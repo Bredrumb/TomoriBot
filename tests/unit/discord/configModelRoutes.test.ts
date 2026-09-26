@@ -49,7 +49,7 @@ import type { ConfigRouteDependencies, ConfigScope } from "@/utils/discord/inter
 import type { NaiPresetRow } from "@/types/db/schema";
 import { providerPanelOperations } from "@/utils/provider/providerPanelOperations";
 import type { ConfigCapabilityEndpoint } from "@/utils/discord/interactions/configModelLoaders";
-import type { ConfigEndpointSlotView } from "@/utils/discord/ui/configModelsPanel";
+import type { ConfigEndpointSlotView, ConfigSwitchModelsProviderPage } from "@/utils/discord/ui/configModelsPanel";
 import { InteractionRouteRegistry } from "@/utils/discord/interactions/routeRegistry";
 import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
 import { buildConfigFallbackSlotId } from "@/utils/discord/ui/configModelModals";
@@ -265,7 +265,12 @@ function makeHarness(options: HarnessOptions = {}): Harness {
       takeCheckboxValues: (_interactionId, fieldId) => checkboxValues[fieldId],
       takeSelectValue: (_interactionId, fieldId) => selectValues[fieldId],
       takeFileUpload: () => undefined,
-      loadSwitchModelsView: async (state, _workspaceDiscId, providerPage, endpointPage) => ({
+      loadSwitchModelsView: async (
+        state,
+        _workspaceDiscId,
+        providerPage: ConfigSwitchModelsProviderPage | undefined,
+        endpointPage,
+      ) => ({
         slots: CATALOG_MODEL_CAPABILITIES.map((capability) => ({
           capability,
           currentModelName:
@@ -1258,7 +1263,7 @@ describe("config models switch page", () => {
     }
 
     const resultCases = [
-      { status: "already-selected" as const },
+      { status: "already-selected" as const, modelName: "model-7" },
       { status: "success" as const, modelName: "model-7", reembedded: false },
       { status: "openrouter-moved" as const },
       { status: "write-failed" as const },
@@ -1502,7 +1507,7 @@ describe("config models capability writes", () => {
 
     await dispatch(harness, interaction);
 
-    expect(acknowledgedAtWrite).toBe(true);
+    expect<boolean | null>(acknowledgedAtWrite).toBe(true);
     expect(harness.telemetry).toContain("server-config.workspace.model.set");
     providers.mockRestore();
     models.mockRestore();
@@ -1740,7 +1745,7 @@ describe("config models parameters page", () => {
       return true;
     });
     await dispatch(harness, interaction);
-    expect(acknowledgedAtCatalogRead).toBe(true);
+    expect<boolean | null>(acknowledgedAtCatalogRead).toBe(true);
     expect(acknowledgedAtWrite).toBe(true);
     expect(apply).toHaveBeenCalledTimes(1);
     expect(apply.mock.calls[0]?.[1]?.preset_name).toBe("preset-2");
@@ -2235,7 +2240,9 @@ describe("config models view loaders", () => {
 
     const view = await loadConfigSwitchModelsView(makeState(), "guild-1", undefined);
     expect(view.slots).toHaveLength(6);
-    expect(view.slots.map((slot) => slot.capability)).toEqual(CATALOG_MODEL_CAPABILITIES);
+    expect<readonly ConfigCatalogModelCapability[]>(view.slots.map((slot) => slot.capability)).toEqual(
+      CATALOG_MODEL_CAPABILITIES,
+    );
     expect(providers).toHaveBeenCalledTimes(6);
     // A persona without a resolved override is an ordinary default, not an override row.
     expect(view.channelOverrides).toEqual([{ target: "<#111>", model: "kayra-v1 (novelai)" }]);

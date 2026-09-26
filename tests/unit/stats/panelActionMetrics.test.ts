@@ -60,7 +60,6 @@ describe("recordPanelActionStat", () => {
       { action: "providers.workspace.provider.add", serverId: 2, userDiscId: "user-no-id" },
       depsMissingUserId,
     );
-
     expect(recordedInput).toBeNull();
   });
 
@@ -82,7 +81,7 @@ describe("recordPanelActionStat", () => {
 
     await recordPanelActionStat(input, deps);
 
-    expect(recordedInput).toEqual({
+    expect<RecordStatInput | null>(recordedInput).toEqual({
       serverId: 7,
       userId: 42,
       metric: "panel_action",

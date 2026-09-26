@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import type { Client } from "discord.js";
 import type { GuildMcpServerRow } from "@/types/db/schema";
+import type { GuildMcpConfigReadResult } from "@/utils/cache/guildMcpConfigCache";
 import { buildConfigRouteId } from "@/utils/discord/configPanelCatalog";
 import { createConfigInteractionRoute } from "@/utils/discord/interactions/configRoutes";
 import type { ConfigRouteDependencies, ConfigScope } from "@/utils/discord/interactions/configRouteContext";
@@ -43,7 +44,8 @@ function countRenderedComponents(payload: unknown): number {
 
 function makeHarness(options: { manager?: boolean; status?: "fresh" | "stale" | "unavailable" } = {}) {
   const configs = Array.from({ length: 10 }, (_, index) => row(index + 1));
-  const read = { status: options.status ?? "fresh", configs } as const;
+  const status = options.status ?? "fresh";
+  const read: GuildMcpConfigReadResult = status === "unavailable" ? { status, configs: [] } : { status, configs };
   const scope: ConfigScope = {
     serverDiscId: "guild-1",
     guildId: "guild-1",
@@ -74,7 +76,9 @@ function makeHarness(options: { manager?: boolean; status?: "fresh" | "stale" | 
     }),
     loadMcpRead: async () => read,
     createNonce: () => "nonce1234567",
-    showModal: async (_interaction, payload) => modals.push(payload),
+    showModal: async (_interaction, payload) => {
+      modals.push(payload);
+    },
     takeSelectValue: () => "general",
     mcpOperations: {
       add: async () => {
@@ -178,6 +182,8 @@ describe("Config-hosted MCP Servers", () => {
       for (const workspaceKind of ["guild", "dm"] as const) {
         for (const status of ["fresh", "stale", "unavailable"] as const) {
           for (const receipt of [undefined, { tone: "success" as const, heading: "Saved", detail: "Saved" }]) {
+            const mcpRead: GuildMcpConfigReadResult =
+              status === "unavailable" ? { status, configs: [] } : { status, configs };
             const payload = buildConfigPanelPayload({
               locale,
               actor: { workspaceKind, isManager: true },
@@ -186,7 +192,7 @@ describe("Config-hosted MCP Servers", () => {
               personas: [],
               selectedPersonaId: null,
               readStatus: "fresh",
-              mcpRead: { status, configs },
+              mcpRead,
               mcpPage: { kind: "collection", rangeIndex: 0 },
               receipt,
             });

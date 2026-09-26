@@ -102,6 +102,7 @@ function createUserRow(id: number, discordId: string, nickname: string): UserRow
     shortterm_cache_crossserver_opt_in: false,
     personal_dtm: "follow",
     personal_deliberate_tool_mode: "follow",
+    personal_server_fallback_enabled: true,
     timezone_offset: null,
   };
 }

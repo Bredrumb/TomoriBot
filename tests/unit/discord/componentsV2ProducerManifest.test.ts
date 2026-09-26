@@ -294,7 +294,10 @@ describe("Components V2 Producer Manifest", () => {
   });
 
   it("requires every delivery entry to explain its boundary", () => {
-    const deliveryEntries = COMPONENTS_V2_PRODUCER_MANIFEST.filter((entry) => entry.coverage.kind === "delivery");
+    const deliveryEntries = COMPONENTS_V2_PRODUCER_MANIFEST.filter(
+      (entry): entry is ProducerManifestEntry & { coverage: Extract<ProducerCoverage, { kind: "delivery" }> } =>
+        entry.coverage.kind === "delivery",
+    );
     expect(deliveryEntries.every((entry) => entry.coverage.note.trim().length > 0)).toBe(true);
   });
 });

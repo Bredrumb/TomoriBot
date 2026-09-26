@@ -12,6 +12,7 @@ import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import * as realDbClient from "@/utils/db/client";
 import * as realRepositories from "@/utils/db/repositories";
 import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
+import { createPersona, createServerConfig } from "../../helpers/fixtures";
 import { RUNTIME_LOCALES } from "../../helpers/localeCases";
 
 const emptyRows = async () => [];
@@ -83,31 +84,17 @@ function countComponents(component: unknown): number {
   if (Array.isArray(component)) return component.reduce((total, item) => total + countComponents(item), 0);
   if (!component || typeof component !== "object") return 0;
   const value = component as { components?: unknown[] };
-  return 1 + (value.components?.reduce((total, item) => total + countComponents(item), 0) ?? 0);
+  return 1 + (value.components?.reduce<number>((total, item) => total + countComponents(item), 0) ?? 0);
 }
 
-function emptyConfig(overrides: Record<string, unknown> = {}): TomoriState["config"] {
-  return new Proxy(
-    {
-      timezone_offset: 0,
-      cooldown_type: "off",
-      tool_notice_hidden_keys: [],
-      llm_disabled_params: [],
-      llm_logit_biases: [],
-      image_default_positive_tags: [],
-      image_default_negative_tags: [],
-      crosschannel_blocklist_ids: [],
-      private_channel_ids: [],
-      rp_channel_ids: [],
-      ...overrides,
-    },
-    { get: (config, key) => (key in config ? config[key as keyof typeof config] : null) },
-  ) as TomoriState["config"];
+/** The declared config defaults, which is what a server reads back after setup with nothing changed. */
+function emptyConfig(overrides: Partial<TomoriState["config"]> = {}): TomoriState["config"] {
+  return createServerConfig(overrides);
 }
 
 const client = { channels: { cache: new Map() } } as unknown as Client;
 const interaction = { user: { id: "status-user" } };
-const state = { server_id: 1, config: emptyConfig(), llm: null, vision_llm: null } as TomoriState;
+const state = createPersona({ server_id: 1, config: emptyConfig() });
 const user = { user_id: 1, user_disc_id: "status-user", language_pref: "en-US" } as UserRow;
 const populatedState = {
   ...state,
@@ -116,14 +103,14 @@ const populatedState = {
     context_note: "configured context note ".repeat(400),
     image_default_positive_tags: ["bright", "detailed"],
     image_default_negative_tags: ["blurry"],
-    llm_disabled_params: ["top_k"],
-    llm_logit_biases: [{ token: "status", bias: 1 }],
+    llm_disabled_params: ["topK"],
+    llm_logit_biases: [{ id: "status", text: "status", value: 1, kind: "text", tokenizations: [] }],
     crosschannel_blocklist_ids: ["42"],
     private_channel_ids: ["43"],
     rp_channel_ids: ["44"],
     welcome_prompt: "welcome prompt",
   }),
-} as TomoriState;
+};
 const populatedUser = {
   ...user,
   impersonation_prompt: "personal prompt ".repeat(800),

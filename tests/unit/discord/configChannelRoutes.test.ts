@@ -1,5 +1,15 @@
 import { beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
-import { ChannelType, ComponentType, type Client } from "discord.js";
+import {
+  type ActionRowData,
+  ChannelType,
+  type ChannelSelectMenuComponentData,
+  type ComponentInContainerData,
+  ComponentType,
+  type ContainerComponentData,
+  type Client,
+  type MessageActionRowComponentData,
+  type StringSelectMenuComponentData,
+} from "discord.js";
 import type { LlmRow, TomoriState } from "@/types/db/schema";
 import { configRepository } from "@/utils/db/repositories";
 import * as tomoriStateCache from "@/utils/cache/tomoriStateCache";
@@ -13,6 +23,7 @@ import {
 } from "@/utils/discord/configPanelCatalog";
 import {
   loadCachedGuildBlocklistChannels,
+  type BlocklistChannelTarget,
   type ChannelOverrideChannelTarget,
   loadCachedGuildTextChecklistChannels,
 } from "@/utils/discord/channelChecklistManager";
@@ -94,7 +105,7 @@ function makeChannelsView(
     { id: CHANNEL_ONE, name: "lounge", rawPosition: 0, parentRawPosition: -1 },
     { id: CHANNEL_TWO, name: "welcome", rawPosition: 1, parentRawPosition: -1 },
   ],
-  availableBlocklistChannels = availableTextChannels.map((channel) => ({
+  availableBlocklistChannels: BlocklistChannelTarget[] = availableTextChannels.map((channel) => ({
     ...channel,
     type: ChannelType.GuildText,
     parentName: null,
@@ -1683,7 +1694,8 @@ describe("Channels Rules", () => {
     ] as const;
 
     for (const [collection, column, prefix, action] of collections) {
-      const state = makePersona({ config: { [column]: [CHANNEL_ONE] } as TomoriState["config"] });
+      const state = makePersona();
+      state.config[column] = [CHANNEL_ONE];
       const available =
         collection === "blocklist"
           ? makeChannelsView(state).availableBlocklistChannels
@@ -1779,15 +1791,23 @@ describe("Channels Overrides", () => {
       readStatus: "fresh",
       channelsView: makeChannelsView(state, undefined, undefined, channels),
     });
-    const container = payload.components.find((component) => component.type === ComponentType.Container);
-    if (!container || container.type !== ComponentType.Container) throw new Error("config container missing");
-    const selectorRow = container.components.find(
-      (component) =>
-        component.type === ComponentType.ActionRow && component.components[0]?.type === ComponentType.ChannelSelect,
+    const container = payload.components.find(
+      (component): component is ContainerComponentData<ComponentInContainerData> =>
+        component.type === ComponentType.Container,
     );
-    if (!selectorRow || selectorRow.type !== ComponentType.ActionRow) throw new Error("channel selector missing");
-    const selector = selectorRow.components[0];
-    if (!selector || selector.type !== ComponentType.ChannelSelect) throw new Error("channel selector has wrong type");
+    if (!container) throw new Error("config container missing");
+    const selectorRow = container.components.find(
+      (component): component is ActionRowData<MessageActionRowComponentData> =>
+        component.type === ComponentType.ActionRow &&
+        "components" in component &&
+        component.components.some((child) => "customId" in child && child.type === ComponentType.ChannelSelect),
+    );
+    if (!selectorRow) throw new Error("channel selector missing");
+    const selector = selectorRow.components.find(
+      (component): component is ChannelSelectMenuComponentData =>
+        "customId" in component && component.type === ComponentType.ChannelSelect,
+    );
+    if (!selector) throw new Error("channel selector has wrong type");
 
     expect(selector.type).toBe(ComponentType.ChannelSelect);
     expect(selector.channelTypes).toEqual([
@@ -1853,13 +1873,20 @@ describe("Channels Overrides", () => {
         rangePageIndex: 0,
       },
     });
-    const container = payload.components.find((component) => component.type === ComponentType.Container);
-    if (!container || container.type !== ComponentType.Container) throw new Error("config container missing");
+    const container = payload.components.find(
+      (component): component is ContainerComponentData<ComponentInContainerData> =>
+        component.type === ComponentType.Container,
+    );
+    if (!container) throw new Error("config container missing");
     const modelSelect = container.components
-      .filter((component) => component.type === ComponentType.ActionRow)
-      .flatMap((row) => (row.type === ComponentType.ActionRow ? row.components : []))
+      .filter(
+        (component): component is ActionRowData<MessageActionRowComponentData> =>
+          component.type === ComponentType.ActionRow && "components" in component,
+      )
+      .flatMap((row) => row.components)
       .find(
-        (component) =>
+        (component): component is StringSelectMenuComponentData =>
+          "customId" in component &&
           component.type === ComponentType.StringSelect &&
           component.customId ===
             buildConfigRouteId({
@@ -2660,7 +2687,7 @@ describe("Channels Overrides", () => {
   it("records each successful override write once", async () => {
     const state = makePersona({ llm: makeLlm(10, "openrouter", "server-default") });
     const channelModel = makeLlm(20, "openrouter", "channel-model");
-    const recordAction = mock(() => undefined);
+    const recordAction = mock<ConfigRouteDependencies["recordAction"]>(() => undefined);
     const values: Partial<ConfigChannelsOverridesView> = {
       selectedChannelId: CHANNEL_ONE,
       prompt: { prompt: "stored", mode: "append" },

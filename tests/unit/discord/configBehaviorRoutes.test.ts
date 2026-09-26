@@ -483,7 +483,7 @@ describe("config Behavior routes", () => {
     for (const [action, contract] of Object.entries(expected)) {
       const codec = CONFIG_ROUTE_CODECS[action as keyof typeof CONFIG_ROUTE_CODECS];
       expect(codec.wireToken).toBe(contract.wireToken);
-      expect(codec.fields.map((field) => field.key)).toEqual(contract.fields);
+      expect<string[]>(codec.fields.map((field) => field.key)).toEqual(contract.fields);
     }
   });
 

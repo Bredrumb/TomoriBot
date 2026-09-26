@@ -158,7 +158,7 @@ describe("autocomplete dispatch reaches its handler with the interaction", () =>
 
     await handler({} as Client, mockInteraction as unknown as AutocompleteInteraction);
 
-    expect(received).toEqual([{ name: "Nerine", value: "42" }]);
+    expect<{ name: string; value: string }[] | null>(received).toEqual([{ name: "Nerine", value: "42" }]);
 
     personaSpy.mockRestore();
     userSpy.mockRestore();

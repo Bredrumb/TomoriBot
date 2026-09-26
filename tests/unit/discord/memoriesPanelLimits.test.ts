@@ -113,7 +113,7 @@ describe("MemoriesPanel Limits & Boundary Sweeps", () => {
             );
 
             const firstMemory = memories[0];
-            if (firstMemory) {
+            if (firstMemory?.server_memory_id !== undefined) {
               expectSafePanelPayload(
                 buildMemoriesPanelPayload({
                   locale,
@@ -241,6 +241,7 @@ describe("MemoriesPanel Limits & Boundary Sweeps", () => {
             const stmEntries = Array.from({ length: stmSize }, (_, i) => ({
               personaName: `Persona ${i + 1}`,
               channelId: `12345678901234567${i}`,
+              lastUpdated: Date.now(),
             }));
             expectSafePanelPayload(
               buildMemoriesPanelPayload({

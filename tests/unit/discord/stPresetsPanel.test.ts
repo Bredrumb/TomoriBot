@@ -1,6 +1,12 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
-import { ComponentType } from "discord.js";
+import {
+  ComponentType,
+  type ActionRowData,
+  type ComponentInContainerData,
+  type ContainerComponentData,
+  type StringSelectMenuComponentData,
+} from "discord.js";
 import type { StPresetNodeRow, StPresetRow } from "@/types/db/schema";
 import type { PanelReceipt } from "@/types/discord/panel";
 import {
@@ -58,9 +64,11 @@ function receipt(tone: PanelReceipt["tone"]): PanelReceipt {
 }
 
 describe("ST Presets route codec", () => {
-  const WIRE_CONTRACT_V1: ReadonlyArray<
-    readonly { action: StPresetsPanelRoute["action"]; customId: string; parsed: StPresetsPanelRoute }
-  > = [
+  const WIRE_CONTRACT_V1: ReadonlyArray<{
+    action: StPresetsPanelRoute["action"];
+    customId: string;
+    parsed: StPresetsPanelRoute;
+  }> = [
     { action: "select", customId: "config:v2:st-presets-select:en-US", parsed: { action: "select", locale: "en-US" } },
     { action: "retry", customId: "config:v2:st-presets-retry:en-US", parsed: { action: "retry", locale: "en-US" } },
     { action: "none", customId: "config:v2:st-presets-none:en-US", parsed: { action: "none", locale: "en-US" } },
@@ -146,7 +154,7 @@ describe("ST Presets route codec", () => {
   });
 
   it("guarantees 15-action exhaustiveness across accepted actions, wire contract, and route handler comparisons", () => {
-    const ACCEPTED_15_ACTIONS = [
+    const ACCEPTED_15_ACTIONS: StPresetsPanelRoute["action"][] = [
       "add-open",
       "add-submit",
       "delete-cancel",
@@ -162,7 +170,7 @@ describe("ST Presets route codec", () => {
       "range",
       "retry",
       "select",
-    ].sort();
+    ];
 
     const wireActions = [...new Set(WIRE_CONTRACT_V1.map((c) => c.action))].sort();
 
@@ -177,12 +185,12 @@ describe("ST Presets route codec", () => {
     expect(handlerActions.size).toBe(15);
     expect([...handlerActions].sort()).toEqual(ACCEPTED_15_ACTIONS);
     expect(ACCEPTED_15_ACTIONS.filter((a) => !handlerActions.has(a))).toEqual([]);
-    expect([...handlerActions].filter((a) => !ACCEPTED_15_ACTIONS.includes(a))).toEqual([]);
+    expect([...handlerActions].filter((a) => !ACCEPTED_15_ACTIONS.some((accepted) => accepted === a))).toEqual([]);
   });
 
   it("guarantees producer coverage against production UI and modal surfaces with five allowlisted producerless actions", () => {
     const PRODUCERLESS_COMPATIBILITY_ACTIONS = ["add-open", "disable", "none", "nodes-page", "nodes-range"] as const;
-    const ACCEPTED_15_ACTIONS = [
+    const ACCEPTED_15_ACTIONS: StPresetsPanelRoute["action"][] = [
       "add-open",
       "add-submit",
       "delete-cancel",
@@ -198,7 +206,7 @@ describe("ST Presets route codec", () => {
       "range",
       "retry",
       "select",
-    ].sort();
+    ];
 
     const collectedCustomIds: string[] = [];
 
@@ -810,16 +818,18 @@ describe("ST Presets panel rendering", () => {
     const presets24 = Array.from({ length: 24 }, (_, i) => makePreset(i + 1));
 
     function getSelectOptions(payload: ReturnType<typeof buildStPresetsPanelPayload>) {
-      const container = payload.components.find((c) => c.type === ComponentType.Container) as {
-        components: Array<{
-          type: number;
-          components?: Array<{ type: number; options?: Array<{ value: string; default?: boolean }> }>;
-        }>;
-      };
-      const selectRow = container?.components.find(
-        (c) => c.type === ComponentType.ActionRow && c.components?.[0]?.type === ComponentType.StringSelect,
+      const container = payload.components.find(
+        (c): c is ContainerComponentData<ComponentInContainerData> => c.type === ComponentType.Container,
       );
-      return selectRow?.components?.[0]?.options ?? [];
+      const selectRow = container?.components.find(
+        (c): c is ActionRowData<StringSelectMenuComponentData> =>
+          c.type === ComponentType.ActionRow &&
+          "components" in c &&
+          c.components[0] !== undefined &&
+          "type" in c.components[0] &&
+          c.components[0].type === ComponentType.StringSelect,
+      );
+      return selectRow?.components[0]?.options ?? [];
     }
 
     // None page with active preset (reproduces the reported crash condition)

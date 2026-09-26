@@ -56,7 +56,7 @@ function resolveAliasReferences(
   );
 }
 
-const message = (content: string, id = crypto.randomUUID()): SimplifiedMessageForContext => ({
+const message = (content: string, id: string = crypto.randomUUID()): SimplifiedMessageForContext => ({
   id,
   authorId: "author",
   authorName: "Author",
@@ -121,6 +121,7 @@ const defaultUser = (): UserRow => ({
   shortterm_cache_crossserver_opt_in: false,
   personal_dtm: "follow",
   personal_deliberate_tool_mode: "follow",
+  personal_server_fallback_enabled: true,
   timezone_offset: null,
 });
 
@@ -338,7 +339,7 @@ describe("context reference discovery", () => {
       expect(resolved.referencedUserIds).toEqual(new Set(["200", "100"]));
       expect(Array.from(resolved.referencedUserRows.keys()).sort()).toEqual(["100", "200"]);
       expect(resolved.referencedUserReasons).toEqual(
-        new Map([
+        new Map<string, ReadonlySet<"real_mention" | "unique_text_alias">>([
           ["200", new Set(["unique_text_alias"])],
           ["100", new Set(["real_mention"])],
         ]),
@@ -554,7 +555,7 @@ describe("persona task context", () => {
     const originalLoadNamingPreferences = userNamingRepository.loadPreferences;
     userRepository.loadByDiscordId = async (discordId) => (discordId === "100" ? user : null);
     userNamingRepository.loadPreferences = async () => new Map();
-    const calls: Array<[string, string | undefined, number | undefined, boolean | undefined]> = [];
+    const calls: Array<Parameters<typeof serverScheduleRepository.getPendingRemindersForUser>> = [];
     serverScheduleRepository.getPendingRemindersForUser = async (...args) => {
       calls.push(args);
       if (args[0] !== "100") return [];
@@ -620,7 +621,7 @@ describe("persona task context", () => {
     const activePersona = persona(7, "Active", ["active"]);
     activePersona.config = { timezone_offset: 8 } as AssembledServerConfig;
     const originalGetPendingReminders = serverScheduleRepository.getPendingRemindersForUser;
-    const calls: Array<[string, string | undefined, number | undefined, boolean | undefined]> = [];
+    const calls: Array<Parameters<typeof serverScheduleRepository.getPendingRemindersForUser>> = [];
     serverScheduleRepository.getPendingRemindersForUser = async (...args) => {
       calls.push(args);
       return [

@@ -138,6 +138,7 @@ async function buildHistoryText(
     tomoriState: makeTomoriState(),
     includeTimestamps: false,
     isUserImpersonation: false,
+    triggererFormattedName: "Alice",
     ...naming,
     uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
     convertMentions,

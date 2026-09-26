@@ -67,7 +67,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
 
   it("updateUser patches arbitrary fields", async () => {
     const userRow = await userRepository.loadByDiscordId(FIXTURE_IDS.regUserDiscId);
-    if (!userRow) throw new Error("Expected registered user to exist");
+    if (!userRow || userRow.user_id === undefined) throw new Error("Expected registered user to exist");
     const updated = await userRepository.update(userRow.user_id, { user_nickname: "_rt_renamed" });
     expect(updated?.user_nickname).toBe("_rt_renamed");
   });

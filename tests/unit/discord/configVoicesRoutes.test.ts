@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import type { APIAttachment, Client } from "discord.js";
 import type { ServerSpeechConfigRow, TomoriState, VoiceSampleRow } from "@/types/db/schema";
 import * as speechRepository from "@/utils/db/repositories/SpeechRepository";
+import type { VoiceSampleRemovalInput } from "@/utils/db/repositories/SpeechRepository";
 import * as voiceSampleStorage from "@/utils/storage/voiceSampleStorage";
 import { configRepository } from "@/utils/db/repositories";
 import { buildConfigRouteId } from "@/utils/discord/configPanelCatalog";
@@ -201,6 +202,7 @@ function makeHarness(options: HarnessOptions = {}): Harness {
       options.speechConfig === undefined
         ? {
             server_id: 9,
+            voice_transcript_chat_mode: true,
             chatterbox_turbo_enabled: true,
             chatterbox_cfg_weight: 0.5,
             chatterbox_exaggeration: 0.5,
@@ -311,6 +313,7 @@ describe("config voice sample routes", () => {
     const samples = Array.from({ length: 51 }, (_, index) => makeSample(index));
     const view = await loadConfigVoicesView(state, 999, {
       loadSpeechConfig: async () => ({
+        server_id: 9,
         voice_transcript_chat_mode: true,
         chatterbox_turbo_enabled: false,
         chatterbox_cfg_weight: 0.7,
@@ -833,7 +836,7 @@ describe("config voice sample routes", () => {
 
   it("removes the current row through the shared operation after acknowledgement", async () => {
     let sawAcknowledgement = false;
-    const inputs: Array<Record<string, unknown>> = [];
+    const inputs: VoiceSampleRemovalInput[] = [];
     const removeSpy = spyOn(speechRepository, "removeVoiceSample").mockImplementation(async (input) => {
       sawAcknowledgement = currentInteraction?.deferred === true || currentInteraction?.replied === true;
       inputs.push(input);
@@ -1009,8 +1012,12 @@ describe("config voice sample routes", () => {
           order.push("store");
           return null;
         },
-        updateVoiceSamplePath: async () => order.push("update"),
-        deleteVoiceSample: async () => order.push("delete"),
+        updateVoiceSamplePath: async () => {
+          order.push("update");
+        },
+        deleteVoiceSample: async () => {
+          order.push("delete");
+        },
       },
     });
     const interaction = makeInteraction({

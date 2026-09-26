@@ -13,7 +13,6 @@ function makeSavedProviderConfigRow(
   return {
     user_saved_config_id: 1,
     user_id: overrides.user_id ?? 1,
-    provider: overrides.provider,
     api_key: overrides.api_key ?? null,
     key_version: overrides.key_version ?? 1,
     llm_id: overrides.llm_id ?? null,

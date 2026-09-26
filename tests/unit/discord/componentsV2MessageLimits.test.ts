@@ -8,7 +8,17 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { ButtonStyle, ComponentType, MessageFlags } from "discord.js";
+import {
+  ButtonStyle,
+  type ButtonComponentData,
+  type ComponentInContainerData,
+  ComponentType,
+  type ContainerComponentData,
+  MessageFlags,
+  type MessageActionRowComponentData,
+  type ThumbnailComponentData,
+  type TopLevelComponentData,
+} from "discord.js";
 import {
   DISCORD_ACTION_ROW_BUTTONS_MAX,
   DISCORD_BUTTON_LABEL_MAX,
@@ -181,6 +191,8 @@ describe("componentsV2Limits recursive component count boundaries", () => {
       ],
     };
 
+    const container40 = payload40.components[0] as ContainerComponentData<ComponentInContainerData>;
+
     // The top-level array has length 1, demonstrating that shallow length checks are insufficient.
     expect(payload40.components.length).toBe(1);
     const validResult = validateComponentsV2MessageLimits(payload40);
@@ -194,8 +206,8 @@ describe("componentsV2Limits recursive component count boundaries", () => {
         {
           type: ComponentType.Container,
           components: [
-            payload40.components[0].components[0],
-            ...payload40.components[0].components.slice(1, 6),
+            container40.components[0],
+            ...container40.components.slice(1, 6),
             {
               type: ComponentType.ActionRow,
               components: [
@@ -253,6 +265,8 @@ describe("componentsV2Limits Text Display character budget boundaries", () => {
       ],
     };
 
+    const container4000 = payload4000.components[0] as ContainerComponentData<ComponentInContainerData>;
+
     const validResult = validateComponentsV2MessageLimits(payload4000);
     expect(validResult.valid).toBe(true);
     expect(validResult.violations).toEqual([]);
@@ -264,7 +278,7 @@ describe("componentsV2Limits Text Display character budget boundaries", () => {
         {
           type: ComponentType.Container,
           components: [
-            payload4000.components[0].components[0],
+            container4000.components[0],
             {
               type: ComponentType.TextDisplay,
               content: "c".repeat(1001),
@@ -616,7 +630,7 @@ describe("componentsV2Limits rule mutations with exact path and code assertions"
             type: ComponentType.StringSelect,
             customId: "sel_acc",
             options: [{ label: "Opt", value: "opt" }],
-          } as unknown as TopLevelComponentData,
+          } as unknown as ButtonComponentData | ThumbnailComponentData,
         },
       ],
     };
@@ -886,7 +900,7 @@ describe("componentsV2Limits rule mutations with exact path and code assertions"
               type: ComponentType.Button,
               label: "No CID",
               style: ButtonStyle.Danger,
-            } as unknown as TopLevelComponentData,
+            } as unknown as MessageActionRowComponentData,
           ],
         },
       ],
@@ -1036,7 +1050,7 @@ describe("componentsV2Limits rule mutations with exact path and code assertions"
             type: ComponentType.Thumbnail,
             description: "d".repeat(1025),
             media: { url: "https://example.com/thumb.png" },
-          } as unknown as TopLevelComponentData,
+          } as unknown as ButtonComponentData | ThumbnailComponentData,
         },
       ],
     };

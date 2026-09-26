@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { Client } from "discord.js";
 import { HumanizerDegree, type AssembledServerConfig } from "@/types/db/schema";
+import type { StructuredContextItem } from "@/types/misc/context";
 import { appendDialogueHistoryContext } from "@/utils/text/context/dialogueHistory";
 import { buildDateSpacer, buildReunionNote, SPACER_TEMPLATE } from "@/utils/text/context/timeAwareness";
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
@@ -153,7 +154,7 @@ describe("buildDateSpacer", () => {
 
 describe("appendDialogueHistoryContext — time-awareness injections", () => {
   it("injects the producer-supplied reunion note above the newest messages", async () => {
-    const contextItems = [];
+    const contextItems: StructuredContextItem[] = [];
     await appendDialogueHistoryContext({
       contextItems,
       client: {} as Client,
@@ -171,6 +172,7 @@ describe("appendDialogueHistoryContext — time-awareness injections", () => {
       reunionNote: "Alice is talking to you directly for the very first time!",
       includeTimestamps: false,
       isUserImpersonation: false,
+      triggererFormattedName: "Alice",
       uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
       convertMentions: async (text) => text,
     });
@@ -187,7 +189,7 @@ describe("appendDialogueHistoryContext — time-awareness injections", () => {
   });
 
   it("emits exactly one spacer per boundary across a multi-day history", async () => {
-    const contextItems = [];
+    const contextItems: StructuredContextItem[] = [];
     await appendDialogueHistoryContext({
       contextItems,
       client: {} as Client,
@@ -204,6 +206,7 @@ describe("appendDialogueHistoryContext — time-awareness injections", () => {
       dateSpacerTemplate: EXPANDED_TEMPLATE,
       includeTimestamps: false,
       isUserImpersonation: false,
+      triggererFormattedName: "Alice",
       uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
       convertMentions: async (text) => text,
     });

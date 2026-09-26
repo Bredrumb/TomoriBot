@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { ComponentType, MessageFlags, type ComponentInContainerData } from "discord.js";
+import { ComponentType, MessageFlags, type ComponentInContainerData, type TextDisplayComponentData } from "discord.js";
 import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/componentsV2Limits";
 import { buildPanelContainer } from "@/utils/discord/ui/panel";
 import { formatPanelComponentTree, formatPanelProse, measurePanelProseWidth } from "@/utils/discord/ui/panelProse";
 
-function textDisplay(content: string): ComponentInContainerData {
+function textDisplay(content: string): TextDisplayComponentData {
   return { type: ComponentType.TextDisplay, content };
 }
 
@@ -35,11 +35,12 @@ describe("panel prose formatter", () => {
     const section = formatted[1];
     expect(ordinary.type).toBe(ComponentType.TextDisplay);
     expect(section.type).toBe(ComponentType.Section);
-    if (ordinary.type !== ComponentType.TextDisplay || section.type !== ComponentType.Section) return;
+    if (!("content" in ordinary) || !("components" in section)) return;
 
     const narrow = section.components[0];
+    if (!("type" in narrow)) return;
     expect(narrow.type).toBe(ComponentType.TextDisplay);
-    if (narrow.type !== ComponentType.TextDisplay) return;
+    if (!("content" in narrow)) return;
     expect(ordinary.content.split("\n").length).toBeLessThan(narrow.content.split("\n").length);
     for (const line of narrow.content.split("\n")) expect(measurePanelProseWidth(line)).toBeLessThanOrEqual(40);
   });

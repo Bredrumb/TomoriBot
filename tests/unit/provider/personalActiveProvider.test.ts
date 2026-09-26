@@ -5,7 +5,6 @@ import { getActivePersonalProviderForCapability } from "@/utils/provider/persona
 function makeRow(overrides: Partial<UserSavedProviderConfigRow> & { provider: string }): UserSavedProviderConfigRow {
   return {
     user_id: 1,
-    provider: overrides.provider,
     enabled_capabilities: [],
     assigned_capabilities: [],
     llm_id: null,

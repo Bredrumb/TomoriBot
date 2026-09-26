@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { Message } from "discord.js";
+import type { Client, Message } from "discord.js";
 import { HumanizerDegree } from "@/types/db/schema";
 import type { StreamConfig, StreamContext } from "@/types/stream/interfaces";
 import type { ChannelLockEntry } from "@/utils/chat/channelQueue";
@@ -19,7 +19,7 @@ function makeStreamConfig(): StreamConfig {
     inactivityTimeoutMs: 30000,
     baseTypeSpeedMsPerChar: 0,
     maxTypingTimeMs: 0,
-    minVisibleDurationMs: 0,
+    minVisibleTypingDurationMs: 0,
     humanizerDegree: HumanizerDegree.NONE,
     emojiUsageEnabled: true,
   };
@@ -34,6 +34,7 @@ describe("queueAdditionalPersonaTurns", () => {
       typingKeepaliveTimer: null,
       followUpCount: 0,
       messageQueue: [],
+      activeTurnAbortController: null,
     };
 
     const handledNow = queueAdditionalPersonaTurns({
@@ -63,6 +64,7 @@ describe("queueAdditionalPersonaTurns", () => {
       typingKeepaliveTimer: null,
       followUpCount: 0,
       messageQueue: [],
+      activeTurnAbortController: null,
     };
     const lilya = createPersona({ persona_id: 1, persona_nickname: "Lilya" });
     const aphel = createPersona({ persona_id: 2, persona_nickname: "Aphel" });
@@ -81,15 +83,18 @@ describe("queueAdditionalPersonaTurns", () => {
     const queuedPersonaId = lockEntry.messageQueue[0]?.selectedPersonaId;
     const queuedPersona = allPersonas.find((persona) => persona.persona_id === queuedPersonaId);
     expect(queuedPersona?.persona_nickname).toBe("Aphel");
+    if (!queuedPersona) throw new Error("Expected the second persona to be queued");
 
     const textConfig = createStreamTextProcessingConfig(makeStreamConfig(), {
+      channel: { id: "_rt_channel" } as unknown as StreamContext["channel"],
+      client: {} as Client,
       tomoriState: queuedPersona,
       contextItems: [],
       currentTurnModelParts: [],
       provider: "_test",
       locale: "en-US",
-      personaUsername: queuedPersona?.persona_nickname,
-    } as StreamContext);
+      personaUsername: queuedPersona.persona_nickname,
+    });
     const sourceNames = collectRenderModifierSourceNames(textConfig.botName, textConfig.botNameAliases);
 
     expect(textConfig.botName).toBe("Aphel");

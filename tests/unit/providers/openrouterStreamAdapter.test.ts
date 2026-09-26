@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { OpenrouterStreamAdapter, type OpenrouterStreamConfig } from "@/providers/openrouter/openrouterStreamAdapter";
+import { HumanizerDegree } from "@/types/db/schema";
 import type { RawStreamChunk, StreamContext } from "@/types/stream/interfaces";
 
 const originalFetch = globalThis.fetch;
@@ -22,7 +23,15 @@ function makeStreamConfig(): OpenrouterStreamConfig {
     minP: 0.1,
     logitBias: { "123": -100 },
     inactivityTimeoutMs: 5_000,
-  } as OpenrouterStreamConfig;
+    maxMessageLength: 2000,
+    flushBufferSize: 1000,
+    flushBufferSizeCodeBlock: 15000,
+    baseTypeSpeedMsPerChar: 0,
+    maxTypingTimeMs: 0,
+    minVisibleTypingDurationMs: 0,
+    humanizerDegree: HumanizerDegree.NONE,
+    emojiUsageEnabled: true,
+  };
 }
 
 function makeStreamContext(): StreamContext {
@@ -452,7 +461,7 @@ describe("OpenrouterStreamAdapter parameter degradation", () => {
 
   it("does not restart an SSE error after visible content commits the stream", async () => {
     let fetchCalls = 0;
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (_input: string | URL | Request, _init?: RequestInit) => {
       fetchCalls += 1;
       return makeSseResponse([
         { choices: [{ index: 0, delta: { content: "Partial output" } }] },
@@ -536,7 +545,7 @@ describe("OpenrouterStreamAdapter response body teardown", () => {
     const { response, wasCancelled } = makeCancelObservableSseResponse([
       { choices: [{ index: 0, delta: { content: "Hello" } }] },
     ]);
-    globalThis.fetch = (async () => response) as typeof fetch;
+    globalThis.fetch = (async (_input: string | URL | Request, _init?: RequestInit) => response) as typeof fetch;
 
     for await (const _chunk of new OpenrouterStreamAdapter().startStream(makeStreamConfig(), makeStreamContext())) {
       break;
@@ -556,7 +565,7 @@ describe("OpenrouterStreamAdapter response body teardown", () => {
         cancelled = true;
       },
     });
-    globalThis.fetch = (async () =>
+    globalThis.fetch = (async (_input: string | URL | Request, _init?: RequestInit) =>
       new Response(stream, {
         status: 200,
         headers: { "Content-Type": "text/event-stream" },

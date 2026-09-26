@@ -1011,7 +1011,7 @@ describe("config route wire contract", () => {
   });
 
   it("covers every declared action in the pinned wire contract", () => {
-    const pinned = new Set(WIRE_CONTRACT_V2.map(([, route]) => route.action));
+    const pinned = new Set<string>(WIRE_CONTRACT_V2.map(([, route]) => route.action));
     expect([...pinned].sort()).toEqual(Object.keys(CONFIG_ROUTE_CODECS).sort());
   });
 
@@ -3343,6 +3343,9 @@ describe("config Persona Advanced routes", () => {
     let stateAtShowModal: { deferred: boolean; replied: boolean; rawModalAcknowledged: boolean } | undefined;
     let stateAfterShowModal: { deferred: boolean; replied: boolean; rawModalAcknowledged: boolean } | undefined;
     harness.dependencies.showModal = async (modalInteraction, payload) => {
+      // A modal submit cannot open another modal, so the route only reaches this with a routable
+      // interaction; the guard narrows to the union the raw modal helpers accept.
+      if (!("showModal" in modalInteraction)) throw new Error("Expected an interaction that can open a modal");
       stateAtShowModal = {
         deferred: modalInteraction.deferred,
         replied: modalInteraction.replied,

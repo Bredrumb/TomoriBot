@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import type { QuotaCheckResult } from "@/utils/quota/imageQuotaManager";
 import type { ResolvedCredentials } from "@/utils/provider/credentialResolver";
 import { resolveCredentialsWithMediaQuota, type CapabilityCredentialResolver } from "@/utils/quota/mediaQuotaGate";
 
@@ -35,9 +36,9 @@ describe("media quota gating", () => {
       SERVER_ID,
       "image-standard",
       INTERNAL_USER_ID,
-      async (serverId, userDiscId) => {
+      async (serverId, userDiscId): Promise<QuotaCheckResult> => {
         quotaCalls.push({ serverId, userDiscId });
-        return { allowed: false as const, reason: "user_quota_exceeded" as const };
+        return { allowed: false, reason: "user_quota_exceeded" };
       },
       USER_DISC_ID,
       { allowed: true },
@@ -57,9 +58,9 @@ describe("media quota gating", () => {
       SERVER_ID,
       "image-nai",
       INTERNAL_USER_ID,
-      async (serverId, userDiscId) => {
+      async (serverId, userDiscId): Promise<QuotaCheckResult> => {
         quotaCalls.push({ serverId, userDiscId });
-        return { allowed: false as const, reason: "user_quota_exceeded" as const };
+        return { allowed: false, reason: "user_quota_exceeded" };
       },
       USER_DISC_ID,
       { allowed: true },

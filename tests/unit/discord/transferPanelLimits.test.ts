@@ -16,6 +16,7 @@ import {
   buildMemoryTransferPreviewPayload,
   buildTransferNoticePayload,
   type MemoryTransferDestination,
+  type MemoryTransferMapping,
 } from "@/utils/discord/ui/transferPanel";
 import { validateComponentsV2MessageLimits, validateRawModalLimits } from "@/utils/discord/ui/componentsV2Limits";
 import { withLinePrefix } from "@/utils/discord/ui/panel";
@@ -437,7 +438,7 @@ describe("transfer panel Components V2 limits", () => {
       personaId: index + 1,
       label: `Persona ${"`".repeat(runLength)} 🌟 \uD800 ${index}`,
     }));
-    const mapping = Object.fromEntries(
+    const mapping: MemoryTransferMapping = Object.fromEntries(
       buckets.map((bucket, index) => {
         const destination = destinations[index];
         if (!destination) throw new Error("Special text fixture requires a matching destination");
@@ -512,7 +513,7 @@ describe("transfer panel Components V2 limits", () => {
     const destinations = makeMemoryDestinations(2);
     const firstDestination = destinations[0];
     if (!firstDestination) throw new Error("Action fixture requires a destination");
-    const mapping = { "bucket-0": firstDestination.lineageId, "bucket-1": "skip" };
+    const mapping: MemoryTransferMapping = { "bucket-0": firstDestination.lineageId, "bucket-1": "skip" };
 
     const previewActions = parsedTransferRoutes(
       buildMemoryTransferPreviewPayload({
@@ -720,7 +721,7 @@ describe("transfer panel Components V2 limits", () => {
   it("renders complete memory mapping text, skip markers, and boundary route fields", () => {
     const buckets = makeMemoryBuckets(26);
     const destinations = makeMemoryDestinations(26);
-    const mapping = Object.fromEntries(
+    const mapping: MemoryTransferMapping = Object.fromEntries(
       buckets.map((bucket, index) => {
         const destination = destinations[index];
         if (!destination) throw new Error("Boundary fixture requires a matching destination");

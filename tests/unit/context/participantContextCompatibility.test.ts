@@ -236,7 +236,7 @@ describe("participant context compatibility matrix", () => {
     const fixture = createParticipantContextFixture();
     try {
       const human = fixture.users.get(PARTICIPANT_FIXTURE_IDS.human);
-      if (!human) throw new Error("Fixture human is missing");
+      if (!human || human.user_id === undefined) throw new Error("Fixture human is missing or has no user_id");
       fixture.personalMemories.push({
         ...fixture.personalMemories[0],
         personal_memory_id: 94,

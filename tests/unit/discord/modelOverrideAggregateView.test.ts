@@ -417,8 +417,7 @@ describe("/model override remove - (5) route button opens requested batch withou
         personasWithOverride: [],
         entries: allEntries,
       }),
-      deleteChannelOverride: async () => true,
-      clearPersonaOverride: async () => true,
+      setTextModelOverride: async () => false,
       showRemoveModal: async (_interaction, _locale, page, _fp, _nonce, entries) => {
         modalShown = true;
         presentedPage = page;
@@ -455,8 +454,7 @@ describe("/model override remove - (5) route button opens requested batch withou
         scopeResolved = true;
         return null;
       },
-      deleteChannelOverride: async () => true,
-      clearPersonaOverride: async () => true,
+      setTextModelOverride: async () => false,
       showRemoveModal: async () => {
         modalShown = true;
       },
@@ -759,7 +757,9 @@ describe("/model override remove - (7) combined scopes and ordered positions con
 
 describe("/model override remove global route wiring", () => {
   it("handles a stale model override route and directs the user to the registered command", async () => {
-    let replyPayload: { content?: string } | null = null;
+    // Initialized to an empty payload so the closure's assignment is what the assertion reads,
+    // not a `null` the compiler can still narrow to after the await.
+    let replyPayload: { content?: string } = {};
     const interaction = {
       id: "stale-interaction",
       customId: "model-overrides:v0:page:en-US:0",

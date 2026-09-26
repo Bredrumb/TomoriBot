@@ -87,7 +87,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona eligibility batched queries — re
     userId = refs.userId;
 
     const altUser = await userRepository.register(FIXTURE_IDS.altUserDiscId, "_rt_alt_user", "en");
-    if (!altUser) throw new Error("Failed to register alt test user");
+    if (!altUser || altUser.user_id === undefined) throw new Error("Failed to register alt test user");
     altUserId = altUser.user_id;
 
     hasDocuments = await tableExists("documents");

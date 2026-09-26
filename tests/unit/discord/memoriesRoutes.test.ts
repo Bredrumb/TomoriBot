@@ -7,7 +7,7 @@ import {
   type ModalSubmitInteraction,
   type StringSelectMenuInteraction,
 } from "discord.js";
-import type { ServerMemoryRow, TomoriState } from "@/types/db/schema";
+import type { SavedProviderConfigRow, ServerMemoryRow, TomoriState } from "@/types/db/schema";
 import {
   buildMemoriesRouteId,
   computeServerStmFingerprint,
@@ -106,6 +106,24 @@ function collectTextDisplays(value: unknown): string[] {
   const self = record.type === ComponentType.TextDisplay && typeof record.content === "string" ? [record.content] : [];
   return [...self, ...Object.values(record).flatMap(collectTextDisplays)];
 }
+
+// Stored provider snapshot behind the stubbed credential resolution: the embedding capability points
+// at model 5, which is the row the document tests stub loadEmbeddingModelById to return.
+const SAVED_PROVIDER_CONFIG: SavedProviderConfigRow = {
+  server_id: 1,
+  provider: "google",
+  api_key: null,
+  key_version: 1,
+  llm_id: null,
+  diffusion_model_id: null,
+  embedding_model_id: 5,
+  nai_diffusion_model_id: null,
+  nai_preset_name: null,
+  llm_disabled_params: [],
+  llm_logit_biases: [],
+  thinking_level: "auto",
+  fallback_model_refs: [],
+};
 
 describe("short-term memory panel", () => {
   it("renders active entries together without component spacing", () => {
@@ -322,7 +340,7 @@ describe("memories panel route catalog", () => {
 
   it("covers every catalog action in the wire contract", () => {
     const catalogActions = listMemoriesPanelActions().sort();
-    const wireActions = [...new Set(WIRE_CONTRACT_V1.map(([, route]) => route.action))].sort();
+    const wireActions: string[] = [...new Set(WIRE_CONTRACT_V1.map(([, route]) => route.action))].sort();
     expect(wireActions).toEqual(catalogActions);
   });
 
@@ -496,8 +514,8 @@ describe("memories permissions and scoping", () => {
       showAddModal: async () => {
         calls.push("showAddModal");
       },
-      takeFileUpload: () => null,
-      takeDocumentFileUpload: () => null,
+      takeFileUpload: () => undefined,
+      takeDocumentFileUpload: () => undefined,
       readUploadedText: async () => ({ isValid: true, text: "" }),
       showEditModal: async () => {
         calls.push("showEditModal");
@@ -1478,7 +1496,7 @@ describe("memories permissions and scoping", () => {
       requireRoute(fakeInteraction.customId),
     );
 
-    expect(modalTags).toEqual(["#general"]);
+    expect<string[] | null>(modalTags).toEqual(["#general"]);
   });
 
   it("keeps the chunk removal prompt on its own document and addresses chunks by chunk_index", async () => {
@@ -1497,7 +1515,6 @@ describe("memories permissions and scoping", () => {
       loadDocuments: async () => documents,
       loadDocumentChunks: async (_serverId, _personaId, documentId) => (documentId === 77 ? chunks : []),
       getDocumentCounts: async () => ({ documents: 2, chunks: 3 }),
-      getEligibleDocumentPersonaIds: async () => new Set([10]),
     });
     const interaction = {
       id: "int-chunk-remove-prompt",
@@ -1673,6 +1690,7 @@ describe("memories permissions and scoping", () => {
           canManage: false,
           isBlacklisted: true,
           memteachingEnabled: true,
+          configuredEmbeddingModelId: null,
           personas: [makePersona(10, 1770, "Tomori")],
           readStatus: "fresh",
         }),
@@ -1763,6 +1781,7 @@ describe("memories permissions and scoping", () => {
           canManage: false,
           isBlacklisted: false,
           memteachingEnabled: false,
+          configuredEmbeddingModelId: null,
           personas: [makePersona(10, 1770, "Tomori")],
           readStatus: "fresh",
         }),
@@ -1825,6 +1844,7 @@ describe("memories permissions and scoping", () => {
           canManage: true,
           isBlacklisted: false,
           memteachingEnabled: false,
+          configuredEmbeddingModelId: null,
           personas: [makePersona(10, 1770, "Tomori")],
           readStatus: "fresh",
         }),
@@ -2036,11 +2056,12 @@ describe("memories permissions and scoping", () => {
         workspaceId: "guild-123",
         isBlacklisted: false,
         canManage: true,
+        memteachingEnabled: false,
         content: "New edited content",
         tags: ["updated"],
       });
       expect(editResult.status).toBe("success");
-      expect(invalidatedWorkspace).toBe("guild-123");
+      expect<string | null>(invalidatedWorkspace).toBe("guild-123");
 
       // Test remove cache invalidation
       invalidatedWorkspace = null;
@@ -2052,9 +2073,10 @@ describe("memories permissions and scoping", () => {
         workspaceId: "guild-123",
         isBlacklisted: false,
         canManage: true,
+        memteachingEnabled: false,
       });
       expect(removeResult.status).toBe("success");
-      expect(invalidatedWorkspace).toBe("guild-123");
+      expect<string | null>(invalidatedWorkspace).toBe("guild-123");
 
       // Test addBatch cache invalidation
       invalidatedWorkspace = null;
@@ -2071,7 +2093,7 @@ describe("memories permissions and scoping", () => {
         tags: [],
       });
       expect(batchResult.status).toBe("success");
-      expect(invalidatedWorkspace).toBe("guild-123");
+      expect<string | null>(invalidatedWorkspace).toBe("guild-123");
     } finally {
       cacheSpy.mockRestore();
       editSpy.mockRestore();
@@ -2251,15 +2273,19 @@ describe("memories document operation ordering", () => {
     const spies = {
       rag: spyOn(ragAvailability, "isRagAvailable").mockReturnValue(true),
       memoryGuard: spyOn(rateLimiter.memoryGuard, "checkMemory").mockReturnValue({
-        status: "ok",
-        usagePercent: 0,
-        heapUsedMB: 1,
-        heapTotalMB: 2,
-        rssMB: 3,
+        status: "safe",
+        rssUsedMB: 1,
+        memoryLimitMB: 2,
+        percentUsed: 0,
+        shouldProcessMedia: true,
       }),
       quota: spyOn(rateLimiter, "reserveDocumentQuota").mockReturnValue({ allowed: true }),
       credential: spyOn(credentialResolver, "resolveCapabilityCredentials").mockResolvedValue({
+        provider: "google",
         apiKey: "test-key",
+        keyVersion: 1,
+        savedConfig: SAVED_PROVIDER_CONFIG,
+        source: "server",
       }),
       modelId: spyOn(credentialResolver, "getResolvedCapabilityModelId").mockReturnValue(5),
       model: spyOn(llmModelRepo, "loadEmbeddingModelById").mockResolvedValue({
@@ -2267,6 +2293,9 @@ describe("memories document operation ordering", () => {
         provider: "google",
         codename: "embedding-model",
         model_family: "embedding-family",
+        is_scoped_registration: false,
+        is_default: false,
+        is_deprecated: false,
       }),
       task: spyOn(embeddingProvider, "providerSupportsEmbeddingTaskType").mockResolvedValue(false),
       embedding: spyOn(embeddingProvider, "generateEmbeddingsBatched").mockResolvedValue([[0.1, 0.2]]),
@@ -2386,6 +2415,7 @@ describe("memories document operation ordering", () => {
             canManage: true,
             memteachingEnabled: true,
             historyOnly: false,
+            isBlacklisted: false,
           })
         ).status,
       ).toBe("success");
@@ -2422,15 +2452,19 @@ describe("memories document operation ordering", () => {
     const order: string[] = [];
     const ragSpy = spyOn(ragAvailability, "isRagAvailable").mockReturnValue(true);
     const memoryGuardSpy = spyOn(rateLimiter.memoryGuard, "checkMemory").mockReturnValue({
-      status: "ok",
-      usagePercent: 0,
-      heapUsedMB: 1,
-      heapTotalMB: 2,
-      rssMB: 3,
+      status: "safe",
+      rssUsedMB: 1,
+      memoryLimitMB: 2,
+      percentUsed: 0,
+      shouldProcessMedia: true,
     });
     const quotaSpy = spyOn(rateLimiter, "reserveDocumentQuota").mockReturnValue({ allowed: true });
     const credentialSpy = spyOn(credentialResolver, "resolveCapabilityCredentials").mockResolvedValue({
+      provider: "google",
       apiKey: "test-key",
+      keyVersion: 1,
+      savedConfig: SAVED_PROVIDER_CONFIG,
+      source: "server",
     });
     const modelIdSpy = spyOn(credentialResolver, "getResolvedCapabilityModelId").mockReturnValue(5);
     const modelSpy = spyOn(llmModelRepo, "loadEmbeddingModelById").mockResolvedValue({
@@ -2438,6 +2472,9 @@ describe("memories document operation ordering", () => {
       provider: "google",
       codename: "embedding-model",
       model_family: "embedding-family",
+      is_scoped_registration: false,
+      is_default: false,
+      is_deprecated: false,
     });
     const taskSpy = spyOn(embeddingProvider, "providerSupportsEmbeddingTaskType").mockResolvedValue(false);
     const embeddingSpy = spyOn(embeddingProvider, "generateEmbeddingsBatched").mockResolvedValue([[0.1, 0.2]]);

@@ -18,12 +18,12 @@ describe("buildStateControlRow", () => {
     expect(requiredBtn.style).toBe(ButtonStyle.Secondary);
     expect(requiredBtn.disabled).toBe(false);
     expect(requiredBtn.label).toBe("Personal Providers Required");
-    expect(requiredBtn.customId).toBe("mod:set:false");
+    expect(requiredBtn && "customId" in requiredBtn ? requiredBtn.customId : "").toBe("mod:set:false");
 
     expect(allowedBtn.style).toBe(ButtonStyle.Primary);
     expect(allowedBtn.disabled).toBe(true);
     expect(allowedBtn.label).toBe("Server Models Allowed");
-    expect(allowedBtn.customId).toBe("mod:set:true");
+    expect(allowedBtn && "customId" in allowedBtn ? allowedBtn.customId : "").toBe("mod:set:true");
   });
 
   it("renders selected choice as disabled Primary when first option is selected", () => {

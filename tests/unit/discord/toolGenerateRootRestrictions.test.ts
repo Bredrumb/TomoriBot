@@ -17,6 +17,9 @@ import { initializeLocalizer } from "@/utils/text/localizer";
 
 beforeAll(async () => initializeLocalizer());
 
+/** The raw snake_case permission field the registration payload carries onto the wire. */
+type RegistrationRestrictions = { default_member_permissions?: string };
+
 describe("/tool and /generate root registration restrictions", () => {
   it("registers /tool with no contexts and no default_member_permissions", async () => {
     const { registrationData } = await loadCommandData();
@@ -24,7 +27,7 @@ describe("/tool and /generate root registration restrictions", () => {
 
     expect(tool).toBeDefined();
     expect(tool?.contexts).toBeUndefined();
-    expect(tool?.default_member_permissions).toBeUndefined();
+    expect((tool as unknown as RegistrationRestrictions | undefined)?.default_member_permissions).toBeUndefined();
   }, 30000);
 
   it("registers /generate with no contexts and no default_member_permissions", async () => {
@@ -33,6 +36,6 @@ describe("/tool and /generate root registration restrictions", () => {
 
     expect(generate).toBeDefined();
     expect(generate?.contexts).toBeUndefined();
-    expect(generate?.default_member_permissions).toBeUndefined();
+    expect((generate as unknown as RegistrationRestrictions | undefined)?.default_member_permissions).toBeUndefined();
   }, 30000);
 });

@@ -27,12 +27,11 @@ const REALISTIC_RECEIPT: PanelReceipt = {
 
 const READ_STATUSES: PanelReadStatus[] = ["fresh", "stale", "unavailable"];
 const RECEIPTS: Array<PanelReceipt | undefined> = [undefined, REALISTIC_RECEIPT];
-const ALL_ACTIONS = new Set<"add-provider" | "add-endpoint" | "model" | "edit" | "activate" | "remove">([
+const ALL_ACTIONS = new Set<"add-provider" | "add-endpoint" | "model" | "edit" | "remove">([
   "add-provider",
   "add-endpoint",
   "model",
   "edit",
-  "activate",
   "remove",
 ]);
 
@@ -51,6 +50,7 @@ function model(id: number, codeName = `provider-model-${id}`, custom = true): Pr
       supportsStructOutput: false,
       strictRoleAlternation: false,
       supportsPrefixCompletion: true,
+      verbatimToolCalling: false,
     },
   };
 }
@@ -98,7 +98,13 @@ function endpointEntry(
     connectionIds: [id],
     isPreset: false,
     connectionDetails: [
-      { connectionId: id, endpointUrl: `https://endpoint-${id}.example.invalid/v1`, apiStyle: "openai-compatible" },
+      {
+        connectionId: id,
+        endpointUrl: `https://endpoint-${id}.example.invalid/v1`,
+        apiStyle: "openai-compatible",
+        capability: "text",
+        vramHandoff: null,
+      },
     ],
     capabilities: [
       section("text", models),

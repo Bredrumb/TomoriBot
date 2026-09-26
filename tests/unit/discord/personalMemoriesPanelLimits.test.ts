@@ -83,7 +83,7 @@ describe("PersonalMemoriesPanel Limits & Boundary Sweeps", () => {
                 );
 
                 const firstMemory = memories[0];
-                if (firstMemory) {
+                if (firstMemory?.personal_memory_id !== undefined) {
                   expectSafePanelPayload(
                     buildPersonalMemoriesPanelPayload({
                       locale,

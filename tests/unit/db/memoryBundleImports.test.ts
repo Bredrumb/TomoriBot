@@ -100,33 +100,32 @@ function recordMemoryWrite(query: string, values: unknown[]): void {
   else committedWrites.push(write);
 }
 
-const fakeSqlTag = (async <T extends readonly Record<string, unknown>[] = Record<string, unknown>[]>(
-  strings: TemplateStringsArray,
-  ...values: unknown[]
-): Promise<T> => {
+// The fake answers every query with untyped rows, so the generic call signature the
+// repositories use is asserted once here instead of at each return.
+const fakeSqlTag = (async (strings: TemplateStringsArray, ...values: unknown[]): Promise<Record<string, unknown>[]> => {
   const query = queryText(strings);
   if (query.startsWith("DELETE FROM server_memories")) {
     recordMemoryWrite(query, values);
-    return rowsForDelete("server_memories", Number(values[1])) as T;
+    return rowsForDelete("server_memories", Number(values[1]));
   }
   if (query.startsWith("DELETE FROM personal_memories")) {
     recordMemoryWrite(query, values);
-    return rowsForDelete("personal_memories", Number(values[1])) as T;
+    return rowsForDelete("personal_memories", Number(values[1]));
   }
-  if (query.includes("FROM servers")) return (serverExists ? [{ server_id: 7 }] : []) as T;
+  if (query.includes("FROM servers")) return serverExists ? [{ server_id: 7 }] : [];
   if (query.includes("FROM personas")) {
     const persona = personas.get(Number(values[0]));
-    return persona?.server_id === Number(values[1]) ? ([persona] as T) : ([] as Record<string, unknown>[] as T);
+    return persona?.server_id === Number(values[1]) ? [persona] : [];
   }
-  if (query.includes("FROM server_memories")) return (serverRows.get(Number(values[1])) ?? []) as T;
-  if (query.includes("FROM personal_memories")) return (personalRows.get(Number(values[1])) ?? []) as T;
-  if (query.includes("FROM users")) return [{ user_id: earlierUserId }] as T;
-  if (query.startsWith("INSERT INTO users")) return [{ user_id: importerUserId }] as T;
+  if (query.includes("FROM server_memories")) return serverRows.get(Number(values[1])) ?? [];
+  if (query.includes("FROM personal_memories")) return personalRows.get(Number(values[1])) ?? [];
+  if (query.includes("FROM users")) return [{ user_id: earlierUserId }];
+  if (query.startsWith("INSERT INTO users")) return [{ user_id: importerUserId }];
   if (query.startsWith("INSERT INTO server_memories") || query.startsWith("INSERT INTO personal_memories")) {
     recordMemoryWrite(query, values);
-    return [] as T;
+    return [];
   }
-  return [] as T;
+  return [];
 }) as SqlCall;
 
 const fakeUnsafe: UnsafeCall = async () => [];

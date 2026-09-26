@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { Client } from "discord.js";
 import { HumanizerDegree, type AssembledServerConfig, type TomoriState } from "@/types/db/schema";
+import type { StructuredContextItem } from "@/types/misc/context";
 import { appendDialogueHistoryContext } from "@/utils/text/context/dialogueHistory";
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { shouldInjectVerbatimToolCallingNudge } from "@/utils/tools/verbatimToolCalling";
@@ -54,7 +55,7 @@ async function buildItems(options: {
   llmProvider?: string;
   messageCount?: number;
 }) {
-  const contextItems = [];
+  const contextItems: StructuredContextItem[] = [];
   await appendDialogueHistoryContext({
     contextItems,
     client: {} as Client,
@@ -65,6 +66,7 @@ async function buildItems(options: {
     tomoriState: makeTomoriState(options),
     includeTimestamps: false,
     isUserImpersonation: false,
+    triggererFormattedName: `User ${(options.messageCount ?? 5) - 1}`,
     uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
     convertMentions: async (text) => text,
   });

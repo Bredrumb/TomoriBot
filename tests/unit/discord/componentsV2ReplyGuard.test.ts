@@ -14,7 +14,7 @@
  */
 
 import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
-import { AttachmentBuilder, ComponentType, MessageFlags } from "discord.js";
+import { AttachmentBuilder, type ButtonInteraction, ComponentType, MessageFlags } from "discord.js";
 import type { ChatInputCommandInteraction, Message } from "discord.js";
 import * as componentsV2Limits from "@/utils/discord/ui/componentsV2Limits";
 import { CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER, parseConfigPanelRoute } from "@/utils/discord/configPanelCatalog";
@@ -36,7 +36,6 @@ import {
   replyInfoEmbed,
   validateComponentsV2MessageLimits,
   type ComponentsV2MessagePayload,
-  type GuardedPanelDeliveryTarget,
   type GuardedPanelWorkflowController,
 } from "@/utils/discord/ui/interactionCore";
 import { log } from "@/utils/misc/logger";
@@ -209,7 +208,9 @@ function makeGuardedInteraction(options: { canUpdate?: boolean; canEditReply?: b
           },
         }
       : {}),
-  } as unknown as GuardedPanelDeliveryTarget;
+    // The reply guard marks concrete interactions and the delivery helper accepts the wider delivery
+    // union, so the button a panel transport really carries is the type both are checked against.
+  } as unknown as ButtonInteraction;
   return { interaction, calls };
 }
 

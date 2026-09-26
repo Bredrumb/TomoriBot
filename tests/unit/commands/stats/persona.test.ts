@@ -149,9 +149,11 @@ describe("/stats persona execute handler", () => {
     user: { id: string };
     id: string;
     options: { getString: (name: string) => string | null };
+    deferred: boolean;
     deferReply: (options?: { flags?: MessageFlags }) => Promise<void>;
     deleteReply: () => Promise<void>;
     followUp: (payload: unknown) => Promise<{ id: string }>;
+    reply: () => Promise<void>;
     editReply: (payload: unknown) => Promise<void>;
   };
 
@@ -267,7 +269,7 @@ describe("/stats persona execute handler", () => {
     );
     const renderSpy = trackSpy(
       spyOn(statsDashboard, "renderStatsDashboardWithReply").mockImplementation(async (replyFn) => {
-        await replyFn({ content: "Dashboard payload" });
+        await replyFn({ components: [], flags: MessageFlags.IsComponentsV2 });
       }),
     );
 
@@ -279,7 +281,7 @@ describe("/stats persona execute handler", () => {
     expect(renderSpy).toHaveBeenCalled();
     expect(getDeleteCalls()).toBe(1);
     expect(followUpCalls.length).toBe(1);
-    expect(followUpCalls[0]).toEqual({ content: "Dashboard payload" });
+    expect(followUpCalls[0]).toEqual({ components: [], flags: MessageFlags.IsComponentsV2 });
   });
 
   it("deletes the private acknowledgement before slow stats construction", async () => {
@@ -293,7 +295,7 @@ describe("/stats persona execute handler", () => {
     trackSpy(
       spyOn(statsDashboard, "renderStatsDashboardWithReply").mockImplementation(async (replyFn) => {
         events.push("render");
-        await replyFn({ content: "Dashboard payload" });
+        await replyFn({ components: [], flags: MessageFlags.IsComponentsV2 });
       }),
     );
 

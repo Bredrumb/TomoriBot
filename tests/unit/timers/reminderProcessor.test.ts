@@ -12,9 +12,10 @@ import * as realMentionHelper from "@/utils/discord/mentionHelper";
 import * as realWebhookManager from "@/utils/discord/webhookManager";
 import * as realTomoriChat from "@/events/messageCreate/tomoriChat";
 import * as realLogger from "@/utils/misc/logger";
+import type { QueuedMessageDiscardHandler } from "@/utils/chat/types";
 import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 
-const getDueRemindersMock = mock(async () => []);
+const getDueRemindersMock = mock<typeof realRepositories.serverScheduleRepository.getDueReminders>(async () => []);
 const rescheduleReminderMock = mock(async (_reminderId: number, nextReminderTime: Date) => ({
   reminder_id: _reminderId,
   reminder_time: nextReminderTime,
@@ -27,7 +28,7 @@ const scheduleReminderRetryMock = mock(
   }),
 );
 const deleteReminderByIdMock = mock(async () => true);
-const tomoriChatMock = mock(async () => "run");
+const tomoriChatMock = mock<typeof realTomoriChat.tomoriChat>(async () => "run");
 const suppressNextSelfReplyMock = mock(() => {});
 const ensureDiscordUserMentionMock = mock(async () => {});
 
@@ -230,7 +231,7 @@ describe("ReminderProcessor delivery acknowledgement", () => {
 
   it("keeps queued reminders leased and retries them when the queue is cleared", async () => {
     const reminder = makeReminder();
-    let onQueueDiscard: ((reason: "channel_queue_cleared") => Promise<void>) | undefined;
+    let onQueueDiscard: QueuedMessageDiscardHandler | undefined;
     getDueRemindersMock.mockImplementation(async () => [reminder]);
     tomoriChatMock.mockImplementation(async (input) => {
       onQueueDiscard = input.onQueueDiscard;

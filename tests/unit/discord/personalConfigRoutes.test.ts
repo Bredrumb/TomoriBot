@@ -7,10 +7,14 @@ import {
   type ActionRowData,
   type ButtonComponentData,
   type Client,
-  type ModalSubmitInteraction,
+  type ComponentInContainerData,
+  type ContainerComponentData,
+  type InteractionButtonComponentData,
   type TextDisplayComponentData,
 } from "discord.js";
 import { PrivacyLevel, type UserRow, type TomoriState, type UserSavedProviderConfigRow } from "@/types/db/schema";
+import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
+import type { PersonalSpotlightStatus } from "@/utils/db/repositories/UserRepository";
 import { createPersonalConfigInteractionRoute } from "@/utils/discord/interactions/personalConfigRoutes";
 import type { PersonalConfigRouteDependencies } from "@/utils/discord/interactions/personalConfigRouteContext";
 import {
@@ -30,6 +34,8 @@ import {
   parsePersonalConfigPanelRoute,
   PERSONAL_CONFIG_ROUTE_CODECS,
   type PersonalConfigAction,
+  type PersonalConfigCategory,
+  type PersonalConfigPage,
   type PersonalConfigPanelRoute,
   SPOTLIGHT_PERSONA_PAGE_SIZE,
 } from "@/utils/discord/personalConfigPanelCatalog";
@@ -45,6 +51,7 @@ import {
 import {
   buildPersonalConfigPanelPayload,
   type PersonalConfigModelDisplayInfo,
+  type PersonalConfigPanelPayload,
   type PersonalConfigRoutingRow,
 } from "@/utils/discord/ui/personalConfigPanel";
 import { formatPanelProse } from "@/utils/discord/ui/panelProse";
@@ -143,10 +150,13 @@ function collectComponents(value: unknown): ObservedComponent[] {
 
 /**
  * The suite pins its actor's Discord snowflake because spotlight fingerprints bind the writable
- * scope to it, so the shared row arrives with this suite's actor and nothing else overridden.
+ * scope to it, so the shared row arrives with this suite's actor and nothing else overridden. The
+ * routes read the numeric id as required while the schema types it optional, so the row the suite
+ * hands over carries the shared fixture's id explicitly.
  */
-function makeUser(overrides: Partial<UserRow> = {}): UserRow {
-  return createUserRow({ user_disc_id: "user-123", ...overrides });
+function makeUser(overrides: Partial<UserRow> = {}): UserRow & { user_id: number } {
+  const row = createUserRow({ user_disc_id: "user-123", ...overrides });
+  return { ...row, user_id: row.user_id ?? 1 };
 }
 
 const SUITE_ACTOR: RouteInteraction["user"] = {
@@ -198,6 +208,72 @@ function makeParameterConfig(provider: string): UserSavedProviderConfigRow {
     llm_max_output_tokens: 4096,
     thinking_level: "auto",
   } as unknown as UserSavedProviderConfigRow;
+}
+
+/**
+ * A complete active-spotlight row. Production reads `channelDiscId`, `personaIds`,
+ * `autoTriggerPersonaId`, and `expiresAt` from these rows, and the suite's own guild and actor fill
+ * the three identity columns, so a call site states only the channel and the persona selection.
+ */
+function makeSpotlight(
+  channelDiscId: string,
+  overrides: Partial<PersonalSpotlightStatus> = {},
+): PersonalSpotlightStatus {
+  return {
+    serverId: 42,
+    userId: 1,
+    channelDiscId,
+    personaIds: [],
+    autoTriggerPersonaId: null,
+    expiresAt: null,
+    createdAt: null,
+    updatedAt: null,
+    ...overrides,
+  };
+}
+
+/** What the loaders report per capability when the account has no saved provider for it. */
+const EMPTY_ROUTING_ROWS: Record<PersonalConfigManagedCapability, PersonalConfigRoutingRow> = {
+  text: { capability: "text", activeModelName: null, storedProvider: null, storedModelName: null },
+  vision: { capability: "vision", activeModelName: null, storedProvider: null, storedModelName: null },
+  embedding: { capability: "embedding", activeModelName: null, storedProvider: null, storedModelName: null },
+  image: { capability: "image", activeModelName: null, storedProvider: null, storedModelName: null },
+  image_nai: { capability: "image_nai", activeModelName: null, storedProvider: null, storedModelName: null },
+  video: { capability: "video", activeModelName: null, storedProvider: null, storedModelName: null },
+};
+
+const EMPTY_CAPABILITY_PROVIDERS: Record<PersonalConfigManagedCapability, string[]> = {
+  text: [],
+  vision: [],
+  embedding: [],
+  image: [],
+  image_nai: [],
+  video: [],
+};
+
+/**
+ * Display info for an account with no saved providers. The loader always reports every capability
+ * key, so a fixture that only varies the Fallbacks fields states those and inherits the rest rather
+ * than omitting keys the rendered page does not read.
+ */
+function makeModelDisplayInfo(
+  overrides: Partial<Omit<PersonalConfigModelDisplayInfo, "routingRows" | "eligibleProvidersForCapability">> & {
+    routingRows?: Partial<Record<PersonalConfigManagedCapability, PersonalConfigRoutingRow>>;
+    eligibleProvidersForCapability?: Partial<Record<PersonalConfigManagedCapability, string[]>>;
+  } = {},
+): PersonalConfigModelDisplayInfo {
+  const { routingRows, eligibleProvidersForCapability, ...rest } = overrides;
+  return {
+    routingRows: { ...EMPTY_ROUTING_ROWS, ...routingRows },
+    availableCapabilities: [],
+    eligibleProvidersForCapability: { ...EMPTY_CAPABILITY_PROVIDERS, ...eligibleProvidersForCapability },
+    parametersProviders: [],
+    fallbacksProviders: [],
+    fallbackSlots: [],
+    randomizerEnabled: false,
+    canEnableRandomizer: false,
+    ...rest,
+  };
 }
 
 function makeDependencies(
@@ -498,15 +574,7 @@ function makeDependencies(
       { id: 101, name: "Claude 3.5 Sonnet" },
       { id: 102, name: "Claude 3 Opus" },
     ],
-    loadActiveSpotlights: async () => [
-      {
-        channelDiscId: "ch-100",
-        personaIds: [1],
-        autoTriggerPersonaId: null,
-        expiresAt: null,
-        userDiscId: "disc-user-1",
-      },
-    ],
+    loadActiveSpotlights: async () => [makeSpotlight("ch-100", { personaIds: [1] })],
     loadGuildPersonas: async () => [
       { id: 1, name: "Tomori", isAlter: false },
       { id: 2, name: "Anon", isAlter: true },
@@ -532,11 +600,15 @@ function makeDependencies(
     showParameters2Modal: async () => {},
     showFallbacksModal: async () => {},
     showImpersonationModal: async () => {},
+    showSpotlightStep1Modal: async () => {},
     showSpotlightSetModal: async () => {},
     showSpotlightAutoTriggerModal: async () => {},
     showSpotlightRemoveModal: async () => {},
-    ...overrides,
   };
+
+  // Spreading a `Partial` over the defaults widens every dependency to `| undefined`, so the
+  // overrides are applied to the completed object, which keeps each key's declared type.
+  Object.assign(dependencies, overrides);
 
   return { dependencies, user, personaPrefs, telemetry };
 }
@@ -1279,7 +1351,7 @@ describe("personalConfigPanelCatalog", () => {
             version: validRoute.version,
             segments: segmentsDropped,
           };
-          if ((action === "retry" || action === "refresh") && route.lineageId !== undefined) {
+          if ((action === "retry" || action === "refresh") && "lineageId" in route && route.lineageId !== undefined) {
             expect(parsePersonalConfigPanelRoute(droppedParsedRoute)).not.toBeNull();
           } else {
             expect(parsePersonalConfigPanelRoute(droppedParsedRoute)).toBeNull();
@@ -1287,7 +1359,7 @@ describe("personalConfigPanelCatalog", () => {
         }
 
         // For 4-segment retry/refresh, dropping one segment drops to 3 segments which must fail closed
-        if ((action === "retry" || action === "refresh") && route.lineageId === undefined) {
+        if ((action === "retry" || action === "refresh") && !("lineageId" in route && route.lineageId !== undefined)) {
           const droppedTwice = {
             namespace: validRoute.namespace,
             version: validRoute.version,
@@ -1423,7 +1495,7 @@ describe("personalConfigOperations invariants", () => {
   });
 
   it("setAppearance validates and updates physical appearance tags", async () => {
-    const updateSpy = spyOn(userRepository, "update").mockImplementation(async () => true);
+    const updateSpy = spyOn(userRepository, "update").mockImplementation(async () => makeUser());
 
     // Empty tags clears
     const clearResult = await personalConfigOperations.setAppearance({
@@ -1447,7 +1519,7 @@ describe("personalConfigOperations invariants", () => {
   });
 
   it("setPrivacyLevel and toggleCrossServerStm call repository methods", async () => {
-    const privacySpy = spyOn(userRepository, "setPrivacyLevel").mockImplementation(async () => true);
+    const privacySpy = spyOn(userRepository, "setPrivacyLevel").mockImplementation(async () => makeUser());
     const toggleSpy = spyOn(userRepository, "toggleCrossServerShmOptIn").mockImplementation(async () => true);
 
     const privacyResult = await personalConfigOperations.setPrivacyLevel({
@@ -1537,7 +1609,9 @@ describe("personalConfigRoutes interaction handling and telemetry", () => {
 describe("naming modal empty fields mean inherit", () => {
   it("submits a blank or whitespace-only field to the operation as null, not an empty string", async () => {
     const calls: string[] = [];
-    let received: { nickname: string | null; prefix: string | null; suffix: string | null } | null = null;
+    // Declared without a `null` initializer: TypeScript narrows a `let` to that initializer and cannot
+    // see the closure assignment, and a missing submission still fails the assertion below.
+    let received: { nickname: string | null; prefix: string | null; suffix: string | null } | undefined;
 
     const { dependencies } = makeDependencies(calls, {
       operations: {
@@ -1872,7 +1946,7 @@ describe("Models interaction routing and telemetry", () => {
   it("quick-toggle-submit acknowledges before the operation and records telemetry on success", async () => {
     const calls: string[] = [];
     let acknowledgedDuringWrite = false;
-    let interaction: ModalSubmitInteraction;
+    let interaction: PersonalInteraction;
     const { dependencies, telemetry } = makeDependencies(calls);
     dependencies.operations = {
       ...dependencies.operations,
@@ -2129,7 +2203,7 @@ describe("personal config Appearance character reference", () => {
   it("clears the Me character reference through the receipt path after acknowledgement", async () => {
     const calls: string[] = [];
     let acknowledgedInsideWrite = false;
-    let interaction: RouteInteraction;
+    let interaction: PersonalInteraction;
     const { dependencies, user } = makeDependencies(calls, {
       operations: {
         ...personalConfigOperations,
@@ -2166,6 +2240,7 @@ describe("Models panel rendering", () => {
       user,
       resolvedNickname: "Tester",
       personas: [makePersona(1, 10, "Tomori")],
+      guildId: "guild-123",
       memoryCount: 0,
       stmCount: 0,
       readStatus: "fresh",
@@ -2278,6 +2353,7 @@ describe("Models panel rendering", () => {
       user,
       resolvedNickname: "Tester",
       personas: [makePersona(1, 10, "Tomori")],
+      guildId: "guild-123",
       memoryCount: 0,
       stmCount: 0,
       readStatus: "fresh",
@@ -2425,6 +2501,7 @@ describe("Models panel rendering", () => {
       user,
       resolvedNickname: "Tester",
       personas: [makePersona(1, 10, "Tomori")],
+      guildId: "guild-123",
       memoryCount: 0,
       stmCount: 0,
       readStatus: "fresh",
@@ -2749,7 +2826,7 @@ describe("Re-resolution and zero model guard", () => {
     const calls: string[] = [];
     const { dependencies, telemetry } = makeDependencies(calls);
     let acknowledgedInsideWrite = false;
-    let interaction: RouteInteraction;
+    let interaction: PersonalInteraction;
     dependencies.operations.setCapabilityEnabled = async () => {
       acknowledgedInsideWrite = interaction.deferred;
       return { status: "no-changes" };
@@ -2989,23 +3066,23 @@ describe("Range pagination workflow", () => {
     }));
 
     const { dependencies } = makeDependencies([], {
-      loadPersonalModelDisplayInfo: async () => ({
-        routingRows: {
-          text: {
-            capability: "text",
-            activeModelName: "Model 1",
-            storedProvider: "provider_1",
-            activeProvider: "provider_1",
-            parameterConfigured: false,
+      loadPersonalModelDisplayInfo: async () =>
+        makeModelDisplayInfo({
+          routingRows: {
+            text: {
+              capability: "text",
+              activeModelName: "Model 1",
+              storedProvider: "provider_1",
+              storedModelName: "Model 1",
+            },
           },
-        },
-        availableCapabilities: ["text"],
-        eligibleProvidersForCapability: {
-          text: twentyFourProviders,
-        },
-        parametersProviders: ["provider_1"],
-        selectedParametersConfig: null,
-      }),
+          availableCapabilities: ["text"],
+          eligibleProvidersForCapability: {
+            text: twentyFourProviders,
+          },
+          parametersProviders: ["provider_1"],
+          selectedParametersConfig: null,
+        }),
       loadAvailableModelsForCapability: async () => thirtyModels,
     });
 
@@ -3028,9 +3105,11 @@ describe("Range pagination workflow", () => {
     const textSelect = components.find((c) => c.customId?.includes(":model-provider-select:en-US:text"));
     expect(textSelect).toBeDefined();
 
-    const moreOption = textSelect?.options?.find((o) => decodeProviderRangeValue(o.value) !== null);
+    const moreOption = textSelect?.options?.find(
+      (o) => o.value !== undefined && decodeProviderRangeValue(o.value) !== null,
+    );
     expect(moreOption).toBeDefined();
-    if (!moreOption) throw new Error("Expected moreOption to be defined");
+    if (!moreOption?.value) throw new Error("Expected moreOption to carry a provider range value");
     const decoded = decodeProviderRangeValue(moreOption.value);
     expect(decoded).toEqual({
       start: 23,
@@ -3790,6 +3869,7 @@ describe("Quick-Toggle modal structure and routing copy", () => {
         } as unknown as UserSavedProviderConfigRow,
       ],
       operations: {
+        ...personalConfigOperations,
         setQuickToggleRouting: async (input) => {
           calls.push(`setQuickToggleRouting:${Array.from(input.selectedCapabilities).join(",")}`);
           return { status: "success" };
@@ -3883,7 +3963,7 @@ describe("personalConfigOperations Advanced operations", () => {
   });
 
   it("setToolMode calls userRepository.update", async () => {
-    const updateSpy = spyOn(userRepository, "update").mockImplementation(async () => true);
+    const updateSpy = spyOn(userRepository, "update").mockImplementation(async () => makeUser());
     const result = await personalConfigOperations.setToolMode({
       userId: 1,
       userDiscId: "user-123",
@@ -4152,13 +4232,9 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
 
   it("removes only the presented range when the removal modal was opened past the first page", async () => {
     const calls: string[] = [];
-    const activeSpotlights = Array.from({ length: 60 }, (_, index) => ({
-      channelDiscId: String(100000000000000000n + BigInt(index)),
-      personaIds: [1],
-      autoTriggerPersonaId: null,
-      expiresAt: null,
-      userDiscId: "user-123",
-    }));
+    const activeSpotlights = Array.from({ length: 60 }, (_, index) =>
+      makeSpotlight(String(100000000000000000n + BigInt(index)), { personaIds: [1] }),
+    );
     const { dependencies } = makeDependencies(calls, {
       loadActiveSpotlights: async () => activeSpotlights,
     });
@@ -4234,14 +4310,7 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
       "nonce123456",
       0,
       "a1b2c3d4",
-      [
-        {
-          channelDiscId: "123456789012345678",
-          personaIds: [1],
-          autoTriggerPersonaId: null,
-          expiresAt: null,
-        },
-      ] as unknown as Parameters<typeof buildSpotlightRemoveModal>[4],
+      [makeSpotlight("123456789012345678", { personaIds: [1] })],
       [{ id: 1, name: "Tomori", isAlter: false }],
       new Map([["123456789012345678", { name: "general" }]]),
     );
@@ -4299,19 +4368,19 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
                 : null,
             });
 
-            const container = payload.components[0] as { components: unknown[] };
-            expect(container).toBeDefined();
+            const container = payload.components.find(
+              (component): component is ContainerComponentData<ComponentInContainerData> =>
+                component.type === ComponentType.Container,
+            );
+            if (!container) throw new Error("Expected the panel container");
 
             // Find DTM action row and its surrounding text displays
             const dtmRowIndex = container.components.findIndex(
               (c) =>
-                typeof c === "object" &&
-                c !== null &&
-                "type" in c &&
-                (c as { type: number }).type === ComponentType.ActionRow &&
-                Array.isArray((c as { components: unknown[] }).components) &&
-                (c as { components: Array<{ customId?: string }> }).components.some((b) =>
-                  b.customId?.includes("trigger-mode-set"),
+                c.type === ComponentType.ActionRow &&
+                "components" in c &&
+                c.components.some(
+                  (b) => "customId" in b && typeof b.customId === "string" && b.customId.includes("trigger-mode-set"),
                 ),
             );
             expect(dtmRowIndex).toBeGreaterThan(0);
@@ -4342,7 +4411,7 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
             }
 
             // Verify DTM button styling and disabled states
-            const dtmRow = container.components[dtmRowIndex] as ActionRowData<ButtonComponentData>;
+            const dtmRow = container.components[dtmRowIndex] as ActionRowData<InteractionButtonComponentData>;
             expect(dtmRow.components).toHaveLength(3);
             const [dtmOff, dtmFollow, dtmOn] = dtmRow.components;
 
@@ -4364,13 +4433,10 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
             // Find Tool Mode action row and its surrounding text displays
             const toolRowIndex = container.components.findIndex(
               (c) =>
-                typeof c === "object" &&
-                c !== null &&
-                "type" in c &&
-                (c as { type: number }).type === ComponentType.ActionRow &&
-                Array.isArray((c as { components: unknown[] }).components) &&
-                (c as { components: Array<{ customId?: string }> }).components.some((b) =>
-                  b.customId?.includes("tool-mode-set"),
+                c.type === ComponentType.ActionRow &&
+                "components" in c &&
+                c.components.some(
+                  (b) => "customId" in b && typeof b.customId === "string" && b.customId.includes("tool-mode-set"),
                 ),
             );
             expect(toolRowIndex).toBeGreaterThan(dtmRowIndex);
@@ -4397,7 +4463,7 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
             );
 
             // Verify Tool Mode button styling and disabled states
-            const toolRow = container.components[toolRowIndex] as ActionRowData<ButtonComponentData>;
+            const toolRow = container.components[toolRowIndex] as ActionRowData<InteractionButtonComponentData>;
             expect(toolRow.components).toHaveLength(3);
             const [toolOff, toolFollow, toolOn] = toolRow.components;
 
@@ -4442,16 +4508,20 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
       serverTriggerBehavior: { deliberate_trigger_mode: false, deliberate_tool_mode: false },
     });
 
-    const container = payload.components[0] as { components: unknown[] };
+    const container = payload.components.find(
+      (component): component is ContainerComponentData<ComponentInContainerData> =>
+        component.type === ComponentType.Container,
+    );
+    if (!container) throw new Error("Expected the panel container");
     const rows = container.components.filter(
       (c): c is ActionRowData<ButtonComponentData> =>
-        typeof c === "object" &&
-        c !== null &&
-        "type" in c &&
-        (c as { type: number }).type === ComponentType.ActionRow &&
-        Array.isArray((c as { components: unknown[] }).components) &&
-        (c as { components: Array<{ customId?: string }> }).components.some(
-          (b) => b.customId?.includes("trigger-mode-set") || b.customId?.includes("tool-mode-set"),
+        c.type === ComponentType.ActionRow &&
+        "components" in c &&
+        c.components.some(
+          (b) =>
+            "customId" in b &&
+            typeof b.customId === "string" &&
+            (b.customId.includes("trigger-mode-set") || b.customId.includes("tool-mode-set")),
         ),
     );
 
@@ -4533,7 +4603,7 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
     const privacyPayload = buildPersonalConfigPanelPayload({
       locale: "en-US",
       category: "privacy",
-      page: "privacy-controls",
+      page: "controls",
       user: makeUser({ shortterm_cache_crossserver_opt_in: false }),
       resolvedNickname: "Tester",
       personas: [],
@@ -4606,15 +4676,7 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
 
   it("handles spotlight removal and records telemetry on success", async () => {
     const calls: string[] = [];
-    const activeSpotlights = [
-      {
-        channelDiscId: "123456789012345678",
-        personaIds: [1],
-        autoTriggerPersonaId: null,
-        expiresAt: null,
-        userDiscId: "user-123",
-      },
-    ];
+    const activeSpotlights = [makeSpotlight("123456789012345678", { personaIds: [1] })];
     const { dependencies, telemetry } = makeDependencies(calls, {
       loadActiveSpotlights: async () => activeSpotlights,
     });
@@ -4643,7 +4705,10 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
 describe("Stable spotlight identity and destructive safety", () => {
   it("detects persona inserted before selected position and fails stale with zero writes or telemetry", async () => {
     const calls: string[] = [];
-    const initialPersonas = [makePersona(1, 10, "Tomori"), makePersona(2, 20, "Anon")];
+    const initialPersonas = [
+      { id: 1, name: "Tomori", isAlter: false },
+      { id: 2, name: "Anon", isAlter: false },
+    ];
     const fp = computeSpotlightSetFingerprint("guild-123", "user-123", initialPersonas);
     const customId = buildPersonalConfigRouteId({
       action: "spot-set-cf",
@@ -4658,9 +4723,9 @@ describe("Stable spotlight identity and destructive safety", () => {
     });
 
     const driftedPersonas = [
-      makePersona(99, 99, "NewPersona"),
-      makePersona(1, 10, "Tomori"),
-      makePersona(2, 20, "Anon"),
+      { id: 99, name: "NewPersona", isAlter: false },
+      { id: 1, name: "Tomori", isAlter: false },
+      { id: 2, name: "Anon", isAlter: false },
     ];
 
     const { dependencies, telemetry } = makeDependencies(calls, {
@@ -4684,7 +4749,11 @@ describe("Stable spotlight identity and destructive safety", () => {
 
   it("detects persona deleted before selected position and fails stale with zero writes or telemetry", async () => {
     const calls: string[] = [];
-    const initialPersonas = [makePersona(1, 10, "Tomori"), makePersona(2, 20, "Anon"), makePersona(3, 30, "Soy")];
+    const initialPersonas = [
+      { id: 1, name: "Tomori", isAlter: false },
+      { id: 2, name: "Anon", isAlter: false },
+      { id: 3, name: "Soy", isAlter: false },
+    ];
     const fp = computeSpotlightSetFingerprint("guild-123", "user-123", initialPersonas);
     const customId = buildPersonalConfigRouteId({
       action: "spot-set-cf",
@@ -4698,7 +4767,10 @@ describe("Stable spotlight identity and destructive safety", () => {
       nonce: "nonce123456",
     });
 
-    const driftedPersonas = [makePersona(2, 20, "Anon"), makePersona(3, 30, "Soy")];
+    const driftedPersonas = [
+      { id: 2, name: "Anon", isAlter: false },
+      { id: 3, name: "Soy", isAlter: false },
+    ];
 
     const { dependencies, telemetry } = makeDependencies(calls, {
       loadGuildPersonas: async () => driftedPersonas,
@@ -4721,7 +4793,10 @@ describe("Stable spotlight identity and destructive safety", () => {
 
   it("fails stale on spotlight-set-submit when personas drift before modal submit", async () => {
     const calls: string[] = [];
-    const initialPersonas = [makePersona(1, 10, "Tomori"), makePersona(2, 20, "Anon")];
+    const initialPersonas = [
+      { id: 1, name: "Tomori", isAlter: false },
+      { id: 2, name: "Anon", isAlter: false },
+    ];
     const fp = computeSpotlightSetFingerprint("guild-123", "user-123", initialPersonas);
     const customId = buildPersonalConfigRouteId({
       action: "spotlight-set-submit",
@@ -4733,7 +4808,11 @@ describe("Stable spotlight identity and destructive safety", () => {
       nonce: "nonce123456",
     });
 
-    const driftedPersonas = [makePersona(99, 99, "New"), makePersona(1, 10, "Tomori"), makePersona(2, 20, "Anon")];
+    const driftedPersonas = [
+      { id: 99, name: "New", isAlter: false },
+      { id: 1, name: "Tomori", isAlter: false },
+      { id: 2, name: "Anon", isAlter: false },
+    ];
 
     const { dependencies, telemetry } = makeDependencies(calls, {
       loadGuildPersonas: async () => driftedPersonas,
@@ -4760,7 +4839,10 @@ describe("Stable spotlight identity and destructive safety", () => {
   });
 
   it("fails stale on spot-set-auto button click when personas drift", async () => {
-    const initialPersonas = [makePersona(1, 10, "Tomori"), makePersona(2, 20, "Anon")];
+    const initialPersonas = [
+      { id: 1, name: "Tomori", isAlter: false },
+      { id: 2, name: "Anon", isAlter: false },
+    ];
     const fp = computeSpotlightSetFingerprint("guild-123", "user-123", initialPersonas);
     const customId = buildPersonalConfigRouteId({
       action: "spot-set-auto",
@@ -4775,7 +4857,7 @@ describe("Stable spotlight identity and destructive safety", () => {
 
     let modalCalled = false;
     const { dependencies } = makeDependencies([], {
-      loadGuildPersonas: async () => [makePersona(99, 99, "Drifted"), ...initialPersonas],
+      loadGuildPersonas: async () => [{ id: 99, name: "Drifted", isAlter: false }, ...initialPersonas],
       showSpotlightAutoTriggerModal: async () => {
         modalCalled = true;
       },
@@ -4795,7 +4877,10 @@ describe("Stable spotlight identity and destructive safety", () => {
   });
 
   it("fails stale on spot-set-auto-sub modal submission when personas drift", async () => {
-    const initialPersonas = [makePersona(1, 10, "Tomori"), makePersona(2, 20, "Anon")];
+    const initialPersonas = [
+      { id: 1, name: "Tomori", isAlter: false },
+      { id: 2, name: "Anon", isAlter: false },
+    ];
     const fp = computeSpotlightSetFingerprint("guild-123", "user-123", initialPersonas);
     const customId = buildPersonalConfigRouteId({
       action: "spot-set-auto-sub",
@@ -4809,7 +4894,7 @@ describe("Stable spotlight identity and destructive safety", () => {
     });
 
     const { dependencies } = makeDependencies([], {
-      loadGuildPersonas: async () => [makePersona(99, 99, "Drifted"), ...initialPersonas],
+      loadGuildPersonas: async () => [{ id: 99, name: "Drifted", isAlter: false }, ...initialPersonas],
     });
     const route = createPersonalConfigInteractionRoute(dependencies);
 
@@ -4828,20 +4913,8 @@ describe("Stable spotlight identity and destructive safety", () => {
   it("detects presented spotlight inserted, deleted, or expired between modal render and submit", async () => {
     const calls: string[] = [];
     const initialSpotlights = [
-      {
-        channelDiscId: "123456789012345678",
-        personaIds: [1],
-        autoTriggerPersonaId: null,
-        expiresAt: null,
-        userDiscId: "user-123",
-      },
-      {
-        channelDiscId: "987654321098765432",
-        personaIds: [2],
-        autoTriggerPersonaId: null,
-        expiresAt: null,
-        userDiscId: "user-123",
-      },
+      makeSpotlight("123456789012345678", { personaIds: [1] }),
+      makeSpotlight("987654321098765432", { personaIds: [2] }),
     ];
     const fp = computeSpotlightRemoveFingerprint("guild-123", "user-123", initialSpotlights);
     const customId = buildPersonalConfigRouteId({
@@ -4852,16 +4925,7 @@ describe("Stable spotlight identity and destructive safety", () => {
       nonce: "nonce123456",
     });
 
-    const insertedSpotlights = [
-      ...initialSpotlights,
-      {
-        channelDiscId: "111222333444555666",
-        personaIds: [1],
-        autoTriggerPersonaId: null,
-        expiresAt: null,
-        userDiscId: "user-123",
-      },
-    ];
+    const insertedSpotlights = [...initialSpotlights, makeSpotlight("111222333444555666", { personaIds: [1] })];
     const { dependencies: depInserted, telemetry: telInserted } = makeDependencies(calls, {
       loadActiveSpotlights: async () => insertedSpotlights,
     });
@@ -4903,15 +4967,7 @@ describe("Stable spotlight identity and destructive safety", () => {
   });
 
   it("fails stale on spot-rem-range button click when active spotlights drift", async () => {
-    const initialSpotlights = [
-      {
-        channelDiscId: "123456789012345678",
-        personaIds: [1],
-        autoTriggerPersonaId: null,
-        expiresAt: null,
-        userDiscId: "user-123",
-      },
-    ];
+    const initialSpotlights = [makeSpotlight("123456789012345678", { personaIds: [1] })];
     const fp = computeSpotlightRemoveFingerprint("guild-123", "user-123", initialSpotlights);
     const customId = buildPersonalConfigRouteId({ action: "spot-rem-range", locale: "en-US", start: 0, fp });
 
@@ -4938,15 +4994,7 @@ describe("Stable spotlight identity and destructive safety", () => {
 
   it("executes a newly constructed route from transported fingerprint without setup or snapshot state", async () => {
     const calls: string[] = [];
-    const activeSpotlights = [
-      {
-        channelDiscId: "123456789012345678",
-        personaIds: [1],
-        autoTriggerPersonaId: null,
-        expiresAt: null,
-        userDiscId: "user-123",
-      },
-    ];
+    const activeSpotlights = [makeSpotlight("123456789012345678", { personaIds: [1] })];
     const fp = computeSpotlightRemoveFingerprint("guild-123", "user-123", activeSpotlights);
     const customId = buildPersonalConfigRouteId({
       action: "spotlight-remove-submit",
@@ -5089,8 +5137,8 @@ describe("Stable spotlight identity and destructive safety", () => {
 
     const calls: string[] = [];
     const activeSpotlights = [
-      { channelDiscId: "ch-100", personaIds: [1], autoTriggerPersonaId: null, expiresAt: null, userDiscId: "user-123" },
-      { channelDiscId: "ch-200", personaIds: [1], autoTriggerPersonaId: null, expiresAt: null, userDiscId: "user-123" },
+      makeSpotlight("ch-100", { personaIds: [1] }),
+      makeSpotlight("ch-200", { personaIds: [1] }),
     ];
     const fp = computeSpotlightRemoveFingerprint("guild-123", "user-123", activeSpotlights);
     const customId = buildPersonalConfigRouteId({
@@ -5149,15 +5197,7 @@ describe("Stable spotlight identity and destructive safety", () => {
       "nonce123456",
       0,
       "a1b2c3d4",
-      [
-        {
-          channelDiscId: "123456789012345678",
-          personaIds: [1],
-          autoTriggerPersonaId: null,
-          expiresAt: null,
-          userDiscId: "user-123",
-        },
-      ],
+      [makeSpotlight("123456789012345678", { personaIds: [1] })],
       [{ id: 1, name: "Tomori", isAlter: false }],
       new Map([["123456789012345678", { name: "general" }]]),
     );
@@ -5210,15 +5250,7 @@ describe("Stable spotlight identity and destructive safety", () => {
       nonce,
       removeStart,
       fp,
-      [
-        {
-          channelDiscId: snowflake,
-          personaIds: [personaId],
-          autoTriggerPersonaId: null,
-          expiresAt: null,
-          userDiscId: "user-123",
-        },
-      ],
+      [makeSpotlight(snowflake, { personaIds: [personaId] })],
       [{ id: personaId, name: "Tomori", isAlter: false }],
       new Map([[snowflake, { name: "general" }]]),
     );
@@ -5455,7 +5487,7 @@ describe("Stable spotlight identity and destructive safety", () => {
     let acknowledgedDuringSetWrite = false;
     let acknowledgedDuringRemoveWrite = false;
 
-    let setInteraction: RouteInteraction;
+    let setInteraction: PersonalInteraction;
     const { dependencies: depSet } = makeDependencies(calls, {
       operations: {
         ...personalConfigOperations,
@@ -5475,15 +5507,7 @@ describe("Stable spotlight identity and destructive safety", () => {
     await setRoute.execute({} as Client, setInteraction, requireRoute(setCustomId));
     expect(acknowledgedDuringSetWrite).toBe(true);
 
-    const activeSpotlights = [
-      {
-        channelDiscId: "123456789012345678",
-        personaIds: [1],
-        autoTriggerPersonaId: null,
-        expiresAt: null,
-        userDiscId: "user-123",
-      },
-    ];
+    const activeSpotlights = [makeSpotlight("123456789012345678", { personaIds: [1] })];
     const remFp = computeSpotlightRemoveFingerprint("guild-123", "user-123", activeSpotlights);
     const remCustomId = buildPersonalConfigRouteId({
       action: "spotlight-remove-submit",
@@ -5493,7 +5517,7 @@ describe("Stable spotlight identity and destructive safety", () => {
       nonce: "nonce123456",
     });
 
-    let remInteraction: RouteInteraction;
+    let remInteraction: PersonalInteraction;
     const { dependencies: depRem } = makeDependencies(calls, {
       loadActiveSpotlights: async () => activeSpotlights,
       operations: {
@@ -5691,13 +5715,9 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
   });
 
   it("navigates spotlight remove range page past 25 blocks (1250 spotlights)", async () => {
-    const activeSpotlights = Array.from({ length: 1500 }, (_, i) => ({
-      channelDiscId: `1234567890123456${(i % 100).toString().padStart(2, "0")}`,
-      personaIds: [1],
-      autoTriggerPersonaId: null,
-      expiresAt: null,
-      userDiscId: "user-123",
-    }));
+    const activeSpotlights = Array.from({ length: 1500 }, (_, i) =>
+      makeSpotlight(`1234567890123456${(i % 100).toString().padStart(2, "0")}`, { personaIds: [1] }),
+    );
     const fp = computeSpotlightRemoveFingerprint("guild-123", "user-123", activeSpotlights);
 
     const { dependencies } = makeDependencies([], {
@@ -5782,13 +5802,7 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
   it("unchanged permanent spotlight set is a no-op that skips the write", async () => {
     const personalSpotlightCache = await import("@/utils/cache/personalSpotlightCache");
     const getCachedSpy = spyOn(personalSpotlightCache, "getCachedPersonalSpotlightStatus").mockImplementation(
-      async () => ({
-        channelDiscId: "123456789012345678",
-        personaIds: [1, 2],
-        autoTriggerPersonaId: 1,
-        expiresAt: null,
-        userDiscId: "user-123",
-      }),
+      async () => makeSpotlight("123456789012345678", { personaIds: [1, 2], autoTriggerPersonaId: 1 }),
     );
     const replaceSpy = spyOn(userRepository, "replacePersonalSpotlight").mockImplementation(async () => {});
 
@@ -5810,20 +5824,8 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
 
   it("partial removal attempts all selected rows and repaints with warning receipt", async () => {
     const activeSpotlights = [
-      {
-        channelDiscId: "111111111111111111",
-        personaIds: [1],
-        autoTriggerPersonaId: null,
-        expiresAt: null,
-        userDiscId: "user-123",
-      },
-      {
-        channelDiscId: "222222222222222222",
-        personaIds: [2],
-        autoTriggerPersonaId: null,
-        expiresAt: null,
-        userDiscId: "user-123",
-      },
+      makeSpotlight("111111111111111111", { personaIds: [1] }),
+      makeSpotlight("222222222222222222", { personaIds: [2] }),
     ];
     const fp = computeSpotlightRemoveFingerprint("guild-123", "user-123", activeSpotlights);
 
@@ -5990,14 +5992,19 @@ describe("Persona reachability beyond one modal", () => {
     const fp = computeSpotlightSetFingerprint("guild-123", "user-123", personas);
     // Second block, its first three personas selected, the third chosen as auto-trigger.
     const mask = encodeSpotlightMask(0b111n);
-    let written: { personaIds: number[]; autoTriggerPersonaId: number | null } | null = null;
+    // A holder rather than a bare `let`: TypeScript narrows `let` to its `null` initializer and does
+    // not see the closure assignment, and the holder keeps `null` as the unwritten state the
+    // assertion below rejects.
+    const captured: { written: { personaIds: number[]; autoTriggerPersonaId: number | null } | null } = {
+      written: null,
+    };
 
     const { dependencies } = makeDependencies([], {
       loadGuildPersonas: async () => personas,
       operations: {
         ...personalConfigOperations,
         setSpotlight: async (input) => {
-          written = { personaIds: input.personaIds, autoTriggerPersonaId: input.autoTriggerPersonaId };
+          captured.written = { personaIds: input.personaIds, autoTriggerPersonaId: input.autoTriggerPersonaId };
           return { status: "success" };
         },
       },
@@ -6021,9 +6028,9 @@ describe("Persona reachability beyond one modal", () => {
 
     await createPersonalConfigInteractionRoute(dependencies).execute({} as Client, interaction, requireRoute(customId));
 
-    expect(written).not.toBeNull();
-    expect(written?.personaIds).toEqual([personas[50].id, personas[51].id, personas[52].id]);
-    expect(written?.autoTriggerPersonaId).toBe(personas[52].id);
+    expect(captured.written).not.toBeNull();
+    expect(captured.written?.personaIds).toEqual([personas[50].id, personas[51].id, personas[52].id]);
+    expect(captured.written?.autoTriggerPersonaId).toBe(personas[52].id);
   });
 
   it("fails stale without writing when the mask names more personas than the block still holds", async () => {
@@ -6109,7 +6116,7 @@ describe("Raw modal component types and their option bounds", () => {
     expect(unsupportedOptions.every((option) => option.default === false)).toBe(true);
   });
 
-  const assertBounds = (modal: { components: Array<{ component?: Record<string, unknown> }> }, label: string) => {
+  const assertBounds = (modal: { components: RawDiscordComponent[] }, label: string) => {
     for (const row of modal.components) {
       const component = row.component;
       if (!component) continue;
@@ -6209,7 +6216,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
 
     let modalShown = false;
     let acknowledgedInsideModal = true;
-    let modalInteraction: RouteInteraction;
+    let modalInteraction: PersonalInteraction;
 
     const { dependencies: modalDeps } = makeDependencies([], {
       loadAvailableModelsForCapability: async () => [
@@ -6243,13 +6250,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
   });
 
   it("spotlight-remove-open with > SPOTLIGHT_REMOVE_PAGE_SIZE active spotlights falls through to post-defer range chooser, while <= limit shows removal modal pre-defer", async () => {
-    const active51 = Array.from({ length: 51 }, (_, i) => ({
-      channelDiscId: `channel-${i}`,
-      personaIds: [1],
-      autoTriggerPersonaId: null,
-      expiresAt: null,
-      userDiscId: "user-123",
-    }));
+    const active51 = Array.from({ length: 51 }, (_, i) => makeSpotlight(`channel-${i}`, { personaIds: [1] }));
 
     let modalCalledForOverflow = false;
 
@@ -6279,13 +6280,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
     expect(payloadJson).toContain(localizedCopy("en-US", "commands.personal.config.spotlight_remove_range_title"));
     expect(payloadJson).toContain("s-rem-s");
 
-    const active5 = Array.from({ length: 5 }, (_, i) => ({
-      channelDiscId: `channel-${i}`,
-      personaIds: [1],
-      autoTriggerPersonaId: null,
-      expiresAt: null,
-      userDiscId: "user-123",
-    }));
+    const active5 = Array.from({ length: 5 }, (_, i) => makeSpotlight(`channel-${i}`, { personaIds: [1] }));
 
     const normalDeferred = false;
     const normalReplied = false;
@@ -6333,7 +6328,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
     for (const { action, modalProp } of actionsToTest) {
       let modalCalled = false;
       let acknowledgedInsideModal = true;
-      let interaction: RouteInteraction;
+      let interaction: PersonalInteraction;
 
       const { dependencies } = makeDependencies([], {
         [modalProp]: async () => {
@@ -6365,7 +6360,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
     const refreshedUser = makeUser({ user_nickname: "RefreshedNick" });
 
     const { dependencies } = makeDependencies(calls, {
-      resolveScope: async (_interaction, forceRefresh) => {
+      resolveScope: async (_interaction, forceRefresh = false) => {
         resolveCount++;
         const currentUser = forceRefresh ? refreshedUser : initialUser;
         return {
@@ -6377,12 +6372,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           user: currentUser,
           resolvedNickname: currentUser.user_nickname ?? "LiveUser",
           personas: [],
-          readStatus: {
-            is_active: true,
-            model_name: "test-model",
-            read_status_model_name: "test-model",
-            is_bot_blocked: false,
-          },
+          readStatus: "fresh",
         };
       },
       operations: {
@@ -6421,18 +6411,18 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
   it("proves post-defer model parameter writes repaint with refreshed scope and record telemetry", async () => {
     const calls: string[] = [];
     let resolveCount = 0;
-    let recordedAction: string | null = null;
-    let writeUserId: number | null = null;
-    let writeUserDiscId: string | null = null;
-    let repaintSavedProvidersUserId: number | null = null;
-    let repaintModelDisplayInfoUserId: number | null = null;
+    let recordedAction: string | undefined;
+    let writeUserId: number | undefined;
+    let writeUserDiscId: string | undefined;
+    let repaintSavedProvidersUserId: number | undefined;
+    let repaintModelDisplayInfoUserId: number | undefined;
 
     const initialUser = makeUser({ user_id: 101, user_disc_id: "user-101", user_nickname: "InitialUser" });
     const refreshedUser = makeUser({ user_id: 202, user_disc_id: "user-202", user_nickname: "RefreshedUser" });
 
     const baseDependencies = makeDependencies(calls).dependencies;
     const { dependencies } = makeDependencies(calls, {
-      resolveScope: async (_interaction, forceRefresh) => {
+      resolveScope: async (_interaction, forceRefresh = false) => {
         resolveCount++;
         const currentUser = forceRefresh ? refreshedUser : initialUser;
         return {
@@ -6444,12 +6434,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           user: currentUser,
           resolvedNickname: currentUser.user_nickname ?? "LiveUser",
           personas: [],
-          readStatus: {
-            is_active: true,
-            model_name: "test-model",
-            read_status_model_name: "test-model",
-            is_bot_blocked: false,
-          },
+          readStatus: "fresh",
         };
       },
       operations: {
@@ -6529,9 +6514,9 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
   it("proves post-defer trigger mode write repaints with refreshed scope and records telemetry", async () => {
     const calls: string[] = [];
     let resolveCount = 0;
-    let recordedAction: string | null = null;
-    let writeUserId: number | null = null;
-    let writeUserDiscId: string | null = null;
+    let recordedAction: string | undefined;
+    let writeUserId: number | undefined;
+    let writeUserDiscId: string | undefined;
 
     const initialUser = makeUser({
       user_id: 101,
@@ -6547,7 +6532,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
     });
 
     const { dependencies } = makeDependencies(calls, {
-      resolveScope: async (_interaction, forceRefresh) => {
+      resolveScope: async (_interaction, forceRefresh = false) => {
         resolveCount++;
         const currentUser = forceRefresh ? refreshedUser : initialUser;
         return {
@@ -6607,11 +6592,11 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
   it("proves post-defer spotlight write repaints with refreshed scope and records telemetry", async () => {
     const calls: string[] = [];
     let resolveCount = 0;
-    let recordedAction: string | null = null;
-    let writeUserId: number | null = null;
-    let writeUserDiscId: string | null = null;
-    let writeChannelId: string | null = null;
-    let activeSpotlightUserId: number | null = null;
+    let recordedAction: string | undefined;
+    let writeUserId: number | undefined;
+    let writeUserDiscId: string | undefined;
+    let writeChannelId: string | undefined;
+    let activeSpotlightUserId: number | undefined;
 
     const initialUser = makeUser({
       user_id: 101,
@@ -6631,7 +6616,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
     const fp = computeSpotlightSetFingerprint("guild-123", "user-101", personas);
 
     const { dependencies } = makeDependencies(calls, {
-      resolveScope: async (_interaction, forceRefresh) => {
+      resolveScope: async (_interaction, forceRefresh = false) => {
         resolveCount++;
         const currentUser = forceRefresh ? refreshedUser : initialUser;
         return {
@@ -6708,7 +6693,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         const payload = buildPersonalConfigPanelPayload({
           locale: "en-US",
           category: "privacy",
-          page: "privacy-controls",
+          page: "controls",
           user: makeUser({ shortterm_cache_crossserver_opt_in: false }),
           resolvedNickname: "Tester",
           personas: [],
@@ -6718,20 +6703,17 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           readStatus: "fresh",
         });
 
-        const container = (payload as { components: { components: unknown[] }[] }).components[0];
-        const rows = container.components;
-        const buttonRow = rows.find(
-          (
-            r,
-          ): r is {
-            type: number;
-            components: { customId: string; style: number; disabled: boolean; label: string }[];
-          } =>
-            (r as { type: number }).type === ComponentType.ActionRow &&
-            Boolean(
-              (r as { components?: { customId?: string }[] }).components?.some((c) =>
-                c.customId?.includes("crossserver-set"),
-              ),
+        const container = payload.components.find(
+          (component): component is ContainerComponentData<ComponentInContainerData> =>
+            component.type === ComponentType.Container,
+        );
+        if (!container) throw new Error("Expected the panel container");
+        const buttonRow = container.components.find(
+          (r): r is ActionRowData<InteractionButtonComponentData> =>
+            r.type === ComponentType.ActionRow &&
+            "components" in r &&
+            r.components.some(
+              (b) => "customId" in b && typeof b.customId === "string" && b.customId.includes("crossserver-set"),
             ),
         );
 
@@ -6763,7 +6745,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         const payload = buildPersonalConfigPanelPayload({
           locale: "en-US",
           category: "privacy",
-          page: "privacy-controls",
+          page: "controls",
           user: makeUser({ shortterm_cache_crossserver_opt_in: true }),
           resolvedNickname: "Tester",
           personas: [],
@@ -6773,20 +6755,17 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           readStatus: "fresh",
         });
 
-        const container = (payload as { components: { components: unknown[] }[] }).components[0];
-        const rows = container.components;
-        const buttonRow = rows.find(
-          (
-            r,
-          ): r is {
-            type: number;
-            components: { customId: string; style: number; disabled: boolean; label: string }[];
-          } =>
-            (r as { type: number }).type === ComponentType.ActionRow &&
-            Boolean(
-              (r as { components?: { customId?: string }[] }).components?.some((c) =>
-                c.customId?.includes("crossserver-set"),
-              ),
+        const container = payload.components.find(
+          (component): component is ContainerComponentData<ComponentInContainerData> =>
+            component.type === ComponentType.Container,
+        );
+        if (!container) throw new Error("Expected the panel container");
+        const buttonRow = container.components.find(
+          (r): r is ActionRowData<InteractionButtonComponentData> =>
+            r.type === ComponentType.ActionRow &&
+            "components" in r &&
+            r.components.some(
+              (b) => "customId" in b && typeof b.customId === "string" && b.customId.includes("crossserver-set"),
             ),
         );
 
@@ -6826,9 +6805,8 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           memoryCount: 0,
           stmCount: 0,
           readStatus: "fresh",
-          modelDisplayInfo: {
+          modelDisplayInfo: makeModelDisplayInfo({
             fallbacksProviders: ["openrouter"],
-            selectedProvider: "openrouter",
             selectedFallbacksConfig: {
               provider: "openrouter",
               model_randomizer_enabled: false,
@@ -6836,23 +6814,20 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
             fallbackSlots: [{ slot: 1, modelName: "Claude 3 Haiku" }],
             randomizerEnabled: false,
             canEnableRandomizer: true,
-          },
+          }),
         });
 
-        const container = (payload as { components: { components: unknown[] }[] }).components[0];
-        const rows = container.components;
-        const buttonRow = rows.find(
-          (
-            r,
-          ): r is {
-            type: number;
-            components: { customId: string; style: number; disabled: boolean; label: string }[];
-          } =>
-            (r as { type: number }).type === ComponentType.ActionRow &&
-            Boolean(
-              (r as { components?: { customId?: string }[] }).components?.some((c) =>
-                c.customId?.includes("randomizer-set"),
-              ),
+        const container = payload.components.find(
+          (component): component is ContainerComponentData<ComponentInContainerData> =>
+            component.type === ComponentType.Container,
+        );
+        if (!container) throw new Error("Expected the panel container");
+        const buttonRow = container.components.find(
+          (r): r is ActionRowData<InteractionButtonComponentData> =>
+            r.type === ComponentType.ActionRow &&
+            "components" in r &&
+            r.components.some(
+              (b) => "customId" in b && typeof b.customId === "string" && b.customId.includes("randomizer-set"),
             ),
         );
 
@@ -6903,9 +6878,8 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           memoryCount: 0,
           stmCount: 0,
           readStatus: "fresh",
-          modelDisplayInfo: {
+          modelDisplayInfo: makeModelDisplayInfo({
             fallbacksProviders: ["openrouter"],
-            selectedProvider: "openrouter",
             selectedFallbacksConfig: {
               provider: "openrouter",
               model_randomizer_enabled: true,
@@ -6913,23 +6887,20 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
             fallbackSlots: [{ slot: 1, modelName: "Claude 3 Haiku" }],
             randomizerEnabled: true,
             canEnableRandomizer: true,
-          },
+          }),
         });
 
-        const container = (payload as { components: { components: unknown[] }[] }).components[0];
-        const rows = container.components;
-        const buttonRow = rows.find(
-          (
-            r,
-          ): r is {
-            type: number;
-            components: { customId: string; style: number; disabled: boolean; label: string }[];
-          } =>
-            (r as { type: number }).type === ComponentType.ActionRow &&
-            Boolean(
-              (r as { components?: { customId?: string }[] }).components?.some((c) =>
-                c.customId?.includes("randomizer-set"),
-              ),
+        const container = payload.components.find(
+          (component): component is ContainerComponentData<ComponentInContainerData> =>
+            component.type === ComponentType.Container,
+        );
+        if (!container) throw new Error("Expected the panel container");
+        const buttonRow = container.components.find(
+          (r): r is ActionRowData<InteractionButtonComponentData> =>
+            r.type === ComponentType.ActionRow &&
+            "components" in r &&
+            r.components.some(
+              (b) => "customId" in b && typeof b.customId === "string" && b.customId.includes("randomizer-set"),
             ),
         );
 
@@ -6961,9 +6932,8 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           memoryCount: 0,
           stmCount: 0,
           readStatus: "fresh",
-          modelDisplayInfo: {
+          modelDisplayInfo: makeModelDisplayInfo({
             fallbacksProviders: ["openrouter"],
-            selectedProvider: "openrouter",
             selectedFallbacksConfig: {
               provider: "openrouter",
               model_randomizer_enabled: false,
@@ -6971,23 +6941,20 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
             fallbackSlots: [],
             randomizerEnabled: false,
             canEnableRandomizer: false,
-          },
+          }),
         });
 
-        const container = (payload as { components: { components: unknown[] }[] }).components[0];
-        const rows = container.components;
-        const buttonRow = rows.find(
-          (
-            r,
-          ): r is {
-            type: number;
-            components: { customId: string; style: number; disabled: boolean; label: string }[];
-          } =>
-            (r as { type: number }).type === ComponentType.ActionRow &&
-            Boolean(
-              (r as { components?: { customId?: string }[] }).components?.some((c) =>
-                c.customId?.includes("randomizer-set"),
-              ),
+        const container = payload.components.find(
+          (component): component is ContainerComponentData<ComponentInContainerData> =>
+            component.type === ComponentType.Container,
+        );
+        if (!container) throw new Error("Expected the panel container");
+        const buttonRow = container.components.find(
+          (r): r is ActionRowData<InteractionButtonComponentData> =>
+            r.type === ComponentType.ActionRow &&
+            "components" in r &&
+            r.components.some(
+              (b) => "customId" in b && typeof b.customId === "string" && b.customId.includes("randomizer-set"),
             ),
         );
 
@@ -7031,9 +6998,8 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           memoryCount: 0,
           stmCount: 0,
           readStatus: "fresh",
-          modelDisplayInfo: {
+          modelDisplayInfo: makeModelDisplayInfo({
             fallbacksProviders: ["openrouter"],
-            selectedProvider: "openrouter",
             selectedFallbacksConfig: {
               provider: "openrouter",
               model_randomizer_enabled: true,
@@ -7041,22 +7007,20 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
             fallbackSlots: [],
             randomizerEnabled: true,
             canEnableRandomizer: false,
-          },
+          }),
         });
 
-        const container = (payload as { components: { components: unknown[] }[] }).components[0];
+        const container = payload.components.find(
+          (component): component is ContainerComponentData<ComponentInContainerData> =>
+            component.type === ComponentType.Container,
+        );
+        if (!container) throw new Error("Expected the panel container");
         const buttonRow = container.components.find(
-          (
-            r,
-          ): r is {
-            type: number;
-            components: { customId: string; style: number; disabled: boolean; label: string }[];
-          } =>
-            (r as { type: number }).type === ComponentType.ActionRow &&
-            Boolean(
-              (r as { components?: { customId?: string }[] }).components?.some((c) =>
-                c.customId?.includes("randomizer-set"),
-              ),
+          (r): r is ActionRowData<InteractionButtonComponentData> =>
+            r.type === ComponentType.ActionRow &&
+            "components" in r &&
+            r.components.some(
+              (b) => "customId" in b && typeof b.customId === "string" && b.customId.includes("randomizer-set"),
             ),
         );
 
@@ -7085,22 +7049,20 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
 
     describe("Server Model Fallback state control rendering and custom IDs", () => {
       /** The section's own control row, told apart from the randomizer row that shares the page. */
-      function findServerFallbackRow(payload: unknown): {
-        components: { customId: string; style: number; disabled: boolean; label: string }[];
-      } {
-        const container = (payload as { components: { components: unknown[] }[] }).components[0];
+      function findServerFallbackRow(
+        payload: PersonalConfigPanelPayload,
+      ): ActionRowData<InteractionButtonComponentData> {
+        const container = payload.components.find(
+          (component): component is ContainerComponentData<ComponentInContainerData> =>
+            component.type === ComponentType.Container,
+        );
+        if (!container) throw new Error("Expected the panel container");
         const buttonRow = container.components.find(
-          (
-            r,
-          ): r is {
-            type: number;
-            components: { customId: string; style: number; disabled: boolean; label: string }[];
-          } =>
-            (r as { type: number }).type === ComponentType.ActionRow &&
-            Boolean(
-              (r as { components?: { customId?: string }[] }).components?.some((c) =>
-                c.customId?.includes("server-fallback-set"),
-              ),
+          (r): r is ActionRowData<InteractionButtonComponentData> =>
+            r.type === ComponentType.ActionRow &&
+            "components" in r &&
+            r.components.some(
+              (b) => "customId" in b && typeof b.customId === "string" && b.customId.includes("server-fallback-set"),
             ),
         );
         if (!buttonRow) throw new Error("Server Model Fallback control row is missing from the page");
@@ -7185,12 +7147,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           memoryCount: 0,
           stmCount: 0,
           readStatus: "fresh",
-          modelDisplayInfo: {
-            fallbacksProviders: [],
-            fallbackSlots: [],
-            randomizerEnabled: false,
-            canEnableRandomizer: false,
-          },
+          modelDisplayInfo: makeModelDisplayInfo(),
         });
 
         expect(findServerFallbackRow(payload)).toBeDefined();
@@ -7894,13 +7851,9 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
 
     describe("Interaction dispatch for spotlight-remove-select", () => {
       it("opens remove modal on selecting valid block", async () => {
-        const activeSpotlights = Array.from({ length: 120 }, (_, i) => ({
-          channelDiscId: `1234567890123456${(i % 100).toString().padStart(2, "0")}`,
-          personaIds: [1],
-          autoTriggerPersonaId: null,
-          expiresAt: null,
-          userDiscId: "user-123",
-        }));
+        const activeSpotlights = Array.from({ length: 120 }, (_, i) =>
+          makeSpotlight(`1234567890123456${(i % 100).toString().padStart(2, "0")}`, { personaIds: [1] }),
+        );
         const fp = computeSpotlightRemoveFingerprint("guild-123", "user-123", activeSpotlights);
         let openedStart = -1;
         let openedSlice: PersonalSpotlightStatus[] = [];
@@ -7934,13 +7887,9 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
       });
 
       it("repaints with stale warning on out-of-bounds start value", async () => {
-        const activeSpotlights = Array.from({ length: 120 }, (_, i) => ({
-          channelDiscId: `1234567890123456${(i % 100).toString().padStart(2, "0")}`,
-          personaIds: [1],
-          autoTriggerPersonaId: null,
-          expiresAt: null,
-          userDiscId: "user-123",
-        }));
+        const activeSpotlights = Array.from({ length: 120 }, (_, i) =>
+          makeSpotlight(`1234567890123456${(i % 100).toString().padStart(2, "0")}`, { personaIds: [1] }),
+        );
         const fp = computeSpotlightRemoveFingerprint("guild-123", "user-123", activeSpotlights);
         let modalOpened = false;
 

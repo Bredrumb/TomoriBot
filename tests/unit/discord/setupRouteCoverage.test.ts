@@ -55,9 +55,10 @@ const EMITTED_ACTIONS: SetupWizardAction[] = [
 ];
 
 /** Members of the `SetupWizardAction` union, read from the declaration that defines the codec. */
-function declaredActions(): string[] {
+function declaredActions(): SetupWizardAction[] {
   const union = SETUP_ROUTES_SOURCE.match(/export type SetupWizardAction =([\s\S]*?);/);
-  return union ? [...union[1].matchAll(/"([a-z-]+)"/g)].map((match) => match[1]) : [];
+  // The declaration's own string literals are the union members by construction.
+  return union ? [...union[1].matchAll(/"([a-z-]+)"/g)].map((match) => match[1] as SetupWizardAction) : [];
 }
 
 /** Actions the dispatcher's switch handles, read from its own case labels. */

@@ -234,7 +234,7 @@ export function overrideMembers<TReal extends object, TOverrides extends object>
   // static, which a spread would drop; `Object.assign` then shadows only the
   // listed statics.
   if (typeof real === "function") {
-    class Overridden extends (real as unknown as new (...args: never[]) => unknown) {}
+    class Overridden extends (real as unknown as new (...args: never[]) => object) {}
     return Object.assign(Overridden, overrides) as unknown as TReal & TOverrides;
   }
 

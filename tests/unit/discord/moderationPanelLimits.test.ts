@@ -183,7 +183,6 @@ describe("Moderation panel Components V2 limits", () => {
       expectSafePanelPayload(
         buildModerationPanelPayload({
           locale: "en-US",
-          category: testCase.category,
           whitelistPage: testCase.page,
           rangeIndex: 0,
           data,
@@ -302,22 +301,26 @@ describe("Moderation panel Components V2 limits", () => {
     expect(
       collect("user-blacklist", "channels")
         .match(/blocked-user-\d+/gu)
-        ?.sort(),
+        ?.slice()
+        .sort(),
     ).toEqual(Array.from({ length: total }, (_, index) => `blocked-user-${index + 1}`).sort());
     expect(
       collect("whitelist", "channels")
         .match(/channel-\d+/gu)
-        ?.sort(),
+        ?.slice()
+        .sort(),
     ).toEqual(Array.from({ length: total }, (_, index) => `channel-${index + 1}`).sort());
     expect(
       collect("whitelist", "persona-channels")
         .match(/persona-channel-\d+/gu)
-        ?.sort(),
+        ?.slice()
+        .sort(),
     ).toEqual(Array.from({ length: total }, (_, index) => `persona-channel-${index + 1}`).sort());
     expect(
       collect("whitelist", "roles")
         .match(/role-\d+/gu)
-        ?.sort(),
+        ?.slice()
+        .sort(),
     ).toEqual(Array.from({ length: total }, (_, index) => `role-${index + 1}`).sort());
   });
 });

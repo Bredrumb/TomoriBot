@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { readFileSync } from "node:fs";
 import type {
   ActionRowData,
+  ButtonComponentData,
   ButtonInteraction,
   Client,
   InteractionReplyOptions,
@@ -310,7 +311,7 @@ describe("personal-memories panel route catalog", () => {
       "stm-clear",
     ].sort();
 
-    const wireActions = [...new Set(WIRE_CONTRACT_V1.map(([, route]) => route.action))].sort();
+    const wireActions: string[] = [...new Set(WIRE_CONTRACT_V1.map(([, route]) => route.action))].sort();
     const codecTableActions = Object.keys(PERSONAL_MEMORIES_ROUTE_CODECS).sort();
 
     const routesSource = readFileSync(
@@ -1241,6 +1242,10 @@ describe("telemetry & acknowledgement invariants", () => {
         clearStm: async () => {
           stmAcknowledged = currentInteraction.deferred || currentInteraction.replied;
         },
+        addBatch: async (input) => {
+          addAcknowledged = currentInteraction.deferred || currentInteraction.replied;
+          return { status: "success", added: input.contents.length, skipped: 0 };
+        },
       },
     });
 
@@ -1400,17 +1405,18 @@ describe("memory selector pagination & 25-option ceiling", () => {
     });
 
     const rootContainer = payload.components[0] as unknown as {
-      components: ActionRowData<StringSelectMenuComponentData>[];
+      components: ActionRowData<ButtonComponentData | StringSelectMenuComponentData>[];
     };
     const selectActionRow = rootContainer.components.find((c) => c.type === 1 && c.components?.[0]?.type === 3);
 
     expect(selectActionRow).toBeDefined();
     const selectMenu = selectActionRow?.components[0];
+    if (selectMenu?.type !== ComponentType.StringSelect) throw new Error("Expected a String Select action row");
     // 1 Add option + 24 memories = exactly 25 options
-    expect(selectMenu?.options?.length).toBe(25);
-    expect(selectMenu?.options?.[0]?.value).toBe("action:add");
-    expect(selectMenu?.options?.[1]?.value).toBe("1");
-    expect(selectMenu?.options?.[24]?.value).toBe("24");
+    expect(selectMenu.options.length).toBe(25);
+    expect(selectMenu.options[0]?.value).toBe("action:add");
+    expect(selectMenu.options[1]?.value).toBe("1");
+    expect(selectMenu.options[24]?.value).toBe("24");
 
     const rangeLabels = rootContainer.components
       .filter((component) => component.type === ComponentType.ActionRow)
@@ -1432,7 +1438,7 @@ describe("memory selector pagination & 25-option ceiling", () => {
       page: { kind: "main" },
     });
     const personaContainer = personaPayload.components[0] as unknown as {
-      components: ActionRowData<StringSelectMenuComponentData>[];
+      components: ActionRowData<ButtonComponentData | StringSelectMenuComponentData>[];
     };
     const personaRangeLabels = personaContainer.components
       .filter((component) => component.type === ComponentType.ActionRow)
@@ -1705,7 +1711,9 @@ describe("router wiring & outdated version fallback", () => {
     const handled = await dispatchGlobalInteraction({} as Client, staleInteraction as unknown as ButtonInteraction);
     expect(handled).toBeTrue();
     expect(replyPayload).toBeDefined();
-    expect(replyPayload?.content).toContain("/personal memories");
+    // The stub assigns inside a callback, which control flow analysis cannot see, so read the
+    // captured reply through its declared type.
+    expect((replyPayload as InteractionReplyOptions | null)?.content).toContain("/personal memories");
   });
 });
 

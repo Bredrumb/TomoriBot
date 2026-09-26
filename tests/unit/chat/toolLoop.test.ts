@@ -16,7 +16,10 @@ import * as realToolProgressNotice from "@/utils/discord/toolProgressNotice";
 import * as realProviderInfoRegistry from "@/utils/provider/providerInfoRegistry";
 import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
+import type { Sticker } from "discord.js";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
+import type { StandardEmbedOptions } from "@/types/discord/embed";
+import type { StructuredContextItem } from "@/types/misc/context";
 import type { ChatTurnContext } from "@/utils/chat/types";
 import type { TomoriState } from "@/types/db/schema";
 import type { ToolResult } from "@/types/tool/interfaces";
@@ -29,7 +32,7 @@ let requiresFollowUpCalls: Array<{ name: string; provider: string; serverId?: nu
 let hasStopRequest = false;
 let isFollowUpRequest = false;
 let clearStopRequestCalls = 0;
-let standardEmbedCalls: Array<{ titleKey?: string; descriptionKey?: string }> = [];
+let standardEmbedCalls: StandardEmbedOptions[] = [];
 let hiddenToolNotices: string[] = [];
 
 // Module mocks: all must appear before the first lazy import of toolLoop.ts
@@ -58,11 +61,7 @@ stubLogMembers({
 
 scopedMock.module("@/utils/discord/embedHelper", () => ({
   ...realEmbedHelper,
-  sendStandardEmbed: async (
-    _channel: unknown,
-    _locale: string,
-    options: { titleKey?: string; descriptionKey?: string },
-  ) => {
+  sendStandardEmbed: async (_channel: unknown, _locale: string, options: StandardEmbedOptions) => {
     standardEmbedCalls.push(options);
   },
 }));
@@ -512,7 +511,10 @@ describe("runToolLoop — contract tests", () => {
     ]);
 
     // Tool returns a context_restart_youtube signal with an enhanced_context_item.
-    const fakeContextItem = { role: "user", parts: [{ text: "YouTube transcript: ..." }] };
+    const fakeContextItem: StructuredContextItem = {
+      role: "user",
+      parts: [{ type: "text", text: "YouTube transcript: ..." }],
+    };
     toolExecuteQueue.push({
       success: true,
       data: {
@@ -716,7 +718,7 @@ describe("runToolLoop — contract tests", () => {
 
   it("successful sticker selection is carried on the completed result", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
-    const sticker = { id: "sticker_1", name: "Wave", url: "https://cdn.example/sticker.png" };
+    const sticker = { id: "sticker_1", name: "Wave", url: "https://cdn.example/sticker.png" } as unknown as Sticker;
     const { provider } = makeProvider([
       makeFunctionCallResult("select_sticker_for_response", { sticker_name: "Wave" }),
       { status: "completed", accumulatedText: "Hello!" },

@@ -31,8 +31,9 @@ function recordingDeps(overrides: Partial<VoiceSampleRemovalDeps> = {}): Recordi
     invalidateCache: () => {
       calls.push("invalidateCache");
     },
-    deleteStoredFile: async () => {
+    deleteStoredFile: async (_reference: string): Promise<boolean> => {
       calls.push("deleteStoredFile");
+      return true;
     },
     ...overrides,
   };

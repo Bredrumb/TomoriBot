@@ -72,9 +72,11 @@ describe("participant adversarial review regressions", () => {
         physical_appearance_tags: ["red hair"],
       } as TomoriState;
       fixture.personas.push(referencedPersona);
+      const referencedPersonaId = referencedPersona.persona_id;
+      if (referencedPersonaId === undefined) throw new Error("Fixture persona is missing its persona_id");
 
       const item = await buildPreparedParticipantContext(fixture, {
-        responderPersonaIds: new Set([referencedPersona.persona_id]),
+        responderPersonaIds: new Set([referencedPersonaId]),
       });
       const text = participantText(item);
       const target = item.conversationUsers?.find((candidate) => candidate.targetId === "persona:9");

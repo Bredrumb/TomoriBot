@@ -114,7 +114,9 @@ describe("stPresetOperations domain delegation", () => {
     });
 
     it("loads activeNodeCounts for active preset on fresh read and skips on unavailable", async () => {
-      let countCalledWith: { presetId: number; serverId: number } | null = null;
+      // A sentinel rather than `null`, so the declared shape matches the recorded one: a nullable
+      // union would be narrowed away and the equality assertion below would lose its type check.
+      let countCalledWith: { presetId: number; serverId: number } = { presetId: -1, serverId: -1 };
       const depsWithActive: StPresetOperationsDependencies = {
         getState: async () => makeMockTomoriState(10),
         getLastDbError: () => null,
@@ -318,7 +320,8 @@ describe("stPresetOperations domain delegation", () => {
 
     it("imports preset, stores author description, and activates inserted row", async () => {
       let insertedDescription: string | null | undefined;
-      let activatedPresetId: number | null = null;
+      // Sentinel rather than a nullable union: the stub always assigns before the assertion reads it.
+      let activatedPresetId = -1;
 
       const deps: StPresetOperationsDependencies = {
         getState: async () => makeMockTomoriState(10),
@@ -442,7 +445,8 @@ describe("stPresetOperations domain delegation", () => {
       const preset3 = makeMockPresetRow({ preset_id: 3, preset_name: "Preset 3", is_active: true });
 
       const allPresets = [preset1, preset2, preset3];
-      let activatedPresetId: number | null = null;
+      // Sentinel rather than a nullable union: the stub always assigns before the assertion reads it.
+      let activatedPresetId = -1;
       const deletedPresetIds: number[] = [];
 
       const deps: StPresetOperationsDependencies = {
@@ -486,7 +490,8 @@ describe("stPresetOperations domain delegation", () => {
       const presetActive = makeMockPresetRow({ preset_id: 3, preset_name: "Active Preset", is_active: true });
 
       const allPresets = [preset1, preset2, presetActive];
-      let activatedPresetId: number | null = null;
+      // Sentinel rather than a nullable union: the stub always assigns before the assertion reads it.
+      let activatedPresetId = -1;
 
       const deps: StPresetOperationsDependencies = {
         getState: async () => makeMockTomoriState(10),

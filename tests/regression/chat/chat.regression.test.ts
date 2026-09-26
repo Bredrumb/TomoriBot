@@ -100,7 +100,7 @@ function makeClient(): Client {
 }
 
 function makeTextChannel(): TextChannel {
-  const channel = Object.create(TextChannel.prototype) as TextChannel & {
+  const channel = Object.create(TextChannel.prototype) as {
     id: string;
     parentId: string | null;
     messages: { cache: Map<string, Message> };
@@ -112,7 +112,7 @@ function makeTextChannel(): TextChannel {
   channel.messages = { cache: new Map<string, Message>() };
   channel.isThread = () => false;
 
-  return channel;
+  return channel as unknown as TextChannel;
 }
 
 function makeMessage(fixture: ConversationFixture, client: Client): Message {
@@ -618,9 +618,13 @@ describe("chat regression harness", () => {
       isPersonaJob: false,
       isCommandTriggered: false,
     });
+    // The fixture always carries an id, but TomoriState types it optional.
+    const personaId = tomoriState.persona_id;
+    if (personaId === undefined) throw new Error("Fixture persona is missing a persona_id");
+
     setActiveChannelTurnState(lockEntry, {
-      activePersonaId: tomoriState.persona_id,
-      triggeredPersonaIds: [tomoriState.persona_id],
+      activePersonaId: personaId,
+      triggeredPersonaIds: [personaId],
       followUpEligible: true,
       isUserImpersonation: false,
     });
@@ -706,9 +710,13 @@ describe("chat regression harness", () => {
       isPersonaJob: false,
       isCommandTriggered: false,
     });
+    // The fixture always carries an id, but TomoriState types it optional.
+    const personaId = tomoriState.persona_id;
+    if (personaId === undefined) throw new Error("Fixture persona is missing a persona_id");
+
     setActiveChannelTurnState(lockEntry, {
-      activePersonaId: tomoriState.persona_id,
-      triggeredPersonaIds: [tomoriState.persona_id],
+      activePersonaId: personaId,
+      triggeredPersonaIds: [personaId],
       followUpEligible: true,
       isUserImpersonation: false,
     });
@@ -800,9 +808,13 @@ describe("chat regression harness", () => {
       isPersonaJob: false,
       isCommandTriggered: false,
     });
+    // The fixture always carries an id, but TomoriState types it optional.
+    const personaId = tomoriState.persona_id;
+    if (personaId === undefined) throw new Error("Fixture persona is missing a persona_id");
+
     setActiveChannelTurnState(lockEntry, {
-      activePersonaId: tomoriState.persona_id,
-      triggeredPersonaIds: [tomoriState.persona_id],
+      activePersonaId: personaId,
+      triggeredPersonaIds: [personaId],
       followUpEligible: true,
     });
     StreamOrchestrator.requestStop(channelId, message.author.id);

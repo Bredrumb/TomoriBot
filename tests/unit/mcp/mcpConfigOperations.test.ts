@@ -238,7 +238,9 @@ describe("canonical MCP config operations", () => {
           calls.push("write-remove");
           return true;
         },
-        disconnect: async () => calls.push("disconnect"),
+        disconnect: async () => {
+          calls.push("disconnect");
+        },
       }),
     );
     await operations.setEnabled({ serverId: 10, serverDiscId: "100", guildMcpId: 1, enabled: false });
@@ -298,7 +300,9 @@ describe("canonical MCP config operations", () => {
           calls.push("write");
           return true;
         },
-        disconnect: async () => calls.push("disconnect"),
+        disconnect: async () => {
+          calls.push("disconnect");
+        },
       }),
     );
     expect(

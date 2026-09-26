@@ -2,6 +2,8 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import {
   ComponentType,
   MessageFlags,
+  type ActionRowComponentData,
+  type ActionRowData,
   type Client,
   type ComponentInContainerData,
   type ContainerComponentData,
@@ -100,7 +102,7 @@ describe("help dashboard", () => {
             for (const comp of container.components) {
               if (comp.type === ComponentType.ActionRow && "components" in comp) {
                 for (const child of comp.components) {
-                  if (child.type === ComponentType.StringSelect) {
+                  if ("type" in child && child.type === ComponentType.StringSelect) {
                     const select = child as StringSelectMenuComponentData;
                     for (const option of select.options) {
                       expect(option.description).toBeDefined();
@@ -299,7 +301,7 @@ describe("help dashboard", () => {
     const buttons = navRow && "components" in navRow ? navRow.components : [];
     expect(buttons).toHaveLength(2);
     const nextButton = buttons[1];
-    expect(nextButton?.disabled).toBe(false);
+    expect(nextButton && "disabled" in nextButton ? nextButton.disabled : undefined).toBe(false);
 
     const expectedCustomId = `help:v2:navigate:en-US:${setupCategory.id}:${customEndpointsPage.id}:${firstCustomVariant.id}`;
     expect(nextButton && "customId" in nextButton ? nextButton.customId : "").toBe(expectedCustomId);
@@ -321,7 +323,7 @@ describe("help dashboard", () => {
       );
       expect(firstNavRow).toBeDefined();
       const firstButtons = firstNavRow && "components" in firstNavRow ? firstNavRow.components : [];
-      expect(firstButtons[0]?.disabled).toBe(true);
+      expect(firstButtons[0] && "disabled" in firstButtons[0] ? firstButtons[0].disabled : undefined).toBe(true);
 
       const lastStop = stops[stops.length - 1];
       const lastPayload = buildHelpDashboardPayload("en-US", category.id, lastStop?.pageId, lastStop?.variantId);
@@ -334,7 +336,7 @@ describe("help dashboard", () => {
       );
       expect(lastNavRow).toBeDefined();
       const lastButtons = lastNavRow && "components" in lastNavRow ? lastNavRow.components : [];
-      expect(lastButtons[1]?.disabled).toBe(true);
+      expect(lastButtons[1] && "disabled" in lastButtons[1] ? lastButtons[1].disabled : undefined).toBe(true);
     }
   });
 });
@@ -348,15 +350,27 @@ describe("help dashboard", () => {
  * `buildProviderGuideModal` is reached only through the provider select route, so "reachable" means
  * a value in one of these two pickers; asserting the modal renders would prove only that the guide
  * exists.
+ *
+ * `BaseComponentData.type` spans the whole enum and the narrowed `"components" in comp` branch loses
+ * its type argument, so the provider picker is recognized by a predicate over the concrete row type
+ * rather than by the type field alone.
  */
+function isProviderSelect(child: ActionRowComponentData): child is StringSelectMenuComponentData {
+  if (!("customId" in child) || typeof child.customId !== "string") return false;
+  return child.type === ComponentType.StringSelect && child.customId.startsWith("help:v2:provider:");
+}
+
+function actionRowComponents(comp: ComponentInContainerData): readonly ActionRowComponentData[] | undefined {
+  return "components" in comp ? (comp as ActionRowData<ActionRowComponentData>).components : undefined;
+}
+
 function findProviderSelects(categoryId: string, pageId: string, variantId?: string): StringSelectMenuComponentData[] {
   const payload = buildHelpDashboardPayload("en-US", categoryId, pageId, variantId);
   const container = payload.components[0] as ContainerComponentData<ComponentInContainerData>;
   const selects: StringSelectMenuComponentData[] = [];
   for (const comp of container.components) {
-    if (comp.type !== ComponentType.ActionRow || !("components" in comp)) continue;
-    for (const child of comp.components) {
-      if (child.type === ComponentType.StringSelect && child.customId?.startsWith("help:v2:provider:")) {
+    for (const child of actionRowComponents(comp) ?? []) {
+      if (isProviderSelect(child)) {
         selects.push(child);
       }
     }
@@ -459,14 +473,7 @@ describe("help provider picker", () => {
     const container = getContainer("en-US", "setup", "getting-started", "get-api-key");
     const pickerRowIndexes = container.components
       .map((comp, index) => ({ comp, index }))
-      .filter(
-        ({ comp }) =>
-          comp.type === ComponentType.ActionRow &&
-          "components" in comp &&
-          comp.components.some(
-            (child) => child.type === ComponentType.StringSelect && child.customId?.startsWith("help:v2:provider:"),
-          ),
-      )
+      .filter(({ comp }) => (actionRowComponents(comp) ?? []).some(isProviderSelect))
       .map(({ index }) => index);
     expect(pickerRowIndexes).toHaveLength(2);
     expect(pickerRowIndexes[1]).toBe((pickerRowIndexes[0] ?? -1) + 1);

@@ -95,6 +95,8 @@ describe("reassembleWithPreset", () => {
         client: {} as Client,
         guildId: "111111111111111111",
         triggererName: "Alice",
+        triggererFormattedName: "Alice",
+        triggererAddressTerm: "",
         botName: "Tomori",
         personalMemoriesEnabled: true,
       },

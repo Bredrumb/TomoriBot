@@ -17,6 +17,7 @@ import {
 } from "@/types/discord/setupWizard";
 import { setupCustomEndpointCapabilitySchema } from "@/types/db/schema";
 import {
+  claimSetupDraft,
   readSetupDraft,
   resetSetupDrafts,
   storeSetupDraft,
@@ -39,6 +40,7 @@ import {
   buildSetupSettingsRouteId,
   buildSetupSettingsSubmitRouteId,
   startSetupWizard,
+  type SetupWizardAction,
 } from "@/utils/discord/interactions/setupRoutes";
 import {
   SETUP_POLICY_CHOICE_VALUES,
@@ -314,7 +316,7 @@ async function expectRependAfterCatalogDrift(input: {
  */
 interface SetupSubmitModalCase {
   /** Submit action the opened modal's custom ID must parse to, which is also how the case reports. */
-  label: string;
+  label: SetupWizardAction;
   nonce: string;
   /**
    * Seeds the draft the open route reads, and stubs the catalogs a step resolves. A callback because
@@ -369,7 +371,7 @@ describe("setupWizardRoutes", () => {
       storeSetupDraft: mockStore as typeof storeSetupDraft,
     });
 
-    expect(acknowledgedAtStoreTime).toBe(true);
+    expect<boolean | null>(acknowledgedAtStoreTime).toBe(true);
     expect(mockStore).toHaveBeenCalledTimes(1);
   });
 
@@ -553,9 +555,11 @@ describe("setupWizardRoutes", () => {
     const nonce = "nonce-byok-modal-1";
     storeSetupDraft(nonce, makeDraft({ providerAccess: null }));
 
-    let openedModal: { custom_id: string; title: string; components: unknown[] } | null = null;
+    // A holder rather than a bare `let`: TypeScript narrows `let` to its `null` initializer and does
+    // not see the closure assignment, and the holder keeps `null` as the unwritten state.
+    const opened: { modal: { custom_id: string; title: string; components: unknown[] } | null } = { modal: null };
     const modalSpy = spyOn(modalModule, "showRoutedRawModal").mockImplementation(async (_interaction, modal) => {
-      openedModal = modal as typeof openedModal;
+      opened.modal = modal;
     });
 
     try {
@@ -569,10 +573,10 @@ describe("setupWizardRoutes", () => {
       await dispatchGlobalInteraction({} as Client, interaction);
 
       expect(modalSpy).toHaveBeenCalledTimes(1);
-      expect(openedModal).not.toBeNull();
+      expect(opened.modal).not.toBeNull();
       // Which submit route each step's modal carries is pinned per case in SETUP_SUBMIT_MODAL_ROUTES;
       // what stays here is that the modal this flow handed back parses at all.
-      const parsed = parseSetupRoute(openedModal?.custom_id ?? "");
+      const parsed = parseSetupRoute(opened.modal?.custom_id ?? "");
       expect(parsed?.action).toBe("provider-byok-submit");
 
       const check = readSetupDraft(nonce, "actor-1", "guild-1", "guild");
@@ -840,9 +844,10 @@ describe("setupWizardRoutes", () => {
       }),
     );
 
-    let openedModal: { custom_id: string; title: string; components: unknown[] } | null = null;
+    // A holder rather than a bare `let`, for the same control flow analysis reason as above.
+    const opened: { modal: { custom_id: string; title: string; components: unknown[] } | null } = { modal: null };
     const modalSpy = spyOn(modalModule, "showRoutedRawModal").mockImplementation(async (_interaction, modal) => {
-      openedModal = modal as typeof openedModal;
+      opened.modal = modal;
     });
 
     try {
@@ -856,8 +861,8 @@ describe("setupWizardRoutes", () => {
       await dispatchGlobalInteraction({} as Client, interaction);
 
       expect(modalSpy).toHaveBeenCalledTimes(1);
-      expect(openedModal).not.toBeNull();
-      expect(openedModal?.custom_id).toBe(buildSetupProviderCatalogSubmitRouteId({ locale: "en-US", nonce }));
+      expect(opened.modal).not.toBeNull();
+      expect(opened.modal?.custom_id).toBe(buildSetupProviderCatalogSubmitRouteId({ locale: "en-US", nonce }));
 
       const check = readSetupDraft(nonce, "actor-1", "guild-1", "guild");
       expect(check.status).toBe("ok");
@@ -1218,7 +1223,9 @@ describe("setupWizardRoutes", () => {
     const subRow = container.components.find(
       (c): c is ActionRowData<ButtonComponentData> =>
         c.type === ComponentType.ActionRow &&
-        c.components?.some((b) => b.customId === buildSetupEndpointModelRouteId({ locale: "en-US", nonce })),
+        c.components?.some(
+          (b) => "customId" in b && b.customId === buildSetupEndpointModelRouteId({ locale: "en-US", nonce }),
+        ),
     );
 
     return { subRow, connection: subRow?.components[0], model: subRow?.components[1] };
@@ -2771,6 +2778,14 @@ describe("setupWizardFinish", () => {
    * varying. Returns the spies for assertions and a restore for the caller's finally block.
    */
   function stubCommitDependencies() {
+    // Named rather than reached through the array's index, because indexing a heterogeneous spy array
+    // gives a union whose `mockRejectedValue` parameter collapses to `never`.
+    const setupSpy = spyOn(serverRepository, "setup").mockResolvedValue({
+      server: { server_id: 42 },
+      tomori: {},
+      emojis: [],
+      stickers: [],
+    } as never);
     const spies = [
       spyOn(serverRepository, "loadServerIdByDiscId").mockResolvedValue(null),
       spyOn(personaRepository, "hasMainPersona").mockResolvedValue(false as never),
@@ -2783,12 +2798,7 @@ describe("setupWizardFinish", () => {
       spyOn(configRepository, "loadPresetRowsByLocale").mockResolvedValue([COMMIT_CATALOGS.persona] as never),
       spyOn(configRepository, "loadSystemPromptPresets").mockResolvedValue([COMMIT_CATALOGS.prompt] as never),
       spyOn(llmModelRepo, "loadDefaultModel").mockResolvedValue({ llm_codename: "gpt-4o" } as never),
-      spyOn(serverRepository, "setup").mockResolvedValue({
-        server: { server_id: 42 },
-        tomori: {},
-        emojis: [],
-        stickers: [],
-      } as never),
+      setupSpy,
       spyOn(cacheStore, "invalidateTomoriStateCache").mockImplementation(() => {}),
       spyOn(avatarHelper, "getCachedPresetAvatar").mockReturnValue(null),
       spyOn(personaRepository, "markServerMainAvatarSynced").mockResolvedValue(undefined as never),
@@ -2799,7 +2809,7 @@ describe("setupWizardFinish", () => {
     ];
 
     return {
-      setupSpy: spies[6],
+      setupSpy,
       invalidateSpy: spies[7],
       loadStateSpy: spies[2],
       panelActionSpy: spies[12],
@@ -2873,10 +2883,12 @@ describe("setupWizardFinish", () => {
       storeSetupDraft(COMMIT_NONCE, makeCompleteDraft());
       const customId = buildSetupFinishRouteId({ locale: "en-US", nonce: COMMIT_NONCE });
       const interaction = makeMockInteraction({ customId, guild: COMMIT_GUILD });
-      interaction.deferUpdate = async () => {
+      // The replacement mirrors the fake's own deferUpdate, which only sets `deferred`, and adds the
+      // flag this test samples from inside the write.
+      interaction.deferUpdate = (async () => {
         interactionAcknowledged = true;
         interaction.deferred = true;
-      };
+      }) as unknown as typeof interaction.deferUpdate;
 
       await dispatchGlobalInteraction({} as Client, interaction);
 
@@ -2885,7 +2897,7 @@ describe("setupWizardFinish", () => {
       // and a REST avatar update before the receipt is edited in. Sampling the flag from inside the
       // write is the only way to see the ordering, because the ordering is invisible in what is
       // called: every delivery method here is editReply either way.
-      expect(acknowledgedAtWrite).toBe(true);
+      expect<boolean | null>(acknowledgedAtWrite).toBe(true);
       expect(interaction.editReplyCalls.length).toBe(1);
     } finally {
       stubs.restore();
@@ -2897,8 +2909,9 @@ describe("setupWizardFinish", () => {
     const originalBuffer = Buffer.from("live-credential");
 
     try {
-      storeSetupDraft(COMMIT_NONCE, {
-        ...makeCompleteDraft({
+      storeSetupDraft(
+        COMMIT_NONCE,
+        makeCompleteDraft({
           providerAccess: {
             mode: "catalog",
             provider: "anthropic",
@@ -2906,8 +2919,8 @@ describe("setupWizardFinish", () => {
             keyVersion: 1,
           },
         }),
-        writeClaimed: true,
-      });
+      );
+      claimSetupDraft(COMMIT_NONCE, "actor-1", "guild-1", "guild");
 
       // The same authorized actor saves a different provider mode while the commit that claimed the
       // draft is still running. Without a freeze this mutation reaches
@@ -2935,12 +2948,13 @@ describe("setupWizardFinish", () => {
     // store itself refuses a mutation on a claimed draft, because a caller reaching it by any other
     // path would otherwise wipe the displaced buffer and hand the commit a zeroed key.
     const liveBuffer = Buffer.from("live-credential");
-    storeSetupDraft(COMMIT_NONCE, {
-      ...makeCompleteDraft({
+    storeSetupDraft(
+      COMMIT_NONCE,
+      makeCompleteDraft({
         providerAccess: { mode: "catalog", provider: "anthropic", encryptedApiKey: liveBuffer, keyVersion: 1 },
       }),
-      writeClaimed: true,
-    });
+    );
+    claimSetupDraft(COMMIT_NONCE, "actor-1", "guild-1", "guild");
 
     const result = updateSetupDraft(COMMIT_NONCE, "actor-1", "guild-1", "guild", {
       providerAccess: { mode: "user-byok" },
@@ -3098,9 +3112,10 @@ describe("setupWizardFinish", () => {
     const stubs = stubCommitDependencies();
 
     try {
-      // writeClaimed is what the atomic claim sets for the duration of the transaction, so this is
-      // the state a duplicate confirmation arriving mid-commit actually reads.
-      storeSetupDraft(COMMIT_NONCE, { ...makeCompleteDraft(), writeClaimed: true });
+      // The atomic claim freezes the draft for the duration of the transaction, so this is the state a
+      // duplicate confirmation arriving mid-commit actually reads.
+      storeSetupDraft(COMMIT_NONCE, makeCompleteDraft());
+      claimSetupDraft(COMMIT_NONCE, "actor-1", "guild-1", "guild");
       const customId = buildSetupFinishRouteId({ locale: "en-US", nonce: COMMIT_NONCE });
       const interaction = makeMockInteraction({ customId, guild: COMMIT_GUILD });
 

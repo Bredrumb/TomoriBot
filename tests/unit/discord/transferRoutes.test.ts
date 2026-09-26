@@ -35,9 +35,15 @@ import {
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
-import { createRouteInteraction } from "../../helpers/routeInteraction";
+import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
 
 type InteractionKind = "button" | "string" | "modal";
+
+/**
+ * The fake the routes are handed: the dispatcher's contract plus the component-interaction surface
+ * (`update` and friends) the transfer routes call, so a spy can name either one.
+ */
+type MockRouteInteraction = GlobalRoutableInteraction & RouteInteraction;
 
 /** The minimum a `chat` section must state literally, because these three fields carry no default. */
 const CHAT_SECTION_VALUES = {
@@ -66,7 +72,7 @@ function makeInteraction({
   canManageGuild = false,
   guildCached = true,
   values = [],
-}: MockInteractionOptions): GlobalRoutableInteraction {
+}: MockInteractionOptions): MockRouteInteraction {
   const interaction = createRouteInteraction({
     customId,
     kind: kind === "string" ? "string-select" : kind,
@@ -85,7 +91,7 @@ function makeInteraction({
   Object.assign(interaction, { locale: "en-US", guildLocale: "en-US" });
   // discord.js can hold a guild snowflake whose guild object is not in the client cache yet.
   if (guildId !== null && !guildCached) interaction.guild = null;
-  return interaction as unknown as GlobalRoutableInteraction;
+  return interaction as unknown as MockRouteInteraction;
 }
 
 function makeMemoryBuckets(count = 2): MemoryBucket[] {

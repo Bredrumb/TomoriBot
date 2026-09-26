@@ -10,6 +10,7 @@ import {
   type PersonalConfigManagedCapability,
   type PersonalConfigPage,
 } from "@/utils/discord/personalConfigPanelCatalog";
+import type { PersonalSpotlightStatus } from "@/utils/db/repositories/UserRepository";
 import {
   buildPersonalConfigPanelPayload,
   type PersonalConfigModelDisplayInfo,
@@ -115,11 +116,15 @@ function makeSpotlightDisplayInfo(activeCount = 2, personaCount = 5): PersonalCo
     name: `Persona ${i + 1}`,
     isAlter: false,
   }));
-  const activeSpotlights = Array.from({ length: activeCount }, (_, i) => ({
+  const activeSpotlights: PersonalSpotlightStatus[] = Array.from({ length: activeCount }, (_, i) => ({
+    serverId: 1,
+    userId: 1,
     channelDiscId: `12345678901234567${i}`,
     personaIds: [personas[0]?.id ?? 1],
     autoTriggerPersonaId: personas[0]?.id ?? 1,
     expiresAt: new Date(Date.now() + 3600 * 1000 * (i + 1)),
+    createdAt: null,
+    updatedAt: null,
   }));
   return { activeSpotlights, personas };
 }

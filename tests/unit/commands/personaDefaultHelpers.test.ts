@@ -6,6 +6,7 @@ import {
   resolvePresetTriggerWords,
 } from "@/commands/persona/default";
 import type { TomoriPresetRow } from "@/types/db/schema";
+import { EMPTY_PERSONA_NAMING_CONFIG } from "@/types/personaNaming";
 
 /** Minimal preset fixture: only the fields used by the pure helpers. */
 function makePreset(overrides: Partial<TomoriPresetRow> = {}): TomoriPresetRow {
@@ -21,6 +22,7 @@ function makePreset(overrides: Partial<TomoriPresetRow> = {}): TomoriPresetRow {
     preset_language: "en-US",
     preset_avatar_path: null,
     preset_trigger_words: [],
+    preset_naming_config: structuredClone(EMPTY_PERSONA_NAMING_CONFIG),
     ...overrides,
   };
 }

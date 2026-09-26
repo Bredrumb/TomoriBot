@@ -240,6 +240,7 @@ describe("v2 config export projections", () => {
 
     expect(result.success).toBe(true);
     if (!result.success || !result.data) return;
+    if (result.data.type !== "workspace_config") throw new Error("Expected a workspace_config export payload");
 
     const parsed = workspaceConfigExportSchema.parse(result.data);
     expect(parsed).toEqual(result.data);

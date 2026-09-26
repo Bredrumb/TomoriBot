@@ -160,6 +160,8 @@ describe("participant context Phase 0 baseline", () => {
           client: fixture.client,
           guildId: PARTICIPANT_FIXTURE_IDS.guild,
           triggererName: "Alice",
+          triggererFormattedName: "Alice",
+          triggererAddressTerm: "",
           botName: "Tomori",
           personalMemoriesEnabled: true,
         },

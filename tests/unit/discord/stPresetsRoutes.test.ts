@@ -109,7 +109,8 @@ function makeDependencies(
         calls.push(`removeWithPromotion:${input.presetIdsToRemove.join(",")}`);
         return {
           successCount: 1,
-          failureCount: 0,
+          failedNames: [],
+          removedNames: ["Preset 2"],
           promotedPreset: preset(2, { is_active: true }),
         };
       },

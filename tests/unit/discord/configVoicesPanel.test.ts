@@ -11,7 +11,7 @@ import {
 } from "discord.js";
 import type { VoiceSampleRow } from "@/types/db/schema";
 import { parseConfigPanelRoute, type ConfigPanelRoute } from "@/utils/discord/configPanelCatalog";
-import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
+import { parseInteractionRoute, type ParsedInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import { buildConfigModelsBody } from "@/utils/discord/ui/configModelsPanel";
 import {
   buildConfigVoicesBody,
@@ -36,6 +36,16 @@ function makeSample(index: number, overrides: Partial<VoiceSampleRow> = {}): Voi
     duration_ms: 3500,
     ...overrides,
   };
+}
+
+function requireRoute(customId: string): ParsedInteractionRoute {
+  const parsed = parseInteractionRoute(customId);
+  if (!parsed) throw new Error(`Failed to parse route for customId: ${customId}`);
+  return parsed;
+}
+
+function buttonCustomId(button: ButtonComponentData): string {
+  return "customId" in button ? button.customId : "";
 }
 
 describe("configVoicesPanel", () => {
@@ -73,7 +83,7 @@ describe("configVoicesPanel", () => {
     expect(components[2].type).toBe(ComponentType.ActionRow);
     const editParamsRow = components[2] as ActionRowData<ButtonComponentData>;
     expect(editParamsRow.components.length).toBe(1);
-    const editParamsRoute = parseConfigPanelRoute(parseInteractionRoute(editParamsRow.components[0].customId ?? ""));
+    const editParamsRoute = parseConfigPanelRoute(requireRoute(buttonCustomId(editParamsRow.components[0])));
     expect(editParamsRoute?.action).toBe("tts-parameters-open");
 
     expect(components[3].type).toBe(ComponentType.TextDisplay);
@@ -83,7 +93,7 @@ describe("configVoicesPanel", () => {
     expect(components[4].type).toBe(ComponentType.ActionRow);
     const selectRow = components[4] as ActionRowData<StringSelectMenuComponentData>;
     expect(selectRow.components[0].type).toBe(ComponentType.StringSelect);
-    const selectRoute = parseConfigPanelRoute(parseInteractionRoute(selectRow.components[0].customId ?? ""));
+    const selectRoute = parseConfigPanelRoute(requireRoute(selectRow.components[0].customId ?? ""));
     expect(selectRoute?.action).toBe("voice-sample-select");
     expect(selectRow.components[0].options.length).toBe(25);
     expect(selectRow.components[0].options[0]).toMatchObject({ label: "Voice Sample 1", default: true });
@@ -95,15 +105,15 @@ describe("configVoicesPanel", () => {
     expect(components[6].type).toBe(ComponentType.ActionRow);
     const paginationRow = components[6] as ActionRowData<ButtonComponentData>;
     expect(paginationRow.components.length).toBe(3); // prev, indicator, next
-    const nextRoute = parseConfigPanelRoute(parseInteractionRoute(paginationRow.components[2].customId ?? ""));
+    const nextRoute = parseConfigPanelRoute(requireRoute(buttonCustomId(paginationRow.components[2])));
     expect(nextRoute?.action).toBe("voice-sample-page");
 
     expect(components[7].type).toBe(ComponentType.ActionRow);
     const actionRow = components[7] as ActionRowData<ButtonComponentData>;
     expect(actionRow.components.length).toBe(2);
-    const addRoute = parseConfigPanelRoute(parseInteractionRoute(actionRow.components[0].customId ?? ""));
+    const addRoute = parseConfigPanelRoute(requireRoute(buttonCustomId(actionRow.components[0])));
     expect(addRoute?.action).toBe("voice-sample-add-open");
-    const removeRoute = parseConfigPanelRoute(parseInteractionRoute(actionRow.components[1].customId ?? ""));
+    const removeRoute = parseConfigPanelRoute(requireRoute(buttonCustomId(actionRow.components[1])));
     expect(removeRoute?.action).toBe("voice-sample-remove-view");
     expect(actionRow.components[1].disabled).toBe(false); // selectedIndex is 0 (valid)
   });
@@ -125,7 +135,7 @@ describe("configVoicesPanel", () => {
       (component) =>
         component.type === ComponentType.ActionRow &&
         (component as ActionRowData<ButtonComponentData>).components.some((button) =>
-          button.customId?.includes("tts-turbo-set"),
+          buttonCustomId(button).includes("tts-turbo-set"),
         ),
     );
     expect(hasTurboRoute).toBe(false);
@@ -249,7 +259,9 @@ describe("configVoicesPanel", () => {
 
     const selectRow = components.find(
       (c) =>
-        c.type === ComponentType.ActionRow && (c as ActionRowData).components[0]?.type === ComponentType.StringSelect,
+        c.type === ComponentType.ActionRow &&
+        (c as ActionRowData<ButtonComponentData | StringSelectMenuComponentData>).components[0]?.type ===
+          ComponentType.StringSelect,
     ) as ActionRowData<StringSelectMenuComponentData>;
 
     expect(selectRow).toBeDefined();
@@ -259,16 +271,16 @@ describe("configVoicesPanel", () => {
     for (let i = 0; i < select.options.length; i++) {
       const option = select.options[i];
       const decoded = decodeVoiceSampleOptionValue(option.value);
-      expect(decoded).not.toBeNull();
-      expect(decoded?.index).toBe(i);
-      expect(decoded?.fp).toBe(computeVoiceSampleFingerprint(samples[i]));
+      if (!decoded) throw new Error(`Failed to decode voice sample option value: ${option.value}`);
+      expect(decoded.index).toBe(i);
+      expect(decoded.fp).toBe(computeVoiceSampleFingerprint(samples[i]));
 
       // Also assert round-trip through the interaction route parser as vsample-rem-view segments
       const routeId = `config:v2:vsample-rem-view:en-US:${option.value}`;
-      const parsed = parseConfigPanelRoute(parseInteractionRoute(routeId));
+      const parsed = parseConfigPanelRoute(requireRoute(routeId));
       expect(parsed).not.toBeNull();
       expect((parsed as Extract<ConfigPanelRoute, { action: "voice-sample-remove-view" }>).index).toBe(i);
-      expect((parsed as Extract<ConfigPanelRoute, { action: "voice-sample-remove-view" }>).fp).toBe(decoded?.fp);
+      expect((parsed as Extract<ConfigPanelRoute, { action: "voice-sample-remove-view" }>).fp).toBe(decoded.fp);
     }
 
     // Specific pin: an index of 0 survives and is not treated as falsy
@@ -312,7 +324,9 @@ describe("configVoicesPanel", () => {
 
       const selectRow = components.find(
         (c) =>
-          c.type === ComponentType.ActionRow && (c as ActionRowData).components[0]?.type === ComponentType.StringSelect,
+          c.type === ComponentType.ActionRow &&
+          (c as ActionRowData<ButtonComponentData | StringSelectMenuComponentData>).components[0]?.type ===
+            ComponentType.StringSelect,
       ) as ActionRowData<StringSelectMenuComponentData>;
 
       expect(selectRow).toBeDefined();
@@ -467,7 +481,7 @@ describe("configVoicesPanel", () => {
 
     const [confBtn, cancelBtn] = confirmRow.components;
     expect(confBtn.style).toBe(ButtonStyle.Danger);
-    const confRoute = parseConfigPanelRoute(parseInteractionRoute(confBtn.customId ?? ""));
+    const confRoute = parseConfigPanelRoute(requireRoute(buttonCustomId(confBtn)));
     expect(confRoute?.action).toBe("voice-sample-remove-confirm");
     expect((confRoute as Extract<ConfigPanelRoute, { action: "voice-sample-remove-confirm" }>).index).toBe(1);
     expect((confRoute as Extract<ConfigPanelRoute, { action: "voice-sample-remove-confirm" }>).fp).toBe("abcd1234");
@@ -476,13 +490,15 @@ describe("configVoicesPanel", () => {
     );
 
     expect(cancelBtn.style).toBe(ButtonStyle.Secondary);
-    const cancelRoute = parseConfigPanelRoute(parseInteractionRoute(cancelBtn.customId ?? ""));
+    const cancelRoute = parseConfigPanelRoute(requireRoute(buttonCustomId(cancelBtn)));
     expect(cancelRoute?.action).toBe("voice-sample-remove-cancel");
 
     // No StringSelect is present
     const hasSelect = components.some(
       (c) =>
-        c.type === ComponentType.ActionRow && (c as ActionRowData).components[0]?.type === ComponentType.StringSelect,
+        c.type === ComponentType.ActionRow &&
+        (c as ActionRowData<ButtonComponentData | StringSelectMenuComponentData>).components[0]?.type ===
+          ComponentType.StringSelect,
     );
     expect(hasSelect).toBe(false);
   });

@@ -3,6 +3,7 @@ import {
   ButtonStyle,
   type ActionRowData,
   type ButtonComponentData,
+  type ComponentInContainerData,
   type ContainerComponentData,
   type StringSelectMenuComponentData,
 } from "discord.js";
@@ -83,8 +84,10 @@ function createCompleteDraftInput(isHosted = false): {
   };
 }
 
-function getContainerComponents(payload: ReturnType<typeof buildSetupWizardPayload>): unknown[] {
-  const container = payload.components[0] as ContainerComponentData<unknown>;
+function getContainerComponents(
+  payload: ReturnType<typeof buildSetupWizardPayload>,
+): readonly ComponentInContainerData[] {
+  const container = payload.components[0] as ContainerComponentData<ComponentInContainerData>;
   return container.components;
 }
 
@@ -674,7 +677,7 @@ describe("setupPanel Components V2 layout and limits", () => {
       isHosted: false,
       nonce: TEST_NONCE,
     });
-    const pendingContainer = pendingPayload.components[0] as ContainerComponentData<unknown>;
+    const pendingContainer = pendingPayload.components[0] as ContainerComponentData<ComponentInContainerData>;
     expect(pendingContainer.accentColor).toBe(0xed4245);
 
     const readyInput = createCompleteDraftInput(false);
@@ -685,7 +688,7 @@ describe("setupPanel Components V2 layout and limits", () => {
       nonce: TEST_NONCE,
       settingsCatalogs: readyInput.settingsCatalogs,
     });
-    const readyContainer = readyPayload.components[0] as ContainerComponentData<unknown>;
+    const readyContainer = readyPayload.components[0] as ContainerComponentData<ComponentInContainerData>;
     expect(readyContainer.accentColor).toBe(0x57f287);
 
     const successPayload = buildSetupSuccessPayload({
@@ -698,7 +701,7 @@ describe("setupPanel Components V2 layout and limits", () => {
       notes: [],
       learnMore: "Learn more",
     });
-    const successContainer = successPayload.components[0] as ContainerComponentData<unknown>;
+    const successContainer = successPayload.components[0] as ContainerComponentData<ComponentInContainerData>;
     expect(successContainer.accentColor).toBe(0x57f287);
   });
 });

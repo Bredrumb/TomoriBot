@@ -16,6 +16,12 @@ type CommandOption = {
   options?: CommandOption[];
 };
 
+/** The raw snake_case fields the registration payload carries onto the wire. */
+type RegistrationRestrictions = {
+  contexts?: number[];
+  default_member_permissions?: string;
+};
+
 type Leaf = { path: string; option: CommandOption };
 
 const SUBCOMMAND_TYPE = 1;
@@ -42,7 +48,10 @@ function findRoot(registrationData: ApplicationCommandData[], name: string): App
 
 function collectLeaves(root: ApplicationCommandData): Leaf[] {
   const leaves: Leaf[] = [];
-  for (const option of (root.options ?? []) as CommandOption[]) {
+  // The loader hands back the builders' raw JSON, whose option tree nests one level deeper than
+  // the builder-facing union admits.
+  const rootOptions = ("options" in root ? root.options : undefined) as unknown as CommandOption[] | undefined;
+  for (const option of rootOptions ?? []) {
     if (option.type === SUBCOMMAND_TYPE && option.name) {
       leaves.push({ path: `${root.name} ${option.name}`, option });
       continue;
@@ -87,11 +96,12 @@ describe("export and import command registration", () => {
       if (!root) throw new Error(`/${rootName} is not registered`);
       // Both roots host a user-owned personal group, so a root-level Manage Server default would hide it from the
       // members who own it. Each workspace leaf performs its own runtime authorization instead.
-      expect({ rootName, permissions: root.default_member_permissions }).toEqual({
+      const restrictions = root as unknown as RegistrationRestrictions;
+      expect({ rootName, permissions: restrictions.default_member_permissions }).toEqual({
         rootName,
         permissions: undefined,
       });
-      const contexts = (root as { contexts?: number[] }).contexts;
+      const contexts = restrictions.contexts;
       expect({ rootName, allowsDm: contexts === undefined || contexts.includes(BOT_DM_CONTEXT) }).toEqual({
         rootName,
         allowsDm: true,

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { stubLogMembers } from "../../helpers/mockSurface";
 import { createOpenRouterCatalog, parseOpenRouterCatalogModelList } from "@/utils/cache/openrouterCatalog";
 
@@ -39,7 +39,9 @@ function makeCatalog(settings: { minRefreshIntervalMs?: number; ttlMs?: number }
 let fetchSpy: ReturnType<typeof spyOn<typeof globalThis, "fetch">>;
 
 beforeEach(() => {
-  fetchSpy = spyOn(globalThis, "fetch").mockImplementation(mock(async () => jsonResponse(["vendor/first"])));
+  // Bun's `typeof fetch` also carries the static `preconnect`, so the stub is asserted to the real signature.
+  fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (..._args: Parameters<typeof fetch>) =>
+    jsonResponse(["vendor/first"])) as typeof fetch);
 });
 
 afterEach(() => {
@@ -53,19 +55,21 @@ describe("OpenRouter catalog refresh", () => {
 
     expect(await catalog.getOrFetch("vendor/published-later")).toBeUndefined();
 
-    fetchSpy.mockImplementation(mock(async () => jsonResponse(["vendor/first", "vendor/published-later"])));
+    fetchSpy.mockImplementation((async (..._args: Parameters<typeof fetch>) =>
+      jsonResponse(["vendor/first", "vendor/published-later"])) as typeof fetch);
 
     expect(await catalog.getOrFetch("vendor/published-later")).toEqual({ id: "vendor/published-later" });
   });
 
   it("reaches the network after a failed startup fetch instead of staying closed", async () => {
-    fetchSpy.mockImplementation(mock(async () => errorResponse(503)));
+    fetchSpy.mockImplementation((async (..._args: Parameters<typeof fetch>) => errorResponse(503)) as typeof fetch);
 
     const catalog = makeCatalog({ minRefreshIntervalMs: 0 });
     await catalog.initialize();
     expect(catalog.isReady()).toBe(false);
 
-    fetchSpy.mockImplementation(mock(async () => jsonResponse(["vendor/first"])));
+    fetchSpy.mockImplementation((async (..._args: Parameters<typeof fetch>) =>
+      jsonResponse(["vendor/first"])) as typeof fetch);
 
     expect(await catalog.getOrFetch("vendor/first")).toEqual({ id: "vendor/first" });
     expect(catalog.isReady()).toBe(true);
@@ -75,7 +79,7 @@ describe("OpenRouter catalog refresh", () => {
     const catalog = makeCatalog({ minRefreshIntervalMs: 0 });
     await catalog.initialize();
 
-    fetchSpy.mockImplementation(mock(async () => errorResponse(503)));
+    fetchSpy.mockImplementation((async (..._args: Parameters<typeof fetch>) => errorResponse(503)) as typeof fetch);
     await catalog.getOrFetch("vendor/missing");
 
     expect(catalog.isReady()).toBe(true);
@@ -86,7 +90,7 @@ describe("OpenRouter catalog refresh", () => {
     const catalog = makeCatalog({ minRefreshIntervalMs: 0 });
     await catalog.initialize();
 
-    fetchSpy.mockImplementation(mock(async () => jsonResponse([])));
+    fetchSpy.mockImplementation((async (..._args: Parameters<typeof fetch>) => jsonResponse([])) as typeof fetch);
     await catalog.getOrFetch("vendor/missing");
 
     expect(catalog.size()).toBe(1);
@@ -112,7 +116,8 @@ describe("OpenRouter catalog refresh", () => {
     await catalog.initialize();
     expect(fetchSpy).toHaveBeenCalledTimes(1);
 
-    fetchSpy.mockImplementation(mock(async () => jsonResponse(["vendor/first", "vendor/published-later"])));
+    fetchSpy.mockImplementation((async (..._args: Parameters<typeof fetch>) =>
+      jsonResponse(["vendor/first", "vendor/published-later"])) as typeof fetch);
 
     expect(await catalog.getOrFetch("vendor/published-later")).toBeUndefined();
     expect(await catalog.getOrFetch("vendor/published-later", { fresh: true })).toEqual({
@@ -160,7 +165,8 @@ describe("OpenRouter catalog refresh", () => {
 
   it("matches codenames case-insensitively", async () => {
     const catalog = makeCatalog();
-    fetchSpy.mockImplementation(mock(async () => jsonResponse(["Vendor/Mixed-Case"])));
+    fetchSpy.mockImplementation((async (..._args: Parameters<typeof fetch>) =>
+      jsonResponse(["Vendor/Mixed-Case"])) as typeof fetch);
     await catalog.initialize();
 
     expect(catalog.get("  vendor/MIXED-case ")).toEqual({ id: "vendor/mixed-case" });

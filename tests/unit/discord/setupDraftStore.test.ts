@@ -439,7 +439,7 @@ describe("setup draft store", () => {
         endpointUrl: "https://example.invalid/v1",
         encryptedAuthToken: oldTokenBuffer,
         keyVersion: 1,
-      };
+      } as const;
 
       store.storeSetupDraft(
         "nonce-1234",
@@ -451,7 +451,7 @@ describe("setup draft store", () => {
           mode: "custom-endpoint",
           connection: { ...connection, encryptedAuthToken: newTokenBuffer },
           textModel: null,
-        },
+        } as const,
       });
 
       expect(oldTokenBuffer.every((byte) => byte === 0)).toBe(true);

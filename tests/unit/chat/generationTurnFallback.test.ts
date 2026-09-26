@@ -282,7 +282,7 @@ scopedMock.module("@/utils/provider/providerFactory", () => ({
 // files unable to link against any omitted export.
 scopedMock.module("@/utils/security/crypto", () => ({
   ...realCrypto,
-  decryptApiKey: async (key: string) => (key === "personal-encrypted-key" ? "personal-key" : "server-key"),
+  decryptApiKey: async (key: Buffer) => (key.toString() === "personal-encrypted-key" ? "personal-key" : "server-key"),
   encryptApiKey: async () => ({ encrypted: Buffer.from(""), version: 1 }),
   storeOptApiKey: async () => true,
   getOptApiKey: async () => null,
@@ -661,7 +661,7 @@ function makePersonalContext(serverPrimary: LlmRow, serverFallback: LlmRow, pers
     llm: personalPrimary,
     fallback_chain: undefined,
     fallback_llms: undefined,
-    config: { ...context.currentPersona.config, api_key: "personal-encrypted-key" },
+    config: { ...context.currentPersona.config, api_key: Buffer.from("personal-encrypted-key") },
   } as TomoriState;
   return context;
 }

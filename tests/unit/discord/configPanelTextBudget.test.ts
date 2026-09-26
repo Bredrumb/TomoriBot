@@ -14,11 +14,13 @@
  * matching English marker text, so it only runs in `en-US`, and the sweep is cheap.
  */
 import { beforeAll, describe, expect, it } from "bun:test";
-import { ComponentType } from "discord.js";
+import { ChannelType, ComponentType } from "discord.js";
 import type { LlmRow, NaiPresetRow, SavedProviderConfigRow, TomoriState, VoiceSampleRow } from "@/types/db/schema";
 import type { PanelReadStatus } from "@/types/discord/panel";
+import type { BlocklistChannelTarget, ChecklistChannelTarget } from "@/utils/discord/channelChecklistManager";
 import type { ConfigActor } from "@/utils/discord/interactions/configPermissionPolicy";
 import type {
+  ConfigBehaviorTriggerView,
   ConfigBehaviorView,
   ConfigChannelsView,
   ConfigPermissionsView,
@@ -48,12 +50,14 @@ import {
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
 import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import { getCapabilitiesManagePermissionDefinitions } from "@/utils/discord/manageConfigMapping";
+import { HUMANIZER_DEFAULT } from "@/utils/discord/humanizerOptions";
+import { DEFAULT_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
 import { withLinePrefix } from "@/utils/discord/ui/panel";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { collectCaseFailures, RUNTIME_LOCALES, localizedCopy } from "../../helpers/localeCases";
 import { BACKTICK_RUNS } from "../../helpers/panelLimits";
-import { createPersona } from "../../helpers/fixtures";
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
 /** The locale whose rendered text is longest; see the file header for why one locale suffices. */
 const BUDGET_LOCALE = "es-419";
@@ -77,6 +81,34 @@ function makePersona(overrides: Partial<TomoriState> & { persona_id: number }): 
     ...overrides,
   });
 }
+
+/**
+ * Trigger slice for behavior pages that never read it, carrying the loader's defaults so the view
+ * matches what a server with no stored trigger config produces.
+ */
+const BEHAVIOR_TRIGGER_VIEW: ConfigBehaviorTriggerView = {
+  randomTriggers: [],
+  cascadeLimit: 3,
+  matchLimit: 3,
+  deliberateTriggerMode: false,
+  alwaysReplyEnabled: false,
+  cooldownType: 0,
+  cooldownLength: 5,
+};
+
+/**
+ * A channels view whose every required slice is present and empty. A fixture spreads it and
+ * overrides the slice its own page renders, so the page still receives the slices it never reads.
+ */
+const EMPTY_CHANNELS_VIEW: ConfigChannelsView = {
+  destinations: { thoughtLogChannelId: null, welcomeChannelId: null, welcomePersonaId: null, welcomePrompt: null },
+  autoTrigger: { enabledChannels: [], personaOverrides: [], threshold: 0, maxThreshold: 0 },
+  rules: { privateChannels: [], roleplayChannels: [], crossChannelBlocklist: [] },
+  availableTextChannels: [],
+  availableBlocklistChannels: [],
+  availableOverrideChannels: [],
+  overrides: { selectedChannelId: null, prompt: null, contextNote: null, textModelOverride: null },
+};
 
 function makeSavedProvider(provider: string): SavedProviderConfigRow {
   return { provider } as unknown as SavedProviderConfigRow;
@@ -144,10 +176,23 @@ function makeSnowflake(n: number): string {
   return (1000000000000000000n + BigInt(n)).toString();
 }
 
-function makeChannelList(count: number): Array<{ id: string; name?: string }> {
+function makeChannelList(count: number): ChecklistChannelTarget[] {
   return Array.from({ length: count }, (_, i) => ({
     id: makeSnowflake(i + 1),
     name: `channel-${i + 1}`,
+    rawPosition: i,
+    parentRawPosition: -1,
+  }));
+}
+
+function makeBlocklistChannelList(count: number): BlocklistChannelTarget[] {
+  return Array.from({ length: count }, (_, i) => ({
+    id: makeSnowflake(i + 1),
+    name: `channel-${i + 1}`,
+    type: ChannelType.GuildText,
+    parentName: null,
+    rawPosition: i,
+    parentRawPosition: -1,
   }));
 }
 
@@ -463,10 +508,12 @@ describe("config page text budgeting at stored maxima", () => {
           general: {
             systemPrompt: "S".repeat(16000),
             contextNote: "G".repeat(2000),
+            contextNoteDepth: 0,
             humanizerDegree: 1,
             messageFetchLimit: 20,
             timezoneOffset: 0,
           },
+          trigger: BEHAVIOR_TRIGGER_VIEW,
         };
         return buildConfigPanelPayload({
           locale,
@@ -486,6 +533,15 @@ describe("config page text budgeting at stored maxima", () => {
       maxTolerance: PREVIEW_TIGHTNESS_TOLERANCE,
       buildPayload: (locale: string, receipt: boolean) => {
         const behaviorView: ConfigBehaviorView = {
+          general: {
+            systemPrompt: null,
+            contextNote: null,
+            contextNoteDepth: 0,
+            humanizerDegree: HUMANIZER_DEFAULT,
+            messageFetchLimit: DEFAULT_MESSAGE_FETCH_LIMIT,
+            timezoneOffset: 0,
+          },
+          trigger: BEHAVIOR_TRIGGER_VIEW,
           memory: {
             memoryTaggingEnabled: true,
             channelMemoryEnabled: true,
@@ -554,9 +610,7 @@ describe("config page text budgeting at stored maxima", () => {
       maxTolerance: PREVIEW_TIGHTNESS_TOLERANCE,
       buildPayload: (locale: string, receipt: boolean) => {
         const channelsView: ConfigChannelsView = {
-          availableTextChannels: [],
-          availableBlocklistChannels: [],
-          availableOverrideChannels: [],
+          ...EMPTY_CHANNELS_VIEW,
           destinations: {
             thoughtLogChannelId: makeSnowflake(1),
             welcomeChannelId: makeSnowflake(2),
@@ -583,9 +637,8 @@ describe("config page text budgeting at stored maxima", () => {
       buildPayload: (locale: string, receipt: boolean) => {
         const channels = makeChannelList(220);
         const channelsView: ConfigChannelsView = {
+          ...EMPTY_CHANNELS_VIEW,
           availableTextChannels: channels,
-          availableBlocklistChannels: [],
-          availableOverrideChannels: [],
           autoTrigger: {
             enabledChannels: channels,
             personaOverrides: channels.map((channel) => ({ channel_disc_id: channel.id, persona_id: 55 })),
@@ -621,11 +674,11 @@ describe("config page text budgeting at stored maxima", () => {
       buildPayload: (locale: string, receipt: boolean) => {
         const privateChannels = makeChannelList(220);
         const roleplayChannels = makeChannelList(220);
-        const blocklistChannels = makeChannelList(220);
+        const blocklistChannels = makeBlocklistChannelList(220);
         const channelsView: ConfigChannelsView = {
+          ...EMPTY_CHANNELS_VIEW,
           availableTextChannels: privateChannels,
           availableBlocklistChannels: blocklistChannels,
-          availableOverrideChannels: [],
           rules: {
             privateChannels,
             roleplayChannels,
@@ -651,9 +704,16 @@ describe("config page text budgeting at stored maxima", () => {
       buildPayload: (locale: string, receipt: boolean) => {
         const selectedId = makeSnowflake(100);
         const channelsView: ConfigChannelsView = {
-          availableTextChannels: [],
-          availableBlocklistChannels: [],
-          availableOverrideChannels: [{ id: selectedId }],
+          ...EMPTY_CHANNELS_VIEW,
+          availableOverrideChannels: [
+            {
+              id: selectedId,
+              name: "channel-100",
+              type: ChannelType.GuildText,
+              rawPosition: 99,
+              parentRawPosition: -1,
+            },
+          ],
           overrides: {
             selectedChannelId: selectedId,
             prompt: { prompt: "P".repeat(4000), mode: "append" },
@@ -976,10 +1036,12 @@ describe("Persona Advanced and Overrides component budgeting", () => {
       humanizer_degree_override: index === 0 || index === 40 ? 2 : undefined,
       llm:
         index === 0 || index === 40
-          ? { llm_id: 10, llm_provider: "openrouter", llm_codename: "server-model" }
+          ? createLlmRow({ llm_id: 10, llm_provider: "openrouter", llm_codename: "server-model" })
           : undefined,
       persona_llm:
-        index === 0 || index === 40 ? { llm_id: 11, llm_provider: "google", llm_codename: "persona-model" } : undefined,
+        index === 0 || index === 40
+          ? createLlmRow({ llm_id: 11, llm_provider: "google", llm_codename: "persona-model" })
+          : undefined,
     }),
   );
   const models = Array.from(
@@ -1284,8 +1346,8 @@ describe("Switch Models capability notice budgeting", () => {
       expect(placeholder).toContain(`${capability}-endpoint-1: ${capability}-model-1`);
       const options = menu?.options;
       expect(Array.isArray(options)).toBe(true);
-      for (const option of options ?? []) {
-        expect((option as Record<string, unknown>).default).not.toBe(true);
+      for (const option of (options ?? []) as Array<Record<string, unknown>>) {
+        expect(option.default).not.toBe(true);
       }
     }
 
@@ -1422,7 +1484,7 @@ describe("voices page text and component budgeting", () => {
       const options = menu.options;
       expect(Array.isArray(options)).toBe(true);
       expect(options).toHaveLength(1);
-      const option = options?.[0] as Record<string, unknown>;
+      const [option] = (options ?? []) as Array<Record<string, unknown>>;
       expect(option.value).toBe("none");
     }));
 
@@ -1783,10 +1845,13 @@ describe("bounded preview unicode and truncation boundary assertions", () => {
         const behaviorView: ConfigBehaviorView = {
           general: {
             systemPrompt: content,
+            contextNote: null,
+            contextNoteDepth: 0,
             humanizerDegree: 0,
             messageFetchLimit: 10,
             timezoneOffset: 0,
           },
+          trigger: BEHAVIOR_TRIGGER_VIEW,
         };
         const payload = buildConfigPanelPayload({
           locale: "en-US",
@@ -1855,10 +1920,13 @@ describe("bounded preview unicode and truncation boundary assertions", () => {
       behaviorView: {
         general: {
           systemPrompt: breakoutContent,
+          contextNote: null,
+          contextNoteDepth: 0,
           humanizerDegree: 0,
           messageFetchLimit: 10,
           timezoneOffset: 0,
         },
+        trigger: BEHAVIOR_TRIGGER_VIEW,
       },
     });
 
@@ -1919,10 +1987,13 @@ describe("bounded preview unicode and truncation boundary assertions", () => {
       behaviorView: {
         general: {
           systemPrompt: `before ${run} after`,
+          contextNote: null,
+          contextNoteDepth: 0,
           humanizerDegree: 0,
           messageFetchLimit: 10,
           timezoneOffset: 0,
         },
+        trigger: BEHAVIOR_TRIGGER_VIEW,
       },
     });
 
@@ -1952,9 +2023,8 @@ describe("channels collection bounds and truncation notices", () => {
           selectedPersonaId: 55,
           readStatus: "fresh",
           channelsView: {
+            ...EMPTY_CHANNELS_VIEW,
             availableTextChannels: channels,
-            availableBlocklistChannels: [],
-            availableOverrideChannels: [],
             autoTrigger: {
               enabledChannels: channels,
               personaOverrides: channels.map((c) => ({ channel_disc_id: c.id, persona_id: 55 })),
@@ -1980,9 +2050,8 @@ describe("channels collection bounds and truncation notices", () => {
           selectedPersonaId: 55,
           readStatus: "fresh",
           channelsView: {
+            ...EMPTY_CHANNELS_VIEW,
             availableTextChannels: channels,
-            availableBlocklistChannels: [],
-            availableOverrideChannels: [],
             rules: {
               privateChannels: channels,
               roleplayChannels: [],
@@ -2007,9 +2076,8 @@ describe("channels collection bounds and truncation notices", () => {
           selectedPersonaId: 55,
           readStatus: "fresh",
           channelsView: {
+            ...EMPTY_CHANNELS_VIEW,
             availableTextChannels: channels,
-            availableBlocklistChannels: [],
-            availableOverrideChannels: [],
             rules: {
               privateChannels: [],
               roleplayChannels: channels,
@@ -2024,7 +2092,7 @@ describe("channels collection bounds and truncation notices", () => {
     {
       name: "Rules cross-channel blocklist",
       buildPayload: (locale: string, count: number) => {
-        const channels = makeChannelList(count);
+        const channels = makeBlocklistChannelList(count);
         return buildConfigPanelPayload({
           locale,
           actor: GUILD_MANAGER,
@@ -2034,9 +2102,8 @@ describe("channels collection bounds and truncation notices", () => {
           selectedPersonaId: 55,
           readStatus: "fresh",
           channelsView: {
-            availableTextChannels: [],
+            ...EMPTY_CHANNELS_VIEW,
             availableBlocklistChannels: channels,
-            availableOverrideChannels: [],
             rules: {
               privateChannels: [],
               roleplayChannels: [],
@@ -2120,7 +2187,7 @@ describe("channels collection bounds and truncation notices", () => {
       cases.check(locale, () => {
         const privateChannels = makeChannelList(220);
         const roleplayChannels = makeChannelList(220);
-        const blocklistChannels = makeChannelList(220);
+        const blocklistChannels = makeBlocklistChannelList(220);
         const payload = buildConfigPanelPayload({
           locale,
           actor: GUILD_MANAGER,
@@ -2130,9 +2197,9 @@ describe("channels collection bounds and truncation notices", () => {
           selectedPersonaId: 55,
           readStatus: "fresh",
           channelsView: {
+            ...EMPTY_CHANNELS_VIEW,
             availableTextChannels: privateChannels,
             availableBlocklistChannels: blocklistChannels,
-            availableOverrideChannels: [],
             rules: {
               privateChannels,
               roleplayChannels,
@@ -2200,9 +2267,7 @@ describe("channels collection bounds and truncation notices", () => {
       selectedPersonaId: 55,
       readStatus: "fresh",
       channelsView: {
-        availableTextChannels: [],
-        availableBlocklistChannels: [],
-        availableOverrideChannels: [],
+        ...EMPTY_CHANNELS_VIEW,
         destinations: {
           thoughtLogChannelId: null,
           welcomeChannelId: null,
@@ -2232,9 +2297,7 @@ describe("channels collection bounds and truncation notices", () => {
       selectedPersonaId: 55,
       readStatus: "fresh",
       channelsView: {
-        availableTextChannels: [],
-        availableBlocklistChannels: [],
-        availableOverrideChannels: [],
+        ...EMPTY_CHANNELS_VIEW,
         destinations: {
           thoughtLogChannelId: null,
           welcomeChannelId: null,
@@ -2257,9 +2320,7 @@ describe("channels collection bounds and truncation notices", () => {
       selectedPersonaId: 55,
       readStatus: "fresh",
       channelsView: {
-        availableTextChannels: [],
-        availableBlocklistChannels: [],
-        availableOverrideChannels: [],
+        ...EMPTY_CHANNELS_VIEW,
         destinations: {
           thoughtLogChannelId: null,
           welcomeChannelId: null,
@@ -2286,9 +2347,10 @@ describe("channels collection bounds and truncation notices", () => {
       channelsSelectedChannelId: selectedId,
       readStatus: "fresh",
       channelsView: {
-        availableTextChannels: [],
-        availableBlocklistChannels: [],
-        availableOverrideChannels: [{ id: selectedId }],
+        ...EMPTY_CHANNELS_VIEW,
+        availableOverrideChannels: [
+          { id: selectedId, name: "channel-100", type: ChannelType.GuildText, rawPosition: 99, parentRawPosition: -1 },
+        ],
         overrides: {
           selectedChannelId: selectedId,
           prompt: { prompt: "Short prompt.", mode: "append" },
@@ -2310,9 +2372,10 @@ describe("channels collection bounds and truncation notices", () => {
       channelsSelectedChannelId: selectedId,
       readStatus: "fresh",
       channelsView: {
-        availableTextChannels: [],
-        availableBlocklistChannels: [],
-        availableOverrideChannels: [{ id: selectedId }],
+        ...EMPTY_CHANNELS_VIEW,
+        availableOverrideChannels: [
+          { id: selectedId, name: "channel-100", type: ChannelType.GuildText, rawPosition: 99, parentRawPosition: -1 },
+        ],
         overrides: {
           selectedChannelId: selectedId,
           prompt: { prompt: "P".repeat(4000), mode: "append" },

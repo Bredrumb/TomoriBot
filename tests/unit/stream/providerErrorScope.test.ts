@@ -38,7 +38,7 @@ function makeProvider(name = "openrouter"): StreamProvider {
     processChunk() {
       return { type: "text", content: "" };
     },
-    handleProviderError(error) {
+    handleProviderError(error: unknown) {
       return {
         type: "api_error",
         message: error instanceof Error ? error.message : String(error),
@@ -74,7 +74,7 @@ async function renderTips(
       return collector;
     },
   };
-  const send = mock(async () => ({
+  const send = mock(async (_payload: unknown) => ({
     createMessageComponentCollector: () => collector,
   }));
   await new StreamErrorUi().handleProviderError(

@@ -2,9 +2,9 @@
  * Shared typed fixture factories for database rows.
  *
  * Every factory takes `Partial<T>` overrides and returns a complete row typed against the real schema
- * type, so once `tests/` is type-checked a schema change breaks compilation here instead of leaving
- * the fixture on an older shape. Until then `fixtures.test.ts` is the guard that runs. Identity
- * values (ids, snowflakes, model codenames) are placeholders; a test that needs a second row
+ * type, so a schema change breaks compilation here instead of leaving the fixture on an older shape.
+ * `fixtures.test.ts` guards what a type cannot state: the default values and the override merge.
+ * Identity values (ids, snowflakes, model codenames) are placeholders; a test that needs a second row
  * overrides them, as in `createPersona({ persona_id: 2, persona_lineage_id: 101 })`.
  */
 

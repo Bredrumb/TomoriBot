@@ -37,7 +37,7 @@ describe("stats server id resolution", () => {
     // Either title is the setup refusal: `replyInfoEmbed` swaps in the "currently updating"
     // variant when the database failed recently or the process is still in its startup grace
     // period, and that state is not this test's to control.
-    expect([
+    expect<Array<string | undefined>>([
       localizer(LOCALE, "general.errors.tomori_not_setup_title"),
       localizer(LOCALE, "general.errors.tomori_updating_title"),
     ]).toContain(payload?.embeds[0]?.data.title);

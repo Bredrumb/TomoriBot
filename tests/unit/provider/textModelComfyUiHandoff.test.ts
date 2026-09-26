@@ -38,7 +38,11 @@ function stubBackend(kobold: KoboldBehavior = {}) {
   const calls: string[] = [];
   let loaded = true;
   let comfyUiVramFree = 2_000;
-  const spy = spyOn(globalThis, "fetch").mockImplementation(async (input: unknown, init?: RequestInit) => {
+  // Bun's `typeof fetch` also carries the static `preconnect`, so the stub is asserted to the real signature.
+  const spy = spyOn(globalThis, "fetch").mockImplementation((async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
     const { pathname } = new URL(String(input instanceof Request ? input.url : input));
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
     if (pathname === "/free") {
@@ -67,7 +71,7 @@ function stubBackend(kobold: KoboldBehavior = {}) {
     }
     if (pathname === "/api/extra/version") return Response.json({ result: "KoboldCpp", llm: loaded });
     return new Response("not found", { status: 404 });
-  });
+  }) as typeof fetch);
   return { calls, spy, isLoaded: () => loaded };
 }
 

@@ -102,7 +102,7 @@ describe("moderation interaction routes", () => {
       },
     } as unknown as ButtonInteraction;
 
-    const deps: ModerationRouteDependencies = {
+    const deps: Partial<ModerationRouteDependencies> = {
       resolveScope: async (_interaction, forceRefresh) => {
         log.push(forceRefresh ? "load-refresh" : "load");
         return createScopeData();
@@ -228,6 +228,7 @@ describe("moderation interaction routes", () => {
     const route = createModerationInteractionRoute({
       resolveScope: async () => createScopeData(),
       operations: {
+        ...moderationOperations,
         updateMemberPermissions: async () => {
           updateCalled++;
           return { status: "success", changes: [], patch: {} };
@@ -392,7 +393,7 @@ describe("moderation interaction routes", () => {
   it("opens member-access modal with fresh state, nonce, and no pre-defer on valid button click without calling full scope resolver", async () => {
     const log: string[] = [];
     let modalState: unknown = null;
-    let modalNonce: string | null = null;
+    let modalNonce = "";
     let scopeCalls = 0;
 
     const mockInteraction = {
@@ -449,7 +450,7 @@ describe("moderation interaction routes", () => {
   });
 
   it("acknowledges the model-access write before it runs, not after", async () => {
-    let acknowledgedAtWrite: boolean | null = null;
+    let acknowledgedAtWrite = false;
     const interaction = {
       id: "int-byok",
       isButton: () => true,
@@ -470,13 +471,14 @@ describe("moderation interaction routes", () => {
     const route = createModerationInteractionRoute({
       resolveScope: async () => createScopeData(),
       operations: {
+        ...moderationOperations,
         // Sampled from inside the write: ordering is invisible in *what* was called, and Discord
         // drops an interaction that is not acknowledged within three seconds.
         updateServerModelAccess: async () => {
           acknowledgedAtWrite = interaction.deferred || interaction.replied;
           return { status: "success", allowServerModels: false };
         },
-      } as never,
+      },
     });
 
     await route.execute({} as Client, interaction as never, {
@@ -509,11 +511,12 @@ describe("moderation interaction routes", () => {
     const route = createModerationInteractionRoute({
       resolveScope: async () => createScopeData(),
       operations: {
+        ...moderationOperations,
         updateServerModelAccess: async () => {
           writeCalls += 1;
           return { status: "success", allowServerModels: false };
         },
-      } as never,
+      },
     });
 
     await route.execute({} as Client, interaction as never, {
@@ -547,11 +550,12 @@ describe("moderation interaction routes", () => {
     const route = createModerationInteractionRoute({
       resolveScope: async () => createScopeData({ readStatus: "stale" }),
       operations: {
+        ...moderationOperations,
         updateServerModelAccess: async () => {
           writeCalls += 1;
           return { status: "success", allowServerModels: true };
         },
-      } as never,
+      },
     });
 
     await route.execute({} as Client, interaction as never, {
@@ -568,7 +572,7 @@ describe("moderation interaction routes", () => {
 
   it("denies member-access-submit on permission loss between open and submit before any write", async () => {
     let updateCalled = 0;
-    let cleanedNonce: string | null = null;
+    let cleanedNonce = "";
     const editReplyCalls: unknown[] = [];
 
     const mockInteraction = {
@@ -594,6 +598,7 @@ describe("moderation interaction routes", () => {
         return ["servermemories"];
       },
       operations: {
+        ...moderationOperations,
         updateMemberPermissions: async () => {
           updateCalled++;
           return { status: "success", changes: [], patch: {} };
@@ -638,6 +643,7 @@ describe("moderation interaction routes", () => {
       resolveScope: async () => createScopeData(),
       takeCheckboxValues: () => undefined,
       operations: {
+        ...moderationOperations,
         updateMemberPermissions: async () => {
           updateCalled++;
           return { status: "success", changes: [], patch: {} };
@@ -683,6 +689,7 @@ describe("moderation interaction routes", () => {
       resolveScope: async () => ({ ...createScopeData(), readStatus: "stale" }),
       takeCheckboxValues: () => ["servermemories"],
       operations: {
+        ...moderationOperations,
         updateMemberPermissions: async () => {
           updateCalled++;
           return { status: "success", changes: [], patch: {} };
@@ -726,17 +733,17 @@ describe("moderation interaction routes", () => {
       resolveScope: async () => createScopeData(),
       takeCheckboxValues: () => ["servermemories", "malicious_payload", "promptsnapshot", "unknown_option"],
       operations: {
+        ...moderationOperations,
         updateMemberPermissions: async (input) => {
           passedSelectedValues = input.selectedValues;
           return {
             status: "success",
             changes: [
               {
-                setting: "prompt_snapshot_enabled",
+                dbColumn: "prompt_snapshot_enabled",
                 isEnabled: true,
                 value: "promptsnapshot",
                 labelKey: "commands.server.member-permissions.promptsnapshot_label",
-                descKey: "commands.server.member-permissions.promptsnapshot_desc",
               },
             ],
             patch: { prompt_snapshot_enabled: true },
@@ -784,6 +791,7 @@ describe("moderation interaction routes", () => {
       },
       takeCheckboxValues: () => ["servermemories", "sampledialogues"],
       operations: {
+        ...moderationOperations,
         updateMemberPermissions: async () => ({
           status: "unchanged",
           changes: [],
@@ -833,6 +841,7 @@ describe("moderation interaction routes", () => {
       },
       takeCheckboxValues: () => [],
       operations: {
+        ...moderationOperations,
         updateMemberPermissions: async () => ({
           status: "failure",
           changes: [],
@@ -885,15 +894,15 @@ describe("moderation interaction routes", () => {
       },
       takeCheckboxValues: () => ["attributelist"],
       operations: {
+        ...moderationOperations,
         updateMemberPermissions: async () => ({
           status: "success",
           changes: [
             {
-              setting: "attribute_memteaching_enabled",
+              dbColumn: "attribute_memteaching_enabled",
               isEnabled: true,
               value: "attributelist",
               labelKey: "commands.server.member-permissions.attributelist_label",
-              descKey: "commands.server.member-permissions.attributelist_desc",
             },
           ],
           patch: { attribute_memteaching_enabled: true },
@@ -1238,7 +1247,7 @@ describe("moderation interaction routes", () => {
     });
 
     it("opens User Blacklist Add raw modal with nonce without pre-deferral", async () => {
-      let modalShownNonce: string | null = null;
+      let modalShownNonce = "";
       let replyCalled = 0;
       let deferCalled = 0;
 
@@ -1478,6 +1487,7 @@ describe("moderation interaction routes", () => {
         takeUserSelectValue: () => "123456789012345678",
         resolveUser: async () => ({ id: "123456789012345678", username: "AnonMember", bot: false }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "unchanged", changes: [], patch: {} }),
           addUserToBlacklist: async (input) => {
             addOperationInput = input;
@@ -1531,6 +1541,7 @@ describe("moderation interaction routes", () => {
         takeUserSelectValue: () => "123456789012345678",
         resolveUser: async () => ({ id: "123456789012345678", username: "ExistingMember", bot: false }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "unchanged", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "already_blacklisted", targetUserId: "123456789012345678" }),
         },
@@ -1551,7 +1562,7 @@ describe("moderation interaction routes", () => {
     });
 
     it("resolves member through current guild membership using default user resolver", async () => {
-      let fetchedMemberId: string | null = null;
+      let fetchedMemberId = "";
       const editReplyCalls: unknown[] = [];
 
       const mockInteraction = {
@@ -1597,6 +1608,7 @@ describe("moderation interaction routes", () => {
         },
         takeUserSelectValue: () => "123456789012345678",
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "unchanged", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "123456789012345678" }),
         },
@@ -1838,6 +1850,7 @@ describe("moderation interaction routes", () => {
       const route = createModerationInteractionRoute({
         resolveScope: async () => createScopeData(),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => {
             writeCalled++;
             return { status: "success", changes: [], patch: {} };
@@ -1907,6 +1920,7 @@ describe("moderation interaction routes", () => {
       const route = createModerationInteractionRoute({
         resolveScope: async () => createScopeData(),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => {
@@ -1958,6 +1972,7 @@ describe("moderation interaction routes", () => {
           },
         }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => {
@@ -2009,6 +2024,7 @@ describe("moderation interaction routes", () => {
           },
         }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => {
@@ -2063,6 +2079,7 @@ describe("moderation interaction routes", () => {
         },
         resolveUser: async () => ({ id: "123456789012345678", username: "alice", bot: false }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async ({ targetUserId }) => ({
@@ -2130,6 +2147,7 @@ describe("moderation interaction routes", () => {
         },
         resolveUser: async () => ({ id: "123456789012345678", username: "bob", bot: false }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "not_found", targetUserId: "u" }),
@@ -2183,6 +2201,7 @@ describe("moderation interaction routes", () => {
         }),
         resolveUser: async () => ({ id: "123456789012345678", username: "alice", bot: false }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({
@@ -2246,7 +2265,7 @@ describe("moderation interaction routes", () => {
     });
 
     it("opens whitelist channel add modal with nonce on fresh scope", async () => {
-      let shownModalNonce: string | null = null;
+      let shownModalNonce = "";
       const mockInteraction = {
         isButton: () => true,
         isStringSelectMenu: () => false,
@@ -2322,17 +2341,30 @@ describe("moderation interaction routes", () => {
           config: { cooldown_type: null, cooldown_length: null },
         }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async (args) => {
             upsertArgs = args;
             return {
               status: "success",
               channelId: args.channelId,
-              cooldownType: args.requestedCooldownType,
-              cooldownLength: args.requestedCooldownLength,
+              cooldownType: args.requestedCooldownType ?? null,
+              cooldownLength: args.requestedCooldownLength ?? null,
               isUpdate: false,
             };
           },
@@ -2438,10 +2470,23 @@ describe("moderation interaction routes", () => {
           config: { cooldown_type: null, cooldown_length: null },
         }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async (args) => ({
             status: "unchanged",
             channelId: args.channelId,
@@ -2497,10 +2542,23 @@ describe("moderation interaction routes", () => {
         resolveChannel: async (_i, id) => ({ id, name: "bot-lounge", type: ChannelType.GuildText }),
         resolveWhitelistChannelAdd: async () => null,
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async () => {
             upsertCalled++;
             return { status: "success", channelId: "c", cooldownType: null, cooldownLength: null, isUpdate: false };
@@ -2530,10 +2588,23 @@ describe("moderation interaction routes", () => {
           config: { cooldown_type: null, cooldown_length: null },
         }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async () => {
             upsertCalled++;
             return { status: "success", channelId: "c", cooldownType: null, cooldownLength: null, isUpdate: false };
@@ -2586,10 +2657,23 @@ describe("moderation interaction routes", () => {
           config: { cooldown_type: null, cooldown_length: null },
         }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async () => {
             upsertCalled++;
             return { status: "success", channelId: "c", cooldownType: null, cooldownLength: null, isUpdate: false };
@@ -2838,10 +2922,23 @@ describe("moderation interaction routes", () => {
         }),
         resolveChannel: async (_i, id) => ({ id, name: "bot-lounge", type: ChannelType.GuildText }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async () => ({
             status: "success",
             channelId: "c",
@@ -2912,10 +3009,23 @@ describe("moderation interaction routes", () => {
         }),
         resolveChannel: async () => null,
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async () => ({
             status: "success",
             channelId: "c",
@@ -2981,10 +3091,23 @@ describe("moderation interaction routes", () => {
         }),
         resolveChannel: async (_i, id) => ({ id, name: "stage-channel", type: ChannelType.GuildStageVoice }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async () => ({
             status: "success",
             channelId: "c",
@@ -3043,13 +3166,26 @@ describe("moderation interaction routes", () => {
         resolveScope: async () => createScopeData(),
         takeUserSelectValue: () => "123456789012345678",
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => {
             addCalled++;
             return { status: "success", targetUserId: "123456789012345678" };
           },
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async () => ({
             status: "success",
             channelId: "c",
@@ -3131,10 +3267,23 @@ describe("moderation interaction routes", () => {
           config: { cooldown_type: null, cooldown_length: null },
         }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async () => {
             upsertCalled++;
             return { status: "success", channelId: "c", cooldownType: null, cooldownLength: null, isUpdate: false };
@@ -3863,7 +4012,7 @@ describe("moderation whitelist role routes", () => {
         takeUserSelectValue: () => "123456789012345678",
         operations: {
           ...moderationOperations,
-          addUserToBlacklist: async () => ({ status: "success" }),
+          addUserToBlacklist: async () => ({ status: "success", targetUserId: "123456789012345678" }),
         },
         recordAction,
       });
@@ -4097,7 +4246,7 @@ function parsedRoute(customId: string) {
   return route;
 }
 
-const ACCEPTED_35_ACTIONS: readonly ModerationAction[] = [
+const ACCEPTED_35_ACTIONS: readonly ModerationPanelRoute["action"][] = [
   "category",
   "member-access-open",
   "member-access-submit",

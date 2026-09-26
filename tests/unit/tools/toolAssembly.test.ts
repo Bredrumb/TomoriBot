@@ -51,6 +51,8 @@ function createAssemblyState(overrides: Partial<ToolAssemblyState> = {}): ToolAs
       imagegen_enabled: true,
       videogen_enabled: true,
       voice_message_enabled: true,
+      user_blocking_enabled: true,
+      user_info_updates_enabled: true,
       thread_creation_enabled: true,
     },
     ...overrides,
@@ -100,7 +102,7 @@ describe("tool schema assembly", () => {
 
   it("assembles web_search with SearXNG categories", () => {
     const tool = buildWebSearchToolVariant(new WebSearchTool(), {
-      categories: ["text", "image", "video", "news", "science", "it", "files", "music"],
+      categories: ["text", "image", "video", "news", "papers", "code", "files", "music"],
       engineLabel: "SearXNG",
     });
 
@@ -110,8 +112,8 @@ describe("tool schema assembly", () => {
       "image",
       "video",
       "news",
-      "science",
-      "it",
+      "papers",
+      "code",
       "files",
       "music",
     ]);

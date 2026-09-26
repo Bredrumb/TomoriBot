@@ -67,6 +67,7 @@ describe("transfer route catalog and codecs", () => {
     for (const route of testRoutes) {
       const customId = buildTransferRouteId(route);
       const parsed = parseInteractionRoute(customId);
+      if (!parsed) throw new Error(`Failed to parse route for customId: ${customId}`);
       expect(parseTransferPanelRoute(parsed)).toEqual(route);
     }
   });

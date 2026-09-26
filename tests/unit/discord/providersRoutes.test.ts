@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import type { ChatInputCommandInteraction, Client } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type { ProviderPanelEntry } from "@/types/discord/providerPanel";
-import type { LoadedProviderPanelScope } from "@/utils/provider/providerPanelOperations";
+import { providerPanelOperations, type LoadedProviderPanelScope } from "@/utils/provider/providerPanelOperations";
 import { executeProvidersCommand } from "@/commands/providers";
 import { createProvidersInteractionRoute } from "@/utils/discord/interactions/providersRoutes";
 import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
@@ -136,6 +136,7 @@ const scope: LoadedProviderPanelScope = {
                   supportsStructOutput: false,
                   strictRoleAlternation: false,
                   supportsPrefixCompletion: false,
+                  verbatimToolCalling: false,
                 },
               },
             ],
@@ -155,8 +156,20 @@ const voiceEndpointEntry: ProviderPanelEntry = {
   connectionIds: [88, 89],
   isPreset: false,
   connectionDetails: [
-    { connectionId: 88, endpointUrl: "https://voice.example.invalid", apiStyle: "tts-clone" },
-    { connectionId: 89, endpointUrl: "https://voice.example.invalid", apiStyle: "openai-compatible-transcription" },
+    {
+      connectionId: 88,
+      endpointUrl: "https://voice.example.invalid",
+      apiStyle: "tts-clone",
+      capability: "speech",
+      vramHandoff: null,
+    },
+    {
+      connectionId: 89,
+      endpointUrl: "https://voice.example.invalid",
+      apiStyle: "openai-compatible-transcription",
+      capability: "transcription",
+      vramHandoff: null,
+    },
   ],
   capabilities: [
     {
@@ -260,7 +273,7 @@ describe("providers routes", () => {
       "select",
     ].sort();
 
-    const wireActions = [...new Set(WIRE_CONTRACT_V1.map(([, route]) => route.action))].sort();
+    const wireActions: string[] = [...new Set(WIRE_CONTRACT_V1.map(([, route]) => route.action))].sort();
     const codecTableActions = Object.keys(PROVIDERS_ROUTE_CODECS).sort();
 
     const routesSource = readFileSync(
@@ -372,6 +385,16 @@ describe("providers routes", () => {
             displayName: "EP",
             savedAt: null,
             connectionIds: [73],
+            isPreset: false,
+            connectionDetails: [
+              {
+                connectionId: 73,
+                endpointUrl: "https://models.example.com/v1",
+                apiStyle: "openai-compatible",
+                capability: "text",
+                vramHandoff: null,
+              },
+            ],
             capabilities: [
               {
                 capability: "text",
@@ -544,11 +567,12 @@ describe("providers routes", () => {
       {
         resolveScope: async () => personalScope,
         operations: {
+          ...providerPanelOperations,
           editServerProvider: async (input) => {
             calls.push(`write:${input.scopeKind}:${input.ownerId}:${input.rotationKey}`);
             return { status: "success", entryId: "provider:google", changed: ["api-key"] };
           },
-        } as never,
+        },
       },
       {
         namespace: PERSONAL_PROVIDERS_ROUTE_NAMESPACE,
@@ -582,7 +606,9 @@ describe("providers routes", () => {
     };
     const route = createProvidersInteractionRoute({
       createNonce: () => "abcdefgh",
-      showProviderEditModal: async (_interaction, _locale, provider, count) => calls.push(`show:${provider}:${count}`),
+      showProviderEditModal: async (_interaction, _locale, provider, count) => {
+        calls.push(`show:${provider}:${count}`);
+      },
     });
 
     await route.execute({} as Client, interaction as never, parsed(customId));
@@ -607,6 +633,8 @@ describe("providers routes", () => {
                 connectionId: 73,
                 endpointUrl: "https://models.example.com/v1",
                 apiStyle: "openai-compatible",
+                capability: "text",
+                vramHandoff: null,
               },
             ],
             isPreset: false,
@@ -636,8 +664,9 @@ describe("providers routes", () => {
         calls.push("load");
         return endpointScope;
       },
-      showEndpointEditModal: async (_interaction, _locale, context) =>
-        calls.push(`show:${context.label}:${context.endpointUrl}`),
+      showEndpointEditModal: async (_interaction, _locale, context) => {
+        calls.push(`show:${context.label}:${context.endpointUrl}`);
+      },
     });
 
     await route.execute({} as Client, interaction as never, parsed(customId));
@@ -674,11 +703,12 @@ describe("providers routes", () => {
         return scope;
       },
       operations: {
+        ...providerPanelOperations,
         editServerProvider: async (input) => {
           calls.push(`write:${input.provider}:${input.deleteRotationKeys}`);
           return { status: "success", entryId: "provider:google", changed: ["api-key", "rotation-key"] };
         },
-      } as never,
+      },
     });
 
     await route.execute({} as Client, interaction as never, parsed(customId));
@@ -710,11 +740,12 @@ describe("providers routes", () => {
         return scope;
       },
       operations: {
+        ...providerPanelOperations,
         removeServerProviderEntry: async (input) => {
           calls.push(`write:${input.entry.id}`);
           return { status: "success", entryId: input.entry.id, displayName: input.entry.displayName };
         },
-      } as never,
+      },
     });
 
     await route.execute({} as Client, interaction as never, parsed(customId));
@@ -737,7 +768,9 @@ describe("providers routes", () => {
     };
     const route = createProvidersInteractionRoute({
       createNonce: () => "abcdefgh",
-      showAddProviderModal: async () => calls.push("showModal"),
+      showAddProviderModal: async () => {
+        calls.push("showModal");
+      },
       resolveScope: async () => {
         calls.push("load");
         return scope;
@@ -775,6 +808,7 @@ describe("providers routes", () => {
         return scope;
       },
       operations: {
+        ...providerPanelOperations,
         addServerProvider: async () => {
           calls.push("write");
           return {
@@ -812,7 +846,9 @@ describe("providers routes", () => {
     };
     const route = createProvidersInteractionRoute({
       createNonce: () => "abcdefgh",
-      showAddEndpointModal: async (_interaction, _locale, nonce) => calls.push(`show:${nonce}`),
+      showAddEndpointModal: async (_interaction, _locale, nonce) => {
+        calls.push(`show:${nonce}`);
+      },
     });
 
     await route.execute({} as Client, interaction as never, parsed(customId));
@@ -863,6 +899,7 @@ describe("providers routes", () => {
         supportsStructOutput: false,
         strictRoleAlternation: false,
         supportsPrefixCompletion: false,
+        verbatimToolCalling: false,
       },
     });
   });
@@ -901,6 +938,7 @@ describe("providers routes", () => {
         return scope;
       },
       operations: {
+        ...providerPanelOperations,
         addServerProvider: async () => ({ status: "write-failed" }),
         addCustomEndpointConnection: async () => ({ status: "write-failed" }),
         saveProviderModel: async (input) => {
@@ -956,7 +994,13 @@ describe("providers routes", () => {
               savedAt: null,
               connectionIds: [73],
               connectionDetails: [
-                { connectionId: 73, endpointUrl: "https://comfy.example.com", apiStyle: "comfyui" as const },
+                {
+                  connectionId: 73,
+                  endpointUrl: "https://comfy.example.com",
+                  apiStyle: "comfyui" as const,
+                  capability: "image" as const,
+                  vramHandoff: null,
+                },
               ],
               isPreset: false,
               capabilities: [
@@ -1036,7 +1080,13 @@ describe("providers routes", () => {
               savedAt: null,
               connectionIds: [73],
               connectionDetails: [
-                { connectionId: 73, endpointUrl: "https://comfy.example.com", apiStyle: "comfyui" as const },
+                {
+                  connectionId: 73,
+                  endpointUrl: "https://comfy.example.com",
+                  apiStyle: "comfyui" as const,
+                  capability: "image" as const,
+                  vramHandoff: null,
+                },
               ],
               isPreset: false,
               capabilities: [],
@@ -1045,6 +1095,7 @@ describe("providers routes", () => {
         },
       }),
       operations: {
+        ...providerPanelOperations,
         addServerProvider: async () => ({ status: "write-failed" }),
         addCustomEndpointConnection: async () => ({ status: "write-failed" }),
         saveProviderModel: async (input) => {
@@ -1117,6 +1168,7 @@ describe("providers routes", () => {
                       supportsStructOutput: false,
                       strictRoleAlternation: true,
                       supportsPrefixCompletion: true,
+                      verbatimToolCalling: false,
                     },
                   },
                 ],
@@ -1155,11 +1207,12 @@ describe("providers routes", () => {
       takeWorkflow: () => undefined,
       resolveScope: async () => editedScope,
       operations: {
+        ...providerPanelOperations,
         saveProviderModel: async (input) => {
           written.push(input as unknown as Record<string, unknown>);
           return { status: "success", entryId: "provider:openrouter", codeName: input.codeName };
         },
-      } as never,
+      },
     });
 
     await route.execute({} as Client, interaction as never, parsed(customId));
@@ -1213,6 +1266,8 @@ describe("providers routes", () => {
                   connectionId: 73,
                   endpointUrl: "https://models.example.com/v1",
                   apiStyle: "openai-compatible" as const,
+                  capability: "text" as const,
+                  vramHandoff: null,
                 },
               ],
               isPreset: false,
@@ -1223,11 +1278,12 @@ describe("providers routes", () => {
         },
       }),
       operations: {
+        ...providerPanelOperations,
         saveProviderModel: async (input) => {
           written.push(input as unknown as Record<string, unknown>);
           return { status: "success", entryId: "endpoint:73", codeName: input.codeName };
         },
-      } as never,
+      },
     });
 
     await route.execute({} as Client, interaction as never, parsed(customId));
@@ -1274,7 +1330,13 @@ describe("providers routes", () => {
               savedAt: null,
               connectionIds: [73],
               connectionDetails: [
-                { connectionId: 73, endpointUrl: "https://tts.example.com", apiStyle: "tts-clone" as const },
+                {
+                  connectionId: 73,
+                  endpointUrl: "https://tts.example.com",
+                  apiStyle: "tts-clone" as const,
+                  capability: "speech" as const,
+                  vramHandoff: null,
+                },
               ],
               isPreset: false,
               capabilities: [
@@ -1361,7 +1423,13 @@ describe("providers routes", () => {
               savedAt: null,
               connectionIds: [73],
               connectionDetails: [
-                { connectionId: 73, endpointUrl: "https://tts.example.com", apiStyle: "tts-clone" as const },
+                {
+                  connectionId: 73,
+                  endpointUrl: "https://tts.example.com",
+                  apiStyle: "tts-clone" as const,
+                  capability: "speech" as const,
+                  vramHandoff: null,
+                },
               ],
               isPreset: false,
               capabilities: [
@@ -1378,12 +1446,13 @@ describe("providers routes", () => {
         },
       }),
       operations: {
+        ...providerPanelOperations,
         saveProviderModel: async (input) => {
           written = input as unknown as Record<string, unknown>;
           calls.push("write");
           return { status: "success", entryId: "endpoint:73", codeName: input.codeName };
         },
-      } as never,
+      },
     });
 
     await route.execute({} as Client, interaction as never, parsed(customId));
@@ -1420,7 +1489,9 @@ describe("providers routes", () => {
     };
     const route = createProvidersInteractionRoute({
       createNonce: () => "abcdefgh",
-      showModelModal: async () => calls.push("show"),
+      showModelModal: async () => {
+        calls.push("show");
+      },
       resolveScope: async () => ({
         ...scope,
         data: {
@@ -1437,6 +1508,8 @@ describe("providers routes", () => {
                   connectionId: 73,
                   endpointUrl: "https://models.example.com/v1",
                   apiStyle: "openai-compatible" as const,
+                  capability: "text" as const,
+                  vramHandoff: null,
                 },
               ],
               isPreset: false,
@@ -1695,7 +1768,6 @@ describe("providers routes", () => {
     };
     const addRoute = createProvidersInteractionRoute({
       resolveScope: async () => scope,
-      takeServerType: () => "google",
       operations: {
         addServerProvider: async () => ({ status: "success", entryId: "provider:google" }),
       } as never,
@@ -1769,7 +1841,6 @@ describe("providers routes", () => {
     };
     const endpointAddRoute = createProvidersInteractionRoute({
       resolveScope: async () => scope,
-      takeServerType: () => "custom-1",
       operations: {
         addCustomEndpointConnection: async () => ({ status: "success", entryId: "endpoint:custom-1:1" }),
       } as never,

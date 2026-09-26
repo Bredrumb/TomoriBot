@@ -1,5 +1,12 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { AttachmentBuilder, ComponentType, MessageFlags, type Client } from "discord.js";
+import {
+  AttachmentBuilder,
+  ComponentType,
+  MessageFlags,
+  type Client,
+  type ComponentInContainerData,
+  type ContainerComponentData,
+} from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { InteractionRouteRegistry, type GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import { createStatsInteractionRoute } from "@/utils/discord/interactions/statsRoutes";
@@ -304,7 +311,7 @@ describe("durable stats dashboard interaction route", () => {
       "attachment://stats_persona_icon.png",
       iconFile,
     );
-    const body = (payload.components[0] as { components: Array<{ type: number; components?: unknown[] }> }).components;
+    const body = (payload.components[0] as ContainerComponentData<ComponentInContainerData>).components;
 
     expect((body[0] as { type: number }).type).toBe(ComponentType.ActionRow);
     expect((body[1] as { type: number }).type).toBe(ComponentType.Separator);

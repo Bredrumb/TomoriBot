@@ -27,6 +27,7 @@ beforeEach(() => {
 });
 
 const preset = {
+  nai_preset_id: 1,
   preset_name: "Carefree-Kayra",
   model_target: "kayra",
   is_default: true,

@@ -1,5 +1,18 @@
 import { describe, expect, it } from "bun:test";
-import { ButtonStyle, ComponentType, MessageFlags, type ChatInputCommandInteraction, type Client } from "discord.js";
+import {
+  ButtonStyle,
+  ComponentType,
+  MessageFlags,
+  type ActionRowData,
+  type ChatInputCommandInteraction,
+  type Client,
+  type ComponentInContainerData,
+  type ContainerComponentData,
+  type InteractionButtonComponentData,
+  type Message,
+  type StringSelectMenuComponentData,
+  type TopLevelComponentData,
+} from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import type { SummaryEmbedOptions } from "@/types/discord/embed";
 import { ColorCode } from "@/utils/misc/logger";
@@ -89,6 +102,32 @@ const expectedCategories: StatusPageCategory[] = [
   },
   ...expectedSiblingCategories,
 ];
+
+function isContainerComponent(
+  component: TopLevelComponentData,
+): component is ContainerComponentData<ComponentInContainerData> {
+  return "components" in component && component.type === ComponentType.Container;
+}
+
+function isButtonRow(component: ComponentInContainerData): component is ActionRowData<InteractionButtonComponentData> {
+  return (
+    component.type === ComponentType.ActionRow &&
+    "components" in component &&
+    Array.isArray(component.components) &&
+    component.components.every((child) => child.type === ComponentType.Button && "customId" in child)
+  );
+}
+
+function isStringSelectRow(
+  component: ComponentInContainerData,
+): component is ActionRowData<StringSelectMenuComponentData> {
+  return (
+    component.type === ComponentType.ActionRow &&
+    "components" in component &&
+    Array.isArray(component.components) &&
+    component.components.every((child) => child.type === ComponentType.StringSelect)
+  );
+}
 
 function createInteraction(guildId: string | null, interactionId = "interaction-123") {
   const deferCalls: ({ flags?: MessageFlags } | undefined)[] = [];
@@ -233,18 +272,18 @@ describe("executeStatusCommand", () => {
 
     for (const scope of orderedCategoryIds) {
       const payload = dashboardPayload("anchor-456", "en-US", expectedCategories, scope, 0, false);
-      const container = payload.components[0] as {
-        components: Array<{
-          type: ComponentType;
-          components?: Array<{ type: ComponentType; customId?: string; style?: ButtonStyle; options?: unknown[] }>;
-        }>;
-      };
+      const [first] = payload.components;
+      if (!first || !isContainerComponent(first)) {
+        throw new Error("Expected the dashboard payload to start with a container component");
+      }
+      const container = first.components;
 
-      const buttonRow = container.components[0];
+      const buttonRow = container[0];
+      if (!isButtonRow(buttonRow)) throw new Error("Expected the category controls to be a button row");
       expect(buttonRow.type).toBe(ComponentType.ActionRow);
       expect(buttonRow.components).toHaveLength(5);
 
-      const buttons = buttonRow.components ?? [];
+      const buttons = buttonRow.components;
       expect(buttons.map((b) => b.customId)).toEqual(orderedCategoryIds.map((id) => `status:v1:category:en-US:${id}`));
 
       for (const [index, id] of orderedCategoryIds.entries()) {
@@ -252,9 +291,10 @@ describe("executeStatusCommand", () => {
         expect(buttons[index]?.style).toBe(expectedStyle);
       }
 
-      const selectRow = container.components[2];
+      const selectRow = container[2];
+      if (!isStringSelectRow(selectRow)) throw new Error("Expected the page picker to be a string select row");
       expect(selectRow.type).toBe(ComponentType.ActionRow);
-      const selectMenu = selectRow.components?.[0];
+      const selectMenu = selectRow.components[0];
       expect(selectMenu?.type).toBe(ComponentType.StringSelect);
       expect(selectMenu?.options).toHaveLength(expectedPageCounts[scope]);
     }
@@ -294,7 +334,7 @@ describe("executeStatusCommand", () => {
     expect(calls.cache).toEqual([["guild-empty"]]);
     expect(calls.info).toEqual([
       [
-        interaction,
+        interaction as unknown as ChatInputCommandInteraction,
         "en-US",
         {
           titleKey: "general.errors.tomori_not_setup_title",
@@ -310,12 +350,11 @@ describe("executeStatusCommand", () => {
     const { interaction } = createInteraction("guild-123", "anchor-789");
     const { dependencies } = createDependencies(interaction, tomoriState);
     const deliveredDashboardPayloads: unknown[] = [];
-    const mockInteraction = interaction as unknown as ChatInputCommandInteraction & {
-      editReply: (payload: unknown) => Promise<unknown>;
-    };
-    mockInteraction.editReply = async (payload: unknown) => {
+    const mockInteraction = interaction as unknown as ChatInputCommandInteraction;
+    mockInteraction.editReply = async (payload) => {
       deliveredDashboardPayloads.push(payload);
-      return payload;
+      // `renderStatusPageDashboard` discards the reply, so the stub only has to satisfy the signature.
+      return {} as unknown as Message;
     };
     dependencies.renderStatusPageDashboard = renderStatusPageDashboard;
 
