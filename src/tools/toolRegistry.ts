@@ -31,6 +31,29 @@ function resolveBuiltInToolAlias(toolName: string): string {
   return BUILTIN_TOOL_ALIASES[toolName] ?? toolName;
 }
 
+function toolNameDistance(left: string, right: string): number {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex++) {
+    const current = [leftIndex];
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex++) {
+      current[rightIndex] = Math.min(
+        (previous[rightIndex] ?? 0) + 1,
+        (current[rightIndex - 1] ?? 0) + 1,
+        (previous[rightIndex - 1] ?? 0) + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+      );
+    }
+    previous = current;
+  }
+  return previous[right.length] ?? 0;
+}
+
+function closestToolName(name: string, available: readonly string[]): string | null {
+  return available.reduce<string | null>((closest, candidate) => {
+    if (!closest) return candidate;
+    return toolNameDistance(name, candidate) < toolNameDistance(name, closest) ? candidate : closest;
+  }, null);
+}
+
 function resolveOpaqueIds(args: Record<string, unknown>, messageIdMap?: MessageIdMap): Record<string, unknown> {
   if (!messageIdMap) {
     return args;
@@ -338,9 +361,11 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     const tool = this.getTool(toolName);
 
     if (!tool) {
+      const available = Array.from(this.tools.keys());
+      const closest = closestToolName(toolName, available);
       const errorResult: ToolResult = {
         success: false,
-        error: `Tool '${toolName}' not found in registry`,
+        error: `Tool '${toolName}' not found. ${closest ? `Did you mean '${closest}'? ` : ""}Available tools: ${available.join(", ")}`,
       };
 
       log.error(
