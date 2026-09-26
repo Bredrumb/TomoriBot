@@ -2144,9 +2144,9 @@ describe("memories permissions and scoping", () => {
 
 describe("memories teaching gate on edit and remove", () => {
   /**
-   * Server memory edit and remove operations independently gate on `server_memteaching_enabled`,
-   * not just memory addition. Removal additionally has no blacklist check, so the two guards are
-   * asserted separately rather than assumed to travel together.
+   * Server memory edit and remove operations independently gate on `server_memteaching_enabled`
+   * and on the server blacklist, not just memory addition. The two guards are asserted separately
+   * rather than assumed to travel together.
    */
   it("refuses edit and remove for a non-manager when teaching is disabled", async () => {
     const editSpy = spyOn(serverMemoryRepository, "edit").mockImplementation(async () => true);
@@ -2181,6 +2181,35 @@ describe("memories teaching gate on edit and remove", () => {
       expect(removeSpy).toHaveBeenCalled();
     } finally {
       editSpy.mockRestore();
+      removeSpy.mockRestore();
+      loadSpy.mockRestore();
+    }
+  });
+
+  it("refuses remove for a blacklisted non-manager even when teaching is enabled", async () => {
+    const removeSpy = spyOn(serverMemoryRepository, "remove").mockImplementation(async () => true);
+    const loadSpy = spyOn(serverMemoryRepository, "loadServerMemoriesScoped").mockImplementation(async () => [
+      { server_memory_id: 7, content: "stored", tags: [] } as unknown as ServerMemoryRow,
+    ]);
+
+    try {
+      const blacklisted = {
+        serverId: 1,
+        personaLineageId: 1770,
+        taughtByUserId: 42,
+        memoryId: 7,
+        workspaceId: "guild-123",
+        isBlacklisted: true,
+        canManage: false,
+        memteachingEnabled: true,
+      };
+
+      expect((await serverMemoriesOperations.remove(blacklisted)).status).toBe("blacklisted");
+      expect(removeSpy).not.toHaveBeenCalled();
+
+      expect((await serverMemoriesOperations.remove({ ...blacklisted, canManage: true })).status).toBe("success");
+      expect(removeSpy).toHaveBeenCalled();
+    } finally {
       removeSpy.mockRestore();
       loadSpy.mockRestore();
     }

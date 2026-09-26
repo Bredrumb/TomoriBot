@@ -62,10 +62,6 @@
       "reason": "Stale documentation path with no decided replacement; owed a fix in the docs-accuracy burn-down."
     },
     {
-      "path": "server blacklist",
-      "reason": "Stale documentation path with no decided replacement; owed a fix in the docs-accuracy burn-down."
-    },
-    {
       "path": "server dtm",
       "reason": "Stale documentation path with no decided replacement; owed a fix in the docs-accuracy burn-down."
     },

@@ -27,7 +27,7 @@ import { getGeminiTokenLimits } from "@/utils/cache/geminiCapabilityCache";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { charsToTokensJson, charsToTokensText, estimateContextItemsTokens } from "@/utils/text/tokenEstimate";
-import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
+import { getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { GoogleProvider, type GoogleProviderConfig } from "@/providers/google/googleProvider";
 import { GoogleStreamAdapter } from "@/providers/google/googleStreamAdapter";
 import { VertexProvider, type VertexProviderConfig } from "@/providers/vertex/vertexProvider";
@@ -705,6 +705,13 @@ async function buildRuntimeParityContext(
     if (!message.webhookId) {
       const privacyLevel = await getCachedPrivacyLevel(message.author.id);
       if (privacyLevel === PrivacyLevel.FULL) {
+        continue;
+      }
+      if (
+        interaction.guild &&
+        !message.author.bot &&
+        (await getCachedBlacklistStatus(serverDiscId, message.author.id))
+      ) {
         continue;
       }
     }

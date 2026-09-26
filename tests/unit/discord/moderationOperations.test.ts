@@ -599,7 +599,6 @@ describe("loadModerationUserBlacklistAddData lightweight resolver", () => {
       guildId: "1001",
       serverId: 10,
       readStatus: "fresh",
-      personalMemoriesEnabled: true,
     });
     expect(getStateCalled).toBe(1);
     expect(getLastDbErrorCalled).toBe(1);
@@ -616,7 +615,6 @@ describe("loadModerationUserBlacklistAddData lightweight resolver", () => {
       guildId: "1001",
       serverId: 10,
       readStatus: "stale",
-      personalMemoriesEnabled: false,
     });
   });
 
@@ -641,7 +639,6 @@ describe("loadModerationUserBlacklistAddData lightweight resolver", () => {
       guildId: "1001",
       serverId: 0,
       readStatus: "unavailable",
-      personalMemoriesEnabled: false,
     });
   });
 });
@@ -658,7 +655,6 @@ describe("addUserToBlacklist canonical operation", () => {
         serverId: 10,
         targetUserId: "bot-user-1",
         isBot: true,
-        personalMemoriesEnabled: true,
       },
       {
         isUserBlacklisted: async () => {
@@ -684,43 +680,6 @@ describe("addUserToBlacklist canonical operation", () => {
     expect(invalidateCalled).toBe(0);
   });
 
-  it("returns personalization_disabled status without querying repository when personalization is disabled", async () => {
-    let isBlacklistedCalled = 0;
-    let addBlacklistCalled = 0;
-    let invalidateCalled = 0;
-
-    const result = await addUserToBlacklist(
-      {
-        guildId: "1001",
-        serverId: 10,
-        targetUserId: "user-1",
-        isBot: false,
-        personalMemoriesEnabled: false,
-      },
-      {
-        isUserBlacklisted: async () => {
-          isBlacklistedCalled++;
-          return false;
-        },
-        addUserBlacklist: async () => {
-          addBlacklistCalled++;
-          return true;
-        },
-        invalidateCache: () => {
-          invalidateCalled++;
-        },
-      },
-    );
-
-    expect(result).toEqual({
-      status: "personalization_disabled",
-      targetUserId: "user-1",
-    });
-    expect(isBlacklistedCalled).toBe(0);
-    expect(addBlacklistCalled).toBe(0);
-    expect(invalidateCalled).toBe(0);
-  });
-
   it("returns already_blacklisted status without writing or invalidating cache when member is already blacklisted", async () => {
     let addBlacklistCalled = 0;
     let invalidateCalled = 0;
@@ -731,7 +690,6 @@ describe("addUserToBlacklist canonical operation", () => {
         serverId: 10,
         targetUserId: "user-dup",
         isBot: false,
-        personalMemoriesEnabled: true,
       },
       {
         isUserBlacklisted: async (serverId, targetUserId) => {
@@ -766,7 +724,6 @@ describe("addUserToBlacklist canonical operation", () => {
         serverId: 10,
         targetUserId: "user-new",
         isBot: false,
-        personalMemoriesEnabled: true,
       },
       {
         isUserBlacklisted: async (serverId, targetUserId) => {
@@ -799,7 +756,6 @@ describe("addUserToBlacklist canonical operation", () => {
         serverId: 10,
         targetUserId: "user-fail",
         isBot: false,
-        personalMemoriesEnabled: true,
       },
       {
         isUserBlacklisted: async (serverId, targetUserId) => {

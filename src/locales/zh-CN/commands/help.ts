@@ -94,7 +94,7 @@ export default {
         memory_tagging: `记忆标签（高级）`,
         memory_tagging_description: `只在相关时唤醒某条记忆`,
         blacklisting: `屏蔽名单`,
-        blacklisting_description: `阻止某位成员触发我`,
+        blacklisting_description: "让我完全忽略某位成员",
       },
     },
     breadcrumbs: {
@@ -431,7 +431,7 @@ export default {
       blacklisting: {
         title: `屏蔽名单`,
         description:
-          "被屏蔽的成员完全无法触发我，在任何频道、 用任何人格都不行。\n\n在 {moderationBlacklist} 里添加。同一页面会列出 当前所有条目，并可逐条或批量移除。\n> 屏蔽管的是访问权限，不是删除。关于该成员的 记忆会保留，直到有人删掉。",
+          "被列入黑名单的成员会被我完全忽略：在任何频道、用任何人格都无法触发我，他们的消息也不会进入我的上下文。像 `/respond`、`/reward`、`/punish` 这类让我替他们行动的命令也会被拒绝。他们也无法修改服务器记忆、属性或示例对话。\n\n在 {moderationBlacklist} 里添加。同一页面会列出当前所有条目，并可逐条或批量移除。\n> 黑名单管的是访问权限，不是删除。关于该成员的记忆会保留，直到有人删掉。",
         footer: "如果要让整个频道安静，而不是针对某个人， 请改为把该频道移出白名单。",
       },
     },

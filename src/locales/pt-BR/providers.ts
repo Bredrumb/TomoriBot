@@ -235,7 +235,8 @@ O modelo selecionado requer a permissão de dados para treinamento de modelo pag
       server_memory_footer: `Os administradores do servidor podem gerenciar essa memória usando \`/memories\`.`,
       personal_memory_footer_manage: `Você pode gerenciar suas memórias pessoais usando \`/personal memories\`.`,
       personal_memory_footer_personalization_disabled: `Esta memória foi salva, mas os recursos de personalização estão desativados no momento neste servidor, portanto, não terá efeito imediato aqui. Use \`/export personal memories\` para visualizá-la. Você pode desativar as memórias com \`/personal config\`.`,
-      personal_memory_footer_user_blacklisted: `Esta memória foi salva, mas o usuário em questão está atualmente na lista negra dos recursos de personalização neste servidor, portanto, não terá efeito imediato aqui. Use \`/export personal memories\` para visualizá-la. Você pode desativar as memórias com \`/personal config\`.`,
+      personal_memory_footer_user_blacklisted:
+        "Esta memória foi salva, mas o usuário em questão está na lista negra deste servidor, então eu o ignoro aqui e ela não terá efeito. Use `/export personal memories` para visualizá-la. Você pode desativar as memórias com `/personal config`.",
       expand_memory_button: `Mostrar a Memória Completa`,
       expand_memory_title: `Conteúdo Completo da Memória`,
     },

@@ -96,6 +96,9 @@ export default {
       api_key_error_description: `Hubo un problema al acceder o descifrar las credenciales del proveedor configurado. Por favor, vuelve a configurarlas usando \`/providers\`.`,
       database_unavailable_title: `Base de datos inalcanzable`,
       database_unavailable_description: `No pude comunicarme con mi base de datos en este momento, así que no sé cómo está configurado este servidor. Nada está roto y no se cambió ningún ajuste. Por favor, inténtalo de nuevo en un momento.`,
+      blacklisted_title: "Estás en la lista negra",
+      blacklisted_description:
+        "Un administrador del servidor te puso en la lista negra de este servidor, así que aquí no te responderé ni ejecutaré este comando.",
       personal_provider_required_title: `Proveedor personal requerido`,
       personal_provider_required_description: `Configura tu proveedor con \`/personal providers\`, luego usa \`/personal config\` para elegirlo para respuestas de texto. Este servidor usa el acceso a la IA proporcionado por los miembros para los mensajes activados por el usuario. Abre \`/help\` en **Características** (Features), luego en **Proveedores personales** (Personal Providers) si necesitas ayuda.`,
       personal_provider_credentials_error_title: `Error en el proveedor personal`,

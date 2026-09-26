@@ -47,7 +47,8 @@ Canais na lista de permissões herdam o tempo de recarga global, a menos que voc
 ## Controles de Aprendizado & Privacidade
 
 - `/server memberpermissions`: controle quem pode ensinar coisas a ela.
-- `/server blacklist`: impeça que ela aprenda ou use memórias sobre usuários específicos.
+- `/moderation` > User Blacklist: faça com que ela ignore completamente membros específicos. Eles não podem
+  acioná-la nem usar seus comandos de interação, e suas mensagens nunca chegam ao contexto dela.
 - `/config` > Channels > Channel Rules: marque canais onde a memória de curto prazo é isolada e os
   registros de pensamento são suprimidos.
 

@@ -233,7 +233,8 @@ export default {
       server_memory_footer: `サーバー管理者は\`/memories\`でこの記憶を管理できます。`,
       personal_memory_footer_manage: `個人記憶は\`/personal memories\`で管理できます。`,
       personal_memory_footer_personalization_disabled: `この記憶は保存されましたが、現在このサーバーではパーソナライズ機能が無効になっているため、すぐには効果がありません。全文は\`/export personal memories\`で確認できます。\`/personal config\`でオプトアウトできます。`,
-      personal_memory_footer_user_blacklisted: `この記憶は保存されましたが、対象のユーザーは現在このサーバーのパーソナライズ機能のブラックリストに登録されているため、すぐには効果がありません。全文は\`/export personal memories\`で確認できます。\`/personal config\`でオプトアウトできます。`,
+      personal_memory_footer_user_blacklisted:
+        "この記憶は保存されましたが、対象のユーザーはこのサーバーでブラックリストに登録されているため、ここでは無視され、効果はありません。全文は`/export personal memories`で確認できます。`/personal config`でオプトアウトできます。",
       expand_memory_button: `全文を表示`,
       expand_memory_title: `記憶の全文`,
     },

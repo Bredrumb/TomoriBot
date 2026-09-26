@@ -41,7 +41,6 @@ function createScopeData(overrides: Partial<ModerationScopeData> = {}): Moderati
     userBlacklist: {
       personalizationUserIds: [],
       personaBlocks: [],
-      personalMemoriesEnabled: true,
     },
     whitelist: {
       channels: [],
@@ -640,7 +639,7 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Blacklisted Members `(0)`");
-    expect(serialized).toContain("**Personalization Blacklist**");
+    expect(serialized).toContain("**Server Blacklist**");
     expect(serialized).not.toContain("####");
     expect(serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_empty"));
     expect(serialized).not.toContain("> No members blacklisted");
@@ -682,8 +681,8 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Blacklisted Members `(3)`");
-    expect(serialized).toContain("**Personalization Blacklist**");
-    expect(serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
+    expect(serialized).toContain("**Server Blacklist**");
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.personalization_blacklist_description"));
     expect(serialized).not.toContain("####");
     expect(serialized).toContain("> <@p-user-1>");
     expect(serialized).toContain("> <@p-user-2>");
@@ -728,7 +727,7 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Blacklisted Members `(1)`");
-    expect(serialized).toContain("**Personalization Blacklist**");
+    expect(serialized).toContain("**Server Blacklist**");
     expect(serialized).not.toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
     expect(serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_empty"));
     expect(serialized).toContain("**Persona User Blocks**");
@@ -754,7 +753,7 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Blacklisted Members `(15)`");
-    expect(serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.personalization_blacklist_description"));
     expect(serialized).toContain("> <@user-1>");
     expect(serialized).toContain("> <@user-10>");
     expect(serialized).not.toContain("(`user-1`)");
@@ -798,8 +797,10 @@ describe("moderationPanel UI rendering", () => {
 
     const page1Serialized = JSON.stringify(page1Payload);
     expect(page1Serialized).toContain("### Blacklisted Members `(13)`");
-    expect(page1Serialized).toContain("**Personalization Blacklist**");
-    expect(page1Serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
+    expect(page1Serialized).toContain("**Server Blacklist**");
+    expect(page1Serialized).toMatch(
+      localizedProse("en-US", "commands.moderation.personalization_blacklist_description"),
+    );
     expect(page1Serialized).not.toContain("####");
     expect(page1Serialized).toContain("> <@p-user-1>");
     expect(page1Serialized).toContain("> <@p-user-10>");
@@ -825,8 +826,10 @@ describe("moderationPanel UI rendering", () => {
 
     const page2Serialized = JSON.stringify(page2Payload);
     expect(page2Serialized).toContain("### Blacklisted Members `(13)`");
-    expect(page2Serialized).toContain("**Personalization Blacklist**");
-    expect(page2Serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
+    expect(page2Serialized).toContain("**Server Blacklist**");
+    expect(page2Serialized).toMatch(
+      localizedProse("en-US", "commands.moderation.personalization_blacklist_description"),
+    );
     expect(page2Serialized).toContain("> <@p-user-11>");
     expect(page2Serialized).toContain("> <@p-user-12>");
     expect(page2Serialized).not.toContain("(`p-user-11`)");
@@ -860,7 +863,7 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Blacklisted Members `(1)`");
-    expect(serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.personalization_blacklist_description"));
     expect(serialized).toContain("> <@surviving-user>");
     expect(serialized).not.toContain("(`surviving-user`)");
     expect(serialized).not.toContain("•");
@@ -1688,7 +1691,7 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Remove Blacklisted Member");
-    expect(serialized).toContain("Remove <@p-user-1> from the personalization blacklist?");
+    expect(serialized).toContain("Remove <@p-user-1> from the blacklist?");
     expect(serialized).toContain("moderation:v1:user-blacklist-remove-confirm:en-US:personalization:p-user-1");
     expect(serialized).toContain("moderation:v1:user-blacklist-remove-cancel:en-US");
     expect(serialized).not.toContain("### Blacklisted Members");

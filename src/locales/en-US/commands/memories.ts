@@ -67,7 +67,8 @@ export default {
     batch_limit_reached_heading: `Not Enough Room`,
     batch_limit_reached_detail: "That file holds {requested} new memories but only {available} slots remain of {max}.",
     blacklisted_error_heading: `User Blacklisted`,
-    blacklisted_error_detail: "You are blacklisted from teaching server memories in this server.",
+    blacklisted_error_detail:
+      "You are blacklisted on this server, so you cannot change its server memories or documents.",
     teaching_disabled_error_heading: `Teaching Disabled`,
     teaching_disabled_error_detail: `Member memory teaching is disabled on this server.`,
     empty_memory_label: `(empty memory)`,

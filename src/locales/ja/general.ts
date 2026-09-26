@@ -98,6 +98,9 @@
       api_key_error_description: `設定されたプロバイダー認証情報へのアクセスまたは復号化で問題が発生しました。\`/providers\`で再設定してください。`,
       database_unavailable_title: `データベースに接続できません`,
       database_unavailable_description: `ただいまデータベースに接続できず、このサーバーの設定を読み取れませんでした。故障ではなく、設定が変更されたわけでもありません。少し時間をおいてからもう一度お試しください。`,
+      blacklisted_title: "ブラックリストに登録されています",
+      blacklisted_description:
+        "サーバー管理者によってこのサーバーのブラックリストに登録されているため、ここではあなたに応答せず、このコマンドも実行しません。",
       personal_provider_required_title: `個人プロバイダーが必要です`,
       personal_provider_required_description: `まず \`/personal providers\` でプロバイダーを設定し、次に \`/personal config\` でテキスト返信用に選択してください。このサーバーでは、ユーザーが発言したメッセージに対してメンバー自身のAIプロバイダー設定を使用しています。手順が必要な場合は \`/help\` の **機能** から **個人プロバイダー** を確認してください。`,
       personal_provider_credentials_error_title: `個人プロバイダーエラー`,

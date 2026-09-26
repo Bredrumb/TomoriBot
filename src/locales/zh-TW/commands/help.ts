@@ -94,7 +94,7 @@ export default {
         memory_tagging: `記憶標籤（進階）`,
         memory_tagging_description: `只在相關時喚醒某則記憶`,
         blacklisting: `黑名單`,
-        blacklisting_description: `阻止某位成員觸發我`,
+        blacklisting_description: "讓我完全忽略某位成員",
       },
     },
     breadcrumbs: {
@@ -529,7 +529,7 @@ export default {
       blacklisting: {
         title: `黑名單`,
         description:
-          "被列入黑名單的成員完全無法觸發我，在任何 頻道、用任何人格都一樣。\n\n在 {moderationBlacklist} 加入。同一頁會列出所有 目前的項目並可移除，一次一個或批次處理。\n> 黑名單處理的是存取權，不是刪除。關於 該成員的記憶會保留，直到有人移除它們。",
+          "被列入黑名單的成員會被我完全忽略：在任何頻道、用任何人格都無法觸發我，他們的訊息也不會進入我的上下文。像 `/respond`、`/reward`、`/punish` 這類讓我替他們行動的指令也會被拒絕。他們也無法修改伺服器記憶、屬性或範例對話。\n\n在 {moderationBlacklist} 加入。同一頁會列出所有目前的項目並可移除，一次一個或批次處理。\n> 黑名單處理的是存取權，不是刪除。關於該成員的記憶會保留，直到有人移除它們。",
         footer: "想讓整個頻道安靜，而不是針對某個人，請把 該頻道從白名單移除。",
       },
     },

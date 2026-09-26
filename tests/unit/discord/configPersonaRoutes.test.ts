@@ -2263,27 +2263,21 @@ describe("config persona collections", () => {
     expect(editSpy).not.toHaveBeenCalled();
     expect(removeSpy).not.toHaveBeenCalled();
     expect(harness.edits.filter((entry) => JSON.stringify(entry).includes("Panel Out Of Date"))).toHaveLength(2);
-    expect(blacklistSpy).toHaveBeenCalledTimes(1);
+    expect(blacklistSpy).toHaveBeenCalledTimes(2);
     editSpy.mockRestore();
     removeSpy.mockRestore();
     blacklistSpy.mockRestore();
   });
 
-  it("removes an attribute even when the actor is blacklisted and clamps the page", async () => {
-    let acknowledgedDuringWrite = false;
-    let interaction: ReturnType<typeof makeInteraction>;
+  it("refuses to remove an attribute when the actor is blacklisted", async () => {
     const persona = makeTeachingPersona({
       persona_id: 55,
       attribute_list: ["Only"],
     });
-    const refreshed = makeTeachingPersona({ persona_id: 55, attribute_list: [] });
-    const removeSpy = spyOn(personaRepository, "removeAttributeAt").mockImplementation(async () => {
-      acknowledgedDuringWrite = interaction.deferred;
-      return true;
-    });
+    const removeSpy = spyOn(personaRepository, "removeAttributeAt").mockResolvedValue(true);
     const blacklistSpy = spyOn(userRepository, "isBlacklisted").mockResolvedValue(true);
-    const harness = makeHarness({ personas: [persona], refreshedPersonas: [refreshed], isManager: false });
-    interaction = makeInteraction({
+    const harness = makeHarness({ personas: [persona], isManager: false });
+    const interaction = makeInteraction({
       customId: buildConfigRouteId({
         action: "attribute-remove",
         locale: "en-US",
@@ -2296,10 +2290,8 @@ describe("config persona collections", () => {
     });
     await dispatch(harness, interaction);
 
-    expect(acknowledgedDuringWrite).toBe(true);
-    expect(removeSpy).toHaveBeenCalledWith(55, 1);
-    expect(blacklistSpy).not.toHaveBeenCalled();
-    expect(JSON.stringify(harness.edits.at(-1))).not.toContain(":attr-edit-open:");
+    expect(removeSpy).not.toHaveBeenCalled();
+    expect(blacklistSpy).toHaveBeenCalledWith("guild-1", "user-1");
     removeSpy.mockRestore();
     blacklistSpy.mockRestore();
   });
@@ -2403,7 +2395,7 @@ describe("config persona collections", () => {
     await dispatch(removeHarness, interaction);
 
     expect(removeSpy).toHaveBeenCalledWith(55, 1);
-    expect(blacklistSpy).toHaveBeenCalledTimes(1);
+    expect(blacklistSpy).toHaveBeenCalledTimes(2);
     expect(editHarness.telemetry).toEqual(["server-config.workspace.persona-dialogue.edit"]);
     expect(removeHarness.telemetry).toEqual(["server-config.workspace.persona-dialogue.remove"]);
     editSpy.mockRestore();
@@ -2512,7 +2504,7 @@ describe("config persona collections", () => {
     expect(editSpy).not.toHaveBeenCalled();
     expect(removeSpy).not.toHaveBeenCalled();
     expect(harness.edits.filter((entry) => JSON.stringify(entry).includes("Panel Out Of Date"))).toHaveLength(2);
-    expect(blacklistSpy).toHaveBeenCalledTimes(1);
+    expect(blacklistSpy).toHaveBeenCalledTimes(2);
     editSpy.mockRestore();
     removeSpy.mockRestore();
     blacklistSpy.mockRestore();
@@ -2593,8 +2585,8 @@ describe("config persona collections", () => {
       harness: blacklistedHarness,
     });
     await dispatch(blacklistedHarness, interaction);
-    expect(acknowledgedDuringRemove).toBe(true);
-    expect(removeSpy).toHaveBeenCalledWith(55, 1);
+    expect(acknowledgedDuringRemove).toBe(false);
+    expect(removeSpy).not.toHaveBeenCalled();
 
     const disabledPersona = makeTeachingPersona(
       {
@@ -2659,7 +2651,7 @@ describe("config persona collections", () => {
     );
     expect(addSpy).not.toHaveBeenCalled();
     expect(editSpy).not.toHaveBeenCalled();
-    expect(removeSpy).toHaveBeenCalledTimes(1);
+    expect(removeSpy).not.toHaveBeenCalled();
 
     const managerPersona = makeTeachingPersona({ persona_id: 55 }, { dialogue: false });
     const managerHarness = makeHarness({ personas: [managerPersona], isManager: true });
@@ -2683,7 +2675,7 @@ describe("config persona collections", () => {
     );
     expect(addSpy).toHaveBeenCalledWith(55, ["New"], ["Response"]);
     expect(limitSpy).toHaveBeenCalledWith(55);
-    expect(blacklistSpy).toHaveBeenCalledTimes(2);
+    expect(blacklistSpy).toHaveBeenCalledTimes(3);
     removeSpy.mockRestore();
     editSpy.mockRestore();
     addSpy.mockRestore();

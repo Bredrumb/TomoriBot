@@ -98,6 +98,9 @@ export default {
       api_key_error_description: `Houve um problema ao acessar ou descriptografar as credenciais do provedor configurado. Por favor, reconfigure-as usando \`/providers\`.`,
       database_unavailable_title: `Banco de Dados Inacessível`,
       database_unavailable_description: `Não consegui acessar meu banco de dados agora, então não sei como este servidor está configurado. Nada está quebrado e nenhuma configuração foi alterada. Por favor, tente novamente em um momento.`,
+      blacklisted_title: "Você está na lista negra",
+      blacklisted_description:
+        "Um administrador do servidor colocou você na lista negra deste servidor, então aqui não vou responder a você nem executar este comando.",
       personal_provider_required_title: `Provedor Pessoal Necessário`,
       personal_provider_required_description: `Configure seu provedor com \`/personal providers\`, então use \`/personal config\` para escolhê-lo para respostas de texto. Este servidor está usando acesso de IA fornecido pelos membros para mensagens acionadas por usuários. Abra \`/help\` em **Features**, depois **Personal Providers** se precisar de ajuda.`,
       personal_provider_credentials_error_title: `Erro no Provedor Pessoal`,

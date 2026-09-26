@@ -234,7 +234,8 @@ export default {
       server_memory_footer: `伺服器管理員可以用 \`/memories\` 管理這則記憶。`,
       personal_memory_footer_manage: `你可以用 \`/personal memories\` 管理你的個人記憶。`,
       personal_memory_footer_personalization_disabled: `這則記憶已儲存，但這個伺服器目前停用了個人化功能，所以在這裡不會立即生效。你可以用 \`/export personal memories\` 查看。想要退出請用 \`/personal config\`。`,
-      personal_memory_footer_user_blacklisted: `這則記憶已儲存，但這位使用者目前被這個伺服器的個人化功能列入黑名單，所以在這裡不會立即生效。你可以用 \`/export personal memories\` 查看。想要退出請用 \`/personal config\`。`,
+      personal_memory_footer_user_blacklisted:
+        "這則記憶已儲存，但這位使用者目前在這個伺服器被列入黑名單，我在這裡會忽略他們，所以它不會生效。你可以用 `/export personal memories` 查看。想要退出請用 `/personal config`。",
       expand_memory_button: `顯示完整記憶`,
       expand_memory_title: `完整記憶內容`,
     },

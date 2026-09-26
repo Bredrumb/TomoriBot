@@ -94,7 +94,7 @@ export default {
         memory_tagging: `Etiquetado de memoria (Avanzado)`,
         memory_tagging_description: `Despierta una memoria solo cuando es relevante`,
         blacklisting: `Listas negras`,
-        blacklisting_description: `Evita que un miembro me active`,
+        blacklisting_description: "Haz que ignore por completo a un miembro",
       },
     },
     breadcrumbs: {
@@ -534,7 +534,7 @@ Ingresa \`{project_id}::{location}\` con {configSetup} o {configApikeySet}
       blacklisting: {
         title: `Listas negras`,
         description:
-          "Un miembro en lista negra no puede activarme para nada, en ningún canal, con ninguna persona.\n\nAñade uno en {moderationBlacklist}. Esa misma página los lista y los elimina.\n> Se trata de acceso, no de borrado. Las memorias sobre ese miembro se mantienen.",
+          "Ignoro por completo a un miembro en lista negra: no puede activarme en ningún canal ni con ninguna persona, sus mensajes nunca llegan a mi contexto y rechazo los comandos que me harían actuar por él, como `/respond`, `/reward` y `/punish`. Tampoco puede cambiar memorias del servidor, atributos ni diálogos de ejemplo.\n\nAñade uno en {moderationBlacklist}. Esa misma página los lista y los elimina.\n> Se trata de acceso, no de borrado. Las memorias sobre ese miembro se mantienen.",
         footer: "Para silenciar todo un canal en lugar de a una persona, quita el canal de la lista blanca.",
       },
     },

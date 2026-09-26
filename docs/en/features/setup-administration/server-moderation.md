@@ -47,7 +47,8 @@ Whitelisted channels inherit the global cooldown unless you set a channel-specif
 ## Learning & Privacy Controls
 
 - `/server memberpermissions`: control who can teach her things.
-- `/server blacklist`: prevent her from learning from or using memories about specific users.
+- `/moderation` > User Blacklist: make her ignore specific members completely. They cannot trigger her or use
+  her interaction commands, and their messages never reach her context.
 - `/config` > Channels > Channel Rules: mark channels where short-term memory is isolated and thought
   logs are suppressed.
 

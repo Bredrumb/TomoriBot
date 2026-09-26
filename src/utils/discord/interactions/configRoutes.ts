@@ -724,7 +724,7 @@ async function authorizeCollectionOperation(
       : config?.sampledialogue_memteaching_enabled === true;
   if (!teachingEnabled) return false;
 
-  if (scope.guildId && (operation.operation === "add" || operation.operation === "edit")) {
+  if (scope.guildId) {
     try {
       if (await userRepository.isBlacklisted(scope.serverDiscId, interaction.user.id)) return false;
     } catch (error) {

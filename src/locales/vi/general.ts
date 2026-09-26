@@ -98,6 +98,9 @@ export default {
       api_key_error_description: `Đã xảy ra sự cố khi truy cập hoặc giải mã thông tin xác thực nhà cung cấp. Vui lòng định cấu hình lại bằng \`/providers\`.`,
       database_unavailable_title: `Không thể kết nối cơ sở dữ liệu`,
       database_unavailable_description: `Mình vừa không thể kết nối tới cơ sở dữ liệu, nên không biết cấu hình của máy chủ này. Mọi thứ vẫn ổn và không có cài đặt nào bị thay đổi. Vui lòng thử lại sau giây lát.`,
+      blacklisted_title: "Bạn đang nằm trong blacklist",
+      blacklisted_description:
+        "Quản trị viên máy chủ đã thêm bạn vào blacklist của máy chủ này, nên mình sẽ không phản hồi bạn hay thực hiện lệnh này ở đây.",
       personal_provider_required_title: `Cần nhà cung cấp cá nhân`,
       personal_provider_required_description: `Thiết lập nhà cung cấp bằng \`/personal providers\`, sau đó dùng \`/personal config\` để chọn cho phản hồi văn bản. Máy chủ này dùng quyền truy cập AI do thành viên cung cấp cho tin nhắn do người dùng kích hoạt. Mở \`/help\` đến mục **Features**, rồi **Personal Providers** nếu bạn cần trợ giúp.`,
       personal_provider_credentials_error_title: `Lỗi nhà cung cấp cá nhân`,

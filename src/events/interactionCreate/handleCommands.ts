@@ -20,6 +20,8 @@ import {
 } from "../../utils/discord/commandLoader";
 import { resolvePreferredDiscordDisplayName } from "../../utils/discord/displayName";
 import { dispatchGlobalInteraction, isGlobalRoutableInteraction } from "@/utils/discord/interactions/router";
+import { getCachedBlacklistStatus } from "@/utils/cache/userCache";
+import { isBlacklistGatedCommand } from "@/utils/moderation/serverBlacklist";
 
 // Cooldown for any command whose category is listed below, in milliseconds.
 const DEFAULT_COOLDOWN_MS = 1_600;
@@ -240,6 +242,24 @@ const runChatInputCommand = async (client: Client, interaction: ChatInputCommand
     }
 
     const mainLogicPromise = async () => {
+      if (
+        interaction.guildId &&
+        isBlacklistGatedCommand(commandName, groupName, subcommandName) &&
+        (await getCachedBlacklistStatus(interaction.guildId, interaction.user.id))
+      ) {
+        await replyInfoEmbed(
+          interaction,
+          initialLocale,
+          {
+            titleKey: "general.errors.blacklisted_title",
+            descriptionKey: "general.errors.blacklisted_description",
+            color: ColorCode.WARN,
+          },
+          MessageFlags.Ephemeral,
+        );
+        return;
+      }
+
       const cooldownDuration = resolveCommandCooldown(commandName);
 
       const isOnCooldown = cooldownDuration > 0 && (await checkCooldown(interaction.user.id, commandName));

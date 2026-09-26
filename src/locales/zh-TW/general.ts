@@ -98,6 +98,8 @@ export default {
       api_key_error_description: `存取或解密已設定的供應商憑證時發生問題。請使用 \`/providers\` 重新設定。`,
       database_unavailable_title: `資料庫連不上`,
       database_unavailable_description: `我剛剛連不上資料庫，所以不知道這個伺服器的設定。沒有東西損壞，設定也沒有被更動。請稍後再試一次。`,
+      blacklisted_title: "你已被列入黑名單",
+      blacklisted_description: "伺服器管理員已將你列入這個伺服器的黑名單，所以我在這裡不會回應你，也不會執行這個指令。",
       personal_provider_required_title: `需要個人供應商`,
       personal_provider_required_description: `請用 \`/personal providers\` 設定你的供應商，再用 \`/personal config\` 選擇要用來產生文字回覆的供應商。這個伺服器對使用者觸發的訊息採用成員自備的 AI 存取。需要協助的話，可以開啟 \`/help\` 的 **功能**，再選 **個人供應商**。`,
       personal_provider_credentials_error_title: `個人供應商錯誤`,

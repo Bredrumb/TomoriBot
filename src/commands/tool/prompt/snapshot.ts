@@ -21,7 +21,7 @@ import { userPersonaNamingPairKey } from "@/utils/db/repositories/UserNamingRepo
 import { resolveEffectiveUserNaming } from "@/utils/text/userNaming";
 import { buildContext } from "@/utils/text/contextBuilder";
 import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
-import { getCachedPrivacyLevel, getCachedUserRow } from "@/utils/cache/userCache";
+import { getCachedBlacklistStatus, getCachedPrivacyLevel, getCachedUserRow } from "@/utils/cache/userCache";
 import { getStaticProviderInfo, normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
@@ -547,10 +547,11 @@ export async function execute(
     const syntheticUsers = new Map<string, { displayName: string; type: "persona" | "webhook" }>();
 
     for (const message of messagesArray) {
-      // Skip fully-private users (same gate as real context building)
+      // Skip fully-private and server-blacklisted users (same gates as real context building)
       if (!message.webhookId) {
         const privacyLevel = await getCachedPrivacyLevel(message.author.id);
         if (privacyLevel === PrivacyLevel.FULL) continue;
+        if (!message.author.bot && (await getCachedBlacklistStatus(interaction.guild.id, message.author.id))) continue;
       }
 
       let effectiveAuthorId = message.author.id;

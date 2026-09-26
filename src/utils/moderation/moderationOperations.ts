@@ -118,7 +118,6 @@ export interface ModerationMemberAccessData {
 interface ModerationUserBlacklistData {
   personalizationUserIds: string[];
   personaBlocks: PersonaUserBlockWithPersona[];
-  personalMemoriesEnabled: boolean;
 }
 
 interface ModerationWhitelistData {
@@ -210,7 +209,6 @@ export interface ModerationUserBlacklistAddScopeData {
   guildId: string;
   serverId: number;
   readStatus: PanelReadStatus;
-  personalMemoriesEnabled: boolean;
 }
 
 export interface ModerationUserBlacklistAddDataDependencies {
@@ -238,7 +236,6 @@ export async function loadModerationUserBlacklistAddData(
         guildId,
         serverId: 0,
         readStatus: "unavailable",
-        personalMemoriesEnabled: false,
       };
     }
     return null;
@@ -249,7 +246,6 @@ export async function loadModerationUserBlacklistAddData(
     guildId,
     serverId: tomoriState.server_id,
     readStatus: dbError ? "stale" : "fresh",
-    personalMemoriesEnabled: Boolean(tomoriState.config.personal_memories_enabled),
   };
 }
 
@@ -369,7 +365,6 @@ export async function loadModerationScopeData(
         userBlacklist: {
           personalizationUserIds: [],
           personaBlocks: [],
-          personalMemoriesEnabled: false,
         },
         whitelist: {
           channels: [],
@@ -477,7 +472,6 @@ export async function loadModerationScopeData(
     userBlacklist: {
       personalizationUserIds: blacklistResult.memberIds,
       personaBlocks: personaBlocksResult.blocks,
-      personalMemoriesEnabled: Boolean(tomoriState.config.personal_memories_enabled),
     },
     whitelist: {
       channels: channelsResult.channels,
@@ -615,14 +609,12 @@ export interface AddUserToBlacklistInput {
   serverId: number;
   targetUserId: string;
   isBot?: boolean;
-  personalMemoriesEnabled?: boolean;
 }
 
 export type AddUserToBlacklistResult =
   | { status: "success"; targetUserId: string }
   | { status: "already_blacklisted"; targetUserId: string }
   | { status: "bot"; targetUserId: string }
-  | { status: "personalization_disabled"; targetUserId: string }
   | { status: "failure"; targetUserId: string };
 
 export interface UserBlacklistOperationsDependencies {
@@ -644,13 +636,6 @@ export async function addUserToBlacklist(
   if (input.isBot) {
     return {
       status: "bot",
-      targetUserId: input.targetUserId,
-    };
-  }
-
-  if (input.personalMemoriesEnabled === false) {
-    return {
-      status: "personalization_disabled",
       targetUserId: input.targetUserId,
     };
   }

@@ -98,6 +98,8 @@ export default {
       api_key_error_description: `读取或解密已配置的提供方凭据时出了问题。请用 \`/providers\` 重新配置。`,
       database_unavailable_title: `连不上数据库`,
       database_unavailable_description: `我刚才连不上数据库，所以不知道这个服务器是怎么配置的。没有东西坏掉，设置也没有被改动。请稍后再试。`,
+      blacklisted_title: "你已被列入黑名单",
+      blacklisted_description: "服务器管理员已把你列入这个服务器的黑名单，所以我在这里不会回应你，也不会执行这个命令。",
       personal_provider_required_title: `需要个人提供方`,
       personal_provider_required_description: `先用 \`/personal providers\` 设置好你的提供方，再用 \`/personal config\` 选它来生成文本回复。这个服务器对用户触发的消息使用的是成员自备的 AI 访问权限。如果不知道怎么设置，打开 \`/help\` 里的 **功能介绍**，再看 **个人提供方**。`,
       personal_provider_credentials_error_title: `个人提供方出错`,

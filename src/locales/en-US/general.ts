@@ -98,6 +98,9 @@
       api_key_error_description: `There was an issue accessing or decrypting the configured provider credentials. Please reconfigure them using \`/providers\`.`,
       database_unavailable_title: `Database Unreachable`,
       database_unavailable_description: `I could not reach my database just now, so I do not know how this server is configured. Nothing is broken and no settings were changed. Please try again in a moment.`,
+      blacklisted_title: "You are blacklisted",
+      blacklisted_description:
+        "A server manager has blacklisted you on this server, so I will not respond to you or run this command here.",
       personal_provider_required_title: `Personal Provider Required`,
       personal_provider_required_description: `Set up your provider with \`/personal providers\`, then use \`/personal config\` to choose it for text replies. This server is using member-provided AI access for user-triggered messages. Open \`/help\` to **Features**, then **Personal Providers** if you need help.`,
       personal_provider_credentials_error_title: `Personal Provider Error`,

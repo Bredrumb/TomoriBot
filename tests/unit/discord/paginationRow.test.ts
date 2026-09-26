@@ -29,7 +29,6 @@ function createScopeData(overrides: Partial<ModerationScopeData> = {}): Moderati
     userBlacklist: {
       personalizationUserIds: [],
       personaBlocks: [],
-      personalMemoriesEnabled: true,
     },
     whitelist: {
       channels: [],

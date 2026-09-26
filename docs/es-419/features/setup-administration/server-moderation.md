@@ -54,7 +54,8 @@ anulación específica del canal.
 ## Controles de aprendizaje y privacidad
 
 - `/server memberpermissions`: controla quién puede enseñarle cosas.
-- `/server blacklist`: evita que aprenda de usuarios específicos o use memorias sobre ellos.
+- `/moderation` > User Blacklist: haz que ignore por completo a miembros específicos. No pueden activarla ni
+  usar sus comandos de interacción, y sus mensajes nunca llegan a su contexto.
 - `/config` > Canales > Reglas de canal: marca canales donde la memoria a corto plazo está
   aislada y los registros de pensamiento están suprimidos.
 

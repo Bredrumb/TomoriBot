@@ -64,7 +64,6 @@ function createScopeData(overrides: Partial<ModerationScopeData> = {}): Moderati
     userBlacklist: {
       personalizationUserIds: ["u1"],
       personaBlocks: [],
-      personalMemoriesEnabled: true,
     },
     whitelist: {
       channels: [],
@@ -1108,7 +1107,7 @@ describe("moderation interaction routes", () => {
       const route = createModerationInteractionRoute({
         resolveUserBlacklistAdd: async () => {
           resolveUserBlacklistAddCalled++;
-          return { guildId: "guild-1", serverId: 1, readStatus: "fresh", personalMemoriesEnabled: true };
+          return { guildId: "guild-1", serverId: 1, readStatus: "fresh" };
         },
         showUserBlacklistAddModal: async () => {
           modalShown++;
@@ -1184,7 +1183,6 @@ describe("moderation interaction routes", () => {
           guildId: "guild-1",
           serverId: 1,
           readStatus: "unavailable",
-          personalMemoriesEnabled: true,
         }),
         showUserBlacklistAddModal: async () => {
           modalShown++;
@@ -1201,7 +1199,7 @@ describe("moderation interaction routes", () => {
       expect(JSON.stringify(replyPayload)).toContain(localizedCopy("en-US", "commands.moderation.unavailable"));
     });
 
-    it("rejects user-blacklist-add-open when personalization is disabled", async () => {
+    it("opens user-blacklist-add without requiring server personalization", async () => {
       let modalShown = 0;
       let replyPayload: unknown = null;
 
@@ -1224,7 +1222,6 @@ describe("moderation interaction routes", () => {
           guildId: "guild-1",
           serverId: 1,
           readStatus: "fresh",
-          personalMemoriesEnabled: false,
         }),
         showUserBlacklistAddModal: async () => {
           modalShown++;
@@ -1237,10 +1234,8 @@ describe("moderation interaction routes", () => {
         segments: ["user-blacklist-add-open", "en-US"],
       });
 
-      expect(modalShown).toBe(0);
-      expect(JSON.stringify(replyPayload)).toContain(
-        localizedCopy("en-US", "commands.moderation.user_blacklist_add_personalization_disabled_detail"),
-      );
+      expect(modalShown).toBe(1);
+      expect(replyPayload).toBeNull();
     });
 
     it("opens User Blacklist Add raw modal with nonce without pre-deferral", async () => {
@@ -1274,7 +1269,6 @@ describe("moderation interaction routes", () => {
           guildId: "guild-1",
           serverId: 1,
           readStatus: "fresh",
-          personalMemoriesEnabled: true,
         }),
         showUserBlacklistAddModal: async (_interaction, _locale, nonce) => {
           modalShownNonce = nonce;
@@ -1474,7 +1468,6 @@ describe("moderation interaction routes", () => {
         userBlacklist: {
           personalizationUserIds: ["u1", "123456789012345678"],
           personaBlocks: [],
-          personalMemoriesEnabled: true,
         },
       };
 
@@ -1506,12 +1499,11 @@ describe("moderation interaction routes", () => {
         serverId: 1,
         targetUserId: "123456789012345678",
         isBot: false,
-        personalMemoriesEnabled: true,
       });
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
       expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.user_blacklist_add_success"));
-      expect(serialized).toContain("Added AnonMember to the personalization blacklist.");
+      expect(serialized).toContain("Added AnonMember to the blacklist.");
       expect(serialized).toContain("Blacklisted Members `(2)`");
       expect(serialized).toContain("<@123456789012345678>");
     });
@@ -1556,7 +1548,7 @@ describe("moderation interaction routes", () => {
       expect(serialized).toContain(
         localizedCopy("en-US", "commands.moderation.user_blacklist_add_already_blacklisted"),
       );
-      expect(serialized).toContain("ExistingMember is already on the personalization blacklist.");
+      expect(serialized).toContain("ExistingMember is already on the blacklist.");
     });
 
     it("resolves member through current guild membership using default user resolver", async () => {
@@ -1595,7 +1587,6 @@ describe("moderation interaction routes", () => {
         userBlacklist: {
           personalizationUserIds: ["u1", "123456789012345678"],
           personaBlocks: [],
-          personalMemoriesEnabled: true,
         },
       };
 
@@ -1622,7 +1613,7 @@ describe("moderation interaction routes", () => {
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
       expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.user_blacklist_add_success"));
-      expect(serialized).toContain("Added Mirri to the personalization blacklist.");
+      expect(serialized).toContain("Added Mirri to the blacklist.");
     });
 
     it("repaints with invalid_user receipt when default user resolver member fetch fails or outside guild", async () => {
@@ -1766,7 +1757,6 @@ describe("moderation interaction routes", () => {
           userBlacklist: {
             personalizationUserIds: ["other-user"],
             personaBlocks: [],
-            personalMemoriesEnabled: true,
           },
         }),
       });
@@ -1807,7 +1797,6 @@ describe("moderation interaction routes", () => {
           userBlacklist: {
             personalizationUserIds: ["123456789012345678"],
             personaBlocks: [],
-            personalMemoriesEnabled: true,
           },
         }),
       });
@@ -1821,7 +1810,7 @@ describe("moderation interaction routes", () => {
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
       expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.user_blacklist_remove_title"));
-      expect(serialized).toContain("Remove <@123456789012345678> from the personalization blacklist?");
+      expect(serialized).toContain("Remove <@123456789012345678> from the blacklist?");
       expect(serialized).toContain("user-blacklist-remove-confirm");
       expect(serialized).toContain("user-blacklist-remove-cancel");
     });
@@ -1967,7 +1956,6 @@ describe("moderation interaction routes", () => {
           userBlacklist: {
             personalizationUserIds: ["123456789012345678"],
             personaBlocks: [],
-            personalMemoriesEnabled: true,
           },
         }),
         operations: {
@@ -2019,7 +2007,6 @@ describe("moderation interaction routes", () => {
           userBlacklist: {
             personalizationUserIds: [],
             personaBlocks: [],
-            personalMemoriesEnabled: true,
           },
         }),
         operations: {
@@ -2072,7 +2059,6 @@ describe("moderation interaction routes", () => {
             userBlacklist: {
               personalizationUserIds: scopeLoadLog.length === 1 ? ["123456789012345678"] : [],
               personaBlocks: [],
-              personalMemoriesEnabled: true,
             },
           };
         },
@@ -2098,7 +2084,7 @@ describe("moderation interaction routes", () => {
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
       expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.user_blacklist_remove_success"));
-      expect(serialized).toContain("Removed alice from the personalization blacklist.");
+      expect(serialized).toContain("Removed alice from the blacklist.");
     });
 
     it("successfully removes persona block entry, verifies forceRefresh=false on reload, and renders receipt with persona name", async () => {
@@ -2140,7 +2126,6 @@ describe("moderation interaction routes", () => {
             userBlacklist: {
               personalizationUserIds: [],
               personaBlocks: scopeLoadLog.length === 1 ? [mockBlock] : [],
-              personalMemoriesEnabled: true,
             },
           };
         },
@@ -2195,7 +2180,6 @@ describe("moderation interaction routes", () => {
           userBlacklist: {
             personalizationUserIds: ["123456789012345678"],
             personaBlocks: [],
-            personalMemoriesEnabled: true,
           },
         }),
         resolveUser: async () => ({ id: "123456789012345678", username: "alice", bot: false }),
@@ -3218,7 +3202,6 @@ describe("moderation bulk removal routes", () => {
           userBlacklist: {
             personalizationUserIds: ["123456789012345678"],
             personaBlocks: [],
-            personalMemoriesEnabled: true,
           },
         }),
       resolveUser: async () => ({
@@ -3247,7 +3230,6 @@ describe("moderation bulk removal routes", () => {
       userBlacklist: {
         personalizationUserIds: ["123456789012345678", "223456789012345678"],
         personaBlocks: [],
-        personalMemoriesEnabled: true,
       },
     });
     const interaction = {
@@ -4271,7 +4253,6 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
             persona_name: "Tomori",
           },
         ],
-        personalMemoriesEnabled: true,
       },
     });
 
