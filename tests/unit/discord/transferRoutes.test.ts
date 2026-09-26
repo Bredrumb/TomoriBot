@@ -35,6 +35,7 @@ import {
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { createRouteInteraction } from "../../helpers/routeInteraction";
 
 type InteractionKind = "button" | "string" | "modal";
 
@@ -66,36 +67,24 @@ function makeInteraction({
   guildCached = true,
   values = [],
 }: MockInteractionOptions): GlobalRoutableInteraction {
-  const interaction = {
-    id: `interaction-${customId}`,
+  const interaction = createRouteInteraction({
     customId,
-    locale: "en-US",
-    guildLocale: "en-US",
-    user: { id: actorDiscId },
+    kind: kind === "string" ? "string-select" : kind,
     guildId,
-    guild: guildId && guildCached ? { id: guildId } : null,
-    memberPermissions: { has: (permission: string) => permission === "ManageGuild" && canManageGuild },
-    replied: false,
-    deferred: false,
-    type: 3,
-    isMessageComponent: () => true,
-    isModalSubmit: () => kind === "modal",
-    isButton: () => kind === "button",
-    isStringSelectMenu: () => kind === "string",
+    isManager: canManageGuild,
     values,
-    reply: async () => {
-      interaction.replied = true;
-    },
-    deferReply: async () => {
-      interaction.deferred = true;
-    },
-    deferUpdate: async () => {
-      interaction.deferred = true;
-    },
-    editReply: async () => {},
-    update: async () => {},
-    fetchReply: async () => ({}),
+    overrides: { user: { id: actorDiscId, username: actorDiscId, displayName: actorDiscId, globalName: actorDiscId } },
+  });
+  // The transfer surface asks for the flag by name while the config host asks for the bigint, so the
+  // permission answer is keyed on either spelling, as discord.js resolves both.
+  const MANAGED_GUILD_FLAG = 32n;
+  interaction.memberPermissions = {
+    has: (flag: unknown) => canManageGuild && (flag === MANAGED_GUILD_FLAG || flag === "ManageGuild"),
   };
+  // The router's stale-version branch localizes from the interaction, and the routes read `en-US`.
+  Object.assign(interaction, { locale: "en-US", guildLocale: "en-US" });
+  // discord.js can hold a guild snowflake whose guild object is not in the client cache yet.
+  if (guildId !== null && !guildCached) interaction.guild = null;
   return interaction as unknown as GlobalRoutableInteraction;
 }
 

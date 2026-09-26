@@ -7,7 +7,7 @@
  * expected answer instead of exercising the guard.
  */
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
-import { AttachmentBuilder, MessageFlags, PermissionsBitField, type APIAttachment, type Client } from "discord.js";
+import { AttachmentBuilder, MessageFlags, type APIAttachment, type Client } from "discord.js";
 import type { PersonaSpriteRow, StmCategoryRow, TomoriState } from "@/types/db/schema";
 import type { ConditioningGroup } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
@@ -52,6 +52,7 @@ import { configSpriteOperations } from "@/utils/discord/interactions/configSprit
 import {
   InteractionRouteRegistry,
   parseInteractionRoute,
+  type GlobalRoutableInteraction,
   type ParsedInteractionRoute,
 } from "@/utils/discord/interactions/routeRegistry";
 import { hasRawModalAcknowledgement } from "@/utils/discord/ui/interactionCore";
@@ -70,10 +71,15 @@ import {
   CONFIG_SPRITE_NAME_FIELD,
 } from "@/utils/discord/ui/configModals";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { createPersona, type PersonaFixtureOverrides } from "../../helpers/fixtures";
+import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
 
 beforeAll(async () => initializeLocalizer());
 
 const CLIENT = {} as Client;
+
+/** The interaction the route registry hands a route, which the shared factory models by hand. */
+type ConfigInteraction = Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1];
 
 function requireRoute(customId: string): ParsedInteractionRoute {
   const parsed = parseInteractionRoute(customId);
@@ -81,28 +87,21 @@ function requireRoute(customId: string): ParsedInteractionRoute {
   return parsed;
 }
 
-function makePersona(overrides: Partial<TomoriState> & { persona_id: number }): TomoriState {
-  return {
-    server_id: 9,
-    persona_nickname: `Persona ${overrides.persona_id}`,
-    is_alter: false,
-    trigger_words: [],
-    naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
-    persona_prompt: null,
-    attribute_list: [],
-    sample_dialogues_in: [],
-    sample_dialogues_out: [],
-    webhook_avatar_url: null,
-    is_pointer: false,
-    ...overrides,
-  } as unknown as TomoriState;
+/**
+ * Persona rows for the workspace this suite drives: server 9, with persona 55 as the roster's first
+ * entry. The nickname default follows the persona id because the conditioning aggregate view prints
+ * it beside each entry, so a caller that names no persona still renders as `Persona <id>`.
+ */
+function makePersona(overrides: PersonaFixtureOverrides = {}): TomoriState {
+  const personaId = overrides.persona_id ?? 55;
+  return createPersona({ server_id: 9, persona_id: personaId, persona_nickname: `Persona ${personaId}`, ...overrides });
 }
 
 const MAIN = makePersona({ persona_id: 55, persona_nickname: "Aphel", trigger_words: ["aphel", "hey aphel"] });
 const ALTER = makePersona({ persona_id: 56, persona_nickname: "Wren", is_alter: true });
 
 function makeTeachingPersona(
-  overrides: Partial<TomoriState> & { persona_id: number },
+  overrides: PersonaFixtureOverrides = {},
   flags: { attribute?: boolean; dialogue?: boolean } = {},
 ): TomoriState {
   return makePersona({
@@ -110,7 +109,7 @@ function makeTeachingPersona(
     config: {
       attribute_memteaching_enabled: flags.attribute ?? true,
       sampledialogue_memteaching_enabled: flags.dialogue ?? true,
-    } as TomoriState["config"],
+    },
   });
 }
 
@@ -192,22 +191,30 @@ interface HarnessOptions {
 interface Harness {
   dependencies: Partial<ConfigRouteDependencies>;
   telemetry: string[];
-  edits: unknown[];
-  replies: unknown[];
-  followUps: unknown[];
+  /** Payloads every interaction in this harness has edited, oldest first. */
+  readonly edits: unknown[];
+  /** Payloads every interaction in this harness has replied or followed up with, oldest first. */
+  readonly replies: unknown[];
+  /** Payloads every interaction in this harness has followed up with, derived from its recorded calls. */
+  readonly followUps: unknown[];
   modals: unknown[];
   scopeLoads: boolean[];
   spriteLoads: number[];
+  /** Files the newest interaction's recordings behind the running `edits`/`replies`/`followUps` views. */
+  record: (interaction: RouteInteraction) => void;
 }
 
 function makeHarness(options: HarnessOptions = {}): Harness {
   const telemetry: string[] = [];
-  const edits: unknown[] = [];
-  const replies: unknown[] = [];
-  const followUps: unknown[] = [];
   const modals: unknown[] = [];
   const scopeLoads: boolean[] = [];
   const spriteLoads: number[] = [];
+  // Several tests dispatch more than once and then read the whole recording, so the harness keeps
+  // the interactions it built and exposes their arrays in order.
+  const previousEdits: unknown[][] = [];
+  const previousReplies: unknown[][] = [];
+  const previousCalls: Array<RouteInteraction["calls"]> = [];
+  let current: RouteInteraction | undefined;
 
   const buildScope = (forceRefresh: boolean): ConfigScope => ({
     serverDiscId: options.inGuild === false ? "user-1" : "guild-1",
@@ -224,12 +231,29 @@ function makeHarness(options: HarnessOptions = {}): Harness {
 
   return {
     telemetry,
-    edits,
-    replies,
-    followUps,
+    get edits(): unknown[] {
+      return [...previousEdits, current?.edits ?? []].flat();
+    },
+    get replies(): unknown[] {
+      return [...previousReplies, current?.replies ?? []].flat();
+    },
+    get followUps(): unknown[] {
+      return [...previousCalls, current?.calls ?? []]
+        .flat()
+        .filter((call) => call.method === "followUp")
+        .map((call) => call.payload);
+    },
     modals,
     scopeLoads,
     spriteLoads,
+    record: (interaction) => {
+      if (current) {
+        previousEdits.push(current.edits);
+        previousReplies.push(current.replies);
+        previousCalls.push(current.calls);
+      }
+      current = interaction;
+    },
     dependencies: {
       resolveScope: async (_interaction, forceRefresh = false) => {
         scopeLoads.push(forceRefresh);
@@ -274,62 +298,23 @@ interface FakeInteractionOptions {
   harness: Harness;
 }
 
-function makeInteraction(options: FakeInteractionOptions) {
-  let deferred = false;
-  let replied = false;
+function makeInteraction(options: FakeInteractionOptions): RouteInteraction {
   const kind = options.kind ?? "button";
-
-  const interaction = {
-    id: "interaction-1",
+  const interaction = createRouteInteraction({
     customId: options.customId,
-    user: { id: "user-1", username: "Mirri" },
-    channelId: "channel-1",
-    channel: { name: "lounge" },
+    kind: kind === "select" ? "string-select" : kind,
     guildId: options.inGuild === false ? null : "guild-1",
-    guild: options.inGuild === false ? null : { members: { me: null, fetch: async () => null } },
-    client: { user: null },
-    values: options.values ?? [],
-    memberPermissions: {
-      has: (flag: bigint) => (options.isManager ?? true) && flag === PermissionsBitField.Flags.ManageGuild,
-    },
-    isButton: () => kind === "button",
-    isStringSelectMenu: () => kind === "select",
-    isModalSubmit: () => kind === "modal",
-    get deferred() {
-      return deferred;
-    },
-    get replied() {
-      return replied;
-    },
-    deferUpdate: async () => {
-      deferred = true;
-    },
-    editReply: async (payload: unknown) => {
-      options.harness.edits.push(payload);
-      return payload;
-    },
-    reply: async (payload: unknown) => {
-      replied = true;
-      options.harness.replies.push(payload);
-      return payload;
-    },
-    followUp: async (payload: unknown) => {
-      options.harness.followUps.push(payload);
-      return payload;
-    },
-    fields: {
-      getTextInputValue: (fieldId: string) => options.fields?.[fieldId] ?? "",
-    },
-  };
-
-  return interaction as unknown as Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1] & {
-    deferred: boolean;
-  };
+    isManager: options.isManager ?? true,
+    values: options.values,
+    fields: options.fields,
+  });
+  options.harness.record(interaction);
+  return interaction;
 }
 
-async function dispatch(harness: Harness, interaction: ReturnType<typeof makeInteraction>): Promise<void> {
+async function dispatch(harness: Harness, interaction: RouteInteraction): Promise<void> {
   const registry = new InteractionRouteRegistry([createConfigInteractionRoute(harness.dependencies)]);
-  await registry.dispatch(CLIENT, interaction);
+  await registry.dispatch(CLIENT, interaction as unknown as ConfigInteraction);
 }
 
 /**
@@ -1016,17 +1001,13 @@ const WIRE_CONTRACT_V2: ReadonlyArray<readonly [string, ConfigPanelRoute]> = [
 ];
 
 describe("config route wire contract", () => {
-  it("decodes every pinned v2 wire string to its exact route", () => {
-    for (const [customId, expected] of WIRE_CONTRACT_V2) {
-      expect(customId.length).toBeLessThanOrEqual(100);
-      expect(parseConfigPanelRoute(requireRoute(customId))).toEqual(expected);
-    }
+  it.each(WIRE_CONTRACT_V2)("decodes the pinned wire string %s to its exact route", (customId, expected) => {
+    expect(customId.length).toBeLessThanOrEqual(100);
+    expect(parseConfigPanelRoute(requireRoute(customId))).toEqual(expected);
   });
 
-  it("re-encodes every pinned route to the exact wire string it came from", () => {
-    for (const [customId, route] of WIRE_CONTRACT_V2) {
-      expect(buildConfigRouteId(route)).toBe(customId);
-    }
+  it.each(WIRE_CONTRACT_V2)("re-encodes the pinned route for %s to the wire string it came from", (customId, route) => {
+    expect(buildConfigRouteId(route)).toBe(customId);
   });
 
   it("covers every declared action in the pinned wire contract", () => {
@@ -1046,14 +1027,18 @@ describe("config route wire contract", () => {
     expect(customId.length).toBeLessThan(100);
   });
 
-  it("rejects a malformed or out-of-range field rather than defaulting it", () => {
-    expect(parseConfigPanelRoute(requireRoute("config:v2:persona-select:en-US:0"))).toBeNull();
-    expect(parseConfigPanelRoute(requireRoute("config:v2:persona-select:en-US:abc"))).toBeNull();
-    // `general` is a Behavior page too, so a page must decode against its own category.
-    expect(parseConfigPanelRoute(requireRoute("config:v2:page:en-US:models:general"))).toBeNull();
-    expect(parseConfigPanelRoute(requireRoute("config:v2:persona-page-select:en-US:models:switch:55"))).toBeNull();
-    expect(parseConfigPanelRoute(requireRoute("config:v2:naming-open:en-US:55:androgynous"))).toBeNull();
-    expect(parseConfigPanelRoute(requireRoute("config:v2:not-a-token:en-US:55"))).toBeNull();
+  /** Each row is one field the codec must refuse instead of defaulting. */
+  const REJECTED_WIRE_FIELDS: ReadonlyArray<readonly [string, string]> = [
+    ["config:v2:persona-select:en-US:0", "a persona id of 0, which is not a real persona"],
+    ["config:v2:persona-select:en-US:abc", "a non-numeric persona id"],
+    ["config:v2:page:en-US:models:general", "`general` is a Behavior page, so it must decode against its own category"],
+    ["config:v2:persona-page-select:en-US:models:switch:55", "a persona page paired with the models category"],
+    ["config:v2:naming-open:en-US:55:androgynous", "a naming style outside the accepted set"],
+    ["config:v2:not-a-token:en-US:55", "an action that no codec declares"],
+  ];
+
+  it.each(REJECTED_WIRE_FIELDS)("rejects the malformed custom ID %s (%s)", (customId, _reason) => {
+    expect(parseConfigPanelRoute(requireRoute(customId))).toBeNull();
   });
 });
 
@@ -1702,7 +1687,8 @@ describe("config Persona Memories routes", () => {
       undefined,
       "lounge",
       55,
-      0,
+      // The route falls back to 0 only for a row without a lineage; a real persona row always has one.
+      MAIN.persona_lineage_id,
       undefined,
     );
     expect(acknowledged).toBe(true);
@@ -1975,7 +1961,7 @@ describe("config Persona Memories routes", () => {
     const harness = makeHarness();
 
     await loadConfigPersonaMemoryView(
-      makeInteraction({ customId: "unused", harness }),
+      makeInteraction({ customId: "unused", harness }) as unknown as GlobalRoutableInteraction,
       {
         serverDiscId: "guild-1",
         guildId: "guild-1",
@@ -2016,7 +2002,7 @@ describe("config Persona Memories routes", () => {
     const harness = makeHarness({ inGuild: false });
 
     await loadConfigPersonaMemoryView(
-      makeInteraction({ customId: "unused", inGuild: false, harness }),
+      makeInteraction({ customId: "unused", inGuild: false, harness }) as unknown as GlobalRoutableInteraction,
       {
         serverDiscId: "user-1",
         guildId: null,
@@ -2125,7 +2111,7 @@ describe("config Persona Memories routes", () => {
 describe("config persona collections", () => {
   it("adds attributes from a .txt upload through the routed operation", async () => {
     let acknowledgedDuringWrite = false;
-    let interaction: ReturnType<typeof makeInteraction>;
+    let interaction: RouteInteraction;
     const persona = makeTeachingPersona({ persona_id: 55, attribute_list: ["Existing"] });
     const refreshed = makeTeachingPersona({ persona_id: 55, attribute_list: ["Existing", "Likes tea", "Reads"] });
     const addSpy = spyOn(personaRepository, "addAttributes").mockImplementation(async () => {
@@ -2167,7 +2153,7 @@ describe("config persona collections", () => {
 
   it("edits attributes with checkbox evidence while preserving absent evidence", async () => {
     let acknowledgedDuringWrite = false;
-    let interaction: ReturnType<typeof makeInteraction>;
+    let interaction: RouteInteraction;
     const persona = makeTeachingPersona({
       persona_id: 55,
       attribute_list: ["Old"],
@@ -2298,7 +2284,7 @@ describe("config persona collections", () => {
 
   it("adds sample dialogues from a .txt upload and routes the last pair into view", async () => {
     let acknowledgedDuringWrite = false;
-    let interaction: ReturnType<typeof makeInteraction>;
+    let interaction: RouteInteraction;
     const persona = makeTeachingPersona({ persona_id: 55 });
     const refreshed = makeTeachingPersona({
       persona_id: 55,
@@ -2341,7 +2327,7 @@ describe("config persona collections", () => {
 
   it("edits and removes sample dialogues through fingerprinted routes", async () => {
     let acknowledgedDuringWrite = false;
-    let interaction: ReturnType<typeof makeInteraction>;
+    let interaction: RouteInteraction;
     const persona = makeTeachingPersona({
       persona_id: 55,
       sample_dialogues_in: ["Old"],
@@ -2404,7 +2390,7 @@ describe("config persona collections", () => {
   });
 
   it("repairs mismatched dialogue pairs before an edit", async () => {
-    let interaction: ReturnType<typeof makeInteraction>;
+    let interaction: RouteInteraction;
     let acknowledgedDuringRepair = false;
     let acknowledgedDuringEdit = false;
     const persona = makeTeachingPersona({
@@ -2510,19 +2496,14 @@ describe("config persona collections", () => {
     blacklistSpy.mockRestore();
   });
 
-  it("applies dialogue blacklist and teaching gates to the real routes", async () => {
-    let interaction: ReturnType<typeof makeInteraction>;
+  it("blocks a blacklisted member's dialogue add, edit, and remove without writing", async () => {
+    let interaction: RouteInteraction;
     let acknowledgedDuringRemove = false;
     const addSpy = spyOn(personaRepository, "addSampleDialoguePair").mockResolvedValue(true);
     const editSpy = spyOn(personaRepository, "editSampleDialoguePairAt");
     const removeSpy = spyOn(personaRepository, "removeSampleDialoguePairAt").mockImplementation(async () => {
       acknowledgedDuringRemove = interaction.deferred;
       return true;
-    });
-    const limitSpy = spyOn(personaRepository, "checkSampleDialogueLimit").mockResolvedValue({
-      isValid: true,
-      currentCount: 0,
-      maxAllowed: 100,
     });
     const blacklistSpy = spyOn(userRepository, "isBlacklisted").mockResolvedValue(true);
     const memberPersona = makeTeachingPersona({
@@ -2587,7 +2568,18 @@ describe("config persona collections", () => {
     await dispatch(blacklistedHarness, interaction);
     expect(acknowledgedDuringRemove).toBe(false);
     expect(removeSpy).not.toHaveBeenCalled();
+    // The gate reads the blacklist once per gated write: the add, the edit, and the removal.
+    expect(blacklistSpy).toHaveBeenCalledTimes(3);
+    addSpy.mockRestore();
+    editSpy.mockRestore();
+    removeSpy.mockRestore();
+    blacklistSpy.mockRestore();
+  });
 
+  it("blocks dialogue writes while sampledialogue memteaching is disabled", async () => {
+    const addSpy = spyOn(personaRepository, "addSampleDialoguePair").mockResolvedValue(true);
+    const editSpy = spyOn(personaRepository, "editSampleDialoguePairAt");
+    const removeSpy = spyOn(personaRepository, "removeSampleDialoguePairAt");
     const disabledPersona = makeTeachingPersona(
       {
         persona_id: 55,
@@ -2652,7 +2644,21 @@ describe("config persona collections", () => {
     expect(addSpy).not.toHaveBeenCalled();
     expect(editSpy).not.toHaveBeenCalled();
     expect(removeSpy).not.toHaveBeenCalled();
+    addSpy.mockRestore();
+    editSpy.mockRestore();
+    removeSpy.mockRestore();
+  });
 
+  it("lets a manager add a dialogue pair while the teaching gate is off", async () => {
+    // The denials above are only meaningful if the manager bypass still lands: a route layer that
+    // refused every dialogue write would satisfy them on its own.
+    const addSpy = spyOn(personaRepository, "addSampleDialoguePair").mockResolvedValue(true);
+    const limitSpy = spyOn(personaRepository, "checkSampleDialogueLimit").mockResolvedValue({
+      isValid: true,
+      currentCount: 0,
+      maxAllowed: 100,
+    });
+    const blacklistSpy = spyOn(userRepository, "isBlacklisted").mockResolvedValue(true);
     const managerPersona = makeTeachingPersona({ persona_id: 55 }, { dialogue: false });
     const managerHarness = makeHarness({ personas: [managerPersona], isManager: true });
     await dispatch(
@@ -2675,9 +2681,8 @@ describe("config persona collections", () => {
     );
     expect(addSpy).toHaveBeenCalledWith(55, ["New"], ["Response"]);
     expect(limitSpy).toHaveBeenCalledWith(55);
-    expect(blacklistSpy).toHaveBeenCalledTimes(3);
-    removeSpy.mockRestore();
-    editSpy.mockRestore();
+    // A manager passes the gate before the blacklist is read, so the read count stays at zero.
+    expect(blacklistSpy).not.toHaveBeenCalled();
     addSpy.mockRestore();
     limitSpy.mockRestore();
     blacklistSpy.mockRestore();
@@ -2745,13 +2750,8 @@ describe("config persona collections", () => {
     });
   });
 
-  it("gates teaching-disabled members, lets managers bypass, and keeps DM blacklist reads absent", async () => {
+  it("blocks a blacklisted member's attribute add and edit without writing", async () => {
     const addSpy = spyOn(personaRepository, "addAttributes").mockResolvedValue(true);
-    const limitSpy = spyOn(personaRepository, "checkAttributeLimit").mockResolvedValue({
-      isValid: true,
-      currentCount: 0,
-      maxAllowed: 100,
-    });
     const blacklistSpy = spyOn(userRepository, "isBlacklisted").mockResolvedValue(true);
     const memberPersona = makeTeachingPersona({ persona_id: 55, attribute_list: ["Old"] });
 
@@ -2792,7 +2792,15 @@ describe("config persona collections", () => {
       }),
     );
     expect(blacklistedEditSpy).not.toHaveBeenCalled();
+    // The gate reads the blacklist once per gated write, so the member's add and edit are both reads.
+    expect(blacklistSpy).toHaveBeenCalledTimes(2);
+    blacklistedEditSpy.mockRestore();
+    addSpy.mockRestore();
+    blacklistSpy.mockRestore();
+  });
 
+  it("blocks attribute writes while attribute memteaching is disabled", async () => {
+    const addSpy = spyOn(personaRepository, "addAttributes").mockResolvedValue(true);
     const disabledPersona = makeTeachingPersona({ persona_id: 55, attribute_list: ["Old"] }, { attribute: false });
     const disabledHarness = makeHarness({ personas: [disabledPersona], isManager: false });
     await dispatch(
@@ -2848,7 +2856,21 @@ describe("config persona collections", () => {
       }),
     );
     expect(disabledRemoveSpy).not.toHaveBeenCalled();
+    disabledRemoveSpy.mockRestore();
+    disabledEditSpy.mockRestore();
+    addSpy.mockRestore();
+  });
 
+  it("lets a manager add an attribute while attribute memteaching is disabled", async () => {
+    // The manager bypass is the positive control for the denials above: without it, a route layer
+    // that refused every attribute write would satisfy them on its own.
+    const addSpy = spyOn(personaRepository, "addAttributes").mockResolvedValue(true);
+    const limitSpy = spyOn(personaRepository, "checkAttributeLimit").mockResolvedValue({
+      isValid: true,
+      currentCount: 0,
+      maxAllowed: 100,
+    });
+    const blacklistSpy = spyOn(userRepository, "isBlacklisted").mockResolvedValue(true);
     const managerPersona = makeTeachingPersona({ persona_id: 55 }, { attribute: false });
     const managerHarness = makeHarness({ personas: [managerPersona], isManager: true });
     const managerInteraction = makeInteraction({
@@ -2865,8 +2887,15 @@ describe("config persona collections", () => {
     });
     await dispatch(managerHarness, managerInteraction);
     expect(addSpy).toHaveBeenCalledWith(55, ["New"], false);
-    expect(blacklistSpy).toHaveBeenCalledTimes(2);
+    // A manager passes the gate before the blacklist is read, so the read count stays at zero.
+    expect(blacklistSpy).not.toHaveBeenCalled();
+    addSpy.mockRestore();
+    limitSpy.mockRestore();
+    blacklistSpy.mockRestore();
+  });
 
+  it("denies the DM attribute removal and never reads the blacklist without a guild", async () => {
+    const blacklistSpy = spyOn(userRepository, "isBlacklisted").mockResolvedValue(true);
     const dmPersona = makeTeachingPersona({ persona_id: 55, attribute_list: ["Old"] }, { attribute: false });
     const dmHarness = makeHarness({ personas: [dmPersona], inGuild: false });
     const dmRemoveSpy = spyOn(personaRepository, "removeAttributeAt");
@@ -2885,19 +2914,20 @@ describe("config persona collections", () => {
       }),
     );
     expect(dmRemoveSpy).not.toHaveBeenCalled();
-    expect(blacklistSpy).toHaveBeenCalledTimes(2);
-    disabledRemoveSpy.mockRestore();
-    disabledEditSpy.mockRestore();
-    blacklistedEditSpy.mockRestore();
+    // A DM has no guild blacklist to read, so the gate must not reach for one.
+    expect(blacklistSpy).not.toHaveBeenCalled();
     dmRemoveSpy.mockRestore();
-    addSpy.mockRestore();
-    limitSpy.mockRestore();
     blacklistSpy.mockRestore();
   });
 });
 
 describe("config promotion", () => {
-  it("transfers the live CDN avatar to the former main before cleaning up either source", async () => {
+  /**
+   * Installs the spies and identity a live-CDN promotion records into, and returns the run's handles.
+   * Each case below drives its own promotion, because sharing one run would make a case's call order
+   * depend on what the case before it asserted.
+   */
+  function installLiveCdnPromotion() {
     const mainPersona = makePersona({
       persona_id: 55,
       persona_nickname: "Aphel",
@@ -2947,8 +2977,8 @@ describe("config promotion", () => {
       },
     );
 
-    try {
-      const result = await configPersonaOperations.promoteToMain({
+    const promote = () =>
+      configPersonaOperations.promoteToMain({
         alterPersona,
         mainPersona,
         serverDiscId: "guild-1",
@@ -2969,42 +2999,7 @@ describe("config promotion", () => {
         },
       });
 
-      expect(result).toMatchObject({ status: "success", nicknameSynced: true, avatarSynced: true });
-      expect(loadSpy).toHaveBeenCalledWith(liveCdnReference);
-      expect(loadSpy).toHaveBeenCalledWith(alterPersona.webhook_avatar_url);
-      expect(uploadSpy).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({ personaId: mainPersona.persona_id, label: "former main swap" }),
-      );
-      expect(uploadSpy).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({ personaId: alterPersona.persona_id, label: "selected alter swap" }),
-      );
-      expect(setAvatarSpy).toHaveBeenCalledWith(mainPersona.persona_id, formerMainReference);
-      expect(setAvatarSpy).toHaveBeenCalledWith(alterPersona.persona_id, promotedAlterReference);
-      expect(deleteSpy).toHaveBeenCalledWith(mainPersona.webhook_avatar_url);
-      expect(deleteSpy).toHaveBeenCalledWith(alterPersona.webhook_avatar_url);
-      expect(deleteSpy).not.toHaveBeenCalledWith(formerMainReference);
-      expect(deleteSpy).not.toHaveBeenCalledWith(promotedAlterReference);
-
-      const loadIndex = events.indexOf(`load:${liveCdnReference}`);
-      const swapIndex = events.indexOf(`swap:${mainPersona.persona_id}:${alterPersona.persona_id}`);
-      const formerUploadIndex = events.indexOf(
-        `upload:${mainPersona.persona_id}:former main swap:${formerMainReference}`,
-      );
-      const formerPersistIndex = events.indexOf(`persist:${mainPersona.persona_id}:${formerMainReference}`);
-      const formerDeleteIndex = events.indexOf(`delete:${mainPersona.webhook_avatar_url}`);
-      const finalInvalidateIndex = events.lastIndexOf("invalidate:guild-1");
-      expect(loadIndex).toBeGreaterThanOrEqual(0);
-      expect(loadIndex).toBeLessThan(swapIndex);
-      expect(formerUploadIndex).toBeGreaterThanOrEqual(0);
-      expect(swapIndex).toBeLessThan(formerUploadIndex);
-      expect(formerUploadIndex).toBeLessThan(formerPersistIndex);
-      expect(formerPersistIndex).toBeGreaterThanOrEqual(0);
-      expect(formerPersistIndex).toBeLessThan(formerDeleteIndex);
-      expect(invalidateSpy).toHaveBeenCalledTimes(1);
-      expect(finalInvalidateIndex).toBe(events.length - 1);
-    } finally {
+    const restore = () => {
       loadSpy.mockRestore();
       pngSpy.mockRestore();
       swapSpy.mockRestore();
@@ -3012,10 +3007,96 @@ describe("config promotion", () => {
       uploadSpy.mockRestore();
       deleteSpy.mockRestore();
       invalidateSpy.mockRestore();
+    };
+
+    return {
+      mainPersona,
+      alterPersona,
+      liveCdnReference,
+      formerMainReference,
+      promotedAlterReference,
+      events,
+      loadSpy,
+      swapSpy,
+      setAvatarSpy,
+      uploadSpy,
+      deleteSpy,
+      invalidateSpy,
+      promote,
+      restore,
+    };
+  }
+
+  it("transfers the live CDN avatar onto the former main and persists both swap references", async () => {
+    const run = installLiveCdnPromotion();
+    try {
+      const result = await run.promote();
+
+      expect(result).toMatchObject({ status: "success", nicknameSynced: true, avatarSynced: true });
+      expect(run.loadSpy).toHaveBeenCalledWith(run.liveCdnReference);
+      expect(run.loadSpy).toHaveBeenCalledWith(run.alterPersona.webhook_avatar_url);
+      expect(run.uploadSpy).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ personaId: run.mainPersona.persona_id, label: "former main swap" }),
+      );
+      expect(run.uploadSpy).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ personaId: run.alterPersona.persona_id, label: "selected alter swap" }),
+      );
+      expect(run.setAvatarSpy).toHaveBeenCalledWith(run.mainPersona.persona_id, run.formerMainReference);
+      expect(run.setAvatarSpy).toHaveBeenCalledWith(run.alterPersona.persona_id, run.promotedAlterReference);
+    } finally {
+      run.restore();
     }
   });
 
-  it("uses the local former-main fallback and keeps avatar transfer after a nickname-sync failure", async () => {
+  it("deletes only the superseded live-CDN avatar references after the swap", async () => {
+    const run = installLiveCdnPromotion();
+    try {
+      await run.promote();
+
+      expect(run.deleteSpy).toHaveBeenCalledWith(run.mainPersona.webhook_avatar_url);
+      expect(run.deleteSpy).toHaveBeenCalledWith(run.alterPersona.webhook_avatar_url);
+      expect(run.deleteSpy).not.toHaveBeenCalledWith(run.formerMainReference);
+      expect(run.deleteSpy).not.toHaveBeenCalledWith(run.promotedAlterReference);
+    } finally {
+      run.restore();
+    }
+  });
+
+  it("orders the live-CDN load, swap, upload, persist, delete, and final invalidation", async () => {
+    const run = installLiveCdnPromotion();
+    try {
+      await run.promote();
+
+      const loadIndex = run.events.indexOf(`load:${run.liveCdnReference}`);
+      const swapIndex = run.events.indexOf(`swap:${run.mainPersona.persona_id}:${run.alterPersona.persona_id}`);
+      const formerUploadIndex = run.events.indexOf(
+        `upload:${run.mainPersona.persona_id}:former main swap:${run.formerMainReference}`,
+      );
+      const formerPersistIndex = run.events.indexOf(`persist:${run.mainPersona.persona_id}:${run.formerMainReference}`);
+      const formerDeleteIndex = run.events.indexOf(`delete:${run.mainPersona.webhook_avatar_url}`);
+      const finalInvalidateIndex = run.events.lastIndexOf("invalidate:guild-1");
+
+      expect(loadIndex).toBeGreaterThanOrEqual(0);
+      expect(loadIndex).toBeLessThan(swapIndex);
+      expect(formerUploadIndex).toBeGreaterThanOrEqual(0);
+      expect(swapIndex).toBeLessThan(formerUploadIndex);
+      expect(formerUploadIndex).toBeLessThan(formerPersistIndex);
+      expect(formerPersistIndex).toBeGreaterThanOrEqual(0);
+      expect(formerPersistIndex).toBeLessThan(formerDeleteIndex);
+      expect(run.invalidateSpy).toHaveBeenCalledTimes(1);
+      expect(finalInvalidateIndex).toBe(run.events.length - 1);
+    } finally {
+      run.restore();
+    }
+  });
+
+  /**
+   * The local-avatar variant of {@link installLiveCdnPromotion}: the guild has no live CDN avatar and
+   * the nickname sync fails, so the run must keep going from the stored former-main avatar.
+   */
+  function installLocalFallbackPromotion() {
     const mainPersona = makePersona({
       persona_id: 55,
       persona_nickname: "Aphel",
@@ -3061,8 +3142,8 @@ describe("config promotion", () => {
       },
     );
 
-    try {
-      const result = await configPersonaOperations.promoteToMain({
+    const promote = () =>
+      configPersonaOperations.promoteToMain({
         alterPersona,
         mainPersona,
         serverDiscId: "guild-1",
@@ -3080,37 +3161,7 @@ describe("config promotion", () => {
         },
       });
 
-      expect(result).toMatchObject({ status: "success", nicknameSynced: false, avatarSynced: true });
-      expect(swapSpy).toHaveBeenCalledWith(mainPersona.persona_id, alterPersona.persona_id);
-      expect(loadSpy).toHaveBeenCalledWith(mainPersona.webhook_avatar_url);
-      expect(uploadSpy).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({ personaId: mainPersona.persona_id, label: "former main swap" }),
-      );
-      expect(setAvatarSpy).toHaveBeenCalledWith(mainPersona.persona_id, formerMainReference);
-      expect(setAvatarSpy).toHaveBeenCalledWith(alterPersona.persona_id, promotedAlterReference);
-      expect(deleteSpy).toHaveBeenCalledWith(mainPersona.webhook_avatar_url);
-      expect(deleteSpy).toHaveBeenCalledWith(alterPersona.webhook_avatar_url);
-      expect(deleteSpy).not.toHaveBeenCalledWith(formerMainReference);
-      expect(deleteSpy).not.toHaveBeenCalledWith(promotedAlterReference);
-
-      const loadIndex = events.indexOf(`load:${mainPersona.webhook_avatar_url}`);
-      const swapIndex = events.indexOf(`swap:${mainPersona.persona_id}:${alterPersona.persona_id}`);
-      const formerUploadIndex = events.indexOf(
-        `upload:${mainPersona.persona_id}:former main swap:${formerMainReference}`,
-      );
-      const formerPersistIndex = events.indexOf(`persist:${mainPersona.persona_id}:${formerMainReference}`);
-      const formerDeleteIndex = events.indexOf(`delete:${mainPersona.webhook_avatar_url}`);
-      const finalInvalidateIndex = events.lastIndexOf("invalidate:guild-1");
-      expect(loadIndex).toBeLessThan(swapIndex);
-      expect(formerUploadIndex).toBeGreaterThanOrEqual(0);
-      expect(swapIndex).toBeLessThan(formerUploadIndex);
-      expect(formerUploadIndex).toBeLessThan(formerPersistIndex);
-      expect(formerPersistIndex).toBeGreaterThanOrEqual(0);
-      expect(formerPersistIndex).toBeLessThan(formerDeleteIndex);
-      expect(invalidateSpy).toHaveBeenCalledTimes(1);
-      expect(finalInvalidateIndex).toBe(events.length - 1);
-    } finally {
+    const restore = () => {
       loadSpy.mockRestore();
       pngSpy.mockRestore();
       swapSpy.mockRestore();
@@ -3118,6 +3169,82 @@ describe("config promotion", () => {
       uploadSpy.mockRestore();
       deleteSpy.mockRestore();
       invalidateSpy.mockRestore();
+    };
+
+    return {
+      mainPersona,
+      alterPersona,
+      formerMainReference,
+      promotedAlterReference,
+      events,
+      loadSpy,
+      swapSpy,
+      setAvatarSpy,
+      uploadSpy,
+      deleteSpy,
+      invalidateSpy,
+      promote,
+      restore,
+    };
+  }
+
+  it("keeps the avatar transfer after a nickname-sync failure and records the failed sync", async () => {
+    const run = installLocalFallbackPromotion();
+    try {
+      const result = await run.promote();
+
+      expect(result).toMatchObject({ status: "success", nicknameSynced: false, avatarSynced: true });
+      expect(run.swapSpy).toHaveBeenCalledWith(run.mainPersona.persona_id, run.alterPersona.persona_id);
+      expect(run.loadSpy).toHaveBeenCalledWith(run.mainPersona.webhook_avatar_url);
+      expect(run.uploadSpy).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ personaId: run.mainPersona.persona_id, label: "former main swap" }),
+      );
+      expect(run.setAvatarSpy).toHaveBeenCalledWith(run.mainPersona.persona_id, run.formerMainReference);
+      expect(run.setAvatarSpy).toHaveBeenCalledWith(run.alterPersona.persona_id, run.promotedAlterReference);
+    } finally {
+      run.restore();
+    }
+  });
+
+  it("deletes only the superseded local avatar references after the swap", async () => {
+    const run = installLocalFallbackPromotion();
+    try {
+      await run.promote();
+
+      expect(run.deleteSpy).toHaveBeenCalledWith(run.mainPersona.webhook_avatar_url);
+      expect(run.deleteSpy).toHaveBeenCalledWith(run.alterPersona.webhook_avatar_url);
+      expect(run.deleteSpy).not.toHaveBeenCalledWith(run.formerMainReference);
+      expect(run.deleteSpy).not.toHaveBeenCalledWith(run.promotedAlterReference);
+    } finally {
+      run.restore();
+    }
+  });
+
+  it("orders the local-fallback load, swap, upload, persist, delete, and final invalidation", async () => {
+    const run = installLocalFallbackPromotion();
+    try {
+      await run.promote();
+
+      const loadIndex = run.events.indexOf(`load:${run.mainPersona.webhook_avatar_url}`);
+      const swapIndex = run.events.indexOf(`swap:${run.mainPersona.persona_id}:${run.alterPersona.persona_id}`);
+      const formerUploadIndex = run.events.indexOf(
+        `upload:${run.mainPersona.persona_id}:former main swap:${run.formerMainReference}`,
+      );
+      const formerPersistIndex = run.events.indexOf(`persist:${run.mainPersona.persona_id}:${run.formerMainReference}`);
+      const formerDeleteIndex = run.events.indexOf(`delete:${run.mainPersona.webhook_avatar_url}`);
+      const finalInvalidateIndex = run.events.lastIndexOf("invalidate:guild-1");
+
+      expect(loadIndex).toBeLessThan(swapIndex);
+      expect(formerUploadIndex).toBeGreaterThanOrEqual(0);
+      expect(swapIndex).toBeLessThan(formerUploadIndex);
+      expect(formerUploadIndex).toBeLessThan(formerPersistIndex);
+      expect(formerPersistIndex).toBeGreaterThanOrEqual(0);
+      expect(formerPersistIndex).toBeLessThan(formerDeleteIndex);
+      expect(run.invalidateSpy).toHaveBeenCalledTimes(1);
+      expect(finalInvalidateIndex).toBe(run.events.length - 1);
+    } finally {
+      run.restore();
     }
   });
 
@@ -3165,16 +3292,37 @@ describe("config promotion", () => {
 });
 
 describe("config Persona Advanced routes", () => {
+  const ATTG_FIELDS = [
+    CONFIG_NAI_ATTG_AUTHOR_FIELD,
+    CONFIG_NAI_ATTG_TITLE_FIELD,
+    CONFIG_NAI_ATTG_TAGS_FIELD,
+    CONFIG_NAI_ATTG_GENRE_FIELD,
+    CONFIG_NAI_ATTG_STARS_FIELD,
+  ] as const;
+
   const attgFields = (values: Partial<Record<string, string>> = {}) =>
     Object.fromEntries(
-      [
-        CONFIG_NAI_ATTG_AUTHOR_FIELD,
-        CONFIG_NAI_ATTG_TITLE_FIELD,
-        CONFIG_NAI_ATTG_TAGS_FIELD,
-        CONFIG_NAI_ATTG_GENRE_FIELD,
-        CONFIG_NAI_ATTG_STARS_FIELD,
-      ].map((field) => [buildConfigModalFieldId(field, "nonce1234567"), values[field] ?? ""]),
+      ATTG_FIELDS.map((field) => [buildConfigModalFieldId(field, "nonce1234567"), values[field] ?? ""]),
     );
+
+  /** Dispatches one ATTG submit carrying exactly these modal field values. */
+  async function submitAttg(fields: Record<string, string>): Promise<void> {
+    const harness = makeHarness({ personas: [makePersona({ persona_id: 55 })] });
+    await dispatch(
+      harness,
+      makeInteraction({
+        customId: buildConfigRouteId({
+          action: "attg-submit",
+          locale: "en-US",
+          personaId: 55,
+          nonce: "nonce1234567",
+        }),
+        kind: "modal",
+        fields,
+        harness,
+      }),
+    );
+  }
 
   it("opens ATTG with five prefilled routed inputs and acknowledges through showModal", async () => {
     const persona = makePersona({
@@ -3295,116 +3443,66 @@ describe("config Persona Advanced routes", () => {
     setAttgSpy.mockRestore();
   });
 
-  it("rejects every non-canonical Stars value before the repository call", async () => {
+  it.each([
+    "0",
+    "6",
+    "01",
+    "1.0",
+    "abc",
+  ])("rejects the non-canonical Stars value %j before the repository call", async (stars) => {
     const setAttgSpy = spyOn(personaRepository, "setNaiAttg").mockResolvedValue(true);
-    for (const stars of ["0", "6", "01", "1.0", "abc"]) {
-      const harness = makeHarness({ personas: [makePersona({ persona_id: 55 })] });
-      await dispatch(
-        harness,
-        makeInteraction({
-          customId: buildConfigRouteId({
-            action: "attg-submit",
-            locale: "en-US",
-            personaId: 55,
-            nonce: "nonce1234567",
-          }),
-          kind: "modal",
-          fields: attgFields({ [CONFIG_NAI_ATTG_STARS_FIELD]: stars }),
-          harness,
-        }),
-      );
-    }
+    await submitAttg(attgFields({ [CONFIG_NAI_ATTG_STARS_FIELD]: stars }));
     expect(setAttgSpy).not.toHaveBeenCalled();
     setAttgSpy.mockRestore();
   });
 
-  it("accepts only canonical Stars values and preserves a blank as null", async () => {
+  /** `false` marks an input the route must refuse, `null` a blank it stores as no value. */
+  const STARS_CASES: ReadonlyArray<readonly [string, number | null | false]> = [
+    ["0", false],
+    ["1", 1],
+    ["5", 5],
+    ["6", false],
+    ["01", false],
+    ["", null],
+    ["abc", false],
+  ];
+
+  it.each(STARS_CASES)("maps the Stars input %j to the stored value it declares", async (raw, expected) => {
     const setAttgSpy = spyOn(personaRepository, "setNaiAttg").mockResolvedValue(true);
-    const cases: Array<{ raw: string; expected: number | null | false }> = [
-      { raw: "0", expected: false },
-      { raw: "1", expected: 1 },
-      { raw: "5", expected: 5 },
-      { raw: "6", expected: false },
-      { raw: "01", expected: false },
-      { raw: "", expected: null },
-      { raw: "abc", expected: false },
-    ];
+    await submitAttg(attgFields({ [CONFIG_NAI_ATTG_STARS_FIELD]: raw }));
 
-    for (const entry of cases) {
-      setAttgSpy.mockClear();
-      const harness = makeHarness({ personas: [makePersona({ persona_id: 55 })] });
-      await dispatch(
-        harness,
-        makeInteraction({
-          customId: buildConfigRouteId({
-            action: "attg-submit",
-            locale: "en-US",
-            personaId: 55,
-            nonce: "nonce1234567",
-          }),
-          kind: "modal",
-          fields: attgFields({ [CONFIG_NAI_ATTG_STARS_FIELD]: entry.raw }),
-          harness,
-        }),
-      );
-
-      if (entry.expected === false) {
-        expect(setAttgSpy).not.toHaveBeenCalled();
-      } else {
-        expect(setAttgSpy).toHaveBeenCalledWith(55, {
-          nai_attg_author: null,
-          nai_attg_title: null,
-          nai_attg_tags: null,
-          nai_attg_genre: null,
-          nai_attg_stars: entry.expected,
-        });
-      }
+    if (expected === false) {
+      expect(setAttgSpy).not.toHaveBeenCalled();
+    } else {
+      expect(setAttgSpy).toHaveBeenCalledWith(55, {
+        nai_attg_author: null,
+        nai_attg_title: null,
+        nai_attg_tags: null,
+        nai_attg_genre: null,
+        nai_attg_stars: expected,
+      });
     }
     setAttgSpy.mockRestore();
   });
 
-  it("clears one ATTG column at a time while retaining the other values", async () => {
+  it.each([...ATTG_FIELDS])("clears only the %s column while retaining the other values", async (blankField) => {
     const setAttgSpy = spyOn(personaRepository, "setNaiAttg").mockResolvedValue(true);
-    const fields = [
-      CONFIG_NAI_ATTG_AUTHOR_FIELD,
-      CONFIG_NAI_ATTG_TITLE_FIELD,
-      CONFIG_NAI_ATTG_TAGS_FIELD,
-      CONFIG_NAI_ATTG_GENRE_FIELD,
-      CONFIG_NAI_ATTG_STARS_FIELD,
-    ];
+    const values = Object.fromEntries(
+      ATTG_FIELDS.map((field) => [
+        field,
+        field === blankField ? " " : field === CONFIG_NAI_ATTG_STARS_FIELD ? " 5 " : ` ${field} `,
+      ]),
+    );
 
-    for (const blankField of fields) {
-      setAttgSpy.mockClear();
-      const values = Object.fromEntries(
-        fields.map((field) => [
-          field,
-          field === blankField ? " " : field === CONFIG_NAI_ATTG_STARS_FIELD ? " 5 " : ` ${field} `,
-        ]),
-      );
-      const harness = makeHarness({ personas: [makePersona({ persona_id: 55 })] });
-      await dispatch(
-        harness,
-        makeInteraction({
-          customId: buildConfigRouteId({
-            action: "attg-submit",
-            locale: "en-US",
-            personaId: 55,
-            nonce: "nonce1234567",
-          }),
-          kind: "modal",
-          fields: attgFields(values),
-          harness,
-        }),
-      );
+    await submitAttg(attgFields(values));
 
-      expect(setAttgSpy).toHaveBeenCalledWith(55, {
-        nai_attg_author: blankField === CONFIG_NAI_ATTG_AUTHOR_FIELD ? null : CONFIG_NAI_ATTG_AUTHOR_FIELD,
-        nai_attg_title: blankField === CONFIG_NAI_ATTG_TITLE_FIELD ? null : CONFIG_NAI_ATTG_TITLE_FIELD,
-        nai_attg_tags: blankField === CONFIG_NAI_ATTG_TAGS_FIELD ? null : CONFIG_NAI_ATTG_TAGS_FIELD,
-        nai_attg_genre: blankField === CONFIG_NAI_ATTG_GENRE_FIELD ? null : CONFIG_NAI_ATTG_GENRE_FIELD,
-        nai_attg_stars: blankField === CONFIG_NAI_ATTG_STARS_FIELD ? null : 5,
-      });
-    }
+    expect(setAttgSpy).toHaveBeenCalledWith(55, {
+      nai_attg_author: blankField === CONFIG_NAI_ATTG_AUTHOR_FIELD ? null : CONFIG_NAI_ATTG_AUTHOR_FIELD,
+      nai_attg_title: blankField === CONFIG_NAI_ATTG_TITLE_FIELD ? null : CONFIG_NAI_ATTG_TITLE_FIELD,
+      nai_attg_tags: blankField === CONFIG_NAI_ATTG_TAGS_FIELD ? null : CONFIG_NAI_ATTG_TAGS_FIELD,
+      nai_attg_genre: blankField === CONFIG_NAI_ATTG_GENRE_FIELD ? null : CONFIG_NAI_ATTG_GENRE_FIELD,
+      nai_attg_stars: blankField === CONFIG_NAI_ATTG_STARS_FIELD ? null : 5,
+    });
     setAttgSpy.mockRestore();
   });
 
@@ -3451,26 +3549,34 @@ describe("config Persona Advanced routes", () => {
     setAttgSpy.mockRestore();
   });
 
-  it("does not write for malformed or stale ATTG custom IDs through the registry", async () => {
+  /** Arity cases: a truncated nonce and a superseded version must both die at the codec. */
+  const REJECTED_ATTG_IDS: ReadonlyArray<readonly [string, string]> = [
+    ["config:v2:attg-submit:en-US:55:", "a truncated nonce segment"],
+    ["config:v0:attg-submit:en-US:55:nonce1234567", "a superseded wire version"],
+  ];
+
+  it.each(
+    REJECTED_ATTG_IDS,
+  )("does not write when the registry carries the ATTG route as %s (%s)", async (customId, _reason) => {
     const setAttgSpy = spyOn(personaRepository, "setNaiAttg").mockResolvedValue(true);
-    for (const customId of ["config:v2:attg-submit:en-US:55:", "config:v0:attg-submit:en-US:55:nonce1234567"]) {
-      const harness = makeHarness({ personas: [makePersona({ persona_id: 55 })] });
-      await dispatch(
+    const harness = makeHarness({ personas: [makePersona({ persona_id: 55 })] });
+
+    await dispatch(
+      harness,
+      makeInteraction({
+        customId,
+        kind: "modal",
+        fields: attgFields({ [CONFIG_NAI_ATTG_AUTHOR_FIELD]: "Author" }),
         harness,
-        makeInteraction({
-          customId,
-          kind: "modal",
-          fields: attgFields({ [CONFIG_NAI_ATTG_AUTHOR_FIELD]: "Author" }),
-          harness,
-        }),
-      );
-    }
+      }),
+    );
+
     expect(setAttgSpy).not.toHaveBeenCalled();
     setAttgSpy.mockRestore();
   });
 
   it("clears ATTG from a button and invalidates after a false repository result", async () => {
-    let interaction: ReturnType<typeof makeInteraction>;
+    let interaction: RouteInteraction;
     let acknowledged = false;
     const setAttgSpy = spyOn(personaRepository, "setNaiAttg").mockImplementation(async () => {
       acknowledged = interaction.deferred || interaction.replied;
@@ -3547,7 +3653,7 @@ describe("config Persona Advanced routes", () => {
   it("round-trips a prompt longer than 4000 characters through four modal parts", async () => {
     const prompt = `${"a".repeat(4000)}${"b".repeat(4000)}${"c".repeat(4000)}${"d".repeat(25)}`;
     const persona = makePersona({ persona_id: 55, persona_prompt: null });
-    let interaction: ReturnType<typeof makeInteraction>;
+    let interaction: RouteInteraction;
     let acknowledged = false;
     let persistedPrompt = "";
     const harness = makeHarness({
@@ -3607,7 +3713,7 @@ describe("config Persona Advanced routes", () => {
   });
 
   it("maps Humanizer Inherit to null and acknowledges before the write", async () => {
-    let interaction: ReturnType<typeof makeInteraction>;
+    let interaction: RouteInteraction;
     let acknowledged = false;
     let selectedValue: number | null | undefined;
     const harness = makeHarness({
@@ -3791,7 +3897,7 @@ describe("config Persona Advanced routes", () => {
         },
       },
     });
-    let clearInteraction: ReturnType<typeof makeInteraction>;
+    let clearInteraction: RouteInteraction;
     clearInteraction = makeInteraction({
       customId: buildConfigRouteId({ action: "text-override-clear", locale: "en-US", personaId: 55 }),
       harness: clearHarness,
@@ -3803,7 +3909,66 @@ describe("config Persona Advanced routes", () => {
     expect(clearInput).toEqual({ scope: "persona", personaId: 55, llmId: null, serverDiscId: "guild-1" });
   });
 
-  it("denies every manager-only Advanced write before any repository write", async () => {
+  /**
+   * Every manager-only Advanced write, with the interaction kind and modal fields it needs. The case
+   * asserts the whole repository surface stayed untouched, so a row added here is denied for a plain
+   * member by construction.
+   */
+  const MANAGER_ONLY_WRITES: Array<{
+    label: string;
+    route: ConfigPanelRoute;
+    kind?: "modal" | "select" | "button";
+    fields?: Record<string, string>;
+  }> = [
+    {
+      label: "image-tags-submit",
+      route: { action: "image-tags-submit", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
+      kind: "modal",
+      fields: { [buildConfigModalFieldId("image_tags", "nonce1234567")]: "tag" },
+    },
+    {
+      label: "attg-submit",
+      route: { action: "attg-submit", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
+      kind: "modal",
+      fields: attgFields({ [CONFIG_NAI_ATTG_AUTHOR_FIELD]: "author" }),
+    },
+    { label: "attg-clear-all", route: { action: "attg-clear-all", locale: "en-US", personaId: 55 } },
+    {
+      label: "character-reference-submit",
+      route: { action: "character-reference-submit", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
+      kind: "modal",
+    },
+    {
+      label: "character-reference-clear-confirm",
+      route: { action: "character-reference-clear-confirm", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
+    },
+    {
+      label: "prompt-submit",
+      route: { action: "prompt-submit", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
+      kind: "modal",
+      fields: Object.fromEntries(
+        CONFIG_PERSONA_PROMPT_PART_FIELDS.map((field) => [buildConfigModalFieldId(field, "nonce1234567"), "prompt"]),
+      ),
+    },
+    { label: "prompt-remove", route: { action: "prompt-remove", locale: "en-US", personaId: 55 } },
+    {
+      label: "context-note-submit",
+      route: { action: "context-note-submit", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
+      kind: "modal",
+      fields: {
+        [buildConfigModalFieldId("context_note_text", "nonce1234567")]: "note",
+        [buildConfigModalFieldId("context_note_depth", "nonce1234567")]: "1",
+      },
+    },
+    {
+      label: "humanizer-select",
+      route: { action: "humanizer-select", locale: "en-US", personaId: 55 },
+      kind: "select",
+    },
+    { label: "text-override-clear", route: { action: "text-override-clear", locale: "en-US", personaId: 55 } },
+  ];
+
+  it.each(MANAGER_ONLY_WRITES)("denies the manager-only $label write before any repository write", async (entry) => {
     const imageTagsSpy = spyOn(personaRepository, "setPhysicalAppearanceTags").mockResolvedValue(true);
     const promptSpy = spyOn(personaRepository, "setPrompt").mockResolvedValue(true);
     const removePromptSpy = spyOn(personaRepository, "removePrompt").mockResolvedValue(true);
@@ -3813,67 +3978,20 @@ describe("config Persona Advanced routes", () => {
     const charRefSpy = spyOn(personaRepository, "setNaiCharRef").mockResolvedValue(true);
     const modelSpy = spyOn(llmOverrideRepo, "setPersonaLlmOverride").mockResolvedValue(true);
 
-    const cases: Array<{
-      route: ConfigPanelRoute;
-      kind?: "modal" | "select" | "button";
-      fields?: Record<string, string>;
-    }> = [
-      {
-        route: { action: "image-tags-submit", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
-        kind: "modal",
-        fields: { [buildConfigModalFieldId("image_tags", "nonce1234567")]: "tag" },
-      },
-      {
-        route: { action: "attg-submit", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
-        kind: "modal",
-        fields: attgFields({ [CONFIG_NAI_ATTG_AUTHOR_FIELD]: "author" }),
-      },
-      { route: { action: "attg-clear-all", locale: "en-US", personaId: 55 } },
-      {
-        route: { action: "character-reference-submit", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
-        kind: "modal",
-      },
-      {
-        route: { action: "character-reference-clear-confirm", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
-      },
-      {
-        route: { action: "prompt-submit", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
-        kind: "modal",
-        fields: Object.fromEntries(
-          CONFIG_PERSONA_PROMPT_PART_FIELDS.map((field) => [buildConfigModalFieldId(field, "nonce1234567"), "prompt"]),
-        ),
-      },
-      {
-        route: { action: "prompt-remove", locale: "en-US", personaId: 55 },
-      },
-      {
-        route: { action: "context-note-submit", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
-        kind: "modal",
-        fields: {
-          [buildConfigModalFieldId("context_note_text", "nonce1234567")]: "note",
-          [buildConfigModalFieldId("context_note_depth", "nonce1234567")]: "1",
-        },
-      },
-      { route: { action: "humanizer-select", locale: "en-US", personaId: 55 }, kind: "select", fields: undefined },
-      { route: { action: "text-override-clear", locale: "en-US", personaId: 55 } },
-    ];
-
-    for (const entry of cases) {
-      const harness = makeHarness({
+    const harness = makeHarness({
+      isManager: false,
+      personas: [makePersona({ persona_id: 55, persona_prompt: "prompt" })],
+    });
+    await dispatch(
+      harness,
+      makeInteraction({
+        customId: buildConfigRouteId(entry.route),
+        kind: entry.kind,
+        fields: entry.fields,
         isManager: false,
-        personas: [makePersona({ persona_id: 55, persona_prompt: "prompt" })],
-      });
-      await dispatch(
         harness,
-        makeInteraction({
-          customId: buildConfigRouteId(entry.route),
-          kind: entry.kind,
-          fields: entry.fields,
-          isManager: false,
-          harness,
-        }),
-      );
-    }
+      }),
+    );
 
     expect(imageTagsSpy).not.toHaveBeenCalled();
     expect(promptSpy).not.toHaveBeenCalled();
@@ -3894,53 +4012,63 @@ describe("config Persona Advanced routes", () => {
     modelSpy.mockRestore();
   });
 
-  it("denies the guild-only Advanced writes in a DM while the DM-capable ones still land", async () => {
+  /** The Advanced writes that need a guild workspace, with the interaction each one arrives on. */
+  const GUILD_ONLY_WRITES: Array<{
+    label: string;
+    route: ConfigPanelRoute;
+    kind?: "modal" | "button";
+    fields?: Record<string, string>;
+  }> = [
+    {
+      label: "image-tags-submit",
+      route: { action: "image-tags-submit", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
+      kind: "modal",
+      fields: { [buildConfigModalFieldId("image_tags", "nonce1234567")]: "tag" },
+    },
+    {
+      label: "attg-submit",
+      route: { action: "attg-submit", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
+      kind: "modal",
+      fields: attgFields({ [CONFIG_NAI_ATTG_AUTHOR_FIELD]: "author" }),
+    },
+    {
+      label: "character-reference-clear-confirm",
+      route: { action: "character-reference-clear-confirm", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
+    },
+  ];
+
+  it.each(GUILD_ONLY_WRITES)("denies the guild-only $label write in a DM", async (entry) => {
     const imageTagsSpy = spyOn(personaRepository, "setPhysicalAppearanceTags").mockResolvedValue(true);
     const attgSpy = spyOn(personaRepository, "setNaiAttg").mockResolvedValue(true);
     const charRefSpy = spyOn(personaRepository, "setNaiCharRef").mockResolvedValue(true);
-    const promptSpy = spyOn(personaRepository, "setPrompt").mockResolvedValue(true);
+    const harness = makeHarness({ inGuild: false, personas: [makePersona({ persona_id: 55 })] });
 
-    const guildOnlyCases: Array<{
-      route: ConfigPanelRoute;
-      kind?: "modal" | "button";
-      fields?: Record<string, string>;
-    }> = [
-      {
-        route: { action: "image-tags-submit", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
-        kind: "modal",
-        fields: { [buildConfigModalFieldId("image_tags", "nonce1234567")]: "tag" },
-      },
-      {
-        route: { action: "attg-submit", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
-        kind: "modal",
-        fields: attgFields({ [CONFIG_NAI_ATTG_AUTHOR_FIELD]: "author" }),
-      },
-      {
-        route: { action: "character-reference-clear-confirm", locale: "en-US", personaId: 55, nonce: "nonce1234567" },
-      },
-    ];
-
-    for (const entry of guildOnlyCases) {
-      const harness = makeHarness({ inGuild: false, personas: [makePersona({ persona_id: 55 })] });
-      await dispatch(
+    await dispatch(
+      harness,
+      makeInteraction({
+        customId: buildConfigRouteId(entry.route),
+        kind: entry.kind,
+        fields: entry.fields,
+        inGuild: false,
         harness,
-        makeInteraction({
-          customId: buildConfigRouteId(entry.route),
-          kind: entry.kind,
-          fields: entry.fields,
-          inGuild: false,
-          harness,
-        }),
-      );
-    }
+      }),
+    );
 
     expect(imageTagsSpy).not.toHaveBeenCalled();
     expect(attgSpy).not.toHaveBeenCalled();
     expect(charRefSpy).not.toHaveBeenCalled();
 
+    imageTagsSpy.mockRestore();
+    attgSpy.mockRestore();
+    charRefSpy.mockRestore();
+  });
+
+  it("still lands a DM-capable Advanced write while the guild-only ones are denied", async () => {
     // Asserting a write that must still land keeps the denials above meaningful: a route layer that
-    // refused every Advanced action in a DM would satisfy the two negatives on its own.
+    // refused every Advanced action in a DM would satisfy the negatives on its own.
+    const promptSpy = spyOn(personaRepository, "setPrompt").mockResolvedValue(true);
     const allowedHarness = makeHarness({ inGuild: false, personas: [makePersona({ persona_id: 55 })] });
+
     await dispatch(
       allowedHarness,
       makeInteraction({
@@ -3960,10 +4088,6 @@ describe("config Persona Advanced routes", () => {
     );
 
     expect(promptSpy).toHaveBeenCalledTimes(1);
-
-    imageTagsSpy.mockRestore();
-    attgSpy.mockRestore();
-    charRefSpy.mockRestore();
     promptSpy.mockRestore();
   });
 });
@@ -3975,61 +4099,74 @@ describe("config Persona Sprites routes", () => {
     [buildConfigModalFieldId(CONFIG_SPRITE_INSTRUCTIONS_FIELD, SPRITE_NONCE)]: instructions,
   });
 
-  it("keeps a member's Export working while every sprite mutation reaches no repository", async () => {
+  /** The sprite mutations a plain member must never reach, with the interaction each arrives on. */
+  const MEMBER_DENIED_SPRITE_ROUTES: Array<{
+    label: string;
+    route: ConfigPanelRoute;
+    kind?: "modal";
+  }> = [
+    {
+      label: "sprite-add-submit",
+      route: { action: "sprite-add-submit", locale: "en-US", personaId: 55, nonce: SPRITE_NONCE },
+      kind: "modal",
+    },
+    {
+      label: "sprite-edit-submit",
+      route: {
+        action: "sprite-edit-submit",
+        locale: "en-US",
+        personaId: 55,
+        index: 0,
+        fp: computeSpriteFingerprint(55, 0, "happy"),
+        nonce: SPRITE_NONCE,
+      },
+      kind: "modal",
+    },
+    {
+      label: "sprite-remove-confirm",
+      route: {
+        action: "sprite-remove-confirm",
+        locale: "en-US",
+        personaId: 55,
+        index: 0,
+        fp: computeSpriteFingerprint(55, 0, "happy"),
+        nonce: SPRITE_NONCE,
+      },
+    },
+    {
+      label: "sprite-import-submit",
+      route: { action: "sprite-import-submit", locale: "en-US", personaId: 55, nonce: SPRITE_NONCE },
+      kind: "modal",
+    },
+  ];
+
+  it.each(MEMBER_DENIED_SPRITE_ROUTES)("denies the $label sprite mutation for a plain member", async (entry) => {
     const upsertSpy = spyOn(personaSpriteRepository, "upsertSprite").mockResolvedValue(null);
     const updateSpy = spyOn(personaSpriteRepository, "updateSpriteMetadata").mockResolvedValue(null);
     const deleteSpy = spyOn(personaSpriteRepository, "deleteSpritesByKeys").mockResolvedValue([]);
+    const harness = makeHarness({ isManager: false, personas: [MAIN] });
 
-    const deniedRoutes: Array<{ route: ConfigPanelRoute; kind?: "modal" }> = [
-      {
-        route: { action: "sprite-add-submit", locale: "en-US", personaId: 55, nonce: SPRITE_NONCE },
-        kind: "modal",
-      },
-      {
-        route: {
-          action: "sprite-edit-submit",
-          locale: "en-US",
-          personaId: 55,
-          index: 0,
-          fp: computeSpriteFingerprint(55, 0, "happy"),
-          nonce: SPRITE_NONCE,
-        },
-        kind: "modal",
-      },
-      {
-        route: {
-          action: "sprite-remove-confirm",
-          locale: "en-US",
-          personaId: 55,
-          index: 0,
-          fp: computeSpriteFingerprint(55, 0, "happy"),
-          nonce: SPRITE_NONCE,
-        },
-      },
-      {
-        route: { action: "sprite-import-submit", locale: "en-US", personaId: 55, nonce: SPRITE_NONCE },
-        kind: "modal",
-      },
-    ];
-
-    for (const entry of deniedRoutes) {
-      const harness = makeHarness({ isManager: false, personas: [MAIN] });
-      await dispatch(
+    await dispatch(
+      harness,
+      makeInteraction({
+        customId: buildConfigRouteId(entry.route),
+        kind: entry.kind,
+        fields: spriteFields("Happy"),
+        isManager: false,
         harness,
-        makeInteraction({
-          customId: buildConfigRouteId(entry.route),
-          kind: entry.kind,
-          fields: spriteFields("Happy"),
-          isManager: false,
-          harness,
-        }),
-      );
-    }
+      }),
+    );
 
     expect(upsertSpy).not.toHaveBeenCalled();
     expect(updateSpy).not.toHaveBeenCalled();
     expect(deleteSpy).not.toHaveBeenCalled();
 
+    upsertSpy.mockRestore();
+    updateSpy.mockRestore();
+    deleteSpy.mockRestore();
+  });
+
+  it("keeps a member's Export working while every sprite mutation is denied", async () => {
     // The denials above are only meaningful if the same read-only page still serves Export: a route
     // layer that refused every sprite action for a member would satisfy them on its own.
     let exported = false;
@@ -4059,10 +4196,6 @@ describe("config Persona Sprites routes", () => {
     );
 
     expect(exported).toBe(true);
-
-    upsertSpy.mockRestore();
-    updateSpy.mockRestore();
-    deleteSpy.mockRestore();
   });
 
   it("delivers the archive as a public follow-up rather than through the ephemeral panel", async () => {

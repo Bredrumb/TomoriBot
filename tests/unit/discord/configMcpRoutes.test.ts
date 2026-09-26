@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { PermissionsBitField, type Client } from "discord.js";
+import type { Client } from "discord.js";
 import type { GuildMcpServerRow } from "@/types/db/schema";
 import { buildConfigRouteId } from "@/utils/discord/configPanelCatalog";
 import { createConfigInteractionRoute } from "@/utils/discord/interactions/configRoutes";
@@ -8,6 +8,7 @@ import { InteractionRouteRegistry } from "@/utils/discord/interactions/routeRegi
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
 import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/componentsV2Limits";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -61,11 +62,9 @@ function makeHarness(options: { manager?: boolean; status?: "fresh" | "stale" | 
     ],
     readStatus: "fresh",
   };
-  const edits: unknown[] = [];
-  const replies: unknown[] = [];
   const modals: unknown[] = [];
   let operationCalls = 0;
-  let interaction: ReturnType<typeof makeInteraction> | undefined;
+  let interaction: RouteInteraction | undefined;
   const dependencies: Partial<ConfigRouteDependencies> = {
     resolveScope: async () => scope,
     getPersonaAvatarData: async () => ({ url: null, files: [] }),
@@ -97,13 +96,19 @@ function makeHarness(options: { manager?: boolean; status?: "fresh" | "stale" | 
   };
   return {
     dependencies,
-    edits,
-    replies,
     modals,
+    // The interaction owns both recording arrays, so the harness reads them back rather than
+    // keeping a second copy that could drift.
+    get edits(): unknown[] {
+      return interaction?.edits ?? [];
+    },
+    get replies(): unknown[] {
+      return interaction?.replies ?? [];
+    },
     get operationCalls() {
       return operationCalls;
     },
-    setInteraction: (value: ReturnType<typeof makeInteraction>) => {
+    setInteraction: (value: RouteInteraction) => {
       interaction = value;
     },
   };
@@ -113,44 +118,17 @@ function makeInteraction(
   customId: string,
   harness: ReturnType<typeof makeHarness>,
   options: { kind?: "button" | "modal" | "select"; manager?: boolean; fields?: Record<string, string> } = {},
-) {
-  let deferred = false;
-  let replied = false;
+): RouteInteraction {
   const kind = options.kind ?? "button";
-  return {
-    id: "interaction-1",
+  const interaction = createRouteInteraction({
     customId,
-    user: { id: "user-1", username: "Mirri" },
-    guildId: "guild-1",
-    guild: { id: "guild-1" },
-    memberPermissions: {
-      has: (flag: bigint) => (options.manager ?? true) && flag === PermissionsBitField.Flags.ManageGuild,
-    },
+    kind: kind === "select" ? "string-select" : kind,
+    isManager: options.manager ?? true,
     values: ["1"],
-    isButton: () => kind === "button",
-    isStringSelectMenu: () => kind === "select",
-    isModalSubmit: () => kind === "modal",
-    get deferred() {
-      return deferred;
-    },
-    get replied() {
-      return replied;
-    },
-    deferUpdate: async () => {
-      deferred = true;
-    },
-    editReply: async (payload: unknown) => {
-      harness.edits.push(payload);
-      return payload;
-    },
-    reply: async (payload: unknown) => {
-      replied = true;
-      harness.replies.push(payload);
-      return payload;
-    },
-    followUp: async (payload: unknown) => payload,
-    fields: { getTextInputValue: (fieldId: string) => options.fields?.[fieldId] ?? "server" },
-  } as unknown as Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1] & { deferred: boolean };
+    fields: options.fields,
+  });
+  harness.setInteraction(interaction);
+  return interaction;
 }
 
 async function dispatch(
@@ -159,10 +137,9 @@ async function dispatch(
   options: Parameters<typeof makeInteraction>[2] = {},
 ): Promise<void> {
   const interaction = makeInteraction(customId, harness, options);
-  harness.setInteraction(interaction);
   await new InteractionRouteRegistry([createConfigInteractionRoute(harness.dependencies)]).dispatch(
     CLIENT,
-    interaction,
+    interaction as unknown as Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1],
   );
 }
 
@@ -241,10 +218,9 @@ describe("Config-hosted MCP Servers", () => {
   it("opens the add modal without deferring and keeps the Config route namespace", async () => {
     const harness = makeHarness();
     const interaction = makeInteraction(buildConfigRouteId({ action: "mcp-add-open", locale: "en-US" }), harness);
-    harness.setInteraction(interaction);
     await new InteractionRouteRegistry([createConfigInteractionRoute(harness.dependencies)]).dispatch(
       CLIENT,
-      interaction,
+      interaction as unknown as Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1],
     );
     expect(interaction.deferred).toBe(false);
     expect(interaction.replied).toBe(false);

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
-import { ChannelType, ComponentType, PermissionsBitField, type Client } from "discord.js";
+import { ChannelType, ComponentType, type Client } from "discord.js";
 import type { LlmRow, TomoriState } from "@/types/db/schema";
 import { configRepository } from "@/utils/db/repositories";
 import * as tomoriStateCache from "@/utils/cache/tomoriStateCache";
@@ -58,6 +58,8 @@ import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { localizedProse } from "../../helpers/localeCases";
+import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
+import { createPersona, type PersonaFixtureOverrides } from "../../helpers/fixtures";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -65,17 +67,8 @@ const CLIENT = {} as Client;
 const CHANNEL_ONE = "123456789012345678";
 const CHANNEL_TWO = "223456789012345678";
 
-function makePersona(overrides: Partial<TomoriState> = {}): TomoriState {
-  return {
-    server_id: 9,
-    persona_id: 55,
-    persona_nickname: "Mirri",
-    is_alter: false,
-    trigger_words: [],
-    naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
-    config: {},
-    ...overrides,
-  } as unknown as TomoriState;
+function makePersona(overrides: PersonaFixtureOverrides = {}): TomoriState {
+  return createPersona({ server_id: 9, persona_id: 55, ...overrides });
 }
 
 function makeScope(
@@ -155,65 +148,24 @@ interface FakeInteractionOptions {
   inGuild?: boolean;
   fields?: Record<string, string>;
   selectedValue?: string;
-  fetch?: () => Promise<unknown>;
+  fetch?: (channelId: string) => Promise<unknown>;
 }
 
-function makeInteraction(options: FakeInteractionOptions) {
-  let deferred = false;
-  let replied = false;
+function makeInteraction(options: FakeInteractionOptions): RouteInteraction {
   const kind = options.kind ?? "button";
-  const fields = new Map(Object.keys(options.fields ?? {}).map((fieldId) => [fieldId, true]));
-  const editedReplies: unknown[] = [];
-
-  const interaction = {
-    id: "interaction-1",
+  const interaction = createRouteInteraction({
     customId: buildConfigRouteId(options.route),
-    user: { id: "user-1", username: "Mirri" },
-    channelId: CHANNEL_ONE,
-    channel: { name: "lounge" },
+    kind,
     guildId: options.inGuild === false ? null : "guild-1",
-    guild:
-      options.inGuild === false
-        ? null
-        : { channels: { fetch: options.fetch ?? (async () => undefined), cache: new Map() } },
-    client: { user: null },
-    memberPermissions: {
-      has: (flag: bigint) => (options.isManager ?? true) && flag === PermissionsBitField.Flags.ManageGuild,
-    },
-    isButton: () => kind === "button",
-    isStringSelectMenu: () => kind === "string-select",
-    isChannelSelectMenu: () => kind === "channel-select",
-    isModalSubmit: () => kind === "modal",
+    isManager: options.isManager ?? true,
+    fields: options.fields,
     values: options.selectedValue ? [options.selectedValue] : [CHANNEL_ONE],
-    get deferred() {
-      return deferred;
-    },
-    get replied() {
-      return replied;
-    },
-    deferUpdate: async () => {
-      deferred = true;
-    },
-    editReply: async (payload: unknown) => {
-      editedReplies.push(payload);
-      return payload;
-    },
-    reply: async () => {
-      replied = true;
-    },
-    followUp: async (payload: unknown) => payload,
-    fields: {
-      fields,
-      getTextInputValue: (fieldId: string) => options.fields?.[fieldId] ?? "",
-    },
-    editedReplies,
-  };
-
-  return interaction as unknown as Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1] & {
-    deferred: boolean;
-    replied: boolean;
-    editedReplies: unknown[];
-  };
+    fetch: options.fetch,
+  });
+  // Routes that resolve a chosen channel read it back from the guild cache.
+  interaction.guild?.channels.cache.set(CHANNEL_ONE, { id: CHANNEL_ONE, name: "lounge", type: ChannelType.GuildText });
+  interaction.guild?.channels.cache.set(CHANNEL_TWO, { id: CHANNEL_TWO, name: "welcome", type: ChannelType.GuildText });
+  return interaction;
 }
 
 interface HarnessOptions {
@@ -250,9 +202,12 @@ function makeHarness(options: HarnessOptions) {
   };
   return {
     dependencies,
-    dispatch: async (interaction: ReturnType<typeof makeInteraction>) => {
+    dispatch: async (interaction: RouteInteraction) => {
       const registry = new InteractionRouteRegistry([createConfigInteractionRoute(dependencies)]);
-      await registry.dispatch(CLIENT, interaction);
+      await registry.dispatch(
+        CLIENT,
+        interaction as unknown as Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1],
+      );
     },
   };
 }
@@ -552,7 +507,7 @@ describe("Channels Destinations routes", () => {
 
     expect(update).not.toHaveBeenCalled();
     expect(recordAction).not.toHaveBeenCalled();
-    expect(JSON.stringify(interaction.editedReplies)).toContain("Already Set");
+    expect(JSON.stringify(interaction.edits)).toContain("Already Set");
     update.mockRestore();
   });
 
@@ -732,7 +687,7 @@ describe("Channels Destinations routes", () => {
 
     expect(update).not.toHaveBeenCalled();
     expect(recordAction).not.toHaveBeenCalled();
-    expect(JSON.stringify(interaction.editedReplies)).toContain(
+    expect(JSON.stringify(interaction.edits)).toContain(
       localizer("en-US", "commands.config.panel.channels_welcome_not_configured_heading"),
     );
     update.mockRestore();
@@ -1284,8 +1239,8 @@ describe("Channels Auto-Trigger routes", () => {
     expect(update).not.toHaveBeenCalled();
     expect(setThreshold).not.toHaveBeenCalled();
     expect(recordAction).not.toHaveBeenCalled();
-    expect(JSON.stringify(bulkInteraction.editedReplies)).toContain("Already Set");
-    expect(JSON.stringify(thresholdInteraction.editedReplies)).toContain("Already Set");
+    expect(JSON.stringify(bulkInteraction.edits)).toContain("Already Set");
+    expect(JSON.stringify(thresholdInteraction.edits)).toContain("Already Set");
     update.mockRestore();
     setThreshold.mockRestore();
   });
@@ -1749,7 +1704,7 @@ describe("Channels Rules", () => {
         recordAction,
         checkboxValues: rulesCheckboxValues(nonce, prefix, [[CHANNEL_ONE]]),
       }).dispatch(interaction);
-      expect(JSON.stringify(interaction.editedReplies)).toContain("Already Set");
+      expect(JSON.stringify(interaction.edits)).toContain("Already Set");
     }
 
     expect(update).not.toHaveBeenCalled();
@@ -1983,7 +1938,7 @@ describe("Channels Overrides", () => {
 
       expect(interaction.deferred).toBe(false);
       expect(interaction.replied).toBe(true);
-      expect(interaction.editedReplies).toHaveLength(0);
+      expect(interaction.edits).toHaveLength(0);
     }
 
     expect(loadPersonaTextModels).toHaveBeenCalledTimes(1);
@@ -2025,7 +1980,7 @@ describe("Channels Overrides", () => {
       provider: "openrouter",
       fp,
     });
-    const rangePayload = JSON.stringify(providerInteraction.editedReplies);
+    const rangePayload = JSON.stringify(providerInteraction.edits);
     expect(rangePayload).toContain(rangeRoute);
     expect(rangePayload).toContain('"value":"25"');
 
@@ -2180,8 +2135,8 @@ describe("Channels Overrides", () => {
     expect(contextWriteAcknowledged).toBe(true);
     expect(contextInteraction.deferred).toBe(true);
     expect(contextInteraction.replied).toBe(false);
-    expect(contextInteraction.editedReplies).toHaveLength(1);
-    expect(JSON.stringify(contextInteraction.editedReplies)).toContain(
+    expect(contextInteraction.edits).toHaveLength(1);
+    expect(JSON.stringify(contextInteraction.edits)).toContain(
       localizer("en-US", "commands.config.panel.channels_overrides_context_note_updated_heading"),
     );
     promptSet.mockRestore();

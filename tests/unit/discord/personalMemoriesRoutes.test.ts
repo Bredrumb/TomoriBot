@@ -43,6 +43,7 @@ import {
 } from "@/utils/discord/ui/personalMemoriesPanel";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
+import { createPersona } from "../../helpers/fixtures";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -136,13 +137,12 @@ function makeMemory(id: number, overrides: Partial<PersonalMemoryRow> = {}): Per
 }
 
 function makePersona(id: number, lineageId: number, name: string, isAlter = false): TomoriState {
-  return {
+  return createPersona({
     persona_id: id,
     persona_lineage_id: lineageId,
     persona_nickname: name,
     is_alter: isAlter,
-    is_active: true,
-  } as unknown as TomoriState;
+  });
 }
 
 /** Every String Select in the payload, flattened, so a test can pick one out by custom ID. */

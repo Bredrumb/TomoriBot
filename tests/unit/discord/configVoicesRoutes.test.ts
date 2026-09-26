@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
-import { PermissionsBitField, type APIAttachment, type Client } from "discord.js";
+import type { APIAttachment, Client } from "discord.js";
 import type { ServerSpeechConfigRow, TomoriState, VoiceSampleRow } from "@/types/db/schema";
 import * as speechRepository from "@/utils/db/repositories/SpeechRepository";
 import * as voiceSampleStorage from "@/utils/storage/voiceSampleStorage";
@@ -23,6 +23,7 @@ import {
 } from "@/utils/discord/ui/configModals";
 import { addVoiceSample, type VoiceSampleAddDependencies } from "@/utils/speech/voiceSampleAddOperation";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -85,8 +86,10 @@ interface HarnessOptions {
 interface Harness {
   dependencies: Partial<ConfigRouteDependencies>;
   modals: unknown[];
-  edits: unknown[];
-  replies: unknown[];
+  /** Payloads the current interaction has edited. */
+  readonly edits: unknown[];
+  /** Payloads the current interaction has replied or followed up with. */
+  readonly replies: unknown[];
   operationCalls: string[];
   fileUploadCalls: { value: number };
   deferredAtPreflight: boolean[];
@@ -101,6 +104,7 @@ interface Harness {
     selectedIndex: number | null;
   }>;
   samples: VoiceSampleRow[];
+  setInteraction: (interaction: RouteInteraction) => void;
 }
 
 type ConfigInteraction = Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1];
@@ -108,8 +112,6 @@ let currentInteraction: ConfigInteraction | undefined;
 
 function makeHarness(options: HarnessOptions = {}): Harness {
   const modals: unknown[] = [];
-  const edits: unknown[] = [];
-  const replies: unknown[] = [];
   const operationCalls: string[] = [];
   const fileUploadCalls = { value: 0 };
   const deferredAtPreflight: boolean[] = [];
@@ -215,11 +217,20 @@ function makeHarness(options: HarnessOptions = {}): Harness {
   if (options.useDefaultRemoveOperation) delete dependencies.removeVoiceSample;
   else dependencies.removeVoiceSample = async () => ({ storedFileRemoved: true });
 
-  const harness = {
+  let interaction: RouteInteraction | undefined;
+  // Several tests dispatch more than once and then read the whole recording, so the harness keeps
+  // the interactions it built and exposes their arrays in order.
+  const previousEdits: unknown[][] = [];
+  const previousReplies: unknown[][] = [];
+  const harness: Harness = {
     dependencies,
     modals,
-    edits,
-    replies,
+    get edits(): unknown[] {
+      return [...previousEdits, interaction?.edits ?? []].flat();
+    },
+    get replies(): unknown[] {
+      return [...previousReplies, interaction?.replies ?? []].flat();
+    },
     operationCalls,
     fileUploadCalls,
     deferredAtPreflight,
@@ -229,6 +240,13 @@ function makeHarness(options: HarnessOptions = {}): Harness {
     voiceSampleLoadCalls,
     voiceViews,
     samples,
+    setInteraction: (value: RouteInteraction) => {
+      if (interaction) {
+        previousEdits.push(interaction.edits);
+        previousReplies.push(interaction.replies);
+      }
+      interaction = value;
+    },
   };
   currentInteraction = undefined;
   return harness;
@@ -243,47 +261,24 @@ function makeInteraction(options: {
   guildId?: string | null;
   harness: Harness;
 }): ConfigInteraction {
-  let deferred = false;
-  const interaction = {
-    id: "interaction-1",
+  const interaction = createRouteInteraction({
     customId: options.customId,
-    user: { id: "user-1", username: "Mirri" },
-    channelId: "channel-1",
-    channel: { name: "lounge" },
+    kind: options.kind === "select" ? "string-select" : options.kind,
     guildId: options.guildId === undefined ? "guild-1" : options.guildId,
-    guild: options.guildId === null ? null : { id: "guild-1" },
-    client: { user: null },
-    memberPermissions: {
-      has: (flag: bigint) => (options.isManager ?? true) && flag === PermissionsBitField.Flags.ManageGuild,
-    },
-    isButton: () => options.kind === "button",
-    isStringSelectMenu: () => options.kind === "select",
-    isModalSubmit: () => options.kind === "modal",
-    get deferred() {
-      return deferred;
-    },
-    get replied() {
-      return false;
-    },
-    deferUpdate: async () => {
-      deferred = true;
-      options.harness.deferCalls.value += 1;
-    },
-    editReply: async (payload: unknown) => {
-      options.harness.edits.push(payload);
-      return payload;
-    },
-    reply: async (payload: unknown) => {
-      options.harness.replies.push(payload);
-      return payload;
-    },
-    followUp: async (payload: unknown) => payload,
-    values: options.values ?? [],
-    fields: {
-      fields: new Map(Object.entries(options.fields ?? {})),
-      getTextInputValue: (fieldId: string) => options.fields?.[fieldId] ?? "",
-    },
+    isManager: options.isManager ?? true,
+    fields: options.fields,
+    values: options.values,
+    overrides: { id: "interaction-1" },
+  });
+  // The harness counts acknowledgements, which the shared factory records without a hook. The
+  // wrapper keeps the factory's method as the receiver so the recorded call still lands.
+  const deferUpdate = interaction.deferUpdate.bind(interaction);
+  interaction.deferUpdate = async (payload?: unknown) => {
+    options.harness.deferCalls.value += 1;
+    await deferUpdate(payload);
   };
+
+  options.harness.setInteraction(interaction);
   currentInteraction = interaction as unknown as ConfigInteraction;
   return currentInteraction;
 }

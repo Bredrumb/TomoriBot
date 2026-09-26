@@ -1,19 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import type { Message } from "discord.js";
-import { HumanizerDegree, type TomoriState } from "@/types/db/schema";
+import { HumanizerDegree } from "@/types/db/schema";
 import type { StreamConfig, StreamContext } from "@/types/stream/interfaces";
 import type { ChannelLockEntry } from "@/utils/chat/channelQueue";
 import { queueAdditionalPersonaTurns } from "@/utils/chat/personaQueue";
 import { collectRenderModifierSourceNames, parseLeadingRenderModifier } from "@/utils/discord/renderModifierParser";
 import { createStreamTextProcessingConfig } from "@/utils/discord/stream/textConfig";
-
-function makePersona(personaId: number, nickname: string): TomoriState {
-  return {
-    persona_id: personaId,
-    persona_nickname: nickname,
-    config: {},
-  } as TomoriState;
-}
+import { createPersona } from "../../helpers/fixtures";
 
 function makeStreamConfig(): StreamConfig {
   return {
@@ -46,7 +39,10 @@ describe("queueAdditionalPersonaTurns", () => {
     const handledNow = queueAdditionalPersonaTurns({
       lockEntry,
       message: {} as Message,
-      personasToRespond: [makePersona(1, "Rose"), makePersona(2, "Temari")],
+      personasToRespond: [
+        createPersona({ persona_id: 1, persona_nickname: "Rose" }),
+        createPersona({ persona_id: 2, persona_nickname: "Temari" }),
+      ],
       triggeredPersonaIds: [1, 2],
       textQuotaSource: "user",
       textQuotaTriggerKey: "_rt_turn",
@@ -68,8 +64,8 @@ describe("queueAdditionalPersonaTurns", () => {
       followUpCount: 0,
       messageQueue: [],
     };
-    const lilya = makePersona(1, "Lilya");
-    const aphel = makePersona(2, "Aphel");
+    const lilya = createPersona({ persona_id: 1, persona_nickname: "Lilya" });
+    const aphel = createPersona({ persona_id: 2, persona_nickname: "Aphel" });
     const allPersonas = [lilya, aphel];
 
     queueAdditionalPersonaTurns({

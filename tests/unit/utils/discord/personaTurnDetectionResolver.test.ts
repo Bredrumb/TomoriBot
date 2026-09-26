@@ -11,33 +11,26 @@ import type { Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import * as personaTurnDetection from "@/utils/discord/personaTurnDetection";
 import { resolveFallbackPersona } from "@/utils/discord/personaTurnDetectionResolver";
+import { createPersona } from "../../../helpers/fixtures";
 
 type PersonaOverrides = {
   autochDiscIds?: string[];
   autochPersonaOverrides?: { channel_disc_id: string; persona_id: number }[];
 };
 
-function makePersona(personaId: number, nickname: string, isAlter: boolean): TomoriState {
-  return {
-    persona_id: personaId,
-    persona_nickname: nickname,
-    is_alter: isAlter,
-  } as unknown as TomoriState;
-}
-
+/** The resolver reads only the config tiers, so the persona and its config share one fixture row. */
 function makeTomoriState(overrides: PersonaOverrides = {}): TomoriState {
-  return {
+  return createPersona({
     config: {
       autoch_disc_ids: overrides.autochDiscIds ?? [],
       autoch_persona_overrides: overrides.autochPersonaOverrides ?? [],
-      message_fetch_limit: 80,
     },
-  } as unknown as TomoriState;
+  });
 }
 
-const MAIN = makePersona(1, "Main", false);
-const ALTER_A = makePersona(2, "AlterA", true);
-const ALTER_B = makePersona(3, "AlterB", true);
+const MAIN = createPersona({ persona_id: 1, persona_nickname: "Main", is_alter: false });
+const ALTER_A = createPersona({ persona_id: 2, persona_nickname: "AlterA", is_alter: true });
+const ALTER_B = createPersona({ persona_id: 3, persona_nickname: "AlterB", is_alter: true });
 
 const noMessages = async (): Promise<Message[]> => [];
 

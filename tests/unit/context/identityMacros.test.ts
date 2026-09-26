@@ -5,6 +5,7 @@ import { convertMentions } from "@/utils/text/context/mentionNormalizer";
 import { appendDialogueHistoryContext } from "@/utils/text/context/dialogueHistory";
 import { buildSampleDialogueContextItems } from "@/utils/text/context/templates";
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
 // These fixtures contain no Discord mentions and always pass an explicit bot nickname, so
 // convertMentions never touches the client or the persona repository. That keeps the suite free of
@@ -109,11 +110,13 @@ function makeConfig(): AssembledServerConfig {
 }
 
 function makeTomoriState(): TomoriState {
-  return {
+  return createPersona({
     context_note: null,
     context_note_depth: 0,
-    llm: { has_tools: false, llm_provider: "custom" },
-  } as TomoriState;
+    // Kept from the pre-migration fixture: a tool-less custom provider, so nothing in the
+    // dialogue path can treat this persona as tool-capable.
+    llm: createLlmRow({ has_tools: false, llm_provider: "custom" }),
+  });
 }
 
 /** Runs the real convertMentions through the dialogue-history builder for a single message. */

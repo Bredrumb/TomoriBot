@@ -34,7 +34,9 @@ import {
   buildPaginationRow,
   withLinePrefix,
 } from "@/utils/discord/ui/panel";
+import { DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { measureFormattedPanelTextLength } from "@/utils/discord/ui/panelProse";
 import type { ImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
 import {
   SPEECH_SCRIPT_MARKUPS,
@@ -785,12 +787,13 @@ function buildModelLine(locale: string, model: ProviderPanelModel, routeNamespac
   return `> \`${codeName}\`${suffix}`;
 }
 
-/**
- * Leaves room for the model-selector guidance that is appended to this body, inside Discord's
- * 4000-character TextDisplay limit.
- */
-const ENTRY_BODY_LIMIT = 3_500;
 const PROVIDER_NAME_PREVIEW_BUDGET = 600;
+
+/**
+ * Each refit shrinks the body by the measured post-wrap overflow, so the fit converges; the bound
+ * only stops a future formatter that wraps differently at each length from looping forever.
+ */
+const ENTRY_FIT_ATTEMPTS = 3;
 
 function renderProviderName(locale: string, value: string): string {
   const preview = buildTextPreview(value, PROVIDER_NAME_PREVIEW_BUDGET);
@@ -813,7 +816,12 @@ function buildCapabilitySection(
   ].join("\n");
 }
 
-function buildEntryBody(locale: string, entry: ProviderPanelEntry, routeNamespace: ProvidersRouteNamespace): string {
+function buildEntryBody(
+  locale: string,
+  entry: ProviderPanelEntry,
+  routeNamespace: ProvidersRouteNamespace,
+  bodyLimit: number,
+): string {
   if (entry.kind === "brave") {
     return [
       localizer(locale, "commands.providers.brave_description"),
@@ -826,21 +834,45 @@ function buildEntryBody(locale: string, entry: ProviderPanelEntry, routeNamespac
   const populated = entry.capabilities.filter((section) => section.models.length > 0);
   if (populated.length === 0) return localizer(locale, "commands.providers.entry_no_models");
   const body = populated.map((section) => buildCapabilitySection(locale, section, routeNamespace)).join("\n\n");
-  return capEntryBody(locale, body);
+  return capEntryBody(locale, body, bodyLimit);
 }
 
 /**
  * Discord rejects a TextDisplay over 4000 characters, and the model list under each capability is
  * unbounded, so a catalog-sized provider made the whole panel fail with BASE_TYPE_BAD_LENGTH rather
  * than render. Trimming at a line boundary and stating the omitted count keeps the panel usable
- * without hiding models silently. Selector pagination keeps the panel usable while the body
- * remains bounded to Discord's TextDisplay limit.
+ * without hiding models silently.
  */
-function capEntryBody(locale: string, body: string): string {
-  const preview = buildTextPreview(body, ENTRY_BODY_LIMIT);
+function capEntryBody(locale: string, body: string, bodyLimit: number): string {
+  const preview = buildTextPreview(body, bodyLimit);
   const footerKey = textPreviewFooterKey(preview);
   if (!footerKey) return preview.text;
   return `${preview.text}\n-# ${localizer(locale, footerKey, textPreviewFooterVars(preview, locale))}`;
+}
+
+/**
+ * Fits the entry body and its trailing guidance into what the rest of the panel leaves of Discord's
+ * message-wide text-display total. A fixed body cap overflowed that total once a long locale's
+ * guidance and a receipt shared the message. The fit is measured after the panel boundary wraps the
+ * text, because each wrapped line gains a prefix the raw length does not count.
+ */
+function buildEntryContent(
+  locale: string,
+  entry: ProviderPanelEntry,
+  routeNamespace: ProvidersRouteNamespace,
+  guidance: string,
+  availableTextLength: number,
+): string {
+  let bodyLimit = Math.max(0, availableTextLength - guidance.length);
+  let content = "";
+  for (let attempt = 0; attempt < ENTRY_FIT_ATTEMPTS; attempt++) {
+    content = `${buildEntryBody(locale, entry, routeNamespace, bodyLimit)}${guidance}`;
+    const overflow =
+      measureFormattedPanelTextLength({ type: ComponentType.TextDisplay, content }) - availableTextLength;
+    if (overflow <= 0) return content;
+    bodyLimit = Math.max(0, bodyLimit - overflow);
+  }
+  return content;
 }
 
 function buildEntryActions(
@@ -1073,6 +1105,27 @@ export function buildProvidersPanelPayload(input: ProvidersPanelRenderInput): Pr
     components.push(paginationRow);
   }
 
+  // Built before the page branches because the entry page reserves their length out of the
+  // message-wide text total before it sizes its own body.
+  const footerComponents: ComponentInContainerData[] = [
+    { type: ComponentType.Separator, divider: true, spacing: 1 },
+    {
+      type: ComponentType.TextDisplay,
+      content: `-# ${localizer(
+        locale,
+        routeNamespace === PROVIDERS_ROUTE_NAMESPACE
+          ? "commands.providers.routing_hint"
+          : "commands.providers.personal_routing_hint",
+      )}`,
+    },
+  ];
+  if (readStatus === "stale") {
+    footerComponents.push(buildRetryRow(locale, routeNamespace), {
+      type: ComponentType.TextDisplay,
+      content: withLinePrefix("-# ", localizer(locale, "commands.providers.stale_warning")),
+    });
+  }
+
   components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
   if (input.page.kind === "remove") {
     const removalPage = input.page;
@@ -1139,14 +1192,21 @@ ${localizer(locale, `commands.providers.remove_impact_${entry.kind}`, {
         input.enabledActions,
         routeNamespace,
       );
-      const body = buildEntryBody(locale, entry, routeNamespace);
+      const guidance =
+        modelSelector.length > 0 ? `\n\n${localizer(locale, "commands.providers.model_selector_guidance")}` : "";
+      const fixedTextLength =
+        measureFormattedPanelTextLength([...components, ...footerComponents]) +
+        (input.receipt ? measureFormattedPanelTextLength(buildPanelReceiptContainer(input.receipt)) : 0);
       components.push(
         {
           type: ComponentType.TextDisplay,
-          content:
-            modelSelector.length > 0
-              ? `${body}\n\n${localizer(locale, "commands.providers.model_selector_guidance")}`
-              : body,
+          content: buildEntryContent(
+            locale,
+            entry,
+            routeNamespace,
+            guidance,
+            DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX - fixedTextLength,
+          ),
         },
         ...modelSelector,
         buildEntryActions(locale, entry, readStatus, input.enabledActions, routeNamespace),
@@ -1162,24 +1222,6 @@ ${localizer(locale, `commands.providers.remove_impact_${entry.kind}`, {
     }
   }
 
-  components.push(
-    { type: ComponentType.Separator, divider: true, spacing: 1 },
-    {
-      type: ComponentType.TextDisplay,
-      content: `-# ${localizer(
-        locale,
-        routeNamespace === PROVIDERS_ROUTE_NAMESPACE
-          ? "commands.providers.routing_hint"
-          : "commands.providers.personal_routing_hint",
-      )}`,
-    },
-  );
-
-  if (readStatus === "stale") {
-    components.push(buildRetryRow(locale, routeNamespace), {
-      type: ComponentType.TextDisplay,
-      content: withLinePrefix("-# ", localizer(locale, "commands.providers.stale_warning")),
-    });
-  }
+  components.push(...footerComponents);
   return buildPayload(components, input.receipt);
 }

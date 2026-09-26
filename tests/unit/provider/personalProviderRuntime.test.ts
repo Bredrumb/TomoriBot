@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { CustomEndpointRow, LlmRow, TomoriState, UserSavedProviderConfigRow } from "@/types/db/schema";
 import * as realRepositories from "@/utils/db/repositories";
 import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
 const primary = { llm_id: 11, llm_provider: "custom:u4:local", llm_codename: "primary" } as LlmRow;
 const fallback = { llm_id: 12, llm_provider: "google", llm_codename: "fallback" } as LlmRow;
@@ -36,12 +37,14 @@ scopedMock.module("@/utils/db/repositories", () => ({
 }));
 
 function makeState(): TomoriState {
-  return {
-    llm: { llm_id: 1, llm_provider: "google", llm_codename: "server-primary" },
+  return createPersona({
+    // The server's own row, kept distinct from the personal overlay rows the repository mock
+    // returns.
+    llm: createLlmRow({ llm_id: 1, llm_provider: "google", llm_codename: "server-primary" }),
     fallback_llms: [serverFallback],
     fallback_chain: [{ kind: "llm", model: serverFallback }],
     config: { fallback_llm_ids: [90] },
-  } as TomoriState;
+  });
 }
 
 function makePersonalRow(

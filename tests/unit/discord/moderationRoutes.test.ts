@@ -25,7 +25,7 @@ import {
   parseModerationPanelRoute,
   type ModerationPanelRoute,
 } from "@/utils/discord/moderationPanelCatalog";
-import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
+import { parseInteractionRoute, type ParsedInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import { dispatchGlobalInteraction } from "@/utils/discord/interactions/router";
 import {
   buildMemberAccessModal,
@@ -3645,64 +3645,73 @@ describe("moderation whitelist role routes", () => {
       expect(JSON.stringify(edits[0])).toContain(localizedCopy("en-US", "commands.moderation.permission_denied"));
     });
 
-    it("quota-edit-submit validates bounds and refuses write on invalid values", async () => {
-      const testCases = [
-        { daily: "-1", serverwide: "100", resets: "30" },
-        { daily: "101", serverwide: "100", resets: "30" },
-        { daily: "10.5", serverwide: "100", resets: "30" },
-        { daily: "abc", serverwide: "100", resets: "30" },
-        { daily: "10", serverwide: "-5", resets: "30" },
-        { daily: "10", serverwide: "100000", resets: "30" },
-        { daily: "10", serverwide: "100", resets: "0" },
-        { daily: "10", serverwide: "100", resets: "366" },
-      ];
+    /** One submitted triple per bound the quota modal must refuse, with the field it violates. */
+    const INVALID_QUOTA_VALUES: ReadonlyArray<readonly [string, string, string, string]> = [
+      ["a daily quota below zero", "-1", "100", "30"],
+      ["a daily quota above its cap", "101", "100", "30"],
+      ["a fractional daily quota", "10.5", "100", "30"],
+      ["a non-numeric daily quota", "abc", "100", "30"],
+      ["a serverwide quota below zero", "10", "-5", "30"],
+      ["a serverwide quota above its cap", "10", "100000", "30"],
+      ["a reset window of zero days", "10", "100", "0"],
+      ["a reset window beyond a year", "10", "100", "366"],
+    ];
 
-      for (const testCase of testCases) {
-        let writes = 0;
-        const edits: unknown[] = [];
-        const interaction = {
-          id: "modal-val",
-          isButton: () => false,
-          isStringSelectMenu: () => false,
-          isModalSubmit: () => true,
-          guildId: "guild-1",
-          memberPermissions: { has: () => true },
-          deferUpdate: async () => undefined,
-          editReply: async (payload: unknown) => {
-            edits.push(payload);
+    /** The quota modal submit the table drives, carrying one submitted triple and its edit sink. */
+    function quotaSubmitInteraction(
+      daily: string,
+      serverwide: string,
+      resets: string,
+      edits: unknown[],
+    ): ModalSubmitInteraction {
+      return {
+        id: "modal-val",
+        isButton: () => false,
+        isStringSelectMenu: () => false,
+        isModalSubmit: () => true,
+        guildId: "guild-1",
+        memberPermissions: { has: () => true },
+        deferUpdate: async () => undefined,
+        editReply: async (payload: unknown) => {
+          edits.push(payload);
+        },
+        fields: {
+          getTextInputValue: (fieldId: string) => {
+            if (fieldId === buildQuotaModalFieldId("nonce_val", "daily_user_quota")) return daily;
+            if (fieldId === buildQuotaModalFieldId("nonce_val", "serverwide_quota")) return serverwide;
+            if (fieldId === buildQuotaModalFieldId("nonce_val", "serverwide_quota_resets_in")) return resets;
+            return "";
           },
-          fields: {
-            getTextInputValue: (fieldId: string) => {
-              if (fieldId === buildQuotaModalFieldId("nonce_val", "daily_user_quota")) return testCase.daily;
-              if (fieldId === buildQuotaModalFieldId("nonce_val", "serverwide_quota")) return testCase.serverwide;
-              if (fieldId === buildQuotaModalFieldId("nonce_val", "serverwide_quota_resets_in")) return testCase.resets;
-              return "";
-            },
+        },
+      } as unknown as ModalSubmitInteraction;
+    }
+
+    it.each(
+      INVALID_QUOTA_VALUES,
+    )("quota-edit-submit refuses the write for %s", async (_label, daily, serverwide, resets) => {
+      let writes = 0;
+      const edits: unknown[] = [];
+      const route = createModerationInteractionRoute({
+        resolveScope: async () => createScopeData(),
+        operations: {
+          ...moderationOperations,
+          updateQuotaSettings: async () => {
+            writes++;
+            return { status: "success", quotaType: "image", appliedFields: [] };
           },
-        } as unknown as ModalSubmitInteraction;
+        },
+      });
 
-        const route = createModerationInteractionRoute({
-          resolveScope: async () => createScopeData(),
-          operations: {
-            ...moderationOperations,
-            updateQuotaSettings: async () => {
-              writes++;
-              return { status: "success", quotaType: "image", appliedFields: [] };
-            },
-          },
-        });
+      await route.execute({} as Client, quotaSubmitInteraction(daily, serverwide, resets, edits), {
+        namespace: "moderation",
+        version: "v1",
+        segments: ["quota-edit-submit", "en-US", "image", "nonce_val"],
+      });
 
-        await route.execute({} as Client, interaction, {
-          namespace: "moderation",
-          version: "v1",
-          segments: ["quota-edit-submit", "en-US", "image", "nonce_val"],
-        });
-
-        expect(writes).toBe(0);
-        expect(JSON.stringify(edits.at(-1))).toMatch(
-          localizedProse("en-US", "commands.moderation.quota_edit_invalid_input"),
-        );
-      }
+      expect(writes).toBe(0);
+      expect(JSON.stringify(edits.at(-1))).toMatch(
+        localizedProse("en-US", "commands.moderation.quota_edit_invalid_input"),
+      );
     });
 
     it("quota-edit-submit performs no write and repaints unchanged receipt when submitted values match stored values", async () => {
@@ -3830,13 +3839,25 @@ describe("moderation whitelist role routes", () => {
       expect(JSON.stringify(edits.at(-1))).toContain("Image Generation quotas updated");
     });
 
-    it("records panel_action telemetry across all moderation operations", async () => {
+    /**
+     * A `recordAction` that flattens each recorded action, so one case asserts exactly the one
+     * panel_action its own route writes rather than a shared transcript of three routes.
+     */
+    function collectPanelActions(): {
+      recorded: string[];
+      recordAction: (input: { action: string; serverId: number; userDiscId: string }) => void;
+    } {
       const recorded: string[] = [];
-      const recordAction = (input: { action: string; serverId: number; userDiscId: string }) => {
-        recorded.push(`${input.action}:${input.serverId}:${input.userDiscId}`);
+      return {
+        recorded,
+        recordAction: (input) => {
+          recorded.push(`${input.action}:${input.serverId}:${input.userDiscId}`);
+        },
       };
+    }
 
-      // user-blacklist-add-submit
+    it("records panel_action telemetry for a user blacklist add", async () => {
+      const { recorded, recordAction } = collectPanelActions();
       const addRoute = createModerationInteractionRoute({
         resolveScope: async () => createScopeData({ serverId: 55 }),
         resolveUser: async () => ({ id: "123456789012345678", username: "target", bot: false }) as never,
@@ -3859,14 +3880,18 @@ describe("moderation whitelist role routes", () => {
         editReply: async () => {},
         fields: { getTextInputValue: () => "123456789012345678" },
       } as unknown as ModalSubmitInteraction;
+
       await addRoute.execute({} as Client, addInteraction, {
         namespace: "moderation",
         version: "v1",
         segments: ["user-blacklist-add-submit", "en-US", "nonce12345678"],
       });
-      expect(recorded).toContain("moderation.workspace.user-blacklist.add:55:mod-1");
 
-      // model-access-set
+      expect(recorded).toContain("moderation.workspace.user-blacklist.add:55:mod-1");
+    });
+
+    it("records panel_action telemetry for a model access set", async () => {
+      const { recorded, recordAction } = collectPanelActions();
       const modelRoute = createModerationInteractionRoute({
         resolveScope: async () => createScopeData({ serverId: 55 }),
         operations: {
@@ -3886,14 +3911,18 @@ describe("moderation whitelist role routes", () => {
         deferUpdate: async () => {},
         editReply: async () => {},
       } as unknown as ButtonInteraction;
+
       await modelRoute.execute({} as Client, modelInteraction, {
         namespace: "moderation",
         version: "v1",
         segments: ["model-access-set", "en-US", "allow"],
       });
-      expect(recorded).toContain("moderation.workspace.model-access.set:55:mod-1");
 
-      // quota-edit-submit
+      expect(recorded).toContain("moderation.workspace.model-access.set:55:mod-1");
+    });
+
+    it("records panel_action telemetry for a quota edit", async () => {
+      const { recorded, recordAction } = collectPanelActions();
       const quotaRoute = createModerationInteractionRoute({
         resolveScope: async () => createScopeData({ serverId: 55 }),
         operations: {
@@ -3925,11 +3954,13 @@ describe("moderation whitelist role routes", () => {
           },
         },
       } as unknown as ModalSubmitInteraction;
+
       await quotaRoute.execute({} as Client, quotaInteraction, {
         namespace: "moderation",
         version: "v1",
         segments: ["quota-edit-submit", "en-US", "text", "nonce1234"],
       });
+
       expect(recorded).toContain("moderation.workspace.quota.set:55:mod-1");
     });
   });
@@ -4068,26 +4099,19 @@ function parsedRoute(customId: string) {
 }
 
 describe("moderation route codec wire contract, exhaustiveness, and producer coverage", () => {
-  it("decodes every literal v1 wire string to its exact route object", () => {
-    for (const [customId, expected] of WIRE_CONTRACT_V1) {
-      expect(parseModerationPanelRoute(parsedRoute(customId))).toEqual(expected);
-    }
+  it.each(WIRE_CONTRACT_V1)("decodes the pinned wire string %s to its exact route object", (customId, expected) => {
+    expect(parseModerationPanelRoute(parsedRoute(customId))).toEqual(expected);
   });
 
-  it("encodes every canonical typed route to exact literal wire bytes", () => {
-    for (const [customId, expected] of WIRE_CONTRACT_V1) {
-      expect(buildModerationRouteId(expected)).toBe(customId);
-      const expectedSegments = customId.split(":").slice(2);
-      expect(buildModerationRouteSegments(expected)).toEqual(expectedSegments);
-    }
+  it.each(WIRE_CONTRACT_V1)("encodes %s to its exact literal wire bytes", (customId, expected) => {
+    expect(buildModerationRouteId(expected)).toBe(customId);
+    expect(buildModerationRouteSegments(expected)).toEqual(customId.split(":").slice(2));
   });
 
-  it("round trips parse and build for all canonical actions", () => {
-    for (const [, expected] of WIRE_CONTRACT_V1) {
-      const generatedId = buildModerationRouteId(expected);
-      const parsed = parseModerationPanelRoute(parsedRoute(generatedId));
-      expect(parsed).toEqual(expected);
-    }
+  it.each(WIRE_CONTRACT_V1)("round trips %s through parse and build", (_customId, expected) => {
+    const generatedId = buildModerationRouteId(expected);
+    const parsed = parseModerationPanelRoute(parsedRoute(generatedId));
+    expect(parsed).toEqual(expected);
   });
 
   it("guarantees 35-action exhaustiveness across catalog, accepted actions, wire contract, and route handler comparisons", () => {
@@ -4154,16 +4178,20 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
     expect([...handlerActions].sort()).toEqual(sortedAccepted);
   });
 
-  it("guarantees producer coverage against production UI and modal surfaces with explicit allowlist for compatibility actions", () => {
-    const PRODUCERLESS_ACTIONS = [
-      "page",
-      "user-blacklist-remove-prompt",
-      "whitelist-channel-remove-prompt",
-      "whitelist-role-remove-prompt",
-    ] as const;
+  /** Actions a compatibility surface renders no button for; the allowlist the union check closes over. */
+  const PRODUCERLESS_ACTIONS = [
+    "page",
+    "user-blacklist-remove-prompt",
+    "whitelist-channel-remove-prompt",
+    "whitelist-role-remove-prompt",
+  ] as const;
 
-    const ACCEPTED_35_ACTIONS = listModerationPanelActions().sort();
-
+  /**
+   * Every custom ID the production modal builders and panel renderers emit, collected from the modal
+   * surfaces and from one panel payload per category, page, and removal state. The cases below share
+   * this collection so a new surface is still added in one place.
+   */
+  function collectPanelSurfaceCustomIds(): string[] {
     const customIds: string[] = [];
 
     customIds.push(
@@ -4377,20 +4405,47 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
       extractCustomIds(payload);
     }
 
+    return customIds;
+  }
+
+  /** The actions the collected custom IDs decode to, ignoring the pagination indicator's own ID. */
+  function collectedProducedActions(customIds: string[]): Set<string> {
     const producedActions = new Set<string>();
     for (const id of customIds) {
       if (id.startsWith("pagination-indicator-")) continue;
       const parsed = parseModerationPanelRoute(parsedRoute(id));
-      expect(parsed).not.toBeNull();
       if (parsed) producedActions.add(parsed.action);
     }
+    return producedActions;
+  }
+
+  it("surfaces only custom IDs the moderation codec can decode", () => {
+    const customIds = collectPanelSurfaceCustomIds();
+
+    let routable = 0;
+    for (const id of customIds) {
+      if (id.startsWith("pagination-indicator-")) continue;
+      expect(parseModerationPanelRoute(parsedRoute(id))).not.toBeNull();
+      routable += 1;
+    }
+    // Without this the loop would pass over an empty collection, hiding a renderer that silently
+    // stopped emitting custom IDs at all.
+    expect(routable).toBeGreaterThan(0);
+  });
+
+  it("leaves the compatibility actions without a rendered producer", () => {
+    const producedActions = collectedProducedActions(collectPanelSurfaceCustomIds());
 
     for (const producerless of PRODUCERLESS_ACTIONS) {
       expect(producedActions.has(producerless)).toBe(false);
     }
+  });
+
+  it("unions the rendered producers and the compatibility allowlist to every accepted action", () => {
+    const producedActions = collectedProducedActions(collectPanelSurfaceCustomIds());
 
     const unionedActions = [...new Set([...producedActions, ...PRODUCERLESS_ACTIONS])].sort();
-    expect(unionedActions).toEqual(ACCEPTED_35_ACTIONS);
+    expect(unionedActions).toEqual(listModerationPanelActions().sort());
   });
 
   it("enforces exact 97-character bound for the maximum persona-block removal route and all IDs under 100", () => {
@@ -4424,61 +4479,57 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
     }
   });
 
-  it("rejects malformed, empty, wrong namespace/version, or invalid-enum route segments", () => {
-    expect(
-      parseModerationPanelRoute({
-        namespace: "wrong",
-        version: "v1",
-        segments: ["category", "en-US", "member-access"],
-      }),
-    ).toBeNull();
-    expect(
-      parseModerationPanelRoute({
-        namespace: "moderation",
-        version: "v2",
-        segments: ["category", "en-US", "member-access"],
-      }),
-    ).toBeNull();
+  /** Route objects the router would accept but the panel codec must refuse on identity alone. */
+  const REJECTED_ROUTE_OBJECTS: Array<{ label: string; route: ParsedInteractionRoute }> = [
+    {
+      label: "a foreign namespace",
+      route: { namespace: "wrong", version: "v1", segments: ["category", "en-US", "member-access"] },
+    },
+    {
+      label: "a future version",
+      route: { namespace: "moderation", version: "v2", segments: ["category", "en-US", "member-access"] },
+    },
+  ];
 
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:category:invalid-locale:member-access"))).toBeNull();
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:unknown-action:en-US"))).toBeNull();
+  /**
+   * Every string the router parses into segments but the panel codec must still refuse, paired with
+   * the field that makes it invalid. Each row is one arity or enum case: a new action adds one row.
+   */
+  const REJECTED_WIRE_STRINGS: ReadonlyArray<readonly [string, string]> = [
+    ["moderation:v1:category:invalid-locale:member-access", "an unknown locale"],
+    ["moderation:v1:unknown-action:en-US", "an action no codec declares"],
+    ["moderation:v1:category:en-US:invalid-category", "a category outside the accepted set"],
+    ["moderation:v1:page:en-US:invalid-page", "a whitelist page outside the accepted set"],
+    ["moderation:v1:quota-edit-open:en-US:invalid-quota", "a quota type outside the accepted set"],
+    ["moderation:v1:model-access-set:en-US:invalid-choice", "a model-access choice outside the accepted set"],
+    ["moderation:v1:range:en-US:whitelist:channels:-1", "a negative range index"],
+    ["moderation:v1:range:en-US:whitelist:channels:abc", "a non-numeric range index"],
+    ["moderation:v1:whitelist-channel-remove-confirm:en-US:not-a-snowflake", "a channel id that is not a snowflake"],
+    ["moderation:v1:whitelist-role-remove-confirm:en-US:short", "a role id that is too short to be a snowflake"],
+    [
+      "moderation:v1:user-blacklist-remove-prompt:en-US:unknown-source:123456789012345678",
+      "a removal source outside the accepted set",
+    ],
+    [
+      "moderation:v1:user-blacklist-remove-prompt:en-US:persona-block:-1:123456789012345678",
+      "a negative persona id in a persona-block target",
+    ],
+    [
+      "moderation:v1:user-blacklist-remove-prompt:en-US:persona-block:0:123456789012345678",
+      "a zero persona id in a persona-block target",
+    ],
+    ["moderation:v1:member-access-submit:en-US:bad!nonce#", "a nonce carrying characters a custom ID cannot hold"],
+    ["moderation:v1:user-blacklist-add-submit:en-US:short", "a nonce shorter than the declared minimum"],
+    ["moderation:v1:select-page:en-US:extra-segment", "a trailing segment the action does not declare"],
+    ["moderation:v1:member-access-open:en-US:extra", "a trailing segment the action does not declare"],
+    ["moderation:v1:user-blacklist-remove-cancel:en-US:extra", "a trailing segment the action does not declare"],
+  ];
 
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:category:en-US:invalid-category"))).toBeNull();
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:page:en-US:invalid-page"))).toBeNull();
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:quota-edit-open:en-US:invalid-quota"))).toBeNull();
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:model-access-set:en-US:invalid-choice"))).toBeNull();
+  it.each(REJECTED_ROUTE_OBJECTS)("rejects a route object carrying $label", (entry) => {
+    expect(parseModerationPanelRoute(entry.route)).toBeNull();
+  });
 
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:range:en-US:whitelist:channels:-1"))).toBeNull();
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:range:en-US:whitelist:channels:abc"))).toBeNull();
-
-    expect(
-      parseModerationPanelRoute(parsedRoute("moderation:v1:whitelist-channel-remove-confirm:en-US:not-a-snowflake")),
-    ).toBeNull();
-    expect(
-      parseModerationPanelRoute(parsedRoute("moderation:v1:whitelist-role-remove-confirm:en-US:short")),
-    ).toBeNull();
-
-    expect(
-      parseModerationPanelRoute(
-        parsedRoute("moderation:v1:user-blacklist-remove-prompt:en-US:unknown-source:123456789012345678"),
-      ),
-    ).toBeNull();
-    expect(
-      parseModerationPanelRoute(
-        parsedRoute("moderation:v1:user-blacklist-remove-prompt:en-US:persona-block:-1:123456789012345678"),
-      ),
-    ).toBeNull();
-    expect(
-      parseModerationPanelRoute(
-        parsedRoute("moderation:v1:user-blacklist-remove-prompt:en-US:persona-block:0:123456789012345678"),
-      ),
-    ).toBeNull();
-
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:member-access-submit:en-US:bad!nonce#"))).toBeNull();
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:user-blacklist-add-submit:en-US:short"))).toBeNull();
-
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:select-page:en-US:extra-segment"))).toBeNull();
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:member-access-open:en-US:extra"))).toBeNull();
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:user-blacklist-remove-cancel:en-US:extra"))).toBeNull();
+  it.each(REJECTED_WIRE_STRINGS)("rejects the malformed custom ID %s (%s)", (customId, _reason) => {
+    expect(parseModerationPanelRoute(parsedRoute(customId))).toBeNull();
   });
 });

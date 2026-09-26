@@ -8,6 +8,8 @@ import { stPresetOperations } from "@/utils/stPreset/stPresetOperations";
 import { buildStPresetsNodesModalFieldId } from "@/utils/discord/ui/stPresetsPanel";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy } from "../../helpers/localeCases";
+import { createPersona } from "../../helpers/fixtures";
+import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -49,53 +51,39 @@ function makeScope(): ConfigScope {
     internalServerId: 15,
     userId: 99,
     actor: { workspaceKind: "guild", isManager: true },
-    personas: [{ server_id: 15, persona_id: 1, is_alter: false, config: {} } as never],
+    personas: [createPersona({ server_id: 15, persona_id: 1 })],
     readStatus: "fresh",
   };
 }
 
+/**
+ * The shared factory owns the interaction surface and the recording; this only narrows the kind and
+ * names the interaction each call site models.
+ */
 function makeInteraction(
   customId: string,
   kind: "button" | "modal",
   manager: boolean,
   id = "interaction-1",
-  edits: unknown[] = [],
-): Record<string, unknown> {
-  return {
-    id,
-    customId,
-    guildId: "guild-1",
-    user: { id: manager ? "manager" : "member" },
-    memberPermissions: { has: () => manager },
-    isButton: () => kind === "button",
-    isStringSelectMenu: () => false,
-    isModalSubmit: () => kind === "modal",
-    deferUpdate: async () => {},
-    editReply: async (payload: unknown) => {
-      edits.push(payload);
-    },
-    reply: async () => {},
-    fields: { getTextInputValue: () => "" },
-  };
+): RouteInteraction {
+  return createRouteInteraction({ customId, kind, isManager: manager, overrides: { id } });
 }
 
-async function dispatchRetry(route: ReturnType<typeof createConfigInteractionRoute>, edits: unknown[]): Promise<void> {
+async function dispatchRetry(route: ReturnType<typeof createConfigInteractionRoute>): Promise<RouteInteraction> {
   const retryRoute = { action: "retry" as const, locale: "en-US" };
-  await route.execute(
-    {} as Client,
-    makeInteraction(
-      CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER.buildRouteId(retryRoute),
-      "button",
-      true,
-      "interaction-retry",
-      edits,
-    ) as never,
-    {
-      namespace: CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER.namespace,
-      version: CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER.version,
-      segments: CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER.buildRouteSegments(retryRoute),
-    },
+  const interaction = makeInteraction(
+    CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER.buildRouteId(retryRoute),
+    "button",
+    true,
+    "interaction-retry",
   );
+  await route.execute({} as Client, interaction as never, {
+    namespace: CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER.namespace,
+    version: CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER.version,
+    segments: CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER.buildRouteSegments(retryRoute),
+  });
+  // The interaction owns the recorded edits, so the caller reads them back off it.
+  return interaction;
 }
 
 describe("Config-hosted ST preset node routes", () => {
@@ -201,30 +189,28 @@ describe("Config-hosted ST preset node routes", () => {
   });
 
   it("reports a stale panel, never a setup gap, when the fallback scope has no persona", async () => {
-    const edits: unknown[] = [];
     const route = createConfigInteractionRoute({
       resolveScope: async () => ({ ...makeScope(), personas: [] }),
       getLastDbError: () => null,
       recordAction: () => {},
     });
 
-    await dispatchRetry(route, edits);
+    const interaction = await dispatchRetry(route);
 
-    const rendered = JSON.stringify(edits);
+    const rendered = JSON.stringify(interaction.edits);
     expect(rendered).toContain(localizedCopy("en-US", "commands.config.panel.outdated_panel", { command: "/config" }));
     expect(rendered).not.toContain("/setup");
   });
 
   it("reports the setup gap when the fallback scope never resolves", async () => {
-    const edits: unknown[] = [];
     const route = createConfigInteractionRoute({
       resolveScope: async () => null,
       getLastDbError: () => null,
       recordAction: () => {},
     });
 
-    await dispatchRetry(route, edits);
+    const interaction = await dispatchRetry(route);
 
-    expect(JSON.stringify(edits)).toContain(localizedCopy("en-US", "commands.config.panel.not_setup"));
+    expect(JSON.stringify(interaction.edits)).toContain(localizedCopy("en-US", "commands.config.panel.not_setup"));
   });
 });

@@ -27,6 +27,7 @@ import { buildConfigModelsBody } from "@/utils/discord/ui/configModelsPanel";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
+import { createPersona } from "../../helpers/fixtures";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -119,15 +120,16 @@ function actionRows(payload: unknown): string[][] {
   return rows;
 }
 
+/**
+ * The suite's personas share server 9, and the nickname is derived from the id because the panel
+ * renders it: a roster of fixed "Mirri" rows would let a nickname regression pass unnoticed.
+ */
 function makePersona(overrides: Partial<TomoriState> & { persona_id: number }): TomoriState {
-  return {
+  return createPersona({
     server_id: 9,
     persona_nickname: `Persona ${overrides.persona_id}`,
-    is_alter: false,
-    trigger_words: [],
-    naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
     ...overrides,
-  } as unknown as TomoriState;
+  });
 }
 
 const MAIN = makePersona({ persona_id: 55, persona_nickname: "Aphel", trigger_words: ["aphel", "hey aphel"] });
@@ -1137,7 +1139,7 @@ describe("config Persona General collections", () => {
         suffixes: {},
         addressTerms: {},
       },
-    } as Partial<TomoriState> & { persona_id: number });
+    });
     const payload = build(GUILD_MANAGER, { personas: [persona], page: "naming" });
     const components = walk(payload);
 

@@ -21,6 +21,7 @@ import type {
 import * as realInteractionCore from "@/utils/discord/ui/interactionCore";
 import * as realLocalizer from "@/utils/text/localizer";
 import { createScopedModuleMocker, stubLogMembers } from "../../helpers/mockSurface";
+import { createPersona } from "../../helpers/fixtures";
 
 interface RecordedCall {
   method: string;
@@ -259,13 +260,11 @@ interface WorkflowHarness {
 let interactionSequence = 0;
 
 function makePersona(personaId: number): TomoriState {
-  return {
+  return createPersona({
     persona_id: personaId,
     persona_nickname: `Persona ${personaId}`,
     persona_prompt: `Prompt ${personaId}`,
-    attribute_list: [],
-    is_alter: false,
-  } as unknown as TomoriState;
+  });
 }
 
 function makeComponentMessage(id: string, harness: WorkflowHarness): Message {

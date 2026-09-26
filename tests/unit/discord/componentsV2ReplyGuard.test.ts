@@ -42,6 +42,7 @@ import {
 import { log } from "@/utils/misc/logger";
 import { parseInteractionRoute, type GlobalInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -51,34 +52,30 @@ interface RecordedCall {
   payload: Record<string, unknown>;
 }
 
+/** The shared route fake, typed as the command interaction the reply sinks accept. */
+type ReplyGuardInteraction = RouteInteraction & ChatInputCommandInteraction;
+
 /**
- * Minimal fake interaction that records the payload of every acknowledgement call.
- * `deferred` controls whether the sink routes to editReply (acknowledged) or reply.
+ * Fake interaction for the sinks under test.
+ *
+ * `deferred` selects whether a sink routes to `editReply` (acknowledged) or `reply`, and the
+ * acknowledgement goes through `deferUpdate` rather than a flag assignment so the fake's recorded
+ * state stays the one its own call log describes.
  */
-function makeInteraction(deferred: boolean): {
-  interaction: ChatInputCommandInteraction;
-  calls: RecordedCall[];
-} {
-  const calls: RecordedCall[] = [];
-  const interaction = {
-    id: "fake-interaction",
-    deferred,
-    replied: false,
-    guild: null,
-    user: { id: "user-1" },
-    reply: async (payload: Record<string, unknown>) => {
-      calls.push({ method: "reply", payload });
-    },
-    editReply: async (payload: Record<string, unknown>) => {
-      calls.push({ method: "editReply", payload });
-    },
-    webhook: {
-      send: async (payload: Record<string, unknown>) => {
-        calls.push({ method: "webhook.send", payload });
-      },
-    },
-  } as unknown as ChatInputCommandInteraction;
-  return { interaction, calls };
+function makeReplyGuardInteraction(deferred: boolean): ReplyGuardInteraction {
+  const interaction = createRouteInteraction();
+  if (deferred) void interaction.deferUpdate();
+  return interaction as ReplyGuardInteraction;
+}
+
+/** Acknowledgement calls the sinks made, in order, as payloads these tests can inspect. */
+function acknowledgementCalls(interaction: RouteInteraction): RecordedCall[] {
+  return interaction.calls
+    .filter((call) => call.method === "reply" || call.method === "editReply" || call.method === "webhook.send")
+    .map((call) => ({
+      method: call.method as RecordedCall["method"],
+      payload: call.payload as Record<string, unknown>,
+    }));
 }
 
 const infoOptions = {
@@ -119,10 +116,11 @@ const configMcpTerminalRoute: GlobalInteractionRoute = {
 
 describe("Components V2 reply guard", () => {
   it("emits a legacy embed when the interaction is NOT marked (control)", async () => {
-    const { interaction, calls } = makeInteraction(true);
+    const interaction = makeReplyGuardInteraction(true);
 
     await replyInfoEmbed(interaction, "en-US", { ...infoOptions });
 
+    const calls = acknowledgementCalls(interaction);
     expect(calls).toHaveLength(1);
     const call = calls[0];
     expect(call.method).toBe("editReply");
@@ -132,11 +130,12 @@ describe("Components V2 reply guard", () => {
   });
 
   it("emits a Components V2 notice (never embeds) when the interaction is marked — editReply path", async () => {
-    const { interaction, calls } = makeInteraction(true);
+    const interaction = makeReplyGuardInteraction(true);
     markComponentsV2Reply(interaction);
 
     await replyInfoEmbed(interaction, "en-US", { ...infoOptions });
 
+    const calls = acknowledgementCalls(interaction);
     expect(calls).toHaveLength(1);
     const call = calls[0];
     expect(call.method).toBe("editReply");
@@ -149,11 +148,12 @@ describe("Components V2 reply guard", () => {
   });
 
   it("emits an ephemeral Components V2 notice on the fresh reply path when marked", async () => {
-    const { interaction, calls } = makeInteraction(false);
+    const interaction = makeReplyGuardInteraction(false);
     markComponentsV2Reply(interaction);
 
     await replyInfoEmbed(interaction, "en-US", { ...infoOptions });
 
+    const calls = acknowledgementCalls(interaction);
     expect(calls).toHaveLength(1);
     const call = calls[0];
     expect(call.method).toBe("reply");
@@ -162,7 +162,7 @@ describe("Components V2 reply guard", () => {
   });
 
   it("marks the interaction after replyComponentsV2Status writes a V2 payload", async () => {
-    const { interaction } = makeInteraction(true);
+    const interaction = makeReplyGuardInteraction(true);
     expect(hasComponentsV2Reply(interaction)).toBe(false);
 
     await replyComponentsV2Status(

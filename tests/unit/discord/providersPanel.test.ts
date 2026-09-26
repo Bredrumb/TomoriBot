@@ -895,6 +895,10 @@ describe("Provider entry body stays inside the TextDisplay budget", () => {
       expect((text.content as string).length).toBeLessThanOrEqual(4000);
       expect((text.content as string).length).toBeGreaterThan(0);
     }
-    expect(JSON.stringify(panel)).toContain("Showing the first 3,500 of");
+    // The body takes whatever the rest of the message leaves, so the shown count moves with locale
+    // and receipt; the message-wide total is the bound that must hold.
+    const total = texts.reduce((sum, text) => sum + (text.content as string).length, 0);
+    expect(total).toBeLessThanOrEqual(4000);
+    expect(JSON.stringify(panel)).toMatch(/Showing the first [\d,]+ of 15,848 characters/);
   });
 });

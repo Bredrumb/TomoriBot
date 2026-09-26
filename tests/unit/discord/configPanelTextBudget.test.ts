@@ -53,6 +53,7 @@ import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { collectCaseFailures, RUNTIME_LOCALES, localizedCopy } from "../../helpers/localeCases";
 import { BACKTICK_RUNS } from "../../helpers/panelLimits";
+import { createPersona } from "../../helpers/fixtures";
 
 /** The locale whose rendered text is longest; see the file header for why one locale suffices. */
 const BUDGET_LOCALE = "es-419";
@@ -68,15 +69,13 @@ beforeAll(async () => initializeLocalizer());
 
 const GUILD_MANAGER: ConfigActor = { workspaceKind: "guild", isManager: true };
 
+/** Server 9 and the id-derived nickname are this suite's defaults, so both stay off the factory. */
 function makePersona(overrides: Partial<TomoriState> & { persona_id: number }): TomoriState {
-  return {
+  return createPersona({
     server_id: 9,
     persona_nickname: `Persona ${overrides.persona_id}`,
-    is_alter: false,
-    trigger_words: [],
-    naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
     ...overrides,
-  } as unknown as TomoriState;
+  });
 }
 
 function makeSavedProvider(provider: string): SavedProviderConfigRow {

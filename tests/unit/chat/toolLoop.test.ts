@@ -15,6 +15,7 @@ import * as realStreamOrchestrator from "@/utils/discord/streamOrchestrator";
 import * as realToolProgressNotice from "@/utils/discord/toolProgressNotice";
 import * as realProviderInfoRegistry from "@/utils/provider/providerInfoRegistry";
 import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ChatTurnContext } from "@/utils/chat/types";
 import type { TomoriState } from "@/types/db/schema";
@@ -147,28 +148,25 @@ scopedMock.module("@/tools/toolRegistry", () => ({
 }));
 
 function makeTomoriState(): TomoriState {
-  return {
-    server_id: 1,
+  return createPersona({
     persona_id: 42,
     persona_lineage_id: 420,
     persona_nickname: "TestBot",
-    is_alter: false,
-    llm: {
+    llm: createLlmRow({
       llm_codename: "test-model",
       has_tools: true,
       sees_images: false,
       sees_videos: false,
       sees_youtube: false,
       supports_structoutput: false,
-    },
+    }),
     config: {
-      api_key: "test-key",
-      key_version: 1,
+      // The schema stores the decrypted credential as bytes. The loop's credential arrives
+      // through `providerConfig`, so this field only has to be present.
+      api_key: Buffer.from("test-key"),
       llm_temperature: 0.7,
-      private_channel_ids: [],
-      tool_notice_hidden_keys: [],
     },
-  } as unknown as TomoriState;
+  });
 }
 
 function makeContext(): ChatTurnContext {

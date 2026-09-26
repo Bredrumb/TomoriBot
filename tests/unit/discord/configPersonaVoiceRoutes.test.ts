@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
-import { PermissionsBitField, type Client } from "discord.js";
+import type { Client } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { personaRepository } from "@/utils/db/repositories";
 import { buildConfigPersonaVoiceRemoteView } from "@/utils/discord/interactions/configPersonaVoiceRoutes";
@@ -8,25 +8,18 @@ import type { ConfigRouteDependencies, ConfigScope } from "@/utils/discord/inter
 import { InteractionRouteRegistry } from "@/utils/discord/interactions/routeRegistry";
 import { buildConfigRouteId } from "@/utils/discord/configPanelCatalog";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { createPersona, type PersonaFixtureOverrides } from "../../helpers/fixtures";
+import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
 
 beforeAll(async () => initializeLocalizer());
 
 const CLIENT = {} as Client;
 
-function makePersona(overrides: Partial<TomoriState> = {}): TomoriState {
-  return {
-    persona_id: 55,
-    server_id: 9,
-    persona_nickname: "Mirri",
-    is_alter: false,
-    trigger_words: [],
-    naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
-    speech_voice_sample_id: null,
-    speech_voice_id: null,
-    speech_voice_name: null,
-    speech_voice_design_prompt: null,
-    ...overrides,
-  } as unknown as TomoriState;
+type ConfigInteraction = Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1];
+
+/** Voice routes address persona 55 on server 9, and the factory default nickname is "Mirri". */
+function makePersona(overrides: PersonaFixtureOverrides = {}): TomoriState {
+  return createPersona({ persona_id: 55, server_id: 9, ...overrides });
 }
 
 function makeEndpoint(apiStyle: "tts-clone" | "elevenlabs", supportsInstruct = false) {
@@ -61,14 +54,13 @@ interface HarnessOptions {
 function makeHarness(options: HarnessOptions = {}) {
   const persona = options.persona ?? makePersona();
   const events: string[] = [];
-  const edits: unknown[] = [];
   const modals: unknown[] = [];
   const writes: unknown[] = [];
   const invalidations: string[] = [];
   const renderedPersonaIds: Array<number | null> = [];
   const acknowledgedAtFetch: boolean[] = [];
   const acknowledgedAtWrite: boolean[] = [];
-  let activeInteraction: { deferred: boolean; replied: boolean } | null = null;
+  let activeInteraction: RouteInteraction | null = null;
   let endpointCall = 0;
   let refreshedPersonas: TomoriState[] = [persona];
   const voices = options.voices ?? [
@@ -157,63 +149,35 @@ function makeHarness(options: HarnessOptions = {}) {
     },
   };
 
-  function makeInteraction(customId: string, kind: "button" | "select" | "modal", values: string[] = [], fields = {}) {
-    let deferred = false;
-    let replied = false;
-    const interaction = {
-      id: "interaction-1",
+  function makeInteraction(
+    customId: string,
+    kind: "button" | "select" | "modal",
+    values: string[] = [],
+    fields = {},
+  ): RouteInteraction {
+    const interaction = createRouteInteraction({
       customId,
-      user: { id: "user-1", username: "Mirri" },
-      channelId: "channel-1",
-      channel: { name: "lounge" },
-      guildId: "guild-1",
-      guild: { members: { me: null, fetch: async () => null } },
-      client: { user: null },
+      kind: kind === "select" ? "string-select" : kind,
+      isManager: options.isManager ?? true,
       values,
-      memberPermissions: {
-        has: (flag: bigint) => (options.isManager ?? true) && flag === PermissionsBitField.Flags.ManageGuild,
-      },
-      isButton: () => kind === "button",
-      isStringSelectMenu: () => kind === "select",
-      isModalSubmit: () => kind === "modal",
-      get deferred() {
-        return deferred;
-      },
-      get replied() {
-        return replied;
-      },
-      deferUpdate: async () => {
-        deferred = true;
-        events.push("defer");
-      },
-      editReply: async (payload: unknown) => {
-        edits.push(payload);
-        events.push("edit");
-        return payload;
-      },
-      reply: async () => {
-        replied = true;
-        events.push("reply");
-      },
-      followUp: async () => undefined,
-      fields: {
-        getTextInputValue: (fieldId: string) => (fields as Record<string, string>)[fieldId] ?? "",
-      },
-    };
+      fields,
+    });
     activeInteraction = interaction;
-    return interaction as unknown as Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1];
+    return interaction;
   }
 
   async function dispatch(customId: string, kind: "button" | "select" | "modal", values: string[] = [], fields = {}) {
     const interaction = makeInteraction(customId, kind, values, fields);
-    await new InteractionRouteRegistry([createConfigInteractionRoute(dependencies)]).dispatch(CLIENT, interaction);
+    await new InteractionRouteRegistry([createConfigInteractionRoute(dependencies)]).dispatch(
+      CLIENT,
+      interaction as unknown as ConfigInteraction,
+    );
     return interaction;
   }
 
   return {
     dependencies,
     dispatch,
-    edits,
     events,
     invalidations,
     acknowledgedAtFetch,
@@ -241,8 +205,8 @@ describe("Persona > Voice routes", () => {
       "0",
     ]);
 
-    expect(harness.events.indexOf("defer")).toBeGreaterThanOrEqual(0);
-    expect(harness.events.indexOf("defer")).toBeLessThan(harness.events.indexOf("write"));
+    // Read as the write runs, so this is the defer-before-write proof rather than a restatement of it.
+    expect(harness.acknowledgedAtWrite).toEqual([true]);
     expect(harness.writes).toEqual([
       {
         personaId: 55,
@@ -422,12 +386,14 @@ describe("Persona > Voice routes", () => {
 
   it("refuses a stale remote fingerprint without exposing the provider ID", async () => {
     const harness = makeHarness({ apiStyle: "elevenlabs" });
-    await harness.dispatch(buildConfigRouteId({ action: "voice-select", locale: "en-US", personaId: 55 }), "select", [
-      "voice:0:stale",
-    ]);
+    const interaction = await harness.dispatch(
+      buildConfigRouteId({ action: "voice-select", locale: "en-US", personaId: 55 }),
+      "select",
+      ["voice:0:stale"],
+    );
 
     expect(harness.writes).toEqual([]);
-    expect(JSON.stringify(harness.edits)).not.toContain("provider-secret-id");
+    expect(JSON.stringify(interaction.edits)).not.toContain("provider-secret-id");
     expect(harness.events).toContain("fetch:test-key");
   });
 
@@ -438,8 +404,9 @@ describe("Persona > Voice routes", () => {
       "button",
     );
 
+    // A modal is the acknowledgement here, so the route must not have deferred or replied first.
     expect(interaction.deferred).toBe(false);
-    expect(harness.events).not.toContain("defer");
+    expect(interaction.replied).toBe(false);
     expect(harness.events).toContain("modal");
     const modal = harness.modals[0] as {
       components: Array<{ type?: number; component?: { type?: number } }>;

@@ -6,9 +6,7 @@ import {
   MessageFlags,
   type ActionRowData,
   type ButtonComponentData,
-  type ButtonInteraction,
   type Client,
-  type InteractionReplyOptions,
   type ModalSubmitInteraction,
   type TextDisplayComponentData,
 } from "discord.js";
@@ -53,16 +51,32 @@ import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import type { ThinkingLevelValue } from "@/constants/thinkingLevels";
 import type { ModelParameterOptions } from "@/utils/discord/modelParametersConfigMapping";
 import type { PersonalConfigManagedCapability } from "@/utils/discord/personalConfigPanelCatalog";
-import { parseInteractionRoute, type ParsedInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
+import {
+  type GlobalRoutableInteraction,
+  parseInteractionRoute,
+  type ParsedInteractionRoute,
+} from "@/utils/discord/interactions/routeRegistry";
 import { dispatchGlobalInteraction } from "@/utils/discord/interactions/router";
 import { getRegisterableLocales, initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { loadCommandData } from "@/utils/discord/commandLoader";
 import type { UserPersonaNamingPreference } from "@/types/personaNaming";
 import { localizedProse, localizedCopy } from "../../helpers/localeCases";
+import { createPersona, createUserRow } from "../../helpers/fixtures";
+import {
+  createRouteInteraction,
+  type RouteGuildChannel,
+  type RouteInteraction,
+  type RouteInteractionOptions,
+} from "../../helpers/routeInteraction";
 
 beforeAll(async () => initializeLocalizer());
 
-function makeChannelCache(channelIds: string[]): Map<string, { type: number; name: string }> {
+/**
+ * The single place this suite says which channels are text channels in the fake guild. Routes that
+ * confirm a spotlight channel read `guild.channels.cache`, so a channel missing here is rejected as
+ * not a text channel in this guild.
+ */
+function makeChannelCache(channelIds: string[]): Map<string, RouteGuildChannel> {
   // ChannelType.GuildText is 0; the route guard rejects anything else.
   return new Map(channelIds.map((id) => [id, { type: 0, name: `channel-${id.slice(-4)}` }]));
 }
@@ -141,46 +155,49 @@ function collectComponents(value: unknown): ObservedComponent[] {
   return [...current, ...Object.values(record).flatMap(collectComponents)];
 }
 
-function makeModalFields(
-  getValue: (fieldId: string) => string,
-  isPresent: (fieldId: string) => boolean = () => true,
-): { fields: { has: (fieldId: string) => boolean }; getTextInputValue: (fieldId: string) => string } {
-  return {
-    fields: { has: isPresent },
-    getTextInputValue: getValue,
-  };
-}
-
+/**
+ * The suite pins its actor's Discord snowflake because spotlight fingerprints bind the writable
+ * scope to it, so the shared row arrives with this suite's actor and nothing else overridden.
+ */
 function makeUser(overrides: Partial<UserRow> = {}): UserRow {
-  return {
-    user_id: 1,
-    user_disc_id: "user-123",
-    user_name: "testuser",
-    user_nickname: null,
-    prefix_override: null,
-    suffix_override: null,
-    gender_identity: null,
-    pronouns: null,
-    addressing_style: null,
-    language_pref: "en-US",
-    timezone_offset: null,
-    physical_appearance_tags: [],
-    privacy_level: PrivacyLevel.MINIMAL,
-    shortterm_cache_crossserver_opt_in: false,
-    created_at: new Date(),
-    updated_at: new Date(),
-    ...overrides,
-  } as unknown as UserRow;
+  return createUserRow({ user_disc_id: "user-123", ...overrides });
 }
 
-function makePersona(id: number, lineageId: number, name: string): TomoriState {
-  return {
-    persona_id: id,
+const SUITE_ACTOR: RouteInteraction["user"] = {
+  id: "user-123",
+  username: "tester",
+  displayName: "Tester",
+  globalName: "Tester",
+};
+
+/** The shared route fake, typed as the interaction the personal routes and global router accept. */
+type PersonalInteraction = RouteInteraction & GlobalRoutableInteraction;
+
+/**
+ * A route interaction from this suite's actor in this suite's guild. `resolveScope` answers
+ * `guild-123`/`user-123` whatever the interaction says, so a fake left on the shared factory's own
+ * identity would dispatch as a different actor than the scope the route writes for.
+ */
+function makePersonalInteraction(options: RouteInteractionOptions = {}): PersonalInteraction {
+  return createRouteInteraction({
+    guildId: "guild-123",
+    ...options,
+    overrides: { user: SUITE_ACTOR, ...options.overrides },
+  }) as PersonalInteraction;
+}
+
+/**
+ * Positional wrapper over {@link createPersona}. The suite names personas by the lineage IDs it
+ * asserts on, so the wrapper keeps those call sites reading as identity triples while the row shape
+ * itself lives in the shared factory.
+ */
+function makePersona(personaId: number, lineageId: number, name: string, isAlter = false): TomoriState {
+  return createPersona({
+    persona_id: personaId,
     persona_lineage_id: lineageId,
     persona_nickname: name,
-    is_alter: false,
-    is_active: true,
-  } as unknown as TomoriState;
+    is_alter: isAlter,
+  });
 }
 
 function makeParameterConfig(provider: string): UserSavedProviderConfigRow {
@@ -575,210 +592,87 @@ describe("personalConfigPanelCatalog", () => {
     expect(parsePersonalConfigPanelRoute(requireRoute(customId))).toEqual(route);
   });
 
-  it("builds and parses modal open and submit routes", () => {
-    const langOpen = buildPersonalConfigRouteId({ action: "language-open", locale: "en-US" });
-    expect(parsePersonalConfigPanelRoute(requireRoute(langOpen))).toEqual({
-      action: "language-open",
-      locale: "en-US",
-    });
+  /**
+   * Route objects whose every field must survive a build and parse. One row per route so a codec
+   * regression names the field it lost instead of failing one 543-line test.
+   */
+  const MODAL_AND_CONTROL_ROUTES: ReadonlyArray<readonly [string, PersonalConfigPanelRoute]> = [
+    ["language-open", { action: "language-open", locale: "en-US" }],
+    ["language-submit", { action: "language-submit", locale: "en-US", nonce: "nonce123456" }],
+    [
+      "persona-naming-submit",
+      { action: "persona-naming-submit", locale: "en-US", lineageId: 10, nonce: "nonce123456" },
+    ],
+    ["crossserver-toggle", { action: "crossserver-toggle", locale: "en-US" }],
+    ["trigger-mode-set", { action: "trigger-mode-set", locale: "en-US", mode: "on" }],
+    ["tool-mode-set", { action: "tool-mode-set", locale: "en-US", mode: "off" }],
+    ["impersonation-open", { action: "impersonation-open", locale: "en-US" }],
+    ["impersonation-submit", { action: "impersonation-submit", locale: "en-US", nonce: "nonce123456" }],
+    ["impersonation-clear-view", { action: "impersonation-clear-view", locale: "en-US" }],
+    ["impersonation-clear-confirm", { action: "impersonation-clear-confirm", locale: "en-US", nonce: "nonce123456" }],
+    ["spotlight-set-open", { action: "spotlight-set-open", locale: "en-US" }],
+    [
+      "spotlight-set-submit",
+      {
+        action: "spotlight-set-submit",
+        locale: "en-US",
+        channelId: "123456789012345678",
+        hours: 0,
+        blockIdx: 0,
+        fp: "a1b2c3d4",
+        nonce: "nonce123456",
+      },
+    ],
+    [
+      "spot-set-auto",
+      {
+        action: "spot-set-auto",
+        locale: "en-US",
+        channelId: "123456789012345678",
+        hours: 24,
+        blockIdx: 0,
+        mask: "3",
+        fp: "a1b2c3d4",
+        nonce: "nonce123456",
+      },
+    ],
+    [
+      "spot-set-auto-sub",
+      {
+        action: "spot-set-auto-sub",
+        locale: "en-US",
+        channelId: "123456789012345678",
+        hours: 24,
+        blockIdx: 0,
+        mask: "3",
+        fp: "a1b2c3d4",
+        nonce: "nonce123456",
+      },
+    ],
+    [
+      "spot-set-cf",
+      {
+        action: "spot-set-cf",
+        locale: "en-US",
+        channelId: "123456789012345678",
+        hours: 24,
+        autoIdx: 7,
+        blockIdx: 0,
+        mask: "3",
+        fp: "a1b2c3d4",
+        nonce: "nonce123456",
+      },
+    ],
+    ["spotlight-remove-open", { action: "spotlight-remove-open", locale: "en-US" }],
+    ["spot-rem-range", { action: "spot-rem-range", locale: "en-US", start: 50, fp: "a1b2c3d4" }],
+    [
+      "spotlight-remove-submit",
+      { action: "spotlight-remove-submit", locale: "en-US", start: 50, fp: "a1b2c3d4", nonce: "nonce123456" },
+    ],
+  ];
 
-    const langSubmit = buildPersonalConfigRouteId({ action: "language-submit", locale: "en-US", nonce: "nonce123456" });
-    expect(parsePersonalConfigPanelRoute(requireRoute(langSubmit))).toEqual({
-      action: "language-submit",
-      locale: "en-US",
-      nonce: "nonce123456",
-    });
-
-    const personaNamingSubmit = buildPersonalConfigRouteId({
-      action: "persona-naming-submit",
-      locale: "en-US",
-      lineageId: 10,
-      nonce: "nonce123456",
-    });
-    expect(parsePersonalConfigPanelRoute(requireRoute(personaNamingSubmit))).toEqual({
-      action: "persona-naming-submit",
-      locale: "en-US",
-      lineageId: 10,
-      nonce: "nonce123456",
-    });
-
-    const toggle = buildPersonalConfigRouteId({ action: "crossserver-toggle", locale: "en-US" });
-    expect(parsePersonalConfigPanelRoute(requireRoute(toggle))).toEqual({
-      action: "crossserver-toggle",
-      locale: "en-US",
-    });
-
-    const triggerMode = buildPersonalConfigRouteId({ action: "trigger-mode-set", locale: "en-US", mode: "on" });
-    expect(parsePersonalConfigPanelRoute(requireRoute(triggerMode))).toEqual({
-      action: "trigger-mode-set",
-      locale: "en-US",
-      mode: "on",
-    });
-
-    const toolMode = buildPersonalConfigRouteId({ action: "tool-mode-set", locale: "en-US", mode: "off" });
-    expect(parsePersonalConfigPanelRoute(requireRoute(toolMode))).toEqual({
-      action: "tool-mode-set",
-      locale: "en-US",
-      mode: "off",
-    });
-
-    const impOpen = buildPersonalConfigRouteId({ action: "impersonation-open", locale: "en-US" });
-    expect(parsePersonalConfigPanelRoute(requireRoute(impOpen))).toEqual({
-      action: "impersonation-open",
-      locale: "en-US",
-    });
-
-    const impSubmit = buildPersonalConfigRouteId({
-      action: "impersonation-submit",
-      locale: "en-US",
-      nonce: "nonce123456",
-    });
-    expect(parsePersonalConfigPanelRoute(requireRoute(impSubmit))).toEqual({
-      action: "impersonation-submit",
-      locale: "en-US",
-      nonce: "nonce123456",
-    });
-
-    const impClearView = buildPersonalConfigRouteId({ action: "impersonation-clear-view", locale: "en-US" });
-    expect(parsePersonalConfigPanelRoute(requireRoute(impClearView))).toEqual({
-      action: "impersonation-clear-view",
-      locale: "en-US",
-    });
-
-    const impClearConfirm = buildPersonalConfigRouteId({
-      action: "impersonation-clear-confirm",
-      locale: "en-US",
-      nonce: "nonce123456",
-    });
-    expect(parsePersonalConfigPanelRoute(requireRoute(impClearConfirm))).toEqual({
-      action: "impersonation-clear-confirm",
-      locale: "en-US",
-      nonce: "nonce123456",
-    });
-
-    const spotSetOpen = buildPersonalConfigRouteId({ action: "spotlight-set-open", locale: "en-US" });
-    expect(parsePersonalConfigPanelRoute(requireRoute(spotSetOpen))).toEqual({
-      action: "spotlight-set-open",
-      locale: "en-US",
-    });
-
-    const spotSetSubmit = buildPersonalConfigRouteId({
-      action: "spotlight-set-submit",
-      locale: "en-US",
-      channelId: "123456789012345678",
-      hours: 0,
-      blockIdx: 0,
-      fp: "a1b2c3d4",
-      nonce: "nonce123456",
-    });
-    expect(parsePersonalConfigPanelRoute(requireRoute(spotSetSubmit))).toEqual({
-      action: "spotlight-set-submit",
-      locale: "en-US",
-      channelId: "123456789012345678",
-      hours: 0,
-      blockIdx: 0,
-      fp: "a1b2c3d4",
-      nonce: "nonce123456",
-    });
-
-    const spotSetAuto = buildPersonalConfigRouteId({
-      action: "spot-set-auto",
-      locale: "en-US",
-      channelId: "123456789012345678",
-      hours: 24,
-      blockIdx: 0,
-      mask: "3",
-      fp: "a1b2c3d4",
-      nonce: "nonce123456",
-    });
-    expect(parsePersonalConfigPanelRoute(requireRoute(spotSetAuto))).toEqual({
-      action: "spot-set-auto",
-      locale: "en-US",
-      channelId: "123456789012345678",
-      hours: 24,
-      blockIdx: 0,
-      mask: "3",
-      fp: "a1b2c3d4",
-      nonce: "nonce123456",
-    });
-
-    const spotSetAutoSub = buildPersonalConfigRouteId({
-      action: "spot-set-auto-sub",
-      locale: "en-US",
-      channelId: "123456789012345678",
-      hours: 24,
-      blockIdx: 0,
-      mask: "3",
-      fp: "a1b2c3d4",
-      nonce: "nonce123456",
-    });
-    expect(parsePersonalConfigPanelRoute(requireRoute(spotSetAutoSub))).toEqual({
-      action: "spot-set-auto-sub",
-      locale: "en-US",
-      channelId: "123456789012345678",
-      hours: 24,
-      blockIdx: 0,
-      mask: "3",
-      fp: "a1b2c3d4",
-      nonce: "nonce123456",
-    });
-
-    const spotSetCf = buildPersonalConfigRouteId({
-      action: "spot-set-cf",
-      locale: "en-US",
-      channelId: "123456789012345678",
-      hours: 24,
-      autoIdx: 7,
-      blockIdx: 0,
-      mask: "3",
-      fp: "a1b2c3d4",
-      nonce: "nonce123456",
-    });
-    expect(parsePersonalConfigPanelRoute(requireRoute(spotSetCf))).toEqual({
-      action: "spot-set-cf",
-      locale: "en-US",
-      channelId: "123456789012345678",
-      hours: 24,
-      autoIdx: 7,
-      blockIdx: 0,
-      mask: "3",
-      fp: "a1b2c3d4",
-      nonce: "nonce123456",
-    });
-
-    const spotRemOpen = buildPersonalConfigRouteId({ action: "spotlight-remove-open", locale: "en-US" });
-    expect(parsePersonalConfigPanelRoute(requireRoute(spotRemOpen))).toEqual({
-      action: "spotlight-remove-open",
-      locale: "en-US",
-    });
-
-    const spotRemRange = buildPersonalConfigRouteId({
-      action: "spot-rem-range",
-      locale: "en-US",
-      start: 50,
-      fp: "a1b2c3d4",
-    });
-    expect(parsePersonalConfigPanelRoute(requireRoute(spotRemRange))).toEqual({
-      action: "spot-rem-range",
-      locale: "en-US",
-      start: 50,
-      fp: "a1b2c3d4",
-    });
-
-    const spotRemSubmit = buildPersonalConfigRouteId({
-      action: "spotlight-remove-submit",
-      locale: "en-US",
-      start: 50,
-      fp: "a1b2c3d4",
-      nonce: "nonce123456",
-    });
-    expect(parsePersonalConfigPanelRoute(requireRoute(spotRemSubmit))).toEqual({
-      action: "spotlight-remove-submit",
-      locale: "en-US",
-      start: 50,
-      fp: "a1b2c3d4",
-      nonce: "nonce123456",
-    });
+  it.each(MODAL_AND_CONTROL_ROUTES)("builds and parses the %s route", (_label, route) => {
+    expect(parsePersonalConfigPanelRoute(requireRoute(buildPersonalConfigRouteId(route)))).toEqual(route);
   });
 
   // Pins the personal-config v2 wire contract: each literal custom ID and the exact route it must
@@ -1119,11 +1013,9 @@ describe("personalConfigPanelCatalog", () => {
     ],
   ];
 
-  it("decodes every pinned personal-config v2 wire string to its exact route", () => {
-    for (const [customId, expected] of WIRE_CONTRACT_V2) {
-      expect(customId.length).toBeLessThanOrEqual(100);
-      expect(parsePersonalConfigPanelRoute(requireRoute(customId))).toEqual(expected);
-    }
+  it.each(WIRE_CONTRACT_V2)("decodes the pinned wire string %s to its exact route", (customId, expected) => {
+    expect(customId.length).toBeLessThanOrEqual(100);
+    expect(parsePersonalConfigPanelRoute(requireRoute(customId))).toEqual(expected);
   });
 
   it("covers every personal-config action in the pinned wire contract", () => {
@@ -1146,76 +1038,43 @@ describe("personalConfigPanelCatalog", () => {
     expect([...declared].filter((action) => !pinned.has(action))).toEqual([]);
   });
 
-  it("round-trips retry and refresh routes and enforces exact arity", () => {
-    const retryFourSeg = buildPersonalConfigRouteId({
-      action: "retry",
-      locale: "en-US",
-      category: "profile",
-      page: "general",
-    });
-    const parsedRetryFour = parsePersonalConfigPanelRoute(requireRoute(retryFourSeg));
-    expect(parsedRetryFour).toEqual({
-      action: "retry",
-      locale: "en-US",
-      category: "profile",
-      page: "general",
-    });
-    expect("lineageId" in (parsedRetryFour ?? {})).toBe(false);
-    expect("capability" in (parsedRetryFour ?? {})).toBe(false);
-    expect("provider" in (parsedRetryFour ?? {})).toBe(false);
+  /**
+   * The retry and refresh codecs accept a four-segment form (no lineage) and a five-segment form
+   * (lineage present). Each pair is one case: the round-trip proves the field survives, and the
+   * field-absence assertions prove the shorter form does not fabricate the longer form's fields.
+   */
+  const RETRY_AND_REFRESH_ROUTES: ReadonlyArray<
+    readonly [string, PersonalConfigPanelRoute, PersonalConfigPanelRoute, readonly string[]]
+  > = [
+    [
+      "retry without a lineage",
+      { action: "retry", locale: "en-US", category: "profile", page: "general" },
+      { action: "retry", locale: "en-US", category: "profile", page: "persona", lineageId: 10 },
+      ["lineageId", "capability", "provider"],
+    ],
+    [
+      "refresh without a lineage",
+      { action: "refresh", locale: "en-US", category: "models", page: "switch" },
+      { action: "refresh", locale: "en-US", category: "profile", page: "persona", lineageId: 42 },
+      ["lineageId", "capability", "provider"],
+    ],
+  ];
 
-    const retryFiveSeg = buildPersonalConfigRouteId({
-      action: "retry",
-      locale: "en-US",
-      category: "profile",
-      page: "persona",
-      lineageId: 10,
-    });
-    const parsedRetryFive = parsePersonalConfigPanelRoute(requireRoute(retryFiveSeg));
-    expect(parsedRetryFive).toEqual({
-      action: "retry",
-      locale: "en-US",
-      category: "profile",
-      page: "persona",
-      lineageId: 10,
-    });
-    expect("capability" in (parsedRetryFive ?? {})).toBe(false);
-    expect("provider" in (parsedRetryFive ?? {})).toBe(false);
+  it.each(
+    RETRY_AND_REFRESH_ROUTES,
+  )("round-trips the %s form and enforces exact arity", (_label, fourSegment, fiveSegment, absentFromFour) => {
+    const parsedFour = parsePersonalConfigPanelRoute(requireRoute(buildPersonalConfigRouteId(fourSegment)));
+    expect(parsedFour).toEqual(fourSegment);
+    for (const field of absentFromFour) {
+      expect(field in (parsedFour ?? {})).toBe(false);
+    }
 
-    const refreshFourSeg = buildPersonalConfigRouteId({
-      action: "refresh",
-      locale: "en-US",
-      category: "models",
-      page: "switch",
-    });
-    const parsedRefreshFour = parsePersonalConfigPanelRoute(requireRoute(refreshFourSeg));
-    expect(parsedRefreshFour).toEqual({
-      action: "refresh",
-      locale: "en-US",
-      category: "models",
-      page: "switch",
-    });
-    expect("lineageId" in (parsedRefreshFour ?? {})).toBe(false);
-    expect("capability" in (parsedRefreshFour ?? {})).toBe(false);
-    expect("provider" in (parsedRefreshFour ?? {})).toBe(false);
-
-    const refreshFiveSeg = buildPersonalConfigRouteId({
-      action: "refresh",
-      locale: "en-US",
-      category: "profile",
-      page: "persona",
-      lineageId: 42,
-    });
-    const parsedRefreshFive = parsePersonalConfigPanelRoute(requireRoute(refreshFiveSeg));
-    expect(parsedRefreshFive).toEqual({
-      action: "refresh",
-      locale: "en-US",
-      category: "profile",
-      page: "persona",
-      lineageId: 42,
-    });
-    expect("capability" in (parsedRefreshFive ?? {})).toBe(false);
-    expect("provider" in (parsedRefreshFive ?? {})).toBe(false);
+    const parsedFive = parsePersonalConfigPanelRoute(requireRoute(buildPersonalConfigRouteId(fiveSegment)));
+    expect(parsedFive).toEqual(fiveSegment);
+    // The longer form carries lineageId, so only the fields it never declares must be absent.
+    for (const field of absentFromFour.filter((candidate) => candidate !== "lineageId")) {
+      expect(field in (parsedFive ?? {})).toBe(false);
+    }
   });
 
   function buildRoutesForAction(action: PersonalConfigAction, isWorstCase = false): PersonalConfigPanelRoute[] {
@@ -1484,30 +1343,29 @@ describe("personalConfigPanelCatalog", () => {
     }
   });
 
-  it("rejects malformed routes", () => {
-    expect(parsePersonalConfigPanelRoute(requireRoute("other:v2:category:en-US:profile:general"))).toBeNull();
-    expect(parsePersonalConfigPanelRoute(requireRoute("personal-config:v1:category:en-US:profile:general"))).toBeNull();
-    expect(
-      parsePersonalConfigPanelRoute(requireRoute("personal-config:v2:category:invalid-locale:profile:general")),
-    ).toBeNull();
-    expect(parsePersonalConfigPanelRoute(requireRoute("personal-config:v2:category:en-US:unknown:general"))).toBeNull();
-    expect(
-      parsePersonalConfigPanelRoute(requireRoute("personal-config:v2:s-set-sub:en-US:short:nonce123456")),
-    ).toBeNull();
-    expect(
-      parsePersonalConfigPanelRoute(
-        requireRoute("personal-config:v2:spot-set-cf:en-US:123456789012345678:0:0:1:a1b2c3d4:nonce123456"),
-      ),
-    ).toBeNull();
-    expect(
-      parsePersonalConfigPanelRoute(requireRoute("personal-config:v2:retry:en-US:profile:persona:10:extra")),
-    ).toBeNull();
-    expect(
-      parsePersonalConfigPanelRoute(requireRoute("personal-config:v2:retry:en-US:models:switch:openrouter")),
-    ).toBeNull();
-    expect(parsePersonalConfigPanelRoute(requireRoute("personal-config:v2:retry:en-US:models:switch:text"))).toBeNull();
-    expect(parsePersonalConfigPanelRoute(requireRoute("personal-config:v2:retry:en-US:profile:persona:0"))).toBeNull();
-    expect(parsePersonalConfigPanelRoute(requireRoute("personal-config:v2:retry:en-US:profile"))).toBeNull();
+  /**
+   * Custom IDs a client could construct but the parser must refuse. Each row names the rule it
+   * exercises so a loosened parse reports which grammar rule it broke.
+   */
+  const MALFORMED_ROUTES: ReadonlyArray<readonly [string, string]> = [
+    ["foreign namespace", "other:v2:category:en-US:profile:general"],
+    ["retired v1 version", "personal-config:v1:category:en-US:profile:general"],
+    ["unparseable locale", "personal-config:v2:category:invalid-locale:profile:general"],
+    ["unknown category", "personal-config:v2:category:en-US:unknown:general"],
+    ["unknown wire token", "personal-config:v2:s-set-sub:en-US:short:nonce123456"],
+    [
+      "spot-set-cf with an empty mask",
+      "personal-config:v2:spot-set-cf:en-US:123456789012345678:0:0:1:a1b2c3d4:nonce123456",
+    ],
+    ["retry with a trailing segment", "personal-config:v2:retry:en-US:profile:persona:10:extra"],
+    ["retry naming a page's provider slot", "personal-config:v2:retry:en-US:models:switch:openrouter"],
+    ["retry naming a capability slot", "personal-config:v2:retry:en-US:models:switch:text"],
+    ["retry with a zero lineage", "personal-config:v2:retry:en-US:profile:persona:0"],
+    ["retry missing its page segment", "personal-config:v2:retry:en-US:profile"],
+  ];
+
+  it.each(MALFORMED_ROUTES)("rejects a route with %s", (_label, customId) => {
+    expect(parsePersonalConfigPanelRoute(requireRoute(customId))).toBeNull();
   });
 });
 
@@ -1666,32 +1524,11 @@ describe("personalConfigRoutes interaction handling and telemetry", () => {
     const route = createPersonalConfigInteractionRoute(dependencies);
     const customId = buildPersonalConfigRouteId({ action: "naming-submit", locale: "en-US", nonce: "nonce123456" });
 
-    let deferred = false;
-    const replied = false;
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return deferred;
-      },
-      get replied() {
-        return replied;
-      },
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async () => {},
-      fields: {
-        getTextInputValue: (fieldId: string) => {
-          if (fieldId.startsWith("nickname_")) return "SuperUser";
-          return "";
-        },
-      },
-    } as unknown as ModalSubmitInteraction;
+      fields: { nickname_nonce123456: "SuperUser", prefix_nonce123456: "", suffix_nonce123456: "" },
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -1706,25 +1543,9 @@ describe("personalConfigRoutes interaction handling and telemetry", () => {
     const route = createPersonalConfigInteractionRoute(dependencies);
     const customId = buildPersonalConfigRouteId({ action: "crossserver-toggle", locale: "en-US" });
 
-    let deferred = false;
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return deferred;
-      },
-      get replied() {
-        return false;
-      },
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async () => {},
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -1733,23 +1554,15 @@ describe("personalConfigRoutes interaction handling and telemetry", () => {
   });
 
   it("handles outdated panel version in router", async () => {
-    let replyPayload: InteractionReplyOptions | null = null;
-    const staleInteraction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const staleInteraction = makePersonalInteraction({
       customId: "personal-config:v0:category:en-US:profile:general",
-      locale: "en-US",
-      user: { id: "user-123" },
-      reply: async (payload: InteractionReplyOptions) => {
-        replyPayload = payload;
-      },
-    } as unknown as ButtonInteraction;
+    });
 
     const handled = await dispatchGlobalInteraction({} as Client, staleInteraction);
     expect(handled).toBe(true);
+    const replyPayload = staleInteraction.replies.at(-1) as unknown as { content: string };
     expect(replyPayload).toBeDefined();
-    expect((replyPayload as unknown as { content: string }).content).toContain("/personal config");
+    expect(replyPayload.content).toContain("/personal config");
   });
 });
 
@@ -1775,29 +1588,12 @@ describe("naming modal empty fields mean inherit", () => {
     const route = createPersonalConfigInteractionRoute(dependencies);
     const customId = buildPersonalConfigRouteId({ action: "naming-submit", locale: "en-US", nonce: "nonce123456" });
 
-    let deferred = false;
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    // Whitespace rather than "" so a dropped .trim() fails here too.
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return deferred;
-      },
-      get replied() {
-        return false;
-      },
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async () => {},
-      fields: {
-        // Whitespace rather than "" so a dropped .trim() fails here too.
-        getTextInputValue: (fieldId: string) => (fieldId.startsWith("nickname_") ? "   " : ""),
-      },
-    } as unknown as ModalSubmitInteraction;
+      fields: { nickname_nonce123456: "   ", prefix_nonce123456: "", suffix_nonce123456: "" },
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -2111,7 +1907,6 @@ describe("personalConfigOperations Models invariants", () => {
 describe("Models interaction routing and telemetry", () => {
   it("quick-toggle-submit acknowledges before the operation and records telemetry on success", async () => {
     const calls: string[] = [];
-    let deferred = false;
     let acknowledgedDuringWrite = false;
     let interaction: ModalSubmitInteraction;
     const { dependencies, telemetry } = makeDependencies(calls);
@@ -2130,25 +1925,10 @@ describe("Models interaction routing and telemetry", () => {
       nonce: "nonce123456",
     });
 
-    interaction = {
-      id: "modal-1",
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return deferred;
-      },
-      get replied() {
-        return false;
-      },
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async () => {},
-    } as unknown as ModalSubmitInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -2167,25 +1947,9 @@ describe("Models interaction routing and telemetry", () => {
       provider: "openrouter",
     });
 
-    let deferred = false;
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return deferred;
-      },
-      get replied() {
-        return false;
-      },
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async () => {},
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -2204,34 +1968,17 @@ describe("Models interaction routing and telemetry", () => {
       nonce: "nonce123456",
     });
 
-    let deferred = false;
-    const interaction = {
-      id: "modal-1",
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return deferred;
+      fields: {
+        temperature_nonce123456: "0.8",
+        min_p_nonce123456: "0.1",
+        top_p_nonce123456: "0.9",
+        top_k_nonce123456: "40",
+        frequency_penalty_nonce123456: "0.2",
       },
-      get replied() {
-        return false;
-      },
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async () => {},
-      fields: makeModalFields((fieldId: string) => {
-        if (fieldId.startsWith("temperature_")) return "0.8";
-        if (fieldId.startsWith("min_p_")) return "0.1";
-        if (fieldId.startsWith("top_p_")) return "0.9";
-        if (fieldId.startsWith("top_k_")) return "40";
-        if (fieldId.startsWith("frequency_penalty_")) return "0.2";
-        return "";
-      }),
-    } as unknown as ModalSubmitInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -2258,44 +2005,23 @@ describe("Models interaction routing and telemetry", () => {
 
     const submit = async (
       action: "parameters-1-submit" | "parameters-2-submit",
-      id: string,
       values: Record<string, string>,
       presentFields: string[],
     ) => {
       const customId = buildPersonalConfigRouteId({ action, locale: "en-US", provider: "openrouter", nonce });
-      let deferred = false;
-      const interaction = {
-        id,
-        isButton: () => false,
-        isStringSelectMenu: () => false,
-        isModalSubmit: () => true,
+      const interaction = makePersonalInteraction({
+        kind: "modal",
         customId,
-        user: { id: "user-123", username: "tester", displayName: "Tester" },
-        guildId: "guild-123",
-        get deferred() {
-          return deferred;
-        },
-        get replied() {
-          return false;
-        },
-        deferUpdate: async () => {
-          deferred = true;
-        },
-        editReply: async () => {},
-        fields: makeModalFields(
-          (submittedFieldId) => values[submittedFieldId] ?? "",
-          (submittedFieldId) => presentFields.includes(submittedFieldId),
-        ),
-      } as unknown as ModalSubmitInteraction;
+        fields: Object.fromEntries(presentFields.map((present) => [present, values[present] ?? ""])),
+      });
 
       await route.execute({} as Client, interaction, requireRoute(customId));
-      expect(deferred).toBe(true);
+      expect(interaction.deferred).toBe(true);
     };
 
     try {
       await submit(
         "parameters-1-submit",
-        "sampling-new",
         {
           [fieldId("temperature")]: "0.8",
           [fieldId("min_p")]: "0.1",
@@ -2308,7 +2034,6 @@ describe("Models interaction routing and telemetry", () => {
 
       await submit(
         "parameters-1-submit",
-        "sampling-legacy",
         {
           [fieldId("temperature")]: "0.8",
           [fieldId("min_p")]: "0.1",
@@ -2328,7 +2053,6 @@ describe("Models interaction routing and telemetry", () => {
 
       await submit(
         "parameters-2-submit",
-        "generation-new",
         {
           [fieldId("frequency_penalty")]: "0.4",
           [fieldId("presence_penalty")]: "0.1",
@@ -2345,7 +2069,6 @@ describe("Models interaction routing and telemetry", () => {
 
       await submit(
         "parameters-2-submit",
-        "generation-legacy",
         {
           [fieldId("presence_penalty")]: "0.1",
           [fieldId("max_output_tokens")]: "2048",
@@ -2356,7 +2079,6 @@ describe("Models interaction routing and telemetry", () => {
 
       await submit(
         "parameters-2-submit",
-        "generation-empty-frequency",
         {
           [fieldId("frequency_penalty")]: "",
           [fieldId("presence_penalty")]: "0.1",
@@ -2386,29 +2108,10 @@ describe("Models interaction routing and telemetry", () => {
       nonce: "nonce123456",
     });
 
-    let deferred = false;
-    const interaction = {
-      id: "modal-1",
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return deferred;
-      },
-      get replied() {
-        return false;
-      },
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async () => {},
-      fields: {
-        getTextInputValue: () => "",
-      },
-    } as unknown as ModalSubmitInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -2442,7 +2145,6 @@ describe("personal config Appearance character reference", () => {
 
   it("opens the Me character-reference modal before deferring", async () => {
     let modalShown = false;
-    let deferred = false;
     const { dependencies } = makeDependencies([], {
       showCharacterReferenceModal: async () => {
         modalShown = true;
@@ -2450,37 +2152,25 @@ describe("personal config Appearance character reference", () => {
     });
     const route = createPersonalConfigInteractionRoute(dependencies);
     const customId = buildPersonalConfigRouteId({ action: "character-reference-open", locale: "en-US" });
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return deferred;
-      },
-      replied: false,
-      deferUpdate: async () => {
-        deferred = true;
-      },
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
     expect(modalShown).toBe(true);
-    expect(deferred).toBe(false);
+    expect(interaction.deferred).toBe(false);
   });
 
   it("clears the Me character reference through the receipt path after acknowledgement", async () => {
     const calls: string[] = [];
-    let deferred = false;
     let acknowledgedInsideWrite = false;
+    let interaction: RouteInteraction;
     const { dependencies, user } = makeDependencies(calls, {
       operations: {
         ...personalConfigOperations,
         replaceCharacterReference: async (input) => {
-          acknowledgedInsideWrite = deferred;
+          acknowledgedInsideWrite = interaction.deferred;
           calls.push(`replaceCharacterReference:${input.attachment ? "set" : "clear"}`);
           user.nai_char_ref_url = null;
           return { status: "success", cleared: true };
@@ -2490,22 +2180,9 @@ describe("personal config Appearance character reference", () => {
     user.nai_char_ref_url = "https://cdn.example.invalid/old.png";
     const route = createPersonalConfigInteractionRoute(dependencies);
     const customId = buildPersonalConfigRouteId({ action: "character-reference-clear", locale: "en-US" });
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return deferred;
-      },
-      replied: false,
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async () => {},
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -2865,7 +2542,6 @@ describe("Models panel rendering", () => {
 describe("Model assignment writes on modal submit", () => {
   it("writes on submit even when the assignment newly activates a cross-server override", async () => {
     const calls: string[] = [];
-    let repaintedView: unknown = null;
 
     const { dependencies, telemetry } = makeDependencies(calls, {
       loadUserSavedProviders: async () => [
@@ -2893,24 +2569,10 @@ describe("Model assignment writes on modal submit", () => {
       nonce: "nonce123456",
     });
 
-    const interaction = {
-      id: "modal-1",
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: { components: unknown[] }) => {
-        repaintedView = payload;
-      },
-      fields: {
-        getTextInputValue: () => "",
-      },
-    } as unknown as ModalSubmitInteraction;
+    });
 
     // Simulate modal value for model ID 102
     const modalsModule = await import("@/utils/discord/ui/modals");
@@ -2923,15 +2585,13 @@ describe("Model assignment writes on modal submit", () => {
     // Submitting the model is the decision, so there is no second confirmation step.
     expect(calls).toContain("setCapabilityModel:text:openrouter:102");
     expect(telemetry).toContain("personal-config.personal.model.set");
-    const json = JSON.stringify(repaintedView);
+    const json = JSON.stringify(interaction.edits.at(-1));
     expect(json).not.toContain("model-act-confirm");
     expect(json).toContain("Text now routes to OpenRouter using Claude 3 Opus");
   });
 
   it("answers the standalone language submit with a reply instead of repainting a panel", async () => {
     const calls: string[] = [];
-    let replied: { content?: string } | null = null;
-    let deferUpdateCalls = 0;
 
     const { dependencies, telemetry } = makeDependencies(calls);
     const route = createPersonalConfigInteractionRoute(dependencies);
@@ -2941,24 +2601,11 @@ describe("Model assignment writes on modal submit", () => {
       nonce: "nonce123456",
     });
 
-    const interaction = {
-      id: "modal-lang-1",
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {
-        deferUpdateCalls += 1;
-      },
-      reply: async (payload: { content?: string }) => {
-        replied = payload;
-      },
-      fields: { getTextInputValue: () => "" },
-    } as unknown as ModalSubmitInteraction;
+      overrides: { id: "modal-lang-1" },
+    });
 
     const modalsModule = await import("@/utils/discord/ui/modals");
     const takeSpy = spyOn(modalsModule, "takeRawModalSelectValue").mockReturnValue("ja");
@@ -2971,14 +2618,14 @@ describe("Model assignment writes on modal submit", () => {
     expect(telemetry).toContain("personal-config.personal.language.set");
     // A slash-command modal has no message, so deferring an update would fail outright and the
     // repaint the panel route ends with would have nothing to edit.
-    expect(deferUpdateCalls).toBe(0);
+    expect(interaction.calls.filter((call) => call.method === "deferUpdate")).toHaveLength(0);
+    const replied = interaction.replies.at(-1) as { content?: string } | undefined;
     expect(replied).not.toBeNull();
     expect(replied?.content).toContain("日本語");
   });
 
   it("writes immediately without confirmation when capability is already an active override", async () => {
     const calls: string[] = [];
-    let repaintedView: unknown = null;
 
     const { dependencies, telemetry } = makeDependencies(calls, {
       loadUserSavedProviders: async () => [
@@ -3006,24 +2653,10 @@ describe("Model assignment writes on modal submit", () => {
       nonce: "nonce123456",
     });
 
-    const interaction = {
-      id: "modal-1",
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        repaintedView = payload;
-      },
-      fields: {
-        getTextInputValue: () => "",
-      },
-    } as unknown as ModalSubmitInteraction;
+    });
 
     const modalsModule = await import("@/utils/discord/ui/modals");
     const takeSpy = spyOn(modalsModule, "takeRawModalSelectValue").mockReturnValue("102");
@@ -3034,45 +2667,32 @@ describe("Model assignment writes on modal submit", () => {
 
     expect(calls).toContain("setCapabilityModel:text:openrouter:102");
     expect(telemetry).toContain("personal-config.personal.model.set");
-    const json = JSON.stringify(repaintedView);
+    const json = JSON.stringify(interaction.edits.at(-1));
     expect(json).not.toContain("model-act-confirm");
     expect(json).toContain("Text now routes to OpenRouter using Claude 3 Opus");
   });
 
   it("model-act-cancel repaints without writing or emitting telemetry", async () => {
     const calls: string[] = [];
-    let repaintedView: unknown = null;
     const { dependencies, telemetry } = makeDependencies(calls);
 
     const route = createPersonalConfigInteractionRoute(dependencies);
     const customId = buildPersonalConfigRouteId({ action: "model-act-cancel", locale: "en-US" });
 
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        repaintedView = payload;
-      },
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
     expect(calls.some((c) => c.startsWith("setCapabilityModel"))).toBe(false);
     expect(telemetry).toHaveLength(0);
-    const json = JSON.stringify(repaintedView);
+    const json = JSON.stringify(interaction.edits.at(-1));
     expect(json).toContain(localizedCopy("en-US", "commands.personal.config.no_changes_heading"));
   });
 
   it("fails closed on modal submit when the chosen model is no longer available", async () => {
     const calls: string[] = [];
-    let repaintedView: unknown = null;
     const { dependencies, telemetry } = makeDependencies(calls, {
       loadAvailableModelsForCapability: async () => [], // model 999 no longer exists
     });
@@ -3086,24 +2706,10 @@ describe("Model assignment writes on modal submit", () => {
       nonce: "nonce123456",
     });
 
-    const interaction = {
-      id: "modal-1",
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        repaintedView = payload;
-      },
-      fields: {
-        getTextInputValue: () => "",
-      },
-    } as unknown as ModalSubmitInteraction;
+    });
 
     const modalsModule = await import("@/utils/discord/ui/modals");
     const takeSpy = spyOn(modalsModule, "takeRawModalSelectValue").mockReturnValue("999");
@@ -3114,7 +2720,7 @@ describe("Model assignment writes on modal submit", () => {
 
     expect(calls.some((c) => c.startsWith("setCapabilityModel"))).toBe(false);
     expect(telemetry).toHaveLength(0);
-    expect(JSON.stringify(repaintedView)).toContain(
+    expect(JSON.stringify(interaction.edits.at(-1))).toContain(
       localizedCopy("en-US", "commands.personal.config.write_failed_heading"),
     );
   });
@@ -3123,7 +2729,6 @@ describe("Model assignment writes on modal submit", () => {
 describe("Re-resolution and zero model guard", () => {
   it("model-provider-select shows named no-models receipt when provider has 0 eligible models", async () => {
     let modalShown = false;
-    let repaintedView: unknown = null;
 
     const { dependencies } = makeDependencies([], {
       loadAvailableModelsForCapability: async () => [],
@@ -3139,26 +2744,16 @@ describe("Re-resolution and zero model guard", () => {
       capability: "text",
     });
 
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => true,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
+      kind: "string-select",
       customId,
       values: ["openrouter"],
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        repaintedView = payload;
-      },
-    } as unknown as StringSelectMenuInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
     expect(modalShown).toBe(false);
-    const json = JSON.stringify(repaintedView);
+    const json = JSON.stringify(interaction.edits.at(-1));
     expect(json).toContain(localizedCopy("en-US", "commands.personal.config.no_models_available_heading"));
     expect(json).toContain("OpenRouter");
   });
@@ -3174,19 +2769,11 @@ describe("Re-resolution and zero model guard", () => {
       capability: "text",
     });
 
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => true,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
+      kind: "string-select",
       customId,
       values: ["__server_default__"],
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async () => {},
-    } as unknown as StringSelectMenuInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -3197,10 +2784,10 @@ describe("Re-resolution and zero model guard", () => {
   it("acknowledges before disabling and emits no success telemetry for an unchanged Server Default choice", async () => {
     const calls: string[] = [];
     const { dependencies, telemetry } = makeDependencies(calls);
-    let deferred = false;
     let acknowledgedInsideWrite = false;
+    let interaction: RouteInteraction;
     dependencies.operations.setCapabilityEnabled = async () => {
-      acknowledgedInsideWrite = deferred;
+      acknowledgedInsideWrite = interaction.deferred;
       return { status: "no-changes" };
     };
     const route = createPersonalConfigInteractionRoute(dependencies);
@@ -3209,31 +2796,16 @@ describe("Re-resolution and zero model guard", () => {
       locale: "en-US",
       capability: "vision",
     });
-    let repainted: unknown = null;
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => true,
-      isModalSubmit: () => false,
+    interaction = makePersonalInteraction({
+      kind: "string-select",
       customId,
       values: ["__server_default__"],
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return deferred;
-      },
-      replied: false,
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async (payload: unknown) => {
-        repainted = payload;
-      },
-    } as unknown as StringSelectMenuInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
     expect(acknowledgedInsideWrite).toBe(true);
-    expect(JSON.stringify(repainted)).toContain("No Changes");
+    expect(JSON.stringify(interaction.edits.at(-1))).toContain("No Changes");
     expect(telemetry).toEqual([]);
   });
 });
@@ -3263,24 +2835,13 @@ describe("Range pagination workflow", () => {
       capability: "text",
       start: 24,
     });
-    let page1Payload: unknown = null;
-    const page1Interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const page1Interaction = makePersonalInteraction({
       customId: page1Id,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        page1Payload = payload;
-      },
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, page1Interaction, requireRoute(page1Id));
 
+    const page1Payload = page1Interaction.edits.at(-1);
     const page1Components = collectComponents(page1Payload);
     const providerSelect = page1Components.find((component) =>
       component.customId?.endsWith(":model-provider-select:en-US:text"),
@@ -3326,25 +2887,15 @@ describe("Range pagination workflow", () => {
       capability: "text",
       start: 50,
     });
-    let repainted: unknown = null;
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        repainted = payload;
-      },
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
-    expect(JSON.stringify(repainted)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
+    expect(JSON.stringify(interaction.edits.at(-1))).toContain(
+      localizedCopy("en-US", "commands.personal.config.unavailable"),
+    );
     expect(calls).toEqual([]);
     expect(telemetry).toEqual([]);
   });
@@ -3369,24 +2920,13 @@ describe("Range pagination workflow", () => {
 
     // Literal WIRE_CONTRACT_V2 action ending in :25
     const customId = "personal-config:v2:model-provider-range-open:en-US:text:25";
-    let repaintedPayload: unknown = null;
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        repaintedPayload = payload;
-      },
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
+    const repaintedPayload = interaction.edits.at(-1);
     const components = collectComponents(repaintedPayload);
     const providerSelect = components.find((c) => c.customId?.endsWith(":model-provider-select:en-US:text"));
     expect(providerSelect?.options?.map((o) => o.value)).toEqual([
@@ -3414,8 +2954,6 @@ describe("Range pagination workflow", () => {
 
   it("defers and repaints Switch Models with one selector entry per model page when model-provider-select has > 25 models", async () => {
     let modalShown = false;
-    let deferred = false;
-    let repaintedPayload: unknown = null;
 
     const thirtyOpenRouterModels = Array.from({ length: 30 }, (_, i) => ({
       id: 100 + i,
@@ -3440,29 +2978,18 @@ describe("Range pagination workflow", () => {
       capability: "text",
     });
 
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => true,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
+      kind: "string-select",
       customId,
       values: ["openrouter"],
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async (payload: unknown) => {
-        repaintedPayload = payload;
-      },
-    } as unknown as StringSelectMenuInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
     expect(modalShown).toBe(false);
-    expect(deferred).toBe(true);
+    expect(interaction.deferred).toBe(true);
 
+    const repaintedPayload = interaction.edits.at(-1);
     expect(repaintedPayload).not.toBeNull();
     const components = collectComponents(repaintedPayload);
     const customIds = components.flatMap((component) => (component.customId ? [component.customId] : []));
@@ -3525,26 +3052,15 @@ describe("Range pagination workflow", () => {
       capability: "text",
     });
 
-    let repaintedPayload: unknown = null;
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => true,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
+      kind: "string-select",
       customId,
       values: ["provider_1"],
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        repaintedPayload = payload;
-      },
-    } as unknown as StringSelectMenuInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
-    const components = collectComponents(repaintedPayload);
+    const components = collectComponents(interaction.edits.at(-1));
     const textSelect = components.find((c) => c.customId?.includes(":model-provider-select:en-US:text"));
     expect(textSelect).toBeDefined();
 
@@ -3580,19 +3096,11 @@ describe("Range pagination workflow", () => {
       capability: "text",
     });
 
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => true,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
+      kind: "string-select",
       customId,
       values: ["page!25!openrouter"],
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async () => {},
-    } as unknown as StringSelectMenuInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -3629,19 +3137,11 @@ describe("Range pagination workflow", () => {
       capability: "text",
     });
 
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => true,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
+      kind: "string-select",
       customId,
       values: ["openrouter"],
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async () => {},
-    } as unknown as StringSelectMenuInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -3677,18 +3177,9 @@ describe("Range pagination workflow", () => {
       start: 25,
     });
 
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async () => {},
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -3699,9 +3190,6 @@ describe("Range pagination workflow", () => {
   });
 
   it("defers and repaints Fallbacks with one selector entry per option page when fallbacks-provider-select has > 24 options", async () => {
-    let modalShown = false;
-    let deferred = false;
-    let repaintedPayload: unknown = null;
     const fallbackOptions = Array.from({ length: 30 }, (_, i) => ({
       refKey: `llm:${100 + i}`,
       label: `Model ${i + 1}`,
@@ -3715,6 +3203,7 @@ describe("Range pagination workflow", () => {
     ]);
 
     try {
+      let modalShown = false;
       const { dependencies } = makeDependencies([], {
         showFallbacksModal: async () => {
           modalShown = true;
@@ -3727,29 +3216,18 @@ describe("Range pagination workflow", () => {
         locale: "en-US",
       });
 
-      const interaction = {
-        isButton: () => false,
-        isStringSelectMenu: () => true,
-        isModalSubmit: () => false,
+      const interaction = makePersonalInteraction({
+        kind: "string-select",
         customId,
         values: ["openrouter"],
-        user: { id: "user-123", username: "tester", displayName: "Tester" },
-        guildId: "guild-123",
-        deferred: false,
-        replied: false,
-        deferUpdate: async () => {
-          deferred = true;
-        },
-        editReply: async (payload: unknown) => {
-          repaintedPayload = payload;
-        },
-      } as unknown as StringSelectMenuInteraction;
+      });
 
       await route.execute({} as Client, interaction, requireRoute(customId));
 
       expect(modalShown).toBe(false);
-      expect(deferred).toBe(true);
+      expect(interaction.deferred).toBe(true);
 
+      const repaintedPayload = interaction.edits.at(-1);
       const components = collectComponents(repaintedPayload);
       const providerSelect = components.find((c) => c.customId?.includes(":fallbacks-provider-select:en-US"));
       expect(providerSelect?.options?.map((option) => option.value)).toEqual([
@@ -3800,17 +3278,11 @@ describe("Range pagination workflow", () => {
         locale: "en-US",
       });
 
-      const interaction = {
-        isButton: () => false,
-        isStringSelectMenu: () => true,
-        isModalSubmit: () => false,
+      const interaction = makePersonalInteraction({
+        kind: "string-select",
         customId,
         values: ["openrouter"],
-        user: { id: "user-123", username: "tester", displayName: "Tester" },
-        guildId: "guild-123",
-        deferred: false,
-        replied: false,
-      } as unknown as StringSelectMenuInteraction;
+      });
 
       await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -3859,18 +3331,9 @@ describe("Range pagination workflow", () => {
         start: 24,
       });
 
-      const interaction = {
-        isButton: () => true,
-        isStringSelectMenu: () => false,
-        isModalSubmit: () => false,
+      const interaction = makePersonalInteraction({
         customId,
-        user: { id: "user-123", username: "tester", displayName: "Tester" },
-        guildId: "guild-123",
-        deferred: false,
-        replied: false,
-        deferUpdate: async () => {},
-        editReply: async () => {},
-      } as unknown as ButtonInteraction;
+      });
 
       await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -3888,7 +3351,6 @@ describe("Range pagination workflow", () => {
 
   it("rejects handcrafted :25 fallback button with unavailable reply and shows no modal", async () => {
     let modalShown = false;
-    let replyPayload: InteractionReplyOptions | null = null;
     const fallbackOptions = Array.from({ length: 30 }, (_, i) => ({
       refKey: `llm:${100 + i}`,
       label: `Model ${i + 1}`,
@@ -3912,26 +3374,14 @@ describe("Range pagination workflow", () => {
       const route = createPersonalConfigInteractionRoute(dependencies);
       const customId = "personal-config:v2:fallbacks-range-open:en-US:openrouter:25";
 
-      const interaction = {
-        isButton: () => true,
-        isStringSelectMenu: () => false,
-        isModalSubmit: () => false,
+      const interaction = makePersonalInteraction({
         customId,
-        user: { id: "user-123", username: "tester", displayName: "Tester" },
-        guildId: "guild-123",
-        deferred: false,
-        replied: false,
-        reply: async (payload: InteractionReplyOptions) => {
-          replyPayload = payload;
-        },
-        deferUpdate: async () => {},
-        editReply: async () => {},
-      } as unknown as ButtonInteraction;
+      });
 
       await route.execute({} as Client, interaction, requireRoute(customId));
 
       expect(modalShown).toBe(false);
-      expect(replyPayload).toEqual({
+      expect(interaction.replies.at(-1)).toEqual({
         content: localizer("en-US", "commands.personal.config.unavailable"),
         flags: MessageFlags.Ephemeral,
       });
@@ -4358,7 +3808,6 @@ describe("Quick-Toggle modal structure and routing copy", () => {
 
   it("carries the submitted capability set straight to the write with no confirmation step", async () => {
     const calls: string[] = [];
-    let repaintedView: unknown = null;
     const { dependencies, telemetry } = makeDependencies(calls, {
       loadUserSavedProviders: async () => [
         {
@@ -4390,21 +3839,10 @@ describe("Quick-Toggle modal structure and routing copy", () => {
       locale: "en-US",
       nonce: "nonce123456",
     });
-    const interaction = {
-      id: "modal-1",
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        repaintedView = payload;
-      },
-    } as unknown as ModalSubmitInteraction;
+    });
 
     const modalsModule = await import("@/utils/discord/ui/modals");
     const takeSpy = spyOn(modalsModule, "takeRawModalCheckboxGroupValues").mockReturnValue(["text", "vision"]);
@@ -4415,14 +3853,13 @@ describe("Quick-Toggle modal structure and routing copy", () => {
 
     expect(calls).toContain("setQuickToggleRouting:text,vision");
     expect(telemetry).toContain("personal-config.personal.model-routing.set");
-    const json = JSON.stringify(repaintedView);
+    const json = JSON.stringify(interaction.edits.at(-1));
     expect(json).not.toContain("quick-toggle-confirm");
     expect(json).toContain(localizedCopy("en-US", "commands.personal.config.routing_updated_heading"));
   });
 
   it("fails closed when a checked capability has no configured model", async () => {
     const calls: string[] = [];
-    let repaintedView: unknown = null;
     const { dependencies, telemetry } = makeDependencies(calls, {
       loadUserSavedProviders: async () => [
         {
@@ -4447,21 +3884,10 @@ describe("Quick-Toggle modal structure and routing copy", () => {
       locale: "en-US",
       nonce: "nonce123456",
     });
-    const interaction = {
-      id: "modal-1",
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        repaintedView = payload;
-      },
-    } as unknown as ModalSubmitInteraction;
+    });
 
     const modalsModule = await import("@/utils/discord/ui/modals");
     const takeSpy = spyOn(modalsModule, "takeRawModalCheckboxGroupValues").mockReturnValue(["text", "video"]);
@@ -4473,7 +3899,7 @@ describe("Quick-Toggle modal structure and routing copy", () => {
     // The guard that used to sit behind the confirmation still runs before any write.
     expect(calls.some((c) => c.startsWith("setQuickToggleRouting"))).toBe(false);
     expect(telemetry).toHaveLength(0);
-    expect(JSON.stringify(repaintedView)).toContain(
+    expect(JSON.stringify(interaction.edits.at(-1))).toContain(
       localizedCopy("en-US", "commands.personal.config.missing_model_heading"),
     );
   });
@@ -4556,22 +3982,9 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
     const route = createPersonalConfigInteractionRoute(dependencies);
     const customId = buildPersonalConfigRouteId({ action: "trigger-mode-set", locale: "en-US", mode: "on" });
 
-    let deferred = false;
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return deferred;
-      },
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async () => {},
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -4585,22 +3998,9 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
     const route = createPersonalConfigInteractionRoute(dependencies);
     const customId = buildPersonalConfigRouteId({ action: "tool-mode-set", locale: "en-US", mode: "off" });
 
-    let deferred = false;
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return deferred;
-      },
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async () => {},
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -4620,16 +4020,9 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
     const route = createPersonalConfigInteractionRoute(dependencies);
     const customId = buildPersonalConfigRouteId({ action: "impersonation-open", locale: "en-US" });
 
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -4646,29 +4039,17 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
       nonce: "nonce123456",
     });
 
-    let replyPayload: unknown;
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        replyPayload = payload;
-      },
-      fields: {
-        getTextInputValue: () => "   ",
-      },
-    } as unknown as ModalSubmitInteraction;
+      fields: { prompt_nonce123456: "   " },
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
     expect(calls.filter((c) => c.startsWith("setImpersonationPrompt"))).toHaveLength(0);
     expect(telemetry).not.toContain("personal-config.personal.impersonation.set");
-    expect(JSON.stringify(replyPayload)).toContain(
+    expect(JSON.stringify(interaction.edits.at(-1))).toContain(
       localizedCopy("en-US", "commands.personal.config.impersonation_blank_refusal_heading"),
     );
   });
@@ -4683,20 +4064,11 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
       nonce: "nonce123456",
     });
 
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      deferUpdate: async () => {},
-      editReply: async () => {},
-      fields: {
-        getTextInputValue: () => "Speak concisely",
-      },
-    } as unknown as ModalSubmitInteraction;
+      fields: { prompt_nonce123456: "Speak concisely" },
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -4715,17 +4087,9 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
       nonce: "nonce123456",
     });
 
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      deferUpdate: async () => {},
-      editReply: async () => {},
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -4752,22 +4116,14 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
     const route = createPersonalConfigInteractionRoute(dependencies);
     const customId = buildPersonalConfigRouteId({ action: "spotlight-set-open", locale: "en-US" });
 
-    let replyPayload: unknown;
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
       guildId: null,
-      reply: async (payload: unknown) => {
-        replyPayload = payload;
-      },
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
-    expect(JSON.stringify(replyPayload)).toContain(
+    expect(JSON.stringify(interaction.replies.at(-1))).toContain(
       localizedCopy("en-US", "commands.personal.config.spotlight_guild_only_detail"),
     );
   });
@@ -4790,18 +4146,10 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
       nonce: "nonce123456",
     });
 
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      guild: { channels: { cache: makeChannelCache(["123456789012345678"]) } },
-      deferred: false,
-      deferUpdate: async () => {},
-      editReply: async () => {},
-    } as unknown as ButtonInteraction;
+      channelCache: makeChannelCache(["123456789012345678"]),
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -4827,18 +4175,10 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
       nonce: "nonce123456",
     });
 
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      guild: { channels: { cache: makeChannelCache(["123456789012345678"]) } },
-      deferred: false,
-      deferUpdate: async () => {},
-      editReply: async () => {},
-    } as unknown as ButtonInteraction;
+      channelCache: makeChannelCache(["123456789012345678"]),
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -4868,19 +4208,11 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
       nonce: "nonce123456",
     });
 
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      deferUpdate: async () => {},
-      editReply: async () => {},
-      fields: {},
-      id: "modal-range-2",
-    } as unknown as ModalSubmitInteraction;
+      overrides: { id: "modal-range-2" },
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -5332,19 +4664,10 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
       nonce: "nonce123456",
     });
 
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      deferUpdate: async () => {},
-      editReply: async () => {},
-      fields: {},
-      id: "modal-1",
-    } as unknown as ModalSubmitInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -5376,32 +4699,23 @@ describe("Stable spotlight identity and destructive safety", () => {
       makePersona(2, 20, "Anon"),
     ];
 
-    let editPayload: unknown;
     const { dependencies, telemetry } = makeDependencies(calls, {
       loadGuildPersonas: async () => driftedPersonas,
     });
     const route = createPersonalConfigInteractionRoute(dependencies);
 
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      guild: { channels: { cache: makeChannelCache(["123456789012345678"]) } },
-      deferred: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        editPayload = payload;
-      },
-    } as unknown as ButtonInteraction;
+      channelCache: makeChannelCache(["123456789012345678"]),
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
     expect(calls.filter((c) => c.startsWith("setSpotlight"))).toHaveLength(0);
     expect(telemetry).not.toContain("personal-config.personal.spotlight.set");
-    expect(JSON.stringify(editPayload)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
+    expect(JSON.stringify(interaction.edits.at(-1))).toContain(
+      localizedCopy("en-US", "commands.personal.config.unavailable"),
+    );
   });
 
   it("detects persona deleted before selected position and fails stale with zero writes or telemetry", async () => {
@@ -5422,32 +4736,23 @@ describe("Stable spotlight identity and destructive safety", () => {
 
     const driftedPersonas = [makePersona(2, 20, "Anon"), makePersona(3, 30, "Soy")];
 
-    let editPayload: unknown;
     const { dependencies, telemetry } = makeDependencies(calls, {
       loadGuildPersonas: async () => driftedPersonas,
     });
     const route = createPersonalConfigInteractionRoute(dependencies);
 
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      guild: { channels: { cache: makeChannelCache(["123456789012345678"]) } },
-      deferred: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        editPayload = payload;
-      },
-    } as unknown as ButtonInteraction;
+      channelCache: makeChannelCache(["123456789012345678"]),
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
     expect(calls.filter((c) => c.startsWith("setSpotlight"))).toHaveLength(0);
     expect(telemetry).not.toContain("personal-config.personal.spotlight.set");
-    expect(JSON.stringify(editPayload)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
+    expect(JSON.stringify(interaction.edits.at(-1))).toContain(
+      localizedCopy("en-US", "commands.personal.config.unavailable"),
+    );
   });
 
   it("fails stale on spotlight-set-submit when personas drift before modal submit", async () => {
@@ -5466,29 +4771,15 @@ describe("Stable spotlight identity and destructive safety", () => {
 
     const driftedPersonas = [makePersona(99, 99, "New"), makePersona(1, 10, "Tomori"), makePersona(2, 20, "Anon")];
 
-    let editPayload: unknown;
     const { dependencies, telemetry } = makeDependencies(calls, {
       loadGuildPersonas: async () => driftedPersonas,
     });
     const route = createPersonalConfigInteractionRoute(dependencies);
 
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        editPayload = payload;
-      },
-      fields: {
-        getTextInputValue: () => "0",
-      },
-      id: "modal-1",
-    } as unknown as ModalSubmitInteraction;
+    });
 
     const modalsModule = await import("@/utils/discord/ui/modals");
     const takeSpy = spyOn(modalsModule, "takeRawModalSelectValue").mockReturnValue("123456789012345678");
@@ -5499,7 +4790,9 @@ describe("Stable spotlight identity and destructive safety", () => {
 
     expect(calls.filter((c) => c.startsWith("setSpotlight"))).toHaveLength(0);
     expect(telemetry).not.toContain("personal-config.personal.spotlight.set");
-    expect(JSON.stringify(editPayload)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
+    expect(JSON.stringify(interaction.edits.at(-1))).toContain(
+      localizedCopy("en-US", "commands.personal.config.unavailable"),
+    );
   });
 
   it("fails stale on spot-set-auto button click when personas drift", async () => {
@@ -5517,7 +4810,6 @@ describe("Stable spotlight identity and destructive safety", () => {
     });
 
     let modalCalled = false;
-    let replyPayload: unknown;
     const { dependencies } = makeDependencies([], {
       loadGuildPersonas: async () => [makePersona(99, 99, "Drifted"), ...initialPersonas],
       showSpotlightAutoTriggerModal: async () => {
@@ -5526,22 +4818,16 @@ describe("Stable spotlight identity and destructive safety", () => {
     });
     const route = createPersonalConfigInteractionRoute(dependencies);
 
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      reply: async (payload: unknown) => {
-        replyPayload = payload;
-      },
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
     expect(modalCalled).toBe(false);
-    expect(JSON.stringify(replyPayload)).toContain(localizedCopy("en-US", "commands.personal.config.stale_warning"));
+    expect(JSON.stringify(interaction.replies.at(-1))).toContain(
+      localizedCopy("en-US", "commands.personal.config.stale_warning"),
+    );
   });
 
   it("fails stale on spot-set-auto-sub modal submission when personas drift", async () => {
@@ -5558,33 +4844,21 @@ describe("Stable spotlight identity and destructive safety", () => {
       nonce: "nonce123456",
     });
 
-    let editPayload: unknown;
     const { dependencies } = makeDependencies([], {
       loadGuildPersonas: async () => [makePersona(99, 99, "Drifted"), ...initialPersonas],
     });
     const route = createPersonalConfigInteractionRoute(dependencies);
 
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        editPayload = payload;
-      },
-      fields: {
-        getTextInputValue: () => "0",
-      },
-      id: "modal-auto",
-    } as unknown as ModalSubmitInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
-    expect(JSON.stringify(editPayload)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
+    expect(JSON.stringify(interaction.edits.at(-1))).toContain(
+      localizedCopy("en-US", "commands.personal.config.unavailable"),
+    );
   });
 
   it("detects presented spotlight inserted, deleted, or expired between modal render and submit", async () => {
@@ -5624,33 +4898,24 @@ describe("Stable spotlight identity and destructive safety", () => {
         userDiscId: "user-123",
       },
     ];
-    let editPayload: unknown;
     const { dependencies: depInserted, telemetry: telInserted } = makeDependencies(calls, {
       loadActiveSpotlights: async () => insertedSpotlights,
     });
     const routeInserted = createPersonalConfigInteractionRoute(depInserted);
 
-    const interactionA = {
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interactionA = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        editPayload = payload;
-      },
-      fields: {},
-      id: "modal-drift-a",
-    } as unknown as ModalSubmitInteraction;
+      overrides: { id: "modal-drift-a" },
+    });
 
     await routeInserted.execute({} as Client, interactionA, requireRoute(customId));
 
     expect(calls.filter((c) => c.startsWith("removeSpotlights"))).toHaveLength(0);
     expect(telInserted).not.toContain("personal-config.personal.spotlight.remove");
-    expect(JSON.stringify(editPayload)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
+    expect(JSON.stringify(interactionA.edits.at(-1))).toContain(
+      localizedCopy("en-US", "commands.personal.config.unavailable"),
+    );
 
     const expiredSpotlights = [initialSpotlights[1]];
     const { dependencies: depExpired, telemetry: telExpired } = makeDependencies(calls, {
@@ -5658,27 +4923,19 @@ describe("Stable spotlight identity and destructive safety", () => {
     });
     const routeExpired = createPersonalConfigInteractionRoute(depExpired);
 
-    const interactionB = {
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interactionB = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        editPayload = payload;
-      },
-      fields: {},
-      id: "modal-drift-b",
-    } as unknown as ModalSubmitInteraction;
+      overrides: { id: "modal-drift-b" },
+    });
 
     await routeExpired.execute({} as Client, interactionB, requireRoute(customId));
 
     expect(calls.filter((c) => c.startsWith("removeSpotlights"))).toHaveLength(0);
     expect(telExpired).not.toContain("personal-config.personal.spotlight.remove");
-    expect(JSON.stringify(editPayload)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
+    expect(JSON.stringify(interactionB.edits.at(-1))).toContain(
+      localizedCopy("en-US", "commands.personal.config.unavailable"),
+    );
   });
 
   it("fails stale on spot-rem-range button click when active spotlights drift", async () => {
@@ -5695,7 +4952,6 @@ describe("Stable spotlight identity and destructive safety", () => {
     const customId = buildPersonalConfigRouteId({ action: "spot-rem-range", locale: "en-US", start: 0, fp });
 
     let modalCalled = false;
-    let replyPayload: unknown;
     const { dependencies } = makeDependencies([], {
       loadActiveSpotlights: async () => [],
       showSpotlightRemoveModal: async () => {
@@ -5704,22 +4960,16 @@ describe("Stable spotlight identity and destructive safety", () => {
     });
     const route = createPersonalConfigInteractionRoute(dependencies);
 
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      reply: async (payload: unknown) => {
-        replyPayload = payload;
-      },
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
     expect(modalCalled).toBe(false);
-    expect(JSON.stringify(replyPayload)).toContain(localizedCopy("en-US", "commands.personal.config.stale_warning"));
+    expect(JSON.stringify(interaction.replies.at(-1))).toContain(
+      localizedCopy("en-US", "commands.personal.config.stale_warning"),
+    );
   });
 
   it("executes a newly constructed route from transported fingerprint without setup or snapshot state", async () => {
@@ -5747,19 +4997,11 @@ describe("Stable spotlight identity and destructive safety", () => {
     });
     const freshRoute = createPersonalConfigInteractionRoute(dependencies);
 
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      deferUpdate: async () => {},
-      editReply: async () => {},
-      fields: {},
-      id: "modal-restart",
-    } as unknown as ModalSubmitInteraction;
+      overrides: { id: "modal-restart" },
+    });
 
     await freshRoute.execute({} as Client, interaction, requireRoute(customId));
 
@@ -5783,21 +5025,11 @@ describe("Stable spotlight identity and destructive safety", () => {
       nonce: "nonce123456",
     });
 
-    let editPayloadActor: unknown;
-    const actorInteraction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const actorInteraction = makePersonalInteraction({
       customId,
-      user: { id: "user-999", username: "attacker", displayName: "Attacker" },
-      guildId: "guild-123",
-      guild: { channels: { cache: makeChannelCache(["123456789012345678"]) } },
-      deferred: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        editPayloadActor = payload;
-      },
-    } as unknown as ButtonInteraction;
+      channelCache: makeChannelCache(["123456789012345678"]),
+      overrides: { user: { id: "user-999", username: "attacker", displayName: "Attacker", globalName: "Attacker" } },
+    });
 
     const { dependencies: depActor, telemetry: telActor } = makeDependencies(calls, {
       resolveScope: async () => ({
@@ -5818,23 +5050,15 @@ describe("Stable spotlight identity and destructive safety", () => {
 
     expect(calls.filter((c) => c.startsWith("setSpotlight"))).toHaveLength(0);
     expect(telActor).not.toContain("personal-config.personal.spotlight.set");
-    expect(JSON.stringify(editPayloadActor)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
+    expect(JSON.stringify(actorInteraction.edits.at(-1))).toContain(
+      localizedCopy("en-US", "commands.personal.config.unavailable"),
+    );
 
-    let editPayloadGuild: unknown;
-    const guildInteraction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const guildInteraction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
       guildId: "guild-999",
-      guild: { channels: { cache: makeChannelCache(["123456789012345678"]) } },
-      deferred: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        editPayloadGuild = payload;
-      },
-    } as unknown as ButtonInteraction;
+      channelCache: makeChannelCache(["123456789012345678"]),
+    });
 
     const { dependencies: depGuild, telemetry: telGuild } = makeDependencies(calls, {
       resolveScope: async () => ({
@@ -5855,22 +5079,15 @@ describe("Stable spotlight identity and destructive safety", () => {
 
     expect(calls.filter((c) => c.startsWith("setSpotlight"))).toHaveLength(0);
     expect(telGuild).not.toContain("personal-config.personal.spotlight.set");
-    expect(JSON.stringify(editPayloadGuild)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
+    expect(JSON.stringify(guildInteraction.edits.at(-1))).toContain(
+      localizedCopy("en-US", "commands.personal.config.unavailable"),
+    );
   });
 
   it("fails stale on old v1 controls through real global router with no mutation", async () => {
-    let replyPayload: unknown;
-    const v1Interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const v1Interaction = makePersonalInteraction({
       customId: "personal-config:v1:spot-set-cf:en-US:123456789012345678:12:1:1:nonce123456",
-      locale: "en-US",
-      user: { id: "user-123" },
-      reply: async (payload: unknown) => {
-        replyPayload = payload;
-      },
-    } as unknown as ButtonInteraction;
+    });
 
     const replaceSpy = spyOn(userRepository, "replacePersonalSpotlight").mockImplementation(async () => {});
     const removeSpy = spyOn(userRepository, "removePersonalSpotlight").mockImplementation(async () => true);
@@ -5880,7 +5097,7 @@ describe("Stable spotlight identity and destructive safety", () => {
     expect(handled).toBe(true);
     expect(replaceSpy).not.toHaveBeenCalled();
     expect(removeSpy).not.toHaveBeenCalled();
-    expect(JSON.stringify(replyPayload)).toContain("/personal config");
+    expect(JSON.stringify(v1Interaction.replies.at(-1))).toContain("/personal config");
 
     replaceSpy.mockRestore();
     removeSpy.mockRestore();
@@ -5920,7 +5137,6 @@ describe("Stable spotlight identity and destructive safety", () => {
       nonce: "nonce123456",
     });
 
-    let editPayload: unknown;
     const { dependencies, telemetry } = makeDependencies(calls, {
       loadActiveSpotlights: async () => activeSpotlights,
       operations: {
@@ -5934,26 +5150,16 @@ describe("Stable spotlight identity and destructive safety", () => {
     });
     const route = createPersonalConfigInteractionRoute(dependencies);
 
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        editPayload = payload;
-      },
-      fields: {},
-      id: "modal-partial",
-    } as unknown as ModalSubmitInteraction;
+      overrides: { id: "modal-partial" },
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
     expect(telemetry).not.toContain("personal-config.personal.spotlight.remove");
-    expect(JSON.stringify(editPayload)).toContain(
+    expect(JSON.stringify(interaction.edits.at(-1))).toContain(
       localizedCopy("en-US", "commands.personal.config.spotlight_partial_removal_heading"),
     );
   });
@@ -6285,8 +5491,7 @@ describe("Stable spotlight identity and destructive safety", () => {
     let acknowledgedDuringSetWrite = false;
     let acknowledgedDuringRemoveWrite = false;
 
-    let deferredState = false;
-    let setInteraction: ButtonInteraction;
+    let setInteraction: RouteInteraction;
     const { dependencies: depSet } = makeDependencies(calls, {
       operations: {
         ...personalConfigOperations,
@@ -6298,25 +5503,10 @@ describe("Stable spotlight identity and destructive safety", () => {
     });
     const setRoute = createPersonalConfigInteractionRoute(depSet);
 
-    setInteraction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    setInteraction = makePersonalInteraction({
       customId: setCustomId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      guild: { channels: { cache: makeChannelCache(["123456789012345678"]) } },
-      get deferred() {
-        return deferredState;
-      },
-      get replied() {
-        return false;
-      },
-      deferUpdate: async () => {
-        deferredState = true;
-      },
-      editReply: async () => {},
-    } as unknown as ButtonInteraction;
+      channelCache: makeChannelCache(["123456789012345678"]),
+    });
 
     await setRoute.execute({} as Client, setInteraction, requireRoute(setCustomId));
     expect(acknowledgedDuringSetWrite).toBe(true);
@@ -6339,8 +5529,7 @@ describe("Stable spotlight identity and destructive safety", () => {
       nonce: "nonce123456",
     });
 
-    let remDeferredState = false;
-    let remInteraction: ModalSubmitInteraction;
+    let remInteraction: RouteInteraction;
     const { dependencies: depRem } = makeDependencies(calls, {
       loadActiveSpotlights: async () => activeSpotlights,
       operations: {
@@ -6353,26 +5542,11 @@ describe("Stable spotlight identity and destructive safety", () => {
     });
     const remRoute = createPersonalConfigInteractionRoute(depRem);
 
-    remInteraction = {
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    remInteraction = makePersonalInteraction({
+      kind: "modal",
       customId: remCustomId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return remDeferredState;
-      },
-      get replied() {
-        return false;
-      },
-      deferUpdate: async () => {
-        remDeferredState = true;
-      },
-      editReply: async () => {},
-      fields: {},
-      id: "modal-ack",
-    } as unknown as ModalSubmitInteraction;
+      overrides: { id: "modal-ack" },
+    });
 
     await remRoute.execute({} as Client, remInteraction, requireRoute(remCustomId));
     expect(acknowledgedDuringRemoveWrite).toBe(true);
@@ -6382,7 +5556,6 @@ describe("Stable spotlight identity and destructive safety", () => {
 describe("Personal Spotlight auto-trigger and range chooser", () => {
   it("assigns single selected persona directly as auto-trigger without modal", async () => {
     let modalOpened = false;
-    let repaintedPayload: unknown = null;
     const persona = { id: 10, name: "Tomori", isAlter: false };
     const fp = computeSpotlightSetFingerprint("guild-123", "user-123", [persona]);
     const mask = "1";
@@ -6406,29 +5579,15 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
       nonce: "nonce123456",
     });
 
-    let deferred = false;
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async (payload: unknown) => {
-        repaintedPayload = payload;
-      },
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
-    expect(deferred).toBe(true);
+    expect(interaction.deferred).toBe(true);
     expect(modalOpened).toBe(false);
-    const json = JSON.stringify(repaintedPayload);
+    const json = JSON.stringify(interaction.edits.at(-1));
     expect(json).toContain("Auto-trigger: Tomori");
   });
 
@@ -6443,7 +5602,6 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
     const mask = ((1n << BigInt(personas.length)) - 1n).toString(36);
 
     let modalOpenedWith: Array<{ id: number; name: string }> = [];
-    let repaintedPayload: unknown = null;
 
     const { dependencies } = makeDependencies([], {
       loadGuildPersonas: async () => personas,
@@ -6465,29 +5623,15 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
       nonce: "nonce123456",
     });
 
-    let deferred = false;
-    const autoInteraction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const autoInteraction = makePersonalInteraction({
       customId: autoCustomId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async (payload: unknown) => {
-        repaintedPayload = payload;
-      },
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, autoInteraction, requireRoute(autoCustomId));
 
-    expect(deferred).toBe(true);
+    expect(autoInteraction.deferred).toBe(true);
     expect(modalOpenedWith).toHaveLength(0);
-    const json = JSON.stringify(repaintedPayload);
+    const json = JSON.stringify(autoInteraction.edits.at(-1));
     expect(json).toContain("1-24");
     expect(json).toContain("25-30");
 
@@ -6502,16 +5646,9 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
       start: 24,
     });
 
-    const rangeInteraction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const rangeInteraction = makePersonalInteraction({
       customId: rangeCustomId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, rangeInteraction, requireRoute(rangeCustomId));
 
@@ -6529,7 +5666,6 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
       refKey: `llm:${200 + i}`,
       label: `Model ${i + 1}`,
     }));
-    let repaintedPayload: unknown = null;
 
     const { dependencies } = makeDependencies([], {
       loadAvailableModelsForCapability: async () => models,
@@ -6547,26 +5683,15 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
       chooserPage: 5,
     });
 
-    const modelInteraction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const modelInteraction = makePersonalInteraction({
       customId: modelPageCustomId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        repaintedPayload = payload;
-      },
-    } as unknown as ButtonInteraction;
+    });
 
     try {
       await route.execute({} as Client, modelInteraction, requireRoute(modelPageCustomId));
-      const modelJson = JSON.stringify(repaintedPayload);
+      const modelJson = JSON.stringify(modelInteraction.edits.at(-1));
       expect(modelJson).toContain(localizedCopy("en-US", "commands.personal.config.models_title"));
-      const modelComponents = collectComponents(repaintedPayload);
+      const modelComponents = collectComponents(modelInteraction.edits.at(-1));
       const modelSelect = modelComponents.find((c) => c.customId?.includes(":model-provider-select:en-US:text"));
       expect(modelSelect?.options?.map((option) => option.label)).toEqual([
         "Using Server Default",
@@ -6585,25 +5710,14 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
         chooserPage: 5,
       });
 
-      const fallbackInteraction = {
-        isButton: () => true,
-        isStringSelectMenu: () => false,
-        isModalSubmit: () => false,
+      const fallbackInteraction = makePersonalInteraction({
         customId: fallbackPageCustomId,
-        user: { id: "user-123", username: "tester", displayName: "Tester" },
-        guildId: "guild-123",
-        deferred: false,
-        replied: false,
-        deferUpdate: async () => {},
-        editReply: async (payload: unknown) => {
-          repaintedPayload = payload;
-        },
-      } as unknown as ButtonInteraction;
+      });
 
       await route.execute({} as Client, fallbackInteraction, requireRoute(fallbackPageCustomId));
-      const fallbackJson = JSON.stringify(repaintedPayload);
+      const fallbackJson = JSON.stringify(fallbackInteraction.edits.at(-1));
       expect(fallbackJson).toContain(localizedCopy("en-US", "commands.personal.config.fallbacks_title"));
-      const fallbackComponents = collectComponents(repaintedPayload);
+      const fallbackComponents = collectComponents(fallbackInteraction.edits.at(-1));
       const fallbackSelect = fallbackComponents.find((c) => c.customId?.includes(":fallbacks-provider-select:en-US"));
       expect(fallbackSelect?.options).toHaveLength(7);
       expect(fallbackSelect?.options?.at(-1)?.label).toBe("OpenRouter (page 7)");
@@ -6621,7 +5735,6 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
       userDiscId: "user-123",
     }));
     const fp = computeSpotlightRemoveFingerprint("guild-123", "user-123", activeSpotlights);
-    let repaintedPayload: unknown = null;
 
     const { dependencies } = makeDependencies([], {
       loadActiveSpotlights: async () => activeSpotlights,
@@ -6635,23 +5748,12 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
       fp,
     });
 
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId: removePageCustomId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        repaintedPayload = payload;
-      },
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(removePageCustomId));
-    const json = JSON.stringify(repaintedPayload);
+    const json = JSON.stringify(interaction.edits.at(-1));
     expect(json).toContain(localizedCopy("en-US", "commands.personal.config.spotlight_remove_range_title"));
     expect(json).toContain("1251-1300");
     expect(json).toContain("1451-1500");
@@ -6664,7 +5766,6 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
 
     let writeCalled = false;
     let telemetryRecorded = false;
-    let repaintedPayload: unknown = null;
 
     const { dependencies } = makeDependencies([], {
       loadGuildPersonas: async () => [persona],
@@ -6701,27 +5802,16 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
       nonce: "nonce123456",
     });
 
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      guild: { channels: { cache: makeChannelCache([channelId]) } },
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        repaintedPayload = payload;
-      },
-    } as unknown as ButtonInteraction;
+      channelCache: makeChannelCache([channelId]),
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
     expect(writeCalled).toBe(false);
     expect(telemetryRecorded).toBe(false);
-    const json = JSON.stringify(repaintedPayload);
+    const json = JSON.stringify(interaction.edits.at(-1));
     expect(json).toContain("No Changes");
   });
 
@@ -6772,7 +5862,6 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
       },
     ];
     const fp = computeSpotlightRemoveFingerprint("guild-123", "user-123", activeSpotlights);
-    let repaintedPayload: unknown = null;
 
     const { dependencies } = makeDependencies([], {
       loadActiveSpotlights: async () => activeSpotlights,
@@ -6795,26 +5884,15 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
       nonce: "nonce123456",
     });
 
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        repaintedPayload = payload;
-      },
-      fields: {},
-      id: "modal-submit-123",
-    } as unknown as ModalSubmitInteraction;
+      overrides: { id: "modal-submit-123" },
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
-    const json = JSON.stringify(repaintedPayload);
+    const json = JSON.stringify(interaction.edits.at(-1));
     expect(json).toContain(localizedCopy("en-US", "commands.personal.config.spotlight_partial_removal_heading"));
   });
 });
@@ -6835,28 +5913,17 @@ describe("Persona reachability beyond one modal", () => {
     const modalsModule = await import("@/utils/discord/ui/modals");
     const takeSpy = spyOn(modalsModule, "takeRawModalSelectValue").mockReturnValue("123456789012345678");
 
-    let repainted: unknown = null;
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      id: "modal-step1",
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      fields: { getTextInputValue: () => "12" },
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        repainted = payload;
-      },
-    } as unknown as ModalSubmitInteraction;
+      overrides: { id: "modal-step1" },
+      fields: { hours_nonce123456: "12" },
+    });
 
     await createPersonalConfigInteractionRoute(dependencies).execute({} as Client, interaction, requireRoute(customId));
 
     takeSpy.mockRestore();
-    const json = JSON.stringify(repainted);
+    const json = JSON.stringify(interaction.edits.at(-1));
     // The block select must carry both, because the persona modal that follows cannot ask again.
     expect(json).toContain("s-blk-s:en-US:123456789012345678:12:");
   });
@@ -6944,19 +6011,9 @@ describe("Persona reachability beyond one modal", () => {
       fp,
       blockIdx: 1,
     });
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      deferred: false,
-      replied: false,
-      reply: async () => {},
-      deferUpdate: async () => {},
-      editReply: async () => {},
-    } as unknown as ButtonInteraction;
+    });
 
     await createPersonalConfigInteractionRoute(dependencies).execute({} as Client, interaction, requireRoute(customId));
 
@@ -6993,19 +6050,10 @@ describe("Persona reachability beyond one modal", () => {
       fp,
       nonce: "nonce123456",
     });
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      guild: { channels: { cache: makeChannelCache(["123456789012345678"]) } },
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async () => {},
-    } as unknown as ButtonInteraction;
+      channelCache: makeChannelCache(["123456789012345678"]),
+    });
 
     await createPersonalConfigInteractionRoute(dependencies).execute({} as Client, interaction, requireRoute(customId));
 
@@ -7043,27 +6091,15 @@ describe("Persona reachability beyond one modal", () => {
       fp,
       nonce: "nonce123456",
     });
-    let repainted: unknown = null;
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      guild: { channels: { cache: makeChannelCache(["123456789012345678"]) } },
-      deferred: false,
-      replied: false,
-      deferUpdate: async () => {},
-      editReply: async (payload: unknown) => {
-        repainted = payload;
-      },
-    } as unknown as ButtonInteraction;
+      channelCache: makeChannelCache(["123456789012345678"]),
+    });
 
     await createPersonalConfigInteractionRoute(dependencies).execute({} as Client, interaction, requireRoute(customId));
 
     expect(wrote).toBe(false);
-    expect(JSON.stringify(repainted)).toContain("out of date");
+    expect(JSON.stringify(interaction.edits.at(-1))).toContain("out of date");
   });
 });
 
@@ -7179,13 +6215,12 @@ describe("Raw modal component types and their option bounds", () => {
 
 describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => {
   it("model-provider-select with __server_default__ falls through to post-defer, while ordinary provider shows modal pre-defer without deferring", async () => {
-    let serverDefaultDeferred = false;
     let setCapabilityCalled = false;
     const { dependencies: serverDefaultDeps } = makeDependencies([], {
       operations: {
         ...personalConfigOperations,
         setCapabilityEnabled: async (_input) => {
-          expect(serverDefaultDeferred).toBe(true);
+          expect(serverDefaultInteraction.deferred).toBe(true);
           setCapabilityCalled = true;
           return { status: "success" };
         },
@@ -7199,32 +6234,18 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
       capability: "text",
     });
 
-    const serverDefaultInteraction = {
-      isButton: () => false,
-      isStringSelectMenu: () => true,
-      isModalSubmit: () => false,
+    const serverDefaultInteraction = makePersonalInteraction({
+      kind: "string-select",
       customId: serverDefaultCustomId,
       values: ["__server_default__"],
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return serverDefaultDeferred;
-      },
-      replied: false,
-      deferUpdate: async () => {
-        serverDefaultDeferred = true;
-      },
-      editReply: async () => {},
-    } as unknown as StringSelectMenuInteraction;
-
+    });
     await route1.execute({} as Client, serverDefaultInteraction, requireRoute(serverDefaultCustomId));
-    expect(serverDefaultDeferred).toBe(true);
+    expect(serverDefaultInteraction.deferred).toBe(true);
     expect(setCapabilityCalled).toBe(true);
 
     let modalShown = false;
     let acknowledgedInsideModal = true;
-    let ordinaryDeferred = false;
-    let ordinaryReplied = false;
+    let modalInteraction: RouteInteraction;
 
     const { dependencies: modalDeps } = makeDependencies([], {
       loadAvailableModelsForCapability: async () => [
@@ -7233,7 +6254,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
       ],
       showModelSelectModal: async () => {
         modalShown = true;
-        acknowledgedInsideModal = ordinaryDeferred || ordinaryReplied;
+        acknowledgedInsideModal = modalInteraction.deferred || modalInteraction.replied;
       },
     });
 
@@ -7244,34 +6265,17 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
       capability: "text",
     });
 
-    const modalInteraction = {
-      isButton: () => false,
-      isStringSelectMenu: () => true,
-      isModalSubmit: () => false,
+    modalInteraction = makePersonalInteraction({
+      kind: "string-select",
       customId: modalCustomId,
       values: ["openrouter"],
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return ordinaryDeferred;
-      },
-      get replied() {
-        return ordinaryReplied;
-      },
-      deferUpdate: async () => {
-        ordinaryDeferred = true;
-      },
-      reply: async () => {
-        ordinaryReplied = true;
-      },
-      editReply: async () => {},
-    } as unknown as StringSelectMenuInteraction;
+    });
 
     await route2.execute({} as Client, modalInteraction, requireRoute(modalCustomId));
     expect(modalShown).toBe(true);
     expect(acknowledgedInsideModal).toBe(false);
-    expect(ordinaryDeferred).toBe(false);
-    expect(ordinaryReplied).toBe(false);
+    expect(modalInteraction.deferred).toBe(false);
+    expect(modalInteraction.replied).toBe(false);
   });
 
   it("spotlight-remove-open with > SPOTLIGHT_REMOVE_PAGE_SIZE active spotlights falls through to post-defer range chooser, while <= limit shows removal modal pre-defer", async () => {
@@ -7283,8 +6287,6 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
       userDiscId: "user-123",
     }));
 
-    let overflowDeferred = false;
-    let repaintedPayload: unknown = null;
     let modalCalledForOverflow = false;
 
     const { dependencies: overflowDeps } = makeDependencies([], {
@@ -7300,28 +6302,14 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
       locale: "en-US",
     });
 
-    const overflowInteraction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const overflowInteraction = makePersonalInteraction({
       customId: overflowCustomId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return overflowDeferred;
-      },
-      replied: false,
-      deferUpdate: async () => {
-        overflowDeferred = true;
-      },
-      editReply: async (payload: unknown) => {
-        repaintedPayload = payload;
-      },
-    } as unknown as ButtonInteraction;
+    });
 
     await route1.execute({} as Client, overflowInteraction, requireRoute(overflowCustomId));
     expect(modalCalledForOverflow).toBe(false);
-    expect(overflowDeferred).toBe(true);
+    expect(overflowInteraction.deferred).toBe(true);
+    const repaintedPayload = overflowInteraction.edits.at(-1);
     expect(repaintedPayload).not.toBeNull();
     const payloadJson = JSON.stringify(repaintedPayload);
     expect(payloadJson).toContain(localizedCopy("en-US", "commands.personal.config.spotlight_remove_range_title"));
@@ -7335,8 +6323,8 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
       userDiscId: "user-123",
     }));
 
-    let normalDeferred = false;
-    let normalReplied = false;
+    const normalDeferred = false;
+    const normalReplied = false;
     let modalCalledForNormal = false;
     let acknowledgedInsideNormalModal = true;
 
@@ -7354,33 +6342,15 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
       locale: "en-US",
     });
 
-    const normalInteraction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const normalInteraction = makePersonalInteraction({
       customId: normalCustomId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return normalDeferred;
-      },
-      get replied() {
-        return normalReplied;
-      },
-      deferUpdate: async () => {
-        normalDeferred = true;
-      },
-      reply: async () => {
-        normalReplied = true;
-      },
-      editReply: async () => {},
-    } as unknown as ButtonInteraction;
+    });
 
     await route2.execute({} as Client, normalInteraction, requireRoute(normalCustomId));
     expect(modalCalledForNormal).toBe(true);
     expect(acknowledgedInsideNormalModal).toBe(false);
-    expect(normalDeferred).toBe(false);
-    expect(normalReplied).toBe(false);
+    expect(normalInteraction.deferred).toBe(false);
+    expect(normalInteraction.replied).toBe(false);
   });
 
   it("proves pre-defer modal actions do not acknowledge before opening their modal or direct reply", async () => {
@@ -7399,53 +6369,33 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
     for (const { action, modalProp } of actionsToTest) {
       let modalCalled = false;
       let acknowledgedInsideModal = true;
-      let deferred = false;
-      let replied = false;
+      let interaction: RouteInteraction;
 
       const { dependencies } = makeDependencies([], {
         [modalProp]: async () => {
           modalCalled = true;
-          acknowledgedInsideModal = deferred || replied;
+          acknowledgedInsideModal = interaction.deferred || interaction.replied;
         },
       });
 
       const route = createPersonalConfigInteractionRoute(dependencies);
       const customId = buildPersonalConfigRouteId({ action, locale: "en-US" } as PersonalConfigPanelRoute);
 
-      const interaction = {
-        isButton: () => true,
-        isStringSelectMenu: () => false,
-        isModalSubmit: () => false,
+      interaction = makePersonalInteraction({
         customId,
-        user: { id: "user-123", username: "tester", displayName: "Tester" },
-        guildId: "guild-123",
-        get deferred() {
-          return deferred;
-        },
-        get replied() {
-          return replied;
-        },
-        deferUpdate: async () => {
-          deferred = true;
-        },
-        reply: async () => {
-          replied = true;
-        },
-        editReply: async () => {},
-      } as unknown as ButtonInteraction;
+      });
 
       await route.execute({} as Client, interaction, requireRoute(customId));
       expect(modalCalled).toBe(true);
       expect(acknowledgedInsideModal).toBe(false);
-      expect(deferred).toBe(false);
-      expect(replied).toBe(false);
+      expect(interaction.deferred).toBe(false);
+      expect(interaction.replied).toBe(false);
     }
   });
 
   it("proves post-defer write handlers repaint with refreshed scope after database writes", async () => {
     const calls: string[] = [];
     let resolveCount = 0;
-    let capturedPayload: unknown = null;
 
     const initialUser = makeUser({ user_nickname: "InitialNick" });
     const refreshedUser = makeUser({ user_nickname: "RefreshedNick" });
@@ -7483,38 +6433,21 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
     const route = createPersonalConfigInteractionRoute(dependencies);
     const customId = buildPersonalConfigRouteId({ action: "naming-submit", locale: "en-US", nonce: "nonce123456" });
 
-    let deferred = false;
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return deferred;
-      },
-      get replied() {
-        return false;
-      },
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async (payload: unknown) => {
-        capturedPayload = payload;
-      },
       fields: {
-        getTextInputValue: (fieldId: string) => {
-          if (fieldId.startsWith("nickname_")) return "RefreshedNick";
-          return "";
-        },
+        nickname_nonce123456: "RefreshedNick",
+        prefix_nonce123456: "",
+        suffix_nonce123456: "",
       },
-    } as unknown as ModalSubmitInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
     expect(calls).toContain("setNaming:RefreshedNick");
     expect(resolveCount).toBeGreaterThanOrEqual(2);
+    const capturedPayload = interaction.edits.at(-1);
     expect(capturedPayload).not.toBeNull();
     const renderedText = JSON.stringify(capturedPayload);
     expect(renderedText).toContain("RefreshedNick");
@@ -7524,7 +6457,6 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
   it("proves post-defer model parameter writes repaint with refreshed scope and record telemetry", async () => {
     const calls: string[] = [];
     let resolveCount = 0;
-    let capturedPayload: unknown = null;
     let recordedAction: string | null = null;
     let writeUserId: number | null = null;
     let writeUserDiscId: string | null = null;
@@ -7600,32 +6532,16 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
       provider: "gemini",
     });
 
-    let deferred = false;
-    const interaction = {
-      isButton: () => false,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => true,
+    const interaction = makePersonalInteraction({
+      kind: "modal",
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return deferred;
+      fields: {
+        temperature_nonce123456: "0.7",
+        min_p_nonce123456: "",
+        top_p_nonce123456: "",
+        top_k_nonce123456: "",
       },
-      get replied() {
-        return false;
-      },
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async (payload: unknown) => {
-        capturedPayload = payload;
-      },
-      fields: makeModalFields(
-        (fieldId: string) => (fieldId.startsWith("temperature_") ? "0.7" : ""),
-        (fieldId: string) =>
-          ["temperature_", "min_p_", "top_p_", "top_k_"].some((prefix) => fieldId.startsWith(prefix)),
-      ),
-    } as unknown as ModalSubmitInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -7638,7 +6554,8 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
     expect(calls).toContain("loadPersonalModelDisplayInfo:202");
     expect(resolveCount).toBeGreaterThanOrEqual(2);
     expect(recordedAction).toBe("personal-config.personal.parameters.set");
-    expect(deferred).toBe(true);
+    expect(interaction.deferred).toBe(true);
+    const capturedPayload = interaction.edits.at(-1);
     expect(capturedPayload).not.toBeNull();
     const renderedText = JSON.stringify(capturedPayload);
     expect(renderedText).toContain(localizedCopy("en-US", "commands.personal.config.parameters_updated_heading"));
@@ -7648,7 +6565,6 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
   it("proves post-defer trigger mode write repaints with refreshed scope and records telemetry", async () => {
     const calls: string[] = [];
     let resolveCount = 0;
-    let capturedPayload: unknown = null;
     let recordedAction: string | null = null;
     let writeUserId: number | null = null;
     let writeUserDiscId: string | null = null;
@@ -7703,27 +6619,9 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
       mode: "on",
     });
 
-    let deferred = false;
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-123", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      get deferred() {
-        return deferred;
-      },
-      get replied() {
-        return false;
-      },
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async (payload: unknown) => {
-        capturedPayload = payload;
-      },
-    } as unknown as ButtonInteraction;
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -7732,7 +6630,8 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
     expect(calls).toContain("setTriggerMode:101:on");
     expect(resolveCount).toBeGreaterThanOrEqual(2);
     expect(recordedAction).toBe("personal-config.personal.trigger-mode.set");
-    expect(deferred).toBe(true);
+    expect(interaction.deferred).toBe(true);
+    const capturedPayload = interaction.edits.at(-1);
     expect(capturedPayload).not.toBeNull();
     const renderedText = JSON.stringify(capturedPayload);
     expect(renderedText).toContain(localizedCopy("en-US", "commands.personal.config.trigger_mode_updated_heading"));
@@ -7744,7 +6643,6 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
   it("proves post-defer spotlight write repaints with refreshed scope and records telemetry", async () => {
     const calls: string[] = [];
     let resolveCount = 0;
-    let capturedPayload: unknown = null;
     let recordedAction: string | null = null;
     let writeUserId: number | null = null;
     let writeUserDiscId: string | null = null;
@@ -7817,28 +6715,11 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
       nonce: "nonce123456",
     });
 
-    let deferred = false;
-    const interaction = {
-      isButton: () => true,
-      isStringSelectMenu: () => false,
-      isModalSubmit: () => false,
+    const interaction = makePersonalInteraction({
       customId,
-      user: { id: "user-101", username: "tester", displayName: "Tester" },
-      guildId: "guild-123",
-      guild: { channels: { cache: makeChannelCache(["123456789012345678"]) } },
-      get deferred() {
-        return deferred;
-      },
-      get replied() {
-        return false;
-      },
-      deferUpdate: async () => {
-        deferred = true;
-      },
-      editReply: async (payload: unknown) => {
-        capturedPayload = payload;
-      },
-    } as unknown as ButtonInteraction;
+      channelCache: makeChannelCache(["123456789012345678"]),
+      overrides: { user: { id: "user-101", username: "tester", displayName: "Tester", globalName: "Tester" } },
+    });
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -7849,7 +6730,8 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
     expect(resolveCount).toBeGreaterThanOrEqual(2);
     expect(activeSpotlightUserId).toBe(202);
     expect(recordedAction).toBe("personal-config.personal.spotlight.set");
-    expect(deferred).toBe(true);
+    expect(interaction.deferred).toBe(true);
+    const capturedPayload = interaction.edits.at(-1);
     expect(capturedPayload).not.toBeNull();
     const renderedText = JSON.stringify(capturedPayload);
     expect(renderedText).toContain(localizedCopy("en-US", "commands.personal.config.spotlight_saved_heading"));
@@ -8402,34 +7284,16 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           enabled: true,
         });
 
-        let deferred = false;
-        let capturedPayload: unknown = null;
-        const interaction = {
-          isButton: () => true,
-          isStringSelectMenu: () => false,
-          isModalSubmit: () => false,
+        const interaction = makePersonalInteraction({
           customId,
-          user: { id: "user-123", username: "tester", displayName: "Tester" },
-          guildId: "guild-123",
-          get deferred() {
-            return deferred;
-          },
-          get replied() {
-            return false;
-          },
-          deferUpdate: async () => {
-            deferred = true;
-          },
-          editReply: async (payload: unknown) => {
-            capturedPayload = payload;
-          },
-        } as unknown as ButtonInteraction;
+        });
 
         await route.execute({} as Client, interaction, requireRoute(customId));
 
         expect(acknowledgedDuringWrite).toBe(true);
         expect(calls).toContain("setCrossServerStm:true");
         expect(telemetry).toContain("personal-config.personal.crossserver-stm.set");
+        const capturedPayload = interaction.edits.at(-1);
         expect(capturedPayload).not.toBeNull();
         const renderedText = JSON.stringify(capturedPayload);
         expect(renderedText).toContain(localizedCopy("en-US", "commands.personal.config.crossserver_enabled_heading"));
@@ -8447,34 +7311,16 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           enabled: true,
         });
 
-        let deferred = false;
-        let capturedPayload: unknown = null;
-        const interaction = {
-          isButton: () => true,
-          isStringSelectMenu: () => false,
-          isModalSubmit: () => false,
+        const interaction = makePersonalInteraction({
           customId,
-          user: { id: "user-123", username: "tester", displayName: "Tester" },
-          guildId: "guild-123",
-          get deferred() {
-            return deferred;
-          },
-          get replied() {
-            return false;
-          },
-          deferUpdate: async () => {
-            deferred = true;
-          },
-          editReply: async (payload: unknown) => {
-            capturedPayload = payload;
-          },
-        } as unknown as ButtonInteraction;
+        });
 
         await route.execute({} as Client, interaction, requireRoute(customId));
 
         // No DB write performed
         expect(calls.filter((c) => c.startsWith("setCrossServerStm"))).toHaveLength(0);
         // Still repaints from authoritative state with noChangesReceipt
+        const capturedPayload = interaction.edits.at(-1);
         expect(capturedPayload).not.toBeNull();
         const renderedText = JSON.stringify(capturedPayload);
         expect(renderedText).toContain("No Changes");
@@ -8488,34 +7334,16 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         const route = createPersonalConfigInteractionRoute(dependencies);
         const customId = "personal-config:v2:crossserver-toggle:en-US";
 
-        let deferred = false;
-        let capturedPayload: unknown = null;
-        const interaction = {
-          isButton: () => true,
-          isStringSelectMenu: () => false,
-          isModalSubmit: () => false,
+        const interaction = makePersonalInteraction({
           customId,
-          user: { id: "user-123", username: "tester", displayName: "Tester" },
-          guildId: "guild-123",
-          get deferred() {
-            return deferred;
-          },
-          get replied() {
-            return false;
-          },
-          deferUpdate: async () => {
-            deferred = true;
-          },
-          editReply: async (payload: unknown) => {
-            capturedPayload = payload;
-          },
-        } as unknown as ButtonInteraction;
+        });
 
         await route.execute({} as Client, interaction, requireRoute(customId));
 
         expect(calls).toContain("toggleCrossServerStm");
         expect(user.shortterm_cache_crossserver_opt_in).toBe(true);
         expect(telemetry).toContain("personal-config.personal.crossserver-stm.set");
+        const capturedPayload = interaction.edits.at(-1);
         expect(capturedPayload).not.toBeNull();
         const renderedText = JSON.stringify(capturedPayload);
         expect(renderedText).toContain(localizedCopy("en-US", "commands.personal.config.crossserver_enabled_heading"));
@@ -8553,34 +7381,16 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           enabled: true,
         });
 
-        let deferred = false;
-        let capturedPayload: unknown = null;
-        const interaction = {
-          isButton: () => true,
-          isStringSelectMenu: () => false,
-          isModalSubmit: () => false,
+        const interaction = makePersonalInteraction({
           customId,
-          user: { id: "user-123", username: "tester", displayName: "Tester" },
-          guildId: "guild-123",
-          get deferred() {
-            return deferred;
-          },
-          get replied() {
-            return false;
-          },
-          deferUpdate: async () => {
-            deferred = true;
-          },
-          editReply: async (payload: unknown) => {
-            capturedPayload = payload;
-          },
-        } as unknown as ButtonInteraction;
+        });
 
         await route.execute({} as Client, interaction, requireRoute(customId));
 
         expect(acknowledgedDuringWrite).toBe(true);
         expect(calls).toContain("setRandomizer:openrouter:true");
         expect(telemetry).toContain("personal-config.personal.randomizer.set");
+        const capturedPayload = interaction.edits.at(-1);
         expect(capturedPayload).not.toBeNull();
         const renderedText = JSON.stringify(capturedPayload);
         expect(renderedText).toContain(localizedCopy("en-US", "commands.personal.config.randomizer_enabled_heading"));
@@ -8612,31 +7422,13 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           enabled: true,
         });
 
-        let deferred = false;
-        let capturedPayload: unknown = null;
-        const interaction = {
-          isButton: () => true,
-          isStringSelectMenu: () => false,
-          isModalSubmit: () => false,
+        const interaction = makePersonalInteraction({
           customId,
-          user: { id: "user-123", username: "tester", displayName: "Tester" },
-          guildId: "guild-123",
-          get deferred() {
-            return deferred;
-          },
-          get replied() {
-            return false;
-          },
-          deferUpdate: async () => {
-            deferred = true;
-          },
-          editReply: async (payload: unknown) => {
-            capturedPayload = payload;
-          },
-        } as unknown as ButtonInteraction;
+        });
 
         await route.execute({} as Client, interaction, requireRoute(customId));
 
+        const capturedPayload = interaction.edits.at(-1);
         expect(capturedPayload).not.toBeNull();
         const renderedText = JSON.stringify(capturedPayload);
         expect(renderedText).toContain("No Changes");
@@ -8659,33 +7451,15 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         const route = createPersonalConfigInteractionRoute(dependencies);
         const customId = "personal-config:v2:randomizer-toggle:en-US:openrouter";
 
-        let deferred = false;
-        let capturedPayload: unknown = null;
-        const interaction = {
-          isButton: () => true,
-          isStringSelectMenu: () => false,
-          isModalSubmit: () => false,
+        const interaction = makePersonalInteraction({
           customId,
-          user: { id: "user-123", username: "tester", displayName: "Tester" },
-          guildId: "guild-123",
-          get deferred() {
-            return deferred;
-          },
-          get replied() {
-            return false;
-          },
-          deferUpdate: async () => {
-            deferred = true;
-          },
-          editReply: async (payload: unknown) => {
-            capturedPayload = payload;
-          },
-        } as unknown as ButtonInteraction;
+        });
 
         await route.execute({} as Client, interaction, requireRoute(customId));
 
         expect(calls).toContain("setRandomizer:openrouter:true");
         expect(telemetry).toContain("personal-config.personal.randomizer.set");
+        const capturedPayload = interaction.edits.at(-1);
         expect(capturedPayload).not.toBeNull();
         const renderedText = JSON.stringify(capturedPayload);
         expect(renderedText).toContain(localizedCopy("en-US", "commands.personal.config.randomizer_enabled_heading"));
@@ -8693,35 +7467,6 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
     });
 
     describe("Execution of server-fallback-set", () => {
-      function makeButtonInteraction(customId: string): {
-        interaction: ButtonInteraction;
-        capturedPayload: () => unknown;
-      } {
-        let deferred = false;
-        let capturedPayload: unknown = null;
-        const interaction = {
-          isButton: () => true,
-          isStringSelectMenu: () => false,
-          isModalSubmit: () => false,
-          customId,
-          user: { id: "user-123", username: "tester", displayName: "Tester" },
-          guildId: "guild-123",
-          get deferred() {
-            return deferred;
-          },
-          get replied() {
-            return false;
-          },
-          deferUpdate: async () => {
-            deferred = true;
-          },
-          editReply: async (payload: unknown) => {
-            capturedPayload = payload;
-          },
-        } as unknown as ButtonInteraction;
-        return { interaction, capturedPayload: () => capturedPayload };
-      }
-
       it("acknowledges the interaction before the write and reports the account opt-out", async () => {
         const calls: string[] = [];
         let acknowledgedDuringWrite = false;
@@ -8741,14 +7486,16 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           locale: "en-US",
           enabled: false,
         });
-        const { interaction, capturedPayload } = makeButtonInteraction(customId);
+        const interaction = makePersonalInteraction({
+          customId,
+        });
 
         await route.execute({} as Client, interaction, requireRoute(customId));
 
         expect(acknowledgedDuringWrite).toBe(true);
         expect(calls).toContain("setServerModelFallback:true:false");
         expect(telemetry).toContain("personal-config.personal.server-fallback.set");
-        expect(JSON.stringify(capturedPayload())).toContain(
+        expect(JSON.stringify(interaction.edits.at(-1))).toContain(
           localizedCopy("en-US", "commands.personal.config.server_fallback_disabled_heading"),
         );
       });
@@ -8766,12 +7513,14 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           locale: "en-US",
           enabled: false,
         });
-        const { interaction, capturedPayload } = makeButtonInteraction(customId);
+        const interaction = makePersonalInteraction({
+          customId,
+        });
 
         await route.execute({} as Client, interaction, requireRoute(customId));
 
         expect(telemetry).not.toContain("personal-config.personal.server-fallback.set");
-        expect(JSON.stringify(capturedPayload())).toContain(
+        expect(JSON.stringify(interaction.edits.at(-1))).toContain(
           localizedCopy("en-US", "commands.personal.config.no_changes_heading"),
         );
       });
@@ -9056,20 +7805,11 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           fp,
         });
 
-        const interaction = {
-          isButton: () => false,
-          isStringSelectMenu: () => true,
-          isModalSubmit: () => false,
+        const interaction = makePersonalInteraction({
+          kind: "string-select",
           customId,
           values: ["1"],
-          user: { id: "user-123", username: "tester", displayName: "Tester" },
-          guildId: "guild-123",
-          deferred: false,
-          replied: false,
-          reply: async () => {},
-          deferUpdate: async () => {},
-          editReply: async () => {},
-        } as unknown as StringSelectMenuInteraction;
+        });
 
         await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -9082,7 +7822,6 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         const personas = makeBlockPersonas(120);
         const fp = computeSpotlightSetFingerprint("guild-123", "user-123", personas);
         let modalOpened = false;
-        let repaintedPayload: unknown = null;
 
         const { dependencies } = makeDependencies([], {
           loadGuildPersonas: async () => personas,
@@ -9100,26 +7839,16 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           fp,
         });
 
-        const interaction = {
-          isButton: () => false,
-          isStringSelectMenu: () => true,
-          isModalSubmit: () => false,
+        const interaction = makePersonalInteraction({
+          kind: "string-select",
           customId,
           values: ["99"],
-          user: { id: "user-123", username: "tester", displayName: "Tester" },
-          guildId: "guild-123",
-          deferred: false,
-          replied: false,
-          deferUpdate: async () => {},
-          editReply: async (payload: unknown) => {
-            repaintedPayload = payload;
-          },
-        } as unknown as StringSelectMenuInteraction;
+        });
 
         await route.execute({} as Client, interaction, requireRoute(customId));
 
         expect(modalOpened).toBe(false);
-        const json = JSON.stringify(repaintedPayload);
+        const json = JSON.stringify(interaction.edits.at(-1));
         expect(json).toContain(localizedCopy("en-US", "commands.personal.config.stale_warning"));
       });
     });
@@ -9149,20 +7878,11 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           fp,
         });
 
-        const interaction = {
-          isButton: () => false,
-          isStringSelectMenu: () => true,
-          isModalSubmit: () => false,
+        const interaction = makePersonalInteraction({
+          kind: "string-select",
           customId,
           values: ["24"],
-          user: { id: "user-123", username: "tester", displayName: "Tester" },
-          guildId: "guild-123",
-          deferred: false,
-          replied: false,
-          reply: async () => {},
-          deferUpdate: async () => {},
-          editReply: async () => {},
-        } as unknown as StringSelectMenuInteraction;
+        });
 
         await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -9175,7 +7895,6 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         const fp = computeSpotlightSetFingerprint("guild-123", "user-123", personas);
         const mask = ((1n << 50n) - 1n).toString(36);
         let modalOpened = false;
-        let repaintedPayload: unknown = null;
 
         const { dependencies } = makeDependencies([], {
           loadGuildPersonas: async () => personas,
@@ -9195,26 +7914,16 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           fp,
         });
 
-        const interaction = {
-          isButton: () => false,
-          isStringSelectMenu: () => true,
-          isModalSubmit: () => false,
+        const interaction = makePersonalInteraction({
+          kind: "string-select",
           customId,
           values: ["100"],
-          user: { id: "user-123", username: "tester", displayName: "Tester" },
-          guildId: "guild-123",
-          deferred: false,
-          replied: false,
-          deferUpdate: async () => {},
-          editReply: async (payload: unknown) => {
-            repaintedPayload = payload;
-          },
-        } as unknown as StringSelectMenuInteraction;
+        });
 
         await route.execute({} as Client, interaction, requireRoute(customId));
 
         expect(modalOpened).toBe(false);
-        const json = JSON.stringify(repaintedPayload);
+        const json = JSON.stringify(interaction.edits.at(-1));
         expect(json).toContain(localizedCopy("en-US", "commands.personal.config.stale_warning"));
       });
     });
@@ -9247,20 +7956,11 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           fp,
         });
 
-        const interaction = {
-          isButton: () => false,
-          isStringSelectMenu: () => true,
-          isModalSubmit: () => false,
+        const interaction = makePersonalInteraction({
+          kind: "string-select",
           customId,
           values: ["50"],
-          user: { id: "user-123", username: "tester", displayName: "Tester" },
-          guildId: "guild-123",
-          deferred: false,
-          replied: false,
-          reply: async () => {},
-          deferUpdate: async () => {},
-          editReply: async () => {},
-        } as unknown as StringSelectMenuInteraction;
+        });
 
         await route.execute({} as Client, interaction, requireRoute(customId));
 
@@ -9279,7 +7979,6 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         }));
         const fp = computeSpotlightRemoveFingerprint("guild-123", "user-123", activeSpotlights);
         let modalOpened = false;
-        let repaintedPayload: unknown = null;
 
         const { dependencies } = makeDependencies([], {
           loadActiveSpotlights: async () => activeSpotlights,
@@ -9295,26 +7994,16 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           fp,
         });
 
-        const interaction = {
-          isButton: () => false,
-          isStringSelectMenu: () => true,
-          isModalSubmit: () => false,
+        const interaction = makePersonalInteraction({
+          kind: "string-select",
           customId,
           values: ["500"],
-          user: { id: "user-123", username: "tester", displayName: "Tester" },
-          guildId: "guild-123",
-          deferred: false,
-          replied: false,
-          deferUpdate: async () => {},
-          editReply: async (payload: unknown) => {
-            repaintedPayload = payload;
-          },
-        } as unknown as StringSelectMenuInteraction;
+        });
 
         await route.execute({} as Client, interaction, requireRoute(customId));
 
         expect(modalOpened).toBe(false);
-        const json = JSON.stringify(repaintedPayload);
+        const json = JSON.stringify(interaction.edits.at(-1));
         expect(json).toContain(localizedCopy("en-US", "commands.personal.config.stale_warning"));
       });
     });

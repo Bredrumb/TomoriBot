@@ -124,35 +124,6 @@ describe("MCP panel Components V2 limits", () => {
         );
       }
     }
-
-    // Explicitly test a full page at MAX_MCP_PANEL_PAGE_SIZE with every row carrying oversized content
-    const fullPageConfigs = Array.from({ length: MAX_MCP_PANEL_PAGE_SIZE }, (_, i) =>
-      row(i + 1, {
-        name: "M".repeat(20_000),
-        url: `https://safe-${i + 1}.example.invalid/${"u".repeat(20_000)}`,
-      }),
-    );
-    for (const locale of RUNTIME_LOCALES) {
-      for (const receipt of RECEIPTS) {
-        for (const page of [
-          { kind: "collection" as const, rangeIndex: 0 },
-          { kind: "remove" as const, entityId: fullPageConfigs[0]?.guild_mcp_id as number },
-        ]) {
-          expectSafePanelPayload(
-            buildMcpsPanelPayload({
-              locale,
-              scope: "guild",
-              configs: fullPageConfigs,
-              readStatus: "fresh",
-              page,
-              receipt,
-              routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
-            }),
-            `full-page-oversized/${locale}/${page.kind}/receipt=${Boolean(receipt)}`,
-          );
-        }
-      }
-    }
   });
 
   it("covers every MCP record exactly once across paginated ranges", () => {

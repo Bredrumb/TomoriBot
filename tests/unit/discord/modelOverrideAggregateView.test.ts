@@ -40,6 +40,7 @@ import {
 } from "@/utils/discord/interactions/textModelOverrideOperations";
 import * as channelLlmCacheStore from "@/utils/cache/channelLlmCacheStore";
 import * as tomoriStateCacheStore from "@/utils/cache/tomoriStateCacheStore";
+import { createPersona } from "../../helpers/fixtures";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -51,15 +52,15 @@ const LLM_A: LlmRow = {
   llm_codename: "gemini-2.5-flash",
 } as unknown as LlmRow;
 
+/** Override browsing reads the persona's server, id, lineage, and nickname, so all four stay fixed. */
 function makePersona(overrides: Partial<TomoriState>): TomoriState {
-  return {
+  return createPersona({
     server_id: 9,
     persona_id: 55,
     persona_nickname: "Mirri",
     persona_lineage_id: 101,
-    config: {},
     ...overrides,
-  } as unknown as TomoriState;
+  });
 }
 
 function makeChannelEntry(channelDiscId: string, llm: LlmRow = LLM_A): ChannelOverrideEntry {
