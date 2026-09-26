@@ -24,6 +24,7 @@
     "restore-backup": "bun run scripts/devtools/backupData.ts --restore",
     "backup:personas": "bun run scripts/devtools/backupPersonas.ts",
     "prune-legacy-preset-assets": "bun run scripts/devtools/pruneLegacyPresetAssets.ts",
+    "sweep-preset-assets": "bun run scripts/devtools/sweepPresetAssets.ts",
     "lint": "biome check --fix",
     "lint:ci": "biome check",
     "check": "bunx tsc --noEmit",
