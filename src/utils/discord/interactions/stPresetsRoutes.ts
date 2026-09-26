@@ -223,15 +223,18 @@ function buildImportNotes(locale: string, result: Extract<ImportStPresetResult, 
   return notes;
 }
 
-function importFailureReceipt(locale: string, status: string, maxSizeMB?: number): PanelReceipt {
+function importFailureReceipt(
+  locale: string,
+  result: Exclude<ImportStPresetResult, { status: "success" }>,
+): PanelReceipt {
   const heading = localizer(locale, "commands.st-presets.failed_receipt");
   let detail: string;
-  switch (status) {
+  switch (result.status) {
     case "invalid_file":
       detail = localizer(locale, "commands.st-presets.add_invalid_file");
       break;
     case "file_too_large":
-      detail = localizer(locale, "commands.st-presets.add_file_too_large", { maxSizeMB: maxSizeMB ?? 10 });
+      detail = localizer(locale, "commands.st-presets.add_file_too_large", { maxSizeMB: result.maxSizeMB });
       break;
     case "download_failed":
       detail = localizer(locale, "commands.st-presets.add_download_failed");
@@ -244,6 +247,12 @@ function importFailureReceipt(locale: string, status: string, maxSizeMB?: number
       break;
     case "no_nodes":
       detail = localizer(locale, "commands.st-presets.add_no_nodes");
+      break;
+    case "invalid_integer":
+      detail = localizer(locale, "commands.st-presets.add_invalid_integer", {
+        name: escapeDiscordMarkdown(result.promptName.slice(0, 100)),
+        field: result.field,
+      });
       break;
     default:
       detail = localizer(locale, "commands.st-presets.add_insert_failed");
@@ -865,14 +874,7 @@ export function createStPresetsInteractionRoute(
             },
           );
         } else {
-          const maxSizeMB = result.status === "file_too_large" ? result.maxSizeMB : undefined;
-          await repaint(
-            interaction,
-            route.locale,
-            scope,
-            { kind: "none" },
-            importFailureReceipt(route.locale, result.status, maxSizeMB),
-          );
+          await repaint(interaction, route.locale, scope, { kind: "none" }, importFailureReceipt(route.locale, result));
         }
         return;
       }

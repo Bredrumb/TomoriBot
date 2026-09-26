@@ -7,6 +7,8 @@ export const MAX_PRESET_FILE_SIZE_MB = 2;
 /** Maximum allowed preset name length (derived from filename) */
 export const MAX_PRESET_NAME_LENGTH = 100;
 const LEGACY_POST_HISTORY_INJECTION_ORDER = 10_000;
+const INT32_MIN = -2_147_483_648;
+const INT32_MAX = 2_147_483_647;
 const LEGACY_STORY_TRIM_REGEX = /\{\{trim\}\}/gi;
 const LEGACY_STORY_BLOCK_REGEX = /\{\{#if\s+([a-zA-Z_][\w]*)\}\}([\s\S]*?)\{\{\/if\}\}/gi;
 
@@ -66,6 +68,26 @@ type PresetSourceKind = "modern" | "legacy_text_completion";
 export interface NormalizedPresetShape {
   preset: RawSTPreset;
   sourceKind: PresetSourceKind;
+}
+
+export class InvalidPresetIntegerError extends Error {
+  constructor(
+    readonly promptName: string,
+    readonly field: string,
+  ) {
+    super(`Invalid ${field} in prompt ${promptName}`);
+  }
+}
+
+function presetInteger(value: unknown, fallback: number, prompt: RawSTPromptNode, field: string): number {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) {
+    throw new InvalidPresetIntegerError(prompt.name || prompt.identifier, field);
+  }
+  if (field === "injection_position" && value !== 0 && value !== 1) {
+    throw new InvalidPresetIntegerError(prompt.name || prompt.identifier, field);
+  }
+  return Math.min(INT32_MAX, Math.max(INT32_MIN, value));
 }
 
 /**
@@ -489,10 +511,10 @@ export function parsePresetNodes(normalizedPreset: NormalizedPresetShape): Parse
       is_marker: isMarker,
       is_enabled: entry.enabled,
       is_comment: isComment,
-      node_order: nodeOrder++,
-      injection_position: prompt.injection_position ?? 0,
-      injection_depth: prompt.injection_depth ?? 4,
-      injection_order: prompt.injection_order ?? 100,
+      node_order: presetInteger(nodeOrder++, 0, prompt, "node_order"),
+      injection_position: presetInteger(prompt.injection_position, 0, prompt, "injection_position"),
+      injection_depth: presetInteger(prompt.injection_depth, 4, prompt, "injection_depth"),
+      injection_order: presetInteger(prompt.injection_order, 100, prompt, "injection_order"),
     });
   }
 

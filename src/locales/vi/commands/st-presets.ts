@@ -38,6 +38,7 @@ export default {
     add_invalid_json: `Tệp đính kèm không phải là JSON hợp lệ.`,
     add_not_a_preset: `Tệp đính kèm không phải là preset SillyTavern hợp lệ.`,
     add_no_nodes: `Preset không chứa bất kỳ node prompt nào dùng được.`,
+    add_invalid_integer: `Prompt **{name}** có giá trị không hợp lệ cho \`{field}\`. Hãy dùng số nguyên trong phạm vi được hỗ trợ.`,
     add_insert_failed: `Không thể lưu preset vào cơ sở dữ liệu.`,
     activated_receipt: `Đã kích hoạt preset`,
     activated_receipt_detail: `**{name}** hiện là preset chat completion đang hoạt động.`,

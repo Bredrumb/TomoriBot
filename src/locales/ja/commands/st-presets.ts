@@ -39,6 +39,7 @@ export default {
     add_invalid_json: `添付されたファイルは有効なJSONではありません。`,
     add_not_a_preset: `添付されたファイルは有効なSillyTavernプリセットではありません。`,
     add_no_nodes: `このプリセットには使用可能なプロンプトノードが含まれていません。`,
+    add_invalid_integer: `プロンプト **{name}** の \`{field}\` の値が無効です。対応範囲内の整数を指定してください。`,
     add_insert_failed: `プリセットのデータベースへの保存に失敗しました。`,
     activated_receipt: `プリセットを有効化しました`,
     activated_receipt_detail: `**{name}** が現在有効なチャット補完プリセットになりました。`,

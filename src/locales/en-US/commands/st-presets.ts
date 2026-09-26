@@ -39,6 +39,7 @@ export default {
     add_invalid_json: `The attached file is not valid JSON.`,
     add_not_a_preset: `The attached file is not a valid SillyTavern preset.`,
     add_no_nodes: `The preset does not contain any usable prompt nodes.`,
+    add_invalid_integer: `Prompt **{name}** has an invalid value for \`{field}\`. Use an integer within the supported range.`,
     add_insert_failed: `Failed to save the preset to the database.`,
     activated_receipt: `Preset activated`,
     activated_receipt_detail: `**{name}** is now the active chat completion preset.`,

@@ -38,6 +38,7 @@ export default {
     add_invalid_json: `附加的文件不是有效的 JSON。`,
     add_not_a_preset: `附加的文件不是有效的 SillyTavern 预设集。`,
     add_no_nodes: `这个预设集里没有可用的提示词节点。`,
+    add_invalid_integer: `提示词 **{name}** 的 \`{field}\` 值无效。请使用支持范围内的整数。`,
     add_insert_failed: `预设集保存到数据库失败。`,
     activated_receipt: `预设集已启用`,
     activated_receipt_detail: `**{name}** 现在是生效的聊天补全预设集。`,

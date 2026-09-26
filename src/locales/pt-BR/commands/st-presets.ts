@@ -41,6 +41,7 @@ export default {
     add_invalid_json: `O arquivo anexado não é um JSON válido.`,
     add_not_a_preset: `O arquivo anexado não é uma predefinição válida do SillyTavern.`,
     add_no_nodes: `A predefinição não contém nós de prompt utilizáveis.`,
+    add_invalid_integer: `O prompt **{name}** tem um valor inválido para \`{field}\`. Use um número inteiro dentro do intervalo permitido.`,
     add_insert_failed: `Falha ao salvar a predefinição no banco de dados.`,
     activated_receipt: `Predefinição ativada`,
     activated_receipt_detail: `**{name}** agora é a predefinição de conclusão de chat ativa.`,
