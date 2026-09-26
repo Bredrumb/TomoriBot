@@ -128,7 +128,7 @@ To set one up with `/personal config`, choose:
 
 After choosing personas, you can optionally pick one as your **personal auto-trigger
 persona**: the fallback responder for your messages in that channel. Direct triggers still
-target whichever persona you explicitly call. Press Finish to skip.
+target whichever persona you explicitly call. Press `Save Spotlight` to skip the auto-trigger choice.
 
 ### Important rules
 

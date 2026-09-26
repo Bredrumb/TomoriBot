@@ -54,9 +54,9 @@ puede hablar de *dónde* y *cuándo* ocurre la conversación, no solo de lo que 
 - **Quién participa en la conversación**: nombres visibles, cómo mencionarlos, etiquetas de apariencia física y recordatorios pendientes.
 - **Qué está haciendo alguien (presencia)**: la actividad de Discord de un usuario: lo que está **jugando**, **transmitiendo**, **escuchando** (por ejemplo, una canción y artista de Spotify), **viendo** o su estado personalizado.
 
-La presencia depende de la privacidad: solo se comparte para usuarios con el nivel de privacidad `Mínimo`
+La presencia depende de la privacidad: solo se comparte para usuarios con el nivel de privacidad `Ninguno`
 (el valor predeterminado; consulta `/personal config`) y cuando el bot tiene activada la intención de Discord
-Guild Presences. Los usuarios que aumentan su privacidad o las instancias con autoalojamiento que no
+`Guild Presences`. Los usuarios que aumentan su privacidad o las instancias con autoalojamiento que no
 tienen esa intención simplemente no mostrarán su actividad.
 
 ## Activación automática (chat sin manos)

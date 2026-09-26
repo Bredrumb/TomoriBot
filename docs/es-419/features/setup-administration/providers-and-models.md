@@ -126,8 +126,8 @@ etiquetados**.
 
 Una etiqueta es el nombre de menú visible para el usuario y agrupa capacidades bajo un
 paquete cuando comparten una URL de endpoint. Nunca se envía al endpoint remoto. Las
-capacidades servidas desde URL distintas necesitan etiquetas distintas. Elige **Añadir endpoint
-personalizado nuevo**, selecciona la compatibilidad de API y guarda la conexión. Guardar
+capacidades servidas desde URL distintas necesitan etiquetas distintas. Elige
+`+ Agregar nuevo punto de conexión personalizado`, selecciona la compatibilidad de API y guarda la conexión. Guardar
 prepara las capacidades admitidas por ese protocolo sin registrar ningún modelo. Luego
 selecciona el nuevo endpoint y usa su menú desplegable de modelo para registrar un código de
 modelo exacto y una capacidad. Añadir un modelo lo activa para esa capacidad. Usa el mismo menú
@@ -147,8 +147,8 @@ forma confiable a partir de la URL del endpoint.
 
 El modo `Punto de conexión personalizado (avanzado)` de `/setup` realiza los mismos dos pasos dentro
 del asistente: `Configurar conexión` guarda la compatibilidad de API, la etiqueta, la URL y
-el token de autenticación opcional detrás de una verificación de accesibilidad, y **Configurar
-modelo de texto** registra el modelo de texto exacto y sus declaraciones de capacidad. El botón
+el token de autenticación opcional detrás de una verificación de accesibilidad, y
+`Configurar modelo de texto` registra el modelo de texto exacto y sus declaraciones de capacidad. El botón
 de modelo permanece desactivado hasta que una conexión se valida, y volver a guardar la
 conexión borra la declaración del modelo porque las declaraciones dependen de la compatibilidad
 de API. El asistente crea juntos la conexión, el proveedor guardado, el modelo y las filas de

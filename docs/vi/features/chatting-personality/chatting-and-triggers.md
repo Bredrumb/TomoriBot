@@ -62,7 +62,7 @@ Ngữ cảnh này bao gồm:
   phát trực tiếp gì, nghe gì (ví dụ: bài hát và nghệ sĩ trên Spotify), xem gì, hoặc trạng thái tùy chỉnh của họ.
 
 Trạng thái hiện diện được kiểm soát bởi quyền riêng tư: trạng thái này chỉ được chia sẻ đối với người dùng ở mức
-riêng tư `Tối thiểu` (Minimal, mặc định: xem `/personal config`) và chỉ khi bot đã bật intent *Guild Presences*
+riêng tư `Không` (mặc định: xem `/personal config`) và chỉ khi bot đã bật intent `Guild Presences`
 của Discord. Những người dùng nâng cao mức độ riêng tư, hoặc các phiên bản self-host chạy không có intent đó,
 sẽ không để lộ hoạt động của mình cho bot.
 

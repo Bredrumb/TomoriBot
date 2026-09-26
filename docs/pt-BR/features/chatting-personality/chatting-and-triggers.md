@@ -64,8 +64,8 @@ apenas sobre o que foi dito. Esse contexto inclui:
   status personalizado.
 
 A presença é restringida por privacidade: só é compartilhada para usuários no nível de
-privacidade `Mínimo` (o padrão; veja `/personal config`) e somente quando o bot tem a intent
-*Guild Presences* do Discord habilitada. Usuários que aumentam sua privacidade, ou instâncias
+privacidade `Nenhum` (o padrão; veja `/personal config`) e somente quando o bot tem a intent
+`Guild Presences` do Discord habilitada. Usuários que aumentam sua privacidade, ou instâncias
 de hospedagem própria executando sem essa intent, simplesmente não terão sua atividade
 revelada para ela.
 

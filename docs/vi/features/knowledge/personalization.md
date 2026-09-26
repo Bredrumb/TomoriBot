@@ -12,7 +12,7 @@ Các dữ kiện bot nhớ về bạn sẽ đi theo bạn giữa các máy chủ
 
 ## Hồ sơ và tên theo persona
 
-Lệnh `/personal config` lưu trữ ba tùy chọn độc lập không bắt buộc: bản dạng giới, đại từ xưng hô và kiểu xưng hô. TomoriBot không bao giờ suy diễn tùy chọn này từ tùy chọn khác. Kiểu xưng hô chọn biến thể đặt tên nam tính, nữ tính hoặc trung tính của persona, và Trung tính là mặc định được chọn sẵn. Các trường để trống sẽ bị xóa và bỏ qua khỏi ngữ cảnh prompt. Các trường hồ sơ thô chỉ hiển thị ở mức quyền riêng tư Tối thiểu (Minimal).
+Lệnh `/personal config` lưu trữ ba tùy chọn độc lập không bắt buộc: bản dạng giới, đại từ xưng hô và kiểu xưng hô. TomoriBot không bao giờ suy diễn tùy chọn này từ tùy chọn khác. Kiểu xưng hô chọn biến thể đặt tên nam tính, nữ tính hoặc trung tính của persona, và Trung tính là mặc định được chọn sẵn. Các trường để trống sẽ bị xóa và bỏ qua khỏi ngữ cảnh prompt. Các trường hồ sơ thô chỉ hiển thị ở mức quyền riêng tư `Không`.
 
 Lệnh `/personal config` mở một cửa sổ nhập tên cho phạm vi toàn cục hoặc phạm vi persona. Tùy chọn theo phạm vi persona sẽ đi theo nguồn gốc ổn định của persona đó qua các máy chủ. Biệt danh kế thừa từ tùy chọn persona đến tùy chọn toàn cục và sau đó là tên hiển thị trực tiếp trên Discord. Biệt danh toàn cục để trống sẽ tiếp tục lấy theo Discord, bao gồm cả những thay đổi tên hiển thị sau đó. Việc lưu biệt danh toàn cục sẽ cố định giá trị tùy chỉnh đó cho đến khi bị xóa. Tiền tố hoặc hậu tố để trống cũng kế thừa theo cách tương tự, và văn bản đã nhập sẽ ghi đè giá trị này, vì vậy `Master Mirri-san` có thể kết hợp các giá trị từ các cấp độ khác nhau mà không làm thay đổi đối tượng mention cơ bản trên Discord. Để bỏ một danh xưng mà persona tự thêm vào, hãy yêu cầu trực tiếp persona đó ("đừng gọi tôi là Master nữa"); điều này sẽ loại bỏ danh xưng đó đối với riêng persona này trong khi vẫn giữ nguyên các persona khác của bạn.
 
@@ -71,7 +71,7 @@ Thiết lập spotlight bằng `/personal config`, chọn:
 - kênh mục tiêu,
 - các persona bạn muốn đưa vào spotlight.
 
-Sau khi chọn persona, bạn có thể tùy chọn chọn một persona làm persona tự động kích hoạt cá nhân: persona phản hồi dự phòng cho các tin nhắn của bạn trong kênh đó. Kích hoạt trực tiếp vẫn sẽ nhắm vào bất kỳ persona nào bạn gọi tên rõ ràng. Nhấn Finish để bỏ qua.
+Sau khi chọn persona, bạn có thể tùy chọn chọn một persona làm persona tự động kích hoạt cá nhân: persona phản hồi dự phòng cho các tin nhắn của bạn trong kênh đó. Kích hoạt trực tiếp vẫn sẽ nhắm vào bất kỳ persona nào bạn gọi tên rõ ràng. Nhấn `Lưu spotlight` để bỏ qua lựa chọn tự động kích hoạt.
 
 Các quy tắc quan trọng:
 

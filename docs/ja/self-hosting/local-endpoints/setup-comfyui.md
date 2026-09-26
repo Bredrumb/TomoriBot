@@ -58,7 +58,7 @@ curl http://127.0.0.1:8188/system_stats
 
 ## 3. Discordに登録する
 
-`/providers`（または`/personal providers`）を実行し、`新しいカスタムエンドポイントを追加`を選んで、以下を入力します。
+`/providers`（または`/personal providers`）を実行し、`+ 新しいカスタムエンドポイントを追加`を選んで、以下を入力します。
 
 | フィールド | ComfyUI用の値 |
 |-------|-------------------|

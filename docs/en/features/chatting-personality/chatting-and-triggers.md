@@ -63,7 +63,7 @@ what was said. This context includes:
   custom status.
 
 Presence is privacy-gated: it's only shared for users at the `None` privacy level (the
-default: see `/personal config`) and only when the bot has Discord's *Guild Presences*
+default: see `/personal config`) and only when the bot has Discord's `Guild Presences`
 intent enabled. Users who raise their privacy, or self-hosts running without that intent,
 simply won't have their activity surfaced to her.
 

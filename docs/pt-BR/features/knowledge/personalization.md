@@ -20,7 +20,7 @@ está coberto na página de [Memória](/pt-BR/features/knowledge/memory/#persona
 pronomes e estilo de tratamento. A TomoriBot nunca infere um a partir do outro. O estilo de tratamento
 seleciona a variante de nomenclatura masculina, feminina ou neutra de uma persona, e Neutra é o
 padrão pré-selecionado. Campos em branco são limpos e omitidos do contexto do prompt. Campos brutos
-de perfil são expostos apenas no nível de privacidade Minimal.
+de perfil são expostos apenas no nível de privacidade `Nenhum`.
 
 `/personal config` abre um modal de nomenclatura para escopo global ou por persona. Uma preferência
 com escopo de persona segue a linhagem estável daquela persona entre servidores. Apelidos herdam da
@@ -131,7 +131,7 @@ Configure um com `/personal config`, escolhendo:
 
 Após escolher as personas, você pode opcionalmente selecionar uma como sua **persona de auto-acionamento
 pessoal**: a respondedora padrão para suas mensagens naquele canal. Acionamentos diretos ainda
-miram na persona que você chamou explicitamente. Pressione Finish para pular.
+miram na persona que você chamou explicitamente. Pressione `Salvar Destaque` para pular a escolha de acionamento automático.
 
 Regras importantes:
 

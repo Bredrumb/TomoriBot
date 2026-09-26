@@ -19,7 +19,7 @@ exportar) se explica en la página de [Memoria](/es-419/features/knowledge/memor
 pronombres y estilo de trato. TomoriBot nunca infiere una a partir de otra. El estilo de trato
 selecciona la variante de nombre masculina, femenina o neutra de una persona, y Neutro es el
 valor predeterminado preseleccionado. Los campos en blanco se limpian y se omiten del contexto
-del prompt. Los campos de perfil sin procesar solo se exponen con privacidad Mínima.
+del prompt. Los campos de perfil sin procesar solo se exponen con privacidad `Ninguno`.
 
 `/personal config` abre un modal de nombres para el alcance global o el de persona. Una
 preferencia con alcance de persona sigue el linaje estable de esa persona entre servidores. Los
@@ -140,7 +140,7 @@ Configura uno con `/personal config`, eligiendo:
 Después de elegir las personas, opcionalmente puedes seleccionar una como tu **persona de
 activación automática personal**: la respondedora de respaldo para tus mensajes en ese canal.
 Las activaciones directas siguen apuntando a la persona que llames explícitamente. Presiona
-Finalizar para omitir este paso.
+`Guardar enfoque` para omitir la elección de activación automática.
 
 Reglas importantes:
 
