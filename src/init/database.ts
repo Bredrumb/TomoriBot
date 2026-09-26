@@ -1,5 +1,7 @@
 import { sql } from "@/utils/db/client";
-import { initializeDatabase } from "@/utils/db/initializeDatabase";
+import { initializeDatabase, invalidatePresetPointerStateCaches } from "@/utils/db/initializeDatabase";
+import { seedPersonaSpritesFromCatalog } from "@/db/seed/catalog/presetSpriteSeed";
+import { seedPersonaAvatarsFromCatalog } from "@/db/seed/catalog/presetAvatarSeed";
 import { log } from "@/utils/misc/logger";
 import type { AppEnvironment } from "@/types/config";
 
@@ -100,4 +102,23 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
 export function isDatabaseSchemaManagementEnabled(raw = process.env.DATABASE_SCHEMA_MANAGEMENT_ENABLED): boolean {
   if (raw === undefined) return true;
   return ["true", "1", "yes", "on"].includes(raw.trim().toLowerCase());
+}
+
+/** Seeds catalog art after gateway readiness, when the bot has storage credentials. */
+export async function seedStorageBackedCatalogs(): Promise<void> {
+  try {
+    const spriteSeed = await seedPersonaSpritesFromCatalog(sql);
+    log.success(
+      `PostgreSQL preset sprite catalog seeded (${spriteSeed.seeded}/${spriteSeed.declarations} declarations seeded, ` +
+        `${spriteSeed.failed} failed, ${spriteSeed.removed} removed, ${spriteSeed.presets} preset variants)`,
+    );
+
+    const avatarSeed = await seedPersonaAvatarsFromCatalog(sql);
+    log.success(
+      `PostgreSQL preset avatar catalog seeded (${avatarSeed.seeded}/${avatarSeed.declarations} declarations seeded, ` +
+        `${avatarSeed.failed} failed)`,
+    );
+  } finally {
+    await invalidatePresetPointerStateCaches(sql);
+  }
 }
