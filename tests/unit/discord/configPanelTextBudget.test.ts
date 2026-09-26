@@ -2,6 +2,16 @@
  * Text budgeting coverage for Config pages:
  * asserts message-wide Text Display budgets at stored maxima, boundary Unicode handling,
  * and fence breakout immunity.
+ *
+ * The NovelAI preset and Switch Models matrices run on {@link BUDGET_LOCALE} rather than every
+ * locale, because they are the expensive sweeps and rendered length decides where the message-wide
+ * budget binds. With practical preset strings `es-419` renders the longest total of any locale and
+ * every locale stays far below the budget. With oversized strings, truncation fills a fixed budget,
+ * so every locale renders the identical total; the equality case in the NovelAI block pins that, and
+ * fails if a translation ever breaks it instead of silently narrowing the sweep.
+ *
+ * The stored-maxima sweep keeps every locale: its truncation-tightness check detects truncation by
+ * matching English marker text, so it only runs in `en-US`, and the sweep is cheap.
  */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ComponentType } from "discord.js";
@@ -43,6 +53,16 @@ import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { collectCaseFailures, RUNTIME_LOCALES, localizedCopy } from "../../helpers/localeCases";
 import { BACKTICK_RUNS } from "../../helpers/panelLimits";
+
+/** The locale whose rendered text is longest; see the file header for why one locale suffices. */
+const BUDGET_LOCALE = "es-419";
+
+/**
+ * Read statuses that render differently. `stale` sets the same `writesDisabled` flag as
+ * `unavailable` for every panel here, and only `unavailable` adds the notice that changes the
+ * rendered text, so sweeping it would rebuild identical payloads.
+ */
+const RENDERING_READ_STATUSES: readonly PanelReadStatus[] = ["fresh", "unavailable"];
 
 beforeAll(async () => initializeLocalizer());
 
@@ -808,7 +828,6 @@ describe("Plugins and Channel Rules component budgeting", () => {
 });
 
 describe("NovelAI preset Parameters budgeting", () => {
-  const readStatuses: PanelReadStatus[] = ["fresh", "stale", "unavailable"];
   const providerSets = [["novelai"], ["novelai", "google"]];
   const presetCounts = [0, 1, 24, 25, 26, 60];
   const stringProfiles = [
@@ -818,69 +837,65 @@ describe("NovelAI preset Parameters budgeting", () => {
 
   // One test per preset count: the full matrix takes about 10 s, past Bun's 5 s default timeout.
   for (const presetCount of presetCounts) {
-    it(`keeps every ${presetCount}-preset page valid across locales, receipts, reads, providers, and backtick runs`, () => {
+    it(`keeps every ${presetCount}-preset page valid across receipts, reads, providers, and backtick runs`, () => {
       const cases = collectCaseFailures();
-      for (const locale of RUNTIME_LOCALES) {
-        for (const receipt of [false, true]) {
-          for (const readStatus of readStatuses) {
-            for (const providers of providerSets) {
-              for (const runLength of BACKTICK_RUNS) {
-                for (const profile of stringProfiles) {
-                  cases.check(
-                    `${presetCount} ${profile.name} presets, ${providers.length} providers, ${readStatus}, receipt=${receipt} (${locale}, backticks=${runLength})`,
-                    () => {
-                      const presets = makeNaiPresetCatalog(presetCount, runLength, profile.oversized);
-                      const pageStarts = Array.from(
-                        { length: Math.max(1, Math.ceil(presetCount / CONFIG_NAI_PRESET_PAGE_SIZE)) },
-                        (_unused, page) => page * CONFIG_NAI_PRESET_PAGE_SIZE,
+      for (const receipt of [false, true]) {
+        for (const readStatus of RENDERING_READ_STATUSES) {
+          for (const providers of providerSets) {
+            for (const runLength of BACKTICK_RUNS) {
+              for (const profile of stringProfiles) {
+                cases.check(
+                  `${presetCount} ${profile.name} presets, ${providers.length} providers, ${readStatus}, receipt=${receipt} (backticks=${runLength})`,
+                  () => {
+                    const presets = makeNaiPresetCatalog(presetCount, runLength, profile.oversized);
+                    const pageStarts = Array.from(
+                      { length: Math.max(1, Math.ceil(presetCount / CONFIG_NAI_PRESET_PAGE_SIZE)) },
+                      (_unused, page) => page * CONFIG_NAI_PRESET_PAGE_SIZE,
+                    );
+                    const reachable = new Set<number>();
+                    let componentCeiling = 0;
+
+                    for (const pageStart of pageStarts) {
+                      const payload = buildNaiParametersPayload(
+                        BUDGET_LOCALE,
+                        readStatus,
+                        receipt,
+                        providers,
+                        presets,
+                        pageStart,
                       );
-                      const reachable = new Set<number>();
-                      let componentCeiling = 0;
+                      const validation = validateComponentsV2MessageLimits(payload);
+                      expect(
+                        validation.valid,
+                        `${BUDGET_LOCALE} ${readStatus} providers=${providers.length} presets=${presetCount} ` +
+                          `page=${pageStart} receipt=${receipt}: ${JSON.stringify(validation.violations)}`,
+                      ).toBe(true);
+                      expect(getPayloadTextTotal(payload)).toBeLessThanOrEqual(DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX);
+                      componentCeiling = Math.max(componentCeiling, countRenderedComponents(payload));
 
-                      for (const pageStart of pageStarts) {
-                        const payload = buildNaiParametersPayload(
-                          locale,
-                          readStatus,
-                          receipt,
-                          providers,
-                          presets,
-                          pageStart,
-                        );
-                        const validation = validateComponentsV2MessageLimits(payload);
-                        expect(
-                          validation.valid,
-                          `${locale} ${readStatus} providers=${providers.length} presets=${presetCount} ` +
-                            `page=${pageStart} receipt=${receipt}: ${JSON.stringify(validation.violations)}`,
-                        ).toBe(true);
-                        expect(getPayloadTextTotal(payload)).toBeLessThanOrEqual(
-                          DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX,
-                        );
-                        componentCeiling = Math.max(componentCeiling, countRenderedComponents(payload));
-
-                        for (const menu of getStringSelectMenus(payload)) {
-                          const options = Array.isArray(menu.options) ? menu.options : [];
-                          expect(options.length).toBeLessThanOrEqual(25);
-                          if (typeof menu.customId === "string" && menu.customId.includes("nai-preset-select")) {
-                            for (const option of options) {
-                              if (typeof option !== "object" || option === null) continue;
-                              const value = (option as Record<string, unknown>).value;
-                              if (typeof value === "string" && /^\d+$/.test(value)) reachable.add(Number(value));
-                              const description = (option as Record<string, unknown>).description;
-                              if (typeof description === "string") {
-                                expect(getDiscordTextLength(description)).toBeLessThanOrEqual(100);
-                              }
+                      for (const menu of getStringSelectMenus(payload)) {
+                        const options = Array.isArray(menu.options) ? menu.options : [];
+                        expect(options.length).toBeLessThanOrEqual(25);
+                        if (typeof menu.customId === "string" && menu.customId.includes("nai-preset-select")) {
+                          for (const option of options) {
+                            if (typeof option !== "object" || option === null) continue;
+                            const value = (option as Record<string, unknown>).value;
+                            if (typeof value === "string" && /^\d+$/.test(value)) reachable.add(Number(value));
+                            const description = (option as Record<string, unknown>).description;
+                            if (typeof description === "string") {
+                              expect(getDiscordTextLength(description)).toBeLessThanOrEqual(100);
                             }
                           }
                         }
                       }
+                    }
 
-                      if (readStatus !== "unavailable") {
-                        expect([...reachable]).toEqual(Array.from({ length: presetCount }, (_unused, index) => index));
-                      }
-                      expect(componentCeiling).toBeGreaterThan(0);
-                    },
-                  );
-                }
+                    if (readStatus !== "unavailable") {
+                      expect([...reachable]).toEqual(Array.from({ length: presetCount }, (_unused, index) => index));
+                    }
+                    expect(componentCeiling).toBeGreaterThan(0);
+                  },
+                );
               }
             }
           }
@@ -889,6 +904,19 @@ describe("NovelAI preset Parameters budgeting", () => {
       cases.expectNoFailures();
     });
   }
+
+  it("renders the oversized profile to the same total in every locale", () => {
+    // An oversized preset name is truncated into a fixed codepoint budget, and this panel's
+    // translations preserve key length, so every locale fills that budget exactly. Asserting the
+    // equality is what lets the profile sweep above run on one locale: if a translation ever
+    // changes that, this fails instead of silently narrowing the sweep.
+    const presets = makeNaiPresetCatalog(24, 3, true);
+    const totals = RUNTIME_LOCALES.map((locale) =>
+      getPayloadTextTotal(buildNaiParametersPayload(locale, "fresh", true, ["novelai", "google"], presets, 0)),
+    );
+
+    expect(new Set(totals).size).toBe(1);
+  });
 
   it("enforces the literal Parameters component ceiling and rejects an extra row", () => {
     const payload = buildNaiParametersPayload(
@@ -1174,54 +1202,51 @@ describe("Switch Models capability notice budgeting", () => {
     expect(countRenderedComponents(payloadWithExtraTextDisplay)).toBeGreaterThan(28);
   });
 
-  it("budgets an explicit eight-slot matrix across locales, flags, reads, and endpoint boundaries", () => {
+  it("budgets an explicit eight-slot matrix across flags, reads, and endpoint boundaries", () => {
     const componentBudget = 32;
     const componentReserve = 8;
     const discordComponentLimit = 40;
-    const readStatuses: PanelReadStatus[] = ["fresh", "stale", "unavailable"];
     const endpointCounts = [0, 1, 24, 25, 26, 60];
     let maximumReceiptComponentCount = 0;
 
-    for (const locale of RUNTIME_LOCALES) {
-      for (const receipt of [false, true]) {
-        for (const readStatus of readStatuses) {
-          for (const slotState of SWITCH_MODEL_SLOT_STATES) {
-            for (const flags of flagCombinations) {
-              for (const endpointCount of endpointCounts) {
-                const payload = buildConfigPanelPayload({
-                  locale,
-                  actor: GUILD_MANAGER,
-                  category: "models",
-                  page: "switch",
-                  personas: [makePersona({ persona_id: 55 })],
-                  selectedPersonaId: 55,
-                  readStatus,
-                  switchModelsView: makeExplicitEightSlotView(
-                    flags.imageGenerationEnabled,
-                    flags.videoGenerationEnabled,
-                    slotState.isUsable,
-                    endpointCount,
-                    true,
-                    -1,
-                  ),
-                  receipt: receipt
-                    ? { tone: "success", heading: "Saved", detail: "Configuration was saved." }
-                    : undefined,
-                });
-                const validation = validateComponentsV2MessageLimits(payload);
-                expect(
-                  validation.valid,
-                  `${locale} ${readStatus} ${slotState.name} endpoint=${endpointCount} ` +
-                    `${flags.imageGenerationEnabled}/${flags.videoGenerationEnabled}: ${JSON.stringify(validation.violations)}`,
-                ).toBe(true);
-                for (const menu of getStringSelectMenus(payload)) {
-                  const options = Array.isArray(menu.options) ? menu.options : [];
-                  expect(options.length).toBeLessThanOrEqual(25);
-                }
-                const componentCount = countRenderedComponents(payload);
-                expect(componentCount).toBeLessThanOrEqual(componentBudget);
-                if (receipt) maximumReceiptComponentCount = Math.max(maximumReceiptComponentCount, componentCount);
+    for (const receipt of [false, true]) {
+      for (const readStatus of RENDERING_READ_STATUSES) {
+        for (const slotState of SWITCH_MODEL_SLOT_STATES) {
+          for (const flags of flagCombinations) {
+            for (const endpointCount of endpointCounts) {
+              const payload = buildConfigPanelPayload({
+                locale: BUDGET_LOCALE,
+                actor: GUILD_MANAGER,
+                category: "models",
+                page: "switch",
+                personas: [makePersona({ persona_id: 55 })],
+                selectedPersonaId: 55,
+                readStatus,
+                switchModelsView: makeExplicitEightSlotView(
+                  flags.imageGenerationEnabled,
+                  flags.videoGenerationEnabled,
+                  slotState.isUsable,
+                  endpointCount,
+                  true,
+                  -1,
+                ),
+                receipt: receipt
+                  ? { tone: "success", heading: "Saved", detail: "Configuration was saved." }
+                  : undefined,
+              });
+              const validation = validateComponentsV2MessageLimits(payload);
+              expect(
+                validation.valid,
+                `${BUDGET_LOCALE} ${readStatus} ${slotState.name} endpoint=${endpointCount} ` +
+                  `${flags.imageGenerationEnabled}/${flags.videoGenerationEnabled}: ${JSON.stringify(validation.violations)}`,
+              ).toBe(true);
+              for (const menu of getStringSelectMenus(payload)) {
+                const options = Array.isArray(menu.options) ? menu.options : [];
+                expect(options.length).toBeLessThanOrEqual(25);
               }
+              const componentCount = countRenderedComponents(payload);
+              expect(componentCount).toBeLessThanOrEqual(componentBudget);
+              if (receipt) maximumReceiptComponentCount = Math.max(maximumReceiptComponentCount, componentCount);
             }
           }
         }

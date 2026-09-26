@@ -11,14 +11,31 @@
  * `plans/pressure-aware-recovery.md`.
  */
 
-const SAMPLE_INTERVAL_MS = Math.max(Number.parseInt(process.env.EVENT_LOOP_SAMPLE_INTERVAL_MS || "", 10) || 1000, 100);
+/** Floor for the configured cadence: below this the timer itself becomes the load being measured. */
+const MIN_SAMPLE_INTERVAL_MS = 100;
 
-class EventLoopMonitor {
+const SAMPLE_INTERVAL_MS = Math.max(
+  Number.parseInt(process.env.EVENT_LOOP_SAMPLE_INTERVAL_MS || "", 10) || 1000,
+  MIN_SAMPLE_INTERVAL_MS,
+);
+
+/**
+ * Exported so a test can drive the cadence down to tens of milliseconds; production uses the
+ * singleton below, which reads its interval from the deployment environment.
+ */
+export class EventLoopMonitor {
   private timer: ReturnType<typeof setInterval> | null = null;
   private lastTickAt = Date.now();
   private lastLagMs = 0;
   private peakLagSinceStartMs = 0;
   private peakLagSinceReadMs = 0;
+
+  /**
+   * Injectable so a test can prove the lag and staleness shapes without waiting out the production
+   * cadence. Every derived reading is relative to this value, so a short interval changes only how
+   * long the same assertions take.
+   */
+  constructor(private readonly sampleIntervalMs: number = SAMPLE_INTERVAL_MS) {}
 
   start(): void {
     if (this.timer) {
@@ -28,12 +45,12 @@ class EventLoopMonitor {
     this.lastTickAt = Date.now();
     this.timer = setInterval(() => {
       const now = Date.now();
-      const lag = Math.max(0, now - this.lastTickAt - SAMPLE_INTERVAL_MS);
+      const lag = Math.max(0, now - this.lastTickAt - this.sampleIntervalMs);
       this.lastTickAt = now;
       this.lastLagMs = lag;
       this.peakLagSinceStartMs = Math.max(this.peakLagSinceStartMs, lag);
       this.peakLagSinceReadMs = Math.max(this.peakLagSinceReadMs, lag);
-    }, SAMPLE_INTERVAL_MS);
+    }, this.sampleIntervalMs);
 
     // Never hold the process open: this is diagnostics, and a live handle here would stall shutdown.
     this.timer.unref?.();
@@ -54,7 +71,7 @@ class EventLoopMonitor {
   getSnapshot(): EventLoopSnapshot {
     return {
       running: this.timer !== null,
-      sampleIntervalMs: SAMPLE_INTERVAL_MS,
+      sampleIntervalMs: this.sampleIntervalMs,
       stalenessMs: Date.now() - this.lastTickAt,
       lastLagMs: this.lastLagMs,
       peakLagSinceStartMs: this.peakLagSinceStartMs,

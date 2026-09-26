@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { afterAll, afterEach, describe, expect, it } from "bun:test";
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -54,31 +54,62 @@ interface FixtureRepo {
 }
 
 /**
+ * Base repositories, keyed by their file map, built once and copied per case.
+ *
+ * Building a repository costs a `git init`, a `git add`, and a `git commit`; the cases here only
+ * differ in what they do afterwards, so paying that once per distinct starting shape is enough.
+ * Every case still gets its own repository, because each one commits its own change.
+ */
+const templateRepos = new Map<string, string>();
+
+afterAll(() => {
+  for (const root of templateRepos.values()) rmSync(root, { recursive: true, force: true });
+  templateRepos.clear();
+});
+
+function templateRepo(files: Record<string, string>): string {
+  const key = JSON.stringify(Object.entries(files).sort(([left], [right]) => left.localeCompare(right)));
+  const cached = templateRepos.get(key);
+  if (cached) return cached;
+
+  const root = createRepoAt(mkdtempSync(join(tmpdir(), "locale-staleness-template-")));
+  for (const [relativePath, contents] of Object.entries(files)) writeLocaleFile(root, relativePath, contents);
+  git(root, "add", "-A");
+  git(root, "commit", "-qm", "fixture base");
+
+  templateRepos.set(key, root);
+  return root;
+}
+
+function createRepoAt(root: string): string {
+  git(root, "init", "-q", "-b", "main");
+  return root;
+}
+
+function writeLocaleFile(root: string, relativePath: string, contents: string): void {
+  const target = join(root, "src", "locales", relativePath);
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, contents, "utf8");
+}
+
+/**
  * A real repository rather than a mocked git, so the shallow-clone, missing-ref, and merge-base
  * paths under test are the ones the command actually takes.
  */
 function createFixtureRepo(files: Record<string, string>): FixtureRepo {
   const root = mkdtempSync(join(tmpdir(), "locale-staleness-"));
   temporaryRoots.push(root);
-  git(root, "init", "-q", "-b", "main");
+  cpSync(templateRepo(files), root, { recursive: true });
 
-  const repo: FixtureRepo = {
+  return {
     root,
-    write(relativePath, contents) {
-      const target = join(root, "src", "locales", relativePath);
-      mkdirSync(dirname(target), { recursive: true });
-      writeFileSync(target, contents, "utf8");
-    },
+    write: (relativePath, contents) => writeLocaleFile(root, relativePath, contents),
     commit(message) {
       git(root, "add", "-A");
       git(root, "commit", "-qm", message);
       return git(root, "rev-parse", "HEAD");
     },
   };
-
-  for (const [relativePath, contents] of Object.entries(files)) repo.write(relativePath, contents);
-  repo.commit("fixture base");
-  return repo;
 }
 
 function localeObject(body: string): string {
