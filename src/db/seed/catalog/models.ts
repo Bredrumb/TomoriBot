@@ -3208,7 +3208,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
     ],
   },
   {
-    comment: "OpenRouter Gemini Image Generation Models (via OpenRouter API)",
+    comment: "OpenRouter Image Generation Models (via OpenRouter API)",
     rows: [
       {
         provider: "openrouter",

@@ -556,6 +556,21 @@ alters live-resolve the URL and the main-avatar reconciler gates guild-avatar PA
 hash (`personas.applied_avatar_hash`). The seed order is enforced by `check-seed-catalogs`.
 There are no startup seed `.sql` files; edit the typed catalog and the change is seeded on
 the next boot. Invariants are validated on startup and via `bun run check-seed-catalogs`.
+
+The weekly model drift action drafts catalog rows from models.dev in a pull request. It records
+offered models in `scripts/data/modelDriftSeen.json`, keyed by provider, table, and codename. Merge
+the seen entries for declined rows to stop them returning in later runs. Closing the pull request
+leaves them eligible for the next run. Drafted rows require English and Japanese descriptions;
+`check-seed-catalogs` rejects the `MODEL_DRIFT_TODO` markers. Review endpoint availability,
+capabilities, and official prices before merging. Fixed OpenRouter model IDs get draft fallback prices;
+floating aliases stay unpriced because their targets change. The action does not draft media rows for providers
+whose current generation implementation cannot serve them. Run
+`bun scripts/checks/modelDrift.ts` for a local read-only check against current models.dev data.
+The first run may contain a large backlog. Review the dry-run output before dispatching the action.
+`--baseline` records every currently offered model as declined without adding catalog rows; use it
+only when the whole backlog should be skipped. The action waits while its previous PR is open, so
+weekly runs cannot replace edits made during review.
+
 `seedPersonasFromCatalog()` also preserves the derived `official_attribute_flags` update
 for official persona attribute visibility flags.
 

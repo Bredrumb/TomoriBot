@@ -235,8 +235,9 @@ function validateSpec<T extends RowLike>(spec: TableSpec<T>, errors: string[]): 
 // Providers whose llms rows MUST carry a strict chat-completion flag. Kept in lockstep with the
 // request-time safety net in src/providers/utils/strictChatCompat.ts (providerRequires*). Defined
 // locally so the seed catalog stays independent of the provider runtime layer.
-const REQUIRED_ALTERNATION_PROVIDERS = new Set<string>(["anthropic"]);
-const REQUIRED_PREFIX_PROVIDERS = new Set<string>(["deepseek", "zai", "zaicoding"]);
+export const REQUIRED_ALTERNATION_PROVIDERS = new Set<string>(["anthropic"]);
+export const REQUIRED_PREFIX_PROVIDERS = new Set<string>(["deepseek", "zai", "zaicoding"]);
+export const MODEL_DRIFT_TODO = "MODEL_DRIFT_TODO";
 
 /**
  * Enforce that every llms row whose provider requires a strict chat-completion normalization has
@@ -325,7 +326,16 @@ export function validateModels(): string[] {
   validateSpec(embeddingSpec, errors);
   errors.push(...collectStrictChatFlagViolations(rowsOf(llmSpec)));
   errors.push(...collectMeteredPriceViolations(rowsOf(llmSpec)));
+  for (const spec of [llmSpec, imageSpec, videoSpec]) {
+    errors.push(...collectModelDriftTodoViolations(spec.table, rowsOf(spec)));
+  }
   return errors;
+}
+
+export function collectModelDriftTodoViolations(table: string, rows: RowLike[]): string[] {
+  return rows
+    .filter((row) => row.desc?.includes(MODEL_DRIFT_TODO) || row.i18n?.ja?.includes(MODEL_DRIFT_TODO))
+    .map((row) => `${table}/${row.provider}/${row.codename}: replace ${MODEL_DRIFT_TODO} descriptions`);
 }
 
 function renderStatement<T extends RowLike>(spec: TableSpec<T>): string {
