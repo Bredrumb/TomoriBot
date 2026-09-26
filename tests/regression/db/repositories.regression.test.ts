@@ -21,7 +21,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { PrivacyLevel } from "@/types/db/schema";
 import { clearUserCache, getCachedUserRow } from "@/utils/cache/userCache";
-import { llmModelRepo, userRepository } from "@/utils/db/repositories";
+import { configRepository, llmModelRepo, userRepository } from "@/utils/db/repositories";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
@@ -219,6 +219,21 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
       const result = await llmModelRepo.loadById(999_999_999);
       expect(result).toBeNull();
     });
+  });
+
+  it("loads chat config after a column is added to a cached SELECT *", async () => {
+    const { resetDatabaseConnection } = await import("@/utils/db/client");
+    const first = await configRepository.getChatConfig(refs.serverId);
+    expect(first?.server_id).toBe(refs.serverId);
+
+    try {
+      await testSql`ALTER TABLE server_chat_configs ADD COLUMN _rt_cached_plan_probe INTEGER`;
+      const second = await configRepository.getChatConfig(refs.serverId);
+      expect(second?.server_id).toBe(refs.serverId);
+    } finally {
+      await testSql`ALTER TABLE server_chat_configs DROP COLUMN IF EXISTS _rt_cached_plan_probe`;
+      resetDatabaseConnection();
+    }
   });
 
   describe("LlmRepository.getLlmsByIds", () => {

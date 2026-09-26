@@ -34,7 +34,7 @@ import type { TomoriPresetRow, SystemPromptPresetRow } from "@/types/db/schema";
 import type { FallbackModelRef } from "@/types/db/schema";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import type { SqlParameterArray } from "@/types/db/sqlOperations";
-import { sql } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
@@ -929,7 +929,10 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
   async getChatConfig(serverId: number): Promise<ServerChatConfigRow | null> {
     try {
-      const [row] = await sql`SELECT * FROM server_chat_configs WHERE server_id = ${serverId}`;
+      const [row] = await withTransientDbRetry(
+        () => sql`SELECT * FROM server_chat_configs WHERE server_id = ${serverId}`,
+        "load server chat config",
+      );
       return (row as unknown as ServerChatConfigRow) ?? null;
     } catch (error) {
       log.error(`Error loading server_chat_configs for server ${serverId}:`, error);
@@ -939,7 +942,10 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
   async getModelConfig(serverId: number): Promise<ServerModelConfigRow | null> {
     try {
-      const [row] = await sql`SELECT * FROM server_model_configs WHERE server_id = ${serverId}`;
+      const [row] = await withTransientDbRetry(
+        () => sql`SELECT * FROM server_model_configs WHERE server_id = ${serverId}`,
+        "load server model config",
+      );
       return (row as unknown as ServerModelConfigRow) ?? null;
     } catch (error) {
       log.error(`Error loading server_model_configs for server ${serverId}:`, error);
@@ -949,7 +955,10 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
   async getSpeechConfig(serverId: number): Promise<ServerSpeechConfigRow | null> {
     try {
-      const [row] = await sql`SELECT * FROM server_speech_configs WHERE server_id = ${serverId}`;
+      const [row] = await withTransientDbRetry(
+        () => sql`SELECT * FROM server_speech_configs WHERE server_id = ${serverId}`,
+        "load server speech config",
+      );
       return (row as unknown as ServerSpeechConfigRow) ?? null;
     } catch (error) {
       log.error(`Error loading server_speech_configs for server ${serverId}:`, error);

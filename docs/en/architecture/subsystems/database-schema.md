@@ -52,9 +52,10 @@ state is owned by `src/utils/cache/shortTermMemoryCache.ts` (write-through cache
 it is imported from its own module rather than the barrel, so the barrel keeps no edge into the cache layer.
 The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts`) have
 also been removed.
-`LlmModelRepository.loadDiffusionModelById()` retries transient connection and cached-plan errors
+Hot-path model, config, provider, and persona reads retry transient connection and cached-plan errors
 through the shared DB retry helper. A cached-plan retry resets the connection before rerunning the
-lookup; it does not make a query compatible with columns removed by a migration.
+read. Transaction-bound reads must retry the entire transaction, since a connection reset cannot
+resume one. A retry cannot make a query compatible with columns removed by a migration.
 
 ### SQL convention
 
