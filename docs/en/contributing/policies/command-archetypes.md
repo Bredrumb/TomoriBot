@@ -135,7 +135,7 @@ Modes 2 and 3 are always on. `setContexts(Guild)` is a platform guarantee, so a 
 assume a guild. `setDefaultMemberPermissions(ManageGuild)` is only a default that server admins can
 override per role and channel, so a handler never treats being called as permission.
 
-**Disabled or omitted.** Disable a control for a temporary state or an unmet prerequisite (Add at the
+- **Disabled or omitted**: disable a control for a temporary state or an unmet prerequisite (Add at the
 limit, writes during a stale read), or to show a member which manager-only actions exist. Omit it when
 it cannot apply in this context, when its existence or state is sensitive, or when the component
 cannot be disabled (a single select option). `/config` is registered without a Manage Server default

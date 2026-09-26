@@ -5,7 +5,7 @@ title: "STM 02: Summary Upgrade"
 LLM-initiated replacement of the crude conversation at render time with a
 compact, durable LLM-authored summary.
 
-**Files:**
+- **Files**:
 - `UpdateShortTermMemoryTool`: `src/tools/functionCalls/updateShortTermMemoryTool.ts`
 - `updateShortTermMemorySummary`: `src/utils/cache/shortTermMemoryCache.ts:518-574`
 

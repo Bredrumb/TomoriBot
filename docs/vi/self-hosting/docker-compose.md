@@ -4,10 +4,10 @@ sidebar:
   order: 3
 ---
 
-Docker Compose xây dựng và chạy TomoriBot **cùng** PostgreSQL dưới dạng các container. Đây là
+Docker Compose xây dựng và chạy TomoriBot cùng PostgreSQL dưới dạng các container. Đây là
 phương thức cài đặt thứ ba bên cạnh [trình hướng dẫn thiết lập](/vi/self-hosting/setup-wizard/) và
 [cài đặt thủ công](/vi/self-hosting/manual-setup/): hãy chọn phương thức này khi bạn muốn chạy mọi thứ trong Docker thay vì
-cài đặt Bun và PostgreSQL trên máy chủ lưu trữ. Phương thức này **không** sử dụng trình hướng dẫn thiết lập; cơ sở dữ liệu
+cài đặt Bun và PostgreSQL trên máy chủ lưu trữ. Phương thức này không sử dụng trình hướng dẫn thiết lập; cơ sở dữ liệu
 sẽ được tự động cấu hình kết nối cho bạn.
 
 :::caution[Các script phía máy chủ lưu trữ vẫn cần công cụ trên máy chủ]

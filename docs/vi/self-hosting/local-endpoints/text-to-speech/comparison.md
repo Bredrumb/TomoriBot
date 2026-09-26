@@ -12,31 +12,31 @@ Trang này cung cấp kết quả benchmark thực nghiệm, thời gian tổng 
 
 ### Prompt benchmark
 
-- **Prompt tiêu chuẩn** *(sử dụng cho Chatterbox Standard/Turbo/Nano, MOSS-TTS, CosyVoice 3, VoxCPM2, Qwen3-TTS)*:
+- Prompt tiêu chuẩn *(sử dụng cho Chatterbox Standard/Turbo/Nano, MOSS-TTS, CosyVoice 3, VoxCPM2, Qwen3-TTS)*:
   > *"Pain and pleasure are two sides of the same coin. Go on now... flip it. Either way, I'll let you feel all of me."*
-- **Prompt Fish Audio S2 Pro** *(được thử nghiệm với các thẻ biểu cảm trong ngoặc vuông)*:
+- Prompt Fish Audio S2 Pro *(được thử nghiệm với các thẻ biểu cảm trong ngoặc vuông)*:
   > *"Pain and pleasure are two sides of the same coin. [laughs] Go on now... flip it. [whispers] Either way, I'll let you feel all of me."*
 
 ### Hiệu năng & so sánh âm thanh
 
-Thời gian đo lường báo cáo cả **toàn bộ thời gian tạo** (tổng số giây theo thời gian thực từ lúc yêu cầu đến khi âm thanh hoàn tất) và **Real-Time Factor (RTF)**, được xác định là thời gian tạo chia cho thời lượng âm thanh:
+Thời gian đo lường báo cáo cả toàn bộ thời gian tạo (tổng số giây theo thời gian thực từ lúc yêu cầu đến khi âm thanh hoàn tất) và Real-Time Factor (RTF), được xác định là thời gian tạo chia cho thời lượng âm thanh:
 
-- **RTF < 1.0 (in đậm):** Engine tạo giọng nói nhanh hơn thời gian thực (ví dụ, `0.50× RTF` kết xuất đoạn clip dài 10 giây trong 5 giây). Chỉ những engine này mới có thể theo kịp cuộc gọi thoại trực tiếp, tính năng mà TomoriBot hiện chưa triển khai.
-- **RTF > 1.0:** Thời gian tạo lâu hơn thời lượng âm thanh được nói. TomoriBot gửi mỗi tin nhắn thoại dưới dạng một tệp hoàn chỉnh, vì vậy RTF cao hơn chỉ đồng nghĩa với việc phải chờ lâu hơn.
+- RTF < 1.0 (in đậm): Engine tạo giọng nói nhanh hơn thời gian thực (ví dụ, `0.50× RTF` kết xuất đoạn clip dài 10 giây trong 5 giây). Chỉ những engine này mới có thể theo kịp cuộc gọi thoại trực tiếp, tính năng mà TomoriBot hiện chưa triển khai.
+- RTF > 1.0: Thời gian tạo lâu hơn thời lượng âm thanh được nói. TomoriBot gửi mỗi tin nhắn thoại dưới dạng một tệp hoàn chỉnh, vì vậy RTF cao hơn chỉ đồng nghĩa với việc phải chờ lâu hơn.
 
 | Engine | Windows Native<sup>(1)</sup><br/>(RTX 4070 Ti SUPER) | Linux / WSL2 | macOS<br/>(Apple Silicon) | Mẫu âm thanh |
 |---|---|---|---|---|
-| **[Fish Audio S2 Pro](/vi/self-hosting/local-endpoints/text-to-speech/fishs2/)** | ~8-10 phút<sup>(2)</sup><br/>*(~65× RTF)* | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/fish-s2-pro.wav"></audio> |
-| **[Chatterbox (Turbo, Mặc định)](/vi/self-hosting/local-endpoints/text-to-speech/chatterbox/)** | **~5.0s** *(clip 8.7s)*<br/>**0.57× RTF** | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/chatterbox-turbo.wav"></audio> |
-| **[Chatterbox (Nano)](/vi/self-hosting/local-endpoints/text-to-speech/chatterbox/)** | **~3.0s** *(clip 8.0s)*<br/>**0.38× RTF** | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/chatterbox-nano.wav"></audio> |
-| **[Chatterbox (Tiêu chuẩn)](/vi/self-hosting/local-endpoints/text-to-speech/chatterbox/)** | **~6.0s** *(clip 7.8s)*<br/>**0.77× RTF** | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/chatterbox.wav"></audio> |
-| **[MOSS-TTS](/vi/self-hosting/local-endpoints/text-to-speech/moss/)** | ~12.0s *(clip 8.8s)*<br/>1.36× RTF | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/moss-tts.wav"></audio> |
-| **[CosyVoice 3](/vi/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)** | **~6.0s** *(clip 13.9s)*<br/>**0.43× RTF** | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/cosy-voice-3.wav"></audio> |
-| **[VoxCPM2](/vi/self-hosting/local-endpoints/text-to-speech/voxcpm2/)** | ~8.0s *(clip 7.4s)*<br/>1.09× RTF | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/voxcpm2.wav"></audio> |
-| **[Qwen3-TTS](/vi/self-hosting/local-endpoints/text-to-speech/qwen3tts/)** | ~10.0s *(clip 9.2s)*<br/>1.09× RTF | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/qwen3-tts.wav"></audio> |
+| [Fish Audio S2 Pro](/vi/self-hosting/local-endpoints/text-to-speech/fishs2/) | ~8-10 phút<sup>(2)</sup><br/>*(~65× RTF)* | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/fish-s2-pro.wav"></audio> |
+| [Chatterbox (Turbo, Mặc định)](/vi/self-hosting/local-endpoints/text-to-speech/chatterbox/) | ~5.0s *(clip 8.7s)*<br/>0.57× RTF | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/chatterbox-turbo.wav"></audio> |
+| [Chatterbox (Nano)](/vi/self-hosting/local-endpoints/text-to-speech/chatterbox/) | ~3.0s *(clip 8.0s)*<br/>0.38× RTF | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/chatterbox-nano.wav"></audio> |
+| [Chatterbox (Tiêu chuẩn)](/vi/self-hosting/local-endpoints/text-to-speech/chatterbox/) | ~6.0s *(clip 7.8s)*<br/>0.77× RTF | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/chatterbox.wav"></audio> |
+| [MOSS-TTS](/vi/self-hosting/local-endpoints/text-to-speech/moss/) | ~12.0s *(clip 8.8s)*<br/>1.36× RTF | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/moss-tts.wav"></audio> |
+| [CosyVoice 3](/vi/self-hosting/local-endpoints/text-to-speech/cosyvoice3/) | ~6.0s *(clip 13.9s)*<br/>0.43× RTF | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/cosy-voice-3.wav"></audio> |
+| [VoxCPM2](/vi/self-hosting/local-endpoints/text-to-speech/voxcpm2/) | ~8.0s *(clip 7.4s)*<br/>1.09× RTF | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/voxcpm2.wav"></audio> |
+| [Qwen3-TTS](/vi/self-hosting/local-endpoints/text-to-speech/qwen3tts/) | ~10.0s *(clip 9.2s)*<br/>1.09× RTF | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/qwen3-tts.wav"></audio> |
 
-- <sup>(1)</sup> **Môi trường thử nghiệm**: NVIDIA GeForce RTX 4070 Ti SUPER (16 GB GDDR6X, Ada Lovelace) trên Windows 11 (thực thi gốc) sử dụng mẫu âm thanh tham chiếu đơn kênh (mono) 24 kHz dài 26,6 giây với bản phiên âm khớp từng từ.
-- <sup>(2)</sup> **Fish Audio S2 Pro**: Quá trình thực thi trên Windows chạy ở chế độ eager mode chưa biên dịch (~65× RTF) do độ trễ khởi chạy CUDA kernel qua 76 lượt đánh giá lớp trên mỗi token. Bạn nên chạy trên Linux hoặc WSL2 với kỹ thuật kết hợp trình biên dịch OpenAI Triton (`torch.compile`) để tránh tình trạng nghẽn điều phối này.
+- <sup>(1)</sup> Môi trường thử nghiệm: NVIDIA GeForce RTX 4070 Ti SUPER (16 GB GDDR6X, Ada Lovelace) trên Windows 11 (thực thi gốc) sử dụng mẫu âm thanh tham chiếu đơn kênh (mono) 24 kHz dài 26,6 giây với bản phiên âm khớp từng từ.
+- <sup>(2)</sup> Fish Audio S2 Pro: Quá trình thực thi trên Windows chạy ở chế độ eager mode chưa biên dịch (~65× RTF) do độ trễ khởi chạy CUDA kernel qua 76 lượt đánh giá lớp trên mỗi token. Bạn nên chạy trên Linux hoặc WSL2 với kỹ thuật kết hợp trình biên dịch OpenAI Triton (`torch.compile`) để tránh tình trạng nghẽn điều phối này.
 
 ---
 
@@ -50,7 +50,7 @@ Thời gian đo lường báo cáo cả **toàn bộ thời gian tạo** (tổng
 
 | Engine | Windows Native<sup>(1)</sup><br/>(RTX 4070 Ti SUPER) | Linux / WSL2 | macOS<br/>(Apple Silicon) | Mẫu âm thanh |
 |---|---|---|---|---|
-| **[IrodoriTTS](/vi/self-hosting/local-endpoints/text-to-speech/irodoritts/)** | **~4.0s** *(clip 8.5s)*<br/>**0.47× RTF** | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/irodori.wav"></audio> |
+| [IrodoriTTS](/vi/self-hosting/local-endpoints/text-to-speech/irodoritts/) | ~4.0s *(clip 8.5s)*<br/>0.47× RTF | Chưa thử nghiệm | Chưa thử nghiệm | <audio controls preload="none" src="/audio/tts/irodori.wav"></audio> |
 
 - <sup>(1)</sup> Được đo lường trong cùng môi trường thử nghiệm RTX 4070 Ti SUPER Windows 11.
 
@@ -58,19 +58,19 @@ Thời gian đo lường báo cáo cả **toàn bộ thời gian tạo** (tổng
 
 ## Bạn nên chọn engine nào?
 
-- **Chọn [Fish Audio S2 Pro](/vi/self-hosting/local-endpoints/text-to-speech/fishs2/)** nếu bạn muốn độ trung thực của giọng nói cao nhất có thể, các thẻ biểu cảm chi tiết trong ngoặc vuông (`[whisper]`, `[laughs]`, `[sigh]`), và bạn có quyền truy cập vào **Linux hoặc WSL2** nơi có thể bật kỹ thuật kết hợp trình biên dịch Triton.
-- **Chọn [Chatterbox (Turbo / Nano / Tiêu chuẩn)](/vi/self-hosting/local-endpoints/text-to-speech/chatterbox/)** để sao chép giọng nói tiếng Anh với mức chiếm dụng VRAM nhỏ. Nano (~3.0s, 0.38× RTF) cung cấp tốc độ tối đa trên CPU/GPU, Turbo (~5.0s, 0.57× RTF) hỗ trợ các thẻ sự kiện cận ngôn ngữ (`[laughter]`, `[sigh]`), và Tiêu chuẩn (~6.0s, 0.77× RTF) cho phép hướng dẫn sáng tạo với CFG cùng tinh chỉnh độ phóng đại cảm xúc.
-- **Chọn [MOSS-TTS](/vi/self-hosting/local-endpoints/text-to-speech/moss/)** để thử nghiệm sao chép giọng nói đa phương thức và tạo giọng nói tiếng Anh/tiếng Trung qua mô tả văn bản.
-- **Chọn [CosyVoice 3](/vi/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)** nếu bạn cần sao chép zero-shot đa ngôn ngữ chất lượng cao với chỉ dẫn truyền đạt bằng ngôn ngữ tự nhiên (`"Speak in English with excitement"`).
-- **Chọn [VoxCPM2](/vi/self-hosting/local-endpoints/text-to-speech/voxcpm2/)** nếu bạn cần hỗ trợ đa ngôn ngữ toàn diện (30 ngôn ngữ), Ultimate Cloning có hỗ trợ của bản phiên âm, và thiết kế giọng nói tự nhiên.
-- **Chọn [Qwen3-TTS](/vi/self-hosting/local-endpoints/text-to-speech/qwen3tts/)** nếu bạn muốn sao chép đa ngôn ngữ rõ ràng với khả năng thiết kế giọng nói linh hoạt và mức độ bám sát prompt ổn định.
-- **Chọn [IrodoriTTS](/vi/self-hosting/local-endpoints/text-to-speech/irodoritts/)** nếu bot của bạn nói tiếng Nhật. Đây là engine thuần tiếng Nhật duy nhất được đo lường (~4s, 0.47× RTF trên Windows) và phân tích cú pháp Unicode emoji gốc (`😊`, `😭`, `😠`) để điều chỉnh cảm xúc của nhân vật.
+- Chọn [Fish Audio S2 Pro](/vi/self-hosting/local-endpoints/text-to-speech/fishs2/) nếu bạn muốn độ trung thực của giọng nói cao nhất có thể, các thẻ biểu cảm chi tiết trong ngoặc vuông (`[whisper]`, `[laughs]`, `[sigh]`), và bạn có quyền truy cập vào Linux hoặc WSL2 nơi có thể bật kỹ thuật kết hợp trình biên dịch Triton.
+- Chọn [Chatterbox (Turbo / Nano / Tiêu chuẩn)](/vi/self-hosting/local-endpoints/text-to-speech/chatterbox/) để sao chép giọng nói tiếng Anh với mức chiếm dụng VRAM nhỏ. Nano (~3.0s, 0.38× RTF) cung cấp tốc độ tối đa trên CPU/GPU, Turbo (~5.0s, 0.57× RTF) hỗ trợ các thẻ sự kiện cận ngôn ngữ (`[laughter]`, `[sigh]`), và Tiêu chuẩn (~6.0s, 0.77× RTF) cho phép hướng dẫn sáng tạo với CFG cùng tinh chỉnh độ phóng đại cảm xúc.
+- Chọn [MOSS-TTS](/vi/self-hosting/local-endpoints/text-to-speech/moss/) để thử nghiệm sao chép giọng nói đa phương thức và tạo giọng nói tiếng Anh/tiếng Trung qua mô tả văn bản.
+- Chọn [CosyVoice 3](/vi/self-hosting/local-endpoints/text-to-speech/cosyvoice3/) nếu bạn cần sao chép zero-shot đa ngôn ngữ chất lượng cao với chỉ dẫn truyền đạt bằng ngôn ngữ tự nhiên (`"Speak in English with excitement"`).
+- Chọn [VoxCPM2](/vi/self-hosting/local-endpoints/text-to-speech/voxcpm2/) nếu bạn cần hỗ trợ đa ngôn ngữ toàn diện (30 ngôn ngữ), Ultimate Cloning có hỗ trợ của bản phiên âm, và thiết kế giọng nói tự nhiên.
+- Chọn [Qwen3-TTS](/vi/self-hosting/local-endpoints/text-to-speech/qwen3tts/) nếu bạn muốn sao chép đa ngôn ngữ rõ ràng với khả năng thiết kế giọng nói linh hoạt và mức độ bám sát prompt ổn định.
+- Chọn [IrodoriTTS](/vi/self-hosting/local-endpoints/text-to-speech/irodoritts/) nếu bot của bạn nói tiếng Nhật. Đây là engine thuần tiếng Nhật duy nhất được đo lường (~4s, 0.47× RTF trên Windows) và phân tích cú pháp Unicode emoji gốc (`😊`, `😭`, `😠`) để điều chỉnh cảm xúc của nhân vật.
 
 ---
 
 ## So sánh các engine
 
-Tất cả các máy chủ TTS của TomoriBot hiện đều trả về một tệp WAV hoàn chỉnh cho bot. "Đường dẫn streaming" có nghĩa là model thượng nguồn hoặc backend cung cấp riêng biệt có hỗ trợ tính năng này; điều này **không** có nghĩa là tính năng phát trực tiếp trong kênh thoại Discord đã được triển khai. Kích thước ở đây là số lượng tham số của model, **không phải** dung lượng VRAM hoặc dung lượng tải về, và cột 16 GB GPU là hướng dẫn thiết lập thay vì mức đỉnh được đo lường. Cột tốc độ mô tả sự đánh đổi dự định của từng engine; các mốc thời gian đo được ở trên đến từ một máy chạy Windows và không phản ánh thứ hạng của các engine trên Linux.
+Tất cả các máy chủ TTS của TomoriBot hiện đều trả về một tệp WAV hoàn chỉnh cho bot. "Đường dẫn streaming" có nghĩa là model thượng nguồn hoặc backend cung cấp riêng biệt có hỗ trợ tính năng này; điều này không có nghĩa là tính năng phát trực tiếp trong kênh thoại Discord đã được triển khai. Kích thước ở đây là số lượng tham số của model, không phải dung lượng VRAM hoặc dung lượng tải về, và cột 16 GB GPU là hướng dẫn thiết lập thay vì mức đỉnh được đo lường. Cột tốc độ mô tả sự đánh đổi dự định của từng engine; các mốc thời gian đo được ở trên đến từ một máy chạy Windows và không phản ánh thứ hạng của các engine trên Linux.
 
 Cột "Clip tham chiếu" cho biết độ dài âm thanh tham chiếu mà mỗi engine ghi lại trong tài liệu hoặc áp dụng trong runtime, vì vậy cột này pha trộn hướng dẫn đã công bố với các giới hạn đọc được từ mã nguồn thượng nguồn. Hầu hết các engine cắt âm thầm theo cửa sổ của mình thay vì từ chối yêu cầu, đó là lý do cột này nêu những gì engine đọc chứ không chỉ những gì engine chấp nhận. Đây là hành vi ở thượng nguồn, không phải kết quả đo tại đây, và độc lập với giới hạn tải lên của TomoriBot.
 

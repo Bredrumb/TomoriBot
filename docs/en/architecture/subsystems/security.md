@@ -207,7 +207,7 @@ The same URL-validation path is also used by `safeDownload()` for user/media dow
 A URL the gate rejects never reaches the network, so it is reported separately from a real connection failure:
 
 - `fetchUserRemoteUrl()` throws `RemoteUrlPolicyError` (not a bare `Error`) for every deliberate refusal: preflight validation, per-hop redirect revalidation, a forbidden or over-deep redirect chain, a missing `Location` header, and an unpinnable address. It carries the `hostname` and a `failureCode`.
-- `safeDownload()` maps that to `error: "blocked_by_policy"` and logs it at **warn** with `errorType: "download_blocked_by_policy"`, instead of the **error**-level `download_network_error` used for genuine transport faults.
+- `safeDownload()` maps that to `error: "blocked_by_policy"` and logs it at `warn` level with `errorType: "download_blocked_by_policy"`, instead of the `error`-level `download_network_error` used for genuine transport faults.
 
 This matters for log-based alerting: user-supplied content routinely contains URLs that policy declines (a plain-HTTP image CDN, a shortener redirecting to a private address). Those are expected outcomes, not incidents, and they no longer land in the error-level stream or the `error_logs` table.
 
@@ -245,13 +245,13 @@ Critical memory behavior:
 
 TomoriBot implements several controls to mitigate supply chain risks during development and deployment:
 
-- **Lockfiles and Pinning:** Always use `--frozen-lockfile` to ensure deterministic builds. Never use floating tags like `@latest` in the `Dockerfile`, workflow actions, dependency overrides, or bundled MCP server configs. A global dependency override must remain within every dependent package's declared version range; update or patch the parent dependency instead of forcing an incompatible major version.
-- **Pinned Runtime Images and Actions:** Production Docker builds pin the Bun base image by digest, and deployment workflows pin third-party GitHub Actions by commit SHA.
-- **Bundled MCP Packages:** Built-in npm MCP servers are pinned in `package.json`/`bun.lock`; production uses installed binaries instead of runtime `bunx` package resolution.
-- **Dependency Auditing:** The CI/CD pipeline enforces `bun audit` (failing on high/critical) and container scanning (Trivy).
-- **Asset Checksums:** External dependencies downloaded outside the primary package manager must be verified against cryptographic hashes before the Docker image is built.
-- **Dependency Patches:** Patches and overrides are tracked in `patches/README.md`. When updating dependencies, always refer to this document to check if a patch can be reverted.
-- **OIDC Deployments:** Production infrastructure uses short-lived OIDC tokens for AWS authentication rather than static IAM credentials.
+- **Lockfiles and pinning**: Always use `--frozen-lockfile` to ensure deterministic builds. Never use floating tags like `@latest` in the `Dockerfile`, workflow actions, dependency overrides, or bundled MCP server configs. A global dependency override must remain within every dependent package's declared version range; update or patch the parent dependency instead of forcing an incompatible major version.
+- **Pinned runtime images and actions**: Production Docker builds pin the Bun base image by digest, and deployment workflows pin third-party GitHub Actions by commit SHA.
+- **Bundled MCP packages**: Built-in npm MCP servers are pinned in `package.json`/`bun.lock`; production uses installed binaries instead of runtime `bunx` package resolution.
+- **Dependency auditing**: The CI/CD pipeline enforces `bun audit` (failing on high/critical) and container scanning (Trivy).
+- **Asset checksums**: External dependencies downloaded outside the primary package manager must be verified against cryptographic hashes before the Docker image is built.
+- **Dependency patches**: Patches and overrides are tracked in `patches/README.md`. When updating dependencies, always refer to this document to check if a patch can be reverted.
+- **OIDC deployments**: Production infrastructure uses short-lived OIDC tokens for AWS authentication rather than static IAM credentials.
 
 ## Operational Checklist
 

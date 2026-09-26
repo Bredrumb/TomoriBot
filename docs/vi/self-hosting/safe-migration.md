@@ -8,7 +8,7 @@ Khi bạn `git pull` mã nguồn mới và khởi động lại TomoriBot, bot s
 
 ## Tại sao điều này lại quan trọng
 
-Trình chạy migration của TomoriBot (trong `src/db/migrationRunner.ts`) thực thi tất cả các migration chưa được áp dụng theo thứ tự phiên bản. Các migration **chỉ tiến về phía trước**: nếu xảy ra sự cố, trình chạy sẽ không tự động rollback. Hầu hết các migration là những mở rộng an toàn (thêm cột mới, bảng mới), nhưng theo chính sách thiết kế nội bộ của dự án (OD-R-6), các thao tác có tính phá hủy như `DROP COLUMN` hoặc `DROP TABLE` đều được cho phép. Nếu một migration phá hủy chạy mà không có bản sao lưu, bạn sẽ mất dữ liệu vĩnh viễn. Khi còn nghi ngờ, hãy sao lưu trước.
+Trình chạy migration của TomoriBot (trong `src/db/migrationRunner.ts`) thực thi tất cả các migration chưa được áp dụng theo thứ tự phiên bản. Các migration chỉ tiến về phía trước: nếu xảy ra sự cố, trình chạy sẽ không tự động rollback. Hầu hết các migration là những mở rộng an toàn (thêm cột mới, bảng mới), nhưng theo chính sách thiết kế nội bộ của dự án (OD-R-6), các thao tác có tính phá hủy như `DROP COLUMN` hoặc `DROP TABLE` đều được cho phép. Nếu một migration phá hủy chạy mà không có bản sao lưu, bạn sẽ mất dữ liệu vĩnh viễn. Khi còn nghi ngờ, hãy sao lưu trước.
 
 ## Danh sách kiểm tra trước khi kéo mã nguồn
 
@@ -21,7 +21,7 @@ Thực hiện theo các bước sau TRƯỚC KHI chạy `git pull`:
 
 ### Điều kiện tiên quyết: tiện ích mở rộng `pgvector`
 
-Một bản sao lưu đầy đủ là bản `pg_dump` dạng plain-SQL (`backupData.ts` chạy `pg_dump --clean --if-exists -f`), do đó nó chứa bảng `document_chunks` kiểu `vector` dùng cho RAG. **Postgres đích bắt buộc phải có sẵn tiện ích mở rộng `pgvector` trước khi bạn khôi phục**, nếu không lệnh `CREATE EXTENSION IF NOT EXISTS vector` của bản dump sẽ không thể chạy và bảng `document_chunks` sẽ không thể tạo được.
+Một bản sao lưu đầy đủ là bản `pg_dump` dạng plain-SQL (`backupData.ts` chạy `pg_dump --clean --if-exists -f`), do đó nó chứa bảng `document_chunks` kiểu `vector` dùng cho RAG. Postgres đích bắt buộc phải có sẵn tiện ích mở rộng `pgvector` trước khi bạn khôi phục, nếu không lệnh `CREATE EXTENSION IF NOT EXISTS vector` của bản dump sẽ không thể chạy và bảng `document_chunks` sẽ không thể tạo được.
 
 Cài đặt tiện ích một lần trên máy chủ lưu trữ (khớp với phiên bản chính Postgres của bạn), ví dụ cho Postgres 16:
 
@@ -37,8 +37,8 @@ psql -c "SELECT name, default_version FROM pg_available_extensions WHERE name = 
 
 Nếu bạn khôi phục mà không có tiện ích này:
 
-- Lệnh `restore-backup` của dự án (và bất kỳ lệnh `psql -f` nào chạy với `ON_ERROR_STOP=1`) sẽ **hủy sớm** với thông báo `extension "vector" is not available`: không có dữ liệu nào được nạp. Hãy cài đặt pgvector và thử lại.
-- Một lệnh `psql -f` chạy thủ công **bỏ qua lỗi** (`ON_ERROR_STOP=0`) còn tồi tệ hơn: lệnh `COPY public.document_chunks` bị thất bại làm mất đồng bộ bộ phân tích cú pháp đầu vào của psql, khiến psql phân tích nhầm các hàng dữ liệu `COPY` tiếp theo thành câu lệnh SQL (gây ra một chuỗi `syntax error at or near …`). Điều này âm thầm xóa toàn bộ các bảng (đã ghi nhận: `documents` và `llms`), để lại một cơ sở dữ liệu được khôi phục một phần trông có vẻ nguyên vẹn nhưng đã bị mất dữ liệu. Luôn khôi phục với `ON_ERROR_STOP=1` để các lỗi xuất hiện ngay lập tức.
+- Lệnh `restore-backup` của dự án (và bất kỳ lệnh `psql -f` nào chạy với `ON_ERROR_STOP=1`) sẽ hủy sớm với thông báo `extension "vector" is not available`: không có dữ liệu nào được nạp. Hãy cài đặt pgvector và thử lại.
+- Một lệnh `psql -f` chạy thủ công bỏ qua lỗi (`ON_ERROR_STOP=0`) còn tồi tệ hơn: lệnh `COPY public.document_chunks` bị thất bại làm mất đồng bộ bộ phân tích cú pháp đầu vào của psql, khiến psql phân tích nhầm các hàng dữ liệu `COPY` tiếp theo thành câu lệnh SQL (gây ra một chuỗi `syntax error at or near …`). Điều này âm thầm xóa toàn bộ các bảng (đã ghi nhận: `documents` và `llms`), để lại một cơ sở dữ liệu được khôi phục một phần trông có vẻ nguyên vẹn nhưng đã bị mất dữ liệu. Luôn khôi phục với `ON_ERROR_STOP=1` để các lỗi xuất hiện ngay lập tức.
 
 ### Tùy chọn A: Sử dụng script sao lưu của dự án
 
@@ -47,7 +47,7 @@ TomoriBot đi kèm hai script sao lưu, mỗi script nhắm vào các dữ liệ
 - **`bun run backup`**: Bản dump đầy đủ schema cơ sở dữ liệu + dữ liệu (persona, bộ nhớ, cấu hình, mọi thứ)
 - **`bun run backup:personas`**: Chỉ bao gồm các preset persona và bộ nhớ máy chủ theo từng persona
 
-Để di chuyển an toàn, hãy sử dụng **bản sao lưu đầy đủ**:
+Để di chuyển an toàn, hãy sử dụng bản sao lưu đầy đủ:
 
 ```bash
 bun run backup
@@ -108,11 +108,11 @@ pg_restore \
   tomoribot-backup-20240115-143045.dump
 ```
 
-**Lưu ý:** `pg_restore` sẽ yêu cầu mật khẩu trừ khi bạn đã thiết lập mật khẩu trong tệp `.pgpass` (tệp lưu thông tin xác thực tích hợp của PostgreSQL).
+Lưu ý: `pg_restore` sẽ yêu cầu mật khẩu trừ khi bạn đã thiết lập mật khẩu trong tệp `.pgpass` (tệp lưu thông tin xác thực tích hợp của PostgreSQL).
 
 ## Dành cho cộng tác viên triển khai qua CI: quy ước `(Checkpoint)`
 
-Nếu bạn duy trì một bản fork triển khai lên AWS hoặc GCP thông qua các workflow trong `.github/workflows/deploy-tomoribot-{aws,gcp}.yml`, các quy trình này hỗ trợ **tùy chọn chụp nhanh trước khi triển khai**: khi một thông điệp commit chứa token ký tự `(Checkpoint)`, workflow sẽ chạy `aws rds create-db-snapshot` (hoặc lệnh tương đương của GCP Cloud SQL) **trước khi** bất kỳ mã nào được triển khai và trước khi trình chạy migration can thiệp vào cơ sở dữ liệu khi khởi động.
+Nếu bạn duy trì một bản fork triển khai lên AWS hoặc GCP thông qua các workflow trong `.github/workflows/deploy-tomoribot-{aws,gcp}.yml`, các quy trình này hỗ trợ tùy chọn chụp nhanh trước khi triển khai: khi một thông điệp commit chứa token ký tự `(Checkpoint)`, workflow sẽ chạy `aws rds create-db-snapshot` (hoặc lệnh tương đương của GCP Cloud SQL) trước khi bất kỳ mã nào được triển khai và trước khi trình chạy migration can thiệp vào cơ sở dữ liệu khi khởi động.
 
 Sử dụng tùy chọn này khi:
 
@@ -180,13 +180,13 @@ Nếu bot bị crash hoặc treo trong quá trình migration:
 
 ## Những gì KHÔNG THỂ tự động khôi phục
 
-Theo thiết kế của dự án (OD-R-6), **các migration phá hủy không thể được rollback** bởi trình chạy migration. Ví dụ:
+Theo thiết kế của dự án (OD-R-6), các migration phá hủy không thể được rollback bởi trình chạy migration. Ví dụ:
 
 - `DROP COLUMN name_here`: các hàng dữ liệu bị xóa sẽ mất vĩnh viễn; không có script SQL nào có thể khôi phục chúng
 - `DROP TABLE old_table`: toàn bộ bảng bị xóa hoàn toàn
 - Thu hẹp kiểu dữ liệu (ví dụ `VARCHAR(255) → VARCHAR(100)`): các giá trị dài hơn 100 ký tự sẽ bị cắt bớt
 
-Đối với các thao tác này, **cách khôi phục duy nhất là sử dụng bản sao lưu của bạn**. Luôn sao lưu trước khi kéo mã nguồn nếu bạn đang ở phiên bản cũ và một đợt tái cấu trúc mới được phát hành.
+Đối với các thao tác này, cách khôi phục duy nhất là sử dụng bản sao lưu của bạn. Luôn sao lưu trước khi kéo mã nguồn nếu bạn đang ở phiên bản cũ và một đợt tái cấu trúc mới được phát hành.
 
 Thiết kế chỉ tiến về phía trước của trình chạy migration là có chủ đích: các tệp rollback (`.down.sql`) tồn tại vì sự an toàn của nhà phát triển trong quá trình thử nghiệm, nhưng việc khôi phục trên môi trường production phụ thuộc vào các bản sao lưu chứ không phải việc thực thi lại các thao tác không thể hoàn tác.
 
@@ -194,22 +194,22 @@ Thiết kế chỉ tiến về phía trước của trình chạy migration là 
 
 Một trường hợp phổ biến: ai đó yêu cầu bạn thử nghiệm một nhánh trên bản cài đặt hiện có của bạn, và bạn muốn biết liệu việc chuyển sang nhánh đó, khởi động bot, rồi chuyển lại về `main` có làm hỏng cơ sở dữ liệu của bạn hay không.
 
-**Các sự thật then chốt:**
+Các sự thật then chốt:
 
 - Git và PostgreSQL là hai thế giới tách biệt. Lệnh `git checkout` chỉ hoán đổi các tệp trên ổ đĩa; nó không bao giờ kết nối hay sửa đổi cơ sở dữ liệu của bạn. Trạng thái migration đã áp dụng nằm trong bảng `schema_migrations`, không phải trong git.
-- Các migration chạy **tự động khi khởi động** (thông qua `initializeDatabase.ts`), vì vậy ngay khi bạn khởi động nhánh đó, các migration mới của nó sẽ được áp dụng cho bất kỳ cơ sở dữ liệu nào mà bạn trỏ tới.
-- Trình chạy tiến **không bao giờ tự động rollback**. Khi bạn quay lại `main`, nó quét các tệp trên ổ đĩa, không tìm thấy mục nào đang chờ xử lý và không làm gì cả. Các migration mà nhánh đó đã áp dụng vẫn sẽ giữ nguyên.
+- Các migration chạy tự động khi khởi động (thông qua `initializeDatabase.ts`), vì vậy ngay khi bạn khởi động nhánh đó, các migration mới của nó sẽ được áp dụng cho bất kỳ cơ sở dữ liệu nào mà bạn trỏ tới.
+- Trình chạy tiến không bao giờ tự động rollback. Khi bạn quay lại `main`, nó quét các tệp trên ổ đĩa, không tìm thấy mục nào đang chờ xử lý và không làm gì cả. Các migration mà nhánh đó đã áp dụng vẫn sẽ giữ nguyên.
 
-**Vậy điều đó có an toàn không?** Điều này hoàn toàn phụ thuộc vào những gì các migration của nhánh đó đã thực hiện:
+Vậy điều đó có an toàn không? Điều này hoàn toàn phụ thuộc vào những gì các migration của nhánh đó đã thực hiện:
 
-- **Chỉ bổ sung** (bảng mới / cột mới) → an toàn. Các đối tượng mới chỉ nằm đó và không được sử dụng; mã nguồn của `main` không bao giờ tham chiếu đến chúng, vì vậy chúng không thể gây ra kết quả sai hoặc crash. Chúng chỉ là phần dư thừa vô hại.
-- **Có tính phá hủy** (`DROP`/`RENAME`/`ALTER` trên bảng mà `main` vẫn sử dụng) → không an toàn. Thay đổi của nhánh khiến mã nguồn của `main` bị lỗi khi truy cập một cột/bảng hiện đã bị xóa hoặc thay đổi.
+- Chỉ bổ sung (bảng mới / cột mới) → an toàn. Các đối tượng mới chỉ nằm đó và không được sử dụng; mã nguồn của `main` không bao giờ tham chiếu đến chúng, vì vậy chúng không thể gây ra kết quả sai hoặc crash. Chúng chỉ là phần dư thừa vô hại.
+- Có tính phá hủy (`DROP`/`RENAME`/`ALTER` trên bảng mà `main` vẫn sử dụng) → không an toàn. Thay đổi của nhánh khiến mã nguồn của `main` bị lỗi khi truy cập một cột/bảng hiện đã bị xóa hoặc thay đổi.
 
-**Cách tiếp cận an toàn nhất:** trỏ nhánh tới một cơ sở dữ liệu dùng một lần (một `POSTGRES_DB` riêng biệt), để dữ liệu thực của bạn không bao giờ bị ảnh hưởng. Bạn đã thiết lập kết nối từ các biến `POSTGRES_*`, và `bun run nuke-db` có thể đặt lại cơ sở dữ liệu thử nghiệm.
+Cách tiếp cận an toàn nhất: trỏ nhánh tới một cơ sở dữ liệu dùng một lần (một `POSTGRES_DB` riêng biệt), để dữ liệu thực của bạn không bao giờ bị ảnh hưởng. Bạn đã thiết lập kết nối từ các biến `POSTGRES_*`, và `bun run nuke-db` có thể đặt lại cơ sở dữ liệu thử nghiệm.
 
 ### Rollback thủ công một migration thử nghiệm
 
-Nếu bạn đã thử nghiệm một nhánh với cơ sở dữ liệu **thực** của mình và muốn hoàn tác các migration của nó sau đó, hãy sử dụng trình chạy rollback. Không giống như trình chạy tiến, công cụ này **không bao giờ chạy tự động**: rollback luôn là một hành động thủ công có chủ đích vì các tệp `.down.sql` thường làm mất dữ liệu.
+Nếu bạn đã thử nghiệm một nhánh với cơ sở dữ liệu thực của mình và muốn hoàn tác các migration của nó sau đó, hãy sử dụng trình chạy rollback. Không giống như trình chạy tiến, công cụ này không bao giờ chạy tự động: rollback luôn là một hành động thủ công có chủ đích vì các tệp `.down.sql` thường làm mất dữ liệu.
 
 ```bash
 # Chỉ xem trước (dry run): hiển thị những gì sẽ được rollback
@@ -221,11 +221,11 @@ bun run migrate:down --last=2     # hai migration được áp dụng gần đâ
 bun run migrate:down 034 --yes
 ```
 
-Lệnh này chạy các tệp `.down.sql` đã chọn theo thứ tự phiên bản **giảm dần** (để các mục phụ thuộc vào một migration được hoàn tác trước nó), sau đó xóa các hàng `schema_migrations` tương ứng. Khi các hàng đó đã bị xóa, trình chạy tiến sẽ áp dụng lại các migration trong lần tiếp theo bạn khởi động một nhánh vẫn chứa chúng.
+Lệnh này chạy các tệp `.down.sql` đã chọn theo thứ tự phiên bản giảm dần (để các mục phụ thuộc vào một migration được hoàn tác trước nó), sau đó xóa các hàng `schema_migrations` tương ứng. Khi các hàng đó đã bị xóa, trình chạy tiến sẽ áp dụng lại các migration trong lần tiếp theo bạn khởi động một nhánh vẫn chứa chúng.
 
-> **Chạy lệnh khi vẫn còn ở trên nhánh đó.** Quá trình rollback đọc `NNN_description.down.sql` từ ổ đĩa. Khi bạn `git checkout main`, các tệp đó sẽ biến mất và việc rollback không còn thực hiện được nữa. Hãy rollback trước, sau đó mới chuyển nhánh.
+> Chạy lệnh khi vẫn còn ở trên nhánh đó. Quá trình rollback đọc `NNN_description.down.sql` từ ổ đĩa. Khi bạn `git checkout main`, các tệp đó sẽ biến mất và việc rollback không còn thực hiện được nữa. Hãy rollback trước, sau đó mới chuyển nhánh.
 
-> **Quá trình này vẫn làm mất dữ liệu.** Việc rollback `034` ở đây sẽ chạy `DROP TABLE short_term_memories`, do đó bất kỳ dữ liệu nào được tạo trong quá trình thử nghiệm đều sẽ bị xóa. Điều đó hoàn toàn bình thường đối với việc dọn dẹp thử nghiệm, nhưng đừng bao giờ chạy `migrate:down` với dữ liệu bạn muốn giữ lại mà không có bản sao lưu.
+> Quá trình này vẫn làm mất dữ liệu. Việc rollback `034` ở đây sẽ chạy `DROP TABLE short_term_memories`, do đó bất kỳ dữ liệu nào được tạo trong quá trình thử nghiệm đều sẽ bị xóa. Điều đó hoàn toàn bình thường đối với việc dọn dẹp thử nghiệm, nhưng đừng bao giờ chạy `migrate:down` với dữ liệu bạn muốn giữ lại mà không có bản sao lưu.
 
 ## Xem thêm
 

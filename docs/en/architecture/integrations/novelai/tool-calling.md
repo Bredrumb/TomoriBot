@@ -4,7 +4,7 @@ title: "NovelAI GLM 4.6 Tool Calling"
 
 ## Overview
 
-NovelAI's GLM 4.6 model uses **prompt-based tool calling**: tools are defined in the system prompt, and the model generates structured XML blocks when it decides to use a tool. This is fundamentally different from providers like Google Gemini or OpenRouter that have native function calling APIs.
+NovelAI's GLM 4.6 model uses prompt-based tool calling: tools are defined in the system prompt, and the model generates structured XML blocks when it decides to use a tool. This is fundamentally different from providers like Google Gemini or OpenRouter that have native function calling APIs.
 
 The implementation lives primarily in `src/providers/novelai/novelaiStreamAdapter.ts`.
 
@@ -87,7 +87,7 @@ When in `undecided` mode, each token is appended to `toolPreludeBuffer` and anal
 
 ### What the Model Actually Generates (common GLM behavior)
 
-GLM 4.6 frequently **omits the `<tool_call>` wrapper tag** and outputs the function name directly:
+GLM 4.6 frequently omits the `<tool_call>` wrapper tag and outputs the function name directly:
 
 ```
 web_search
@@ -97,7 +97,7 @@ web_search
 <arg_value>text</arg_value>
 ```
 
-The adapter handles this via **unwrapped tool call detection**: checking if the first line of the prelude matches a known tool name (with underscore/hyphen normalization via `normalizeToolName()`).
+The adapter handles this via unwrapped tool call detection: checking if the first line of the prelude matches a known tool name (with underscore/hyphen normalization via `normalizeToolName()`).
 
 ### Tool Name Normalization
 
@@ -177,12 +177,12 @@ The adapter includes three layers of debris detection to handle GLM's tendency t
 ### 1. `</think>` Debris Detection (RESOLVED)
 The model sometimes generates stray `</think>` tags mid-response followed by garbage text (e.g., `"oggers:</think>\nTomori I'll kill you"`).
 
-**Solution**: `processVisibleText()` checks for `</think>` during the visible text phase. When found, the stream stops immediately: only clean text before the tag is emitted, everything after is discarded.
+- **Solution**: `processVisibleText()` checks for `</think>` during the visible text phase. When found, the stream stops immediately: only clean text before the tag is emitted, everything after is discarded.
 
 ### 2. Stray Tool Calls After Text (RESOLVED)
 The model may generate a complete text response, then attempt a tool call (e.g., `select_sticker_for_response`) at the very end without arguments.
 
-**Solution**: A `hasEmittedVisibleText` flag tracks whether any visible text has been sent to the user. When set, all subsequent tool call detections are suppressed:
+- **Solution**: a `hasEmittedVisibleText` flag tracks whether any visible text has been sent to the user. When set, all subsequent tool call detections are suppressed:
 - `processTokenWithToolParsing()`: ignores `undecided` → `tool_call` transitions
 - `processTextWithToolScan()`: ignores both `<tool_call>` tags and unwrapped function names
 - `processChunk()` final-chunk recovery: skips truncation recovery for both `tool_call` and `undecided` modes
@@ -190,7 +190,7 @@ The model may generate a complete text response, then attempt a tool call (e.g.,
 ### 3. Mid-Text Unwrapped Tool Call Detection (RESOLVED)
 When the model starts with text then switches to an unwrapped tool call (bare function name without `<tool_call>` wrapper), the previous code only scanned for `<tool_call>` XML tags.
 
-**Solution**: `detectUnwrappedToolCallInText()` scans the text buffer for bare function names (matching registered tools via `normalizeToolName()`) followed by `<arg_key>` tags. If found after visible text, they're suppressed as debris. If found before any visible text, they're wrapped in `<tool_call>` tags for standard parsing.
+- **Solution**: `detectUnwrappedToolCallInText()` scans the text buffer for bare function names (matching registered tools via `normalizeToolName()`) followed by `<arg_key>` tags. If found after visible text, they're suppressed as debris. If found before any visible text, they're wrapped in `<tool_call>` tags for standard parsing.
 
 ## Known Limitations
 

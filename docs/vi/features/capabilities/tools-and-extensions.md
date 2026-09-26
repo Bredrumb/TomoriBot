@@ -4,7 +4,7 @@ sidebar:
   order: 1
 ---
 
-TomoriBot hoạt động theo cơ chế agentic: ngoài việc trò chuyện, bot có thể gọi các **công cụ**
+TomoriBot hoạt động theo cơ chế agentic: ngoài việc trò chuyện, bot có thể gọi các công cụ
 để tìm kiếm web, đọc tài liệu, tạo phương tiện, đặt lời nhắc, thực hiện hành động trong các kênh
 khác và nhiều hơn nữa. Bot tự quyết định thời điểm sử dụng chúng dựa trên ngữ cảnh trò chuyện.
 Trang này trình bày các công cụ tích hợp sẵn, cách mở rộng năng lực của bot với máy chủ MCP, và
@@ -12,18 +12,18 @@ cách giữ cho các khai báo công cụ gọn gàng với Chế độ công c�
 
 Dưới đây là một số ví dụ vui:
 
-- **1. Kiểm tra sức khỏe**
+- 1. Kiểm tra sức khỏe
   ```text
   Cứ vài giờ một lần, hãy bắt buộc kiểm tra sức khỏe của @Bredrumb.
   Hỏi xem hiện giờ họ cảm thấy thế nào và gần đây họ có nghỉ giải lao khỏi việc lập trình không.
   Theo dõi trạng thái cảm xúc của họ theo thời gian bằng {memory_tool} và/hoặc {memory_update_tool} để báo lại cho họ sau.
   ```
-- **2. Bản tin ~~thời sự~~ Yuri hằng tuần**
+- 2. Bản tin ~~thời sự~~ Yuri hằng tuần
   ```text
   Mỗi thứ Sáu, hãy tổng hợp các chương manga yuri, tập anime và các bản fan art nổi bật của cộng đồng trong tuần bằng {web_search_tool}.
   Trình bày kết quả bằng {voice_message_tool} với giọng ASMR quyến rũ.
   ```
-- **3. Cảnh sát giấc ngủ**
+- 3. Cảnh sát giấc ngủ
   ```text
   Nếu bạn nhận thấy qua {message_metadata_tool} rằng ai đó đang nhắn tin quá 2 giờ sáng, hãy dùng {voice_message_tool} gửi cho họ một bài ru ngủ ASMR bình tĩnh đến đáng sợ, bảo họ đi ngủ đi.
   Nếu 10 phút sau họ vẫn nói chuyện, hãy dùng {manage_message_tool} xóa tin nhắn của họ vì lợi ích của chính họ và nhắc rằng thiếu ngủ là nguyên nhân hàng đầu gây ra các vấn đề của họ.
@@ -45,11 +45,11 @@ một quyền Discord, năng lực của model, hoặc một khóa API tùy ch�
 | Gửi tin nhắn liên kênh | `{cross_channel_tool}` | (không hỗ trợ trên NovelAI) | Hành động trong một kênh/luồng khác, kèm tùy chọn báo cáo lại. |
 | Tạo luồng | `{create_thread_tool}` | `thread_creation_enabled` + quyền quản lý luồng | Mở một luồng công khai và đăng tin nhắn khởi đầu. |
 | Chọn sticker | `{sticker_tool}` | `sticker_usage_enabled` | Thêm một sticker máy chủ phù hợp vào phản hồi. |
-| Quản lý tin nhắn | `{manage_message_tool}` | `manage_message_enabled` | Ghim, chỉnh sửa hoặc xóa các tin nhắn gần đây (ghim cần quyền Manage Messages). |
+| Quản lý tin nhắn | `{manage_message_tool}` | `manage_message_enabled` | Ghim, chỉnh sửa hoặc xóa các tin nhắn gần đây (ghim cần quyền Quản lý tin nhắn). |
 | Chặn / bỏ chặn người dùng | `{block_user_tool}` / `{unblock_user_tool}` | `user_blocking_enabled` | Tắt tiếng/chặn người dùng trong phạm vi persona (không ảnh hưởng đến bộ nhớ). |
 | Tương tác với tin nhắn gần đây | `{message_interaction_tool}` | - | Thả cảm xúc hoặc gửi phản hồi ngắn cho một tin nhắn gần đây. |
 | Xem ảnh đại diện | `{profile_picture_tool}` | model thị giác hoặc `vision_llm` | Kiểm tra avatar của người dùng hoặc của persona. |
-| Đọc tài liệu | `{document_tool}` | - | Trích xuất văn bản từ PDF hoặc **bất kỳ** tệp văn bản UTF-8 nào: mã nguồn (`.py`/`.ts`/`.rs`/…), `.json`, `.yaml`, `.md`, `.txt`, và bất kỳ tệp đính kèm phi nhị phân nào. |
+| Đọc tài liệu | `{document_tool}` | - | Trích xuất văn bản từ PDF hoặc bất kỳ tệp văn bản UTF-8 nào: mã nguồn (`.py`/`.ts`/`.rs`/…), `.json`, `.yaml`, `.md`, `.txt`, và bất kỳ tệp đính kèm phi nhị phân nào. |
 | Hiển thị siêu dữ liệu tin nhắn | `{message_metadata_tool}` | - | Chú thích các lượt hội thoại gần đây kèm tên định danh/mốc thời gian để nhắm mục tiêu chính xác. |
 | Xử lý video YouTube | `{youtube_tool}` | model hỗ trợ video | Phân tích một liên kết YouTube cụ thể theo yêu cầu. |
 | Phân tích hình ảnh | `{image_analysis_tool}` | đã cấu hình `vision_llm` | Ủy quyền khả năng hiểu hình ảnh cho một model thị giác riêng biệt. |
@@ -102,14 +102,14 @@ chat thô, đầu ra của model và kết quả công cụ không bao giờ đ�
 Model nhìn thấy một công cụ hợp nhất duy nhất là `web_search(query, category)`. Phía sau nó, một bộ điều
 phối sẽ định tuyến mỗi lệnh gọi qua chuỗi engine và trả về kết quả thành công đầu tiên:
 
-**Brave → SearXNG → DuckDuckGo → IAsk**
+Brave → SearXNG → DuckDuckGo → IAsk
 
-- **Brave** chạy đầu tiên khi khóa API Brave được cấu hình (thiết lập bằng `/providers`); nó bổ sung
+- Brave chạy đầu tiên khi khóa API Brave được cấu hình (thiết lập bằng `/providers`); nó bổ sung
   tìm kiếm hình ảnh, video và tin tức. ⚠️ Hãy đặt hạn mức sử dụng 5 USD trong bảng điều khiển Brave để
   tránh các khoản phí phát sinh ngoài ý muốn.
-- **DuckDuckGo** là mặc định khi chưa đặt khóa, tự động chuyển tiếp sang **IAsk** nếu bị giới hạn tần suất
+- DuckDuckGo là mặc định khi chưa đặt khóa, tự động chuyển tiếp sang IAsk nếu bị giới hạn tần suất
   hoặc kết quả trống.
-- **SearXNG** và **Crawl4AI** là các máy chủ self-hosted tùy chọn giúp mở khóa nhiều danh mục hơn và tìm
+- SearXNG và Crawl4AI là các máy chủ self-hosted tùy chọn giúp mở khóa nhiều danh mục hơn và tìm
   nạp trang được render bằng trình duyệt; xem [Self-Hosting](/vi/self-hosting/).
 
 Để đọc một trang cụ thể, bot sử dụng `fetch_url`. Tính năng này không khả dụng trên NovelAI.
@@ -126,8 +126,8 @@ Bất kỳ máy chủ MCP nào được lưu trữ công khai với endpoint HTT
 [Smithery.ai](https://smithery.ai) làm ví dụ:
 
 1. Tạo một tài khoản và tạo một khóa API từ hồ sơ của bạn.
-2. Mở một MCP trong danh mục và sao chép **URL kết nối** của nó (ví dụ: `https://youtube.run.tools`).
-3. Mở `/config` > Plugins > MCP Servers, chọn `Thêm MCP`, dán URL kết nối vào ô **URL**, dán khóa
+2. Mở một MCP trong danh mục và sao chép URL kết nối của nó (ví dụ: `https://youtube.run.tools`).
+3. Mở `/config` > Plugins > MCP Servers, chọn `Thêm MCP`, dán URL kết nối vào ô URL, dán khóa
    Smithery vào ô `Token xác thực`, và chọn `Loại máy chủ` bắt buộc. Tùy chọn **General
    Purpose** được chọn theo mặc định.
 
@@ -135,19 +135,19 @@ Nếu máy chủ không yêu cầu xác thực, hãy để trống ô `Token xá
 thái lưu trữ và không bao giờ hiển thị lại. Hãy mở cùng trang Config đó để kiểm tra trạng thái cấu hình, bật
 hoặc tắt máy chủ, hoặc xóa máy chủ với xác nhận rõ ràng. Việc xóa sẽ ngắt kết nối ngay lập tức và giải phóng
 một vị trí. Mỗi hàng đã lưu cũng hiển thị tên các công cụ có giới hạn từ lần phát hiện thành công gần nhất.
-**None discovered** là kết quả xác nhận không có công cụ nào; **Discovery unknown** xác định một hàng cũ
+None discovered là kết quả xác nhận không có công cụ nào; Discovery unknown xác định một hàng cũ
 hoặc một máy chủ chưa có bản ghi nhanh thành công nào. Việc mở giao diện quản lý MCP chỉ đọc siêu dữ liệu đã
 lưu và không liên hệ với máy chủ từ xa.
 
 ### Máy chủ MCP cục bộ
 
-Máy chủ MCP cục bộ **chỉ được hỗ trợ trên các phiên bản self-hosted**, vì bot công khai yêu cầu HTTPS
+Máy chủ MCP cục bộ chỉ được hỗ trợ trên các phiên bản self-hosted, vì bot công khai yêu cầu HTTPS
 và chặn các địa chỉ cục bộ/nội bộ. Nếu bạn tự vận hành phiên bản của riêng mình, hãy xem
 [Cài đặt: Máy chủ MCP cục bộ](/vi/self-hosting/local-endpoints/setup-local-mcp/).
 
 :::danger[Chỉ thêm máy chủ MCP bạn tin cậy]
-Một máy chủ MCP độc hại có thể **prompt-inject** vào bot với các hướng dẫn ẩn, **chiếm đoạt dữ liệu**
-mà người dùng gửi cho các công cụ của nó, hoặc trả về **kết quả sai lệch/gây hại** mà bot sẽ chuyển tiếp tới
+Một máy chủ MCP độc hại có thể prompt-inject vào bot với các hướng dẫn ẩn, chiếm đoạt dữ liệu
+mà người dùng gửi cho các công cụ của nó, hoặc trả về kết quả sai lệch/gây hại mà bot sẽ chuyển tiếp tới
 máy chủ của bạn. Hãy đối xử với các máy chủ MCP như tiện ích mở rộng trình duyệt: nếu nghi ngờ, đừng thêm.
 Luôn xem lại các công cụ được mô tả của một MCP trước khi thêm nó.
 :::
@@ -155,17 +155,17 @@ Luôn xem lại các công cụ được mô tả của một MCP trước khi t
 ## Chế độ công cụ có chủ đích
 <!-- anchor: deliberate-tool-mode -->
 
-Mỗi công cụ được khai báo đều làm tăng kích thước prompt. `Chế độ công cụ có chủ đích` (Deliberate Tool Mode)
+Mỗi công cụ được khai báo đều làm tăng kích thước prompt. `Chế độ công cụ có chủ đích` (Chế độ công cụ có chủ ý)
 giữ cho các khai báo công cụ không xuất hiện trong các lượt chat thông thường trừ khi tin nhắn có vẻ thực sự
 cần một công cụ; điều này giúp giảm kích thước prompt và giúp các model nhỏ hơn/cục bộ trả lời nhanh hơn.
 
-- Trước tiên bot kiểm tra tin nhắn để xác định **ý định gọi công cụ**. Các kích hoạt tích hợp sẵn bao gồm các
+- Trước tiên bot kiểm tra tin nhắn để xác định ý định gọi công cụ. Các kích hoạt tích hợp sẵn bao gồm các
   yêu cầu phổ biến (lời nhắc, tìm kiếm web, cập nhật bộ nhớ, tin nhắn liên kênh, tạo hình ảnh/video/giọng nói,
   phân tích phương tiện, tạo luồng, hành động tin nhắn). Các câu hỏi về model hiện tại của bot, công cụ, cài
   đặt, hoặc lý do tại sao một tính năng không khả dụng sẽ đồng thời mở quyền xem lại tính năng và quyền truy
   cập tài liệu chính thức. Cách diễn đạt tiếp nối cũng hoạt động, như "làm lại cái đó nhưng giận dữ hơn" sau
   một yêu cầu tin nhắn thoại.
-- Quản lý máy chủ có thể thêm các **cụm từ kích hoạt tùy chỉnh** bằng lệnh `/server trigger add`, ví dụ gán
+- Quản lý máy chủ có thể thêm các cụm từ kích hoạt tùy chỉnh bằng lệnh `/server trigger add`, ví dụ gán
   `pic`, `img`, hoặc `pfp` cho tính năng tạo hình ảnh.
 - Các kích hoạt tích hợp sẵn đọc cách diễn đạt tiếng Anh. Các ngôn ngữ khác tiếp cận cùng các công cụ đó qua
   danh sách từ khóa của từng ngôn ngữ. Danh sách của mọi ngôn ngữ được phát hành đều được kiểm tra trên mỗi tin
@@ -182,11 +182,11 @@ cần một công cụ; điều này giúp giảm kích thước prompt và giú
   độ có chủ đích sẽ được ghi lại ở đó cùng với trigger đã kích hoạt công cụ.
 
 Chế độ công cụ có chủ đích chỉ quyết định công cụ nào được *hiển thị* cho model, nhưng model vẫn phải tự lựa
-chọn có gọi một công cụ hay không. Trong `/help`, chọn `Hành vi`, sau đó chọn **Deliberate Tool Mode** để
+chọn có gọi một công cụ hay không. Trong `/help`, chọn `Hành vi`, sau đó chọn Chế độ công cụ có chủ ý để
 xem tóm tắt trên Discord.
 
 :::note
-**Chế độ công cụ có chủ đích** (mục này) không liên quan đến `Chế độ kích hoạt có chủ đích`, vốn kiểm soát
+Chế độ công cụ có chủ đích (mục này) không liên quan đến `Chế độ kích hoạt có chủ đích`, vốn kiểm soát
 cách *bot* được kích hoạt; xem
 [Trò chuyện & từ kích hoạt](/vi/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode).
 Cả hai đều được viết tắt là "DTM" trong Discord.

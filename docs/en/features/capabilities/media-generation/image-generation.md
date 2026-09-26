@@ -41,7 +41,7 @@ pre-filled with the current tags, so you edit in place:
 - **`/personal config`**: *your own* appearance tags, applied when a generation
   references you. Follows you across every server (see
   [Personalization](/features/knowledge/personalization/)).
-- **Default positive and negative tags** on **`/config` > Models > Image Generation Defaults**:
+- **`/config` > Models > Image Generation Defaults**: use `Edit Positive` and `Edit Negative` to set
   the server-wide default tags added to (or steered away from) every generation. Negative
   tags only take effect where the backend supports negative prompts. Submitting the modal with
   an empty box resets that list to the built-in defaults.
@@ -55,11 +55,11 @@ pre-filled with the current tags, so you edit in place:
 
 ## Provider Support
 
-Native image generation is available on **Google, Vertex AI, Vertex AI Express, OpenRouter,
-Z.ai, NVIDIA NIM**, and **NovelAI** (anime-styled; native inpainting is built and coming
+Native image generation is available on Google, Vertex AI, Vertex AI Express, OpenRouter,
+Z.ai, NVIDIA NIM, and NovelAI (anime-styled; native inpainting is built and coming
 soon, currently disabled while edge-blending is refined). For the full support
 matrix and how to add a provider, see
 [Providers & Models](/features/setup-administration/providers-and-models/#supported-providers).
 
-For **local** image generation with your own hardware via ComfyUI, see
+For local image generation with your own hardware via ComfyUI, see
 [Setup: ComfyUI](/self-hosting/local-endpoints/setup-comfyui/).

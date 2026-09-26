@@ -114,14 +114,14 @@ Keep the `/en/` segment, as every docs link in `src/locales/en-US/` does.
 - A modal holds five top-level components. Text inputs reopen with the stored value; selects and checkbox
   groups cannot be prefilled and reopen empty.
 
-**Removal checklists.** For a list where unchecking removes an entry, every current entry starts checked
+- **Removal checklists**: for a list where unchecking removes an entry, every current entry starts checked
 and submitting is the write, with no second confirmation. A checkbox group holds 10 options, so one modal
 holds 50 entries. Title the first group with the list (`Blacklisted Members`) plus one sentence on what
 unchecking does, and the rest `Continuation (1)`, `Continuation (2)`. Bind the presented entries to a
 single-use nonce; on submit, re-authorize, reload, and remove only presented entries that are unchecked
 and still current, so entries added meanwhile survive.
 
-**Longer lists.** Past one modal's capacity (50 for checkbox groups, 25 for a String Select), replace the
+- **Longer lists**: past one modal's capacity (50 for checkbox groups, 25 for a String Select), replace the
 page body with a range chooser inside the panel, keeping the category row and separator. Choosing a range
 opens that range's modal, and every path returns to the previous page. `Previous` and `Next` appear only
 when the chooser has several pages; `Cancel` always appears. Keep at most 10 ranges per chooser page,

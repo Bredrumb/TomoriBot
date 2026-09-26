@@ -4,7 +4,7 @@ title: "CosyVoice 3"
 
 CosyVoice 3 是 Alibaba/QwenAudio 多语言 CosyVoice 语音合成项目的当前一代。TomoriBot 把官方运行时封装在 `servers/tts/cosyvoice3/` 里，并对外暴露与其他本地语音端点相同的 `POST /synthesize` 接口。
 
-TomoriBot 默认使用官方的 **`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`** 检查点。它是上游推荐的当前 CosyVoice 3 版本，使用正常的未量化模型，体积足够小，可以在 16 GB 的 NVIDIA GPU 上轻松运行，同时保留 CosyVoice 的低延迟设计。
+TomoriBot 默认使用官方的 `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` 检查点。它是上游推荐的当前 CosyVoice 3 版本，使用正常的未量化模型，体积足够小，可以在 16 GB 的 NVIDIA GPU 上轻松运行，同时保留 CosyVoice 的低延迟设计。
 
 ## 它支持什么
 
@@ -42,7 +42,7 @@ TomoriBot 默认使用官方的 **`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`** 检�
 
 ### 风格与情绪控制
 
-请用 **Plain** 标记注册该端点。表达方式的指导应当放在端点的全局 `voice_instructions` 字段里，而不是放在任意的行内方括号标签中。这样能保住指令对整段话的含义，也避免把 `[happy] Hello. [sad] Goodbye.` 这样的脚本当成两条互相矛盾的全局指令。原生的 `[breath]` 与 `[laughter]` 支持被有意推迟，直到 TomoriBot 能够声明一项精确的、能感知提供方的标签功能为止。
+请用 Plain 标记注册该端点。表达方式的指导应当放在端点的全局 `voice_instructions` 字段里，而不是放在任意的行内方括号标签中。这样能保住指令对整段话的含义，也避免把 `[happy] Hello. [sad] Goodbye.` 这样的脚本当成两条互相矛盾的全局指令。原生的 `[breath]` 与 `[laughter]` 支持被有意推迟，直到 TomoriBot 能够声明一项精确的、能感知提供方的标签功能为止。
 
 `/synthesize` 的 `instruct` 字段会被传入 CosyVoice 3 的指令条件。例如 `sound relieved but still tired`、`speak as quickly as possible`，或 `speak quietly with restrained excitement`。
 
@@ -56,8 +56,8 @@ TomoriBot 当前的自定义语音合成接口期望为一条 Discord 语音消�
 
 推荐的 TomoriBot 起点：
 
-- NVIDIA GPU，**16 GB 显存**
-- Python **3.10**
+- NVIDIA GPU，16 GB 显存
+- Python 3.10
 - 与 CUDA 12 兼容的较新 NVIDIA 驱动
 - `git`
 - `ffmpeg`，用于 TomoriBot 的语音样本归一化
@@ -104,7 +104,7 @@ bun run launch --cosyvoice3
 .\servers\tts\cosyvoice3\.venv\Scripts\python.exe servers\tts\cosyvoice3\server.py
 ```
 
-要使用 NVIDIA GPU，**推荐 WSL2**。当前的上游依赖在 Linux 上安装 GPU 版 ONNX Runtime，在 Windows 上却安装 CPU 版，所以 WSL2 更接近 CosyVoice 项目为低延迟而优化和测试的配置。
+要使用 NVIDIA GPU，推荐 WSL2。当前的上游依赖在 Linux 上安装 GPU 版 ONNX Runtime，在 Windows 上却安装 CPU 版，所以 WSL2 更接近 CosyVoice 项目为低延迟而优化和测试的配置。
 
 ## 在 TomoriBot 中注册
 
@@ -180,6 +180,6 @@ CosyVoice 3 还支持可选的 vLLM 与 TensorRT 路径。上游目前记录了�
 
 ## 许可证
 
-当前 CosyVoice 代码仓库采用 **Apache License 2.0** 许可，`FunAudioLLM/Fun-CosyVoice3-0.5B-2512` 这个 Hugging Face 仓库也标注为 **Apache-2.0**。
+当前 CosyVoice 代码仓库采用 Apache License 2.0 许可，`FunAudioLLM/Fun-CosyVoice3-0.5B-2512` 这个 Hugging Face 仓库也标注为 Apache-2.0。
 
 上游模型卡还包含一段免责声明，说明所展示的内容用于学术演示，其中一些示例可能来自互联网。上游有一个公开讨论，要求明确澄清该免责声明与权重商业使用之间的关系。TomoriBot 不分发该模型。自部署者应当针对自己的部署审查当前的上游许可与模型卡条款，尤其是在商业使用之前。

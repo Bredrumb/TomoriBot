@@ -4,7 +4,7 @@ title: "04: Orchestrator State Machine"
 
 Drives the provider generator as a state machine, routing each `ProcessedChunk` and resolving stop signals, timeouts, and stream completion into a `StreamResult`.
 
-**File:** `src/utils/discord/stream/stateMachine.ts:119-485`
+- **File**: `src/utils/discord/stream/stateMachine.ts:119-485`
 
 ## Mission
 
@@ -99,11 +99,11 @@ billed separately, so the sum is billing-accurate, and falls back to the charact
 - **Error embed**: when `chunk.type === "error"` and `!context.suppressUserErrors`, calls
   `StreamErrorUi.handleProviderError()` which sends a Discord embed to the channel. The embed is
   composed centrally: a provider's localized headline (`createErrorDescription`) followed by the
-  **raw provider detail** for every error type, extracted via `getProviderErrorDetail` and
+  raw provider detail for every error type, extracted via `getProviderErrorDetail` and
   truncated to Discord's embed description limit. This means providers that map known codes to
   hardcoded locale strings (e.g. OpenRouter) no longer hide the actual provider message; the detail
   is de-duped so a provider that already appended it is not echoed twice. Recognized `model_error`
-  failures additionally get a dedicated "Model Configuration Error" title. This is the **sole**
+  failures additionally get a dedicated "Model Configuration Error" title. This is the sole
   embed send path for `ProviderError` types: the downstream response sink (`emitStreamResult` in
   `responseEmitter.ts`) deliberately skips the generic fallback embed when `result.data` is a
   `ProviderError`, to avoid double-sending.

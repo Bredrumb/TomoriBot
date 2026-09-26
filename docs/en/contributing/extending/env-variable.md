@@ -65,14 +65,14 @@ bun run env-doctor --no-live-env       # leave out your .env names before sharin
 ```
 
 After adding a variable, run `--var` on it. The doctor should find your read, and the code fallback
-should match `.env.optional.example`; a difference appears under **Conflicting defaults**.
+should match `.env.optional.example`; a difference appears under `Conflicting defaults`.
 
 - It never prints a live `.env` value, and redacts every value of a credential-named variable.
 - Its classification (`deployment`, `runtime-preference`, `algorithmic-invariant`, `dead`,
   `undecided`) guides review; it is not a verdict. `dead` means nothing reads the name and every
   consumer was scanned. Without the `release` ref, `deploy/` and `terraform/` cannot be scanned and the
   result is `undecided`.
-- An **UNREGISTERED** dynamic read needs a literal name, or an entry with its reason in
+- An unregistered dynamic read needs a literal name, or an entry with its reason in
   `REGISTERED_DYNAMIC_READS` in `scripts/devtools/envDoctor/policy.ts`. A variable only a dependency
   reads (a cloud SDK, for example) goes in `LIBRARY_CONSUMERS` in the same file.
 

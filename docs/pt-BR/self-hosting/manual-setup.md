@@ -84,7 +84,7 @@ bun run launch --help        # ver todas as flags
 ## Extras opcionais (a "Instalação Completa" manual)
 <!-- anchor: optional-extras-the-manual-full-install -->
 
-O caminho de **Instalação Completa** do [assistente de configuração](/pt-BR/self-hosting/setup-wizard/) sobrepõe quatro extras leves
+O caminho de Instalação Completa do [assistente de configuração](/pt-BR/self-hosting/setup-wizard/) sobrepõe quatro extras leves
 em cima da instalação base. Nenhum deles é necessário para executar o bot, mas cada um desbloqueia um recurso. Se
 você estiver instalando manualmente, adicione o que quiser:
 
@@ -134,7 +134,7 @@ O `pg_cron` possibilita a manutenção periódica opcional do banco de dados (li
 O Docker Compose deste repositório já o configura.
 
 :::caution[Não é necessário para lembretes ou gatilhos]
-O `pg_cron` é **puramente para limpeza**, pois limpa apenas linhas obsoletas. A entrega de lembretes e
+O `pg_cron` é puramente para limpeza, pois limpa apenas linhas obsoletas. A entrega de lembretes e
 os gatilhos aleatórios são executados no próprio aplicativo, portanto, esses recursos funcionam com ou sem o `pg_cron`.
 :::
 

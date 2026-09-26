@@ -19,12 +19,12 @@ until the message is removed, and another user cannot operate the controls.
 - `/stats persona`: a persona's usage on this server.
 - `/stats server`: server-wide usage.
 
-Most support a **timeframe** window, and personal stats can be scoped to this server or
+Most support a timeframe window, and personal stats can be scoped to this server or
 across all servers.
 
 :::note
-**Token counts** are the provider's own reported usage when available (a character-based
-estimate is used only for providers that report none). **Cost** prices those tokens at the
+Token counts reflect the provider's reported usage when available (a character-based
+estimate is used only for providers that report none). Cost prices those tokens at the
 model catalog's list rates, so it may differ from your actual bill (prompt caching, discounts,
 free-tier quotas, etc.).
 :::

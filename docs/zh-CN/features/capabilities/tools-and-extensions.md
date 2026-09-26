@@ -11,18 +11,18 @@ TomoriBot 是代理式的：除了聊天，她还能调用`工具`去搜索网�
 
 下面是几个搞怪的例子：
 
-- **1. 健康检查员**
+- 1. 健康检查员
   ```text
   每隔几个小时，对 @Bredrumb 做一次强制的健康检查。
   问问对方现在感觉如何，最近有没有从写代码里抽空休息。
   用 {memory_tool} 和/或 {memory_update_tool} 记录对方的情绪变化，之后再向本人汇报。
   ```
-- **2. 每周 ~~时事~~ 百合新闻**
+- 2. 每周 ~~时事~~ 百合新闻
   ```text
   每周五，用 {web_search_tool} 汇总这一周值得关注的百合漫画章节、动画集数和社群同人图。
   用 {voice_message_tool} 以撩人的 ASMR 嗓音播报汇总结果。
   ```
-- **3. 睡眠警察**
+- 3. 睡眠警察
   ```text
   如果你通过 {message_metadata_tool} 发现有谁凌晨 2 点之后还在聊天，就用 {voice_message_tool} 给对方发一段平静得吓人的 ASMR 摇篮曲，叫对方去睡觉。
   如果 10 分钟后还在说话，就用 {manage_message_tool} 为对方好而删掉那条消息，并提醒对方睡眠不足正是其问题的首要原因。
@@ -44,11 +44,11 @@ TomoriBot 是代理式的：除了聊天，她还能调用`工具`去搜索网�
 | Cross-channel message | `{cross_channel_tool}` | （NovelAI 上不可用） | 在另一个频道或子区里行动，可选回报结果。 |
 | Create thread | `{create_thread_tool}` | `thread_creation_enabled` + 子区权限 | 开一个公开子区并发出它的起始消息。 |
 | Select sticker | `{sticker_tool}` | `sticker_usage_enabled` | 在回复里附上一张匹配的服务器贴纸。 |
-| Manage message | `{manage_message_tool}` | `manage_message_enabled` | 置顶、编辑或删除近期消息（置顶需要 `Manage Messages`）。 |
+| Manage message | `{manage_message_tool}` | `manage_message_enabled` | 置顶、编辑或删除近期消息（置顶需要 `管理消息`）。 |
 | Block / unblock user | `{block_user_tool}` / `{unblock_user_tool}` | `user_blocking_enabled` | 按人格对某个用户禁言或屏蔽（不涉及记忆）。 |
 | Interact with recent message | `{message_interaction_tool}` | 无 | 对一条近期消息做出表情回应，或者回一句短的。 |
 | Peek profile picture | `{profile_picture_tool}` | 视觉模型或 `vision_llm` | 查看某个用户或人格的头像。 |
-| Read document | `{document_tool}` | 无 | 从 PDF 或**任何** UTF-8 文本文件里提取文字：源代码（`.py`/`.ts`/`.rs`/……）、`.json`、`.yaml`、`.md`、`.txt`，以及任何非二进制的附件。 |
+| Read document | `{document_tool}` | 无 | 从 PDF 或任何 UTF-8 文本文件里提取文字：源代码（`.py`/`.ts`/`.rs`/……）、`.json`、`.yaml`、`.md`、`.txt`，以及任何非二进制的附件。 |
 | Reveal message metadata | `{message_metadata_tool}` | 无 | 给近期发言标注句柄与时间戳，便于精确指向。 |
 | Process YouTube video | `{youtube_tool}` | 支持视频的模型 | 按需分析某个 YouTube 链接。 |
 | Analyze image | `{image_analysis_tool}` | 已配置的 `vision_llm` | 把图像理解交给一个独立的视觉模型。 |
@@ -56,7 +56,7 @@ TomoriBot 是代理式的：除了聊天，她还能调用`工具`去搜索网�
 | Generate voice message | `{voice_message_tool}` | ElevenLabs 密钥 + 人格语音 + `voice_message_enabled` | 发一条说出来的 Discord 语音回复。 |
 
 :::note[给提示词作者]
-在自定义她的系统提示词或人格指令时，请用上表里的**提示词宏**来引用工具，而不要写死工具名，因为宏会在拼接上下文时展开成
+在自定义她的系统提示词或人格指令时，请用上表里的提示词宏来引用工具，而不要写死工具名，因为宏会在拼接上下文时展开成
 正确的名字，并在某个工具不可用时优雅降级。
 `{pin_tool}` 和 `{timestamp_refresh_tool}` 仍然可以作为
 `{manage_message_tool}` 和 `{message_metadata_tool}` 的兼容别名。下面的网页搜索与 URL 工具
@@ -99,13 +99,13 @@ MCP 替代项，以及当前的明确工具模式允许清单。它们不会绕�
 模型看到的是一个统一的 `web_search(query, category)` 工具。在它背后，一个调度器
 把每次调用按引擎链依次路由，并返回第一个成功的结果：
 
-**Brave → SearXNG → DuckDuckGo → IAsk**
+Brave → SearXNG → DuckDuckGo → IAsk
 
-- 配置了 Brave API 密钥时**Brave** 排在第一个（用
+- 配置了 Brave API 密钥时Brave 排在第一个（用
   `/providers` 设置）；它会增加图像、视频和新闻搜索。⚠️ 请在 Brave 后台设置 5 美元的用量上限，
   以免出现意外扣费。
-- 没有设置密钥时**DuckDuckGo** 是默认项，在遇到速率限制或结果为空时级联到 **IAsk**。
-- **SearXNG** 和 **Crawl4AI** 是可选的自行部署本地服务器，能解锁更多分类
+- 没有设置密钥时DuckDuckGo 是默认项，在遇到速率限制或结果为空时级联到 IAsk。
+- SearXNG 和 Crawl4AI 是可选的自行部署本地服务器，能解锁更多分类
   以及浏览器渲染的页面抓取；见[自部署](/zh-CN/self-hosting/)。
 
 要读取某个具体页面，她使用 `fetch_url`。它在 NovelAI 上不可用。
@@ -122,8 +122,8 @@ MCP 替代项，以及当前的明确工具模式允许清单。它们不会绕�
 [Smithery.ai](https://smithery.ai) 为例：
 
 1. 注册账号，并在个人资料里生成一个 API 密钥。
-2. 在目录里打开一个 MCP，复制它的**连接 URL**（例如 `https://youtube.run.tools`）。
-3. 打开 `/config` > 插件 > MCP 服务器，选择 `添加 MCP`，把连接 URL 粘贴到 **URL**，把你的
+2. 在目录里打开一个 MCP，复制它的连接 URL（例如 `https://youtube.run.tools`）。
+3. 打开 `/config` > 插件 > MCP 服务器，选择 `添加 MCP`，把连接 URL 粘贴到 URL，把你的
    Smithery 密钥粘贴到 `认证令牌`，并选择所需的 `服务器类型`。**General
    Purpose** 默认已选中。
 
@@ -131,19 +131,19 @@ MCP 替代项，以及当前的明确工具模式允许清单。它们不会绕�
 之后不再显示。打开同一个配置页面可以查看已配置的状态、启用或禁用一个服务器，
 或者在明确确认后移除它。移除会立刻断开连接并释放一个槽位。
 每一行已保存的记录还会显示它上次成功发现到的工具名列表（有长度上限）。**None
-discovered** 是已知的零工具结果；**Discovery unknown** 表示这是一行历史遗留记录，或者是一个
+discovered 是已知的零工具结果；Discovery unknown** 表示这是一行历史遗留记录，或者是一个
 还没有成功快照的服务器。打开 MCP 管理界面只会读取已保存的元数据，不会联系
 远端服务器。
 
 ### 本地 MCP 服务器
 
-本地 MCP 服务器**只在自部署实例上受支持**，因为公开托管的 bot
+本地 MCP 服务器只在自部署实例上受支持，因为公开托管的 bot
 要求 HTTPS 并会拦截本地与私有地址。如果你自己跑实例，见
 [设置：本地 MCP 服务器](/zh-CN/self-hosting/local-endpoints/setup-local-mcp/)。
 
 :::danger[只添加你信任的 MCP 服务器]
-一个恶意的 MCP 服务器可以用隐藏指令**提示词注入**她、**窃取**
-用户传给它的工具的数据，或者返回**有害或错误的结果**让她转发到你的
+一个恶意的 MCP 服务器可以用隐藏指令提示词注入她、窃取
+用户传给它的工具的数据，或者返回有害或错误的结果让她转发到你的
 服务器。把 MCP 服务器当成浏览器扩展来看：有疑虑就别加。添加之前
 一定要先看过这个 MCP 描述的工具。
 :::
@@ -155,13 +155,13 @@ discovered** 是已知的零工具结果；**Discovery unknown** 表示这是一
 普通聊天轮次里不出现，除非消息看起来确实需要一个工具；这能减小
 提示词体积，并帮助更小的本地模型更快回答。
 
-- 她会先检查消息里有没有**工具意图**。内置触发覆盖常见请求
+- 她会先检查消息里有没有工具意图。内置触发覆盖常见请求
   （提醒、网页搜索、记忆更新、跨频道消息、图像与视频与语音
   生成、媒体分析、创建子区、消息操作）。关于她当前
   模型、工具、设置，或者某项功能为何不可用的问题，会同时暴露能力查看与
   官方文档访问。后续措辞也有效，比如在一条语音消息请求之后说「再来一次
   但是更生气一点」。
-- 服务器管理员可以用 `/server trigger add` 添加字面的**自定义触发短语**，
+- 服务器管理员可以用 `/server trigger add` 添加字面的自定义触发短语，
   例如把 `pic`、`img` 或 `pfp` 映射到图像生成。
 - 内置触发读取的是英语措辞。其他语言通过
   各语言自己的关键词列表到达同样的工具。所有已发布语言的列表都会在每条消息上检查，
@@ -181,7 +181,7 @@ discovered** 是已知的零工具结果；**Discovery unknown** 表示这是一
 自己选择调用其中一个。在 `/help` 里选择 `行为`，再选 `明确工具模式`，可以看到 Discord 里的说明。
 
 :::note
-**明确工具模式**（本节）与`明确触发模式`无关，后者
+明确工具模式（本节）与`明确触发模式`无关，后者
 控制*她*如何被触发；见
 [聊天与触发](/zh-CN/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode)。两者在 Discord 里
 都缩写成「DTM」。

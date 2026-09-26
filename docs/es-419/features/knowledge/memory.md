@@ -16,9 +16,9 @@ De lo más permanente a lo más pasajero
 
 | Nivel | Qué es | Cuánto dura |
 |---|---|---|
-| **Memoria a largo plazo (LTM)** | Datos guardados sobre un usuario o un servidor, documentos subidos y condicionamiento | Para siempre, hasta que alguien lo elimine. Sobrevive a `/refresh`, a reinicios, a todo |
-| **Memoria a corto plazo (STM)** | Un resumen que escribe para un canal, más algunos mensajes recientes | 24 horas. Puede cruzar entre canales |
-| **Historial de chat** | Los mensajes recientes en el canal en el que está respondiendo | Solo este canal, solo hasta que salgan del rango de `/config` > Motor > General (80 mensajes más recientes por defecto). `/refresh` lo corta de inmediato |
+| Memoria a largo plazo (LTM) | Datos guardados sobre un usuario o un servidor, documentos subidos y condicionamiento | Para siempre, hasta que alguien lo elimine. Sobrevive a `/refresh`, a reinicios, a todo |
+| Memoria a corto plazo (STM) | Un resumen que escribe para un canal, más algunos mensajes recientes | 24 horas. Puede cruzar entre canales |
+| Historial de chat | Los mensajes recientes en el canal en el que está respondiendo | Solo este canal, solo hasta que salgan del rango de `/config` > Motor > General (80 mensajes más recientes por defecto). `/refresh` lo corta de inmediato |
 
 Casi todo lo que parece "saber" en una conversación es solo historial de chat reciente, por eso
 parece olvidar un mensaje una vez que la conversación se vuelve demasiado larga. **Solo la
@@ -39,16 +39,16 @@ por `/refresh`, por reinicios, ni por moverse a otro canal.
 
 Hay dos tipos de memoria a largo plazo:
 
-- **Memorias personales** (`/personal memories`): datos sobre un usuario individual, por ejemplo
+- Memorias personales (`/personal memories`): datos sobre un usuario individual, por ejemplo
   "a Amaori le encantan los gatos", "prefiere el modo oscuro", "alérgico a los cacahuates". Están
-  vinculadas a *ti* y te siguen **a través de todos los servidores**, pero solo las usa en
+  vinculadas a *ti* y te siguen a través de todos los servidores, pero solo las usa en
   conversaciones en las que estás participando activamente.
-- **Memorias del servidor** (`/memories`): información relevante para todo el servidor, por
+- Memorias del servidor (`/memories`): información relevante para todo el servidor, por
   ejemplo "la noche de juegos es cada viernes a las 8 PM", "no publicar contenido NSFW",
   "#general es para anuncios". Estas permanecen dentro del servidor y siempre están presentes
   ahí.
 
-**Las memorias están aisladas por persona por defecto.** Cada persona (incluidos los alters)
+Las memorias están aisladas por persona por defecto. Cada persona (incluidos los alters)
 mantiene su propio conjunto separado de memorias personales y del servidor, así que personas
 distintas significan que no puede recordar lo que aprendió otra persona. La única excepción es
 una memoria personal añadida desde la página Global en `/personal memories`, que entonces se
@@ -62,15 +62,15 @@ Las memorias persisten hasta que las elimines.
 
 En servidores nuevos, el acceso de miembros no administradores para crear, editar o eliminar
 memorias compartidas del servidor está desactivado por defecto. Los miembros con el permiso
-`Manage Server` mantienen acceso en todo momento, y los administradores pueden habilitar a otros
+`Administrar servidor` mantienen acceso en todo momento, y los administradores pueden habilitar a otros
 miembros mediante Acceso de miembros en `/moderation`.
 
 ### Cómo se guardan las memorias
 
 Hay exactamente dos formas en que se crea una memoria a largo plazo:
 
-1. **Tú la guardas** con `/personal memories` o `/memories`.
-2. **Ella misma la guarda** cuando decide que algo vale la pena conservar.
+1. Tú la guardas con `/personal memories` o `/memories`.
+2. Ella misma la guarda cuando decide que algo vale la pena conservar.
 
 Cuando ella guarda una por su cuenta, publica un embed diciendo que aprendió algo. **Ese embed
 es la confirmación.** Si le cuentas algo y no aparece ningún embed, no se guardó nada: sigue
@@ -97,12 +97,12 @@ Permisos.
 
 ### Cuántas memorias
 
-Por defecto conserva hasta **100 memorias personales** y **100 memorias del servidor**. Quienes
+Por defecto conserva hasta 100 memorias personales y 100 memorias del servidor. Quienes
 se autoalojan pueden cambiar esto con las variables de entorno `MAX_PERSONAL_MEMORIES`,
 `MAX_SERVER_MEMORIES` y `MAX_MEMORY_LENGTH`. Subir la *longitud* cuesta mucho más contexto que
 subir la *cantidad*, así que prefiere más memorias cortas en lugar de menos memorias largas.
 
-Estos conteos son **por persona**, no por usuario ni por servidor. Cada persona mantiene su
+Estos conteos son por persona, no por usuario ni por servidor. Cada persona mantiene su
 propio conjunto, así que un servidor con cuatro personas activas tiene cuatro cupos separados.
 Tus propias memorias personales globales cuentan contra el cupo personal de cada persona.
 
@@ -112,10 +112,10 @@ Tus propias memorias personales globales cuentan contra el cupo personal de cada
 Los administradores del servidor pueden darle documentos como referencia mediante RAG. Los
 documentos se fragmentan y se almacenan como incrustaciones (embeddings) que se pueden buscar;
 recupera automáticamente el contenido relevante al responder. En servidores nuevos, la gestión
-de documentos también está restringida por defecto a miembros con `Manage Server`; los
+de documentos también está restringida por defecto a miembros con `Administrar servidor`; los
 administradores pueden otorgar acceso a miembros mediante Acceso de miembros en `/moderation`.
 
-**Requiere un modelo de incrustaciones**, configurado con `/config` > Modelos > Cambiar modelos.
+Requiere un modelo de incrustaciones, configurado con `/config` > Modelos > Cambiar modelos.
 Consulta [Proveedores y modelos](/es-419/features/setup-administration/providers-and-models/).
 La página Documentos en `/memories` ofrece alcances por persona y por servidor, conteos en vivo
 de documentos y fragmentos, subidas, exploración de documentos y eliminación:
@@ -134,11 +134,11 @@ de documentos y fragmentos, subidas, exploración de documentos y eliminación:
 Al importar el historial de un canal con `/learn history`, la opción `prompt` cambia cómo
 TomoriBot extrae las memorias:
 
-- **Conversación** extrae datos independientes de un chat normal. Resuelve pronombres y usa
+- Conversación extrae datos independientes de un chat normal. Resuelve pronombres y usa
   marcas de tiempo absolutas cuando se mencionan fechas u horas o se pueden inferir.
-- **Rol** busca escenas, lore, relaciones y eventos memorables sin intentar preservar cada
+- Rol busca escenas, lore, relaciones y eventos memorables sin intentar preservar cada
   detalle pequeño.
-- **En personaje** extrae memorias desde el punto de vista de la persona seleccionada, usando el
+- En personaje extrae memorias desde el punto de vista de la persona seleccionada, usando el
   prompt, los atributos, las memorias existentes y los documentos relevantes de esa persona como
   contexto.
 
@@ -182,9 +182,9 @@ STM.
 ### Etiquetas de palabra clave
 <!-- anchor: keyword-tags -->
 
-- Las memorias **sin** etiquetas de palabra clave están siempre activas (el valor
+- Las memorias sin etiquetas de palabra clave están siempre activas (el valor
   predeterminado).
-- Las memorias **con** etiquetas de palabra clave solo se activan cuando la palabra clave
+- Las memorias con etiquetas de palabra clave solo se activan cuando la palabra clave
   aparece en el contexto visible.
 - Usa `/tool prompt snapshot` para ver qué memorias están activas en ese momento.
 
@@ -206,7 +206,7 @@ STM le permite hacer lo siguiente sin guardar una memoria a largo plazo real:
 1. Reforzar temporalmente el escenario/situación actual del canal en el contexto
 2. Recordar temporalmente conversaciones de otros canales/servidores
 
-**Solo recuerda conversaciones en las que participó.** Actualiza la memoria de un canal cuando
+Solo recuerda conversaciones en las que participó. Actualiza la memoria de un canal cuando
 responde, y en ningún otro momento, así que un canal ocupado donde nadie le habla no deja
 rastro.
 
@@ -217,12 +217,12 @@ La STM de cada canal expira después de 24 horas por defecto, y si decidiste no 
 
 | Dónde | Qué significa eso |
 |---|---|
-| **En un servidor** | Una memoria compartida por canal, no una por persona. No lleva notas sobre ti individualmente. |
-| **En mensajes directos** | Solo tuya. |
-| **Otros canales** | Puede recordar sus conversaciones recientes de algunos otros canales en el mismo servidor. |
-| **Canales privados** | Cualquier cosa configurada con `/config` > Canales > Reglas de canal se queda ahí y no aparecerá en otro lugar. |
-| **Otros servidores** | Nunca, a menos que actives `/personal config` → `crossserver`. Aun así, solo *tus propias* conversaciones te siguen. |
-| **Cada persona** | Mantiene su propia memoria separada, así que cambiar de persona cambia de memoria. |
+| En un servidor | Una memoria compartida por canal, no una por persona. No lleva notas sobre ti individualmente. |
+| En mensajes directos | Solo tuya. |
+| Otros canales | Puede recordar sus conversaciones recientes de algunos otros canales en el mismo servidor. |
+| Canales privados | Cualquier cosa configurada con `/config` > Canales > Reglas de canal se queda ahí y no aparecerá en otro lugar. |
+| Otros servidores | Nunca, a menos que actives `/personal config` → `crossserver`. Aun así, solo *tus propias* conversaciones te siguen. |
+| Cada persona | Mantiene su propia memoria separada, así que cambiar de persona cambia de memoria. |
 
 La memoria de cada canal contiene los últimos mensajes más un resumen breve que ella misma
 escribe y actualiza a medida que avanza la conversación. Se desvanece sola después de algunas
@@ -249,26 +249,26 @@ Cualquiera puede ejecutar `/config` > Persona > Memorias, `/personal config` y
 ### Configuración de la STM
 
 Los administradores del espacio de trabajo pueden ajustar la memoria a corto plazo desde
-`/config` → `Comportamiento` → **Memoria y STM**. Estos ajustes se aplican a los registros
+`/config` → `Comportamiento` → Memoria y STM. Estos ajustes se aplican a los registros
 activos de STM del espacio de trabajo:
 
-- **Cadencia de actualización** controla cuántos turnos del bot pasan entre empujones de
+- Cadencia de actualización controla cuántos turnos del bot pasan entre empujones de
   actualización. El rango permitido es de 1 a 100.
-- **Modo de renderizado** elige si los valores de categoría sustituyen a los turnos recientes o
+- Modo de renderizado elige si los valores de categoría sustituyen a los turnos recientes o
   aparecen como un resumen simple.
-- **Mensajes sin procesar** controla cuántos mensajes recientes se conservan, de 1 hasta el máximo
+- Mensajes sin procesar controla cuántos mensajes recientes se conservan, de 1 hasta el máximo
   del canal.
-- **Profundidad de aviso** ubica el empujón de actualización desde el final del contexto
+- Profundidad de aviso ubica el empujón de actualización desde el final del contexto
   ensamblado, de 0 a 20.
-- **Profundidad de contenido** ubica el contenido de STM desde el final del contexto ensamblado,
+- Profundidad de contenido ubica el contenido de STM desde el final del contexto ensamblado,
   de -1 a 20.
 
-**Categorías de STM** reemplaza el campo de Resumen predeterminado por hasta cinco campos
+Categorías de STM reemplaza el campo de Resumen predeterminado por hasta cinco campos
 etiquetados. Ingresa cada campo como `Label: Description`; dejar todos los campos en blanco
 restaura la categoría de Resumen predeterminada. Guardar categorías limpia la STM activa
 incompatible de canal-servidor, y el panel muestra los canales afectados antes de guardar.
 
-**Prompt de STM** permite a los administradores anular la descripción de la herramienta y el
+Prompt de STM permite a los administradores anular la descripción de la herramienta y el
 empujón de actualización. Las anulaciones en blanco restauran los valores predeterminados
 efectivos, incluido el empujón consciente de categoría cuando las categorías están activadas.
 

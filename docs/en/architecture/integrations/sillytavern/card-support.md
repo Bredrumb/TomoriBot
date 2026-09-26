@@ -46,7 +46,7 @@ tree referenced by `embeded://` URIs. The reader:
 - resolves `card.json` by exact path first, falling back to a case-insensitive basename search so a
   wrapping folder still works. The exact-path preference matters: without it a decoy
   `assets/card.json` would shadow the root card the specification mandates;
-- checks the entry's **declared** uncompressed size before decompressing it, then measures the
+- checks the entry's declared uncompressed size before decompressing it, then measures the
   decompressed bytes. The declared-size check is the load-bearing one: an archive honestly
   declaring a huge card is refused before any decompression, while an entry that delivers more
   than it declared is refused by jszip's own consistency check;
@@ -167,7 +167,7 @@ Tomori stores paired arrays, so unpaired entries use an internal sentinel value:
 
 Behavior at runtime (`src/utils/text/contextBuilder.ts`):
 
-1. If input side is sentinel, Tomori **does not inject** a user sample turn.
+1. If input side is sentinel, Tomori does not inject a user sample turn.
 2. It still injects the model sample response.
 3. If any unpaired sample exists, Tomori inserts a spacer message before live conversation history:
 

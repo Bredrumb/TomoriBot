@@ -14,4 +14,4 @@ La página aún no está terminada. ¡Mantente al tanto!
 
 ![Nerine](/img/docs/meet-tomori/05-nerine.png)
 
-**Nerine** es un modelo antiguo y descontinuado de TomoriBot: cálida sin reservas e infinitamente servicial, de la manera más triste posible. Una persona más silenciosa y pesada, con una máscara cuidadosamente llevada, para quienes prefieren profundidad a las bromas.
+Nerine es un modelo antiguo y descontinuado de TomoriBot: cálida sin reservas e infinitamente servicial, de la manera más triste posible. Una persona más silenciosa y pesada, con una máscara cuidadosamente llevada, para quienes prefieren profundidad a las bromas.

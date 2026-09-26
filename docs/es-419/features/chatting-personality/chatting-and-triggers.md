@@ -13,7 +13,7 @@ sin manos con la activación automática y cómo evitar activaciones accidentale
 Por defecto, responde cuando tú:
 
 - **La mencionas**: `@TomoriBot`
-- **Respondes** a uno de sus mensajes (incluido el mensaje de webhook de una persona)
+- Respondes a uno de sus mensajes (incluido el mensaje de webhook de una persona)
 - **Usas una palabra de activación**: cualquier palabra sencilla que hayas registrado, dicha en cualquier parte del mensaje
 - **Usas `/respond`**: solicita una respuesta manualmente
 
@@ -56,7 +56,7 @@ puede hablar de *dónde* y *cuándo* ocurre la conversación, no solo de lo que 
 
 La presencia depende de la privacidad: solo se comparte para usuarios con el nivel de privacidad `Mínimo`
 (el valor predeterminado; consulta `/personal config`) y cuando el bot tiene activada la intención de Discord
-**Guild Presences**. Los usuarios que aumentan su privacidad o las instancias con autoalojamiento que no
+Guild Presences. Los usuarios que aumentan su privacidad o las instancias con autoalojamiento que no
 tienen esa intención simplemente no mostrarán su actividad.
 
 ## Activación automática (chat sin manos)
@@ -75,7 +75,7 @@ La activación automática le permite unirse a la conversación sin que la menci
 <!-- anchor: deliberate-trigger-mode -->
 
 Si las personas dicen mucho el nombre de una persona en conversaciones normales, las palabras de activación
-simples pueden activarla por accidente. El **modo de activación deliberada (DTM)** lo evita al hacer que las
+simples pueden activarla por accidente. El modo de activación deliberada (DTM) lo evita al hacer que las
 palabras de activación simples dejen de contar como un activador explícito.
 
 Cuando DTM está activado:
@@ -84,7 +84,7 @@ Cuando DTM está activado:
 - Las menciones de Discord siguen funcionando
 - Las respuestas siguen funcionando
 - `/respond` sigue funcionando
-- **Las palabras de activación simples ya no la activan**
+- Las palabras de activación simples ya no la activan
 
 Esto obliga a invocarla deliberadamente en lugar de activarla por accidente.
 
@@ -99,7 +99,7 @@ Esto obliga a invocarla deliberadamente en lugar de activarla por accidente.
 En `/help`, elige `Comportamiento` y luego `Modo de activación deliberada` para ver el mismo resumen en Discord.
 
 :::note
-No confundas el **modo de activación deliberada** (esta página, controla *cómo se activa*) con el **modo de
+No confundas el modo de activación deliberada (esta página, controla *cómo se activa*) con el **modo de
 herramientas deliberado**, que controla *qué herramientas se exponen al modelo* en un turno. Comparten la
 abreviatura "DTM", pero no tienen relación. Consulta [Herramientas y extensiones](/es-419/features/capabilities/tools-and-extensions/#deliberate-tool-mode).
 :::

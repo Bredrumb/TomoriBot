@@ -9,8 +9,8 @@ How to run TomoriBot locally with Bun and PostgreSQL for development.
 ## Prerequisites
 
 - Bun and PostgreSQL.
-- A Discord application with the `bot` and `applications.commands` scopes, and the **Server Members**
-  and **Message Content** privileged intents enabled in the Developer Portal. `Presence` is optional
+- A Discord application with the `bot` and `applications.commands` scopes, and the `Server Members`
+  and `Message Content` privileged intents enabled in the Developer Portal. `Presence` is optional
   and only used outside production.
 
 ## Run the bot
@@ -46,7 +46,7 @@ and caches, then sets up event handlers and logs in to Discord.
 
 ## Set up a test server
 
-Run `/setup` in your server. It needs **Manage Server** and opens a private checklist. Nothing is
+Run `/setup` in your server. It needs `Manage Server` and opens a private checklist. Nothing is
 saved until `Finish Setup`: cancelling or restarting the bot discards the draft (drafts live in
 memory, up to 200 at a time).
 
@@ -60,7 +60,7 @@ With `RUN_ENV=development` the checklist has two steps:
   - **User BYOK** (servers only): members bring their own providers and the server keeps no text
     provider.
 - **Starting Settings**, one modal: persona, reply style, timezone, and the default system prompt.
-  **Built-in Default (Recommended)** stores no prompt text, so it follows future changes to the
+  `Built-in Default (Recommended)` stores no prompt text, so it follows future changes to the
   shipped default; a catalog preset stores its text when you finish.
 
 `RUN_ENV=production` adds a `Policies` step that accepts the Terms of Service and Privacy Policy.

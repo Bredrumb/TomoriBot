@@ -93,7 +93,7 @@ sent into would break every later chunk.
 `createTipText(locale, tipKeys, tipVars?)` in `embedHelper.ts` builds the reusable markdown opened by
 the `What You Can Do` button below an error (e.g. in `stream/errorUi.ts` and `ui/interactionCore.ts`).
 
-- Each entry in `tipKeys` is an **atomic** locale key resolved independently and rendered as its own
+- Each entry in `tipKeys` is an atomic locale key resolved independently and rendered as its own
   dashed bullet (`- item`). Keys live under `genai.tips.*` (see the Localization doc's
   [Tip-item keys](./localization.md#tip-item-keys-genaitips) convention).
 - Tips render in a read-only Discord text-display modal, so markdown and hyperlinks remain usable

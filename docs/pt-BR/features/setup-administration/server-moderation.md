@@ -6,7 +6,7 @@ sidebar:
 
 A TomoriBot dá aos administradores do servidor controles sobre como ela se comporta no seu servidor: quem pode usá-la,
 onde e quanto custa, através do painel `/config` e seus comandos relacionados. A maioria requer
-a permissão **Gerenciar Servidor**. Esta página cobre os destaques; todos os comandos estão na
+a permissão Gerenciar Servidor. Esta página cobre os destaques; todos os comandos estão na
 [Referência de Comandos](/pt-BR/features/command-reference/).
 
 ## Controle de Custo: Cotas
@@ -23,15 +23,15 @@ de dias configurável.
 ## BYOK de Usuário (Traga Sua Própria Chave)
 <!-- anchor: user-byok-bring-your-own-key -->
 
-`/moderation` **((Member Access))** apresenta isso como uma escolha de dois estados. **Allow Server Models** é o
-padrão; **Require Personal Providers** faz cada membro trazer seu **próprio** provedor pessoal para
+`/moderation` ((Acesso de Membros)) apresenta isso como uma escolha de dois estados. Allow Server Models é o
+padrão; Require Provedores Pessoais faz cada membro trazer seu próprio provedor pessoal para
 seus gatilhos; o servidor não paga nada em mensagens iniciadas pelo usuário. Gatilhos iniciados
 pelo servidor ainda usam o provedor do servidor. Este é o controle de custo mais forte: ele transfere o gasto com
 API inteiramente para os membros. Membros configuram o deles em
 [Personalização → Seus Próprios Provedores](/pt-BR/features/knowledge/personalization/#your-own-providers).
 
-Você também pode iniciar um servidor **sem** nenhum provedor de texto do lado do servidor escolhendo
-**User BYOK** durante o `/setup`. Essa opção é oferecida em servidores e não em DMs, e pede
+Você também pode iniciar um servidor sem nenhum provedor de texto do lado do servidor escolhendo
+BYOK de Usuário durante o `/setup`. Essa opção é oferecida em servidores e não em DMs, e pede
 confirmação antes de concluir a etapa do provedor, porque o workspace então não tem nenhum provedor para
 recorrer.
 

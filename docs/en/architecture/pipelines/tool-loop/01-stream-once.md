@@ -4,7 +4,7 @@ title: "01: Stream Once"
 
 One provider generation pass, wrapped with a rolling AbortController SDK timeout.
 
-**File:** `src/utils/chat/toolLoop.ts:142-195`
+- **File**: `src/utils/chat/toolLoop.ts:142-195`
 
 ## Mission
 

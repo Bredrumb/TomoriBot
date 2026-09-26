@@ -4,7 +4,7 @@ sidebar:
   order: 1
 ---
 
-TomoriBot es agéntica: además de chatear, puede usar **herramientas** para buscar en la web, leer
+TomoriBot es agéntica: además de chatear, puede usar herramientas para buscar en la web, leer
 documentos, generar medios, establecer recordatorios, actuar en otros canales y más. Decide cuándo
 usarlas según la conversación. Esta página cubre las herramientas integradas, cómo ampliarla con
 servidores MCP y cómo mantener ligeras las declaraciones de herramientas con el modo de
@@ -12,18 +12,18 @@ herramientas deliberado.
 
 Aquí tienes algunos ejemplos graciosos:
 
-- **1. Verificador de bienestar**
+- 1. Verificador de bienestar
   ```text
   Cada pocas horas, realiza un chequeo de bienestar obligatorio a @Bredrumb.
   Pregúntale cómo se siente ahora mismo y si se ha tomado un descanso de la programación recientemente.
   Rastrea su estado emocional a lo largo del tiempo con {memory_tool} y/o {memory_update_tool} para informarle más tarde.
   ```
-- **2. Noticias semanales de manga yuri**
+- 2. Noticias semanales de manga yuri
   ```text
   Todos los viernes, recopila los capítulos de manga yuri destacados de la semana, los episodios de anime y las entregas de fanart de la comunidad utilizando {web_search_tool}.
   Presenta los hallazgos con {voice_message_tool} en una voz ASMR seductora.
   ```
-- **3. Policía del sueño**
+- 3. Policía del sueño
   ```text
   Si notas a través de {message_metadata_tool} que alguien está chateando después de las 2 AM, usa {voice_message_tool} para enviarle una canción de cuna ASMR amenazadoramente calmada diciéndole que se vaya a dormir.
   Si siguen hablando 10 minutos después, usa {manage_message_tool} para eliminar su mensaje por su propio bien y recuérdales que la privación del sueño es una causa principal de sus problemas.
@@ -45,11 +45,11 @@ permiso de Discord, una capacidad del modelo o una clave de API opcional.
 | Mensaje entre canales | `{cross_channel_tool}` | Ninguno (no en NovelAI) | Actúa en otro canal o hilo, con un informe opcional. |
 | Crear hilo | `{create_thread_tool}` | `thread_creation_enabled` + permisos de hilo | Abre un hilo público y publica su mensaje inicial. |
 | Seleccionar sticker | `{sticker_tool}` | `sticker_usage_enabled` | Añade a una respuesta un sticker del servidor que coincida. |
-| Administrar mensaje | `{manage_message_tool}` | `manage_message_enabled` | Fija, edita o elimina mensajes recientes (fijar requiere `Manage Messages`). |
+| Administrar mensaje | `{manage_message_tool}` | `manage_message_enabled` | Fija, edita o elimina mensajes recientes (fijar requiere `Administrar mensajes`). |
 | Bloquear o desbloquear usuario | `{block_user_tool}` / `{unblock_user_tool}` | `user_blocking_enabled` | Silencia o bloquea a un usuario para una persona (no toca las memorias). |
 | Interactuar con mensaje reciente | `{message_interaction_tool}` | Ninguno | Reacciona a un mensaje reciente o le envía una respuesta corta. |
 | Consultar foto de perfil | `{profile_picture_tool}` | modelo de visión o `vision_llm` | Inspecciona el avatar de un usuario o de la persona. |
-| Leer documento | `{document_tool}` | Ninguno | Extrae texto de un PDF o de **cualquier** archivo de texto UTF-8: código fuente (`.py`/`.ts`/`.rs`/…), `.json`, `.yaml`, `.md`, `.txt` y cualquier adjunto no binario. |
+| Leer documento | `{document_tool}` | Ninguno | Extrae texto de un PDF o de cualquier archivo de texto UTF-8: código fuente (`.py`/`.ts`/`.rs`/…), `.json`, `.yaml`, `.md`, `.txt` y cualquier adjunto no binario. |
 | Mostrar metadatos del mensaje | `{message_metadata_tool}` | Ninguno | Anota turnos recientes con identificadores y marcas de tiempo para dirigir acciones con precisión. |
 | Procesar video de YouTube | `{youtube_tool}` | modelo compatible con video | Analiza bajo demanda un enlace específico de YouTube. |
 | Analizar imagen | `{image_analysis_tool}` | `vision_llm` configurado | Delega la comprensión de imágenes a un modelo de visión separado. |
@@ -58,7 +58,7 @@ permiso de Discord, una capacidad del modelo o una clave de API opcional.
 
 :::note[Para autores de prompts]
 Al personalizar el prompt del sistema o las instrucciones de una persona, referencia las
-herramientas mediante sus **macros del prompt** de la tabla anterior en lugar de codificar sus
+herramientas mediante sus macros del prompt de la tabla anterior en lugar de codificar sus
 nombres: las macros se expanden a los nombres correctos al ensamblar el contexto y se degradan de
 forma controlada cuando una herramienta no está disponible. `{pin_tool}` y
 `{timestamp_refresh_tool}` siguen funcionando como alias de compatibilidad para
@@ -106,14 +106,14 @@ tratan como plantillas condicionales.
 El modelo ve una sola herramienta unificada `web_search(query, category)`. Detrás, un distribuidor
 dirige cada llamada por una cadena de motores y devuelve el primer éxito:
 
-**Brave → SearXNG → DuckDuckGo → IAsk**
+Brave → SearXNG → DuckDuckGo → IAsk
 
-- **Brave** se ejecuta primero cuando hay una clave de API de Brave configurada (establécela con
+- Brave se ejecuta primero cuando hay una clave de API de Brave configurada (establécela con
   `/providers`); añade búsqueda de imágenes, videos y noticias. ⚠️ Establece un límite de uso de
   $5 en el panel de Brave para evitar cargos inesperados.
-- **DuckDuckGo** es el predeterminado cuando no hay clave establecida, y pasa a **IAsk** en caso de
+- DuckDuckGo es el predeterminado cuando no hay clave establecida, y pasa a IAsk en caso de
   límites de frecuencia o resultados vacíos.
-- **SearXNG** y **Crawl4AI** son servidores opcionales con autoalojamiento que desbloquean más
+- SearXNG y Crawl4AI son servidores opcionales con autoalojamiento que desbloquean más
   categorías y obtención de páginas renderizadas por navegador; consulta
   [Autoalojamiento](/es-419/self-hosting/).
 
@@ -131,31 +131,31 @@ Cualquier servidor MCP alojado públicamente con un endpoint HTTPS funciona. Com
 [Smithery.ai](https://smithery.ai):
 
 1. Crea una cuenta y genera una clave de API desde tu perfil.
-2. Abre un MCP en el catálogo y copia su **URL de conexión** (por ejemplo, `https://youtube.run.tools`).
+2. Abre un MCP en el catálogo y copia su URL de conexión (por ejemplo, `https://youtube.run.tools`).
 3. Abre `/config` > Plugins > Servidores MCP, elige `Agregar MCP`, pega la URL de conexión en
-   **URL**, pega tu clave de Smithery en `Token de autenticación` y elige el **Tipo de
-   servidor** requerido. **Propósito general** está seleccionado por defecto.
+   URL, pega tu clave de Smithery en `Token de autenticación` y elige el **Tipo de
+   servidor requerido. Propósito general** está seleccionado por defecto.
 
 Si un servidor no necesita autenticación, deja vacío `Token de autenticación`. Tu token de
 autenticación se cifra en reposo y nunca vuelve a mostrarse. Abre la misma página de Config para
 revisar el estado configurado, activar o desactivar un servidor, o eliminarlo con confirmación
 explícita. Eliminarlo lo desconecta de inmediato y libera un espacio. Cada fila guardada también
 muestra los nombres de herramientas acotados de su último descubrimiento exitoso. **Ninguna
-descubierta** es un resultado conocido de cero herramientas; **Descubrimiento desconocido**
+descubierta es un resultado conocido de cero herramientas; Descubrimiento desconocido**
 identifica una fila heredada o un servidor que aún no tiene una instantánea exitosa. Abrir la
 superficie de administración de MCP solo lee metadatos guardados y no contacta al servidor
 remoto.
 
 ### Servidores MCP locales
 
-Los servidores MCP locales **solo son compatibles con instancias con autoalojamiento**: el bot
+Los servidores MCP locales solo son compatibles con instancias con autoalojamiento: el bot
 público alojado requiere HTTPS y bloquea direcciones locales o privadas. Si ejecutas tu propia
 instancia, consulta
 [Configuración: servidor MCP local](/es-419/self-hosting/local-endpoints/setup-local-mcp/).
 
 :::danger[Agrega solo servidores MCP de confianza]
-Un servidor MCP malicioso puede hacerle **inyección de prompt** con instrucciones ocultas,
-**exfiltrar** los datos que los usuarios entregan a sus herramientas, o devolver **resultados
+Un servidor MCP malicioso puede hacerle inyección de prompt con instrucciones ocultas,
+exfiltrar los datos que los usuarios entregan a sus herramientas, o devolver **resultados
 dañinos o falsos** que ella transmitirá a tu servidor. Trata los servidores MCP como extensiones
 del navegador: si tienes dudas, no lo agregues. Revisa siempre las herramientas descritas por un
 MCP antes de añadirlo.
@@ -164,19 +164,19 @@ MCP antes de añadirlo.
 ## Modo de herramientas deliberado
 <!-- anchor: deliberate-tool-mode -->
 
-Cada herramienta declarada se añade al prompt. El **modo de herramientas deliberado** mantiene las
+Cada herramienta declarada se añade al prompt. El modo de herramientas deliberado mantiene las
 declaraciones de herramientas fuera de los turnos de chat normales, salvo que el mensaje parezca
 necesitar realmente una herramienta: esto reduce el tamaño del prompt y ayuda a que los modelos
 pequeños o locales respondan más rápido.
 
-- Primero comprueba si el mensaje tiene **intención de uso de herramienta**. Los activadores
+- Primero comprueba si el mensaje tiene intención de uso de herramienta. Los activadores
   integrados cubren solicitudes comunes (recordatorios, búsqueda web, actualizaciones de memoria,
   mensajes entre canales, generación de imágenes/video/voz, análisis de medios, creación de hilos,
   acciones sobre mensajes). Las preguntas sobre su modelo actual, sus herramientas, sus ajustes o
   por qué una capacidad no está disponible exponen juntas la revisión de capacidades y el acceso a
   la documentación oficial. El texto de seguimiento también funciona, como "hazlo de nuevo pero
   más enojada" después de una solicitud de mensaje de voz.
-- Los administradores del servidor pueden añadir **frases de activación personalizadas** literales
+- Los administradores del servidor pueden añadir frases de activación personalizadas literales
   con `/server trigger add`; por ejemplo, asociar `pic`, `img` o `pfp` con la generación de
   imágenes.
 - Los activadores integrados leen frases en inglés. Otros idiomas llegan a las mismas herramientas
@@ -200,7 +200,7 @@ modelo aún debe elegir llamar a una. En `/help`, elige `Comportamiento` y luego
 herramientas deliberado** para ver el resumen de Discord.
 
 :::note
-El **modo de herramientas deliberado** (esta sección) no está relacionado con el **modo de
+El modo de herramientas deliberado (esta sección) no está relacionado con el **modo de
 activación deliberada**, que controla cómo se activa *ella*; consulta
 [Chat y activadores](/es-419/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode).
 Ambos se abrevian como "DTM" en Discord.

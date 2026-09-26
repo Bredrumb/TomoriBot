@@ -240,9 +240,9 @@ bun install --frozen-lockfile
 
 `servers/tts/` 下的 TTS 本地服务器不再有共用的后备值、按引擎设置的上限和认证设置。`.env` 或 shell 里的旧值会被忽略，所以请留意下面那些会改变行为的行，而不是只把它当作重复一遍默认值。
 
-- **端口：** `TOMORI_TTS_PORT` 已移除，因为 `.env` 里的一个值会让所有启动的服务器使用同一个端口。现在每个引擎读取自己的变量：`CHATTERBOX_PORT`（8011）、`QWEN3TTS_PORT`（8012，语音设计模式下为 8014）、`IRODORI_TTS_PORT`（8013）、`FISH_S2_PORT`（8015）、`VOXCPM2_PORT`（8016）、`COSYVOICE3_PORT`（8017）和 `MOSS_TTS_PORT`（8018）。
-- **认证：** 服务器不再校验 bearer 令牌，也不再拒绝绑定到非回环地址。如果你设置过 `FISH_S2_API_KEY`、`VOXCPM2_API_KEY`、`TOMORI_TTS_API_KEY` 或 `COSYVOICE3_BEARER_TOKEN`，端点现在不带它们也会接受请求。绑定到回环地址以外之前，请先读[网络访问](/zh-CN/self-hosting/local-endpoints/text-to-speech/#network-access)。
-- **安装脚本固定的版本：** Fish Speech 运行时的提交，以及 CosyVoice 运行时和模型的修订，都固定在安装脚本里。要更新它们，就得改脚本里固定的版本。
+- 端口： `TOMORI_TTS_PORT` 已移除，因为 `.env` 里的一个值会让所有启动的服务器使用同一个端口。现在每个引擎读取自己的变量：`CHATTERBOX_PORT`（8011）、`QWEN3TTS_PORT`（8012，语音设计模式下为 8014）、`IRODORI_TTS_PORT`（8013）、`FISH_S2_PORT`（8015）、`VOXCPM2_PORT`（8016）、`COSYVOICE3_PORT`（8017）和 `MOSS_TTS_PORT`（8018）。
+- 认证： 服务器不再校验 bearer 令牌，也不再拒绝绑定到非回环地址。如果你设置过 `FISH_S2_API_KEY`、`VOXCPM2_API_KEY`、`TOMORI_TTS_API_KEY` 或 `COSYVOICE3_BEARER_TOKEN`，端点现在不带它们也会接受请求。绑定到回环地址以外之前，请先读[网络访问](/zh-CN/self-hosting/local-endpoints/text-to-speech/#network-access)。
+- 安装脚本固定的版本： Fish Speech 运行时的提交，以及 CosyVoice 运行时和模型的修订，都固定在安装脚本里。要更新它们，就得改脚本里固定的版本。
 
 <details>
 <summary>全部已移除的 TTS 本地服务器变量</summary>
@@ -298,9 +298,9 @@ bun run restore-backup --latest
 bun run restore-backup --from backups/backup_2024-01-15_14-30-45
 ```
 
-`bun run backup:personas` 是范围更窄的导出：只包含人格预设集和按人格区分的服务器记忆，覆盖所有服务器。它**必须**通过 `/persona import` 手动重新导入，并且**不能**与 `restore-backup` 一起使用（那会导致主键冲突）。
+`bun run backup:personas` 是范围更窄的导出：只包含人格预设集和按人格区分的服务器记忆，覆盖所有服务器。它必须通过 `/persona import` 手动重新导入，并且不能与 `restore-backup` 一起使用（那会导致主键冲突）。
 
-TomoriBot 还会在非生产环境里做**启动时自动备份**，而完整还原要求目标数据库上已装好 `pgvector` 扩展。这两点都在[安全迁移](/zh-CN/self-hosting/safe-migration/)里有详细说明，那里也给出了手动 `pg_dump` 与 `pg_restore` 的流程，供你想直接操作工具时参考。
+TomoriBot 还会在非生产环境里做启动时自动备份，而完整还原要求目标数据库上已装好 `pgvector` 扩展。这两点都在[安全迁移](/zh-CN/self-hosting/safe-migration/)里有详细说明，那里也给出了手动 `pg_dump` 与 `pg_restore` 的流程，供你想直接操作工具时参考。
 
 ## Docker Compose 的备份
 

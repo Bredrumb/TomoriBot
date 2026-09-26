@@ -149,7 +149,7 @@ Setting `HEAP_SNAPSHOT_DIR` registers a `SIGUSR2` signal handler that triggers a
 `.heapsnapshot` dump. This allows diagnosing unmanaged array buffer or external memory growth that
 normal counters cannot attribute.
 
-**Operational trade-off**: Serializing the snapshot string requires approximately half the live heap
+- **Operational trade-off**: serializing the snapshot string requires approximately half the live heap
 in additional temporary memory. On a memory-constrained host, initiating a snapshot is itself a
 heavy pressure event. Collect snapshots during moderate uptime, and restart the container
 afterward. Ensure the target directory points to a writable host bind mount, as production containers

@@ -12,16 +12,16 @@ sidebar:
   order: 2
 ---
 
-TomoriBot 可以從 [SillyTavern](https://github.com/SillyTavern/SillyTavern) 匯入兩種你可能已經有的東西：**Prompt Manager 預設集**（提示詞的編排方式）與**角色卡**（角色本身）。這是給 ST 使用者的利基功能；如果你從沒用過 SillyTavern，可以跳過這一頁。
+TomoriBot 可以從 [SillyTavern](https://github.com/SillyTavern/SillyTavern) 匯入兩種你可能已經有的東西：Prompt Manager 預設集（提示詞的編排方式）與角色卡（角色本身）。這是給 ST 使用者的利基功能；如果你從沒用過 SillyTavern，可以跳過這一頁。
 
 ## 角色卡匯入
 
 用 `/persona import` 把既有的 SillyTavern 角色直接帶進 Discord。它接受：
 
-- 內嵌 `chara` / `char` 中繼資料的 **PNG 卡**，
-- **v2 風格 JSON** 卡（根層級的 `name`、`description`、`first_mes`……），
-- **v3 JSON** 卡（`spec: "chara_card_v3"`，內含嵌套的 `data` 物件），
-- **`.charx` 壓縮檔**（Character Card V3，角色卡網站預設發放的格式）。
+- 內嵌 `chara` / `char` 中繼資料的 PNG 卡，
+- v2 風格 JSON 卡（根層級的 `name`、`description`、`first_mes`……），
+- v3 JSON 卡（`spec: "chara_card_v3"`，內含嵌套的 `data` 物件），
+- `.charx` 壓縮檔（Character Card V3，角色卡網站預設發放的格式）。
 
 `.charx` 檔是一個 zip，其中的 `card.json` 存放角色。TomoriBot 會讀取那張卡，並忽略壓縮檔中的其他所有東西：內附的圖示、表情立繪、音訊與影片都不會匯入，匯入回覆也會說明這點。用 `/server avatar` 設定頭像，並在 `/config` > 人格 > 立繪 底下新增立繪。
 
@@ -32,7 +32,7 @@ TomoriBot 可以從 [SillyTavern](https://github.com/SillyTavern/SillyTavern) �
 ## 提示詞預設集
 <!-- anchor: prompt-presets -->
 
-SillyTavern 的 Prompt Manager 預設集控制提示詞的**編排**。用 `/config` > 外掛 > SillyTavern 預設集 匯入預設集、檢視已啟用的節點、在預設集之間切換，或回到一般編排。
+SillyTavern 的 Prompt Manager 預設集控制提示詞的編排。用 `/config` > 外掛 > SillyTavern 預設集 匯入預設集、檢視已啟用的節點、在預設集之間切換，或回到一般編排。
 
 ### 預設集控制什麼
 
@@ -71,4 +71,4 @@ SillyTavern 的 Prompt Manager 預設集控制提示詞的**編排**。用 `/con
 - 歷史後與深度注入會合併進既有的對話紀錄項目，而不是變成獨立訊息；同一深度的多個節點會批次處理。
 - 不支援規則表達式後處理、預設集端的 temperature、top-p 或模型覆寫，以及分層預設集。舊式的文字補全預設集會走一條盡力而為的路徑匯入，並捨棄 ST 專屬的區塊（scenario、anchors、stop strings……）。
 
-在 `/help` 中選擇 **整合**，然後選 `SillyTavern 預設集`，就能看到 Discord 內的參考。匯入引擎的內部細節請看[預設集系統架構](/en/architecture/integrations/sillytavern/preset-system/)。
+在 `/help` 中選擇 整合，然後選 `SillyTavern 預設集`，就能看到 Discord 內的參考。匯入引擎的內部細節請看[預設集系統架構](/en/architecture/integrations/sillytavern/preset-system/)。

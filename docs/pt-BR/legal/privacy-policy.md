@@ -30,53 +30,53 @@ Os administradores do servidor aceitam os Termos de Serviço durante o `/setup` 
 ## 2) O Que Armazenamos
 
 ### 2.1) Sobre Você
-- **Identidade e preferências:** sua ID de usuário do Discord, preferência de idioma e status de recusa de privacidade.
-- **Configurações de personalização:** o apelido que você escolhe, pronomes, identidade de gênero, formas de tratamento, marcadores de aparência física, um prompt de personificação, um URL de imagem de referência de personagem, deslocamento de fuso horário e substituições de prefixo/sufixo de mensagem.
-- **Preferências de nomenclatura:** como cada persona deve chamar você.
-- **Memórias pessoais:** fatos que você ensina ao TomoriBot sobre si mesmo, ou que ele salva sobre você quando memórias pessoais estão ativadas.
-- **Destaques:** a configuração de destaque pessoal que você define por servidor.
-- **Registros de condicionamento:** o texto e o motivo que você fornece por meio de `/reward` e `/punish`, que moldam como uma persona se comporta naquele Servidor.
-- **Contadores de uso:** contagens diárias de comandos, modelos e ferramentas que você usou, além de totais de tokens, vinculados a você, ao Servidor e à persona. Isso alimenta o `/stats`.
+- Identidade e preferências: sua ID de usuário do Discord, preferência de idioma e status de recusa de privacidade.
+- Configurações de personalização: o apelido que você escolhe, pronomes, identidade de gênero, formas de tratamento, marcadores de aparência física, um prompt de personificação, um URL de imagem de referência de personagem, deslocamento de fuso horário e substituições de prefixo/sufixo de mensagem.
+- Preferências de nomenclatura: como cada persona deve chamar você.
+- Memórias pessoais: fatos que você ensina ao TomoriBot sobre si mesmo, ou que ele salva sobre você quando memórias pessoais estão ativadas.
+- Destaques: a configuração de destaque pessoal que você define por servidor.
+- Registros de condicionamento: o texto e o motivo que você fornece por meio de `/reward` e `/punish`, que moldam como uma persona se comporta naquele Servidor.
+- Contadores de uso: contagens diárias de comandos, modelos e ferramentas que você usou, além de totais de tokens, vinculados a você, ao Servidor e à persona. Isso alimenta o `/stats`.
 
 ### 2.2) Sobre Seu Servidor
-- **Configuração do servidor:** atributos da persona, diálogos de exemplo, palavras-gatilho, provedor e seleções de modelo, permissões de canal e função, cotas, fuso horário e alternâncias de recursos.
-- **Memórias do servidor:** fatos ensinados ao TomoriBot para todo o Servidor. Estes podem descrever membros, incluindo membros que não os escreveram.
-- **Metadados de emoji e figurinha:** IDs do Discord, nomes, descrições e sinalizadores de formato. Os próprios arquivos de imagem não são armazenados.
-- **Lembretes:** o texto do lembrete, a ID e o apelido do usuário de destino no Discord, o canal, a programação e qualquer configuração de recorrência.
-- **Resumos de memória de curto prazo:** quando a memória de curto prazo (STM) está ativada, o TomoriBot grava resumos curtos derivados da conversa recente no banco de dados para que possa permanecer contextual entre os Gatilhos. Estes são excluídos após um período de inatividade (90 dias por padrão).
-- **Links de integração:** links de sala e canal do Matrix, e os URLs, nomes de ferramentas descobertos e tokens de autenticação criptografados para quaisquer servidores MCP que um administrador conecte.
+- Configuração do servidor: atributos da persona, diálogos de exemplo, palavras-gatilho, provedor e seleções de modelo, permissões de canal e função, cotas, fuso horário e alternâncias de recursos.
+- Memórias do servidor: fatos ensinados ao TomoriBot para todo o Servidor. Estes podem descrever membros, incluindo membros que não os escreveram.
+- Metadados de emoji e figurinha: IDs do Discord, nomes, descrições e sinalizadores de formato. Os próprios arquivos de imagem não são armazenados.
+- Lembretes: o texto do lembrete, a ID e o apelido do usuário de destino no Discord, o canal, a programação e qualquer configuração de recorrência.
+- Resumos de memória de curto prazo: quando a memória de curto prazo (STM) está ativada, o TomoriBot grava resumos curtos derivados da conversa recente no banco de dados para que possa permanecer contextual entre os Gatilhos. Estes são excluídos após um período de inatividade (90 dias por padrão).
+- Links de integração: links de sala e canal do Matrix, e os URLs, nomes de ferramentas descobertos e tokens de autenticação criptografados para quaisquer servidores MCP que um administrador conecte.
 
 ### 2.3) Credenciais
-- **Chaves de API do provedor** que você escolhe armazenar, em nível de Servidor ou pessoalmente.
-- **Definições de endpoint personalizadas,** incluindo o URL do endpoint e qualquer token de portador.
+- Chaves de API do provedor que você escolhe armazenar, em nível de Servidor ou pessoalmente.
+- Definições de endpoint personalizadas, incluindo o URL do endpoint e qualquer token de portador.
 
 Todas as credenciais são criptografadas em repouso.
 
 ### 2.4) Conteúdo Que Você Envia
-- **Documentos:** o texto completo extraído de arquivos enviados para a base de conhecimento de um Servidor, junto com o nome do arquivo, tipo de mídia, tamanho e embeddings de pesquisa gerados a partir desse texto.
-- **Imagens da persona:** avatares, sprites e imagens de referência de personagens, armazenados no armazenamento de objetos para que as personas possam renderizar de forma consistente.
-- **Amostras de voz:** amostras de áudio e suas transcrições de referência, quando a clonagem de voz está configurada.
+- Documentos: o texto completo extraído de arquivos enviados para a base de conhecimento de um Servidor, junto com o nome do arquivo, tipo de mídia, tamanho e embeddings de pesquisa gerados a partir desse texto.
+- Imagens da persona: avatares, sprites e imagens de referência de personagens, armazenados no armazenamento de objetos para que as personas possam renderizar de forma consistente.
+- Amostras de voz: amostras de áudio e suas transcrições de referência, quando a clonagem de voz está configurada.
 
 ### 2.5) Registros Operacionais
-- **Logs de erro:** IDs de interação, IDs de usuário e Servidor, nomes de comando, tipos de erro e rastreamentos de pilha. O conteúdo das mensagens e as conversas não são registrados. Mantidos por 90 dias.
-- **Métricas de desempenho:** amostras de tempo e recursos usados para manter a integridade do serviço. Mantidas por 30 dias.
-- **Mapeamentos de mensagens de persona:** IDs de mensagens e canais do Discord vinculando uma mensagem enviada ao sprite da persona que usou, para que o TomoriBot possa atualizar ou limpar suas próprias mensagens. Mantidos por 30 dias.
+- Logs de erro: IDs de interação, IDs de usuário e Servidor, nomes de comando, tipos de erro e rastreamentos de pilha. O conteúdo das mensagens e as conversas não são registrados. Mantidos por 90 dias.
+- Métricas de desempenho: amostras de tempo e recursos usados para manter a integridade do serviço. Mantidas por 30 dias.
+- Mapeamentos de mensagens de persona: IDs de mensagens e canais do Discord vinculando uma mensagem enviada ao sprite da persona que usou, para que o TomoriBot possa atualizar ou limpar suas próprias mensagens. Mantidos por 30 dias.
 
 ## 3) O Que Não Armazenamos
 
 O seguinte é lido enquanto o TomoriBot está preparando uma resposta e não é gravado em nosso banco de dados:
 
-- **Mensagens do Discord:** mensagens recentes do canal (normalmente as últimas 80) são lidas na memória para construir o contexto e enviadas ao Provedor configurado. Elas são descartadas assim que a resposta é gerada. Os resumos podem ser retidos separadamente se a memória de curto prazo estiver ativada, conforme descrito na Seção 2.2.
-- **Anexos e mídias:** imagens, vídeos e fotos de perfil analisados durante um Gatilho são processados na memória e descartados.
-- **Metadados de Servidor e canal:** nomes de Servidor, descrições, nomes de canais e tópicos são lidos do zero a cada vez.
-- **Informações de presença:** sua atividade ou status atual, quando disponível.
-- **Imagens de emoji e figurinha:** buscadas no Discord cada vez que são usadas.
+- Mensagens do Discord: mensagens recentes do canal (normalmente as últimas 80) são lidas na memória para construir o contexto e enviadas ao Provedor configurado. Elas são descartadas assim que a resposta é gerada. Os resumos podem ser retidos separadamente se a memória de curto prazo estiver ativada, conforme descrito na Seção 2.2.
+- Anexos e mídias: imagens, vídeos e fotos de perfil analisados durante um Gatilho são processados na memória e descartados.
+- Metadados de Servidor e canal: nomes de Servidor, descrições, nomes de canais e tópicos são lidos do zero a cada vez.
+- Informações de presença: sua atividade ou status atual, quando disponível.
+- Imagens de emoji e figurinha: buscadas no Discord cada vez que são usadas.
 
 ## 4) O Que Enviamos para Terceiros
 
-- **Provedores de IA:** seu prompt, o contexto recente descrito acima, dados da persona e quaisquer anexos são enviados para o provedor configurado para esse Servidor ou para você, como Google, OpenRouter, NovelAI ou um endpoint personalizado. Isso abrange solicitações de texto, visão, embedding, imagem, vídeo, fala e transcrição. Seus termos, políticas de privacidade, filtros de segurança e regras de retenção se aplicam a esse conteúdo, e não os controlamos.
-- **Provedores de pesquisa:** se a pesquisa na web estiver ativada, consultas de pesquisa e contexto relevante vão para o provedor de pesquisa configurado.
-- **Matrix:** se uma ponte Matrix estiver configurada para um canal, as mensagens cruzam entre o Discord e a sala vinculada do Matrix.
+- Provedores de IA: seu prompt, o contexto recente descrito acima, dados da persona e quaisquer anexos são enviados para o provedor configurado para esse Servidor ou para você, como Google, OpenRouter, NovelAI ou um endpoint personalizado. Isso abrange solicitações de texto, visão, embedding, imagem, vídeo, fala e transcrição. Seus termos, políticas de privacidade, filtros de segurança e regras de retenção se aplicam a esse conteúdo, e não os controlamos.
+- Provedores de pesquisa: se a pesquisa na web estiver ativada, consultas de pesquisa e contexto relevante vão para o provedor de pesquisa configurado.
+- Matrix: se uma ponte Matrix estiver configurada para um canal, as mensagens cruzam entre o Discord e a sala vinculada do Matrix.
 
 Não vendemos dados pessoais. Os compartilhamos apenas conforme necessário para operar os recursos que você invoca, ou quando a lei exige.
 

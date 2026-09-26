@@ -5,11 +5,11 @@ aiGenerated: true
 
 VoxCPM2 is OpenBMB's 2B-parameter multilingual text-to-speech model. It supports 30 languages, 48 kHz output, natural-language Voice Design, reference-audio voice cloning, controllable cloning, and transcript-assisted "Ultimate Cloning". TomoriBot uses the official `voxcpm` Python package through the thin wrapper in `servers/tts/voxcpm2/`.
 
-The default model is the official `openbmb/VoxCPM2` BF16 checkpoint. OpenBMB reports roughly **8 GB VRAM** for the standard runtime, so the normal model comfortably fits a 16 GB NVIDIA GPU and no quantized checkpoint is needed by default.
+The default model is the official `openbmb/VoxCPM2` BF16 checkpoint. OpenBMB reports roughly 8 GB VRAM for the standard runtime, so the normal model comfortably fits a 16 GB NVIDIA GPU and no quantized checkpoint is needed by default.
 
 ## License
 
-VoxCPM2 code and model weights are released under **Apache-2.0**, including commercial use subject to the license terms. TomoriBot does not redistribute the weights; the installer downloads them from the official Hugging Face repository.
+VoxCPM2 code and model weights are released under Apache-2.0, including commercial use subject to the license terms. TomoriBot does not redistribute the weights; the installer downloads them from the official Hugging Face repository.
 
 Official upstream resources:
 
@@ -40,14 +40,14 @@ One VoxCPM2 endpoint can handle all useful TomoriBot voice-source modes:
 
 VoxCPM2 represents Voice Design and style control by placing a natural-language description in parentheses before the text to synthesize. TomoriBot already has an `instruct` field for this purpose, so the wrapper performs that conversion automatically.
 
-Use **Plain** Script Markup. VoxCPM2 does not require TomoriBot to preserve bracket tags or emoji control syntax, and no new Script Markup mode is necessary.
+Use `Plain` Script Markup. VoxCPM2 does not require TomoriBot to preserve bracket tags or emoji control syntax, and no new Script Markup mode is necessary.
 
 ## Hardware and runtime
 
 Recommended starting point:
 
-- Python **3.10-3.12**
-- NVIDIA GPU with **8 GB VRAM or more** for the official BF16 runtime; 12-16 GB gives comfortable headroom
+- Python 3.10-3.12
+- NVIDIA GPU with 8 GB VRAM or more for the official BF16 runtime; 12-16 GB gives comfortable headroom
 - Current NVIDIA driver and a CUDA-enabled PyTorch build for GPU acceleration
 - CPU is supported as a fallback but is substantially slower
 

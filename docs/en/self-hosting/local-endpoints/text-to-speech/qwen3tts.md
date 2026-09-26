@@ -47,7 +47,7 @@ Run `/providers`, choose `Add New Custom Endpoint`, and use the speech API compa
 - `endpoint_url`: `http://127.0.0.1:8012`
 
 After saving the connection, select it and use its model dropdown to add a Speech model. The model form
-asks for `Voice Source Mode` and **Script Markup**; choose `Auto` and `Plain` for the auto-mode server.
+asks for `Voice Source Mode` and `Script Markup`; choose `Auto` and `Plain` for the auto-mode server.
 
 Use `/providers` for endpoint registration and model setup. Then open `/config` > Models > Switch Models to select and activate the registered endpoint.
 

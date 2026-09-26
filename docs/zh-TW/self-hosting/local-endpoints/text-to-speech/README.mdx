@@ -62,7 +62,7 @@ TomoriBot 把語音視為自訂端點功能。本機引擎在 bot 之外以 HTTP
 
 對 Qwen3-TTS、MOSS-VoiceGenerator、IrodoriTTS 或 VoxCPM2 VoiceDesign 而言，請跳過音訊樣本，改用 `/config` 中的人格 > 語音 為該人格儲存一段自然語言的語音描述。CosyVoice 3 使用帶參考樣本的複製模式，並透過 `voice_instructions` 接受單次的語氣指示。
 
-使用 ElevenLabs 的人應該在 `/providers` 中選擇 `新增供應商` 與 **ElevenLabs**，它會同時註冊語音與轉錄端點。
+使用 ElevenLabs 的人應該在 `/providers` 中選擇 `新增供應商` 與 ElevenLabs，它會同時註冊語音與轉錄端點。
 
 TomoriBot 會在合成之前，從生成的語音腳本中移除 Discord 自訂表情符號語法，例如 `:pepega:` 或 `<:pepega:123456789012345678>`。Unicode 表情符號同樣會被移除，除非語音端點使用表情符號標記，那是為 IrodoriTTS 設計的。當某個端點的腳本標記風格設為 `方括號標籤` 時，例如 Chatterbox Turbo 與 Fish S2 Pro，方括號標籤會被保留。
 
@@ -72,4 +72,4 @@ CosyVoice 3 同樣使用 `純文字` 腳本標記風格。它將有逐字稿的�
 
 ## 引擎比較
 
-若要逐項對照實測延遲基準、音訊試聽播放，以及比較所有支援引擎的詳細功能矩陣，請看 **[TTS 引擎比較](/zh-TW/self-hosting/local-endpoints/text-to-speech/comparison/)**。
+若要逐項對照實測延遲基準、音訊試聽播放，以及比較所有支援引擎的詳細功能矩陣，請看 [TTS 引擎比較](/zh-TW/self-hosting/local-endpoints/text-to-speech/comparison/)。

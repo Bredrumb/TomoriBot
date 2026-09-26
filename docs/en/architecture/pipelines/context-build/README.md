@@ -10,10 +10,10 @@ Assembles the LLM-visible prompt; every system message, every memory, every
 sample dialogue, every historical message; into a `StructuredContextItem[]`
 list ready for a provider.
 
-**Entry point:** `src/utils/text/contextBuilder.ts` (5-line barrel) →
+- **Entry point**: `src/utils/text/contextBuilder.ts` (5-line barrel) →
 `src/utils/text/context/builder.ts:buildContext()`
 
-**Triggered by:** the chat per-turn stage
+- **Triggered by**: the chat per-turn stage
 [`buildChatTurnContext`](../chat/06-per-turn/01-build-context), and any
 other caller that needs an LLM prompt for a given persona + history snapshot
 (import/export, snapshot tooling, structured-output flows).

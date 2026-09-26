@@ -9,8 +9,8 @@ sidebar:
 ---
 
 TomoriBot puede importar dos cosas de [SillyTavern](https://github.com/SillyTavern/SillyTavern)
-que ya podrías tener: **preajustes del Administrador de prompts** (cómo se organiza el prompt)
-y **tarjetas de personaje** (el personaje en sí). Esta es una función especializada para
+que ya podrías tener: preajustes del Administrador de prompts (cómo se organiza el prompt)
+y tarjetas de personaje (el personaje en sí). Esta es una función especializada para
 usuarios de ST; si nunca has usado SillyTavern, puedes omitir esta página.
 
 ## Importación de tarjetas de personaje
@@ -18,10 +18,10 @@ usuarios de ST; si nunca has usado SillyTavern, puedes omitir esta página.
 Trae un personaje de SillyTavern existente directamente a Discord con `/persona import`.
 Acepta:
 
-- **Tarjetas PNG** con metadatos `chara` / `char` incrustados,
-- **Tarjetas JSON estilo v2** (`name`, `description`, `first_mes`, … a nivel raíz),
-- **JSON v3** (`spec: "chara_card_v3"` con un objeto `data` anidado),
-- **Archivos `.charx`** (Character Card V3, el formato que los sitios de tarjetas entregan por
+- Tarjetas PNG con metadatos `chara` / `char` incrustados,
+- Tarjetas JSON estilo v2 (`name`, `description`, `first_mes`, … a nivel raíz),
+- JSON v3 (`spec: "chara_card_v3"` con un objeto `data` anidado),
+- Archivos `.charx` (Character Card V3, el formato que los sitios de tarjetas entregan por
   defecto).
 
 Un archivo `.charx` es un zip cuyo `card.json` contiene el personaje. TomoriBot lee esa tarjeta
@@ -44,7 +44,7 @@ expande. Para el mapeo exacto de conversión y campos, consulta la
 ## Preajustes de prompt
 <!-- anchor: prompt-presets -->
 
-Un preajuste del Administrador de prompts de SillyTavern controla la **organización** del
+Un preajuste del Administrador de prompts de SillyTavern controla la organización del
 prompt. Usa `/config` > Plugins > Preajustes de SillyTavern para importar preajustes, inspeccionar
 los nodos activados, cambiar entre preajustes, o volver a la organización normal.
 
@@ -99,6 +99,6 @@ Sorpresas comunes cuando un preajuste parece ser ignorado:
   completado de texto se importan mediante una ruta de mejor esfuerzo que descarta bloques
   exclusivos de ST (escenario, anclas, cadenas de parada, …).
 
-En `/help`, elige **Integraciones** y luego `Preajustes de SillyTavern`, para la referencia
+En `/help`, elige Integraciones y luego `Preajustes de SillyTavern`, para la referencia
 dentro de Discord. Para los detalles internos del motor de importación, consulta la
 [arquitectura del sistema de preajustes](/en/architecture/integrations/sillytavern/preset-system/).

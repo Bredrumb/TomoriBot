@@ -4,15 +4,15 @@ sidebar:
   order: 1
 ---
 
-A TomoriBot não tem um modelo de IA embutido: você conecta um a partir de um provedor. Um **provedor** é um
-serviço de IA (Google Gemini, OpenRouter, NovelAI, um endpoint local, …), e um **modelo** é um
+A TomoriBot não tem um modelo de IA embutido: você conecta um a partir de um provedor. Um provedor é um
+serviço de IA (Google Gemini, OpenRouter, NovelAI, um endpoint local, …), e um modelo é um
 modelo específico nesse provedor. Você precisa de pelo menos um provedor para usá-la.
 
 ## Chaves de API
 <!-- anchor: api-keys -->
 
 Adicione uma chave de provedor durante a configuração inicial com `/setup`, ou depois em `/providers` escolhendo
-**Adicionar Novo Provedor**. As chaves são **criptografadas em repouso**: ninguém, incluindo administradores do servidor, pode
+Adicionar Novo Provedor. As chaves são criptografadas em repouso: ninguém, incluindo administradores do servidor, pode
 lê-las de volta.
 
 `/setup` pergunta como as respostas devem chegar a um modelo antes de tudo, e a resposta decide o que ele
@@ -20,40 +20,40 @@ coleta:
 
 | Modo | O que é coletado |
 |---|---|
-| **Provedor de IA (Recomendado)** | Um provedor do catálogo mais sua chave de API, validada e criptografada como rascunho. |
-| **Endpoint Personalizado (Avançado)** | A conexão do endpoint e um modelo de texto, registrados dentro do assistente. Veja [Endpoints Personalizados](#endpoints-personalizados). |
-| **User BYOK** (apenas servidores) | Nada: o workspace não mantém nenhum provedor próprio, então os membros devem fornecer provedores pessoais. |
+| Provedor de IA (Recomendado) | Um provedor do catálogo mais sua chave de API, validada e criptografada como rascunho. |
+| Endpoint Personalizado (Avançado) | A conexão do endpoint e um modelo de texto, registrados dentro do assistente. Veja [Endpoints Personalizados](#endpoints-personalizados). |
+| BYOK de Usuário (apenas servidores) | Nada: o workspace não mantém nenhum provedor próprio, então os membros devem fornecer provedores pessoais. |
 
 Nada é gravado até o `Concluir Configuração`, então um assistente abandonado ou expirado não altera as
 linhas de provedor existentes do workspace. Para substituir uma chave já armazenada, use `/providers`, porque
 o `/setup` se recusa a executar em um workspace que já está configurado.
 
-Cada provedor tem suas próprias etapas de geração de chave. Execute **`/help`**, escolha `Configuração`, depois **Step 1: Get an API Key**, e escolha seu
+Cada provedor tem suas próprias etapas de geração de chave. Execute `/help`, escolha `Configuração`, depois Step 1: Obter uma Chave de API, e escolha seu
 provedor para o passo a passo exato, ou use estes pontos de partida:
 
 | Provedor | Notas | Obter uma chave |
 |---|---|---|
-| **Google Gemini** | Nível gratuito, executa todos os recursos. Configuração inicial recomendada. | [AI Studio](https://aistudio.google.com/apikey) |
-| **OpenRouter** | Uma chave, muitos modelos (alguns gratuitos). | [Chaves do OpenRouter](https://openrouter.ai/settings/keys) |
-| **NovelAI** | Assinatura; narrativa/roleplay sem censura (somente texto). | [NovelAI](https://novelai.net/) |
-| **DeepSeek** | Modelos de raciocínio com pagamento por uso. | [DeepSeek](https://platform.deepseek.com/api_keys) |
-| **NVIDIA NIM** | Texto hospedado, embeddings e imagem. | [NVIDIA Build](https://build.nvidia.com/) |
-| **Anthropic** | Modelos Claude via API (não Claude Code). | — |
-| **Z.ai** | Família GLM. ⚠️ ToS restringe uso a cenários de código/agente. | [Z.ai](https://z.ai/) |
-| **Vertex AI** | Google Cloud via ADC do `gcloud`: melhor para configurações locais/dev. | veja abaixo |
-| **Vertex AI Express** | BYOK de chave de API do Google Cloud (Preview, subconjunto do Gemini). | [Express Mode](https://console.cloud.google.com/expressmode) |
-| **Custom** | Qualquer endpoint compatível com OpenAI (Ollama, vLLM, LiteLLM, …). | veja [Endpoints Personalizados](#endpoints-personalizados) |
+| Google Gemini | Nível gratuito, executa todos os recursos. Configuração inicial recomendada. | [AI Studio](https://aistudio.google.com/apikey) |
+| OpenRouter | Uma chave, muitos modelos (alguns gratuitos). | [Chaves do OpenRouter](https://openrouter.ai/settings/keys) |
+| NovelAI | Assinatura; narrativa/roleplay sem censura (somente texto). | [NovelAI](https://novelai.net/) |
+| DeepSeek | Modelos de raciocínio com pagamento por uso. | [DeepSeek](https://platform.deepseek.com/api_keys) |
+| NVIDIA NIM | Texto hospedado, embeddings e imagem. | [NVIDIA Build](https://build.nvidia.com/) |
+| Anthropic | Modelos Claude via API (não Claude Code). | — |
+| Z.ai | Família GLM. ⚠️ ToS restringe uso a cenários de código/agente. | [Z.ai](https://z.ai/) |
+| Vertex AI | Google Cloud via ADC do `gcloud`: melhor para configurações locais/dev. | veja abaixo |
+| Vertex AI Express | BYOK de chave de API do Google Cloud (Preview, subconjunto do Gemini). | [Express Mode](https://console.cloud.google.com/expressmode) |
+| Custom | Qualquer endpoint compatível com OpenAI (Ollama, vLLM, LiteLLM, …). | veja [Endpoints Personalizados](#endpoints-personalizados) |
 
 :::caution
 Nunca compartilhe sua chave de API com ninguém. Adicione ou substitua o token de autenticação Bearer de um endpoint personalizado
 a partir da ação `Editar Endpoint` em `/providers`.
 :::
 
-O **Vertex AI** se autentica com Application Default Credentials em vez de um segredo armazenado.
+O Vertex AI se autentica com Application Default Credentials em vez de um segredo armazenado.
 Para hospedagem local, o ADC pode vir do `gcloud`; implantações hospedadas devem usar uma identidade de
 carga de trabalho ou conta de serviço. Uma chave de API do AI Studio sozinha não autentica o Vertex AI completo. O projeto
 selecionado deve ter faturamento e a API do Vertex AI habilitados, e a identidade do host precisa de acesso ao Vertex.
-O guia de configuração está disponível em **Google Vertex AI** na página **API Keys** em `/help`.
+O guia de configuração está disponível em Google Vertex AI na página API Keys em `/help`.
 
 A configuração de provedores com suporte Google valida as credenciais através do endpoint autenticado de
 listagem de modelos. Ela não gera texto nem depende de qualquer modelo de chat que esteja marcado como
@@ -101,14 +101,14 @@ Você também pode gerenciar as chaves de backup deste servidor para failover au
 <!-- anchor: custom-endpoints -->
 
 Endpoints personalizados permitem que você registre serviços auto-hospedados ou com proxy: Ollama, LM Studio,
-LiteLLM, vLLM, ComfyUI, TTS/STT local; como **pacotes de provedores rotulados**.
+LiteLLM, vLLM, ComfyUI, TTS/STT local; como pacotes de provedores rotulados.
 
-- **Escopo do servidor:** abra `/providers` para registro e edição de endpoints do workspace.
-- **Escopo pessoal:** abra `/personal providers` para catálogos de modelos pessoais (apenas você; veja
+- Escopo do servidor: abra `/providers` para registro e edição de endpoints do workspace.
+- Escopo pessoal: abra `/personal providers` para catálogos de modelos pessoais (apenas você; veja
   [Personalização](/pt-BR/features/knowledge/personalization/#your-own-providers)). Endpoints pessoais de fala
   não são selecionados em `/personal config`.
 
-Um **rótulo** é o nome exibido no menu e agrupa capacidades sob um pacote quando compartilham
+Um rótulo é o nome exibido no menu e agrupa capacidades sob um pacote quando compartilham
 uma URL de endpoint. Ele nunca é enviado ao endpoint remoto. Capacidades servidas de URLs diferentes
 precisam de rótulos distintos. Escolha `Adicionar Novo Endpoint Personalizado`, selecione a
 compatibilidade de API e salve a conexão. Salvar prepara as capacidades suportadas por aquele
@@ -127,7 +127,7 @@ slots de capacidade a conexão prepara. Registrar modelos exatos para esses slot
 protocolo não pode ser inferido de forma confiável a partir da URL do endpoint.
 
 O modo `Endpoint Personalizado (Avançado)` do `/setup` executa os mesmos dois passos dentro do assistente:
-**Configurar Conexão** salva a compatibilidade de API, rótulo, URL e token de autenticação opcional após
+Configurar Conexão salva a compatibilidade de API, rótulo, URL e token de autenticação opcional após
 uma verificação de acessibilidade, e `Configurar Modelo de Texto` registra o modelo de texto exato e suas declarações de
 capacidade. O botão de modelo fica desabilitado até que uma conexão seja validada, e re-salvar a
 conexão limpa a declaração do modelo porque as declarações dependem da compatibilidade de API.
@@ -151,28 +151,28 @@ serviços. Nem todo recurso está disponível em todos os provedores.
 
 | Provedor | Streaming | Chamada de Ferramentas | Entrada de Imagem | Embeddings | Notas |
 |---|---|---|---|---|---|
-| **Google Gemini** | ✅ | ✅ | ✅ | ✅ | Modelos gratuitos disponíveis |
-| **OpenRouter** | ✅ | ✅ | ✅ | ✅ | Modelos gratuitos disponíveis |
-| **Anthropic (API)** | ✅ | ✅ | ✅ | – | Não é Claude Code |
-| **NovelAI** | ✅ | ✅ | – | – | Apenas GLM 4.6 pode usar ferramentas |
-| **NVIDIA NIM** | ✅ | ✅ | ✅ | ✅ | Modelos gratuitos disponíveis |
-| **DeepSeek** | ✅ | ✅ | – | – | – |
-| **Z.ai** | ✅ | ✅ | ✅ | – | Modelos gratuitos; ⚠️ ToS = uso somente para código/agente |
-| **Z.ai Coding** | ✅ | ✅ | – | – | Plano de assinatura |
-| **Google Vertex AI** | ✅ | ✅ | ✅ | ✅ | Inclui versão Express 'gratuita' |
-| **Codex CLI (via ChatMock)** | ✅ | ✅ | ✅ | – | [Configuração](/pt-BR/self-hosting/local-endpoints/setup-chatmock/) |
+| Google Gemini | ✅ | ✅ | ✅ | ✅ | Modelos gratuitos disponíveis |
+| OpenRouter | ✅ | ✅ | ✅ | ✅ | Modelos gratuitos disponíveis |
+| Anthropic (API) | ✅ | ✅ | ✅ | – | Não é Claude Code |
+| NovelAI | ✅ | ✅ | – | – | Apenas GLM 4.6 pode usar ferramentas |
+| NVIDIA NIM | ✅ | ✅ | ✅ | ✅ | Modelos gratuitos disponíveis |
+| DeepSeek | ✅ | ✅ | – | – | – |
+| Z.ai | ✅ | ✅ | ✅ | – | Modelos gratuitos; ⚠️ ToS = uso somente para código/agente |
+| Z.ai Coding | ✅ | ✅ | – | – | Plano de assinatura |
+| Google Vertex AI | ✅ | ✅ | ✅ | ✅ | Inclui versão Express 'gratuita' |
+| Codex CLI (via ChatMock) | ✅ | ✅ | ✅ | – | [Configuração](/pt-BR/self-hosting/local-endpoints/setup-chatmock/) |
 
 ### Geração de Imagem
 
 | Provedor | Texto-para-Imagem | Imagem-para-Imagem | Inpainting | Notas |
 |---|---|---|---|---|
-| **Google** | ✅ | ✅ | – | – |
-| **OpenRouter** | ✅ | ✅ | – | – |
-| **NovelAI** | ✅ | ✅ | ✅ | Pode combinar com outros provedores |
-| **NVIDIA** | ✅ | – | – | Somente texto-para-imagem; imagens de referência são ignoradas |
-| **Z.ai** | ✅ | – | – | – |
+| Google | ✅ | ✅ | – | – |
+| OpenRouter | ✅ | ✅ | – | – |
+| NovelAI | ✅ | ✅ | ✅ | Pode combinar com outros provedores |
+| NVIDIA | ✅ | – | – | Somente texto-para-imagem; imagens de referência são ignoradas |
+| Z.ai | ✅ | – | – | – |
 
-Esses são os **padrões** com os quais os modelos de imagem de um provedor começam, e o NovelAI roda por seu próprio
+Esses são os padrões com os quais os modelos de imagem de um provedor começam, e o NovelAI roda por seu próprio
 pipeline em vez desta tabela. Registrar um modelo de imagem através de `/providers` permite que você declare os modos
 próprios daquele modelo, que é como você habilita inpainting em um workflow ComfyUI ou em um modelo de provedor cuja API suporta
 edição com máscara. Um modelo que você nunca declara continua seguindo os padrões acima, então uma correção posterior neles
@@ -183,15 +183,15 @@ que você marca, e um modo que a API rejeita se torna uma geração falhada.
 
 | Provedor | Texto-para-Vídeo | Imagem-para-Vídeo | Notas |
 |---|---|---|---|
-| **Google** | ✅ | ✅ | Workflow de polling assíncrono |
-| **OpenRouter** | ✅ | ✅ | Workflow de polling assíncrono |
-| **Z.ai** | ✅ | ✅ | Workflow de polling assíncrono |
+| Google | ✅ | ✅ | Workflow de polling assíncrono |
+| OpenRouter | ✅ | ✅ | Workflow de polling assíncrono |
+| Z.ai | ✅ | ✅ | Workflow de polling assíncrono |
 
 ### Voz & Áudio
 
 | Provedor | Texto-para-Fala | Fala-para-Texto |
 |---|---|---|
-| **ElevenLabs** | ✅ | ✅ |
+| ElevenLabs | ✅ | ✅ |
 
 Motores de voz locais são cobertos em [Hospedagem Própria](/pt-BR/self-hosting/). Para os mecanismos integrados de pesquisa na
 web e leitura de URLs, veja [Ferramentas & Extensões](/pt-BR/features/capabilities/tools-and-extensions/#pesquisa-na-web--leitura-de-urls).

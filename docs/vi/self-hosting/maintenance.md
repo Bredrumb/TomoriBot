@@ -244,9 +244,9 @@ Cooldown lệnh là ngoại lệ của việc "cố định": các tên `COOLDOW
 
 Các máy chủ TTS cục bộ trong `servers/tts/` không còn giá trị dự phòng dùng chung, giới hạn theo từng engine và các cài đặt xác thực. Giá trị cũ trong `.env` hoặc shell của bạn sẽ bị bỏ qua, vì vậy hãy xem các dòng bên dưới có làm thay đổi hành vi, thay vì chỉ nhắc lại một giá trị mặc định.
 
-- **Cổng:** `TOMORI_TTS_PORT` đã bị bỏ vì một giá trị trong `.env` khiến mọi máy chủ được khởi chạy dùng chung một cổng. Thay vào đó, mỗi engine đọc biến riêng của mình: `CHATTERBOX_PORT` (8011), `QWEN3TTS_PORT` (8012, hoặc 8014 ở chế độ thiết kế giọng nói), `IRODORI_TTS_PORT` (8013), `FISH_S2_PORT` (8015), `VOXCPM2_PORT` (8016), `COSYVOICE3_PORT` (8017) và `MOSS_TTS_PORT` (8018).
-- **Xác thực:** các máy chủ không còn kiểm tra bearer token và không còn từ chối bind ngoài loopback. Nếu bạn đã đặt `FISH_S2_API_KEY`, `VOXCPM2_API_KEY`, `TOMORI_TTS_API_KEY` hoặc `COSYVOICE3_BEARER_TOKEN`, endpoint giờ chấp nhận yêu cầu mà không cần chúng. Hãy đọc [Truy cập mạng](/vi/self-hosting/local-endpoints/text-to-speech/#network-access) trước khi bind ra ngoài loopback.
-- **Bản ghim trong trình cài đặt:** commit runtime của Fish Speech cùng revision runtime và model của CosyVoice được cố định trong các trình cài đặt. Muốn cập nhật thì phải sửa bản ghim trong script.
+- Cổng: `TOMORI_TTS_PORT` đã bị bỏ vì một giá trị trong `.env` khiến mọi máy chủ được khởi chạy dùng chung một cổng. Thay vào đó, mỗi engine đọc biến riêng của mình: `CHATTERBOX_PORT` (8011), `QWEN3TTS_PORT` (8012, hoặc 8014 ở chế độ thiết kế giọng nói), `IRODORI_TTS_PORT` (8013), `FISH_S2_PORT` (8015), `VOXCPM2_PORT` (8016), `COSYVOICE3_PORT` (8017) và `MOSS_TTS_PORT` (8018).
+- Xác thực: các máy chủ không còn kiểm tra bearer token và không còn từ chối bind ngoài loopback. Nếu bạn đã đặt `FISH_S2_API_KEY`, `VOXCPM2_API_KEY`, `TOMORI_TTS_API_KEY` hoặc `COSYVOICE3_BEARER_TOKEN`, endpoint giờ chấp nhận yêu cầu mà không cần chúng. Hãy đọc [Truy cập mạng](/vi/self-hosting/local-endpoints/text-to-speech/#network-access) trước khi bind ra ngoài loopback.
+- Bản ghim trong trình cài đặt: commit runtime của Fish Speech cùng revision runtime và model của CosyVoice được cố định trong các trình cài đặt. Muốn cập nhật thì phải sửa bản ghim trong script.
 
 <details>
 <summary>Toàn bộ biến của máy chủ TTS cục bộ đã bị xóa</summary>
@@ -305,10 +305,10 @@ bun run restore-backup --from backups/backup_2024-01-15_14-30-45
 ```
 
 `bun run backup:personas` là một bản xuất hẹp hơn: chỉ bao gồm các preset persona và
-bộ nhớ máy chủ theo từng persona, trên tất cả các máy chủ. Bản này **bắt buộc** phải được nhập lại thủ công qua `/persona import`
-và **không thể** sử dụng với `restore-backup` (điều đó sẽ gây ra xung đột khóa chính primary key).
+bộ nhớ máy chủ theo từng persona, trên tất cả các máy chủ. Bản này bắt buộc phải được nhập lại thủ công qua `/persona import`
+và không thể sử dụng với `restore-backup` (điều đó sẽ gây ra xung đột khóa chính primary key).
 
-TomoriBot cũng thực hiện **sao lưu tự động khi khởi động** trong môi trường không phải production, và việc
+TomoriBot cũng thực hiện sao lưu tự động khi khởi động trong môi trường không phải production, và việc
 khôi phục hoàn chỉnh đòi hỏi tiện ích mở rộng `pgvector` phải có sẵn trên cơ sở dữ liệu đích. Cả hai điều này
 đều được trình bày chi tiết trong [Di chuyển an toàn](/vi/self-hosting/safe-migration/), cùng với quy trình sử dụng `pg_dump` /
 `pg_restore` thủ công nếu bạn muốn thao tác trực tiếp với các công cụ.

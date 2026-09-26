@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-El comportamiento de TomoriBot, **lo que puede hacer y cómo genera sus respuestas**, se controla desde
+El comportamiento de TomoriBot, lo que puede hacer y cómo genera sus respuestas, se controla desde
 `/config` > Permisos y `/config`, además de la personalidad ([Múltiples personas](/es-419/features/chatting-personality/multiple-personas/))
 y el conocimiento ([Memoria](/es-419/features/knowledge/memory/)). Esta página reúne los controles más importantes.
 Todos los comandos están en la [Referencia de comandos](/es-419/features/command-reference/).
@@ -38,9 +38,9 @@ Cuando hay un [preajuste de SillyTavern](/es-419/features/integrations/sillytave
 ## Salida sin censura
 <!-- anchor: uncensored-output -->
 
-TomoriBot **no tiene un filtro de contenido propio**. No es un sistema de moderación ni añade barreras de
+TomoriBot no tiene un filtro de contenido propio. No es un sistema de moderación ni añade barreras de
 seguridad sobre el modelo. Lo que devuelve el proveedor subyacente es lo que dice. Por eso `/nsfw jailbreaks`
-no "desbloquea" nada dentro de TomoriBot. Solo sirve para sortear filtros del **proveedor** más estrictos de lo que quieres.
+no "desbloquea" nada dentro de TomoriBot. Solo sirve para sortear filtros del proveedor más estrictos de lo que quieres.
 
 Activa tres técnicas independientes, todas desactivadas por defecto:
 

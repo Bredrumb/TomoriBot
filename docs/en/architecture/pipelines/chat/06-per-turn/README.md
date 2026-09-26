@@ -5,7 +5,7 @@ sidebar:
   groupLabel: "06: Per-Turn"
 ---
 
-This folder documents the **body of the loop** in
+This folder documents the body of the loop in
 [`tomoriChat.ts`](../README): the four stages that execute once per
 responding persona inside `runWithChannelLock`.
 

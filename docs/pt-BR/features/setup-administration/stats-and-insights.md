@@ -19,12 +19,12 @@ até a mensagem ser removida, e outro usuário não pode operar os controles.
 - `/stats persona`: uso de uma persona neste servidor.
 - `/stats server`: uso em todo o servidor.
 
-A maioria suporta uma janela de **período de tempo**, e estatísticas pessoais podem ser limitadas a este servidor ou
+A maioria suporta uma janela de período de tempo, e estatísticas pessoais podem ser limitadas a este servidor ou
 a todos os servidores.
 
 :::note
-**Contagem de tokens** é o uso relatado pelo próprio provedor quando disponível (uma estimativa
-baseada em caracteres é usada apenas para provedores que não relatam nenhuma). **Custo** precifica esses tokens
+Contagem de tokens é o uso relatado pelo próprio provedor quando disponível (uma estimativa
+baseada em caracteres é usada apenas para provedores que não relatam nenhuma). Custo precifica esses tokens
 pelas taxas de tabela do catálogo de modelos, então pode diferir da sua fatura real (cache de prompt, descontos,
 cotas de nível gratuito, etc.).
 :::

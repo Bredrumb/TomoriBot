@@ -6,7 +6,7 @@ sidebar:
 
 TomoriBot le da a los administradores del servidor control sobre cómo se comporta en tu
 servidor: quién puede usarla, dónde y cuánto cuesta, a través del panel `/config` y sus
-comandos relacionados. La mayoría requiere el permiso **Administrar servidor**. Esta página
+comandos relacionados. La mayoría requiere el permiso Administrar servidor. Esta página
 cubre lo más destacado; cada comando está en la
 [Referencia de comandos](/es-419/features/command-reference/).
 
@@ -26,15 +26,15 @@ servidor se restablecen en un intervalo de días configurable.
 ## BYOK de usuario (trae tu propia clave)
 <!-- anchor: user-byok-bring-your-own-key -->
 
-`/moderation` **(Acceso de miembros)** lleva esto como una opción de dos estados. **Permitir
-modelos del servidor** es el predeterminado; **Requerir proveedores personales** hace que cada
-miembro traiga su **propio** proveedor personal para sus activaciones: el servidor no paga nada
+`/moderation` (Acceso de miembros) lleva esto como una opción de dos estados. **Permitir
+modelos del servidor es el predeterminado; Requerir proveedores personales** hace que cada
+miembro traiga su propio proveedor personal para sus activaciones: el servidor no paga nada
 por los mensajes iniciados por el usuario. Las activaciones iniciadas por el servidor siguen
 usando el proveedor del servidor. Este es el control de costo más fuerte: traslada por completo
 el gasto de API a los miembros. Los miembros configuran el suyo en
 [Personalización → Tus propios proveedores](/es-419/features/knowledge/personalization/#your-own-providers).
 
-También puedes arrancar un servidor sin **ningún** proveedor de texto del lado del servidor
+También puedes arrancar un servidor sin ningún proveedor de texto del lado del servidor
 eligiendo `BYOK de usuario` durante `/setup`. Se ofrece en servidores en lugar de en mensajes
 directos, y pide confirmación antes de completar el paso de proveedor, porque el espacio de
 trabajo se queda entonces sin proveedor de respaldo.

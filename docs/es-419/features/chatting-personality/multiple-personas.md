@@ -14,7 +14,7 @@ sidebar:
   order: 2
 ---
 
-La personalidad de TomoriBot vive en una **persona**: su nombre, avatar, rasgos, estilo al hablar y
+La personalidad de TomoriBot vive en una persona: su nombre, avatar, rasgos, estilo al hablar y
 comportamiento. Puedes ejecutar varias personas a la vez, cada una con su propio personaje, activadores
 y avatar de webhook. Esta página explica *cómo se comporta*. Para saber *qué conoce* (datos y memorias),
 consulta [Memoria](/es-419/features/knowledge/memory/).
@@ -24,7 +24,7 @@ consulta [Memoria](/es-419/features/knowledge/memory/).
 - `/persona create`: crea una personalidad personalizada desde cero.
 - `/persona generate`: haz que la IA genere una personalidad a partir de una descripción y una imagen. Requiere un proveedor compatible con salida estructurada. También puedes cargar aquí un preajuste existente de TomoriBot o una tarjeta de SillyTavern para transformar un personaje ([Compatibilidad con SillyTavern](/es-419/features/integrations/sillytavern-support/)).
 - `/persona default`: cambia a una de las personalidades predeterminadas integradas como base.
-- `/persona export` / `/persona import`: comparte o respalda una persona como archivo. Importar permite traer una persona como **alter** con sus propios activadores y avatar de webhook.
+- `/persona export` / `/persona import`: comparte o respalda una persona como archivo. Importar permite traer una persona como alter con sus propios activadores y avatar de webhook.
 - `/persona remove`: elimina una persona alter.
 
 Un buen flujo inicial es elegir una predeterminada o generar una, y después perfeccionarla con los atributos y diálogos de ejemplo de abajo.
@@ -33,9 +33,9 @@ Un buen flujo inicial es elegir una predeterminada o generar una, y después per
 
 Las personas alter permiten que varios personajes coexistan en un servidor:
 
-- Cada alter tiene su propia personalidad, palabras de activación y **avatar de webhook**, así que distintos personajes aparecen con nombres e imágenes diferentes en el mismo canal.
+- Cada alter tiene su propia personalidad, palabras de activación y avatar de webhook, así que distintos personajes aparecen con nombres e imágenes diferentes en el mismo canal.
 - Varias personas alter pueden responder a un solo mensaje, hasta el límite de `/config` > Motor > Activador.
-- **Responder a un mensaje de webhook** continúa la conversación como esa persona.
+- Responder a un mensaje de webhook continúa la conversación como esa persona.
 - Añade alters mediante `/persona import` (opción alter) y adminístralas con `/persona` y `/persona remove`.
 
 Esto hace posibles el roleplay grupal y los servidores con varios personajes. Para conocer los detalles de ejecución sobre cómo los activadores dirigen a las personas y cómo funcionan las identidades de webhook, consulta la referencia de arquitectura sobre [comportamiento de múltiples personas](/en/architecture/subsystems/multi-persona/).
@@ -91,14 +91,14 @@ uno, inicia una línea de respuesta con `PersonaName (label):`. Esa línea se en
 correspondiente. Si ningún sprite encaja, responde normalmente.
 
 Administra los sprites de una persona en `/config` > Persona > Sprites (añadir y eliminar requiere el permiso
-**Administrar servidor**):
+Administrar servidor):
 
-- `/config` > Persona > Sprites: añade o reemplaza un sprite. Elige la persona, dale una **etiqueta**, carga la **imagen** (PNG, JPG o GIF) y, opcionalmente, añade **instrucciones de uso** que indiquen cuándo utilizarlo. Reutilizar una etiqueta reemplaza ese sprite. Cada persona tiene un máximo de sprites.
+- `/config` > Persona > Sprites: añade o reemplaza un sprite. Elige la persona, dale una etiqueta, carga la imagen (PNG, JPG o GIF) y, opcionalmente, añade instrucciones de uso que indiquen cuándo utilizarlo. Reutilizar una etiqueta reemplaza ese sprite. Cada persona tiene un máximo de sprites.
 - `/config` > Persona > Sprites: cambia el nombre, imagen, instrucciones o interruptor de identidad de un sprite existente.
 - `/config` > Persona > Sprites: elimina sprites de una persona.
 - Exportar e importar en `/config` > Persona > Sprites: respalda o comparte todo el conjunto de sprites de una persona como archivo.
 
-El interruptor de **identidad** decora el nombre del mensaje como `Label (Persona)` en Discord, lo que resulta especialmente útil para [personas alter](#personas-alter) que hablan como personajes distintos.
+El interruptor de identidad decora el nombre del mensaje como `Label (Persona)` en Discord, lo que resulta especialmente útil para [personas alter](#personas-alter) que hablan como personajes distintos.
 
 Cambiar el avatar de una persona predeterminada elimina los sprites que traía porque muestran el rostro del
 personaje original. Los sprites que añadiste permanecen. Ejecuta `/persona default` para recuperar los sprites predeterminados.

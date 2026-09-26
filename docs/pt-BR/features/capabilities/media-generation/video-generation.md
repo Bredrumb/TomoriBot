@@ -14,13 +14,13 @@ Use `/generate video`, ou simplesmente peça a ela.
   referenciada se torna o quadro inicial).
 - **Imagem-para-vídeo em loop**: quando solicitado pelo chat, modelos compatíveis podem reutilizar a
   imagem inicial como o quadro final.
-- **Proporções de aspecto personalizáveis**.
+- Proporções de aspecto personalizáveis.
 
 Imagem-para-vídeo e loop dependem das capacidades de primeiro/último quadro do modelo selecionado. A TomoriBot
 verifica o catálogo atual de modelos de vídeo do OpenRouter antes de enviar um trabalho pago e pede para você remover
 a imagem, desativar o loop ou selecionar um modelo compatível quando necessário.
 
-A geração de vídeo usa um **fluxo de trabalho assíncrono com polling**: a solicitação é enviada e então
+A geração de vídeo usa um fluxo de trabalho assíncrono com polling: a solicitação é enviada e então
 a TomoriBot consulta o provedor até que o clipe finalizado esteja pronto, e o publica quando concluído. Clipes
 grandes podem demorar um pouco.
 
@@ -32,10 +32,10 @@ grandes podem demorar um pouco.
 
 ## Suporte de Provedores
 
-A geração nativa de vídeo está disponível no **Google, OpenRouter** e **Z.ai**. Veja a matriz completa
+A geração nativa de vídeo está disponível no Google, OpenRouter e Z.ai. Veja a matriz completa
 em [Provedores & Modelos](/pt-BR/features/setup-administration/providers-and-models/#supported-providers).
 
-Para geração de vídeo **local** via ComfyUI (por exemplo, workflows WAN de imagem-para-vídeo), veja
+Para geração de vídeo local via ComfyUI (por exemplo, workflows WAN de imagem-para-vídeo), veja
 [Configuração: ComfyUI](/pt-BR/self-hosting/local-endpoints/setup-comfyui/).
 
 Para a arquitetura interna de geração e polling, veja a referência sobre

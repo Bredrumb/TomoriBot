@@ -4,7 +4,7 @@ title: "02.5: Server Stickers"
 
 List of the server's custom stickers with metadata, framed for tool use.
 
-**File:** `src/utils/text/context/serverAssets.ts:128-221`
+- **File**: `src/utils/text/context/serverAssets.ts:128-221`
 
 ## Mission
 

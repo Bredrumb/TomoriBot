@@ -45,7 +45,7 @@ Labels are analogous to Action Rows for Text Inputs, but designed specifically f
 
 ## Radio Group
 
-A Radio Group allows the user to select **exactly one** option from a defined list. Useful for mutually exclusive choices like provider selection, mode switches, or preference settings.
+A Radio Group allows the user to select exactly one option from a defined list. Useful for mutually exclusive choices like provider selection, mode switches, or preference settings.
 
 ### Radio Group Structure
 
@@ -132,7 +132,7 @@ A Radio Group allows the user to select **exactly one** option from a defined li
 
 ## Checkbox Group
 
-A Checkbox Group allows the user to select **one or many** options from a list. Ideal for multi-select scenarios like capability toggles, feature flags, or day-of-week selection.
+A Checkbox Group allows the user to select one or many options from a list. Ideal for multi-select scenarios like capability toggles, feature flags, or day-of-week selection.
 
 ### Checkbox Group Structure
 
@@ -236,7 +236,7 @@ A Checkbox is a single toggle for simple yes/no questions. Unlike Checkbox Group
 | custom_id | string  | Developer-defined identifier for the input; 1-100 characters |
 | default?  | boolean | Whether the checkbox is selected by default                  |
 
-> **Note:** Checkboxes cannot be set as `required`. To achieve required single-option behavior, use a Checkbox Group with one option and `required: true`.
+> Note: Checkboxes cannot be set as `required`. To achieve required single-option behavior, use a Checkbox Group with one option and `required: true`.
 
 ### Checkbox Interaction Response
 
@@ -477,14 +477,14 @@ Use this decision guide when choosing between modal input types.
 | **String Select** | Large option sets (11+), dynamic/growing lists, options needing emoji or rich descriptions       | Small fixed set of mutually exclusive options (use Radio Group instead)                        |
 | **Radio Group**  | Small fixed set of mutually exclusive options (2-10), unlikely to grow beyond 10                  | Option list is dynamic or may exceed 10 items (use String Select instead)                     |
 | **Checkbox Group** | Multiple items can be selected from a list (1-10 options), OR a single required yes/no toggle  | Mutually exclusive choice (use Radio Group)                                                   |
-| **Checkbox**     | Single **optional** yes/no or on/off toggle question                                             | The answer is **required** (use Checkbox Group with 1 option instead)                         |
+| **Checkbox**     | Single optional yes/no or on/off toggle question                                                 | The answer is required (use Checkbox Group with 1 option instead)                             |
 
 ### Boolean Input Pattern
 
 Many TomoriBot modals include yes/no, enable/disable, or true/false string selects. These should be migrated to:
 
-- **Optional boolean** → **Checkbox**: Unchecked submits as `false`, checked as `true`. The user can leave it unchecked and still submit.
-- **Required boolean** → **Checkbox Group with 1 option**: Set `required: true` and provide a single option. This forces the user to explicitly check it before submitting; acting as a required confirmation or acknowledgment.
+- **Optional boolean** (Checkbox): unchecked submits as `false`, checked as `true`. The user can leave it unchecked and still submit.
+- **Required boolean** (Checkbox Group with 1 option): set `required: true` and provide a single option. This forces the user to explicitly check it before submitting; acting as a required confirmation or acknowledgment.
 
 ```json
 // Required boolean workaround: Checkbox Group with 1 option
@@ -524,7 +524,7 @@ Is the input free-form text?
 - **Checkbox Group**: 1-10 options. Supports `min_values`/`max_values` for range control. Also serves as the workaround for required single-boolean inputs.
 - **Checkbox**: Cannot be `required`. Use a Checkbox Group with 1 option if required behavior is needed.
 - **String Select**: Up to 25 options natively. Flows on the anchor message workflow must use `selection.openModal(...)` / `openAnchorModal(...)`, whose `>25` bridge keeps the range selector on the anchor Components V2 message. Flows still on `promptWithPaginatedModal()` may pass `selectorStyle: "componentsV2"` to render that same `>25` selector (`1-25`/`26-50` + Previous/Cancel/Next), or omit it for the legacy numbered page-button embed (default). Both selectors share `buildRangeSelectorPayload`. Supports emoji, descriptions, and placeholder text.
-- **All new components** must be wrapped in a **Label** (type 18), not an Action Row.
+- **All new components** must be wrapped in a `Label` (type 18), not an Action Row.
 
 ### Anchor workflow modal bridge
 
@@ -561,7 +561,7 @@ Range navigation, cancellation, and timeout replace the same anchor message. The
 range button opens the sliced modal, and a submitted phase reports `optionOffset`; add it to
 page-local indexes when the option values themselves are not stable IDs.
 
-The bridge slices **exactly one** select component and treats every entry as a selectable
+The bridge slices exactly one select component and treats every entry as a selectable
 option. A modal that breaks either assumption (several selects sharing one option list, or
 a reserved entry such as an explicit "None" that must appear on every page) cannot use it.
 Those pick a range up front with `acquireModalOptionRange(...)`, passing a `pageSize` below
@@ -587,8 +587,8 @@ When a modal is editing an existing list of configured items, prefer Checkbox Gr
 - Use `min_values: 0` and `required: false` so users can submit with every item unchecked.
 - Chunk one category across multiple groups of 10 options, or split different entity types into separate groups.
 - Give the first group a domain title such as `Whitelisted Personas` and a short instruction such as
-  "Uncheck box then submit to remove whitelist." Name later groups **Continuation (1)**,
-  **Continuation (2)**, and so on, without repeating the description.
+  "Uncheck box then submit to remove whitelist." Name later groups `Continuation (1)`,
+  `Continuation (2)`, and so on, without repeating the description.
 - Respect Discord's modal ceiling: 5 checkbox groups, 10 options each, 50 total entries.
 - If the list exceeds 50, keep the originating control panel visible and show a temporary yellow selection receipt
   above it with bounded range buttons such as `1-50` and `51-100`. A range button opens a modal containing only
@@ -659,16 +659,16 @@ These modals currently use a 2-option String Select (yes/no, true/false, enable/
 
 | Command                    | File                            | Custom ID              | Current Options          | Required | Migration Target                               |
 | -------------------------- | ------------------------------- | ---------------------- | ------------------------ | -------- | ---------------------------------------------- |
-| `/config` > Engine > Trigger| `config/randomtrigger/add.ts`  | `respond_to_self`      | Yes / No                 | Yes      | **Checkbox Group** (1 option, required)        |
-| `/compact`            | `compact.ts`                   | `refresh_context`      | Yes / No                 | Yes      | **Checkbox Group** (1 option, required)        |
-| `/compact`            | `compact.ts`                   | `analyze_images`       | Yes / No                 | Yes      | **Checkbox Group** (1 option, required)        |
-| `/config provider switch`  | `config/provider/switch.ts`    | `save_current_select`  | Yes / No (default: Yes)  | No       | **Checkbox** (default: true, rarely unchecked) |
-| `/respond`                 | `respond.ts`                   | `use_reasoning`        | Yes / No                 | No       | **Checkbox** (optional toggle)                 |
-| `/persona export`          | `persona/export.ts`            | `export_json_select`   | False / True             | No       | **Checkbox** (optional toggle)                 |
+| `/config` > Engine > Trigger| `config/randomtrigger/add.ts`  | `respond_to_self`      | Yes / No                 | Yes      | Checkbox Group (1 option, required)            |
+| `/compact`            | `compact.ts`                   | `refresh_context`      | Yes / No                 | Yes      | Checkbox Group (1 option, required)            |
+| `/compact`            | `compact.ts`                   | `analyze_images`       | Yes / No                 | Yes      | Checkbox Group (1 option, required)            |
+| `/config provider switch`  | `config/provider/switch.ts`    | `save_current_select`  | Yes / No (default: Yes)  | No       | Checkbox (default: true, rarely unchecked)     |
+| `/respond`                 | `respond.ts`                   | `use_reasoning`        | Yes / No                 | No       | Checkbox (optional toggle)                     |
+| `/persona export`          | `persona/export.ts`            | `export_json_select`   | False / True             | No       | Checkbox (optional toggle)                     |
 
-> **Note on `/config provider switch`:** This modal has _two_ migration candidates: the save-current-config toggle becomes a **Checkbox** (default checked, since users almost always want to save). The provider select itself is dynamic (loaded from DB via `loadUniqueProviders()`), so it stays as a String Select.
+> Note on `/config provider switch`: This modal has two migration candidates: the save-current-config toggle becomes a Checkbox (default checked, since users almost always want to save). The provider select itself is dynamic (loaded from DB via `loadUniqueProviders()`), so it stays as a String Select.
 
-> **Note on `/compact`:** This modal has _three_ migration candidates: `summary_type` becomes a Radio Group, while `refresh_context` and `analyze_images` both become required Checkbox Groups.
+> Note on `/compact`: This modal has three migration candidates: `summary_type` becomes a Radio Group, while `refresh_context` and `analyze_images` both become required Checkbox Groups.
 
 ### Strong Candidates: Checkbox Group Bulk Management
 
@@ -776,7 +776,7 @@ This is the pattern used by the attribute and sample-dialogue edit flows on `/co
 
 For persona-scoped flows that already have a persistent ephemeral picker message, prefer replacing that same message with the confirmation embed and later success state instead of spawning a second ephemeral thread.
 
-Do **not** use `promptWithConfirmation()` for this case.
+Do not use `promptWithConfirmation()` for this case.
 It eagerly `deferUpdate()`s the button click in its collector filter, which consumes the interaction and prevents the next `showModal()` call.
 
 Use `promptWithUnacknowledgedConfirmation()` instead so the confirm button interaction stays available for the edit modal.

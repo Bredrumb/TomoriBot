@@ -4,7 +4,7 @@ title: "CosyVoice 3"
 
 CosyVoice 3 es la generación actual del proyecto multilingüe de texto a voz CosyVoice de Alibaba/QwenAudio. TomoriBot envuelve el tiempo de ejecución oficial en `servers/tts/cosyvoice3/` y expone la misma interfaz `POST /synthesize` utilizada por los otros endpoints de voz locales.
 
-TomoriBot usa por defecto el punto de control oficial **`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`**. Es el lanzamiento actual de CosyVoice 3 recomendado por los desarrolladores, usa el modelo normal sin cuantificar y es lo suficientemente pequeño como para ejecutarse cómodamente en una GPU NVIDIA de 16 GB manteniendo intacto el diseño de baja latencia de CosyVoice.
+TomoriBot usa por defecto el punto de control oficial `FunAudioLLM/Fun-CosyVoice3-0.5B-2512`. Es el lanzamiento actual de CosyVoice 3 recomendado por los desarrolladores, usa el modelo normal sin cuantificar y es lo suficientemente pequeño como para ejecutarse cómodamente en una GPU NVIDIA de 16 GB manteniendo intacto el diseño de baja latencia de CosyVoice.
 
 ## Qué admite
 
@@ -65,8 +65,8 @@ reduce la latencia de respuesta de TomoriBot hasta que exista un transporte de v
 
 Punto de partida recomendado para TomoriBot:
 
-- GPU NVIDIA con **16 GB VRAM**
-- Python **3.10**
+- GPU NVIDIA con 16 GB VRAM
+- Python 3.10
 - controlador NVIDIA reciente compatible con CUDA 12
 - `git`
 - `ffmpeg` para la normalización de muestras de voz de TomoriBot
@@ -113,7 +113,7 @@ El Windows nativo se proporciona como un esfuerzo de buena fe:
 .\servers\tts\cosyvoice3\.venv\Scripts\python.exe servers\tts\cosyvoice3\server.py
 ```
 
-Para uso de GPU NVIDIA, **se recomienda WSL2**. Los requisitos upstream actuales instalan GPU ONNX Runtime en Linux pero CPU ONNX Runtime en Windows, por lo que WSL2 se adapta más a la configuración que el proyecto CosyVoice optimiza y prueba para baja latencia.
+Para uso de GPU NVIDIA, se recomienda WSL2. Los requisitos upstream actuales instalan GPU ONNX Runtime en Linux pero CPU ONNX Runtime en Windows, por lo que WSL2 se adapta más a la configuración que el proyecto CosyVoice optimiza y prueba para baja latencia.
 
 ## Registro en TomoriBot
 
@@ -191,6 +191,6 @@ CosyVoice 3 también admite rutas opcionales de vLLM y TensorRT. Upstream docume
 
 ## Licencia
 
-El repositorio de código actual de CosyVoice tiene licencia bajo la **Apache License 2.0**, y el repositorio de Hugging Face `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` también está marcado como **Apache-2.0**.
+El repositorio de código actual de CosyVoice tiene licencia bajo la Apache License 2.0, y el repositorio de Hugging Face `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` también está marcado como Apache-2.0.
 
 La tarjeta del modelo upstream contiene además un descargo de responsabilidad que dice que el contenido mostrado es para demostración académica y que algunos ejemplos pueden provenir de Internet. Una discusión upstream abierta pide una aclaración explícita sobre cómo se relaciona ese descargo de responsabilidad con el uso comercial de los pesos. TomoriBot no redistribuye el modelo. Los autoalojadores deben revisar la licencia actual upstream y los términos de la tarjeta del modelo para su propia implementación, especialmente antes del uso comercial.

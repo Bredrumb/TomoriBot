@@ -13,16 +13,16 @@ sidebar:
   order: 2
 ---
 
-TomoriBotは、[SillyTavern](https://github.com/SillyTavern/SillyTavern)からお持ちかもしれない2つのものをインポートできます。**プロンプトマネージャーのプリセット**（プロンプトのレイアウト方法）と、**キャラクターカード**（キャラクター自体）です。これはSTユーザー向けのニッチな機能です。SillyTavernを使用したことがない場合は、このページをスキップして構いません。
+TomoriBotは、[SillyTavern](https://github.com/SillyTavern/SillyTavern)からお持ちかもしれない2つのものをインポートできます。プロンプトマネージャーのプリセット（プロンプトのレイアウト方法）と、キャラクターカード（キャラクター自体）です。これはSTユーザー向けのニッチな機能です。SillyTavernを使用したことがない場合は、このページをスキップして構いません。
 
 ## キャラクターカードのインポート
 
 既存のSillyTavernキャラクターを `/persona import` でDiscordに直接持ち込むことができます。以下を受け付けます：
 
-- `chara` / `char` メタデータが埋め込まれた **PNGカード**
-- **v2スタイルのJSON** カード（ルートレベルに `name`、`description`、`first_mes` など）
-- **v3 JSON** カード（ネストされた `data` オブジェクトを持つ `spec: "chara_card_v3"`）
-- **`.charx` アーカイブ**（キャラクターカード V3、カードサイトがデフォルトで配布する形式）
+- `chara` / `char` メタデータが埋め込まれた PNGカード
+- v2スタイルのJSON カード（ルートレベルに `name`、`description`、`first_mes` など）
+- v3 JSON カード（ネストされた `data` オブジェクトを持つ `spec: "chara_card_v3"`）
+- `.charx` アーカイブ（キャラクターカード V3、カードサイトがデフォルトで配布する形式）
 
 `.charx` ファイルは、`card.json` にキャラクター情報を保持するzipファイルです。TomoriBotはそのカードを読み取り、アーカイブ内の他のすべて（同梱されているアイコン、感情スプライト、音声、動画など）を無視します（インポートの返信でもその旨が通知されます）。`/server avatar` でアバターを設定し、`/config` > ペルソナ > スプライト でスプライトを追加してください。
 
@@ -33,7 +33,7 @@ TomoriBotは、[SillyTavern](https://github.com/SillyTavern/SillyTavern)から�
 ## プロンプトプリセット
 <!-- anchor: prompt-presets -->
 
-SillyTavernのプロンプトマネージャーのプリセットは、プロンプトの**レイアウト**を制御します。プリセットをインポートしたり、有効なノードを調べたり、プリセットを切り替えたり、通常のレイアウトに戻したりするには、`/config` > プラグイン > SillyTavernプリセット を使用します。
+SillyTavernのプロンプトマネージャーのプリセットは、プロンプトのレイアウトを制御します。プリセットをインポートしたり、有効なノードを調べたり、プリセットを切り替えたり、通常のレイアウトに戻したりするには、`/config` > プラグイン > SillyTavernプリセット を使用します。
 
 ### プリセットが制御するもの
 
@@ -72,4 +72,4 @@ SillyTavernのプロンプトマネージャーのプリセットは、プロン
 - 履歴後（Post-history）/ 深度挿入（depth-injection）は、独立したメッセージになるのではなく、既存のチャット履歴エントリにマージされます。同じ深度の複数のノードはバッチ処理されます。
 - 正規表現による後処理、プリセット側のtemperature/top-p/モデルの上書き、および階層化されたプリセットはサポートされていません。従来のテキスト補完プリセットは、ST専用ブロック（シナリオ、アンカー、ストップ文字列など）を破棄するベストエフォートなパスを通じてインポートされます。
 
-`/help` の **連携** から `SillyTavernプリセット` を選択すると、Discord内のリファレンスを確認できます。インポートエンジンの内部については、[プリセットシステムのアーキテクチャ](/en/architecture/integrations/sillytavern/preset-system/)を参照してください。
+`/help` の 連携 から `SillyTavernプリセット` を選択すると、Discord内のリファレンスを確認できます。インポートエンジンの内部については、[プリセットシステムのアーキテクチャ](/en/architecture/integrations/sillytavern/preset-system/)を参照してください。

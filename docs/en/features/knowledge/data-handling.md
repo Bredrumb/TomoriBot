@@ -9,27 +9,29 @@ everything she stores, and this page spells out exactly what that is. For the le
 see `/legal privacy-policy` and `/legal terms-of-service`.
 
 :::note
-This page covers the in-Discord, per-user controls. **Self-hosting your own instance?**
+This page covers the in-Discord, per-user controls. For self-hosted instances:
 Whole-database backups and restores are a host-side operation; see
 [Maintenance & Backups](/self-hosting/maintenance/).
 :::
 
 ## What She Stores
 
-**Stored:**
+### Stored data
 
 - Server and personal memories
 - Her settings and persona data
 - Server configuration
 - Encrypted API keys
 
-**Not stored:**
+### Not stored
 
 - Your Discord messages
 - Chat history
 
-**Sent to your AI provider:** whenever she's triggered, she fetches the **latest messages**
-in the channel plus any **relevant memories** as context for the model. She does not monitor
+### Sent to your AI provider
+
+Whenever she is triggered, she fetches the latest messages
+in the channel plus any relevant memories as context for the model. She does not monitor
 or read messages outside of those triggers.
 
 :::note
@@ -51,9 +53,9 @@ Everything exportable is sent to your DMs as a JSON file:
 
 Attach a previously exported file to restore it:
 
-- `/import config`: server configuration; requires **Manage Server**. Choose which detected sections to apply.
+- `/import config`: server configuration; requires `Manage Server`. Choose which detected sections to apply.
 - `/import personal config`: your personal settings. Choose which detected sections to apply.
-- `/import memories`: server memories; requires **Manage Server**. Merge or replace, and map each source persona if the file has more than one.
+- `/import memories`: server memories; requires `Manage Server`. Merge or replace, and map each source persona if the file has more than one.
 - `/import personal memories`: your personal memories. Merge or replace, and map each source persona if the file has more than one.
 - `/persona import`: restore a persona. It also accepts PNG and JSON SillyTavern cards and
   `.charx` Character Card V3 archives, which import the character text only (see
@@ -61,7 +63,7 @@ Attach a previously exported file to restore it:
 
 ## Delete Your Data
 
-These permanently remove or reset data - **they cannot be undone**:
+These permanently remove or reset data; these actions cannot be undone:
 
 - `/personal memories`, `/memories`
 - `/reset config` - resets server configuration across the 29 configuration tables to database defaults.

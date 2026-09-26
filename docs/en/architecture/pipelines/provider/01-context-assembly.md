@@ -4,8 +4,8 @@ title: "01: Context Assembly"
 
 Translates the provider-agnostic `StructuredContextItem[]` into a provider-native API request and opens the HTTP streaming connection.
 
-**Contract:** `BaseStreamAdapter.startStream`: `src/types/stream/interfaces.ts:245`
-**Canonical implementation:** `GoogleStreamAdapter.startStream`: `src/providers/google/googleStreamAdapter.ts:151-291`
+- **Contract**: `BaseStreamAdapter.startStream`: `src/types/stream/interfaces.ts:245`
+- **Canonical implementation**: `GoogleStreamAdapter.startStream`: `src/providers/google/googleStreamAdapter.ts:151-291`
 
 ## Mission
 
@@ -89,7 +89,7 @@ After context assembly completes (before the generator loop begins):
 
 | Surface | Plugin-relevance |
 |---|---|
-| `BaseStreamAdapter.startStream()` abstract method | **A plugin adding a new provider implements this method.** The contract is defined in `src/types/stream/interfaces.ts:182`. The full implementation must yield `RawStreamChunk` objects (stage 02) and conform to the generator signature. |
+| `BaseStreamAdapter.startStream()` abstract method | A plugin adding a new provider implements this method. The contract is defined in `src/types/stream/interfaces.ts:182`. The full implementation must yield `RawStreamChunk` objects (stage 02) and conform to the generator signature. |
 | Dynamic tool assembly | `src/tools/assembly.ts` is the standard seam for tools whose LLM-visible schema depends on active backend capability. A built-in tool implements `assembleForContext(context)` and returns a per-turn variant or `null`; provider adapters should keep consuming the assembled `Tool[]`. |
 | `StructuredContextItem` routing (system vs. dialogue) | Each adapter decides which `ContextItemTag` values become system instructions vs. dialogue turns. Google's `SYSTEM_INSTRUCTION_TAGS` set at `src/providers/google/googleStreamAdapter.ts:94` is the canonical example. A plugin changing context routing would subclass the relevant adapter or provide its own. → plugin plan candidate |
 | `buildProviderStopStrings()` | `src/providers/utils/stopStrings.ts`. Internal: stop-string merging is a provider-operational concern; the `llm_stop_strings` DB column is the configuration surface. |

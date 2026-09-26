@@ -4,7 +4,7 @@ title: "05: Turn Planning"
 
 Persona selection + per-turn state assembly.
 
-**File:** `src/utils/chat/turnPlanner.ts:49-288`
+- **File**: `src/utils/chat/turnPlanner.ts:49-288`
 
 ## Mission
 
@@ -104,7 +104,7 @@ After this stage runs:
 
 ## Extension points
 
-This stage is **the densest decision surface in the chat pipeline**, and most
+This stage is the densest decision surface in the chat pipeline, and most
 of its decisions are delegated to named helpers. Each helper is the
 plugin-relevant seam:
 
@@ -120,7 +120,7 @@ plugin-relevant seam:
 | Text-quota preflight | `checkTextQuotaForAdmission` (`admissionGuards.ts`) + `textQuotaManager` | Internal: coupled to quota table schema |
 | Cascade trigger limit | `getSelfReplyChainState` (`selfReplyState.ts`) | Internal: coupled to self-reply chain semantics |
 
-**The stage itself is internal.** A future plugin extension for "modify the
+- **The stage itself is internal**: a future plugin extension for "modify the
 turn plan" would likely take the form of a post-plan hook
 (`afterPlanTurns(plan) → plan'`) that adds or filters turns *after* the fixed
 gating completes, not a wholesale override.

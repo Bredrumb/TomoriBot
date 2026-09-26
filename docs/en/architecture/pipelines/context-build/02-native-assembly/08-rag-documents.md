@@ -4,7 +4,7 @@ title: "02.8: RAG Documents"
 
 pgvector-backed long-term retrieval over server-uploaded documents.
 
-**File:** `src/utils/text/context/rag.ts:36-96`
+- **File**: `src/utils/text/context/rag.ts:36-96`
 
 ## Mission
 

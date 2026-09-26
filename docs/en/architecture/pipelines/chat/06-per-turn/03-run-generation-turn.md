@@ -4,13 +4,13 @@ title: "06.3: Generation Turn"
 
 Drive the provider call with model fallback and API-key rotation.
 
-**File:** `src/utils/chat/generationTurn.ts:77-283` (`runGenerationTurn` and the attempt loop)
+- **File**: `src/utils/chat/generationTurn.ts:77-283` (`runGenerationTurn` and the attempt loop)
 
 ## Mission
 
 Run the LLM call for this turn, with two layers of resilience: a **model
 fallback chain** (primary model + any configured fallback entries) and, per
-attempt, an **API-key rotation loop** (cycles through saved rotation keys
+attempt, an API-key rotation loop (cycles through saved rotation keys
 before giving up). Each attempt delegates the actual streaming + tool-call
 dispatch to the [tool-loop pipeline](../../tool-loop/). Emits stream results to the sink and finalizes
 with the first non-error result (or the last attempt's result if all fail).
@@ -40,7 +40,7 @@ a non-error result *and* the loop falls through (rare; defensive).
 
 ## Side effects
 
-**Per-attempt setup (`buildGenerationPlan`, `createAttempt`):**
+### Per-attempt setup (`buildGenerationPlan`, `createAttempt`)
 
 - Resolves the primary `TomoriState`: applies personal-provider selection
   (if BYOK), channel LLM override, and any `llmOverrideCodename` from the
@@ -48,7 +48,7 @@ a non-error result *and* the loop falls through (rare; defensive).
 - Selects an API key from the rotation pool, falling back to the server's
   own encrypted key via `decryptApiKey`.
 - Builds a `ProviderConfig` via the resolved `LLMProvider.createConfig`.
-- Assembles a **unified pool** with the primary model at index 0 followed by
+- Assembles a unified pool with the primary model at index 0 followed by
   every configured fallback entry, then builds one attempt per pool member
   (custom-endpoint or saved-provider-config flavor). The lead attempt is always
   labelled `"primary"` in logs even when the randomizer (below) promoted a
@@ -59,10 +59,10 @@ a non-error result *and* the loop falls through (rare; defensive).
   from the server chain and retain their configured order.
 - Returns a plan rather than a bare list: the attempts for the route the turn was
   planned on, plus an optional extension thunk for the server route (below). The
-  thunk is **not** invoked here, so a turn that never leaves its planned route never
+  thunk is not invoked here, so a turn that never leaves its planned route never
   resolves server provider config or asks for the server's quota admission.
 
-**Per-turn model randomizer (`buildPlannedRouteAttempts`, `buildServerRouteAttempts`):**
+### Per-turn model randomizer (`buildPlannedRouteAttempts`, `buildServerRouteAttempts`)
 
 - When `config.model_randomizer_enabled` is `true` and the pool has ≥2 members,
   a random pool member is spliced to the front of the attempt list **per
@@ -79,28 +79,28 @@ a non-error result *and* the loop falls through (rare; defensive).
   `/config` > Models > Fallbacks & Randomizer, which refuses to enable unless ≥1 fallback model is
   configured, guaranteeing the pool always has ≥2 members.
 - `config.model_randomizer_enabled` is not always the server value. When a user has
-  an **active personal Text route**, `applyPersonalProviderSelectionsToTomoriState`
+  an active personal Text route, `applyPersonalProviderSelectionsToTomoriState`
   overlays that provider row's own `user_saved_provider_configs.model_randomizer_enabled`
   (migration 076), so a personal preference wins in both directions: personal `false`
   suppresses a server `true`, and personal `true` applies under a server `false`. A row
-  counts as the active Text route only when it has the `text` capability enabled **and**
+  counts as the active Text route only when it has the `text` capability enabled and
   a configured text model, so a personal row whose model pointer went NULL leaves the
   server value in place. `/personal config` > Models > Fallbacks writes it through
   `personalConfigOperations.setRandomizer`.
-- Each pool draws on its **own** state: the planned route's pool reads the overlaid
+- Each pool draws on its own state: the planned route's pool reads the overlaid
   personal flag, and the server route's pool reads the unmodified server flag. A
   personal randomizer therefore never reorders the server route, and vice versa.
 
-**Server route fallback (`resolveServerRouteExtension`, `buildServerRouteAttempts`):**
+### Server route fallback (`resolveServerRouteExtension`, `buildServerRouteAttempts`)
 
 - Exists only for a turn planned on personal text credentials outside user
-  impersonation. Every other turn's planned route already **is** the server route,
+  impersonation. Every other turn's planned route already is the server route,
   so there is nothing to extend with.
 - Is materialized once, and only after every planned attempt has failed on an
   `error`/`timeout`. Until then nothing about the server route is resolved: no
   server provider config, no server key, no admission. The extension runs from the
   attempt loop, not from the plan builder.
-- Rebuilds its pool from the **unmodified** server state
+- Rebuilds its pool from the unmodified server state
   (`resolveTomoriStateForRoute(context, "server")`: persona server model, channel
   override, then `llmOverrideCodename`), so each attempt carries the server's
   credentials even when both routes name models from one provider. Attempt numbering
@@ -147,7 +147,7 @@ a non-error result *and* the loop falls through (rare; defensive).
   such control to point at, and a model that is its route's own lead reports slot 1
   rather than a fallback slot it does not hold.
 
-**Per-attempt context prep (`prepareProviderContextItems`):**
+### Per-attempt context prep (`prepareProviderContextItems`)
 
 - Resolves dialogue `mediaDescriptors` into final image/video parts or
   model-appropriate system notices using the attempt's `TomoriState`. This is
@@ -167,7 +167,7 @@ a non-error result *and* the loop falls through (rare; defensive).
   and we're on a retry, additionally drops the oldest history exchange
   pairs.
 
-**Per-attempt execution (key rotation inner loop):**
+### Per-attempt execution (key rotation inner loop)
 
 - Calls `runToolLoop(...)`: see [tool-loop pipeline](../../tool-loop/).
 - On success: `recordKeySuccess(rotationKeyId)`, break out of the rotation
@@ -193,7 +193,7 @@ a non-error result *and* the loop falls through (rare; defensive).
   `responseSink.cleanup()` runs from a `finally` on every path, so per-turn
   resources are released even then.
 
-**Superseded-message cleanup (`purgeSupersededDeliveries`):**
+### Superseded-message cleanup (`purgeSupersededDeliveries`)
 
 - A shared, per-turn sink (`streamingContext.deliveredMessageRefs`) collects one
   entry per message the streaming layer commits to Discord. The orchestrator
@@ -202,7 +202,7 @@ a non-error result *and* the loop falls through (rare; defensive).
   when a stalled `streamToDiscord` promise is abandoned by the SDK-call-timeout
   race in the tool loop (that path returns `timeout` but never reports the
   messages it had already flushed).
-- Whenever the stage decides **not** to keep an invocation's result (a
+- Whenever the stage decides not to keep an invocation's result (a
   key-rotation retry, or a model fallback after an `error`/`timeout`), it deletes
   that invocation's already-committed messages. Deletion tries the persona webhook
   first (`webhook.deleteMessage`, no Manage Messages needed) and falls back to a
@@ -224,7 +224,7 @@ a non-error result *and* the loop falls through (rare; defensive).
   to…" notice, warning/progress embeds) are not tracked and may persist after a
   purge.
 
-**NovelAI subscription refresh:**
+### NovelAI subscription refresh
 
 - For NovelAI providers without a cached context-token count, refreshes the
   subscription via `refreshNovelAISubscription` (one-shot, cached for
@@ -268,7 +268,7 @@ The stage is a coordinator over several plugin-relevant subsystems:
 | Context truncation | `truncateDialogueHistory` | Per-provider token-limit table is the registration surface |
 | Personal-provider routing | `applyPersonalProviderSelectionsToTomoriState` | BYOK substitution; see [provider pipeline](../../provider/) |
 
-**The stage itself is internal**: its job is to orchestrate the
+- **The stage itself is internal**: its job is to orchestrate the
 "attempt with fallback + key rotation" pattern. Plugins wanting to:
 
 - **Add a new provider**: register it via the provider plugin contract.

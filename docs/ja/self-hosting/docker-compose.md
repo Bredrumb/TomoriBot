@@ -4,10 +4,10 @@ sidebar:
   order: 3
 ---
 
-Docker Composeは、TomoriBot**と**PostgreSQLをコンテナとしてビルドおよび実行します。
+Docker Composeは、TomoriBotとPostgreSQLをコンテナとしてビルドおよび実行します。
 これは[セットアップウィザード](/ja/self-hosting/setup-wizard/)および[手動セットアップ](/ja/self-hosting/manual-setup/)と並ぶ3つ目のインストール方法です。
 ホストにBunやPostgreSQLをインストールするよりも、すべてをDockerで実行したい場合に選択してください。
-セットアップウィザードは使用し**ません**。データベース接続は自動的に設定されます。
+セットアップウィザードは使用しません。データベース接続は自動的に設定されます。
 
 :::caution[更新に必要なホストのツール]
 `bun run update --docker`は、コードを更新するためにホストのBunとGitが必要です。

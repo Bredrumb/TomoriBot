@@ -4,7 +4,7 @@ title: "02.10: Sample Dialogues"
 
 Few-shot example dialogues to anchor the LLM's voice.
 
-**File:** `src/utils/text/context/templates.ts:199-278`
+- **File**: `src/utils/text/context/templates.ts:199-278`
 
 ## Mission
 
@@ -79,7 +79,7 @@ After this stage runs:
 | Bot-name prefix on model samples | Hardcoded `${botName}: `: a plugin adding "no-prefix mode" would extend here. → plugin plan candidate. |
 | Humanizer + uncensor integration | Inherited from chat pipeline config; if a plugin adds new sample-transform passes (e.g. style transfer), it would extend the per-item transform sequence here. |
 
-**This is the simplest contributor in the pipeline**: it's a pure
+- **This is the simplest contributor in the pipeline**: it is a pure
 formatter over two arrays. Most plugin-relevant work happens *upstream* in
 how `sample_dialogues_in/out` get populated (via persona editor, import,
 ST card conversion).

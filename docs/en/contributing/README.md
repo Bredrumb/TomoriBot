@@ -10,7 +10,7 @@ Guides for changing TomoriBot's code. Set up with [`getting-started.md`](./getti
 the conventions and gates in [`development-tasks.md`](./development-tasks), then open the guide for
 your task.
 
-**Extending the bot** (`extending/`)
+### Extending the bot (`extending/`)
 
 | Task | Guide |
 |---|---|
@@ -26,7 +26,7 @@ your task.
 | Add a participant field | [`participant-extension.md`](./extending/participant-extension) |
 | Add an environment variable | [`env-variable.md`](./extending/env-variable) |
 
-**Localization and docs** (`localization/`)
+### Localization and docs (`localization/`)
 
 | Task | Guide |
 |---|---|
@@ -34,7 +34,7 @@ your task.
 | Publish translated docs or READMEs | [`docs-site.md`](./localization/docs-site) |
 | Add or move docs pages | [`docs-authoring.md`](./localization/docs-authoring) |
 
-**Testing** (`testing/`)
+### Testing (`testing/`)
 
 | Task | Guide |
 |---|---|
@@ -43,7 +43,7 @@ your task.
 | Mock a module in tests | [`module-mocks.md`](./testing/module-mocks) |
 | Keep tests small, fast, and honest | [`maintainable-tests.md`](./testing/maintainable-tests) |
 
-**Policies** (`policies/`)
+### Policies (`policies/`)
 
 - [`comments.md`](./policies/comments): what a comment may say, dashes, and the comment and prose audits
 - [`command-archetypes.md`](./policies/command-archetypes): which kind of command or panel to build, with reference commands

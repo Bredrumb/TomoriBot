@@ -6,11 +6,11 @@ sidebar:
 
 [MCP](https://modelcontextprotocol.io/) 伺服器用外部工具擴充 TomoriBot。線上
 （HTTPS）MCP 伺服器在任何執行個體都能用，請看
-[工具與擴充](/zh-TW/features/capabilities/tools-and-extensions/#mcp-servers)。**本機** MCP 伺服器則
+[工具與擴充](/zh-TW/features/capabilities/tools-and-extensions/#mcp-servers)。本機 MCP 伺服器則
 不同：
 
 :::caution[僅限自架]
-本機 MCP 伺服器**只支援自架執行個體**。公開的託管 bot
+本機 MCP 伺服器只支援自架執行個體。公開的託管 bot
 要求 HTTPS，並基於安全理由封鎖本機與私有位址，所以它連不到 `localhost` 或你區網上的伺服器。
 :::
 
@@ -25,11 +25,11 @@ npx -y <some-mcp-server> --port 3000
 
 確切指令取決於你運行的伺服器。記下它印出的 URL 與傳輸路徑，常見的會像 `http://localhost:3000/sse`。
 
-TomoriBot 自己的工具預期主機上有 **Node.js v20+** 可供 MCP 工具使用。
+TomoriBot 自己的工具預期主機上有 Node.js v20+ 可供 MCP 工具使用。
 
 ## 2. 在 Discord 註冊它
 
-開啟 `/config` > 外掛 > MCP 伺服器，選擇 `新增 MCP`，把 **URL** 欄位指向你的本機伺服器，並讓必填的 `伺服器類型` 維持在預設的 `一般用途`：
+開啟 `/config` > 外掛 > MCP 伺服器，選擇 `新增 MCP`，把 URL 欄位指向你的本機伺服器，並讓必填的 `伺服器類型` 維持在預設的 `一般用途`：
 
 ```text
 http://localhost:3000/sse

@@ -4,7 +4,7 @@ title: "02.1: Prompt Items"
 
 The top of the context list: the LLM's identity framing.
 
-**File:** `src/utils/text/context/templates.ts:94-197`
+- **File**: `src/utils/text/context/templates.ts:94-197`
 
 ## Mission
 

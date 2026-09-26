@@ -63,14 +63,14 @@ The upload size limit and the duration ceiling are independent, and the size che
 
 For Qwen3-TTS, MOSS-VoiceGenerator, IrodoriTTS, or VoxCPM2 VoiceDesign, skip the audio sample and use Persona > Voice in `/config` to save a natural-language voice description for the persona. CosyVoice 3 uses Clone mode with a reference sample and accepts one-off delivery direction through `voice_instructions`.
 
-ElevenLabs users should choose `Add New Provider` and **ElevenLabs** in `/providers`; it registers the speech and transcription endpoints together.
+ElevenLabs users should choose `Add New Provider` and `ElevenLabs` in `/providers`; it registers the speech and transcription endpoints together.
 
 TomoriBot strips Discord custom emoji syntax such as `:pepega:` or `<:pepega:123456789012345678>` from generated voice scripts before synthesis. Unicode emojis are also stripped unless the speech endpoint uses emoji markup, which is intended for IrodoriTTS. Bracket tags are preserved for endpoints such as Chatterbox Turbo and Fish S2 Pro when their Script Markup is set to `Bracket Tags`.
 
-VoxCPM2 uses **Plain** Script Markup. Its Voice Design and speaking-style controls travel through TomoriBot's `instruct` field, and the VoxCPM2 wrapper converts them to the model's native parenthesized natural-language control syntax.
+VoxCPM2 uses `Plain` Script Markup. Its Voice Design and speaking-style controls travel through TomoriBot's `instruct` field, and the VoxCPM2 wrapper converts them to the model's native parenthesized natural-language control syntax.
 
-CosyVoice 3 also uses **Plain** Script Markup. It maps transcript-backed references to zero-shot cloning, transcript-free references to cross-lingual cloning, and `voice_instructions` to its instruction-conditioned path. Inline bracket tags are removed because CosyVoice instructions apply to the whole utterance.
+CosyVoice 3 also uses `Plain` Script Markup. It maps transcript-backed references to zero-shot cloning, transcript-free references to cross-lingual cloning, and `voice_instructions` to its instruction-conditioned path. Inline bracket tags are removed because CosyVoice instructions apply to the whole utterance.
 
 ## Engine Comparison
 
-For side-by-side empirical latency benchmarks, audio sample playback, and a detailed feature matrix comparing all supported engines, see **[TTS Engine Comparison](/en/self-hosting/local-endpoints/text-to-speech/comparison/)**.
+For side-by-side empirical latency benchmarks, audio sample playback, and a detailed feature matrix comparing all supported engines, see [TTS Engine Comparison](/en/self-hosting/local-endpoints/text-to-speech/comparison/).

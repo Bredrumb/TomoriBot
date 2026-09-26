@@ -21,11 +21,11 @@ import { LinkButton, Aside } from "@astrojs/starlight/components";
 
 ### 第 1 步：邀请她
 
-用下面的按钮邀请公开实例，然后选一个你想让她进的服务器。添加 bot 需要**管理服务器**权限。
+用下面的按钮邀请公开实例，然后选一个你想让她进的服务器。添加 bot 需要管理服务器权限。
 
 <div class="button-row">
   <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
-    **邀请 TomoriBot**
+    邀请 TomoriBot
   </LinkButton>
 </div>
 
@@ -38,12 +38,12 @@ TomoriBot 自己不带 AI 大脑，你需要通过 `API 密钥`接入一个`提�
 - **Google Gemini**：通用型，有免费档位，所有功能都能跑。第一次设置推荐用这个。
 - **OpenRouter**：一把密钥就能用到最新的文本、视频、图像、嵌入模型。
 - **NovelAI**：订阅制，无审查图像、角色扮演和故事创作。
-- **DeepSeek**、**NVIDIA NIM**、**Anthropic**、**Vertex AI**、**Z.ai**，或者任何 OpenAI 兼容的`自定义`端点。
+- DeepSeek、NVIDIA NIM、Anthropic、Vertex AI、Z.ai，或者任何 OpenAI 兼容的`自定义`端点。
 
-在 Discord 里运行 `/help`，选`设置`，再选**第 1 步：获取 API 密钥**，挑一个提供方就能看到怎么拿它的 API 密钥；完整列表也可以看[提供方与模型](/zh-CN/features/setup-administration/providers-and-models/#api-keys)。
+在 Discord 里运行 `/help`，选`设置`，再选第 1 步：获取 API 密钥，挑一个提供方就能看到怎么拿它的 API 密钥；完整列表也可以看[提供方与模型](/zh-CN/features/setup-administration/providers-and-models/#api-keys)。
 
 <Aside type="caution">
-**绝不要把 API 密钥分享给任何人**。只通过 TomoriBot 的斜杠指令提交，它会安全地保存并加密。
+绝不要把 API 密钥分享给任何人。只通过 TomoriBot 的斜杠指令提交，它会安全地保存并加密。
 </Aside>
 
 ### 第 3 步：运行设置
@@ -52,15 +52,15 @@ TomoriBot 自己不带 AI 大脑，你需要通过 `API 密钥`接入一个`提�
 
 - **AI 提供方**：选`AI 提供方（推荐）`，挑一个提供方，把密钥粘进去。高级自部署用户可以改选`自定义端点（高级）`，在这里登记自己端点的连接和文本模型；服务器也可以跑在`用户 BYOK`模式下（只能在服务器里，不能私信），让每位成员用自己的提供方。
 - **初始设置**：挑一个初始人格、一种回复风格、一个时区，以及默认系统提示词。
-- **政策**（仅托管实例）：在一个弹窗里接受服务条款和隐私政策。
+- 政策（仅托管实例）：在一个弹窗里接受服务条款和隐私政策。
 
 你操作的过程中什么都不会保存：面板只是草稿，`完成设置`才会加密密钥、为服务器初始化她的配置，并让她准备好开口说话。`取消`会丢弃草稿，一直没动的面板也会自己过期。每个服务器保留自己独立的配置。
 
-**推荐：**之后再运行 `/expressions initialize`，这样她才能准确用上你服务器的自定义表情和贴纸。
+推荐：之后再运行 `/expressions initialize`，这样她才能准确用上你服务器的自定义表情和贴纸。
 
 ### 第 4 步：开始聊天
 
-只要**提到**她，或者**回复**她的一条消息就行：
+只要提到她，或者回复她的一条消息就行：
 
 ```text
 @TomoriBot yo, what's up?
@@ -79,6 +79,6 @@ TomoriBot 自己不带 AI 大脑，你需要通过 `API 密钥`接入一个`提�
 
 <div class="button-row">
   <LinkButton href="/zh-CN/self-hosting/" variant="secondary">
-    **自部署 TomoriBot**
+    自部署 TomoriBot
   </LinkButton>
 </div>

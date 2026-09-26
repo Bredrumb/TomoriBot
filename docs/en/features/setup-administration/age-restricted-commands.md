@@ -9,10 +9,9 @@ hidden until you opt in. This page explains how to access it and where it works.
 
 ## Enabling Age-Restricted Commands
 
-1. In Discord, open **User Settings → Privacy & Safety**.
-2. Toggle on **Allow access to age-restricted commands in apps**. You must be 18 or older.
-3. Age-restricted commands only run in channels marked **NSFW** (right-click a channel →
-   **Edit Channel → toggle NSFW**; only server admins can mark channels NSFW).
+1. In Discord, open `User Settings` > `Privacy & Safety`.
+2. Toggle on `Allow access to age-restricted commands in apps`. You must be 18 or older.
+3. Age-restricted commands only run in channels marked `Age-Restricted Channel` (right-click a channel > `Edit Channel` and toggle `Age-Restricted Channel`; only server admins can mark channels age-restricted).
 
 If a command is restricted and the channel isn't marked NSFW, it simply won't appear.
 

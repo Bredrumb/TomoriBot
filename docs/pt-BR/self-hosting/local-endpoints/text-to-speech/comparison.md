@@ -13,31 +13,31 @@ Esta página traz resultados empíricos de benchmark, tempos de síntese e clipe
 
 ### Prompts do Benchmark
 
-- **Prompt padrão** *(usado para Chatterbox Standard/Turbo/Nano, MOSS-TTS, CosyVoice 3, VoxCPM2 e Qwen3-TTS)*:
+- Prompt padrão *(usado para Chatterbox Standard/Turbo/Nano, MOSS-TTS, CosyVoice 3, VoxCPM2 e Qwen3-TTS)*:
   > *"Pain and pleasure are two sides of the same coin. Go on now... flip it. Either way, I'll let you feel all of me."*
-- **Prompt do Fish Audio S2 Pro** *(testado com tags de expressão entre colchetes)*:
+- Prompt do Fish Audio S2 Pro *(testado com tags de expressão entre colchetes)*:
   > *"Pain and pleasure are two sides of the same coin. [laughs] Go on now... flip it. [whispers] Either way, I'll let you feel all of me."*
 
 ### Desempenho e Comparação de Áudio
 
-Os tempos informam o **tempo total de geração** (segundos de relógio desde a requisição até o áudio pronto) e o **Real-Time Factor (RTF)**, definido como o tempo de geração dividido pela duração do áudio:
+Os tempos informam o tempo total de geração (segundos de relógio desde a requisição até o áudio pronto) e o Real-Time Factor (RTF), definido como o tempo de geração dividido pela duração do áudio:
 
-- **RTF < 1.0 (negrito):** o motor gera a fala mais rápido que o tempo real (por exemplo, `0.50× RTF` renderiza um clipe de 10 segundos em 5 segundos). Só esses motores conseguiriam acompanhar uma chamada de voz ao vivo, que o TomoriBot não implementa hoje.
-- **RTF > 1.0:** a geração demora mais que o áudio falado. O TomoriBot envia cada mensagem de voz como um arquivo completo, então um RTF maior significa apenas uma espera mais longa.
+- RTF < 1.0 (negrito): o motor gera a fala mais rápido que o tempo real (por exemplo, `0.50× RTF` renderiza um clipe de 10 segundos em 5 segundos). Só esses motores conseguiriam acompanhar uma chamada de voz ao vivo, que o TomoriBot não implementa hoje.
+- RTF > 1.0: a geração demora mais que o áudio falado. O TomoriBot envia cada mensagem de voz como um arquivo completo, então um RTF maior significa apenas uma espera mais longa.
 
 | Motor | Windows nativo<sup>(1)</sup><br/>(RTX 4070 Ti SUPER) | Linux / WSL2 | macOS<br/>(Apple Silicon) | Amostra de áudio |
 |---|---|---|---|---|
-| **[Fish Audio S2 Pro](/pt-BR/self-hosting/local-endpoints/text-to-speech/fishs2/)** | ~8-10 min<sup>(2)</sup><br/>*(~65× RTF)* | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/fish-s2-pro.wav"></audio> |
-| **[Chatterbox (Turbo, padrão)](/pt-BR/self-hosting/local-endpoints/text-to-speech/chatterbox/)** | **~5.0s** *(clipe de 8.7s)*<br/>**0.57× RTF** | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/chatterbox-turbo.wav"></audio> |
-| **[Chatterbox (Nano)](/pt-BR/self-hosting/local-endpoints/text-to-speech/chatterbox/)** | **~3.0s** *(clipe de 8.0s)*<br/>**0.38× RTF** | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/chatterbox-nano.wav"></audio> |
-| **[Chatterbox (Standard)](/pt-BR/self-hosting/local-endpoints/text-to-speech/chatterbox/)** | **~6.0s** *(clipe de 7.8s)*<br/>**0.77× RTF** | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/chatterbox.wav"></audio> |
-| **[MOSS-TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/moss/)** | ~12.0s *(clipe de 8.8s)*<br/>1.36× RTF | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/moss-tts.wav"></audio> |
-| **[CosyVoice 3](/pt-BR/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)** | **~6.0s** *(clipe de 13.9s)*<br/>**0.43× RTF** | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/cosy-voice-3.wav"></audio> |
-| **[VoxCPM2](/pt-BR/self-hosting/local-endpoints/text-to-speech/voxcpm2/)** | ~8.0s *(clipe de 7.4s)*<br/>1.09× RTF | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/voxcpm2.wav"></audio> |
-| **[Qwen3-TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/qwen3tts/)** | ~10.0s *(clipe de 9.2s)*<br/>1.09× RTF | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/qwen3-tts.wav"></audio> |
+| [Fish Audio S2 Pro](/pt-BR/self-hosting/local-endpoints/text-to-speech/fishs2/) | ~8-10 min<sup>(2)</sup><br/>*(~65× RTF)* | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/fish-s2-pro.wav"></audio> |
+| [Chatterbox (Turbo, padrão)](/pt-BR/self-hosting/local-endpoints/text-to-speech/chatterbox/) | ~5.0s *(clipe de 8.7s)*<br/>0.57× RTF | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/chatterbox-turbo.wav"></audio> |
+| [Chatterbox (Nano)](/pt-BR/self-hosting/local-endpoints/text-to-speech/chatterbox/) | ~3.0s *(clipe de 8.0s)*<br/>0.38× RTF | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/chatterbox-nano.wav"></audio> |
+| [Chatterbox (Standard)](/pt-BR/self-hosting/local-endpoints/text-to-speech/chatterbox/) | ~6.0s *(clipe de 7.8s)*<br/>0.77× RTF | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/chatterbox.wav"></audio> |
+| [MOSS-TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/moss/) | ~12.0s *(clipe de 8.8s)*<br/>1.36× RTF | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/moss-tts.wav"></audio> |
+| [CosyVoice 3](/pt-BR/self-hosting/local-endpoints/text-to-speech/cosyvoice3/) | ~6.0s *(clipe de 13.9s)*<br/>0.43× RTF | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/cosy-voice-3.wav"></audio> |
+| [VoxCPM2](/pt-BR/self-hosting/local-endpoints/text-to-speech/voxcpm2/) | ~8.0s *(clipe de 7.4s)*<br/>1.09× RTF | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/voxcpm2.wav"></audio> |
+| [Qwen3-TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/qwen3tts/) | ~10.0s *(clipe de 9.2s)*<br/>1.09× RTF | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/qwen3-tts.wav"></audio> |
 
-- <sup>(1)</sup> **Ambiente de teste**: NVIDIA GeForce RTX 4070 Ti SUPER (16 GB GDDR6X, Ada Lovelace) no Windows 11 (execução nativa), usando uma amostra de áudio de referência mono de 24 kHz com 26.6 segundos e transcrição literal correspondente.
-- <sup>(2)</sup> **Fish Audio S2 Pro**: no Windows, a execução roda em modo eager não compilado (~65× RTF) por causa da latência de lançamento de kernels CUDA ao longo das suas 76 avaliações de camada por token. Recomenda-se executar no Linux ou WSL2 com a fusão do compilador OpenAI Triton (`torch.compile`) para evitar esse travamento de despacho.
+- <sup>(1)</sup> Ambiente de teste: NVIDIA GeForce RTX 4070 Ti SUPER (16 GB GDDR6X, Ada Lovelace) no Windows 11 (execução nativa), usando uma amostra de áudio de referência mono de 24 kHz com 26.6 segundos e transcrição literal correspondente.
+- <sup>(2)</sup> Fish Audio S2 Pro: no Windows, a execução roda em modo eager não compilado (~65× RTF) por causa da latência de lançamento de kernels CUDA ao longo das suas 76 avaliações de camada por token. Recomenda-se executar no Linux ou WSL2 com a fusão do compilador OpenAI Triton (`torch.compile`) para evitar esse travamento de despacho.
 
 ---
 
@@ -51,7 +51,7 @@ Os tempos informam o **tempo total de geração** (segundos de relógio desde a 
 
 | Motor | Windows nativo<sup>(1)</sup><br/>(RTX 4070 Ti SUPER) | Linux / WSL2 | macOS<br/>(Apple Silicon) | Amostra de áudio |
 |---|---|---|---|---|
-| **[IrodoriTTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/irodoritts/)** | **~4.0s** *(clipe de 8.5s)*<br/>**0.47× RTF** | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/irodori.wav"></audio> |
+| [IrodoriTTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/irodoritts/) | ~4.0s *(clipe de 8.5s)*<br/>0.47× RTF | Não testado | Não testado | <audio controls preload="none" src="/audio/tts/irodori.wav"></audio> |
 
 - <sup>(1)</sup> Medido no mesmo ambiente de teste com RTX 4070 Ti SUPER e Windows 11.
 
@@ -59,19 +59,19 @@ Os tempos informam o **tempo total de geração** (segundos de relógio desde a 
 
 ## Qual Motor Escolher?
 
-- **Escolha o [Fish Audio S2 Pro](/pt-BR/self-hosting/local-endpoints/text-to-speech/fishs2/)** se você quer a maior fidelidade vocal possível, tags de expressão refinadas entre colchetes (`[whisper]`, `[laughs]`, `[sigh]`) e tem acesso a **Linux ou WSL2**, onde a fusão do compilador Triton pode ser ativada.
-- **Escolha o [Chatterbox (Turbo / Nano / Standard)](/pt-BR/self-hosting/local-endpoints/text-to-speech/chatterbox/)** para clonagem de voz em inglês com pouco uso de VRAM. O Nano (~3.0s, 0.38× RTF) oferece a maior velocidade em CPU/GPU, o Turbo (~5.0s, 0.57× RTF) suporta tags de evento paralinguísticas (`[laughter]`, `[sigh]`) e o Standard (~6.0s, 0.77× RTF) permite ajuste criativo de orientação CFG e de exagero emocional.
-- **Escolha o [MOSS-TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/moss/)** para clonagem de voz multimodal experimental e geração de voz descrita por texto em inglês/chinês.
-- **Escolha o [CosyVoice 3](/pt-BR/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)** se você precisa de clonagem zero-shot multilíngue de alta qualidade com direção de entrega em linguagem natural (`"Speak in English with excitement"`).
-- **Escolha o [VoxCPM2](/pt-BR/self-hosting/local-endpoints/text-to-speech/voxcpm2/)** se você precisa de suporte multilíngue abrangente (30 idiomas), Ultimate Cloning assistida por transcrição e design de voz natural.
-- **Escolha o [Qwen3-TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/qwen3tts/)** se você quer clonagem limpa em vários idiomas, com design de voz flexível e boa aderência ao prompt.
-- **Escolha o [IrodoriTTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/irodoritts/)** se o seu bot fala japonês. Foi o único motor exclusivo para japonês medido (~4s, 0.47× RTF no Windows) e interpreta nativamente emojis Unicode (`😊`, `😭`, `😠`) para modular a emoção da personagem.
+- Escolha o [Fish Audio S2 Pro](/pt-BR/self-hosting/local-endpoints/text-to-speech/fishs2/) se você quer a maior fidelidade vocal possível, tags de expressão refinadas entre colchetes (`[whisper]`, `[laughs]`, `[sigh]`) e tem acesso a Linux ou WSL2, onde a fusão do compilador Triton pode ser ativada.
+- Escolha o [Chatterbox (Turbo / Nano / Standard)](/pt-BR/self-hosting/local-endpoints/text-to-speech/chatterbox/) para clonagem de voz em inglês com pouco uso de VRAM. O Nano (~3.0s, 0.38× RTF) oferece a maior velocidade em CPU/GPU, o Turbo (~5.0s, 0.57× RTF) suporta tags de evento paralinguísticas (`[laughter]`, `[sigh]`) e o Standard (~6.0s, 0.77× RTF) permite ajuste criativo de orientação CFG e de exagero emocional.
+- Escolha o [MOSS-TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/moss/) para clonagem de voz multimodal experimental e geração de voz descrita por texto em inglês/chinês.
+- Escolha o [CosyVoice 3](/pt-BR/self-hosting/local-endpoints/text-to-speech/cosyvoice3/) se você precisa de clonagem zero-shot multilíngue de alta qualidade com direção de entrega em linguagem natural (`"Speak in English with excitement"`).
+- Escolha o [VoxCPM2](/pt-BR/self-hosting/local-endpoints/text-to-speech/voxcpm2/) se você precisa de suporte multilíngue abrangente (30 idiomas), Ultimate Cloning assistida por transcrição e design de voz natural.
+- Escolha o [Qwen3-TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/qwen3tts/) se você quer clonagem limpa em vários idiomas, com design de voz flexível e boa aderência ao prompt.
+- Escolha o [IrodoriTTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/irodoritts/) se o seu bot fala japonês. Foi o único motor exclusivo para japonês medido (~4s, 0.47× RTF no Windows) e interpreta nativamente emojis Unicode (`😊`, `😭`, `😠`) para modular a emoção da personagem.
 
 ---
 
 ## Compare os Motores
 
-Todos os servidores TTS do TomoriBot atualmente retornam um WAV completo para o bot. "Caminho de streaming" significa que o modelo upstream ou um backend de serviço separado tem um; isso **não** significa que o streaming de chat de voz do Discord está implementado. Os tamanhos são parâmetros de modelo, **não** tamanhos de VRAM ou de download, e a coluna de 16 GB é uma orientação de configuração, não um pico medido. A coluna de velocidade descreve a troca pretendida de cada motor; os tempos medidos acima vêm de uma única máquina Windows e não classificam os motores no Linux.
+Todos os servidores TTS do TomoriBot atualmente retornam um WAV completo para o bot. "Caminho de streaming" significa que o modelo upstream ou um backend de serviço separado tem um; isso não significa que o streaming de chat de voz do Discord está implementado. Os tamanhos são parâmetros de modelo, não tamanhos de VRAM ou de download, e a coluna de 16 GB é uma orientação de configuração, não um pico medido. A coluna de velocidade descreve a troca pretendida de cada motor; os tempos medidos acima vêm de uma única máquina Windows e não classificam os motores no Linux.
 
 A coluna "Clipe de referência" informa o comprimento da referência de clonagem que cada motor documenta ou aplica no runtime, então ela mistura orientação publicada com limites lidos do código upstream. A maioria dos motores corta silenciosamente a referência para caber na própria janela em vez de recusar a requisição, e é por isso que a coluna indica o que o motor lê, não apenas o que ele aceita. É comportamento upstream, não uma medição feita aqui, e é independente do limite de upload do TomoriBot.
 

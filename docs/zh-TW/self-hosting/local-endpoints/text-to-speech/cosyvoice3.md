@@ -4,7 +4,7 @@ title: "CosyVoice 3"
 
 CosyVoice 3 是 Alibaba 與 QwenAudio 多語言 CosyVoice TTS 專案的當代版本。TomoriBot 在 `servers/tts/cosyvoice3/` 中包裝官方執行環境，並提供與其他本機語音端點相同的 `POST /synthesize` 介面。
 
-TomoriBot 預設使用官方 **`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`** 檢查點。它是上游推薦的現行 CosyVoice 3 版本，使用未量化的正常模型，而且小到可以在 16 GB 的 NVIDIA GPU 上舒適運行，同時保留 CosyVoice 的低延遲設計。
+TomoriBot 預設使用官方 `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` 檢查點。它是上游推薦的現行 CosyVoice 3 版本，使用未量化的正常模型，而且小到可以在 16 GB 的 NVIDIA GPU 上舒適運行，同時保留 CosyVoice 的低延遲設計。
 
 ## 它支援什麼
 
@@ -62,8 +62,8 @@ TomoriBot 目前的自訂 TTS 介面預期一則 Discord 語音訊息對應一�
 
 建議的 TomoriBot 起點：
 
-- 具備 **16 GB VRAM** 的 NVIDIA GPU
-- Python **3.10**
+- 具備 16 GB VRAM 的 NVIDIA GPU
+- Python 3.10
 - 與 CUDA 12 相容的近期 NVIDIA 驅動程式
 - `git`
 - `ffmpeg`，供 TomoriBot 正規化語音樣本
@@ -110,7 +110,7 @@ bun run launch --cosyvoice3
 .\servers\tts\cosyvoice3\.venv\Scripts\python.exe servers\tts\cosyvoice3\server.py
 ```
 
-若使用 NVIDIA GPU，**建議使用 WSL2**。目前的上游需求在 Linux 上會安裝 GPU ONNX Runtime，在 Windows 上則安裝 CPU ONNX Runtime，所以 WSL2 更貼近 CosyVoice 專案為低延遲最佳化與測試的設定。
+若使用 NVIDIA GPU，建議使用 WSL2。目前的上游需求在 Linux 上會安裝 GPU ONNX Runtime，在 Windows 上則安裝 CPU ONNX Runtime，所以 WSL2 更貼近 CosyVoice 專案為低延遲最佳化與測試的設定。
 
 ## 在 TomoriBot 中註冊
 
@@ -119,7 +119,7 @@ bun run launch --cosyvoice3
 - Capability：`Speech`
 - API Compatibility：`tts-clone`
 - Endpoint URL：`http://127.0.0.1:8017`
-- Voice Source Mode：`Clone`
+- 語音來源模式：`Clone`
 - Script Markup：`Plain`
 - Supports Instruct：`Yes`
 
@@ -187,6 +187,6 @@ CosyVoice 3 也支援選用的 vLLM 與 TensorRT 路徑。上游目前記載使�
 
 ## 授權條款
 
-目前的 CosyVoice 程式碼儲存庫採用 **Apache License 2.0**，而 `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` 的 Hugging Face 儲存庫同樣標示為 **Apache-2.0**。
+目前的 CosyVoice 程式碼儲存庫採用 Apache License 2.0，而 `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` 的 Hugging Face 儲存庫同樣標示為 Apache-2.0。
 
 上游的模型卡另外包含一段免責聲明，說明所顯示的內容是學術示範，且部分範例可能來自網際網路。一則上游的公開討論要求明確釐清該免責聲明與權重商業使用之間的關係。TomoriBot 不重新散布該模型。自架者應就自己的部署檢視目前的上游授權條款與模型卡條款，尤其是在商業使用之前。

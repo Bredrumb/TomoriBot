@@ -85,11 +85,11 @@ router, so a root-relative link there points at `github.com`.
 
 Component `href` values such as `LinkCard` follow the same rule, so each locale file writes its own.
 
-**UI labels** are code spans holding the text that locale's bot shows: copy the value of the same key
+- **UI labels**: code spans holding the text that locale's bot shows: copy the value of the same key
 from `src/locales/<code>/`. A translated page that writes `` `Finish Setup` ``, or its own translation
 of it, sends the reader looking for a button their Discord client does not show.
 
-**Fragments** are always the English slug. A heading that anything links to carries an anchor comment
+- **Fragments**: always the English slug. A heading that anything links to carries an anchor comment
 in every locale:
 
 ```md
@@ -105,7 +105,7 @@ anchor would drop every non-English reader at the top of the page.
 trying the linking file's own locale first and then English. It does not read root-relative Markdown
 links under `docs/`, so the translator and reviewer check those.
 
-**Bot links.** `buildDocsUrl()` and `buildLegalDocUrl()` prefix the locale only when its tree is
+- **Bot links**: `buildDocsUrl()` and `buildLegalDocUrl()` prefix the locale only when its tree is
 published. `DOCS_PATHS` in `src/utils/discord/docsLinks.ts` holds locale-less routes; never add a
 prefix there. `tests/unit/docs/docsRouteRegistry.test.ts` rejects a prefixed route and resolves every
 absolute URL in locale strings against `docs/`.

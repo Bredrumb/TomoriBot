@@ -55,14 +55,14 @@ bun run launch --searxng --crawl4ai
 
 Se você preferir gerenciar o contêiner você mesmo, mantenha `CRAWL4AI_BASE_URL=http://localhost:11235/` no `.env` e rode:
 
-**PowerShell:**
+PowerShell:
 
 ```powershell
 docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g `
   unclecode/crawl4ai:latest
 ```
 
-**Bash (Linux/macOS):**
+Bash (Linux/macOS):
 
 ```bash
 docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
@@ -83,7 +83,7 @@ Deixe `CRAWL4AI_BASE_URL` não definido. A ferramenta `fetch_url` usa o motor pr
 
 ## Ordem de Inicialização (Importante)
 
-O TomoriBot sonda a saúde do servidor na **primeira chamada de `fetch_url` após a inicialização** e armazena o resultado em cache por 60 segundos. Se o contêiner não estiver pronto quando a primeira sondagem for disparada, o bot o trata como indisponível pelo próximo minuto.
+O TomoriBot sonda a saúde do servidor na primeira chamada de `fetch_url` após a inicialização e armazena o resultado em cache por 60 segundos. Se o contêiner não estiver pronto quando a primeira sondagem for disparada, o bot o trata como indisponível pelo próximo minuto.
 
 Para o Docker standalone, inicie seu contêiner do Crawl4AI antes de iniciar o TomoriBot. `bun run launch --crawl4ai` já faz isso para você.
 
@@ -116,14 +116,14 @@ Então inicie o TomoriBot normalmente. Reiniciar `bun run dev` redefine o cache 
 
 O Crawl4AI suporta a injeção de cookies a nível de navegador para que o navegador headless pareça já logado ao buscar uma página. Isso é útil para sites que exigem uma sessão para visualizar conteúdo (ex: notícias pagas, fóruns privados, painéis restritos por login).
 
-O fallback `safe_http` **não** suporta a injeção de cookies: os cookies só se aplicam quando o Crawl4AI está ativo.
+O fallback `safe_http` não suporta a injeção de cookies: os cookies só se aplicam quando o Crawl4AI está ativo.
 
-> **Limitação:** A injeção de cookies contorna paredes de login, mas não a impressão digital de bots (bot fingerprinting). Sites com detecção agressiva de bots (notavelmente Twitter/X) detectam o Playwright headless através de fingerprinting de canvas/WebGL e servem páginas vazias mesmo com cookies de sessão válidos. A injeção de cookies funciona bem para sites que bloqueiam apenas na autenticação.
+> Limitação: A injeção de cookies contorna paredes de login, mas não a impressão digital de bots (bot fingerprinting). Sites com detecção agressiva de bots (notavelmente Twitter/X) detectam o Playwright headless através de fingerprinting de canvas/WebGL e servem páginas vazias mesmo com cookies de sessão válidos. A injeção de cookies funciona bem para sites que bloqueiam apenas na autenticação.
 
 ### Obtendo seus cookies
 
 1. Abra seu navegador e faça login no site de destino.
-2. Abra o DevTools (`F12`) → guia **Application** → **Storage** → **Cookies** → selecione o domínio do site.
+2. Abra o DevTools (`F12`) → guia Application → Storage → Cookies → selecione o domínio do site.
 3. Copie o `Value` de cada cookie necessário (tipicamente um token de sessão: verifique os nomes dos cookies do site).
 
 ### Crawl4AI
@@ -145,7 +145,7 @@ Quando isso é definido, `fetch_url` muda automaticamente do endpoint `/md` para
 | `domain` | Não | Escopo de domínio (ex: `.x.com`). Recomendado para correção. |
 | `path` | Não | Escopo de caminho. O padrão é `/` se omitido. |
 
-> **Nota:** Os valores dos cookies são sensíveis: trate-os como senhas. Eles concedem acesso de sessão total à sua conta. Não faça commit do `.env` no controle de versão.
+> Nota: Os valores dos cookies são sensíveis: trate-os como senhas. Eles concedem acesso de sessão total à sua conta. Não faça commit do `.env` no controle de versão.
 
 ---
 

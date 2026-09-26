@@ -7,25 +7,25 @@ O Fish Audio S2 Pro é um modelo de TTS 4B multilíngue focado em clonagem de vo
 
 A configuração padrão do TomoriBot usa os pesos BF16 oficiais (`fishaudio/s2-pro`) para oferecer a maior fidelidade de síntese e evitar incompatibilidades de quantização. Para usuários com GPUs de consumo com memória limitada, uma quantização opcional apenas de pesos em INT8 (`Imagilux/fishaudio-s2-pro`) é suportada por meio de variáveis de ambiente.
 
-O Fish S2 Pro suporta tags de expressão entre colchetes, como `[whisper]`, `[excited]` e `[angry]`. Configure o endpoint com a marcação `Tags em Colchetes` (Bracket Tags) para que o TomoriBot preserve esses controles nos scripts de voz gerados.
+O Fish S2 Pro suporta tags de expressão entre colchetes, como `[whisper]`, `[excited]` e `[angry]`. Configure o endpoint com a marcação `Tags em Colchetes` (Tags em Colchetes) para que o TomoriBot preserve esses controles nos scripts de voz gerados.
 
 ## Licença
 
 O código do Fish Speech e os pesos do modelo S2 Pro são distribuídos sob a Fish Audio Research License. Pesquisa e uso não comercial são permitidos de acordo com seus termos; o uso comercial exige uma licença separada da Fish Audio.
 
-O TomoriBot não redistribui os pesos do modelo. Cada usuário de hospedagem própria baixa o Fish S2 Pro diretamente do Hugging Face e é responsável por cumprir a Fish Audio Research License. A atribuição exigida é: **Built with Fish Audio**.
+O TomoriBot não redistribui os pesos do modelo. Cada usuário de hospedagem própria baixa o Fish S2 Pro diretamente do Hugging Face e é responsável por cumprir a Fish Audio Research License. A atribuição exigida é: Built with Fish Audio.
 
 ## Hardware e Sistema Operacional
 
 > [!IMPORTANT]
-> **Use Linux ou WSL2 para o Fish Speech:** a Fish Audio tem como alvo oficial o Linux e o WSL2. O Fish S2 Pro usa uma arquitetura Dual-Autoregressive (Dual-AR): 36 camadas lentas de transformer mais 10 passagens rápidas de codebook, totalizando 76 avaliações de camada por token. No Linux, o OpenAI Triton pode compilar esse loop aninhado em kernels de GPU fundidos (`torch.compile(backend="inductor")`), e os benchmarks upstream demonstram que isso permite síntese em tempo real em GPUs de servidor Linux. O wrapper deixa a compilação desativada por padrão, então defina `FISH_S2_COMPILE=1` para usá-la.
+> Use Linux ou WSL2 para o Fish Speech: a Fish Audio tem como alvo oficial o Linux e o WSL2. O Fish S2 Pro usa uma arquitetura Dual-Autoregressive (Dual-AR): 36 camadas lentas de transformer mais 10 passagens rápidas de codebook, totalizando 76 avaliações de camada por token. No Linux, o OpenAI Triton pode compilar esse loop aninhado em kernels de GPU fundidos (`torch.compile(backend="inductor")`), e os benchmarks upstream demonstram que isso permite síntese em tempo real em GPUs de servidor Linux. O wrapper deixa a compilação desativada por padrão, então defina `FISH_S2_COMPILE=1` para usá-la.
 >
-> No Windows nativo, o Triton não é suportado, o que força o PyTorch ao modo eager não compilado, com mais de 120.000 despachos sequenciais de kernels CUDA pelo driver WDDM do Windows. Isso causa um travamento severo de despacho e deixa a geração em **~8-10 minutos** (~65s de processamento por segundo de áudio) para o mesmo clipe. Para uma inferência utilizável, **execute o Fish S2 Pro dentro do Linux ou do WSL2**.
+> No Windows nativo, o Triton não é suportado, o que força o PyTorch ao modo eager não compilado, com mais de 120.000 despachos sequenciais de kernels CUDA pelo driver WDDM do Windows. Isso causa um travamento severo de despacho e deixa a geração em ~8-10 minutos (~65s de processamento por segundo de áudio) para o mesmo clipe. Para uma inferência utilizável, execute o Fish S2 Pro dentro do Linux ou do WSL2.
 
 Hardware recomendado:
 
-- **Linux ou WSL2 (fortemente recomendado)**
-- GPU NVIDIA com **16 GB a 24 GB de VRAM** (o BF16 cabe com folga em ~16-18 GB de VRAM com cache KV e offload)
+- Linux ou WSL2 (fortemente recomendado)
+- GPU NVIDIA com 16 GB a 24 GB de VRAM (o BF16 cabe com folga em ~16-18 GB de VRAM com cache KV e offload)
 - Python 3.12 recomendado
 - `git`, `ffmpeg` e as bibliotecas de áudio padrão exigidas pelo Fish Speech
 
@@ -88,9 +88,9 @@ O TomoriBot para de esperar por uma mensagem de voz após `TTS_SYNTHESIZE_TIMEOU
 ## Transcrição de Referência Obrigatória
 
 > [!WARNING]
-> **O texto de referência (`ref_text`) é obrigatório para clonagem de voz:** o mecanismo de atenção cruzada do Fish S2 Pro precisa da transcrição do áudio de referência para alinhar tokens fonéticos com códigos acústicos.
+> O texto de referência (`ref_text`) é obrigatório para clonagem de voz: o mecanismo de atenção cruzada do Fish S2 Pro precisa da transcrição do áudio de referência para alinhar tokens fonéticos com códigos acústicos.
 >
-> Se você enviar uma amostra de voz sem a transcrição de referência correspondente, o Fish Speech **descarta silenciosamente os tokens do áudio de referência** e recorre a uma fala aleatória sem referência. O wrapper do Fish no TomoriBot valida e rejeita requisições de síntese sem texto de referência com um `400 Bad Request`, para evitar uma geração acidental sem condicionamento.
+> Se você enviar uma amostra de voz sem a transcrição de referência correspondente, o Fish Speech descarta silenciosamente os tokens do áudio de referência e recorre a uma fala aleatória sem referência. O wrapper do Fish no TomoriBot valida e rejeita requisições de síntese sem texto de referência com um `400 Bad Request`, para evitar uma geração acidental sem condicionamento.
 
 Ao adicionar uma voz de persona em `/config` em `Modelos > Parâmetros de TTS e Vozes`, sempre preencha o campo `Transcrição de referência` com o texto exato falado no seu clipe de áudio de referência.
 
@@ -101,8 +101,8 @@ Em `/providers`, escolha `Adicionar Novo Endpoint Personalizado` (Adicionar Novo
 - Capability (Capacidade): `Speech`
 - API Compatibility (Compatibilidade de API): `tts-clone`
 - Endpoint URL (URL do Endpoint): `http://127.0.0.1:8015`
-- Voice Source Mode (Modo da Fonte de Voz): `Clone`
-- Script Markup (Marcação do Script): `Bracket Tags`
+- Modo de Fonte de Voz (Modo da Fonte de Voz): `Clone`
+- Script Markup (Marcação do Script): `Tags em Colchetes`
 - API key (Chave de API): deixe em branco. O wrapper não tem autenticação; consulte [Acesso de rede](/self-hosting/local-endpoints/text-to-speech/#network-access).
 
 Em seguida, adicione a entrada do modelo (model) do endpoint e ative-o através de `/config` em Models > Switch Models.
@@ -110,8 +110,8 @@ Em seguida, adicione a entrada do modelo (model) do endpoint e ative-o através 
 ## Adicionar vozes de persona
 
 1. Prepare um clipe de referência limpo de 10-20 segundos com apenas um orador e pouco ou nenhum ruído de fundo.
-2. Em `/config`, abra Models > TTS Parameters & Voices e faça o upload da amostra de voz.
-3. **Insira a transcrição exata** falada no clipe de referência no campo de texto de referência.
+2. Em `/config`, abra Models > Parâmetros TTS e Vozes e faça o upload da amostra de voz.
+3. Insira a transcrição exata falada no clipe de referência no campo de texto de referência.
 4. Em `/config`, abra Persona > Voice e atribua a amostra à persona.
 5. Gere uma mensagem de voz com `/generate voice-message` ou deixe o TomoriBot gerar uma através da sua ferramenta de mensagem de voz.
 
@@ -125,7 +125,7 @@ O Fish S2 Pro pode variar a entrega dentro de uma mesma fala usando tags entre c
 [whisper] Keep your voice down. [excited] Wait, you actually found it?
 ```
 
-Como o endpoint usa a marcação `Bracket Tags`, o TomoriBot preserva essas tags em vez de removê-las antes da síntese.
+Como o endpoint usa a marcação `Tags em Colchetes`, o TomoriBot preserva essas tags em vez de removê-las antes da síntese.
 
 ## Configuração
 

@@ -11,14 +11,14 @@ Bằng cách thiết lập hoặc tương tác với TomoriBot, bạn chấp nh�
 
 ## 1) Định nghĩa thuật ngữ
 Để rõ ràng, các thuật ngữ sau được sử dụng xuyên suốt tài liệu này:
-- **Máy chủ** (Server): Một cộng đồng/guild Discord nơi TomoriBot được thiết lập
-- **Bộ nhớ** (Memories): Các dữ kiện hoặc thông tin được dạy cho TomoriBot qua các lệnh, hoặc do bot tự học thông qua công cụ hàm `remember_this_fact`
+- Máy chủ (Server): Một cộng đồng/guild Discord nơi TomoriBot được thiết lập
+- Bộ nhớ (Memories): Các dữ kiện hoặc thông tin được dạy cho TomoriBot qua các lệnh, hoặc do bot tự học thông qua công cụ hàm `remember_this_fact`
 - **Persona/Preset**: Các hồ sơ tính cách và hành vi có thể cấu hình để thay đổi cách TomoriBot phản hồi
-- **Nhà cung cấp** (Provider): Các dịch vụ tìm kiếm hoặc AI của bên thứ ba (ví dụ: Google, NovelAI, OpenRouter, Brave Search) mà bạn cấu hình cho TomoriBot sử dụng
-- **Instance có sẵn** (Hosted Instance): Dịch vụ TomoriBot chính thức được duy trì dưới dạng bot công khai cho Discord, trái ngược với các bản sao self-hosted
-- **Khóa API** (API Key): Thông tin xác thực bạn cung cấp để kết nối TomoriBot với các Nhà cung cấp đã chọn
-- **Kích hoạt** (Trigger): Một sự kiện khiến TomoriBot tạo câu trả lời trong kênh văn bản Discord bằng nhà cung cấp bạn đã cấu hình, chẳng hạn như: tag bot, trả lời tin nhắn của bot, sử dụng các lệnh slash yêu cầu xử lý AI/tìm kiếm, hoặc gửi tin nhắn trong các kênh đã bật tự động trả lời. Các lần kích hoạt sẽ tiêu tốn tín dụng/token API từ tài khoản nhà cung cấp của bạn.
-- **Người quản lý máy chủ** (Server Manager): Thành viên có quyền cấu hình TomoriBot cho một Máy chủ, chẳng hạn như thành viên chạy lệnh `/setup`
+- Nhà cung cấp (Provider): Các dịch vụ tìm kiếm hoặc AI của bên thứ ba (ví dụ: Google, NovelAI, OpenRouter, Brave Search) mà bạn cấu hình cho TomoriBot sử dụng
+- Instance có sẵn (Hosted Instance): Dịch vụ TomoriBot chính thức được duy trì dưới dạng bot công khai cho Discord, trái ngược với các bản sao self-hosted
+- Khóa API (API Key): Thông tin xác thực bạn cung cấp để kết nối TomoriBot với các Nhà cung cấp đã chọn
+- Kích hoạt (Trigger): Một sự kiện khiến TomoriBot tạo câu trả lời trong kênh văn bản Discord bằng nhà cung cấp bạn đã cấu hình, chẳng hạn như: tag bot, trả lời tin nhắn của bot, sử dụng các lệnh slash yêu cầu xử lý AI/tìm kiếm, hoặc gửi tin nhắn trong các kênh đã bật tự động trả lời. Các lần kích hoạt sẽ tiêu tốn tín dụng/token API từ tài khoản nhà cung cấp của bạn.
+- Người quản lý máy chủ (Server Manager): Thành viên có quyền cấu hình TomoriBot cho một Máy chủ, chẳng hạn như thành viên chạy lệnh `/setup`
 
 ## 2) Phạm vi dịch vụ
 - TomoriBot là một chatbot vận hành bằng AI, phản hồi các tương tác trên Discord bằng cách sử dụng các Nhà cung cấp bên ngoài do bạn cấu hình.

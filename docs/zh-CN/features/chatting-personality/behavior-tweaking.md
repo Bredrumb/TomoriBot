@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-TomoriBot 的行为（**她被允许做什么，以及她如何生成内容**）由 `/config` > 权限和 `/config` 控制，此外还有人格（[多个人格](/zh-CN/features/chatting-personality/multiple-personas/)）和知识（[记忆](/zh-CN/features/knowledge/memory/)）。这一页挑出最值得调的几组开关；全部指令见[指令参考](/zh-CN/features/command-reference/)。
+TomoriBot 的行为（她被允许做什么，以及她如何生成内容）由 `/config` > 权限和 `/config` 控制，此外还有人格（[多个人格](/zh-CN/features/chatting-personality/multiple-personas/)）和知识（[记忆](/zh-CN/features/knowledge/memory/)）。这一页挑出最值得调的几组开关；全部指令见[指令参考](/zh-CN/features/command-reference/)。
 
 ## 功能开关：她被允许做什么
 <!-- anchor: capabilities-what-shes-allowed-to-do -->
@@ -32,7 +32,7 @@ TomoriBot 的行为（**她被允许做什么，以及她如何生成内容**）
 ## 不做内容过滤
 <!-- anchor: uncensored-output -->
 
-TomoriBot **自身没有任何内容过滤**：她不是一套审核机制，也不会在模型之上再加安全栏杆。底层提供方返回什么，她就说什么。所以 `/nsfw jailbreaks` 并不是在 TomoriBot 内部「解锁」什么；它存在的唯一目的，是绕过**提供方那一侧**比你预期更严格的过滤。
+TomoriBot 自身没有任何内容过滤：她不是一套审核机制，也不会在模型之上再加安全栏杆。底层提供方返回什么，她就说什么。所以 `/nsfw jailbreaks` 并不是在 TomoriBot 内部「解锁」什么；它存在的唯一目的，是绕过提供方那一侧比你预期更严格的过滤。
 
 它切换三种互相独立的手段（默认全部关闭）：
 

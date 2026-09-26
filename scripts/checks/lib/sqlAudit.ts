@@ -82,6 +82,7 @@ export const EXEMPT_PATHS = new Map<string, string>([
   ["src/utils/security/crypto.ts", "security primitive"],
   ["src/utils/security/keyRotation.ts", "security primitive"],
   ["src/utils/documents/documentService.ts", "RAG service layer; SQL invoked exclusively through RagRepository facade"],
+  ["src/db/seed/catalog/presetAssetLock.ts", "catalog seeding concurrency lock"],
 ]);
 
 /** Normalize a path to POSIX separators for stable comparison across OSes. */

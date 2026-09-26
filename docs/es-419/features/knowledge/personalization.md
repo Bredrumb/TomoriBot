@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-TomoriBot se puede configurar **específicamente para ti** con los comandos `/personal`: ajustes
+TomoriBot se puede configurar específicamente para ti con los comandos `/personal`: ajustes
 que te siguen en todos los servidores que compartes con ella, independientes de la
 configuración de cualquier servidor.
 
@@ -59,7 +59,7 @@ Hay dos alcances en juego, y vale la pena tenerlos claros:
   activado, reemplaza el valor predeterminado del servidor para esa capacidad **en todos los
   servidores** donde uses TomoriBot, no solo en el que lo configuraste.
 
-**Configuración:**
+Configuración:
 
 1. `/personal providers` guarda un proveedor (tu clave se cifra). Esto también activa de
    inmediato tu ajuste personal de `Texto`, usando el modelo de texto predeterminado de ese
@@ -91,9 +91,9 @@ modelo de texto del propio servidor en lugar de dejar el mensaje sin respuesta. 
 las credenciales del servidor y se descuenta de su cuota de texto, y respeta el tiempo de espera
 entre mensajes del servidor, así que un proveedor que falla en cada mensaje no se convierte en una
 respuesta por mensaje. Se reporta igual que cualquier
-otro respaldo de modelo: un botón **Respaldo utilizado** cuyos detalles nombran el modelo que
+otro respaldo de modelo: un botón Respaldo utilizado cuyos detalles nombran el modelo que
 respondió y las fallas anteriores. Puedes desactivarlo en `/personal config` > Modelos > Alternativas,
-en la sección **Respaldo al modelo del servidor**, para que las fallas de tu proveedor sigan siendo
+en la sección Respaldo al modelo del servidor, para que las fallas de tu proveedor sigan siendo
 tuyas. La opción se aplica a toda la cuenta y está activada por defecto, así que te sigue a cada
 servidor que la permita.
 
@@ -126,14 +126,14 @@ todos los servidores donde la uses.
 ## Foco personal
 <!-- anchor: personal-spotlight -->
 
-**Foco personal: selección de persona por canal.** El foco personal te permite *a ti* limitar
+Foco personal: selección de persona por canal. El foco personal te permite *a ti* limitar
 qué personas puedes activar en un canal, y opcionalmente asignar una para que se active
-automáticamente con tus propios mensajes ahí. Tiene alcance a **ti + un canal** y no afecta a
+automáticamente con tus propios mensajes ahí. Tiene alcance a ti + un canal y no afecta a
 nadie más.
 
-**Configura uno** con `/personal config`, eligiendo:
+Configura uno con `/personal config`, eligiendo:
 
-- una duración en horas (usa **0** para conservarlo hasta que lo elimines manualmente),
+- una duración en horas (usa 0 para conservarlo hasta que lo elimines manualmente),
 - el canal objetivo,
 - las personas que quieres en tu foco personal.
 
@@ -142,9 +142,9 @@ activación automática personal**: la respondedora de respaldo para tus mensaje
 Las activaciones directas siguen apuntando a la persona que llames explícitamente. Presiona
 Finalizar para omitir este paso.
 
-**Reglas importantes:**
+Reglas importantes:
 
-- El foco personal solo **limita** el acceso; nunca lo amplía. Las personas seleccionadas son
+- El foco personal solo limita el acceso; nunca lo amplía. Las personas seleccionadas son
   las *únicas* que puedes activar ahí.
 - Sigue respetando los límites de persona a nivel de servidor configurados mediante
   `/moderation`.

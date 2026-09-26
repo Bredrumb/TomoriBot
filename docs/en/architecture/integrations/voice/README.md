@@ -93,8 +93,8 @@ forwards `voice_instructions` through the clone adapter only for endpoints that 
 
 Two predicates in `ttsVoiceDesignAdapter.ts` are easy to confuse, and confusing them once already disabled voice design on every `auto` deployment:
 
-- `isVoiceDesignEndpoint()` is true only for a **dedicated** voice-design endpoint.
-- `acceptsDesignShape()` is true for a dedicated voice-design endpoint **and** for `auto`.
+- `isVoiceDesignEndpoint()` is true only for a dedicated voice-design endpoint.
+- `acceptsDesignShape()` is true for a dedicated voice-design endpoint and for `auto`.
 
 Anywhere the question is "can this endpoint receive a design body", the answer is `acceptsDesignShape()` or the capability table, never `isVoiceDesignEndpoint()`.
 

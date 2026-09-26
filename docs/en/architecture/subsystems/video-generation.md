@@ -74,7 +74,7 @@ To work around this, `openrouterVideoGeneration.ts` uses `externalHttpRequest()`
 - **Windows (development)**: PowerShell 7 (`pwsh`) with `Invoke-WebRequest`. Uses .NET's Schannel TLS with proper HTTP/2 negotiation. Request data is piped via stdin as JSON; response body is base64-encoded for binary safety. Windows system curl lacks HTTP/2 support, so it cannot be used.
 - **Linux / Docker (production)**: `curl` with HTTP/2 via `nghttp2` (standard on Alpine/Debian). Response headers and body are parsed from curl's `-i` output. Key flags: `--proto =https` (protocol restriction), `--data-raw` (no `@filename` expansion), `-H "Expect:"` (suppresses 100-Continue).
 
-**Deployment requirements**:
+- **Deployment requirements**:
 - Windows: `pwsh` (PowerShell 7+) on `PATH`
 - Linux/Docker: `curl` with HTTP/2 support on `PATH` (already in the Dockerfile via `apk add curl`)
 

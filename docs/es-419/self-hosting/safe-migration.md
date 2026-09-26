@@ -10,7 +10,7 @@ Cuando ejecutas `git pull` para obtener código nuevo y reinicias TomoriBot, el 
 
 ## Por qué es importante esto
 
-El ejecutor de migraciones de TomoriBot (en `src/db/migrationRunner.ts`) ejecuta todas las migraciones no aplicadas en orden de versión. Las migraciones son **solo hacia adelante**: si algo sale mal, el ejecutor no hace una reversión automática. La mayoría de las migraciones son expansiones seguras (nuevas columnas, nuevas tablas), pero según la política de diseño interna (OD-R-6) del proyecto, se permiten operaciones destructivas como `DROP COLUMN` o `DROP TABLE`. Si una migración destructiva se ejecuta sin una copia de seguridad, pierdes datos de forma permanente. En caso de duda, haz una copia de seguridad primero.
+El ejecutor de migraciones de TomoriBot (en `src/db/migrationRunner.ts`) ejecuta todas las migraciones no aplicadas en orden de versión. Las migraciones son solo hacia adelante: si algo sale mal, el ejecutor no hace una reversión automática. La mayoría de las migraciones son expansiones seguras (nuevas columnas, nuevas tablas), pero según la política de diseño interna (OD-R-6) del proyecto, se permiten operaciones destructivas como `DROP COLUMN` o `DROP TABLE`. Si una migración destructiva se ejecuta sin una copia de seguridad, pierdes datos de forma permanente. En caso de duda, haz una copia de seguridad primero.
 
 ## Lista de verificación antes de hacer pull
 
@@ -23,7 +23,7 @@ Sigue estos pasos ANTES de ejecutar `git pull`:
 
 ### Requisito previo: la extensión `pgvector`
 
-Una copia de seguridad completa es un volcado `pg_dump` en SQL simple (`backupData.ts` ejecuta `pg_dump --clean --if-exists -f`), por lo que contiene la tabla `document_chunks` de tipo `vector` que se utiliza para RAG. **El Postgres de destino debe tener la extensión `pgvector` disponible antes de que restaures**, o la ejecución de `CREATE EXTENSION IF NOT EXISTS vector` del volcado no se podrá ejecutar y la tabla `document_chunks` no se podrá crear.
+Una copia de seguridad completa es un volcado `pg_dump` en SQL simple (`backupData.ts` ejecuta `pg_dump --clean --if-exists -f`), por lo que contiene la tabla `document_chunks` de tipo `vector` que se utiliza para RAG. El Postgres de destino debe tener la extensión `pgvector` disponible antes de que restaures, o la ejecución de `CREATE EXTENSION IF NOT EXISTS vector` del volcado no se podrá ejecutar y la tabla `document_chunks` no se podrá crear.
 
 Instálala una vez en el host (coincidiendo con la versión principal de tu Postgres), por ejemplo para Postgres 16:
 
@@ -39,8 +39,8 @@ psql -c "SELECT name, default_version FROM pg_available_extensions WHERE name = 
 
 Si restauras sin ella:
 
-- El script `restore-backup` del proyecto (y cualquier ejecución de `psql -f` con `ON_ERROR_STOP=1`) **se aborta temprano** con `extension "vector" is not available` (no se cargan datos). Instala pgvector y vuelve a intentarlo.
-- Una ejecución manual de `psql -f` que **ignora los errores** (`ON_ERROR_STOP=0`) es peor: el comando `COPY public.document_chunks` fallido desincroniza el analizador de entrada de psql, que luego analiza incorrectamente las siguientes filas de datos de `COPY` como SQL (una cascada de `syntax error at or near …`). Esto elimina silenciosamente tablas enteras (observado: `documents` y `llms`), dejando una base de datos parcialmente restaurada que parece intacta pero ha perdido filas. Siempre restaura con `ON_ERROR_STOP=1` para que las fallas salgan a la luz de inmediato.
+- El script `restore-backup` del proyecto (y cualquier ejecución de `psql -f` con `ON_ERROR_STOP=1`) se aborta temprano con `extension "vector" is not available` (no se cargan datos). Instala pgvector y vuelve a intentarlo.
+- Una ejecución manual de `psql -f` que ignora los errores (`ON_ERROR_STOP=0`) es peor: el comando `COPY public.document_chunks` fallido desincroniza el analizador de entrada de psql, que luego analiza incorrectamente las siguientes filas de datos de `COPY` como SQL (una cascada de `syntax error at or near …`). Esto elimina silenciosamente tablas enteras (observado: `documents` y `llms`), dejando una base de datos parcialmente restaurada que parece intacta pero ha perdido filas. Siempre restaura con `ON_ERROR_STOP=1` para que las fallas salgan a la luz de inmediato.
 
 ### Opción A: Usar el script de copia de seguridad del proyecto
 
@@ -49,7 +49,7 @@ TomoriBot incluye dos scripts de copia de seguridad, cada uno apuntando a datos 
 - **`bun run backup`**: esquema completo de la base de datos y volcado de datos (personas, recuerdos, configuraciones, todo).
 - **`bun run backup:personas`**: solo ajustes preestablecidos de personas y recuerdos del servidor por persona.
 
-Para una migración segura, usa la **copia de seguridad completa**:
+Para una migración segura, usa la copia de seguridad completa:
 
 ```bash
 bun run backup
@@ -110,11 +110,11 @@ pg_restore \
   tomoribot-backup-20240115-143045.dump
 ```
 
-**Nota:** `pg_restore` te pedirá tu contraseña a menos que la configures en un archivo `.pgpass` (el archivo de credenciales incorporado de PostgreSQL).
+Nota: `pg_restore` te pedirá tu contraseña a menos que la configures en un archivo `.pgpass` (el archivo de credenciales incorporado de PostgreSQL).
 
 ## Para los colaboradores que implementan a través de CI: la convención `(Checkpoint)`
 
-Si mantienes un fork que se implementa en AWS o GCP a través de los flujos de trabajo en `.github/workflows/deploy-tomoribot-{aws,gcp}.yml`, esos canales admiten una **instantánea previa a la implementación opcional**: cuando un mensaje de commit contiene el token literal `(Checkpoint)`, el flujo de trabajo ejecuta `aws rds create-db-snapshot` (o el equivalente de GCP Cloud SQL) **antes** de que se implemente cualquier código y antes de que el ejecutor de migraciones toque la base de datos en el arranque.
+Si mantienes un fork que se implementa en AWS o GCP a través de los flujos de trabajo en `.github/workflows/deploy-tomoribot-{aws,gcp}.yml`, esos canales admiten una instantánea previa a la implementación opcional: cuando un mensaje de commit contiene el token literal `(Checkpoint)`, el flujo de trabajo ejecuta `aws rds create-db-snapshot` (o el equivalente de GCP Cloud SQL) antes de que se implemente cualquier código y antes de que el ejecutor de migraciones toque la base de datos en el arranque.
 
 Úsala cuando:
 
@@ -182,13 +182,13 @@ Si el bot se bloquea o se congela durante la migración:
 
 ## Qué NO es recuperable automáticamente
 
-Según el diseño del proyecto (OD-R-6), **las migraciones destructivas no pueden ser revertidas** por el ejecutor de migraciones. Ejemplos:
+Según el diseño del proyecto (OD-R-6), las migraciones destructivas no pueden ser revertidas por el ejecutor de migraciones. Ejemplos:
 
 - `DROP COLUMN name_here`: las filas eliminadas se pierden para siempre; ningún script de SQL puede recuperarlas.
 - `DROP TABLE old_table`: toda la tabla desaparece.
 - Reducción de tipo (por ejemplo, `VARCHAR(255) → VARCHAR(100)`): los valores más largos de 100 caracteres se truncan.
 
-Para estas operaciones, **la única recuperación es tu copia de seguridad**. Siempre haz una copia de seguridad antes de hacer pull si estás en una versión anterior y se ha enviado una refactorización nueva.
+Para estas operaciones, la única recuperación es tu copia de seguridad. Siempre haz una copia de seguridad antes de hacer pull si estás en una versión anterior y se ha enviado una refactorización nueva.
 
 El diseño de solo hacia adelante del ejecutor de migraciones es intencional: los archivos de reversión (`.down.sql`) existen para la seguridad del desarrollador durante las pruebas, pero la recuperación en producción depende de las copias de seguridad, no de la reejecución de operaciones que no se pueden deshacer.
 
@@ -196,22 +196,22 @@ El diseño de solo hacia adelante del ejecutor de migraciones es intencional: lo
 
 Un caso común: alguien te pide que pruebes una rama en tu instalación existente, y quieres saber si revisar la rama, iniciarla y luego cambiar de nuevo a `main` dañará tu base de datos.
 
-**Los hechos clave:**
+Los hechos clave:
 
 - Git y PostgreSQL son mundos separados. `git checkout` solo intercambia archivos en el disco; nunca se conecta a ni modifica tu base de datos. Tu estado de migración aplicada vive en la tabla `schema_migrations`, no en git.
-- Las migraciones se ejecutan **automáticamente en el arranque** (a través de `initializeDatabase.ts`), por lo que en el momento en que inicias la rama, sus nuevas migraciones se aplican a la base de datos a la que hayas apuntado.
-- El ejecutor hacia adelante **nunca hace reversiones automáticas**. Cuando regresas a `main`, escanea los archivos en el disco, no encuentra nada pendiente y no hace nada. Las migraciones que aplicó la rama permanecen aplicadas.
+- Las migraciones se ejecutan automáticamente en el arranque (a través de `initializeDatabase.ts`), por lo que en el momento en que inicias la rama, sus nuevas migraciones se aplican a la base de datos a la que hayas apuntado.
+- El ejecutor hacia adelante nunca hace reversiones automáticas. Cuando regresas a `main`, escanea los archivos en el disco, no encuentra nada pendiente y no hace nada. Las migraciones que aplicó la rama permanecen aplicadas.
 
-**Entonces, ¿es seguro?** Depende completamente de lo que hicieron las migraciones de la rama:
+Entonces, ¿es seguro? Depende completamente de lo que hicieron las migraciones de la rama:
 
-- **Solo aditivo** (nuevas tablas o nuevas columnas) → seguro. Los nuevos objetos simplemente permanecen sin usarse; el código de `main` nunca hace referencia a ellos, por lo que no pueden causar resultados incorrectos o bloqueos. Son peso muerto inofensivo.
-- **Destructivo** (`DROP`, `RENAME` o `ALTER` en una tabla que `main` aún usa) → no seguro. El cambio de la rama deja varado el código de `main` contra una columna o tabla que ahora no existe o está alterada.
+- Solo aditivo (nuevas tablas o nuevas columnas) → seguro. Los nuevos objetos simplemente permanecen sin usarse; el código de `main` nunca hace referencia a ellos, por lo que no pueden causar resultados incorrectos o bloqueos. Son peso muerto inofensivo.
+- Destructivo (`DROP`, `RENAME` o `ALTER` en una tabla que `main` aún usa) → no seguro. El cambio de la rama deja varado el código de `main` contra una columna o tabla que ahora no existe o está alterada.
 
-**El enfoque más seguro:** apunta la rama a una base de datos desechable (una `POSTGRES_DB` separada), para que tus datos reales nunca se toquen. Ya construyes la conexión a partir de las variables `POSTGRES_*`, y `bun run nuke-db` puede restablecer una base de datos de prueba.
+El enfoque más seguro: apunta la rama a una base de datos desechable (una `POSTGRES_DB` separada), para que tus datos reales nunca se toquen. Ya construyes la conexión a partir de las variables `POSTGRES_*`, y `bun run nuke-db` puede restablecer una base de datos de prueba.
 
 ### Revertir manualmente una migración de prueba
 
-Si probaste una rama contra tu base de datos **real** y quieres deshacer sus migraciones después, usa el ejecutor de reversión. A diferencia del ejecutor hacia adelante, **nunca se ejecuta automáticamente**: la reversión siempre es un acto manual deliberado porque los archivos `.down.sql` suelen tener pérdidas.
+Si probaste una rama contra tu base de datos real y quieres deshacer sus migraciones después, usa el ejecutor de reversión. A diferencia del ejecutor hacia adelante, nunca se ejecuta automáticamente: la reversión siempre es un acto manual deliberado porque los archivos `.down.sql` suelen tener pérdidas.
 
 ```bash
 # Solo vista previa (ejecución en seco): muestra lo que se revertiría
@@ -223,11 +223,11 @@ bun run migrate:down --last=2     # las dos migraciones aplicadas más recientem
 bun run migrate:down 034 --yes
 ```
 
-El comando ejecuta los archivos `.down.sql` seleccionados en orden de versión **descendente** (para que los dependientes de una migración se deshagan antes que ella), y luego elimina las filas de `schema_migrations` coincidentes. Sin esas filas, el ejecutor hacia adelante volverá a aplicar las migraciones la próxima vez que inicies una rama que todavía las incluye.
+El comando ejecuta los archivos `.down.sql` seleccionados en orden de versión descendente (para que los dependientes de una migración se deshagan antes que ella), y luego elimina las filas de `schema_migrations` coincidentes. Sin esas filas, el ejecutor hacia adelante volverá a aplicar las migraciones la próxima vez que inicies una rama que todavía las incluye.
 
-> **Ejecútalo mientras aún estés en la rama.** La reversión lee `NNN_description.down.sql` del disco. Una vez que haces `git checkout main`, esos archivos desaparecen y la reversión ya no se puede ejecutar. Revierte primero, luego cambia de rama.
+> Ejecútalo mientras aún estés en la rama. La reversión lee `NNN_description.down.sql` del disco. Una vez que haces `git checkout main`, esos archivos desaparecen y la reversión ya no se puede ejecutar. Revierte primero, luego cambia de rama.
 
-> **Todavía tiene pérdidas.** Revertir `034` aquí ejecuta `DROP TABLE short_term_memories`: cualquier dato creado durante las pruebas se pierde. Eso se espera para una limpieza de prueba, pero nunca ejecutes `migrate:down` contra datos que quieras conservar sin una copia de seguridad.
+> Todavía tiene pérdidas. Revertir `034` aquí ejecuta `DROP TABLE short_term_memories`: cualquier dato creado durante las pruebas se pierde. Eso se espera para una limpieza de prueba, pero nunca ejecutes `migrate:down` contra datos que quieras conservar sin una copia de seguridad.
 
 ## Ver también
 

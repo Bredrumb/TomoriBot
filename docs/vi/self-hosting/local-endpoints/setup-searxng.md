@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-Công cụ `web_search` định tuyến qua một chuỗi các engine: **Brave → SearXNG → DuckDuckGo → IAsk**. Bằng cách chạy phiên bản SearXNG của riêng mình, chúng ta tránh được các giới hạn tần suất của từng engine đơn lẻ cũng như sự cố trích xuất dữ liệu, đồng thời mở khóa các danh mục chỉ có trên SearXNG: `science`, `it`, `files`, và `music`.
+Công cụ `web_search` định tuyến qua một chuỗi các engine: Brave → SearXNG → DuckDuckGo → IAsk. Bằng cách chạy phiên bản SearXNG của riêng mình, chúng ta tránh được các giới hạn tần suất của từng engine đơn lẻ cũng như sự cố trích xuất dữ liệu, đồng thời mở khóa các danh mục chỉ có trên SearXNG: `science`, `it`, `files`, và `music`.
 
 Chọn một phương thức thiết lập SearXNG:
 
@@ -34,7 +34,7 @@ bun run launch --searxng
 
 Nếu bạn thích tự quản lý container, hãy giữ `SEARXNG_BASE_URL=http://localhost:8080/` trong `.env` và chạy:
 
-**PowerShell:**
+PowerShell:
 ```powershell
 docker run -d --name searxng -p 8080:8080 `
   -v "${PWD}/servers/searxng:/etc/searxng:rw" `
@@ -42,7 +42,7 @@ docker run -d --name searxng -p 8080:8080 `
   searxng/searxng:latest
 ```
 
-**Bash (Linux/macOS):**
+Bash (Linux/macOS):
 ```bash
 docker run -d --name searxng -p 8080:8080 \
   -v "${PWD}/servers/searxng:/etc/searxng:rw" \

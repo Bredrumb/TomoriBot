@@ -6,7 +6,7 @@ sidebar:
 
 TomoriBot gives server admins controls over how she behaves in your server (who can use her,
 where, and how much she costs) through the `/config` panel and its related commands. Most require
-the **Manage Server** permission. This page covers the highlights; every command is in the
+the `Manage Server` permission. This page covers the highlights; every command is in the
 [Command Reference](/features/command-reference/).
 
 ## Cost Control: Quotas
@@ -23,15 +23,15 @@ interval.
 ## User BYOK (Bring Your Own Key)
 <!-- anchor: user-byok-bring-your-own-key -->
 
-`/moderation` **((Member Access))** carries this as a two-state choice. **Allow Server Models** is the
-default; **Require Personal Providers** makes each member bring their **own** personal provider for
+`/moderation` `Member Access` carries this as a two-state choice. `Allow Server Models` is the
+default; `Require Personal Providers` makes each member bring their own personal provider for
 their triggers, so the server pays for nothing on user-initiated messages. Server-initiated
 triggers still use the server provider. This is the strongest cost control: it shifts API
 spend entirely to members. Members set theirs up under
 [Personalization → Your Own Providers](/features/knowledge/personalization/#your-own-providers).
 
-You can also bootstrap a server with **no** server-side text provider at all by choosing
-**User BYOK** during `/setup`. It is offered in servers rather than in DMs, and it asks for
+You can also bootstrap a server without a server-side text provider by choosing
+`User BYOK` during `/setup`. It is offered in servers rather than in DMs, and it asks for
 confirmation before completing the provider step, because the workspace then has no provider to fall
 back to.
 
@@ -63,7 +63,7 @@ are posted, useful for auditing what she's doing (including which trigger expose
 `/config` > Channels > Logs & Welcome configures an automated greeting for new members in a chosen
 channel. By default, Tomori waits one minute before greeting them so server onboarding can
 finish. Use the
-**Clear Welcome** button on that same page to stop greetings.
+`Clear Welcome` button on that same page to stop greetings.
 
 ## Expressions
 

@@ -22,11 +22,11 @@ import { LinkButton, Aside } from "@astrojs/starlight/components";
 ### ステップ1：招待する
 
 以下のボタンを使用して公開インスタンスを招待し、参加させたいサーバーを選択します。
-Botを追加するには、**サーバー管理**権限が必要です。
+Botを追加するには、サーバー管理権限が必要です。
 
 <div class="button-row">
   <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
-    **TomoriBotを招待**
+    TomoriBotを招待
   </LinkButton>
 </div>
 
@@ -39,12 +39,12 @@ TomoriBot自体にはAIの頭脳は組み込まれていません。`APIキー`�
 - **Google Gemini**：汎用性が高く、無料枠があり、すべての機能を実行できます。初めてのセットアップにおすすめです。
 - **OpenRouter**：1つのキーで、最新のテキスト、動画、画像、埋め込みモデルのすべてにアクセスできます。
 - **NovelAI**：サブスクリプションベースで、検閲のない画像、ロールプレイ、ストーリーテリングに適しています。
-- **DeepSeek**、**NVIDIA NIM**、**Anthropic**、**Vertex AI**、**Z.ai**、またはOpenAI互換の任意の**Custom**エンドポイント。
+- DeepSeek、NVIDIA NIM、Anthropic、Vertex AI、Z.ai、またはOpenAI互換の任意のCustomエンドポイント。
 
-Discord内で`/help`を実行し、`TomoriBotをセットアップ`、**ステップ 1: APIキーの取得**の順に選択し、プロバイダーを選んでAPIキーの取得方法を確認するか、完全なリストについては[プロバイダーとモデル](/ja/features/setup-administration/providers-and-models/#api-keys)をご覧ください。
+Discord内で`/help`を実行し、`TomoriBotをセットアップ`、ステップ 1: APIキーの取得の順に選択し、プロバイダーを選んでAPIキーの取得方法を確認するか、完全なリストについては[プロバイダーとモデル](/ja/features/setup-administration/providers-and-models/#api-keys)をご覧ください。
 
 <Aside type="caution">
-**APIキーは絶対に他の人と共有しないでください**。TomoriBotのスラッシュコマンドを通じてのみ提供してください。これにより安全に保存・暗号化されます。
+APIキーは絶対に他の人と共有しないでください。TomoriBotのスラッシュコマンドを通じてのみ提供してください。これにより安全に保存・暗号化されます。
 </Aside>
 
 ### ステップ3：セットアップを実行する
@@ -53,15 +53,15 @@ Discord内で`/help`を実行し、`TomoriBotをセットアップ`、**ステ�
 
 - **AIプロバイダー**：`AIプロバイダー（推奨）`を選択し、プロバイダーを選んでキーを貼り付けます。上級のセルフホストユーザーは、ここで`カスタムエンドポイント（高度）`を選択してエンドポイントの接続とテキストモデルを登録することもできます。また、サーバーは`ユーザーBYOK`（DMではなくサーバー内のみ）で実行でき、各メンバーが個人のプロバイダーを提供できます。
 - **初期設定**：開始時のペルソナ、返信スタイル、タイムゾーン、およびデフォルトのシステムプロンプトを選択します。
-- **ポリシー**（ホストされたインスタンスのみ）：利用規約とプライバシーポリシーを1つのモーダルで承認します。
+- ポリシー（ホストされたインスタンスのみ）：利用規約とプライバシーポリシーを1つのモーダルで承認します。
 
 作業中は何も保存されません。パネルはドラフトであり、`設定完了`を押すことでキーが暗号化され、サーバー用の設定が初期化され、話す準備が整います。`キャンセル`を押すとドラフトは破棄され、操作されないパネルは自動的に期限切れになります。各サーバーは独自の独立した設定を保持します。
 
-**推奨：** その後`/expressions initialize`を実行して、サーバーのカスタム絵文字やスタンプを正確に使用できるようにしてください。
+推奨： その後`/expressions initialize`を実行して、サーバーのカスタム絵文字やスタンプを正確に使用できるようにしてください。
 
 ### ステップ4：チャットを開始する
 
-**メンション**するか、メッセージに`返信`するだけです。
+メンションするか、メッセージに`返信`するだけです。
 
 ```text
 @TomoriBot やあ、調子はどう？
@@ -80,6 +80,6 @@ Discord内で`/help`を実行し、`TomoriBotをセットアップ`、**ステ�
 
 <div class="button-row">
   <LinkButton href="/ja/self-hosting/" variant="secondary">
-    **TomoriBotをセルフホスト**
+    TomoriBotをセルフホスト
   </LinkButton>
 </div>

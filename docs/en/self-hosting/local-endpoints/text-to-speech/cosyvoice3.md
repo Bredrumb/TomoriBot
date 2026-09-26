@@ -5,7 +5,7 @@ aiGenerated: true
 
 CosyVoice 3 is the current generation of Alibaba/QwenAudio's multilingual CosyVoice TTS project. TomoriBot wraps the official runtime in `servers/tts/cosyvoice3/` and exposes the same `POST /synthesize` interface used by the other local speech endpoints.
 
-TomoriBot defaults to the official **`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`** checkpoint. It is the current CosyVoice 3 release recommended by upstream, uses the normal unquantized model, and is small enough to run comfortably on a 16 GB NVIDIA GPU while keeping CosyVoice's low-latency design intact.
+TomoriBot defaults to the official `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` checkpoint. It is the current CosyVoice 3 release recommended by upstream, uses the normal unquantized model, and is small enough to run comfortably on a 16 GB NVIDIA GPU while keeping CosyVoice's low-latency design intact.
 
 ## What it supports
 
@@ -43,7 +43,7 @@ For the best ordinary cloning quality, provide both the reference audio and its 
 
 ### Style and emotion controls
 
-Register the endpoint with **Plain** markup. Delivery direction belongs in the endpoint's global
+Register the endpoint with `Plain` markup. Delivery direction belongs in the endpoint's global
 `voice_instructions` field, not in arbitrary inline bracket tags. This preserves the meaning of
 the instruction for the whole utterance and avoids treating a script such as `[happy] Hello.
 [sad] Goodbye.` as two contradictory global instructions. Native `[breath]` and `[laughter]`
@@ -67,8 +67,8 @@ does not reduce TomoriBot's response latency until a streaming voice transport e
 
 Recommended TomoriBot starting point:
 
-- NVIDIA GPU with **16 GB VRAM**
-- Python **3.10**
+- NVIDIA GPU with 16 GB VRAM
+- Python 3.10
 - recent NVIDIA driver compatible with CUDA 12
 - `git`
 - `ffmpeg` for TomoriBot voice-sample normalization
@@ -116,7 +116,7 @@ Native Windows is provided as a best-effort path:
 .\servers\tts\cosyvoice3\.venv\Scripts\python.exe servers\tts\cosyvoice3\server.py
 ```
 
-For NVIDIA GPU use, **WSL2 is recommended**. The current upstream requirements install GPU ONNX Runtime on Linux but CPU ONNX Runtime on Windows, so WSL2 more closely matches the configuration the CosyVoice project optimizes and tests for low latency.
+For NVIDIA GPU use, WSL2 is recommended. The current upstream requirements install GPU ONNX Runtime on Linux but CPU ONNX Runtime on Windows, so WSL2 more closely matches the configuration the CosyVoice project optimizes and tests for low latency.
 
 ## Register in TomoriBot
 
@@ -194,6 +194,6 @@ Use them only after the ordinary PyTorch server is working. For a Discord voice-
 
 ## License
 
-The current CosyVoice code repository is licensed under **Apache License 2.0**, and the `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` Hugging Face repository is also marked **Apache-2.0**.
+The current CosyVoice code repository is licensed under Apache License 2.0, and the `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` Hugging Face repository is also marked Apache-2.0.
 
 The upstream model card additionally contains a disclaimer saying the displayed content is for academic demonstration and that some examples may come from the internet. An open upstream discussion asks for explicit clarification about how that disclaimer relates to commercial use of the weights. TomoriBot does not redistribute the model. Self-hosters should review the current upstream license and model-card terms for their own deployment, especially before commercial use.

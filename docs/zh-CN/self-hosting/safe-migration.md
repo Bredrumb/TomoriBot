@@ -8,11 +8,11 @@ sidebar:
 
 ## 为什么这件事重要
 
-TomoriBot 的迁移执行器（在 `src/db/migrationRunner.ts`）会按版本顺序执行所有尚未应用的迁移。迁移是**只能向前**的：一旦出问题，执行器不会自动回滚。大多数迁移是安全的扩展（新增列、新增表），但按项目内部的设计政策（OD-R-6），`DROP COLUMN` 或 `DROP TABLE` 这类破坏性操作是被允许的。如果破坏性迁移在没有备份的情况下运行，你的数据会永久丢失。拿不准的时候，先备份。
+TomoriBot 的迁移执行器（在 `src/db/migrationRunner.ts`）会按版本顺序执行所有尚未应用的迁移。迁移是只能向前的：一旦出问题，执行器不会自动回滚。大多数迁移是安全的扩展（新增列、新增表），但按项目内部的设计政策（OD-R-6），`DROP COLUMN` 或 `DROP TABLE` 这类破坏性操作是被允许的。如果破坏性迁移在没有备份的情况下运行，你的数据会永久丢失。拿不准的时候，先备份。
 
 ## 拉取前的检查清单
 
-在运行 `git pull` **之前**先做这些步骤：
+在运行 `git pull` 之前先做这些步骤：
 
 1. **停掉 bot**：关闭 TomoriBot 进程，这样就不会有活跃的数据库连接干扰备份。
 2. **备份数据库**：用下面两种方法之一。
@@ -21,7 +21,7 @@ TomoriBot 的迁移执行器（在 `src/db/migrationRunner.ts`）会按版本顺
 
 ### 前提：`pgvector` 扩展
 
-完整备份是纯 SQL 的 `pg_dump`（`backupData.ts` 运行的是 `pg_dump --clean --if-exists -f`），所以它包含 RAG 用到的 `vector` 类型 `document_chunks` 表。**目标 Postgres 必须在你还原之前就具备 `pgvector` 扩展**，否则转储里的 `CREATE EXTENSION IF NOT EXISTS vector` 无法执行，`document_chunks` 表也创建失败。
+完整备份是纯 SQL 的 `pg_dump`（`backupData.ts` 运行的是 `pg_dump --clean --if-exists -f`），所以它包含 RAG 用到的 `vector` 类型 `document_chunks` 表。目标 Postgres 必须在你还原之前就具备 `pgvector` 扩展，否则转储里的 `CREATE EXTENSION IF NOT EXISTS vector` 无法执行，`document_chunks` 表也创建失败。
 
 在主机上安装一次（要匹配你的 Postgres 主版本），例如 Postgres 16：
 
@@ -37,9 +37,9 @@ psql -c "SELECT name, default_version FROM pg_available_extensions WHERE name = 
 
 如果没装就还原：
 
-- 本项目的 `restore-backup`（以及任何带 `ON_ERROR_STOP=1` 的 `psql -f`）会**提前中止**，报
+- 本项目的 `restore-backup`（以及任何带 `ON_ERROR_STOP=1` 的 `psql -f`）会提前中止，报
   `extension "vector" is not available`：不会载入任何数据。装好 pgvector 再重试。
-- 手动 `psql -f` 且**忽略错误**（`ON_ERROR_STOP=0`）更糟：失败的 `COPY public.document_chunks` 会让
+- 手动 `psql -f` 且忽略错误（`ON_ERROR_STOP=0`）更糟：失败的 `COPY public.document_chunks` 会让
   psql 的输入解析器错位，于是它把后面的 `COPY` 数据行误当成 SQL 解析（一连串
   `syntax error at or near …`）。这会悄悄丢掉整张表（已观察到：`documents` 和 `llms`），留下一个
   看起来完好、其实少了很多行的半还原数据库。还原时始终用 `ON_ERROR_STOP=1`，让失败立刻暴露出来。
@@ -51,7 +51,7 @@ TomoriBot 自带两个备份脚本，各自针对不同的数据：
 - **`bun run backup`**：完整的数据库结构加数据转储（人格、记忆、配置，全部内容）
 - **`bun run backup:personas`**：只包含人格预设集和按人格区分的服务器记忆
 
-为了安全迁移，请使用**完整备份**：
+为了安全迁移，请使用完整备份：
 
 ```bash
 bun run backup
@@ -112,11 +112,11 @@ pg_restore \
   tomoribot-backup-20240115-143045.dump
 ```
 
-**注意：** 除非你在 `.pgpass` 文件（PostgreSQL 自带的凭据文件）里设置好密码，否则 `pg_restore` 会提示你输入。
+注意： 除非你在 `.pgpass` 文件（PostgreSQL 自带的凭据文件）里设置好密码，否则 `pg_restore` 会提示你输入。
 
 ## 给通过 CI 部署的贡献者：`(Checkpoint)` 约定
 
-如果你维护一个通过 `.github/workflows/deploy-tomoribot-{aws,gcp}.yml` 里的工作流部署到 AWS 或 GCP 的分支，这些流水线支持**选择启用的部署前快照**：当提交信息里包含字面量标记 `(Checkpoint)` 时，工作流会在任何代码被部署之前、也在启动时的迁移执行器碰到数据库之前，先运行 `aws rds create-db-snapshot`（或 GCP Cloud SQL 的对应操作）。
+如果你维护一个通过 `.github/workflows/deploy-tomoribot-{aws,gcp}.yml` 里的工作流部署到 AWS 或 GCP 的分支，这些流水线支持选择启用的部署前快照：当提交信息里包含字面量标记 `(Checkpoint)` 时，工作流会在任何代码被部署之前、也在启动时的迁移执行器碰到数据库之前，先运行 `aws rds create-db-snapshot`（或 GCP Cloud SQL 的对应操作）。
 
 这些情况下用它：
 
@@ -184,13 +184,13 @@ Snapshot is required because the migration is destructive.
 
 ## 哪些情况无法自动恢复
 
-按项目的设计（OD-R-6），**破坏性迁移无法被迁移执行器回滚**。例如：
+按项目的设计（OD-R-6），破坏性迁移无法被迁移执行器回滚。例如：
 
 - `DROP COLUMN name_here`：被删的行永久丢失，没有任何 SQL 脚本能找回它们
 - `DROP TABLE old_table`：整张表都没了
 - 类型收窄（例如 `VARCHAR(255) → VARCHAR(100)`）：超过 100 字符的值会被截断
 
-对这类操作，**唯一的恢复手段就是你的备份**。如果你还在旧版本上，而新的重构已经发布，拉取之前一定要备份。
+对这类操作，唯一的恢复手段就是你的备份。如果你还在旧版本上，而新的重构已经发布，拉取之前一定要备份。
 
 迁移执行器只能向前的设计是有意为之：回滚文件（`.down.sql`）是为开发者在测试期间的安全而存在的，但生产环境的恢复靠备份，而不是重新执行那些无法撤销的操作。
 
@@ -198,22 +198,22 @@ Snapshot is required because the migration is destructive.
 
 常见情形：有人让你在现有安装上测一个分支，你想知道检出该分支、启动它、再切回 `main`，会不会伤到你的数据库。
 
-**关键事实：**
+关键事实：
 
 - Git 和 PostgreSQL 是两个世界。`git checkout` 只替换磁盘上的文件；它从不连接数据库，也不修改数据库。你已应用的迁移状态存在 `schema_migrations` 表里，不在 git 里。
-- 迁移会在**启动时自动**运行（通过 `initializeDatabase.ts`），所以你一启动该分支，它的新迁移就会应用到你所指向的那个数据库上。
-- 只能向前的执行器**从不自动回滚**。当你回到 `main` 时，它扫描磁盘上的文件，发现没有待应用的迁移，就什么都不做。分支应用过的迁移仍然处于已应用状态。
+- 迁移会在启动时自动运行（通过 `initializeDatabase.ts`），所以你一启动该分支，它的新迁移就会应用到你所指向的那个数据库上。
+- 只能向前的执行器从不自动回滚。当你回到 `main` 时，它扫描磁盘上的文件，发现没有待应用的迁移，就什么都不做。分支应用过的迁移仍然处于已应用状态。
 
-**那它安全吗？** 这完全取决于该分支的迁移做了什么：
+那它安全吗？ 这完全取决于该分支的迁移做了什么：
 
-- **只有追加**（新表或新列）→ 安全。新对象只是闲置在那里；`main` 的代码从不引用它们，所以不会导致结果错误或崩溃。它们是无害的赘余。
-- **破坏性**（对 `main` 仍在使用的表做 `DROP`、`RENAME`、`ALTER`）→ 不安全。分支的改动会让 `main` 的代码面对一个已经消失或已被改动的列或表。
+- 只有追加（新表或新列）→ 安全。新对象只是闲置在那里；`main` 的代码从不引用它们，所以不会导致结果错误或崩溃。它们是无害的赘余。
+- 破坏性（对 `main` 仍在使用的表做 `DROP`、`RENAME`、`ALTER`）→ 不安全。分支的改动会让 `main` 的代码面对一个已经消失或已被改动的列或表。
 
-**最稳妥的做法：** 让该分支指向一个用完就扔的数据库（另设一个 `POSTGRES_DB`），这样你的真实数据永远不会被碰到。你本来就用 `POSTGRES_*` 变量构建连接，而 `bun run nuke-db` 可以重置一个临时数据库。
+最稳妥的做法： 让该分支指向一个用完就扔的数据库（另设一个 `POSTGRES_DB`），这样你的真实数据永远不会被碰到。你本来就用 `POSTGRES_*` 变量构建连接，而 `bun run nuke-db` 可以重置一个临时数据库。
 
 ### 手动回滚测试用的迁移
 
-如果你在**真实**数据库上测过某个分支，事后想撤销它的迁移，就用回滚执行器。与只能向前的执行器不同，它**从不自动运行**：回滚永远是刻意的主动行为，因为 `.down.sql` 文件通常是有损的。
+如果你在真实数据库上测过某个分支，事后想撤销它的迁移，就用回滚执行器。与只能向前的执行器不同，它从不自动运行：回滚永远是刻意的主动行为，因为 `.down.sql` 文件通常是有损的。
 
 ```bash
 # 只预览（空运行）：看看会回滚什么
@@ -225,11 +225,11 @@ bun run migrate:down --last=2     # 回滚最近应用的两个迁移
 bun run migrate:down 034 --yes
 ```
 
-该指令按**递减**的版本顺序运行选中的 `.down.sql` 文件（这样依赖它的迁移会先被撤销），然后删除对应的 `schema_migrations` 数据行。这些行被删掉之后，下次你启动一个仍然带着这些迁移的分支时，只能向前的执行器会重新应用它们。
+该指令按递减的版本顺序运行选中的 `.down.sql` 文件（这样依赖它的迁移会先被撤销），然后删除对应的 `schema_migrations` 数据行。这些行被删掉之后，下次你启动一个仍然带着这些迁移的分支时，只能向前的执行器会重新应用它们。
 
-> **请还在该分支上时运行它。** 回滚会从磁盘读取 `NNN_description.down.sql`。一旦你 `git checkout main`，那些文件就没了，回滚也就无法再执行。先回滚，再切分支。
+> 请还在该分支上时运行它。 回滚会从磁盘读取 `NNN_description.down.sql`。一旦你 `git checkout main`，那些文件就没了，回滚也就无法再执行。先回滚，再切分支。
 
-> **它仍然是有损的。** 在这里回滚 `034` 会运行 `DROP TABLE short_term_memories`，所以测试期间创建的任何数据都会消失。对测试清理来说这在意料之中，但绝不要在没有备份的情况下对你想保留的数据运行 `migrate:down`。
+> 它仍然是有损的。 在这里回滚 `034` 会运行 `DROP TABLE short_term_memories`，所以测试期间创建的任何数据都会消失。对测试清理来说这在意料之中，但绝不要在没有备份的情况下对你想保留的数据运行 `migrate:down`。
 
 ## 另见
 

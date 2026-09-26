@@ -14,7 +14,7 @@ Chế độ kích hoạt có chủ đích.
 Theo mặc định, bot sẽ trả lời khi bạn:
 
 - **Nhắc đến bot (mention)**: `@TomoriBot`
-- **Trả lời (reply)** vào một trong các tin nhắn của bot (bao gồm cả tin nhắn webhook của một persona)
+- Trả lời (reply) vào một trong các tin nhắn của bot (bao gồm cả tin nhắn webhook của một persona)
 - **Sử dụng từ kích hoạt**: bất kỳ từ thông thường nào bạn đã đăng ký, được nói ở bất kỳ đâu trong tin nhắn
 - **Sử dụng `/respond`**: yêu cầu bot trả lời thủ công
 
@@ -42,7 +42,7 @@ các tin nhắn:
 <!-- anchor: roleplay-channels -->
 
 Các kênh nhập vai sẽ ẩn việc sử dụng emoji tùy chỉnh và sticker trong câu trả lời của bot. Mọi người cũng
-có thể sử dụng `/tool delete turn` tại đó để xóa lượt phản hồi mới nhất của bot mà không cần quyền Manage Server.
+có thể sử dụng `/tool delete turn` tại đó để xóa lượt phản hồi mới nhất của bot mà không cần quyền Quản lý máy chủ.
 
 Cấu hình các kênh này từ trang Quy tắc kênh (Channel Rules) trong `/config`.
 
@@ -59,7 +59,7 @@ Ngữ cảnh này bao gồm:
 - **Những người tham gia cuộc trò chuyện**: tên hiển thị của người tham gia, cách nhắc đến họ, mọi thẻ
   ngoại hình, cùng các lời nhắc đang chờ xử lý của họ.
 - **Hoạt động của người dùng (trạng thái hiện diện)**: hoạt động Discord của người dùng: họ đang **chơi** gì,
-  **phát trực tiếp** gì, **nghe** gì (ví dụ: bài hát và nghệ sĩ trên Spotify), **xem** gì, hoặc trạng thái tùy chỉnh của họ.
+  phát trực tiếp gì, nghe gì (ví dụ: bài hát và nghệ sĩ trên Spotify), xem gì, hoặc trạng thái tùy chỉnh của họ.
 
 Trạng thái hiện diện được kiểm soát bởi quyền riêng tư: trạng thái này chỉ được chia sẻ đối với người dùng ở mức
 riêng tư `Tối thiểu` (Minimal, mặc định: xem `/personal config`) và chỉ khi bot đã bật intent *Guild Presences*
@@ -83,7 +83,7 @@ viên tham gia hơn là một trợ lý được triệu hồi.
 <!-- anchor: deliberate-trigger-mode -->
 
 Nếu mọi người thường xuyên nhắc đến tên persona trong cuộc trò chuyện thông thường, các từ kích hoạt dạng văn
-bản thuần có thể vô tình kích hoạt bot. **Chế độ kích hoạt có chủ đích (DTM)** giải quyết vấn đề này bằng cách
+bản thuần có thể vô tình kích hoạt bot. Chế độ kích hoạt có chủ đích (DTM) giải quyết vấn đề này bằng cách
 làm cho các từ kích hoạt thuần không còn được tính là một kích hoạt rõ ràng.
 
 Khi DTM bật:
@@ -92,7 +92,7 @@ Khi DTM bật:
 - Lượt nhắc Discord vẫn hoạt động
 - Trả lời tin nhắn (reply) vẫn hoạt động
 - `/respond` vẫn hoạt động
-- **Các từ kích hoạt dạng văn bản thuần không còn kích hoạt bot nữa**
+- Các từ kích hoạt dạng văn bản thuần không còn kích hoạt bot nữa
 
 Điều này buộc người dùng phải kích hoạt có chủ đích thay vì vô tình kích hoạt.
 
@@ -108,7 +108,7 @@ Trong `/help`, chọn `Hành vi`, sau đó chọn `Chế độ kích hoạt có 
 
 :::note
 Đừng nhầm lẫn `Chế độ kích hoạt có chủ đích` (trang này, kiểm soát *cách bot được kích hoạt*) với
-**Chế độ công cụ có chủ đích**, vốn kiểm soát *công cụ nào được cung cấp cho model* trong một lượt hội
+Chế độ công cụ có chủ đích, vốn kiểm soát *công cụ nào được cung cấp cho model* trong một lượt hội
 thoại nhất định. Cả hai đều dùng chung từ viết tắt "DTM" nhưng không liên quan đến nhau. Xem
 [Công cụ & tiện ích mở rộng](/vi/features/capabilities/tools-and-extensions/#deliberate-tool-mode).
 :::

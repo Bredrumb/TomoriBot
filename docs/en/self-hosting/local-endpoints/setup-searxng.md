@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-The `web_search` tool routes through an engine chain: **Brave → SearXNG → DuckDuckGo → IAsk**. A local SearXNG instance provides another search source when an engine rate-limits or fails. It also provides the `science`, `it`, `files`, and `music` categories.
+The `web_search` tool routes through an engine chain: Brave → SearXNG → DuckDuckGo → IAsk. A local SearXNG instance provides another search source when an engine rate-limits or fails. It also provides the `science`, `it`, `files`, and `music` categories.
 
 Choose one SearXNG setup path:
 
@@ -42,14 +42,14 @@ docker build -t tomoribot-searxng:latest -f servers/searxng/Dockerfile servers/s
 
 Then run it:
 
-**PowerShell:**
+PowerShell:
 ```powershell
 docker run -d --name searxng -p 8080:8080 `
   --tmpfs /etc/searxng `
   tomoribot-searxng:latest
 ```
 
-**Bash (Linux/macOS):**
+Bash (Linux/macOS):
 ```bash
 docker run -d --name searxng -p 8080:8080 \
   --tmpfs /etc/searxng \

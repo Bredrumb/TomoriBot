@@ -32,13 +32,13 @@ the LTM tools instead.
 
 ## Intent detection gate
 
-**Symbol:** `hasExplicitLongTermMemoryIntent`:
+- **Symbol**: `hasExplicitLongTermMemoryIntent`:
 `src/utils/memory/explicitLongTermMemoryIntent.ts:31`
 
-**Where it runs:** Inside `buildChatTurnContext` (`src/utils/chat/contextPipeline.ts:70`),
+- **Where it runs**: Inside `buildChatTurnContext` (`src/utils/chat/contextPipeline.ts:70`),
 before the tool-loop begins.
 
-**What it does:** Scans the incoming user message for explicit persistence
+- **What it does**: Scans the incoming user message for explicit persistence
 phrases. English phrases: `"remember"`, `"don't forget"`, `"note"`,
 `"commit to memory"`, `"for future conversations"`, `"for future reference"`.
 Japanese phrases: `"覚えておいて"`, `"忘れないで"`, and several conjugation

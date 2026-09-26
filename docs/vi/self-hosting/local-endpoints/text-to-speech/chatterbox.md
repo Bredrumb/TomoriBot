@@ -46,17 +46,17 @@ Nút bật tắt model nhanh trong `/config` phải luôn được bật để s
 
 ### Chatterbox tiêu chuẩn (0.5B với CFG & độ phóng đại)
 
-Model Chatterbox 0.5B gốc (`ChatterboxTTS`) được tích hợp trực tiếp vào server wrapper. Model này đánh đổi các thẻ sự kiện trong ngoặc vuông nội dòng của Turbo để lấy khả năng kiểm soát giọng nói chi tiết bằng cách sử dụng **Classifier-Free Guidance (`cfg_weight`)** và **`exaggeration`** (độ phóng đại cảm xúc).
+Model Chatterbox 0.5B gốc (`ChatterboxTTS`) được tích hợp trực tiếp vào server wrapper. Model này đánh đổi các thẻ sự kiện trong ngoặc vuông nội dòng của Turbo để lấy khả năng kiểm soát giọng nói chi tiết bằng cách sử dụng Classifier-Free Guidance (`cfg_weight`) và `exaggeration` (độ phóng đại cảm xúc).
 
 Cách sử dụng model Tiêu chuẩn:
 1. Khởi động server wrapper như bình thường.
 2. Trong Discord, chạy `/config` > `Model` > `Tham số & Giọng đọc TTS`.
-3. Chuyển nút bật tắt tùy chọn **Fast Model (Turbo)** sang **TẮT**.
+3. Chuyển nút bật tắt tùy chọn Fast Model (Turbo) sang TẮT.
 4. Ở lần tạo tiếp theo, wrapper sẽ tải trễ và nạp model 0.5B tiêu chuẩn vào bộ nhớ.
 
 Cả hai giá trị đều là các trường văn bản trong cửa sổ tương tác `Sửa tham số`. Chúng luôn có thể chỉnh sửa được, và trang có lưu ý rằng chúng sẽ bị bỏ qua khi model nhanh được bật:
-- **`cfg_weight`** (mặc định `0.5`): Điều chỉnh mức độ âm thanh tổng hợp bám sát theo nhịp độ và phong cách giọng nói tham chiếu.
-- **`exaggeration`** (mặc định `0.5`): Kiểm soát cường độ cảm xúc và ngữ điệu kịch tính khi truyền đạt.
+- `cfg_weight` (mặc định `0.5`): Điều chỉnh mức độ âm thanh tổng hợp bám sát theo nhịp độ và phong cách giọng nói tham chiếu.
+- `exaggeration` (mặc định `0.5`): Kiểm soát cường độ cảm xúc và ngữ điệu kịch tính khi truyền đạt.
 
 > [!NOTE]
 > Chatterbox tiêu chuẩn không hỗ trợ các thẻ sự kiện trong ngoặc vuông nội dòng (chẳng hạn như `[laughs]` hoặc `[sigh]`). TomoriBot tự động loại bỏ các thẻ trong ngoặc vuông khỏi văn bản prompt khi nút bật tắt Fast Model bị tắt.
@@ -70,14 +70,14 @@ Chạy `/providers`, chọn `Thêm endpoint tùy chỉnh mới`, và sử dụng
 - API Compatibility: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8011`
 
-Sau khi lưu kết nối, hãy chọn kết nối đó và sử dụng menu thả xuống model để thêm một model Speech. Chọn `Voice Clone` làm Voice Source Mode và `Bracket Tags` làm Script Markup để các thẻ truyền đạt vẫn còn khi gửi.
+Sau khi lưu kết nối, hãy chọn kết nối đó và sử dụng menu thả xuống model để thêm một model Speech. Chọn `Sao chép giọng đọc` làm Chế độ nguồn giọng đọc và `Thẻ trong ngoặc vuông` làm Script Markup để các thẻ truyền đạt vẫn còn khi gửi.
 
 Sử dụng `/providers` để đăng ký endpoint và thiết lập model. Sau đó mở `/config` > Models > Switch Models để chọn và kích hoạt endpoint đã đăng ký.
 
 ## Thiết lập giọng nói persona
 
 1. Chuẩn bị một đoạn âm thanh giọng nói rõ ràng dài 10 giây với một người nói và không có nhạc nền.
-2. Mở `/config` trong phần Models > TTS Parameters & Voices và tải đoạn âm thanh lên.
+2. Mở `/config` trong phần Models > Tham số & Giọng đọc TTS và tải đoạn âm thanh lên.
 3. Mở `/config` trong phần Persona > Voice, sau đó chọn persona và mẫu giọng nói.
 
 Đoạn âm thanh dài hơn không mang lại thêm giá trị nào cho Chatterbox, và cũng không bị từ chối. Runtime của nó cắt đoạn tham chiếu trước khi điều kiện hóa, nên phần âm thanh vượt quá cửa sổ vẫn được tải lên, lưu trữ, rồi sau đó bị bỏ qua ([`tts_turbo.py`](https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts_turbo.py), [`tts.py`](https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts.py)):
@@ -93,7 +93,7 @@ Turbo và Nano có thể sử dụng các thẻ sự kiện trong ngoặc vuông
 
 ## Tinh chỉnh tùy chọn
 
-Sử dụng `/config` trong phần Models > TTS Parameters & Voices để tinh chỉnh payload yêu cầu Chatterbox:
+Sử dụng `/config` trong phần Models > Tham số & Giọng đọc TTS để tinh chỉnh payload yêu cầu Chatterbox:
 
 - Nút bật tắt model nhanh mặc định là bật. TomoriBot giữ lại các thẻ sự kiện Turbo/Nano được hỗ trợ và loại bỏ các thẻ mô tả trong ngoặc vuông không được hỗ trợ trước khi wrapper gọi `ChatterboxTurboTTS.generate(...)`.
 - `cfg_weight` mặc định là `0.5`. Giá trị tối thiểu là `0`; TomoriBot không đặt mức tối đa cứng. Giá trị này chỉ áp dụng khi `turbo` là `false`; các giá trị thấp hơn có thể giúp làm chậm các giọng nói tham chiếu nhanh, trong khi các giá trị cao hơn sẽ bám sát giọng tham chiếu mạnh mẽ hơn.

@@ -55,14 +55,14 @@ skips an unknown folder, which keeps a local experiment from breaking startup.
 shows it. Command metadata localizations need no registration step: `commandLoader` emits the keys the
 tree authors.
 
-**Aliases.** `LOCALE_ALIASES` in `src/constants/locales.ts` maps a Discord code to another locale's
+- **Aliases**: `LOCALE_ALIASES` in `src/constants/locales.ts` maps a Discord code to another locale's
 tree. `es-ES` reads `es-419`, which is written in neutral Latin American Spanish so the product has one
 Spanish voice. `localizer()` resolves aliases before lookup (so `es-MX` also reaches `es-419`), and
 `commandLoader` emits the alias key next to its source. `getSupportedLocales()` returns authored folders
 only; `getRegisterableLocales()` adds the aliases. Never create a folder for an alias. The docs site
 inverts the same map into `DOCS_LOCALE_ALIASES`.
 
-**Picker order.** Pickers follow `LOCALE_DISPLAY_ORDER`, derived from the row order of `DOCS_LOCALES`
+- **Picker order**: pickers follow `LOCALE_DISPLAY_ORDER`, derived from the row order of `DOCS_LOCALES`
 in `src/constants/docsLocales.ts`. Insert the new row where it should appear; that one move reorders
 the docs switcher, the README switcher, and the bot's picker. The picker in `/personal config` >
 Profile > General (also `/personal language`) is a String Select capped at 25 options
@@ -91,7 +91,7 @@ The tree mirrors `src/locales/en-US/`: `general.ts`, `tools.ts`, `providers.ts`,
   raw key. A partial locale therefore shows English for its gaps. A key missing from every locale fails
   `bun run check-locales`.
 
-**What the model reads stays English.** Tool schema `description:` fields in
+- **What the model reads stays English**: tool schema `description:` fields in
 `src/tools/functionCalls/*.ts` are English literals, because a localized schema lowers tool-calling
 accuracy and no check would notice. A tool result's `error` is English for the model and its `message`
 is localized for the user. System prompt bodies stay English, as do dates and durations interpolated
@@ -118,7 +118,7 @@ Some bot embeds are classified by their rendered title. The reader does not know
 message, so it compares the title against every locale's rendering. `PROTOCOL_KEYS` in
 `src/utils/discord/embedProtocol.ts` lists those keys.
 
-**A protocol key's translation is frozen after that locale's first release.** Changing it orphans
+- **Protocol key stability**: a protocol key's translation is frozen after that locale's first release. Changing it orphans
 every embed already posted with the old title, including the reset and compact-refresh markers that
 history slicing uses. `sliceMessagesAtResetMarker` then finds no marker and returns no error, so
 `/reset` and `/refresh` stop applying with no log and no failing test.
@@ -182,7 +182,7 @@ The descriptions live in three shared files: `models.ts`, `naiPresets.ts`, and `
 parallel edits to one typed array conflict on every batch. System prompt bodies (`promptText`) are not
 translated.
 
-**Persona variants** live in `src/db/seed/catalog/personas/{preset}/{code}.ts`, each exporting one
+Persona variants live in `src/db/seed/catalog/personas/{preset}/{code}.ts`, each exporting one
 `persona: PersonaInput`, registered by hand in `personas/index.ts`. An unregistered file does not seed.
 Write each variant the way a native speaker would write an original character: same identity, same
 relationship to the user, same register, different words. A translated persona reads like a foreigner
@@ -234,7 +234,7 @@ cd apps/docs && bun run build                      # if docs changed: hreflang a
 
 `check-locales` has no locale filter; the other review tools take `--locale=<code>`.
 
-**`find-stale-translations` reasons.** `drifted` means the English changed after the translation's
+- **`find-stale-translations` reasons**: `drifted` means the English changed after the translation's
 line was last committed, taken from `git blame` on `HEAD`, so uncommitted edits are ignored. The count
 is a lower bound, and a listed key may still be correct after a wording-only English change, so review
 each entry rather than retranslating the list. `unfollowed` compares the branch with its merge base.
@@ -251,7 +251,7 @@ Failures that only `bun run test` reports:
   new locale's values; do not loosen the assertions.
 - `tests/unit/docs/docsLocaleConfig.test.ts` fails when `docsTree` flags and `docs/` folders disagree.
 
-**Boot the bot and confirm command registration.** Nothing else proves Discord accepted the folder
+Boot the bot and confirm command registration; nothing else proves Discord accepted the folder
 name, and startup is also where protocol key collisions surface.
 
 The root `bun run check` does not type-check `apps/docs`; its build is the only check for those files.

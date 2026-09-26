@@ -25,14 +25,14 @@ How to add a column to an existing table.
 5. After a successful write, invalidate the affected caches in the same code path; never before the
    write and never on failure.
 
-**Runtime config columns.** A column on a `server_*_configs` table that the bot reads through
+- **Runtime config columns**: a column on a `server_*_configs` table that the bot reads through
 `tomoriState.config` must also be added to both config SELECTs in
 `src/utils/db/repositories/PersonaRepository.ts` (`loadTomoriState` and `loadAllForServer`; search
 for `scaps.tool_use_enabled`). `assembledServerConfigSchema` gives each field a `.default()`, so a
 column missing from the SELECT is silently replaced by its default and a check like
 `config.flag === false` never fires, with no type or test failure.
 
-**Descriptions.** Model and preset descriptions use the existing `descriptions` JSONB locale map. Do
+- **Descriptions**: model and preset descriptions use the existing `descriptions` JSONB locale map. Do
 not add a column per language; add translations to the seed catalog's `i18n` field and keep English in
 `desc`.
 

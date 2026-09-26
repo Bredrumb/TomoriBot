@@ -2,7 +2,7 @@
 title: "Qwen3-TTS"
 ---
 
-Usa `servers/tts/qwen3tts/server.py` para ambos modos de Qwen3-TTS 12Hz 1.7B, el texto a voz más grande pero más preciso entre las opciones actuales de TomoriBot. De forma predeterminada, se inicia en el modo automático (Auto), que elige el modelo base de clonación de voz o el modelo de Diseño de voz (VoiceDesign) de cada forma de solicitud.
+Usa `servers/tts/qwen3tts/server.py` para ambos modos de Qwen3-TTS 12Hz 1.7B, el texto a voz más grande pero más preciso entre las opciones actuales de TomoriBot. De forma predeterminada, se inicia en el modo automático (Auto), que elige el modelo base de clonación de voz o el modelo de Diseño de voz (Diseño de voz) de cada forma de solicitud.
 
 ## Configuración
 
@@ -66,7 +66,7 @@ Qwen3-TTS anuncia clonación rápida a partir de tan solo 3 segundos de audio de
 
 Usa esto para las personas que deban usar una descripción de voz escrita en lugar de una muestra:
 
-1. Abre `/config` bajo Persona > Voz y elige VoiceDesign.
+1. Abre `/config` bajo Persona > Voz y elige Diseño de voz.
 2. Elige la persona.
 3. Ingresa un prompt de voz en lenguaje natural, como la edad del orador, el tono, el acento y la entrega.
 
@@ -76,7 +76,7 @@ El modo automático mantiene ambas configuraciones. Las personas configuradas ba
 
 ## (Opcional) Servidor solo para Diseño de voz
 
-Inicia el mismo servidor en modo VoiceDesign cuando sirvas `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign`.
+Inicia el mismo servidor en modo Diseño de voz cuando sirvas `Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign`.
 
 Windows PowerShell:
 
@@ -95,5 +95,5 @@ TOMORI_TTS_MODE=voice-design python servers/tts/qwen3tts/server.py
 
 También puedes pasar `--mode voice-design` en lugar de establecer `TOMORI_TTS_MODE`. La URL predeterminada del punto de conexión solo para Diseño de voz es `http://127.0.0.1:8014`.
 
-Regístralo de la misma manera que el modo automático, pero usa la URL de endpoint `http://127.0.0.1:8014` y elige `VoiceDesign`
+Regístralo de la misma manera que el modo automático, pero usa la URL de endpoint `http://127.0.0.1:8014` y elige `Diseño de voz`
 como el Modo de fuente de voz en el modelo de Voz.

@@ -4,9 +4,9 @@ title: "04: Channel Lock"
 
 Per-channel mutex wrapper around the per-turn body.
 
-**File:** `src/utils/chat/channelQueue.ts:75-134`
+- **File**: `src/utils/chat/channelQueue.ts:75-134`
 
-> **Concurrency wrapper, not a data-transform stage.** Input and output are
+> Concurrency wrapper, not a data-transform stage. Input and output are
 > structurally the same (`RunnableChatAdmission` flows in; the callback receives
 > a `LockedChatTurn` derived from it). What this stage *does* is enforce that
 > exactly one turn-sequence runs per channel at a time, manage the Discord
@@ -46,7 +46,7 @@ The callback receives `LockedChatTurn`:
 
 ## Side effects
 
-**Lock acquisition (if `skipLock === false`):**
+### Lock acquisition (if `skipLock === false`)
 
 - Looks up or creates a `ChannelLockEntry` keyed by `channelId` in the in-memory
   `channelLocks` map.
@@ -60,18 +60,18 @@ The callback receives `LockedChatTurn`:
   own timeout. Work outside those phases keeps the stale-lock recovery.
 - Sets `isLocked = true`, records `lockedAt`, `currentMessageId`, `userDiscId`,
   persona-job/persona-id/command-triggered flags.
-- Creates a **fresh `AbortController`** (`activeTurnAbortController`) for this
+- Creates a fresh `AbortController` (`activeTurnAbortController`) for this
   turn. Its signal is passed to tools via `ToolContext.abortSignal` so HTTP-level
   cancellation propagates on `/kill`.
 
-**During the callback:**
+### During the callback
 
 - `startTyping()` (called by the coordinator after `planChatTurns` produces
   ≥ 1 turn) starts the Discord typing keepalive interval (default 8s,
   configurable via env). Interval auto-stops when the lock is released or a
   stop request is registered.
 
-**Lock release (always runs via `finally`):**
+### Lock release (always runs via `finally`)
 
 - Clears `isLocked`, `lockedAt`, all active-turn state.
 - Aborts `activeTurnAbortController` and clears `activeStreamKill`; ensures no
@@ -96,7 +96,7 @@ Manual slash-command work bypasses the latest-follow-up replacement path and is
 stored in this FIFO queue. This preserves command-owned callbacks and payload
 fields such as the user-impersonation target while an ordinary turn is active.
 
-**`skipLock=true` path:**
+### `skipLock=true` path
 
 - Re-entries from retry/post-turn effects pass `skipLock=true`. The stage
   short-circuits: reuses the outer lock's `lockedAt` and queue depth, invokes
@@ -110,7 +110,7 @@ After this stage's `finally` block runs:
 - `lockEntry.isLocked === false` for the duration between turn-sequences.
 - The Discord typing keepalive timer is cleared (`typingKeepaliveTimer ===
   null`).
-- The queued-message replay is **scheduled via `setImmediate`**, not awaited:
+- The queued-message replay is scheduled via `setImmediate`, not awaited:
   the current invocation returns before the next message is processed, so the
   call stack stays shallow even under heavy queue pressure.
 - A pending stop-response (if any) was scheduled *before* the queue replay, so
@@ -167,12 +167,12 @@ carries a footer warning that the provider may still bill for the job.
 
 ## Extension points
 
-**Internal: concurrency primitive.** The lock, queue, and typing-keepalive
+- **Internal: concurrency primitive**: the lock, queue, and typing-keepalive
 mechanics are tightly coupled to Discord rate limits, the stream orchestrator's
 stop/follow-up signaling, and the recursive `tomoriChat()` re-entry pattern.
 Replacing this stage from a plugin would risk breaking those guarantees.
 
-**Plugin-relevant adjacent surfaces** (lower in the same module):
+- **Plugin-relevant adjacent surfaces** (lower in the same module):
 
 | Helper | What a plugin might do | Plugin-relevance |
 |---|---|---|

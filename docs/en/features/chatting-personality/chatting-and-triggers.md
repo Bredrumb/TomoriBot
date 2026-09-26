@@ -58,11 +58,11 @@ what was said. This context includes:
   `/config` > Engine > General, plus each person's own local time if they've set `/personal config`.
 - **Who's in the conversation**: participants' display names, how to mention them, any
   physical-appearance tags, and their pending reminders.
-- **What someone's up to (presence)**: a user's Discord activity: what they're **playing**,
-  **streaming**, **listening to** (e.g. a Spotify track and artist), **watching**, or their
+- **What someone's up to (presence)**: a user's Discord activity: what they are playing,
+  streaming, listening to (such as a Spotify track and artist), watching, or their
   custom status.
 
-Presence is privacy-gated: it's only shared for users at the `Minimal` privacy level (the
+Presence is privacy-gated: it's only shared for users at the `None` privacy level (the
 default: see `/personal config`) and only when the bot has Discord's *Guild Presences*
 intent enabled. Users who raise their privacy, or self-hosts running without that intent,
 simply won't have their activity surfaced to her.
@@ -84,7 +84,7 @@ than a summoned assistant.
 <!-- anchor: deliberate-trigger-mode -->
 
 If people say a persona's name a lot in ordinary conversation, plain trigger words can fire
-her by accident. **Deliberate Trigger Mode (DTM)** fixes this by making plain trigger words
+her by accident. `Deliberate Trigger Mode` (DTM) fixes this by making plain trigger words
 stop counting as an explicit trigger.
 
 When DTM is on:
@@ -109,7 +109,7 @@ In `/help`, choose `Behavior`, then `Deliberate Trigger Mode`, for the same summ
 
 :::note
 Don't confuse `Deliberate Trigger Mode` (this page, which controls *how she's triggered*) with
-**Deliberate Tool Mode**, which controls *which tools are exposed to the model* on a given
+`Deliberate Tool Mode`, which controls *which tools are exposed to the model* on a given
 turn. They share the "DTM" abbreviation but are unrelated. See
 [Tools & Extensions](/features/capabilities/tools-and-extensions/#deliberate-tool-mode).
 :::

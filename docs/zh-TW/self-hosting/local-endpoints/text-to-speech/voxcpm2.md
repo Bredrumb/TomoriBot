@@ -4,11 +4,11 @@ title: "VoxCPM2"
 
 VoxCPM2 是 OpenBMB 的 2B 參數多語言文字轉語音模型。它支援 30 種語言、48 kHz 輸出、自然語言語音設計、參考音訊語音複製、可控複製，以及逐字稿輔助的「Ultimate Cloning」。TomoriBot 透過 `servers/tts/voxcpm2/` 中的輕薄包裝使用官方的 `voxcpm` Python 套件。
 
-預設模型是官方的 `openbmb/VoxCPM2` BF16 檢查點。OpenBMB 回報標準執行環境約需 **8 GB VRAM**，所以正常模型能舒適地塞進 16 GB 的 NVIDIA GPU，預設不需要量化檢查點。
+預設模型是官方的 `openbmb/VoxCPM2` BF16 檢查點。OpenBMB 回報標準執行環境約需 8 GB VRAM，所以正常模型能舒適地塞進 16 GB 的 NVIDIA GPU，預設不需要量化檢查點。
 
 ## 授權條款
 
-VoxCPM2 的程式碼與模型權重依 **Apache-2.0** 發布，包含商業使用，但受授權條款約束。TomoriBot 不重新散布權重；安裝程式會從官方 Hugging Face repository 下載它們。
+VoxCPM2 的程式碼與模型權重依 Apache-2.0 發布，包含商業使用，但受授權條款約束。TomoriBot 不重新散布權重；安裝程式會從官方 Hugging Face repository 下載它們。
 
 官方上游資源：
 
@@ -45,8 +45,8 @@ VoxCPM2 以在要合成的文字前面加上括號包住的自然語言描述，
 
 建議起點：
 
-- Python **3.10 到 3.12**
-- 官方 BF16 執行環境需要具備 **8 GB VRAM 以上**的 NVIDIA GPU；12 到 16 GB 有舒適的餘裕
+- Python 3.10 到 3.12
+- 官方 BF16 執行環境需要具備 8 GB VRAM 以上的 NVIDIA GPU；12 到 16 GB 有舒適的餘裕
 - 目前的 NVIDIA 驅動程式，以及支援 CUDA 的 PyTorch 建置以進行 GPU 加速
 - 支援 CPU 作為備援，但明顯較慢
 
@@ -112,7 +112,7 @@ $env:VOXCPM2_PREFETCH = "0"
 - Capability：`Speech`
 - API Compatibility：`tts-clone`
 - Endpoint URL：`http://127.0.0.1:8016`
-- Voice Source Mode：`Auto`
+- 語音來源模式：`Auto`
 - Script Markup：`Plain`
 - Supports Instruct：`Yes`
 

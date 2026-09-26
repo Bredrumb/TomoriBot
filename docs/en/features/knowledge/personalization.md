@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-TomoriBot can be configured for **you specifically** with the `/personal` commands: settings
+TomoriBot can be configured for you specifically with the `/personal` commands: settings
 that follow you across every server you share with her, independent of any server's
 configuration.
 
@@ -19,7 +19,7 @@ is covered on the [Memory](/features/knowledge/memory/#personal-vs-server-memori
 pronouns, and addressing style. TomoriBot never infers one from another. The addressing style
 selects a persona's masculine, feminine, or neutral naming variant, and Neutral is the
 preselected default. Blank fields are cleared and omitted from prompt context. Raw profile
-fields are exposed only at Minimal privacy.
+fields are exposed only at the `None` privacy level.
 
 `/personal config` opens a naming modal for either global or persona scope. A persona-scoped
 preference follows that persona's stable lineage across servers. Nicknames inherit from the
@@ -51,13 +51,13 @@ Two scopes are in play, and it's worth keeping them straight:
 - **Server default**: shared credentials and catalogs in `/providers`, with routing selected through
   `/model` by members with the required server permission. It applies to everyone there.
 - **Personal override**: configuration used only for your own requests. When enabled it
-  overrides the server default for that capability **across every server** where you use
+  overrides the server default for that capability across every server where you use
   TomoriBot, not just the one you set it up in.
 
-**Setup:**
+### Setup
 
 1. `/personal providers` saves a provider (your key is encrypted). This also enables your
-   personal **Text** override immediately, using that provider's default text model.
+   personal text override immediately, using that provider's default text model.
 2. `/personal config` allows selecting a different model for your personal text override.
    Picking a model here keeps Text enabled.
 3. Return to `/personal providers` whenever you need to update credentials, manage custom
@@ -83,9 +83,9 @@ When every model on your personal text route fails, TomoriBot can answer with th
 text model instead of leaving the message unanswered. That answer runs on the server's
 credentials, counts against the server's text quota, and respects the server's message cooldown,
 so a provider that fails on every message does not become a reply per message. It is reported the
-same way as any other model fallback: a **Fallback Used** button whose details name the model that
+same way as any other model fallback: a `Fallback Used` button whose details name the model that
 answered and the failures that came before it. Turn it off in `/personal config` > Models >
-Fallbacks, in the **Server Model Fallback** section, to keep your provider's failures yours. The
+Fallbacks, in the `Server Model Fallback` section, to keep your provider's failures yours. The
 setting is account-wide and on by default, so it follows you to every server that allows it.
 
 :::note[BYOK-required servers]
@@ -102,7 +102,7 @@ a fallback. Personal providers apply across every server you use her in.
 - `/personal config`: your own appearance tags (booru-style), used when an
   [image generation](/features/capabilities/media-generation/image-generation/#tag-customization)
   references you. Submit an empty box to clear them.
-- `/personal config`: control your visibility to her, up to **full invisibility** (opt out
+- `/personal config`: control your visibility to her, up to full invisibility (opt out
   of memory features entirely).
 - `/personal config`: your personal override for
   [Deliberate Trigger Mode](/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode).
@@ -116,13 +116,13 @@ a fallback. Personal providers apply across every server you use her in.
 ## Personal Spotlight
 <!-- anchor: personal-spotlight -->
 
-**Personal Spotlight: per-channel persona picks.** Spotlight lets *you* narrow which personas
+- **Personal Spotlight: per-channel persona picks**: Spotlight lets you narrow which personas
 you can trigger in one channel, and optionally assign one to auto-trigger for your own
-messages there. It's scoped to **you + one channel** and doesn't affect anyone else.
+messages there. It's scoped to you plus one channel and does not affect anyone else.
 
-**Set one up** with `/personal config`, choosing:
+To set one up with `/personal config`, choose:
 
-- a duration in hours (use **0** to keep it until you remove it manually),
+- a duration in hours (use `0` to keep it until you remove it manually),
 - the target channel,
 - the personas you want in your spotlight.
 
@@ -130,13 +130,13 @@ After choosing personas, you can optionally pick one as your **personal auto-tri
 persona**: the fallback responder for your messages in that channel. Direct triggers still
 target whichever persona you explicitly call. Press Finish to skip.
 
-**Important rules:**
+### Important rules
 
-- Spotlight only **narrows** access; it never expands it. The selected personas are the
+- Spotlight only narrows access; it never expands it. The selected personas are the
   *only* ones you can trigger there.
 - It still respects server-level persona limits configured through `/moderation`.
 - Proxy chains are blocked: if your spotlight only includes Alice, an Alice reply can't hand
   off to Bob for your message chain.
 
 Review or remove entries with `/personal config` (uncheck to remove; timed
-spotlights expire on their own). In `/help`, choose `Behavior`, then `Personal Spotlight`, for the Discord summary.
+spotlights expire on their own). In `/help`, choose `Advanced`, then `Personal Spotlight`, for the Discord summary.

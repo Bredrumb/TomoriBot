@@ -4,7 +4,7 @@ title: "02: Execute Tool Call"
 
 Validate, gate, dispatch, and record one tool call from the provider.
 
-**File:** `src/utils/chat/toolLoop.ts:237-475`
+- **File**: `src/utils/chat/toolLoop.ts:237-475`
 
 ## Mission
 
@@ -201,7 +201,7 @@ After this stage runs:
   `executeTool`).
 - A call whose provider payload was truncated is never dispatched, and its
   recovered argument subset is never replayed to the model as the call it made.
-- If `kind === "restart"` is returned, `functionHistory` will **not** receive
+- If `kind === "restart"` is returned, `functionHistory` will not receive
   an entry for this tool call; the restart mechanism replaces the tool
   response with enriched context.
 - `consecutiveToolErrors` in the outer loop is reset to `0` on `success ===

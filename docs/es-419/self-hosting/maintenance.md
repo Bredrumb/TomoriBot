@@ -247,9 +247,9 @@ Los enfriamientos de comandos son la excepción a «fijo»: los nombres `COOLDOW
 
 Los servidores locales de TTS en `servers/tts/` perdieron sus valores de respaldo compartidos, los límites por motor y los ajustes de autenticación. Un valor antiguo en `.env` o en tu shell se ignora, así que revisa las filas de abajo que cambian el comportamiento en lugar de solo repetir un valor predeterminado.
 
-- **Puertos:** `TOMORI_TTS_PORT` desapareció porque un solo valor en `.env` ponía a todos los servidores iniciados en el mismo puerto. En su lugar, cada motor lee su propia variable: `CHATTERBOX_PORT` (8011), `QWEN3TTS_PORT` (8012, o 8014 en modo de diseño de voz), `IRODORI_TTS_PORT` (8013), `FISH_S2_PORT` (8015), `VOXCPM2_PORT` (8016), `COSYVOICE3_PORT` (8017) y `MOSS_TTS_PORT` (8018).
-- **Autenticación:** los servidores ya no verifican un token de portador ni rechazan un enlace que no sea de loopback. Si configuraste `FISH_S2_API_KEY`, `VOXCPM2_API_KEY`, `TOMORI_TTS_API_KEY` o `COSYVOICE3_BEARER_TOKEN`, el endpoint ahora acepta solicitudes sin ellas. Lee [Acceso de red](/es-419/self-hosting/local-endpoints/text-to-speech/#network-access) antes de enlazar fuera de loopback.
-- **Versiones fijadas en los instaladores:** el commit del runtime de Fish Speech y las revisiones del runtime y del modelo de CosyVoice están fijados en los instaladores. Para actualizarlos hay que editar la versión fijada en el script.
+- Puertos: `TOMORI_TTS_PORT` desapareció porque un solo valor en `.env` ponía a todos los servidores iniciados en el mismo puerto. En su lugar, cada motor lee su propia variable: `CHATTERBOX_PORT` (8011), `QWEN3TTS_PORT` (8012, o 8014 en modo de diseño de voz), `IRODORI_TTS_PORT` (8013), `FISH_S2_PORT` (8015), `VOXCPM2_PORT` (8016), `COSYVOICE3_PORT` (8017) y `MOSS_TTS_PORT` (8018).
+- Autenticación: los servidores ya no verifican un token de portador ni rechazan un enlace que no sea de loopback. Si configuraste `FISH_S2_API_KEY`, `VOXCPM2_API_KEY`, `TOMORI_TTS_API_KEY` o `COSYVOICE3_BEARER_TOKEN`, el endpoint ahora acepta solicitudes sin ellas. Lee [Acceso de red](/es-419/self-hosting/local-endpoints/text-to-speech/#network-access) antes de enlazar fuera de loopback.
+- Versiones fijadas en los instaladores: el commit del runtime de Fish Speech y las revisiones del runtime y del modelo de CosyVoice están fijados en los instaladores. Para actualizarlos hay que editar la versión fijada en el script.
 
 <details>
 <summary>Todas las variables eliminadas de los servidores locales de TTS</summary>
@@ -308,11 +308,11 @@ bun run restore-backup --from backups/backup_2024-01-15_14-30-45
 ```
 
 `bun run backup:personas` es una exportación más acotada: solo preajustes de persona y memorias de
-servidor por persona, en todos los servidores. **Debe** reimportarse manualmente mediante
-`/persona import` y **no puede** usarse con `restore-backup` (eso causaría conflictos de clave
+servidor por persona, en todos los servidores. Debe reimportarse manualmente mediante
+`/persona import` y no puede usarse con `restore-backup` (eso causaría conflictos de clave
 primaria).
 
-TomoriBot también hace **copias de seguridad automáticas de inicio** en entornos que no son de
+TomoriBot también hace copias de seguridad automáticas de inicio en entornos que no son de
 producción, y una restauración completa requiere que la extensión `pgvector` esté presente en la base de
 datos de destino. Ambas se cubren en detalle en
 [Migración segura](/es-419/self-hosting/safe-migration/), junto con un procedimiento manual de

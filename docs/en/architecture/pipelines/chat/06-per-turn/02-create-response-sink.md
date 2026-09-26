@@ -5,7 +5,7 @@ title: "06.2: Response Sink"
 Resolve the Discord delivery target and produce the sink callbacks that
 generation will write through.
 
-**File:** `src/utils/chat/responseEmitter.ts:62-99`
+- **File**: `src/utils/chat/responseEmitter.ts:62-99`
 
 ## Mission
 
@@ -48,7 +48,7 @@ The `ChatResponseTarget` returned by `prepare` (see
 
 ## Side effects
 
-**On `prepare()`:**
+#### On `prepare()`
 
 - Resolves the delivery target via `resolveResponseTarget`:
   - **User impersonation** (`isUserImpersonation` + `impersonatedUserId`):
@@ -64,7 +64,7 @@ The `ChatResponseTarget` returned by `prepare` (see
 - Updates the channel lock's `activeTurnState` with this turn's persona ID
   and impersonation flags; clears `isInToolCallChain`.
 
-**On `emitStreamResult(result)`:**
+#### On `emitStreamResult(result)`
 
 - No-ops if `result.status !== "error"`.
 - If `result.data` is a `ProviderError` (has `type` + `retryable`), returns
@@ -75,13 +75,13 @@ The `ChatResponseTarget` returned by `prepare` (see
   "Generation Error" embed via `sendStandardEmbed`, gated on
   `context.shouldSurfaceUserErrors`.
 
-**On `emitError(error)`:**
+#### On `emitError(error)`
 
 - Renders an error embed (or re-throws if `isUserImpersonation`, since
   impersonation errors must not surface as the impersonated user's
   "message"). Non-deliberate turns log the failure and stay quiet in chat.
 
-**On `finalize(result)`:**
+#### On `finalize(result)`
 
 - Deletes the temporary impersonation webhook if one was created.
 - Logs the response count and final status.
@@ -109,7 +109,7 @@ Deletion is guarded so the two entry points cannot both issue it.
 
 ## Extension points
 
-**The `ChatResponseSink` interface itself is the extension point.** The sink
+- **The `ChatResponseSink` interface itself is the extension point**: the sink
 is constructed *per turn* and the same interface contract is consumed by
 both the stream orchestrator (writes chunks) and the generation stage (calls
 `prepare`/`finalize`). A plugin wanting to:
@@ -122,7 +122,7 @@ both the stream orchestrator (writes chunks) and the generation stage (calls
 - **Customize webhook identity**: `resolvePersonaWebhookIdentity` and
   `resolveImpersonatedIdentity` are the named seams.
 
-**Related but non-sink extensibility:**
+### Related but non-sink extensibility
 
 - Webhook creation/fetch policy lives in `getOrCreateWebhook` in
   webhook manager (currently `webhookManager.ts` / `webhook/webhookCore.ts`; no dedicated subsystems doc yet).

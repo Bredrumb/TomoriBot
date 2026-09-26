@@ -32,24 +32,24 @@ bun run setup
 
 | Ruta | Úsala cuando | Qué hace |
 |---|---|---|
-| **Instalación completa** | Quieres la configuración recomendada con extras livianos. | Ejecuta la instalación base y luego intenta los cuatro extras siguientes. |
-| **Instalación base** | Solo quieres el bot mínimo funcional. | Crea/configura `.env`, el token de Discord, PostgreSQL y las dependencias. |
+| Instalación completa | Quieres la configuración recomendada con extras livianos. | Ejecuta la instalación base y luego intenta los cuatro extras siguientes. |
+| Instalación base | Solo quieres el bot mínimo funcional. | Crea/configura `.env`, el token de Discord, PostgreSQL y las dependencias. |
 
 
 
 ## Qué tener listo
 
-- **[Bun](https://bun.sh/)** para ejecutar el bot y el propio asistente.
-- **Node.js v20+** (usado para las herramientas de MCP).
-- **Un token de bot de Discord** con los intents privilegiados `GuildMembers`, `MessageContent` y
+- [Bun](https://bun.sh/) para ejecutar el bot y el propio asistente.
+- Node.js v20+ (usado para las herramientas de MCP).
+- Un token de bot de Discord con los intents privilegiados `GuildMembers`, `MessageContent` y
   `GuildPresences` habilitados.
-- **Una base de datos.** TomoriBot almacena todo en PostgreSQL. No necesitas configurarla a mano, ya
+- Una base de datos. TomoriBot almacena todo en PostgreSQL. No necesitas configurarla a mano, ya
   que el asistente lo hace por ti: usará PostgreSQL si ya lo tienes instalado, o ejecutará uno por ti
   en [Docker](https://www.docker.com/) si no lo tienes. Solo asegúrate de tener alguno de los dos
   instalado antes de empezar.
 
 :::caution
-- **El PostgreSQL de Docker incluido solo ejecuta la base de datos en Docker.** El bot en sí, las
+- El PostgreSQL de Docker incluido solo ejecuta la base de datos en Docker. El bot en sí, las
   copias de seguridad de inicio, `bun run backup` y `restore-backup` siguen ejecutándose mediante Bun
   y las herramientas de cliente de PostgreSQL del host. Si prefieres ejecutar todo en Docker, usa
   [Docker Compose](/es-419/self-hosting/docker-compose/) en su lugar.
@@ -89,16 +89,16 @@ cada ruta de instalación.
 <!-- anchor: the-setup-command -->
 
 `/setup` abre un panel de lista de verificación efímero que solo puede operar la persona que lo ejecutó.
-En un servidor requiere **Administrar servidor**; en un mensaje directo está disponible para el espacio
+En un servidor requiere Administrar servidor; en un mensaje directo está disponible para el espacio
 de trabajo de esa misma persona. Cada fila del panel es un valor en borrador: `Finalizar configuración`
 es el único control que escribe algo, así que abrir, editar, cancelar o reiniciar deja intacta cada fila
 de la base de datos.
 
 | Paso | Aparece | Qué recopila |
 |---|---|---|
-| **Políticas** | Solo con `RUN_ENV=production` | Aceptación de los Términos de servicio y la Política de privacidad, ambos en un solo modal. |
-| **Proveedor de IA** | En todos los entornos | Cómo llegan las respuestas a un modelo. Uno de los tres modos de acceso siguientes. |
-| **Ajustes iniciales** | En todos los entornos | Persona inicial, estilo de respuesta, zona horaria y el prompt de sistema predeterminado del espacio de trabajo. |
+| Políticas | Solo con `RUN_ENV=production` | Aceptación de los Términos de servicio y la Política de privacidad, ambos en un solo modal. |
+| Proveedor de IA | En todos los entornos | Cómo llegan las respuestas a un modelo. Uno de los tres modos de acceso siguientes. |
+| Ajustes iniciales | En todos los entornos | Persona inicial, estilo de respuesta, zona horaria y el prompt de sistema predeterminado del espacio de trabajo. |
 
 Cualquier otro valor de `RUN_ENV` muestra el diseño de dos pasos y ningún texto de políticas. Una
 implementación que se ejecuta con `RUN_ENV=production` registra `/legal terms-of-service` y
@@ -117,7 +117,7 @@ implementación que se ejecuta con `RUN_ENV=production` registra `/legal terms-o
   hasta que una conexión se valide. Guardar la conexión de nuevo borra la declaración del modelo, porque
   las declaraciones dependen de la compatibilidad de API elegida. Este es el mismo registro que realiza
   `/providers`, hecho dentro del asistente, y no crea ninguna fila antes de `Finalizar configuración`.
-- **BYOK de usuario** (solo servidores, nunca en un mensaje directo): el espacio de trabajo no conserva
+- BYOK de usuario (solo servidores, nunca en un mensaje directo): el espacio de trabajo no conserva
   ningún proveedor propio y cada respuesta activada por un miembro resuelve en su lugar un proveedor
   personal. Confírmalo en el modal y luego haz que los miembros registren el suyo con
   `/personal providers`. Consulta
@@ -135,7 +135,7 @@ hasta que se elija otro.
 
 ### Finalizar y cancelar
 
-**Finalizar configuración** permanece deshabilitado hasta que cada paso mostrado esté completo. Revalida
+Finalizar configuración permanece deshabilitado hasta que cada paso mostrado esté completo. Revalida
 los catálogos y el estado del espacio de trabajo, confirma todo el borrador en una sola transacción y
 reemplaza el panel con el comprobante. `Cancelar` descarta el borrador y hace expirar cada control del
 panel.
@@ -147,7 +147,7 @@ ya no está disponible no escribe nada.
 
 ## Actualización
 
-Usa el comando de actualización con copia de seguridad primero: `bun run update` 
+Usa el comando de actualización con copia de seguridad primero: `bun run update`
 
 Esto ejecuta `bun run backup`, luego
 `git pull --rebase --autostash`, luego `bun install --frozen-lockfile`. Agrega `--build` si ejecutas

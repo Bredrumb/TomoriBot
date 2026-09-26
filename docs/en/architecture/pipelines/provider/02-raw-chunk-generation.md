@@ -4,8 +4,8 @@ title: "02: Raw Chunk Generation"
 
 Opens the provider's HTTP stream and yields a `RawStreamChunk` for each token delivery, with provider-specific pre-processing applied before each yield.
 
-**Contract:** `BaseStreamAdapter.startStream` (generator body): `src/types/stream/interfaces.ts:182`
-**Canonical implementation:** `GoogleStreamAdapter.startStream` (stream loop): `src/providers/google/googleStreamAdapter.ts:292-373`
+- **Contract**: `BaseStreamAdapter.startStream` (generator body): `src/types/stream/interfaces.ts:182`
+- **Canonical implementation**: `GoogleStreamAdapter.startStream` (stream loop): `src/providers/google/googleStreamAdapter.ts:292-373`
 
 ## Mission
 
@@ -92,7 +92,7 @@ that degradation cannot fix, so those adapters fail fast and let key rotation an
 
 An opt-in `degradeOnOpaque5xx` covers the inverse case: a backend that reports "I do not support
 this input" as an internal server error rather than a parameter rejection. It fires only when the
-status is 5xx **and** the message carries no diagnostic content of its own (empty, `error`,
+status is 5xx and the message carries no diagnostic content of its own (empty, `error`,
 `internal server error`), so a descriptive outage still fails fast. NVIDIA enables it because NIM
 on the vLLM V2 model runner answers an unsupported request key with a bare
 `Internal server error`, and when streaming it does so mid-SSE after a `200 OK`.
@@ -100,7 +100,7 @@ on the vLLM V2 model runner answers an unsupported request key with a bare
 Adapters that inject request keys of their own (via `mutateRequestBody`) declare them in
 `degradationPriorityKeys`. The ladder otherwise cannot tell an injected key from junk and sorts it
 into the unknown tail, so a backend dropping support for one is never probed. Declared keys are
-probed **before** the user's own samplers: each rung drops one key from the same baseline and the
+probed before the user's own samplers: each rung drops one key from the same baseline and the
 ladder stops at the first success, so ordering is pure latency and the winning rung ships the same
 payload either way. Reaching an injected key first cuts NVIDIA's recovery from eight round trips to
 three, and a key the user never asked for is the better first hypothesis.
@@ -183,7 +183,7 @@ After each `yield`:
 
 | Surface | Plugin-relevance |
 |---|---|
-| `BaseStreamAdapter.startStream()` generator body | **A new provider's adapter implements the full generator.** Pre-processing logic (dedup, guard, split) is adapter-local; it does not need to match other adapters' approaches. |
+| `BaseStreamAdapter.startStream()` generator body | A new provider's adapter implements the full generator. Pre-processing logic (dedup, guard, split) is adapter-local; it does not need to match other adapters' approaches. |
 | `BaseStreamAdapter.onRawChunk(chunk)` | Override hook for instrumentation (e.g., logging raw chunk payloads). Internal: no behavioral contract; the orchestrator never sees override output. |
 | `BaseStreamAdapter.onProviderError(error)` | Override hook for per-provider error telemetry. Internal: same caveat as `onRawChunk`. |
 | Speaker boundary guard (`truncateBeforeGenericSpeakerLine`) | `src/utils/text/processors/llmOutputProcessor.ts`. Internal: coupled to TomoriBot's persona-name speaker-label convention; the `llm_stop_speaker_pattern_enabled` DB flag is the configuration surface. |

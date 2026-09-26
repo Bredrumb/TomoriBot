@@ -4,20 +4,20 @@ sidebar:
   order: 1
 ---
 
-TomoriBotは、**Matrixルーム**とDiscordチャンネルをブリッジできます。Matrixからチャットすると、そのメッセージはWebhookメッセージとしてDiscordに転送され、彼女はMatrixルームに返信します。
+TomoriBotは、MatrixルームとDiscordチャンネルをブリッジできます。Matrixからチャットすると、そのメッセージはWebhookメッセージとしてDiscordに転送され、彼女はMatrixルームに返信します。
 このページはブリッジのユーザー側について説明しています。Appserviceの内部動作については、[Matrixブリッジのアーキテクチャ](/en/architecture/integrations/matrix/bridge/)を参照してください。
 
 ## セットアップ
 
-1. 設定されたMatrixボットアカウントを、**暗号化されていない**Matrixルームに招待します。
-2. そのルームの**内部ルームID**（Internal Room ID）をコピーします。
+1. 設定されたMatrixボットアカウントを、暗号化されていないMatrixルームに招待します。
+2. そのルームの内部ルームID（Internal Room ID）をコピーします。
 3. 連携させたいDiscordチャンネルで `/matrix link` を実行し、ルームIDを貼り付けます。
 
 ボットが招待を承諾すると、Matrixルームに短いリマインダーが投稿されますが、リンクの完了には引き続きDiscordから `/matrix link` を実行する必要があります。
 
 ### ルームIDの見つけ方
 
-ほとんどのMatrixクライアントでは、**Room Settings → Advanced → Internal Room ID**（ルーム設定 → 詳細設定 → 内部ルームID）にあります。`!abc:matrix.org` のような形式です。
+ほとんどのMatrixクライアントでは、Room Settings → 高度な設定 → Internal Room ID（ルーム設定 → 詳細設定 → 内部ルームID）にあります。`!abc:matrix.org` のような形式です。
 
 ## Matrixからの使用
 
@@ -37,7 +37,7 @@ TomoriBotは、**Matrixルーム**とDiscordチャンネルをブリッジでき
 ## 備考
 
 - ボットが自動参加しない場合は、手動でMatrixボットアカウントを招待し、もう一度 `/matrix link` を実行してください。
-- **Matrixの暗号化は後から無効にできません**。暗号化されたルームは、新しく暗号化されていないルームに置き換える必要があります。
+- Matrixの暗号化は後から無効にできません。暗号化されたルームは、新しく暗号化されていないルームに置き換える必要があります。
 - 上記に記載されていない制限事項については、正常に動作するはずですので、サポートサーバー（`/support discord`）でバグを報告してください。
 
-`/help` の **連携** から **Matrix** を選択すると、Discord内で同じガイドを確認できます。
+`/help` の 連携 から Matrix を選択すると、Discord内で同じガイドを確認できます。

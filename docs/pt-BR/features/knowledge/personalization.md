@@ -5,7 +5,7 @@ sidebar:
 aiGenerated: true
 ---
 
-A TomoriBot pode ser configurada **especificamente para você** com os comandos `/personal`: configurações
+A TomoriBot pode ser configurada especificamente para você com os comandos `/personal`: configurações
 que acompanham você em todos os servidores que você compartilha com ela, independentemente da
 configuração de qualquer servidor.
 
@@ -52,10 +52,10 @@ Dois escopos estão em jogo, e vale a pena diferenciá-los:
 - **Padrão do servidor**: credenciais e catálogos compartilhados em `/providers`, com roteamento selecionado através de
   `/model` por membros com a permissão de servidor necessária. Aplica-se a todos no servidor.
 - **Substituição pessoal**: configuração usada apenas para suas próprias solicitações. Quando habilitada, ela
-  substitui o padrão do servidor para aquela capacidade **em todos os servidores** onde você usa
+  substitui o padrão do servidor para aquela capacidade em todos os servidores onde você usa
   a TomoriBot, não apenas naquele em que você a configurou.
 
-**Configuração:**
+Configuração:
 
 1. `/personal providers` salva um provedor (sua chave é criptografada). Isso também habilita sua
    substituição pessoal de `Texto` imediatamente, usando o modelo de texto padrão daquele provedor.
@@ -85,14 +85,14 @@ de texto do próprio servidor em vez de deixar a mensagem sem resposta. Essa res
 do servidor e é descontada da cota de texto dele, e respeita o cooldown de mensagens do servidor,
 então um provedor que falha em toda mensagem não vira uma resposta por mensagem. É relatada da mesma
 forma que qualquer outro
-fallback de modelo: um botão **Secundário Usado** cujos detalhes nomeiam o modelo que respondeu e as
+fallback de modelo: um botão Secundário Usado cujos detalhes nomeiam o modelo que respondeu e as
 falhas que vieram antes. Desative isso em `/personal config` > Modelos > Reservas, na seção
-**Fallback com o Modelo do Servidor**, para que as falhas do seu provedor continuem sendo suas. A
+Fallback com o Modelo do Servidor, para que as falhas do seu provedor continuem sendo suas. A
 configuração vale para toda a conta e vem ativada por padrão, então ela acompanha você em todos os
 servidores que permitem isso.
 
 :::note[Servidores que exigem BYOK]
-Um servidor pode exigir provedores fornecidos pelos membros com o modo User BYOK
+Um servidor pode exigir provedores fornecidos pelos membros com o modo BYOK de Usuário
 ([Moderação do Servidor](/pt-BR/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)). Quando isso
 está ativado, suas mensagens acionadas por usuário precisam de um provedor pessoal antes que ela possa responder, e uma
 rota pessoal que falha continua falhando: um servidor que não cede seus modelos aos membros não empresta nenhum como
@@ -105,7 +105,7 @@ fallback. Provedores pessoais se aplicam em todos os servidores em que você a u
 - `/personal config`: suas próprias tags de aparência (estilo booru), usadas quando uma
   [geração de imagem](/pt-BR/features/capabilities/media-generation/image-generation/#tag-customization)
   referencia você. Envie uma caixa vazia para limpá-las.
-- `/personal config`: controlar sua visibilidade para ela, até **invisibilidade total** (optar por sair
+- `/personal config`: controlar sua visibilidade para ela, até invisibilidade total (optar por sair
   dos recursos de memória inteiramente).
 - `/personal config`: sua substituição pessoal para o
   [Modo de Gatilho Deliberado](/pt-BR/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode).
@@ -119,13 +119,13 @@ fallback. Provedores pessoais se aplicam em todos os servidores em que você a u
 ## Destaque Pessoal
 <!-- anchor: personal-spotlight -->
 
-**Destaque Pessoal: escolha de personas por canal.** O Destaque permite que *você* restrinja quais personas
+Destaque Pessoal: escolha de personas por canal. O Destaque permite que *você* restrinja quais personas
 pode acionar em um canal; opcionalmente, atribua uma para acionar automaticamente para suas próprias
-mensagens lá. Ele é limitado a **você + um canal** e não afeta ninguém mais.
+mensagens lá. Ele é limitado a você + um canal e não afeta ninguém mais.
 
-**Configure um** com `/personal config`, escolhendo:
+Configure um com `/personal config`, escolhendo:
 
-- uma duração em horas (use **0** para manter até que você remova manualmente),
+- uma duração em horas (use 0 para manter até que você remova manualmente),
 - o canal alvo,
 - as personas que você quer no seu destaque.
 
@@ -133,9 +133,9 @@ Após escolher as personas, você pode opcionalmente selecionar uma como sua **p
 pessoal**: a respondedora padrão para suas mensagens naquele canal. Acionamentos diretos ainda
 miram na persona que você chamou explicitamente. Pressione Finish para pular.
 
-**Regras importantes:**
+Regras importantes:
 
-- O Destaque apenas **restringe** o acesso; ele nunca o expande. As personas selecionadas são as
+- O Destaque apenas restringe o acesso; ele nunca o expande. As personas selecionadas são as
   *únicas* que você pode acionar lá.
 - Ele ainda respeita os limites de personas configurados no servidor através de `/moderation`.
 - Cadeias de proxy são bloqueadas: se seu destaque inclui apenas Alice, uma resposta de Alice não pode

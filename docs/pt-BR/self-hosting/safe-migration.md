@@ -8,7 +8,7 @@ Quando você faz `git pull` de um código novo e reinicia a TomoriBot, o bot exe
 
 ## Por que isso importa
 
-O executor de migração da TomoriBot (em `src/db/migrationRunner.ts`) executa todas as migrações não aplicadas na ordem de versão. As migrações são **somente para frente**: se algo der errado, o executor não faz a reversão automática. A maioria das migrações são expansões seguras (novas colunas, novas tabelas), mas de acordo com a política de design interna (OD-R-6) do projeto, operações destrutivas, como `DROP COLUMN` ou `DROP TABLE`, são permitidas. Se uma migração destrutiva for executada sem um backup, você perde dados permanentemente. Em caso de dúvida, faça o backup primeiro.
+O executor de migração da TomoriBot (em `src/db/migrationRunner.ts`) executa todas as migrações não aplicadas na ordem de versão. As migrações são somente para frente: se algo der errado, o executor não faz a reversão automática. A maioria das migrações são expansões seguras (novas colunas, novas tabelas), mas de acordo com a política de design interna (OD-R-6) do projeto, operações destrutivas, como `DROP COLUMN` ou `DROP TABLE`, são permitidas. Se uma migração destrutiva for executada sem um backup, você perde dados permanentemente. Em caso de dúvida, faça o backup primeiro.
 
 ## Lista de verificação pré-pull
 
@@ -21,7 +21,7 @@ Siga estas etapas ANTES de executar `git pull`:
 
 ### Pré-requisito: a extensão `pgvector`
 
-Um backup completo é um `pg_dump` de SQL puro (`backupData.ts` executa `pg_dump --clean --if-exists -f`), portanto ele contém a tabela `document_chunks` com tipo `vector` usada para RAG. **O Postgres de destino deve ter a extensão `pgvector` disponível antes da sua restauração**, caso contrário, o `CREATE EXTENSION IF NOT EXISTS vector` do dump não pode ser executado e a criação da tabela `document_chunks` falhará.
+Um backup completo é um `pg_dump` de SQL puro (`backupData.ts` executa `pg_dump --clean --if-exists -f`), portanto ele contém a tabela `document_chunks` com tipo `vector` usada para RAG. O Postgres de destino deve ter a extensão `pgvector` disponível antes da sua restauração, caso contrário, o `CREATE EXTENSION IF NOT EXISTS vector` do dump não pode ser executado e a criação da tabela `document_chunks` falhará.
 
 Instale-a uma vez no host (correspondendo à versão principal do seu Postgres), por exemplo, para o Postgres 16:
 
@@ -37,8 +37,8 @@ psql -c "SELECT name, default_version FROM pg_available_extensions WHERE name = 
 
 Se você restaurar sem ela:
 
-- O `restore-backup` do projeto (e qualquer execução de `psql -f` com `ON_ERROR_STOP=1`) **aborta precocemente** com `extension "vector" is not available`: nenhum dado é carregado. Instale o pgvector e tente novamente.
-- Uma execução manual do `psql -f` que **ignora erros** (`ON_ERROR_STOP=0`) é pior: o `COPY public.document_chunks` que falhou dessincroniza o analisador de entrada do psql, que por sua vez analisa de forma incorreta as linhas de dados seguintes do `COPY` como SQL (uma cascata de `syntax error at or near …`). Isso descarta silenciosamente tabelas inteiras (observado: `documents` e `llms`), deixando um banco de dados parcialmente restaurado que parece intacto, mas perdeu linhas. Sempre restaure com `ON_ERROR_STOP=1` para que falhas apareçam imediatamente.
+- O `restore-backup` do projeto (e qualquer execução de `psql -f` com `ON_ERROR_STOP=1`) aborta precocemente com `extension "vector" is not available`: nenhum dado é carregado. Instale o pgvector e tente novamente.
+- Uma execução manual do `psql -f` que ignora erros (`ON_ERROR_STOP=0`) é pior: o `COPY public.document_chunks` que falhou dessincroniza o analisador de entrada do psql, que por sua vez analisa de forma incorreta as linhas de dados seguintes do `COPY` como SQL (uma cascata de `syntax error at or near …`). Isso descarta silenciosamente tabelas inteiras (observado: `documents` e `llms`), deixando um banco de dados parcialmente restaurado que parece intacto, mas perdeu linhas. Sempre restaure com `ON_ERROR_STOP=1` para que falhas apareçam imediatamente.
 
 ### Opção A: Usar o script de backup do projeto
 
@@ -47,7 +47,7 @@ A TomoriBot inclui dois scripts de backup, cada um visando diferentes dados:
 - **`bun run backup`**: Dump completo do esquema do banco de dados + dados (personas, memórias, configurações, tudo)
 - **`bun run backup:personas`**: Predefinições de persona e memórias do servidor por persona apenas
 
-Para uma migração segura, use o **backup completo**:
+Para uma migração segura, use o backup completo:
 
 ```bash
 bun run backup
@@ -108,11 +108,11 @@ pg_restore \
   tomoribot-backup-20240115-143045.dump
 ```
 
-**Nota:** o `pg_restore` pedirá sua senha, a menos que você a defina em um arquivo `.pgpass` (arquivo de credenciais integrado do PostgreSQL).
+Nota: o `pg_restore` pedirá sua senha, a menos que você a defina em um arquivo `.pgpass` (arquivo de credenciais integrado do PostgreSQL).
 
 ## Para contribuidores que fazem o deploy via CI: a convenção `(Checkpoint)`
 
-Se você mantém um fork que faz o deploy na AWS ou GCP através dos fluxos de trabalho em `.github/workflows/deploy-tomoribot-{aws,gcp}.yml`, essas pipelines suportam um **snapshot pré-deploy opcional**: quando uma mensagem de commit contém o token literal `(Checkpoint)`, o fluxo de trabalho executa `aws rds create-db-snapshot` (ou o equivalente da GCP Cloud SQL) **antes** que qualquer código seja implantado e antes que o executor de migração toque no banco de dados durante a inicialização.
+Se você mantém um fork que faz o deploy na AWS ou GCP através dos fluxos de trabalho em `.github/workflows/deploy-tomoribot-{aws,gcp}.yml`, essas pipelines suportam um snapshot pré-deploy opcional: quando uma mensagem de commit contém o token literal `(Checkpoint)`, o fluxo de trabalho executa `aws rds create-db-snapshot` (ou o equivalente da GCP Cloud SQL) antes que qualquer código seja implantado e antes que o executor de migração toque no banco de dados durante a inicialização.
 
 Use-o quando:
 
@@ -180,13 +180,13 @@ Se o bot travar ou congelar durante a migração:
 
 ## O que NÃO é auto-recuperável
 
-De acordo com o design do projeto (OD-R-6), **migrações destrutivas não podem ser revertidas** pelo executor de migração. Exemplos:
+De acordo com o design do projeto (OD-R-6), migrações destrutivas não podem ser revertidas pelo executor de migração. Exemplos:
 
 - `DROP COLUMN name_here`: linhas excluídas são perdidas para sempre; nenhum script SQL pode recuperá-las
 - `DROP TABLE old_table`: a tabela inteira é perdida
 - Estreitamento de tipo (por exemplo, `VARCHAR(255) → VARCHAR(100)`): valores maiores que 100 caracteres são truncados
 
-Para essas operações, **a única recuperação é o seu backup**. Sempre faça backup antes do pull se você estiver em uma versão mais antiga e um novo refatoramento tiver sido lançado.
+Para essas operações, a única recuperação é o seu backup. Sempre faça backup antes do pull se você estiver em uma versão mais antiga e um novo refatoramento tiver sido lançado.
 
 O design de ir apenas para frente do executor de migração é intencional: os arquivos de reversão (`.down.sql`) existem para a segurança do desenvolvedor durante os testes, mas a recuperação na produção depende de backups, e não da reexecução de operações irreversíveis.
 
@@ -194,22 +194,22 @@ O design de ir apenas para frente do executor de migração é intencional: os a
 
 Um caso comum: alguém pede que você teste uma branch na sua instalação existente, e você quer saber se fazer o checkout da branch, inicializá-la e depois voltar para a `main` irá prejudicar seu banco de dados.
 
-**Os fatos principais:**
+Os fatos principais:
 
 - O Git e o PostgreSQL são mundos separados. `git checkout` apenas troca os arquivos no disco; ele nunca se conecta ou modifica o seu banco de dados. Seu estado de migração aplicada vive na tabela `schema_migrations`, não no git.
-- Migrações são executadas **automaticamente na inicialização** (via `initializeDatabase.ts`), de modo que no momento em que você iniciar a branch, suas novas migrações serão aplicadas ao banco de dados para o qual você apontou.
-- O executor para frente **nunca faz reversão automática**. Ao voltar para a `main`, ele varre os arquivos no disco, não encontra nada pendente e não faz nada. Migrações que a branch aplicou continuam aplicadas.
+- Migrações são executadas automaticamente na inicialização (via `initializeDatabase.ts`), de modo que no momento em que você iniciar a branch, suas novas migrações serão aplicadas ao banco de dados para o qual você apontou.
+- O executor para frente nunca faz reversão automática. Ao voltar para a `main`, ele varre os arquivos no disco, não encontra nada pendente e não faz nada. Migrações que a branch aplicou continuam aplicadas.
 
-**Então, é seguro?** Depende inteiramente do que as migrações da branch fizeram:
+Então, é seguro? Depende inteiramente do que as migrações da branch fizeram:
 
-- **Apenas aditivo** (novas tabelas / novas colunas) → seguro. Os novos objetos simplesmente ficam sem uso; o código da `main` nunca faz referência a eles, então eles não podem causar resultados incorretos ou falhas. Eles são um peso morto inofensivo.
-- **Destrutivo** (`DROP`/`RENAME`/`ALTER` em uma tabela que a `main` ainda usa) → não seguro. A mudança da branch deixa o código da `main` trabalhando contra uma coluna/tabela que agora não existe mais ou foi alterada.
+- Apenas aditivo (novas tabelas / novas colunas) → seguro. Os novos objetos simplesmente ficam sem uso; o código da `main` nunca faz referência a eles, então eles não podem causar resultados incorretos ou falhas. Eles são um peso morto inofensivo.
+- Destrutivo (`DROP`/`RENAME`/`ALTER` em uma tabela que a `main` ainda usa) → não seguro. A mudança da branch deixa o código da `main` trabalhando contra uma coluna/tabela que agora não existe mais ou foi alterada.
 
-**A abordagem mais segura:** aponte a branch para um banco de dados descartável (um `POSTGRES_DB` separado), assim seus dados reais nunca serão tocados. Você já constrói a conexão a partir das variáveis `POSTGRES_*`, e o `bun run nuke-db` pode resetar um banco de dados de rascunho.
+A abordagem mais segura: aponte a branch para um banco de dados descartável (um `POSTGRES_DB` separado), assim seus dados reais nunca serão tocados. Você já constrói a conexão a partir das variáveis `POSTGRES_*`, e o `bun run nuke-db` pode resetar um banco de dados de rascunho.
 
 ### Revertendo manualmente uma migração de teste
 
-Se você testou uma branch contra o seu banco de dados **real** e deseja desfazer suas migrações em seguida, use o executor de rollback. Ao contrário do executor para frente, ele **nunca roda automaticamente**: o rollback é sempre um ato manual deliberado, já que os arquivos `.down.sql` tipicamente envolvem perda de dados.
+Se você testou uma branch contra o seu banco de dados real e deseja desfazer suas migrações em seguida, use o executor de rollback. Ao contrário do executor para frente, ele nunca roda automaticamente: o rollback é sempre um ato manual deliberado, já que os arquivos `.down.sql` tipicamente envolvem perda de dados.
 
 ```bash
 # Apenas visualização (dry run): mostrar o que seria revertido
@@ -221,11 +221,11 @@ bun run migrate:down --last=2     # as duas migrações mais recentemente aplica
 bun run migrate:down 034 --yes
 ```
 
-O comando executa os arquivos `.down.sql` selecionados em ordem de versão **decrescente** (para que as dependências de uma migração sejam desfeitas antes dela mesma), então exclui as linhas correspondentes em `schema_migrations`. Com essas linhas fora, o executor para frente reaplicará as migrações na próxima vez que você iniciar uma branch que ainda as ofereça.
+O comando executa os arquivos `.down.sql` selecionados em ordem de versão decrescente (para que as dependências de uma migração sejam desfeitas antes dela mesma), então exclui as linhas correspondentes em `schema_migrations`. Com essas linhas fora, o executor para frente reaplicará as migrações na próxima vez que você iniciar uma branch que ainda as ofereça.
 
-> **Execute-o enquanto ainda estiver na branch.** O rollback lê os arquivos `NNN_description.down.sql` do disco. Assim que você fizer `git checkout main`, esses arquivos não estarão mais presentes e a reversão não poderá mais ser executada. Faça o rollback primeiro e depois troque de branch.
+> Execute-o enquanto ainda estiver na branch. O rollback lê os arquivos `NNN_description.down.sql` do disco. Assim que você fizer `git checkout main`, esses arquivos não estarão mais presentes e a reversão não poderá mais ser executada. Faça o rollback primeiro e depois troque de branch.
 
-> **Ainda causa perda de dados.** Reverter `034` aqui executa o `DROP TABLE short_term_memories`: quaisquer dados criados durante o teste serão perdidos. Isso é o esperado para a limpeza de um teste, mas nunca execute `migrate:down` contra os dados que você deseja manter sem um backup.
+> Ainda causa perda de dados. Reverter `034` aqui executa o `DROP TABLE short_term_memories`: quaisquer dados criados durante o teste serão perdidos. Isso é o esperado para a limpeza de um teste, mas nunca execute `migrate:down` contra os dados que você deseja manter sem um backup.
 
 ## Veja também
 

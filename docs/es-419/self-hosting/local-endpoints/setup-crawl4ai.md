@@ -55,14 +55,14 @@ bun run launch --searxng --crawl4ai
 
 Si prefieres administrar el contenedor tú mismo, mantén `CRAWL4AI_BASE_URL=http://localhost:11235/` en `.env` y ejecuta:
 
-**PowerShell:**
+PowerShell:
 
 ```powershell
 docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g `
   unclecode/crawl4ai:latest
 ```
 
-**Bash (Linux/macOS):**
+Bash (Linux/macOS):
 
 ```bash
 docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
@@ -83,7 +83,7 @@ Deja `CRAWL4AI_BASE_URL` sin establecer. La herramienta `fetch_url` utiliza el m
 
 ## Orden de Inicio (Importante)
 
-TomoriBot sondea el estado del servidor en la **primera llamada a `fetch_url` después del inicio** y almacena el resultado en caché durante 60 segundos. Si el contenedor no está listo cuando se realiza ese primer sondeo, el bot lo considera no disponible durante el siguiente minuto.
+TomoriBot sondea el estado del servidor en la primera llamada a `fetch_url` después del inicio y almacena el resultado en caché durante 60 segundos. Si el contenedor no está listo cuando se realiza ese primer sondeo, el bot lo considera no disponible durante el siguiente minuto.
 
 Para Docker independiente, inicia tu contenedor de Crawl4AI antes de iniciar TomoriBot. `bun run launch --crawl4ai` ya hace esto por ti.
 
@@ -116,14 +116,14 @@ Luego inicia TomoriBot como de costumbre. Reiniciar `bun run dev` restablece la 
 
 Crawl4AI admite la inyección de cookies a nivel de navegador para que el navegador sin interfaz gráfica aparezca ya conectado al recuperar una página. Esto es útil para los sitios que requieren una sesión para ver contenido (por ejemplo, noticias de pago, foros privados o paneles con inicio de sesión).
 
-El motor de reserva `safe_http` **no** admite la inyección de cookies; las cookies solo se aplican cuando Crawl4AI está activo.
+El motor de reserva `safe_http` no admite la inyección de cookies; las cookies solo se aplican cuando Crawl4AI está activo.
 
-> **Limitación:** La inyección de cookies elude los muros de inicio de sesión, pero no la huella digital para bots. Los sitios con detección agresiva contra bots (notablemente Twitter/X) detectan el Playwright sin interfaz gráfica a través de la huella digital de canvas/WebGL y ofrecen páginas vacías incluso con cookies de sesión válidas. La inyección de cookies funciona bien para los sitios que bloquean únicamente por autenticación.
+> Limitación: La inyección de cookies elude los muros de inicio de sesión, pero no la huella digital para bots. Los sitios con detección agresiva contra bots (notablemente Twitter/X) detectan el Playwright sin interfaz gráfica a través de la huella digital de canvas/WebGL y ofrecen páginas vacías incluso con cookies de sesión válidas. La inyección de cookies funciona bien para los sitios que bloquean únicamente por autenticación.
 
 ### Obteniendo tus cookies
 
 1. Abre tu navegador e inicia sesión en el sitio objetivo.
-2. Abre las herramientas para desarrolladores (`F12`) → Pestaña **Application** → **Storage** → **Cookies** → selecciona el dominio del sitio.
+2. Abre las herramientas para desarrolladores (`F12`) → Pestaña Application → Storage → Cookies → selecciona el dominio del sitio.
 3. Copia el valor de `Value` de cada cookie requerida (típicamente un token de sesión; verifica los nombres de las cookies del sitio).
 
 ### Crawl4AI
@@ -145,7 +145,7 @@ Cuando esto está configurado, `fetch_url` cambia automáticamente del punto de 
 | `domain` | No | Alcance del dominio (por ejemplo, `.x.com`). Recomendado para mayor exactitud. |
 | `path` | No | Alcance de la ruta. Por defecto es `/` si se omite. |
 
-> **Nota:** Los valores de las cookies son confidenciales; trátalos como contraseñas. Otorgan acceso completo a la sesión de tu cuenta. No confirmes `.env` en el control de versiones.
+> Nota: Los valores de las cookies son confidenciales; trátalos como contraseñas. Otorgan acceso completo a la sesión de tu cuenta. No confirmes `.env` en el control de versiones.
 
 ---
 

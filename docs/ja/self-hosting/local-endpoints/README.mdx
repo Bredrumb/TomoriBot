@@ -77,4 +77,4 @@ bun run launch --help
 
 Dockerベースのサーバー（`--searxng`、`--crawl4ai`）は初回実行時に作成され、その後の実行でも再利用されます。PythonのTTS/STTサーバーは、事前に一度venvをセットアップしておく必要があります。個別のセットアップガイドについては、[音声合成 (TTS)](/ja/self-hosting/local-endpoints/text-to-speech/)および[音声認識 (STT)](/ja/self-hosting/local-endpoints/speech-to-text/)を参照してください。
 
-**Ctrl+C**を押すと、ボットとすべてのPythonサーバープロセスが停止します。Dockerコンテナは意図的に実行されたままになります。完了したら、`docker stop searxng` / `docker stop crawl4ai`を使用して手動で停止してください。
+Ctrl+Cを押すと、ボットとすべてのPythonサーバープロセスが停止します。Dockerコンテナは意図的に実行されたままになります。完了したら、`docker stop searxng` / `docker stop crawl4ai`を使用して手動で停止してください。

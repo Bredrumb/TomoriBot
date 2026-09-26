@@ -5,7 +5,7 @@ title: "01: Preset Routing"
 Decide whether to use native fixed-order assembly or to reassemble its output
 through an active SillyTavern preset.
 
-**File:** `src/utils/text/context/builder.ts:13-83`
+- **File**: `src/utils/text/context/builder.ts:13-83`
 
 ## Mission
 
@@ -56,7 +56,7 @@ After this stage runs:
 
 ## Extension points
 
-**This stage is the routing seam.** Two architectural facts worth naming:
+- **This stage is the routing seam**: two architectural facts worth naming:
 
 | Surface | Plugin-relevance |
 |---|---|

@@ -106,13 +106,13 @@ The stream adapter turns vendor chunks into TomoriBot's stream pipeline. The too
 tool schemas and results into the vendor's function-calling format. Tool conversion differs per
 vendor, so a serializer change (nested schemas, for example) has to land in every tool adapter.
 
-**Media the model cannot see.** The context pipeline can include image or video parts for a
+- **Media the model cannot see**: the context pipeline can include image or video parts for a
 non-vision model, because a fallback model in the chain may accept them. When the adapter meets a
 part it cannot send, it must push a text part instead of skipping it:
 `[System: An image/video is attached to this message that this model cannot process.]`. The reference
 is `openaiCompatibleMessageBuilder.ts`.
 
-**Reasoning output.** Put displayable reasoning on `ProcessedChunk.thoughts`: `kind: "summary"` for
+- **Reasoning output**: put displayable reasoning on `ProcessedChunk.thoughts`: `kind: "summary"` for
 vendor summaries, `kind: "raw"` for readable raw reasoning. Strip `<think>...</think>` style tags from
 visible text and surface their contents as `raw`. Replay-only fields (Gemini `thoughtSignature`,
 OpenRouter `reasoning_details`, DeepSeek `reasoning_content`) may go back to the vendor inside a

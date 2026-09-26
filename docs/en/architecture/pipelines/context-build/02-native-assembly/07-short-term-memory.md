@@ -5,7 +5,7 @@ title: "02.7: Short-Term Memory"
 Recent conversation snippets from the DB-backed STM cache, plus tool-hint
 emission (nudges) for the LLM to create and maintain short-term memory.
 
-**File:** `src/utils/text/context/memories.ts:190-530`
+- **File**: `src/utils/text/context/memories.ts:190-530`
 
 ## Mission
 
@@ -17,7 +17,7 @@ Surface two kinds of short-term memory to the LLM:
 2. **Same-channel memory**: the running summary or category block for the
    current channel (if one exists).
 
-Separately, the contributor emits a single **unified nudge** (`nudgeItem`)
+Separately, the contributor emits a single unified nudge (`nudgeItem`)
 for the `update_short_term_memory` tool, gated by the cadence counter. The
 same nudge covers BOTH cases ("no STM yet, please create one" and "STM
 exists, please refresh it" and so there is no longer a distinct create vs.
@@ -32,9 +32,9 @@ and `position`. The tool schema dynamically builds one string property per
 category slug.
 
 When only the default `summary` category exists, the system operates in
-**single-summary fallback mode**: identical to pre-category behavior.
+single-summary fallback mode: identical to pre-category behavior.
 
-When additional categories are present, the system enters **category mode**.
+When additional categories are present, the system enters category mode.
 Category-mode nudges support the `{category_labels}` placeholder, which is
 replaced with the comma-separated list of configured labels.
 
@@ -48,10 +48,10 @@ presented in context:
 | Crude + Summary (default) | `crude_summary` | Crude messages are always shown AND the summary/category block is appended additively alongside them. |
 | Supersede | `supersede` | When a summary/categories exist, crude messages for that channel are replaced entirely by the summary/category block. |
 
-Render mode only affects **other-channel** memories. A channel's own raw turns are
+Render mode only affects other-channel memories. A channel's own raw turns are
 the live dialogue history, which is always present, so same-channel rendering is
 identical under both modes. In `crude_summary` the summary/category block is
-emitted **first**, followed by the `recent raw messages` block for that channel.
+emitted first, followed by the `recent raw messages` block for that channel.
 
 The default became `crude_summary` in migration 055, which also rewrote existing
 rows. Servers with no `server_stm_configs` row (the common case, since the table is
@@ -84,12 +84,12 @@ participated in `refreshCadence` turns.
 The nudge is injected positionally by the chat pipeline
 (`insertAtDialogueDepth` in `contextAnnotations.ts`) at
 `server_stm_configs.nudge_injection_depth`. Depth counts individual dialogue
-TURNS from the bottom (a user turn and a bot turn are separate turns, **not**
+TURNS from the bottom (a user turn and a bot turn are separate turns, not
 pairs):
 
 - `0`: tail, after every dialogue turn (literal last position)
 - `1`: before the final turn
-- `2`: before the latest user/bot pair (**default**; mirrors the legacy
+- `2`: before the latest user/bot pair (default; mirrors the legacy
   create-nudge placement)
 - `N`: before the Nth turn from the bottom (clamps to the earliest dialogue
   turn when fewer than N exist, rather than jumping to tail)
@@ -99,14 +99,14 @@ dialogues are excluded from the walk.
 
 ## STM content block injection depth
 
-By default the same/other-channel STM memory **content block** (`memoryItems`)
+By default the same/other-channel STM memory content block (`memoryItems`)
 is pushed inline near the top of context (above sample dialogues and dialogue
 history) as ambient knowledge; and, under a SillyTavern preset, flushed at the
 `chatHistory`/`dialogueExamples` anchor. `server_stm_configs.content_injection_depth`
 optionally moves that block to a dialogue depth instead, reusing the same
 `insertAtDialogueDepth` walk as the nudge:
 
-- `-1`: **default**: keep the block anchored near the top (legacy behavior); the
+- `-1` (default): keep the block anchored near the top (legacy behavior); the
   block stays inline in `contextItems` and is NOT deferred.
 - `0`: tail (the "last dialogue item"), after every dialogue turn.
 - `N`: before the Nth dialogue turn from the bottom (same clamp semantics as the
@@ -114,11 +114,11 @@ optionally moves that block to a dialogue depth instead, reusing the same
 
 When `content_injection_depth >= 0`, the builder withholds `memoryItems` from
 `contextItems` and returns them out-of-band (`memoryInjectionItems` +
-`memoryInjectionDepth`) so the pipeline can splice them positionally **after**
+`memoryInjectionDepth`) so the pipeline can splice them positionally after
 dialogue assembly; identical plumbing to the nudge, and correct under both native
 and preset assembly.
 
-**Content block vs. nudge ordering:** the pipeline injects the content block
+- **Content block vs. nudge ordering**: the pipeline injects the content block
 *first*, then the nudge. When both depths are equal, each is spliced before the
 same Nth dialogue turn, so the block (inserted first, in order) ends up directly
 above the later-inserted nudge, i.e. the nudge always sits just below the block.
@@ -135,7 +135,7 @@ entry is younger than `STM_FRESH_WINDOW_MS` (60 minutes), the content block is
 injected at `STM_FRESH_INJECTION_DEPTH` (2) instead. Once the entry ages past
 the window, the block snaps back to `content_injection_depth`.
 
-`STM_FRESH_INJECTION_DEPTH` is a **ceiling, not a replacement**: the override may only
+`STM_FRESH_INJECTION_DEPTH` is a ceiling, not a replacement: the override may only
 pull the block closer to the dialogue, never push it away.
 
 | `content_injection_depth` | Fresh | Aged |
@@ -150,7 +150,7 @@ instead of being treated as "already closer".
 
 Freshness is measured from the newest `lastUpdated` timestamp across all active memory entries being injected (either same-channel memory or any included other-channel memory). The per-turn crude write refreshes `lastUpdated` on every bot turn (the `refreshCadence` gate applies only to the *summary* write). So it tracks the last turn Tomori took part in, not the last time she wrote a summary. When no active memories exist, there is no age and the block is not fresh.
 
-The override moves **only the content block**; the nudge stays at
+The override moves only the content block; the nudge stays at
 `nudge_injection_depth`. Both default to `2`, so on a default server a fresh block and
 the nudge land at the same depth and the equal-depth ordering above still holds (nudge
 directly below the block). The guarantee only breaks if `nudge_injection_depth` is
@@ -318,22 +318,22 @@ After this stage runs:
 | `/config` > Permissions | "Short-Term Memory" toggle: turns OFF the bot's automatic STM management (write tool + cadence nudge) while leaving STM content visible |
 | `/help`, then Memory and Short-Term Memory | In-Discord guide to the STM customization surface |
 
-> **Disabling STM:** the `short_term_memory_enabled` capability flag
+> Disabling STM: the `short_term_memory_enabled` capability flag
 > (`server_capabilities_configs`, migration 054, default `true`) controls the bot's
 > *automatic* STM management; not whether STM appears at all. When off, two gates fire:
 > (1) `UpdateShortTermMemoryTool.isAvailableForContext` returns `false` so the write tool
 > is never offered, and (2) the cadence nudge is suppressed inside
 > `buildShortTermMemoryContext`; `isStmToolAvailable` now folds in the same flag, so the
-> nudge tracks the tool. **Memory content still renders:** `nativeBuilder.ts` always calls
+> nudge tracks the tool. Memory content still renders: `nativeBuilder.ts` always calls
 > `buildShortTermMemoryContext`, so the same-channel block and other-channel recall keep
 > surfacing. This lets admins curate STM by hand via `/config` > Persona > Memories (and keep crude
 > messages visible) with the bot's auto-updates and nudges turned off. Stored
 > `short_term_memories` rows are NOT deleted; the `/server stm …` and `/persona stm …`
 > commands stay fully usable.
 
-> **Scope note:** both the view and edit actions on `/config` > Persona > Memories resolve the exact row
-> that gets injected; the **server-shared** row (`serverId, channelId, personaId`) in a
-> guild, or the **user-scoped** row (`userId, channelId, personaId`) in a DM. There is no
+> Scope note: both the view and edit actions on `/config` > Persona > Memories resolve the exact row
+> that gets injected; the server-shared row (`serverId, channelId, personaId`) in a
+> guild, or the user-scoped row (`userId, channelId, personaId`) in a DM. There is no
 > per-user STM inside a guild, so every member sees/edits the same shared blob.
 
 ## Extension points

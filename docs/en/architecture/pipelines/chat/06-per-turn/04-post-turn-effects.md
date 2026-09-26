@@ -4,7 +4,7 @@ title: "06.4: Post-Turn Effects"
 
 Side-effect sequence after generation completes.
 
-**File:** `src/utils/chat/postTurnEffects.ts:21-28`
+- **File**: `src/utils/chat/postTurnEffects.ts:21-28`
 
 ## Mission
 
@@ -37,9 +37,9 @@ If a completed `GenerationTurnResult` carries `selectedSticker`:
   the thread ID where applicable. The webhook is taken from
   `responseTarget.webhook` when present and otherwise resolved lazily via
   `resolveManagedChannelWebhook()`, since the main persona has none.
-- This is **not** gated on `is_alter`: the main persona also delivers through a
+- This is not gated on `is_alter`: the main persona also delivers through a
   webhook whenever a sprite renders, and the sticker must match it.
-- The recorded username is reused **verbatim**: it may be the decorated
+- The recorded username is reused verbatim: it may be the decorated
   `Persona (sprite)` form chosen by the group-break alternation. Re-resolving the
   persona's default identity would yield a different name, and Discord would
   split the sticker into its own message group instead of attaching it to the
@@ -160,7 +160,7 @@ Schedules a `setImmediate` callback:
 Starts fire-and-forget recording for completed persona responses: turn/model,
 token, impersonation, emoji, and sprite metrics.
 
-Expression metrics are **delivery-gated**: they count what Discord accepted, not
+Expression metrics are delivery-gated: they count what Discord accepted, not
 what the model produced. `emoji_used` is therefore scanned from each stream
 segment's `StreamResult.accumulatedText` (appended only inside the post-send
 `recordSuccessfulSend` block) rather than from `personaResponses[].text`, which
@@ -198,7 +198,7 @@ After this stage runs:
 
 ## Extension points
 
-This is **the richest plugin surface in the chat pipeline.** Each of the six
+This is the richest plugin surface in the chat pipeline. Each of the six
 steps is an independent side-effect concern that a plugin might want to
 extend or replace:
 
@@ -213,7 +213,7 @@ extend or replace:
 | Boomerang follow-up | `consumePendingBoomerang`, `buildBoomerangContext` | Cross-channel-tool-specific; one plugin (the cross-channel tool) owns the pending-boomerang state |
 | Usage statistics | `recordUsageStats` | Post-turn metrics chokepoint; intentionally fire-and-forget |
 
-**The sequencing matters**: sticker delivery runs first but is completed-turn
+- **The sequencing matters**: sticker delivery runs first but is completed-turn
 only; an empty result therefore proceeds directly to retry handling. Quota
 consumption runs *before* memory write so quota
 exhaustion doesn't pollute the memory cache; boomerang runs *last* via

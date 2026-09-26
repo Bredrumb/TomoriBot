@@ -5,7 +5,7 @@ title: "02.7b: Verbatim Tool Definitions"
 In-band JSON dump of the resolved tool schemas, emitted only when the
 verbatim tool-calling workaround is enabled.
 
-**File:** `src/utils/text/context/toolDefinitions.ts`
+- **File**: `src/utils/text/context/toolDefinitions.ts`
 
 ## Mission
 
@@ -52,7 +52,7 @@ and by `<Provider>Provider.getTools`:
    feature-flag-gated built-in tools plus the allowed MCP function names.
 3. `new OpenAICompatibleToolAdapter(provider).getAllToolsInProviderFormat(
    builtInTools, server_id, mcpFunctionNames)`: serializes full native
-   schemas for built-in **+ global MCP + guild MCP** tools, exactly matching
+   schemas for built-in, global MCP, and guild MCP tools, exactly matching
    what lands in `config.tools`.
 
 ## Invariants
