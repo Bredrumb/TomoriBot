@@ -400,6 +400,16 @@ async function dispatch(harness: Harness, interaction: RouteInteraction): Promis
   await registry.dispatch(CLIENT, interaction as unknown as ConfigInteraction);
 }
 
+async function openPreparedModelModal(harness: Harness): Promise<void> {
+  await dispatch(
+    harness,
+    makeInteraction({
+      customId: buildConfigRouteId({ action: "model-modal-ready", locale: "en-US", nonce: "nonce1234567" }),
+      harness,
+    }),
+  );
+}
+
 function renderedText(payload: unknown): string {
   return JSON.stringify(payload);
 }
@@ -1062,23 +1072,30 @@ describe("config models switch page", () => {
         }),
       );
       expect(harness.modals).toHaveLength(0);
-      expect(harness.replies.at(-1)).toBeDefined();
+      expect(harness.edits.at(-1)).toBeDefined();
     }
   });
 
   it("opens the picker with one page of models rather than a second panel page", async () => {
     const harness = makeHarness({ models: [{ id: 7, name: "gemini-2.5-pro", description: "Pro" }] });
-    await dispatch(
+    const selection = makeInteraction({
+      customId: buildConfigRouteId({ action: "model-provider-select", locale: "en-US", capability: "vision" }),
+      kind: "select",
+      values: [encodeConfigProviderPageValue("google", 0)],
       harness,
-      makeInteraction({
-        customId: buildConfigRouteId({ action: "model-provider-select", locale: "en-US", capability: "vision" }),
-        kind: "select",
-        values: [encodeConfigProviderPageValue("google", 0)],
-        harness,
-      }),
-    );
+    });
+    await dispatch(harness, selection);
 
-    expect(harness.edits).toHaveLength(0);
+    expect(harness.edits).toHaveLength(1);
+    expect(selection.calls[0]?.method).toBe("deferReply");
+    const otherActor = makeInteraction({
+      customId: buildConfigRouteId({ action: "model-modal-ready", locale: "en-US", nonce: "nonce1234567" }),
+      harness,
+    });
+    otherActor.user.id = "different-user";
+    await dispatch(harness, otherActor);
+    expect(harness.modals).toHaveLength(0);
+    await openPreparedModelModal(harness);
     const modal = harness.modals.at(-1) as { custom_id: string };
     expect(modal.custom_id).toContain(":model-modal:");
     expect(modelModalOptions(modal).map((option) => option.value)).toEqual(["7"]);
@@ -1189,6 +1206,7 @@ describe("config models switch page", () => {
             harness: pageHarness,
           }),
         );
+        await openPreparedModelModal(pageHarness);
         for (const option of modelModalOptions(pageHarness.modals.at(-1))) reachable.add(option.value);
       }
 
@@ -1219,10 +1237,7 @@ describe("config models switch page", () => {
         harness: stale,
       }),
     );
-    // A retired provider is refused before the panel is touched, so it answers ephemerally rather
-    // than repainting a page whose selector never changed.
-    expect(stale.edits).toHaveLength(0);
-    expect(stale.replies.at(-1)).toBeDefined();
+    expect(stale.edits.at(-1)).toBeDefined();
 
     const staleRead = makeHarness({ readStatus: "stale" });
     await dispatch(
@@ -2356,6 +2371,7 @@ describe("config models view loaders", () => {
         harness,
       }),
     );
+    await openPreparedModelModal(harness);
 
     const options = modelModalOptions(harness.modals.at(-1)) as Array<{ value: string; default?: boolean }>;
     expect(options).toHaveLength(1);

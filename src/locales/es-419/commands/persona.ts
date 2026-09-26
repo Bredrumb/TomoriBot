@@ -114,6 +114,7 @@ Atributos: {attribute_count}
 Diálogos de ejemplo: {dialogue_count}
 Palabras de activación: {trigger_word_count}`,
       success_confirmation: `¡Persona principal **{nickname}** importada con éxito! La información detallada de la importación se ha publicado en el canal.`,
+      post_missing_permission: `Persona importada, pero no pude publicar la confirmación. Pide a un administrador que me conceda {permission} en este canal.`,
       nickname_update_success: `El apodo en el servidor ha sido actualizado.`,
       nickname_update_failed: `🟡 No se pudo actualizar el apodo en el servidor, probablemente por los límites de tasa de Discord. Cámbialo manualmente.`,
       avatar_update_success: `El avatar en el servidor ha sido actualizado.`,

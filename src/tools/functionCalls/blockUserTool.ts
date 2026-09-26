@@ -1,7 +1,9 @@
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
+import { localizer } from "@/utils/text/localizer";
 import {
   buildFailureResult,
   DEFAULT_BLOCK_USER_MAX_DURATION_HOURS,
+  missingBlockNoticePermission,
   parseBlockUserArgs,
   resolveDiscordBlockTarget,
   sendUserBlockedEmbed,
@@ -76,6 +78,14 @@ export class BlockUserTool extends BaseTool {
       );
     }
 
+    const missingPermission = await missingBlockNoticePermission(context);
+    if (missingPermission) {
+      return buildFailureResult(
+        "user_block_failed_missing_permission",
+        localizer(context.locale, "tools.user_block.error_missing_permission", { permission: missingPermission }),
+      );
+    }
+
     const expiresAt = new Date(Date.now() + parsed.durationHours * 60 * 60 * 1000);
     const row = await upsertPersonaUserBlock({
       context,
@@ -89,14 +99,22 @@ export class BlockUserTool extends BaseTool {
       return buildFailureResult("user_block_failed_db_error", "Database operation failed to save the user block.");
     }
 
-    await sendUserBlockedEmbed({
-      context,
-      targetDisplayName: target.displayLabel,
-      blockType: parsed.blockType,
-      durationHours: parsed.durationHours,
-      reason: parsed.reason,
-      expiresAt,
-    });
+    try {
+      await sendUserBlockedEmbed({
+        context,
+        targetDisplayName: target.displayLabel,
+        blockType: parsed.blockType,
+        durationHours: parsed.durationHours,
+        reason: parsed.reason,
+        expiresAt,
+      });
+    } catch {
+      return {
+        success: true,
+        message: localizer(context.locale, "tools.user_block.notice_failed"),
+        data: { status: "user_block_created_notice_failed", user_disc_id: target.userDiscId },
+      };
+    }
 
     return {
       success: true,

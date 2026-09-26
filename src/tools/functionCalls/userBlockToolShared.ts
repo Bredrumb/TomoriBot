@@ -115,6 +115,18 @@ export function buildFailureResult(status: string, reason: string, extraData?: R
   };
 }
 
+export async function missingBlockNoticePermission(context: ToolContext): Promise<string | null> {
+  if (!context.guildId) return null;
+  const guild = context.client.guilds.cache.get(context.guildId);
+  const member = guild?.members.me ?? (await guild?.members.fetchMe().catch(() => null));
+  const permissions = member && "permissionsFor" in context.channel ? context.channel.permissionsFor(member) : null;
+  const sendPermission = context.channel.isThread() ? "SendMessagesInThreads" : "SendMessages";
+  for (const permission of ["ViewChannel", sendPermission, "EmbedLinks"] as const) {
+    if (!permissions?.has(permission)) return permission;
+  }
+  return null;
+}
+
 export async function resolveDiscordBlockTarget(input: string, context: ToolContext): Promise<ResolvedBlockTarget> {
   const resolution = await resolveUserTarget(input, context);
   if (resolution.status === "ambiguous") {

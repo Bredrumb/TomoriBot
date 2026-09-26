@@ -53,6 +53,8 @@ export default {
       hide_footer_with_kill: `Oculta esto desde \`/config\` > Comportamiento > Avisos · Usa \`/kill\` si crees que me quedé atascada`,
     },
     user_block: {
+      error_missing_permission: `Necesito el permiso {permission} en este canal para anunciar un bloqueo. Pide a un administrador del servidor que lo conceda e inténtalo de nuevo.`,
+      notice_failed: `Se guardó el bloqueo, pero no pude publicar la confirmación en este canal. Pide a un administrador que revise mis permisos.`,
       type_mute: `silenciar`,
       type_block: `bloquear`,
       effect_mute: `La persona objetivo no puede activar esta persona.`,

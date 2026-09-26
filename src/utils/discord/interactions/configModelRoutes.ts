@@ -1,4 +1,4 @@
-import { MessageFlags, type ModalSubmitInteraction } from "discord.js";
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, type ModalSubmitInteraction } from "discord.js";
 import type { PanelAction } from "@/constants/panelActions";
 import type { ThinkingLevelValue } from "@/constants/thinkingLevels";
 import type { PanelReceipt, PanelReceiptTone } from "@/types/discord/panel";
@@ -14,6 +14,7 @@ import {
   computeStopStringFingerprint,
   type ConfigModelCapability,
   CONFIG_MODEL_PAGE_SIZE,
+  buildConfigRouteId,
   CONFIG_NAI_PRESET_PAGE_SIZE,
   CONFIG_NAI_PRESET_NEXT_VALUE,
   CONFIG_NAI_PRESET_PREVIOUS_VALUE,
@@ -54,7 +55,7 @@ import {
 } from "@/utils/discord/interactions/configRouteContext";
 import { performPanelAction } from "@/utils/discord/interactions/panelController";
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
-import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
+import { buildConfigModalFieldId, type RawModalPayload } from "@/utils/discord/ui/configModals";
 import {
   buildConfigFallbackModal,
   buildConfigFallbackSlotId,
@@ -88,6 +89,12 @@ import { log } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { localizer } from "@/utils/text/localizer";
 
+const PREPARED_MODEL_MODAL_TTL_MS = 5 * 60_000;
+const preparedModelModals = new Map<
+  string,
+  { actorId: string; guildId: string | null; payload: RawModalPayload; expiresAt: number }
+>();
+
 /** Routes that answer with a modal, which is its own acknowledgement and must not be deferred. */
 export const CONFIG_MODEL_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "sampling-open",
@@ -100,6 +107,7 @@ export const CONFIG_MODEL_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"
   "logit-manage-select",
   "fallback-provider-select",
   "model-provider-select",
+  "model-modal-ready",
   "endpoint-select",
   "image-tags-default-open",
   "nai-parameters-open",
@@ -237,20 +245,60 @@ export async function handleConfigModelModalOpen(
     return true;
   }
 
+  if (route.action === "model-modal-ready") {
+    const prepared = preparedModelModals.get(route.nonce);
+    if (
+      !prepared ||
+      prepared.expiresAt < Date.now() ||
+      prepared.actorId !== interaction.user.id ||
+      prepared.guildId !== interaction.guildId
+    ) {
+      await interaction.reply({
+        content: localizer(locale, "commands.config.panel.stale_detail"),
+        flags: MessageFlags.Ephemeral,
+      });
+      return true;
+    }
+    preparedModelModals.delete(route.nonce);
+    await dependencies.showModal(interaction, prepared.payload);
+    return true;
+  }
+
+  const modelSelection =
+    route.action === "model-provider-select" && interaction.isStringSelectMenu()
+      ? (interaction.values[0] ?? null)
+      : null;
+  const providerRange = modelSelection ? decodeConfigProviderRangeValue(modelSelection) : null;
+  if (route.action === "model-provider-select") {
+    if (providerRange) {
+      await interaction.deferUpdate();
+    } else {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    }
+  }
+
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
-    await interaction.reply({
-      content: localizer(locale, missingScopeMessageKey(interaction, dependencies)),
-      flags: MessageFlags.Ephemeral,
-    });
+    await (route.action === "model-provider-select"
+      ? interaction.editReply({
+          content: localizer(locale, missingScopeMessageKey(interaction, dependencies)),
+        })
+      : interaction.reply({
+          content: localizer(locale, missingScopeMessageKey(interaction, dependencies)),
+          flags: MessageFlags.Ephemeral,
+        }));
     return true;
   }
   const state = serverStateFromScope(scope);
   if (!state) {
-    await interaction.reply({
-      content: outdatedConfigPanelMessage(locale),
-      flags: MessageFlags.Ephemeral,
-    });
+    await (route.action === "model-provider-select"
+      ? interaction.editReply({
+          content: outdatedConfigPanelMessage(locale),
+        })
+      : interaction.reply({
+          content: outdatedConfigPanelMessage(locale),
+          flags: MessageFlags.Ephemeral,
+        }));
     return true;
   }
 
@@ -393,13 +441,12 @@ export async function handleConfigModelModalOpen(
       return true;
     }
     const capability = route.capability;
-    const selected = interaction.isStringSelectMenu() ? (interaction.values[0] ?? null) : null;
+    const selected = modelSelection;
 
     // The advance entry rides the select too, because six selectors cannot each afford a
     // prev/next row under the forty-component budget.
-    const range = selected ? decodeConfigProviderRangeValue(selected) : null;
+    const range = providerRange;
     if (range) {
-      await interaction.deferUpdate();
       await repaint(interaction, {
         locale,
         scope,
@@ -421,20 +468,18 @@ export async function handleConfigModelModalOpen(
     const providers = await dependencies.loadModelProviders(state, capability);
     const provider = providers.find((candidate) => candidate.toLowerCase() === chosenProvider?.toLowerCase());
     if (!provider) {
-      await interaction.reply({
+      await interaction.editReply({
         content: localizer(locale, "commands.config.panel.stale_detail"),
-        flags: MessageFlags.Ephemeral,
       });
       return true;
     }
 
     const models = await dependencies.loadModelChoices(state, capability, provider, locale);
     if (models.length === 0) {
-      await interaction.reply({
+      await interaction.editReply({
         content: localizer(locale, "commands.model.text.no_models_description", {
           provider: getProviderDisplayName(provider),
         }),
-        flags: MessageFlags.Ephemeral,
       });
       return true;
     }
@@ -442,7 +487,6 @@ export async function handleConfigModelModalOpen(
     // A slice value is the reader picking part of an already expanded provider, so it opens the
     // modal directly instead of expanding again.
     if (!chosenSlice && models.length > CONFIG_MODEL_PAGE_SIZE) {
-      await interaction.deferUpdate();
       await repaint(interaction, {
         locale,
         scope,
@@ -466,24 +510,40 @@ export async function handleConfigModelModalOpen(
 
     const sliceStart = chosenSlice?.start ?? 0;
     if (sliceStart % CONFIG_MODEL_PAGE_SIZE !== 0 || sliceStart >= models.length) {
-      await interaction.reply({
+      await interaction.editReply({
         content: localizer(locale, "commands.config.panel.stale_detail"),
-        flags: MessageFlags.Ephemeral,
       });
       return true;
     }
 
-    await dependencies.showModal(
-      interaction,
-      buildConfigModelSelectModal(
-        locale,
-        capability,
-        provider,
-        nonce,
-        models.slice(sliceStart, sliceStart + CONFIG_MODEL_PAGE_SIZE),
-        currentModelIdForCapability(state, capability),
-      ),
+    const payload = buildConfigModelSelectModal(
+      locale,
+      capability,
+      provider,
+      nonce,
+      models.slice(sliceStart, sliceStart + CONFIG_MODEL_PAGE_SIZE),
+      currentModelIdForCapability(state, capability),
     );
+    for (const [key, prepared] of preparedModelModals) {
+      if (prepared.expiresAt < Date.now()) preparedModelModals.delete(key);
+    }
+    preparedModelModals.set(nonce, {
+      actorId: interaction.user.id,
+      guildId: interaction.guildId,
+      payload,
+      expiresAt: Date.now() + PREPARED_MODEL_MODAL_TTL_MS,
+    });
+    await interaction.editReply({
+      content: localizer(locale, "commands.config.panel.model_modal_ready"),
+      components: [
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId(buildConfigRouteId({ action: "model-modal-ready", locale, nonce }))
+            .setLabel(localizer(locale, "commands.config.panel.model_modal_ready_button"))
+            .setStyle(ButtonStyle.Primary),
+        ),
+      ],
+    });
     return true;
   }
 

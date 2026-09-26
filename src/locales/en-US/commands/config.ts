@@ -879,6 +879,8 @@ export default {
       model_provider_paged_detail:
         "{provider} has {count} models for this feature, more than one page holds. Pick a page in the selector above.",
       model_modal_title: `Select {capability} Model`,
+      model_modal_ready: `The model choices are ready. Open the selector to continue.`,
+      model_modal_ready_button: `Choose Model`,
       model_modal_select_label: `Model`,
       model_modal_select_description: `Choose a model from {provider}.`,
       model_updated_heading: `Model Updated`,

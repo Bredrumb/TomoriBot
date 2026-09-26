@@ -45,6 +45,8 @@ export default {
       model_provider_paged_detail:
         "{provider}にはこの機能向けのモデルが{count}件あり、1ページに 収まりません。上のセレクターでページを選んでください。",
       model_modal_title: `{capability}モデルを選択`,
+      model_modal_ready: `モデルの候補を読み込みました。選択画面を開いて続けてください。`,
+      model_modal_ready_button: `モデルを選択`,
       model_modal_select_label: `モデル`,
       model_modal_select_description: `{provider}のモデルから選んでください。`,
       fallback_provider_page_placeholder: `{provider}のモデルのページを選択...`,

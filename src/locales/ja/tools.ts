@@ -53,6 +53,8 @@ export default {
       hide_footer_with_kill: `\`/config\` > 動作 > 通知動作 で非表示にできます · 止まっていると思ったら \`/kill\` を使用してください`,
     },
     user_block: {
+      error_missing_permission: `ブロックを通知するには、このチャンネルで {permission} 権限が必要です。サーバー管理者に権限を付与してもらい、もう一度お試しください。`,
+      notice_failed: `ブロックは保存されましたが、このチャンネルに確認メッセージを投稿できませんでした。管理者に権限の確認を依頼してください。`,
       type_mute: `ミュート`,
       type_block: `ブロック`,
       effect_mute: `対象ユーザーはこのペルソナをトリガーできません。`,

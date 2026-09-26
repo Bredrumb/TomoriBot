@@ -114,6 +114,7 @@ export default {
 範例對話：{dialogue_count}
 觸發詞：{trigger_word_count}`,
       success_confirmation: `已成功匯入主要人格 **{nickname}**！詳細的匯入資訊已發布在頻道中。`,
+      post_missing_permission: `人格已匯入，但我無法發布確認訊息。請讓管理員授予我此頻道的 {permission} 權限。`,
       nickname_update_success: `伺服器暱稱已更新。`,
       nickname_update_failed: `🟡 無法更新伺服器暱稱，可能是遇到 Discord 的頻率限制。請改為手動變更。`,
       avatar_update_success: `伺服器頭像已更新。`,

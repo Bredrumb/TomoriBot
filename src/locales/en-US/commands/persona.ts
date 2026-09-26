@@ -114,6 +114,7 @@ Attributes: {attribute_count}
 Sample Dialogues: {dialogue_count}
 Trigger Words: {trigger_word_count}`,
       success_confirmation: `Successfully imported main persona **{nickname}**! The detailed import information has been posted in the channel.`,
+      post_missing_permission: `Persona imported, but I could not post the public confirmation. Ask a server administrator to grant me {permission} in this channel.`,
       nickname_update_success: `Server nickname has been updated.`,
       nickname_update_failed: `🟡 Server nickname could not be updated, likely due to Discord rate limits. Please change it manually instead.`,
       avatar_update_success: `Server avatar has been updated.`,

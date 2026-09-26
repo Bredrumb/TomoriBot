@@ -114,6 +114,7 @@ export default {
 サンプル対話: {dialogue_count}
 トリガーワード: {trigger_word_count}`,
       success_confirmation: `メインペルソナ **{nickname}** が正常にインポートされました！詳細なインポート情報がチャンネルに投稿されました。`,
+      post_missing_permission: `ペルソナはインポートされましたが、確認メッセージを投稿できませんでした。管理者にこのチャンネルの {permission} 権限を付与してもらってください。`,
       nickname_update_success: `サーバーニックネームが更新されました。`,
       nickname_update_failed: `🟡 サーバーニックネームを更新できませんでした。Discordのレート制限が原因である可能性があります。手動で変更してください。`,
       avatar_update_success: `サーバーアバターが更新されました。`,

@@ -878,6 +878,8 @@ export default {
       model_provider_paged_detail:
         "{provider} có {count} model cho tính năng này, nhiều hơn một trang. Hãy chọn một trang ở bộ chọn phía trên.",
       model_modal_title: `Chọn model {capability}`,
+      model_modal_ready: `Danh sách model đã sẵn sàng. Mở trình chọn để tiếp tục.`,
+      model_modal_ready_button: `Chọn model`,
       model_modal_select_label: `Model`,
       model_modal_select_description: `Chọn một model từ {provider}.`,
       model_updated_heading: `Đã cập nhật model`,

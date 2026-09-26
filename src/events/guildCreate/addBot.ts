@@ -35,7 +35,11 @@ const handler = async (client: Client, guild: Guild): Promise<void> => {
     let channel = guild.systemChannel;
     let sentSuccessfully = false;
 
-    if (channel) {
+    if (
+      channel &&
+      guild.members.me &&
+      channel.permissionsFor(guild.members.me)?.has(["ViewChannel", "SendMessages", "EmbedLinks"])
+    ) {
       try {
         await sendStandardEmbed(channel, serverLocale, welcomeEmbedOptions);
         sentSuccessfully = true;

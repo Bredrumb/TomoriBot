@@ -18,6 +18,8 @@ Official bundled character presets have their own pointer behavior for seeded te
 
 Guild avatar and nickname updates share one Discord member PATCH helper. Failed responses log the HTTP status, Discord error code, and invalid field names. Avatar image bytes and response body text stay out of logs.
 
+Persona import checks the bot's channel permissions before posting its public confirmation. If posting is unavailable, the private receipt names the missing permission; the imported persona remains saved. On guild join, the welcome message falls back from a system channel that lacks view, send, or embed permission to an accessible text channel.
+
 ### Participant context freshness
 
 Persona responses in the same locked chat turn share only active-independent participant

@@ -33,6 +33,21 @@ const MAX_FILE_SIZE = IMPORT_LIMITS.MAX_PERSONA_IMPORT_SIZE_MB * 1024 * 1024;
 /** Byte budget for the `card.json` payload the archive reader will decompress. */
 const MAX_CHARX_CARD_BYTES = IMPORT_LIMITS.MAX_CHARX_CARD_SIZE_MB * 1024 * 1024;
 const MAX_CHARX_ASSET_TOTAL_BYTES = IMPORT_LIMITS.MAX_CHARX_ASSET_TOTAL_MB * 1024 * 1024;
+
+export async function missingPublicImportPermission(
+  interaction: ChatInputCommandInteraction,
+  includesAttachment: boolean,
+): Promise<string | null> {
+  if (!interaction.guild) return null;
+  if (!interaction.channel || !("permissionsFor" in interaction.channel)) return "ViewChannel";
+  const member = interaction.guild.members.me ?? (await interaction.guild.members.fetchMe().catch(() => null));
+  const permissions = member ? interaction.channel.permissionsFor(member) : null;
+  const sendPermission = interaction.channel.isThread() ? "SendMessagesInThreads" : "SendMessages";
+  const required = includesAttachment
+    ? (["ViewChannel", sendPermission, "EmbedLinks", "AttachFiles"] as const)
+    : (["ViewChannel", sendPermission, "EmbedLinks"] as const);
+  return required.find((permission) => !permissions?.has(permission)) ?? null;
+}
 const MAX_SILLY_TAVERN_DEBUG_BYTES = 1_000_000;
 
 type PersonaImportSource = "tomori-png" | "tomori-json" | "sillytavern-png" | "sillytavern-json" | "charx";
@@ -1010,7 +1025,8 @@ export async function execute(
         return;
       }
 
-      if (avatarImageBuffer) {
+      const missingPostPermission = await missingPublicImportPermission(interaction, Boolean(avatarImageBuffer));
+      if (!missingPostPermission && avatarImageBuffer) {
         const sanitizedNickname = sanitizeAttachmentFilenamePart(itemsImported.nickname, {
           fallback: "persona",
           maxLength: 50,
@@ -1025,11 +1041,14 @@ export async function execute(
           embeds: [successEmbed],
           files: [avatarAttachment],
         });
-        await persistImportedMainAvatar(serverDiscId, avatarImageBuffer);
-      } else {
+      } else if (!missingPostPermission) {
         await interaction.channel.send({
           embeds: [successEmbed],
         });
+      }
+
+      if (avatarImageBuffer) {
+        await persistImportedMainAvatar(serverDiscId, avatarImageBuffer);
       }
 
       await interaction.editReply({
@@ -1037,9 +1056,13 @@ export async function execute(
           new EmbedBuilder()
             .setTitle(localizer(locale, "commands.persona.import.success_title"))
             .setDescription(
-              localizer(locale, "commands.persona.import.success_confirmation", {
-                nickname: itemsImported.nickname,
-              }),
+              missingPostPermission
+                ? localizer(locale, "commands.persona.import.post_missing_permission", {
+                    permission: missingPostPermission,
+                  })
+                : localizer(locale, "commands.persona.import.success_confirmation", {
+                    nickname: itemsImported.nickname,
+                  }),
             )
             .setColor(
               avatarUpdateSkippedNoImage ||
@@ -1143,7 +1166,8 @@ export async function execute(
       // Post the public confirmation in-channel, attaching the avatar image
       //      when one was supplied. The persona already exists, so a missing
       //      channel only skips the public notice (the invoker still gets one).
-      if (interaction.channel && "send" in interaction.channel) {
+      const missingAlterPostPermission = await missingPublicImportPermission(interaction, Boolean(avatarImageBuffer));
+      if (!missingAlterPostPermission && interaction.channel && "send" in interaction.channel) {
         if (avatarImageBuffer) {
           const sanitizedNickname = sanitizeAttachmentFilenamePart(alterResult.nickname, {
             fallback: "persona",
@@ -1169,10 +1193,14 @@ export async function execute(
           new EmbedBuilder()
             .setTitle(localizer(locale, "commands.persona.import.alter_success_title"))
             .setDescription(
-              localizer(locale, "commands.persona.import.alter_success_confirmation", {
-                nickname: alterResult.nickname,
-                trigger_count: alterResult.uniqueTriggerCount,
-              }),
+              missingAlterPostPermission
+                ? localizer(locale, "commands.persona.import.post_missing_permission", {
+                    permission: missingAlterPostPermission,
+                  })
+                : localizer(locale, "commands.persona.import.alter_success_confirmation", {
+                    nickname: alterResult.nickname,
+                    trigger_count: alterResult.uniqueTriggerCount,
+                  }),
             )
             .setColor(alterEmbedColor),
         ],

@@ -53,6 +53,8 @@ export default {
       hide_footer_with_kill: `用 \`/config\` > 行为 > 提示 隐藏它 · 觉得我卡住了就用 \`/kill\``,
     },
     user_block: {
+      error_missing_permission: `我需要此频道的 {permission} 权限才能发布屏蔽通知。请让服务器管理员授予该权限后重试。`,
+      notice_failed: `屏蔽已保存，但我无法在此频道发布确认消息。请让管理员检查我的频道权限。`,
       type_mute: `禁言`,
       type_block: `屏蔽`,
       effect_mute: `目标没法触发这个人格。`,

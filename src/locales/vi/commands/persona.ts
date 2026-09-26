@@ -114,6 +114,7 @@ Thuộc tính: {attribute_count}
 Đối thoại mẫu: {dialogue_count}
 Từ kích hoạt: {trigger_word_count}`,
       success_confirmation: `Đã nhập thành công persona chính **{nickname}**! Thông tin nhập chi tiết đã được gửi trong kênh.`,
+      post_missing_permission: `Đã nhập persona nhưng tôi không thể gửi thông báo xác nhận. Hãy nhờ quản trị viên cấp quyền {permission} trong kênh này.`,
       nickname_update_success: `Đã cập nhật biệt danh trên máy chủ.`,
       nickname_update_failed: `🟡 Không thể cập nhật biệt danh máy chủ, có thể do giới hạn tốc độ của Discord. Vui lòng đổi thủ công.`,
       avatar_update_success: `Đã cập nhật avatar trên máy chủ.`,

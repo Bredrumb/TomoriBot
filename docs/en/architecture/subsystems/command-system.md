@@ -276,6 +276,8 @@ result on one anchor ephemeral message through the shared helpers in
 below). `promptForSavedProvider()` is forbidden in those files, and the allow-list audit in
 `tests/unit/commands/anchorMigrationLockdown.test.ts` enforces it.
 
+The `/config` Models provider selector acknowledges before loading model choices. Once the choices are ready, it sends the actor a button that opens the model modal on a fresh interaction. The prepared modal expires after five minutes and belongs to the actor who selected the provider.
+
 Root commands are represented by top-level command files:
 
 - `src/commands/subscribe.ts` -> `/subscribe`
