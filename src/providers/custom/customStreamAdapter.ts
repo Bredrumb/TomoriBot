@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { OpenAICompatibleStreamAdapter } from "@/providers/openaiCompatible/openaiCompatibleStreamAdapter";
 import type { OpenAICompatibleStreamConfig } from "@/providers/openaiCompatible/openaiCompatibleTypes";
 import { GemmaToolCallParser } from "@/providers/custom/customGemmaToolParser";
@@ -65,6 +66,15 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
       // system-role turns before forwarding to the underlying model.
       // Detect it by URL so the adapter falls back to an in-band user turn.
       supportsSystemRole: (apiUrl) => !isChatmockEndpoint(apiUrl),
+      mutateHeaders: ({ headers, config, context }) => {
+        const sessionId = resolveOpenCodeSessionId((config as CustomStreamConfig).endpointUrl, {
+          channelId: context.channel.id,
+          personaId: context.tomoriState.persona_id,
+        });
+        if (sessionId) {
+          headers["x-opencode-session"] = sessionId;
+        }
+      },
       // Inject Ollama-style options.num_ctx when the user has configured a
       // context window override. This travels outside the messages array so it
       // is unaffected by the context window it controls.
@@ -281,6 +291,30 @@ function isChatmockEndpoint(apiUrl: string): boolean {
     // Malformed URL, so don't assume ChatMock
     return false;
   }
+}
+
+/**
+ * The session affinity key OpenCode Go and Zen require, or null for every other endpoint.
+ *
+ * OpenCode asks for one stable ID per conversation, which here is a channel plus the persona
+ * answering in it. It is hashed because the value leaves for a third party and a raw Discord
+ * snowflake would identify the channel; it must stay deterministic so retries and later turns keep
+ * the same affinity.
+ */
+export function resolveOpenCodeSessionId(
+  endpointUrl: string,
+  conversation: { channelId: string; personaId: number | null | undefined },
+): string | null {
+  try {
+    const { hostname, pathname } = new URL(endpointUrl);
+    if (hostname !== "opencode.ai" || !pathname.startsWith("/zen/")) return null;
+  } catch {
+    return null;
+  }
+  return createHash("sha256")
+    .update(`${conversation.channelId}:${conversation.personaId ?? "none"}`)
+    .digest("hex")
+    .slice(0, 32);
 }
 
 export function normalizeCustomApiUrl(endpointUrl?: string): string {

@@ -135,6 +135,10 @@ The wizard creates the connection, saved provider, model, and active-model rows 
 press `Finish Setup`, so it never leaves a connection that has no usable text model. It registers
 text models only; image, video, TTS, and STT capabilities are still registered in `/providers`.
 
+OpenCode Go (`https://opencode.ai/zen/go/v1`) and OpenCode Zen (`https://opencode.ai/zen/v1`) work as
+OpenAI-compatible custom endpoints. TomoriBot sends them the per-conversation session ID they require,
+derived from a hash of the channel and persona, so no Discord ID leaves the bot.
+
 For full walkthroughs of running the servers, see:
 
 - [Setup: Local LLM](/self-hosting/local-endpoints/setup-local-llm/): Ollama, KoboldCPP, LM Studio, vLLM, LiteLLM.
