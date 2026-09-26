@@ -79,8 +79,11 @@ export class InvalidPresetIntegerError extends Error {
   }
 }
 
-function presetInteger(value: unknown, fallback: number, prompt: RawSTPromptNode, field: string): number {
-  if (value === undefined || value === null) return fallback;
+function presetInteger(rawValue: unknown, fallback: number, prompt: RawSTPromptNode, field: string): number {
+  if (rawValue === undefined || rawValue === null) return fallback;
+  // Hand-edited and third-party presets sometimes quote whole numbers, which imported before this
+  // validation existed, so only strings that are not a whole number are rejected.
+  const value = typeof rawValue === "string" && /^\s*-?\d+\s*$/.test(rawValue) ? Number(rawValue) : rawValue;
   if (typeof value !== "number" || !Number.isSafeInteger(value)) {
     throw new InvalidPresetIntegerError(String(prompt.name || prompt.identifier), field);
   }

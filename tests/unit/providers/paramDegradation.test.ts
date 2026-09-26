@@ -4,6 +4,7 @@ import {
   buildImageStripAttempt,
   buildTargetedAttempt,
   classifyDegradableError,
+  errorMessageNamesRejectableParam,
   extractRejectedParams,
   isMultimodalRejectionError,
   messagesContainImageBlocks,
@@ -58,6 +59,15 @@ describe("extractRejectedParams", () => {
     expect(extractRejectedParams("property 'options' is unsupported", { options: { num_ctx: 8192 } })).toEqual([
       "options",
     ]);
+  });
+
+  it("keeps Ollama's options when an error only uses the word in prose", () => {
+    const requestBody = { options: { num_ctx: 8192 }, top_k: 40 };
+    const message = "Unsupported parameter: top_k. Supported options are temperature and top_p.";
+
+    expect(extractRejectedParams(message, requestBody)).toEqual(["top_k"]);
+    expect(errorMessageNamesRejectableParam("Upstream failed; check your request options")).toBe(false);
+    expect(errorMessageNamesRejectableParam('property "options" is unsupported')).toBe(true);
   });
 
   it("excludes a named parameter that is absent from the request", () => {
