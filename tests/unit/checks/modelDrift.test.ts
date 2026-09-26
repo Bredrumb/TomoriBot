@@ -92,17 +92,19 @@ describe("model drift", () => {
     expect(compiled.diagnostics).toHaveLength(0);
     expect(inserted).toContain(candidate.codename);
     expect(inserted).toContain(MODEL_DRIFT_TODO);
+    const draftStart = inserted.indexOf(`codename: "${candidate.codename}"`);
+    const draftEnd = inserted.indexOf("},", inserted.indexOf(`desc: "${MODEL_DRIFT_TODO}"`, draftStart));
+    expect(inserted.slice(draftStart, draftEnd)).not.toContain("i18n:");
     expect(inserted.slice(0, text.indexOf("export const imageSections"))).toBe(
       text.slice(0, text.indexOf("export const imageSections")),
     );
   });
 
-  it("blocks drafted descriptions until both languages are reviewed", () => {
-    const row = { provider: "google", codename: "sample", desc: MODEL_DRIFT_TODO, i18n: { ja: MODEL_DRIFT_TODO } };
+  it("blocks the generated English placeholder and permits missing translations", () => {
+    const row = { provider: "google", codename: "sample", desc: MODEL_DRIFT_TODO };
     expect(collectModelDriftTodoViolations("llms", [row])).toHaveLength(1);
     row.desc = "Reviewed description";
-    expect(collectModelDriftTodoViolations("llms", [row])).toHaveLength(1);
-    row.i18n.ja = "確認済みの説明";
     expect(collectModelDriftTodoViolations("llms", [row])).toEqual([]);
+    expect(collectModelDriftTodoViolations("llms", [{ ...row, i18n: { ja: MODEL_DRIFT_TODO } }])).toHaveLength(1);
   });
 });

@@ -334,7 +334,11 @@ export function validateModels(): string[] {
 
 export function collectModelDriftTodoViolations(table: string, rows: RowLike[]): string[] {
   return rows
-    .filter((row) => row.desc?.includes(MODEL_DRIFT_TODO) || row.i18n?.ja?.includes(MODEL_DRIFT_TODO))
+    .filter(
+      (row) =>
+        row.desc?.includes(MODEL_DRIFT_TODO) ||
+        Object.values(row.i18n ?? {}).some((value) => value.includes(MODEL_DRIFT_TODO)),
+    )
     .map((row) => `${table}/${row.provider}/${row.codename}: replace ${MODEL_DRIFT_TODO} descriptions`);
 }
 

@@ -560,11 +560,12 @@ the next boot. Invariants are validated on startup and via `bun run check-seed-c
 The weekly model drift action drafts catalog rows from models.dev in a pull request. It records
 offered models in `scripts/data/modelDriftSeen.json`, keyed by provider, table, and codename. Merge
 the seen entries for declined rows to stop them returning in later runs. Closing the pull request
-leaves them eligible for the next run. Drafted rows require English and Japanese descriptions;
+leaves them eligible for the next run. Drafted rows require an English description; translations
+are optional and fall back to English.
 `check-seed-catalogs` rejects the `MODEL_DRIFT_TODO` markers. Review endpoint availability,
 capabilities, and official prices before merging. Fixed OpenRouter model IDs get draft fallback prices;
-floating aliases stay unpriced because their targets change. The action does not draft media rows for providers
-whose current generation implementation cannot serve them. Run
+floating aliases stay unpriced because their targets change. The action does not draft media rows
+for providers whose current generation implementation cannot serve them. Run
 `bun scripts/checks/modelDrift.ts` for a local read-only check against current models.dev data.
 The first run may contain a large backlog. Review the dry-run output before dispatching the action.
 `--baseline` records every currently offered model as declined without adding catalog rows; use it

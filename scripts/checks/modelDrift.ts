@@ -255,7 +255,6 @@ function renderRow(candidate: Candidate): string {
     }
   }
   row.desc = MODEL_DRIFT_TODO;
-  row.i18n = { ja: MODEL_DRIFT_TODO };
   return `      {\n${Object.entries(row)
     .map(([key, value]) => `        ${key}: ${JSON.stringify(value)},`)
     .join("\n")}\n      }`;
@@ -358,7 +357,7 @@ function report(candidates: Candidate[], free: Candidate[], advisories: ReturnTy
     "Catalog rows drafted from models.dev. Verify provider availability, endpoint support, capabilities, and official prices before merging.",
     "Verify drafted fallback prices for fixed OpenRouter models. Floating aliases have no static price.",
     "",
-    `Replace every ${MODEL_DRIFT_TODO} English and Japanese description. Remove unwanted rows, but keep their seen entries to decline them.`,
+    `Replace every ${MODEL_DRIFT_TODO} English description. Translations are optional and fall back to English. Remove unwanted rows, but keep their seen entries to decline them.`,
     "",
     `Drafted rows: ${candidates.length}. Free variants for review: ${free.length}.`,
     "",
