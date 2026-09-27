@@ -24,6 +24,7 @@ import {
 } from "@/utils/discord/stream/channelDeliveryContinuity";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { STREAMING_LIMITS } from "@/utils/security/rateLimiter";
+import { recordChatDiagnostic, recordChatMessageSent } from "@/utils/chat/diagnosticTimeline";
 
 export type StreamSendPayload = {
   content?: string;
@@ -453,6 +454,7 @@ export class StreamUiUpdater {
       // Only the first refusal of an episode is logged at error level: the rest are the same
       // fact repeated, and at error level they crowd out unrelated signal.
       const sendFailureReason = classifySendFailure(discordError);
+      recordChatDiagnostic({ kind: "send_failed", reason: sendFailureReason ?? "other" });
       const isFirstOfEpisode = sendFailureReason
         ? noteSendFailure(context.channel.id, sendFailureReason).isFirstOfEpisode
         : true;
@@ -529,6 +531,9 @@ export class StreamUiUpdater {
       });
     }
     state.messageSentCount++;
+    if (sentMessage) {
+      recordChatMessageSent(sentMessage.id, sentMessage.webhookId ? "webhook" : "bot");
+    }
     if (textForState) {
       state.accumulatedText += textForState;
     }

@@ -11,7 +11,7 @@ sidebar:
 
 Tất cả các lệnh slash hiện được TomoriBot đăng ký, được tạo từ cùng trình xây dựng lệnh và mô tả tiếng Việt dùng để đăng ký trên Discord (mô tả chưa được dịch sẽ hiển thị bằng tiếng Anh).
 
-Các nhóm lệnh cấp cao nhất: **39**. Các lệnh slash có thể thực thi: **81**.
+Các nhóm lệnh cấp cao nhất: **40**. Các lệnh slash có thể thực thi: **82**.
 
 ## `/comment`
 
@@ -358,6 +358,14 @@ Các thao tác tiện ích cho ngữ cảnh hội thoại, prompt và chẩn đo
 | `/tool delete turn` | Xóa lượt trò chuyện gần nhất của persona khỏi kênh. |
 | `/tool estimate cost` | Ước tính chi phí API cho các nhà cung cấp AI trả phí |
 | `/tool prompt snapshot` | Xuất chính xác prompt LLM của một persona ra tệp để gỡ lỗi. |
+
+## `/troubleshoot`
+
+Nhận trợ giúp về những gì TomoriBot đã thực hiện.
+
+| Lệnh | Tóm tắt |
+|---|---|
+| `/troubleshoot chat` | Tạo tệp riêng tư về sự cố trò chuyện gần đây. |
 
 ## `/update`
 

@@ -11,7 +11,7 @@ sidebar:
 
 Every slash command currently registered by TomoriBot, generated from the same command builders and English locale descriptions used for Discord registration.
 
-Top-level command groups: **39**. Runnable slash commands: **81**.
+Top-level command groups: **40**. Runnable slash commands: **82**.
 
 ## `/comment`
 
@@ -187,7 +187,7 @@ Configure NovelAI text and image generation for this server.
 
 | Command | Summary |
 |---|---|
-| `/novelai generate image` | Generate a NovelAI image using imageboard-style tags and an optional character reference on V4.5 models. |
+| `/novelai generate image` | Generate a NovelAI image using imageboard-style tags and an optional character reference. |
 | `/novelai usage` | Show this server's NovelAI Opus generation usage meter (Manage Server required). |
 
 ## `/nsfw`
@@ -358,6 +358,14 @@ Utility actions for conversation context, prompts, and diagnostics.
 | `/tool delete turn` | Delete the last persona's turn from the channel. |
 | `/tool estimate cost` | Estimate API costs for paid AI providers |
 | `/tool prompt snapshot` | Dump the exact LLM prompt for a persona to a file for debugging. |
+
+## `/troubleshoot`
+
+Get help with something TomoriBot did.
+
+| Command | Summary |
+|---|---|
+| `/troubleshoot chat` | Make a private file about a recent chat problem. |
 
 ## `/update`
 

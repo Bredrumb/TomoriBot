@@ -97,3 +97,30 @@ tomoriChat(TomoriChatInput)
   `src/utils/chat/`. The event-loader scans `src/events/messageCreate/*.ts`
   shallowly, so helper modules colocated with chat logic *must not* sit in that
   folder (they would be auto-registered as additional handlers).
+
+## Chat troubleshooting files
+
+`/troubleshoot chat` gives a user a private JSON file for their latest message in the current
+channel from the past 15 minutes. They can supply a link to their message or a bot reply to
+select a specific turn from the past hour, or enter the approximate number of minutes ago
+(within five minutes of a matching trigger). Standard, Canary, and PTB Discord message links are
+accepted for the current channel. The command tries a DM first and shows a private embed receipt.
+If the DM fails, it attaches the file to that private reply. It does not send the file to support.
+
+`diagnosticTimeline.ts` records admission, queue and persona turns, context history, provider
+attempts, tool continuations, and Discord sends. Attempts use labels such as `model-1` so two
+attempts on the same model can be compared without exposing its name. Context history records the latest 25 fetched
+messages with relative millisecond offsets, author roles, and whether each message entered the
+simplified history. The provider event lists the dialogue messages retained for that attempt.
+This distinguishes a later user's message entering the first user's prompt from two independent
+turns or two sends in one turn. Tool continuations reuse the existing context items; another
+context-history event appears only if a chat turn rebuilds them.
+
+The file contains UTC times, relative millisecond offsets, counts, status codes, and labels such
+as `message-2`. It excludes message text, prompts, user IDs, channel IDs, and raw message IDs.
+The bot keeps the raw IDs in memory to find and join events. The store holds at most 5,000
+message traces for one hour, 100 events per trace, and 100 delivered message IDs per trace for
+reply-link lookup. A restart clears it. If chat runs
+on multiple bot processes or users need reports after a restart, move this bounded record to a
+shared store before relying on the command for those cases. `stat_counters` remains an aggregate
+usage record and cannot reconstruct this event order.

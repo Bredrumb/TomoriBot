@@ -11,7 +11,7 @@ sidebar:
 
 Todos os comandos de barra (slash commands) atualmente registrados pela TomoriBot, gerados a partir dos mesmos construtores de comando e descrições em português usados para o registro no Discord (descrições ainda não traduzidas aparecem em inglês).
 
-Grupos de comandos de nível superior: **39**. Comandos de barra executáveis: **81**.
+Grupos de comandos de nível superior: **40**. Comandos de barra executáveis: **82**.
 
 ## `/comment`
 
@@ -358,6 +358,14 @@ Ações utilitárias para contexto de conversa, prompts e diagnósticos.
 | `/tool delete turn` | Excluir o turno da última persona do canal. |
 | `/tool estimate cost` | Estimar custos de API para provedores de IA pagos |
 | `/tool prompt snapshot` | Despeje o prompt exato do LLM para uma persona em um arquivo para depuração. |
+
+## `/troubleshoot`
+
+Obtenha ajuda com algo que a TomoriBot fez.
+
+| Comando | Resumo |
+|---|---|
+| `/troubleshoot chat` | Cria um arquivo privado sobre um problema recente no chat. |
 
 ## `/update`
 

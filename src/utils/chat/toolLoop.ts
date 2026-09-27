@@ -27,6 +27,7 @@ import {
   buildTailDirectiveMessage,
 } from "@/utils/chat/contextAnnotations";
 import { takeEnhancedContextItem } from "@/utils/chat/pendingEnhancedContext";
+import { recordChatDiagnostic } from "@/utils/chat/diagnosticTimeline";
 import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 import type { ChatTurnContext, GenerationTurnResult, ToolHistoryEntry } from "@/utils/chat/types";
 import { DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
@@ -89,6 +90,14 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
   let toolResponseDelivered = false;
 
   for (let iteration = 0; iteration < MAX_FUNCTION_CALL_ITERATIONS; iteration++) {
+    if (iteration > 0) {
+      recordChatDiagnostic({
+        kind: "tool_continuation",
+        iteration: iteration + 1,
+        historyEntries: functionHistory.length,
+        contextItems: params.context.contextItems.length,
+      });
+    }
     if (iteration === SOFT_WARN_ITERATION_THRESHOLD && params.context.shouldSurfaceUserErrors) {
       await sendStandardEmbed(
         params.context.channel as Parameters<typeof sendStandardEmbed>[0],
@@ -177,6 +186,11 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         detailsText = mergeDetails(detailsText, streamResult.detailsContent);
         setChannelToolCallChainActive(channelLocks.get(params.context.turn.lockedTurn.channelId), true);
         const toolOutcome = await executeToolCall(params, streamResult, iteration);
+        recordChatDiagnostic({
+          kind: "tool_outcome",
+          outcome: toolOutcome.kind,
+          ...(toolOutcome.kind === "history" ? { success: toolOutcome.success } : {}),
+        });
         if (toolOutcome.kind === "restart") {
           consecutiveToolErrors = 0;
           naiConsecutiveToolFailures = 0;

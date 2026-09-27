@@ -33,6 +33,7 @@ import conditioning from "./commands/conditioning";
 import reward from "./commands/reward";
 import punish from "./commands/punish";
 import support from "./commands/support";
+import troubleshoot from "./commands/troubleshoot";
 import contribute from "./commands/contribute";
 import donate from "./commands/donate";
 import nsfw from "./commands/nsfw";
@@ -89,6 +90,7 @@ export default {
     ...reward,
     ...punish,
     ...support,
+    ...troubleshoot,
     ...contribute,
     ...donate,
     ...nsfw,

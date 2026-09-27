@@ -11,7 +11,7 @@ sidebar:
 
 TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使用的同一批指令建構器與繁體中文說明產生的（尚未翻譯的說明會以英文顯示）。
 
-頂層指令群組：**39**。可執行的斜線指令：**81**。
+頂層指令群組：**40**。可執行的斜線指令：**82**。
 
 ## `/comment`
 
@@ -358,6 +358,14 @@ TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使�
 | `/tool delete turn` | 從頻道刪除人格的最後一輪發言。 |
 | `/tool estimate cost` | 估算付費 AI 供應商的 API 費用 |
 | `/tool prompt snapshot` | 將某個人格的完整 LLM 提示詞匯出成檔案，方便除錯。 |
+
+## `/troubleshoot`
+
+針對 TomoriBot 的行為取得協助與排查問題。
+
+| 指令 | 摘要 |
+|---|---|
+| `/troubleshoot chat` | 建立一份關於近期聊天問題的私人診斷檔案。 |
 
 ## `/update`
 

@@ -11,7 +11,7 @@ sidebar:
 
 TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同一批指令构建器和简体中文描述生成（尚未翻译的描述以英文显示）。
 
-顶层指令组：**39**。可执行的斜杠指令：**81**。
+顶层指令组：**40**。可执行的斜杠指令：**82**。
 
 ## `/comment`
 
@@ -358,6 +358,14 @@ TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同�
 | `/tool delete turn` | 从频道里删除人格最近的一轮回复。 |
 | `/tool estimate cost` | 估算付费 AI 提供方的 API 费用 |
 | `/tool prompt snapshot` | 把某个人格实际的 LLM 提示词导出成文件，用于调试。 |
+
+## `/troubleshoot`
+
+针对 TomoriBot 的行为获取帮助与排查问题。
+
+| 指令 | 摘要 |
+|---|---|
+| `/troubleshoot chat` | 生成一份关于近期聊天问题的私密诊断文件。 |
 
 ## `/update`
 

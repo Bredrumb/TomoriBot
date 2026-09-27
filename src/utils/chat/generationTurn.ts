@@ -37,6 +37,11 @@ import {
   shouldApplyServerTextQuota,
 } from "@/utils/chat/admissionGuards";
 import { hasTextQuotaBeenRefused, markTextQuotaRefused } from "@/utils/chat/textQuotaState";
+import {
+  recordChatAttemptStarted,
+  recordChatDiagnostic,
+  recordChatProviderContext,
+} from "@/utils/chat/diagnosticTimeline";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import { providerIsApiFamily, runToolLoop, sendStreamTimeoutNotice } from "@/utils/chat/toolLoop";
 import {
@@ -120,6 +125,11 @@ async function runGenerationAttempts(
     for (let index = 0; index < attempts.length; index++) {
       const attempt = attempts[index];
       if (!attempt) continue;
+      recordChatAttemptStarted(
+        index + 1,
+        context.textCredentialSource,
+        `${attempt.successModel.llm_provider}:${attempt.successModel.llm_codename}`,
+      );
       // A server route that has not been built yet still counts as a pending model, so the last
       // planned attempt keeps its errors suppressed while a later model may yet answer.
       const hasPendingModelFallback = index < attempts.length - 1 || plan.extendWithServerRoute !== null;
@@ -131,6 +141,12 @@ async function runGenerationAttempts(
         emptyResponseFinishReason: context.turn.lockedTurn.admission.incoming.emptyResponseFinishReason,
         retryCount: context.turn.lockedTurn.admission.incoming.retryCount,
       });
+      recordChatProviderContext(
+        index + 1,
+        context.contextItems.flatMap((item) =>
+          item.metadataTag === ContextItemTag.DIALOGUE_HISTORY && item.messageId ? [item.messageId] : [],
+        ),
+      );
 
       // Key rotation inner loop: try multiple keys for this attempt before giving up.
       let rotationKeyId = attempt.rotationKeyId;
@@ -190,6 +206,13 @@ async function runGenerationAttempts(
           `Key rotation: retrying ${attempt.label} with key ${rotationKeyId ?? "main"} (attempt ${keyAttemptCount + 1}).`,
         );
       }
+
+      recordChatDiagnostic({
+        kind: "attempt_finished",
+        ordinal: index + 1,
+        status: result?.status ?? "skipped",
+        keyAttempts: keyAttemptCount,
+      });
 
       // A destination the bot cannot post into fails for every key and every model alike, whether
       // the channel was deleted or access to it was revoked. Retrying would burn a full generation
@@ -312,6 +335,7 @@ async function purgeSupersededDeliveries(
     return;
   }
   const superseded = deliveredMessageRefs.splice(fromIndex);
+  recordChatDiagnostic({ kind: "messages_purge_requested", count: superseded.length });
   log.info(`Deleting ${superseded.length} superseded partial message(s) from a failed generation attempt.`);
   await deleteSupersededStreamMessages(superseded, {
     channel: context.channel,

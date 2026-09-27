@@ -41,6 +41,7 @@ import { isAudioAttachment, transcribeMessageAudioAttachment } from "@/utils/aud
 import { resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
 import { buildQueuedReplyDirective, normalizeTailDirective } from "@/utils/chat/contextDirectives";
 import { excludeMessagesAwaitingOwnTurn } from "@/utils/chat/channelQueue";
+import { recordChatContextHistory } from "@/utils/chat/diagnosticTimeline";
 import {
   buildCombinedTailDirectiveMessage,
   buildReactionContextAnnotation,
@@ -613,6 +614,7 @@ async function buildSimplifiedHistory(
   ) {
     messages.push(turn.lockedTurn.admission.message);
   }
+  const fetchedMessages = messages;
   messages = excludeMessagesAwaitingOwnTurn(
     messages,
     turn.lockedTurn.channelId,
@@ -868,6 +870,19 @@ async function buildSimplifiedHistory(
       `Injected reminder into conversation history for ${isSelfReminder ? "self task" : `user ${incoming.reminderRecipientID}`}`,
     );
   }
+
+  const includedIds = new Set(
+    simplifiedMessages.flatMap((message) => [message.id, ...(message.combinedMessageIds ?? [])]),
+  );
+  recordChatContextHistory(
+    fetchedMessages.map((message) => ({
+      id: message.id,
+      authorId: message.author.id,
+      isBot: message.author.bot || Boolean(message.webhookId),
+      createdAt: message.createdTimestamp,
+    })),
+    includedIds,
+  );
 
   return {
     simplifiedMessages,

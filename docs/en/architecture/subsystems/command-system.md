@@ -348,6 +348,7 @@ handler.
 - `status`
 - `support`
 - `tool`
+- `troubleshoot`
 - `update`
 
 ## Category Restrictions
