@@ -122,6 +122,8 @@ Memory and runtime-state writes do not materialize pointers. Server memories, pe
 
 Native Tomori preset exports include `attribute_public_flags`, aligned 1:1 with `attribute_list`. Older Tomori preset files that do not have this field remain valid; import normalizes them to all-private flags before writing `persona_attributes`.
 
+Native preset export and import accept persona prompts up to 16003 characters, including the separators the four-part `/config` persona prompt editor can insert. Other preset strings retain their 5000-character import limit.
+
 Exports materialize pointer personas into self-contained preset files by reading the current live preset content. When the source persona is or was derived from an official preset, export stamps `preset_lineage_id` in the native Tomori preset payload.
 
 Import re-links to an official preset pointer only when all of these are true:
