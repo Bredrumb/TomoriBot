@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 # GitHub Actions Workflow: Deploy TomoriBot to Azure VM
 
-name: Deploy: Azure (Production)
+name: "Deploy: Azure (Production)"
 
 on:
   push:

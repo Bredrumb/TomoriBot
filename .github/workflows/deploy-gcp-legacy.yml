@@ -5,7 +5,7 @@
 # this workflow requires intentionally recreating state and deployment secrets.
 # GitHub Actions Workflow: Deploy TomoriBot to GCP Cloud Run
 
-name: Deploy: GCP (Legacy Rollback)
+name: "Deploy: GCP (Legacy Rollback)"
 
 on:
   workflow_dispatch:

@@ -1,4 +1,4 @@
-name: Agent: Claude Assistant
+name: "Agent: Claude Assistant"
 
 on:
   issue_comment:

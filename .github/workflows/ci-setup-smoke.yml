@@ -1,4 +1,4 @@
-name: CI: Setup Smoke (Cross-Platform)
+name: "CI: Setup Smoke (Cross-Platform)"
 
 on:
   workflow_dispatch:
