@@ -585,6 +585,9 @@ jobs:
           # Diffing against the last green deploy keeps the window open until one actually succeeds.
           # Query params rather than repeated flags so this needs no line continuations.
           LAST_GREEN=$(gh api "repos/${{ github.repository }}/actions/workflows/deploy-azure.yml/runs?branch=${{ github.ref_name }}&status=success&per_page=1" --jq '.workflow_runs[0].head_sha' 2>/dev/null || true)
+          if [ -z "$LAST_GREEN" ] || [ "$LAST_GREEN" = "null" ]; then
+            LAST_GREEN=$(gh api "repos/${{ github.repository }}/actions/workflows/deploy-tomoribot-azure.yml/runs?branch=${{ github.ref_name }}&status=success&per_page=1" --jq '.workflow_runs[0].head_sha' 2>/dev/null || true)
+          fi
           PREV_REF=""
           if [ -n "$LAST_GREEN" ] && [ "$LAST_GREEN" != "null" ] && git cat-file -e "${LAST_GREEN}^{commit}" 2>/dev/null; then
             PREV_REF="$LAST_GREEN"
