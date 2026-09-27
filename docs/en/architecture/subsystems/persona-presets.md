@@ -42,12 +42,12 @@ When `is_pointer = true`, runtime reads resolve the persona's preset-backed cont
 
 The persona row and normalized child rows still carry copied values for compatibility with older surfaces, but live preset data is authoritative while the persona is a pointer.
 
-Trigger words are the one preset-resolved field that is further post-processed: because every preset bundles the shared base word (`tomori`), `loadAllForServer` collapses contested words to a single owner after resolving them (main persona wins base words; alters keep only what no higher-priority persona already claimed). See `docs/en/architecture/subsystems/multi-persona.md` → *Single-owner trigger resolution*. The de-duped result, not the raw preset list, is what routes messages.
+Trigger words are the one preset-resolved field that is further post-processed: because every preset bundles the shared base word (`tomori`), `loadAllForServer` collapses contested words to a single owner after resolving them (main persona wins base words; alters keep only what no higher-priority persona already claimed). See `docs/en/architecture/subsystems/multi-persona.md` → *Single-owner trigger resolution*. Message routing uses the de-duped result.
 
-Avatars sync too, but the mechanism depends on the delivery channel, not on "avatar vs sprite":
+Avatar synchronization depends on the delivery channel:
 
 - **Alter avatars**: Delivered per-message as a webhook `avatarURL`, exactly like sprites, so they live-resolve from one shared image. The seed uploads each preset avatar once to the immutable `presets/{lineage}/avatar-{hash}.png` prefix and records the URL + content hash on `persona_presets.preset_avatar_shared_url` / `preset_avatar_hash`. An unforked pointer alter with a NULL `personas.webhook_avatar_url` resolves the shared URL at state-load time (`PersonaRepository.resolvePointerAlterAvatarUrl`), so catalog avatar edits fan out to it on the next reseed; materialization copies it by reference. No per-server upload occurs.
-- **Main persona avatars**: The bot's Discord guild member avatar; Discord-owned state that cannot live-resolve per message. They are fanned out by a throttled, best-effort, resumable background reconciler (see *Main avatar fan-out* below).
+- **Main persona avatars**: The bot's Discord guild member avatar is Discord-owned state that cannot live-resolve per message. A throttled, best-effort, resumable background reconciler fans out changes (see *Main avatar fan-out* below).
 
 `persona_presets.preset_avatar_path` remains the local catalog source asset the seed reads to build the shared upload; `preset_avatar_shared_url` is the runtime-resolved field.
 
@@ -88,7 +88,7 @@ The shared `presets/` images are immutable and never deleted by per-persona path
 
 A `BOOLEAN[]` aligned 1:1 with `preset_attribute_list`. Pointer personas resolve these flags from the live preset row; materialized copies store them in `persona_attributes.is_public`. Official Tomori presets mark their first appearance-style attribute public; public attributes can be shown in another persona's participant profile when the persona spoke in visible history, is a co-responder, or is referenced by trigger text. All other seeded attributes are private.
 
-The flags are still derived at seed time, not authored in each catalog row. `seedPersonasFromCatalog()` runs the preserved `official_attribute_flags` update after the persona upsert for lineage IDs `4`, `716`, `1770`, `3585`, and `50`.
+`seedPersonasFromCatalog()` derives the flags at seed time through the preserved `official_attribute_flags` update after the persona upsert for lineage IDs `4`, `716`, `1770`, `3585`, and `50`. Catalog rows do not author the flags.
 
 ## Applying Presets
 
@@ -116,7 +116,7 @@ All main-persona avatar uploads are re-encoded to PNG before the guild-member PA
 
 The first local content edit forks a pointer into an independent copy. Materialization preserves `persona_id` and `persona_lineage_id`, copies the current live preset content into `personas`, `persona_attributes`, `persona_configs`, and `persona_sprites`, then sets `is_pointer = false`. Preset sprites are copied by reference: the new `persona_sprites` rows reuse the shared `presets/` image URL (no byte duplication), so the immutable-delete guard still protects them. A sprite edit (`/persona sprites add|edit|remove|import`) forks through this same path, so the user keeps the default sprite set and layers their changes on top. An avatar edit is the exception: once the avatar write succeeds, `removePresetSpritesAfterAvatarChange` deletes the persona's sprite rows that still reference shared `presets/` images, because the preset character's expressions would contradict the new face. Sprites the user uploaded are kept, the shared image files are untouched, and `/persona default` restores the preset set. Main-persona imports already clear every sprite (see Import/export cards), so they need no separate pass. An alter's avatar is likewise copied by reference: if a forking alter had no avatar of its own (`webhook_avatar_url` NULL), materialization stamps it with `preset_avatar_shared_url` so it keeps the same shared image after forking.
 
-This fork is binary per persona, not field-level: after any content edit, future seed updates no longer change that persona's preset-backed content. Re-running `/persona default` is the supported way to opt back into the live official preset.
+The first content edit forks the entire persona. Future seed updates no longer change that persona's preset-backed content. Re-running `/persona default` restores the live official preset.
 
 Memory and runtime-state writes do not materialize pointers. Server memories, personal memories, conditioning history, autochat runtime counters, cooldowns, and similar runtime rows continue to use `persona_lineage_id`/`persona_id` normally.
 
