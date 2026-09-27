@@ -17,15 +17,15 @@ unknown option keys, asserting copy by key) live next to the helpers in
 - **Budget the payload the user receives.** A limits test that measures a standalone builder the user never
   sees proves nothing about the page they do see. Build the real page, as `tests/helpers/configMcpPage.ts` does
   for MCP servers.
-- **Narrow panel payloads with a guard, not a cast view.** discord.js types a component's `type` as the whole
+- **Narrow panel payloads with a guard.** discord.js types a component's `type` as the whole
   `ComponentType` enum, so `type ===` narrows nothing. Use an `in` guard or a
   `component is ContainerComponentData<...>` predicate; a hand-declared `{ components: ... }` view is the last
   resort.
 
 ## Shape
 
-- **Table a family of route cases.** Build and parse round trips, arity, wire contracts, and rejections are one
-  `it.each` table each, not one test per case.
+- **Table a family of route cases.** Put build and parse round trips, arity, wire contracts, and rejections
+  in one `it.each` table per family.
 - **Split long tests into named cases.** A test over about 100 lines usually covers several scenarios, and its
   failure message cannot say which one broke.
 - **Loop locales inside one test** that reports every failing locale (`expectForEveryLocale`), not one test per
