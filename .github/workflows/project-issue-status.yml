@@ -1,4 +1,4 @@
-name: Move Issue to In-Progress on Assignment
+name: "Project: Move Assigned Issue to In-Progress"
 
 on:
   issues:

@@ -1,4 +1,4 @@
-name: Auto-assign PR Author
+name: "PR: Triage & Labeling"
 
 on:
   pull_request_target:

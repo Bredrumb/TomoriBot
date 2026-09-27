@@ -116,7 +116,7 @@ pg_restore \
 
 ## 给通过 CI 部署的贡献者：`(Checkpoint)` 约定
 
-如果你维护一个通过 `.github/workflows/deploy-tomoribot-{aws,gcp}.yml` 里的工作流部署到 AWS 或 GCP 的分支，这些流水线支持选择启用的部署前快照：当提交信息里包含字面量标记 `(Checkpoint)` 时，工作流会在任何代码被部署之前、也在启动时的迁移执行器碰到数据库之前，先运行 `aws rds create-db-snapshot`（或 GCP Cloud SQL 的对应操作）。
+如果你维护一个通过 `.github/workflows/deploy-{aws,gcp-legacy}.yml` 里的工作流部署到 AWS 或 GCP 的分支，这些流水线支持选择启用的部署前快照：当提交信息里包含字面量标记 `(Checkpoint)` 时，工作流会在任何代码被部署之前、也在启动时的迁移执行器碰到数据库之前，先运行 `aws rds create-db-snapshot`（或 GCP Cloud SQL 的对应操作）。
 
 这些情况下用它：
 

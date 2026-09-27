@@ -111,7 +111,7 @@ pg_restore \
 
 ## CI経由でデプロイする貢献者向け：`(Checkpoint)` 規則
 
-AWSまたはGCPに `.github/workflows/deploy-tomoribot-{aws,gcp}.yml` のワークフロー経由でデプロイするフォークを保守している場合、これらのパイプラインはオプトインのデプロイ前スナップショットをサポートしています。コミットメッセージに `(Checkpoint)` という文字通りのトークンが含まれている場合、コードがデプロイされる前、かつ移行ランナーが起動時にデータベースに触れる前に、ワークフローは `aws rds create-db-snapshot`（またはGCP Cloud SQLの同等のコマンド）を実行します。
+AWSまたはGCPに `.github/workflows/deploy-{aws,gcp-legacy}.yml` のワークフロー経由でデプロイするフォークを保守している場合、これらのパイプラインはオプトインのデプロイ前スナップショットをサポートしています。コミットメッセージに `(Checkpoint)` という文字通りのトークンが含まれている場合、コードがデプロイされる前、かつ移行ランナーが起動時にデータベースに触れる前に、ワークフローは `aws rds create-db-snapshot`（またはGCP Cloud SQLの同等のコマンド）を実行します。
 
 次の場合に使用します。
 

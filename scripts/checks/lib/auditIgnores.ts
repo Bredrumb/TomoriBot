@@ -1,7 +1,7 @@
 /**
  * Advisory IDs `bun audit` is told to skip, shared by `auditClean.ts` and `vl.ts` so a local run
- * and the `validation.yml` gate never disagree about what blocks. The same list is mirrored as a
- * `run:` flag in `.github/workflows/validation.yml`, and container-scan equivalents live in
+ * and the `ci.yml` gate never disagree about what blocks. The same list is mirrored as a
+ * `run:` flag in `.github/workflows/ci.yml`, and container-scan equivalents live in
  * `.trivyignore`.
  *
  * Every entry needs a justification and a retirement condition in

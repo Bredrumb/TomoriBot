@@ -2,7 +2,7 @@
 # GitHub Actions Workflow: Deploy TomoriBot to AWS ECS
 # Note: Secret validation warnings are expected - secrets are configured in GitHub repo settings
 
-name: Deploy TomoriBot (AWS)
+name: Deploy: AWS (ECS)
 on:
   workflow_dispatch: # Manual trigger only — GCP pipeline handles push to release
     inputs:
@@ -88,7 +88,7 @@ jobs:
   # VALIDATION (lint, types, schema, locales, lifecycle)
   validate:
     needs: validate-secrets
-    uses: ./.github/workflows/validation.yml
+    uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
 

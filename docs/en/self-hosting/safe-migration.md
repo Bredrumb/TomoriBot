@@ -112,7 +112,7 @@ Note: `pg_restore` will prompt for your password unless you set it in a `.pgpass
 
 ## For contributors deploying via CI: the `(Checkpoint)` convention
 
-If you maintain a fork that deploys to AWS or GCP via the workflows in `.github/workflows/deploy-tomoribot-{aws,gcp}.yml`, those pipelines support an opt-in pre-deploy snapshot: when a commit message contains the literal token `(Checkpoint)`, the workflow runs `aws rds create-db-snapshot` (or the GCP Cloud SQL equivalent) before any code is deployed and before the migration runner touches the database on boot.
+If you maintain a fork that deploys to AWS or GCP via the workflows in `.github/workflows/deploy-{aws,gcp-legacy}.yml`, those pipelines support an opt-in pre-deploy snapshot: when a commit message contains the literal token `(Checkpoint)`, the workflow runs `aws rds create-db-snapshot` (or the GCP Cloud SQL equivalent) before any code is deployed and before the migration runner touches the database on boot.
 
 Use it when:
 

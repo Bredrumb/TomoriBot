@@ -90,7 +90,7 @@ provider answers instead, so this is the last step of every install path.
 
 ## Check a fresh install on each operating system
 
-The [Setup smoke test](https://github.com/Bredrumb/TomoriBot/actions/workflows/setup-smoke.yml)
+The [Setup smoke test](https://github.com/Bredrumb/TomoriBot/actions/workflows/ci-setup-smoke.yml)
 runs only when you select **Run workflow** in GitHub Actions. It checks a fresh checkout on Ubuntu,
 macOS, and Windows. Each runner starts a temporary PostgreSQL server, supplies a dummy Discord token,
 runs `bun run setup --full --defaults` before installing dependencies separately, checks the generated

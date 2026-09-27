@@ -31,11 +31,11 @@ Try these in order and stop at the first that works.
 | Deploy workflows, `security-dependencies` job | `bun run audit:clean` | Yes, the release | `AUDIT_IGNORED_ADVISORIES` |
 | Deploy workflows, `security-container` job | Trivy image scan | Yes, the release | `.github/.trivyignore` |
 | `bun run audit:clean` locally | `bun audit --audit-level=high` | Yes | `AUDIT_IGNORED_ADVISORIES` |
-| `.github/workflows/validation.yml` | `bun audit --audit-level=high` | No: a PR's merge lockfile can carry advisories its author cannot fix | Inline `--ignore` flags |
+| `.github/workflows/ci.yml` | `bun audit --audit-level=high` | No: a PR's merge lockfile can carry advisories its author cannot fix | Inline `--ignore` flags |
 | `bun run vl` | `bun audit` | No, warning | `AUDIT_IGNORED_ADVISORIES` |
 
 `AUDIT_IGNORED_ADVISORIES` in `scripts/checks/lib/auditIgnores.ts` feeds `audit:clean` and `vl`.
-`validation.yml` cannot import TypeScript, so it repeats the IDs; keep it in sync. `bun audit` never
+`ci.yml` cannot import TypeScript, so it repeats the IDs; keep it in sync. `bun audit` never
 reads `.trivyignore` and Trivy never reads `--ignore`, so an advisory caught by both needs both
 entries. The image installs with `--production`, so Trivy never sees devDependency advisories.
 
@@ -53,7 +53,7 @@ transitive tree.
 
 1. Show that no override or parent bump works, and record what you tried.
 2. Name the code path that reaches the package and whether TomoriBot runs it.
-3. Add the ID to `AUDIT_IGNORED_ADVISORIES` and the `validation.yml` flags, and to
+3. Add the ID to `AUDIT_IGNORED_ADVISORIES` and the `ci.yml` flags, and to
    `.github/.trivyignore` if the package ships in the image.
 4. Add an entry under Active exceptions with the path, reason, risk, and the condition for removing it.
 

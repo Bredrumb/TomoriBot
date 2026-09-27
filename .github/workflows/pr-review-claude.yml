@@ -1,4 +1,4 @@
-﻿name: Claude Code Review
+name: "PR: Claude Automated Code Review"
 
 on:
   # Automatic trigger disabled: the review job can report success while

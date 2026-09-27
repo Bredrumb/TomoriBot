@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 # GitHub Actions Workflow: Deploy TomoriBot to Azure VM
 
-name: Deploy TomoriBot (Azure)
+name: Deploy: Azure (Production)
 
 on:
   push:
@@ -49,7 +49,7 @@ jobs:
 
   code-quality:
     if: vars.ACTIVE_PROVIDER == 'azure' || github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/validation.yml
+    uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
 
@@ -334,7 +334,7 @@ jobs:
             exit 0
           fi
 
-          changed_files=$(git diff --name-only "$BEFORE" "${{ github.sha }}" -- terraform/azure deploy/azure/ .github/workflows/deploy-tomoribot-azure.yml servers/searxng/ || true)
+          changed_files=$(git diff --name-only "$BEFORE" "${{ github.sha }}" -- terraform/azure deploy/azure/ .github/workflows/deploy-azure.yml servers/searxng/ || true)
           if [ -n "$changed_files" ]; then
             echo "Infrastructure changes detected:"
             printf '%s\n' "$changed_files"
@@ -584,7 +584,7 @@ jobs:
           # finds no new migration files, passes, and the DROPs then run at startup with no backup.
           # Diffing against the last green deploy keeps the window open until one actually succeeds.
           # Query params rather than repeated flags so this needs no line continuations.
-          LAST_GREEN=$(gh api "repos/${{ github.repository }}/actions/workflows/deploy-tomoribot-azure.yml/runs?branch=${{ github.ref_name }}&status=success&per_page=1" --jq '.workflow_runs[0].head_sha' 2>/dev/null || true)
+          LAST_GREEN=$(gh api "repos/${{ github.repository }}/actions/workflows/deploy-azure.yml/runs?branch=${{ github.ref_name }}&status=success&per_page=1" --jq '.workflow_runs[0].head_sha' 2>/dev/null || true)
           PREV_REF=""
           if [ -n "$LAST_GREEN" ] && [ "$LAST_GREEN" != "null" ] && git cat-file -e "${LAST_GREEN}^{commit}" 2>/dev/null; then
             PREV_REF="$LAST_GREEN"

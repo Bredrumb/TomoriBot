@@ -78,7 +78,7 @@ AWS task definition. To upgrade:
    in:
    - `docker-compose.yaml`
    - `terraform/gcp/variables.tf` (`searxng_image` default)
-   - `.github/workflows/deploy-tomoribot-aws.yml` task-def container image
+   - `.github/workflows/deploy-aws.yml` task-def container image
 3. Smoke test locally with `docker compose up`.
 4. Open a PR. CI build + deploy will roll the new digest forward.
 

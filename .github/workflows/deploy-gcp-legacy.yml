@@ -5,12 +5,9 @@
 # this workflow requires intentionally recreating state and deployment secrets.
 # GitHub Actions Workflow: Deploy TomoriBot to GCP Cloud Run
 
-name: Deploy TomoriBot (GCP)
+name: Deploy: GCP (Legacy Rollback)
 
 on:
-  push:
-    branches:
-      - release
   workflow_dispatch:
     inputs:
       environment:
@@ -82,7 +79,7 @@ jobs:
 
   code-quality:
     needs: validate-secrets
-    uses: ./.github/workflows/validation.yml
+    uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
 
@@ -397,7 +394,7 @@ jobs:
             exit 0
           fi
 
-          changed_files=$(git diff --name-only "$BEFORE" "${{ github.sha }}" -- terraform/gcp .github/workflows/deploy-tomoribot-gcp.yml servers/searxng/ || true)
+          changed_files=$(git diff --name-only "$BEFORE" "${{ github.sha }}" -- terraform/gcp .github/workflows/deploy-gcp-legacy.yml servers/searxng/ || true)
           if [ -n "$changed_files" ]; then
             echo "Infrastructure changes detected:"
             echo "$changed_files"

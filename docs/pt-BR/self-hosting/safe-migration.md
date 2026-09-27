@@ -112,7 +112,7 @@ Nota: o `pg_restore` pedirá sua senha, a menos que você a defina em um arquivo
 
 ## Para contribuidores que fazem o deploy via CI: a convenção `(Checkpoint)`
 
-Se você mantém um fork que faz o deploy na AWS ou GCP através dos fluxos de trabalho em `.github/workflows/deploy-tomoribot-{aws,gcp}.yml`, essas pipelines suportam um snapshot pré-deploy opcional: quando uma mensagem de commit contém o token literal `(Checkpoint)`, o fluxo de trabalho executa `aws rds create-db-snapshot` (ou o equivalente da GCP Cloud SQL) antes que qualquer código seja implantado e antes que o executor de migração toque no banco de dados durante a inicialização.
+Se você mantém um fork que faz o deploy na AWS ou GCP através dos fluxos de trabalho em `.github/workflows/deploy-{aws,gcp-legacy}.yml`, essas pipelines suportam um snapshot pré-deploy opcional: quando uma mensagem de commit contém o token literal `(Checkpoint)`, o fluxo de trabalho executa `aws rds create-db-snapshot` (ou o equivalente da GCP Cloud SQL) antes que qualquer código seja implantado e antes que o executor de migração toque no banco de dados durante a inicialização.
 
 Use-o quando:
 

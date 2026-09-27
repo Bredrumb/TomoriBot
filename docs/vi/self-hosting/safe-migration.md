@@ -112,7 +112,7 @@ Lưu ý: `pg_restore` sẽ yêu cầu mật khẩu trừ khi bạn đã thiết 
 
 ## Dành cho cộng tác viên triển khai qua CI: quy ước `(Checkpoint)`
 
-Nếu bạn duy trì một bản fork triển khai lên AWS hoặc GCP thông qua các workflow trong `.github/workflows/deploy-tomoribot-{aws,gcp}.yml`, các quy trình này hỗ trợ tùy chọn chụp nhanh trước khi triển khai: khi một thông điệp commit chứa token ký tự `(Checkpoint)`, workflow sẽ chạy `aws rds create-db-snapshot` (hoặc lệnh tương đương của GCP Cloud SQL) trước khi bất kỳ mã nào được triển khai và trước khi trình chạy migration can thiệp vào cơ sở dữ liệu khi khởi động.
+Nếu bạn duy trì một bản fork triển khai lên AWS hoặc GCP thông qua các workflow trong `.github/workflows/deploy-{aws,gcp-legacy}.yml`, các quy trình này hỗ trợ tùy chọn chụp nhanh trước khi triển khai: khi một thông điệp commit chứa token ký tự `(Checkpoint)`, workflow sẽ chạy `aws rds create-db-snapshot` (hoặc lệnh tương đương của GCP Cloud SQL) trước khi bất kỳ mã nào được triển khai và trước khi trình chạy migration can thiệp vào cơ sở dữ liệu khi khởi động.
 
 Sử dụng tùy chọn này khi:
 

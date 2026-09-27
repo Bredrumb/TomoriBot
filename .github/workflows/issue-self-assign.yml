@@ -1,4 +1,4 @@
-name: Issue Assignment
+name: "Issue: Self-Assign (/assign-me)"
 
 on:
   issue_comment:
@@ -47,6 +47,6 @@ jobs:
               assignees: [commenter],
             });
             // Assigning fires the `issues: assigned` event, which
-            // issue-assigned.yml handles to move the card to In-Progress.
+            // project-issue-status.yml handles moving the card to In-Progress.
             // That status transition is intentionally owned solely by that
             // workflow so it also covers manual assignments via the GitHub UI.

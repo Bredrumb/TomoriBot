@@ -114,7 +114,7 @@ Nota: `pg_restore` te pedirá tu contraseña a menos que la configures en un arc
 
 ## Para los colaboradores que implementan a través de CI: la convención `(Checkpoint)`
 
-Si mantienes un fork que se implementa en AWS o GCP a través de los flujos de trabajo en `.github/workflows/deploy-tomoribot-{aws,gcp}.yml`, esos canales admiten una instantánea previa a la implementación opcional: cuando un mensaje de commit contiene el token literal `(Checkpoint)`, el flujo de trabajo ejecuta `aws rds create-db-snapshot` (o el equivalente de GCP Cloud SQL) antes de que se implemente cualquier código y antes de que el ejecutor de migraciones toque la base de datos en el arranque.
+Si mantienes un fork que se implementa en AWS o GCP a través de los flujos de trabajo en `.github/workflows/deploy-{aws,gcp-legacy}.yml`, esos canales admiten una instantánea previa a la implementación opcional: cuando un mensaje de commit contiene el token literal `(Checkpoint)`, el flujo de trabajo ejecuta `aws rds create-db-snapshot` (o el equivalente de GCP Cloud SQL) antes de que se implemente cualquier código y antes de que el ejecutor de migraciones toque la base de datos en el arranque.
 
 Úsala cuando:
 
