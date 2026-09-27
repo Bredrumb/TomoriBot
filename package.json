@@ -10,7 +10,7 @@
     "build": "rm -rf dist && bun build ./src/index.ts --outdir dist --target bun",
     "start": "bun run dist/index.js",
     "dev": "bun --watch src/index.ts",
-    "setup": "bun run scripts/devtools/setup.ts",
+    "setup": "bun install --frozen-lockfile && bun run scripts/devtools/setup.ts",
     "launch": "bun run scripts/devtools/launch.ts",
     "update": "bun run scripts/devtools/update.ts",
     "watch": "bun build ./src/index.ts --outdir dist --target node --watch",
