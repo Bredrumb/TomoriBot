@@ -18,11 +18,11 @@ Esta guía te lleva desde cero hasta tu primer mensaje con TomoriBot. La forma m
 ### Paso 1: Invítala
 
 Invita a la instancia pública con el botón de abajo y luego elige el servidor donde la quieres.
-Necesitas el permiso **Administrar servidor** para añadir un bot.
+Necesitas el permiso Administrar servidor para añadir un bot.
 
 <div class="button-row">
   <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
-    **Invitar a TomoriBot**
+    Invitar a TomoriBot
   </LinkButton>
 </div>
 
@@ -30,17 +30,17 @@ También puedes enviarle un mensaje directo. Los pasos de configuración son los
 
 ### Paso 2: Obtén una clave de API
 
-TomoriBot no incluye un cerebro de IA propio. Conectas uno de un **proveedor** mediante una **clave de API**. Es compatible con muchos proveedores y solo necesitas uno para comenzar. Estos son algunos de los proveedores compatibles actualmente:
+TomoriBot no incluye un cerebro de IA propio. Conectas uno de un proveedor mediante una clave de API. Es compatible con muchos proveedores y solo necesitas uno para comenzar. Estos son algunos de los proveedores compatibles actualmente:
 
 - **Google Gemini**: de propósito general, tiene un nivel gratuito y ejecuta todas las funciones. Recomendado para tu primera configuración.
 - **OpenRouter**: una clave para acceder a los modelos más recientes de texto, video, imagen y embeddings.
 - **NovelAI**: basado en suscripción, con imágenes sin censura, rol y narrativa.
-- **DeepSeek**, **NVIDIA NIM**, **Anthropic**, **Vertex AI**, **Z.ai** o cualquier endpoint **Custom** compatible con OpenAI.
+- DeepSeek, NVIDIA NIM, Anthropic, Vertex AI, Z.ai o cualquier endpoint Custom compatible con OpenAI.
 
-Ejecuta `/help` en Discord, elige `Configuración`, luego **Paso 1: Obtener una clave de API** y selecciona tu proveedor para saber cómo obtener su clave de API, o consulta [Proveedores y modelos](/es-419/features/setup-administration/providers-and-models/#api-keys) para ver la lista completa.
+Ejecuta `/help` en Discord, elige `Configuración`, luego Paso 1: Obtener una clave de API y selecciona tu proveedor para saber cómo obtener su clave de API, o consulta [Proveedores y modelos](/es-419/features/setup-administration/providers-and-models/#api-keys) para ver la lista completa.
 
 <Aside type="caution">
-**Nunca compartas tu clave de API con nadie**. Proporciónala únicamente mediante los comandos de barra de TomoriBot, que la almacenan y cifran de forma segura.
+Nunca compartas tu clave de API con nadie. Proporciónala únicamente mediante los comandos de barra de TomoriBot, que la almacenan y cifran de forma segura.
 </Aside>
 
 ### Paso 3: Ejecuta la configuración
@@ -49,15 +49,15 @@ Ejecuta `/setup`. Se abre un panel privado con una lista de verificación que so
 
 - **Proveedor de IA**: elige `Proveedor de IA (recomendado)`, selecciona tu proveedor y pega la clave. Si tienes experiencia con autoalojamiento, puedes elegir `Punto de conexión personalizado (avanzado)` y registrar aquí la conexión y el modelo de texto de tu endpoint. Un servidor también puede usar `BYOK de usuario` (en un servidor, no en un mensaje directo), para que cada miembro proporcione su propio proveedor personal.
 - **Ajustes iniciales**: elige una persona inicial, un estilo de respuesta, una zona horaria y el prompt de sistema predeterminado.
-- **Políticas** (solo instancias alojadas): acepta los Términos de servicio y la Política de privacidad en un modal.
+- Políticas (solo instancias alojadas): acepta los Términos de servicio y la Política de privacidad en un modal.
 
 No se guarda nada mientras trabajas: el panel es un borrador. `Finalizar configuración` cifra la clave, inicializa la configuración del servidor y la prepara para conversar. `Cancelar` descarta el borrador, y un panel intacto vence por sí solo. Cada servidor conserva su propia configuración independiente.
 
-**Recomendado:** ejecuta `/expressions initialize` después para que pueda usar correctamente los emojis y stickers personalizados de tu servidor.
+Recomendado: ejecuta `/expressions initialize` después para que pueda usar correctamente los emojis y stickers personalizados de tu servidor.
 
 ### Paso 4: Comienza a chatear
 
-Solo **menciónala** o **responde** a uno de sus mensajes:
+Solo menciónala o responde a uno de sus mensajes:
 
 ```text
 @TomoriBot hola, ¿qué tal?
@@ -76,6 +76,6 @@ En la instancia alojada, configurar TomoriBot significa que tú y los miembros d
 
 <div class="button-row">
   <LinkButton href="/es-419/self-hosting/" variant="secondary">
-    **Autoalojar TomoriBot**
+    Autoalojar TomoriBot
   </LinkButton>
 </div>

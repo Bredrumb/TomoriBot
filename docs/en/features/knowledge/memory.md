@@ -15,9 +15,9 @@ From most permanent to most fleeting
 
 | Tier | What it is | How long it lasts |
 |---|---|---|
-| **Long-term memory (LTM)** | Saved facts about a user or a server, uploaded documents, and conditioning | Forever, until someone removes it. Survives `/refresh`, restarts, everything |
-| **Short-term memory (STM)** | A summary she writes for a channel, plus a few recent messages | 24 hours. Can reach across channels |
-| **Chat history** | The recent messages in the channel she's replying in | Only this channel, only until they scroll out of `/config` > Engine > General range (defaults to latest 80 messages). `/refresh` cuts it off immediately |
+| Long-term memory (LTM) | Saved facts about a user or a server, uploaded documents, and conditioning | Forever, until someone removes it. Survives `/refresh`, restarts, everything |
+| Short-term memory (STM) | A summary she writes for a channel, plus a few recent messages | 24 hours. Can reach across channels |
+| Chat history | The recent messages in the channel she's replying in | Only this channel, only until they scroll out of `/config` > Engine > General range (defaults to latest 80 messages). `/refresh` cuts it off immediately |
 
 Almost everything she appears to "know" in a conversation is just recent chat history, which is why
 she seems to forget a message once the conversation becomes too long. **Only long-term memory is
@@ -40,12 +40,12 @@ There are two kinds of long-term memory:
 
 - **Personal memories** (`/personal memories`): facts about an individual user, e.g.
   "Amaori loves cats", "prefers dark mode", "allergic to peanuts". These are tied to *you*
-  and follow you **across every server**, but she only draws on them in conversations you're actively part of.
+  and follow you across every server, but she only draws on them in conversations you're actively part of.
 - **Server memories** (`/memories`): information relevant to the whole server,
   e.g. "Game night is every Friday at 8 PM", "no NSFW posting", "#general is for
   announcements". These stay within the server and are always in mind there.
 
-**Memories are isolated per persona by default.** Each persona (including alters) keeps its
+Memories are isolated per persona by default: each persona (including alters) keeps its
 own separate set of personal and server memories, so different personas means she can't recall
 what another persona learned. The one exception is a personal memory added from the Global page
 on `/personal memories`, which then applies to every persona for you specifically. Server
@@ -91,11 +91,11 @@ Server admins can turn her self-saving off entirely with `/config` > Permissions
 ### How Many Memories 
 <!-- anchor: how-many-memories -->
 
-By default she holds up to **100 personal memories** and **100 server memories**. Self-hosters can change these with .env variables `MAX_PERSONAL_MEMORIES`, `MAX_SERVER_MEMORIES`, and
+By default she holds up to 100 personal memories and 100 server memories. Self-hosters can change these with .env variables `MAX_PERSONAL_MEMORIES`, `MAX_SERVER_MEMORIES`, and
 `MAX_MEMORY_LENGTH`. Raising the *length* costs far more context than raising the *count*, so
 prefer more short memories over fewer long ones.
 
-These counts are **per persona**, not per user or per server. Each persona keeps her own set,
+These counts are per persona, not per user or per server. Each persona keeps her own set,
 so a server running four personas has four separate allowances. Your own global personal
 memories count against every persona's personal allowance.
 
@@ -106,7 +106,7 @@ memories count against every persona's personal allowance.
 Server admins can give her documents to reference using RAG. Documents are chunked and stored as searchable embeddings; she automatically retrieves
   relevant content when answering. In new servers, document management is similarly restricted to members with `Manage Server` by default; managers can grant member access through `/moderation` Member Access.
 
-**Requires an embedding model**, configured with `/config` > Models > Switch Models. See
+Requires an embedding model, configured with `/config` > Models > Switch Models. See
 [Providers & Models](/features/setup-administration/providers-and-models/). The
 Documents page in `/memories` provides persona and server-wide scopes, live document
 and chunk counts, uploads, document browsing, and removal:
@@ -165,8 +165,8 @@ a keyword or only in one channel. Turn it on with `/config` > Engine > Memory & 
 ### Keyword Tags
 <!-- anchor: keyword-tags -->
 
-- Memories **without** keyword tags are always active (the default).
-- Memories **with** keyword tags only activate when the keyword appears in the visible
+- Memories without keyword tags are always active (the default).
+- Memories with keyword tags only activate when the keyword appears in the visible
   context.
 - Use `/tool prompt snapshot` to see which memories are currently activating.
 
@@ -186,7 +186,7 @@ TomoriBot can easily read messages from the current channel she's talking in, bu
 1. Temporarily reinforce the current scenario/situation of the channel in context
 2. Temporarily remember conversations from other channels/servers
 
-**She only remembers conversations she took part in.** She updates a channel's memory when
+She only remembers conversations she took part in; she updates a channel's memory when
 she replies, and at no other time, so a busy channel where nobody talks to her leaves no
 trace. 
 
@@ -196,12 +196,12 @@ STM of each channel expires after 24 hours by default and if you've opted out wi
 
 | Where | What that means |
 |---|---|
-| **In a server** | One shared memory per channel, not one per person. She isn't keeping notes on you individually. |
-| **In DMs** | Yours alone. |
-| **Other channels** | She can recall her recent conversations from a few other channels in the same server. |
-| **Private channels** | Anything set with `/config` > Channels > Channel Rules stays there and won't surface elsewhere. |
-| **Other servers** | Never, unless you turn on `/personal config` → `crossserver`. Even then only *your own* conversations follow you. |
-| **Each persona** | Keeps her own separate memory, so switching persona switches memory. |
+| In a server | One shared memory per channel, not one per person. She isn't keeping notes on you individually. |
+| In DMs | Yours alone. |
+| Other channels | She can recall her recent conversations from a few other channels in the same server. |
+| Private channels | Anything set with `/config` > Channels > Channel Rules stays there and won't surface elsewhere. |
+| Other servers | Never, unless you turn on `/personal config` → `crossserver`. Even then only *your own* conversations follow you. |
+| Each persona | Keeps her own separate memory, so switching persona switches memory. |
 
 Each channel's memory holds the last few messages plus a short summary she writes herself
 and refreshes as the conversation moves along. It fades on its own after a few quiet hours.
@@ -225,7 +225,7 @@ Anyone can run `/config` > Persona > Memories, `/personal config`, and `/persona
 
 ### STM Configuration
 
-Workspace managers can tune short-term memory from `/config` → `Behavior` → **Memory & STM**.
+Workspace managers can tune short-term memory from `/config` → `Behavior` → `Memory & STM`.
 These settings apply to the workspace's active STM records:
 
 - **Refresh cadence** controls how many bot turns pass between refresh nudges. The allowed range is 1-100.
@@ -234,11 +234,11 @@ These settings apply to the workspace's active STM records:
 - **Nudge depth** places the refresh nudge from the end of the assembled context, from 0-20.
 - **Content depth** places STM content from the end of the assembled context, from −1-20.
 
-**STM Categories** replaces the default Summary field with up to five labeled fields. Enter each field as
+`STM Categories` replaces the default Summary field with up to five labeled fields. Enter each field as
 `Label: Description`; leaving every field blank restores the default Summary category. Saving categories
 clears incompatible active server-channel STM, and the panel discloses the affected channels before saving.
 
-**STM Prompt** lets managers override the tool description and update nudge. Blank overrides restore the
+`STM Prompt` lets managers override the tool description and update nudge. Blank overrides restore the
 effective defaults, including the category-aware nudge when categories are enabled.
 
 :::tip

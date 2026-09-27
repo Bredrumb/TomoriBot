@@ -12,31 +12,31 @@ TomoriBotは複数のローカルText-to-Speechサーバーに対応しており
 
 ### ベンチマークプロンプト
 
-- **標準プロンプト**（Chatterbox Standard/Turbo/Nano、MOSS-TTS、CosyVoice 3、VoxCPM2、Qwen3-TTSで使用）:
+- 標準プロンプト（Chatterbox Standard/Turbo/Nano、MOSS-TTS、CosyVoice 3、VoxCPM2、Qwen3-TTSで使用）:
   > *"Pain and pleasure are two sides of the same coin. Go on now... flip it. Either way, I'll let you feel all of me."*
-- **Fish Audio S2 Proプロンプト**（角括弧の表現タグ付きでテスト）:
+- Fish Audio S2 Proプロンプト（角括弧の表現タグ付きでテスト）:
   > *"Pain and pleasure are two sides of the same coin. [laughs] Go on now... flip it. [whispers] Either way, I'll let you feel all of me."*
 
 ### パフォーマンスと音声の比較
 
-計測結果は、**全体の生成時間**（リクエストから音声完成までの実時間の合計、秒）と、生成時間を音声の長さで割った**リアルタイムファクター（RTF）**の両方を示します。
+計測結果は、全体の生成時間（リクエストから音声完成までの実時間の合計、秒）と、生成時間を音声の長さで割ったリアルタイムファクター（RTF）の両方を示します。
 
-- **RTF < 1.0（太字）:** エンジンがリアルタイムより速く音声を生成します（例えば`0.50× RTF`は10秒のクリップを5秒で生成します）。ライブの音声通話に追従できるのはこれらのエンジンだけですが、TomoriBotは今のところそれを実装していません。
-- **RTF > 1.0:** 生成に発話音声そのものよりも長い時間がかかります。TomoriBotは各音声メッセージを完成した1つのファイルとして送信するため、RTFが高いことは単に待ち時間が長くなることを意味します。
+- RTF < 1.0（太字）: エンジンがリアルタイムより速く音声を生成します（例えば`0.50× RTF`は10秒のクリップを5秒で生成します）。ライブの音声通話に追従できるのはこれらのエンジンだけですが、TomoriBotは今のところそれを実装していません。
+- RTF > 1.0: 生成に発話音声そのものよりも長い時間がかかります。TomoriBotは各音声メッセージを完成した1つのファイルとして送信するため、RTFが高いことは単に待ち時間が長くなることを意味します。
 
 | エンジン | Windowsネイティブ<sup>(1)</sup><br/>（RTX 4070 Ti SUPER） | Linux / WSL2 | macOS<br/>（Apple Silicon） | 音声サンプル |
 |---|---|---|---|---|
-| **[Fish Audio S2 Pro](/ja/self-hosting/local-endpoints/text-to-speech/fishs2/)** | ~8〜10分<sup>(2)</sup><br/>*(~65× RTF)* | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/fish-s2-pro.wav"></audio> |
-| **[Chatterbox（Turbo、既定）](/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/)** | **約5.0秒** *(8.7秒のクリップ)*<br/>**0.57× RTF** | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/chatterbox-turbo.wav"></audio> |
-| **[Chatterbox（Nano）](/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/)** | **約3.0秒** *(8.0秒のクリップ)*<br/>**0.38× RTF** | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/chatterbox-nano.wav"></audio> |
-| **[Chatterbox（Standard）](/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/)** | **約6.0秒** *(7.8秒のクリップ)*<br/>**0.77× RTF** | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/chatterbox.wav"></audio> |
-| **[MOSS-TTS](/ja/self-hosting/local-endpoints/text-to-speech/moss/)** | 約12.0秒 *(8.8秒のクリップ)*<br/>1.36× RTF | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/moss-tts.wav"></audio> |
-| **[CosyVoice 3](/ja/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)** | **約6.0秒** *(13.9秒のクリップ)*<br/>**0.43× RTF** | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/cosy-voice-3.wav"></audio> |
-| **[VoxCPM2](/ja/self-hosting/local-endpoints/text-to-speech/voxcpm2/)** | 約8.0秒 *(7.4秒のクリップ)*<br/>1.09× RTF | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/voxcpm2.wav"></audio> |
-| **[Qwen3-TTS](/ja/self-hosting/local-endpoints/text-to-speech/qwen3tts/)** | 約10.0秒 *(9.2秒のクリップ)*<br/>1.09× RTF | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/qwen3-tts.wav"></audio> |
+| [Fish Audio S2 Pro](/ja/self-hosting/local-endpoints/text-to-speech/fishs2/) | ~8〜10分<sup>(2)</sup><br/>*(~65× RTF)* | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/fish-s2-pro.wav"></audio> |
+| [Chatterbox（Turbo、既定）](/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/) | 約5.0秒 *(8.7秒のクリップ)*<br/>0.57× RTF | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/chatterbox-turbo.wav"></audio> |
+| [Chatterbox（Nano）](/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/) | 約3.0秒 *(8.0秒のクリップ)*<br/>0.38× RTF | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/chatterbox-nano.wav"></audio> |
+| [Chatterbox（Standard）](/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/) | 約6.0秒 *(7.8秒のクリップ)*<br/>0.77× RTF | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/chatterbox.wav"></audio> |
+| [MOSS-TTS](/ja/self-hosting/local-endpoints/text-to-speech/moss/) | 約12.0秒 *(8.8秒のクリップ)*<br/>1.36× RTF | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/moss-tts.wav"></audio> |
+| [CosyVoice 3](/ja/self-hosting/local-endpoints/text-to-speech/cosyvoice3/) | 約6.0秒 *(13.9秒のクリップ)*<br/>0.43× RTF | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/cosy-voice-3.wav"></audio> |
+| [VoxCPM2](/ja/self-hosting/local-endpoints/text-to-speech/voxcpm2/) | 約8.0秒 *(7.4秒のクリップ)*<br/>1.09× RTF | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/voxcpm2.wav"></audio> |
+| [Qwen3-TTS](/ja/self-hosting/local-endpoints/text-to-speech/qwen3tts/) | 約10.0秒 *(9.2秒のクリップ)*<br/>1.09× RTF | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/qwen3-tts.wav"></audio> |
 
-- <sup>(1)</sup> **テスト環境:** NVIDIA GeForce RTX 4070 Ti SUPER（16 GB GDDR6X、Ada Lovelace）を搭載したWindows 11（ネイティブ実行）で、26.6秒・24 kHzモノラルの参照音声サンプルと、それに対応する逐語的な文字起こしを使用。
-- <sup>(2)</sup> **Fish Audio S2 Pro:** Windowsでの実行は未コンパイルのeagerモードで動作し（~65× RTF）、これは1トークンあたり76層の評価にわたるCUDAカーネル起動の遅延によるものです。この処理のディスパッチストールを避けるには、OpenAI Tritonコンパイラの融合（`torch.compile`）が使えるLinuxまたはWSL2での実行を推奨します。
+- <sup>(1)</sup> テスト環境: NVIDIA GeForce RTX 4070 Ti SUPER（16 GB GDDR6X、Ada Lovelace）を搭載したWindows 11（ネイティブ実行）で、26.6秒・24 kHzモノラルの参照音声サンプルと、それに対応する逐語的な文字起こしを使用。
+- <sup>(2)</sup> Fish Audio S2 Pro: Windowsでの実行は未コンパイルのeagerモードで動作し（~65× RTF）、これは1トークンあたり76層の評価にわたるCUDAカーネル起動の遅延によるものです。この処理のディスパッチストールを避けるには、OpenAI Tritonコンパイラの融合（`torch.compile`）が使えるLinuxまたはWSL2での実行を推奨します。
 
 ---
 
@@ -50,7 +50,7 @@ TomoriBotは複数のローカルText-to-Speechサーバーに対応しており
 
 | エンジン | Windowsネイティブ<sup>(1)</sup><br/>（RTX 4070 Ti SUPER） | Linux / WSL2 | macOS<br/>（Apple Silicon） | 音声サンプル |
 |---|---|---|---|---|
-| **[IrodoriTTS](/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/)** | **約4.0秒** *(8.5秒のクリップ)*<br/>**0.47× RTF** | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/irodori.wav"></audio> |
+| [IrodoriTTS](/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/) | 約4.0秒 *(8.5秒のクリップ)*<br/>0.47× RTF | 未計測 | 未計測 | <audio controls preload="none" src="/audio/tts/irodori.wav"></audio> |
 
 - <sup>(1)</sup> 同じRTX 4070 Ti SUPER搭載Windows 11のテスト環境で計測。
 
@@ -58,19 +58,19 @@ TomoriBotは複数のローカルText-to-Speechサーバーに対応しており
 
 ## どのエンジンを選ぶべきか
 
-- 可能な限り高い声質の忠実度と、細かな表現の角括弧タグ（`[whisper]`、`[laughs]`、`[sigh]`）が必要で、Tritonコンパイラの融合を有効化できる**LinuxまたはWSL2**を利用できるなら、**[Fish Audio S2 Pro](/ja/self-hosting/local-endpoints/text-to-speech/fishs2/)を選んでください**。
-- VRAMの使用量を抑えた英語の音声クローンには、**[Chatterbox（Turbo / Nano / Standard）](/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/)を選んでください**。Nano（約3.0秒、0.38× RTF）はCPU/GPUで最大の速度を、Turbo（約5.0秒、0.57× RTF）はパラ言語イベントタグ（`[laughter]`、`[sigh]`）を、Standard（約6.0秒、0.77× RTF）は創造的なCFGガイダンスと感情の誇張調整を提供します。
-- 実験的なマルチモーダル音声クローンと、テキストで説明する英語・中国語の音声生成には、**[MOSS-TTS](/ja/self-hosting/local-endpoints/text-to-speech/moss/)を選んでください**。
-- 自然言語による発話方向の指定を伴う、高品質な多言語ゼロショットクローンが必要なら、**[CosyVoice 3](/ja/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)を選んでください**（「興奮気味に英語で話して」など）。
-- 幅広い多言語対応（30言語）、文字起こし支援のUltimate Cloning、自然な音声設計が必要なら、**[VoxCPM2](/ja/self-hosting/local-endpoints/text-to-speech/voxcpm2/)を選んでください**。
-- 柔軟な音声設計と安定したプロンプト追従性を備えた、すっきりとした多言語クローンが欲しいなら、**[Qwen3-TTS](/ja/self-hosting/local-endpoints/text-to-speech/qwen3tts/)を選んでください**。
-- ボットが日本語を話す場合は、**[IrodoriTTS](/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/)を選んでください**。今回計測した中で唯一の日本語専用エンジンであり（Windowsで約4秒、0.47× RTF）、Unicode絵文字（`😊`、`😭`、`😠`）をネイティブに解釈してキャラクターの感情を調整します。
+- 可能な限り高い声質の忠実度と、細かな表現の角括弧タグ（`[whisper]`、`[laughs]`、`[sigh]`）が必要で、Tritonコンパイラの融合を有効化できるLinuxまたはWSL2を利用できるなら、[Fish Audio S2 Pro](/ja/self-hosting/local-endpoints/text-to-speech/fishs2/)を選んでください。
+- VRAMの使用量を抑えた英語の音声クローンには、[Chatterbox（Turbo / Nano / Standard）](/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/)を選んでください。Nano（約3.0秒、0.38× RTF）はCPU/GPUで最大の速度を、Turbo（約5.0秒、0.57× RTF）はパラ言語イベントタグ（`[laughter]`、`[sigh]`）を、Standard（約6.0秒、0.77× RTF）は創造的なCFGガイダンスと感情の誇張調整を提供します。
+- 実験的なマルチモーダル音声クローンと、テキストで説明する英語・中国語の音声生成には、[MOSS-TTS](/ja/self-hosting/local-endpoints/text-to-speech/moss/)を選んでください。
+- 自然言語による発話方向の指定を伴う、高品質な多言語ゼロショットクローンが必要なら、[CosyVoice 3](/ja/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)を選んでください（「興奮気味に英語で話して」など）。
+- 幅広い多言語対応（30言語）、文字起こし支援のUltimate Cloning、自然な音声設計が必要なら、[VoxCPM2](/ja/self-hosting/local-endpoints/text-to-speech/voxcpm2/)を選んでください。
+- 柔軟な音声設計と安定したプロンプト追従性を備えた、すっきりとした多言語クローンが欲しいなら、[Qwen3-TTS](/ja/self-hosting/local-endpoints/text-to-speech/qwen3tts/)を選んでください。
+- ボットが日本語を話す場合は、[IrodoriTTS](/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/)を選んでください。今回計測した中で唯一の日本語専用エンジンであり（Windowsで約4秒、0.47× RTF）、Unicode絵文字（`😊`、`😭`、`😠`）をネイティブに解釈してキャラクターの感情を調整します。
 
 ---
 
 ## エンジンを比較する
 
-現在、TomoriBotのすべてのTTSサーバーは完成したWAVをボットに返します。「ストリーミング経路」とは、上流のモデルまたは別の配信バックエンドがその手段を持つという意味であり、Discordの音声チャットへのストリーミングが実装されているという意味では**ありません**。サイズはモデルのパラメーター数であり、VRAMやダウンロードサイズでは**ありません**。また、16 GB欄はセットアップの目安であり、実測されたピーク値ではありません。速度欄は各エンジンが意図するトレードオフを示すものです。上記の計測はいずれも1台のWindowsマシンによるもので、Linuxでの順位付けを示すものではありません。
+現在、TomoriBotのすべてのTTSサーバーは完成したWAVをボットに返します。「ストリーミング経路」とは、上流のモデルまたは別の配信バックエンドがその手段を持つという意味であり、Discordの音声チャットへのストリーミングが実装されているという意味ではありません。サイズはモデルのパラメーター数であり、VRAMやダウンロードサイズではありません。また、16 GB欄はセットアップの目安であり、実測されたピーク値ではありません。速度欄は各エンジンが意図するトレードオフを示すものです。上記の計測はいずれも1台のWindowsマシンによるもので、Linuxでの順位付けを示すものではありません。
 
 「参照クリップ」列は、各エンジンがドキュメントに記載しているか、実行時に適用している参照音声の長さをまとめたものです。そのため、公開されている指針と、上流のコードから読み取った制限が混在しています。ほとんどのエンジンはリクエストを拒否するのではなく、自分の窓に合わせて黙って切り詰めます。だからこそ、この列はエンジンが受け入れる長さだけでなく、エンジンが読み取る長さを示しています。これは上流の挙動であり、ここで計測した値ではなく、TomoriBotのアップロード上限とは独立しています。
 

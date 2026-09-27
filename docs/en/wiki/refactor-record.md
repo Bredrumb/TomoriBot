@@ -138,25 +138,25 @@ Type-only deletions, deleted tests, and locale-file shuffles in Phase 1 were ski
 | 4 | `643aaef1` | Phase 4: Context & Output | Clean |
 | 5 | `44c975e0` | Phase 5: Orchestrator | Clean (caveat below) |
 
-**Phase 1**: `chunkMessage`, `cleanLLMOutput`, `replaceMentionHandles`, `normalizeCustomEmojisForLlm`, `findMarkdownCodeRanges`, `truncateBeforeGenericSpeakerLine`, `isGenericSpeakerStopLabel`, `escapeRegExp` → moved to `src/utils/text/processors/`. `index.ts` bootstrap split into `src/init/*` modules.
+- **Phase 1**: `chunkMessage`, `cleanLLMOutput`, `replaceMentionHandles`, `normalizeCustomEmojisForLlm`, `findMarkdownCodeRanges`, `truncateBeforeGenericSpeakerLine`, `isGenericSpeakerStopLabel`, `escapeRegExp` → moved to `src/utils/text/processors/`. `index.ts` bootstrap split into `src/init/*` modules.
 
-**Phase 2.1**: Pure adapter-layer insertion: queries previously called inline against `Bun.sql` were wrapped in `*Repository` classes with the same SQL bodies. Compile errors at every caller site forced exhaustive rewiring.
+- **Phase 2.1**: Pure adapter-layer insertion: queries previously called inline against `Bun.sql` were wrapped in `*Repository` classes with the same SQL bodies. Compile errors at every caller site forced exhaustive rewiring.
 
-**Phase 2.2**: Status command internals → `src/utils/metrics/statusCommandMetrics.ts` and submodules. Compact command internals → `src/utils/compaction/compactOrchestrator.ts`. Channel LLM cache functions → `src/utils/cache/channelLlmCacheStore.ts`.
+- **Phase 2.2**: Status command internals → `src/utils/metrics/statusCommandMetrics.ts` and submodules. Compact command internals → `src/utils/compaction/compactOrchestrator.ts`. Channel LLM cache functions → `src/utils/cache/channelLlmCacheStore.ts`.
 
-**Phase 3.1**: Stream adapter classes refactored to extend `BaseStreamAdapter`. Duplicated methods hoisted; provider-specific overrides remain in subclasses.
+- **Phase 3.1**: Stream adapter classes refactored to extend `BaseStreamAdapter`. Duplicated methods hoisted; provider-specific overrides remain in subclasses.
 
-**Phase 3.2**: `interactionHelper.ts` exports split across `src/utils/discord/ui/{buttons,confirmation,embeds,errors,modals,pagination,statusComponents,interactionCore}.ts`. Matrix bridge moved from `src/utils/matrix/index.ts` to `src/utils/bridges/matrix/`.
+- **Phase 3.2**: `interactionHelper.ts` exports split across `src/utils/discord/ui/{buttons,confirmation,embeds,errors,modals,pagination,statusComponents,interactionCore}.ts`. Matrix bridge moved from `src/utils/matrix/index.ts` to `src/utils/bridges/matrix/`.
 
-**Phase 4**: Internal context-building functions extracted from `src/utils/text/contextBuilder.ts` into `src/utils/text/context/{history,memories,rag,templates,types}.ts`. Stream orchestration helpers split into `src/utils/discord/stream/` submodules.
+- **Phase 4**: Internal context-building functions extracted from `src/utils/text/contextBuilder.ts` into `src/utils/text/context/{history,memories,rag,templates,types}.ts`. Stream orchestration helpers split into `src/utils/discord/stream/` submodules.
 
-**Phase 5 (caveat)**: Phase 5 moved `tomoriChat.ts` (~9,500 lines) into `src/utils/chat/turnRunner.ts` as a near-verbatim relocation. Function bodies survived intact at commit `44c975e0`. The behavioral regressions later catalogued in the Phase 5.5d appendix (`plans/archive/refactor/phases/phase-5.5d-chat-drain.md`) were introduced by Phase 5.5d's *drain* of `turnRunner.ts`, not by Phase 5's *move*.
+- **Phase 5 (caveat)**: Phase 5 moved `tomoriChat.ts` (~9,500 lines) into `src/utils/chat/turnRunner.ts` as a near-verbatim relocation. Function bodies survived intact at commit `44c975e0`. The behavioral regressions later catalogued in the Phase 5.5d appendix (`plans/archive/refactor/phases/phase-5.5d-chat-drain.md`) were introduced by Phase 5.5d's *drain* of `turnRunner.ts`, not by Phase 5's *move*.
 
 ### Why Phases 1-5 Were Low-Risk
 
-Phases 1-5 were predominantly **relocation refactors**: files were deleted and recreated under new paths with the same function set. Import-site rewrites force compile errors at every caller, which surfaces missing functions immediately.
+Phases 1-5 were predominantly relocation refactors: files were deleted and recreated under new paths with the same function set. Import-site rewrites force compile errors at every caller, which surfaces missing functions immediately.
 
-Phase 5.5d broke that pattern: it was a **reshape refactor** that dissolved `runChatTurn()` into named stages with different signatures and control flow. There was no 1:1 import rewrite to force errors; pieces of the old function body could be quietly dropped while the file still compiled. The Phase 5.5d appendix proposes a per-function before/after diff audit as the template for any future drain work.
+Phase 5.5d broke that pattern: it was a reshape refactor that dissolved `runChatTurn()` into named stages with different signatures and control flow. There was no 1:1 import rewrite to force errors; pieces of the old function body could be quietly dropped while the file still compiled. The Phase 5.5d appendix proposes a per-function before/after diff audit as the template for any future drain work.
 
 ---
 
@@ -203,7 +203,7 @@ src/utils/misc/memoryLimits.ts         # env-loading half of db/memoryLimits.ts
 src/utils/cache/shortTermMemoryCache.ts # short-term memory data access; obsolete repository wrapper removed
 ```
 
-**SQL inlining:** All `*ReadSql.ts` / `*WriteSql.ts` siblings were dissolved into their repository as `private` methods and deleted. The public/private boundary is enforced by TypeScript's `private` keyword, not by folder convention.
+- **SQL inlining**: all `*ReadSql.ts` / `*WriteSql.ts` siblings were dissolved into their repository as `private` methods and deleted. The public/private boundary is enforced by TypeScript's `private` keyword, not by folder convention.
 
 ### Repository Headroom (Post-5.5e)
 
@@ -226,7 +226,7 @@ Budget was ~1,000 lines per Repository file once SQL is inlined.
 
 ### File Disposition (26 Orphan Files)
 
-**Group A: Infrastructure (stays at `db/` root)**
+#### Group A: Infrastructure (stays at `db/` root)
 
 | File | LOC | Disposition |
 |---|---:|---|
@@ -235,7 +235,7 @@ Budget was ~1,000 lines per Repository file once SQL is inlined.
 | `sqlSecurity.ts` | 116 | Unchanged |
 | `sqlSplitter.ts` | 129 | Unchanged |
 
-**Group B: SQL barrels (deleted)**
+#### Group B: SQL barrels (deleted)
 
 | File | LOC | Disposition |
 |---|---:|---|
@@ -244,7 +244,7 @@ Budget was ~1,000 lines per Repository file once SQL is inlined.
 | `repositoryReadSql.ts` | 7 | Deleted (barrel into SQL siblings, which were themselves dissolved) |
 | `repositoryWriteSql.ts` | 6 | Deleted (same reason) |
 
-**Group C: Folded into existing repositories**
+#### Group C: Folded into existing repositories
 
 | File | LOC | Target Repository | Why |
 |---|---:|---|---|
@@ -254,7 +254,7 @@ Budget was ~1,000 lines per Repository file once SQL is inlined.
 | `conditioningDb.ts` | 358 | `ConditioningMemoryRepository` | Conditioning history is the natural extension of conditioning memory |
 | `personalSpotlight.ts` | 361 | `UserRepository` | Post-fold `UserRepository` is 965 lines: under limit |
 
-**Group D: New repositories**
+#### Group D: New repositories
 
 | New Repository | Source files absorbed | Why a new repository |
 |---|---|---|
@@ -262,14 +262,14 @@ Budget was ~1,000 lines per Repository file once SQL is inlined.
 | `PresetRepository` | `presetExport.ts` (214), `presetImport.ts` (264), `stPresetDb.ts` (285), `sillyTavernImport.ts` (545) | 1,308 combined LOC; ST card ingestion is a distinct concern from TomoriBot export/import |
 | `CooldownRepository` | `cooldownManager.ts` (365), `cooldownsCleanup.ts` (82), `messageCooldown.ts` (305) | Duplication between `cooldownManager` and `messageCooldown` (both had `isExemptFromCooldown` variants) collapsed into one canonical pair |
 
-**Group E: Moved out of `db/`**
+#### Group E: Moved out of `db/`
 
 | File | LOC | Destination | Why |
 |---|---:|---|---|
 | `personaAccess.ts` | 22 | `src/utils/persona/personaAccess.ts` | Pure functional composition of `isPersonaAllowedByWhitelistStatus` + `isPersonaAllowedByPersonalSpotlight`; no DB access |
 | `ragDetection.ts` | 45 | `src/utils/db/ragAvailability.ts` (renamed) | Startup-time infrastructure; `RagRepository` does CRUD on documents/chunks and should not depend on availability detection |
 
-**Group F: Split between locations**
+#### Group F: Split between locations
 
 | File | LOC | Split |
 |---|---:|---|
@@ -277,7 +277,7 @@ Budget was ~1,000 lines per Repository file once SQL is inlined.
 
 ### Repository Split Decisions
 
-**LlmRepository → 3-way split** (combined ~3,713 lines, severely over budget)
+#### LlmRepository → 3-way split (combined ~3,713 lines, over budget)
 
 | New repository | Tables owned |
 |---|---|
@@ -287,7 +287,7 @@ Budget was ~1,000 lines per Repository file once SQL is inlined.
 
 `toExportShape()` / `fromExportShape()` moved to `LlmProviderRepository` (saved provider configs and OpenRouter registrations are the exportable state; model catalog is global seed data).
 
-**ServerRepository → 2-way split** (combined ~1,630 lines, over budget)
+#### ServerRepository → 2-way split (combined ~1,630 lines, over budget)
 
 | Repository | Tables owned |
 |---|---|
@@ -296,9 +296,9 @@ Budget was ~1,000 lines per Repository file once SQL is inlined.
 
 `setupServer` is a single unavoidably large transaction (~400 SQL lines); the marginal overrun of the core file was accepted and documented inline.
 
-**ConfigRepository**: combined ~1,132 lines. SQL inlined and re-measured; no further split warranted given the uniform config-read-write surface.
+- **ConfigRepository**: combined ~1,132 lines. SQL inlined and re-measured; no further split warranted given the uniform config-read-write surface.
 
-**ImportExportRepository**: after PresetRepository absorbed ~1,308 LOC, the remaining export/import SQL still exceeded the 1,000-line heuristic. Split by direction: `ExportRepository` (read-only export paths) and `ImportRepository` (import paths + cache invalidation).
+- **ImportExportRepository**: after PresetRepository absorbed ~1,308 LOC, the remaining export/import SQL still exceeded the 1,000-line heuristic. Split by direction: `ExportRepository` (read-only export paths) and `ImportRepository` (import paths + cache invalidation).
 
 ---
 

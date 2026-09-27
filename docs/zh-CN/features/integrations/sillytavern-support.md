@@ -14,8 +14,8 @@ sidebar:
 ---
 
 TomoriBot 可以从 [SillyTavern](https://github.com/SillyTavern/SillyTavern)
-导入两样你可能已经有的东西：**Prompt Manager 预设集**（提示词怎么排布）和
-**角色卡**（角色本身）。这是给 ST 用户的细分功能，所以如果你从来没用过
+导入两样你可能已经有的东西：Prompt Manager 预设集（提示词怎么排布）和
+角色卡（角色本身）。这是给 ST 用户的细分功能，所以如果你从来没用过
 SillyTavern，这一页可以跳过。
 
 ## 角色卡导入
@@ -23,10 +23,10 @@ SillyTavern，这一页可以跳过。
 用 `/persona import` 把已有的 SillyTavern 角色直接带进 Discord。它
 接受：
 
-- 带内嵌 `chara` / `char` 元数据的 **PNG 卡片**，
-- **v2 风格 JSON** 卡片（根级的 `name`、`description`、`first_mes`……），
-- **v3 JSON** 卡片（`spec: "chara_card_v3"`，带一个嵌套的 `data` 对象），
-- **`.charx` 压缩包**（Character Card V3，也是角色卡站点默认发放的格式）。
+- 带内嵌 `chara` / `char` 元数据的 PNG 卡片，
+- v2 风格 JSON 卡片（根级的 `name`、`description`、`first_mes`……），
+- v3 JSON 卡片（`spec: "chara_card_v3"`，带一个嵌套的 `data` 对象），
+- `.charx` 压缩包（Character Card V3，也是角色卡站点默认发放的格式）。
 
 `.charx` 文件是一个 zip，其中的 `card.json` 装着角色。TomoriBot 读取那张卡，
 忽略压缩包里的其他一切：打包的图标、表情立绘、音频和视频都不会被
@@ -46,7 +46,7 @@ SillyTavern，这一页可以跳过。
 ## 提示词预设集
 <!-- anchor: prompt-presets -->
 
-SillyTavern 的 Prompt Manager 预设集控制提示词的**排布**。用 `/config` > 插件
+SillyTavern 的 Prompt Manager 预设集控制提示词的排布。用 `/config` > 插件
 > SillyTavern 预设集 来导入预设集、查看已启用的节点、在预设集之间切换，或者回到
 常规排布。
 
@@ -95,5 +95,5 @@ SillyTavern 的 Prompt Manager 预设集控制提示词的**排布**。用 `/con
   旧式文本补全预设集走的是一条尽力而为的导入路径，会
   丢掉只属于 ST 的区块（scenario、anchors、停止字符串……）。
 
-在 `/help` 里选择 **集成**，再选 `SillyTavern 预设集`，可以看到 Discord 内的参考。关于导入引擎的内部实现，见
+在 `/help` 里选择 集成，再选 `SillyTavern 预设集`，可以看到 Discord 内的参考。关于导入引擎的内部实现，见
 [预设集系统架构](/en/architecture/integrations/sillytavern/preset-system/)。

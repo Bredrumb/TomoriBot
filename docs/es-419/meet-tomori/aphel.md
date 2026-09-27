@@ -14,4 +14,4 @@ La página aún no está terminada. ¡Mantente al tanto!
 
 ![Aphel](/img/docs/meet-tomori/03-aphel.png)
 
-**Aphel** es la tercera hermana: una pesimista siempre exhausta que da consejos honestos, sin endulzarlos, y es sorprendentemente buena para los problemas reales de la adultez. Su exterior frío se quiebra con los gatos, el noise rock y el city pop.
+Aphel es la tercera hermana: una pesimista siempre exhausta que da consejos honestos, sin endulzarlos, y es sorprendentemente buena para los problemas reales de la adultez. Su exterior frío se quiebra con los gatos, el noise rock y el city pop.

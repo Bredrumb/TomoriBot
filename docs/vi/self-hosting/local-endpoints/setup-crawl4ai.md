@@ -55,14 +55,14 @@ bun run launch --searxng --crawl4ai
 
 Nếu bạn thích tự quản lý container, hãy giữ `CRAWL4AI_BASE_URL=http://localhost:11235/` trong `.env` và chạy:
 
-**PowerShell:**
+PowerShell:
 
 ```powershell
 docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g `
   unclecode/crawl4ai:latest
 ```
 
-**Bash (Linux/macOS):**
+Bash (Linux/macOS):
 
 ```bash
 docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
@@ -83,7 +83,7 @@ Sau đó chạy `bun run dev` khi container đã ở trạng thái hoạt độn
 
 ## Thứ tự khởi động (Quan trọng)
 
-TomoriBot kiểm tra tình trạng hoạt động của máy chủ trong **lần gọi `fetch_url` đầu tiên sau khi khởi động** và lưu tạm kết quả trong 60 giây. Nếu container chưa sẵn sàng khi lần kiểm tra đầu tiên đó diễn ra, bot sẽ coi máy chủ không khả dụng trong một phút tiếp theo.
+TomoriBot kiểm tra tình trạng hoạt động của máy chủ trong lần gọi `fetch_url` đầu tiên sau khi khởi động và lưu tạm kết quả trong 60 giây. Nếu container chưa sẵn sàng khi lần kiểm tra đầu tiên đó diễn ra, bot sẽ coi máy chủ không khả dụng trong một phút tiếp theo.
 
 Đối với Docker độc lập, hãy khởi động container Crawl4AI trước khi khởi động TomoriBot. `bun run launch --crawl4ai` đã tự động thực hiện việc này cho bạn.
 
@@ -116,14 +116,14 @@ Sau đó khởi động TomoriBot như bình thường. Việc khởi động l�
 
 Crawl4AI hỗ trợ chèn cookie ở cấp độ trình duyệt để trình duyệt không đầu xuất hiện như đã đăng nhập khi thu thập một trang. Điều này hữu ích cho các trang web yêu cầu phiên đăng nhập để xem nội dung (ví dụ: tin tức có tường thu phí, diễn đàn riêng tư, bảng điều khiển yêu cầu đăng nhập).
 
-Phương án dự phòng `safe_http` **không** hỗ trợ chèn cookie. Cookie chỉ áp dụng khi Crawl4AI đang hoạt động.
+Phương án dự phòng `safe_http` không hỗ trợ chèn cookie. Cookie chỉ áp dụng khi Crawl4AI đang hoạt động.
 
-> **Hạn chế:** Chèn cookie giúp vượt qua tường đăng nhập nhưng không vượt qua được cơ chế nhận dạng bot. Các trang web có khả năng phát hiện bot nghiêmặt (đặc biệt là Twitter/X) sẽ phát hiện Playwright không đầu qua canvas/WebGL và trả về các trang trống ngay cả khi có cookie phiên hợp lệ. Chèn cookie hoạt động tốt cho các trang web chỉ chặn dựa trên xác thực.
+> Hạn chế: Chèn cookie giúp vượt qua tường đăng nhập nhưng không vượt qua được cơ chế nhận dạng bot. Các trang web có khả năng phát hiện bot nghiêmặt (đặc biệt là Twitter/X) sẽ phát hiện Playwright không đầu qua canvas/WebGL và trả về các trang trống ngay cả khi có cookie phiên hợp lệ. Chèn cookie hoạt động tốt cho các trang web chỉ chặn dựa trên xác thực.
 
 ### Lấy cookie của bạn
 
 1. Mở trình duyệt của bạn và đăng nhập vào trang web đích.
-2. Mở DevTools (`F12`) → thẻ **Application** → **Storage** → **Cookies** → chọn domain của trang web.
+2. Mở DevTools (`F12`) → thẻ Application → Storage → Cookies → chọn domain của trang web.
 3. Sao chép `Value` của từng cookie bắt buộc (thường là token phiên; hãy kiểm tra tên cookie của trang web).
 
 ### Crawl4AI
@@ -145,7 +145,7 @@ Khi biến này được thiết lập, `fetch_url` sẽ tự động chuyển t
 | `domain` | Không | Phạm vi domain (ví dụ `.x.com`). Khuyến nghị cung cấp để đảm bảo tính chính xác. |
 | `path` | Không | Phạm vi đường dẫn. Mặc định là `/` nếu bỏ qua. |
 
-> **Lưu ý:** Các giá trị cookie rất nhạy cảm, vì vậy hãy xử lý chúng như mật khẩu. Chúng cấp toàn quyền truy cập phiên vào tài khoản của bạn. Không commit `.env` vào hệ thống quản lý phiên bản.
+> Lưu ý: Các giá trị cookie rất nhạy cảm, vì vậy hãy xử lý chúng như mật khẩu. Chúng cấp toàn quyền truy cập phiên vào tài khoản của bạn. Không commit `.env` vào hệ thống quản lý phiên bản.
 
 ---
 

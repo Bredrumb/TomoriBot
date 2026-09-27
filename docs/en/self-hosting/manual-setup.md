@@ -88,7 +88,7 @@ bun run launch --help        # see all flags
 ## Optional extras (the manual "Full Install")
 <!-- anchor: optional-extras-the-manual-full-install -->
 
-The [setup wizard](/self-hosting/setup-wizard/)'s **Full Install** path layers four lightweight extras on
+The [setup wizard](/self-hosting/setup-wizard/)'s `Full Install` path layers four lightweight extras on
 top of the base install. None are required to run the bot, but each unlocks a feature. If
 you're installing by hand, add whichever you want:
 
@@ -138,7 +138,7 @@ also required on the target database before restoring a backup; see
 Docker Compose from this repo already configures it.
 
 :::caution[Not required for reminders or triggers]
-`pg_cron` is **purely housekeeping** as it only cleans up stale rows. Reminder delivery and
+`pg_cron` performs purely housekeeping as it only cleans up stale rows. Reminder delivery and
 random triggers run in the app itself, so those features work with or without `pg_cron`.
 :::
 

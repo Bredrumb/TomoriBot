@@ -55,14 +55,14 @@ bun run launch --searxng --crawl4ai
 
 如果你更喜欢自己管理容器，就在 `.env` 里保留 `CRAWL4AI_BASE_URL=http://localhost:11235/`，然后运行：
 
-**PowerShell：**
+PowerShell：
 
 ```powershell
 docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g `
   unclecode/crawl4ai:latest
 ```
 
-**Bash（Linux/macOS）：**
+Bash（Linux/macOS）：
 
 ```bash
 docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
@@ -83,7 +83,7 @@ docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
 
 ## 启动顺序（重要）
 
-TomoriBot 会在**启动后第一次调用 `fetch_url` 时**探测本地服务器的健康状态，并把结果缓存 60 秒。如果第一次探测发生时容器还没就绪，bot 就会在接下来一分钟里把它当作不可用。
+TomoriBot 会在启动后第一次调用 `fetch_url` 时探测本地服务器的健康状态，并把结果缓存 60 秒。如果第一次探测发生时容器还没就绪，bot 就会在接下来一分钟里把它当作不可用。
 
 对于独立 Docker，请先启动 Crawl4AI 容器，再启动 TomoriBot。`bun run launch --crawl4ai` 已经替你做好了这件事。
 
@@ -116,14 +116,14 @@ docker ps
 
 Crawl4AI 支持注入浏览器层面的 cookie，让无头浏览器在抓取页面时看起来已经登录。对于需要会话才能查看内容的站点（例如付费墙新闻、私密论坛、需要登录的面板）很有用。
 
-`safe_http` 兜底**不**支持 cookie 注入。Cookie 只在 Crawl4AI 生效时才起作用。
+`safe_http` 兜底不支持 cookie 注入。Cookie 只在 Crawl4AI 生效时才起作用。
 
-> **限制：** Cookie 注入能绕过登录墙，但绕不过机器人指纹识别。带有激进反机器人检测的站点（尤其是 Twitter/X）会通过 canvas 或 WebGL 指纹识别出无头 Playwright，即使带着有效的会话 cookie 也返回空页面。Cookie 注入对只靠认证把关的站点效果很好。
+> 限制： Cookie 注入能绕过登录墙，但绕不过机器人指纹识别。带有激进反机器人检测的站点（尤其是 Twitter/X）会通过 canvas 或 WebGL 指纹识别出无头 Playwright，即使带着有效的会话 cookie 也返回空页面。Cookie 注入对只靠认证把关的站点效果很好。
 
 ### 获取你的 cookie
 
 1. 打开浏览器并登录目标站点。
-2. 打开开发者工具（`F12`）→ **Application** 标签 → **Storage** → **Cookies** → 选择该站点的域名。
+2. 打开开发者工具（`F12`）→ Application 标签 → Storage → Cookies → 选择该站点的域名。
 3. 复制每个必需 cookie 的 `Value`（通常是一个会话令牌；具体看该站点的 cookie 名称）。
 
 ### Crawl4AI
@@ -145,7 +145,7 @@ CRAWL4AI_COOKIES_JSON=[{"name":"session","value":"YOUR_SESSION_TOKEN","domain":"
 | `domain` | 否 | 域作用范围（例如 `.x.com`）。为了正确性建议填写。 |
 | `path` | 否 | 路径作用范围。省略时默认为 `/`。 |
 
-> **注意：** Cookie 值很敏感，请像对待密码一样对待它们。它们能让你账户的完整会话被访问。不要把 `.env` 提交进版本控制。
+> 注意： Cookie 值很敏感，请像对待密码一样对待它们。它们能让你账户的完整会话被访问。不要把 `.env` 提交进版本控制。
 
 ---
 

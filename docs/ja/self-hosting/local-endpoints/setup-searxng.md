@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-`web_search`ツールは、**Brave → SearXNG → DuckDuckGo → IAsk**のエンジンチェーンを通じてルーティングします。独自のSearXNGインスタンスを実行することで、単一エンジンのレート制限やスクレイピングの破損を回避し、`science`、`it`、`files`、`music`といったSearXNG専用のカテゴリーを利用できるようになります。
+`web_search`ツールは、Brave → SearXNG → DuckDuckGo → IAskのエンジンチェーンを通じてルーティングします。独自のSearXNGインスタンスを実行することで、単一エンジンのレート制限やスクレイピングの破損を回避し、`science`、`it`、`files`、`music`といったSearXNG専用のカテゴリーを利用できるようになります。
 
 SearXNGのセットアップパスを1つ選択してください。
 
@@ -40,14 +40,14 @@ bun run launch --searxng
 docker build -t tomoribot-searxng:latest -f servers/searxng/Dockerfile servers/searxng
 ```
 
-**PowerShell:**
+PowerShell:
 ```powershell
 docker run -d --name searxng -p 8080:8080 `
   --tmpfs /etc/searxng `
   tomoribot-searxng:latest
 ```
 
-**Bash (Linux/macOS):**
+Bash (Linux/macOS):
 ```bash
 docker run -d --name searxng -p 8080:8080 \
   --tmpfs /etc/searxng \

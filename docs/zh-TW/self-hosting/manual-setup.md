@@ -80,7 +80,7 @@ bun run launch --help        # 查看所有旗標
 ## 選用額外項目（手動的「完整安裝」）
 <!-- anchor: optional-extras-the-manual-full-install -->
 
-[設定精靈](/zh-TW/self-hosting/setup-wizard/)的**完整安裝**路徑會在基礎安裝之上疊加四個輕量的額外項目。它們都不是執行 bot 的必要條件，但每一項都會解鎖一個功能。如果你是手動安裝，想要哪一項就加哪一項：
+[設定精靈](/zh-TW/self-hosting/setup-wizard/)的完整安裝路徑會在基礎安裝之上疊加四個輕量的額外項目。它們都不是執行 bot 的必要條件，但每一項都會解鎖一個功能。如果你是手動安裝，想要哪一項就加哪一項：
 
 ### `pgvector`：文件與 RAG 記憶
 
@@ -123,7 +123,7 @@ CREATE EXTENSION vector;
 `pg_cron` 提供選用的定期資料庫維護（冷卻與提醒資料列的清理）。本 repo 的 Docker Compose 已經設定好它。
 
 :::caution[提醒與觸發不需要它]
-`pg_cron` 純粹是做**日常家務**，因為它只清理過期的資料列。提醒的送達與隨機觸發都在應用程式本身執行，
+`pg_cron` 純粹是做日常家務，因為它只清理過期的資料列。提醒的送達與隨機觸發都在應用程式本身執行，
 所以那些功能有沒有 `pg_cron` 都能運作。
 :::
 

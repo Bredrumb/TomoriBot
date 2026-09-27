@@ -5,7 +5,7 @@ sidebar:
 ---
 
 TomoriBot puede establecer recordatorios y programar tareas para después, puntuales o recurrentes. La
-forma más fácil es **pedírselo**. Ella crea la tarea mediante su herramienta `create_task`.
+forma más fácil es pedírselo. Ella crea la tarea mediante su herramienta `create_task`.
 Las tareas programadas son específicas de cada persona.
 
 Cada persona mantiene sus tareas propias pendientes en el contexto cuando responde, sin importar
@@ -35,7 +35,7 @@ significa tus 9 a. m., aunque el servidor esté en otro continente. Las horas re
 no dependen de la zona horaria y siempre son seguras.
 
 Cuando un recordatorio tiene como destinataria a una persona cuya zona horaria personal difiere de la
-del servidor, el embed de confirmación muestra **ambos relojes** (la hora del servidor y la hora local de
+del servidor, el embed de confirmación muestra ambos relojes (la hora del servidor y la hora local de
 la persona destinataria), para que una hora mal etiquetada sea visible de inmediato y puedas corregirla
 con otro mensaje o con `/scheduled-task edit`.
 
@@ -52,7 +52,7 @@ necesitas recordar los identificadores.
 ## Cómo se entregan
 
 Los recordatorios se entregan mediante un programador dentro de la aplicación y solo se marcan como
-completados **después de que la entrega tiene éxito**. Si una entrega se interrumpe o se vacía la cola
+completados después de que la entrega tiene éxito. Si una entrega se interrumpe o se vacía la cola
 del canal, se reintenta automáticamente. Los retrasos de reintento no cambian la cadencia recurrente original.
 
 Los intentos automáticos no publican un mensaje de error cada vez. Si la entrega sigue fallando después

@@ -46,7 +46,7 @@ Execute `/providers`, escolha `Adicionar Novo Endpoint Personalizado` e use a co
 - API Compatibility: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8012`
 
-Após salvar a conexão, selecione-a e use o menu suspenso de modelo para adicionar um modelo de fala (Speech). O formulário do modelo pede por **Voice Source Mode** e **Script Markup**; escolha `Auto` e `Plain` para o servidor em modo automático.
+Após salvar a conexão, selecione-a e use o menu suspenso de modelo para adicionar um modelo de fala (Speech). O formulário do modelo pede por Modo de Fonte de Voz e Script Markup; escolha `Auto` e `Plain` para o servidor em modo automático.
 
 Use `/providers` para registro do endpoint e configuração do modelo. Em seguida, abra `/config` > Models > Switch Models para selecionar e ativar o endpoint registrado.
 
@@ -57,7 +57,7 @@ Use `/providers` para registro do endpoint e configuração do modelo. Em seguid
 Use isso para personas que devem imitar um clipe de referência:
 
 1. Prepare um clipe de voz limpo de 10 a 20 segundos com um locutor e sem música de fundo.
-2. Abra `/config` em Models > TTS Parameters & Voices e envie o clipe.
+2. Abra `/config` em Models > Parâmetros TTS e Vozes e envie o clipe.
 3. Abra `/config` em Persona > Voice e, em seguida, escolha a persona e a amostra de voz.
 
 O Qwen3-TTS anuncia clonagem rápida a partir de apenas 3 segundos de áudio de referência, e seu tempo de execução não documenta nem aplica um limite de duração da referência. O comprimento do clipe é, portanto, uma decisão de qualidade que você controla, e não um limite que o servidor verifica.
@@ -95,4 +95,4 @@ TOMORI_TTS_MODE=voice-design python servers/tts/qwen3tts/server.py
 
 Você também pode passar `--mode voice-design` em vez de definir `TOMORI_TTS_MODE`. A URL padrão do endpoint apenas para VoiceDesign é `http://127.0.0.1:8014`.
 
-Registre-o da mesma forma que o modo automático, mas use a URL do endpoint `http://127.0.0.1:8014` e escolha `VoiceDesign` como o Voice Source Mode no modelo de fala (Speech).
+Registre-o da mesma forma que o modo automático, mas use a URL do endpoint `http://127.0.0.1:8014` e escolha `VoiceDesign` como o Modo de Fonte de Voz no modelo de fala (Speech).

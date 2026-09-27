@@ -16,10 +16,10 @@ Các thẻ văn bản là bảng điều khiển công khai bền vững do ngư
 - `/stats persona`: mức sử dụng của một persona trên máy chủ này.
 - `/stats server`: mức sử dụng trên toàn máy chủ.
 
-Hầu hết các lệnh đều hỗ trợ khung thời gian (**timeframe**), và số liệu thống kê cá nhân có thể được giới hạn trong máy chủ này hoặc trên tất cả các máy chủ.
+Hầu hết các lệnh đều hỗ trợ khung thời gian (timeframe), và số liệu thống kê cá nhân có thể được giới hạn trong máy chủ này hoặc trên tất cả các máy chủ.
 
 :::note
-**Số lượng token** là mức sử dụng do chính nhà cung cấp báo cáo khi có sẵn (ước tính dựa trên ký tự chỉ được sử dụng cho các nhà cung cấp không báo cáo). **Chi phí** định giá các token đó theo mức giá niêm yết trong danh mục model, vì vậy nó có thể khác với hóa đơn thực tế của bạn (bộ nhớ đệm prompt, giảm giá, hạn ngạch gói miễn phí, v.v.).
+Số lượng token là mức sử dụng do chính nhà cung cấp báo cáo khi có sẵn (ước tính dựa trên ký tự chỉ được sử dụng cho các nhà cung cấp không báo cáo). Chi phí định giá các token đó theo mức giá niêm yết trong danh mục model, vì vậy nó có thể khác với hóa đơn thực tế của bạn (bộ nhớ đệm prompt, giảm giá, hạn ngạch gói miễn phí, v.v.).
 :::
 
 ## Thẻ đồ họa thông tin có thể chia sẻ

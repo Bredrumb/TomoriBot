@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-TomoriBot's behavior (**what she's allowed to do and how she generates**) is controlled by
+TomoriBot's behavior (what she is allowed to do and how she generates) is controlled by
 `/config` > Permissions and `/config`, beyond personality ([Multiple Personas](/features/chatting-personality/multiple-personas/))
 and knowledge ([Memory](/features/knowledge/memory/)). This page is a curated set of the high-value
 knobs; every command is in the [Command Reference](/features/command-reference/).
@@ -45,10 +45,10 @@ system prompt is replaced, but a custom one you set here is still sent.
 ## Uncensored Output
 <!-- anchor: uncensored-output -->
 
-TomoriBot has **no content filter of its own**: she is not a moderation harness and adds no
+TomoriBot has no content filter of its own: she is not a moderation harness and adds no
 safety rails on top of the model. Whatever the underlying provider returns is what she says.
 `/nsfw jailbreaks` therefore doesn't "unlock" anything inside TomoriBot; it exists purely to
-work around **provider-side** filters that are stricter than you want.
+work around provider-side filters that are stricter than you want.
 
 It toggles three independent techniques (all off by default):
 

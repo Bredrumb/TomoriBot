@@ -4,8 +4,8 @@ title: "03: Chunk Normalization"
 
 Converts a provider-native `RawStreamChunk` into the uniform `ProcessedChunk` shape the orchestrator routes.
 
-**Contract:** `BaseStreamAdapter.processChunk`: `src/types/stream/interfaces.ts:247`
-**Canonical implementation:** `GoogleStreamAdapter.processChunk`: `src/providers/google/googleStreamAdapter.ts:649-760`
+- **Contract**: `BaseStreamAdapter.processChunk`: `src/types/stream/interfaces.ts:247`
+- **Canonical implementation**: `GoogleStreamAdapter.processChunk`: `src/providers/google/googleStreamAdapter.ts:649-760`
 
 ## Mission
 
@@ -52,7 +52,7 @@ The method also handles three additional responsibilities:
   closers split across chunks, into `delta.reasoning`) and `ReasoningContentSpillGuard` (catches a
   *tagless* reasoning tail glued to the first visible delta: e.g., `must do.Hello!`). The spill guard
   only fires on the first visible content after reasoning, when that content starts lowercase and a
-  sentence boundary is **glued** (no following whitespace). It strips when EITHER the text after the
+  sentence boundary is glued (no following whitespace). It strips when EITHER the text after the
   boundary looks like an answer start (uppercase / caseless letter, emoji, or quote/bracket: catches
   `wait.Actually`) OR the fragment before the boundary is a multi-word clause (catches a casual
   lowercase reply glued onto a reasoning tail, e.g. `g it out.hey master 👋`, where capitalization is
@@ -64,7 +64,7 @@ The method also handles three additional responsibilities:
   identifiers are protected by an inline-code guard: a boundary preceded by an odd number of
   backticks (inside a `` `obj.Method` `` span, or a still-open one mid-stream) is left intact, as is
   code at the very start of content (a leading backtick is not lowercase). Bare, non-backticked
-  identifiers in prose are accepted collateral of the aggressiveness. The **shape** of a think tag is
+  identifiers in prose are accepted collateral of the aggressiveness. The shape of a think tag is
   defined once in
   `src/providers/utils/reasoningTags.ts` and is namespace-aware (`<think>`, `<mm:think>`,
   `<ns:think>`); the stripper, the Discord-layer `bufferManager`, and the final `cleanLLMOutput`
@@ -78,8 +78,8 @@ The method also handles three additional responsibilities:
   `VerbatimToolCallParser` over visible `delta.content` after existing Custom/Gemma cleanup. It scans
   the stream for an anchor `<knownToolName>(`, only names from the exposed tool set trigger, then
   accumulates from that name until the parentheses balance (quote-aware, so a `)` inside a JSON string
-  does not close early) and parses the `name(...)` body. The call may be **bare** or wrapped in an
-  inline code span / fenced block, and **prose before it is allowed** (chat models narrate before they
+  does not close early) and parses the `name(...)` body. The call may be bare or wrapped in an
+  inline code span / fenced block, and prose before it is allowed (chat models narrate before they
   act): leading narration is emitted as normal text and the call is recovered after it, e.g.
   `` Fine. `generate_image({"prompt":"a cat","mode":"txt2img"})` `` or the same call with no backticks.
   The parse step is the false-positive guard: a tool name merely *mentioned* in prose
@@ -210,9 +210,9 @@ server-scoped form, which is the correct default for configuration a member does
 
 | Surface | Plugin-relevance |
 |---|---|
-| `BaseStreamAdapter.processChunk()` abstract method | **A new provider adapter implements this to map its SDK chunk shapes to `ProcessedChunk`.** The contract is at `src/types/stream/interfaces.ts:184`. The implementation must be synchronous. |
-| `BaseStreamAdapter.handleProviderError()` abstract method | **A new provider adapter implements this to classify its SDK errors.** The `ProviderError.retryable` flag is consumed by the key-rotation loop in `runGenerationTurn`; the `type` field drives user-facing error embed formatting. Model-name and model-availability failures should become `model_error` or carry a message that the shared model-error classifier can recognize. Contract at `src/types/stream/interfaces.ts:201`. |
-| `BaseStreamAdapter.createErrorDescription()` abstract method | **A new provider adapter implements this to produce localized, provider-specific error text** for the error embed shown in Discord when `retryable: false` and user errors are not suppressed. For `model_error`, preserve the provider's actionable details, such as supported model IDs. Contract at `src/types/stream/interfaces.ts:207`. |
+| `BaseStreamAdapter.processChunk()` abstract method | A new provider adapter implements this to map its SDK chunk shapes to `ProcessedChunk`. The contract is at `src/types/stream/interfaces.ts:184`. The implementation must be synchronous. |
+| `BaseStreamAdapter.handleProviderError()` abstract method | A new provider adapter implements this to classify its SDK errors. The `ProviderError.retryable` flag is consumed by the key-rotation loop in `runGenerationTurn`; the `type` field drives user-facing error embed formatting. Model-name and model-availability failures should become `model_error` or carry a message that the shared model-error classifier can recognize. Contract at `src/types/stream/interfaces.ts:201`. |
+| `BaseStreamAdapter.createErrorDescription()` abstract method | A new provider adapter implements this to produce localized, provider-specific error text for the error embed shown in Discord when `retryable: false` and user errors are not suppressed. For `model_error`, preserve the provider's actionable details, such as supported model IDs. Contract at `src/types/stream/interfaces.ts:207`. |
 | `FunctionCall` shape (`name`, `args`, `thoughtSignature`) | The provider-agnostic function call format, at `src/types/provider/interfaces.ts:167`. Fields like `thoughtSignature`, `reasoning_details`, and `deepseekReasoningContent` are provider-specific optional fields that must be preserved when passing tool results back to the provider in stage 01. `argumentsTruncated` is a core field: any adapter that recovers arguments from an incomplete payload must set it, because the tool loop uses it to refuse the dispatch. |
 
 ## Related docs

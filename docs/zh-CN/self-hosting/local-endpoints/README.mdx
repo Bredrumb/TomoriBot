@@ -79,4 +79,4 @@ bun run launch --help
 
 跑在 Docker 里的服务器（`--searxng`、`--crawl4ai`）在首次运行时创建，之后复用。Python 的 TTS 与 STT 服务器需要事先建好各自的 venv；详见[语音合成](/zh-CN/self-hosting/local-endpoints/text-to-speech/)和[语音识别](/zh-CN/self-hosting/local-endpoints/speech-to-text/)下的各篇配置指南。
 
-**Ctrl+C** 会停掉 bot 和所有 Python 服务器进程。Docker 容器会被有意留在运行状态，用完请用 `docker stop searxng` / `docker stop crawl4ai` 手动停掉它们。
+Ctrl+C 会停掉 bot 和所有 Python 服务器进程。Docker 容器会被有意留在运行状态，用完请用 `docker stop searxng` / `docker stop crawl4ai` 手动停掉它们。

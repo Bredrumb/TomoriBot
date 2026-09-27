@@ -4,7 +4,7 @@ description: Los términos que rigen el uso de la instancia oficial alojada de T
 aiGenerated: true
 ---
 
-**Aviso de traducción:** Esta traducción se proporciona para tu comodidad. La versión en inglés controla en caso de conflicto.
+Aviso de traducción: Esta traducción se proporciona para tu comodidad. La versión en inglés controla en caso de conflicto.
 
 Última actualización: 2026-09-12
 

@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-Hành vi của TomoriBot (**những gì bot được phép làm và cách bot tạo phản hồi**) được kiểm soát bởi
+Hành vi của TomoriBot (những gì bot được phép làm và cách bot tạo phản hồi) được kiểm soát bởi
 `/config` > Permissions và `/config`, bên cạnh tính cách ([Nhiều persona](/vi/features/chatting-personality/multiple-personas/))
 và tri thức ([Bộ nhớ](/vi/features/knowledge/memory/)). Trang này là tập hợp các tùy chọn cấu hình
 giá trị cao; mọi lệnh đầy đủ đều có trong [Danh mục lệnh](/vi/features/command-reference/).
@@ -45,10 +45,10 @@ tích hợp sẵn sẽ được thay thế, nhưng prompt tùy chỉnh do bạn 
 ## Đầu ra không kiểm duyệt
 <!-- anchor: uncensored-output -->
 
-TomoriBot **không có bộ lọc nội dung riêng**: bot không phải là một hệ thống kiểm duyệt và không bổ sung
+TomoriBot không có bộ lọc nội dung riêng: bot không phải là một hệ thống kiểm duyệt và không bổ sung
 thêm rào chắn an toàn nào lên trên model. Bất cứ điều gì nhà cung cấp bên dưới trả về đều là những gì bot sẽ
 nói. Do đó, `/nsfw jailbreaks` không "mở khóa" bất kỳ điều gì bên trong TomoriBot; tính năng này tồn tại
-hoàn toàn để giải quyết các bộ lọc **phía nhà cung cấp** vốn khắt khe hơn mức bạn mong muốn.
+hoàn toàn để giải quyết các bộ lọc phía nhà cung cấp vốn khắt khe hơn mức bạn mong muốn.
 
 Lệnh này bật/tắt ba kỹ thuật độc lập (tất cả đều tắt theo mặc định):
 

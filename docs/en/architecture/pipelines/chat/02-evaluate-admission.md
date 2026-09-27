@@ -4,7 +4,7 @@ title: "02: Admission Check"
 
 The gatekeeper. Decides if/how a message becomes a generation turn.
 
-**File:** `src/utils/chat/admission.ts:66-267`
+- **File**: `src/utils/chat/admission.ts:66-267`
 
 ## Mission
 
@@ -101,7 +101,7 @@ a reply costs nothing to generate for.
 | Block reason | Catches | Why the others miss it |
 |---|---|---|
 | `cannot_send_in_channel` | `SendMessages`, or `SendMessagesInThreads` in a thread | The ordinary case |
-| `bot_timed_out_in_guild` | A moderator timeout on the bot | A timed-out member keeps **every permission bit**, so the bitfield check passes and Discord still rejects the send with 50013. The state lives on the member as `communicationDisabledUntilTimestamp`, entirely outside permissions |
+| `bot_timed_out_in_guild` | A moderator timeout on the bot | A timed-out member keeps every permission bit, so the bitfield check passes and Discord still rejects the send with 50013. The state lives on the member as `communicationDisabledUntilTimestamp`, entirely outside permissions |
 | `recent_send_refused` | Any channel whose last send was actually refused | Reacts to a refusal that happened rather than predicting one, so it holds for causes not yet identified |
 
 The timeout check reads the cached member and never fetches: turning a per-turn gate into a Discord
@@ -115,7 +115,7 @@ ignores transient codes such as 429: silencing a channel that is having a bad mi
 the wasted call it exists to prevent.
 
 This matters because the failure is otherwise invisible and expensive. A production guild timed the
-bot out and drew **397 refused sends over two days**, each one a fully generated response discarded
+bot out and drew 397 refused sends over two days, each one a fully generated response discarded
 at the last step, and at two error rows per attempt it accounted for 63% of that day's error volume
 while looking exactly like a correctly configured channel.
 
@@ -138,7 +138,7 @@ After this stage runs:
 
 ## Extension points
 
-This stage is **a long sequence of fixed checks**, not a polymorphic seam.
+This stage is a long sequence of fixed checks, not a polymorphic seam.
 Extensibility lives in the helpers it calls:
 
 | Helper | File | What it does | Plugin-relevance |
@@ -148,7 +148,7 @@ Extensibility lives in the helpers it calls:
 | `evaluateAdmissionQueueAndTriggerGate` | `admissionQueue.ts` | Channel-busy + trigger gate decision tree; includes cross-persona and manual-command guards that bypass follow-up replacement when the incoming message explicitly targets a different persona or represents command-owned work | → plugin plan candidate if plugins want to add admission policies |
 | `getSelfReplyChainOriginUser`, `updateSelfReplyChainState` | `selfReplyState.ts` | Self-reply chain memory | Internal: tightly coupled to cascade-trigger limit semantics |
 
-**The stage itself is internal**: there is no current seam for "replace
+- **The stage itself is internal**: there is no current seam for "replace
 `evaluateChatAdmission`." A future plugin-extension for early admission veto
 would likely take the form of a pre-admission hook (`beforeAdmission(incoming)
 → Disposition | null`) running before the fixed checks, not a wholesale

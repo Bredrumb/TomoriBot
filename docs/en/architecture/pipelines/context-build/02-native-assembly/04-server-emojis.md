@@ -4,7 +4,7 @@ title: "02.4: Server Emojis"
 
 List of the server's custom emojis with metadata, framed for LLM use.
 
-**File:** `src/utils/text/context/serverAssets.ts:31-126`
+- **File**: `src/utils/text/context/serverAssets.ts:31-126`
 
 ## Mission
 
@@ -82,7 +82,7 @@ After this stage runs:
 | Sister contributor: stickers (stage 05) | Stickers share the metadata + dedup logic pattern. Future "GIF library" or "voice clip library" contributors would mirror this shape. |
 | Emoji-metadata enrichment (emotion key, description) | The `/refresh` and `/emoji` commands populate this; the contributor only formats. New enrichment kinds would extend the DB schema + the formatter here. |
 
-**A plugin adding a new server-asset kind** (e.g. custom GIF reactions)
+- **A plugin adding a new server-asset kind** (e.g. custom GIF reactions)
 would add a new contributor with its own tag, parallel to this one; see
 the native-assembly README's extension-point discussion for the
 "new contributor" question.

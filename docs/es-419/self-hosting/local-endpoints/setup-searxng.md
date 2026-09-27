@@ -6,7 +6,7 @@ sidebar:
 
 Esta traducción se proporciona para tu comodidad. La versión en inglés es la autoritativa.
 
-La herramienta `web_search` enruta a través de una cadena de motores de búsqueda: **Brave → SearXNG → DuckDuckGo → IAsk**. Al ejecutar nuestra propia instancia de SearXNG, evitamos los límites de velocidad de un solo motor y los fallos de extracción, y desbloqueamos categorías exclusivas de SearXNG: `science`, `it`, `files` y `music`.
+La herramienta `web_search` enruta a través de una cadena de motores de búsqueda: Brave → SearXNG → DuckDuckGo → IAsk. Al ejecutar nuestra propia instancia de SearXNG, evitamos los límites de velocidad de un solo motor y los fallos de extracción, y desbloqueamos categorías exclusivas de SearXNG: `science`, `it`, `files` y `music`.
 
 Elige una ruta de configuración de SearXNG:
 
@@ -36,7 +36,7 @@ bun run launch --searxng
 
 Si prefieres administrar el contenedor tú mismo, mantén `SEARXNG_BASE_URL=http://localhost:8080/` en `.env` y ejecuta:
 
-**PowerShell:**
+PowerShell:
 ```powershell
 docker run -d --name searxng -p 8080:8080 `
   -v "${PWD}/servers/searxng:/etc/searxng:rw" `
@@ -44,7 +44,7 @@ docker run -d --name searxng -p 8080:8080 `
   searxng/searxng:latest
 ```
 
-**Bash (Linux/macOS):**
+Bash (Linux/macOS):
 ```bash
 docker run -d --name searxng -p 8080:8080 \
   -v "${PWD}/servers/searxng:/etc/searxng:rw" \

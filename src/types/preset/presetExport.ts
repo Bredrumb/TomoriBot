@@ -26,6 +26,8 @@ export const UNPAIRED_SAMPLE_DIALOGUE_SENTINEL = "__UNPAIRED_SAMPLE_DIALOGUE__";
  * Preset import/export schema limits.
  */
 export const PRESET_MAX_STRING_LENGTH = 5000;
+// Four 4000-character persona prompt fields can add three two-character separators.
+export const PRESET_MAX_PERSONA_PROMPT_LENGTH = 16_003;
 export const PRESET_MAX_ATTRIBUTES = 200;
 const PRESET_MAX_SAMPLE_DIALOGUES = 100;
 const PRESET_MAX_TRIGGER_WORDS = 100;
@@ -141,7 +143,7 @@ export const presetExportDataSchema = z.object({
   sample_dialogues_in: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_SAMPLE_DIALOGUES),
   sample_dialogues_out: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_SAMPLE_DIALOGUES),
   trigger_words: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_TRIGGER_WORDS),
-  persona_prompt: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
+  persona_prompt: z.string().max(PRESET_MAX_PERSONA_PROMPT_LENGTH).nullable().optional(),
   naming_config: personaNamingConfigSchema.default(EMPTY_PERSONA_NAMING_CONFIG),
   persona_lineage_id: z
     .preprocess((value) => {

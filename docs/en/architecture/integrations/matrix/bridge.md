@@ -85,7 +85,7 @@ Remaining degraded features are listed in the table above. Current parity work f
 
 ### From the server admin's perspective
 
-Setting up the bridge requires **two steps**:
+Setting up the bridge requires two steps:
 1. Invite `@tomoribot:yourdomain.com` to a Matrix room.
    - TomoriBot auto-accepts the invite and posts a short setup hint in the Matrix room telling users to finish the link from Discord, where to find the Internal Room ID, and that the room must stay unencrypted.
 2. Run `/matrix link` in the Discord channel to link them.
@@ -95,13 +95,13 @@ That's it. The homeserver infrastructure is invisible to server admins; the same
 
 ### From the operator's perspective (you)
 
-The homeserver and appservice are set up **once**, centrally. All server admins share the same bridge infrastructure. Compare this to solutions like mautrix-discord, where each admin would need to run their own bridge instance.
+The homeserver and appservice are set up once, centrally. All server admins share the same bridge infrastructure. Compare this to solutions like mautrix-discord, where each admin would need to run their own bridge instance.
 
 ---
 
 ## Why Not Mautrix or an Existing Bridge?
 
-Existing bridges like [mautrix-discord](https://github.com/mautrix/discord) and [Heisenbridge](https://github.com/hifi/heisenbridge) are **general-purpose room-mirroring bridges**. Their goal is to replicate an entire community across platforms: every user gets a puppet, every room gets bridged.
+Existing bridges like [mautrix-discord](https://github.com/mautrix/discord) and [Heisenbridge](https://github.com/hifi/heisenbridge) are general-purpose room-mirroring bridges. Their goal is to replicate an entire community across platforms: every user gets a puppet, every room gets bridged.
 
 TomoriBot's use case is fundamentally different:
 
@@ -117,7 +117,7 @@ Using mautrix would bring all the puppet/mirroring infrastructure without solvin
 
 ### What about users running their own mautrix-discord?
 
-A power user who already has mautrix-discord running could technically bridge their server. mautrix would relay Matrix users' messages into Discord as webhook messages. However, TomoriBot **ignores webhook messages by default** (to prevent echo loops from its own alter persona webhooks). The only missing piece would be a carve-out to allow webhook triggers in Matrix-linked channels; this could be added in the future as an "external bridge mode" flag. TomoriBot's responses would be picked up and relayed to Matrix by the external bridge automatically.
+A power user who already has mautrix-discord running could technically bridge their server. mautrix would relay Matrix users' messages into Discord as webhook messages. However, TomoriBot ignores webhook messages by default (to prevent echo loops from its own alter persona webhooks). The only missing piece would be a carve-out to allow webhook triggers in Matrix-linked channels; this could be added in the future as an "external bridge mode" flag. TomoriBot's responses would be picked up and relayed to Matrix by the external bridge automatically.
 
 ---
 
@@ -150,14 +150,14 @@ src/commands/matrix/
 
 The split under `utils/bridges/` is intentional:
 
-- `utils/bridges/` contains **pure string utilities** with no runtime dependencies: ID format detection, webhook username parsing. These work for any bridge protocol.
-- `utils/bridges/matrix/` contains **stateful Matrix operations**: the appservice HTTP server, session-scoped display name maps, Matrix API calls.
+- `utils/bridges/` contains pure string utilities with no runtime dependencies: ID format detection, webhook username parsing. These work for any bridge protocol.
+- `utils/bridges/matrix/` contains stateful Matrix operations: the appservice HTTP server, session-scoped display name maps, Matrix API calls.
 
 This means a file like `reminderProcessor.ts` imports from `utils/bridges` for the ID check, not `utils/bridges/matrix`, making it clear the bridge support is a general concern rather than Matrix-specific logic scattered everywhere.
 
 ### Data Flow
 
-**Matrix → Discord (inbound):**
+### Matrix → Discord (inbound)
 ```
 Matrix user sends message
   → Homeserver pushes event to appservice HTTP server (port 9993)
@@ -179,7 +179,7 @@ the same name without rendering the Matrix alias as a ping. The required
 `PreparedParticipantContext` carries this result into native context assembly, so the context
 builder does not accept a separate Matrix participant map.
 
-**Discord → Matrix (outbound):**
+### Discord → Matrix (outbound)
 ```
 TomoriBot sends AI response to Discord channel
   → matrixRelay.ts messageCreate handler fires
@@ -194,9 +194,9 @@ TomoriBot sends AI response to Discord channel
 
 Two separate guards prevent message echo loops:
 
-**Matrix → Discord direction:** `onEvent` in `client.ts` filters out any event where `sender === botUserId` OR `sender` starts with `@_tomori_` and ends with `:${serverName}`. The domain suffix check prevents a remote user named `@_tomori_*:evil.org` from bypassing the guard.
+- **Matrix → Discord direction**: `onEvent` in `client.ts` filters out any event where `sender === botUserId` OR `sender` starts with `@_tomori_` and ends with `:${serverName}`. The domain suffix check prevents a remote user named `@_tomori_*:evil.org` from bypassing the guard.
 
-**Discord → Matrix direction:** `matrixRelay.ts` only relays messages where `isSelfTriggerMessage()` returns true; i.e., messages from TomoriBot's own bot account or alter persona webhooks. Regular user messages and Matrix relay webhooks are never relayed back.
+- **Discord → Matrix direction**: `matrixRelay.ts` only relays messages where `isSelfTriggerMessage()` returns true; i.e., messages from TomoriBot's own bot account or alter persona webhooks. Regular user messages and Matrix relay webhooks are never relayed back.
 
 ---
 
@@ -275,7 +275,7 @@ Each TomoriBot persona gets its own Matrix virtual user identity:
 
 Example: `@_tomori_lilya:yourdomain.com`
 
-The appservice registration claims **exclusive** control over the `@_tomori_.*:{serverName}` namespace, meaning no other user can register an account matching that pattern on the homeserver.
+The appservice registration claims exclusive control over the `@_tomori_.*:{serverName}` namespace, meaning no other user can register an account matching that pattern on the homeserver.
 
 On first use per bot session, the virtual user is:
 1. Registered on the homeserver (idempotent; safe to call repeatedly)
@@ -290,17 +290,17 @@ An in-memory cache (`provisionedIntents`) prevents redundant provisioning API ca
 
 TomoriBot's AI uses the `@{displayName}` placeholder format for mentioning users in responses (e.g., `@{obonya}`). When relaying to Matrix, `matrixRelay.ts` resolves these placeholders to proper Matrix mention links:
 
-**Plain text body:**
+- **Plain text body**:
 ```
 @obonya:localhost
 ```
 
-**Formatted HTML body:**
+- **Formatted HTML body**:
 ```html
 <a href="https://matrix.to/#/@obonya:localhost">obonya</a>
 ```
 
-**MSC3952 m.mentions field:**
+- **MSC3952 m.mentions field**:
 ```json
 { "user_ids": ["@obonya:localhost"] }
 ```
@@ -313,9 +313,9 @@ The display name → Matrix ID mapping is maintained in a session-scoped `matrix
 
 ## Media Relay
 
-**Matrix → Discord:** Media events (`m.image`, `m.video`, `m.file`, `m.audio`) are downloaded from the homeserver using MSC3916 authenticated media endpoints (`/_matrix/client/v1/media/download/`) and re-uploaded as Discord webhook file attachments. Files exceeding `MATRIX_MAX_ATTACHMENT_MB` (default: 8 MB) are replaced with a text notice.
+- **Matrix → Discord**: media events (`m.image`, `m.video`, `m.file`, `m.audio`) are downloaded from the homeserver using MSC3916 authenticated media endpoints (`/_matrix/client/v1/media/download/`) and re-uploaded as Discord webhook file attachments. Files exceeding `MATRIX_MAX_ATTACHMENT_MB` (default: 8 MB) are replaced with a text notice.
 
-**Discord → Matrix:** Attachments in TomoriBot's messages are fetched from Discord's proxy CDN and uploaded to the homeserver's media repository, then sent as typed media events (`m.image` for images, `m.video` for video, `m.file` for everything else).
+- **Discord → Matrix**: attachments in TomoriBot's messages are fetched from Discord's proxy CDN and uploaded to the homeserver's media repository, then sent as typed media events (`m.image` for images, `m.video` for video, `m.file` for everything else).
 
 Both directions enforce the same size limit via the shared `MATRIX_MAX_ATTACHMENT_BYTES` constant.
 
@@ -323,7 +323,7 @@ Both directions enforce the same size limit via the shared `MATRIX_MAX_ATTACHMEN
 
 ## Embed Relay
 
-Discord embeds cannot be rendered natively in Matrix. Instead, `matrixRelay.ts` serializes **all** visible embed content to plain text and relays it:
+Discord embeds cannot be rendered natively in Matrix. Instead, `matrixRelay.ts` serializes all visible embed content to plain text and relays it:
 
 - Author name/url
 - Title/url

@@ -5,7 +5,7 @@ title: "02.9: Conditioning"
 Reward/punish reinforcement memory: what the bot has been thanked for and
 what it has been corrected on.
 
-**File:** `src/utils/text/context/templates.ts:280-352`
+- **File**: `src/utils/text/context/templates.ts:280-352`
 
 ## Mission
 

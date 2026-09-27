@@ -81,7 +81,7 @@ bun run launch --help        # 查看所有参数
 ## 可选附加项（手动版的「完整安装」）
 <!-- anchor: optional-extras-the-manual-full-install -->
 
-[安装向导](/zh-CN/self-hosting/setup-wizard/)的 **完整安装** 路径会在基础安装之上叠加四个轻量附加项。它们都不是运行 bot 的必需项，但每一项都会解锁一个功能。如果你是手动安装，想加哪个就加哪个：
+[安装向导](/zh-CN/self-hosting/setup-wizard/)的 完整安装 路径会在基础安装之上叠加四个轻量附加项。它们都不是运行 bot 的必需项，但每一项都会解锁一个功能。如果你是手动安装，想加哪个就加哪个：
 
 ### `pgvector`：文档与 RAG 记忆
 
@@ -124,7 +124,7 @@ CREATE EXTENSION vector;
 `pg_cron` 支撑可选的周期性数据库维护（冷却行与提醒行的清理）。本仓库的 Docker Compose 已经替你配置好了。
 
 :::caution[提醒和触发并不需要它]
-`pg_cron` **纯粹是打扫卫生**，它只清理过期数据行。提醒的发送与随机触发都在应用内部运行，所以有没有 `pg_cron` 这些功能都照常工作。
+`pg_cron` 纯粹是打扫卫生，它只清理过期数据行。提醒的发送与随机触发都在应用内部运行，所以有没有 `pg_cron` 这些功能都照常工作。
 :::
 
 对于自己管理的 PostgreSQL，先找到生效中的配置文件：

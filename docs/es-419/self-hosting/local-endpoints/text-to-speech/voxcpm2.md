@@ -4,11 +4,11 @@ title: "VoxCPM2"
 
 VoxCPM2 es el modelo multilingüe de texto a voz de 2B de parámetros de OpenBMB. Admite 30 idiomas, salida de 48 kHz, Diseño de voz en lenguaje natural, clonación de voz de audio de referencia, clonación controlable y "Clonación Definitiva" asistida por transcripción. TomoriBot usa el paquete oficial de Python `voxcpm` a través del ligero envoltorio en `servers/tts/voxcpm2/`.
 
-El modelo predeterminado es el punto de control BF16 oficial `openbmb/VoxCPM2`. OpenBMB informa de aproximadamente **8 GB de VRAM** para el tiempo de ejecución estándar, por lo que el modelo normal se ajusta cómodamente a una GPU NVIDIA de 16 GB y no se necesita un punto de control cuantificado de forma predeterminada.
+El modelo predeterminado es el punto de control BF16 oficial `openbmb/VoxCPM2`. OpenBMB informa de aproximadamente 8 GB de VRAM para el tiempo de ejecución estándar, por lo que el modelo normal se ajusta cómodamente a una GPU NVIDIA de 16 GB y no se necesita un punto de control cuantificado de forma predeterminada.
 
 ## Licencia
 
-El código y los pesos del modelo VoxCPM2 se publican bajo **Apache-2.0**, incluido el uso comercial sujeto a los términos de la licencia. TomoriBot no redistribuye los pesos; el instalador los descarga del repositorio oficial de Hugging Face.
+El código y los pesos del modelo VoxCPM2 se publican bajo Apache-2.0, incluido el uso comercial sujeto a los términos de la licencia. TomoriBot no redistribuye los pesos; el instalador los descarga del repositorio oficial de Hugging Face.
 
 Recursos oficiales upstream:
 
@@ -45,8 +45,8 @@ Usa el Estilo de marcado del guion `Plano`. VoxCPM2 no requiere que TomoriBot co
 
 Punto de partida recomendado:
 
-- Python **3.10-3.12**
-- GPU NVIDIA con **8 GB VRAM o más** para el tiempo de ejecución oficial BF16; 12-16 GB proporcionan un margen cómodo
+- Python 3.10-3.12
+- GPU NVIDIA con 8 GB VRAM o más para el tiempo de ejecución oficial BF16; 12-16 GB proporcionan un margen cómodo
 - Controlador NVIDIA actual y una compilación de PyTorch con CUDA habilitado para aceleración de GPU
 - Se admite la CPU como respaldo, pero es sustancialmente más lenta
 
@@ -137,7 +137,7 @@ La cifra de 5 a 30 segundos es un rango de calidad documentado, y no un límite 
 
 Para una persona que debe crearse a partir de una descripción de voz escrita en lugar de una muestra:
 
-1. Abre `/config` bajo Persona > Voz y elige VoiceDesign.
+1. Abre `/config` bajo Persona > Voz y elige Diseño de voz.
 2. Elige la persona.
 3. Ingresa una descripción en lenguaje natural, como `Young adult woman, soft warm voice, relaxed pace, slightly playful delivery`.
 
@@ -150,7 +150,7 @@ Cuando una persona clonada también recibe instrucciones de voz únicas, VoxCPM2
 Una vez que VoxCPM2 es el modelo de Voz activo, `/generate voice-message` usa la fuente de voz configurada de la persona de la misma manera que las llamadas a la herramienta de mensajes de voz normales:
 
 - las personas clones envían el `ref_audio` guardado y el `ref_text` opcional;
-- las personas de VoiceDesign envían su prompt guardado como `instruct`;
+- las personas de Diseño de voz envían su prompt guardado como `instruct`;
 - los endpoints con capacidad de clonación con Compatibilidad con instrucciones habilitada exponen el campo de Dirección de entrega y pasan instrucciones únicas a través de `instruct`;
 - cuando una instrucción está presente con una muestra clon, TomoriBot usa `reference_wav_path` únicamente y no envía los campos de prompt de transcripción.
 

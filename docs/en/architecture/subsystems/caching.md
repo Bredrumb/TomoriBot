@@ -11,7 +11,7 @@ Caching reduces repeated DB/API calls and helps meet Discord interaction timing 
 
 ## TTL Does Not Bound Memory
 
-Every TTL in this document is **lazy**: the deadline is checked when an entry is read, a stale entry
+Every TTL in this document is lazy: the deadline is checked when an entry is read, a stale entry
 is treated as a miss and refetched, and the entry itself stays in its `Map` until something
 overwrites or explicitly invalidates it. No cache in `src/utils/cache/` runs a periodic sweeper.
 
@@ -26,15 +26,15 @@ Two implementations of the same lazy pattern exist, so a search for one will mis
 | `expiresAt` timestamp compared on read | `channelWhitelistCache`, `channelLlmCacheStore`, `personalSpotlightCache` |
 | `cachedAt` plus a duration constant | `userCache.ts:33,55`, `tomoriStateCache.ts:23,105` |
 
-So **tightening a TTL reduces staleness, not memory.** It shortens how long a value is served before
+So tightening a TTL reduces staleness, not memory. It shortens how long a value is served before
 a refetch, and it adds database reads, but it frees nothing. Bounding memory requires a different
 mechanism, and the codebase offers three:
 
-1. **A size cap with eviction on insert.** See `personalSpotlightCache.evictForInsert()`, which drops
+1. **Size cap with eviction on insert**: See `personalSpotlightCache.evictForInsert()`, which drops
    expired entries first and then oldest-inserted.
-2. **A gate that prevents the entry from being created at all.** Preferred when the answer is
+2. **Creation gate**: Preferred when the answer is
    uniform across a coarser key. See the personal spotlight gate below.
-3. **The emergency clearer**, which is reactive rather than continuous. See
+3. **Emergency clearer**: Reactive rather than continuous. See
    [Emergency Memory Cleanup](#emergency-memory-cleanup).
 
 `clearExpiredEntries()` in `shortTermMemoryCache.ts` is the only expired-entry sweeper in the
@@ -63,7 +63,7 @@ duplicate a finer record while adding to that file's growth. The database row is
 not exist, since removing the monitoring agent left host memory with no queryable series.
 
 The database insert is fire-and-forget and never rejects: a telemetry sample must not be able to
-break the interval that produces it. It is deliberately **not** retried, because for a 5-minute
+break the interval that produces it. It is deliberately not retried, because for a 5-minute
 sample a retry adds load to a connection pool at exactly the moment the pool is already failing.
 
 Retention rides the same write path, pruning at most once per `METRIC_SAMPLE_PRUNE_INTERVAL_MS` and
@@ -238,16 +238,16 @@ the next refresh window to reclaim a few hundred KB.
 
 ### 14b) Channel system prompt cache (`channelPromptCache.ts`)
 
-- **Scope:** per `(server_id, channel_disc_id)`: one entry per channel that may carry an override
-- **Value:** `{ prompt, mode }` (`append`/`replace`) for the per-channel system prompt, or `null`
-- **Negative caching:** channels with no override cache `null` so DM channels and unconfigured channels cost a single cheap lookup
+- **Scope**: per `(server_id, channel_disc_id)`: one entry per channel that may carry an override
+- **Value**: `{ prompt, mode }` (`append`/`replace`) for the per-channel system prompt, or `null`
+- **Negative caching**: channels with no override cache `null` so DM channels and unconfigured channels cost a single cheap lookup
 - Default TTL: `TOMORI_STATE_CACHE_TTL_MS` in `src/constants/cacheTtl.ts` (10 minutes)
 - Backed by the standalone `channel_prompt_overrides` table; `ChannelPromptRepository` invalidates the entry after each successful write/delete (`invalidateChannelPromptCache`). Mirrors the per-channel LLM override cache (`channelLlmCache.ts`).
 
 ### 15) Persona sprite cache (`personaSpriteCache.ts`)
 
-- **Scope:** per `persona_id`
-- **Value:** ordered `persona_sprites` rows used by prompt context and render-modifier resolution
+- **Scope**: per `persona_id`
+- **Value**: ordered `persona_sprites` rows used by prompt context and render-modifier resolution
 - Default TTL: `TOMORI_STATE_CACHE_TTL_MS` (10 minutes)
 - Backed by `persona_sprites`; `PersonaSpriteRepository` invalidates after successful add/replace/delete.
 - Related operational limits:
@@ -257,11 +257,11 @@ the next refresh window to reclaim a few hundred KB.
 
 ### 15b) Persona sprite message cache (`personaSpriteMessageCache.ts`)
 
-- **Scope:** per Discord `message_disc_id`
-- **Value:** the `persona_sprite_messages` mapping row, or `null` (negative entry) when the
+- **Scope**: per Discord `message_disc_id`
+- **Value**: the `persona_sprite_messages` mapping row, or `null` (negative entry) when the
   message has no sprite mapping. Most persona webhook messages are plain sends, so caching
   the miss avoids re-querying them every turn
-- Entries are **immutable** (a sent message's sprite never changes), so the cache needs no
+- Entries are immutable (a sent message's sprite never changes), so the cache needs no
   invalidation; the TTL only bounds memory (120 minutes)
 - Expired entries are swept on the write path at most once every 10 minutes. Expiry is otherwise
   lazy (an entry is dropped only when that message is looked up again), so without the sweep the TTL
@@ -275,20 +275,20 @@ the next refresh window to reclaim a few hundred KB.
 
 ### 16) Persona workflow avatar session cache (transient, in `utils/discord/ui/personaWorkflow.ts`)
 
-Unlike the caches above, this one is **not** stored in `src/utils/cache/`. It is an
+Unlike the caches above, this one is not stored in `src/utils/cache/`. It is an
 ephemeral `Map<number, AvatarCacheEntry>` owned by one
 `runPersonaPickerWorkflow(...)` invocation and discarded when that workflow returns.
 
-- **Scope:** the complete persona workflow started by one slash command, including picker
+- **Scope**: the complete persona workflow started by one slash command, including picker
   navigation and every explicit retry directive
-- **Key:** absolute persona index within the workflow's current `personas` array
-- **Value:** `{ type: "url"; url: string }` for public/fallback URLs, or
+- **Key**: absolute persona index within the workflow's current `personas` array
+- **Value**: `{ type: "url"; url: string }` for public/fallback URLs, or
   `{ type: "buffer"; buffer: Buffer }` for local-disk avatars attached to Discord
-- **Purpose:** resolve each avatar once and reuse it across page navigation, modal
+- **Purpose**: resolve each avatar once and reuse it across page navigation, modal
   cancel/timeout recovery, validation retries, and transaction-loop re-entry
-- **Owner:** the workflow runner creates the cache before its internal retry loop and passes
+- **Owner**: the workflow runner creates the cache before its internal retry loop and passes
   the same instance to the low-level renderer on every iteration
-- **Lifetime:** when the runner returns `selected`, `cancelled`, `timeout`, `error`, or
+- **Lifetime**: when the runner returns `selected`, `cancelled`, `timeout`, `error`, or
   `fatal`, it releases the cache; an internal `retryPersonaWorkflow()` directive retains it
 
 Command code must not import `AvatarSessionCache`, construct the map, or pass
@@ -317,15 +317,15 @@ unchanged; a removal, addition, or reorder clears the map before the next picker
 
 Two maps, deliberately keyed at different granularities.
 
-- **Gate:** `serverId -> { hasAny, expiresAt }`, bounded by guild count
-- **Result:** `serverId:userId:channelDiscId -> { result, expiresAt }`, the highest-cardinality key
+- **Gate**: `serverId -> { hasAny, expiresAt }`, bounded by guild count
+- **Result**: `serverId:userId:channelDiscId -> { result, expiresAt }`, the highest-cardinality key
   in the cache layer
 - Default TTL: `CACHE_TTL_MS` (5 minutes), applied to both maps
 - Hard cap: `MAX_ENTRIES` (2000) on the result map
 - API: `getCachedPersonalSpotlightStatus`, `invalidatePersonalSpotlightCache`
 
 A read consults the gate before the triple. When a server has no spotlight rows, the gate answers
-`null` and **no triple entry is created**, so a server that never uses the feature contributes one
+`null` and no triple entry is created, so a server that never uses the feature contributes one
 entry instead of one per user per channel. Misses are cached as `null` (an unconfigured spotlight
 must not hit the database on every message), which is what made the unbounded triple key expensive
 before the gate existed.

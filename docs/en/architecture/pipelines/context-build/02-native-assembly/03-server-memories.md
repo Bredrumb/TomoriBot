@@ -4,7 +4,7 @@ title: "02.3: Server Memories"
 
 Persona-scoped long-term server memories.
 
-**File:** `src/utils/text/context/memories.ts:28-100`
+- **File**: `src/utils/text/context/memories.ts:28-100`
 
 ## Mission
 

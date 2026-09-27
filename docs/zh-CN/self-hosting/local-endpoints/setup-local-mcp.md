@@ -10,7 +10,7 @@ sidebar:
 不一样：
 
 :::caution[仅限自部署]
-本地 MCP 服务器**只在自部署实例上受支持**。公开托管的 bot 出于安全原因要求 HTTPS，并会拦截本地与私有地址，所以它无法访问跑在 `localhost` 或你局域网里的服务器。
+本地 MCP 服务器只在自部署实例上受支持。公开托管的 bot 出于安全原因要求 HTTPS，并会拦截本地与私有地址，所以它无法访问跑在 `localhost` 或你局域网里的服务器。
 :::
 
 ## 1. 运行一个本地 MCP 服务器
@@ -23,7 +23,7 @@ npx -y <some-mcp-server> --port 3000
 
 确切的命令取决于你要运行哪个服务器。记下它打印出来的 URL 和传输路径（通常类似 `http://localhost:3000/sse`）。
 
-TomoriBot 自己的工具链要求主机上有 **Node.js v20+** 可供 MCP 工具使用。
+TomoriBot 自己的工具链要求主机上有 Node.js v20+ 可供 MCP 工具使用。
 
 ## 2. 在 Discord 里注册它
 

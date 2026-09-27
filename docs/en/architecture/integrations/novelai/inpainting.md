@@ -57,7 +57,7 @@ The trade-off is precision: a bounding box covers more area than the exact targe
 
 ### Elliptical Mask Shape
 
-Instead of filling the bounding box as a rectangle, we inscribe an **ellipse** within the padded bounding box:
+Instead of filling the bounding box as a rectangle, we inscribe an ellipse within the padded bounding box:
 
 - **Diffusion models expect organic shapes**: NAI's inpainting model was trained on masks from brush strokes, lasso selections, and other organic tools: not perfect rectangles. A rectangular mask creates an unnatural latent-space discontinuity that the model reproduces as a visible edge.
 - **Curved boundaries blend naturally**: An ellipse's varying distance from the content center gives the model a more gradual transition to work with during denoising.
@@ -65,14 +65,14 @@ Instead of filling the bounding box as a rectangle, we inscribe an **ellipse** w
 
 ### Latent Grid Quantization (Critical)
 
-The mask is **quantized to 1/8th resolution** before being sent to NAI. This is the single most important step for avoiding halo artifacts:
+The mask is quantized to 1/8th resolution before being sent to NAI. This is the single most important step for avoiding halo artifacts:
 
 ```
 Full-res mask → downsample to ceil(w/64)*8 × ceil(h/64)*8 (nearest-neighbor)
              → upsample back to full resolution (nearest-neighbor, V4 only)
 ```
 
-**Why this matters:** NAI's diffusion model operates in latent space at 1/8th pixel resolution. When you send a full-resolution mask, the model downsamples it internally, and any mask edges that don't align to the 8×8 latent grid produce intermediate grey values. These grey values tell the model to *partially* redraw, creating a visible halo ring at the mask boundary.
+- **Why this matters**: NAI's diffusion model operates in latent space at 1/8th pixel resolution. When you send a full-resolution mask, the model downsamples it internally, and any mask edges that don't align to the 8×8 latent grid produce intermediate grey values. These grey values tell the model to *partially* redraw, creating a visible halo ring at the mask boundary.
 
 Pre-quantizing with nearest-neighbor interpolation ensures every mask pixel snaps to the latent grid. The resulting mask looks "blocky" at full resolution, but this is correct: it matches exactly what the model sees internally.
 
@@ -80,7 +80,7 @@ This approach was derived from the open-source [ComfyUI_NAIDGenerator](https://g
 
 ### RGBA Mask Format
 
-The mask is encoded as an **RGBA PNG** rather than a simple RGB black/white PNG:
+The mask is encoded as an RGBA PNG rather than a simple RGB black/white PNG:
 
 | Pixel type | R | G | B | A |
 |-----------|---|---|---|---|

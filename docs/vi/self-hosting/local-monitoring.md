@@ -15,7 +15,7 @@ docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up -d
 Lệnh này sẽ:
 - Khởi chạy TomoriBot cùng PostgreSQL (trên cổng 15432 cho DB)
 - Khởi chạy Grafana trên cổng 3000 với nguồn dữ liệu PostgreSQL được cấu hình tự động
-- Cung cấp sẵn bảng điều khiển **TomoriBot Overview**
+- Cung cấp sẵn bảng điều khiển TomoriBot Overview
 - Kết nối cả hai dịch vụ trên cùng một mạng Docker
 
 Truy cập Grafana tại [http://localhost:3000](http://localhost:3000):
@@ -24,7 +24,7 @@ Truy cập Grafana tại [http://localhost:3000](http://localhost:3000):
 
 ## Bảng điều khiển được cung cấp sẵn
 
-Bảng điều khiển **TomoriBot Overview** xuất hiện tự động và không cần thiết lập thêm. Các panel của bảng điều khiển theo dõi bộ nhớ tiến trình,
+Bảng điều khiển TomoriBot Overview xuất hiện tự động và không cần thiết lập thêm. Các panel của bảng điều khiển theo dõi bộ nhớ tiến trình,
 số lượng mục bộ nhớ đệm, lỗi mỗi giờ, mức sử dụng token theo model, hoạt động theo giờ, các lệnh hàng đầu, ngôn ngữ
 người dùng, đám mây cảm xúc, cùng các preset và model đang được sử dụng.
 

@@ -4,7 +4,7 @@ title: "03: Chat Disposition"
 
 Terminal handler for non-run dispositions.
 
-**File:** `src/utils/chat/admission.ts:378-385`
+- **File**: `src/utils/chat/admission.ts:378-385`
 
 ## Mission
 
@@ -60,12 +60,12 @@ After this stage runs:
   message. An accepted `"queued"` admission has already enqueued work and is
   replayed by the channel-lock stage.
 - The original `messageCreate` event has been fully consumed.
-- Channel state (locks, queues, self-reply chain) is **not** mutated here;
+- Channel state (locks, queues, self-reply chain) is not mutated here;
   stage 02 made any required mutations already.
 
 ## Extension points
 
-**Internal: log-only terminal handler.** This is the natural seam if the
+- **Internal: log-only terminal handler**: this is the natural seam if the
 project ever needs to:
 
 - Emit metrics (`disposition_count{disposition="blocked", reason="rate_limit"}`)

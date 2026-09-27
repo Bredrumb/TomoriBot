@@ -74,6 +74,16 @@ describe("render modifier parser", () => {
     expect(result?.body).toBe("hi");
   });
 
+  it("consumes balanced formatting around a sprite label", () => {
+    for (const opening of ["`", "**", "*", "__", "_"]) {
+      const result = parseLeadingRenderModifier(`${opening}Ren (smug):${opening} hi`, ["Ren"]);
+      expect(result?.modifier).toBe("smug");
+      expect(result?.body).toBe("hi");
+    }
+    expect(parseLeadingRenderModifier("Ren（smug）：hi", ["Ren"])?.body).toBe("hi");
+    expect(parseLeadingRenderModifier("**Ren (smug): hi", ["Ren"])).toBeNull();
+  });
+
   it("does not parse other speakers", () => {
     expect(parseLeadingRenderModifier("Other (Obonya): hi", ["Ren"])).toBeNull();
     expect(parseLeadingRenderModifier("Other: Ren (Obonya): hi", ["Ren", "Tomori"])).toBeNull();

@@ -4,7 +4,7 @@ title: "07: Discord Delivery"
 
 Delivers a normalized text segment to Discord, applying typing simulation and routing through webhooks for persona mode.
 
-**Files:**
+- **Files**:
 - `StreamMessageDelivery.sendSegment`: `src/utils/discord/stream/messageDelivery.ts:154-194`
 - `StreamUiUpdater.sendSinglePayload`: `src/utils/discord/stream/uiUpdater.ts:51-~230`
 
@@ -22,7 +22,7 @@ native Discord sticker as a reply for queued turns or directly to the channel
 otherwise. Webhook failure falls back to the native bot sticker send, and a
 final sticker-send failure is logged without failing the completed turn.
 
-**`StreamMessageDelivery.sendSegment()`** makes the delivery-mode decision:
+`StreamMessageDelivery.sendSegment()` makes the delivery-mode decision:
 
 - **Aggregated mode** (`HumanizerDegree.NONE`): the segment is queued into
   `state.pendingAggregatedText` via `queueAggregatedSegment()`. Aggregated text is only sent to
@@ -43,7 +43,7 @@ final sticker-send failure is logged without failing the completed turn.
     every 250 ms and returns early if a stop is pending.
   - **Immediate** (no simulation): `sendChunksImmediate()` sends all chunks back-to-back.
 
-**`StreamUiUpdater.sendSinglePayload()`** executes the Discord API call for a single message
+`StreamUiUpdater.sendSinglePayload()` executes the Discord API call for a single message
 payload. It handles:
 
 - **Send-message-limit enforcement**: if `state.messageSentCount >= config.send_message_limit`
@@ -60,7 +60,7 @@ payload. It handles:
   `sendWebhookReplyNotice()`. This covers the main persona too whenever a sprite pushes it onto the
   webhook path; the notice is gated on webhook delivery, not on `is_alter`. Sprite identity
   overrides (carrying a `spriteRecord`) still get the notice since the persona is speaking as itself;
-  **copied** identities (impersonating a user or another persona) are excluded, because a notice
+  copied identities (impersonating a user or another persona) are excluded, because a notice
   posted under the disguise would attribute the reply to the wrong speaker.
 - **Delivered-identity recording**: after every successful send, the identity Discord actually
   saw is recorded per channel in `channelDeliveryContinuity.ts`: the webhook identity on a
@@ -111,7 +111,7 @@ The message carries a single `Show Markdown` button (`createShowMarkdownButtonRo
 `src/utils/discord/markdownTableButton.ts`), following the same collector pattern as the
 `Fallback Used` notice:
 
-- Pressing it replies **ephemerally** with the table's original Markdown inside a
+- Pressing it replies ephemerally with the table's original Markdown inside a
   ` ```markdown ` fence, so a viewer can copy the source the image was rendered from.
 - Source text is read from `markdownTableCache` (keyed by message ID) on each press rather than
   captured in the collector closure, so the collector does not pin every rendered table's source in
@@ -154,9 +154,9 @@ exception, a span containing a newline at `LIGHT`/`MEDIUM`, is described under H
 
 ### Emoji isolation and runs
 
-By default, every custom emoji block is **isolated**: flushed into its own Discord message rather
+By default, every custom emoji block is isolated: flushed into its own Discord message rather
 than carried inline with surrounding text. Consecutive emojis are merged into a single
-"emoji-run" message **iff** their normalized names share the same prefix (length set by the
+"emoji-run" message if and only if their normalized names share the same prefix (length set by the
 `EMOJI_RUN_PREFIX_LENGTH` constant in `chunkProcessor.ts`, 3 characters; the regex `[^a-z0-9]` strips separators before slicing).
 This produces Discord's large-emoji rendering for reaction-style messages, while keeping
 unrelated emoji packs in separate messages.
@@ -220,7 +220,7 @@ and `?...` are never stripped or split; full-width `、`/`，`/`！`/`？` have 
 CJK prose has no spaces. Every rule classifies by character script, never by the user's locale,
 because a persona can reply in a language other than the user's preference: lowercasing applies to
 every cased script (accented Latin, Cyrillic, Greek) and leaves uncased scripts unchanged, and
-sender prefixes and inline code are protected in any script. Any comma/mark inside `**bold**`, `*italic*`, `~~strikethrough~~`,
+sender prefixes and inline code are protected in any script. Any comma/mark inside bold, italic, or strikethrough markup,
 `||spoiler||`, a `"quoted"` span or any `PAIRED_QUOTE_MARKS` pair, a parenthesized aside, or a
 `[markdown link](url)` is also left untouched, so a flush can never sever formatting across two
 messages. More messages per reply means a server's `send_message_limit` is reached sooner; that

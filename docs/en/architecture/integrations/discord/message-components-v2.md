@@ -122,10 +122,10 @@ Buttons must be placed inside an [Action Row](#action-row) or a [Section](#secti
 
 Buttons come in various styles to convey different types of actions. These styles also define what fields are valid for a button.
 
-- Non-link and non-premium buttons **must** have a `custom_id`, and cannot have a `url` or a `sku_id`.
-- Link buttons **must** have a `url`, and cannot have a `custom_id`
+- Non-link and non-premium buttons must have a `custom_id`, and cannot have a `url` or a `sku_id`.
+- Link buttons must have a `url`, and cannot have a `custom_id`
 - Link buttons do not send an interaction to the app when clicked
-- Premium buttons **must** contain a `sku_id`, and cannot have a `custom_id`, `label`, `url`, or `emoji`.
+- Premium buttons must contain a `sku_id`, and cannot have a `custom_id`, `label`, `url`, or `emoji`.
 - Premium buttons do not send an interaction to the app when clicked
 
 ##### Button Styles
@@ -596,7 +596,7 @@ When sent in a message, pingable mentions (@user, @role, etc) present in this co
 
 ### TomoriBot convention: container titles
 
-TomoriBot renders the leading "title" line of every Components V2 container (status, confirmation, persona picker, persona results, memory/task notices) as a Markdown **H3 heading** via the shared `formatContainerTitle` helper in `src/utils/discord/ui/interactionCore.ts`. Keep title locale strings **plain text** (an emoji prefix is fine); do not embed `###` or `**` in them, or the heading will double up. Body text, section sub-headings, and footers are unaffected.
+TomoriBot renders the leading "title" line of every Components V2 container (status, confirmation, persona picker, persona results, memory/task notices) as a Markdown H3 heading via the shared `formatContainerTitle` helper in `src/utils/discord/ui/interactionCore.ts`. Keep title locale strings plain text (an emoji prefix is fine); do not embed `###` or `**` in them, or the heading will double up. Body text, section sub-headings, and footers are unaffected.
 
 Memory and scheduled-task notices use `buildNoticeContainer` in `src/utils/discord/ui/interactionCore.ts`. The old embed title maps to the H3 title, the old embed description maps to a Text Display, and the old embed footer maps to muted `-#` subtext after a separator. When the memory/task body is truncated, the Secondary "Expand" button is rendered as an Action Row inside the same container; the ephemeral full-content reveal remains a separate classic embed reply.
 
@@ -605,7 +605,7 @@ Memory and scheduled-task notices use `buildNoticeContainer` in `src/utils/disco
 Persistent and categorized control panels follow a standardized four-tier text hierarchy to maintain consistent structure across desktop and mobile clients:
 
 - **Page and Major-Section Headings (`###`)**: Used for page titles, category headers, and major section counts (for example `### Whitelisted Channels \`(3)\``). Heading depth does not exceed `###`.
-- **Nested Subsection Labels (`**Bold**`)**: Used for named sub-sections within a page where additional heading tags would create excessive vertical spacing or hit Discord client heading limitations.
+- **Nested Subsection Labels**: used for named sub-sections within a page where additional heading tags would create excessive vertical spacing or hit Discord client heading limitations.
 - **Plain Text Prose**: Used for section descriptions, guidance explanations, populated-section semantic descriptions, and empty-state copy. Explanatory prose is never quoted, keeping it distinct from configured values. Populated list sections explain what their entries mean before rendering quote rows. Avoid prose em dashes in panel copy; use parentheticals where compact metadata is useful.
 - **Quote Rows (`>`)**: Used for current configuration values, semantic status lines (such as `> 🟢 ...`), and populated entity rows (such as channels, users, or roles) instead of bulleted lists. Because Discord mentions (`<@id>`, `<#id>`, `<@&id>`) already encode snowflake IDs, entity rows omit redundant raw IDs beside mentions. Metadata such as persona interaction restrictions uses parentheticals (for example `(mute)` or `(block)`) instead of em dashes. Multi-line entity details (such as per-channel cooldown settings) remain inside the same quote block on subsequent lines.
 
@@ -1022,9 +1022,9 @@ and have an optional customizable accent color bar.
 ## Unfurled Media Item
 
 An Unfurled Media Item is a piece of media, represented by a URL, that is used within a component. It can be
-constructed via either uploading media to Discord, or by referencing external media via **a direct link** to the asset.
+constructed via either uploading media to Discord, or by referencing external media via a direct link to the asset.
 
-Info: While the structure below is the full representation of an Unfurled Media Item, **only the `url` field is settable by developers** when making requests that utilize this structure.
+Info: While the structure below is the full representation of an Unfurled Media Item, only the `url` field is settable by developers when making requests that utilize this structure.
 All other fields will be automatically populated by Discord.
 
 ###### Unfurled Media Item Structure
@@ -1057,15 +1057,15 @@ retype the numbers.
 
 | Bound | Value | Notes |
 |---|---|---|
-| Total components | **40** | Counted **recursively**: top-level layout components, nested children, and Section accessories all count. Top-level array length is not the measure. |
-| Text Display total | **4,000 codepoints** | Summed across every `TextDisplay.content` in the message. Button labels and select placeholders do **not** count toward it; they have their own per-slot ceilings. |
-| Action Row | one select, or at most **5** buttons | Never a mixture. |
+| Total components | 40 | Counted recursively: top-level layout components, nested children, and Section accessories all count. Top-level array length is not the measure. |
+| Text Display total | 4,000 codepoints | Summed across every `TextDisplay.content` in the message. Button labels and select placeholders do not count toward it; they have their own per-slot ceilings. |
+| Action Row | one select, or at most 5 buttons | Never a mixture. |
 | Section | 1 to 3 Text Displays, exactly one accessory | The accessory must be a supported Button or Thumbnail. |
 | String Select | 1 to 25 options | Option label, value, and description at most 100; placeholder at most 150; `minValues`/`maxValues` coherent with the option count. |
 | Button | label at most 80 | Interactive `custom_id` 1 to 100 and unique within the message; link URL at most 512. |
 | Media description | at most 1,024 | Where TomoriBot emits one. |
 
-Length is measured in **Unicode codepoints**, matching Discord's backend, not in UTF-16 code units. Use
+Length is measured in Unicode codepoints, matching Discord's backend, not in UTF-16 code units. Use
 `getDiscordTextLength` and `truncateDiscordText` from `@/utils/text/discordTextLimits`, which is deliberately
 free of any discord.js import so tool execution paths can budget text without loading the Discord client
 runtime. `truncateDiscordText` walks grapheme clusters, so it never splits a surrogate pair or a combining
@@ -1085,7 +1085,7 @@ hidden count.** The transport budget is a presentation constraint, not a data co
 
 ### Page budgets are measured, not guessed
 
-A page derives its dynamic text budget by subtracting its **measured** fixed chrome from the message
+A page derives its dynamic text budget by subtracting its measured fixed chrome from the message
 allowance, rather than subtracting a hand-tuned constant. A guessed reserve cannot be distinguished from a
 correct one by a validity test, since both pass, and it rots silently the moment a line of prose is added or a
 locale's wording grows. `tests/unit/discord/configPanelTextBudget.test.ts` asserts that each page at stored
@@ -1100,9 +1100,9 @@ is checked once wherever it is delivered from.
 
 Behavior differs by environment on purpose:
 
-- Outside production the guard **throws** `ComponentsV2LimitError` carrying the violations, so a broken panel
+- Outside production the guard throws `ComponentsV2LimitError` carrying the violations, so a broken panel
   fails loudly in tests and development.
-- In production it logs a **redacted** structured diagnostic and delivers a minimal localized Components V2
+- In production it logs a redacted structured diagnostic and delivers a minimal localized Components V2
   error payload in place of the invalid one. The diagnostic carries the path, component type, observed value,
   limit, and code. It never carries stored prompt, tag, memory, receipt, or endpoint text.
 

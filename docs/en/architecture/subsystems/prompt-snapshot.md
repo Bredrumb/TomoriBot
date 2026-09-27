@@ -9,7 +9,7 @@ The prompt-snapshot command produces a runtime-faithful dump of the exact prompt
 1. Takes a snapshot of the channel's recent message history (respecting the persona's `message_fetch_limit`).
 2. Resolves the target persona (main or alter) via a modal picker.
 3. Assembles the full context using the same `buildContext()` pipeline the live chat uses: preset routing, `/context-note` depth injection, conditioning logs, memories, documents, presence, everything.
-4. Serializes the result to either a human-readable **text** format or a provider-native **JSON** format.
+4. Serializes the result to either a human-readable text format or a provider-native JSON format.
 5. Sends the file to the invoking user via DM (or as an ephemeral attachment if DMs are closed).
 6. Posts sampling / request config alongside the snapshot so users can reproduce the call parameters.
 
@@ -25,8 +25,8 @@ The snapshot mirrors the real `messageCreate → tomoriChat` pipeline as closely
 
 | Aspect | Respected? | Notes |
 | --- | --- | --- |
-| `/refresh` reset marker | ✅ | Uses `sliceMessagesAtResetMarker()`: history starts **after** the marker. |
-| `/compact_refresh` marker | ✅ | Same slicer: history starts **at** the marker (compact summary becomes the new opener). |
+| `/refresh` reset marker | ✅ | Uses `sliceMessagesAtResetMarker()`: history starts after the marker. |
+| `/compact_refresh` marker | ✅ | Same slicer: history starts at the marker (compact summary becomes the new opener). |
 | `FULL` privacy users filtered | ✅ | Skipped from history, matching `tomoriChat.ts`. |
 | Reference-driven profiles | ✅ | Calls the same `prepareParticipantContext()` API as live chat. Equivalent sanitized visible authors, persona triggers, eligible user aliases/mentions, synthetic identities, and bridges produce the same ordered discovery plan and rendered participant item without changing response routing. Profiles are hydrated through the same required active-persona scope, including lineage memories, main/alter reminder filters, persona self-tasks, exposure policy, and triggerer snapshot fast paths. Snapshot keeps an independent request scope because it builds one selected persona. |
 | Webhook persona attribution | ✅ | Webhooks whose username matches an alter persona are re-attributed. |
@@ -65,9 +65,9 @@ Flat-text, annotation-heavy. Each context block is prefixed with a locator heade
 
 Sub-section markers (`== Subtitle ==`) appear inside composite blocks like `KNOWLEDGE_USERS_IN_CONVERSATION` that pull from multiple sources.
 
-> **Important:** The `=== === ` and `== ==` markers are annotations: they are NOT part of the prompt actually sent to the LLM. The DM body that ships with the file explicitly states this.
+> Important: The `=== === ` and `== ==` markers are annotations: they are NOT part of the prompt actually sent to the LLM. The DM body that ships with the file explicitly states this.
 
-Tools are **omitted** from the TXT format: users are directed to re-run with `format: JSON` if they need them.
+Tools are omitted from the TXT format: users are directed to re-run with `format: JSON` if they need them.
 
 ### JSON (`format: JSON`)
 
@@ -80,7 +80,7 @@ Shapes:
 | `google`, `vertex`, `vertexexpress` | `{model, systemInstruction, contents[], generation_config, safety_settings, thinking_config?}` |
 | `anthropic` | `{model, system, messages[], temperature?, top_p?, top_k?, max_tokens, stop_sequences, thinking?, output_config?}` |
 | `openrouter`, `deepseek`, `zai`, `zaicoding`, `nvidia` | `{model, messages[], temperature?, top_p?, top_k?, frequency_penalty?, presence_penalty?, min_p?, max_tokens, stop, reasoning?/thinking?}` |
-| `custom`, `novelai` (fallback) | `{model, messages[]}` + sampling params, OpenAI-vision array content form for media, optional `reasoning_effort` / `thinking_directive`, **one consolidated `role: "system"` entry** |
+| `custom`, `novelai` (fallback) | `{model, messages[]}` + sampling params, OpenAI-vision array content form for media, optional `reasoning_effort` / `thinking_directive`, one consolidated `role: "system"` entry |
 
 #### Custom fallback consolidation
 

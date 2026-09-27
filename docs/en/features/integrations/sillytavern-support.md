@@ -14,8 +14,8 @@ sidebar:
 ---
 
 TomoriBot can import two things from [SillyTavern](https://github.com/SillyTavern/SillyTavern)
-that you may already have: **Prompt Manager presets** (how the prompt is laid out) and
-**character cards** (the character itself). This is a niche feature for ST users, so if you've
+that you may already have: Prompt Manager presets (how the prompt is laid out) and
+character cards (the character itself). This is a niche feature for ST users, so if you've
 never used SillyTavern, you can skip this page.
 
 ## Character Card Import
@@ -47,7 +47,7 @@ to. For the exact conversion and field mapping, see the
 ## Prompt Presets
 <!-- anchor: prompt-presets -->
 
-A SillyTavern Prompt Manager preset controls the **layout** of the prompt. Use `/config` > Plugins
+A SillyTavern Prompt Manager preset controls the layout of the prompt. Use `/config` > Plugins
 > SillyTavern Presets to import presets, inspect enabled nodes, switch between presets, or return
 to the normal layout.
 
@@ -96,5 +96,5 @@ Common surprises when a preset seems ignored:
   are not supported. Legacy text-completion presets import through a best-effort path that
   drops ST-only blocks (scenario, anchors, stop strings, …).
 
-In `/help`, choose **Integrations**, then `SillyTavern Presets`, for the in-Discord reference. For the import engine internals, see
+In `/help`, choose `Integrations`, then `SillyTavern Presets`, for the in-Discord reference. For the import engine internals, see
 the [preset-system architecture](/architecture/integrations/sillytavern/preset-system/).

@@ -324,10 +324,10 @@ bun run restore-backup --from backups/backup_2024-01-15_14-30-45
 ```
 
 `bun run backup:personas` is a narrower export: persona presets and per-persona server
-memories only, across all servers. It **must** be re-imported manually via `/persona import`
-and **cannot** be used with `restore-backup` (that would cause primary-key conflicts).
+memories only, across all servers. It must be re-imported manually via `/persona import`
+and cannot be used with `restore-backup` (that would cause primary-key conflicts).
 
-TomoriBot also takes **automatic startup backups** in non-production environments, and a full
+TomoriBot also takes automatic startup backups in non-production environments, and a full
 restore requires the `pgvector` extension to be present on the target database. Both are
 covered in detail under [Safe Migration](/self-hosting/safe-migration/), along with a manual `pg_dump` /
 `pg_restore` procedure if you prefer to drive the tooling directly.

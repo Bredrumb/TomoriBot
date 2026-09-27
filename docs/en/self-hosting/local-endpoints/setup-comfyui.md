@@ -7,10 +7,10 @@ sidebar:
 
 TomoriBot can generate images and videos through your own
 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) instance. It drives ComfyUI by
-submitting an **API-format workflow** with your prompt/size substituted in, then polls
+submitting an API-format workflow with your prompt/size substituted in, then polls
 ComfyUI's `/history` endpoint until the output is ready.
 
-This guide covers installing/running ComfyUI and registering it. For **authoring or editing**
+This guide covers installing/running ComfyUI and registering it. For authoring or editing
 a TomoriBot-compatible workflow (the `{TOMORI_*}` placeholders), use the in-Discord deep
 dive, open `/help`, choose `Features`, then `Custom Endpoints`, and use the
 [workflow README](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows)
@@ -23,26 +23,26 @@ See the [local endpoints hub](/self-hosting/local-endpoints/).
 
 ## Hardware requirements
 
-Image and video generation is **GPU-bound**: the heavy cost is **VRAM** (your graphics card's
+Image and video generation is GPU-bound: the heavy cost is VRAM (your graphics card's
 memory, separate from system RAM), set by the model checkpoint your workflow loads, not by
 ComfyUI itself. An NVIDIA GPU is strongly recommended. The two workflows TomoriBot ships are
 both modern, heavier-than-SDXL models:
 
 | Bundled workflow | Base model | Practical VRAM | Notes |
 |---|---|---|---|
-| **Anima v1** (image) | Qwen-Image (~20B), fp8 | ~16 GB floor · 24 GB comfortable | Text encoder + VAE add ~8-10 GB of overhead. Below 16 GB, use a GGUF build + `--lowvram`. |
-| **WAN i2v loop** (video) | Wan 2.2 14B, fp8 + 4-step LightX2V LoRAs | ~16 GB workable · 24 GB+ comfortable | Heaviest option expect **minutes per clip**. Offload the UMT5 text encoder to RAM (`t5_cpu`, needs 24 GB+ system RAM) on smaller cards. |
+| Anima v1 (image) | Qwen-Image (~20B), fp8 | ~16 GB floor · 24 GB comfortable | Text encoder + VAE add ~8-10 GB of overhead. Below 16 GB, use a GGUF build + `--lowvram`. |
+| WAN i2v loop (video) | Wan 2.2 14B, fp8 + 4-step LightX2V LoRAs | ~16 GB workable · 24 GB+ comfortable | Heaviest option expect minutes per clip. Offload the UMT5 text encoder to RAM (`t5_cpu`, needs 24 GB+ system RAM) on smaller cards. |
 
-Both bundled checkpoints are already **fp8-quantized** to fit consumer cards. If you have less
+Both bundled checkpoints are already fp8-quantized to fit consumer cards. If you have less
 VRAM, swap the UNET for a smaller quant and enable ComfyUI's `--lowvram` / CPU offload. CPU-only diffusion is
 impractical (many minutes per image, worse for video) and can exceed TomoriBot's poll window,
 so a GPU is effectively required for regular use.
 
 :::tip[Going lower: pick a GGUF quant]
-**Quantization** stores each model weight in fewer bits to cut VRAM and disk use, at a small
+Quantization stores each model weight in fewer bits to cut VRAM and disk use, at a small
 precision cost. The bundled fp8 files are a mild form of it, and to shrink further, download a
-**GGUF** build of the model from Hugging Face: the code in names like `Q4_K_M` / `Q5_K_M` is the
-bits-per-weight, and **4-bit (Q4) or 5-bit (Q5) is the usual sweet spot** with most of the quality
+GGUF build of the model from Hugging Face: the code in names like `Q4_K_M` / `Q5_K_M` is the
+bits-per-weight, and 4-bit (Q4) or 5-bit (Q5) is the usual sweet spot with most of the quality
 for a fraction of the fp8/fp16 footprint. Below 4-bit shrinks more but degrades quickly. Loading
 GGUF UNETs in ComfyUI needs the [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) custom
 node.
@@ -59,7 +59,7 @@ python main.py --listen 0.0.0.0 --port 8188
 ```
 
 `--listen 0.0.0.0` matters if TomoriBot runs in Docker or on a different machine: the
-default binds to loopback only. Confirm reachability **from the machine the bot runs on**:
+default binds to loopback only. Confirm reachability from the machine the bot runs on:
 
 ```sh
 curl http://127.0.0.1:8188/system_stats
@@ -70,7 +70,7 @@ ComfyUI web UI to confirm it works end to end before wiring up TomoriBot.
 
 ## 2. Grab a TomoriBot workflow
 
-Download a ready-to-use **API-format** workflow. Examples can be found in the repo under
+Download a ready-to-use API-format workflow. Examples can be found in the repo under
 [`assets/comfyui-workflows/`](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows):
 
 | Workflow | Modes |
@@ -78,26 +78,26 @@ Download a ready-to-use **API-format** workflow. Examples can be found in the re
 | Anima v1 (image) : `tomoribot-anima-v1-comfyui.json` | `txt2img`, `img2img`, `inpaint` |
 | WAN i2v loop (video) : `tomoribot-wan-i2v-loop-video.json` | image-to-video |
 
-These are **API format** (the JSON ComfyUI exports via *Save (API Format)*), not the regular
+These are API format (the JSON ComfyUI exports via *Save (API Format)*), not the regular
 UI-save format. If you author your own, it must contain the `{TOMORI_*}` placeholders
 TomoriBot substitutes (prompt, width/height, seed, reference images, etc.). See the workflow
-README and the `Custom Endpoints` page under **Providers** in `/help`.
+README and the `Custom Endpoints` page under `Providers` in `/help`.
 
 ## 3. Register it in Discord
 
-Run **`/providers`** (or `/personal providers`), choose `Add New Custom Endpoint`, and enter:
+Run `/providers` (or `/personal providers`), choose `Add New Custom Endpoint`, and enter:
 
 | Field | Value for ComfyUI |
 |-------|-------------------|
 | `endpoint_label` | A name you choose, e.g. `home-comfy` |
 | API Compatibility | `ComfyUI` |
-| `endpoint_url` | `http://127.0.0.1:8188` (root, **no** `/v1`) |
+| `endpoint_url` | `http://127.0.0.1:8188` (root, without `/v1`) |
 | `auth_token` | *(leave blank unless your ComfyUI is behind auth)* |
 
-After saving the connection, select it and use its model dropdown to add an Image or Video
-model. Enter the checkpoint's exact code name and **upload the workflow `.json`** you downloaded
-from Step 2. The model capability must match the workflow (image workflow → `image`, video
-workflow → `video`).
+After saving the connection, select it and choose `+ Add new Image Model` or `+ Add new Video Model`
+from the model dropdown. Enter the checkpoint's exact code name and upload the workflow `.json`
+downloaded from Step 2 into `ComfyUI Workflow`. The model capability must match the workflow (image
+workflow → `image`, video workflow → `video`).
 
 An image model also asks for its `Image Capabilities`: text to image, reference image,
 inpainting, and negative prompt. Tick only the modes your workflow actually implements, because

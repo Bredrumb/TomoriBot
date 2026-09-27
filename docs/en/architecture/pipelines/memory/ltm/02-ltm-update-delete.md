@@ -5,7 +5,7 @@ title: "LTM 02: Memory Update & Delete"
 LLM-initiated replacement or deletion of an existing persistent memory,
 identified by the `ID:N` shown in the LLM's context.
 
-**File:** `src/tools/functionCalls/updateLongTermMemoryTool.ts`: class
+- **File**: `src/tools/functionCalls/updateLongTermMemoryTool.ts`: class
 `UpdateLongTermMemoryTool`, tool name `update_long_term_memory`
 
 ## Mission

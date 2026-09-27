@@ -14,7 +14,7 @@ com o Modo de Gatilho Deliberado.
 Por padrão, ela responde quando você:
 
 - **Menciona ela**: `@TomoriBot`
-- **Responde** a uma mensagem dela (incluindo uma mensagem de webhook de uma persona)
+- Responde a uma mensagem dela (incluindo uma mensagem de webhook de uma persona)
 - **Usa uma palavra-gatilho**: qualquer palavra simples que você registrou, dita em qualquer lugar de uma mensagem
 - **Usa `/respond`**: solicita uma resposta manualmente
 
@@ -60,12 +60,12 @@ apenas sobre o que foi dito. Esse contexto inclui:
 - **Quem está na conversa**: nomes de exibição dos participantes, como mencioná-los,
   quaisquer tags de aparência física e seus lembretes pendentes.
 - **O que alguém está fazendo (presença)**: a atividade no Discord de um usuário: o que está **jogando**,
-  **transmitindo**, **ouvindo** (por exemplo, uma faixa e artista no Spotify), **assistindo** ou seu
+  transmitindo, ouvindo (por exemplo, uma faixa e artista no Spotify), assistindo ou seu
   status personalizado.
 
 A presença é restringida por privacidade: só é compartilhada para usuários no nível de
-privacidade `Mínimo` (o padrão; veja `/personal config`) e somente quando o bot tem a intent
-*Guild Presences* do Discord habilitada. Usuários que aumentam sua privacidade, ou instâncias
+privacidade `Nenhum` (o padrão; veja `/personal config`) e somente quando o bot tem a intent
+`Guild Presences` do Discord habilitada. Usuários que aumentam sua privacidade, ou instâncias
 de hospedagem própria executando sem essa intent, simplesmente não terão sua atividade
 revelada para ela.
 
@@ -86,7 +86,7 @@ vez de uma assistente convocada.
 <!-- anchor: deliberate-trigger-mode -->
 
 Se as pessoas dizem o nome de uma persona com frequência em conversas normais, palavras-gatilho
-simples podem acioná-la por acidente. O **Modo de Gatilho Deliberado (DTM)** resolve isso
+simples podem acioná-la por acidente. O Modo de Gatilho Deliberado (DTM) resolve isso
 fazendo com que palavras-gatilho simples deixem de contar como um acionamento explícito.
 
 Quando o DTM está ativado:
@@ -95,7 +95,7 @@ Quando o DTM está ativado:
 - Menções do Discord ainda funcionam
 - Respostas ainda funcionam
 - `/respond` ainda funciona
-- **Palavras-gatilho simples não a acionam mais**
+- Palavras-gatilho simples não a acionam mais
 
 Isso força uma invocação deliberada em vez de uma ativação acidental.
 
@@ -111,7 +111,7 @@ Em `/help`, escolha `Comportamento` e depois `Modo de Gatilho Deliberado` para o
 
 :::note
 Não confunda `Modo de Gatilho Deliberado` (esta página, controla *como ela é acionada*) com
-**Modo de Ferramenta Deliberada**, que controla *quais ferramentas são expostas ao modelo* em um
+Modo de Ferramenta Deliberada, que controla *quais ferramentas são expostas ao modelo* em um
 determinado turno. Eles compartilham a abreviação "DTM" mas não têm relação. Veja
 [Ferramentas & Extensões](/pt-BR/features/capabilities/tools-and-extensions/#deliberate-tool-mode).
 :::

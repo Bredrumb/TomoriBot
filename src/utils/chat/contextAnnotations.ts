@@ -113,12 +113,18 @@ export function buildTailDirectiveMessage(directive: string | null | undefined):
   return buildCombinedTailDirectiveMessage([directive]);
 }
 
-export function buildSpeakerGuardRetryDirective(activePersonaName?: string | null): StructuredContextItem | null {
+export function buildSpeakerGuardRetryDirective(
+  activePersonaName?: string | null,
+  allowSpriteLabel = false,
+): StructuredContextItem | null {
   const normalizedPersonaName = compactWhitespace(activePersonaName ?? "") || process.env.DEFAULT_BOTNAME || "Tomori";
   const sanitizedPersonaName = normalizedPersonaName.replaceAll('"', "'");
 
+  const opening = allowSpriteLabel
+    ? `Start with "${sanitizedPersonaName}:", or with "${sanitizedPersonaName} ({sprite label}):" if you are using a listed sprite.`
+    : `Start exactly with "${sanitizedPersonaName}:".`;
   return buildTailDirectiveMessage(
-    `Your previous attempt started as the wrong speaker and was discarded. Reply only as ${sanitizedPersonaName}. Start exactly with "${sanitizedPersonaName}:". Do not start with any other speaker name or write dialogue for anyone else.`,
+    `Your previous attempt started as the wrong speaker and was discarded. Reply only as ${sanitizedPersonaName}. ${opening} Do not start with any other speaker name or write dialogue for anyone else.`,
   );
 }
 

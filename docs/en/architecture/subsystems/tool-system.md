@@ -106,9 +106,9 @@ consult the curated official docs when the runtime report is insufficient.
 
 ### Connection resilience
 
-Guild MCP servers are connected lazily and pooled (`guildMcpManager`), on the critical path of tool-gathering before each generation. Each connect attempt tries transports in order (Smithery Connect (for `*.run.tools`), then StreamableHTTP, then SSE) using a **fresh MCP client per attempt** (reusing one client across attempts triggers the SDK's "Already connected to a transport" error and breaks the fallback). Every attempt is bounded by `GUILD_MCP_CONNECT_TIMEOUT_MS`.
+Guild MCP servers are connected lazily and pooled (`guildMcpManager`), on the critical path of tool-gathering before each generation. Each connect attempt tries transports in order (Smithery Connect (for `*.run.tools`), then StreamableHTTP, then SSE) using a fresh MCP client per attempt (reusing one client across attempts triggers the SDK's "Already connected to a transport" error and breaks the fallback). Every attempt is bounded by `GUILD_MCP_CONNECT_TIMEOUT_MS`.
 
-A **circuit breaker** quarantines any server that fails to connect for `GUILD_MCP_FAILURE_COOLDOWN_MS` (default 5 min), so a single unreachable server cannot re-pay its full connect timeout on every generation (and every fallback-model attempt), which would otherwise blow the stream inactivity budget and stall chat for that guild. The quarantine is cleared early on a successful connect or when the server is removed/disabled.
+A circuit breaker quarantines any server that fails to connect for `GUILD_MCP_FAILURE_COOLDOWN_MS` (default 5 min), so a single unreachable server cannot re-pay its full connect timeout on every generation (and every fallback-model attempt), which would otherwise blow the stream inactivity budget and stall chat for that guild. The quarantine is cleared early on a successful connect or when the server is removed/disabled.
 
 ## NovelAI
 

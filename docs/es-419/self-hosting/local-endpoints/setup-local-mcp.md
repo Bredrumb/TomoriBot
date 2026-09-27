@@ -8,11 +8,11 @@ Esta traducción se proporciona para tu comodidad. La versión en inglés es la 
 
 Los servidores [MCP](https://modelcontextprotocol.io/) amplían a TomoriBot con herramientas externas. Los servidores MCP en línea
 (HTTPS) funcionan en cualquier instancia (consulta
-[Herramientas y extensiones](/es-419/features/capabilities/tools-and-extensions/#mcp-servers)). Los servidores MCP **locales** son
+[Herramientas y extensiones](/es-419/features/capabilities/tools-and-extensions/#mcp-servers)). Los servidores MCP locales son
 diferentes:
 
 :::caution[Solo para autoalojamiento]
-Los servidores MCP locales **solo son compatibles en instancias autoalojadas**. El bot público alojado
+Los servidores MCP locales solo son compatibles en instancias autoalojadas. El bot público alojado
 requiere HTTPS y bloquea direcciones locales o privadas por seguridad, por lo que no puede comunicarse con un servidor en
 `localhost` o en tu red de área local.
 :::
@@ -29,11 +29,11 @@ npx -y <some-mcp-server> --port 3000
 El comando exacto depende del servidor que estés ejecutando. Toma nota de la URL y la ruta de transporte que
 imprime (comúnmente algo como `http://localhost:3000/sse`).
 
-Las herramientas propias de TomoriBot esperan que **Node.js v20+** esté disponible para las herramientas MCP en el host.
+Las herramientas propias de TomoriBot esperan que Node.js v20+ esté disponible para las herramientas MCP en el host.
 
 ## 2. Regístralo en Discord
 
-Abre `/config` > Complementos > Servidores MCP, elige `Agregar MCP`, apunta el campo **URL**
+Abre `/config` > Complementos > Servidores MCP, elige `Agregar MCP`, apunta el campo URL
 a tu servidor local, y deja el campo obligatorio `Tipo de servidor` en su valor predeterminado `Uso general`:
 
 ```text

@@ -36,7 +36,7 @@ O TomoriBot trata a fala como uma capacidade de endpoint personalizado. Motores 
 
 1. Escolha um motor nos cartões acima e configure seu wrapper a partir de `servers/tts/`.
 2. Em `/providers`, escolha `Adicionar Novo Endpoint Personalizado` e use a Compatibilidade de API `tts-clone`.
-3. Selecione o endpoint salvo e use seu menu suspenso de modelo para adicionar seu modelo de Speech, Voice Source Mode e Script Markup.
+3. Selecione o endpoint salvo e use seu menu suspenso de modelo para adicionar seu modelo de Speech, Modo de Fonte de Voz e Script Markup.
 4. Abra `/config` > Models > Switch Models e selecione o modelo de Speech registrado.
 
 ## Acesso de rede
@@ -53,7 +53,7 @@ Cada servidor lê sua própria variável de porta (`CHATTERBOX_PORT`, `QWEN3TTS_
 Para motores de clone, adicione e atribua uma amostra de voz por persona:
 
 1. Prepare um clipe limpo com um locutor e sem música de fundo. Cada motor documenta o melhor comprimento por conta própria, de 3 a 30 segundos dependendo do modelo; os guias por motor abaixo trazem os números.
-2. Abra `/config` em Models > TTS Parameters & Voices e faça o upload da amostra. Qualquer formato de áudio é aceito; o TomoriBot o converte para WAV mono, até 130 segundos.
+2. Abra `/config` em Models > Parâmetros TTS e Vozes e faça o upload da amostra. Qualquer formato de áudio é aceito; o TomoriBot o converte para WAV mono, até 130 segundos.
 3. Forneça uma transcrição correspondente quando o motor se beneficiar disso. O Fish S2 Pro encaminha a transcrição de referência armazenada para a solicitação de clonagem, e o VoxCPM2 a usa para uma Ultimate Cloning de maior fidelidade.
 4. Abra `/config` em Persona > Voice, depois escolha a persona e a amostra de voz.
 
@@ -63,14 +63,14 @@ O limite de tamanho do upload e o teto de duração são independentes, e a veri
 
 Para Qwen3-TTS, MOSS-VoiceGenerator, IrodoriTTS ou VoxCPM2 VoiceDesign, pule a amostra de áudio e use Persona > Voice em `/config` para salvar uma descrição de voz em linguagem natural para a persona. O CosyVoice 3 usa o modo Clone com uma amostra de referência e aceita orientações de entrega pontuais através de `voice_instructions`.
 
-Os usuários do ElevenLabs devem escolher `Adicionar Novo Provedor` e **ElevenLabs** em `/providers`; isso registra os endpoints de fala e transcrição juntos.
+Os usuários do ElevenLabs devem escolher `Adicionar Novo Provedor` e ElevenLabs em `/providers`; isso registra os endpoints de fala e transcrição juntos.
 
 O TomoriBot remove a sintaxe de emoji personalizado do Discord, como `:pepega:` ou `<:pepega:123456789012345678>`, dos scripts de voz gerados antes da síntese. Emojis Unicode também são removidos a menos que o endpoint de fala use marcação de emoji, o que é destinado ao IrodoriTTS. As tags entre colchetes são preservadas para endpoints como Chatterbox Turbo e Fish S2 Pro quando o seu Script Markup está definido para `Tags em Colchetes`.
 
-O VoxCPM2 usa **Plain** Script Markup. Seus controles de Voice Design e estilo de fala trafegam pelo campo `instruct` do TomoriBot, e o wrapper do VoxCPM2 os converte para a sintaxe de controle em linguagem natural nativa do modelo, entre parênteses.
+O VoxCPM2 usa Plain Script Markup. Seus controles de Voice Design e estilo de fala trafegam pelo campo `instruct` do TomoriBot, e o wrapper do VoxCPM2 os converte para a sintaxe de controle em linguagem natural nativa do modelo, entre parênteses.
 
-O CosyVoice 3 também usa **Plain** Script Markup. Ele mapeia referências apoiadas por transcrição para clonagem zero-shot, referências sem transcrição para clonagem interlinguística, e `voice_instructions` para seu caminho condicionado por instrução. Tags entre colchetes inline são removidas porque as instruções do CosyVoice se aplicam a todo o enunciado.
+O CosyVoice 3 também usa Plain Script Markup. Ele mapeia referências apoiadas por transcrição para clonagem zero-shot, referências sem transcrição para clonagem interlinguística, e `voice_instructions` para seu caminho condicionado por instrução. Tags entre colchetes inline são removidas porque as instruções do CosyVoice se aplicam a todo o enunciado.
 
 ## Comparação de Motores
 
-Para benchmarks empíricos de latência lado a lado, reprodução de amostras de áudio e uma matriz detalhada de recursos comparando todos os motores suportados, consulte **[Comparação de Motores TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/comparison/)**.
+Para benchmarks empíricos de latência lado a lado, reprodução de amostras de áudio e uma matriz detalhada de recursos comparando todos os motores suportados, consulte [Comparação de Motores TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/comparison/).

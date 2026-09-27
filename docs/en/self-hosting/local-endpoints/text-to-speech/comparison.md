@@ -20,21 +20,21 @@ This page provides empirical benchmark results, synthesis timings, and audio com
 
 ### Performance & Audio Comparison
 
-Timings report both the **full generation time** (total wall-clock seconds from request to finished audio) and the **Real-Time Factor (RTF)**, defined as generation time divided by audio duration:
+Timings report both full generation time (total wall-clock seconds from request to finished audio) and Real-Time Factor (RTF), defined as generation time divided by audio duration:
 
 - **RTF < 1.0 (bold):** The engine generates speech faster than real time (for example, `0.50× RTF` renders a 10-second clip in 5 seconds). Only these engines could keep up with a live voice call, which TomoriBot does not implement today.
 - **RTF > 1.0:** Generation takes longer than the spoken audio. TomoriBot sends each voice message as a complete file, so a higher RTF only means a longer wait.
 
 | Engine | Windows Native<sup>(1)</sup><br/>(RTX 4070 Ti SUPER) | Linux / WSL2 | macOS<br/>(Apple Silicon) | Audio Sample |
 |---|---|---|---|---|
-| **[Fish Audio S2 Pro](/en/self-hosting/local-endpoints/text-to-speech/fishs2/)** | ~8-10 min<sup>(2)</sup><br/>*(~65× RTF)* | Untested | Untested | <audio controls preload="none" src="/audio/tts/fish-s2-pro.wav"></audio> |
-| **[Chatterbox (Turbo, Default)](/en/self-hosting/local-endpoints/text-to-speech/chatterbox/)** | **~5.0s** *(8.7s clip)*<br/>**0.57× RTF** | Untested | Untested | <audio controls preload="none" src="/audio/tts/chatterbox-turbo.wav"></audio> |
-| **[Chatterbox (Nano)](/en/self-hosting/local-endpoints/text-to-speech/chatterbox/)** | **~3.0s** *(8.0s clip)*<br/>**0.38× RTF** | Untested | Untested | <audio controls preload="none" src="/audio/tts/chatterbox-nano.wav"></audio> |
-| **[Chatterbox (Standard)](/en/self-hosting/local-endpoints/text-to-speech/chatterbox/)** | **~6.0s** *(7.8s clip)*<br/>**0.77× RTF** | Untested | Untested | <audio controls preload="none" src="/audio/tts/chatterbox.wav"></audio> |
-| **[MOSS-TTS](/en/self-hosting/local-endpoints/text-to-speech/moss/)** | ~12.0s *(8.8s clip)*<br/>1.36× RTF | Untested | Untested | <audio controls preload="none" src="/audio/tts/moss-tts.wav"></audio> |
-| **[CosyVoice 3](/en/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)** | **~6.0s** *(13.9s clip)*<br/>**0.43× RTF** | Untested | Untested | <audio controls preload="none" src="/audio/tts/cosy-voice-3.wav"></audio> |
-| **[VoxCPM2](/en/self-hosting/local-endpoints/text-to-speech/voxcpm2/)** | ~8.0s *(7.4s clip)*<br/>1.09× RTF | Untested | Untested | <audio controls preload="none" src="/audio/tts/voxcpm2.wav"></audio> |
-| **[Qwen3-TTS](/en/self-hosting/local-endpoints/text-to-speech/qwen3tts/)** | ~10.0s *(9.2s clip)*<br/>1.09× RTF | Untested | Untested | <audio controls preload="none" src="/audio/tts/qwen3-tts.wav"></audio> |
+| [Fish Audio S2 Pro](/en/self-hosting/local-endpoints/text-to-speech/fishs2/) | ~8-10 min<sup>(2)</sup><br/>*(~65× RTF)* | Untested | Untested | <audio controls preload="none" src="/audio/tts/fish-s2-pro.wav"></audio> |
+| [Chatterbox (Turbo, Default)](/en/self-hosting/local-endpoints/text-to-speech/chatterbox/) | ~5.0s *(8.7s clip)*<br/>0.57× RTF | Untested | Untested | <audio controls preload="none" src="/audio/tts/chatterbox-turbo.wav"></audio> |
+| [Chatterbox (Nano)](/en/self-hosting/local-endpoints/text-to-speech/chatterbox/) | ~3.0s *(8.0s clip)*<br/>0.38× RTF | Untested | Untested | <audio controls preload="none" src="/audio/tts/chatterbox-nano.wav"></audio> |
+| [Chatterbox (Standard)](/en/self-hosting/local-endpoints/text-to-speech/chatterbox/) | ~6.0s *(7.8s clip)*<br/>0.77× RTF | Untested | Untested | <audio controls preload="none" src="/audio/tts/chatterbox.wav"></audio> |
+| [MOSS-TTS](/en/self-hosting/local-endpoints/text-to-speech/moss/) | ~12.0s *(8.8s clip)*<br/>1.36× RTF | Untested | Untested | <audio controls preload="none" src="/audio/tts/moss-tts.wav"></audio> |
+| [CosyVoice 3](/en/self-hosting/local-endpoints/text-to-speech/cosyvoice3/) | ~6.0s *(13.9s clip)*<br/>0.43× RTF | Untested | Untested | <audio controls preload="none" src="/audio/tts/cosy-voice-3.wav"></audio> |
+| [VoxCPM2](/en/self-hosting/local-endpoints/text-to-speech/voxcpm2/) | ~8.0s *(7.4s clip)*<br/>1.09× RTF | Untested | Untested | <audio controls preload="none" src="/audio/tts/voxcpm2.wav"></audio> |
+| [Qwen3-TTS](/en/self-hosting/local-endpoints/text-to-speech/qwen3tts/) | ~10.0s *(9.2s clip)*<br/>1.09× RTF | Untested | Untested | <audio controls preload="none" src="/audio/tts/qwen3-tts.wav"></audio> |
 
 - <sup>(1)</sup> **Test Environment**: NVIDIA GeForce RTX 4070 Ti SUPER (16 GB GDDR6X, Ada Lovelace) on Windows 11 (native execution) using a 26.6-second 24 kHz mono reference audio sample with matching verbatim transcript.
 - <sup>(2)</sup> **Fish Audio S2 Pro**: Windows execution runs in uncompiled eager mode (~65× RTF) due to CUDA kernel launch latency across its 76 layer evaluations per token. Running on Linux or WSL2 with OpenAI Triton compiler fusion (`torch.compile`) is recommended to avoid this dispatch stall.
@@ -51,7 +51,7 @@ Timings report both the **full generation time** (total wall-clock seconds from 
 
 | Engine | Windows Native<sup>(1)</sup><br/>(RTX 4070 Ti SUPER) | Linux / WSL2 | macOS<br/>(Apple Silicon) | Audio Sample |
 |---|---|---|---|---|
-| **[IrodoriTTS](/en/self-hosting/local-endpoints/text-to-speech/irodoritts/)** | **~4.0s** *(8.5s clip)*<br/>**0.47× RTF** | Untested | Untested | <audio controls preload="none" src="/audio/tts/irodori.wav"></audio> |
+| [IrodoriTTS](/en/self-hosting/local-endpoints/text-to-speech/irodoritts/) | ~4.0s *(8.5s clip)*<br/>0.47× RTF | Untested | Untested | <audio controls preload="none" src="/audio/tts/irodori.wav"></audio> |
 
 - <sup>(1)</sup> Measured in the same RTX 4070 Ti SUPER Windows 11 test environment.
 
@@ -59,7 +59,7 @@ Timings report both the **full generation time** (total wall-clock seconds from 
 
 ## Which Engine Should You Choose?
 
-- **Choose [Fish Audio S2 Pro](/en/self-hosting/local-endpoints/text-to-speech/fishs2/)** if you want the highest possible vocal fidelity, fine-grained expressive bracket tags (`[whisper]`, `[laughs]`, `[sigh]`), and you have access to **Linux or WSL2** where Triton compiler fusion can be enabled.
+- **Choose [Fish Audio S2 Pro](/en/self-hosting/local-endpoints/text-to-speech/fishs2/)** if you want the highest possible vocal fidelity, fine-grained expressive bracket tags (`[whisper]`, `[laughs]`, `[sigh]`), and you have access to Linux or WSL2 where Triton compiler fusion can be enabled.
 - **Choose [Chatterbox (Turbo / Nano / Standard)](/en/self-hosting/local-endpoints/text-to-speech/chatterbox/)** for English voice cloning with small VRAM footprint. Nano (~3.0s, 0.38× RTF) provides maximum speed on CPU/GPU, Turbo (~5.0s, 0.57× RTF) supports paralinguistic event tags (`[laughter]`, `[sigh]`), and Standard (~6.0s, 0.77× RTF) enables creative CFG guidance and emotional exaggeration tuning.
 - **Choose [MOSS-TTS](/en/self-hosting/local-endpoints/text-to-speech/moss/)** for experimental multi-modal voice cloning and text-described English/Chinese voice generation.
 - **Choose [CosyVoice 3](/en/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)** if you need high-quality multilingual zero-shot cloning with natural language delivery direction (`"Speak in English with excitement"`).
@@ -71,7 +71,7 @@ Timings report both the **full generation time** (total wall-clock seconds from 
 
 ## Compare the Engines
 
-All TomoriBot TTS servers currently return a complete WAV to the bot. "Streaming path" means the upstream model or a separate serving backend has one; it does **not** mean Discord voice-chat streaming is implemented. Sizes are model parameters, **not** VRAM or download sizes, and the 16 GB column is setup guidance rather than a measured peak. The speed column describes each engine's intended trade-off; the measured timings above come from one Windows machine and do not rank the engines on Linux.
+All TomoriBot TTS servers currently return a complete WAV to the bot. "Streaming path" means the upstream model or a separate serving backend has one; it does not mean Discord voice-chat streaming is implemented. Sizes are model parameters, not VRAM or download sizes, and the 16 GB column is setup guidance rather than a measured peak. The speed column describes each engine's intended trade-off; the measured timings above come from one Windows machine and do not rank the engines on Linux.
 
 The "Reference clip" column reports the reference-audio length each engine documents or applies in its runtime, so it mixes published guidance with limits read from upstream code. Most engines silently truncate to their window rather than refusing the request, which is why the column says what the engine reads rather than only what it accepts. It is upstream behavior, not a measurement taken here, and it is independent of TomoriBot's upload ceiling.
 

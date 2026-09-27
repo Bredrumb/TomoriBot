@@ -91,7 +91,7 @@ bun run launch --help        # ver todos los indicadores
 ## Extras opcionales (la "instalación completa" manual)
 <!-- anchor: optional-extras-the-manual-full-install -->
 
-La ruta **Instalación completa** del [asistente de instalación](/es-419/self-hosting/setup-wizard/) agrega
+La ruta Instalación completa del [asistente de instalación](/es-419/self-hosting/setup-wizard/) agrega
 cuatro extras livianos encima de la instalación base. Ninguno es necesario para ejecutar el bot, pero
 cada uno desbloquea una función. Si estás instalando a mano, agrega el que quieras:
 
@@ -141,7 +141,7 @@ seguridad; consulta [Migración segura](/es-419/self-hosting/safe-migration/) pa
 enfriamiento/recordatorio). Docker Compose de este repositorio ya lo configura.
 
 :::caution[No es necesario para recordatorios ni activadores]
-`pg_cron` es **puramente de mantenimiento**, ya que solo limpia filas obsoletas. La entrega de
+`pg_cron` es puramente de mantenimiento, ya que solo limpia filas obsoletas. La entrega de
 recordatorios y los activadores aleatorios se ejecutan en la propia aplicación, así que esas funciones
 funcionan con o sin `pg_cron`.
 :::

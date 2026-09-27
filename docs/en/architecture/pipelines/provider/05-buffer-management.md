@@ -4,7 +4,7 @@ title: "05: Buffer Management"
 
 Accumulates streamed text into semantic buffers and flushes discrete segments to stage 06 when a delivery boundary is detected.
 
-**File:** `src/utils/discord/stream/bufferFlusher.ts:35-342`
+- **File**: `src/utils/discord/stream/bufferFlusher.ts:35-342`
 
 ## Mission
 
@@ -58,7 +58,7 @@ this stage protect that:
 
 ### Parenthesis balance and multi-message splitting
 
-`hasIncompleteSemanticMarkers` counts only **unmatched openers**: the running total clamps at zero,
+`hasIncompleteSemanticMarkers` counts only unmatched openers: the running total clamps at zero,
 so a `)` with no `(` before it is discarded rather than banked. Both halves of that matter, because a
 `true` here suppresses the newline break in `processStreamBufferContent` and defers the buffer to the
 final flush.
@@ -147,11 +147,11 @@ No return value. All output is produced as side effects on `state` and via calls
 ## Side effects
 
 - **`state.buffer`**: mutated: text appended, segments flushed (string truncated).
-- **`state.isInsideCodeBlock`** / **`state.isInsideThinkBlock`** / **`state.isInsideDetailsBlock`**:
+- `state.isInsideCodeBlock` / `state.isInsideThinkBlock` / `state.isInsideDetailsBlock`:
   toggled when block boundaries are detected.
-- **`state.thinkBlockBuffer`** / **`state.detailsBlockBuffer`**: accumulated while inside their
+- `state.thinkBlockBuffer` / `state.detailsBlockBuffer`: accumulated while inside their
   respective blocks; drained when the block closes.
-- **`state.thoughtRawSegments`** / **`state.detailsSegments`**: appended to when a think/details
+- `state.thoughtRawSegments` / `state.detailsSegments`: appended to when a think/details
   block closes or when `flushFinalBuffer()` captures an unclosed block.
 - **`context.currentTurnModelParts`**: non-empty, non-whitespace text is pushed as
   `{ text: content }` parts so the provider adapter can replay accumulated output when

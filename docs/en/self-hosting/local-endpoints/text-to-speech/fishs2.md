@@ -13,19 +13,19 @@ Fish S2 Pro supports bracket expression tags such as `[whisper]`, `[excited]`, a
 
 Fish Speech code and S2 Pro model weights are distributed under the Fish Audio Research License. Research and non-commercial use are permitted under its terms; commercial use requires a separate Fish Audio license.
 
-TomoriBot does not redistribute the model weights. Each self-hosting user downloads Fish S2 Pro directly from Hugging Face and is responsible for complying with the Fish Audio Research License. The required attribution is: **Built with Fish Audio**.
+TomoriBot does not redistribute the model weights. Each self-hosting user downloads Fish S2 Pro directly from Hugging Face and is responsible for complying with the Fish Audio Research License. The required attribution is: Built with Fish Audio.
 
 ## Hardware & Operating System
 
 > [!IMPORTANT]
-> **Use Linux or WSL2 for Fish Speech:** Fish Audio officially targets Linux and WSL2. Fish S2 Pro uses a Dual-Autoregressive (Dual-AR) architecture (36 slow transformer layers + 10 fast codebook passes = 76 layer evaluations per token). On Linux, OpenAI Triton can compile this nested loop into fused GPU kernels (`torch.compile(backend="inductor")`), which upstream benchmarks demonstrate enables real-time synthesis on Linux server GPUs. The wrapper leaves compilation off by default, so set `FISH_S2_COMPILE=1` to use it.
+> Note: Fish Audio officially targets Linux and WSL2. Fish S2 Pro uses a Dual-Autoregressive (Dual-AR) architecture (36 slow transformer layers + 10 fast codebook passes = 76 layer evaluations per token). On Linux, OpenAI Triton can compile this nested loop into fused GPU kernels (`torch.compile(backend="inductor")`), which upstream benchmarks demonstrate enables real-time synthesis on Linux server GPUs. The wrapper leaves compilation off by default, so set `FISH_S2_COMPILE=1` to use it.
 >
-> On native Windows, Triton is unsupported, forcing PyTorch into uncompiled eager mode with over 120,000 sequential CUDA kernel dispatches through the Windows WDDM driver. This causes a severe dispatch stall, slowing generation down to **~8-10 minutes** (~65s compute per second of audio) for the exact same clip. For usable inference, **run Fish S2 Pro inside Linux or WSL2**.
+> On native Windows, Triton is unsupported, forcing PyTorch into uncompiled eager mode with over 120,000 sequential CUDA kernel dispatches through the Windows WDDM driver. This causes a severe dispatch stall, slowing generation down to ~8-10 minutes (~65s compute per second of audio) for the exact same clip. For usable inference, run Fish S2 Pro inside Linux or WSL2.
 
 Recommended hardware:
 
 - **Linux or WSL2 (Strongly Recommended)**
-- NVIDIA GPU with **16 GB to 24 GB VRAM** (BF16 fits comfortably in ~16-18 GB VRAM with KV caching and offload)
+- NVIDIA GPU with 16 GB to 24 GB VRAM (BF16 fits comfortably in ~16-18 GB VRAM with KV caching and offload)
 - Python 3.12 recommended
 - `git`, `ffmpeg`, and the standard audio libraries required by Fish Speech
 
@@ -88,9 +88,9 @@ is shorter than a native Windows clip takes. Raise it in TomoriBot's `.env` (for
 ## Mandatory Reference Transcript
 
 > [!WARNING]
-> **Reference Text (`ref_text`) is required for voice cloning:** Fish S2 Pro's cross-attention mechanism requires the transcript of the reference audio to align phonetic tokens with acoustic codes.
+> Note: Reference text (`ref_text`) is required for voice cloning; Fish S2 Pro's cross-attention mechanism requires the transcript of the reference audio to align phonetic tokens with acoustic codes.
 >
-> If you upload a voice sample without providing its matching reference transcript, Fish Speech **silently drops the reference audio tokens** and falls back to random zero-reference speech. The TomoriBot Fish wrapper validates and rejects synthesis requests that lack reference text with a `400 Bad Request` to prevent accidental unconditioned generation.
+> If you upload a voice sample without providing its matching reference transcript, Fish Speech silently drops the reference audio tokens and falls back to random zero-reference speech. The TomoriBot Fish wrapper validates and rejects synthesis requests that lack reference text with a `400 Bad Request` to prevent accidental unconditioned generation.
 
 When adding a persona voice in `/config` under `Models > TTS Parameters & Voices`, always fill in the `Reference transcript` field with the verbatim text spoken in your reference audio clip.
 

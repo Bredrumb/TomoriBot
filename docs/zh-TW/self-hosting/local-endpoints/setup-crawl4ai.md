@@ -55,14 +55,14 @@ bun run launch --searxng --crawl4ai
 
 如果你偏好自己管理容器，請在 `.env` 保留 `CRAWL4AI_BASE_URL=http://localhost:11235/`，然後執行：
 
-**PowerShell：**
+PowerShell：
 
 ```powershell
 docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g `
   unclecode/crawl4ai:latest
 ```
 
-**Bash（Linux/macOS）：**
+Bash（Linux/macOS）：
 
 ```bash
 docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
@@ -83,7 +83,7 @@ docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
 
 ## 啟動順序（重要）
 
-TomoriBot 會在**啟動後第一次呼叫 `fetch_url`** 時探測伺服器健康狀態，並將結果快取 60 秒。如果第一次探測時容器還沒就緒，bot 會在下一次探測之前的一分鐘內將它視為無法使用。
+TomoriBot 會在啟動後第一次呼叫 `fetch_url` 時探測伺服器健康狀態，並將結果快取 60 秒。如果第一次探測時容器還沒就緒，bot 會在下一次探測之前的一分鐘內將它視為無法使用。
 
 對獨立 Docker 而言，請在啟動 TomoriBot 之前先啟動你的 Crawl4AI 容器。`bun run launch --crawl4ai` 已經幫你處理好了。
 
@@ -116,14 +116,14 @@ docker ps
 
 Crawl4AI 支援注入瀏覽器層級的 cookie，讓無頭瀏覽器在抓取網頁時看起來已經登入。這對需要工作階段才能看到內容的網站很實用（例如付費牆新聞、私人論壇、需要登入的儀表板）。
 
-`safe_http` 備援**不**支援 cookie 注入，cookie 只在 Crawl4AI 作用中時才生效。
+`safe_http` 備援不支援 cookie 注入，cookie 只在 Crawl4AI 作用中時才生效。
 
-> **限制：** Cookie 注入能繞過登入牆，但繞不過 bot 指紋辨識。具備積極反機器人偵測的網站（特別是 Twitter/X）會透過 canvas 與 WebGL 指紋辨識偵測無頭 Playwright，即使帶著有效的工作階段 cookie 也回傳空白頁面。Cookie 注入對只靠驗證把關的網站效果良好。
+> 限制： Cookie 注入能繞過登入牆，但繞不過 bot 指紋辨識。具備積極反機器人偵測的網站（特別是 Twitter/X）會透過 canvas 與 WebGL 指紋辨識偵測無頭 Playwright，即使帶著有效的工作階段 cookie 也回傳空白頁面。Cookie 注入對只靠驗證把關的網站效果良好。
 
 ### 取得你的 cookie
 
 1. 開啟瀏覽器並登入目標網站。
-2. 開啟 DevTools（`F12`）→ **Application** 分頁 → **Storage** → **Cookies** → 選取該網站的網域。
+2. 開啟 DevTools（`F12`）→ Application 分頁 → Storage → Cookies → 選取該網站的網域。
 3. 複製每個必要 cookie 的 `Value`（通常是工作階段權杖，請檢查該網站的 cookie 名稱）。
 
 ### Crawl4AI
@@ -145,7 +145,7 @@ CRAWL4AI_COOKIES_JSON=[{"name":"session","value":"YOUR_SESSION_TOKEN","domain":"
 | `domain` | 否 | 網域範圍（例如 `.x.com`）。為了正確性建議填寫。 |
 | `path` | 否 | 路徑範圍。省略時預設為 `/`。 |
 
-> **注意：** Cookie 值是敏感資料，請當作密碼看待。它們能取得你帳號的完整工作階段存取權。不要把 `.env` 提交到版本控制。
+> 注意： Cookie 值是敏感資料，請當作密碼看待。它們能取得你帳號的完整工作階段存取權。不要把 `.env` 提交到版本控制。
 
 ---
 

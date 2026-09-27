@@ -17,11 +17,11 @@ Hướng dẫn này sẽ dẫn dắt bạn từ bước đầu tiên đến tin 
 ### Bước 1: Mời bot
 
 Mời phiên bản công khai bằng nút bên dưới, sau đó chọn máy chủ bạn muốn thêm bot vào.
-Bạn cần có quyền **Quản lý máy chủ** (Manage Server) để thêm bot.
+Bạn cần có quyền Quản lý máy chủ (Quản lý máy chủ) để thêm bot.
 
 <div class="button-row">
   <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
-    **Mời TomoriBot**
+    Mời TomoriBot
   </LinkButton>
 </div>
 
@@ -29,21 +29,21 @@ Bạn cũng có thể nhắn tin trực tiếp (DM) cho bot. Các bước thiế
 
 ### Bước 2: Lấy khóa API
 
-TomoriBot không đi kèm bộ não AI riêng; bạn sẽ kết nối bộ não từ một **nhà cung cấp** thông qua **khóa API**. Bot hỗ trợ nhiều
+TomoriBot không đi kèm bộ não AI riêng; bạn sẽ kết nối bộ não từ một nhà cung cấp thông qua khóa API. Bot hỗ trợ nhiều
 nhà cung cấp và bạn chỉ cần một khóa để bắt đầu. Dưới đây là một số nhà cung cấp hiện được hỗ trợ:
 
 - **Google Gemini**: đa mục đích, có gói miễn phí, chạy được mọi tính năng. Khuyên dùng
   cho lần thiết lập đầu tiên của bạn.
 - **OpenRouter**: một khóa duy nhất, truy cập mọi model văn bản, video, hình ảnh và embedding mới nhất.
 - **NovelAI**: hình thức đăng ký thuê bao, tạo hình ảnh không kiểm duyệt, nhập vai và kể chuyện.
-- **DeepSeek**, **NVIDIA NIM**, **Anthropic**, **Vertex AI**, **Z.ai**, hoặc bất kỳ
-  endpoint **Custom** nào tương thích với OpenAI.
+- DeepSeek, NVIDIA NIM, Anthropic, Vertex AI, Z.ai, hoặc bất kỳ
+  endpoint Custom nào tương thích với OpenAI.
 
-Chạy lệnh `/help` trong Discord, chọn `Thiết lập`, sau đó chọn **Step 1: Get an API Key**, rồi chọn nhà cung cấp để xem cách lấy khóa API, hoặc
+Chạy lệnh `/help` trong Discord, chọn `Thiết lập`, sau đó chọn Step 1: Lấy API key, rồi chọn nhà cung cấp để xem cách lấy khóa API, hoặc
 xem [Nhà cung cấp & Model](/vi/features/setup-administration/providers-and-models/#api-keys) để có danh sách đầy đủ.
 
 <Aside type="caution">
-**Không bao giờ chia sẻ khóa API của bạn với bất kỳ ai**. Chỉ cung cấp khóa qua các lệnh slash của TomoriBot vì bot sẽ lưu trữ và mã hóa an toàn.
+Không bao giờ chia sẻ khóa API của bạn với bất kỳ ai. Chỉ cung cấp khóa qua các lệnh slash của TomoriBot vì bot sẽ lưu trữ và mã hóa an toàn.
 </Aside>
 
 ### Bước 3: Chạy thiết lập
@@ -57,7 +57,7 @@ sau đó nhấn `Hoàn tất thiết lập`:
   DM) để từng thành viên tự cung cấp nhà cung cấp cá nhân của riêng họ.
 - **Cài đặt ban đầu**: chọn một persona khởi đầu, phong cách phản hồi, múi giờ và system
   prompt mặc định.
-- **Chính sách** (chỉ dành cho instance có sẵn): chấp nhận Điều khoản dịch vụ và Chính sách quyền riêng tư trong cùng
+- Chính sách (chỉ dành cho instance có sẵn): chấp nhận Điều khoản dịch vụ và Chính sách quyền riêng tư trong cùng
   một hộp thoại.
 
 Không có gì được lưu trong khi bạn thao tác: bảng này chỉ là bản nháp, nút `Hoàn tất thiết lập` mới là thao tác mã hóa khóa,
@@ -65,12 +65,12 @@ khởi tạo cấu hình bot cho máy chủ và chuẩn bị để bot sẵn sà
 nháp, và bảng không được chạm vào sẽ tự động hết hạn. Mỗi máy chủ duy trì cấu hình
 độc lập của riêng mình.
 
-**Khuyên dùng:** chạy lệnh `/expressions initialize` sau đó để bot có thể sử dụng emoji và
+Khuyên dùng: chạy lệnh `/expressions initialize` sau đó để bot có thể sử dụng emoji và
 sticker tùy chỉnh của máy chủ một cách chính xác.
 
 ### Bước 4: Bắt đầu trò chuyện
 
-Chỉ cần **tag (mention)** bot hoặc **trả lời (reply)** một trong các tin nhắn của bot:
+Chỉ cần tag (mention) bot hoặc trả lời (reply) một trong các tin nhắn của bot:
 
 ```text
 @TomoriBot yo, what's up?
@@ -94,6 +94,6 @@ instance TomoriBot trên phần cứng của riêng bạn. Lựa chọn khuyên 
 
 <div class="button-row">
   <LinkButton href="/vi/self-hosting/" variant="secondary">
-    **Self-host TomoriBot**
+    Self-host TomoriBot
   </LinkButton>
 </div>

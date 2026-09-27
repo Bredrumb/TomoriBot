@@ -15,7 +15,7 @@ docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up -d
 這會：
 - 啟動 TomoriBot 與 PostgreSQL（資料庫連接埠為 15432）
 - 在連接埠 3000 啟動 Grafana，並自動設定好 PostgreSQL 資料來源
-- 佈建 **TomoriBot Overview** 儀表板
+- 佈建 TomoriBot Overview 儀表板
 - 讓兩個服務連上同一個 Docker 網路
 
 從 [http://localhost:3000](http://localhost:3000) 存取 Grafana：
@@ -24,7 +24,7 @@ docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up -d
 
 ## 佈建好的儀表板
 
-**TomoriBot Overview** 會自動出現，不需要任何設定。它的面板涵蓋行程記憶體、快取項目數、每小時錯誤數、依模型劃分的 token 用量、依小時劃分的活動量、熱門指令、使用者語系、情緒雲，以及目前使用中的預設集與模型。
+TomoriBot Overview 會自動出現，不需要任何設定。它的面板涵蓋行程記憶體、快取項目數、每小時錯誤數、依模型劃分的 token 用量、依小時劃分的活動量、熱門指令、使用者語系、情緒雲，以及目前使用中的預設集與模型。
 
 每個面板都只讀取任何安裝都存在的資料表，所以同一份儀表板在自架與雲端部署都能用。
 

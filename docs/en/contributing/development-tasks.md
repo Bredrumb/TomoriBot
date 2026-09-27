@@ -23,7 +23,7 @@ bun run db:lifecycle    # when schema.sql changed
   fresh initialization, backup and restore, and the maintenance scripts in a temporary database.
 - `bun run test <path>` runs selected files through the same disposable-database setup.
 
-**`bun run vl`** runs every gate and prints one verdict per gate. Its last line is for scripts:
+`bun run vl` runs every gate and prints one verdict per gate. Its last line is for scripts:
 `vl-status: PASS exit=0 pass=<n> warn=<n> fail=<n> skip=<n>`. Passing gates are silent and failing
 gates print everything; `--verbose` prints all output. To keep the output, redirect it to a file
 instead of piping through `grep` or `tail`, which replaces the gate's exit code with the filter's:
@@ -48,7 +48,7 @@ bun run vl > /tmp/vl.log 2>&1; echo "VL_EXIT=$?" >> /tmp/vl.log
 - After a write that affects cached reads, invalidate the cache keys, and only after the write
   succeeds. Never edit a cached object in place. See [Caching](/architecture/subsystems/caching/).
 
-**Constants and environment variables.** Name every magic number as a constant in the module that
+- **Constants and environment variables**: name every magic number as a constant in the module that
 owns it, with a comment when the value was measured or comes from an external limit. Make a value an
 environment variable only when it is a deployment choice: host resources, network behavior, external
 credentials or quotas, or an operator decision that differs between installations. Probabilities,

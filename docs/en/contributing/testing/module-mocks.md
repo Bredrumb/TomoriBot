@@ -37,9 +37,9 @@ object spread does not copy prototype members.
 
 How an export is neutralised depends on its kind, and the difference matters:
 
-- A **function** export becomes a proxy that switches back to the hoisted real
+- A function export becomes a proxy that switches back to the hoisted real
   function once the scope closes.
-- An **object** export (a repository singleton, a registry) keeps its genuine
+- An object export (a repository singleton, a registry) keeps its genuine
   identity. The overridden members are installed on the real object and restored
   from their pristine descriptors when the scope closes.
 

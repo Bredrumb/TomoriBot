@@ -5,7 +5,7 @@ aiGenerated: true
 
 O CosyVoice 3 é a atual geração do projeto de TTS (Text-to-Speech) multilíngue CosyVoice da Alibaba/QwenAudio. O TomoriBot encapsula o runtime oficial em `servers/tts/cosyvoice3/` e expõe a mesma interface `POST /synthesize` usada pelos outros endpoints de fala locais.
 
-O TomoriBot usa como padrão o checkpoint oficial **`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`**. Este é o lançamento atual do CosyVoice 3 recomendado pelos criadores (upstream), usa o modelo não quantizado normal e é pequeno o suficiente para rodar confortavelmente em uma GPU NVIDIA de 16 GB, mantendo intacto o design de baixa latência do CosyVoice.
+O TomoriBot usa como padrão o checkpoint oficial `FunAudioLLM/Fun-CosyVoice3-0.5B-2512`. Este é o lançamento atual do CosyVoice 3 recomendado pelos criadores (upstream), usa o modelo não quantizado normal e é pequeno o suficiente para rodar confortavelmente em uma GPU NVIDIA de 16 GB, mantendo intacto o design de baixa latência do CosyVoice.
 
 ## O que ele suporta
 
@@ -43,7 +43,7 @@ Para obter a melhor qualidade de clonagem comum, forneça tanto o áudio de refe
 
 ### Controles de estilo e emoção
 
-Registre o endpoint com a marcação de script (Script Markup) **Plain**. A direção de entrega (delivery direction) pertence ao campo `voice_instructions` global do endpoint, e não a tags arbitrárias de colchetes no meio da frase. Isso preserva o significado da instrução para toda a declaração e evita tratar um script como `[happy] Hello. [sad] Goodbye.` como duas instruções globais contraditórias. O suporte nativo a `[breath]` e `[laughter]` é intencionalmente adiado até que o TomoriBot possa anunciar uma capacidade exata de tag ciente do provedor.
+Registre o endpoint com a marcação de script (Script Markup) Plain. A direção de entrega (delivery direction) pertence ao campo `voice_instructions` global do endpoint, e não a tags arbitrárias de colchetes no meio da frase. Isso preserva o significado da instrução para toda a declaração e evita tratar um script como `[happy] Hello. [sad] Goodbye.` como duas instruções globais contraditórias. O suporte nativo a `[breath]` e `[laughter]` é intencionalmente adiado até que o TomoriBot possa anunciar uma capacidade exata de tag ciente do provedor.
 
 O campo `instruct` do `/synthesize` é passado para o condicionamento de instrução do CosyVoice 3. Os exemplos incluem `sound relieved but still tired`, `speak as quickly as possible` ou `speak quietly with restrained excitement`.
 
@@ -57,8 +57,8 @@ A interface TTS personalizada atual do TomoriBot espera uma resposta de áudio c
 
 Ponto de partida recomendado para o TomoriBot:
 
-- GPU NVIDIA com **16 GB de VRAM**
-- Python **3.10**
+- GPU NVIDIA com 16 GB de VRAM
+- Python 3.10
 - Driver NVIDIA recente compatível com CUDA 12
 - `git`
 - `ffmpeg` para normalização de amostra de voz do TomoriBot
@@ -105,7 +105,7 @@ O Windows nativo é fornecido como um caminho de "melhor esforço" (best-effort)
 .\servers\tts\cosyvoice3\.venv\Scripts\python.exe servers\tts\cosyvoice3\server.py
 ```
 
-Para o uso de GPU NVIDIA, **o WSL2 é recomendado**. Os requisitos atuais do upstream instalam a GPU ONNX Runtime no Linux, mas a CPU ONNX Runtime no Windows, então o WSL2 corresponde mais fielmente à configuração que o projeto CosyVoice otimiza e testa para obter baixa latência.
+Para o uso de GPU NVIDIA, o WSL2 é recomendado. Os requisitos atuais do upstream instalam a GPU ONNX Runtime no Linux, mas a CPU ONNX Runtime no Windows, então o WSL2 corresponde mais fielmente à configuração que o projeto CosyVoice otimiza e testa para obter baixa latência.
 
 ## Registrar no TomoriBot
 
@@ -114,7 +114,7 @@ Execute `/providers`, escolha `Adicionar Novo Endpoint Personalizado` (Adicionar
 - Capability: `Speech`
 - API Compatibility: `tts-clone`
 - Endpoint URL: `http://127.0.0.1:8017`
-- Voice Source Mode: `Clone`
+- Modo de Fonte de Voz: `Clone`
 - Script Markup: `Plain`
 - Supports Instruct: `Yes`
 
@@ -127,7 +127,7 @@ Em seguida, abra `/config` > Models > Switch Models e ative o endpoint de fala d
 Para a clonagem zero-shot normal:
 
 1. Prepare uma amostra limpa de 3 a 30 segundos com um locutor e pouco ou nenhum ruído de fundo.
-2. Abra `/config` em Models > TTS Parameters & Voices e envie a amostra.
+2. Abra `/config` em Models > Parâmetros TTS e Vozes e envie a amostra.
 3. Insira a transcrição correspondente quando possível. O CosyVoice 3 usa isso para o caminho zero-shot com suporte de transcrição, e ela é tokenizada como prefixo de prompt, então deve descrever o áudio que é realmente usado: os primeiros 30 segundos do clipe.
 4. Abra `/config` em Persona > Voice e atribua essa amostra à persona.
 
@@ -181,6 +181,6 @@ Use-os apenas depois que o servidor comum do PyTorch estiver funcionando. Para u
 
 ## Licença
 
-O repositório de código atual do CosyVoice é licenciado sob a **Apache License 2.0**, e o repositório Hugging Face `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` também está marcado como **Apache-2.0**.
+O repositório de código atual do CosyVoice é licenciado sob a Apache License 2.0, e o repositório Hugging Face `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` também está marcado como Apache-2.0.
 
 O model card upstream também contém um aviso (disclaimer) afirmando que o conteúdo exibido é para demonstração acadêmica e que alguns exemplos podem vir da internet. Uma discussão aberta upstream pede uma clarificação explícita sobre como esse aviso se relaciona com o uso comercial dos pesos. O TomoriBot não redistribui o modelo. Os usuários de hospedagem própria devem revisar as licenças e os termos do model card atuais do upstream para sua própria implementação, especialmente antes de qualquer uso comercial.

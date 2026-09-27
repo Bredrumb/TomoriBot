@@ -55,14 +55,14 @@ bun run launch --searxng --crawl4ai
 
 If you prefer to manage the container yourself, keep `CRAWL4AI_BASE_URL=http://localhost:11235/` in `.env` and run:
 
-**PowerShell:**
+PowerShell:
 
 ```powershell
 docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g `
   unclecode/crawl4ai:latest
 ```
 
-**Bash (Linux/macOS):**
+Bash (Linux/macOS):
 
 ```bash
 docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
@@ -83,7 +83,7 @@ Leave `CRAWL4AI_BASE_URL` unset. The `fetch_url` tool uses the guarded `safe_htt
 
 ## Starting Order (Important)
 
-TomoriBot probes server health on the **first `fetch_url` call after startup** and caches the result for 60 seconds. If the container isn't ready when that first probe fires, the bot treats it as unavailable for the next minute.
+TomoriBot probes server health on the first `fetch_url` call after startup and caches the result for 60 seconds. If the container isn't ready when that first probe fires, the bot treats it as unavailable for the next minute.
 
 For standalone Docker, start your Crawl4AI container before starting TomoriBot. `bun run launch --crawl4ai` already does this for you.
 
@@ -116,14 +116,14 @@ Then start TomoriBot as normal. Restarting `bun run dev` resets the in-memory he
 
 Crawl4AI supports injecting browser-level cookies so the headless browser appears already logged in when fetching a page. This is useful for sites that require a session to view content (e.g. paywalled news, private forums, login-gated dashboards).
 
-The `safe_http` fallback does **not** support cookie injection. Cookies only apply when Crawl4AI is active.
+The `safe_http` fallback does not support cookie injection. Cookies only apply when Crawl4AI is active.
 
-> **Limitation:** Cookie injection bypasses login walls but not bot fingerprinting. Sites with aggressive anti-bot detection (notably Twitter/X) detect headless Playwright via canvas/WebGL fingerprinting and serve empty pages even with valid session cookies. Cookie injection works well for sites that gate on authentication alone.
+> Limitation: Cookie injection bypasses login walls but not bot fingerprinting. Sites with aggressive anti-bot detection (notably Twitter/X) detect headless Playwright via canvas/WebGL fingerprinting and serve empty pages even with valid session cookies. Cookie injection works well for sites that gate on authentication alone.
 
 ### Getting your cookies
 
 1. Open your browser and log in to the target site.
-2. Open DevTools (`F12`) → **Application** tab → **Storage** → **Cookies** → select the site's domain.
+2. Open DevTools (`F12`) > `Application` tab > `Storage` > `Cookies` > select the site's domain.
 3. Copy the `Value` of each required cookie (typically a session token; check the site's cookie names).
 
 ### Crawl4AI
@@ -145,7 +145,7 @@ When this is set, `fetch_url` automatically switches from the `/md` endpoint to 
 | `domain` | No | Domain scope (e.g. `.x.com`). Recommended for correctness. |
 | `path` | No | Path scope. Defaults to `/` if omitted. |
 
-> **Note:** Cookie values are sensitive, so treat them like passwords. They grant full session access to your account. Do not commit `.env` to version control.
+> Note: Cookie values are sensitive, so treat them like passwords. They grant full session access to your account. Do not commit `.env` to version control.
 
 ---
 

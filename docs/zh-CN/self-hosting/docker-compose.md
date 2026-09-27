@@ -4,8 +4,8 @@ sidebar:
   order: 3
 ---
 
-Docker Compose 把 TomoriBot **加上** PostgreSQL 一起构建并作为容器运行。它是继[安装向导](/zh-CN/self-hosting/setup-wizard/)和
-[手动安装](/zh-CN/self-hosting/manual-setup/)之后的第三条安装路径：当你宁愿把所有东西都跑在 Docker 里，而不是在主机上安装 Bun 和 PostgreSQL 时，就选它。它**不**使用安装向导；数据库连接已经替你自动配置好了。
+Docker Compose 把 TomoriBot 加上 PostgreSQL 一起构建并作为容器运行。它是继[安装向导](/zh-CN/self-hosting/setup-wizard/)和
+[手动安装](/zh-CN/self-hosting/manual-setup/)之后的第三条安装路径：当你宁愿把所有东西都跑在 Docker 里，而不是在主机上安装 Bun 和 PostgreSQL 时，就选它。它不使用安装向导；数据库连接已经替你自动配置好了。
 
 :::caution[主机端脚本仍然需要主机上的工具]
 把 bot 和数据库跑在 Docker 里，并不会把维护脚本也容器化。

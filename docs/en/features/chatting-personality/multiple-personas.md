@@ -14,7 +14,7 @@ sidebar:
   order: 2
 ---
 
-TomoriBot's personality lives in a **persona**: her name, avatar, traits, speaking style, and
+TomoriBot's personality lives in a persona: her name, avatar, traits, speaking style, and
 behavior. You can run several personas at once, each a distinct character with its own
 triggers and webhook avatar. This page is about *how she behaves*; for *what she knows*
 (facts and memories), see [Memory](/features/knowledge/memory/).
@@ -28,7 +28,7 @@ triggers and webhook avatar. This page is about *how she behaves*; for *what she
   [SillyTavern Support](/features/integrations/sillytavern-support/)).
 - `/persona default`: switch to one of the built-in default personalities as a foundation.
 - `/persona export` / `/persona import`: share or back up a persona as a file. Import
-  supports bringing a persona in as an **alter** with its own triggers and webhook avatar.
+  supports bringing a persona in as an alter with its own triggers and webhook avatar.
 - `/persona remove`: remove an alter persona.
 
 A good starting workflow: pick a default or generate one, then refine it with attributes
@@ -38,7 +38,7 @@ and sample dialogues below.
 
 Alter personas let multiple characters coexist in one server:
 
-- Each alter has its own personality, trigger words, and **webhook avatar**, so different
+- Each alter has its own personality, trigger words, and webhook avatar, so different
   characters appear with different names and pictures in the same channel.
 - Multiple alters can respond to a single message, up to the `/config` > Engine > Trigger
   limit.
@@ -104,10 +104,10 @@ turn. To show one, she starts a reply line with `PersonaName (label):`; that lin
 delivered with the matching sprite image. If no sprite fits, she replies normally.
 
 Manage a persona's sprites on `/config` > Persona > Sprites (adding and removing
-require the **Manage Server** permission):
+require the `Manage Server` permission):
 
-- `/config` > Persona > Sprites: add or replace a sprite: pick the persona, give it a **label**,
-  upload the **image** (PNG, JPG, or GIF), and optionally add **usage instructions** telling
+- `/config` > Persona > Sprites: add or replace a sprite: pick the persona, give it a label,
+  upload the image (PNG, JPG, or GIF), and optionally add usage instructions telling
   her when to use it. Reusing a label replaces that sprite. Each persona has a maximum sprite
   count.
 - `/config` > Persona > Sprites: change an existing sprite's name, image, instructions, or
@@ -116,7 +116,7 @@ require the **Manage Server** permission):
 - Export and import on `/config` > Persona > Sprites: back up or share a persona's whole
   sprite set as a file.
 
-The **identity** toggle decorates the message name as `Label (Persona)` in Discord, which is
+The `Save as Identity` toggle decorates the message name as `Label (Persona)` in Discord, which is
 especially useful for [alter personas](#alter-personas) that speak as distinct characters.
 
 Changing a default persona's avatar removes the sprites it came with, because they show the

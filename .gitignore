@@ -1,5 +1,4 @@
 nul
-temp_*
 .venv*
 
 # Temp/scratch folders dropped in the repo root by local tooling (e.g. ollama scratch dirs).
@@ -9,6 +8,7 @@ tmp-*/
 temp-*/
 temp/
 .tmp-*/
+temp_*
 
 # Root-level scratch .txt output/prompts (e.g. captured check-locales stdout). Root-scoped so it
 # doesn't hide apps/docs/public/robots.txt or servers/*/requirements.txt.

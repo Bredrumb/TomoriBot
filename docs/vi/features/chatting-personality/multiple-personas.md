@@ -8,7 +8,7 @@ sidebar:
   order: 2
 ---
 
-Cá tính của TomoriBot nằm trong một **persona**: tên, avatar, đặc điểm tính cách, phong cách nói
+Cá tính của TomoriBot nằm trong một persona: tên, avatar, đặc điểm tính cách, phong cách nói
 chuyện và hành vi của bot. Bạn có thể chạy nhiều persona cùng lúc, mỗi persona là một nhân vật riêng
 biệt có từ kích hoạt và avatar webhook riêng. Trang này nói về *cách bot hành xử*; còn về *những gì
 bot biết* (sự thật và ký ức), hãy xem [Bộ nhớ](/vi/features/knowledge/memory/).
@@ -22,7 +22,7 @@ bot biết* (sự thật và ký ức), hãy xem [Bộ nhớ](/vi/features/knowl
   [Hỗ trợ SillyTavern](/vi/features/integrations/sillytavern-support/)).
 - `/persona default`: chuyển sang một trong các cá tính mặc định tích hợp sẵn để làm nền tảng.
 - `/persona export` / `/persona import`: chia sẻ hoặc sao lưu một persona dưới dạng tệp. Tính năng nhập
-  hỗ trợ đưa một persona vào dưới dạng một **alter** với từ kích hoạt và avatar webhook riêng.
+  hỗ trợ đưa một persona vào dưới dạng một alter với từ kích hoạt và avatar webhook riêng.
 - `/persona remove`: xóa một persona alter.
 
 Quy trình bắt đầu hiệu quả: chọn một persona mặc định hoặc tạo tự động, sau đó tinh chỉnh bằng các
@@ -32,10 +32,10 @@ thuộc tính và mẫu hội thoại bên dưới.
 
 Các persona alter cho phép nhiều nhân vật cùng tồn tại trong một máy chủ:
 
-- Mỗi alter có cá tính, từ kích hoạt và **avatar webhook** riêng, nhờ đó các nhân vật khác nhau xuất
+- Mỗi alter có cá tính, từ kích hoạt và avatar webhook riêng, nhờ đó các nhân vật khác nhau xuất
   hiện với tên và hình ảnh khác nhau trong cùng một kênh.
 - Nhiều alter có thể cùng phản hồi một tin nhắn, tối đa theo giới hạn trong `/config` > Engine > Trigger.
-- **Trả lời tin nhắn webhook** sẽ tiếp tục cuộc trò chuyện với tư cách là persona đó.
+- Trả lời tin nhắn webhook sẽ tiếp tục cuộc trò chuyện với tư cách là persona đó.
 - Thêm các alter qua lệnh `/persona import` (tùy chọn alter); quản lý chúng bằng `/persona` và
   `/persona remove`.
 
@@ -98,10 +98,10 @@ lượt. Để hiển thị một sprite, bot bắt đầu một dòng trả l�
 được gửi kèm hình ảnh sprite tương ứng. Nếu không có sprite nào phù hợp, bot sẽ trả lời bình thường.
 
 Quản lý sprite của một persona trên `/config` > Persona > Sprites (việc thêm và xóa yêu cầu quyền
-**Manage Server**):
+Quản lý máy chủ):
 
-- `/config` > Persona > Sprites: thêm hoặc thay thế một sprite: chọn persona, đặt cho nó một **nhãn**
-  (label), tải lên **hình ảnh** (PNG, JPG, hoặc GIF), và tùy chọn thêm **hướng dẫn sử dụng** để bảo bot
+- `/config` > Persona > Sprites: thêm hoặc thay thế một sprite: chọn persona, đặt cho nó một nhãn
+  (label), tải lên hình ảnh (PNG, JPG, hoặc GIF), và tùy chọn thêm hướng dẫn sử dụng để bảo bot
   khi nào nên dùng. Dùng lại một nhãn sẽ thay thế sprite đó. Mỗi persona có một số lượng sprite tối đa.
 - `/config` > Persona > Sprites: thay đổi tên, hình ảnh, hướng dẫn hoặc nút bật/tắt danh tính của một
   sprite hiện có.
@@ -109,7 +109,7 @@ Quản lý sprite của một persona trên `/config` > Persona > Sprites (việ
 - Xuất và nhập trên `/config` > Persona > Sprites: sao lưu hoặc chia sẻ toàn bộ bộ sprite của một
   persona dưới dạng tệp.
 
-Nút bật/tắt **danh tính** (identity) trang trí tên tin nhắn thành `Label (Persona)` trong Discord, rất
+Nút bật/tắt danh tính (identity) trang trí tên tin nhắn thành `Label (Persona)` trong Discord, rất
 hữu ích cho các [persona alter](#persona-alter) nói chuyện với tư cách là những nhân vật riêng biệt.
 
 Thay đổi avatar của một persona mặc định sẽ xóa các sprite đi kèm với nó, vì chúng hiển thị khuôn mặt của

@@ -4,10 +4,10 @@ sidebar:
   order: 3
 ---
 
-Docker Compose builds and runs TomoriBot **plus** PostgreSQL as containers. It's the
+Docker Compose builds and runs TomoriBot and PostgreSQL as containers. It's the
 third install path alongside the [setup wizard](/self-hosting/setup-wizard/) and
 [manual setup](/self-hosting/manual-setup/): pick it when you'd rather run everything in Docker than
-install Bun and PostgreSQL on the host. It does **not** use the setup wizard; the database
+install Bun and PostgreSQL on the host. It does not use the setup wizard; the database
 connection is auto-configured for you.
 
 :::caution[Host tools for updates]

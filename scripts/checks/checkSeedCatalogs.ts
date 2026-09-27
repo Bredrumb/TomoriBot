@@ -46,8 +46,8 @@ function validateStartupSeedOrder(): string[] {
     previousIndex = index;
   }
 
-  const spriteIndex = runtimeDatabaseSource.indexOf("await seedPersonaSpritesFromCatalog(sql);");
-  const avatarIndex = runtimeDatabaseSource.indexOf("await seedPersonaAvatarsFromCatalog(sql);");
+  const spriteIndex = runtimeDatabaseSource.indexOf("await seedPersonaSpritesFromCatalog(client);");
+  const avatarIndex = runtimeDatabaseSource.indexOf("await seedPersonaAvatarsFromCatalog(client);");
   if (spriteIndex === -1 || avatarIndex === -1 || avatarIndex < spriteIndex) {
     errors.push("Runtime preset sprite seed must run before the preset avatar seed");
   }

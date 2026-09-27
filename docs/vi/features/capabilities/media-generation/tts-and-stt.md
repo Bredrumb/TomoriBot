@@ -4,12 +4,12 @@ sidebar:
   order: 3
 ---
 
-TomoriBot có thể **nói** (text-to-speech) và **lắng nghe** (speech-to-text):
+TomoriBot có thể nói (text-to-speech) và lắng nghe (speech-to-text):
 
-- **TTS** cho phép bot trả lời bằng tin nhắn thoại Discord nguyên bản.
-- **STT** chuyển tệp âm thanh đính kèm của người dùng thành văn bản để bot sử dụng làm ngữ cảnh cuộc trò chuyện.
+- TTS cho phép bot trả lời bằng tin nhắn thoại Discord nguyên bản.
+- STT chuyển tệp âm thanh đính kèm của người dùng thành văn bản để bot sử dụng làm ngữ cảnh cuộc trò chuyện.
 
-Cả hai đều hoạt động qua cùng một hệ thống endpoint. Con đường nhanh nhất là **ElevenLabs** (đám mây, được
+Cả hai đều hoạt động qua cùng một hệ thống endpoint. Con đường nhanh nhất là ElevenLabs (đám mây, được
 hướng dẫn đầy đủ bên dưới). Nếu bạn muốn chạy giọng nói trên phần cứng của riêng mình, hãy sử dụng một engine
 cục bộ và làm theo các hướng dẫn self-hosting.
 
@@ -19,8 +19,8 @@ cục bộ và làm theo các hướng dẫn self-hosting.
 ### ElevenLabs (đám mây, dễ nhất)
 
 1. Lấy khóa API từ [ElevenLabs](https://elevenlabs.io/app/settings/api-keys).
-2. Chạy lệnh `/providers`, chọn `Thêm nhà cung cấp mới`, chọn **ElevenLabs**, rồi dán khóa API. Quy trình này sẽ:
-   - đăng ký endpoint **speech** của ElevenLabs (và cả endpoint **transcription**),
+2. Chạy lệnh `/providers`, chọn `Thêm nhà cung cấp mới`, chọn ElevenLabs, rồi dán khóa API. Quy trình này sẽ:
+   - đăng ký endpoint speech của ElevenLabs (và cả endpoint transcription),
    - chọn chúng làm endpoint hoạt động,
    - có thể chỉ định ngay một giọng nói cho một persona.
 3. Chỉ định giọng nói cho các persona khác trong mục Persona > Voice tại `/config`. Duyệt tìm giọng nói trong
@@ -31,13 +31,13 @@ Chọn ElevenLabs trong `/providers`, sau đó chọn `Sửa endpoint` bất c�
 
 Lưu ý:
 
-- Trên **gói miễn phí, chỉ các giọng nói tạo sẵn mới hoạt động**. Duyệt danh sách tại
+- Trên gói miễn phí, chỉ các giọng nói tạo sẵn mới hoạt động. Duyệt danh sách tại
   [danh sách giọng nói tạo sẵn](https://elevenlabs-sdk.mintlify.app/voices/premade-voices).
 - Ký tự được tính khi bot tạo và đọc tin nhắn thoại; gói miễn phí có giới hạn hàng tháng, vì vậy hãy kiểm
   tra bảng điều khiển ElevenLabs của bạn.
 - Phản hồi bằng giọng nói được kiểm soát bởi `voice_message_enabled` và yêu cầu persona đang hoạt động phải có
   một giọng nói được chỉ định.
-- Mục Persona > Voice trong `/config` yêu cầu quyền Manage Server trong máy chủ và vẫn khả dụng cho chủ sở hữu
+- Mục Persona > Voice trong `/config` yêu cầu quyền Quản lý máy chủ trong máy chủ và vẫn khả dụng cho chủ sở hữu
   trong không gian làm việc DM.
 
 Trong `/help`, chọn `Tính năng`, sau đó chọn `Giọng nói` để xem hướng dẫn tương tự trong Discord.
@@ -46,7 +46,7 @@ Trong `/help`, chọn `Tính năng`, sau đó chọn `Giọng nói` để xem h�
 
 Trên một phiên bản self-hosted, bạn có thể chạy máy chủ clone giọng nói cục bộ. Quy trình chung gồm:
 khởi động máy chủ wrapper, đăng ký kết nối cùng model bằng `/providers`, chọn nó trong `/providers`, tải lên
-một mẫu âm thanh bằng `/config` trong mục Models > TTS Parameters & Voices, sau đó chỉ định trong
+một mẫu âm thanh bằng `/config` trong mục Models > Tham số & Giọng đọc TTS, sau đó chỉ định trong
 Persona > Voice tại `/config`. Mọi định dạng âm thanh đều được chấp nhận (tự động chuyển sang định dạng WAV mono);
 các đoạn âm thanh dài 10-20 giây không có nhạc nền sẽ hoạt động tốt nhất.
 
@@ -65,7 +65,7 @@ Xem [bảng so sánh Text-to-Speech](/vi/self-hosting/local-endpoints/text-to-sp
 <!-- anchor: speech-to-text -->
 
 Các endpoint transcription chuyển tệp âm thanh đính kèm của người dùng thành văn bản cho ngữ cảnh cuộc trò chuyện
-nền. Việc bản chép lời có được **đăng công khai** trong đoạn chat hay không được điều khiển riêng bởi
+nền. Việc bản chép lời có được đăng công khai trong đoạn chat hay không được điều khiển riêng bởi
 `/config` > Engine > Notices.
 
 ### ElevenLabs (đám mây)

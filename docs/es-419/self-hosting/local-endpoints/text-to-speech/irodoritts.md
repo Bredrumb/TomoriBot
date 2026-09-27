@@ -85,8 +85,8 @@ Ejecuta `/providers`, elige `Agregar nuevo punto de conexión personalizado` y u
 Después de guardar la conexión, selecciónala y usa su menú desplegable de modelos para agregar un modelo de Voz. Para la v4.1, las
 configuraciones recomendadas son:
 
-- `Voice Source Mode`: `Auto`
-- `Script Markup Style`: `Emoji`
+- `Modo de fuente de voz`: `Auto`
+- `Estilo de marcado del guion`: `Emoji`
 
 `Auto` permite que el mismo endpoint de Irodori admita ambos modos de voz de TomoriBot, para que las pistas de emoción sobrevivan al envío:
 
@@ -94,7 +94,7 @@ configuraciones recomendadas son:
 - Las personas con un prompt de Diseño de voz establecido bajo Persona > Voz envían el prompt en lenguaje natural guardado como
   condicionamiento de subtítulos de Irodori.
 
-Aún puedes elegir `Voice Clone` como Modo de fuente de voz si solo deseas la clonación de voz de audio de referencia.
+Aún puedes elegir `Clon de voz` como Modo de fuente de voz si solo deseas la clonación de voz de audio de referencia.
 
 Usa `/providers` para el registro del endpoint y la configuración del modelo. Luego abre `/config` > Modelos > Cambiar modelos para
 seleccionar y activar el endpoint registrado.
@@ -125,7 +125,7 @@ TomoriBot elimina la sintaxis de emoji personalizados de Discord antes de enviar
 
 ### Controles de estilo con emoji
 
-IrodoriTTS admite anotaciones con emoji en el texto de entrada para influir en los efectos de sonido, la forma de hablar y las expresiones emocionales. Con `Script Markup Style` de TomoriBot configurado como `Emoji`, estos emojis Unicode se conservan y se envían a Irodori.
+IrodoriTTS admite anotaciones con emoji en el texto de entrada para influir en los efectos de sonido, la forma de hablar y las expresiones emocionales. Con `Estilo de marcado del guion` de TomoriBot configurado como `Emoji`, estos emojis Unicode se conservan y se envían a Irodori.
 
 | Emoji | Significado / emoción / estilo |
 | --- | --- |

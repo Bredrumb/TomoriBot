@@ -4,11 +4,11 @@ title: "VoxCPM2"
 
 VoxCPM2 是 OpenBMB 的 2B 参数多语言语音合成模型。它支持 30 种语言、48 kHz 输出、自然语言形式的 Voice Design、参考音频语音克隆、可控克隆，以及借助参考文本的「终极克隆」。TomoriBot 通过 `servers/tts/voxcpm2/` 里的轻量封装程序来使用官方的 `voxcpm` Python 包。
 
-默认模型是官方的 `openbmb/VoxCPM2` BF16 检查点。OpenBMB 报告标准运行时大约需要 **8 GB 显存**，所以常规模型可以轻松放进 16 GB 的 NVIDIA GPU，默认不需要量化检查点。
+默认模型是官方的 `openbmb/VoxCPM2` BF16 检查点。OpenBMB 报告标准运行时大约需要 8 GB 显存，所以常规模型可以轻松放进 16 GB 的 NVIDIA GPU，默认不需要量化检查点。
 
 ## 许可证
 
-VoxCPM2 的代码与模型权重以 **Apache-2.0** 发布，在遵守许可证条款的前提下也包括商业使用。TomoriBot 不分发这些权重；安装程序会从官方 Hugging Face 仓库下载它们。
+VoxCPM2 的代码与模型权重以 Apache-2.0 发布，在遵守许可证条款的前提下也包括商业使用。TomoriBot 不分发这些权重；安装程序会从官方 Hugging Face 仓库下载它们。
 
 官方上游资源：
 
@@ -39,14 +39,14 @@ OpenBMB 还记录了若干中文方言。为了兼容通用的 TTS 契约，Tomo
 
 VoxCPM2 把自然语言描述放在待合成文本前的括号里，以此表示 Voice Design 与风格控制。TomoriBot 已经有用于此目的的 `instruct` 字段，所以封装程序会自动完成这个转换。
 
-请使用 **Plain** 脚本标记风格。VoxCPM2 不需要 TomoriBot 保留方括号标签或表情符号控制语法，也不必新增脚本标记模式。
+请使用 Plain 脚本标记风格。VoxCPM2 不需要 TomoriBot 保留方括号标签或表情符号控制语法，也不必新增脚本标记模式。
 
 ## 硬件与运行时
 
 推荐的起点：
 
-- Python **3.10-3.12**
-- 用于官方 BF16 运行时的 NVIDIA GPU，**8 GB 显存或更多**；12-16 GB 会比较宽裕
+- Python 3.10-3.12
+- 用于官方 BF16 运行时的 NVIDIA GPU，8 GB 显存或更多；12-16 GB 会比较宽裕
 - 最新的 NVIDIA 驱动，以及支持 CUDA 的 PyTorch 构建，用于 GPU 加速
 - 也支持 CPU 作为兜底方案，但速度会慢得多
 
@@ -151,7 +151,7 @@ TomoriBot 会把保存好的描述作为 `instruct` 发送。VoxCPM2 会把它�
 
 - 克隆人格发送存储的 `ref_audio` 与可选的 `ref_text`；
 - VoiceDesign 人格把保存的提示词作为 `instruct` 发送；
-- 启用了支持指令的、具备克隆能力的端点会显示**表达方向**字段，并通过 `instruct` 传递一次性指令；
+- 启用了支持指令的、具备克隆能力的端点会显示表达方向字段，并通过 `instruct` 传递一次性指令；
 - 当存在指令且配有克隆样本时，TomoriBot 只使用 `reference_wav_path`，不发送转写文本相关字段。
 
 ## 环境变量

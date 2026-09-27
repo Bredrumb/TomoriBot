@@ -4,7 +4,7 @@ title: "CosyVoice 3"
 
 CosyVoice 3は、Alibaba/QwenAudioによる多言語CosyVoice TTSプロジェクトの現行世代です。TomoriBotは`servers/tts/cosyvoice3/`で公式ランタイムをラップし、他のローカル音声エンドポイントと同じ`POST /synthesize`インターフェースを公開します。
 
-TomoriBotは既定で公式の**`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`**チェックポイントを使用します。これは上流が推奨する現行のCosyVoice 3リリースで、通常の非量子化モデルを使用しつつ、CosyVoiceの低遅延設計を保ったまま16 GBのNVIDIA GPUで無理なく動作するほど小型です。
+TomoriBotは既定で公式の`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`チェックポイントを使用します。これは上流が推奨する現行のCosyVoice 3リリースで、通常の非量子化モデルを使用しつつ、CosyVoiceの低遅延設計を保ったまま16 GBのNVIDIA GPUで無理なく動作するほど小型です。
 
 ## 対応機能
 
@@ -65,8 +65,8 @@ TomoriBotの現行のカスタムTTSインターフェースは、Discordの音�
 
 TomoriBotの推奨される出発点は次のとおりです。
 
-- **16 GBのVRAM**を搭載したNVIDIA GPU
-- Python **3.10**
+- 16 GBのVRAMを搭載したNVIDIA GPU
+- Python 3.10
 - CUDA 12に対応した最近のNVIDIAドライバー
 - `git`
 - TomoriBotの音声サンプル正規化用の`ffmpeg`
@@ -113,7 +113,7 @@ bun run launch --cosyvoice3
 .\servers\tts\cosyvoice3\.venv\Scripts\python.exe servers\tts\cosyvoice3\server.py
 ```
 
-NVIDIA GPUを使用する場合は**WSL2を推奨**します。現行の上流の依存関係は、LinuxではGPU版のONNX Runtimeを、WindowsではCPU版のONNX Runtimeをインストールするため、WSL2の方がCosyVoiceプロジェクトが低遅延のために最適化・テストしている構成により近くなります。
+NVIDIA GPUを使用する場合はWSL2を推奨します。現行の上流の依存関係は、LinuxではGPU版のONNX Runtimeを、WindowsではCPU版のONNX Runtimeをインストールするため、WSL2の方がCosyVoiceプロジェクトが低遅延のために最適化・テストしている構成により近くなります。
 
 ## TomoriBotへの登録
 
@@ -192,6 +192,6 @@ CosyVoice 3は、任意のvLLMおよびTensorRTのパスにも対応していま
 
 ## ライセンス
 
-現行のCosyVoiceコードリポジトリは**Apache License 2.0**のもとでライセンスされており、`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`のHugging Faceリポジトリも同様に**Apache-2.0**と表示されています。
+現行のCosyVoiceコードリポジトリはApache License 2.0のもとでライセンスされており、`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`のHugging Faceリポジトリも同様にApache-2.0と表示されています。
 
 さらに、上流のモデルカードには、表示されている内容は学術的なデモンストレーション目的であり、一部の例はインターネット由来である可能性があるという免責事項が含まれています。ある公開中の上流の議論では、この免責事項が重みの商用利用にどう関係するのかについて、明確な説明を求めています。TomoriBotはこのモデルを再配布しません。セルフホストするユーザーは、特に商用利用の前に、自らのデプロイのために現行の上流ライセンスとモデルカードの条件を確認してください。

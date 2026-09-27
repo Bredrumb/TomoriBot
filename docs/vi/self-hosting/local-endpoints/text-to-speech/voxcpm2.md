@@ -4,11 +4,11 @@ title: "VoxCPM2"
 
 VoxCPM2 là model text-to-speech đa ngôn ngữ 2B tham số của OpenBMB. Model hỗ trợ 30 ngôn ngữ, đầu ra 48 kHz, Voice Design bằng ngôn ngữ tự nhiên, sao chép giọng nói bằng âm thanh tham chiếu, sao chép có thể kiểm soát, và "Ultimate Cloning" có hỗ trợ của bản phiên âm. TomoriBot sử dụng gói Python `voxcpm` chính thức thông qua wrapper mỏng trong `servers/tts/voxcpm2/`.
 
-Model mặc định là checkpoint BF16 chính thức `openbmb/VoxCPM2`. OpenBMB báo cáo mức chiếm dụng khoảng **8 GB VRAM** cho runtime tiêu chuẩn, vì vậy model thông thường vừa vặn thoải mái trên GPU NVIDIA 16 GB và không cần checkpoint lượng tử hóa theo mặc định.
+Model mặc định là checkpoint BF16 chính thức `openbmb/VoxCPM2`. OpenBMB báo cáo mức chiếm dụng khoảng 8 GB VRAM cho runtime tiêu chuẩn, vì vậy model thông thường vừa vặn thoải mái trên GPU NVIDIA 16 GB và không cần checkpoint lượng tử hóa theo mặc định.
 
 ## Giấy phép
 
-Mã nguồn và trọng số model VoxCPM2 được phát hành theo **Apache-2.0**, bao gồm cả việc sử dụng thương mại tuân theo các điều khoản giấy phép. TomoriBot không phân phối lại các trọng số; trình cài đặt tải chúng từ kho lưu trữ Hugging Face chính thức.
+Mã nguồn và trọng số model VoxCPM2 được phát hành theo Apache-2.0, bao gồm cả việc sử dụng thương mại tuân theo các điều khoản giấy phép. TomoriBot không phân phối lại các trọng số; trình cài đặt tải chúng từ kho lưu trữ Hugging Face chính thức.
 
 Tài nguyên thượng nguồn chính thức:
 
@@ -39,14 +39,14 @@ Một endpoint VoxCPM2 có thể xử lý tất cả các chế độ nguồn gi
 
 VoxCPM2 biểu thị Voice Design và kiểm soát phong cách bằng cách đặt mô tả bằng ngôn ngữ tự nhiên trong dấu ngoặc đơn trước văn bản cần tổng hợp. TomoriBot đã có sẵn trường `instruct` cho mục đích này, vì vậy wrapper sẽ tự động thực hiện chuyển đổi đó.
 
-Sử dụng Script Markup **Plain**. VoxCPM2 không yêu cầu TomoriBot phải giữ lại các thẻ trong ngoặc vuông hoặc cú pháp điều khiển emoji, và không cần chế độ Script Markup mới nào.
+Sử dụng Script Markup Plain. VoxCPM2 không yêu cầu TomoriBot phải giữ lại các thẻ trong ngoặc vuông hoặc cú pháp điều khiển emoji, và không cần chế độ Script Markup mới nào.
 
 ## Phần cứng và runtime
 
 Điểm khởi đầu được khuyến nghị:
 
-- Python **3.10-3.12**
-- GPU NVIDIA với **8 GB VRAM trở lên** cho runtime BF16 chính thức; 12-16 GB mang lại khoảng trống thoải mái
+- Python 3.10-3.12
+- GPU NVIDIA với 8 GB VRAM trở lên cho runtime BF16 chính thức; 12-16 GB mang lại khoảng trống thoải mái
 - Driver NVIDIA hiện tại và bản dựng PyTorch hỗ trợ CUDA để tăng tốc GPU
 - CPU được hỗ trợ dưới dạng dự phòng nhưng chậm hơn đáng kể
 
@@ -112,7 +112,7 @@ Chạy `/providers`, chọn `Thêm endpoint tùy chỉnh mới`, và định c�
 - Capability: `Speech`
 - API Compatibility: `tts-clone`
 - Endpoint URL: `http://127.0.0.1:8016`
-- Voice Source Mode: `Auto`
+- Chế độ nguồn giọng đọc: `Auto`
 - Script Markup: `Plain`
 - Supports Instruct: `Yes`
 
@@ -125,7 +125,7 @@ Sau khi lưu kết nối, hãy chọn kết nối đó và sử dụng menu th�
 Đối với persona cần sao chép một người nói hiện có:
 
 1. Chuẩn bị một clip tham chiếu rõ ràng với một người nói và ít hoặc không có nhạc nền. Thượng nguồn coi 5 đến 30 giây là khoảng thực tế.
-2. Mở `/config` dưới phần Models > TTS Parameters & Voices và tải clip lên.
+2. Mở `/config` dưới phần Models > Tham số & Giọng đọc TTS và tải clip lên.
 3. Thêm bản phiên âm chính xác của clip tham chiếu khi có sẵn. VoxCPM2 sử dụng bản phiên âm này cho Ultimate Cloning và có thể tái tạo nhiều hơn nhịp điệu, cảm xúc và phong cách của bản tham chiếu.
 4. Mở `/config` dưới phần Persona > Voice, chọn persona, và gán mẫu đã lưu.
 

@@ -40,4 +40,4 @@ Enable these capability flags for ChatMock:
 - **Video Understanding**: No
 - **Structured Output**: Yes
 
-**Note**: Codex CLI does not allow you to change its `system` prompt so TomoriBot's `system` prompt is turned into a `user` turn in context as a workaround. Please configure the `CHATMOCK_PORT` .env variable to match your actual ChatMock port so this workaround works properly (defaults to 8000).
+Note: Codex CLI does not allow you to change its `system` prompt so TomoriBot's `system` prompt is turned into a `user` turn in context as a workaround. Please configure the `CHATMOCK_PORT` .env variable to match your actual ChatMock port so this workaround works properly (defaults to 8000).

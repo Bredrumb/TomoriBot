@@ -12,31 +12,31 @@ TomoriBot 支持多种本地语音合成服务器，各自适合不同的语言�
 
 ### 基准测试文本
 
-- **标准文本**（*用于 Chatterbox Standard/Turbo/Nano、MOSS-TTS、CosyVoice 3、VoxCPM2、Qwen3-TTS*）：
+- 标准文本（*用于 Chatterbox Standard/Turbo/Nano、MOSS-TTS、CosyVoice 3、VoxCPM2、Qwen3-TTS*）：
   > *"Pain and pleasure are two sides of the same coin. Go on now... flip it. Either way, I'll let you feel all of me."*
-- **Fish Audio S2 Pro 文本**（*测试时带方括号表达标签*）：
+- Fish Audio S2 Pro 文本（*测试时带方括号表达标签*）：
   > *"Pain and pleasure are two sides of the same coin. [laughs] Go on now... flip it. [whispers] Either way, I'll let you feel all of me."*
 
 ### 性能与音频对比
 
-耗时同时给出**完整生成时间**（从发出请求到音频生成完毕的总实际秒数）和**实时率（RTF）**，后者的定义是生成时间除以音频时长：
+耗时同时给出完整生成时间（从发出请求到音频生成完毕的总实际秒数）和实时率（RTF），后者的定义是生成时间除以音频时长：
 
 - **RTF < 1.0（加粗）**：引擎生成语音的速度快于实时（例如 `0.50× RTF` 表示一个 10 秒的片段用 5 秒生成完）。只有这些引擎有可能跟上实时语音通话，而 TomoriBot 目前并没有实现这个功能。
 - **RTF > 1.0**：生成所需的时间比说出来的音频更长。TomoriBot 把每条语音消息作为完整文件发送，所以 RTF 更高只意味着等得更久。
 
 | 引擎 | Windows 原生<sup>(1)</sup><br/>（RTX 4070 Ti SUPER） | Linux / WSL2 | macOS<br/>（Apple Silicon） | 音频样本 |
 |---|---|---|---|---|
-| **[Fish Audio S2 Pro](/zh-CN/self-hosting/local-endpoints/text-to-speech/fishs2/)** | 约 8-10 分钟<sup>(2)</sup><br/>*（约 65× RTF）* | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/fish-s2-pro.wav"></audio> |
-| **[Chatterbox（Turbo，默认）](/zh-CN/self-hosting/local-endpoints/text-to-speech/chatterbox/)** | **约 5.0 秒** *（8.7 秒片段）*<br/>**0.57× RTF** | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/chatterbox-turbo.wav"></audio> |
-| **[Chatterbox（Nano）](/zh-CN/self-hosting/local-endpoints/text-to-speech/chatterbox/)** | **约 3.0 秒** *（8.0 秒片段）*<br/>**0.38× RTF** | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/chatterbox-nano.wav"></audio> |
-| **[Chatterbox（Standard）](/zh-CN/self-hosting/local-endpoints/text-to-speech/chatterbox/)** | **约 6.0 秒** *（7.8 秒片段）*<br/>**0.77× RTF** | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/chatterbox.wav"></audio> |
-| **[MOSS-TTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/moss/)** | 约 12.0 秒 *（8.8 秒片段）*<br/>1.36× RTF | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/moss-tts.wav"></audio> |
-| **[CosyVoice 3](/zh-CN/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)** | **约 6.0 秒** *（13.9 秒片段）*<br/>**0.43× RTF** | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/cosy-voice-3.wav"></audio> |
-| **[VoxCPM2](/zh-CN/self-hosting/local-endpoints/text-to-speech/voxcpm2/)** | 约 8.0 秒 *（7.4 秒片段）*<br/>1.09× RTF | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/voxcpm2.wav"></audio> |
-| **[Qwen3-TTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/qwen3tts/)** | 约 10.0 秒 *（9.2 秒片段）*<br/>1.09× RTF | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/qwen3-tts.wav"></audio> |
+| [Fish Audio S2 Pro](/zh-CN/self-hosting/local-endpoints/text-to-speech/fishs2/) | 约 8-10 分钟<sup>(2)</sup><br/>*（约 65× RTF）* | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/fish-s2-pro.wav"></audio> |
+| [Chatterbox（Turbo，默认）](/zh-CN/self-hosting/local-endpoints/text-to-speech/chatterbox/) | 约 5.0 秒 *（8.7 秒片段）*<br/>0.57× RTF | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/chatterbox-turbo.wav"></audio> |
+| [Chatterbox（Nano）](/zh-CN/self-hosting/local-endpoints/text-to-speech/chatterbox/) | 约 3.0 秒 *（8.0 秒片段）*<br/>0.38× RTF | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/chatterbox-nano.wav"></audio> |
+| [Chatterbox（Standard）](/zh-CN/self-hosting/local-endpoints/text-to-speech/chatterbox/) | 约 6.0 秒 *（7.8 秒片段）*<br/>0.77× RTF | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/chatterbox.wav"></audio> |
+| [MOSS-TTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/moss/) | 约 12.0 秒 *（8.8 秒片段）*<br/>1.36× RTF | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/moss-tts.wav"></audio> |
+| [CosyVoice 3](/zh-CN/self-hosting/local-endpoints/text-to-speech/cosyvoice3/) | 约 6.0 秒 *（13.9 秒片段）*<br/>0.43× RTF | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/cosy-voice-3.wav"></audio> |
+| [VoxCPM2](/zh-CN/self-hosting/local-endpoints/text-to-speech/voxcpm2/) | 约 8.0 秒 *（7.4 秒片段）*<br/>1.09× RTF | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/voxcpm2.wav"></audio> |
+| [Qwen3-TTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/qwen3tts/) | 约 10.0 秒 *（9.2 秒片段）*<br/>1.09× RTF | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/qwen3-tts.wav"></audio> |
 
-- <sup>(1)</sup> **测试环境**：Windows 11（原生运行）上的 NVIDIA GeForce RTX 4070 Ti SUPER（16 GB GDDR6X、Ada Lovelace），使用一段 26.6 秒、24 kHz 的单声道参考音频样本，并配有逐字对应的参考文本。
-- <sup>(2)</sup> **Fish Audio S2 Pro**：在 Windows 上以未编译的 eager 模式运行（约 65× RTF），原因是每个 token 都要经过 76 层求值，CUDA kernel 启动延迟累积起来很可观。建议在 Linux 或 WSL2 上配合 OpenAI Triton 的编译器融合（`torch.compile`）运行，以避免这种调度停顿。
+- <sup>(1)</sup> 测试环境：Windows 11（原生运行）上的 NVIDIA GeForce RTX 4070 Ti SUPER（16 GB GDDR6X、Ada Lovelace），使用一段 26.6 秒、24 kHz 的单声道参考音频样本，并配有逐字对应的参考文本。
+- <sup>(2)</sup> Fish Audio S2 Pro：在 Windows 上以未编译的 eager 模式运行（约 65× RTF），原因是每个 token 都要经过 76 层求值，CUDA kernel 启动延迟累积起来很可观。建议在 Linux 或 WSL2 上配合 OpenAI Triton 的编译器融合（`torch.compile`）运行，以避免这种调度停顿。
 
 ---
 
@@ -50,7 +50,7 @@ TomoriBot 支持多种本地语音合成服务器，各自适合不同的语言�
 
 | 引擎 | Windows 原生<sup>(1)</sup><br/>（RTX 4070 Ti SUPER） | Linux / WSL2 | macOS<br/>（Apple Silicon） | 音频样本 |
 |---|---|---|---|---|
-| **[IrodoriTTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/irodoritts/)** | **约 4.0 秒** *（8.5 秒片段）*<br/>**0.47× RTF** | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/irodori.wav"></audio> |
+| [IrodoriTTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/irodoritts/) | 约 4.0 秒 *（8.5 秒片段）*<br/>0.47× RTF | 未测试 | 未测试 | <audio controls preload="none" src="/audio/tts/irodori.wav"></audio> |
 
 - <sup>(1)</sup> 在同一个 RTX 4070 Ti SUPER、Windows 11 测试环境中测得。
 
@@ -58,19 +58,19 @@ TomoriBot 支持多种本地语音合成服务器，各自适合不同的语言�
 
 ## 该选哪个引擎？
 
-- 如果你想要尽可能高的声音保真度、细粒度、富有表现力的方括号标签（`[whisper]`、`[laughs]`、`[sigh]`），并且能用上可开启 Triton 编译器融合的 **Linux 或 WSL2**，那就**选 [Fish Audio S2 Pro](/zh-CN/self-hosting/local-endpoints/text-to-speech/fishs2/)**。
-- 想做显存占用小的英语语音克隆，就**选 [Chatterbox（Turbo / Nano / Standard）](/zh-CN/self-hosting/local-endpoints/text-to-speech/chatterbox/)**。Nano（约 3.0 秒，0.38× RTF）在 CPU/GPU 上速度最快，Turbo（约 5.0 秒，0.57× RTF）支持副语言事件标签（`[laughter]`、`[sigh]`），Standard（约 6.0 秒，0.77× RTF）则可以灵活调节 CFG 引导与情绪夸张程度。
-- 想做试验性的多模态语音克隆，以及用文字描述的英语与中文语音生成，就**选 [MOSS-TTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/moss/)**。
-- 如果你需要高质量的多语言零样本克隆，并能用自然语言给出表达方式指令（`"Speak in English with excitement"`），那就**选 [CosyVoice 3](/zh-CN/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)**。
-- 如果你需要覆盖面足够广的多语言支持（30 种语言）、参考文本辅助的 Ultimate Cloning 以及自然的语音设计，那就**选 [VoxCPM2](/zh-CN/self-hosting/local-endpoints/text-to-speech/voxcpm2/)**。
-- 如果你想要干净的多语言克隆、灵活的语音设计以及稳定的提示词遵循度，那就**选 [Qwen3-TTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/qwen3tts/)**。
-- 如果你的 bot 说日语，那就**选 [IrodoriTTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/irodoritts/)**。它是唯一被实测的纯日语引擎（Windows 上约 4 秒，0.47× RTF），并且能原生解析 Unicode emoji（`😊`、`😭`、`😠`）来调节角色情绪。
+- 如果你想要尽可能高的声音保真度、细粒度、富有表现力的方括号标签（`[whisper]`、`[laughs]`、`[sigh]`），并且能用上可开启 Triton 编译器融合的 Linux 或 WSL2，那就选 [Fish Audio S2 Pro](/zh-CN/self-hosting/local-endpoints/text-to-speech/fishs2/)。
+- 想做显存占用小的英语语音克隆，就选 [Chatterbox（Turbo / Nano / Standard）](/zh-CN/self-hosting/local-endpoints/text-to-speech/chatterbox/)。Nano（约 3.0 秒，0.38× RTF）在 CPU/GPU 上速度最快，Turbo（约 5.0 秒，0.57× RTF）支持副语言事件标签（`[laughter]`、`[sigh]`），Standard（约 6.0 秒，0.77× RTF）则可以灵活调节 CFG 引导与情绪夸张程度。
+- 想做试验性的多模态语音克隆，以及用文字描述的英语与中文语音生成，就选 [MOSS-TTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/moss/)。
+- 如果你需要高质量的多语言零样本克隆，并能用自然语言给出表达方式指令（`"Speak in English with excitement"`），那就选 [CosyVoice 3](/zh-CN/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)。
+- 如果你需要覆盖面足够广的多语言支持（30 种语言）、参考文本辅助的 Ultimate Cloning 以及自然的语音设计，那就选 [VoxCPM2](/zh-CN/self-hosting/local-endpoints/text-to-speech/voxcpm2/)。
+- 如果你想要干净的多语言克隆、灵活的语音设计以及稳定的提示词遵循度，那就选 [Qwen3-TTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/qwen3tts/)。
+- 如果你的 bot 说日语，那就选 [IrodoriTTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/irodoritts/)。它是唯一被实测的纯日语引擎（Windows 上约 4 秒，0.47× RTF），并且能原生解析 Unicode emoji（`😊`、`😭`、`😠`）来调节角色情绪。
 
 ---
 
 ## 对比各引擎
 
-目前 TomoriBot 的所有语音合成服务器都向 bot 返回一个完整的 WAV 文件。「流式路径」是指上游模型或单独的推理后端具备流式输出，**并不**表示已经实现了 Discord 语音通话的流式传输。体积指的是模型参数量，**不是**显存占用或下载体积，16 GB 那一列只是配置建议，不是实测峰值。速度那一列描述的是各引擎的设计取舍；上面的实测耗时来自同一台 Windows 机器，不能用来给各引擎在 Linux 上的表现排名。
+目前 TomoriBot 的所有语音合成服务器都向 bot 返回一个完整的 WAV 文件。「流式路径」是指上游模型或单独的推理后端具备流式输出，并不表示已经实现了 Discord 语音通话的流式传输。体积指的是模型参数量，不是显存占用或下载体积，16 GB 那一列只是配置建议，不是实测峰值。速度那一列描述的是各引擎的设计取舍；上面的实测耗时来自同一台 Windows 机器，不能用来给各引擎在 Linux 上的表现排名。
 
 「参考片段」列列出的是各引擎在文档中记载、或在运行时实际套用的参考音频长度，因此混合了已发布的指引与从上游代码读出的限制。大多数引擎不会拒绝请求，而是静默裁剪到自己的窗口，所以这一列给出的是引擎读取的长度，而不只是引擎接受的长度。这是上游行为，不是在本页测得的结果，也和 TomoriBot 的上传上限无关。
 

@@ -20,13 +20,13 @@ controles.
 - `/stats persona`: el uso de una persona en este servidor.
 - `/stats server`: el uso de todo el servidor.
 
-La mayoría admite una ventana de **período**, y las estadísticas personales pueden limitarse a
+La mayoría admite una ventana de período, y las estadísticas personales pueden limitarse a
 este servidor o abarcar todos los servidores.
 
 :::note
-Los **conteos de tokens** son el uso reportado por el propio proveedor cuando está disponible
+Los conteos de tokens son el uso reportado por el propio proveedor cuando está disponible
 (se usa una estimación basada en caracteres solo para proveedores que no reportan ninguno). El
-**costo** valora esos tokens a las tarifas de lista del catálogo de modelos, así que puede
+costo valora esos tokens a las tarifas de lista del catálogo de modelos, así que puede
 diferir de tu factura real (caché de prompts, descuentos, cuotas de nivel gratuito, etc.).
 :::
 

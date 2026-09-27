@@ -30,53 +30,53 @@ Người quản lý máy chủ chấp nhận Điều khoản dịch vụ trong q
 ## 2) Dữ liệu chúng tôi lưu trữ
 
 ### 2.1) Về bạn
-- **Danh tính và tùy chọn:** ID người dùng Discord, tùy chọn ngôn ngữ và trạng thái từ chối quyền riêng tư của bạn.
-- **Cài đặt cá nhân hóa:** biệt danh bạn chọn, đại từ, bản dạng giới, cách xưng hô, thẻ ngoại hình, prompt giả lập nhân vật, URL hình ảnh tham chiếu nhân vật, độ lệch múi giờ và các tùy chỉnh tiền tố/hậu tố tin nhắn.
-- **Tùy chọn xưng hô:** cách mà từng persona sẽ gọi bạn.
-- **Bộ nhớ cá nhân:** các thông tin bạn dạy TomoriBot về bản thân, hoặc thông tin bot tự lưu về bạn khi tính năng bộ nhớ cá nhân được bật.
-- **Spotlight:** cấu hình spotlight cá nhân mà bạn thiết lập cho từng máy chủ.
-- **Hồ sơ điều hướng hành vi:** văn bản và lý do bạn cung cấp qua `/reward` và `/punish`, nhằm định hình cách persona hành xử trong Máy chủ đó.
-- **Bộ đếm sử dụng:** số lượng lệnh, model và công cụ bạn đã sử dụng hàng ngày, cùng với tổng số token, được liên kết với bạn, Máy chủ và persona. Dữ liệu này dùng cho lệnh `/stats`.
+- Danh tính và tùy chọn: ID người dùng Discord, tùy chọn ngôn ngữ và trạng thái từ chối quyền riêng tư của bạn.
+- Cài đặt cá nhân hóa: biệt danh bạn chọn, đại từ, bản dạng giới, cách xưng hô, thẻ ngoại hình, prompt giả lập nhân vật, URL hình ảnh tham chiếu nhân vật, độ lệch múi giờ và các tùy chỉnh tiền tố/hậu tố tin nhắn.
+- Tùy chọn xưng hô: cách mà từng persona sẽ gọi bạn.
+- Bộ nhớ cá nhân: các thông tin bạn dạy TomoriBot về bản thân, hoặc thông tin bot tự lưu về bạn khi tính năng bộ nhớ cá nhân được bật.
+- Spotlight: cấu hình spotlight cá nhân mà bạn thiết lập cho từng máy chủ.
+- Hồ sơ điều hướng hành vi: văn bản và lý do bạn cung cấp qua `/reward` và `/punish`, nhằm định hình cách persona hành xử trong Máy chủ đó.
+- Bộ đếm sử dụng: số lượng lệnh, model và công cụ bạn đã sử dụng hàng ngày, cùng với tổng số token, được liên kết với bạn, Máy chủ và persona. Dữ liệu này dùng cho lệnh `/stats`.
 
 ### 2.2) Về máy chủ của bạn
-- **Cấu hình máy chủ:** các thuộc tính persona, đoạn hội thoại mẫu, từ kích hoạt, lựa chọn nhà cung cấp và model, quyền hạn kênh và vai trò, hạn mức, múi giờ và các nút bật/tắt tính năng.
-- **Bộ nhớ máy chủ:** các thông tin được dạy cho TomoriBot áp dụng cho toàn bộ Máy chủ. Những thông tin này có thể mô tả các thành viên, bao gồm cả những thành viên không trực tiếp viết ra chúng.
-- **Metadata của emoji và sticker:** ID Discord, tên, mô tả và cờ định dạng. Bản thân các tệp hình ảnh không được lưu trữ.
-- **Lời nhắc nhở:** nội dung lời nhắc, ID Discord và biệt danh của người dùng mục tiêu, kênh, lịch trình và mọi cài đặt lặp lại.
-- **Bản tóm tắt bộ nhớ ngắn hạn:** khi bộ nhớ ngắn hạn được bật, TomoriBot sẽ ghi các bản tóm tắt ngắn rút ra từ cuộc trò chuyện gần đây vào cơ sở dữ liệu để duy trì ngữ cảnh giữa các lần Kích hoạt. Những bản tóm tắt này sẽ bị xóa sau một khoảng thời gian không hoạt động (mặc định là 90 ngày).
-- **Liên kết tích hợp:** liên kết phòng và kênh Matrix, cùng với các URL, tên công cụ được phát hiện và token xác thực được mã hóa cho bất kỳ máy chủ MCP nào mà người quản lý kết nối.
+- Cấu hình máy chủ: các thuộc tính persona, đoạn hội thoại mẫu, từ kích hoạt, lựa chọn nhà cung cấp và model, quyền hạn kênh và vai trò, hạn mức, múi giờ và các nút bật/tắt tính năng.
+- Bộ nhớ máy chủ: các thông tin được dạy cho TomoriBot áp dụng cho toàn bộ Máy chủ. Những thông tin này có thể mô tả các thành viên, bao gồm cả những thành viên không trực tiếp viết ra chúng.
+- Metadata của emoji và sticker: ID Discord, tên, mô tả và cờ định dạng. Bản thân các tệp hình ảnh không được lưu trữ.
+- Lời nhắc nhở: nội dung lời nhắc, ID Discord và biệt danh của người dùng mục tiêu, kênh, lịch trình và mọi cài đặt lặp lại.
+- Bản tóm tắt bộ nhớ ngắn hạn: khi bộ nhớ ngắn hạn được bật, TomoriBot sẽ ghi các bản tóm tắt ngắn rút ra từ cuộc trò chuyện gần đây vào cơ sở dữ liệu để duy trì ngữ cảnh giữa các lần Kích hoạt. Những bản tóm tắt này sẽ bị xóa sau một khoảng thời gian không hoạt động (mặc định là 90 ngày).
+- Liên kết tích hợp: liên kết phòng và kênh Matrix, cùng với các URL, tên công cụ được phát hiện và token xác thực được mã hóa cho bất kỳ máy chủ MCP nào mà người quản lý kết nối.
 
 ### 2.3) Thông tin xác thực
-- **Khóa API của nhà cung cấp** mà bạn chọn lưu trữ, ở cấp độ Máy chủ hoặc cá nhân.
-- **Định nghĩa endpoint tùy chỉnh,** bao gồm URL endpoint và bất kỳ bearer token nào.
+- Khóa API của nhà cung cấp mà bạn chọn lưu trữ, ở cấp độ Máy chủ hoặc cá nhân.
+- Định nghĩa endpoint tùy chỉnh, bao gồm URL endpoint và bất kỳ bearer token nào.
 
 Tất cả thông tin xác thực đều được mã hóa khi lưu trữ (at rest).
 
 ### 2.4) Nội dung bạn tải lên
-- **Tài liệu:** toàn bộ văn bản được trích xuất từ các tệp tải lên cơ sở tri thức của Máy chủ, cùng với tên tệp, loại phương tiện, kích thước và vector embedding tìm kiếm được tạo ra từ văn bản đó.
-- **Hình ảnh persona:** avatar, sprite và hình ảnh tham chiếu nhân vật, được lưu trữ trong bộ lưu trữ đối tượng để persona có thể hiển thị nhất quán.
-- **Mẫu giọng nói:** các mẫu âm thanh và bản ghi tham chiếu của chúng, khi tính năng nhân bản giọng nói được cấu hình.
+- Tài liệu: toàn bộ văn bản được trích xuất từ các tệp tải lên cơ sở tri thức của Máy chủ, cùng với tên tệp, loại phương tiện, kích thước và vector embedding tìm kiếm được tạo ra từ văn bản đó.
+- Hình ảnh persona: avatar, sprite và hình ảnh tham chiếu nhân vật, được lưu trữ trong bộ lưu trữ đối tượng để persona có thể hiển thị nhất quán.
+- Mẫu giọng nói: các mẫu âm thanh và bản ghi tham chiếu của chúng, khi tính năng nhân bản giọng nói được cấu hình.
 
 ### 2.5) Hồ sơ vận hành
-- **Nhật ký lỗi:** ID tương tác, ID người dùng và Máy chủ, tên lệnh, loại lỗi và stack trace. Nội dung tin nhắn và cuộc trò chuyện không được ghi nhật ký. Được lưu giữ trong 90 ngày.
-- **Số liệu hiệu năng:** các mẫu đo thời gian và tài nguyên dùng để duy trì sự ổn định của dịch vụ. Được lưu giữ trong 30 ngày.
-- **Ánh xạ tin nhắn persona:** ID tin nhắn và kênh Discord liên kết một tin nhắn đã gửi với sprite persona được sử dụng, để TomoriBot có thể cập nhật hoặc dọn dẹp tin nhắn của chính mình. Được lưu giữ trong 30 ngày.
+- Nhật ký lỗi: ID tương tác, ID người dùng và Máy chủ, tên lệnh, loại lỗi và stack trace. Nội dung tin nhắn và cuộc trò chuyện không được ghi nhật ký. Được lưu giữ trong 90 ngày.
+- Số liệu hiệu năng: các mẫu đo thời gian và tài nguyên dùng để duy trì sự ổn định của dịch vụ. Được lưu giữ trong 30 ngày.
+- Ánh xạ tin nhắn persona: ID tin nhắn và kênh Discord liên kết một tin nhắn đã gửi với sprite persona được sử dụng, để TomoriBot có thể cập nhật hoặc dọn dẹp tin nhắn của chính mình. Được lưu giữ trong 30 ngày.
 
 ## 3) Dữ liệu chúng tôi không lưu trữ
 
 Những thông tin sau chỉ được đọc trong khi TomoriBot chuẩn bị câu trả lời và không được ghi vào cơ sở dữ liệu của chúng tôi:
 
-- **Tin nhắn Discord:** các tin nhắn gần đây trong kênh (thường là 80 tin nhắn gần nhất) được đọc vào bộ nhớ tạm để xây dựng ngữ cảnh và gửi đến Nhà cung cấp được cấu hình. Chúng sẽ bị hủy sau khi câu trả lời được tạo ra. Các bản tóm tắt có thể được giữ lại riêng nếu bộ nhớ ngắn hạn được bật, như đã mô tả trong Mục 2.2.
-- **Tệp đính kèm và phương tiện:** hình ảnh, video và ảnh hồ sơ được phân tích trong quá trình Kích hoạt sẽ được xử lý trong bộ nhớ tạm và bị hủy sau đó.
-- **Metadata của máy chủ và kênh:** tên Máy chủ, mô tả, tên kênh và chủ đề được đọc mới hoàn toàn trong mỗi lần tương tác.
-- **Thông tin trạng thái hoạt động:** hoạt động hiện tại hoặc trạng thái của bạn, khi có sẵn.
-- **Hình ảnh emoji và sticker:** được lấy từ Discord mỗi khi sử dụng.
+- Tin nhắn Discord: các tin nhắn gần đây trong kênh (thường là 80 tin nhắn gần nhất) được đọc vào bộ nhớ tạm để xây dựng ngữ cảnh và gửi đến Nhà cung cấp được cấu hình. Chúng sẽ bị hủy sau khi câu trả lời được tạo ra. Các bản tóm tắt có thể được giữ lại riêng nếu bộ nhớ ngắn hạn được bật, như đã mô tả trong Mục 2.2.
+- Tệp đính kèm và phương tiện: hình ảnh, video và ảnh hồ sơ được phân tích trong quá trình Kích hoạt sẽ được xử lý trong bộ nhớ tạm và bị hủy sau đó.
+- Metadata của máy chủ và kênh: tên Máy chủ, mô tả, tên kênh và chủ đề được đọc mới hoàn toàn trong mỗi lần tương tác.
+- Thông tin trạng thái hoạt động: hoạt động hiện tại hoặc trạng thái của bạn, khi có sẵn.
+- Hình ảnh emoji và sticker: được lấy từ Discord mỗi khi sử dụng.
 
 ## 4) Dữ liệu chúng tôi gửi cho bên thứ ba
 
-- **Nhà cung cấp AI:** prompt của bạn, ngữ cảnh gần đây như mô tả ở trên, dữ liệu persona và mọi tệp đính kèm sẽ được gửi đến Nhà cung cấp được cấu hình cho Máy chủ đó hoặc cho cá nhân bạn, chẳng hạn như Google, OpenRouter, NovelAI hoặc một endpoint tùy chỉnh. Điều này bao gồm các yêu cầu về văn bản, thị giác, embedding, hình ảnh, video, giọng nói và phiên âm. Các điều khoản, chính sách quyền riêng tư, bộ lọc an toàn và quy tắc lưu giữ dữ liệu của họ sẽ áp dụng cho nội dung đó, và chúng tôi không kiểm soát những điều này.
-- **Nhà cung cấp tìm kiếm:** nếu tính năng tìm kiếm web được bật, các truy vấn tìm kiếm và ngữ cảnh liên quan sẽ được gửi đến nhà cung cấp tìm kiếm được cấu hình.
-- **Matrix:** nếu cầu nối Matrix được cấu hình cho một kênh, tin nhắn sẽ được chuyển tiếp qua lại giữa Discord và phòng Matrix được liên kết.
+- Nhà cung cấp AI: prompt của bạn, ngữ cảnh gần đây như mô tả ở trên, dữ liệu persona và mọi tệp đính kèm sẽ được gửi đến Nhà cung cấp được cấu hình cho Máy chủ đó hoặc cho cá nhân bạn, chẳng hạn như Google, OpenRouter, NovelAI hoặc một endpoint tùy chỉnh. Điều này bao gồm các yêu cầu về văn bản, thị giác, embedding, hình ảnh, video, giọng nói và phiên âm. Các điều khoản, chính sách quyền riêng tư, bộ lọc an toàn và quy tắc lưu giữ dữ liệu của họ sẽ áp dụng cho nội dung đó, và chúng tôi không kiểm soát những điều này.
+- Nhà cung cấp tìm kiếm: nếu tính năng tìm kiếm web được bật, các truy vấn tìm kiếm và ngữ cảnh liên quan sẽ được gửi đến nhà cung cấp tìm kiếm được cấu hình.
+- Matrix: nếu cầu nối Matrix được cấu hình cho một kênh, tin nhắn sẽ được chuyển tiếp qua lại giữa Discord và phòng Matrix được liên kết.
 
 Chúng tôi không bán dữ liệu cá nhân. Chúng tôi chỉ chia sẻ dữ liệu khi cần thiết để vận hành các tính năng bạn yêu cầu, hoặc khi pháp luật có quy định bắt buộc.
 

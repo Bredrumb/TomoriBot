@@ -4,22 +4,22 @@ sidebar:
   order: 1
 ---
 
-A TomoriBot é baseada em agentes: além de conversar, ela pode chamar **ferramentas** para pesquisar na web, ler documentos, gerar mídia, definir lembretes, agir em outros canais e muito mais. Ela decide quando usá-las com base na conversa. Esta página aborda as ferramentas integradas, como estendê-la com servidores MCP e como manter as declarações de ferramentas enxutas com o Modo de Ferramenta Deliberada.
+A TomoriBot é baseada em agentes: além de conversar, ela pode chamar ferramentas para pesquisar na web, ler documentos, gerar mídia, definir lembretes, agir em outros canais e muito mais. Ela decide quando usá-las com base na conversa. Esta página aborda as ferramentas integradas, como estendê-la com servidores MCP e como manter as declarações de ferramentas enxutas com o Modo de Ferramenta Deliberada.
 
 Aqui estão alguns exemplos divertidos:
 
-- **1. Verificador de Bem-Estar**
+- 1. Verificador de Bem-Estar
   ```text
   A cada poucas horas, faça uma verificação obrigatória de bem-estar em @Bredrumb.
   Pergunte como ele se sente no momento e se ele fez alguma pausa na codificação recentemente.
   Acompanhe o estado emocional dele ao longo do tempo com {memory_tool} e/or {memory_update_tool} para reportar a ele mais tarde.
   ```
-- **2. Notícias Semanais de ~~Eventos Atuais~~ Yuri**
+- 2. Notícias Semanais de ~~Eventos Atuais~~ Yuri
   ```text
   Toda sexta-feira, compile os capítulos notáveis de mangá yuri da semana, episódios de anime e lançamentos de fanart da comunidade usando {web_search_tool}.
   Apresente os resultados com {voice_message_tool} usando uma voz ASMR sedutora.
   ```
-- **3. Polícia do Sono**
+- 3. Polícia do Sono
   ```text
   Se você notar através da {message_metadata_tool} que alguém está no bate-papo depois das 2h da manhã, use {voice_message_tool} para enviar uma canção de ninar ASMR ameaçadoramente calma mandando-os ir para a cama.
   Se eles continuarem conversando 10 minutos depois, use {manage_message_tool} para excluir a mensagem deles para o próprio bem e lembrá-los de que a privação do sono é a principal causa de seus problemas.
@@ -43,7 +43,7 @@ As ferramentas dependem de o provedor/modelo ativo suportar chamada de ferrament
 | Bloquear / desbloquear usuário | `{block_user_tool}` / `{unblock_user_tool}` | `user_blocking_enabled` | Silenciamento/bloqueio de um usuário no escopo da persona (não afeta memórias). |
 | Interagir com mensagem recente | `{message_interaction_tool}` | — | Reagir ou enviar uma resposta curta a uma mensagem recente. |
 | Olhar foto de perfil | `{profile_picture_tool}` | modelo de visão ou `vision_llm` | Inspecionar o avatar de um usuário ou da persona. |
-| Ler documento | `{document_tool}` | — | Extrair texto de um PDF ou de **qualquer** arquivo de texto UTF-8: código-fonte (`.py`/`.ts`/`.rs`/…), `.json`, `.yaml`, `.md`, `.txt` e qualquer anexo não binário. |
+| Ler documento | `{document_tool}` | — | Extrair texto de um PDF ou de qualquer arquivo de texto UTF-8: código-fonte (`.py`/`.ts`/`.rs`/…), `.json`, `.yaml`, `.md`, `.txt` e qualquer anexo não binário. |
 | Revelar metadados da mensagem | `{message_metadata_tool}` | — | Anotar turnos recentes com identificadores/carimbos de data/hora para direcionamento preciso. |
 | Processar vídeo do YouTube | `{youtube_tool}` | modelo com suporte a vídeo | Analisar um link específico do YouTube sob demanda. |
 | Analisar imagem | `{image_analysis_tool}` | `vision_llm` configurado | Delegar a compreensão de imagem a um modelo de visão separado. |
@@ -51,7 +51,7 @@ As ferramentas dependem de o provedor/modelo ativo suportar chamada de ferrament
 | Gerar mensagem de voz | `{voice_message_tool}` | chave ElevenLabs + voz da persona + `voice_message_enabled` | Enviar uma resposta de voz falada no Discord. |
 
 :::note[Para autores de prompts]
-Ao personalizar o prompt de sistema dela ou as instruções da persona, faça referência às ferramentas por meio de suas **macros de prompt** da tabela acima em vez de codificar nomes de ferramentas de forma fixa: as macros se expandem para os nomes corretos no momento da montagem do contexto e degradam suavemente quando uma ferramenta não está disponível.
+Ao personalizar o prompt de sistema dela ou as instruções da persona, faça referência às ferramentas por meio de suas macros de prompt da tabela acima em vez de codificar nomes de ferramentas de forma fixa: as macros se expandem para os nomes corretos no momento da montagem do contexto e degradam suavemente quando uma ferramenta não está disponível.
 `{pin_tool}` e `{timestamp_refresh_tool}` ainda funcionam como aliases de compatibilidade para `{manage_message_tool}` e `{message_metadata_tool}`. As ferramentas de pesquisa na web e URLs abaixo também têm macros: `{web_search_tool}`, `{image_search_tool}`, `{video_search_tool}`, `{news_search_tool}`, `{url_fetch_tool}` e `{url_metadata_tool}`; estas são resolvidas dinamicamente para o melhor mecanismo disponível, incluindo substituições de MCP do servidor.
 :::
 
@@ -78,11 +78,11 @@ As condições de ferramentas refletem o suporte do provedor/modelo, a configura
 
 O modelo vê uma única ferramenta unificada `web_search(query, category)`. Por trás dela, um despachante encaminha cada chamada por uma cadeia de mecanismos e retorna o primeiro sucesso:
 
-**Brave → SearXNG → DuckDuckGo → IAsk**
+Brave → SearXNG → DuckDuckGo → IAsk
 
-- O **Brave** é executado primeiro quando uma chave de API do Brave está configurada (defina-a com `/providers`); ele adiciona pesquisa de imagens, vídeos e notícias. ⚠️ Defina um limite de uso de $5 no painel do Brave para evitar cobranças inesperadas.
-- O **DuckDuckGo** é o padrão quando nenhuma chave está configurada, alternando em cascata para o **IAsk** em caso de limites de taxa ou resultados vazios.
-- O **SearXNG** e o **Crawl4AI** são servidores opcionais de hospedagem própria que desbloqueiam mais categorias e buscas de páginas renderizadas pelo navegador; veja [Hospedagem Própria](/pt-BR/self-hosting/).
+- O Brave é executado primeiro quando uma chave de API do Brave está configurada (defina-a com `/providers`); ele adiciona pesquisa de imagens, vídeos e notícias. ⚠️ Defina um limite de uso de $5 no painel do Brave para evitar cobranças inesperadas.
+- O DuckDuckGo é o padrão quando nenhuma chave está configurada, alternando em cascata para o IAsk em caso de limites de taxa ou resultados vazios.
+- O SearXNG e o Crawl4AI são servidores opcionais de hospedagem própria que desbloqueiam mais categorias e buscas de páginas renderizadas pelo navegador; veja [Hospedagem Própria](/pt-BR/self-hosting/).
 
 Para ler uma página específica, ela usa `fetch_url`. Ele não está disponível no NovelAI.
 
@@ -96,17 +96,17 @@ Servidores [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) este
 Qualquer servidor MCP hospedado publicamente com um endpoint HTTPS funciona. Usando o [Smithery.ai](https://smithery.ai) como exemplo:
 
 1. Crie uma conta e gere uma chave de API a partir do seu perfil.
-2. Abra um MCP no catálogo e copie a **URL de conexão** (por exemplo, `https://youtube.run.tools`).
-3. Abra `/config` > Plugins > MCP Servers, escolha `Adicionar MCP`, cole a URL de conexão em **URL**, cole sua chave do Smithery em `Token de Autenticação` e escolha o `Tipo de Servidor` necessário. `Propósito Geral` fica selecionado por padrão.
+2. Abra um MCP no catálogo e copie a URL de conexão (por exemplo, `https://youtube.run.tools`).
+3. Abra `/config` > Plugins > MCP Servers, escolha `Adicionar MCP`, cole a URL de conexão em URL, cole sua chave do Smithery em `Token de Autenticação` e escolha o `Tipo de Servidor` necessário. `Propósito Geral` fica selecionado por padrão.
 
-Se um servidor não precisar de autenticação, deixe `Token de Autenticação` em branco. Seu token de autenticação é criptografado em repouso e nunca é exibido novamente. Abra a mesma página de Configuração para inspecionar o estado configurado, ativar ou desativar um servidor, ou remover um com confirmação explícita. A remoção o desconecta imediatamente e libera um slot. Cada linha salva também mostra os nomes das ferramentas delimitadas de sua última descoberta bem-sucedida. **None discovered** é um resultado conhecido de zero ferramentas; **Discovery unknown** identifica uma linha legada ou um servidor que ainda não possui um snapshot bem-sucedido. Abrir a interface de gerenciamento de MCP apenas lê os metadados salvos e não entra em contato com o servidor remoto.
+Se um servidor não precisar de autenticação, deixe `Token de Autenticação` em branco. Seu token de autenticação é criptografado em repouso e nunca é exibido novamente. Abra a mesma página de Configuração para inspecionar o estado configurado, ativar ou desativar um servidor, ou remover um com confirmação explícita. A remoção o desconecta imediatamente e libera um slot. Cada linha salva também mostra os nomes das ferramentas delimitadas de sua última descoberta bem-sucedida. None discovered é um resultado conhecido de zero ferramentas; Discovery unknown identifica uma linha legada ou um servidor que ainda não possui um snapshot bem-sucedido. Abrir a interface de gerenciamento de MCP apenas lê os metadados salvos e não entra em contato com o servidor remoto.
 
 ### Servidores MCP Locais
 
-Servidores MCP locais são **suportados apenas em instâncias de hospedagem própria**: o bot público hospedado exige HTTPS e bloqueia endereços locais/privados. Se você executa sua própria instância, veja [Configuração: Servidor MCP Local](/pt-BR/self-hosting/local-endpoints/setup-local-mcp/).
+Servidores MCP locais são suportados apenas em instâncias de hospedagem própria: o bot público hospedado exige HTTPS e bloqueia endereços locais/privados. Se você executa sua própria instância, veja [Configuração: Servidor MCP Local](/pt-BR/self-hosting/local-endpoints/setup-local-mcp/).
 
 :::danger[Adicione apenas servidores MCP em que você confia]
-Um servidor MCP malicioso pode **injetar prompts** nela com instruções ocultas, **exfiltrar** dados que os usuários passam para suas ferramentas ou retornar **resultados prejudiciais/falsos** que ela retransmitirá para o seu servidor. Trate servidores MCP como extensões de navegador; em caso de dúvida, não adicione. Sempre revise as ferramentas descritas de um MCP antes de adicioná-lo.
+Um servidor MCP malicioso pode injetar prompts nela com instruções ocultas, exfiltrar dados que os usuários passam para suas ferramentas ou retornar resultados prejudiciais/falsos que ela retransmitirá para o seu servidor. Trate servidores MCP como extensões de navegador; em caso de dúvida, não adicione. Sempre revise as ferramentas descritas de um MCP antes de adicioná-lo.
 :::
 
 ## Modo de Ferramenta Deliberada
@@ -114,8 +114,8 @@ Um servidor MCP malicioso pode **injetar prompts** nela com instruções ocultas
 
 Cada ferramenta declarada aumenta o tamanho do prompt. O `Modo de Ferramenta Deliberada` mantém as declarações de ferramentas fora dos turnos normais de chat, a menos que a mensagem pareça realmente precisar de uma ferramenta; isso reduz o tamanho do prompt e ajuda modelos menores/locais a responderem mais rápido.
 
-- Primeiro, ela verifica a mensagem quanto à **intenção de ferramenta**. Gatilhos integrados cobrem solicitações comuns (lembretes, pesquisa na web, atualizações de memória, mensagens entre canais, geração de imagem/vídeo/voz, análise de mídia, criação de tópicos, ações de mensagem). Perguntas sobre seu modelo atual, ferramentas, configurações ou por que uma capacidade está indisponível expõem a revisão de capacidades e o acesso à documentação oficial em conjunto. Expressões de acompanhamento também funcionam, como "faça isso de novo, mas com mais raiva" após um pedido de mensagem de voz.
-- Os administradores de servidores podem adicionar **frases de gatilho personalizadas** literais com `/server trigger add`: por exemplo, mapeando `pic`, `img` ou `pfp` para geração de imagem.
+- Primeiro, ela verifica a mensagem quanto à intenção de ferramenta. Gatilhos integrados cobrem solicitações comuns (lembretes, pesquisa na web, atualizações de memória, mensagens entre canais, geração de imagem/vídeo/voz, análise de mídia, criação de tópicos, ações de mensagem). Perguntas sobre seu modelo atual, ferramentas, configurações ou por que uma capacidade está indisponível expõem a revisão de capacidades e o acesso à documentação oficial em conjunto. Expressões de acompanhamento também funcionam, como "faça isso de novo, mas com mais raiva" após um pedido de mensagem de voz.
+- Os administradores de servidores podem adicionar frases de gatilho personalizadas literais com `/server trigger add`: por exemplo, mapeando `pic`, `img` ou `pfp` para geração de imagem.
 - Os gatilhos integrados leem expressões em inglês. Outros idiomas acessam as mesmas ferramentas por meio da lista de palavras-chave de cada idioma. A lista de cada idioma incluído é verificada em todas as mensagens, independentemente da sua configuração de idioma, de modo que um servidor bilíngue funciona em ambos os idiomas.
 - Frases personalizadas em japonês, chinês ou coreano também correspondem dentro de palavras mais longas, pois esses idiomas não separam palavras com espaços. Uma frase terminada em `*` corresponde a qualquer palavra que comece com ela: `remind*` cobre `reminder` e `reminding`.
 
@@ -125,7 +125,7 @@ Cada ferramenta declarada aumenta o tamanho do prompt. O `Modo de Ferramenta Del
 - `/personal config`: usuários substituem a configuração para si mesmos.
 - Com um canal de registros de pensamentos configurado (`/server thought-logs`), chamadas de ferramentas bem-sucedidas no modo deliberado são registradas lá junto com o gatilho que expôs a ferramenta.
 
-O Modo de Ferramenta Deliberada apenas decide quais ferramentas são *mostradas* ao modelo; o modelo ainda precisa escolher chamar uma. Em `/help`, escolha `Comportamento` e depois **Deliberate Tool Mode** para o resumo no Discord.
+O Modo de Ferramenta Deliberada apenas decide quais ferramentas são *mostradas* ao modelo; o modelo ainda precisa escolher chamar uma. Em `/help`, escolha `Comportamento` e depois Modo de Ferramenta Deliberada para o resumo no Discord.
 
 :::note
 O `Modo de Ferramenta Deliberada` (esta seção) não tem relação com o `Modo de Gatilho Deliberado`, que controla como *ela* é acionada; veja [Conversas & Gatilhos](/pt-BR/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode). Ambos são abreviados como "DTM" no Discord.

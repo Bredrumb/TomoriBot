@@ -7,7 +7,7 @@ sidebar:
 自架執行個體的日常運作：維護指令稿、如何更新，以及如何備份與還原你的資料庫。這些都是主機端操作，你要從 shell 執行，不是從 Discord。Discord 內、以使用者為單位的匯出、匯入與刪除流程，請改看
 [資料處理](/zh-TW/features/knowledge/data-handling/)。
 
-如果你正準備 `git pull` 新版本，請先讀[安全移轉](/zh-TW/self-hosting/safe-migration/)，它涵蓋了在開機時執行的移轉程式碰觸你的結構描述**之前**先備份。
+如果你正準備 `git pull` 新版本，請先讀[安全移轉](/zh-TW/self-hosting/safe-migration/)，它涵蓋了在開機時執行的移轉程式碰觸你的結構描述之前先備份。
 
 ## 維護指令稿
 
@@ -240,9 +240,9 @@ bun install --frozen-lockfile
 
 `servers/tts/` 底下的 TTS 本機伺服器不再有共用的後備值、依引擎設定的上限與驗證設定。`.env` 或 shell 裡的舊值會被忽略，所以請留意下面那些會改變行為的列，而不是只把它當成重複一次預設值。
 
-- **連接埠：** `TOMORI_TTS_PORT` 已移除，因為 `.env` 裡的一個值會讓所有啟動的伺服器使用同一個連接埠。現在每個引擎讀取自己的變數：`CHATTERBOX_PORT`（8011）、`QWEN3TTS_PORT`（8012，語音設計模式下為 8014）、`IRODORI_TTS_PORT`（8013）、`FISH_S2_PORT`（8015）、`VOXCPM2_PORT`（8016）、`COSYVOICE3_PORT`（8017）和 `MOSS_TTS_PORT`（8018）。
-- **驗證：** 伺服器不再檢查 bearer 權杖，也不再拒絕綁定到非迴路位址。如果你設定過 `FISH_S2_API_KEY`、`VOXCPM2_API_KEY`、`TOMORI_TTS_API_KEY` 或 `COSYVOICE3_BEARER_TOKEN`，端點現在不帶它們也會接受請求。綁定到迴路位址以外之前，請先讀[網路存取](/zh-TW/self-hosting/local-endpoints/text-to-speech/#network-access)。
-- **安裝腳本固定的版本：** Fish Speech 執行環境的提交，以及 CosyVoice 執行環境與模型的修訂，都固定在安裝腳本裡。要更新它們，就得改腳本裡固定的版本。
+- 連接埠： `TOMORI_TTS_PORT` 已移除，因為 `.env` 裡的一個值會讓所有啟動的伺服器使用同一個連接埠。現在每個引擎讀取自己的變數：`CHATTERBOX_PORT`（8011）、`QWEN3TTS_PORT`（8012，語音設計模式下為 8014）、`IRODORI_TTS_PORT`（8013）、`FISH_S2_PORT`（8015）、`VOXCPM2_PORT`（8016）、`COSYVOICE3_PORT`（8017）和 `MOSS_TTS_PORT`（8018）。
+- 驗證： 伺服器不再檢查 bearer 權杖，也不再拒絕綁定到非迴路位址。如果你設定過 `FISH_S2_API_KEY`、`VOXCPM2_API_KEY`、`TOMORI_TTS_API_KEY` 或 `COSYVOICE3_BEARER_TOKEN`，端點現在不帶它們也會接受請求。綁定到迴路位址以外之前，請先讀[網路存取](/zh-TW/self-hosting/local-endpoints/text-to-speech/#network-access)。
+- 安裝腳本固定的版本： Fish Speech 執行環境的提交，以及 CosyVoice 執行環境與模型的修訂，都固定在安裝腳本裡。要更新它們，就得改腳本裡固定的版本。
 
 <details>
 <summary>全部已移除的 TTS 本機伺服器變數</summary>
@@ -298,10 +298,10 @@ bun run restore-backup --latest
 bun run restore-backup --from backups/backup_2024-01-15_14-30-45
 ```
 
-`bun run backup:personas` 是範圍更窄的匯出，只含人格預設集與每個人格的伺服器記憶，涵蓋所有伺服器。它**必須**透過 `/persona import`
-手動重新匯入，而且**不能**搭配 `restore-backup` 使用（那會造成主鍵衝突）。
+`bun run backup:personas` 是範圍更窄的匯出，只含人格預設集與每個人格的伺服器記憶，涵蓋所有伺服器。它必須透過 `/persona import`
+手動重新匯入，而且不能搭配 `restore-backup` 使用（那會造成主鍵衝突）。
 
-TomoriBot 在非正式環境也會進行**自動啟動備份**，而完整還原需要目標資料庫上已有 `pgvector` 擴充功能。這兩件事都詳述於[安全移轉](/zh-TW/self-hosting/safe-migration/)，那裡也有手動的 `pg_dump` 與 `pg_restore` 流程，供你偏好直接操作工具時使用。
+TomoriBot 在非正式環境也會進行自動啟動備份，而完整還原需要目標資料庫上已有 `pgvector` 擴充功能。這兩件事都詳述於[安全移轉](/zh-TW/self-hosting/safe-migration/)，那裡也有手動的 `pg_dump` 與 `pg_restore` 流程，供你偏好直接操作工具時使用。
 
 ## Docker Compose 備份
 

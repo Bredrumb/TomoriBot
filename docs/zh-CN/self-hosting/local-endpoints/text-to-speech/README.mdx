@@ -62,14 +62,14 @@ TomoriBot 把语音当作一种自定义端点功能来处理。本地引擎在 
 
 对 Qwen3-TTS、MOSS-VoiceGenerator、IrodoriTTS 或 VoxCPM2 的 VoiceDesign，可以跳过音频样本，直接在 `/config` 的人格 > 语音里为这个人格保存一段自然语言的声音描述。CosyVoice 3 使用带参考样本的克隆模式，并可通过 `voice_instructions` 接受一次性的表达方式指令。
 
-用 ElevenLabs 的话，在 `/providers` 里选择`添加新提供方`和 **ElevenLabs**，它会一并注册语音与转写端点。
+用 ElevenLabs 的话，在 `/providers` 里选择`添加新提供方`和 ElevenLabs，它会一并注册语音与转写端点。
 
 合成之前，TomoriBot 会从生成的语音脚本里去掉 `:pepega:`、`<:pepega:123456789012345678>` 这类 Discord 自定义 emoji 写法。除非语音端点使用 emoji 标记（这是给 IrodoriTTS 用的），否则 Unicode emoji 也会被去掉。对 Chatterbox Turbo、Fish S2 Pro 这类端点，当它们的脚本标记风格设为 `方括号标签` 时，方括号标签会被保留。
 
-VoxCPM2 使用 **Plain** 脚本标记风格。它的语音设计与说话风格控制通过 TomoriBot 的 `instruct` 字段传递，再由 VoxCPM2 的封装程序转换成模型原生的、用圆括号包起来的自然语言控制语法。
+VoxCPM2 使用 Plain 脚本标记风格。它的语音设计与说话风格控制通过 TomoriBot 的 `instruct` 字段传递，再由 VoxCPM2 的封装程序转换成模型原生的、用圆括号包起来的自然语言控制语法。
 
-CosyVoice 3 也使用 **Plain** 脚本标记风格。它把带参考文本的参考音频映射到零样本克隆，把不带参考文本的参考音频映射到跨语言克隆，并把 `voice_instructions` 映射到自身的指令条件路径。行内的方括号标签会被去掉，因为 CosyVoice 的指令作用于整段话。
+CosyVoice 3 也使用 Plain 脚本标记风格。它把带参考文本的参考音频映射到零样本克隆，把不带参考文本的参考音频映射到跨语言克隆，并把 `voice_instructions` 映射到自身的指令条件路径。行内的方括号标签会被去掉，因为 CosyVoice 的指令作用于整段话。
 
 ## 引擎对比
 
-想查看并排的实测延迟基准、音频样本播放，以及对比所有受支持引擎的详细功能矩阵，请看 **[TTS 引擎对比](/zh-CN/self-hosting/local-endpoints/text-to-speech/comparison/)**。
+想查看并排的实测延迟基准、音频样本播放，以及对比所有受支持引擎的详细功能矩阵，请看 [TTS 引擎对比](/zh-CN/self-hosting/local-endpoints/text-to-speech/comparison/)。

@@ -5,7 +5,7 @@ title: "LTM 01: Memory Creation"
 LLM-initiated creation of a new persistent memory (server-wide or
 user-specific) written to the database.
 
-**File:** `src/tools/functionCalls/memoryTool.ts`: class `MemoryTool`,
+- **File**: `src/tools/functionCalls/memoryTool.ts`: class `MemoryTool`,
 tool name `create_long_term_memory`
 
 ## Mission
@@ -105,7 +105,7 @@ After a successful write:
 
 | Surface | Plugin-relevance |
 |---|---|
-| `serverMemoryRepository.add()` / `personalMemoryRepository.add()` | **A plugin adding a new memory scope (e.g., channel-specific LTM) would add a repository method and a matching `memory_scope` enum value here.** → plugin plan candidate |
+| `serverMemoryRepository.add()` / `personalMemoryRepository.add()` | A plugin adding a new memory scope (e.g., channel-specific LTM) would add a repository method and a matching `memory_scope` enum value here. → plugin plan candidate |
 | `resolveUserTarget()` | `src/utils/discord/targetResolver.ts`. Internal: user resolution is a guild-lookup utility; no plugin seam. |
 | Memory limit checks (`checkServerMemoryLimit`, `checkPersonalMemoryLimit`) | Internal: limits are DB-column configured, not plugin-controlled. |
 | `convertMentions()` | `src/utils/text/contextBuilder.ts`. Internal: token replacement (`{user}` / `{bot}`) for embed display only; does not affect the stored content. |

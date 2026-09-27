@@ -5,7 +5,7 @@ title: "02.11: Dialogue History"
 The actual recent message history as alternating user/model items. The
 bottom of the prompt, immediately above the LLM's next response.
 
-**File:** `src/utils/text/context/dialogueHistory.ts:25-157`
+- **File**: `src/utils/text/context/dialogueHistory.ts:25-157`
 
 ## Mission
 
@@ -62,7 +62,7 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
 
 ## Side effects
 
-**Per message:**
+### Per message
 
 - **Role mapping** computed from author type and impersonation flags.
 - **Persona user block handling** happens before this stage in
@@ -148,13 +148,13 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   build). See `src/utils/text/processors/formatters.ts`.
 - **Identity macros are preserved in message bodies**: this stage is the only
   `convertMentions` caller that handles raw prose it did not author, so it splits
-  the conversion in two: the **author label** is converted with
+  the conversion in two: the author label is converted with
   `identityMacroMode: "resolve"` (it names the turn's owner), and the **joined
   line** is then converted with `identityMacroMode: "preserve"`. Mentions,
   channel links, and roles still resolve in the body; only `{bot}` / `{char}` /
   `{user}` stay literal. Two reasons:
   - On a model-role line `authorName` *is* the persona label and `botName` *is*
-    the persona nickname, so resolving would collapse **both** macros onto the
+    the persona nickname, so resolving would collapse both macros onto the
     same persona name; turning `{bot} greets {user}` into `Tomori greets Tomori`.
   - A message body legitimately contains macros whenever a user asks the persona
     to draft a preset or system prompt; rewriting them corrupts the draft the
@@ -182,7 +182,7 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   The `{message_metadata_tool}` macro is expanded once before this loop, so the
   emitted hint names `reveal_message_metadata` without introducing async work per message.
 
-**Context-note injection (once per build):**
+### Context-note injection (once per build)
 
 - If `context_note` is set, computes `contextNoteTargetIndex = max(0,
   totalMessages - context_note_depth)`.
@@ -201,24 +201,24 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   `TIME_AWARENESS_NOTE_DEPTH` (3 messages). The chat pipeline omits it for user
   impersonation and when the direct triggerer has no internal user id.
 
-**Only the direct triggerer gets a note.** Passive authors in the channel history
+Only the direct triggerer gets a note. Passive authors in the channel history
 neither receive nor consume reunions. This keeps unrelated turns from advancing a
 person's relationship clock and prevents a busy channel from prompting several
 greetings at once.
 
-**Presence is the clock, not message volume.** `presence_seen` is recorded once per
+Presence is the clock, not message volume. `presence_seen` is recorded once per
 successful direct-triggerer turn, including DMs. This is deliberately separate from
 the `message_sent` telemetry metric, whose guild-only recording rules exist for
 leaderboard correctness.
 
-**The clock is a two-phase protocol**, both halves in `@/utils/chat/reunionPresence`:
+The clock is a two-phase protocol, both halves in `@/utils/chat/reunionPresence`:
 
-1. `resolveReunionNote` at **context build** acquires a process-wide
+1. `resolveReunionNote` at context build acquires a process-wide
    `(persona lineage, user)` claim before reading the clock. This ordering prevents
    a concurrent query from resuming with a stale pre-commit snapshot. Ineligible
    turns release immediately; eligible turns carry the claim in the
    `ReunionPresenceScope` on `ChatTurnContext.reunionPresence`.
-2. `recordReunionPresence` at **post-turn** immediately persists `presence_seen`
+2. `recordReunionPresence` at post-turn immediately persists `presence_seen`
    after a response lands, then releases the claim. A direct-delivery tool such as
    voice generation also counts when it confirms that its message reached Discord,
    even if the model emits no separate text. Empty and failed turns release without
@@ -230,10 +230,10 @@ the same time. `REUNION_CLAIM_TTL_MS` (240000) releases abandoned claims after
 an interrupted turn. Empty-response retries finalize the old claim before rebuilding
 context, allowing the retry to claim the note itself.
 
-**Reunions are one-shot.** `StatRepository.getUserPersonaReunionInfo` reads the last
+Reunions are one-shot. `StatRepository.getUserPersonaReunionInfo` reads the last
 activity timestamp from buckets before `CURRENT_DATE` and whether a persisted
 `presence_seen` row exists today for the `(user, persona lineage)` tuple across all
-servers. The gap lookup spans `presence_seen` **and** `message_sent` so relationships
+servers. The gap lookup spans `presence_seen` and `message_sent` so relationships
 predating the presence metric retain their history. A successful direct turn writes
 `presence_seen` immediately rather than through the telemetry buffer, providing the
 read-after-write consistency needed by another channel. A failed read injects nothing.
@@ -298,7 +298,7 @@ After this stage runs:
 
 ## Extension points
 
-This is the **biggest contributor by complexity**, with multiple
+This is the biggest contributor by complexity, with multiple
 plugin-relevant seams:
 
 | Surface | Plugin-relevance |
@@ -311,7 +311,7 @@ plugin-relevant seams:
 | Context-note injection depth | Tomori-state can override tomoriConfig: a plugin adding "per-channel context note" would extend the resolution. → plugin plan candidate. |
 | `pushDialogueHistoryContextItem` (the only contributor that uses it) | The push utility wraps tag defaulting; if a plugin emits its own dialogue items it would use the same helper to stay consistent. |
 
-**A plugin extension for "alternate history rendering"** (e.g.
+- **A plugin extension for "alternate history rendering"** (e.g.
 collapse-tool-calls, anonymize-user-content, summarize-old-messages) would
 most naturally take the form of a per-message pre-processor running before
 the role mapping + text/media emission. → plugin plan candidate.

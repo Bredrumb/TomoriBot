@@ -46,7 +46,7 @@ El interruptor del modelo rápido de `/config` debe permanecer activado para usa
 
 ### Chatterbox Estándar (0.5B con CFG y Exageración)
 
-El modelo original Chatterbox base de 0.5B (`ChatterboxTTS`) está integrado directamente en el envoltorio del servidor. Intercambia las etiquetas de eventos entre corchetes en línea de Turbo por un control vocal detallado usando **Orientación sin clasificador (`cfg_weight`)** y **`exaggeration`** emocional.
+El modelo original Chatterbox base de 0.5B (`ChatterboxTTS`) está integrado directamente en el envoltorio del servidor. Intercambia las etiquetas de eventos entre corchetes en línea de Turbo por un control vocal detallado usando Orientación sin clasificador (`cfg_weight`) y `exaggeration` emocional.
 
 Para usar el modelo Estándar:
 1. Inicia el envoltorio del servidor normalmente.
@@ -55,8 +55,8 @@ Para usar el modelo Estándar:
 4. En la siguiente generación, el envoltorio descarga y carga lentamente el modelo de 0.5B estándar en la memoria.
 
 Ambos valores son campos de texto en el modal `Editar parámetros`. Siempre son editables, y la página señala que se ignoran mientras el modelo rápido esté activado:
-- **`cfg_weight`** (predeterminado `0.5`): ajusta qué tan fielmente se adhiere el audio sintetizado al tempo de referencia y al estilo vocal.
-- **`exaggeration`** (predeterminado `0.5`): controla la intensidad emocional y la inflexión dramática de la entrega.
+- `cfg_weight` (predeterminado `0.5`): ajusta qué tan fielmente se adhiere el audio sintetizado al tempo de referencia y al estilo vocal.
+- `exaggeration` (predeterminado `0.5`): controla la intensidad emocional y la inflexión dramática de la entrega.
 
 > [!NOTE]
 > El Chatterbox Estándar no admite etiquetas de eventos entre corchetes en línea (como `[laughs]` o `[sigh]`). TomoriBot elimina automáticamente las etiquetas entre corchetes del texto del prompt cuando el interruptor del Modelo rápido se desactiva.
@@ -70,7 +70,7 @@ Ejecuta `/providers`, elige `Agregar nuevo punto de conexión personalizado` y u
 - Compatibilidad de API: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8011`
 
-Después de guardar la conexión, selecciónala y usa su menú desplegable de modelos para agregar un modelo de Voz. Elige `Voice Clone` como el Modo de fuente de voz y `Bracket Tags` como el Estilo de marcado del guion para que las etiquetas de entrega sobrevivan al envío.
+Después de guardar la conexión, selecciónala y usa su menú desplegable de modelos para agregar un modelo de Voz. Elige `Clon de voz` como el Modo de fuente de voz y `Etiquetas entre corchetes` como el Estilo de marcado del guion para que las etiquetas de entrega sobrevivan al envío.
 
 Usa `/providers` para el registro del endpoint y la configuración del modelo. Luego abre `/config` > Modelos > Cambiar modelos para seleccionar y activar el endpoint registrado.
 

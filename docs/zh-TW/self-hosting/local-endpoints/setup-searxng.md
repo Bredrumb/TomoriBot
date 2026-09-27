@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-`web_search` 工具會走一條引擎鏈：**Brave → SearXNG → DuckDuckGo → IAsk**。自己運行一個 SearXNG 執行個體，就能避開單一引擎的速率限制與爬取中斷，並解鎖 SearXNG 專屬的分類：`science`、`it`、`files` 與 `music`。
+`web_search` 工具會走一條引擎鏈：Brave → SearXNG → DuckDuckGo → IAsk。自己運行一個 SearXNG 執行個體，就能避開單一引擎的速率限制與爬取中斷，並解鎖 SearXNG 專屬的分類：`science`、`it`、`files` 與 `music`。
 
 從下列 SearXNG 設定路徑中選一條：
 
@@ -34,7 +34,7 @@ bun run launch --searxng
 
 如果你偏好自己管理容器，請在 `.env` 保留 `SEARXNG_BASE_URL=http://localhost:8080/`，然後執行：
 
-**PowerShell：**
+PowerShell：
 ```powershell
 docker run -d --name searxng -p 8080:8080 `
   -v "${PWD}/servers/searxng:/etc/searxng:rw" `
@@ -42,7 +42,7 @@ docker run -d --name searxng -p 8080:8080 `
   searxng/searxng:latest
 ```
 
-**Bash（Linux/macOS）：**
+Bash（Linux/macOS）：
 ```bash
 docker run -d --name searxng -p 8080:8080 \
   -v "${PWD}/servers/searxng:/etc/searxng:rw" \

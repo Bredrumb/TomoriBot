@@ -5,11 +5,11 @@ aiGenerated: true
 
 O VoxCPM2 é o modelo multilíngue de conversão de texto em fala (TTS) de 2 bilhões de parâmetros da OpenBMB. Ele suporta 30 idiomas, saída de 48 kHz, Voice Design em linguagem natural, clonagem de voz por áudio de referência, clonagem controlável e "Clonagem Suprema" auxiliada por transcrição. O TomoriBot usa o pacote Python oficial `voxcpm` através do wrapper leve em `servers/tts/voxcpm2/`.
 
-O modelo padrão é o checkpoint oficial `openbmb/VoxCPM2` em BF16. A OpenBMB relata o uso de aproximadamente **8 GB de VRAM** para a execução padrão, de modo que o modelo normal cabe confortavelmente em uma placa de vídeo NVIDIA de 16 GB e nenhum checkpoint quantizado é necessário por padrão.
+O modelo padrão é o checkpoint oficial `openbmb/VoxCPM2` em BF16. A OpenBMB relata o uso de aproximadamente 8 GB de VRAM para a execução padrão, de modo que o modelo normal cabe confortavelmente em uma placa de vídeo NVIDIA de 16 GB e nenhum checkpoint quantizado é necessário por padrão.
 
 ## Licença
 
-O código e os pesos do modelo VoxCPM2 são lançados sob a licença **Apache-2.0**, incluindo o uso comercial sujeito aos termos da licença. O TomoriBot não redistribui os pesos; o instalador os baixa do repositório oficial do Hugging Face.
+O código e os pesos do modelo VoxCPM2 são lançados sob a licença Apache-2.0, incluindo o uso comercial sujeito aos termos da licença. O TomoriBot não redistribui os pesos; o instalador os baixa do repositório oficial do Hugging Face.
 
 Recursos oficiais da fonte (upstream):
 
@@ -40,14 +40,14 @@ Um único endpoint do VoxCPM2 pode lidar com todos os modos úteis de fonte de v
 
 O VoxCPM2 representa o Voice Design e o controle de estilo ao colocar uma descrição em linguagem natural entre parênteses antes do texto a ser sintetizado. O TomoriBot já possui um campo `instruct` para esse fim, então o wrapper realiza essa conversão automaticamente.
 
-Use o Script Markup **Plain**. O VoxCPM2 não exige que o TomoriBot preserve as tags de colchetes ou a sintaxe de controle de emojis, e nenhum modo novo de Script Markup é necessário.
+Use o Script Markup Plain. O VoxCPM2 não exige que o TomoriBot preserve as tags de colchetes ou a sintaxe de controle de emojis, e nenhum modo novo de Script Markup é necessário.
 
 ## Hardware e tempo de execução
 
 Ponto de partida recomendado:
 
-- Python **3.10-3.12**
-- Placa de vídeo NVIDIA com **8 GB de VRAM ou mais** para a execução oficial em BF16; 12-16 GB oferecem uma margem confortável
+- Python 3.10-3.12
+- Placa de vídeo NVIDIA com 8 GB de VRAM ou mais para a execução oficial em BF16; 12-16 GB oferecem uma margem confortável
 - Driver NVIDIA atual e uma compilação do PyTorch habilitada para CUDA para aceleração por GPU
 - O uso de CPU é suportado como um plano de fallback, mas é substancialmente mais lento
 
@@ -126,7 +126,7 @@ O modo `Auto` é recomendado porque o mesmo servidor suporta tanto a clonagem po
 Para uma persona que deve clonar um falante existente:
 
 1. Prepare um clipe de referência nítido com um falante e pouca ou nenhuma música de fundo. A fonte (upstream) trata 5 a 30 segundos como a faixa prática.
-2. Abra `/config` em Models (Modelos) > TTS Parameters & Voices (Parâmetros e Vozes TTS) e envie o clipe (upload).
+2. Abra `/config` em Models (Modelos) > Parâmetros TTS e Vozes (Parâmetros e Vozes TTS) e envie o clipe (upload).
 3. Adicione a transcrição exata do clipe de referência, quando disponível. O VoxCPM2 utiliza isso para a Clonagem Suprema e consegue reproduzir mais do ritmo, emoção e estilo da referência.
 4. Abra `/config` em Persona > Voice (Voz), escolha a persona e atribua a amostra salva.
 

@@ -4,7 +4,7 @@ title: "02.2: Server Info"
 
 The "where am I" framing: server name and description.
 
-**File:** `src/utils/text/context/serverInfo.ts:6-51`
+- **File**: `src/utils/text/context/serverInfo.ts:6-51`
 
 ## Mission
 
@@ -56,7 +56,7 @@ After this stage runs:
 
 ## Extension points
 
-**Internal: fixed shape.** This contributor exists to give the LLM a
+- **Internal: fixed shape**: this contributor exists to give the LLM a
 two-sentence "you are here" framing. A plugin wanting to add additional
 server-context kinds (e.g. "verified server," "NSFW server tier," "rules
 channel link") would either:

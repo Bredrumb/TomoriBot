@@ -103,10 +103,10 @@ by prose narration) into the same provider-agnostic `FunctionCall` shape as nati
 `streamResult.status === "function_call"` and execute through `executeToolCall`, preserving
 deliberate-mode gating, tool-timeout handling, enhanced-context restarts, and function history.
 
-**Fallback-chain adaptation.** The verbatim *nudge* (the in-context instruction to emit calls as a
+- **Fallback-chain adaptation**: the verbatim *nudge* (the in-context instruction to emit calls as a
 code span), the in-band *schema dump*, and the verbatim *parser* must agree per attempt, or a
 fallback leaks the call as text. `shouldInjectVerbatimToolCallingNudge` decides this per attempt:
-the model's `verbatim_tool_calling` flag **and** tools **and** a `custom` provider (the only adapter
+the model's `verbatim_tool_calling` flag and tools and a `custom` provider (the only adapter
 with the parser). Because base context is assembled once from the *primary* model,
 `generationTurn.prepareProviderContextItems` adapts it for every attempt in both directions:
 
@@ -155,7 +155,7 @@ after pre-tool text set `suppressTextOutput` and retry. At
 `NAI_TOOL_FAILURE_RETRY_THRESHOLD`, the loop sends the localized tool-error
 embed and ends with the already-delivered text.
 
-**File:** `src/utils/chat/toolLoop.ts` (`shouldEndAfterPreToolText`)
+- **File**: `src/utils/chat/toolLoop.ts` (`shouldEndAfterPreToolText`)
 
 ### Iteration guards
 

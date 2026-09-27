@@ -3,13 +3,12 @@ title: "02.6: Participants"
 ---
 
 The densest single contributor: list every conversation participant with
-per-user details (presence, roles, **personal memories**, reminders),
+per-user details (presence, roles, personal memories, reminders),
 mention aliases with conflict detection, the active persona's pending
 self-tasks, and the closing
 channel/time-of-day footer.
 
-**Files:**
-
+- **Files**:
 - `src/utils/text/participants/identity.ts` owns typed participant keys, inclusion reasons,
   alias contracts, stable key serialization, and first-seen deduplication.
 - `src/utils/text/participants/aliases.ts` owns alias normalization, source builders,

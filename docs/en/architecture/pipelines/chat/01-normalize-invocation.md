@@ -4,7 +4,7 @@ title: "01: Input Normalization"
 
 Defensive input normalization at the chat pipeline's entry boundary.
 
-**File:** `src/utils/chat/admission.ts:26-56`
+- **File**: `src/utils/chat/admission.ts:26-56`
 
 ## Mission
 
@@ -58,7 +58,7 @@ After this stage runs:
 
 ## Extension points
 
-**Internal: pure normalization stage.** A plugin wanting to inject input
+- **Internal: pure normalization stage**: a plugin wanting to inject input
 transformations should hook *before* this stage runs (i.e. at the `tomoriChat()`
 entry, not here). Once normalization completes, the contract is "fields are as
 declared on `ChatIncoming`" and modifying them later risks invariants in

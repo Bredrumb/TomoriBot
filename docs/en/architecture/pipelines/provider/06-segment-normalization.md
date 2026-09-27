@@ -4,7 +4,7 @@ title: "06: Segment Normalization"
 
 Normalizes a flushed text segment (capturing render modifiers, cleaning LLM output artifacts, resolving Discord mentions, enforcing the speaker guard, and managing output prefill) before handing it to stage 07 for Discord delivery.
 
-**File:** `src/utils/discord/stream/segmentProcessor.ts:21-233`
+- **File**: `src/utils/discord/stream/segmentProcessor.ts:21-233`
 
 ## Mission
 
@@ -25,14 +25,14 @@ The transformation pipeline runs in this order:
    and the sprite avatar, plus a `spriteRecord` so the message → sprite-label mapping is persisted
    after the send (`persona_sprite_messages`). Ordinary sprites use the **clean username
    `SourcePersona`** (no `(sprite)` suffix in Discord); identity sprites (`is_identity = true`)
-   use the **flipped username `sprite (SourcePersona)`** shown directly in Discord, DID-alter
+   use the flipped username `sprite (SourcePersona)` shown directly in Discord, DID-alter
    style. The accumulated-text prefix keeps the decorated
    `SourcePersona (sprite): ` label so the model still sees its own sprite usage. If the sprite
    row matches but its image cannot be loaded, the parenthetical modifier is stripped and the
    line is delivered as normal source-persona output without trying copied identity. If no
    sprite matches, the modifier falls back to copied-render resolution against known personas
    and users in current context. The candidate identities and purpose-filtered aliases come
-   from the participant target index; copied matches use the **flipped** webhook username
+   from the participant target index; copied matches use the flipped webhook username
    `target (SourcePersona)` (impersonated name first for the in-chat disguise) while the
    accumulated-text prefix stays source-first (`SourcePersona (target): `) for the model.
    Unknown or ambiguous copied targets are stripped and delivered as
@@ -41,7 +41,7 @@ The transformation pipeline runs in this order:
 
 3. **Opening-label leak guard** (`matchLeadingSpeakerLeak` + `parseLeadingGenericSpeakerLabel`):
    runs only at response start (nothing accumulated or sent yet) on segments the render-modifier
-   capture refused, and **regardless of `llm_stop_speaker_pattern_enabled`**. It catches the model
+   capture refused, and regardless of `llm_stop_speaker_pattern_enabled`. It catches the model
    cross-breeding history label formats into a foreign speaker label the other guards all miss:
    the decorated grammar with a non-persona name (`Chris (smug): …`, any name outside the active
    persona/aliases using the parenthetical form is unambiguously a leak), or a plain
@@ -82,7 +82,7 @@ The transformation pipeline runs in this order:
    excluded from the leaked-preamble pass so a stranded mid-body label cannot delete preceding reply
    text.
 
-   The opening chain also matches **identity-macro labels**: `{bot}:`, `{{char}}:`, `{user}:` and
+   The opening chain also matches identity-macro labels: `{bot}:`, `{{char}}:`, `{user}:` and
    their bold forms, because the model sometimes labels its turn with the template syntax instead
    of the resolved name. Like aliases, macros widen the *opening-chain* match only. Identity macros
    elsewhere in the response are deliberately delivered to Discord verbatim: a persona asked to
@@ -134,7 +134,7 @@ No return value. The normalized segment (or its table-split parts) is forwarded 
 ## Side effects
 
 - **`state.pendingOrphanPunctuation`**: may be set (hold) or cleared (prepend to segment).
-- **`state.prefillMatched`** / **`state.prefillInjected`** / **`state.prefillMatchFailed`**:
+- `state.prefillMatched` / `state.prefillInjected` / `state.prefillMatchFailed`:
   updated as prefill stripping/injection progresses.
 - **`state.activeRenderModifier`**: tracks the active render-modifier identity override so period
   or chunk splits keep using the sprite/copied identity. Expiry differs by modifier kind:
@@ -155,7 +155,7 @@ No return value. The normalized segment (or its table-split parts) is forwarded 
   under the first one, while same-sprite runs keep an identical username and still group. Identity
   sprites are excluded (their decorated name is already distinct).
 
-  The run **restarts on the clean name whenever anything else has posted since our last delivery**;
+  The run restarts on the clean name whenever anything else has posted since our last delivery;
   a user, another persona's webhook, or our own bot-user fallback (a different Discord author than
   the webhook). Discord groups a message only with the one directly above it, so a broken group
   leaves nothing to collide with and the decorated name would read as an emotion display rather than
@@ -175,7 +175,7 @@ No return value. The normalized segment (or its table-split parts) is forwarded 
   Entries expire after `CONTINUITY_TTL_MS` (10 minutes); past Discord's own
   grouping window, continuity no longer matters.
 
-  The same module also records the **identity each message was actually delivered under**
+  The same module also records the identity each message was actually delivered under
   (`recordChannelDeliveredWebhookIdentity` on a webhook send, `recordChannelDeliveredBotMessage`
   on an ordinary bot send). Post-turn artifacts read it back via
   `getChannelDeliveredWebhookIdentity()` so they group with the message they follow; see
@@ -211,7 +211,7 @@ After this stage (per segment):
 | `resolveGuildMentions()` | `src/utils/discord/stream/mentionResolver.ts`. Internal: mention resolution uses the static mention map derived at stream-init from the participant target index. A plugin adding custom handle → user-ID mappings would extend the participant source/profile contracts, not this stage. Takes `(text, channel, mentionMap, mentionIdSet, personaMentionMap?)` so it can be shared by non-stream callers (see `cleanToolReplyText`, below). Known persona handles stay as bare `@trigger` text after Discord user mentions are resolved. |
 | `cleanToolReplyText()` | `src/utils/discord/toolReplyText.ts`. Internal: applies this stage's `filterDuplicateCustomEmojis` → `cleanLLMOutput` → `resolveGuildMentions` chain to tool-authored reply text (e.g. the `reply` action of `interact_with_recent_message`), which bypasses the streaming segment path. Keeps tool replies and normal replies rendering identically (emoji, Discord `@mention` resolution, and persona `@trigger` preservation). A plugin adding another tool that sends Tomori-authored Discord text should route it through this helper. |
 | `filterDuplicateCustomEmojis()` | `src/utils/text/emojiPenalty.ts`. Internal: emoji deduplication heuristic; no plugin-relevant seam. |
-| `extractMarkdownTableSegments()` + `renderMarkdownTableToPng()` | `src/utils/text/markdownTable.ts` + `src/utils/image/markdownTableRenderer.ts`. The table renderer path is the only place in the stream pipeline where image attachments are sent during streaming (as opposed to tool results). **A plugin adding other attachment types mid-stream would extend here.** → plugin plan candidate |
+| `extractMarkdownTableSegments()` + `renderMarkdownTableToPng()` | `src/utils/text/markdownTable.ts` + `src/utils/image/markdownTableRenderer.ts`. The table renderer path is the only place in the stream pipeline where image attachments are sent during streaming (as opposed to tool results). A plugin adding other attachment types mid-stream would extend here. → plugin plan candidate |
 | Speaker guard (`truncateBeforeGenericSpeakerLine`) | `src/utils/text/processors/llmOutputProcessor.ts`. Internal: speaker-label detection runs in both the adapter (stage 02) and the segment processor. The `llm_stop_speaker_pattern_enabled` DB flag is the configuration surface. |
 | Opening-label leak guard (`parseLeadingGenericSpeakerLabel` + `collectKnownSpeakerNames`) | `src/utils/discord/renderModifierParser.ts` + `src/utils/discord/renderModifierResolver.ts`. Internal: always-on response-start companion to the speaker guard; no configuration surface by design (the shapes it fires on are unambiguous leaks). |
 | Output prefill (`context.outputPrefill`) | Internal: NAI-specific hybrid prefix streaming mechanism; not a general extension point. |

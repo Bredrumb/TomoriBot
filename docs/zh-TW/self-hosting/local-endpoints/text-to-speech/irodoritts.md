@@ -85,8 +85,8 @@ IRODORI_TTS_CHECKPOINT="/path/to/custom_checkpoint.pt"
 儲存連線之後，選取它並用它的模型下拉選單加入一個 Speech 模型。對 v4.1 而言，
 建議的設定是：
 
-- `Voice Source Mode`：`自動`
-- `Script Markup Style`：`表情符號`
+- `語音來源模式`：`自動`
+- `腳本標記風格`：`表情符號`
 
 `自動` 讓同一個 Irodori 端點同時支援 TomoriBot 的兩種語音模式，讓情緒提示能撐過送出流程：
 
@@ -94,7 +94,7 @@ IRODORI_TTS_CHECKPOINT="/path/to/custom_checkpoint.pt"
 - 在人格 > 語音 底下設定了 VoiceDesign 提示詞的人格，會送出已儲存的自然語言提示詞，
   作為 Irodori 的說明文字條件。
 
-如果你只想要參考音訊的語音複製，仍然可以把 `Voice Clone` 選為語音來源模式。
+如果你只想要參考音訊的語音複製，仍然可以把 `語音複製` 選為語音來源模式。
 
 端點註冊與模型設定請用 `/providers`。接著開啟 `/config` > 模型 > 切換模型，
 選取並啟用註冊好的端點。
@@ -125,7 +125,7 @@ TomoriBot 會在把文字送給 TTS 之前移除 Discord 自訂表情符號語�
 
 ### Emoji 風格控制
 
-IrodoriTTS 支援在輸入文字中插入 emoji 標註，以影響音效、說話方式與情緒表達。當 TomoriBot 的 `Script Markup Style` 設定為 `Emoji` 時，這些 Unicode emoji 會被保留並傳送給 Irodori。
+IrodoriTTS 支援在輸入文字中插入 emoji 標註，以影響音效、說話方式與情緒表達。當 TomoriBot 的 `腳本標記風格` 設定為 `Emoji` 時，這些 Unicode emoji 會被保留並傳送給 Irodori。
 
 | Emoji | 含義 / 情緒 / 風格 |
 | --- | --- |

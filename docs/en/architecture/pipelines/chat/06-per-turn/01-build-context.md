@@ -4,7 +4,8 @@ title: "06.1: Build Context"
 
 Assemble the LLM-visible prompt for one persona turn.
 
-**Files:** `src/utils/chat/contextPipelineIntent.ts` (intent wrapper) and
+- **Files**:
+`src/utils/chat/contextPipelineIntent.ts` (intent wrapper) and
 `src/utils/chat/contextPipeline.ts` (base builder)
 
 ## Mission
@@ -12,11 +13,11 @@ Assemble the LLM-visible prompt for one persona turn.
 Build the `ChatTurnContext` closure carried through the rest of the per-turn
 loop. Fetch and simplify recent message history, hydrate per-message
 annotations (reply/reaction/forward/media/embed), load emoji/sticker assets,
-delegate to the **context-build pipeline** for the LLM-shaped prompt
+delegate to the context-build pipeline for the LLM-shaped prompt
 assembly, then append tail directives. Returns the full `ChatTurnContext`:
 the closure that stages 02-04 read and mutate.
 
-This stage is the **thin chat-side wrapper** around a much larger inner
+This stage is the thin chat-side wrapper around a much larger inner
 pipeline. The heavy lifting (mentions, memories, RAG, persona prompt,
 participants, dialogue history) lives in [context-build](../../context-build/).
 
@@ -63,7 +64,7 @@ Key fields populated here:
   collapses it into the previous entry when (1) the effective `authorId`
   matches, (2) the debug (`$:`)/normal kind matches (a debug message never
   merges with a normal one even though they share an authorId), and (3)
-  **neither side carries media** (media forces a separate turn so per-message
+  neither side carries media (media forces a separate turn so per-message
   media IDs stay unambiguous). Merged entries record `combinedMessageIds`,
   `individualContents`, and `combinedCreatedAts` so `reveal_message_metadata`
   can still surface one `ref_N` + timestamp per original message.
@@ -127,7 +128,7 @@ After this stage runs:
   fails closed and leaves the normal deliberate-tool gate in effect.
 - `streamingContext.replyNoticeState` is initialized to
   `{ attempted: false, sent: false }` whenever `incoming.isFromQueue` is true;
-  for **any** persona, not only alters. This is the only place where
+  for any persona, not only alters. This is the only place where
   `replyNoticeState` is set; without it the "Replying to…" embed in stage 07 is
   suppressed (the presence of the object is the enable-switch, not its field
   values).
@@ -140,7 +141,7 @@ After this stage runs:
 
 ## Extension points
 
-This stage is **a coordinator over many extension-relevant helpers**:
+This stage is a coordinator over many extension-relevant helpers:
 
 | Helper | File | Plugin-relevance |
 |---|---|---|
@@ -152,7 +153,7 @@ This stage is **a coordinator over many extension-relevant helpers**:
 | `buildReactionContextAnnotation`, `buildReplyReferenceContextAnnotation` | `contextAnnotations.ts` | Annotation builders; reaction/reply formatting hooks here |
 | `appendTailDirectives` | this file | Tail-directive assembly; new directive kinds insert here |
 
-**The stage itself is a thin coordinator.** Most plugin work for "show the
+- **The stage itself is a thin coordinator**: most plugin work for "show the
 LLM something different" goes either into the inner context-build pipeline
 (memories/RAG/persona) or into one of the per-message helpers above. The
 appropriate seam depends on whether the change is per-message
@@ -168,7 +169,7 @@ appropriate seam depends on whether the change is per-message
 
 System notices that the LLM must see (memory-learning, reminder/task set,
 system injection, compact summary/refresh, reward/punish, scene directive)
-arrive over **two different transports**, and both must be read:
+arrive over two different transports, and both must be read:
 
 | Transport | Where the text lives | Read by |
 |---|---|---|
@@ -188,14 +189,14 @@ heading via `formatContainerTitle` and the footer as Discord subtext (`-# `);
 the reader strips both prefixes so the reconstructed title matches
 `checkTargetEmbedTitle` exactly, including its cross-locale scan.
 
-**If you convert a notice to Components V2, verify it still classifies.** The
+- **If you convert a notice to Components V2, verify it still classifies**: the
 formatting helpers take a transport-agnostic `{title, description}` pair
 specifically so both paths emit byte-identical `[System: ...]` context. Current
 CV2 senders: `expandableEmbedNotice.ts` (memory + task via `sendEmbedWithExpand`,
 `update_user_info` via `sendNoticeContainerMessage`). All other notice types are
 still embed-based.
 
-**A notice title absent from `checkTargetEmbedTitle` is dropped silently**,
+- **A notice title absent from `checkTargetEmbedTitle` is dropped silently**:
 whichever transport it uses, so a persona asked "did you already do that?" has no
 history to answer from. Registered action-record titles now also cover
 `tools.user_info_update.success_title` (`user_info_update`) and the block/mute

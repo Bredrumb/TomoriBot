@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-TomoriBotの振る舞い（**彼女に許可する操作や生成方法**）は、性格（[マルチペルソナ](/ja/features/chatting-personality/multiple-personas/)）や知識（[記憶](/ja/features/knowledge/memory/)）の枠を超え、`/config` > 権限 と `/config` によって制御されます。このページでは重要度の高い設定を厳選して紹介します。すべてのコマンドは[コマンドリファレンス](/ja/features/command-reference/)に記載されています。
+TomoriBotの振る舞い（彼女に許可する操作や生成方法）は、性格（[マルチペルソナ](/ja/features/chatting-personality/multiple-personas/)）や知識（[記憶](/ja/features/knowledge/memory/)）の枠を超え、`/config` > 権限 と `/config` によって制御されます。このページでは重要度の高い設定を厳選して紹介します。すべてのコマンドは[コマンドリファレンス](/ja/features/command-reference/)に記載されています。
 
 :::note
 この翻訳は利便性のためのものであり、英語版が優先されます。
@@ -36,7 +36,7 @@ TomoriBotの振る舞い（**彼女に許可する操作や生成方法**）は�
 ## 検閲なしの出力
 <!-- anchor: uncensored-output -->
 
-TomoriBotには**独自のコンテンツフィルターはありません**：彼女はモデレーションツールではなく、モデルに安全装置を追加することもありません。基盤となるプロバイダーが返した内容をそのまま出力します。そのため、`/nsfw jailbreaks` はTomoriBot内部の制限を「解除」するものではなく、必要以上に厳しい**プロバイダー側**のフィルターを回避するためだけに存在します。
+TomoriBotには独自のコンテンツフィルターはありません：彼女はモデレーションツールではなく、モデルに安全装置を追加することもありません。基盤となるプロバイダーが返した内容をそのまま出力します。そのため、`/nsfw jailbreaks` はTomoriBot内部の制限を「解除」するものではなく、必要以上に厳しいプロバイダー側のフィルターを回避するためだけに存在します。
 
 これら3つの独立した技術を切り替えます（デフォルトはすべてオフ）：
 

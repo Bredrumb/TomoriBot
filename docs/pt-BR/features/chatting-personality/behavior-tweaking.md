@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-O comportamento da TomoriBot (**o que ela tem permissão para fazer e como ela gera as respostas**) é controlado por
+O comportamento da TomoriBot (o que ela tem permissão para fazer e como ela gera as respostas) é controlado por
 `/config` > Permissions e `/config`, além da personalidade ([Múltiplas Personas](/pt-BR/features/chatting-personality/multiple-personas/))
 e do conhecimento ([Memória](/pt-BR/features/knowledge/memory/)). Esta página é um conjunto selecionado das configurações de
 alto valor; cada comando está na [Referência de Comandos](/pt-BR/features/command-reference/).
@@ -45,10 +45,10 @@ padrão integrado é substituído; mas um personalizado que você definiu aqui a
 ## Saída Sem Censura
 <!-- anchor: uncensored-output -->
 
-A TomoriBot **não tem filtro de conteúdo próprio**: ela não é um sistema de moderação e não adiciona
+A TomoriBot não tem filtro de conteúdo próprio: ela não é um sistema de moderação e não adiciona
 proteções por cima do modelo. O que quer que o provedor subjacente retorne é o que ela diz.
 `/nsfw jailbreaks` portanto não "desbloqueia" nada dentro da TomoriBot; ele existe puramente para
-contornar filtros **do lado do provedor** que são mais rígidos do que você deseja.
+contornar filtros do lado do provedor que são mais rígidos do que você deseja.
 
 Ele alterna três técnicas independentes (todas desativadas por padrão):
 

@@ -12,19 +12,19 @@ Fish S2 Pro 支援 `[whisper]`、`[excited]`、`[angry]` 這類方括號表情�
 
 Fish Speech 的程式碼與 S2 Pro 模型權重依 Fish Audio Research License 散布。依其條款允許研究與非商業使用；商業使用需要另外取得 Fish Audio 授權。
 
-TomoriBot 不重新散布模型權重。每位自架使用者都直接從 Hugging Face 下載 Fish S2 Pro，並自行負責遵守 Fish Audio Research License。必要的標示是：**Built with Fish Audio**。
+TomoriBot 不重新散布模型權重。每位自架使用者都直接從 Hugging Face 下載 Fish S2 Pro，並自行負責遵守 Fish Audio Research License。必要的標示是：Built with Fish Audio。
 
 ## 硬體與作業系統
 
 > [!IMPORTANT]
-> **Fish Speech 請使用 Linux 或 WSL2：** Fish Audio 官方以 Linux 與 WSL2 為目標。Fish S2 Pro 使用雙自迴歸（Dual-AR）架構（36 層慢速 transformer 加 10 次快速 codebook 傳遞，等於每個 token 有 76 次層評估）。在 Linux 上，OpenAI Triton 可以將這個巢狀迴圈編譯成融合的 GPU kernel（`torch.compile(backend="inductor")`），上游的基準測試顯示這能在 Linux 伺服器 GPU 上實現即時合成。包裝預設關閉編譯，請設定 `FISH_S2_COMPILE=1` 來使用它。
+> Fish Speech 請使用 Linux 或 WSL2： Fish Audio 官方以 Linux 與 WSL2 為目標。Fish S2 Pro 使用雙自迴歸（Dual-AR）架構（36 層慢速 transformer 加 10 次快速 codebook 傳遞，等於每個 token 有 76 次層評估）。在 Linux 上，OpenAI Triton 可以將這個巢狀迴圈編譯成融合的 GPU kernel（`torch.compile(backend="inductor")`），上游的基準測試顯示這能在 Linux 伺服器 GPU 上實現即時合成。包裝預設關閉編譯，請設定 `FISH_S2_COMPILE=1` 來使用它。
 >
-> 在原生 Windows 上，Triton 不受支援，迫使 PyTorch 進入未編譯的 eager 模式，透過 Windows WDDM 驅動程式產生超過 120,000 次循序的 CUDA kernel 派送。這會造成嚴重的派送停滯，讓完全相同的片段生成速度降到 **約 8 到 10 分鐘**（每秒音訊約需 65 秒運算）。為了可用的推論，**請在 Linux 或 WSL2 中運行 Fish S2 Pro**。
+> 在原生 Windows 上，Triton 不受支援，迫使 PyTorch 進入未編譯的 eager 模式，透過 Windows WDDM 驅動程式產生超過 120,000 次循序的 CUDA kernel 派送。這會造成嚴重的派送停滯，讓完全相同的片段生成速度降到 約 8 到 10 分鐘（每秒音訊約需 65 秒運算）。為了可用的推論，請在 Linux 或 WSL2 中運行 Fish S2 Pro。
 
 建議的硬體：
 
-- **Linux 或 WSL2（強烈建議）**
-- 具備 **16 GB 到 24 GB VRAM** 的 NVIDIA GPU（BF16 搭配 KV 快取與卸載，可以舒適地塞進約 16 到 18 GB VRAM）
+- Linux 或 WSL2（強烈建議）
+- 具備 16 GB 到 24 GB VRAM 的 NVIDIA GPU（BF16 搭配 KV 快取與卸載，可以舒適地塞進約 16 到 18 GB VRAM）
 - 建議使用 Python 3.12
 - `git`、`ffmpeg`，以及 Fish Speech 所需的標準音訊函式庫
 
@@ -85,9 +85,9 @@ TomoriBot 會在 `TTS_SYNTHESIZE_TIMEOUT_MS`（預設 240000 ms）之後停止�
 ## 必要的參考逐字稿
 
 > [!WARNING]
-> **語音複製必須提供 Reference Text（`ref_text`）：** Fish S2 Pro 的交叉注意力機制需要參考音訊的逐字稿，才能將語音 token 與聲學碼對齊。
+> 語音複製必須提供 Reference Text（`ref_text`）： Fish S2 Pro 的交叉注意力機制需要參考音訊的逐字稿，才能將語音 token 與聲學碼對齊。
 >
-> 如果你上傳語音樣本卻沒有提供對應的參考逐字稿，Fish Speech 會**默默丟棄參考音訊 token**，退回隨機的零參考語音。TomoriBot 的 Fish 包裝會驗證並以 `400 Bad Request` 拒絕缺少參考文字的合成請求，以避免意外的無條件生成。
+> 如果你上傳語音樣本卻沒有提供對應的參考逐字稿，Fish Speech 會默默丟棄參考音訊 token，退回隨機的零參考語音。TomoriBot 的 Fish 包裝會驗證並以 `400 Bad Request` 拒絕缺少參考文字的合成請求，以避免意外的無條件生成。
 
 在 `/config` 的 `模型 > TTS 參數與語音` 底下加入人格語音時，請務必在 `參考逐字稿` 欄位填入參考音訊片段中所說的逐字文字。
 
@@ -98,8 +98,8 @@ TomoriBot 會在 `TTS_SYNTHESIZE_TIMEOUT_MS`（預設 240000 ms）之後停止�
 - Capability：`Speech`
 - API Compatibility：`tts-clone`
 - Endpoint URL：`http://127.0.0.1:8015`
-- Voice Source Mode：`Clone`
-- Script Markup：`Bracket Tags`
+- 語音來源模式：`Clone`
+- Script Markup：`方括號標籤`
 - API key：留空。包裝沒有驗證機制，請參閱[網路存取](/self-hosting/local-endpoints/text-to-speech/#network-access)。
 
 接著加入該端點的模型項目，並透過 `/config` 的 模型 > 切換模型 啟用它。
@@ -108,7 +108,7 @@ TomoriBot 會在 `TTS_SYNTHESIZE_TIMEOUT_MS`（預設 240000 ms）之後停止�
 
 1. 準備一段乾淨、10 到 20 秒、只有一位說話者且背景噪音很少或沒有的參考片段。
 2. 在 `/config` 中開啟 模型 > TTS 參數與語音 並上傳語音樣本。
-3. **輸入確切的逐字稿**，也就是參考片段中所說的文字，放進參考文字欄位。
+3. 輸入確切的逐字稿，也就是參考片段中所說的文字，放進參考文字欄位。
 4. 在 `/config` 中開啟 人格 > 語音，並將樣本指派給人格。
 5. 用 `/generate voice-message` 生成語音訊息，或讓 TomoriBot 透過它的語音訊息工具生成。
 
@@ -122,7 +122,7 @@ Fish S2 Pro 可以用方括號標籤在同一段語句中改變語氣。例如�
 [whisper] Keep your voice down. [excited] Wait, you actually found it?
 ```
 
-因為端點使用 `Bracket Tags` 標記，TomoriBot 會保留這些標籤，而不是在合成前移除它們。
+因為端點使用 `方括號標籤` 標記，TomoriBot 會保留這些標籤，而不是在合成前移除它們。
 
 ## 設定
 

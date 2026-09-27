@@ -5,7 +5,7 @@ title: "03: Enhanced Context Restart"
 Consume a context-enrichment restart signal from a tool response and mutate
 the live context before the loop continues.
 
-**File:** `src/utils/chat/toolLoop.ts:333-364`
+- **File**: `src/utils/chat/toolLoop.ts:333-364`
 
 ## Mission
 
@@ -58,7 +58,7 @@ was not a restart signal (caller continues normally).
 
 All mutations apply only when `data.type` starts with `"context_restart_"`.
 
-**Message-metadata restart** (`type.includes("message_metadata")`):
+- **Message-metadata restart** (`type.includes("message_metadata")`):
 - Calls `annotateRecentMessageMetadataInContext`: annotates recent messages
   in `contextItems` with author/timestamp metadata and patches reply references.
   Logs annotated and patched counts. When a turn merged several consecutive
@@ -76,8 +76,8 @@ All mutations apply only when `data.type` starts with `"context_restart_"`.
   subsequent turn, and to make the tool's own availability and execution
   guards reject a second reveal in this turn.
 
-**All restart types:**
-- Resolves the enrichment payload via `resolveEnhancedContextItem` and appends it to
+- **All restart types**:
+  - Resolves the enrichment payload via `resolveEnhancedContextItem` and appends it to
   `contextItems` when present. `pending_context_key` is drained first (and removed from
   the stash so a later restart cannot replay stale media); `enhanced_context_item` is
   used otherwise. A key that resolves to nothing logs a warning: the turn continues
@@ -100,7 +100,7 @@ After this stage runs (when it returns `true`):
 
 - `contextItems` contains the enriched item at the end of the list: the
   next `streamOnce` call will include it in the provider's context.
-- The `context_restart_*` tool call is **not** appended to `functionHistory`.
+- The `context_restart_*` tool call is not appended to `functionHistory`.
   The provider will not see the tool's raw response; it sees only the
   enriched context that was injected.
 - `consecutiveToolErrors` in the outer loop is reset to `0` (restarts are

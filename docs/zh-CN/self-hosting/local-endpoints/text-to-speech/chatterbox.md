@@ -46,19 +46,19 @@ python -m pip install --no-deps --force-reinstall "git+https://github.com/resemb
 
 ### 标准 Chatterbox（0.5B，带 CFG 与夸张程度）
 
-最初的 0.5B 基础 Chatterbox 模型（`ChatterboxTTS`）直接内置在这个服务端封装程序里。它不再使用 Turbo 的行内方括号事件标签，改用**无分类器引导**（Classifier-Free Guidance，`cfg_weight`）与情绪强度 **`exaggeration`** 来做细粒度的人声控制。
+最初的 0.5B 基础 Chatterbox 模型（`ChatterboxTTS`）直接内置在这个服务端封装程序里。它不再使用 Turbo 的行内方括号事件标签，改用无分类器引导（Classifier-Free Guidance，`cfg_weight`）与情绪强度 `exaggeration` 来做细粒度的人声控制。
 
 要使用标准模型：
 
 1. 照常启动服务端封装程序。
 2. 在 Discord 里运行 `/config` > `模型` > `TTS 参数与语音`。
-3. 把 **快速模型（Turbo）** 选项切换为 `关闭`。
+3. 把 快速模型（Turbo） 选项切换为 `关闭`。
 4. 下一次生成时，封装程序会按需下载标准 0.5B 模型并加载进内存。
 
 这两个值都是`编辑参数`弹窗里的文本字段。它们始终可以编辑，页面上也注明，快速模型开启时这两个值会被忽略：
 
-- **`cfg_weight`**（默认 `0.5`）：调节合成音频在多大程度上贴合参考音频的节奏与人声风格。
-- **`exaggeration`**（默认 `0.5`）：控制情绪强度以及表达上的戏剧性起伏。
+- `cfg_weight`（默认 `0.5`）：调节合成音频在多大程度上贴合参考音频的节奏与人声风格。
+- `exaggeration`（默认 `0.5`）：控制情绪强度以及表达上的戏剧性起伏。
 
 > [!NOTE]
 > 标准 Chatterbox 不支持行内方括号事件标签（例如 `[laughs]` 或 `[sigh]`）。快速模型开关关闭时，TomoriBot 会自动去掉提示词文本里的方括号标签。
@@ -72,7 +72,7 @@ python -m pip install --no-deps --force-reinstall "git+https://github.com/resemb
 - API 兼容性：`tts-clone`
 - `endpoint_url`：`http://127.0.0.1:8011`
 
-保存连接后，选中它，用它的模型下拉菜单添加一个语音合成模型。把语音来源模式选为 `Voice Clone`，把脚本标记风格选为 `Bracket Tags`，这样表达标签在发送时才会保留下来。
+保存连接后，选中它，用它的模型下拉菜单添加一个语音合成模型。把语音来源模式选为 `声音克隆`，把脚本标记风格选为 `方括号标签`，这样表达标签在发送时才会保留下来。
 
 端点注册和模型设置都在 `/providers` 里做，之后打开 `/config` > 模型 > 切换模型，选中并启用已注册的端点。
 

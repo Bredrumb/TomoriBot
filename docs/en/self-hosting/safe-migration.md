@@ -8,7 +8,7 @@ When you `git pull` new code and restart TomoriBot, the bot automatically runs d
 
 ## Why this matters
 
-TomoriBot's migration runner (in `src/db/migrationRunner.ts`) executes all unapplied migrations in version order. Migrations are **forward-only**: if something goes wrong, the runner does not auto-rollback. Most migrations are safe expansions (new columns, new tables), but per the project's internal design policy (OD-R-6), destructive operations such as `DROP COLUMN` or `DROP TABLE` are permitted. If a destructive migration runs without a backup, you lose data permanently. When in doubt, back up first.
+TomoriBot's migration runner (in `src/db/migrationRunner.ts`) executes all unapplied migrations in version order. Migrations are forward-only: if something goes wrong, the runner does not auto-rollback. Most migrations are safe expansions (new columns, new tables), but per the project's internal design policy (OD-R-6), destructive operations such as `DROP COLUMN` or `DROP TABLE` are permitted. If a destructive migration runs without a backup, you lose data permanently. When in doubt, back up first.
 
 ## Pre-pull checklist
 
@@ -21,7 +21,7 @@ Follow these steps BEFORE running `git pull`:
 
 ### Prerequisite: the `pgvector` extension
 
-A full backup is a plain-SQL `pg_dump` (`backupData.ts` runs `pg_dump --clean --if-exists -f`), so it contains the `vector`-typed `document_chunks` table used for RAG. **The target Postgres must have the `pgvector` extension available before you restore**, or the dump's `CREATE EXTENSION IF NOT EXISTS vector` cannot run and the `document_chunks` table fails to create.
+A full backup is a plain-SQL `pg_dump` (`backupData.ts` runs `pg_dump --clean --if-exists -f`), so it contains the `vector`-typed `document_chunks` table used for RAG. The target Postgres must have the `pgvector` extension available before you restore; otherwise, the dump's `CREATE EXTENSION IF NOT EXISTS vector` cannot run and the `document_chunks` table fails to create.
 
 Install it once on the host (matching your Postgres major version), e.g. for Postgres 16:
 
@@ -37,8 +37,8 @@ psql -c "SELECT name, default_version FROM pg_available_extensions WHERE name = 
 
 If you restore without it:
 
-- The project's `restore-backup` (and any `psql -f` run with `ON_ERROR_STOP=1`) **aborts early** with `extension "vector" is not available`: no data is loaded. Install pgvector and retry.
-- A manual `psql -f` run that **ignores errors** (`ON_ERROR_STOP=0`) is worse: the failed `COPY public.document_chunks` desynchronizes psql's input parser, which then mis-parses the following `COPY` data rows as SQL (a `syntax error at or near …` cascade). This silently drops whole tables (observed: `documents` and `llms`), leaving a partially-restored database that looks intact but has lost rows. Always restore with `ON_ERROR_STOP=1` so failures surface immediately.
+- The project's `restore-backup` (and any `psql -f` run with `ON_ERROR_STOP=1`) aborts early with `extension "vector" is not available`: no data is loaded. Install pgvector and retry.
+- A manual `psql -f` run that ignores errors (`ON_ERROR_STOP=0`) is worse: the failed `COPY public.document_chunks` desynchronizes psql's input parser, which then mis-parses the following `COPY` data rows as SQL (a `syntax error at or near …` cascade). This silently drops whole tables (observed: `documents` and `llms`), leaving a partially-restored database that looks intact but has lost rows. Always restore with `ON_ERROR_STOP=1` so failures surface immediately.
 
 ### Option A: Use the project's backup script
 
@@ -47,7 +47,7 @@ TomoriBot includes two backup scripts, each targeting different data:
 - **`bun run backup`**: Full database schema + data dump (personas, memories, configs, everything)
 - **`bun run backup:personas`**: Persona presets and per-persona server memories only
 
-For a safe migration, use the **full backup**:
+For a safe migration, use the full backup:
 
 ```bash
 bun run backup
@@ -108,11 +108,11 @@ pg_restore \
   tomoribot-backup-20240115-143045.dump
 ```
 
-**Note:** `pg_restore` will prompt for your password unless you set it in a `.pgpass` file (PostgreSQL's built-in credential file).
+Note: `pg_restore` will prompt for your password unless you set it in a `.pgpass` file (PostgreSQL's built-in credential file).
 
 ## For contributors deploying via CI: the `(Checkpoint)` convention
 
-If you maintain a fork that deploys to AWS or GCP via the workflows in `.github/workflows/deploy-tomoribot-{aws,gcp}.yml`, those pipelines support an **opt-in pre-deploy snapshot**: when a commit message contains the literal token `(Checkpoint)`, the workflow runs `aws rds create-db-snapshot` (or the GCP Cloud SQL equivalent) **before** any code is deployed and before the migration runner touches the database on boot.
+If you maintain a fork that deploys to AWS or GCP via the workflows in `.github/workflows/deploy-tomoribot-{aws,gcp}.yml`, those pipelines support an opt-in pre-deploy snapshot: when a commit message contains the literal token `(Checkpoint)`, the workflow runs `aws rds create-db-snapshot` (or the GCP Cloud SQL equivalent) before any code is deployed and before the migration runner touches the database on boot.
 
 Use it when:
 
@@ -209,13 +209,13 @@ If the bot crashes or hangs during migration:
 
 ## What is NOT auto-recoverable
 
-Per the project's design (OD-R-6), **destructive migrations cannot be rolled back** by the migration runner. Examples:
+By project design policy (OD-R-6), the migration runner cannot roll back destructive migrations. Examples:
 
 - `DROP COLUMN name_here`: deleted rows are lost forever; no SQL script can recover them
 - `DROP TABLE old_table`: entire table is gone
 - Type narrowing (e.g., `VARCHAR(255) → VARCHAR(100)`): values longer than 100 characters are truncated
 
-For these operations, **the only recovery is your backup**. Always back up before pulling if you're on an older version and a new refactor has shipped.
+Your backup is the only recovery for these operations. Always back up before pulling if you're on an older version and a new refactor has shipped.
 
 The migration runner's forward-only design is intentional: rollback files (`.down.sql`) exist for developer safety during testing, but production recovery relies on backups, not re-execution of undoable operations.
 
@@ -223,22 +223,24 @@ The migration runner's forward-only design is intentional: rollback files (`.dow
 
 A common case: someone asks you to test a branch on your existing install, and you want to know whether checking out the branch, booting it, then switching back to `main` will harm your database.
 
-**The key facts:**
+### Key facts
 
 - Git and PostgreSQL are separate worlds. `git checkout` only swaps files on disk; it never connects to or modifies your database. Your applied-migration state lives in the `schema_migrations` table, not in git.
-- Migrations run **automatically on boot** (via `initializeDatabase.ts`), so the moment you start the branch, its new migrations are applied to whatever database you pointed at.
-- The forward runner **never auto-rolls-back**. When you return to `main`, it scans the files on disk, finds nothing pending, and does nothing. Migrations the branch applied stay applied.
+- Migrations run automatically on boot (via `initializeDatabase.ts`), so the moment you start the branch, its new migrations are applied to whatever database you pointed at.
+- The forward runner never auto-rolls-back. When you return to `main`, it scans the files on disk, finds nothing pending, and does nothing. Migrations the branch applied stay applied.
 
-**So is it safe?** It depends entirely on what the branch's migrations did:
+### Is it safe?
+
+It depends entirely on what the branch's migrations did:
 
 - **Additive only** (new tables / new columns) → safe. The new objects simply sit unused; `main`'s code never references them, so they cannot cause wrong results or crashes. They are harmless dead weight.
 - **Destructive** (`DROP`/`RENAME`/`ALTER` on a table `main` still uses) → not safe. The branch's change strands `main`'s code against a column/table that is now gone or altered.
 
-**Safest approach:** point the branch at a throwaway database (a separate `POSTGRES_DB`), so your real data is never touched. You already build the connection from `POSTGRES_*` vars, and `bun run nuke-db` can reset a scratch database.
+- **Safest approach**: point the branch at a throwaway database (a separate `POSTGRES_DB`), so your real data is never touched. You already build the connection from `POSTGRES_*` vars, and `bun run nuke-db` can reset a scratch database.
 
 ### Manually rolling back a test migration
 
-If you tested a branch against your **real** database and want to undo its migrations afterward, use the rollback runner. Unlike the forward runner, it **never runs automatically**: rollback is always a deliberate manual act because `.down.sql` files are typically lossy.
+If you tested a branch against your production database and want to undo its migrations afterward, use the rollback runner. Unlike the forward runner, it never runs automatically: rollback is always a deliberate manual act because `.down.sql` files are typically lossy.
 
 ```bash
 # Preview only (dry run): show what would be rolled back
@@ -250,11 +252,11 @@ bun run migrate:down --last=2     # the two most recently applied migrations
 bun run migrate:down 034 --yes
 ```
 
-The command runs the selected `.down.sql` files in **descending** version order (so a migration's dependents are undone before it), then deletes the matching `schema_migrations` rows. With those rows gone, the forward runner will re-apply the migrations the next time you boot a branch that still ships them.
+The command runs the selected `.down.sql` files in descending version order (so a migration's dependents are undone before it), then deletes the matching `schema_migrations` rows. With those rows gone, the forward runner will re-apply the migrations the next time you boot a branch that still ships them.
 
-> **Run it while still on the branch.** The rollback reads `NNN_description.down.sql` from disk. Once you `git checkout main`, those files are gone and the rollback can no longer execute. Roll back first, then switch branches.
+> Note: Run the rollback while still on the branch. The rollback reads `NNN_description.down.sql` from disk. Once you `git checkout main`, those files are gone and the rollback can no longer execute. Roll back first, then switch branches.
 
-> **It is still lossy.** Rolling back `034` here runs `DROP TABLE short_term_memories`, so any data created while testing is gone. That is expected for a test cleanup, but never run `migrate:down` against data you want to keep without a backup.
+> Warning: Rolling back is lossy. Rolling back `034` here runs `DROP TABLE short_term_memories`, so any data created while testing is gone. That is expected for a test cleanup, but never run `migrate:down` against data you want to keep without a backup.
 
 ## See also
 

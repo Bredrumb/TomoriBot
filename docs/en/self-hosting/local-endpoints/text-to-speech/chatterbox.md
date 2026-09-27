@@ -47,12 +47,12 @@ The `/config` fast-model toggle must stay enabled to use Nano or Turbo. Disablin
 
 ### Standard Chatterbox (0.5B with CFG & Exaggeration)
 
-The original 0.5B base Chatterbox model (`ChatterboxTTS`) is built directly into the server wrapper. It trades Turbo's inline bracket event tags for fine-grained vocal control using **Classifier-Free Guidance (`cfg_weight`)** and emotional **`exaggeration`**.
+The original 0.5B base Chatterbox model (`ChatterboxTTS`) is built directly into the server wrapper. It trades Turbo's inline bracket event tags for fine-grained vocal control using Classifier-Free Guidance (`cfg_weight`) and emotional `exaggeration`.
 
 To use the Standard model:
 1. Start the server wrapper as normal.
 2. In Discord, run `/config` > `Models` > `TTS Parameters & Voices`.
-3. Toggle **OFF** the **Fast Model (Turbo)** option.
+3. Toggle off the `Fast Model (Turbo)` option.
 4. On the next generation, the wrapper lazily downloads and loads the standard 0.5B model into memory.
 
 Both values are text fields in the `Edit Parameters` modal. They are always editable, and the page notes that they are ignored while the fast model is enabled:
@@ -71,8 +71,9 @@ Run `/providers`, choose `Add New Custom Endpoint`, and use the speech API compa
 - API Compatibility: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8011`
 
-After saving the connection, select it and use its model dropdown to add a Speech model. Choose `Voice Clone`
-as the Voice Source Mode and `Bracket Tags` as the Script Markup so delivery tags survive the send.
+After saving the connection, select it and choose `+ Add new Speech Model` from the model dropdown.
+Choose `Voice Clone` as the `Voice Source Mode` and `Bracket Tags` as the `Script Markup Style` so
+delivery tags survive the send.
 
 Use `/providers` for endpoint registration and model setup. Then open `/config` > Models > Switch Models to select and activate the registered endpoint.
 

@@ -15,16 +15,16 @@ docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up -d
 これにより、以下の処理が行われます。
 - PostgreSQLを使用してTomoriBotを起動（DBはポート15432）
 - 自動設定されたPostgreSQLデータソースを使用してポート3000でGrafanaを起動
-- **TomoriBot Overview** ダッシュボードをプロビジョニング
+- TomoriBot Overview ダッシュボードをプロビジョニング
 - 同じDockerネットワーク上で両方のサービスを接続
 
 [http://localhost:3000](http://localhost:3000) でGrafanaにアクセスします。
-- **Username**: `admin`
-- **Password**: `.env` の `GRAFANA_PASSWORD` で設定（未設定の場合はデフォルトで `admin`）
+- **Username**：`admin`
+- **Password**：`.env` の `GRAFANA_PASSWORD` で設定（未設定の場合はデフォルトで `admin`）
 
 ## プロビジョニング済みダッシュボード
 
-**TomoriBot Overview** は自動的に表示され、設定は不要です。パネルの内容は、プロセスメモリ、キャッシュのエントリ数、時間あたりのエラー数、モデル別のトークン消費、時間帯別のアクティビティ、よく使われるコマンド、ユーザーのロケール、表情クラウド、使用中のプリセットとモデルです。
+TomoriBot Overview は自動的に表示され、設定は不要です。パネルの内容は、プロセスメモリ、キャッシュのエントリ数、時間あたりのエラー数、モデル別のトークン消費、時間帯別のアクティビティ、よく使われるコマンド、ユーザーのロケール、表情クラウド、使用中のプリセットとモデルです。
 
 すべてのパネルは、どの環境にも存在するテーブルのみを読み取ります。そのため、同じダッシュボードがセルフホスト環境でもクラウド環境でも動作します。
 

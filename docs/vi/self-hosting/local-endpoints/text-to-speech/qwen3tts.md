@@ -45,7 +45,7 @@ Chạy `/providers`, chọn `Thêm endpoint tùy chỉnh mới`, và sử dụng
 - API Compatibility: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8012`
 
-Sau khi lưu kết nối, hãy chọn kết nối đó và sử dụng menu thả xuống model để thêm một model Speech. Biểu mẫu model yêu cầu **Voice Source Mode** và **Script Markup**; hãy chọn `Auto` và `Plain` cho máy chủ ở chế độ tự động.
+Sau khi lưu kết nối, hãy chọn kết nối đó và sử dụng menu thả xuống model để thêm một model Speech. Biểu mẫu model yêu cầu Chế độ nguồn giọng đọc và Script Markup; hãy chọn `Auto` và `Plain` cho máy chủ ở chế độ tự động.
 
 Sử dụng `/providers` để đăng ký endpoint và thiết lập model. Sau đó mở `/config` > Models > Switch Models để chọn và kích hoạt endpoint đã đăng ký.
 
@@ -56,7 +56,7 @@ Sử dụng `/providers` để đăng ký endpoint và thiết lập model. Sau 
 Sử dụng tính năng này cho các persona cần bắt chước một đoạn clip tham chiếu:
 
 1. Chuẩn bị một đoạn clip giọng nói rõ ràng dài 10-20 giây với một người nói và không có nhạc nền.
-2. Mở `/config` trong phần Models > TTS Parameters & Voices và tải clip lên.
+2. Mở `/config` trong phần Models > Tham số & Giọng đọc TTS và tải clip lên.
 3. Mở `/config` trong phần Persona > Voice, sau đó chọn persona và mẫu giọng nói.
 
 Qwen3-TTS quảng cáo khả năng sao chép nhanh chỉ từ 3 giây âm thanh tham chiếu, và runtime của nó không tài liệu hóa cũng không áp đặt giới hạn thời lượng tham chiếu. Vì vậy, độ dài clip là một sự đánh đổi về chất lượng do bạn kiểm soát, chứ không phải một giới hạn mà máy chủ kiểm tra.
@@ -94,4 +94,4 @@ TOMORI_TTS_MODE=voice-design python servers/tts/qwen3tts/server.py
 
 Bạn cũng có thể truyền `--mode voice-design` thay vì đặt `TOMORI_TTS_MODE`. URL endpoint mặc định chỉ chạy VoiceDesign là `http://127.0.0.1:8014`.
 
-Đăng ký máy chủ theo cách tương tự như chế độ tự động, nhưng sử dụng URL endpoint `http://127.0.0.1:8014` và chọn `VoiceDesign` làm Voice Source Mode trên model Speech.
+Đăng ký máy chủ theo cách tương tự như chế độ tự động, nhưng sử dụng URL endpoint `http://127.0.0.1:8014` và chọn `VoiceDesign` làm Chế độ nguồn giọng đọc trên model Speech.

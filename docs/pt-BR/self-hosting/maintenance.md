@@ -241,9 +241,9 @@ Os tempos de recarga de comandos são a exceção ao "fixo": os nomes `COOLDOWN_
 
 Os servidores locais de TTS em `servers/tts/` perderam seus valores de fallback compartilhados, limites por motor e configurações de autenticação. Um valor antigo no `.env` ou no seu shell é ignorado, então confira as linhas abaixo que mudam o comportamento, em vez de apenas repetir um padrão.
 
-- **Portas:** `TOMORI_TTS_PORT` foi removida porque um único valor no `.env` colocava todos os servidores iniciados na mesma porta. Em vez disso, cada motor lê sua própria variável: `CHATTERBOX_PORT` (8011), `QWEN3TTS_PORT` (8012, ou 8014 no modo de design de voz), `IRODORI_TTS_PORT` (8013), `FISH_S2_PORT` (8015), `VOXCPM2_PORT` (8016), `COSYVOICE3_PORT` (8017) e `MOSS_TTS_PORT` (8018).
-- **Autenticação:** os servidores não verificam mais um token de portador nem recusam um bind fora do loopback. Se você definiu `FISH_S2_API_KEY`, `VOXCPM2_API_KEY`, `TOMORI_TTS_API_KEY` ou `COSYVOICE3_BEARER_TOKEN`, o endpoint agora aceita requisições sem elas. Leia [Acesso de rede](/pt-BR/self-hosting/local-endpoints/text-to-speech/#network-access) antes de fazer o bind fora do loopback.
-- **Versões fixadas nos instaladores:** o commit do runtime do Fish Speech e as revisões do runtime e do modelo do CosyVoice estão fixados nos instaladores. Para atualizá-los, edite a versão fixada no script.
+- Portas: `TOMORI_TTS_PORT` foi removida porque um único valor no `.env` colocava todos os servidores iniciados na mesma porta. Em vez disso, cada motor lê sua própria variável: `CHATTERBOX_PORT` (8011), `QWEN3TTS_PORT` (8012, ou 8014 no modo de design de voz), `IRODORI_TTS_PORT` (8013), `FISH_S2_PORT` (8015), `VOXCPM2_PORT` (8016), `COSYVOICE3_PORT` (8017) e `MOSS_TTS_PORT` (8018).
+- Autenticação: os servidores não verificam mais um token de portador nem recusam um bind fora do loopback. Se você definiu `FISH_S2_API_KEY`, `VOXCPM2_API_KEY`, `TOMORI_TTS_API_KEY` ou `COSYVOICE3_BEARER_TOKEN`, o endpoint agora aceita requisições sem elas. Leia [Acesso de rede](/pt-BR/self-hosting/local-endpoints/text-to-speech/#network-access) antes de fazer o bind fora do loopback.
+- Versões fixadas nos instaladores: o commit do runtime do Fish Speech e as revisões do runtime e do modelo do CosyVoice estão fixados nos instaladores. Para atualizá-los, edite a versão fixada no script.
 
 <details>
 <summary>Todas as variáveis removidas dos servidores locais de TTS</summary>
@@ -299,9 +299,9 @@ Ou restaure um pacote específico:
 bun run restore-backup --from backups/backup_2024-01-15_14-30-45
 ```
 
-`bun run backup:personas` é uma exportação mais restrita: apenas predefinições de persona e memórias do servidor por persona, através de todos os servidores. Ele **deve** ser reimportado manualmente via `/persona import` e **não pode** ser usado com `restore-backup` (isso causaria conflitos de chave primária).
+`bun run backup:personas` é uma exportação mais restrita: apenas predefinições de persona e memórias do servidor por persona, através de todos os servidores. Ele deve ser reimportado manualmente via `/persona import` e não pode ser usado com `restore-backup` (isso causaria conflitos de chave primária).
 
-O TomoriBot também faz **backups automáticos na inicialização** em ambientes não produtivos, e uma restauração completa requer que a extensão `pgvector` esteja presente no banco de dados de destino. Ambos são abordados em detalhes em [Migração Segura](/pt-BR/self-hosting/safe-migration/), juntamente com um procedimento manual de `pg_dump` / `pg_restore` se você preferir conduzir as ferramentas diretamente.
+O TomoriBot também faz backups automáticos na inicialização em ambientes não produtivos, e uma restauração completa requer que a extensão `pgvector` esteja presente no banco de dados de destino. Ambos são abordados em detalhes em [Migração Segura](/pt-BR/self-hosting/safe-migration/), juntamente com um procedimento manual de `pg_dump` / `pg_restore` se você preferir conduzir as ferramentas diretamente.
 
 ## Backups com Docker Compose
 

@@ -5,7 +5,7 @@ title: "STM 01: Passive Capture"
 Captures the completed conversation turn into the in-process short-term
 memory cache immediately after generation finishes.
 
-**Files:**
+- **Files**:
 - `writeShortTermMemory` (module-private): `src/utils/chat/postTurnEffects.ts:129-181`
 - `storeShortTermMemory`: `src/utils/cache/shortTermMemoryCache.ts:317-378`
 
@@ -85,7 +85,7 @@ After this stage runs for a non-empty, non-stop generation result:
 
 | Surface | Plugin-relevance |
 |---|---|
-| `storeShortTermMemory()` | **A plugin extending channel-memory tagging or cross-server STM scoping would extend here.** The function signature accepts `personaId` and `personaLineageId` for scoping; new scope dimensions (e.g., thread lineage) would be added as additional parameters. → plugin plan candidate |
+| `storeShortTermMemory()` | A plugin extending channel-memory tagging or cross-server STM scoping would extend here. The function signature accepts `personaId` and `personaLineageId` for scoping; new scope dimensions (e.g., thread lineage) would be added as additional parameters. → plugin plan candidate |
 | TTL and size constants (`CRUDE_CONVERSATION_TTL_HOURS`, `MAX_MESSAGES_PER_CHANNEL`) | Fixed in code. Not a plugin seam: operational tuning only. |
 | Message storage cap (`messages.slice(-MAX_MESSAGES_PER_CHANNEL)`) | Internal; `MAX_MESSAGES_PER_CHANNEL` is the control surface. |
 

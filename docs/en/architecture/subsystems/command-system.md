@@ -22,17 +22,17 @@ Flow:
 
 ### Single-flight loading (race protection)
 
-`loadCommandData()` is called from two places: the startup registration path (`clientReady/01_registercommands.ts`) and the lazy first-interaction path (`interactionCreate/handleCommands.ts`). It is memoized behind a single shared promise (`cachedCommandDataPromise`) so both callers await **one** evaluation.
+`loadCommandData()` is called from two places: the startup registration path (`clientReady/01_registercommands.ts`) and the lazy first-interaction path (`interactionCreate/handleCommands.ts`). It is memoized behind a single shared promise (`cachedCommandDataPromise`) so both callers await one evaluation.
 
 This guards against a startup race: if an interaction arrives while registration is still loading, a second concurrent `loadCommandData()` would independently `await import()` the same command modules. Because ES module evaluation interleaves across `await` points, the second loader could read an export binding (e.g. `configureSubcommand`) while the module was still in its Temporal Dead Zone, throwing `Cannot access 'configureSubcommand' before initialization` and silently skipping that command, so leaving the bot "dead" for those commands until restart.
 
-The memoized promise is **not** cached when a load fails catastrophically (empty execution map) or rejects, so a later interaction can retry instead of locking in a broken state. `handleCommands.ts` likewise only commits its module-level maps when the load produced commands. New callers must use the exported `loadCommandData()`, never the private `loadCommandDataUncached()`.
+The memoized promise is not cached when a load fails catastrophically (empty execution map) or rejects, so a later interaction can retry instead of locking in a broken state. `handleCommands.ts` likewise only commits its module-level maps when the load produced commands. New callers must use the exported `loadCommandData()`, never the private `loadCommandDataUncached()`.
 
 ### Import hygiene (keep the loaded graph shallow)
 
 The race above is only *possible* because a command module's static import graph can be large and cyclic. Most command files import the repositories barrel (`@/utils/db/repositories`), so any heavy dependency reachable from that barrel is pulled into every command load.
 
-Rule: **data-layer modules (repositories, caches) must not import high-level subsystems** (context building, tools, webhooks, providers). Import shared leaf constants directly from their owning leaf module, not from a barrel that also re-exports heavy code. Example: `ServerRepository.ts` imports `DEFAULT_SYSTEM_PROMPT` from `@/utils/text/context/templates` (a leaf), **not** from `@/utils/text/contextBuilder` (a barrel that also re-exports `buildContext` and its tool/webhook/provider graph). That single edge previously routed the entire runtime subsystem into the repositories barrel.
+Rule: data-layer modules (repositories, caches) must not import high-level subsystems (context building, tools, webhooks, providers). Import shared leaf constants directly from their owning leaf module, not from a barrel that also re-exports heavy code. Example: `ServerRepository.ts` imports `DEFAULT_SYSTEM_PROMPT` from `@/utils/text/context/templates` (a leaf), not from `@/utils/text/contextBuilder` (a barrel that also re-exports `buildContext` and its tool/webhook/provider graph). That single edge previously routed the entire runtime subsystem into the repositories barrel.
 
 Run `bunx madge --circular --extensions ts --ts-config tsconfig.json src` to audit cycles. Remaining cycles are expected to be either type-only (`import type`, erased at runtime), localized repository↔cache↔barrel cycles, or self-contained subsystem-internal cycles (Matrix bridge, chat pipeline); none should route the repositories barrel into context/tool/webhook code.
 
@@ -100,7 +100,7 @@ repainting with a red receipt. It does not throw, so the router's exception hand
 the actor's failure leaves no trace unless something else records it. Two rules keep that class of
 failure traceable.
 
-**Every receipt repaint is observable.** `deliverGuardedPanel` takes the receipt in its delivery
+Every receipt repaint is observable. `deliverGuardedPanel` takes the receipt in its delivery
 options and emits one `panel_failure` metric for an `error` or `warning` tone, carrying the locale,
 the tone, the namespace parsed from the interaction's custom ID, and a `reason` key. The
 per-namespace `repaint` helpers pass their receipt through, so a panel that repaints as failed is
@@ -120,7 +120,7 @@ Passing it as an option keeps observability metadata out of user-facing content.
 container then formats both the main payload and receipt `TextDisplay` content from component-tree
 context before final Components V2 validation.
 
-**A receipt that knows its action carries the join key.** Successes live in `stat_counters` as
+A receipt that knows its action carries the join key. Successes live in `stat_counters` as
 `panel_action`, keyed `<surface>.<scope>.<resource>.<verb>`. `reason` does not share that key space,
 so a receipt that knows which control it reports on sets `action` to the same identifier the success
 counter writes, and the metric emits it as an `action` field. The field is omitted rather than
@@ -156,7 +156,7 @@ once per outage rather than once per action, and re-arms after the next write th
 recorder. That report is a metric, not `log.warn` (dropped by production's level pin) and not
 `log.error` (which would attempt an `error_logs` insert down the same pool that just failed).
 
-**`deliverGuardedPanel` is the only emitter of `panel_failure`.** A route that counts a failure
+`deliverGuardedPanel` is the only emitter of `panel_failure`. A route that counts a failure
 itself and then repaints with a receipt would count the same failure twice, under two reason keys,
 so a site that needs to record detail a receipt cannot carry emits `panel_failure_detail` instead
 and names its cause on the receipt. Counting queries therefore stay on `panel_failure`, and a
@@ -164,7 +164,7 @@ drill-down joins the two on `reason`. `tests/unit/discord/panelFailureSingleEmis
 the source to hold that invariant, because no test over the delivery helper can see a second
 emitter.
 
-**Group on `reason`, never on `heading`.** `PanelReceipt.reason` is an optional machine key naming
+Group on `reason`, never on `heading`. `PanelReceipt.reason` is an optional machine key naming
 the cause (`endpoint_add_unreachable`, `setup_commit_failed`). A receipt that does not set one falls
 back to `<namespace>_<tone>`, and a target with no route id falls back to `unknown`. The heading is
 localized, so grouping on it files one defect under a different label per locale.
@@ -174,7 +174,7 @@ carries no route id, and the notice payloads built by `buildTransferNoticePayloa
 object. A call site on either path that wants reporting passes a receipt explicitly, which is what
 the import-failure notices and the `/setup` terminal states do.
 
-**Genuinely broken paths log at error level where the cause is still in scope.** The `panel_failure`
+Genuinely broken paths log at error level where the cause is still in scope. The `panel_failure`
 metric is deliberately not an `error_logs` row: most receipts are expected outcomes the actor can
 correct (bad input, a stale panel, an unavailable read), and the production log level filters `warn`
 out entirely, so neither `log.error` for all of them nor `log.warn` for any of them is right. Paths
@@ -557,7 +557,9 @@ Rules:
 - `promptWithPaginatedModal(...)` does not expose an auto-defer parameter; defer on submission manually when needed
 - commands that begin with a persona picker use Pattern 4A; the workflow owns picker acknowledgment and retries
 
-**`>25`-option selector style (pre-anchor).** This applies to callers still on
+#### `>25`-option selector style (pre-anchor)
+
+This applies to callers still on
 `promptWithPaginatedModal(...)`. Commands migrated to the anchor message workflow
 (Pattern 4A) never set `selectorStyle`: their `>25` handling is chosen for them by the
 engine's range-selector bridge, which always renders the Components V2 selector.
@@ -580,17 +582,17 @@ sinks (`replyInfoEmbed`/`replySummaryEmbed`/`replyPaginatedStatusPages`) detect 
 and emit a V2 notice container instead of embeds, so a later error/info reply to the same
 interaction cannot collide. Before opting a caller into `"componentsV2"`, confirm the
 interaction reaching the helper is unacknowledged (fresh-reply path) rather than a
-deferred/replied **legacy** message, since Discord cannot convert a legacy reply to V2 via
+deferred/replied legacy message, since Discord cannot convert a legacy reply to V2 via
 `editReply`.
 
 ### Pattern 4A: Anchor Message Workflow (persona picker)
 
-The **anchor message workflow** is the engine behind Pattern 4A. Its rule: one
-command invocation owns exactly **one** ephemeral message, edited in place through every
+The anchor message workflow is the engine behind Pattern 4A. Its rule: one
+command invocation owns exactly one ephemeral message, edited in place through every
 stage: picker, `>25` range selector, modal, progress, and terminal result. Opening a modal
 is an acknowledgment, not a second message.
 
-This exists because Discord emits **no event when a user dismisses a modal**. A flow that
+This exists because Discord emits no event when a user dismisses a modal. A flow that
 opens a modal and leaves its picker message behind therefore strands dead-but-clickable
 buttons ("This interaction failed") until the modal's timeout. Rendering everything on one
 message makes that orphan impossible by construction, and *collapse-at-open* swaps the live
@@ -984,7 +986,7 @@ refresh control. Stale or unavailable reads expose a read-only `Retry` action; R
 configuration and never connects to an MCP endpoint. The collection renders every supported registration
 in deterministic order with its own Enable/Disable and Remove actions, then a `Add MCP` action.
 Receipts render in a separate top-level container below the authoritative collection repaint.
-**+ Add MCP** opens one raw modal containing Name, URL, optional Auth Token, and the required
+`+ Add MCP` opens one raw modal containing Name, URL, optional Auth Token, and the required
 General Purpose/Web Search/URL Fetcher Radio Group, with General Purpose selected by default. Its modal
 and field IDs carry bounded random nonces, and submission returns through the global router rather
 than an invocation-scoped modal collector, so a supported open modal can survive a process restart.
@@ -1006,7 +1008,9 @@ than an invocation-scoped modal collector, so a supported open modal can survive
 - `tool`: ping, status, refresh, compact, comment
 - `stats`: personal(scope toggle), persona(autocomplete), server; each takes an optional `timeframe` (default All-Time)
 
-`/stats` is a guild-only category that reads the `stat_counters` telemetry table (see [database-schema](database-schema)). Each subcommand (`personal`, `persona`, `server`) takes an **optional** `timeframe` choice (`Today` / `Last 7 Days` / `Last 30 Days` / `Last Year` / `All-Time`), defaulting to `All-Time` when omitted; `personal` adds a required `scope` choice (`This Server` / `All Servers`), declared before `timeframe` because Discord rejects a required option after an optional one. The result is a **public, invoker-controlled tabbed dashboard** (`src/utils/stats/statsDashboard.ts`) built on **Components V2**: each tab is a single container (H3 title, separator-divided stat sections, and the tab buttons living inside the card). A row of named tab buttons swaps which container is shown (a tabbed view, not item pagination). Only the invoker can operate the tabs; the buttons are stripped on collector timeout (5 minutes). The renderer uses a single **persistent** `createMessageComponentCollector` (not a one-shot `awaitMessageComponent` loop) so rapid tab switching can't land in a no-collector gap, and wraps each `button.update` in try/catch so a stale/expired interaction (DiscordAPIError 10062) can never tear down the dashboard. Dashboard and infographic entry points drain the in-memory stat buffer before querying, so their snapshots include all successfully buffered work from the current process. **Timeframe gating:** rewards/punishments and memories are all-time-only; daily telemetry, including generation totals, works for every timeframe. Span metrics (streaks, most-active hour/day) are hidden under the single-day `Today` view. `/stats persona` uses autocomplete to select from all guild personas, validating the ID and rendering the public dashboard directly via follow-up after an initial private deferral. Token and cost figures prefer provider-reported usage and fall back to character estimates when unavailable; they remain estimates because pricing can be incomplete or provider-dependent. Timeframe windows use the daily-bucket floor, so `Today` is the current UTC day, not a rolling 24h.
+`/stats` is a guild-only category that reads the `stat_counters` telemetry table (see [database-schema](database-schema)). Each subcommand (`personal`, `persona`, `server`) takes an optional `timeframe` choice (`Today` / `Last 7 Days` / `Last 30 Days` / `Last Year` / `All-Time`), defaulting to `All-Time` when omitted; `personal` adds a required `scope` choice (`This Server` / `All Servers`), declared before `timeframe` because Discord rejects a required option after an optional one. The result is a public, invoker-controlled tabbed dashboard (`src/utils/stats/statsDashboard.ts`) built on Components V2: each tab is a single container (H3 title, separator-divided stat sections, and the tab buttons living inside the card). A row of named tab buttons swaps which container is shown (a tabbed view, not item pagination). Only the invoker can operate the tabs; the buttons are stripped on collector timeout (5 minutes). The renderer uses a single persistent `createMessageComponentCollector` (not a one-shot `awaitMessageComponent` loop) so rapid tab switching can't land in a no-collector gap, and wraps each `button.update` in try/catch so a stale/expired interaction (DiscordAPIError 10062) can never tear down the dashboard. Dashboard and infographic entry points drain the in-memory stat buffer before querying, so their snapshots include all successfully buffered work from the current process.
+
+Timeframe gating: rewards/punishments and memories are all-time-only; daily telemetry, including generation totals, works for every timeframe. Span metrics (streaks, most-active hour/day) are hidden under the single-day `Today` view. `/stats persona` uses autocomplete to select from all guild personas, validating the ID and rendering the public dashboard directly via follow-up after an initial private deferral. Token and cost figures prefer provider-reported usage and fall back to character estimates when unavailable; they remain estimates because pricing can be incomplete or provider-dependent. Timeframe windows use the daily-bucket floor, so `Today` is the current UTC day, not a rolling 24h.
 
 `/config` > Channels > Auto-Trigger is channel-scoped and uses one shared cycle across its configured channels. Threshold `0` enables always-reply in those channels. Positive values use either a fixed trigger (`min = max`) or a shared inclusive random range (`min-max`), rerolling after each successful auto-trigger. The cycle only advances on qualifying real user-like messages; TomoriBot and alter webhook self-messages do not advance or consume the auto-trigger counter. Removing a channel disables auto-trigger behavior for that channel. The page can also target a single channel and assign one persona to that room's auto-trigger fallback instead of always using the main persona.
 
@@ -1085,7 +1089,7 @@ the same implementation.
 
 The command holds the same pre-modal line as the other `/generate` subcommands: it must acknowledge within three seconds without deferring, so `voice_sample` is validated on metadata only (MIME type and byte size) before the modal opens, and the download, duration check, and ffmpeg normalization happen after submission. It gates on `voice_message_enabled` and shares the trigger cooldown with message triggers, mirroring `/generate scene`. Because a voice message is sent under a persona's name and avatar, the command requires a guild text channel or thread, resolves a webhook rather than falling back to bot identity, and posts the transcript caption plus `setCachedVoiceTranscript` exactly as the tool path does. `audio_generated` is recorded once, on success only, with the same three backend keys as the tool.
 
-The randomizer on `/config` > Models > Fallbacks & Randomizer is a server-level toggle for the per-turn text model randomizer. When enabled, each generation turn randomly promotes one model from the pool (primary model + configured fallbacks) to lead the attempt chain, breaking the bot out of any single model's repetitive phrasing while keeping the rest as failover. It enforces a **block-until-fallbacks** precondition: enabling is refused with a localized warning embed unless the server has ≥1 fallback configured on that same page, guaranteeing the pool always has ≥2 members so the toggle is never a silent no-op. The flag lives in `server_chat_configs.model_randomizer_enabled` and is consumed by `buildGenerationAttempts` (see the [generation-turn pipeline](../pipelines/chat/06-per-turn/03-run-generation-turn)).
+The randomizer on `/config` > Models > Fallbacks & Randomizer is a server-level toggle for the per-turn text model randomizer. When enabled, each generation turn randomly promotes one model from the pool (primary model + configured fallbacks) to lead the attempt chain, breaking the bot out of any single model's repetitive phrasing while keeping the rest as failover. It enforces a block-until-fallbacks precondition: enabling is refused with a localized warning embed unless the server has ≥1 fallback configured on that same page, guaranteeing the pool always has ≥2 members so the toggle is never a silent no-op. The flag lives in `server_chat_configs.model_randomizer_enabled` and is consumed by `buildGenerationAttempts` (see the [generation-turn pipeline](../pipelines/chat/06-per-turn/03-run-generation-turn)).
 
 The Compatibility section that once sat on `/config` > Engine > Experimental is retired. Its only entry, `Verbatim Tool-Calling`, described a single backend's parser rather than server-wide behavior, so it now lives per model in `/providers`: select a custom endpoint, then add or edit a text model, and use `Chat Completion Compatibilities` alongside the same `strict_role_alternation` and `supports_prefix_completion` toggles. The value is stored on `custom_endpoints.verbatim_tool_calling` and mirrored to the endpoint's synthetic `llms` row, which is what the runtime reads. See the [tool-loop pipeline](../pipelines/tool-loop/README.md) for how it drives prompt assembly.
 
@@ -1095,7 +1099,7 @@ Any command that performs AI work the invoking user triggers must honor that use
 
 In contrast, `/memories` resolves the invoking user's embedding credentials directly through the credential resolver via `resolveCapabilityCredentials(serverId, "embedding", { userId })` during document addition and memory vectorization operations.
 
-The one deliberate exception is `/config` > Models > Switch Models, which re-embeds **server-wide** documents under server credentials (`resolveCapabilityCredentials(serverId, "embedding")` with no `userId`). This is bulk maintenance of a pre-existing server resource rather than a fresh user action, so it intentionally stays on server credentials.
+The one deliberate exception is `/config` > Models > Switch Models, which re-embeds server-wide documents under server credentials (`resolveCapabilityCredentials(serverId, "embedding")` with no `userId`). This is bulk maintenance of a pre-existing server resource rather than a fresh user action, so it intentionally stays on server credentials.
 
 Forward-looking command rewrite guidance (naming conventions, checklist-style settings pattern, migration map) is now part of `docs/en/contributing/extending/slash-command.md`. The runtime loader and current implementation still use the existing `src/commands/` structure.
 

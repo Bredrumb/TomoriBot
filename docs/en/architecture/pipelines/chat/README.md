@@ -11,9 +11,9 @@ many persona replies. It is the spine of TomoriBot: most other AI subsystems
 (context build, tool loop, provider streaming, memory capture) are reached from
 inside this pipeline.
 
-**Entry point:** `src/events/messageCreate/tomoriChat.ts:tomoriChat()`
+- **Entry point**: `src/events/messageCreate/tomoriChat.ts:tomoriChat()`
 
-**Triggered by:** every Discord `messageCreate` event (including bot/webhook
+- **Triggered by**: every Discord `messageCreate` event (including bot/webhook
 messages: filtering happens inside `evaluateChatAdmission`), plus internal
 re-invocations from retries, queue replays, stop-response generation, boomerang
 follow-ups, and command-driven manual triggers.
@@ -82,10 +82,10 @@ tomoriChat(TomoriChatInput)
 
 - One channel ⇄ one active turn-sequence at a time. Enforced by
   `runWithChannelLock`.
-- Messages arriving while a channel is locked are either **enqueued for replay
-  after lock release**, **converted to a follow-up interrupt** (if eligible),
-  **converted to a natural-stop signal** (if matching stop phrasing), or
-  **dropped**: full decision tree in [`04-channel-lock.md`](./04-channel-lock).
+- Messages arriving while a channel is locked are either enqueued for replay
+  after lock release, converted to a follow-up interrupt (if eligible),
+  converted to a natural-stop signal (if matching stop phrasing), or
+  dropped: full decision tree in [`04-channel-lock.md`](./04-channel-lock).
 - Three recursive re-entries into `tomoriChat()` are by design:
   empty-response retry (with `skipLock=true`), stop-response generation (after
   lock release, via `handleStopResponse`), and boomerang follow-up (with

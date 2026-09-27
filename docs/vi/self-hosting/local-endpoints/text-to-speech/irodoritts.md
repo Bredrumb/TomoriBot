@@ -84,15 +84,15 @@ Chạy `/providers`, chọn `Thêm endpoint tùy chỉnh mới`, và sử dụng
 
 Sau khi lưu kết nối, hãy chọn kết nối đó và sử dụng menu thả xuống model để thêm một model Speech. Đối với v4.1, các cài đặt được khuyến nghị là:
 
-- `Voice Source Mode`: `Auto`
-- `Script Markup Style`: `Emoji`
+- `Chế độ nguồn giọng đọc`: `Auto`
+- `Kiểu định dạng kịch bản`: `Emoji`
 
 `Auto` cho phép cùng một endpoint Irodori hỗ trợ cả hai chế độ giọng nói của TomoriBot, nhờ đó các gợi ý cảm xúc vẫn còn khi gửi:
 
 - Các persona có mẫu giọng nói được chỉ định dưới phần Persona > Voice sẽ gửi đoạn clip tham chiếu đã lưu để sao chép giọng nói.
 - Các persona có prompt VoiceDesign được đặt dưới phần Persona > Voice sẽ gửi prompt ngôn ngữ tự nhiên đã lưu làm điều kiện chú thích của Irodori.
 
-Bạn vẫn có thể chọn `Voice Clone` làm Voice Source Mode nếu bạn chỉ muốn sao chép giọng nói bằng âm thanh tham chiếu.
+Bạn vẫn có thể chọn `Sao chép giọng đọc` làm Chế độ nguồn giọng đọc nếu bạn chỉ muốn sao chép giọng nói bằng âm thanh tham chiếu.
 
 Sử dụng `/providers` để đăng ký endpoint và thiết lập model. Sau đó mở `/config` > Models > Switch Models để chọn và kích hoạt endpoint đã đăng ký.
 
@@ -101,7 +101,7 @@ Sử dụng `/providers` để đăng ký endpoint và thiết lập model. Sau 
 ### Sao chép giọng nói
 
 1. Chuẩn bị một đoạn clip giọng nói tiếng Nhật rõ ràng với một người nói và không có nhạc nền. Khoảng 30 giây là đã đủ: vượt quá mốc đó, phần âm thanh thêm vào hầu như không cải thiện độ trung thực của âm sắc mà còn làm tăng kích thước tải lên và thời gian suy luận.
-2. Mở `/config` trong phần Models > TTS Parameters & Voices và tải clip lên.
+2. Mở `/config` trong phần Models > Tham số & Giọng đọc TTS và tải clip lên.
 3. Mở `/config` trong phần Persona > Voice, sau đó chọn persona và mẫu giọng nói.
 
 Irodori v4.1 hỗ trợ điều kiện hóa tham chiếu dài hơn so với model v2 cũ, nhưng âm thanh nguồn rõ ràng vẫn quan trọng hơn thời lượng thô.
@@ -122,7 +122,7 @@ TomoriBot loại bỏ cú pháp emoji tùy chỉnh của Discord trước khi g�
 
 ### Điều khiển phong cách bằng emoji
 
-IrodoriTTS hỗ trợ chú thích emoji trong văn bản đầu vào để tác động đến hiệu ứng âm thanh, cách nói và biểu cảm cảm xúc. Khi `Script Markup Style` của TomoriBot được đặt thành `Emoji`, các emoji Unicode này sẽ được giữ lại và gửi đến Irodori.
+IrodoriTTS hỗ trợ chú thích emoji trong văn bản đầu vào để tác động đến hiệu ứng âm thanh, cách nói và biểu cảm cảm xúc. Khi `Kiểu định dạng kịch bản` của TomoriBot được đặt thành `Emoji`, các emoji Unicode này sẽ được giữ lại và gửi đến Irodori.
 
 | Emoji | Ý nghĩa / cảm xúc / phong cách |
 | --- | --- |

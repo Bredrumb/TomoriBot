@@ -6,11 +6,11 @@ sidebar:
 
 Các máy chủ [MCP](https://modelcontextprotocol.io/) mở rộng TomoriBot bằng các công cụ bên ngoài. Các máy chủ
 MCP trực tuyến (HTTPS) hoạt động trên mọi phiên bản bot; xem
-[Công cụ và phần mở rộng](/vi/features/capabilities/tools-and-extensions/#mcp-servers). Máy chủ MCP **cục bộ** có
+[Công cụ và phần mở rộng](/vi/features/capabilities/tools-and-extensions/#mcp-servers). Máy chủ MCP cục bộ có
 sự khác biệt:
 
 :::caution[Chỉ dành cho self-hosting]
-Máy chủ MCP cục bộ **chỉ được hỗ trợ trên các phiên bản self-host**. Phiên bản bot công khai
+Máy chủ MCP cục bộ chỉ được hỗ trợ trên các phiên bản self-host. Phiên bản bot công khai
 yêu cầu HTTPS và chặn các địa chỉ cục bộ/riêng tư vì lý do bảo mật, do đó không thể kết nối tới máy chủ trên
 `localhost` hoặc mạng LAN của bạn.
 :::
@@ -27,11 +27,11 @@ npx -y <some-mcp-server> --port 3000
 Lệnh chính xác phụ thuộc vào máy chủ bạn đang chạy. Hãy ghi lại URL và đường dẫn truyền tải mà nó
 in ra (thường có dạng như `http://localhost:3000/sse`).
 
-Bộ công cụ của chính TomoriBot yêu cầu **Node.js v20+** khả dụng trên máy chủ lưu trữ cho các công cụ MCP.
+Bộ công cụ của chính TomoriBot yêu cầu Node.js v20+ khả dụng trên máy chủ lưu trữ cho các công cụ MCP.
 
 ## 2. Đăng ký trong Discord
 
-Mở `/config` > Plugins > MCP Servers, chọn `Thêm MCP`, trỏ trường **URL**
+Mở `/config` > Plugins > MCP Servers, chọn `Thêm MCP`, trỏ trường URL
 vào máy chủ cục bộ của bạn, và giữ nguyên trường bắt buộc `Loại máy chủ` ở giá trị mặc định `Mục đích chung`:
 
 ```text

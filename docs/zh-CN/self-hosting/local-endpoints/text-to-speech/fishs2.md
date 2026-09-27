@@ -12,19 +12,19 @@ Fish S2 Pro 支持 `[whisper]`、`[excited]`、`[angry]` 这样的方括号表�
 
 Fish Speech 代码与 S2 Pro 模型权重按 Fish Audio Research License 分发。根据其条款，研究与不可商用用途是被允许的；商业用途需要单独的 Fish Audio 许可。
 
-TomoriBot 不分发模型权重。每位自部署用户都直接从 Hugging Face 下载 Fish S2 Pro，并自行负责遵守 Fish Audio Research License。要求的署名是：**Built with Fish Audio**。
+TomoriBot 不分发模型权重。每位自部署用户都直接从 Hugging Face 下载 Fish S2 Pro，并自行负责遵守 Fish Audio Research License。要求的署名是：Built with Fish Audio。
 
 ## 硬件与操作系统
 
 > [!IMPORTANT]
-> **请为 Fish Speech 使用 Linux 或 WSL2：** Fish Audio 官方以 Linux 与 WSL2 为目标平台。Fish S2 Pro 使用双自回归（Dual-AR）架构（36 层慢速 transformer + 10 次快速码本迭代 = 每个 token 76 次层求值）。在 Linux 上，OpenAI Triton 可以把这种嵌套循环编译成融合的 GPU 内核（`torch.compile(backend="inductor")`），上游基准测试表明，这能在 Linux 服务器 GPU 上实现实时合成。封装程序默认关闭编译，所以要使用它请设置 `FISH_S2_COMPILE=1`。
+> 请为 Fish Speech 使用 Linux 或 WSL2： Fish Audio 官方以 Linux 与 WSL2 为目标平台。Fish S2 Pro 使用双自回归（Dual-AR）架构（36 层慢速 transformer + 10 次快速码本迭代 = 每个 token 76 次层求值）。在 Linux 上，OpenAI Triton 可以把这种嵌套循环编译成融合的 GPU 内核（`torch.compile(backend="inductor")`），上游基准测试表明，这能在 Linux 服务器 GPU 上实现实时合成。封装程序默认关闭编译，所以要使用它请设置 `FISH_S2_COMPILE=1`。
 >
-> 在原生 Windows 上，Triton 不受支持，PyTorch 只能工作在未编译的 eager 模式，并通过 Windows WDDM 驱动执行超过 120,000 次顺序 CUDA 内核调度。这会造成严重的调度停顿，对完全相同的片段来说，生成速度会慢到**约 8-10 分钟**（每秒音频约需 65 秒计算）。想要得到可用的推理，**请在 Linux 或 WSL2 中运行 Fish S2 Pro**。
+> 在原生 Windows 上，Triton 不受支持，PyTorch 只能工作在未编译的 eager 模式，并通过 Windows WDDM 驱动执行超过 120,000 次顺序 CUDA 内核调度。这会造成严重的调度停顿，对完全相同的片段来说，生成速度会慢到约 8-10 分钟（每秒音频约需 65 秒计算）。想要得到可用的推理，请在 Linux 或 WSL2 中运行 Fish S2 Pro。
 
 推荐的硬件：
 
-- **Linux 或 WSL2（强烈推荐）**
-- NVIDIA GPU，**16 GB 到 24 GB 显存**（在启用 KV 缓存与卸载的情况下，BF16 可以轻松放进约 16-18 GB 显存）
+- Linux 或 WSL2（强烈推荐）
+- NVIDIA GPU，16 GB 到 24 GB 显存（在启用 KV 缓存与卸载的情况下，BF16 可以轻松放进约 16-18 GB 显存）
 - 推荐 Python 3.12
 - `git`、`ffmpeg`，以及 Fish Speech 所需的标准音频库
 
@@ -82,9 +82,9 @@ PowerShell 安装程序默认面向 CUDA GPU 加速（`cu124`）。要在没有 
 ## 必需的参考文本
 
 > [!WARNING]
-> **语音克隆必须提供参考文本（`ref_text`）：** Fish S2 Pro 的交叉注意力机制需要参考音频的语音转写，才能把语音 token 与声学编码对齐。
+> 语音克隆必须提供参考文本（`ref_text`）： Fish S2 Pro 的交叉注意力机制需要参考音频的语音转写，才能把语音 token 与声学编码对齐。
 >
-> 如果你上传了语音样本，却没有提供与之匹配的参考语音转写，Fish Speech 会**静默丢弃参考音频 token**，退回随机的零参考语音。为防止意外进行无条件生成，TomoriBot 的 Fish 封装程序会校验并拒绝缺少参考文本的合成请求，并返回 `400 Bad Request`。
+> 如果你上传了语音样本，却没有提供与之匹配的参考语音转写，Fish Speech 会静默丢弃参考音频 token，退回随机的零参考语音。为防止意外进行无条件生成，TomoriBot 的 Fish 封装程序会校验并拒绝缺少参考文本的合成请求，并返回 `400 Bad Request`。
 
 在 `/config` 的`模型 > TTS 参数与语音`下添加人格语音时，请始终在`参考文本`字段里填入你的参考音频片段中逐字说出的文本。
 
@@ -96,7 +96,7 @@ PowerShell 安装程序默认面向 CUDA GPU 加速（`cu124`）。要在没有 
 - API 兼容性：`tts-clone`
 - 端点 URL：`http://127.0.0.1:8015`
 - 语音来源模式：`Clone`
-- 脚本标记风格：`Bracket Tags`
+- 脚本标记风格：`方括号标签`
 - API 密钥：留空。封装程序没有身份验证，参见[网络访问](/self-hosting/local-endpoints/text-to-speech/#network-access)。
 
 然后添加该端点的模型条目，并通过 `/config` 的 模型 > 切换模型 启用它。
@@ -105,7 +105,7 @@ PowerShell 安装程序默认面向 CUDA GPU 加速（`cu124`）。要在没有 
 
 1. 准备一段干净的 10-20 秒参考片段，只有一位说话者，背景噪音很小或没有。
 2. 在 `/config` 中打开 模型 > TTS 参数与语音 并上传语音样本。
-3. **输入参考片段中逐字说出的文本**，填进参考文本字段。
+3. 输入参考片段中逐字说出的文本，填进参考文本字段。
 4. 在 `/config` 中打开 人格 > 语音 并把样本指定给该人格。
 5. 用 `/generate voice-message` 生成语音消息，或让 TomoriBot 通过它的语音消息工具生成一条。
 
@@ -119,7 +119,7 @@ Fish S2 Pro 可以用方括号标签在同一句话内部改变表达方式。�
 [whisper] Keep your voice down. [excited] Wait, you actually found it?
 ```
 
-因为端点使用 `Bracket Tags` 标记，TomoriBot 会保留这些标签，而不是在合成前把它们去掉。
+因为端点使用 `方括号标签` 标记，TomoriBot 会保留这些标签，而不是在合成前把它们去掉。
 
 ## 配置
 

@@ -4,7 +4,7 @@ title: "04: Build Result"
 
 Assemble the final `GenerationTurnResult` from accumulated state.
 
-**File:** `src/utils/chat/toolLoop.ts:411-455`
+- **File**: `src/utils/chat/toolLoop.ts:411-455`
 (includes `resolveThoughtLogOwner` at 441-450 and `mergeDetails` at 452-455)
 
 ## Mission
@@ -63,7 +63,7 @@ metadata alongside its response. `mergeDetails` appends it as:
 
 If `detailsText` is empty or whitespace-only, `responseText` is used unchanged.
 
-The merged string is a **short-term-memory payload, not a transcript**: the scene
+The merged string is a short-term-memory payload, not a transcript: the scene
 metadata was drained out of the visible buffer and never sent to Discord.
 Consumers that need "what the channel actually saw" (notably expression stats)
 must read `StreamResult.accumulatedText` per stream segment instead, as

@@ -4,7 +4,7 @@ sidebar:
   order: 1
 ---
 
-TomoriBot is agentic: beyond chatting, she can call **tools** to search the web, read
+TomoriBot is agentic: beyond chatting, she can call tools to search the web, read
 documents, generate media, set reminders, act in other channels, and more. She decides when
 to use them based on the conversation. This page covers the built-in tools, how to extend
 her with MCP servers, and how to keep tool declarations lean with Deliberate Tool Mode.
@@ -48,7 +48,7 @@ an optional API key.
 | Block / unblock user | `{block_user_tool}` / `{unblock_user_tool}` | `user_blocking_enabled` | Persona-scoped mute/block of a user (does not touch memories). |
 | Interact with recent message | `{message_interaction_tool}` | — | React to or send a short reply to a recent message. |
 | Peek profile picture | `{profile_picture_tool}` | vision model or `vision_llm` | Inspect a user's or the persona's avatar. |
-| Read document | `{document_tool}` | — | Extract text from a PDF or **any** UTF-8 text file: source code (`.py`/`.ts`/`.rs`/…), `.json`, `.yaml`, `.md`, `.txt`, and any non-binary attachment. |
+| Read document | `{document_tool}` | — | Extract text from a PDF or any UTF-8 text file: source code (`.py`/`.ts`/`.rs`/…), `.json`, `.yaml`, `.md`, `.txt`, and any non-binary attachment. |
 | Reveal message metadata | `{message_metadata_tool}` | — | Annotate recent turns with handles/timestamps for precise targeting. |
 | Process YouTube video | `{youtube_tool}` | model with video support | Analyze a specific YouTube link on demand. |
 | Analyze image | `{image_analysis_tool}` | configured `vision_llm` | Delegate image understanding to a separate vision model. |
@@ -101,13 +101,13 @@ output, and tool results are never treated as conditional templates.
 The model sees a single unified `web_search(query, category)` tool. Behind it, a dispatcher
 routes each call through an engine chain and returns the first success:
 
-**Brave → SearXNG → DuckDuckGo → IAsk**
+Brave → SearXNG → DuckDuckGo → IAsk
 
 - **Brave** runs first when a Brave API key is configured (set it with
   `/providers`); it adds image, video, and news search. ⚠️ Set a $5 usage limit
   in the Brave dashboard to avoid surprise charges.
-- **DuckDuckGo** is the default when no key is set, cascading to **IAsk** on rate limits or empty results.
-- **SearXNG** and **Crawl4AI** are optional self-hosted servers that unlock more categories
+- DuckDuckGo is the default when no key is set, cascading to IAsk on rate limits or empty results.
+- SearXNG and Crawl4AI are optional self-hosted servers that unlock more categories
   and browser-rendered page fetches; see [Self-Hosting](/self-hosting/).
 
 For reading a specific page, she uses `fetch_url`. It's unavailable on NovelAI.
@@ -124,28 +124,27 @@ Any publicly hosted MCP server with an HTTPS endpoint works. Using
 [Smithery.ai](https://smithery.ai) as an example:
 
 1. Create an account and generate an API key from your profile.
-2. Open an MCP in the catalog and copy its **connection URL** (e.g. `https://youtube.run.tools`).
-3. Open `/config` > Plugins > MCP Servers, choose `Add MCP`, paste the connection URL into **URL**, paste your
+2. Open an MCP in the catalog and copy its connection URL (e.g. `https://youtube.run.tools`).
+3. Open `/config` > Plugins > MCP Servers, choose `Add MCP`, paste the connection URL into `URL`, paste your
    Smithery key into `Auth Token`, and choose the required `Server Type`. **General
    Purpose** is selected by default.
 
 If a server needs no auth, leave `Auth Token` blank. Your auth token is encrypted at rest
 and never shown again. Open the same Config page to inspect configured state, enable or disable a server,
 or remove one with explicit confirmation. Removal disconnects it immediately and frees a slot.
-Each saved row also shows the bounded tool names from its last successful discovery. **None
-discovered** is a known zero-tool result; **Discovery unknown** identifies a legacy row or a server
+Each saved row also shows the bounded tool names from its last successful discovery. `None discovered` is a known zero-tool result; `Discovery unknown` identifies a legacy row or a server
 that has no successful snapshot yet. Opening the MCP management surface only reads saved metadata and does not contact the
 remote server.
 
 ### Local MCP Servers
 
-Local MCP servers are **only supported on self-hosted instances**, because the public hosted bot
+Local MCP servers are supported on self-hosted instances only, because the public hosted bot
 requires HTTPS and blocks local/private addresses. If you run your own instance, see
 [Setup: Local MCP Server](/self-hosting/local-endpoints/setup-local-mcp/).
 
 :::danger[Only add MCP servers you trust]
-A malicious MCP server can **prompt-inject** her with hidden instructions, **exfiltrate**
-data users pass to its tools, or return **harmful/false results** she'll relay to your
+A malicious MCP server can prompt-inject her with hidden instructions, exfiltrate
+data users pass to its tools, or return harmful or false results she'll relay to your
 server. Treat MCP servers like browser extensions: if in doubt, don't add it. Always review
 an MCP's described tools before adding it.
 :::
@@ -157,13 +156,13 @@ Every declared tool adds to the prompt. `Deliberate Tool Mode` keeps tool declar
 of ordinary chat turns unless the message looks like it actually needs a tool; this reduces
 prompt size and helps smaller/local models answer faster.
 
-- She first checks the message for **tool intent**. Built-in triggers cover common requests
+- She first checks the message for tool intent. Built-in triggers cover common requests
   (reminders, web search, memory updates, cross-channel messages, image/video/voice
   generation, media analysis, thread creation, message actions). Questions about her current
   model, tools, settings, or why a capability is unavailable expose capability review and
   official documentation access together. Follow-up wording works too, like "do that again
   but angrier" after a voice-message request.
-- Server managers can add literal **custom trigger phrases** with `/server trigger add`, for
+- Server managers can add literal custom trigger phrases with `/server trigger add`, for
   example mapping `pic`, `img`, or `pfp` to image generation.
 - The built-in triggers read English phrasing. Other languages reach the same tools through
   each language's keyword list. Every shipped language's list is checked on every message,
@@ -183,7 +182,7 @@ Deliberate Tool Mode only decides which tools are *shown* to the model, but the 
 to choose to call one. In `/help`, choose `Behavior`, then `Deliberate Tool Mode`, for the Discord summary.
 
 :::note
-**Deliberate Tool Mode** (this section) is unrelated to `Deliberate Trigger Mode`, which
+`Deliberate Tool Mode` (this section) is unrelated to `Deliberate Trigger Mode`, which
 controls how *she* is triggered; see
 [Chatting & Triggers](/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode). Both are
 abbreviated "DTM" in Discord.

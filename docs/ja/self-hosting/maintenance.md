@@ -246,9 +246,9 @@ Docker Composeを実行していますか？
 
 `servers/tts/` 配下のTTSローカルサーバーから、共通のフォールバック、エンジンごとの上限、認証設定が削除されました。`.env` やシェルに残っている古い値は無視されます。既定値の再掲だけでなく、動作が変わる下記の項目を確認してください。
 
-- **ポート：** `TOMORI_TTS_PORT` は廃止されました。`.env` に1つ値を置くと、起動したすべてのサーバーが同じポートになってしまうためです。代わりに各エンジンが専用の変数を読み取ります：`CHATTERBOX_PORT`（8011）、`QWEN3TTS_PORT`（8012、ボイスデザインモードでは8014）、`IRODORI_TTS_PORT`（8013）、`FISH_S2_PORT`（8015）、`VOXCPM2_PORT`（8016）、`COSYVOICE3_PORT`（8017）、`MOSS_TTS_PORT`（8018）。
-- **認証：** サーバーはベアラートークンの確認も、ループバック以外へのバインドの拒否も行わなくなりました。`FISH_S2_API_KEY`、`VOXCPM2_API_KEY`、`TOMORI_TTS_API_KEY`、`COSYVOICE3_BEARER_TOKEN` を設定していた場合、エンドポイントはそれらがなくてもリクエストを受け付けます。ループバック以外にバインドする前に、[ネットワークアクセス](/ja/self-hosting/local-endpoints/text-to-speech/#network-access)を読んでください。
-- **インストーラーの固定値：** Fish Speechランタイムのコミットと、CosyVoiceのランタイムおよびモデルのリビジョンは、インストーラー内で固定されています。更新するには、スクリプト内の固定値を編集します。
+- ポート： `TOMORI_TTS_PORT` は廃止されました。`.env` に1つ値を置くと、起動したすべてのサーバーが同じポートになってしまうためです。代わりに各エンジンが専用の変数を読み取ります：`CHATTERBOX_PORT`（8011）、`QWEN3TTS_PORT`（8012、ボイスデザインモードでは8014）、`IRODORI_TTS_PORT`（8013）、`FISH_S2_PORT`（8015）、`VOXCPM2_PORT`（8016）、`COSYVOICE3_PORT`（8017）、`MOSS_TTS_PORT`（8018）。
+- 認証： サーバーはベアラートークンの確認も、ループバック以外へのバインドの拒否も行わなくなりました。`FISH_S2_API_KEY`、`VOXCPM2_API_KEY`、`TOMORI_TTS_API_KEY`、`COSYVOICE3_BEARER_TOKEN` を設定していた場合、エンドポイントはそれらがなくてもリクエストを受け付けます。ループバック以外にバインドする前に、[ネットワークアクセス](/ja/self-hosting/local-endpoints/text-to-speech/#network-access)を読んでください。
+- インストーラーの固定値： Fish Speechランタイムのコミットと、CosyVoiceのランタイムおよびモデルのリビジョンは、インストーラー内で固定されています。更新するには、スクリプト内の固定値を編集します。
 
 <details>
 <summary>削除されたTTSローカルサーバーの全変数</summary>
@@ -306,9 +306,9 @@ bun run restore-backup --from backups/backup_2024-01-15_14-30-45
 ```
 
 `bun run backup:personas` はより絞り込まれたエクスポートであり、すべてのサーバーにまたがるペルソナのプリセットとペルソナごとのサーバーメモリーのみが対象です。
-これは `/persona import` 経由で手動で再インポートする**必要があり**、`restore-backup` と一緒には**使用できません**（プライマリキーの競合を引き起こすため）。
+これは `/persona import` 経由で手動で再インポートする必要があり、`restore-backup` と一緒には使用できません（プライマリキーの競合を引き起こすため）。
 
-また、TomoriBotは本番環境以外では**自動スタートアップバックアップ**を取得します。
+また、TomoriBotは本番環境以外では自動スタートアップバックアップを取得します。
 完全な復元には、ターゲットデータベースに `pgvector` 拡張機能が存在している必要があります。
 両方の詳細については、[安全な移行](/ja/self-hosting/safe-migration/)で説明しています。
 ツールを直接操作したい場合の、手動での `pg_dump` / `pg_restore` 手順も併せて記載しています。

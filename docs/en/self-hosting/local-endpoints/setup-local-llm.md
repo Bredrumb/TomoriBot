@@ -6,7 +6,7 @@ sidebar:
 ---
 
 TomoriBot can use any OpenAI-compatible local LLM server for text generation and embeddings.
-This guide walks through the process using **Ollama** as an example because it's the easiest to get started with.
+This guide walks through the process using Ollama as an example because it is the easiest to get started with.
 
 Once you've found your footing consider a more flexible server like
 [KoboldCPP](https://github.com/LostRuins/koboldcpp) and use open-source models straight from
@@ -20,12 +20,12 @@ database. There's no `.env` setting for them. See the [local endpoints hub](/sel
 
 ## 1. Run your model server
 
-Install [Ollama](https://ollama.com). The examples below use Google's **Gemma 4** but anything in [Ollama's library](https://ollama.com/library) works.
+Install [Ollama](https://ollama.com). The examples below use Google's Gemma 4, but anything in [Ollama's library](https://ollama.com/library) works.
 
 ### Which size should I pull?
 
-Local models run in your GPU's **VRAM** (the memory built into your graphics card, separate
-from your system RAM). Rule of thumb: a model needs at least its **download size** free in
+Local models run in your GPU's VRAM (the memory built into your graphics card, separate
+from your system RAM). Rule of thumb: a model needs at least its download size free in
 VRAM, plus ~1-2 GB of headroom for the conversation context. Pick the largest Gemma 4 that
 fits your card:
 
@@ -38,10 +38,10 @@ fits your card:
 
 Downloads are Ollama's default-quantization sizes; see the
 [model page](https://ollama.com/library/gemma4) for exact figures. Not sure how much VRAM you
-have? On Windows: **Task Manager → Performance → GPU**, read "Dedicated GPU memory."
+have? On Windows: `Task Manager` > `Performance` > `GPU`, read "Dedicated GPU memory."
 
 :::tip[Why 26B can beat its size]
-`gemma4:26b` is a **Mixture-of-Experts (MoE)** model: it holds many "expert" sub-networks but
+`gemma4:26b` is a Mixture-of-Experts (MoE) model: it holds many "expert" sub-networks but
 activates only ~4B parameters per token. So even though its ~18 GB of weights don't *quite*
 fit in 16 GB, the small spill to system RAM barely slows it down unlike a dense model of the
 same footprint. That's why it runs happily on many 16 GB cards.
@@ -54,7 +54,7 @@ ollama pull gemma4:12b     # swap for the tag that fits your VRAM
 ollama serve               # listens on http://127.0.0.1:11434
 ```
 
-Confirm it's reachable **from the machine TomoriBot runs on**:
+Confirm it is reachable from the machine TomoriBot runs on:
 
 ```sh
 curl http://127.0.0.1:11434/v1/models
@@ -70,8 +70,7 @@ ollama list
 
 ## 2. Register it in Discord
 
-Run **`/providers`** (server-wide) or **`/personal providers`** (just you), choose **Add New
-Custom Endpoint**, and enter:
+Run `/providers` (server-wide) or `/personal providers` (just you), choose `Add New Custom Endpoint`, and enter:
 
 | Field | Value for Ollama |
 |-------|------------------|
@@ -82,19 +81,19 @@ Custom Endpoint**, and enter:
 
 :::tip[Pick the URL that matches the API compatibility]
 Both `OpenAI-Compatible` and `Ollama` accept the bare root and normalize it to the `/v1` base.
-`/chat/completions` is appended automatically, so do **not** add it. URLs that already carry a
+`/chat/completions` is appended automatically, so do not add it. URLs that already carry a
 path, such as `https://openrouter.ai/api/v1` or a gateway prefix, are stored verbatim.
 :::
 
-After saving the connection, select it and choose **+ Add new Text Model** from its model dropdown.
+After saving the connection, select it and choose `+ Add new Text Model` from its model dropdown.
 Fill in:
 
 - **Model Name (exact API ID):** `gemma4:12b`, the exact tag from `ollama list`.
-- **Context Window Override:** optional, **Ollama / KoboldCPP only**. Set this (e.g. `8192`,
+- **Context Window Override**: optional, Ollama / KoboldCPP only. Set this (e.g. `8192`,
   `16384`) to raise Ollama's default `num_ctx`, which is otherwise small enough to truncate
   long TomoriBot context. Leave blank to use the server default.
-- **Toggles:** enable `Tools` if the model supports function calling; enable **Image
-  Understanding** only for a vision model; **Structured Output** if the model handles JSON
+- **Toggles:** enable `Tool calling` if the model supports function calling; enable
+  `Image input` only for a vision model; `Structured output` if the model handles JSON
   schemas well. For our example, Gemma 4 supports all of them, so tick them all.
 
 TomoriBot validates the connection when you save it. If it reports the endpoint is unreachable, the
@@ -104,7 +103,7 @@ usual cause is a `localhost`/Docker mismatch or a missing/extra `/v1` (see
 Adding the model makes it the active `text` model automatically. Start chatting to try it. If
 it isn't active for some reason, run `/config` > Models > Switch Models and select your newly registered model.
 
-Registering never changes any model other than `text`. If you ticked **Image Understanding**
+Registering never changes any model other than `text`. If you ticked `Image Understanding`
 so this endpoint can act as the vision helper for an image-blind chat model, select it
 explicitly with `/config` > Models > Switch Models; every text endpoint you registered with that toggle on shows
 up there. Note the vision model is only consulted when the chat model cannot see images, so
@@ -122,8 +121,8 @@ If the text model and ComfyUI run on the same GPU, TomoriBot can unload the text
 ComfyUI image or video job runs. Text replies that arrive during the job wait until the GPU is
 free again.
 
-Open the saved endpoint, press **Edit Endpoint**, and tick **Unload model during ComfyUI jobs**
-under **Endpoint Behavior**. TomoriBot checks which server is at the URL when you save:
+Open the saved endpoint, press `Edit Endpoint`, and check `Unload model during ComfyUI jobs`
+under `Endpoint Behavior`. TomoriBot checks which server is at the URL when you save:
 
 - **Ollama:** works as installed. TomoriBot asks Ollama to unload the model before the job, and
   Ollama reloads it on the next text request.
@@ -163,7 +162,7 @@ All of these use the same flow, only the URL and a couple of notes change.
 
 ### LM Studio
 
-- In LM Studio, start the **Local Server** (Developer tab). Default: `http://127.0.0.1:1234/v1`.
+- In LM Studio, start the `Local Server` (`Developer` tab). Default: `http://127.0.0.1:1234/v1`.
 - API Compatibility: `OpenAI-Compatible`. `endpoint_url`: `http://127.0.0.1:1234/v1`.
 - Model Name is the identifier LM Studio shows for the loaded model.
 
@@ -184,17 +183,17 @@ All of these use the same flow, only the URL and a couple of notes change.
 ### ChatMock (ChatGPT account / Codex CLI)
 
 Has its own dedicated guide because of a system-prompt workaround:
-**[Setup: ChatMock](/self-hosting/local-endpoints/setup-chatmock/)**.
+[Setup: ChatMock](/self-hosting/local-endpoints/setup-chatmock/).
 
 ## Picking models from Hugging Face
 
 Beyond Ollama's curated library, [Hugging Face](https://huggingface.co) hosts thousands of
-community models. KoboldCPP, llama.cpp, and LM Studio can all load the **GGUF** format which is a
+community models. KoboldCPP, llama.cpp, and LM Studio can all load the GGUF format which is a
 single-file package you download and point the server at.
 
 1. **Find a GGUF.** Search Hugging Face for your model plus "GGUF" community quantizers like
    [bartowski](https://huggingface.co/bartowski) publish GGUF builds of most popular models
-   soon after release. Prefer an **instruct/chat** variant (names ending in `-Instruct` or
+   soon after release. Prefer an instruct/chat variant (names ending in `-Instruct` or
    `-Chat`); base models don't hold a conversation.
 2. **Pick a quant that fits your VRAM.** A repo lists the same model at many quant levels, and a
    file's size ≈ the VRAM it needs (plus ~1-2 GB for context, same rule as the
@@ -203,7 +202,7 @@ single-file package you download and point the server at.
    [Other servers](#other-servers)), then register the endpoint in Discord as usual.
 
 :::tip[Which quant? Q4 or Q5 is the sweet spot]
-**Quantization** stores each weight in fewer bits to shrink the model, at a small quality cost.
+Quantization stores each weight in fewer bits to shrink the model, at a small quality cost.
 The code in names like `Q4_K_M` / `Q5_K_M` is the bits-per-weight: **4-bit (Q4) or 5-bit (Q5)
 is the usual sweet spot** as most of the quality for roughly half the size of 8-bit. Below 4-bit
 degrades quickly. And for a fixed VRAM budget, a **larger model at Q4 usually beats a smaller

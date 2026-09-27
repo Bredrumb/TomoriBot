@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-A ferramenta `web_search` é roteada através de uma cadeia de motores: **Brave → SearXNG → DuckDuckGo → IAsk**. Ao executar nossa própria instância do SearXNG, evitamos os limites de taxa de um único motor e quebras de raspagem (scrape), e desbloqueamos categorias exclusivas do SearXNG: `science`, `it`, `files` e `music`.
+A ferramenta `web_search` é roteada através de uma cadeia de motores: Brave → SearXNG → DuckDuckGo → IAsk. Ao executar nossa própria instância do SearXNG, evitamos os limites de taxa de um único motor e quebras de raspagem (scrape), e desbloqueamos categorias exclusivas do SearXNG: `science`, `it`, `files` e `music`.
 
 Escolha um caminho de configuração do SearXNG:
 
@@ -40,14 +40,14 @@ Primeiro, compile a imagem do repositório. Ela carrega as configurações de bu
 docker build -t tomoribot-searxng:latest -f servers/searxng/Dockerfile servers/searxng
 ```
 
-**PowerShell:**
+PowerShell:
 ```powershell
 docker run -d --name searxng -p 8080:8080 `
   --tmpfs /etc/searxng `
   tomoribot-searxng:latest
 ```
 
-**Bash (Linux/macOS):**
+Bash (Linux/macOS):
 ```bash
 docker run -d --name searxng -p 8080:8080 \
   --tmpfs /etc/searxng \

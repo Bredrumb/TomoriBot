@@ -73,7 +73,7 @@ bun run launch --help        # xem tất cả các cờ
 ## Tiện ích bổ sung tùy chọn (bản "Full Install" thủ công)
 <!-- anchor: optional-extras-the-manual-full-install -->
 
-Phương thức **Full Install** của [trình hướng dẫn thiết lập](/vi/self-hosting/setup-wizard/) bổ sung bốn tiện ích nhẹ lên trên bản cài đặt cơ bản. Không có tiện ích nào là bắt buộc để chạy bot, nhưng mỗi tiện ích sẽ mở khóa một tính năng. Nếu cài đặt thủ công, bạn có thể thêm bất kỳ tiện ích nào bạn muốn:
+Phương thức Full Install của [trình hướng dẫn thiết lập](/vi/self-hosting/setup-wizard/) bổ sung bốn tiện ích nhẹ lên trên bản cài đặt cơ bản. Không có tiện ích nào là bắt buộc để chạy bot, nhưng mỗi tiện ích sẽ mở khóa một tính năng. Nếu cài đặt thủ công, bạn có thể thêm bất kỳ tiện ích nào bạn muốn:
 
 ### `pgvector`: bộ nhớ tài liệu/RAG
 
@@ -111,7 +111,7 @@ Nếu không có pgvector, bot vẫn chạy bình thường nhưng các tính n�
 `pg_cron` cung cấp khả năng bảo trì định kỳ tùy chọn cho cơ sở dữ liệu (dọn dẹp các hàng cooldown/lời nhắc). Docker Compose từ kho lưu trữ này đã cấu hình sẵn tiện ích này.
 
 :::caution[Không bắt buộc đối với lời nhắc hoặc từ kích hoạt]
-`pg_cron` **hoàn toàn chỉ phục vụ công việc dọn dẹp nội bộ** vì nó chỉ dọn các hàng dữ liệu cũ. Việc gửi lời nhắc và kích hoạt ngẫu nhiên chạy trong chính ứng dụng, do đó các tính năng này hoạt động bình thường dù có hay không có `pg_cron`.
+`pg_cron` hoàn toàn chỉ phục vụ công việc dọn dẹp nội bộ vì nó chỉ dọn các hàng dữ liệu cũ. Việc gửi lời nhắc và kích hoạt ngẫu nhiên chạy trong chính ứng dụng, do đó các tính năng này hoạt động bình thường dù có hay không có `pg_cron`.
 :::
 
 Đối với PostgreSQL tự quản lý, hãy tìm tệp cấu hình đang hoạt động:

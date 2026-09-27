@@ -4,15 +4,15 @@ sidebar:
   order: 1
 ---
 
-A TomoriBot pode conectar uma **sala Matrix** a um canal do Discord: as pessoas conversam pelo Matrix, suas
+A TomoriBot pode conectar uma sala Matrix a um canal do Discord: as pessoas conversam pelo Matrix, suas
 mensagens são retransmitidas para o Discord como mensagens de webhook, e ela responde de volta na sala Matrix.
 Esta página é o lado do usuário da bridge. Para os detalhes internos do appservice, veja a
 [arquitetura da bridge Matrix](/en/architecture/integrations/matrix/bridge/).
 
 ## Configuração
 
-1. Convide a conta de bot Matrix configurada para uma sala Matrix **não criptografada**.
-2. Copie o **ID Interno da Sala** dessa sala.
+1. Convide a conta de bot Matrix configurada para uma sala Matrix não criptografada.
+2. Copie o ID Interno da Sala dessa sala.
 3. Execute `/matrix link` no canal do Discord que você deseja conectar e cole o ID da
    sala.
 
@@ -21,7 +21,7 @@ ainda finaliza a conexão a partir do Discord com `/matrix link`.
 
 ### Encontrando o ID da Sala
 
-Na maioria dos clientes Matrix: **Configurações da Sala → Avançado → ID Interno da Sala**. Ele se parece com
+Na maioria dos clientes Matrix: Configurações da Sala → Avançado → ID Interno da Sala. Ele se parece com
 `!abc:matrix.org`.
 
 ## Usando pelo Matrix
@@ -48,4 +48,4 @@ Na maioria dos clientes Matrix: **Configurações da Sala → Avançado → ID I
 - Se uma limitação não está listada acima, presuma que deve funcionar e reporte bugs no servidor de
   suporte (`/support discord`).
 
-No `/help`, escolha **Integrations** e depois **Matrix** para o mesmo guia no Discord.
+No `/help`, escolha Integrations e depois Matrix para o mesmo guia no Discord.

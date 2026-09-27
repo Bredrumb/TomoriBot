@@ -106,11 +106,11 @@ through English fallback.
 
 Two consequences to keep in mind when writing new code:
 
-- **Do not infer key existence from the returned string.** A miss now yields English, which is
+- **Key existence**: Do not infer key existence from the returned string. A miss now yields English, which is
   indistinguishable from a real translation. Use `hasLocaleKey(locale, key)` instead: it walks
   only the requested locale's tree and never falls back. `embedClassifier.ts` depends on this
   to decide which dynamically discovered reward and punish titles a locale actually defines.
-- **The miss-everywhere case is unchanged**, so callers that detect an unknown key by comparing
+- **Miss-everywhere case**: Unchanged, so callers that detect an unknown key by comparing
   the result against the key still work. `openrouterStreamAdapter.ts` and
   `openaiCompatibleErrorFormatter.ts` use that comparison, and `st-preset/node/toggle.ts` relies
   on the verbatim echo to pass a dynamic label through `localizer()`.
@@ -163,7 +163,7 @@ Key conventions:
 
 ## Tip-item keys (`genai.tips.*`)
 
-User-facing hints ("Tips") are stored as **atomic, single-sentence** keys under `genai.tips.*`
+User-facing hints ("Tips") are stored as atomic, single-sentence keys under `genai.tips.*`
 (defined in `providers.ts`, which exports the `genai` tree). Each key is one self-contained bullet;
 never a multi-hint paragraph:
 

@@ -86,15 +86,15 @@ Execute `/providers`, escolha `Adicionar Novo Endpoint Personalizado`, e use a c
 Após salvar a conexão, selecione-a e use a lista suspensa do modelo para adicionar um modelo de Speech. Para a v4.1, as
 configurações recomendadas são:
 
-- `Voice Source Mode`: `Auto`
-- `Script Markup Style`: `Emoji`
+- `Modo de Fonte de Voz`: `Auto`
+- `Estilo de Marcação de Script`: `Emoji`
 
 O `Auto` permite que o mesmo endpoint do Irodori suporte ambos os modos de voz do TomoriBot, para que os sinais de emoção sobrevivam ao envio:
 
 - As personas com uma amostra de voz atribuída em Persona > Voice enviam um clipe de referência armazenado para clonagem de voz.
 - As personas com um prompt de VoiceDesign configurado em Persona > Voice enviam o prompt em linguagem natural salvo como o condicionamento de legenda do Irodori.
 
-Você ainda pode escolher `Voice Clone` como o `Voice Source Mode` se quiser apenas a clonagem de voz por áudio de referência.
+Você ainda pode escolher `Clone de Voz` como o `Modo de Fonte de Voz` se quiser apenas a clonagem de voz por áudio de referência.
 
 Use `/providers` para registrar o endpoint e configurar o modelo. Em seguida, abra `/config` > Models > Switch Models para selecionar e ativar o endpoint registrado.
 
@@ -103,7 +103,7 @@ Use `/providers` para registrar o endpoint e configurar o modelo. Em seguida, ab
 ### Clonagem de voz
 
 1. Prepare um clipe de voz limpo em japonês com um falante e sem música de fundo. Cerca de 30 segundos já bastam: além disso, o áudio extra acrescenta pouco à fidelidade do timbre e aumenta o tamanho do upload e o tempo de inferência.
-2. Abra `/config` em Models > TTS Parameters & Voices e envie o clipe.
+2. Abra `/config` em Models > Parâmetros TTS e Vozes e envie o clipe.
 3. Abra `/config` em Persona > Voice, e então escolha a persona e a amostra de voz.
 
 O Irodori v4.1 suporta condicionamento de referência mais longo do que o antigo modelo v2, mas um áudio de origem limpo continua sendo mais importante do que a duração bruta.
@@ -124,7 +124,7 @@ O TomoriBot remove a sintaxe de emoji personalizado do Discord antes de enviar o
 
 ### Controles de estilo por emoji
 
-O IrodoriTTS aceita anotações de emoji no texto de entrada para influenciar efeitos sonoros, modos de fala e expressões emocionais. Com o `Script Markup Style` do TomoriBot definido como `Emoji`, esses emojis Unicode são preservados e enviados ao Irodori.
+O IrodoriTTS aceita anotações de emoji no texto de entrada para influenciar efeitos sonoros, modos de fala e expressões emocionais. Com o `Estilo de Marcação de Script` do TomoriBot definido como `Emoji`, esses emojis Unicode são preservados e enviados ao Irodori.
 
 | Emoji | Significado / emoção / estilo |
 | --- | --- |

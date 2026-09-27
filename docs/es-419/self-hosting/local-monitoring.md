@@ -16,7 +16,7 @@ docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up -d
 Esto hará lo siguiente:
 - Lanzará TomoriBot con PostgreSQL (en el puerto 15432 para la base de datos)
 - Lanzará Grafana en el puerto 3000 con una fuente de datos de PostgreSQL autoconfigurada
-- Aprovisionará el panel **TomoriBot Overview**
+- Aprovisionará el panel TomoriBot Overview
 - Conectará ambos servicios en la misma red de Docker
 
 Accede a Grafana en [http://localhost:3000](http://localhost:3000):
@@ -26,7 +26,7 @@ Accede a Grafana en [http://localhost:3000](http://localhost:3000):
 
 ## El panel aprovisionado
 
-**TomoriBot Overview** aparece automáticamente y no necesita configuración. Sus paneles cubren la
+TomoriBot Overview aparece automáticamente y no necesita configuración. Sus paneles cubren la
 memoria del proceso, el número de entradas de caché, los errores por hora, el uso de tokens por modelo,
 la actividad por hora, los comandos principales, las configuraciones regionales de los usuarios, una nube
 de emociones y qué preajustes y modelos están en uso.

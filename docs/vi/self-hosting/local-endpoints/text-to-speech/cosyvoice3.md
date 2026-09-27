@@ -4,7 +4,7 @@ title: "CosyVoice 3"
 
 CosyVoice 3 là thế hệ hiện tại của dự án TTS đa ngôn ngữ CosyVoice từ Alibaba/QwenAudio. TomoriBot đóng gói runtime chính thức trong `servers/tts/cosyvoice3/` và cung cấp cùng giao diện `POST /synthesize` được sử dụng bởi các endpoint giọng nói cục bộ khác.
 
-TomoriBot mặc định sử dụng checkpoint chính thức **`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`**. Đây là bản phát hành CosyVoice 3 hiện tại được thượng nguồn khuyến nghị, sử dụng model không lượng tử hóa thông thường, và đủ nhỏ để chạy thoải mái trên GPU NVIDIA 16 GB trong khi vẫn giữ nguyên thiết kế độ trễ thấp của CosyVoice.
+TomoriBot mặc định sử dụng checkpoint chính thức `FunAudioLLM/Fun-CosyVoice3-0.5B-2512`. Đây là bản phát hành CosyVoice 3 hiện tại được thượng nguồn khuyến nghị, sử dụng model không lượng tử hóa thông thường, và đủ nhỏ để chạy thoải mái trên GPU NVIDIA 16 GB trong khi vẫn giữ nguyên thiết kế độ trễ thấp của CosyVoice.
 
 ## Các tính năng hỗ trợ
 
@@ -42,7 +42,7 @@ Wrapper lựa chọn API CosyVoice 3 hiện tại như sau:
 
 ### Điều khiển phong cách và cảm xúc
 
-Đăng ký endpoint với markup **Plain**. Chỉ dẫn truyền đạt thuộc về trường `voice_instructions` toàn cục của endpoint, không phải trong các thẻ ngoặc vuông nội dòng tùy ý. Điều này bảo toàn ý nghĩa của hướng dẫn cho toàn bộ câu nói và tránh việc xử lý một kịch bản như `[happy] Hello. [sad] Goodbye.` thành hai hướng dẫn toàn cục mâu thuẫn nhau. Hỗ trợ gốc cho `[breath]` và `[laughter]` được chủ ý hoãn lại cho đến khi TomoriBot có thể thông báo một tính năng thẻ nhận biết nhà cung cấp chính xác.
+Đăng ký endpoint với markup Plain. Chỉ dẫn truyền đạt thuộc về trường `voice_instructions` toàn cục của endpoint, không phải trong các thẻ ngoặc vuông nội dòng tùy ý. Điều này bảo toàn ý nghĩa của hướng dẫn cho toàn bộ câu nói và tránh việc xử lý một kịch bản như `[happy] Hello. [sad] Goodbye.` thành hai hướng dẫn toàn cục mâu thuẫn nhau. Hỗ trợ gốc cho `[breath]` và `[laughter]` được chủ ý hoãn lại cho đến khi TomoriBot có thể thông báo một tính năng thẻ nhận biết nhà cung cấp chính xác.
 
 Trường `instruct` của `/synthesize` được chuyển vào phần điều kiện hóa hướng dẫn của CosyVoice 3. Các ví dụ bao gồm `sound relieved but still tired`, `speak as quickly as possible`, hoặc `speak quietly with restrained excitement`.
 
@@ -56,8 +56,8 @@ Giao diện TTS tùy chỉnh hiện tại của TomoriBot yêu cầu một phả
 
 Điểm khởi đầu được khuyến nghị cho TomoriBot:
 
-- GPU NVIDIA với **16 GB VRAM**
-- Python **3.10**
+- GPU NVIDIA với 16 GB VRAM
+- Python 3.10
 - Driver NVIDIA gần đây tương thích với CUDA 12
 - `git`
 - `ffmpeg` để chuẩn hóa mẫu giọng nói của TomoriBot
@@ -104,7 +104,7 @@ Bản chạy Windows gốc được cung cấp theo khả năng tốt nhất:
 .\servers\tts\cosyvoice3\.venv\Scripts\python.exe servers\tts\cosyvoice3\server.py
 ```
 
-Đối với GPU NVIDIA, **WSL2 được khuyến nghị**. Các phần phụ thuộc thượng nguồn hiện tại cài đặt ONNX Runtime hỗ trợ GPU trên Linux nhưng cài đặt ONNX Runtime cho CPU trên Windows, do đó WSL2 khớp hơn với cấu hình mà dự án CosyVoice tối ưu hóa và thử nghiệm để đạt độ trễ thấp.
+Đối với GPU NVIDIA, WSL2 được khuyến nghị. Các phần phụ thuộc thượng nguồn hiện tại cài đặt ONNX Runtime hỗ trợ GPU trên Linux nhưng cài đặt ONNX Runtime cho CPU trên Windows, do đó WSL2 khớp hơn với cấu hình mà dự án CosyVoice tối ưu hóa và thử nghiệm để đạt độ trễ thấp.
 
 ## Đăng ký trong TomoriBot
 
@@ -113,7 +113,7 @@ Chạy `/providers`, chọn `Thêm endpoint tùy chỉnh mới`, và định c�
 - Capability: `Speech`
 - API Compatibility: `tts-clone`
 - Endpoint URL: `http://127.0.0.1:8017`
-- Voice Source Mode: `Clone`
+- Chế độ nguồn giọng đọc: `Clone`
 - Script Markup: `Plain`
 - Supports Instruct: `Yes`
 
@@ -126,7 +126,7 @@ Sau đó mở `/config` > Models > Switch Models và kích hoạt endpoint giọ
 Đối với sao chép zero-shot thông thường:
 
 1. Chuẩn bị một mẫu âm thanh rõ ràng dài từ 3 đến 30 giây với một người nói và ít hoặc không có tiếng ồn nền.
-2. Mở `/config` trong phần Models > TTS Parameters & Voices và tải mẫu âm thanh lên.
+2. Mở `/config` trong phần Models > Tham số & Giọng đọc TTS và tải mẫu âm thanh lên.
 3. Nhập bản phiên âm khớp khi có thể. CosyVoice 3 sử dụng bản phiên âm này cho đường dẫn zero-shot có hỗ trợ bản phiên âm, và nó được token hóa như một tiền tố prompt, nên bản phiên âm phải mô tả âm thanh thực sự được dùng: 30 giây đầu tiên của clip.
 4. Mở `/config` trong phần Persona > Voice và gán mẫu âm thanh đó cho persona.
 
@@ -180,6 +180,6 @@ Chỉ sử dụng chúng sau khi máy chủ PyTorch thông thường đã hoạt
 
 ## Giấy phép
 
-Kho lưu trữ mã nguồn CosyVoice hiện tại được cấp phép theo **Apache License 2.0**, và kho lưu trữ Hugging Face `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` cũng được đánh dấu **Apache-2.0**.
+Kho lưu trữ mã nguồn CosyVoice hiện tại được cấp phép theo Apache License 2.0, và kho lưu trữ Hugging Face `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` cũng được đánh dấu Apache-2.0.
 
 Thẻ model thượng nguồn cũng chứa một tuyên bố từ chối trách nhiệm nêu rõ nội dung hiển thị dành cho mục đích trình diễn học thuật và một số ví dụ có thể đến từ internet. Một cuộc thảo luận mở ở thượng nguồn đang yêu cầu làm rõ cụ thể về mối liên hệ giữa tuyên bố từ chối trách nhiệm đó với việc sử dụng thương mại các trọng số. TomoriBot không phân phối lại model. Người tự lưu trữ nên xem xét các điều khoản giấy phép và thẻ model thượng nguồn hiện tại cho việc triển khai của riêng họ, đặc biệt trước khi sử dụng cho mục đích thương mại.

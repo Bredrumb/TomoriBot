@@ -15,7 +15,7 @@ docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up -d
 这会：
 - 启动 TomoriBot 与 PostgreSQL（数据库端口 15432）
 - 在 3000 端口启动 Grafana，并自动配置好 PostgreSQL 数据源
-- 自动置备 **TomoriBot Overview** 面板
+- 自动置备 TomoriBot Overview 面板
 - 把两个服务接到同一个 Docker 网络
 
 在 [http://localhost:3000](http://localhost:3000) 访问 Grafana：
@@ -24,7 +24,7 @@ docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up -d
 
 ## 自动置备的面板
 
-**TomoriBot Overview** 会自动出现，无需任何设置。它的面板覆盖进程内存、缓存条目数、每小时错误数、按模型统计的词元用量、按小时统计的活动量、最常用指令、用户语言、情绪云，以及正在使用哪些预设集与模型。
+TomoriBot Overview 会自动出现，无需任何设置。它的面板覆盖进程内存、缓存条目数、每小时错误数、按模型统计的词元用量、按小时统计的活动量、最常用指令、用户语言、情绪云，以及正在使用哪些预设集与模型。
 
 每个面板都只读取任何安装中都存在的表，所以同一份面板在自部署实例和云端部署里都能用。
 

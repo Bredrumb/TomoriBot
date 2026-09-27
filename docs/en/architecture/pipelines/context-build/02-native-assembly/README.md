@@ -9,7 +9,7 @@ documents one contributor that appends to the shared `contextItems` list.
 Order is structural; it determines where each item appears in the LLM's
 prompt, and the LLM cares about that order.
 
-**File:** `src/utils/text/context/nativeBuilder.ts:27-320`
+- **File**: `src/utils/text/context/nativeBuilder.ts:27-320`
 
 ## Read order
 
@@ -125,7 +125,7 @@ A grab-bag utility module split between two consumers:
 
 ## Extension points
 
-The native builder itself is **a fixed-order contributor sequence**; there
+The native builder itself is a fixed-order contributor sequence; there
 is no current registration mechanism for adding new contributors. The order
 matters (prompt at top, dialogue history at bottom) and changing it without
 the LLM noticing is unlikely.

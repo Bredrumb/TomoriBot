@@ -4,12 +4,12 @@ sidebar:
   order: 3
 ---
 
-TomoriBot can **speak** (text-to-speech) and **listen** (speech-to-text):
+TomoriBot can speak (text-to-speech) and listen (speech-to-text):
 
 - **TTS** lets her reply with native Discord voice messages.
 - **STT** turns user audio attachments into text she can use as conversation context.
 
-Both work through the same endpoint system. The quickest path is **ElevenLabs** (cloud,
+Both work through the same endpoint system. The quickest path is ElevenLabs (cloud,
 documented in full below). If you'd rather run voice on your own hardware, use a local engine
 and follow the self-hosting guides.
 
@@ -19,8 +19,8 @@ and follow the self-hosting guides.
 ### ElevenLabs (cloud, easiest)
 
 1. Get an API key from [ElevenLabs](https://elevenlabs.io/app/settings/api-keys).
-2. Run `/providers`, choose `Add New Provider`, select **ElevenLabs**, and paste the key. This flow:
-   - registers the ElevenLabs **speech** endpoint (and the **transcription** endpoint too),
+2. Run `/providers`, choose `Add New Provider`, select `ElevenLabs`, and paste the key. This flow:
+   - registers the ElevenLabs speech endpoint (and the transcription endpoint too),
    - selects them as active,
    - can assign a voice to one persona on the spot.
 3. Assign voices to additional personas under Persona > Voice in `/config`. Browse voices in the
@@ -31,7 +31,7 @@ Select ElevenLabs in `/providers`, then choose `Edit Endpoint` anytime you need 
 
 Notes:
 
-- On the **free plan, only premade voices work**. Browse the
+- On the free plan, only premade voices work. Browse the
   [premade voice list](https://elevenlabs-sdk.mintlify.app/voices/premade-voices).
 - Characters are counted when she generates and reads voice messages; the free tier has
   monthly limits, so check your ElevenLabs dashboard.
@@ -64,7 +64,7 @@ See the [Text-to-Speech comparison table](/en/self-hosting/local-endpoints/text-
 <!-- anchor: speech-to-text -->
 
 Transcription endpoints turn user audio attachments into text for background conversation
-context. Whether transcripts are **visibly posted** in chat is controlled separately by
+context. Whether transcripts are visibly posted in chat is controlled separately by
 `/config` > Engine > Notices.
 
 ### ElevenLabs (cloud)
