@@ -51,18 +51,18 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Start-Service postgresql-x64-17
           Add-Content -Path $env:GITHUB_PATH -Value $env:PGBIN
-          for ($attempt = 0; $attempt -lt 30; $attempt++) {
-            & "$env:PGBIN\pg_isready.exe" -h localhost | Out-Null
-            if ($LASTEXITCODE -eq 0) { break }
-            Start-Sleep -Seconds 1
-          }
-          if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL did not become ready.' }
-          $env:PGPASSWORD = 'root'
-          & "$env:PGBIN\psql.exe" -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE tomori LOGIN SUPERUSER PASSWORD 'tomori_smoke_password';"
+          $dataDir = Join-Path $env:RUNNER_TEMP 'setup-postgres'
+          $passwordFile = Join-Path $env:RUNNER_TEMP 'postgres-password.txt'
+          Set-Content -Path $passwordFile -Value 'root' -NoNewline
+          & "$env:PGBIN\initdb.exe" -D $dataDir -U postgres -A scram-sha-256 "--pwfile=$passwordFile"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & "$env:PGBIN\createdb.exe" -U postgres --owner=tomori tomodb
+          & "$env:PGBIN\pg_ctl.exe" -D $dataDir -l (Join-Path $env:RUNNER_TEMP 'postgres.log') -o '-h 127.0.0.1 -p 5432' start
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:PGPASSWORD = 'root'
+          & "$env:PGBIN\psql.exe" -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE tomori LOGIN SUPERUSER PASSWORD 'tomori_smoke_password';"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$env:PGBIN\createdb.exe" -h localhost -U postgres --owner=tomori tomodb
           exit $LASTEXITCODE
 
       - name: Run Full Install from a dependency-free checkout
