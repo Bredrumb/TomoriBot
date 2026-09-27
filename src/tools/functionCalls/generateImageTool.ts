@@ -11,6 +11,7 @@ import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import { resolveAvatarByIdentity, type ResolvedAvatarData } from "@/utils/discord/avatarResolver";
 import { buildGeneratedImageComponentsV2Payload } from "@/utils/discord/generatedImageMessage";
+import { prepareGeneratedImage } from "@/utils/image/generatedImageMetadata";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import {
   buildImageToolNoticeDescription,
@@ -750,6 +751,7 @@ export class GenerateImageTool extends BaseTool {
     attachmentFilename: string,
     elapsedMs: number,
     referencedIdentities: string[] = [],
+    promptAttachment?: AttachmentBuilder,
   ): Promise<import("discord.js").Message> {
     const threadId =
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
@@ -760,14 +762,16 @@ export class GenerateImageTool extends BaseTool {
       elapsedMs,
       context.locale,
       referencedIdentities,
+      Boolean(promptAttachment),
     );
+    const files = promptAttachment ? [attachment, promptAttachment] : [attachment];
 
     if (context.webhook && context.personaUsername) {
       try {
         return await sendWebhookMessageWithIdentity(
           context.webhook,
           {
-            files: [attachment],
+            files,
             ...componentsPayload,
             withComponents: true,
             ...(threadId ? { threadId } : {}),
@@ -784,7 +788,7 @@ export class GenerateImageTool extends BaseTool {
           return await sendWebhookMessageWithIdentity(
             context.webhook,
             {
-              files: [attachment],
+              files,
               ...(threadId ? { threadId } : {}),
             },
             {
@@ -801,12 +805,12 @@ export class GenerateImageTool extends BaseTool {
 
     try {
       return await context.channel.send({
-        files: [attachment],
+        files,
         ...componentsPayload,
       });
     } catch (error) {
       log.warn("Failed to send generated image with Components V2, falling back to attachment-only message", error);
-      return await context.channel.send({ files: [attachment] });
+      return await context.channel.send({ files });
     }
   }
 
@@ -1398,9 +1402,14 @@ export class GenerateImageTool extends BaseTool {
         return { success: false, error: "Image generation was cancelled." };
       }
 
-      const imageBuffer = Buffer.from(generatedImageData, "base64");
-      const attachmentFilename = `generated_${Date.now()}.png`;
-      const attachment = new AttachmentBuilder(imageBuffer, {
+      const preparedImage = await prepareGeneratedImage(
+        Buffer.from(generatedImageData, "base64"),
+        effectivePrompt,
+        context.locale,
+        effectiveNegativePrompt,
+      );
+      const attachmentFilename = `generated_${Date.now()}.${preparedImage.extension}`;
+      const attachment = new AttachmentBuilder(preparedImage.buffer, {
         name: attachmentFilename,
       });
 
@@ -1410,6 +1419,7 @@ export class GenerateImageTool extends BaseTool {
         attachmentFilename,
         Date.now() - startedAtMs,
         referencedIdentityNames,
+        preparedImage.promptAttachment,
       );
 
       log.success("Successfully generated and sent image to Discord");

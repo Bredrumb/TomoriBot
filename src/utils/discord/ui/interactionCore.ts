@@ -1006,6 +1006,7 @@ export async function replyInfoEmbed(
       const message = await interaction.webhook.send({
         embeds,
         components,
+        files: finalOptions.files,
         flags: flags || MessageFlags.Ephemeral,
       });
       attachTipCollector(message);
@@ -1017,10 +1018,10 @@ export async function replyInfoEmbed(
 
   try {
     if (interaction.deferred || interaction.replied) {
-      const message = await interaction.editReply({ embeds, components });
+      const message = await interaction.editReply({ embeds, components, files: finalOptions.files });
       attachTipCollector(message);
     } else {
-      await interaction.reply({ embeds, components, flags });
+      await interaction.reply({ embeds, components, files: finalOptions.files, flags });
       attachTipCollector(await interaction.fetchReply());
     }
   } catch (error) {
@@ -1037,6 +1038,7 @@ export async function replyInfoEmbed(
         const message = await interaction.webhook.send({
           embeds,
           components,
+          files: finalOptions.files,
           flags: flags || MessageFlags.Ephemeral,
         });
         attachTipCollector(message);
@@ -1046,6 +1048,7 @@ export async function replyInfoEmbed(
         await interaction.reply({
           embeds,
           components,
+          files: finalOptions.files,
           flags: MessageFlags.Ephemeral,
         });
         attachTipCollector(await interaction.fetchReply());
@@ -1055,6 +1058,7 @@ export async function replyInfoEmbed(
         const message = await interaction.webhook.send({
           embeds,
           components,
+          files: finalOptions.files,
           flags: flags || MessageFlags.Ephemeral,
         });
         attachTipCollector(message);

@@ -12,6 +12,7 @@
  */
 
 import { AttachmentBuilder } from "discord.js";
+import { prepareGeneratedImage } from "@/utils/image/generatedImageMetadata";
 import JSZip from "jszip";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
@@ -256,19 +257,27 @@ export class GenerateImageNaiTool extends BaseTool {
     attachment: AttachmentBuilder,
     attachmentFilename: string,
     elapsedMs: number,
+    promptAttachment?: AttachmentBuilder,
   ): Promise<import("discord.js").Message> {
     const threadId =
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id
         : undefined;
-    const componentsPayload = buildGeneratedImageComponentsV2Payload(attachmentFilename, elapsedMs, context.locale);
+    const componentsPayload = buildGeneratedImageComponentsV2Payload(
+      attachmentFilename,
+      elapsedMs,
+      context.locale,
+      [],
+      Boolean(promptAttachment),
+    );
+    const files = promptAttachment ? [attachment, promptAttachment] : [attachment];
 
     if (context.webhook && context.personaUsername) {
       try {
         return await sendWebhookMessageWithIdentity(
           context.webhook,
           {
-            files: [attachment],
+            files,
             ...componentsPayload,
             withComponents: true,
             ...(threadId ? { threadId } : {}),
@@ -288,7 +297,7 @@ export class GenerateImageNaiTool extends BaseTool {
           return await sendWebhookMessageWithIdentity(
             context.webhook,
             {
-              files: [attachment],
+              files,
               ...(threadId ? { threadId } : {}),
             },
             {
@@ -308,12 +317,12 @@ export class GenerateImageNaiTool extends BaseTool {
 
     try {
       return await context.channel.send({
-        files: [attachment],
+        files,
         ...componentsPayload,
       });
     } catch (error) {
       log.warn("Failed to send NAI generated image with Components V2, falling back to attachment-only message", error);
-      return await context.channel.send({ files: [attachment] });
+      return await context.channel.send({ files });
     }
   }
 
@@ -1239,8 +1248,14 @@ export class GenerateImageNaiTool extends BaseTool {
       }
 
       const filePrefix = isInpaintMode ? "nai_inpainted" : "nai_generated";
-      const attachmentFilename = `${filePrefix}_${Date.now()}.png`;
-      const attachment = new AttachmentBuilder(imageBuffer, {
+      const preparedImage = await prepareGeneratedImage(
+        imageBuffer,
+        normalizedPrompt,
+        context.locale,
+        effectiveNegativePrompt,
+      );
+      const attachmentFilename = `${filePrefix}_${Date.now()}.${preparedImage.extension}`;
+      const attachment = new AttachmentBuilder(preparedImage.buffer, {
         name: attachmentFilename,
       });
 
@@ -1249,6 +1264,7 @@ export class GenerateImageNaiTool extends BaseTool {
         attachment,
         attachmentFilename,
         Date.now() - startedAtMs,
+        preparedImage.promptAttachment,
       );
 
       log.success(`Successfully ${isInpaintMode ? "inpainted" : "generated"} and sent NAI image to Discord`);

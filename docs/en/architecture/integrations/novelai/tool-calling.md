@@ -15,7 +15,10 @@ The implementation lives primarily in `src/providers/novelai/novelaiStreamAdapte
 - `generate_image_nai` now resolves its sampler, steps, scale, noise schedule, and `cfg_rescale` from `server_novelai_imagegen_configs` first, falling back to the `DEFAULT_NAI_*` constants in `src/utils/image/naiImageParams.ts` when the server override is `NULL`.
 - `/novelai image params` is the admin-facing command for those parameter overrides.
 - Image tag profile commands are provider-neutral: `/config` > Persona > Appearance, `/personal config`, and the default positive and negative tag fields on `/config` > Models > Image Generation Defaults.
-- `/novelai generate image` is the slash-command image generation entrypoint for direct tag-based NAI image creation, and now opens a modal for prompt, extra negative tags, optional character reference, and orientation selection.
+- `/novelai generate image` opens a modal for prompt, extra negative tags, optional character reference, and orientation selection. Precise Reference is supported only on NovelAI Diffusion V4.5 models. A selected reference on another model is rejected before generation, and a failed reference request is not retried without the reference.
+- Slash command and tool-generated images store the effective prompt and negative prompt in PNG `iTXt` or JPEG/WebP XMP metadata without re-encoding compressed image data. Slash command result embeds show a metadata hint in the footer and keep prompt text out of the embed fields. Chat tool results show no metadata reminder. If metadata cannot be inserted without replacing existing XMP or would exceed the upload limit, the original image is sent with `image_prompt.txt` and a prompt-file hint.
+- `/novelai generate image` uses the active personal `image-nai` credential and model when configured. Otherwise it uses the server's optional NovelAI key or server API key. Server credentials consume the server image quota; personal credentials do not.
+- If the slash command fails after modal submission, its error reply attaches `image_generation_input.txt` with the submitted tags and orientation. The file lists a character reference filename when one was selected; the image must be uploaded again on retry.
 - `/config` > Persona > Appearance persists persona reference images through `src/utils/storage/charrefStorage.ts`; `/personal config` owns the separate user reference.
 - `generate_image_nai` now supports a structured `characters[]` array for V4 models.
 - `generate_image_nai` now uses a simpler active character schema: each `characters[]` item is one visible character instance, and `characters[].tags` must contain that character's full appearance plus their role in the scene. Profile-driven autofill by `id` and `remove_tags` suppression are currently disabled in the active schema/runtime. If known persona/user Physical Appearance tags are available in conversation context, the model is expected to copy the relevant tags into `characters[].tags` directly. For erotic scenes, clothing tags can be omitted and the intended nude state can be stated directly in `tags`.
@@ -199,6 +202,8 @@ With `/nothink` removed (to enable reasoning for tool use), the model may use to
 - Truncated tool calls (handled by recovery)
 - Thinking consuming entire budget (empty response)
 - Model choosing to respond with text instead of tool calls
+
+After a failed tool call that followed visible text, the next GLM stream suppresses repeated text. A genuinely empty suppressed stream still enters the normal empty-response retry with its continuation prefill. Hidden image turns keep their separate completion path.
 
 ### 2. Tool Call Arguments Truncation
 If the token cap hits mid-`<arg_value>`, the last argument is incomplete. The truncation recovery synthesizes `</tool_call>` but the incomplete argument may be lost.

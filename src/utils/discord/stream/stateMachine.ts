@@ -105,7 +105,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     );
 
     const result = await this.executeStream(provider, config, context);
-    if (result.status === "completed" && wasEmptyStreamResponse(result)) {
+    if (result.status === "completed" && wasEmptyStreamResponse(result) && !context.suppressTextOutput) {
       log.info("Empty response detected. Returning empty_response status for retry at tomoriChat level.");
       return {
         status: "empty_response",

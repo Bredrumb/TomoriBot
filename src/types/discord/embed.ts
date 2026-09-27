@@ -1,5 +1,5 @@
 import type { ButtonStyle } from "discord.js";
-import type { ButtonInteraction, ColorResolvable, EmbedBuilder, MessageFlags } from "discord.js";
+import type { AttachmentBuilder, ButtonInteraction, ColorResolvable, EmbedBuilder, MessageFlags } from "discord.js";
 
 /**
  * Options for creating a standard info/status embed.
@@ -23,6 +23,7 @@ export interface StandardEmbedOptions {
   tipKeys?: string[];
   /** Shared interpolation vars applied to every tip item in {@link tipKeys}. */
   tipVars?: Record<string, string | number | boolean>;
+  files?: AttachmentBuilder[];
 }
 
 /**

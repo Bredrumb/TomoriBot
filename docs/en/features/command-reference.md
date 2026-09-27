@@ -187,7 +187,7 @@ Configure NovelAI text and image generation for this server.
 
 | Command | Summary |
 |---|---|
-| `/novelai generate image` | Generate a NovelAI image using imageboard-style tags and an optional character reference. |
+| `/novelai generate image` | Generate a NovelAI image using imageboard-style tags and an optional character reference on V4.5 models. |
 | `/novelai usage` | Show this server's NovelAI Opus generation usage meter (Manage Server required). |
 
 ## `/nsfw`

@@ -362,6 +362,19 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
       // tomoriChat can use it as a prompt continuation on the retry, instead of
       // starting a fresh generation that produces the same truncated output.
       const pendingPrefill = novelaiAdapter.getPendingContinuationPrefill();
+      const emptySuppressedRetry =
+        result.status === "completed" &&
+        streamingContext?.suppressTextOutput === true &&
+        !streamingContext.endTurnAfterTools?.length &&
+        !result.accumulatedText?.trim();
+      if (emptySuppressedRetry) {
+        // A normal GLM tool retry still needs the empty-response path; hidden image turns end independently.
+        return {
+          ...result,
+          status: "empty_response",
+          naiContinuationPrefill: pendingPrefill ?? undefined,
+        };
+      }
       if (result.status === "empty_response" && pendingPrefill) {
         log.info(`NovelAIProvider: Attaching continuation prefill to StreamResult (${pendingPrefill.length} chars)`);
         return { ...result, naiContinuationPrefill: pendingPrefill };

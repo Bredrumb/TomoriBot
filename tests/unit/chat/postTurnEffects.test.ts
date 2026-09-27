@@ -12,11 +12,21 @@ const emptyResponseResult: GenerationTurnResult = {
   personaResponses: [],
 };
 
-function makeContext(options: { shouldSurfaceUserErrors: boolean; isUserImpersonation?: boolean }): {
+function makeContext(options: {
+  shouldSurfaceUserErrors: boolean;
+  isUserImpersonation?: boolean;
+  textCredentialSource?: "server" | "personal";
+}): {
   context: ChatTurnContext;
   send: ReturnType<typeof mock>;
 } {
-  const send = mock(async (_payload: unknown) => undefined);
+  const collector = {
+    on: () => collector,
+  };
+  const send = mock(async (_payload: unknown) => ({
+    id: "sent_msg_1",
+    createMessageComponentCollector: () => collector,
+  }));
   const channel = {
     id: `channel_${options.shouldSurfaceUserErrors ? "deliberate" : "passive"}`,
     send,
@@ -65,6 +75,7 @@ function makeContext(options: { shouldSurfaceUserErrors: boolean; isUserImperson
       tomoriState,
       shouldSurfaceUserErrors: options.shouldSurfaceUserErrors,
       isUserImpersonation: options.isUserImpersonation ?? false,
+      textCredentialSource: options.textCredentialSource ?? "server",
       shouldApplyTextQuota: false,
       simplifiedMessages: [],
       isStopResponse: false,
@@ -90,10 +101,37 @@ describe("empty-response post-turn handling", () => {
     expect(shouldRetryEmptyResponse(incoming, emptyResponseResult)).toBe(false);
   });
 
-  it("surfaces the localized terminal warning for a deliberate turn", async () => {
+  it("surfaces the localized terminal warning with recovery tips for a deliberate turn", async () => {
     const { context, send } = makeContext({ shouldSurfaceUserErrors: true });
 
     await runPostTurnEffects(context, emptyResponseResult);
+
+    expect(send).toHaveBeenCalledTimes(1);
+    const payload = send.mock.calls[0]?.[0] as
+      | {
+          embeds?: Array<{ toJSON: () => { title?: string; footer?: { text?: string } } }>;
+          components?: Array<{ components?: Array<{ data?: { label?: string } }> }>;
+        }
+      | undefined;
+    expect(payload?.embeds?.[0]?.toJSON().title).toBe(localizedCopy("en-US", "genai.empty_response_title"));
+    expect(payload?.embeds?.[0]?.toJSON().footer).toBeUndefined();
+    expect(payload?.components?.length).toBeGreaterThan(0);
+    expect(payload?.components?.[0]?.components?.[0]?.data?.label).toBe(localizedCopy("en-US", "genai.tips.button"));
+  });
+
+  it("surfaces the terminal warning even when partial text was already delivered to Discord", async () => {
+    const { context, send } = makeContext({ shouldSurfaceUserErrors: true });
+    const partiallyDeliveredResult: GenerationTurnResult = {
+      ...emptyResponseResult,
+      personaResponses: [
+        {
+          personaName: "Kamila",
+          text: "you're a menace",
+        },
+      ],
+    };
+
+    await runPostTurnEffects(context, partiallyDeliveredResult);
 
     expect(send).toHaveBeenCalledTimes(1);
     const payload = send.mock.calls[0]?.[0] as
@@ -102,6 +140,20 @@ describe("empty-response post-turn handling", () => {
         }
       | undefined;
     expect(payload?.embeds?.[0]?.toJSON().title).toBe(localizedCopy("en-US", "genai.empty_response_title"));
+  });
+
+  it("attaches personal-provider recovery guidance when textCredentialSource is personal", async () => {
+    const { context, send } = makeContext({ shouldSurfaceUserErrors: true, textCredentialSource: "personal" });
+
+    await runPostTurnEffects(context, emptyResponseResult);
+
+    expect(send).toHaveBeenCalledTimes(1);
+    const payload = send.mock.calls[0]?.[0] as
+      | {
+          components?: Array<{ components?: Array<{ data?: { label?: string } }> }>;
+        }
+      | undefined;
+    expect(payload?.components?.length).toBeGreaterThan(0);
   });
 
   it("keeps terminal exhaustion silent for a passive turn", async () => {

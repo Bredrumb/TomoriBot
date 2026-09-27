@@ -47,6 +47,11 @@ export function usesNaiStructuredPromptFormat(model: string): boolean {
   return /nai-diffusion-[45]/.test(model);
 }
 
+/** Precise Reference is available on NovelAI V4.5 models only. */
+export function supportsNaiPreciseReference(model: string): boolean {
+  return /^nai-diffusion-4-5-(?:full|curated)$/.test(model);
+}
+
 export function classifyNaiImageError(error: unknown): NaiImageErrorKind {
   const errorMessage = error instanceof Error ? error.message : String(error);
   const normalizedErrorMessage = errorMessage.toLowerCase();
@@ -118,6 +123,10 @@ export async function generateNovelAiImage(options: {
   const referenceInfoExtracted = characterPayload?.referenceInfoExtracted ?? [];
   const useCoords = characterPayload?.useCoords ?? false;
 
+  if (referenceImages.length > 0 && !supportsNaiPreciseReference(model)) {
+    throw new Error(`NovelAI Precise Reference requires a V4.5 model (received ${model}).`);
+  }
+
   let requestPayload: Record<string, unknown>;
 
   if (usesNaiStructuredPromptFormat(model)) {
@@ -131,11 +140,8 @@ export async function generateNovelAiImage(options: {
       }));
     const buildDirectorReferenceSecondaryStrengths = (count: number) =>
       Array.from({ length: count }, () => NAI_CHAR_REF_SECONDARY_STRENGTH);
-    const buildV4RequestPayload = (includeReferences: boolean): Record<string, unknown> => {
-      const refsForRequest = includeReferences ? referenceImages : [];
-      const directorRefCount = refsForRequest.length;
-      const refStrengthsForRequest = includeReferences ? referenceStrengths : [];
-      const refInfoForRequest = includeReferences ? referenceInfoExtracted : [];
+    const buildV4RequestPayload = (): Record<string, unknown> => {
+      const directorRefCount = referenceImages.length;
 
       return {
         action: "generate",
@@ -161,11 +167,12 @@ export async function generateNovelAiImage(options: {
           normalize_reference_strength_multiple: directorRefCount > 0 ? true : undefined,
           director_reference_descriptions:
             directorRefCount > 0 ? buildDirectorReferenceDescriptions(directorRefCount) : undefined,
-          director_reference_information_extracted: refInfoForRequest.length > 0 ? refInfoForRequest : undefined,
-          director_reference_strength_values: refStrengthsForRequest.length > 0 ? refStrengthsForRequest : undefined,
+          director_reference_information_extracted:
+            referenceInfoExtracted.length > 0 ? referenceInfoExtracted : undefined,
+          director_reference_strength_values: referenceStrengths.length > 0 ? referenceStrengths : undefined,
           director_reference_secondary_strength_values:
             directorRefCount > 0 ? buildDirectorReferenceSecondaryStrengths(directorRefCount) : undefined,
-          director_reference_images: refsForRequest.length > 0 ? refsForRequest : undefined,
+          director_reference_images: referenceImages.length > 0 ? referenceImages : undefined,
           v4_prompt: {
             caption: {
               base_caption: prompt,
@@ -212,71 +219,27 @@ export async function generateNovelAiImage(options: {
       };
     };
 
-    const attempts: Array<{
-      label: string;
-      includeReferences: boolean;
-    }> = [];
-    const seenAttempts = new Set<string>();
-    const pushAttempt = (label: string, includeReferences: boolean) => {
-      const key = includeReferences.toString();
-      if (seenAttempts.has(key)) {
-        return;
-      }
+    requestPayload = buildV4RequestPayload();
+    log.info(
+      `[NAI] V4+ generate request (chars: ${charCaptions.length}, coords: ${useCoords}, refs: ${referenceImages.length})`,
+    );
 
-      seenAttempts.add(key);
-      attempts.push({
-        label,
-        includeReferences,
-      });
-    };
+    const response = await fetch(`${NAI_IMAGE_BASE_URL}/ai/generate-image`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestPayload),
+      signal: abortSignal,
+    });
+    if (response.ok) return await extractPngFromZipResponse(response);
 
-    if (referenceImages.length > 0) {
-      pushAttempt("director_refs", true);
-    }
-    pushAttempt("without_refs", false);
-
-    let lastError: Error | null = null;
-
-    for (const [attemptIndex, attempt] of attempts.entries()) {
-      requestPayload = buildV4RequestPayload(attempt.includeReferences);
-
-      log.info(
-        `[NAI] V4 generate attempt "${attempt.label}" (chars: ${charCaptions.length}, coords: ${useCoords}, refs: ${attempt.includeReferences ? referenceImages.length : 0})`,
-      );
-
-      const response = await fetch(`${NAI_IMAGE_BASE_URL}/ai/generate-image`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestPayload),
-        signal: abortSignal,
-      });
-
-      if (response.ok) {
-        return await extractPngFromZipResponse(response);
-      }
-
-      const correlationId = response.headers.get("x-correlation-id");
-      const errorText = await response.text().catch(() => "");
-      const snippet = errorText.slice(0, 500);
-      lastError = new Error(
-        `NovelAI image generation failed (${response.status} ${response.statusText})${correlationId ? ` [correlation-id: ${correlationId}]` : ""}: ${snippet}`,
-      );
-
-      const hasFallbackAttempt = attemptIndex < attempts.length - 1;
-      if (hasFallbackAttempt && attempt.includeReferences) {
-        log.warn(
-          `[NAI] V4 generate attempt "${attempt.label}" failed with ${response.status}. Retrying with "${attempts[attemptIndex + 1].label}"`,
-        );
-        continue;
-      }
-
-      throw lastError;
-    }
-
-    throw lastError ?? new Error("NovelAI image generation failed");
+    const correlationId = response.headers.get("x-correlation-id");
+    const errorText = await response.text().catch(() => "");
+    throw new Error(
+      `NovelAI image generation failed (${response.status} ${response.statusText})${correlationId ? ` [correlation-id: ${correlationId}]` : ""}: ${errorText.slice(0, 500)}`,
+    );
   }
 
   requestPayload = {

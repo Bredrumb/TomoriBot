@@ -362,6 +362,14 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
       return;
     }
 
+    const isPersonal = context.textCredentialSource === "personal";
+    const tipKeys = [
+      "genai.tips.refresh_context",
+      ...(isPersonal
+        ? ["genai.tips.disable_personal_text_override", "genai.tips.switch_model_provider_personal"]
+        : ["genai.tips.switch_model_provider"]),
+    ];
+
     await sendStandardEmbed(
       context.channel as Parameters<typeof sendStandardEmbed>[0],
       context.locale,
@@ -369,7 +377,7 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
         titleKey: "genai.empty_response_title",
         descriptionKey: "genai.empty_response_description",
         color: ColorCode.WARN,
-        footerKey: "genai.generic_error_footer",
+        tipKeys,
       },
       {
         webhook: context.responseTarget?.webhook,
