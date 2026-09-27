@@ -61,6 +61,8 @@ Shared preset images remain in storage when catalog art changes or a sprite decl
 
 The post-ready sprite and avatar seeders share a PostgreSQL advisory lock with the sweep's `--apply` pass. The sweep waits for any in-progress seed, then lists objects and reads references again while holding the lock. This prevents it from deleting an older content-addressed object between the seeder's upload and its database write. Dry runs do not acquire the lock or delete objects.
 
+Production JSONL records `preset_art_phase` at the start and end of the full seed, sprite seed, avatar seed, and main-avatar fan-out. Each record includes process RSS, heap, external memory, and array buffers; completed phases also record duration. A start without an end identifies the phase interrupted by a process exit. The full-seed marker also covers waiting for the advisory lock.
+
 Resolution is centralized in `PersonaSpriteRepository.listForPersona()`: for a pointer persona it returns the shared `preset_sprites` set (shaped as `PersonaSpriteRow`); for a materialized persona it returns the persona's own `persona_sprites` rows. Every downstream consumer (prompt context builder, render-modifier resolver, `/config` > Persona > Sprites) reads through that one method, so they are pointer-agnostic. Editing the catalog sprite set fans out to all still-pointer personas on the next boot.
 
 That reconcile is deliberately conservative, because these rows are the only record of a usable shared image URL and pointer personas resolve them live:

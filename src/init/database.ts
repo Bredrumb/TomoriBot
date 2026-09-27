@@ -4,6 +4,7 @@ import { seedPersonaSpritesFromCatalog } from "@/db/seed/catalog/presetSpriteSee
 import { seedPersonaAvatarsFromCatalog } from "@/db/seed/catalog/presetAvatarSeed";
 import { withPresetAssetLock } from "@/db/seed/catalog/presetAssetLock";
 import { log } from "@/utils/misc/logger";
+import { collectProcessMemorySnapshot } from "@/utils/misc/processMemory";
 import type { AppEnvironment } from "@/types/config";
 
 /**
@@ -105,14 +106,47 @@ export function isDatabaseSchemaManagementEnabled(raw = process.env.DATABASE_SCH
   return ["true", "1", "yes", "on"].includes(raw.trim().toLowerCase());
 }
 
+type PresetArtPhase = "total" | "sprites" | "avatars" | "fanout";
+type PresetArtPhaseStatus = "started" | "completed" | "failed";
+
+function recordPresetArtPhase(phase: PresetArtPhase, status: PresetArtPhaseStatus, durationMs?: number): void {
+  const memory = collectProcessMemorySnapshot();
+  log.metric("preset_art_phase", {
+    phase,
+    status,
+    ...(durationMs === undefined ? {} : { duration_ms: durationMs }),
+    rss_mb: memory.rssMb,
+    heap_used_mb: memory.heapUsedMb,
+    external_mb: memory.externalMb,
+    array_buffers_mb: memory.arrayBuffersMb,
+  });
+}
+
+/** Production hides success logs, so phase markers remain in JSONL if memory pressure ends a run. */
+export async function measurePresetArtPhase<T>(phase: PresetArtPhase, action: () => Promise<T>): Promise<T> {
+  const startedAt = performance.now();
+  recordPresetArtPhase(phase, "started");
+
+  let status: PresetArtPhaseStatus = "failed";
+  try {
+    const result = await action();
+    status = "completed";
+    return result;
+  } finally {
+    recordPresetArtPhase(phase, status, Math.round(performance.now() - startedAt));
+  }
+}
+
 /** Seeds catalog art after gateway readiness, when the bot has storage credentials. */
 export async function seedStorageBackedCatalogs(): Promise<void> {
   try {
-    const { spriteSeed, avatarSeed } = await withPresetAssetLock(sql, async (client) => {
-      const spriteSeed = await seedPersonaSpritesFromCatalog(client);
-      const avatarSeed = await seedPersonaAvatarsFromCatalog(client);
-      return { spriteSeed, avatarSeed };
-    });
+    const { spriteSeed, avatarSeed } = await measurePresetArtPhase("total", () =>
+      withPresetAssetLock(sql, async (client) => {
+        const spriteSeed = await measurePresetArtPhase("sprites", () => seedPersonaSpritesFromCatalog(client));
+        const avatarSeed = await measurePresetArtPhase("avatars", () => seedPersonaAvatarsFromCatalog(client));
+        return { spriteSeed, avatarSeed };
+      }),
+    );
     log.success(
       `PostgreSQL preset sprite catalog seeded (${spriteSeed.seeded}/${spriteSeed.declarations} declarations seeded, ` +
         `${spriteSeed.failed} failed, ${spriteSeed.removed} removed, ${spriteSeed.presets} preset variants)`,

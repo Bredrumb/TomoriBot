@@ -1,5 +1,5 @@
 import type { Client } from "discord.js";
-import { seedStorageBackedCatalogs } from "@/init/database";
+import { measurePresetArtPhase, seedStorageBackedCatalogs } from "@/init/database";
 import { log } from "@/utils/misc/logger";
 import { healthTracker } from "@/utils/misc/healthTracker";
 
@@ -75,7 +75,7 @@ export function initTimers(client: Client): void {
       void seedStorageBackedCatalogs()
         .then(() => import("@/utils/persona/presetAvatarReconciler"))
         .then(({ reconcilePresetMainAvatars }) => {
-          return reconcilePresetMainAvatars(client);
+          return measurePresetArtPhase("fanout", () => reconcilePresetMainAvatars(client));
         })
         .catch((error: Error) => {
           log.error("Preset art seed or avatar fan-out failed", error);
