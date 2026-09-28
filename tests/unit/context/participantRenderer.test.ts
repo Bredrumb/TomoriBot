@@ -3,16 +3,19 @@ import { createParticipantAlias } from "@/utils/text/participants/aliases";
 import type {
   HydratedParticipantProfile,
   ParticipantProfileField,
-  ChatProxyNamespaceNote,
+  MessageProxyNamespaceNote,
 } from "@/utils/text/participants/hydration";
 import { createBotKey, createDiscordUserKey, type ParticipantKey } from "@/utils/text/participants/identity";
 import { renderParticipantPrompt } from "@/utils/text/participants/renderer";
 
-function render(profiles: readonly HydratedParticipantProfile[], chatProxyNamespaces: ChatProxyNamespaceNote[] = []) {
+function render(
+  profiles: readonly HydratedParticipantProfile[],
+  messageProxyNamespaces: MessageProxyNamespaceNote[] = [],
+) {
   return renderParticipantPrompt({
     profiles,
     personaTaskLines: [],
-    chatProxyNamespaces,
+    messageProxyNamespaces,
     isUserImpersonation: false,
     botName: "Tomori",
     isDMChannel: false,

@@ -225,7 +225,7 @@ Administra tus configuraciones personales
 
 | Comando | Resumen |
 |---|---|
-| `/personal chat-proxy` | Choose a supported chat proxy service for your account. |
+| `/personal message-proxy` | Choose a supported message proxy service for your account. |
 | `/personal config` | Administra tus preferencias personales, privacidad, modelos y perfil. |
 | `/personal language` | Elige el idioma en el que TomoriBot te habla. |
 | `/personal memories` | Administra tus memorias personales a largo plazo y contexto corto de conversación. |

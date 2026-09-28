@@ -5,14 +5,14 @@ import {
   targetAliasesForPurpose,
   type ParticipantTargetIndex,
 } from "@/utils/text/participants/targetIndex";
-import type { HydratedParticipantProfile, ChatProxyNamespaceNote } from "@/utils/text/participants/hydration";
+import type { HydratedParticipantProfile, MessageProxyNamespaceNote } from "@/utils/text/participants/hydration";
 import { normalizeParticipantAlias } from "@/utils/text/participants/aliases";
 import { serializeParticipantKey } from "@/utils/text/participants/identity";
 
 export interface ParticipantPromptRenderParams {
   profiles: readonly HydratedParticipantProfile[];
   personaTaskLines: readonly string[];
-  chatProxyNamespaces?: readonly ChatProxyNamespaceNote[];
+  messageProxyNamespaces?: readonly MessageProxyNamespaceNote[];
   isUserImpersonation: boolean;
   botName: string;
   isDMChannel: boolean;
@@ -36,7 +36,7 @@ export function renderParticipantPrompt(params: ParticipantPromptRenderParams): 
     ? 'To ping users, prepend an "@" symbol to a unique mention handle shown below (case-insensitive). If there is ambiguity with names, ask for clarification instead of guessing. Use mentions only when the notification matters.\n\n'
     : `If ${params.botName} wants to ping any of these users, prepend an "@" symbol to a unique mention handle shown below (case-insensitive). If there is ambiguity with names, ask for clarification instead of guessing. Use mentions only when the notification matters.\n\n`;
   text += renderProfileEntries(params.profiles, targetIndex, params.isUserImpersonation);
-  text += renderChatProxyNamespaceNotes(params.chatProxyNamespaces ?? []);
+  text += renderMessageProxyNamespaceNotes(params.messageProxyNamespaces ?? []);
   if (params.personaTaskLines.length > 0) text += `${params.personaTaskLines.join("\n")}\n\n`;
   text += renderChannelTimeFooter(params);
   return {
@@ -46,7 +46,7 @@ export function renderParticipantPrompt(params: ParticipantPromptRenderParams): 
   };
 }
 
-function renderChatProxyNamespaceNotes(namespaces: readonly ChatProxyNamespaceNote[]): string {
+function renderMessageProxyNamespaceNotes(namespaces: readonly MessageProxyNamespaceNote[]): string {
   if (namespaces.length === 0) return "";
   const entriesByHeading = new Map<string, string[]>();
   for (const namespace of namespaces) {

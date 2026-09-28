@@ -31,7 +31,7 @@ import {
 } from "@/utils/tools/deliberateToolMode";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
 import { buildContext, type SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
-import type { ChatProxyConversationUser } from "@/utils/text/context/types";
+import type { MessageProxyConversationUser } from "@/utils/text/context/types";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getCachedChannelContextNote } from "@/utils/cache/channelContextNoteCache";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
@@ -44,13 +44,13 @@ import { buildQueuedReplyDirective, normalizeTailDirective } from "@/utils/chat/
 import { excludeMessagesAwaitingOwnTurn } from "@/utils/chat/channelQueue";
 import { recordChatContextHistory } from "@/utils/chat/diagnosticTimeline";
 import {
-  getChatProxyMessageRecord,
-  getSupersededChatProxyOriginalMessageIds,
-} from "@/utils/chatProxy/proxyExpectation";
+  getMessageProxyMessageRecord,
+  getSupersededMessageProxyOriginalMessageIds,
+} from "@/utils/messageProxy/proxyExpectation";
 import {
-  resolveChatProxyMessageIdentitiesForHistory,
-  type ChatProxyHistoryIdentity,
-} from "@/utils/chatProxy/historyAttribution";
+  resolveMessageProxyMessageIdentitiesForHistory,
+  type MessageProxyHistoryIdentity,
+} from "@/utils/messageProxy/historyAttribution";
 import {
   buildCombinedTailDirectiveMessage,
   buildReactionContextAnnotation,
@@ -75,7 +75,7 @@ import {
 } from "@/utils/chat/contextMedia";
 import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 import { getCachedImpersonatedUserIdForWebhook } from "@/utils/chat/webhookIdentity";
-import { getProxyServiceDescriptor } from "@/utils/chatProxy/registry";
+import { getProxyServiceDescriptor } from "@/utils/messageProxy/registry";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { primePersonaSpriteMessageRecords } from "@/utils/cache/personaSpriteMessageCache";
 import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
@@ -216,7 +216,7 @@ async function buildHistoryNamingProjection(params: {
  */
 function resolveProxiedIdentityName(message: Message): string | null {
   if (!message.webhookId) return null;
-  const record = getChatProxyMessageRecord(message.id);
+  const record = getMessageProxyMessageRecord(message.id);
   if (!record) return null;
   const identity = getProxyServiceDescriptor(record.serviceId)?.getCachedAttestation?.(message.id)?.identity;
   return identity?.displayName ?? null;
@@ -425,7 +425,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     visibleUserIds: [...history.userIds],
     syntheticUsers: history.syntheticUsers,
     matrixUsers: history.matrixUsers,
-    chatProxyUsers: history.chatProxyUsers,
+    messageProxyUsers: history.messageProxyUsers,
     responderPersonaIds: new Set(turn.triggeredPersonaIds),
     requestScope: participantRequestScope,
   });
@@ -624,7 +624,7 @@ async function buildSimplifiedHistory(
   userIds: Set<string>;
   matrixUsers: Map<string, string>;
   syntheticUsers: Map<string, { displayName: string; type: "persona" | "webhook" }>;
-  chatProxyUsers: Map<string, ChatProxyConversationUser>;
+  messageProxyUsers: Map<string, MessageProxyConversationUser>;
   rawMessages: Message[];
   activeUserBlocks: PersonaUserBlockRow[];
 }> {
@@ -650,7 +650,7 @@ async function buildSimplifiedHistory(
 
   // A proxy may be confirmed before the original deletion lands, so a history
   // fetch can contain both. Keeping both would duplicate one authored message.
-  const supersededOriginalIds = getSupersededChatProxyOriginalMessageIds(channel.id);
+  const supersededOriginalIds = getSupersededMessageProxyOriginalMessageIds(channel.id);
   if (supersededOriginalIds.size > 0) {
     messages = messages.filter((message) => !supersededOriginalIds.has(message.id));
   }
@@ -676,7 +676,7 @@ async function buildSimplifiedHistory(
     messages = messages.slice(startIndex);
   }
 
-  const chatProxyIdentitiesByMessageId = await resolveChatProxyMessageIdentitiesForHistory(messages);
+  const messageProxyIdentitiesByMessageId = await resolveMessageProxyMessageIdentitiesForHistory(messages);
   const activeUserBlocks = await loadActivePersonaUserBlocks(turn);
   // Map each 'block'-type target to its row so the simplify loop can render a
   // notice that includes the remaining block duration (from expires_at). 'mute'
@@ -732,7 +732,7 @@ async function buildSimplifiedHistory(
   const userIds = new Set<string>();
   const matrixUsers = new Map<string, string>();
   const syntheticUsers = new Map<string, { displayName: string; type: "persona" | "webhook" }>();
-  const chatProxyUsers = new Map<string, ChatProxyConversationUser>();
+  const messageProxyUsers = new Map<string, MessageProxyConversationUser>();
   const personaByName = new Map(
     turn.allPersonas.map((persona) => [normalizeRenderModifierName(persona.persona_nickname), persona]),
   );
@@ -750,8 +750,8 @@ async function buildSimplifiedHistory(
   // Iterate the full message list (not visibleRawMessages): blocked authors are
   // rendered as notices here rather than dropped.
   for (const msg of messages) {
-    const chatProxyIdentity = chatProxyIdentitiesByMessageId.get(msg.id);
-    if ((await getCachedPrivacyLevel(chatProxyIdentity?.senderDiscId ?? msg.author.id)) === PrivacyLevel.FULL) {
+    const messageProxyIdentity = messageProxyIdentitiesByMessageId.get(msg.id);
+    if ((await getCachedPrivacyLevel(messageProxyIdentity?.senderDiscId ?? msg.author.id)) === PrivacyLevel.FULL) {
       continue;
     }
 
@@ -794,8 +794,8 @@ async function buildSimplifiedHistory(
       messageIdMap,
       syntheticUsers,
       matrixUsers,
-      chatProxyIdentitiesByMessageId,
-      chatProxyUsers,
+      messageProxyIdentitiesByMessageId,
+      messageProxyUsers,
       reactionBudgetState,
       hiddenAuthorIds,
     );
@@ -927,7 +927,7 @@ async function buildSimplifiedHistory(
     userIds,
     matrixUsers,
     syntheticUsers,
-    chatProxyUsers,
+    messageProxyUsers,
     rawMessages: visibleRawMessages,
     activeUserBlocks,
   };
@@ -940,8 +940,8 @@ async function simplifyMessage(
   messageIdMap: MessageIdMap,
   syntheticUsers: Map<string, { displayName: string; type: "persona" | "webhook" }>,
   matrixUsers: Map<string, string>,
-  chatProxyIdentitiesByMessageId: Map<string, ChatProxyHistoryIdentity>,
-  chatProxyUsers: Map<string, ChatProxyConversationUser>,
+  messageProxyIdentitiesByMessageId: Map<string, MessageProxyHistoryIdentity>,
+  messageProxyUsers: Map<string, MessageProxyConversationUser>,
   reactionBudgetState: ReactionContextBudgetState,
   blockedContextUserIds: Set<string>,
 ): Promise<{ message: SimplifiedMessageForContext; isDebug: boolean } | null> {
@@ -960,7 +960,7 @@ async function simplifyMessage(
     messageIdMap,
     personaByName,
     blockedContextUserIds,
-    chatProxyIdentitiesByMessageId,
+    messageProxyIdentitiesByMessageId,
   );
   content = replyContext.content;
   content = await withReactionContext(turn, msg, content, reactionBudgetState);
@@ -1019,18 +1019,18 @@ async function simplifyMessage(
       authorPersonaLineageId = matchedPersona.persona_lineage_id;
       syntheticUsers.set(authorId, { displayName: authorName, type: "persona" });
     } else {
-      const chatProxyIdentity = chatProxyIdentitiesByMessageId.get(msg.id);
-      if (chatProxyIdentity) {
-        authorId = chatProxyIdentity.userDiscId;
-        authorName = chatProxyIdentity.displayName;
+      const messageProxyIdentity = messageProxyIdentitiesByMessageId.get(msg.id);
+      if (messageProxyIdentity) {
+        authorId = messageProxyIdentity.userDiscId;
+        authorName = messageProxyIdentity.displayName;
         // Deliberately not registered in syntheticUsers: a stable proxy identity
         // owns a real users row, and participant discovery keys any synthetic
         // entry as a webhook, which would strip its memories, aliases, and
         // system/host identity lines.
-        chatProxyUsers.set(authorId, {
-          serviceId: chatProxyIdentity.serviceId,
+        messageProxyUsers.set(authorId, {
+          serviceId: messageProxyIdentity.serviceId,
           displayName: authorName,
-          senderDiscId: chatProxyIdentity.senderDiscId,
+          senderDiscId: messageProxyIdentity.senderDiscId,
         });
       } else {
         authorId = msg.webhookId ?? msg.author.id;
@@ -1183,7 +1183,7 @@ async function withReplyContext(
   messageIdMap: MessageIdMap,
   personaByNickname: Map<string, ChatTurn["persona"]>,
   blockedContextUserIds: Set<string>,
-  chatProxyIdentitiesByMessageId: Map<string, ChatProxyHistoryIdentity>,
+  messageProxyIdentitiesByMessageId: Map<string, MessageProxyHistoryIdentity>,
 ): Promise<{ content: string; referencedMessage?: Message }> {
   if (msg.reference?.type === MessageReferenceType.Forward || !("messages" in msg.channel)) {
     return { content };
@@ -1199,7 +1199,7 @@ async function withReplyContext(
     }
     const referenced =
       msg.channel.messages.cache.get(referenceMessageId) ?? (await msg.channel.messages.fetch(referenceMessageId));
-    if (blockedContextUserIds.has(getBlockComparableAuthorId(referenced, chatProxyIdentitiesByMessageId))) {
+    if (blockedContextUserIds.has(getBlockComparableAuthorId(referenced, messageProxyIdentitiesByMessageId))) {
       return { content };
     }
     const annotation = await buildReplyReferenceContextAnnotation({
@@ -1229,11 +1229,11 @@ async function loadActivePersonaUserBlocks(turn: ChatTurn): Promise<PersonaUserB
 
 function getBlockComparableAuthorId(
   msg: Message,
-  chatProxyIdentitiesByMessageId?: Map<string, ChatProxyHistoryIdentity>,
+  messageProxyIdentitiesByMessageId?: Map<string, MessageProxyHistoryIdentity>,
 ): string {
-  const chatProxyIdentity = chatProxyIdentitiesByMessageId?.get(msg.id);
-  if (chatProxyIdentity) {
-    return chatProxyIdentity.senderDiscId;
+  const messageProxyIdentity = messageProxyIdentitiesByMessageId?.get(msg.id);
+  if (messageProxyIdentity) {
+    return messageProxyIdentity.senderDiscId;
   }
   if (msg.webhookId) {
     return getCachedImpersonatedUserIdForWebhook(msg.webhookId) ?? msg.author.id;

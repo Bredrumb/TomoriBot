@@ -50,7 +50,7 @@ const DUMMY_USER_ROW: UserRow = {
   personal_deliberate_tool_mode: "follow",
   personal_server_fallback_enabled: true,
   shortterm_cache_crossserver_opt_in: false,
-  chat_proxy_service: null,
+  message_proxy_service: null,
   created_at: new Date(),
   updated_at: new Date(),
 };

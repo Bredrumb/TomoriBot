@@ -7,7 +7,7 @@ import { getCachedBlacklistStatus, getCachedUserRow } from "@/utils/cache/userCa
 import { stripBridgePrefix } from "@/utils/bridges";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
-import { extractChatProxyReplyTargetFromEmbed } from "@/utils/chatProxy/registry";
+import { extractMessageProxyReplyTargetFromEmbed } from "@/utils/messageProxy/registry";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import { log } from "@/utils/misc/logger";
 import { compactWhitespace, normalizeTailDirective } from "@/utils/chat/contextDirectives";
@@ -253,9 +253,9 @@ export function findReplyContextTargetInMessage(
 function extractReplyContextTargetFromEmbed(embed: Embed): { channelId: string; messageId: string } | null {
   // The proxy record that restores `message.reference` is memory-resident, so a
   // refetched proxy arrives with the embed as its only reply evidence.
-  const chatProxyReplyTarget = extractChatProxyReplyTargetFromEmbed(embed);
-  if (chatProxyReplyTarget) {
-    return chatProxyReplyTarget;
+  const messageProxyReplyTarget = extractMessageProxyReplyTargetFromEmbed(embed);
+  if (messageProxyReplyTarget) {
+    return messageProxyReplyTarget;
   }
 
   const description = embed.description?.trim() ?? "";

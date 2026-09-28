@@ -5,12 +5,12 @@ sidebar:
 ---
 
 The PluralKit adapter supplies authoritative message correlation, stable member identity, reply
-recovery, and service-owned prompt wording to the generic [chat-proxy subsystem](/architecture/integrations/chat-proxy/).
-PluralKit is currently the only selectable chat-proxy service.
+recovery, and service-owned prompt wording to the generic [message-proxy subsystem](/architecture/integrations/message-proxy/).
+PluralKit is currently the only selectable message-proxy service.
 
 ## Descriptor
 
-`src/utils/chatProxy/services/pluralkit/descriptor.ts` registers these facts:
+`src/utils/messageProxy/services/pluralkit/descriptor.ts` registers these facts:
 
 | Property | Value |
 |---|---|
@@ -53,14 +53,14 @@ PluralKit maps its concepts into generic persistence as follows:
 PluralKit member UUID
   -> external_identities(kind = pluralkit_member)
   -> users(user_disc_id = pk:<member-uuid>)
-  -> chat_proxy_identities
+  -> message_proxy_identities
 
 PluralKit system UUID
-  -> chat_proxy_namespaces(service_id = pluralkit)
-  -> chat_proxy_namespace_accounts(host Discord accounts)
+  -> message_proxy_namespaces(service_id = pluralkit)
+  -> message_proxy_namespace_accounts(host Discord accounts)
 
 Proxy message ID
-  -> chat_proxy_message_index(member identity + attested sender)
+  -> message_proxy_message_index(member identity + attested sender)
 ```
 
 The host account owns authorization, privacy, blacklist state, cooldowns, quotas, and personal
@@ -88,8 +88,8 @@ suppresses that service metadata as a link preview while retaining the recovered
 
 ## User and operator settings
 
-Users select the adapter with `/personal chat-proxy service:pluralkit` and disable it with
-`service:none`. The mechanism delay is `CHAT_PROXY_WAIT_MS`; only transport authentication and
+Users select the adapter with `/personal message-proxy service:pluralkit` and disable it with
+`service:none`. The mechanism delay is `MESSAGE_PROXY_WAIT_MS`; only transport authentication and
 lookup timing remain under `PLURALKIT_*` variables.
 
 For user-visible behavior and limitations, see [PluralKit Support](/features/integrations/pluralkit-support/).

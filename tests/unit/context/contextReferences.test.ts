@@ -123,7 +123,7 @@ const defaultUser = (): UserRow => ({
   personal_deliberate_tool_mode: "follow",
   personal_server_fallback_enabled: true,
   timezone_offset: null,
-  chat_proxy_service: null,
+  message_proxy_service: null,
 });
 
 describe("context reference discovery", () => {
@@ -335,7 +335,7 @@ describe("context reference discovery", () => {
         simplifiedMessageHistory: [message("<@100>, ask Guild Alias. Bot Alias and User 400 are also named.")],
         personas: [],
         existingParticipantIds: new Set(),
-        chatProxyIdentitySource: { loadIdentities: async () => [] },
+        messageProxyIdentitySource: { loadIdentities: async () => [] },
       });
 
       expect(resolved.referencedUserIds).toEqual(new Set(["200", "100"]));
@@ -352,7 +352,7 @@ describe("context reference discovery", () => {
   });
 });
 
-describe("chat-proxy identity reference discovery", () => {
+describe("message-proxy identity reference discovery", () => {
   const HOST_ID = "700";
   const MEMBER_ID = "pk:11111111-1111-4111-8111-111111111111";
 
@@ -398,7 +398,7 @@ describe("chat-proxy identity reference discovery", () => {
         simplifiedMessageHistory: [message(params.content)],
         personas: [],
         existingParticipantIds: params.existingParticipantIds ?? new Set(),
-        chatProxyIdentitySource: {
+        messageProxyIdentitySource: {
           loadIdentities: async (query) => {
             params.onQuery?.(query);
             return params.identities;

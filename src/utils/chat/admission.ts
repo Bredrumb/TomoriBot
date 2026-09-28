@@ -23,25 +23,25 @@ import { isActiveNaturalStopTurn, selfReplySuppressionUntil } from "@/utils/chat
 import { cleanupTextQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { evaluateAdmissionQueueAndTriggerGate } from "@/utils/chat/admissionQueue";
 import {
-  applyChatProxyReference,
-  createChatProxyExpectation,
-  getChatProxyMessageRecord,
-  getLiveChatProxyExpectationServiceIds,
-  hasLiveChatProxyExpectations,
-  markChatProxyExpectationProxied,
-  rememberChatProxyMessage,
-  waitForChatProxyExpectation,
-  type ChatProxyMessageRecord,
-} from "@/utils/chatProxy/proxyExpectation";
+  applyMessageProxyReference,
+  createMessageProxyExpectation,
+  getMessageProxyMessageRecord,
+  getLiveMessageProxyExpectationServiceIds,
+  hasLiveMessageProxyExpectations,
+  markMessageProxyExpectationProxied,
+  rememberMessageProxyMessage,
+  waitForMessageProxyExpectation,
+  type MessageProxyMessageRecord,
+} from "@/utils/messageProxy/proxyExpectation";
 import {
   getSelfReplyChainOriginUser,
   setSelfReplyChainOriginUser,
   updateSelfReplyChainState,
 } from "@/utils/chat/selfReplyState";
 import type { ChatAdmission, ChatIncoming, NonRunnableChatAdmission, TomoriChatInput } from "@/utils/chat/types";
-import { resolveConfiguredProxyService } from "@/utils/chatProxy/registry";
-import { routeChatProxyMessage } from "@/utils/chatProxy/router";
-import { persistChatProxyAttestationIdentity } from "@/utils/chatProxy/persistence";
+import { resolveConfiguredProxyService } from "@/utils/messageProxy/registry";
+import { routeMessageProxyMessage } from "@/utils/messageProxy/router";
+import { persistMessageProxyAttestationIdentity } from "@/utils/messageProxy/persistence";
 import type { Message } from "discord.js";
 
 /**
@@ -121,9 +121,9 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   const isInteractionResponse = Boolean(message.interaction);
   const isFromClientUser = Boolean(client.user && message.author.id === client.user.id);
   const isMatrixRelay = isMatrixRelayMessage(message);
-  const chatProxyRecord = await resolveChatProxyRecord(message, isWebhookMessage, isMatrixRelay);
-  const isChatProxy = Boolean(chatProxyRecord);
-  const isLikelySelfMessage = !isMatrixRelay && !isChatProxy && (isFromClientUser || isWebhookMessage);
+  const messageProxyRecord = await resolveMessageProxyRecord(message, isWebhookMessage, isMatrixRelay);
+  const isMessageProxy = Boolean(messageProxyRecord);
+  const isLikelySelfMessage = !isMatrixRelay && !isMessageProxy && (isFromClientUser || isWebhookMessage);
   const isRealUserMessage = isRealUserLikeMessage(message);
   const isActiveNaturalStopMessage =
     !incoming.isStopResponse &&
@@ -240,7 +240,7 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   const userDiscId =
     incoming.manualTriggerInvoker?.userDiscId ??
     incoming.systemTriggerIdentity?.userDiscId ??
-    chatProxyRecord?.senderDiscId ??
+    messageProxyRecord?.senderDiscId ??
     chainOriginUserDiscId ??
     authorFallbackDiscId;
   const matrixRelayUserId = isMatrixRelay ? extractBridgeUserId(message.author.username) : undefined;
@@ -301,14 +301,14 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
     }
   }
 
-  const chatProxyOriginalDisposition = await evaluateChatProxyOriginalSpeedbump({
+  const messageProxyOriginalDisposition = await evaluateMessageProxyOriginalSpeedbump({
     incoming,
     userDiscId,
     isRealUserMessage,
     ignored,
   });
-  if (chatProxyOriginalDisposition) {
-    return chatProxyOriginalDisposition;
+  if (messageProxyOriginalDisposition) {
+    return messageProxyOriginalDisposition;
   }
 
   const { earlyTomoriState, earlyAllPersonas } = await loadEarlyTomoriState(channelScope.serverDiscId, channel.id);
@@ -342,7 +342,7 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
     cooldownUserDiscId,
     isActiveNaturalStopMessage,
     isNaturalStopMessage: isNaturalStopMessage(message.content),
-    triggerMessage: chatProxyRecord?.originalMessage,
+    triggerMessage: messageProxyRecord?.originalMessage,
   });
   if (queueDisposition) {
     return queueDisposition;
@@ -365,23 +365,23 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   };
 }
 
-async function resolveChatProxyRecord(
+async function resolveMessageProxyRecord(
   message: Message,
   isWebhookMessage: boolean,
   isMatrixRelay: boolean,
-): Promise<ChatProxyMessageRecord | null> {
-  const knownRecord = getChatProxyMessageRecord(message.id);
+): Promise<MessageProxyMessageRecord | null> {
+  const knownRecord = getMessageProxyMessageRecord(message.id);
   if (knownRecord) {
-    applyChatProxyReference(message);
+    applyMessageProxyReference(message);
     return knownRecord;
   }
 
-  if (!isWebhookMessage || isMatrixRelay || !hasLiveChatProxyExpectations(message.channelId)) {
+  if (!isWebhookMessage || isMatrixRelay || !hasLiveMessageProxyExpectations(message.channelId)) {
     return null;
   }
 
   // Client-owned webhooks (persona replies, user impersonation) can never be
-  // chat-proxy reposts. Skipping them avoids guaranteed transport misses and
+  // message-proxy reposts. Skipping them avoids guaranteed transport misses and
   // stalls in this message's admission for the full retry cap, and extends live
   // speedbump waits. A proxied identity whose display name exactly matches a
   // persona nickname is misclassified as self
@@ -397,35 +397,35 @@ async function resolveChatProxyRecord(
     }
   }
 
-  const route = await routeChatProxyMessage({
+  const route = await routeMessageProxyMessage({
     message,
-    candidateServiceIds: getLiveChatProxyExpectationServiceIds(message.channelId),
+    candidateServiceIds: getLiveMessageProxyExpectationServiceIds(message.channelId),
   });
   if (route.status !== "matched_trigger_only" && route.status !== "matched_stable_identity") {
     return null;
   }
 
-  await persistChatProxyAttestationIdentity({
+  await persistMessageProxyAttestationIdentity({
     messageDiscId: message.id,
     attestation: route.attestation,
     serverDiscId: message.guildId ?? null,
   });
 
-  markChatProxyExpectationProxied(route.expectation);
-  const record = rememberChatProxyMessage({
+  markMessageProxyExpectationProxied(route.expectation);
+  const record = rememberMessageProxyMessage({
     messageDiscId: message.id,
     channelId: message.channelId,
     expectation: route.expectation,
   });
-  applyChatProxyReference(message);
+  applyMessageProxyReference(message);
 
   log.info(
-    `Confirmed ${route.attestation.serviceId} chat-proxy message ${message.id} for original ${route.expectation.originalMessageId} in channel ${message.channelId}`,
+    `Confirmed ${route.attestation.serviceId} message-proxy message ${message.id} for original ${route.expectation.originalMessageId} in channel ${message.channelId}`,
   );
   return record;
 }
 
-async function evaluateChatProxyOriginalSpeedbump(args: {
+async function evaluateMessageProxyOriginalSpeedbump(args: {
   incoming: ChatIncoming;
   userDiscId: string;
   isRealUserMessage: boolean;
@@ -449,12 +449,12 @@ async function evaluateChatProxyOriginalSpeedbump(args: {
   }
 
   const userRow = await getCachedUserRow(userDiscId);
-  const serviceId = resolveConfiguredProxyService(userRow?.chat_proxy_service);
+  const serviceId = resolveConfiguredProxyService(userRow?.message_proxy_service);
   if (!serviceId) {
     return null;
   }
 
-  const expectation = createChatProxyExpectation({
+  const expectation = createMessageProxyExpectation({
     serviceId,
     channelId: message.channelId,
     originalMessageId: message.id,
@@ -462,9 +462,9 @@ async function evaluateChatProxyOriginalSpeedbump(args: {
     originalMessage: message,
     originalReference: message.reference,
   });
-  const waitResult = await waitForChatProxyExpectation(expectation);
+  const waitResult = await waitForMessageProxyExpectation(expectation);
   if (waitResult === "proxied") {
-    return ignored("chat_proxy_proxied");
+    return ignored("message_proxy_proxied");
   }
 
   return null;

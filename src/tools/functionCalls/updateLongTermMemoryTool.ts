@@ -17,8 +17,8 @@ import { buildTextPreview } from "@/utils/text/textPreview";
 import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
 import { personalMemoryRepository, serverMemoryRepository, userRepository } from "@/utils/db/repositories";
 import { resolveTriggererDiscordId, resolveUserTarget } from "@/utils/discord/targetResolver";
-import { isChatProxyIdentityUserId } from "@/utils/chatProxy/identityUserId";
-import { getChatProxyHostProtection } from "@/utils/chatProxy/hostProtection";
+import { isMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserId";
+import { getMessageProxyHostProtection } from "@/utils/messageProxy/hostProtection";
 
 export class UpdateLongTermMemoryTool extends BaseTool {
   name = "update_long_term_memory";
@@ -372,8 +372,8 @@ export class UpdateLongTermMemoryTool extends BaseTool {
 
       const guild = "guild" in context.channel ? context.channel.guild : undefined;
       let guildMember = null;
-      const isChatProxyTarget = isChatProxyIdentityUserId(resolvedTargetUserId as string);
-      if (guild && !isChatProxyTarget) {
+      const isMessageProxyTarget = isMessageProxyIdentityUserId(resolvedTargetUserId as string);
+      if (guild && !isMessageProxyTarget) {
         guildMember =
           guild.members.cache.get(resolvedTargetUserId as string) ||
           (await guild.members.fetch(resolvedTargetUserId as string).catch(() => null));
@@ -420,17 +420,20 @@ export class UpdateLongTermMemoryTool extends BaseTool {
           };
         }
 
-        const chatProxyHostProtection = await getChatProxyHostProtection(resolvedTargetUserId as string, serverDiscId);
-        if (chatProxyHostProtection.protected) {
+        const messageProxyHostProtection = await getMessageProxyHostProtection(
+          resolvedTargetUserId as string,
+          serverDiscId,
+        );
+        if (messageProxyHostProtection.protected) {
           return {
             success: false,
             error: `Cannot update personal memory: ${resolvedTargetUserLabel} has privacy restrictions.`,
             data: {
               status: "memory_update_failed_privacy_restricted",
               reason:
-                chatProxyHostProtection.reason === "host_blacklisted"
-                  ? `The host account for ${resolvedTargetUserLabel} is blacklisted in this server. I cannot update personal memories for its chat-proxy identities.`
-                  : `The host account for ${resolvedTargetUserLabel} has full privacy enabled. I cannot update personal memories for its chat-proxy identities.`,
+                messageProxyHostProtection.reason === "host_blacklisted"
+                  ? `The host account for ${resolvedTargetUserLabel} is blacklisted in this server. I cannot update personal memories for its message-proxy identities.`
+                  : `The host account for ${resolvedTargetUserLabel} has full privacy enabled. I cannot update personal memories for its message-proxy identities.`,
             },
           };
         }
@@ -456,7 +459,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
 
       const isUserBlacklisted = guild
         ? (await userRepository.isBlacklisted(serverDiscId, resolvedTargetUserId as string)) ||
-          (await getChatProxyHostProtection(resolvedTargetUserId as string, serverDiscId)).protected
+          (await getMessageProxyHostProtection(resolvedTargetUserId as string, serverDiscId)).protected
         : false;
       const footerKey = !tomoriState.config.personal_memories_enabled
         ? "genai.self_teach.personal_memory_footer_personalization_disabled"

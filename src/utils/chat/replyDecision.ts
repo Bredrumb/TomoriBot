@@ -12,7 +12,7 @@ import {
   isAutochatConfiguredChannel,
   isAutochatCounterHit,
   isAutochatQualifyingMessage,
-  isChatProxyMessage,
+  isMessageProxyMessage,
   isSelfTriggerMessage,
 } from "@/utils/chat/triggerProcessor";
 import { getSelfReplyChainState } from "@/utils/chat/selfReplyState";
@@ -36,11 +36,11 @@ export function shouldBotReply(
 ): boolean {
   const isSelfMessage = isSelfTriggerMessage(message, allPersonas);
   const isMatrixRelayMessage = Boolean(message.webhookId) && isMatrixBridgeWebhookUsername(message.author.username);
-  const isChatProxy = isChatProxyMessage(message);
+  const isMessageProxy = isMessageProxyMessage(message);
   const rawCascadeLimit = tomoriState.config.cascade_limit ?? DEFAULT_CASCADE_LIMIT;
   const cascadeLimit = Math.min(Math.max(rawCascadeLimit, 0), MAX_CASCADE_LIMIT);
 
-  if (message.webhookId && !isSelfMessage && !isMatrixRelayMessage && !isChatProxy) {
+  if (message.webhookId && !isSelfMessage && !isMatrixRelayMessage && !isMessageProxy) {
     return false;
   }
   if (isSelfMessage && cascadeLimit <= 0) {
@@ -54,7 +54,7 @@ export function shouldBotReply(
   const isVoiceChannel =
     message.channel.type === ChannelType.GuildVoice || message.channel.type === ChannelType.GuildStageVoice;
   if (
-    (message.author.bot && (!isSelfMessage || cascadeLimit <= 0) && !isMatrixRelayMessage && !isChatProxy) ||
+    (message.author.bot && (!isSelfMessage || cascadeLimit <= 0) && !isMatrixRelayMessage && !isMessageProxy) ||
     message.content.startsWith("!") ||
     !(
       message.channel instanceof TextChannel ||
@@ -99,7 +99,7 @@ export function shouldBotReply(
       isReplyToBot = true;
       isReplyToPersona = true;
       replyPersonaTarget = mainPersona ?? null;
-    } else if (referenceMessage?.webhookId && !isChatProxyMessage(referenceMessage)) {
+    } else if (referenceMessage?.webhookId && !isMessageProxyMessage(referenceMessage)) {
       const webhookReplyTarget = resolveReferencedWebhookTarget(referenceMessage, personaByNickname, message.guild);
       if (webhookReplyTarget.replyPersona) {
         isReplyToPersona = true;
@@ -115,7 +115,7 @@ export function shouldBotReply(
   const isBotMentioned = message.client.user ? message.mentions.users.has(message.client.user.id) : false;
 
   let senderPersona: TomoriState | undefined;
-  if (message.webhookId && !isChatProxy) {
+  if (message.webhookId && !isMessageProxy) {
     const webhookName = message.author.username;
     senderPersona =
       resolveRenderModifierSourcePersona(webhookName, personaByNickname)?.persona ??

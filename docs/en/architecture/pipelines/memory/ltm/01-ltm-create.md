@@ -99,16 +99,16 @@ After a successful write:
 |---|---|---|
 | `target_user` resolves to the bot itself | `server_wide` | Bot can't have personal memories about itself |
 | `target_user` is a Matrix bridge user | `server_wide` | Bridge users are not stored in `users` table with full identity |
-| `target_user` is a stable chat-proxy identity | `target_user` (**no fallback**) | Stable identities have synthetic `users` rows, so `resolveUserTarget()` and the memory path remain service-neutral. |
+| `target_user` is a stable message-proxy identity | `target_user` (**no fallback**) | Stable identities have synthetic `users` rows, so `resolveUserTarget()` and the memory path remain service-neutral. |
 | `target_user` has `PrivacyLevel.PARTIAL/FULL` | Error (no fallback) | Privacy restriction; user must change setting |
 
 Authorization also checks a proxy identity's **host** Discord account for `PrivacyLevel.FULL` and
-blacklist shielding through `getChatProxyHostProtection()`. See
-[Chat-Proxy Integration](../../../integrations/chat-proxy#persistence).
+blacklist shielding through `getMessageProxyHostProtection()`. See
+[Message-Proxy Integration](../../../integrations/message-proxy#persistence).
 
 ### One-time proxy identity bio seed
 
-`src/utils/chatProxy/bioSeeding.ts` writes through `personalMemoryRepository.add()` rather than the
+`src/utils/messageProxy/bioSeeding.ts` writes through `personalMemoryRepository.add()` rather than the
 tool. A stable adapter may supply a public bio when an identity is first registered. The write uses
 `persona_lineage_id = 0`, runs without delaying admission, invalidates cache only after success, and
 is blocked by host privacy or blacklist state. PluralKit's member bio is a one-time snapshot; see the

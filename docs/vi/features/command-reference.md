@@ -225,7 +225,7 @@ Quản lý cài đặt cá nhân của bạn
 
 | Lệnh | Tóm tắt |
 |---|---|
-| `/personal chat-proxy` | Choose a supported chat proxy service for your account. |
+| `/personal message-proxy` | Choose a supported message proxy service for your account. |
 | `/personal config` | Quản lý tùy chọn cá nhân, quyền riêng tư, model và hồ sơ. |
 | `/personal language` | Chọn ngôn ngữ TomoriBot dùng để nói chuyện với bạn. |
 | `/personal memories` | Quản lý bộ nhớ dài hạn cá nhân và ngữ cảnh hội thoại ngắn hạn. |

@@ -67,8 +67,8 @@ the command payload remains intact.
 - **Persona-job mutation**: if the message is a likely-self message and not
   manually triggered, sets `incoming.isPersonaJob = true` so downstream stages
   can distinguish persona-driven self-replies from user messages.
-- **Chat-proxy speedbump**: for users with a registered `users.chat_proxy_service`, normal guild
-  messages create a service-scoped expectation and wait up to `CHAT_PROXY_WAIT_MS`. A matching
+- **Message-proxy speedbump**: for users with a registered `users.message_proxy_service`, normal guild
+  messages create a service-scoped expectation and wait up to `MESSAGE_PROXY_WAIT_MS`. A matching
   `messageDelete` suppresses the original. The router asks each distinct candidate adapter once and
   admits only an exact service/original/sender attestation. Stable identities persist atomically;
   correlated identity-free reposts write no identity state. Privacy, cooldown, quota, and access
@@ -153,8 +153,8 @@ Extensibility lives in the helpers it calls:
 | Helper | File | What it does | Plugin-relevance |
 |---|---|---|---|
 | `isMatrixRelayMessage`, `isRealUserLikeMessage` | `triggerProcessor.ts` | Trigger-source classification | A new bridge plugin would extend trigger detection here |
-| `createChatProxyExpectation`, `beginChatProxyLookup` | `chatProxy/proxyExpectation.ts` | Service-scoped original/repost matching and wait lifecycle | Internal, coupled to Discord delete/repost ordering |
-| `routeChatProxyMessage` | `chatProxy/router.ts` | Concurrent candidate dispatch and unique exact-claim enforcement | Services extend the registry and adapter contract |
+| `createMessageProxyExpectation`, `beginMessageProxyLookup` | `messageProxy/proxyExpectation.ts` | Service-scoped original/repost matching and wait lifecycle | Internal, coupled to Discord delete/repost ordering |
+| `routeMessageProxyMessage` | `messageProxy/router.ts` | Concurrent candidate dispatch and unique exact-claim enforcement | Services extend the registry and adapter contract |
 | `transcribeMessageAudioAttachment` | `audioAttachmentTranscription.ts` | STT dispatch | STT providers register via `customEndpointService`: existing mechanism, not chat-specific |
 | `evaluateAdmissionQueueAndTriggerGate` | `admissionQueue.ts` | Channel-busy + trigger gate decision tree; includes cross-persona and manual-command guards that bypass follow-up replacement when the incoming message explicitly targets a different persona or represents command-owned work | → plugin plan candidate if plugins want to add admission policies |
 | `getSelfReplyChainOriginUser`, `updateSelfReplyChainState` | `selfReplyState.ts` | Self-reply chain memory | Internal: tightly coupled to cascade-trigger limit semantics |

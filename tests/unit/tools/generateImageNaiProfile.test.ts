@@ -21,7 +21,7 @@ function createUserRow(): UserRow {
     personal_deliberate_tool_mode: "follow",
     personal_server_fallback_enabled: true,
     timezone_offset: null,
-    chat_proxy_service: null,
+    message_proxy_service: null,
   };
 }
 

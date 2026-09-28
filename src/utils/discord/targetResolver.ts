@@ -5,7 +5,7 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import { userNamingRepository, userRepository } from "@/utils/db/repositories";
 import { resolveEffectiveUserNaming } from "@/utils/text/userNaming";
 import { isBridgeUserId } from "@/utils/bridges";
-import { isChatProxyIdentityUserId } from "@/utils/chatProxy/identityUserId";
+import { isMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserId";
 import { normalizeParticipantAlias } from "@/utils/text/participants/aliases";
 import {
   collectParticipantTargetIndex,
@@ -412,7 +412,7 @@ function resolveGuildMemberStage(
  * permission check on the triggerer rather than on a named target.
  *
  * `context.userId` is the identity admission already resolved through the
- * Chat-proxy, Matrix relay, manual-trigger, and self-reply-chain paths, so
+ * Message-proxy, Matrix relay, manual-trigger, and self-reply-chain paths, so
  * it outranks the message author. The author is a fallback for tool contexts
  * built outside a chat turn, and never used for a webhook message: a proxied
  * turn authors as the webhook, whose snowflake matches no user row.
@@ -613,13 +613,13 @@ export async function resolveUserTarget(input: string, context: ToolContext): Pr
     }
   }
 
-  if (isChatProxyIdentityUserId(rawInput)) {
-    const chatProxyReference = conversationReferences.find((reference) => reference.targetId === rawInput);
-    if (chatProxyReference) {
+  if (isMessageProxyIdentityUserId(rawInput)) {
+    const messageProxyReference = conversationReferences.find((reference) => reference.targetId === rawInput);
+    if (messageProxyReference) {
       return {
         status: "resolved",
-        targetId: chatProxyReference.targetId,
-        displayLabel: chatProxyReference.displayLabel,
+        targetId: messageProxyReference.targetId,
+        displayLabel: messageProxyReference.displayLabel,
         isBridgeUser: false,
         source: "legacy_id",
       };

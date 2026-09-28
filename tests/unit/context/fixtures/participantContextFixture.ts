@@ -9,7 +9,7 @@ import type {
 } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
-import { chatProxyRepository } from "@/utils/db/repositories/ChatProxyRepository";
+import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
 import {
   personalMemoryRepository,
   serverScheduleRepository,
@@ -105,7 +105,7 @@ function createUserRow(id: number, discordId: string, nickname: string): UserRow
     personal_deliberate_tool_mode: "follow",
     personal_server_fallback_enabled: true,
     timezone_offset: null,
-    chat_proxy_service: null,
+    message_proxy_service: null,
   };
 }
 
@@ -299,12 +299,12 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
     loadNamingPreferences: userNamingRepository.loadPreferences,
     loadForUserLineage: personalMemoryRepository.loadForUserLineage,
     getPendingRemindersForUser: serverScheduleRepository.getPendingRemindersForUser,
-    loadContextReferenceIdentities: chatProxyRepository.loadContextReferenceIdentities,
+    loadContextReferenceIdentities: messageProxyRepository.loadContextReferenceIdentities,
   };
 
   // Reference resolution always checks stable proxy identities, so the fixture
   // isolates that read from the live database even when it returns no rows.
-  chatProxyRepository.loadContextReferenceIdentities = async () => [];
+  messageProxyRepository.loadContextReferenceIdentities = async () => [];
 
   userRepository.loadByDiscordId = async (discordId) => {
     counters.userRowLoads += 1;
@@ -404,7 +404,7 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
       userNamingRepository.loadPreferences = originals.loadNamingPreferences;
       personalMemoryRepository.loadForUserLineage = originals.loadForUserLineage;
       serverScheduleRepository.getPendingRemindersForUser = originals.getPendingRemindersForUser;
-      chatProxyRepository.loadContextReferenceIdentities = originals.loadContextReferenceIdentities;
+      messageProxyRepository.loadContextReferenceIdentities = originals.loadContextReferenceIdentities;
     },
   };
 }

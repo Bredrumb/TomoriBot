@@ -39,7 +39,7 @@ export type ParticipantAliasSource =
   | "persona_trigger"
   | "bridge_display_name"
   | "webhook_display_name"
-  | "chat_proxy_display_name";
+  | "message_proxy_display_name";
 
 export interface ParticipantAlias {
   owner: ParticipantKey;

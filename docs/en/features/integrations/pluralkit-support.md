@@ -19,14 +19,14 @@ deletes, and she treats each system member as a person with their own name,
 identity, and personal memories instead of grouping everyone under the shared
 Discord account. This page is the user's side of the feature. For the internals, see the
 [PluralKit adapter architecture](/architecture/integrations/pluralkit/). The shared safety model is
-covered in [Chat-Proxy Support](/features/integrations/chat-proxy-support/).
+covered in [Message-Proxy Support](/features/integrations/message-proxy-support/).
 
 ## Enabling It
 
-Run `/personal chat-proxy service:pluralkit`. It's a personal, per-account selection, so there is
+Run `/personal message-proxy service:pluralkit`. It's a personal, per-account selection, so there is
 nothing for server staff to configure and it follows you across servers. Members of your system
 don't opt in individually; the selection lives on the Discord account that sends the messages.
-Use `/personal chat-proxy service:none` to disable it.
+Use `/personal message-proxy service:none` to disable it.
 
 If you don't use PluralKit, leave this off. Every message you send would pay a small delay
 for no benefit (see below).
@@ -38,7 +38,7 @@ for no benefit (see below).
   the proxy, and responds to the webhook repost, including proxied *replies* to her
   messages, which normally lose their reply linkage in the proxy process.
 - **A short pause on your messages.** Tomori waits about **2 seconds** (self-hosters can
-  tune `CHAT_PROXY_WAIT_MS`) to see whether PluralKit deletes and reposts your message.
+  tune `MESSAGE_PROXY_WAIT_MS`) to see whether PluralKit deletes and reposts your message.
   Proxied messages usually resolve faster than that; unproxied messages simply arrive that
   little bit late. This is the tradeoff you accept by opting in, and the command's
   confirmation reply spells it out.

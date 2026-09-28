@@ -6,7 +6,7 @@
  */
 
 import type { Embed } from "discord.js";
-import { isChatProxyReplyEmbed } from "@/utils/chatProxy/registry";
+import { isMessageProxyReplyEmbed } from "@/utils/messageProxy/registry";
 
 import {
   classifyProtocolEmbed,
@@ -66,9 +66,9 @@ export function processLinkEmbed(embed: Embed): LinkPreviewResult {
     return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };
   }
 
-  // A chat-proxy reply embed restates a reference the pipeline already annotates
+  // A message-proxy reply embed restates a reference the pipeline already annotates
   // from the pre-proxy original, so rendering it would duplicate the notice.
-  if (isChatProxyReplyEmbed(embed)) {
+  if (isMessageProxyReplyEmbed(embed)) {
     return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };
   }
 

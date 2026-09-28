@@ -3,7 +3,7 @@ import { getCurrentTimeWithOffset, formatUTCOffset, getTimeOfDayPhrase } from "@
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { AssembledServerConfig, TomoriState, UserRow } from "@/types/db/schema";
 import type { MentionConverter } from "./templates";
-import type { ChatProxyConversationUser, PublicPersonaProfile } from "./types";
+import type { MessageProxyConversationUser, PublicPersonaProfile } from "./types";
 import { serializeParticipantKey, type ParticipantSeed } from "@/utils/text/participants/identity";
 import { hydrateParticipantProfiles } from "@/utils/text/participants/hydration";
 import { renderParticipantPrompt } from "@/utils/text/participants/renderer";
@@ -28,7 +28,7 @@ export async function buildParticipantContextItem(params: {
   impersonatedIdentityName: string | null;
   matrixUsers?: ReadonlyMap<string, string>;
   syntheticUsers?: ReadonlyMap<string, { displayName: string; type: "persona" | "webhook" }>;
-  chatProxyUsers?: ReadonlyMap<string, ChatProxyConversationUser>;
+  messageProxyUsers?: ReadonlyMap<string, MessageProxyConversationUser>;
   publicPersonaProfiles?: readonly PublicPersonaProfile[];
   preloadedReferencedUserRows?: ReadonlyMap<string, UserRow>;
   referencedUserIds?: ReadonlySet<string>;
@@ -71,7 +71,7 @@ export async function buildParticipantContextItem(params: {
     impersonatedIdentityName: params.impersonatedIdentityName,
     matrixUsers: params.matrixUsers,
     syntheticUsers: params.syntheticUsers,
-    chatProxyUsers: params.chatProxyUsers,
+    messageProxyUsers: params.messageProxyUsers,
     publicPersonaProfiles: params.publicPersonaProfiles,
     preloadedReferencedUserRows: params.preloadedReferencedUserRows,
     referencedUserIds: params.referencedUserIds,
@@ -86,7 +86,7 @@ export async function buildParticipantContextItem(params: {
   const rendered = renderParticipantPrompt({
     profiles: hydrated.profiles,
     personaTaskLines: hydrated.personaTaskLines,
-    chatProxyNamespaces: hydrated.chatProxyNamespaces,
+    messageProxyNamespaces: hydrated.messageProxyNamespaces,
     isUserImpersonation: params.isUserImpersonation,
     botName: params.botName,
     isDMChannel: params.isDMChannel,

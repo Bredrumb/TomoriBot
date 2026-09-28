@@ -43,7 +43,7 @@ Pages are bucketed into task-based sub-categories, each with a landing card-grid
   - [`age-restricted-commands.md`](./en/features/setup-administration/age-restricted-commands/)
   - [`stats-and-insights.md`](./en/features/setup-administration/stats-and-insights/)
 - **Integrations**: [`integrations/`](./en/features/integrations/README.mdx)
-  - [`chat-proxy-support.md`](./en/features/integrations/chat-proxy-support/)
+  - [`message-proxy-support.md`](./en/features/integrations/message-proxy-support/)
   - [`pluralkit-support.md`](./en/features/integrations/pluralkit-support/)
   - [`matrix-bridge.md`](./en/features/integrations/matrix-bridge/)
   - [`sillytavern-support.md`](./en/features/integrations/sillytavern-support/)
@@ -137,7 +137,7 @@ Supporting services that pipelines depend on.
 
 - [`architecture/integrations/`](./en/architecture/integrations/README.md): Discord platform, Matrix bridge,
   NovelAI, SillyTavern, and voice pipeline internals
-- [`architecture/integrations/chat-proxy.md`](./en/architecture/integrations/chat-proxy/): proxy routing and identity contract
+- [`architecture/integrations/message-proxy.md`](./en/architecture/integrations/message-proxy/): proxy routing and identity contract
 - [`architecture/integrations/pluralkit.md`](./en/architecture/integrations/pluralkit/): PluralKit adapter behavior
 
 ### Cloud

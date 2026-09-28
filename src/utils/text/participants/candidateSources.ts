@@ -1,8 +1,8 @@
 import type { Client } from "discord.js";
 import type { ContextReferenceCandidate } from "@/utils/db/repositories/UserRepository";
 import { userRepository } from "@/utils/db/repositories";
-import type { ChatProxyIdentityReference } from "@/utils/chatProxy/types";
-import { chatProxyRepository } from "@/utils/db/repositories/ChatProxyRepository";
+import type { MessageProxyIdentityReference } from "@/utils/messageProxy/types";
+import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
 
 interface UserReferenceCandidateQuery {
   serverDiscId: string;
@@ -14,13 +14,13 @@ export interface UserReferenceCandidateSource {
   loadCandidates(query: UserReferenceCandidateQuery): Promise<readonly ContextReferenceCandidate[]>;
 }
 
-interface ChatProxyIdentityReferenceQuery {
+interface MessageProxyIdentityReferenceQuery {
   hostUserDiscIds: readonly string[];
   normalizedHistoryText: string;
 }
 
-export interface ChatProxyIdentityReferenceSource {
-  loadIdentities(query: ChatProxyIdentityReferenceQuery): Promise<readonly ChatProxyIdentityReference[]>;
+export interface MessageProxyIdentityReferenceSource {
+  loadIdentities(query: MessageProxyIdentityReferenceQuery): Promise<readonly MessageProxyIdentityReference[]>;
 }
 
 interface ReferenceMemberIdentity {
@@ -46,9 +46,9 @@ export const repositoryUserReferenceCandidateSource: UserReferenceCandidateSourc
     }),
 };
 
-export const repositoryChatProxyIdentityReferenceSource: ChatProxyIdentityReferenceSource = {
+export const repositoryMessageProxyIdentityReferenceSource: MessageProxyIdentityReferenceSource = {
   loadIdentities: (query) =>
-    chatProxyRepository.loadContextReferenceIdentities({
+    messageProxyRepository.loadContextReferenceIdentities({
       hostUserDiscIds: [...query.hostUserDiscIds],
       normalizedHistoryText: query.normalizedHistoryText,
     }),

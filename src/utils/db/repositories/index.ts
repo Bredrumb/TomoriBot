@@ -12,7 +12,7 @@ import { personalMemoryRepository } from "./PersonalMemoryRepository";
 import { personaUserBlockRepository } from "./PersonaUserBlockRepository";
 import { personaSpriteRepository } from "./PersonaSpriteRepository";
 import { personaRepository } from "./PersonaRepository";
-import { chatProxyRepository } from "./ChatProxyRepository";
+import { messageProxyRepository } from "./MessageProxyRepository";
 import { presetRepository } from "./PresetRepository";
 import { ragRepository } from "./RagRepository";
 import { serverMemoryRepository } from "./ServerMemoryRepository";
@@ -39,7 +39,7 @@ export {
   personaUserBlockRepository,
   personaSpriteRepository,
   personaRepository,
-  chatProxyRepository,
+  messageProxyRepository,
   presetRepository,
   ragRepository,
   serverMemoryRepository,

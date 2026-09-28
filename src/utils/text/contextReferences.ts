@@ -2,13 +2,13 @@ import type { Client } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { isEligibleContextReferenceUserV1 } from "@/utils/db/repositories/UserRepository";
 import type { PublicPersonaProfile, SimplifiedMessageForContext } from "@/utils/text/context/types";
-import { buildDiscordUserAliases, buildChatProxyIdentityAliases } from "@/utils/text/participants/aliases";
+import { buildDiscordUserAliases, buildMessageProxyIdentityAliases } from "@/utils/text/participants/aliases";
 import {
   createDiscordParticipantMemberDirectory,
-  repositoryChatProxyIdentityReferenceSource,
+  repositoryMessageProxyIdentityReferenceSource,
   repositoryUserReferenceCandidateSource,
   type ParticipantMemberDirectory,
-  type ChatProxyIdentityReferenceSource,
+  type MessageProxyIdentityReferenceSource,
   type UserReferenceCandidateSource,
 } from "@/utils/text/participants/candidateSources";
 import {
@@ -18,7 +18,7 @@ import {
   type ParticipantDiscoveryPlan,
   type ParticipantDiscoveryRejection,
 } from "@/utils/text/participants/discoveryPlan";
-import { isChatProxyIdentityUserId } from "@/utils/chatProxy/identityUserId";
+import { isMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserId";
 import {
   discoverReferencedPersonaIds,
   extractRealDiscordMentionIds,
@@ -95,7 +95,7 @@ export async function resolveContextReferences(params: {
   existingPersonaIds?: ReadonlySet<number>;
   responderPersonaIds?: ReadonlySet<number>;
   candidateSource?: UserReferenceCandidateSource;
-  chatProxyIdentitySource?: ChatProxyIdentityReferenceSource;
+  messageProxyIdentitySource?: MessageProxyIdentityReferenceSource;
   memberDirectory?: ParticipantMemberDirectory | null;
 }): Promise<ResolvedContextReferences> {
   const historyText = params.simplifiedMessageHistory
@@ -166,7 +166,7 @@ export async function resolveContextReferences(params: {
   // synthetic identifier from reaching guild.members.fetch(), which would
   // spend a REST call to earn an Unknown Member error and a bogus non_member rejection.
   const uniqueEligibleRows = [...new Map(eligibleRows.map((row) => [row.user_disc_id, row])).values()].filter(
-    (row) => !isChatProxyIdentityUserId(row.user_disc_id),
+    (row) => !isMessageProxyIdentityUserId(row.user_disc_id),
   );
 
   const eligibleMembers = (
@@ -190,8 +190,8 @@ export async function resolveContextReferences(params: {
   // It gets its own lookup but shares the alias resolver below, so identities
   // and humans answering to the same
   // name must collide with each other, not each win inside their own lane.
-  const chatProxyReferences = await (
-    params.chatProxyIdentitySource ?? repositoryChatProxyIdentityReferenceSource
+  const messageProxyReferences = await (
+    params.messageProxyIdentitySource ?? repositoryMessageProxyIdentityReferenceSource
   ).loadIdentities({
     hostUserDiscIds: [...candidateDiscordIds],
     normalizedHistoryText: historyText,
@@ -211,8 +211,8 @@ export async function resolveContextReferences(params: {
         exposeSavedNickname: false,
       }),
     ),
-    ...chatProxyReferences.flatMap((reference) =>
-      buildChatProxyIdentityAliases({
+    ...messageProxyReferences.flatMap((reference) =>
+      buildMessageProxyIdentityAliases({
         owner: createDiscordUserKey(reference.userDiscId),
         displayName: reference.displayName,
         savedNickname: reference.savedNickname,
@@ -266,7 +266,7 @@ export async function resolveContextReferences(params: {
       },
     ];
   });
-  const chatProxyCandidates: DiscoveredParticipantCandidate[] = chatProxyReferences.flatMap((reference) => {
+  const messageProxyCandidates: DiscoveredParticipantCandidate[] = messageProxyReferences.flatMap((reference) => {
     const reasons = referencedUserReasons.get(reference.userDiscId);
     if (!reasons) return [];
     const displayName = reference.displayName ?? reference.savedNickname;
@@ -285,13 +285,13 @@ export async function resolveContextReferences(params: {
     ];
   });
   const discoveryPlan = buildParticipantDiscoveryPlan({
-    candidates: [...userCandidates, ...chatProxyCandidates, ...personaCandidates],
+    candidates: [...userCandidates, ...messageProxyCandidates, ...personaCandidates],
     rejections,
     aliasReferenceDiagnostics: aliasResolution.diagnostics,
   });
 
   return {
-    candidateCount: personaCandidates.length + loadedCandidates.length + chatProxyReferences.length,
+    candidateCount: personaCandidates.length + loadedCandidates.length + messageProxyReferences.length,
     referencedUserIds,
     referencedUserRows,
     referencedUserReasons,

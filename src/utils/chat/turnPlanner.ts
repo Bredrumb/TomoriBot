@@ -39,7 +39,7 @@ import {
   isAutochatOverrideChannel,
   isAutochatQualifyingMessage,
   isMatrixRelayMessage,
-  isChatProxyMessage,
+  isMessageProxyMessage,
   isSelfTriggerMessage,
 } from "@/utils/chat/triggerProcessor";
 import { getLastRespondedPersonaId, getSelfReplyChainState } from "@/utils/chat/selfReplyState";
@@ -102,13 +102,13 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
   admission.allPersonas = allPersonas;
 
   const isSelfMessage = isSelfTriggerMessage(message, allPersonas);
-  const isChatProxy = isChatProxyMessage(message);
+  const isMessageProxy = isMessageProxyMessage(message);
   if (
     (message.author.bot || message.webhookId) &&
     !isSelfMessage &&
     !incoming.isManuallyTriggered &&
     !isMatrixRelayMessage(message) &&
-    !isChatProxy
+    !isMessageProxy
   ) {
     return { lockedTurn, turns: [] };
   }
@@ -502,7 +502,7 @@ async function updateAutochatCounter(message: Message, tomoriState: TomoriState,
 }
 
 function isRealUserMessage(message: Message): boolean {
-  return (!message.author.bot && !message.webhookId) || isMatrixRelayMessage(message) || isChatProxyMessage(message);
+  return (!message.author.bot && !message.webhookId) || isMatrixRelayMessage(message) || isMessageProxyMessage(message);
 }
 
 function getMatchLimit(tomoriState: TomoriState): number {

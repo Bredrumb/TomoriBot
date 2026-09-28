@@ -117,7 +117,7 @@ class UserRepository implements IRepository<UserExportShape> {
             u.language_pref,
             u.registration_locale,
             u.privacy_level,
-            u.chat_proxy_service,
+            u.message_proxy_service,
             COALESCE(upc.personal_deliberate_tool_mode, 'follow') AS personal_deliberate_tool_mode,
             upc.timezone_offset,
             upc.prefix_override,
@@ -173,7 +173,7 @@ class UserRepository implements IRepository<UserExportShape> {
               u.language_pref,
               u.registration_locale,
               u.privacy_level,
-              u.chat_proxy_service,
+              u.message_proxy_service,
               COALESCE(upc.personal_deliberate_tool_mode, 'follow') AS personal_deliberate_tool_mode,
               upc.timezone_offset,
               upc.prefix_override,
@@ -580,8 +580,8 @@ class UserRepository implements IRepository<UserExportShape> {
     return updated !== null;
   }
 
-  async setChatProxyService(userId: number, serviceId: string | null): Promise<boolean> {
-    const updated = await this.update(userId, { chat_proxy_service: serviceId });
+  async setMessageProxyService(userId: number, serviceId: string | null): Promise<boolean> {
+    const updated = await this.update(userId, { message_proxy_service: serviceId });
     return updated !== null;
   }
 

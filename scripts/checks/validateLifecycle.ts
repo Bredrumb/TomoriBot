@@ -65,24 +65,24 @@ const requiredTables = [
   "st_presets",
   "st_preset_nodes",
   "external_identities",
-  "chat_proxy_namespaces",
-  "chat_proxy_identities",
-  "chat_proxy_namespace_accounts",
-  "chat_proxy_message_index",
+  "message_proxy_namespaces",
+  "message_proxy_identities",
+  "message_proxy_namespace_accounts",
+  "message_proxy_message_index",
 ] as const;
 
-const chatProxyTables = [
+const messageProxyTables = [
   "external_identities",
-  "chat_proxy_namespaces",
-  "chat_proxy_identities",
-  "chat_proxy_namespace_accounts",
-  "chat_proxy_message_index",
+  "message_proxy_namespaces",
+  "message_proxy_identities",
+  "message_proxy_namespace_accounts",
+  "message_proxy_message_index",
 ] as const;
 
-const chatProxyIndexes = [
-  "idx_chat_proxy_identities_namespace",
-  "idx_chat_proxy_namespace_accounts_host",
-  "idx_chat_proxy_message_index_created",
+const messageProxyIndexes = [
+  "idx_message_proxy_identities_namespace",
+  "idx_message_proxy_namespace_accounts_host",
+  "idx_message_proxy_message_index_created",
 ] as const;
 
 const seedChecks: SeedCheck[] = [
@@ -201,22 +201,22 @@ async function assertStartupFunctionsExist(client: SQL): Promise<void> {
   }
 }
 
-async function assertChatProxyMigrationPresent(client: SQL): Promise<void> {
-  for (const table of chatProxyTables) {
+async function assertMessageProxyMigrationPresent(client: SQL): Promise<void> {
+  for (const table of messageProxyTables) {
     const [row] = await client<ExistsRow[]>`
       SELECT to_regclass(${`public.${table}`}) IS NOT NULL AS exists
     `;
     if (!row?.exists) {
-      throw new Error(`Chat-proxy migration is missing table ${table}.`);
+      throw new Error(`Message-proxy migration is missing table ${table}.`);
     }
   }
 
-  for (const index of chatProxyIndexes) {
+  for (const index of messageProxyIndexes) {
     const [row] = await client<ExistsRow[]>`
       SELECT to_regclass(${`public.${index}`}) IS NOT NULL AS exists
     `;
     if (!row?.exists) {
-      throw new Error(`Chat-proxy migration is missing index ${index}.`);
+      throw new Error(`Message-proxy migration is missing index ${index}.`);
     }
   }
 
@@ -225,10 +225,10 @@ async function assertChatProxyMigrationPresent(client: SQL): Promise<void> {
     FROM information_schema.columns
     WHERE table_schema = 'public'
       AND table_name = 'users'
-      AND column_name = 'chat_proxy_service'
+      AND column_name = 'message_proxy_service'
   `;
   if (serviceColumn?.data_type !== "text" || serviceColumn.is_nullable !== "YES") {
-    throw new Error("users.chat_proxy_service must be nullable TEXT.");
+    throw new Error("users.message_proxy_service must be nullable TEXT.");
   }
 
   const [constraintCount] = await client<CountRow[]>`
@@ -238,18 +238,18 @@ async function assertChatProxyMigrationPresent(client: SQL): Promise<void> {
       'external_identities_user_id_key',
       'external_identities_kind_external_key_key',
       'external_identities_user_id_fkey',
-      'chat_proxy_namespaces_service_id_namespace_key_key',
-      'chat_proxy_identities_external_identity_id_key',
-      'chat_proxy_identities_chat_proxy_namespace_id_fkey',
-      'chat_proxy_identities_external_identity_id_fkey',
-      'chat_proxy_namespace_accounts_pkey',
-      'chat_proxy_namespace_accounts_chat_proxy_namespace_id_fkey',
-      'chat_proxy_message_index_pkey',
-      'chat_proxy_message_index_external_identity_id_fkey'
+      'message_proxy_namespaces_service_id_namespace_key_key',
+      'message_proxy_identities_external_identity_id_key',
+      'message_proxy_identities_message_proxy_namespace_id_fkey',
+      'message_proxy_identities_external_identity_id_fkey',
+      'message_proxy_namespace_accounts_pkey',
+      'message_proxy_namespace_accounts_message_proxy_namespace_id_fkey',
+      'message_proxy_message_index_pkey',
+      'message_proxy_message_index_external_identity_id_fkey'
     )
   `;
   if (Number(constraintCount?.count ?? 0) !== 11) {
-    throw new Error("Chat-proxy migration is missing required unique, primary-key, or foreign-key constraints.");
+    throw new Error("Message-proxy migration is missing required unique, primary-key, or foreign-key constraints.");
   }
 
   const migrationRows = await client<{ name: string }[]>`
@@ -262,7 +262,7 @@ async function assertChatProxyMigrationPresent(client: SQL): Promise<void> {
        OR name LIKE '060\_%' ESCAPE '\\'
   `;
   const names = new Set(migrationRows.map(({ name }) => name));
-  if (!names.has("056_chat_proxy_identity") || !names.has("058_personal_fallback_chain")) {
+  if (!names.has("056_message_proxy_identity") || !names.has("058_personal_fallback_chain")) {
     throw new Error("Expected migrations 056 and 058 were not applied.");
   }
   if (!names.has("060_personal_capability_assignment")) {
@@ -273,13 +273,13 @@ async function assertChatProxyMigrationPresent(client: SQL): Promise<void> {
   }
 }
 
-async function assertChatProxyMigrationAbsent(client: SQL): Promise<void> {
-  for (const table of chatProxyTables) {
+async function assertMessageProxyMigrationAbsent(client: SQL): Promise<void> {
+  for (const table of messageProxyTables) {
     const [row] = await client<ExistsRow[]>`
       SELECT to_regclass(${`public.${table}`}) IS NOT NULL AS exists
     `;
     if (row?.exists) {
-      throw new Error(`Chat-proxy rollback left table ${table} behind.`);
+      throw new Error(`Message-proxy rollback left table ${table} behind.`);
     }
   }
 
@@ -289,11 +289,11 @@ async function assertChatProxyMigrationAbsent(client: SQL): Promise<void> {
       FROM information_schema.columns
       WHERE table_schema = 'public'
         AND table_name = 'users'
-        AND column_name = 'chat_proxy_service'
+        AND column_name = 'message_proxy_service'
     ) AS exists
   `;
   if (serviceColumn?.exists) {
-    throw new Error("Chat-proxy rollback left users.chat_proxy_service behind.");
+    throw new Error("Message-proxy rollback left users.message_proxy_service behind.");
   }
 }
 
@@ -409,7 +409,7 @@ async function validateFreshInitialization(client: SQL): Promise<void> {
   await assertRequiredTablesExist(client);
   await assertSeedDataExists(client);
   await assertStartupFunctionsExist(client);
-  await assertChatProxyMigrationPresent(client);
+  await assertMessageProxyMigrationPresent(client);
 }
 
 async function main(): Promise<void> {
@@ -436,17 +436,17 @@ async function main(): Promise<void> {
 
     const commandEnv = buildCommandEnv(validationUrl, baseUrl);
 
-    section("Validating Chat-Proxy Migration Down And Re-Up");
+    section("Validating Message-Proxy Migration Down And Re-Up");
     await appSql.close({ timeout: 1 });
     appSql = null;
     await runCommand("bun run migrate:down 056 --yes", ["bun", "run", "migrate:down", "056", "--yes"], commandEnv);
     appSql = createScriptSqlClient(validationUrl);
-    await assertChatProxyMigrationAbsent(appSql);
+    await assertMessageProxyMigrationAbsent(appSql);
     await appSql.close({ timeout: 1 });
     appSql = null;
     await runCommand("bun run migrate", ["bun", "run", "migrate"], commandEnv);
     appSql = createScriptSqlClient(validationUrl);
-    await assertChatProxyMigrationPresent(appSql);
+    await assertMessageProxyMigrationPresent(appSql);
 
     section("Validating Maintenance Scripts");
     await runCommand("bun run backup", ["bun", "run", "backup"], commandEnv);

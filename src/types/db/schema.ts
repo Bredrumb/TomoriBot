@@ -53,7 +53,7 @@ export const userSchema = z.object({
   personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).default("follow"), // Added May 2026 - User-scoped deliberate tool mode tri-state
   personal_server_fallback_enabled: z.boolean().default(true), // Whether a failed personal text route may fall back to the server's model
   timezone_offset: z.number().int().min(-12).max(14).nullable().optional(), // Added June 2026 - Personal UTC offset; NULL = not set / opt-out
-  chat_proxy_service: z.string().nullable().default(null),
+  message_proxy_service: z.string().nullable().default(null),
   prefix_override: z.string().nullable().optional(),
   suffix_override: z.string().nullable().optional(),
   gender_identity: z.string().nullable().optional(),
@@ -196,8 +196,8 @@ export const externalIdentitySchema = z.object({
 });
 export type ExternalIdentityRow = z.infer<typeof externalIdentitySchema>;
 
-export const chatProxyNamespaceSchema = z.object({
-  chat_proxy_namespace_id: z.number().int().optional(),
+export const messageProxyNamespaceSchema = z.object({
+  message_proxy_namespace_id: z.number().int().optional(),
   service_id: z.string().min(1),
   namespace_key: z.string().min(1),
   short_id: z.string().nullable().optional(),
@@ -207,33 +207,33 @@ export const chatProxyNamespaceSchema = z.object({
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
-export type ChatProxyNamespaceRow = z.infer<typeof chatProxyNamespaceSchema>;
+export type MessageProxyNamespaceRow = z.infer<typeof messageProxyNamespaceSchema>;
 
-export const chatProxyIdentitySchema = z.object({
-  chat_proxy_identity_id: z.number().int().optional(),
-  chat_proxy_namespace_id: z.number().int(),
+export const messageProxyIdentitySchema = z.object({
+  message_proxy_identity_id: z.number().int().optional(),
+  message_proxy_namespace_id: z.number().int(),
   external_identity_id: z.number().int(),
   short_id: z.string().nullable().optional(),
   display_name: z.string().nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
-export type ChatProxyIdentityRow = z.infer<typeof chatProxyIdentitySchema>;
+export type MessageProxyIdentityRow = z.infer<typeof messageProxyIdentitySchema>;
 
-export const chatProxyNamespaceAccountSchema = z.object({
-  chat_proxy_namespace_id: z.number().int(),
+export const messageProxyNamespaceAccountSchema = z.object({
+  message_proxy_namespace_id: z.number().int(),
   host_user_disc_id: z.string().min(1),
   created_at: z.date().optional(),
 });
-export type ChatProxyNamespaceAccountRow = z.infer<typeof chatProxyNamespaceAccountSchema>;
+export type MessageProxyNamespaceAccountRow = z.infer<typeof messageProxyNamespaceAccountSchema>;
 
-export const chatProxyMessageIndexSchema = z.object({
+export const messageProxyMessageIndexSchema = z.object({
   message_disc_id: z.string().min(1),
   external_identity_id: z.number().int(),
   sender_disc_id: z.string().min(1),
   created_at: z.date().optional(),
 });
-export type ChatProxyMessageIndexRow = z.infer<typeof chatProxyMessageIndexSchema>;
+export type MessageProxyMessageIndexRow = z.infer<typeof messageProxyMessageIndexSchema>;
 
 /**
  * Schema for voice_samples table : reference audio clips for local TTS voice cloning.

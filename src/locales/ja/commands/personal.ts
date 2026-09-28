@@ -526,19 +526,19 @@ export default {
     "deliberate-tool-mode": {
       description: `個人の明示的ツールモード設定を変更します。`,
     },
-    "chat-proxy": {
-      description: `あなたのアカウントで使用する対応チャットプロキシサービスを選択します。`,
-      service_description: `使用するチャットプロキシサービス。無効にする場合は「なし」を選択します。`,
+    "message-proxy": {
+      description: `あなたのアカウントで使用する対応メッセージプロキシサービスを選択します。`,
+      service_description: `使用するメッセージプロキシサービス。無効にする場合は「なし」を選択します。`,
       none_option: `なし`,
       pluralkit_option: `PluralKit`,
       already_selected_title: `変更はありません`,
-      already_selected_description: `チャットプロキシサービスは既に**{service}**に設定されています。`,
-      enabled_success_title: `チャットプロキシサービスを有効にしました`,
-      pluralkit_enabled_success_description: `**{service}**をチャットプロキシサービスとして設定しました。
+      already_selected_description: `メッセージプロキシサービスは既に**{service}**に設定されています。`,
+      enabled_success_title: `メッセージプロキシサービスを有効にしました`,
+      pluralkit_enabled_success_description: `**{service}**をメッセージプロキシサービスとして設定しました。
 
 あなたからのメッセージを検出すると、PluralKitがそれを削除してプロキシのWebhook経由で再投稿する可能性があるため、約{delay_seconds}秒待ってから返信します。あなたのシステムのメンバーを初めて見かけたとき、PluralKit上で設定された公開プロフィール文があれば、そのメンバーの初期記憶として保存されることがあります。システムの公開説明文が設定されている場合は、メンバーとの会話中に参照できるよう、そちらも保存します。`,
-      disabled_success_title: `チャットプロキシサービスを無効にしました`,
-      disabled_success_description: `あなたのアカウントのチャットプロキシ処理を**無効**にしました。プロキシ再投稿を待つことなく、メッセージは通常どおり処理されます。`,
+      disabled_success_title: `メッセージプロキシサービスを無効にしました`,
+      disabled_success_description: `あなたのアカウントのメッセージプロキシ処理を**無効**にしました。プロキシ再投稿を待つことなく、メッセージは通常どおり処理されます。`,
     },
   },
 };

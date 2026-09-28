@@ -8,7 +8,7 @@ import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema }
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "../../utils/cache/userCache";
 import { resolveTriggererDiscordId, resolveUserTarget } from "@/utils/discord/targetResolver";
-import { getChatProxyHostProtection } from "@/utils/chatProxy/hostProtection";
+import { getMessageProxyHostProtection } from "@/utils/messageProxy/hostProtection";
 import { renderMemoryNoticeContent, memoryServerDiscId } from "./memoryNoticeContent";
 
 /**
@@ -391,13 +391,13 @@ export class MemoryTool extends BaseTool {
         const targetUserDisplayName =
           resolvedTargetUserLabel || targetUserRow.user_nickname || resolvedTargetUserId || "user";
         const contextServerDiscId = "guild" in context.channel ? context.channel.guild.id : context.userId;
-        const chatProxyHostProtection = await getChatProxyHostProtection(
+        const messageProxyHostProtection = await getMessageProxyHostProtection(
           resolvedTargetUserId as string,
           contextServerDiscId,
         );
-        if (chatProxyHostProtection.protected) {
+        if (messageProxyHostProtection.protected) {
           log.info(
-            `Self-teach blocked: chat-proxy identity ${resolvedTargetUserId} is shielded by host ${chatProxyHostProtection.hostUserDiscId} (${chatProxyHostProtection.reason})`,
+            `Self-teach blocked: message-proxy identity ${resolvedTargetUserId} is shielded by host ${messageProxyHostProtection.hostUserDiscId} (${messageProxyHostProtection.reason})`,
           );
           return {
             success: false,
@@ -406,9 +406,9 @@ export class MemoryTool extends BaseTool {
               status: "memory_save_failed_privacy_restricted",
               scope: "target_user",
               reason:
-                chatProxyHostProtection.reason === "host_blacklisted"
-                  ? `The host account for ${targetUserDisplayName} is blacklisted in this server. I cannot save personal memories for its chat-proxy identities.`
-                  : `The host account for ${targetUserDisplayName} has full privacy enabled. I cannot save personal memories for its chat-proxy identities.`,
+                messageProxyHostProtection.reason === "host_blacklisted"
+                  ? `The host account for ${targetUserDisplayName} is blacklisted in this server. I cannot save personal memories for its message-proxy identities.`
+                  : `The host account for ${targetUserDisplayName} has full privacy enabled. I cannot save personal memories for its message-proxy identities.`,
             },
           };
         }
@@ -488,7 +488,7 @@ export class MemoryTool extends BaseTool {
           );
           const targetUserIsBlacklisted =
             ((await userRepository.isBlacklisted(serverDiscId, resolvedTargetUserId as string)) ?? false) ||
-            (await getChatProxyHostProtection(resolvedTargetUserId as string, serverDiscId)).protected;
+            (await getMessageProxyHostProtection(resolvedTargetUserId as string, serverDiscId)).protected;
 
           let personalMemoryFooterKey: string;
           if (!personalizationEnabled) {

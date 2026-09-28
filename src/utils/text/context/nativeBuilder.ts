@@ -294,7 +294,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       impersonatedIdentityName,
       matrixUsers: preparedParticipantContext.matrixUsers,
       syntheticUsers: preparedParticipantContext.syntheticUsers,
-      chatProxyUsers: preparedParticipantContext.chatProxyUsers,
+      messageProxyUsers: preparedParticipantContext.messageProxyUsers,
       publicPersonaProfiles: preparedParticipantContext.publicPersonaProfiles,
       preloadedReferencedUserRows: preparedParticipantContext.referencedUserRows,
       referencedUserIds: preparedParticipantContext.referencedUserIds,

@@ -2,7 +2,7 @@ import type { Client, Message } from "discord.js";
 import { DMChannel } from "discord.js";
 import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
 import { isMatrixBridgeWebhookUsername } from "@/utils/bridges";
-import { isKnownChatProxyMessage } from "@/utils/chatProxy/proxyExpectation";
+import { isKnownMessageProxyMessage } from "@/utils/messageProxy/proxyExpectation";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { escapeRegExp, isUnspacedScriptText, wrapWithWordBoundary } from "@/utils/text/processors/regexUtils";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
@@ -137,12 +137,12 @@ export function isMatrixRelayMessage(message: Pick<Message, "webhookId" | "autho
   return Boolean(message.webhookId) && isMatrixBridgeWebhookUsername(message.author.username);
 }
 
-export function isChatProxyMessage(message: Pick<Message, "id" | "webhookId">): boolean {
-  return isKnownChatProxyMessage(message);
+export function isMessageProxyMessage(message: Pick<Message, "id" | "webhookId">): boolean {
+  return isKnownMessageProxyMessage(message);
 }
 
 export function isRealUserLikeMessage(message: Message): boolean {
-  return (!message.author.bot && !message.webhookId) || isMatrixRelayMessage(message) || isChatProxyMessage(message);
+  return (!message.author.bot && !message.webhookId) || isMatrixRelayMessage(message) || isMessageProxyMessage(message);
 }
 
 export function isSelfTriggerMessage(message: Message, allPersonas: TomoriState[]): boolean {
@@ -156,7 +156,7 @@ export function isSelfTriggerMessage(message: Message, allPersonas: TomoriState[
   if (!message.webhookId) {
     return false;
   }
-  if (isChatProxyMessage(message)) {
+  if (isMessageProxyMessage(message)) {
     return false;
   }
 
@@ -348,7 +348,7 @@ export function determineMatchingPersonas(
     if (!nicknameKey || personaByNickname.has(nicknameKey)) continue;
     personaByNickname.set(nicknameKey, persona);
   }
-  if (message.webhookId && !isChatProxyMessage(message)) {
+  if (message.webhookId && !isMessageProxyMessage(message)) {
     const webhookName = message.author.username;
     senderPersona =
       resolveRenderModifierSourcePersona(webhookName, personaByNickname)?.persona ??
@@ -363,7 +363,7 @@ export function determineMatchingPersonas(
     if (referenceMessage) {
       if (referenceMessage.author.id === client.user?.id) {
         repliedToPersona = allPersonas.find((persona) => !persona.is_alter);
-      } else if (referenceMessage.webhookId && !isChatProxyMessage(referenceMessage)) {
+      } else if (referenceMessage.webhookId && !isMessageProxyMessage(referenceMessage)) {
         const webhookName = referenceMessage.author.username;
         repliedToPersona =
           resolveRenderModifierSourcePersona(webhookName, personaByNickname)?.persona ??

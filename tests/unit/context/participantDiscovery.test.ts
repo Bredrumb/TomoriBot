@@ -59,7 +59,7 @@ function userRow(discordId: string, nickname: string): UserRow {
     personal_deliberate_tool_mode: "follow",
     personal_server_fallback_enabled: true,
     timezone_offset: null,
-    chat_proxy_service: null,
+    message_proxy_service: null,
   };
 }
 
@@ -126,12 +126,12 @@ describe("participant discovery plan", () => {
   });
 
   it("keys a stable proxy identity as a Discord-shaped user even when a webhook entry exists", () => {
-    const chatProxyUserId = "pk:11111111-2222-4333-8444-555555555555";
-    const syntheticUsers = new Map([[chatProxyUserId, { displayName: "Hiro", type: "webhook" as const }]]);
+    const messageProxyUserId = "pk:11111111-2222-4333-8444-555555555555";
+    const syntheticUsers = new Map([[messageProxyUserId, { displayName: "Hiro", type: "webhook" as const }]]);
 
-    const visible = discoverVisibleAuthorCandidates({ participantIds: [chatProxyUserId], syntheticUsers });
+    const visible = discoverVisibleAuthorCandidates({ participantIds: [messageProxyUserId], syntheticUsers });
     expect(visible).toHaveLength(1);
-    expect(visible[0]?.key).toEqual(createDiscordUserKey(chatProxyUserId));
+    expect(visible[0]?.key).toEqual(createDiscordUserKey(messageProxyUserId));
 
     expect(discoverHistoricalSyntheticCandidates(syntheticUsers)).toHaveLength(0);
   });

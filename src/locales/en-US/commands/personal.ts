@@ -531,19 +531,19 @@ Use Clear Prompt to remove it.`,
     "deliberate-tool-mode": {
       description: `Set your personal deliberate tool mode preference.`,
     },
-    "chat-proxy": {
-      description: `Choose a supported chat proxy service for your account.`,
-      service_description: `The chat proxy service to use, or None to disable chat proxy handling.`,
+    "message-proxy": {
+      description: `Choose a supported message proxy service for your account.`,
+      service_description: `The message proxy service to use, or None to disable message proxy handling.`,
       none_option: `None`,
       pluralkit_option: `PluralKit`,
       already_selected_title: `No Changes Made`,
-      already_selected_description: `Your chat proxy service is already set to **{service}**.`,
-      enabled_success_title: `Chat Proxy Service Enabled`,
-      pluralkit_enabled_success_description: `**{service}** is now your selected chat proxy service.
+      already_selected_description: `Your message proxy service is already set to **{service}**.`,
+      enabled_success_title: `Message Proxy Service Enabled`,
+      pluralkit_enabled_success_description: `**{service}** is now your selected message proxy service.
 
 When I see a message from you, I'll wait about {delay_seconds}s before responding, in case PluralKit deletes and reposts it through a proxy webhook. The first time I see one of your system's members, any public bio text they've set on PluralKit may be saved as a starting memory for them. If your system has a public description, I'll also keep it so I can read it while your members are talking with me.`,
-      disabled_success_title: `Chat Proxy Service Disabled`,
-      disabled_success_description: `Chat proxy handling is now **disabled** for your account. Your messages will be handled normally, without waiting for a possible proxy repost.`,
+      disabled_success_title: `Message Proxy Service Disabled`,
+      disabled_success_description: `Message proxy handling is now **disabled** for your account. Your messages will be handled normally, without waiting for a possible proxy repost.`,
     },
   },
 };

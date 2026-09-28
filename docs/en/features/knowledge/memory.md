@@ -58,16 +58,16 @@ Memories persist until you remove them.
 
 In new servers, non-manager member access to create, edit, or remove shared server memories is disabled by default. Members with `Manage Server` permission retain access at all times, and managers can opt other members in through `/moderation` Member Access.
 
-### Chat-Proxy Identities
+### Message-Proxy Identities
 
-When you enable a supported chat-proxy service, TomoriBot can keep personal memories for each
+When you enable a supported message-proxy service, TomoriBot can keep personal memories for each
 verified proxied identity separately from the Discord account that sent the message. The host
 account still controls privacy, blocking, cooldowns, and authorization. TomoriBot never guesses an
 identity from a webhook name or avatar, and an unverified webhook does not receive a separate
 memory profile.
 
 PluralKit is currently the only selectable service. See
-[Chat-Proxy Support](/features/integrations/chat-proxy-support/) for setup and limitations.
+[Message-Proxy Support](/features/integrations/message-proxy-support/) for setup and limitations.
 
 
 ### How Memories Get Saved

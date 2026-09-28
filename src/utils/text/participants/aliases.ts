@@ -189,11 +189,11 @@ export function buildBridgeUserAliases(params: {
 }
 
 /**
- * Aliases for a stable chat-proxy identity. Exposure stays `lookup_only` because
+ * Aliases for a stable message-proxy identity. Exposure stays `lookup_only` because
  * it is not a mentionable Discord account: the handles exist for tool targeting,
  * not notifications.
  */
-export function buildChatProxyIdentityAliases(params: {
+export function buildMessageProxyIdentityAliases(params: {
   owner: Extract<ParticipantKey, { kind: "discord_user" }>;
   displayName?: string | null;
   savedNickname?: string | null;
@@ -206,7 +206,7 @@ export function buildChatProxyIdentityAliases(params: {
     appendAlias(aliases, {
       owner: params.owner,
       value,
-      source: "chat_proxy_display_name",
+      source: "message_proxy_display_name",
       purposes: ["input_reference", "output_mention", "tool_target"],
       exposure: "lookup_only",
       priority,

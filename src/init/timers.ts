@@ -85,21 +85,21 @@ export function initTimers(client: Client): void {
     log.error("Failed to schedule preset art seed and avatar fan-out", error as Error);
   }
 
-  log.section("Initializing Chat-Proxy Index Pruner...");
+  log.section("Initializing Message-Proxy Index Pruner...");
   try {
     // Age-based retention keeps the durable proxy-message index bounded.
-    import("@/timers/chatProxyIndexPruner")
-      .then(({ initializeChatProxyIndexPruner }) => {
+    import("@/timers/messageProxyIndexPruner")
+      .then(({ initializeMessageProxyIndexPruner }) => {
         client.once("clientReady", () => {
-          initializeChatProxyIndexPruner();
-          log.success("Chat-proxy index pruner initialized");
+          initializeMessageProxyIndexPruner();
+          log.success("Message-proxy index pruner initialized");
         });
       })
       .catch((error: Error) => {
-        log.error("Failed to initialize chat-proxy index pruner", error);
+        log.error("Failed to initialize message-proxy index pruner", error);
       });
   } catch (error) {
-    log.error("Failed to initialize chat-proxy index pruner", error as Error);
+    log.error("Failed to initialize message-proxy index pruner", error as Error);
   }
 
   log.section("Initializing Upload Quota System...");

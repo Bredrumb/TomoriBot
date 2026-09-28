@@ -1,0 +1,122 @@
+import type { Message } from "discord.js";
+import { messageProxyServiceRegistry, type ProxyServiceRegistry } from "@/utils/messageProxy/registry";
+import {
+  beginMessageProxyLookup,
+  findMatchingMessageProxyExpectation,
+  type MessageProxyExpectation,
+} from "@/utils/messageProxy/proxyExpectation";
+import type { ProxyMessageAttestation, ProxyServiceDescriptor } from "@/utils/messageProxy/types";
+import { log } from "@/utils/misc/logger";
+
+export type MessageProxyRouteStatus =
+  | "unsupported_correlation"
+  | "unmatched"
+  | "timeout_or_error"
+  | "conflicting_attestations"
+  | "matched_trigger_only"
+  | "matched_stable_identity";
+
+export type MessageProxyRouteResult =
+  | { status: Exclude<MessageProxyRouteStatus, "matched_trigger_only" | "matched_stable_identity"> }
+  | {
+      status: "matched_trigger_only" | "matched_stable_identity";
+      attestation: ProxyMessageAttestation;
+      expectation: MessageProxyExpectation;
+    };
+
+const routeMetrics: Record<MessageProxyRouteStatus, number> = {
+  unsupported_correlation: 0,
+  unmatched: 0,
+  timeout_or_error: 0,
+  conflicting_attestations: 0,
+  matched_trigger_only: 0,
+  matched_stable_identity: 0,
+};
+
+function routeResult<TResult extends MessageProxyRouteResult>(result: TResult): TResult {
+  routeMetrics[result.status] += 1;
+  return result;
+}
+
+export function getMessageProxyRouteMetricsSnapshot(): Readonly<Record<MessageProxyRouteStatus, number>> {
+  return { ...routeMetrics };
+}
+
+export function clearMessageProxyRouteMetricsForTests(): void {
+  for (const status of Object.keys(routeMetrics) as MessageProxyRouteStatus[]) {
+    routeMetrics[status] = 0;
+  }
+}
+
+type MessageProxyRouterDependencies = {
+  registry: ProxyServiceRegistry<string>;
+  findExpectation(channelId: string, attestation: ProxyMessageAttestation): MessageProxyExpectation | null;
+};
+
+const DEFAULT_DEPENDENCIES: MessageProxyRouterDependencies = {
+  registry: messageProxyServiceRegistry,
+  findExpectation: findMatchingMessageProxyExpectation,
+};
+
+type AttestingProxyServiceDescriptor = Exclude<
+  ProxyServiceDescriptor<string>,
+  { capabilities: { correlation: "none" } }
+>;
+
+function isAttestingDescriptor(
+  descriptor: ProxyServiceDescriptor<string> | undefined,
+): descriptor is AttestingProxyServiceDescriptor {
+  return descriptor?.capabilities.correlation === "attested";
+}
+
+export async function routeMessageProxyMessage(
+  args: {
+    message: Message;
+    candidateServiceIds: readonly string[];
+  },
+  dependencyOverrides: Partial<MessageProxyRouterDependencies> = {},
+): Promise<MessageProxyRouteResult> {
+  const dependencies = { ...DEFAULT_DEPENDENCIES, ...dependencyOverrides };
+  const descriptors = [...new Set(args.candidateServiceIds)]
+    .map((serviceId) => dependencies.registry.get(serviceId))
+    .filter(isAttestingDescriptor)
+    .filter((descriptor) => descriptor.canAttestMessage?.(args.message) ?? true);
+  if (descriptors.length === 0) return routeResult({ status: "unsupported_correlation" });
+
+  const endLookup = beginMessageProxyLookup(args.message.channelId);
+  const settled = await Promise.allSettled(
+    descriptors.map(async (descriptor) => descriptor.attestMessage(args.message.id)),
+  ).finally(endLookup);
+  const errored = settled.some((result) => result.status === "rejected");
+  const claims = settled.flatMap((result, index) => {
+    if (result.status !== "fulfilled" || !result.value) return [];
+    const descriptor = descriptors[index];
+    const claim = result.value;
+    const invalidIdentity =
+      claim.identity !== null &&
+      (descriptor.capabilities.identity !== "stable" ||
+        claim.identity.serviceId !== descriptor.serviceId ||
+        claim.identity.externalIdentityKind !== descriptor.externalIdentityKind ||
+        !descriptor.validateExternalKey(claim.identity.externalKey));
+    if (claim.serviceId !== descriptor.serviceId || claim.proxyMessageId !== args.message.id || invalidIdentity) {
+      log.warn(`Rejected malformed message-proxy attestation from ${descriptor.serviceId}`);
+      return [];
+    }
+    return [claim];
+  });
+
+  if (claims.length > 1) {
+    log.error(`Conflicting message-proxy attestations for message ${args.message.id}`);
+    return routeResult({ status: "conflicting_attestations" });
+  }
+  const attestation = claims[0];
+  if (!attestation) return routeResult({ status: errored ? "timeout_or_error" : "unmatched" });
+
+  const expectation = dependencies.findExpectation(args.message.channelId, attestation);
+  if (!expectation) return routeResult({ status: "unmatched" });
+  return routeResult({
+    status: attestation.identity ? "matched_stable_identity" : "matched_trigger_only",
+    attestation,
+    expectation,
+  });
+}

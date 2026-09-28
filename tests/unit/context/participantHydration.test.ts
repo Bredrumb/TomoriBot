@@ -9,9 +9,9 @@ import {
   type UserRow,
 } from "@/types/db/schema";
 import type { RequestSnapshot } from "@/types/misc/context";
-import type { ChatProxyIdentityContext } from "@/utils/chatProxy/types";
-import { getProxyServicePresentation } from "@/utils/chatProxy/registry";
-import type { ChatProxyConversationUser } from "@/utils/text/context/types";
+import type { MessageProxyIdentityContext } from "@/utils/messageProxy/types";
+import { getProxyServicePresentation } from "@/utils/messageProxy/registry";
+import type { MessageProxyConversationUser } from "@/utils/text/context/types";
 import {
   createParticipantExposurePolicy,
   hydrateParticipantProfiles,
@@ -58,7 +58,7 @@ function createUserRow(overrides: Partial<UserRow> = {}): UserRow {
     privacy_level: PrivacyLevel.MINIMAL,
     personal_memories: [],
     physical_appearance_tags: ["auburn hair", "green eyes"],
-    chat_proxy_service: null,
+    message_proxy_service: null,
     nai_char_ref_url: null,
     impersonation_prompt: null,
     shortterm_cache_crossserver_opt_in: false,
@@ -137,8 +137,8 @@ function createFixture(
     fallbackUser?: User | null;
     participantSeeds?: ParticipantSeed[];
     snapshot?: RequestSnapshot;
-    chatProxyContext?: ChatProxyIdentityContext | null;
-    chatProxyUsers?: ReadonlyMap<string, ChatProxyConversationUser>;
+    messageProxyContext?: MessageProxyIdentityContext | null;
+    messageProxyUsers?: ReadonlyMap<string, MessageProxyConversationUser>;
     privacyByDiscordId?: Record<string, PrivacyLevel>;
     blacklistedDiscordIds?: readonly string[];
     namingConfig?: PersonaNamingConfig;
@@ -198,11 +198,11 @@ function createFixture(
     conversationCorpus: "maps",
     snapshot: options.snapshot,
     convertMentions: async (text) => text,
-    ...(options.chatProxyUsers && { chatProxyUsers: options.chatProxyUsers }),
+    ...(options.messageProxyUsers && { messageProxyUsers: options.messageProxyUsers }),
   };
   const dependencies: ParticipantHydrationDependencies = {
-    isChatProxyIdentity: (discordId) => discordId.startsWith("pk:"),
-    getChatProxyPresentation: getProxyServicePresentation,
+    isMessageProxyIdentity: (discordId) => discordId.startsWith("pk:"),
+    getMessageProxyPresentation: getProxyServicePresentation,
     loadUserRow: async () => userRow,
     registerUser: async () => null,
     isBlacklisted: async (_guildId, discordId) => {
@@ -242,7 +242,7 @@ function createFixture(
       presenceMembers.push(preloadedMember);
       return "Online";
     },
-    loadChatProxyIdentityContext: async () => options.chatProxyContext ?? null,
+    loadMessageProxyIdentityContext: async () => options.messageProxyContext ?? null,
     loadNamingPreferences: async () => new Map(),
   };
   return {
@@ -609,7 +609,7 @@ describe("participant hydration", () => {
 const PK_USER_ID = "pk:2f1c9d4e-6b7a-4c31-8d02-5e9f7a1b3c4d";
 const PK_HOST_ID = "500000000000000001";
 
-function createPluralKitContext(overrides: Partial<ChatProxyIdentityContext> = {}): ChatProxyIdentityContext {
+function createPluralKitContext(overrides: Partial<MessageProxyIdentityContext> = {}): MessageProxyIdentityContext {
   return {
     serviceId: "pluralkit",
     userDiscId: PK_USER_ID,
@@ -642,7 +642,7 @@ function createPluralKitFixture(options: Parameters<typeof createFixture>[0] = {
   return createFixture({
     participantSeeds: [createPluralKitSeed()],
     userRow: createUserRow({ user_id: 88, user_disc_id: PK_USER_ID, user_nickname: "Saved Sparrow" }),
-    chatProxyContext: createPluralKitContext(),
+    messageProxyContext: createPluralKitContext(),
     ...options,
   });
 }
@@ -664,7 +664,7 @@ describe("pluralkit member hydration", () => {
 
     const result = await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
     const identityLines = result.profiles[0]?.fields
-      .find((candidate) => candidate.kind === "chat_proxy_identity")
+      .find((candidate) => candidate.kind === "message_proxy_identity")
       ?.lines.join("\n");
 
     expect(identityLines).toBe('- Member of the "Lighthouse" plural system; its members share one presence here');
@@ -674,8 +674,8 @@ describe("pluralkit member hydration", () => {
   it("prefers the proxying host over the system's other linked accounts", async () => {
     const proxyingHost = "500000000000000009";
     const fixture = createPluralKitFixture({
-      chatProxyContext: createPluralKitContext({ hostUserDiscIds: [PK_HOST_ID] }),
-      chatProxyUsers: new Map<string, ChatProxyConversationUser>([
+      messageProxyContext: createPluralKitContext({ hostUserDiscIds: [PK_HOST_ID] }),
+      messageProxyUsers: new Map<string, MessageProxyConversationUser>([
         [PK_USER_ID, { serviceId: "pluralkit", displayName: "Sparrow", senderDiscId: proxyingHost }],
       ]),
     });
@@ -695,13 +695,13 @@ describe("pluralkit member hydration", () => {
         createPluralKitSeed(),
         { ...createPluralKitSeed(), key: createDiscordUserKey(siblingUserId), firstSeenOrder: 1 },
       ],
-      chatProxyContext: createPluralKitContext({ namespaceDescription: "We are five.\n\nAsk before  DMing." }),
+      messageProxyContext: createPluralKitContext({ namespaceDescription: "We are five.\n\nAsk before  DMing." }),
     });
 
     const result = await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
 
     expect(result.profiles).toHaveLength(2);
-    expect(result.chatProxyNamespaces).toEqual([
+    expect(result.messageProxyNamespaces).toEqual([
       {
         serviceId: "pluralkit",
         namespaceKey: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
@@ -715,12 +715,12 @@ describe("pluralkit member hydration", () => {
 
   it("collects a system note without a description, so the shared account still renders", async () => {
     const blank = createPluralKitFixture({
-      chatProxyContext: createPluralKitContext({ namespaceDescription: "   " }),
+      messageProxyContext: createPluralKitContext({ namespaceDescription: "   " }),
     });
     const absent = createPluralKitFixture();
 
     for (const fixture of [blank, absent]) {
-      expect((await hydrateParticipantProfiles(fixture.params, fixture.dependencies)).chatProxyNamespaces).toEqual([
+      expect((await hydrateParticipantProfiles(fixture.params, fixture.dependencies)).messageProxyNamespaces).toEqual([
         {
           serviceId: "pluralkit",
           namespaceKey: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
@@ -743,7 +743,7 @@ describe("pluralkit member hydration", () => {
 
   it("attributes memories to the member, not the shared account", async () => {
     const fixture = createPluralKitFixture({
-      chatProxyUsers: new Map<string, ChatProxyConversationUser>([
+      messageProxyUsers: new Map<string, MessageProxyConversationUser>([
         [PK_USER_ID, { serviceId: "pluralkit", displayName: "Sparrow", senderDiscId: PK_HOST_ID }],
       ]),
     });
@@ -788,7 +788,7 @@ describe("pluralkit member hydration", () => {
   });
 });
 
-describe("service-owned chat-proxy presentation", () => {
+describe("service-owned message-proxy presentation", () => {
   it("renders a non-PluralKit identity without service vocabulary in shared consumers", async () => {
     const identityUserId = "fx:profile-one";
     const fixture = createFixture({
@@ -802,7 +802,7 @@ describe("service-owned chat-proxy presentation", () => {
         },
       ],
       userRow: createUserRow({ user_id: 99, user_disc_id: identityUserId, user_nickname: "Saved Profile" }),
-      chatProxyContext: {
+      messageProxyContext: {
         serviceId: "fixture_service",
         userDiscId: identityUserId,
         externalIdentityId: 21,
@@ -817,12 +817,12 @@ describe("service-owned chat-proxy presentation", () => {
         namespaceDescription: "Shared public notes.",
         hostUserDiscIds: [],
       },
-      chatProxyUsers: new Map([
+      messageProxyUsers: new Map([
         [identityUserId, { serviceId: "fixture_service", displayName: "Sparrow", senderDiscId: USER_ID }],
       ]),
     });
-    fixture.dependencies.isChatProxyIdentity = (discordId) => discordId.startsWith("fx:");
-    fixture.dependencies.getChatProxyPresentation = () => ({
+    fixture.dependencies.isMessageProxyIdentity = (discordId) => discordId.startsWith("fx:");
+    fixture.dependencies.getMessageProxyPresentation = () => ({
       identityMemoryLabel: (displayName) => `${displayName}'s profile notes`,
       identityMembershipLine: (context) => `- Profile on ${context.namespaceDisplayName ?? "an account"}`,
       namespacePresentation: (context, accountLabels) => ({
@@ -837,7 +837,7 @@ describe("service-owned chat-proxy presentation", () => {
     const rendered = renderParticipantPrompt({
       profiles: result.profiles,
       personaTaskLines: result.personaTaskLines,
-      chatProxyNamespaces: result.chatProxyNamespaces,
+      messageProxyNamespaces: result.messageProxyNamespaces,
       isUserImpersonation: false,
       botName: "Tomori",
       isDMChannel: false,
