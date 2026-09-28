@@ -1,5 +1,5 @@
 import type { AnyThreadChannel, Guild } from "discord.js";
-import { BaseGuildTextChannel, ChannelType, DMChannel, EmbedBuilder } from "discord.js";
+import { BaseGuildTextChannel, ChannelType, DMChannel, EmbedBuilder, MessageReferenceType } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
 import { getCachedBlacklistStatus, getCachedPrivacyLevel, getCachedUserRow } from "@/utils/cache/userCache";
@@ -8,6 +8,7 @@ import { setCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { transcribeMessageAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import { extractBridgeUserId } from "@/utils/bridges";
 import { createStandardEmbed, sendStandardEmbed } from "@/utils/discord/embedHelper";
+import { extractTextDisplayContent } from "@/utils/discord/componentNoticeReader";
 import { sendUserTranscriptViaWebhook } from "@/utils/discord/webhook/webhookCore";
 import { getBlockedSendReason } from "@/utils/discord/stream/sendFailureCache";
 import { ColorCode, log } from "@/utils/misc/logger";
@@ -25,6 +26,7 @@ import { evaluateAdmissionQueueAndTriggerGate } from "@/utils/chat/admissionQueu
 import {
   applyMessageProxyReference,
   createMessageProxyExpectation,
+  consumeVerifiedRepostExpectation,
   getMessageProxyMessageRecord,
   getLiveMessageProxyExpectationServiceIds,
   hasLiveMessageProxyExpectations,
@@ -342,7 +344,7 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
     cooldownUserDiscId,
     isActiveNaturalStopMessage,
     isNaturalStopMessage: isNaturalStopMessage(message.content),
-    triggerMessage: messageProxyRecord?.originalMessage,
+    triggerMessage: messageProxyRecord?.originalMessage ?? undefined,
   });
   if (queueDisposition) {
     return queueDisposition;
@@ -405,10 +407,16 @@ async function resolveMessageProxyRecord(
     return null;
   }
 
+  const selectedService = resolveConfiguredProxyService(
+    (await getCachedUserRow(route.attestation.senderDiscordId))?.message_proxy_service,
+  );
+  if (selectedService !== route.attestation.serviceId) return null;
+
   await persistMessageProxyAttestationIdentity({
     messageDiscId: message.id,
     attestation: route.attestation,
     serverDiscId: message.guildId ?? null,
+    avatarUrl: message.author.avatar ? message.author.displayAvatarURL() : null,
   });
 
   markMessageProxyExpectationProxied(route.expectation);
@@ -416,11 +424,29 @@ async function resolveMessageProxyRecord(
     messageDiscId: message.id,
     channelId: message.channelId,
     expectation: route.expectation,
+    verifiedRepostOnly: route.attestation.originalMessageId === null,
+    verifiedRepostReference: route.attestation.replyTarget
+      ? {
+          channelId: route.attestation.replyTarget.channelId,
+          guildId: message.guildId ?? undefined,
+          messageId: route.attestation.replyTarget.messageId,
+          type: MessageReferenceType.Default,
+        }
+      : null,
   });
+  if (route.attestation.originalMessageId === null) {
+    consumeVerifiedRepostExpectation(route.expectation);
+  }
   applyMessageProxyReference(message);
+  if (route.attestation.serviceId === "pluralbuddy" && !message.content.trim()) {
+    const text = extractTextDisplayContent(message.components);
+    if (text) {
+      Object.defineProperty(message, "content", { value: text, configurable: true, writable: true });
+    }
+  }
 
   log.info(
-    `Confirmed ${route.attestation.serviceId} message-proxy message ${message.id} for original ${route.expectation.originalMessageId} in channel ${message.channelId}`,
+    `Confirmed ${route.attestation.serviceId} message-proxy message ${message.id} in channel ${message.channelId}`,
   );
   return record;
 }

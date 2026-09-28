@@ -1,10 +1,11 @@
 import type { Embed, Message } from "discord.js";
 import type { ProxyReplyTarget, ProxyServiceDescriptor, ProxyServicePresentation } from "@/utils/messageProxy/types";
 import { pluralKitProxyService } from "@/utils/messageProxy/services/pluralkit/descriptor";
+import { pluralBuddyProxyService } from "@/utils/messageProxy/services/pluralbuddy/descriptor";
 import { log } from "@/utils/misc/logger";
 
 export const MESSAGE_PROXY_DISABLED_SERVICE_ID = "none" as const;
-export const MESSAGE_PROXY_SERVICE_DESCRIPTORS = [pluralKitProxyService] as const;
+export const MESSAGE_PROXY_SERVICE_DESCRIPTORS = [pluralKitProxyService, pluralBuddyProxyService] as const;
 export type ProxyServiceId = (typeof MESSAGE_PROXY_SERVICE_DESCRIPTORS)[number]["serviceId"];
 export type MessageProxyServiceSelection = typeof MESSAGE_PROXY_DISABLED_SERVICE_ID | ProxyServiceId;
 
@@ -38,7 +39,7 @@ function assertValidCapabilities(descriptor: ProxyServiceDescriptor<string>): vo
     hasAttestation &&
     !hasBioCapabilities;
   const validStableIdentity =
-    capabilities.correlation === "attested" &&
+    (capabilities.correlation === "attested" || capabilities.correlation === "verified-repost") &&
     capabilities.identity === "stable" &&
     hasAttestation &&
     BIO_CAPABILITIES.has(capabilities.identityBio as string) &&

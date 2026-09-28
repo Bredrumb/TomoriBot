@@ -4,8 +4,10 @@ import {
   applyMessageProxyReference,
   beginMessageProxyLookup,
   clearMessageProxyExpectationStateForTests,
+  consumeVerifiedRepostExpectation,
   createMessageProxyExpectation,
   findMatchingMessageProxyExpectation,
+  findVerifiedRepostExpectation,
   getMessageProxyExpectationTtlMs,
   getMessageProxyWaitMs,
   getLiveMessageProxyExpectationServiceIds,
@@ -66,6 +68,25 @@ function createExpectation(overrides: Partial<Parameters<typeof createMessagePro
 }
 
 describe("message-proxy expectations", () => {
+  it("keeps a PluralBuddy host candidate briefly after the original wait without inventing an original link", async () => {
+    const first = createExpectation({ serviceId: "pluralbuddy" });
+    expect(await waitForMessageProxyExpectation(first)).toBe("timeout");
+    expect(findVerifiedRepostExpectation("channel_1", "pluralbuddy", "sender_1")).toBe(first);
+    createExpectation({ serviceId: "pluralbuddy", originalMessageId: "original_2" });
+    expect(findVerifiedRepostExpectation("channel_1", "pluralbuddy", "sender_1")).toBeNull();
+    consumeVerifiedRepostExpectation(first);
+    const second = findVerifiedRepostExpectation("channel_1", "pluralbuddy", "sender_1");
+    expect(second?.originalMessageId).toBe("original_2");
+    if (!second) return;
+    const record = rememberMessageProxyMessage({
+      messageDiscId: "proxy_pb",
+      channelId: "channel_1",
+      expectation: second,
+      verifiedRepostOnly: true,
+    });
+    expect(record.originalMessageId).toBeNull();
+    expect(getSupersededMessageProxyOriginalMessageIds("channel_1")).toEqual(new Set());
+  });
   it("resolves the original speedbump when the original message is deleted", async () => {
     const expectation = createExpectation();
     const wait = waitForMessageProxyExpectation(expectation);

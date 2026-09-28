@@ -4,6 +4,12 @@ export type ProxyServiceCapabilities =
   | { correlation: "none"; identity: "none" }
   | { correlation: "attested"; identity: "none" }
   | {
+      correlation: "verified-repost";
+      identity: "stable";
+      identityBio: "inline" | "separate-fetch" | "none";
+      namespaceBio: "inline" | "separate-fetch" | "none";
+    }
+  | {
       correlation: "attested";
       identity: "stable";
       identityBio: "inline" | "separate-fetch" | "none";
@@ -24,6 +30,7 @@ export type ProxyIdentityUpsertInput = {
   externalKey: string;
   shortId: string | null;
   displayName: string | null;
+  avatarUrl?: string | null;
   bio: string | null;
   namespace: ProxyIdentityNamespaceInput;
 };
@@ -31,7 +38,9 @@ export type ProxyIdentityUpsertInput = {
 export type ProxyMessageAttestation = {
   serviceId: string;
   proxyMessageId: string;
-  originalMessageId: string;
+  channelId?: string;
+  replyTarget?: ProxyReplyTarget | null;
+  originalMessageId: string | null;
   senderDiscordId: string;
   identity: ProxyIdentityUpsertInput | null;
 };
@@ -106,6 +115,11 @@ export type ProxyServiceDescriptor<TServiceId extends string = string> =
     })
   | (ProxyDescriptorBase<TServiceId> & {
       capabilities: Extract<ProxyServiceCapabilities, { correlation: "attested"; identity: "stable" }>;
+      attestMessage(proxyMessageId: string): Promise<ProxyMessageAttestation | null>;
+      getCachedAttestation?(proxyMessageId: string): ProxyMessageAttestation | null;
+    })
+  | (ProxyDescriptorBase<TServiceId> & {
+      capabilities: Extract<ProxyServiceCapabilities, { correlation: "verified-repost" }>;
       attestMessage(proxyMessageId: string): Promise<ProxyMessageAttestation | null>;
       getCachedAttestation?(proxyMessageId: string): ProxyMessageAttestation | null;
     });

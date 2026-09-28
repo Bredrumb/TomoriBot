@@ -85,16 +85,15 @@ for no benefit (see below).
 ## Settings Stay on the Host Account
 
 Your Discord account remains the thing that *gates* everything: privacy level, blacklists,
-cooldowns, quotas, API keys, and all `/personal` settings are shared across your members
+cooldowns, quotas, API keys, and account-level `/personal` settings are shared across your members
 and keyed on the host account. Setting your privacy to full, or being blacklisted on a
-server, shields **all** of your members at once. Only conversational identity and memories
-are per-member.
+server, shields all of your members at once. Conversational identity, profile preferences,
+appearance, and memories can be set per member.
 
 ## Current Limitations
 
-- `/personal memories` acts on the account that runs it, so seeded or learned member
-  memories can't be managed from the panel yet. Chat-mediated edits ("Tomori, forget
-  that") are the way to change them.
+- `/personal memories identity:` edits a stored member's global and persona memories. Use
+  `/personal config identity:` to edit that member's profile, nickname, and appearance.
 - The bio import happens exactly once per member, ever. Later PluralKit bio edits never
   propagate. Tell her in chat instead.
 - Members can't be `@`-mentioned by Tomori (webhooks aren't mentionable); she addresses

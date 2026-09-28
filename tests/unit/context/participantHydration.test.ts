@@ -753,8 +753,20 @@ describe("pluralkit member hydration", () => {
       .find((candidate) => candidate.kind === "personal_memories")
       ?.lines.join("\n");
 
-    expect(result.profiles[0]?.displayName).toBe("Sparrow");
+    expect(result.profiles[0]?.displayName).toBe("Saved Sparrow");
     expect(memoryLines).toContain("Sparrow's memories:");
+  });
+
+  it("uses the service name again after an identity nickname is cleared", async () => {
+    const fixture = createPluralKitFixture({
+      userRow: createUserRow({ user_id: 88, user_disc_id: PK_USER_ID, user_nickname: null }),
+      messageProxyUsers: new Map<string, MessageProxyConversationUser>([
+        [PK_USER_ID, { serviceId: "pluralkit", displayName: "Sparrow", senderDiscId: PK_HOST_ID }],
+      ]),
+    });
+
+    const result = await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
+    expect(result.profiles[0]?.displayName).toBe("Sparrow");
   });
 
   it("is never mentionable even though the seed carries the capability", async () => {

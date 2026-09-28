@@ -269,7 +269,7 @@ export async function resolveContextReferences(params: {
   const messageProxyCandidates: DiscoveredParticipantCandidate[] = messageProxyReferences.flatMap((reference) => {
     const reasons = referencedUserReasons.get(reference.userDiscId);
     if (!reasons) return [];
-    const displayName = reference.displayName ?? reference.savedNickname;
+    const displayName = reference.savedNickname ?? reference.displayName;
     return [
       {
         key: createDiscordUserKey(reference.userDiscId),

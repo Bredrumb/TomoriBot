@@ -14,10 +14,10 @@ describe("/personal registration", () => {
 
     // `nuke` is the erasure route the Privacy Policy names, so it must stay registered.
     expect([...personal.keys()].sort()).toEqual([
-      "message-proxy",
       "config",
       "language",
       "memories",
+      "message-proxy",
       "nuke",
       "providers",
     ]);

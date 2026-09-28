@@ -225,10 +225,10 @@ Discordチャンネルを双方向リレーでMatrixルームにリンクしま�
 
 | コマンド | 概要 |
 |---|---|
-| `/personal message-proxy` | あなたのアカウントで使用する対応メッセージプロキシサービスを選択します。 |
 | `/personal config` | 個人の設定、プライバシー、モデル、プロフィールを管理します。 |
 | `/personal language` | TomoriBotがあなたに話しかける言語を選びます。 |
 | `/personal memories` | 個人の長期記憶や短期間の会話コンテキストを管理します。 |
+| `/personal message-proxy` | あなたのアカウントで使用する対応メッセージプロキシサービスを選択します。 |
 | `/personal nuke` | TomoriBotが保存しているあなたの情報を、すべてのサーバーから消去します。 |
 | `/personal providers` | 個人のプロバイダー認証情報、エンドポイント、モデルカタログを管理します。 |
 

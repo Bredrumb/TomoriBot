@@ -455,9 +455,9 @@ async function hydrateDiscordUserBase(
   });
   const customNickname = userRow.user_nickname?.trim() || null;
   const messageProxyDisplayName = messageProxy
-    ? (params.messageProxyUsers?.get(discordId)?.displayName ??
+    ? (customNickname ??
+      params.messageProxyUsers?.get(discordId)?.displayName ??
       messageProxy.context?.displayName ??
-      customNickname ??
       discordId)
     : null;
   let displayName =

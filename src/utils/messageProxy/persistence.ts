@@ -31,10 +31,15 @@ export async function persistMessageProxyAttestationIdentity(
     messageDiscId: string;
     attestation: ProxyMessageAttestation;
     serverDiscId: string | null;
+    avatarUrl?: string | null;
   },
   dependencies: MessageProxyIdentityPersistenceDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<MessageProxyIdentityPersistenceStatus> {
-  const identityInput = args.attestation.identity;
+  const identityInput = args.attestation.identity
+    ? args.avatarUrl === undefined
+      ? args.attestation.identity
+      : { ...args.attestation.identity, avatarUrl: args.avatarUrl }
+    : null;
   if (!identityInput) return "identity_free";
 
   const descriptor = dependencies.getDescriptor(args.attestation.serviceId);

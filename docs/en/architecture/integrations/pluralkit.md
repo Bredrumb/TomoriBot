@@ -6,7 +6,7 @@ sidebar:
 
 The PluralKit adapter supplies authoritative message correlation, stable member identity, reply
 recovery, and service-owned prompt wording to the generic [message-proxy subsystem](/architecture/integrations/message-proxy/).
-PluralKit is currently the only selectable message-proxy service.
+PluralKit is one of the selectable message-proxy services.
 
 ## Descriptor
 

@@ -3206,6 +3206,7 @@ CREATE TABLE IF NOT EXISTS message_proxy_identities (
   external_identity_id INT NOT NULL UNIQUE REFERENCES external_identities(external_identity_id) ON DELETE CASCADE,
   short_id TEXT,
   display_name TEXT,
+  avatar_url TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

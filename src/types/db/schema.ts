@@ -215,6 +215,7 @@ export const messageProxyIdentitySchema = z.object({
   external_identity_id: z.number().int(),
   short_id: z.string().nullable().optional(),
   display_name: z.string().nullable().optional(),
+  avatar_url: z.string().nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });

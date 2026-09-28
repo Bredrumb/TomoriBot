@@ -32,12 +32,12 @@ export interface MessageProxyMessageRecord {
   serviceId: string;
   messageDiscId: string;
   channelId: string;
-  originalMessageId: string;
+  originalMessageId: string | null;
   senderDiscId: string;
   createdAt: number;
   expiresAt: number;
-  originalMessage: Message;
-  originalReference: Message["reference"];
+  originalMessage: Message | null;
+  originalReference: Message["reference"] | null;
 }
 
 interface InternalMessageProxyMessageRecord extends MessageProxyMessageRecord {
@@ -174,6 +174,7 @@ export function findMatchingMessageProxyExpectation(
   attestation: ProxyMessageAttestation,
 ): MessageProxyExpectation | null {
   sweepExpiredMessageProxyState();
+  if (!attestation.originalMessageId) return null;
   const expectation = getInternalMessageProxyExpectation(channelId, attestation.originalMessageId);
   if (
     !expectation ||
@@ -185,6 +186,19 @@ export function findMatchingMessageProxyExpectation(
   return expectation;
 }
 
+export function findVerifiedRepostExpectation(
+  channelId: string,
+  serviceId: string,
+  senderDiscId: string,
+): MessageProxyExpectation | null {
+  sweepExpiredMessageProxyState();
+  const matching = [...(expectationsByChannel.get(channelId)?.values() ?? [])].filter(
+    (expectation) => expectation.serviceId === serviceId && expectation.senderDiscId === senderDiscId,
+  );
+  // Without an original ID, concurrent messages from the same host cannot be paired safely.
+  return matching.length === 1 ? matching[0] : null;
+}
+
 export function markMessageProxyExpectationProxied(expectation: MessageProxyExpectation): void {
   const internal = getInternalMessageProxyExpectation(expectation.channelId, expectation.originalMessageId);
   if (!internal) {
@@ -193,6 +207,10 @@ export function markMessageProxyExpectationProxied(expectation: MessageProxyExpe
 
   internal.state = "proxied";
   internal.resolveWait("proxied");
+}
+
+export function consumeVerifiedRepostExpectation(expectation: MessageProxyExpectation): void {
+  deleteMessageProxyExpectation(expectation.channelId, expectation.originalMessageId);
 }
 
 export function beginMessageProxyLookup(channelId: string): () => void {
@@ -220,6 +238,8 @@ export function rememberMessageProxyMessage(args: {
   messageDiscId: string;
   channelId: string;
   expectation: MessageProxyExpectation;
+  verifiedRepostOnly?: boolean;
+  verifiedRepostReference?: Message["reference"];
 }): MessageProxyMessageRecord {
   sweepExpiredMessageProxyState();
   deleteMessageProxyMessageRecord(args.messageDiscId);
@@ -230,12 +250,14 @@ export function rememberMessageProxyMessage(args: {
     serviceId: args.expectation.serviceId,
     messageDiscId: args.messageDiscId,
     channelId: args.channelId,
-    originalMessageId: args.expectation.originalMessageId,
+    originalMessageId: args.verifiedRepostOnly ? null : args.expectation.originalMessageId,
     senderDiscId: args.expectation.senderDiscId,
     createdAt,
     expiresAt: createdAt + confirmedProxyMessageTtlMs,
-    originalMessage: args.expectation.originalMessage,
-    originalReference: args.expectation.originalReference,
+    originalMessage: args.verifiedRepostOnly ? null : args.expectation.originalMessage,
+    originalReference: args.verifiedRepostOnly
+      ? (args.verifiedRepostReference ?? null)
+      : args.expectation.originalReference,
     ttlTimer: null,
   };
 
@@ -272,7 +294,7 @@ export function getSupersededMessageProxyOriginalMessageIds(channelId: string): 
   sweepExpiredMessageProxyState();
   const originalMessageIds = new Set<string>();
   for (const record of proxyMessagesById.values()) {
-    if (record.channelId === channelId) {
+    if (record.channelId === channelId && record.originalMessageId) {
       originalMessageIds.add(record.originalMessageId);
     }
   }
@@ -383,7 +405,11 @@ function scheduleMessageProxyWaitTimer(expectation: InternalMessageProxyExpectat
     () => {
       // Once the original is allowed to proceed, a later webhook must not
       // inherit its trigger decision and create a second response.
-      deleteMessageProxyExpectation(expectation.channelId, expectation.originalMessageId);
+      if (expectation.serviceId === "pluralbuddy") {
+        expectation.resolveWait("timeout");
+      } else {
+        deleteMessageProxyExpectation(expectation.channelId, expectation.originalMessageId);
+      }
     },
     Math.max(expectation.waitDeadline - Date.now(), 0),
   );

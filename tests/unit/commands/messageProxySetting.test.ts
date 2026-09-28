@@ -70,7 +70,7 @@ describe("/personal message-proxy", () => {
 
     configureSubcommand(subcommand as never);
 
-    expect(choices.map(({ value }) => value)).toEqual(["none", "pluralkit"]);
+    expect(choices.map(({ value }) => value)).toEqual(["none", "pluralkit", "pluralbuddy"]);
   });
 
   it("defers before persisting a changed selection", async () => {

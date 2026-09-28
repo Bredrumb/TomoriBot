@@ -25,6 +25,26 @@ export type MessageProxyIdentityUpsertResult = {
   isNewIdentity: boolean;
 };
 
+export type MessageProxyManagedIdentity = {
+  identityId: number;
+  userId: number;
+  userDiscId: string;
+  serviceId: string;
+  displayName: string;
+  avatarUrl: string | null;
+};
+
+type ManagedIdentityRow = {
+  message_proxy_identity_id: number | string;
+  user_id: number | string;
+  user_disc_id: string;
+  service_id: string;
+  display_name: string | null;
+  short_id: string | null;
+  user_nickname: string | null;
+  avatar_url: string | null;
+};
+
 type MessageProxyIdentityReferenceRow = {
   service_id: string;
   user_disc_id: string;
@@ -58,6 +78,72 @@ const CONTEXT_CACHE_MAX_ENTRIES = 2000;
 export class MessageProxyRepository {
   private readonly identityContextByUserDiscId = new Map<string, MessageProxyIdentityContext | null>();
 
+  async listManagedIdentities(hostUserDiscId: string, search = ""): Promise<MessageProxyManagedIdentity[]> {
+    try {
+      const rows = await sql<ManagedIdentityRow[]>`
+        SELECT mpi.message_proxy_identity_id, u.user_id, u.user_disc_id, mpn.service_id,
+          mpi.display_name, mpi.short_id, mpi.avatar_url, upc.user_nickname
+        FROM message_proxy_namespace_accounts mpna
+        JOIN message_proxy_namespaces mpn ON mpn.message_proxy_namespace_id = mpna.message_proxy_namespace_id
+        JOIN message_proxy_identities mpi ON mpi.message_proxy_namespace_id = mpn.message_proxy_namespace_id
+        JOIN external_identities ei ON ei.external_identity_id = mpi.external_identity_id
+        JOIN users u ON u.user_id = ei.user_id
+        LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
+        WHERE mpna.host_user_disc_id = ${hostUserDiscId}
+          AND position(lower(${search.trim()}) in lower(concat_ws(' ', upc.user_nickname, mpi.display_name, mpi.short_id, mpn.service_id))) > 0
+        ORDER BY coalesce(upc.user_nickname, mpi.display_name, mpi.short_id, u.user_disc_id), mpn.service_id
+        LIMIT 25
+      `;
+      return rows.flatMap((row) => this.parseManagedIdentity(row));
+    } catch (error) {
+      log.error("Failed to list managed message-proxy identities", error);
+      return [];
+    }
+  }
+
+  async getManagedIdentity(hostUserDiscId: string, identityId: number): Promise<MessageProxyManagedIdentity | null> {
+    if (!Number.isSafeInteger(identityId) || identityId <= 0) return null;
+    try {
+      const [row] = await sql<ManagedIdentityRow[]>`
+        SELECT mpi.message_proxy_identity_id, u.user_id, u.user_disc_id, mpn.service_id,
+          mpi.display_name, mpi.short_id, mpi.avatar_url, upc.user_nickname
+        FROM message_proxy_namespace_accounts mpna
+        JOIN message_proxy_namespaces mpn ON mpn.message_proxy_namespace_id = mpna.message_proxy_namespace_id
+        JOIN message_proxy_identities mpi ON mpi.message_proxy_namespace_id = mpn.message_proxy_namespace_id
+        JOIN external_identities ei ON ei.external_identity_id = mpi.external_identity_id
+        JOIN users u ON u.user_id = ei.user_id
+        LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
+        WHERE mpna.host_user_disc_id = ${hostUserDiscId}
+          AND mpi.message_proxy_identity_id = ${identityId}
+        LIMIT 1
+      `;
+      return row ? (this.parseManagedIdentity(row)[0] ?? null) : null;
+    } catch (error) {
+      log.error("Failed to load managed message-proxy identity", error);
+      return null;
+    }
+  }
+
+  private parseManagedIdentity(row: ManagedIdentityRow): MessageProxyManagedIdentity[] {
+    const identityId = Number(row.message_proxy_identity_id);
+    const userId = Number(row.user_id);
+    const parsed = parseMessageProxyIdentityUserId(row.user_disc_id);
+    if (!Number.isSafeInteger(identityId) || !Number.isSafeInteger(userId) || parsed?.serviceId !== row.service_id) {
+      return [];
+    }
+    return [
+      {
+        identityId,
+        userId,
+        userDiscId: row.user_disc_id,
+        serviceId: row.service_id,
+        displayName:
+          row.user_nickname?.trim() || row.display_name?.trim() || row.short_id?.trim() || parsed.externalKey,
+        avatarUrl: row.avatar_url,
+      },
+    ];
+  }
+
   async persistAttestedIdentity(args: {
     input: ProxyIdentityUpsertInput;
     messageDiscId: string;
@@ -75,7 +161,6 @@ export class MessageProxyRepository {
     }
 
     const userDiscId = formatMessageProxyIdentityUserId(descriptor.serviceId, input.externalKey);
-    const displayName = input.displayName ?? input.shortId ?? input.externalKey;
     try {
       const persisted = await sql.begin(async (tx) => {
         const [user] = await tx`
@@ -86,16 +171,12 @@ export class MessageProxyRepository {
         `;
         if (!user?.user_id) throw new Error("Synthetic user upsert returned no identifier");
 
+        // Naming and profile writes require a personalization row. A null nickname leaves the
+        // service display name active until the user explicitly sets an override.
         await tx`
           INSERT INTO user_personalization_configs (user_id, user_nickname)
-          VALUES (${user.user_id}, ${displayName})
-          ON CONFLICT (user_id) DO UPDATE SET
-            user_nickname = EXCLUDED.user_nickname,
-            updated_at = CASE
-              WHEN user_personalization_configs.user_nickname IS DISTINCT FROM EXCLUDED.user_nickname THEN NOW()
-              ELSE user_personalization_configs.updated_at
-            END
-          WHERE user_personalization_configs.user_nickname IS DISTINCT FROM EXCLUDED.user_nickname
+          VALUES (${user.user_id}, NULL)
+          ON CONFLICT (user_id) DO NOTHING
         `;
 
         const [namespaceRow] = await tx`
@@ -143,20 +224,21 @@ export class MessageProxyRepository {
 
         const [identityRow] = await tx`
           INSERT INTO message_proxy_identities (
-            message_proxy_namespace_id, external_identity_id, short_id, display_name
+            message_proxy_namespace_id, external_identity_id, short_id, display_name, avatar_url
           )
           VALUES (
             ${namespaceRow.message_proxy_namespace_id}, ${externalIdentity.external_identity_id},
-            ${input.shortId}, ${input.displayName}
+            ${input.shortId}, ${input.displayName}, ${input.avatarUrl ?? null}
           )
           ON CONFLICT (external_identity_id) DO UPDATE SET
             message_proxy_namespace_id = EXCLUDED.message_proxy_namespace_id,
             short_id = EXCLUDED.short_id,
             display_name = EXCLUDED.display_name,
+            avatar_url = EXCLUDED.avatar_url,
             updated_at = NOW()
           RETURNING
             message_proxy_identity_id, message_proxy_namespace_id, external_identity_id,
-            short_id, display_name, created_at, updated_at
+            short_id, display_name, avatar_url, created_at, updated_at
         `;
         if (!identityRow?.message_proxy_identity_id) {
           throw new Error("Message-proxy identity upsert returned no identifier");

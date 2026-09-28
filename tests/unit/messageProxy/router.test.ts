@@ -100,7 +100,7 @@ const noCorrelationDescriptor = {
 } as const satisfies ProxyServiceDescriptor<"uncorrelated">;
 
 function message(): Message {
-  return { id: "proxy-1", channelId: "channel-1", webhookId: "webhook-1" } as Message;
+  return { id: "proxy-1", channelId: "channel-1", webhookId: "webhook-1", author: { username: "Juno" } } as Message;
 }
 
 function expectation(serviceId: string) {
@@ -120,6 +120,40 @@ afterEach(() => {
 });
 
 describe("message-proxy attestation router", () => {
+  it("accepts a verified repost without claiming an original ID", async () => {
+    const service = {
+      serviceId: "best_effort",
+      settingsLocaleKey: "best_effort_option",
+      enabledSuccessDescriptionLocaleKey: "commands.personal.message-proxy.best_effort_enabled_success_description",
+      syntheticUserPrefix: "best_effort:" as const,
+      externalIdentityKind: "best_effort_profile",
+      validateExternalKey: (key: string) => key.length > 0,
+      presentation,
+      attestMessage: async () =>
+        claim("best_effort", {
+          originalMessageId: null,
+          senderDiscordId: "sender-1",
+          identity: identity("best_effort"),
+        }),
+      capabilities: {
+        correlation: "verified-repost" as const,
+        identity: "stable" as const,
+        identityBio: "none" as const,
+        namespaceBio: "none" as const,
+      },
+    } satisfies ProxyServiceDescriptor<"best_effort">;
+    const expected = expectation("best_effort");
+    const result = await routeMessageProxyMessage(
+      { message: message(), candidateServiceIds: ["best_effort"] },
+      { registry: createProxyServiceRegistry([service]) },
+    );
+    expect(result.status).toBe("matched_stable_identity");
+    if (result.status === "matched_stable_identity") {
+      expect(result.expectation).toBe(expected);
+      expect(result.attestation.originalMessageId).toBeNull();
+      expect(result.attestation.identity?.displayName).toBe("Juno");
+    }
+  });
   it("reports unsupported correlation without invoking transport", async () => {
     const registry = createProxyServiceRegistry([noCorrelationDescriptor]);
 

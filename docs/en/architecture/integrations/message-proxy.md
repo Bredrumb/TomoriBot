@@ -8,22 +8,24 @@ The message-proxy subsystem safely transfers a Discord user's trigger verdict to
 delete-and-repost webhook message. It separates service-specific attestation and wording from shared
 admission, identity, persistence, context, targeting, and memory behavior.
 
-Only PluralKit is selectable. Tupperbox is an example of why the capability model includes a
+PluralKit and PluralBuddy are selectable. Tupperbox is an example of why the capability model includes a
 no-correlation state, but TomoriBot does not claim Tupperbox support: its public documentation does
 not provide an authoritative message-attestation API.
 
-## Safety invariant
+## Verification invariant
 
-A webhook repost is admitted only when an adapter authoritatively attests all of these values and
-they exactly match a live expectation:
+A webhook repost is admitted only when an adapter verifies its repost ID, host account, and stable
+identity. The host must have selected that service and have a recent message expectation in the same
+channel. PluralKit also attests an exact original ID. PluralBuddy's message API omits that field, so
+its match to one recent original is best effort:
 
 - registered service ID;
-- Discord original message ID;
+- Discord original message ID for PluralKit;
 - Discord sender account ID;
 - Discord proxy message ID being evaluated.
 
 Timing, channel proximity, display name, avatar, webhook name, and the number of live expectations
-are never identity or correlation evidence. Zero claims admits nothing. Two services claiming the
+are never identity evidence. Zero claims admits nothing. Two services claiming the
 same webhook is a conflict and also admits nothing.
 
 ## Capability model
@@ -33,9 +35,10 @@ same webhook is a conflict and also admits nothing.
 | None | None | Suppress a deleted opted-in original, but ignore the webhook as self-like. |
 | Attested | None | Transfer the exact trigger verdict to the matched webhook. Keep webhook presentation and write no identity rows. |
 | Attested | Stable | Transfer the verdict, persist the stable identity, reconstruct history, and enable service-owned bio behavior. |
+| Verified repost | Stable | Persist verified repost and alter identity with a recent host expectation. Original pairing and duplicate suppression are best effort. |
 
-Stable identity implies authoritative correlation. Identity and namespace bio capabilities exist
-only on the stable branch, making unsafe combinations unrepresentable in `ProxyServiceCapabilities`.
+Identity and namespace bio capabilities exist only for stable identities. The correlation capability
+states whether an adapter can identify the exact original.
 
 ## Lifecycle
 
@@ -48,18 +51,18 @@ user message
 webhook in the same channel while expectations are live
   -> route each distinct candidate service at most once
   -> adapter returns zero or one authoritative attestation
-  -> exact service/original/sender/message match
+  -> exact service/sender/message match, plus original for PluralKit
   -> mark the expectation proxied and remember the short-lived proxy record
   -> stable identity: persist identity + host + immutable message index atomically
   -> identity-free: admit without identity persistence or bio seeding
 ```
 
 Delete and repost events may arrive in either order. Lookup activity pauses the original's wait
-timer. Confirmed proxy records suppress the superseded original during racing history reads and
-carry its reply reference onto the repost. The trigger gate always evaluates the original message,
-so edited repost text cannot create or remove a reply verdict. When the wait expires, the
-expectation is removed immediately; a late webhook cannot inherit a verdict after the original has
-continued.
+timer. PluralKit records suppress the superseded original during racing history reads and carry its
+reply reference onto the repost. Its trigger gate evaluates the original message. PluralKit
+expectations expire when the wait ends. PluralBuddy keeps the expectation until its TTL so a verified
+late repost can still be recognized, but the original may already have triggered a reply. Concurrent
+originals from one host cannot be paired and are left unmatched.
 
 Router outcomes use a fixed six-value taxonomy: unsupported correlation, unmatched, timeout or
 error, conflicting attestations, matched trigger-only, and matched stable identity. In-process
@@ -103,7 +106,7 @@ fit the namespace model, extend persistence deliberately rather than fabricating
 | `users.message_proxy_service` | `NULL` never configured, `none` explicit opt-out, registered ID enabled. Unknown IDs are retained but disabled at runtime. |
 | `external_identities` | Generic canonical external key mapped to one synthetic `users` row. |
 | `message_proxy_namespaces` | Service container keyed by `(service_id, namespace_key)`. |
-| `message_proxy_identities` | Stable identity linked to an external identity and namespace. |
+| `message_proxy_identities` | Stable identity linked to an external identity and namespace, with its last verified webhook avatar. |
 | `message_proxy_namespace_accounts` | Discord accounts authorized to speak for the namespace. |
 | `message_proxy_message_index` | Immutable message-to-identity and attested-sender history attribution. |
 
@@ -123,5 +126,9 @@ identity transaction invalidates a prior miss only after the write commits.
 | `MESSAGE_PROXY_MESSAGE_INDEX_PRUNE_INTERVAL_HOURS` | `24` | Retention sweep interval. |
 | `MESSAGE_PROXY_BIO_SEED_MAX_CHARS` | `1000` | Maximum one-time identity bio snapshot. |
 
-Transport-specific authentication, rate-limit behavior, and timeout variables remain with each
-adapter. See the [PluralKit adapter](/architecture/integrations/pluralkit/) for the supported service.
+PluralBuddy uses deployment-owned OAuth app credentials in `PLURALBUDDY_CLIENT_ID` and
+`PLURALBUDDY_CLIENT_SECRET` for its OAuth client-credentials token. Its message lookup is bounded to
+five seconds, stops on a rate-limit response, and caches successful lookups. See the
+[PluralKit adapter](/architecture/integrations/pluralkit/) for its separate transport.
+The PluralBuddy adapter uses the public `pluralbuddy.app` origin. Supporting another instance would
+require a configurable API origin, instance-scoped credentials, and instance-scoped identity keys.

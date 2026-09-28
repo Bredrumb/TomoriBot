@@ -70,10 +70,11 @@ the command payload remains intact.
 - **Message-proxy speedbump**: for users with a registered `users.message_proxy_service`, normal guild
   messages create a service-scoped expectation and wait up to `MESSAGE_PROXY_WAIT_MS`. A matching
   `messageDelete` suppresses the original. The router asks each distinct candidate adapter once and
-  admits only an exact service/original/sender attestation. Stable identities persist atomically;
-  correlated identity-free reposts write no identity state. Privacy, cooldown, quota, and access
-  checks remain keyed on the attested host account. Trigger evaluation uses the original message,
-  not mutable repost text, and an expired wait removes the expectation before the original proceeds.
+  admits only a verified service/repost/sender claim from a selected service. PluralKit also attests
+  the exact original, so trigger evaluation uses its original message and an expired wait removes
+  the expectation before the original proceeds. PluralBuddy has no original ID, so it uses a recent
+  host expectation and the verified repost text. Stable identities persist atomically. Privacy,
+  cooldown, quota, and access checks remain keyed on the attested host account.
 
 ## DM server-key resolution
 

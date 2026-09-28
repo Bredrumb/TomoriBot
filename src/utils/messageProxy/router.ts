@@ -3,6 +3,7 @@ import { messageProxyServiceRegistry, type ProxyServiceRegistry } from "@/utils/
 import {
   beginMessageProxyLookup,
   findMatchingMessageProxyExpectation,
+  findVerifiedRepostExpectation,
   type MessageProxyExpectation,
 } from "@/utils/messageProxy/proxyExpectation";
 import type { ProxyMessageAttestation, ProxyServiceDescriptor } from "@/utils/messageProxy/types";
@@ -51,11 +52,17 @@ export function clearMessageProxyRouteMetricsForTests(): void {
 type MessageProxyRouterDependencies = {
   registry: ProxyServiceRegistry<string>;
   findExpectation(channelId: string, attestation: ProxyMessageAttestation): MessageProxyExpectation | null;
+  findVerifiedRepostExpectation(
+    channelId: string,
+    serviceId: string,
+    senderDiscId: string,
+  ): MessageProxyExpectation | null;
 };
 
 const DEFAULT_DEPENDENCIES: MessageProxyRouterDependencies = {
   registry: messageProxyServiceRegistry,
   findExpectation: findMatchingMessageProxyExpectation,
+  findVerifiedRepostExpectation,
 };
 
 type AttestingProxyServiceDescriptor = Exclude<
@@ -66,7 +73,9 @@ type AttestingProxyServiceDescriptor = Exclude<
 function isAttestingDescriptor(
   descriptor: ProxyServiceDescriptor<string> | undefined,
 ): descriptor is AttestingProxyServiceDescriptor {
-  return descriptor?.capabilities.correlation === "attested";
+  return (
+    descriptor?.capabilities.correlation === "attested" || descriptor?.capabilities.correlation === "verified-repost"
+  );
 }
 
 export async function routeMessageProxyMessage(
@@ -98,9 +107,19 @@ export async function routeMessageProxyMessage(
         claim.identity.serviceId !== descriptor.serviceId ||
         claim.identity.externalIdentityKind !== descriptor.externalIdentityKind ||
         !descriptor.validateExternalKey(claim.identity.externalKey));
-    if (claim.serviceId !== descriptor.serviceId || claim.proxyMessageId !== args.message.id || invalidIdentity) {
+    if (
+      claim.serviceId !== descriptor.serviceId ||
+      claim.proxyMessageId !== args.message.id ||
+      (claim.channelId && claim.channelId !== args.message.channelId) ||
+      (descriptor.capabilities.correlation === "attested" && !claim.originalMessageId) ||
+      (descriptor.capabilities.correlation === "verified-repost" && claim.originalMessageId !== null) ||
+      invalidIdentity
+    ) {
       log.warn(`Rejected malformed message-proxy attestation from ${descriptor.serviceId}`);
       return [];
+    }
+    if (descriptor.capabilities.correlation === "verified-repost" && claim.identity) {
+      claim.identity.displayName = args.message.author.username;
     }
     return [claim];
   });
@@ -112,7 +131,13 @@ export async function routeMessageProxyMessage(
   const attestation = claims[0];
   if (!attestation) return routeResult({ status: errored ? "timeout_or_error" : "unmatched" });
 
-  const expectation = dependencies.findExpectation(args.message.channelId, attestation);
+  const expectation = attestation.originalMessageId
+    ? dependencies.findExpectation(args.message.channelId, attestation)
+    : dependencies.findVerifiedRepostExpectation(
+        args.message.channelId,
+        attestation.serviceId,
+        attestation.senderDiscordId,
+      );
   if (!expectation) return routeResult({ status: "unmatched" });
   return routeResult({
     status: attestation.identity ? "matched_stable_identity" : "matched_trigger_only",

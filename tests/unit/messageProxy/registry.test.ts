@@ -42,7 +42,7 @@ const fixtureDescriptor = {
 
 describe("message-proxy registry", () => {
   it("exposes only the disabled choice and registered production services", () => {
-    expect(getMessageProxyServiceChoices()).toEqual([MESSAGE_PROXY_DISABLED_SERVICE_ID, "pluralkit"]);
+    expect(getMessageProxyServiceChoices()).toEqual([MESSAGE_PROXY_DISABLED_SERVICE_ID, "pluralkit", "pluralbuddy"]);
     expect(resolveConfiguredProxyService(null)).toBeNull();
     expect(resolveConfiguredProxyService("none")).toBeNull();
     expect(resolveConfiguredProxyService("pluralkit")).toBe("pluralkit");

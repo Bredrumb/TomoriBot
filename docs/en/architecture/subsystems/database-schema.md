@@ -87,7 +87,9 @@ Migration 056 adds the service-neutral identity graph:
 - `message_proxy_namespaces` is unique on `(service_id, namespace_key)` and stores optional cosmetic
   short ID, display name, tag, and public description.
 - `message_proxy_identities` links one external identity to one namespace. Its external-identity link is
-  unique and both foreign keys cascade on deletion.
+  unique and both foreign keys cascade on deletion. Migration 087 adds the last verified webhook
+  avatar URL for the identity panels and clears generated nicknames that matched the service snapshot.
+  Nicknames subsequently set by users remain in `user_personalization_configs` and take priority.
 - `message_proxy_namespace_accounts` links one namespace to multiple Discord host accounts and indexes
   `host_user_disc_id` for scoped absent-identity discovery.
 - `message_proxy_message_index` immutably maps a Discord message to its stable external identity and

@@ -37,6 +37,7 @@ import { getCachedChannelContextNote } from "@/utils/cache/channelContextNoteCac
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { stripBridgePrefix, extractBridgeUserId, isMatrixBridgeWebhookUsername, isBridgeUserId } from "@/utils/bridges";
 import { checkTargetEmbed } from "@/utils/discord/embedClassifier";
+import { extractTextDisplayContent } from "@/utils/discord/componentNoticeReader";
 import { getCachedVoiceTranscript, setCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { isAudioAttachment, transcribeMessageAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import { resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
@@ -953,6 +954,9 @@ async function simplifyMessage(
     : isDebug
       ? msg.content.slice(2)
       : msg.content;
+  if (!content && messageProxyIdentitiesByMessageId.get(msg.id)?.serviceId === "pluralbuddy") {
+    content = extractTextDisplayContent(msg.components);
+  }
   const replyContext = await withReplyContext(
     turn,
     msg,
@@ -1022,7 +1026,8 @@ async function simplifyMessage(
       const messageProxyIdentity = messageProxyIdentitiesByMessageId.get(msg.id);
       if (messageProxyIdentity) {
         authorId = messageProxyIdentity.userDiscId;
-        authorName = messageProxyIdentity.displayName;
+        const identityUser = await getCachedUserRow(authorId);
+        authorName = identityUser?.user_nickname?.trim() || messageProxyIdentity.displayName;
         // Deliberately not registered in syntheticUsers: a stable proxy identity
         // owns a real users row, and participant discovery keys any synthetic
         // entry as a webhook, which would strip its memories, aliases, and
