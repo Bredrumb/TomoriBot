@@ -18,7 +18,7 @@ import {
 import type { ParticipantCapability } from "@/utils/text/participants/identity";
 import { participantKeysEqual, serializeParticipantKey } from "@/utils/text/participants/identity";
 
-const DEFAULT_SOURCE_TIMEOUT_MS = 1_500;
+const SOURCE_TIMEOUT_MS = 1_500;
 
 export interface ParticipantSourceInput {
   visibleInput: ParticipantVisibleInput;
@@ -53,11 +53,6 @@ export type ParticipantSourceRegistry = ContributionRegistry<RegisteredParticipa
 export interface ParticipantDiscoveryComposition {
   plan: ParticipantDiscoveryPlan;
   diagnostics: readonly ContributionExecutionDiagnostic[];
-}
-
-function sourceTimeoutMs(): number {
-  const configured = Number.parseInt(process.env.PARTICIPANT_SOURCE_TIMEOUT_MS ?? "", 10);
-  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_SOURCE_TIMEOUT_MS;
 }
 
 function referenceCandidates(input: ParticipantSourceInput): DiscoveredParticipantCandidate[] {
@@ -177,7 +172,7 @@ export async function composeParticipantDiscoveryPlan(
   for (const registration of registry.ordered) {
     const executed = await executeContribution<readonly ParticipantSourceCandidate[]>({
       descriptor: registration,
-      timeoutMs: sourceTimeoutMs(),
+      timeoutMs: SOURCE_TIMEOUT_MS,
       outputCount: (output) => output.length,
       run: async (signal) => {
         const output = await registration.source.discover(input, signal);

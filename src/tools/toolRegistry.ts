@@ -14,6 +14,7 @@ import type {
 } from "../types/tool/interfaces";
 import { getGuildMcpManager } from "../utils/mcp/guildMcpManager";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
+import { redactToolParametersForStorage } from "@/utils/tools/toolParameterRedaction";
 import {
   getAvailableToolsForContext as getAvailableToolsForContextFromRegistry,
   getAvailableToolsForProvider,
@@ -28,6 +29,29 @@ const BUILTIN_TOOL_ALIASES: Record<string, string> = {
 
 function resolveBuiltInToolAlias(toolName: string): string {
   return BUILTIN_TOOL_ALIASES[toolName] ?? toolName;
+}
+
+function toolNameDistance(left: string, right: string): number {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex++) {
+    const current = [leftIndex];
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex++) {
+      current[rightIndex] = Math.min(
+        (previous[rightIndex] ?? 0) + 1,
+        (current[rightIndex - 1] ?? 0) + 1,
+        (previous[rightIndex - 1] ?? 0) + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+      );
+    }
+    previous = current;
+  }
+  return previous[right.length] ?? 0;
+}
+
+function closestToolName(name: string, available: readonly string[]): string | null {
+  return available.reduce<string | null>((closest, candidate) => {
+    if (!closest) return candidate;
+    return toolNameDistance(name, candidate) < toolNameDistance(name, closest) ? candidate : closest;
+  }, null);
 }
 
 function resolveOpaqueIds(args: Record<string, unknown>, messageIdMap?: MessageIdMap): Record<string, unknown> {
@@ -280,7 +304,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
         provider: context.provider,
         serverId: context.tomoriState.server_id?.toString() || "unknown",
         userId: context.userId,
-        parameters: args,
+        parameters: redactToolParametersForStorage(functionName, args),
         result,
         executionTime,
         timestamp: new Date(),
@@ -307,7 +331,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
         provider: context.provider,
         serverId: context.tomoriState.server_id?.toString() || "unknown",
         userId: context.userId,
-        parameters: args,
+        parameters: redactToolParametersForStorage(functionName, args),
         result: errorResult,
         executionTime,
         timestamp: new Date(),
@@ -337,9 +361,13 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     const tool = this.getTool(toolName);
 
     if (!tool) {
+      // Suggesting a tool this turn cannot run only trades the unknown-name error for an
+      // availability rejection on the next loop iteration.
+      const available = this.getAvailableTools(context.provider, context).map((candidate) => candidate.name);
+      const closest = closestToolName(toolName, available);
       const errorResult: ToolResult = {
         success: false,
-        error: `Tool '${toolName}' not found in registry`,
+        error: `Tool '${toolName}' not found. ${closest ? `Did you mean '${closest}'? ` : ""}Available tools: ${available.join(", ")}`,
       };
 
       log.error(
@@ -390,7 +418,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
         provider: context.provider,
         serverId: context.tomoriState.server_id?.toString() || "unknown",
         userId: context.userId,
-        parameters: args,
+        parameters: redactToolParametersForStorage(toolName, args),
         result,
         executionTime,
         timestamp: new Date(),
@@ -417,7 +445,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
         provider: context.provider,
         serverId: context.tomoriState.server_id?.toString() || "unknown",
         userId: context.userId,
-        parameters: args,
+        parameters: redactToolParametersForStorage(toolName, args),
         result: errorResult,
         executionTime,
         timestamp: new Date(),

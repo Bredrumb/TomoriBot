@@ -12,19 +12,11 @@
  *   bun run rotate-keys --dry-run # Preview without changes
  */
 
-import { config } from "dotenv";
 import { sql } from "bun";
+import { loadInitializedKeyManager } from "../lib/keyManagerBootstrap";
 
-// Load .env before importing keyManager because ES module imports are hoisted
-// above runtime code, so keyManager would read an empty process.env if
-// we imported it statically at the top of this file.
-config();
-
-const { keyManager } = await import("@/utils/security/keyManager");
+const keyManager = await loadInitializedKeyManager();
 const { decryptApiKey, encryptApiKey } = await import("@/utils/security/crypto");
-
-// Populate the key manager's internal map from process.env (now loaded)
-keyManager.initialize();
 
 /**
  * Get PostgreSQL connection URL from environment variables

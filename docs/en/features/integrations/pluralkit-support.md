@@ -15,8 +15,8 @@ sidebar:
 
 TomoriBot understands [PluralKit](https://pluralkit.me/) proxied messages. With support
 enabled, she replies to the proxied webhook message instead of the original that PluralKit
-deletes, and she treats each system member as **their own person** — with their own name,
-identity, and personal memories — rather than lumping everyone together under the shared
+deletes, and she treats each system member as a person with their own name,
+identity, and personal memories instead of grouping everyone under the shared
 Discord account. This page is the user's side of the feature. For the internals, see the
 [PluralKit adapter architecture](/architecture/integrations/pluralkit/). The shared safety model is
 covered in [Chat-Proxy Support](/features/integrations/chat-proxy-support/).
@@ -35,7 +35,7 @@ for no benefit (see below).
 
 - **She answers the right message.** Without this, PluralKit deletes your original message
   mid-generation and Tomori ends up replying to a ghost. With it, she waits briefly, notices
-  the proxy, and responds to the webhook repost — including proxied *replies* to her
+  the proxy, and responds to the webhook repost, including proxied *replies* to her
   messages, which normally lose their reply linkage in the proxy process.
 - **A short pause on your messages.** Tomori waits about **2 seconds** (self-hosters can
   tune `CHAT_PROXY_WAIT_MS`) to see whether PluralKit deletes and reposts your message.
@@ -43,15 +43,15 @@ for no benefit (see below).
   little bit late. This is the tradeoff you accept by opting in, and the command's
   confirmation reply spells it out.
 - **Each member is their own person.** Tomori knows the member's name, which system they
-  belong to, and which Discord account hosts them — as three separate facts. Fronting as a
+  belong to, and which Discord account hosts them as three separate facts. Fronting as a
   different member means talking to her as that member, not as "the account".
 - **Personal memories are per-member.** A fact Tomori learns about one member is stored for
-  *that member* — it doesn't become a server-wide memory, doesn't attach to the host
+  *that member*. It doesn't become a server-wide memory, doesn't attach to the host
   account, and doesn't bleed to system-mates.
 - **A one-time bio import.** The first time Tomori ever sees a member, that member's public
   PluralKit description (if any) may be saved as a starting personal memory so she can
   respect pronouns, boundaries, and preferences from the first conversation. This is a
-  **snapshot, not a sync** — editing the bio on PluralKit later never updates it. To change
+  one-time snapshot. Editing the bio on PluralKit later never updates it. To change
   what she remembers, just tell her in chat ("forget that", "actually, ...").
 - **Your system's description, read while your members talk.** If your system has a public
   description, Tomori keeps it and reads it whenever any of your members are in the
@@ -64,9 +64,9 @@ for no benefit (see below).
 ## Identity Details Worth Knowing
 
 - Members are recognized by PluralKit's **stable internal IDs**, never by name. Renaming a
-  member or changing their display name is fine — Tomori still knows they're the same
+  member or changing their display name is fine: Tomori still knows they're the same
   person, and picks up the new name cosmetically.
-- Identity comes from the message itself, not from who is "currently fronting" — Tomori
+- Identity comes from the message itself, not from who is "currently fronting": Tomori
   never polls your fronters. A member becomes part of the conversation the moment they send
   a proxied message, and Tomori has no way to know a member exists until it has proxied at
   least once while you were opted in.
@@ -92,15 +92,15 @@ are per-member.
 
 ## Current Limitations
 
-- `/memory personal` acts on the account that runs it, so seeded or learned **member**
-  memories can't be managed from the command yet — chat-mediated edits ("Tomori, forget
+- `/personal memories` acts on the account that runs it, so seeded or learned member
+  memories can't be managed from the panel yet. Chat-mediated edits ("Tomori, forget
   that") are the way to change them.
 - The bio import happens exactly once per member, ever. Later PluralKit bio edits never
-  propagate (by design — tell her in chat instead).
+  propagate. Tell her in chat instead.
 - Members can't be `@`-mentioned by Tomori (webhooks aren't mentionable); she addresses
   members by name.
 - If the PluralKit API is slow or down, Tomori falls back to treating the message as a
-  plain webhook for that moment — she'll never invent an identity she couldn't verify.
+  plain webhook for that moment. She never invents an identity she couldn't verify.
 
 If a limitation isn't listed above, assume it should work and report bugs in the support
 server (`/support discord`).

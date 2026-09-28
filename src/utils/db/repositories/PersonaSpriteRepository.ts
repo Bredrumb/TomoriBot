@@ -52,7 +52,9 @@ class PersonaSpriteRepository {
    * materialized/independent persona, its own `persona_sprites` rows are returned.
    *
    * @param personaId - Target persona id
-   * @returns Sprite rows (preset-resolved or persona-owned), or [] on error
+   * @returns Sprite rows (preset-resolved or persona-owned)
+   * @throws When the persona or sprite query fails, so callers that make cleanup decisions do not
+   * treat an unavailable snapshot as an empty sprite set.
    */
   async listForPersona(personaId: number): Promise<PersonaSpriteRow[]> {
     try {
@@ -70,10 +72,10 @@ class PersonaSpriteRepository {
         ORDER BY sprite_key ASC, sprite_id ASC
       `;
 
-      return this.parseRows(rows, `persona ${personaId}`);
+      return this.parseRowsStrict(rows, `persona ${personaId}`);
     } catch (error) {
       log.error(`Error loading persona sprites for persona ${personaId}:`, error);
-      return [];
+      throw error;
     }
   }
 
@@ -135,61 +137,6 @@ class PersonaSpriteRepository {
     `;
 
     return this.parseRows(rows, `preset pointer persona ${personaId}`);
-  }
-
-  /**
-   * Returns the subset of the given persona ids that have at least one sprite,
-   * resolving preset pointers in bulk. Batched eligibility source for the
-   * `/persona sprites` picker filters.
-   *
-   * A plain `GROUP BY persona_id` over `persona_sprites` would be wrong: a live
-   * preset-pointer persona owns **zero** `persona_sprites` rows yet still has
-   * sprites through the shared preset set. This query reproduces
-   * {@link listForPersona}'s branch order: pointer resolution first, own rows
-   * otherwise; and treats a persona as eligible when:
-   *   - it is not a live pointer and owns at least one `persona_sprites` row
-   *     (real rows always carry a numeric `sprite_id`, reproducing the caller's
-   *     `typeof sprite.sprite_id === "number"` narrowing); or
-   *   - it is a live pointer whose resolved preset lineage/language has at least
-   *     one `preset_sprites` row.
-   *
-   * @param personaIds - Candidate persona ids (usually every persona on a server)
-   * @returns Set of eligible `persona_id` values.
-   */
-  async personaIdsWithSprites(personaIds: number[]): Promise<Set<number>> {
-    if (personaIds.length === 0) {
-      return new Set();
-    }
-
-    try {
-      const rows = await sql<Array<{ persona_id: number | string }>>`
-        SELECT DISTINCT p.persona_id
-        FROM personas p
-        WHERE p.persona_id = ANY(${sql.array(personaIds, "int4")})
-          AND (
-            (
-              p.is_pointer IS NOT TRUE
-              AND EXISTS (
-                SELECT 1 FROM persona_sprites ps WHERE ps.persona_id = p.persona_id
-              )
-            )
-            OR (
-              p.is_pointer = TRUE
-              AND p.preset_lineage_id IS NOT NULL
-              AND p.preset_language IS NOT NULL
-              AND EXISTS (
-                SELECT 1 FROM preset_sprites prs
-                WHERE prs.preset_lineage_id = p.preset_lineage_id
-                  AND prs.preset_language = p.preset_language
-              )
-            )
-          )
-      `;
-      return new Set(rows.map((row) => Number(row.persona_id)));
-    } catch (error) {
-      log.error(`Error loading persona ids with sprites for ${personaIds.length} personas:`, error);
-      return new Set();
-    }
   }
 
   async countForPersona(personaId: number): Promise<number> {
@@ -374,7 +321,8 @@ class PersonaSpriteRepository {
    * Deletes ALL of a persona's own sprite rows (used when `/persona default`
    * re-points a persona, resetting it to the official preset sprite set).
    *
-   * @returns The deleted rows (for storage cleanup), or [] on error/no-op
+   * @returns The deleted rows (for storage cleanup), or [] when no rows matched
+   * @throws When the delete query fails
    */
   async deleteAllForPersona(personaId: number): Promise<PersonaSpriteRow[]> {
     try {
@@ -383,14 +331,13 @@ class PersonaSpriteRepository {
         WHERE persona_id = ${personaId}
         RETURNING sprite_id, persona_id, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity, created_at, updated_at
       `;
-      const parsedRows = this.parseRows(rows, `persona ${personaId} sprite reset`);
-      if (parsedRows.length > 0) {
-        invalidatePersonaSpriteCache(personaId);
-      }
-      return parsedRows;
+      // A successful DELETE with no matching rows still establishes that the cache is not
+      // authoritative for this reset. Invalidation follows the completed write, never before it.
+      invalidatePersonaSpriteCache(personaId);
+      return this.parseRowsStrict(rows, `persona ${personaId} sprite reset`);
     } catch (error) {
       log.error(`Error clearing persona sprites for persona ${personaId}:`, error);
-      return [];
+      throw error;
     }
   }
 
@@ -401,6 +348,18 @@ class PersonaSpriteRepository {
       if (parsed) {
         parsedRows.push(parsed);
       }
+    }
+    return parsedRows;
+  }
+
+  private parseRowsStrict(rows: PersonaSpriteRow[], context: string): PersonaSpriteRow[] {
+    const parsedRows: PersonaSpriteRow[] = [];
+    for (const row of rows) {
+      const parsed = this.parseRow(row, context);
+      if (!parsed) {
+        throw new Error(`Invalid persona_sprites row for ${context}`);
+      }
+      parsedRows.push(parsed);
     }
     return parsedRows;
   }

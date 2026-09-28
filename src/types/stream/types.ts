@@ -27,6 +27,11 @@ export const DISCORD_STREAMING_CONSTANTS = {
   THINKING_PAUSE_CHANCE: 0.25,
 
   INACTIVITY_TIMEOUT_MS: 120000, // 2 minutes
+  // Hosted queues (NVIDIA NIM's free tier measured 266s, OpenRouter free models similar) can hold a
+  // healthy request for minutes before the first token, so the wait for it gets a longer budget
+  // than the gaps after it. Every stall detector must honor this for the pre-first-token phase,
+  // or the shortest one silently caps the wait for all of them.
+  FIRST_TOKEN_TIMEOUT_MS: 300000, // 5 minutes
 } as const;
 
 export enum VisibleDeliveryMode {
@@ -90,9 +95,6 @@ export interface StreamState {
   hasSemanticMarkers: boolean;
   messageSentCount: number;
   hasRepliedToOriginalMessage: boolean;
-  lastChunkTime: number;
-  inactivityTimer: NodeJS.Timeout | null;
-  timedOut: boolean;
   accumulatedText: string; // Track all text sent to Discord for short-term memory
   prefillTarget?: string; // Prefill text to strip from streamed output (hybrid prefix)
   prefillMatched: number; // Number of prefill chars matched/stripped so far
@@ -207,9 +209,6 @@ export function createDefaultStreamState(): StreamState {
     hasSemanticMarkers: false,
     messageSentCount: 0,
     hasRepliedToOriginalMessage: false,
-    lastChunkTime: Date.now(),
-    inactivityTimer: null,
-    timedOut: false,
     accumulatedText: "", // Initialize empty for short-term memory tracking
     prefillTarget: undefined,
     prefillMatched: 0,

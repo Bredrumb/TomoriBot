@@ -1,27 +1,12 @@
 import { HumanizerDegree } from "@/types/db/schema";
 import { log } from "@/utils/misc/logger";
-import { escapeRegExp } from "./regexUtils";
 
 const DISCORD_CUSTOM_EMOJI_NAME_REGEX = /^<a?:([^:>]+):[^>]+>$/;
-const DEFAULT_EMOJI_RUN_PREFIX_LENGTH = 3;
-const MIN_EMOJI_RUN_PREFIX_LENGTH = 1;
-const MAX_EMOJI_RUN_PREFIX_LENGTH = 32;
+// Adjacent custom emojis merge into one message when their normalized names share this many
+// leading characters (JoeCaught_1 + JoeCaught_2), so sticker-like sets land together.
+const EMOJI_RUN_PREFIX_LENGTH = 3;
 const HEAVY_HUMANIZER_ELLIPSIS_PLACEHOLDER = "__TOMORI_ELLIPSIS__";
-
-function loadEmojiRunPrefixLength(): number {
-  const raw = process.env.EMOJI_RUN_PREFIX_LENGTH;
-  if (!raw) return DEFAULT_EMOJI_RUN_PREFIX_LENGTH;
-
-  const parsed = Number.parseInt(raw, 10);
-  if (Number.isNaN(parsed)) {
-    log.warn(`Invalid EMOJI_RUN_PREFIX_LENGTH value: ${raw}. Using default: ${DEFAULT_EMOJI_RUN_PREFIX_LENGTH}`);
-    return DEFAULT_EMOJI_RUN_PREFIX_LENGTH;
-  }
-
-  return Math.min(MAX_EMOJI_RUN_PREFIX_LENGTH, Math.max(MIN_EMOJI_RUN_PREFIX_LENGTH, parsed));
-}
-
-const EMOJI_RUN_PREFIX_LENGTH = loadEmojiRunPrefixLength();
+const HEAVY_HUMANIZER_SPAN_PLACEHOLDER_PREFIX = "__TOMORI_SPAN_";
 
 function getEmojiRunPrefix(emojiTag: string): string | null {
   const match = DISCORD_CUSTOM_EMOJI_NAME_REGEX.exec(emojiTag);
@@ -86,47 +71,6 @@ function shouldEmojiStayInline(sourceText: string, emojiStart: number, emojiLeng
   return true;
 }
 
-function detectAndProtectMarkdownLinks(text: string): {
-  protectedText: string;
-  markdownLinks: string[];
-} {
-  const markdownLinks: string[] = [];
-  const markdownLinkRegex = /\[([^\]]*)\]\(([^)]+(?:\([^)]*\)[^)]*)*)\)/g;
-
-  const protectedText = text.replace(markdownLinkRegex, (match) => {
-    markdownLinks.push(match);
-    const placeholder = `__MARKDOWN_LINK_${markdownLinks.length - 1}__`;
-    log.info(`Markdown Link Protection: Protected "${match}" with placeholder "${placeholder}"`);
-    return placeholder;
-  });
-
-  if (markdownLinks.length > 0) {
-    log.info(`Markdown Link Protection: Protected ${markdownLinks.length} markdown link(s) in text`);
-  }
-
-  return { protectedText, markdownLinks };
-}
-
-function restoreMarkdownLinksFromPlaceholders(text: string, markdownLinks: string[]): string {
-  let restoredText = text;
-
-  for (let i = markdownLinks.length - 1; i >= 0; i--) {
-    const placeholder = `__MARKDOWN_LINK_${i}__`;
-    const originalLink = markdownLinks[i];
-    restoredText = restoredText.replace(new RegExp(escapeRegExp(placeholder), "g"), originalLink);
-
-    if (restoredText.includes(originalLink)) {
-      log.info(`Markdown Link Restoration: Restored placeholder "${placeholder}" to "${originalLink}"`);
-    }
-  }
-
-  if (markdownLinks.length > 0) {
-    log.info(`Markdown Link Restoration: Restored ${markdownLinks.length} markdown link(s) from placeholders`);
-  }
-
-  return restoredText;
-}
-
 function findBalancedParentheses(text: string, startIndex = 0): { start: number; end: number; content: string } | null {
   const openIndex = text.indexOf("(", startIndex);
   if (openIndex === -1) return null;
@@ -149,7 +93,25 @@ function findBalancedParentheses(text: string, startIndex = 0): { start: number;
   return { start: openIndex, end: closeIndex + 1, content: text.substring(openIndex, closeIndex + 1) };
 }
 
-function findQuotedString(text: string, startIndex = 0): { start: number; end: number; content: string } | null {
+/**
+ * Scanning variant of {@link findBalancedParentheses}: the base function only examines the first "("
+ * at or after `startIndex`, so an unclosed "(" or an emoticon like ":(" would hide every balanced
+ * aside after it, and a flush landing in one of those asides would sever it.
+ */
+export function findNextBalancedParentheses(
+  text: string,
+  startIndex = 0,
+): { start: number; end: number; content: string } | null {
+  let openIndex = text.indexOf("(", startIndex);
+  while (openIndex !== -1) {
+    const match = findBalancedParentheses(text, openIndex);
+    if (match) return match;
+    openIndex = text.indexOf("(", openIndex + 1);
+  }
+  return null;
+}
+
+export function findQuotedString(text: string, startIndex = 0): { start: number; end: number; content: string } | null {
   const openIndex = text.indexOf('"', startIndex);
   if (openIndex === -1) return null;
 
@@ -166,18 +128,41 @@ function findQuotedString(text: string, startIndex = 0): { start: number; end: n
   return null;
 }
 
-function findJapaneseQuotedString(
+/**
+ * Distinct open/close quotation pairs whose contents must never be split. The straight `"` is
+ * handled by {@link findQuotedString} because it opens and closes with one character. `'` and
+ * `‘ ’` are excluded: they double as apostrophes ("don’t"), so treating them as openers would
+ * protect arbitrary stretches of prose.
+ */
+export const PAIRED_QUOTE_MARKS: ReadonlyArray<readonly [string, string]> = [
+  ["「", "」"],
+  ["『", "』"],
+  ["｢", "｣"],
+  ["«", "»"],
+  ["‹", "›"],
+  ["“", "”"],
+  ["〈", "〉"],
+  ["《", "》"],
+];
+
+/** Finds the earliest closed span of any {@link PAIRED_QUOTE_MARKS} pair at or after `startIndex`. */
+export function findPairedQuotedString(
   text: string,
   startIndex = 0,
 ): { start: number; end: number; content: string } | null {
-  const openIndex = text.indexOf("「", startIndex);
-  if (openIndex === -1) return null;
-  const closeIndex = text.indexOf("」", openIndex + 1);
-  if (closeIndex === -1) return null;
-  return { start: openIndex, end: closeIndex + 1, content: text.substring(openIndex, closeIndex + 1) };
+  let earliest: { start: number; end: number; content: string } | null = null;
+  for (const [open, close] of PAIRED_QUOTE_MARKS) {
+    const openIndex = text.indexOf(open, startIndex);
+    if (openIndex === -1 || (earliest && openIndex >= earliest.start)) continue;
+    const closeIndex = text.indexOf(close, openIndex + open.length);
+    if (closeIndex === -1) continue;
+    const end = closeIndex + close.length;
+    earliest = { start: openIndex, end, content: text.substring(openIndex, end) };
+  }
+  return earliest;
 }
 
-function findMarkdownBold(
+export function findMarkdownBold(
   text: string,
   startIndex = 0,
 ): { start: number; end: number; content: string; type: "markdown_bold" } | null {
@@ -210,7 +195,7 @@ function findMarkdownBold(
   return null;
 }
 
-function findMarkdownItalic(
+export function findMarkdownItalic(
   text: string,
   startIndex = 0,
 ): { start: number; end: number; content: string; type: "markdown_italic" } | null {
@@ -261,7 +246,7 @@ function findMarkdownItalic(
   return null;
 }
 
-function findMarkdownStrikethrough(
+export function findMarkdownStrikethrough(
   text: string,
   startIndex = 0,
 ): { start: number; end: number; content: string; type: "markdown_strikethrough" } | null {
@@ -274,6 +259,22 @@ function findMarkdownStrikethrough(
     end: closing + 2,
     content: text.substring(opening, closing + 2),
     type: "markdown_strikethrough",
+  };
+}
+
+export function findMarkdownSpoiler(
+  text: string,
+  startIndex = 0,
+): { start: number; end: number; content: string; type: "markdown_spoiler" } | null {
+  const opening = text.indexOf("||", startIndex);
+  if (opening === -1) return null;
+  const closing = text.indexOf("||", opening + 2);
+  if (closing === -1) return null;
+  return {
+    start: opening,
+    end: closing + 2,
+    content: text.substring(opening, closing + 2),
+    type: "markdown_spoiler",
   };
 }
 
@@ -311,7 +312,7 @@ function findMarkdownInlineCode(
   return null;
 }
 
-function findMarkdownLink(
+export function findMarkdownLink(
   text: string,
   startIndex = 0,
 ): { start: number; end: number; content: string; type: "markdown_link" } | null {
@@ -343,6 +344,221 @@ function findMarkdownLink(
     content: text.substring(openBracket, closeParen + 1),
     type: "markdown_link",
   };
+}
+
+export type EmphasisMarker = "*" | "_" | "~";
+
+const EMPHASIS_WORD_CHAR_REGEX = /[\p{L}\p{N}_]/u;
+const EMPHASIS_CONTENT_CHAR_REGEX = /[\p{L}\p{N}]/u;
+const EMPHASIS_WHITESPACE_REGEX = /\s/u;
+// Han, kana, and Hangul write without spaces between words, so the ja and zh-TW locales place
+// emphasis markers directly against letters.
+const SPACELESS_SCRIPT_REGEX = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+// Emoticons use bare parens as facial features, so a candidate whose opener is glued to one is not
+// an aside: "ugh :( that sucks. anyway. glad you're back :)" would otherwise hold the whole stretch
+// between the two faces in one message.
+const EMOTICON_GLUE_REGEX = /[:;=8']/;
+/** Pass 1 and {@link maskInlineCodeAndUrls} share one URL shape so the two cannot drift apart. */
+const URL_PATTERN_SOURCE = String.raw`(?<!\]\()(https?|ftps?):\/\/[^\s<>[\](){}'"]+`;
+const INLINE_CODE_PATTERN = /`[^`\n]*`/g;
+
+function isEmphasisMarkerChar(char: string): char is EmphasisMarker {
+  return char === "*" || char === "_" || char === "~";
+}
+
+/**
+ * Whether `char` reads as part of a word when a marker run sits next to it.
+ *
+ * A spaceless script's letter does not: Japanese and Chinese put the marker straight against the
+ * text ("ふん*顔をそむける*わけ"), and a renderer italicizes that, so counting those letters as word
+ * characters would leave the ja and zh-TW locales with exactly the split this classifier exists to
+ * prevent. Only `*` gets this exemption. An underscore glued to a word is an identifier ("user_id")
+ * in every script, and an ASCII `~~` glued to kana is almost always a wave-dash elongation
+ * ("やだ~~w", "おはよ~~！"); exempting it would hold the rest of the reply behind a strikethrough
+ * that was never opened.
+ */
+function isWordCharForMarker(char: string, marker: EmphasisMarker): boolean {
+  if (!EMPHASIS_WORD_CHAR_REGEX.test(char)) return false;
+  return marker !== "*" || !SPACELESS_SCRIPT_REGEX.test(char);
+}
+
+/**
+ * Flanking classification for one marker run, following the rules a markdown renderer applies.
+ *
+ * An opener needs non-whitespace after it and must not sit inside a word, so `2 * 3` and a `* ` list
+ * bullet never open. A closer needs non-whitespace before it and must not sit inside a word either,
+ * so a `Best*` footnote never closes. `_` additionally needs a letter or digit against its inner
+ * side, which keeps kaomoji (`-_-`, `^_^`, `>_<`) and identifiers (`user_id`, `_id`) from reading as
+ * emphasis. A single `~` is prose.
+ *
+ * The stream hold and the HEAVY span protection both classify runs here, so a run one layer treats
+ * as an opener is an opener for the other as well. Deliberately stricter than a renderer in one
+ * place: an intraword closer in a spaced script (`*a*b`) is rejected, because the hold shares this
+ * rule and would otherwise stall on prose.
+ */
+export function classifyEmphasisMarkerRun(
+  text: string,
+  runStart: number,
+  runEnd: number,
+  marker: EmphasisMarker,
+): { opens: boolean; closes: boolean } {
+  if (marker === "~" && runEnd - runStart < 2) return { opens: false, closes: false };
+
+  const previousChar = runStart > 0 ? text[runStart - 1] : "";
+  const nextChar = runEnd < text.length ? text[runEnd] : "";
+
+  const opens =
+    nextChar !== "" &&
+    !EMPHASIS_WHITESPACE_REGEX.test(nextChar) &&
+    !isWordCharForMarker(previousChar, marker) &&
+    (marker !== "_" || EMPHASIS_CONTENT_CHAR_REGEX.test(nextChar));
+  const closes =
+    previousChar !== "" &&
+    !EMPHASIS_WHITESPACE_REGEX.test(previousChar) &&
+    !isWordCharForMarker(nextChar, marker) &&
+    (marker !== "_" || EMPHASIS_CONTENT_CHAR_REGEX.test(previousChar));
+
+  return { opens, closes };
+}
+
+/**
+ * Blanks out inline code and URLs, leaving length and line structure intact, so an emphasis scan
+ * reads them as prose rather than as markers: `*args`, `**kwargs`, and a `/_next/` path segment are
+ * not emphasis.
+ */
+export function maskInlineCodeAndUrls(text: string): string {
+  return text
+    .replace(INLINE_CODE_PATTERN, (match) => " ".repeat(match.length))
+    .replace(new RegExp(URL_PATTERN_SOURCE, "g"), (match) => " ".repeat(match.length));
+}
+
+/**
+ * True when a finder-reported span is an emphasis pair a renderer would honor.
+ *
+ * The finders pair any two markers, so "* first item\n* second item", "2 * 3 ... 4 * 5", and
+ * "yay ^_^ ... snake_case" all come back as spans. Protecting those suppresses the paragraph and
+ * sentence splits the degree exists to make, so both delimiter runs have to classify as a real
+ * opener and closer, and neither may sit in inline code or a URL.
+ */
+function isRealEmphasisSpan(
+  text: string,
+  maskedText: string,
+  span: { start: number; end: number; content: string },
+): boolean {
+  const marker = span.content.charAt(0);
+  if (!isEmphasisMarkerChar(marker)) return false;
+
+  let openerLength = 0;
+  while (openerLength < span.content.length && span.content[openerLength] === marker) openerLength++;
+  let closerLength = 0;
+  while (
+    closerLength < span.content.length - openerLength &&
+    span.content[span.content.length - 1 - closerLength] === marker
+  ) {
+    closerLength++;
+  }
+  if (openerLength + closerLength >= span.content.length) return false;
+  if (maskedText[span.start] !== marker) return false;
+  if (maskedText[span.end - closerLength] !== marker) return false;
+
+  const opener = classifyEmphasisMarkerRun(text, span.start, span.start + openerLength, marker);
+  const closer = classifyEmphasisMarkerRun(text, span.end - closerLength, span.end, marker);
+  return opener.opens && closer.closes;
+}
+
+/**
+ * True when a paren candidate is an emoticon's face rather than a parenthetical aside.
+ *
+ * A face opens with a bare "(" glued to its eyes (`:(`, `;(`, `:'(`), so a pair of faces reads as a
+ * balanced aside: "ugh :( that sucks. anyway. glad you're back :)" arrives as one span, and holding
+ * it whole would swallow every sentence split between the two faces. Only the opener is checked: a
+ * spurious opener is what creates the false pair, while `(see note:)` is a real aside whose closer
+ * happens to follow a colon.
+ */
+function isEmoticonParenSpan(text: string, span: { start: number; content: string }): boolean {
+  if (span.content.charAt(0) !== "(") return false;
+  const charBeforeOpen = span.start > 0 ? text[span.start - 1] : "";
+  return EMOTICON_GLUE_REGEX.test(charBeforeOpen);
+}
+
+/**
+ * Replaces every protected span in `text` with a placeholder so the HEAVY sentence splitter cannot
+ * cut inside one.
+ *
+ * The semantic-block merge below rewrites protected spans to plain "text" blocks so their
+ * surrounding prose stays in one message, so the HEAVY branch then splits the merged block at every
+ * newline and sentence period, including ones inside the span. A split span reaches Discord as two
+ * messages, each holding one half of the pair as literal syntax
+ * ("*...but if you're asking the answer's more than zero" / "don't make me say a number.*").
+ * Placeholders survive both splits, and each span is restored into whichever chunk holds it.
+ *
+ * The candidate set mirrors the semantic-block pass, markdown links included, so the HEAVY path
+ * needs no separate link protection. Emphasis candidates the finders paired wrongly are rejected,
+ * and the scan resumes one character into them, so a real span that starts before the false pair's
+ * closer is still found. Placeholders are literal tokens, so a reply that emits
+ * `__TOMORI_SPAN_<n>__` verbatim could collide with one; the ellipsis placeholder shares that
+ * exposure, and a collision costs a visible token rather than content.
+ */
+function protectSpansForHeavySplit(text: string): { protectedText: string; spans: string[] } {
+  const spans: string[] = [];
+  let protectedText = "";
+  let searchIndex = 0;
+  const maskedText = maskInlineCodeAndUrls(text);
+
+  while (searchIndex < text.length) {
+    const candidates = [
+      findQuotedString(text, searchIndex),
+      findNextBalancedParentheses(text, searchIndex),
+      findPairedQuotedString(text, searchIndex),
+      findMarkdownBold(text, searchIndex),
+      findMarkdownItalic(text, searchIndex),
+      findMarkdownStrikethrough(text, searchIndex),
+      findMarkdownInlineCode(text, searchIndex),
+      findMarkdownLink(text, searchIndex),
+    ].filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null);
+
+    if (candidates.length === 0) break;
+    const earliest = candidates.reduce((a, b) => (a.start <= b.start ? a : b));
+
+    if (isEmphasisMarkerChar(earliest.content.charAt(0)) && !isRealEmphasisSpan(text, maskedText, earliest)) {
+      protectedText += text.slice(searchIndex, earliest.start + 1);
+      searchIndex = earliest.start + 1;
+      continue;
+    }
+
+    if (isEmoticonParenSpan(text, earliest)) {
+      protectedText += text.slice(searchIndex, earliest.start + 1);
+      searchIndex = earliest.start + 1;
+      continue;
+    }
+
+    protectedText += text.slice(searchIndex, earliest.start);
+    protectedText += `${HEAVY_HUMANIZER_SPAN_PLACEHOLDER_PREFIX}${spans.length}__`;
+    spans.push(earliest.content);
+    searchIndex = earliest.end;
+  }
+
+  protectedText += text.slice(searchIndex);
+  if (spans.length > 0) {
+    log.info(`HEAVY Span Protection: Protected ${spans.length} span(s) from the sentence split`);
+  }
+
+  return { protectedText, spans };
+}
+
+/**
+ * Restores the spans a chunk holds, in one pass over that chunk.
+ *
+ * Scanning every placeholder for every sentence would cost spans times sentences: a 20k-character
+ * span-dense reply spends over a second there, where matching the placeholders actually present
+ * stays proportional to the sentence. A placeholder the model emitted verbatim and that no span owns
+ * is left as written.
+ */
+function restoreSpansFromPlaceholders(text: string, spans: string[]): string {
+  const placeholderPattern = new RegExp(`${HEAVY_HUMANIZER_SPAN_PLACEHOLDER_PREFIX}(\\d+)__`, "g");
+
+  // Function replacer: a string one would expand "$&"-style sequences inside restored span text.
+  return text.replace(placeholderPattern, (match, index: string) => spans[Number(index)] ?? match);
 }
 
 function isStandalonePunctuationChunk(text: string): boolean {
@@ -415,8 +631,16 @@ function findBreakPoint(text: string, maxLength: number): number {
   for (let i = maxLength; i >= preferredBreakZone; i--) {
     if (text[i] === " ") return i + 1;
   }
-  return maxLength;
+  // Unspaced scripts offer no space to break on, so their sentence and clause marks stand in.
+  for (let i = maxLength - 1; i >= preferredBreakZone; i--) {
+    if (FULL_WIDTH_BREAK_MARKS.test(text[i])) return i + 1;
+  }
+  // A cut between a surrogate pair would send half of one character in each message.
+  const nextCode = text.charCodeAt(maxLength);
+  return nextCode >= 0xdc00 && nextCode <= 0xdfff ? maxLength - 1 : maxLength;
 }
+
+const FULL_WIDTH_BREAK_MARKS = /[。！？、，．｡､]/;
 
 function splitCodeBlock(codeBlock: string, chunkLength: number): string[] {
   const chunks: string[] = [];
@@ -470,7 +694,7 @@ function addTextSegment(text: string, currentChunk: string, chunks: string[], ch
 
 /**
  * Creates a regex pattern for splitting sentences while preserving common abbreviations.
- * Splits on periods and Japanese periods (。) but avoids splitting on common abbreviations,
+ * Splits on periods and full-width periods (。．｡) but avoids splitting on common abbreviations,
  * numbered lists, and other period-containing patterns.
  */
 export function createSentenceSplitRegex(): RegExp {
@@ -484,6 +708,7 @@ export function createSentenceSplitRegex(): RegExp {
   const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
   const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
   const alsoKnownAs = ["a\\.k\\.a", "aka"];
+  const otherTargetLanguages = ["sra", "srta", "sres", "dra", "mme", "mlle", "т\\.е", "т\\.д", "т\\.п", "ул"];
 
   const allAbbreviations = [
     ...titles,
@@ -496,14 +721,17 @@ export function createSentenceSplitRegex(): RegExp {
     ...months,
     ...days,
     ...alsoKnownAs,
+    ...otherTargetLanguages,
   ];
 
-  const abbreviationsPattern = `\\b(?:${allAbbreviations.join("|")})`;
+  // An ASCII \b sees no boundary before a Cyrillic or accented letter, so it would never let a
+  // non-English abbreviation match.
+  const abbreviationsPattern = `(?<![\\p{L}\\p{N}_])(?:${allAbbreviations.join("|")})`;
   const acronymPattern = "(?:[A-Z]\\.[A-Z]\\.(?:[A-Z]\\.)*)";
   const negativeLookbehind = `(?<!(?:${abbreviationsPattern}|\\d|${acronymPattern}|\\.))`;
-  const sentenceEnd = "(?:\\.(?=\\s|\\n|$)|。)";
+  const sentenceEnd = "(?:\\.(?=\\s|\\n|$)|[。．｡])";
 
-  return new RegExp(`${negativeLookbehind}${sentenceEnd}`, "i");
+  return new RegExp(`${negativeLookbehind}${sentenceEnd}`, "iu");
 }
 
 /**
@@ -524,7 +752,7 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
     | "url"
     | "quoted"
     | "parenthesized"
-    | "japanese_quoted"
+    | "paired_quoted"
     | "markdown_bold"
     | "markdown_italic"
     | "markdown_strikethrough"
@@ -562,7 +790,7 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
     }
 
     const textContent = block.content;
-    const urlRegex = /(?<!\]\()(https?|ftps?):\/\/[^\s<>[\](){}'"]+/g;
+    const urlRegex = new RegExp(URL_PATTERN_SOURCE, "g");
     let textLastIndex = 0;
     let urlMatch: RegExpExecArray | null;
 
@@ -614,11 +842,11 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
     while (searchIndex < textContent.length) {
       const quotedString = findQuotedString(textContent, searchIndex);
       const balancedParens = findBalancedParentheses(textContent, searchIndex);
-      const japaneseQuoted = findJapaneseQuotedString(textContent, searchIndex);
+      const pairedQuoted = findPairedQuotedString(textContent, searchIndex);
       const candidates = [
         quotedString ? { ...quotedString, type: "quoted" as const } : null,
         balancedParens ? { ...balancedParens, type: "parenthesized" as const } : null,
-        japaneseQuoted ? { ...japaneseQuoted, type: "japanese_quoted" as const } : null,
+        pairedQuoted ? { ...pairedQuoted, type: "paired_quoted" as const } : null,
         findMarkdownBold(textContent, searchIndex),
         findMarkdownItalic(textContent, searchIndex),
         findMarkdownStrikethrough(textContent, searchIndex),
@@ -715,7 +943,7 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
     const isSemanticBlock =
       currentBlock.type === "quoted" ||
       currentBlock.type === "parenthesized" ||
-      currentBlock.type === "japanese_quoted" ||
+      currentBlock.type === "paired_quoted" ||
       currentBlock.type === "markdown_bold" ||
       currentBlock.type === "markdown_italic" ||
       currentBlock.type === "markdown_strikethrough" ||
@@ -818,10 +1046,9 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
       case "text": {
         let textToAdd = block.content.trim();
         if (prevBlockWasEmoji) {
-          // Strip leading sentence-ending punctuation orphaned by the emoji split.
-          // Still needed for trailing-emoji prose like "That was amazing! :Smile:"
-          // where the emoji is intentionally isolated (not "emoji_inline") and the
-          // following text fragment would otherwise begin with an orphan "!".
+          // Strip leading sentence-ending punctuation orphaned by the emoji split. An
+          // intentionally isolated trailing emoji (not "emoji_inline") leaves the following
+          // text fragment starting with an orphan "!".
           textToAdd = textToAdd.replace(/^[.!?。]+(?=\s|$)/, "");
         }
         prevBlockWasEmoji = false;
@@ -840,15 +1067,14 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
             chunkedMessages.push(paragraph);
           }
         } else if (humanizerDegree >= HumanizerDegree.HEAVY) {
-          const paragraphs = textToAdd.split(/\n+/);
+          // Protected spans are held out of the split for the whole block, not per paragraph: a
+          // span containing a newline would otherwise be cut by the paragraph split below.
+          const { protectedText, spans } = protectSpansForHeavySplit(textToAdd);
+          const paragraphs = protectedText.split(/\n+/);
           for (const paragraph of paragraphs) {
             if (!paragraph.trim()) continue;
 
-            const { protectedText: protectedParagraph, markdownLinks } = detectAndProtectMarkdownLinks(paragraph);
-            const processedParagraph = protectedParagraph.replace(
-              /\.{3}(?!\.)(?!\d)/g,
-              HEAVY_HUMANIZER_ELLIPSIS_PLACEHOLDER,
-            );
+            const processedParagraph = paragraph.replace(/\.{3}(?!\.)(?!\d)/g, HEAVY_HUMANIZER_ELLIPSIS_PLACEHOLDER);
             const sentences = processedParagraph.split(createSentenceSplitRegex());
 
             for (let sentence of sentences) {
@@ -856,19 +1082,26 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
               if (!sentence) continue;
 
               let processedSentence = sentence;
-              if ((sentence.endsWith(".") || sentence.endsWith("。")) && !sentence.endsWith("...")) {
+              if (/[.。．｡]$/.test(sentence) && !sentence.endsWith("...")) {
                 processedSentence = sentence.slice(0, -1).trim();
               }
               if (!processedSentence) continue;
 
               processedSentence = processedSentence.replaceAll(HEAVY_HUMANIZER_ELLIPSIS_PLACEHOLDER, "...");
-              processedSentence = restoreMarkdownLinksFromPlaceholders(processedSentence, markdownLinks);
+              processedSentence = restoreSpansFromPlaceholders(processedSentence, spans);
 
               if (currentChunk.length > 0) {
                 chunkedMessages.push(currentChunk);
                 currentChunk = "";
               }
-              chunkedMessages.push(processedSentence);
+              // A restored span reaches this point whole, so it can exceed the chunk limit the
+              // sentence split never checked; splitByNewlines brings it back to the requested
+              // length before it reaches Discord.
+              if (processedSentence.length > chunkLength) {
+                chunkedMessages.push(...splitByNewlines(processedSentence, chunkLength));
+              } else {
+                chunkedMessages.push(processedSentence);
+              }
             }
           }
         } else {

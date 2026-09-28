@@ -5,6 +5,7 @@ import {
   normalizeOpenAICompatibleProviderError,
 } from "@/providers/openaiCompatible/openaiCompatibleErrorFormatter";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy } from "../../helpers/localeCases";
 
 describe("openAI-compatible provider error formatting", () => {
   beforeAll(async () => {
@@ -40,7 +41,7 @@ describe("openAI-compatible provider error formatting", () => {
       fallbackMessage: "Custom endpoint failed.",
     });
 
-    expect(description).toContain("The selected model was rejected by the provider");
+    expect(description).toContain(localizedCopy("en-US", "genai.stream.model_error_description"));
     expect(description).toContain("Unsupported model `Deepseek`");
     expect(description).toContain("Supported IDs: `deepseek-auto`");
   });
@@ -61,8 +62,7 @@ describe("openAI-compatible provider error formatting", () => {
         },
       );
 
-      expect(description).toContain("An unexpected error occurred");
-      expect(description).not.toContain(`${localeNamespace}.unknown_default_message`);
+      expect(description).toContain(localizedCopy("en-US", `${localeNamespace}.unknown_default_message`));
     }
   });
 
@@ -89,8 +89,8 @@ describe("openAI-compatible provider error formatting", () => {
         },
       );
 
-      expect(description).toContain("The provider is currently overloaded or temporarily unavailable");
-      expect(description).not.toContain("An unexpected error occurred");
+      expect(description).toContain(localizedCopy("en-US", "genai.stream.provider_overloaded_description"));
+      expect(description).not.toContain(localizedCopy("en-US", `${localeNamespace}.unknown_default_message`));
     }
   });
 
@@ -109,7 +109,7 @@ describe("openAI-compatible provider error formatting", () => {
       },
     );
 
-    expect(description).toContain("The upstream AI model is currently overloaded");
+    expect(description).toContain(localizedCopy("en-US", "genai.openrouter.503_default_message"));
   });
 
   it("uses NVIDIA 500 parameter guidance and keeps provider details visible", () => {
@@ -129,10 +129,32 @@ describe("openAI-compatible provider error formatting", () => {
       },
     );
 
-    expect(description).toContain("NVIDIA rejected one or more request parameters");
-    expect(description).toContain("set them to `0` with `/model parameters`");
-    expect(description).toContain("`/model logit-bias remove`");
+    expect(description).toContain(localizedCopy("en-US", "genai.nvidia.500_parameter_default_message"));
     expect(description).toContain("**Details:**");
     expect(description).toContain("min_p and logit_bias");
+  });
+
+  it("does not blame a parameter on an opaque NVIDIA 500", () => {
+    // A user acted on the old unconditional copy and changed a setting the payload never carried.
+    // Wrong copy is worse than no copy, so the remediation is gated on NVIDIA naming a parameter.
+    const description = createOpenAICompatibleErrorDescription(
+      {
+        type: "provider_overloaded",
+        message: "NVIDIA API error: HTTP 500: Internal server error (internal_server_error)",
+        code: "500",
+        retryable: true,
+      },
+      "en-US",
+      {
+        localeNamespace: "genai.nvidia",
+        fallbackMessage: "Fallback should not be needed",
+        appendDetailsForCodes: ["500"],
+      },
+    );
+
+    expect(description).not.toContain(localizedCopy("en-US", "genai.nvidia.500_parameter_default_message"));
+    expect(description).toContain(localizedCopy("en-US", "genai.nvidia.500_default_message"));
+    expect(description).toContain("**Details:**");
+    expect(description).toContain("internal_server_error");
   });
 });

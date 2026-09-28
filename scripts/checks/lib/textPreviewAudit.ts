@@ -26,6 +26,9 @@ import { Glob } from "bun";
 /** The helper every fenced, user-authored placeholder must be routed through. */
 export const REQUIRED_HELPER = "buildTextPreview";
 
+/** Domain wrappers that apply the required preview before rendering their result. */
+export const SAFE_PREVIEW_WRAPPERS = ["renderMemoryNoticeContent"] as const;
+
 /**
  * Every locale audited for rule 1. Both are scanned because `check-locales`
  * enforces key PARITY, not content, so a baked ellipsis added only to `ja` would
@@ -40,13 +43,7 @@ export const AUDITED_LOCALES = ["en-US", "ja"] as const;
  */
 export const KNOWN_UNGUARDED = new Set([
   "commands.persona.image-tags.success_description",
-  "commands.personal.image-tags.success_description",
-  "commands.config.image-tags.default-positive.success_description",
-  "commands.config.image-tags.default-positive.cleared_description",
-  "commands.config.image-tags.default-negative.success_description",
-  "commands.config.image-tags.default-negative.cleared_description",
-  "commands.novelai.image.generate.error_description",
-  "commands.novelai.image.parameters.success_description",
+  "commands.novelai.generate.image.error_description",
 ]);
 
 export const TEXT_PREVIEW_REPO_ROOT = resolve(import.meta.dir, "..", "..", "..");
@@ -118,7 +115,10 @@ export function scanFencedPlaceholderUsage(
   if (consumers.length === 0) return [];
 
   return consumers
-    .filter(([, content]) => !content.includes(REQUIRED_HELPER))
+    .filter(
+      ([, content]) =>
+        !content.includes(REQUIRED_HELPER) && !SAFE_PREVIEW_WRAPPERS.some((wrapper) => content.includes(wrapper)),
+    )
     .map(([file]) => ({
       kind: "unguarded-fenced-placeholder" as const,
       key,
@@ -167,9 +167,7 @@ export async function auditTextPreview(): Promise<TextPreviewAuditResult> {
   // Flatten every audited locale so each string carries its dotted key.
   //    Locales load concurrently because this runs inside `bun run vl`'s shared unit
   //    lane, so avoidable serial I/O lands directly on the critical path.
-  const loaded = await Promise.all(
-    AUDITED_LOCALES.map(async (locale) => [locale, await loadLocale(locale)] as const),
-  );
+  const loaded = await Promise.all(AUDITED_LOCALES.map(async (locale) => [locale, await loadLocale(locale)] as const));
   const perLocale = new Map<string, Map<string, string>>();
   for (const [locale, tree] of loaded) {
     const flat = new Map<string, string>();

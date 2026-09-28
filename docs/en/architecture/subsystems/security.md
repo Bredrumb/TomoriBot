@@ -1,4 +1,4 @@
-﻿---
+---
 title: "Security & Privacy"
 ---
 
@@ -52,6 +52,7 @@ Main encrypted storage locations:
 - `server_model_configs.api_key` + `server_model_configs.key_version` *(deprecated Phase 1.5 mirror; drop scheduled for step #14.5)*
 - `opt_api_keys.api_key` + `opt_api_keys.key_version`
 - `api_key_rotation.api_key` + `api_key_rotation.key_version` (except main-key pointer rows)
+- `saved_provider_configs.api_key` and `user_saved_provider_configs.api_key`, each paired with `key_version`
 
 ## Key Versioning and Rotation
 
@@ -89,22 +90,27 @@ Primary file:
 - Temporary cooldown on errored keys
   - `rate_limit`: 60s
   - `api_error`: 5min
-- Main key pointer support (`is_main_key_pointer=true`) so `server_model_configs.api_key` can participate in the pool
+- One main-key pointer per `(server_id, provider)` (`is_main_key_pointer=true`) so each saved provider's primary
+  key can participate in its own pool without coupling rotation state to another provider
 - Success/error recording updates counters and cooldown metadata
 
 This is separate from encryption key version rotation. It controls runtime provider key usage and failover.
+Personal provider credentials do not use this pool. `/personal providers` edits only the user's primary saved
+credential and never reads or writes server rotation rows.
 
 ## Privacy Model
 
 Primary files:
-- `src/commands/personal/privacy.ts`
+- `src/commands/personal/config.ts`
+- `src/utils/discord/ui/personalConfigPanel.ts`
+- `src/utils/discord/interactions/personalConfigRoutes.ts` and its extracted handler modules
 - `src/events/messageCreate/tomoriChat.ts`
 - `src/utils/text/contextBuilder.ts`
 - `src/utils/db/repositories/UserRepository.ts`
 - `src/utils/db/repositories/index.ts`
 - `src/db/schema.sql` (`users.privacy_level`, `personalization_blacklist`)
 
-### Global privacy levels (`/personal privacy`)
+### Global privacy levels (`/personal config`)
 
 `users.privacy_level` values:
 - `0` (`MINIMAL`): full personalization context (including status/roles/personal memories when allowed).
@@ -118,7 +124,7 @@ Current runtime effects for `FULL`:
   but typed hydration applies privacy before rendering or target projection. A hidden saved
   nickname cannot become an output mention, tool target, or copied identity.
 
-### Per-server blacklist (`/server user-blacklist add|remove`)
+### Per-server blacklist (`/moderation`)
 
 `personalization_blacklist` is server-scoped and keyed by `(server_id, user_disc_id)`.
 
@@ -132,21 +138,22 @@ enrichers run. Extension enrichers receive cloned privacy-filtered core fields a
 only owner-stamped `extension:{id}` fields; they cannot restore suppressed names, memories,
 presence, roles, timezone, or physical appearance.
 
-`/server user-blacklist remove` also lists active `persona_user_blocks` rows so moderators can remove persona-scoped mutes/blocks through the same checklist flow. These rows are separate from `personalization_blacklist`: a `mute` prevents the target from triggering that persona, while a `block` also hides the target's recent live dialogue-history messages/media from that persona's context. Persona user blocks are not data deletion, forgetting, or memory redaction.
+`/moderation` also lists active `persona_user_blocks` rows so moderators can remove persona-scoped mutes/blocks through the same checklist flow. These rows are separate from `personalization_blacklist`: a `mute` prevents the target from triggering that persona, while a `block` also hides the target's recent live dialogue-history messages/media from that persona's context. Persona user blocks are not data deletion, forgetting, or memory redaction.
 
 ## Data Export and Deletion (Current Behavior)
 
 Primary files:
-- `src/commands/memory/personal/export.ts`
-- `src/commands/memory/personal/remove.ts`
-- `src/commands/memory/personal/edit.ts`
-- `src/commands/memory/server/export.ts`
-- `src/commands/memory/server/remove.ts`
-- `src/commands/memory/server/edit.ts`
-- `src/commands/personal/config/export.ts`
-- `src/commands/personal/config/remove.ts`
-- `src/commands/server/config/export.ts`
-- `src/commands/server/config/remove.ts`
+- `src/commands/export/personal/memories.ts`
+- `src/commands/personal/memories.ts`
+- `src/utils/discord/ui/personalMemoriesPanel.ts`
+- `src/utils/discord/interactions/personalMemoriesOperations.ts`
+- `src/commands/export/memories.ts`
+- `src/commands/memories.ts`
+- `src/utils/discord/ui/memoriesPanel.ts`
+- `src/utils/discord/interactions/memoriesRoutes.ts`
+- `src/utils/discord/interactions/memoriesDocumentOperations.ts`
+- `src/commands/export/config.ts`
+- `src/commands/reset/config.ts`
 - `src/utils/db/repositories/ImportExportRepository.ts`
 - `src/utils/db/repositoryExportSql.ts`
 
@@ -161,7 +168,7 @@ Delete/reset remains type-scoped. Commands that currently require confirmation c
 - personal settings reset
 - server config reset
 
-Personal memory management remains type-scoped by persona/global scope, and server memory management remains type-scoped by persona scope. `/memory personal remove|edit` and `/memory server remove|edit` operate on one selected stored row per invocation rather than bulk-resetting a whole scope.
+Personal row management is through `/personal memories` (type-scoped by persona/global scope), and server memory management remains type-scoped by persona scope (`/memories`). Both operate on selected stored rows rather than bulk-resetting a whole scope.
 
 Important: the current reset/remove commands do not implement a blanket user-row/account hard delete path in these command implementations.
 
@@ -187,11 +194,11 @@ Primary files:
 Current runtime protections for guild MCP servers and custom endpoints:
 - URL preflight validation still enforces the existing protocol/host policy from `validateRemoteUrl()`.
 - Actual HTTP requests no longer trust that preflight alone; each request revalidates the target URL immediately before sending.
-- The real connection is pinned to the just-validated DNS result via a per-request dispatcher, so the request does not perform a second untrusted DNS lookup.
+- The real connection is pinned to the just-validated DNS results, so the request does not perform a second untrusted DNS lookup. Idempotent `GET` and `HEAD` requests try the next validated address after a transport failure, covering hosts such as `localhost` that resolve to both IPv6 and IPv4 while listening on only one family. Non-idempotent requests fail over only after an explicit connection refusal, which occurs before the remote service accepts or processes the request.
 - Custom endpoint redirects are handled hop-by-hop with revalidation on every `Location` target and a bounded redirect depth (`USER_REMOTE_FETCH_MAX_REDIRECTS`, default `3`).
 - Guild MCP HTTP transports continue to reject redirects (`redirect: "error"`), but now use the same pinned-DNS fetch path for the underlying network call.
 
-Key takeaway: TomoriBot no longer relies on a validation-only DNS check for user-supplied remote endpoints; the validated address is now the address actually used for the request.
+Key takeaway: user-supplied remote endpoints no longer rely on a validation-only DNS check; every attempted address comes from the validated result set.
 
 The same URL-validation path is also used by `safeDownload()` for user/media downloads. Discord attachment imports, workflow JSON uploads, image/GIF/video context expansion, avatar/character-reference reloads, and provider-returned media downloads get bounded size checks, timeout enforcement, redirect revalidation, and production SSRF blocking before bytes are read into memory.
 
@@ -200,7 +207,7 @@ The same URL-validation path is also used by `safeDownload()` for user/media dow
 A URL the gate rejects never reaches the network, so it is reported separately from a real connection failure:
 
 - `fetchUserRemoteUrl()` throws `RemoteUrlPolicyError` (not a bare `Error`) for every deliberate refusal: preflight validation, per-hop redirect revalidation, a forbidden or over-deep redirect chain, a missing `Location` header, and an unpinnable address. It carries the `hostname` and a `failureCode`.
-- `safeDownload()` maps that to `error: "blocked_by_policy"` and logs it at **warn** with `errorType: "download_blocked_by_policy"`, instead of the **error**-level `download_network_error` used for genuine transport faults.
+- `safeDownload()` maps that to `error: "blocked_by_policy"` and logs it at `warn` level with `errorType: "download_blocked_by_policy"`, instead of the `error`-level `download_network_error` used for genuine transport faults.
 
 This matters for log-based alerting: user-supplied content routinely contains URLs that policy declines (a plain-HTTP image CDN, a shortener redirecting to a private address). Those are expected outcomes, not incidents, and they no longer land in the error-level stream or the `error_logs` table.
 
@@ -219,7 +226,7 @@ Controls include:
 - Command and message cooldown system (see `docs/en/architecture/subsystems/cooldowns.md`)
 - Production-only message concurrency limits per user/server
 - Daily in-memory quotas for persona/import/document/avatar operations
-- Stream flood guard (`MAX_FLUSH_COUNT`)
+- Stream flood guard (`STREAMING_LIMITS.MAX_FLUSH_COUNT`)
 - Memory pressure guard with warning/critical modes, emergency cooldown, and automatic recoverable-cache clearing
 - Safe attachment download with max size + timeout + response validation
 - Media download limits for provider-returned videos and Gemini/Vertex inline video context are configurable through `PROVIDER_VIDEO_DOWNLOAD_MAX_MB` and `VIDEO_CONTEXT_MAX_INLINE_MB`.
@@ -238,13 +245,13 @@ Critical memory behavior:
 
 TomoriBot implements several controls to mitigate supply chain risks during development and deployment:
 
-- **Lockfiles and Pinning:** Always use `--frozen-lockfile` to ensure deterministic builds. Never use floating tags like `@latest` in the `Dockerfile`, workflow actions, dependency overrides, or bundled MCP server configs. A global dependency override must remain within every dependent package's declared version range; update or patch the parent dependency instead of forcing an incompatible major version.
-- **Pinned Runtime Images and Actions:** Production Docker builds pin the Bun base image by digest, and deployment workflows pin third-party GitHub Actions by commit SHA.
-- **Bundled MCP Packages:** Built-in npm MCP servers are pinned in `package.json`/`bun.lock`; production uses installed binaries instead of runtime `bunx` package resolution.
-- **Dependency Auditing:** The CI/CD pipeline enforces `bun audit` (failing on high/critical) and container scanning (Trivy).
-- **Asset Checksums:** External dependencies downloaded outside the primary package manager must be verified against cryptographic hashes before the Docker image is built.
-- **Dependency Patches:** Patches and overrides are tracked in `patches/README.md`. When updating dependencies, always refer to this document to check if a patch can be reverted.
-- **OIDC Deployments:** Production infrastructure uses short-lived OIDC tokens for AWS authentication rather than static IAM credentials.
+- **Lockfiles and pinning**: Always use `--frozen-lockfile` to ensure deterministic builds. Never use floating tags like `@latest` in the `Dockerfile`, workflow actions, dependency overrides, or bundled MCP server configs. A global dependency override must remain within every dependent package's declared version range; update or patch the parent dependency instead of forcing an incompatible major version.
+- **Pinned runtime images and actions**: Production Docker builds pin the Bun base image by digest, and deployment workflows pin third-party GitHub Actions by commit SHA.
+- **Bundled MCP packages**: Built-in npm MCP servers are pinned in `package.json`/`bun.lock`; production uses installed binaries instead of runtime `bunx` package resolution.
+- **Dependency auditing**: The CI/CD pipeline enforces `bun audit` (failing on high/critical) and container scanning (Trivy).
+- **Asset checksums**: External dependencies downloaded outside the primary package manager must be verified against cryptographic hashes before the Docker image is built.
+- **Dependency patches**: Patches and overrides are tracked in `patches/README.md`. When updating dependencies, always refer to this document to check if a patch can be reverted.
+- **OIDC deployments**: Production infrastructure uses short-lived OIDC tokens for AWS authentication rather than static IAM credentials.
 
 ## Operational Checklist
 

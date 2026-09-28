@@ -11,10 +11,10 @@ that TomoriBot connects to.
 
 ## Sections
 
-- [`discord/`](./discord/) — Discord platform capabilities such as Components V2 and modals
-- [`matrix/`](./matrix/) — Matrix bridge behavior
-- [`novelai/`](./novelai/) — NovelAI-specific tool and generation behavior
-- [`sillytavern/`](./sillytavern/) — SillyTavern card and preset import support
-- [`voice/`](./voice/) — speech-to-text and text-to-speech integrations
-- [`chat-proxy.md`](./chat-proxy) — generic attestation, routing, identity, and persistence contract
-- [`pluralkit.md`](./pluralkit) — PluralKit proxy-aware triggers + per-member identity
+- [`discord/`](./discord/): Discord platform capabilities such as Components V2 and modals
+- [`matrix/`](./matrix/): Matrix bridge behavior
+- [`novelai/`](./novelai/): NovelAI-specific tool and generation behavior
+- [`sillytavern/`](./sillytavern/): SillyTavern card and preset import support
+- [`voice/`](./voice/): speech-to-text and text-to-speech integrations
+- [`chat-proxy.md`](./chat-proxy): proxy routing, identity, and persistence contract
+- [`pluralkit.md`](./pluralkit): PluralKit message attestation and identity presentation

@@ -1,39 +1,132 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import os
 import tempfile
-import threading
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from pathlib import Path
 from typing import Optional
 
 import torch
-import torchaudio
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
-from huggingface_hub import hf_hub_download
 from pydantic import BaseModel
 
+from chunking import split_text_for_speech
 
-MODEL_ID = os.getenv("IRODORI_TTS_MODEL_ID", "Aratako/Irodori-TTS-500M-v2")
-MODEL_NAME = "irodori-tts-500m-v2"
+
+def _load_env_files() -> list[Path]:
+  # Standalone Python execution does not inherit repo root .env values unless loaded explicitly.
+  candidates = [
+    Path(__file__).resolve().parents[3] / ".env",
+    Path(__file__).resolve().parent / ".env",
+  ]
+  loaded: list[Path] = []
+  for path in candidates:
+    if not path.is_file():
+      continue
+    try:
+      from dotenv import load_dotenv
+
+      load_dotenv(path, override=False)
+      loaded.append(path)
+    except ImportError:
+      for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+          continue
+        key, val = line.split("=", 1)
+        key = key.strip()
+        val = val.strip().strip("\"'")
+        if key and key not in os.environ:
+          os.environ[key] = val
+      loaded.append(path)
+  return loaded
+
+
+_loaded_env_files = _load_env_files()
+
+DEFAULT_MODEL_ID = "Aratako/Irodori-TTS-v4.1-Small"
+
+MODEL_ID = os.getenv("IRODORI_TTS_MODEL_ID", DEFAULT_MODEL_ID)
+LOCAL_CHECKPOINT = os.getenv("IRODORI_TTS_CHECKPOINT")
+
+if _loaded_env_files:
+  env_paths = ", ".join(str(p) for p in _loaded_env_files)
+  print(f"[Irodori-TTS] Loaded environment from {env_paths}")
+
+if LOCAL_CHECKPOINT:
+  print(f"[Irodori-TTS] Model checkpoint path: {LOCAL_CHECKPOINT}")
+elif MODEL_ID != DEFAULT_MODEL_ID:
+  print(f"[Irodori-TTS] Using model ID: {MODEL_ID} (configured override)")
+else:
+  print(f"[Irodori-TTS] Using model ID: {MODEL_ID} (default)")
+
 HOST = os.getenv("TOMORI_TTS_HOST", "127.0.0.1")
-PORT = int(os.getenv("TOMORI_TTS_PORT", "8013"))
-MODEL_DEVICE = os.getenv("IRODORI_MODEL_DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
-CODEC_DEVICE = os.getenv("IRODORI_CODEC_DEVICE", MODEL_DEVICE)
-MODEL_PRECISION = os.getenv("IRODORI_MODEL_PRECISION", "bf16" if torch.cuda.is_available() else "fp32")
-CODEC_PRECISION = os.getenv("IRODORI_CODEC_PRECISION", MODEL_PRECISION)
-MAX_TEXT_CHARS = int(os.getenv("TOMORI_TTS_MAX_TEXT_CHARS", "1000"))
+PORT = int(os.getenv("IRODORI_TTS_PORT", "8013"))
+
+MODEL_DEVICE = os.getenv("IRODORI_MODEL_DEVICE", "auto")
+CODEC_DEVICE = os.getenv("IRODORI_CODEC_DEVICE", "auto")
+MODEL_PRECISION = os.getenv(
+  "IRODORI_MODEL_PRECISION",
+  "bf16" if torch.cuda.is_available() else "fp32",
+)
+CODEC_PRECISION = os.getenv("IRODORI_CODEC_PRECISION", "fp32")
+COMPILE_MODEL = os.getenv("IRODORI_COMPILE_MODEL", "false").lower() in {"1", "true", "yes", "on"}
+COMPILE_DYNAMIC = os.getenv("IRODORI_COMPILE_DYNAMIC", "false").lower() in {"1", "true", "yes", "on"}
+
+NUM_STEPS = int(os.getenv("IRODORI_NUM_STEPS", "40"))
+T_SCHEDULE_MODE = os.getenv("IRODORI_T_SCHEDULE_MODE", "linear")
+SWAY_COEFF = float(os.getenv("IRODORI_SWAY_COEFF", "-1.0"))
+CFG_SCALE_TEXT = float(os.getenv("IRODORI_CFG_SCALE_TEXT", "3.0"))
+CFG_SCALE_CAPTION = float(os.getenv("IRODORI_CFG_SCALE_CAPTION", "3.0"))
+CFG_SCALE_SPEAKER = float(os.getenv("IRODORI_CFG_SCALE_SPEAKER", "5.0"))
+MAX_REF_SECONDS_RAW = os.getenv("IRODORI_MAX_REF_SECONDS")
+MAX_REF_SECONDS = float(MAX_REF_SECONDS_RAW) if MAX_REF_SECONDS_RAW else None
+
+MAX_TEXT_CHARS = 1000
+
+
+def _env_bool(name: str, default: bool) -> bool:
+  raw = os.getenv(name)
+  if raw is None or not raw.strip():
+    return default
+  value = raw.strip().lower()
+  if value in {"1", "true", "yes", "on"}:
+    return True
+  if value in {"0", "false", "no", "off"}:
+    return False
+  raise ValueError(f"{name} must be a boolean value.")
+
+
+def _env_positive_int(name: str, default: int) -> int:
+  raw = os.getenv(name)
+  if raw is None or not raw.strip():
+    return default
+  try:
+    value = int(raw)
+  except ValueError as exc:
+    raise ValueError(f"{name} must be an integer.") from exc
+  if value <= 0:
+    raise ValueError(f"{name} must be greater than 0.")
+  return value
+
+
+CHUNKING_ENABLED = _env_bool("IRODORI_CHUNKING_ENABLED", True)
+CHUNK_MIN_CHARS = _env_positive_int("IRODORI_CHUNK_MIN_CHARS", 80)
 
 runtime = None
-runtime_lock = threading.Lock()
+resolved_checkpoint: str | None = None
+resolved_model_device: str | None = None
+resolved_codec_device: str | None = None
 
 
 class SynthesizeRequest(BaseModel):
   text: str
-  ref_audio: str
+  ref_audio: Optional[str] = None
   ref_text: Optional[str] = None
   instruct: Optional[str] = None
   language: Optional[str] = None
@@ -45,24 +138,116 @@ def decode_ref_audio(raw_base64: str, directory: str) -> str:
   except Exception as exc:
     raise HTTPException(status_code=400, detail="ref_audio must be valid base64.") from exc
 
+  if not audio_bytes:
+    raise HTTPException(status_code=400, detail="ref_audio must not be empty.")
+
   ref_path = Path(directory) / "reference.wav"
   ref_path.write_bytes(audio_bytes)
   return str(ref_path)
 
 
+def resolve_device(value: str) -> str:
+  from irodori_tts.inference_runtime import default_runtime_device
+
+  return default_runtime_device() if value.strip().lower() in {"", "auto"} else value
+
+
+def resolve_checkpoint() -> str:
+  from irodori_tts.inference_runtime import download_hf_checkpoint
+
+  if LOCAL_CHECKPOINT and LOCAL_CHECKPOINT.strip():
+    path = Path(LOCAL_CHECKPOINT).expanduser()
+    if not path.is_file():
+      raise FileNotFoundError(f"IRODORI_TTS_CHECKPOINT not found: {path}")
+    return str(path)
+
+  return download_hf_checkpoint(MODEL_ID)
+
+
+def _audio_as_channels_first(audio: torch.Tensor) -> torch.Tensor:
+  if audio.ndim == 1:
+    return audio.unsqueeze(0)
+  if audio.ndim == 2:
+    return audio
+  raise RuntimeError(f"Expected audio shape (samples,) or (channels, samples), got {tuple(audio.shape)}")
+
+
+async def synthesize_text_chunks(
+  *,
+  text: str,
+  caption: str,
+  ref_path: str | None,
+  client_request: Request | None = None,
+) -> tuple[torch.Tensor, int]:
+  from irodori_tts.inference_runtime import SamplingRequest
+
+  chunks = split_text_for_speech(text, min_chars=CHUNK_MIN_CHARS) if CHUNKING_ENABLED else [text]
+  if len(chunks) > 1:
+    print(f"[Irodori-TTS] Long-text chunking: {len(chunks)} chunks (min_chars={CHUNK_MIN_CHARS})")
+
+  base_request = SamplingRequest(
+    text=text,
+    caption=caption or None,
+    ref_wav=ref_path,
+    no_ref=ref_path is None,
+    num_candidates=1,
+    num_steps=NUM_STEPS,
+    t_schedule_mode=T_SCHEDULE_MODE,
+    sway_coeff=SWAY_COEFF,
+    cfg_scale_text=CFG_SCALE_TEXT,
+    cfg_scale_caption=CFG_SCALE_CAPTION,
+    cfg_scale_speaker=CFG_SCALE_SPEAKER,
+    max_ref_seconds=MAX_REF_SECONDS,
+  )
+
+  if not chunks:
+    raise ValueError("text contains no speakable characters.")
+
+  results = []
+  pinned_seed: int | None = base_request.seed
+  for index, chunk in enumerate(chunks, start=1):
+    if client_request is not None and await client_request.is_disconnected():
+      raise HTTPException(
+        status_code=499,
+        detail="Client disconnected before synthesis completed.",
+      )
+    if len(chunks) > 1:
+      print(f"[Irodori-TTS] Synthesizing chunk {index}/{len(chunks)} ({len(chunk)} chars)")
+    chunk_request = replace(base_request, text=chunk, seed=pinned_seed)
+    result = await asyncio.to_thread(runtime.synthesize, chunk_request, log_fn=None)
+    results.append(result)
+    if pinned_seed is None:
+      pinned_seed = int(result.used_seed)
+
+  sample_rate = int(results[0].sample_rate)
+  if any(int(result.sample_rate) != sample_rate for result in results):
+    raise RuntimeError("Chunk sample rates did not match.")
+
+  if len(results) == 1:
+    return results[0].audio, sample_rate
+
+  audio = torch.cat([_audio_as_channels_first(result.audio) for result in results], dim=-1)
+  return audio, sample_rate
+
+
 def load_model() -> None:
-  global runtime
+  global runtime, resolved_checkpoint, resolved_model_device, resolved_codec_device
 
   from irodori_tts.inference_runtime import InferenceRuntime, RuntimeKey
 
-  checkpoint_path = hf_hub_download(repo_id=MODEL_ID, filename="model.safetensors")
+  resolved_checkpoint = resolve_checkpoint()
+  resolved_model_device = resolve_device(MODEL_DEVICE)
+  resolved_codec_device = resolve_device(CODEC_DEVICE)
+
   runtime = InferenceRuntime.from_key(
     RuntimeKey(
-      checkpoint=checkpoint_path,
-      model_device=MODEL_DEVICE,
-      codec_device=CODEC_DEVICE,
+      checkpoint=resolved_checkpoint,
+      model_device=resolved_model_device,
+      codec_device=resolved_codec_device,
       model_precision=MODEL_PRECISION,
       codec_precision=CODEC_PRECISION,
+      compile_model=COMPILE_MODEL,
+      compile_dynamic=COMPILE_DYNAMIC,
     )
   )
 
@@ -70,24 +255,38 @@ def load_model() -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
   load_model()
-  yield
+  try:
+    yield
+  finally:
+    if runtime is not None:
+      runtime.unload()
 
 
 app = FastAPI(title="TomoriBot Irodori-TTS Server", lifespan=lifespan)
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+def health() -> dict[str, str | int | float | bool | None]:
   return {
     "status": "ok" if runtime is not None else "loading",
-    "model": MODEL_NAME,
     "model_id": MODEL_ID,
-    "model_device": MODEL_DEVICE,
+    "checkpoint": resolved_checkpoint,
+    "model_device": resolved_model_device,
+    "codec_device": resolved_codec_device,
+    "model_precision": MODEL_PRECISION,
+    "codec_precision": CODEC_PRECISION,
+    "num_steps": NUM_STEPS,
+    "t_schedule_mode": T_SCHEDULE_MODE,
+    "sway_coeff": SWAY_COEFF,
+    "compile_model": COMPILE_MODEL,
+    "chunking_enabled": CHUNKING_ENABLED,
+    "chunk_min_chars": CHUNK_MIN_CHARS,
+    "supports_voice_design": True,
   }
 
 
 @app.post("/synthesize")
-def synthesize(payload: SynthesizeRequest) -> Response:
+async def synthesize(payload: SynthesizeRequest, request: Request) -> Response:
   if runtime is None:
     raise HTTPException(status_code=503, detail="Model is still loading.")
 
@@ -96,28 +295,29 @@ def synthesize(payload: SynthesizeRequest) -> Response:
     raise HTTPException(status_code=400, detail="text is required.")
   if len(text) > MAX_TEXT_CHARS:
     raise HTTPException(status_code=400, detail=f"text exceeds {MAX_TEXT_CHARS} characters.")
-  if not payload.ref_audio.strip():
-    raise HTTPException(status_code=400, detail="ref_audio is required.")
+
+  ref_audio = payload.ref_audio.strip() if payload.ref_audio else ""
+  caption = payload.instruct.strip() if payload.instruct else ""
+  if not ref_audio and not caption:
+    raise HTTPException(status_code=400, detail="ref_audio or instruct is required.")
 
   with tempfile.TemporaryDirectory(prefix="tomori-irodori-") as temp_dir:
-    ref_path = decode_ref_audio(payload.ref_audio, temp_dir)
+    ref_path = decode_ref_audio(ref_audio, temp_dir) if ref_audio else None
     output_path = Path(temp_dir) / "output.wav"
 
-    from irodori_tts.inference_runtime import SamplingRequest
+    from irodori_tts.inference_runtime import save_wav
 
-    with runtime_lock:
-      result = runtime.synthesize(
-        SamplingRequest(
-          text=text,
-          ref_wav=ref_path,
-          no_ref=False,
-          num_candidates=1,
-        ),
-        log_fn=None,
+    try:
+      audio, sample_rate = await synthesize_text_chunks(
+        text=text,
+        caption=caption,
+        ref_path=ref_path,
+        client_request=request,
       )
+    except ValueError as exc:
+      raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    # Cast to float32 before saving — WAV doesn't support bfloat16
-    torchaudio.save(str(output_path), result.audio.float().cpu(), int(result.sample_rate))
+    save_wav(output_path, audio, sample_rate)
     return Response(content=output_path.read_bytes(), media_type="audio/wav")
 
 

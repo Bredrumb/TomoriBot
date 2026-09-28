@@ -16,24 +16,13 @@ import { localizer } from "@/utils/text/localizer";
 /** Custom id carried by every rendered-table "Show Markdown" button. */
 const SHOW_MARKDOWN_BUTTON_ID = "markdown_table_show_source";
 
-const DEFAULT_SHOW_MARKDOWN_BUTTON_TIMEOUT_MS = 7_200_000;
+// Two hours, matching the markdown-table cache TTL: a live button whose cache entry already
+// expired would only ever return the expired notice.
+const SHOW_MARKDOWN_BUTTON_TIMEOUT_MS = 7_200_000;
 
 /** Discord's per-message content limit, minus room for the ```markdown fence and newlines. */
 const MARKDOWN_FENCE_OVERHEAD = 32;
 const DISCORD_MESSAGE_CONTENT_LIMIT = 2000;
-
-/**
- * Reads the button's active window from the environment.
- *
- * Defaults to two hours so it matches `MARKDOWN_TABLE_CACHE_TTL_MINUTES`' own default, so a
- * live button whose cache entry already expired would only ever return the expired notice.
- *
- * @returns Collector lifetime in milliseconds
- */
-function getShowMarkdownButtonTimeoutMs(): number {
-  const parsed = Number.parseInt(process.env.MARKDOWN_TABLE_BUTTON_TIMEOUT_MS ?? "", 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_SHOW_MARKDOWN_BUTTON_TIMEOUT_MS;
-}
 
 /**
  * Builds the single-button row attached to a rendered markdown-table image.
@@ -154,7 +143,7 @@ export function attachShowMarkdownCollector(
 ): void {
   const collector = message.createMessageComponentCollector({
     componentType: ComponentType.Button,
-    time: getShowMarkdownButtonTimeoutMs(),
+    time: SHOW_MARKDOWN_BUTTON_TIMEOUT_MS,
     filter: (interaction) => interaction.customId === SHOW_MARKDOWN_BUTTON_ID && !interaction.user.bot,
   });
 

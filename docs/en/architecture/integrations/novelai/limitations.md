@@ -4,8 +4,8 @@ title: "NovelAI Provider Limitations"
 
 This document catalogs every feature, tool, and context block that is deliberately disabled or reduced for the NovelAI provider compared to Google Gemini and OpenRouter. All exclusions fall into one of two root causes:
 
-1. **Text-only model** — GLM 4.6 has no vision or image understanding capability.
-2. **Token budget** — NovelAI's API has a hard token cap that creates a practical quality threshold around ~2800 tokens of system prompt. Exceeding it degrades output quality noticeably.
+1. **Text-only model**: GLM 4.6 has no vision or image understanding capability.
+2. **Token budget**: NovelAI's API has a hard token cap that creates a practical quality threshold around ~2800 tokens of system prompt. Exceeding it degrades output quality noticeably.
 
 See also: [`tool-calling.md`](/architecture/integrations/novelai/tool-calling/) for how prompt-based tool calling itself works.
 
@@ -19,7 +19,7 @@ filter because NovelAI models have `sees_images = false`.
 
 | Tool | File | Reason |
 |------|------|--------|
-| `select_sticker_for_response` | `src/tools/functionCalls/stickerTool.ts:144` | GLM 4.6 cannot reliably generate CJK/Japanese sticker names as tool arguments — token-level instability causes garbled output. |
+| `select_sticker_for_response` | `src/tools/functionCalls/stickerTool.ts:144` | GLM 4.6 cannot reliably generate CJK/Japanese sticker names as tool arguments: token-level instability causes garbled output. |
 | `update_short_term_memory` | `src/tools/functionCalls/updateShortTermMemoryTool.ts:56` | Token budget too constrained; the tool definition and invocation overhead is not worth the benefit at GLM's prompt size. |
 | `fetch_url` | `src/tools/fetchUrl/fetchUrlTool.ts` | Token budget too constrained for fetched-page payloads; disabled until realistic URL-fetch prompt/tool history behavior is validated. |
 | `peek_profile_picture` | `src/tools/functionCalls/peekProfilePictureTool.ts` | Requires `requiredModelCapabilities = { sees_images: true }`; NovelAI models are text-only. |
@@ -36,7 +36,7 @@ iask-search
 monica-search
 ```
 
-**Reason:** These are redundant with the unified `web_search` tool (which routes search through the Brave → SearXNG → DuckDuckGo → IAsk engine chain) and too token-expensive in their raw form for GLM's strict prompt budget. The `brave_*` MCP function names are no longer LLM-visible at all post-unification, so they don't need to be in this disable list anymore.
+- **Reason**: these are redundant with the unified `web_search` tool (which routes search through the Brave → SearXNG → DuckDuckGo → IAsk engine chain) and too token-expensive in their raw form for GLM's strict prompt budget. The `brave_*` MCP function names are no longer LLM-visible at all post-unification, so they don't need to be in this disable list anymore.
 
 ---
 
@@ -49,7 +49,7 @@ Each provider's stream adapter defines which `ContextItemTag` blocks are include
 | `KNOWLEDGE_SERVER_EMOJIS` | ✅ Included | ❌ Excluded |
 | `KNOWLEDGE_SERVER_STICKERS` | ✅ Included | ❌ Excluded |
 
-**Source:** `src/providers/novelai/novelaiStreamAdapter.ts:107-109`
+- **Source**: `src/providers/novelai/novelaiStreamAdapter.ts:107-109`
 
 ```typescript
 private static readonly SYSTEM_INSTRUCTION_TAGS_TOOLING: ContextItemTag[] = [
@@ -60,7 +60,7 @@ private static readonly SYSTEM_INSTRUCTION_TAGS_TOOLING: ContextItemTag[] = [
 ];
 ```
 
-**Practical effect:** The model is never told which custom server emojis or stickers exist, so it will not reference or attempt to use them. The `emojiUsageEnabled` config flag still flows through to the stream adapter (it controls output formatting), but without the knowledge block, the model has no emoji list to draw from.
+- **Practical effect**: the model is never told which custom server emojis or stickers exist, so it will not reference or attempt to use them. The `emojiUsageEnabled` config flag still flows through to the stream adapter (it controls output formatting), but without the knowledge block, the model has no emoji list to draw from.
 
 ---
 
@@ -68,7 +68,7 @@ private static readonly SYSTEM_INSTRUCTION_TAGS_TOOLING: ContextItemTag[] = [
 
 Even though the `update_short_term_memory` tool is excluded from the tool list for NovelAI (see above), there is a second independent suppression point in context building.
 
-**Source:** `src/utils/text/contextBuilder.ts:519`
+- **Source**: `src/utils/text/contextBuilder.ts:519`
 
 ```typescript
 const isStmToolAvailable = tomoriState.llm.llm_provider !== "novelai";
@@ -78,7 +78,7 @@ When `isStmToolAvailable` is `false`:
 - The hint message `"[System: Use the update_short_term_memory tool...]"` is never injected after short-term memory summaries.
 - The nudge prompt that encourages the model to call the tool when a conversation goes stale is also suppressed.
 
-The short-term memory **data itself** (summaries and recent messages) is still included in context when available — only the tool-use instructions around it are removed.
+The short-term memory data itself (summaries and recent messages) is still included in context when available; only the tool-use instructions around it are removed.
 
 ---
 
@@ -98,7 +98,7 @@ These flags gate image/video attachment processing earlier in the pipeline, so m
 
 ## Reminder Tool: Auto-Fill Quirk
 
-**Source:** `src/tools/functionCalls/reminderTool.ts:255-266`
+- **Source**: `src/tools/functionCalls/reminderTool.ts:255-266`
 
 When the reminder tool is called via NovelAI and `repetition_interval_hours` is missing from the model's response (a common GLM omission for simple "remind me in X" requests), the tool automatically defaults the value to `0` (one-time reminder) instead of rejecting the call.
 
@@ -109,7 +109,7 @@ if (context.provider === "novelai" && typeof repetitionIntervalHoursArg !== "num
 }
 ```
 
-Other providers do **not** get this fallback — they must explicitly set the field so the model is "conscious" of whether the reminder is one-time or recurring.
+Other providers do not receive this fallback; they must explicitly set the field so the model is "conscious" of whether the reminder is one-time or recurring.
 
 ---
 

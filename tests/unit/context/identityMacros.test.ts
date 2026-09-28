@@ -5,6 +5,7 @@ import { convertMentions } from "@/utils/text/context/mentionNormalizer";
 import { appendDialogueHistoryContext } from "@/utils/text/context/dialogueHistory";
 import { buildSampleDialogueContextItems } from "@/utils/text/context/templates";
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
 // These fixtures contain no Discord mentions and always pass an explicit bot nickname, so
 // convertMentions never touches the client or the persona repository. That keeps the suite free of
@@ -20,6 +21,21 @@ describe("convertMentions — identityMacroMode", () => {
   it("treats {char} as an alias for {bot} when resolving", async () => {
     const result = await convertMentions("{{char}} waves", CLIENT, "guild-1", "Alice", "Tomori");
     expect(result).toBe("Tomori waves");
+  });
+
+  it("resolves formatted-name and address-term macros in both brace forms", async () => {
+    const result = await convertMentions(
+      "{user_formatted}, {{user_term}}!",
+      CLIENT,
+      "guild-1",
+      "Mirri",
+      "Tomori",
+      true,
+      undefined,
+      "resolve",
+      { userFormatted: "Master Mirri-san", userTerm: "fam" },
+    );
+    expect(result).toBe("Master Mirri-san, fam!");
   });
 
   it("leaves identity macros literal in preserve mode", async () => {
@@ -50,6 +66,21 @@ describe("convertMentions — identityMacroMode", () => {
     expect(result).toBe("{{char}}: Hi!\n{{user}}: Hey.");
   });
 
+  it("preserves new identity macros in preserve mode", async () => {
+    const result = await convertMentions(
+      "{user_formatted} / {{user_term}}",
+      CLIENT,
+      "guild-1",
+      "Mirri",
+      "Tomori",
+      true,
+      undefined,
+      "preserve",
+      { userFormatted: "Master Mirri", userTerm: "fam" },
+    );
+    expect(result).toBe("{user_formatted} / {{user_term}}");
+  });
+
   it("still normalizes Discord channel links in preserve mode", async () => {
     const result = await convertMentions(
       "see https://discord.com/channels/123456789012345678/234567890123456789 and {bot}",
@@ -75,20 +106,27 @@ function makeConfig(): AssembledServerConfig {
     personal_memories_enabled: true,
     uncensor_unicode_space_enabled: false,
     uncensor_sanitize_enabled: false,
-    verbatim_tool_calling_enabled: false,
   } as AssembledServerConfig;
 }
 
 function makeTomoriState(): TomoriState {
-  return {
+  return createPersona({
     context_note: null,
     context_note_depth: 0,
-    llm: { has_tools: false, llm_provider: "custom" },
-  } as TomoriState;
+    // Kept from the pre-migration fixture: a tool-less custom provider, so nothing in the
+    // dialogue path can treat this persona as tool-capable.
+    llm: createLlmRow({ has_tools: false, llm_provider: "custom" }),
+  });
 }
 
 /** Runs the real convertMentions through the dialogue-history builder for a single message. */
-async function buildHistoryText(msg: SimplifiedMessageForContext): Promise<string> {
+async function buildHistoryText(
+  msg: SimplifiedMessageForContext,
+  naming?: Pick<
+    Parameters<typeof appendDialogueHistoryContext>[0],
+    "historyUserLabels" | "historyPersonaMentionLabels"
+  >,
+): Promise<string> {
   const contextItems: Parameters<typeof appendDialogueHistoryContext>[0]["contextItems"] = [];
   await appendDialogueHistoryContext({
     contextItems,
@@ -100,6 +138,8 @@ async function buildHistoryText(msg: SimplifiedMessageForContext): Promise<strin
     tomoriState: makeTomoriState(),
     includeTimestamps: false,
     isUserImpersonation: false,
+    triggererFormattedName: "Alice",
+    ...naming,
     uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
     convertMentions,
   });
@@ -153,6 +193,21 @@ describe("appendDialogueHistoryContext — identity macros in message bodies", (
   it("still prefixes the resolved author label", async () => {
     const text = await buildHistoryText(userMessage("hello"));
     expect(text.startsWith("Alice: ")).toBe(true);
+  });
+
+  it("uses the receiving persona's formatted user speaker label", async () => {
+    const text = await buildHistoryText(userMessage("hello"), {
+      historyUserLabels: new Map([["user-1", "Master Alice"]]),
+    });
+    expect(text).toBe("Master Alice: hello");
+  });
+
+  it("uses a proven author persona lineage for real historical mentions", async () => {
+    const message = { ...personaMessage("Hello <@123456789012345678>"), authorPersonaLineageId: 50 };
+    const text = await buildHistoryText(message, {
+      historyPersonaMentionLabels: new Map([["50:123456789012345678", "Master Mirri"]]),
+    });
+    expect(text).toBe("Tomori: Hello Master Mirri");
   });
 });
 

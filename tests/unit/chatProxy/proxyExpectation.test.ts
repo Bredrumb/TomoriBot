@@ -96,7 +96,7 @@ describe("chat-proxy expectations", () => {
 
     endLookup();
     await wait;
-    expect(waitResult).toBe("timeout");
+    expect(waitResult as string | null).toBe("timeout");
   });
 
   it("cleans up expired expectations after the TTL", async () => {

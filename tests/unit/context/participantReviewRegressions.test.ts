@@ -72,9 +72,11 @@ describe("participant adversarial review regressions", () => {
         physical_appearance_tags: ["red hair"],
       } as TomoriState;
       fixture.personas.push(referencedPersona);
+      const referencedPersonaId = referencedPersona.persona_id;
+      if (referencedPersonaId === undefined) throw new Error("Fixture persona is missing its persona_id");
 
       const item = await buildPreparedParticipantContext(fixture, {
-        responderPersonaIds: new Set([referencedPersona.persona_id]),
+        responderPersonaIds: new Set([referencedPersonaId]),
       });
       const text = participantText(item);
       const target = item.conversationUsers?.find((candidate) => candidate.targetId === "persona:9");
@@ -125,7 +127,7 @@ describe("participant adversarial review regressions", () => {
 
       const text = participantText(await buildPreparedParticipantContext(fixture));
 
-      expect(text).toContain("Alice Saved (Mention: @{Alice Saved}");
+      expect(text).toContain("Alice Saved (Mention: @{Alice Guild}");
       expect(text).toContain("- Alice Saved (sprite)'s Physical Appearance: silver hair, violet eyes");
       expect(text).not.toContain("- Ren's Physical Appearance: silver hair, violet eyes");
     } finally {

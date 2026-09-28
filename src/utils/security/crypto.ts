@@ -1,6 +1,5 @@
 import { log } from "../misc/logger";
 import { sql } from "@/utils/db/client";
-import type { OptApiKeyRow } from "../../types/db/schema";
 import { keyManager } from "./keyManager";
 /**
  * Encrypts an API key before storing it in the database using pgcrypto's PGP symmetric encryption.
@@ -80,24 +79,6 @@ export const decryptApiKey = async (encryptedKey: Buffer, keyVersion: number = 1
     );
     throw new Error("API key decryption failed");
   }
-};
-
-/**
- * Re-encrypts an API key from an old version to the current version
- *
- */
-export const reencryptApiKey = async (
-  encryptedKey: Buffer,
-  oldVersion: number,
-): Promise<{ encrypted: Buffer; version: number }> => {
-  // Decrypt with old key version
-  const plaintext = await decryptApiKey(encryptedKey, oldVersion);
-
-  // Encrypt with current key version
-  const result = await encryptApiKey(plaintext);
-
-  log.info(`Re-encrypted API key from version ${oldVersion} to ${result.version}`);
-  return result;
 };
 
 /**
@@ -188,66 +169,6 @@ export const getOptApiKey = async (serverId: number, serviceName: string): Promi
   } catch (error) {
     log.error(`Failed to retrieve optional API key for ${serviceName}`, error as Error);
     return null;
-  }
-};
-
-/**
- * Get all optional API keys for a server (returns a map of serviceName -> decryptedKey)
- * Automatically performs lazy rotation for keys encrypted with old versions
- *
- */
-export const getAllOptApiKeysForServer = async (serverId: number): Promise<Record<string, string>> => {
-  if (!serverId) {
-    log.warn("Missing serverId for optional API key retrieval");
-    return {};
-  }
-
-  try {
-    log.info(`Retrieving all optional API keys for server ${serverId}`);
-
-    const results = (await sql`
-			SELECT service_name, api_key, key_version
-			FROM opt_api_keys
-			WHERE server_id = ${serverId}
-		`) as OptApiKeyRow[];
-
-    const apiKeys: Record<string, string> = {};
-    const currentVersion = keyManager.getCurrentVersion();
-
-    for (const result of results) {
-      if (result.api_key && result.service_name) {
-        try {
-          const keyVersion = result.key_version || 1;
-          const decryptedKey = await decryptApiKey(result.api_key, keyVersion);
-          apiKeys[result.service_name] = decryptedKey;
-
-          // LAZY ROTATION: Re-encrypt if using old version
-          if (keyVersion !== currentVersion) {
-            log.info(`Rotating key from version ${keyVersion} to ${currentVersion} for ${result.service_name}`);
-
-            const { encrypted, version } = await encryptApiKey(decryptedKey);
-
-            await sql`
-							UPDATE opt_api_keys
-							SET api_key = ${encrypted},
-							    key_version = ${version},
-							    updated_at = CURRENT_TIMESTAMP
-							WHERE server_id = ${serverId} AND service_name = ${result.service_name}
-						`;
-
-            log.success(`Key rotation completed for ${result.service_name}`);
-          }
-        } catch (error) {
-          log.warn(`Failed to decrypt API key for service: ${result.service_name}`, error as Error);
-        }
-      }
-    }
-
-    log.success(`Retrieved ${Object.keys(apiKeys).length} optional API keys for server ${serverId}`);
-    return apiKeys;
-  } catch (error) {
-    log.error(`Failed to retrieve optional API keys for server ${serverId}`, error as Error);
-    return {};
   }
 };
 

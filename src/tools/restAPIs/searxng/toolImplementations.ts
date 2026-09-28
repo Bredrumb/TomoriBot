@@ -18,28 +18,18 @@ import { sendWebhookMessageWithIdentity } from "../../../utils/discord/webhookMa
 import { addFetchCapabilityReminder } from "../brave/braveSearchService";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
+import {
+  buildImageSearchDeliveryMessage,
+  buildImageSearchTextFallback,
+  IMAGE_COMPRESSION_TARGET_MB,
+  IMAGE_DISCORD_LIMIT_MB,
+  IMAGE_DOWNLOAD_MAX_MB,
+  IMAGE_MIN_SIZE_BYTES,
+} from "@/tools/restAPIs/imageSearchResults";
 import sharp from "sharp";
 import { searxngSearch, formatSearxngResults, extractSearxngImageUrls } from "./searxngService";
 import type { SearxngCategory } from "./types";
 
-const SEARXNG_IMAGE_DISCORD_LIMIT_MB = Math.max(
-  1,
-  Number.parseInt(process.env.BRAVE_IMAGE_DISCORD_LIMIT_MB ?? "8", 10) || 8,
-);
-// Minimum image size in bytes, so rejects tiny placeholders/error images that Discord
-// renders as raw file attachments rather than inline media (default 5 KB).
-const SEARXNG_IMAGE_MIN_SIZE_BYTES = Math.max(
-  1,
-  Number.parseInt(process.env.IMAGE_MIN_SIZE_BYTES ?? "5120", 10) || 5120,
-);
-const SEARXNG_IMAGE_COMPRESSION_TARGET_MB = Math.max(
-  1,
-  Number.parseInt(process.env.BRAVE_IMAGE_COMPRESSION_TARGET_MB ?? "7", 10) || 7,
-);
-const SEARXNG_IMAGE_DOWNLOAD_MAX_MB = Math.max(
-  SEARXNG_IMAGE_DISCORD_LIMIT_MB,
-  Number.parseInt(process.env.BRAVE_IMAGE_DOWNLOAD_MAX_MB ?? "25", 10) || 25,
-);
 // How many valid images to actually send to Discord (default 3, max 10).
 const SEARXNG_IMAGE_COUNT = Math.min(Math.max(1, Number.parseInt(process.env.SEARXNG_IMAGE_COUNT ?? "3", 10) || 3), 10);
 // How many candidate URLs to pull from SearXNG and validate (default 10, max 20).
@@ -135,7 +125,7 @@ export async function searxng_category_search(
 async function compressImage(imageUrl: string): Promise<{ success: boolean; buffer?: Buffer; reason?: string }> {
   try {
     const response = await safeDownload(imageUrl, {
-      maxSizeMB: SEARXNG_IMAGE_DOWNLOAD_MAX_MB,
+      maxSizeMB: IMAGE_DOWNLOAD_MAX_MB,
       timeoutMs: 5000,
       requestInit: {
         method: "GET",
@@ -145,7 +135,7 @@ async function compressImage(imageUrl: string): Promise<{ success: boolean; buff
     if (!response.success || !response.buffer) {
       return { success: false, reason: response.error ?? "fetch_failed" };
     }
-    const targetSize = SEARXNG_IMAGE_COMPRESSION_TARGET_MB * 1024 * 1024;
+    const targetSize = IMAGE_COMPRESSION_TARGET_MB * 1024 * 1024;
     let quality = 80;
     let compressedBuffer: Buffer;
     do {
@@ -188,8 +178,8 @@ async function validateImageUrl(imageUrl: string): Promise<{
 
     if (response.ok && response.headers.get("content-type")?.startsWith("image/")) {
       const contentLength = response.headers.get("content-length");
-      const discordLimit = SEARXNG_IMAGE_DISCORD_LIMIT_MB * 1024 * 1024;
-      if (contentLength && parseInt(contentLength, 10) < SEARXNG_IMAGE_MIN_SIZE_BYTES) {
+      const discordLimit = IMAGE_DISCORD_LIMIT_MB * 1024 * 1024;
+      if (contentLength && parseInt(contentLength, 10) < IMAGE_MIN_SIZE_BYTES) {
         return { url: imageUrl, valid: false, reason: "too_small" };
       }
       if (contentLength && parseInt(contentLength, 10) > discordLimit) {
@@ -296,18 +286,11 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
     }
 
     if (validated.length === 0) {
-      // Soft degradation: engine succeeded but no URLs passed validation (hotlink
-      // protection, timeouts, too-small placeholders). Return success with a text
-      // listing so the dispatcher doesn't fall through to "category unavailable".
-      return createToolResult(
-        true,
-        `Found ${query} images via SearXNG but none were directly accessible. Showing result links instead.`,
-        {
-          results: formatSearxngResults(result.data, "images"),
-          imagesFiltered: failed.length,
-          status: "text_fallback",
-        },
-      );
+      return buildImageSearchTextFallback({
+        message: `Found ${query} images via SearXNG but none were directly accessible. Showing result links instead.`,
+        formattedResults: formatSearxngResults(result.data, "images"),
+        filteredCount: failed.length,
+      });
     }
 
     // Build Discord attachments, so cap to sendCount after validation
@@ -340,10 +323,13 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
         : await context.channel.send({ files: attachments });
 
     const sentAttachments = Array.from(sentMessage.attachments.values());
-    let completionMessage = `Found and sent ${attachments.length} ${query} images directly to Discord via SearXNG (message ID: ${sentMessage.id}).`;
-    if (failed.length > 0) {
-      completionMessage += ` (Note: ${failed.length} URLs were inaccessible.)`;
-    }
+    const completionMessage = buildImageSearchDeliveryMessage({
+      query,
+      sentCount: attachments.length,
+      messageId: sentMessage.id,
+      providerPhrase: " via SearXNG",
+      note: failed.length > 0 ? `(Note: ${failed.length} URLs were inaccessible.)` : undefined,
+    });
 
     return {
       success: true,

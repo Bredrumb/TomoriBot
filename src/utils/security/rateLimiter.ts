@@ -89,6 +89,37 @@ export const IMPORT_LIMITS = {
    * @default 10 MB
    */
   MAX_PERSONA_IMPORT_SIZE_MB: Number.parseInt(process.env.MAX_PERSONA_IMPORT_SIZE_MB || "10", 10),
+
+  /**
+   * Maximum compressed size for a Character Card V3 (`.charx`) archive. An
+   * archive carries an asset tree whose expanded size the download bound cannot
+   * describe, so this value is a separate knob from the PNG/JSON bound.
+   * @default 10 MB
+   */
+  MAX_CHARX_IMPORT_SIZE_MB: Number.parseInt(process.env.MAX_CHARX_IMPORT_SIZE_MB || "10", 10),
+
+  /**
+   * Maximum decompressed size of the `card.json` payload inside a `.charx`
+   * archive. Only the card is decompressed; this bound is what stops a
+   * compressed bomb from spending memory on the one entry that is read.
+   * @default 4 MB
+   */
+  MAX_CHARX_CARD_SIZE_MB: Number.parseInt(process.env.MAX_CHARX_CARD_SIZE_MB || "4", 10),
+
+  /**
+   * Maximum number of assets a `.charx` card may declare before the import is
+   * refused. Assets are not imported, so this only bounds the header scan.
+   * @default 500
+   */
+  MAX_CHARX_ASSETS: Number.parseInt(process.env.MAX_CHARX_ASSETS || "500", 10),
+
+  /**
+   * Maximum declared total size of a `.charx` card's embedded assets. Sizes come
+   * from the zip central directory, so a hostile tree is refused without being
+   * decompressed.
+   * @default 256 MB
+   */
+  MAX_CHARX_ASSET_TOTAL_MB: Number.parseInt(process.env.MAX_CHARX_ASSET_TOTAL_MB || "256", 10),
 } as const;
 
 export const PERSONA_RATE_LIMITS = {
@@ -170,7 +201,7 @@ export const STREAMING_LIMITS = {
    * Each flush = 1 Discord message sent (semantically complete chunks)
    * @default 40 in production, Infinity in development
    */
-  MAX_FLUSH_COUNT: GUARDS_ENABLED ? Number.parseInt(process.env.MAX_FLUSH_COUNT || "40", 10) : Number.POSITIVE_INFINITY,
+  MAX_FLUSH_COUNT: GUARDS_ENABLED ? 40 : Number.POSITIVE_INFINITY,
 } as const;
 
 /**
@@ -522,6 +553,9 @@ const importQuotaMap = new Map<string, QuotaEntry>(); // Key: userId
 const documentQuotaMap = new Map<string, QuotaEntry>(); // Key: userId
 const avatarQuotaMap = new Map<string, QuotaEntry>(); // Key: guildId (server-level)
 
+/** Length of every daily quota window: a fixed 24 hours from the first reserved operation. */
+const DAILY_QUOTA_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 /**
  * ============================================================================
  * RATE LIMIT GUARDS
@@ -590,25 +624,30 @@ export function checkServerRateLimit(serverActiveCount: number): RateLimitResult
  */
 
 /**
- * Atomically checks and reserves a persona operation quota slot
- * Combines check and increment into a single operation to prevent race conditions
- * @returns Quota check result - if allowed, quota is already reserved
+ * Reserves one slot in a daily quota map, creating or resetting the window as needed.
+ *
+ * Check and increment happen in one synchronous step so two concurrent callers cannot both read
+ * the same count and each treat themselves as under the limit.
+ *
+ * @param quotaMap - Caller's own quota scope, keyed by whichever identifier that scope counts
+ * @param key - Identifier the scope counts against
+ * @param limit - Daily operation ceiling for this scope
+ * @returns Quota check result; when allowed, the slot is already reserved
  */
-export function reservePersonaQuota(userId: string): QuotaCheckResult {
+function reserveDailyQuota(quotaMap: Map<string, QuotaEntry>, key: string, limit: number): QuotaCheckResult {
   // Disabled in development
   if (!GUARDS_ENABLED) {
     return { allowed: true };
   }
 
   const now = Date.now();
-  const quota = personaQuotaMap.get(userId);
-  const limit = PERSONA_RATE_LIMITS.MAX_OPERATIONS_PER_DAY;
+  const quota = quotaMap.get(key);
 
   // First operation or expired quota - create with count 1 (atomically reserve)
   if (!quota || now >= quota.resetAt) {
-    personaQuotaMap.set(userId, {
+    quotaMap.set(key, {
       count: 1,
-      resetAt: now + 24 * 60 * 60 * 1000,
+      resetAt: now + DAILY_QUOTA_WINDOW_MS,
     });
     return { allowed: true };
   }
@@ -625,6 +664,15 @@ export function reservePersonaQuota(userId: string): QuotaCheckResult {
   // Atomically increment and return success
   quota.count++;
   return { allowed: true };
+}
+
+/**
+ * Atomically checks and reserves a persona operation quota slot
+ * Combines check and increment into a single operation to prevent race conditions
+ * @returns Quota check result - if allowed, quota is already reserved
+ */
+export function reservePersonaQuota(userId: string): QuotaCheckResult {
+  return reserveDailyQuota(personaQuotaMap, userId, PERSONA_RATE_LIMITS.MAX_OPERATIONS_PER_DAY);
 }
 
 /**
@@ -633,36 +681,7 @@ export function reservePersonaQuota(userId: string): QuotaCheckResult {
  * @returns Quota check result - if allowed, quota is already reserved
  */
 export function reserveImportQuota(userId: string): QuotaCheckResult {
-  // Disabled in development
-  if (!GUARDS_ENABLED) {
-    return { allowed: true };
-  }
-
-  const now = Date.now();
-  const quota = importQuotaMap.get(userId);
-  const limit = IMPORT_RATE_LIMITS.MAX_OPERATIONS_PER_DAY;
-
-  // First operation or expired quota - create with count 1 (atomically reserve)
-  if (!quota || now >= quota.resetAt) {
-    importQuotaMap.set(userId, {
-      count: 1,
-      resetAt: now + 24 * 60 * 60 * 1000,
-    });
-    return { allowed: true };
-  }
-
-  if (quota.count >= limit) {
-    return {
-      allowed: false,
-      resetAt: quota.resetAt,
-      current: quota.count,
-      max: limit,
-    };
-  }
-
-  // Atomically increment and return success
-  quota.count++;
-  return { allowed: true };
+  return reserveDailyQuota(importQuotaMap, userId, IMPORT_RATE_LIMITS.MAX_OPERATIONS_PER_DAY);
 }
 
 /**
@@ -671,36 +690,7 @@ export function reserveImportQuota(userId: string): QuotaCheckResult {
  * @returns Quota check result - if allowed, quota is already reserved
  */
 export function reserveDocumentQuota(userId: string): QuotaCheckResult {
-  // Disabled in development
-  if (!GUARDS_ENABLED) {
-    return { allowed: true };
-  }
-
-  const now = Date.now();
-  const quota = documentQuotaMap.get(userId);
-  const limit = DOCUMENT_RATE_LIMITS.MAX_OPERATIONS_PER_DAY;
-
-  // First operation or expired quota - create with count 1 (atomically reserve)
-  if (!quota || now >= quota.resetAt) {
-    documentQuotaMap.set(userId, {
-      count: 1,
-      resetAt: now + 24 * 60 * 60 * 1000,
-    });
-    return { allowed: true };
-  }
-
-  if (quota.count >= limit) {
-    return {
-      allowed: false,
-      resetAt: quota.resetAt,
-      current: quota.count,
-      max: limit,
-    };
-  }
-
-  // Atomically increment and return success
-  quota.count++;
-  return { allowed: true };
+  return reserveDailyQuota(documentQuotaMap, userId, DOCUMENT_RATE_LIMITS.MAX_OPERATIONS_PER_DAY);
 }
 
 /**
@@ -710,36 +700,7 @@ export function reserveDocumentQuota(userId: string): QuotaCheckResult {
  * @returns Quota check result - if allowed, quota is already reserved
  */
 export function reserveAvatarQuota(guildId: string): QuotaCheckResult {
-  // Disabled in development
-  if (!GUARDS_ENABLED) {
-    return { allowed: true };
-  }
-
-  const now = Date.now();
-  const quota = avatarQuotaMap.get(guildId);
-  const limit = AVATAR_RATE_LIMITS.MAX_OPERATIONS_PER_DAY;
-
-  // First operation or expired quota - create with count 1 (atomically reserve)
-  if (!quota || now >= quota.resetAt) {
-    avatarQuotaMap.set(guildId, {
-      count: 1,
-      resetAt: now + 24 * 60 * 60 * 1000,
-    });
-    return { allowed: true };
-  }
-
-  if (quota.count >= limit) {
-    return {
-      allowed: false,
-      resetAt: quota.resetAt,
-      current: quota.count,
-      max: limit,
-    };
-  }
-
-  // Atomically increment and return success
-  quota.count++;
-  return { allowed: true };
+  return reserveDailyQuota(avatarQuotaMap, guildId, AVATAR_RATE_LIMITS.MAX_OPERATIONS_PER_DAY);
 }
 
 /**
@@ -770,6 +731,8 @@ export function logGuardConfiguration(): void {
   log.info("\n--- Import Limits ---");
   log.info(`Max Data Import Size: ${IMPORT_LIMITS.MAX_DATA_IMPORT_SIZE_MB} MB`);
   log.info(`Max Persona Import Size: ${IMPORT_LIMITS.MAX_PERSONA_IMPORT_SIZE_MB} MB`);
+  log.info(`Max Character Card Archive Size: ${IMPORT_LIMITS.MAX_CHARX_IMPORT_SIZE_MB} MB`);
+  log.info(`Max Character Card Payload Size: ${IMPORT_LIMITS.MAX_CHARX_CARD_SIZE_MB} MB`);
   log.info("\n--- Upload Quota Limits (24h) ---");
   log.info(`Max Persona Operations: ${PERSONA_RATE_LIMITS.MAX_OPERATIONS_PER_DAY} per user`);
   log.info(`Max Import Operations: ${IMPORT_RATE_LIMITS.MAX_OPERATIONS_PER_DAY} per user`);

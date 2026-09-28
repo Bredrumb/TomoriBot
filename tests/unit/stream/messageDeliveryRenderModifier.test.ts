@@ -8,7 +8,7 @@ import {
   VisibleDeliveryMode,
 } from "@/types/stream/types";
 import { StreamMessageDelivery } from "@/utils/discord/stream/messageDelivery";
-import type { StreamSendPayload, StreamUiUpdater } from "@/utils/discord/stream/uiUpdater";
+import { StreamUiUpdater, type StreamSendPayload } from "@/utils/discord/stream/uiUpdater";
 
 function textConfig(visibleDeliveryMode = VisibleDeliveryMode.STREAMING): TextProcessingConfig {
   return {
@@ -39,46 +39,51 @@ const context = {
   },
 } as StreamContext;
 
+/**
+ * The real updater with only the send intercepted: the delivery calls nothing else on it, so the
+ * recorded calls are exactly what production would have handed to Discord.
+ */
+function makeDelivery(onPayload: (payload: StreamSendPayload, textForState: string) => void): StreamMessageDelivery {
+  const uiUpdater = new StreamUiUpdater({
+    hasStopRequest: () => false,
+    requestStop: () => true,
+    notifyStreamProgress: () => undefined,
+  });
+  uiUpdater.sendSinglePayload = async (payload, textForState) => {
+    onPayload(payload, textForState);
+    return null;
+  };
+  return new StreamMessageDelivery({ hasStopRequest: () => false, uiUpdater });
+}
+
 describe("StreamMessageDelivery copied-render options", () => {
   it("passes identity overrides and accumulated text prefixes to the UI updater", async () => {
     const sentPayloads: Array<{ payload: StreamSendPayload; textForState: string }> = [];
-    const delivery = new StreamMessageDelivery({
-      hasStopRequest: () => false,
-      uiUpdater: {
-        sendSinglePayload: async (payload, textForState) => {
-          sentPayloads.push({ payload, textForState });
-          return null;
-        },
-      } as StreamUiUpdater,
+    const delivery = makeDelivery((payload, textForState) => {
+      sentPayloads.push({ payload, textForState });
     });
 
-    // Copied identities flip the Discord display name ("bredrumb (Ren)") while
+    // Copied identities flip the Discord display name ("Obonya (Ren)") while
     // the accumulated-text prefix stays source-persona-first for the model.
     await delivery.sendSegment("hi", "period", textConfig(), typingConfig, context, createDefaultStreamState(), {
       identityOverride: {
-        username: "bredrumb (Ren)",
+        username: "Obonya (Ren)",
         avatarUrl: "https://example.com/avatar.png",
       },
-      accumulatedTextPrefix: "Ren (bredrumb): ",
+      accumulatedTextPrefix: "Ren (Obonya): ",
     });
 
     expect(sentPayloads).toHaveLength(1);
-    expect(sentPayloads[0].payload.identityOverride?.username).toBe("bredrumb (Ren)");
+    expect(sentPayloads[0].payload.identityOverride?.username).toBe("Obonya (Ren)");
     expect(sentPayloads[0].payload.identityOverride?.avatarUrl).toBe("https://example.com/avatar.png");
-    expect(sentPayloads[0].payload.accumulatedTextPrefix).toBe("Ren (bredrumb): ");
+    expect(sentPayloads[0].payload.accumulatedTextPrefix).toBe("Ren (Obonya): ");
     expect(sentPayloads[0].textForState).toBe("hi");
   });
 
   it("passes sprite records with a clean username and decorated accumulated prefix", async () => {
     const sentPayloads: Array<{ payload: StreamSendPayload; textForState: string }> = [];
-    const delivery = new StreamMessageDelivery({
-      hasStopRequest: () => false,
-      uiUpdater: {
-        sendSinglePayload: async (payload, textForState) => {
-          sentPayloads.push({ payload, textForState });
-          return null;
-        },
-      } as StreamUiUpdater,
+    const delivery = makeDelivery((payload, textForState) => {
+      sentPayloads.push({ payload, textForState });
     });
 
     // Sprite renders keep the webhook username clean ("Ren"); the decorated
@@ -101,14 +106,8 @@ describe("StreamMessageDelivery copied-render options", () => {
 
   it("flushes aggregate-mode bot text before sending a copied-render override", async () => {
     const sentPayloads: StreamSendPayload[] = [];
-    const delivery = new StreamMessageDelivery({
-      hasStopRequest: () => false,
-      uiUpdater: {
-        sendSinglePayload: async (payload) => {
-          sentPayloads.push(payload);
-          return null;
-        },
-      } as StreamUiUpdater,
+    const delivery = makeDelivery((payload) => {
+      sentPayloads.push(payload);
     });
     const state = createDefaultStreamState();
     state.pendingAggregatedText = "plain bot text";
@@ -122,9 +121,9 @@ describe("StreamMessageDelivery copied-render options", () => {
       state,
       {
         identityOverride: {
-          username: "bredrumb (Ren)",
+          username: "Obonya (Ren)",
         },
-        accumulatedTextPrefix: "Ren (bredrumb): ",
+        accumulatedTextPrefix: "Ren (Obonya): ",
       },
     );
 
@@ -133,8 +132,42 @@ describe("StreamMessageDelivery copied-render options", () => {
     expect(sentPayloads[0].identityOverride).toBeUndefined();
     expect(sentPayloads[1]).toMatchObject({
       content: "copied text",
-      accumulatedTextPrefix: "Ren (bredrumb): ",
+      accumulatedTextPrefix: "Ren (Obonya): ",
     });
-    expect(sentPayloads[1].identityOverride?.username).toBe("bredrumb (Ren)");
+    expect(sentPayloads[1].identityOverride?.username).toBe("Obonya (Ren)");
+  });
+
+  it("marks message-length and heavy-humanizer splits at the delivery boundary", async () => {
+    const sentPayloads: StreamSendPayload[] = [];
+    const delivery = makeDelivery((payload) => sentPayloads.push(payload));
+    const shortConfig = textConfig();
+    shortConfig.maxMessageLength = 30;
+
+    await delivery.sendSegment(
+      "A long sentence about apples and pears that continues past the message limit.",
+      "final",
+      shortConfig,
+      typingConfig,
+      context,
+      createDefaultStreamState(),
+    );
+    expect(sentPayloads.length).toBeGreaterThan(1);
+    expect(sentPayloads[0]?.diagnosticReason).toBe("stream_segment");
+    expect(sentPayloads.slice(1).every((payload) => payload.diagnosticReason === "length_split")).toBe(true);
+
+    sentPayloads.length = 0;
+    const heavyConfig = textConfig();
+    heavyConfig.humanizerDegree = HumanizerDegree.HEAVY;
+    await delivery.sendSegment(
+      "really? ok! bye",
+      "final",
+      heavyConfig,
+      typingConfig,
+      context,
+      createDefaultStreamState(),
+    );
+    expect(sentPayloads.length).toBeGreaterThan(1);
+    expect(sentPayloads[0]?.diagnosticReason).toBe("stream_segment");
+    expect(sentPayloads.slice(1).every((payload) => payload.diagnosticReason === "humanizer_split")).toBe(true);
   });
 });

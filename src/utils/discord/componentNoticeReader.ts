@@ -11,8 +11,8 @@
  * `message.embeds`, so those notices became completely invisible to the LLM:
  * causing Tomori to re-run tools she had already run. This module restores the
  * old behavior by reconstructing the embed-equivalent {title, description,
- * footer} triple from a CV2 container, so the existing title classifiers
- * (`checkTargetEmbedTitle`, `classifyEmbedTitle`) keep working unchanged.
+ * footer} triple from a CV2 container, so the shared title protocol lookup
+ * can classify notices even though they cannot carry embed footer markers.
  *
  * The traversal is duck-typed (via `toJSON()` when present) rather than
  * instanceof-based, mirroring `collectMediaCandidatesFromComponent` in

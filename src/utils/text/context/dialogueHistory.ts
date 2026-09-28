@@ -45,6 +45,10 @@ export async function appendDialogueHistoryContext(params: {
   includeTimestamps: boolean;
   isUserImpersonation: boolean;
   impersonatedUserId?: string;
+  triggererDiscordId?: string;
+  triggererFormattedName: string;
+  historyUserLabels?: Map<string, string>;
+  historyPersonaMentionLabels?: Map<string, string>;
   messageIdMap?: MessageIdMap;
   uncensorInputOptions: { unicodeSpacesEnabled: boolean; sanitizeEnabled: boolean };
   convertMentions: MentionConverter;
@@ -85,7 +89,7 @@ export async function appendDialogueHistoryContext(params: {
       activeNotes.push({ text: globalNoteText, targetIndex: Math.max(0, totalMessages - depth), emitted: false });
     }
   }
-  if (shouldInjectVerbatimToolCallingNudge(params.tomoriConfig, params.tomoriState)) {
+  if (shouldInjectVerbatimToolCallingNudge(params.tomoriState)) {
     activeNotes.push({
       text: VERBATIM_TOOL_CALLING_NUDGE,
       targetIndex: Math.max(0, totalMessages - VERBATIM_TOOL_CALLING_CONTEXT_DEPTH),
@@ -413,17 +417,30 @@ async function appendTextParts(
     mediaAttributionHint: string | null;
   },
 ): Promise<void> {
+  const authorLabel =
+    params.msg.authorType === "user"
+      ? (params.historyUserLabels?.get(params.msg.authorId) ??
+        (params.triggererDiscordId === params.msg.authorId && params.triggererFormattedName
+          ? params.triggererFormattedName
+          : params.msg.authorName))
+      : params.msg.authorName;
+
   if (params.msg.content) {
-    const normalizedContent = normalizeCustomEmojisForLlm(params.msg.content);
+    let normalizedContent = normalizeCustomEmojisForLlm(params.msg.content);
+    if (params.msg.authorPersonaLineageId != null && params.historyPersonaMentionLabels) {
+      normalizedContent = normalizedContent.replace(/<@!?(\d+)>/gu, (mention, targetId: string) => {
+        return params.historyPersonaMentionLabels?.get(`${params.msg.authorPersonaLineageId}:${targetId}`) ?? mention;
+      });
+    }
 
     // The author label is text WE author, so identity macros in it must still resolve: it is
     //    what tells the model which name owns the turn. Resolved BEFORE the join so the body,
     //    which is raw prose, can opt out of macro expansion in step 3.
     const resolvedAuthorLabel = await params.convertMentions(
-      params.msg.authorName,
+      authorLabel,
       params.client,
       params.guildId,
-      params.msg.authorName,
+      authorLabel,
       params.botName,
       params.tomoriConfig.personal_memories_enabled,
       undefined,
@@ -442,12 +459,17 @@ async function appendTextParts(
     }
 
     if (params.tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY && params.role === "model") {
-      processedContent = humanizeString(processedContent);
+      // content is already real, previously-delivered text, so re-rolling the same randomized
+      // comma/emphasis noise on every context build would just re-randomize already-final output
+      // and, since it never lands on the same result twice, defeat provider prompt-prefix caching
+      // for every turn after this one. suppressPunctuationNoise keeps only the deterministic
+      // casing/semicolon normalization, so a rebuilt prompt's history prefix stays byte-stable.
+      [processedContent] = humanizeString(processedContent, { suppressPunctuationNoise: true });
     }
-    // Mentions, channel links, and roles still resolve here. Only the identity macros are left
+    // Mentions, channel links, and roles still resolve here. Only the identity macros stay
     //    literal: this string carries a real Discord message body, so rewriting "{bot}"/"{char}"
-    //    would corrupt legitimate content (e.g. a persona preset Tomori drafted for a user) and,
-    //    on a model-role line, would collapse both macros onto the persona's own name.
+    //    would corrupt legitimate content (e.g. a persona preset Tomori drafted for a user).
+    //    On a model-role line it would also collapse both macros onto the persona's own name.
     processedContent = await params.convertMentions(
       processedContent,
       params.client,
@@ -475,10 +497,10 @@ async function appendTextParts(
     params.parts.push({
       type: "text",
       text: await params.convertMentions(
-        buildMediaAttributionText(params.msg, params.msg.authorName),
+        buildMediaAttributionText(params.msg, authorLabel),
         params.client,
         params.guildId,
-        params.msg.authorName,
+        authorLabel,
         params.botName,
         params.tomoriConfig.personal_memories_enabled,
       ),

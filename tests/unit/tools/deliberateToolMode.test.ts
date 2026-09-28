@@ -1,5 +1,19 @@
-import { describe, expect, it } from "bun:test";
-import { applyDeliberateToolAllowlist, getDeliberateToolAllowedNames } from "@/utils/tools/deliberateToolMode";
+import { beforeAll, describe, expect, it } from "bun:test";
+import { getLocaleStringList, getSupportedLocales, initializeLocalizer } from "@/utils/text/localizer";
+import {
+  DELIBERATE_TOOL_PACK_KEYS,
+  EXPLICIT_MEMORY_PACK_KEY,
+  findIntentPackViolations,
+  getIntentPackEntryProblem,
+} from "@/utils/text/localeIntentPacks";
+import {
+  applyDeliberateToolAllowlist,
+  getDeliberateToolAllowedNames,
+  matchesLocaleDeliberateToolPack,
+  resolveDeliberateToolContextTurns,
+} from "@/utils/tools/deliberateToolMode";
+
+const ALL_PACK_KEYS = [...Object.values(DELIBERATE_TOOL_PACK_KEYS), EXPLICIT_MEMORY_PACK_KEY];
 
 describe("deliberate tool mode", () => {
   it("allows the unified web_search tool for web-search intent", () => {
@@ -45,6 +59,23 @@ describe("deliberate tool mode", () => {
     expect(allowedNames).toContain("unblock_user");
   });
 
+  it("allows structured user info updates for naming, identity, and timezone requests", () => {
+    for (const prompt of [
+      "call me Mirri",
+      "change my pronouns to they/them",
+      "set my UTC offset to 8",
+      "clear my honorific",
+    ]) {
+      expect(getDeliberateToolAllowedNames(prompt)).toContain("update_user_info");
+    }
+  });
+
+  it("exposes user info updates for its custom trigger target", () => {
+    expect(getDeliberateToolAllowedNames("profile settings", { "user-info": ["profile settings"] })).toContain(
+      "update_user_info",
+    );
+  });
+
   it("supports wildcard custom triggers without breaking regex triggers", () => {
     expect(getDeliberateToolAllowedNames("", { image: ["^"] })).toContain("generate_image");
     expect(
@@ -70,5 +101,81 @@ describe("deliberate tool mode", () => {
       expect(allowedNames).toContain("fetch_url");
       expect(allowedNames).not.toContain("web_search");
     }
+  });
+
+  it("matches Japanese and Korean custom literals inside longer words", () => {
+    expect(getDeliberateToolAllowedNames("リマインドしてね", { reminder: ["リマインド"] })).toContain("create_task");
+    expect(getDeliberateToolAllowedNames("알림을 설정해 줘", { reminder: ["알림"] })).toContain("create_task");
+  });
+
+  it("treats a trailing * as a word-start stem and keeps whole-word matching otherwise", () => {
+    expect(getDeliberateToolAllowedNames("me lembre amanhã", { reminder: ["lembr*"] })).toContain("create_task");
+    expect(getDeliberateToolAllowedNames("vou relembrar", { reminder: ["lembr*"] })).not.toContain("create_task");
+    expect(getDeliberateToolAllowedNames("nice pictures", { image: ["pic"] })).not.toContain("generate_image");
+  });
+});
+
+describe("locale intent packs", () => {
+  beforeAll(async () => {
+    await initializeLocalizer();
+  });
+
+  it("exposes tools from an authored locale's pack regardless of the user's language", () => {
+    expect(getDeliberateToolAllowedNames("明日の朝にリマインドして")).toContain("create_task");
+    expect(getDeliberateToolAllowedNames("この画像を分析して")).toContain("analyze_image");
+    expect(getDeliberateToolAllowedNames("hello there")).not.toContain("create_task");
+    expect(matchesLocaleDeliberateToolPack("voice", "音声で知らせて")).toBe(true);
+  });
+
+  it("keeps memory tools hidden for Japanese save and forget phrasing that is not a memory request", () => {
+    // Japanese pack entries match as substrings, so a bare save or forget verb would expose memory writes
+    // for any file, image, or setting a user asks to save.
+    for (const request of [
+      "画像を保存して",
+      "このファイル保存して",
+      "設定を保存してください",
+      "パスワード忘れてた",
+      "記憶力が悪い",
+    ]) {
+      expect(getDeliberateToolAllowedNames(request)).not.toContain("create_long_term_memory");
+      expect(getDeliberateToolAllowedNames(request)).not.toContain("update_long_term_memory");
+    }
+    expect(getDeliberateToolAllowedNames("これ記憶に保存して")).toContain("create_long_term_memory");
+  });
+
+  it("defines every pack as a string list in every authored locale", () => {
+    for (const locale of getSupportedLocales()) {
+      for (const key of ALL_PACK_KEYS) {
+        expect(getLocaleStringList(locale, key)).toBeDefined();
+      }
+    }
+  });
+
+  it("ships no entry that the pack validator rejects", () => {
+    expect(findIntentPackViolations(ALL_PACK_KEYS)).toEqual([]);
+  });
+
+  it("rejects regex syntax, wildcards, and single-character unspaced entries", () => {
+    expect(getIntentPackEntryProblem("^")).toBe("regex_syntax");
+    expect(getIntentPackEntryProblem("a*b")).toBe("regex_syntax");
+    expect(getIntentPackEntryProblem("remind (me)")).toBe("regex_syntax");
+    expect(getIntentPackEntryProblem("画")).toBe("too_short");
+    expect(getIntentPackEntryProblem("알")).toBe("too_short");
+    expect(getIntentPackEntryProblem("  ")).toBe("empty");
+    expect(getIntentPackEntryProblem("lembr*")).toBeNull();
+    expect(getIntentPackEntryProblem("画像")).toBeNull();
+    expect(getIntentPackEntryProblem("don't forget")).toBeNull();
+  });
+});
+
+describe("resolveDeliberateToolContextTurns", () => {
+  it("keeps tools for four turns when the server has not chosen a value", () => {
+    expect(resolveDeliberateToolContextTurns(null)).toBe(4);
+    expect(resolveDeliberateToolContextTurns(undefined)).toBe(4);
+  });
+
+  it("clamps a server value into 0-10", () => {
+    expect(resolveDeliberateToolContextTurns(-2)).toBe(0);
+    expect(resolveDeliberateToolContextTurns(25)).toBe(10);
   });
 });

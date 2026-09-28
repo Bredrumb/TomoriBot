@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { OpenAICompatibleStreamAdapter } from "@/providers/openaiCompatible/openaiCompatibleStreamAdapter";
 import type { OpenAICompatibleStreamConfig } from "@/providers/openaiCompatible/openaiCompatibleTypes";
 import { GemmaToolCallParser } from "@/providers/custom/customGemmaToolParser";
@@ -6,7 +7,9 @@ import type { ProcessedChunk, RawStreamChunk, StreamConfig, StreamContext } from
 import type { ThoughtLogEntry } from "@/types/provider/interfaces";
 import { log } from "@/utils/misc/logger";
 import { buildCustomThinkingRequest } from "@/utils/provider/thinkingControl";
+import { acquireTextModelLease } from "@/utils/provider/textModelComfyUiHandoff";
 import { VerbatimToolCallParser, getVerbatimToolCallMaxBufferChars } from "@/utils/tools/verbatimToolCallParser";
+import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
 /**
  * When true, the stream adapter scans `delta.content` for Gemma 4's hallucinated
@@ -19,6 +22,7 @@ const GEMMA_TOOL_PARSER_ENABLED = (process.env.CUSTOM_GEMMA_TOOL_PARSER_ENABLED 
 
 export interface CustomStreamConfig extends OpenAICompatibleStreamConfig {
   endpointUrl: string;
+  customConnectionId?: number | null;
   /** Optional context window override sent as options.num_ctx (Ollama extension) */
   numCtx?: number | null;
 }
@@ -62,6 +66,15 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
       // system-role turns before forwarding to the underlying model.
       // Detect it by URL so the adapter falls back to an in-band user turn.
       supportsSystemRole: (apiUrl) => !isChatmockEndpoint(apiUrl),
+      mutateHeaders: ({ headers, config, context }) => {
+        const sessionId = resolveOpenCodeSessionId((config as CustomStreamConfig).endpointUrl, {
+          channelId: context.channel.id,
+          personaId: context.tomoriState.persona_id,
+        });
+        if (sessionId) {
+          headers["x-opencode-session"] = sessionId;
+        }
+      },
       // Inject Ollama-style options.num_ctx when the user has configured a
       // context window override. This travels outside the messages array so it
       // is unaffected by the context window it controls.
@@ -69,7 +82,8 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
         const customConfig = config as CustomStreamConfig;
         if (customConfig.numCtx != null) {
           // Ollama reads options.num_ctx; KoboldCPP reads top-level max_context_length.
-          // Both are injected so each server picks up what it understands and ignores the other.
+          // Both are injected; strict servers may reject the unused field, which the
+          // pre-commit parameter degradation path then drops on a targeted retry.
           requestBody.options = {
             ...((requestBody.options as Record<string, unknown>) ?? {}),
             num_ctx: customConfig.numCtx,
@@ -101,10 +115,18 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
     config: StreamConfig,
     context: StreamContext,
   ): AsyncGenerator<RawStreamChunk, void, unknown> {
+    // Held for the whole stream, and taken per tool round, so a ComfyUI job never unloads the model
+    // mid-reply. The `finally` also runs when the consumer returns early on a function call, which
+    // releases the lease before that tool (possibly the ComfyUI job itself) executes.
+    const releaseModel = await acquireTextModelLease(
+      (config as CustomStreamConfig).customConnectionId,
+      context.abortSignal,
+    );
     this.configureVerbatimToolCallParser(config, context);
     try {
       yield* super.startStream(config, context);
     } finally {
+      releaseModel();
       this.verbatimParser = null;
     }
   }
@@ -201,7 +223,9 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
 
     const tools = Array.isArray(config.tools) ? config.tools : [];
     const enabled = Boolean(
-      context.tomoriState.config.verbatim_tool_calling_enabled && context.tomoriState.llm.has_tools && tools.length > 0,
+      context.tomoriState.llm.verbatim_tool_calling &&
+        resolveToolsEnabled(context.tomoriState, context.tomoriState.llm.has_tools) &&
+        tools.length > 0,
     );
     if (!enabled) {
       return;
@@ -267,6 +291,30 @@ function isChatmockEndpoint(apiUrl: string): boolean {
     // Malformed URL, so don't assume ChatMock
     return false;
   }
+}
+
+/**
+ * The session affinity key OpenCode Go and Zen require, or null for every other endpoint.
+ *
+ * OpenCode asks for one stable ID per conversation, which here is a channel plus the persona
+ * answering in it. It is hashed because the value leaves for a third party and a raw Discord
+ * snowflake would identify the channel; it must stay deterministic so retries and later turns keep
+ * the same affinity.
+ */
+export function resolveOpenCodeSessionId(
+  endpointUrl: string,
+  conversation: { channelId: string; personaId: number | null | undefined },
+): string | null {
+  try {
+    const { hostname, pathname } = new URL(endpointUrl);
+    if (hostname !== "opencode.ai" || !pathname.startsWith("/zen/")) return null;
+  } catch {
+    return null;
+  }
+  return createHash("sha256")
+    .update(`${conversation.channelId}:${conversation.personaId ?? "none"}`)
+    .digest("hex")
+    .slice(0, 32);
 }
 
 export function normalizeCustomApiUrl(endpointUrl?: string): string {

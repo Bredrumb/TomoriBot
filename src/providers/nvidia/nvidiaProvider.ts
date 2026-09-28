@@ -14,11 +14,11 @@ import { NvidiaStreamAdapter, type NvidiaStreamConfig } from "@/providers/nvidia
 import { getNvidiaToolAdapter } from "@/providers/nvidia/nvidiaToolAdapter";
 import {
   NVIDIA_CHAT_COMPLETIONS_URL,
+  NVIDIA_KEY_VALIDATION_TIMEOUT_MS,
   NVIDIA_DEFAULT_EMBEDDING_MODEL,
   NVIDIA_DEFAULT_TEXT_MODEL,
   NVIDIA_EMBEDDINGS_URL,
   NVIDIA_MIN_P_UNSUPPORTED_MODELS,
-  NVIDIA_MODELS_URL,
 } from "@/providers/nvidia/nvidiaConstants";
 import {
   createOpenAICompatibleHttpError,
@@ -71,6 +71,7 @@ import { llmModelRepo } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { buildRuntimeLogitBiasMapForLlm } from "@/utils/provider/logitBiasResolver";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
+import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
 async function getDefaultNvidiaModel(): Promise<string> {
   const providerName = "nvidia";
@@ -175,22 +176,49 @@ export class NvidiaProvider
     return nvidiaProviderInfo;
   }
 
+  /**
+   * Validates a key with a one-token completion rather than `/v1/models`, which NIM serves without
+   * authentication and so accepted any string, including mistyped and expired keys.
+   *
+   * Only 401/403 fail validation. NIM retires hosted models often and queues free-tier requests,
+   * so a 404, 410, 429, or 5xx from the probe model says nothing about the key. NIM authenticates
+   * before it queues (a bad key is refused in under a second even on a model that holds valid
+   * requests for minutes), so a streaming probe still waiting for headers at the deadline has
+   * already passed authentication.
+   */
   async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), NVIDIA_KEY_VALIDATION_TIMEOUT_MS);
     try {
-      // Use the models list endpoint: no model needed, no tokens consumed
-      const response = await fetch(NVIDIA_MODELS_URL, {
-        method: "GET",
+      const response = await fetch(NVIDIA_CHAT_COMPLETIONS_URL, {
+        method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          model: NVIDIA_DEFAULT_TEXT_MODEL,
+          messages: [{ role: "user", content: "ping" }],
+          max_tokens: 1,
+          stream: true,
+        }),
+        signal: controller.signal,
       });
+      // Past the headers the deadline has done its job; left armed, it could abort the body read of
+      // a 401/403 and report a rejected key as valid.
+      clearTimeout(deadline);
 
-      if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
         throw createOpenAICompatibleHttpError(response.status, response.statusText, await response.text());
       }
 
+      // Cancel rather than abandon: an unread body keeps the socket and its buffers alive.
+      await response.body?.cancel();
       return { valid: true };
     } catch (error) {
+      if (controller.signal.aborted) {
+        return { valid: true };
+      }
       log.error("NVIDIA API key validation failed", error as Error);
       return {
         valid: false,
@@ -198,6 +226,8 @@ export class NvidiaProvider
           errorMessagePrefix: "NVIDIA API error",
         }),
       };
+    } finally {
+      clearTimeout(deadline);
     }
   }
 
@@ -253,8 +283,10 @@ export class NvidiaProvider
     tomoriState: TomoriState,
     streamingContext?: StreamingContext,
   ): Promise<Array<Record<string, unknown>>> {
-    if (!tomoriState.llm.has_tools) {
-      log.info("NVIDIA provider: Model does not support tools (seeded capability)");
+    if (!resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
+      log.info(
+        `NVIDIA provider: Tools unavailable (tool_use_enabled=${tomoriState.config.tool_use_enabled}, has_tools=${tomoriState.llm.has_tools})`,
+      );
       return [];
     }
 
@@ -288,6 +320,7 @@ export class NvidiaProvider
           videogen_enabled: tomoriState.config.videogen_enabled,
           voice_message_enabled: tomoriState.config.voice_message_enabled,
           user_blocking_enabled: tomoriState.config.user_blocking_enabled,
+          user_info_updates_enabled: tomoriState.config.user_info_updates_enabled,
           thread_creation_enabled: tomoriState.config.thread_creation_enabled,
         },
       };
@@ -359,7 +392,7 @@ export class NvidiaProvider
       config.logitBias = runtimeLogitBias;
     }
 
-    if (tomoriState.llm.has_tools) {
+    if (resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
       config.tools = await this.getTools(tomoriState);
     }
 
@@ -409,7 +442,7 @@ export class NvidiaProvider
         isManuallyTriggered: streamingContext?.isManuallyTriggered,
       };
 
-      if (streamingContext && tomoriState.llm.has_tools) {
+      if (streamingContext && resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
         log.info("NvidiaProvider: Reloading tools with streaming context for context-aware availability");
         streamConfig.tools = await this.getTools(tomoriState, streamingContext);
       }
@@ -503,6 +536,7 @@ export class NvidiaProvider
         videogen_enabled: false,
         voice_message_enabled: false,
         user_blocking_enabled: false,
+        user_info_updates_enabled: false,
         thread_creation_enabled: false,
       },
     };

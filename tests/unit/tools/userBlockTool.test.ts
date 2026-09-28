@@ -1,9 +1,25 @@
 import { describe, expect, it } from "bun:test";
+import type { ToolContext } from "@/types/tool/interfaces";
 import {
   DEFAULT_BLOCK_USER_MAX_DURATION_HOURS,
   formatBlockedUserNoticeContent,
+  missingBlockNoticePermission,
   parseBlockUserArgs,
 } from "@/tools/functionCalls/userBlockToolShared";
+
+it("identifies the channel permission needed before saving a block", async () => {
+  const member = { id: "bot" };
+  const context = {
+    guildId: "guild",
+    client: { guilds: { cache: new Map([["guild", { members: { me: member } }]]) } },
+    channel: {
+      isThread: () => false,
+      permissionsFor: () => ({ has: (permission: string) => permission !== "SendMessages" }),
+    },
+  } as unknown as ToolContext;
+
+  expect(await missingBlockNoticePermission(context)).toBe("SendMessages");
+});
 
 describe("block_user argument parsing", () => {
   it("accepts valid mute arguments", () => {

@@ -114,7 +114,9 @@ describe("pkApi.fetchMessage", () => {
   });
 
   it("sends the configured token verbatim and omits an empty token", async () => {
-    const fetchMock = mock(async () => jsonResponse(200, { sender: "token-sender", system: null, member: null }));
+    const fetchMock = mock(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      jsonResponse(200, { sender: "token-sender", system: null, member: null }),
+    );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     process.env.PLURALKIT_API_TOKEN = "fixture-token";

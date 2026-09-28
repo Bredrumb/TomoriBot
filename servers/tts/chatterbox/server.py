@@ -18,9 +18,12 @@ from pydantic import BaseModel
 
 MODEL_NAME = "chatterbox"
 HOST = os.getenv("TOMORI_TTS_HOST", "127.0.0.1")
-PORT = int(os.getenv("TOMORI_TTS_PORT", "8011"))
+PORT = int(os.getenv("CHATTERBOX_PORT", "8011"))
 DEVICE = os.getenv("TOMORI_TTS_DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
-MAX_TEXT_CHARS = int(os.getenv("TOMORI_TTS_MAX_TEXT_CHARS", "2000"))
+MAX_TEXT_CHARS = 2000
+FAST_MODEL = os.getenv("CHATTERBOX_FAST_MODEL", "turbo").strip().lower()
+if FAST_MODEL not in {"turbo", "nano"}:
+  raise ValueError("CHATTERBOX_FAST_MODEL must be 'turbo' or 'nano'.")
 
 turbo_model = None
 standard_model = None
@@ -58,7 +61,10 @@ def load_model() -> None:
 
   from chatterbox.tts_turbo import ChatterboxTurboTTS
 
-  turbo_model = ChatterboxTurboTTS.from_pretrained(device=DEVICE)
+  if FAST_MODEL == "nano":
+    turbo_model = ChatterboxTurboTTS.from_pretrained(device=DEVICE, nano=True)
+  else:
+    turbo_model = ChatterboxTurboTTS.from_pretrained(device=DEVICE)
 
 
 def load_standard_model():
@@ -85,6 +91,7 @@ def health() -> dict[str, str]:
   return {
     "status": "ok" if turbo_model is not None else "loading",
     "model": MODEL_NAME,
+    "fast_model": FAST_MODEL,
     "device": DEVICE,
     "turbo_loaded": str(turbo_model is not None).lower(),
     "standard_loaded": str(standard_model is not None).lower(),

@@ -4,6 +4,11 @@
  */
 
 import { z } from "zod";
+import {
+  EMPTY_PERSONA_NAMING_CONFIG,
+  personaNamingConfigSchema,
+  type PersonaNamingConfig,
+} from "@/types/personaNaming";
 
 /**
  * Current version of the preset export format
@@ -17,21 +22,16 @@ export const PRESET_EXPORT_VERSION = "1.0.0";
  */
 export const UNPAIRED_SAMPLE_DIALOGUE_SENTINEL = "__UNPAIRED_SAMPLE_DIALOGUE__";
 
-function parsePositiveIntegerEnv(name: string, defaultValue: number): number {
-  const parsedValue = Number.parseInt(process.env[name] ?? "", 10);
-  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : defaultValue;
-}
-
 /**
  * Preset import/export schema limits.
- * Admins can raise these with env vars, but doing so affects untrusted import files
- * and cross-instance preset portability.
  */
-export const PRESET_MAX_STRING_LENGTH = parsePositiveIntegerEnv("PRESET_MAX_STRING_LENGTH", 5000);
-export const PRESET_MAX_ATTRIBUTES = parsePositiveIntegerEnv("PRESET_MAX_ATTRIBUTES", 200);
-const PRESET_MAX_SAMPLE_DIALOGUES = parsePositiveIntegerEnv("PRESET_MAX_SAMPLE_DIALOGUES", 100);
-const PRESET_MAX_TRIGGER_WORDS = parsePositiveIntegerEnv("PRESET_MAX_TRIGGER_WORDS", 100);
-const PRESET_MAX_IMAGE_TAGS = parsePositiveIntegerEnv("PRESET_MAX_IMAGE_TAGS", 200);
+export const PRESET_MAX_STRING_LENGTH = 5000;
+// Four 4000-character persona prompt fields can add three two-character separators.
+export const PRESET_MAX_PERSONA_PROMPT_LENGTH = 16_003;
+export const PRESET_MAX_ATTRIBUTES = 200;
+const PRESET_MAX_SAMPLE_DIALOGUES = 100;
+const PRESET_MAX_TRIGGER_WORDS = 100;
+const PRESET_MAX_IMAGE_TAGS = 200;
 
 /**
  * Generated presets use the canonical 6-attribute layout from presetCommon.ts:
@@ -60,6 +60,7 @@ export interface PresetExportData {
   sample_dialogues_out: string[];
   trigger_words: string[];
   persona_prompt?: string | null;
+  naming_config?: PersonaNamingConfig;
   persona_lineage_id?: number;
   /** Official preset lineage, when this export was materialized from a preset pointer */
   preset_lineage_id?: number;
@@ -115,6 +116,8 @@ export type ImportResult =
         dialogueCount: number;
         triggerWordCount: number;
       };
+      /** Whether the imported main persona now resolves sprites from an official preset. */
+      mainPersonaIsPointer: boolean;
     }
   | {
       success: false;
@@ -140,7 +143,8 @@ export const presetExportDataSchema = z.object({
   sample_dialogues_in: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_SAMPLE_DIALOGUES),
   sample_dialogues_out: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_SAMPLE_DIALOGUES),
   trigger_words: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_TRIGGER_WORDS),
-  persona_prompt: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
+  persona_prompt: z.string().max(PRESET_MAX_PERSONA_PROMPT_LENGTH).nullable().optional(),
+  naming_config: personaNamingConfigSchema.default(EMPTY_PERSONA_NAMING_CONFIG),
   persona_lineage_id: z
     .preprocess((value) => {
       if (typeof value === "bigint") {

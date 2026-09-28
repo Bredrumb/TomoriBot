@@ -4,7 +4,7 @@ import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
 import { isMatrixBridgeWebhookUsername } from "@/utils/bridges";
 import { isKnownChatProxyMessage } from "@/utils/chatProxy/proxyExpectation";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
-import { escapeRegExp } from "@/utils/text/processors/regexUtils";
+import { escapeRegExp, isUnspacedScriptText, wrapWithWordBoundary } from "@/utils/text/processors/regexUtils";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 
 const NEVER_MATCH_REGEX = /a^/i;
@@ -29,7 +29,7 @@ function createScreamingRegex(trigger: string): RegExp {
     }
   }
 
-  return new RegExp(`\\b${pattern}\\b`, "i");
+  return new RegExp(wrapWithWordBoundary(pattern), "iu");
 }
 
 function createDeliberateTriggerRegex(trigger: string): RegExp {
@@ -69,8 +69,7 @@ export function getDeliberateTriggerMatch(content: string, trigger: string): Reg
     return null;
   }
 
-  const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(normalizedTrigger);
-  const hasFullTriggerMatch = isJapanese
+  const hasFullTriggerMatch = isUnspacedScriptText(normalizedTrigger)
     ? content.includes(normalizedTrigger)
     : createScreamingRegex(normalizedTrigger).test(content);
   if (!hasFullTriggerMatch) {
@@ -103,8 +102,7 @@ export function getTriggerFirstMatchIndexInContent(content: string, trigger: str
     return deliberateMatch?.index ?? Number.POSITIVE_INFINITY;
   }
 
-  const isJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(normalizedTrigger);
-  if (isJapanese) {
+  if (isUnspacedScriptText(normalizedTrigger)) {
     const index = content.indexOf(normalizedTrigger);
     return index >= 0 ? index : Number.POSITIVE_INFINITY;
   }

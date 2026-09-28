@@ -1,28 +1,16 @@
 /**
  * Bun module-mock surface and lifetime audit.
  *
- * `mock.module()` replacements persist for the entire Bun process. High-fanout
- * modules therefore need both a complete export surface and scoped behavioral
- * overrides that fall back to real behavior after the declaring file.
+ * `mock.module()` replacements persist for the entire Bun process, so every project module
+ * mock needs both a complete export surface and scoped behavioral overrides that fall back to
+ * real behavior after the declaring file. The runner isolates mocking files in their own
+ * process, but a bare `bun test` does not, and a partial mock of even a low-fanout module
+ * breaks whichever later file imports a member it left out.
  */
 
 import { readFile, readdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { ts } from "ts-morph";
-
-export const HIGH_RISK_MOCK_MODULES = new Set([
-  "@/utils/cache/tomoriStateCache",
-  "@/utils/chat/contextAnnotations",
-  "@/utils/db/client",
-  "@/utils/db/repositories",
-  "@/utils/discord/streamOrchestrator",
-  "@/utils/discord/ui/embeds",
-  "@/utils/discord/ui/modals",
-  "@/utils/discord/ui/personaWorkflow",
-  "@/utils/provider/providerInfoRegistry",
-  "@/utils/security/crypto",
-  "@/utils/text/localizer",
-]);
 
 /**
  * Modules that must never be mocked at module level, not even full-surface and leak-scoped.
@@ -34,6 +22,14 @@ export const HIGH_RISK_MOCK_MODULES = new Set([
  * in `tests/helpers/mockSurface.ts` covers every case a module mock was serving here.
  */
 export const FORBIDDEN_MOCK_MODULES = new Set(["@/utils/misc/logger"]);
+
+/**
+ * Project modules, addressed through the `@/` alias. A relative specifier is not guarded: Bun
+ * resolves it from the file that calls `mock.module`, and every project mock uses the alias.
+ */
+export function isGuardedMockModule(moduleSpecifier: string): boolean {
+  return moduleSpecifier.startsWith("@/");
+}
 
 export const MOCK_MODULE_SURFACE_REPO_ROOT = resolve(import.meta.dir, "..", "..", "..");
 
@@ -49,6 +45,7 @@ export interface MockModuleSurfaceViolation {
   /** 1-based source line. */
   line: number;
   /** 1-based source column. */
+  column: number;
   moduleSpecifier: string;
   kind: MockModuleSurfaceViolationKind;
   message: string;
@@ -139,7 +136,7 @@ function moduleCallReceiver(call: ts.CallExpression): string | null {
 }
 
 /**
- * Scan one test source for unsafe mocks of curated high-fanout modules.
+ * Scan one test source for unsafe mocks of project modules.
  */
 export function scanMockModuleSurfaceSource(
   content: string,
@@ -183,7 +180,7 @@ export function scanMockModuleSurfaceSource(
               "tests/helpers/mockSurface instead: a replaced module record makes a later file's " +
               "`spyOn` silently install nothing.",
           );
-        } else if (HIGH_RISK_MOCK_MODULES.has(moduleSpecifier)) {
+        } else if (isGuardedMockModule(moduleSpecifier)) {
           const realAliases = namespaceImports.get(moduleSpecifier) ?? new Set<string>();
           const object = factoryObjectLiteral(node.arguments[1]);
           const matchingSpreads =
@@ -272,7 +269,12 @@ export async function auditMockModuleSurfaces(
       if (ts.isCallExpression(node)) {
         const receiver = moduleCallReceiver(node);
         const firstArgument = node.arguments[0] ? unwrapExpression(node.arguments[0]) : null;
-        if (receiver && firstArgument && ts.isStringLiteralLike(firstArgument) && HIGH_RISK_MOCK_MODULES.has(firstArgument.text)) {
+        if (
+          receiver &&
+          firstArgument &&
+          ts.isStringLiteralLike(firstArgument) &&
+          isGuardedMockModule(firstArgument.text)
+        ) {
           guardedMocks++;
         }
       }
@@ -282,8 +284,7 @@ export async function auditMockModuleSurfaces(
   }
 
   violations.sort(
-    (a, b) =>
-      a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column || a.kind.localeCompare(b.kind),
+    (a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column || a.kind.localeCompare(b.kind),
   );
   return { violations, scannedFiles: candidates.length, guardedMocks };
 }

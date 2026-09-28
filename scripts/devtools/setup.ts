@@ -168,7 +168,9 @@ function buildContext(scan: PrereqScan): SetupContext {
 }
 
 function generateSecret(length = 32): string {
-  return randomBytes(Math.ceil((length * 3) / 4)).toString("base64url").slice(0, length);
+  return randomBytes(Math.ceil((length * 3) / 4))
+    .toString("base64url")
+    .slice(0, length);
 }
 
 function validateNonPlaceholder(label: string): (value: string) => string | null {
@@ -185,7 +187,7 @@ function getMissingRequiredEnvKeys(env: Record<string, string>): string[] {
 }
 
 function quoteSqlIdentifier(value: string): string {
-  return `"${value.replace(/"/g, "\"\"")}"`;
+  return `"${value.replace(/"/g, '""')}"`;
 }
 
 function quoteSqlLiteral(value: string): string {
@@ -194,12 +196,15 @@ function quoteSqlLiteral(value: string): string {
 
 function buildPostgresUrl(connection: PostgresConnection): string {
   const user = encodeURIComponent(connection.user);
-  const auth =
-    connection.password.trim().length > 0 ? `${user}:${encodeURIComponent(connection.password)}` : user;
+  const auth = connection.password.trim().length > 0 ? `${user}:${encodeURIComponent(connection.password)}` : user;
   return `postgresql://${auth}@${connection.host}:${connection.port}/${connection.database}`;
 }
 
-function buildProvisioningSql(appUser: string, appPassword: string, appDatabase: string): {
+function buildProvisioningSql(
+  appUser: string,
+  appPassword: string,
+  appDatabase: string,
+): {
   roleSql: string;
   databaseExistsSql: string;
   createDatabaseSql: string;
@@ -228,19 +233,20 @@ function printManualProvisioningSql(sql: ReturnType<typeof buildProvisioningSql>
   log.warn("TomoriBot cannot connect with these .env database credentials until this SQL has run successfully.");
 }
 
-async function runPsql(connection: PostgresConnection, sql: string, stdout: "inherit" | "pipe" = "inherit"): Promise<{
+async function runPsql(
+  connection: PostgresConnection,
+  sql: string,
+  stdout: "inherit" | "pipe" = "inherit",
+): Promise<{
   exitCode: number;
   output: string;
 }> {
   const outputArgs = stdout === "pipe" ? ["-t", "-A"] : [];
-  const proc = Bun.spawn(
-    ["psql", buildPostgresUrl(connection), "-v", "ON_ERROR_STOP=1", ...outputArgs, "-c", sql],
-    {
-      cwd: ROOT,
-      stdout,
-      stderr: "inherit",
-    },
-  );
+  const proc = Bun.spawn(["psql", buildPostgresUrl(connection), "-v", "ON_ERROR_STOP=1", ...outputArgs, "-c", sql], {
+    cwd: ROOT,
+    stdout,
+    stderr: "inherit",
+  });
   const exitCode = await proc.exited;
   const output = stdout === "pipe" ? await new Response(proc.stdout).text() : "";
   return { exitCode, output };
@@ -349,7 +355,10 @@ async function chooseEnvMode(envAlreadyExisted: boolean, env: Record<string, str
   return selected.id;
 }
 
-async function configureDiscordToken(env: Record<string, string>, mode: EnvConfigureMode): Promise<Record<string, string>> {
+async function configureDiscordToken(
+  env: Record<string, string>,
+  mode: EnvConfigureMode,
+): Promise<Record<string, string>> {
   if (mode === "keep" || (mode === "fill" && !isPlaceholder(env.DISCORD_TOKEN))) {
     return {};
   }
@@ -368,7 +377,10 @@ async function configureDiscordToken(env: Record<string, string>, mode: EnvConfi
   return { DISCORD_TOKEN: token.trim() };
 }
 
-async function configureCryptoSecret(env: Record<string, string>, mode: EnvConfigureMode): Promise<Record<string, string>> {
+async function configureCryptoSecret(
+  env: Record<string, string>,
+  mode: EnvConfigureMode,
+): Promise<Record<string, string>> {
   if (isPlaceholder(env.CRYPTO_SECRET)) {
     const secret = generateSecret();
     log.success("Generated a 32-character CRYPTO_SECRET.");
@@ -465,7 +477,11 @@ async function configureDockerDatabase(env: Record<string, string>): Promise<Dat
   };
 }
 
-async function configureDatabase(env: Record<string, string>, mode: EnvConfigureMode, scan: PrereqScan): Promise<DatabaseConfigResult> {
+async function configureDatabase(
+  env: Record<string, string>,
+  mode: EnvConfigureMode,
+  scan: PrereqScan,
+): Promise<DatabaseConfigResult> {
   if (!needsDatabaseConfig(env, mode)) {
     return { values: {}, startDockerDatabase: false };
   }
@@ -500,7 +516,9 @@ async function configureDatabase(env: Record<string, string>, mode: EnvConfigure
   const selected = await selectMenu<"native" | "docker">("Database for local Bun setup", choices);
 
   if (selected.id === "docker") {
-    log.info("This uses Docker only for PostgreSQL. TomoriBot will still start with `bun run dev` or `bun run launch`.");
+    log.info(
+      "This uses Docker only for PostgreSQL. TomoriBot will still start with `bun run dev` or `bun run launch`.",
+    );
     return configureDockerDatabase(env);
   }
 
@@ -518,19 +536,11 @@ async function maybeStartDockerDatabase(scan: PrereqScan): Promise<void> {
   await runInherited("docker", ["compose", "up", "-d", "postgres"]);
 }
 
-async function runBunInstall(): Promise<void> {
-  if (!(await confirm("Run bun install --frozen-lockfile now?", true))) {
-    log.info("Skipped dependency install. Run `bun install --frozen-lockfile` before starting TomoriBot.");
-    return;
-  }
-  await runInherited("bun", ["install", "--frozen-lockfile"]);
-}
-
 function printSetupComplete(title: string): void {
   log.section(title);
   log.info("Next steps:");
   log.info("  1. Start TomoriBot with `bun run dev` or `bun run launch`.");
-  log.info("  2. When Discord shows the bot online, run `/config setup` in your server.");
+  log.info("  2. When Discord shows the bot online, run `/setup` in your server.");
 }
 
 async function runBaseInstall(scan: PrereqScan, options: BaseInstallOptions = {}): Promise<void> {
@@ -560,8 +570,6 @@ async function runBaseInstall(scan: PrereqScan, options: BaseInstallOptions = {}
   if (database.startDockerDatabase) {
     await maybeStartDockerDatabase(scan);
   }
-
-  await runBunInstall();
 
   if (options.showCompletion ?? true) {
     printSetupComplete("Base Install Complete");
@@ -635,6 +643,9 @@ async function main(): Promise<void> {
   }
 
   console.log(pc.bold("\nTomoriBot Setup Wizard\n"));
+  if (!process.stdin.isTTY && !flags.has("--yes") && !flags.has("--defaults") && process.env.CI !== "true") {
+    log.warn("Input is not an interactive terminal. The setup wizard will use defaults where available.");
+  }
   const scan = await scanPrereqs();
 
   if (flags.has("--full")) {

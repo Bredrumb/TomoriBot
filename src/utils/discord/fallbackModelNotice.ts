@@ -1,7 +1,8 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, type Message, MessageFlags } from "discord.js";
+import type { Message, Webhook } from "discord.js";
 import type { LlmRow } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
-import { createStandardEmbed, truncateForEmbedDescription } from "@/utils/discord/embedHelper";
+import { truncateForEmbedDescription } from "@/utils/discord/embedHelper";
+import { attachTextDisplayModalCollector, buildTextDisplayModalButton } from "@/utils/discord/textDisplayModal";
 import { isNoticeEmbedVisible, routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import { resolveManagedChannelWebhook } from "@/utils/discord/webhook/webhookCore";
@@ -10,11 +11,7 @@ import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
 const FALLBACK_DETAILS_BUTTON_ID = "fallback_notice_details";
-const DEFAULT_FALLBACK_NOTICE_BUTTON_TIMEOUT_MS = 86_400_000;
-const FALLBACK_NOTICE_BUTTON_TIMEOUT_MS = parsePositiveIntegerEnv(
-  process.env.FALLBACK_NOTICE_BUTTON_TIMEOUT_MS,
-  DEFAULT_FALLBACK_NOTICE_BUTTON_TIMEOUT_MS,
-);
+const FALLBACK_NOTICE_BUTTON_TIMEOUT_MS = 86_400_000;
 
 export interface FallbackNoticeAttempt {
   modelCodename: string;
@@ -25,13 +22,12 @@ interface SendFallbackModelUsageNoticeOptions {
   context: ToolContext;
   failures: FallbackNoticeAttempt[];
   successModel: LlmRow;
-}
-
-function parsePositiveIntegerEnv(value: string | undefined, fallback: number): number {
-  if (!value) return fallback;
-
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  /**
+   * Names the account setting that turns this fallback off. Only a success on the server route of
+   * a turn that started on personal credentials has one, because every other route is either the
+   * server's own or a model the user configured themselves.
+   */
+  offerPersonalFallbackOptOut?: boolean;
 }
 
 // Characters reserved for the description text wrapping the failure list (slot/model prefix line),
@@ -54,7 +50,16 @@ function buildFailureList(locale: string, failures: FallbackNoticeAttempt[]): st
   return truncateForEmbedDescription(failureList, FAILURE_LIST_DESCRIPTION_RESERVE);
 }
 
-function resolveFallbackSlot(context: ToolContext, successModel: LlmRow, failures: FallbackNoticeAttempt[]): number {
+/**
+ * The fallback slot the receipt names for the model that answered.
+ *
+ * Both routes number their own configured slots, so a personal success names its personal slot and a
+ * server-route success names the server's. A model that is not in its route's fallback list is that
+ * route's own lead: it holds no slot, so the receipt reports the first model of the route that
+ * answered instead of borrowing a number from the failure count, which named a slot the reader
+ * cannot see anywhere on the page.
+ */
+export function resolveFallbackSlot(context: ToolContext, successModel: LlmRow): number {
   const configuredChainIndex = context.tomoriState.fallback_chain?.findIndex((entry) =>
     entry.kind === "llm"
       ? entry.model.llm_id === successModel.llm_id
@@ -71,25 +76,16 @@ function resolveFallbackSlot(context: ToolContext, successModel: LlmRow, failure
     return configuredFallbackIndex + 1;
   }
 
-  return Math.max(1, failures.length);
-}
-
-function createFallbackDetailsButton(locale: string, disabled = false): ActionRowBuilder<ButtonBuilder> {
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(FALLBACK_DETAILS_BUTTON_ID)
-      .setLabel(localizer(locale, "genai.fallback_used_details_button"))
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(disabled),
-  );
+  return 1;
 }
 
 export async function sendFallbackModelUsageNotice({
   context,
   failures,
   successModel,
+  offerPersonalFallbackOptOut = false,
 }: SendFallbackModelUsageNoticeOptions): Promise<void> {
-  const slot = resolveFallbackSlot(context, successModel, failures);
+  const slot = resolveFallbackSlot(context, successModel);
   const detailsOptions = {
     titleKey: "genai.fallback_used_title",
     descriptionKey: "genai.fallback_used_details_description",
@@ -106,14 +102,20 @@ export async function sendFallbackModelUsageNotice({
     return;
   }
 
-  const detailsEmbed = createStandardEmbed(context.locale, {
-    ...detailsOptions,
-    footerKey: "genai.fallback_used_hide_footer",
-  });
+  const modalTitle = localizer(context.locale, detailsOptions.titleKey);
+  const optOutFooter = offerPersonalFallbackOptOut
+    ? `\n-# ${localizer(context.locale, "genai.fallback_used_personal_opt_out_footer")}`
+    : "";
+  const modalContent = `${localizer(
+    context.locale,
+    detailsOptions.descriptionKey,
+    detailsOptions.descriptionVars,
+  )}\n\n-# ${localizer(context.locale, "genai.fallback_used_hide_footer")}${optOutFooter}`;
 
   try {
-    const buttonRow = createFallbackDetailsButton(context.locale);
-    const disabledButtonRow = createFallbackDetailsButton(context.locale, true);
+    const buttonLabel = localizer(context.locale, "genai.fallback_used_details_button");
+    const buttonRow = buildTextDisplayModalButton(FALLBACK_DETAILS_BUTTON_ID, buttonLabel);
+    const disabledButtonRow = buildTextDisplayModalButton(FALLBACK_DETAILS_BUTTON_ID, buttonLabel, true);
 
     // Resolve thread ID: webhooks targeting a parent channel need it to post into a thread.
     const threadId =
@@ -133,8 +135,8 @@ export async function sendFallbackModelUsageNotice({
     // so when a sprite put it on the webhook path the webhook is resolved lazily here: the
     // lookup is cached, so this costs nothing on the common path.
     const deliveredIdentity = getChannelDeliveredWebhookIdentity(context.channel.id);
-    const noticeWebhook = deliveredIdentity
-      ? (context.webhook ?? (await resolveManagedChannelWebhook(context.channel)))
+    const noticeWebhook: Webhook | undefined = deliveredIdentity
+      ? (context.webhook ?? (await resolveManagedChannelWebhook(context.channel)) ?? undefined)
       : undefined;
 
     if (deliveredIdentity && noticeWebhook) {
@@ -151,39 +153,23 @@ export async function sendFallbackModelUsageNotice({
       noticeMessage = await context.channel.send({ components: [buttonRow] });
     }
 
-    const collector = noticeMessage.createMessageComponentCollector({
-      componentType: ComponentType.Button,
-      time: FALLBACK_NOTICE_BUTTON_TIMEOUT_MS,
-      filter: (interaction) => interaction.customId === FALLBACK_DETAILS_BUTTON_ID && !interaction.user.bot,
-    });
-
-    collector.on("collect", async (interaction) => {
-      try {
-        await interaction.reply({
-          embeds: [detailsEmbed],
-          flags: MessageFlags.Ephemeral,
-        });
-      } catch (error) {
-        log.warn("Fallback model details button reply failed", error as Error);
-      }
-    });
-
-    collector.on("end", async () => {
-      // Webhook messages must be edited via the webhook token, not the bot token.
-      if (context.webhook) {
-        await context.webhook
-          .editMessage(noticeMessage.id, {
+    attachTextDisplayModalCollector({
+      message: noticeMessage,
+      customId: FALLBACK_DETAILS_BUTTON_ID,
+      title: modalTitle,
+      content: modalContent,
+      timeoutMs: FALLBACK_NOTICE_BUTTON_TIMEOUT_MS,
+      logLabel: "Fallback model details",
+      onExpire: async () => {
+        if (deliveredIdentity && noticeWebhook) {
+          await noticeWebhook.editMessage(noticeMessage.id, {
             components: [disabledButtonRow],
             ...(threadId ? { threadId } : {}),
-          })
-          .catch((err: unknown) =>
-            log.warn("[FallbackNotice] Failed to disable buttons via webhook after collector end", err),
-          );
-      } else {
-        await noticeMessage
-          .edit({ components: [disabledButtonRow] })
-          .catch((err: unknown) => log.warn("[FallbackNotice] Failed to disable buttons after collector end", err));
-      }
+          });
+          return;
+        }
+        await noticeMessage.edit({ components: [disabledButtonRow] });
+      },
     });
   } catch (error) {
     log.warn("Failed to send compact fallback model notice", error as Error);

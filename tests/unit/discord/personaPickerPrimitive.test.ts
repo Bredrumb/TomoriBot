@@ -1,11 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import type { ButtonInteraction, ChatInputCommandInteraction, InteractionEditReplyOptions, Message } from "discord.js";
-import type { TomoriState } from "@/types/db/schema";
 import {
   isCollectorTimeoutError,
   replyPaginatedPersonaChoicesV2,
   type AvatarSessionCache,
 } from "@/utils/discord/ui/interactionCore";
+import { createPersona } from "../../helpers/fixtures";
 
 /** Terminal states the harness can drive the picker into. */
 type PickerOutcome = "cancel" | "timeout" | "collector-timeout";
@@ -26,17 +26,6 @@ interface PickerHarness {
   interaction: ChatInputCommandInteraction;
   edits: InteractionEditReplyOptions[];
   deferredButtons: string[];
-}
-
-function makePersona(): TomoriState {
-  return {
-    persona_id: 1,
-    persona_nickname: "Local avatar persona",
-    persona_prompt: "Prompt",
-    attribute_list: [],
-    is_alter: true,
-    webhook_avatar_url: "avatars/local.png",
-  } as unknown as TomoriState;
 }
 
 function makeHarness(outcome: PickerOutcome): PickerHarness {
@@ -95,7 +84,14 @@ describe("replyPaginatedPersonaChoicesV2 terminal attachment cleanup", () => {
       ]);
 
       const result = await replyPaginatedPersonaChoicesV2(harness.interaction, "en-US", {
-        personas: [makePersona()],
+        personas: [
+          createPersona({
+            persona_nickname: "Local avatar persona",
+            persona_prompt: "Prompt",
+            is_alter: true,
+            webhook_avatar_url: "avatars/local.png",
+          }),
+        ],
         preserveSelectedInteraction: true,
         avatarSessionCache,
       });

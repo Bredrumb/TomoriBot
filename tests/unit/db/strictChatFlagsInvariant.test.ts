@@ -6,7 +6,7 @@ import type { LlmInput } from "@/db/seed/catalog/types";
 // strictRoleAlternation; deepseek/zai/zaicoding must set supportsPrefixCompletion.
 
 function row(overrides: Partial<LlmInput> & Pick<LlmInput, "provider" | "codename">): LlmInput {
-  return { desc: null, ja: null, ...overrides };
+  return { desc: null, ...overrides };
 }
 
 describe("collectStrictChatFlagViolations", () => {

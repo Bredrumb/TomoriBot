@@ -24,11 +24,10 @@ function validateStartupSeedOrder(): string[] {
     new URL("../../src/utils/db/initializeDatabase.ts", import.meta.url),
     "utf8",
   );
+  const runtimeDatabaseSource = readFileSync(new URL("../../src/init/database.ts", import.meta.url), "utf8");
   const expectedCalls = [
     "await seedModelsFromCatalog(client);",
     "await seedPersonasFromCatalog(client);",
-    "await seedPersonaSpritesFromCatalog(client);",
-    "await seedPersonaAvatarsFromCatalog(client);",
     "await seedSystemPromptsFromCatalog(client);",
     "await seedNaiPresetsFromCatalog(client);",
   ];
@@ -47,8 +46,16 @@ function validateStartupSeedOrder(): string[] {
     previousIndex = index;
   }
 
+  const spriteIndex = runtimeDatabaseSource.indexOf("seedPersonaSpritesFromCatalog(client)");
+  const avatarIndex = runtimeDatabaseSource.indexOf("seedPersonaAvatarsFromCatalog(client)");
+  if (spriteIndex === -1 || avatarIndex === -1 || avatarIndex < spriteIndex) {
+    errors.push("Runtime preset sprite seed must run before the preset avatar seed");
+  }
+
   if (initializeDatabaseSource.includes("executeSqlDirectory(")) {
-    errors.push("initializeDatabase: SQL seed-directory loading should stay removed; seed catalogs own startup seeding");
+    errors.push(
+      "initializeDatabase: SQL seed-directory loading should stay removed; seed catalogs own startup seeding",
+    );
   }
 
   return errors;

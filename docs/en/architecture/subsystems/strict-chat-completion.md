@@ -5,7 +5,7 @@ title: "Strict Chat-Completion Compatibility"
 # Strict Chat-Completion Compatibility
 
 Some provider APIs require message shapes that others merely tolerate. TomoriBot normalizes three
-of these behind one shared seam so any provider path — built-in or a custom-endpoint proxy — can
+of these behind one shared seam so any provider path (built-in or a custom-endpoint proxy) can
 front a strict backend (e.g. Claude behind an OpenAI-shaped proxy, or a DeepSeek/Z.ai-style
 "continue this turn" backend).
 
@@ -17,22 +17,22 @@ The shared helpers live in [`src/providers/utils/strictChatCompat.ts`](../../src
 |---|---|---|
 | **Role alternation** | `strict_role_alternation` | Merge consecutive same-role turns into one, and prepend a synthetic leading `user` turn when the first dialogue turn is `assistant`. Tool-bearing turns (top-level `tool_calls`/`tool_call_id`) act as merge boundaries so their wiring is never dropped. |
 | **Prefix completion** | `supports_prefix_completion` | Set `prefix: true` on the trailing assistant prefill turn so the backend continues it (DeepSeek / Z.ai vendor extension). |
-| **Media relocation** | *(always-on, not a toggle)* | Peel media off `assistant` turns into a following `[System: …]` `user` turn with sender attribution — the `assistant` role cannot carry media in input history across OpenAI/Anthropic/Gemini-shaped APIs. |
+| **Media relocation** | *(always-on, not a toggle)* | Peel media off `assistant` turns into a following `[System: …]` `user` turn with sender attribution; the `assistant` role cannot carry media in input history across OpenAI/Anthropic/Gemini-shaped APIs. |
 
 ### Orthogonality (why two toggles, not one)
 
 Role alternation and prefix completion pull in opposite directions and must stay independent:
 
-- A **Claude-via-proxy** backend wants role alternation **ON**, prefix completion **OFF** (it does
+- A Claude-via-proxy backend wants role alternation enabled and prefix completion disabled (it does
   not understand `prefix: true` and may hard-error on it).
-- A **DeepSeek/Z.ai/vLLM-style continue** backend wants prefix completion **ON**, and usually does
+- A DeepSeek/Z.ai/vLLM-style continue backend wants prefix completion enabled, and usually does
   not need role alternation.
 
 A single bundled "strict mode" boolean would force the wrong combination on one group.
 
 ### Media relocation is always-on
 
-Media relocation runs unconditionally in every provider path, regardless of either toggle — a
+Media relocation runs unconditionally in every provider path, regardless of either toggle; a
 custom endpoint with both toggles OFF still gets it. It was already unconditional before this
 seam existed; do not gate it. The canonical wording is shared across all providers:
 
@@ -67,20 +67,20 @@ and prefix-completion goldens remain unchanged.
 
 ## Resolution: column-is-truth (D4)
 
-Both flags are stored as boolean columns on **`llms`** and **`custom_endpoints`**
+Both flags are stored as boolean columns on `llms` and `custom_endpoints`
 ([`src/types/db/schema.ts`](../../src/types/db/schema.ts), [`src/db/schema.sql`](../../src/db/schema.sql)).
-At request time the active model's `llms` row is the source of truth — the adapter reads
+At request time the active model's `llms` row is the source of truth: the adapter reads
 `context.tomoriState.llm.strict_role_alternation` / `.supports_prefix_completion`:
 
-- **Built-in providers** are seeded with the required flag in the typed catalog
+- **Built-in providers**: Seeded with the required flag in the typed catalog
   ([`src/db/seed/catalog/models.ts`](../../src/db/seed/catalog/models.ts)): anthropic →
   alternation; deepseek/zai/zaicoding → prefix.
-- **Custom endpoints** carry the user's toggle choices on the `custom_endpoints` row, synced to the
-  endpoint's **synthetic `llms` row** (`upsertSyntheticCustomLlm`), so the runtime reads them the
+- **Custom endpoints**: Carry the user's toggle choices on the `custom_endpoints` row, synced to the
+  endpoint's synthetic `llms` row (`upsertSyntheticCustomLlm`), so the runtime reads them the
   same way as built-ins.
 
-A small request-time **safety net** — `providerRequiresAlternation` / `providerRequiresPrefixCompletion`
-in `strictChatCompat.ts` — OR-combines with the column so a mis-seeded row can never make a
+A small request-time safety net: `providerRequiresAlternation` / `providerRequiresPrefixCompletion`
+in `strictChatCompat.ts`: OR-combines with the column so a mis-seeded row can never make a
 built-in emit an invalid body:
 
 ```ts
@@ -102,14 +102,23 @@ the `REQUIRED_*_PROVIDERS` sets in `modelSeed.ts` in lockstep with `providerRequ
 
 ## Configuring a custom endpoint
 
-The two toggles appear as checkboxes in the `text` capability modal of
-`/provider custom-endpoint add|edit` and `/personal custom-endpoint add|edit` (the shared
-`text_capabilities` group in [`customEndpointCapabilityModal.ts`](../../src/utils/provider/customEndpointCapabilityModal.ts)).
+The two toggles appear under `Chat Completion Compatibilities` in the Text model modal opened from the
+model dropdown on a `/providers` or `/personal providers` entry page. They are deliberately separate from
+Text Capabilities: tool calling, image input, and structured output describe the model, while these two
+describe the backend's message parser.
 
-- **Strict Role Alternation** — enable when your proxy fronts a backend that requires strict
-  user/assistant alternation and a leading user turn (e.g. **Claude behind an OpenAI-shaped proxy**).
-- **Prefix Completion** — enable when your proxy fronts a backend that supports continuing a partial
-  assistant turn (e.g. **DeepSeek / Z.ai-style** `prefix: true`, or vLLM/SGLang continue modes).
+The group is offered only where the request path can act on it, which is the `openai-compatible` api family
+minus any flag that family already forces on. Custom endpoints resolve through the `custom` provider and so
+keep both. Anthropic forces alternation and never reads prefix completion; DeepSeek, Z.ai, and Z.ai Coding
+force prefix completion; OpenRouter, Google/Vertex, and NovelAI read neither column. Where a flag is not
+offered, its stored value is preserved rather than rewritten, so nothing changes for a workspace that set it
+before. `offeredChatCompatFlags` derives this from `apiFamily` plus `providerRequires*`, and the submit path
+re-derives it rather than trusting the submission.
+
+- **Strict Role Alternation**: enable when your proxy fronts a backend that requires strict
+  user/assistant alternation and a leading user turn (e.g. Claude behind an OpenAI-shaped proxy).
+- **Prefix Completion**: enable when your proxy fronts a backend that supports continuing a partial
+  assistant turn (e.g. DeepSeek / Z.ai-style `prefix: true`, or vLLM/SGLang continue modes).
 
 Both default OFF. With both OFF a custom endpoint behaves exactly as before (media relocation still
 applies; no alternation merge; no `prefix: true`).

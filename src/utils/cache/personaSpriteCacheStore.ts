@@ -1,12 +1,7 @@
 import type { PersonaSpriteRow } from "@/types/db/schema";
+import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
 
-const parsedCacheTtlMinutes = Number.parseInt(
-  process.env.PERSONA_SPRITE_CACHE_TTL_MINUTES || process.env.TOMORI_STATE_CACHE_TTL_MINUTES || "10",
-  10,
-);
-const CACHE_TTL_MINUTES =
-  Number.isFinite(parsedCacheTtlMinutes) && parsedCacheTtlMinutes > 0 ? parsedCacheTtlMinutes : 10;
-const CACHE_TTL_MS = CACHE_TTL_MINUTES * 60 * 1000;
+const CACHE_TTL_MS = TOMORI_STATE_CACHE_TTL_MS;
 
 const personaSpriteCache = new Map<number, { sprites: PersonaSpriteRow[]; expiresAt: number }>();
 

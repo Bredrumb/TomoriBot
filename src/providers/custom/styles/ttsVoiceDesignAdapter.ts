@@ -27,6 +27,8 @@ export interface TtsVoiceDesignRequest {
   voiceInstructions?: string;
   /** Empty string for local endpoints that don't require auth. */
   apiKey: string;
+  /** Turn-level cancellation from /kill, merged with the synthesis timeout. */
+  abortSignal?: AbortSignal;
 }
 
 type TtsVoiceMode = "clone" | "voice-design" | "auto";
@@ -118,11 +120,11 @@ function prepareVoiceDesignText(
  * This is intentionally separate from `ttsCloningAdapter.ts`. Clone models
  * synthesize from a stored speaker sample; voice-design models synthesize from
  * a persona-level natural-language prompt. Sending the prompt as `instruct`
- * makes the JSON body honest and keeps `/speech voice-add` focused on actual
+ * makes the JSON body honest and keeps `/config` focused on actual
  * reference samples.
  */
 export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignRequest): Promise<TtsCloneResult> {
-  const { endpoint, script, designPrompt, voiceInstructions, apiKey } = request;
+  const { endpoint, script, designPrompt, voiceInstructions, apiKey, abortSignal } = request;
   const scriptMarkup = (endpoint.extra_config.script_markup as string | undefined) ?? "plain";
   const { processedScript, captionText } = prepareVoiceDesignText(script, scriptMarkup);
   const cleanedDesignPrompt = designPrompt.trim();
@@ -165,7 +167,7 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
   let response: Response;
   const requestStartedAt = Date.now();
   log.info(
-    `[TtsVoiceDesign] Sending /synthesize | endpoint="${endpoint.display_name}" label="${endpoint.label}" url="${endpointUrl}" mode=${getTtsVoiceMode(endpoint)} scriptChars=${processedScript.length} instructChars=${instruct.length} oneOffInstructionChars=${cleanedVoiceInstructions.length} timeoutMs=${TTS_SYNTHESIZE_TIMEOUT_MS} payloadLog=${TTS_VOICE_DESIGN_LOG_PAYLOADS ? "full" : "preview"}`,
+    `[TtsVoiceDesign] Sending /synthesize | endpoint="${endpoint.model_name || endpoint.label}" label="${endpoint.label}" url="${endpointUrl}" mode=${getTtsVoiceMode(endpoint)} scriptChars=${processedScript.length} instructChars=${instruct.length} oneOffInstructionChars=${cleanedVoiceInstructions.length} timeoutMs=${TTS_SYNTHESIZE_TIMEOUT_MS} payloadLog=${TTS_VOICE_DESIGN_LOG_PAYLOADS ? "full" : "preview"}`,
   );
   log.info(
     `[TtsVoiceDesign] Script ${TTS_VOICE_DESIGN_LOG_PAYLOADS ? "full" : "preview"}: ${previewForLog(processedScript)}`,
@@ -182,13 +184,13 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
         method: "POST",
         headers,
         body: JSON.stringify(body),
-        signal: abortController.signal,
+        signal: abortSignal ? AbortSignal.any([abortController.signal, abortSignal]) : abortController.signal,
       });
     } finally {
       clearTimeout(timer);
     }
   } catch (error) {
-    const isTimeout = error instanceof Error && error.name === "AbortError";
+    const isTimeout = error instanceof Error && error.name === "AbortError" && !abortSignal?.aborted;
     const elapsedMs = Date.now() - requestStartedAt;
     log.warn(
       `[TtsVoiceDesign] Request to ${endpointUrl}/synthesize ${isTimeout ? "timed out" : "failed"} after ${elapsedMs}ms`,

@@ -14,6 +14,7 @@ import type {
   TypedMCPToolResult,
 } from "../../../types/tool/mcpTypes";
 import { MCPTypeGuards } from "../../../types/tool/mcpTypes";
+import { buildImageSearchDeliveryMessage } from "@/tools/restAPIs/imageSearchResults";
 
 /**
  * Brave Search MCP Server Behavior Handler
@@ -179,9 +180,14 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
           }
         }
 
-        // Return simplified response to LLM - no URLs or image data to prevent duplicate processing
-        const queryTerm = args.query || "images";
-        const completionMessage = `Found and sent ${attachments.length} ${queryTerm} images directly to Discord (message ID: ${sentMessageId ?? "unknown"}). The images are now displayed for the user.`;
+        const queryTerm = (args.query as string) || "images";
+        const deliveryInput = {
+          query: queryTerm,
+          sentCount: attachments.length,
+          messageId: sentMessageId ?? "unknown",
+          providerPhrase: "",
+        };
+        const deliveryMessage = buildImageSearchDeliveryMessage(deliveryInput);
 
         const imageMetadata = {
           imageUrls: sentAttachments
@@ -205,7 +211,7 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
 
         const toolResult: TypedMCPToolResult = {
           success: true,
-          message: completionMessage,
+          message: deliveryMessage,
           data: {
             source: "mcp" as const,
             functionName: "brave_image_search",
@@ -214,7 +220,7 @@ export class BraveSearchHandler implements MCPServerBehaviorHandler {
             executionTime: Date.now() - context.executionStartTime,
             imagesSent: attachments.length,
             status: "completed_and_sent",
-            completionMessage: completionMessage,
+            completionMessage: deliveryMessage,
             // Deliberately not including imageUrls or rawResult to prevent duplicate sending
           },
           imageMetadata,

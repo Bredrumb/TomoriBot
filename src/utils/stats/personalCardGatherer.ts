@@ -20,18 +20,9 @@ import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { log } from "@/utils/misc/logger";
 import { loadStoredPersonaAvatarDataUri } from "@/utils/storage/avatarStorage";
 import { type Timeframe, resolveWindowFrom } from "@/utils/stats/statsDashboard";
-import { prettifyModelCodename } from "@/utils/provider/customProviderUtils";
 import { extractCardPalette, loadTomoriconDataUri } from "@/utils/stats/cardColor";
 import { loadStatsPersonaAvatarDataUri, loadStatsPresetAvatarLookup } from "@/utils/stats/personaAvatar";
 import type { PersonalCardData, PersonalFavoritePersona } from "@/utils/stats/statsInfographic";
-
-/**
- * Samples the leading persona avatar into a high-contrast light-mode palette.
- *
- * @deprecated Backward-compatible alias for {@link extractCardPalette}; the
- * palette logic now lives in `cardColor.ts` and is shared with the Server card.
- */
-export const extractPersonalCardPalette = extractCardPalette;
 
 /** Arguments for `gatherPersonalCardData`. */
 export interface GatherPersonalCardArgs {
@@ -115,6 +106,6 @@ export async function gatherPersonalCardData(args: GatherPersonalCardArgs): Prom
     totalTriggers,
     estimatedCost,
     favoritePersonas,
-    favoriteModelName: modelBreakdown[0] ? prettifyModelCodename(modelBreakdown[0].model) : null,
+    favoriteModelName: modelBreakdown[0] ? modelBreakdown[0].model : null,
   };
 }

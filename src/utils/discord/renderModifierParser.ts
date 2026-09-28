@@ -87,6 +87,13 @@ export function parseLeadingRenderModifier(
 ): LeadingRenderModifierMatch | null {
   if (!text.trim() || text.trimStart().startsWith("```")) return null;
 
+  // Models sometimes copy the prompt's code-span example or emphasize the label. Consume only a
+  // balanced wrapper around the label, so ordinary Markdown at the start stays in the message.
+  const opening = /^(\s*)(`|\*\*|\*|__|_)/u.exec(text);
+  const wrapper = opening?.[2] ?? "";
+  const prefixLength = wrapper ? (opening?.[0].length ?? 0) : 0;
+  const labelText = text.slice(prefixLength);
+
   const collectedSourceNames = collectRenderModifierSourceNames("", sourceNames);
   const collectedChainSourceNames = collectRenderModifierSourceNames("", chainSourceNames);
   const labelChainAlternation = buildSourceLabelAlternation(collectedChainSourceNames);
@@ -94,23 +101,58 @@ export function parseLeadingRenderModifier(
 
   for (const sourceName of collectedSourceNames) {
     const pattern = new RegExp(
-      `^\\s*${labelChainPrefix}(${escapeRegExp(sourceName)})\\s*\\(([^()\\n\\r:：]{1,${RENDER_MODIFIER_LIMIT}})\\)\\s*[:：][ \\t]*`,
+      `^\\s*${labelChainPrefix}(${escapeRegExp(sourceName)})\\s*[（(]([^()（）\\n\\r:：]{1,${RENDER_MODIFIER_LIMIT}})[）)]\\s*[:：]`,
       "iu",
     );
-    const match = pattern.exec(text);
+    const match = pattern.exec(labelText);
     const matchedSourceName = match?.[1]?.trim();
     const modifier = match?.[2]?.trim();
     if (!match || !matchedSourceName || !modifier) continue;
 
+    const remainder = labelText.slice(match[0].length);
+    const closing = wrapper
+      ? new RegExp(`^[ \\t]*${escapeRegExp(wrapper)}[ \\t]*`, "u").exec(remainder)?.[0]
+      : /^[ \t]*/u.exec(remainder)?.[0];
+    if (closing === undefined) continue;
+    const consumed = prefixLength + match[0].length + closing.length;
     return {
       sourceName: matchedSourceName,
       modifier,
-      body: text.slice(match[0].length),
-      matchedPrefix: match[0],
+      body: text.slice(consumed),
+      matchedPrefix: text.slice(0, consumed),
     };
   }
 
   return null;
+}
+
+/**
+ * Parses a leading sprite modifier for `/impersonate persona`, where the persona is already
+ * fixed by the command's autocomplete option: unlike {@link parseLeadingRenderModifier}, the source
+ * name is optional. Accepts both "PersonaName (modifier): body" (delegated to the named parser)
+ * and the bare "(modifier): body" shape, since repeating the already-selected persona's name is
+ * redundant in this context. Callers still gate on an actual sprite match before treating the
+ * text as decorated; text that fails that lookup falls through to plain, unmodified content.
+ */
+export function parseLeadingImpersonationSpriteModifier(
+  text: string,
+  personaName: string,
+): LeadingRenderModifierMatch | null {
+  const named = parseLeadingRenderModifier(text, [personaName]);
+  if (named) return named;
+
+  if (!text.trim() || text.trimStart().startsWith("```")) return null;
+
+  const bare = new RegExp(`^\\s*\\(([^()\\n\\r:：]{1,${RENDER_MODIFIER_LIMIT}})\\)\\s*[:：][ \\t]*`, "u").exec(text);
+  const modifier = bare?.[1]?.trim();
+  if (!bare || !modifier) return null;
+
+  return {
+    sourceName: personaName,
+    modifier,
+    body: text.slice(bare[0].length),
+    matchedPrefix: bare[0],
+  };
 }
 
 // Rejects label candidates that are really markdown structure: list items ("- Name", "1. Name"),

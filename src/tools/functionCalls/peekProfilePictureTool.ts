@@ -12,16 +12,13 @@ import type { EnhancedImageContent } from "@/types/tool/enhancedContextTypes";
 import { stashEnhancedContextItem } from "@/utils/chat/pendingEnhancedContext";
 import { resolveAvatarByIdentity } from "@/utils/discord/avatarResolver";
 import { sendToolProgressNotice } from "@/utils/discord/toolProgressNotice";
-import {
-  toZaiApiModelName,
-  ZAI_CODING_CHAT_COMPLETIONS_URL,
-  ZAI_GENERAL_CHAT_COMPLETIONS_URL,
-} from "@/providers/zai/zaiShared";
+import { ZAI_CODING_CHAT_COMPLETIONS_URL, ZAI_GENERAL_CHAT_COMPLETIONS_URL } from "@/providers/zai/zaiShared";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { ContextItemTag, type StructuredContextItem } from "../../types/misc/context";
 import { ColorCode } from "@/utils/misc/logger";
 import { llmModelRepo } from "@/utils/db/repositories";
 import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { resolveVisionApiModelName } from "@/utils/provider/visionCaption";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
@@ -366,10 +363,7 @@ export class PeekProfilePictureTool extends BaseTool {
 
     // Resolve API model name and provider from the vision LLM row
     const provider = visionLlm.llm_provider.toLowerCase();
-    const apiModelName =
-      provider === "zai" || provider === "zaicoding"
-        ? toZaiApiModelName(visionLlm.llm_codename)
-        : visionLlm.llm_codename;
+    const apiModelName = resolveVisionApiModelName(provider, visionLlm.llm_codename);
 
     const hasBanner = images.some((image) => image.kind === "banner");
     const prompt = `${DEFAULT_AVATAR_ANALYSIS_PROMPT} This is the profile picture of ${targetTypeLabel}: ${userDisplayText}. Reason for analysis: ${reason}${hasBanner ? " A profile banner is also attached; use it as supporting context and describe any additional visual information it provides." : ""}`;

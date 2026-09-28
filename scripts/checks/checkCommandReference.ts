@@ -1,17 +1,24 @@
 async function main(): Promise<void> {
   process.env.RUN_ENV = "production";
-  const { COMMAND_REFERENCE_PATH, generateCommandReferenceMarkdown } = await import("../lib/commandReference");
+  const { commandReferencePath, exitAfterCommandGraphLoad, generateCommandReferences } = await import(
+    "../lib/commandReference"
+  );
 
-  const expected = await generateCommandReferenceMarkdown();
-  const current = await Bun.file(COMMAND_REFERENCE_PATH).text();
+  const stale: string[] = [];
+  for (const [locale, expected] of await generateCommandReferences()) {
+    const file = Bun.file(commandReferencePath(locale));
+    if (!(await file.exists()) || (await file.text()) !== expected) {
+      stale.push(`docs/${locale}/features/command-reference.md`);
+    }
+  }
 
-  if (current === expected) {
+  if (stale.length === 0) {
     console.log("Command reference OK");
-    return;
+    exitAfterCommandGraphLoad();
   }
 
   console.error(
-    "Command reference is stale. Run `bun run generate-command-reference` and commit docs/en/features/command-reference.md.",
+    `Command reference is stale: ${stale.join(", ")}. Run \`bun run generate-command-reference\` and commit the regenerated files.`,
   );
   process.exit(1);
 }

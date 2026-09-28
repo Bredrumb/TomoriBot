@@ -35,6 +35,6 @@ describe("command loader availability gates", () => {
     };
 
     await expect(isCommandModuleEnabledForRegistration(commandModule, context)).resolves.toBe(true);
-    expect(receivedContext).toEqual(context);
+    expect<CommandAvailabilityContext | null>(receivedContext).toEqual(context);
   });
 });

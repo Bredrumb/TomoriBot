@@ -51,11 +51,11 @@ def read_startup_mode() -> str:
 
 MODE = resolve_mode(read_startup_mode())
 HOST = os.getenv("TOMORI_TTS_HOST", "127.0.0.1")
-PORT = int(os.getenv("TOMORI_TTS_PORT", "8014" if MODE == "voice-design" else "8012"))
+PORT = int(os.getenv("QWEN3TTS_PORT", "8014" if MODE == "voice-design" else "8012"))
 DEVICE_MAP = os.getenv("QWEN3TTS_DEVICE_MAP", "cuda:0" if torch.cuda.is_available() else "cpu")
 DTYPE = os.getenv("QWEN3TTS_DTYPE", "bfloat16" if torch.cuda.is_available() else "float32")
 USE_FLASH_ATTENTION = os.getenv("QWEN3TTS_FLASH_ATTENTION", "0") == "1"
-MAX_TEXT_CHARS = int(os.getenv("TOMORI_TTS_MAX_TEXT_CHARS", "2000"))
+MAX_TEXT_CHARS = 2000
 DEFAULT_INSTRUCT = os.getenv("TOMORI_TTS_DEFAULT_INSTRUCT", "").strip()
 LOG_PAYLOADS = os.getenv("TOMORI_TTS_LOG_PAYLOADS", "0") == "1"
 LOG_PREVIEW_CHARS = int(os.getenv("TOMORI_TTS_LOG_PREVIEW_CHARS", "240"))

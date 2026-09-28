@@ -1,4 +1,5 @@
 import type { ChannelPromptMode } from "@/types/db/schema";
+import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
 
 /**
  * Resolved per-channel system prompt override.
@@ -15,8 +16,7 @@ export type ChannelPromptOverride = {
  */
 const channelPromptCache = new Map<string, { override: ChannelPromptOverride | null; expiresAt: number }>();
 
-const CACHE_TTL_MINUTES = Number.parseInt(process.env.TOMORI_STATE_CACHE_TTL_MINUTES || "10", 10);
-const CACHE_TTL_MS = CACHE_TTL_MINUTES * 60 * 1000;
+const CACHE_TTL_MS = TOMORI_STATE_CACHE_TTL_MS;
 
 function getCacheKey(serverId: number, channelDiscId: string): string {
   return `${serverId}:${channelDiscId}`;

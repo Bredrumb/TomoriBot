@@ -266,6 +266,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("chat-proxy persistence regression", () => 
         user_nickname: "Settings Fixture",
         language_pref: "en-US",
         physical_appearance_tags: [],
+        persona_naming_preferences: [],
         chat_proxy_service: serviceId,
       });
       expect(imported).toEqual({ success: true, itemsImported: { configFieldsCount: 3 } });
@@ -273,7 +274,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("chat-proxy persistence regression", () => 
 
       const exported = await exportRepository.exportPersonalSettings("_rt_chat_proxy_settings");
       expect(exported.success).toBe(true);
-      if (exported.success) expect(exported.data.data.chat_proxy_service).toBe(serviceId);
+      if (exported.data?.type === "personal_settings") expect(exported.data.data.chat_proxy_service).toBe(serviceId);
     }
   });
 
@@ -282,6 +283,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("chat-proxy persistence regression", () => 
       user_nickname: "Settings Fixture",
       language_pref: "en-US",
       physical_appearance_tags: [],
+      persona_naming_preferences: [],
     });
 
     expect(imported.success).toBe(true);

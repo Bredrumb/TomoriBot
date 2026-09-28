@@ -15,7 +15,7 @@ import {
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import { buildParticipantContextItem } from "@/utils/text/context/participants";
 import { isEligibleContextReferenceUserV1, userRepository } from "@/utils/db/repositories/UserRepository";
-import { serverScheduleRepository } from "@/utils/db/repositories";
+import { serverScheduleRepository, userNamingRepository } from "@/utils/db/repositories";
 import { buildParticipantDiscoveryPlan, type ParticipantDiscoveryPlan } from "@/utils/text/participants/discoveryPlan";
 import { createDiscordUserKey, createPersonaKey, type ParticipantSeed } from "@/utils/text/participants/identity";
 import { buildDiscordUserAliases } from "@/utils/text/participants/aliases";
@@ -56,7 +56,7 @@ function resolveAliasReferences(
   );
 }
 
-const message = (content: string, id = crypto.randomUUID()): SimplifiedMessageForContext => ({
+const message = (content: string, id: string = crypto.randomUUID()): SimplifiedMessageForContext => ({
   id,
   authorId: "author",
   authorName: "Author",
@@ -121,7 +121,9 @@ const defaultUser = (): UserRow => ({
   shortterm_cache_crossserver_opt_in: false,
   personal_dtm: "follow",
   personal_deliberate_tool_mode: "follow",
+  personal_server_fallback_enabled: true,
   timezone_offset: null,
+  chat_proxy_service: null,
 });
 
 describe("context reference discovery", () => {
@@ -339,7 +341,7 @@ describe("context reference discovery", () => {
       expect(resolved.referencedUserIds).toEqual(new Set(["200", "100"]));
       expect(Array.from(resolved.referencedUserRows.keys()).sort()).toEqual(["100", "200"]);
       expect(resolved.referencedUserReasons).toEqual(
-        new Map([
+        new Map<string, ReadonlySet<"real_mention" | "unique_text_alias">>([
           ["200", new Set(["unique_text_alias"])],
           ["100", new Set(["real_mention"])],
         ]),
@@ -409,12 +411,12 @@ describe("chat-proxy identity reference discovery", () => {
   }
 
   it("discovers a member named in conversation that never spoke in the window", async () => {
-    let observedQuery: { hostUserDiscIds: readonly string[]; normalizedHistoryText: string } | null = null;
+    const observedQueries: Array<{ hostUserDiscIds: readonly string[]; normalizedHistoryText: string }> = [];
     const resolved = await resolveWithMembers({
       content: "What did Sparrow say about that?",
       identities: [{ serviceId: "pluralkit", userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: null }],
       onQuery: (query) => {
-        observedQuery = query;
+        observedQueries.push(query);
       },
     });
 
@@ -422,7 +424,7 @@ describe("chat-proxy identity reference discovery", () => {
     expect(resolved.referencedUserReasons).toEqual(new Map([[MEMBER_ID, new Set(["unique_text_alias"])]]));
     // Host scoping is what keeps member names from colliding across every system
     // the bot has ever seen; the pool is the guild's cached members.
-    expect(observedQuery?.hostUserDiscIds).toContain(HOST_ID);
+    expect(observedQueries[0]?.hostUserDiscIds).toContain(HOST_ID);
 
     const seed = resolved.discoveryPlan.seeds.find(
       (candidate) => candidate.key.kind === "discord_user" && candidate.key.discordId === MEMBER_ID,
@@ -680,8 +682,12 @@ describe("persona task context", () => {
       timezone_offset: 0,
       personal_memories_enabled: false,
     } as AssembledServerConfig;
+    const originalLoadByDiscordId = userRepository.loadByDiscordId;
     const originalGetPendingReminders = serverScheduleRepository.getPendingRemindersForUser;
-    const calls: Array<[string, string | undefined, number | undefined, boolean | undefined]> = [];
+    const originalLoadNamingPreferences = userNamingRepository.loadPreferences;
+    userRepository.loadByDiscordId = async (discordId) => (discordId === "100" ? user : null);
+    userNamingRepository.loadPreferences = async () => new Map();
+    const calls: Array<Parameters<typeof serverScheduleRepository.getPendingRemindersForUser>> = [];
     serverScheduleRepository.getPendingRemindersForUser = async (...args) => {
       calls.push(args);
       if (args[0] !== "100") return [];
@@ -732,6 +738,8 @@ describe("persona task context", () => {
       expect(text).toContain('ID:41 "Take meds"');
       expect(text).not.toContain("Pending Tasks Assigned to You:");
     } finally {
+      userRepository.loadByDiscordId = originalLoadByDiscordId;
+      userNamingRepository.loadPreferences = originalLoadNamingPreferences;
       serverScheduleRepository.getPendingRemindersForUser = originalGetPendingReminders;
     }
   });
@@ -745,7 +753,7 @@ describe("persona task context", () => {
     const activePersona = persona(7, "Active", ["active"]);
     activePersona.config = { timezone_offset: 8 } as AssembledServerConfig;
     const originalGetPendingReminders = serverScheduleRepository.getPendingRemindersForUser;
-    const calls: Array<[string, string | undefined, number | undefined, boolean | undefined]> = [];
+    const calls: Array<Parameters<typeof serverScheduleRepository.getPendingRemindersForUser>> = [];
     serverScheduleRepository.getPendingRemindersForUser = async (...args) => {
       calls.push(args);
       return [

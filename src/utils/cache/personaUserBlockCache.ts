@@ -2,7 +2,7 @@ import type { PersonaUserBlockRow } from "@/types/db/schema";
 import { personaUserBlockRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 
-const CACHE_TTL_MS = (Number(process.env.PERSONA_USER_BLOCK_CACHE_TTL_SECONDS) || 60) * 1000;
+const CACHE_TTL_MS = 60 * 1000;
 
 type CacheEntry<T> = {
   value: T;
@@ -55,8 +55,17 @@ export async function getCachedActiveBlocksForUser(
     userCache.set(key, { value, cachedAt: Date.now() });
     return value;
   } catch (error) {
-    log.warn(`Failed to load persona user block cache for user ${userDiscId}`, error as Error);
-    return cached?.value ?? [];
+    // Stale entries were read successfully once, so they still describe real blocks.
+    if (cached) {
+      log.warn(`Serving stale persona user block cache for user ${userDiscId}`, error as Error);
+      return cached.value;
+    }
+
+    // With nothing cached, "which personas are blocked" has no safe expressible answer: an empty
+    // list is read downstream as "none", which lifts every block. Propagating instead aborts the
+    // turn, and a persona that stays silent is the same outcome the block asks for.
+    log.error(`Failed to load persona user blocks for user ${userDiscId}`, error);
+    throw error;
   }
 }
 
@@ -68,6 +77,18 @@ export function invalidatePersonaUserBlockCache(serverId: number, personaId: num
     for (const key of userCache.keys()) {
       if (key.startsWith(`${serverId}:`)) {
         userCache.delete(key);
+      }
+    }
+  }
+}
+
+/** Removes all persona and user block-cache entries for one server. */
+export function invalidateAllPersonaUserBlockCacheForServer(serverId: number): void {
+  const prefix = `${serverId}:`;
+  for (const cache of [personaCache, userCache]) {
+    for (const key of cache.keys()) {
+      if (key.startsWith(prefix)) {
+        cache.delete(key);
       }
     }
   }

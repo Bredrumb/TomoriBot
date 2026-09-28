@@ -4,6 +4,7 @@ import {
   buildImageStripAttempt,
   buildTargetedAttempt,
   classifyDegradableError,
+  errorMessageNamesRejectableParam,
   extractRejectedParams,
   isMultimodalRejectionError,
   messagesContainImageBlocks,
@@ -31,6 +32,42 @@ describe("extractRejectedParams", () => {
 
   it("extracts a single named parameter", () => {
     expect(extractRejectedParams("Unsupported parameter: temperature", body)).toEqual(["temperature"]);
+  });
+
+  it("drops a rejected custom context field while retaining Ollama's option", () => {
+    const requestBody = {
+      model: "local-model",
+      messages: [],
+      stream: true,
+      options: { num_ctx: 8192 },
+      max_context_length: 8192,
+    };
+    const message = "property 'max_context_length' is unsupported";
+
+    expect(classifyDegradableError({ statusCode: 400, message })).toBe("parameter_rejection_400");
+    const rejected = extractRejectedParams(message, requestBody);
+    expect(rejected).toEqual(["max_context_length"]);
+    const retry = buildTargetedAttempt(requestBody, rejected);
+    expect(retry.body).not.toHaveProperty("max_context_length");
+    expect(retry.body.options).toEqual({ num_ctx: 8192 });
+    expect(
+      buildDegradationAttempts(requestBody, { mandatoryKeys: new Set(["model", "messages", "stream"]) })[0]?.body,
+    ).toEqual(requestBody);
+  });
+
+  it("can drop the Ollama options object when a strict endpoint names it", () => {
+    expect(extractRejectedParams("property 'options' is unsupported", { options: { num_ctx: 8192 } })).toEqual([
+      "options",
+    ]);
+  });
+
+  it("keeps Ollama's options when an error only uses the word in prose", () => {
+    const requestBody = { options: { num_ctx: 8192 }, top_k: 40 };
+    const message = "Unsupported parameter: top_k. Supported options are temperature and top_p.";
+
+    expect(extractRejectedParams(message, requestBody)).toEqual(["top_k"]);
+    expect(errorMessageNamesRejectableParam("Upstream failed; check your request options")).toBe(false);
+    expect(errorMessageNamesRejectableParam('property "options" is unsupported')).toBe(true);
   });
 
   it("excludes a named parameter that is absent from the request", () => {
@@ -103,6 +140,53 @@ describe("buildDegradationAttempts", () => {
     for (const attempt of attempts) {
       expect(attempt.body).toHaveProperty("thinking");
     }
+  });
+
+  it("probes declared injected keys before the user's samplers", () => {
+    // Without the declaration, reasoning_budget and custom_option are indistinguishable, so the
+    // key the backend actually rejected sorts into the tail behind unrelated junk. Ordering is
+    // pure latency (the ladder stops at the first success, so the winning rung ships the same
+    // payload either way), and a key the user never asked for is the better first hypothesis.
+    const attempts = buildDegradationAttempts(
+      {
+        model: "nvidia/example",
+        messages: [],
+        stream: true,
+        temperature: 0.8,
+        min_p: 0.1,
+        custom_option: true,
+        chat_template_kwargs: { enable_thinking: true },
+        reasoning_budget: 16384,
+      },
+      {
+        mandatoryKeys: new Set(["model", "messages", "stream"]),
+        priorityKeys: ["reasoning_budget", "chat_template_kwargs"],
+      },
+    );
+
+    expect(attempts.map((attempt) => attempt.label)).toEqual([
+      "default",
+      "probe_drop_reasoning_budget",
+      "probe_drop_chat_template_kwargs",
+      "probe_drop_min_p",
+      "probe_drop_temperature",
+      "probe_drop_custom_option",
+      "minimal_payload",
+    ]);
+  });
+
+  it("leaves undeclared keys in the unknown tail", () => {
+    const attempts = buildDegradationAttempts(
+      { model: "nvidia/example", messages: [], stream: true, temperature: 0.8, reasoning_budget: 16384 },
+      { mandatoryKeys: new Set(["model", "messages", "stream"]) },
+    );
+
+    expect(attempts.map((attempt) => attempt.label)).toEqual([
+      "default",
+      "probe_drop_temperature",
+      "probe_drop_reasoning_budget",
+      "minimal_payload",
+    ]);
   });
 
   it("deduplicates identical serialized bodies", () => {
@@ -260,6 +344,35 @@ describe("classifyDegradableError", () => {
       "backend_incompatible_502",
     );
     expect(classifyDegradableError({ statusCode: 502, message: "Bad gateway" })).toBeNull();
+  });
+
+  it("degrades an opaque 5xx only when the provider opts in", () => {
+    // NVIDIA NIM reports an unsupported request key as a bare "Internal server error", and when
+    // streaming it does so mid-SSE after a 200, so nothing else in the ladder can see it.
+    expect(classifyDegradableError({ statusCode: 500, message: "Internal server error" })).toBeNull();
+    expect(
+      classifyDegradableError({ statusCode: 500, message: "Internal server error", degradeOnOpaque5xx: true }),
+    ).toBe("opaque_5xx");
+    expect(classifyDegradableError({ statusCode: 503, message: "", degradeOnOpaque5xx: true })).toBe("opaque_5xx");
+  });
+
+  it("fails a descriptive 5xx fast instead of walking the ladder", () => {
+    // A genuine outage says so. Degrading against a dead endpoint burns every rung and delays
+    // the key-rotation and model-fallback paths that can actually recover the turn.
+    expect(
+      classifyDegradableError({
+        statusCode: 503,
+        message: "Service temporarily overloaded, please try again later",
+        degradeOnOpaque5xx: true,
+      }),
+    ).toBeNull();
+    expect(
+      classifyDegradableError({
+        statusCode: 500,
+        message: "thinking_token_budget is not yet supported by the V2 model runner",
+        degradeOnOpaque5xx: true,
+      }),
+    ).toBeNull();
   });
 
   it("supports provider-specific classifiers", () => {

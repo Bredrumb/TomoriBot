@@ -9,8 +9,13 @@ import type {
 } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
-import { personalMemoryRepository, serverScheduleRepository, userRepository } from "@/utils/db/repositories";
 import { chatProxyRepository } from "@/utils/db/repositories/ChatProxyRepository";
+import {
+  personalMemoryRepository,
+  serverScheduleRepository,
+  userNamingRepository,
+  userRepository,
+} from "@/utils/db/repositories";
 import { buildParticipantContextItem } from "@/utils/text/context/participants";
 import type { PublicPersonaProfile, SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { attachPersonaMentionMapToContextItems, buildPersonaMentionCatalog } from "@/utils/text/personaMentionHandles";
@@ -98,7 +103,9 @@ function createUserRow(id: number, discordId: string, nickname: string): UserRow
     shortterm_cache_crossserver_opt_in: false,
     personal_dtm: "follow",
     personal_deliberate_tool_mode: "follow",
+    personal_server_fallback_enabled: true,
     timezone_offset: null,
+    chat_proxy_service: null,
   };
 }
 
@@ -289,6 +296,7 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
     register: userRepository.register,
     isBlacklisted: userRepository.isBlacklisted,
     getPrivacyLevel: userRepository.getPrivacyLevel,
+    loadNamingPreferences: userNamingRepository.loadPreferences,
     loadForUserLineage: personalMemoryRepository.loadForUserLineage,
     getPendingRemindersForUser: serverScheduleRepository.getPendingRemindersForUser,
     loadContextReferenceIdentities: chatProxyRepository.loadContextReferenceIdentities,
@@ -321,6 +329,7 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
     counters.privacyReads += 1;
     return users.get(discordId)?.privacy_level ?? PrivacyLevel.MINIMAL;
   };
+  userNamingRepository.loadPreferences = async () => new Map();
   personalMemoryRepository.loadForUserLineage = async (userId, lineageId) => {
     counters.personalMemoryReads += 1;
     hydrationObservations.memoryLineages.push(lineageId);
@@ -392,6 +401,7 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
       userRepository.register = originals.register;
       userRepository.isBlacklisted = originals.isBlacklisted;
       userRepository.getPrivacyLevel = originals.getPrivacyLevel;
+      userNamingRepository.loadPreferences = originals.loadNamingPreferences;
       personalMemoryRepository.loadForUserLineage = originals.loadForUserLineage;
       serverScheduleRepository.getPendingRemindersForUser = originals.getPendingRemindersForUser;
       chatProxyRepository.loadContextReferenceIdentities = originals.loadContextReferenceIdentities;

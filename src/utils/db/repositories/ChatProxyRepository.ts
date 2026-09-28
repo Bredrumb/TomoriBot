@@ -79,25 +79,23 @@ export class ChatProxyRepository {
     try {
       const persisted = await sql.begin(async (tx) => {
         const [user] = await tx`
-          INSERT INTO users (user_disc_id, user_nickname, language_pref, registration_locale)
-          VALUES (${userDiscId}, ${displayName}, 'en', 'en')
-          ON CONFLICT (user_disc_id) DO UPDATE SET
-            user_nickname = CASE
-              WHEN users.user_nickname IS DISTINCT FROM EXCLUDED.user_nickname THEN EXCLUDED.user_nickname
-              ELSE users.user_nickname
-            END,
-            updated_at = CASE
-              WHEN users.user_nickname IS DISTINCT FROM EXCLUDED.user_nickname THEN NOW()
-              ELSE users.updated_at
-            END
+          INSERT INTO users (user_disc_id, language_pref, registration_locale)
+          VALUES (${userDiscId}, 'en', 'en')
+          ON CONFLICT (user_disc_id) DO UPDATE SET user_disc_id = EXCLUDED.user_disc_id
           RETURNING user_id
         `;
         if (!user?.user_id) throw new Error("Synthetic user upsert returned no identifier");
 
         await tx`
-          INSERT INTO user_personalization_configs (user_id)
-          VALUES (${user.user_id})
-          ON CONFLICT (user_id) DO NOTHING
+          INSERT INTO user_personalization_configs (user_id, user_nickname)
+          VALUES (${user.user_id}, ${displayName})
+          ON CONFLICT (user_id) DO UPDATE SET
+            user_nickname = EXCLUDED.user_nickname,
+            updated_at = CASE
+              WHEN user_personalization_configs.user_nickname IS DISTINCT FROM EXCLUDED.user_nickname THEN NOW()
+              ELSE user_personalization_configs.updated_at
+            END
+          WHERE user_personalization_configs.user_nickname IS DISTINCT FROM EXCLUDED.user_nickname
         `;
 
         const [namespaceRow] = await tx`
@@ -308,10 +306,11 @@ export class ChatProxyRepository {
     if (hostUserDiscIds.length === 0 || !normalizedHistoryText) return [];
     try {
       const rows = await sql<ChatProxyIdentityReferenceRow[]>`
-        SELECT DISTINCT cpn.service_id, u.user_disc_id, cpi.display_name, u.user_nickname
+        SELECT DISTINCT cpn.service_id, u.user_disc_id, cpi.display_name, upc.user_nickname
         FROM chat_proxy_identities cpi
         JOIN external_identities ei ON ei.external_identity_id = cpi.external_identity_id
         JOIN users u ON u.user_id = ei.user_id
+        LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
         JOIN chat_proxy_namespaces cpn ON cpn.chat_proxy_namespace_id = cpi.chat_proxy_namespace_id
         JOIN chat_proxy_namespace_accounts cpna
           ON cpna.chat_proxy_namespace_id = cpn.chat_proxy_namespace_id
@@ -322,8 +321,8 @@ export class ChatProxyRepository {
               IN ${normalizedHistoryText}
             ) > 0)
             OR
-            (btrim(u.user_nickname) <> '' AND position(
-              regexp_replace(lower(trim(u.user_nickname)), '[[:space:]]+', ' ', 'g')
+            (btrim(upc.user_nickname) <> '' AND position(
+              regexp_replace(lower(trim(upc.user_nickname)), '[[:space:]]+', ' ', 'g')
               IN ${normalizedHistoryText}
             ) > 0)
           )

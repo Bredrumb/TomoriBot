@@ -5,6 +5,7 @@ import {
   hasFencedPlaceholder,
   KNOWN_UNGUARDED,
   REQUIRED_HELPER,
+  SAFE_PREVIEW_WRAPPERS,
   scanBakedEllipsis,
   scanFencedPlaceholderUsage,
 } from "../../../scripts/checks/lib/textPreviewAudit";
@@ -62,6 +63,13 @@ describe("text-preview scanner — fenced placeholder (rule 2)", () => {
   it("accepts a consumer that routes the value through the helper", () => {
     const sources = new Map([
       ["src/commands/example.ts", `descriptionKey: "a.b", preview: ${REQUIRED_HELPER}(raw).text`],
+    ]);
+    expect(scanFencedPlaceholderUsage("a.b", fenced, sources)).toHaveLength(0);
+  });
+
+  it("accepts a consumer that routes the value through a safe domain wrapper", () => {
+    const sources = new Map([
+      ["src/tools/functionCalls/memoryTool.ts", `descriptionKey: "a.b", preview: ${SAFE_PREVIEW_WRAPPERS[0]}(raw)`],
     ]);
     expect(scanFencedPlaceholderUsage("a.b", fenced, sources)).toHaveLength(0);
   });

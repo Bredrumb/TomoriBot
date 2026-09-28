@@ -31,17 +31,10 @@
 
 */
 
-import { config } from "dotenv";
 import { sql } from "bun";
+import { loadInitializedKeyManager } from "../lib/keyManagerBootstrap";
 
-// Load .env before importing keyManager because ES module imports are hoisted
-//    above runtime code, so keyManager would read an empty process.env if
-//    we imported it statically at the top of this file.
-config();
-
-const { keyManager } = await import("@/utils/security/keyManager");
-
-keyManager.initialize();
+const keyManager = await loadInitializedKeyManager();
 
 /**
  * Get PostgreSQL connection URL from environment variables

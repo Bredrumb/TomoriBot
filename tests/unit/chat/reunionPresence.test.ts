@@ -20,6 +20,13 @@ const emptyResult: GenerationTurnResult = {
   personaResponses: [],
 };
 
+const toolDeliveredResult: GenerationTurnResult = {
+  status: "completed",
+  streamResults: [],
+  personaResponses: [],
+  toolResponseDelivered: true,
+};
+
 function makeResolveArgs(userId: number) {
   return {
     turn: {
@@ -89,7 +96,7 @@ describe("ReunionClaimRegistry", () => {
     const first = await resolveReunionNote(makeResolveArgs(30), presenceStore);
     const concurrent = await resolveReunionNote(makeResolveArgs(30), presenceStore);
 
-    expect(first.note).toContain("Alice is talking to you again");
+    expect(first.note).toContain("Alice hasn't interacted with you specifically since");
     expect(first.presence?.mode).toBe("claimed");
     expect(concurrent.note).toBeNull();
     expect(concurrent.presence?.mode).toBe("deferred");
@@ -109,7 +116,7 @@ describe("ReunionClaimRegistry", () => {
     let finishRead: ((value: { lastPreviousDayAt: Date; seenToday: boolean }) => void) | undefined;
     const read = mock(
       () =>
-        new Promise((resolve) => {
+        new Promise<{ lastPreviousDayAt: Date; seenToday: boolean }>((resolve) => {
           finishRead = resolve;
         }),
     );
@@ -128,6 +135,20 @@ describe("ReunionClaimRegistry", () => {
     await recordReunionPresence(first.presence, emptyResult, presenceStore);
   });
 
+  it("consumes the reunion after a tool directly delivers the persona response", async () => {
+    const write = mock(async () => true);
+    const presenceStore = makePresenceStore({
+      getUserPersonaReunionInfo: async () => ({ lastPreviousDayAt: null, seenToday: false }),
+      recordPresenceSeen: write,
+    });
+    const first = await resolveReunionNote(makeResolveArgs(33), presenceStore);
+
+    expect(first.note).toContain("very first time");
+    await recordReunionPresence(first.presence, toolDeliveredResult, presenceStore);
+
+    expect(write).toHaveBeenCalledTimes(1);
+  });
+
   it("releases a failed claim without letting a suppressed turn consume it", async () => {
     const read = mock(async () => ({
       lastPreviousDayAt: new Date("2026-07-01T00:00:00Z"),
@@ -144,7 +165,7 @@ describe("ReunionClaimRegistry", () => {
     expect(write).not.toHaveBeenCalled();
 
     const retry = await resolveReunionNote(makeResolveArgs(31), presenceStore);
-    expect(retry.note).toContain("Alice is talking to you again");
+    expect(retry.note).toContain("Alice hasn't interacted with you specifically since");
     expect(retry.presence?.mode).toBe("claimed");
     await recordReunionPresence(retry.presence, emptyResult, presenceStore);
   });
@@ -175,7 +196,7 @@ describe("ReunionClaimRegistry", () => {
 
     const resolved = await resolveReunionNote({ ...makeResolveArgs(34), proxiedIdentityName: "  " }, presenceStore);
 
-    expect(resolved.note).toContain("Alice is talking to you again for the first time since");
+    expect(resolved.note).toContain("Alice hasn't interacted with you specifically since");
     expect(resolved.note).not.toContain("the account they share");
     await recordReunionPresence(resolved.presence, emptyResult, presenceStore);
   });

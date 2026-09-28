@@ -79,13 +79,13 @@ function descriptor(
     ? {
         ...base,
         capabilities: {
-          correlation: "attested",
-          identity: "stable",
-          identityBio: "none",
-          namespaceBio: "none",
+          correlation: "attested" as const,
+          identity: "stable" as const,
+          identityBio: "none" as const,
+          namespaceBio: "none" as const,
         },
       }
-    : { ...base, capabilities: { correlation: "attested", identity: "none" } };
+    : { ...base, capabilities: { correlation: "attested" as const, identity: "none" as const } };
 }
 
 const noCorrelationDescriptor = {

@@ -6,8 +6,6 @@
 import type { Timeframe } from "@/utils/stats/statsDashboard";
 import { localizer } from "@/utils/text/localizer";
 
-// ── JSX factory ───────────────────────────────────────────────────────────────
-
 export interface VNode {
   type: string;
   props: Record<string, unknown> & { children?: unknown };
@@ -40,17 +38,8 @@ export function Fragment(props: { children?: unknown }): unknown {
   return props.children;
 }
 
-// ── Canvas + theme ────────────────────────────────────────────────────────────
-
-function readIntEnv(name: string, fallback: number): number {
-  const raw = process.env[name]?.trim();
-  if (!raw) return fallback;
-  const value = Number.parseInt(raw, 10);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
 /** Logical canvas width. All typography is sized for a Discord-scale preview. */
-export const CARD_W = readIntEnv("STATS_CARD_W", 1080);
+export const CARD_W = 1080;
 const BASE_CARD_W = 1080;
 const CARD_SCALE = CARD_W / BASE_CARD_W;
 
@@ -64,16 +53,16 @@ export const PERSONA_CARD_H = scaled(1920);
 /** @deprecated Use the card-specific height helpers instead. */
 export const CARD_H = PERSONAL_CARD_H;
 
-/** TomoriBot brand palette. Operators may override the three structural colors. */
+/** TomoriBot brand palette. */
 export const CARD_THEME = {
-  bg: process.env.STATS_CARD_THEME_BG ?? "#1d100e",
-  surface: process.env.STATS_CARD_THEME_SURFACE ?? "#2c1815",
+  bg: "#1d100e",
+  surface: "#2c1815",
   surfaceAlt: "#160b0a",
   border: "#4d2b26",
   text: "#f7f2f1",
   textMuted: "#d1b8b2",
   textSubtle: "#ab8981",
-  red: process.env.STATS_CARD_THEME_ACCENT ?? "#e7322a",
+  red: "#e7322a",
   magenta: "#db1458",
   cyan: "#00e5ff",
   teal: "#6ec4cf",
@@ -144,8 +133,6 @@ export function buildDonutSvg(
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${track}${paths}</svg>`;
 }
-
-// ── Personal Wrapped ──────────────────────────────────────────────────────────
 
 export interface PersonalCardPalette {
   background: string;
@@ -477,7 +464,7 @@ export function renderPersonalCard(data: PersonalCardData): VNode {
                   (no panel/border), each square the same size as the avatar and
                   staggered up-left: accent back → secondary-accent mid → avatar front.
                   Personal-only (it replaces PersonalHeroDecor here), so the Server card
-                  — which still uses the shared decor — is unaffected. */}
+                  (which still uses the shared decor) is unaffected. */}
               <div
                 style={{
                   display: "flex",
@@ -633,8 +620,6 @@ export function renderPersonalCard(data: PersonalCardData): VNode {
     </div>
   );
 }
-
-// ── Persona Affinity ──────────────────────────────────────────────────────────
 
 export interface PersonaCardData {
   locale: string;
@@ -1120,8 +1105,6 @@ export function renderPersonaCard(data: PersonaCardData): VNode {
   );
 }
 
-// ── Server Leaderboard ────────────────────────────────────────────────────────
-
 /**
  * One persona's vertical-bar entry, ranked by total tokens (highest = leftmost).
  * `accent` is sampled from the persona avatar in the gatherer and tints the bar.
@@ -1177,7 +1160,7 @@ const SERVER_MODEL_TRACK_W = SERVER_LOWER_W - scaled(280);
 const SERVER_BAR_TEXT_PAD = scaled(24);
 const SERVER_BAR_TEXT_FONT_SIZE = scaled(27);
 
-// Fixed section heights — summed by getServerCardHeight so the content-aware
+// Fixed section heights, summed by getServerCardHeight so the content-aware
 // card height stays exact (satori clips/pads to the height we hand it).
 const SERVER_HEADER_H = scaled(112);
 const SERVER_BLOCK_TITLE_H = scaled(74);
@@ -1530,7 +1513,7 @@ export function renderServerCard(data: ServerCardData): VNode {
 
       {hasData ? (
         <>
-          {/* 2. Top Personas — horizontal bars (tokens | cost inside, avatar + name at tip). */}
+          {/* 2. Top Personas: horizontal bars (tokens | cost inside, avatar + name at tip). */}
           <ServerBlockTitle title={t.topPersonas} palette={palette} />
           {personas.length > 0 ? (
             personas.map((entry) => (
@@ -1554,7 +1537,7 @@ export function renderServerCard(data: ServerCardData): VNode {
             <div style={{ display: "flex", color: palette.muted, fontSize: scaled(28) }}>{t.empty}</div>
           )}
 
-          {/* 3. Most Active Members — triggers inside, avatar + name at tip. */}
+          {/* 3. Most Active Members: triggers inside, avatar + name at tip. */}
           <ServerBlockTitle title={t.mostActiveMembers} palette={palette} />
           {members.length > 0 ? (
             members.map((entry) => (
@@ -1578,7 +1561,7 @@ export function renderServerCard(data: ServerCardData): VNode {
             <div style={{ display: "flex", color: palette.muted, fontSize: scaled(28) }}>{t.empty}</div>
           )}
 
-          {/* 4. Top Models — tokens | cost inside, model name at tip (no avatar). */}
+          {/* 4. Top Models: tokens | cost inside, model name at tip (no avatar). */}
           <ServerBlockTitle title={t.topModels} palette={palette} />
           {models.length > 0 ? (
             models.map((entry) => (

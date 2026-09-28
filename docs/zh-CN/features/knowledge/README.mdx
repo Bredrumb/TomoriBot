@@ -1,0 +1,21 @@
+---
+title: "知识"
+sidebar:
+  groupLabel: "知识"
+  order: 2
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+TomoriBot 知道什么、记住什么：她记住的事实、跟着你走的个人设置，以及对所存数据的完整控制权。
+
+<CardGrid>
+  <LinkCard title="记忆" href="/zh-CN/features/knowledge/memory/"
+    description="个人记忆与服务器记忆、标签、短期记忆，以及文档知识库。" />
+  <LinkCard title="提示词内部" href="/zh-CN/features/knowledge/inside-the-prompt/"
+    description="她每次回复实际拿到些什么，以及为什么有些事她忘了、有些没忘。" />
+  <LinkCard title="个性化" href="/zh-CN/features/knowledge/personalization/"
+    description="你自己的提供方（BYOK）、时区、提示词、个人聚光灯与隐私。" />
+  <LinkCard title="数据处理" href="/zh-CN/features/knowledge/data-handling/"
+    description="导出、导入与删除你的数据，以及她到底存了些什么。" />
+</CardGrid>

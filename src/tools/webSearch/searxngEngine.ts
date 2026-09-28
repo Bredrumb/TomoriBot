@@ -7,7 +7,7 @@
  * instance responding healthy (cached probe : see `isSearxngAvailable`).
  *
  * Sits between Brave and DuckDuckGo in the dispatcher chain: when a Brave key
- * isn't configured but a self-hosted SearXNG sidecar is, queries are routed
+ * isn't configured but a self-hosted SearXNG server is, queries are routed
  * here instead of falling through to DuckDuckGo/IAsk.
  */
 

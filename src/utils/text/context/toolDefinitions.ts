@@ -3,7 +3,7 @@ import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/tool
 import { log } from "@/utils/misc/logger";
 import { shouldInjectVerbatimToolCallingNudge } from "@/utils/tools/verbatimToolCalling";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
-import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
+import type { TomoriState } from "@/types/db/schema";
 
 /**
  * Header text placed above the serialized tool schemas. Kept terse because the
@@ -58,6 +58,7 @@ async function buildVerbatimToolDefinitionsJson(tomoriState: TomoriState): Promi
       videogen_enabled: tomoriState.config.videogen_enabled,
       voice_message_enabled: tomoriState.config.voice_message_enabled,
       user_blocking_enabled: tomoriState.config.user_blocking_enabled,
+      user_info_updates_enabled: tomoriState.config.user_info_updates_enabled,
       thread_creation_enabled: tomoriState.config.thread_creation_enabled,
     },
   };
@@ -72,25 +73,21 @@ async function buildVerbatimToolDefinitionsJson(tomoriState: TomoriState): Promi
 }
 
 /**
+ * Only emitted when the active model opted into verbatim tool calling and is
+ * tool-capable (gated identically to the verbatim nudge so the schema dump and
+ * the behavioral nudge are always switched on together). When enabled, the
+ * resolved tool set is serialized to JSON and embedded in-band so endpoints that
+ * ignore the native `tools` field still expose the schemas to the model.
  *
- * Only emitted when the verbatim tool-calling workaround is enabled and the
- * active model is tool-capable (gated identically to the verbatim nudge so the
- * schema dump and the behavioral nudge are always switched on together). When
- * enabled, the resolved tool set is serialized to JSON and embedded in-band so
- * endpoints that ignore the native `tools` field still expose the schemas to
- * the model.
- *
- * @param params.tomoriConfig - Assembled server config (verbatim toggle source).
  * @param params.tomoriState - Active persona/server state, or null when unavailable.
- * @returns A structured context item, or null when the workaround is off / no tools apply.
+ * @returns A structured context item, or null when the flag is off / no tools apply.
  */
 export async function buildVerbatimToolDefinitionsContextItem(params: {
-  tomoriConfig: AssembledServerConfig;
   tomoriState: TomoriState | null | undefined;
 }): Promise<StructuredContextItem | null> {
   try {
-    const { tomoriConfig, tomoriState } = params;
-    if (!shouldInjectVerbatimToolCallingNudge(tomoriConfig, tomoriState) || !tomoriState) {
+    const { tomoriState } = params;
+    if (!shouldInjectVerbatimToolCallingNudge(tomoriState) || !tomoriState) {
       return null;
     }
 

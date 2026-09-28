@@ -82,6 +82,7 @@ export const EXEMPT_PATHS = new Map<string, string>([
   ["src/utils/security/crypto.ts", "security primitive"],
   ["src/utils/security/keyRotation.ts", "security primitive"],
   ["src/utils/documents/documentService.ts", "RAG service layer; SQL invoked exclusively through RagRepository facade"],
+  ["src/db/seed/catalog/presetAssetLock.ts", "catalog seeding concurrency lock"],
 ]);
 
 /** Normalize a path to POSIX separators for stable comparison across OSes. */
@@ -170,7 +171,7 @@ export function scanFileForSqlQueries(content: string): Array<{ line: number; qu
       const match = line.match(matchRegex);
       if (match) {
         queryStartLine = i + 1;
-        const splitPoint = match.index! + match[0].length;
+        const splitPoint = (match.index ?? 0) + match[0].length;
         const restOfLine = line.substring(splitPoint);
         if (restOfLine.includes("`")) {
           hits.push({ line: queryStartLine, query: restOfLine.split("`")[0].trim() });

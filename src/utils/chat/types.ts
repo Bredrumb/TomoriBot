@@ -198,6 +198,8 @@ export interface ChatTurn {
   userDiscId: string;
   cooldownUserDiscId: string;
   triggererName: string;
+  triggererFormattedName: string;
+  triggererAddressTerm: string;
   channelName: string;
   channelDescription: string | null;
   serverName: string;
@@ -254,6 +256,8 @@ export interface ChatTurnContext {
   serverName: string;
   serverDescription: string | null;
   triggererName: string;
+  triggererFormattedName: string;
+  triggererAddressTerm: string;
   textCredentialSource: "server" | "personal";
   personalRoutingUserId: number | null;
   personalTextProvider: string | null;
@@ -309,6 +313,8 @@ export interface GenerationTurnResult {
   status: StreamResult["status"] | "skipped";
   streamResults: StreamResult[];
   personaResponses: ChatPersonaResponse[];
+  /** A tool delivered the response directly even though no streamed text was captured. */
+  toolResponseDelivered?: boolean;
   thoughtLog?: ThoughtLogPayload;
   thoughtLogOwner?: ThoughtLogOwner;
   selectedSticker?: Sticker;

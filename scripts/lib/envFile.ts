@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync, readdirSync, rmdirSync, statSync, writeFileSync } from "node:fs";
 
 interface RawLine {
   kind: "raw";
@@ -9,7 +9,7 @@ interface EntryLine {
   kind: "entry";
   key: string;
   value: string;
-  quote?: "\"" | "'";
+  quote?: '"' | "'";
   exportPrefix: boolean;
 }
 
@@ -27,16 +27,13 @@ export interface UpsertOptions {
 
 const ENTRY_PATTERN = /^(\s*)(export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/;
 
-function parseValue(rawValue: string): { value: string; quote?: "\"" | "'" } {
+function parseValue(rawValue: string): { value: string; quote?: '"' | "'" } {
   const trimmed = rawValue.trim();
-  if (
-    (trimmed.startsWith("\"") && trimmed.endsWith("\"")) ||
-    (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  ) {
-    const quote = trimmed[0] as "\"" | "'";
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    const quote = trimmed[0] as '"' | "'";
     const inner = trimmed.slice(1, -1);
     return {
-      value: quote === "\"" ? inner.replace(/\\"/g, "\"") : inner.replace(/\\'/g, "'"),
+      value: quote === '"' ? inner.replace(/\\"/g, '"') : inner.replace(/\\'/g, "'"),
       quote,
     };
   }
@@ -60,16 +57,16 @@ function parseLine(text: string): EnvLine {
   };
 }
 
-function formatValue(value: string, quote?: "\"" | "'"): string {
+function formatValue(value: string, quote?: '"' | "'"): string {
   const needsQuotes = quote || /\s|#/.test(value);
   if (!needsQuotes) {
     return value;
   }
-  const selectedQuote = quote ?? "\"";
+  const selectedQuote = quote ?? '"';
   if (selectedQuote === "'") {
     return `'${value.replace(/'/g, "\\'")}'`;
   }
-  return `"${value.replace(/"/g, "\\\"")}"`;
+  return `"${value.replace(/"/g, '\\"')}"`;
 }
 
 function formatLine(line: EnvLine): string {
@@ -81,7 +78,10 @@ function formatLine(line: EnvLine): string {
 }
 
 function normalizePlaceholderValue(value: string): string {
-  return value.trim().replace(/^["']|["']$/g, "").toLowerCase();
+  return value
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .toLowerCase();
 }
 
 export function isPlaceholder(value: string | undefined): boolean {
@@ -127,7 +127,13 @@ export function readEnvValues(path: string): Record<string, string> {
 
 export function seedFromExample(examplePath: string, destPath: string): boolean {
   if (existsSync(destPath)) {
-    return false;
+    if (!statSync(destPath).isDirectory()) {
+      return false;
+    }
+    if (readdirSync(destPath).length > 0) {
+      throw new Error(`${destPath} is a non-empty directory. Move its contents before running setup.`);
+    }
+    rmdirSync(destPath);
   }
   copyFileSync(examplePath, destPath);
   return true;

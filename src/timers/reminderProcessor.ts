@@ -19,13 +19,10 @@ import { isBridgeUserId } from "../utils/bridges";
 import { sendMatrixReminderMention } from "../utils/bridges/matrix";
 import type { GenerationTurnResult, QueuedMessageDiscardReason } from "@/utils/chat/types";
 import { runWithErrorContext } from "@/utils/misc/errorContextStore";
+import { neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
 import { localizer } from "@/utils/text/localizer";
 
-const REMINDER_DELIVERY_RETRY_DELAY_MS = parseIntegerEnvFlag(
-  process.env.REMINDER_DELIVERY_RETRY_DELAY_MS,
-  60_000,
-  1_000,
-);
+const REMINDER_DELIVERY_RETRY_DELAY_MS = 60_000;
 
 /**
  * Cap on unacknowledged delivery retries before a reminder is surfaced via the plain
@@ -33,14 +30,7 @@ const REMINDER_DELIVERY_RETRY_DELAY_MS = parseIntegerEnvFlag(
  * becomes an unbounded loop: the retry's own output changes the channel's last message,
  * which is the very input the next retry reads back.
  */
-const REMINDER_DELIVERY_MAX_RETRIES = parseIntegerEnvFlag(process.env.REMINDER_DELIVERY_MAX_RETRIES, 5, 1);
-
-function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, minimum: number): number {
-  if (typeof value !== "string") return defaultValue;
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed)) return defaultValue;
-  return Math.max(minimum, parsed);
-}
+const REMINDER_DELIVERY_MAX_RETRIES = 5;
 
 function getNextRecurringReminderTime(
   reminderTime: Date,
@@ -63,7 +53,7 @@ function buildFallbackDescription(locale: string, reminder: ReminderRow): string
   });
   const fenceStart = "```text\n";
   const fenceEnd = "\n```";
-  const sanitizedPurpose = reminder.reminder_purpose.replaceAll("```", "`\u200b``");
+  const sanitizedPurpose = neutralizeFenceRuns(reminder.reminder_purpose);
   const purpose = truncateForEmbedDescription(
     sanitizedPurpose,
     header.length + fenceStart.length + fenceEnd.length + 1,

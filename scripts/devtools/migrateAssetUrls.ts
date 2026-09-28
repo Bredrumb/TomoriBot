@@ -97,11 +97,7 @@ async function countMatchingRows(target: AssetColumnTarget, fromPrefix: string):
   return Number(rows[0]?.count ?? 0);
 }
 
-async function rewriteMatchingRows(
-  target: AssetColumnTarget,
-  fromPrefix: string,
-  toPrefix: string,
-): Promise<number> {
+async function rewriteMatchingRows(target: AssetColumnTarget, fromPrefix: string, toPrefix: string): Promise<number> {
   const rows = await sql<Array<Record<string, never>>>`
     UPDATE ${sql(target.table)}
     SET ${sql(target.column)} = ${toPrefix} || substring(${sql(target.column)} from length(${fromPrefix}) + 1)

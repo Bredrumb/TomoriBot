@@ -1,6 +1,47 @@
 import { ApplicationFlags, Client, GatewayIntentBits, Partials, REST, Routes } from "discord.js";
 import { log } from "@/utils/misc/logger";
+import { healthTracker } from "@/utils/misc/healthTracker";
 import type { AppEnvironment } from "@/types/config";
+
+/**
+ * Whether a Discord connection failure is one the bot can recover from on its own.
+ *
+ * The gateway sits behind an edge that answers a connect attempt with a non-101 status while a
+ * region is unhealthy, so the failure arrives as a transport error rather than a gateway close
+ * code. Retrying is correct for those. A rejected token or an unapproved privileged intent is
+ * not: no amount of retrying changes Discord's answer, and a restart loop only hides the
+ * misconfiguration behind transport noise.
+ *
+ * @param error - Failure raised by a gateway connect attempt or by login
+ * @returns True when the caller should retry rather than exit
+ */
+export function isTransientGatewayError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+
+  const message = error.message.toLowerCase();
+  if (message.includes("expected 101 status code")) return true;
+  if (message.includes("disallowed intents") || message.includes("privileged intent")) return false;
+  if (message.includes("invalid token") || message.includes("unauthorized")) return false;
+
+  const code = (error as { code?: unknown }).code;
+  if (code === "DisallowedIntents" || code === "TokenInvalid" || code === "InvalidToken") return false;
+
+  const status = (error as { status?: unknown }).status;
+  if (typeof status === "number") return status >= 500 || status === 408 || status === 429;
+
+  return (
+    message.includes("econnreset") ||
+    message.includes("econnrefused") ||
+    message.includes("etimedout") ||
+    message.includes("socket hang up") ||
+    message.includes("socket closed") ||
+    message.includes("network") ||
+    message.includes("fetch failed") ||
+    message.includes("timeout") ||
+    message.includes("websocket") ||
+    message.includes("429")
+  );
+}
 
 /**
  * Resolves whether the privileged GuildPresences intent should be requested,
@@ -117,8 +158,47 @@ export function createDiscordClient(includePresences: boolean): Client {
     log.error("Discord client error occurred", error);
   });
 
-  client.on("shardError", (error) => {
-    log.error("Discord WebSocket shard error occurred", error);
+  // A reconnect is transport maintenance, not an application defect. Logging every failed attempt
+  // at error level fills `error_logs` with identical rows during one gateway incident, which is
+  // what buries unrelated failures in the same Grafana view, so only the first attempt reports at
+  // error level and the rest stay visible at a level that does not write a row.
+  const gatewayErrorReporter = createGatewayErrorReporter();
+  client.on("shardError", (error, shardId) => {
+    gatewayErrorReporter(error, shardId);
+  });
+
+  // Session lifecycle is the other half of a connection failure: without these, a resumed session
+  // and a fresh identify are indistinguishable in the logs, and an event gap is invisible.
+  //
+  // The reporter is cleared only where a session is actually established. Clearing it on a
+  // disconnect would re-arm error level for the next attempt of the same outage, which is the
+  // repetition the reporter exists to absorb.
+  client.on("shardReady", (shardId) => {
+    gatewayErrorReporter.reset(shardId);
+    healthTracker.recordGatewayConnected();
+    log.rateLimit(`Discord gateway shard ready (shard ${shardId})`, { shardId });
+  });
+
+  client.on("shardResume", (shardId, replayedEvents) => {
+    gatewayErrorReporter.reset(shardId);
+    healthTracker.recordGatewayConnected();
+    log.rateLimit(`Discord gateway session resumed (shard ${shardId})`, { shardId, replayedEvents });
+  });
+
+  client.on("shardDisconnect", (event, shardId) => {
+    log.rateLimit(`Discord gateway disconnected (shard ${shardId})`, {
+      code: event.code,
+      reason: event.reason ?? "",
+      wasClean: event.wasClean,
+    });
+  });
+
+  client.on("shardReconnecting", (shardId) => {
+    log.rateLimit(`Discord gateway reconnecting (shard ${shardId})`, { shardId });
+  });
+
+  client.on("invalidated", () => {
+    log.warn("Discord session invalidated; discord.js will reconnect with a new session");
   });
 
   process.on("uncaughtException", (error) => {
@@ -139,4 +219,42 @@ export function createDiscordClient(includePresences: boolean): Client {
   });
 
   return client;
+}
+
+/**
+ * Rate-limits gateway connection failures to one error row per shard per episode.
+ *
+ * discord.js retries a failed handshake on its own, so a single outage produces one failure per
+ * attempt with the same message. Only the first is news; the rest are the same fact repeated, and
+ * at error level each one is a row the failure views have to filter out.
+ */
+function createGatewayErrorReporter(): ((error: unknown, shardId: number) => void) & {
+  reset: (shardId: number) => void;
+} {
+  const reported = new Set<number>();
+
+  const report = (error: unknown, shardId: number) => {
+    healthTracker.recordGatewayFailure();
+    const metadata = { shardId, reason: error instanceof Error ? error.message : String(error) };
+
+    if (!reported.has(shardId)) {
+      reported.add(shardId);
+      log.error(
+        `Discord WebSocket shard error occurred (shard ${shardId}); further attempts for this shard stay at warn level until it connects`,
+        error,
+      );
+      return;
+    }
+
+    log.warn(`Discord WebSocket shard error repeated (shard ${shardId})`, error instanceof Error ? error : undefined, {
+      errorType: "DiscordGatewayError",
+      metadata,
+    });
+  };
+
+  report.reset = (shardId: number) => {
+    reported.delete(shardId);
+  };
+
+  return report;
 }

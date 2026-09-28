@@ -14,12 +14,7 @@ export interface StdioProcessExit {
   expected: boolean;
 }
 
-const DEFAULT_DIAGNOSTIC_MAX_CHARS = 8192;
-
-function getDiagnosticMaxChars(): number {
-  const configured = Number.parseInt(process.env.MCP_STDIO_DIAGNOSTIC_MAX_CHARS ?? "", 10);
-  return Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_DIAGNOSTIC_MAX_CHARS;
-}
+const DIAGNOSTIC_MAX_CHARS = 8192;
 
 /**
  * Stdio MCP transport that accepts only JSON-RPC lines from child stdout.
@@ -31,7 +26,7 @@ export class BannerFilteringStdioClientTransport implements Transport {
   private readonly readBuffer = new ReadBuffer();
   private readonly decoder = new StringDecoder("utf8");
   private readonly stderrStream: PassThrough | null = null;
-  private readonly diagnosticMaxChars = getDiagnosticMaxChars();
+  private readonly diagnosticMaxChars = DIAGNOSTIC_MAX_CHARS;
   private pendingLine = "";
   private diagnosticTail = "";
   private closeRequested = false;

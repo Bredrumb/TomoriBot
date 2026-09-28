@@ -32,7 +32,8 @@ Handler: `src/events/interactionCreate/handleCommands.ts`
 
 - Cooldown type: `CooldownType.COMMAND_CATEGORY`
 - Key shape: `user_disc_id + command_category`
-- Durations come from env (`DEFAULT_COMMAND_COOLDOWN`, `COOLDOWN_CONFIG`, `COOLDOWN_PERSONA`, `COOLDOWN_MEMORY`, `COOLDOWN_SERVER`, `COOLDOWN_PERSONAL`, `COOLDOWN_CONDITIONING`)
+- Base durations are constants in `handleCommands.ts`: `COOLDOWN_PERSONA_MS` (10,000 ms) for `/persona`, `CATEGORY_COOLDOWN_MS` (3,000 ms) for the other listed categories, and `DEFAULT_COOLDOWN_MS` (1,600 ms) for everything else
+- `COMMAND_COOLDOWN_SCALE` multiplies every base duration (default `1`), so the ratio between categories holds at any scale; `0` skips both the cooldown check and the write
 - Cooldown warning uses localized `general.cooldown*` keys
 
 ## Message Trigger Cooldowns
@@ -47,7 +48,7 @@ Used for automatic message-triggered chat flow.
 2. If the trigger is in a thread, first check the thread itself, then fall back to its parent channel's whitelist entry.
 3. If channel whitelist is active and current channel (or its parent channel for threads) is not whitelisted -> blocked.
 4. If role whitelist is active and triggering member has no whitelisted role -> blocked.
-5. If a persona has a channel whitelist configured anywhere in the server, that persona is only eligible in its whitelisted channels (threads inherit the parent channel entry); personas with no rows remain eligible everywhere. Disallowed automatic persona matches fail silently and manual persona selections (for example `/bot respond`, `/bot impersonate`, conditioning, and scene-image sender selection) are rejected.
+5. If a persona has a channel whitelist configured anywhere in the server, that persona is only eligible in its whitelisted channels (threads inherit the parent channel entry); personas with no rows remain eligible everywhere. Disallowed automatic persona matches fail silently and manual persona selections (for example `/respond`, `/impersonate persona`, conditioning, and scene-image sender selection) are rejected.
 6. If the triggering user has a personal spotlight for the effective channel, that spotlight becomes an additional persona filter on top of the server whitelist. Only personas present in both sets may trigger, including proxy/self chains. The spotlight's optional personal auto-trigger persona behaves like a user+channel-scoped always-reply fallback, but still respects the server whitelist result.
 7. If channel is whitelisted and has an explicit override, use that channel-specific cooldown type/length.
 8. If channel is whitelisted without an override, inherit global `server_trigger_behavior_configs.cooldown_type/cooldown_length`.
@@ -66,7 +67,7 @@ Enum in `src/types/db/schema.ts`:
 
 Operational note:
 
-- `/server cooldown triggers` currently allows selecting types `0..3`.
+- `/config` > Engine > Trigger currently allows selecting types `0..3`.
 - Type 4 remains in enum/runtime support for legacy rows.
 
 ### Manager exemption
@@ -77,15 +78,13 @@ Operational note:
 
 ## Configuration Commands
 
-- Global trigger cooldown: `/server cooldown triggers`
+- Global trigger cooldown: `/config` > Engine > Trigger
 - Trigger whitelist:
-  - `/server whitelist channel` (leave cooldown options empty to inherit the global cooldown)
-  - `/server whitelist persona`
-  - `/server whitelist role`
-  - `/server whitelist remove` (bulk remove whitelisted personas, channels, and/or roles)
+  - `/moderation` Whitelist Channels (leave cooldown options empty to inherit the global cooldown)
+  - `/moderation` Whitelist Personas
+  - `/moderation` Whitelist Roles
 - Personal spotlight:
-  - `/personal spotlight set`
-  - `/personal spotlight manage`
+  - `/personal config`
 
 ## Cleanup
 

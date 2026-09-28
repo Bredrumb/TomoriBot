@@ -33,16 +33,9 @@ const CONTEXT_PAST_PARTICIPLES: Record<ConditioningType, Record<ConditioningActi
   },
 };
 
-function parsePositiveInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(value ?? "", 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-export const CONDITIONING_REASON_MAX_LENGTH = parsePositiveInt(process.env.CONDITIONING_REASON_MAX_LENGTH, 250);
-export const CONDITIONING_CONTEXT_MAX_GROUPS_PER_TYPE = parsePositiveInt(
-  process.env.CONDITIONING_CONTEXT_MAX_GROUPS_PER_TYPE,
-  10,
-);
+/** Reasons are shown in the conditioning panel, so they are capped rather than free-form. */
+export const CONDITIONING_REASON_MAX_LENGTH = 250;
+export const CONDITIONING_CONTEXT_MAX_GROUPS_PER_TYPE = 10;
 
 export function normalizeConditioningReason(reason: string | null | undefined): string {
   return (reason ?? "").trim().replace(/\s+/g, " ");

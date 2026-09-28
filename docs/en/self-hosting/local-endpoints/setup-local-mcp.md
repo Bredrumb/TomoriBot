@@ -5,12 +5,12 @@ sidebar:
 ---
 
 [MCP](https://modelcontextprotocol.io/) servers extend TomoriBot with external tools. Online
-(HTTPS) MCP servers work on any instance — see
-[Tools & Extensions](/features/capabilities/tools-and-extensions/#mcp-servers). **Local** MCP servers are
+(HTTPS) MCP servers work on any instance; see
+[Tools & Extensions](/features/capabilities/tools-and-extensions/#mcp-servers). Local MCP servers are
 different:
 
 :::caution[Self-hosting only]
-Local MCP servers are **only supported on self-hosted instances**. The public hosted bot
+Local MCP servers are supported on self-hosted instances only. The public hosted bot
 requires HTTPS and blocks local/private addresses for security, so it can't reach a server on
 `localhost` or your LAN.
 :::
@@ -25,23 +25,25 @@ npx -y <some-mcp-server> --port 3000
 ```
 
 The exact command depends on the server you're running. Note the URL and transport path it
-prints — commonly something like `http://localhost:3000/sse`.
+prints (commonly something like `http://localhost:3000/sse`).
 
-TomoriBot's own tooling expects **Node.js v20+** to be available for MCP tooling on the host.
+TomoriBot's own tooling expects Node.js v20+ to be available for MCP tooling on the host.
 
 ## 2. Register it in Discord
 
-Run `/mcp add` and point the **URL** field at your local server:
+Open `/config` > Plugins > MCP Servers, choose `Add MCP`, point the `URL` field
+at your local server, and leave the required `Server Type` on its default `General Purpose` value:
 
 ```text
 http://localhost:3000/sse
 ```
 
-Leave the **Auth Token** field blank — no auth token is needed for local servers.
+Leave the `Auth Token` field blank: no auth token is needed for local servers.
 
 ## 3. Manage it
 
-- `/mcp remove` — unregister the server. This immediately disconnects it and frees a slot.
+- Open the Config page and choose `Remove` on the server's row. Confirming unregisters it,
+  immediately disconnects it, and frees a slot.
 
 ## Security
 

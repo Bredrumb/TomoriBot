@@ -1,0 +1,3 @@
+-- Down-migration 086: no-op.
+--
+-- Re-associating NovelAI models with standard image diffusion_model_id is invalid and not recoverable.

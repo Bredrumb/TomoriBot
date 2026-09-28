@@ -7,23 +7,10 @@ import { NVIDIA_IMAGE_GENERATION_BASE_URL } from "@/providers/nvidia/nvidiaConst
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 
-function parseNumberEnv(name: string, fallbackValue: number, min: number, max: number): number {
-  const rawValue = process.env[name];
-  if (!rawValue) {
-    return fallbackValue;
-  }
+const FLUX_STEPS = 30;
 
-  const parsedValue = Number(rawValue);
-  if (!Number.isFinite(parsedValue) || parsedValue < min || parsedValue > max) {
-    log.warn(`[NVIDIA] Invalid ${name} value "${rawValue}". Falling back to ${fallbackValue}.`);
-    return fallbackValue;
-  }
-
-  return parsedValue;
-}
-
-const FLUX_STEPS = parseNumberEnv("NVIDIA_IMAGE_STEPS", 30, 1, 50);
-const FLUX_CFG_SCALE = parseNumberEnv("NVIDIA_IMAGE_CFG_SCALE", 3.5, 0, 10);
+/** Guidance scale used when the caller supplies none; `request.cfg` takes precedence. */
+const FLUX_CFG_SCALE = 3.5;
 
 interface ImageDimensions {
   width: number;

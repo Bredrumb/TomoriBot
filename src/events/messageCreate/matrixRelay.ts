@@ -32,17 +32,7 @@ import type { TomoriState } from "@/types/db/schema";
 import { resolvePersonaAvatarPublicUrl } from "@/utils/storage/avatarStorage";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 
-const DEFAULT_MATRIX_EMBED_CHUNK_MAX_CHARS = 3500;
-
-function getMatrixEmbedChunkMaxChars(): number {
-  const parsed = Number.parseInt(
-    process.env.MATRIX_EMBED_CHUNK_MAX_CHARS ?? `${DEFAULT_MATRIX_EMBED_CHUNK_MAX_CHARS}`,
-    10,
-  );
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MATRIX_EMBED_CHUNK_MAX_CHARS;
-}
-
-const MATRIX_EMBED_CHUNK_MAX_CHARS = getMatrixEmbedChunkMaxChars();
+const MATRIX_EMBED_CHUNK_MAX_CHARS = 3500;
 
 /**
  * Strip Discord inline markdown from a string for plain-text Matrix relay.
@@ -340,10 +330,9 @@ const handler = async (client: Client, message: Message): Promise<void> => {
 
   const personaName = persona?.persona_nickname ?? message.author.username;
 
-  // Relay the text content (skip if empty after trim)
-  //    Identity is conveyed by the virtual Matrix user, so no bold prefix needed.
-  //    @{name} placeholders are transformed to proper Matrix mention links so
-  //    Matrix clients highlight and notify the mentioned user (MSC3952).
+  // Identity is conveyed by the virtual Matrix user, so no bold prefix needed.
+  // @{name} placeholders are transformed to proper Matrix mention links so
+  // Matrix clients highlight and notify the mentioned user (MSC3952).
   const rawText = message.content.trim();
   if (rawText) {
     const { body, formattedBody, mentionedIds } = resolveDiscordTextForMatrix(rawText, message);

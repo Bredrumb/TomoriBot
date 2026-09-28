@@ -19,13 +19,15 @@ ${pc.bold("bun run update")} - backup-first TomoriBot updater
 ${pc.bold("Usage:")}
   bun run update                  Backup, git pull, bun install --frozen-lockfile
   bun run update --build          Also run bun run build after install
-  bun run update --docker         Backup, git pull, docker compose build, docker compose up -d
+  bun run update --docker         Docker backup, git pull, docker compose build, docker compose up -d
   bun run update --skip-backup    Skip the pre-update backup step
   bun run update --yes            Do not prompt before starting
 
 ${pc.bold("Notes:")}
   Stop TomoriBot before updating so the backup and migrations have a quiet database.
   This command uses: git pull --rebase --autostash
+  The --docker path still needs host Bun and git, but not host PostgreSQL tools.
+  A pulled update may require a newer Bun. Run bun upgrade if this command asks for one.
   If Git reports "needs merge", resolve the listed files, run git add on them, then re-run update.
 `);
 }
@@ -76,6 +78,52 @@ async function getUnmergedPaths(): Promise<string[]> {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
+}
+
+/**
+ * Compares two dot-separated version strings numerically.
+ *
+ * @returns Negative when `a` precedes `b`, zero when equal, positive otherwise.
+ */
+function compareVersions(a: string, b: string): number {
+  const left = a.split(".").map(Number);
+  const right = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(left.length, right.length); i++) {
+    const diff = (left[i] ?? 0) - (right[i] ?? 0);
+    if (diff !== 0) {
+      return diff;
+    }
+  }
+  return 0;
+}
+
+/**
+ * Aborts the update when the running Bun is older than the `packageManager` pin.
+ *
+ * Bun refuses to parse a lockfile written by a newer major or minor, so an outdated runtime fails
+ * the install with `UnknownLockfileVersion` naming only `bun.lock`. That reads as a corrupt
+ * repository rather than an outdated runtime, and the natural recovery (dropping
+ * `--frozen-lockfile`) makes Bun ignore the lockfile and re-resolve every dependency from its
+ * version ranges, silently drifting off the tested tree. Failing here keeps that door shut.
+ *
+ * Must run after the pull: `packageManager` is read from the checkout, so before the pull it still
+ * carries the previous requirement.
+ */
+async function ensureBunRuntimeVersion(): Promise<void> {
+  const packageJson = (await Bun.file("package.json").json()) as { packageManager?: string };
+  const pin = packageJson.packageManager?.match(/^bun@(\d+\.\d+\.\d+)$/)?.[1];
+  if (!pin || compareVersions(Bun.version, pin) >= 0) {
+    return;
+  }
+
+  log.error(`TomoriBot needs Bun ${pin} or newer, but this is Bun ${Bun.version}.`);
+  log.info("Upgrade the Bun runtime, then re-run the update:");
+  log.info("  bun upgrade");
+  log.info("  bun run update");
+  log.info("The code is already up to date, so TomoriBot still starts on your current Bun.");
+  log.warn("Do not run a plain `bun install` to bypass this. Without --frozen-lockfile Bun ignores");
+  log.warn("the lockfile and re-resolves every dependency, which drifts you off the tested versions.");
+  process.exit(1);
 }
 
 function printGitConflictGuidance(paths: string[]): void {
@@ -130,7 +178,11 @@ async function main(): Promise<void> {
   } else {
     log.section("Backup");
     try {
-      await run("bun", ["run", "backup"]);
+      if (docker) {
+        await run("docker", ["compose", "run", "--rm", "tomoribot", "bun", "run", "backup"]);
+      } else {
+        await run("bun", ["run", "backup"]);
+      }
     } catch (error) {
       log.error("Backup failed. Update aborted before changing code.", error);
       log.info("Fix the backup issue, or re-run with --skip-backup if you accept the risk.");
@@ -147,7 +199,9 @@ async function main(): Promise<void> {
     if (conflictedPaths.length > 0) {
       printGitConflictGuidance(conflictedPaths);
     } else {
-      log.info("No unresolved merge files were reported. Review the Git output above, fix the issue, then re-run update.");
+      log.info(
+        "No unresolved merge files were reported. Review the Git output above, fix the issue, then re-run update.",
+      );
     }
     process.exit(1);
   }
@@ -157,6 +211,8 @@ async function main(): Promise<void> {
     await run("docker", ["compose", "build"]);
     await run("docker", ["compose", "up", "-d"]);
   } else {
+    await ensureBunRuntimeVersion();
+
     log.section("Install dependencies");
     await run("bun", ["install", "--frozen-lockfile"]);
 

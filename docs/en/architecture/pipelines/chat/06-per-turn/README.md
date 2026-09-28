@@ -5,8 +5,8 @@ sidebar:
   groupLabel: "06: Per-Turn"
 ---
 
-This folder documents the **body of the loop** in
-[`tomoriChat.ts`](../README) — the four stages that execute once per
+This folder documents the body of the loop in
+[`tomoriChat.ts`](../README): the four stages that execute once per
 responding persona inside `runWithChannelLock`.
 
 ## Loop semantics
@@ -22,8 +22,8 @@ for (const turn of turnPlan.turns) {
 
 - **Iteration scope:** one iteration = one persona's reply attempt. A
   3-persona reply runs the body 3 times under a single channel lock.
-- **Carried state:** stages 01–03 share the same `ChatTurnContext` closure.
-  Stage 01 builds it; stages 02–03 may mutate it (`responseTarget`,
+- **Carried state:** stages 01-03 share the same `ChatTurnContext` closure.
+  Stage 01 builds it; stages 02-03 may mutate it (`responseTarget`,
   `tomoriState`, `contextItems`). Stage 04 reads it after generation finishes.
 - **No persona-to-persona dependency:** each iteration is structurally
   independent. The next iteration sees the *Discord-visible* effects of the

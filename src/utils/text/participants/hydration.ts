@@ -39,6 +39,14 @@ import {
   type ParticipantProfileEnricherRegistry,
 } from "@/utils/text/participants/profileEnrichers";
 import type { ContributionExecutionDiagnostic } from "@/utils/contributions/registry";
+import {
+  userNamingRepository,
+  userPersonaNamingPairKey,
+  type UserPersonaNamingPair,
+} from "@/utils/db/repositories/UserNamingRepository";
+import type { UserPersonaNamingPreference } from "@/types/personaNaming";
+import { type EffectiveUserNaming, resolveEffectiveUserNaming } from "@/utils/text/userNaming";
+import { createParticipantAlias } from "@/utils/text/participants/aliases";
 
 export interface ActivePersonaScope {
   personaId?: number;
@@ -51,7 +59,9 @@ export interface ActivePersonaScope {
 export type ParticipantProfileFieldKind =
   | "status"
   | "physical_appearance"
+  | "naming"
   | "timezone"
+  | "identity"
   | "presence"
   | "roles"
   | "personal_memories"
@@ -99,6 +109,7 @@ export interface ParticipantExposurePolicy {
   exposeRoles: boolean;
   exposePhysicalAppearance: boolean;
   exposeTimezone: boolean;
+  exposeIdentity: boolean;
   exposePersonalMemories: boolean;
 }
 
@@ -139,7 +150,7 @@ export interface ParticipantHydrationDependencies {
   isChatProxyIdentity(discordId: string): boolean;
   getChatProxyPresentation(serviceId: string): ProxyServicePresentation | null;
   loadUserRow(discordId: string): Promise<UserRow | null>;
-  registerUser(discordId: string, displayName: string, language: "en-US" | "ja"): Promise<UserRow | null>;
+  registerUser(discordId: string, displayName: string, language: string): Promise<UserRow | null>;
   isBlacklisted(guildId: string, discordId: string): Promise<boolean>;
   getPrivacyLevel(discordId: string): Promise<PrivacyLevel>;
   loadPersonalMemories(userId: number, lineageId: number): Promise<PersonalMemoryRow[]>;
@@ -153,6 +164,7 @@ export interface ParticipantHydrationDependencies {
   loadFallbackUser(client: Client, discordId: string): Promise<User | null>;
   loadPresence(client: Client, discordId: string, guildId: string, preloadedMember?: GuildMember): Promise<string>;
   loadChatProxyIdentityContext(userDiscId: string): Promise<ChatProxyIdentityContext | null>;
+  loadNamingPreferences(pairs: UserPersonaNamingPair[]): Promise<Map<string, UserPersonaNamingPreference>>;
 }
 
 export interface ParticipantHydrationParams {
@@ -202,6 +214,7 @@ const DEFAULT_HYDRATION_DEPENDENCIES: ParticipantHydrationDependencies = {
   loadPresence: (client, discordId, guildId, preloadedMember) =>
     getUserPresenceDetails(client, discordId, guildId, preloadedMember),
   loadChatProxyIdentityContext: (userDiscId) => chatProxyRepository.getIdentityContextByUserDiscId(userDiscId),
+  loadNamingPreferences: (pairs) => userNamingRepository.loadPreferences(pairs),
 };
 
 export function createParticipantExposurePolicy(params: {
@@ -212,8 +225,7 @@ export function createParticipantExposurePolicy(params: {
   isUserImpersonation: boolean;
   isImpersonatedUser: boolean;
 }): ParticipantExposurePolicy {
-  const canUseSavedNickname =
-    params.personalizationEnabled && !params.blacklisted && params.privacyLevel !== PrivacyLevel.FULL;
+  const canUseSavedNickname = params.personalizationEnabled && !params.blacklisted;
   return {
     canUseSavedNickname,
     exposeSavedNicknameAlias:
@@ -222,6 +234,8 @@ export function createParticipantExposurePolicy(params: {
     exposeRoles: params.privacyLevel === PrivacyLevel.MINIMAL,
     exposePhysicalAppearance: !params.isUserImpersonation,
     exposeTimezone: !params.isUserImpersonation,
+    exposeIdentity:
+      params.personalizationEnabled && !params.blacklisted && params.privacyLevel === PrivacyLevel.MINIMAL,
     exposePersonalMemories:
       (!params.isUserImpersonation || params.isImpersonatedUser) &&
       params.personalizationEnabled &&
@@ -319,6 +333,7 @@ interface HydratedDiscordUserBase {
   personalizationEnabled: boolean;
   isTriggerer: boolean;
   chatProxy: ChatProxyParticipant | null;
+  naming?: EffectiveUserNaming;
 }
 
 interface ChatProxyParticipant {
@@ -378,7 +393,7 @@ async function hydrateDiscordUserBase(
     : await dependencies.loadMember(params.client, params.guildId, discordId).catch(() => null);
   if (!userRow && !params.referencedUserIds?.has(discordId) && member) {
     const guild = params.client.guilds.cache.get(params.guildId);
-    const language = guild?.preferredLocale.startsWith("ja") ? "ja" : "en-US";
+    const language = guild?.preferredLocale ?? "en-US";
     const registrationDisplayName = resolvePreferredDiscordDisplayName({
       memberDisplayName: member.displayName,
       user: member.user,
@@ -399,10 +414,10 @@ async function hydrateDiscordUserBase(
   const ownAuthorization = {
     blacklisted: isTriggerer
       ? (params.snapshot?.isTriggererBlacklisted ?? false)
-      : await dependencies.isBlacklisted(params.guildId, discordId),
+      : await dependencies.isBlacklisted(params.guildId, discordId).catch(() => true),
     privacyLevel: isTriggerer
       ? (params.snapshot?.triggererPrivacyLevel ?? PrivacyLevel.MINIMAL)
-      : await dependencies.getPrivacyLevel(discordId),
+      : await dependencies.getPrivacyLevel(discordId).catch(() => PrivacyLevel.FULL),
   };
   const chatProxyContext = isChatProxyIdentity
     ? await dependencies.loadChatProxyIdentityContext(discordId).catch(() => null)
@@ -430,7 +445,7 @@ async function hydrateDiscordUserBase(
     isUserImpersonation: params.activePersonaScope.isUserImpersonation,
     isImpersonatedUser,
   });
-  const customNickname = userRow.user_nickname;
+  const customNickname = userRow.user_nickname?.trim() || null;
   const chatProxyDisplayName = chatProxy
     ? (params.chatProxyUsers?.get(discordId)?.displayName ??
       chatProxy.context?.displayName ??
@@ -439,7 +454,11 @@ async function hydrateDiscordUserBase(
     : null;
   let displayName =
     chatProxyDisplayName ??
-    (policy.canUseSavedNickname ? customNickname : serverNickname ? serverNickname : `<@${discordId}>`);
+    (policy.canUseSavedNickname && customNickname
+      ? customNickname
+      : serverNickname
+        ? serverNickname
+        : `<@${discordId}>`);
   if (isImpersonatedUser && params.impersonatedIdentityName) displayName = params.impersonatedIdentityName;
 
   const identity: DiscordAliasIdentity = {
@@ -467,8 +486,7 @@ async function hydrateDiscordUserBase(
   const primaryAlias =
     isImpersonatedUser && params.impersonatedIdentityName
       ? params.impersonatedIdentityName
-      : (chatProxyDisplayName ??
-        (policy.canUseSavedNickname ? customNickname : (serverNickname ?? globalName ?? username ?? discordId)));
+      : (chatProxyDisplayName ?? serverNickname ?? globalName ?? username ?? discordId);
   return {
     profile: {
       key: seed.key,
@@ -488,6 +506,79 @@ async function hydrateDiscordUserBase(
     isTriggerer,
     chatProxy,
   };
+}
+
+function applyPersonaRelativeNaming(
+  base: HydratedDiscordUserBase,
+  params: ParticipantHydrationParams,
+  preference: UserPersonaNamingPreference | undefined,
+): HydratedDiscordUserBase {
+  if (base.chatProxy) return base;
+  if (params.activePersonaScope.isUserImpersonation && base.profile.key.kind === "discord_user") return base;
+  const canUsePersonalizedNaming = base.personalizationEnabled && !base.blacklisted;
+  const liveDisplayName =
+    base.member?.displayName ?? base.member?.user.globalName ?? base.member?.user.username ?? base.userRow.user_disc_id;
+  const naming = resolveEffectiveUserNaming({
+    global: {
+      userNickname: canUsePersonalizedNaming ? base.userRow.user_nickname : null,
+      prefixOverride: canUsePersonalizedNaming ? (base.userRow.prefix_override ?? null) : null,
+      suffixOverride: canUsePersonalizedNaming ? (base.userRow.suffix_override ?? null) : null,
+      addressingStyle: canUsePersonalizedNaming ? (base.userRow.addressing_style ?? null) : null,
+    },
+    liveDisplayName,
+    persona: canUsePersonalizedNaming ? params.tomoriState?.naming_config : undefined,
+    preference: canUsePersonalizedNaming ? preference : null,
+  });
+  const aliasPurposes = ["input_reference", "output_mention", "tool_target", "copied_identity"] as const;
+  const effectiveNicknameAlias = createParticipantAlias({
+    owner: base.profile.key,
+    value: naming.nickname,
+    source: "effective_nickname",
+    purposes: aliasPurposes,
+    exposure: "visible",
+    priority: 8,
+  });
+  const formattedNameAlias = createParticipantAlias({
+    owner: base.profile.key,
+    value: naming.formattedName,
+    source: "formatted_name",
+    purposes: aliasPurposes,
+    exposure: "visible",
+    priority: 9,
+  });
+
+  return {
+    ...base,
+    naming,
+    profile: {
+      ...base.profile,
+      displayName: naming.formattedName,
+      aliases: [
+        ...base.profile.aliases,
+        ...(effectiveNicknameAlias ? [effectiveNicknameAlias] : []),
+        ...(formattedNameAlias ? [formattedNameAlias] : []),
+      ],
+    },
+  };
+}
+
+/**
+ * Names the affixes separately from the nickname, so an affix stays removable.
+ * Without it the model only ever sees the joined name and reads "stop calling me
+ * Master Mirri" as a nickname rewrite that re-composes to the same string. The
+ * parenthetical uses the tool's own field words so the mapping to a change is
+ * direct.
+ */
+function enrichNamingField(base: HydratedDiscordUserBase, params: ParticipantHydrationParams): ParticipantProfileField {
+  const naming = base.naming;
+  const lines: string[] = [];
+  if (naming && (naming.prefix || naming.suffix)) {
+    const affixes: string[] = [];
+    if (naming.prefix) affixes.push(`prefix "${naming.prefix}"`);
+    if (naming.suffix) affixes.push(`suffix "${naming.suffix}"`);
+    lines.push(`- ${params.botName} calls ${naming.nickname} "${naming.formattedName}" (${affixes.join(", ")})`);
+  }
+  return field(base.profile.key, "naming", 12, lines);
 }
 
 async function enrichPresenceField(
@@ -565,6 +656,17 @@ function enrichTimezoneField(
       isUserImpersonation: params.activePersonaScope.isUserImpersonation,
     }),
   );
+}
+
+function enrichIdentityField(base: HydratedDiscordUserBase): ParticipantProfileField {
+  const lines: string[] = [];
+  if (base.policy.exposeIdentity) {
+    const genderIdentity = base.userRow.gender_identity?.trim();
+    const pronouns = base.userRow.pronouns?.trim();
+    if (genderIdentity) lines.push(`- Gender Identity: ${genderIdentity}`);
+    if (pronouns) lines.push(`- Pronouns: ${pronouns}`);
+  }
+  return field(base.profile.key, "identity", 15, lines, base.policy.exposeIdentity ? "missing_data" : "privacy");
 }
 
 function enrichRolesField(base: HydratedDiscordUserBase, params: ParticipantHydrationParams): ParticipantProfileField {
@@ -676,15 +778,15 @@ function chatProxyNamespaceNoteSeed(base: HydratedDiscordUserBase): ChatProxyNam
 }
 
 async function hydrateDiscordUser(
-  seed: ParticipantSeed,
+  base: HydratedDiscordUserBase,
   params: ParticipantHydrationParams,
   dependencies: ParticipantHydrationDependencies,
 ): Promise<{ profile: HydratedParticipantProfile; namespaceNoteSeed: ChatProxyNamespaceNoteSeed | null } | null> {
-  const base = await hydrateDiscordUserBase(seed, params, dependencies);
-  if (!base) return null;
   const fields: ParticipantProfileField[] = [
     ...(base.chatProxy ? [enrichChatProxyIdentityField(base)] : []),
     enrichPhysicalAppearanceField(base, params),
+    enrichNamingField(base, params),
+    enrichIdentityField(base),
     enrichTimezoneField(base, params),
     await enrichPresenceField(base, params, dependencies),
     enrichRolesField(base, params),
@@ -960,7 +1062,20 @@ export async function hydrateParticipantProfiles(
       externalCalls.chatProxyContextReads += 1;
       return baseDependencies.loadChatProxyIdentityContext(userDiscId);
     },
+    loadNamingPreferences: (pairs) => baseDependencies.loadNamingPreferences(pairs),
   };
+  const discordBases = new Map<string, HydratedDiscordUserBase>();
+  for (const seed of params.participantSeeds) {
+    if (seed.key.kind !== "discord_user") continue;
+    const base = await hydrateDiscordUserBase(seed, params, dependencies);
+    if (base) discordBases.set(serializeParticipantKey(seed.key), base);
+  }
+  const personaLineageId = params.activePersonaScope.lineageId ?? params.snapshot?.tomoriState?.persona_lineage_id ?? 0;
+  const namingPreferences = await dependencies.loadNamingPreferences(
+    [...discordBases.values()].flatMap((base) =>
+      base.userRow.user_id ? [{ userId: base.userRow.user_id, personaLineageId }] : [],
+    ),
+  );
   const profiles: HydratedParticipantProfile[] = [];
   const chatProxyNamespaces = new Map<string, ChatProxyNamespaceNote>();
   let botAdded = false;
@@ -973,7 +1088,16 @@ export async function hydrateParticipantProfiles(
       continue;
     }
     if (seed.key.kind === "discord_user") {
-      const hydrated = await hydrateDiscordUser(seed, params, dependencies);
+      const base = discordBases.get(serializeParticipantKey(seed.key));
+      if (!base) continue;
+      const preference = base.userRow.user_id
+        ? namingPreferences.get(userPersonaNamingPairKey(base.userRow.user_id, personaLineageId))
+        : undefined;
+      const hydrated = await hydrateDiscordUser(
+        applyPersonaRelativeNaming(base, params, preference),
+        params,
+        dependencies,
+      );
       if (hydrated) {
         profiles.push(hydrated.profile);
         const noteSeed = hydrated.namespaceNoteSeed;

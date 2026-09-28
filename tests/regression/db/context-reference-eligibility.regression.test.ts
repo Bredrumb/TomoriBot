@@ -76,7 +76,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Context reference eligibility — server s
 
     for (const discId of ALL_TEST_USERS) {
       const row = await userRepository.register(discId, discId, "en-US");
-      if (!row) throw new Error(`Failed to register ${discId}`);
+      if (!row?.user_id) throw new Error(`Failed to register ${discId}`);
       userIds.set(discId, row.user_id);
     }
 
@@ -85,9 +85,11 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Context reference eligibility — server s
       [FOREIGN_MEMORY_USER, foreignLineageId],
       [GLOBAL_MEMORY_USER, 0],
     ] as const) {
+      const userId = userIds.get(discId);
+      if (userId === undefined) throw new Error(`Missing registered user ${discId}`);
       await testSql`
         INSERT INTO personal_memories (user_id, persona_lineage_id, content, tags)
-        VALUES (${userIds.get(discId)}, ${lineageId}, '_rt_ctxref_memory', ARRAY[]::TEXT[])
+        VALUES (${userId}, ${lineageId}, '_rt_ctxref_memory', ARRAY[]::TEXT[])
       `;
     }
 

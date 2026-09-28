@@ -144,10 +144,9 @@ export class WebSearchTool extends BaseTool {
         `web_search invoked: category=${category} query="${args.query}"${rawCount !== undefined ? ` count=${rawCount}` : ""}`,
       );
 
-      // Hand off to the dispatcher. The dispatcher itself emits the
-      //    per-engine Discord notice via the engine's underlying tool wrapper
-      //    (BraveEngine reuses the Internal*Tool classes that already call
-      //    sendToolNotice; DuckDuckGo/IAsk do it inside processWebSearch).
+      // The dispatcher emits the per-engine Discord notice through the engine's underlying
+      // tool wrapper: BraveEngine reuses the Internal*Tool classes that already call
+      // sendToolNotice, while DuckDuckGo and IAsk do it inside processWebSearch.
       return await executeWebSearchWithFallback(args.query as string, category, context, rawCount);
     } catch (error) {
       log.error("Error in web_search tool:", error as Error);

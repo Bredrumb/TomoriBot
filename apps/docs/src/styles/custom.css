@@ -150,3 +150,24 @@
     font-size: var(--sl-text-sm);
   }
 }
+
+:root {
+  --sl-content-width: 58rem;
+}
+
+/* Audio table styling */
+.sl-markdown-content table {
+  width: 100%;
+}
+
+.sl-markdown-content table th,
+.sl-markdown-content table td {
+  vertical-align: middle;
+}
+
+.sl-markdown-content table audio {
+  width: 100%;
+  min-width: 160px;
+  max-width: 210px;
+  height: 32px;
+}

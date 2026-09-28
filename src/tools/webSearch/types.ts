@@ -18,7 +18,7 @@ export const BASE_SEARCH_CATEGORIES = ["text", "image", "video", "news"] as cons
 /**
  * SearXNG-only vertical categories. The dispatcher will skip engines that
  * don't support these and return the normal category-unavailable message when
- * no SearXNG sidecar is configured.
+ * no SearXNG server is configured.
  */
 const SEARXNG_ONLY_SEARCH_CATEGORIES = ["papers", "code", "files", "music"] as const;
 

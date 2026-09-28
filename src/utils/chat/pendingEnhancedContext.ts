@@ -12,8 +12,8 @@ import { log } from "@/utils/misc/logger";
  * image per avatar peek would never be reclaimed.
  */
 
-const STASH_TTL_MS = parseIntegerEnvFlag(process.env.ENHANCED_CONTEXT_STASH_TTL_MS, 300000, 1000);
-const STASH_MAX_ENTRIES = parseIntegerEnvFlag(process.env.ENHANCED_CONTEXT_STASH_MAX_ENTRIES, 16, 1);
+const STASH_TTL_MS = 300_000;
+const STASH_MAX_ENTRIES = 16;
 
 interface StashedEntry {
   item: StructuredContextItem;
@@ -60,11 +60,4 @@ function evictStaleEntries(now: number): void {
       stash.delete(key);
     }
   }
-}
-
-function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, minimum: number): number {
-  if (typeof value !== "string") return defaultValue;
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed)) return defaultValue;
-  return Math.max(minimum, parsed);
 }

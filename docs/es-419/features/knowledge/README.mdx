@@ -1,0 +1,22 @@
+---
+title: "Conocimiento"
+sidebar:
+  groupLabel: "Conocimiento"
+  order: 2
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+Lo que TomoriBot sabe y conserva: los datos que recuerda, los ajustes que te siguen
+personalmente y control total sobre los datos que almacena.
+
+<CardGrid>
+  <LinkCard title="Memoria" href="/es-419/features/knowledge/memory/"
+    description="Memorias personales y del servidor, etiquetado, memoria a corto plazo y una base de conocimiento de documentos." />
+  <LinkCard title="Dentro del prompt" href="/es-419/features/knowledge/inside-the-prompt/"
+    description="Qué recibe realmente en cada respuesta, y por qué olvida algunas cosas pero no otras." />
+  <LinkCard title="Personalización" href="/es-419/features/knowledge/personalization/"
+    description="Tus propios proveedores (BYOK), zona horaria, prompts, foco personal y privacidad." />
+  <LinkCard title="Manejo de datos" href="/es-419/features/knowledge/data-handling/"
+    description="Exporta, importa y elimina tus datos, además de exactamente lo que almacena." />
+</CardGrid>

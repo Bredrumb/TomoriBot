@@ -1,9 +1,9 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
-import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
+import { resolveStatsServerId } from "@/utils/stats/statsServerContext";
 import {
   buildServerTabs,
   buildSubtitle,
@@ -55,17 +55,8 @@ export async function execute(
   }
 
   try {
-    // Resolve the internal server id; stat reads key on it, not the snowflake.
-    const tomoriState = await getCachedTomoriState(guild.id);
-    const serverId = tomoriState?.server_id;
-    if (!serverId) {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.tomori_not_setup_title",
-        descriptionKey: "general.errors.tomori_not_setup_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
+    const serverId = await resolveStatsServerId(interaction, locale);
+    if (!serverId) return;
 
     const timeframe = (interaction.options.getString("timeframe") ?? DEFAULT_TIMEFRAME) as Timeframe;
     const from = resolveWindowFrom(timeframe);
@@ -83,7 +74,19 @@ export async function execute(
     // Pin the server's icon to the dashboard's top-right corner (null when the guild
     // has no custom icon, so the card simply renders without one).
     const iconUrl = guild.iconURL({ extension: "png", size: 256 }) ?? undefined;
-    await renderStatsDashboard(interaction, interaction.user.id, locale, tabs, iconUrl);
+    await renderStatsDashboard(
+      interaction,
+      {
+        view: "server",
+        locale,
+        ownerId: interaction.user.id,
+        serverId,
+        guildId: guild.id,
+        timeframe,
+      },
+      tabs,
+      iconUrl,
+    );
   } catch (error) {
     await log.error(`Error executing /stats server for user ${userData.user_disc_id}`, error as Error, {
       userId: userData.user_id,

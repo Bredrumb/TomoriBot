@@ -12,16 +12,11 @@ function resolveBackupsRoot(): string {
   return process.env.TOMORI_BACKUP_DIR ? resolve(process.env.TOMORI_BACKUP_DIR) : join(process.cwd(), "backups");
 }
 
-// scripts/devtools/backupPersonas.ts
-//   bun run backup:personas  → export ALL personas across all servers
-//
-//   For each persona: writes a single import-compatible file: a PNG with
-//   embedded metadata when an avatar is stored (restores the PFP too), or a
-//   flat JSON matching the /persona import schema otherwise; plus a
-//   `.meta.json` sidecar carrying extras (webhook avatar URL, trigger words,
-//   server memories) that /persona import does not consume. Organized into
-//   per-server subdirectories.
-
+// For each persona: writes a single import-compatible file, a PNG with embedded
+// metadata when an avatar is stored (restores the PFP too), or a flat JSON matching
+// the /persona import schema otherwise, plus a `.meta.json` companion file carrying extras
+// (webhook avatar URL, trigger words, server memories) that /persona import does not
+// consume. Organized into per-server subdirectories.
 
 interface ServerRow {
   server_id: number;
@@ -42,8 +37,8 @@ interface PersonaManifestEntry {
   /** Import-compatible file: upload this via /persona import. */
   filename: string;
   format: "png" | "json";
-  /** Sidecar with extras (meta + memories) not consumed by /persona import. */
-  sidecar_filename: string;
+  /** Companion file with extras (meta + memories) not consumed by /persona import. */
+  meta_filename: string;
   nickname: string;
   persona_id: number;
   is_alter: boolean;
@@ -63,7 +58,6 @@ interface BundleManifest {
   total_personas: number;
   servers: ServerManifest[];
 }
-
 
 /** Retrieve all registered servers. */
 async function getAllServers(): Promise<ServerRow[]> {
@@ -103,7 +97,6 @@ async function getMemoriesForPersona(serverId: number, lineageId: number): Promi
   `;
   return rows.map((r) => r.content);
 }
-
 
 async function runBackup(): Promise<void> {
   log.section("PERSONA BACKUP");
@@ -222,9 +215,9 @@ async function runBackup(): Promise<void> {
           writeFileSync(join(serverDir, filename), `${JSON.stringify(exportResult.data, null, 2)}\n`);
         }
 
-        // Sidecar with extras /persona import doesn't consume (meta + memories)
-        const sidecarFilename = `${base}.meta.json`;
-        const sidecar = {
+        // Companion file with extras /persona import doesn't consume (meta + memories)
+        const metaFilename = `${base}.meta.json`;
+        const metaPayload = {
           meta: {
             persona_id: persona.persona_id,
             is_alter,
@@ -233,7 +226,7 @@ async function runBackup(): Promise<void> {
           },
           memories,
         };
-        writeFileSync(join(serverDir, sidecarFilename), `${JSON.stringify(sidecar, null, 2)}\n`);
+        writeFileSync(join(serverDir, metaFilename), `${JSON.stringify(metaPayload, null, 2)}\n`);
 
         log.success(`    Exported: ${nickname} (${typeTag}, ${format.toUpperCase()}, ${memories.length} memories)`);
         totalExported++;
@@ -241,7 +234,7 @@ async function runBackup(): Promise<void> {
         serverEntry.personas.push({
           filename,
           format,
-          sidecar_filename: sidecarFilename,
+          meta_filename: metaFilename,
           nickname,
           persona_id: persona.persona_id,
           is_alter,

@@ -1,4 +1,4 @@
-import type { Client, Message } from "discord.js";
+import { MessageType, type Client, type Message } from "discord.js";
 import { evaluateChatAdmission, handleChatDisposition, normalizeChatInvocation } from "@/utils/chat/admission";
 import {
   clearChannelProcessingQueue,
@@ -7,9 +7,15 @@ import {
   runWithChannelLock,
   suppressNextSelfReply,
 } from "@/utils/chat/channelQueue";
-import { buildChatTurnContext } from "@/utils/chat/contextPipeline";
+import { buildChatTurnContext } from "@/utils/chat/contextPipelineIntent";
+import {
+  recordChatDiagnostic,
+  runWithChatDiagnostic,
+  runWithChatDiagnosticStage,
+} from "@/utils/chat/diagnosticTimeline";
 import { runGenerationTurn } from "@/utils/chat/generationTurn";
 import type { ChatAdmissionDisposition, ChatIncoming, TomoriChatInput } from "@/utils/chat/types";
+import { installUserImpersonationCompletion } from "@/utils/chat/userImpersonationCompletion";
 import { enrichErrorContext, runWithErrorContext } from "@/utils/misc/errorContextStore";
 import { runPostTurnEffects, shouldRetryEmptyResponse } from "@/utils/chat/postTurnEffects";
 import { createChatResponseSink, handleStopResponse } from "@/utils/chat/responseEmitter";
@@ -33,24 +39,41 @@ export {
  */
 export async function tomoriChat(input: TomoriChatInput): Promise<ChatAdmissionDisposition> {
   const incoming = normalizeChatInvocation(input);
+  const userImpersonationCompletion = installUserImpersonationCompletion(incoming);
 
-  return runWithErrorContext(
+  const disposition = await runWithErrorContext(
     {
       source: "chat",
       userDiscId: incoming.message.author.id,
       serverDiscId: incoming.message.guildId,
       channelDiscId: incoming.message.channelId,
     },
-    () => runAdmittedChatTurn(incoming),
+    () => runWithChatDiagnostic(incoming, () => runAdmittedChatTurn(incoming)),
   );
+
+  // User impersonation owns its user-facing error UI at the slash interaction. Waiting here keeps
+  // returned error/timeout statuses and queued turns attached to that interaction instead of letting
+  // a non-throwing tomoriChat() result be mistaken for successful generation.
+  if (userImpersonationCompletion) {
+    await userImpersonationCompletion;
+  }
+
+  return disposition;
 }
 
 async function runAdmittedChatTurn(incoming: ChatIncoming): Promise<ChatAdmissionDisposition> {
   const admission = await evaluateChatAdmission(incoming);
+  recordChatDiagnostic({ kind: "admission", disposition: admission.disposition });
 
   if (admission.disposition !== "run") {
     await handleChatDisposition(admission);
-    await incoming.onQueueDiscard?.("admission_rejected");
+    // A queued turn is still live work: its callbacks are copied into QueuedMessage and fire when
+    // that turn eventually runs (or is genuinely discarded). Treating "queued" as a discard here
+    // detaches command callers from the real generation outcome.
+    if (admission.disposition !== "queued") {
+      await incoming.onQueueDiscard?.("admission_rejected");
+    }
+    recordChatDiagnostic({ kind: "invocation_finished", disposition: admission.disposition });
     return admission.disposition;
   }
 
@@ -67,15 +90,24 @@ async function runAdmittedChatTurn(incoming: ChatIncoming): Promise<ChatAdmissio
     admission,
     async (lockedTurn, startTyping) => {
       const turnPlan = await planChatTurns(lockedTurn);
+      recordChatDiagnostic({ kind: "turns_planned", count: turnPlan.turns.length });
       let generationResultCount = 0;
 
       if (turnPlan.turns.length > 0) {
         await startTyping();
 
         for (const turn of turnPlan.turns) {
+          recordChatDiagnostic({ kind: "turn_started", ordinal: turn.personaIndex + 1, total: turn.totalPersonas });
           const context = await buildChatTurnContext(turn);
           const responseSink = createChatResponseSink(context);
-          const result = await runGenerationTurn(context, responseSink);
+          const result = await runWithChatDiagnosticStage({ turn: turn.personaIndex + 1 }, () =>
+            runGenerationTurn(context, responseSink),
+          );
+          recordChatDiagnostic({
+            kind: "turn_finished",
+            status: result.status,
+            responseCount: result.personaResponses.length,
+          });
           const willRetryEmptyResponse = shouldRetryEmptyResponse(context.turn.lockedTurn.admission.incoming, result);
 
           await runPostTurnEffects(context, result);
@@ -132,10 +164,18 @@ async function runAdmittedChatTurn(incoming: ChatIncoming): Promise<ChatAdmissio
     },
   );
 
+  recordChatDiagnostic({ kind: "invocation_finished", disposition: "run" });
   return "run";
 }
 
 /** Thin event-dispatch adapter: satisfies EventFunction(client, ...args) called by the event loader. */
 export default async function messageCreateHandler(client: Client, message: Message): Promise<void> {
+  // Discord emits pin notifications as ChannelPinnedMessage system messages with
+  // a message reference to the pinned message. That reference is context metadata,
+  // not an intentional conversational reply, so it must never enter the trigger path.
+  if (message.type === MessageType.ChannelPinnedMessage) {
+    return;
+  }
+
   await tomoriChat({ client, message, isFromQueue: false });
 }

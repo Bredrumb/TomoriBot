@@ -1,9 +1,11 @@
 async function main(): Promise<void> {
   process.env.RUN_ENV = "production";
-  const { COMMAND_REFERENCE_PATH, writeCommandReference } = await import("../lib/commandReference");
+  const { exitAfterCommandGraphLoad, writeCommandReferences } = await import("../lib/commandReference");
 
-  await writeCommandReference();
-  console.log(`Command reference generated: ${COMMAND_REFERENCE_PATH}`);
+  for (const path of await writeCommandReferences()) {
+    console.log(`Command reference generated: ${path}`);
+  }
+  exitAfterCommandGraphLoad();
 }
 
 if (import.meta.main) {

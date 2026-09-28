@@ -15,9 +15,9 @@ persona behavior.
 
 ## Common References
 
-- [`command-system`](./command-system) — slash-command loading and interaction timing
-- [`database-schema`](./database-schema) — schema reference and table ownership
-- [`caching`](./caching) — cache layers and invalidation patterns
-- [`localization`](./localization) — locale keys and user-facing text conventions
-- [`security`](./security) — threat boundaries and safe defaults
-- [`tool-system`](./tool-system) — built-in, REST, and MCP tool registration
+- [`command-system`](./command-system): slash-command loading and interaction timing
+- [`database-schema`](./database-schema): schema reference and table ownership
+- [`caching`](./caching): cache layers and invalidation patterns
+- [`localization`](./localization): locale keys and user-facing text conventions
+- [`security`](./security): threat boundaries and safe defaults
+- [`tool-system`](./tool-system): built-in, REST, and MCP tool registration

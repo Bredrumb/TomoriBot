@@ -8,6 +8,10 @@ import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
 
+// Keyed on the text rather than the locale: the description may already have fallen back to
+// English. Hangul is excluded because Korean prose ends sentences with an ASCII period.
+const FULL_WIDTH_SENTENCE_SCRIPT_END = /[぀-ヿ㐀-鿿豈-﫿＀-￯]$/;
+
 const HIDE_NOTICE_FOOTER_KEY = "tools.tool_notice.hide_footer";
 const KILL_HINT_FOOTER_KEY = "tools.tool_notice.hide_footer_with_kill";
 const IMAGE_NOTICE_PROMPT_PREVIEW_LENGTH = 700;
@@ -110,9 +114,9 @@ function buildLabeledGenerationNoticeDescription(
   const baseWithTiming =
     trimmedTimingLine.length === 0
       ? trimmedBaseDescription
-      : /[.!?。]$/.test(trimmedBaseDescription)
+      : /[.!?。！？…]$/.test(trimmedBaseDescription)
         ? `${trimmedBaseDescription} ${trimmedTimingLine}`
-        : locale.startsWith("ja")
+        : FULL_WIDTH_SENTENCE_SCRIPT_END.test(trimmedBaseDescription)
           ? `${trimmedBaseDescription}。${trimmedTimingLine}`
           : `${trimmedBaseDescription}. ${trimmedTimingLine}`;
   const metadataLines = [

@@ -8,7 +8,7 @@ const DEFAULT_USAGE_INSTRUCTIONS = "Use when this sprite fits the current emotio
 export function buildPersonaSpritePromptText(
   botName: string,
   sprites: readonly PersonaSpriteRow[],
-  maxCount = PERSONA_SPRITE_LIMITS.PROMPT_MAX_COUNT,
+  maxCount: number = PERSONA_SPRITE_LIMITS.PROMPT_MAX_COUNT,
 ): string | null {
   const usableSprites = sprites.slice(0, maxCount);
   if (usableSprites.length === 0) {

@@ -7,14 +7,13 @@
 import type { BaseGuildTextChannel, Message, Webhook } from "discord.js";
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
+import { DISCORD_ID_PATTERN, findFuzzyMessageMatch } from "@/utils/text/fuzzyMessageMatch";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { getKnownPersonaSpeakerNames, stripLeadingKnownSpeakerPrefixes } from "@/utils/discord/modelAuthoredText";
 import { resolveManagedWebhookForChannel } from "@/utils/discord/webhook/fallback";
 import { log } from "@/utils/misc/logger";
 import { isMatrixBridgeWebhookUsername, stripBridgePrefix } from "@/utils/bridges";
 
-const DISCORD_ID_PATTERN = /^\d{17,20}$/;
-const MAX_FUZZY_DISTANCE = 1000n;
 const PREVIEW_MAX_LENGTH = 120;
 
 type ManageAction = "pin" | "edit" | "delete";
@@ -287,28 +286,12 @@ export class ManageMessageTool extends BaseTool {
       (action === "pin" || action === "edit" || action === "delete");
 
     if (!targetMessage && canFuzzyMatch) {
-      try {
-        const targetBigInt = BigInt(messageIdResult.resolvedId);
-        let bestMatch: Message | undefined;
-        let bestDiff = MAX_FUZZY_DISTANCE;
-
-        for (const [candidateId, candidateMessage] of recentMessages) {
-          const candidateBigInt = BigInt(candidateId);
-          const diff = targetBigInt > candidateBigInt ? targetBigInt - candidateBigInt : candidateBigInt - targetBigInt;
-          if (diff > 0n && diff < bestDiff) {
-            bestDiff = diff;
-            bestMatch = candidateMessage;
-          }
-        }
-
-        if (bestMatch) {
-          targetMessage = bestMatch;
-          log.info(
-            `ManageMessageTool: Fuzzy-matched single-target message ID "${messageIdResult.resolvedId}" -> "${bestMatch.id}" (diff=${bestDiff})`,
-          );
-        }
-      } catch {
-        // Ignore parse failures for fuzzy matching; the normal not-found path below will handle it.
+      const fuzzyMatch = findFuzzyMessageMatch(recentMessages, messageIdResult.resolvedId);
+      if (fuzzyMatch) {
+        targetMessage = fuzzyMatch.message;
+        log.info(
+          `ManageMessageTool: Fuzzy-matched single-target message ID "${messageIdResult.resolvedId}" -> "${fuzzyMatch.message.id}" (diff=${fuzzyMatch.diff})`,
+        );
       }
     }
 

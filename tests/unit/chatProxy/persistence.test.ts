@@ -93,7 +93,7 @@ function persistedIdentity(): ChatProxyIdentityUpsertResult {
 }
 
 function dependencies(identityBio: "inline" | "none" = "inline") {
-  const persistIdentity = mock(async () => persistedIdentity());
+  const persistIdentity = mock(async (): Promise<ChatProxyIdentityUpsertResult | null> => persistedIdentity());
   const seedIdentityBio = mock(async () => {});
   const value: ChatProxyIdentityPersistenceDependencies = {
     getDescriptor: () => descriptor(identityBio),

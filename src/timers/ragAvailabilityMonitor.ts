@@ -80,8 +80,7 @@ export function initializeRagAvailabilityMonitor(intervalMs?: number): void {
     return;
   }
 
-  const resolved =
-    intervalMs ?? (Number.parseInt(process.env.RAG_AVAILABILITY_REPROBE_INTERVAL_MS || "", 10) || DEFAULT_INTERVAL_MS);
+  const resolved = intervalMs ?? DEFAULT_INTERVAL_MS;
 
   monitorInstance = new RagAvailabilityMonitor(Math.max(1000, resolved));
   monitorInstance.start();

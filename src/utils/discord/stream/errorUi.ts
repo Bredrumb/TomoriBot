@@ -1,12 +1,13 @@
-import { EmbedBuilder, MessageFlags, type ColorResolvable } from "discord.js";
+import { MessageFlags, type ColorResolvable } from "discord.js";
 import type { ProviderError, StreamProvider, StreamContext } from "@/types/stream/interfaces";
-import { createTipEmbed, sendStandardEmbed, truncateForEmbedDescription } from "@/utils/discord/embedHelper";
+import { sendStandardEmbed, truncateForEmbedDescription } from "@/utils/discord/embedHelper";
 import { ColorCode, log } from "@/utils/misc/logger";
 import {
   getProviderErrorDetail,
   isAccountBalanceExhaustedError,
   isContextLengthError,
   isCreditAffordabilityError,
+  isNvidiaCredentialRejected,
   isProviderModelError,
 } from "@/utils/provider/providerErrorClassification";
 import { localizer } from "@/utils/text/localizer";
@@ -44,19 +45,12 @@ export class StreamErrorUi {
     if (providerDescription) {
       const { titleKey, tipKeys, color } = this.resolveProviderErrorPresentation(providerError, provider, context);
 
-      const embed = new EmbedBuilder()
-        .setColor(color)
-        .setTitle(localizer(locale, titleKey))
-        .setDescription(providerDescription);
-
-      // Actionable tips now ride in a separate green Tip embed (footers cannot render the hyperlinks
-      // that tips like the OpenRouter model list need).
-      const tipEmbed = createTipEmbed(locale, tipKeys);
-      const embeds = tipEmbed ? [embed, tipEmbed] : [embed];
-
-      await context.channel
-        .send({ embeds })
-        .catch((e) => log.warn("Stream: Failed to send provider error embed to channel", e));
+      await sendStandardEmbed(context.channel, locale, {
+        titleKey,
+        description: providerDescription,
+        color,
+        tipKeys,
+      }).catch((e) => log.warn("Stream: Failed to send provider error embed to channel", e));
       return;
     }
 
@@ -92,17 +86,13 @@ export class StreamErrorUi {
       return;
     }
 
-    await sendStandardEmbed(
-      context.channel,
-      "guild" in context.channel ? context.channel.guild.preferredLocale : "en-US",
-      {
-        titleKey: "genai.generic_error_title",
-        descriptionKey: "genai.generic_error_description",
-        descriptionVars: { error_message: error.message },
-        color: ColorCode.ERROR,
-        tipKeys: ["genai.tips.refresh_context"],
-      },
-    ).catch((e) => log.warn("Stream: Failed to send generic error embed to channel", e));
+    await sendStandardEmbed(context.channel, context.locale, {
+      titleKey: "genai.generic_error_title",
+      descriptionKey: "genai.generic_error_description",
+      descriptionVars: { error_message: error.message },
+      color: ColorCode.ERROR,
+      tipKeys: ["genai.tips.refresh_context"],
+    }).catch((e) => log.warn("Stream: Failed to send generic error embed to channel", e));
   }
 
   /**
@@ -143,6 +133,15 @@ export class StreamErrorUi {
     // handing the turn back to the server default, except where User BYOK mode forbids it.
     const disableOverrideTip = isPersonal ? ["genai.tips.disable_personal_text_override"] : [];
 
+    // Unscoped: the tip names no command, so it reads the same for a personal key.
+    const keyRejectionTips = isNvidiaCredentialRejected(providerName, providerError)
+      ? ["genai.tips.verify_api_key_expiry"]
+      : [];
+
+    // NVIDIA retires hosted models faster than the seeded catalog can follow, and a backed-up free
+    // queue looks like a timeout or overload, so each of those points at a model NVIDIA serves today.
+    const nvidiaFreeModelTip = providerName === "nvidia" ? [scoped("genai.tips.nvidia_register_free_model")] : [];
+
     // Specialized Error Conditions
     const isPrivacyError = providerError.message.includes("Privacy Policy Error");
     if (isPrivacyError) {
@@ -151,7 +150,7 @@ export class StreamErrorUi {
         tipKeys: [
           "genai.tips.openrouter_privacy_settings",
           scoped("genai.tips.choose_supported_model"),
-          ...(isOpenRouter ? ["genai.tips.openrouter_models"] : []),
+          ...(isOpenRouter ? [scoped("genai.tips.openrouter_models")] : []),
         ],
         color: ColorCode.ERROR,
       };
@@ -174,7 +173,8 @@ export class StreamErrorUi {
         titleKey: "genai.stream.model_error_title",
         tipKeys: [
           scoped("genai.tips.choose_supported_model"),
-          ...(isOpenRouter ? ["genai.tips.openrouter_models"] : []),
+          ...nvidiaFreeModelTip,
+          ...(isOpenRouter ? [scoped("genai.tips.openrouter_models")] : []),
           ...disableOverrideTip,
         ],
         color: ColorCode.ERROR,
@@ -242,7 +242,7 @@ export class StreamErrorUi {
             // Rotation pools are a server-scoped, manager-only feature; a personal key has none.
             ...(isPersonal ? [] : ["genai.tips.api_key_rotation"]),
             ...modelFallbackTip,
-            ...(isOpenRouter ? ["genai.tips.openrouter_free_models"] : []),
+            ...(isOpenRouter ? [scoped("genai.tips.openrouter_free_models")] : []),
             ...(isOpenRouter && providerError.message.includes("free-models-per-day")
               ? ["genai.tips.openrouter_fund_account"]
               : []),
@@ -265,13 +265,13 @@ export class StreamErrorUi {
       case "timeout":
         return {
           titleKey: "genai.stream.timeout_title",
-          tipKeys: ["genai.tips.shorten_message", "genai.tips.refresh_context"],
+          tipKeys: ["genai.tips.shorten_message", "genai.tips.refresh_context", ...nvidiaFreeModelTip],
           color: ColorCode.WARN,
         };
       case "provider_overloaded":
         return {
           titleKey: "genai.stream.provider_overloaded_title",
-          tipKeys: ["genai.tips.provider_overloaded_wait", ...modelFallbackTip],
+          tipKeys: ["genai.tips.provider_overloaded_wait", ...modelFallbackTip, ...nvidiaFreeModelTip],
           color: ColorCode.WARN,
         };
       default:
@@ -285,8 +285,12 @@ export class StreamErrorUi {
               ? ["genai.tips.google_credential_type"]
               : []),
             scoped("genai.tips.verify_api_key"),
+            ...keyRejectionTips,
+            // NIM answers some retired routes with a bare "404 page not found" that no model
+            // pattern can recognize without also catching unrelated 404s.
+            ...(providerError.code === "404" || providerError.code === "410" ? nvidiaFreeModelTip : []),
             scoped("genai.tips.switch_model_provider"),
-            ...(isOpenRouter ? ["genai.tips.openrouter_models"] : []),
+            ...(isOpenRouter ? [scoped("genai.tips.openrouter_models")] : []),
             ...disableOverrideTip,
           ],
           color: providerError.retryable ? ColorCode.WARN : ColorCode.ERROR,

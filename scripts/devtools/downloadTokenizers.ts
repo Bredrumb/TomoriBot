@@ -20,7 +20,6 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
 
-
 interface TokenizerFamily {
   repo: string;
   files: string[];
@@ -33,17 +32,14 @@ interface Manifest {
 
 type FamilyResult = "ok" | "skipped" | "access-denied" | "error";
 
-
 const MANIFEST_PATH = path.join(import.meta.dir, "..", "..", "tokenizers", "manifest.json");
 const TOKENIZER_BASE_DIR = path.join(import.meta.dir, "..", "..", "tokenizers");
 const HF_BASE_URL = "https://huggingface.co";
-
 
 const args = process.argv.slice(2);
 const force = args.includes("--force");
 const familyFlagIndex = args.indexOf("--family");
 const targetFamily = familyFlagIndex !== -1 ? args[familyFlagIndex + 1] : null;
-
 
 /**
  * Builds the HuggingFace resolve URL for a specific file in a repo.
@@ -188,7 +184,6 @@ async function downloadFamily(
 
   return "ok";
 }
-
 
 async function main(): Promise<void> {
   const manifestRaw = fs.readFileSync(MANIFEST_PATH, "utf-8");

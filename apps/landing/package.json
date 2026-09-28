@@ -1,0 +1,13 @@
+{
+  "name": "tomoribot-landing",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build && bun run scripts/checkOutput.ts",
+    "preview": "astro preview"
+  },
+  "devDependencies": {
+    "@astrojs/sitemap": "^3.7.3",
+    "astro": "^7.2.8"
+  }
+}

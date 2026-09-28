@@ -1,9 +1,11 @@
 import { PrivacyLevel } from "@/types/db/schema";
+import { ContextItemTag } from "@/types/misc/context";
 import { incrementStmTurnCounter, storeShortTermMemory } from "@/utils/cache/shortTermMemoryCache";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { hasThoughtLogContent, sendAttributionOnlyEmbed, sendThoughtLogEmbed } from "@/utils/discord/thoughtLog";
 import { resolveManagedChannelWebhook, sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/webhookCore";
 import { getChannelDeliveredWebhookIdentity } from "@/utils/discord/stream/channelDeliveryContinuity";
+import { isStickerUnusableError, markStickerRejected } from "@/utils/discord/stickerAvailability";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { incrementTextQuota } from "@/utils/quota/textQuotaManager";
@@ -105,6 +107,14 @@ async function sendSelectedSticker(context: ChatTurnContext, result: GenerationT
     log.info(`Sent selected sticker '${sticker.name}' after stream.`);
     recordStickerDelivery(context, sticker.name);
   } catch (error) {
+    // Discord refusing the sticker outright is permanent for that ID (lost boost tier, deleted
+    // but still cached), so retiring it here is what stops the model reselecting it every turn.
+    if (isStickerUnusableError(error)) {
+      markStickerRejected(sticker.id);
+      log.warn(`Discord rejected sticker '${sticker.name}' (${sticker.id}) as unusable; retiring it for this process.`);
+      return;
+    }
+
     log.error("Failed to send selected sticker after stream:", error, {
       serverId: context.tomoriState.server_id,
       errorType: "StickerSendError",
@@ -211,14 +221,12 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     }
 
     // Custom-emoji uses that actually reached Discord, one increment per occurrence,
-    //    pre-aggregated per name so repeats collapse to one UPSERT. Counted off each
-    //    stream segment's accumulatedText (appended only after Discord accepts a send)
-    //    rather than personaResponses[].text, which is the short-term-memory payload:
-    //    that string carries the `[Scene Metadata]` block drained out of `<details>`,
-    //    so emoji the model wrote there would score despite never surfacing in chat.
-    //    Reading the segments also recovers text delivered before a tool call, since
-    //    stream state is fresh per streamOnce and only the last segment reaches the
-    //    response.
+    // pre-aggregated per name so repeats collapse to one UPSERT. Read from each stream
+    // segment's accumulatedText, which is appended only after Discord accepts a send, not
+    // from personaResponses[].text: that string is the short-term-memory payload and
+    // carries the `[Scene Metadata]` block drained out of `<details>`, so emoji the model
+    // wrote there would score despite never surfacing in chat. Per-stream state also
+    // recovers text delivered before a tool call, which the final response no longer holds.
     const emojiCounts = new Map<string, number>();
     for (const stream of result.streamResults) {
       for (const match of (stream.accumulatedText ?? "").matchAll(RESOLVED_CUSTOM_EMOJI_RE)) {
@@ -354,6 +362,14 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
       return;
     }
 
+    const isPersonal = context.textCredentialSource === "personal";
+    const tipKeys = [
+      "genai.tips.refresh_context",
+      ...(isPersonal
+        ? ["genai.tips.disable_personal_text_override", "genai.tips.switch_model_provider_personal"]
+        : ["genai.tips.switch_model_provider"]),
+    ];
+
     await sendStandardEmbed(
       context.channel as Parameters<typeof sendStandardEmbed>[0],
       context.locale,
@@ -361,7 +377,7 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
         titleKey: "genai.empty_response_title",
         descriptionKey: "genai.empty_response_description",
         color: ColorCode.WARN,
-        footerKey: "genai.generic_error_footer",
+        tipKeys,
       },
       {
         webhook: context.responseTarget?.webhook,
@@ -381,7 +397,10 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     typeof streamResultData?.emptyResponseReason === "string" ? streamResultData.emptyResponseReason : undefined;
   const speakerGuardRetryDirective =
     emptyResponseReason === "speaker_guard"
-      ? buildSpeakerGuardRetryDirective(context.currentPersona.persona_nickname ?? context.tomoriState.persona_nickname)
+      ? buildSpeakerGuardRetryDirective(
+          context.currentPersona.persona_nickname ?? context.tomoriState.persona_nickname,
+          context.contextItems.some((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_PERSONA_SPRITES),
+        )
       : null;
   const retryInjectedContextItems = mergeInjectedContextItems(
     incoming.injectedContextItems,

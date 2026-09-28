@@ -13,8 +13,16 @@ import { executeTool } from "@/tools/toolRegistry";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import type { GeneratePresetParams, PresetGenerationResult } from "@/types/provider/featureInterfaces";
 import { getAnthropicToolAdapter } from "@/providers/anthropic/anthropicToolAdapter";
-import { sanitizeSampleDialogueText } from "@/providers/google/presetGenerator";
-import { buildPresetResponseSchema, buildPresetPrompt, buildToolErrorResult } from "@/providers/utils/presetCommon";
+import {
+  buildPresetResponseSchema,
+  buildPresetPrompt,
+  buildToolErrorResult,
+  extractPresetGenerationFields,
+  presetGenerationFailureErrorType,
+  presetGenerationFailureMessage,
+  validatePresetGenerationFields,
+} from "@/providers/utils/presetCommon";
+import { resolvePresetGenerationMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_API_VERSION = "2023-06-01";
@@ -86,11 +94,12 @@ export async function generatePresetFromPromptAnthropic(
 
   const maxToolRounds = options.maxToolRounds ?? 3;
   let toolRounds = 0;
+  const maxOutputTokens = resolvePresetGenerationMaxOutputTokens({ configured: params.maxOutputTokens });
 
   while (true) {
     const body: Record<string, unknown> = {
       model: options.model,
-      max_tokens: 8192,
+      max_tokens: maxOutputTokens,
       system: buildAnthropicPresetSystemPrompt(),
       messages,
       tools: allTools,
@@ -208,53 +217,22 @@ export async function generatePresetFromPromptAnthropic(
     const presetToolCall = toolUseBlocks.find((tc) => tc.name === "preset_export_data");
 
     if (presetToolCall) {
-      const parsedResponse = presetToolCall.input as {
-        attribute_list?: string[];
-        sample_dialogues_in?: string[];
-        sample_dialogues_out?: string[];
-      };
+      // The tool-call path hands over an already-decoded object, so there is no text to
+      // parse and no truncation to repair; only the preset contract is left to enforce.
+      const decoded = validatePresetGenerationFields(presetToolCall.input);
 
-      if (
-        !parsedResponse.attribute_list ||
-        !parsedResponse.sample_dialogues_in ||
-        !parsedResponse.sample_dialogues_out
-      ) {
+      if (!decoded.ok) {
+        log.error(`Anthropic preset generation rejected: ${decoded.failure.code}`);
         return {
-          error: "Generated character data is incomplete. Please try again.",
-          errorType: "INVALID_JSON",
+          error: presetGenerationFailureMessage(decoded.failure),
+          errorType: presetGenerationFailureErrorType(decoded.failure),
         };
       }
-
-      if (!Array.isArray(parsedResponse.attribute_list) || parsedResponse.attribute_list.length !== 6) {
-        return {
-          error: "Generated attribute list must contain exactly 6 items. Please try again.",
-          errorType: "VALIDATION_ERROR",
-        };
-      }
-
-      if (!Array.isArray(parsedResponse.sample_dialogues_in) || parsedResponse.sample_dialogues_in.length !== 5) {
-        return {
-          error: "Generated sample dialogues must contain exactly 5 user inputs.",
-          errorType: "VALIDATION_ERROR",
-        };
-      }
-
-      if (!Array.isArray(parsedResponse.sample_dialogues_out) || parsedResponse.sample_dialogues_out.length !== 5) {
-        return {
-          error: "Generated sample dialogues must contain exactly 5 character responses.",
-          errorType: "VALIDATION_ERROR",
-        };
-      }
-
-      const sanitizedDialoguesIn = parsedResponse.sample_dialogues_in.map(sanitizeSampleDialogueText);
-      const sanitizedDialoguesOut = parsedResponse.sample_dialogues_out.map(sanitizeSampleDialogueText);
 
       const preset = {
         tomori_nickname: params.characterName,
         trigger_words: [params.characterName],
-        attribute_list: parsedResponse.attribute_list,
-        sample_dialogues_in: sanitizedDialoguesIn,
-        sample_dialogues_out: sanitizedDialoguesOut,
+        ...decoded.preset,
       };
 
       log.success(`Anthropic preset generation successful for ${params.characterName}`);
@@ -274,64 +252,29 @@ export async function generatePresetFromPromptAnthropic(
       };
     }
 
-    try {
-      const parsedResponse = JSON.parse(responseText) as {
-        attribute_list?: string[];
-        sample_dialogues_in?: string[];
-        sample_dialogues_out?: string[];
-      };
-
-      if (
-        !parsedResponse.attribute_list ||
-        !parsedResponse.sample_dialogues_in ||
-        !parsedResponse.sample_dialogues_out
-      ) {
-        return {
-          error: "Generated character data is incomplete. Please try again.",
-          errorType: "INVALID_JSON",
-        };
-      }
-
-      if (!Array.isArray(parsedResponse.attribute_list) || parsedResponse.attribute_list.length !== 6) {
-        return {
-          error: "Generated attribute list must contain exactly 6 items. Please try again.",
-          errorType: "VALIDATION_ERROR",
-        };
-      }
-
-      if (!Array.isArray(parsedResponse.sample_dialogues_in) || parsedResponse.sample_dialogues_in.length !== 5) {
-        return {
-          error: "Generated sample dialogues must contain exactly 5 user inputs.",
-          errorType: "VALIDATION_ERROR",
-        };
-      }
-
-      if (!Array.isArray(parsedResponse.sample_dialogues_out) || parsedResponse.sample_dialogues_out.length !== 5) {
-        return {
-          error: "Generated sample dialogues must contain exactly 5 character responses.",
-          errorType: "VALIDATION_ERROR",
-        };
-      }
-
-      const sanitizedDialoguesIn = parsedResponse.sample_dialogues_in.map(sanitizeSampleDialogueText);
-      const sanitizedDialoguesOut = parsedResponse.sample_dialogues_out.map(sanitizeSampleDialogueText);
-
-      const preset = {
-        tomori_nickname: params.characterName,
-        trigger_words: [params.characterName],
-        attribute_list: parsedResponse.attribute_list,
-        sample_dialogues_in: sanitizedDialoguesIn,
-        sample_dialogues_out: sanitizedDialoguesOut,
-      };
-
-      log.success(`Anthropic preset generation successful (text fallback) for ${params.characterName}`);
-      return { preset };
-    } catch (parseError) {
-      log.error("Anthropic preset generation JSON parse failed", parseError as Error);
+    const decoded = extractPresetGenerationFields(responseText, JSON.parse, (parseError) =>
+      log.error("Anthropic preset generation response could not be parsed", parseError),
+    );
+    if (!decoded.ok) {
+      log.error(`Anthropic preset generation rejected: ${decoded.failure.code}`);
       return {
-        error: "Invalid JSON response from Anthropic.",
-        errorType: "INVALID_JSON",
+        // A payload nothing could read is a provider fault worth naming; a schema miss is
+        // the model's, and the shared message is the instruction the user can act on.
+        error:
+          decoded.failure.code === "PARSE_FAILED"
+            ? "Invalid JSON response from Anthropic."
+            : presetGenerationFailureMessage(decoded.failure),
+        errorType: presetGenerationFailureErrorType(decoded.failure),
       };
     }
+
+    const preset = {
+      tomori_nickname: params.characterName,
+      trigger_words: [params.characterName],
+      ...decoded.preset,
+    };
+
+    log.success(`Anthropic preset generation successful (text fallback) for ${params.characterName}`);
+    return { preset };
   }
 }

@@ -2,12 +2,13 @@ import type { Embed } from "discord.js";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import {
   checkTargetEmbedTitle,
+  checkTargetEmbed,
   formatSystemProducedEmbedHint,
   processLinkEmbed,
 } from "@/utils/discord/embedClassifier";
 import { extractNoticeTextFromComponents } from "@/utils/discord/componentNoticeReader";
 import { ColorCode } from "@/utils/misc/logger";
-import { getSupportedLocales, localizer } from "@/utils/text/localizer";
+import { classifyProtocolEmbed } from "@/utils/discord/embedProtocol";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { truncateForSystemContext } from "@/utils/chat/contextDirectives";
 
@@ -35,7 +36,7 @@ export function processEmbedsFromMessage(args: {
   let processedSystemEmbed = false;
 
   for (const embed of args.embeds) {
-    const embedCheck = checkTargetEmbedTitle(embed.title);
+    const embedCheck = checkTargetEmbed(embed);
     if (embedCheck.isTarget && embed.description) {
       const embedContent = formatTargetEmbedForContext(
         { title: embed.title, description: embed.description },
@@ -75,8 +76,8 @@ export function processEmbedsFromMessage(args: {
 
   // Components V2 pass: a CV2 notice carries no embeds at all, so its text has
   // to be reconstructed from the component tree before it can be classified.
-  // Runs after the embed loop and is naturally exclusive with it , so Discord
-  // rejects messages that mix `embeds` with the IsComponentsV2 flag.
+  // This runs after the embed loop and is mutually exclusive with it, because
+  // Discord rejects messages that mix `embeds` with the IsComponentsV2 flag.
   const notice = extractNoticeTextFromComponents(args.components);
   if (notice?.title && notice.description) {
     const noticeCheck = checkTargetEmbedTitle(notice.title);
@@ -129,35 +130,19 @@ function formatTargetEmbedForContext(
     }
   }
 
-  const includeTitleInEmbedContent = embedType === "memory_learning" || embedType === "reminder_set";
-  const titleLine = includeTitleInEmbedContent && source.title ? `${source.title}\n` : "";
+  // Titles of action-record notices carry the target and the action itself, so
+  // the body alone would not say who was changed.
+  const titledTypes = ["memory_learning", "reminder_set", "user_info_update", "user_moderation"];
+  const titleLine = titledTypes.includes(embedType ?? "") && source.title ? `${source.title}\n` : "";
   const embedBody = `${titleLine}${cleanedDescription}`;
-  return embedType === "memory_learning" || embedType === "reward" || embedType === "punish"
+  const inlineSystemTypes = ["memory_learning", "reward", "punish", "user_info_update", "user_moderation"];
+  return inlineSystemTypes.includes(embedType ?? "")
     ? `[System: ${embedBody}]`
     : formatSystemProducedEmbedHint(embedBody);
 }
 
-function checkSelfDebugDiagnosticEmbedTitle(embedTitle: string | null): boolean {
-  if (!embedTitle) return false;
-
-  for (const supportedLocale of getSupportedLocales()) {
-    const diagnosticTitles = [
-      localizer(supportedLocale, "genai.fallback_used_title"),
-      localizer(supportedLocale, "genai.error_stream_timeout_title"),
-      localizer(supportedLocale, "genai.empty_response_title"),
-      localizer(supportedLocale, "genai.max_iterations_title"),
-      localizer(supportedLocale, "genai.no_response_title"),
-    ];
-    if (diagnosticTitles.includes(embedTitle)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 function shouldIncludeSelfDebugEmbed(embed: Embed): boolean {
-  return embed.color === ERROR_EMBED_COLOR_DECIMAL || checkSelfDebugDiagnosticEmbedTitle(embed.title);
+  return embed.color === ERROR_EMBED_COLOR_DECIMAL || classifyProtocolEmbed(embed) === "diagnostic";
 }
 
 function formatTomoriSelfDebugEmbedAsSystemMessage(embed: Embed): string | null {

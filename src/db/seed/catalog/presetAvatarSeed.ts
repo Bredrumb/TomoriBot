@@ -12,8 +12,9 @@ import type { SQL } from "bun";
 import { resolveAvatarPath } from "@/utils/image/avatarHelper";
 import { convertToPNG } from "@/utils/image/imageProcessor";
 import { log } from "@/utils/misc/logger";
-import { buildPresetAvatarFilename, uploadPresetAvatarToStorage } from "@/utils/storage/avatarStorage";
+import { buildPresetAvatarRelativeKey, uploadPresetAvatarToStorage } from "@/utils/storage/avatarStorage";
 import { personaSections } from "./personas";
+import { resolveSharedPresetAssetReference } from "./presetAssetReference";
 import type { PersonaInput } from "./types";
 
 /** Length of the content hash embedded in shared avatar filenames + version token. */
@@ -27,11 +28,16 @@ const CONTENT_HASH_LENGTH = 12;
  *
  * @param client - Active DB client/transaction
  */
-export async function seedPersonaAvatarsFromCatalog(client: SQL): Promise<void> {
+export async function seedPersonaAvatarsFromCatalog(
+  client: SQL,
+): Promise<{ declarations: number; seeded: number; failed: number }> {
   const personas = personaSections.flatMap((section) => section.rows);
+  const uploadedThisRun = new Map<string, string>();
+  let seeded = 0;
   for (const persona of personas) {
-    await seedOneAvatar(client, persona);
+    if (await seedOneAvatar(client, persona, uploadedThisRun)) seeded += 1;
   }
+  return { declarations: personas.length, seeded, failed: personas.length - seeded };
 }
 
 /**
@@ -39,7 +45,11 @@ export async function seedPersonaAvatarsFromCatalog(client: SQL): Promise<void> 
  * when its content changed (content-addressed filename), and stamps the shared
  * URL + hash onto the preset row.
  */
-async function seedOneAvatar(client: SQL, persona: PersonaInput): Promise<void> {
+async function seedOneAvatar(
+  client: SQL,
+  persona: PersonaInput,
+  uploadedThisRun: Map<string, string>,
+): Promise<boolean> {
   // Read + normalize the persona's avatar image to PNG. `avatarPath` is the
   //    persona's catalog directory; resolveAvatarPath picks the first image in it.
   let pngBuffer: Buffer;
@@ -48,13 +58,11 @@ async function seedOneAvatar(client: SQL, persona: PersonaInput): Promise<void> 
     pngBuffer = await convertToPNG(rawBuffer);
   } catch (error) {
     log.warn(`[Preset Avatars] Skipping ${persona.name}: cannot read/convert avatar at ${persona.avatarPath}`, error);
-    return;
+    return false;
   }
 
-  // Content-address the image. If the preset already references this exact
-  //    content (same filename suffix), skip the (network) upload entirely.
   const contentHash = createHash("sha1").update(pngBuffer).digest("hex").slice(0, CONTENT_HASH_LENGTH);
-  const expectedSuffix = buildPresetAvatarFilename(contentHash);
+  const expectedKey = buildPresetAvatarRelativeKey({ lineageId: persona.lineageId, contentHash });
 
   const [existing] = await client<Array<{ preset_avatar_shared_url: string | null }>>`
     SELECT preset_avatar_shared_url
@@ -64,34 +72,40 @@ async function seedOneAvatar(client: SQL, persona: PersonaInput): Promise<void> 
     LIMIT 1
   `;
 
-  const existingUrl = existing?.preset_avatar_shared_url ?? null;
-  let sharedUrl: string;
-  if (existingUrl?.endsWith(expectedSuffix)) {
-    // Same content already uploaded, so skip the (network) upload, refresh metadata only.
-    sharedUrl = existingUrl;
-  } else {
-    const uploadedUrl = await uploadPresetAvatarToStorage({
-      lineageId: persona.lineageId,
-      language: persona.language,
-      contentHash,
-      buffer: pngBuffer,
-    });
-    if (!uploadedUrl) {
-      log.warn(`[Preset Avatars] Skipping ${persona.name}: avatar upload failed`);
-      return;
-    }
-    sharedUrl = uploadedUrl;
+  const sharedUrl = await resolveSharedPresetAssetReference({
+    expectedKey,
+    existingReference: existing?.preset_avatar_shared_url ?? null,
+    uploadedThisRun,
+    upload: () =>
+      uploadPresetAvatarToStorage({
+        lineageId: persona.lineageId,
+        contentHash,
+        buffer: pngBuffer,
+      }),
+    logFailure: (error) => {
+      const message = `[Preset Avatars] Skipping ${persona.name}: avatar upload failed`;
+      if (error) {
+        log.warn(message, error);
+      } else {
+        log.warn(message);
+      }
+    },
+  });
+  if (!sharedUrl) {
+    return false;
   }
 
   // Stamp the shared URL + version hash onto the preset row. The hash is the
   //    fan-out gate: a changed avatar yields a new hash, so the reconciler
   //    re-PATCHes only the servers that have not yet received it.
-  await client`
+  const updated = await client`
     UPDATE persona_presets
     SET
       preset_avatar_shared_url = ${sharedUrl},
       preset_avatar_hash = ${contentHash}
     WHERE preset_lineage_id = ${persona.lineageId}
       AND preset_language = ${persona.language}
+    RETURNING persona_preset_id
   `;
+  return updated.length > 0;
 }

@@ -7,26 +7,20 @@ import type { ModelTokenLimits } from "./openrouterCapabilityCache";
 const KAYRA_MAX_COMPLETION = 150;
 
 /**
- * Fallback Kayra context limit used when the subscription API is unavailable.
+ * Characters-per-token ratio for Kayra/Erato context estimation.
  *
- * Set NAI_KAYRA_CONTEXT_LIMIT to your subscription tier's actual limit:
- *   Tablet: 4_096 tokens
- *   Scroll: 8_192 tokens (default)
- *   Opus:   varies (8_192-12_288+)
+ * Kayra tokenizes at ~3.0-3.5 chars/token, denser than the 4 chars/token assumed by
+ * contextTruncator. Drives the virtual context length below and the stream adapter's
+ * dynamic max_length cap.
  */
-const NAI_KAYRA_CONTEXT_LIMIT_FALLBACK = Number.parseInt(process.env.NAI_KAYRA_CONTEXT_LIMIT ?? "8192", 10);
+export const NAI_KAYRA_CHARS_PER_TOKEN = 3.5;
 
 /**
- * Kayra's actual characters-per-token ratio.
- *
- * Kayra tokenizes at roughly 3.0:3.5 chars/token depending on content.
- * The contextTruncator assumes 4 chars/token, and its 10% safety margin
- * alone is insufficient to cover this ~14% gap. The virtual contextLength
- * computed by getKayraVirtualContextLength() compensates for this.
- *
- * Configured via NAI_KAYRA_CHARS_PER_TOKEN env var (default: "3.5").
+ * Hard context window ceiling (input + output tokens combined) for Kayra/Erato when the
+ * subscription API has not reported the guild's tier yet: the Scroll tier's 8192
+ * (Tablet is 4096, Opus varies).
  */
-const NAI_KAYRA_CHARS_PER_TOKEN = Number.parseFloat(process.env.NAI_KAYRA_CHARS_PER_TOKEN ?? "3.5");
+export const NAI_KAYRA_CONTEXT_LIMIT = 8192;
 
 /**
  * Derives the virtual contextLength to pass to contextTruncator for Kayra.
@@ -63,7 +57,7 @@ const STATIC_NOVELAI_TOKEN_LIMITS: Readonly<Record<string, ModelTokenLimits>> = 
    * estimated tokens ; truncation fires correctly before hitting the real 12_288 ceiling.
    *
    * The hard 12_288 ceiling is enforced separately by the dynamic max_length cap
-   * in novelaiStreamAdapter.ts (NAI_GLM_CONTEXT_LIMIT env var).
+   * in novelaiStreamAdapter.ts (NAI_GLM_CONTEXT_LIMIT).
    */
   "glm-4-6": { contextLength: 8_192, maxCompletionTokens: 4096 },
 };
@@ -72,8 +66,8 @@ const STATIC_NOVELAI_TOKEN_LIMITS: Readonly<Record<string, ModelTokenLimits>> = 
  * Gets the token limits for a known NovelAI model.
  *
  * For Kayra (kayra-v1): uses subscriptionContextTokens (from GET /user/subscription)
- * to compute a correct virtual contextLength. Falls back to NAI_KAYRA_CONTEXT_LIMIT
- * env var (default: 8192) if no subscription data is available.
+ * to compute a correct virtual contextLength. Falls back to the shared
+ * NAI_KAYRA_CONTEXT_LIMIT when no subscription data is available.
  *
  * For all other models: returns static limits from the compile-time map.
  *
@@ -88,7 +82,7 @@ export function getNovelAITokenLimits(
   subscriptionContextTokens?: number,
 ): ModelTokenLimits | undefined {
   if (modelCodename === "kayra-v1") {
-    const realLimit = subscriptionContextTokens ?? NAI_KAYRA_CONTEXT_LIMIT_FALLBACK;
+    const realLimit = subscriptionContextTokens ?? NAI_KAYRA_CONTEXT_LIMIT;
     return {
       contextLength: getKayraVirtualContextLength(realLimit),
       maxCompletionTokens: KAYRA_MAX_COMPLETION,

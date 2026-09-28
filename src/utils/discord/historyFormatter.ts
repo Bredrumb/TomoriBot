@@ -143,7 +143,7 @@ export function formatMessagesForExtraction(
       if (cachedRenderedTable) continue;
 
       if (isAudioAttachment(attachment)) {
-        // Check the in-memory cache first, so avoids re-running STT on history audio.
+        // A cached transcript avoids re-running STT on history audio.
         // "tts" source = Tomori's own voice message; caption text is already
         // included in msg.content (sent alongside the attachment), so we just
         // skip the [Attachment] tag to avoid duplication.

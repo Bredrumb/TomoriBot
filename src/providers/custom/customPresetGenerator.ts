@@ -2,17 +2,20 @@ import { executeTool } from "@/tools/toolRegistry";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import type { GeneratePresetParams, PresetGenerationResult } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
-import { sanitizeSampleDialogueText } from "@/providers/google/presetGenerator";
 import { getCustomToolAdapter } from "@/providers/custom/customToolAdapter";
 import {
   callCustomChatCompletions,
   extractCustomResponseText,
   parseCustomJsonResponse,
 } from "@/providers/custom/customOpenAICompatibleUtils";
+import { resolvePresetGenerationMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 import {
   buildPresetResponseSchema,
   buildPresetPrompt,
   buildToolErrorResult,
+  extractPresetGenerationFields,
+  presetGenerationFailureErrorType,
+  presetGenerationFailureMessage,
   type PresetContentPart as CustomContentPart,
   type PresetMessage as CustomMessage,
   type PresetToolCall as CustomToolCall,
@@ -72,13 +75,14 @@ export async function generatePresetFromPromptCustom(
 
   const maxToolRounds = options.maxToolRounds ?? 3;
   let toolRounds = 0;
+  const maxOutputTokens = resolvePresetGenerationMaxOutputTokens({ configured: params.maxOutputTokens });
 
   while (true) {
     const body: Record<string, unknown> = {
       ...(options.model !== "other-model" ? { model: options.model } : {}),
       messages,
       temperature: options.temperature ?? 1.0,
-      max_tokens: 8192,
+      max_tokens: maxOutputTokens,
       response_format: responseFormat,
       stream: false,
     };
@@ -210,63 +214,26 @@ export async function generatePresetFromPromptCustom(
       };
     }
 
-    let parsedResponse: {
-      attribute_list?: string[];
-      sample_dialogues_in?: string[];
-      sample_dialogues_out?: string[];
-    };
-
-    try {
-      parsedResponse = parseCustomJsonResponse(responseText) as {
-        attribute_list?: string[];
-        sample_dialogues_in?: string[];
-        sample_dialogues_out?: string[];
-      };
-    } catch (parseError) {
-      log.error("Custom preset generation JSON parse failed", parseError as Error);
+    // parseCustomJsonResponse already probes the fenced, bracketed, and braced candidates
+    // and repairs a truncated tail, so the shared extractor adds only the preset contract.
+    const decoded = extractPresetGenerationFields(responseText, parseCustomJsonResponse, (parseError) =>
+      log.error("Custom preset generation response could not be parsed", parseError),
+    );
+    if (!decoded.ok) {
+      log.error(`Custom preset generation rejected: ${decoded.failure.code}`);
       return {
-        error: "Invalid JSON response from custom endpoint.",
-        errorType: "INVALID_JSON",
+        error:
+          decoded.failure.code === "PARSE_FAILED"
+            ? "Invalid JSON response from custom endpoint."
+            : presetGenerationFailureMessage(decoded.failure),
+        errorType: presetGenerationFailureErrorType(decoded.failure),
       };
     }
-
-    if (!parsedResponse.attribute_list || !parsedResponse.sample_dialogues_in || !parsedResponse.sample_dialogues_out) {
-      return {
-        error: "Generated character data is incomplete. Please try again.",
-        errorType: "INVALID_JSON",
-      };
-    }
-
-    if (!Array.isArray(parsedResponse.attribute_list) || parsedResponse.attribute_list.length !== 6) {
-      return {
-        error: "Generated attribute list must contain exactly 6 items. Please try again.",
-        errorType: "VALIDATION_ERROR",
-      };
-    }
-
-    if (!Array.isArray(parsedResponse.sample_dialogues_in) || parsedResponse.sample_dialogues_in.length !== 5) {
-      return {
-        error: "Generated sample dialogues must contain exactly 5 user inputs.",
-        errorType: "VALIDATION_ERROR",
-      };
-    }
-
-    if (!Array.isArray(parsedResponse.sample_dialogues_out) || parsedResponse.sample_dialogues_out.length !== 5) {
-      return {
-        error: "Generated sample dialogues must contain exactly 5 character responses.",
-        errorType: "VALIDATION_ERROR",
-      };
-    }
-
-    const sanitizedDialoguesIn = parsedResponse.sample_dialogues_in.map(sanitizeSampleDialogueText);
-    const sanitizedDialoguesOut = parsedResponse.sample_dialogues_out.map(sanitizeSampleDialogueText);
 
     const preset = {
       tomori_nickname: params.characterName,
       trigger_words: [params.characterName],
-      attribute_list: parsedResponse.attribute_list,
-      sample_dialogues_in: sanitizedDialoguesIn,
-      sample_dialogues_out: sanitizedDialoguesOut,
+      ...decoded.preset,
     };
 
     log.success(`Custom preset generation successful for ${params.characterName}`);

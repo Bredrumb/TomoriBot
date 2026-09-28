@@ -3,16 +3,18 @@
  * Analyzes bot's recent messages and injects guidance when threshold is exceeded
  * NOTE: Only counts custom server emojis (:name:), NOT Unicode emojis (😊, 👍)
  *
- * Configuration via environment variables:
- * - EMOJI_PENALTY_ENABLED: Enable/disable the feature (default: true)
- * - EMOJI_PENALTY_LOOKBACK: Number of recent messages to check (default: 3)
- * - EMOJI_PENALTY_THRESHOLD: Max custom emojis allowed across lookback window (default: 1)
+ * EMOJI_PENALTY_ENABLED and EMOJI_UNIQUE_ENABLED switch each behavior off (default: on).
  */
 
 import type { StructuredContextItem } from "../../types/misc/context";
 import { ContextItemTag } from "../../types/misc/context";
 import { extractCustomEmojis, filterCustomEmojis } from "./emojiHelper";
 import { log } from "../misc/logger";
+
+const EMOJI_PENALTY_LOOKBACK_MESSAGES = 3;
+// More than one custom emoji across the lookback window triggers the penalty directive.
+const EMOJI_PENALTY_MAX_EMOJIS = 1;
+const EMOJI_UNIQUE_LOOKBACK_MESSAGES = 5;
 
 /**
  * Configuration for emoji penalty thresholds
@@ -27,20 +29,13 @@ interface EmojiPenaltyConfig {
 }
 
 /**
- * Load emoji penalty configuration from environment variables
- * @returns Configuration object with enabled status and thresholds
+ * @returns The penalty thresholds, with the on/off switch read from EMOJI_PENALTY_ENABLED
  */
 function loadEmojiPenaltyConfig(): EmojiPenaltyConfig {
-  const enabled = process.env.EMOJI_PENALTY_ENABLED !== "false";
-
-  const lookbackCount = Number.parseInt(process.env.EMOJI_PENALTY_LOOKBACK || "3", 10);
-
-  const maxEmojis = Number.parseInt(process.env.EMOJI_PENALTY_THRESHOLD || "1", 10);
-
   return {
-    enabled,
-    lookbackCount: Number.isNaN(lookbackCount) ? 2 : lookbackCount,
-    maxEmojis: Number.isNaN(maxEmojis) ? 1 : maxEmojis,
+    enabled: process.env.EMOJI_PENALTY_ENABLED !== "false",
+    lookbackCount: EMOJI_PENALTY_LOOKBACK_MESSAGES,
+    maxEmojis: EMOJI_PENALTY_MAX_EMOJIS,
   };
 }
 
@@ -130,17 +125,12 @@ interface UniqueEmojiConfig {
 }
 
 /**
- * Load unique emoji enforcement configuration from environment variables
- * @returns Configuration object with enabled status and lookback count
+ * @returns The unique-emoji lookback, with the on/off switch read from EMOJI_UNIQUE_ENABLED
  */
 function loadUniqueEmojiConfig(): UniqueEmojiConfig {
-  const enabled = process.env.EMOJI_UNIQUE_ENABLED !== "false";
-
-  const lookbackCount = Number.parseInt(process.env.EMOJI_UNIQUE_LOOKBACK || "5", 10);
-
   return {
-    enabled,
-    lookbackCount: Number.isNaN(lookbackCount) ? 5 : lookbackCount,
+    enabled: process.env.EMOJI_UNIQUE_ENABLED !== "false",
+    lookbackCount: EMOJI_UNIQUE_LOOKBACK_MESSAGES,
   };
 }
 
@@ -214,10 +204,9 @@ export function filterDuplicateCustomEmojis(generatedText: string, contextItems:
 
   const filtered = filterCustomEmojis(generatedText, emojisToRemove);
 
-  // If filtering collapses output to punctuation only (e.g. ", that's all!" → ","),
-  // keep the original text to avoid sending a lone punctuation character.
-  // NOTE: An empty result is intentionally allowed, so it means the segment was purely
-  // duplicate emojis, and the orchestrator's empty-segment guard will drop it cleanly.
+  // If filtering collapses output to punctuation only, keep the original text rather than
+  // sending a lone punctuation character. An empty result is allowed instead: the segment was
+  // purely duplicate emojis, and the orchestrator's empty-segment guard drops it cleanly.
   const compactFiltered = filtered.replace(/\s+/g, "");
   if (compactFiltered.length > 0 && /^[.,!?;:。！？、，]+$/.test(compactFiltered)) {
     log.info("[Unique Emoji] Skipping duplicate filter because result became punctuation-only");

@@ -22,8 +22,7 @@ const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 TomoriBot";
 
 const REQUEST_TIMEOUT_MS = Math.max(1000, Number.parseInt(process.env.FETCH_URL_TIMEOUT_MS ?? "15000", 10) || 15000);
-const HEALTHCHECK_CACHE_MS =
-  Math.max(5, Number.parseInt(process.env.FETCH_URL_HEALTHCHECK_CACHE_SEC ?? "60", 10) || 60) * 1000;
+const HEALTHCHECK_CACHE_MS = 60_000;
 const HEALTHCHECK_TIMEOUT_MS = Math.min(3000, REQUEST_TIMEOUT_MS);
 
 const FILTER_MODES = new Set<Crawl4aiFilterMode>(["raw", "fit", "bm25", "llm"]);

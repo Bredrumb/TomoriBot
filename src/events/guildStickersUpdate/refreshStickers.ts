@@ -1,64 +1,37 @@
-import { type Client, type Guild, Sticker } from "discord.js";
+import { Sticker } from "discord.js";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
-import type { EventFunction, EventArg } from "../../types/discord/global";
-import type { ErrorContext } from "../../types/db/schema"; // Import ServerRow
-import { log } from "../../utils/misc/logger";
+import type { EventArg, EventFunction } from "../../types/discord/global";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
-import { invalidateEmojiStickerCache } from "../../utils/cache/emojiStickerCache";
+import { createGuildExpressionRefresh } from "../shared/guildExpressionRefresh";
 
 /**
- * JSDoc comment for exported function
- * Handles sticker create, delete, and update events by refreshing the guild's sticker list in the database.
+ * Refreshes the guild's sticker rows for sticker create, delete, and update events.
  * @param args - Event arguments (expected: Sticker or [Sticker, Sticker])
  */
-const handleGuildStickersUpdate: EventFunction = async (_client: Client, ...args: EventArg[]): Promise<void> => {
-  const sticker = args[0];
-  if (!(sticker instanceof Sticker) || !sticker.guild) {
-    log.warn("guildStickersUpdate event triggered without a valid Sticker or Guild.", { args });
-    return; // Cannot proceed without guild info
-  }
-  const guild: Guild = sticker.guild;
-  log.info(`Sticker change detected in guild: ${guild.name} (${guild.id})`);
-
-  let serverId: number | undefined; // Variable to hold the internal server ID
-
-  try {
-    serverId = (await serverRepository.loadServerIdByDiscId(guild.id)) ?? undefined;
-
-    if (!serverId) {
-      log.warn(`Received sticker update for guild ${guild.id} but server is not registered in DB. Skipping refresh.`);
-      return; // Server not setup, nothing to refresh
-    }
-
-    // CRITICAL: Must fetch() to ensure cache is complete - cache may be incomplete on startup
+const handleGuildStickersUpdate: EventFunction = createGuildExpressionRefresh({
+  resolvePayload: (args: EventArg[]) => {
+    const sticker = args[0];
+    if (!(sticker instanceof Sticker) || !sticker.guild) return null;
+    return { guild: sticker.guild };
+  },
+  retrieve: async (guild) => {
     await guild.stickers.fetch();
-    const currentStickers = Array.from(guild.stickers.cache.values());
-    log.info(`Fetched and cached ${currentStickers.length} stickers for guild ${guild.id}. Refreshing DB...`);
-
+    return Array.from(guild.stickers.cache.values());
+  },
+  sync: async (serverId, guildId, items) => {
     await withTransientDbRetry(
       () =>
         sql.transaction(async (tx) => {
-          // biome-ignore lint/style/noNonNullAssertion: serverId is guaranteed to exist after checks above
-          await serverRepository.syncStickers(tx, serverId!, currentStickers);
+          await serverRepository.syncStickers(tx, serverId, items);
         }),
-      `refresh stickers for guild ${guild.id}`,
+      `refresh stickers for guild ${guildId}`,
     );
-
-    // Invalidate in-memory cache to force refresh on next message
-    // biome-ignore lint/style/noNonNullAssertion: serverId is guaranteed to exist after checks above
-    invalidateEmojiStickerCache(serverId!);
-
-    log.success(`Successfully refreshed stickers for guild ${guild.id} (Server ID: ${serverId}).`);
-  } catch (error) {
-    // Log error with context
-    // serverId might be undefined if the initial SELECT failed
-    const context: ErrorContext = {
-      serverId: serverId, // Use the serverId if found, otherwise undefined
-      errorType: "StickerRefreshError",
-      metadata: { guildId: guild.id, eventArgsCount: args.length },
-    };
-    await log.error(`Failed to refresh stickers for guild ${guild.id}`, error, context);
-  }
-};
+  },
+  label: "sticker",
+  logPrefix: "stickers",
+  errorType: "StickerRefreshError",
+  invalidPayloadMessage: "guildStickersUpdate event triggered without a valid Sticker or Guild.",
+  startMessage: (guildName, guildId) => `Sticker change detected in guild: ${guildName} (${guildId})`,
+});
 
 export default handleGuildStickersUpdate;

@@ -12,9 +12,10 @@ import * as realMentionHelper from "@/utils/discord/mentionHelper";
 import * as realWebhookManager from "@/utils/discord/webhookManager";
 import * as realTomoriChat from "@/events/messageCreate/tomoriChat";
 import * as realLogger from "@/utils/misc/logger";
+import type { QueuedMessageDiscardHandler } from "@/utils/chat/types";
 import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 
-const getDueRemindersMock = mock(async () => []);
+const getDueRemindersMock = mock<typeof realRepositories.serverScheduleRepository.getDueReminders>(async () => []);
 const rescheduleReminderMock = mock(async (_reminderId: number, nextReminderTime: Date) => ({
   reminder_id: _reminderId,
   reminder_time: nextReminderTime,
@@ -27,7 +28,7 @@ const scheduleReminderRetryMock = mock(
   }),
 );
 const deleteReminderByIdMock = mock(async () => true);
-const tomoriChatMock = mock(async () => "run");
+const tomoriChatMock = mock<typeof realTomoriChat.tomoriChat>(async () => "run");
 const suppressNextSelfReplyMock = mock(() => {});
 const ensureDiscordUserMentionMock = mock(async () => {});
 
@@ -186,7 +187,7 @@ describe("ReminderProcessor delivery acknowledgement", () => {
     tomoriChatMock.mockClear();
   });
 
-  it("reschedules instead of deleting when /bot kill stops reminder generation", async () => {
+  it("reschedules instead of deleting when /kill stops reminder generation", async () => {
     const reminder = makeReminder();
     getDueRemindersMock.mockImplementation(async () => [reminder]);
     tomoriChatMock.mockImplementation(async (input) => {
@@ -230,7 +231,7 @@ describe("ReminderProcessor delivery acknowledgement", () => {
 
   it("keeps queued reminders leased and retries them when the queue is cleared", async () => {
     const reminder = makeReminder();
-    let onQueueDiscard: ((reason: "channel_queue_cleared") => Promise<void>) | undefined;
+    let onQueueDiscard: QueuedMessageDiscardHandler | undefined;
     getDueRemindersMock.mockImplementation(async () => [reminder]);
     tomoriChatMock.mockImplementation(async (input) => {
       onQueueDiscard = input.onQueueDiscard;
@@ -376,8 +377,10 @@ describe("ReminderProcessor delivery retry cap", () => {
       | undefined;
     const footerText = fallbackPayload?.embeds?.[0]?.toJSON().footer?.text;
     expect(
-      footerText === "reminders.triggered_footer_recurring_retained" || footerText?.includes("original cadence"),
+      footerText?.startsWith("reminders.triggered_footer_recurring_retained") ||
+        footerText?.includes("original cadence"),
     ).toBeTrue();
+    expect(footerText).not.toContain("[tomori:v1:");
   });
 
   it("does not mention a user when a self-task falls back", async () => {
@@ -418,5 +421,32 @@ describe("ReminderProcessor delivery retry cap", () => {
 
     // Six failures total: without the reset the cap would have fired on the last one.
     expect(deleteReminderByIdMock).not.toHaveBeenCalled();
+  });
+
+  it("neutralizes backtick runs (3, 4, 5, 6, 8) in fallback description so no two adjacent backticks survive", async () => {
+    for (const runLen of [3, 4, 5, 6, 8]) {
+      const purpose = `prefix ${"`".repeat(runLen)} middle ${"`".repeat(runLen)} suffix`;
+      const reminder = makeReminder({ reminder_purpose: purpose });
+      getDueRemindersMock.mockImplementation(async () => [reminder]);
+      alwaysFailDelivery();
+
+      const client = makeClient();
+      const channel = await client.channels.fetch();
+      const processor = new ReminderProcessor(client as never);
+      for (let attempt = 0; attempt <= 5; attempt++) {
+        await processor.processDueReminders();
+      }
+
+      const fallbackPayload = channel.send.mock.calls[0]?.[0] as
+        | { embeds?: Array<{ toJSON(): { description?: string } }> }
+        | undefined;
+      const description = fallbackPayload?.embeds?.[0]?.toJSON().description ?? "";
+      const fenceStart = description.indexOf("```text\n");
+      const fenceEnd = description.lastIndexOf("\n```");
+      expect(fenceStart).toBeGreaterThanOrEqual(0);
+      expect(fenceEnd).toBeGreaterThan(fenceStart);
+      const innerContent = description.slice(fenceStart + "```text\n".length, fenceEnd);
+      expect(innerContent).not.toContain("``");
+    }
   });
 });

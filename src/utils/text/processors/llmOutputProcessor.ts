@@ -198,8 +198,8 @@ const IDENTITY_MACRO_LABEL_ALTERNATION = `(?:\\*\\*${IDENTITY_MACRO_SOURCE}:\\*\
  * Legitimate "Name: value" list items and inline prose are preserved throughout: see
  * stripBoundaryOwnNameLabels for the turn-boundary rules and list-marker guards.
  *
- * NOTE: this function owns the leading-label strip, so it must run on text where that label is
- * still present (callers must not pre-strip it) otherwise the branch-A/B decision is wrong.
+ * This function owns the leading-label strip, so it must run on text where that label is
+ * still present, since callers that pre-strip it make the branch-A/B decision wrong.
  *
  * @param aliasNames - Additional names the active persona answers to (e.g. lore/default name)
  */
@@ -269,13 +269,12 @@ const CUSTOM_EMOJI_TAG_SOURCE = "<a?:[^\\s:>]+:\\d+>";
  */
 function stripLeakedPreamble(text: string, labelAlternation: string): string {
   const codeRanges = findMarkdownCodeRanges(text);
-  // A "leak-shaped" re-introduction label is glued directly onto the preamble (preceded by a
-  //    non-whitespace char with no space: "30Tomori:"), follows a custom emoji tag (with the
-  //    conversion-inserted space: "<:Emoji:id> Tomori:"), or sits at a turn boundary (newline, or
-  //    sentence punctuation that is not a numbered-list marker). List items ("- Tomori:",
-  //    "1. Tomori:") and inline prose (", Tomori:") are space-preceded and so NOT leak-shaped, so a
-  //    legitimate label is skipped and its surrounding text is preserved. Colon is excluded from the
-  //    glued char so an emoji named exactly like the persona ("<:Tomori:id>") is not a false match.
+  // A "leak-shaped" re-introduction label is glued directly onto the preamble, follows a custom
+  // emoji tag (where the shortcode-to-tag conversion inserts a space that would otherwise
+  // disguise the leak), or sits at a turn boundary. Colon is excluded from the glued char so an
+  // emoji named exactly like the persona ("<:Tomori:id>") is not a false match. The rest of the
+  // rule, including which preceding characters count as a boundary and why list items survive,
+  // is documented on stripBoundaryOwnNameLabels above.
   const leakLabelPattern = new RegExp(
     `(?:[^\\s.!?。！？:]${labelAlternation}` +
       `|${CUSTOM_EMOJI_TAG_SOURCE}[ \\t]*${labelAlternation}` +
@@ -310,16 +309,11 @@ function stripLeakedPreamble(text: string, labelAlternation: string): string {
  */
 function stripBoundaryOwnNameLabels(text: string, labelAlternation: string): string {
   const codeRanges = findMarkdownCodeRanges(text);
-  // A leaked self-label is detected in three shapes (each keeps its preceding char/tag and drops
-  //    only the label, inserting a newline so the next clause splits onto its own line):
-  //      - Boundary (group 1) + optional spaces (group 2): start, newline, or sentence punctuation
-  //        that is not a numbered-list marker ("...girl. Tomori:", "scored 100.Tomori:"). The
-  //        lookbehind rejects "1. Tomori:" (line-start digits) so numbered lists survive.
-  //      - Emoji tag (group 3) + optional spaces: a label after a custom emoji ("<:Emoji:id> Tomori:"),
-  //        where the shortcode→tag conversion inserted a space that would otherwise disguise the leak.
-  //      - Glued (group 4): a non-whitespace char fused directly onto the label with NO space
-  //        ("30Tomori:"). Colon is excluded so an emoji named exactly like the persona is not matched.
-  //    A space before the label means a list item ("- Tomori:") or prose (", Tomori:"), so preserved.
+  // Each group keeps its preceding char or tag, drops only the label, and inserts a newline so
+  // the next clause splits onto its own line. Group 1's lookbehind rejects a punctuation boundary
+  // preceded by line-start digits so numbered lists survive, and the glued group excludes colon so
+  // an emoji named exactly like the persona is not matched. A space before the label means a list
+  // item or inline prose, so those labels stay.
   const labelPattern = new RegExp(
     `(?:(^|\\n|(?<!(?:^|\\n)[ \\t]*\\d{1,9})[.!?。！？])([ \\t]*)` +
       `|(${CUSTOM_EMOJI_TAG_SOURCE})[ \\t]*` +

@@ -1,17 +1,11 @@
-// Runtime model seeding from the typed catalog (`models.ts`).
-//
-// This is the single source of truth for seeded models: the catalog is rendered
-// into INSERT … ON CONFLICT statements and executed directly during database
-// initialization (see `seedModelsFromCatalog`). There is no generated .sql file
-// to keep in sync, so editing `models.ts` is all that's needed.
-//
-// The same row tuples and ON CONFLICT upserts used by the old 01_models.sql are
-// reproduced here, so seeding behavior (idempotent upsert on every startup) is
-// unchanged.
+// Runtime model seeding from the typed catalog (`models.ts`), the single source of truth for
+// seeded models: the catalog is rendered into INSERT … ON CONFLICT statements and executed
+// directly during database initialization (see `seedModelsFromCatalog`). There is no generated
+// .sql file to keep in sync, and seeding stays an idempotent upsert on every startup.
 
 import type { SQL } from "bun";
 import { embeddingSections, imageSections, llmSections, videoSections } from "./models";
-import { bool, desc, num, str } from "./sql";
+import { bool, desc, jsonb, num, str } from "./sql";
 import type { EmbeddingInput, ImageInput, LlmInput, ModelSection, VideoInput } from "./types";
 
 /** Providers exempt from the default/smartest invariants (bootstrap placeholders). */
@@ -24,6 +18,12 @@ interface RowLike {
   isDefault?: boolean;
   isDeprecated?: boolean;
   isSmartest?: boolean;
+  desc: string | null;
+  i18n?: Record<string, string>;
+}
+
+function localizedDescriptions(row: RowLike): Record<string, string> {
+  return { ...(row.desc ? { "en-US": row.desc } : {}), ...row.i18n };
 }
 
 interface TableSpec<T extends RowLike> {
@@ -43,7 +43,7 @@ interface TableSpec<T extends RowLike> {
 const llmSpec: TableSpec<LlmInput> = {
   table: "llms",
   columns:
-    "llm_provider, llm_codename, is_smartest, is_default, is_reasoning, is_deprecated, is_free, has_tools, sees_images, sees_videos, sees_youtube, is_uncensored, supports_structoutput, strict_role_alternation, supports_prefix_completion, llm_description, ja_description, input_price_per_million, output_price_per_million",
+    "llm_provider, llm_codename, is_smartest, is_default, is_reasoning, is_deprecated, is_free, has_tools, sees_images, sees_videos, sees_youtube, is_uncensored, supports_structoutput, strict_role_alternation, supports_prefix_completion, llm_description, descriptions, input_price_per_million, output_price_per_million",
   tuple: (m) =>
     [
       str(m.provider),
@@ -62,7 +62,7 @@ const llmSpec: TableSpec<LlmInput> = {
       bool(m.strictRoleAlternation),
       bool(m.supportsPrefixCompletion),
       desc(m.desc),
-      desc(m.ja),
+      jsonb(localizedDescriptions(m)),
       num(m.inputPricePerMillion),
       num(m.outputPricePerMillion),
     ].join(", "),
@@ -74,7 +74,7 @@ const llmSpec: TableSpec<LlmInput> = {
   // Curated (non-scoped, possibly NULL) rows still upsert normally and get normalized to false.
   onConflict: `ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
   llm_description = EXCLUDED.llm_description,
-  ja_description = EXCLUDED.ja_description,
+  descriptions = EXCLUDED.descriptions,
   is_smartest = EXCLUDED.is_smartest,
   is_default = EXCLUDED.is_default,
   is_reasoning = EXCLUDED.is_reasoning,
@@ -92,14 +92,15 @@ const llmSpec: TableSpec<LlmInput> = {
   input_price_per_million = EXCLUDED.input_price_per_million,
   output_price_per_million = EXCLUDED.output_price_per_million,
   updated_at = CURRENT_TIMESTAMP
-  WHERE COALESCE(llms.is_scoped_registration, false) = false`,
+  WHERE COALESCE(llms.is_scoped_registration, false) = false
+     OR EXCLUDED.is_deprecated = false`,
   hasSmartest: true,
   sections: llmSections,
 };
 
 const imageSpec: TableSpec<ImageInput> = {
   table: "image_diffusion_models",
-  columns: "provider, codename, is_default, is_deprecated, is_free, is_uncensored, model_description, ja_description",
+  columns: "provider, codename, is_default, is_deprecated, is_free, is_uncensored, model_description, descriptions",
   tuple: (m) =>
     [
       str(m.provider),
@@ -109,13 +110,13 @@ const imageSpec: TableSpec<ImageInput> = {
       bool(m.isFree),
       bool(m.isUncensored),
       desc(m.desc),
-      desc(m.ja),
+      jsonb(localizedDescriptions(m)),
     ].join(", "),
   // WHERE guard: preserve scoped OpenRouter image registrations across the per-boot reseed.
   // See the llmSpec onConflict note for the full rationale.
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_description = EXCLUDED.model_description,
-  ja_description = EXCLUDED.ja_description,
+  descriptions = EXCLUDED.descriptions,
   is_default = EXCLUDED.is_default,
   is_deprecated = EXCLUDED.is_deprecated,
   is_free = EXCLUDED.is_free,
@@ -123,14 +124,15 @@ const imageSpec: TableSpec<ImageInput> = {
   is_scoped_registration = false,
   provider = EXCLUDED.provider,
   updated_at = CURRENT_TIMESTAMP
-  WHERE COALESCE(image_diffusion_models.is_scoped_registration, false) = false`,
+  WHERE COALESCE(image_diffusion_models.is_scoped_registration, false) = false
+     OR EXCLUDED.is_deprecated = false`,
   hasSmartest: false,
   sections: imageSections,
 };
 
 const videoSpec: TableSpec<VideoInput> = {
   table: "video_generation_models",
-  columns: "provider, codename, is_default, is_deprecated, is_free, model_description, ja_description",
+  columns: "provider, codename, is_default, is_deprecated, is_free, model_description, descriptions",
   tuple: (m) =>
     [
       str(m.provider),
@@ -139,27 +141,28 @@ const videoSpec: TableSpec<VideoInput> = {
       bool(m.isDeprecated),
       bool(m.isFree),
       desc(m.desc),
-      desc(m.ja),
+      jsonb(localizedDescriptions(m)),
     ].join(", "),
   // WHERE guard: preserve scoped OpenRouter video registrations across the per-boot reseed.
   // See the llmSpec onConflict note for the full rationale.
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_description = EXCLUDED.model_description,
-  ja_description = EXCLUDED.ja_description,
+  descriptions = EXCLUDED.descriptions,
   is_default = EXCLUDED.is_default,
   is_deprecated = EXCLUDED.is_deprecated,
   is_free = EXCLUDED.is_free,
   is_scoped_registration = false,
   provider = EXCLUDED.provider,
   updated_at = CURRENT_TIMESTAMP
-  WHERE COALESCE(video_generation_models.is_scoped_registration, false) = false`,
+  WHERE COALESCE(video_generation_models.is_scoped_registration, false) = false
+     OR EXCLUDED.is_deprecated = false`,
   hasSmartest: false,
   sections: videoSections,
 };
 
 const embeddingSpec: TableSpec<EmbeddingInput> = {
   table: "embedding_models",
-  columns: "provider, codename, model_family, is_default, is_deprecated, model_description, ja_description",
+  columns: "provider, codename, model_family, is_default, is_deprecated, model_description, descriptions",
   tuple: (m) =>
     [
       str(m.provider),
@@ -168,20 +171,21 @@ const embeddingSpec: TableSpec<EmbeddingInput> = {
       bool(m.isDefault),
       bool(m.isDeprecated),
       desc(m.desc),
-      desc(m.ja),
+      jsonb(localizedDescriptions(m)),
     ].join(", "),
   // WHERE guard: preserve scoped OpenRouter embedding registrations across the per-boot reseed.
   // See the llmSpec onConflict note for the full rationale.
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_family = EXCLUDED.model_family,
   model_description = EXCLUDED.model_description,
-  ja_description = EXCLUDED.ja_description,
+  descriptions = EXCLUDED.descriptions,
   is_default = EXCLUDED.is_default,
   is_deprecated = EXCLUDED.is_deprecated,
   is_scoped_registration = false,
   provider = EXCLUDED.provider,
   updated_at = CURRENT_TIMESTAMP
-  WHERE COALESCE(embedding_models.is_scoped_registration, false) = false`,
+  WHERE COALESCE(embedding_models.is_scoped_registration, false) = false
+     OR EXCLUDED.is_deprecated = false`,
   hasSmartest: false,
   sections: embeddingSections,
 };
@@ -231,8 +235,9 @@ function validateSpec<T extends RowLike>(spec: TableSpec<T>, errors: string[]): 
 // Providers whose llms rows MUST carry a strict chat-completion flag. Kept in lockstep with the
 // request-time safety net in src/providers/utils/strictChatCompat.ts (providerRequires*). Defined
 // locally so the seed catalog stays independent of the provider runtime layer.
-const REQUIRED_ALTERNATION_PROVIDERS = new Set<string>(["anthropic"]);
-const REQUIRED_PREFIX_PROVIDERS = new Set<string>(["deepseek", "zai", "zaicoding"]);
+export const REQUIRED_ALTERNATION_PROVIDERS = new Set<string>(["anthropic"]);
+export const REQUIRED_PREFIX_PROVIDERS = new Set<string>(["deepseek", "zai", "zaicoding"]);
+export const MODEL_DRIFT_TODO = "MODEL_DRIFT_TODO";
 
 /**
  * Enforce that every llms row whose provider requires a strict chat-completion normalization has
@@ -263,7 +268,8 @@ export function collectStrictChatFlagViolations(rows: LlmInput[]): string[] {
 // providers must carry an explicit catalog price: the env-based price fallback has been removed, so an
 // unpriced row makes resolveModelPricing (src/commands/tool/estimate/cost.ts) return null and the command
 // reports "pricing unavailable". OpenRouter is intentionally absent, because it is priced live from the OpenRouter
-// API cache, with any catalog price acting only as a cache-miss fallback.
+// API cache, with any catalog price acting only as a cache-miss fallback. Its llms rows are still filled in at
+// startup by syncOpenrouterCatalogPricing (src/init/loaders.ts), which SQL-computed cost surfaces read.
 const METERED_FIRST_PARTY_PROVIDERS = new Set<string>([
   "google",
   "vertex",
@@ -274,9 +280,9 @@ const METERED_FIRST_PARTY_PROVIDERS = new Set<string>([
   "zaicoding",
 ]);
 
-// Active first-party rows that legitimately have no published price yet (the provider has not shipped one).
-// Re-checked 2026-06-11. Remove a codename here once its official rate is filled into models.ts.
-const PRICING_PENDING_CODENAMES = new Set<string>(["gemini-3.5-pro"]);
+// Active first-party rows whose provider has not published a price yet. A codename belongs here only
+// until its official rate lands in models.ts or the row is deprecated.
+const PRICING_PENDING_CODENAMES = new Set<string>();
 
 /**
  * Enforce that every billable first-party llms row carries explicit per-million input/output prices.
@@ -320,7 +326,20 @@ export function validateModels(): string[] {
   validateSpec(embeddingSpec, errors);
   errors.push(...collectStrictChatFlagViolations(rowsOf(llmSpec)));
   errors.push(...collectMeteredPriceViolations(rowsOf(llmSpec)));
+  for (const spec of [llmSpec, imageSpec, videoSpec]) {
+    errors.push(...collectModelDriftTodoViolations(spec.table, rowsOf(spec)));
+  }
   return errors;
+}
+
+export function collectModelDriftTodoViolations(table: string, rows: RowLike[]): string[] {
+  return rows
+    .filter(
+      (row) =>
+        row.desc?.includes(MODEL_DRIFT_TODO) ||
+        Object.values(row.i18n ?? {}).some((value) => value.includes(MODEL_DRIFT_TODO)),
+    )
+    .map((row) => `${table}/${row.provider}/${row.codename}: replace ${MODEL_DRIFT_TODO} descriptions`);
 }
 
 function renderStatement<T extends RowLike>(spec: TableSpec<T>): string {

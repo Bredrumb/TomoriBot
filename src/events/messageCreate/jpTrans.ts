@@ -22,11 +22,7 @@ const handler = async (_client: Client, message: Message): Promise<void> => {
       return;
     }
 
-    // Check for Japanese text using a native regex (matches Kanji, Hiragana, or Katakana)
-    // Kanji: \u4E00-\u9FFF
-    // Hiragana: \u3040-\u309F
-    // Katakana: \u30A0-\u30FF
-    // This ensures we only proceed if any Japanese character is present.
+    // Kanji (\u4E00-\u9FFF), Hiragana (\u3040-\u309F), or Katakana (\u30A0-\u30FF).
     if (!/[\u3040-\u30FF\u4E00-\u9FFF]/.test(message.content)) {
       return;
     }

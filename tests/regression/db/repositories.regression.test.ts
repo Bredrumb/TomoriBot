@@ -16,12 +16,12 @@
  *   LlmRepository  : loadAvailableLlms, loadLlmById, getLlmsByIds,
  *                     result parity with repository SQL reads
  *
- * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
+ * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { PrivacyLevel } from "@/types/db/schema";
 import { clearUserCache, getCachedUserRow } from "@/utils/cache/userCache";
-import { llmModelRepo, userRepository } from "@/utils/db/repositories";
+import { configRepository, llmModelRepo, userRepository } from "@/utils/db/repositories";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
@@ -103,9 +103,14 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
       expect(fresh?.user_disc_id).toBe(REPO_USER_ID);
     });
 
-    it("is idempotent — re-registering preserves the original nickname", async () => {
+    it("is idempotent and leaves an uncustomized nickname unset", async () => {
       const again = await userRepository.register(REPO_USER_ID, "_rt_different_name", "en");
-      expect(again?.user_nickname).toBe("_rt_repo_name");
+      expect(again?.user_nickname).toBeNull();
+    });
+
+    it("exports an unset nickname without freezing a Discord ID", async () => {
+      const shape = await userRepository.toExportShape(REPO_USER_ID);
+      expect(shape?.user_nickname).toBeNull();
     });
   });
 
@@ -125,7 +130,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
   describe("UserRepository.update (cache side-effect)", () => {
     it("patches a field and the cache reflects the change without manual invalidation", async () => {
       const row = await userRepository.loadByDiscordId(REPO_USER_ID);
-      if (!row) throw new Error("Expected REPO_USER_ID to exist after register()");
+      if (!row || row.user_id === undefined) throw new Error("Expected REPO_USER_ID to exist after register()");
 
       await getCachedUserRow(REPO_USER_ID); // warm cache
 
@@ -156,7 +161,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
       if (!original) throw new Error("Expected toExportShape to return data");
 
       const row = await userRepository.loadByDiscordId(REPO_USER_ID);
-      if (!row) throw new Error("Row should exist");
+      if (!row || row.user_id === undefined) throw new Error("Row should exist");
       await userRepository.update(row.user_id, { user_nickname: "_rt_repo_temp" });
 
       const success = await userRepository.fromExportShape(REPO_USER_ID, original);
@@ -202,7 +207,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
   describe("LlmRepository.loadLlmById", () => {
     it("returns the same row as the direct repository SQL call", async () => {
       const allLlms = await llmModelRepo.loadAvailableLlms();
-      if (!allLlms?.[0]) throw new Error("No seeded LLMs found");
+      if (!allLlms?.[0] || allLlms[0].llm_id === undefined) throw new Error("No seeded LLMs found");
       const id = allLlms[0].llm_id;
 
       const direct = await testSql`SELECT * FROM llms WHERE llm_id = ${id} LIMIT 1`;
@@ -216,13 +221,31 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Repositories — delegation & cache regres
     });
   });
 
+  it("loads chat config after a column is added to a cached SELECT *", async () => {
+    const { resetDatabaseConnection } = await import("@/utils/db/client");
+    const first = await configRepository.getChatConfig(refs.serverId);
+    expect(first?.server_id).toBe(refs.serverId);
+
+    try {
+      await testSql`ALTER TABLE server_chat_configs ADD COLUMN _rt_cached_plan_probe INTEGER`;
+      const second = await configRepository.getChatConfig(refs.serverId);
+      expect(second?.server_id).toBe(refs.serverId);
+    } finally {
+      await testSql`ALTER TABLE server_chat_configs DROP COLUMN IF EXISTS _rt_cached_plan_probe`;
+      resetDatabaseConnection();
+    }
+  });
+
   describe("LlmRepository.getLlmsByIds", () => {
     it("returns the same rows as the direct repository SQL call", async () => {
       const allLlms = await llmModelRepo.loadAvailableLlms();
       if (!allLlms || allLlms.length < 2) throw new Error("Need at least 2 seeded LLMs");
-      const ids = allLlms.slice(0, 2).map((l) => l.llm_id);
+      const ids = allLlms.slice(0, 2).map((l) => {
+        if (l.llm_id === undefined) throw new Error("Seeded LLM row is missing llm_id");
+        return l.llm_id;
+      });
 
-      const direct = await testSql.unsafe(
+      const direct = await testSql.unsafe<{ llm_id: number }[]>(
         `SELECT * FROM llms WHERE llm_id IN (${ids.map((_, index) => `$${index + 1}`).join(", ")})`,
         ids,
       );

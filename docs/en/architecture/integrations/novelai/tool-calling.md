@@ -4,22 +4,25 @@ title: "NovelAI GLM 4.6 Tool Calling"
 
 ## Overview
 
-NovelAI's GLM 4.6 model uses **prompt-based tool calling** — tools are defined in the system prompt, and the model generates structured XML blocks when it decides to use a tool. This is fundamentally different from providers like Google Gemini or OpenRouter that have native function calling APIs.
+NovelAI's GLM 4.6 model uses prompt-based tool calling: tools are defined in the system prompt, and the model generates structured XML blocks when it decides to use a tool. This is fundamentally different from providers like Google Gemini or OpenRouter that have native function calling APIs.
 
 The implementation lives primarily in `src/providers/novelai/novelaiStreamAdapter.ts`.
 
 ## Image Generation State
 
-- `generate_image_nai` now requires an explicit `server_novelai_imagegen_configs.nai_diffusion_model_id`. When that dedicated slot is `NULL`, the tool stays hidden and NovelAI image generation remains disabled until `/model image` sets a NovelAI model again.
-- `/model image` now also handles the dedicated NovelAI image slot when the selected provider is NovelAI.
-- `generate_image_nai` now resolves its sampler, steps, scale, noise schedule, and `cfg_rescale` from `server_novelai_imagegen_configs` first, falling back to the `NAI_IMAGE_*` / `NAI_CFG_RESCALE` env values when the server override is `NULL`.
+- `generate_image_nai` now requires an explicit `server_novelai_imagegen_configs.nai_diffusion_model_id`. When that dedicated slot is `NULL`, the tool stays hidden and NovelAI image generation remains disabled until `/config` > Models > Switch Models sets a NovelAI model again.
+- `/config` > Models > Switch Models now also handles the dedicated NovelAI image slot when the selected provider is NovelAI.
+- `generate_image_nai` now resolves its sampler, steps, scale, noise schedule, and `cfg_rescale` from `server_novelai_imagegen_configs` first, falling back to the `DEFAULT_NAI_*` constants in `src/utils/image/naiImageParams.ts` when the server override is `NULL`.
 - `/novelai image params` is the admin-facing command for those parameter overrides.
-- Image tag profile commands are provider-neutral: `/persona image-tags`, `/personal image-tags`, `/config image-tags default-positive`, and `/config image-tags default-negative`.
-- `/novelai image generate` is the slash-command image generation entrypoint for direct tag-based NAI image creation, and now opens a modal for prompt, extra negative tags, optional character reference, and orientation selection.
-- `/novelai character-reference` now persists persona/user reference images through `src/utils/storage/charrefStorage.ts`.
+- Image tag profile commands are provider-neutral: `/config` > Persona > Appearance, `/personal config`, and the default positive and negative tag fields on `/config` > Models > Image Generation Defaults.
+- `/novelai generate image` opens a modal for prompt, extra negative tags, optional character reference, and orientation selection. Precise Reference is supported only on NovelAI Diffusion V4.5 models. A selected reference on another model is rejected before generation, and a failed reference request is not retried without the reference.
+- Slash command and tool-generated images store the effective prompt and negative prompt in PNG `iTXt` or JPEG/WebP XMP metadata without re-encoding compressed image data. Slash command result embeds show a metadata hint in the footer and keep prompt text out of the embed fields. Chat tool results show no metadata reminder. If metadata cannot be inserted without replacing existing XMP or would exceed the upload limit, the original image is sent with `image_prompt.txt` and a prompt-file hint.
+- `/novelai generate image` uses the active personal `image-nai` credential and model when configured. Otherwise it uses the server's optional NovelAI key or server API key. Server credentials consume the server image quota; personal credentials do not.
+- If the slash command fails after modal submission, its error reply attaches `image_generation_input.txt` with the submitted tags and orientation. The file lists a character reference filename when one was selected; the image must be uploaded again on retry.
+- `/config` > Persona > Appearance persists persona reference images through `src/utils/storage/charrefStorage.ts`; `/personal config` owns the separate user reference.
 - `generate_image_nai` now supports a structured `characters[]` array for V4 models.
 - `generate_image_nai` now uses a simpler active character schema: each `characters[]` item is one visible character instance, and `characters[].tags` must contain that character's full appearance plus their role in the scene. Profile-driven autofill by `id` and `remove_tags` suppression are currently disabled in the active schema/runtime. If known persona/user Physical Appearance tags are available in conversation context, the model is expected to copy the relevant tags into `characters[].tags` directly. For erotic scenes, clothing tags can be omitted and the intended nude state can be stated directly in `tags`.
-- Saved character references are still persisted by `/novelai character-reference`, but the current active `generate_image_nai` character prompting flow does not inject profile-driven refs or profile-driven Physical Appearance tags.
+- Saved persona character references are persisted by `/config` > Persona > Appearance, but the current active `generate_image_nai` character prompting flow does not inject profile-driven refs or profile-driven Physical Appearance tags.
 - Multi-character generations intentionally skip saved reference images and rely on per-character tags only, because NovelAI still treats Director/Precise Reference as whole-image guidance rather than strict per-character binding.
 - Character placement now populates both top-level `characterPrompts[]` and `v4_prompt.caption.char_captions[]` from the inline `characters[].tags` only. Coordinate mode is enabled when two or more characters are present.
 - Context building now surfaces saved Physical Appearance tags inline on the relevant conversation entries instead of a separate `# Image Profiles` block, so identity and image appearance guidance stay together in one place.
@@ -58,7 +61,7 @@ The adapter uses a state machine (`toolCallMode`) with four states:
 
 | State | Description | Transitions |
 |-------|-------------|-------------|
-| `disabled` | Tools not available — pass tokens to `processVisibleText()` directly | — |
+| `disabled` | Tools not available: pass tokens to `processVisibleText()` directly | — |
 | `undecided` | Accumulating initial tokens to decide if the model is generating text or a tool call | → `text` or `tool_call` |
 | `text` | Model is generating visible text; scan for `<tool_call>` mid-stream | → `tool_call` (if tag found) |
 | `tool_call` | Accumulating tool call XML until `</tool_call>` is found | → parsed `FunctionCall` |
@@ -67,10 +70,10 @@ The adapter uses a state machine (`toolCallMode`) with four states:
 
 When in `undecided` mode, each token is appended to `toolPreludeBuffer` and analyzed:
 
-1. **`<think>...</think>` blocks** — consumed silently (thinking content stripped)
-2. **`<tool_call>` tag** — switch to `tool_call` mode (properly wrapped call)
-3. **Known tool name** — if the first line matches a registered tool name (with underscore/hyphen normalization), wait for `<arg_key>` to confirm, then wrap in `<tool_call>` and switch to `tool_call` mode
-4. **Anything else** — switch to `text` mode
+1. **`<think>...</think>` blocks**: consumed silently (thinking content stripped)
+2. **`<tool_call>` tag**: switch to `tool_call` mode (properly wrapped call)
+3. **Known tool name**: if the first line matches a registered tool name (with underscore/hyphen normalization), wait for `<arg_key>` to confirm, then wrap in `<tool_call>` and switch to `tool_call` mode
+4. **Anything else**: switch to `text` mode
 
 ## Tool Call Format
 
@@ -87,7 +90,7 @@ When in `undecided` mode, each token is appended to `toolPreludeBuffer` and anal
 
 ### What the Model Actually Generates (common GLM behavior)
 
-GLM 4.6 frequently **omits the `<tool_call>` wrapper tag** and outputs the function name directly:
+GLM 4.6 frequently omits the `<tool_call>` wrapper tag and outputs the function name directly:
 
 ```
 web_search
@@ -97,7 +100,7 @@ web_search
 <arg_value>text</arg_value>
 ```
 
-The adapter handles this via **unwrapped tool call detection** — checking if the first line of the prelude matches a known tool name (with underscore/hyphen normalization via `normalizeToolName()`).
+The adapter handles this via unwrapped tool call detection: checking if the first line of the prelude matches a known tool name (with underscore/hyphen normalization via `normalizeToolName()`).
 
 ### Tool Name Normalization
 
@@ -108,8 +111,8 @@ MCP tools are sometimes registered with hyphens (e.g., `web-search`) but the mod
 3. Hyphens → underscores
 
 This normalization is used in both:
-- `decideToolCallMode()` — for detecting unwrapped tool calls
-- `parseToolCallBlock()` — for resolving the final function name
+- `decideToolCallMode()`: for detecting unwrapped tool calls
+- `parseToolCallBlock()`: for resolving the final function name
 
 ## Tool History Format (GLM Chat Template)
 
@@ -177,20 +180,20 @@ The adapter includes three layers of debris detection to handle GLM's tendency t
 ### 1. `</think>` Debris Detection (RESOLVED)
 The model sometimes generates stray `</think>` tags mid-response followed by garbage text (e.g., `"oggers:</think>\nTomori I'll kill you"`).
 
-**Solution**: `processVisibleText()` checks for `</think>` during the visible text phase. When found, the stream stops immediately — only clean text before the tag is emitted, everything after is discarded.
+- **Solution**: `processVisibleText()` checks for `</think>` during the visible text phase. When found, the stream stops immediately: only clean text before the tag is emitted, everything after is discarded.
 
 ### 2. Stray Tool Calls After Text (RESOLVED)
 The model may generate a complete text response, then attempt a tool call (e.g., `select_sticker_for_response`) at the very end without arguments.
 
-**Solution**: A `hasEmittedVisibleText` flag tracks whether any visible text has been sent to the user. When set, all subsequent tool call detections are suppressed:
-- `processTokenWithToolParsing()` — ignores `undecided` → `tool_call` transitions
-- `processTextWithToolScan()` — ignores both `<tool_call>` tags and unwrapped function names
-- `processChunk()` final-chunk recovery — skips truncation recovery for both `tool_call` and `undecided` modes
+- **Solution**: a `hasEmittedVisibleText` flag tracks whether any visible text has been sent to the user. When set, all subsequent tool call detections are suppressed:
+- `processTokenWithToolParsing()`: ignores `undecided` → `tool_call` transitions
+- `processTextWithToolScan()`: ignores both `<tool_call>` tags and unwrapped function names
+- `processChunk()` final-chunk recovery: skips truncation recovery for both `tool_call` and `undecided` modes
 
 ### 3. Mid-Text Unwrapped Tool Call Detection (RESOLVED)
 When the model starts with text then switches to an unwrapped tool call (bare function name without `<tool_call>` wrapper), the previous code only scanned for `<tool_call>` XML tags.
 
-**Solution**: `detectUnwrappedToolCallInText()` scans the text buffer for bare function names (matching registered tools via `normalizeToolName()`) followed by `<arg_key>` tags. If found after visible text, they're suppressed as debris. If found before any visible text, they're wrapped in `<tool_call>` tags for standard parsing.
+- **Solution**: `detectUnwrappedToolCallInText()` scans the text buffer for bare function names (matching registered tools via `normalizeToolName()`) followed by `<arg_key>` tags. If found after visible text, they're suppressed as debris. If found before any visible text, they're wrapped in `<tool_call>` tags for standard parsing.
 
 ## Known Limitations
 
@@ -199,6 +202,8 @@ With `/nothink` removed (to enable reasoning for tool use), the model may use to
 - Truncated tool calls (handled by recovery)
 - Thinking consuming entire budget (empty response)
 - Model choosing to respond with text instead of tool calls
+
+After a failed tool call that followed visible text, the next GLM stream suppresses repeated text. A genuinely empty suppressed stream still enters the normal empty-response retry with its continuation prefill. Hidden image turns keep their separate completion path.
 
 ### 2. Tool Call Arguments Truncation
 If the token cap hits mid-`<arg_value>`, the last argument is incomplete. The truncation recovery synthesizes `</tool_call>` but the incomplete argument may be lost.
