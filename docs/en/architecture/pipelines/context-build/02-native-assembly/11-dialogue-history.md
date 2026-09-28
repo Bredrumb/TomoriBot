@@ -199,7 +199,8 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   gated by the same predicate.
 - The producer-supplied reunion note reuses the same `activeNotes` mechanism at
   `TIME_AWARENESS_NOTE_DEPTH` (3 messages). The chat pipeline omits it for user
-  impersonation and when the direct triggerer has no internal user id.
+  impersonation and when the direct triggerer has no internal user id, which for a
+  verified proxied speaker means the synthetic identity resolved through its own row.
 
 Only the direct triggerer gets a note. Passive authors in the channel history
 neither receive nor consume reunions. This keeps unrelated turns from advancing a
@@ -210,6 +211,11 @@ Presence is the clock, not message volume. `presence_seen` is recorded once per
 successful direct-triggerer turn, including DMs. This is deliberately separate from
 the `message_sent` telemetry metric, whose guild-only recording rules exist for
 leaderboard correctness.
+
+The direct triggerer is whoever spoke: the host account for an ordinary message, the
+proxied identity for a verified repost. Its synthetic `users` row carries the clock, so
+two members of one system have independent first meetings and reunions while authorization,
+quota, cooldown, and usage telemetry stay on the host account.
 
 The clock is a two-phase protocol, both halves in `@/utils/chat/reunionPresence`:
 
@@ -234,9 +240,11 @@ Reunions are one-shot. `StatRepository.getUserPersonaReunionInfo` reads the last
 activity timestamp from buckets before `CURRENT_DATE` and whether a persisted
 `presence_seen` row exists today for the `(user, persona lineage)` tuple across all
 servers. The gap lookup spans `presence_seen` and `message_sent` so relationships
-predating the presence metric retain their history. A successful direct turn writes
-`presence_seen` immediately rather than through the telemetry buffer, providing the
-read-after-write consistency needed by another channel. A failed read injects nothing.
+predating the presence metric retain their history, and because both metrics are
+host-owned, a member's row starts empty and reads as a first meeting. A successful
+direct turn writes `presence_seen` immediately rather than through the telemetry buffer,
+providing the read-after-write consistency needed by another channel. A failed read
+injects nothing.
 The consumed-today flag follows the UTC database bucket, while the displayed day gap
 uses the personal/server timezone chain. With `STAT_TRACKING_ENABLED=false` the feature
 disables itself.
@@ -270,8 +278,10 @@ After this stage runs:
   the pre-feature dialogue context for both injections. It also records no
   `presence_seen` ticks, so a disabled server writes nothing.
 - At most one reunion note is injected, and it can describe only the direct triggerer.
-- On a stable message-proxy turn the clock stays on the host account while the note names the proxied
-  identity, so absence remains attributed to the shared account. See
+- On a stable message-proxy turn the clock moves to the proxied identity: the member meets
+  Tomori and returns to her on its own timeline, and the note names that identity only. The
+  host account's clock is untouched, so a sibling speaking from the same account never
+  consumes or resets this member's reunion. See
   [Message-Proxy Integration](/architecture/integrations/message-proxy/).
 - `messageIdMap.register(...)` is called for every media reference the
   LLM might ask about after resolution (so `image_analysis_tool` and

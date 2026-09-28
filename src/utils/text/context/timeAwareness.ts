@@ -22,8 +22,9 @@ export interface BuildReunionNoteArgs {
   nowMs?: number;
   reunionDays?: number;
   /**
-   * Set when `displayName` is a proxied identity. The absence belongs to the
-   * shared host account, so the wording must not assign it to that identity.
+   * Set when `displayName` is a proxied identity whose clock is its own. Talk about the
+   * identity, never about the host account it shares: siblings speak from that account
+   * between this one's turns, so any claim about the account's absence would be false.
    */
   isSharedAccount?: boolean;
 }
@@ -31,6 +32,11 @@ export interface BuildReunionNoteArgs {
 /**
  * Builds the one-shot persona-reunion note as raw text. The dialogue-history
  * consumer wraps it in `[System: ...]`.
+ *
+ * The caller supplies the clock of whoever is speaking: the host account for an ordinary
+ * message, the proxied identity for a verified repost. Every branch therefore describes
+ * `displayName` and nothing wider, which stays true when a shared account has other people
+ * speaking from it between this speaker's turns.
  *
  * @returns The note body, or null when no reunion applies to this person.
  */
@@ -42,7 +48,7 @@ export function buildReunionNote(args: BuildReunionNoteArgs): string | null {
 
   if (args.lastPreviousDayAt === null) {
     if (args.isSharedAccount) {
-      return `${args.displayName} is talking to you for the very first time! Welcome them naturally and ask something friendly to get to know them.`;
+      return `${args.displayName} is talking to you for the very first time, from an account you already know. Welcome them naturally and ask something friendly to get to know them.`;
     }
     return `${args.displayName} is talking to you directly for the very first time! Welcome them naturally and ask something friendly to get to know them.`;
   }
@@ -55,7 +61,7 @@ export function buildReunionNote(args: BuildReunionNoteArgs): string | null {
 
   const lastDate = formatDateWithOffset(args.lastPreviousDayAt.getTime(), offsetHours);
   if (args.isSharedAccount) {
-    return `${args.displayName} is talking to you again, and the account they share has not been around since ${lastDate}. It's been ${dayGap} days! Acknowledge their return naturally and ask what they've been up to.`;
+    return `${args.displayName} hasn't interacted with you specifically since ${lastDate} (${dayGap} days ago). Acknowledge them interacting with you again.`;
   }
   return `${args.displayName} hasn't interacted with you specifically since ${lastDate} (${dayGap} days ago), though they may have been around the server. Acknowledge them interacting with you again.`;
 }

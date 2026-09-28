@@ -28,6 +28,29 @@ const DEFAULT_DEPENDENCIES: MessageProxyHistoryAttributionDependencies = {
   loadMessageIdentities: (messageDiscIds) => messageProxyRepository.getMessageIdentitiesByMessageIds(messageDiscIds),
 };
 
+/** Current verified identity from the adapter cache, including the webhook name fallback. */
+export function resolveCachedMessageProxyIdentity(
+  message: Message,
+  dependencies: Pick<
+    MessageProxyHistoryAttributionDependencies,
+    "getMessageRecord" | "getDescriptor"
+  > = DEFAULT_DEPENDENCIES,
+): MessageProxyHistoryIdentity | null {
+  if (!message.webhookId) return null;
+  const record = dependencies.getMessageRecord(message.id);
+  const descriptor = record ? dependencies.getDescriptor(record.serviceId) : null;
+  const attestation = descriptor?.getCachedAttestation?.(message.id) ?? null;
+  const identity = attestation?.identity;
+  if (!descriptor || !attestation || !identity || !descriptor.validateExternalKey(identity.externalKey)) return null;
+
+  return {
+    serviceId: attestation.serviceId,
+    userDiscId: `${descriptor.syntheticUserPrefix}${identity.externalKey}`,
+    displayName: identity.displayName ?? getWebhookDisplayName(message, identity.shortId ?? identity.externalKey),
+    senderDiscId: attestation.senderDiscordId,
+  };
+}
+
 export async function resolveMessageProxyMessageIdentitiesForHistory(
   messages: Message[],
   dependencies: MessageProxyHistoryAttributionDependencies = DEFAULT_DEPENDENCIES,
@@ -41,25 +64,9 @@ export async function resolveMessageProxyMessageIdentitiesForHistory(
     if (!message.webhookId) continue;
     if (hasNegativeMessageProxyMessageIdentity(message.id)) continue;
 
-    const record = dependencies.getMessageRecord(message.id);
-    const descriptor = record ? dependencies.getDescriptor(record.serviceId) : null;
-    const cachedAttestation = descriptor?.getCachedAttestation?.(message.id) ?? null;
-    const cachedIdentity = cachedAttestation?.identity;
-    if (
-      record &&
-      descriptor &&
-      cachedIdentity &&
-      cachedAttestation &&
-      descriptor.validateExternalKey(cachedIdentity.externalKey)
-    ) {
-      identities.set(message.id, {
-        serviceId: cachedAttestation.serviceId,
-        userDiscId: `${descriptor.syntheticUserPrefix}${cachedIdentity.externalKey}`,
-        displayName:
-          cachedIdentity.displayName ??
-          getWebhookDisplayName(message, cachedIdentity.shortId ?? cachedIdentity.externalKey),
-        senderDiscId: cachedAttestation.senderDiscordId,
-      });
+    const cachedIdentity = resolveCachedMessageProxyIdentity(message, dependencies);
+    if (cachedIdentity) {
+      identities.set(message.id, cachedIdentity);
       continue;
     }
 
@@ -96,6 +103,27 @@ export async function resolveMessageProxyMessageIdentitiesForHistory(
   }
 
   return identities;
+}
+
+/**
+ * Resolves verified proxy attribution for one message that sits outside the prepared history
+ * window, such as a reply reference fetched by ID. Uses the same cache-first lookup and single
+ * batched index read as history, so rebuilding context never calls a service API, and a
+ * confirmed miss is remembered so repeated lookups for the same message stay free.
+ *
+ * A hit is merged into `identities` so every later consumer in the same turn reads the same
+ * attribution the history loop would have produced for that message.
+ */
+export async function ensureMessageProxyMessageIdentity(
+  message: Message,
+  identities: Map<string, MessageProxyHistoryIdentity>,
+  dependencies: MessageProxyHistoryAttributionDependencies = DEFAULT_DEPENDENCIES,
+): Promise<void> {
+  if (identities.has(message.id)) return;
+  if (!message.webhookId) return;
+
+  const resolved = (await resolveMessageProxyMessageIdentitiesForHistory([message], dependencies)).get(message.id);
+  if (resolved) identities.set(message.id, resolved);
 }
 
 function getWebhookDisplayName(message: Message | undefined, fallback: string): string {

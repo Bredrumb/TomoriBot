@@ -413,8 +413,8 @@ describe("message-proxy identity reference discovery", () => {
   it("discovers a member named in conversation that never spoke in the window", async () => {
     const observedQueries: Array<{ hostUserDiscIds: readonly string[]; normalizedHistoryText: string }> = [];
     const resolved = await resolveWithMembers({
-      content: "What did Sparrow say about that?",
-      identities: [{ serviceId: "pluralkit", userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: null }],
+      content: "What did Mirri say about that?",
+      identities: [{ serviceId: "pluralkit", userDiscId: MEMBER_ID, displayName: "Mirri", savedNickname: null }],
       onQuery: (query) => {
         observedQueries.push(query);
       },
@@ -429,24 +429,24 @@ describe("message-proxy identity reference discovery", () => {
     const seed = resolved.discoveryPlan.seeds.find(
       (candidate) => candidate.key.kind === "discord_user" && candidate.key.discordId === MEMBER_ID,
     );
-    expect(seed?.sourceDisplayName).toBe("Sparrow");
+    expect(seed?.sourceDisplayName).toBe("Mirri");
     expect(seed?.capabilities.has("mentionable")).toBe(false);
   });
 
   it("resolves a member by its saved nickname as well as its PluralKit display name", async () => {
     const resolved = await resolveWithMembers({
       content: "Ask Spar about it.",
-      identities: [{ serviceId: "pluralkit", userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: "Spar" }],
+      identities: [{ serviceId: "pluralkit", userDiscId: MEMBER_ID, displayName: "Mirri", savedNickname: "Spar" }],
     });
 
     expect(resolved.referencedUserIds).toEqual(new Set([MEMBER_ID]));
   });
 
   it("drops a name shared by a member and a human instead of guessing between them", async () => {
-    const human: UserRow = { ...defaultUser(), user_disc_id: HOST_ID, user_nickname: "Sparrow" };
+    const human: UserRow = { ...defaultUser(), user_disc_id: HOST_ID, user_nickname: "Mirri" };
     const resolved = await resolveWithMembers({
-      content: "Sparrow said so.",
-      identities: [{ serviceId: "pluralkit", userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: null }],
+      content: "Mirri said so.",
+      identities: [{ serviceId: "pluralkit", userDiscId: MEMBER_ID, displayName: "Mirri", savedNickname: null }],
       humanCandidates: [human],
     });
 
@@ -457,8 +457,8 @@ describe("message-proxy identity reference discovery", () => {
 
   it("does not re-add a member that is already a visible participant", async () => {
     const resolved = await resolveWithMembers({
-      content: "Sparrow said so.",
-      identities: [{ serviceId: "pluralkit", userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: null }],
+      content: "Mirri said so.",
+      identities: [{ serviceId: "pluralkit", userDiscId: MEMBER_ID, displayName: "Mirri", savedNickname: null }],
       existingParticipantIds: new Set([MEMBER_ID]),
     });
 
@@ -470,10 +470,10 @@ describe("message-proxy identity reference discovery", () => {
     // The human candidate query selects by nickname and server activity, which a
     // member's real users row can satisfy. Reaching resolveMember would spend a
     // fetch on a non-snowflake and log an Unknown Member error.
-    const memberRow: UserRow = { ...defaultUser(), user_disc_id: MEMBER_ID, user_nickname: "Sparrow" };
+    const memberRow: UserRow = { ...defaultUser(), user_disc_id: MEMBER_ID, user_nickname: "Mirri" };
     const resolved = await resolveWithMembers({
-      content: "Sparrow said so.",
-      identities: [{ serviceId: "pluralkit", userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: null }],
+      content: "Mirri said so.",
+      identities: [{ serviceId: "pluralkit", userDiscId: MEMBER_ID, displayName: "Mirri", savedNickname: null }],
       humanCandidates: [memberRow],
     });
 

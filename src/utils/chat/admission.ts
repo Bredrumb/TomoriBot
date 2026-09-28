@@ -41,7 +41,7 @@ import {
   updateSelfReplyChainState,
 } from "@/utils/chat/selfReplyState";
 import type { ChatAdmission, ChatIncoming, NonRunnableChatAdmission, TomoriChatInput } from "@/utils/chat/types";
-import { resolveConfiguredProxyService } from "@/utils/messageProxy/registry";
+import { getProxyServiceDescriptor, resolveConfiguredProxyService } from "@/utils/messageProxy/registry";
 import { routeMessageProxyMessage } from "@/utils/messageProxy/router";
 import { persistMessageProxyAttestationIdentity } from "@/utils/messageProxy/persistence";
 import type { Message } from "discord.js";
@@ -344,7 +344,7 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
     cooldownUserDiscId,
     isActiveNaturalStopMessage,
     isNaturalStopMessage: isNaturalStopMessage(message.content),
-    triggerMessage: messageProxyRecord?.originalMessage ?? undefined,
+    messageProxyRecord,
   });
   if (queueDisposition) {
     return queueDisposition;
@@ -420,10 +420,15 @@ async function resolveMessageProxyRecord(
   });
 
   markMessageProxyExpectationProxied(route.expectation);
+  const identityDescriptor = getProxyServiceDescriptor(route.attestation.serviceId);
   const record = rememberMessageProxyMessage({
     messageDiscId: message.id,
     channelId: message.channelId,
     expectation: route.expectation,
+    identityUserDiscId:
+      route.attestation.identity && identityDescriptor
+        ? `${identityDescriptor.syntheticUserPrefix}${route.attestation.identity.externalKey}`
+        : null,
     verifiedRepostOnly: route.attestation.originalMessageId === null,
     verifiedRepostReference: route.attestation.replyTarget
       ? {

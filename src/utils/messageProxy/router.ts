@@ -96,6 +96,10 @@ export async function routeMessageProxyMessage(
   const settled = await Promise.allSettled(
     descriptors.map(async (descriptor) => descriptor.attestMessage(args.message.id)),
   ).finally(endLookup);
+  // A rejected adapter could not answer (stall, network failure, rate limit); a
+  // fulfilled null means the service answered that it has no such message. Only the
+  // first is an error, so an adapter that cannot tell must reject rather than
+  // resolve null.
   const errored = settled.some((result) => result.status === "rejected");
   const claims = settled.flatMap((result, index) => {
     if (result.status !== "fulfilled" || !result.value) return [];

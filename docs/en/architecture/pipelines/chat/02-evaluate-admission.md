@@ -42,7 +42,10 @@ non-runnable dispositions.
 An accepted same-user conversational follow-up and a message queued behind a
 busy channel both use `"queued"`. Manual slash-command work, including user
 impersonation, skips follow-up replacement and enters the normal FIFO queue so
-the command payload remains intact.
+the command payload remains intact. Bot and webhook messages never become follow-ups, with one
+exception: a verified message-proxy repost from the active turn's stable member, with its original
+still held by the proxy wait (see
+[Message-Proxy Integration](../../integrations/message-proxy/)).
 
 ## Side effects
 

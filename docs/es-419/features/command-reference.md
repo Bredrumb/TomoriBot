@@ -228,7 +228,7 @@ Administra tus configuraciones personales
 | `/personal config` | Administra tus preferencias personales, privacidad, modelos y perfil. |
 | `/personal language` | Elige el idioma en el que TomoriBot te habla. |
 | `/personal memories` | Administra tus memorias personales a largo plazo y contexto corto de conversación. |
-| `/personal message-proxy` | Choose a supported message proxy service for your account. |
+| `/personal message-proxy` | Elige un servicio de proxy de mensajes compatible para tu cuenta. |
 | `/personal nuke` | Borra todo lo que TomoriBot guarda sobre ti en cada servidor. |
 | `/personal providers` | Administra tus credenciales de proveedor, endpoints y catálogos de modelos personales. |
 

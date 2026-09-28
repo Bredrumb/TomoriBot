@@ -50,8 +50,9 @@ const identityInput: ProxyIdentityUpsertInput = {
   externalIdentityKind: "fixture_profile",
   externalKey: "profile-one",
   shortId: null,
-  displayName: "Sparrow",
+  displayName: "Mirri",
   bio: "Public profile.",
+  pronouns: "she/her",
   namespace: {
     namespaceKey: "account-one",
     shortId: null,
@@ -76,7 +77,7 @@ function persistedIdentity(): MessageProxyIdentityUpsertResult {
     userRow: {
       user_id: 41,
       user_disc_id: "fx:profile-one",
-      user_nickname: "Sparrow",
+      user_nickname: "Mirri",
     } as UserRow,
     namespace: {
       message_proxy_namespace_id: 51,
@@ -163,5 +164,20 @@ describe("message-proxy identity persistence orchestration", () => {
     ).toBe("persistence_failed");
     expect(deps.seedIdentityBio).not.toHaveBeenCalled();
     expect(hasNegativeMessageProxyMessageIdentity("proxy-1")).toBe(true);
+  });
+
+  it("passes service pronouns through on the one write that can seed them", async () => {
+    const deps = dependencies();
+
+    await persistMessageProxyAttestationIdentity(
+      { messageDiscId: "proxy-1", attestation: attestation(identityInput), serverDiscId: null },
+      deps.value,
+    );
+
+    // The seed decision belongs to the identity transaction, which alone knows whether this
+    // attestation created the identity. This layer must not drop or rewrite the value.
+    expect(deps.persistIdentity).toHaveBeenCalledWith(
+      expect.objectContaining({ input: expect.objectContaining({ pronouns: "she/her" }) }),
+    );
   });
 });

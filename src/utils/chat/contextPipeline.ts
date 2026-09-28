@@ -44,11 +44,10 @@ import { resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
 import { buildQueuedReplyDirective, normalizeTailDirective } from "@/utils/chat/contextDirectives";
 import { excludeMessagesAwaitingOwnTurn } from "@/utils/chat/channelQueue";
 import { recordChatContextHistory } from "@/utils/chat/diagnosticTimeline";
+import { getSupersededMessageProxyOriginalMessageIds } from "@/utils/messageProxy/proxyExpectation";
 import {
-  getMessageProxyMessageRecord,
-  getSupersededMessageProxyOriginalMessageIds,
-} from "@/utils/messageProxy/proxyExpectation";
-import {
+  ensureMessageProxyMessageIdentity,
+  resolveCachedMessageProxyIdentity,
   resolveMessageProxyMessageIdentitiesForHistory,
   type MessageProxyHistoryIdentity,
 } from "@/utils/messageProxy/historyAttribution";
@@ -76,7 +75,6 @@ import {
 } from "@/utils/chat/contextMedia";
 import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 import { getCachedImpersonatedUserIdForWebhook } from "@/utils/chat/webhookIdentity";
-import { getProxyServiceDescriptor } from "@/utils/messageProxy/registry";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { primePersonaSpriteMessageRecords } from "@/utils/cache/personaSpriteMessageCache";
 import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
@@ -213,14 +211,13 @@ async function buildHistoryNamingProjection(params: {
 /**
  * The stable proxied identity speaking this turn, or null for an ordinary message.
  * Admission resolves a proxied turn to its host account for settings and
- * quotas, while speaker-facing context recovers the service identity name.
+ * quotas, while speaker-facing context recovers the service identity. The synthetic id is
+ * what `resolveReunionNote` clocks against, so a member meets and revisits Tomori on its
+ * own timeline rather than on its host account's.
  */
-function resolveProxiedIdentityName(message: Message): string | null {
-  if (!message.webhookId) return null;
-  const record = getMessageProxyMessageRecord(message.id);
-  if (!record) return null;
-  const identity = getProxyServiceDescriptor(record.serviceId)?.getCachedAttestation?.(message.id)?.identity;
-  return identity?.displayName ?? null;
+function resolveProxiedIdentity(message: Message): { name: string | null; userDiscId: string | null } {
+  const identity = resolveCachedMessageProxyIdentity(message);
+  return { name: identity?.displayName ?? null, userDiscId: identity?.userDiscId ?? null };
 }
 
 export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnContext> {
@@ -457,11 +454,17 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   // Reunion state is deliberately cross-server: the lineage is the persona's
   // cross-server identity anchor, so a successful delivery in one channel or
   // server consumes the same one-shot return everywhere that lineage appears.
+  // A verified proxied speaker carries its own clock, so scope it to that identity.
+  const proxiedIdentity = resolveProxiedIdentity(message);
+  const proxiedSpeakerName = proxiedIdentity.userDiscId
+    ? (await getCachedUserRow(proxiedIdentity.userDiscId))?.user_nickname?.trim() || proxiedIdentity.name
+    : null;
   const { note: reunionNote, presence: reunionPresence } = await resolveReunionNote({
     turn,
     effectivePersona,
     isUserImpersonation: incoming.isUserImpersonation,
-    proxiedIdentityName: resolveProxiedIdentityName(message),
+    proxiedIdentityName: proxiedIdentity.name,
+    proxiedIdentityUserDiscId: proxiedIdentity.userDiscId,
   });
 
   const contextBuild = await buildContext({
@@ -527,6 +530,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
       memoryInjectionDepth: contextBuild.memoryInjectionDepth,
       messageIdMap,
       allowSpriteLabel,
+      proxiedSpeakerName,
     }),
     buildPersonaMentionCatalog(turn.allPersonas),
   );
@@ -1204,6 +1208,11 @@ async function withReplyContext(
     }
     const referenced =
       msg.channel.messages.cache.get(referenceMessageId) ?? (await msg.channel.messages.fetch(referenceMessageId));
+    // A reference can sit outside the fetched history window, so resolve its verified proxy
+    // attribution through the same bounded index read the history loop used. This is what lets
+    // the annotation name a proxied member instead of the webhook veneer, and it also brings an
+    // out-of-window sender under the persona's active block below.
+    await ensureMessageProxyMessageIdentity(referenced, messageProxyIdentitiesByMessageId);
     if (blockedContextUserIds.has(getBlockComparableAuthorId(referenced, messageProxyIdentitiesByMessageId))) {
       return { content };
     }
@@ -1216,6 +1225,7 @@ async function withReplyContext(
       serverDiscId: turn.serverDiscId,
       serverPersonalizationDisabled: turn.persona.config.personal_memories_enabled === false,
       messageIdMap,
+      messageProxyIdentitiesByMessageId,
     });
     return { content: content ? `${annotation}\n${content}` : annotation, referencedMessage: referenced };
   } catch (error) {
@@ -1305,6 +1315,7 @@ function appendTailDirectives(args: {
   messageIdMap?: MessageIdMap;
   /** True when this turn also carries the persona-sprite prompt (see buildPersonaSpriteContextItem). */
   allowSpriteLabel?: boolean;
+  proxiedSpeakerName?: string | null;
 }): ChatTurnContext["contextItems"] {
   const incoming = args.turn.lockedTurn.admission.incoming;
   const contextItems = [...args.contextItems];
@@ -1373,14 +1384,14 @@ function appendTailDirectives(args: {
   // Resolve the queued reply target name. When the triggering message was sent
   // by the bot itself or one of its webhook personas, use the configured persona
   // nickname instead of the raw Discord username (e.g. "Tomori(α)").
-  let queuedReplyTargetName = args.turn.triggererName;
+  let queuedReplyTargetName = args.proxiedSpeakerName ?? args.turn.triggererName;
   if (incoming.isFromQueue) {
     const queuedMessage = args.turn.lockedTurn.admission.message;
     const queuedClient = args.turn.lockedTurn.admission.client;
     if (queuedMessage.author.id === queuedClient.user?.id) {
       queuedReplyTargetName =
         args.turn.mainPersona?.persona_nickname ?? args.turn.tomoriState.persona_nickname ?? queuedReplyTargetName;
-    } else if (queuedMessage.webhookId) {
+    } else if (queuedMessage.webhookId && !args.proxiedSpeakerName) {
       const webhookName = stripBridgePrefix(queuedMessage.author.username);
       const personaByNicknameMap = new Map<string, (typeof args.turn.allPersonas)[number]>();
       for (const p of args.turn.allPersonas) {

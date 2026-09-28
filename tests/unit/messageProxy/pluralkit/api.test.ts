@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
+import { stallUntilAborted } from "../../../helpers/fetchStub";
 
 const originalLookupTimeoutMs = process.env.PLURALKIT_LOOKUP_TIMEOUT_MS;
 const originalApiToken = process.env.PLURALKIT_API_TOKEN;
@@ -15,11 +16,13 @@ afterAll(() => {
 let fetchMessage: typeof import("@/utils/messageProxy/services/pluralkit/api").fetchMessage;
 let getCachedMessageLookup: typeof import("@/utils/messageProxy/services/pluralkit/api").getCachedMessageLookup;
 let clearPluralKitApiStateForTests: typeof import("@/utils/messageProxy/services/pluralkit/api").clearPluralKitApiStateForTests;
+let PluralKitLookupUnavailableError: typeof import("@/utils/messageProxy/services/pluralkit/api").PluralKitLookupUnavailableError;
+
+const FILE_LOOKUP_TIMEOUT_MS = "2000";
 
 beforeAll(async () => {
-  ({ fetchMessage, getCachedMessageLookup, clearPluralKitApiStateForTests } = await import(
-    "@/utils/messageProxy/services/pluralkit/api"
-  ));
+  ({ fetchMessage, getCachedMessageLookup, clearPluralKitApiStateForTests, PluralKitLookupUnavailableError } =
+    await import("@/utils/messageProxy/services/pluralkit/api"));
 });
 
 const originalFetch = globalThis.fetch;
@@ -27,9 +30,20 @@ const originalFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = originalFetch;
   clearPluralKitApiStateForTests();
+  process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = FILE_LOOKUP_TIMEOUT_MS;
   if (originalApiToken === undefined) delete process.env.PLURALKIT_API_TOKEN;
   else process.env.PLURALKIT_API_TOKEN = originalApiToken;
 });
+
+/** Runs one test under a lookup budget other than the file's 2000ms default. */
+async function withLookupBudget(budgetMs: number, body: () => Promise<void>): Promise<void> {
+  process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = String(budgetMs);
+  try {
+    await body();
+  } finally {
+    process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = FILE_LOOKUP_TIMEOUT_MS;
+  }
+}
 
 function jsonResponse(status: number, body: unknown, headers?: Record<string, string>): Response {
   return new Response(JSON.stringify(body), { status, headers });
@@ -85,7 +99,7 @@ describe("pkApi.fetchMessage", () => {
         member: {
           id: "ghijkl",
           uuid: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
-          name: "Sparrow",
+          name: "Mirri",
         },
       }),
     );
@@ -96,6 +110,45 @@ describe("pkApi.fetchMessage", () => {
     expect(result?.system?.name).toBeUndefined();
     expect(result?.system?.description).toBeUndefined();
     expect(result?.member?.display_name).toBeUndefined();
+    expect(result?.member?.pronouns).toBeUndefined();
+  });
+
+  it("keeps a public member's pronouns in the validated payload", async () => {
+    const fetchMock = mock(async () =>
+      jsonResponse(200, {
+        original: "pronoun-original",
+        sender: "pronoun-sender",
+        system: { id: "abcdef", uuid: "11111111-2222-4333-8444-555555555555", name: "Lighthouse" },
+        member: {
+          id: "ghijkl",
+          uuid: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+          name: "Mirri",
+          pronouns: "she/her",
+        },
+      }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    expect((await fetchMessage("msg-public-pronouns"))?.member?.pronouns).toBe("she/her");
+  });
+
+  it("accepts explicit null pronouns from a member who keeps them private", async () => {
+    const fetchMock = mock(async () =>
+      jsonResponse(200, {
+        original: "null-pronoun-original",
+        sender: "null-pronoun-sender",
+        system: { id: "abcdef", uuid: "11111111-2222-4333-8444-555555555555" },
+        member: {
+          id: "ghijkl",
+          uuid: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+          name: "Mirri",
+          pronouns: null,
+        },
+      }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    expect((await fetchMessage("msg-null-pronouns"))?.member?.pronouns).toBeNull();
   });
 
   it("fails closed on structurally invalid successful payloads", async () => {
@@ -109,8 +162,11 @@ describe("pkApi.fetchMessage", () => {
     );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    expect(await fetchMessage("msg-invalid-payload")).toBeNull();
+    // PK answered, but not with anything trustworthy: that is a transport failure,
+    // never a confirmed miss, and the untrustworthy answer must not be cached.
+    await expect(fetchMessage("msg-invalid-payload")).rejects.toThrow(PluralKitLookupUnavailableError);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(getCachedMessageLookup("msg-invalid-payload")).toBeNull();
   });
 
   it("sends the configured token verbatim and omits an empty token", async () => {
@@ -201,6 +257,117 @@ describe("pkApi.fetchMessage", () => {
   });
 
   it(
+    "aborts a stalled attempt in time to recover on a second attempt",
+    async () => {
+      await withLookupBudget(3000, async () => {
+        let calls = 0;
+        const fetchMock = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+          calls++;
+          if (calls === 1) return stallUntilAborted(init?.signal);
+          return jsonResponse(200, { original: "stall-original", sender: "stall-sender", system: null, member: null });
+        });
+        globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+        const start = Date.now();
+        const result = await fetchMessage("msg-stalled-then-valid");
+        const elapsed = Date.now() - start;
+
+        expect(calls).toBe(2);
+        expect(result?.sender).toBe("stall-sender");
+        // The stalled attempt is cut at half the 3000ms budget (1500ms), which is what
+        // leaves the ~800ms backoff step and the retry inside the same deadline. A
+        // whole-budget attempt would have ended here with no answer at all.
+        expect(elapsed).toBeGreaterThanOrEqual(1500);
+        expect(elapsed).toBeLessThan(3000);
+      });
+    },
+    RETRY_EXHAUSTION_TIMEOUT_MS,
+  );
+
+  it(
+    "retries when the first response stalls while reading its body",
+    async () => {
+      await withLookupBudget(3000, async () => {
+        let calls = 0;
+        const fetchMock = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+          calls++;
+          if (calls === 1) {
+            const body = new ReadableStream<Uint8Array>({
+              start(controller) {
+                init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
+              },
+            });
+            return new Response(body, { status: 200 });
+          }
+          return jsonResponse(200, { original: "body-original", sender: "body-sender" });
+        });
+        globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+        const result = await fetchMessage("msg-stalled-body");
+
+        expect(calls).toBe(2);
+        expect(result?.sender).toBe("body-sender");
+      });
+    },
+    RETRY_EXHAUSTION_TIMEOUT_MS,
+  );
+
+  it(
+    "reports an unresolved stall instead of a miss once the whole budget is spent",
+    async () => {
+      await withLookupBudget(3000, async () => {
+        const fetchMock = mock(async (_input: RequestInfo | URL, init?: RequestInit) =>
+          stallUntilAborted(init?.signal),
+        );
+        globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+        const start = Date.now();
+        await expect(fetchMessage("msg-always-stalled")).rejects.toThrow(PluralKitLookupUnavailableError);
+        const elapsed = Date.now() - start;
+
+        // Two attempts, both bounded by the same overall deadline: the retry does not
+        // extend the lookup, and a stalled transport stays distinguishable from a 404.
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(elapsed).toBeLessThan(3600);
+      });
+    },
+    RETRY_EXHAUSTION_TIMEOUT_MS,
+  );
+
+  it("reports a refusing API as unavailable rather than a miss", async () => {
+    for (const status of [401, 500] as const) {
+      const messageId = `msg-status-${status}`;
+      const fetchMock = mock(async () => jsonResponse(status, {}));
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      await expect(fetchMessage(messageId)).rejects.toThrow(PluralKitLookupUnavailableError);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      clearPluralKitApiStateForTests();
+    }
+  });
+
+  it("stops instead of retrying early when Retry-After leaves no room for another attempt", async () => {
+    await withLookupBudget(2000, async () => {
+      for (const retryAfterSeconds of ["30", "1.8"] as const) {
+        const fetchMock = mock(async () => jsonResponse(429, {}, { "Retry-After": retryAfterSeconds }));
+        globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+        const start = Date.now();
+        await expect(fetchMessage(`msg-retry-after-${retryAfterSeconds}`)).rejects.toThrow(
+          PluralKitLookupUnavailableError,
+        );
+
+        // Honoring the header would leave this 2000ms budget no usable attempt, so the
+        // lookup reports the rate limit now rather than retrying before the server
+        // allows or holding this admission for two seconds.
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(Date.now() - start).toBeLessThan(500);
+        clearPluralKitApiStateForTests();
+      }
+    });
+  });
+
+  it(
     "gives up once the retry budget is exhausted and returns null",
     async () => {
       const fetchMock = mock(async () => jsonResponse(404, {}));
@@ -208,10 +375,11 @@ describe("pkApi.fetchMessage", () => {
 
       const result = await fetchMessage("msg-exhausted");
 
+      // Every answer was a 404, so PK's last word stands: the message is unknown, not
+      // a transport failure. Real backoff sleeps dominate this test, putting it near
+      // the 5s default and flaking whenever the shared lane runs under load.
       expect(result).toBeNull();
       expect(fetchMock.mock.calls.length).toBeGreaterThan(0);
-      // Real backoff sleeps dominate this test, putting it near the 5s default and
-      // flaking whenever the shared lane runs under load.
     },
     RETRY_EXHAUSTION_TIMEOUT_MS,
   );
@@ -236,6 +404,23 @@ describe("pkApi.fetchMessage", () => {
     },
     RETRY_EXHAUSTION_TIMEOUT_MS,
   );
+
+  it("keeps a transport failure uncached so a later call can still resolve the message", async () => {
+    const failingFetch = mock(async () => jsonResponse(401, {}));
+    globalThis.fetch = failingFetch as unknown as typeof fetch;
+
+    await expect(fetchMessage("msg-recovers-after-error")).rejects.toThrow(PluralKitLookupUnavailableError);
+
+    const succeedingFetch = mock(async () =>
+      jsonResponse(200, { original: "122", sender: "233", system: null, member: null }),
+    );
+    globalThis.fetch = succeedingFetch as unknown as typeof fetch;
+
+    // The rejected lookup must leave no in-flight or cached entry behind, or every
+    // later attempt for this message would fail without touching the network.
+    expect((await fetchMessage("msg-recovers-after-error"))?.sender).toBe("233");
+    expect(succeedingFetch).toHaveBeenCalledTimes(1);
+  });
 
   it("caches a successful lookup permanently — a later call never refetches", async () => {
     const fetchMock = mock(async () =>

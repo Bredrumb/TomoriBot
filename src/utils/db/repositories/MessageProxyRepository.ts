@@ -171,14 +171,6 @@ export class MessageProxyRepository {
         `;
         if (!user?.user_id) throw new Error("Synthetic user upsert returned no identifier");
 
-        // Naming and profile writes require a personalization row. A null nickname leaves the
-        // service display name active until the user explicitly sets an override.
-        await tx`
-          INSERT INTO user_personalization_configs (user_id, user_nickname)
-          VALUES (${user.user_id}, NULL)
-          ON CONFLICT (user_id) DO NOTHING
-        `;
-
         const [namespaceRow] = await tx`
           INSERT INTO message_proxy_namespaces (
             service_id, namespace_key, short_id, display_name, tag, description
@@ -221,6 +213,18 @@ export class MessageProxyRepository {
         if (Number(externalIdentity.user_id) !== Number(user.user_id)) {
           throw new Error("External identity resolved to a different synthetic user");
         }
+
+        // Naming and profile writes require a personalization row. A null nickname leaves the
+        // service display name active until the user explicitly sets an override. Pronouns are
+        // seeded only when the statement above was the insert that first registered the
+        // identity, so a repeat attestation never revisits the column and an edit made through
+        // the personalization panel or a chat tool outlives every later proxy message.
+        const seededPronouns = insertedExternalIdentity ? (input.pronouns?.trim() ?? "") : "";
+        await tx`
+          INSERT INTO user_personalization_configs (user_id, user_nickname, pronouns)
+          VALUES (${user.user_id}, NULL, ${seededPronouns || null})
+          ON CONFLICT (user_id) DO NOTHING
+        `;
 
         const [identityRow] = await tx`
           INSERT INTO message_proxy_identities (

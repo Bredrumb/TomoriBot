@@ -27,6 +27,7 @@ import { shouldBotReply } from "@/utils/chat/replyDecision";
 import { shouldSurfaceChatUserErrors } from "@/utils/chat/errorVisibility";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import type { ChatIncoming, NonRunnableChatAdmission } from "@/utils/chat/types";
+import type { MessageProxyMessageRecord } from "@/utils/messageProxy/proxyExpectation";
 
 type RateLimitedChannel = Parameters<typeof enforceGlobalRateLimit>[0]["channel"];
 
@@ -43,12 +44,33 @@ type AdmissionQueueAndTriggerArgs = {
   cooldownUserDiscId: string;
   isActiveNaturalStopMessage: boolean;
   isNaturalStopMessage: boolean;
-  triggerMessage?: Message;
+  /** Confirmed repost record; its original, when attested, carries the trigger verdict. */
+  messageProxyRecord?: MessageProxyMessageRecord | null;
 };
 
 export async function evaluateAdmissionQueueAndTriggerGate(
   args: AdmissionQueueAndTriggerArgs,
 ): Promise<NonRunnableChatAdmission | null> {
+  const { incoming, messageProxyRecord } = args;
+  // PluralBuddy can verify a repost after the original's wait has ended. The original may
+  // already have started a reply, so admitting the repost would answer the same message twice.
+  if (
+    messageProxyRecord &&
+    !messageProxyRecord.originalSuppressed &&
+    !incoming.isManuallyTriggered &&
+    !incoming.isStopResponse &&
+    !incoming.isPersonaJob &&
+    !incoming.reminderRecipientID &&
+    !incoming.reminderData?.self_reminder
+  ) {
+    return {
+      incoming,
+      disposition: "ignore",
+      locale: "en-US",
+      reason: "proxy_original_already_processed",
+    };
+  }
+
   const lockDisposition = await evaluateLockedChannelAdmission(args);
   if (lockDisposition) {
     return lockDisposition;
@@ -62,7 +84,7 @@ async function evaluateLockedChannelAdmission(
 ): Promise<NonRunnableChatAdmission | null> {
   const { incoming, channelScope, earlyTomoriState, earlyAllPersonas, userDiscId, cooldownUserDiscId } = args;
   const { client, message } = incoming;
-  const triggerMessage = args.triggerMessage ?? message;
+  const triggerMessage = args.messageProxyRecord?.originalMessage ?? message;
   if (incoming.skipLock) {
     return null;
   }
@@ -127,6 +149,9 @@ async function evaluateLockedChannelAdmission(
       channelId,
       userDiscId,
       message,
+      verifiedProxySenderDiscId: args.messageProxyRecord?.originalSuppressed
+        ? args.messageProxyRecord.senderDiscId
+        : undefined,
       textQuotaSource: incoming.textQuotaSource,
       textQuotaTriggerKey,
       textQuotaUserDiscId,
@@ -278,7 +303,7 @@ async function evaluateLockedChannelAdmission(
 async function evaluatePreLockReplyGate(args: AdmissionQueueAndTriggerArgs): Promise<NonRunnableChatAdmission | null> {
   const { incoming, channelScope, earlyTomoriState, earlyAllPersonas, userDiscId } = args;
   const message = incoming.message;
-  const triggerMessage = args.triggerMessage ?? message;
+  const triggerMessage = args.messageProxyRecord?.originalMessage ?? message;
   if (
     incoming.isManuallyTriggered ||
     incoming.isStopResponse ||

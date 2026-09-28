@@ -27,8 +27,10 @@ Tomori never assigns a webhook identity from its name or avatar. The selected se
 repost ID, host account, and stable alter ID. PluralKit also identifies the exact original message,
 so TomoriBot can transfer its trigger decision and reply target. PluralBuddy does not provide that
 original ID. TomoriBot uses a recent message from the same host and channel as a best-effort match.
-If the repost arrives after the original wait or several originals overlap, it may be ignored or
-cause a second reply. Failed or conflicting verification never creates an identity.
+If a PluralBuddy repost is verified after the original wait, TomoriBot ignores it as a chat trigger
+because the original has already been released for processing. Several overlapping originals cannot
+be paired reliably and their reposts may be ignored. Failed or conflicting verification never
+creates an identity.
 
 This is why Tupperbox is not currently offered as a choice. Its public documentation describes
 proxying but not a public authoritative message-attestation API that TomoriBot can safely use.

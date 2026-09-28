@@ -21,7 +21,7 @@ export interface MessageProxyExpectation {
 
 interface InternalMessageProxyExpectation extends MessageProxyExpectation {
   waitPromise: Promise<MessageProxyWaitResult>;
-  waitResolved: boolean;
+  waitResult: MessageProxyWaitResult | null;
   waitDeadline: number;
   waitTimer: TimerHandle | null;
   ttlTimer: TimerHandle | null;
@@ -38,6 +38,14 @@ export interface MessageProxyMessageRecord {
   expiresAt: number;
   originalMessage: Message | null;
   originalReference: Message["reference"] | null;
+  /** Stable speaker ID from the attestation, used while the channel turn holds its lock. */
+  identityUserDiscId: string | null;
+  /**
+   * Whether the original was still held by its speedbump when this repost was confirmed, so the
+   * repost is the only admitted copy. False for a late PluralBuddy repost whose original already
+   * ran, which must not be admitted as a second follow-up of the same message.
+   */
+  originalSuppressed: boolean;
 }
 
 interface InternalMessageProxyMessageRecord extends MessageProxyMessageRecord {
@@ -103,13 +111,13 @@ export function createMessageProxyExpectation(args: {
     originalMessage: args.originalMessage,
     originalReference: args.originalReference,
     waitPromise,
-    waitResolved: false,
+    waitResult: null,
     waitDeadline: createdAt + proxyWaitMs,
     waitTimer: null,
     ttlTimer: null,
     resolveWait: (result) => {
-      if (expectation.waitResolved) return;
-      expectation.waitResolved = true;
+      if (expectation.waitResult) return;
+      expectation.waitResult = result;
       if (expectation.waitTimer) {
         clearTimeout(expectation.waitTimer);
         expectation.waitTimer = null;
@@ -240,6 +248,7 @@ export function rememberMessageProxyMessage(args: {
   expectation: MessageProxyExpectation;
   verifiedRepostOnly?: boolean;
   verifiedRepostReference?: Message["reference"];
+  identityUserDiscId?: string | null;
 }): MessageProxyMessageRecord {
   sweepExpiredMessageProxyState();
   deleteMessageProxyMessageRecord(args.messageDiscId);
@@ -258,6 +267,9 @@ export function rememberMessageProxyMessage(args: {
     originalReference: args.verifiedRepostOnly
       ? (args.verifiedRepostReference ?? null)
       : args.expectation.originalReference,
+    identityUserDiscId: args.identityUserDiscId ?? null,
+    originalSuppressed:
+      getInternalMessageProxyExpectation(args.channelId, args.expectation.originalMessageId)?.waitResult === "proxied",
     ttlTimer: null,
   };
 
@@ -393,7 +405,7 @@ function clearMessageProxyExpectationTimers(expectation: InternalMessageProxyExp
 }
 
 function scheduleMessageProxyWaitTimer(expectation: InternalMessageProxyExpectation): void {
-  if (expectation.waitResolved || activeLookupCountsByChannel.has(expectation.channelId)) {
+  if (expectation.waitResult || activeLookupCountsByChannel.has(expectation.channelId)) {
     return;
   }
 

@@ -28,18 +28,31 @@ are cosmetic data and never establish identity.
 ## Message lookup transport
 
 `services/pluralkit/api.ts` calls `GET /v2/messages/{messageId}` and validates the response with
-Zod before it reaches generic code. The adapter converts the validated transport DTO into a
-`ProxyMessageAttestation` containing the proxy message, original message, sender account, and an
-optional stable identity.
+Zod before it reaches generic code. The message model carries the full member object, so the public
+member name, description, and pronouns arrive in that one response and no separate member-profile
+request is made. PluralKit omits or nulls a value the member keeps private, so an absent key is
+never replaced with a placeholder. The adapter converts the validated transport DTO
+into a `ProxyMessageAttestation` containing the proxy message, original message, sender account, and
+an optional stable identity.
 
 The client preserves PluralKit-specific behavior:
 
 - `404` is retried because PluralKit may receive a proxy message before its API index does.
-- `429` honors a sane positive `Retry-After`; zero or malformed values use bounded backoff.
-- `PLURALKIT_LOOKUP_TIMEOUT_MS` bounds the complete lookup budget.
+- `429` honors a sane positive `Retry-After`; zero or malformed values use bounded backoff. A
+  `Retry-After` that leaves the budget no room to retry after it fails the lookup immediately,
+  rather than retrying early or sleeping out the deadline.
+- `PLURALKIT_LOOKUP_TIMEOUT_MS` bounds the complete lookup budget. One attempt may spend at most
+  half of it, so a stalled connection is aborted with the first backoff step and a second attempt
+  still inside the same deadline. A response that stalls while sending its body takes the same
+  retry path. Every retry sleep also leaves a minimum attempt's time, and the final attempt uses
+  whatever remains.
+- A lookup resolves `null` only when PluralKit answered that it has no such message. A stall,
+  network failure, rate limit, `5xx`, or untrustworthy payload rejects as
+  `PluralKitLookupUnavailableError`, which the router counts as `timeout_or_error` rather than
+  `unmatched`. Neither outcome invents an identity.
 - `PLURALKIT_API_TOKEN`, when set, is sent as the authorization token.
 - Concurrent reads for one message share a single request. Successful results are cached; failed
-  results are not permanently cached.
+  results are never cached, so a later attempt can still resolve the message.
 - A missing, deleted, private, or otherwise unavailable member produces no stable identity claim.
 
 The generic router still requires the returned service ID, original ID, and sender ID to match a
@@ -63,9 +76,11 @@ Proxy message ID
   -> message_proxy_message_index(member identity + attested sender)
 ```
 
-The host account owns authorization, privacy, blacklist state, cooldowns, quotas, and personal
-settings. The synthetic member owns conversational attribution and personal memories. Host
-`PrivacyLevel.FULL` or blacklist state shields every linked member.
+The host account owns authorization, privacy, blacklist state, cooldowns, quotas, usage telemetry,
+and personal settings. The synthetic member owns conversational attribution, personal memories, the
+profile fields a service publishes for it, and its own first-meeting and reunion clock, so two members
+of one system each meet Tomori and return to her independently. Host `PrivacyLevel.FULL` or blacklist
+state shields every linked member.
 
 ## Prompt presentation
 
@@ -79,6 +94,13 @@ A present member has no independent Discord presence and cannot be mentioned. It
 member-specific. A public system description is refreshed when observed and rendered once for the
 system; a public member description may be seeded once as a global personal memory when the member
 is first registered. The seed is a snapshot, not a later synchronization.
+
+A member's public pronouns follow the same one-time rule, written into that member's own `pronouns`
+setting on the attestation that first registers the identity. PluralKit stays the source of the
+initial value only: a pronoun set the member changes on PluralKit later does not overwrite an edit
+made through `/personal config identity:`, and a member who reports no pronouns leaves the setting
+empty. Nothing here infers a gender or an addressing style, and the system's own pronouns are not
+imported.
 
 ## Reply embeds
 

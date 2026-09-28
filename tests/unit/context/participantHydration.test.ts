@@ -616,7 +616,7 @@ function createPluralKitContext(overrides: Partial<MessageProxyIdentityContext> 
     externalIdentityId: 12,
     externalKey: "2f1c9d4e-6b7a-4c31-8d02-5e9f7a1b3c4d",
     identityShortId: "ghijkl",
-    displayName: "Sparrow",
+    displayName: "Mirri",
     namespaceId: 3,
     namespaceKey: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
     namespaceShortId: "abcdef",
@@ -641,7 +641,7 @@ function createPluralKitSeed(): ParticipantSeed {
 function createPluralKitFixture(options: Parameters<typeof createFixture>[0] = {}): ReturnType<typeof createFixture> {
   return createFixture({
     participantSeeds: [createPluralKitSeed()],
-    userRow: createUserRow({ user_id: 88, user_disc_id: PK_USER_ID, user_nickname: "Saved Sparrow" }),
+    userRow: createUserRow({ user_id: 88, user_disc_id: PK_USER_ID, user_nickname: "Saved Mirri" }),
     messageProxyContext: createPluralKitContext(),
     ...options,
   });
@@ -676,7 +676,7 @@ describe("pluralkit member hydration", () => {
     const fixture = createPluralKitFixture({
       messageProxyContext: createPluralKitContext({ hostUserDiscIds: [PK_HOST_ID] }),
       messageProxyUsers: new Map<string, MessageProxyConversationUser>([
-        [PK_USER_ID, { serviceId: "pluralkit", displayName: "Sparrow", senderDiscId: proxyingHost }],
+        [PK_USER_ID, { serviceId: "pluralkit", displayName: "Mirri", senderDiscId: proxyingHost }],
       ]),
     });
 
@@ -744,7 +744,7 @@ describe("pluralkit member hydration", () => {
   it("attributes memories to the member, not the shared account", async () => {
     const fixture = createPluralKitFixture({
       messageProxyUsers: new Map<string, MessageProxyConversationUser>([
-        [PK_USER_ID, { serviceId: "pluralkit", displayName: "Sparrow", senderDiscId: PK_HOST_ID }],
+        [PK_USER_ID, { serviceId: "pluralkit", displayName: "Mirri", senderDiscId: PK_HOST_ID }],
       ]),
     });
 
@@ -753,20 +753,20 @@ describe("pluralkit member hydration", () => {
       .find((candidate) => candidate.kind === "personal_memories")
       ?.lines.join("\n");
 
-    expect(result.profiles[0]?.displayName).toBe("Saved Sparrow");
-    expect(memoryLines).toContain("Sparrow's memories:");
+    expect(result.profiles[0]?.displayName).toBe("Saved Mirri");
+    expect(memoryLines).toContain("Mirri's memories:");
   });
 
   it("uses the service name again after an identity nickname is cleared", async () => {
     const fixture = createPluralKitFixture({
       userRow: createUserRow({ user_id: 88, user_disc_id: PK_USER_ID, user_nickname: null }),
       messageProxyUsers: new Map<string, MessageProxyConversationUser>([
-        [PK_USER_ID, { serviceId: "pluralkit", displayName: "Sparrow", senderDiscId: PK_HOST_ID }],
+        [PK_USER_ID, { serviceId: "pluralkit", displayName: "Mirri", senderDiscId: PK_HOST_ID }],
       ]),
     });
 
     const result = await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
-    expect(result.profiles[0]?.displayName).toBe("Sparrow");
+    expect(result.profiles[0]?.displayName).toBe("Mirri");
   });
 
   it("is never mentionable even though the seed carries the capability", async () => {
@@ -820,7 +820,7 @@ describe("service-owned message-proxy presentation", () => {
         externalIdentityId: 21,
         externalKey: "profile-one",
         identityShortId: "one",
-        displayName: "Sparrow",
+        displayName: "Mirri",
         namespaceId: 22,
         namespaceKey: "account-one",
         namespaceShortId: "acct",
@@ -830,7 +830,7 @@ describe("service-owned message-proxy presentation", () => {
         hostUserDiscIds: [],
       },
       messageProxyUsers: new Map([
-        [identityUserId, { serviceId: "fixture_service", displayName: "Sparrow", senderDiscId: USER_ID }],
+        [identityUserId, { serviceId: "fixture_service", displayName: "Mirri", senderDiscId: USER_ID }],
       ]),
     });
     fixture.dependencies.isMessageProxyIdentity = (discordId) => discordId.startsWith("fx:");

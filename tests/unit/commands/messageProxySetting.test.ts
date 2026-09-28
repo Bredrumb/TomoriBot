@@ -21,7 +21,7 @@ function user(service: string | null): UserRow {
   return {
     user_id: 42,
     user_disc_id: "user-42",
-    user_nickname: "Sparrow",
+    user_nickname: "Mirri",
     language_pref: "en-US",
     registration_locale: "en-US",
     privacy_level: PrivacyLevel.MINIMAL,
@@ -108,7 +108,7 @@ describe("/personal message-proxy", () => {
     for (const serviceId of [null, "none", "pluralkit", "removed_service"] as const) {
       expect(
         personalSettingsExportDataSchema.safeParse({
-          user_nickname: "Sparrow",
+          user_nickname: "Mirri",
           language_pref: "en-US",
           physical_appearance_tags: [],
           message_proxy_service: serviceId,

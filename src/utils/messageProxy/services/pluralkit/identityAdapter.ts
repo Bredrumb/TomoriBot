@@ -20,6 +20,7 @@ export function toPluralKitIdentityInput(lookup: PkMessageLookup): ProxyIdentity
     shortId: lookup.member.id,
     displayName: getPluralKitIdentityDisplayName(lookup) ?? lookup.member.id,
     bio: normalizeOptionalText(lookup.member.description),
+    pronouns: normalizeOptionalText(lookup.member.pronouns),
     namespace: {
       namespaceKey: lookup.system.uuid,
       shortId: lookup.system.id,

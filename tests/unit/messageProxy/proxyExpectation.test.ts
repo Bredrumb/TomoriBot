@@ -85,6 +85,7 @@ describe("message-proxy expectations", () => {
       verifiedRepostOnly: true,
     });
     expect(record.originalMessageId).toBeNull();
+    expect(record.originalSuppressed).toBe(false);
     expect(getSupersededMessageProxyOriginalMessageIds("channel_1")).toEqual(new Set());
   });
   it("resolves the original speedbump when the original message is deleted", async () => {
@@ -161,6 +162,7 @@ describe("message-proxy expectations", () => {
 
     expect(await wait).toBe("proxied");
     expect(record.serviceId).toBe("service_a");
+    expect(record.originalSuppressed).toBe(true);
     expect(record.senderDiscId).toBe("sender_1");
     expect(isKnownMessageProxyMessage({ id: "proxy_1", webhookId: "webhook_1" } as Message)).toBe(true);
 

@@ -32,6 +32,12 @@ export type ProxyIdentityUpsertInput = {
   displayName: string | null;
   avatarUrl?: string | null;
   bio: string | null;
+  /**
+   * Service-published pronouns for this identity, when the service reports them publicly.
+   * They seed the synthetic user's own `pronouns` setting at first registration only,
+   * so every later edit belongs to that profile and is never taken back from the service.
+   */
+  pronouns?: string | null;
   namespace: ProxyIdentityNamespaceInput;
 };
 

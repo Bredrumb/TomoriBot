@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterAll, afterEach, describe, expect, it, mock } from "bun:test";
 import type { Message } from "discord.js";
 import {
   clearMessageProxyExpectationStateForTests,
   createMessageProxyExpectation,
+  getLiveMessageProxyExpectationServiceIds,
   getMessageProxyMessageRecord,
   markMessageProxyExpectationProxied,
   markMessageProxyOriginalDeleted,
@@ -15,12 +16,51 @@ import {
   getMessageProxyRouteMetricsSnapshot,
   routeMessageProxyMessage,
 } from "@/utils/messageProxy/router";
+import { clearPluralKitApiStateForTests } from "@/utils/messageProxy/services/pluralkit/api";
 import type {
   ProxyIdentityUpsertInput,
   ProxyMessageAttestation,
   ProxyServiceDescriptor,
   ProxyServicePresentation,
 } from "@/utils/messageProxy/types";
+import { stallUntilAborted } from "../../helpers/fetchStub";
+
+const originalLookupTimeoutMs = process.env.PLURALKIT_LOOKUP_TIMEOUT_MS;
+const originalProxyWaitMs = process.env.MESSAGE_PROXY_WAIT_MS;
+
+afterAll(() => {
+  if (originalLookupTimeoutMs === undefined) delete process.env.PLURALKIT_LOOKUP_TIMEOUT_MS;
+  else process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = originalLookupTimeoutMs;
+  if (originalProxyWaitMs === undefined) delete process.env.MESSAGE_PROXY_WAIT_MS;
+  else process.env.MESSAGE_PROXY_WAIT_MS = originalProxyWaitMs;
+});
+
+/** Runs one test under timing other than the production defaults it would otherwise wait out. */
+async function withTiming(
+  timing: { lookupTimeoutMs?: number; proxyWaitMs?: number },
+  body: () => Promise<void>,
+): Promise<void> {
+  try {
+    if (timing.lookupTimeoutMs !== undefined) process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = String(timing.lookupTimeoutMs);
+    if (timing.proxyWaitMs !== undefined) process.env.MESSAGE_PROXY_WAIT_MS = String(timing.proxyWaitMs);
+    await body();
+  } finally {
+    if (originalLookupTimeoutMs === undefined) delete process.env.PLURALKIT_LOOKUP_TIMEOUT_MS;
+    else process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = originalLookupTimeoutMs;
+    if (originalProxyWaitMs === undefined) delete process.env.MESSAGE_PROXY_WAIT_MS;
+    else process.env.MESSAGE_PROXY_WAIT_MS = originalProxyWaitMs;
+  }
+}
+
+/** A valid PluralKit lookup payload whose original and sender match the standard expectation. */
+function pluralKitPayload(): Record<string, unknown> {
+  return {
+    original: "original-1",
+    sender: "sender-1",
+    system: { id: "abcdef", uuid: "11111111-2222-4333-8444-555555555555", name: "Lighthouse", tag: null },
+    member: { id: "ghijkl", uuid: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", name: "Mirri" },
+  };
+}
 
 const presentation: ProxyServicePresentation = {
   identityMemoryLabel: (displayName) => `${displayName}'s notes`,
@@ -37,7 +77,7 @@ function identity(serviceId: string): ProxyIdentityUpsertInput {
     externalIdentityKind: `${serviceId}_profile`,
     externalKey: "profile-1",
     shortId: "p1",
-    displayName: "Sparrow",
+    displayName: "Mirri",
     bio: null,
     namespace: {
       namespaceKey: "account-1",
@@ -114,9 +154,13 @@ function expectation(serviceId: string) {
   });
 }
 
+const originalFetch = globalThis.fetch;
+
 afterEach(() => {
+  globalThis.fetch = originalFetch;
   clearMessageProxyExpectationStateForTests();
   clearMessageProxyRouteMetricsForTests();
+  clearPluralKitApiStateForTests();
 });
 
 describe("message-proxy attestation router", () => {
@@ -259,7 +303,7 @@ describe("message-proxy attestation router", () => {
     expect(record.originalMessageId).toBe("original-1");
   });
 
-  it("keeps an API failure after deletion identity-free and silent", async () => {
+  it("keeps a late repost after a suppressed original identity-free and silent", async () => {
     const failing = descriptor("failing", async () => {
       throw new Error("transport unavailable");
     });
@@ -275,6 +319,109 @@ describe("message-proxy attestation router", () => {
     });
     expect(await originalWait).toBe("proxied");
     expect(getMessageProxyMessageRecord("proxy-1")).toBeNull();
+    expect(getMessageProxyRouteMetricsSnapshot()).toMatchObject({ timeout_or_error: 1, unmatched: 0 });
+  });
+
+  it("releases a paused original wait after a failed lookup so the channel keeps working", async () => {
+    await withTiming({ proxyWaitMs: 80 }, async () => {
+      const failing = descriptor("failing", async () => {
+        throw new Error("transport unavailable");
+      });
+      const registry = createProxyServiceRegistry([failing]);
+      const expected = expectation("failing");
+      const originalWait = waitForMessageProxyExpectation(expected);
+
+      expect(
+        await routeMessageProxyMessage({ message: message(), candidateServiceIds: ["failing"] }, { registry }),
+      ).toEqual({ status: "timeout_or_error" });
+
+      // The lookup pauses this channel's wait timers. A failed lookup must resume them,
+      // or every original in the channel is held until its TTL expires.
+      const waitResult = await Promise.race([
+        originalWait,
+        new Promise<"stuck">((resolve) => setTimeout(() => resolve("stuck"), 1000)),
+      ]);
+      expect(waitResult).toBe("timeout");
+      expect(getLiveMessageProxyExpectationServiceIds("channel-1")).toEqual([]);
+    });
+  });
+
+  it("counts a confirmed miss as unmatched and a transport failure as timeout_or_error", async () => {
+    const missing = descriptor("missing", async () => null);
+    const failing = descriptor("failing", async () => {
+      throw new Error("transport unavailable");
+    });
+
+    expect(
+      await routeMessageProxyMessage(
+        { message: message(), candidateServiceIds: ["missing"] },
+        { registry: createProxyServiceRegistry([missing]) },
+      ),
+    ).toEqual({ status: "unmatched" });
+    expect(
+      await routeMessageProxyMessage(
+        { message: message(), candidateServiceIds: ["failing"] },
+        { registry: createProxyServiceRegistry([failing]) },
+      ),
+    ).toEqual({ status: "timeout_or_error" });
+
+    expect(getMessageProxyRouteMetricsSnapshot()).toMatchObject({ unmatched: 1, timeout_or_error: 1 });
+  });
+
+  it("recovers a PluralKit repost whose first lookup attempt stalls", async () => {
+    await withTiming({ lookupTimeoutMs: 3000, proxyWaitMs: 5000 }, async () => {
+      let calls = 0;
+      globalThis.fetch = mock(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        calls++;
+        if (calls === 1) return stallUntilAborted(init?.signal);
+        return new Response(JSON.stringify(pluralKitPayload()), { status: 200 });
+      }) as unknown as typeof fetch;
+      const expected = expectation("pluralkit");
+
+      const result = await routeMessageProxyMessage({
+        message: message(),
+        candidateServiceIds: getLiveMessageProxyExpectationServiceIds("channel-1"),
+      });
+
+      expect(calls).toBe(2);
+      expect(result.status).toBe("matched_stable_identity");
+      if (result.status === "matched_stable_identity") {
+        expect(result.expectation).toBe(expected);
+        expect(result.attestation.identity?.externalKey).toBe("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee");
+      }
+    });
+  }, 10_000);
+
+  it("counts a stalled PluralKit lookup as timeout_or_error, not a miss", async () => {
+    await withTiming({ lookupTimeoutMs: 600 }, async () => {
+      globalThis.fetch = mock(async (_input: RequestInfo | URL, init?: RequestInit) =>
+        stallUntilAborted(init?.signal),
+      ) as unknown as typeof fetch;
+      expectation("pluralkit");
+
+      expect(
+        await routeMessageProxyMessage({
+          message: message(),
+          candidateServiceIds: getLiveMessageProxyExpectationServiceIds("channel-1"),
+        }),
+      ).toEqual({ status: "timeout_or_error" });
+      expect(getMessageProxyRouteMetricsSnapshot()).toMatchObject({ timeout_or_error: 1, unmatched: 0 });
+    });
+  });
+
+  it("counts a PluralKit 404 as an unmatched miss rather than an error", async () => {
+    await withTiming({ lookupTimeoutMs: 600 }, async () => {
+      globalThis.fetch = mock(async () => new Response(JSON.stringify({}), { status: 404 })) as unknown as typeof fetch;
+      expectation("pluralkit");
+
+      expect(
+        await routeMessageProxyMessage({
+          message: message(),
+          candidateServiceIds: getLiveMessageProxyExpectationServiceIds("channel-1"),
+        }),
+      ).toEqual({ status: "unmatched" });
+      expect(getMessageProxyRouteMetricsSnapshot()).toMatchObject({ unmatched: 1, timeout_or_error: 0 });
+    });
   });
 
   it("rejects stable identity metadata that does not belong to the claiming descriptor", async () => {

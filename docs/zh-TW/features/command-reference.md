@@ -228,7 +228,7 @@ TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使�
 | `/personal config` | 管理你的個人偏好、隱私、模型與個人檔案。 |
 | `/personal language` | 選擇 TomoriBot 對你說話時使用的語言。 |
 | `/personal memories` | 管理你的個人長期記憶與短期對話脈絡。 |
-| `/personal message-proxy` | Choose a supported message proxy service for your account. |
+| `/personal message-proxy` | 為你的帳號選擇支援的訊息代理服務。 |
 | `/personal nuke` | 清除 TomoriBot 在每個伺服器儲存的、關於你的一切。 |
 | `/personal providers` | 管理你的個人供應商憑證、端點與模型目錄。 |
 

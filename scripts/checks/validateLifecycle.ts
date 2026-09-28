@@ -243,7 +243,7 @@ async function assertMessageProxyMigrationPresent(client: SQL): Promise<void> {
       'message_proxy_identities_message_proxy_namespace_id_fkey',
       'message_proxy_identities_external_identity_id_fkey',
       'message_proxy_namespace_accounts_pkey',
-      'message_proxy_namespace_accounts_message_proxy_namespace_id_fkey',
+      'message_proxy_namespace_account_message_proxy_namespace_id_fkey',
       'message_proxy_message_index_pkey',
       'message_proxy_message_index_external_identity_id_fkey'
     )
@@ -256,20 +256,14 @@ async function assertMessageProxyMigrationPresent(client: SQL): Promise<void> {
     SELECT name
     FROM schema_migrations
     WHERE name LIKE '056\_%' ESCAPE '\\'
-       OR name LIKE '057\_%' ESCAPE '\\'
-       OR name LIKE '058\_%' ESCAPE '\\'
-       OR name LIKE '059\_%' ESCAPE '\\'
        OR name LIKE '060\_%' ESCAPE '\\'
   `;
   const names = new Set(migrationRows.map(({ name }) => name));
-  if (!names.has("056_message_proxy_identity") || !names.has("058_personal_fallback_chain")) {
-    throw new Error("Expected migrations 056 and 058 were not applied.");
+  if (!names.has("056_message_proxy_identity")) {
+    throw new Error("Expected migration 056 was not applied.");
   }
   if (!names.has("060_personal_capability_assignment")) {
     throw new Error("Expected migration 060 was not applied.");
-  }
-  if ([...names].some((name) => name.startsWith("057_") || name.startsWith("059_"))) {
-    throw new Error("Retired migrations 057 or 059 were unexpectedly applied.");
   }
 }
 

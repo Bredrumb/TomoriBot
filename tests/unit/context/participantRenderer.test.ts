@@ -143,7 +143,7 @@ Current time: Aug 2, 2026, 02:00 PM (UTC+8), afternoon.
   });
 
   it("renders a neutral service-owned namespace entry after participant entries", () => {
-    const profile = humanProfile("400000000000000001", "Sparrow", "sparrow", ["- Verified relay identity"]);
+    const profile = humanProfile("400000000000000001", "Mirri", "Mirri", ["- Verified relay identity"]);
     const rendered = render(
       [profile],
       [
@@ -159,13 +159,13 @@ Current time: Aug 2, 2026, 02:00 PM (UTC+8), afternoon.
     expect(rendered.text).toContain(
       "Verified relay profiles:\n- Lighthouse profile (relay source: Jordan, @jordan_h): Public relay notes.",
     );
-    expect(rendered.text.indexOf("Sparrow")).toBeLessThan(rendered.text.indexOf("Verified relay profiles"));
+    expect(rendered.text.indexOf("Mirri")).toBeLessThan(rendered.text.indexOf("Verified relay profiles"));
     expect(rendered.text).not.toMatch(/shared account|\bmember\b|plural system/iu);
   });
 
   it("preserves a service entry that has no account relationship or description", () => {
     const rendered = render(
-      [humanProfile("400000000000000001", "Sparrow", "sparrow", ["- A fact"])],
+      [humanProfile("400000000000000001", "Mirri", "Mirri", ["- A fact"])],
       [
         {
           serviceId: "fixture_service",
@@ -181,7 +181,7 @@ Current time: Aug 2, 2026, 02:00 PM (UTC+8), afternoon.
   });
 
   it("renders no namespace section when no service provides one", () => {
-    const rendered = render([humanProfile("400000000000000001", "Sparrow", "sparrow", ["- A fact"])]);
+    const rendered = render([humanProfile("400000000000000001", "Mirri", "Mirri", ["- A fact"])]);
 
     expect(rendered.text).not.toContain("Verified relay profiles:");
   });

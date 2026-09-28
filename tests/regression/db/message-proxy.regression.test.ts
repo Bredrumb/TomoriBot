@@ -21,8 +21,8 @@ function identityInput(
     serviceId: "pluralkit",
     externalIdentityKind: "pluralkit_member",
     externalKey,
-    shortId: "sparrow",
-    displayName: "Sparrow",
+    shortId: "Mirri",
+    displayName: "Mirri",
     bio: "Keeps field notes.",
     namespace: {
       namespaceKey: "fixture-account",
@@ -83,12 +83,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("message-proxy persistence regression", () 
     expect(await messageProxyRepository.getIdentityContextByUserDiscId(`pk:${PRIMARY_KEY}`)).toMatchObject({
       externalKey: PRIMARY_KEY,
     });
-    expect((await getCachedUserRow(`pk:${PRIMARY_KEY}`))?.user_nickname).toBe("Sparrow");
+    expect((await getCachedUserRow(`pk:${PRIMARY_KEY}`))?.user_nickname).toBeNull();
   });
 
   it("is idempotent, refreshes cosmetic names, and supports multiple hosts", async () => {
     const renamed = identityInput(PRIMARY_KEY, {
-      displayName: "Sparrow Updated",
+      displayName: "Mirri Updated",
       namespace: {
         namespaceKey: "fixture-account",
         shortId: "light",
@@ -104,13 +104,13 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("message-proxy persistence regression", () 
     });
 
     expect(result?.isNewIdentity).toBe(false);
-    expect(result?.userRow.user_nickname).toBe("Sparrow Updated");
+    expect(result?.userRow.user_nickname).toBeNull();
     expect(result?.namespace).toMatchObject({
       display_name: "Lighthouse Updated",
       tag: "[NEW]",
       description: "Updated public description.",
     });
-    expect((await getCachedUserRow(`pk:${PRIMARY_KEY}`))?.user_nickname).toBe("Sparrow Updated");
+    expect((await getCachedUserRow(`pk:${PRIMARY_KEY}`))?.user_nickname).toBeNull();
     const context = await messageProxyRepository.getIdentityContextByUserDiscId(`pk:${PRIMARY_KEY}`);
     expect(context?.hostUserDiscIds.sort()).toEqual(["_rt_proxy_host_1", "_rt_proxy_host_2"]);
   });
