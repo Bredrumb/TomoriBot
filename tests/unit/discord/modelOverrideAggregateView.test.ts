@@ -41,6 +41,8 @@ import {
 import * as channelLlmCacheStore from "@/utils/cache/channelLlmCacheStore";
 import * as tomoriStateCacheStore from "@/utils/cache/tomoriStateCacheStore";
 import { createPersona } from "../../helpers/fixtures";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
+import { ColorCode } from "@/utils/misc/logger";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -695,7 +697,9 @@ describe("/model override remove - (6) routed submit stale fp and absent checkbo
 
     const editedPayload = interaction.getEditedReply() as { embeds?: Array<{ data: { title?: string } }> };
     expect(editedPayload).toBeDefined();
-    expect(editedPayload?.embeds?.[0]?.data?.title).toBe(localizer("en-US", "general.errors.update_failed_title"));
+    expect(editedPayload?.embeds?.[0]?.data?.title).toBe(
+      localizedStatusTitle("en-US", "general.errors.update_failed_title", ColorCode.ERROR),
+    );
   });
 });
 

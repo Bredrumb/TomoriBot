@@ -42,6 +42,7 @@ import { safeDownload } from "@/utils/security/safeDownload";
 import { executeAutoImageCommand } from "@/utils/image/autoImageCommand";
 import { prepareGeneratedImage } from "@/utils/image/generatedImageMetadata";
 import { buildImageGenerationInputAttachment } from "@/utils/image/imageGenerationInput";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
 const MODAL_CUSTOM_ID = "generate_image_modal";
 const PROMPT_INPUT_ID = "prompt_input";
@@ -631,7 +632,7 @@ export async function execute(
     }
 
     const successEmbed = new EmbedBuilder()
-      .setTitle(localizer(locale, "commands.generate.image.success_title"))
+      .setTitle(localizedStatusTitle(locale, "commands.generate.image.success_title", ColorCode.SUCCESS))
       .setColor(ColorCode.SUCCESS)
       .setImage(`attachment://${filename}`)
       .setFooter({

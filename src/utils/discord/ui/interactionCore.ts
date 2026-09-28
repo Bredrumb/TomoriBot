@@ -49,7 +49,8 @@ import {
   type ComponentsV2MessagePayload,
 } from "./componentsV2Limits";
 export { ComponentsV2LimitError, validateComponentsV2MessageLimits, type ComponentsV2MessagePayload };
-import { buildPanelContainer } from "./panel";
+import { buildPanelContainer, resolveAccentColor, type AccentColorInput } from "./panel";
+import { withStatusCircle } from "./statusTitle";
 
 // Clean storage for select values (Discord.js will strip them, so we preserve them)
 const modalSelectValues = new Map<string, Record<string, string>>();
@@ -658,7 +659,7 @@ export async function promptWithConfirmation(
 
     const cancelEmbed = new EmbedBuilder()
       .setColor(ColorCode.ERROR)
-      .setTitle(localizer(locale, "general.interaction.cancel_title"))
+      .setTitle(withStatusCircle(localizer(locale, "general.interaction.cancel_title"), ColorCode.ERROR))
       .setDescription(localizer(locale, "general.interaction.cancel_description"));
 
     await interaction.editReply({ embeds: [cancelEmbed], components: [] });
@@ -667,7 +668,7 @@ export async function promptWithConfirmation(
     log.warn(`Confirmation prompt timed out for user ${interaction.user.id}`);
     const timeoutEmbed = new EmbedBuilder()
       .setColor(ColorCode.ERROR)
-      .setTitle(localizer(locale, "general.interaction.timeout_title"))
+      .setTitle(withStatusCircle(localizer(locale, "general.interaction.timeout_title"), ColorCode.ERROR))
       .setDescription(localizer(locale, "general.interaction.timeout_description"));
     await interaction.editReply({ embeds: [timeoutEmbed], components: [] });
     return { outcome: "timeout" };
@@ -1222,28 +1223,6 @@ interface PersonaPaginatedChoiceOptions {
   avatarSessionCache?: AvatarSessionCache;
 }
 
-type AccentColorInput = string | number | readonly [red: number, green: number, blue: number];
-
-function resolveAccentColor(color?: AccentColorInput): number {
-  if (typeof color === "number") {
-    return color;
-  }
-
-  if (typeof color === "string") {
-    const normalized = color.trim().replace("#", "");
-    if (/^[0-9a-fA-F]{6}$/.test(normalized)) {
-      return Number.parseInt(normalized, 16);
-    }
-  }
-
-  if (Array.isArray(color) && color.length === 3) {
-    const [red, green, blue] = color;
-    return (red << 16) + (green << 8) + blue;
-  }
-
-  return Number.parseInt(ColorCode.INFO.replace("#", ""), 16);
-}
-
 /**
  * Formats the leading "title" line of a Components V2 container. All CV2
  * containers render their title as an H3 heading for consistent prominence
@@ -1264,11 +1243,12 @@ function buildV2StatusComponents(
   secondaryDescriptionKey?: string,
   secondaryDescriptionVars?: Record<string, string | number | boolean>,
 ): TopLevelComponentData[] {
+  const accentColor = resolveAccentColor(color);
   const container = buildPanelContainer(
     [
       {
         type: ComponentType.TextDisplay,
-        content: formatContainerTitle(localizer(locale, titleKey)),
+        content: formatContainerTitle(withStatusCircle(localizer(locale, titleKey), accentColor)),
       },
       {
         type: ComponentType.TextDisplay,
@@ -1283,7 +1263,7 @@ function buildV2StatusComponents(
           ]
         : []),
     ],
-    resolveAccentColor(color),
+    accentColor,
   );
 
   return [container];
@@ -1387,6 +1367,7 @@ export interface NoticeContainerOptions {
  */
 export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelComponentData[] {
   const { locale } = options;
+  const accentColor = resolveAccentColor(options.color);
   const components: ComponentInContainerData[] = [];
   const descriptionText =
     options.description ??
@@ -1394,7 +1375,9 @@ export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelC
 
   components.push({
     type: ComponentType.TextDisplay,
-    content: formatContainerTitle(localizer(locale, options.titleKey, options.titleVars)),
+    content: formatContainerTitle(
+      withStatusCircle(localizer(locale, options.titleKey, options.titleVars), accentColor),
+    ),
   });
 
   if (descriptionText) {
@@ -1427,7 +1410,7 @@ export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelC
     } satisfies ActionRowData<ButtonComponentData>);
   }
 
-  const container = buildPanelContainer(components, resolveAccentColor(options.color));
+  const container = buildPanelContainer(components, accentColor);
 
   return [container];
 }
@@ -1637,6 +1620,7 @@ export interface PersonaResultContainerOptions {
  */
 export function buildPersonaResultContainer(options: PersonaResultContainerOptions): TopLevelComponentData[] {
   const { locale } = options;
+  const accentColor = resolveAccentColor(options.color);
   const components: ComponentInContainerData[] = [];
   const sections = options.sections ?? [];
 
@@ -1647,7 +1631,9 @@ export function buildPersonaResultContainer(options: PersonaResultContainerOptio
 
   components.push({
     type: ComponentType.TextDisplay,
-    content: formatContainerTitle(localizer(locale, options.titleKey, options.titleVars)),
+    content: formatContainerTitle(
+      withStatusCircle(localizer(locale, options.titleKey, options.titleVars), accentColor),
+    ),
   });
 
   // Hero image directly under the title (CV2 has no embed image slot, so the
@@ -1735,7 +1721,7 @@ export function buildPersonaResultContainer(options: PersonaResultContainerOptio
     });
   }
 
-  const container = buildPanelContainer(components, resolveAccentColor(options.color));
+  const container = buildPanelContainer(components, accentColor);
 
   return [container];
 }

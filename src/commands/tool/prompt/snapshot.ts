@@ -76,6 +76,7 @@ import {
 import { normalizeRenderModifierName } from "@/utils/discord/renderModifierParser";
 import { resolveWebhookPersonaAuthor } from "@/utils/discord/webhookPersonaAuthor";
 import { prepareParticipantContext } from "@/utils/text/participants/preparation";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
 const PERSONA_SELECT_ID = "prompt_snapshot_persona_select";
 
@@ -419,7 +420,7 @@ export async function execute(
       await modalInteraction.editReply({
         embeds: [
           new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.tool.prompt.snapshot.build_failed_title"))
+            .setTitle(localizedStatusTitle(locale, "commands.tool.prompt.snapshot.build_failed_title", ColorCode.ERROR))
             .setDescription(localizer(locale, "commands.tool.prompt.snapshot.build_failed_description"))
             .setColor(ColorCode.ERROR),
         ],
@@ -484,7 +485,7 @@ export async function execute(
       await modalInteraction.editReply({
         embeds: [
           new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.tool.prompt.snapshot.build_failed_title"))
+            .setTitle(localizedStatusTitle(locale, "commands.tool.prompt.snapshot.build_failed_title", ColorCode.ERROR))
             .setDescription(localizer(locale, "commands.tool.prompt.snapshot.build_failed_description"))
             .setColor(ColorCode.ERROR),
         ],
@@ -971,7 +972,7 @@ export async function execute(
       await modalInteraction.editReply({
         embeds: [
           new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.tool.prompt.snapshot.success_title"))
+            .setTitle(localizedStatusTitle(locale, "commands.tool.prompt.snapshot.success_title", ColorCode.SUCCESS))
             .setDescription(localizer(locale, "commands.tool.prompt.snapshot.success_description"))
             .setColor(ColorCode.SUCCESS),
         ],
@@ -981,7 +982,7 @@ export async function execute(
       await modalInteraction.editReply({
         embeds: [
           new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.tool.prompt.snapshot.dm_failed_title"))
+            .setTitle(localizedStatusTitle(locale, "commands.tool.prompt.snapshot.dm_failed_title", ColorCode.WARN))
             .setDescription(
               `${localizer(locale, "commands.tool.prompt.snapshot.dm_failed_description")}\n\n${dmDescription}`,
             )

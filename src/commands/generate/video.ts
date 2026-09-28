@@ -35,6 +35,7 @@ import { formatCustomModelDisplay } from "@/utils/provider/customProviderUtils";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { isOpenRouterVideoCapabilityError } from "@/providers/openrouter/openrouterVideoRequest";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
 const MODAL_CUSTOM_ID = "generate_video_modal";
 const PROMPT_INPUT_ID = "prompt_input";
@@ -409,7 +410,7 @@ export async function execute(
       await modalSubmitInteraction.editReply({
         embeds: [
           new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.generate.video.invalid_duration_title"))
+            .setTitle(localizedStatusTitle(locale, "commands.generate.video.invalid_duration_title", ColorCode.ERROR))
             .setDescription(
               localizer(locale, "commands.generate.video.invalid_duration_description", {
                 max: MAX_VIDEO_DURATION_SECONDS.toString(),
@@ -427,7 +428,7 @@ export async function execute(
       await modalSubmitInteraction.editReply({
         embeds: [
           new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.generate.video.invalid_fps_title"))
+            .setTitle(localizedStatusTitle(locale, "commands.generate.video.invalid_fps_title", ColorCode.ERROR))
             .setDescription(
               localizer(locale, "commands.generate.video.invalid_fps_description", {
                 max: MAX_VIDEO_FPS.toString(),
@@ -452,7 +453,7 @@ export async function execute(
         await modalSubmitInteraction.editReply({
           embeds: [
             new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.generate.video.invalid_image_title"))
+              .setTitle(localizedStatusTitle(locale, "commands.generate.video.invalid_image_title", ColorCode.ERROR))
               .setDescription(localizer(locale, "commands.generate.video.invalid_image_description"))
               .setColor(ColorCode.ERROR),
           ],
@@ -540,7 +541,7 @@ export async function execute(
       await modalSubmitInteraction.editReply({
         embeds: [
           new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.generate.video.error_title"))
+            .setTitle(localizedStatusTitle(locale, "commands.generate.video.error_title", ColorCode.ERROR))
             .setDescription(
               localizer(locale, "commands.generate.video.unsupported_provider_description", {
                 provider: executionProvider,
@@ -556,7 +557,7 @@ export async function execute(
       await modalSubmitInteraction.editReply({
         embeds: [
           new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.generate.video.error_title"))
+            .setTitle(localizedStatusTitle(locale, "commands.generate.video.error_title", ColorCode.ERROR))
             .setDescription(localizer(locale, "commands.generate.video.no_data_description"))
             .setColor(ColorCode.ERROR),
         ],
@@ -569,7 +570,7 @@ export async function execute(
       await modalSubmitInteraction.editReply({
         embeds: [
           new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.generate.video.file_too_large_title"))
+            .setTitle(localizedStatusTitle(locale, "commands.generate.video.file_too_large_title", ColorCode.ERROR))
             .setDescription(
               localizer(locale, "commands.generate.video.file_too_large_description", { size_mb: sizeMB }),
             )
@@ -596,7 +597,7 @@ export async function execute(
     await modalSubmitInteraction.editReply({
       embeds: [
         new EmbedBuilder()
-          .setTitle(localizer(locale, "commands.generate.video.success_title"))
+          .setTitle(localizedStatusTitle(locale, "commands.generate.video.success_title", ColorCode.SUCCESS))
           .setDescription(
             localizer(locale, "commands.generate.video.success_description", {
               model: displayModelName,
@@ -630,7 +631,7 @@ export async function execute(
 
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorEmbed = new EmbedBuilder()
-      .setTitle(localizer(locale, "commands.generate.video.error_title"))
+      .setTitle(localizedStatusTitle(locale, "commands.generate.video.error_title", ColorCode.ERROR))
       .setDescription(
         isOpenRouterVideoCapabilityError(error)
           ? localizer(

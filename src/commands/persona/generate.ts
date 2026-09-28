@@ -53,6 +53,7 @@ import { getOpenRouterTokenLimits, isOpenRouterCapabilityCacheReady } from "@/ut
 import { providerSupportsFeature, normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
 const MODAL_CUSTOM_ID = "preset_generate_modal";
 const CHARACTER_NAME_ID = "character_name";
@@ -572,7 +573,7 @@ export async function execute(
       await modalSubmitInteraction.editReply({
         embeds: [
           new EmbedBuilder()
-            .setTitle(localizer(locale, "rate_limit.error_quota_exceeded_title"))
+            .setTitle(localizedStatusTitle(locale, "rate_limit.error_quota_exceeded_title", ColorCode.ERROR))
             .setDescription(
               localizer(locale, "rate_limit.error_quota_exceeded_description", {
                 reset_time: resetTime,
@@ -605,7 +606,7 @@ export async function execute(
       if (memCheck.status === "critical") {
         // Preserve modal inputs for user convenience
         const embed = new EmbedBuilder()
-          .setTitle(localizer(locale, "rate_limit.error_memory_critical_title"))
+          .setTitle(localizedStatusTitle(locale, "rate_limit.error_memory_critical_title", ColorCode.ERROR))
           .setDescription(localizer(locale, "rate_limit.error_memory_critical_description"))
           .setColor(ColorCode.ERROR);
 
@@ -643,7 +644,7 @@ export async function execute(
         await modalSubmitInteraction.editReply({
           embeds: [
             new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.persona.generate.invalid_image_title"))
+              .setTitle(localizedStatusTitle(locale, "commands.persona.generate.invalid_image_title", ColorCode.ERROR))
               .setDescription(localizer(locale, "commands.persona.generate.invalid_image_description"))
               .setColor(ColorCode.ERROR),
           ],
@@ -673,7 +674,7 @@ export async function execute(
           embeds: [
             new EmbedBuilder()
               .setTitle(
-                localizer(locale, errorKey, {
+                localizedStatusTitle(locale, errorKey, ColorCode.ERROR, {
                   max_size: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB.toString(),
                 }),
               )
@@ -690,7 +691,9 @@ export async function execute(
         await modalSubmitInteraction.editReply({
           embeds: [
             new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.persona.generate.error_download_failed"))
+              .setTitle(
+                localizedStatusTitle(locale, "commands.persona.generate.error_download_failed", ColorCode.ERROR),
+              )
               .setColor(ColorCode.ERROR),
           ],
           files: [getInputAttachment()],
@@ -750,7 +753,9 @@ export async function execute(
         await modalSubmitInteraction.editReply({
           embeds: [
             new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.persona.generate.image_vision_required_title"))
+              .setTitle(
+                localizedStatusTitle(locale, "commands.persona.generate.image_vision_required_title", ColorCode.ERROR),
+              )
               .setDescription(
                 localizer(locale, "commands.persona.generate.image_vision_required_description", {
                   model_name: effectiveModelName,
@@ -797,7 +802,13 @@ export async function execute(
       await modalSubmitInteraction.editReply({
         embeds: [
           new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.persona.generate.web_search_tools_required_title"))
+            .setTitle(
+              localizedStatusTitle(
+                locale,
+                "commands.persona.generate.web_search_tools_required_title",
+                ColorCode.ERROR,
+              ),
+            )
             .setDescription(
               localizer(locale, "commands.persona.generate.web_search_tools_required_description", {
                 model_name: effectiveModelName,
@@ -1143,7 +1154,7 @@ export async function execute(
 
     try {
       const errorEmbed = new EmbedBuilder()
-        .setTitle(localizer(locale, "general.errors.unexpected_title"))
+        .setTitle(localizedStatusTitle(locale, "general.errors.unexpected_title", ColorCode.ERROR))
         .setDescription(
           localizer(locale, "general.errors.unexpected_description", {
             error: errorMessage,

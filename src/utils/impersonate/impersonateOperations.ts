@@ -33,6 +33,7 @@ import { getCachedUserRow } from "@/utils/cache/userCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
 import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { UserImpersonationGenerationSkippedError } from "@/utils/chat/userImpersonationCompletion";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
 type ImpersonationInteraction = ChatInputCommandInteraction;
 
@@ -489,7 +490,7 @@ export async function executeUserImpersonation(
     await interaction.editReply({
       embeds: [
         new EmbedBuilder()
-          .setTitle(localizer(locale, "commands.impersonate.me_success_title"))
+          .setTitle(localizedStatusTitle(locale, "commands.impersonate.me_success_title", ColorCode.SUCCESS))
           .setDescription(
             localizer(locale, "commands.impersonate.me_success_description", { user: impersonatedDisplayName }),
           )
@@ -515,7 +516,13 @@ export async function executeUserImpersonation(
               error_message: error instanceof Error ? error.message : "Unknown error",
             });
       const errorEmbed = new EmbedBuilder()
-        .setTitle(localizer(locale, isTimeoutError ? "genai.error_stream_timeout_title" : "genai.generic_error_title"))
+        .setTitle(
+          localizedStatusTitle(
+            locale,
+            isTimeoutError ? "genai.error_stream_timeout_title" : "genai.generic_error_title",
+            ColorCode.ERROR,
+          ),
+        )
         .setDescription(description)
         .setColor(ColorCode.ERROR);
       await interaction.editReply({

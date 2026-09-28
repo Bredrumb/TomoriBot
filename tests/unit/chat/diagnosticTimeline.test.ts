@@ -16,6 +16,8 @@ import {
 import { createUserRow } from "../../helpers/fixtures";
 import { makeFakeInteraction } from "../../helpers/fakeInteraction";
 import { localizedCopy } from "../../helpers/localeCases";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
+import { ColorCode } from "@/utils/misc/logger";
 
 const guildId = "1750000000000000001";
 const channelId = "1750000000000000002";
@@ -182,7 +184,9 @@ describe("chat troubleshooting timeline", () => {
       localizedCopy("en-US", "commands.troubleshoot.chat.dm_description"),
     );
     const receipt = calls.at(-1)?.args[0] as { embeds: EmbedBuilder[] };
-    expect(receipt.embeds[0]?.toJSON().title).toBe(localizedCopy("en-US", "commands.troubleshoot.chat.success_title"));
+    expect(receipt.embeds[0]?.toJSON().title).toBe(
+      localizedStatusTitle("en-US", "commands.troubleshoot.chat.success_title", ColorCode.SUCCESS),
+    );
     expect(receipt).not.toHaveProperty("content");
 
     for (const host of ["canary.discord.com", "ptb.discord.com"]) {

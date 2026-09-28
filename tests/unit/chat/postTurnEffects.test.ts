@@ -5,6 +5,8 @@ import { runPostTurnEffects, shouldRetryEmptyResponse } from "@/utils/chat/postT
 import { recordReunionPresence, resolveReunionNote, type ReunionPresenceStore } from "@/utils/chat/reunionPresence";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy } from "../../helpers/localeCases";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
+import { ColorCode } from "@/utils/misc/logger";
 
 const emptyResponseResult: GenerationTurnResult = {
   status: "empty_response",
@@ -113,7 +115,9 @@ describe("empty-response post-turn handling", () => {
           components?: Array<{ components?: Array<{ data?: { label?: string } }> }>;
         }
       | undefined;
-    expect(payload?.embeds?.[0]?.toJSON().title).toBe(localizedCopy("en-US", "genai.empty_response_title"));
+    expect(payload?.embeds?.[0]?.toJSON().title).toBe(
+      localizedStatusTitle("en-US", "genai.empty_response_title", ColorCode.WARN),
+    );
     expect(payload?.embeds?.[0]?.toJSON().footer).toBeUndefined();
     expect(payload?.components?.length).toBeGreaterThan(0);
     expect(payload?.components?.[0]?.components?.[0]?.data?.label).toBe(localizedCopy("en-US", "genai.tips.button"));
@@ -139,7 +143,9 @@ describe("empty-response post-turn handling", () => {
           embeds?: Array<{ toJSON: () => { title?: string } }>;
         }
       | undefined;
-    expect(payload?.embeds?.[0]?.toJSON().title).toBe(localizedCopy("en-US", "genai.empty_response_title"));
+    expect(payload?.embeds?.[0]?.toJSON().title).toBe(
+      localizedStatusTitle("en-US", "genai.empty_response_title", ColorCode.WARN),
+    );
   });
 
   it("attaches personal-provider recovery guidance when textCredentialSource is personal", async () => {
