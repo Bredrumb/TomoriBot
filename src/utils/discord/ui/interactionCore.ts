@@ -1410,7 +1410,7 @@ export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelC
     } satisfies ActionRowData<ButtonComponentData>);
   }
 
-  const container = buildPanelContainer(components, accentColor);
+  const container = buildPanelContainer(components, accentColor, { formatProse: false });
 
   return [container];
 }

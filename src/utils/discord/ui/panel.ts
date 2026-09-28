@@ -70,15 +70,26 @@ export function withLinePrefix(prefix: string, text: string): string {
     .join("\n");
 }
 
+export interface BuildPanelContainerOptions {
+  /**
+   * Whether to apply panel layout wrapping across TextDisplay components.
+   * Defaults to true. Notice cards disable this because they act as embed
+   * replacements rather than interactive grid panels.
+   */
+  formatProse?: boolean;
+}
+
 export function buildPanelContainer(
   components: ComponentInContainerData[],
   accent?: number | PanelAccentTone,
+  options?: BuildPanelContainerOptions,
 ): ContainerComponentData<ComponentInContainerData> {
   const accentColor = typeof accent === "string" ? PANEL_ACCENT_BY_TONE[accent] : (accent ?? PANEL_ACCENT_BY_TONE.info);
+  const shouldFormatProse = options?.formatProse ?? true;
   return {
     type: ComponentType.Container,
     accentColor,
-    components: formatPanelComponentTree(components),
+    components: shouldFormatProse ? formatPanelComponentTree(components) : components,
   };
 }
 
