@@ -25,6 +25,7 @@ import {
 import { ColorCode, log } from "@/utils/misc/logger";
 import { STREAMING_LIMITS } from "@/utils/security/rateLimiter";
 import { recordChatDiagnostic, recordChatMessageSent } from "@/utils/chat/diagnosticTimeline";
+import type { ChatSendReason } from "@/utils/chat/diagnosticTimeline";
 
 export type StreamSendPayload = {
   content?: string;
@@ -39,6 +40,7 @@ export type StreamSendPayload = {
     parse?: Array<"users" | "roles" | "everyone">;
     repliedUser?: boolean;
   };
+  diagnosticReason?: ChatSendReason;
 };
 
 type StreamUiUpdaterDependencies = {
@@ -206,7 +208,13 @@ export class StreamUiUpdater {
       return null;
     }
 
-    const { identityOverride, accumulatedTextPrefix, spriteRecord: _spriteRecord, ...discordPayload } = payload;
+    const {
+      identityOverride,
+      accumulatedTextPrefix,
+      spriteRecord: _spriteRecord,
+      diagnosticReason: _diagnosticReason,
+      ...discordPayload
+    } = payload;
     const textForAccumulation = `${accumulatedTextPrefix ?? ""}${textForState}`;
     const strictUserImpersonation = isUserImpersonationStreamContext(context);
     let replyNoticeMessage: Message | null = null;
@@ -493,6 +501,7 @@ export class StreamUiUpdater {
     state: StreamState,
     sentMessage: Message | null,
     deliveredWebhookIdentity?: ResolvedWebhookIdentity,
+    route: "normal" | "webhook_recovery" | "bot_fallback" = "normal",
   ): void {
     if (!state.firstReplyUrl && sentMessage?.url) {
       state.firstReplyUrl = sentMessage.url;
@@ -532,7 +541,13 @@ export class StreamUiUpdater {
     }
     state.messageSentCount++;
     if (sentMessage) {
-      recordChatMessageSent(sentMessage.id, sentMessage.webhookId ? "webhook" : "bot");
+      recordChatMessageSent(
+        sentMessage.id,
+        sentMessage.webhookId ? "webhook" : "bot",
+        payload.diagnosticReason,
+        state.messageSentCount,
+        route,
+      );
     }
     if (textForState) {
       state.accumulatedText += textForState;
@@ -636,7 +651,15 @@ export class StreamUiUpdater {
 
       context.webhook = recreatedWebhook;
       state.hasRepliedToOriginalMessage = true;
-      this.recordSuccessfulSend(payload, textForState, context, state, recoveredReplyMessage);
+      this.recordSuccessfulSend(
+        payload,
+        textForState,
+        context,
+        state,
+        recoveredReplyMessage,
+        undefined,
+        "webhook_recovery",
+      );
       log.info("Stream Send: Recreated webhook after invalid webhook error and resumed persona sending");
       return recoveredReplyMessage;
     } catch (recoveryError) {
@@ -682,7 +705,7 @@ export class StreamUiUpdater {
       });
 
       state.hasRepliedToOriginalMessage = true;
-      this.recordSuccessfulSend(payload, textForState, context, state, fallbackMessage);
+      this.recordSuccessfulSend(payload, textForState, context, state, fallbackMessage, undefined, "bot_fallback");
       log.info("Stream Send: Successfully sent message via fallback after webhook failure");
       return fallbackMessage;
     } catch (fallbackError) {

@@ -11,6 +11,7 @@ import {
   recordChatMessageSent,
   recordChatProviderContext,
   runWithChatDiagnostic,
+  runWithChatDiagnosticStage,
 } from "@/utils/chat/diagnosticTimeline";
 import { createUserRow } from "../../helpers/fixtures";
 import { makeFakeInteraction } from "../../helpers/fakeInteraction";
@@ -45,6 +46,44 @@ function incoming(
 }
 
 describe("chat troubleshooting timeline", () => {
+  test("attributes each sent message to its generation and delivery path", async () => {
+    const attributedTriggerId = "1750000000000000013";
+    await runWithChatDiagnostic(incoming({ messageId: attributedTriggerId }), async () => {
+      await runWithChatDiagnosticStage({ turn: 1 }, async () => {
+        await runWithChatDiagnosticStage({ attempt: 1, keyAttempt: 1 }, async () => {
+          await runWithChatDiagnosticStage({ toolIteration: 1 }, async () => {
+            recordChatMessageSent("1750000000000000014", "webhook", "stream_segment", 1);
+            recordChatMessageSent("1750000000000000015", "webhook", "length_split", 2);
+          });
+          await runWithChatDiagnosticStage({ toolIteration: 2 }, async () => {
+            recordChatMessageSent("1750000000000000016", "bot", "stream_segment", 1, "bot_fallback");
+          });
+        });
+      });
+      await runWithChatDiagnosticStage({ turn: 2 }, async () => {
+        await runWithChatDiagnosticStage({ attempt: 2, keyAttempt: 2, toolIteration: 1 }, async () => {
+          recordChatMessageSent("1750000000000000017", "bot", "table_attachment", 1);
+        });
+      });
+    });
+
+    const report = getChatDiagnostic({ ownerId, channelId, guildId, messageId: attributedTriggerId });
+    expect(report?.schemaVersion).toBe(2);
+    const sends = report?.events.flatMap(({ event }) => (event.kind === "message_sent" ? [event] : []));
+    expect(sends).toMatchObject([
+      { origins: ["initial_generation"], streamMessage: 1, reason: "stream_segment", turn: 1, attempt: 1 },
+      { origins: ["initial_generation"], streamMessage: 2, reason: "length_split", turn: 1, attempt: 1 },
+      { origins: ["tool_continuation"], streamMessage: 1, route: "bot_fallback", toolIteration: 2 },
+      {
+        origins: ["additional_persona", "model_fallback", "key_retry"],
+        reason: "table_attachment",
+        turn: 2,
+        attempt: 2,
+        keyAttempt: 2,
+      },
+    ]);
+  });
+
   test("keeps context ordering and timing without publishing Discord IDs or chat text", async () => {
     const trigger = incoming();
     await runWithChatDiagnostic(trigger, async () => {

@@ -8,10 +8,26 @@ const MAX_TRACES = 5_000;
 const MAX_EVENTS_PER_TRACE = 100;
 const MAX_DELIVERED_MESSAGE_IDS_PER_TRACE = 100;
 
+export type ChatSendReason =
+  | "stream_segment"
+  | "length_split"
+  | "formatting_split"
+  | "humanizer_split"
+  | "table_attachment";
+type ChatSendRoute = "normal" | "webhook_recovery" | "bot_fallback";
+type ChatSendOrigin =
+  | "initial_generation"
+  | "persona_job"
+  | "additional_persona"
+  | "model_fallback"
+  | "key_retry"
+  | "tool_continuation";
+type ChatInvocationSource = "message" | "queue" | "persona_job" | "retry" | "manual" | "stop";
+
 type DiagnosticEvent =
   | {
       kind: "invocation_started";
-      source: "message" | "queue" | "persona_job" | "retry" | "manual" | "stop";
+      source: ChatInvocationSource;
       retryCount: number;
     }
   | { kind: "admission"; disposition: ChatAdmissionDisposition }
@@ -35,7 +51,20 @@ type DiagnosticEvent =
   | { kind: "provider_context"; ordinal: number; dialogueCount: number; recentMessages: string[] }
   | { kind: "tool_continuation"; iteration: number; historyEntries: number; contextItems: number }
   | { kind: "tool_outcome"; outcome: "restart" | "abort" | "history"; success?: boolean }
-  | { kind: "message_sent"; message: string; delivery: "webhook" | "bot" }
+  | {
+      kind: "message_sent";
+      message: string;
+      delivery: "webhook" | "bot";
+      route: ChatSendRoute;
+      reason: ChatSendReason;
+      origins: ChatSendOrigin[];
+      triggerSource: ChatInvocationSource;
+      streamMessage: number;
+      turn?: number;
+      attempt?: number;
+      keyAttempt?: number;
+      toolIteration?: number;
+    }
   | { kind: "send_failed"; reason: "missing_access" | "missing_permissions" | "channel_gone" | "other" }
   | { kind: "messages_purge_requested"; count: number }
   | { kind: "invocation_finished"; disposition: ChatAdmissionDisposition }
@@ -65,7 +94,7 @@ interface DiagnosticTrace {
 }
 
 export interface ShareableChatDiagnostic {
-  schemaVersion: 1;
+  schemaVersion: 2;
   reportId: string;
   generatedAt: string;
   triggerMessage: string;
@@ -76,7 +105,25 @@ export interface ShareableChatDiagnostic {
 }
 
 const traces = new Map<string, DiagnosticTrace>();
-const scope = new AsyncLocalStorage<{ trace: DiagnosticTrace; invocation: number }>();
+interface DiagnosticScope {
+  trace: DiagnosticTrace;
+  invocation: number;
+  triggerSource: ChatInvocationSource;
+  turn?: number;
+  attempt?: number;
+  keyAttempt?: number;
+  toolIteration?: number;
+}
+
+const scope = new AsyncLocalStorage<DiagnosticScope>();
+
+export function runWithChatDiagnosticStage<T>(
+  stage: Partial<Pick<DiagnosticScope, "turn" | "attempt" | "keyAttempt" | "toolIteration">>,
+  callback: () => Promise<T>,
+): Promise<T> {
+  const active = scope.getStore();
+  return active ? scope.run({ ...active, ...stage }, callback) : callback();
+}
 
 function prune(now: number): void {
   for (const [messageId, trace] of traces) {
@@ -138,8 +185,9 @@ export function runWithChatDiagnostic<T>(incoming: ChatIncoming, callback: () =>
 
   trace.invocationCount++;
   const invocation = trace.invocationCount;
-  return scope.run({ trace, invocation }, async () => {
-    recordChatDiagnostic(sourceOf(incoming));
+  const source = sourceOf(incoming);
+  return scope.run({ trace, invocation, triggerSource: source.source }, async () => {
+    recordChatDiagnostic(source);
     try {
       return await callback();
     } catch (error) {
@@ -181,7 +229,13 @@ function dropIfFull(trace: DiagnosticTrace): boolean {
   return true;
 }
 
-export function recordChatMessageSent(messageId: string, delivery: "webhook" | "bot"): void {
+export function recordChatMessageSent(
+  messageId: string,
+  delivery: "webhook" | "bot",
+  reason: ChatSendReason = "stream_segment",
+  streamMessage = 1,
+  route: ChatSendRoute = "normal",
+): void {
   const active = scope.getStore();
   if (!active) return;
   if (
@@ -193,7 +247,27 @@ export function recordChatMessageSent(messageId: string, delivery: "webhook" | "
   }
   active.trace.deliveredMessageIds.add(messageId);
   if (dropIfFull(active.trace)) return;
-  recordChatDiagnostic({ kind: "message_sent", message: labelMessage(active.trace, messageId), delivery });
+  const origins: ChatSendOrigin[] = [];
+  if (active.triggerSource === "persona_job") origins.push("persona_job");
+  if (active.turn && active.turn > 1) origins.push("additional_persona");
+  if (active.attempt && active.attempt > 1) origins.push("model_fallback");
+  if (active.keyAttempt && active.keyAttempt > 1) origins.push("key_retry");
+  if (active.toolIteration && active.toolIteration > 1) origins.push("tool_continuation");
+  if (origins.length === 0) origins.push("initial_generation");
+  recordChatDiagnostic({
+    kind: "message_sent",
+    message: labelMessage(active.trace, messageId),
+    delivery,
+    route,
+    reason,
+    origins,
+    triggerSource: active.triggerSource,
+    streamMessage,
+    ...(active.turn ? { turn: active.turn } : {}),
+    ...(active.attempt ? { attempt: active.attempt } : {}),
+    ...(active.keyAttempt ? { keyAttempt: active.keyAttempt } : {}),
+    ...(active.toolIteration ? { toolIteration: active.toolIteration } : {}),
+  });
 }
 
 export function recordChatAttemptStarted(
@@ -275,7 +349,7 @@ export function getChatDiagnostic(args: {
   if (!trace) return null;
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     reportId: trace.reportId,
     generatedAt: new Date(now).toISOString(),
     triggerMessage: labelMessage(trace, trace.triggerMessageId),

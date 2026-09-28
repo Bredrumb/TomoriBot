@@ -109,18 +109,25 @@ If the DM fails, it attaches the file to that private reply. It does not send th
 
 `diagnosticTimeline.ts` records admission, queue and persona turns, context history, provider
 attempts, tool continuations, and Discord sends. Attempts use labels such as `model-1` so two
-attempts on the same model can be compared without exposing its name. Context history records the latest 25 fetched
-messages with relative millisecond offsets, author roles, and whether each message entered the
-simplified history. The provider event lists the dialogue messages retained for that attempt.
-This distinguishes a later user's message entering the first user's prompt from two independent
-turns or two sends in one turn. Tool continuations reuse the existing context items; another
-context-history event appears only if a chat turn rebuilds them.
+attempts on the same model can be compared without exposing its name. Context history records
+the latest 25 fetched messages with relative millisecond offsets, author roles, and whether each
+message entered the simplified history. The provider event lists the dialogue messages retained
+for that attempt. This shows whether a later user's message entered the first user's prompt.
+
+Each streamed `message_sent` event names its trigger source, persona turn, model attempt ordinal,
+key attempt, tool iteration, and message number within that stream. The `origins` list marks
+persona jobs, later persona turns, model fallbacks, key retries, and tool continuations. The `reason` marks a
+streamed segment, a length or formatting split, a heavy humanizer split, or a rendered table.
+The `route` distinguishes a normal send from webhook recovery or bot fallback after a webhook
+failure. Standalone reply notices and tool UI sent outside the stream delivery path are not
+`message_sent` events. Tool continuations reuse the existing context items; another
+`context_history` event appears only if a chat turn rebuilds them.
 
 The file contains UTC times, relative millisecond offsets, counts, status codes, and labels such
 as `message-2`. It excludes message text, prompts, user IDs, channel IDs, and raw message IDs.
 The bot keeps the raw IDs in memory to find and join events. The store holds at most 5,000
 message traces for one hour, 100 events per trace, and 100 delivered message IDs per trace for
-reply-link lookup. A restart clears it. If chat runs
-on multiple bot processes or users need reports after a restart, move this bounded record to a
+reply-link lookup. A restart clears it. If chat runs on multiple bot processes or users need
+reports after a restart, move this bounded record to a
 shared store before relying on the command for those cases. `stat_counters` remains an aggregate
 usage record and cannot reconstruct this event order.

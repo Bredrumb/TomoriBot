@@ -41,6 +41,7 @@ import {
   recordChatAttemptStarted,
   recordChatDiagnostic,
   recordChatProviderContext,
+  runWithChatDiagnosticStage,
 } from "@/utils/chat/diagnosticTimeline";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import { providerIsApiFamily, runToolLoop, sendStreamTimeoutNotice } from "@/utils/chat/toolLoop";
@@ -171,12 +172,14 @@ async function runGenerationAttempts(
         context.streamingContext.forceModelFallback = hasPendingModelFallback;
 
         invocationStart = deliveredMessageRefs.length;
-        result = await runToolLoop({
-          context,
-          provider: attempt.provider,
-          providerConfig: attempt.providerConfig,
-          tomoriState: attempt.tomoriState,
-        });
+        result = await runWithChatDiagnosticStage({ attempt: index + 1, keyAttempt: keyAttemptCount }, () =>
+          runToolLoop({
+            context,
+            provider: attempt.provider,
+            providerConfig: attempt.providerConfig,
+            tomoriState: attempt.tomoriState,
+          }),
+        );
 
         if (result.status !== "error") {
           // Don't credit a timed-out key as successful : a timeout is not a clean completion.

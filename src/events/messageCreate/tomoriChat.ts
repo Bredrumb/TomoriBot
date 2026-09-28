@@ -8,7 +8,11 @@ import {
   suppressNextSelfReply,
 } from "@/utils/chat/channelQueue";
 import { buildChatTurnContext } from "@/utils/chat/contextPipelineIntent";
-import { recordChatDiagnostic, runWithChatDiagnostic } from "@/utils/chat/diagnosticTimeline";
+import {
+  recordChatDiagnostic,
+  runWithChatDiagnostic,
+  runWithChatDiagnosticStage,
+} from "@/utils/chat/diagnosticTimeline";
 import { runGenerationTurn } from "@/utils/chat/generationTurn";
 import type { ChatAdmissionDisposition, ChatIncoming, TomoriChatInput } from "@/utils/chat/types";
 import { installUserImpersonationCompletion } from "@/utils/chat/userImpersonationCompletion";
@@ -96,7 +100,9 @@ async function runAdmittedChatTurn(incoming: ChatIncoming): Promise<ChatAdmissio
           recordChatDiagnostic({ kind: "turn_started", ordinal: turn.personaIndex + 1, total: turn.totalPersonas });
           const context = await buildChatTurnContext(turn);
           const responseSink = createChatResponseSink(context);
-          const result = await runGenerationTurn(context, responseSink);
+          const result = await runWithChatDiagnosticStage({ turn: turn.personaIndex + 1 }, () =>
+            runGenerationTurn(context, responseSink),
+          );
           recordChatDiagnostic({
             kind: "turn_finished",
             status: result.status,

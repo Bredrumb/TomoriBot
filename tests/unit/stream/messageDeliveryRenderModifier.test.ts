@@ -136,4 +136,38 @@ describe("StreamMessageDelivery copied-render options", () => {
     });
     expect(sentPayloads[1].identityOverride?.username).toBe("Obonya (Ren)");
   });
+
+  it("marks message-length and heavy-humanizer splits at the delivery boundary", async () => {
+    const sentPayloads: StreamSendPayload[] = [];
+    const delivery = makeDelivery((payload) => sentPayloads.push(payload));
+    const shortConfig = textConfig();
+    shortConfig.maxMessageLength = 30;
+
+    await delivery.sendSegment(
+      "A long sentence about apples and pears that continues past the message limit.",
+      "final",
+      shortConfig,
+      typingConfig,
+      context,
+      createDefaultStreamState(),
+    );
+    expect(sentPayloads.length).toBeGreaterThan(1);
+    expect(sentPayloads[0]?.diagnosticReason).toBe("stream_segment");
+    expect(sentPayloads.slice(1).every((payload) => payload.diagnosticReason === "length_split")).toBe(true);
+
+    sentPayloads.length = 0;
+    const heavyConfig = textConfig();
+    heavyConfig.humanizerDegree = HumanizerDegree.HEAVY;
+    await delivery.sendSegment(
+      "really? ok! bye",
+      "final",
+      heavyConfig,
+      typingConfig,
+      context,
+      createDefaultStreamState(),
+    );
+    expect(sentPayloads.length).toBeGreaterThan(1);
+    expect(sentPayloads[0]?.diagnosticReason).toBe("stream_segment");
+    expect(sentPayloads.slice(1).every((payload) => payload.diagnosticReason === "humanizer_split")).toBe(true);
+  });
 });

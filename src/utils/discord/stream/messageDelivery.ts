@@ -19,6 +19,9 @@ import { humanizeString } from "@/utils/text/processors/formatters";
 import { PREFILL_WHITESPACE_SENTINEL } from "@/utils/discord/stream/constants";
 import type { StreamSendPayload, StreamUiUpdater } from "@/utils/discord/stream/uiUpdater";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
+import type { ChatSendReason } from "@/utils/chat/diagnosticTimeline";
+
+type DeliveryChunk = { content: string; diagnosticReason: ChatSendReason };
 
 export type BufferedDeliveryBoundary =
   | "code_open"
@@ -98,7 +101,19 @@ export class StreamMessageDelivery {
     log.info(
       `Stream Aggregate: Flushing ${aggregatedText.length} chars as ${finalMessageChunks.length} Discord message(s)`,
     );
-    await this.sendChunksImmediate(finalMessageChunks, context, state);
+    await this.sendChunksImmediate(
+      finalMessageChunks.map((content, index) => ({
+        content,
+        diagnosticReason:
+          index === 0
+            ? "stream_segment"
+            : aggregatedText.length > textConfig.maxMessageLength
+              ? "length_split"
+              : "formatting_split",
+      })),
+      context,
+      state,
+    );
   }
 
   public async flushHeldOrphanPunctuation(
@@ -161,6 +176,7 @@ export class StreamMessageDelivery {
         identityOverride: options?.identityOverride,
         accumulatedTextPrefix: options?.accumulatedTextPrefix,
         spriteRecord: options?.spriteRecord,
+        diagnosticReason: "table_attachment",
       },
       tableMarkdown,
       context,
@@ -213,8 +229,14 @@ export class StreamMessageDelivery {
     );
     if (!rawMessageChunks.length) return;
 
-    const finalMessageChunks: string[] = [];
-    for (const chunk of rawMessageChunks) {
+    const finalMessageChunks: DeliveryChunk[] = [];
+    for (const [chunkIndex, chunk] of rawMessageChunks.entries()) {
+      const chunkReason: ChatSendReason =
+        chunkIndex === 0
+          ? "stream_segment"
+          : segment.length > textConfig.maxMessageLength
+            ? "length_split"
+            : "formatting_split";
       if (textConfig.humanizerDegree === HumanizerDegree.HEAVY) {
         // A humanizer flush becomes a real extra entry here, so it goes out as its own sent
         // message (with typing simulation in between) rather than a linebreak inside one message.
@@ -222,13 +244,18 @@ export class StreamMessageDelivery {
         if (humanizedPieces.length > 1 || humanizedPieces[0] !== chunk) {
           log.info(`Stream Send: Humanized (D3) from "${chunk}" to ${JSON.stringify(humanizedPieces)}`);
         }
-        for (const piece of humanizedPieces) {
-          if (piece.trim()) finalMessageChunks.push(piece);
+        for (const [pieceIndex, piece] of humanizedPieces.entries()) {
+          if (piece.trim()) {
+            finalMessageChunks.push({
+              content: piece,
+              diagnosticReason: pieceIndex === 0 ? chunkReason : "humanizer_split",
+            });
+          }
         }
         continue;
       }
       if (chunk.trim()) {
-        finalMessageChunks.push(chunk);
+        finalMessageChunks.push({ content: chunk, diagnosticReason: chunkReason });
       }
     }
     if (!finalMessageChunks.length) return;
@@ -250,7 +277,7 @@ export class StreamMessageDelivery {
   }
 
   private async sendChunksWithTyping(
-    chunks: string[],
+    chunks: DeliveryChunk[],
     typingConfig: TypingSimulationConfig,
     context: StreamContext,
     state: StreamState,
@@ -262,7 +289,7 @@ export class StreamMessageDelivery {
     }
 
     const firstChunk = chunks[0];
-    await this.sendSingleMessage(firstChunk, context, state, options);
+    await this.sendSingleMessage(firstChunk.content, context, state, options, firstChunk.diagnosticReason);
 
     for (let i = 1; i < chunks.length; i++) {
       if (this.deps.hasStopRequest(context.channel.id)) {
@@ -271,9 +298,12 @@ export class StreamMessageDelivery {
       }
 
       const chunkToSend = chunks[i];
-      let typingTime = Math.min(chunkToSend.length * typingConfig.baseSpeedMsPerChar, typingConfig.maxTypingTimeMs);
+      let typingTime = Math.min(
+        chunkToSend.content.length * typingConfig.baseSpeedMsPerChar,
+        typingConfig.maxTypingTimeMs,
+      );
       typingTime = Math.max(typingTime, typingConfig.minVisibleDurationMs);
-      if (chunkToSend.includes("```")) {
+      if (chunkToSend.content.includes("```")) {
         typingTime = Math.max(typingTime, typingConfig.minVisibleDurationMs * 1.25);
       }
 
@@ -284,10 +314,16 @@ export class StreamMessageDelivery {
         return;
       }
 
-      await this.sendSingleMessage(chunkToSend, context, state, {
-        ...options,
-        accumulatedTextPrefix: undefined,
-      });
+      await this.sendSingleMessage(
+        chunkToSend.content,
+        context,
+        state,
+        {
+          ...options,
+          accumulatedTextPrefix: undefined,
+        },
+        chunkToSend.diagnosticReason,
+      );
 
       if (i < chunks.length - 1 && typingConfig.randomPauseEnabled) {
         const pauseCancelled = await this.addThinkingPauseInterruptible(typingConfig, context);
@@ -300,7 +336,7 @@ export class StreamMessageDelivery {
   }
 
   private async sendChunksImmediate(
-    chunks: string[],
+    chunks: DeliveryChunk[],
     context: StreamContext,
     state: StreamState,
     options?: StreamDeliveryOptions,
@@ -311,10 +347,16 @@ export class StreamMessageDelivery {
         return;
       }
 
-      await this.sendSingleMessage(chunk, context, state, {
-        ...options,
-        accumulatedTextPrefix: index === 0 ? options?.accumulatedTextPrefix : undefined,
-      });
+      await this.sendSingleMessage(
+        chunk.content,
+        context,
+        state,
+        {
+          ...options,
+          accumulatedTextPrefix: index === 0 ? options?.accumulatedTextPrefix : undefined,
+        },
+        chunk.diagnosticReason,
+      );
     }
   }
 
@@ -323,6 +365,7 @@ export class StreamMessageDelivery {
     context: StreamContext,
     state: StreamState,
     options?: StreamDeliveryOptions,
+    diagnosticReason: ChatSendReason = "stream_segment",
   ): Promise<void> {
     await this.sendSinglePayload(
       {
@@ -330,6 +373,7 @@ export class StreamMessageDelivery {
         identityOverride: options?.identityOverride,
         accumulatedTextPrefix: options?.accumulatedTextPrefix,
         spriteRecord: options?.spriteRecord,
+        diagnosticReason,
       },
       content,
       context,

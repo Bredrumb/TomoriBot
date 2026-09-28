@@ -27,7 +27,7 @@ import {
   buildTailDirectiveMessage,
 } from "@/utils/chat/contextAnnotations";
 import { takeEnhancedContextItem } from "@/utils/chat/pendingEnhancedContext";
-import { recordChatDiagnostic } from "@/utils/chat/diagnosticTimeline";
+import { recordChatDiagnostic, runWithChatDiagnosticStage } from "@/utils/chat/diagnosticTimeline";
 import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 import type { ChatTurnContext, GenerationTurnResult, ToolHistoryEntry } from "@/utils/chat/types";
 import { DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
@@ -110,7 +110,9 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
       );
     }
 
-    const streamResult = await streamOnce(params, accumulatedModelParts, functionHistory);
+    const streamResult = await runWithChatDiagnosticStage({ toolIteration: iteration + 1 }, () =>
+      streamOnce(params, accumulatedModelParts, functionHistory),
+    );
     streamResults.push(streamResult);
     thoughtLog = streamResult.thoughtLog ?? thoughtLog;
 
