@@ -331,7 +331,12 @@ describe("evaluateChatAdmission verified proxy follow-ups", () => {
       ),
       spyOn(messageProxyRepository, "persistAttestedIdentity").mockResolvedValue({
         userRow: createUserRow({ user_id: undefined, user_disc_id: "pk:ghijkl", user_nickname: "Mirri" }),
-        namespace: { message_proxy_namespace_id: 51, service_id: "pluralkit", namespace_key: "abcdef" },
+        namespace: {
+          message_proxy_namespace_id: 51,
+          service_id: "pluralkit",
+          instance_id: "pluralkit:official",
+          namespace_key: "abcdef",
+        },
         identity: { message_proxy_identity_id: 61, message_proxy_namespace_id: 51, external_identity_id: 71 },
         isNewIdentity: false,
       }),

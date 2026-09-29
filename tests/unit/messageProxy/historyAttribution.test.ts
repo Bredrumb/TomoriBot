@@ -53,6 +53,7 @@ function attestation(proxyMessageId: string): ProxyMessageAttestation {
 function indexedIdentity(messageDiscId: string): MessageProxyIndexedMessageIdentity {
   return {
     serviceId: "pluralkit",
+    instanceId: "pluralkit:official",
     userDiscId: `pk:${MEMBER_UUID}`,
     externalIdentityId: 1,
     externalKey: MEMBER_UUID,

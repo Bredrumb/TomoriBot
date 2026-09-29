@@ -6,6 +6,7 @@ import {
 } from "@/utils/messageProxy/messageIdentityNegativeCache";
 import { getMessageProxyMessageRecord, type MessageProxyMessageRecord } from "@/utils/messageProxy/proxyExpectation";
 import { getProxyServiceDescriptor } from "@/utils/messageProxy/registry";
+import { formatMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserId";
 import type { MessageProxyIndexedMessageIdentity, ProxyServiceDescriptor } from "@/utils/messageProxy/types";
 import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
 
@@ -45,7 +46,7 @@ export function resolveCachedMessageProxyIdentity(
 
   return {
     serviceId: attestation.serviceId,
-    userDiscId: `${descriptor.syntheticUserPrefix}${identity.externalKey}`,
+    userDiscId: formatMessageProxyIdentityUserId(descriptor.serviceId, identity.externalKey, identity.instanceId),
     displayName: identity.displayName ?? getWebhookDisplayName(message, identity.shortId ?? identity.externalKey),
     senderDiscId: attestation.senderDiscordId,
   };

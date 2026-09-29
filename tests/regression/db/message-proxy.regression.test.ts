@@ -1,17 +1,22 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { readFile } from "node:fs/promises";
 import type { ProxyIdentityUpsertInput } from "@/utils/messageProxy/types";
 import { getCachedUserRow } from "@/utils/cache/userCache";
 import { persistMessageProxyAttestationIdentity } from "@/utils/messageProxy/persistence";
 import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
+import { messageProxyInstanceRepository } from "@/utils/db/repositories/MessageProxyInstanceRepository";
+import { formatMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserId";
 import { exportRepository } from "@/utils/db/repositories/ExportRepository";
 import { importRepository } from "@/utils/db/repositories/ImportRepository";
 import { userRepository } from "@/utils/db/repositories/UserRepository";
+import { splitSqlStatements } from "@/utils/db/sqlSplitter";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
 const PRIMARY_KEY = "11111111-2222-4333-8444-555555555555";
 const SECONDARY_KEY = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const ROLLBACK_KEY = "99999999-8888-4777-8666-555555555555";
 const CASCADE_KEY = "12345678-1234-4234-8234-123456789abc";
+const CUSTOM_INSTANCE_ID = "pluralkit:11111111-2222-4333-8444-555555555555";
 
 function identityInput(
   externalKey = PRIMARY_KEY,
@@ -40,7 +45,8 @@ async function cleanup(): Promise<void> {
     DELETE FROM users
     WHERE user_disc_id IN (
       ${`pk:${PRIMARY_KEY}`}, ${`pk:${SECONDARY_KEY}`}, ${`pk:${ROLLBACK_KEY}`},
-      ${`pk:${CASCADE_KEY}`}, '_rt_message_proxy_settings'
+      ${`pk:${CASCADE_KEY}`}, '_rt_message_proxy_settings', '_rt_proxy_selected_host'
+      , ${formatMessageProxyIdentityUserId("pluralkit", PRIMARY_KEY, CUSTOM_INSTANCE_ID)}
     )
   `;
   await testSql`
@@ -48,6 +54,7 @@ async function cleanup(): Promise<void> {
     WHERE service_id = 'pluralkit'
       AND namespace_key IN ('fixture-account', 'rollback-account', 'cascade-account')
   `;
+  await testSql`DELETE FROM message_proxy_instances WHERE instance_id = ${CUSTOM_INSTANCE_ID}`;
 }
 
 describe.skipIf(!DB_TESTS_AVAILABLE)("message-proxy persistence regression", () => {
@@ -84,6 +91,107 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("message-proxy persistence regression", () 
       externalKey: PRIMARY_KEY,
     });
     expect((await getCachedUserRow(`pk:${PRIMARY_KEY}`))?.user_nickname).toBeNull();
+  });
+
+  it("keeps public identity, host link, and message attribution through rollback and reapplication", async () => {
+    const migrationUrl = new URL("../../../src/db/migrations/088_message_proxy_instances.sql", import.meta.url);
+    const downUrl = new URL("../../../src/db/migrations/088_message_proxy_instances.down.sql", import.meta.url);
+    const [upStatements, downStatements] = await Promise.all([
+      readFile(migrationUrl, "utf8").then(splitSqlStatements),
+      readFile(downUrl, "utf8").then(splitSqlStatements),
+    ]);
+
+    await testSql.begin(async (tx) => {
+      const [selectedHost] = await tx`
+        INSERT INTO users (user_disc_id, language_pref, registration_locale, message_proxy_service, message_proxy_instance_id)
+        VALUES ('_rt_proxy_selected_host', 'en-US', 'en-US', 'pluralkit', 'pluralkit:official')
+        RETURNING user_id
+      `;
+      const [before] = await tx`
+        SELECT u.user_id, ei.external_identity_id, mpn.message_proxy_namespace_id,
+          mpmi.message_disc_id, mpmi.sender_disc_id, mpna.host_user_disc_id
+        FROM external_identities ei
+        JOIN users u ON u.user_id = ei.user_id
+        JOIN message_proxy_identities mpi ON mpi.external_identity_id = ei.external_identity_id
+        JOIN message_proxy_namespaces mpn ON mpn.message_proxy_namespace_id = mpi.message_proxy_namespace_id
+        JOIN message_proxy_message_index mpmi ON mpmi.external_identity_id = ei.external_identity_id
+        JOIN message_proxy_namespace_accounts mpna ON mpna.message_proxy_namespace_id = mpn.message_proxy_namespace_id
+        WHERE u.user_disc_id = ${`pk:${PRIMARY_KEY}`} AND mpmi.message_disc_id = '_rt_proxy_message_1'
+      `;
+      const [memory] = await tx`
+        INSERT INTO personal_memories (user_id, persona_lineage_id, content)
+        VALUES (${before.user_id}, 0, 'Fixture memory')
+        RETURNING personal_memory_id
+      `;
+      for (const statement of downStatements) await tx.unsafe(statement);
+      for (const statement of upStatements) await tx.unsafe(statement);
+      const [after] = await tx`
+        SELECT u.user_id, ei.external_identity_id, mpn.message_proxy_namespace_id,
+          mpmi.message_disc_id, mpmi.sender_disc_id, mpna.host_user_disc_id,
+          ei.instance_id, mpn.instance_id AS namespace_instance_id, u.message_proxy_instance_id
+        FROM external_identities ei
+        JOIN users u ON u.user_id = ei.user_id
+        JOIN message_proxy_identities mpi ON mpi.external_identity_id = ei.external_identity_id
+        JOIN message_proxy_namespaces mpn ON mpn.message_proxy_namespace_id = mpi.message_proxy_namespace_id
+        JOIN message_proxy_message_index mpmi ON mpmi.external_identity_id = ei.external_identity_id
+        JOIN message_proxy_namespace_accounts mpna ON mpna.message_proxy_namespace_id = mpn.message_proxy_namespace_id
+        WHERE u.user_disc_id = ${`pk:${PRIMARY_KEY}`} AND mpmi.message_disc_id = '_rt_proxy_message_1'
+      `;
+      expect(after).toMatchObject({
+        ...before,
+        instance_id: "pluralkit:official",
+        namespace_instance_id: "pluralkit:official",
+      });
+      const [selectedAfter] = await tx`
+        SELECT user_id, message_proxy_instance_id FROM users WHERE user_disc_id = '_rt_proxy_selected_host'
+      `;
+      expect(selectedAfter).toMatchObject({
+        user_id: selectedHost.user_id,
+        message_proxy_instance_id: "pluralkit:official",
+      });
+      const [memoryAfter] = await tx`
+        SELECT personal_memory_id, user_id FROM personal_memories WHERE personal_memory_id = ${memory.personal_memory_id}
+      `;
+      expect(memoryAfter).toMatchObject({ personal_memory_id: memory.personal_memory_id, user_id: before.user_id });
+    });
+  });
+
+  it("separates the same member and namespace keys across instances and reloads attribution", async () => {
+    expect(await messageProxyInstanceRepository.getEnabled("pluralkit")).toEqual({
+      serviceId: "pluralkit",
+      instanceId: "pluralkit:official",
+      origin: "https://api.pluralkit.me",
+    });
+    await testSql`
+      INSERT INTO message_proxy_instances (instance_id, service_id, origin, display_name, enabled)
+      VALUES (${CUSTOM_INSTANCE_ID}, 'pluralkit', 'https://fixture.example', 'Fixture', false)
+    `;
+    expect(await messageProxyInstanceRepository.getEnabled("pluralkit", CUSTOM_INSTANCE_ID)).toBeNull();
+    const result = await messageProxyRepository.persistAttestedIdentity({
+      input: identityInput(PRIMARY_KEY, { instanceId: CUSTOM_INSTANCE_ID }),
+      messageDiscId: "_rt_proxy_message_custom",
+      senderDiscId: "_rt_proxy_host_custom",
+    });
+    const customUserId = formatMessageProxyIdentityUserId("pluralkit", PRIMARY_KEY, CUSTOM_INSTANCE_ID);
+    expect(result?.userRow.user_disc_id).toBe(customUserId);
+    expect(result?.identity.external_identity_id).not.toBeNull();
+    expect((await messageProxyRepository.getIdentityContextByUserDiscId(customUserId))?.instanceId).toBe(
+      CUSTOM_INSTANCE_ID,
+    );
+    expect(
+      (await messageProxyRepository.getMessageIdentitiesByMessageIds(["_rt_proxy_message_custom"]))?.get(
+        "_rt_proxy_message_custom",
+      ),
+    ).toMatchObject({
+      instanceId: CUSTOM_INSTANCE_ID,
+      userDiscId: customUserId,
+      senderDiscId: "_rt_proxy_host_custom",
+    });
+    expect(
+      (await messageProxyRepository.getMessageIdentitiesByMessageIds(["_rt_proxy_message_1"]))?.get(
+        "_rt_proxy_message_1",
+      ),
+    ).toMatchObject({ instanceId: "pluralkit:official", userDiscId: `pk:${PRIMARY_KEY}` });
   });
 
   it("is idempotent, refreshes cosmetic names, and supports multiple hosts", async () => {
@@ -194,9 +302,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("message-proxy persistence regression", () 
     const [namespaceConstraint] = await testSql<Array<{ definition: string }>>`
       SELECT pg_get_constraintdef(oid) AS definition
       FROM pg_constraint
-      WHERE conname = 'message_proxy_namespaces_service_id_namespace_key_key'
+      WHERE conname = 'message_proxy_namespaces_instance_id_namespace_key_key'
     `;
-    expect(namespaceConstraint?.definition).toBe("UNIQUE (service_id, namespace_key)");
+    expect(namespaceConstraint?.definition).toBe("UNIQUE (instance_id, namespace_key)");
 
     const indexes = await testSql<Array<{ indexname: string }>>`
       SELECT indexname
@@ -272,6 +380,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("message-proxy persistence regression", () 
       expect(imported).toEqual({ success: true, itemsImported: { configFieldsCount: 3 } });
       expect((await userRepository.loadByDiscordId("_rt_message_proxy_settings"))?.message_proxy_service).toBe(
         serviceId,
+      );
+      expect((await userRepository.loadByDiscordId("_rt_message_proxy_settings"))?.message_proxy_instance_id).toBe(
+        serviceId === "pluralkit" ? "pluralkit:official" : null,
       );
 
       const exported = await exportRepository.exportPersonalSettings("_rt_message_proxy_settings");

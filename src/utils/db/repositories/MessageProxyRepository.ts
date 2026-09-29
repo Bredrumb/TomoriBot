@@ -39,6 +39,7 @@ type ManagedIdentityRow = {
   user_id: number | string;
   user_disc_id: string;
   service_id: string;
+  instance_id: string;
   display_name: string | null;
   short_id: string | null;
   user_nickname: string | null;
@@ -47,6 +48,7 @@ type ManagedIdentityRow = {
 
 type MessageProxyIdentityReferenceRow = {
   service_id: string;
+  instance_id: string;
   user_disc_id: string;
   display_name: string | null;
   user_nickname: string | null;
@@ -54,6 +56,7 @@ type MessageProxyIdentityReferenceRow = {
 
 type MessageProxyContextRow = {
   service_id: string;
+  instance_id: string;
   user_disc_id: string;
   external_identity_id: number | string;
   external_key: string;
@@ -81,12 +84,13 @@ export class MessageProxyRepository {
   async listManagedIdentities(hostUserDiscId: string, search = ""): Promise<MessageProxyManagedIdentity[]> {
     try {
       const rows = await sql<ManagedIdentityRow[]>`
-        SELECT mpi.message_proxy_identity_id, u.user_id, u.user_disc_id, mpn.service_id,
+        SELECT mpi.message_proxy_identity_id, u.user_id, u.user_disc_id, mpn.service_id, mpn.instance_id,
           mpi.display_name, mpi.short_id, mpi.avatar_url, upc.user_nickname
         FROM message_proxy_namespace_accounts mpna
         JOIN message_proxy_namespaces mpn ON mpn.message_proxy_namespace_id = mpna.message_proxy_namespace_id
         JOIN message_proxy_identities mpi ON mpi.message_proxy_namespace_id = mpn.message_proxy_namespace_id
         JOIN external_identities ei ON ei.external_identity_id = mpi.external_identity_id
+          AND ei.instance_id = mpn.instance_id
         JOIN users u ON u.user_id = ei.user_id
         LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
         WHERE mpna.host_user_disc_id = ${hostUserDiscId}
@@ -105,12 +109,13 @@ export class MessageProxyRepository {
     if (!Number.isSafeInteger(identityId) || identityId <= 0) return null;
     try {
       const [row] = await sql<ManagedIdentityRow[]>`
-        SELECT mpi.message_proxy_identity_id, u.user_id, u.user_disc_id, mpn.service_id,
+        SELECT mpi.message_proxy_identity_id, u.user_id, u.user_disc_id, mpn.service_id, mpn.instance_id,
           mpi.display_name, mpi.short_id, mpi.avatar_url, upc.user_nickname
         FROM message_proxy_namespace_accounts mpna
         JOIN message_proxy_namespaces mpn ON mpn.message_proxy_namespace_id = mpna.message_proxy_namespace_id
         JOIN message_proxy_identities mpi ON mpi.message_proxy_namespace_id = mpn.message_proxy_namespace_id
         JOIN external_identities ei ON ei.external_identity_id = mpi.external_identity_id
+          AND ei.instance_id = mpn.instance_id
         JOIN users u ON u.user_id = ei.user_id
         LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
         WHERE mpna.host_user_disc_id = ${hostUserDiscId}
@@ -128,7 +133,12 @@ export class MessageProxyRepository {
     const identityId = Number(row.message_proxy_identity_id);
     const userId = Number(row.user_id);
     const parsed = parseMessageProxyIdentityUserId(row.user_disc_id);
-    if (!Number.isSafeInteger(identityId) || !Number.isSafeInteger(userId) || parsed?.serviceId !== row.service_id) {
+    if (
+      !Number.isSafeInteger(identityId) ||
+      !Number.isSafeInteger(userId) ||
+      parsed?.serviceId !== row.service_id ||
+      parsed.instanceId !== row.instance_id
+    ) {
       return [];
     }
     return [
@@ -160,7 +170,8 @@ export class MessageProxyRepository {
       return null;
     }
 
-    const userDiscId = formatMessageProxyIdentityUserId(descriptor.serviceId, input.externalKey);
+    const instanceId = input.instanceId ?? `${descriptor.serviceId}:official`;
+    const userDiscId = formatMessageProxyIdentityUserId(descriptor.serviceId, input.externalKey, instanceId);
     try {
       const persisted = await sql.begin(async (tx) => {
         const [user] = await tx`
@@ -173,20 +184,20 @@ export class MessageProxyRepository {
 
         const [namespaceRow] = await tx`
           INSERT INTO message_proxy_namespaces (
-            service_id, namespace_key, short_id, display_name, tag, description
+            service_id, instance_id, namespace_key, short_id, display_name, tag, description
           )
           VALUES (
-            ${input.serviceId}, ${input.namespace.namespaceKey}, ${input.namespace.shortId},
+            ${input.serviceId}, ${instanceId}, ${input.namespace.namespaceKey}, ${input.namespace.shortId},
             ${input.namespace.displayName}, ${input.namespace.tag}, ${input.namespace.description}
           )
-          ON CONFLICT (service_id, namespace_key) DO UPDATE SET
+          ON CONFLICT (instance_id, namespace_key) DO UPDATE SET
             short_id = EXCLUDED.short_id,
             display_name = EXCLUDED.display_name,
             tag = EXCLUDED.tag,
             description = EXCLUDED.description,
             updated_at = NOW()
           RETURNING
-            message_proxy_namespace_id, service_id, namespace_key, short_id,
+            message_proxy_namespace_id, service_id, instance_id, namespace_key, short_id,
             display_name, tag, description, created_at, updated_at
         `;
         if (!namespaceRow?.message_proxy_namespace_id) {
@@ -194,9 +205,9 @@ export class MessageProxyRepository {
         }
 
         const [insertedExternalIdentity] = await tx`
-          INSERT INTO external_identities (kind, external_key, user_id)
-          VALUES (${input.externalIdentityKind}, ${input.externalKey}, ${user.user_id})
-          ON CONFLICT (kind, external_key) DO NOTHING
+          INSERT INTO external_identities (kind, instance_id, external_key, user_id)
+          VALUES (${input.externalIdentityKind}, ${instanceId}, ${input.externalKey}, ${user.user_id})
+          ON CONFLICT (kind, instance_id, external_key) DO NOTHING
           RETURNING external_identity_id, user_id
         `;
         const [externalIdentity] = insertedExternalIdentity
@@ -204,7 +215,7 @@ export class MessageProxyRepository {
           : await tx`
               SELECT external_identity_id, user_id
               FROM external_identities
-              WHERE kind = ${input.externalIdentityKind} AND external_key = ${input.externalKey}
+              WHERE kind = ${input.externalIdentityKind} AND instance_id = ${instanceId} AND external_key = ${input.externalKey}
               LIMIT 1
             `;
         if (!externalIdentity?.external_identity_id) {
@@ -294,6 +305,7 @@ export class MessageProxyRepository {
           cpmi.message_disc_id,
           cpmi.sender_disc_id,
           cpn.service_id,
+          cpn.instance_id,
           u.user_disc_id,
           ei.external_identity_id,
           ei.external_key,
@@ -314,11 +326,12 @@ export class MessageProxyRepository {
         JOIN users u ON u.user_id = ei.user_id
         JOIN message_proxy_identities cpi ON cpi.external_identity_id = ei.external_identity_id
         JOIN message_proxy_namespaces cpn ON cpn.message_proxy_namespace_id = cpi.message_proxy_namespace_id
+          AND cpn.instance_id = ei.instance_id
         LEFT JOIN message_proxy_namespace_accounts cpna
           ON cpna.message_proxy_namespace_id = cpn.message_proxy_namespace_id
         WHERE cpmi.message_disc_id = ANY(${sql.array(messageDiscIds, "TEXT")})
         GROUP BY
-          cpmi.message_disc_id, cpmi.sender_disc_id, cpn.service_id, u.user_disc_id,
+          cpmi.message_disc_id, cpmi.sender_disc_id, cpn.service_id, cpn.instance_id, u.user_disc_id,
           ei.external_identity_id, ei.external_key, cpi.short_id, cpi.display_name,
           cpn.message_proxy_namespace_id, cpn.namespace_key, cpn.short_id,
           cpn.display_name, cpn.tag, cpn.description
@@ -346,6 +359,7 @@ export class MessageProxyRepository {
       const [row] = await sql<MessageProxyContextRow[]>`
         SELECT
           cpn.service_id,
+          cpn.instance_id,
           u.user_disc_id,
           ei.external_identity_id,
           ei.external_key,
@@ -365,11 +379,12 @@ export class MessageProxyRepository {
         JOIN external_identities ei ON ei.user_id = u.user_id
         JOIN message_proxy_identities cpi ON cpi.external_identity_id = ei.external_identity_id
         JOIN message_proxy_namespaces cpn ON cpn.message_proxy_namespace_id = cpi.message_proxy_namespace_id
+          AND cpn.instance_id = ei.instance_id
         LEFT JOIN message_proxy_namespace_accounts cpna
           ON cpna.message_proxy_namespace_id = cpn.message_proxy_namespace_id
         WHERE u.user_disc_id = ${userDiscId}
         GROUP BY
-          cpn.service_id, u.user_disc_id, ei.external_identity_id, ei.external_key,
+          cpn.service_id, cpn.instance_id, u.user_disc_id, ei.external_identity_id, ei.external_key,
           cpi.short_id, cpi.display_name, cpn.message_proxy_namespace_id,
           cpn.namespace_key, cpn.short_id, cpn.display_name, cpn.tag, cpn.description
         LIMIT 1
@@ -392,12 +407,13 @@ export class MessageProxyRepository {
     if (hostUserDiscIds.length === 0 || !normalizedHistoryText) return [];
     try {
       const rows = await sql<MessageProxyIdentityReferenceRow[]>`
-        SELECT DISTINCT cpn.service_id, u.user_disc_id, cpi.display_name, upc.user_nickname
+        SELECT DISTINCT cpn.service_id, cpn.instance_id, u.user_disc_id, cpi.display_name, upc.user_nickname
         FROM message_proxy_identities cpi
         JOIN external_identities ei ON ei.external_identity_id = cpi.external_identity_id
         JOIN users u ON u.user_id = ei.user_id
         LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
         JOIN message_proxy_namespaces cpn ON cpn.message_proxy_namespace_id = cpi.message_proxy_namespace_id
+          AND cpn.instance_id = ei.instance_id
         JOIN message_proxy_namespace_accounts cpna
           ON cpna.message_proxy_namespace_id = cpn.message_proxy_namespace_id
         WHERE cpna.host_user_disc_id = ANY(${sql.array(hostUserDiscIds, "TEXT")})
@@ -415,7 +431,7 @@ export class MessageProxyRepository {
       `;
       return rows.flatMap((row) => {
         const parsed = parseMessageProxyIdentityUserId(String(row.user_disc_id));
-        if (!parsed || parsed.serviceId !== row.service_id) return [];
+        if (!parsed || parsed.serviceId !== row.service_id || parsed.instanceId !== row.instance_id) return [];
         return [
           {
             serviceId: parsed.serviceId,
@@ -485,6 +501,7 @@ export class MessageProxyRepository {
       !parsedUserId ||
       !descriptor ||
       parsedUserId.serviceId !== descriptor.serviceId ||
+      parsedUserId.instanceId !== row.instance_id ||
       parsedUserId.externalKey !== String(row.external_key)
     ) {
       log.warn(`Invalid message-proxy context row for ${context}`);
@@ -492,6 +509,7 @@ export class MessageProxyRepository {
     }
     return {
       serviceId: descriptor.serviceId,
+      instanceId: row.instance_id,
       userDiscId: String(row.user_disc_id),
       externalIdentityId,
       externalKey: String(row.external_key),

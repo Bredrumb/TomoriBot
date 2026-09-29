@@ -41,7 +41,8 @@ import {
   updateSelfReplyChainState,
 } from "@/utils/chat/selfReplyState";
 import type { ChatAdmission, ChatIncoming, NonRunnableChatAdmission, TomoriChatInput } from "@/utils/chat/types";
-import { getProxyServiceDescriptor, resolveConfiguredProxyService } from "@/utils/messageProxy/registry";
+import { resolveConfiguredProxyService } from "@/utils/messageProxy/registry";
+import { formatMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserId";
 import { routeMessageProxyMessage } from "@/utils/messageProxy/router";
 import { persistMessageProxyAttestationIdentity } from "@/utils/messageProxy/persistence";
 import type { Message } from "discord.js";
@@ -407,10 +408,13 @@ async function resolveMessageProxyRecord(
     return null;
   }
 
-  const selectedService = resolveConfiguredProxyService(
-    (await getCachedUserRow(route.attestation.senderDiscordId))?.message_proxy_service,
-  );
-  if (selectedService !== route.attestation.serviceId) return null;
+  const senderRow = await getCachedUserRow(route.attestation.senderDiscordId);
+  const selectedService = resolveConfiguredProxyService(senderRow?.message_proxy_service);
+  if (
+    selectedService !== route.attestation.serviceId ||
+    (senderRow?.message_proxy_instance_id && senderRow.message_proxy_instance_id !== `${selectedService}:official`)
+  )
+    return null;
 
   await persistMessageProxyAttestationIdentity({
     messageDiscId: message.id,
@@ -420,15 +424,17 @@ async function resolveMessageProxyRecord(
   });
 
   markMessageProxyExpectationProxied(route.expectation);
-  const identityDescriptor = getProxyServiceDescriptor(route.attestation.serviceId);
   const record = rememberMessageProxyMessage({
     messageDiscId: message.id,
     channelId: message.channelId,
     expectation: route.expectation,
-    identityUserDiscId:
-      route.attestation.identity && identityDescriptor
-        ? `${identityDescriptor.syntheticUserPrefix}${route.attestation.identity.externalKey}`
-        : null,
+    identityUserDiscId: route.attestation.identity
+      ? formatMessageProxyIdentityUserId(
+          route.attestation.serviceId,
+          route.attestation.identity.externalKey,
+          route.attestation.identity.instanceId,
+        )
+      : null,
     verifiedRepostOnly: route.attestation.originalMessageId === null,
     verifiedRepostReference: route.attestation.replyTarget
       ? {
@@ -481,7 +487,10 @@ async function evaluateMessageProxyOriginalSpeedbump(args: {
 
   const userRow = await getCachedUserRow(userDiscId);
   const serviceId = resolveConfiguredProxyService(userRow?.message_proxy_service);
-  if (!serviceId) {
+  if (
+    !serviceId ||
+    (userRow?.message_proxy_instance_id && userRow.message_proxy_instance_id !== `${serviceId}:official`)
+  ) {
     return null;
   }
 

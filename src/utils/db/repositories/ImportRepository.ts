@@ -704,12 +704,14 @@ class ImportRepository {
             user_disc_id,
             language_pref,
             privacy_level,
-            message_proxy_service
+            message_proxy_service,
+            message_proxy_instance_id
           ) VALUES (
             ${userDiscId},
             ${importData.language_pref},
             ${importData.privacy_level ?? 0},
-            ${importData.message_proxy_service ?? null}
+            ${importData.message_proxy_service ?? null},
+            ${importData.message_proxy_service === "pluralkit" || importData.message_proxy_service === "pluralbuddy" ? `${importData.message_proxy_service}:official` : null}
           )
           ON CONFLICT (user_disc_id) DO UPDATE
           SET
@@ -718,6 +720,11 @@ class ImportRepository {
             message_proxy_service = CASE
               WHEN ${importData.message_proxy_service !== undefined} THEN ${importData.message_proxy_service ?? null}
               ELSE users.message_proxy_service
+            END,
+            message_proxy_instance_id = CASE
+              WHEN ${importData.message_proxy_service !== undefined} THEN
+                ${importData.message_proxy_service === "pluralkit" || importData.message_proxy_service === "pluralbuddy" ? `${importData.message_proxy_service}:official` : null}
+              ELSE users.message_proxy_instance_id
             END
           RETURNING user_id
         `;

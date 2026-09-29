@@ -5,6 +5,7 @@ import type { MessageProxyIdentityContext } from "@/utils/messageProxy/types";
 function context(overrides: Partial<MessageProxyIdentityContext> = {}): MessageProxyIdentityContext {
   return {
     serviceId: "pluralkit",
+    instanceId: "pluralkit:official",
     userDiscId: "pk:11111111-2222-4333-8444-555555555555",
     externalIdentityId: 1,
     externalKey: "11111111-2222-4333-8444-555555555555",

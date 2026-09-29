@@ -35,6 +35,7 @@ function user(service: string | null): UserRow {
     personal_server_fallback_enabled: true,
     timezone_offset: null,
     message_proxy_service: service,
+    message_proxy_instance_id: service === "pluralkit" || service === "pluralbuddy" ? `${service}:official` : null,
   };
 }
 
@@ -102,6 +103,22 @@ describe("/personal message-proxy", () => {
     expect(calls[0]?.method).toBe("deferReply");
     expect(writes).toBe(0);
     expect(calls.some(({ method }) => method === "editReply")).toBe(true);
+  });
+
+  it("allows a host with an unavailable custom selection to choose the official instance", async () => {
+    const writes: string[] = [];
+    userRepository.setMessageProxyService = async (_userId, serviceId) => {
+      writes.push(serviceId ?? "null");
+      return true;
+    };
+    const { interaction } = interactionFor("pluralkit");
+    await execute(
+      {} as Client,
+      interaction as unknown as ChatInputCommandInteraction,
+      { ...user("pluralkit"), message_proxy_instance_id: "pluralkit:11111111-2222-4333-8444-555555555555" },
+      "en-US",
+    );
+    expect(writes).toEqual(["pluralkit"]);
   });
 
   it("accepts all storage states in the portable settings schema", () => {

@@ -86,6 +86,7 @@ function proxyIdentity(displayName: string): MessageProxyHistoryIdentity {
 function indexedIdentity(messageDiscId: string, displayName: string): MessageProxyIndexedMessageIdentity {
   return {
     serviceId: "pluralkit",
+    instanceId: "pluralkit:official",
     userDiscId: MEMBER_USER_DISC_ID,
     externalIdentityId: 1,
     externalKey: MEMBER_UUID,

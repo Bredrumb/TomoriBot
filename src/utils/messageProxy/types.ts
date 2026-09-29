@@ -26,6 +26,7 @@ export type ProxyIdentityNamespaceInput = {
 
 export type ProxyIdentityUpsertInput = {
   serviceId: string;
+  instanceId?: string;
   externalIdentityKind: string;
   externalKey: string;
   shortId: string | null;
@@ -55,6 +56,7 @@ export type ProxyReplyTarget = { channelId: string; messageId: string };
 
 export type MessageProxyIdentityContext = {
   serviceId: string;
+  instanceId: string;
   userDiscId: string;
   externalIdentityId: number;
   externalKey: string;

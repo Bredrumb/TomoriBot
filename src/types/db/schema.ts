@@ -54,6 +54,7 @@ export const userSchema = z.object({
   personal_server_fallback_enabled: z.boolean().default(true), // Whether a failed personal text route may fall back to the server's model
   timezone_offset: z.number().int().min(-12).max(14).nullable().optional(), // Added June 2026 - Personal UTC offset; NULL = not set / opt-out
   message_proxy_service: z.string().nullable().default(null),
+  message_proxy_instance_id: z.string().nullable().default(null),
   prefix_override: z.string().nullable().optional(),
   suffix_override: z.string().nullable().optional(),
   gender_identity: z.string().nullable().optional(),
@@ -189,6 +190,7 @@ export type PersonaAutochRuntimeStateRow = z.infer<typeof personaAutochRuntimeSt
 export const externalIdentitySchema = z.object({
   external_identity_id: z.number().int().optional(),
   kind: z.string().min(1),
+  instance_id: z.string().min(1),
   external_key: z.string().min(1),
   user_id: z.number().int(),
   created_at: z.date().optional(),
@@ -199,6 +201,7 @@ export type ExternalIdentityRow = z.infer<typeof externalIdentitySchema>;
 export const messageProxyNamespaceSchema = z.object({
   message_proxy_namespace_id: z.number().int().optional(),
   service_id: z.string().min(1),
+  instance_id: z.string().min(1),
   namespace_key: z.string().min(1),
   short_id: z.string().nullable().optional(),
   display_name: z.string().nullable().optional(),

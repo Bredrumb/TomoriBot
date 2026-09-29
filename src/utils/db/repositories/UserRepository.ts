@@ -118,6 +118,7 @@ class UserRepository implements IRepository<UserExportShape> {
             u.registration_locale,
             u.privacy_level,
             u.message_proxy_service,
+            u.message_proxy_instance_id,
             COALESCE(upc.personal_deliberate_tool_mode, 'follow') AS personal_deliberate_tool_mode,
             upc.timezone_offset,
             upc.prefix_override,
@@ -174,6 +175,7 @@ class UserRepository implements IRepository<UserExportShape> {
               u.registration_locale,
               u.privacy_level,
               u.message_proxy_service,
+              u.message_proxy_instance_id,
               COALESCE(upc.personal_deliberate_tool_mode, 'follow') AS personal_deliberate_tool_mode,
               upc.timezone_offset,
               upc.prefix_override,
@@ -581,7 +583,11 @@ class UserRepository implements IRepository<UserExportShape> {
   }
 
   async setMessageProxyService(userId: number, serviceId: string | null): Promise<boolean> {
-    const updated = await this.update(userId, { message_proxy_service: serviceId });
+    const instanceId = serviceId === "pluralkit" || serviceId === "pluralbuddy" ? `${serviceId}:official` : null;
+    const updated = await this.update(userId, {
+      message_proxy_service: serviceId,
+      message_proxy_instance_id: instanceId,
+    });
     return updated !== null;
   }
 

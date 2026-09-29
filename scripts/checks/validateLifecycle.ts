@@ -65,6 +65,7 @@ const requiredTables = [
   "st_presets",
   "st_preset_nodes",
   "external_identities",
+  "message_proxy_instances",
   "message_proxy_namespaces",
   "message_proxy_identities",
   "message_proxy_namespace_accounts",
@@ -72,6 +73,7 @@ const requiredTables = [
 ] as const;
 
 const messageProxyTables = [
+  "message_proxy_instances",
   "external_identities",
   "message_proxy_namespaces",
   "message_proxy_identities",
@@ -236,9 +238,9 @@ async function assertMessageProxyMigrationPresent(client: SQL): Promise<void> {
     FROM pg_constraint
     WHERE conname IN (
       'external_identities_user_id_key',
-      'external_identities_kind_external_key_key',
+      'external_identities_kind_instance_id_external_key_key',
       'external_identities_user_id_fkey',
-      'message_proxy_namespaces_service_id_namespace_key_key',
+      'message_proxy_namespaces_instance_id_namespace_key_key',
       'message_proxy_identities_external_identity_id_key',
       'message_proxy_identities_message_proxy_namespace_id_fkey',
       'message_proxy_identities_external_identity_id_fkey',

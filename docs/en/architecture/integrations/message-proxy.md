@@ -134,13 +134,21 @@ fit the namespace model, extend persistence deliberately rather than fabricating
 | Table or column | Purpose |
 |---|---|
 | `users.message_proxy_service` | `NULL` never configured, `none` explicit opt-out, registered ID enabled. Unknown IDs are retained but disabled at runtime. |
-| `external_identities` | Generic canonical external key mapped to one synthetic `users` row. |
-| `message_proxy_namespaces` | Service container keyed by `(service_id, namespace_key)`. |
+| `users.message_proxy_instance_id` | Selected instance. `NULL` means the official instance for a selected service; Off clears the selection. Custom selections do not route yet. |
+| `message_proxy_instances` | Stable instance ID, service, canonical origin, and enabled state. Official rows are `pluralkit:official` and `pluralbuddy:official`. |
+| `external_identities` | Canonical key scoped by `(kind, instance_id, external_key)` and mapped to one synthetic `users` row. |
+| `message_proxy_namespaces` | Service container keyed by `(instance_id, namespace_key)`. |
 | `message_proxy_identities` | Stable identity linked to an external identity and namespace, with its last verified webhook avatar. |
 | `message_proxy_namespace_accounts` | Discord accounts authorized to speak for the namespace. |
 | `message_proxy_message_index` | Immutable message-to-identity and attested-sender history attribution. |
 
 Canonical identity, namespace, host link, and message attribution are committed in one transaction.
+Public synthetic IDs keep their `pk:<member-id>` and `pb:<alter-id>` forms. A custom instance
+uses the instance ID in its synthetic user ID, so equal raw keys from different origins create
+separate profiles. Existing message attribution continues to reference the same external identity
+row after the instance backfill. A custom catalog row starts disabled and cannot be selected by
+users; `scripts/db/register-message-proxy-instance.ts` validates its HTTPS origin and records it
+without credentials. Custom routing and authorization are separate work.
 Cosmetic fields may refresh; canonical keys and an existing message attribution do not. A service
 that publishes profile text for an identity may seed it once, on the same transaction that first
 registers that identity: pronouns reach the synthetic user's own `pronouns` setting there, and every
@@ -166,5 +174,5 @@ PluralBuddy uses deployment-owned OAuth app credentials in `PLURALBUDDY_CLIENT_I
 `PLURALBUDDY_CLIENT_SECRET` for its OAuth client-credentials token. Its message lookup is bounded to
 five seconds, stops on a rate-limit response, and caches successful lookups. See the
 [PluralKit adapter](/architecture/integrations/pluralkit/) for its separate transport.
-The PluralBuddy adapter uses the public `pluralbuddy.app` origin. Supporting another instance would
-require a configurable API origin, instance-scoped credentials, and instance-scoped identity keys.
+The PluralBuddy adapter still uses the public `pluralbuddy.app` origin. The instance catalog and
+identity keys are ready for instance-scoped credentials and routing.

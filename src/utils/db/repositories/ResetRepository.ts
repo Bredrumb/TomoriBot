@@ -261,7 +261,7 @@ export const SERVER_COLLECTION_RESET_TABLES = [
 export const PERSONAL_SINGLETON_RESET_TABLES: readonly SingletonResetClassification[] = [
   {
     table: "users",
-    reset: ["language_pref", "privacy_level", "message_proxy_service"],
+    reset: ["language_pref", "privacy_level", "message_proxy_service", "message_proxy_instance_id"],
     preserved: ["registration_locale"],
   },
   {
@@ -556,6 +556,7 @@ class ResetRepository {
           language_pref = DEFAULT,
           privacy_level = DEFAULT,
           message_proxy_service = DEFAULT,
+          message_proxy_instance_id = DEFAULT,
           updated_at = NOW()
         WHERE user_id = ${userId}
         RETURNING user_disc_id

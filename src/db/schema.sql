@@ -855,6 +855,7 @@ SELECT add_column_if_not_exists('users', 'registration_locale', 'TEXT');
 -- NULL means never configured, "none" is an explicit opt-out, and a registered
 -- service ID enables that adapter. Unknown values fail closed in the registry.
 SELECT add_column_if_not_exists('users', 'message_proxy_service', 'TEXT');
+SELECT add_column_if_not_exists('users', 'message_proxy_instance_id', 'TEXT');
 
 -- Create updated_at trigger for users table
 DROP TRIGGER IF EXISTS update_users_timestamp ON users;
@@ -3165,16 +3166,64 @@ CREATE INDEX IF NOT EXISTS idx_stat_counters_user_lineage_metric
   ON stat_counters(user_id, persona_lineage_id, metric);
 
 -- ============================================================================
--- Message-proxy identities and durable message attribution (migration 056)
+-- Message-proxy identities and durable message attribution
 -- ============================================================================
+CREATE TABLE IF NOT EXISTS message_proxy_instances (
+  instance_id TEXT PRIMARY KEY,
+  service_id TEXT NOT NULL CHECK (service_id IN ('pluralkit', 'pluralbuddy')),
+  origin TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT message_proxy_instances_id_format CHECK (
+    instance_id = service_id || ':official'
+    OR instance_id ~ ('^' || service_id || ':[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+  )
+);
+
+INSERT INTO message_proxy_instances (instance_id, service_id, origin, display_name, enabled)
+VALUES
+  ('pluralkit:official', 'pluralkit', 'https://api.pluralkit.me', 'PluralKit', true),
+  ('pluralbuddy:official', 'pluralbuddy', 'https://pluralbuddy.app', 'PluralBuddy', true)
+ON CONFLICT (instance_id) DO NOTHING;
+
+CREATE OR REPLACE FUNCTION keep_message_proxy_instance_identity()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.instance_id <> OLD.instance_id OR NEW.service_id <> OLD.service_id OR NEW.origin <> OLD.origin THEN
+    RAISE EXCEPTION 'Message-proxy instance identity and origin are immutable';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS keep_message_proxy_instance_identity_before_update ON message_proxy_instances;
+CREATE TRIGGER keep_message_proxy_instance_identity_before_update
+BEFORE UPDATE ON message_proxy_instances
+FOR EACH ROW EXECUTE FUNCTION keep_message_proxy_instance_identity();
+
+DROP TRIGGER IF EXISTS update_message_proxy_instances_timestamp ON message_proxy_instances;
+CREATE TRIGGER update_message_proxy_instances_timestamp
+BEFORE UPDATE ON message_proxy_instances
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_message_proxy_instance_id_fkey') THEN
+    ALTER TABLE users ADD CONSTRAINT users_message_proxy_instance_id_fkey
+      FOREIGN KEY (message_proxy_instance_id) REFERENCES message_proxy_instances(instance_id);
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS external_identities (
   external_identity_id SERIAL PRIMARY KEY,
   kind         TEXT NOT NULL,
+  instance_id TEXT NOT NULL REFERENCES message_proxy_instances(instance_id),
   external_key TEXT NOT NULL,
   user_id      INT NOT NULL UNIQUE REFERENCES users(user_id) ON DELETE CASCADE,
   created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE (kind, external_key)
+  CONSTRAINT external_identities_kind_instance_id_external_key_key UNIQUE (kind, instance_id, external_key)
 );
 
 DROP TRIGGER IF EXISTS update_external_identities_timestamp ON external_identities;
@@ -3185,6 +3234,7 @@ FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 CREATE TABLE IF NOT EXISTS message_proxy_namespaces (
   message_proxy_namespace_id SERIAL PRIMARY KEY,
   service_id TEXT NOT NULL,
+  instance_id TEXT NOT NULL REFERENCES message_proxy_instances(instance_id),
   namespace_key TEXT NOT NULL,
   short_id TEXT,
   display_name TEXT,
@@ -3192,7 +3242,7 @@ CREATE TABLE IF NOT EXISTS message_proxy_namespaces (
   description TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE (service_id, namespace_key)
+  CONSTRAINT message_proxy_namespaces_instance_id_namespace_key_key UNIQUE (instance_id, namespace_key)
 );
 
 DROP TRIGGER IF EXISTS update_message_proxy_namespaces_timestamp ON message_proxy_namespaces;

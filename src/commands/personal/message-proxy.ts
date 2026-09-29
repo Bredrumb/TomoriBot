@@ -81,7 +81,13 @@ export async function execute(
       return;
     }
 
-    if (requestedService === userData.message_proxy_service) {
+    if (
+      requestedService === userData.message_proxy_service &&
+      (requestedService === MESSAGE_PROXY_DISABLED_SERVICE_ID
+        ? userData.message_proxy_instance_id === null
+        : userData.message_proxy_instance_id === null ||
+          userData.message_proxy_instance_id === `${requestedService}:official`)
+    ) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.personal.message-proxy.already_selected_title",
         descriptionKey: "commands.personal.message-proxy.already_selected_description",

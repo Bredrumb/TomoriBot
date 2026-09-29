@@ -64,12 +64,12 @@ PluralKit maps its concepts into generic persistence as follows:
 
 ```text
 PluralKit member UUID
-  -> external_identities(kind = pluralkit_member)
+  -> external_identities(kind = pluralkit_member, instance_id = pluralkit:official)
   -> users(user_disc_id = pk:<member-uuid>)
   -> message_proxy_identities
 
 PluralKit system UUID
-  -> message_proxy_namespaces(service_id = pluralkit)
+  -> message_proxy_namespaces(instance_id = pluralkit:official)
   -> message_proxy_namespace_accounts(host Discord accounts)
 
 Proxy message ID
@@ -93,7 +93,7 @@ and history code only sees generic identity and namespace DTOs.
 A present member has no independent Discord presence and cannot be mentioned. Its memories remain
 member-specific. A public system description is refreshed when observed and rendered once for the
 system; a public member description may be seeded once as a global personal memory when the member
-is first registered. The seed is a snapshot, not a later synchronization.
+is first registered. Later service edits do not rewrite that memory.
 
 A member's public pronouns follow the same one-time rule, written into that member's own `pronouns`
 setting on the attestation that first registers the identity. PluralKit stays the source of the

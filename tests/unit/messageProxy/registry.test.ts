@@ -99,6 +99,7 @@ describe("message-proxy registry", () => {
     expect(formatMessageProxyIdentityUserIdFromRegistry("fixture", "profile-1", registry)).toBe("fx:profile-1");
     expect(parseMessageProxyIdentityUserIdFromRegistry("fx:profile-1", registry)).toEqual({
       serviceId: "fixture",
+      instanceId: "fixture:official",
       externalKey: "profile-1",
     });
   });
@@ -112,5 +113,23 @@ describe("message-proxy registry", () => {
       "Invalid external key",
     );
     expect(parseMessageProxyIdentityUserId("pk:not-a-uuid")).toBeNull();
+  });
+
+  it("keeps official IDs and separates matching keys on custom instances", () => {
+    const registry = createProxyServiceRegistry([fixtureDescriptor]);
+    const instanceA = "fixture:11111111-2222-4333-8444-555555555555";
+    const instanceB = "fixture:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+    const official = formatMessageProxyIdentityUserIdFromRegistry("fixture", "profile-1", registry);
+    const customA = formatMessageProxyIdentityUserIdFromRegistry("fixture", "profile-1", registry, instanceA);
+    const customB = formatMessageProxyIdentityUserIdFromRegistry("fixture", "profile-1", registry, instanceB);
+    expect(official).toBe("fx:profile-1");
+    expect(new Set([official, customA, customB]).size).toBe(3);
+    expect(parseMessageProxyIdentityUserIdFromRegistry(customA, registry)).toEqual({
+      serviceId: "fixture",
+      instanceId: instanceA,
+      externalKey: "profile-1",
+    });
+    expect(parseMessageProxyIdentityUserIdFromRegistry(customB, registry)?.instanceId).toBe(instanceB);
+    expect(parseMessageProxyIdentityUserIdFromRegistry(customA.replace("i:44:", "i:43:"), registry)).toBeNull();
   });
 });

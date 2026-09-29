@@ -82,6 +82,7 @@ function persistedIdentity(): MessageProxyIdentityUpsertResult {
     namespace: {
       message_proxy_namespace_id: 51,
       service_id: "fixture",
+      instance_id: "fixture:official",
       namespace_key: "account-one",
     },
     identity: {

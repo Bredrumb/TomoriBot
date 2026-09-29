@@ -59,6 +59,7 @@ function createUserRow(overrides: Partial<UserRow> = {}): UserRow {
     personal_memories: [],
     physical_appearance_tags: ["auburn hair", "green eyes"],
     message_proxy_service: null,
+    message_proxy_instance_id: null,
     nai_char_ref_url: null,
     impersonation_prompt: null,
     shortterm_cache_crossserver_opt_in: false,
@@ -612,6 +613,7 @@ const PK_HOST_ID = "500000000000000001";
 function createPluralKitContext(overrides: Partial<MessageProxyIdentityContext> = {}): MessageProxyIdentityContext {
   return {
     serviceId: "pluralkit",
+    instanceId: "pluralkit:official",
     userDiscId: PK_USER_ID,
     externalIdentityId: 12,
     externalKey: "2f1c9d4e-6b7a-4c31-8d02-5e9f7a1b3c4d",
@@ -816,6 +818,7 @@ describe("service-owned message-proxy presentation", () => {
       userRow: createUserRow({ user_id: 99, user_disc_id: identityUserId, user_nickname: "Saved Profile" }),
       messageProxyContext: {
         serviceId: "fixture_service",
+        instanceId: "fixture_service:official",
         userDiscId: identityUserId,
         externalIdentityId: 21,
         externalKey: "profile-one",

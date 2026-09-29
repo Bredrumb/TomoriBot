@@ -124,6 +124,7 @@ const defaultUser = (): UserRow => ({
   personal_server_fallback_enabled: true,
   timezone_offset: null,
   message_proxy_service: null,
+  message_proxy_instance_id: null,
 });
 
 describe("context reference discovery", () => {
