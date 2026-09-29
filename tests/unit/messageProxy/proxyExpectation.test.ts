@@ -9,6 +9,7 @@ import {
   findMatchingMessageProxyExpectation,
   findVerifiedRepostExpectation,
   getMessageProxyExpectationTtlMs,
+  getMessageProxyLookupTimeoutMs,
   getMessageProxyWaitMs,
   getLiveMessageProxyExpectationInstances,
   getSupersededMessageProxyOriginalMessageIds,
@@ -67,6 +68,34 @@ function createExpectation(overrides: Partial<Parameters<typeof createMessagePro
     ...overrides,
   });
 }
+
+describe("message-proxy lookup budget", () => {
+  const originalLookupTimeoutMs = process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS;
+
+  afterEach(() => {
+    if (originalLookupTimeoutMs === undefined) delete process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS;
+    else process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS = originalLookupTimeoutMs;
+    process.env.MESSAGE_PROXY_EXPECTATION_TTL_MS = "45";
+  });
+
+  it("defaults to 5000ms, honors a smaller value, and falls back on garbage", () => {
+    process.env.MESSAGE_PROXY_EXPECTATION_TTL_MS = "10000";
+    delete process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS;
+    expect(getMessageProxyLookupTimeoutMs()).toBe(5000);
+    process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS = "1200";
+    expect(getMessageProxyLookupTimeoutMs()).toBe(1200);
+    process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS = "not-a-number";
+    expect(getMessageProxyLookupTimeoutMs()).toBe(5000);
+  });
+
+  it("never outlasts half the expectation TTL, which would expire the match mid-lookup", () => {
+    process.env.MESSAGE_PROXY_EXPECTATION_TTL_MS = "10000";
+    process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS = "9000";
+    expect(getMessageProxyLookupTimeoutMs()).toBe(5000);
+    process.env.MESSAGE_PROXY_EXPECTATION_TTL_MS = "4000";
+    expect(getMessageProxyLookupTimeoutMs()).toBe(2000);
+  });
+});
 
 describe("message-proxy expectations", () => {
   it("keeps a PluralBuddy host candidate briefly after the original wait without inventing an original link", async () => {

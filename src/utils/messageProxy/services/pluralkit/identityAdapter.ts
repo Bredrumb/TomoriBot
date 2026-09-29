@@ -7,7 +7,7 @@ function normalizeOptionalText(value: string | null | undefined): string | null 
   return trimmed && trimmed.length > 0 ? trimmed : null;
 }
 
-export function getPluralKitIdentityDisplayName(lookup: PkMessageLookup): string | null {
+function getPluralKitIdentityDisplayName(lookup: PkMessageLookup): string | null {
   if (!lookup.member) return null;
   return normalizeOptionalText(lookup.member.display_name) ?? normalizeOptionalText(lookup.member.name) ?? null;
 }

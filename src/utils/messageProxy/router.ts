@@ -96,7 +96,7 @@ export async function routeMessageProxyMessage(
   }
   const candidates = instances.flatMap((instance) => {
     const descriptor = dependencies.registry.get(instance.serviceId);
-    return isAttestingDescriptor(descriptor) && (descriptor.canAttestMessage?.(args.message) ?? true)
+    return isAttestingDescriptor(descriptor) && (descriptor.canAttestMessage?.(args.message, instance) ?? true)
       ? [{ descriptor, instance }]
       : [];
   });
@@ -146,6 +146,10 @@ export async function routeMessageProxyMessage(
   }
   const attestation = claims[0];
   if (!attestation) return routeResult({ status: errored ? "timeout_or_error" : "unmatched" });
+
+  // Before the expectation check: the service confirmed the message even when no original pairs with it.
+  const claimed = candidates.find(({ instance }) => instance.instanceId === attestation.instanceId);
+  claimed?.descriptor.recordAttestedMessage?.(args.message, claimed.instance);
 
   const expectation = attestation.originalMessageId
     ? dependencies.findExpectation(args.message.channelId, attestation)

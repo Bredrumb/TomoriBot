@@ -1,4 +1,4 @@
-import type { Embed, Message } from "discord.js";
+import type { Embed } from "discord.js";
 import type { ProxyReplyTarget, ProxyServiceDescriptor, ProxyServicePresentation } from "@/utils/messageProxy/types";
 import { pluralKitProxyService } from "@/utils/messageProxy/services/pluralkit/descriptor";
 import { pluralBuddyProxyService } from "@/utils/messageProxy/services/pluralbuddy/descriptor";
@@ -100,14 +100,6 @@ export function getMessageProxyServiceChoices(): readonly MessageProxyServiceSel
 
 export function getProxyServicePresentation(serviceId: string): ProxyServicePresentation | null {
   return getProxyServiceDescriptor(serviceId)?.presentation ?? null;
-}
-
-export function extractMessageProxyReplyTarget(message: Pick<Message, "embeds">): ProxyReplyTarget | null {
-  for (const descriptor of MESSAGE_PROXY_SERVICE_DESCRIPTORS) {
-    const target = descriptor.extractReplyTarget?.(message);
-    if (target) return target;
-  }
-  return null;
 }
 
 export function extractMessageProxyReplyTargetFromEmbed(

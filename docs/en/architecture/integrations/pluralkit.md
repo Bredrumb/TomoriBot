@@ -41,7 +41,7 @@ The client preserves PluralKit-specific behavior:
 - `429` honors a sane positive `Retry-After`; zero or malformed values use bounded backoff. A
   `Retry-After` that leaves the budget no room to retry after it fails the lookup immediately,
   rather than retrying early or sleeping out the deadline.
-- `PLURALKIT_LOOKUP_TIMEOUT_MS` bounds the complete lookup budget. One attempt may spend at most
+- `MESSAGE_PROXY_LOOKUP_TIMEOUT_MS` (shared with every service) bounds the complete lookup budget. One attempt may spend at most
   half of it, so a stalled connection is aborted with the first backoff step and a second attempt
   still inside the same deadline. A response that stalls while sending its body takes the same
   retry path. Every retry sleep also leaves a minimum attempt's time, and the final attempt uses

@@ -39,14 +39,14 @@ import { stallUntilAborted, stubGlobalFetch } from "../../helpers/fetchStub";
 import { createUserRow } from "../../helpers/fixtures";
 
 const originalFetch = globalThis.fetch;
-const originalLookupTimeoutMs = process.env.PLURALKIT_LOOKUP_TIMEOUT_MS;
+const originalLookupTimeoutMs = process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS;
 
 // Both mutations are process-wide, and Bun does not reset them between the files
 // sharing this lane, so the restore has to live in a hook.
 afterAll(() => {
   globalThis.fetch = originalFetch;
-  if (originalLookupTimeoutMs === undefined) delete process.env.PLURALKIT_LOOKUP_TIMEOUT_MS;
-  else process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = originalLookupTimeoutMs;
+  if (originalLookupTimeoutMs === undefined) delete process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS;
+  else process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS = originalLookupTimeoutMs;
 });
 
 // Object.create skips the discord.js constructor (which demands a live client and a full
@@ -243,7 +243,7 @@ describe("evaluateChatAdmission message-proxy lookup failure", () => {
     const originalMessageId = "original-message-1";
     const webhookMessageId = "webhook-message-1";
     const webhookAuthorId = "999000000000000001";
-    process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = "600";
+    process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS = "600";
 
     // A live expectation for this channel is what makes admission attempt a lookup.
     createMessageProxyExpectation({

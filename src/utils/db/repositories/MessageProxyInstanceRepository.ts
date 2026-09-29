@@ -11,9 +11,9 @@ type InstanceRow = {
   display_name: string;
 };
 
-export type SelectableMessageProxyInstance = MessageProxyInstanceContext & { displayName: string };
+type SelectableMessageProxyInstance = MessageProxyInstanceContext & { displayName: string };
 
-export class MessageProxyInstanceRepository {
+class MessageProxyInstanceRepository {
   async getEnabled(serviceId: string, instanceId?: string | null): Promise<SelectableMessageProxyInstance | null> {
     const descriptor = getProxyServiceDescriptor(serviceId);
     if (!descriptor) return null;

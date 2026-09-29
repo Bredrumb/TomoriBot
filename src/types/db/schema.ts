@@ -182,22 +182,6 @@ export const personaAutochRuntimeStateSchema = z.object({
   updated_at: z.date().optional(),
 });
 export type PersonaAutochRuntimeStateRow = z.infer<typeof personaAutochRuntimeStateSchema>;
-/**
- * Generic (kind, external_key) -> users-row anchor (migration 056). Only
- * Service-owned identity kinds share this shape so new adapters do not require
- * another user-identity schema.
- */
-export const externalIdentitySchema = z.object({
-  external_identity_id: z.number().int().optional(),
-  kind: z.string().min(1),
-  instance_id: z.string().min(1),
-  external_key: z.string().min(1),
-  user_id: z.number().int(),
-  created_at: z.date().optional(),
-  updated_at: z.date().optional(),
-});
-export type ExternalIdentityRow = z.infer<typeof externalIdentitySchema>;
-
 export const messageProxyNamespaceSchema = z.object({
   message_proxy_namespace_id: z.number().int().optional(),
   service_id: z.string().min(1),
@@ -223,34 +207,6 @@ export const messageProxyIdentitySchema = z.object({
   updated_at: z.date().optional(),
 });
 export type MessageProxyIdentityRow = z.infer<typeof messageProxyIdentitySchema>;
-
-export const messageProxyNamespaceAccountSchema = z.object({
-  message_proxy_namespace_id: z.number().int(),
-  host_user_disc_id: z.string().min(1),
-  created_at: z.date().optional(),
-});
-export type MessageProxyNamespaceAccountRow = z.infer<typeof messageProxyNamespaceAccountSchema>;
-
-export const messageProxyMessageIndexSchema = z.object({
-  message_disc_id: z.string().min(1),
-  external_identity_id: z.number().int(),
-  sender_disc_id: z.string().min(1),
-  created_at: z.date().optional(),
-});
-export type MessageProxyMessageIndexRow = z.infer<typeof messageProxyMessageIndexSchema>;
-
-export const pluralBuddyOAuthConnectionSchema = z.object({
-  instance_id: z.string().min(1),
-  origin: z.string().url(),
-  client_id: z.string().min(1),
-  client_secret: z.instanceof(Buffer),
-  client_secret_key_version: z.number().int().positive(),
-  refresh_token: z.instanceof(Buffer),
-  refresh_token_key_version: z.number().int().positive(),
-  created_at: z.date().optional(),
-  updated_at: z.date().optional(),
-});
-export type PluralBuddyOAuthConnectionRow = z.infer<typeof pluralBuddyOAuthConnectionSchema>;
 
 /**
  * Schema for voice_samples table : reference audio clips for local TTS voice cloning.
@@ -531,21 +487,6 @@ function normalizeFallbackModelRefs(value: unknown): FallbackModelRef[] {
   const parsed = fallbackModelRefSchema.array().safeParse(rows);
   return parsed.success ? parsed.data : [];
 }
-
-/**
- * A user's model fallback chain, held once per user rather than per saved
- * provider row so it survives a provider switch and can span providers.
- */
-export const userFallbackChainSchema = z.object({
-  user_id: z.number().int(),
-  fallback_model_refs: z.preprocess(
-    (value) => normalizeFallbackModelRefs(value),
-    fallbackModelRefSchema.array().default([]),
-  ),
-  created_at: z.coerce.date().optional(),
-  updated_at: z.coerce.date().optional(),
-});
-export type UserFallbackChainRow = z.infer<typeof userFallbackChainSchema>;
 
 function normalizeEnabledCapabilities(value: unknown): string[] {
   let source: unknown = value;

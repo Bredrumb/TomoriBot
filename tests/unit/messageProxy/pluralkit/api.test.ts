@@ -3,14 +3,14 @@ import { createHash } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
 import { stallUntilAborted } from "../../../helpers/fetchStub";
 
-const originalLookupTimeoutMs = process.env.PLURALKIT_LOOKUP_TIMEOUT_MS;
+const originalLookupTimeoutMs = process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS;
 const originalApiToken = process.env.PLURALKIT_API_TOKEN;
-process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = "2000";
+process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS = "2000";
 
 // Set at module scope, so it can only be undone once every test here has run.
 afterAll(() => {
-  if (originalLookupTimeoutMs === undefined) delete process.env.PLURALKIT_LOOKUP_TIMEOUT_MS;
-  else process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = originalLookupTimeoutMs;
+  if (originalLookupTimeoutMs === undefined) delete process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS;
+  else process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS = originalLookupTimeoutMs;
   if (originalApiToken === undefined) delete process.env.PLURALKIT_API_TOKEN;
   else process.env.PLURALKIT_API_TOKEN = originalApiToken;
 });
@@ -33,18 +33,18 @@ const originalFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = originalFetch;
   clearPluralKitApiStateForTests();
-  process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = FILE_LOOKUP_TIMEOUT_MS;
+  process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS = FILE_LOOKUP_TIMEOUT_MS;
   if (originalApiToken === undefined) delete process.env.PLURALKIT_API_TOKEN;
   else process.env.PLURALKIT_API_TOKEN = originalApiToken;
 });
 
 /** Runs one test under a lookup budget other than the file's 2000ms default. */
 async function withLookupBudget(budgetMs: number, body: () => Promise<void>): Promise<void> {
-  process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = String(budgetMs);
+  process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS = String(budgetMs);
   try {
     await body();
   } finally {
-    process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = FILE_LOOKUP_TIMEOUT_MS;
+    process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS = FILE_LOOKUP_TIMEOUT_MS;
   }
 }
 

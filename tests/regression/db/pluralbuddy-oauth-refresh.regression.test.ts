@@ -19,7 +19,7 @@ scopedMock.module("@/utils/security/userRemoteFetch", () => ({
 const { clearPluralBuddyOAuthTokenStateForTests, getPluralBuddyAccessToken } = await import(
   "@/utils/messageProxy/services/pluralbuddy/oauthTokens"
 );
-const { clearPluralBuddyApiStateForTests, fetchPluralBuddyMessage } = await import(
+const { clearPluralBuddyApiStateForTests, fetchPluralBuddyMessage, PluralBuddyLookupUnavailableError } = await import(
   "@/utils/messageProxy/services/pluralbuddy/api"
 );
 
@@ -223,9 +223,15 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("PluralBuddy OAuth refresh persistence", ()
       return new Response(null, { status: 401 });
     });
 
-    expect(await fetchPluralBuddyMessage(official, messageId)).toBeNull();
-    expect(await fetchPluralBuddyMessage(official, messageId)).toBeNull();
-    expect(request).toHaveBeenCalledTimes(2);
+    const warning = spyOn(log, "warn").mockImplementation(() => {});
+
+    try {
+      await expect(fetchPluralBuddyMessage(official, messageId)).rejects.toThrow(PluralBuddyLookupUnavailableError);
+      expect(await fetchPluralBuddyMessage(official, messageId)).toBeNull();
+      expect(request).toHaveBeenCalledTimes(2);
+    } finally {
+      warning.mockRestore();
+    }
     const [connection] = await testSql<{ refresh_blocked_at: Date | null }[]>`
       SELECT refresh_blocked_at FROM pluralbuddy_oauth_connections WHERE instance_id = ${official.instanceId}
     `;

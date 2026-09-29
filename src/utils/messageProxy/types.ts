@@ -1,7 +1,7 @@
 import type { Embed, Message } from "discord.js";
 import type { MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
 
-export type ProxyServiceCapabilities =
+type ProxyServiceCapabilities =
   | { correlation: "none"; identity: "none" }
   | { correlation: "attested"; identity: "none" }
   | {
@@ -17,7 +17,7 @@ export type ProxyServiceCapabilities =
       namespaceBio: "inline" | "separate-fetch" | "none";
     };
 
-export type ProxyIdentityNamespaceInput = {
+type ProxyIdentityNamespaceInput = {
   namespaceKey: string;
   shortId: string | null;
   displayName: string | null;
@@ -85,7 +85,7 @@ export type MessageProxyIdentityReference = {
   savedNickname: string | null;
 };
 
-export type ProxyNamespacePresentation = {
+type ProxyNamespacePresentation = {
   sectionHeading: string;
   entry: string;
 };
@@ -107,7 +107,10 @@ type ProxyDescriptorBase<TServiceId extends string> = {
   externalIdentityKind: string;
   validateExternalKey(externalKey: string): boolean;
   presentation: ProxyServicePresentation;
-  canAttestMessage?(message: Message): boolean;
+  /** False skips the lookup for good, so it must never reject a message the service could have sent. */
+  canAttestMessage?(message: Message, instance: MessageProxyInstanceContext): boolean;
+  /** Called for a validated claim, before the router looks for a matching expectation. */
+  recordAttestedMessage?(message: Message, instance: MessageProxyInstanceContext): void;
   extractReplyTarget?(message: Pick<Message, "embeds">): ProxyReplyTarget | null;
   extractReplyTargetFromEmbed?(embed: Pick<Embed, "author" | "description">): ProxyReplyTarget | null;
 };

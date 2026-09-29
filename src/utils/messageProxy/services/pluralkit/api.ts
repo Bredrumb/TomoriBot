@@ -9,31 +9,17 @@ import { canonicalMessageProxyOrigin, type MessageProxyInstanceContext } from "@
 import { log } from "@/utils/misc/logger";
 import { fetchUserRemoteUrl, RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
 import { readBoundedMessageProxyResponse } from "@/utils/messageProxy/boundedResponse";
-
-/** Overall retry budget for a single message lookup, in milliseconds. */
-function getLookupTimeoutMs(): number {
-  const parsed = Number.parseInt(process.env.PLURALKIT_LOOKUP_TIMEOUT_MS || "5000", 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 5000;
-}
+import {
+  attemptCapMs,
+  discardBody,
+  MIN_ATTEMPT_TIMEOUT_MS,
+  parseRetryAfterMs,
+  waitBeforeRetry,
+} from "@/utils/messageProxy/lookupRetry";
+import { getMessageProxyLookupTimeoutMs } from "@/utils/messageProxy/proxyExpectation";
 
 /** Backoff schedule between retries, in ms; PK's message index lags ~2s behind proxied sends */
 const RETRY_DELAYS_MS = [800, 1600, 3200];
-
-/**
- * Share of the overall budget one attempt may spend before it is aborted. A stalled
- * connection otherwise consumes the whole deadline and leaves nothing for the retry
- * that recovers a transient stall. Half keeps a retry funded at the default 5s budget:
- * the first attempt aborts at 2.5s, the first backoff step costs 800ms, and the retry
- * still has roughly 1.7s to answer.
- */
-const ATTEMPT_BUDGET_SHARE = 0.5;
-
-/**
- * Shortest attempt worth starting. It also caps every retry sleep, so a retry always
- * keeps a usable slice of the deadline and a transport that fails instantly cannot
- * spin attempts inside the same millisecond.
- */
-const MIN_ATTEMPT_TIMEOUT_MS = 500;
 
 /** Cap on permanently-cached resolved identities (a message's identity never changes once known) */
 const IDENTITY_CACHE_MAX_ENTRIES = 2000;
@@ -119,22 +105,6 @@ function rememberIdentity(messageId: string, lookup: PkMessageLookup): void {
   identityCache.set(messageId, lookup);
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Parses a `Retry-After` header (seconds) into milliseconds; null if missing
- * or insane. Zero counts as insane: PK's rate limiter is known to accidentally
- * send `Retry-After: 0`, and honoring it would mean retrying a
- * rate-limited endpoint immediately, so fall back to the backoff schedule instead.
- */
-function parseRetryAfterMs(header: string | null): number | null {
-  if (!header) return null;
-  const seconds = Number.parseFloat(header);
-  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null;
-}
-
 function toMessageLookup(raw: PkApiMessageResponse, messageId: string): PkMessageLookup {
   return {
     original: raw.original ?? messageId,
@@ -168,17 +138,6 @@ function endExhaustedLookup(
   return failLookup(messageId, reason, cause);
 }
 
-/**
- * Sleeps out a retry delay, or reports that the deadline cannot fund another attempt.
- * The delay is trimmed so the retry keeps `MIN_ATTEMPT_TIMEOUT_MS` of its own.
- */
-async function waitBeforeRetry(deadline: number, delayMs: number): Promise<boolean> {
-  const availableMs = deadline - Date.now() - MIN_ATTEMPT_TIMEOUT_MS;
-  if (availableMs <= 0) return false;
-  await sleep(Math.min(delayMs, availableMs));
-  return true;
-}
-
 function backoffMsForAttempt(attempt: number): number {
   return RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
 }
@@ -197,7 +156,7 @@ async function fetchWithRetry(
   deadline: number,
   lookupTimeoutMs: number,
 ): Promise<PkMessageLookup | null> {
-  const attemptCapMs = Math.max(Math.floor(lookupTimeoutMs * ATTEMPT_BUDGET_SHARE), MIN_ATTEMPT_TIMEOUT_MS);
+  const perAttemptCapMs = attemptCapMs(lookupTimeoutMs);
   const headers: Record<string, string> = { "User-Agent": "TomoriBot" };
   // Optional bot-owned PK token, sent as-is (no "Bearer" prefix: PluralKit's own
   // convention, not OAuth). It raises the base rate limit for all lookups and grants
@@ -216,7 +175,7 @@ async function fetchWithRetry(
     }
 
     let response: Response;
-    const signal = AbortSignal.timeout(Math.min(remainingMs, attemptCapMs));
+    const signal = AbortSignal.timeout(Math.min(remainingMs, perAttemptCapMs));
     try {
       response = await fetchUserRemoteUrl(
         `${instance.origin}/v2/messages/${messageId}`,
@@ -270,6 +229,7 @@ async function fetchWithRetry(
     // 404: PK's message index lags ~2s behind proxied sends, so retry within budget.
     // 429: honor Retry-After when sane, otherwise fall back to the backoff schedule.
     if (response.status === 404 || response.status === 429) {
+      await discardBody(response);
       lastAnswerWasMiss = response.status === 404;
       const retryAfterMs = response.status === 429 ? parseRetryAfterMs(response.headers.get("Retry-After")) : null;
       // A Retry-After that cannot be honored with room left for another attempt is the
@@ -289,6 +249,7 @@ async function fetchWithRetry(
       continue;
     }
 
+    await discardBody(response);
     return failLookup(messageId, `failed with status ${response.status}`);
   }
 }
@@ -298,7 +259,7 @@ async function fetchWithRetry(
  * repost), via `GET /v2/messages/{messageId}`.
  *
  * Retries 404s (PK indexing lag) and 429s (honoring `Retry-After`) on an
- * exponential backoff schedule, bounded by `PLURALKIT_LOOKUP_TIMEOUT_MS`
+ * exponential backoff schedule, bounded by `MESSAGE_PROXY_LOOKUP_TIMEOUT_MS`
  * (default 5000ms). No single attempt may spend the whole budget, so a stalled
  * connection is aborted with enough time left for one retry.
  *
@@ -325,7 +286,7 @@ export async function fetchMessage(
   const existing = inFlightLookups.get(key);
   if (existing) return existing;
 
-  const lookupTimeoutMs = getLookupTimeoutMs();
+  const lookupTimeoutMs = getMessageProxyLookupTimeoutMs();
   const deadline = Date.now() + lookupTimeoutMs;
   const lookupPromise = fetchWithRetry(instance, messageId, deadline, lookupTimeoutMs)
     .then((lookup) => {

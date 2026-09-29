@@ -27,12 +27,12 @@ import type {
 import { stallUntilAborted } from "../../helpers/fetchStub";
 import { officialMessageProxyInstanceFixture } from "../../helpers/messageProxyInstance";
 
-const originalLookupTimeoutMs = process.env.PLURALKIT_LOOKUP_TIMEOUT_MS;
+const originalLookupTimeoutMs = process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS;
 const originalProxyWaitMs = process.env.MESSAGE_PROXY_WAIT_MS;
 
 afterAll(() => {
-  if (originalLookupTimeoutMs === undefined) delete process.env.PLURALKIT_LOOKUP_TIMEOUT_MS;
-  else process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = originalLookupTimeoutMs;
+  if (originalLookupTimeoutMs === undefined) delete process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS;
+  else process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS = originalLookupTimeoutMs;
   if (originalProxyWaitMs === undefined) delete process.env.MESSAGE_PROXY_WAIT_MS;
   else process.env.MESSAGE_PROXY_WAIT_MS = originalProxyWaitMs;
 });
@@ -43,12 +43,13 @@ async function withTiming(
   body: () => Promise<void>,
 ): Promise<void> {
   try {
-    if (timing.lookupTimeoutMs !== undefined) process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = String(timing.lookupTimeoutMs);
+    if (timing.lookupTimeoutMs !== undefined)
+      process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS = String(timing.lookupTimeoutMs);
     if (timing.proxyWaitMs !== undefined) process.env.MESSAGE_PROXY_WAIT_MS = String(timing.proxyWaitMs);
     await body();
   } finally {
-    if (originalLookupTimeoutMs === undefined) delete process.env.PLURALKIT_LOOKUP_TIMEOUT_MS;
-    else process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = originalLookupTimeoutMs;
+    if (originalLookupTimeoutMs === undefined) delete process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS;
+    else process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS = originalLookupTimeoutMs;
     if (originalProxyWaitMs === undefined) delete process.env.MESSAGE_PROXY_WAIT_MS;
     else process.env.MESSAGE_PROXY_WAIT_MS = originalProxyWaitMs;
   }
@@ -225,6 +226,64 @@ describe("message-proxy attestation router", () => {
       unmatched: 0,
       matched_stable_identity: 0,
     });
+  });
+
+  it("skips transport for an instance whose adapter says it cannot have sent the message", async () => {
+    let calls = 0;
+    const seen: string[] = [];
+    const service = {
+      ...descriptor("picky", async () => {
+        calls += 1;
+        return claim("picky");
+      }),
+      canAttestMessage: (_message: Message, instance: MessageProxyInstanceContext) => {
+        seen.push(instance.instanceId);
+        return false;
+      },
+    } as ProxyServiceDescriptor<string>;
+
+    expect(
+      await routeMessageProxyMessage(
+        { message: message(), candidateInstances: [testInstance("picky")] },
+        { registry: createProxyServiceRegistry([service]) },
+      ),
+    ).toEqual({ status: "unsupported_correlation" });
+    expect(calls).toBe(0);
+    expect(seen).toEqual([testInstance("picky").instanceId]);
+  });
+
+  it("tells the adapter about a message only once its claim is accepted", async () => {
+    const recorded: string[] = [];
+    const withHook = (serviceId: string, answer: () => ProxyMessageAttestation | null) =>
+      ({
+        ...descriptor(serviceId, async () => answer()),
+        recordAttestedMessage: (_message: Message, instance: MessageProxyInstanceContext) => {
+          recorded.push(instance.instanceId);
+        },
+      }) as ProxyServiceDescriptor<string>;
+
+    const accepted = withHook("accepted", () => claim("accepted"));
+    await routeMessageProxyMessage(
+      { message: message(), candidateInstances: [testInstance("accepted")] },
+      { registry: createProxyServiceRegistry([accepted]) },
+    );
+    expect(recorded).toEqual([testInstance("accepted").instanceId]);
+
+    recorded.length = 0;
+    const first = withHook("first", () => claim("first"));
+    const second = withHook("second", () => claim("second"));
+    await routeMessageProxyMessage(
+      { message: message(), candidateInstances: [testInstance("first"), testInstance("second")] },
+      { registry: createProxyServiceRegistry([first, second]) },
+    );
+    expect(recorded).toEqual([]);
+
+    const miss = withHook("miss", () => null);
+    await routeMessageProxyMessage(
+      { message: message(), candidateInstances: [testInstance("miss")] },
+      { registry: createProxyServiceRegistry([miss]) },
+    );
+    expect(recorded).toEqual([]);
   });
 
   it("invokes each distinct eligible adapter once and fails closed on zero claims", async () => {

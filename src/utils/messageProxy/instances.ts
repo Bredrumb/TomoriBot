@@ -1,5 +1,4 @@
-export type MessageProxyInstanceId = string;
-export type MessageProxyTokenRecordKey = MessageProxyInstanceId;
+type MessageProxyInstanceId = string;
 
 export type MessageProxyInstanceContext = Readonly<{
   serviceId: string;

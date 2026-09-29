@@ -3,7 +3,7 @@ import type { MessageProxyInstanceContext } from "@/utils/messageProxy/instances
 import type { ProxyMessageAttestation } from "@/utils/messageProxy/types";
 import { log } from "@/utils/misc/logger";
 
-export type MessageProxyExpectationState = "pending" | "proxied";
+type MessageProxyExpectationState = "pending" | "proxied";
 export type MessageProxyWaitResult = "timeout" | "proxied";
 
 type TimerHandle = ReturnType<typeof setTimeout>;
@@ -72,6 +72,15 @@ export function getMessageProxyWaitMs(): number {
 
 export function getMessageProxyExpectationTtlMs(): number {
   return parseIntegerEnv(process.env.MESSAGE_PROXY_EXPECTATION_TTL_MS, 10000, Math.max(getMessageProxyWaitMs(), 1));
+}
+
+/**
+ * Capped at half the expectation TTL: the router pairs the attestation with its
+ * expectation only after the lookup returns, so a longer budget lets it expire mid-lookup.
+ */
+export function getMessageProxyLookupTimeoutMs(): number {
+  const requested = parseIntegerEnv(process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS, 5000, 1);
+  return Math.max(1, Math.min(requested, Math.floor(getMessageProxyExpectationTtlMs() / 2)));
 }
 
 function getConfirmedProxyMessageTtlMs(): number {

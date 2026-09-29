@@ -5,6 +5,7 @@ import { fetchMessage } from "@/utils/messageProxy/services/pluralkit/api";
 import { fetchPluralBuddyMessage } from "@/utils/messageProxy/services/pluralbuddy/api";
 import { validatePluralBuddyDiscovery } from "@/utils/messageProxy/services/pluralbuddy/oauthBootstrap";
 import { getPluralBuddyAccessToken } from "@/utils/messageProxy/services/pluralbuddy/oauthTokens";
+import { keyManager } from "@/utils/security/keyManager";
 import { validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 
@@ -122,8 +123,13 @@ try {
       await validateOrigin(row.origin);
       const instance: MessageProxyInstanceContext = { serviceId: row.service_id, instanceId, origin: row.origin };
       await checkDiscovery(instance);
-      if (row.service_id === "pluralbuddy" && !(await getPluralBuddyAccessToken(instance))) {
-        throw new Error("PluralBuddy authorization is unavailable for this instance. Complete its OAuth setup first.");
+      if (row.service_id === "pluralbuddy") {
+        keyManager.initialize();
+        if (!(await getPluralBuddyAccessToken(instance))) {
+          throw new Error(
+            "PluralBuddy authorization is unavailable for this instance. Complete its OAuth setup first.",
+          );
+        }
       }
       const attestedSender =
         row.service_id === "pluralkit"

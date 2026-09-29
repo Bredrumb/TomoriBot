@@ -81,7 +81,7 @@ type MessageProxyIndexedMessageIdentityRow = MessageProxyContextRow & {
 
 const CONTEXT_CACHE_MAX_ENTRIES = 2000;
 
-export class MessageProxyRepository {
+class MessageProxyRepository {
   private readonly identityContextByUserDiscId = new Map<string, MessageProxyIdentityContext | null>();
 
   async listManagedIdentities(hostUserDiscId: string, search = ""): Promise<MessageProxyManagedIdentity[]> {

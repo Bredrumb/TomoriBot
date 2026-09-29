@@ -7,8 +7,15 @@ import {
 import { log } from "@/utils/misc/logger";
 import { fetchUserRemoteUrl, RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
 import { readBoundedMessageProxyResponse } from "@/utils/messageProxy/boundedResponse";
+import {
+  attemptCapMs,
+  discardBody,
+  MIN_ATTEMPT_TIMEOUT_MS,
+  parseRetryAfterMs,
+  waitBeforeRetry,
+} from "@/utils/messageProxy/lookupRetry";
+import { getMessageProxyLookupTimeoutMs } from "@/utils/messageProxy/proxyExpectation";
 
-const LOOKUP_TIMEOUT_MS = 5000;
 const RETRY_DELAYS_MS = [500, 1000, 1500] as const;
 const CACHE_LIMIT = 2000;
 const snowflake = z.string().regex(/^\d{17,20}$/);
@@ -28,6 +35,14 @@ export type PluralBuddyMessage = NonNullable<z.infer<typeof responseSchema>["mes
   alterIdKey: string;
 };
 
+/** Resolving `null` instead means PluralBuddy said it has no such message; the router counts this as timeout/error, not a miss. */
+export class PluralBuddyLookupUnavailableError extends Error {
+  constructor(message: string, cause?: unknown) {
+    super(message, { cause });
+    this.name = "PluralBuddyLookupUnavailableError";
+  }
+}
+
 const cache = new Map<string, PluralBuddyMessage>();
 const pending = new Map<string, Promise<PluralBuddyMessage | null>>();
 
@@ -39,81 +54,127 @@ function lookupKey(instance: MessageProxyInstanceContext, messageId: string): st
   return `${instance.instanceId}\0${instance.origin}\0${messageId}`;
 }
 
+function backoffMsForAttempt(attempt: number): number {
+  return RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
+}
+
+function failLookup(
+  instance: MessageProxyInstanceContext,
+  reason: string,
+  metadata: Record<string, unknown> = {},
+  cause?: unknown,
+): never {
+  log.warn(`PluralBuddy message lookup ${reason}`, undefined, {
+    metadata: { instanceId: instance.instanceId, ...metadata },
+  });
+  throw new PluralBuddyLookupUnavailableError(`PluralBuddy message lookup ${reason}`, cause);
+}
+
+/** A miss PluralBuddy already answered stands when the budget ends; any other exhaustion is unresolved. */
+function endExhaustedLookup(instance: MessageProxyInstanceContext, lastAnswerWasMiss: boolean, cause?: unknown): null {
+  if (lastAnswerWasMiss) return null;
+  return failLookup(instance, "timed out", { errorClass: cause instanceof Error ? cause.name : "unknown" }, cause);
+}
+
+/** Null also covers no connected bot host, which is a state to report quietly rather than an outage. */
 async function lookUp(instance: MessageProxyInstanceContext, messageId: string): Promise<PluralBuddyMessage | null> {
-  const deadline = Date.now() + LOOKUP_TIMEOUT_MS;
-  for (let attempt = 0; Date.now() < deadline; attempt++) {
+  const lookupTimeoutMs = getMessageProxyLookupTimeoutMs();
+  const deadline = Date.now() + lookupTimeoutMs;
+  const perAttemptCapMs = attemptCapMs(lookupTimeoutMs);
+  let attempt = 0;
+  // PluralBuddy reports an unknown message as 200 with a null message, so that counts as a miss alongside 404.
+  let lastAnswerWasMiss = false;
+
+  while (true) {
+    if (Date.now() >= deadline) return endExhaustedLookup(instance, lastAnswerWasMiss);
     const accessToken = await getPluralBuddyAccessToken(instance);
-    if (!accessToken || Date.now() >= deadline) return null;
+    if (!accessToken) return null;
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) return endExhaustedLookup(instance, lastAnswerWasMiss);
+
+    let response: Response;
+    const signal = AbortSignal.timeout(Math.min(remainingMs, perAttemptCapMs));
     try {
-      const response = await fetchUserRemoteUrl(
+      response = await fetchUserRemoteUrl(
         `${instance.origin}/api/v1/messages/${messageId}`,
         {
           headers: { Authorization: `Bearer ${accessToken}` },
           redirect: "manual",
-          signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+          signal,
         },
         { strict: true },
       );
-      if (response.status === 401) {
-        await rejectPluralBuddyAccessToken(instance, accessToken);
-        return null;
-      }
-      if (response.status === 429) {
-        log.warn("PluralBuddy message lookup was rate limited", undefined, {
-          metadata: { instanceId: instance.instanceId },
-        });
-        return null;
-      }
-      if (response.ok) {
-        const rawText = await readBoundedMessageProxyResponse(response);
-        let raw: unknown;
-        try {
-          raw = JSON.parse(rawText);
-        } catch {
-          return null;
-        }
-        const parsed = responseSchema.safeParse(raw);
-        if (!parsed.success) {
-          log.warn("PluralBuddy message lookup returned an invalid payload", undefined, {
-            metadata: {
-              instanceId: instance.instanceId,
-              // Paths and codes only: issue messages can echo response values.
-              issues: parsed.error.issues.map((issue) => `${issue.path.join(".") || "<root>"}:${issue.code}`),
-            },
-          });
-          return null;
-        }
-        if (parsed.data.message) {
-          const exactAlterId = rawText.match(/"alterId"\s*:\s*(\d{1,20})\b/)?.[1];
-          if (!exactAlterId || Number(exactAlterId) !== parsed.data.message.alterId) return null;
-          if (parsed.data.message.messageId !== messageId) return null;
-          return { ...parsed.data.message, alterIdKey: exactAlterId };
-        }
-      }
-      if (!response.ok && response.status !== 404) {
-        log.warn("PluralBuddy message lookup failed", undefined, {
-          metadata: { instanceId: instance.instanceId, status: response.status },
-        });
-        return null;
-      }
     } catch (error) {
       if (error instanceof RemoteUrlPolicyError) {
-        log.warn("PluralBuddy message lookup was blocked by the outbound URL policy", undefined, {
-          metadata: { instanceId: instance.instanceId, failureCode: error.failureCode },
-        });
-        return null;
+        return failLookup(instance, "was blocked by the outbound URL policy", { failureCode: error.failureCode });
       }
-      if (Date.now() >= deadline) {
-        log.warn("PluralBuddy message lookup timed out", undefined, {
-          metadata: { instanceId: instance.instanceId, errorClass: error instanceof Error ? error.name : "unknown" },
-        });
-        return null;
+      if (!(await waitBeforeRetry(deadline, backoffMsForAttempt(attempt)))) {
+        return endExhaustedLookup(instance, lastAnswerWasMiss, error);
       }
+      attempt++;
+      continue;
     }
-    const delay = Math.min(RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)], deadline - Date.now());
-    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+
+    let retryDelayMs = backoffMsForAttempt(attempt);
+    if (response.status === 401) {
+      await discardBody(response);
+      await rejectPluralBuddyAccessToken(instance, accessToken);
+      return failLookup(instance, "was rejected as unauthorized", { status: 401 });
+    }
+    if (response.ok) {
+      let rawText: string;
+      let raw: unknown;
+      try {
+        rawText = await readBoundedMessageProxyResponse(response);
+        raw = JSON.parse(rawText);
+      } catch (error) {
+        if (!signal.aborted) {
+          return failLookup(instance, "returned an unreadable payload", {
+            errorClass: error instanceof Error ? error.name : "unknown",
+          });
+        }
+        if (!(await waitBeforeRetry(deadline, retryDelayMs))) {
+          return endExhaustedLookup(instance, lastAnswerWasMiss, error);
+        }
+        attempt++;
+        continue;
+      }
+      const parsed = responseSchema.safeParse(raw);
+      if (!parsed.success) {
+        return failLookup(instance, "returned an invalid payload", {
+          // Paths and codes only: issue messages can echo response values.
+          issues: parsed.error.issues.map((issue) => `${issue.path.join(".") || "<root>"}:${issue.code}`),
+        });
+      }
+      const { message } = parsed.data;
+      if (message) {
+        // JSON.parse rounds ids above 2^53, so the key comes from the raw text.
+        const exactAlterId = rawText.match(/"alterId"\s*:\s*(\d{1,20})\b/)?.[1];
+        if (!exactAlterId || Number(exactAlterId) !== message.alterId || message.messageId !== messageId) {
+          return failLookup(instance, "returned an inconsistent message");
+        }
+        return { ...message, alterIdKey: exactAlterId };
+      }
+      lastAnswerWasMiss = true;
+    } else if (response.status === 404 || response.status === 429) {
+      await discardBody(response);
+      lastAnswerWasMiss = response.status === 404;
+      const retryAfterMs = response.status === 429 ? parseRetryAfterMs(response.headers.get("Retry-After")) : null;
+      if (retryAfterMs !== null) {
+        // Retrying early would ignore the rate limit, and sleeping it out would only stall this admission.
+        if (retryAfterMs > deadline - Date.now() - MIN_ATTEMPT_TIMEOUT_MS) {
+          return failLookup(instance, "was rate limited beyond its remaining budget", { retryAfterMs });
+        }
+        retryDelayMs = retryAfterMs;
+      }
+    } else {
+      await discardBody(response);
+      return failLookup(instance, "failed", { status: response.status });
+    }
+
+    if (!(await waitBeforeRetry(deadline, retryDelayMs))) return endExhaustedLookup(instance, lastAnswerWasMiss);
+    attempt++;
   }
-  return null;
 }
 
 export async function fetchPluralBuddyMessage(

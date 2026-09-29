@@ -172,17 +172,31 @@ transaction invalidates a prior miss only after the write commits.
 |---|---:|---|
 | `MESSAGE_PROXY_WAIT_MS` | `2000` | Original-message wait before ordinary processing. |
 | `MESSAGE_PROXY_EXPECTATION_TTL_MS` | `10000` | Correlation expectation lifetime. |
+| `MESSAGE_PROXY_LOOKUP_TIMEOUT_MS` | `5000` | Total repost lookup budget for every service, capped at half the expectation lifetime so the match cannot expire mid-lookup. |
 | `MESSAGE_PROXY_MESSAGE_INDEX_RETENTION_DAYS` | `30` | Durable attribution retention. |
 | `MESSAGE_PROXY_MESSAGE_INDEX_PRUNE_INTERVAL_HOURS` | `24` | Retention sweep interval. |
 | `MESSAGE_PROXY_BIO_SEED_MAX_CHARS` | `1000` | Maximum one-time identity bio snapshot. |
 
 PluralBuddy message lookup uses the connection authorized by the bot host for the validated instance ID
-and origin. The renewable token source stores refresh tokens in the database. Lookup is bounded to
-five seconds, stops on a rate-limit response, and caches successful results by instance. A `401`
+and origin. The renewable token source stores refresh tokens in the database. Lookup is bounded by
+the shared lookup budget, aborts any single attempt at half that so a stall still leaves room for a retry,
+honors a `Retry-After` that fits the remaining budget, and caches successful results by instance.
+A lookup that cannot get an answer (stall, rate limit past the budget, error status, untrustworthy
+payload) is reported to the router as a timeout or error, never as "no such message". A `401`
 blocks the rejected connection until the bot host authorizes it again. The router passes each
 selected instance's exact origin. PluralKit's optional deployment token is sent only to the
 official origin. Both adapters use the pinned outbound fetch path and refuse redirects; each
 lookup rechecks the resolved address against the public-network policy.
+
+Both adapters filter candidates before they spend a lookup. Each adapter learns an instance's Discord
+bot application ID from the first message that instance confirms, then skips the lookup for any
+webhook message from a different application or from no application. The learned ID is kept only
+in memory, expires after an hour without a new confirmation, and is cleared by a restart, so each
+of those costs one unfiltered lookup. The filter assumes an instance's reposts all come from one
+application-owned webhook identity. If an instance sends from a second application, those messages
+stay unmatched until the learned ID expires. A skipped message is counted as unsupported
+correlation, not as an error.
+
 See the [PluralKit adapter](/architecture/integrations/pluralkit/) for its separate transport.
 
 ## PluralBuddy bot host authorization bootstrap

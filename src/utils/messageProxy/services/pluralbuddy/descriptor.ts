@@ -1,5 +1,6 @@
 import type { ProxyMessageAttestation, ProxyServiceDescriptor } from "@/utils/messageProxy/types";
 import type { MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
+import { createApplicationIdFilter } from "@/utils/messageProxy/applicationFilter";
 import {
   fetchPluralBuddyMessage,
   getCachedPluralBuddyMessage,
@@ -36,6 +37,8 @@ function toAttestation(message: PluralBuddyMessage, instance: MessageProxyInstan
   };
 }
 
+const applicationFilter = createApplicationIdFilter();
+
 export const pluralBuddyProxyService = {
   serviceId: "pluralbuddy",
   settingsLocaleKey: "pluralbuddy_option",
@@ -57,6 +60,8 @@ export const pluralBuddyProxyService = {
       entry: `- A plural system${accountLabels.length ? ` (shared account: ${accountLabels.join("; ")})` : ""}`,
     }),
   },
+  canAttestMessage: (message, instance) => applicationFilter.canAttest(message, instance),
+  recordAttestedMessage: (message, instance) => applicationFilter.record(message, instance),
   attestMessage: async (messageId: string, instance) => {
     const message = await fetchPluralBuddyMessage(instance, messageId);
     return message ? toAttestation(message, instance) : null;
