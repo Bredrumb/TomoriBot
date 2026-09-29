@@ -70,6 +70,5 @@ export const pluralBuddyProxyService = {
     const message = getCachedPluralBuddyMessage(instance, messageId);
     return message ? toAttestation(message, instance) : null;
   },
-  extractReplyTarget: () => null,
   extractReplyTargetFromEmbed: () => null,
 } as const satisfies ProxyServiceDescriptor<"pluralbuddy">;

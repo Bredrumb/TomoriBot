@@ -111,7 +111,6 @@ type ProxyDescriptorBase<TServiceId extends string> = {
   canAttestMessage?(message: Message, instance: MessageProxyInstanceContext): boolean;
   /** Called for a validated claim, before the router looks for a matching expectation. */
   recordAttestedMessage?(message: Message, instance: MessageProxyInstanceContext): void;
-  extractReplyTarget?(message: Pick<Message, "embeds">): ProxyReplyTarget | null;
   extractReplyTargetFromEmbed?(embed: Pick<Embed, "author" | "description">): ProxyReplyTarget | null;
 };
 
