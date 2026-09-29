@@ -17,6 +17,7 @@ import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/pe
 import { CooldownType } from "@/types/db/schema";
 import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { isNoticeEmbedVisible } from "@/utils/discord/toolProgressNotice";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
 /**
  * Configure the respond command
@@ -304,7 +305,7 @@ export async function execute(
       await replyInteraction.editReply({
         embeds: [
           new EmbedBuilder()
-            .setTitle(localizer(locale, "general.message_cooldown_title"))
+            .setTitle(localizedStatusTitle(locale, "general.message_cooldown_title", ColorCode.WARN))
             .setDescription(localizer(locale, "commands.respond.persona_access_blocked"))
             .setColor(ColorCode.WARN),
         ],
@@ -326,7 +327,7 @@ export async function execute(
         await replyInteraction.editReply({
           embeds: [
             new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.respond.no_smart_model_title"))
+              .setTitle(localizedStatusTitle(locale, "commands.respond.no_smart_model_title", ColorCode.ERROR))
               .setDescription(localizer(locale, "commands.respond.no_smart_model_description"))
               .setColor(ColorCode.ERROR),
           ],
@@ -344,7 +345,7 @@ export async function execute(
       await interaction.editReply({
         embeds: [
           new EmbedBuilder()
-            .setTitle(localizer(locale, "general.message_cooldown_title"))
+            .setTitle(localizedStatusTitle(locale, "general.message_cooldown_title", ColorCode.WARN))
             .setDescription(localizer(locale, "commands.respond.persona_access_blocked"))
             .setColor(ColorCode.WARN),
         ],
@@ -355,7 +356,7 @@ export async function execute(
 
   try {
     const successEmbed = new EmbedBuilder()
-      .setTitle(localizer(locale, "commands.respond.success_title"))
+      .setTitle(localizedStatusTitle(locale, "commands.respond.success_title", ColorCode.SUCCESS))
       .setDescription(localizer(locale, "commands.respond.success_description"))
       .setColor(ColorCode.SUCCESS);
 

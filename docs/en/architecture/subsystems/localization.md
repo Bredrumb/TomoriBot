@@ -60,6 +60,32 @@ older embed is still read and takes precedence over the title. Reset markers dro
 from history; compact-refresh markers keep their summary message as the new conversation opener.
 Components V2 notices have no embeds and use their reconstructed title text.
 
+## Status Circles
+
+A status title's colored circle belongs to the surface, not to the locale string, so a title can never
+contradict the color beside it. `src/utils/discord/ui/statusTitle.ts` owns the mapping (red for
+`ColorCode.ERROR`, yellow for `WARN`, green for `SUCCESS`) and applies it where titles are rendered:
+`createStandardEmbed` and `createSummaryEmbed` in `src/utils/discord/embedHelper.ts`,
+`buildNoticeContainer`, `buildV2StatusComponents`, and `buildPersonaResultContainer` in
+`src/utils/discord/ui/interactionCore.ts`, and the command flows that assemble an `EmbedBuilder`
+themselves through `localizedStatusTitle`.
+
+The rules that keep the result unambiguous:
+
+- `withStatusCircle` strips a leading circle before it prepends one, so a locale value that still
+  authors a circle (any locale other than `en-US` today) renders exactly one, not two.
+- A color with no tone (info, section, affection, memory update) renders no circle and drops a circle
+  the value carried.
+- A title that already leads with another emoji keeps it, so `⏳ Building Summary` and
+  `✅ Summary Saved` are never double-marked.
+- Question surfaces stay bare: a confirmation prompt and the pagination persona picker ask rather than
+  report, so they render no circle even when their color is a status tone.
+- Panels and panel receipts are out of scope: their headings come from panel copy, and the accent bar
+  already carries the tone.
+
+`buildProtocolLookup` and `classifyProtocolTitle` strip the circle from both sides, because protocol
+titles are matched against values authored before this rule existed.
+
 ## Key Resolution and the `en-US` Fallback
 
 `localizer()` resolves in three steps, and the middle one is what keeps an incomplete locale

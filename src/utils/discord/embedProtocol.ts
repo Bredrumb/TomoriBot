@@ -1,4 +1,5 @@
 import type { Embed } from "discord.js";
+import { stripStatusCircle } from "@/utils/discord/ui/statusTitle";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { getLocaleSubKeys, getSupportedLocales, hasLocaleKey, localizer } from "@/utils/text/localizer";
 
@@ -121,8 +122,11 @@ export function buildProtocolLookup(
   const prefixMatches: Match[] = [];
   for (const locale of locales) {
     for (const entry of entries) {
-      const value = read(locale, entry.key);
-      if (value === undefined) continue;
+      const authored = read(locale, entry.key);
+      if (authored === undefined) continue;
+      // Titles render their status circle from the surface color (see `statusTitle.ts`), so the
+      // stored value and the rendered title differ by that circle. Both sides normalize here.
+      const value = stripStatusCircle(authored);
       const previousKey = seenValues.get(value);
       if (previousKey && previousKey !== entry.key) {
         throw new Error(`Protocol title collision: ${previousKey} and ${entry.key} render as ${JSON.stringify(value)}`);
@@ -176,13 +180,15 @@ export function initializeEmbedProtocol(): void {
 
 export function classifyProtocolTitle(title: string | null | undefined): ProtocolKind | null {
   if (!title) return null;
-  const exact = exactTitles.get(title);
+  // Titles reach here as Discord rendered them, circle included. The lookup stores bare values.
+  const bareTitle = stripStatusCircle(title);
+  const exact = exactTitles.get(bareTitle);
   if (exact) return exact.kind;
   // Reply-context patterns match embed fields, never titles. The English URL field is a bare
   // placeholder, so including it here would accept every non-empty Japanese notice title.
-  const template = templates.find((entry) => entry.kind !== "reply_context" && entry.pattern?.test(title));
+  const template = templates.find((entry) => entry.kind !== "reply_context" && entry.pattern?.test(bareTitle));
   if (template) return template.kind;
-  return prefixes.find((entry) => title.startsWith(entry.value))?.kind ?? null;
+  return prefixes.find((entry) => bareTitle.startsWith(entry.value))?.kind ?? null;
 }
 
 export function classifyProtocolEmbed(embed: Pick<Embed, "title" | "footer">): ProtocolKind | null {
@@ -196,9 +202,10 @@ export function isTargetProtocolKind(kind: ProtocolKind | null): kind is TargetE
 }
 
 export function matchesProtocolTemplateKey(key: string, text: string): boolean {
-  if (templates.some((entry) => entry.key === key && entry.pattern?.test(text))) return true;
+  const bareText = stripStatusCircle(text);
+  if (templates.some((entry) => entry.key === key && entry.pattern?.test(bareText))) return true;
   for (const entry of exactTitles.values()) {
-    if (entry.key === key && entry.value === text) return true;
+    if (entry.key === key && entry.value === bareText) return true;
   }
   return false;
 }

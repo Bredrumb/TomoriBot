@@ -11,6 +11,7 @@ import { ColorCode } from "@/utils/misc/logger";
 import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 import { checkTargetEmbedTitle } from "@/utils/discord/embedClassifier";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { localizedCopy } from "../../helpers/localeCases";
 
 function makeEmbed(title: string, description: string): Embed {
   return { title, description, fields: [], color: null } as unknown as Embed;
@@ -128,6 +129,38 @@ describe("update_user_info notice visibility", () => {
           component.type === ComponentType.Separator && "divider" in component && Boolean(component.divider),
       ),
     ).toBe(true);
+  });
+
+  it("does not insert artificial newlines into notice descriptions", () => {
+    const memoryNotice = buildNoticeContainer({
+      locale: "en-US",
+      titleKey: "genai.self_teach.personal_memory_learned_title",
+      titleVars: { persona_nickname: "Mirri", user_nickname: "Locke" },
+      descriptionKey: "genai.self_teach.personal_memory_learned_description",
+      descriptionVars: { user_nickname: "Locke", memory_content: "ラーメンが好き" },
+    });
+
+    const [container] = memoryNotice;
+    if (!container || !isContainerComponent(container)) {
+      throw new Error("Expected the notice to be wrapped in a container component");
+    }
+
+    const description = container.components.find(
+      (component) =>
+        component.type === ComponentType.TextDisplay &&
+        "content" in component &&
+        component.content.includes("Personal Memory"),
+    );
+    expect(description).toBeDefined();
+    if (!description || !("content" in description)) return;
+
+    const expectedIntro = localizedCopy("en-US", "genai.self_teach.personal_memory_learned_description", {
+      user_nickname: "Locke",
+      memory_content: "ラーメンが好き",
+    }).split("\n```")[0];
+
+    expect(description.content).toContain(expectedIntro);
+    expect(description.content).not.toContain("Locke\n");
   });
 
   it("also recognizes user block and unblock notices", () => {

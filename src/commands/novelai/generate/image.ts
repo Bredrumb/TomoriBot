@@ -31,6 +31,7 @@ import { prepareGeneratedImage } from "@/utils/image/generatedImageMetadata";
 import { buildImageGenerationInputAttachment } from "@/utils/image/imageGenerationInput";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 import {
   NAI_CHAR_REF_INFO_EXTRACTED,
   NAI_CHAR_REF_STRENGTH,
@@ -422,7 +423,7 @@ export async function execute(
     });
 
     const successEmbed = new EmbedBuilder()
-      .setTitle(localizer(locale, "commands.novelai.generate.image.success_title"))
+      .setTitle(localizedStatusTitle(locale, "commands.novelai.generate.image.success_title", ColorCode.SUCCESS))
       .setColor(ColorCode.SUCCESS)
       .setImage(`attachment://${filename}`)
       .setFooter({

@@ -287,13 +287,53 @@ export function measurePanelProseWidth(markdown: string): number {
 }
 
 /**
+ * Detects whether non-code markdown prose contains Kana. Fenced and indented code
+ * blocks are excluded, so code snippets or stored raw content do not force English
+ * panel prose into the narrower Japanese layout policy.
+ */
+function hasJapaneseScriptInProse(markdown: string): boolean {
+  if (!JAPANESE_SCRIPT_PATTERN.test(markdown)) {
+    return false;
+  }
+
+  const parts = markdown.split(/(\r?\n)/u);
+  let fence: { marker: "`" | "~"; length: number } | null = null;
+
+  for (let index = 0; index < parts.length; index += 2) {
+    const line = parts[index] ?? "";
+    const fenceRun = line.match(/^\s*(`{3,}|~{3,})/u)?.[1];
+
+    if (fence) {
+      const closingPattern = new RegExp(`^\\s*${fence.marker}{${fence.length},}\\s*$`, "u");
+      if (closingPattern.test(line)) fence = null;
+      continue;
+    }
+
+    if (isIndentedCodeLine(line)) {
+      continue;
+    }
+
+    if (fenceRun) {
+      fence = { marker: fenceRun[0] as "`" | "~", length: fenceRun.length };
+      continue;
+    }
+
+    if (JAPANESE_SCRIPT_PATTERN.test(line)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Wraps panel prose while preserving fenced blocks and explicit line structure.
  *
  * A token wider than the selected layout remains intact on its own line because splitting it
  * could corrupt a URL, inline-code span, custom emoji, or grapheme cluster.
  */
 export function formatPanelProse(markdown: string, besideThumbnail = false): string {
-  const profile = JAPANESE_SCRIPT_PATTERN.test(markdown)
+  const profile = hasJapaneseScriptInProse(markdown)
     ? PANEL_PROSE_LAYOUT_POLICY.japanese
     : PANEL_PROSE_LAYOUT_POLICY.default;
   const width = besideThumbnail ? profile.besideThumbnail : profile.body;

@@ -13,6 +13,7 @@ import type { UserRow } from "../../types/db/schema";
 import type { SelectOption } from "../../types/discord/modal";
 import { personaRepository } from "@/utils/db/repositories";
 import { deletePersonaAvatarFromStorage } from "../../utils/storage/avatarStorage";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
 const MODAL_CUSTOM_ID = "persona_remove_modal";
 const PERSONA_SELECT_ID = "persona_select";
@@ -188,7 +189,7 @@ export async function execute(
       await interaction.editReply({
         embeds: [
           new EmbedBuilder()
-            .setTitle(localizer(locale, "general.errors.unknown_error_title"))
+            .setTitle(localizedStatusTitle(locale, "general.errors.unknown_error_title", ColorCode.ERROR))
             .setDescription(localizer(locale, "general.errors.unknown_error_description"))
             .setColor(ColorCode.ERROR),
         ],

@@ -77,6 +77,8 @@ proposed follow-up's premise in source before suggesting it.
      - Option descriptions: `{option_name}_description` (e.g. `channel_description`)
      - Choice labels: `{choice_value}_option` (e.g. `injection_option`, `enable_option`)
      - Do NOT use `{option_name}_option` for option descriptions; it silently fails auto-localization.
+   - Never open a title key with a status circle (`🔴`, `🟡`, `🟢`). `src/utils/discord/ui/statusTitle.ts`
+     renders it from the surface color, and a hardcoded one is stripped as contradictory.
    - Panel text: write natural prose and let `buildPanelContainer()` wrap it at runtime. See
      `docs/en/contributing/policies/panel-prose-and-layout.md`.
 5. Respect Discord interaction timing.

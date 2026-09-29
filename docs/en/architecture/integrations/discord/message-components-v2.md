@@ -596,7 +596,7 @@ When sent in a message, pingable mentions (@user, @role, etc) present in this co
 
 ### TomoriBot convention: container titles
 
-TomoriBot renders the leading "title" line of every Components V2 container (status, confirmation, persona picker, persona results, memory/task notices) as a Markdown H3 heading via the shared `formatContainerTitle` helper in `src/utils/discord/ui/interactionCore.ts`. Keep title locale strings plain text (an emoji prefix is fine); do not embed `###` or `**` in them, or the heading will double up. Body text, section sub-headings, and footers are unaffected.
+TomoriBot renders the leading "title" line of every Components V2 container (status, confirmation, persona picker, persona results, memory/task notices) as a Markdown H3 heading via the shared `formatContainerTitle` helper in `src/utils/discord/ui/interactionCore.ts`. Write title locale strings as plain text, with no circle and no `###` or `**`, or the heading will double up. A non-status emoji is still fine where it carries meaning the color cannot (`⏳`, `✅`, `⚠️`). Body text, section sub-headings, and footers are unaffected.
 
 Memory and scheduled-task notices use `buildNoticeContainer` in `src/utils/discord/ui/interactionCore.ts`. The old embed title maps to the H3 title, the old embed description maps to a Text Display, and the old embed footer maps to muted `-#` subtext after a separator. When the memory/task body is truncated, the Secondary "Expand" button is rendered as an Action Row inside the same container; the ephemeral full-content reveal remains a separate classic embed reply.
 

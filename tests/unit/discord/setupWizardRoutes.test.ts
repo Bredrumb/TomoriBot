@@ -79,6 +79,8 @@ import * as stickerLazySync from "@/utils/cache/stickerLazySync";
 import * as panelActionMetrics from "@/utils/stats/panelActionMetrics";
 import { createRouteInteraction } from "../../helpers/routeInteraction";
 import { localizedCopy } from "../../helpers/localeCases";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
+import { ColorCode } from "@/utils/misc/logger";
 
 function serializedPanelProse(markdown: string): string {
   return JSON.stringify(formatPanelProse(markdown)).slice(1, -1);
@@ -420,7 +422,9 @@ describe("setupWizardRoutes", () => {
     // A main persona with no loadable state is recoverable in place, so setup must not clear it.
     expect(interaction.deferred).toBe(true);
     const editedPayload = interaction.edits[0] as { embeds?: Array<{ data?: { title?: string } }> } | undefined;
-    expect(editedPayload?.embeds?.[0]?.data?.title).toBe(localizer("en-US", "commands.setup.broken_state_title"));
+    expect(editedPayload?.embeds?.[0]?.data?.title).toBe(
+      localizedStatusTitle("en-US", "commands.setup.broken_state_title", ColorCode.ERROR),
+    );
     expect(mockStore).not.toHaveBeenCalled();
   });
 

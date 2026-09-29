@@ -15,6 +15,7 @@ import { findLastPersonaTurnBlock } from "@/utils/discord/personaTurnDetection";
 import { resolveManagedWebhookForChannel } from "@/utils/discord/webhook/fallback";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
+import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
 /** Module-level lock set keyed by channelId, so prevents double-invocation. */
 const activeDeleteLocks = new Set<string>();
@@ -505,7 +506,7 @@ export async function execute(
       await interaction.editReply({
         embeds: [
           new EmbedBuilder()
-            .setTitle(localizer(locale, status.titleKey))
+            .setTitle(localizedStatusTitle(locale, status.titleKey, status.color))
             .setDescription(localizer(locale, status.descriptionKey, status.descriptionVars))
             .setColor(status.color),
         ],
@@ -526,7 +527,7 @@ export async function execute(
       await interaction.editReply({
         embeds: [
           new EmbedBuilder()
-            .setTitle(localizer(locale, "general.errors.unexpected_title"))
+            .setTitle(localizedStatusTitle(locale, "general.errors.unexpected_title", ColorCode.ERROR))
             .setDescription(localizer(locale, "general.errors.unexpected_description"))
             .setColor(ColorCode.ERROR),
         ],
