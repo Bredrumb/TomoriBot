@@ -155,7 +155,12 @@ try {
       client_secret = EXCLUDED.client_secret,
       client_secret_key_version = EXCLUDED.client_secret_key_version,
       refresh_token = EXCLUDED.refresh_token,
-      refresh_token_key_version = EXCLUDED.refresh_token_key_version
+      refresh_token_key_version = EXCLUDED.refresh_token_key_version,
+      access_token = NULL,
+      access_token_key_version = NULL,
+      access_expires_at = NULL,
+      refresh_blocked_at = NULL,
+      refresh_retry_after = NULL
   `;
   console.log(`Stored the encrypted OAuth connection for ${instance.instanceId}.`);
 } catch (error) {

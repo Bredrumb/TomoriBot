@@ -3216,8 +3216,17 @@ CREATE TABLE IF NOT EXISTS pluralbuddy_oauth_connections (
   client_secret_key_version INTEGER NOT NULL,
   refresh_token BYTEA NOT NULL,
   refresh_token_key_version INTEGER NOT NULL,
+  access_token BYTEA,
+  access_token_key_version INTEGER,
+  access_expires_at TIMESTAMPTZ,
+  refresh_blocked_at TIMESTAMPTZ,
+  refresh_retry_after TIMESTAMPTZ,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT pluralbuddy_access_token_complete CHECK (
+    (access_token IS NULL AND access_token_key_version IS NULL AND access_expires_at IS NULL)
+    OR (access_token IS NOT NULL AND access_token_key_version IS NOT NULL AND access_expires_at IS NOT NULL)
+  )
 );
 
 CREATE OR REPLACE FUNCTION validate_pluralbuddy_oauth_connection()

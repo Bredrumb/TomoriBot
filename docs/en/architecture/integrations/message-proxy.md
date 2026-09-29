@@ -136,7 +136,7 @@ fit the namespace model, extend persistence deliberately rather than fabricating
 | `users.message_proxy_service` | `NULL` never configured, `none` explicit opt-out, registered ID enabled. Unknown IDs are retained but disabled at runtime. |
 | `users.message_proxy_instance_id` | Selected instance. `NULL` means the official instance for a selected service; Off clears the selection. Custom selections do not route yet. |
 | `message_proxy_instances` | Stable instance ID, service, canonical origin, and enabled state. Official rows are `pluralkit:official` and `pluralbuddy:official`. |
-| `pluralbuddy_oauth_connections` | One encrypted operator client secret and refresh token per PluralBuddy instance, bound to its canonical origin. |
+| `pluralbuddy_oauth_connections` | One encrypted operator client secret and refresh token per PluralBuddy instance, bound to its canonical origin. The short-lived access token and expiry let other processes reuse a completed refresh. Refresh failures record a retry time or block the connection until the operator authorizes it again. |
 | `external_identities` | Canonical key scoped by `(kind, instance_id, external_key)` and mapped to one synthetic `users` row. |
 | `message_proxy_namespaces` | Service container keyed by `(instance_id, namespace_key)`. |
 | `message_proxy_identities` | Stable identity linked to an external identity and namespace, with its last verified webhook avatar. |
@@ -205,4 +205,13 @@ loopback listener there cannot complete this flow. Keep the secret bundle outsid
 do not pass credentials as command arguments.
 
 The encrypted connection is initialization data for the renewable client. Message lookup still uses
-the existing client credentials path until the token refresh and adapter work is complete.
+the existing client credentials path until the adapter uses the renewable token source.
+
+The renewable token source reads the connection for the selected instance and exact origin. It
+refreshes with HTTP Basic client authentication and `resource` set to that origin. A database row lock
+serializes refreshes across bot processes. When the provider rotates the refresh token, the bot
+encrypts and commits its replacement with the new access token and expiry before caching the access
+token in process memory. Another process reuses that committed access token. A revoked refresh token
+blocks further attempts until the operator repeats authorization;
+a rate limit or transient failure sets a database retry time. A crash after the provider rotates a
+token but before PostgreSQL commits it may require operator authorization again.
