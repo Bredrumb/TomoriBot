@@ -54,7 +54,7 @@ export const pluralBuddyProxyService = {
     identityMembershipLine: () => "- Member of a plural system; its members share one presence here",
     namespacePresentation: (_context, accountLabels) => ({
       sectionHeading: "Some of the people above are members of plural systems:",
-      entry: `- PluralBuddy system${accountLabels.length ? ` (shared account: ${accountLabels.join("; ")})` : ""}`,
+      entry: `- A plural system${accountLabels.length ? ` (shared account: ${accountLabels.join("; ")})` : ""}`,
     }),
   },
   attestMessage: async (messageId: string) => {

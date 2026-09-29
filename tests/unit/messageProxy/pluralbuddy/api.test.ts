@@ -71,6 +71,42 @@ describe("PluralBuddy message lookup", () => {
     expect(await fetchPluralBuddyMessage(official, messageId)).toBeNull();
   });
 
+  it("accepts the null reply reference the live API sends for a non-reply", async () => {
+    spyOn(oauthTokens, "getPluralBuddyAccessToken").mockResolvedValue("token");
+    spyOn(remoteFetch, "fetchUserRemoteUrl").mockResolvedValue(
+      new Response(
+        `{"message":{"messageId":"${messageId}","systemId":"${hostId}","alterId":456789012345678901,"channelId":"${channelId}","referencedMessage":null}}`,
+      ),
+    );
+    const message = await fetchPluralBuddyMessage(official, messageId);
+    expect(message?.alterIdKey).toBe("456789012345678901");
+    expect(message?.referencedMessage).toBeNull();
+  });
+
+  it("keeps a snowflake reply reference", async () => {
+    spyOn(oauthTokens, "getPluralBuddyAccessToken").mockResolvedValue("token");
+    spyOn(remoteFetch, "fetchUserRemoteUrl").mockResolvedValue(
+      new Response(
+        `{"message":{"messageId":"${messageId}","systemId":"${hostId}","alterId":456789012345678901,"channelId":"${channelId}","referencedMessage":"567890123456789012"}}`,
+      ),
+    );
+    expect((await fetchPluralBuddyMessage(official, messageId))?.referencedMessage).toBe("567890123456789012");
+  });
+
+  it("logs the failing field path without echoing response values", async () => {
+    spyOn(oauthTokens, "getPluralBuddyAccessToken").mockResolvedValue("token");
+    spyOn(remoteFetch, "fetchUserRemoteUrl").mockResolvedValue(
+      new Response(
+        `{"message":{"messageId":"${messageId}","systemId":"${hostId}","alterId":"secret-alter","channelId":"${channelId}"}}`,
+      ),
+    );
+    const warn = spyOn(log, "warn").mockImplementation(() => {});
+    expect(await fetchPluralBuddyMessage(official, messageId)).toBeNull();
+    const logged = JSON.stringify(warn.mock.calls);
+    expect(logged).toContain("message.alterId:invalid_type");
+    expect(logged).not.toContain("secret-alter");
+  });
+
   it("stops after a rate-limit response", async () => {
     spyOn(oauthTokens, "getPluralBuddyAccessToken").mockResolvedValue("token");
     const fetch = spyOn(remoteFetch, "fetchUserRemoteUrl").mockResolvedValue(new Response(null, { status: 429 }));
