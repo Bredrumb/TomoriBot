@@ -181,28 +181,12 @@ See the [PluralKit adapter](/architecture/integrations/pluralkit/) for its separ
 ## PluralBuddy operator authorization bootstrap
 
 `scripts/db/authorize-pluralbuddy-instance.ts` initializes one encrypted OAuth connection for an
-instance in `message_proxy_instances`. The operator creates a confidential application in that
-instance's developer portal with `profile` and `offline_access` and registers an exact
-`http://127.0.0.1:<port>/<path>` redirect URI. The helper must run on the same machine as the
-operator's browser. It listens only on `127.0.0.1`, validates discovery, callback state and issuer,
-then exchanges the code with S256 PKCE and the instance origin as `resource`. It closes the listener
-after one callback or three minutes. It stores the client ID, encrypted client secret, and encrypted
-refresh token under the instance ID and canonical origin. The access token stays in memory only for
-the setup process.
-
-Run the helper with the instance ID and the registered redirect URI:
-
-```bash
-bun scripts/db/authorize-pluralbuddy-instance.ts pluralbuddy:official http://127.0.0.1:47321/oauth/callback
-```
-
-The helper reads the client ID and secret interactively. It needs the bot's PostgreSQL connection
-settings and `CRYPTO_SECRET` or versioned encryption keys from `.env` or a local `SECRET_FILE` JSON
-bundle. It checks database access before opening the browser flow. For a managed database, the
-operator must arrange temporary, restricted database access from the browser machine and remove that
-access after setup. The production VM does not accept inbound browser connections, so running the
-loopback listener there cannot complete this flow. Keep the secret bundle outside the repository and
-do not pass credentials as command arguments.
+instance in `message_proxy_instances`. It listens on `127.0.0.1`, validates discovery, callback
+state and issuer, then exchanges the code with S256 PKCE and the instance origin as `resource`. It
+closes after one callback or three minutes. The client ID, encrypted client secret, and encrypted
+refresh token are bound to the instance ID and canonical origin. The access token stays in memory
+only for the setup process. Operators follow [PluralBuddy OAuth Setup](/self-hosting/pluralbuddy-oauth/)
+to create the application and run the helper.
 
 The encrypted connection supplies the renewable token used by message lookup. A missing or blocked
 connection makes `/personal message-proxy service:pluralbuddy` report unavailability without changing

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { officialMessageProxyInstance, type MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
 import * as oauthTokens from "@/utils/messageProxy/services/pluralbuddy/oauthTokens";
 import * as remoteFetch from "@/utils/security/userRemoteFetch";
+import { log } from "@/utils/misc/logger";
 import {
   clearPluralBuddyApiStateForTests,
   fetchPluralBuddyMessage,
@@ -84,5 +85,24 @@ describe("PluralBuddy message lookup", () => {
     expect(await fetchPluralBuddyMessage(official, messageId)).toBeNull();
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(reject).toHaveBeenCalledWith(official, "token");
+  });
+
+  it("bounds a stalled lookup and omits the access token from its warning", async () => {
+    const secretToken = "sensitive-access-token";
+    spyOn(oauthTokens, "getPluralBuddyAccessToken").mockResolvedValue(secretToken);
+    const warning = spyOn(log, "warn").mockImplementation(() => {});
+    const fetch = spyOn(remoteFetch, "fetchUserRemoteUrl").mockImplementation(async (_url, init) => {
+      await new Promise<void>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("Timed out", "TimeoutError")), {
+          once: true,
+        });
+      });
+      throw new Error("unreachable");
+    });
+
+    expect(await fetchPluralBuddyMessage(official, messageId)).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(warning).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(warning.mock.calls)).not.toContain(secretToken);
   });
 });

@@ -1,4 +1,4 @@
-CREATE TABLE pluralbuddy_oauth_connections (
+CREATE TABLE IF NOT EXISTS pluralbuddy_oauth_connections (
   instance_id TEXT PRIMARY KEY REFERENCES message_proxy_instances(instance_id),
   origin TEXT NOT NULL,
   client_id TEXT NOT NULL,
@@ -25,10 +25,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS validate_pluralbuddy_oauth_connection_before_write ON pluralbuddy_oauth_connections;
 CREATE TRIGGER validate_pluralbuddy_oauth_connection_before_write
 BEFORE INSERT OR UPDATE ON pluralbuddy_oauth_connections
 FOR EACH ROW EXECUTE FUNCTION validate_pluralbuddy_oauth_connection();
 
+DROP TRIGGER IF EXISTS update_pluralbuddy_oauth_connections_timestamp ON pluralbuddy_oauth_connections;
 CREATE TRIGGER update_pluralbuddy_oauth_connections_timestamp
 BEFORE UPDATE ON pluralbuddy_oauth_connections
 FOR EACH ROW EXECUTE FUNCTION update_timestamp();

@@ -1,6 +1,8 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
+import { runMigrations } from "@/db/migrationRunner";
 import { decryptApiKey, encryptApiKey } from "@/utils/security/crypto";
 import type { MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
+import { log } from "@/utils/misc/logger";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
 const request = mock(async (_input: RequestInfo | URL, _init?: RequestInit) =>
@@ -13,6 +15,9 @@ mock.module("@/utils/security/userRemoteFetch", () => ({
 
 const { clearPluralBuddyOAuthTokenStateForTests, getPluralBuddyAccessToken } = await import(
   "@/utils/messageProxy/services/pluralbuddy/oauthTokens"
+);
+const { clearPluralBuddyApiStateForTests, fetchPluralBuddyMessage } = await import(
+  "@/utils/messageProxy/services/pluralbuddy/api"
 );
 
 const official: MessageProxyInstanceContext = {
@@ -49,7 +54,11 @@ async function cleanup(): Promise<void> {
   await testSql`DELETE FROM pluralbuddy_oauth_connections WHERE instance_id IN (${official.instanceId}, ${custom.instanceId})`;
   await testSql`DELETE FROM message_proxy_instances WHERE instance_id = ${custom.instanceId}`;
   clearPluralBuddyOAuthTokenStateForTests();
+  clearPluralBuddyApiStateForTests();
   request.mockClear();
+  request.mockImplementation(async () =>
+    Response.json({ access_token: "access-one", refresh_token: "refresh-two", token_type: "Bearer", expires_in: 3600 }),
+  );
 }
 
 describe.skipIf(!DB_TESTS_AVAILABLE)("PluralBuddy OAuth refresh persistence", () => {
@@ -59,6 +68,46 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("PluralBuddy OAuth refresh persistence", ()
   });
   afterEach(cleanup);
   afterAll(cleanup);
+
+  it("applies pending instance and OAuth migrations after the current schema snapshot", async () => {
+    await storeConnection(official, "secret-one", "refresh-one");
+    await testSql`
+      DELETE FROM schema_migrations
+      WHERE name IN (
+        '088_message_proxy_instances',
+        '089_pluralbuddy_oauth_connections',
+        '090_pluralbuddy_refresh_state'
+      )
+    `;
+
+    await runMigrations(testSql);
+
+    const markers = await testSql<{ name: string }[]>`
+      SELECT name FROM schema_migrations
+      WHERE name IN (
+        '088_message_proxy_instances',
+        '089_pluralbuddy_oauth_connections',
+        '090_pluralbuddy_refresh_state'
+      )
+    `;
+    expect(markers.map(({ name }) => name).sort()).toEqual([
+      "088_message_proxy_instances",
+      "089_pluralbuddy_oauth_connections",
+      "090_pluralbuddy_refresh_state",
+    ]);
+    const [connection] = await testSql<{ refresh_token: Buffer; refresh_token_key_version: number }[]>`
+      SELECT refresh_token, refresh_token_key_version
+      FROM pluralbuddy_oauth_connections WHERE instance_id = ${official.instanceId}
+    `;
+    expect(connection && (await decryptApiKey(connection.refresh_token, connection.refresh_token_key_version))).toBe(
+      "refresh-one",
+    );
+  });
+
+  it("does not contact the provider without an operator connection", async () => {
+    expect(await getPluralBuddyAccessToken(official)).toBeNull();
+    expect(request).not.toHaveBeenCalled();
+  });
 
   it("stores a rotated refresh token before serving access and reads it after restart", async () => {
     await storeConnection(official, "secret-one", "refresh-one");
@@ -150,5 +199,49 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("PluralBuddy OAuth refresh persistence", ()
     expect(await getPluralBuddyAccessToken(official)).toBeNull();
     expect(await getPluralBuddyAccessToken(official)).toBeNull();
     expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("treats a self-issued token rejected by the message API as unusable", async () => {
+    await storeConnection(official, "secret-one", "refresh-one");
+    const messageId = "123456789012345678";
+    request.mockImplementation(async (input) => {
+      if (String(input).endsWith("/oauth2/token")) {
+        return Response.json({
+          access_token: "unusable-access",
+          refresh_token: "refresh-two",
+          token_type: "Bearer",
+          expires_in: 3600,
+        });
+      }
+      expect(String(input)).toBe(`${official.origin}/api/v1/messages/${messageId}`);
+      return new Response(null, { status: 401 });
+    });
+
+    expect(await fetchPluralBuddyMessage(official, messageId)).toBeNull();
+    expect(await fetchPluralBuddyMessage(official, messageId)).toBeNull();
+    expect(request).toHaveBeenCalledTimes(2);
+    const [connection] = await testSql<{ refresh_blocked_at: Date | null }[]>`
+      SELECT refresh_blocked_at FROM pluralbuddy_oauth_connections WHERE instance_id = ${official.instanceId}
+    `;
+    expect(connection?.refresh_blocked_at).not.toBeNull();
+  });
+
+  it("backs off after a refresh timeout without logging credentials", async () => {
+    await storeConnection(official, "sensitive-client-secret", "sensitive-refresh-token");
+    const warning = spyOn(log, "warn").mockImplementation(() => {});
+    request.mockImplementationOnce(async () => {
+      throw new DOMException("sensitive-refresh-token", "TimeoutError");
+    });
+
+    try {
+      expect(await getPluralBuddyAccessToken(official)).toBeNull();
+      expect(await getPluralBuddyAccessToken(official)).toBeNull();
+      expect(request).toHaveBeenCalledTimes(1);
+      expect(warning).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(warning.mock.calls)).not.toContain("sensitive-refresh-token");
+      expect(JSON.stringify(warning.mock.calls)).not.toContain("sensitive-client-secret");
+    } finally {
+      warning.mockRestore();
+    }
   });
 });

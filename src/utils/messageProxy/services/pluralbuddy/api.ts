@@ -18,7 +18,7 @@ const responseSchema = z.object({
       systemId: snowflake,
       alterId: z.number().positive(),
       channelId: snowflake,
-      referencedMessage: snowflake.optional(),
+      referencedMessage: snowflake.nullish(),
     })
     .nullable(),
 });
@@ -74,7 +74,11 @@ async function lookUp(instance: MessageProxyInstanceContext, messageId: string):
         const parsed = responseSchema.safeParse(raw);
         if (!parsed.success) {
           log.warn("PluralBuddy message lookup returned an invalid payload", undefined, {
-            metadata: { instanceId: instance.instanceId },
+            metadata: {
+              instanceId: instance.instanceId,
+              // Paths and codes only: issue messages can echo response values.
+              issues: parsed.error.issues.map((issue) => `${issue.path.join(".") || "<root>"}:${issue.code}`),
+            },
           });
           return null;
         }

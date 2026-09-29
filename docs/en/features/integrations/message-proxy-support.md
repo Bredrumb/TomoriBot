@@ -13,13 +13,14 @@ through a webhook.
 Run `/personal message-proxy service:pluralkit` or `/personal message-proxy service:pluralbuddy`.
 Choose `service:none` (shown as Off) to disable proxy handling. This is a personal setting on
 the Discord account that sends the original messages and follows that account across servers.
+See [PluralKit Support](/features/integrations/pluralkit-support/) or
+[PluralBuddy Support](/features/integrations/pluralbuddy-support/) for service-specific behavior.
 
 After TomoriBot sees an alter's first verified message, use `/personal config identity:` to edit its
 profile and `/personal memories identity:` to edit its memories. Autocomplete includes stored
 identities from both services even while proxy handling is Off. Account interface, privacy, and model
 settings stay on the host account. A nickname set in TomoriBot remains until cleared; otherwise the
-service display name refreshes on verified messages. See
-[PluralKit Support](/features/integrations/pluralkit-support/) for its member and bio details.
+service display name refreshes on verified messages.
 
 ## What the safety check means
 
@@ -47,3 +48,4 @@ separate, such as PluralKit's API timeout and optional token. PluralBuddy messag
 an operator-authorized OAuth connection for the official instance. Individual users do not supply
 tokens. If authorization is unavailable, `/personal message-proxy` leaves the selection unchanged.
 The current adapter queries `pluralbuddy.app` only; self-hosted PluralBuddy instances cannot be selected yet.
+Operators can follow [PluralBuddy OAuth Setup](/self-hosting/pluralbuddy-oauth/).

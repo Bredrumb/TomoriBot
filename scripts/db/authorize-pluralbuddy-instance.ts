@@ -1,4 +1,5 @@
 import { config } from "dotenv";
+import { ask, askSecret } from "../lib/prompt";
 
 config({ quiet: true });
 
@@ -39,41 +40,11 @@ const {
   parsePluralBuddyOAuthCallback,
   validatePluralBuddyRedirect,
 } = await import("@/utils/messageProxy/services/pluralbuddy/oauthBootstrap");
-const { createInterface } = await import("node:readline/promises");
-
 const redirect = validatePluralBuddyRedirect(redirectInput);
 if (redirect.toString() !== redirectInput) throw new Error("The redirect URI must exactly match the registered URI.");
 
 type InstanceRow = { instance_id: string; service_id: string; origin: string };
 let listener: ReturnType<typeof Bun.serve> | undefined;
-
-async function readSecret(promptText: string): Promise<string> {
-  if (!process.stdin.isTTY || !process.stdin.setRawMode) {
-    throw new Error("An interactive terminal is required to enter the client secret.");
-  }
-  process.stdout.write(promptText);
-  process.stdin.setRawMode(true);
-  process.stdin.resume();
-  let value = "";
-  try {
-    for await (const chunk of process.stdin) {
-      const characters = String(chunk);
-      for (const character of characters) {
-        if (character === "\r" || character === "\n") {
-          process.stdout.write("\n");
-          return value;
-        }
-        if (character === "\u0003") throw new Error("Authorization was cancelled.");
-        if (character === "\u007f" || character === "\b") value = value.slice(0, -1);
-        else if (character >= " " && character !== "\u007f") value += character;
-      }
-    }
-    throw new Error("Client secret input closed.");
-  } finally {
-    process.stdin.setRawMode(false);
-    process.stdin.pause();
-  }
-}
 
 try {
   keyManager.initialize();
@@ -91,11 +62,9 @@ try {
   if (!validation.valid) throw new Error(`Instance origin failed URL validation: ${validation.failureCode}`);
   const instance = { serviceId: "pluralbuddy" as const, instanceId: row.instance_id, origin: row.origin };
 
-  const terminal = createInterface({ input: process.stdin, output: process.stdout });
-  const clientId = (await terminal.question("OAuth client ID: ")).trim();
-  terminal.close();
+  const clientId = await ask("OAuth client ID");
   if (!clientId || clientId.includes(":")) throw new Error("The OAuth client ID is invalid.");
-  const clientSecret = await readSecret("OAuth client secret (hidden): ");
+  const clientSecret = await askSecret("OAuth client secret", { allowVisibleFallback: false });
   if (!clientSecret) throw new Error("The OAuth client secret is required.");
   const session = await createPluralBuddyOAuthSession(instance, clientId, redirectInput);
 

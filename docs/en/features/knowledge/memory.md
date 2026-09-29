@@ -66,7 +66,7 @@ account still controls privacy, blocking, cooldowns, and authorization. TomoriBo
 identity from a webhook name or avatar, and an unverified webhook does not receive a separate
 memory profile.
 
-PluralKit is currently the only selectable service. See
+PluralKit and PluralBuddy are selectable services. See
 [Message-Proxy Support](/features/integrations/message-proxy-support/) for setup and limitations.
 
 
