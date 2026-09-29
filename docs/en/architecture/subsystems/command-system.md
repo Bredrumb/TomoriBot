@@ -1072,7 +1072,9 @@ overrides while the block shares the message-wide text budget with the eight cap
 The capability notice above the override block carries only states that need an action: a disabled Image,
 Video, or Speech capability, an enabled Image or Video capability with no usable model, or an enabled
 Speech capability with no active endpoint. A working capability renders no line, which keeps the enabled
-Speech capability from restating itself on every repaint.
+Speech capability from restating itself on every repaint. Several capabilities can need an action at once,
+so the notice is one titled bullet list rather than a run of bare `-#` lines, and it renders nothing at
+all when no capability needs one.
 
 `/conditioning remove` shows the removal modal directly when stored conditioning entries are at or under
 the modal ceiling of 50. When more than 50 entries exist, it displays a minimal ephemeral page-select

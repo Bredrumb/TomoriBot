@@ -855,6 +855,7 @@ export default {
       capability_video: `Video`,
       capability_tts: `Chuyển văn bản thành giọng nói`,
       capability_stt: `Chuyển giọng nói thành văn bản`,
+      capability_notice_title: `Lưu ý`,
       image_generation_disabled_direction:
         "Tính năng tạo hình ảnh đã bị tắt. Bật tính năng này trong Quyền hạn > Tính năng của bot.",
       image_generation_missing_model: `Chưa có model khả dụng nào được cấu hình cho việc tạo ảnh.`,

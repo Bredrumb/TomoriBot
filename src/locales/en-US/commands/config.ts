@@ -855,6 +855,7 @@ export default {
       capability_video: `Video`,
       capability_tts: `Text to Speech`,
       capability_stt: `Speech to Text`,
+      capability_notice_title: `Notes:`,
       image_generation_disabled_direction:
         "Image generation is disabled. Enable it under Permissions > Bot Capabilities.",
       image_generation_missing_model: `No usable model is configured for Image generation.`,

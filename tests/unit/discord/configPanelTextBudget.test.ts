@@ -1212,8 +1212,8 @@ describe("Switch Models capability notice budgeting", () => {
                   expectedWarnings.push(
                     formatPanelProse(
                       withLinePrefix(
-                        "-# ",
-                        localizer(locale, getCapabilityWarningKey("image", flags.imageGenerationEnabled)),
+                        "> ",
+                        `- ${localizer(locale, getCapabilityWarningKey("image", flags.imageGenerationEnabled))}`,
                       ),
                     ),
                   );
@@ -1222,8 +1222,8 @@ describe("Switch Models capability notice budgeting", () => {
                   expectedWarnings.push(
                     formatPanelProse(
                       withLinePrefix(
-                        "-# ",
-                        localizer(locale, getCapabilityWarningKey("video", flags.videoGenerationEnabled)),
+                        "> ",
+                        `- ${localizer(locale, getCapabilityWarningKey("video", flags.videoGenerationEnabled))}`,
                       ),
                     ),
                   );
@@ -1239,9 +1239,17 @@ describe("Switch Models capability notice budgeting", () => {
                       "commands.config.panel.image_generation_missing_model",
                       "commands.config.panel.video_generation_disabled_direction",
                       "commands.config.panel.video_generation_missing_model",
-                    ].some((key) => text.includes(formatPanelProse(withLinePrefix("-# ", localizer(locale, key))))),
+                    ].some((key) =>
+                      text.includes(formatPanelProse(withLinePrefix("> ", `- ${localizer(locale, key)}`))),
+                    ),
                   );
                   expect(capabilityNotice).toBeUndefined();
+                } else {
+                  // The rows read as one titled list rather than as loose footnotes, so the heading
+                  // ships with the notice and disappears with it.
+                  expect(renderedText).toContain(
+                    `**${localizer(locale, "commands.config.panel.capability_notice_title")}**`,
+                  );
                 }
               },
             );
@@ -1395,13 +1403,11 @@ describe("Switch Models capability notice budgeting", () => {
         const renderedText = getTextDisplays(payload).join("\n");
         for (const key of speechState.present) {
           expect(renderedText).toContain(
-            formatPanelProse(withLinePrefix("-# ", localizer(locale, `commands.config.panel.${key}`))),
+            formatPanelProse(withLinePrefix("> ", `- ${localizer(locale, `commands.config.panel.${key}`)}`)),
           );
         }
         for (const key of speechState.absent) {
-          expect(renderedText).not.toContain(
-            formatPanelProse(withLinePrefix("-# ", localizer(locale, `commands.config.panel.${key}`))),
-          );
+          expect(renderedText).not.toContain(localizer(locale, `commands.config.panel.${key}`));
         }
       }
     }

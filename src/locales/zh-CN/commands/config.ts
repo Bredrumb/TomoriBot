@@ -850,6 +850,7 @@ export default {
       capability_video: `视频`,
       capability_tts: `语音合成`,
       capability_stt: `语音识别`,
+      capability_notice_title: `注意`,
       image_generation_disabled_direction: "图像生成已关闭。 请在权限 > bot 功能 里启用。",
       image_generation_missing_model: `图像生成还没有配置可用的模型。`,
       video_generation_disabled_direction: "视频生成已关闭。 请在权限 > bot 功能 里启用。",

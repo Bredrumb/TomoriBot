@@ -671,8 +671,8 @@ function enrichIdentityField(base: HydratedDiscordUserBase): ParticipantProfileF
   if (base.policy.exposeIdentity) {
     const genderIdentity = base.userRow.gender_identity?.trim();
     const pronouns = base.userRow.pronouns?.trim();
-    if (genderIdentity) lines.push(`- Gender Identity: ${genderIdentity}`);
-    if (pronouns) lines.push(`- Pronouns: ${pronouns}`);
+    if (genderIdentity) lines.push(`- ${base.profile.displayName}'s Gender Identity: ${genderIdentity}`);
+    if (pronouns) lines.push(`- ${base.profile.displayName}'s Pronouns: ${pronouns}`);
   }
   return field(base.profile.key, "identity", 15, lines, base.policy.exposeIdentity ? "missing_data" : "privacy");
 }
@@ -689,11 +689,7 @@ async function enrichPersonalMemoriesField(
   dependencies: ParticipantHydrationDependencies,
 ): Promise<ParticipantProfileField> {
   const lines = base.policy.exposePersonalMemories
-    ? await hydratePersonalMemoryLines(base.userRow, base.profile.displayName, params, dependencies, {
-        label: base.messageProxy?.context
-          ? (base.messageProxy.presentation?.identityMemoryLabel(base.profile.displayName) ?? "Memories")
-          : "Memories",
-      })
+    ? await hydratePersonalMemoryLines(base.userRow, base.profile.displayName, params, dependencies)
     : [];
   return field(
     base.profile.key,
@@ -817,7 +813,6 @@ async function hydratePersonalMemoryLines(
   displayName: string,
   params: ParticipantHydrationParams,
   dependencies: ParticipantHydrationDependencies,
-  options: { label: string } = { label: "Memories" },
 ): Promise<string[]> {
   if (!userRow.user_id) return [];
   const memories = await dependencies.loadPersonalMemories(
@@ -839,7 +834,7 @@ async function hydratePersonalMemoryLines(
       return formatMemoryWithId(memory.personal_memory_id ?? index + 1, processed, memory.tags ?? []);
     }),
   );
-  return [`- ${options.label}: ${processedMemories.join("; ")}`];
+  return [`- Memories about ${displayName}: ${processedMemories.join("; ")}`];
 }
 
 function memoryMatchesContext(memory: PersonalMemoryRow, params: ParticipantHydrationParams): boolean {

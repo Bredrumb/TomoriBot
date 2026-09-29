@@ -867,6 +867,7 @@ export default {
       capability_video: `Video`,
       capability_tts: `Texto a voz`,
       capability_stt: `Voz a texto`,
+      capability_notice_title: `Notas`,
       image_generation_disabled_direction:
         "La generación de imágenes está desactivada. Actívala bajo Permisos > Capacidades del bot.",
       image_generation_missing_model: `No hay un modelo utilizable configurado para generación de imágenes.`,
