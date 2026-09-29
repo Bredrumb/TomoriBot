@@ -1,7 +1,4 @@
 nul
-temp_*
-scratch*.diff
-scratch*.patch
 .venv*
 
 # Temp/scratch folders dropped in the repo root by local tooling (e.g. ollama scratch dirs).

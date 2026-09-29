@@ -194,8 +194,8 @@ webhook message from a different application or from no application. The learned
 in memory, expires after an hour without a new confirmation, and is cleared by a restart, so each
 of those costs one unfiltered lookup. The filter assumes an instance's reposts all come from one
 application-owned webhook identity. If an instance sends from a second application, those messages
-stay unmatched until the learned ID expires. A skipped message is counted as unsupported
-correlation, not as an error.
+stay unmatched until the learned ID expires. A skipped message is recorded as unsupported
+correlation rather than an error.
 
 See the [PluralKit adapter](/architecture/integrations/pluralkit/) for its separate transport.
 
