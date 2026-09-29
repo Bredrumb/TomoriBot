@@ -134,7 +134,7 @@ UserA (Mention: @{UserA}; Aliases: @{aliceA}, @{alice_global})
 - Physical Appearance: short white hair, red eyes
 - Status: Online - Playing Stardew Valley
 - Server Roles: Mod, Member
-- Memories: [id:42] Likes cats (tags: pets, animals)
+- Memories about UserA: [id:42] Likes cats (tags: pets, animals)
 - Reminders:
   - ID:42 "Take meds" (scheduled for Tue, May 21, 2026 10:00 AM (UTC-7), repeats every 24 hour(s))
 

@@ -850,6 +850,7 @@ export default {
       capability_video: `影片`,
       capability_tts: `文字轉語音`,
       capability_stt: `語音轉文字`,
+      capability_notice_title: `注意`,
       image_generation_disabled_direction: "圖片生成已停用。 請在權限 > bot 功能底下啟用。",
       image_generation_missing_model: `圖片生成沒有設定可用的模型。`,
       video_generation_disabled_direction: "影片生成已停用。 請在權限 > bot 功能底下啟用。",
