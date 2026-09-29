@@ -53,7 +53,6 @@ export const pluralBuddyProxyService = {
     namespaceBio: "none",
   },
   presentation: {
-    identityMemoryLabel: (name: string) => `${name}'s memories`,
     identityMembershipLine: () => "- Member of a plural system; its members share one presence here",
     namespacePresentation: (_context, accountLabels) => ({
       sectionHeading: "Some of the people above are members of plural systems:",

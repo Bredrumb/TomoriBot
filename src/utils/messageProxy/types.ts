@@ -91,7 +91,6 @@ type ProxyNamespacePresentation = {
 };
 
 export interface ProxyServicePresentation {
-  identityMemoryLabel(displayName: string): string;
   identityMembershipLine(context: MessageProxyIdentityContext): string;
   namespacePresentation(
     context: MessageProxyIdentityContext,

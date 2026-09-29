@@ -10,7 +10,6 @@ function formatPluralKitSystemLabel(
 }
 
 export const pluralKitPresentation: ProxyServicePresentation = {
-  identityMemoryLabel: (displayName) => `${displayName}'s memories`,
   identityMembershipLine: (context) =>
     `- Member of ${formatPluralKitSystemLabel(context)}; its members share one presence here`,
   namespacePresentation: (context, accountLabels) => {

@@ -759,7 +759,7 @@ describe("pluralkit member hydration", () => {
       ?.lines.join("\n");
 
     expect(result.profiles[0]?.displayName).toBe("Saved Mirri");
-    expect(memoryLines).toContain("Mirri's memories:");
+    expect(memoryLines).toContain("- Memories about Saved Mirri:");
   });
 
   it("uses the service name again after an identity nickname is cleared", async () => {
@@ -841,7 +841,6 @@ describe("service-owned message-proxy presentation", () => {
     });
     fixture.dependencies.isMessageProxyIdentity = (discordId) => discordId.startsWith("fx:");
     fixture.dependencies.getMessageProxyPresentation = () => ({
-      identityMemoryLabel: (displayName) => `${displayName}'s profile notes`,
       identityMembershipLine: (context) => `- Profile on ${context.namespaceDisplayName ?? "an account"}`,
       namespacePresentation: (context, accountLabels) => ({
         sectionHeading: "Verified relay profiles:",

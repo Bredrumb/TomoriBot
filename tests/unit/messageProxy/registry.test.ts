@@ -13,7 +13,6 @@ import {
 import type { ProxyServiceDescriptor, ProxyServicePresentation } from "@/utils/messageProxy/types";
 
 const fixturePresentation: ProxyServicePresentation = {
-  identityMemoryLabel: (displayName) => `${displayName}'s notes`,
   identityMembershipLine: (context) => `- Profile from ${context.namespaceDisplayName ?? "an account"}`,
   namespacePresentation: (context, accountLabels) => ({
     sectionHeading: "Linked profiles:",

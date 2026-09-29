@@ -141,7 +141,6 @@ describe("message-proxy history attribution", () => {
         namespaceBio: "inline",
       },
       presentation: {
-        identityMemoryLabel: (name: string) => name,
         identityMembershipLine: () => "membership",
         namespacePresentation: () => ({ sectionHeading: "Namespaces", entry: "- Namespace" }),
       },

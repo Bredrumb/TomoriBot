@@ -66,7 +66,6 @@ function pluralKitPayload(): Record<string, unknown> {
 }
 
 const presentation: ProxyServicePresentation = {
-  identityMemoryLabel: (displayName) => `${displayName}'s notes`,
   identityMembershipLine: (context) => `- Linked to ${context.namespaceDisplayName ?? "an account"}`,
   namespacePresentation: (context) => ({
     sectionHeading: "Linked profiles:",

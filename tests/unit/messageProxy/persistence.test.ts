@@ -18,7 +18,6 @@ import type {
 import type { MessageProxyIdentityUpsertResult } from "@/utils/db/repositories/MessageProxyRepository";
 
 const presentation: ProxyServicePresentation = {
-  identityMemoryLabel: (displayName) => displayName,
   identityMembershipLine: () => "- Linked identity",
   namespacePresentation: () => ({
     sectionHeading: "Linked accounts:",
