@@ -171,12 +171,12 @@ transaction invalidates a prior miss only after the write commits.
 | `MESSAGE_PROXY_MESSAGE_INDEX_PRUNE_INTERVAL_HOURS` | `24` | Retention sweep interval. |
 | `MESSAGE_PROXY_BIO_SEED_MAX_CHARS` | `1000` | Maximum one-time identity bio snapshot. |
 
-PluralBuddy uses deployment-owned OAuth app credentials in `PLURALBUDDY_CLIENT_ID` and
-`PLURALBUDDY_CLIENT_SECRET` for its OAuth client-credentials token. Its message lookup is bounded to
-five seconds, stops on a rate-limit response, and caches successful lookups. See the
-[PluralKit adapter](/architecture/integrations/pluralkit/) for its separate transport.
-The PluralBuddy adapter still uses the public `pluralbuddy.app` origin. The instance catalog and
-identity keys are ready for instance-scoped credentials and routing.
+PluralBuddy message lookup uses the operator-authorized connection for the validated instance ID
+and origin. The renewable token source stores refresh tokens in the database. Lookup is bounded to
+five seconds, stops on a rate-limit response, and caches successful results by instance. A `401`
+blocks the rejected connection until the operator authorizes it again. The current router passes
+the official `pluralbuddy.app` instance; custom selection and routing remain unavailable.
+See the [PluralKit adapter](/architecture/integrations/pluralkit/) for its separate transport.
 
 ## PluralBuddy operator authorization bootstrap
 
@@ -204,8 +204,10 @@ access after setup. The production VM does not accept inbound browser connection
 loopback listener there cannot complete this flow. Keep the secret bundle outside the repository and
 do not pass credentials as command arguments.
 
-The encrypted connection is initialization data for the renewable client. Message lookup still uses
-the existing client credentials path until the adapter uses the renewable token source.
+The encrypted connection supplies the renewable token used by message lookup. A missing or blocked
+connection makes `/personal message-proxy service:pluralbuddy` report unavailability without changing
+the user's selection. Users who selected PluralBuddy earlier may still have the setting, but lookup
+returns no attestation while authorization is unavailable.
 
 The renewable token source reads the connection for the selected instance and exact origin. It
 refreshes with HTTP Basic client authentication and `resource` set to that origin. A database row lock

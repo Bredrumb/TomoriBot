@@ -1,9 +1,11 @@
-import { afterEach, beforeAll, describe, expect, it } from "bun:test";
+import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import type { ChatInputCommandInteraction, Client } from "discord.js";
 import { configureSubcommand, execute } from "@/commands/personal/message-proxy";
 import { PrivacyLevel, type UserRow } from "@/types/db/schema";
 import { personalSettingsExportDataSchema } from "@/types/db/dataExport";
 import { userRepository } from "@/utils/db/repositories";
+import * as oauthTokens from "@/utils/messageProxy/services/pluralbuddy/oauthTokens";
+import { localizedCopy } from "../../helpers/localeCases";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { makeFakeInteraction } from "../../helpers/fakeInteraction";
 
@@ -15,6 +17,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   userRepository.setMessageProxyService = originalSetter;
+  mock.restore();
 });
 
 function user(service: string | null): UserRow {
@@ -103,6 +106,25 @@ describe("/personal message-proxy", () => {
     expect(calls[0]?.method).toBe("deferReply");
     expect(writes).toBe(0);
     expect(calls.some(({ method }) => method === "editReply")).toBe(true);
+  });
+
+  it("leaves the selection unchanged when PluralBuddy authorization is unavailable", async () => {
+    spyOn(oauthTokens, "getPluralBuddyAccessToken").mockResolvedValue(null);
+    let writes = 0;
+    userRepository.setMessageProxyService = async () => {
+      writes += 1;
+      return true;
+    };
+    const { interaction, calls } = interactionFor("pluralbuddy");
+
+    await execute({} as Client, interaction as unknown as ChatInputCommandInteraction, user(null), "en-US");
+
+    expect(calls[0]?.method).toBe("deferReply");
+    expect(writes).toBe(0);
+    const editReply = calls.find(({ method }) => method === "editReply");
+    expect(JSON.stringify(editReply?.args)).toContain(
+      localizedCopy("en-US", "commands.personal.message-proxy.pluralbuddy_unavailable_description"),
+    );
   });
 
   it("allows a host with an unavailable custom selection to choose the official instance", async () => {

@@ -43,7 +43,7 @@ the wait. PluralKit reposts inherit the original trigger decision and reply targ
 the verified repost content and best-effort recent-message match.
 
 Self-hosters can tune this mechanism with `MESSAGE_PROXY_WAIT_MS`. Service transport settings remain
-separate, such as PluralKit's API timeout and optional token. PluralBuddy message lookups require
-deployment OAuth app credentials in `PLURALBUDDY_CLIENT_ID` and `PLURALBUDDY_CLIENT_SECRET`.
-Individual users do not need to supply tokens. The current adapter queries `pluralbuddy.app` only;
-self-hosted PluralBuddy instances are not supported.
+separate, such as PluralKit's API timeout and optional token. PluralBuddy message lookup requires
+an operator-authorized OAuth connection for the official instance. Individual users do not supply
+tokens. If authorization is unavailable, `/personal message-proxy` leaves the selection unchanged.
+The current adapter queries `pluralbuddy.app` only; self-hosted PluralBuddy instances cannot be selected yet.

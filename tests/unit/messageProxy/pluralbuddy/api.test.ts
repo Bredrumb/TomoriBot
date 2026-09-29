@@ -1,100 +1,88 @@
-import { afterEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { officialMessageProxyInstance, type MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
+import * as oauthTokens from "@/utils/messageProxy/services/pluralbuddy/oauthTokens";
+import * as remoteFetch from "@/utils/security/userRemoteFetch";
 import {
   clearPluralBuddyApiStateForTests,
   fetchPluralBuddyMessage,
   getCachedPluralBuddyMessage,
 } from "@/utils/messageProxy/services/pluralbuddy/api";
 
-const originalFetch = globalThis.fetch;
-const originalClientId = process.env.PLURALBUDDY_CLIENT_ID;
-const originalClientSecret = process.env.PLURALBUDDY_CLIENT_SECRET;
+const official = officialMessageProxyInstance("pluralbuddy");
+const custom: MessageProxyInstanceContext = {
+  serviceId: "pluralbuddy",
+  instanceId: "pluralbuddy:11111111-2222-4333-8444-555555555555",
+  origin: "https://example.org",
+};
 const messageId = "123456789012345678";
 const hostId = "234567890123456789";
 const channelId = "345678901234567890";
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
-  if (originalClientId === undefined) delete process.env.PLURALBUDDY_CLIENT_ID;
-  else process.env.PLURALBUDDY_CLIENT_ID = originalClientId;
-  if (originalClientSecret === undefined) delete process.env.PLURALBUDDY_CLIENT_SECRET;
-  else process.env.PLURALBUDDY_CLIENT_SECRET = originalClientSecret;
+  mock.restore();
   clearPluralBuddyApiStateForTests();
 });
 
-describe("PluralBuddy message lookup", () => {
-  it("requires app credentials before requesting an identity", async () => {
-    delete process.env.PLURALBUDDY_CLIENT_ID;
-    delete process.env.PLURALBUDDY_CLIENT_SECRET;
-    const fetchMock = mock(async () => new Response("unexpected"));
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
+function messageResponse(id = messageId): Response {
+  return new Response(
+    `{"message":{"messageId":"${id}","systemId":"${hostId}","alterId":456789012345678901,"channelId":"${channelId}"}}`,
+  );
+}
 
-    expect(await fetchPluralBuddyMessage(messageId)).toBeNull();
-    expect(fetchMock).not.toHaveBeenCalled();
+describe("PluralBuddy message lookup", () => {
+  it("does not request a message without operator authorization", async () => {
+    spyOn(oauthTokens, "getPluralBuddyAccessToken").mockResolvedValue(null);
+    const fetch = spyOn(remoteFetch, "fetchUserRemoteUrl");
+    expect(await fetchPluralBuddyMessage(official, messageId)).toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("uses a client token and preserves an alter snowflake exactly", async () => {
-    process.env.PLURALBUDDY_CLIENT_ID = "test-client";
-    process.env.PLURALBUDDY_CLIENT_SECRET = "test-secret";
-    const fetchMock = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (url.endsWith("/api/auth/oauth2/token")) {
-        expect(String(init?.body)).toContain("grant_type=client_credentials");
-        return Response.json({ access_token: "test-token", expires_in: 3600 });
-      }
-      expect(init?.headers).toEqual({ Authorization: "Bearer test-token" });
-      return new Response(
-        `{"message":{"messageId":"${messageId}","systemId":"${hostId}","alterId":456789012345678901,"channelId":"${channelId}"}}`,
+  it("uses each instance origin and keeps concurrent lookups and cached records separate", async () => {
+    spyOn(oauthTokens, "getPluralBuddyAccessToken").mockImplementation(async (instance) => instance.instanceId);
+    const fetch = spyOn(remoteFetch, "fetchUserRemoteUrl").mockImplementation(async (url, init) => {
+      const origin = new URL(String(url)).origin;
+      expect(new Headers(init?.headers).get("authorization")).toBe(
+        `Bearer ${origin === official.origin ? official.instanceId : custom.instanceId}`,
       );
+      return messageResponse();
     });
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const result = await fetchPluralBuddyMessage(messageId);
-
-    expect(result?.alterIdKey).toBe("456789012345678901");
-    expect(result?.systemId).toBe(hostId);
-    expect(getCachedPluralBuddyMessage(messageId)).toEqual(result);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [first, duplicate, second] = await Promise.all([
+      fetchPluralBuddyMessage(official, messageId),
+      fetchPluralBuddyMessage(official, messageId),
+      fetchPluralBuddyMessage(custom, messageId),
+    ]);
+    expect(first?.alterIdKey).toBe("456789012345678901");
+    expect(duplicate).toEqual(first);
+    expect(second).toEqual(first);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls.map(([url]) => String(url))).toEqual([
+      `${official.origin}/api/v1/messages/${messageId}`,
+      `${custom.origin}/api/v1/messages/${messageId}`,
+    ]);
+    expect(getCachedPluralBuddyMessage(official, messageId)).toEqual(first);
+    expect(getCachedPluralBuddyMessage(custom, messageId)).toEqual(second);
   });
 
   it("rejects a response for another repost ID", async () => {
-    process.env.PLURALBUDDY_CLIENT_ID = "test-client";
-    process.env.PLURALBUDDY_CLIENT_SECRET = "test-secret";
-    globalThis.fetch = mock(async (input: RequestInfo | URL) =>
-      String(input).endsWith("/api/auth/oauth2/token")
-        ? Response.json({ access_token: "test-token", expires_in: 3600 })
-        : new Response(
-            `{"message":{"messageId":"999999999999999999","systemId":"${hostId}","alterId":456789012345678901,"channelId":"${channelId}"}}`,
-          ),
-    ) as unknown as typeof fetch;
-
-    expect(await fetchPluralBuddyMessage(messageId)).toBeNull();
+    spyOn(oauthTokens, "getPluralBuddyAccessToken").mockResolvedValue("token");
+    spyOn(remoteFetch, "fetchUserRemoteUrl").mockResolvedValue(messageResponse("999999999999999999"));
+    expect(await fetchPluralBuddyMessage(official, messageId)).toBeNull();
   });
 
   it("stops after a rate-limit response", async () => {
-    process.env.PLURALBUDDY_CLIENT_ID = "test-client";
-    process.env.PLURALBUDDY_CLIENT_SECRET = "test-secret";
-    const fetchMock = mock(async (input: RequestInfo | URL) =>
-      String(input).endsWith("/api/auth/oauth2/token")
-        ? Response.json({ access_token: "test-token", expires_in: 3600 })
-        : new Response(null, { status: 429 }),
-    );
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-    expect(await fetchPluralBuddyMessage(messageId)).toBeNull();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    spyOn(oauthTokens, "getPluralBuddyAccessToken").mockResolvedValue("token");
+    const fetch = spyOn(remoteFetch, "fetchUserRemoteUrl").mockResolvedValue(new Response(null, { status: 429 }));
+    expect(await fetchPluralBuddyMessage(official, messageId)).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it("rejects an unauthorized token without retrying the message", async () => {
-    process.env.PLURALBUDDY_CLIENT_ID = "test-client";
-    process.env.PLURALBUDDY_CLIENT_SECRET = "test-secret";
-    const fetchMock = mock(async (input: RequestInfo | URL) =>
-      String(input).endsWith("/api/auth/oauth2/token")
-        ? Response.json({ access_token: "test-token", expires_in: 3600 })
-        : new Response(null, { status: 401 }),
-    );
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-    expect(await fetchPluralBuddyMessage(messageId)).toBeNull();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+  it("blocks a rejected token without retrying the message", async () => {
+    spyOn(oauthTokens, "getPluralBuddyAccessToken").mockResolvedValue("token");
+    const reject = spyOn(oauthTokens, "rejectPluralBuddyAccessToken").mockResolvedValue();
+    const fetch = spyOn(remoteFetch, "fetchUserRemoteUrl").mockResolvedValue(new Response(null, { status: 401 }));
+    expect(await fetchPluralBuddyMessage(official, messageId)).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(reject).toHaveBeenCalledWith(official, "token");
   });
 });

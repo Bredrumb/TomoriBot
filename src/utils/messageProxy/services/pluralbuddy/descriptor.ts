@@ -1,9 +1,12 @@
 import type { ProxyMessageAttestation, ProxyServiceDescriptor } from "@/utils/messageProxy/types";
+import { officialMessageProxyInstance } from "@/utils/messageProxy/instances";
 import {
   fetchPluralBuddyMessage,
   getCachedPluralBuddyMessage,
   type PluralBuddyMessage,
 } from "@/utils/messageProxy/services/pluralbuddy/api";
+
+const officialInstance = officialMessageProxyInstance("pluralbuddy");
 
 function toAttestation(message: PluralBuddyMessage): ProxyMessageAttestation {
   return {
@@ -55,11 +58,11 @@ export const pluralBuddyProxyService = {
     }),
   },
   attestMessage: async (messageId: string) => {
-    const message = await fetchPluralBuddyMessage(messageId);
+    const message = await fetchPluralBuddyMessage(officialInstance, messageId);
     return message ? toAttestation(message) : null;
   },
   getCachedAttestation: (messageId: string) => {
-    const message = getCachedPluralBuddyMessage(messageId);
+    const message = getCachedPluralBuddyMessage(officialInstance, messageId);
     return message ? toAttestation(message) : null;
   },
   extractReplyTarget: () => null,

@@ -1,7 +1,12 @@
 import { z } from "zod";
+import { canonicalMessageProxyOrigin, type MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
+import {
+  getPluralBuddyAccessToken,
+  rejectPluralBuddyAccessToken,
+} from "@/utils/messageProxy/services/pluralbuddy/oauthTokens";
 import { log } from "@/utils/misc/logger";
+import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 
-const API_ORIGIN = "https://pluralbuddy.app";
 const LOOKUP_TIMEOUT_MS = 5000;
 const RETRY_DELAYS_MS = [500, 1000, 1500] as const;
 const CACHE_LIMIT = 2000;
@@ -17,84 +22,45 @@ const responseSchema = z.object({
     })
     .nullable(),
 });
-const tokenSchema = z.object({
-  access_token: z.string().min(1),
-  expires_in: z.number().positive(),
-});
 
 export type PluralBuddyMessage = NonNullable<z.infer<typeof responseSchema>["message"]> & {
   alterIdKey: string;
 };
 
-let token: { value: string; expiresAt: number } | null = null;
-let pendingToken: Promise<string | null> | null = null;
 const cache = new Map<string, PluralBuddyMessage>();
 const pending = new Map<string, Promise<PluralBuddyMessage | null>>();
-let warnedMissingCredentials = false;
 
-async function getAccessToken(deadline: number): Promise<string | null> {
-  if (token && token.expiresAt > Date.now() + 30_000) return token.value;
-  if (pendingToken) return pendingToken;
-  const clientId = process.env.PLURALBUDDY_CLIENT_ID?.trim();
-  const clientSecret = process.env.PLURALBUDDY_CLIENT_SECRET?.trim();
-  if (!clientId || !clientSecret) {
-    if (!warnedMissingCredentials) {
-      log.warn("PluralBuddy message lookup requires PLURALBUDDY_CLIENT_ID and PLURALBUDDY_CLIENT_SECRET");
-      warnedMissingCredentials = true;
-    }
-    return null;
-  }
-  pendingToken = (async () => {
-    try {
-      const body = new URLSearchParams({
-        grant_type: "client_credentials",
-        client_id: clientId,
-        client_secret: clientSecret,
-        resource: API_ORIGIN,
-      });
-      const response = await fetch(`${API_ORIGIN}/api/auth/oauth2/token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body,
-        signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
-      });
-      if (!response.ok) {
-        log.warn(`PluralBuddy token request failed with status ${response.status}`);
-        return null;
-      }
-      const parsed = tokenSchema.safeParse(await response.json());
-      if (!parsed.success) return null;
-      token = {
-        value: parsed.data.access_token,
-        expiresAt: Date.now() + parsed.data.expires_in * 1000,
-      };
-      return token.value;
-    } catch (error) {
-      log.warn("PluralBuddy token request failed", error);
-      return null;
-    } finally {
-      pendingToken = null;
-    }
-  })();
-  return pendingToken;
+function validInstance(instance: MessageProxyInstanceContext): boolean {
+  return instance.serviceId === "pluralbuddy" && canonicalMessageProxyOrigin(instance.origin) === instance.origin;
 }
 
-async function lookUp(messageId: string): Promise<PluralBuddyMessage | null> {
+function lookupKey(instance: MessageProxyInstanceContext, messageId: string): string {
+  return `${instance.instanceId}\0${instance.origin}\0${messageId}`;
+}
+
+async function lookUp(instance: MessageProxyInstanceContext, messageId: string): Promise<PluralBuddyMessage | null> {
   const deadline = Date.now() + LOOKUP_TIMEOUT_MS;
   for (let attempt = 0; Date.now() < deadline; attempt++) {
-    const accessToken = await getAccessToken(deadline);
-    if (!accessToken) return null;
+    const accessToken = await getPluralBuddyAccessToken(instance);
+    if (!accessToken || Date.now() >= deadline) return null;
     try {
-      const response = await fetch(`${API_ORIGIN}/api/v1/messages/${messageId}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
-      });
+      const response = await fetchUserRemoteUrl(
+        `${instance.origin}/api/v1/messages/${messageId}`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          redirect: "manual",
+          signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+        },
+        { strict: true },
+      );
       if (response.status === 401) {
-        token = null;
+        await rejectPluralBuddyAccessToken(instance, accessToken);
         return null;
       }
       if (response.status === 429) {
-        log.warn("PluralBuddy message lookup was rate limited");
+        log.warn("PluralBuddy message lookup was rate limited", undefined, {
+          metadata: { instanceId: instance.instanceId },
+        });
         return null;
       }
       if (response.ok) {
@@ -107,7 +73,9 @@ async function lookUp(messageId: string): Promise<PluralBuddyMessage | null> {
         }
         const parsed = responseSchema.safeParse(raw);
         if (!parsed.success) {
-          log.warn(`PluralBuddy message lookup for ${messageId} returned an invalid payload`);
+          log.warn("PluralBuddy message lookup returned an invalid payload", undefined, {
+            metadata: { instanceId: instance.instanceId },
+          });
           return null;
         }
         if (parsed.data.message) {
@@ -118,12 +86,16 @@ async function lookUp(messageId: string): Promise<PluralBuddyMessage | null> {
         }
       }
       if (!response.ok && response.status !== 404) {
-        log.warn(`PluralBuddy message lookup failed with status ${response.status}`);
+        log.warn("PluralBuddy message lookup failed", undefined, {
+          metadata: { instanceId: instance.instanceId, status: response.status },
+        });
         return null;
       }
     } catch (error) {
       if (Date.now() >= deadline) {
-        log.warn(`PluralBuddy message lookup for ${messageId} timed out`, error);
+        log.warn("PluralBuddy message lookup timed out", undefined, {
+          metadata: { instanceId: instance.instanceId, errorClass: error instanceof Error ? error.name : "unknown" },
+        });
         return null;
       }
     }
@@ -133,33 +105,38 @@ async function lookUp(messageId: string): Promise<PluralBuddyMessage | null> {
   return null;
 }
 
-export async function fetchPluralBuddyMessage(messageId: string): Promise<PluralBuddyMessage | null> {
-  if (!snowflake.safeParse(messageId).success) return null;
-  const cached = cache.get(messageId);
+export async function fetchPluralBuddyMessage(
+  instance: MessageProxyInstanceContext,
+  messageId: string,
+): Promise<PluralBuddyMessage | null> {
+  if (!validInstance(instance) || !snowflake.safeParse(messageId).success) return null;
+  const key = lookupKey(instance, messageId);
+  const cached = cache.get(key);
   if (cached) return cached;
-  const inFlight = pending.get(messageId);
+  const inFlight = pending.get(key);
   if (inFlight) return inFlight;
-  const lookup = lookUp(messageId)
+  const lookup = lookUp(instance, messageId)
     .then((result) => {
       if (result) {
         if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value ?? "");
-        cache.set(messageId, result);
+        cache.set(key, result);
       }
       return result;
     })
-    .finally(() => pending.delete(messageId));
-  pending.set(messageId, lookup);
+    .finally(() => pending.delete(key));
+  pending.set(key, lookup);
   return lookup;
 }
 
-export function getCachedPluralBuddyMessage(messageId: string): PluralBuddyMessage | null {
-  return cache.get(messageId) ?? null;
+export function getCachedPluralBuddyMessage(
+  instance: MessageProxyInstanceContext,
+  messageId: string,
+): PluralBuddyMessage | null {
+  if (!validInstance(instance)) return null;
+  return cache.get(lookupKey(instance, messageId)) ?? null;
 }
 
 export function clearPluralBuddyApiStateForTests(): void {
-  token = null;
-  pendingToken = null;
   cache.clear();
   pending.clear();
-  warnedMissingCredentials = false;
 }

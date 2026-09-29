@@ -241,6 +241,40 @@ export function clearPluralBuddyAccessToken(instance: MessageProxyInstanceContex
   if (cached?.origin === instance.origin && cached.token.value === rejectedToken) tokens.delete(instance.instanceId);
 }
 
+export async function rejectPluralBuddyAccessToken(
+  instance: MessageProxyInstanceContext,
+  rejectedToken: string,
+): Promise<void> {
+  clearPluralBuddyAccessToken(instance, rejectedToken);
+  try {
+    await sql.begin(async (tx) => {
+      const [connection] = await tx<{ access_token: Buffer | null; access_token_key_version: number | null }[]>`
+        SELECT access_token, access_token_key_version
+        FROM pluralbuddy_oauth_connections
+        WHERE instance_id = ${instance.instanceId} AND origin = ${instance.origin}
+          AND refresh_blocked_at IS NULL
+        FOR UPDATE
+      `;
+      if (!connection?.access_token || connection.access_token_key_version === null) return;
+      const key = keyManager.getKey(connection.access_token_key_version);
+      const [stored] = await tx<{ access_token: string }[]>`
+        SELECT pgp_sym_decrypt(${connection.access_token}, ${key}) AS access_token
+      `;
+      if (stored?.access_token !== rejectedToken) return;
+      await tx`
+        UPDATE pluralbuddy_oauth_connections
+        SET refresh_blocked_at = NOW(), access_token = NULL,
+          access_token_key_version = NULL, access_expires_at = NULL
+        WHERE instance_id = ${instance.instanceId} AND origin = ${instance.origin}
+      `;
+    });
+  } catch {
+    log.warn("PluralBuddy rejected token could not be blocked", undefined, {
+      metadata: { instanceId: instance.instanceId, errorClass: "storage" },
+    });
+  }
+}
+
 export function clearPluralBuddyOAuthTokenStateForTests(): void {
   tokens.clear();
   pending.clear();

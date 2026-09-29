@@ -6,6 +6,8 @@ import {
 } from "discord.js";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { getMessageProxyWaitMs } from "@/utils/messageProxy/proxyExpectation";
+import { officialMessageProxyInstance } from "@/utils/messageProxy/instances";
+import { getPluralBuddyAccessToken } from "@/utils/messageProxy/services/pluralbuddy/oauthTokens";
 import {
   MESSAGE_PROXY_DISABLED_SERVICE_ID,
   MESSAGE_PROXY_SERVICE_DESCRIPTORS,
@@ -77,6 +79,18 @@ export async function execute(
         titleKey: "general.errors.invalid_option_title",
         descriptionKey: "general.errors.invalid_option_description",
         color: ColorCode.ERROR,
+      });
+      return;
+    }
+
+    if (
+      requestedService === "pluralbuddy" &&
+      !(await getPluralBuddyAccessToken(officialMessageProxyInstance("pluralbuddy")))
+    ) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.personal.message-proxy.pluralbuddy_unavailable_title",
+        descriptionKey: "commands.personal.message-proxy.pluralbuddy_unavailable_description",
+        color: ColorCode.WARN,
       });
       return;
     }
