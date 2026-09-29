@@ -136,6 +136,7 @@ fit the namespace model, extend persistence deliberately rather than fabricating
 | `users.message_proxy_service` | `NULL` never configured, `none` explicit opt-out, registered ID enabled. Unknown IDs are retained but disabled at runtime. |
 | `users.message_proxy_instance_id` | Selected instance. `NULL` means the official instance for a selected service; Off clears the selection. Custom selections do not route yet. |
 | `message_proxy_instances` | Stable instance ID, service, canonical origin, and enabled state. Official rows are `pluralkit:official` and `pluralbuddy:official`. |
+| `pluralbuddy_oauth_connections` | One encrypted operator client secret and refresh token per PluralBuddy instance, bound to its canonical origin. |
 | `external_identities` | Canonical key scoped by `(kind, instance_id, external_key)` and mapped to one synthetic `users` row. |
 | `message_proxy_namespaces` | Service container keyed by `(instance_id, namespace_key)`. |
 | `message_proxy_identities` | Stable identity linked to an external identity and namespace, with its last verified webhook avatar. |
@@ -176,3 +177,32 @@ five seconds, stops on a rate-limit response, and caches successful lookups. See
 [PluralKit adapter](/architecture/integrations/pluralkit/) for its separate transport.
 The PluralBuddy adapter still uses the public `pluralbuddy.app` origin. The instance catalog and
 identity keys are ready for instance-scoped credentials and routing.
+
+## PluralBuddy operator authorization bootstrap
+
+`scripts/db/authorize-pluralbuddy-instance.ts` initializes one encrypted OAuth connection for an
+instance in `message_proxy_instances`. The operator creates a confidential application in that
+instance's developer portal with `profile` and `offline_access` and registers an exact
+`http://127.0.0.1:<port>/<path>` redirect URI. The helper must run on the same machine as the
+operator's browser. It listens only on `127.0.0.1`, validates discovery, callback state and issuer,
+then exchanges the code with S256 PKCE and the instance origin as `resource`. It closes the listener
+after one callback or three minutes. It stores the client ID, encrypted client secret, and encrypted
+refresh token under the instance ID and canonical origin. The access token stays in memory only for
+the setup process.
+
+Run the helper with the instance ID and the registered redirect URI:
+
+```bash
+bun scripts/db/authorize-pluralbuddy-instance.ts pluralbuddy:official http://127.0.0.1:47321/oauth/callback
+```
+
+The helper reads the client ID and secret interactively. It needs the bot's PostgreSQL connection
+settings and `CRYPTO_SECRET` or versioned encryption keys from `.env` or a local `SECRET_FILE` JSON
+bundle. It checks database access before opening the browser flow. For a managed database, the
+operator must arrange temporary, restricted database access from the browser machine and remove that
+access after setup. The production VM does not accept inbound browser connections, so running the
+loopback listener there cannot complete this flow. Keep the secret bundle outside the repository and
+do not pass credentials as command arguments.
+
+The encrypted connection is initialization data for the renewable client. Message lookup still uses
+the existing client credentials path until the token refresh and adapter work is complete.

@@ -66,6 +66,7 @@ const requiredTables = [
   "st_preset_nodes",
   "external_identities",
   "message_proxy_instances",
+  "pluralbuddy_oauth_connections",
   "message_proxy_namespaces",
   "message_proxy_identities",
   "message_proxy_namespace_accounts",
@@ -74,6 +75,7 @@ const requiredTables = [
 
 const messageProxyTables = [
   "message_proxy_instances",
+  "pluralbuddy_oauth_connections",
   "external_identities",
   "message_proxy_namespaces",
   "message_proxy_identities",

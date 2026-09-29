@@ -239,6 +239,19 @@ export const messageProxyMessageIndexSchema = z.object({
 });
 export type MessageProxyMessageIndexRow = z.infer<typeof messageProxyMessageIndexSchema>;
 
+export const pluralBuddyOAuthConnectionSchema = z.object({
+  instance_id: z.string().min(1),
+  origin: z.string().url(),
+  client_id: z.string().min(1),
+  client_secret: z.instanceof(Buffer),
+  client_secret_key_version: z.number().int().positive(),
+  refresh_token: z.instanceof(Buffer),
+  refresh_token_key_version: z.number().int().positive(),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type PluralBuddyOAuthConnectionRow = z.infer<typeof pluralBuddyOAuthConnectionSchema>;
+
 /**
  * Schema for voice_samples table : reference audio clips for local TTS voice cloning.
  * file_path stores either a production S3/CloudFront URL or a local data/voice-samples path.
