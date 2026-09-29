@@ -1,3 +1,5 @@
+import { officialMessageProxyInstanceFixture } from "../../../helpers/messageProxyInstance";
+import { createHash } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
 import { stallUntilAborted } from "../../../helpers/fetchStub";
 
@@ -25,6 +27,7 @@ beforeAll(async () => {
     await import("@/utils/messageProxy/services/pluralkit/api"));
 });
 
+const officialInstance = officialMessageProxyInstanceFixture("pluralkit");
 const originalFetch = globalThis.fetch;
 
 afterEach(() => {
@@ -45,8 +48,26 @@ async function withLookupBudget(budgetMs: number, body: () => Promise<void>): Pr
   }
 }
 
+function snowflake(value: string): string {
+  return (
+    (BigInt(`0x${createHash("sha256").update(value).digest("hex").slice(0, 15)}`) % 900000000000000000n) +
+    100000000000000000n
+  ).toString();
+}
+
 function jsonResponse(status: number, body: unknown, headers?: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), { status, headers });
+  const payload =
+    body && typeof body === "object" && !Array.isArray(body)
+      ? {
+          ...body,
+          ...Object.fromEntries(
+            Object.entries(body)
+              .filter(([key, value]) => (key === "original" || key === "sender") && typeof value === "string")
+              .map(([key, value]) => [key, snowflake(value as string)]),
+          ),
+        }
+      : body;
+  return new Response(JSON.stringify(payload), { status, headers });
 }
 
 // Two cases below exhaust the real retry budget rather than faking timers, so they need
@@ -65,12 +86,12 @@ describe("pkApi.fetchMessage", () => {
     );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const result = await fetchMessage("msg-success-1");
+    const result = await fetchMessage(officialInstance, "msg-success-1");
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
-      original: "111",
-      sender: "222",
+      original: snowflake("111"),
+      sender: snowflake("222"),
       system: { id: "abcdef", uuid: "11111111-2222-4333-8444-555555555555", name: "Lighthouse", tag: "[LH]" },
       member: { id: "ghijkl", uuid: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", name: "TestA", display_name: "Test A" },
     });
@@ -80,11 +101,11 @@ describe("pkApi.fetchMessage", () => {
     const fetchMock = mock(async () => jsonResponse(200, { original: "333", sender: "444" }));
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const result = await fetchMessage("msg-deleted-member");
+    const result = await fetchMessage(officialInstance, "msg-deleted-member");
 
     expect(result?.system).toBeNull();
     expect(result?.member).toBeNull();
-    expect(result?.sender).toBe("444");
+    expect(result?.sender).toBe(snowflake("444"));
   });
 
   it("accepts private optional fields without inventing values", async () => {
@@ -105,7 +126,7 @@ describe("pkApi.fetchMessage", () => {
     );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const result = await fetchMessage("msg-private-fields");
+    const result = await fetchMessage(officialInstance, "msg-private-fields");
 
     expect(result?.system?.name).toBeUndefined();
     expect(result?.system?.description).toBeUndefined();
@@ -129,7 +150,7 @@ describe("pkApi.fetchMessage", () => {
     );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    expect((await fetchMessage("msg-public-pronouns"))?.member?.pronouns).toBe("she/her");
+    expect((await fetchMessage(officialInstance, "msg-public-pronouns"))?.member?.pronouns).toBe("she/her");
   });
 
   it("accepts explicit null pronouns from a member who keeps them private", async () => {
@@ -148,7 +169,7 @@ describe("pkApi.fetchMessage", () => {
     );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    expect((await fetchMessage("msg-null-pronouns"))?.member?.pronouns).toBeNull();
+    expect((await fetchMessage(officialInstance, "msg-null-pronouns"))?.member?.pronouns).toBeNull();
   });
 
   it("fails closed on structurally invalid successful payloads", async () => {
@@ -164,9 +185,11 @@ describe("pkApi.fetchMessage", () => {
 
     // PK answered, but not with anything trustworthy: that is a transport failure,
     // never a confirmed miss, and the untrustworthy answer must not be cached.
-    await expect(fetchMessage("msg-invalid-payload")).rejects.toThrow(PluralKitLookupUnavailableError);
+    await expect(fetchMessage(officialInstance, "msg-invalid-payload")).rejects.toThrow(
+      PluralKitLookupUnavailableError,
+    );
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(getCachedMessageLookup("msg-invalid-payload")).toBeNull();
+    expect(getCachedMessageLookup(officialInstance, "msg-invalid-payload")).toBeNull();
   });
 
   it("sends the configured token verbatim and omits an empty token", async () => {
@@ -176,14 +199,16 @@ describe("pkApi.fetchMessage", () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     process.env.PLURALKIT_API_TOKEN = "fixture-token";
-    await fetchMessage("msg-token-present");
+    await fetchMessage(officialInstance, "msg-token-present");
     process.env.PLURALKIT_API_TOKEN = "";
-    await fetchMessage("msg-token-absent");
+    await fetchMessage(officialInstance, "msg-token-absent");
 
-    expect((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.headers).toEqual({
-      Authorization: "fixture-token",
-    });
-    expect((fetchMock.mock.calls[1]?.[1] as RequestInit | undefined)?.headers).toEqual({});
+    expect(new Headers((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.headers).get("Authorization")).toBe(
+      "fixture-token",
+    );
+    expect(
+      new Headers((fetchMock.mock.calls[1]?.[1] as RequestInit | undefined)?.headers).get("Authorization"),
+    ).toBeNull();
   });
 
   it("retries a 404 (PK indexing lag) and succeeds once the message appears", async () => {
@@ -195,10 +220,10 @@ describe("pkApi.fetchMessage", () => {
     });
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const result = await fetchMessage("msg-retry-404");
+    const result = await fetchMessage(officialInstance, "msg-retry-404");
 
     expect(calls).toBe(2);
-    expect(result?.sender).toBe("666");
+    expect(result?.sender).toBe(snowflake("666"));
   });
 
   it("honors a sane Retry-After header on 429 before succeeding", async () => {
@@ -211,10 +236,10 @@ describe("pkApi.fetchMessage", () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     const start = Date.now();
-    const result = await fetchMessage("msg-retry-429");
+    const result = await fetchMessage(officialInstance, "msg-retry-429");
 
     expect(calls).toBe(2);
-    expect(result?.sender).toBe("888");
+    expect(result?.sender).toBe(snowflake("888"));
     // Honored the 50ms header, not the ~800ms first backoff step
     expect(Date.now() - start).toBeLessThan(700);
   });
@@ -229,10 +254,10 @@ describe("pkApi.fetchMessage", () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     const start = Date.now();
-    const result = await fetchMessage("msg-retry-429-zero");
+    const result = await fetchMessage(officialInstance, "msg-retry-429-zero");
 
     expect(calls).toBe(2);
-    expect(result?.sender).toBe("888");
+    expect(result?.sender).toBe(snowflake("888"));
     // A zero header must NOT mean an instant retry against a rate-limited
     // endpoint; the ~800ms first backoff step applies instead. PluralKit's
     // rate limiter is known to send 0 accidentally.
@@ -249,10 +274,10 @@ describe("pkApi.fetchMessage", () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     const start = Date.now();
-    const result = await fetchMessage("msg-retry-429-malformed");
+    const result = await fetchMessage(officialInstance, "msg-retry-429-malformed");
 
     expect(calls).toBe(2);
-    expect(result?.sender).toBe("888");
+    expect(result?.sender).toBe(snowflake("888"));
     expect(Date.now() - start).toBeGreaterThanOrEqual(750);
   });
 
@@ -269,11 +294,11 @@ describe("pkApi.fetchMessage", () => {
         globalThis.fetch = fetchMock as unknown as typeof fetch;
 
         const start = Date.now();
-        const result = await fetchMessage("msg-stalled-then-valid");
+        const result = await fetchMessage(officialInstance, "msg-stalled-then-valid");
         const elapsed = Date.now() - start;
 
         expect(calls).toBe(2);
-        expect(result?.sender).toBe("stall-sender");
+        expect(result?.sender).toBe(snowflake("stall-sender"));
         // The stalled attempt is cut at half the 3000ms budget (1500ms), which is what
         // leaves the ~800ms backoff step and the retry inside the same deadline. A
         // whole-budget attempt would have ended here with no answer at all.
@@ -303,10 +328,10 @@ describe("pkApi.fetchMessage", () => {
         });
         globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-        const result = await fetchMessage("msg-stalled-body");
+        const result = await fetchMessage(officialInstance, "msg-stalled-body");
 
         expect(calls).toBe(2);
-        expect(result?.sender).toBe("body-sender");
+        expect(result?.sender).toBe(snowflake("body-sender"));
       });
     },
     RETRY_EXHAUSTION_TIMEOUT_MS,
@@ -322,7 +347,9 @@ describe("pkApi.fetchMessage", () => {
         globalThis.fetch = fetchMock as unknown as typeof fetch;
 
         const start = Date.now();
-        await expect(fetchMessage("msg-always-stalled")).rejects.toThrow(PluralKitLookupUnavailableError);
+        await expect(fetchMessage(officialInstance, "msg-always-stalled")).rejects.toThrow(
+          PluralKitLookupUnavailableError,
+        );
         const elapsed = Date.now() - start;
 
         // Two attempts, both bounded by the same overall deadline: the retry does not
@@ -340,7 +367,7 @@ describe("pkApi.fetchMessage", () => {
       const fetchMock = mock(async () => jsonResponse(status, {}));
       globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-      await expect(fetchMessage(messageId)).rejects.toThrow(PluralKitLookupUnavailableError);
+      await expect(fetchMessage(officialInstance, messageId)).rejects.toThrow(PluralKitLookupUnavailableError);
       expect(fetchMock).toHaveBeenCalledTimes(1);
       clearPluralKitApiStateForTests();
     }
@@ -353,7 +380,7 @@ describe("pkApi.fetchMessage", () => {
         globalThis.fetch = fetchMock as unknown as typeof fetch;
 
         const start = Date.now();
-        await expect(fetchMessage(`msg-retry-after-${retryAfterSeconds}`)).rejects.toThrow(
+        await expect(fetchMessage(officialInstance, `msg-retry-after-${retryAfterSeconds}`)).rejects.toThrow(
           PluralKitLookupUnavailableError,
         );
 
@@ -373,7 +400,7 @@ describe("pkApi.fetchMessage", () => {
       const fetchMock = mock(async () => jsonResponse(404, {}));
       globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-      const result = await fetchMessage("msg-exhausted");
+      const result = await fetchMessage(officialInstance, "msg-exhausted");
 
       // Every answer was a 404, so PK's last word stands: the message is unknown, not
       // a transport failure. Real backoff sleeps dominate this test, putting it near
@@ -390,7 +417,7 @@ describe("pkApi.fetchMessage", () => {
       const failingFetch = mock(async () => jsonResponse(404, {}));
       globalThis.fetch = failingFetch as unknown as typeof fetch;
 
-      const firstResult = await fetchMessage("msg-recovers");
+      const firstResult = await fetchMessage(officialInstance, "msg-recovers");
       expect(firstResult).toBeNull();
 
       const succeedingFetch = mock(async () =>
@@ -398,8 +425,8 @@ describe("pkApi.fetchMessage", () => {
       );
       globalThis.fetch = succeedingFetch as unknown as typeof fetch;
 
-      const secondResult = await fetchMessage("msg-recovers");
-      expect(secondResult?.sender).toBe("aaa");
+      const secondResult = await fetchMessage(officialInstance, "msg-recovers");
+      expect(secondResult?.sender).toBe(snowflake("aaa"));
       expect(succeedingFetch).toHaveBeenCalledTimes(1);
     },
     RETRY_EXHAUSTION_TIMEOUT_MS,
@@ -409,7 +436,9 @@ describe("pkApi.fetchMessage", () => {
     const failingFetch = mock(async () => jsonResponse(401, {}));
     globalThis.fetch = failingFetch as unknown as typeof fetch;
 
-    await expect(fetchMessage("msg-recovers-after-error")).rejects.toThrow(PluralKitLookupUnavailableError);
+    await expect(fetchMessage(officialInstance, "msg-recovers-after-error")).rejects.toThrow(
+      PluralKitLookupUnavailableError,
+    );
 
     const succeedingFetch = mock(async () =>
       jsonResponse(200, { original: "122", sender: "233", system: null, member: null }),
@@ -418,7 +447,7 @@ describe("pkApi.fetchMessage", () => {
 
     // The rejected lookup must leave no in-flight or cached entry behind, or every
     // later attempt for this message would fail without touching the network.
-    expect((await fetchMessage("msg-recovers-after-error"))?.sender).toBe("233");
+    expect((await fetchMessage(officialInstance, "msg-recovers-after-error"))?.sender).toBe(snowflake("233"));
     expect(succeedingFetch).toHaveBeenCalledTimes(1);
   });
 
@@ -428,8 +457,8 @@ describe("pkApi.fetchMessage", () => {
     );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const first = await fetchMessage("msg-cached");
-    const second = await fetchMessage("msg-cached");
+    const first = await fetchMessage(officialInstance, "msg-cached");
+    const second = await fetchMessage(officialInstance, "msg-cached");
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(first).toEqual(second);
@@ -441,8 +470,8 @@ describe("pkApi.fetchMessage", () => {
     );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const fetched = await fetchMessage("msg-context-cache");
-    const cached = getCachedMessageLookup("msg-context-cache");
+    const fetched = await fetchMessage(officialInstance, "msg-context-cache");
+    const cached = getCachedMessageLookup(officialInstance, "msg-context-cache");
 
     expect(cached).toEqual(fetched);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -456,12 +485,12 @@ describe("pkApi.fetchMessage", () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     for (let index = 0; index <= 2000; index++) {
-      await fetchMessage(`msg-lru-${index}`);
+      await fetchMessage(officialInstance, `msg-lru-${index}`);
     }
-    expect(getCachedMessageLookup("msg-lru-0")).toBeNull();
-    expect(getCachedMessageLookup("msg-lru-2000")?.original).toBe("msg-lru-2000");
+    expect(getCachedMessageLookup(officialInstance, "msg-lru-0")).toBeNull();
+    expect(getCachedMessageLookup(officialInstance, "msg-lru-2000")?.original).toBe(snowflake("msg-lru-2000"));
 
-    await fetchMessage("msg-lru-0");
+    await fetchMessage(officialInstance, "msg-lru-0");
     expect(fetchMock).toHaveBeenCalledTimes(2002);
   });
 
@@ -473,8 +502,8 @@ describe("pkApi.fetchMessage", () => {
     const fetchMock = mock(async () => responsePromise);
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const first = fetchMessage("msg-concurrent");
-    const second = fetchMessage("msg-concurrent");
+    const first = fetchMessage(officialInstance, "msg-concurrent");
+    const second = fetchMessage(officialInstance, "msg-concurrent");
 
     resolveResponse(jsonResponse(200, { original: "ddd", sender: "eee", system: null, member: null }));
 
@@ -482,5 +511,59 @@ describe("pkApi.fetchMessage", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(firstResult).toEqual(secondResult);
+  });
+
+  it("keeps same-ID lookups separate across approved instances", async () => {
+    const custom = {
+      serviceId: "pluralkit",
+      instanceId: "pluralkit:11111111-2222-4333-8444-555555555555",
+      origin: "https://example.org",
+    };
+    const fetchMock = mock(async (_url: RequestInfo | URL, init?: RequestInit) =>
+      jsonResponse(200, {
+        original: "111",
+        sender: new Headers(init?.headers).get("host") === "example.org" ? "custom-sender" : "official-sender",
+        system: null,
+        member: null,
+      }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const [official, other] = await Promise.all([
+      fetchMessage(officialInstance, "msg-shared"),
+      fetchMessage(custom, "msg-shared"),
+    ]);
+    expect(official?.sender).toBe(snowflake("official-sender"));
+    expect(other?.sender).toBe(snowflake("custom-sender"));
+    expect(getCachedMessageLookup(officialInstance, "msg-shared")?.sender).toBe(snowflake("official-sender"));
+    expect(getCachedMessageLookup(custom, "msg-shared")?.sender).toBe(snowflake("custom-sender"));
+  });
+
+  it("refuses a private origin before opening a request", async () => {
+    const fetchMock = mock(async () => jsonResponse(200, {}));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    await expect(
+      fetchMessage(
+        {
+          serviceId: "pluralkit",
+          instanceId: "pluralkit:11111111-2222-4333-8444-555555555555",
+          origin: "https://127.0.0.1",
+        },
+        "msg-private-origin",
+      ),
+    ).rejects.toThrow(PluralKitLookupUnavailableError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not follow a lookup redirect", async () => {
+    const fetchMock = mock(
+      async () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://example.org/v2/messages/123456789012345678" },
+        }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    await expect(fetchMessage(officialInstance, "msg-redirect")).rejects.toThrow(PluralKitLookupUnavailableError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

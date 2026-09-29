@@ -94,12 +94,18 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("message-proxy persistence regression", () 
   });
 
   it("keeps public identity, host link, and message attribution through rollback and reapplication", async () => {
-    const migrationUrl = new URL("../../../src/db/migrations/088_message_proxy_instances.sql", import.meta.url);
-    const downUrl = new URL("../../../src/db/migrations/088_message_proxy_instances.down.sql", import.meta.url);
-    const [upStatements, downStatements] = await Promise.all([
-      readFile(migrationUrl, "utf8").then(splitSqlStatements),
-      readFile(downUrl, "utf8").then(splitSqlStatements),
-    ]);
+    const migrations = [
+      "088_message_proxy_instances",
+      "089_pluralbuddy_oauth_connections",
+      "090_pluralbuddy_refresh_state",
+      "091_message_proxy_instance_removal",
+    ];
+    const readMigration = (name: string, down: boolean) =>
+      readFile(new URL(`../../../src/db/migrations/${name}${down ? ".down" : ""}.sql`, import.meta.url), "utf8").then(
+        splitSqlStatements,
+      );
+    const upStatements = (await Promise.all(migrations.map((name) => readMigration(name, false)))).flat();
+    const downStatements = (await Promise.all(migrations.toReversed().map((name) => readMigration(name, true)))).flat();
 
     await testSql.begin(async (tx) => {
       const [selectedHost] = await tx`
@@ -161,6 +167,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("message-proxy persistence regression", () 
       serviceId: "pluralkit",
       instanceId: "pluralkit:official",
       origin: "https://api.pluralkit.me",
+      displayName: "PluralKit",
     });
     await testSql`
       INSERT INTO message_proxy_instances (instance_id, service_id, origin, display_name, enabled)
@@ -192,6 +199,27 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("message-proxy persistence regression", () 
         "_rt_proxy_message_1",
       ),
     ).toMatchObject({ instanceId: "pluralkit:official", userDiscId: `pk:${PRIMARY_KEY}` });
+  });
+
+  it("hides a removed instance while retaining its identity and message attribution", async () => {
+    await testSql`UPDATE message_proxy_instances SET enabled = true WHERE instance_id = ${CUSTOM_INSTANCE_ID}`;
+    expect(await messageProxyInstanceRepository.getEnabled("pluralkit", CUSTOM_INSTANCE_ID)).not.toBeNull();
+    await testSql`
+      UPDATE message_proxy_instances
+      SET enabled = false, removed_at = CURRENT_TIMESTAMP
+      WHERE instance_id = ${CUSTOM_INSTANCE_ID}
+    `;
+    expect(await messageProxyInstanceRepository.getEnabled("pluralkit", CUSTOM_INSTANCE_ID)).toBeNull();
+    expect(
+      (await messageProxyInstanceRepository.listEnabled("pluralkit")).some(
+        ({ instanceId }) => instanceId === CUSTOM_INSTANCE_ID,
+      ),
+    ).toBe(false);
+    expect(
+      (await messageProxyRepository.getMessageIdentitiesByMessageIds(["_rt_proxy_message_custom"]))?.get(
+        "_rt_proxy_message_custom",
+      )?.instanceId,
+    ).toBe(CUSTOM_INSTANCE_ID);
   });
 
   it("is idempotent, refreshes cosmetic names, and supports multiple hosts", async () => {
@@ -279,6 +307,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("message-proxy persistence regression", () 
         serverDiscId: null,
         attestation: {
           serviceId: "pluralkit",
+          instanceId: "pluralkit:official",
           proxyMessageId: "_rt_proxy_identity_free",
           originalMessageId: "_rt_proxy_original_identity_free",
           senderDiscordId: "_rt_proxy_host_identity_free",

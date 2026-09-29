@@ -65,6 +65,7 @@ const identityInput: ProxyIdentityUpsertInput = {
 function attestation(identity: ProxyIdentityUpsertInput | null): ProxyMessageAttestation {
   return {
     serviceId: "fixture",
+    instanceId: "fixture:official",
     proxyMessageId: "proxy-1",
     originalMessageId: "original-1",
     senderDiscordId: "sender-1",

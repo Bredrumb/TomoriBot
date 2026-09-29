@@ -1,5 +1,6 @@
 import type { ProxyIdentityUpsertInput, ProxyMessageAttestation } from "@/utils/messageProxy/types";
 import type { PkMessageLookup } from "@/utils/messageProxy/services/pluralkit/api";
+import type { MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
 
 function normalizeOptionalText(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
@@ -11,10 +12,14 @@ export function getPluralKitIdentityDisplayName(lookup: PkMessageLookup): string
   return normalizeOptionalText(lookup.member.display_name) ?? normalizeOptionalText(lookup.member.name) ?? null;
 }
 
-export function toPluralKitIdentityInput(lookup: PkMessageLookup): ProxyIdentityUpsertInput | null {
+export function toPluralKitIdentityInput(
+  lookup: PkMessageLookup,
+  instanceId?: string,
+): ProxyIdentityUpsertInput | null {
   if (!lookup.member || !lookup.system) return null;
   return {
     serviceId: "pluralkit",
+    instanceId,
     externalIdentityKind: "pluralkit_member",
     externalKey: lookup.member.uuid,
     shortId: lookup.member.id,
@@ -31,12 +36,17 @@ export function toPluralKitIdentityInput(lookup: PkMessageLookup): ProxyIdentity
   };
 }
 
-export function toPluralKitAttestation(proxyMessageId: string, lookup: PkMessageLookup): ProxyMessageAttestation {
+export function toPluralKitAttestation(
+  proxyMessageId: string,
+  lookup: PkMessageLookup,
+  instance: MessageProxyInstanceContext,
+): ProxyMessageAttestation {
   return {
     serviceId: "pluralkit",
+    instanceId: instance.instanceId,
     proxyMessageId,
     originalMessageId: lookup.original,
     senderDiscordId: lookup.sender,
-    identity: toPluralKitIdentityInput(lookup),
+    identity: toPluralKitIdentityInput(lookup, instance.instanceId),
   };
 }

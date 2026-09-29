@@ -15,11 +15,11 @@ not provide an authoritative message-attestation API.
 ## Verification invariant
 
 A webhook repost is admitted only when an adapter verifies its repost ID, host account, and stable
-identity. The host must have selected that service and have a recent message expectation in the same
+identity. The host account must have selected that service and instance and have a recent message expectation in the same
 channel. PluralKit also attests an exact original ID. PluralBuddy's message API omits that field, so
 its match to one recent original is best effort:
 
-- registered service ID;
+- registered service and instance IDs;
 - Discord original message ID for PluralKit;
 - Discord sender account ID;
 - Discord proxy message ID being evaluated.
@@ -63,21 +63,22 @@ newly persisted identity has no history and correctly reads as a first meeting. 
 
 ```text
 user message
-  -> resolve users.message_proxy_service through the registry
-  -> create expectation(service, original, sender, copied reply reference)
+  -> resolve users.message_proxy_service and message_proxy_instance_id through the catalog
+  -> create expectation(service, instance, original, sender, copied reply reference)
   -> wait for delete or MESSAGE_PROXY_WAIT_MS timeout
 
 webhook in the same channel while expectations are live
-  -> route each distinct candidate service at most once
+  -> route each distinct enabled candidate instance at most once (maximum four per channel)
   -> adapter returns zero or one authoritative attestation
-  -> exact service/sender/message match, plus original for PluralKit
+  -> exact service/instance/sender/message match, plus original for PluralKit
   -> mark the expectation proxied and remember the short-lived proxy record
   -> stable identity: persist identity + host + immutable message index atomically
   -> identity-free: admit without identity persistence or bio seeding
 ```
 
-Delete and repost events may arrive in either order. Lookup activity pauses the original's wait
-timer. PluralKit records suppress the superseded original during racing history reads and carry its
+Delete and repost events may arrive in either order. Different webhook messages in one channel can
+be verified concurrently. Lookup activity pauses original wait timers until all in-flight checks
+finish. PluralKit records suppress the superseded original during racing history reads and carry its
 reply reference onto the repost. Its trigger gate evaluates the original message. PluralKit
 expectations expire when the wait ends. PluralBuddy keeps the expectation until its TTL so a verified
 late repost can still be recognized, but the original may already have triggered a reply. Concurrent
@@ -134,9 +135,9 @@ fit the namespace model, extend persistence deliberately rather than fabricating
 | Table or column | Purpose |
 |---|---|
 | `users.message_proxy_service` | `NULL` never configured, `none` explicit opt-out, registered ID enabled. Unknown IDs are retained but disabled at runtime. |
-| `users.message_proxy_instance_id` | Selected instance. `NULL` means the official instance for a selected service; Off clears the selection. Custom selections do not route yet. |
-| `message_proxy_instances` | Stable instance ID, service, canonical origin, and enabled state. Official rows are `pluralkit:official` and `pluralbuddy:official`. |
-| `pluralbuddy_oauth_connections` | One encrypted operator client secret and refresh token per PluralBuddy instance, bound to its canonical origin. The short-lived access token and expiry let other processes reuse a completed refresh. Refresh failures record a retry time or block the connection until the operator authorizes it again. |
+| `users.message_proxy_instance_id` | Selected instance. `NULL` means the official instance for a selected service; Off clears the selection. Disabled selections do not route. |
+| `message_proxy_instances` | Stable instance ID, service, canonical origin, enabled state, and removal marker. Official rows are `pluralkit:official` and `pluralbuddy:official`. |
+| `pluralbuddy_oauth_connections` | One encrypted bot host client secret and refresh token per PluralBuddy instance, bound to its canonical origin. The short-lived access token and expiry let other processes reuse a completed refresh. Refresh failures record a retry time or block the connection until the bot host authorizes it again. |
 | `external_identities` | Canonical key scoped by `(kind, instance_id, external_key)` and mapped to one synthetic `users` row. |
 | `message_proxy_namespaces` | Service container keyed by `(instance_id, namespace_key)`. |
 | `message_proxy_identities` | Stable identity linked to an external identity and namespace, with its last verified webhook avatar. |
@@ -149,7 +150,11 @@ uses the instance ID in its synthetic user ID, so equal raw keys from different 
 separate profiles. Existing message attribution continues to reference the same external identity
 row after the instance backfill. A custom catalog row starts disabled and cannot be selected by
 users; `scripts/db/register-message-proxy-instance.ts` validates its HTTPS origin and records it
-without credentials. Custom routing and authorization are separate work.
+without credentials. A bot host enables it after checking a bot-written repost and, for PluralBuddy,
+completing instance-bound OAuth. The running bot reads the catalog on each selection and lookup, so
+changes need no restart. Removal hides the instance and deletes its OAuth connection while keeping
+historical identities, memories, and message attribution. See the
+[bot host setup guide](/self-hosting/pluralbuddy-oauth/).
 Cosmetic fields may refresh; canonical keys and an existing message attribution do not. A service
 that publishes profile text for an identity may seed it once, on the same transaction that first
 registers that identity: pronouns reach the synthetic user's own `pronouns` setting there, and every
@@ -171,21 +176,23 @@ transaction invalidates a prior miss only after the write commits.
 | `MESSAGE_PROXY_MESSAGE_INDEX_PRUNE_INTERVAL_HOURS` | `24` | Retention sweep interval. |
 | `MESSAGE_PROXY_BIO_SEED_MAX_CHARS` | `1000` | Maximum one-time identity bio snapshot. |
 
-PluralBuddy message lookup uses the operator-authorized connection for the validated instance ID
+PluralBuddy message lookup uses the connection authorized by the bot host for the validated instance ID
 and origin. The renewable token source stores refresh tokens in the database. Lookup is bounded to
 five seconds, stops on a rate-limit response, and caches successful results by instance. A `401`
-blocks the rejected connection until the operator authorizes it again. The current router passes
-the official `pluralbuddy.app` instance; custom selection and routing remain unavailable.
+blocks the rejected connection until the bot host authorizes it again. The router passes each
+selected instance's exact origin. PluralKit's optional deployment token is sent only to the
+official origin. Both adapters use the pinned outbound fetch path and refuse redirects; each
+lookup rechecks the resolved address against the public-network policy.
 See the [PluralKit adapter](/architecture/integrations/pluralkit/) for its separate transport.
 
-## PluralBuddy operator authorization bootstrap
+## PluralBuddy bot host authorization bootstrap
 
 `scripts/db/authorize-pluralbuddy-instance.ts` initializes one encrypted OAuth connection for an
 instance in `message_proxy_instances`. It listens on `127.0.0.1`, validates discovery, callback
 state and issuer, then exchanges the code with S256 PKCE and the instance origin as `resource`. It
 closes after one callback or three minutes. The client ID, encrypted client secret, and encrypted
 refresh token are bound to the instance ID and canonical origin. The access token stays in memory
-only for the setup process. Operators follow [PluralBuddy OAuth Setup](/self-hosting/pluralbuddy-oauth/)
+only for the setup process. Bot hosts follow [PluralBuddy OAuth Setup](/self-hosting/pluralbuddy-oauth/)
 to create the application and run the helper.
 
 The encrypted connection supplies the renewable token used by message lookup. A missing or blocked
@@ -198,6 +205,6 @@ refreshes with HTTP Basic client authentication and `resource` set to that origi
 serializes refreshes across bot processes. When the provider rotates the refresh token, the bot
 encrypts and commits its replacement with the new access token and expiry before caching the access
 token in process memory. Another process reuses that committed access token. A revoked refresh token
-blocks further attempts until the operator repeats authorization;
+blocks further attempts until the bot host repeats authorization;
 a rate limit or transient failure sets a database retry time. A crash after the provider rotates a
-token but before PostgreSQL commits it may require operator authorization again.
+token but before PostgreSQL commits it may require authorization by the bot host again.

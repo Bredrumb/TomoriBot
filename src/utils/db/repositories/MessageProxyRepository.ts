@@ -30,6 +30,8 @@ export type MessageProxyManagedIdentity = {
   userId: number;
   userDiscId: string;
   serviceId: string;
+  instanceId: string;
+  instanceDisplayName: string;
   displayName: string;
   avatarUrl: string | null;
 };
@@ -40,6 +42,7 @@ type ManagedIdentityRow = {
   user_disc_id: string;
   service_id: string;
   instance_id: string;
+  instance_display_name: string;
   display_name: string | null;
   short_id: string | null;
   user_nickname: string | null;
@@ -85,9 +88,11 @@ export class MessageProxyRepository {
     try {
       const rows = await sql<ManagedIdentityRow[]>`
         SELECT mpi.message_proxy_identity_id, u.user_id, u.user_disc_id, mpn.service_id, mpn.instance_id,
+          mpi_catalog.display_name AS instance_display_name,
           mpi.display_name, mpi.short_id, mpi.avatar_url, upc.user_nickname
         FROM message_proxy_namespace_accounts mpna
         JOIN message_proxy_namespaces mpn ON mpn.message_proxy_namespace_id = mpna.message_proxy_namespace_id
+        JOIN message_proxy_instances mpi_catalog ON mpi_catalog.instance_id = mpn.instance_id
         JOIN message_proxy_identities mpi ON mpi.message_proxy_namespace_id = mpn.message_proxy_namespace_id
         JOIN external_identities ei ON ei.external_identity_id = mpi.external_identity_id
           AND ei.instance_id = mpn.instance_id
@@ -110,9 +115,11 @@ export class MessageProxyRepository {
     try {
       const [row] = await sql<ManagedIdentityRow[]>`
         SELECT mpi.message_proxy_identity_id, u.user_id, u.user_disc_id, mpn.service_id, mpn.instance_id,
+          mpi_catalog.display_name AS instance_display_name,
           mpi.display_name, mpi.short_id, mpi.avatar_url, upc.user_nickname
         FROM message_proxy_namespace_accounts mpna
         JOIN message_proxy_namespaces mpn ON mpn.message_proxy_namespace_id = mpna.message_proxy_namespace_id
+        JOIN message_proxy_instances mpi_catalog ON mpi_catalog.instance_id = mpn.instance_id
         JOIN message_proxy_identities mpi ON mpi.message_proxy_namespace_id = mpn.message_proxy_namespace_id
         JOIN external_identities ei ON ei.external_identity_id = mpi.external_identity_id
           AND ei.instance_id = mpn.instance_id
@@ -147,6 +154,8 @@ export class MessageProxyRepository {
         userId,
         userDiscId: row.user_disc_id,
         serviceId: row.service_id,
+        instanceId: row.instance_id,
+        instanceDisplayName: row.instance_display_name,
         displayName:
           row.user_nickname?.trim() || row.display_name?.trim() || row.short_id?.trim() || parsed.externalKey,
         avatarUrl: row.avatar_url,

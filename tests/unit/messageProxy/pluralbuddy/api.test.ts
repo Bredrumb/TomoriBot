@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
-import { officialMessageProxyInstance, type MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
+import type { MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
+import { officialMessageProxyInstanceFixture } from "../../../helpers/messageProxyInstance";
 import * as oauthTokens from "@/utils/messageProxy/services/pluralbuddy/oauthTokens";
 import * as remoteFetch from "@/utils/security/userRemoteFetch";
 import { log } from "@/utils/misc/logger";
@@ -9,7 +10,7 @@ import {
   getCachedPluralBuddyMessage,
 } from "@/utils/messageProxy/services/pluralbuddy/api";
 
-const official = officialMessageProxyInstance("pluralbuddy");
+const official = officialMessageProxyInstanceFixture("pluralbuddy");
 const custom: MessageProxyInstanceContext = {
   serviceId: "pluralbuddy",
   instanceId: "pluralbuddy:11111111-2222-4333-8444-555555555555",
@@ -31,7 +32,7 @@ function messageResponse(id = messageId): Response {
 }
 
 describe("PluralBuddy message lookup", () => {
-  it("does not request a message without operator authorization", async () => {
+  it("does not request a message without bot host authorization", async () => {
     spyOn(oauthTokens, "getPluralBuddyAccessToken").mockResolvedValue(null);
     const fetch = spyOn(remoteFetch, "fetchUserRemoteUrl");
     expect(await fetchPluralBuddyMessage(official, messageId)).toBeNull();

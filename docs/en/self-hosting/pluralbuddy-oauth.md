@@ -1,11 +1,11 @@
 ---
 title: "PluralBuddy OAuth Setup"
-description: "Authorize your self-hosted TomoriBot to verify messages from the official PluralBuddy service."
+description: "Authorize your self-hosted TomoriBot to verify messages from approved PluralBuddy instances."
 sidebar:
   order: 8
 ---
 
-TomoriBot needs one operator-authorized PluralBuddy application to verify webhook reposts. People
+The bot host must authorize one PluralBuddy application per instance so TomoriBot can verify webhook reposts. People
 using your bot select PluralBuddy in Discord; they do not create applications or supply tokens.
 
 ## Before you start
@@ -38,7 +38,7 @@ using your bot select PluralBuddy in Discord; they do not create applications or
    send a webhook repost to check that TomoriBot recognizes the alter.
 
 The helper reads PostgreSQL settings and `CRYPTO_SECRET` or versioned encryption keys from `.env`
-or an operator-only `SECRET_FILE` JSON bundle. Keep the bundle outside the repository. Enter the
+or a `SECRET_FILE` JSON bundle accessible only to the bot host. Keep the bundle outside the repository. Enter the
 client secret at the prompt; do not place it in a command argument or Discord message. If PluralBuddy
 revokes the connection, repeat these steps with the same instance ID. A failed selection leaves the
 user's current message-proxy choice unchanged.
@@ -50,7 +50,59 @@ The helper stores the client ID, encrypted client secret, and encrypted refresh 
 `SECRET_FILE` to read them and renew access. The OAuth client secret does not belong in `.env`, and
 the bot no longer reads `PLURALBUDDY_CLIENT_ID` or `PLURALBUDDY_CLIENT_SECRET` variables.
 
-This setup authorizes the official `pluralbuddy.app` instance. Custom PluralBuddy selection is not
-available yet. The [PluralBuddy support page](/features/integrations/pluralbuddy-support/) explains
-what users can expect. See the [message-proxy architecture](/architecture/integrations/message-proxy/)
+## Add an approved instance
+
+The custom origin must serve a proxy bot and its matching API. An API URL alone cannot make the
+public PluralKit or PluralBuddy bot write records there. The first version accepts public HTTPS
+origins only: no path, query, fragment, user information, private address, loopback address, or
+link-local address. The bot rechecks DNS before each request and never follows redirects on lookup
+or token requests.
+
+1. On a computer with deployment database access, register a disabled instance:
+
+   ```sh
+   bun scripts/db/register-message-proxy-instance.ts register pluralbuddy https://<instance-host> "<display-name>"
+   bun scripts/db/register-message-proxy-instance.ts inspect
+   ```
+
+   For PluralKit, use `pluralkit` as the service. Registration checks discovery but does not prove
+   that the bot writes lookup records.
+2. For PluralBuddy, register a separate OAuth application on that instance with the same loopback
+   callback pattern as above. Authorize it using the instance ID returned by registration:
+
+   ```sh
+   bun scripts/db/authorize-pluralbuddy-instance.ts <instance-id> <callback-url>
+   ```
+
+   Repeat this authorization command to replace credentials or recover from a revoked refresh
+   token. The helper writes the replacement connection only after a successful code exchange.
+   PluralKit's public message lookup does not need this step.
+3. From a message written by the matching proxy bot, record its Discord repost ID and sender
+   account ID. Check that the instance API resolves that repost, then enable it:
+
+   ```sh
+   bun scripts/db/register-message-proxy-instance.ts enable <instance-id> <repost-id> <sender-id>
+   ```
+
+   The command checks discovery and requires a lookup result for that exact repost and sender.
+   A `401` or a reachable URL alone does not pass. For a new fork, also complete an integrated
+   TomoriBot check in a disposable deployment before offering it to ordinary users. Keep the
+   instance disabled on the main deployment until its bot write, OAuth code exchange and refresh
+   (if applicable), and TomoriBot lookup have passed.
+4. Users select the enabled instance with `/personal message-proxy service:pluralbuddy instance:<name>`.
+   Leaving `instance` empty chooses the official instance. The choice is checked again when the
+   command runs; disabling an instance stops new lookups without changing stored profiles.
+
+Disable or remove a custom instance with:
+
+```sh
+bun scripts/db/register-message-proxy-instance.ts disable <instance-id>
+bun scripts/db/register-message-proxy-instance.ts remove <instance-id>
+```
+
+Removal deletes its PluralBuddy OAuth connection and keeps a hidden catalog row so identities,
+memories, and message attribution still resolve. That origin cannot be registered again after
+removal; use `disable` when you may need to resume the same instance. Catalog changes take effect on the next command
+or lookup without restarting TomoriBot. The [PluralBuddy support page](/features/integrations/pluralbuddy-support/)
+explains what users can expect. See the [message-proxy architecture](/architecture/integrations/message-proxy/)
 for token storage and refresh behavior.

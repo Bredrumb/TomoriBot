@@ -29,6 +29,7 @@ function message(id: string, webhookId: string | null = "webhook-1"): Message {
 function attestation(proxyMessageId: string): ProxyMessageAttestation {
   return {
     serviceId: "pluralkit",
+    instanceId: "pluralkit:official",
     proxyMessageId,
     originalMessageId: "original-1",
     senderDiscordId: "host-1",
@@ -79,6 +80,7 @@ describe("message-proxy history attribution", () => {
     proxyMessage.author.username = "Mirri [LH]";
     const cachedAttestation: ProxyMessageAttestation = {
       serviceId: "pluralbuddy",
+      instanceId: "pluralbuddy:official",
       proxyMessageId: proxyMessage.id,
       originalMessageId: null,
       senderDiscordId: "host-1",
@@ -94,6 +96,8 @@ describe("message-proxy history attribution", () => {
     };
     const record: MessageProxyMessageRecord = {
       serviceId: "pluralbuddy",
+      instanceId: "pluralbuddy:official",
+      instance: { serviceId: "pluralbuddy", instanceId: "pluralbuddy:official", origin: "https://pluralbuddy.app" },
       messageDiscId: proxyMessage.id,
       channelId: "channel-1",
       originalMessageId: null,

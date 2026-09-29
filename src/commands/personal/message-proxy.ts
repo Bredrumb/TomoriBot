@@ -1,12 +1,13 @@
 import {
   MessageFlags,
+  type AutocompleteInteraction,
   type ChatInputCommandInteraction,
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
 import { getMessageProxyWaitMs } from "@/utils/messageProxy/proxyExpectation";
-import { officialMessageProxyInstance } from "@/utils/messageProxy/instances";
+import { messageProxyInstanceRepository } from "@/utils/db/repositories/MessageProxyInstanceRepository";
 import { getPluralBuddyAccessToken } from "@/utils/messageProxy/services/pluralbuddy/oauthTokens";
 import {
   MESSAGE_PROXY_DISABLED_SERVICE_ID,
@@ -31,6 +32,11 @@ function serviceLocaleKey(serviceId: MessageProxyServiceSelection): string {
   );
 }
 
+function selectionLabel(locale: string, serviceId: MessageProxyServiceSelection, instanceName: string | null): string {
+  const service = localizer(locale, `commands.personal.message-proxy.${serviceLocaleKey(serviceId)}`);
+  return instanceName ? `${service} (${instanceName})` : service;
+}
+
 function enabledSuccessDescriptionLocaleKey(serviceId: Exclude<MessageProxyServiceSelection, "none">): string {
   const descriptor = MESSAGE_PROXY_SERVICE_DESCRIPTORS.find((candidate) => candidate.serviceId === serviceId);
   if (!descriptor) throw new Error(`Missing message-proxy descriptor for enabled service: ${serviceId}`);
@@ -52,7 +58,28 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
             value: serviceId,
           })),
         ),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("instance")
+        .setDescription(localizer("en-US", "commands.personal.message-proxy.instance_description"))
+        .setAutocomplete(true),
     );
+
+export async function autocomplete(_client: Client, interaction: AutocompleteInteraction): Promise<void> {
+  const serviceId = interaction.options.getString("service");
+  if (serviceId !== "pluralkit" && serviceId !== "pluralbuddy") {
+    await interaction.respond([]);
+    return;
+  }
+  const instances = await messageProxyInstanceRepository.listEnabled(serviceId, interaction.options.getFocused());
+  await interaction.respond(
+    instances.map((instance) => ({
+      name: `${instance.displayName} (${instance.origin})`.slice(0, 100),
+      value: instance.instanceId,
+    })),
+  );
+}
 
 export async function execute(
   _client: Client,
@@ -74,6 +101,7 @@ export async function execute(
 
   try {
     const requestedService = interaction.options.getString("service", true) as MessageProxyServiceSelection;
+    const requestedInstanceId = interaction.options.getString("instance");
     if (!getMessageProxyServiceChoices().includes(requestedService)) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.invalid_option_title",
@@ -83,10 +111,28 @@ export async function execute(
       return;
     }
 
-    if (
-      requestedService === "pluralbuddy" &&
-      !(await getPluralBuddyAccessToken(officialMessageProxyInstance("pluralbuddy")))
-    ) {
+    if (requestedService === MESSAGE_PROXY_DISABLED_SERVICE_ID && requestedInstanceId) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "general.errors.invalid_option_title",
+        descriptionKey: "general.errors.invalid_option_description",
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
+    const instance =
+      requestedService === MESSAGE_PROXY_DISABLED_SERVICE_ID
+        ? null
+        : await messageProxyInstanceRepository.getEnabled(requestedService, requestedInstanceId);
+    if (requestedService !== MESSAGE_PROXY_DISABLED_SERVICE_ID && !instance) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.personal.message-proxy.instance_unavailable_title",
+        descriptionKey: "commands.personal.message-proxy.instance_unavailable_description",
+        color: ColorCode.WARN,
+      });
+      return;
+    }
+
+    if (requestedService === "pluralbuddy" && instance && !(await getPluralBuddyAccessToken(instance))) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.personal.message-proxy.pluralbuddy_unavailable_title",
         descriptionKey: "commands.personal.message-proxy.pluralbuddy_unavailable_description",
@@ -97,23 +143,21 @@ export async function execute(
 
     if (
       requestedService === userData.message_proxy_service &&
-      (requestedService === MESSAGE_PROXY_DISABLED_SERVICE_ID
-        ? userData.message_proxy_instance_id === null
-        : userData.message_proxy_instance_id === null ||
-          userData.message_proxy_instance_id === `${requestedService}:official`)
+      (userData.message_proxy_instance_id ?? (instance ? `${requestedService}:official` : null)) ===
+        (instance?.instanceId ?? null)
     ) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.personal.message-proxy.already_selected_title",
         descriptionKey: "commands.personal.message-proxy.already_selected_description",
         descriptionVars: {
-          service: localizer(locale, `commands.personal.message-proxy.${serviceLocaleKey(requestedService)}`),
+          service: selectionLabel(locale, requestedService, instance?.displayName ?? null),
         },
         color: ColorCode.WARN,
       });
       return;
     }
 
-    const updated = await userRepository.setMessageProxyService(userId, requestedService);
+    const updated = await userRepository.setMessageProxyService(userId, requestedService, instance?.instanceId);
     if (!updated) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.update_failed_title",
@@ -134,7 +178,7 @@ export async function execute(
       descriptionVars: isDisabled
         ? undefined
         : {
-            service: localizer(locale, `commands.personal.message-proxy.${serviceLocaleKey(requestedService)}`),
+            service: selectionLabel(locale, requestedService, instance?.displayName ?? null),
             delay_seconds: formatDelaySeconds(getMessageProxyWaitMs()),
           },
       color: ColorCode.SUCCESS,

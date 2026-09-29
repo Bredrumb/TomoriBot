@@ -13,6 +13,7 @@ import { personaUserBlockRepository } from "./PersonaUserBlockRepository";
 import { personaSpriteRepository } from "./PersonaSpriteRepository";
 import { personaRepository } from "./PersonaRepository";
 import { messageProxyRepository } from "./MessageProxyRepository";
+import { pluralBuddyOAuthConnectionRepository } from "./PluralBuddyOAuthConnectionRepository";
 import { presetRepository } from "./PresetRepository";
 import { ragRepository } from "./RagRepository";
 import { serverMemoryRepository } from "./ServerMemoryRepository";
@@ -40,6 +41,7 @@ export {
   personaSpriteRepository,
   personaRepository,
   messageProxyRepository,
+  pluralBuddyOAuthConnectionRepository,
   presetRepository,
   ragRepository,
   serverMemoryRepository,

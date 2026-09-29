@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
 import { canonicalMessageProxyOrigin } from "@/utils/messageProxy/instances";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
+import { readBoundedMessageProxyResponse } from "@/utils/messageProxy/boundedResponse";
 
 const DISCOVERY_TIMEOUT_MS = 10_000;
 const TOKEN_TIMEOUT_MS = 10_000;
@@ -65,35 +66,7 @@ export async function createPluralBuddyOAuthSession(
   clientId: string,
   redirectUri: string,
 ): Promise<PluralBuddyOAuthSession> {
-  if (instance.serviceId !== "pluralbuddy" || canonicalMessageProxyOrigin(instance.origin) !== instance.origin) {
-    throw new Error("The selected PluralBuddy instance is invalid.");
-  }
-  const issuer = `${instance.origin}/api/auth`;
-  const authorizationEndpoint = `${issuer}/oauth2/authorize`;
-  const tokenEndpoint = `${issuer}/oauth2/token`;
-  const response = await fetchUserRemoteUrl(
-    `${instance.origin}/.well-known/openid-configuration`,
-    {
-      redirect: "manual",
-      signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
-    },
-    { strict: true },
-  );
-  if (!response.ok) throw new Error(`OAuth discovery failed with status ${response.status}.`);
-  const parsed = discoverySchema.safeParse(await response.json());
-  if (
-    !parsed.success ||
-    parsed.data.issuer !== issuer ||
-    parsed.data.authorization_endpoint !== authorizationEndpoint ||
-    parsed.data.token_endpoint !== tokenEndpoint ||
-    !parsed.data.response_types_supported.includes("code") ||
-    !parsed.data.grant_types_supported.includes("authorization_code") ||
-    !parsed.data.grant_types_supported.includes("refresh_token") ||
-    !parsed.data.code_challenge_methods_supported.includes("S256") ||
-    !parsed.data.token_endpoint_auth_methods_supported.includes("client_secret_basic")
-  ) {
-    throw new Error("OAuth discovery does not match the selected instance or required authorization flow.");
-  }
+  const { issuer, authorizationEndpoint, tokenEndpoint } = await validatePluralBuddyDiscovery(instance);
 
   const state = randomBytes(32).toString("base64url");
   const verifier = randomBytes(32).toString("base64url");
@@ -110,6 +83,44 @@ export async function createPluralBuddyOAuthSession(
     resource: instance.origin,
   }).toString();
   return { authorizeUrl: url.toString(), state, verifier, issuer, tokenEndpoint };
+}
+
+export async function validatePluralBuddyDiscovery(instance: MessageProxyInstanceContext): Promise<{
+  issuer: string;
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+}> {
+  if (instance.serviceId !== "pluralbuddy" || canonicalMessageProxyOrigin(instance.origin) !== instance.origin) {
+    throw new Error("The selected PluralBuddy instance is invalid.");
+  }
+  const issuer = `${instance.origin}/api/auth`;
+  const authorizationEndpoint = `${issuer}/oauth2/authorize`;
+  const tokenEndpoint = `${issuer}/oauth2/token`;
+  const response = await fetchUserRemoteUrl(
+    `${instance.origin}/.well-known/openid-configuration`,
+    {
+      redirect: "manual",
+      signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
+    },
+    { strict: true },
+  );
+  if (!response.ok) throw new Error(`OAuth discovery failed with status ${response.status}.`);
+  const parsed = discoverySchema.safeParse(JSON.parse(await readBoundedMessageProxyResponse(response)));
+  if (
+    !parsed.success ||
+    parsed.data.issuer !== issuer ||
+    parsed.data.authorization_endpoint !== authorizationEndpoint ||
+    parsed.data.token_endpoint !== tokenEndpoint ||
+    !parsed.data.response_types_supported.includes("code") ||
+    !parsed.data.grant_types_supported.includes("authorization_code") ||
+    !parsed.data.grant_types_supported.includes("refresh_token") ||
+    !parsed.data.code_challenge_methods_supported.includes("S256") ||
+    !parsed.data.token_endpoint_auth_methods_supported.includes("client_secret_basic")
+  ) {
+    throw new Error("OAuth discovery does not match the selected instance or required authorization flow.");
+  }
+
+  return { issuer, authorizationEndpoint, tokenEndpoint };
 }
 
 export function parsePluralBuddyOAuthCallback(
@@ -180,7 +191,7 @@ export async function exchangePluralBuddyOAuthCode(
     { strict: true },
   );
   if (!response.ok) throw new Error(`OAuth token exchange failed with status ${response.status}.`);
-  const parsed = tokenSchema.safeParse(await response.json());
+  const parsed = tokenSchema.safeParse(JSON.parse(await readBoundedMessageProxyResponse(response)));
   if (!parsed.success) throw new Error("OAuth token exchange did not return a renewable Bearer token.");
   return parsed.data;
 }

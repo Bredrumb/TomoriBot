@@ -1,16 +1,19 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import { runMigrations } from "@/db/migrationRunner";
 import { decryptApiKey, encryptApiKey } from "@/utils/security/crypto";
+import * as realRemoteFetch from "@/utils/security/userRemoteFetch";
 import type { MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
 import { log } from "@/utils/misc/logger";
+import { createScopedModuleMocker } from "../../helpers/mockSurface";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
 const request = mock(async (_input: RequestInfo | URL, _init?: RequestInit) =>
   Response.json({ access_token: "access-one", refresh_token: "refresh-two", token_type: "Bearer", expires_in: 3600 }),
 );
-mock.module("@/utils/security/userRemoteFetch", () => ({
+const scopedMock = createScopedModuleMocker(mock, { "@/utils/security/userRemoteFetch": realRemoteFetch });
+scopedMock.module("@/utils/security/userRemoteFetch", () => ({
+  ...realRemoteFetch,
   fetchUserRemoteUrl: request,
-  RemoteUrlPolicyError: class RemoteUrlPolicyError extends Error {},
 }));
 
 const { clearPluralBuddyOAuthTokenStateForTests, getPluralBuddyAccessToken } = await import(
@@ -76,7 +79,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("PluralBuddy OAuth refresh persistence", ()
       WHERE name IN (
         '088_message_proxy_instances',
         '089_pluralbuddy_oauth_connections',
-        '090_pluralbuddy_refresh_state'
+        '090_pluralbuddy_refresh_state',
+        '091_message_proxy_instance_removal'
       )
     `;
 
@@ -87,13 +91,15 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("PluralBuddy OAuth refresh persistence", ()
       WHERE name IN (
         '088_message_proxy_instances',
         '089_pluralbuddy_oauth_connections',
-        '090_pluralbuddy_refresh_state'
+        '090_pluralbuddy_refresh_state',
+        '091_message_proxy_instance_removal'
       )
     `;
     expect(markers.map(({ name }) => name).sort()).toEqual([
       "088_message_proxy_instances",
       "089_pluralbuddy_oauth_connections",
       "090_pluralbuddy_refresh_state",
+      "091_message_proxy_instance_removal",
     ]);
     const [connection] = await testSql<{ refresh_token: Buffer; refresh_token_key_version: number }[]>`
       SELECT refresh_token, refresh_token_key_version
@@ -104,7 +110,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("PluralBuddy OAuth refresh persistence", ()
     );
   });
 
-  it("does not contact the provider without an operator connection", async () => {
+  it("does not contact the provider without a bot host connection", async () => {
     expect(await getPluralBuddyAccessToken(official)).toBeNull();
     expect(request).not.toHaveBeenCalled();
   });

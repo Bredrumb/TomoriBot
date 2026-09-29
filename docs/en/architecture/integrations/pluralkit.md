@@ -27,7 +27,7 @@ are cosmetic data and never establish identity.
 
 ## Message lookup transport
 
-`services/pluralkit/api.ts` calls `GET /v2/messages/{messageId}` and validates the response with
+`services/pluralkit/api.ts` calls `GET /v2/messages/{messageId}` on the selected instance origin and validates the response with
 Zod before it reaches generic code. The message model carries the full member object, so the public
 member name, description, and pronouns arrive in that one response and no separate member-profile
 request is made. PluralKit omits or nulls a value the member keeps private, so an absent key is
@@ -108,10 +108,11 @@ PluralKit represents proxied replies with an embed. `replyEmbed.ts` validates th
 suffix and Discord message URL before recovering the channel and message IDs. The context pipeline
 suppresses that service metadata as a link preview while retaining the recovered reply target.
 
-## User and operator settings
+## User and bot host settings
 
-Users select the adapter with `/personal message-proxy service:pluralkit` and disable it with
-`service:none`. The mechanism delay is `MESSAGE_PROXY_WAIT_MS`; only transport authentication and
-lookup timing remain under `PLURALKIT_*` variables.
+Users select the adapter with `/personal message-proxy service:pluralkit`, may choose a bot
+host-approved instance with `instance:`, and disable it with `service:none`. The mechanism delay is
+`MESSAGE_PROXY_WAIT_MS`; only transport authentication and lookup timing remain under `PLURALKIT_*`
+variables. The optional `PLURALKIT_API_TOKEN` goes only to the official PluralKit origin.
 
 For user-visible behavior and limitations, see [PluralKit Support](/features/integrations/pluralkit-support/).

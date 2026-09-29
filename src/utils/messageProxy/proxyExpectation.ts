@@ -1,4 +1,5 @@
 import type { Message } from "discord.js";
+import type { MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
 import type { ProxyMessageAttestation } from "@/utils/messageProxy/types";
 import { log } from "@/utils/misc/logger";
 
@@ -9,6 +10,7 @@ type TimerHandle = ReturnType<typeof setTimeout>;
 
 export interface MessageProxyExpectation {
   serviceId: string;
+  instance: MessageProxyInstanceContext;
   channelId: string;
   originalMessageId: string;
   senderDiscId: string;
@@ -30,6 +32,8 @@ interface InternalMessageProxyExpectation extends MessageProxyExpectation {
 
 export interface MessageProxyMessageRecord {
   serviceId: string;
+  instanceId: string;
+  instance: MessageProxyInstanceContext;
   messageDiscId: string;
   channelId: string;
   originalMessageId: string | null;
@@ -82,7 +86,7 @@ const proxyMessagesById = new Map<string, InternalMessageProxyMessageRecord>();
 const activeLookupCountsByChannel = new Map<string, number>();
 
 export function createMessageProxyExpectation(args: {
-  serviceId: string;
+  instance: MessageProxyInstanceContext;
   channelId: string;
   originalMessageId: string;
   senderDiscId: string;
@@ -101,7 +105,8 @@ export function createMessageProxyExpectation(args: {
   });
 
   const expectation: InternalMessageProxyExpectation = {
-    serviceId: args.serviceId,
+    serviceId: args.instance.serviceId,
+    instance: args.instance,
     channelId: args.channelId,
     originalMessageId: args.originalMessageId,
     senderDiscId: args.senderDiscId,
@@ -168,13 +173,13 @@ export function hasLiveMessageProxyExpectations(channelId: string): boolean {
   return Boolean(channelExpectations && channelExpectations.size > 0);
 }
 
-export function getLiveMessageProxyExpectationServiceIds(channelId: string): string[] {
+export function getLiveMessageProxyExpectationInstances(channelId: string): MessageProxyInstanceContext[] {
   sweepExpiredMessageProxyState();
-  const serviceIds = new Set<string>();
+  const instances = new Map<string, MessageProxyInstanceContext>();
   for (const expectation of expectationsByChannel.get(channelId)?.values() ?? []) {
-    serviceIds.add(expectation.serviceId);
+    instances.set(expectation.instance.instanceId, expectation.instance);
   }
-  return [...serviceIds];
+  return [...instances.values()];
 }
 
 export function findMatchingMessageProxyExpectation(
@@ -187,6 +192,7 @@ export function findMatchingMessageProxyExpectation(
   if (
     !expectation ||
     expectation.serviceId !== attestation.serviceId ||
+    expectation.instance.instanceId !== attestation.instanceId ||
     expectation.senderDiscId !== attestation.senderDiscordId
   ) {
     return null;
@@ -197,11 +203,15 @@ export function findMatchingMessageProxyExpectation(
 export function findVerifiedRepostExpectation(
   channelId: string,
   serviceId: string,
+  instanceId: string,
   senderDiscId: string,
 ): MessageProxyExpectation | null {
   sweepExpiredMessageProxyState();
   const matching = [...(expectationsByChannel.get(channelId)?.values() ?? [])].filter(
-    (expectation) => expectation.serviceId === serviceId && expectation.senderDiscId === senderDiscId,
+    (expectation) =>
+      expectation.serviceId === serviceId &&
+      expectation.instance.instanceId === instanceId &&
+      expectation.senderDiscId === senderDiscId,
   );
   // Without an original ID, concurrent messages from the same host cannot be paired safely.
   return matching.length === 1 ? matching[0] : null;
@@ -257,6 +267,8 @@ export function rememberMessageProxyMessage(args: {
   const confirmedProxyMessageTtlMs = getConfirmedProxyMessageTtlMs();
   const record: InternalMessageProxyMessageRecord = {
     serviceId: args.expectation.serviceId,
+    instanceId: args.expectation.instance.instanceId,
+    instance: args.expectation.instance,
     messageDiscId: args.messageDiscId,
     channelId: args.channelId,
     originalMessageId: args.verifiedRepostOnly ? null : args.expectation.originalMessageId,

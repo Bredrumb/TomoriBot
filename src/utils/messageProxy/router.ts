@@ -1,4 +1,5 @@
 import type { Message } from "discord.js";
+import type { MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
 import { messageProxyServiceRegistry, type ProxyServiceRegistry } from "@/utils/messageProxy/registry";
 import {
   beginMessageProxyLookup,
@@ -55,6 +56,7 @@ type MessageProxyRouterDependencies = {
   findVerifiedRepostExpectation(
     channelId: string,
     serviceId: string,
+    instanceId: string,
     senderDiscId: string,
   ): MessageProxyExpectation | null;
 };
@@ -78,23 +80,31 @@ function isAttestingDescriptor(
   );
 }
 
+export const MAX_CANDIDATE_INSTANCES = 4;
+
 export async function routeMessageProxyMessage(
   args: {
     message: Message;
-    candidateServiceIds: readonly string[];
+    candidateInstances: readonly MessageProxyInstanceContext[];
   },
   dependencyOverrides: Partial<MessageProxyRouterDependencies> = {},
 ): Promise<MessageProxyRouteResult> {
   const dependencies = { ...DEFAULT_DEPENDENCIES, ...dependencyOverrides };
-  const descriptors = [...new Set(args.candidateServiceIds)]
-    .map((serviceId) => dependencies.registry.get(serviceId))
-    .filter(isAttestingDescriptor)
-    .filter((descriptor) => descriptor.canAttestMessage?.(args.message) ?? true);
-  if (descriptors.length === 0) return routeResult({ status: "unsupported_correlation" });
+  const instances = [...new Map(args.candidateInstances.map((instance) => [instance.instanceId, instance])).values()];
+  if (instances.length > MAX_CANDIDATE_INSTANCES) {
+    return routeResult({ status: "timeout_or_error" });
+  }
+  const candidates = instances.flatMap((instance) => {
+    const descriptor = dependencies.registry.get(instance.serviceId);
+    return isAttestingDescriptor(descriptor) && (descriptor.canAttestMessage?.(args.message) ?? true)
+      ? [{ descriptor, instance }]
+      : [];
+  });
+  if (candidates.length === 0) return routeResult({ status: "unsupported_correlation" });
 
   const endLookup = beginMessageProxyLookup(args.message.channelId);
   const settled = await Promise.allSettled(
-    descriptors.map(async (descriptor) => descriptor.attestMessage(args.message.id)),
+    candidates.map(async ({ descriptor, instance }) => descriptor.attestMessage(args.message.id, instance)),
   ).finally(endLookup);
   // A rejected adapter could not answer (stall, network failure, rate limit); a
   // fulfilled null means the service answered that it has no such message. Only the
@@ -103,16 +113,18 @@ export async function routeMessageProxyMessage(
   const errored = settled.some((result) => result.status === "rejected");
   const claims = settled.flatMap((result, index) => {
     if (result.status !== "fulfilled" || !result.value) return [];
-    const descriptor = descriptors[index];
+    const { descriptor, instance } = candidates[index];
     const claim = result.value;
     const invalidIdentity =
       claim.identity !== null &&
       (descriptor.capabilities.identity !== "stable" ||
         claim.identity.serviceId !== descriptor.serviceId ||
+        claim.identity.instanceId !== instance.instanceId ||
         claim.identity.externalIdentityKind !== descriptor.externalIdentityKind ||
         !descriptor.validateExternalKey(claim.identity.externalKey));
     if (
       claim.serviceId !== descriptor.serviceId ||
+      claim.instanceId !== instance.instanceId ||
       claim.proxyMessageId !== args.message.id ||
       (claim.channelId && claim.channelId !== args.message.channelId) ||
       (descriptor.capabilities.correlation === "attested" && !claim.originalMessageId) ||
@@ -140,6 +152,7 @@ export async function routeMessageProxyMessage(
     : dependencies.findVerifiedRepostExpectation(
         args.message.channelId,
         attestation.serviceId,
+        attestation.instanceId,
         attestation.senderDiscordId,
       );
   if (!expectation) return routeResult({ status: "unmatched" });

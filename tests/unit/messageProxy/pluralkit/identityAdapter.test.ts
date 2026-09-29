@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { officialMessageProxyInstanceFixture } from "../../../helpers/messageProxyInstance";
 import type { PkMessageLookup } from "@/utils/messageProxy/services/pluralkit/api";
 import {
   toPluralKitAttestation,
@@ -82,8 +83,15 @@ describe("PluralKit identity adapter", () => {
   });
 
   it("retains authoritative correlation when stable identity data is unavailable", () => {
-    expect(toPluralKitAttestation("proxy-1", { ...lookup, member: null, system: null })).toEqual({
+    expect(
+      toPluralKitAttestation(
+        "proxy-1",
+        { ...lookup, member: null, system: null },
+        officialMessageProxyInstanceFixture("pluralkit"),
+      ),
+    ).toEqual({
       serviceId: "pluralkit",
+      instanceId: "pluralkit:official",
       proxyMessageId: "proxy-1",
       originalMessageId: "original-1",
       senderDiscordId: "sender-1",

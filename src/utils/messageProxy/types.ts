@@ -1,4 +1,5 @@
 import type { Embed, Message } from "discord.js";
+import type { MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
 
 export type ProxyServiceCapabilities =
   | { correlation: "none"; identity: "none" }
@@ -44,6 +45,7 @@ export type ProxyIdentityUpsertInput = {
 
 export type ProxyMessageAttestation = {
   serviceId: string;
+  instanceId: string;
   proxyMessageId: string;
   channelId?: string;
   replyTarget?: ProxyReplyTarget | null;
@@ -118,16 +120,34 @@ export type ProxyServiceDescriptor<TServiceId extends string = string> =
     })
   | (ProxyDescriptorBase<TServiceId> & {
       capabilities: Extract<ProxyServiceCapabilities, { correlation: "attested"; identity: "none" }>;
-      attestMessage(proxyMessageId: string): Promise<ProxyMessageAttestation | null>;
-      getCachedAttestation?(proxyMessageId: string): ProxyMessageAttestation | null;
+      attestMessage(
+        proxyMessageId: string,
+        instance: MessageProxyInstanceContext,
+      ): Promise<ProxyMessageAttestation | null>;
+      getCachedAttestation?(
+        proxyMessageId: string,
+        instance: MessageProxyInstanceContext,
+      ): ProxyMessageAttestation | null;
     })
   | (ProxyDescriptorBase<TServiceId> & {
       capabilities: Extract<ProxyServiceCapabilities, { correlation: "attested"; identity: "stable" }>;
-      attestMessage(proxyMessageId: string): Promise<ProxyMessageAttestation | null>;
-      getCachedAttestation?(proxyMessageId: string): ProxyMessageAttestation | null;
+      attestMessage(
+        proxyMessageId: string,
+        instance: MessageProxyInstanceContext,
+      ): Promise<ProxyMessageAttestation | null>;
+      getCachedAttestation?(
+        proxyMessageId: string,
+        instance: MessageProxyInstanceContext,
+      ): ProxyMessageAttestation | null;
     })
   | (ProxyDescriptorBase<TServiceId> & {
       capabilities: Extract<ProxyServiceCapabilities, { correlation: "verified-repost" }>;
-      attestMessage(proxyMessageId: string): Promise<ProxyMessageAttestation | null>;
-      getCachedAttestation?(proxyMessageId: string): ProxyMessageAttestation | null;
+      attestMessage(
+        proxyMessageId: string,
+        instance: MessageProxyInstanceContext,
+      ): Promise<ProxyMessageAttestation | null>;
+      getCachedAttestation?(
+        proxyMessageId: string,
+        instance: MessageProxyInstanceContext,
+      ): ProxyMessageAttestation | null;
     });

@@ -7,13 +7,15 @@ sidebar:
 
 TomoriBot can recognize verified [PluralBuddy](https://pluralbuddy.app/) webhook reposts and keep
 each alter's name, profile settings, and personal memories separate from the host Discord account.
-Your TomoriBot operator must [authorize the official PluralBuddy instance](/self-hosting/pluralbuddy-oauth/)
+Your TomoriBot host must [authorize the PluralBuddy instance](/self-hosting/pluralbuddy-oauth/)
 before you can select it.
 
 ## Use PluralBuddy with TomoriBot
 
 Run `/personal message-proxy service:pluralbuddy` on the Discord account that sends your PluralBuddy
-messages. Use `service:none` to turn the wait off. Your account's privacy settings, blacklist state,
+messages. If your TomoriBot host has approved another instance, select it with the optional
+`instance` field; leaving that field empty selects the official instance. Use `service:none` to turn
+the wait off. Your account's privacy settings, blacklist state,
 cooldowns, and quotas still apply to every alter it hosts. After TomoriBot verifies an alter's first
 repost, use `/personal config identity:` and `/personal memories identity:` to edit that alter's
 stored profile and memories.

@@ -10,7 +10,7 @@ import {
   findVerifiedRepostExpectation,
   getMessageProxyExpectationTtlMs,
   getMessageProxyWaitMs,
-  getLiveMessageProxyExpectationServiceIds,
+  getLiveMessageProxyExpectationInstances,
   getSupersededMessageProxyOriginalMessageIds,
   hasLiveMessageProxyExpectations,
   isKnownMessageProxyMessage,
@@ -48,6 +48,7 @@ function attestation(
 ): ProxyMessageAttestation {
   return {
     serviceId,
+    instanceId: `${serviceId}:official`,
     proxyMessageId: "proxy_1",
     originalMessageId,
     senderDiscordId,
@@ -57,7 +58,7 @@ function attestation(
 
 function createExpectation(overrides: Partial<Parameters<typeof createMessageProxyExpectation>[0]> = {}) {
   return createMessageProxyExpectation({
-    serviceId: "service_a",
+    instance: { serviceId: "service_a", instanceId: "service_a:official", origin: "https://example.com" },
     channelId: "channel_1",
     originalMessageId: "original_1",
     senderDiscId: "sender_1",
@@ -69,13 +70,18 @@ function createExpectation(overrides: Partial<Parameters<typeof createMessagePro
 
 describe("message-proxy expectations", () => {
   it("keeps a PluralBuddy host candidate briefly after the original wait without inventing an original link", async () => {
-    const first = createExpectation({ serviceId: "pluralbuddy" });
+    const first = createExpectation({
+      instance: { serviceId: "pluralbuddy", instanceId: "pluralbuddy:official", origin: "https://pluralbuddy.app" },
+    });
     expect(await waitForMessageProxyExpectation(first)).toBe("timeout");
-    expect(findVerifiedRepostExpectation("channel_1", "pluralbuddy", "sender_1")).toBe(first);
-    createExpectation({ serviceId: "pluralbuddy", originalMessageId: "original_2" });
-    expect(findVerifiedRepostExpectation("channel_1", "pluralbuddy", "sender_1")).toBeNull();
+    expect(findVerifiedRepostExpectation("channel_1", "pluralbuddy", "pluralbuddy:official", "sender_1")).toBe(first);
+    createExpectation({
+      instance: { serviceId: "pluralbuddy", instanceId: "pluralbuddy:official", origin: "https://pluralbuddy.app" },
+      originalMessageId: "original_2",
+    });
+    expect(findVerifiedRepostExpectation("channel_1", "pluralbuddy", "pluralbuddy:official", "sender_1")).toBeNull();
     consumeVerifiedRepostExpectation(first);
-    const second = findVerifiedRepostExpectation("channel_1", "pluralbuddy", "sender_1");
+    const second = findVerifiedRepostExpectation("channel_1", "pluralbuddy", "pluralbuddy:official", "sender_1");
     expect(second?.originalMessageId).toBe("original_2");
     if (!second) return;
     const record = rememberMessageProxyMessage({
@@ -132,7 +138,7 @@ describe("message-proxy expectations", () => {
   it("matches exact service, original, sender, and channel attestations", () => {
     const first = createExpectation();
     const second = createExpectation({
-      serviceId: "service_b",
+      instance: { serviceId: "service_b", instanceId: "service_b:official", origin: "https://example.com" },
       originalMessageId: "original_2",
       senderDiscId: "sender_2",
     });
@@ -146,7 +152,11 @@ describe("message-proxy expectations", () => {
     ).toBeNull();
     expect(findMatchingMessageProxyExpectation("other_channel", attestation("original_1", "sender_1"))).toBeNull();
     expect(findMatchingMessageProxyExpectation("channel_1", attestation("original_1", "sender_1"))).toBe(first);
-    expect(getLiveMessageProxyExpectationServiceIds("channel_1").sort()).toEqual(["service_a", "service_b"]);
+    expect(
+      getLiveMessageProxyExpectationInstances("channel_1")
+        .map(({ serviceId }) => serviceId)
+        .sort(),
+    ).toEqual(["service_a", "service_b"]);
   });
 
   it("marks repost-before-delete races and remembers the proxy message", async () => {

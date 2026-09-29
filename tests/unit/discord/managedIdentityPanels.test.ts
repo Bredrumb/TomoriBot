@@ -5,21 +5,68 @@ import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistr
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import { identityConfigInteractionRoute } from "@/utils/discord/interactions/personalConfigRoutes";
 import { identityMemoriesInteractionRoute } from "@/utils/discord/interactions/personalMemoriesRoutes";
-import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
+import {
+  messageProxyRepository,
+  type MessageProxyManagedIdentity,
+} from "@/utils/db/repositories/MessageProxyRepository";
 import {
   IDENTITY_CONFIG_VERSION,
   IDENTITY_MEMORIES_VERSION,
+  formatManagedIdentityLabel,
   parseManagedIdentityRoute,
   rewriteManagedIdentityRouteIds,
 } from "@/utils/discord/interactions/managedIdentityPanelRoutes";
 import { buildPersonalConfigPanelPayload } from "@/utils/discord/ui/personalConfigPanel";
 import { buildPersonalMemoriesPanelPayload } from "@/utils/discord/ui/personalMemoriesPanel";
+import { formatMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserId";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createUserRow } from "../../helpers/fixtures";
+import { expectForEveryLocale, localizedCopy } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
 describe("managed identity panels", () => {
+  it("shows the instance name only when it distinguishes a custom identity", () => {
+    const official: MessageProxyManagedIdentity = {
+      identityId: 1,
+      userId: 2,
+      userDiscId: formatMessageProxyIdentityUserId("pluralkit", "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"),
+      serviceId: "pluralkit",
+      instanceId: "pluralkit:official",
+      instanceDisplayName: "PluralKit",
+      displayName: "Mirri",
+      avatarUrl: null,
+    };
+    const custom: MessageProxyManagedIdentity = {
+      ...official,
+      identityId: 3,
+      userId: 3,
+      instanceId: "pluralkit:11111111-2222-4333-8444-555555555555",
+      userDiscId: formatMessageProxyIdentityUserId(
+        "pluralkit",
+        "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        "pluralkit:11111111-2222-4333-8444-555555555555",
+      ),
+      instanceDisplayName: "OurKitty",
+    };
+    const pluralbuddy: MessageProxyManagedIdentity = {
+      ...official,
+      identityId: 4,
+      userId: 4,
+      serviceId: "pluralbuddy",
+      instanceId: "pluralbuddy:official",
+      userDiscId: formatMessageProxyIdentityUserId("pluralbuddy", "123"),
+      instanceDisplayName: "PluralBuddy",
+    };
+    expectForEveryLocale((locale) => {
+      const pluralkitName = localizedCopy(locale, "commands.personal.message-proxy.pluralkit_option");
+      const pluralbuddyName = localizedCopy(locale, "commands.personal.message-proxy.pluralbuddy_option");
+      expect(formatManagedIdentityLabel(official, locale)).toBe(`Mirri (${pluralkitName})`);
+      expect(formatManagedIdentityLabel(custom, locale)).toBe(`Mirri (${pluralkitName}: OurKitty)`);
+      expect(formatManagedIdentityLabel(pluralbuddy, locale)).toBe(`Mirri (${pluralbuddyName})`);
+    });
+  });
+
   it("rechecks ownership for forged config buttons and memory modals", async () => {
     const originalLookup = messageProxyRepository.getManagedIdentity;
     messageProxyRepository.getManagedIdentity = async () => null;

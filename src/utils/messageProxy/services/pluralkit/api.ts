@@ -5,9 +5,10 @@
  */
 
 import { z } from "zod";
+import { canonicalMessageProxyOrigin, type MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
 import { log } from "@/utils/misc/logger";
-
-const PK_API_BASE_URL = "https://api.pluralkit.me/v2";
+import { fetchUserRemoteUrl, RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
+import { readBoundedMessageProxyResponse } from "@/utils/messageProxy/boundedResponse";
 
 /** Overall retry budget for a single message lookup, in milliseconds. */
 function getLookupTimeoutMs(): number {
@@ -86,8 +87,11 @@ export interface PkMessageLookup {
 
 /** Raw PK API response shape for `GET /messages/{id}` (subset of fields we use) */
 const pkApiMessageResponseSchema = z.object({
-  original: z.string().min(1).optional(),
-  sender: z.string().min(1),
+  original: z
+    .string()
+    .regex(/^\d{17,20}$/)
+    .optional(),
+  sender: z.string().regex(/^\d{17,20}$/),
   system: pkSystemInfoSchema.nullable().optional(),
   member: pkMemberInfoSchema.nullable().optional(),
 });
@@ -188,16 +192,17 @@ function backoffMsForAttempt(attempt: number): number {
  * `PluralKitLookupUnavailableError`.
  */
 async function fetchWithRetry(
+  instance: MessageProxyInstanceContext,
   messageId: string,
   deadline: number,
   lookupTimeoutMs: number,
 ): Promise<PkMessageLookup | null> {
   const attemptCapMs = Math.max(Math.floor(lookupTimeoutMs * ATTEMPT_BUDGET_SHARE), MIN_ATTEMPT_TIMEOUT_MS);
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { "User-Agent": "TomoriBot" };
   // Optional bot-owned PK token, sent as-is (no "Bearer" prefix: PluralKit's own
   // convention, not OAuth). It raises the base rate limit for all lookups and grants
   // no access to other users' private data.
-  const apiToken = process.env.PLURALKIT_API_TOKEN?.trim();
+  const apiToken = instance.instanceId === "pluralkit:official" ? process.env.PLURALKIT_API_TOKEN?.trim() : null;
   if (apiToken) headers.Authorization = apiToken;
 
   let attempt = 0;
@@ -213,11 +218,17 @@ async function fetchWithRetry(
     let response: Response;
     const signal = AbortSignal.timeout(Math.min(remainingMs, attemptCapMs));
     try {
-      response = await fetch(`${PK_API_BASE_URL}/messages/${messageId}`, {
-        headers,
-        signal,
-      });
+      response = await fetchUserRemoteUrl(
+        `${instance.origin}/v2/messages/${messageId}`,
+        {
+          headers,
+          redirect: "manual",
+          signal,
+        },
+        { strict: true },
+      );
     } catch (error) {
+      if (error instanceof RemoteUrlPolicyError) return failLookup(messageId, "was blocked by the outbound URL policy");
       if (!(await waitBeforeRetry(deadline, backoffMsForAttempt(attempt)))) {
         return endExhaustedLookup(
           messageId,
@@ -233,7 +244,7 @@ async function fetchWithRetry(
     if (response.ok) {
       let raw: unknown;
       try {
-        raw = await response.json();
+        raw = JSON.parse(await readBoundedMessageProxyResponse(response));
       } catch (error) {
         if (signal.aborted) {
           if (!(await waitBeforeRetry(deadline, backoffMsForAttempt(attempt)))) {
@@ -301,25 +312,31 @@ async function fetchWithRetry(
  * calls for the same message share one in-flight request. A failed lookup is
  * never cached, so a later call can still succeed.
  */
-export async function fetchMessage(messageId: string): Promise<PkMessageLookup | null> {
-  const cached = identityCache.get(messageId);
+export async function fetchMessage(
+  instance: MessageProxyInstanceContext,
+  messageId: string,
+): Promise<PkMessageLookup | null> {
+  if (instance.serviceId !== "pluralkit" || canonicalMessageProxyOrigin(instance.origin) !== instance.origin)
+    return null;
+  const key = `${instance.instanceId}\0${instance.origin}\0${messageId}`;
+  const cached = identityCache.get(key);
   if (cached) return cached;
 
-  const existing = inFlightLookups.get(messageId);
+  const existing = inFlightLookups.get(key);
   if (existing) return existing;
 
   const lookupTimeoutMs = getLookupTimeoutMs();
   const deadline = Date.now() + lookupTimeoutMs;
-  const lookupPromise = fetchWithRetry(messageId, deadline, lookupTimeoutMs)
+  const lookupPromise = fetchWithRetry(instance, messageId, deadline, lookupTimeoutMs)
     .then((lookup) => {
-      if (lookup) rememberIdentity(messageId, lookup);
+      if (lookup) rememberIdentity(key, lookup);
       return lookup;
     })
     .finally(() => {
-      inFlightLookups.delete(messageId);
+      inFlightLookups.delete(key);
     });
 
-  inFlightLookups.set(messageId, lookupPromise);
+  inFlightLookups.set(key, lookupPromise);
   return lookupPromise;
 }
 
@@ -328,8 +345,11 @@ export async function fetchMessage(messageId: string): Promise<PkMessageLookup |
  * network request. Context rebuilding uses this before falling back to the
  * durable DB index; it must never call the PluralKit API.
  */
-export function getCachedMessageLookup(messageId: string): PkMessageLookup | null {
-  return identityCache.get(messageId) ?? null;
+export function getCachedMessageLookup(
+  instance: MessageProxyInstanceContext,
+  messageId: string,
+): PkMessageLookup | null {
+  return identityCache.get(`${instance.instanceId}\0${instance.origin}\0${messageId}`) ?? null;
 }
 
 /** Clears process-local transport state between isolated contract tests. */

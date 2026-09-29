@@ -40,7 +40,7 @@ export function resolveCachedMessageProxyIdentity(
   if (!message.webhookId) return null;
   const record = dependencies.getMessageRecord(message.id);
   const descriptor = record ? dependencies.getDescriptor(record.serviceId) : null;
-  const attestation = descriptor?.getCachedAttestation?.(message.id) ?? null;
+  const attestation = record && descriptor?.getCachedAttestation?.(message.id, record.instance);
   const identity = attestation?.identity;
   if (!descriptor || !attestation || !identity || !descriptor.validateExternalKey(identity.externalKey)) return null;
 

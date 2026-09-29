@@ -1,16 +1,15 @@
 import type { ProxyMessageAttestation, ProxyServiceDescriptor } from "@/utils/messageProxy/types";
-import { officialMessageProxyInstance } from "@/utils/messageProxy/instances";
+import type { MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
 import {
   fetchPluralBuddyMessage,
   getCachedPluralBuddyMessage,
   type PluralBuddyMessage,
 } from "@/utils/messageProxy/services/pluralbuddy/api";
 
-const officialInstance = officialMessageProxyInstance("pluralbuddy");
-
-function toAttestation(message: PluralBuddyMessage): ProxyMessageAttestation {
+function toAttestation(message: PluralBuddyMessage, instance: MessageProxyInstanceContext): ProxyMessageAttestation {
   return {
     serviceId: "pluralbuddy",
+    instanceId: instance.instanceId,
     proxyMessageId: message.messageId,
     channelId: message.channelId,
     replyTarget: message.referencedMessage
@@ -20,6 +19,7 @@ function toAttestation(message: PluralBuddyMessage): ProxyMessageAttestation {
     senderDiscordId: message.systemId,
     identity: {
       serviceId: "pluralbuddy",
+      instanceId: instance.instanceId,
       externalIdentityKind: "pluralbuddy_alter",
       externalKey: message.alterIdKey,
       shortId: message.alterIdKey,
@@ -57,13 +57,13 @@ export const pluralBuddyProxyService = {
       entry: `- A plural system${accountLabels.length ? ` (shared account: ${accountLabels.join("; ")})` : ""}`,
     }),
   },
-  attestMessage: async (messageId: string) => {
-    const message = await fetchPluralBuddyMessage(officialInstance, messageId);
-    return message ? toAttestation(message) : null;
+  attestMessage: async (messageId: string, instance) => {
+    const message = await fetchPluralBuddyMessage(instance, messageId);
+    return message ? toAttestation(message, instance) : null;
   },
-  getCachedAttestation: (messageId: string) => {
-    const message = getCachedPluralBuddyMessage(officialInstance, messageId);
-    return message ? toAttestation(message) : null;
+  getCachedAttestation: (messageId: string, instance) => {
+    const message = getCachedPluralBuddyMessage(instance, messageId);
+    return message ? toAttestation(message, instance) : null;
   },
   extractReplyTarget: () => null,
   extractReplyTargetFromEmbed: () => null,

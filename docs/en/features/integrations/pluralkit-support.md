@@ -23,7 +23,9 @@ covered in [Message-Proxy Support](/features/integrations/message-proxy-support/
 
 ## Enabling It
 
-Run `/personal message-proxy service:pluralkit`. It's a personal, per-account selection, so there is
+Run `/personal message-proxy service:pluralkit`. If your TomoriBot host has approved another
+PluralKit instance, choose it with the optional `instance` field. Leaving the field empty selects
+the official instance. It's a personal, per-account selection, so there is
 nothing for server staff to configure and it follows you across servers. Members of your system
 don't opt in individually; the selection lives on the Discord account that sends the messages.
 Use `/personal message-proxy service:none` to disable it.
@@ -47,7 +49,7 @@ for no benefit (see below).
   confirmation reply spells it out.
 - **Each member is their own person.** Tomori knows the member's name, which system they
   belong to, and which Discord account hosts them as three separate facts. Fronting as a
-  different member means talking to her as that member, not as "the account".
+  different member means Tomori addresses that member by name and uses their own memories.
 - **Personal memories are per-member.** A fact Tomori learns about one member is stored for
   *that member*. It doesn't become a server-wide memory, doesn't attach to the host
   account, and doesn't bleed to system-mates.
@@ -79,8 +81,8 @@ for no benefit (see below).
 - Members are recognized by PluralKit's **stable internal IDs**, never by name. Renaming a
   member or changing their display name is fine: Tomori still knows they're the same
   person, and picks up the new name cosmetically.
-- Identity comes from the message itself, not from who is "currently fronting": Tomori
-  never polls your fronters. A member becomes part of the conversation the moment they send
+- Identity comes from each proxied message. Tomori never polls your fronters. A member becomes
+  part of the conversation the moment they send
   a proxied message, and Tomori has no way to know a member exists until it has proxied at
   least once while you were opted in.
 - **Naming a member brings them into context**, exactly as naming a human participant does:

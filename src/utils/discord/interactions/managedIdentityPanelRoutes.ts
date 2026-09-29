@@ -70,5 +70,10 @@ export function formatManagedIdentityLabel(identity: MessageProxyManagedIdentity
     identity.serviceId === "pluralkit"
       ? "commands.personal.message-proxy.pluralkit_option"
       : "commands.personal.message-proxy.pluralbuddy_option";
-  return `${identity.displayName} (${localizer(locale, serviceKey)})`;
+  const serviceName = localizer(locale, serviceKey);
+  const instanceLabel =
+    identity.instanceId === `${identity.serviceId}:official`
+      ? serviceName
+      : `${serviceName}: ${identity.instanceDisplayName}`;
+  return `${identity.displayName} (${instanceLabel})`;
 }

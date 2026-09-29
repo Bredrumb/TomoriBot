@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
+import * as realRemoteFetch from "@/utils/security/userRemoteFetch";
+import { createScopedModuleMocker } from "../../../helpers/mockSurface";
 
 const request = mock(async (_input: RequestInfo | URL, _init?: RequestInit) =>
   Response.json({
@@ -12,7 +14,8 @@ const request = mock(async (_input: RequestInfo | URL, _init?: RequestInit) =>
     authorization_response_iss_parameter_supported: true,
   }),
 );
-mock.module("@/utils/security/userRemoteFetch", () => ({ fetchUserRemoteUrl: request }));
+const scopedMock = createScopedModuleMocker(mock, { "@/utils/security/userRemoteFetch": realRemoteFetch });
+scopedMock.module("@/utils/security/userRemoteFetch", () => ({ ...realRemoteFetch, fetchUserRemoteUrl: request }));
 
 const {
   createPluralBuddyOAuthSession,
@@ -44,7 +47,7 @@ afterEach(() => {
   );
 });
 
-describe("PluralBuddy operator OAuth bootstrap", () => {
+describe("PluralBuddy bot host OAuth bootstrap", () => {
   it("requires an exact loopback redirect", () => {
     expect(validatePluralBuddyRedirect(redirect).toString()).toBe(redirect);
     expect(() => validatePluralBuddyRedirect("https://example.com/oauth/callback")).toThrow();

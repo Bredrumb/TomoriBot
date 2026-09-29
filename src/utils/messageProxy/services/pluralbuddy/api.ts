@@ -5,7 +5,8 @@ import {
   rejectPluralBuddyAccessToken,
 } from "@/utils/messageProxy/services/pluralbuddy/oauthTokens";
 import { log } from "@/utils/misc/logger";
-import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
+import { fetchUserRemoteUrl, RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
+import { readBoundedMessageProxyResponse } from "@/utils/messageProxy/boundedResponse";
 
 const LOOKUP_TIMEOUT_MS = 5000;
 const RETRY_DELAYS_MS = [500, 1000, 1500] as const;
@@ -64,7 +65,7 @@ async function lookUp(instance: MessageProxyInstanceContext, messageId: string):
         return null;
       }
       if (response.ok) {
-        const rawText = await response.text();
+        const rawText = await readBoundedMessageProxyResponse(response);
         let raw: unknown;
         try {
           raw = JSON.parse(rawText);
@@ -96,6 +97,12 @@ async function lookUp(instance: MessageProxyInstanceContext, messageId: string):
         return null;
       }
     } catch (error) {
+      if (error instanceof RemoteUrlPolicyError) {
+        log.warn("PluralBuddy message lookup was blocked by the outbound URL policy", undefined, {
+          metadata: { instanceId: instance.instanceId, failureCode: error.failureCode },
+        });
+        return null;
+      }
       if (Date.now() >= deadline) {
         log.warn("PluralBuddy message lookup timed out", undefined, {
           metadata: { instanceId: instance.instanceId, errorClass: error instanceof Error ? error.name : "unknown" },

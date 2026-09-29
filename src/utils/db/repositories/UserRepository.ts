@@ -582,8 +582,13 @@ class UserRepository implements IRepository<UserExportShape> {
     return updated !== null;
   }
 
-  async setMessageProxyService(userId: number, serviceId: string | null): Promise<boolean> {
-    const instanceId = serviceId === "pluralkit" || serviceId === "pluralbuddy" ? `${serviceId}:official` : null;
+  async setMessageProxyService(
+    userId: number,
+    serviceId: string | null,
+    selectedInstanceId?: string,
+  ): Promise<boolean> {
+    const instanceId =
+      serviceId === "pluralkit" || serviceId === "pluralbuddy" ? (selectedInstanceId ?? `${serviceId}:official`) : null;
     const updated = await this.update(userId, {
       message_proxy_service: serviceId,
       message_proxy_instance_id: instanceId,

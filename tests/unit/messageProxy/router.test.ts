@@ -3,7 +3,7 @@ import type { Message } from "discord.js";
 import {
   clearMessageProxyExpectationStateForTests,
   createMessageProxyExpectation,
-  getLiveMessageProxyExpectationServiceIds,
+  getLiveMessageProxyExpectationInstances,
   getMessageProxyMessageRecord,
   markMessageProxyExpectationProxied,
   markMessageProxyOriginalDeleted,
@@ -17,6 +17,7 @@ import {
   routeMessageProxyMessage,
 } from "@/utils/messageProxy/router";
 import { clearPluralKitApiStateForTests } from "@/utils/messageProxy/services/pluralkit/api";
+import type { MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
 import type {
   ProxyIdentityUpsertInput,
   ProxyMessageAttestation,
@@ -24,6 +25,7 @@ import type {
   ProxyServicePresentation,
 } from "@/utils/messageProxy/types";
 import { stallUntilAborted } from "../../helpers/fetchStub";
+import { officialMessageProxyInstanceFixture } from "../../helpers/messageProxyInstance";
 
 const originalLookupTimeoutMs = process.env.PLURALKIT_LOOKUP_TIMEOUT_MS;
 const originalProxyWaitMs = process.env.MESSAGE_PROXY_WAIT_MS;
@@ -55,8 +57,8 @@ async function withTiming(
 /** A valid PluralKit lookup payload whose original and sender match the standard expectation. */
 function pluralKitPayload(): Record<string, unknown> {
   return {
-    original: "original-1",
-    sender: "sender-1",
+    original: "123456789012345678",
+    sender: "234567890123456789",
     system: { id: "abcdef", uuid: "11111111-2222-4333-8444-555555555555", name: "Lighthouse", tag: null },
     member: { id: "ghijkl", uuid: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", name: "Mirri" },
   };
@@ -74,6 +76,7 @@ const presentation: ProxyServicePresentation = {
 function identity(serviceId: string): ProxyIdentityUpsertInput {
   return {
     serviceId,
+    instanceId: testInstance(serviceId).instanceId,
     externalIdentityKind: `${serviceId}_profile`,
     externalKey: "profile-1",
     shortId: "p1",
@@ -92,6 +95,7 @@ function identity(serviceId: string): ProxyIdentityUpsertInput {
 function claim(serviceId: string, overrides: Partial<ProxyMessageAttestation> = {}): ProxyMessageAttestation {
   return {
     serviceId,
+    instanceId: testInstance(serviceId).instanceId,
     proxyMessageId: "proxy-1",
     originalMessageId: "original-1",
     senderDiscordId: "sender-1",
@@ -100,9 +104,14 @@ function claim(serviceId: string, overrides: Partial<ProxyMessageAttestation> = 
   };
 }
 
+function testInstance(serviceId: string): MessageProxyInstanceContext {
+  if (serviceId === "pluralkit" || serviceId === "pluralbuddy") return officialMessageProxyInstanceFixture(serviceId);
+  return { serviceId, instanceId: `${serviceId}:official`, origin: "https://example.com" };
+}
+
 function descriptor(
   serviceId: string,
-  attestMessage: (messageId: string) => Promise<ProxyMessageAttestation | null>,
+  attestMessage: (messageId: string, instance: MessageProxyInstanceContext) => Promise<ProxyMessageAttestation | null>,
   stableIdentity = false,
 ): ProxyServiceDescriptor<string> {
   const base = {
@@ -144,12 +153,14 @@ function message(): Message {
 }
 
 function expectation(serviceId: string) {
+  const originalMessageId = serviceId === "pluralkit" ? "123456789012345678" : "original-1";
+  const senderDiscId = serviceId === "pluralkit" ? "234567890123456789" : "sender-1";
   return createMessageProxyExpectation({
-    serviceId,
+    instance: testInstance(serviceId),
     channelId: "channel-1",
-    originalMessageId: "original-1",
-    senderDiscId: "sender-1",
-    originalMessage: { id: "original-1" } as Message,
+    originalMessageId,
+    senderDiscId,
+    originalMessage: { id: originalMessageId } as Message,
     originalReference: null,
   });
 }
@@ -188,7 +199,7 @@ describe("message-proxy attestation router", () => {
     } satisfies ProxyServiceDescriptor<"best_effort">;
     const expected = expectation("best_effort");
     const result = await routeMessageProxyMessage(
-      { message: message(), candidateServiceIds: ["best_effort"] },
+      { message: message(), candidateInstances: ["best_effort"].map((serviceId) => testInstance(serviceId)) },
       { registry: createProxyServiceRegistry([service]) },
     );
     expect(result.status).toBe("matched_stable_identity");
@@ -202,7 +213,10 @@ describe("message-proxy attestation router", () => {
     const registry = createProxyServiceRegistry([noCorrelationDescriptor]);
 
     expect(
-      await routeMessageProxyMessage({ message: message(), candidateServiceIds: ["uncorrelated"] }, { registry }),
+      await routeMessageProxyMessage(
+        { message: message(), candidateInstances: ["uncorrelated"].map((serviceId) => testInstance(serviceId)) },
+        { registry },
+      ),
     ).toEqual({
       status: "unsupported_correlation",
     });
@@ -222,7 +236,10 @@ describe("message-proxy attestation router", () => {
     const registry = createProxyServiceRegistry([empty]);
 
     expect(
-      await routeMessageProxyMessage({ message: message(), candidateServiceIds: ["empty", "empty"] }, { registry }),
+      await routeMessageProxyMessage(
+        { message: message(), candidateInstances: ["empty", "empty"].map((serviceId) => testInstance(serviceId)) },
+        { registry },
+      ),
     ).toEqual({ status: "unmatched" });
     expect(calls).toBe(1);
   });
@@ -233,7 +250,10 @@ describe("message-proxy attestation router", () => {
     const registry = createProxyServiceRegistry([first, second]);
 
     expect(
-      await routeMessageProxyMessage({ message: message(), candidateServiceIds: ["first", "second"] }, { registry }),
+      await routeMessageProxyMessage(
+        { message: message(), candidateInstances: ["first", "second"].map((serviceId) => testInstance(serviceId)) },
+        { registry },
+      ),
     ).toEqual({ status: "conflicting_attestations" });
   });
 
@@ -243,7 +263,7 @@ describe("message-proxy attestation router", () => {
     const expected = expectation("trigger_only");
 
     const result = await routeMessageProxyMessage(
-      { message: message(), candidateServiceIds: ["trigger_only"] },
+      { message: message(), candidateInstances: ["trigger_only"].map((serviceId) => testInstance(serviceId)) },
       { registry },
     );
 
@@ -262,7 +282,10 @@ describe("message-proxy attestation router", () => {
     expectation("trigger_only");
 
     expect(
-      await routeMessageProxyMessage({ message: message(), candidateServiceIds: ["trigger_only"] }, { registry }),
+      await routeMessageProxyMessage(
+        { message: message(), candidateInstances: ["trigger_only"].map((serviceId) => testInstance(serviceId)) },
+        { registry },
+      ),
     ).toEqual({ status: "unmatched" });
   });
 
@@ -273,7 +296,10 @@ describe("message-proxy attestation router", () => {
     const expected = expectation("stable");
 
     expect(
-      await routeMessageProxyMessage({ message: message(), candidateServiceIds: ["stable"] }, { registry }),
+      await routeMessageProxyMessage(
+        { message: message(), candidateInstances: ["stable"].map((serviceId) => testInstance(serviceId)) },
+        { registry },
+      ),
     ).toEqual({
       status: "matched_stable_identity",
       attestation,
@@ -289,7 +315,10 @@ describe("message-proxy attestation router", () => {
     const originalWait = waitForMessageProxyExpectation(expected);
 
     expect(markMessageProxyOriginalDeleted("channel-1", "original-1")).toBe(true);
-    const result = await routeMessageProxyMessage({ message: message(), candidateServiceIds: ["exact"] }, { registry });
+    const result = await routeMessageProxyMessage(
+      { message: message(), candidateInstances: ["exact"].map((serviceId) => testInstance(serviceId)) },
+      { registry },
+    );
     expect(result.status).toBe("matched_trigger_only");
     if (result.status !== "matched_trigger_only") throw new Error("Expected an exact trigger-only match");
 
@@ -313,7 +342,10 @@ describe("message-proxy attestation router", () => {
 
     expect(markMessageProxyOriginalDeleted("channel-1", "original-1")).toBe(true);
     expect(
-      await routeMessageProxyMessage({ message: message(), candidateServiceIds: ["failing"] }, { registry }),
+      await routeMessageProxyMessage(
+        { message: message(), candidateInstances: ["failing"].map((serviceId) => testInstance(serviceId)) },
+        { registry },
+      ),
     ).toEqual({
       status: "timeout_or_error",
     });
@@ -332,7 +364,10 @@ describe("message-proxy attestation router", () => {
       const originalWait = waitForMessageProxyExpectation(expected);
 
       expect(
-        await routeMessageProxyMessage({ message: message(), candidateServiceIds: ["failing"] }, { registry }),
+        await routeMessageProxyMessage(
+          { message: message(), candidateInstances: ["failing"].map((serviceId) => testInstance(serviceId)) },
+          { registry },
+        ),
       ).toEqual({ status: "timeout_or_error" });
 
       // The lookup pauses this channel's wait timers. A failed lookup must resume them,
@@ -342,7 +377,7 @@ describe("message-proxy attestation router", () => {
         new Promise<"stuck">((resolve) => setTimeout(() => resolve("stuck"), 1000)),
       ]);
       expect(waitResult).toBe("timeout");
-      expect(getLiveMessageProxyExpectationServiceIds("channel-1")).toEqual([]);
+      expect(getLiveMessageProxyExpectationInstances("channel-1")).toEqual([]);
     });
   });
 
@@ -354,13 +389,13 @@ describe("message-proxy attestation router", () => {
 
     expect(
       await routeMessageProxyMessage(
-        { message: message(), candidateServiceIds: ["missing"] },
+        { message: message(), candidateInstances: ["missing"].map((serviceId) => testInstance(serviceId)) },
         { registry: createProxyServiceRegistry([missing]) },
       ),
     ).toEqual({ status: "unmatched" });
     expect(
       await routeMessageProxyMessage(
-        { message: message(), candidateServiceIds: ["failing"] },
+        { message: message(), candidateInstances: ["failing"].map((serviceId) => testInstance(serviceId)) },
         { registry: createProxyServiceRegistry([failing]) },
       ),
     ).toEqual({ status: "timeout_or_error" });
@@ -380,7 +415,7 @@ describe("message-proxy attestation router", () => {
 
       const result = await routeMessageProxyMessage({
         message: message(),
-        candidateServiceIds: getLiveMessageProxyExpectationServiceIds("channel-1"),
+        candidateInstances: getLiveMessageProxyExpectationInstances("channel-1"),
       });
 
       expect(calls).toBe(2);
@@ -402,7 +437,7 @@ describe("message-proxy attestation router", () => {
       expect(
         await routeMessageProxyMessage({
           message: message(),
-          candidateServiceIds: getLiveMessageProxyExpectationServiceIds("channel-1"),
+          candidateInstances: getLiveMessageProxyExpectationInstances("channel-1"),
         }),
       ).toEqual({ status: "timeout_or_error" });
       expect(getMessageProxyRouteMetricsSnapshot()).toMatchObject({ timeout_or_error: 1, unmatched: 0 });
@@ -417,7 +452,7 @@ describe("message-proxy attestation router", () => {
       expect(
         await routeMessageProxyMessage({
           message: message(),
-          candidateServiceIds: getLiveMessageProxyExpectationServiceIds("channel-1"),
+          candidateInstances: getLiveMessageProxyExpectationInstances("channel-1"),
         }),
       ).toEqual({ status: "unmatched" });
       expect(getMessageProxyRouteMetricsSnapshot()).toMatchObject({ unmatched: 1, timeout_or_error: 0 });
@@ -440,7 +475,10 @@ describe("message-proxy attestation router", () => {
     expectation("stable");
 
     expect(
-      await routeMessageProxyMessage({ message: message(), candidateServiceIds: ["stable"] }, { registry }),
+      await routeMessageProxyMessage(
+        { message: message(), candidateInstances: ["stable"].map((serviceId) => testInstance(serviceId)) },
+        { registry },
+      ),
     ).toEqual({
       status: "unmatched",
     });
@@ -457,7 +495,10 @@ describe("message-proxy attestation router", () => {
       expectation("exact");
 
       expect(
-        await routeMessageProxyMessage({ message: message(), candidateServiceIds: ["exact"] }, { registry }),
+        await routeMessageProxyMessage(
+          { message: message(), candidateInstances: ["exact"].map((serviceId) => testInstance(serviceId)) },
+          { registry },
+        ),
       ).toEqual({
         status: "unmatched",
       });
@@ -472,15 +513,125 @@ describe("message-proxy attestation router", () => {
 
     expect(
       await routeMessageProxyMessage(
-        { message: message(), candidateServiceIds: ["malformed"] },
+        { message: message(), candidateInstances: ["malformed"].map((serviceId) => testInstance(serviceId)) },
         { registry: createProxyServiceRegistry([malformed]) },
       ),
     ).toEqual({ status: "unmatched" });
     expect(
       await routeMessageProxyMessage(
-        { message: message(), candidateServiceIds: ["failing"] },
+        { message: message(), candidateInstances: ["failing"].map((serviceId) => testInstance(serviceId)) },
         { registry: createProxyServiceRegistry([failing]) },
       ),
     ).toEqual({ status: "timeout_or_error" });
+  });
+
+  it("routes two instances of one service without crossing their expectations", async () => {
+    const official = testInstance("pluralkit");
+    const custom = {
+      serviceId: "pluralkit",
+      instanceId: "pluralkit:11111111-2222-4333-8444-555555555555",
+      origin: "https://example.org",
+    };
+    createMessageProxyExpectation({
+      instance: official,
+      channelId: "channel-1",
+      originalMessageId: "other-original",
+      senderDiscId: "sender-1",
+      originalMessage: { id: "other-original" } as Message,
+      originalReference: null,
+    });
+    const expected = createMessageProxyExpectation({
+      instance: custom,
+      channelId: "channel-1",
+      originalMessageId: "original-1",
+      senderDiscId: "sender-1",
+      originalMessage: { id: "original-1" } as Message,
+      originalReference: null,
+    });
+    const calls: string[] = [];
+    const service = descriptor("pluralkit", async (_messageId, instance) => {
+      calls.push(instance.instanceId);
+      return instance.instanceId === custom.instanceId ? claim("pluralkit", { instanceId: custom.instanceId }) : null;
+    });
+    const result = await routeMessageProxyMessage(
+      { message: message(), candidateInstances: getLiveMessageProxyExpectationInstances("channel-1") },
+      { registry: createProxyServiceRegistry([service]) },
+    );
+    expect(calls).toEqual([official.instanceId, custom.instanceId]);
+    expect(result.status).toBe("matched_trigger_only");
+    if (result.status === "matched_trigger_only") expect(result.expectation).toBe(expected);
+  });
+
+  it("verifies overlapping reposts in one channel independently", async () => {
+    const firstExpectation = expectation("overlap");
+    const secondExpectation = createMessageProxyExpectation({
+      instance: testInstance("overlap"),
+      channelId: "channel-1",
+      originalMessageId: "original-2",
+      senderDiscId: "sender-1",
+      originalMessage: { id: "original-2" } as Message,
+      originalReference: null,
+    });
+    let release!: () => void;
+    const transportGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const calls: string[] = [];
+    const service = descriptor("overlap", async (messageId) => {
+      calls.push(messageId);
+      await transportGate;
+      return claim("overlap", {
+        proxyMessageId: messageId,
+        originalMessageId: messageId === "proxy-1" ? "original-1" : "original-2",
+      });
+    });
+    const registry = createProxyServiceRegistry([service]);
+    const candidateInstances = getLiveMessageProxyExpectationInstances("channel-1");
+    const first = routeMessageProxyMessage({ message: message(), candidateInstances }, { registry });
+    const second = routeMessageProxyMessage(
+      { message: { ...message(), id: "proxy-2" } as Message, candidateInstances },
+      { registry },
+    );
+    const callsWhileFirstWasInFlight = [...calls];
+    release();
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(callsWhileFirstWasInFlight).toEqual(["proxy-1", "proxy-2"]);
+    expect(firstResult.status).toBe("matched_trigger_only");
+    expect(secondResult.status).toBe("matched_trigger_only");
+    if (firstResult.status === "matched_trigger_only") expect(firstResult.expectation).toBe(firstExpectation);
+    if (secondResult.status === "matched_trigger_only") expect(secondResult.expectation).toBe(secondExpectation);
+    expect(getMessageProxyRouteMetricsSnapshot().timeout_or_error).toBe(0);
+  });
+
+  it("fails closed before transport when one channel has too many candidate instances", async () => {
+    let calls = 0;
+    const service = descriptor("pluralkit", async () => {
+      calls++;
+      return null;
+    });
+    const candidateInstances = Array.from({ length: 5 }, (_, index) => ({
+      serviceId: "pluralkit",
+      instanceId: `pluralkit:${index}`,
+      origin: "https://example.org",
+    }));
+    expect(
+      await routeMessageProxyMessage(
+        { message: message(), candidateInstances },
+        { registry: createProxyServiceRegistry([service]) },
+      ),
+    ).toEqual({ status: "timeout_or_error" });
+    expect(calls).toBe(0);
+  });
+
+  it("rejects an attestation whose instance differs from the lookup target", async () => {
+    const service = descriptor("exact", async () => claim("exact", { instanceId: "exact:other" }));
+    expectation("exact");
+    expect(
+      await routeMessageProxyMessage(
+        { message: message(), candidateInstances: [testInstance("exact")] },
+        { registry: createProxyServiceRegistry([service]) },
+      ),
+    ).toEqual({ status: "unmatched" });
   });
 });

@@ -52,7 +52,7 @@ try {
   const [row] = await sql<InstanceRow[]>`
     SELECT instance_id, service_id, origin
     FROM message_proxy_instances
-    WHERE instance_id = ${instanceId} AND service_id = 'pluralbuddy'
+    WHERE instance_id = ${instanceId} AND service_id = 'pluralbuddy' AND removed_at IS NULL
     LIMIT 1
   `;
   if (!row || canonicalMessageProxyOrigin(row.origin) !== row.origin) {

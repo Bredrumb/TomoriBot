@@ -1,9 +1,10 @@
-import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
-import type { ChatInputCommandInteraction, Client } from "discord.js";
-import { configureSubcommand, execute } from "@/commands/personal/message-proxy";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import type { AutocompleteInteraction, ChatInputCommandInteraction, Client } from "discord.js";
+import { autocomplete, configureSubcommand, execute } from "@/commands/personal/message-proxy";
 import { PrivacyLevel, type UserRow } from "@/types/db/schema";
 import { personalSettingsExportDataSchema } from "@/types/db/dataExport";
 import { userRepository } from "@/utils/db/repositories";
+import { messageProxyInstanceRepository } from "@/utils/db/repositories/MessageProxyInstanceRepository";
 import * as oauthTokens from "@/utils/messageProxy/services/pluralbuddy/oauthTokens";
 import { localizedCopy } from "../../helpers/localeCases";
 import { initializeLocalizer } from "@/utils/text/localizer";
@@ -18,6 +19,15 @@ beforeAll(async () => {
 afterEach(() => {
   userRepository.setMessageProxyService = originalSetter;
   mock.restore();
+});
+
+beforeEach(() => {
+  spyOn(messageProxyInstanceRepository, "getEnabled").mockImplementation(async (serviceId, instanceId) => ({
+    serviceId,
+    instanceId: instanceId ?? `${serviceId}:official`,
+    origin: serviceId === "pluralkit" ? "https://api.pluralkit.me" : "https://pluralbuddy.app",
+    displayName: serviceId === "pluralkit" ? "PluralKit" : "PluralBuddy",
+  }));
 });
 
 function user(service: string | null): UserRow {
@@ -42,10 +52,10 @@ function user(service: string | null): UserRow {
   };
 }
 
-function interactionFor(service: string) {
+function interactionFor(service: string, instanceId: string | null = null) {
   return makeFakeInteraction({
     options: {
-      getString: () => service,
+      getString: (name: string) => (name === "service" ? service : instanceId),
       getBoolean: () => null,
     },
   });
@@ -58,6 +68,7 @@ describe("/personal message-proxy", () => {
       setName: () => option,
       setDescription: () => option,
       setRequired: () => option,
+      setAutocomplete: () => option,
       addChoices: (...values: Array<{ name: string; value: string }>) => {
         choices.push(...values);
         return option;
@@ -141,6 +152,56 @@ describe("/personal message-proxy", () => {
       "en-US",
     );
     expect(writes).toEqual(["pluralkit"]);
+  });
+
+  it("stores an approved custom instance and refuses one disabled before writing", async () => {
+    const instanceId = "pluralkit:11111111-2222-4333-8444-555555555555";
+    const writes: string[] = [];
+    userRepository.setMessageProxyService = async (_userId, _serviceId, selectedInstanceId) => {
+      writes.push(selectedInstanceId ?? "missing");
+      return true;
+    };
+    const enabled = interactionFor("pluralkit", instanceId);
+    await execute({} as Client, enabled.interaction as unknown as ChatInputCommandInteraction, user(null), "en-US");
+    expect(writes).toEqual([instanceId]);
+
+    spyOn(messageProxyInstanceRepository, "getEnabled").mockResolvedValue(null);
+    const disabled = interactionFor("pluralkit", instanceId);
+    await execute({} as Client, disabled.interaction as unknown as ChatInputCommandInteraction, user(null), "en-US");
+    expect(writes).toEqual([instanceId]);
+    expect(JSON.stringify(disabled.calls.find(({ method }) => method === "editReply")?.args)).toContain(
+      localizedCopy("en-US", "commands.personal.message-proxy.instance_unavailable_description"),
+    );
+  });
+
+  it("offers only enabled instances of the chosen service in autocomplete", async () => {
+    const list = spyOn(messageProxyInstanceRepository, "listEnabled").mockResolvedValue([
+      {
+        serviceId: "pluralkit",
+        instanceId: "pluralkit:official",
+        origin: "https://api.pluralkit.me",
+        displayName: "PluralKit",
+      },
+    ]);
+    const replies: unknown[] = [];
+    await autocomplete(
+      {} as Client,
+      {
+        options: { getString: () => "pluralkit", getFocused: () => "Plural" },
+        respond: async (choices: unknown) => {
+          replies.push(choices);
+        },
+      } as unknown as AutocompleteInteraction,
+    );
+    expect(list).toHaveBeenCalledWith("pluralkit", "Plural");
+    expect(replies).toEqual([
+      [
+        {
+          name: "PluralKit (https://api.pluralkit.me)",
+          value: "pluralkit:official",
+        },
+      ],
+    ]);
   });
 
   it("accepts all storage states in the portable settings schema", () => {

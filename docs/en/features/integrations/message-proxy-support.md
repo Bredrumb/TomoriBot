@@ -11,6 +11,8 @@ through a webhook.
 ## Choose a service
 
 Run `/personal message-proxy service:pluralkit` or `/personal message-proxy service:pluralbuddy`.
+If the bot host has enabled another instance, choose it with the optional `instance` field. Leaving
+that field empty selects the official instance.
 Choose `service:none` (shown as Off) to disable proxy handling. This is a personal setting on
 the Discord account that sends the original messages and follows that account across servers.
 See [PluralKit Support](/features/integrations/pluralkit-support/) or
@@ -20,7 +22,9 @@ After TomoriBot sees an alter's first verified message, use `/personal config id
 profile and `/personal memories identity:` to edit its memories. Autocomplete includes stored
 identities from both services even while proxy handling is Off. Account interface, privacy, and model
 settings stay on the host account. A nickname set in TomoriBot remains until cleared; otherwise the
-service display name refreshes on verified messages.
+service display name refreshes on verified messages. Autocomplete shows the service beside each
+identity and adds the instance name for custom instances. Matching display names across services or
+instances remain separate profiles and memories because each source verifies its own stable ID.
 
 ## What the safety check means
 
@@ -45,7 +49,6 @@ the verified repost content and best-effort recent-message match.
 
 Self-hosters can tune this mechanism with `MESSAGE_PROXY_WAIT_MS`. Service transport settings remain
 separate, such as PluralKit's API timeout and optional token. PluralBuddy message lookup requires
-an operator-authorized OAuth connection for the official instance. Individual users do not supply
+an OAuth connection authorized by the bot host for the selected instance. Individual users do not supply
 tokens. If authorization is unavailable, `/personal message-proxy` leaves the selection unchanged.
-The current adapter queries `pluralbuddy.app` only; self-hosted PluralBuddy instances cannot be selected yet.
-Operators can follow [PluralBuddy OAuth Setup](/self-hosting/pluralbuddy-oauth/).
+Bot hosts can follow [PluralBuddy OAuth Setup](/self-hosting/pluralbuddy-oauth/).

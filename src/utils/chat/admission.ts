@@ -28,7 +28,7 @@ import {
   createMessageProxyExpectation,
   consumeVerifiedRepostExpectation,
   getMessageProxyMessageRecord,
-  getLiveMessageProxyExpectationServiceIds,
+  getLiveMessageProxyExpectationInstances,
   hasLiveMessageProxyExpectations,
   markMessageProxyExpectationProxied,
   rememberMessageProxyMessage,
@@ -43,8 +43,9 @@ import {
 import type { ChatAdmission, ChatIncoming, NonRunnableChatAdmission, TomoriChatInput } from "@/utils/chat/types";
 import { resolveConfiguredProxyService } from "@/utils/messageProxy/registry";
 import { formatMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserId";
-import { routeMessageProxyMessage } from "@/utils/messageProxy/router";
+import { MAX_CANDIDATE_INSTANCES, routeMessageProxyMessage } from "@/utils/messageProxy/router";
 import { persistMessageProxyAttestationIdentity } from "@/utils/messageProxy/persistence";
+import { messageProxyInstanceRepository } from "@/utils/db/repositories/MessageProxyInstanceRepository";
 import type { Message } from "discord.js";
 
 /**
@@ -400,9 +401,14 @@ async function resolveMessageProxyRecord(
     }
   }
 
+  const liveInstances = getLiveMessageProxyExpectationInstances(message.channelId);
+  if (liveInstances.length > MAX_CANDIDATE_INSTANCES) return null;
+  const enabledInstances = await Promise.all(
+    liveInstances.map((instance) => messageProxyInstanceRepository.getEnabled(instance.serviceId, instance.instanceId)),
+  );
   const route = await routeMessageProxyMessage({
     message,
-    candidateServiceIds: getLiveMessageProxyExpectationServiceIds(message.channelId),
+    candidateInstances: enabledInstances.filter((instance) => instance !== null),
   });
   if (route.status !== "matched_trigger_only" && route.status !== "matched_stable_identity") {
     return null;
@@ -412,7 +418,7 @@ async function resolveMessageProxyRecord(
   const selectedService = resolveConfiguredProxyService(senderRow?.message_proxy_service);
   if (
     selectedService !== route.attestation.serviceId ||
-    (senderRow?.message_proxy_instance_id && senderRow.message_proxy_instance_id !== `${selectedService}:official`)
+    (senderRow?.message_proxy_instance_id ?? `${selectedService}:official`) !== route.attestation.instanceId
   )
     return null;
 
@@ -487,15 +493,12 @@ async function evaluateMessageProxyOriginalSpeedbump(args: {
 
   const userRow = await getCachedUserRow(userDiscId);
   const serviceId = resolveConfiguredProxyService(userRow?.message_proxy_service);
-  if (
-    !serviceId ||
-    (userRow?.message_proxy_instance_id && userRow.message_proxy_instance_id !== `${serviceId}:official`)
-  ) {
-    return null;
-  }
+  if (!serviceId) return null;
+  const instance = await messageProxyInstanceRepository.getEnabled(serviceId, userRow?.message_proxy_instance_id);
+  if (!instance) return null;
 
   const expectation = createMessageProxyExpectation({
-    serviceId,
+    instance,
     channelId: message.channelId,
     originalMessageId: message.id,
     senderDiscId: userDiscId,

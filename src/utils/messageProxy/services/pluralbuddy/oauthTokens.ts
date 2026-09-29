@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { sql } from "@/utils/db/client";
+import { pluralBuddyOAuthConnectionRepository } from "@/utils/db/repositories/PluralBuddyOAuthConnectionRepository";
 import { canonicalMessageProxyOrigin, type MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
 import { log } from "@/utils/misc/logger";
 import { keyManager } from "@/utils/security/keyManager";
 import { fetchUserRemoteUrl, RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
+import { readBoundedMessageProxyResponse } from "@/utils/messageProxy/boundedResponse";
 
 const REFRESH_TIMEOUT_MS = 10_000;
 const TRANSIENT_RETRY_MS = 30_000;
@@ -18,19 +20,6 @@ const tokenSchema = z.object({
   expires_in: z.number().finite().positive(),
 });
 
-type ConnectionRow = {
-  client_id: string;
-  client_secret: Buffer;
-  client_secret_key_version: number;
-  refresh_token: Buffer;
-  refresh_token_key_version: number;
-  access_token: Buffer | null;
-  access_token_key_version: number | null;
-  access_expires_at: Date | null;
-  refresh_blocked_at: Date | null;
-  refresh_retry_after: Date | null;
-};
-
 type AccessToken = { value: string; refreshAt: number };
 const tokens = new Map<string, { origin: string; token: AccessToken }>();
 const pending = new Map<string, { origin: string; promise: Promise<string | null> }>();
@@ -44,20 +33,7 @@ async function refresh(instance: MessageProxyInstanceContext): Promise<string | 
     const renewed = await sql.begin(async (tx) => {
       // The row lock covers the provider exchange and the encrypted write, so another
       // process reads the replacement refresh token only after this transaction commits.
-      const [connection] = await tx<ConnectionRow[]>`
-        SELECT connection.client_id, connection.client_secret, connection.client_secret_key_version,
-          connection.refresh_token, connection.refresh_token_key_version,
-          connection.access_token, connection.access_token_key_version, connection.access_expires_at,
-          connection.refresh_blocked_at, connection.refresh_retry_after
-        FROM pluralbuddy_oauth_connections AS connection
-        JOIN message_proxy_instances AS instance ON instance.instance_id = connection.instance_id
-        WHERE connection.instance_id = ${instance.instanceId}
-          AND connection.origin = ${instance.origin}
-          AND instance.origin = ${instance.origin}
-          AND instance.service_id = 'pluralbuddy'
-          AND instance.enabled = true
-        FOR UPDATE OF connection
-      `;
+      const connection = await pluralBuddyOAuthConnectionRepository.loadForRefresh(tx, instance);
       if (!connection || connection.refresh_blocked_at) return null;
       const accessExpiresAt = connection.access_expires_at && new Date(connection.access_expires_at).getTime();
       if (
@@ -67,30 +43,35 @@ async function refresh(instance: MessageProxyInstanceContext): Promise<string | 
         accessExpiresAt > Date.now() + 30_000
       ) {
         const key = keyManager.getKey(connection.access_token_key_version);
-        const [stored] = await tx<{ access_token: string }[]>`
-          SELECT pgp_sym_decrypt(${connection.access_token}, ${key}) AS access_token
-        `;
-        if (stored?.access_token) return { value: stored.access_token, expiresAt: accessExpiresAt };
+        const storedToken = await pluralBuddyOAuthConnectionRepository.decryptAccessToken(
+          tx,
+          connection.access_token,
+          key,
+        );
+        if (storedToken) return { value: storedToken, expiresAt: accessExpiresAt };
       }
       if (connection.refresh_retry_after && new Date(connection.refresh_retry_after).getTime() > Date.now())
         return null;
 
       const clientSecretKey = keyManager.getKey(connection.client_secret_key_version);
       const refreshTokenKey = keyManager.getKey(connection.refresh_token_key_version);
-      const [decrypted] = await tx<{ client_secret: string; refresh_token: string }[]>`
-        SELECT pgp_sym_decrypt(${connection.client_secret}, ${clientSecretKey}) AS client_secret,
-          pgp_sym_decrypt(${connection.refresh_token}, ${refreshTokenKey}) AS refresh_token
-      `;
+      const decrypted = await pluralBuddyOAuthConnectionRepository.decryptCredentials(
+        tx,
+        connection,
+        clientSecretKey,
+        refreshTokenKey,
+      );
       if (!decrypted?.client_secret || !decrypted.refresh_token) return null;
       const currentKey = keyManager.getCurrentKey();
       const currentVersion = keyManager.getCurrentVersion();
       if (connection.client_secret_key_version !== currentVersion) {
-        await tx`
-          UPDATE pluralbuddy_oauth_connections
-          SET client_secret = pgp_sym_encrypt(${decrypted.client_secret}, ${currentKey}, 'compress-algo=1, cipher-algo=aes256'),
-            client_secret_key_version = ${currentVersion}
-          WHERE instance_id = ${instance.instanceId}
-        `;
+        await pluralBuddyOAuthConnectionRepository.rotateClientSecret(
+          tx,
+          instance.instanceId,
+          decrypted.client_secret,
+          currentKey,
+          currentVersion,
+        );
       }
 
       let response: Response;
@@ -123,11 +104,11 @@ async function refresh(instance: MessageProxyInstanceContext): Promise<string | 
             errorClass: error instanceof RemoteUrlPolicyError ? "url_policy" : "network",
           },
         });
-        await tx`
-          UPDATE pluralbuddy_oauth_connections
-          SET refresh_retry_after = ${new Date(Date.now() + TRANSIENT_RETRY_MS)}
-          WHERE instance_id = ${instance.instanceId}
-        `;
+        await pluralBuddyOAuthConnectionRepository.setRefreshRetryAfter(
+          tx,
+          instance.instanceId,
+          new Date(Date.now() + TRANSIENT_RETRY_MS),
+        );
         return null;
       }
 
@@ -147,18 +128,18 @@ async function refresh(instance: MessageProxyInstanceContext): Promise<string | 
                     : "provider",
           },
         });
-        await tx`
-          UPDATE pluralbuddy_oauth_connections
-          SET refresh_blocked_at = ${revoked ? new Date() : null},
-            refresh_retry_after = ${revoked ? null : new Date(Date.now() + (response.status === 429 ? RATE_LIMIT_RETRY_MS : TRANSIENT_RETRY_MS))}
-          WHERE instance_id = ${instance.instanceId}
-        `;
+        await pluralBuddyOAuthConnectionRepository.setRefreshState(
+          tx,
+          instance.instanceId,
+          revoked ? new Date() : null,
+          revoked ? null : new Date(Date.now() + (response.status === 429 ? RATE_LIMIT_RETRY_MS : TRANSIENT_RETRY_MS)),
+        );
         return null;
       }
 
       let raw: unknown;
       try {
-        raw = await response.json();
+        raw = JSON.parse(await readBoundedMessageProxyResponse(response));
       } catch {
         raw = null;
       }
@@ -170,38 +151,24 @@ async function refresh(instance: MessageProxyInstanceContext): Promise<string | 
             errorClass: "invalid_response",
           },
         });
-        await tx`
-          UPDATE pluralbuddy_oauth_connections
-          SET refresh_retry_after = ${new Date(Date.now() + TRANSIENT_RETRY_MS)}
-          WHERE instance_id = ${instance.instanceId}
-        `;
+        await pluralBuddyOAuthConnectionRepository.setRefreshRetryAfter(
+          tx,
+          instance.instanceId,
+          new Date(Date.now() + TRANSIENT_RETRY_MS),
+        );
         return null;
       }
 
       const expiresAt = new Date(Date.now() + parsed.data.expires_in * 1000);
-      if (parsed.data.refresh_token) {
-        await tx`
-          UPDATE pluralbuddy_oauth_connections
-          SET refresh_token = pgp_sym_encrypt(${parsed.data.refresh_token}, ${currentKey}, 'compress-algo=1, cipher-algo=aes256'),
-            refresh_token_key_version = ${currentVersion},
-            access_token = pgp_sym_encrypt(${parsed.data.access_token}, ${currentKey}, 'compress-algo=1, cipher-algo=aes256'),
-            access_token_key_version = ${currentVersion},
-            access_expires_at = ${expiresAt},
-            refresh_retry_after = NULL
-          WHERE instance_id = ${instance.instanceId}
-        `;
-      } else {
-        await tx`
-          UPDATE pluralbuddy_oauth_connections
-          SET refresh_token = pgp_sym_encrypt(${decrypted.refresh_token}, ${currentKey}, 'compress-algo=1, cipher-algo=aes256'),
-            refresh_token_key_version = ${currentVersion},
-            access_token = pgp_sym_encrypt(${parsed.data.access_token}, ${currentKey}, 'compress-algo=1, cipher-algo=aes256'),
-            access_token_key_version = ${currentVersion},
-            access_expires_at = ${expiresAt},
-            refresh_retry_after = NULL
-          WHERE instance_id = ${instance.instanceId}
-        `;
-      }
+      await pluralBuddyOAuthConnectionRepository.storeRefreshedTokens(
+        tx,
+        instance.instanceId,
+        parsed.data.refresh_token ?? decrypted.refresh_token,
+        parsed.data.access_token,
+        currentKey,
+        currentVersion,
+        expiresAt,
+      );
       return { value: parsed.data.access_token, expiresAt: expiresAt.getTime() };
     });
     if (!renewed) return null;
@@ -248,25 +215,16 @@ export async function rejectPluralBuddyAccessToken(
   clearPluralBuddyAccessToken(instance, rejectedToken);
   try {
     await sql.begin(async (tx) => {
-      const [connection] = await tx<{ access_token: Buffer | null; access_token_key_version: number | null }[]>`
-        SELECT access_token, access_token_key_version
-        FROM pluralbuddy_oauth_connections
-        WHERE instance_id = ${instance.instanceId} AND origin = ${instance.origin}
-          AND refresh_blocked_at IS NULL
-        FOR UPDATE
-      `;
+      const connection = await pluralBuddyOAuthConnectionRepository.loadForTokenRejection(tx, instance);
       if (!connection?.access_token || connection.access_token_key_version === null) return;
       const key = keyManager.getKey(connection.access_token_key_version);
-      const [stored] = await tx<{ access_token: string }[]>`
-        SELECT pgp_sym_decrypt(${connection.access_token}, ${key}) AS access_token
-      `;
-      if (stored?.access_token !== rejectedToken) return;
-      await tx`
-        UPDATE pluralbuddy_oauth_connections
-        SET refresh_blocked_at = NOW(), access_token = NULL,
-          access_token_key_version = NULL, access_expires_at = NULL
-        WHERE instance_id = ${instance.instanceId} AND origin = ${instance.origin}
-      `;
+      const storedToken = await pluralBuddyOAuthConnectionRepository.decryptAccessToken(
+        tx,
+        connection.access_token,
+        key,
+      );
+      if (storedToken !== rejectedToken) return;
+      await pluralBuddyOAuthConnectionRepository.blockRejectedToken(tx, instance);
     });
   } catch {
     log.warn("PluralBuddy rejected token could not be blocked", undefined, {

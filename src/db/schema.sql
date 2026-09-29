@@ -3174,6 +3174,7 @@ CREATE TABLE IF NOT EXISTS message_proxy_instances (
   origin TEXT NOT NULL UNIQUE,
   display_name TEXT NOT NULL,
   enabled BOOLEAN NOT NULL DEFAULT false,
+  removed_at TIMESTAMP,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT message_proxy_instances_id_format CHECK (
@@ -3181,6 +3182,8 @@ CREATE TABLE IF NOT EXISTS message_proxy_instances (
     OR instance_id ~ ('^' || service_id || ':[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
   )
 );
+
+SELECT add_column_if_not_exists('message_proxy_instances', 'removed_at', 'TIMESTAMP');
 
 INSERT INTO message_proxy_instances (instance_id, service_id, origin, display_name, enabled)
 VALUES

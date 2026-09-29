@@ -196,7 +196,9 @@ async function confirmProxyRepost(args: {
   const originalWaitMs = process.env.MESSAGE_PROXY_WAIT_MS;
   if (args.originalRan) process.env.MESSAGE_PROXY_WAIT_MS = "0";
   const expectation = createMessageProxyExpectation({
-    serviceId: args.originalRan ? "pluralbuddy" : "pluralkit",
+    instance: args.originalRan
+      ? { serviceId: "pluralbuddy", instanceId: "pluralbuddy:official", origin: "https://pluralbuddy.app" }
+      : { serviceId: "pluralkit", instanceId: "pluralkit:official", origin: "https://api.pluralkit.me" },
     channelId,
     originalMessageId: args.original.id,
     senderDiscId: args.hostDiscId,

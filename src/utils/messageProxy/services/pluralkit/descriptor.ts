@@ -23,13 +23,13 @@ export const pluralKitProxyService = {
     namespaceBio: "inline",
   },
   presentation: pluralKitPresentation,
-  attestMessage: async (proxyMessageId: string) => {
-    const lookup = await fetchMessage(proxyMessageId);
-    return lookup ? toPluralKitAttestation(proxyMessageId, lookup) : null;
+  attestMessage: async (proxyMessageId: string, instance) => {
+    const lookup = await fetchMessage(instance, proxyMessageId);
+    return lookup ? toPluralKitAttestation(proxyMessageId, lookup, instance) : null;
   },
-  getCachedAttestation: (proxyMessageId: string) => {
-    const lookup = getCachedMessageLookup(proxyMessageId);
-    return lookup ? toPluralKitAttestation(proxyMessageId, lookup) : null;
+  getCachedAttestation: (proxyMessageId: string, instance) => {
+    const lookup = getCachedMessageLookup(instance, proxyMessageId);
+    return lookup ? toPluralKitAttestation(proxyMessageId, lookup, instance) : null;
   },
   extractReplyTarget: extractPluralKitMessageReplyTarget,
   extractReplyTargetFromEmbed: extractPluralKitReplyTarget,

@@ -19,6 +19,7 @@ import {
 } from "@/utils/chat/channelQueue";
 import { personaRepository } from "@/utils/db/repositories";
 import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
+import { messageProxyInstanceRepository } from "@/utils/db/repositories/MessageProxyInstanceRepository";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { clearPluralKitApiStateForTests } from "@/utils/messageProxy/services/pluralkit/api";
 import { userRepository } from "@/utils/db/repositories/UserRepository";
@@ -246,7 +247,7 @@ describe("evaluateChatAdmission message-proxy lookup failure", () => {
 
     // A live expectation for this channel is what makes admission attempt a lookup.
     createMessageProxyExpectation({
-      serviceId: "pluralkit",
+      instance: { serviceId: "pluralkit", instanceId: "pluralkit:official", origin: "https://api.pluralkit.me" },
       channelId,
       originalMessageId,
       senderDiscId: "100000000000000041",
@@ -262,6 +263,12 @@ describe("evaluateChatAdmission message-proxy lookup failure", () => {
     const personasSpy = spyOn(personaRepository, "loadAllForServer").mockResolvedValue([]);
     const privacySpy = spyOn(userRepository, "getPrivacyLevel").mockResolvedValue(PrivacyLevel.MINIMAL);
     const blacklistSpy = spyOn(userRepository, "isBlacklisted").mockResolvedValue(true);
+    const instanceSpy = spyOn(messageProxyInstanceRepository, "getEnabled").mockResolvedValue({
+      serviceId: "pluralkit",
+      instanceId: "pluralkit:official",
+      origin: "https://api.pluralkit.me",
+      displayName: "PluralKit",
+    });
     clearMessageProxyRouteMetricsForTests();
 
     try {
@@ -294,7 +301,7 @@ describe("evaluateChatAdmission message-proxy lookup failure", () => {
       expect(blacklistSpy).toHaveBeenCalledWith(guildId, webhookAuthorId);
       expect(admission.disposition === "run" ? null : admission.reason).toBe("server_blacklisted_user");
     } finally {
-      for (const spy of [personasSpy, privacySpy, blacklistSpy]) spy.mockRestore();
+      for (const spy of [personasSpy, privacySpy, blacklistSpy, instanceSpy]) spy.mockRestore();
       clearMessageProxyExpectationStateForTests();
       clearMessageProxyRouteMetricsForTests();
     }
@@ -329,6 +336,12 @@ describe("evaluateChatAdmission verified proxy follow-ups", () => {
       spyOn(userRepository, "loadByDiscordId").mockResolvedValue(
         createUserRow({ user_disc_id: args.hostDiscId, message_proxy_service: "pluralkit" }),
       ),
+      spyOn(messageProxyInstanceRepository, "getEnabled").mockResolvedValue({
+        serviceId: "pluralkit",
+        instanceId: "pluralkit:official",
+        origin: "https://api.pluralkit.me",
+        displayName: "PluralKit",
+      }),
       spyOn(messageProxyRepository, "persistAttestedIdentity").mockResolvedValue({
         userRow: createUserRow({ user_id: undefined, user_disc_id: "pk:ghijkl", user_nickname: "Mirri" }),
         namespace: {
@@ -357,7 +370,7 @@ describe("evaluateChatAdmission verified proxy follow-ups", () => {
   /** The host's original is still held by its speedbump, as it is while PluralKit reposts it. */
   function holdOriginal(hostDiscId: string, originalMessageId: string) {
     return createMessageProxyExpectation({
-      serviceId: "pluralkit",
+      instance: { serviceId: "pluralkit", instanceId: "pluralkit:official", origin: "https://api.pluralkit.me" },
       channelId,
       originalMessageId,
       senderDiscId: hostDiscId,
@@ -405,9 +418,9 @@ describe("evaluateChatAdmission verified proxy follow-ups", () => {
   it("interrupts a verified repost from the same member and replays it as the host", async () => {
     const guildId = "300000000000000061";
     const hostDiscId = "100000000000000061";
-    const stubs = stubVerifiedPluralKitRepost({ hostDiscId, originalMessageId: "original-follow-up-1" });
+    const stubs = stubVerifiedPluralKitRepost({ hostDiscId, originalMessageId: "200000000000000061" });
     try {
-      holdOriginal(hostDiscId, "original-follow-up-1");
+      holdOriginal(hostDiscId, "200000000000000061");
       const activeExpectation = holdOriginal(hostDiscId, "original-active-member");
       markMessageProxyExpectationProxied(activeExpectation);
       rememberMessageProxyMessage({
@@ -468,14 +481,14 @@ describe("evaluateChatAdmission verified proxy follow-ups", () => {
     });
     const stubs = stubVerifiedPluralKitRepost({
       hostDiscId,
-      originalMessageId: "original-follow-up-2",
+      originalMessageId: "200000000000000062",
       beforeAnswer: async () => {
         signalLookupStarted();
         await lookupAnswered;
       },
     });
     try {
-      holdOriginal(hostDiscId, "original-follow-up-2");
+      holdOriginal(hostDiscId, "200000000000000062");
       const lockEntry = lockHostTurn(hostDiscId);
 
       const pendingAdmission = evaluateChatAdmission(makeRepostIncoming(guildId, "repost-follow-up-2"));
