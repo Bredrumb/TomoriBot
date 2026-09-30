@@ -186,10 +186,9 @@ export async function resolveContextReferences(params: {
     )
   ).filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null);
 
-  // A stable proxy identity can never resolve through the Discord member directory.
-  // It gets its own lookup but shares the alias resolver below, so identities
-  // and humans answering to the same
-  // name must collide with each other, not each win inside their own lane.
+  // A stable proxy identity can never resolve through the Discord member directory. It gets its own
+  // lookup but shares the alias resolver below, so identities and humans answering to the same name
+  // collide with each other instead of each winning inside its own lane.
   const messageProxyReferences = await (
     params.messageProxyIdentitySource ?? repositoryMessageProxyIdentityReferenceSource
   ).loadIdentities({

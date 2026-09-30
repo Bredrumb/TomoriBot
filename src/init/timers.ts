@@ -87,7 +87,6 @@ export function initTimers(client: Client): void {
 
   log.section("Initializing Message-Proxy Index Pruner...");
   try {
-    // Age-based retention keeps the durable proxy-message index bounded.
     import("@/timers/messageProxyIndexPruner")
       .then(({ initializeMessageProxyIndexPruner }) => {
         client.once("clientReady", () => {

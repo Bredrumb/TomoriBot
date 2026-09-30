@@ -1,8 +1,4 @@
-/**
- * One-time message-proxy identity bio seeding into personal memories.
- * Runs once at an identity's first registration. Later service-side bio edits
- * do not rewrite memory that the user may already have curated.
- */
+/** Later service-side bio edits must not rewrite memory the user may already have curated. */
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { personalMemoryRepository } from "@/utils/db/repositories/PersonalMemoryRepository";
 import { log } from "@/utils/misc/logger";
@@ -16,10 +12,6 @@ function getBioSeedMaxChars(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_BIO_SEED_MAX_CHARS;
 }
 
-/**
- * Composes the one-time bio-seed memory string: a single-line snapshot of a
- * message-proxy identity's bio, truncated to `MESSAGE_PROXY_BIO_SEED_MAX_CHARS`.
- */
 export function composeMessageProxyBioSeedContent(description: string): string {
   // Whitespace-flattened: memories render semicolon-joined on a single line, so
   // an embedded newline would break the surrounding block.
@@ -29,18 +21,13 @@ export function composeMessageProxyBioSeedContent(description: string): string {
 }
 
 export type MessageProxyBioSeedArgs = {
-  /** Gate: only an identity's first-ever registration is eligible to seed */
   isNewIdentity: boolean;
-  /** Synthetic identity ID the memory is written under and whose cache is invalidated */
   identityUserDiscId: string;
-  /** Internal `users.user_id` for the synthetic row */
   identityUserId: number;
-  /** Raw message-proxy identity bio; empty/nullish means nothing to seed */
   description: string | null | undefined;
   serverDiscId: string | null | undefined;
 };
 
-/** Injectable seams for unit testing; production callers omit this and get the real implementations. */
 export type MessageProxyBioSeedDeps = {
   getHostProtection: typeof getMessageProxyHostProtection;
   addPersonalMemory: (userId: number, personaLineageId: number, content: string) => Promise<unknown>;
@@ -55,12 +42,8 @@ const defaultDeps: MessageProxyBioSeedDeps = {
 };
 
 /**
- * Seeds a newly-registered message-proxy identity's bio as a single personal
- * memory (lineage 0), once ever. No-ops when `isNewIdentity` is false, the bio
- * is empty, the host is protected (FULL privacy / blacklisted), or the
- * personal-memory limit is exhausted. Callers must fire this without
- * awaiting, because it must never delay admission and failures must never
- * surface to the triggering reply.
+ * Callers must fire this without awaiting: it must never delay admission, and failures must never
+ * surface to the triggering reply. The memory is written under persona lineage 0.
  */
 export async function seedMessageProxyIdentityBio(
   args: MessageProxyBioSeedArgs,

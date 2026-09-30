@@ -1,9 +1,3 @@
-/**
- * PluralKit v2 API client.
- * Resolves the identity behind a proxied webhook message (member/system/host)
- * via `GET /v2/messages/{messageId}`.
- */
-
 import { z } from "zod";
 import { canonicalMessageProxyOrigin, type MessageProxyInstanceContext } from "@/utils/messageProxy/instances";
 import { log } from "@/utils/misc/logger";
@@ -18,17 +12,14 @@ import {
 } from "@/utils/messageProxy/lookupRetry";
 import { getMessageProxyLookupTimeoutMs } from "@/utils/messageProxy/proxyExpectation";
 
-/** Backoff schedule between retries, in ms; PK's message index lags ~2s behind proxied sends */
+/** PK's message index lags ~2s behind proxied sends. */
 const RETRY_DELAYS_MS = [800, 1600, 3200];
 
-/** Cap on permanently-cached resolved identities (a message's identity never changes once known) */
 const IDENTITY_CACHE_MAX_ENTRIES = 2000;
 
 /**
- * A lookup that could not be completed: stalled transport, network failure, rate
- * limit, or an untrustworthy response. Resolving `null` instead means PluralKit
- * answered that it has no such message, so the router reports this failure as
- * timeout/error rather than as a confirmed miss.
+ * Thrown when PluralKit could not answer; resolving `null` instead means it answered that it has no
+ * such message. The router reports this as timeout/error rather than as a confirmed miss.
  */
 export class PluralKitLookupUnavailableError extends Error {
   constructor(message: string, cause?: unknown) {
@@ -59,19 +50,16 @@ const pkMemberInfoSchema = z.object({
 export type PkSystemInfo = z.infer<typeof pkSystemInfoSchema>;
 export type PkMemberInfo = z.infer<typeof pkMemberInfoSchema>;
 
-/** Resolved PluralKit identity behind a proxied webhook message */
 export interface PkMessageLookup {
-  /** The original (pre-proxy, now-deleted) message's Discord snowflake ID */
   original: string;
-  /** The host Discord account snowflake that sent/proxied the message; authorization keys off this, never the member */
+  /** Authorization keys off this host account, never the member. */
   sender: string;
-  /** The fronting member's system, or null if the member (and thus its system) was deleted */
+  /** Null when the member, and so its system, was deleted. */
   system: PkSystemInfo | null;
-  /** The fronting member, or null if deleted; treat as an unproxied webhook with no identity claims */
+  /** Null when deleted; treat as an unproxied webhook with no identity claims. */
   member: PkMemberInfo | null;
 }
 
-/** Raw PK API response shape for `GET /messages/{id}` (subset of fields we use) */
 const pkApiMessageResponseSchema = z.object({
   original: z
     .string()
@@ -84,19 +72,12 @@ const pkApiMessageResponseSchema = z.object({
 
 type PkApiMessageResponse = z.infer<typeof pkApiMessageResponseSchema>;
 
-// Single-flight + permanent cache: a message's PK identity is immutable once
-// resolved, so successful lookups never need to be refetched. Transient
-// failures (network errors, exhausted retries) are deliberately NOT cached,
-// because caching them would permanently poison a message that PK could resolve fine
-// on a later attempt (e.g. after an outage clears).
+// A resolved identity is immutable, so it is cached for good. Failures are deliberately NOT cached:
+// that would poison a message PK could resolve on a later attempt, such as after an outage clears.
 const identityCache = new Map<string, PkMessageLookup>();
 const inFlightLookups = new Map<string, Promise<PkMessageLookup | null>>();
 
-/**
- * Inserts a resolved identity into the permanent cache, evicting the oldest
- * entry first if at capacity. Entries are never re-set once cached, so
- * insertion order doubles as recency for this simple LRU-style cap.
- */
+/** Entries are never re-set once cached, so insertion order doubles as recency for the eviction cap. */
 function rememberIdentity(messageId: string, lookup: PkMessageLookup): void {
   if (identityCache.size >= IDENTITY_CACHE_MAX_ENTRIES) {
     const oldestKey = identityCache.keys().next().value;
@@ -121,9 +102,8 @@ function failLookup(messageId: string, reason: string, cause?: unknown): never {
 }
 
 /**
- * Ends a lookup whose budget ran out. PK's last authoritative answer decides the
- * outcome: a 404 already said the message is unknown, so that miss stands, while any
- * other exhaustion leaves the message unresolved.
+ * PK's last authoritative answer decides the outcome: a 404 already said the message is unknown,
+ * so that miss stands, while any other exhaustion leaves the message unresolved.
  */
 function endExhaustedLookup(
   messageId: string,
@@ -142,14 +122,6 @@ function backoffMsForAttempt(attempt: number): number {
   return RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
 }
 
-/**
- * Attempts the PK message lookup with retries, bounded by `deadline`.
- *
- * Returns null only when PK answered that it has no such message, because callers
- * must fall through to today's plain-webhook behavior in that case, never inventing
- * an identity. Every other way of running out of budget or trust throws
- * `PluralKitLookupUnavailableError`.
- */
 async function fetchWithRetry(
   instance: MessageProxyInstanceContext,
   messageId: string,
@@ -226,15 +198,12 @@ async function fetchWithRetry(
       return toMessageLookup(parsed.data, messageId);
     }
 
-    // 404: PK's message index lags ~2s behind proxied sends, so retry within budget.
-    // 429: honor Retry-After when sane, otherwise fall back to the backoff schedule.
+    // A 404 can be index lag, so it retries within budget.
     if (response.status === 404 || response.status === 429) {
       await discardBody(response);
       lastAnswerWasMiss = response.status === 404;
       const retryAfterMs = response.status === 429 ? parseRetryAfterMs(response.headers.get("Retry-After")) : null;
-      // A Retry-After that cannot be honored with room left for another attempt is the
-      // server saying not to come back inside this budget: retrying early would ignore
-      // the rate limit, and sleeping it out would only stall this admission.
+      // A Retry-After the budget cannot absorb fails the lookup: retrying early would ignore the limit.
       if (retryAfterMs !== null && retryAfterMs > deadline - Date.now() - MIN_ATTEMPT_TIMEOUT_MS) {
         return failLookup(messageId, `was rate limited for ${Math.round(retryAfterMs)}ms, beyond its remaining budget`);
       }
@@ -255,23 +224,11 @@ async function fetchWithRetry(
 }
 
 /**
- * Resolves the PluralKit identity behind a webhook message (the proxy
- * repost), via `GET /v2/messages/{messageId}`.
+ * Resolves the identity behind a proxied message via `GET /v2/messages/{messageId}`.
  *
- * Retries 404s (PK indexing lag) and 429s (honoring `Retry-After`) on an
- * exponential backoff schedule, bounded by `MESSAGE_PROXY_LOOKUP_TIMEOUT_MS`
- * (default 5000ms). No single attempt may spend the whole budget, so a stalled
- * connection is aborted with enough time left for one retry.
- *
- * Returns null once PK reports that it has no such message, because callers must
- * fall through to today's plain-webhook behavior in that case. Any other
- * unresolved outcome throws `PluralKitLookupUnavailableError`, which the router
- * counts as timeout/error instead of a miss.
- *
- * Successful lookups are cached permanently in-process (a message's
- * identity never changes) under an LRU-style eviction cap; concurrent
- * calls for the same message share one in-flight request. A failed lookup is
- * never cached, so a later call can still succeed.
+ * Returns null only once PK reports that it has no such message, because callers must fall through
+ * to plain-webhook behavior in that case. Any other unresolved outcome throws
+ * `PluralKitLookupUnavailableError`, which the router counts as timeout/error instead of a miss.
  */
 export async function fetchMessage(
   instance: MessageProxyInstanceContext,
@@ -301,11 +258,7 @@ export async function fetchMessage(
   return lookupPromise;
 }
 
-/**
- * Returns a successful in-process PluralKit message lookup without making any
- * network request. Context rebuilding uses this before falling back to the
- * durable DB index; it must never call the PluralKit API.
- */
+/** Context rebuilding reads this before the durable DB index, so it must never reach the PluralKit API. */
 export function getCachedMessageLookup(
   instance: MessageProxyInstanceContext,
   messageId: string,
@@ -313,7 +266,6 @@ export function getCachedMessageLookup(
   return identityCache.get(`${instance.instanceId}\0${instance.origin}\0${messageId}`) ?? null;
 }
 
-/** Clears process-local transport state between isolated contract tests. */
 export function clearPluralKitApiStateForTests(): void {
   identityCache.clear();
   inFlightLookups.clear();

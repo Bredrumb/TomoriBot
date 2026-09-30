@@ -323,15 +323,14 @@ export function isKnownMessageProxyMessage(message: Pick<Message, "id" | "webhoo
 /**
  * IDs of originals that a confirmed proxy in this channel has superseded.
  *
- * A service may post the webhook and delete the original as separate operations,
- * so an attestation can resolve while the
- * delete is still in flight. A history fetch in that window still returns the
- * original from Discord, which would render the same message twice under two
- * different identities. Callers building dialogue context must drop these.
+ * A service may post the webhook and delete the original as separate operations, so an attestation
+ * can resolve while the delete is still in flight. A history fetch in that window still returns the
+ * original, which would render the same message twice under two identities. Callers building
+ * dialogue context must drop these.
  *
- * Scanned rather than kept as a reverse index because a service may split long
- * messages into several proxies sharing one original, so an
- * original-to-proxy map would drop live entries as siblings expired.
+ * Scanned rather than kept as a reverse index because a service may split long messages into
+ * several proxies sharing one original, so an original-to-proxy map would drop live entries as
+ * siblings expired.
  */
 export function getSupersededMessageProxyOriginalMessageIds(channelId: string): Set<string> {
   sweepExpiredMessageProxyState();

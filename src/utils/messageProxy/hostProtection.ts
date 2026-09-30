@@ -16,7 +16,6 @@ export type MessageProxyHostProtection =
     };
 
 /**
- * Checks host-account privacy/blacklist shields for a message-proxy synthetic user.
  * The identity's own synthetic row is checked by normal memory code; this helper
  * adds the authorization side of the message-proxy identity split.
  */

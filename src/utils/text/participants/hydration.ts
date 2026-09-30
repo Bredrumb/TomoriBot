@@ -597,10 +597,9 @@ async function enrichPresenceField(
   let lines: string[] = [];
   let failed = false;
   const hasPresenceIntent = params.client.options.intents?.has(GatewayIntentBits.GuildPresences);
-  // Proxy identities carry no presence of their own. They are in this block because
-  // they spoke and are never mentionable, so idle/DND etiquette has no action to
-  // govern. The host's own
-  // presence still renders whenever the host is a participant in its own right.
+  // Proxy identities carry no presence of their own and are never mentionable, so idle/DND etiquette
+  // has nothing to govern. The host's own presence still renders whenever the host is a participant
+  // in its own right.
   if (base.policy.exposePresence && !base.messageProxy) {
     if (params.isDMChannel) {
       lines = ["- Status: Online (Direct Message)"];

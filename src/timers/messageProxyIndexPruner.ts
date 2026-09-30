@@ -1,4 +1,5 @@
 import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
+import { parsePositiveIntegerEnv } from "@/utils/misc/envFlags";
 import { log } from "@/utils/misc/logger";
 
 const DEFAULT_RETENTION_DAYS = 30;
@@ -7,20 +8,7 @@ const MS_PER_HOUR = 3_600_000;
 
 let pruneInterval: ReturnType<typeof setInterval> | null = null;
 
-/**
- * Parses a positive-integer environment variable, falling back to the given
- * default when unset, non-numeric, or non-positive.
- */
-function parsePositiveIntEnv(name: string, fallback: number): number {
-  const parsed = Number.parseInt(process.env[name] || `${fallback}`, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-/**
- * Runs one retention sweep over message_proxy_message_index. Errors are already
- * absorbed by the repository (which logs and returns 0), so a failed pass
- * never disturbs the interval schedule.
- */
+/** The repository logs failures and returns 0, so a failed pass never disturbs the interval. */
 async function runPrunePass(retentionDays: number): Promise<void> {
   const deleted = await messageProxyRepository.pruneMessageIndexOlderThanDays(retentionDays);
   if (deleted > 0) {
@@ -28,26 +16,21 @@ async function runPrunePass(retentionDays: number): Promise<void> {
   }
 }
 
-/**
- * Starts the message-proxy message-index retention pruner.
- *
- * The message_proxy_message_index table only needs rows as far back as context
- * building can read. A startup sweep catches downtime backlog, while a fixed
- * interval keeps entries within MESSAGE_PROXY_MESSAGE_INDEX_RETENTION_DAYS.
- */
+/** The index only needs rows as far back as context building can read. */
 export function initializeMessageProxyIndexPruner(): void {
   if (pruneInterval) {
     log.warn("Message proxy index pruner is already running");
     return;
   }
 
-  const retentionDays = parsePositiveIntEnv("MESSAGE_PROXY_MESSAGE_INDEX_RETENTION_DAYS", DEFAULT_RETENTION_DAYS);
-  const intervalHours = parsePositiveIntEnv(
-    "MESSAGE_PROXY_MESSAGE_INDEX_PRUNE_INTERVAL_HOURS",
-    DEFAULT_PRUNE_INTERVAL_HOURS,
-  );
+  const retentionDays =
+    parsePositiveIntegerEnv(process.env.MESSAGE_PROXY_MESSAGE_INDEX_RETENTION_DAYS) ?? DEFAULT_RETENTION_DAYS;
+  const intervalHours =
+    parsePositiveIntegerEnv(process.env.MESSAGE_PROXY_MESSAGE_INDEX_PRUNE_INTERVAL_HOURS) ??
+    DEFAULT_PRUNE_INTERVAL_HOURS;
 
-  // Never awaited: a slow DB must not delay startup readiness.
+  // Sweeps at startup as well so downtime cannot leave a backlog until the first interval. Never
+  // awaited: a slow DB must not delay startup readiness.
   void runPrunePass(retentionDays);
 
   pruneInterval = setInterval(() => {
@@ -59,7 +42,6 @@ export function initializeMessageProxyIndexPruner(): void {
   );
 }
 
-/** Stops the recurring sweep (used by tests/shutdown paths). */
 export function stopMessageProxyIndexPruner(): void {
   if (pruneInterval) {
     clearInterval(pruneInterval);

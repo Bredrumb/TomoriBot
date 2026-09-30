@@ -386,13 +386,11 @@ async function resolveMessageProxyRecord(
     return null;
   }
 
-  // Client-owned webhooks (persona replies, user impersonation) can never be
-  // message-proxy reposts. Skipping them avoids guaranteed transport misses and
-  // stalls in this message's admission for the full retry cap, and extends live
-  // speedbump waits. A proxied identity whose display name exactly matches a
-  // persona nickname is misclassified as self
-  // and falls back to plain-webhook behavior: the same pre-existing hazard class
-  // as Matrix users named after personas in shouldBotReply.
+  // Client-owned webhooks (persona replies, user impersonation) can never be message-proxy reposts.
+  // Skipping them avoids guaranteed transport misses that would stall this message's admission for
+  // the full retry cap and extend live speedbump waits. A proxied identity whose display name
+  // exactly matches a persona nickname is misclassified as self and falls back to plain-webhook
+  // behavior.
   if (getCachedImpersonatedUserIdForWebhook(message.webhookId)) {
     return null;
   }
