@@ -61,12 +61,13 @@ or token requests.
 1. On a computer with deployment database access, register a disabled instance:
 
    ```sh
-   bun scripts/db/register-message-proxy-instance.ts register pluralbuddy https://<instance-host> "<display-name>"
+   bun scripts/db/register-message-proxy-instance.ts register pluralbuddy https://<instance-host> "<display-name>" <bot-user-id>
    bun scripts/db/register-message-proxy-instance.ts inspect
    ```
 
-   For PluralKit, use `pluralkit` as the service. Registration checks discovery but does not prove
-   that the bot writes lookup records.
+   For PluralKit, use `pluralkit` as the service. The bot user ID lets TomoriBot skip the
+   message-proxy wait in guilds where that instance's bot is not installed. Registration checks
+   discovery but does not prove that the bot writes lookup records.
 2. For PluralBuddy, register a separate OAuth application on that instance with the same loopback
    callback pattern as above. Authorize it using the instance ID returned by registration:
 
@@ -92,6 +93,12 @@ or token requests.
 4. Users select the enabled instance with `/personal message-proxy service:pluralbuddy instance:<name>`.
    Leaving `instance` empty chooses the official instance. The choice is checked again when the
    command runs; disabling an instance stops new lookups without changing stored profiles.
+
+If the custom proxy bot is replaced, update its Discord bot user ID before offering the instance again:
+
+```sh
+bun scripts/db/register-message-proxy-instance.ts set-bot <instance-id> <bot-user-id>
+```
 
 Disable or remove a custom instance with:
 

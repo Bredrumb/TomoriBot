@@ -80,7 +80,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("PluralBuddy OAuth refresh persistence", ()
         '088_message_proxy_instances',
         '089_pluralbuddy_oauth_connections',
         '090_pluralbuddy_refresh_state',
-        '091_message_proxy_instance_removal'
+        '091_message_proxy_instance_removal',
+        '092_message_proxy_instance_bot_user_id'
       )
     `;
 
@@ -92,7 +93,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("PluralBuddy OAuth refresh persistence", ()
         '088_message_proxy_instances',
         '089_pluralbuddy_oauth_connections',
         '090_pluralbuddy_refresh_state',
-        '091_message_proxy_instance_removal'
+        '091_message_proxy_instance_removal',
+        '092_message_proxy_instance_bot_user_id'
       )
     `;
     expect(markers.map(({ name }) => name).sort()).toEqual([
@@ -100,6 +102,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("PluralBuddy OAuth refresh persistence", ()
       "089_pluralbuddy_oauth_connections",
       "090_pluralbuddy_refresh_state",
       "091_message_proxy_instance_removal",
+      "092_message_proxy_instance_bot_user_id",
     ]);
     const [connection] = await testSql<{ refresh_token: Buffer; refresh_token_key_version: number }[]>`
       SELECT refresh_token, refresh_token_key_version

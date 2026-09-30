@@ -46,6 +46,7 @@ import { formatMessageProxyIdentityUserId } from "@/utils/messageProxy/identityU
 import { MAX_CANDIDATE_INSTANCES, routeMessageProxyMessage } from "@/utils/messageProxy/router";
 import { persistMessageProxyAttestationIdentity } from "@/utils/messageProxy/persistence";
 import { messageProxyInstanceRepository } from "@/utils/db/repositories/MessageProxyInstanceRepository";
+import { isMessageProxyInstanceBotPresent } from "@/utils/messageProxy/guildPresence";
 import type { Message } from "discord.js";
 
 /**
@@ -496,6 +497,7 @@ async function evaluateMessageProxyOriginalSpeedbump(args: {
   if (!serviceId) return null;
   const instance = await messageProxyInstanceRepository.getEnabled(serviceId, userRow?.message_proxy_instance_id);
   if (!instance) return null;
+  if (!(await isMessageProxyInstanceBotPresent(message.guild, instance))) return null;
 
   const expectation = createMessageProxyExpectation({
     instance,

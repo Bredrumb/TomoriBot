@@ -99,6 +99,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("message-proxy persistence regression", () 
       "089_pluralbuddy_oauth_connections",
       "090_pluralbuddy_refresh_state",
       "091_message_proxy_instance_removal",
+      "092_message_proxy_instance_bot_user_id",
     ];
     const readMigration = (name: string, down: boolean) =>
       readFile(new URL(`../../../src/db/migrations/${name}${down ? ".down" : ""}.sql`, import.meta.url), "utf8").then(
@@ -168,6 +169,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("message-proxy persistence regression", () 
       instanceId: "pluralkit:official",
       origin: "https://api.pluralkit.me",
       displayName: "PluralKit",
+      botUserId: "466378653216014359",
     });
     await testSql`
       INSERT INTO message_proxy_instances (instance_id, service_id, origin, display_name, enabled)

@@ -9,6 +9,7 @@ type InstanceRow = {
   origin: string;
   enabled: boolean;
   display_name: string;
+  bot_user_id: string | null;
 };
 
 type SelectableMessageProxyInstance = MessageProxyInstanceContext & { displayName: string };
@@ -20,7 +21,7 @@ class MessageProxyInstanceRepository {
     const selectedId = instanceId ?? `${serviceId}:official`;
     try {
       const [row] = await sql<InstanceRow[]>`
-        SELECT instance_id, service_id, origin, display_name, enabled
+        SELECT instance_id, service_id, origin, display_name, bot_user_id, enabled
         FROM message_proxy_instances
         WHERE instance_id = ${selectedId} AND service_id = ${serviceId} AND removed_at IS NULL
         LIMIT 1
@@ -31,6 +32,7 @@ class MessageProxyInstanceRepository {
         instanceId: row.instance_id,
         origin: row.origin,
         displayName: row.display_name,
+        botUserId: row.bot_user_id,
       };
     } catch (error) {
       log.error("Failed to load message-proxy instance", error);
@@ -43,7 +45,7 @@ class MessageProxyInstanceRepository {
     if (!descriptor) return [];
     try {
       const rows = await sql<InstanceRow[]>`
-        SELECT instance_id, service_id, origin, display_name, enabled
+        SELECT instance_id, service_id, origin, display_name, bot_user_id, enabled
         FROM message_proxy_instances
         WHERE service_id = ${serviceId} AND enabled = true AND removed_at IS NULL
           AND position(lower(${search.trim()}) in lower(display_name || ' ' || origin)) > 0
@@ -58,6 +60,7 @@ class MessageProxyInstanceRepository {
                 instanceId: row.instance_id,
                 origin: row.origin,
                 displayName: row.display_name,
+        botUserId: row.bot_user_id,
               },
             ]
           : [],

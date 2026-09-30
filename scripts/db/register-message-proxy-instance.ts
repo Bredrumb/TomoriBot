@@ -17,13 +17,14 @@ type InstanceRow = {
   service_id: "pluralkit" | "pluralbuddy";
   origin: string;
   display_name: string;
+  bot_user_id: string | null;
   enabled: boolean;
   removed_at: Date | null;
 };
 
 const SNOWFLAKE = /^\d{17,20}$/;
 const usage =
-  "Usage: bun scripts/db/register-message-proxy-instance.ts register <pluralkit|pluralbuddy> <https-origin> <display-name> | inspect [instance-id] | enable <instance-id> <bot-written-repost-id> <sender-discord-id> | disable <instance-id> | remove <instance-id>";
+  "Usage: bun scripts/db/register-message-proxy-instance.ts register <pluralkit|pluralbuddy> <https-origin> <display-name> <bot-user-id> | inspect [instance-id] | set-bot <instance-id> <bot-user-id> | enable <instance-id> <bot-written-repost-id> <sender-discord-id> | disable <instance-id> | remove <instance-id>";
 
 async function validateOrigin(origin: string): Promise<void> {
   if (canonicalMessageProxyOrigin(origin) !== origin)
@@ -53,7 +54,7 @@ async function checkDiscovery(instance: MessageProxyInstanceContext): Promise<vo
 
 async function loadInstance(instanceId: string): Promise<InstanceRow> {
   const [instance] = await sql<InstanceRow[]>`
-    SELECT instance_id, service_id, origin, display_name, enabled, removed_at
+    SELECT instance_id, service_id, origin, display_name, bot_user_id, enabled, removed_at
     FROM message_proxy_instances WHERE instance_id = ${instanceId}
   `;
   if (!instance || instance.removed_at) throw new Error("Instance not found or already removed.");
@@ -65,15 +66,16 @@ try {
   const [action, ...args] = process.argv.slice(2);
   switch (action) {
     case "register": {
-      const [serviceId, originInput, displayName] = args;
+      const [serviceId, originInput, displayName, botUserId] = args;
       const origin = originInput ? canonicalMessageProxyOrigin(originInput) : null;
       if (
-        args.length !== 3 ||
+        args.length !== 4 ||
         (serviceId !== "pluralkit" && serviceId !== "pluralbuddy") ||
         !origin ||
         (originInput !== origin && originInput !== `${origin}/`) ||
         !displayName?.trim() ||
-        displayName.length > 100
+        displayName.length > 100 ||
+        !SNOWFLAKE.test(botUserId ?? "")
       ) {
         throw new Error(usage);
       }
@@ -88,11 +90,11 @@ try {
             : `This origin is already registered as ${existing.instance_id}. Inspect or update that instance.`,
         );
       }
-      await checkDiscovery({ serviceId, instanceId: `${serviceId}:pending`, origin });
+      await checkDiscovery({ serviceId, instanceId: `${serviceId}:pending`, origin, botUserId });
       const instanceId = `${serviceId}:${randomUUID()}`;
       await sql`
-        INSERT INTO message_proxy_instances (instance_id, service_id, origin, display_name, enabled)
-        VALUES (${instanceId}, ${serviceId}, ${origin}, ${displayName.trim()}, false)
+        INSERT INTO message_proxy_instances (instance_id, service_id, origin, display_name, bot_user_id, enabled)
+        VALUES (${instanceId}, ${serviceId}, ${origin}, ${displayName.trim()}, ${botUserId}, false)
       `;
       console.log(
         `Registered disabled ${serviceId} instance ${instanceId} at ${origin}. Verify a bot-written repost before enabling.`,
@@ -105,14 +107,22 @@ try {
         args.length === 1
           ? await sql<
               InstanceRow[]
-            >`SELECT instance_id, service_id, origin, display_name, enabled, removed_at FROM message_proxy_instances WHERE instance_id = ${args[0]}`
+            >`SELECT instance_id, service_id, origin, display_name, bot_user_id, enabled, removed_at FROM message_proxy_instances WHERE instance_id = ${args[0]}`
           : await sql<
               InstanceRow[]
-            >`SELECT instance_id, service_id, origin, display_name, enabled, removed_at FROM message_proxy_instances ORDER BY service_id, display_name`;
+            >`SELECT instance_id, service_id, origin, display_name, bot_user_id, enabled, removed_at FROM message_proxy_instances ORDER BY service_id, display_name`;
       for (const row of rows)
         console.log(
-          `${row.instance_id} | ${row.display_name} | ${row.origin} | ${row.removed_at ? "removed" : row.enabled ? "enabled" : "disabled"}`,
+          `${row.instance_id} | ${row.display_name} | ${row.origin} | bot ${row.bot_user_id ?? "unknown"} | ${row.removed_at ? "removed" : row.enabled ? "enabled" : "disabled"}`,
         );
+      break;
+    }
+    case "set-bot": {
+      const [instanceId, botUserId] = args;
+      if (args.length !== 2 || !instanceId || !SNOWFLAKE.test(botUserId ?? "")) throw new Error(usage);
+      const row = await loadInstance(instanceId);
+      await sql`UPDATE message_proxy_instances SET bot_user_id = ${botUserId} WHERE instance_id = ${row.instance_id}`;
+      console.log(`Updated bot user ID for ${row.instance_id}.`);
       break;
     }
     case "enable": {
@@ -120,8 +130,14 @@ try {
       if (args.length !== 3 || !instanceId || !SNOWFLAKE.test(repostId ?? "") || !SNOWFLAKE.test(senderId ?? ""))
         throw new Error(usage);
       const row = await loadInstance(instanceId);
+      if (!row.bot_user_id) throw new Error("Instance bot user ID is not configured. Run set-bot before enabling it.");
       await validateOrigin(row.origin);
-      const instance: MessageProxyInstanceContext = { serviceId: row.service_id, instanceId, origin: row.origin };
+      const instance: MessageProxyInstanceContext = {
+        serviceId: row.service_id,
+        instanceId,
+        origin: row.origin,
+        botUserId: row.bot_user_id,
+      };
       await checkDiscovery(instance);
       if (row.service_id === "pluralbuddy") {
         keyManager.initialize();

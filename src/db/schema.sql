@@ -3173,6 +3173,7 @@ CREATE TABLE IF NOT EXISTS message_proxy_instances (
   service_id TEXT NOT NULL CHECK (service_id IN ('pluralkit', 'pluralbuddy')),
   origin TEXT NOT NULL UNIQUE,
   display_name TEXT NOT NULL,
+  bot_user_id TEXT,
   enabled BOOLEAN NOT NULL DEFAULT false,
   removed_at TIMESTAMP,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -3180,16 +3181,30 @@ CREATE TABLE IF NOT EXISTS message_proxy_instances (
   CONSTRAINT message_proxy_instances_id_format CHECK (
     instance_id = service_id || ':official'
     OR instance_id ~ ('^' || service_id || ':[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+  ),
+  CONSTRAINT message_proxy_instances_bot_user_id_format CHECK (
+    bot_user_id IS NULL OR bot_user_id ~ '^[0-9]{17,20}$'
   )
 );
 
+SELECT add_column_if_not_exists('message_proxy_instances', 'bot_user_id', 'TEXT');
 SELECT add_column_if_not_exists('message_proxy_instances', 'removed_at', 'TIMESTAMP');
 
-INSERT INTO message_proxy_instances (instance_id, service_id, origin, display_name, enabled)
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'message_proxy_instances_bot_user_id_format'
+  ) THEN
+    ALTER TABLE message_proxy_instances
+      ADD CONSTRAINT message_proxy_instances_bot_user_id_format
+      CHECK (bot_user_id IS NULL OR bot_user_id ~ '^[0-9]{17,20}$');
+  END IF;
+END $$;
+
+INSERT INTO message_proxy_instances (instance_id, service_id, origin, display_name, bot_user_id, enabled)
 VALUES
-  ('pluralkit:official', 'pluralkit', 'https://api.pluralkit.me', 'PluralKit', true),
-  ('pluralbuddy:official', 'pluralbuddy', 'https://pluralbuddy.app', 'PluralBuddy', true)
-ON CONFLICT (instance_id) DO NOTHING;
+  ('pluralkit:official', 'pluralkit', 'https://api.pluralkit.me', 'PluralKit', '466378653216014359', true),
+  ('pluralbuddy:official', 'pluralbuddy', 'https://pluralbuddy.app', 'PluralBuddy', '1436973163211657278', true)
+ON CONFLICT (instance_id) DO UPDATE SET bot_user_id = EXCLUDED.bot_user_id;
 
 CREATE OR REPLACE FUNCTION keep_message_proxy_instance_identity()
 RETURNS TRIGGER AS $$

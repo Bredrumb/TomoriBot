@@ -35,8 +35,8 @@ If you do not use a proxy bot, leave this setting off to avoid the brief message
   message, responding directly to the webhook repost and recovering proxied reply targets.
 - **Mid-reply follow-ups.** A follow-up proxied message from the same member interrupts an active
   generation turn to answer the newer message.
-- **Message wait window.** Ordinary guild messages wait up to 2 seconds (`MESSAGE_PROXY_WAIT_MS`)
-  for PluralKit to repost before normal processing continues.
+- **Message wait window.** When the selected PluralKit bot is present in the guild, ordinary
+  messages wait up to 2 seconds (`MESSAGE_PROXY_WAIT_MS`) for it to repost before normal processing continues.
 - **Per-member identity and memories.** Each member has an independent name, isolated personal
   memories, and their own last-seen timestamp. Memories do not bleed to system-mates or the host
   account.

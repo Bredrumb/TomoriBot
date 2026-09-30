@@ -4,6 +4,7 @@ export type MessageProxyInstanceContext = Readonly<{
   serviceId: string;
   instanceId: MessageProxyInstanceId;
   origin: string;
+  botUserId?: string | null;
 }>;
 
 export function canonicalMessageProxyOrigin(input: string): string | null {

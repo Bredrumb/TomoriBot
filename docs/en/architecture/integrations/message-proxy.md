@@ -64,6 +64,7 @@ newly persisted identity has no history and correctly reads as a first meeting. 
 ```text
 user message
   -> resolve users.message_proxy_service and message_proxy_instance_id through the catalog
+  -> if the instance bot ID is known, confirm that bot is present in the guild
   -> create expectation(service, instance, original, sender, copied reply reference)
   -> wait for delete or MESSAGE_PROXY_WAIT_MS timeout
 
@@ -75,6 +76,12 @@ webhook in the same channel while expectations are live
   -> stable identity: persist identity + host + immutable message index atomically
   -> identity-free: admit without identity persistence or bio seeding
 ```
+
+A known instance bot that is authoritatively absent from the guild skips the wait entirely because
+it cannot observe and proxy the original message. Presence uses the guild member cache first and
+falls back to a targeted member fetch. An unknown bot ID or a transient fetch failure preserves the
+wait, while an Unknown Member result is cached briefly. Custom instance registrations store the bot
+user ID, and operators must update it when that proxy bot changes.
 
 Delete and repost events may arrive in either order. Different webhook messages in one channel can
 be verified concurrently. Lookup activity pauses original wait timers until all in-flight checks
@@ -136,7 +143,7 @@ fit the namespace model, extend persistence deliberately rather than fabricating
 |---|---|
 | `users.message_proxy_service` | `NULL` never configured, `none` explicit opt-out, registered ID enabled. Unknown IDs are retained but disabled at runtime. |
 | `users.message_proxy_instance_id` | Selected instance. `NULL` means the official instance for a selected service; Off clears the selection. Disabled selections do not route. |
-| `message_proxy_instances` | Stable instance ID, service, canonical origin, enabled state, and removal marker. Official rows are `pluralkit:official` and `pluralbuddy:official`. |
+| `message_proxy_instances` | Stable instance ID, service, canonical origin, Discord bot user ID, enabled state, and removal marker. Official rows are `pluralkit:official` and `pluralbuddy:official`. |
 | `pluralbuddy_oauth_connections` | One encrypted bot host client secret and refresh token per PluralBuddy instance, bound to its canonical origin. The short-lived access token and expiry let other processes reuse a completed refresh. Refresh failures record a retry time or block the connection until the bot host authorizes it again. |
 | `external_identities` | Canonical key scoped by `(kind, instance_id, external_key)` and mapped to one synthetic `users` row. |
 | `message_proxy_namespaces` | Service container keyed by `(instance_id, namespace_key)`. |
