@@ -8,10 +8,10 @@ import { WELCOME_DELAY_MS, waitForWelcomeDelay } from "@/events/guildMemberAdd/h
  * expired waiter is dropped, never greeted, because greeting someone still sitting in onboarding
  * is the failure this gate exists to prevent.
  */
-export const WELCOME_GATE_MAX_WAIT_MS = 60 * 60 * 1000;
+const WELCOME_GATE_MAX_WAIT_MS = 60 * 60 * 1000;
 
 /** `open`: the member can see channels. `ended`: they left or rejoined. `expired`: bound reached. */
-export type WelcomeGateOutcome = "open" | "ended" | "expired";
+type WelcomeGateOutcome = "open" | "ended" | "expired";
 
 /** `member` is the freshest state seen, so a greeting does not use a name or avatar from join time. */
 export interface WelcomeGateResult {
