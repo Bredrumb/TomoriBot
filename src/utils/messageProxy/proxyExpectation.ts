@@ -165,6 +165,16 @@ export async function waitForMessageProxyExpectation(
   return await internal.waitPromise;
 }
 
+export function cancelPendingMessageProxyExpectation(expectation: MessageProxyExpectation): boolean {
+  const internal = getInternalMessageProxyExpectation(expectation.channelId, expectation.originalMessageId);
+  if (!internal || internal !== expectation || internal.state !== "pending" || internal.waitResult !== null) {
+    return false;
+  }
+
+  deleteMessageProxyExpectation(expectation.channelId, expectation.originalMessageId);
+  return true;
+}
+
 export function markMessageProxyOriginalDeleted(channelId: string, originalMessageId: string): boolean {
   const expectation = getInternalMessageProxyExpectation(channelId, originalMessageId);
   if (!expectation) {

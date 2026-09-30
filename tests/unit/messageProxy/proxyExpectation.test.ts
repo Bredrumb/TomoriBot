@@ -3,6 +3,7 @@ import type { Message } from "discord.js";
 import {
   applyMessageProxyReference,
   beginMessageProxyLookup,
+  cancelPendingMessageProxyExpectation,
   clearMessageProxyExpectationStateForTests,
   consumeVerifiedRepostExpectation,
   createMessageProxyExpectation,
@@ -123,6 +124,28 @@ describe("message-proxy expectations", () => {
     expect(record.originalSuppressed).toBe(false);
     expect(getSupersededMessageProxyOriginalMessageIds("channel_1")).toEqual(new Set());
   });
+  it("cancels only a still-pending expectation and releases its wait as a timeout", async () => {
+    const expectation = createExpectation({ originalMessageId: "original_cancel" });
+    const wait = waitForMessageProxyExpectation(expectation);
+
+    expect(cancelPendingMessageProxyExpectation(expectation)).toBe(true);
+    expect(await wait).toBe("timeout");
+    expect(cancelPendingMessageProxyExpectation(expectation)).toBe(false);
+    expect(findMatchingMessageProxyExpectation("channel_1", attestation("original_cancel", "sender_1"))).toBeNull();
+  });
+
+  it("does not let a late cancellation undo an expectation that already became proxied", async () => {
+    const expectation = createExpectation({ originalMessageId: "original_confirmed" });
+    const wait = waitForMessageProxyExpectation(expectation);
+
+    markMessageProxyExpectationProxied(expectation);
+    expect(cancelPendingMessageProxyExpectation(expectation)).toBe(false);
+    expect(await wait).toBe("proxied");
+    expect(findMatchingMessageProxyExpectation("channel_1", attestation("original_confirmed", "sender_1"))).toBe(
+      expectation,
+    );
+  });
+
   it("resolves the original speedbump when the original message is deleted", async () => {
     const expectation = createExpectation();
     const wait = waitForMessageProxyExpectation(expectation);

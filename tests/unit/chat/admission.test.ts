@@ -6,6 +6,7 @@ import * as audioTranscription from "@/utils/audio/audioAttachmentTranscription"
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import {
   evaluateChatAdmission,
+  evaluateMessageProxyOriginalSpeedbump,
   resolveAdmissionChannelScope,
   shouldBlockReplyToOtherBot,
 } from "@/utils/chat/admission";
@@ -22,12 +23,16 @@ import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepo
 import { messageProxyInstanceRepository } from "@/utils/db/repositories/MessageProxyInstanceRepository";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { clearPluralKitApiStateForTests } from "@/utils/messageProxy/services/pluralkit/api";
+import { clearMessageProxyGuildPresenceStateForTests } from "@/utils/messageProxy/guildPresence";
 import { userRepository } from "@/utils/db/repositories/UserRepository";
 import {
   clearMessageProxyExpectationStateForTests,
   createMessageProxyExpectation,
+  findMatchingMessageProxyExpectation,
   getMessageProxyMessageRecord,
+  hasLiveMessageProxyExpectations,
   markMessageProxyExpectationProxied,
+  markMessageProxyOriginalDeleted,
   rememberMessageProxyMessage,
 } from "@/utils/messageProxy/proxyExpectation";
 import {
@@ -40,6 +45,7 @@ import { createUserRow } from "../../helpers/fixtures";
 
 const originalFetch = globalThis.fetch;
 const originalLookupTimeoutMs = process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS;
+const originalProxyWaitMs = process.env.MESSAGE_PROXY_WAIT_MS;
 
 // Both mutations are process-wide, and Bun does not reset them between the files
 // sharing this lane, so the restore has to live in a hook.
@@ -47,6 +53,8 @@ afterAll(() => {
   globalThis.fetch = originalFetch;
   if (originalLookupTimeoutMs === undefined) delete process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS;
   else process.env.MESSAGE_PROXY_LOOKUP_TIMEOUT_MS = originalLookupTimeoutMs;
+  if (originalProxyWaitMs === undefined) delete process.env.MESSAGE_PROXY_WAIT_MS;
+  else process.env.MESSAGE_PROXY_WAIT_MS = originalProxyWaitMs;
 });
 
 // Object.create skips the discord.js constructor (which demands a live client and a full
@@ -232,6 +240,195 @@ describe("evaluateChatAdmission server blacklist", () => {
     } finally {
       for (const spy of [rowSpy, privacySpy, blacklistSpy, transcribeSpy]) spy.mockRestore();
       invalidateUserCache(memberId);
+    }
+  });
+});
+
+
+describe("evaluateMessageProxyOriginalSpeedbump guild presence", () => {
+  const userDiscId = "100000000000000035";
+  const channelId = "proxy-original-presence";
+  const botUserId = "466378653216014359";
+
+  function setupOriginal(memberFetch: (id: string) => Promise<unknown>) {
+    invalidateUserCache(userDiscId);
+    clearMessageProxyExpectationStateForTests();
+    clearMessageProxyGuildPresenceStateForTests();
+
+    const rowSpy = spyOn(userRepository, "loadByDiscordId").mockResolvedValue(
+      createUserRow({
+        user_disc_id: userDiscId,
+        message_proxy_service: "pluralkit",
+        message_proxy_instance_id: "pluralkit:official",
+      }),
+    );
+    const instanceSpy = spyOn(messageProxyInstanceRepository, "getEnabled").mockResolvedValue({
+      serviceId: "pluralkit",
+      instanceId: "pluralkit:official",
+      origin: "https://api.pluralkit.me",
+      displayName: "PluralKit",
+      botUserId,
+    });
+    const incoming = {
+      client: { user: { id: "tomori" } },
+      message: {
+        id: "original-presence-1",
+        channelId,
+        webhookId: null,
+        reference: null,
+        author: { id: userDiscId, bot: false },
+        guild: {
+          id: "300000000000000035",
+          members: {
+            cache: { has: () => false },
+            fetch: memberFetch,
+          },
+        },
+      },
+      isManuallyTriggered: false,
+    } as unknown as ChatIncoming;
+    const ignored = (reason: string) => ({
+      incoming,
+      disposition: "ignore" as const,
+      locale: "en-US",
+      reason,
+    });
+
+    return {
+      incoming,
+      ignored,
+      restore: () => {
+        rowSpy.mockRestore();
+        instanceSpy.mockRestore();
+        invalidateUserCache(userDiscId);
+        clearMessageProxyExpectationStateForTests();
+        clearMessageProxyGuildPresenceStateForTests();
+      },
+    };
+  }
+
+  it("registers the expectation before a pending member fetch so repost and delete signals are not lost", async () => {
+    let signalFetchStarted: () => void = () => {};
+    const fetchStarted = new Promise<void>((resolve) => {
+      signalFetchStarted = resolve;
+    });
+    let releaseFetch: () => void = () => {};
+    const fetchReleased = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+    const memberFetch = mock(async () => {
+      signalFetchStarted();
+      await fetchReleased;
+      throw Object.assign(new Error("Unknown Member"), { code: 10007 });
+    });
+    const fixture = setupOriginal(memberFetch);
+
+    try {
+      const pending = evaluateMessageProxyOriginalSpeedbump({
+        incoming: fixture.incoming,
+        userDiscId,
+        isRealUserMessage: true,
+        ignored: fixture.ignored,
+      });
+      await fetchStarted;
+
+      const attestation = {
+        serviceId: "pluralkit",
+        instanceId: "pluralkit:official",
+        proxyMessageId: "proxy-presence-1",
+        originalMessageId: "original-presence-1",
+        senderDiscordId: userDiscId,
+        identity: null,
+      };
+      expect(findMatchingMessageProxyExpectation(channelId, attestation)).not.toBeNull();
+      expect(markMessageProxyOriginalDeleted(channelId, "original-presence-1")).toBe(true);
+
+      releaseFetch();
+      const result = await pending;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(result?.reason).toBe("message_proxy_proxied");
+      expect(findMatchingMessageProxyExpectation(channelId, attestation)).not.toBeNull();
+    } finally {
+      releaseFetch();
+      fixture.restore();
+    }
+  });
+
+  it("releases a still-pending original early when Discord confirms the proxy bot is absent", async () => {
+    const previousWaitMs = process.env.MESSAGE_PROXY_WAIT_MS;
+    process.env.MESSAGE_PROXY_WAIT_MS = "1000";
+    const memberFetch = mock(async () => {
+      throw Object.assign(new Error("Unknown Member"), { code: 10007 });
+    });
+    const fixture = setupOriginal(memberFetch);
+
+    try {
+      const pending = evaluateMessageProxyOriginalSpeedbump({
+        incoming: fixture.incoming,
+        userDiscId,
+        isRealUserMessage: true,
+        ignored: fixture.ignored,
+      });
+      const outcome = await Promise.race([
+        pending.then((result) => ({ kind: "released" as const, result })),
+        new Promise<{ kind: "still_waiting"; result: null }>((resolve) =>
+          setTimeout(() => resolve({ kind: "still_waiting", result: null }), 100),
+        ),
+      ]);
+
+      expect(outcome.kind).toBe("released");
+      expect(outcome.result).toBeNull();
+      expect(hasLiveMessageProxyExpectations(channelId)).toBe(false);
+    } finally {
+      if (previousWaitMs === undefined) delete process.env.MESSAGE_PROXY_WAIT_MS;
+      else process.env.MESSAGE_PROXY_WAIT_MS = previousWaitMs;
+      fixture.restore();
+    }
+  });
+
+  it("does not let a slow member fetch extend the configured proxy wait", async () => {
+    const previousWaitMs = process.env.MESSAGE_PROXY_WAIT_MS;
+    process.env.MESSAGE_PROXY_WAIT_MS = "20";
+    let signalFetchStarted: () => void = () => {};
+    const fetchStarted = new Promise<void>((resolve) => {
+      signalFetchStarted = resolve;
+    });
+    let releaseFetch: () => void = () => {};
+    const fetchReleased = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+    const memberFetch = mock(async () => {
+      signalFetchStarted();
+      await fetchReleased;
+      return {};
+    });
+    const fixture = setupOriginal(memberFetch);
+
+    try {
+      const pending = evaluateMessageProxyOriginalSpeedbump({
+        incoming: fixture.incoming,
+        userDiscId,
+        isRealUserMessage: true,
+        ignored: fixture.ignored,
+      });
+      await fetchStarted;
+      const outcome = await Promise.race([
+        pending.then((result) => ({ kind: "completed" as const, result })),
+        new Promise<{ kind: "too_slow"; result: null }>((resolve) =>
+          setTimeout(() => resolve({ kind: "too_slow", result: null }), 150),
+        ),
+      ]);
+
+      releaseFetch();
+      expect(outcome.kind).toBe("completed");
+      expect(outcome.result).toBeNull();
+      expect(hasLiveMessageProxyExpectations(channelId)).toBe(false);
+    } finally {
+      releaseFetch();
+      if (previousWaitMs === undefined) delete process.env.MESSAGE_PROXY_WAIT_MS;
+      else process.env.MESSAGE_PROXY_WAIT_MS = previousWaitMs;
+      fixture.restore();
     }
   });
 });

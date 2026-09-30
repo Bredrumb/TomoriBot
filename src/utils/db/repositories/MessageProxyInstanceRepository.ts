@@ -60,7 +60,7 @@ class MessageProxyInstanceRepository {
                 instanceId: row.instance_id,
                 origin: row.origin,
                 displayName: row.display_name,
-        botUserId: row.bot_user_id,
+                botUserId: row.bot_user_id,
               },
             ]
           : [],

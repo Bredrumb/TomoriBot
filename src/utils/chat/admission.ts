@@ -25,6 +25,7 @@ import { cleanupTextQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { evaluateAdmissionQueueAndTriggerGate } from "@/utils/chat/admissionQueue";
 import {
   applyMessageProxyReference,
+  cancelPendingMessageProxyExpectation,
   createMessageProxyExpectation,
   consumeVerifiedRepostExpectation,
   getMessageProxyMessageRecord,
@@ -469,7 +470,8 @@ async function resolveMessageProxyRecord(
   return record;
 }
 
-async function evaluateMessageProxyOriginalSpeedbump(args: {
+/** @internal Exported for focused admission regression tests. */
+export async function evaluateMessageProxyOriginalSpeedbump(args: {
   incoming: ChatIncoming;
   userDiscId: string;
   isRealUserMessage: boolean;
@@ -497,7 +499,6 @@ async function evaluateMessageProxyOriginalSpeedbump(args: {
   if (!serviceId) return null;
   const instance = await messageProxyInstanceRepository.getEnabled(serviceId, userRow?.message_proxy_instance_id);
   if (!instance) return null;
-  if (!(await isMessageProxyInstanceBotPresent(message.guild, instance))) return null;
 
   const expectation = createMessageProxyExpectation({
     instance,
@@ -507,6 +508,10 @@ async function evaluateMessageProxyOriginalSpeedbump(args: {
     originalMessage: message,
     originalReference: message.reference,
   });
+  void isMessageProxyInstanceBotPresent(message.guild, instance).then((present) => {
+    if (!present) cancelPendingMessageProxyExpectation(expectation);
+  });
+
   const waitResult = await waitForMessageProxyExpectation(expectation);
   if (waitResult === "proxied") {
     return ignored("message_proxy_proxied");

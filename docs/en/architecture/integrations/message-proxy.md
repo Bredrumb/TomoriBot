@@ -64,9 +64,10 @@ newly persisted identity has no history and correctly reads as a first meeting. 
 ```text
 user message
   -> resolve users.message_proxy_service and message_proxy_instance_id through the catalog
-  -> if the instance bot ID is known, confirm that bot is present in the guild
   -> create expectation(service, instance, original, sender, copied reply reference)
-  -> wait for delete or MESSAGE_PROXY_WAIT_MS timeout
+  -> check the selected instance bot's guild presence alongside the normal wait
+  -> confirmed absence cancels a still-pending expectation and releases the original early
+  -> otherwise wait for delete or MESSAGE_PROXY_WAIT_MS timeout
 
 webhook in the same channel while expectations are live
   -> route each distinct enabled candidate instance at most once (maximum four per channel)
@@ -77,11 +78,13 @@ webhook in the same channel while expectations are live
   -> identity-free: admit without identity persistence or bio seeding
 ```
 
-A known instance bot that is authoritatively absent from the guild skips the wait entirely because
-it cannot observe and proxy the original message. Presence uses the guild member cache first and
-falls back to a targeted member fetch. An unknown bot ID or a transient fetch failure preserves the
-wait, while an Unknown Member result is cached briefly. Custom instance registrations store the bot
-user ID, and operators must update it when that proxy bot changes.
+The expectation is registered before any guild-member REST request, so a repost or deletion that
+arrives while presence is being checked can still converge normally. Presence uses the guild member
+cache first and falls back to a targeted member fetch. Confirmed absence cancels only the same
+still-pending expectation, so it can shorten the wait but never extend it or undo a timeout or
+confirmed repost. An unknown bot ID or a transient fetch failure preserves the normal wait, while an
+Unknown Member result is cached briefly. Custom instance registrations store the bot user ID, and
+operators must update it when that proxy bot changes.
 
 Delete and repost events may arrive in either order. Different webhook messages in one channel can
 be verified concurrently. Lookup activity pauses original wait timers until all in-flight checks
