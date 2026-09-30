@@ -353,9 +353,6 @@ async function persistImportedMainAvatar(serverDiscId: string, avatarImageBuffer
   invalidateTomoriStateCache(serverDiscId);
 }
 
-/**
- * Configure the 'import' subcommand
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("import")

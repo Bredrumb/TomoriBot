@@ -1230,7 +1230,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /** Deletes a custom endpoint connection and cascades to its models. */
+  /** Cascades to the connection's models. */
   async deleteCustomEndpointConnectionById(connectionId: number): Promise<boolean> {
     try {
       const result = await sql`
@@ -1915,12 +1915,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Deletes a saved provider config for a server + provider pair.
-   *
-   * @param serverId - Internal server DB ID
-   * @param options  - Optional cache invalidation options
-   */
   async deleteSavedProviderConfig(
     serverId: number,
     provider: string,
@@ -2046,11 +2040,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Deletes a personal saved provider config for a user + provider pair.
-   *
-   * @param userId   - Internal user DB ID
-   */
   async deleteUserSavedProviderConfig(userId: number, provider: string): Promise<boolean> {
     try {
       const result = await sql`
@@ -2291,12 +2280,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     }
   }
 
-  /**
-   * Deletes a custom endpoint for a server or user.
-   *
-   * @param params  - Endpoint lookup parameters
-   * @param options - Optional cache invalidation options
-   */
   async deleteCustomEndpoint(
     params: {
       serverId?: number | null;

@@ -1101,27 +1101,18 @@ type DataExport =
   | WorkspaceMemoriesExport
   | PersonalMemoriesV2Export;
 
-/**
- * Result of export operation
- */
 export interface ExportResult {
   success: boolean;
   data?: DataExport;
   error?: string;
 }
 
-/**
- * Result of personality text export operation
- */
 export interface PersonalityExportResult {
   success: boolean;
   text?: string;
   error?: string;
 }
 
-/**
- * Result of import operation
- */
 export interface ImportResult {
   success: boolean;
   itemsImported?: {

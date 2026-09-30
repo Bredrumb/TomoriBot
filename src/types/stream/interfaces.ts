@@ -45,9 +45,6 @@ export interface ProcessedChunk {
   metadata?: Record<string, unknown>;
 }
 
-/**
- * Provider-specific error with normalized format
- */
 export interface ProviderError {
   type: "api_error" | "rate_limit" | "content_blocked" | "timeout" | "provider_overloaded" | "model_error" | "unknown";
   message: string;
@@ -212,8 +209,6 @@ export interface StreamAdapterInfo {
 }
 
 /**
- * Base class for provider stream adapters.
- *
  * Provider subclasses still own request construction, provider-native parsing,
  * and error normalization. The base class centralizes adapter lifecycle identity
  * and small lifecycle hooks/wrappers used when handing work to StreamOrchestrator.

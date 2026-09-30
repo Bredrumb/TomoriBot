@@ -113,10 +113,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return this.sqlGetUserReminderCount(userDiscordId);
   }
 
-  /**
-   * Deletes a reminder by ID.
-   *
-   */
   async deleteReminderById(reminderId: number): Promise<boolean> {
     return this.sqlDeleteReminderById(reminderId);
   }
@@ -276,10 +272,6 @@ class ServerScheduleRepository implements IRepository<ServerScheduleExportShape>
     return this.sqlUpsertRandomTrigger(triggerId, data);
   }
 
-  /**
-   * Deletes a random trigger by ID.
-   *
-   */
   async deleteTrigger(triggerId: number): Promise<boolean> {
     return this.sqlDeleteRandomTrigger(triggerId);
   }

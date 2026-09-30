@@ -37,9 +37,6 @@ const EXPRESSION_INIT_MAX_CHUNK_RETRIES = 3;
 /** Brief pause between batches to stay within provider rate limits. */
 const EXPRESSION_INIT_BATCH_DELAY_MS = 1000;
 
-/**
- * Configure the subcommand
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("initialize")

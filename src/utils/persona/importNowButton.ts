@@ -44,7 +44,6 @@ const IMPORT_NOW_CUSTOM_ID = "persona_import_now";
  */
 const IMPORT_NOW_BUTTON_TIMEOUT_MS = 14 * 60 * 1000;
 
-/** Visual state of the Import Now button. */
 type ImportNowButtonState = "active" | "done" | "expired";
 
 /**

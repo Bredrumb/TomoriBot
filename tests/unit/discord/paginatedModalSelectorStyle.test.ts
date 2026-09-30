@@ -19,7 +19,6 @@ import type { ChatInputCommandInteraction } from "discord.js";
 import type { ModalOptions } from "@/types/discord/modal";
 import { hasComponentsV2Reply, promptWithPaginatedModal } from "@/utils/discord/ui/interactionCore";
 
-/** One recorded acknowledgement call. */
 interface RecordedCall {
   method: "reply" | "editReply" | "webhook.send";
   payload: Record<string, unknown>;

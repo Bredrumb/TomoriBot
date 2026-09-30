@@ -36,9 +36,7 @@ const NAI_SEGMENTATION_TIMEOUT_MS = Number.parseInt(process.env.NAI_SEGMENTATION
 const NAI_INPAINT_PADDING = 0.15;
 
 /**
- * Safety settings for Gemini segmentation requests.
- * Set to OFF to fully disable content filtering for segmentation requests.
- * Anime/artistic images frequently trigger false positives on default thresholds,
+ * OFF because anime/artistic images frequently trigger false positives on default thresholds,
  * causing Gemini to silently hang or return empty responses instead of masks.
  */
 const SEGMENTATION_SAFETY_SETTINGS: SafetySetting[] = [

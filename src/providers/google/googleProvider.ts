@@ -219,9 +219,6 @@ function logSkippedGooglePenaltyParams(
   });
 }
 
-/**
- * Google Gemini provider implementation
- */
 export class GoogleProvider
   extends BaseLLMProvider
   implements

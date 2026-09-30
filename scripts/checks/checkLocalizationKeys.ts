@@ -26,18 +26,12 @@ interface KeyUsage {
   files: Set<string>;
 }
 
-/**
- * Interface for locale key parity issues
- */
 interface LocaleParityIssue {
   key: string;
   missingIn: string[];
   presentIn: string[];
 }
 
-/**
- * Interface for modal title length violations
- */
 interface ModalTitleViolation {
   key: string;
   value: string;
@@ -45,9 +39,6 @@ interface ModalTitleViolation {
   locale: string;
 }
 
-/**
- * Interface for modal description length violations
- */
 interface ModalDescriptionViolation {
   key: string;
   value: string;
@@ -55,9 +46,6 @@ interface ModalDescriptionViolation {
   locale: string;
 }
 
-/**
- * Interface for command description length violations
- */
 interface CommandDescriptionViolation {
   key: string;
   value: string;
@@ -151,9 +139,6 @@ interface ExpectedMetadataKey {
   strict: boolean;
 }
 
-/**
- * Interface for analysis results
- */
 interface AnalysisResult {
   missingKeys: KeyUsage[];
   unusedKeys: KeyUsage[];

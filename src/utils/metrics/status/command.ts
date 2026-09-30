@@ -37,9 +37,6 @@ const defaultStatusCommandDependencies: StatusCommandDependencies = {
   renderStatusPageDashboard,
 };
 
-/**
- * Executes the /status command for personal, server, and persona status categories.
- */
 export async function executeStatusCommand(
   client: Client,
   interaction: ChatInputCommandInteraction,

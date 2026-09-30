@@ -75,9 +75,6 @@ const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_API_VERSION = "2023-06-01";
 const ANTHROPIC_MAX_OUTPUT_TOKENS = parseInt(process.env.ANTHROPIC_MAX_OUTPUT_TOKENS ?? "8192", 10);
 
-/**
- * Configuration for Anthropic provider requests
- */
 export interface AnthropicProviderConfig extends ProviderConfig {
   seesImages?: boolean;
   topP?: number;
@@ -262,9 +259,6 @@ export class AnthropicProvider
     return DEFAULT_ANTHROPIC_MODEL;
   }
 
-  /**
-   * Create provider-specific configuration from TomoriState.
-   */
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<AnthropicProviderConfig> {
     const samplingParams = buildActiveSamplingParams(tomoriState.config);
     const config: AnthropicProviderConfig = {

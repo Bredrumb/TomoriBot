@@ -116,11 +116,7 @@ export async function loadEndpointCredentials(
   }
 }
 
-/**
- * Load all voice samples registered for a server, ordered by name.
- *
- * @returns Array of VoiceSampleRow (may be empty)
- */
+/** Ordered by name. */
 export async function loadVoiceSamples(serverId: number): Promise<VoiceSampleRow[]> {
   try {
     const rows = await sql`

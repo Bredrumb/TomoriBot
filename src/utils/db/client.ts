@@ -189,10 +189,7 @@ export function resolveProductionPostgresTls(
 // initialization when modules import sql before dotenv/Secrets Manager runs).
 let cachedClient: SQL | null = null;
 
-/**
- * Gets the singleton database client, creating it on first access.
- *
- */
+/** The client is created on first access. */
 function getClient(): SQL {
   if (!cachedClient) {
     cachedClient = createDatabaseClient();

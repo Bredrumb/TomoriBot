@@ -22,9 +22,6 @@ function isDuplicateTaggedName(name: string): boolean {
   return /\[dup-\d+\]\s*$/i.test(name.trim());
 }
 
-/**
- * Configure the 'remove' subcommand
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.persona.remove.description"));
 

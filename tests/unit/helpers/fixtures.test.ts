@@ -8,10 +8,7 @@ import { describe, expect, it } from "bun:test";
 import { PrivacyLevel, assembledServerConfigSchema, tomoriStateSchema, userSchema } from "@/types/db/schema";
 import { createLlmRow, createPersona, createServerConfig, createUserRow } from "../../helpers/fixtures";
 
-/**
- * Schema defaults for the assembled server config, as `loadServerState` reads them after setup with
- * nothing changed.
- */
+/** As `loadServerState` reads them after setup with nothing changed. */
 function schemaConfigDefaults() {
   return assembledServerConfigSchema.parse({
     llm_id: 1,

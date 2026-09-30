@@ -101,9 +101,6 @@ export interface NovelaiProviderConfig extends ProviderConfig {
   // No provider-specific config needed here
 }
 
-/**
- * NovelAI provider implementation
- */
 export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
   /**
    * Get provider information and capabilities

@@ -79,9 +79,6 @@ export interface GoogleTokenCountPayload {
   contents: Content[];
 }
 
-/**
- * Raw chunk from Google's streaming API
- */
 interface GoogleStreamChunk {
   text?: string;
   functionCalls?: GoogleFunctionCall[];

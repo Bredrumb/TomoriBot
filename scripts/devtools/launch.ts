@@ -317,11 +317,7 @@ async function waitForPythonReady(
   throw new Error(`Server did not report a ready JSON status within ${timeoutMs / 1000}s.`);
 }
 
-/**
- * Ensures a Docker-backed local server is running. Creates the container via "docker run"
- * if it doesn't exist, or resumes it with "docker start" if it does.
- * Waits for the container's healthcheck to pass before returning.
- */
+/** Waits for the container's healthcheck to pass before returning. */
 async function ensureDockerLocalServer(def: DockerLocalServer): Promise<void> {
   const { containerName, healthTimeoutMs = 120_000 } = def;
   const label = pc.cyan(`[${containerName}]`);

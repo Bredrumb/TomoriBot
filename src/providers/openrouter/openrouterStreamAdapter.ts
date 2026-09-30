@@ -191,9 +191,6 @@ const OPENROUTER_OUTPUT_SAFETY_FACTOR = 0.9;
  */
 const OPENROUTER_MIN_OUTPUT_TOKENS = 256;
 
-/**
- * OpenRouter streaming adapter implementation
- */
 export class OpenrouterStreamAdapter extends BaseStreamAdapter {
   private static readonly TEMPERATURE_OMIT_MODELS = new Set<string>([
     // Models that don't support temperature parameter

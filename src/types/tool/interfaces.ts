@@ -204,9 +204,6 @@ export interface ToolContext {
   abortSignal?: AbortSignal;
 }
 
-/**
- * Result returned by tool execution
- */
 export interface ToolResult {
   success: boolean;
   data?: unknown;
@@ -220,9 +217,6 @@ export interface ToolResult {
   endTurn?: boolean;
 }
 
-/**
- * Tool category classification
- */
 export type ToolCategory = "discord" | "search" | "memory" | "utility" | "mcp";
 
 /**
@@ -464,9 +458,6 @@ export interface MCPCapableToolAdapter extends ToolAdapter {
   ): Promise<TypedMCPToolResult>;
 }
 
-/**
- * Tool execution event for monitoring and debugging
- */
 export interface ToolExecutionEvent {
   toolName: string;
   provider: string;
@@ -478,9 +469,6 @@ export interface ToolExecutionEvent {
   timestamp: Date;
 }
 
-/**
- * Tool registry interface for managing all available tools
- */
 export interface ToolRegistryInterface {
   registerTool(tool: Tool): void;
 

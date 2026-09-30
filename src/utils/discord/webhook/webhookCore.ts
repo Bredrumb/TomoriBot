@@ -1235,11 +1235,6 @@ export function resolvePersonaAvatarURL(persona: TomoriState, guild: Guild | nul
   return undefined;
 }
 
-/**
- * Invalidates the webhook cache for a specific channel.
- * Useful when webhooks are manually deleted or need to be refreshed.
- *
- */
 export function invalidateWebhookCache(channelId: string): void {
   const hadCache = webhookCache.has(channelId);
   const cachedWebhook = webhookCache.get(channelId);

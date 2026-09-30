@@ -479,9 +479,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     }
   }
 
-  /**
-   * Single-pass streaming for Kayra; no continuation loop
-   */
+  /** For Kayra; there is no continuation loop. */
   private async *streamSinglePass(
     request: NovelAIGenerationRequest,
     config: StreamConfig,
