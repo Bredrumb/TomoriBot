@@ -142,9 +142,6 @@ export interface OpenrouterProviderConfig extends ProviderConfig {
   minP?: number; // Minimum probability threshold (0.0=disabled)
 }
 
-/**
- * OpenRouter provider implementation
- */
 export class OpenrouterProvider
   extends BaseLLMProvider
   implements

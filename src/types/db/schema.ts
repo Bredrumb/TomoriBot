@@ -1281,10 +1281,7 @@ const apiKeyRotationConfigSchema = z.object({
   updated_at: z.date().optional(), // Handled by DB default/trigger
 });
 
-/**
- * Schema for api_key_rotation_runtime_state table.
- * Excluded from export; reset independently of config/credentials.
- */
+/** Excluded from export; reset independently of config/credentials. */
 const apiKeyRotationRuntimeStateSchema = z.object({
   rotation_key_id: z.number(), // PK + FK → api_key_rotation(rotation_key_id) ON DELETE CASCADE
   usage_count: coerceNumber.default(0), // For round-robin tracking
@@ -1474,9 +1471,6 @@ export type TomoriState = TomoriRow &
     autoch_next_target: number;
   };
 
-/**
- * Schema for validating the combined Tomori state
- */
 export const tomoriStateSchema = tomoriSchema.merge(personaScopedConfigStateSchema).extend({
   config: assembledServerConfigSchema,
   llm: llmSchema, // Added LLM schema validation

@@ -67,19 +67,12 @@ function parsePersonaNameInput(input: string): string[] {
   return dedupeTriggerWords(input.split(/[,\u3001]/), { lowercase: false });
 }
 
-/**
- * Configure the 'generate' subcommand
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("generate").setDescription(localizer("en-US", "commands.persona.generate.description"));
 
 /**
- * Format sample dialogues for preview display
- * @param dialoguesIn - Array of user input dialogues
- * @param dialoguesOut - Array of bot response dialogues
  * @param maxExamples - Maximum number of examples to show (default: 3)
  * @param maxLength - Maximum length per dialogue snippet (default: 100)
- * @returns Formatted dialogue preview string
  */
 function formatDialoguePreview(
   dialoguesIn: string[],

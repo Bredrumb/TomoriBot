@@ -81,9 +81,6 @@ function parseModalInteger(raw: string | undefined, min: number, max: number): {
   return { value: parsed };
 }
 
-/**
- * Configure the subcommand
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("video").setDescription(localizer("en-US", "commands.generate.video.description"));
 

@@ -27,7 +27,6 @@ import {
 } from "@/providers/utils/presetCommon";
 import { resolvePresetGenerationMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 
-/** Options for NVIDIA NIM preset generation. */
 interface NvidiaPresetGenerationOptions {
   model: string;
   temperature?: number;

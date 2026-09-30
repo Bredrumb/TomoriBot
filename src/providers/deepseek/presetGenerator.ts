@@ -27,7 +27,6 @@ import { resolvePresetGenerationMaxOutputTokens } from "@/utils/provider/maxOutp
 
 const DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions";
 
-/** Options for DeepSeek preset generation. */
 interface DeepseekPresetGenerationOptions {
   model: string;
   temperature?: number;

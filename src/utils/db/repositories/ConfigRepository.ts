@@ -192,9 +192,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   }
 
   /**
-   * Loads preset option rows filtered by locale, with an optional max description length.
-   *
-   * @param locale               - Locale code (e.g. "en-US")
+   * @param locale - Locale code (e.g. "en-US")
    * @param maxDescriptionLength - Truncate descriptions to this length (default 100)
    */
   async loadPresetOptionsByLocale(

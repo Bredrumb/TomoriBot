@@ -91,9 +91,6 @@ export interface PresetExport {
   data: PresetExportData;
 }
 
-/**
- * Result type for export operations
- */
 export type ExportResult =
   | {
       success: true;
@@ -104,9 +101,6 @@ export type ExportResult =
       error: string; // Locale key for error message
     };
 
-/**
- * Result type for import operations
- */
 export type ImportResult =
   | {
       success: true;
@@ -133,9 +127,6 @@ export interface ValidationResult {
   error?: string; // Locale key or pipe-separated error
 }
 
-/**
- * Zod schema for preset export data validation
- */
 export const presetExportDataSchema = z.object({
   tomori_nickname: z.string().min(1, "Nickname cannot be empty").max(100, "Nickname too long"),
   attribute_list: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_ATTRIBUTES),

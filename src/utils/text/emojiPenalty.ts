@@ -16,9 +16,6 @@ const EMOJI_PENALTY_LOOKBACK_MESSAGES = 3;
 const EMOJI_PENALTY_MAX_EMOJIS = 1;
 const EMOJI_UNIQUE_LOOKBACK_MESSAGES = 5;
 
-/**
- * Configuration for emoji penalty thresholds
- */
 interface EmojiPenaltyConfig {
   /** Whether the emoji penalty system is enabled */
   readonly enabled: boolean;
@@ -114,9 +111,6 @@ export function getEmojiPenaltyDirective(
   return buildEmojiPenaltyText(speakerLabel);
 }
 
-/**
- * Configuration for unique emoji enforcement
- */
 interface UniqueEmojiConfig {
   /** Whether unique emoji enforcement is enabled */
   readonly enabled: boolean;

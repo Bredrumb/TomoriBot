@@ -1027,11 +1027,9 @@ class PresetRepository {
   }
 
   /**
-   * Imports TomoriBot preset personality data, replacing existing personality.
+   * Replaces the existing personality.
    *
-   * @param serverDiscId - Discord server ID to import preset for
    * @param identityMode - preserve: keep/import lineage, fork: assign a fresh lineage
-   * @returns ImportResult indicating success or failure with item counts
    */
   async importPresetData(
     serverDiscId: string,
@@ -1244,10 +1242,8 @@ class PresetRepository {
   }
 
   /**
-   * Validates already-extracted preset data, including converted imports and
-   * command-added trigger words.
-   * Runtime memory env limits are intentionally not applied here; preset import
-   * uses schema safety limits.
+   * Covers converted imports and command-added trigger words. Runtime memory env limits are
+   * intentionally not applied here; preset import uses schema safety limits.
    */
   validatePresetData(data: unknown): ValidationResult {
     const validated = presetExportDataSchema.safeParse(data);
@@ -1275,10 +1271,7 @@ class PresetRepository {
   }
 
   /**
-   * Validates and parses a preset import file.
-   *
    * @param jsonData - The parsed JSON data from the PNG metadata
-   * @returns Validation result with parsed data or error message
    */
   validatePresetFile(jsonData: unknown): ValidationResult {
     if (typeof jsonData !== "object" || jsonData === null) {

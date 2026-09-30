@@ -15,8 +15,8 @@ export type FakeCall = {
 };
 
 /**
- * Minimal fake interaction surface. Covers every acknowledgement method the
- * Discord command-system docs require plus the helpers commands call directly.
+ * Covers every acknowledgement method the Discord command-system docs require plus the helpers
+ * commands call directly.
  */
 export type FakeInteraction = {
   /** Tracks whether deferReply() has been called. */

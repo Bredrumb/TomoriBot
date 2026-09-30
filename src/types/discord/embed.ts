@@ -36,9 +36,6 @@ export interface TranslationEmbedOptions {
   timeout?: number;
 }
 
-/**
- * Options for confirmation embeds with buttons
- */
 export interface ConfirmationOptions {
   embedTitleKey: string;
   embedDescriptionKey: string;
@@ -54,17 +51,11 @@ export interface ConfirmationOptions {
   cancelStyle?: ButtonStyle.Secondary | ButtonStyle.Danger;
 }
 
-/**
- * Result type for confirmation interactions
- */
 export type ConfirmationResult = {
   outcome: "continue" | "cancel" | "timeout";
   interaction?: ButtonInteraction; // The button interaction if outcome is 'continue'
 };
 
-/**
- * Available translation providers
- */
 export enum TranslationProvider {
   GOOGLE = "google",
   BING = "bing",
@@ -97,9 +88,6 @@ export interface SummaryEmbedOptions extends StandardEmbedOptions {
   appendEmbeds?: EmbedBuilder[];
 }
 
-/**
- * Interface for paginated choice options
- */
 export interface PaginatedChoiceOptions {
   titleKey: string; // Localization key for the embed title
   titleVars?: Record<string, string | number | boolean>; // Variables for the title localization
@@ -116,9 +104,6 @@ export interface PaginatedChoiceOptions {
   flags?: MessageFlags;
 }
 
-/**
- * Result of a paginated choice selection
- */
 export interface PaginatedChoiceResult {
   success: boolean; // Whether a selection was made successfully
   selectedIndex?: number; // The index of the selected item (if success is true)

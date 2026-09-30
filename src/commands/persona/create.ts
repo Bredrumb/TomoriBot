@@ -67,9 +67,6 @@ function buildCreateResultPayload(
   );
 }
 
-/**
- * Configure the 'create' subcommand
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("create").setDescription(localizer("en-US", "commands.persona.create.description"));
 

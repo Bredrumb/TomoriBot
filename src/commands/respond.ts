@@ -19,9 +19,6 @@ import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { isNoticeEmbedVisible } from "@/utils/discord/toolProgressNotice";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
-/**
- * Configure the respond command
- */
 export const configureCommand = (command: SlashCommandBuilder) =>
   command
     .setName("respond")

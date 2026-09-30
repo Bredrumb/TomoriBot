@@ -7,9 +7,6 @@
 import { log } from "@/utils/misc/logger";
 import { fetchUserRemoteUrl, RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
 
-/**
- * Options for safe download operation
- */
 export interface SafeDownloadOptions {
   /**
    * Maximum file size in MB
@@ -40,9 +37,6 @@ export interface SafeDownloadOptions {
   externalSignal?: AbortSignal;
 }
 
-/**
- * Result of safe download operation
- */
 export interface SafeDownloadResult {
   /**
    * Whether the download succeeded

@@ -27,7 +27,6 @@ import { resolvePresetGenerationMaxOutputTokens } from "@/utils/provider/maxOutp
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_API_VERSION = "2023-06-01";
 
-/** Options for Anthropic preset generation. */
 interface AnthropicPresetGenerationOptions {
   model: string;
   temperature?: number;

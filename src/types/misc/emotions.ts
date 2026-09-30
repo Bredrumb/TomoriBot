@@ -66,9 +66,6 @@ export const getManualEditEmotionKeys = (): string[] => {
   return getAllEmotionKeys().filter((key) => !MANUAL_EDIT_EXCLUDED_EMOTIONS.includes(key as EmotionKey));
 };
 
-/**
- * Validate if a string is a valid emotion key
- */
 export const isValidEmotionKey = (key: string): key is EmotionKey => {
   return Object.values(EmotionKey).includes(key as EmotionKey);
 };

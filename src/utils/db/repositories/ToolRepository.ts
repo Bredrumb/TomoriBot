@@ -118,7 +118,6 @@ class ToolRepository implements IRepository<ToolExportShape> {
   }
 
   /**
-   * Deletes an MCP server from a guild by name.
    * Invalidates caches after write.
    *
    * @param serverDiscId - Discord server snowflake (required for tomori state cache invalidation)

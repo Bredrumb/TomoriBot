@@ -610,7 +610,6 @@ class ImportRepository {
     return upserted[0]?.user_id ?? null;
   }
 
-  /** Resolves a Discord server ID to the internal server_id. */
   private async resolveServerId(serverDiscId: string): Promise<number | null> {
     const serverRows = await sql<Array<{ server_id: number }>>`
       SELECT s.server_id

@@ -12,9 +12,6 @@ export interface SelectOption {
   };
 }
 
-/**
- * Options for text input fields in a modal
- */
 export interface ModalInputField {
   customId: string;
   labelKey: string;
@@ -27,9 +24,6 @@ export interface ModalInputField {
   value?: string;
 }
 
-/**
- * Options for string select fields in a modal
- */
 export interface ModalSelectField {
   customId: string;
   labelKey: string;
@@ -181,9 +175,6 @@ export interface ModalChannelSelectField {
   channelTypes?: ChannelType[];
 }
 
-/**
- * Union type for all modal component types
- */
 export type ModalComponent =
   | ModalInputField
   | ModalSelectField
@@ -290,9 +281,6 @@ export interface ModalOptions {
   selectorStyle?: "legacy" | "componentsV2";
 }
 
-/**
- * Result type for modal interactions
- */
 export type ModalResult = {
   /**
    * `submit`: the user completed the modal. `timeout`: the selector or modal

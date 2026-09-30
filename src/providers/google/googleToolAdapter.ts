@@ -18,9 +18,6 @@ import { getMCPManager } from "../../utils/mcp/mcpManager";
 import { getMCPExecutor } from "../../utils/mcp/mcpExecutor";
 import { getGuildMcpManager } from "../../utils/mcp/guildMcpManager";
 
-/**
- * Google-specific function declaration format
- */
 interface GoogleFunctionDeclaration extends Record<string, unknown> {
   name: string;
   description: string;

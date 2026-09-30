@@ -92,9 +92,6 @@ type AnthropicContentBlock =
   | AnthropicToolResultBlock
   | AnthropicThinkingBlock;
 
-/**
- * Anthropic message format
- */
 interface AnthropicMessage {
   role: "user" | "assistant";
   content: string | AnthropicContentBlock[];
@@ -109,9 +106,6 @@ interface AccumulatedToolCall {
   argumentsJson: string;
 }
 
-/**
- * SSE event types from Anthropic's streaming API
- */
 type AnthropicSseEventType =
   | "message_start"
   | "content_block_start"

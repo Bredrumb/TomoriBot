@@ -88,9 +88,6 @@ export interface ThoughtLogPayload {
   servingProvider?: string;
 }
 
-/**
- * Generic stream response result
- */
 export interface StreamResult {
   status:
     | "completed"

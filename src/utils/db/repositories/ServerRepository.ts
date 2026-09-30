@@ -384,10 +384,9 @@ class ServerRepository implements IRepository<ServerExportShape> {
   }
 
   /**
-   * Decrypts the token for a managed Discord webhook row, rotating the key if outdated.
+   * Rotates the key when the row's key is outdated.
    *
-   * @param row - ManagedDiscordWebhookRow with encrypted webhook_token
-   * @returns Decrypted token string or null on failure
+   * @returns The decrypted token, or null on failure
    */
   async decryptManagedWebhookToken(row: ManagedDiscordWebhookRow): Promise<string | null> {
     return this.sqlDecryptManagedWebhookToken(row);

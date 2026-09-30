@@ -139,9 +139,6 @@ export interface StreamState {
   usage?: TokenUsage;
 }
 
-/**
- * Configuration for text processing and humanization
- */
 export interface TextProcessingConfig {
   humanizerDegree: HumanizerDegree;
   visibleDeliveryMode: VisibleDeliveryMode;
@@ -160,9 +157,6 @@ export interface TextProcessingConfig {
   uncensorSanitizeEnabled?: boolean;
 }
 
-/**
- * Configuration for typing simulation behavior
- */
 export interface TypingSimulationConfig {
   enabled: boolean;
   baseSpeedMsPerChar: number;
@@ -186,9 +180,6 @@ export interface StreamMetrics {
   timeouts: number;
 }
 
-/**
- * Stream chunk processing result
- */
 export interface ChunkProcessingResult {
   shouldFlush: boolean;
   segmentToFlush?: string;
@@ -238,9 +229,6 @@ export function createDefaultStreamMetrics(): StreamMetrics {
   };
 }
 
-/**
- * Helper function to create typing simulation configuration
- */
 export function createTypingSimulationConfig(
   humanizerDegree: HumanizerDegree,
   customConfig?: Partial<TypingSimulationConfig>,

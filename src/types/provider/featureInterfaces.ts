@@ -220,7 +220,7 @@ interface ProviderNativeVideoReference {
 
 export type ProviderNativeVideoResolution = "480p" | "720p" | "1080p";
 
-/** Request parameters for native video generation across all providers */
+/** Shared across all providers. */
 export interface ProviderNativeVideoGenerationRequest {
   apiKey: string;
   model: string;

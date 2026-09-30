@@ -31,9 +31,6 @@ const PERSONA_EXPORT_JSON_SELECT_ID = "export_json_select";
 const PERSONA_EXPORT_JSON_FALSE = "false";
 const PERSONA_EXPORT_JSON_TRUE = "true";
 
-/**
- * Configure the 'export' subcommand
- */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("export").setDescription(localizer("en-US", "commands.persona.export.description"));
 

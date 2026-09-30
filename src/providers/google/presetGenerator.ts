@@ -22,18 +22,12 @@ export type {
   PresetGenerationResult,
 } from "@/types/provider/featureInterfaces";
 
-/**
- * Additional context for character search
- */
 interface CharacterSearchContext {
   description?: string; // Character description from user
   speechExamples?: string; // How the character should speak
   additionalInstructions?: string; // Extra instructions
 }
 
-/**
- * Result of character information search
- */
 interface CharacterSearchResult {
   characterInfo?: string; // Found character information
   error?: string; // Error message if search failed

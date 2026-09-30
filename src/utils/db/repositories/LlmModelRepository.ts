@@ -1462,12 +1462,7 @@ class LlmModelRepository {
     return Boolean(row?.in_use);
   }
 
-  /**
-   * Count active scope registrations for a scoped LLM.
-   * Zero means the catalog row can be deleted if also unreferenced.
-   *
-   * @param llmId - Internal LLM ID
-   */
+  /** Zero means the catalog row can be deleted if also unreferenced. */
   async countLlmRegistrations(llmId: number): Promise<number> {
     const [row] = await sql<Array<{ count: string | number }>>`
       SELECT COUNT(*) AS count FROM scoped_model_registrations WHERE llm_id = ${llmId}
@@ -1475,11 +1470,6 @@ class LlmModelRepository {
     return Number(row?.count ?? 0);
   }
 
-  /**
-   * Count active scope registrations for a scoped embedding model.
-   *
-   * @param embeddingModelId - Internal embedding model ID
-   */
   async countEmbeddingModelRegistrations(embeddingModelId: number): Promise<number> {
     const [row] = await sql<Array<{ count: string | number }>>`
       SELECT COUNT(*) AS count FROM scoped_model_registrations
@@ -1488,11 +1478,6 @@ class LlmModelRepository {
     return Number(row?.count ?? 0);
   }
 
-  /**
-   * Count active scope registrations for a scoped diffusion model.
-   *
-   * @param diffusionModelId - Internal diffusion model ID
-   */
   async countDiffusionModelRegistrations(diffusionModelId: number): Promise<number> {
     const [row] = await sql<Array<{ count: string | number }>>`
       SELECT COUNT(*) AS count FROM scoped_model_registrations
@@ -1501,11 +1486,6 @@ class LlmModelRepository {
     return Number(row?.count ?? 0);
   }
 
-  /**
-   * Count active scope registrations for a scoped video model.
-   *
-   * @param videoModelId - Internal video model ID
-   */
   async countVideoModelRegistrations(videoModelId: number): Promise<number> {
     const [row] = await sql<Array<{ count: string | number }>>`
       SELECT COUNT(*) AS count FROM scoped_model_registrations
