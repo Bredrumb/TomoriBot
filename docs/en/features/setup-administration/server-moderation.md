@@ -61,8 +61,9 @@ are posted, useful for auditing what she's doing (including which trigger expose
 ## Welcome Greetings
 
 `/config` > Channels > Logs & Welcome configures an automated greeting for new members in a chosen
-channel. By default, Tomori waits one minute before greeting them so server onboarding can
-finish. Use the
+channel. Tomori waits until the member has finished your server's rules screening and onboarding,
+so nobody is greeted before they can see your channels, and a member who leaves first is never
+greeted. Use the
 `Clear Welcome` button on that same page to stop greetings.
 
 ## Expressions

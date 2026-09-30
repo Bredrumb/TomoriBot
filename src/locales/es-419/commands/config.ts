@@ -116,8 +116,8 @@ export default {
       channels_auto_trigger_enabled_title: `Canales habilitados`,
       channels_auto_trigger_enabled_description: `Los mensajes aquí cuentan para la activación automática.`,
       channels_auto_trigger_none: `No hay canales habilitados.`,
-      channels_auto_trigger_manage_button: `Gestionar canales`,
-      channels_auto_trigger_configure_button: `Configurar canal`,
+      channels_auto_trigger_manage_button: `Seleccionar canales`,
+      channels_auto_trigger_configure_button: `Persona del canal`,
       channels_auto_trigger_threshold_title: `Umbral de actividad de canal`,
       channels_auto_trigger_threshold_description:
         "Controla cuántos mensajes pasan antes de que responda automáticamente.",

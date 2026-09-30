@@ -16,6 +16,8 @@ TomoriBot routes Discord events through one dispatcher: `src/handlers/eventHandl
 - `guildCreate`
 - `guildEmojisUpdate`
 - `guildMemberAdd`
+- `guildMemberRemove`
+- `guildMemberUpdate`
 - `guildStickersUpdate`
 - `interactionCreate`
 - `messageCreate`
@@ -28,6 +30,8 @@ TomoriBot routes Discord events through one dispatcher: `src/handlers/eventHandl
 - `clientReady` -> `clientReady`
 - `guildCreate` -> `guildCreate`
 - `guildMemberAdd` -> `guildMemberAdd`
+- `guildMemberUpdate` -> `guildMemberUpdate`
+- `guildMemberRemove` -> `guildMemberRemove`
 - `emojiCreate`/`emojiDelete`/`emojiUpdate` -> `guildEmojisUpdate`
 - `stickerCreate`/`stickerDelete`/`stickerUpdate` -> `guildStickersUpdate`
 - `rateLimit` -> `rateLimit`
@@ -64,8 +68,13 @@ Current message preprocessing enriches fetched history before `buildContext()`:
 
 - registers the joining Discord user in the database
 - optionally triggers a configured welcome message in the server's welcome channel
-- configured greetings wait for `WELCOME_DELAY_MS` (60,000 ms, the constant in `helpers/welcomeDelay.ts`) after registration so onboarding can finish
-- after the delay, the handler skips memberships that ended (including leave/rejoin races) and reloads the Welcome configuration before generating
+- configured greetings wait until the member can see the server: `helpers/welcomeGate.ts` holds an in-memory waiter per member that opens on `guildMemberUpdate` once `pending` (Membership Screening) is clear and, when the guild has Onboarding enabled, the `CompletedOnboarding` member flag is set
+- `guildMemberRemove` cancels the waiter, and a waiter that never opens is dropped after `WELCOME_GATE_MAX_WAIT_MS` (1 hour) without greeting
+- guilds with no gate greet immediately; if the Onboarding config cannot be read, the handler falls back to a fixed `WELCOME_DELAY_MS` (60,000 ms, `helpers/welcomeDelay.ts`) after screening clears
+- the waiter returns the freshest member state it saw, and the greeting is built from that instead of the join-time copy
+- an unreadable Onboarding config is logged once per guild per process to avoid repeated errors
+- waiters live in memory, so a restart drops any greeting still waiting on a member
+- once the gate opens, the handler skips memberships that ended (including leave/rejoin races) and reloads the Welcome configuration before generating
 - welcome greetings reuse the normal chat coordinator manual-trigger pipeline, including persona selection, queueing, and mention fallback checks
 
 ## Adding a New Event Handler
