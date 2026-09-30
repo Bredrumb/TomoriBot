@@ -244,7 +244,6 @@ describe("evaluateChatAdmission server blacklist", () => {
   });
 });
 
-
 describe("evaluateMessageProxyOriginalSpeedbump guild presence", () => {
   const userDiscId = "100000000000000035";
   const channelId = "proxy-original-presence";
@@ -262,6 +261,7 @@ describe("evaluateMessageProxyOriginalSpeedbump guild presence", () => {
         message_proxy_instance_id: "pluralkit:official",
       }),
     );
+    const privacySpy = spyOn(userRepository, "getPrivacyLevel").mockResolvedValue(PrivacyLevel.MINIMAL);
     const instanceSpy = spyOn(messageProxyInstanceRepository, "getEnabled").mockResolvedValue({
       serviceId: "pluralkit",
       instanceId: "pluralkit:official",
@@ -299,6 +299,7 @@ describe("evaluateMessageProxyOriginalSpeedbump guild presence", () => {
       ignored,
       restore: () => {
         rowSpy.mockRestore();
+        privacySpy.mockRestore();
         instanceSpy.mockRestore();
         invalidateUserCache(userDiscId);
         clearMessageProxyExpectationStateForTests();
@@ -379,6 +380,7 @@ describe("evaluateMessageProxyOriginalSpeedbump guild presence", () => {
 
       expect(outcome.kind).toBe("released");
       expect(outcome.result).toBeNull();
+      expect(memberFetch).toHaveBeenCalled();
       expect(hasLiveMessageProxyExpectations(channelId)).toBe(false);
     } finally {
       if (previousWaitMs === undefined) delete process.env.MESSAGE_PROXY_WAIT_MS;
