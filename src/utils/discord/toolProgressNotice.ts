@@ -41,6 +41,7 @@ function buildToolNoticeOptions(
 
   return {
     ...options,
+    minimal: undefined,
     description: [sourceDescription, description].filter((part) => part.length > 0).join("\n\n"),
     footerKey: showKillHint ? KILL_HINT_FOOTER_KEY : undefined,
     footerVars: undefined,
@@ -225,9 +226,10 @@ export function isToolNoticeVisible(config: AssembledServerConfig, key: ToolNoti
 }
 
 /**
- * Whether a notice posted in the conversation renders Minimal. Only the conversation copy shrinks:
- * a hidden notice rerouted to the thought log keeps its full card, because that channel is the
- * record admins read for the detail.
+ * Whether a notice posted in the conversation renders Minimal.
+ *
+ * Minimal notices post only their title in conversation while mirroring the full card to the
+ * thought log. Verbose notices post the full card in conversation alone to avoid redundancy.
  */
 export function isMinimalNotice(config: AssembledServerConfig, key: ToolNoticeKey): boolean {
   return !VERBOSITY_EXEMPT_NOTICE_KEYS.has(key) && config.tool_notice_verbosity !== "verbose";
@@ -341,12 +343,16 @@ export async function sendToolNotice(
   if (context.suppressProgressNotices) return;
   try {
     const { config } = context.tomoriState;
-    if (isToolNoticeVisible(config, noticeKey)) {
-      const visibleOptions = isMinimalNotice(config, noticeKey)
+    const isVisible = isToolNoticeVisible(config, noticeKey);
+    const isMinimal = isVisible && isMinimalNotice(config, noticeKey);
+    if (isVisible) {
+      const visibleOptions = isMinimal
         ? { ...options, minimal: true }
         : buildToolNoticeOptions(context.locale, options, undefined, context.showKillHint);
       await sendStandardEmbed(context.channel, context.locale, visibleOptions, getWebhookContext(context));
-      return;
+      if (!isMinimal) {
+        return;
+      }
     }
 
     if (!isHiddenNoticeRoutable(context)) {

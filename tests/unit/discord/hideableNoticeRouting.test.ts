@@ -149,6 +149,94 @@ describe("hideable tool notices", () => {
     expect(thoughtLog.sent[0]).toContain(configHint());
   });
 
+  it("mirrors a Minimal progress notice to the thought log as a full verbose card with a source backlink", async () => {
+    const conversation = fakeChannel("200");
+    const thoughtLog = fakeChannel("900");
+    const context = buildContext({ hidden: [], conversation, thoughtLog });
+    context.showKillHint = true;
+    await sendToolNotice(
+      context,
+      "web_search",
+      {
+        titleKey: "tools.search.category_search_title",
+        titleVars: { category: "Web", query: "tea" },
+        description: "Looking around",
+      },
+      "test",
+    );
+
+    expect(conversation.sent).toHaveLength(1);
+    expect(thoughtLog.sent).toHaveLength(1);
+    const [convPayload] = conversation.sent;
+    const [thoughtPayload] = thoughtLog.sent;
+
+    const searchTitle = { category: "Web", query: "tea" };
+    expect(convPayload).toContain(
+      encoded(localizedMinimalTitle("en-US", "tools.search.category_search_title", searchTitle)),
+    );
+    expect(convPayload).not.toContain("🔍");
+    expect(convPayload).not.toContain("Looking around");
+    expect(convPayload).not.toContain(encoded(localizedCopy("en-US", "tools.tool_notice.kill_hint")));
+
+    expect(thoughtPayload).toContain(SOURCE_URL);
+    expect(thoughtPayload).toContain("Looking around");
+    expect(thoughtPayload).toContain(encoded(localizedCopy("en-US", "tools.tool_notice.kill_hint")));
+  });
+
+  it("keeps a Verbose progress notice conversation-only to avoid redundancy", async () => {
+    const conversation = fakeChannel("200");
+    const thoughtLog = fakeChannel("900");
+    const context = buildContext({ hidden: [], conversation, thoughtLog, verbosity: "verbose" });
+    context.showKillHint = true;
+    await sendToolNotice(
+      context,
+      "web_search",
+      {
+        titleKey: "tools.search.category_search_title",
+        titleVars: { category: "Web", query: "tea" },
+        description: "Looking around",
+      },
+      "test",
+    );
+
+    expect(conversation.sent).toHaveLength(1);
+    expect(thoughtLog.sent).toHaveLength(0);
+  });
+
+  it("does not mirror a Minimal notice to the thought log when sent from a DM or private channel", async () => {
+    const dmConversation = fakeChannel("200", { dm: true });
+    const dmThoughtLog = fakeChannel("900");
+    await sendToolNotice(
+      buildContext({ hidden: [], conversation: dmConversation, thoughtLog: dmThoughtLog }),
+      "web_search",
+      {
+        titleKey: "tools.search.category_search_title",
+        titleVars: { category: "Web", query: "tea" },
+        description: "Looking around",
+      },
+      "test",
+    );
+
+    expect(dmConversation.sent).toHaveLength(1);
+    expect(dmThoughtLog.sent).toHaveLength(0);
+
+    const privateConversation = fakeChannel("200");
+    const privateThoughtLog = fakeChannel("900");
+    await sendMemoryEmbedWithExpand(
+      buildContext({
+        hidden: [],
+        conversation: privateConversation,
+        thoughtLog: privateThoughtLog,
+        privateChannelIds: ["200"],
+      }),
+      memoryNotice,
+      "likes tea",
+    );
+
+    expect(privateConversation.sent).toHaveLength(1);
+    expect(privateThoughtLog.sent).toHaveLength(0);
+  });
+
   it("hides only the toggled notice type", async () => {
     const conversation = fakeChannel("200");
     const thoughtLog = fakeChannel("900");
@@ -163,7 +251,8 @@ describe("hideable tool notices", () => {
     );
 
     expect(conversation.sent).toHaveLength(1);
-    expect(thoughtLog.sent).toHaveLength(0);
+    expect(thoughtLog.sent).toHaveLength(1);
+    expect(thoughtLog.sent[0]).toContain(SOURCE_URL);
   });
 
   it.each<[string, Omit<Parameters<typeof buildContext>[0], "hidden">]>([

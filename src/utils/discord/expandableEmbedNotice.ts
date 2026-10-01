@@ -330,8 +330,12 @@ type NoticeDelivery = (
 ) => Promise<void>;
 
 /**
- * Delivers a hideable tool notice in the conversation, or the same card to the thought log when
- * the server hid `noticeKey` in `/config` > Behavior > Notices.
+ * Delivers a hideable tool notice in the conversation and/or the thought log.
+ *
+ * Minimal notices post only their title in the conversation while mirroring the full card to the
+ * thought log when one is configured. Verbose notices post the full card in conversation alone to
+ * avoid redundancy. Hidden notices suppress conversation output and reroute the full card to the
+ * thought log.
  *
  * Deliberately ignores `suppressProgressNotices`: that flag silences "working..." progress cards,
  * while these confirm a change the persona already made, which flows like the silent turn have
@@ -345,23 +349,28 @@ async function routeHideableNotice(
 ): Promise<void> {
   const { config } = context.tomoriState;
   const hintedOptions: StandardEmbedOptions = { ...embedOptions, configHint: true };
-  if (isNoticeEmbedVisible(config, noticeKey)) {
-    const visibleOptions = isMinimalNotice(config, noticeKey) ? { ...embedOptions, minimal: true } : hintedOptions;
+  const isVisible = isNoticeEmbedVisible(config, noticeKey);
+  const isMinimal = isVisible && isMinimalNotice(config, noticeKey);
+
+  if (isVisible) {
+    const visibleOptions = isMinimal ? { ...embedOptions, minimal: true } : hintedOptions;
     await deliver(context.channel, visibleOptions, {
       webhook: context.webhook,
       personaUsername: context.personaUsername,
       personaAvatarUrl: context.personaAvatarUrl,
     });
-    return;
+    if (!isMinimal) {
+      return;
+    }
   }
 
-  const logLabel = `Hidden ${noticeKey} notice`;
+  const logLabel = `${isVisible ? "Minimal" : "Hidden"} ${noticeKey} notice`;
   try {
     const target = await resolveHiddenNoticeTarget(context, logLabel);
     if (!target) return;
     await deliver(target.channel, withThoughtLogSource(context, hintedOptions), target.webhookContext);
   } catch (error) {
-    log.warn(`${logLabel}: Failed to reroute to the thought log`, error as Error);
+    log.warn(`${logLabel}: Failed to route to the thought log`, error as Error);
   }
 }
 
