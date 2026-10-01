@@ -125,7 +125,7 @@ export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassificatio
   },
   {
     table: "server_notice_embeds_configs",
-    reset: ["tool_notice_hidden_keys"],
+    reset: ["tool_notice_hidden_keys", "tool_notice_verbosity"],
     preserved: [],
   },
   {
@@ -385,6 +385,7 @@ class ResetRepository {
         INSERT INTO server_notice_embeds_configs (server_id) VALUES (${serverId})
         ON CONFLICT (server_id) DO UPDATE SET
           tool_notice_hidden_keys = DEFAULT,
+          tool_notice_verbosity = DEFAULT,
           updated_at = NOW()
       `;
 

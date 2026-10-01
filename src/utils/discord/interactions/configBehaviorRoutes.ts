@@ -842,6 +842,7 @@ export const CONFIG_BEHAVIOR_D10_MODAL_SUBMIT_ACTIONS = new Set<ConfigPanelRoute
 const CONFIG_BEHAVIOR_D10_DIRECT_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "behavior-tool-mode-set",
   "behavior-self-debug-set",
+  "behavior-notice-verbosity-set",
   "behavior-speech-transcripts-set",
 ]);
 
@@ -859,6 +860,7 @@ function fallbackD10View(state: TomoriState) {
     },
     notices: {
       hiddenNoticeKeys: (state.config.tool_notice_hidden_keys ?? []).filter(isToolNoticeKey),
+      verbosity: state.config.tool_notice_verbosity,
       speechTranscriptsEnabled: state.config.voice_transcript_chat_mode ?? true,
     },
     memory: {
@@ -1127,6 +1129,19 @@ async function runD10Write(
   if (!state) return null;
   const repositories = await import("@/utils/db/repositories");
   const locale = route.locale;
+  if (route.action === "behavior-notice-verbosity-set") {
+    if (state.config.tool_notice_verbosity === route.verbosity)
+      return { receipt: receipt(locale, "info", "state_no_changes_heading", "state_no_changes_detail") };
+    const updated = await repositories.configRepository.updateNoticeEmbedsConfig(state.server_id, {
+      tool_notice_verbosity: route.verbosity,
+    });
+    if (!updated) return { receipt: writeFailed(locale) };
+    invalidateTomoriStateCache(scope.serverDiscId);
+    return {
+      receipt: receipt(locale, "success", "state_updated_heading", "state_updated_detail"),
+      telemetry: "server-config.workspace.notice-verbosity.set",
+    };
+  }
   if (
     route.action === "behavior-tool-mode-set" ||
     route.action === "behavior-self-debug-set" ||

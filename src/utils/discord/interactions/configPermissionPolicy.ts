@@ -52,7 +52,7 @@ export type ConfigBehaviorTriggerAction =
   | "cooldown";
 
 export type ConfigBehaviorExperimentalAction = "tool-mode" | "tool-context" | "tool-trigger" | "send-limit";
-export type ConfigBehaviorNoticesAction = "notice-visibility" | "speech-transcripts";
+export type ConfigBehaviorNoticesAction = "notice-visibility" | "notice-verbosity" | "speech-transcripts";
 export type ConfigBehaviorMemoryAction = "memory-tagging" | "stm-parameters" | "stm-categories" | "stm-prompt";
 export type ConfigPermissionsCapabilitiesAction = "tool-use" | "manage";
 export type ConfigPermissionsPrivacyAction = "privacy-bypass";
@@ -442,6 +442,7 @@ export const BEHAVIOR_NOTICES_ACTION_BY_ROUTE: Partial<
 > = {
   "behavior-notice-visibility-open": "notice-visibility",
   "behavior-notice-visibility-submit": "notice-visibility",
+  "behavior-notice-verbosity-set": "notice-verbosity",
   "behavior-speech-transcripts-set": "speech-transcripts",
 };
 
@@ -592,7 +593,7 @@ export function resolveBehaviorNoticesActionState(
   actor: ConfigActor,
 ): ConfigSurfaceState {
   if (actor.workspaceKind === "dm") return "enabled";
-  if (action === "notice-visibility" || action === "speech-transcripts") {
+  if (action === "notice-visibility" || action === "notice-verbosity" || action === "speech-transcripts") {
     return actor.isManager ? "enabled" : "disabled";
   }
   return "disabled";

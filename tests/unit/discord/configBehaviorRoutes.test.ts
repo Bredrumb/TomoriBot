@@ -458,6 +458,7 @@ describe("config Behavior routes", () => {
       "behavior-self-debug-set": { wireToken: "beh-self-debug-set", fields: ["enabled"] },
       "behavior-notice-visibility-open": { wireToken: "beh-notices-open", fields: [] },
       "behavior-notice-visibility-submit": { wireToken: "beh-notices-sub", fields: ["nonce"] },
+      "behavior-notice-verbosity-set": { wireToken: "beh-notice-verbosity-set", fields: ["verbosity"] },
       "behavior-speech-transcripts-set": { wireToken: "beh-transcripts-set", fields: ["enabled"] },
       "behavior-memory-tagging-open": { wireToken: "beh-memory-tag-open", fields: [] },
       "behavior-memory-tagging-submit": { wireToken: "beh-memory-tag-sub", fields: ["nonce"] },
@@ -864,6 +865,32 @@ describe("config Behavior routes", () => {
       ),
     );
     expect(update).toHaveBeenCalledTimes(1);
+    update.mockRestore();
+  });
+
+  it("writes a Notice Verbosity change and skips the write when it is already selected", async () => {
+    const harness = makeHarness(true);
+    const state = harness.scope.personas[0];
+    if (!state) throw new Error("Test harness has no persona");
+    state.config.tool_notice_verbosity = "minimal";
+    const update = spyOn(configRepository, "updateNoticeEmbedsConfig").mockResolvedValue(true);
+    await dispatch(
+      harness,
+      makeInteraction(
+        harness,
+        buildConfigRouteId({ action: "behavior-notice-verbosity-set", locale: "en-US", verbosity: "verbose" }),
+      ),
+    );
+    await dispatch(
+      harness,
+      makeInteraction(
+        harness,
+        buildConfigRouteId({ action: "behavior-notice-verbosity-set", locale: "en-US", verbosity: "minimal" }),
+      ),
+    );
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update.mock.calls[0]?.[1]).toEqual({ tool_notice_verbosity: "verbose" });
+    expect(harness.telemetry).toEqual(["server-config.workspace.notice-verbosity.set"]);
     update.mockRestore();
   });
 

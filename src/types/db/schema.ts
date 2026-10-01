@@ -2,7 +2,12 @@ import { StickerFormatType } from "discord.js";
 import { z } from "zod";
 import { SUPPORTED_PARAM_VALUES, isSupportedParamValue, type SupportedParamValue } from "@/constants/supportedParams";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_VALUES } from "@/constants/thinkingLevels";
-import { TOOL_NOTICE_KEYS, isToolNoticeKey, type ToolNoticeKey } from "@/constants/toolNotices";
+import {
+  NOTICE_VERBOSITY_LEVELS,
+  TOOL_NOTICE_KEYS,
+  isToolNoticeKey,
+  type ToolNoticeKey,
+} from "@/constants/toolNotices";
 import {
   addressingStyleSchema,
   EMPTY_PERSONA_NAMING_CONFIG,
@@ -724,6 +729,7 @@ const serverNoticeEmbedsConfigSchema = z.object({
     (value) => normalizeToolNoticeHiddenKeys(value),
     z.array(toolNoticeKeySchema).default([]),
   ),
+  tool_notice_verbosity: z.enum(NOTICE_VERBOSITY_LEVELS).default("minimal"),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });

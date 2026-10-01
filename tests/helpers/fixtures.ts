@@ -69,6 +69,7 @@ const BASE_CONFIG: AssembledServerConfig = {
   short_term_memory_enabled: true,
   user_info_updates_enabled: true,
   tool_notice_hidden_keys: [],
+  tool_notice_verbosity: "minimal",
   uncensor_injection_enabled: false,
   uncensor_unicode_space_enabled: false,
   uncensor_sanitize_enabled: false,

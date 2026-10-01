@@ -2,7 +2,7 @@ import { escapeMarkdown, type BaseGuildTextChannel } from "discord.js";
 import type { StandardEmbedOptions } from "@/types/discord/embed";
 import type { ToolContext } from "@/types/tool/interfaces";
 import type { AssembledServerConfig } from "@/types/db/schema";
-import { type ToolNoticeKey, TOOL_NOTICE_DEFINITIONS } from "@/constants/toolNotices";
+import { type ToolNoticeKey, TOOL_NOTICE_DEFINITIONS, VERBOSITY_EXEMPT_NOTICE_KEYS } from "@/constants/toolNotices";
 import { sendStandardEmbed, type WebhookEmbedContext } from "@/utils/discord/embedHelper";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { localizer } from "@/utils/text/localizer";
@@ -224,6 +224,15 @@ export function isToolNoticeVisible(config: AssembledServerConfig, key: ToolNoti
   return isNoticeEmbedVisible(config, key);
 }
 
+/**
+ * Whether a notice posted in the conversation renders Minimal. Only the conversation copy shrinks:
+ * a hidden notice rerouted to the thought log keeps its full card, because that channel is the
+ * record admins read for the detail.
+ */
+export function isMinimalNotice(config: AssembledServerConfig, key: ToolNoticeKey): boolean {
+  return !VERBOSITY_EXEMPT_NOTICE_KEYS.has(key) && config.tool_notice_verbosity !== "verbose";
+}
+
 /** Where a hidden notice is rerouted, with the persona identity to post it under when available. */
 export interface ThoughtLogTarget {
   channel: BaseGuildTextChannel;
@@ -331,9 +340,12 @@ export async function sendToolNotice(
 ): Promise<void> {
   if (context.suppressProgressNotices) return;
   try {
-    const finalOptions = buildToolNoticeOptions(context.locale, options, undefined, context.showKillHint);
-    if (isToolNoticeVisible(context.tomoriState.config, noticeKey)) {
-      await sendStandardEmbed(context.channel, context.locale, finalOptions, getWebhookContext(context));
+    const { config } = context.tomoriState;
+    if (isToolNoticeVisible(config, noticeKey)) {
+      const visibleOptions = isMinimalNotice(config, noticeKey)
+        ? { ...options, minimal: true }
+        : buildToolNoticeOptions(context.locale, options, undefined, context.showKillHint);
+      await sendStandardEmbed(context.channel, context.locale, visibleOptions, getWebhookContext(context));
       return;
     }
 

@@ -18,7 +18,7 @@ import type {
   VoiceSampleRow,
   TomoriState,
 } from "@/types/db/schema";
-import type { ToolNoticeKey } from "@/constants/toolNotices";
+import type { NoticeVerbosity, ToolNoticeKey } from "@/constants/toolNotices";
 import type { DeliberateToolTriggerMap } from "@/utils/tools/deliberateToolMode";
 import type { PanelReadStatus, PanelReceipt } from "@/types/discord/panel";
 import type { LocalizerVariables } from "@/types/discord/global";
@@ -135,6 +135,7 @@ export interface ConfigBehaviorExperimentalView {
 
 export interface ConfigBehaviorNoticesView {
   hiddenNoticeKeys: ToolNoticeKey[];
+  verbosity: NoticeVerbosity;
   speechTranscriptsEnabled: boolean;
 }
 

@@ -1,5 +1,6 @@
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
+import type { NoticeVerbosity } from "@/constants/toolNotices";
 import {
   EXPORT_VERSION,
   EXPORT_V2_VERSION,
@@ -63,6 +64,7 @@ interface WorkspaceConfigProjectionRow {
   short_term_memory_enabled: boolean;
   user_info_updates_enabled: boolean;
   tool_notice_hidden_keys: string[];
+  tool_notice_verbosity: NoticeVerbosity | null;
   uncensor_injection_enabled: boolean;
   uncensor_unicode_space_enabled: boolean;
   uncensor_sanitize_enabled: boolean;
@@ -330,6 +332,7 @@ export class ExportRepository {
           COALESCE(scac.sticker_usage_enabled, true)                AS sticker_usage_enabled,
           COALESCE(scac.imagegen_enabled, true)                     AS imagegen_enabled,
           COALESCE(snec.tool_notice_hidden_keys, ARRAY[]::TEXT[])   AS tool_notice_hidden_keys,
+          snec.tool_notice_verbosity                                AS tool_notice_verbosity,
           COALESCE(scc.self_debug_enabled, false)                   AS self_debug_enabled,
           COALESCE(scc.model_randomizer_enabled, false)             AS model_randomizer_enabled,
           snaic.image_default_positive_tags                                       AS image_default_positive_tags,
@@ -508,6 +511,7 @@ export class ExportRepository {
             sticker_usage_enabled: configData.sticker_usage_enabled,
             imagegen_enabled: configData.imagegen_enabled,
             tool_notice_hidden_keys: configData.tool_notice_hidden_keys ?? [],
+            tool_notice_verbosity: configData.tool_notice_verbosity ?? undefined,
             self_debug_enabled: configData.self_debug_enabled,
             model_randomizer_enabled: configData.model_randomizer_enabled,
             image_default_positive_tags: configData.image_default_positive_tags ?? undefined,
@@ -716,6 +720,7 @@ export class ExportRepository {
           COALESCE(scac.short_term_memory_enabled, true) AS short_term_memory_enabled,
           COALESCE(scac.user_info_updates_enabled, true) AS user_info_updates_enabled,
           COALESCE(snec.tool_notice_hidden_keys, ARRAY[]::TEXT[]) AS tool_notice_hidden_keys,
+          snec.tool_notice_verbosity AS tool_notice_verbosity,
           COALESCE(snc.uncensor_injection_enabled, false) AS uncensor_injection_enabled,
           COALESCE(snc.uncensor_unicode_space_enabled, false) AS uncensor_unicode_space_enabled,
           COALESCE(snc.uncensor_sanitize_enabled, false) AS uncensor_sanitize_enabled,
@@ -834,6 +839,7 @@ export class ExportRepository {
           short_term_memory_enabled: configData.short_term_memory_enabled,
           user_info_updates_enabled: configData.user_info_updates_enabled,
           tool_notice_hidden_keys: configData.tool_notice_hidden_keys,
+          tool_notice_verbosity: configData.tool_notice_verbosity ?? undefined,
           uncensor_injection_enabled: configData.uncensor_injection_enabled,
           uncensor_unicode_space_enabled: configData.uncensor_unicode_space_enabled,
           uncensor_sanitize_enabled: configData.uncensor_sanitize_enabled,

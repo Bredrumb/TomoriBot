@@ -713,6 +713,10 @@ const WIRE_CONTRACT_V2: ReadonlyArray<readonly [string, ConfigPanelRoute]> = [
     { action: "behavior-notice-visibility-submit", locale: "en-US", nonce: "nonce1234567" },
   ],
   [
+    "config:v2:beh-notice-verbosity-set:en-US:verbose",
+    { action: "behavior-notice-verbosity-set", locale: "en-US", verbosity: "verbose" },
+  ],
+  [
     "config:v2:beh-transcripts-set:en-US:0",
     { action: "behavior-speech-transcripts-set", locale: "en-US", enabled: false },
   ],

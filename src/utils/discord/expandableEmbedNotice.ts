@@ -36,6 +36,7 @@ import type { StandardEmbedOptions } from "@/types/discord/embed";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { createStandardEmbed, type WebhookEmbedContext } from "@/utils/discord/embedHelper";
 import {
+  isMinimalNotice,
   isNoticeEmbedVisible,
   resolveHiddenNoticeTarget,
   withThoughtLogSource,
@@ -125,6 +126,7 @@ function buildNoticeComponents(
     footerKey: embedOptions.footerKey,
     footerVars: embedOptions.footerVars,
     configHint: embedOptions.configHint,
+    minimal: embedOptions.minimal,
     button: includeExpandButton
       ? {
           customId: config.customId,
@@ -227,6 +229,7 @@ async function sendNoticeContainerMessage(
     footerKey: embedOptions.footerKey,
     footerVars: embedOptions.footerVars,
     configHint: embedOptions.configHint,
+    minimal: embedOptions.minimal,
   });
   await deliverNoticeComponents(channel, components, webhookContext, locale);
 }
@@ -242,7 +245,8 @@ async function sendEmbedWithExpand(
   const truncationThreshold = config.truncationThreshold ?? DEFAULT_TRUNCATION_THRESHOLD;
   const thresholdPreview = buildTextPreview(fullContent, truncationThreshold);
   const fenceSafeContent = buildTextPreview(fullContent, Number.MAX_SAFE_INTEGER).text;
-  const shouldAttachExpandButton = thresholdPreview.truncated;
+  // A Minimal card shows none of the content, so there is no truncated tail for a button to reveal.
+  const shouldAttachExpandButton = thresholdPreview.truncated && !embedOptions.minimal;
 
   // Teardown reuses the complete Components V2 tree with only the button
   // disabled, keeping the message in one rendering mode.
@@ -339,9 +343,11 @@ async function routeHideableNotice(
   embedOptions: StandardEmbedOptions,
   deliver: NoticeDelivery,
 ): Promise<void> {
+  const { config } = context.tomoriState;
   const hintedOptions: StandardEmbedOptions = { ...embedOptions, configHint: true };
-  if (isNoticeEmbedVisible(context.tomoriState.config, noticeKey)) {
-    await deliver(context.channel, hintedOptions, {
+  if (isNoticeEmbedVisible(config, noticeKey)) {
+    const visibleOptions = isMinimalNotice(config, noticeKey) ? { ...embedOptions, minimal: true } : hintedOptions;
+    await deliver(context.channel, visibleOptions, {
       webhook: context.webhook,
       personaUsername: context.personaUsername,
       personaAvatarUrl: context.personaAvatarUrl,

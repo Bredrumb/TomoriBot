@@ -15,6 +15,11 @@ export interface StandardEmbedOptions {
   footerVars?: Record<string, string | number | boolean>;
   /** Adds the shared `/config` > Behavior > Notices line below the footer, for notices a server can hide. */
   configHint?: boolean;
+  /**
+   * Renders a Minimal notice: the title without its emoji, in the notice color, and nothing else.
+   * Description, footer, config hint, thumbnail, and any expand button are all dropped.
+   */
+  minimal?: boolean;
   thumbnailUrl?: string;
   flags?: MessageFlags;
   timestamp?: boolean;

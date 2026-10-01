@@ -562,6 +562,7 @@ const defaultDependencies: ConfigRouteDependencies = {
     };
     const notices: ConfigBehaviorNoticesView = {
       hiddenNoticeKeys: (state.config.tool_notice_hidden_keys ?? []).filter(isToolNoticeKey),
+      verbosity: state.config.tool_notice_verbosity,
       speechTranscriptsEnabled:
         speechConfig?.voice_transcript_chat_mode ?? state.config.voice_transcript_chat_mode ?? true,
     };

@@ -103,6 +103,7 @@ type ServerChatConfigsRow = {
 /** Row shape for server_notice_embeds_configs (Phase 6). */
 type ServerNoticeEmbedsConfigsRow = {
   tool_notice_hidden_keys: string[];
+  tool_notice_verbosity: string;
 };
 
 /** Row shape for server_member_permissions_configs (Phase 6). */
@@ -1612,7 +1613,9 @@ class ServerRepository implements IRepository<ServerExportShape> {
   private async sqlLoadNoticeEmbedsConfigs(serverId: number): Promise<ServerNoticeEmbedsConfigsRow | null> {
     try {
       const [row] = await sql`
-        SELECT tool_notice_hidden_keys FROM server_notice_embeds_configs WHERE server_id = ${serverId}
+        SELECT tool_notice_hidden_keys, tool_notice_verbosity
+        FROM server_notice_embeds_configs
+        WHERE server_id = ${serverId}
       `;
       return row ? (row as unknown as ServerNoticeEmbedsConfigsRow) : null;
     } catch (error) {
@@ -1717,10 +1720,11 @@ class ServerRepository implements IRepository<ServerExportShape> {
 
   private async sqlUpsertNoticeEmbedsConfigs(serverId: number, row: ServerNoticeEmbedsConfigsRow): Promise<void> {
     await sql`
-      INSERT INTO server_notice_embeds_configs (server_id, tool_notice_hidden_keys)
-      VALUES (${serverId}, ${sql.array(row.tool_notice_hidden_keys, "TEXT")})
+      INSERT INTO server_notice_embeds_configs (server_id, tool_notice_hidden_keys, tool_notice_verbosity)
+      VALUES (${serverId}, ${sql.array(row.tool_notice_hidden_keys, "TEXT")}, ${row.tool_notice_verbosity})
       ON CONFLICT (server_id) DO UPDATE SET
         tool_notice_hidden_keys = EXCLUDED.tool_notice_hidden_keys,
+        tool_notice_verbosity   = EXCLUDED.tool_notice_verbosity,
         updated_at              = NOW()
     `;
   }

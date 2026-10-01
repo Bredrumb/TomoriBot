@@ -99,7 +99,7 @@ import {
   type ConfigVoicesView,
 } from "@/utils/discord/ui/configModelsPanel";
 import { resolveSelectedVoiceSample } from "@/utils/discord/ui/configVoicesPanel";
-import { TOOL_NOTICE_DEFINITIONS } from "@/constants/toolNotices";
+import { NOTICE_VERBOSITY_LEVELS, TOOL_NOTICE_DEFINITIONS, type NoticeVerbosity } from "@/constants/toolNotices";
 import { DEFAULT_STM_TOOL_DESCRIPTION } from "@/tools/functionCalls/updateShortTermMemoryTool";
 import { SEED_CATEGORY_UPDATE_HINT, SEED_SUMMARY_UPDATE_HINT } from "@/utils/text/context/memories";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
@@ -2871,6 +2871,17 @@ function buildBehaviorExperimentalBody(input: ConfigPanelRenderInput): Component
   return components;
 }
 
+const NOTICE_VERBOSITY_COPY: Record<NoticeVerbosity, { buttonKey: string; stateKey: string }> = {
+  minimal: {
+    buttonKey: "commands.config.panel.notice_verbosity_minimal_button",
+    stateKey: "commands.config.panel.notice_verbosity_minimal",
+  },
+  verbose: {
+    buttonKey: "commands.config.panel.notice_verbosity_verbose_button",
+    stateKey: "commands.config.panel.notice_verbosity_verbose",
+  },
+};
+
 function buildBehaviorNoticesBody(input: ConfigPanelRenderInput): ComponentInContainerData[] {
   const { locale } = input;
   const view = input.behaviorView?.notices;
@@ -2910,6 +2921,23 @@ function buildBehaviorNoticesBody(input: ConfigPanelRenderInput): ComponentInCon
           disabled: writesDisabled,
         },
       ],
+    },
+    {
+      type: ComponentType.TextDisplay,
+      content: `**${localizer(locale, "commands.config.panel.notice_verbosity_title")}**\n${localizer(locale, "commands.config.panel.notice_verbosity_description")}`,
+    },
+    buildStateControlRow(
+      NOTICE_VERBOSITY_LEVELS.map((verbosity) => ({
+        value: verbosity,
+        label: localizer(locale, NOTICE_VERBOSITY_COPY[verbosity].buttonKey),
+        customId: buildConfigRouteId({ action: "behavior-notice-verbosity-set", locale, verbosity }),
+      })),
+      view.verbosity,
+      writesDisabled,
+    ),
+    {
+      type: ComponentType.TextDisplay,
+      content: `> ${localizer(locale, NOTICE_VERBOSITY_COPY[view.verbosity].stateKey)}`,
     },
     {
       type: ComponentType.TextDisplay,

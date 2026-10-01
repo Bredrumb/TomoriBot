@@ -1801,6 +1801,7 @@ describe("config Behavior pages", () => {
       },
       notices: {
         hiddenNoticeKeys: ["web_search" as const],
+        verbosity: "minimal" as const,
         speechTranscriptsEnabled: true,
       },
       memory: {
@@ -1826,6 +1827,17 @@ describe("config Behavior pages", () => {
     expect(
       walk(notices).some((component) =>
         component.content?.includes("All disabled notice embeds will be posted in the Logs channel\n-# instead."),
+      ),
+    ).toBe(true);
+    expect(
+      buttonFor(notices, { action: "behavior-notice-verbosity-set", locale: "en-US", verbosity: "minimal" })?.disabled,
+    ).toBe(true);
+    expect(
+      buttonFor(notices, { action: "behavior-notice-verbosity-set", locale: "en-US", verbosity: "verbose" })?.disabled,
+    ).toBe(false);
+    expect(
+      walk(notices).some((component) =>
+        component.content?.includes(localizedCopy("en-US", "commands.config.panel.notice_verbosity_minimal")),
       ),
     ).toBe(true);
     expect(

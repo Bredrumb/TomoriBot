@@ -2630,8 +2630,18 @@ CREATE TRIGGER update_server_chat_configs_timestamp
 CREATE TABLE IF NOT EXISTS server_notice_embeds_configs (
   server_id              INT      PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
   tool_notice_hidden_keys TEXT[]  NOT NULL DEFAULT '{}',
+  tool_notice_verbosity  TEXT     NOT NULL DEFAULT 'minimal'
+    CHECK (tool_notice_verbosity IN ('minimal', 'verbose')),
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+SELECT add_column_if_not_exists(
+  'server_notice_embeds_configs',
+  'tool_notice_verbosity',
+  'TEXT',
+  '''minimal''',
+  'NOT NULL CHECK (tool_notice_verbosity IN (''minimal'', ''verbose''))'
 );
 
 DROP TRIGGER IF EXISTS update_server_notice_embeds_configs_timestamp ON server_notice_embeds_configs;

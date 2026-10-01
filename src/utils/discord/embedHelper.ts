@@ -19,7 +19,7 @@ import { ColorCode, log } from "../misc/logger";
 import { localizer } from "../text/localizer";
 import { sendWebhookMessageWithIdentity } from "./webhookManager";
 import { attachTextDisplayModalCollector, buildTextDisplayModalButton } from "./textDisplayModal";
-import { withStatusCircle } from "./ui/statusTitle";
+import { localizedMinimalTitle, withStatusCircle } from "./ui/statusTitle";
 import { resolveFooterLines } from "./ui/noticeFooter";
 import type { StandardEmbedOptions, SummaryEmbedOptions, TranslationEmbedOptions } from "../../types/discord/embed";
 import { TRANSLATOR_COLORS, TranslationProvider } from "../../types/discord/embed";
@@ -104,7 +104,12 @@ export function createStandardEmbed(locale: string, options: StandardEmbedOption
     footerVars = {},
     configHint,
     thumbnailUrl,
+    minimal,
   } = options;
+
+  if (minimal) {
+    return new EmbedBuilder().setColor(color).setTitle(localizedMinimalTitle(locale, titleKey, titleVars));
+  }
 
   // Use raw description if provided, otherwise use descriptionKey with localization
   const descriptionText = description

@@ -370,6 +370,12 @@ export default {
       disabled_notices_log_hint:
         "Todos los embeds de avisos deshabilitados se publicarán en el canal de Registros en su lugar.",
       edit_notice_visibility_button: `Editar visibilidad de avisos`,
+      notice_verbosity_title: `Detalle de avisos`,
+      notice_verbosity_description: `Cambia cuánta información se muestra en los avisos de herramientas que no están ocultos.`,
+      notice_verbosity_minimal_button: `Mínimo`,
+      notice_verbosity_verbose_button: `Detallado`,
+      notice_verbosity_minimal: `Actualmente solo muestro el título de cada aviso de herramienta.`,
+      notice_verbosity_verbose: `Actualmente muestro toda la información de cada uso de herramienta.`,
       speech_transcripts_title: `Transcripciones de voz`,
       speech_transcripts_description:
         "Controla si la gente puede ver una transcripción después de una respuesta hablada.",

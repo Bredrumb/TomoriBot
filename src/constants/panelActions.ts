@@ -174,6 +174,7 @@ export const PANEL_ACTIONS = [
   "server-config.workspace.send-limit.set",
   "server-config.workspace.self-debug.set",
   "server-config.workspace.notice-visibility.set",
+  "server-config.workspace.notice-verbosity.set",
   "server-config.workspace.speech-transcripts.set",
   "server-config.workspace.memory-tagging.set",
   "server-config.workspace.stm-parameters.set",

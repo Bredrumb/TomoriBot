@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SUPPORTED_PARAM_VALUES } from "@/constants/supportedParams";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_VALUES } from "@/constants/thinkingLevels";
+import { NOTICE_VERBOSITY_LEVELS } from "@/constants/toolNotices";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { logitBiasEntrySchema } from "@/types/provider/logitBias";
 import { PrivacyLevel, deliberateToolTriggerEntrySchema } from "@/types/db/schema";
@@ -220,6 +221,9 @@ const serverCapabilitiesConfigExportSchema = z.object({
 /** Portable server_notice_embeds_configs export fields. */
 const serverNoticeEmbedsConfigExportSchema = z.object({
   tool_notice_hidden_keys: z.array(z.string()).default([]),
+  // Optional, so an export from a server that never chose stays unset on import and keeps following
+  // the column default instead of pinning today's default into the importing server's row.
+  tool_notice_verbosity: z.enum(NOTICE_VERBOSITY_LEVELS).optional(),
 });
 
 /** Portable server_nsfw_configs export fields. */

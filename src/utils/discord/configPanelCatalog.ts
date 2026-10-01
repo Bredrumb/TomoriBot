@@ -21,6 +21,7 @@ import type {
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 import type { RandomTriggerRow } from "@/types/db/schema";
 import type { AddressingStyle } from "@/types/personaNaming";
+import { NOTICE_VERBOSITY_LEVELS, type NoticeVerbosity } from "@/constants/toolNotices";
 
 export const CONFIG_ROUTE_NAMESPACE = "config";
 export const CONFIG_ROUTE_VERSION = "v2";
@@ -545,6 +546,7 @@ export type ConfigPanelRoute =
   | { action: "behavior-self-debug-set"; locale: string; enabled: boolean }
   | { action: "behavior-notice-visibility-open"; locale: string }
   | { action: "behavior-notice-visibility-submit"; locale: string; nonce: string }
+  | { action: "behavior-notice-verbosity-set"; locale: string; verbosity: NoticeVerbosity }
   | { action: "behavior-speech-transcripts-set"; locale: string; enabled: boolean }
   | { action: "behavior-memory-tagging-open"; locale: string }
   | { action: "behavior-memory-tagging-submit"; locale: string; nonce: string }
@@ -711,6 +713,12 @@ const pluginsPageField: RouteFieldCodec<"page", "available-tools" | "context-add
   key: "page",
   encode: (v) => String(v),
   decode: (v) => (v === "available-tools" || v === "context-additions" ? v : null),
+};
+
+const noticeVerbosityField: RouteFieldCodec<"verbosity", NoticeVerbosity> = {
+  key: "verbosity",
+  encode: (v) => String(v),
+  decode: (v) => NOTICE_VERBOSITY_LEVELS.find((level) => level === v) ?? null,
 };
 
 const mcpRangeIndexField: RouteFieldCodec<"rangeIndex", number> = {
@@ -1039,6 +1047,7 @@ export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
   "behavior-self-debug-set": { wireToken: "beh-self-debug-set", fields: [enabledField] },
   "behavior-notice-visibility-open": { wireToken: "beh-notices-open", fields: [] },
   "behavior-notice-visibility-submit": { wireToken: "beh-notices-sub", fields: [nonceField] },
+  "behavior-notice-verbosity-set": { wireToken: "beh-notice-verbosity-set", fields: [noticeVerbosityField] },
   "behavior-speech-transcripts-set": { wireToken: "beh-transcripts-set", fields: [enabledField] },
   "behavior-memory-tagging-open": { wireToken: "beh-memory-tag-open", fields: [] },
   "behavior-memory-tagging-submit": { wireToken: "beh-memory-tag-sub", fields: [nonceField] },

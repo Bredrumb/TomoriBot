@@ -156,7 +156,7 @@ const WORKSPACE_SECTION_TABLES: Record<WorkspaceConfigSection, readonly SectionT
         "user_info_updates_enabled",
       ],
     },
-    { tableName: "server_notice_embeds_configs", fields: ["tool_notice_hidden_keys"] },
+    { tableName: "server_notice_embeds_configs", fields: ["tool_notice_hidden_keys", "tool_notice_verbosity"] },
     {
       tableName: "server_nsfw_configs",
       fields: ["uncensor_injection_enabled", "uncensor_unicode_space_enabled", "uncensor_sanitize_enabled"],
@@ -912,6 +912,7 @@ class ImportRepository {
       const noticeEmbedsPatch: Partial<ServerNoticeEmbedsConfigRow> = {
         tool_notice_hidden_keys:
           config.tool_notice_hidden_keys as ServerNoticeEmbedsConfigRow["tool_notice_hidden_keys"],
+        ...(config.tool_notice_verbosity !== undefined && { tool_notice_verbosity: config.tool_notice_verbosity }),
       };
 
       const requiredWriteResults = await Promise.all([

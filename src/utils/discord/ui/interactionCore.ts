@@ -50,7 +50,7 @@ import {
 } from "./componentsV2Limits";
 export { ComponentsV2LimitError, validateComponentsV2MessageLimits, type ComponentsV2MessagePayload };
 import { buildPanelContainer, resolveAccentColor, type AccentColorInput } from "./panel";
-import { withStatusCircle } from "./statusTitle";
+import { localizedMinimalTitle, withStatusCircle } from "./statusTitle";
 import { resolveFooterLines } from "./noticeFooter";
 
 // Clean storage for select values (Discord.js will strip them, so we preserve them)
@@ -1360,6 +1360,8 @@ export interface NoticeContainerOptions {
   configHint?: boolean;
   /** Optional action button placed inside the container. */
   button?: NoticeContainerButtonOptions;
+  /** Renders only the emoji-free title; body, footer, config hint, and button are dropped. */
+  minimal?: boolean;
 }
 
 /**
@@ -1371,6 +1373,13 @@ export interface NoticeContainerOptions {
 export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelComponentData[] {
   const { locale } = options;
   const accentColor = resolveAccentColor(options.color);
+  if (options.minimal) {
+    const title: ComponentInContainerData = {
+      type: ComponentType.TextDisplay,
+      content: formatContainerTitle(localizedMinimalTitle(locale, options.titleKey, options.titleVars)),
+    };
+    return [buildPanelContainer([title], accentColor, { formatProse: false })];
+  }
   const components: ComponentInContainerData[] = [];
   const descriptionText =
     options.description ??

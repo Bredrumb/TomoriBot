@@ -5,13 +5,10 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { sliceMessagesAtResetMarker } from "@/utils/discord/embedDetection";
-import {
-  checkTargetEmbedTitle,
-  checkTargetEmbed,
-  processLinkEmbed,
-  formatSystemProducedEmbedHint,
-} from "@/utils/discord/embedClassifier";
+import { checkTargetEmbedTitle, checkTargetEmbed, processLinkEmbed } from "@/utils/discord/embedClassifier";
+import { formatTargetEmbedForContext } from "@/utils/chat/contextEmbeds";
 import { extractNoticeTextFromComponents } from "@/utils/discord/componentNoticeReader";
+import { isMinimalTitleKind } from "@/utils/discord/embedProtocol";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
@@ -633,29 +630,13 @@ export async function execute(
         for (const embed of message.embeds) {
           const embedCheck = checkTargetEmbed(embed);
           if (embedCheck.isTarget && embed.description) {
-            const type = embedCheck.type;
-            if (type === "system_injection" || type === "compact_summary" || type === "compact_refresh") {
-              const titleLine =
-                (type === "compact_summary" || type === "compact_refresh") && embed.title ? `## ${embed.title}\n` : "";
-              embedTextSegments.push(`[System: ${titleLine}${embed.description}]`);
-            } else {
-              let cleanedDescription = embed.description;
-              if (botNickname) {
-                const escapedNickname = botNickname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-                const botNamePattern = new RegExp(`^${escapedNickname}:\\s*`, "i");
-                if (botNamePattern.test(cleanedDescription)) {
-                  cleanedDescription = cleanedDescription.replace(botNamePattern, "").trim();
-                }
-              }
-              const includeTitle = type === "memory_learning" || type === "reminder_set";
-              const titleLine = includeTitle && embed.title ? `${embed.title}\n` : "";
-              const embedBody = `${titleLine}${cleanedDescription}`;
-              embedTextSegments.push(
-                type === "memory_learning" || type === "reward" || type === "punish"
-                  ? `[System: ${embedBody}]`
-                  : formatSystemProducedEmbedHint(embedBody),
-              );
-            }
+            embedTextSegments.push(
+              formatTargetEmbedForContext(
+                { title: embed.title, description: embed.description },
+                embedCheck.type,
+                botNickname,
+              ),
+            );
           } else if (!isTomoriAuthored) {
             const linkEmbedData = processLinkEmbed(embed);
             if (linkEmbedData.isLinkPreview) {
@@ -686,23 +667,16 @@ export async function execute(
       // Components V2 notices carry no embeds, so reconstruct their text from the
       // component tree to keep snapshots identical to live chat context.
       const cv2Notice = extractNoticeTextFromComponents(message.components);
-      if (cv2Notice?.title && cv2Notice.description) {
+      if (cv2Notice?.title) {
         const noticeCheck = checkTargetEmbedTitle(cv2Notice.title);
-        if (noticeCheck.isTarget) {
-          const type = noticeCheck.type;
-          if (type === "system_injection" || type === "compact_summary" || type === "compact_refresh") {
-            const titleLine = type === "system_injection" ? "" : `## ${cv2Notice.title}\n`;
-            embedTextSegments.push(`[System: ${titleLine}${cv2Notice.description}]`);
-          } else {
-            const includeTitle = type === "memory_learning" || type === "reminder_set";
-            const titleLine = includeTitle ? `${cv2Notice.title}\n` : "";
-            const embedBody = `${titleLine}${cv2Notice.description}`;
-            embedTextSegments.push(
-              type === "memory_learning" || type === "reward" || type === "punish"
-                ? `[System: ${embedBody}]`
-                : formatSystemProducedEmbedHint(embedBody),
-            );
-          }
+        if (noticeCheck.isTarget && (cv2Notice.description || isMinimalTitleKind(noticeCheck.type))) {
+          embedTextSegments.push(
+            formatTargetEmbedForContext(
+              { title: cv2Notice.title, description: cv2Notice.description ?? "" },
+              noticeCheck.type,
+              botNickname,
+            ),
+          );
         }
       }
 
