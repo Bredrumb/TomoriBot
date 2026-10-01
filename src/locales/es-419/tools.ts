@@ -49,8 +49,8 @@ export default {
       tool_invoke_no_params: `Sin parámetros.`,
     },
     tool_notice: {
-      hide_footer: `Oculta esto desde \`/config\` > Comportamiento > Avisos`,
-      hide_footer_with_kill: `Oculta esto desde \`/config\` > Comportamiento > Avisos · Usa \`/kill\` si crees que me quedé atascada`,
+      configure_hint: `Configura estos avisos en \`/config\` > Comportamiento > Avisos`,
+      kill_hint: `Usa \`/kill\` si crees que me quedé atascada`,
     },
     user_block: {
       error_missing_permission: `Necesito el permiso {permission} en este canal para anunciar un bloqueo. Pide a un administrador del servidor que lo conceda e inténtalo de nuevo.`,

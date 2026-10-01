@@ -13,6 +13,8 @@ export interface StandardEmbedOptions {
   color?: ColorResolvable;
   footerKey?: string;
   footerVars?: Record<string, string | number | boolean>;
+  /** Adds the shared `/config` > Behavior > Notices line below the footer, for notices a server can hide. */
+  configHint?: boolean;
   thumbnailUrl?: string;
   flags?: MessageFlags;
   timestamp?: boolean;

@@ -409,8 +409,7 @@ export class UpdateTaskTool extends BaseTool {
         context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
 
       await sendTaskEmbedWithExpand(
-        context.channel,
-        context.locale,
+        context,
         {
           color: ColorCode.ERROR,
           titleKey: "reminders.task_deleted_title",
@@ -425,11 +424,6 @@ export class UpdateTaskTool extends BaseTool {
           footerKey: "reminders.task_deleted_footer",
         },
         deleteResult.reminder.reminder_purpose,
-        {
-          webhook: context.webhook,
-          personaUsername: context.personaUsername,
-          personaAvatarUrl: context.personaAvatarUrl,
-        },
       );
 
       return {
@@ -537,8 +531,7 @@ export class UpdateTaskTool extends BaseTool {
     const repeatText = formatRepeatText(context.locale, finalRepetitionIntervalHours);
 
     await sendTaskEmbedWithExpand(
-      context.channel,
-      context.locale,
+      context,
       {
         color: ColorCode.MEMORY_UPDATE,
         titleKey: "reminders.task_updated_title",
@@ -555,11 +548,6 @@ export class UpdateTaskTool extends BaseTool {
         footerKey: "reminders.task_updated_footer",
       },
       parsedArgs.newPurpose,
-      {
-        webhook: context.webhook,
-        personaUsername: context.personaUsername,
-        personaAvatarUrl: context.personaAvatarUrl,
-      },
     );
 
     return {

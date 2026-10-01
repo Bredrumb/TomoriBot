@@ -20,6 +20,7 @@ import { localizer } from "../text/localizer";
 import { sendWebhookMessageWithIdentity } from "./webhookManager";
 import { attachTextDisplayModalCollector, buildTextDisplayModalButton } from "./textDisplayModal";
 import { withStatusCircle } from "./ui/statusTitle";
+import { resolveFooterLines } from "./ui/noticeFooter";
 import type { StandardEmbedOptions, SummaryEmbedOptions, TranslationEmbedOptions } from "../../types/discord/embed";
 import { TRANSLATOR_COLORS, TranslationProvider } from "../../types/discord/embed";
 
@@ -101,6 +102,7 @@ export function createStandardEmbed(locale: string, options: StandardEmbedOption
     color = ColorCode.INFO,
     footerKey,
     footerVars = {},
+    configHint,
     thumbnailUrl,
   } = options;
 
@@ -116,9 +118,10 @@ export function createStandardEmbed(locale: string, options: StandardEmbedOption
     .setTitle(withStatusCircle(localizer(locale, titleKey, titleVars), color))
     .setDescription(descriptionText);
 
-  if (footerKey) {
+  const footerLines = resolveFooterLines(locale, footerKey, footerVars, configHint);
+  if (footerLines.length > 0) {
     embed.setFooter({
-      text: localizer(locale, footerKey, footerVars),
+      text: footerLines.join("\n"),
     });
   }
 

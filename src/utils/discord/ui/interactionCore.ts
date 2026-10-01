@@ -51,6 +51,7 @@ import {
 export { ComponentsV2LimitError, validateComponentsV2MessageLimits, type ComponentsV2MessagePayload };
 import { buildPanelContainer, resolveAccentColor, type AccentColorInput } from "./panel";
 import { withStatusCircle } from "./statusTitle";
+import { resolveFooterLines } from "./noticeFooter";
 
 // Clean storage for select values (Discord.js will strip them, so we preserve them)
 const modalSelectValues = new Map<string, Record<string, string>>();
@@ -1355,6 +1356,8 @@ export interface NoticeContainerOptions {
   footerKey?: string;
   /** Variables for the footer. */
   footerVars?: Record<string, string | number | boolean>;
+  /** Adds the shared `/config` > Behavior > Notices line below the footer. */
+  configHint?: boolean;
   /** Optional action button placed inside the container. */
   button?: NoticeContainerButtonOptions;
 }
@@ -1387,11 +1390,12 @@ export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelC
     });
   }
 
-  if (options.footerKey) {
+  const footerLines = resolveFooterLines(locale, options.footerKey, options.footerVars, options.configHint);
+  if (footerLines.length > 0) {
     components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
     components.push({
       type: ComponentType.TextDisplay,
-      content: `-# ${localizer(locale, options.footerKey, options.footerVars)}`,
+      content: footerLines.map((line) => `-# ${line}`).join("\n"),
     });
   }
 

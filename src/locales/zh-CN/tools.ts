@@ -49,8 +49,8 @@ export default {
       tool_invoke_no_params: `没有参数。`,
     },
     tool_notice: {
-      hide_footer: `用 \`/config\` > 行为 > 提示 隐藏它`,
-      hide_footer_with_kill: `用 \`/config\` > 行为 > 提示 隐藏它 · 觉得我卡住了就用 \`/kill\``,
+      configure_hint: `可在 \`/config\` > 行为 > 提示 中设置这些提示`,
+      kill_hint: `觉得我卡住了就用 \`/kill\``,
     },
     user_block: {
       error_missing_permission: `我需要此频道的 {permission} 权限才能发布屏蔽通知。请让服务器管理员授予该权限后重试。`,

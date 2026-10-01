@@ -14,7 +14,6 @@ export default {
     select_persona_label: `ペルソナを選択`,
     select_persona_description: `応答するペルソナを選択してください。`,
     select_persona_placeholder: `応答するペルソナを選択...`,
-    embed_hide_notice: `\`/config\` > 動作 > 通知動作 でこの埋め込みを非表示にできます。`,
     use_reasoning_label: `推論を使用`,
     use_reasoning_description: `利用可能な最も賢いモデルを使用して高度な推論モードを切り替えます。`,
     no_smart_model_title: `推論モデルが見つかりません`,

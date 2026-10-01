@@ -15,7 +15,13 @@ export const TOOL_NOTICE_KEYS = [
   "respond_embed",
   "impersonation_notice",
   "fallback_model_usage",
+  "memory_update",
+  "task_update",
+  "user_info_update",
 ] as const;
+
+/** The one footer line every hideable notice shares, pointing at the toggle that hides it. */
+export const NOTICE_CONFIG_HINT_KEY = "tools.tool_notice.configure_hint";
 
 export type ToolNoticeKey = (typeof TOOL_NOTICE_KEYS)[number];
 
@@ -109,5 +115,20 @@ export const TOOL_NOTICE_DEFINITIONS: ToolNoticeDefinition[] = [
     key: "fallback_model_usage",
     labelKey: "commands.config.notice-embeds.visibility.notice_fallback_model_usage_label",
     descriptionKey: "commands.config.notice-embeds.visibility.notice_fallback_model_usage_description",
+  },
+  {
+    key: "memory_update",
+    labelKey: "commands.config.notice-embeds.visibility.notice_memory_update_label",
+    descriptionKey: "commands.config.notice-embeds.visibility.notice_memory_update_description",
+  },
+  {
+    key: "task_update",
+    labelKey: "commands.config.notice-embeds.visibility.notice_task_update_label",
+    descriptionKey: "commands.config.notice-embeds.visibility.notice_task_update_description",
+  },
+  {
+    key: "user_info_update",
+    labelKey: "commands.config.notice-embeds.visibility.notice_user_info_update_label",
+    descriptionKey: "commands.config.notice-embeds.visibility.notice_user_info_update_description",
   },
 ];

@@ -573,8 +573,7 @@ export class ReminderTool extends BaseTool {
         // Long purposes receive an expansion button so the full text remains
         // available ephemerally without adding channel clutter.
         await sendTaskEmbedWithExpand(
-          context.channel,
-          context.locale,
+          context,
           {
             color: useRecurringTaskEmbed ? ColorCode.INFO : ColorCode.SUCCESS,
             titleKey: useRecurringTaskEmbed
@@ -608,11 +607,6 @@ export class ReminderTool extends BaseTool {
                 },
           },
           reminderPurpose,
-          {
-            webhook: context.webhook,
-            personaUsername: context.personaUsername,
-            personaAvatarUrl: context.personaAvatarUrl,
-          },
         );
 
         return {

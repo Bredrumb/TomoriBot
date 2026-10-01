@@ -20,7 +20,6 @@ export default {
 {failure_list}`,
     fallback_used_failure_line: `{index}. {model} errored with {error_detail}`,
     fallback_used_details_button: `Fallback Used`,
-    fallback_used_hide_footer: `Hide this and reroute details to thought logs with \`/config\` > Behavior > Notices`,
     fallback_used_personal_opt_out_footer: `Stop the server's model from covering your personal provider's failures in \`/personal config\` > Models > Fallbacks`,
     markdown_table: {
       show_button: `Show Markdown`,

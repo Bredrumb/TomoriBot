@@ -12,8 +12,7 @@ import { log } from "@/utils/misc/logger";
 // English. Hangul is excluded because Korean prose ends sentences with an ASCII period.
 const FULL_WIDTH_SENTENCE_SCRIPT_END = /[぀-ヿ㐀-鿿豈-﫿＀-￯]$/;
 
-const HIDE_NOTICE_FOOTER_KEY = "tools.tool_notice.hide_footer";
-const KILL_HINT_FOOTER_KEY = "tools.tool_notice.hide_footer_with_kill";
+const KILL_HINT_FOOTER_KEY = "tools.tool_notice.kill_hint";
 const IMAGE_NOTICE_PROMPT_PREVIEW_LENGTH = 700;
 
 function resolveDescription(locale: string, options: StandardEmbedOptions): string {
@@ -43,8 +42,29 @@ function buildToolNoticeOptions(
   return {
     ...options,
     description: [sourceDescription, description].filter((part) => part.length > 0).join("\n\n"),
-    footerKey: showKillHint ? KILL_HINT_FOOTER_KEY : HIDE_NOTICE_FOOTER_KEY,
+    footerKey: showKillHint ? KILL_HINT_FOOTER_KEY : undefined,
     footerVars: undefined,
+    configHint: true,
+  };
+}
+
+/**
+ * Prefixes a hidden notice's body with the link back to the message that caused it, so a reader
+ * of the thought log can tell which conversation the rerouted notice belongs to.
+ */
+export function withThoughtLogSource(context: ToolContext, options: StandardEmbedOptions): StandardEmbedOptions {
+  const sourceDescription = localizer(context.locale, "genai.thought_log.description", {
+    source_line: getSourceLine(context),
+  });
+  const body = options.description
+    ? options.description
+    : options.descriptionKey
+      ? localizer(context.locale, options.descriptionKey, options.descriptionVars)
+      : "";
+
+  return {
+    ...options,
+    description: [sourceDescription, body.trim()].filter((part) => part.length > 0).join("\n\n"),
   };
 }
 
@@ -204,14 +224,35 @@ export function isToolNoticeVisible(config: AssembledServerConfig, key: ToolNoti
   return isNoticeEmbedVisible(config, key);
 }
 
-export async function routeToolNoticeToThoughtLog(
-  context: ToolContext,
-  options: StandardEmbedOptions,
-  logLabel: string,
-): Promise<boolean> {
+/** Where a hidden notice is rerouted, with the persona identity to post it under when available. */
+export interface ThoughtLogTarget {
+  channel: BaseGuildTextChannel;
+  webhookContext: WebhookEmbedContext | undefined;
+}
+
+/**
+ * Whether a hidden notice from this channel may be copied to the thought log at all. DMs and
+ * private channels stay out of it because the thought log is readable by people who cannot see
+ * those conversations.
+ */
+function isHiddenNoticeRoutable(context: ToolContext): boolean {
+  if (isDMBasedChannel(context.channel)) {
+    return false;
+  }
+
+  const privateChannelIds = context.tomoriState.config.private_channel_ids ?? [];
+  // Threads whose parent channel is private must also be suppressed from the thought log.
+  const toolNoticeParentId = context.channel.isThread() ? context.channel.parentId : null;
+  return !(
+    privateChannelIds.includes(context.channel.id) ||
+    (toolNoticeParentId !== null && privateChannelIds.includes(toolNoticeParentId))
+  );
+}
+
+async function resolveThoughtLogTarget(context: ToolContext, logLabel: string): Promise<ThoughtLogTarget | null> {
   const thoughtLogChannelId = context.tomoriState.config.thought_log_channel_disc_id;
   if (!thoughtLogChannelId) {
-    return false;
+    return null;
   }
 
   const thoughtLogChannel = await context.client.channels.fetch(thoughtLogChannelId).catch(() => null);
@@ -224,7 +265,7 @@ export async function routeToolNoticeToThoughtLog(
       thoughtLogChannel.isDMBased())
   ) {
     log.warn(`${logLabel}: Thought log channel ${thoughtLogChannelId} is missing or unavailable. Skipping reroute.`);
-    return false;
+    return null;
   }
 
   let rerouteWebhookContext: WebhookEmbedContext | undefined;
@@ -243,11 +284,40 @@ export async function routeToolNoticeToThoughtLog(
     }
   }
 
+  return { channel: thoughtLogChannel as BaseGuildTextChannel, webhookContext: rerouteWebhookContext };
+}
+
+/**
+ * Resolves where a hidden notice should go instead of the conversation channel.
+ *
+ * @returns `null` when the notice must be dropped: no thought log is set, it is unreachable, or
+ *   the source conversation is a DM or private channel.
+ */
+export async function resolveHiddenNoticeTarget(
+  context: ToolContext,
+  logLabel: string,
+): Promise<ThoughtLogTarget | null> {
+  if (!isHiddenNoticeRoutable(context)) {
+    return null;
+  }
+  return resolveThoughtLogTarget(context, logLabel);
+}
+
+export async function routeToolNoticeToThoughtLog(
+  context: ToolContext,
+  options: StandardEmbedOptions,
+  logLabel: string,
+): Promise<boolean> {
+  const target = await resolveThoughtLogTarget(context, logLabel);
+  if (!target) {
+    return false;
+  }
+
   await sendStandardEmbed(
-    thoughtLogChannel as BaseGuildTextChannel,
+    target.channel,
     context.locale,
     buildToolNoticeOptions(context.locale, options, getSourceLine(context), context.showKillHint),
-    rerouteWebhookContext,
+    target.webhookContext,
   );
 
   return true;
@@ -267,17 +337,7 @@ export async function sendToolNotice(
       return;
     }
 
-    if (isDMBasedChannel(context.channel)) {
-      return;
-    }
-
-    const privateChannelIds = context.tomoriState.config.private_channel_ids ?? [];
-    // Threads whose parent channel is private must also be suppressed from the thought log.
-    const toolNoticeParentId = context.channel.isThread() ? context.channel.parentId : null;
-    if (
-      privateChannelIds.includes(context.channel.id) ||
-      (toolNoticeParentId !== null && privateChannelIds.includes(toolNoticeParentId))
-    ) {
+    if (!isHiddenNoticeRoutable(context)) {
       return;
     }
 
@@ -294,16 +354,7 @@ export async function routeHiddenToolNotice(
 ): Promise<boolean> {
   if (context.suppressProgressNotices) return false;
 
-  if (isDMBasedChannel(context.channel)) {
-    return false;
-  }
-
-  const privateChannelIds = context.tomoriState.config.private_channel_ids ?? [];
-  const toolNoticeParentId = context.channel.isThread() ? context.channel.parentId : null;
-  if (
-    privateChannelIds.includes(context.channel.id) ||
-    (toolNoticeParentId !== null && privateChannelIds.includes(toolNoticeParentId))
-  ) {
+  if (!isHiddenNoticeRoutable(context)) {
     return false;
   }
 

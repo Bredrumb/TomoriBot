@@ -1254,6 +1254,12 @@ export default {
         notice_impersonation_notice_description: `显示人格与用户扮演的提示嵌入。`,
         notice_fallback_model_usage_label: `备用模型使用`,
         notice_fallback_model_usage_description: `当前面的模型失败、由备用模型回答时，显示「已使用备用模型」按钮。`,
+        notice_memory_update_label: `记忆更新`,
+        notice_memory_update_description: `在保存、编辑或删除服务器记忆或个人记忆时显示提示。`,
+        notice_task_update_label: `定时任务`,
+        notice_task_update_description: `在创建、编辑或删除任务或提醒时显示提示。`,
+        notice_user_info_update_label: `资料更新`,
+        notice_user_info_update_description: `在用户保存的资料被更新时显示提示。`,
       },
     },
     humanizer: {

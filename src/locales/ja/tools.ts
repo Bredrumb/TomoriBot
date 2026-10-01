@@ -49,8 +49,8 @@ export default {
       tool_invoke_no_params: `パラメーターなし。`,
     },
     tool_notice: {
-      hide_footer: `\`/config\` > 動作 > 通知動作 で非表示にできます`,
-      hide_footer_with_kill: `\`/config\` > 動作 > 通知動作 で非表示にできます · 止まっていると思ったら \`/kill\` を使用してください`,
+      configure_hint: `これらの通知は \`/config\` > 動作 > 通知 で設定できます`,
+      kill_hint: `止まっていると思ったら \`/kill\` を使用してください`,
     },
     user_block: {
       error_missing_permission: `ブロックを通知するには、このチャンネルで {permission} 権限が必要です。サーバー管理者に権限を付与してもらい、もう一度お試しください。`,

@@ -1264,6 +1264,12 @@ CFG 權重：**{cfg_weight}**
         notice_impersonation_notice_description: `顯示人格與使用者模擬的通知嵌入。`,
         notice_fallback_model_usage_label: `備援模型使用`,
         notice_fallback_model_usage_description: `在前面的模型失敗後由備援模型回答時，顯示已使用備援的按鈕。`,
+        notice_memory_update_label: `記憶更新`,
+        notice_memory_update_description: `在儲存、編輯或刪除伺服器記憶或個人記憶時顯示通知。`,
+        notice_task_update_label: `排程任務`,
+        notice_task_update_description: `在建立、編輯或刪除任務或提醒時顯示通知。`,
+        notice_user_info_update_label: `個人資料更新`,
+        notice_user_info_update_description: `在使用者儲存的個人資料被更新時顯示通知。`,
       },
     },
     humanizer: {

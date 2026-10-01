@@ -14,7 +14,6 @@ export default {
     select_persona_label: `Choose Persona`,
     select_persona_description: `Select who should respond.`,
     select_persona_placeholder: `Select who should respond...`,
-    embed_hide_notice: `Tip: Hide this embed via \`/config\` > Behavior > Notices.`,
     use_reasoning_label: `Use Reasoning`,
     use_reasoning_description: `Toggle thinking using the highest reasoning budget of this model if available.`,
     no_smart_model_title: `No Reasoning Model Found`,

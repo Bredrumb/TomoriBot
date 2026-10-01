@@ -20,7 +20,6 @@ export default {
 {failure_list}`,
     fallback_used_failure_line: `{index}. {model} falló con {error_detail}`,
     fallback_used_details_button: `Respaldo utilizado`,
-    fallback_used_hide_footer: `Oculta esto y redirige los detalles a los registros de pensamiento con \`/config\` > Modelos > Avisos`,
     fallback_used_personal_opt_out_footer: `Evita que el modelo del servidor cubra las fallas de tu proveedor personal en \`/personal config\` > Modelos > Alternativas`,
     markdown_table: {
       show_button: `Mostrar Markdown`,

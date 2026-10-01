@@ -192,9 +192,9 @@ the reader strips both prefixes so the reconstructed title matches
 - **If you convert a notice to Components V2, verify it still classifies**: the
 formatting helpers take a transport-agnostic `{title, description}` pair
 specifically so both paths emit byte-identical `[System: ...]` context. Current
-CV2 senders: `expandableEmbedNotice.ts` (memory + task via `sendEmbedWithExpand`,
-`update_user_info` via `sendNoticeContainerMessage`). All other notice types are
-still embed-based.
+CV2 senders: `expandableEmbedNotice.ts` (memory + task via
+`sendMemoryEmbedWithExpand` / `sendTaskEmbedWithExpand`, `update_user_info` via
+`sendToolNoticeContainer`). All other notice types are still embed-based.
 
 - **A notice title absent from `checkTargetEmbedTitle` is dropped silently**:
 whichever transport it uses, so a persona asked "did you already do that?" has no

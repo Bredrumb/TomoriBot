@@ -49,8 +49,8 @@ export default {
       tool_invoke_no_params: `沒有參數。`,
     },
     tool_notice: {
-      hide_footer: `使用 \`/config\` > 行為 > 通知隱藏這則訊息`,
-      hide_footer_with_kill: `使用 \`/config\` > 行為 > 通知隱藏這則訊息 · 覺得我卡住了可以用 \`/kill\``,
+      configure_hint: `可在 \`/config\` > 行為 > 通知 中設定這些通知`,
+      kill_hint: `覺得我卡住了可以用 \`/kill\``,
     },
     user_block: {
       error_missing_permission: `我需要此頻道的 {permission} 權限才能發布封鎖通知。請讓伺服器管理員授予該權限後重試。`,

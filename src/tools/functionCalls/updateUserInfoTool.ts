@@ -8,7 +8,7 @@ import {
 import { PrivacyLevel, type UserRow } from "@/types/db/schema";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { resolveUserTarget } from "@/utils/discord/targetResolver";
-import { sendNoticeContainerMessage } from "@/utils/discord/expandableEmbedNotice";
+import { sendToolNoticeContainer } from "@/utils/discord/expandableEmbedNotice";
 import { userNamingRepository, userRepository } from "@/utils/db/repositories";
 import {
   type UserInfoWriteBatch,
@@ -306,23 +306,14 @@ function buildSuccessBody(
 async function sendSuccessNotice(context: ToolContext, targetLabel: string, body: string): Promise<void> {
   if (context.suppressProgressNotices || !context.channel) return;
   try {
-    await sendNoticeContainerMessage(
-      context.channel,
-      context.locale,
-      {
-        titleKey: "tools.user_info_update.success_title",
-        titleVars: { target_user: targetLabel },
-        description: body,
-        footerKey: "tools.user_info_update.success_footer",
-        footerVars: { target_user: targetLabel },
-        color: ColorCode.SUCCESS,
-      },
-      {
-        webhook: context.webhook,
-        personaUsername: context.personaUsername,
-        personaAvatarUrl: context.personaAvatarUrl,
-      },
-    );
+    await sendToolNoticeContainer(context, "user_info_update", {
+      titleKey: "tools.user_info_update.success_title",
+      titleVars: { target_user: targetLabel },
+      description: body,
+      footerKey: "tools.user_info_update.success_footer",
+      footerVars: { target_user: targetLabel },
+      color: ColorCode.SUCCESS,
+    });
   } catch (error) {
     log.warn("Failed to send the user info update notice", error as Error);
   }

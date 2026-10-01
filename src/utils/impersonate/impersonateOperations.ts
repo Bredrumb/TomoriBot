@@ -27,6 +27,7 @@ import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import { CooldownType } from "@/types/db/schema";
 import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
+import { NOTICE_CONFIG_HINT_KEY } from "@/constants/toolNotices";
 import { isNoticeEmbedVisible } from "@/utils/discord/toolProgressNotice";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedUserRow } from "@/utils/cache/userCache";
@@ -181,7 +182,7 @@ export async function executePersonaImpersonation(
           });
 
       const noticeEmbed = new EmbedBuilder()
-        .setDescription(localizer(locale, "commands.impersonate.persona_impersonation_notice_description"))
+        .setDescription(localizer(locale, NOTICE_CONFIG_HINT_KEY))
         .setFooter({
           text: localizer(locale, "commands.impersonate.persona_impersonation_notice_footer", {
             user: interaction.user.username,
@@ -434,7 +435,9 @@ export async function executeUserImpersonation(
             });
 
         const noticeEmbed = new EmbedBuilder()
-          .setDescription(localizer(locale, "commands.impersonate.user_impersonation_notice_description"))
+          .setDescription(
+            `${localizer(locale, NOTICE_CONFIG_HINT_KEY)}\n${localizer(locale, "commands.impersonate.user_impersonation_teach_hint")}`,
+          )
           .setFooter({
             text: localizer(locale, "commands.impersonate.user_impersonation_notice_footer", {
               user: interaction.user.username,

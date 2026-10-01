@@ -16,6 +16,7 @@ import { resolveFallbackPersona } from "@/utils/discord/personaTurnDetectionReso
 import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { CooldownType } from "@/types/db/schema";
 import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
+import { NOTICE_CONFIG_HINT_KEY } from "@/constants/toolNotices";
 import { isNoticeEmbedVisible } from "@/utils/discord/toolProgressNotice";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 
@@ -359,7 +360,7 @@ export async function execute(
 
     if (!hideEmbed) {
       successEmbed.setFooter({
-        text: localizer(locale, "commands.respond.embed_hide_notice"),
+        text: localizer(locale, NOTICE_CONFIG_HINT_KEY),
       });
     }
 

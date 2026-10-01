@@ -49,8 +49,8 @@ export default {
       tool_invoke_no_params: `Không có tham số.`,
     },
     tool_notice: {
-      hide_footer: `Ẩn thông báo này bằng \`/config\` > Behavior > Notices`,
-      hide_footer_with_kill: `Ẩn thông báo bằng \`/config\` > Behavior > Notices · Dùng \`/kill\` nếu bạn nghĩ mình bị kẹt`,
+      configure_hint: `Tùy chỉnh các thông báo này trong \`/config\` > Hành vi > Thông báo`,
+      kill_hint: `Dùng \`/kill\` nếu bạn nghĩ mình bị kẹt`,
     },
     user_block: {
       error_missing_permission: `Tôi cần quyền {permission} trong kênh này để thông báo việc chặn. Hãy nhờ quản trị viên cấp quyền rồi thử lại.`,

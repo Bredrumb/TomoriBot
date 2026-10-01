@@ -14,7 +14,6 @@ export default {
     select_persona_label: `選擇人格`,
     select_persona_description: `選擇要由誰回應。`,
     select_persona_placeholder: `選擇要由誰回應...`,
-    embed_hide_notice: `提示：用 \`/config\` > 行為 > 通知隱藏這則嵌入訊息。`,
     use_reasoning_label: `使用推理`,
     use_reasoning_description: `若這個模型有最高的推理預算，就切換思考來使用它。`,
     no_smart_model_title: `找不到推理模型`,

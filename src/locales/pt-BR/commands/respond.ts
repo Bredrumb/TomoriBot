@@ -14,7 +14,6 @@ export default {
     select_persona_label: `Escolher Persona`,
     select_persona_description: `Selecione quem deve responder.`,
     select_persona_placeholder: `Selecione quem deve responder...`,
-    embed_hide_notice: `Dica: Oculte este embed via \`/config\` > Comportamento > Avisos.`,
     use_reasoning_label: `Usar Raciocínio`,
     use_reasoning_description: `Alterne o pensamento usando o orçamento de raciocínio mais alto deste modelo, se disponível.`,
     no_smart_model_title: `Nenhum Modelo de Raciocínio Encontrado`,

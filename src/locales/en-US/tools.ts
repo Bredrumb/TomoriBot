@@ -49,8 +49,8 @@ export default {
       tool_invoke_no_params: `No parameters.`,
     },
     tool_notice: {
-      hide_footer: `Hide this using \`/config\` > Behavior > Notices`,
-      hide_footer_with_kill: `Hide this using \`/config\` > Behavior > Notices · Use \`/kill\` if you think I'm stuck`,
+      configure_hint: `Configure these notices in \`/config\` > Behavior > Notices`,
+      kill_hint: `Use \`/kill\` if you think I'm stuck`,
     },
     user_block: {
       error_missing_permission: `I need the {permission} permission in this channel to announce a block. Ask a server administrator to grant it, then try again.`,

@@ -31,8 +31,15 @@ import {
   type TopLevelComponentData,
   type Webhook,
 } from "discord.js";
+import type { ToolNoticeKey } from "@/constants/toolNotices";
 import type { StandardEmbedOptions } from "@/types/discord/embed";
+import type { ToolContext } from "@/types/tool/interfaces";
 import { createStandardEmbed, type WebhookEmbedContext } from "@/utils/discord/embedHelper";
+import {
+  isNoticeEmbedVisible,
+  resolveHiddenNoticeTarget,
+  withThoughtLogSource,
+} from "@/utils/discord/toolProgressNotice";
 import { buildNoticeContainer } from "@/utils/discord/ui/statusComponents";
 import { validateAndFallbackPanelPayload } from "@/utils/discord/ui/interactionCore";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/webhookCore";
@@ -117,6 +124,7 @@ function buildNoticeComponents(
     descriptionVars: embedOptions.descriptionVars,
     footerKey: embedOptions.footerKey,
     footerVars: embedOptions.footerVars,
+    configHint: embedOptions.configHint,
     button: includeExpandButton
       ? {
           customId: config.customId,
@@ -202,7 +210,7 @@ async function deliverNoticeComponents(
  * body by anything but blank lines. The CV2 container emits a real `Separator`
  * before `footerKey`.
  */
-export async function sendNoticeContainerMessage(
+async function sendNoticeContainerMessage(
   channel: SupportedChannel,
   locale: string,
   embedOptions: StandardEmbedOptions,
@@ -218,6 +226,7 @@ export async function sendNoticeContainerMessage(
     descriptionVars: embedOptions.descriptionVars,
     footerKey: embedOptions.footerKey,
     footerVars: embedOptions.footerVars,
+    configHint: embedOptions.configHint,
   });
   await deliverNoticeComponents(channel, components, webhookContext, locale);
 }
@@ -310,65 +319,109 @@ async function sendEmbedWithExpand(
   });
 }
 
-/**
- * Memory-learning wrapper for {@link sendEmbedWithExpand}. Attaches a
- * "Show Full Memory" button when the processed memory content exceeds the
- * truncation threshold.
- *
- * @param locale - Locale for button label, expand title, and embed strings.
- * @param fullMemoryContent - Full, processed (post-{user}/{bot}) memory content.
- * @param webhookContext - Optional persona webhook identity.
- */
-export async function sendMemoryEmbedWithExpand(
+type NoticeDelivery = (
   channel: SupportedChannel,
-  locale: string,
+  options: StandardEmbedOptions,
+  webhookContext: WebhookEmbedContext | undefined,
+) => Promise<void>;
+
+/**
+ * Delivers a hideable tool notice in the conversation, or the same card to the thought log when
+ * the server hid `noticeKey` in `/config` > Behavior > Notices.
+ *
+ * Deliberately ignores `suppressProgressNotices`: that flag silences "working..." progress cards,
+ * while these confirm a change the persona already made, which flows like the silent turn have
+ * always surfaced.
+ */
+async function routeHideableNotice(
+  context: ToolContext,
+  noticeKey: ToolNoticeKey,
   embedOptions: StandardEmbedOptions,
-  fullMemoryContent: string,
-  webhookContext?: WebhookEmbedContext,
+  deliver: NoticeDelivery,
 ): Promise<void> {
-  await sendEmbedWithExpand(
-    channel,
-    locale,
-    embedOptions,
-    fullMemoryContent,
-    {
-      customId: "memory_notice_expand",
-      buttonLabelKey: "genai.self_teach.expand_memory_button",
-      expandTitleKey: "genai.self_teach.expand_memory_title",
-      truncationThreshold: MEMORY_NOTICE_PREVIEW_LIMIT,
-      timeoutMs: EXPAND_BUTTON_TIMEOUT_MS,
-    },
-    webhookContext,
+  const hintedOptions: StandardEmbedOptions = { ...embedOptions, configHint: true };
+  if (isNoticeEmbedVisible(context.tomoriState.config, noticeKey)) {
+    await deliver(context.channel, hintedOptions, {
+      webhook: context.webhook,
+      personaUsername: context.personaUsername,
+      personaAvatarUrl: context.personaAvatarUrl,
+    });
+    return;
+  }
+
+  const logLabel = `Hidden ${noticeKey} notice`;
+  try {
+    const target = await resolveHiddenNoticeTarget(context, logLabel);
+    if (!target) return;
+    await deliver(target.channel, withThoughtLogSource(context, hintedOptions), target.webhookContext);
+  } catch (error) {
+    log.warn(`${logLabel}: Failed to reroute to the thought log`, error as Error);
+  }
+}
+
+function sendToolEmbedWithExpand(
+  context: ToolContext,
+  noticeKey: ToolNoticeKey,
+  embedOptions: StandardEmbedOptions,
+  fullContent: string,
+  config: ExpandableNoticeConfig,
+): Promise<void> {
+  return routeHideableNotice(context, noticeKey, embedOptions, (channel, options, webhookContext) =>
+    sendEmbedWithExpand(channel, context.locale, options, fullContent, config, webhookContext),
   );
 }
 
 /**
- * Scheduled-task wrapper for {@link sendEmbedWithExpand}. Attaches a
+ * Memory-learning wrapper for {@link sendToolEmbedWithExpand}. Attaches a
+ * "Show Full Memory" button when the processed memory content exceeds the
+ * truncation threshold.
+ *
+ * @param fullMemoryContent - Full, processed (post-{user}/{bot}) memory content.
+ */
+export async function sendMemoryEmbedWithExpand(
+  context: ToolContext,
+  embedOptions: StandardEmbedOptions,
+  fullMemoryContent: string,
+): Promise<void> {
+  await sendToolEmbedWithExpand(context, "memory_update", embedOptions, fullMemoryContent, {
+    customId: "memory_notice_expand",
+    buttonLabelKey: "genai.self_teach.expand_memory_button",
+    expandTitleKey: "genai.self_teach.expand_memory_title",
+    truncationThreshold: MEMORY_NOTICE_PREVIEW_LIMIT,
+    timeoutMs: EXPAND_BUTTON_TIMEOUT_MS,
+  });
+}
+
+/**
+ * Scheduled-task wrapper for {@link sendToolEmbedWithExpand}. Attaches a
  * "Show Full Task" button when the task/reminder purpose exceeds the
  * truncation threshold (created, updated, and deleted task notices).
  *
- * @param locale - Locale for button label, expand title, and embed strings.
  * @param fullReminderPurpose - Full, un-truncated reminder/task purpose.
- * @param webhookContext - Optional persona webhook identity.
  */
 export async function sendTaskEmbedWithExpand(
-  channel: SupportedChannel,
-  locale: string,
+  context: ToolContext,
   embedOptions: StandardEmbedOptions,
   fullReminderPurpose: string,
-  webhookContext?: WebhookEmbedContext,
 ): Promise<void> {
-  await sendEmbedWithExpand(
-    channel,
-    locale,
-    embedOptions,
-    fullReminderPurpose,
-    {
-      customId: "task_notice_expand",
-      buttonLabelKey: "reminders.expand_task_button",
-      expandTitleKey: "reminders.expand_task_title",
-      timeoutMs: EXPAND_BUTTON_TIMEOUT_MS,
-    },
-    webhookContext,
+  await sendToolEmbedWithExpand(context, "task_update", embedOptions, fullReminderPurpose, {
+    customId: "task_notice_expand",
+    buttonLabelKey: "reminders.expand_task_button",
+    expandTitleKey: "reminders.expand_task_title",
+    timeoutMs: EXPAND_BUTTON_TIMEOUT_MS,
+  });
+}
+
+/**
+ * Sends a hideable plain notice card (no expand button) in the conversation, or reroutes it to
+ * the thought log when the server hid `noticeKey`.
+ */
+export function sendToolNoticeContainer(
+  context: ToolContext,
+  noticeKey: ToolNoticeKey,
+  embedOptions: StandardEmbedOptions,
+): Promise<void> {
+  return routeHideableNotice(context, noticeKey, embedOptions, (channel, options, webhookContext) =>
+    sendNoticeContainerMessage(channel, context.locale, options, webhookContext),
   );
 }

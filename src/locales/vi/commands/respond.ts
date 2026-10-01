@@ -14,7 +14,6 @@ export default {
     select_persona_label: `Chọn persona`,
     select_persona_description: `Chọn ai sẽ phản hồi.`,
     select_persona_placeholder: `Chọn ai sẽ phản hồi...`,
-    embed_hide_notice: `Mẹo: Ẩn embed này qua \`/config\` > Hành vi > Thông báo.`,
     use_reasoning_label: `Dùng suy luận`,
     use_reasoning_description: `Bật/tắt suy nghĩ dùng ngân sách suy luận cao nhất của model này nếu có.`,
     no_smart_model_title: `Không tìm thấy model suy luận`,
