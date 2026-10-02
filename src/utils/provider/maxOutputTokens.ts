@@ -51,11 +51,8 @@ export const DEFAULT_PRESET_GENERATION_MAX_OUTPUT_TOKENS = 16384;
 const DEFAULT_VISION_CAPTION_MAX_OUTPUT_TOKENS = 2048;
 
 /**
- * Parses a positive integer from a raw env string.
- *
- * @param raw - Raw env value (may be undefined/empty/non-numeric).
- * @returns The parsed positive integer, or `undefined` so callers fall through
- *          to the next resolution tier.
+ * Returns `undefined` for an unset or invalid value rather than a default, so the caller falls through
+ * to the next resolution tier.
  */
 function parsePositiveIntEnv(raw: string | undefined): number | undefined {
   if (typeof raw !== "string") {

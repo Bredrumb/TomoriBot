@@ -1055,6 +1055,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
     naiAttgTags?: string | null;
     naiAttgGenre?: string | null;
     naiAttgStars?: number | null;
+    isNsfw?: boolean;
   }): Promise<TomoriRow | null> {
     const row = await sql.transaction(async (tx) => {
       const [insertedRow] = await tx`
@@ -1065,7 +1066,8 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
           sample_dialogues_in,
           sample_dialogues_out,
           is_alter,
-          persona_lineage_id
+          persona_lineage_id,
+          is_nsfw
         )
         VALUES (
           ${params.serverId},
@@ -1074,7 +1076,8 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
           ${sql.array(params.sampleDialoguesIn, "TEXT")},
           ${sql.array(params.sampleDialoguesOut, "TEXT")},
           true,
-          COALESCE(${params.personaLineageId ?? null}::bigint, nextval('persona_lineage_id_seq'))
+          COALESCE(${params.personaLineageId ?? null}::bigint, nextval('persona_lineage_id_seq')),
+          ${params.isNsfw === true}
         )
         RETURNING *
       `;
@@ -1153,6 +1156,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
             is_pointer = true,
             preset_lineage_id = ${pointerLineageId},
             preset_language = ${params.preset.preset_language},
+            is_nsfw = ${params.preset.is_nsfw},
             -- Re-pointing is a fresh pointer: drop any stored avatar so the persona
             -- resolves the official preset avatar again (alters live-resolve the
             -- shared image; mains re-receive it via the guild-avatar reconciler).
@@ -1325,7 +1329,8 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
           persona_lineage_id,
           is_pointer,
           preset_lineage_id,
-          preset_language
+          preset_language,
+          is_nsfw
         )
         VALUES (
           ${params.serverId},
@@ -1337,7 +1342,8 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
           ${memoryLineageId},
           true,
           ${pointerLineageId},
-          ${params.preset.preset_language}
+          ${params.preset.preset_language},
+          ${params.preset.is_nsfw}
         )
         RETURNING *
       `;

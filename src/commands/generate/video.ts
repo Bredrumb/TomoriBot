@@ -48,9 +48,8 @@ const FPS_INPUT_ID = "fps_input";
 const DISCORD_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 
 /**
- * Parse a positive integer from an environment variable, falling back to a default.
- * @param fallback - Value to use when unset or invalid
- * @returns A finite positive integer
+ * Falls back instead of throwing, because it runs at module load and a malformed operator value must
+ * not stop `/generate video` from registering.
  */
 function parsePositiveIntEnv(name: string, fallback: number): number {
   const parsed = Number.parseInt(process.env[name] ?? "", 10);

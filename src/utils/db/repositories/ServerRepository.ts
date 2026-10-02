@@ -671,7 +671,8 @@ class ServerRepository implements IRepository<ServerExportShape> {
             persona_lineage_id,
             is_pointer,
             preset_lineage_id,
-            preset_language
+            preset_language,
+            is_nsfw
           )
           VALUES (
             ${server.server_id},
@@ -685,7 +686,11 @@ class ServerRepository implements IRepository<ServerExportShape> {
             ),
             (SELECT preset_lineage_id IS NOT NULL FROM persona_presets WHERE persona_preset_id = ${validConfig.presetId}),
             (SELECT preset_lineage_id FROM persona_presets WHERE persona_preset_id = ${validConfig.presetId}),
-            (SELECT preset_language FROM persona_presets WHERE persona_preset_id = ${validConfig.presetId})
+            (SELECT preset_language FROM persona_presets WHERE persona_preset_id = ${validConfig.presetId}),
+            COALESCE(
+              (SELECT is_nsfw FROM persona_presets WHERE persona_preset_id = ${validConfig.presetId}),
+              false
+            )
           )
           RETURNING *
         `;

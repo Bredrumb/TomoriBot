@@ -11,7 +11,7 @@ sidebar:
 
 TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同一批指令构建器和简体中文描述生成（尚未翻译的描述以英文显示）。
 
-顶层指令组：**40**。可执行的斜杠指令：**82**。
+顶层指令组：**40**。可执行的斜杠指令：**84**。
 
 ## `/comment`
 
@@ -197,6 +197,8 @@ TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同�
 | 指令 | 摘要 |
 |---|---|
 | `/nsfw jailbreaks` | 管理这个服务器上我的提示词使用的可选越狱行为。 |
+| `/nsfw persona default` | 应用一套 NSFW 人格预设集 |
+| `/nsfw persona import` | 从 PNG、JSON 或 CHARX 文件导入人格，包括 NSFW 人格 |
 
 ## `/nuke`
 
