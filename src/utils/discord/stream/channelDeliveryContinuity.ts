@@ -32,7 +32,7 @@ const SWEEP_SIZE_THRESHOLD = 2000;
 interface ChannelDeliveryState {
   /** Sprite key of the most recent non-identity sprite delivered in this channel. */
   lastSpriteKey: string | null;
-  /** Current half of the clean/decorated username alternation. */
+  /** Current half of the clean/group-break username alternation. */
   groupParity: boolean;
   /**
    * Identity of the most recent WEBHOOK delivery, or null when the last delivery was an

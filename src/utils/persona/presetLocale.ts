@@ -18,7 +18,9 @@ export function presetFallbackLanguages(locale: string): string[] {
  * age-restricted `/nsfw` routes may, and the `/nsfw` listing offers nothing else.
  *
  * Rows without a lineage cannot be matched across languages, so they keep the whole-locale rule: they
- * appear only when their language is the most preferred one that has any rows.
+ * appear only when their language is the most preferred one among the lineage-less rows. Linked rows
+ * do not count toward that choice, or a translated official preset would hide every untranslated
+ * custom one.
  *
  * @param rows - Candidate rows in any of {@link presetFallbackLanguages}
  */
@@ -44,7 +46,7 @@ export function selectPresetsForLocale(
     if (!current || rank(row) < rank(current)) bestByLineage.set(lineageId, row);
   }
 
-  const unlinkedLanguage = languages.find((language) => candidates.some((row) => row.preset_language === language));
+  const unlinkedLanguage = languages.find((language) => unlinked.some((row) => row.preset_language === language));
   const selected = [...bestByLineage.values(), ...unlinked.filter((row) => row.preset_language === unlinkedLanguage)];
   return selected.sort((left, right) => left.persona_preset_name.localeCompare(right.persona_preset_name));
 }

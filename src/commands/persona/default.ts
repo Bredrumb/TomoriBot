@@ -614,6 +614,7 @@ export async function applyPresetDefault(
       triggerWords: uniqueAlterTriggers,
       personaPrompt: presetPersonaPrompt,
     });
+    invalidateTomoriStateCache(serverDiscId);
 
     const insertedValidation = tomoriSchema.safeParse(insertedAlterRow);
     if (!insertedValidation.success) {
@@ -713,9 +714,6 @@ export async function applyPresetDefault(
     // makes catalog avatar edits fan out to this alter on the next reseed, exactly
     // like its sprites/triggers/prompt. The avatar is materialized by reference
     // only if the user later forks the persona with a content edit.
-
-    // Match /persona import cache invalidation timing.
-    invalidateTomoriStateCache(serverDiscId);
 
     log.success(
       `Applied preset "${selectedPreset.persona_preset_name}" to alter persona "${resolvedAlterName}" with ${uniqueAlterTriggers.length} unique triggers for server ${tomoriState.server_id} by user ${userData.user_disc_id}`,

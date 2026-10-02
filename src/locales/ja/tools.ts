@@ -70,6 +70,13 @@ export default {
     },
     user_info_update: {
       success_title: `✅ {target_user} のプロフィールを更新しました`,
+      success_title_fields: `✅ {target_user} の{fields}を更新しました`,
+      success_title_cleared_fields: `🗑️ {target_user} の{fields}を消去しました`,
+      subject_nickname: `ニックネーム`,
+      subject_gender_identity: `性自認`,
+      subject_pronouns: `代名詞`,
+      subject_addressing_style: `呼称スタイル`,
+      subject_timezone_offset: `タイムゾーン`,
       success_intro: `以下を更新しました：`,
       change_line: `{index}. {field}：\`{previous}\` → \`{next}\``,
       success_summary: `{persona_name} は今後 {target_user} を「{formatted_name}」と呼びます。`,

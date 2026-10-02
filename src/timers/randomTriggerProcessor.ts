@@ -6,6 +6,7 @@ import { serverScheduleRepository } from "@/utils/db/repositories";
 import type { RandomTriggerRow, TomoriState } from "../types/db/schema";
 import { tomoriChat, suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
+import { resolvePersonaForMessage } from "@/utils/chat/webhookIdentity";
 import { runWithErrorContext } from "@/utils/misc/errorContextStore";
 
 export class RandomTriggerProcessor {
@@ -140,7 +141,8 @@ export class RandomTriggerProcessor {
 
       if (!trigger.respond_to_self && lastMessage) {
         const isPersonaLastSpeaker =
-          lastMessage.webhookId !== null && lastMessage.author.username === chosenPersona.persona_nickname;
+          lastMessage.webhookId !== null &&
+          resolvePersonaForMessage(lastMessage, allPersonas)?.persona_id === chosenPersona.persona_id;
 
         if (isPersonaLastSpeaker) {
           log.info(

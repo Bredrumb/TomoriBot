@@ -57,4 +57,12 @@ describe("selectPresetsForLocale", () => {
     expect(names(selectPresetsForLocale([customEn, customJa], "ja", { nsfw: false }))).toEqual(["Custom Japanese"]);
     expect(names(selectPresetsForLocale([customEn], "ja", { nsfw: false }))).toEqual(["Custom English"]);
   });
+
+  it("keeps an untranslated lineage-less row reachable beside a translated linked preset", () => {
+    const customEn = preset("Custom English", null, "en-US");
+    expect(names(selectPresetsForLocale([tomoriEn, tomoriJa, customEn], "ja", { nsfw: false }))).toEqual([
+      "Custom English",
+      "ともりくん",
+    ]);
+  });
 });

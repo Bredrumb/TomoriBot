@@ -70,6 +70,13 @@ export default {
     },
     user_info_update: {
       success_title: `✅ 已更新 {target_user} 的個人資料`,
+      success_title_fields: `✅ 已更新 {target_user} 的{fields}`,
+      success_title_cleared_fields: `🗑️ 已清除 {target_user} 的{fields}`,
+      subject_nickname: `暱稱`,
+      subject_gender_identity: `性別認同`,
+      subject_pronouns: `代稱`,
+      subject_addressing_style: `稱呼方式`,
+      subject_timezone_offset: `時區`,
       success_intro: `已更新下列項目：`,
       change_line: `{index}. {field}：\`{previous}\` → \`{next}\``,
       success_summary: `{persona_name} 現在稱呼 {target_user} 為「{formatted_name}」。`,
