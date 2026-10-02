@@ -28,6 +28,8 @@ export default {
     },
     no_response_title: `没有回复`,
     no_response_description: `我没有回复，可能是 AI 给了空回复或者超时了。`,
+    log_channel_chat_notice_title: `日志频道不开放聊天`,
+    log_channel_chat_notice_description: `这个频道被设为日志频道，所以我不会在这里回复消息。如果想在这里聊天，请到 \`/config\` > 频道 > 日志 清除或更改设置。`,
     thought_log: {
       title: `思考日志`,
       description: `来源：{source_line}`,

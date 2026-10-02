@@ -1043,8 +1043,15 @@ export const serverEmojiSchema = z.object({
   server_id: z.number(),
   emoji_disc_id: z.string(),
   emoji_name: z.string(),
-  emoji_desc: z.string().default(""),
-  emotion_key: z.string(),
+  // Both columns are nullable in the DB; NULL maps to the same placeholders the Discord sync writes.
+  emoji_desc: z
+    .string()
+    .nullish()
+    .transform((value) => value ?? ""),
+  emotion_key: z
+    .string()
+    .nullish()
+    .transform((value) => value ?? "unset"),
   is_global: z.boolean().default(false),
   is_animated: z.boolean().default(false),
   created_at: z.date().optional(),
@@ -1057,8 +1064,14 @@ export const serverStickerSchema = z.object({
   server_id: z.number(),
   sticker_disc_id: z.string(),
   sticker_name: z.string(),
-  sticker_desc: z.string().default(""),
-  emotion_key: z.string(),
+  sticker_desc: z
+    .string()
+    .nullish()
+    .transform((value) => value ?? ""),
+  emotion_key: z
+    .string()
+    .nullish()
+    .transform((value) => value ?? "unset"),
   is_global: z.boolean().default(false),
   sticker_format: z.nativeEnum(StickerFormatType).default(StickerFormatType.PNG),
   created_at: z.date().optional(),

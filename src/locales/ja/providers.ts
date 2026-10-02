@@ -28,6 +28,8 @@ export default {
     },
     no_response_title: `応答なし`,
     no_response_description: `応答がありませんでした - これはAIからの空の応答またはタイムアウトが原因である可能性があります。`,
+    log_channel_chat_notice_title: `ログチャンネルでは会話できません`,
+    log_channel_chat_notice_description: `このチャンネルはログチャンネルに設定されているため、ここでのメッセージには返信しません。ここで会話するには、\`/config\` > チャンネル > ログ で解除または変更してください。`,
     thought_log: {
       title: `思考ログ`,
       description: `元チャンネル: {source_line}`,

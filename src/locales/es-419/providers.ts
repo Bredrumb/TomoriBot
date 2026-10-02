@@ -28,6 +28,8 @@ export default {
     },
     no_response_title: `Sin respuesta`,
     no_response_description: `No respondí; esto puede deberse a una respuesta vacía o a que se agotó el tiempo de espera de la IA.`,
+    log_channel_chat_notice_title: `El chat está desactivado en el canal de registros`,
+    log_channel_chat_notice_description: `Este canal está configurado como canal de registros, así que no respondo mensajes aquí. Para chatear aquí, quítalo o cámbialo en \`/config\` > Canales > Registros.`,
     thought_log: {
       title: `Registro de pensamiento`,
       description: `Fuente: {source_line}`,

@@ -28,6 +28,8 @@ export default {
     },
     no_response_title: `沒有回覆`,
     no_response_description: `我沒有回覆，可能是 AI 回傳空白或逾時。`,
+    log_channel_chat_notice_title: `紀錄頻道不開放聊天`,
+    log_channel_chat_notice_description: `這個頻道被設為紀錄頻道，所以我不會在這裡回覆訊息。若要在這裡聊天，請到 \`/config\` > 頻道 > 紀錄 清除或更改設定。`,
     thought_log: {
       title: `思考紀錄`,
       description: `來源：{source_line}`,

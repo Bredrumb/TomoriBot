@@ -1063,14 +1063,25 @@ class ServerRepository implements IRepository<ServerExportShape> {
         return null;
       }
 
-      const parsedEmojis = serverEmojiSchema.array().safeParse(emojiRows);
-
-      if (!parsedEmojis.success) {
-        log.error(`Failed to validate emojis for server ID ${internalServerId}:`, parsedEmojis.error.flatten());
-        return null;
+      // Parsed per row so one malformed emoji cannot hide the server's whole catalogue from context.
+      const validEmojis: ServerEmojiRow[] = [];
+      const invalidEmojiIds: string[] = [];
+      for (const row of emojiRows) {
+        const parsed = serverEmojiSchema.safeParse(row);
+        if (parsed.success) {
+          validEmojis.push(parsed.data);
+        } else {
+          invalidEmojiIds.push(String(row.emoji_disc_id));
+        }
       }
 
-      return parsedEmojis.data;
+      if (invalidEmojiIds.length > 0) {
+        log.error(
+          `Skipped ${invalidEmojiIds.length} invalid emoji rows for server ID ${internalServerId}: ${invalidEmojiIds.join(", ")}`,
+        );
+      }
+
+      return validEmojis.length > 0 ? validEmojis : null;
     } catch (error) {
       log.error(`Error loading emojis for server ID ${internalServerId}:`, error);
       return null;
@@ -1777,24 +1788,22 @@ class ServerRepository implements IRepository<ServerExportShape> {
   }
 
   /**
-   * Minimal classification shape used by initializeExpressions.
-   * Mirrors ExpressionClassification from structuredOutput.ts without importing from providers.
-   */
-
-  /**
-   * Load all server emojis that have not yet been classified (emotion_key is null/unset
-   * or description is empty).
+   * Load the server emojis an `/expressions initialize` run should classify.
    *
+   * @param includeClassified - When true (overwrite mode), return every emoji instead of only
+   *   rows whose emotion_key or description is still unset
    */
-  async loadUninitializedEmojis(
+  async loadEmojisForClassification(
     serverId: number,
+    includeClassified: boolean,
   ): Promise<Array<{ emoji_disc_id: string; emoji_name: string; is_animated: boolean }>> {
     return await sql<Array<{ emoji_disc_id: string; emoji_name: string; is_animated: boolean }>>`
       SELECT emoji_disc_id, emoji_name, is_animated
       FROM server_emojis
       WHERE server_id = ${serverId}
         AND (
-          emotion_key IS NULL
+          ${includeClassified}
+          OR emotion_key IS NULL
           OR emotion_key = 'unset'
           OR emoji_desc IS NULL
           OR emoji_desc = ''
@@ -1803,18 +1812,22 @@ class ServerRepository implements IRepository<ServerExportShape> {
   }
 
   /**
-   * Load all server stickers that have not yet been classified.
+   * Load the server stickers an `/expressions initialize` run should classify.
    *
+   * @param includeClassified - When true (overwrite mode), return every sticker instead of only
+   *   rows whose emotion_key or description is still unset
    */
-  async loadUninitializedStickers(
+  async loadStickersForClassification(
     serverId: number,
+    includeClassified: boolean,
   ): Promise<Array<{ sticker_disc_id: string; sticker_name: string; sticker_format: number }>> {
     return await sql<Array<{ sticker_disc_id: string; sticker_name: string; sticker_format: number }>>`
       SELECT sticker_disc_id, sticker_name, sticker_format
       FROM server_stickers
       WHERE server_id = ${serverId}
         AND (
-          emotion_key IS NULL
+          ${includeClassified}
+          OR emotion_key IS NULL
           OR emotion_key = 'unset'
           OR sticker_desc IS NULL
           OR sticker_desc = ''
@@ -1823,42 +1836,28 @@ class ServerRepository implements IRepository<ServerExportShape> {
   }
 
   /**
-   * Clear emotion_key and description from all server emojis.
-   * Called before a full overwrite re-initialization.
-   *
-   */
-  async clearEmojiExpressions(serverId: number): Promise<void> {
-    await sql`UPDATE server_emojis SET emotion_key = NULL, emoji_desc = NULL WHERE server_id = ${serverId}`;
-  }
-
-  /**
-   * Clear emotion_key and description from all server stickers.
-   * Called before a full overwrite re-initialization.
-   *
-   */
-  async clearStickerExpressions(serverId: number): Promise<void> {
-    await sql`UPDATE server_stickers SET emotion_key = NULL, sticker_desc = NULL WHERE server_id = ${serverId}`;
-  }
-
-  /**
    * Apply LLM expression classification results to server_emojis and server_stickers
    * within a single transaction.
-   * Each result is matched by name (case-insensitive) and only written when the row
-   * is still uninitialized (guards against clobbering manual edits mid-batch).
+   * Each result is matched by name (case-insensitive) against the rows in `scope`, and a row
+   * is written at most once per call. Without `scope.overwrite`, a row is also only written
+   * while still unclassified, which guards against clobbering manual edits mid-run.
    *
-   * @returns Object with counts of emojis and stickers that were updated
+   * @param scope - The batch the model was shown. Matching is confined to these Discord IDs
+   *   because overwrite mode makes every row eligible, so an emoji and a sticker sharing a name
+   *   would otherwise both resolve to the emoji and leave the sticker unclassified.
+   * @returns Discord IDs of the emojis and stickers that were written
    */
   async initializeExpressions(
     serverId: number,
     results: Array<{ name: string; emotion_key: string; description: string }>,
-  ): Promise<{ emojiCount: number; stickerCount: number }> {
-    let emojiCount = 0;
-    let stickerCount = 0;
+    scope: { overwrite: boolean; emojiDiscIds: string[]; stickerDiscIds: string[] },
+  ): Promise<{ emojiDiscIds: string[]; stickerDiscIds: string[] }> {
+    const emojiDiscIds: string[] = [];
+    const stickerDiscIds: string[] = [];
 
     await sql.transaction(async (tx) => {
       for (const result of results) {
-        // Try emoji first (only update if still uninitialized)
-        const emojiRows = await tx`
+        const emojiRows = await tx<Array<{ emoji_disc_id: string }>>`
           UPDATE server_emojis
           SET
             emotion_key = ${result.emotion_key},
@@ -1866,8 +1865,11 @@ class ServerRepository implements IRepository<ServerExportShape> {
             updated_at  = CURRENT_TIMESTAMP
           WHERE server_id = ${serverId}
             AND LOWER(emoji_name) = LOWER(${result.name})
+            AND emoji_disc_id = ANY(${sql.array(scope.emojiDiscIds, "TEXT")})
+            AND NOT (emoji_disc_id = ANY(${sql.array(emojiDiscIds, "TEXT")}))
             AND (
-              emotion_key IS NULL
+              ${scope.overwrite}
+              OR emotion_key IS NULL
               OR emotion_key = 'unset'
               OR emoji_desc IS NULL
               OR emoji_desc = ''
@@ -1876,12 +1878,11 @@ class ServerRepository implements IRepository<ServerExportShape> {
         `;
 
         if (emojiRows.length > 0) {
-          emojiCount++;
+          emojiDiscIds.push(...emojiRows.map((row) => row.emoji_disc_id));
           continue;
         }
 
-        // Fall through to sticker if no emoji matched
-        const stickerRows = await tx`
+        const stickerRows = await tx<Array<{ sticker_disc_id: string }>>`
           UPDATE server_stickers
           SET
             emotion_key  = ${result.emotion_key},
@@ -1889,8 +1890,11 @@ class ServerRepository implements IRepository<ServerExportShape> {
             updated_at   = CURRENT_TIMESTAMP
           WHERE server_id = ${serverId}
             AND LOWER(sticker_name) = LOWER(${result.name})
+            AND sticker_disc_id = ANY(${sql.array(scope.stickerDiscIds, "TEXT")})
+            AND NOT (sticker_disc_id = ANY(${sql.array(stickerDiscIds, "TEXT")}))
             AND (
-              emotion_key IS NULL
+              ${scope.overwrite}
+              OR emotion_key IS NULL
               OR emotion_key = 'unset'
               OR sticker_desc IS NULL
               OR sticker_desc = ''
@@ -1898,13 +1902,11 @@ class ServerRepository implements IRepository<ServerExportShape> {
           RETURNING sticker_disc_id
         `;
 
-        if (stickerRows.length > 0) {
-          stickerCount++;
-        }
+        stickerDiscIds.push(...stickerRows.map((row) => row.sticker_disc_id));
       }
     });
 
-    return { emojiCount, stickerCount };
+    return { emojiDiscIds, stickerDiscIds };
   }
 
   /**

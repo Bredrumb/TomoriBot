@@ -28,6 +28,8 @@ export default {
     },
     no_response_title: `No Response`,
     no_response_description: `I didn't respond - this may be due to an empty response or timeout from the AI.`,
+    log_channel_chat_notice_title: `Chat Is Off in the Log Channel`,
+    log_channel_chat_notice_description: `This channel is set as the log channel, so I don't reply to messages here. To chat here, clear or change it in \`/config\` > Channels > Logs.`,
     thought_log: {
       title: `Thought Log`,
       description: `Source: {source_line}`,

@@ -28,6 +28,8 @@ export default {
     },
     no_response_title: `Không có phản hồi`,
     no_response_description: `Mình không phản hồi: điều này có thể do phản hồi trống hoặc hết thời gian chờ từ AI.`,
+    log_channel_chat_notice_title: `Không trò chuyện trong kênh nhật ký`,
+    log_channel_chat_notice_description: `Kênh này đang được đặt làm kênh nhật ký, nên mình không trả lời tin nhắn ở đây. Để trò chuyện ở đây, hãy xóa hoặc đổi kênh trong \`/config\` > Kênh > Nhật ký.`,
     thought_log: {
       title: `Nhật ký suy nghĩ`,
       description: `Nguồn: {source_line}`,

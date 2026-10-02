@@ -28,6 +28,8 @@ export default {
     },
     no_response_title: `Sem Resposta`,
     no_response_description: `Não respondi - isso pode ser devido a uma resposta vazia ou tempo limite da IA.`,
+    log_channel_chat_notice_title: `Conversa Desativada no Canal de Logs`,
+    log_channel_chat_notice_description: `Este canal está definido como canal de logs, então não respondo a mensagens aqui. Para conversar aqui, limpe ou altere essa configuração em \`/config\` > Canais > Logs.`,
     thought_log: {
       title: `Registro de Pensamento`,
       description: `Fonte: {source_line}`,
