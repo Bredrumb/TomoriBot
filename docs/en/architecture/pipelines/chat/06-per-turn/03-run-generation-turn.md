@@ -57,6 +57,15 @@ a non-error result *and* the loop falls through (rare; defensive).
   endpoints use the server's saved custom provider, while personal endpoints use
   the owning user's saved provider and key. Personal fallback refs are isolated
   from the server chain and retain their configured order.
+- Re-credentials any fallback whose model belongs to a **different provider** than
+  the primary's, via `applyCrossProviderConfig`. The scope follows the turn: a
+  personal-routed turn (`textCredentialSource === "personal"`) resolves against
+  the routing user's own saved providers and **never** falls through to the
+  server's, so a user's chain cannot spend the server owner's key. An entry whose
+  provider has no key in the applicable scope is **dropped from the pool** with a
+  warning rather than attempted. The primary's own entry shares the primary's
+  provider and so never re-credentials, which is what guarantees at least one
+  attempt survives however the randomizer orders the pool.
 - Returns a plan rather than a bare list: the attempts for the route the turn was
   planned on, plus an optional extension thunk for the server route (below). The
   thunk is not invoked here, so a turn that never leaves its planned route never

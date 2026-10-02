@@ -17,7 +17,7 @@ import {
 } from "../../utils/text/timezoneHelper";
 import { localizer } from "@/utils/text/localizer";
 import { isMatrixBridgeWebhookUsername } from "../../utils/bridges";
-import { resolveChannelTarget, resolveUserTarget } from "@/utils/discord/targetResolver";
+import { resolveChannelTarget, resolveTriggererDiscordId, resolveUserTarget } from "@/utils/discord/targetResolver";
 
 /**
  * Tool for creating scheduled tasks that trigger messages at specific times
@@ -169,7 +169,7 @@ export class ReminderTool extends BaseTool {
     const { ColorCode } = await import("../../utils/misc/logger");
 
     const tomoriState = context.tomoriState;
-    const resolvedUserId = context.message?.author?.id || context.userId;
+    const resolvedUserId = resolveTriggererDiscordId(context);
 
     // Matrix relay messages arrive via Discord webhook (author = webhook bot).
     // The webhook bot has no users table record, so loadUserRow returns null.

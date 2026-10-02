@@ -45,8 +45,9 @@ const postgresUrl = getPostgresUrl();
 process.env.DATABASE_URL = postgresUrl;
 
 interface OldKeyRow {
-  table: string;
-  id: number;
+  table: "opt_api_keys" | "pluralbuddy_oauth_connections";
+  id: number | string;
+  field?: "client_secret" | "refresh_token" | "access_token";
   api_key: Buffer;
   key_version: number | undefined;
   identifier: string; // For logging (e.g., "server_id: 123, service: brave-search")
@@ -91,6 +92,31 @@ async function rotateAllKeys() {
     }
   } catch (error) {
     console.error("❌ Failed to query opt_api_keys:", error);
+  }
+
+  try {
+    const connections = await sql`
+      SELECT instance_id, client_secret, client_secret_key_version,
+        refresh_token, refresh_token_key_version, access_token, access_token_key_version
+      FROM pluralbuddy_oauth_connections
+    `;
+    for (const row of connections) {
+      for (const field of ["client_secret", "refresh_token", "access_token"] as const) {
+        const ciphertext = row[field] as Buffer | null;
+        const version = row[`${field}_key_version`] as number | null;
+        if (!ciphertext || version === currentVersion) continue;
+        oldKeys.push({
+          table: "pluralbuddy_oauth_connections",
+          id: row.instance_id as string,
+          field,
+          api_key: ciphertext,
+          key_version: version ?? 1,
+          identifier: `instance_id: ${row.instance_id}, field: ${field}`,
+        });
+      }
+    }
+  } catch (error) {
+    console.error("❌ Failed to query pluralbuddy_oauth_connections:", error);
   }
 
   if (oldKeys.length === 0) {
@@ -146,7 +172,31 @@ async function rotateAllKeys() {
 					    key_version = ${version},
 					    updated_at = CURRENT_TIMESTAMP
 					WHERE opt_api_key_id = ${oldKey.id}
-				`;
+        `;
+      } else if (oldKey.field === "client_secret") {
+        const updated = await sql`
+          UPDATE pluralbuddy_oauth_connections
+          SET client_secret = ${encrypted}, client_secret_key_version = ${version}
+          WHERE instance_id = ${oldKey.id} AND client_secret = ${oldKey.api_key}
+          RETURNING instance_id
+        `;
+        if (updated.length === 0) continue;
+      } else if (oldKey.field === "refresh_token") {
+        const updated = await sql`
+          UPDATE pluralbuddy_oauth_connections
+          SET refresh_token = ${encrypted}, refresh_token_key_version = ${version}
+          WHERE instance_id = ${oldKey.id} AND refresh_token = ${oldKey.api_key}
+          RETURNING instance_id
+        `;
+        if (updated.length === 0) continue;
+      } else if (oldKey.field === "access_token") {
+        const updated = await sql`
+          UPDATE pluralbuddy_oauth_connections
+          SET access_token = ${encrypted}, access_token_key_version = ${version}
+          WHERE instance_id = ${oldKey.id} AND access_token = ${oldKey.api_key}
+          RETURNING instance_id
+        `;
+        if (updated.length === 0) continue;
       }
 
       successCount++;

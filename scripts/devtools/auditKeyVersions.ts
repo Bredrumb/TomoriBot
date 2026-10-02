@@ -105,6 +105,29 @@ async function auditKeyVersions() {
     console.log("⚠️  Could not query opt_api_keys table:", error);
   }
 
+  try {
+    const connectionStats = (await sql`
+      SELECT 'client_secret' AS field, client_secret_key_version AS key_version, COUNT(*) AS count
+      FROM pluralbuddy_oauth_connections GROUP BY client_secret_key_version
+      UNION ALL
+      SELECT 'refresh_token', refresh_token_key_version, COUNT(*)
+      FROM pluralbuddy_oauth_connections GROUP BY refresh_token_key_version
+      UNION ALL
+      SELECT 'access_token', access_token_key_version, COUNT(*)
+      FROM pluralbuddy_oauth_connections WHERE access_token IS NOT NULL GROUP BY access_token_key_version
+    `) as Array<VersionStats & { field: string }>;
+    for (const field of ["client_secret", "refresh_token", "access_token"]) {
+      const stats = connectionStats.filter((row) => row.field === field);
+      tables.push({
+        tableName: `pluralbuddy_oauth_connections.${field}`,
+        stats,
+        total: stats.reduce((sum, row) => sum + Number(row.count), 0),
+      });
+    }
+  } catch (error) {
+    console.log("⚠️  Could not query PluralBuddy OAuth key versions:", error);
+  }
+
   if (tables.length === 0 || tables.every((t) => t.total === 0)) {
     console.log("ℹ️  No encrypted data found in database");
     console.log();

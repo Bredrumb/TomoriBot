@@ -27,10 +27,11 @@ import { shouldBotReply } from "@/utils/chat/replyDecision";
 import { shouldSurfaceChatUserErrors } from "@/utils/chat/errorVisibility";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import type { ChatIncoming, NonRunnableChatAdmission } from "@/utils/chat/types";
+import type { MessageProxyMessageRecord } from "@/utils/messageProxy/proxyExpectation";
 
 type RateLimitedChannel = Parameters<typeof enforceGlobalRateLimit>[0]["channel"];
 
-export async function evaluateAdmissionQueueAndTriggerGate(args: {
+type AdmissionQueueAndTriggerArgs = {
   incoming: ChatIncoming;
   channelScope: {
     guild: Guild | null;
@@ -43,7 +44,33 @@ export async function evaluateAdmissionQueueAndTriggerGate(args: {
   cooldownUserDiscId: string;
   isActiveNaturalStopMessage: boolean;
   isNaturalStopMessage: boolean;
-}): Promise<NonRunnableChatAdmission | null> {
+  /** Confirmed repost record; its original, when attested, carries the trigger verdict. */
+  messageProxyRecord?: MessageProxyMessageRecord | null;
+};
+
+export async function evaluateAdmissionQueueAndTriggerGate(
+  args: AdmissionQueueAndTriggerArgs,
+): Promise<NonRunnableChatAdmission | null> {
+  const { incoming, messageProxyRecord } = args;
+  // PluralBuddy can verify a repost after the original's wait has ended. The original may
+  // already have started a reply, so admitting the repost would answer the same message twice.
+  if (
+    messageProxyRecord &&
+    !messageProxyRecord.originalSuppressed &&
+    !incoming.isManuallyTriggered &&
+    !incoming.isStopResponse &&
+    !incoming.isPersonaJob &&
+    !incoming.reminderRecipientID &&
+    !incoming.reminderData?.self_reminder
+  ) {
+    return {
+      incoming,
+      disposition: "ignore",
+      locale: "en-US",
+      reason: "proxy_original_already_processed",
+    };
+  }
+
   const lockDisposition = await evaluateLockedChannelAdmission(args);
   if (lockDisposition) {
     return lockDisposition;
@@ -52,22 +79,12 @@ export async function evaluateAdmissionQueueAndTriggerGate(args: {
   return await evaluatePreLockReplyGate(args);
 }
 
-async function evaluateLockedChannelAdmission(args: {
-  incoming: ChatIncoming;
-  channelScope: {
-    guild: Guild | null;
-    serverDiscId: string;
-    isDMChannel: boolean;
-  };
-  earlyTomoriState: TomoriState | null;
-  earlyAllPersonas: TomoriState[];
-  userDiscId: string;
-  cooldownUserDiscId: string;
-  isActiveNaturalStopMessage: boolean;
-  isNaturalStopMessage: boolean;
-}): Promise<NonRunnableChatAdmission | null> {
+async function evaluateLockedChannelAdmission(
+  args: AdmissionQueueAndTriggerArgs,
+): Promise<NonRunnableChatAdmission | null> {
   const { incoming, channelScope, earlyTomoriState, earlyAllPersonas, userDiscId, cooldownUserDiscId } = args;
   const { client, message } = incoming;
+  const triggerMessage = args.messageProxyRecord?.originalMessage ?? message;
   if (incoming.skipLock) {
     return null;
   }
@@ -120,7 +137,7 @@ async function evaluateLockedChannelAdmission(args: {
   // activePersonaId must be set (i.e. turn state is established) for this to apply.
   const hasCrossPersonaTrigger =
     lockEntry.activePersonaId !== undefined &&
-    hasExplicitCrossPersonaTrigger(message, earlyAllPersonas, lockEntry.activePersonaId);
+    hasExplicitCrossPersonaTrigger(triggerMessage, earlyAllPersonas, lockEntry.activePersonaId);
 
   if (
     !incoming.isStopResponse &&
@@ -132,6 +149,9 @@ async function evaluateLockedChannelAdmission(args: {
       channelId,
       userDiscId,
       message,
+      verifiedProxySenderDiscId: args.messageProxyRecord?.originalSuppressed
+        ? args.messageProxyRecord.senderDiscId
+        : undefined,
       textQuotaSource: incoming.textQuotaSource,
       textQuotaTriggerKey,
       textQuotaUserDiscId,
@@ -159,7 +179,7 @@ async function evaluateLockedChannelAdmission(args: {
     return ignored("locked_no_persona_state");
   }
 
-  const channelIds = resolveMessageChannelScope(message);
+  const channelIds = resolveMessageChannelScope(triggerMessage);
   const accessState = await evaluateEarlyAccessState({
     incoming,
     channelScope,
@@ -167,7 +187,8 @@ async function evaluateLockedChannelAdmission(args: {
     allPersonas: earlyAllPersonas,
     userDiscId,
     channelIds,
-    isSelfMessage: isSelfTriggerMessage(message, earlyAllPersonas),
+    isSelfMessage: isSelfTriggerMessage(triggerMessage, earlyAllPersonas),
+    triggerMessage,
   });
   if (accessState.rejectedByWhitelist) {
     return ignored("locked_rejected_by_whitelist");
@@ -179,7 +200,7 @@ async function evaluateLockedChannelAdmission(args: {
   };
   const wouldReply =
     incoming.isManuallyTriggered ||
-    shouldBotReply(message, stateForQueueCheck, earlyAllPersonas, {
+    shouldBotReply(triggerMessage, stateForQueueCheck, earlyAllPersonas, {
       personalAutoTriggerPersonaId: accessState.personalSpotlightStatus?.autoTriggerPersonaId ?? null,
       allowedPersonaIds: accessState.allowedPersonaIds,
     });
@@ -279,19 +300,10 @@ async function evaluateLockedChannelAdmission(args: {
   };
 }
 
-async function evaluatePreLockReplyGate(args: {
-  incoming: ChatIncoming;
-  channelScope: {
-    guild: Guild | null;
-    serverDiscId: string;
-    isDMChannel: boolean;
-  };
-  earlyTomoriState: TomoriState | null;
-  earlyAllPersonas: TomoriState[];
-  userDiscId: string;
-}): Promise<NonRunnableChatAdmission | null> {
+async function evaluatePreLockReplyGate(args: AdmissionQueueAndTriggerArgs): Promise<NonRunnableChatAdmission | null> {
   const { incoming, channelScope, earlyTomoriState, earlyAllPersonas, userDiscId } = args;
   const message = incoming.message;
+  const triggerMessage = args.messageProxyRecord?.originalMessage ?? message;
   if (
     incoming.isManuallyTriggered ||
     incoming.isStopResponse ||
@@ -314,8 +326,8 @@ async function evaluatePreLockReplyGate(args: {
     };
   }
 
-  const channelIds = resolveMessageChannelScope(message);
-  const isSelfMessage = isSelfTriggerMessage(message, earlyAllPersonas);
+  const channelIds = resolveMessageChannelScope(triggerMessage);
+  const isSelfMessage = isSelfTriggerMessage(triggerMessage, earlyAllPersonas);
   const accessState = await evaluateEarlyAccessState({
     incoming,
     channelScope,
@@ -324,6 +336,7 @@ async function evaluatePreLockReplyGate(args: {
     userDiscId,
     channelIds,
     isSelfMessage,
+    triggerMessage,
   });
   if (accessState.rejectedByWhitelist) {
     return {
@@ -336,7 +349,7 @@ async function evaluatePreLockReplyGate(args: {
 
   const stateForReplyCheck =
     isAutochatCounterChannelActive(earlyTomoriState.config, channelIds.effectiveChannelId) &&
-    isAutochatQualifyingMessage(message, isSelfMessage)
+    isAutochatQualifyingMessage(triggerMessage, isSelfMessage)
       ? {
           ...earlyTomoriState,
           autoch_counter: earlyTomoriState.autoch_counter + 1,
@@ -344,7 +357,7 @@ async function evaluatePreLockReplyGate(args: {
       : earlyTomoriState;
 
   if (
-    shouldBotReply(message, stateForReplyCheck, earlyAllPersonas, {
+    shouldBotReply(triggerMessage, stateForReplyCheck, earlyAllPersonas, {
       personalAutoTriggerPersonaId: accessState.personalSpotlightStatus?.autoTriggerPersonaId ?? null,
       allowedPersonaIds: accessState.allowedPersonaIds,
       personalDtm: accessState.personalDtm,
@@ -373,6 +386,7 @@ async function evaluateEarlyAccessState(args: {
   userDiscId: string;
   channelIds: { effectiveChannelId: string; parentChannelId?: string };
   isSelfMessage: boolean;
+  triggerMessage: Message;
 }): Promise<ChatAccessState> {
   const cachedTriggerUser =
     !args.channelScope.isDMChannel && args.tomoriState.server_id ? await getCachedUserRow(args.userDiscId) : null;
@@ -397,10 +411,10 @@ async function evaluateEarlyAccessState(args: {
     isAutochatOverride: isAutochatOverrideChannel(args.tomoriState.config, args.channelIds.effectiveChannelId),
     guildDiscId: args.channelScope.serverDiscId,
     fallbackUserDiscId: args.userDiscId,
-    message: args.incoming.message,
+    message: args.triggerMessage,
     memberRoleDiscIds: args.incoming.manualTriggerInvoker?.member
       ? args.incoming.manualTriggerInvoker.member.roles.cache.map((role) => role.id)
-      : (args.incoming.message.member?.roles.cache.map((role) => role.id) ?? undefined),
+      : (args.triggerMessage.member?.roles.cache.map((role) => role.id) ?? undefined),
     parentChannelId: args.channelIds.parentChannelId,
     effectiveChannelId: args.channelIds.effectiveChannelId,
     serverId: args.tomoriState.server_id,

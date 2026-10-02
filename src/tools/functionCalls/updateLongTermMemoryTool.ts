@@ -16,7 +16,9 @@ import { convertMentions } from "../../utils/text/contextBuilder";
 import { buildTextPreview } from "@/utils/text/textPreview";
 import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
 import { personalMemoryRepository, serverMemoryRepository, userRepository } from "@/utils/db/repositories";
-import { resolveUserTarget } from "@/utils/discord/targetResolver";
+import { resolveTriggererDiscordId, resolveUserTarget } from "@/utils/discord/targetResolver";
+import { isMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserId";
+import { getMessageProxyHostProtection } from "@/utils/messageProxy/hostProtection";
 
 export class UpdateLongTermMemoryTool extends BaseTool {
   name = "update_long_term_memory";
@@ -206,7 +208,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
     try {
       if (!isPersonalUpdate) {
         if (isDeleteRequested) {
-          const resolvedTriggererUserId = context.message?.author?.id || context.userId;
+          const resolvedTriggererUserId = resolveTriggererDiscordId(context);
           const triggererRow = resolvedTriggererUserId
             ? await userRepository.loadByDiscordId(resolvedTriggererUserId)
             : null;
@@ -277,7 +279,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         );
 
         if (updatedServerMemory) {
-          const resolvedTriggererUserId = context.message?.author?.id || context.userId;
+          const resolvedTriggererUserId = resolveTriggererDiscordId(context);
           const triggererRow = resolvedTriggererUserId
             ? await userRepository.loadByDiscordId(resolvedTriggererUserId)
             : null;
@@ -358,7 +360,8 @@ export class UpdateLongTermMemoryTool extends BaseTool {
 
       const guild = "guild" in context.channel ? context.channel.guild : undefined;
       let guildMember = null;
-      if (guild) {
+      const isMessageProxyTarget = isMessageProxyIdentityUserId(resolvedTargetUserId as string);
+      if (guild && !isMessageProxyTarget) {
         guildMember =
           guild.members.cache.get(resolvedTargetUserId as string) ||
           (await guild.members.fetch(resolvedTargetUserId as string).catch(() => null));
@@ -372,8 +375,8 @@ export class UpdateLongTermMemoryTool extends BaseTool {
             },
           };
         }
-      } else {
-        const triggererDiscId = context.message?.author?.id || context.userId;
+      } else if (!guild) {
+        const triggererDiscId = resolveTriggererDiscordId(context);
         if (!triggererDiscId || triggererDiscId !== resolvedTargetUserId) {
           return {
             success: false,
@@ -404,6 +407,24 @@ export class UpdateLongTermMemoryTool extends BaseTool {
             },
           };
         }
+
+        const messageProxyHostProtection = await getMessageProxyHostProtection(
+          resolvedTargetUserId as string,
+          serverDiscId,
+        );
+        if (messageProxyHostProtection.protected) {
+          return {
+            success: false,
+            error: `Cannot update personal memory: ${resolvedTargetUserLabel} has privacy restrictions.`,
+            data: {
+              status: "memory_update_failed_privacy_restricted",
+              reason:
+                messageProxyHostProtection.reason === "host_blacklisted"
+                  ? `The host account for ${resolvedTargetUserLabel} is blacklisted in this server. I cannot update personal memories for its message-proxy identities.`
+                  : `The host account for ${resolvedTargetUserLabel} has full privacy enabled. I cannot update personal memories for its message-proxy identities.`,
+            },
+          };
+        }
       }
 
       const personaLineageId = tomoriState.persona_lineage_id ?? 0;
@@ -425,7 +446,8 @@ export class UpdateLongTermMemoryTool extends BaseTool {
       }
 
       const isUserBlacklisted = guild
-        ? await userRepository.isBlacklisted(serverDiscId, resolvedTargetUserId as string)
+        ? (await userRepository.isBlacklisted(serverDiscId, resolvedTargetUserId as string)) ||
+          (await getMessageProxyHostProtection(resolvedTargetUserId as string, serverDiscId)).protected
         : false;
       const footerKey = !tomoriState.config.personal_memories_enabled
         ? "genai.self_teach.personal_memory_footer_personalization_disabled"
