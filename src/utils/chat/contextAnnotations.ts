@@ -548,7 +548,7 @@ async function resolveMessageAuthorDisplayName(params: {
   }
 
   const spriteDisplayName =
-    !renderModifierSource && matchedPersona
+    (!renderModifierSource || renderModifierSource.isNeutralAppearance) && matchedPersona
       ? await resolveSpriteMessageDisplayName(
           params.message.id,
           matchedPersona.persona_id,
@@ -557,8 +557,8 @@ async function resolveMessageAuthorDisplayName(params: {
       : null;
 
   return (
-    renderModifierSource?.displayName ??
     spriteDisplayName ??
+    renderModifierSource?.displayName ??
     matchedPersona?.persona_nickname ??
     (userBlacklisted || params.serverPersonalizationDisabled || !userRow?.user_nickname
       ? fallbackName

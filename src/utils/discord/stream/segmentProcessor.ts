@@ -18,7 +18,10 @@ import type {
 } from "@/utils/discord/stream/messageDelivery";
 import {
   collectRenderModifierSourceNames,
+  formatRenderModifierWebhookName,
+  hasLeadingPlainOwnNameLabel,
   isAllowedRenderModifierSpeakerLabel,
+  NEUTRAL_APPEARANCE_MODIFIER,
   type LeadingGenericSpeakerLabelMatch,
   matchesRenderModifierName,
   parseLeadingGenericSpeakerLabel,
@@ -52,6 +55,10 @@ const SUSPECTED_RENDER_MODIFIER_LABEL_RE = /\([^()\n\r:：]{1,64}\)\s*[:：]/;
 /** How much of a segment to echo into the diagnostic line. */
 const RENDER_MODIFIER_DIAGNOSTIC_HEAD_CHARS = 80;
 
+// Sprite keys can never contain parentheses (validatePersonaSpriteName rejects them), so this key
+// cannot collide with a real sprite named "neutral" in the channel's group alternation.
+const NEUTRAL_APPEARANCE_GROUP_KEY = "(neutral)";
+
 /**
  * Owns normalization and routing for flushed stream text segments before Discord delivery.
  */
@@ -66,6 +73,8 @@ export class StreamSegmentProcessor {
     context: StreamContext,
     state: StreamState,
   ): Promise<void> {
+    const opensLine = state.nextSegmentOpensLine ?? true;
+    state.nextSegmentOpensLine = segmentEndsLine(segment, boundary);
     if (!segment.trim()) return;
 
     const trimmedGuard = segment.trim();
@@ -160,10 +169,16 @@ export class StreamSegmentProcessor {
         state.activeRenderModifier = undefined;
       }
     } else if (canUseRenderModifier && state.activeRenderModifier) {
-      deliveryOptions = {
-        identityOverride: state.activeRenderModifier.identity,
-        spriteRecord: state.activeRenderModifier.spriteRecord,
-      };
+      // The label itself is left in place: cleanLLMOutput strips it like any opening own-name label.
+      if (opensLine && hasLeadingPlainOwnNameLabel(workingSegment, renderModifierSourceNames)) {
+        state.activeRenderModifier = this.resolveBaseAppearanceRevert(state.activeRenderModifier, context, textConfig);
+      }
+      if (state.activeRenderModifier) {
+        deliveryOptions = {
+          identityOverride: state.activeRenderModifier.identity,
+          spriteRecord: state.activeRenderModifier.spriteRecord,
+        };
+      }
     }
 
     // Opening-label leak guard: a response that OPENS with a speaker label the render-modifier
@@ -279,11 +294,14 @@ export class StreamSegmentProcessor {
     // appears, because an expression is a sustained visual state: e.g.
     //   "Touko (mad): ARGGHHH!\nFine... I'll do it"
     // keeps the "mad" sprite for the second line, and switching only happens when
-    // a new "Touko (regret):" label is declared. Sprites (including is_identity
-    // ones) are distinguished by carrying a spriteRecord; copied identities don't.
+    // a new "Touko (regret):" label is declared, or a plain "Touko:" label returns
+    // to the base persona. Sprites (including is_identity ones) are distinguished by
+    // carrying a spriteRecord; copied identities don't. The neutral appearance has
+    // no spriteRecord either but is the persona itself, so it persists like a sprite.
     const shouldClearActiveRenderModifier =
       Boolean(deliveryOptions?.identityOverride) &&
       !deliveryOptions?.spriteRecord &&
+      !state.activeRenderModifier?.isNeutralAppearance &&
       (boundary === "newline" || segmentToSend.includes("\n"));
     const segmentedParts = extractMarkdownTableSegments(segmentToSend);
     const hasRenderedTable = segmentedParts.some((part) => part.type === "table");
@@ -483,6 +501,44 @@ export class StreamSegmentProcessor {
   }
 
   /**
+   * An alter leaving a non-identity sprite sends its base messages through the webhook under the
+   * same clean username the sprite used, so Discord would group the reverted line under the
+   * sprite's avatar. The base appearance then joins the channel's sprite alternation under its own
+   * key, and on the decorated half it is delivered as "Persona (neutral)". That state is returned
+   * so later base lines keep the same name.
+   */
+  private resolveBaseAppearanceRevert(
+    previous: NonNullable<StreamState["activeRenderModifier"]>,
+    context: StreamContext,
+    textConfig: TextProcessingConfig,
+  ): StreamState["activeRenderModifier"] {
+    if (previous.isNeutralAppearance) return previous;
+
+    const sourceDisplayName = context.tomoriState.persona_nickname || textConfig.botName;
+    const baseUsername = context.personaUsername;
+    const sharesSpriteUsername =
+      Boolean(context.webhook) &&
+      baseUsername === sourceDisplayName &&
+      previous.spriteRecord !== undefined &&
+      !previous.spriteRecord.isIdentity;
+    if (!sharesSpriteUsername) return undefined;
+
+    const baseIdentity: ResolvedWebhookIdentity = {
+      username: baseUsername,
+      avatarUrl: context.personaAvatarUrl,
+      avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
+    };
+    const identity = this.resolveSpriteGroupBreakIdentity(
+      baseIdentity,
+      formatRenderModifierWebhookName(sourceDisplayName, NEUTRAL_APPEARANCE_MODIFIER),
+      NEUTRAL_APPEARANCE_GROUP_KEY,
+      context.channel.id,
+      context.channel.lastMessageId,
+    );
+    return identity === baseIdentity ? undefined : { identity, isNeutralAppearance: true };
+  }
+
+  /**
    * Detects a leaked speaker label at the start of a response segment: a label the
    * render-modifier parse already refused (its source name is not the active persona/aliases).
    *
@@ -636,6 +692,12 @@ export class StreamSegmentProcessor {
 
     return "";
   }
+}
+
+/** Only sentence and overflow flushes cut mid-line. */
+function segmentEndsLine(segment: string, boundary: BufferedDeliveryBoundary | undefined): boolean {
+  if (/\n[ \t]*$/u.test(segment)) return true;
+  return boundary !== "period" && boundary !== "overflow";
 }
 
 function collectRenderModifierChainSourceNames(

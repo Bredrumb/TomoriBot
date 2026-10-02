@@ -959,11 +959,12 @@ async function simplifyMessage(
     const renderModifierSource = resolveRenderModifierSourcePersona(webhookName, personaByName);
     const matchedPersona = renderModifierSource?.persona ?? personaByName.get(normalizeRenderModifierName(webhookName));
     if (matchedPersona) {
-      const spriteDisplayName = renderModifierSource
-        ? null
-        : await resolveSpriteMessageDisplayName(msg.id, matchedPersona.persona_id, matchedPersona.persona_nickname);
+      const spriteDisplayName =
+        renderModifierSource && !renderModifierSource.isNeutralAppearance
+          ? null
+          : await resolveSpriteMessageDisplayName(msg.id, matchedPersona.persona_id, matchedPersona.persona_nickname);
       authorId = String(matchedPersona.persona_id ?? webhookName);
-      authorName = renderModifierSource?.displayName ?? spriteDisplayName ?? matchedPersona.persona_nickname;
+      authorName = spriteDisplayName ?? renderModifierSource?.displayName ?? matchedPersona.persona_nickname;
       authorType = "persona";
       personaName = matchedPersona.persona_nickname;
       authorPersonaId = matchedPersona.persona_id ?? null;

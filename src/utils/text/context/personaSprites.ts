@@ -22,6 +22,7 @@ export function buildPersonaSpritePromptText(
     `\`${botName} ({sprite label}):\``,
     "",
     `If no listed sprite fits, respond normally as \`${botName}:\`.`,
+    `A sprite stays active on later lines until another label appears; start a line with \`${botName}:\` to return to ${botName}'s default appearance.`,
     "",
     "Valid sprite labels:",
   ];
