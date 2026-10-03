@@ -175,6 +175,7 @@ export class StreamSegmentProcessor {
         deliveryOptions = {
           identityOverride: state.activeRenderModifier.identity,
           spriteRecord: state.activeRenderModifier.spriteRecord,
+          isNeutralAppearance: state.activeRenderModifier.isNeutralAppearance,
         };
       }
     }
@@ -635,6 +636,7 @@ export class StreamSegmentProcessor {
         ? {
             identityOverride: state.activeRenderModifier.identity,
             spriteRecord: state.activeRenderModifier.spriteRecord,
+            isNeutralAppearance: state.activeRenderModifier.isNeutralAppearance,
           }
         : undefined;
     await this.deps.delivery.flushHeldOrphanPunctuation(
