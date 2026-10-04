@@ -197,7 +197,7 @@ Set `hasTools` and `supportsStructoutput` per model, only for models you tested.
 set `isDeprecated: true`; to remove it, delete the row.
 
 The seeder throws before any write, and `bun run check-seed-catalogs` fails offline, unless each
-provider has exactly one non-deprecated `isDefault`, `llms` has at least one non-deprecated
+provider has exactly one non-deprecated `isDefault`, `llms` has exactly one non-deprecated
 `isSmartest` per provider, and `(provider, codename)` is unique per table. The `custom` provider is
 exempt.
 
