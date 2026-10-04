@@ -26,6 +26,7 @@
  * number, so neither the reservation nor the request can exceed what the model
  * can actually emit.
  */
+import { parsePositiveIntegerEnv } from "@/utils/misc/envFlags";
 
 /** Historical flat fallback used by the OpenRouter path when no override/env is set. */
 export const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
@@ -51,21 +52,6 @@ export const DEFAULT_PRESET_GENERATION_MAX_OUTPUT_TOKENS = 16384;
 const DEFAULT_VISION_CAPTION_MAX_OUTPUT_TOKENS = 2048;
 
 /**
- * Parses a positive integer from a raw env string.
- *
- * @param raw - Raw env value (may be undefined/empty/non-numeric).
- * @returns The parsed positive integer, or `undefined` so callers fall through
- *          to the next resolution tier.
- */
-function parsePositiveIntEnv(raw: string | undefined): number | undefined {
-  if (typeof raw !== "string") {
-    return undefined;
-  }
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-/**
  * Resolves the output-token budget to reserve (truncation) or request (provider).
  *
  * @param params.configured - `config.llm_max_output_tokens` server override (nullable/optional).
@@ -84,7 +70,7 @@ export function resolveMaxOutputTokens(params: {
   const { configured, envRaw, fallback, providerReportedMax } = params;
 
   // Highest-priority intent: server override → provider env cap → caller fallback.
-  const desired = (configured ?? parsePositiveIntEnv(envRaw) ?? fallback) || fallback;
+  const desired = (configured ?? parsePositiveIntegerEnv(envRaw) ?? fallback) || fallback;
 
   if (typeof providerReportedMax === "number" && providerReportedMax > 0) {
     return Math.max(1, Math.min(providerReportedMax, desired));

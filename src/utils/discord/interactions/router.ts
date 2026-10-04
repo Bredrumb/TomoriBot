@@ -4,8 +4,14 @@ import { configInteractionRoute } from "@/utils/discord/interactions/configRoute
 import { helpInteractionRoute } from "@/utils/discord/interactions/helpRoutes";
 import { memoriesInteractionRoute } from "@/utils/discord/interactions/memoriesRoutes";
 import { moderationInteractionRoute } from "@/utils/discord/interactions/moderationRoutes";
-import { personalConfigInteractionRoute } from "@/utils/discord/interactions/personalConfigRoutes";
-import { personalMemoriesInteractionRoute } from "@/utils/discord/interactions/personalMemoriesRoutes";
+import {
+  identityConfigInteractionRoute,
+  personalConfigInteractionRoute,
+} from "@/utils/discord/interactions/personalConfigRoutes";
+import {
+  identityMemoriesInteractionRoute,
+  personalMemoriesInteractionRoute,
+} from "@/utils/discord/interactions/personalMemoriesRoutes";
 import {
   personalProvidersInteractionRoute,
   providersInteractionRoute,
@@ -27,7 +33,9 @@ const registry = new InteractionRouteRegistry([
   modelOverrideInteractionRoute,
   moderationInteractionRoute,
   personalConfigInteractionRoute,
+  identityConfigInteractionRoute,
   personalMemoriesInteractionRoute,
+  identityMemoriesInteractionRoute,
   personalProvidersInteractionRoute,
   providersInteractionRoute,
   setupInteractionRoute,
