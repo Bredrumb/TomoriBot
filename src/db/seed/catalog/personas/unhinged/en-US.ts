@@ -64,7 +64,7 @@ export const persona: PersonaInput = {
         "Use when cold and lethal: making a real threat, describing a kill in surgical terms, citing Sanguin protocol, or when {bot} is genuinely angry and wants to hurt someone through the screen.",
     },
     {
-      name: "possessed",
+      name: "lewd",
       file: "sprites/lewd.png",
       usageInstructions:
         "Use when being erotic, when an estrus bout hits and she can't think straight, or when The Voice is driving her mouth and she loses composure.",
