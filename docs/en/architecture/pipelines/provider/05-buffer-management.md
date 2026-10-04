@@ -112,6 +112,18 @@ until the end of the response, so the reply arrives as one burst instead of a pa
 auto-close pass adds the missing closer, so a hold cannot outlive the response, and content is never
 lost.
 
+### Spoiler marker balance
+
+`hasIncompleteSemanticMarkers` holds on an odd number of `||` markers so a multi-line Discord
+spoiler (`||text spanning\nseveral lines||`) is not split across messages. The count runs on
+prose-only text: inline code is masked first (a logical OR `a || b` inside backticks is not a
+spoiler), and table segments are extracted so adjacent cell delimiters (`| Bob || 50 |`) are
+excluded.
+
+The final auto-close pass appends `||` when the spoiler count is still odd at the end of
+generation, keeping the repair invariant: a hold here can never outlive the response, and an
+unclosed spoiler does not leak its content as plain text.
+
 ### Semantic block detection
 
 `drainThinkBlocksFromBuffer(state)` and `drainDetailsBlocksFromBuffer(state)` scan `state.buffer`

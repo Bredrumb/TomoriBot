@@ -163,6 +163,37 @@ describe("stream buffer Discord spoilers", () => {
     expect(hasIncompleteSemanticMarkers("a ||b|| c ||d||")).toBe(false);
   });
 
+  it("holds when a spoiler tag is opened but not yet closed", () => {
+    expect(hasIncompleteSemanticMarkers("||We want to be picked up like that.")).toBe(true);
+  });
+
+  it("does not hold once the spoiler closes on the same line", () => {
+    expect(hasIncompleteSemanticMarkers("||We want to be picked up like that.||")).toBe(false);
+  });
+
+  it("holds a multi-line spoiler that has not closed yet", () => {
+    expect(hasIncompleteSemanticMarkers("||No. That is slop.\n[Panel 1] They push us down.")).toBe(true);
+  });
+
+  it("does not hold for logical OR inside inline code", () => {
+    expect(hasIncompleteSemanticMarkers("Use `a || b` here\nMore text follows.")).toBe(false);
+  });
+
+  it("does not hold for adjacent pipes in a well-formed table", () => {
+    expect(hasIncompleteSemanticMarkers("| name | mid | age |\n|---|---|---|\n| Bob || 50 |\n\nParagraph after.")).toBe(
+      false,
+    );
+  });
+
+  it("auto-closes an unclosed spoiler on final flush", () => {
+    expect(autoCloseIncompleteMarkers("||Secret text")).toBe("||Secret text||");
+  });
+
+  it("does not auto-close inline code pipes on final flush before a table", () => {
+    const input = "Use `a || b` for the fallback.\n\n| Feature | Supported |\n|---|---|\n| A | Yes |\n";
+    expect(autoCloseIncompleteMarkers(input)).toBe(input);
+  });
+
   it("still holds a real table header that contains a spoiler cell", () => {
     expect(hasIncompleteSemanticMarkers("| ||secret|| | score |\n")).toBe(true);
   });
