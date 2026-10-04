@@ -2,6 +2,7 @@ import { appendFile, writeFile } from "node:fs/promises";
 import ts from "typescript";
 import { imageSections, llmSections, videoSections } from "@/db/seed/catalog/models";
 import {
+  MAX_ACTIVE_ROWS_PER_PROVIDER,
   MODEL_DRIFT_TODO,
   REQUIRED_ALTERNATION_PROVIDERS,
   REQUIRED_PREFIX_PROVIDERS,
@@ -459,14 +460,26 @@ export function report(
     "1. Verify each row against the provider. Fixed OpenRouter models carry a drafted fallback price; floating aliases have none.",
     `2. Replace each \`${MODEL_DRIFT_TODO}\` English description, then tick its box below. Translations are optional and fall back to English.`,
     "3. Commented flags had no source evidence. Uncomment one only after verifying it, and delete the rest. `isFree` and `isUncensored` never have source metadata, and new rows never change the default or smartest model.",
-    "4. Decline a model by deleting its row but keeping its seen entry. Do not close this PR unmerged: that discards every seen entry, and the rows return next week.",
-    "5. CI stays red until every description is written. If only **Check drafted model descriptions** fails, the rows are fine and just need descriptions.",
+    `4. Keep each provider at ${MAX_ACTIVE_ROWS_PER_PROVIDER} or fewer active rows per table, so its whole list fits one Discord select (25 options, with room for registered models). Decline extras, or set \`isDeprecated: true\` on older rows to retire them. Providers over the limit are marked below.`,
+    "5. Decline a model by deleting its row but keeping its seen entry. Do not close this PR unmerged: that discards every seen entry, and the rows return next week.",
+    "6. CI stays red until every description is written and every provider fits the limit. If only **Check model drift review** fails, the rows work and only review remains.",
     "",
     `## Drafted rows (${candidates.length})`,
     "",
   ];
   for (const [provider, rows] of byProvider) {
     lines.push(`### ${provider}`, "");
+    for (const table of new Set(rows.map((row) => row.table))) {
+      const active =
+        catalogRows(table).filter((row) => row.provider === provider && !row.isDeprecated).length +
+        rows.filter((row) => row.table === table).length;
+      if (active <= MAX_ACTIVE_ROWS_PER_PROVIDER) continue;
+      const kind = table === "llmSections" ? "LLM" : table.replace("Sections", "");
+      lines.push(
+        `**Over the limit:** ${active} active ${kind} rows if every draft is kept. Decline or deprecate ${active - MAX_ACTIVE_ROWS_PER_PROVIDER}.`,
+        "",
+      );
+    }
     for (const row of rows) {
       const media = row.table === "llmSections" ? "" : ` (${row.table.replace("Sections", "")})`;
       lines.push(`- [ ] \`${row.codename}\`${media}`);

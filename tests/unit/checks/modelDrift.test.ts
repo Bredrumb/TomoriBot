@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import ts from "typescript";
-import { MODEL_DRIFT_TODO, collectModelDriftTodoViolations } from "@/db/seed/catalog/modelSeed";
+import {
+  MAX_ACTIVE_ROWS_PER_PROVIDER,
+  MODEL_DRIFT_TODO,
+  collectModelDriftTodoViolations,
+  collectProviderRowLimitViolations,
+} from "@/db/seed/catalog/modelSeed";
 import {
   findCandidates,
   insertRows,
@@ -139,5 +144,24 @@ describe("model drift", () => {
     const opener = (date: string) =>
       report([], [], { absent: [], unsupportedMedia: [] }, new Date(date)).split("\n")[0];
     expect(opener("2026-10-05T03:17:00Z")).not.toBe(opener("2026-10-12T03:17:00Z"));
+  });
+
+  it("caps active rows per provider so one Discord select shows the whole list", () => {
+    const rows = (count: number, provider = "openrouter", isDeprecated = false) =>
+      Array.from({ length: count }, (_, index) => ({
+        provider,
+        codename: `${provider}-model-${index}`,
+        isDeprecated,
+        desc: "Model",
+      }));
+    expect(collectProviderRowLimitViolations("llms", rows(MAX_ACTIVE_ROWS_PER_PROVIDER))).toEqual([]);
+    expect(collectProviderRowLimitViolations("llms", rows(MAX_ACTIVE_ROWS_PER_PROVIDER + 1))).toHaveLength(1);
+    expect(
+      collectProviderRowLimitViolations("llms", [
+        ...rows(MAX_ACTIVE_ROWS_PER_PROVIDER),
+        ...rows(5, "openrouter", true).map((row) => ({ ...row, codename: `${row.codename}-old` })),
+        ...rows(MAX_ACTIVE_ROWS_PER_PROVIDER, "google"),
+      ]),
+    ).toEqual([]);
   });
 });
