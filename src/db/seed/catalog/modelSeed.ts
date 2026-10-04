@@ -336,13 +336,37 @@ export function validateModels(): string[] {
 }
 
 /**
- * Find drafted rows whose descriptions still carry the drift placeholder.
- * Kept out of {@link validateModels} because a placeholder is unfinished review, not a malformed row:
- * seeding must still succeed on a drift PR so lifecycle and tests can prove the drafted rows work.
- * @returns One violation per row that still needs a written description.
+ * Discord caps a String Select at 25 options. Twenty curated rows leave room for the user's scoped
+ * registrations and a None entry, so a provider's whole catalog fits one select without paging.
  */
-export function validateModelDriftTodos(): string[] {
-  return [llmSpec, imageSpec, videoSpec].flatMap((spec) => collectModelDriftTodoViolations(spec.table, rowsOf(spec)));
+export const MAX_ACTIVE_ROWS_PER_PROVIDER = 20;
+
+/**
+ * Find catalog work a model drift review must finish: placeholder descriptions and providers grown
+ * past {@link MAX_ACTIVE_ROWS_PER_PROVIDER}.
+ * Kept out of {@link validateModels} because both are unfinished review, not malformed rows: seeding
+ * must still succeed on a drift PR so lifecycle and tests can prove the drafted rows work.
+ * @returns One violation per unfinished row or over-limit provider table.
+ */
+export function validateModelDriftReview(): string[] {
+  return [llmSpec, imageSpec, videoSpec].flatMap((spec) => [
+    ...collectModelDriftTodoViolations(spec.table, rowsOf(spec)),
+    ...collectProviderRowLimitViolations(spec.table, rowsOf(spec)),
+  ]);
+}
+
+export function collectProviderRowLimitViolations(table: string, rows: RowLike[]): string[] {
+  const active = new Map<string, number>();
+  for (const row of rows) {
+    if (row.isDeprecated) continue;
+    active.set(row.provider, (active.get(row.provider) ?? 0) + 1);
+  }
+  return [...active]
+    .filter(([, count]) => count > MAX_ACTIVE_ROWS_PER_PROVIDER)
+    .map(
+      ([provider, count]) =>
+        `${table}/${provider}: ${count} active rows exceed ${MAX_ACTIVE_ROWS_PER_PROVIDER}; decline or deprecate ${count - MAX_ACTIVE_ROWS_PER_PROVIDER}`,
+    );
 }
 
 export function collectModelDriftTodoViolations(table: string, rows: RowLike[]): string[] {
