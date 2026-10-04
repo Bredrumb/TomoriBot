@@ -9,8 +9,6 @@ describe("collectSmartestInvariantViolations", () => {
       { isSmartest: true, isDeprecated: true },
     ]);
 
-    expect(violations).toEqual([
-      "llms/google: expected exactly one non-deprecated is_smartest, found 2",
-    ]);
+    expect(violations).toEqual(["llms/google: expected exactly one non-deprecated is_smartest, found 2"]);
   });
 });

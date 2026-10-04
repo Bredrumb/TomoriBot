@@ -202,9 +202,7 @@ export function collectSmartestInvariantViolations(
   const activeSmartest = rows.filter((row) => row.isSmartest && !row.isDeprecated);
   if (activeSmartest.length === 1) return [];
 
-  return [
-    `${table}/${provider}: expected exactly one non-deprecated is_smartest, found ${activeSmartest.length}`,
-  ];
+  return [`${table}/${provider}: expected exactly one non-deprecated is_smartest, found ${activeSmartest.length}`];
 }
 
 /** Collect every per-provider/uniqueness violation for one table. */
