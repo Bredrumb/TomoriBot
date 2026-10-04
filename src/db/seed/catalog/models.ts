@@ -2252,7 +2252,6 @@ export const llmSections: ModelSection<LlmInput>[] = [
         outputPricePerMillion: 0.47,
         desc: "Multimodal Qwen 3.8 Omni Flash model with image/video understanding, reasoning, and tool use",
       },
-
     ],
   },
   // Pricing: https://api-docs.deepseek.com/quick_start/pricing (verified 2026-09-25). Rows carry the
@@ -2757,7 +2756,6 @@ export const llmSections: ModelSection<LlmInput>[] = [
         outputPricePerMillion: 0,
         desc: "High-speed multimodal DiffusionGemma model with reasoning, tool use, and image understanding via NVIDIA NIM",
       },
-
     ],
   },
   // Pricing for both Z.ai sections: https://docs.z.ai/guides/overview/pricing (direct-API rates;
