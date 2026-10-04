@@ -454,8 +454,6 @@ export function report(
   const lines = [
     greeting,
     "",
-    "<sub>Opened automatically by the weekly model drift workflow, which compares the catalog against [models.dev](https://models.dev), a community database of model prices and capabilities.</sub>",
-    "",
     "## Review",
     "",
     "1. Verify each row against the provider. Fixed OpenRouter models carry a drafted fallback price; floating aliases have none.",
@@ -491,6 +489,9 @@ export function report(
       advisories.unsupportedMedia,
       "The provider serves these, but TomoriBot has no route for them yet.",
     ),
+    "---",
+    "",
+    "<sub>Opened automatically by the weekly model drift workflow, which compares the catalog against [models.dev](https://models.dev), a community database of model prices and capabilities.</sub>",
   );
   return `${lines.join("\n").trimEnd()}\n`;
 }
