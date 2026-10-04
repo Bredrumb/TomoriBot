@@ -1,7 +1,14 @@
 import { describe, expect, it } from "bun:test";
 import ts from "typescript";
 import { MODEL_DRIFT_TODO, collectModelDriftTodoViolations } from "@/db/seed/catalog/modelSeed";
-import { findCandidates, insertRows, seenKey, type SeenEntry } from "../../../scripts/checks/modelDrift";
+import {
+  APHEL_GREETINGS,
+  findCandidates,
+  insertRows,
+  report,
+  seenKey,
+  type SeenEntry,
+} from "../../../scripts/checks/modelDrift";
 
 const fixture = new URL("../../fixtures/modelDrift.json", import.meta.url);
 const catalog = new URL("../../../src/db/seed/catalog/models.ts", import.meta.url);
@@ -111,5 +118,22 @@ describe("model drift", () => {
     row.desc = "Reviewed description";
     expect(collectModelDriftTodoViolations("llms", [row])).toEqual([]);
     expect(collectModelDriftTodoViolations("llms", [{ ...row, i18n: { ja: MODEL_DRIFT_TODO } }])).toHaveLength(1);
+  });
+
+  it("renders a reviewable body that GitHub will not break into hard line breaks", async () => {
+    const { candidates, free } = findCandidates(await Bun.file(fixture).json(), []);
+    const body = report(candidates, free, { absent: [], unsupportedMedia: [] }, new Date("2026-10-05T03:17:00Z"));
+    for (const candidate of candidates) expect(body).toContain(`- [ ] \`${candidate.codename}\``);
+    expect(body).toContain("Nobody typed this.");
+    expect(body).not.toContain("Catalog rows missing from models.dev");
+    const paragraphs = body.split("\n\n").filter((block) => !/^(#|- |\d+\. |<)/.test(block.trim()));
+    for (const paragraph of paragraphs) expect(paragraph.trim()).not.toContain("\n");
+  });
+
+  it("rotates Aphel's greeting between consecutive weekly runs", () => {
+    const opener = (date: string) =>
+      report([], [], { absent: [], unsupportedMedia: [] }, new Date(date)).split("\n")[0];
+    expect(opener("2026-10-05T03:17:00Z")).not.toBe(opener("2026-10-12T03:17:00Z"));
+    for (const greeting of APHEL_GREETINGS) expect(greeting(1)).not.toMatch(/[–—]/);
   });
 });

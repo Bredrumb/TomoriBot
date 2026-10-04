@@ -326,10 +326,17 @@ export function validateModels(): string[] {
   validateSpec(embeddingSpec, errors);
   errors.push(...collectStrictChatFlagViolations(rowsOf(llmSpec)));
   errors.push(...collectMeteredPriceViolations(rowsOf(llmSpec)));
-  for (const spec of [llmSpec, imageSpec, videoSpec]) {
-    errors.push(...collectModelDriftTodoViolations(spec.table, rowsOf(spec)));
-  }
   return errors;
+}
+
+/**
+ * Find drafted rows whose descriptions still carry the drift placeholder.
+ * Kept out of {@link validateModels} because a placeholder is unfinished review, not a malformed row:
+ * seeding must still succeed on a drift PR so lifecycle and tests can prove the drafted rows work.
+ * @returns One violation per row that still needs a written description.
+ */
+export function validateModelDriftTodos(): string[] {
+  return [llmSpec, imageSpec, videoSpec].flatMap((spec) => collectModelDriftTodoViolations(spec.table, rowsOf(spec)));
 }
 
 export function collectModelDriftTodoViolations(table: string, rows: RowLike[]): string[] {

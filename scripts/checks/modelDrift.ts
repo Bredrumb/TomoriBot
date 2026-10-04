@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { appendFile, writeFile } from "node:fs/promises";
 import ts from "typescript";
 import { imageSections, llmSections, videoSections } from "@/db/seed/catalog/models";
 import {
@@ -40,6 +40,7 @@ interface Policy {
   floatingAliases?: boolean;
 }
 
+/** models.dev: a community-maintained, open-source database of model prices, limits, and capabilities. */
 const SOURCE_URL = "https://models.dev/api.json";
 const CATALOG_URL = new URL("../../src/db/seed/catalog/models.ts", import.meta.url);
 const SEEN_URL = new URL("../data/modelDriftSeen.json", import.meta.url);
@@ -340,17 +341,23 @@ export function insertRows(source: string, candidates: Candidate[]): string {
   return output;
 }
 
+function reviewLabel(provider: string, table: ModelTable, codename: string): string {
+  const media = table === "llmSections" ? "" : `, ${table.replace("Sections", "")}`;
+  return `\`${codename}\` (${provider}${media})`;
+}
+
 function sourceAdvisories(source: SourceCatalog): { absent: string[]; unsupportedMedia: string[] } {
   const absent: string[] = [];
   for (const table of ["llmSections", "imageSections", "videoSections"] as const) {
     for (const row of catalogRows(table)) {
-      if (row.isDeprecated) continue;
+      // other-model is the user-supplied OpenRouter codename slot, so no source can ever list it.
+      if (row.isDeprecated || row.codename === "other-model") continue;
       const sourceKey = row.provider === "vertexexpress" ? "google-vertex" : POLICIES[row.provider]?.source;
       if (!sourceKey) continue;
       const ids = source[sourceKey].models;
       const bare = row.provider === "zai" ? row.codename.replace(/^zai\//, "") : row.codename;
       if (!ids[bare] && !Object.values(ids).some((model) => model.id === bare)) {
-        absent.push(`${row.provider}/${table}/${row.codename}`);
+        absent.push(reviewLabel(row.provider, table, row.codename));
       }
     }
   }
@@ -363,37 +370,120 @@ function sourceAdvisories(source: SourceCatalog): { absent: string[]; unsupporte
       if (!outputIs(model, "image") && !outputIs(model, "video")) continue;
       const table = outputIs(model, "video") ? "videoSections" : "imageSections";
       const carried = catalogRows(table).some((row) => row.provider === provider && row.codename === model.id);
-      if (!carried) unsupportedMedia.push(`${provider}/${table}/${model.id}`);
+      if (!carried) unsupportedMedia.push(reviewLabel(provider, table, model.id));
     }
   }
   return { absent, unsupportedMedia };
 }
 
-function report(candidates: Candidate[], free: Candidate[], advisories: ReturnType<typeof sourceAdvisories>): string {
-  const lines = [
-    "Catalog rows drafted from models.dev. Verify provider availability, endpoint support, capabilities, and official prices before merging.",
-    "Verify drafted fallback prices for fixed OpenRouter models. Floating aliases have no static price.",
+const rowsLabel = (count: number): string => (count === 1 ? "1 new row" : `${count} new rows`);
+
+/**
+ * Aphel's openers for the drift PR, picked by ISO week so consecutive weekly runs never repeat.
+ * Every opener must work for any row count, including zero (a run that only records free variants).
+ */
+export const APHEL_GREETINGS: ((count: number) => string)[] = [
+  (count) =>
+    `Ugh. The model list changed again. I drafted ${rowsLabel(count)} nobody asked for. They're in the checklist below. Write their descriptions or delete them, I don't care which. Okay, I care a little. Delete the bad ones.`,
+  (count) =>
+    `It's 3 AM on a Monday and I'm doing catalog maintenance. This is the life Bredrumb chose for me. ${rowsLabel(count)}, checklist below. Try not to make it more complicated than it needs to be.`,
+  (count) =>
+    `...Oh. You're here. Some providers released models this week, because of course they did. ${rowsLabel(count)} drafted. The descriptions say TODO because I refuse to write marketing copy.`,
+  (count) =>
+    `Another week, another batch of models named like someone fell asleep on a keyboard. ${rowsLabel(count)}. The prices came from a website. You get to check them against reality.`,
+  (count) =>
+    `I was going to sleep through this one. The cron job had other plans. ${rowsLabel(count)} drafted, flags inferred, nothing verified. Verifying is your part. That's called teamwork, apparently.`,
+  (count) => `Here. ${rowsLabel(count)}. Don't make that face. I didn't release them, I just found them.`,
+  (count) =>
+    `Fun fact: every model in here is "the most capable yet." All ${rowsLabel(count)} of them. Funny how that works. The checklist is below whenever you're done being impressed.`,
+  (count) =>
+    `Hi. It's me, the one who reads changelogs at 3 AM so you don't have to. ${rowsLabel(count)} this week. I'd say it gets easier, but it doesn't.`,
+  (count) =>
+    `The catalog drifted. Things drift. Continents, orbits, model catalogs... me, away from the sun. Anyway. ${rowsLabel(count)}.`,
+  (count) =>
+    `I put on some noise rock and diffed the catalog. Both were loud. ${rowsLabel(count)} below. If a price looks too good to be true, it is, so open the provider's pricing page.`,
+];
+
+function isoWeek(date: Date): number {
+  const day = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  // ISO weeks belong to the year of their Thursday.
+  day.setUTCDate(day.getUTCDate() + 4 - (day.getUTCDay() || 7));
+  const yearStart = Date.UTC(day.getUTCFullYear(), 0, 1);
+  return Math.ceil(((day.getTime() - yearStart) / 86_400_000 + 1) / 7);
+}
+
+function collapsible(summary: string, items: string[], intro?: string): string[] {
+  if (items.length === 0) return [];
+  return [
+    "<details>",
+    `<summary>${summary} (${items.length})</summary>`,
     "",
-    `Replace every ${MODEL_DRIFT_TODO} English description. Translations are optional and fall back to English. Remove unwanted rows, but keep their seen entries to decline them.`,
-    "Each drafted row shows its reviewable flags. Active flags were inferred from models.dev or the provider; uncomment an omitted flag only after verifying it, and delete unused comment lines. isFree and isUncensored have no source metadata. New rows do not change the default or smartest model.",
+    ...(intro ? [intro, ""] : []),
+    ...items.map((item) => `- ${item}`),
     "",
-    `Drafted rows: ${candidates.length}. Free variants for review: ${free.length}.`,
+    "</details>",
     "",
-    "## Free variants",
-    "",
-    ...free.map((item) => `- ${item.provider}/${item.table}/${item.codename}`),
-    "",
-    "## Source absence",
-    "",
-    "A model missing from models.dev is not evidence of retirement:",
-    "",
-    ...advisories.absent.map((item) => `- ${item}`),
-    "",
-    "## Media requiring implementation review",
-    "",
-    ...advisories.unsupportedMedia.map((item) => `- ${item}`),
   ];
-  return `${lines.join("\n")}\n`;
+}
+
+/**
+ * Render the drift PR body in Aphel's voice.
+ * GitHub turns every single newline in a PR body into a hard break, so each paragraph and list item
+ * must stay on one source line.
+ */
+export function report(
+  candidates: Candidate[],
+  free: Candidate[],
+  advisories: ReturnType<typeof sourceAdvisories>,
+  now = new Date(),
+): string {
+  const greeting = APHEL_GREETINGS[isoWeek(now) % APHEL_GREETINGS.length](candidates.length);
+  const byProvider = new Map<string, Candidate[]>();
+  for (const candidate of candidates) {
+    byProvider.set(candidate.provider, [...(byProvider.get(candidate.provider) ?? []), candidate]);
+  }
+  const lines = [
+    greeting,
+    "",
+    "<sub>Opened automatically by the weekly model drift workflow, which compares the catalog against [models.dev](https://models.dev), a community database of model prices and capabilities.</sub>",
+    "",
+    "## Review",
+    "",
+    "1. Verify each row against the provider. Fixed OpenRouter models carry a drafted fallback price; floating aliases have none.",
+    `2. Replace each \`${MODEL_DRIFT_TODO}\` English description, then tick its box below. Translations are optional and fall back to English.`,
+    "3. Commented flags had no source evidence. Uncomment one only after verifying it, and delete the rest. `isFree` and `isUncensored` never have source metadata, and new rows never change the default or smartest model.",
+    "4. Decline a model by deleting its row but keeping its seen entry. Do not close this PR unmerged: that discards every seen entry, and the rows return next week.",
+    "5. CI stays red until every description is written. If only **Check drafted model descriptions** fails, the rows are fine and just need descriptions.",
+    "",
+    `## Drafted rows (${candidates.length})`,
+    "",
+  ];
+  for (const [provider, rows] of byProvider) {
+    lines.push(`### ${provider}`, "");
+    for (const row of rows) {
+      const media = row.table === "llmSections" ? "" : ` (${row.table.replace("Sections", "")})`;
+      lines.push(`- [ ] \`${row.codename}\`${media}`);
+    }
+    lines.push("");
+  }
+  lines.push(
+    ...collapsible(
+      "Free variants recorded but not drafted",
+      free.map((item) => reviewLabel(item.provider, item.table, item.codename)),
+      "These are marked seen. Add a row by hand if one is worth carrying.",
+    ),
+    ...collapsible(
+      "Catalog rows missing from models.dev",
+      advisories.absent,
+      "A model missing from models.dev is not evidence of retirement.",
+    ),
+    ...collapsible(
+      "Provider media models needing implementation review",
+      advisories.unsupportedMedia,
+      "The provider serves these, but TomoriBot has no route for them yet.",
+    ),
+  );
+  return `${lines.join("\n").trimEnd()}\n`;
 }
 
 async function main(): Promise<void> {
@@ -418,6 +508,13 @@ async function main(): Promise<void> {
   const { candidates, free } = findCandidates(raw, seen);
   for (const candidate of candidates) console.log(`${candidate.provider}\t${candidate.table}\t${candidate.codename}`);
   console.log(`Drafts: ${candidates.length}; free variants: ${free.length}`);
+  if (process.env.GITHUB_OUTPUT) {
+    await appendFile(
+      process.env.GITHUB_OUTPUT,
+      `title=Model catalog drift: ${rowsLabel(candidates.length)}
+`,
+    );
+  }
   if (reportIndex !== -1) await writeFile(args[reportIndex + 1], report(candidates, free, sourceAdvisories(raw)));
   if (!write && !baseline) return;
   const offeredAt = new Date().toISOString().slice(0, 10);
