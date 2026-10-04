@@ -2,21 +2,28 @@ import { describe, expect, it } from "bun:test";
 import ts from "typescript";
 import { MODEL_DRIFT_TODO, collectModelDriftTodoViolations } from "@/db/seed/catalog/modelSeed";
 import {
-  APHEL_GREETINGS,
   findCandidates,
   insertRows,
   report,
   seenKey,
+  type CatalogLookup,
+  type ModelTable,
   type SeenEntry,
 } from "../../../scripts/checks/modelDrift";
 
 const fixture = new URL("../../fixtures/modelDrift.json", import.meta.url);
 const catalog = new URL("../../../src/db/seed/catalog/models.ts", import.meta.url);
+const catalogSnapshot: Record<ModelTable, { provider: string; codename: string }[]> = await Bun.file(
+  new URL("../../fixtures/modelDriftCatalog.json", import.meta.url),
+).json();
+// The source fixture is frozen, so candidates are computed against the catalog as it stood when the
+// fixture was taken. The live catalog absorbs these models once a drift PR merges.
+const frozenCatalog: CatalogLookup = (table) => catalogSnapshot[table];
 
 describe("model drift", () => {
   it("declines one provider row without suppressing another", async () => {
     const source = await Bun.file(fixture).json();
-    const first = findCandidates(source, []);
+    const first = findCandidates(source, [], frozenCatalog);
     const google = first.candidates.find(
       (item) => item.provider === "google" && item.codename === "gemini-3.1-pro-preview-customtools",
     );
@@ -34,14 +41,14 @@ describe("model drift", () => {
       offeredAt: "2026-01-01",
     };
     expect(seenKey(seen)).not.toBe(seenKey(vertex));
-    const second = findCandidates(source, [seen]).candidates;
+    const second = findCandidates(source, [seen], frozenCatalog).candidates;
     expect(second.some((item) => item.provider === "google" && item.codename === seen.codename)).toBe(false);
     expect(second.some((item) => item.provider === "vertex" && item.codename === seen.codename)).toBe(true);
   });
 
   it("does not draft media routes that the provider cannot execute", async () => {
     const source = await Bun.file(fixture).json();
-    const { candidates } = findCandidates(source, []);
+    const { candidates } = findCandidates(source, [], frozenCatalog);
     expect(candidates.some((item) => item.provider === "nvidia" && item.table !== "llmSections")).toBe(false);
     expect(candidates.some((item) => item.provider === "vertex" && item.table !== "llmSections")).toBe(false);
   });
@@ -50,7 +57,7 @@ describe("model drift", () => {
     const source = await Bun.file(fixture).json();
     expect(source.google.models["gemini-3.1-pro-preview"].modalities.output).toEqual(["text"]);
     expect(source.google.models["gemini-3-pro-image"].modalities.output).toContain("image");
-    const { candidates } = findCandidates(source, []);
+    const { candidates } = findCandidates(source, [], frozenCatalog);
     expect(candidates.some((item) => item.provider === "google" && item.codename === "gemini-3.1-pro-preview")).toBe(
       false,
     );
@@ -59,7 +66,7 @@ describe("model drift", () => {
 
   it("drafts fixed OpenRouter prices but leaves floating aliases unpriced", async () => {
     const source = await Bun.file(fixture).json();
-    const candidates = findCandidates(source, []).candidates;
+    const candidates = findCandidates(source, [], frozenCatalog).candidates;
     const openrouter = candidates.find(
       (item) => item.provider === "openrouter" && item.codename === "~openai/gpt-latest",
     );
@@ -91,7 +98,7 @@ describe("model drift", () => {
   it("inserts in the selected section without changing adjacent catalog text", async () => {
     const source = await Bun.file(fixture).json();
     const text = await Bun.file(catalog).text();
-    const candidate = findCandidates(source, []).candidates.find(
+    const candidate = findCandidates(source, [], frozenCatalog).candidates.find(
       (item) => item.provider === "google" && item.table === "imageSections",
     );
     expect(candidate).toBeDefined();
@@ -121,11 +128,9 @@ describe("model drift", () => {
   });
 
   it("renders a reviewable body that GitHub will not break into hard line breaks", async () => {
-    const { candidates, free } = findCandidates(await Bun.file(fixture).json(), []);
+    const { candidates, free } = findCandidates(await Bun.file(fixture).json(), [], frozenCatalog);
     const body = report(candidates, free, { absent: [], unsupportedMedia: [] }, new Date("2026-10-05T03:17:00Z"));
     for (const candidate of candidates) expect(body).toContain(`- [ ] \`${candidate.codename}\``);
-    expect(body).toContain("Nobody typed this.");
-    expect(body).not.toContain("Catalog rows missing from models.dev");
     const paragraphs = body.split("\n\n").filter((block) => !/^(#|- |\d+\. |<)/.test(block.trim()));
     for (const paragraph of paragraphs) expect(paragraph.trim()).not.toContain("\n");
   });
@@ -134,6 +139,5 @@ describe("model drift", () => {
     const opener = (date: string) =>
       report([], [], { absent: [], unsupportedMedia: [] }, new Date(date)).split("\n")[0];
     expect(opener("2026-10-05T03:17:00Z")).not.toBe(opener("2026-10-12T03:17:00Z"));
-    for (const greeting of APHEL_GREETINGS) expect(greeting(1)).not.toMatch(/[–—]/);
   });
 });

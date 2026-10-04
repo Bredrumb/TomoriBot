@@ -63,6 +63,9 @@ export function seenKey(entry: Pick<SeenEntry, "provider" | "table" | "codename"
   return `${entry.provider}\u0000${entry.table}\u0000${entry.codename}`;
 }
 
+/** Reads a table's catalog rows; tests pass a frozen snapshot so the source fixture never goes stale. */
+export type CatalogLookup = (table: ModelTable) => Array<Pick<LlmInput, "provider" | "codename">>;
+
 function catalogRows(table: ModelTable): Array<LlmInput | ImageInput | VideoInput> {
   switch (table) {
     case "llmSections":
@@ -128,15 +131,24 @@ function generationCandidates(models: SourceModel[], provider: string, carried: 
   return passing.filter((model) => !/-\d{8}$/.test(model.id) || !bare.has(bareAliasOf(model.id)));
 }
 
-function mediaCandidates(models: SourceModel[], provider: string, table: ModelTable): SourceModel[] {
-  const kind = table === "imageSections" ? "image" : "video";
-  if (kind === "video" && provider !== "google" && provider !== "openrouter") return [];
-  if (kind === "image" && provider !== "google" && provider !== "openrouter") return [];
-  const carried = new Set(
-    catalogRows(table)
+function carriedCodenames(catalog: CatalogLookup, table: ModelTable, provider: string): Set<string> {
+  return new Set(
+    catalog(table)
       .filter((row) => row.provider === provider)
       .map((row) => row.codename),
   );
+}
+
+function mediaCandidates(
+  models: SourceModel[],
+  provider: string,
+  table: ModelTable,
+  catalog: CatalogLookup,
+): SourceModel[] {
+  const kind = table === "imageSections" ? "image" : "video";
+  if (kind === "video" && provider !== "google" && provider !== "openrouter") return [];
+  if (kind === "image" && provider !== "google" && provider !== "openrouter") return [];
+  const carried = carriedCodenames(catalog, table, provider);
   return models.filter(
     (model) =>
       outputIs(model, kind) &&
@@ -205,25 +217,22 @@ function isSeenEntries(value: unknown): value is SeenEntry[] {
 export function findCandidates(
   source: SourceCatalog,
   seen: SeenEntry[],
+  catalog: CatalogLookup = catalogRows,
 ): { candidates: Candidate[]; free: Candidate[] } {
   const seenKeys = new Set(seen.map(seenKey));
   const candidates: Candidate[] = [];
   const free: Candidate[] = [];
   for (const [provider, policy] of Object.entries(POLICIES)) {
     const models = Object.values(source[policy.source].models);
-    const carried = new Set(
-      catalogRows("llmSections")
-        .filter((row) => row.provider === provider)
-        .map((row) => row.codename),
-    );
+    const carried = carriedCodenames(catalog, "llmSections", provider);
     const text =
       policy.tier === "generation"
         ? generationCandidates(models, provider, carried)
         : familyCandidates(models, provider, carried);
     for (const [table, drafts] of [
       ["llmSections", text],
-      ["imageSections", mediaCandidates(models, provider, "imageSections")],
-      ["videoSections", mediaCandidates(models, provider, "videoSections")],
+      ["imageSections", mediaCandidates(models, provider, "imageSections", catalog)],
+      ["videoSections", mediaCandidates(models, provider, "videoSections", catalog)],
     ] as const) {
       for (const model of drafts) {
         const codename = provider === "zai" ? `zai/${model.id}` : model.id;
@@ -382,7 +391,7 @@ const rowsLabel = (count: number): string => (count === 1 ? "1 new row" : `${cou
  * Aphel's openers for the drift PR, picked by ISO week so consecutive weekly runs never repeat.
  * Every opener must work for any row count, including zero (a run that only records free variants).
  */
-export const APHEL_GREETINGS: ((count: number) => string)[] = [
+const APHEL_GREETINGS: ((count: number) => string)[] = [
   (count) =>
     `Ugh. The model list changed again. I drafted ${rowsLabel(count)} nobody asked for. They're in the checklist below. Write their descriptions or delete them, I don't care which. Okay, I care a little. Delete the bad ones.`,
   (count) =>
