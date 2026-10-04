@@ -109,7 +109,8 @@ proposed follow-up's premise in source before suggesting it.
       for optional local servers (`servers/`), installers, or devtools.
     - Loop locales inside one test that reports every failure, not one test per locale.
     - Assert localized copy by key (`localizedCopy` or `localizedProse` from
-      `tests/helpers/localeCases.ts`), never by quoting its English text.
+      `tests/helpers/localeCases.ts`), never by quoting its English text. Unlocalized prose (error
+      messages, generated reports) is not asserted verbatim either; assert count, structure, or behavior.
     - Assert an exact count or a complete member list only when that exact count or list is what must
       not change.
     - Code kept alive only by a test import is dead code.

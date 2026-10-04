@@ -194,6 +194,17 @@ function rowsOf<T extends RowLike>(spec: TableSpec<T>): T[] {
   return spec.sections.flatMap((s) => s.rows);
 }
 
+export function collectSmartestInvariantViolations(
+  table: string,
+  provider: string,
+  rows: ReadonlyArray<{ isSmartest?: boolean; isDeprecated?: boolean }>,
+): string[] {
+  const activeSmartest = rows.filter((row) => row.isSmartest && !row.isDeprecated);
+  if (activeSmartest.length === 1) return [];
+
+  return [`${table}/${provider}: expected exactly one non-deprecated is_smartest, found ${activeSmartest.length}`];
+}
+
 /** Collect every per-provider/uniqueness violation for one table. */
 function validateSpec<T extends RowLike>(spec: TableSpec<T>, errors: string[]): void {
   const all = rowsOf(spec);
@@ -222,12 +233,7 @@ function validateSpec<T extends RowLike>(spec: TableSpec<T>, errors: string[]): 
     }
 
     if (spec.hasSmartest) {
-      const smartest = rows.filter((r) => r.isSmartest);
-      if (smartest.length < 1) {
-        errors.push(`${spec.table}/${provider}: expected at least one is_smartest`);
-      } else if (!smartest.some((r) => !r.isDeprecated)) {
-        errors.push(`${spec.table}/${provider}: every is_smartest model is deprecated`);
-      }
+      errors.push(...collectSmartestInvariantViolations(spec.table, provider, rows));
     }
   }
 }
@@ -326,10 +332,41 @@ export function validateModels(): string[] {
   validateSpec(embeddingSpec, errors);
   errors.push(...collectStrictChatFlagViolations(rowsOf(llmSpec)));
   errors.push(...collectMeteredPriceViolations(rowsOf(llmSpec)));
-  for (const spec of [llmSpec, imageSpec, videoSpec]) {
-    errors.push(...collectModelDriftTodoViolations(spec.table, rowsOf(spec)));
-  }
   return errors;
+}
+
+/**
+ * Discord caps a String Select at 25 options. Twenty curated rows leave room for the user's scoped
+ * registrations and a None entry, so a provider's whole catalog fits one select without paging.
+ */
+export const MAX_ACTIVE_ROWS_PER_PROVIDER = 20;
+
+/**
+ * Find catalog work a model drift review must finish: placeholder descriptions and providers grown
+ * past {@link MAX_ACTIVE_ROWS_PER_PROVIDER}.
+ * Kept out of {@link validateModels} because both are unfinished review, not malformed rows: seeding
+ * must still succeed on a drift PR so lifecycle and tests can prove the drafted rows work.
+ * @returns One violation per unfinished row or over-limit provider table.
+ */
+export function validateModelDriftReview(): string[] {
+  return [llmSpec, imageSpec, videoSpec].flatMap((spec) => [
+    ...collectModelDriftTodoViolations(spec.table, rowsOf(spec)),
+    ...collectProviderRowLimitViolations(spec.table, rowsOf(spec)),
+  ]);
+}
+
+export function collectProviderRowLimitViolations(table: string, rows: RowLike[]): string[] {
+  const active = new Map<string, number>();
+  for (const row of rows) {
+    if (row.isDeprecated) continue;
+    active.set(row.provider, (active.get(row.provider) ?? 0) + 1);
+  }
+  return [...active]
+    .filter(([, count]) => count > MAX_ACTIVE_ROWS_PER_PROVIDER)
+    .map(
+      ([provider, count]) =>
+        `${table}/${provider}: ${count} active rows exceed ${MAX_ACTIVE_ROWS_PER_PROVIDER}; decline or deprecate ${count - MAX_ACTIVE_ROWS_PER_PROVIDER}`,
+    );
 }
 
 export function collectModelDriftTodoViolations(table: string, rows: RowLike[]): string[] {

@@ -497,7 +497,6 @@ jobs:
       - name: Preflight runtime database credential
         env:
           TOMORI_SECRETS_JSON: ${{ secrets.TOMORI_SECRETS_JSON }}
-          POSTGRES_RUNTIME_PASSWORD: ${{ secrets.AZURE_POSTGRES_RUNTIME_PASSWORD }}
         run: |
           set -euo pipefail
 
@@ -511,17 +510,9 @@ jobs:
           ' <<<"$TOMORI_SECRETS_JSON" >/dev/null
 
           runtime_user=$(jq -er '.POSTGRES_USER' <<<"$TOMORI_SECRETS_JSON")
-          if [[ -n "$POSTGRES_RUNTIME_PASSWORD" ]]; then
-            if (( ${#POSTGRES_RUNTIME_PASSWORD} < 32 )); then
-              echo "AZURE_POSTGRES_RUNTIME_PASSWORD must contain at least 32 characters." >&2
-              exit 1
-            fi
-            runtime_user=tomoribot_runtime
-          fi
-
           case "$runtime_user" in
             tomoriadmin|azure_pg_admin|postgres)
-              echo "Configure the one-time runtime credential migration before Terraform apply." >&2
+              echo "TOMORI_SECRETS_JSON must use the non-administrator runtime database role." >&2
               exit 1
               ;;
           esac
@@ -750,26 +741,10 @@ jobs:
         id: payloads
         env:
           TOMORI_SECRETS_JSON: ${{ secrets.TOMORI_SECRETS_JSON }}
-          POSTGRES_RUNTIME_PASSWORD: ${{ secrets.AZURE_POSTGRES_RUNTIME_PASSWORD }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           set -euo pipefail
           runtime_json=$TOMORI_SECRETS_JSON
-          runtime_secret_migrated=false
-
-          if [[ -n "$POSTGRES_RUNTIME_PASSWORD" ]]; then
-            if (( ${#POSTGRES_RUNTIME_PASSWORD} < 32 )); then
-              echo "AZURE_POSTGRES_RUNTIME_PASSWORD must contain at least 32 characters." >&2
-              exit 1
-            fi
-
-            runtime_json=$(jq -ec \
-              --arg user tomoribot_runtime \
-              --arg password "$POSTGRES_RUNTIME_PASSWORD" \
-              '.POSTGRES_USER = $user | .POSTGRES_PASSWORD = $password' \
-              <<<"$TOMORI_SECRETS_JSON")
-            runtime_secret_migrated=true
-          fi
 
           runtime_user=$(jq -er '.POSTGRES_USER' <<<"$runtime_json")
           case "$runtime_user" in
@@ -801,22 +776,7 @@ jobs:
             echo "bootstrap_script_b64=$bootstrap_script_b64"
             echo "migrate_script_b64=$migrate_script_b64"
             echo "lockdown_script_b64=$lockdown_script_b64"
-            echo "runtime_secret_migrated=$runtime_secret_migrated"
           } >> "$GITHUB_OUTPUT"
-
-      - name: Persist migrated runtime database credential
-        if: steps.payloads.outputs.runtime_secret_migrated == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-          RUNTIME_SECRETS_B64: ${{ steps.payloads.outputs.runtime_b64 }}
-        run: |
-          set -euo pipefail
-          test -n "$GH_TOKEN"
-          printf '%s' "$RUNTIME_SECRETS_B64" |
-            base64 --decode |
-            gh secret set TOMORI_SECRETS_JSON \
-              --env production \
-              --repo "$GITHUB_REPOSITORY"
 
       - name: Bootstrap database role and schema
         if: |

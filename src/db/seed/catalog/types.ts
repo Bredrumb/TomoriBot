@@ -39,7 +39,7 @@ interface CommonInput {
 
 /** A row in the `llms` (text/chat) table. */
 export interface LlmInput extends CommonInput {
-  /** Marks the provider's most capable model. At least one per provider. */
+  /** Marks the provider's most capable active model. Exactly one non-deprecated row per provider. */
   isSmartest?: boolean;
   isReasoning?: boolean;
   isFree?: boolean;
