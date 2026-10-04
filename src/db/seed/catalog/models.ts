@@ -2170,21 +2170,6 @@ export const llmSections: ModelSection<LlmInput>[] = [
         },
       },
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
       {
         provider: "openrouter",
         codename: "~z-ai/glm-flash-latest",
@@ -2232,8 +2217,6 @@ export const llmSections: ModelSection<LlmInput>[] = [
         desc: "Always redirects to the latest model in the OpenAI GPT Astra family",
       },
 
-
-
       {
         provider: "openrouter",
         codename: "~anthropic/claude-fable-latest",
@@ -2243,20 +2226,6 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         desc: "Always redirects to the latest model in the Anthropic Claude Fable family",
       },
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
       {
         provider: "openrouter",
@@ -2271,9 +2240,6 @@ export const llmSections: ModelSection<LlmInput>[] = [
         desc: "Cost-efficient MiMo V2.6 Flash model for agentic tasks and multimodal understanding",
       },
 
-
-
-
       {
         provider: "openrouter",
         codename: "qwen/qwen3.8-omni-flash",
@@ -2284,18 +2250,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         inputPricePerMillion: 0.15,
         outputPricePerMillion: 0.47,
-        desc: "Omnimodal Qwen 3.8 model for text, image, audio, and video understanding",
+        desc: "Multimodal Qwen 3.8 Omni Flash model with image/video understanding, reasoning, and tool use",
       },
-
-
-
-
-
-
-
-
-
-
 
     ],
   },
@@ -3007,7 +2963,6 @@ export const llmSections: ModelSection<LlmInput>[] = [
         desc: "GLM 5.3 FlashX model for multimodal reasoning, coding, and tool use",
       },
 
-
       {
         provider: "zaicoding",
         codename: "glm-5.3",
@@ -3222,7 +3177,6 @@ export const llmSections: ModelSection<LlmInput>[] = [
         desc: "GLM 5.3 FlashX model for multimodal reasoning, coding, and tool use",
       },
 
-
       {
         provider: "zai",
         codename: "zai/glm-5.3",
@@ -3383,7 +3337,6 @@ export const llmSections: ModelSection<LlmInput>[] = [
         },
       },
 
-
       {
         provider: "anthropic",
         codename: "claude-opus-5-5",
@@ -3408,7 +3361,6 @@ export const llmSections: ModelSection<LlmInput>[] = [
         outputPricePerMillion: 50,
         desc: "Claude model for demanding reasoning and long-horizon agentic work",
       },
-
 
       {
         provider: "anthropic",
