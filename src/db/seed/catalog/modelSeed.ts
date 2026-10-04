@@ -194,6 +194,17 @@ function rowsOf<T extends RowLike>(spec: TableSpec<T>): T[] {
   return spec.sections.flatMap((s) => s.rows);
 }
 
+export function collectSmartestInvariantViolations(
+  table: string,
+  provider: string,
+  rows: ReadonlyArray<{ isSmartest?: boolean; isDeprecated?: boolean }>,
+): string[] {
+  const activeSmartest = rows.filter((row) => row.isSmartest && !row.isDeprecated);
+  if (activeSmartest.length === 1) return [];
+
+  return [`${table}/${provider}: expected exactly one non-deprecated is_smartest, found ${activeSmartest.length}`];
+}
+
 /** Collect every per-provider/uniqueness violation for one table. */
 function validateSpec<T extends RowLike>(spec: TableSpec<T>, errors: string[]): void {
   const all = rowsOf(spec);
@@ -222,12 +233,7 @@ function validateSpec<T extends RowLike>(spec: TableSpec<T>, errors: string[]): 
     }
 
     if (spec.hasSmartest) {
-      const smartest = rows.filter((r) => r.isSmartest);
-      if (smartest.length < 1) {
-        errors.push(`${spec.table}/${provider}: expected at least one is_smartest`);
-      } else if (!smartest.some((r) => !r.isDeprecated)) {
-        errors.push(`${spec.table}/${provider}: every is_smartest model is deprecated`);
-      }
+      errors.push(...collectSmartestInvariantViolations(spec.table, provider, rows));
     }
   }
 }
