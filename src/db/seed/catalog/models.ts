@@ -2948,20 +2948,6 @@ export const llmSections: ModelSection<LlmInput>[] = [
       },
       {
         provider: "zaicoding",
-        codename: "glm-5.3-flashx",
-        hasTools: true,
-        seesImages: true,
-        seesVideos: true,
-        isReasoning: true,
-        supportsStructoutput: true,
-        supportsPrefixCompletion: true,
-        inputPricePerMillion: 0.37,
-        outputPricePerMillion: 1.25,
-        desc: "GLM 5.3 FlashX model for multimodal reasoning, coding, and tool use",
-      },
-
-      {
-        provider: "zaicoding",
         codename: "glm-5.3",
         hasTools: true,
         isSmartest: true,

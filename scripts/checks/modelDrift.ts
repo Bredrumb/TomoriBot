@@ -458,7 +458,7 @@ export function report(
     "## Review",
     "",
     "1. Verify each row against the provider. Fixed OpenRouter models carry a drafted fallback price; floating aliases have none.",
-    `2. Replace each \`${MODEL_DRIFT_TODO}\` English description, then tick its box below. Translations are optional and fall back to English.`,
+    `2. Replace each \`${MODEL_DRIFT_TODO}\` English description, then tick its box below. Avoid "latest" in descriptions, and fix older rows a new model makes stale. Translations are optional and fall back to English.`,
     "3. Commented flags had no source evidence. Uncomment one only after verifying it, and delete the rest. `isFree` and `isUncensored` never have source metadata.",
     "4. Moving `isDefault` or `isSmartest` to a newer row is fine with a stated reason. Each provider keeps exactly one of each.",
     `5. Keep each provider at ${MAX_ACTIVE_ROWS_PER_PROVIDER} or fewer active rows per table, so its whole list fits one Discord select (25 options, with room for registered models). Decline extras, or set \`isDeprecated: true\` on older rows to retire them. Providers over the limit are marked below.`,
