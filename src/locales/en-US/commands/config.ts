@@ -1358,7 +1358,6 @@ Exaggeration: **{exaggeration}**`,
         modal_title: `Select System Prompt Preset`,
         selection_label: `Choose a preset`,
         selection_placeholder: `Pick a preset prompt style...`,
-        no_presets_description: `No system prompt presets found. Please contact the bot administrator.`,
       },
     },
     "context-note": {

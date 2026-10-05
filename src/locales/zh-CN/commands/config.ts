@@ -1339,7 +1339,6 @@ export default {
         modal_title: `选择系统提示词预设集`,
         selection_label: `选择预设集`,
         selection_placeholder: `选择预设集的提示词风格…`,
-        no_presets_description: `没有找到系统提示词预设集。请联系 bot 管理员。`,
       },
     },
     "context-note": {

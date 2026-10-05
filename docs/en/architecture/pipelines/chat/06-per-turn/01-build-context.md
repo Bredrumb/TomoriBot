@@ -138,6 +138,13 @@ After this stage runs:
   reply. Whether a sprite will fire is unknown until delivery, so the object is
   allocated up front and stage 07 gates the actual send on real webhook
   delivery; making it an inert no-op for queued turns that reply natively.
+- `streamingContext.disableRecentMessageReplyTool` is set to `true` on queued
+  reply turns, meaning `incoming.isFromQueue` without `isStopResponse` or a
+  scene turn. Reactions stay available, but a tool reply is blocked: the
+  streamed text already answers the queued message as the active persona, and a
+  tool reply would replace it (`endTurn`) through a second delivery route.
+  Scene turns are excluded because they answer their own per-turn directive, not
+  the queued message.
 
 ## Extension points
 

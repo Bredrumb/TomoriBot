@@ -1363,7 +1363,6 @@ Exagero: **{exaggeration}**`,
         modal_title: `Predefinição do Sistema`,
         selection_label: `Escolha uma predefinição`,
         selection_placeholder: `Escolha o estilo de prompt...`,
-        no_presets_description: `Nenhuma predefinição encontrada. Fale com o administrador.`,
       },
     },
     "context-note": {

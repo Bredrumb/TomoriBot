@@ -1357,7 +1357,6 @@ Mức cường điệu: **{exaggeration}**`,
         modal_title: `Chọn preset prompt hệ thống`,
         selection_label: `Chọn một preset`,
         selection_placeholder: `Chọn một phong cách prompt preset...`,
-        no_presets_description: `Không tìm thấy preset prompt hệ thống nào. Vui lòng liên hệ quản trị viên bot.`,
       },
     },
     "context-note": {

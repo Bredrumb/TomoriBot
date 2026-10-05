@@ -1349,7 +1349,6 @@ CFG 權重：**{cfg_weight}**
         modal_title: `選擇系統提示詞預設集`,
         selection_label: `選擇預設集`,
         selection_placeholder: `挑選一種預設提示詞風格...`,
-        no_presets_description: `找不到系統提示詞預設集。請聯絡 bot 管理員。`,
       },
     },
     "context-note": {

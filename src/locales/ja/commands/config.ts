@@ -1356,7 +1356,6 @@ Exaggeration: **{exaggeration}**`,
         modal_title: `システムプロンプトのプリセットを選択`,
         selection_label: `プリセットを選択`,
         selection_placeholder: `プリセットのプロンプトスタイルを選択...`,
-        no_presets_description: `システムプロンプトのプリセットが見つかりません。ボット管理者にお問い合わせください。`,
       },
     },
     "context-note": {

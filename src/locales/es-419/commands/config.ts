@@ -1371,7 +1371,6 @@ Exageración: **{exaggeration}**`,
         modal_title: `Seleccionar preajuste de prompt`,
         selection_label: `Elige un preajuste`,
         selection_placeholder: `Elige un estilo de prompt…`,
-        no_presets_description: `No hay preajustes. Contacta al administrador del bot.`,
       },
     },
     "context-note": {

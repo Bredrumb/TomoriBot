@@ -31,6 +31,7 @@ import {
   BEHAVIOR_FETCH_LIMIT_FIELD,
   BEHAVIOR_HUMANIZER_FIELD,
   BEHAVIOR_MATCH_LIMIT_FIELD,
+  BEHAVIOR_PRESET_BUILT_IN,
   BEHAVIOR_PRESET_FIELD,
   BEHAVIOR_RANDOM_CHANNEL_FIELD,
   BEHAVIOR_RANDOM_PERSONA_FIELD,
@@ -346,14 +347,7 @@ export async function handleConfigBehaviorModalOpen(
     );
   } else if (route.action === "behavior-preset-open") {
     const presets = await (await import("@/utils/db/repositories")).configRepository.loadSystemPromptPresets();
-    if (!presets?.length) {
-      await interaction.reply({
-        content: localizer(route.locale, "commands.config.prompt.preset.no_presets_description"),
-        flags: MessageFlags.Ephemeral,
-      });
-      return true;
-    }
-    await dependencies.showModal(interaction, buildBehaviorPresetModal(route.locale, nonce, presets));
+    await dependencies.showModal(interaction, buildBehaviorPresetModal(route.locale, nonce, presets ?? []));
   } else if (route.action === "behavior-context-open") {
     await dependencies.showModal(
       interaction,
@@ -461,6 +455,30 @@ export async function handleConfigBehaviorModalOpen(
 
 type BehaviorWriteOutcome = { receipt: ConfigRepaintOptions["receipt"]; telemetry?: PanelAction };
 
+/**
+ * Writes NULL so the built-in `DEFAULT_SYSTEM_PROMPT` keeps resolving at read time. Shared by Remove
+ * Prompt and the preset modal's built-in option so both paths report and meter identically.
+ */
+async function clearCustomSystemPrompt(
+  scope: ConfigScope,
+  state: TomoriState,
+  locale: string,
+): Promise<BehaviorWriteOutcome> {
+  if (!state.config.system_prompt)
+    return { receipt: receipt(locale, "info", "system_prompt_no_custom_heading", "system_prompt_no_custom_detail") };
+  const updated = await (await import("@/utils/db/repositories")).configRepository.updateChatConfig(state.server_id, {
+    system_prompt: null,
+  });
+  if (!updated) return { receipt: writeFailed(locale) };
+  invalidateTomoriStateCache(scope.serverDiscId);
+  return {
+    receipt: receipt(locale, "success", "system_prompt_cleared_heading", "system_prompt_cleared_detail", {
+      default: DEFAULT_SYSTEM_PROMPT.trim(),
+    }),
+    telemetry: "server-config.workspace.system-prompt.remove",
+  };
+}
+
 async function runGeneralWrite(
   interaction: GlobalRoutableInteraction,
   route: ConfigPanelRoute,
@@ -492,6 +510,7 @@ async function runGeneralWrite(
       modalInteraction.id,
       buildConfigModalFieldId(BEHAVIOR_PRESET_FIELD, route.nonce),
     );
+    if (selectedName === BEHAVIOR_PRESET_BUILT_IN) return clearCustomSystemPrompt(scope, state, locale);
     const presets = await (await import("@/utils/db/repositories")).configRepository.loadSystemPromptPresets();
     const selected = presets?.find((preset) => preset.system_prompt_preset_name === selectedName);
     if (!selected) return { receipt: staleReceipt(locale) };
@@ -507,21 +526,7 @@ async function runGeneralWrite(
       telemetry: "server-config.workspace.system-prompt.preset",
     };
   }
-  if (route.action === "behavior-prompt-remove") {
-    if (!state.config.system_prompt)
-      return { receipt: receipt(locale, "info", "system_prompt_no_custom_heading", "system_prompt_no_custom_detail") };
-    const updated = await (await import("@/utils/db/repositories")).configRepository.updateChatConfig(state.server_id, {
-      system_prompt: null,
-    });
-    if (!updated) return { receipt: writeFailed(locale) };
-    invalidateTomoriStateCache(scope.serverDiscId);
-    return {
-      receipt: receipt(locale, "success", "system_prompt_cleared_heading", "system_prompt_cleared_detail", {
-        default: DEFAULT_SYSTEM_PROMPT.trim(),
-      }),
-      telemetry: "server-config.workspace.system-prompt.remove",
-    };
-  }
+  if (route.action === "behavior-prompt-remove") return clearCustomSystemPrompt(scope, state, locale);
   if (route.action === "behavior-context-submit" && modalInteraction) {
     const note = getText(modalInteraction, "context_note_text", route.nonce).trim();
     const rawDepth = getText(modalInteraction, "context_note_depth", route.nonce).trim();
