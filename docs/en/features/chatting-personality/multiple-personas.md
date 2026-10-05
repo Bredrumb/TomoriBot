@@ -108,7 +108,8 @@ require the `Manage Server` permission):
 
 - `/config` > Persona > Sprites: add or replace a sprite: pick the persona, give it a label,
   upload the image (PNG, JPG, or GIF), and optionally add usage instructions telling
-  her when to use it. Reusing a label replaces that sprite. Each persona has a maximum sprite
+  her when to use it. Instructions accept the same `{bot}` and `{user}` placeholders as persona
+  attributes. Reusing a label replaces that sprite. Each persona has a maximum sprite
   count.
 - `/config` > Persona > Sprites: change an existing sprite's name, image, instructions, or
   identity toggle.

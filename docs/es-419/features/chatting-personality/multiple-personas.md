@@ -93,7 +93,7 @@ correspondiente. Si ningún sprite encaja, responde normalmente.
 Administra los sprites de una persona en `/config` > Persona > Sprites (añadir y eliminar requiere el permiso
 Administrar servidor):
 
-- `/config` > Persona > Sprites: añade o reemplaza un sprite. Elige la persona, dale una etiqueta, carga la imagen (PNG, JPG o GIF) y, opcionalmente, añade instrucciones de uso que indiquen cuándo utilizarlo. Reutilizar una etiqueta reemplaza ese sprite. Cada persona tiene un máximo de sprites.
+- `/config` > Persona > Sprites: añade o reemplaza un sprite. Elige la persona, dale una etiqueta, carga la imagen (PNG, JPG o GIF) y, opcionalmente, añade instrucciones de uso que indiquen cuándo utilizarlo. Las instrucciones aceptan los mismos marcadores `{bot}` y `{user}` que los atributos de la persona. Reutilizar una etiqueta reemplaza ese sprite. Cada persona tiene un máximo de sprites.
 - `/config` > Persona > Sprites: cambia el nombre, imagen, instrucciones o interruptor de identidad de un sprite existente.
 - `/config` > Persona > Sprites: elimina sprites de una persona.
 - Exportar e importar en `/config` > Persona > Sprites: respalda o comparte todo el conjunto de sprites de una persona como archivo.

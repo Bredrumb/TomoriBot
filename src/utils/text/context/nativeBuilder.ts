@@ -270,9 +270,14 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   await appendOptionalItem(
     contextItems,
     buildPersonaSpriteContextItem({
+      client,
+      guildId,
       tomoriState,
+      tomoriConfig,
       botName,
       isUserImpersonation,
+      snapshot,
+      convertMentions,
     }),
   );
   await appendOptionalItem(

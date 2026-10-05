@@ -102,7 +102,8 @@ Quản lý máy chủ):
 
 - `/config` > Persona > Sprites: thêm hoặc thay thế một sprite: chọn persona, đặt cho nó một nhãn
   (label), tải lên hình ảnh (PNG, JPG, hoặc GIF), và tùy chọn thêm hướng dẫn sử dụng để bảo bot
-  khi nào nên dùng. Dùng lại một nhãn sẽ thay thế sprite đó. Mỗi persona có một số lượng sprite tối đa.
+  khi nào nên dùng. Hướng dẫn chấp nhận các trình giữ chỗ `{bot}` và `{user}` tương tự như các thuộc tính
+  persona. Dùng lại một nhãn sẽ thay thế sprite đó. Mỗi persona có một số lượng sprite tối đa.
 - `/config` > Persona > Sprites: thay đổi tên, hình ảnh, hướng dẫn hoặc nút bật/tắt danh tính của một
   sprite hiện có.
 - `/config` > Persona > Sprites: xóa sprite khỏi một persona.

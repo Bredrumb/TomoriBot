@@ -108,7 +108,8 @@ requerem a permissão Gerenciar Servidor):
 
 - `/config` > Persona > Sprites: adicione ou substitua um sprite; escolha a persona, dê um rótulo,
   envie a imagem (PNG, JPG ou GIF) e opcionalmente adicione instruções de uso dizendo
-  a ela quando usá-lo. Reutilizar um rótulo substitui aquele sprite. Cada persona tem um limite máximo
+  a ela quando usá-lo. As instruções aceitam os mesmos placeholders `{bot}` e `{user}` que os atributos
+  da persona. Reutilizar um rótulo substitui aquele sprite. Cada persona tem um limite máximo
   de sprites.
 - `/config` > Persona > Sprites: altere o nome, imagem, instruções ou toggle de
   identidade de um sprite existente.
