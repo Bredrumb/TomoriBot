@@ -179,6 +179,8 @@ const MEANINGFULLY_NULLABLE_CONFIG_FIELDS = new Set([
   "thought_log_channel_disc_id",
 ]);
 
+type PersonaSwapResult = "swapped" | "roles-changed" | "failed";
+
 /**
  * A main persona whose Discord guild avatar is out of date with its preset:
  * the unit of work consumed by the background preset-avatar fan-out reconciler.
@@ -979,9 +981,15 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
-  async swapPersona(mainPersonaId: number, alterPersonaId: number): Promise<boolean> {
+  /**
+   * Demotes the main persona to an alter and promotes the alter to main in one transaction.
+   *
+   * @returns `roles-changed` when the rows no longer hold the main/alter roles the caller expected.
+   *   That is a lost race against a concurrent promotion, not a defect, so it is not logged as an error.
+   */
+  async swapPersona(mainPersonaId: number, alterPersonaId: number): Promise<PersonaSwapResult> {
     try {
-      await sql.transaction(async (tx) => {
+      return await sql.transaction(async (tx): Promise<PersonaSwapResult> => {
         const rows = await tx<Array<{ persona_id: number; server_id: number; is_alter: boolean }>>`
           SELECT persona_id, server_id, is_alter
           FROM personas
@@ -997,7 +1005,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         }
 
         if (mainPersona.is_alter || !alterPersona.is_alter) {
-          throw new Error("Persona swap requires the first persona to be main and the second persona to be an alter.");
+          return "roles-changed";
         }
 
         await tx`
@@ -1010,11 +1018,11 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
           SET is_alter = false
           WHERE persona_id = ${alterPersonaId}
         `;
+        return "swapped";
       });
-      return true;
     } catch (e) {
       log.error(`Error swapping personas ${mainPersonaId} and ${alterPersonaId}:`, e);
-      return false;
+      return "failed";
     }
   }
 

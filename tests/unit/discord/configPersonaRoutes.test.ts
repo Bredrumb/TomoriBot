@@ -72,6 +72,7 @@ import {
 } from "@/utils/discord/ui/configModals";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { createPersona, type PersonaFixtureOverrides } from "../../helpers/fixtures";
+import { localizedCopy } from "../../helpers/localeCases";
 import {
   createInteractionRecorder,
   createRouteInteraction,
@@ -2946,7 +2947,7 @@ describe("config promotion", () => {
     });
     const swapSpy = spyOn(personaRepository, "swapPersona").mockImplementation(async (mainId, alterId) => {
       events.push(`swap:${mainId}:${alterId}`);
-      return true;
+      return "swapped";
     });
     const setAvatarSpy = spyOn(personaRepository, "setAvatar").mockImplementation(async (personaId, reference) => {
       events.push(`persist:${personaId}:${reference}`);
@@ -3056,7 +3057,7 @@ describe("config promotion", () => {
     }
   });
 
-  it("orders the live-CDN load, swap, upload, persist, delete, and final invalidation", async () => {
+  it("orders the live-CDN load, swap, early invalidation, upload, persist, delete, and final invalidation", async () => {
     const run = installLiveCdnPromotion();
     try {
       await run.promote();
@@ -3068,6 +3069,7 @@ describe("config promotion", () => {
       );
       const formerPersistIndex = run.events.indexOf(`persist:${run.mainPersona.persona_id}:${run.formerMainReference}`);
       const formerDeleteIndex = run.events.indexOf(`delete:${run.mainPersona.webhook_avatar_url}`);
+      const earlyInvalidateIndex = run.events.indexOf("invalidate:guild-1");
       const finalInvalidateIndex = run.events.lastIndexOf("invalidate:guild-1");
 
       expect(loadIndex).toBeGreaterThanOrEqual(0);
@@ -3077,7 +3079,9 @@ describe("config promotion", () => {
       expect(formerUploadIndex).toBeLessThan(formerPersistIndex);
       expect(formerPersistIndex).toBeGreaterThanOrEqual(0);
       expect(formerPersistIndex).toBeLessThan(formerDeleteIndex);
-      expect(run.invalidateSpy).toHaveBeenCalledTimes(1);
+      expect(run.invalidateSpy).toHaveBeenCalledTimes(2);
+      expect(earlyInvalidateIndex).toBeGreaterThan(swapIndex);
+      expect(earlyInvalidateIndex).toBeLessThan(formerUploadIndex);
       expect(finalInvalidateIndex).toBe(run.events.length - 1);
     } finally {
       run.restore();
@@ -3111,7 +3115,7 @@ describe("config promotion", () => {
     const pngSpy = spyOn(imageProcessor, "convertToPNG").mockImplementation(async (buffer: Buffer) => buffer);
     const swapSpy = spyOn(personaRepository, "swapPersona").mockImplementation(async (mainId, alterId) => {
       events.push(`swap:${mainId}:${alterId}`);
-      return true;
+      return "swapped";
     });
     const setAvatarSpy = spyOn(personaRepository, "setAvatar").mockImplementation(async (personaId, reference) => {
       events.push(`persist:${personaId}:${reference}`);
@@ -3213,7 +3217,7 @@ describe("config promotion", () => {
     }
   });
 
-  it("orders the local-fallback load, swap, upload, persist, delete, and final invalidation", async () => {
+  it("orders the local-fallback load, swap, early invalidation, upload, persist, delete, and final invalidation", async () => {
     const run = installLocalFallbackPromotion();
     try {
       await run.promote();
@@ -3225,6 +3229,7 @@ describe("config promotion", () => {
       );
       const formerPersistIndex = run.events.indexOf(`persist:${run.mainPersona.persona_id}:${run.formerMainReference}`);
       const formerDeleteIndex = run.events.indexOf(`delete:${run.mainPersona.webhook_avatar_url}`);
+      const earlyInvalidateIndex = run.events.indexOf("invalidate:guild-1");
       const finalInvalidateIndex = run.events.lastIndexOf("invalidate:guild-1");
 
       expect(loadIndex).toBeLessThan(swapIndex);
@@ -3233,11 +3238,152 @@ describe("config promotion", () => {
       expect(formerUploadIndex).toBeLessThan(formerPersistIndex);
       expect(formerPersistIndex).toBeGreaterThanOrEqual(0);
       expect(formerPersistIndex).toBeLessThan(formerDeleteIndex);
-      expect(run.invalidateSpy).toHaveBeenCalledTimes(1);
+      expect(run.invalidateSpy).toHaveBeenCalledTimes(2);
+      expect(earlyInvalidateIndex).toBeGreaterThan(swapIndex);
+      expect(earlyInvalidateIndex).toBeLessThan(formerUploadIndex);
       expect(finalInvalidateIndex).toBe(run.events.length - 1);
     } finally {
       run.restore();
     }
+  });
+
+  it("treats a lost swap race as stale: evicts the cache and touches no avatar", async () => {
+    const run = installLocalFallbackPromotion();
+    run.swapSpy.mockImplementation(async () => "roles-changed");
+    try {
+      const result = await run.promote();
+
+      expect(result).toEqual({ status: "not-alter" });
+      expect(run.invalidateSpy).toHaveBeenCalledTimes(1);
+      expect(run.uploadSpy).not.toHaveBeenCalled();
+      expect(run.setAvatarSpy).not.toHaveBeenCalled();
+      expect(run.deleteSpy).not.toHaveBeenCalled();
+    } finally {
+      run.restore();
+    }
+  });
+
+  it("reports write-failed without evicting when the swap itself fails", async () => {
+    const run = installLocalFallbackPromotion();
+    run.swapSpy.mockImplementation(async () => "failed");
+    try {
+      expect(await run.promote()).toEqual({ status: "write-failed" });
+      expect(run.invalidateSpy).not.toHaveBeenCalled();
+    } finally {
+      run.restore();
+    }
+  });
+
+  it("refuses a concurrent promotion on the same server and frees the lock when the first ends", async () => {
+    const run = installLocalFallbackPromotion();
+    let releaseNickname: () => void = () => {};
+    const nicknameGate = new Promise<void>((resolve) => {
+      releaseNickname = resolve;
+    });
+    const gatedPromote = () =>
+      configPersonaOperations.promoteToMain({
+        alterPersona: run.alterPersona,
+        mainPersona: run.mainPersona,
+        serverDiscId: "guild-1",
+        guildId: "guild-1",
+        guildIdentity: {
+          currentAvatarReference: async () => null,
+          setNickname: async () => {
+            await nicknameGate;
+            return true;
+          },
+          setAvatar: async () => ({ ok: true, rateLimited: false }),
+        },
+      });
+    try {
+      const first = gatedPromote();
+      // The first run parks inside setNickname, i.e. after the swap committed and before its avatar work.
+      await Bun.sleep(0);
+
+      expect(await gatedPromote()).toEqual({ status: "in-progress" });
+      expect(run.swapSpy).toHaveBeenCalledTimes(1);
+
+      releaseNickname();
+      expect(await first).toMatchObject({ status: "success" });
+      expect(await run.promote()).toMatchObject({ status: "success" });
+      expect(run.swapSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      releaseNickname();
+      run.restore();
+    }
+  });
+
+  it("does not let a different server's promotion block this one", async () => {
+    const run = installLocalFallbackPromotion();
+    let releaseNickname: () => void = () => {};
+    const nicknameGate = new Promise<void>((resolve) => {
+      releaseNickname = resolve;
+    });
+    try {
+      const other = configPersonaOperations.promoteToMain({
+        alterPersona: run.alterPersona,
+        mainPersona: run.mainPersona,
+        serverDiscId: "guild-2",
+        guildId: "guild-2",
+        guildIdentity: {
+          currentAvatarReference: async () => null,
+          setNickname: async () => {
+            await nicknameGate;
+            return true;
+          },
+          setAvatar: async () => ({ ok: true, rateLimited: false }),
+        },
+      });
+      await Bun.sleep(0);
+
+      expect(await run.promote()).toMatchObject({ status: "success" });
+
+      releaseNickname();
+      await other;
+    } finally {
+      releaseNickname();
+      run.restore();
+    }
+  });
+
+  it("frees the lock when a promotion throws after the swap", async () => {
+    const run = installLocalFallbackPromotion();
+    run.uploadSpy.mockImplementation(async ({ personaId }) => {
+      if (personaId === run.alterPersona.persona_id) throw new Error("storage down");
+      return run.formerMainReference;
+    });
+    try {
+      await expect(run.promote()).rejects.toThrow("storage down");
+
+      run.uploadSpy.mockImplementation(async () => run.formerMainReference);
+      expect(await run.promote()).toMatchObject({ status: "success" });
+    } finally {
+      run.restore();
+    }
+  });
+
+  it("answers a promotion refused by the lock with its own receipt, not a write failure", async () => {
+    const harness = makeHarness({
+      operations: { promoteToMain: async () => ({ status: "in-progress" }) },
+    });
+
+    await dispatch(
+      harness,
+      makeInteraction({
+        customId: buildConfigRouteId({
+          action: "promote-confirm",
+          locale: "en-US",
+          personaId: 56,
+          nonce: "nonce1234567",
+        }),
+        harness,
+      }),
+    );
+
+    const rendered = JSON.stringify(harness.edits.at(-1));
+    expect(rendered).toContain(localizedCopy("en-US", "commands.config.panel.promote_in_progress_heading"));
+    expect(rendered).not.toContain(localizedCopy("en-US", "commands.config.panel.stale_heading"));
+    expect(rendered).not.toContain(localizedCopy("en-US", "commands.config.panel.write_failed_heading"));
   });
 
   it("opens a confirmation before promoting rather than swapping on the first press", async () => {

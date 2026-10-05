@@ -777,6 +777,8 @@ export default {
       promote_success_heading: `人格已升為主要`,
       promote_success_detail: `{name} 現在是主要人格；{old} 則是 alter。`,
       promote_partial_detail: `{name} 現在是主要人格，但伺服器身分沒有更新。`,
+      promote_in_progress_heading: `正在升為主要人格`,
+      promote_in_progress_detail: `此伺服器上的另一次升級仍在進行。請稍後再試。`,
       attributes_title: `**[屬性](https://docs.tomoribot.app/zh-TW/features/chatting-personality/multiple-personas/#attributes)**`,
       attributes_description: `這些事實定義了這個人格的性格。`,
       collection_teaching_disabled: `這個伺服器已停用成員教導。`,

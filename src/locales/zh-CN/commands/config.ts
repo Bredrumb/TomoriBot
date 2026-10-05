@@ -777,6 +777,8 @@ export default {
       promote_success_heading: `人格已升为主人格`,
       promote_success_detail: `{name} 现在是主人格，{old} 是副人格。`,
       promote_partial_detail: `{name} 现在是主人格，但服务器身份没有更新。`,
+      promote_in_progress_heading: `正在升为主人格`,
+      promote_in_progress_detail: `此服务器上的另一次升级仍在进行。请稍后重试。`,
       attributes_title: `**[属性](https://docs.tomoribot.app/zh-CN/features/chatting-personality/multiple-personas/#attributes)**`,
       attributes_description: `这些事实定义了这个人格的性格。`,
       collection_teaching_disabled: `这个服务器已关闭成员教导。`,

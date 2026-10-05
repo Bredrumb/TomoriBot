@@ -2684,6 +2684,11 @@ async function runPersonaWrite(
           telemetry: "server-config.workspace.persona.promote",
         };
       }
+      if (result.status === "in-progress") {
+        return {
+          receipt: receipt(locale, "warning", key("promote_in_progress_heading"), key("promote_in_progress_detail")),
+        };
+      }
       return {
         receipt:
           result.status === "not-alter" || result.status === "no-main-persona"

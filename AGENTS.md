@@ -116,6 +116,9 @@ proposed follow-up's premise in source before suggesting it.
     - Code kept alive only by a test import is dead code.
     - Build fixtures with the factories in `tests/helpers/` (see its README), and only from values
       production can produce. Patterns to avoid: `docs/en/contributing/testing/maintainable-tests.md`.
+    - Run tests with `bun run test [files]`, never bare `bun test`, for anything under
+      `tests/regression/db/`. Only the wrapper provisions the disposable database; a bare run skips
+      those suites, and a skipped suite is not a pass.
     - Gates: `bun run check`, `bun run lint`, and `bun run check-locales` when localization or command
       metadata changes. A passing gate says nothing about files it does not scan.
 

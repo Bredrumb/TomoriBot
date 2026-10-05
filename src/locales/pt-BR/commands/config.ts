@@ -786,6 +786,8 @@ export default {
       promote_success_heading: `Persona Promovida`,
       promote_success_detail: `{name} agora é a persona principal; {old} é um alter.`,
       promote_partial_detail: `{name} agora é a principal, mas a identidade do servidor não foi atualizada.`,
+      promote_in_progress_heading: `Promoção em Andamento`,
+      promote_in_progress_detail: `Outra promoção ainda está em andamento neste servidor. Tente novamente em instantes.`,
       attributes_title: `**[Atributos](https://docs.tomoribot.app/pt-BR/features/chatting-personality/multiple-personas/#attributes)**`,
       attributes_description: `Esses fatos definem o caráter desta persona.`,
       collection_teaching_disabled: `Ensinar como membro está desativado neste servidor.`,
