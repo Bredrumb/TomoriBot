@@ -48,11 +48,11 @@ Configure as configurações de persona, comportamento, canal, permissão e mode
 
 ## `/context`
 
-See how much of the model's context window a persona's prompt fills in this channel.
+Veja quanto da janela de contexto do modelo o prompt de uma persona preenche neste canal.
 
 | Comando | Resumo |
 |---|---|
-| `/context` | See how much of the model's context window a persona's prompt fills in this channel. |
+| `/context` | Veja quanto da janela de contexto do modelo o prompt de uma persona preenche neste canal. |
 
 ## `/contribute`
 

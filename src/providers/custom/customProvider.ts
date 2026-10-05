@@ -453,6 +453,7 @@ export class CustomProvider
         provider: "custom",
         configured: tomoriState.config.llm_max_output_tokens,
         modelMaxOutputTokens: null,
+        contextWindow: numCtx,
       }),
       endpointUrl: endpointUrl,
       customConnectionId: parseCustomProvider(tomoriState.llm.llm_provider)?.connectionId ?? null,

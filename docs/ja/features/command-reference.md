@@ -48,11 +48,11 @@ TomoriBotに現在登録されているすべてのスラッシュコマンド�
 
 ## `/context`
 
-See how much of the model's context window a persona's prompt fills in this channel.
+このチャンネルでペルソナのプロンプトがモデルのコンテキストウィンドウをどれだけ占有しているか確認します。
 
 | コマンド | 概要 |
 |---|---|
-| `/context` | See how much of the model's context window a persona's prompt fills in this channel. |
+| `/context` | このチャンネルでペルソナのプロンプトがモデルのコンテキストウィンドウをどれだけ占有しているか確認します。 |
 
 ## `/contribute`
 

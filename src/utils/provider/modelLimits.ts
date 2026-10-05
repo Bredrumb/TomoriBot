@@ -90,9 +90,9 @@ export async function resolveModelLimits(tomoriState: TomoriState): Promise<Mode
 export async function resolveRequestMaxOutputTokens(tomoriState: TomoriState): Promise<number | undefined> {
   const provider = normalizeProviderName(tomoriState.llm.llm_provider);
   const configured = tomoriState.config.llm_max_output_tokens;
-  const { maxOutputTokens } = await resolveModelLimits(tomoriState);
+  const { contextWindow, maxOutputTokens } = await resolveModelLimits(tomoriState);
   if (provider === "openrouter" && !maxOutputTokens) {
     return typeof configured === "number" && configured > 0 ? configured : undefined;
   }
-  return resolveChatMaxOutputTokens({ provider, configured, modelMaxOutputTokens: maxOutputTokens });
+  return resolveChatMaxOutputTokens({ provider, configured, modelMaxOutputTokens: maxOutputTokens, contextWindow });
 }

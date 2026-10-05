@@ -101,22 +101,38 @@ const CHAT_OUTPUT_BUDGETS: Readonly<Record<string, { envVar?: string; fallback: 
 const OPENAI_COMPATIBLE_CHAT_OUTPUT_FALLBACK = 4096;
 
 /**
+ * The largest share of a known window the default reply budget may take. The truncator reserves the
+ * reply before keeping history, so a 4096 default on a 4096 `num_ctx` (the value the setup wizard
+ * suggests) would keep no history at all. Every catalog window is at least 128K, where a quarter
+ * exceeds every default, so in practice this only lowers custom endpoints and small OpenRouter models.
+ */
+const MAX_DEFAULT_OUTPUT_WINDOW_SHARE = 0.25;
+
+/**
  * Resolves the chat reply budget a provider requests and the truncator reserves, so the two can only
  * agree. NovelAI's truncation reserve is the exception: it follows the subscription tier instead.
+ * An explicit server override or env cap is honored as set; only the provider default shrinks to fit
+ * a small window.
  *
  * @param provider - Canonical provider name (`normalizeProviderName`).
  * @param modelMaxOutputTokens - The model's output ceiling from `resolveModelLimits()`, when known.
+ * @param contextWindow - The model's window from `resolveModelLimits()`, when known.
  */
 export function resolveChatMaxOutputTokens(params: {
   provider: string;
   configured: number | null | undefined;
   modelMaxOutputTokens: number | null;
+  contextWindow: number | null;
 }): number {
   const budget = CHAT_OUTPUT_BUDGETS[params.provider];
+  const providerFallback = budget?.fallback ?? OPENAI_COMPATIBLE_CHAT_OUTPUT_FALLBACK;
+  const fallback = params.contextWindow
+    ? Math.min(providerFallback, Math.floor(params.contextWindow * MAX_DEFAULT_OUTPUT_WINDOW_SHARE))
+    : providerFallback;
   return resolveMaxOutputTokens({
     configured: params.configured,
     envRaw: budget?.envVar ? process.env[budget.envVar] : undefined,
-    fallback: budget?.fallback ?? OPENAI_COMPATIBLE_CHAT_OUTPUT_FALLBACK,
+    fallback,
     providerReportedMax: params.modelMaxOutputTokens ?? undefined,
   });
 }

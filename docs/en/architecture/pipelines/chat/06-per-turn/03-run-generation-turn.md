@@ -167,7 +167,9 @@ a non-error result *and* the loop falls through (rare; defensive).
   `ANTHROPIC_MAX_OUTPUT_TOKENS`), then a per-provider fallback (8192 for
   OpenRouter, Gemini, and Anthropic; 4096 for the other OpenAI-compatible
   providers and custom endpoints), clamped to the model's output ceiling
-  (`llms.max_output_tokens` or the live value) when known. The clamp also keeps a
+  (`llms.max_output_tokens` or the live value) when known. The fallback alone also
+  shrinks to a quarter of a known window, because a 4096 default on a 4096 `num_ctx`
+  would leave no room for history; an override or env cap is sent as set. The clamp also keeps a
   server override above the model's real cap from being rejected. Keeping the
   reserve in lockstep with the request avoids over-dropping history. The one
   exception is an OpenRouter model with no known ceiling: its request omits

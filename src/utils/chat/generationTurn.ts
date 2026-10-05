@@ -743,6 +743,7 @@ async function createFallbackAttempt(
         key_version: savedConfig.key_version ?? 1,
         custom_endpoint_url: entry.endpoint.endpoint_url,
         custom_model_name: entry.endpoint.model_name ?? null,
+        custom_num_ctx: entry.endpoint.num_ctx ?? null,
       },
       llm: {
         ...primaryState.llm,

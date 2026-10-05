@@ -44,6 +44,7 @@ const toolLoopCalls: Array<{
   model: string;
   suppressUserErrors: boolean | undefined;
   contextItems: ToolLoopParams["context"]["contextItems"];
+  numCtx: number | null | undefined;
 }> = [];
 const providerConfigCalls: Array<{ model: string; apiKey: string }> = [];
 const fallbackNoticeCalls: Array<{
@@ -358,6 +359,7 @@ async function runToolLoopMock(params: ToolLoopParams): Promise<GenerationTurnRe
       model: params.tomoriState.llm.llm_codename,
       suppressUserErrors: params.context.streamingContext.suppressUserErrors,
       contextItems: params.context.contextItems,
+      numCtx: params.tomoriState.config.custom_num_ctx,
     });
     // Simulate this attempt committing messages to the channel before it resolves, so the
     // supersede-cleanup path in runGenerationTurn has refs to act on.
@@ -785,9 +787,10 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(context.streamingContext.forceModelFallback).toBe(false);
   });
 
-  it("uses personal saved credentials for a user-scoped custom endpoint fallback", async () => {
+  it("runs a user-scoped custom endpoint fallback on its own saved credentials and num_ctx", async () => {
     const primaryModel = makeLlm(1, "primary-model");
     const context = makeContext(primaryModel, makeLlm(2, "unused-fallback"));
+    context.currentPersona.config.custom_num_ctx = 32_768;
     const endpoint = {
       custom_endpoint_id: 5,
       connection_id: 42,
@@ -798,6 +801,7 @@ describe("runGenerationTurn fallback behavior", () => {
       endpoint_url: "https://example.invalid/v1",
       model_name: "personal-fallback",
       model_ref_id: 9,
+      num_ctx: 4_096,
       has_tools: false,
       sees_images: false,
       sees_videos: false,
@@ -827,7 +831,10 @@ describe("runGenerationTurn fallback behavior", () => {
     const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
     await runGenerationTurn(context, sink);
 
-    expect(toolLoopCalls.map((call) => call.model)).toEqual(["primary-model", "personal-fallback"]);
+    expect(toolLoopCalls.map(({ model, numCtx }) => ({ model, numCtx }))).toEqual([
+      { model: "primary-model", numCtx: 32_768 },
+      { model: "personal-fallback", numCtx: 4_096 },
+    ]);
     expect(personalSavedConfigLoads).toEqual([{ userId: 4, provider: "custom:42" }]);
   });
 

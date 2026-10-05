@@ -97,7 +97,7 @@ Extend `BaseLLMProvider` and implement `getInfo()`, `validateApiKey()`, `formatE
 - In `createConfig()`, set `maxOutputTokens` from `resolveRequestMaxOutputTokens(tomoriState)`. History
   truncation reserves the same figure, and it clamps to the model's ceiling. A provider with its own
   env cap or default adds an entry to `CHAT_OUTPUT_BUDGETS` in `src/utils/provider/maxOutputTokens.ts`;
-  otherwise it falls back to 4096.
+  otherwise it falls back to 4096. Either default shrinks to a quarter of a known context window.
 - `formatErrorDescription()` owns the provider's user-facing error text, so commands never format
   vendor errors themselves.
 - Build the `StreamContext` with `buildStreamContext()` from `src/utils/provider/streamContext.ts`.

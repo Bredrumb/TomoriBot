@@ -3,6 +3,7 @@ import { refreshLiveModelLimits } from "@/utils/cache/liveModelLimitsCache";
 import { resolveContextBudget } from "@/utils/provider/contextBudget";
 import { resolveChatMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 import { resolveModelLimits, resolveRequestMaxOutputTokens } from "@/utils/provider/modelLimits";
+import { computeSafeInputBudget } from "@/utils/text/contextTruncator";
 import { stubGlobalFetch } from "../../helpers/fetchStub";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
@@ -31,10 +32,14 @@ function catalogPersona(provider: string, configuredOutput: number | null) {
 }
 
 /** A custom endpoint whose fallback hop pinned the URL mirror, so no endpoint row is loaded. */
-function customPersona(numCtx: number | null) {
+function customPersona(numCtx: number | null, configuredOutput: number | null = null) {
   return createPersona({
     llm: createLlmRow({ llm_provider: "custom:42", llm_codename: "local-model" }),
-    config: { custom_endpoint_url: "http://127.0.0.1:5001/v1", custom_num_ctx: numCtx },
+    config: {
+      custom_endpoint_url: "http://127.0.0.1:5001/v1",
+      custom_num_ctx: numCtx,
+      llm_max_output_tokens: configuredOutput,
+    },
   });
 }
 
@@ -112,12 +117,29 @@ describe("truncation reserve parity", () => {
     });
     expect(await resolveRequestMaxOutputTokens(persona)).toBeUndefined();
     expect((await resolveContextBudget(persona, "1"))?.outputReserve).toBe(
-      resolveChatMaxOutputTokens({ provider: "openrouter", configured: null, modelMaxOutputTokens: null }),
+      resolveChatMaxOutputTokens({
+        provider: "openrouter",
+        configured: null,
+        modelMaxOutputTokens: null,
+        contextWindow: 32_000,
+      }),
     );
   });
 
   test("clamps a server override above the model's output ceiling", async () => {
     expect(await resolveRequestMaxOutputTokens(catalogPersona("deepseek", 50_000))).toBe(2_000);
+  });
+
+  // Regression: the default 4096 reply budget on the 4096 num_ctx the setup wizard suggests left a
+  // safe input budget of zero, so every turn dropped the whole channel history.
+  test("a default reply budget leaves room for history in a small custom window", async () => {
+    const budget = await resolveContextBudget(customPersona(4_096), "1");
+    if (!budget) throw new Error("expected a budget for a known num_ctx");
+    expect(computeSafeInputBudget(budget.contextLength, budget.outputReserve)).toBeGreaterThan(0);
+  });
+
+  test("honors an explicit output override even when it fills a small custom window", async () => {
+    expect(await resolveRequestMaxOutputTokens(customPersona(4_096, 4_096))).toBe(4_096);
   });
 
   test("skips truncation when the window is unknown", async () => {

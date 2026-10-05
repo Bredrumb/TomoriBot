@@ -48,11 +48,11 @@ TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使�
 
 ## `/context`
 
-See how much of the model's context window a persona's prompt fills in this channel.
+查看在目前頻道中，某個人格的提示詞占用了模型脈絡視窗的多少空間。
 
 | 指令 | 摘要 |
 |---|---|
-| `/context` | See how much of the model's context window a persona's prompt fills in this channel. |
+| `/context` | 查看在目前頻道中，某個人格的提示詞占用了模型脈絡視窗的多少空間。 |
 
 ## `/contribute`
 

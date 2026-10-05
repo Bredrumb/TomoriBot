@@ -44,6 +44,8 @@ As mensagens recentes são a parte maior e mais frágil; é uma janela que avan�
 
 `/tool prompt snapshot` exporta o pacote exato de uma persona para um arquivo. É a fonte da verdade para quais memórias estão ativas no momento, se algum documento correspondeu e quanto da conversa realmente coube.
 
+O `/context` desenha o mesmo pacote como uma grade colorida da janela de contexto do modelo, uma cor para cada grupo de blocos acima, para que você possa ver rapidamente o que a preenche e quanto espaço resta.
+
 `/tool estimate cost` detalha o mesmo pacote por tamanho, o que é útil para descobrir o que está consumindo seu contexto antes de aumentar qualquer limite.
 
 ### Onde as Ferramentas são definidas?

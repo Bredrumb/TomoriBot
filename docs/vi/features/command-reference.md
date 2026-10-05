@@ -48,11 +48,11 @@ Cấu hình persona, hành vi, kênh, quyền hạn và cài đặt model.
 
 ## `/context`
 
-See how much of the model's context window a persona's prompt fills in this channel.
+Xem prompt của một persona chiếm bao nhiêu dung lượng cửa sổ ngữ cảnh của model trong kênh này.
 
 | Lệnh | Tóm tắt |
 |---|---|
-| `/context` | See how much of the model's context window a persona's prompt fills in this channel. |
+| `/context` | Xem prompt của một persona chiếm bao nhiêu dung lượng cửa sổ ngữ cảnh của model trong kênh này. |
 
 ## `/contribute`
 

@@ -63,6 +63,7 @@ export async function resolveContextBudget(
       provider: normalizeProviderName(tomoriState.llm.llm_provider),
       configured: tomoriState.config.llm_max_output_tokens,
       modelMaxOutputTokens: limits.maxOutputTokens,
+      contextWindow: limits.contextWindow,
     }),
   };
 }

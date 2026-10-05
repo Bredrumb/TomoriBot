@@ -48,11 +48,11 @@ TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同�
 
 ## `/context`
 
-See how much of the model's context window a persona's prompt fills in this channel.
+查看在当前频道中，某个人格的提示词占用了模型上下文窗口的多少。
 
 | 指令 | 摘要 |
 |---|---|
-| `/context` | See how much of the model's context window a persona's prompt fills in this channel. |
+| `/context` | 查看在当前频道中，某个人格的提示词占用了模型上下文窗口的多少。 |
 
 ## `/contribute`
 
