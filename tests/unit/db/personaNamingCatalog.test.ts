@@ -43,7 +43,7 @@ describe("official persona naming catalog", () => {
       "666:en-US": {
         prefixes: {},
         suffixes: {},
-        addressTerms: { masculine: "mon amour", feminine: "ma chérie", neutral: "mi amor" },
+        addressTerms: { masculine: "mon chéri", feminine: "ma chérie", neutral: "mon amour" },
       },
       "50:en-US": {
         prefixes: { masculine: "Master", feminine: "Mistress", neutral: "Master" },
