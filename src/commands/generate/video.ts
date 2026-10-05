@@ -47,11 +47,6 @@ const FPS_INPUT_ID = "fps_input";
 /** Discord file size limit for non-boosted servers (25 MB) */
 const DISCORD_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 
-/**
- * Parse a positive integer from an environment variable, falling back to a default.
- * @param fallback - Value to use when unset or invalid
- * @returns A finite positive integer
- */
 function parsePositiveIntEnv(name: string, fallback: number): number {
   const parsed = Number.parseInt(process.env[name] ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
