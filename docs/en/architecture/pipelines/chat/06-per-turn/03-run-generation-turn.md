@@ -153,16 +153,27 @@ a non-error result *and* the loop falls through (rare; defensive).
   model-appropriate system notices using the attempt's `TomoriState`. This is
   where personal-provider routing, fallback model capability differences, and
   OpenRouter live media capability corrections affect media visibility.
-- Applies provider-specific token-limit truncation
-  (`truncateDialogueHistory`) for Gemini, OpenRouter, NovelAI. The reserved
-  output budget is resolved by `resolveMaxOutputTokens` so it matches what the
-  request builder actually sends: the server's `/config` > Models > Text Samplers & Parameters override
-  (`config.llm_max_output_tokens`) wins, then the provider env cap
-  (`OPENROUTER_MAX_OUTPUT_TOKENS` / `GOOGLE_MAX_OUTPUT_TOKENS`), then a
-  per-provider fallback (flat 8192 for OpenRouter and Gemini, the model-reported
-  completion ceiling for NovelAI), always clamped to the model's reported
-  ceiling. Keeping the reserve in lockstep with the request avoids over-dropping
-  history.
+- Applies token-limit truncation (`truncateDialogueHistory`) whenever
+  `resolveContextBudget()` knows the window. `resolveModelLimits()` supplies it
+  for every provider except NovelAI: a live provider value first (the OpenRouter
+  capability cache, or the Anthropic and Gemini models APIs through
+  `liveModelLimitsCache.ts`), then the catalog's `llms.context_window`, and for a custom
+  endpoint the `num_ctx` its request sends. An unknown window skips truncation.
+  NovelAI keeps its subscription-tier windows.
+- The reserved output budget comes from `resolveChatMaxOutputTokens`, the same
+  function every request builder sends through: the server's `/config` > Models >
+  Text Samplers & Parameters override (`config.llm_max_output_tokens`) wins, then
+  the provider env cap (`OPENROUTER_MAX_OUTPUT_TOKENS`, `GOOGLE_MAX_OUTPUT_TOKENS`,
+  `ANTHROPIC_MAX_OUTPUT_TOKENS`), then a per-provider fallback (8192 for
+  OpenRouter, Gemini, and Anthropic; 4096 for the other OpenAI-compatible
+  providers and custom endpoints), clamped to the model's output ceiling
+  (`llms.max_output_tokens` or the live value) when known. The fallback alone also
+  shrinks to a quarter of a known window, because a 4096 default on a 4096 `num_ctx`
+  would leave no room for history; an override or env cap is sent as set. The clamp also keeps a
+  server override above the model's real cap from being rejected. Keeping the
+  reserve in lockstep with the request avoids over-dropping history. The one
+  exception is an OpenRouter model with no known ceiling: its request omits
+  `max_tokens`, and truncation still reserves the default budget.
 - If the previous attempt ended with `emptyResponseFinishReason === "length"`
   and we're on a retry, additionally drops the oldest history exchange
   pairs.
@@ -265,7 +276,7 @@ The stage is a coordinator over several plugin-relevant subsystems:
 | Tool execution | `runToolLoop` | See [tool-loop pipeline](../../tool-loop/) |
 | Key rotation | `selectApiKey`, `recordKeySuccess`, `recordKeyError`, `hasAvailableRotationKey` | Internal: rotation-key schema is core, not plugin-relevant |
 | Fallback chain | `createFallbackAttempt`, `applySavedProviderConfig`, `resolveServerRouteExtension` | The fallback-entry schema (`FallbackEntry` union: `model` or `custom_endpoint`) is the data-model seam |
-| Context truncation | `truncateDialogueHistory` | Per-provider token-limit table is the registration surface |
+| Context truncation | `truncateDialogueHistory`, `resolveModelLimits` | A model's catalog `contextWindow` and `maxOutputTokens` are the registration surface |
 | Personal-provider routing | `applyPersonalProviderSelectionsToTomoriState` | BYOK substitution; see [provider pipeline](../../provider/) |
 
 - **The stage itself is internal**: its job is to orchestrate the
@@ -285,6 +296,7 @@ The stage is a coordinator over several plugin-relevant subsystems:
 | Constant (`generationTurn.ts`) | `OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS` | `2` | Per-retry history-pair drop count when OpenRouter returns empty/length |
 | Env var | `OPENROUTER_MAX_OUTPUT_TOKENS` | `8192` | OpenRouter truncation/request output-token cap (overridden by `/config` > Models > Text Samplers & Parameters) |
 | Env var | `GOOGLE_MAX_OUTPUT_TOKENS` | `8192` | Gemini truncation/request output-token cap (overridden by `/config` > Models > Text Samplers & Parameters) |
+| Env var | `ANTHROPIC_MAX_OUTPUT_TOKENS` | `8192` | Anthropic truncation/request output-token cap (overridden by `/config` > Models > Text Samplers & Parameters) |
 | Constant (`toolLoop.ts`) | `STREAM_ABANDONED_SETTLE_TIMEOUT_MS` | `5000` | Max wait (ms) for an SDK-timeout-aborted stream to settle so its in-flight sends are recorded before superseded-message cleanup. `0` disables the wait. |
 
 Plus `MAX_KEY_ATTEMPTS` from `keyRotation.ts`.

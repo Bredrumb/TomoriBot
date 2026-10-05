@@ -11,7 +11,7 @@ sidebar:
 
 Every slash command currently registered by TomoriBot, generated from the same command builders and English locale descriptions used for Discord registration.
 
-Top-level command groups: **40**. Runnable slash commands: **84**.
+Top-level command groups: **41**. Runnable slash commands: **85**.
 
 ## `/comment`
 
@@ -45,6 +45,14 @@ Configure persona, behavior, channel, permission, and model settings.
 | Command | Summary |
 |---|---|
 | `/config` | Configure persona, behavior, channel, permission, and model settings. |
+
+## `/context`
+
+See how much of the model's context window a persona's prompt fills in this channel.
+
+| Command | Summary |
+|---|---|
+| `/context` | See how much of the model's context window a persona's prompt fills in this channel. |
 
 ## `/contribute`
 

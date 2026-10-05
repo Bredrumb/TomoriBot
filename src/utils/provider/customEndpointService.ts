@@ -7,6 +7,7 @@ import type {
   SavedProviderConfigUpsert,
   SavedProviderConfigRow,
   AssembledServerConfig,
+  TomoriState,
   UserSavedProviderConfigUpsert,
   UserSavedProviderConfigRow,
 } from "@/types/db/schema";
@@ -659,6 +660,35 @@ export async function resolveCustomEndpointForProvider(
   }
 
   return await llmProviderRepo.loadCustomEndpointByConnection(parsed.connectionId, capability, activeModelId);
+}
+
+/**
+ * The endpoint a custom text request targets and the `num_ctx` it sends.
+ *
+ * Shared by the request builder and the context budget because the truncation window must equal
+ * the `num_ctx` actually sent. The model config mirror wins when set (a fallback hop pins it), and
+ * only then is the endpoint row skipped.
+ */
+export async function resolveCustomTextEndpointTarget(tomoriState: TomoriState): Promise<{
+  endpointUrl: string | null;
+  modelNameHint: string | null;
+  numCtx: number | null;
+}> {
+  const mirroredUrl = tomoriState.config.custom_endpoint_url ?? null;
+  if (mirroredUrl) {
+    return { endpointUrl: mirroredUrl, modelNameHint: null, numCtx: tomoriState.config.custom_num_ctx ?? null };
+  }
+
+  const textEndpoint = await resolveCustomEndpointForProvider(
+    tomoriState.llm.llm_provider.toLowerCase(),
+    "text",
+    tomoriState.llm.llm_id,
+  );
+  return {
+    endpointUrl: textEndpoint?.endpoint_url ?? null,
+    modelNameHint: textEndpoint?.model_name ?? null,
+    numCtx: tomoriState.config.custom_num_ctx ?? textEndpoint?.num_ctx ?? null,
+  };
 }
 
 export async function validateCustomEndpointReachability(params: {

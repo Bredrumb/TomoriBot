@@ -60,7 +60,7 @@ import { getCachedDefaultLLM, isLLMCacheReady } from "../../utils/cache/llmCache
 import { llmModelRepo } from "@/utils/db/repositories";
 import { googleProviderInfo } from "./providerInfo";
 import { getActiveTemperature, isParamDisabled } from "@/utils/provider/samplingControl";
-import { DEFAULT_MAX_OUTPUT_TOKENS, resolveMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
+import { resolveRequestMaxOutputTokens } from "@/utils/provider/modelLimits";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 import { buildStreamContext } from "@/utils/provider/streamContext";
 import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
@@ -437,14 +437,8 @@ export class GoogleProvider
    * @returns Promise<GoogleProviderConfig> - Provider-specific configuration object
    */
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<GoogleProviderConfig> {
-    // Resolve max output tokens: user config takes priority, then env var, then hardcoded default.
-    // Shared with the context truncator (see resolveMaxOutputTokens) so the reserve and the request
-    // never drift. Google does not clamp to a model-reported ceiling here (no providerReportedMax).
-    const maxOutputTokens = resolveMaxOutputTokens({
-      configured: tomoriState.config.llm_max_output_tokens,
-      envRaw: process.env.GOOGLE_MAX_OUTPUT_TOKENS,
-      fallback: DEFAULT_MAX_OUTPUT_TOKENS,
-    });
+    // Shared with the context truncator so the reserve and the request never drift.
+    const maxOutputTokens = await resolveRequestMaxOutputTokens(tomoriState);
     const modelCodename = tomoriState.llm.llm_codename;
     const disabledParams = tomoriState.config.llm_disabled_params ?? [];
     const temperature = getActiveTemperature(tomoriState.config);

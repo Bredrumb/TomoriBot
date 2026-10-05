@@ -39,6 +39,14 @@ export const BEHAVIOR_MATCH_LIMIT_FIELD = "behavior_match_limit";
 export const BEHAVIOR_COOLDOWN_TYPE_FIELD = "behavior_cooldown_type";
 export const BEHAVIOR_COOLDOWN_LENGTH_FIELD = "behavior_cooldown_length";
 export const BEHAVIOR_PRESET_FIELD = "behavior_preset";
+
+/**
+ * Submitted value of the synthetic "built-in default" option in the preset modal.
+ *
+ * The default prompt is not a catalog row, and it must be stored as NULL so `DEFAULT_SYSTEM_PROMPT`
+ * keeps evolving at read time. Offering it as a sentinel avoids writing a frozen copy of its text.
+ */
+export const BEHAVIOR_PRESET_BUILT_IN = "built-in-default";
 export const BEHAVIOR_RANDOM_CHANNEL_FIELD = "behavior_random_channel";
 export const BEHAVIOR_RANDOM_PERSONA_FIELD = "behavior_random_persona";
 export const BEHAVIOR_RANDOM_SETTINGS_FIELD = "behavior_random_settings";
@@ -649,11 +657,18 @@ export function buildBehaviorPresetModal(
         "commands.config.prompt.preset.selection_label",
         "commands.config.prompt.preset.selection_placeholder",
         "commands.config.prompt.preset.selection_placeholder",
-        presets.map((preset) => ({
-          label: preset.system_prompt_preset_name,
-          value: preset.system_prompt_preset_name,
-          description: resolveDescription(preset.descriptions, locale) ?? "",
-        })),
+        [
+          {
+            label: localizer(locale, "commands.setup.wizard.settings_built_in_prompt"),
+            value: BEHAVIOR_PRESET_BUILT_IN,
+            description: localizer(locale, "commands.setup.wizard.settings_built_in_prompt_description"),
+          },
+          ...presets.map((preset) => ({
+            label: preset.system_prompt_preset_name,
+            value: preset.system_prompt_preset_name,
+            description: resolveDescription(preset.descriptions, locale) ?? "",
+          })),
+        ],
       ),
     ],
   };

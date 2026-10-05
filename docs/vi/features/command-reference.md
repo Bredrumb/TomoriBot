@@ -11,7 +11,7 @@ sidebar:
 
 Tất cả các lệnh slash hiện được TomoriBot đăng ký, được tạo từ cùng trình xây dựng lệnh và mô tả tiếng Việt dùng để đăng ký trên Discord (mô tả chưa được dịch sẽ hiển thị bằng tiếng Anh).
 
-Các nhóm lệnh cấp cao nhất: **40**. Các lệnh slash có thể thực thi: **84**.
+Các nhóm lệnh cấp cao nhất: **41**. Các lệnh slash có thể thực thi: **85**.
 
 ## `/comment`
 
@@ -45,6 +45,14 @@ Cấu hình persona, hành vi, kênh, quyền hạn và cài đặt model.
 | Lệnh | Tóm tắt |
 |---|---|
 | `/config` | Cấu hình persona, hành vi, kênh, quyền hạn và cài đặt model. |
+
+## `/context`
+
+Xem prompt của một persona chiếm bao nhiêu dung lượng cửa sổ ngữ cảnh của model trong kênh này.
+
+| Lệnh | Tóm tắt |
+|---|---|
+| `/context` | Xem prompt của một persona chiếm bao nhiêu dung lượng cửa sổ ngữ cảnh của model trong kênh này. |
 
 ## `/contribute`
 

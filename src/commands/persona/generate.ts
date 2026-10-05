@@ -49,8 +49,8 @@ import type { ToolContext } from "../../types/tool/interfaces";
 import { generatePresetForProvider } from "@/providers/utils/providerFeatureExecutors";
 import { analyzeImageWithVisionModel } from "@/utils/provider/visionCaption";
 import { resolvePresetGenerationMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
-import { getOpenRouterTokenLimits, isOpenRouterCapabilityCacheReady } from "@/utils/cache/openrouterCapabilityCache";
-import { providerSupportsFeature, normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
+import { resolveModelLimits } from "@/utils/provider/modelLimits";
+import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
@@ -261,20 +261,6 @@ Report only what is visible. State when something is unclear, hidden, or out of 
   }
 
   return prompt;
-}
-
-/**
- * The model's own output ceiling, when the provider publishes one.
- *
- * OpenRouter is currently the only provider whose capability cache reports
- * `max_completion_tokens`; elsewhere the registry has no ceiling to offer, so the caller falls
- * back to the configured and env-derived budget alone.
- */
-function resolvePresetModelCeiling(providerName: string, modelCodename: string): number | undefined {
-  if (normalizeProviderName(providerName) !== "openrouter" || !isOpenRouterCapabilityCacheReady()) {
-    return undefined;
-  }
-  return getOpenRouterTokenLimits(modelCodename)?.maxCompletionTokens;
 }
 
 /**
@@ -895,7 +881,7 @@ export async function execute(
     // and passed down so every provider asks for the same budget.
     const presetMaxOutputTokens = resolvePresetGenerationMaxOutputTokens({
       configured: tomoriState.config.llm_max_output_tokens,
-      modelCeiling: resolvePresetModelCeiling(generationProviderName, tomoriState.llm.llm_codename),
+      modelCeiling: (await resolveModelLimits(generationTomoriState)).maxOutputTokens ?? undefined,
     });
 
     const genParams: GeneratePresetParams = {

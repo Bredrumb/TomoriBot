@@ -34,6 +34,8 @@ import {
   BEHAVIOR_COOLDOWN_TYPE_FIELD,
   BEHAVIOR_FETCH_LIMIT_FIELD,
   BEHAVIOR_HUMANIZER_FIELD,
+  BEHAVIOR_PRESET_BUILT_IN,
+  BEHAVIOR_PRESET_FIELD,
   BEHAVIOR_RANDOM_CHANNEL_FIELD,
   BEHAVIOR_RANDOM_PERSONA_FIELD,
   BEHAVIOR_RANDOM_PROMPT_FIELD,
@@ -681,6 +683,80 @@ describe("config Behavior routes", () => {
     expect(update).toHaveBeenCalledWith(9, { humanizer_degree: 3 });
     expect(harness.telemetry).toContain("server-config.workspace.humanizer.set");
     update.mockRestore();
+  });
+
+  it("opens the preset modal with the built-in default first even when the catalog is empty", async () => {
+    const harness = makeHarness();
+    const presets = spyOn(configRepository, "loadSystemPromptPresets").mockResolvedValue([]);
+    try {
+      await dispatch(
+        harness,
+        makeInteraction(harness, buildConfigRouteId({ action: "behavior-preset-open", locale: "en-US" })),
+      );
+
+      expect(harness.modals).toHaveLength(1);
+      const select = (harness.modals[0] as { components: Array<{ component: { options: Array<{ value: string }> } }> })
+        .components[0]?.component;
+      expect(select?.options.map((option) => option.value)).toEqual([BEHAVIOR_PRESET_BUILT_IN]);
+    } finally {
+      presets.mockRestore();
+    }
+  });
+
+  it("clears the custom prompt to NULL when the built-in default is chosen", async () => {
+    const harness = makeHarness();
+    const events: string[] = [];
+    const update = spyOn(configRepository, "updateChatConfig").mockImplementation(async (_serverId, patch) => {
+      events.push("write");
+      expect(patch).toEqual({ system_prompt: null });
+      return true;
+    });
+    const invalidate = spyOn(tomoriStateCache, "invalidateTomoriStateCache").mockImplementation(() => {
+      events.push("invalidate");
+    });
+    const presets = spyOn(configRepository, "loadSystemPromptPresets").mockResolvedValue([]);
+    const field = buildConfigModalFieldId(BEHAVIOR_PRESET_FIELD, "nonce1234567");
+    try {
+      await dispatch(
+        harness,
+        makeInteraction(
+          harness,
+          buildConfigRouteId({ action: "behavior-preset-submit", locale: "en-US", nonce: "nonce1234567" }),
+          { kind: "modal", selectValues: { [field]: BEHAVIOR_PRESET_BUILT_IN } },
+        ),
+      );
+
+      expect(events).toEqual(["write", "invalidate"]);
+      expect(harness.telemetry).toEqual(["server-config.workspace.system-prompt.remove"]);
+    } finally {
+      update.mockRestore();
+      invalidate.mockRestore();
+      presets.mockRestore();
+    }
+  });
+
+  it("does not write when the built-in default is chosen and no custom prompt is set", async () => {
+    const harness = makeHarness();
+    (harness.scope.personas[0] as TomoriState).config.system_prompt = null;
+    const update = spyOn(configRepository, "updateChatConfig").mockResolvedValue(true);
+    const presets = spyOn(configRepository, "loadSystemPromptPresets").mockResolvedValue([]);
+    const field = buildConfigModalFieldId(BEHAVIOR_PRESET_FIELD, "nonce1234567");
+    try {
+      await dispatch(
+        harness,
+        makeInteraction(
+          harness,
+          buildConfigRouteId({ action: "behavior-preset-submit", locale: "en-US", nonce: "nonce1234567" }),
+          { kind: "modal", selectValues: { [field]: BEHAVIOR_PRESET_BUILT_IN } },
+        ),
+      );
+
+      expect(update).not.toHaveBeenCalled();
+      expect(harness.telemetry).toEqual([]);
+    } finally {
+      update.mockRestore();
+      presets.mockRestore();
+    }
   });
 
   it("rejects a humanizer submission whose value is missing from the store", async () => {

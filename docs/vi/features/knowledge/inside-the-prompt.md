@@ -42,6 +42,8 @@ Tin nhắn gần đây là phần lớn nhất và dễ biến động nhất, �
 
 Lệnh `/tool prompt snapshot` sẽ xuất toàn bộ gói ngữ cảnh chính xác cho một persona ra tệp. Đây là nguồn chuẩn xác để biết bộ nhớ nào hiện đang hoạt động, tài liệu có khớp hay không và bao nhiêu phần của cuộc trò chuyện thực sự vừa vặn trong ngữ cảnh.
 
+Lệnh `/context` vẽ cùng gói dữ liệu đó dưới dạng một lưới màu biểu thị cửa sổ ngữ cảnh của model, mỗi nhóm khối ở trên có một màu riêng, giúp bạn dễ dàng nắm bắt thành phần nào đang chiếm ngữ cảnh và còn lại bao nhiêu khoảng trống. Hình tròn biểu thị nhóm có kích thước nhỏ hơn một ô vuông. Lệnh cũng hiển thị chi phí đầu vào ước tính cho mỗi câu trả lời và số lượng token đầu vào mà nhà cung cấp đã báo cáo cho câu trả lời thực tế gần nhất.
+
 Lệnh `/tool estimate cost` chia nhỏ gói dữ liệu đó theo kích thước, rất hữu ích để tìm ra thành phần nào đang chiếm dụng ngữ cảnh trước khi bạn tăng bất kỳ giới hạn nào.
 
 ### Công cụ được định nghĩa ở đâu?

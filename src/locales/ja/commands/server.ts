@@ -49,7 +49,7 @@ export default {
       servermemories_desc: `サーバー記憶の追加・削除`,
       attributelist_desc: `性格属性の追加・削除`,
       sampledialogues_desc: `サンプル対話の追加・削除`,
-      promptsnapshot_desc: `/tool prompt snapshot を使用`,
+      promptsnapshot_desc: `/context および /tool prompt snapshot からプロンプト全文を閲覧`,
       select_placeholder: `メンバーに許可することを選択...`,
       select_embed_title: `メンバー教育権限`,
       select_embed_description: `管理者以外のメンバーが**教えられる**ことを選択してください。チェックあり = 許可。`,

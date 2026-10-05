@@ -66,6 +66,16 @@ export interface LlmInput extends CommonInput {
   inputPricePerMillion?: number;
   /** Official uncached output price in USD per million tokens. See {@link inputPricePerMillion}. */
   outputPricePerMillion?: number;
+  /**
+   * Official context window in tokens. Omit for OpenRouter (its live capability cache answers), NovelAI
+   * (subscription-tier windows), and custom endpoints (their `num_ctx` is the window).
+   */
+  contextWindow?: number;
+  /**
+   * The model's own output ceiling in tokens, not the smaller budget TomoriBot requests by default.
+   * Clamps every request so a server override above it is not rejected. See {@link contextWindow}.
+   */
+  maxOutputTokens?: number;
 }
 
 /** A row in the `image_diffusion_models` table. */

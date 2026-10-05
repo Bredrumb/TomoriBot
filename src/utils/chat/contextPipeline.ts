@@ -197,6 +197,14 @@ async function buildHistoryNamingProjection(params: {
 }
 
 /**
+ * Scene turns share a single trigger message and carry their own per-turn directive via
+ * `manualSystemPrompt` (buildSceneTurnDirective), so they are not replies to their queued message.
+ */
+function isQueuedReplyTurn(incoming: LockedChatTurn["admission"]["incoming"]): boolean {
+  return incoming.isFromQueue && !incoming.isStopResponse && !incoming.sceneTurn;
+}
+
+/**
  * Builds the LLM-visible context and per-turn streaming metadata for one persona turn.
  */
 export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnContext> {
@@ -238,6 +246,13 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   // no-op for queued turns that end up replying natively.
   if (incoming.isFromQueue) {
     streamingContext.replyNoticeState = { attempted: false, sent: false };
+  }
+
+  // The streamed text already answers the queued message as the active persona. A tool reply
+  // would replace it (`endTurn`) through a second delivery route, which is how a persona-job turn
+  // once posted one persona's words under another's identity.
+  if (isQueuedReplyTurn(incoming)) {
+    streamingContext.disableRecentMessageReplyTool = true;
   }
 
   const assets = await loadPersonaAssets(turn);
@@ -1317,21 +1332,18 @@ function appendTailDirectives(args: {
     }
   }
 
-  // Scene turns share a single trigger message and carry their own per-turn
-  // directive via `manualSystemPrompt` (buildSceneTurnDirective). Emitting the
-  // generic "reply to <trigger>'s message" directive here would point every scene
-  // turn at the same unrelated message and compete with the scene script, so it is
-  // suppressed for scene turns (mirrors the visual reply suppression in toolLoop.ts).
-  const queuedDirective =
-    incoming.isFromQueue && !incoming.isStopResponse && !incoming.sceneTurn
-      ? buildQueuedReplyDirective(
-          args.turn.lockedTurn.admission.message,
-          queuedReplyTargetName,
-          args.turn.persona.persona_nickname,
-          args.messageIdMap,
-          args.allowSpriteLabel ?? false,
-        )
-      : null;
+  // A generic "reply to <trigger>'s message" directive on a scene turn would point every
+  // turn at the same unrelated message and compete with the scene script (mirrors the
+  // visual reply suppression in toolLoop.ts).
+  const queuedDirective = isQueuedReplyTurn(incoming)
+    ? buildQueuedReplyDirective(
+        args.turn.lockedTurn.admission.message,
+        queuedReplyTargetName,
+        args.turn.persona.persona_nickname,
+        args.messageIdMap,
+        args.allowSpriteLabel ?? false,
+      )
+    : null;
 
   const lowerPriorityTailMessage = buildCombinedTailDirectiveMessage(lowerPriority);
   if (lowerPriorityTailMessage) {

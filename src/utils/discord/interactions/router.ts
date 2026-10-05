@@ -1,6 +1,7 @@
 import { MessageFlags, type Client, type Interaction } from "discord.js";
 import { conditioningInteractionRoute } from "@/utils/discord/interactions/conditioningRoutes";
 import { configInteractionRoute } from "@/utils/discord/interactions/configRoutes";
+import { contextInteractionRoute } from "@/utils/discord/interactions/contextRoutes";
 import { helpInteractionRoute } from "@/utils/discord/interactions/helpRoutes";
 import { memoriesInteractionRoute } from "@/utils/discord/interactions/memoriesRoutes";
 import { moderationInteractionRoute } from "@/utils/discord/interactions/moderationRoutes";
@@ -22,6 +23,7 @@ import { localizer } from "@/utils/text/localizer";
 const registry = new InteractionRouteRegistry([
   conditioningInteractionRoute,
   configInteractionRoute,
+  contextInteractionRoute,
   helpInteractionRoute,
   memoriesInteractionRoute,
   modelOverrideInteractionRoute,

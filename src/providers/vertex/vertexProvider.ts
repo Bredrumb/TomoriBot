@@ -13,6 +13,7 @@
  * - Chat streaming + tool calling (via VertexStreamAdapter)
  */
 
+import { resolveRequestMaxOutputTokens } from "@/utils/provider/modelLimits";
 import type { ZodType } from "zod";
 import type { GoogleGenAI, HarmBlockThreshold, HarmCategory } from "@google/genai";
 import type {
@@ -405,8 +406,7 @@ export class VertexProvider
   }
 
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<VertexProviderConfig> {
-    const maxOutputTokens =
-      tomoriState.config.llm_max_output_tokens ?? Number.parseInt(process.env.GOOGLE_MAX_OUTPUT_TOKENS || "8192", 10);
+    const maxOutputTokens = await resolveRequestMaxOutputTokens(tomoriState);
     const disabledParams = tomoriState.config.llm_disabled_params ?? [];
     const temperature = getActiveTemperature(tomoriState.config);
     const topKDisabled = isParamDisabled(disabledParams, "topK");

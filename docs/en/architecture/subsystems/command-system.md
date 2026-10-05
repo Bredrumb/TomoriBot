@@ -314,6 +314,7 @@ handler.
 - `compact`
 - `conditioning`
 - `config`
+- `context`
 - `contribute`
 - `donate`
 - `export`
@@ -1006,7 +1007,7 @@ than an invocation-scoped modal collector, so a supported open modal can survive
 - `personal`: `/personal config` contains privacy, language, naming, appearance, model routing, and spotlight controls. Other personal subcommands cover providers, memories, and reset flows.
 - `scheduled-task`: edit, remove
 - `conditioning`: manage, reward(headpat/hug/kiss/tickle), punish(spank/pinch/bite/squeeze)
-- `tool`: ping, status, refresh, compact, comment
+- `tool`: delete(turn), estimate(cost), prompt(snapshot)
 - `stats`: personal(scope toggle), persona(autocomplete), server; each takes an optional `timeframe` (default All-Time)
 
 `/stats` is a guild-only category that reads the `stat_counters` telemetry table (see [database-schema](database-schema)). Each subcommand (`personal`, `persona`, `server`) takes an optional `timeframe` choice (`Today` / `Last 7 Days` / `Last 30 Days` / `Last Year` / `All-Time`), defaulting to `All-Time` when omitted; `personal` adds a required `scope` choice (`This Server` / `All Servers`), declared before `timeframe` because Discord rejects a required option after an optional one. The result is a public, invoker-controlled tabbed dashboard (`src/utils/stats/statsDashboard.ts`) built on Components V2: each tab is a single container (H3 title, separator-divided stat sections, and the tab buttons living inside the card). A row of named tab buttons swaps which container is shown (a tabbed view, not item pagination). Only the invoker can operate the tabs; the buttons are stripped on collector timeout (5 minutes). The renderer uses a single persistent `createMessageComponentCollector` (not a one-shot `awaitMessageComponent` loop) so rapid tab switching can't land in a no-collector gap, and wraps each `button.update` in try/catch so a stale/expired interaction (DiscordAPIError 10062) can never tear down the dashboard. Dashboard and infographic entry points drain the in-memory stat buffer before querying, so their snapshots include all successfully buffered work from the current process.
