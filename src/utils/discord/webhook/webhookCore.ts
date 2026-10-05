@@ -21,6 +21,7 @@ import {
   resolvePersonaAvatarPublicUrl,
   uploadPersonaAvatarToStorage,
 } from "@/utils/storage/avatarStorage";
+import { runDeferrableWebhookAvatarEdit } from "./avatarEditRateLimit";
 
 /**
  * In-memory webhook cache: channelId -> Webhook
@@ -80,6 +81,22 @@ const MAX_AVATAR_SIZE_BYTES = PERSONA_LIMITS.MAX_AVATAR_SIZE_MB * 1024 * 1024;
 const webhookMutationLocks = new Map<string, Promise<void>>();
 const webhookAvatarStateCache = new Map<string, string>();
 const persistedManagedWebhookIds = new Set<string>();
+
+/**
+ * Returns the data-URI avatar this process last applied to the webhook, or undefined when the
+ * webhook holds no avatar it set (or the state is unknown).
+ */
+export function getWebhookStoredAvatarDataUri(webhookId: string): string | undefined {
+  return webhookAvatarStateCache.get(webhookId);
+}
+
+export type WebhookIdentitySendOptions = {
+  /**
+   * Throw `WebhookAvatarEditDeferredError` instead of waiting out a long rate limit on the
+   * avatar edit. Only for callers that can choose another avatar and resend.
+   */
+  deferAvatarEditOnRateLimit?: boolean;
+};
 
 /**
  * Returns current sizes of every in-memory map owned by the webhook manager.
@@ -744,24 +761,38 @@ function shouldResetWebhookAvatar(webhook: Webhook, identity?: ResolvedWebhookId
   return webhookAvatarStateCache.has(webhook.id) || Boolean(webhook.avatar);
 }
 
-async function ensureWebhookAvatarState(webhook: Webhook, identity?: ResolvedWebhookIdentity): Promise<void> {
+async function editWebhookAvatar(
+  webhook: Webhook,
+  edit: { avatar: string | null; reason: string },
+  deferOnRateLimit: boolean,
+): Promise<void> {
+  if (deferOnRateLimit) {
+    await runDeferrableWebhookAvatarEdit(webhook.id, () => webhook.edit(edit));
+    return;
+  }
+  await webhook.edit(edit);
+}
+
+async function ensureWebhookAvatarState(
+  webhook: Webhook,
+  identity: ResolvedWebhookIdentity | undefined,
+  deferOnRateLimit: boolean,
+): Promise<void> {
   if (identity?.avatarDataUri) {
     const cachedAvatar = webhookAvatarStateCache.get(webhook.id);
     if (cachedAvatar !== identity.avatarDataUri) {
-      await webhook.edit({
-        avatar: identity.avatarDataUri,
-        reason: "TomoriBot persona identity update",
-      });
+      await editWebhookAvatar(
+        webhook,
+        { avatar: identity.avatarDataUri, reason: "TomoriBot persona identity update" },
+        deferOnRateLimit,
+      );
       webhookAvatarStateCache.set(webhook.id, identity.avatarDataUri);
     }
     return;
   }
 
   if (shouldResetWebhookAvatar(webhook, identity)) {
-    await webhook.edit({
-      avatar: null,
-      reason: "TomoriBot persona identity reset",
-    });
+    await editWebhookAvatar(webhook, { avatar: null, reason: "TomoriBot persona identity reset" }, deferOnRateLimit);
     webhookAvatarStateCache.delete(webhook.id);
   }
 }
@@ -778,9 +809,10 @@ export async function runWithWebhookIdentity<T>(
   identity: ResolvedWebhookIdentity | undefined,
   operation: () => Promise<T>,
   lockKey?: string,
+  options?: WebhookIdentitySendOptions,
 ): Promise<T> {
   const run = async (): Promise<T> => {
-    await ensureWebhookAvatarState(webhook, identity);
+    await ensureWebhookAvatarState(webhook, identity, options?.deferAvatarEditOnRateLimit === true);
     return await operation();
   };
 
@@ -813,6 +845,7 @@ export async function sendWebhookMessagesWithIdentity(
   payloads: WebhookSendPayload[],
   identity?: ResolvedWebhookIdentity,
   lockKey?: string,
+  options?: WebhookIdentitySendOptions,
 ): Promise<Message[]> {
   try {
     return await runWithWebhookIdentity(
@@ -820,6 +853,7 @@ export async function sendWebhookMessagesWithIdentity(
       identity,
       () => sendWebhookMessagesInternal(webhook, payloads, identity),
       lockKey,
+      options,
     );
   } catch (error) {
     if (isInvalidWebhookError(error) && webhook.channelId) {
@@ -834,8 +868,9 @@ export async function sendWebhookMessageWithIdentity(
   payload: WebhookSendPayload,
   identity?: ResolvedWebhookIdentity,
   lockKey?: string,
+  options?: WebhookIdentitySendOptions,
 ): Promise<Message> {
-  const [message] = await sendWebhookMessagesWithIdentity(webhook, [payload], identity, lockKey);
+  const [message] = await sendWebhookMessagesWithIdentity(webhook, [payload], identity, lockKey, options);
   return message;
 }
 

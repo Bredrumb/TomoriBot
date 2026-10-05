@@ -129,6 +129,8 @@ export interface PersonaInput {
    * simply has no default sprites, so a graceful no-op.
    */
   sprites?: PresetSpriteInput[];
+  /** Hides the preset from `/persona default`; only the age-restricted `/nsfw persona default` lists it. */
+  isNsfw?: boolean;
 }
 
 /** A row in the `system_prompt_presets` seed catalog. */

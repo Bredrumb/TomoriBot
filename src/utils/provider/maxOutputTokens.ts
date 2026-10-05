@@ -50,6 +50,10 @@ export const DEFAULT_PRESET_GENERATION_MAX_OUTPUT_TOKENS = 16384;
  */
 const DEFAULT_VISION_CAPTION_MAX_OUTPUT_TOKENS = 2048;
 
+/**
+ * Returns `undefined` for an unset or invalid value rather than a default, so the caller falls through
+ * to the next resolution tier.
+ */
 function parsePositiveIntEnv(raw: string | undefined): number | undefined {
   if (typeof raw !== "string") {
     return undefined;

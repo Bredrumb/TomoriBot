@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS personas (
   sample_dialogues_in TEXT[] DEFAULT '{}', -- array index is soft id of sample dialogue pairs
   sample_dialogues_out TEXT[] DEFAULT '{}',
   -- autoch_counter and autoch_next_target were here; moved to persona_autoch_runtime_state by migration 015.
+  is_nsfw BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE
@@ -156,6 +157,8 @@ ALTER TABLE personas ALTER COLUMN is_pointer SET NOT NULL;
 -- applied_avatar_hash: preset_avatar_hash last PATCHed onto this persona's guild
 -- member avatar by the main-avatar fan-out reconciler (migration 033). NULL = never synced.
 SELECT add_column_if_not_exists('personas', 'applied_avatar_hash', 'TEXT');
+-- is_nsfw: copied from the preset at creation (migration 094); gates `/persona import`.
+SELECT add_column_if_not_exists('personas', 'is_nsfw', 'BOOLEAN', 'false', 'NOT NULL');
 -- elevenlabs_voice_id / elevenlabs_voice_name were added here (March 2026) and
 -- dropped by migration 010_complete_speech_voice_migration.sql (Phase 6 Step #14.2).
 -- physical_appearance_tags and nai_char_ref_url were added here and later
@@ -711,6 +714,7 @@ CREATE TABLE IF NOT EXISTS persona_presets (
   preset_language TEXT NOT NULL,
   preset_trigger_words TEXT[] DEFAULT '{}',
   preset_naming_config JSONB NOT NULL DEFAULT '{"prefixes":{},"suffixes":{},"addressTerms":{}}'::JSONB,
+  is_nsfw BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -728,6 +732,8 @@ SELECT add_column_if_not_exists('persona_presets', 'preset_attribute_public_flag
 SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_shared_url', 'TEXT');
 SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_hash', 'TEXT');
 SELECT add_column_if_not_exists('persona_presets', 'preset_naming_config', 'JSONB', '''{"prefixes":{},"suffixes":{},"addressTerms":{}}''::JSONB', 'NOT NULL');
+-- is_nsfw (migration 094): hides the preset from `/persona default`; only `/nsfw persona default` lists it.
+SELECT add_column_if_not_exists('persona_presets', 'is_nsfw', 'BOOLEAN', 'false', 'NOT NULL');
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_persona_presets_lineage_language_unique
   ON persona_presets(preset_lineage_id, preset_language)

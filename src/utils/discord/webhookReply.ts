@@ -3,6 +3,7 @@ import { stripBridgePrefix } from "@/utils/bridges";
 import { localizer } from "@/utils/text/localizer";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
+import type { WebhookIdentitySendOptions } from "@/utils/discord/webhook/webhookCore";
 
 /**
  * Resolves the author label for a historic message in the reply-context embed.
@@ -98,7 +99,7 @@ export async function sendWebhookReplyNotice(
     threadId?: string;
     botUserId?: string;
     botName?: string;
-  },
+  } & WebhookIdentitySendOptions,
 ): Promise<Message> {
   return await sendWebhookMessageWithIdentity(
     webhook,
@@ -108,5 +109,6 @@ export async function sendWebhookReplyNotice(
     },
     identity,
     options?.threadId ?? webhook.channelId ?? webhook.id,
+    { deferAvatarEditOnRateLimit: options?.deferAvatarEditOnRateLimit },
   );
 }

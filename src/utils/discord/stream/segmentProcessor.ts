@@ -37,6 +37,7 @@ import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
 import { normalizePersonaSpriteKey } from "@/utils/persona/sprites";
 import { advanceChannelSpriteGroupParity } from "@/utils/discord/stream/channelDeliveryContinuity";
 import { isUserImpersonationStreamContext } from "@/utils/discord/stream/uiUpdater";
+import { toGroupBreakName } from "@/utils/text/groupBreakName";
 
 type StreamSegmentProcessorDependencies = {
   delivery: StreamMessageDelivery;
@@ -137,11 +138,8 @@ export class StreamSegmentProcessor {
         // Non-identity sprites all share the clean persona username, and Discord groups
         // consecutive webhook messages by webhook + username while ignoring the
         // per-message avatar, so back-to-back sprites would render under the first
-        // sprite's avatar. When a sprite change would collide with the previous
-        // message's clean name, fall back to the decorated "Persona (sprite)" name for
-        // that one message so Discord treats it as a distinct author and renders its
-        // avatar. Identity sprites already use a distinct decorated name, so they are
-        // excluded.
+        // sprite's avatar. Identity sprites already use a distinct decorated name, so they
+        // are excluded.
         const identity =
           renderTarget.spriteRecord && !renderTarget.isIdentitySprite
             ? this.resolveSpriteGroupBreakIdentity(
@@ -177,6 +175,7 @@ export class StreamSegmentProcessor {
         deliveryOptions = {
           identityOverride: state.activeRenderModifier.identity,
           spriteRecord: state.activeRenderModifier.spriteRecord,
+          isNeutralAppearance: state.activeRenderModifier.isNeutralAppearance,
         };
       }
     }
@@ -470,12 +469,12 @@ export class StreamSegmentProcessor {
    *
    * Discord groups webhook messages by `webhook_id` + `username` (ignoring the
    * per-message avatar) and strips zero-width/blank characters from usernames, so
-   * the only reliable way to make two adjacent sprites distinct is a visibly
-   * different name. We keep the clean persona name by default and only fall back to
-   * the decorated `Persona (sprite)` name (`contextLabel`) on the *follow-up* of a
-   * sprite change, so the suffix appears only at a boundary that would otherwise
-   * merge. A parity toggle flipped on each sprite change guarantees that adjacent
-   * different-sprite messages alternate clean/decorated and therefore never match;
+   * two adjacent sprites need names that differ in a character Discord keeps. The
+   * "true" half of the parity uses the lookalike-letter variant from
+   * {@link toGroupBreakName}, which reads as the clean name; only a name with no
+   * swappable letter (kana, hanzi, very short words) falls back to the visible
+   * `Persona (sprite)` suffix. A parity toggle flipped on each sprite change guarantees
+   * that adjacent different-sprite messages alternate and therefore never match;
    * same-sprite runs keep an identical username and still group naturally.
    *
    * The alternation is tracked per CHANNEL, not per stream. Discord's grouping spans turns,
@@ -487,17 +486,16 @@ export class StreamSegmentProcessor {
    */
   private resolveSpriteGroupBreakIdentity(
     identity: ResolvedWebhookIdentity,
-    decoratedUsername: string,
+    fallbackDecoratedUsername: string,
     spriteKey: string,
     channelId: string,
     channelLastMessageId: string | null,
   ): ResolvedWebhookIdentity {
-    // The "false" half keeps the clean persona name; the "true" half uses the
-    //    decorated "Persona (sprite)" name so it reads as a distinct Discord author.
     if (!advanceChannelSpriteGroupParity(channelId, spriteKey, channelLastMessageId)) {
       return identity;
     }
-    return { ...identity, username: decoratedUsername };
+    const groupBreakName = identity.username ? toGroupBreakName(identity.username) : null;
+    return { ...identity, username: groupBreakName ?? fallbackDecoratedUsername };
   }
 
   /**
@@ -638,6 +636,7 @@ export class StreamSegmentProcessor {
         ? {
             identityOverride: state.activeRenderModifier.identity,
             spriteRecord: state.activeRenderModifier.spriteRecord,
+            isNeutralAppearance: state.activeRenderModifier.isNeutralAppearance,
           }
         : undefined;
     await this.deps.delivery.flushHeldOrphanPunctuation(

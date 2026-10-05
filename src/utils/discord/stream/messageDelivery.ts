@@ -38,6 +38,8 @@ export type StreamDeliveryOptions = {
   accumulatedTextPrefix?: string;
   /** Sprite mapping persisted after a successful webhook send (clean-name sprite renders). */
   spriteRecord?: SpriteMessageRecordInfo;
+  /** The persona's base appearance under an identity override, which is not a copied identity. */
+  isNeutralAppearance?: boolean;
 };
 
 type StreamMessageDeliveryDependencies = {
@@ -176,6 +178,7 @@ export class StreamMessageDelivery {
         identityOverride: options?.identityOverride,
         accumulatedTextPrefix: options?.accumulatedTextPrefix,
         spriteRecord: options?.spriteRecord,
+        isNeutralAppearance: options?.isNeutralAppearance,
         diagnosticReason: "table_attachment",
       },
       tableMarkdown,
@@ -373,6 +376,7 @@ export class StreamMessageDelivery {
         identityOverride: options?.identityOverride,
         accumulatedTextPrefix: options?.accumulatedTextPrefix,
         spriteRecord: options?.spriteRecord,
+        isNeutralAppearance: options?.isNeutralAppearance,
         diagnosticReason,
       },
       content,

@@ -111,6 +111,7 @@ export const tomoriSchema = z.object({
   is_alter: z.boolean().default(false), // Added January 2026 - Distinguishes main persona (false) from alter personas (true)
   webhook_avatar_url: z.string().nullable().optional(), // Added January 2026 - Stored alter avatar reference (production URL; non-production URL or local avatar path)
   applied_avatar_hash: z.string().nullable().optional(), // Added migration 033 - preset_avatar_hash last PATCHed onto this persona's guild member avatar (NULL = never synced)
+  is_nsfw: z.boolean().default(false),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -1025,6 +1026,7 @@ const tomoriPresetSchema = z.object({
       return value;
     }
   }, personaNamingConfigSchema.default(EMPTY_PERSONA_NAMING_CONFIG)),
+  is_nsfw: z.boolean().default(false),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });

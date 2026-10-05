@@ -159,6 +159,7 @@ export function createPersona(overrides: PersonaFixtureOverrides = {}): TomoriSt
     persona_nickname: "Mirri",
     is_alter: false,
     is_pointer: false,
+    is_nsfw: false,
     attribute_list: [],
     sample_dialogues_in: [],
     sample_dialogues_out: [],

@@ -23,6 +23,8 @@ import { StreamSegmentProcessor } from "@/utils/discord/stream/segmentProcessor"
 
 const PERSONA_ID = 7;
 const BASE_AVATAR = "https://example.com/locke.png";
+// The final Latin "e" of "Locke" swapped for Cyrillic U+0435.
+const LOCKE_GROUP_BREAK = `Lock${String.fromCodePoint(0x0435)}`;
 
 function sprite(name: string, isIdentity = false): PersonaSpriteRow {
   const key = name.toLowerCase();
@@ -188,7 +190,7 @@ describe("StreamSegmentProcessor plain-label sprite revert", () => {
     expect(harness.sent[3]?.options?.spriteRecord?.spriteName).toBe("smug");
   });
 
-  it('delivers an alter\'s revert as "Locke (neutral)" when the sprite held the clean name', async () => {
+  it("delivers an alter's revert under the group-break name when the sprite held the clean name", async () => {
     const harness = makeHarness({ isAlter: true });
 
     await harness.send("Locke (smug): heh\n");
@@ -198,23 +200,23 @@ describe("StreamSegmentProcessor plain-label sprite revert", () => {
 
     expect(harness.sent[0]?.options?.identityOverride?.username).toBe("Locke");
     expect(harness.sent[1]?.options?.identityOverride).toEqual({
-      username: "Locke (neutral)",
+      username: LOCKE_GROUP_BREAK,
       avatarUrl: BASE_AVATAR,
       avatarDataUri: undefined,
     });
     expect(harness.sent[1]?.options?.spriteRecord).toBeUndefined();
-    expect(harness.sent[2]?.options?.identityOverride?.username).toBe("Locke (neutral)");
+    expect(harness.sent[2]?.options?.identityOverride?.username).toBe(LOCKE_GROUP_BREAK);
     expect(harness.sent[3]?.options?.identityOverride?.username).toBe("Locke");
   });
 
-  it("delivers an alter's revert on the plain base identity when the sprite already used a decorated name", async () => {
+  it("delivers an alter's revert on the plain base identity when the sprite already used the group-break name", async () => {
     const harness = makeHarness({ isAlter: true });
 
     await harness.send("Locke (smug): heh\n");
     await harness.send("Locke (mad): grr\n");
     await harness.send("Locke: calm now\n");
 
-    expect(harness.sent[1]?.options?.identityOverride?.username).toBe("Locke (mad)");
+    expect(harness.sent[1]?.options?.identityOverride?.username).toBe(LOCKE_GROUP_BREAK);
     expect(harness.sent[2]?.options).toBeUndefined();
   });
 });

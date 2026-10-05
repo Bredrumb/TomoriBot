@@ -70,6 +70,13 @@ export default {
     },
     user_info_update: {
       success_title: `✅ Đã cập nhật hồ sơ của {target_user}`,
+      success_title_fields: `✅ Đã cập nhật {fields} của {target_user}`,
+      success_title_cleared_fields: `🗑️ Đã xóa {fields} của {target_user}`,
+      subject_nickname: `biệt danh`,
+      subject_gender_identity: `bản dạng giới`,
+      subject_pronouns: `đại từ xưng hô`,
+      subject_addressing_style: `kiểu xưng hô`,
+      subject_timezone_offset: `múi giờ`,
       success_intro: `Đã cập nhật các mục sau:`,
       change_line: `{index}. {field}: \`{previous}\` → \`{next}\``,
       success_summary: `{persona_name} bây giờ gọi {target_user} là "{formatted_name}".`,

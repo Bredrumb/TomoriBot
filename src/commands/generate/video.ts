@@ -47,6 +47,10 @@ const FPS_INPUT_ID = "fps_input";
 /** Discord file size limit for non-boosted servers (25 MB) */
 const DISCORD_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 
+/**
+ * Falls back instead of throwing, because it runs at module load and a malformed operator value must
+ * not stop `/generate video` from registering.
+ */
 function parsePositiveIntEnv(name: string, fallback: number): number {
   const parsed = Number.parseInt(process.env[name] ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;

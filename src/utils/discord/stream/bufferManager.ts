@@ -250,6 +250,18 @@ export function hasIncompleteSemanticMarkers(buffer: string): boolean {
     return true;
   }
 
+  const spoilerScanSegments = extractMarkdownTableSegments(buffer);
+  const spoilerProseText = spoilerScanSegments
+    .filter((seg) => seg.type === "text")
+    .map((seg) => seg.content)
+    .join("");
+  const spoilerScanText = maskInlineCodeAndUrls(spoilerProseText);
+  const spoilerMarkerCount = (spoilerScanText.match(/\|\|/g) || []).length;
+  if (spoilerMarkerCount % 2 !== 0) {
+    log.info("Stream: Buffer has unclosed spoiler tags");
+    return true;
+  }
+
   // Only surplus openers hold the buffer, for the same never-closing stall described above.
   const unclosedQuotePair = PAIRED_QUOTE_MARKS.find(
     ([open, close]) => buffer.split(open).length > buffer.split(close).length,
@@ -382,6 +394,13 @@ function appendUnbalancedMarkerClosers(buffer: string): string {
   if (doubleTilde % 2 !== 0) {
     fixedBuffer += "~~";
     fixes.push("markdown strikethrough (~~)");
+  }
+
+  const spoilerScanText = maskInlineCodeAndUrls(fixedBuffer);
+  const spoilerPipes = (spoilerScanText.match(/\|\|/g) || []).length;
+  if (spoilerPipes % 2 !== 0) {
+    fixedBuffer += "||";
+    fixes.push("discord spoiler (||)");
   }
 
   if (fixedBuffer.match(/\[[^\]]+\]\([^)]*$/)) {

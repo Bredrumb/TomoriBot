@@ -11,7 +11,7 @@ sidebar:
 
 Todos os comandos de barra (slash commands) atualmente registrados pela TomoriBot, gerados a partir dos mesmos construtores de comando e descrições em português usados para o registro no Discord (descrições ainda não traduzidas aparecem em inglês).
 
-Grupos de comandos de nível superior: **41**. Comandos de barra executáveis: **83**.
+Grupos de comandos de nível superior: **41**. Comandos de barra executáveis: **85**.
 
 ## `/comment`
 
@@ -205,6 +205,8 @@ Configurações e comandos com restrição de idade.
 | Comando | Resumo |
 |---|---|
 | `/nsfw jailbreaks` | Gerenciar comportamentos opcionais de jailbreak para meus prompts neste servidor. |
+| `/nsfw persona default` | Aplicar uma predefinição de personalidade NSFW |
+| `/nsfw persona import` | Importar uma persona a partir de um arquivo PNG, JSON ou CHARX, incluindo personas NSFW |
 
 ## `/nuke`
 
