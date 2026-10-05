@@ -43,7 +43,8 @@ a non-error result *and* the loop falls through (rare; defensive).
 ### Per-attempt setup (`buildGenerationPlan`, `createAttempt`)
 
 - Resolves the primary `TomoriState`: applies personal-provider selection
-  (if BYOK), channel LLM override, and any `llmOverrideCodename` from the
+  (if BYOK), channel LLM override (a thread without its own override
+  inherits its parent channel's), and any `llmOverrideCodename` from the
   incoming.
 - Selects an API key from the rotation pool, falling back to the server's
   own encrypted key via `decryptApiKey`.

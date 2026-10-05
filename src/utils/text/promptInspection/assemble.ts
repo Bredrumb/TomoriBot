@@ -415,7 +415,11 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
 
   // Resolve effective LLM (persona override > channel override > global) and swap in the override
   // provider's saved key and samplers when it crosses providers. Mirrors generationTurn.ts.
-  const channelLlmOverride = await getCachedChannelLlm(selectedPersona.server_id, textChannel.id);
+  const channelLlmOverride = await getCachedChannelLlm(
+    selectedPersona.server_id,
+    textChannel.id,
+    textChannel.isThread() ? textChannel.parentId : null,
+  );
   const effectiveLlm = selectedPersona.persona_llm ?? channelLlmOverride ?? selectedPersona.llm;
 
   // The per-channel system prompt override (append/replace) mirrors contextPipeline.ts.

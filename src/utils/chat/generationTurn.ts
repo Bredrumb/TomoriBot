@@ -699,7 +699,11 @@ async function resolveTomoriStateForRoute(context: ChatTurnContext, route: TextR
   const channelLlmOverride =
     context.isUserImpersonation || usePersonalRoute
       ? null
-      : await getCachedChannelLlm(context.currentPersona.server_id, context.channel.id);
+      : await getCachedChannelLlm(
+          context.currentPersona.server_id,
+          context.channel.id,
+          context.channel.isThread() ? context.channel.parentId : null,
+        );
   const effectiveLlm =
     usePersonalRoute || context.isUserImpersonation ? base.llm : (base.persona_llm ?? channelLlmOverride ?? base.llm);
   const overriddenLlm = incoming.llmOverrideCodename
