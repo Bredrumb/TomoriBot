@@ -21,7 +21,6 @@ import * as realRepositories from "@/utils/db/repositories";
 // loaded later. Spreading the real namespace keeps each mock full-surface.
 import * as realChannelLlmCache from "@/utils/cache/channelLlmCache";
 import * as realAdmissionGuards from "@/utils/chat/admissionGuards";
-import * as realGeminiCapabilityCache from "@/utils/cache/geminiCapabilityCache";
 import * as realNovelaiCapabilityCache from "@/utils/cache/novelaiCapabilityCache";
 import * as realNovelaiSubscriptionCache from "@/utils/cache/novelaiSubscriptionCache";
 import * as realOpenrouterCapabilityCache from "@/utils/cache/openrouterCapabilityCache";
@@ -86,7 +85,6 @@ type TestStopContext = {
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/cache/channelLlmCache": realChannelLlmCache,
   "@/utils/chat/admissionGuards": realAdmissionGuards,
-  "@/utils/cache/geminiCapabilityCache": realGeminiCapabilityCache,
   "@/utils/cache/novelaiCapabilityCache": realNovelaiCapabilityCache,
   "@/utils/cache/novelaiSubscriptionCache": realNovelaiSubscriptionCache,
   "@/utils/cache/openrouterCapabilityCache": realOpenrouterCapabilityCache,
@@ -112,11 +110,6 @@ stubLogMembers({
 scopedMock.module("@/utils/cache/channelLlmCache", () => ({
   ...realChannelLlmCache,
   getCachedChannelLlm: async () => null,
-}));
-
-scopedMock.module("@/utils/cache/geminiCapabilityCache", () => ({
-  ...realGeminiCapabilityCache,
-  getGeminiTokenLimits: () => undefined,
 }));
 
 scopedMock.module("@/utils/cache/novelaiCapabilityCache", () => ({

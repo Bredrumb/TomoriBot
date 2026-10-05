@@ -409,6 +409,10 @@ SELECT add_column_if_not_exists('llms', 'descriptions', 'JSONB');
 -- catalog (src/db/seed/catalog/models.ts) — see seedModelsFromCatalog.
 SELECT add_column_if_not_exists('llms', 'input_price_per_million', 'NUMERIC');
 SELECT add_column_if_not_exists('llms', 'output_price_per_million', 'NUMERIC');
+-- Per-model token limits, seeded from the same catalog. NULL means unknown, which skips history
+-- truncation and output clamping. OpenRouter rows stay NULL because its live capability cache answers.
+SELECT add_column_if_not_exists('llms', 'context_window', 'INTEGER');
+SELECT add_column_if_not_exists('llms', 'max_output_tokens', 'INTEGER');
 
 -- Removed updated_at trigger for llms table (static metadata, rarely changes)
 DROP TRIGGER IF EXISTS update_llms_timestamp ON llms;

@@ -19,7 +19,7 @@ import type {
 import type { ZodType } from "zod";
 import { StreamOrchestrator } from "../../utils/discord/streamOrchestrator";
 import { buildStreamContext } from "@/utils/provider/streamContext";
-import { DEFAULT_MAX_OUTPUT_TOKENS, resolveMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
+import { resolveRequestMaxOutputTokens } from "@/utils/provider/modelLimits";
 import { OpenrouterStreamAdapter, type OpenrouterStreamConfig } from "./openrouterStreamAdapter";
 import { generateConversationSummaryOpenrouter, generateRoleplaySummaryOpenrouter } from "./compactGenerator";
 import { generatePresetFromPromptOpenrouter } from "./presetGenerator";
@@ -61,7 +61,6 @@ import { getCachedDefaultLLM, isLLMCacheReady } from "../../utils/cache/llmCache
 import {
   getOpenRouterCapabilities,
   getOrFetchOpenRouterCapabilities,
-  getOpenRouterTokenLimits,
   isOpenRouterCapabilityCacheReady,
 } from "../../utils/cache/openrouterCapabilityCache";
 import { configRepository, llmModelRepo } from "@/utils/db/repositories";
@@ -637,35 +636,9 @@ export class OpenrouterProvider
       log.info("[DB FALLBACK] OpenRouter capability cache not ready - using database flags");
     }
 
-    // Resolve max output tokens from the OpenRouter capability cache.
-    // If the model reports a max_completion_tokens value, use it, but cap it
-    // at OPENROUTER_MAX_OUTPUT_TOKENS (default: 8192) to avoid 402 errors on
+    // OPENROUTER_MAX_OUTPUT_TOKENS (default 8192) caps the default budget to avoid 402 errors on
     // accounts with low daily credit limits.
-    // Shared with the context truncator (see resolveMaxOutputTokens) so the reserved output
-    // budget and the requested max_tokens never drift: `/model parameters` override →
-    // OPENROUTER_MAX_OUTPUT_TOKENS → flat 8192, clamped to the model's reported ceiling.
-    let resolvedMaxOutputTokens: number | undefined;
-    if (tomoriState.llm.llm_codename !== "other-model" && isOpenRouterCapabilityCacheReady()) {
-      const tokenLimits = getOpenRouterTokenLimits(tomoriState.llm.llm_codename);
-      if (tokenLimits?.maxCompletionTokens !== undefined) {
-        resolvedMaxOutputTokens = resolveMaxOutputTokens({
-          configured: tomoriState.config.llm_max_output_tokens,
-          envRaw: process.env.OPENROUTER_MAX_OUTPUT_TOKENS,
-          fallback: DEFAULT_MAX_OUTPUT_TOKENS,
-          providerReportedMax: tokenLimits.maxCompletionTokens,
-        });
-      }
-    }
-    // For custom/unknown models (`other-model`, or a cache miss) we have no reported ceiling to
-    // clamp against, so we normally omit max_tokens and let the model self-manage. But an EXPLICIT
-    // `/model parameters` output-token override is a deliberate user choice, so honor it so the
-    // "lower output tokens" tip shown on 402/400 errors actually reduces the request for these users.
-    if (resolvedMaxOutputTokens === undefined) {
-      const explicitOverride = tomoriState.config.llm_max_output_tokens;
-      if (typeof explicitOverride === "number" && explicitOverride > 0) {
-        resolvedMaxOutputTokens = explicitOverride;
-      }
-    }
+    const resolvedMaxOutputTokens = await resolveRequestMaxOutputTokens(tomoriState);
     const config: OpenrouterProviderConfig = {
       // For other-model, use the user-configured model codename (e.g., "openrouter/free")
       // rather than the placeholder codename "other-model" which OpenRouter rejects

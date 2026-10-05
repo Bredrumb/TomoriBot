@@ -84,7 +84,7 @@ Shapes:
 | --- | --- |
 | `google`, `vertex`, `vertexexpress` | `{model, systemInstruction, contents[], generation_config, safety_settings, thinking_config?}` |
 | `anthropic` | `{model, system, messages[], temperature?, top_p?, top_k?, max_tokens, stop_sequences, thinking?, output_config?}` |
-| `openrouter`, `deepseek`, `zai`, `zaicoding`, `nvidia` | `{model, messages[], temperature?, top_p?, top_k?, frequency_penalty?, presence_penalty?, min_p?, max_tokens, stop, reasoning?/thinking?}` |
+| `openrouter`, `deepseek`, `zai`, `zaicoding`, `nvidia` | `{model, messages[], temperature?, top_p?, top_k?, frequency_penalty?, presence_penalty?, min_p?, max_tokens?, stop, reasoning?/thinking?}` |
 | `custom`, `novelai` (fallback) | `{model, messages[]}` + sampling params, OpenAI-vision array content form for media, optional `reasoning_effort` / `thinking_directive`, one consolidated `role: "system"` entry |
 
 #### Custom fallback consolidation
@@ -100,7 +100,7 @@ A provider-specific sampling block is shown in the DM body (both formats) and ba
 | `google` | `generation_config.{temperature, top_k, top_p, frequency_penalty, presence_penalty, max_output_tokens, stop_sequences}`, `safety_settings[4]` (all `BLOCK_NONE`), provider-driven `thinking_config?` |
 | `vertex`, `vertexexpress` | `generation_config.{temperature, top_k, top_p, max_output_tokens, stop_sequences}`, `safety_settings[4]` (all `BLOCK_NONE`), provider-driven `thinking_config?` |
 | `anthropic` | `temperature?`, `top_p?` (coalesced via `selectAnthropicSamplingParams`), `top_k?`, `max_tokens`, `stop_sequences`, adaptive `thinking?`, `output_config?` |
-| OpenAI-compat | `temperature?`, `top_p?`, `top_k?`, `frequency_penalty?`, `presence_penalty?`, `min_p?`, `max_tokens`, `stop`, provider-specific `reasoning?` / `thinking?` / `reasoning_effort?` / `thinking_directive?` |
+| OpenAI-compat | `temperature?`, `top_p?`, `top_k?`, `frequency_penalty?`, `presence_penalty?`, `min_p?`, `max_tokens?` (omitted only for an OpenRouter model with no known ceiling), `stop`, provider-specific `reasoning?` / `thinking?` / `reasoning_effort?` / `thinking_directive?` |
 
 `disabled_params` is appended when the persona has explicitly disabled sampling parameters. `tools_disabled: true` appears when the LLM has `has_tools: false`.
 
@@ -123,7 +123,7 @@ The `fetch_tools` option is intentionally ignored in the TXT format: a note in t
 - **Estimates, not counts.** Text uses the `/tool estimate cost` ratios from `tokenEstimate.ts` (about 4 characters per token, 3.5 for tool JSON). Media parts are skipped because their cost differs per provider.
 - **Segments.** Every `ContextItemTag` maps to one of seven segments in `contextUsage.ts`, typed as a full `Record` so a new tag fails type checking until it is assigned. Untagged items (SillyTavern preset routing) count as instructions. Seven is the ceiling: Discord has nine colored squares and two are taken by free and reserved space.
 - **Free and reserved.** Free space runs out at the truncation budget, `floor((contextLength - outputReserve) * 0.9)`, not at the raw window. The remainder is drawn as reserved (reply budget plus the estimator margin), so the free cells end exactly where live chat starts dropping history.
-- **Unknown window.** Providers without a resolved budget (Anthropic, custom endpoints, and others the live pipeline does not truncate for) get a grid of the prompt's composition only.
+- **Unknown window.** A model whose window `resolveModelLimits()` cannot resolve (a custom endpoint with no `num_ctx`, or a scoped registration absent from the catalog whose provider reports no live limits) gets a grid of the prompt's composition only.
 - **Why emoji.** An `ansi` code block colors text on desktop but renders plain on mobile, which would leave the legend unreadable there.
 
 The View buttons route through the global interaction registry (`context:v1:snapshot:<personaId>:<format>`) and rebuild the snapshot on click rather than holding the built prompt in memory.

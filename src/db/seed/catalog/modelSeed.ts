@@ -43,7 +43,7 @@ interface TableSpec<T extends RowLike> {
 const llmSpec: TableSpec<LlmInput> = {
   table: "llms",
   columns:
-    "llm_provider, llm_codename, is_smartest, is_default, is_reasoning, is_deprecated, is_free, has_tools, sees_images, sees_videos, sees_youtube, is_uncensored, supports_structoutput, strict_role_alternation, supports_prefix_completion, llm_description, descriptions, input_price_per_million, output_price_per_million",
+    "llm_provider, llm_codename, is_smartest, is_default, is_reasoning, is_deprecated, is_free, has_tools, sees_images, sees_videos, sees_youtube, is_uncensored, supports_structoutput, strict_role_alternation, supports_prefix_completion, llm_description, descriptions, input_price_per_million, output_price_per_million, context_window, max_output_tokens",
   tuple: (m) =>
     [
       str(m.provider),
@@ -65,6 +65,8 @@ const llmSpec: TableSpec<LlmInput> = {
       jsonb(localizedDescriptions(m)),
       num(m.inputPricePerMillion),
       num(m.outputPricePerMillion),
+      num(m.contextWindow),
+      num(m.maxOutputTokens),
     ].join(", "),
   // The trailing WHERE guard is the key protection for scoped OpenRouter registrations:
   // a row that a server/user has promoted to a scoped registration (is_scoped_registration = true)
@@ -91,6 +93,8 @@ const llmSpec: TableSpec<LlmInput> = {
   supports_prefix_completion = EXCLUDED.supports_prefix_completion,
   input_price_per_million = EXCLUDED.input_price_per_million,
   output_price_per_million = EXCLUDED.output_price_per_million,
+  context_window = EXCLUDED.context_window,
+  max_output_tokens = EXCLUDED.max_output_tokens,
   updated_at = CURRENT_TIMESTAMP
   WHERE COALESCE(llms.is_scoped_registration, false) = false
      OR EXCLUDED.is_deprecated = false`,
@@ -320,6 +324,55 @@ function collectMeteredPriceViolations(rows: LlmInput[]): string[] {
   return errors;
 }
 
+// Providers whose token limits come only from the catalog (or the catalog backs a live lookup), so an
+// active row without them silently loses history truncation and output clamping. NVIDIA model cards
+// publish a context window but rarely an output ceiling, so it is held to the window alone.
+const LIMIT_REQUIRED_PROVIDERS = new Set<string>([
+  "google",
+  "vertex",
+  "vertexexpress",
+  "anthropic",
+  "deepseek",
+  "zai",
+  "zaicoding",
+]);
+const WINDOW_ONLY_LIMIT_PROVIDERS = new Set<string>(["nvidia"]);
+
+// Active rows whose vendor documents a context window but no output ceiling. A codename leaves this set
+// once its vendor publishes one.
+const OUTPUT_CEILING_UNPUBLISHED = new Set<string>([
+  "gemma-4-31b-it",
+  "gemma-4-26b-a4b-it",
+  "glm-4.6v",
+  "glm-4.6v-flash",
+  "zai/glm-4.6v",
+  "zai/glm-4.6v-flash",
+]);
+
+/**
+ * Enforce that every active first-party llms row carries its official token limits.
+ * Deprecated rows are excluded because they may predate verified limits, and
+ * {@link OUTPUT_CEILING_UNPUBLISHED} rows owe only the window.
+ *
+ * Pure and exported so the invariant can be unit-tested with crafted rows.
+ * @returns A list of violation messages (empty when valid).
+ */
+export function collectTokenLimitViolations(rows: LlmInput[]): string[] {
+  const errors: string[] = [];
+  for (const row of rows) {
+    if (row.isDeprecated) continue;
+    const requiresBoth = LIMIT_REQUIRED_PROVIDERS.has(row.provider);
+    if (!requiresBoth && !WINDOW_ONLY_LIMIT_PROVIDERS.has(row.provider)) continue;
+    if (typeof row.contextWindow !== "number") {
+      errors.push(`llms/${row.provider}: model ${row.codename} must set contextWindow`);
+    }
+    if (requiresBoth && !OUTPUT_CEILING_UNPUBLISHED.has(row.codename) && typeof row.maxOutputTokens !== "number") {
+      errors.push(`llms/${row.provider}: model ${row.codename} must set maxOutputTokens`);
+    }
+  }
+  return errors;
+}
+
 /**
  * Validate every model table against the per-provider invariants.
  * @returns A list of human-readable violation messages (empty when valid).
@@ -332,6 +385,7 @@ export function validateModels(): string[] {
   validateSpec(embeddingSpec, errors);
   errors.push(...collectStrictChatFlagViolations(rowsOf(llmSpec)));
   errors.push(...collectMeteredPriceViolations(rowsOf(llmSpec)));
+  errors.push(...collectTokenLimitViolations(rowsOf(llmSpec)));
   return errors;
 }
 

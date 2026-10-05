@@ -200,9 +200,15 @@ The catalogs are deliberately excluded from `emergencyCacheClearer.ts`: they are
 metadata rather than per-guild growth, and dropping one would gate chat on database flags until
 the next refresh window to reclaim a few hundred KB.
 
-### 8) Gemini token-limit map (`geminiCapabilityCache.ts`)
+### 8) Live model limits (`liveModelLimitsCache.ts`)
 
-- Static in-memory lookup map for known Gemini model token limits
+- Keys: `<provider>:<codename>` for `anthropic` (`GET /v1/models/{id}`) and `google` (`models.get`)
+- Filled in the background by `resolveModelLimits()` with the server's own key; the turn that misses
+  keeps the catalog limits, so no message waits on the lookup
+- A success refreshes after 24 hours; a failure keeps any earlier success and retries after 10 minutes,
+  so a transient outage never disables the lookup until restart. A 404 (a codename the models API does
+  not know) waits the full 24 hours. Failures emit the `live_model_limits_lookup_failed` metric
+- Vertex and Vertex Express are not looked up, so their limits come from the catalog alone
 
 ### 9) NovelAI token-limit map (`novelaiCapabilityCache.ts`)
 

@@ -42,6 +42,7 @@ import { type ContextBudget, resolveContextBudget } from "@/utils/provider/conte
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { getStaticProviderInfo, normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
+import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
 import { buildContext } from "@/utils/text/contextBuilder";
 import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
@@ -412,8 +413,8 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
 
   if (!("messages" in textChannel)) return null;
 
-  // Resolve effective LLM (persona override > channel override > global) and patch samplers from
-  // saved_provider_configs when the override crosses providers. Mirrors tomoriChat.ts.
+  // Resolve effective LLM (persona override > channel override > global) and swap in the override
+  // provider's saved key and samplers when it crosses providers. Mirrors generationTurn.ts.
   const channelLlmOverride = await getCachedChannelLlm(selectedPersona.server_id, textChannel.id);
   const effectiveLlm = selectedPersona.persona_llm ?? channelLlmOverride ?? selectedPersona.llm;
 
@@ -432,25 +433,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
         selectedPersona.server_id,
         overrideProvider,
       );
-      if (overrideSavedConfig) {
-        effectivePersona = {
-          ...effectivePersona,
-          config: {
-            ...selectedPersona.config,
-            llm_temperature: overrideSavedConfig.llm_temperature ?? selectedPersona.config.llm_temperature,
-            llm_top_p: overrideSavedConfig.llm_top_p ?? selectedPersona.config.llm_top_p,
-            llm_top_k: overrideSavedConfig.llm_top_k ?? selectedPersona.config.llm_top_k,
-            llm_frequency_penalty:
-              overrideSavedConfig.llm_frequency_penalty ?? selectedPersona.config.llm_frequency_penalty,
-            llm_presence_penalty:
-              overrideSavedConfig.llm_presence_penalty ?? selectedPersona.config.llm_presence_penalty,
-            llm_min_p: overrideSavedConfig.llm_min_p ?? selectedPersona.config.llm_min_p,
-            thinking_level: overrideSavedConfig.thinking_level ?? selectedPersona.config.thinking_level,
-            llm_disabled_params: overrideSavedConfig.llm_disabled_params ?? selectedPersona.config.llm_disabled_params,
-            llm_logit_biases: overrideSavedConfig.llm_logit_biases ?? selectedPersona.config.llm_logit_biases,
-          },
-        };
-      }
+      effectivePersona = withSavedProviderConfig(effectivePersona, overrideSavedConfig);
     }
   }
 

@@ -326,16 +326,19 @@ export async function buildJsonSnapshot(
  *   - google           : `{temperature, top_k, top_p, frequency_penalty, presence_penalty, max_output_tokens, stop_sequences, safety_settings, thinking_config?}`
  *   - vertex / vertexexpress: `{temperature, top_k, top_p, max_output_tokens, stop_sequences, safety_settings, thinking_config?}`
  *   - anthropic        : `{temperature?, top_p?, top_k?, max_tokens, stop_sequences}` (Anthropic rejects sending both temp+top_p, uses `selectAnthropicSamplingParams`)
- *   - openai-compat    : `{temperature?, top_p?, top_k?, frequency_penalty?, presence_penalty?, min_p?, max_tokens, stop}`
+ *   - openai-compat    : `{temperature?, top_p?, top_k?, frequency_penalty?, presence_penalty?, min_p?, max_tokens?, stop}`
  *
  * Used in two places:
  *   - Baked into the JSON snapshot file at the top level (alongside `messages`/`contents`)
  *   - Rendered as a second ```json code block in the DM body (shown for BOTH text and JSON formats)
+ *
+ * @param maxOutputTokens - From `resolveRequestMaxOutputTokens()`; undefined omits the key, as the request does.
  */
 export function buildRequestConfig(
   persona: TomoriState,
   providerName: string,
   modelName: string,
+  maxOutputTokens: number | undefined,
 ): Record<string, unknown> {
   const activeLlm = persona.persona_llm ?? persona.llm;
   const config = persona.config;
@@ -348,8 +351,6 @@ export function buildRequestConfig(
 
   if (providerFamily === "google-genai") {
     // Google/Vertex family: show raw configured values (unfiltered, mirrors provider config)
-    const maxOutputTokens =
-      config.llm_max_output_tokens ?? Number.parseInt(process.env.GOOGLE_MAX_OUTPUT_TOKENS || "8192", 10);
     const out: Record<string, unknown> = {
       generation_config: {
         temperature: config.llm_temperature,
@@ -380,7 +381,6 @@ export function buildRequestConfig(
       topP: config.llm_top_p,
       disabledParams,
     });
-    const maxTokens = Number.parseInt(process.env.ANTHROPIC_MAX_OUTPUT_TOKENS || "8192", 10);
     const stopSequences = buildProviderStopStrings({
       providerName: "anthropic",
       model: modelName,
@@ -388,7 +388,7 @@ export function buildRequestConfig(
     });
 
     const thinkingRequest = buildAnthropicThinkingRequest(modelName, config.thinking_level);
-    const out: Record<string, unknown> = { max_tokens: maxTokens };
+    const out: Record<string, unknown> = { max_tokens: maxOutputTokens };
     if (!thinkingRequest.omitSampling) {
       if (selection.temperature !== undefined) out.temperature = selection.temperature;
       if (selection.topP !== undefined) out.top_p = selection.topP;
@@ -404,15 +404,14 @@ export function buildRequestConfig(
   // OpenAI-compatible (openrouter, deepseek, zai, zaicoding, nvidia, custom, novelai):
   //    translate active sampling params to snake_case and include stop + max_tokens.
   const active = buildActiveSamplingParams(config);
-  const maxTokensRaw = process.env.OPENROUTER_MAX_OUTPUT_TOKENS || "8192";
-  const maxTokens = Number.parseInt(maxTokensRaw, 10);
   const stopStrings = buildProviderStopStrings({
     providerName,
     model: modelName,
     personaName: persona.persona_nickname,
   });
 
-  const out: Record<string, unknown> = { max_tokens: maxTokens };
+  const out: Record<string, unknown> = {};
+  if (maxOutputTokens !== undefined) out.max_tokens = maxOutputTokens;
   if (active.temperature !== undefined) out.temperature = active.temperature;
   if (active.topP !== undefined) out.top_p = active.topP;
   if (active.topK !== undefined) out.top_k = active.topK;

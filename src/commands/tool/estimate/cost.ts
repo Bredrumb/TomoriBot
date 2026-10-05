@@ -17,13 +17,8 @@ import { prepareParticipantContext } from "@/utils/text/participants/preparation
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
-import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
-import {
-  getOpenRouterPricing,
-  getOpenRouterTokenLimits,
-  isOpenRouterCapabilityCacheReady,
-} from "@/utils/cache/openrouterCapabilityCache";
-import { getGeminiTokenLimits } from "@/utils/cache/geminiCapabilityCache";
+import { getOpenRouterPricing } from "@/utils/cache/openrouterCapabilityCache";
+import { applyProviderContextTruncation } from "@/utils/provider/contextBudget";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { charsToTokensJson, charsToTokensText, estimateContextItemsTokens } from "@/utils/text/tokenEstimate";
@@ -187,51 +182,6 @@ interface OpenRouterProbeUsage {
   total_tokens?: number;
 }
 
-type ContextTruncator = (contextSegments: StructuredContextItem[], tomoriState: TomoriState) => StructuredContextItem[];
-
-/**
- * Shared truncator for Gemini-family providers (Google AI Studio + Vertex AI).
- * Both resolve the same model codenames against the Gemini capability cache, so
- * Vertex reuses Google's limits to keep the parity context in lockstep.
- */
-const geminiFamilyContextTruncator: ContextTruncator = (contextSegments, tomoriState) => {
-  const tokenLimits = getGeminiTokenLimits(tomoriState.llm.llm_codename);
-  if (!tokenLimits || tokenLimits.contextLength <= 0 || !tokenLimits.maxCompletionTokens) {
-    return contextSegments;
-  }
-
-  const { truncated, totalDropped } = truncateDialogueHistory(
-    contextSegments,
-    tokenLimits.contextLength,
-    tokenLimits.maxCompletionTokens,
-  );
-  return totalDropped > 0 ? truncated : contextSegments;
-};
-
-const contextTruncators: Partial<Record<LiveProvider, ContextTruncator>> = {
-  openrouter: (contextSegments, tomoriState) => {
-    if (tomoriState.llm.llm_codename === "other-model" || !isOpenRouterCapabilityCacheReady()) {
-      return contextSegments;
-    }
-
-    const tokenLimits = getOpenRouterTokenLimits(tomoriState.llm.llm_codename);
-    const openrouterTruncationOutputCap = parseIntegerEnv(process.env.OPENROUTER_MAX_OUTPUT_TOKENS, 8192, 1);
-    if (!tokenLimits || tokenLimits.contextLength <= 0 || !tokenLimits.maxCompletionTokens) {
-      return contextSegments;
-    }
-
-    const truncationMaxCompletionTokens = Math.min(tokenLimits.maxCompletionTokens, openrouterTruncationOutputCap);
-    const { truncated, totalDropped } = truncateDialogueHistory(
-      contextSegments,
-      tokenLimits.contextLength,
-      truncationMaxCompletionTokens,
-    );
-    return totalDropped > 0 ? truncated : contextSegments;
-  },
-  google: geminiFamilyContextTruncator,
-  vertex: geminiFamilyContextTruncator,
-};
-
 interface OpenRouterProbeResponse {
   id?: string;
   usage?: OpenRouterProbeUsage;
@@ -248,13 +198,6 @@ interface DeepseekProbeUsage {
 
 interface DeepseekProbeResponse {
   usage?: DeepseekProbeUsage;
-}
-
-function parseIntegerEnv(value: string | undefined, fallback: number, minimum: number): number {
-  if (!value) return fallback;
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed)) return fallback;
-  return Math.max(minimum, parsed);
 }
 
 /**
@@ -890,8 +833,9 @@ async function buildRuntimeParityContext(
   let contextSegments = contextBuild.contextItems;
 
   // Character-estimate fallback passes provider=null (no live counting) → skip truncation.
-  const contextTruncator = provider ? contextTruncators[provider] : undefined;
-  contextSegments = contextTruncator?.(contextSegments, tomoriState) ?? contextSegments;
+  if (provider) {
+    contextSegments = await applyProviderContextTruncation(contextSegments, tomoriState, serverDiscId);
+  }
 
   const lowerPriorityTailDirectives = [...contextBuild.lowerPriorityTailDirectives];
   const tailDirectives = [...contextBuild.tailDirectives];

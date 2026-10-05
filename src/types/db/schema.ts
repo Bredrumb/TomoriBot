@@ -232,6 +232,9 @@ export const llmSchema = z.object({
   // stays authoritative for request-time math. Coerced because Postgres NUMERIC arrives as a string.
   input_price_per_million: z.coerce.number().nullable().optional(),
   output_price_per_million: z.coerce.number().nullable().optional(),
+  // Token limits; read through resolveModelLimits(), which prefers a live provider value.
+  context_window: z.number().int().nullable().optional(),
+  max_output_tokens: z.number().int().nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });

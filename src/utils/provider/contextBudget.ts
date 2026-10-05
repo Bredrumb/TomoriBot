@@ -1,12 +1,11 @@
 import type { TomoriState } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
-import { getGeminiTokenLimits } from "@/utils/cache/geminiCapabilityCache";
 import { getNovelAITokenLimits } from "@/utils/cache/novelaiCapabilityCache";
 import { getCachedContextTokens, refreshNovelAISubscription } from "@/utils/cache/novelaiSubscriptionCache";
-import { getOpenRouterTokenLimits, isOpenRouterCapabilityCacheReady } from "@/utils/cache/openrouterCapabilityCache";
 import { log } from "@/utils/misc/logger";
-import { DEFAULT_MAX_OUTPUT_TOKENS, resolveMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
-import { providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
+import { resolveChatMaxOutputTokens, resolveMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
+import { resolveModelLimits } from "@/utils/provider/modelLimits";
+import { normalizeProviderName, providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
 
@@ -28,44 +27,6 @@ export async function resolveContextBudget(
   tomoriState: TomoriState,
   serverDiscId: string,
 ): Promise<ContextBudget | null> {
-  if (
-    providerUsesApiFamily(tomoriState.llm.llm_provider, "openrouter") &&
-    tomoriState.llm.llm_codename !== "other-model" &&
-    isOpenRouterCapabilityCacheReady()
-  ) {
-    const tokenLimits = getOpenRouterTokenLimits(tomoriState.llm.llm_codename);
-    if (!tokenLimits || tokenLimits.contextLength <= 0 || !tokenLimits.maxCompletionTokens) return null;
-    // Reserve the SAME output budget the request builder sends: the server's `/model parameters`
-    // override first, then OPENROUTER_MAX_OUTPUT_TOKENS, then a flat 8192, clamped to the model's
-    // reported completion ceiling. Over-reserving here drops history that would have fit.
-    return {
-      contextLength: tokenLimits.contextLength,
-      outputReserve: resolveMaxOutputTokens({
-        configured: tomoriState.config.llm_max_output_tokens,
-        envRaw: process.env.OPENROUTER_MAX_OUTPUT_TOKENS,
-        fallback: DEFAULT_MAX_OUTPUT_TOKENS,
-        providerReportedMax: tokenLimits.maxCompletionTokens,
-      }),
-    };
-  }
-
-  if (providerUsesApiFamily(tomoriState.llm.llm_provider, "google-genai")) {
-    const tokenLimits = getGeminiTokenLimits(tomoriState.llm.llm_codename);
-    if (!tokenLimits || tokenLimits.contextLength <= 0 || !tokenLimits.maxCompletionTokens) return null;
-    // Same fallback chain as the Google request builder. The extra clamp to the model-reported
-    // ceiling (which the request builder omits) only bites when the resolved value exceeds what the
-    // model can emit, so it never under-reserves relative to actual output.
-    return {
-      contextLength: tokenLimits.contextLength,
-      outputReserve: resolveMaxOutputTokens({
-        configured: tomoriState.config.llm_max_output_tokens,
-        envRaw: process.env.GOOGLE_MAX_OUTPUT_TOKENS,
-        fallback: DEFAULT_MAX_OUTPUT_TOKENS,
-        providerReportedMax: tokenLimits.maxCompletionTokens,
-      }),
-    };
-  }
-
   if (providerUsesApiFamily(tomoriState.llm.llm_provider, "novelai")) {
     let naiSubscriptionTokens = getCachedContextTokens(serverDiscId);
     if (naiSubscriptionTokens === undefined && tomoriState.config.api_key) {
@@ -91,7 +52,19 @@ export async function resolveContextBudget(
     };
   }
 
-  return null;
+  const limits = await resolveModelLimits(tomoriState);
+  if (!limits.contextWindow) return null;
+  // Reserve exactly what the request builder sends: over-reserving drops history that would have fit.
+  // The one exception is an OpenRouter model with no known ceiling, whose request omits max_tokens:
+  // the default reply budget is reserved so a long channel still trims instead of overflowing.
+  return {
+    contextLength: limits.contextWindow,
+    outputReserve: resolveChatMaxOutputTokens({
+      provider: normalizeProviderName(tomoriState.llm.llm_provider),
+      configured: tomoriState.config.llm_max_output_tokens,
+      modelMaxOutputTokens: limits.maxOutputTokens,
+    }),
+  };
 }
 
 /**

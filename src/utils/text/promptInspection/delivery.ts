@@ -1,3 +1,4 @@
+import { resolveRequestMaxOutputTokens } from "@/utils/provider/modelLimits";
 import { AttachmentBuilder, EmbedBuilder, type InteractionEditReplyOptions, type User } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
@@ -41,7 +42,12 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
 
   // Both output formats show the request config in the DM, while JSON also
   // stores it at the top level for machine-readable inspection.
-  const requestConfig = buildRequestConfig(inspection.answeringState, providerName, modelName);
+  const requestConfig = buildRequestConfig(
+    inspection.answeringState,
+    providerName,
+    modelName,
+    await resolveRequestMaxOutputTokens(inspection.answeringState),
+  );
 
   let fileContent: string;
   let fileName: string;

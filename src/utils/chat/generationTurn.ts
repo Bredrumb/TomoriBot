@@ -16,6 +16,7 @@ import { getProviderForTomori, ProviderFactory } from "@/utils/provider/provider
 import { getProviderErrorDetail } from "@/utils/provider/providerErrorClassification";
 import { applyProviderContextTruncation } from "@/utils/provider/contextBudget";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
+import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import {
@@ -814,24 +815,7 @@ async function applySavedProviderConfig(tomoriState: TomoriState, providerName: 
   if (!savedConfig?.api_key) {
     throw new Error(`No saved credentials found for provider ${providerName}.`);
   }
-
-  return {
-    ...tomoriState,
-    config: {
-      ...tomoriState.config,
-      api_key: savedConfig.api_key,
-      key_version: savedConfig.key_version ?? 1,
-      llm_temperature: savedConfig.llm_temperature ?? tomoriState.config.llm_temperature,
-      llm_top_p: savedConfig.llm_top_p ?? tomoriState.config.llm_top_p,
-      llm_top_k: savedConfig.llm_top_k ?? tomoriState.config.llm_top_k,
-      llm_frequency_penalty: savedConfig.llm_frequency_penalty ?? tomoriState.config.llm_frequency_penalty,
-      llm_presence_penalty: savedConfig.llm_presence_penalty ?? tomoriState.config.llm_presence_penalty,
-      llm_min_p: savedConfig.llm_min_p ?? tomoriState.config.llm_min_p,
-      thinking_level: savedConfig.thinking_level ?? tomoriState.config.thinking_level,
-      llm_disabled_params: savedConfig.llm_disabled_params ?? tomoriState.config.llm_disabled_params,
-      llm_logit_biases: savedConfig.llm_logit_biases ?? tomoriState.config.llm_logit_biases,
-    },
-  };
+  return withSavedProviderConfig(tomoriState, savedConfig);
 }
 
 function extractErrorCode(streamResult: StreamResult | undefined): string {
