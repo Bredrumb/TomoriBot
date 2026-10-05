@@ -7,7 +7,7 @@ export default {
     usage_line: `約 **{used}** / **{window}** トークン使用中（{share}）`,
     usage_unknown_window: `約 **{used}** トークン使用中。このモデルのウィンドウサイズが不明なため、グリッドにはプロンプトの構成内訳のみを表示しています。`,
     scale_line: `1マスあたり約 **{tokens}** トークン`,
-    scale_line_circles: `1マスあたり約 **{tokens}** トークン、丸は1マスに満たない項目を表します`,
+    circle_line: `丸は1マスに満たない項目を表します`,
     cost_line: `返信1回あたり約 **{cost}** の入力費用（キャッシュ割引前）`,
     last_reply_line: `ここでの直近の返信では、{provider} の報告によると実際に **{tokens}** 入力トークンが使用されました`,
     legend_line: `{emoji} {label}：{tokens}（{share}）`,

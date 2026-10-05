@@ -7,7 +7,7 @@ export default {
     usage_line: `About **{used}** of **{window}** tokens used ({share})`,
     usage_unknown_window: `About **{used}** tokens used. I don't know this model's window size, so the grid shows only what the prompt is made of.`,
     scale_line: `Each square is about **{tokens}** tokens`,
-    scale_line_circles: `Each square is about **{tokens}** tokens, and a circle is a part smaller than one square`,
+    circle_line: `A circle is a part smaller than one square`,
     cost_line: `About **{cost}** of input per reply, before any caching discount`,
     last_reply_line: `The last reply here actually used **{tokens}** input tokens, as reported by {provider}`,
     legend_line: `{emoji} {label}: {tokens} ({share})`,

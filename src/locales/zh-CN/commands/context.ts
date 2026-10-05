@@ -7,7 +7,7 @@ export default {
     usage_line: `已用约 **{used}** / **{window}** 词元（{share}）`,
     usage_unknown_window: `已用约 **{used}** 词元。我不清楚该模型的上下文窗口大小，因此网格仅展示提示词的内部构成。`,
     scale_line: `每个方块约合 **{tokens}** 词元`,
-    scale_line_circles: `每个方块约合 **{tokens}** 词元，圆形表示不足一个方块的部分`,
+    circle_line: `圆形表示不足一个方块的部分`,
     cost_line: `每次回复的输入费用约为 **{cost}**（未计入任何缓存折扣）`,
     last_reply_line: `根据 {provider} 报告，此处最近一次回复实际消耗了 **{tokens}** 输入词元`,
     legend_line: `{emoji} {label}：{tokens}（{share}）`,

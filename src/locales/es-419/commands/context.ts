@@ -7,7 +7,7 @@ export default {
     usage_line: `Aproximadamente **{used}** de **{window}** tokens usados ({share})`,
     usage_unknown_window: `Aproximadamente **{used}** tokens usados. No conozco el tamaño de la ventana de este modelo, así que la cuadrícula solo muestra la composición del prompt.`,
     scale_line: `Cada cuadrado representa aproximadamente **{tokens}** tokens`,
-    scale_line_circles: `Cada cuadrado representa aproximadamente **{tokens}** tokens, y un círculo es una parte menor que un cuadrado`,
+    circle_line: `Un círculo es una parte menor que un cuadrado`,
     cost_line: `Aproximadamente **{cost}** de entrada por respuesta, antes de cualquier descuento por caché`,
     last_reply_line: `La última respuesta aquí utilizó realmente **{tokens}** tokens de entrada, según lo informado por {provider}`,
     legend_line: `{emoji} {label}: {tokens} ({share})`,

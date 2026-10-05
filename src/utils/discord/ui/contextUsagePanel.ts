@@ -87,20 +87,26 @@ function buildUsageLine(locale: string, inspection: PromptInspection, usage: Con
 
 /** The grid's key as one quote block: what a cell stands for, then each part with its figures. */
 function buildLegend(locale: string, grid: ContextGrid): string {
-  const scaleLine = localizer(
-    locale,
-    grid.hasCircles ? "commands.context.scale_line_circles" : "commands.context.scale_line",
-    { tokens: formatTokens(locale, grid.tokensPerCell) },
-  );
-  const partLines = grid.parts.map((part) =>
-    localizer(locale, "commands.context.legend_line", {
-      emoji: part.glyph,
-      label: localizer(locale, `commands.context.segment_${part.id}`),
-      tokens: formatTokens(locale, part.tokens),
-      share: formatShare(locale, part.tokens, grid.capacityTokens),
-    }),
-  );
-  return [scaleLine, ...partLines].map((line) => `> ${line}`).join("\n");
+  const legendLines: string[] = [
+    localizer(locale, "commands.context.scale_line", { tokens: formatTokens(locale, grid.tokensPerCell) }),
+  ];
+  if (grid.hasCircles) {
+    legendLines.push(localizer(locale, "commands.context.circle_line"));
+  }
+  for (const part of grid.parts) {
+    legendLines.push(
+      localizer(locale, "commands.context.legend_line", {
+        emoji: part.glyph,
+        label: localizer(locale, `commands.context.segment_${part.id}`),
+        tokens: formatTokens(locale, part.tokens),
+        share: formatShare(locale, part.tokens, grid.capacityTokens),
+      }),
+    );
+  }
+  return legendLines
+    .flatMap((line) => line.split("\n"))
+    .map((line) => `> ${line}`)
+    .join("\n");
 }
 
 /**

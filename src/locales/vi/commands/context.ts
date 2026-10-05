@@ -7,7 +7,7 @@ export default {
     usage_line: `Đã dùng khoảng **{used}** trên **{window}** token ({share})`,
     usage_unknown_window: `Đã dùng khoảng **{used}** token. Mình không biết kích thước cửa sổ của model này, nên lưới chỉ hiển thị các thành phần tạo nên prompt.`,
     scale_line: `Mỗi ô vuông tương đương khoảng **{tokens}** token`,
-    scale_line_circles: `Mỗi ô vuông tương đương khoảng **{tokens}** token, và hình tròn là phần nhỏ hơn một ô vuông`,
+    circle_line: `Hình tròn là phần nhỏ hơn một ô vuông`,
     cost_line: `Khoảng **{cost}** chi phí đầu vào cho mỗi câu trả lời, trước khi tính chiết khấu bộ nhớ đệm`,
     last_reply_line: `Câu trả lời gần nhất tại đây thực tế đã dùng **{tokens}** token đầu vào, theo báo cáo từ {provider}`,
     legend_line: `{emoji} {label}: {tokens} ({share})`,

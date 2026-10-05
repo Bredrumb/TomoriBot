@@ -7,7 +7,7 @@ export default {
     usage_line: `Cerca de **{used}** de **{window}** tokens usados ({share})`,
     usage_unknown_window: `Cerca de **{used}** tokens usados. Não sei o tamanho da janela deste modelo, então a grade mostra apenas a composição do prompt.`,
     scale_line: `Cada quadrado representa cerca de **{tokens}** tokens`,
-    scale_line_circles: `Cada quadrado representa cerca de **{tokens}** tokens, e um círculo é uma parte menor que um quadrado`,
+    circle_line: `Um círculo é uma parte menor que um quadrado`,
     cost_line: `Cerca de **{cost}** de entrada por resposta, antes de qualquer desconto de cache`,
     last_reply_line: `A última resposta aqui realmente usou **{tokens}** tokens de entrada, conforme informado por {provider}`,
     legend_line: `{emoji} {label}: {tokens} ({share})`,

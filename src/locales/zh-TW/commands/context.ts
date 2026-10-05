@@ -7,7 +7,7 @@ export default {
     usage_line: `已使用約 **{used}** / **{window}** 個 token（{share}）`,
     usage_unknown_window: `已使用約 **{used}** 個 token。我不清楚這個模型的視窗大小，因此網格只顯示提示詞的組成內容。`,
     scale_line: `每個方塊約代表 **{tokens}** 個 token`,
-    scale_line_circles: `每個方塊約代表 **{tokens}** 個 token，圓形則代表小於一個方塊的部分`,
+    circle_line: `圓形代表小於一個方塊的部分`,
     cost_line: `每次回覆的輸入費用約為 **{cost}**（尚未計算任何快取折扣）`,
     last_reply_line: `根據 {provider} 的回報，此處最近一次回覆實際上使用了 **{tokens}** 個輸入 token`,
     legend_line: `{emoji} {label}：{tokens}（{share}）`,
