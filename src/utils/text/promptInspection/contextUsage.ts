@@ -5,8 +5,6 @@ import { charsToTokensJson, charsToTokensText } from "@/utils/text/tokenEstimate
 
 type ContextSegmentId = "instructions" | "persona" | "server" | "memory" | "people" | "conversation" | "tools";
 
-export type ContextCellId = ContextSegmentId | "free" | "reserved";
-
 const CONTEXT_SEGMENT_ORDER: readonly ContextSegmentId[] = [
   "instructions",
   "persona",
@@ -17,12 +15,14 @@ const CONTEXT_SEGMENT_ORDER: readonly ContextSegmentId[] = [
   "tools",
 ];
 
+export type ContextCellId = ContextSegmentId | "free" | "reserved";
+
 /**
  * Colored squares are the only color Discord renders identically on desktop and mobile: an
  * `ansi` code block loses its colors on mobile, which would leave the legend unreadable there.
  * Nine squares exist, so the segment list cannot grow past seven without merging two.
  */
-export const CONTEXT_CELL_EMOJI: Readonly<Record<ContextCellId, string>> = {
+const CONTEXT_CELL_SQUARES: Readonly<Record<ContextCellId, string>> = {
   instructions: "🟥",
   persona: "🟧",
   server: "🟨",
@@ -32,6 +32,17 @@ export const CONTEXT_CELL_EMOJI: Readonly<Record<ContextCellId, string>> = {
   tools: "🟫",
   free: "⬛",
   reserved: "⬜",
+};
+
+/** One circle per segment square, drawn for a segment smaller than one cell. */
+const CONTEXT_SEGMENT_CIRCLES: Readonly<Record<ContextSegmentId, string>> = {
+  instructions: "🔴",
+  persona: "🟠",
+  server: "🟡",
+  memory: "🟢",
+  people: "🔵",
+  conversation: "🟣",
+  tools: "🟤",
 };
 
 /** A full Record so that adding a context tag fails type checking until it is given a segment. */
@@ -102,12 +113,14 @@ export function measureContextUsage(
 }
 
 export const CONTEXT_GRID_COLUMNS = 10;
-export const CONTEXT_GRID_ROWS = 10;
+export const CONTEXT_GRID_ROWS = 20;
 const CONTEXT_GRID_CELLS = CONTEXT_GRID_COLUMNS * CONTEXT_GRID_ROWS;
 
 interface ContextGridPart {
   id: ContextCellId;
   tokens: number;
+  /** The square, or for a segment smaller than one cell, its circle. */
+  glyph: string;
 }
 
 export interface ContextGrid {
@@ -115,56 +128,86 @@ export interface ContextGrid {
   parts: ContextGridPart[];
   /** The denominator for percentages: the window when it is known, else the input itself. */
   capacityTokens: number;
+  tokensPerCell: number;
+  /** Whether any segment is drawn as a circle, which the scale line then explains. */
+  hasCircles: boolean;
   rows: string[];
 }
 
 /**
- * Lays the usage out as a 10x10 grid where each cell is roughly 1% of the window.
+ * Lays the usage out as a 10x20 grid where each cell is 0.5% of the window.
  *
  * Free space is measured against the truncation budget rather than the raw window, and the gap
  * between them is drawn as reserved, so the free cells run out exactly where the live pipeline
  * starts dropping history. Any non-empty segment keeps at least one cell so a small slice stays
- * visible; the legend carries the exact figures.
+ * visible, and one smaller than a cell is drawn as a circle so that floor does not pass for its
+ * size; the legend carries the exact figures.
  */
 export function layoutContextGrid(usage: ContextUsage, budget: ContextBudget | null): ContextGrid {
-  const parts: ContextGridPart[] = usage.segments.map(({ id, tokens }) => ({ id, tokens }));
-  let capacityTokens = usage.inputTokens;
+  const parts: Array<{ id: ContextCellId; tokens: number }> = usage.segments.map(({ id, tokens }) => ({ id, tokens }));
 
   if (budget) {
     const safeInputBudget = Math.max(0, computeSafeInputBudget(budget.contextLength, budget.outputReserve));
     parts.push({ id: "free", tokens: Math.max(0, safeInputBudget - usage.inputTokens) });
     parts.push({ id: "reserved", tokens: Math.max(0, budget.contextLength - safeInputBudget) });
-    capacityTokens = Math.max(budget.contextLength, usage.inputTokens + (budget.contextLength - safeInputBudget));
   }
 
-  const cellCounts = allocateCells(parts, capacityTokens);
-  const cells = parts.flatMap((part, index) => Array<string>(cellCounts[index]).fill(CONTEXT_CELL_EMOJI[part.id]));
+  const capacityTokens = parts.reduce((total, part) => total + part.tokens, 0);
+  const tokensPerCell = capacityTokens / CONTEXT_GRID_CELLS;
+
+  const glyphParts = parts.map(({ id, tokens }) => ({
+    id,
+    tokens,
+    glyph:
+      id !== "free" && id !== "reserved" && tokens < tokensPerCell
+        ? CONTEXT_SEGMENT_CIRCLES[id]
+        : CONTEXT_CELL_SQUARES[id],
+  }));
+
+  // Free space may honestly be zero, so it is the one part without a floor.
+  const cellCounts = allocateCells(
+    parts.map((part) => part.tokens),
+    CONTEXT_GRID_CELLS,
+    (index) => parts[index].id !== "free",
+  );
+  const cells = glyphParts.flatMap((part, index) => Array<string>(cellCounts[index]).fill(part.glyph));
 
   const rows: string[] = [];
   for (let start = 0; start < cells.length; start += CONTEXT_GRID_COLUMNS) {
     rows.push(cells.slice(start, start + CONTEXT_GRID_COLUMNS).join(""));
   }
 
-  return { parts, capacityTokens, rows };
+  return {
+    parts: glyphParts,
+    capacityTokens,
+    tokensPerCell,
+    hasCircles: glyphParts.some((part) => part.glyph !== CONTEXT_CELL_SQUARES[part.id]),
+    rows,
+  };
 }
 
 /**
- * Largest-remainder allocation of the grid's cells, with a floor of one cell for every
- * non-empty part except free space (which may honestly be zero).
+ * Largest-remainder allocation of `totalCells` in proportion to `weights`, with a floor of one cell
+ * for every non-zero weight that `keepVisible` selects.
  */
-function allocateCells(parts: readonly ContextGridPart[], capacityTokens: number): number[] {
-  if (capacityTokens <= 0) return parts.map(() => 0);
+function allocateCells(
+  weights: readonly number[],
+  totalCells: number,
+  keepVisible: (index: number) => boolean,
+): number[] {
+  const totalWeight = weights.reduce((total, weight) => total + weight, 0);
+  if (totalWeight <= 0 || totalCells <= 0) return weights.map(() => 0);
 
-  const exact = parts.map((part) => (part.tokens / capacityTokens) * CONTEXT_GRID_CELLS);
+  const exact = weights.map((weight) => (weight / totalWeight) * totalCells);
   const counts = exact.map((value, index) => {
     const floor = Math.floor(value);
-    return parts[index].tokens > 0 && parts[index].id !== "free" ? Math.max(1, floor) : floor;
+    return weights[index] > 0 && keepVisible(index) ? Math.max(1, floor) : floor;
   });
 
   let allocated = counts.reduce((total, count) => total + count, 0);
 
   // The one-cell floor can overshoot, so give cells back from the largest part first.
-  while (allocated > CONTEXT_GRID_CELLS) {
+  while (allocated > totalCells) {
     let donor = 0;
     for (let index = 1; index < counts.length; index++) {
       if (counts[index] > counts[donor]) donor = index;
@@ -173,10 +216,12 @@ function allocateCells(parts: readonly ContextGridPart[], capacityTokens: number
     allocated -= 1;
   }
 
+  // Measured from the allocated count, not the floor, so a part the one-cell floor already lifted
+  // does not take a leftover cell from a larger part.
   const byRemainder = exact
-    .map((value, index) => ({ index, remainder: value - Math.floor(value) }))
+    .map((value, index) => ({ index, remainder: value - counts[index] }))
     .sort((left, right) => right.remainder - left.remainder);
-  for (let cursor = 0; allocated < CONTEXT_GRID_CELLS && byRemainder.length > 0; cursor++) {
+  for (let cursor = 0; allocated < totalCells && byRemainder.length > 0; cursor++) {
     counts[byRemainder[cursor % byRemainder.length].index] += 1;
     allocated += 1;
   }

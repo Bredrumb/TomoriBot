@@ -46,7 +46,7 @@ Los mensajes recientes son la parte más grande y frágil: es una ventana que av
 verdad de qué memorias están activas en ese momento, si coincidió algún documento, y cuánto de
 la conversación realmente cupo.
 
-`/context` dibuja ese mismo paquete como una cuadrícula coloreada de la ventana de contexto del modelo, con un color por cada grupo de bloques anterior, para que puedas ver de un vistazo qué la ocupa y cuánto espacio queda.
+`/context` dibuja ese mismo paquete como una cuadrícula coloreada de la ventana de contexto del modelo, con un color por cada grupo de bloques anterior, para que puedas ver de un vistazo qué la ocupa y cuánto espacio queda. Un círculo marca un grupo menor que un cuadrado. También muestra el costo estimado de entrada por respuesta y cuántos tokens de entrada reportó el proveedor para la última respuesta real.
 
 `/tool estimate cost` desglosa ese mismo paquete por tamaño, lo cual es útil para averiguar qué
 está consumiendo tu contexto antes de subir cualquier límite.

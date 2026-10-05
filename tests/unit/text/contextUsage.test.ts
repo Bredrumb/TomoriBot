@@ -1,24 +1,27 @@
 import { describe, expect, test } from "bun:test";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import {
-  CONTEXT_CELL_EMOJI,
   CONTEXT_GRID_COLUMNS,
   CONTEXT_GRID_ROWS,
   type ContextCellId,
+  type ContextGrid,
   layoutContextGrid,
   measureContextUsage,
 } from "@/utils/text/promptInspection/contextUsage";
+
+const GRID_CELLS = CONTEXT_GRID_COLUMNS * CONTEXT_GRID_ROWS;
 
 function textItem(tag: ContextItemTag | undefined, chars: number): StructuredContextItem {
   return { role: "system", parts: [{ type: "text", text: "x".repeat(chars) }], metadataTag: tag };
 }
 
-function countCells(rows: readonly string[], id: ContextCellId): number {
-  return rows.join("").split(CONTEXT_CELL_EMOJI[id]).length - 1;
+function countCells(grid: ContextGrid, id: ContextCellId): number {
+  const glyph = grid.parts.find((part) => part.id === id)?.glyph;
+  return glyph ? grid.rows.join("").split(glyph).length - 1 : 0;
 }
 
-function allCells(rows: readonly string[]): string[] {
-  return Array.from(rows.join(""));
+function allCells(grid: ContextGrid): string[] {
+  return Array.from(grid.rows.join(""));
 }
 
 describe("measureContextUsage", () => {
@@ -82,33 +85,67 @@ describe("layoutContextGrid", () => {
     const usage = measureContextUsage([textItem(ContextItemTag.DIALOGUE_HISTORY, 4 * 400)], null);
     const grid = layoutContextGrid(usage, { contextLength: 1000, outputReserve: 100 });
 
-    expect(grid.parts).toEqual([
+    expect(grid.parts.map(({ id, tokens }) => ({ id, tokens }))).toEqual([
       { id: "conversation", tokens: 400 },
       { id: "free", tokens: 410 },
       { id: "reserved", tokens: 190 },
     ]);
-    expect(countCells(grid.rows, "conversation")).toBe(40);
-    expect(countCells(grid.rows, "free")).toBe(41);
-    expect(countCells(grid.rows, "reserved")).toBe(19);
+    expect(countCells(grid, "conversation")).toBe(80);
+    expect(countCells(grid, "free")).toBe(82);
+    expect(countCells(grid, "reserved")).toBe(38);
   });
 
-  test("keeps a visible cell for a segment far below one percent", () => {
+  test("draws a segment smaller than one cell as a single circle, and says so", () => {
     const usage = measureContextUsage(
       [textItem(ContextItemTag.SYSTEM_PERSONALITY, 4), textItem(ContextItemTag.DIALOGUE_HISTORY, 4 * 50_000)],
       null,
     );
     const grid = layoutContextGrid(usage, { contextLength: 1_000_000, outputReserve: 8192 });
+    const persona = grid.parts.find((part) => part.id === "persona");
+    const conversation = grid.parts.find((part) => part.id === "conversation");
 
-    expect(countCells(grid.rows, "persona")).toBe(1);
-    expect(allCells(grid.rows)).toHaveLength(CONTEXT_GRID_ROWS * CONTEXT_GRID_COLUMNS);
+    expect(grid.tokensPerCell).toBe(5000);
+    expect(grid.hasCircles).toBe(true);
+    expect(persona?.glyph).not.toBe(conversation?.glyph);
+    expect(countCells(grid, "persona")).toBe(1);
+    expect(allCells(grid)).toHaveLength(GRID_CELLS);
+  });
+
+  test("draws every segment as a square when each fills at least one cell", () => {
+    const usage = measureContextUsage(
+      [textItem(ContextItemTag.SYSTEM_PERSONALITY, 4 * 100), textItem(ContextItemTag.DIALOGUE_HISTORY, 4 * 300)],
+      null,
+    );
+    const grid = layoutContextGrid(usage, { contextLength: 1000, outputReserve: 100 });
+
+    expect(grid.hasCircles).toBe(false);
+  });
+
+  test("never gives a segment the floor lifted more cells than a larger segment", () => {
+    // At 5K tokens per cell, server info is 0.9 cells and memories 1.2: the floor lifts server info
+    // to one cell, after which its 0.9 remainder must not win a leftover cell over larger parts.
+    const usage = measureContextUsage(
+      [
+        textItem(ContextItemTag.SYSTEM_HUMANIZER_RULES, 4 * 21_000),
+        textItem(ContextItemTag.KNOWLEDGE_SERVER_INFO, 4 * 4500),
+        textItem(ContextItemTag.KNOWLEDGE_SERVER_MEMORIES, 4 * 6000),
+        textItem(ContextItemTag.DIALOGUE_HISTORY, 4 * 18_000),
+      ],
+      null,
+    );
+    const grid = layoutContextGrid(usage, { contextLength: 1_000_000, outputReserve: 8192 });
+
+    expect(countCells(grid, "server")).toBe(1);
+    expect(countCells(grid, "memory")).toBe(1);
+    expect(allCells(grid)).toHaveLength(GRID_CELLS);
   });
 
   test("shows no free space once the prompt is past the truncation budget", () => {
     const usage = measureContextUsage([textItem(ContextItemTag.DIALOGUE_HISTORY, 4 * 950)], null);
     const grid = layoutContextGrid(usage, { contextLength: 1000, outputReserve: 100 });
 
-    expect(countCells(grid.rows, "free")).toBe(0);
-    expect(allCells(grid.rows)).toHaveLength(CONTEXT_GRID_ROWS * CONTEXT_GRID_COLUMNS);
+    expect(countCells(grid, "free")).toBe(0);
+    expect(allCells(grid)).toHaveLength(GRID_CELLS);
   });
 
   test("shows only the prompt's composition when the window is unknown", () => {
@@ -119,7 +156,7 @@ describe("layoutContextGrid", () => {
     const grid = layoutContextGrid(usage, null);
 
     expect(grid.parts.map((part) => part.id)).toEqual(["instructions", "conversation"]);
-    expect(countCells(grid.rows, "instructions")).toBe(25);
-    expect(countCells(grid.rows, "conversation")).toBe(75);
+    expect(countCells(grid, "instructions")).toBe(50);
+    expect(countCells(grid, "conversation")).toBe(150);
   });
 });

@@ -1,5 +1,6 @@
 import { PrivacyLevel } from "@/types/db/schema";
 import { ContextItemTag } from "@/types/misc/context";
+import { recordLastReplyUsage } from "@/utils/cache/lastReplyUsageCache";
 import { incrementStmTurnCounter, storeShortTermMemory } from "@/utils/cache/shortTermMemoryCache";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { hasThoughtLogContent, sendAttributionOnlyEmbed, sendThoughtLogEmbed } from "@/utils/discord/thoughtLog";
@@ -49,8 +50,24 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
   await writeShortTermMemory(context, result);
   await emitThoughtLog(context, result);
   scheduleBoomerangFollowUp(context);
+  rememberLastReplyUsage(context, result);
   // Fire-and-forget so stat tracking never adds latency to the response path.
   void recordUsageStats(context, result);
+}
+
+/**
+ * Keeps the first request's reported input tokens for `/context`. Later tool-loop requests also
+ * carry the tool results, so only the first one matches the prompt `/context` rebuilds.
+ */
+function rememberLastReplyUsage(context: ChatTurnContext, result: GenerationTurnResult): void {
+  if (result.personaResponses.length === 0 || context.isDMChannel) return;
+  const personaId = context.currentPersona.persona_id;
+  const inputTokens = result.streamResults.find((stream) => stream.usage)?.usage?.inputTokens ?? 0;
+  if (typeof personaId !== "number" || inputTokens <= 0) return;
+  recordLastReplyUsage(context.channel.id, personaId, {
+    inputTokens,
+    modelCodename: context.tomoriState.llm.llm_codename,
+  });
 }
 
 async function sendSelectedSticker(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {

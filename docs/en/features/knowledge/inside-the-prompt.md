@@ -47,7 +47,9 @@ truth for which memories are currently active, whether a document matched, and h
 the conversation actually fit.
 
 `/context` draws the same bundle as a colored grid of the model's context window, one color
-per group of blocks above, so you can see at a glance what fills it and how much room is left.
+per group of blocks above, so you can see at a glance what fills it and how much room is left. A
+circle marks a group smaller than one square. It also shows the estimated input cost per reply and how many input tokens the provider
+reported for the last real reply.
 
 `/tool estimate cost` breaks the same bundle down by size, which is useful for working out
 what is eating your context before you raise any limits.

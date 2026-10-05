@@ -18,6 +18,7 @@ import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
 import { getOpenRouterPricing } from "@/utils/cache/openrouterCapabilityCache";
+import { resolveModelPricing } from "@/utils/provider/modelPricing";
 import { applyProviderContextTruncation } from "@/utils/provider/contextBudget";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -83,7 +84,7 @@ const EST_OUTPUT_LONG = 500;
 
 // First-party pricing is read from the `llms` catalog columns, so a model with no
 // catalog price reports "pricing unavailable" instead of billing against a
-// provider-wide guess. See resolveModelPricing() below for the precedence order.
+// provider-wide guess (see resolveModelPricing in @/utils/provider/modelPricing).
 
 const YOUTUBE_URL_PATTERNS = [
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/i,
@@ -392,32 +393,6 @@ function calculateCost(
   const inputCost = (inputTokens / 1_000_000) * inputPricePerMillion;
   const outputCost = (outputTokens / 1_000_000) * outputPricePerMillion;
   return inputCost + outputCost;
-}
-
-/**
- * Resolve per-million input/output pricing for the active model.
- *
- * Precedence (see docs/subsystems/database-schema.md):
- *  1. The model row's own `input_price_per_million` / `output_price_per_million` columns: the official,
- *     DB-backed source of truth, seeded from the typed catalog (src/db/seed/catalog/models.ts).
- *  2. The optional caller-supplied `fallback` (e.g. OpenRouter's live API pricing cache), used only when
- *     the row carries no price. First-party providers pass no fallback: a model with no catalog price
- *     resolves to `null`, and the caller surfaces "pricing unavailable" instead of guessing a rate.
- *
- * @param tomoriState - Active server/persona state; its `llm` row carries the price columns
- * @param fallback - Optional prices used only when the row's columns are null/undefined
- * @returns Resolved input/output price per million tokens, or `null` when no price can be determined
- */
-function resolveModelPricing(
-  tomoriState: TomoriState,
-  fallback?: { input: number; output: number },
-): { input: number; output: number } | null {
-  const dbInput = tomoriState.llm.input_price_per_million;
-  const dbOutput = tomoriState.llm.output_price_per_million;
-  if (typeof dbInput === "number" && typeof dbOutput === "number") {
-    return { input: dbInput, output: dbOutput };
-  }
-  return fallback ?? null;
 }
 
 /**

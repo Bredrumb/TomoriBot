@@ -276,7 +276,7 @@ export function collectStrictChatFlagViolations(rows: LlmInput[]): string[] {
 
 // Providers billed per-token by the live `/tool estimate cost` path. Every active, billable row of these
 // providers must carry an explicit catalog price: the env-based price fallback has been removed, so an
-// unpriced row makes resolveModelPricing (src/commands/tool/estimate/cost.ts) return null and the command
+// unpriced row makes resolveModelPricing (src/utils/provider/modelPricing.ts) return null and the command
 // reports "pricing unavailable". OpenRouter is intentionally absent, because it is priced live from the OpenRouter
 // API cache, with any catalog price acting only as a cache-miss fallback. Its llms rows are still filled in at
 // startup by syncOpenrouterCatalogPricing (src/init/loaders.ts), which SQL-computed cost surfaces read.
