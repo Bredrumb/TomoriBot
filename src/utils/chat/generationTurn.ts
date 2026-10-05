@@ -4,10 +4,6 @@ import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider
 import type { ProviderError } from "@/types/stream/interfaces";
 import type { DeliveredStreamMessage, ToolContext } from "@/types/tool/interfaces";
 import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
-import { getGeminiTokenLimits } from "@/utils/cache/geminiCapabilityCache";
-import { getNovelAITokenLimits } from "@/utils/cache/novelaiCapabilityCache";
-import { getCachedContextTokens, refreshNovelAISubscription } from "@/utils/cache/novelaiSubscriptionCache";
-import { getOpenRouterTokenLimits, isOpenRouterCapabilityCacheReady } from "@/utils/cache/openrouterCapabilityCache";
 import { llmProviderRepo } from "@/utils/db/repositories";
 import { type FallbackNoticeAttempt, sendFallbackModelUsageNotice } from "@/utils/discord/fallbackModelNotice";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
@@ -18,7 +14,7 @@ import { log } from "@/utils/misc/logger";
 import { buildCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
 import { getProviderErrorDetail } from "@/utils/provider/providerErrorClassification";
-import { DEFAULT_MAX_OUTPUT_TOKENS, resolveMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
+import { applyProviderContextTruncation } from "@/utils/provider/contextBudget";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
@@ -29,7 +25,6 @@ import {
   recordKeySuccess,
   selectApiKey,
 } from "@/utils/security/keyRotation";
-import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
 import { buildVerbatimToolDefinitionsContextItem } from "@/utils/text/context/toolDefinitions";
 import {
   checkTextQuotaForAdmission,
@@ -1045,111 +1040,6 @@ function dropOldestHistoryExchangePairs(
   }
 
   return { truncated: items, historyPairsDropped };
-}
-
-async function applyProviderContextTruncation(
-  contextItems: StructuredContextItem[],
-  tomoriState: TomoriState,
-  serverDiscId: string,
-): Promise<StructuredContextItem[]> {
-  if (
-    providerIsApiFamily(tomoriState.llm.llm_provider, "openrouter") &&
-    tomoriState.llm.llm_codename !== "other-model" &&
-    isOpenRouterCapabilityCacheReady()
-  ) {
-    const tokenLimits = getOpenRouterTokenLimits(tomoriState.llm.llm_codename);
-    if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-      // Reserve the SAME output budget the request builder sends: the server's
-      // `/model parameters` override first, then OPENROUTER_MAX_OUTPUT_TOKENS, then a
-      // flat 8192 , so clamped to the model's reported completion ceiling. Previously this
-      // ignored the server override, over-reserving output and dropping fitting history.
-      const truncationMaxCompletionTokens = resolveMaxOutputTokens({
-        configured: tomoriState.config.llm_max_output_tokens,
-        envRaw: process.env.OPENROUTER_MAX_OUTPUT_TOKENS,
-        fallback: DEFAULT_MAX_OUTPUT_TOKENS,
-        providerReportedMax: tokenLimits.maxCompletionTokens,
-      });
-      const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
-        contextItems,
-        tokenLimits.contextLength,
-        truncationMaxCompletionTokens,
-      );
-      if (totalDropped > 0) {
-        log.warn(
-          `History truncation: dropped ${historyPairsDropped} history exchange pair(s) and ${sampleItemsDropped} sample dialogue item(s) for ${tomoriState.llm.llm_codename} to preserve output budget`,
-        );
-        return truncated;
-      }
-    }
-    return contextItems;
-  }
-
-  if (providerIsApiFamily(tomoriState.llm.llm_provider, "google-genai")) {
-    const tokenLimits = getGeminiTokenLimits(tomoriState.llm.llm_codename);
-    if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-      // Use the SAME fallback chain as the Google request builder (config override →
-      // GOOGLE_MAX_OUTPUT_TOKENS → flat 8192), so big-ceiling Gemini models (e.g. 65536
-      // reported) no longer over-reserve output and drop history that would otherwise fit.
-      // The extra clamp to the model-reported ceiling (which the request builder omits) only
-      // bites when the resolved value is ABOVE what the model can emit; reserving the real
-      // ceiling there is correct , so the model cannot output more than that regardless of the
-      // requested max, so this never under-reserves relative to actual output.
-      const truncationMaxCompletionTokens = resolveMaxOutputTokens({
-        configured: tomoriState.config.llm_max_output_tokens,
-        envRaw: process.env.GOOGLE_MAX_OUTPUT_TOKENS,
-        fallback: DEFAULT_MAX_OUTPUT_TOKENS,
-        providerReportedMax: tokenLimits.maxCompletionTokens,
-      });
-      const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
-        contextItems,
-        tokenLimits.contextLength,
-        truncationMaxCompletionTokens,
-      );
-      if (totalDropped > 0) {
-        log.warn(
-          `History truncation: dropped ${historyPairsDropped} history exchange pair(s) and ${sampleItemsDropped} sample dialogue item(s) for ${tomoriState.llm.llm_codename} to preserve output budget`,
-        );
-        return truncated;
-      }
-    }
-    return contextItems;
-  }
-
-  if (providerIsApiFamily(tomoriState.llm.llm_provider, "novelai")) {
-    let naiSubscriptionTokens = getCachedContextTokens(serverDiscId);
-    if (naiSubscriptionTokens === undefined && tomoriState.config.api_key) {
-      try {
-        const tempKey = await decryptApiKey(tomoriState.config.api_key, tomoriState.config.key_version || 1);
-        naiSubscriptionTokens = await refreshNovelAISubscription(serverDiscId, tempKey);
-      } catch (error) {
-        log.warn("Failed to refresh NovelAI subscription for context truncation; using default token limits.", error);
-      }
-    }
-    const tokenLimits = getNovelAITokenLimits(tomoriState.llm.llm_codename, naiSubscriptionTokens);
-    if (tokenLimits && tokenLimits.contextLength > 0 && tokenLimits.maxCompletionTokens) {
-      // NovelAI has no dedicated output-token env cap, so the reserve falls back to the
-      // subscription-tier ceiling unless the server set a `/model parameters` override.
-      const truncationMaxCompletionTokens = resolveMaxOutputTokens({
-        configured: tomoriState.config.llm_max_output_tokens,
-        envRaw: undefined,
-        fallback: tokenLimits.maxCompletionTokens,
-        providerReportedMax: tokenLimits.maxCompletionTokens,
-      });
-      const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
-        contextItems,
-        tokenLimits.contextLength,
-        truncationMaxCompletionTokens,
-      );
-      if (totalDropped > 0) {
-        log.warn(
-          `History truncation: dropped ${historyPairsDropped} history exchange pair(s) and ${sampleItemsDropped} sample dialogue item(s) for ${tomoriState.llm.llm_codename} to preserve output budget`,
-        );
-        return truncated;
-      }
-    }
-  }
-
-  return contextItems;
 }
 
 function shouldApplyLengthEmptyRetryTrim(

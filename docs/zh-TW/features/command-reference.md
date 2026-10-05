@@ -11,7 +11,7 @@ sidebar:
 
 TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使用的同一批指令建構器與繁體中文說明產生的（尚未翻譯的說明會以英文顯示）。
 
-頂層指令群組：**40**。可執行的斜線指令：**82**。
+頂層指令群組：**41**。可執行的斜線指令：**83**。
 
 ## `/comment`
 
@@ -45,6 +45,14 @@ TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使�
 | 指令 | 摘要 |
 |---|---|
 | `/config` | 設定人格、行為、頻道、權限與模型。 |
+
+## `/context`
+
+See how much of the model's context window a persona's prompt fills in this channel.
+
+| 指令 | 摘要 |
+|---|---|
+| `/context` | See how much of the model's context window a persona's prompt fills in this channel. |
 
 ## `/contribute`
 

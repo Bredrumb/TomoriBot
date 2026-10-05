@@ -97,4 +97,4 @@ After this stage runs:
 - Verbatim nudge (behavioral half): → [`11-dialogue-history.md`](/architecture/pipelines/context-build/02-native-assembly/11-dialogue-history/)
 - Verbatim parsing at stream time: → [`provider/03-chunk-normalization.md`](../../provider/03-chunk-normalization)
 - Per-attempt fallback adaptation: → [`tool-loop/README.md`](../../tool-loop/README.md)
-- Provider tool assembly reference: → `/tool prompt snapshot` (`src/commands/tool/prompt/snapshot.ts`)
+- Provider tool assembly reference: → `/tool prompt snapshot` (`src/utils/text/promptInspection/assemble.ts`)

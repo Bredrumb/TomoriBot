@@ -46,6 +46,9 @@ Recent messages are the largest and most fragile part, it is a window that slide
 truth for which memories are currently active, whether a document matched, and how much of
 the conversation actually fit.
 
+`/context` draws the same bundle as a colored grid of the model's context window, one color
+per group of blocks above, so you can see at a glance what fills it and how much room is left.
+
 `/tool estimate cost` breaks the same bundle down by size, which is useful for working out
 what is eating your context before you raise any limits.
 

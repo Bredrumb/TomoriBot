@@ -2,22 +2,26 @@
 title: "Prompt Snapshot"
 ---
 
-The prompt-snapshot command produces a runtime-faithful dump of the exact prompt TomoriBot would send to the LLM for a given channel + persona combination. It's aimed at server admins and prompt engineers who want to debug or reproduce what the bot is "seeing" at any point in time.
+Two commands rebuild the exact prompt TomoriBot would send to the LLM for a given channel and persona:
+
+- `/tool prompt snapshot` dumps it to a file, for admins and prompt engineers who want to debug or reproduce what the bot is "seeing".
+- `/context` shows how much of the model's context window it fills, as an emoji grid, with buttons that send the same file as the snapshot.
+
+Both share one assembler (`assemblePromptInspection()`), so they always describe the same prompt.
 
 ## What it does
 
-1. Takes a snapshot of the channel's recent message history (respecting the persona's `message_fetch_limit`).
-2. Resolves the target persona (main or alter) via a modal picker.
+1. Resolves the target persona from the optional `persona` autocomplete option, defaulting to the main persona.
+2. Takes a snapshot of the channel's recent message history (respecting the persona's `message_fetch_limit`).
 3. Assembles the full context using the same `buildContext()` pipeline the live chat uses: preset routing, `/context-note` depth injection, conditioning logs, memories, documents, presence, everything.
-4. Serializes the result to either a human-readable text format or a provider-native JSON format.
-5. Sends the file to the invoking user via DM (or as an ephemeral attachment if DMs are closed).
-6. Posts sampling / request config alongside the snapshot so users can reproduce the call parameters.
+4. Truncates history against the provider budget from `resolveContextBudget()`, the same helper `generationTurn.ts` uses, so a channel past the window shows only the history the model would receive.
+5. For a snapshot, serializes the result to either a human-readable text format or a provider-native JSON format, and sends the file to the invoking user via DM (or as an ephemeral attachment if DMs are closed), with the sampling / request config so users can reproduce the call parameters.
 
 ## Permission model
 
 - Guild-only (cannot be used in DMs; no server context).
-- `ManageGuild` always bypasses the gate.
-- Non-admin access depends on `server_member_permissions_configs.prompt_snapshot_enabled` (default off).
+- The `/context` grid is open to every member: it shows token counts, not prompt text.
+- Prompt text (the snapshot command and the `/context` View buttons) needs `ManageGuild`, or `server_member_permissions_configs.prompt_snapshot_enabled` (default off) for non-admins. Members without access see the buttons disabled, and every click re-checks access, because the setting may have changed since the grid was drawn.
 
 ## Faithfulness to runtime
 
@@ -41,6 +45,7 @@ The snapshot mirrors the real `messageCreate → tomoriChat` pipeline as closely
 | Forwarded-message inline expansion | ⚠️ | Basic text is captured; full forwarded-body expansion used by tomoriChat is NOT replicated. |
 | Reply-reference context annotation | ⚠️ | Reply threading isn't re-assembled; only the raw reply chain's content is visible. |
 | Output prefill / speaker-guard stop strings | ✅ | Present in the sampling/config block for providers that use them. |
+| Provider history truncation | ✅ | Applied after media resolution with the same budget and drop policy as `generationTurn.ts`. The DM notes how many exchanges were dropped. The OpenRouter length-empty retry trim is not replicated, since it only runs after a failed attempt. |
 | Media capability resolution | ✅ | `buildContext()` emits capability-neutral `mediaDescriptors`; snapshot resolves them after context assembly with the routed answering model, including personal text-provider routing, before TXT serialization or provider-native JSON probe serialization. |
 
 ## Output formats
@@ -111,6 +116,18 @@ Internally this mirrors the tool-list assembly that each `<Provider>Provider.get
 
 The `fetch_tools` option is intentionally ignored in the TXT format: a note in the DM body tells users to re-run as JSON if they need the tool list.
 
+## `/context` usage grid
+
+`/context` assembles the prompt with tools included, estimates tokens per segment, and renders a 10x10 grid of colored squares where each cell is roughly 1% of the window.
+
+- **Estimates, not counts.** Text uses the `/tool estimate cost` ratios from `tokenEstimate.ts` (about 4 characters per token, 3.5 for tool JSON). Media parts are skipped because their cost differs per provider.
+- **Segments.** Every `ContextItemTag` maps to one of seven segments in `contextUsage.ts`, typed as a full `Record` so a new tag fails type checking until it is assigned. Untagged items (SillyTavern preset routing) count as instructions. Seven is the ceiling: Discord has nine colored squares and two are taken by free and reserved space.
+- **Free and reserved.** Free space runs out at the truncation budget, `floor((contextLength - outputReserve) * 0.9)`, not at the raw window. The remainder is drawn as reserved (reply budget plus the estimator margin), so the free cells end exactly where live chat starts dropping history.
+- **Unknown window.** Providers without a resolved budget (Anthropic, custom endpoints, and others the live pipeline does not truncate for) get a grid of the prompt's composition only.
+- **Why emoji.** An `ansi` code block colors text on desktop but renders plain on mobile, which would leave the legend unreadable there.
+
+The View buttons route through the global interaction registry (`context:v1:snapshot:<personaId>:<format>`) and rebuild the snapshot on click rather than holding the built prompt in memory.
+
 ## Design decisions
 
 ### Why flatten metadata out of the file?
@@ -140,6 +157,9 @@ silently omit notices that live chat does include.
 
 ## Source
 
-- Command: `src/commands/tool/prompt/snapshot.ts`
+- Commands: `src/commands/tool/prompt/snapshot.ts`, `src/commands/context.ts`
+- Prompt assembly, serialization, delivery, and usage grid: `src/utils/text/promptInspection/`
+- Provider budget shared with live chat: `src/utils/provider/contextBudget.ts`
+- `/context` panel and button route: `src/utils/discord/ui/contextUsagePanel.ts`, `src/utils/discord/interactions/contextRoutes.ts`
 - Shared embed helpers: `src/utils/discord/embedClassifier.ts`, `src/utils/discord/embedDetection.ts`
 - Sampling helper: `src/utils/provider/samplingControl.ts`

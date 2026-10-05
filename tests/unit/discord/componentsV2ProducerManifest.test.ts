@@ -218,6 +218,11 @@ export const COMPONENTS_V2_PRODUCER_MANIFEST: readonly ProducerManifestEntry[] =
     },
   },
   {
+    modulePath: "src/utils/discord/ui/contextUsagePanel.ts",
+    reason: "/context window usage grid with full-prompt buttons",
+    coverage: { kind: "suite", suites: ["tests/unit/discord/componentsV2DeclaredProducerSmoke.test.ts"] },
+  },
+  {
     modulePath: "src/utils/stats/statsDashboard.ts",
     reason: "Stats dashboard message builder",
     coverage: { kind: "suite", suites: ["tests/unit/discord/componentsV2DeclaredProducerSmoke.test.ts"] },

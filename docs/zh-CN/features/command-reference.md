@@ -11,7 +11,7 @@ sidebar:
 
 TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同一批指令构建器和简体中文描述生成（尚未翻译的描述以英文显示）。
 
-顶层指令组：**40**。可执行的斜杠指令：**82**。
+顶层指令组：**41**。可执行的斜杠指令：**83**。
 
 ## `/comment`
 
@@ -45,6 +45,14 @@ TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同�
 | 指令 | 摘要 |
 |---|---|
 | `/config` | 配置人格、行为、频道、权限与模型设置。 |
+
+## `/context`
+
+See how much of the model's context window a persona's prompt fills in this channel.
+
+| 指令 | 摘要 |
+|---|---|
+| `/context` | See how much of the model's context window a persona's prompt fills in this channel. |
 
 ## `/contribute`
 

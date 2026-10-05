@@ -11,7 +11,7 @@ sidebar:
 
 TomoriBotに現在登録されているすべてのスラッシュコマンドです。Discordへの登録に使われるものと同じコマンド定義と日本語の説明文から生成しています（未翻訳の説明は英語で表示されます）。
 
-トップレベルのコマンドグループ：**40**。実行できるスラッシュコマンド：**82**。
+トップレベルのコマンドグループ：**41**。実行できるスラッシュコマンド：**83**。
 
 ## `/comment`
 
@@ -45,6 +45,14 @@ TomoriBotに現在登録されているすべてのスラッシュコマンド�
 | コマンド | 概要 |
 |---|---|
 | `/config` | ペルソナ、エンジン、チャンネル、権限、およびモデルの設定を行います。 |
+
+## `/context`
+
+See how much of the model's context window a persona's prompt fills in this channel.
+
+| コマンド | 概要 |
+|---|---|
+| `/context` | See how much of the model's context window a persona's prompt fills in this channel. |
 
 ## `/contribute`
 

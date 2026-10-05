@@ -11,7 +11,7 @@ sidebar:
 
 Todos los comandos de barra que TomoriBot tiene registrados actualmente, generados a partir de los mismos constructores de comandos y descripciones en español que se usan para el registro en Discord (las descripciones sin traducir aparecen en inglés).
 
-Grupos de comandos de nivel superior: **40**. Comandos de barra ejecutables: **82**.
+Grupos de comandos de nivel superior: **41**. Comandos de barra ejecutables: **83**.
 
 ## `/comment`
 
@@ -45,6 +45,14 @@ Configura ajustes de persona, comportamiento, canal, permisos y modelo.
 | Comando | Resumen |
 |---|---|
 | `/config` | Configura ajustes de persona, comportamiento, canal, permisos y modelo. |
+
+## `/context`
+
+See how much of the model's context window a persona's prompt fills in this channel.
+
+| Comando | Resumen |
+|---|---|
+| `/context` | See how much of the model's context window a persona's prompt fills in this channel. |
 
 ## `/contribute`
 
