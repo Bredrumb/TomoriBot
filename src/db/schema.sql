@@ -280,6 +280,21 @@ CREATE TABLE IF NOT EXISTS persona_sprite_messages (
 CREATE INDEX IF NOT EXISTS idx_persona_sprite_messages_created
   ON persona_sprite_messages(created_at);
 
+-- Maps a Minimal tool notice message to the memory or task it confirmed. A Minimal card shows only
+-- its title, so context rebuilding joins this reference to the live row to restore the body the
+-- model needs to avoid repeating the tool call. Storing the reference rather than the text keeps no
+-- second copy of personal data: a deleted or erased row simply stops resolving. No FK because
+-- `ref_id` points into a different table per kind; dangling references are harmless and pruned.
+CREATE TABLE IF NOT EXISTS minimal_notice_refs (
+  message_disc_id TEXT PRIMARY KEY,
+  ref_kind TEXT NOT NULL CHECK (ref_kind IN ('server_memory', 'personal_memory', 'task')),
+  ref_id INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_minimal_notice_refs_created
+  ON minimal_notice_refs(created_at);
+
 -- Create lineage sequence (start high so reserved low IDs stay available)
 CREATE SEQUENCE IF NOT EXISTS persona_lineage_id_seq
 	INCREMENT BY 1

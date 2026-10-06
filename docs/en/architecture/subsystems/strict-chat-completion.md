@@ -42,6 +42,11 @@ generation attempt; NovelAI and prefix-completion backends count as able regardl
 The exception is DeepSeek, which rejects `prefix: true` in a request that also carries `tools`
 ("Function call should not be used with prefix"). While Tool Use is on there, the resolver reports a
 `tools` blocker: a server prefill is skipped and a `/respond` prefill is sent as an instruction.
+Once the model calls a tool, the prefill no longer trails the request: the tool loop moves it into the
+first tool call's assistant turn (`foldPrefillIntoToolHistory`), because leaving it in place would put
+two assistant turns in a row, which Gemini and other strict-alternation backends reject. A prefill
+that already opens with the persona's speaker label (its name, `{bot}`, or a sprite label such as
+`Name (mad):`) is normalized to that label rather than prefixed a second time.
 Unlisted models default to `false`, so a new model never receives a prefill until its seed row is
 flipped after a probe (`plans/prefill-probe.ts`). Moving `~` aliases stay `false`, because the model
 behind one can drop support without the row changing. See

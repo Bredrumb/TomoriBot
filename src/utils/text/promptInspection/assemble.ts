@@ -33,6 +33,7 @@ import { extractNoticeTextFromComponents } from "@/utils/discord/componentNotice
 import { checkTargetEmbed, checkTargetEmbedTitle, processLinkEmbed } from "@/utils/discord/embedClassifier";
 import { sliceMessagesAtResetMarker } from "@/utils/discord/embedDetection";
 import { isMinimalTitleKind } from "@/utils/discord/embedProtocol";
+import { resolveMinimalNoticeBodies } from "@/utils/discord/minimalNoticeBodies";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { normalizeRenderModifierName } from "@/utils/discord/renderModifierParser";
 import { resolveWebhookPersonaAuthor } from "@/utils/discord/webhookPersonaAuthor";
@@ -497,6 +498,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
   const simplifiedMessages: SimpleMsg[] = [];
   const userListSet = new Set<string>();
   const syntheticUsers = new Map<string, { displayName: string; type: "persona" | "webhook" }>();
+  const minimalNoticeBodies = await resolveMinimalNoticeBodies(messagesArray);
 
   for (const message of messagesArray) {
     // Skip fully-private and server-blacklisted users (same gates as real context building)
@@ -626,7 +628,10 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
       if (noticeCheck.isTarget && (cv2Notice.description || isMinimalTitleKind(noticeCheck.type))) {
         embedTextSegments.push(
           formatTargetEmbedForContext(
-            { title: cv2Notice.title, description: cv2Notice.description ?? "" },
+            {
+              title: cv2Notice.title,
+              description: cv2Notice.description ?? minimalNoticeBodies.get(message.id) ?? "",
+            },
             noticeCheck.type,
             botNickname,
           ),

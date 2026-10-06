@@ -607,6 +607,7 @@ export class ReminderTool extends BaseTool {
                 },
           },
           reminderPurpose,
+          dbResult.reminder_id === undefined ? undefined : { kind: "task", id: dbResult.reminder_id },
         );
 
         return {

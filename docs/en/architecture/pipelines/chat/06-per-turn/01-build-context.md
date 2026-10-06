@@ -171,6 +171,7 @@ This stage is a coordinator over many extension-relevant helpers:
 | `simplifyMessage` + sub-helpers (`withReplyContext`, `withReactionContext`, `buildForwardContext`) | this file | Per-message annotation pipeline; new annotation types hook here |
 | `processEmbedsFromMessage` | `contextEmbeds.ts` | Embed classification + content extraction; new embed type plugins hook here |
 | `extractNoticeTextFromComponents` | `discord/componentNoticeReader.ts` | Reconstructs `{title, description, footer}` from a Components V2 container so CV2 notices classify like embeds |
+| `resolveMinimalNoticeBodies` | `discord/minimalNoticeBodies.ts` | Restores the body of title-only Minimal memory and task notices from the live rows they reference |
 | `appendSupportedMediaFromMessage`, `appendStickersFromMessage`, etc. | `contextMedia.ts` | Media attachment extractors; new media kinds hook here |
 | `buildReactionContextAnnotation`, `buildReplyReferenceContextAnnotation` | `contextAnnotations.ts` | Annotation builders; reaction/reply formatting hooks here |
 | `appendTailDirectives` | this file | Tail-directive assembly; new directive kinds insert here |
@@ -217,6 +218,17 @@ specifically so both paths emit byte-identical `[System: ...]` context. Current
 CV2 senders: `expandableEmbedNotice.ts` (memory + task via
 `sendMemoryEmbedWithExpand` / `sendTaskEmbedWithExpand`, `update_user_info` via
 `sendToolNoticeContainer`). All other notice types are still embed-based.
+
+- **A Minimal notice is a title with no body**: at Minimal verbosity the card
+shows only its title, so without help the model would know it saved a memory but
+not which one, and save it again. `routeHideableNotice` records a
+`minimal_notice_refs` row for Minimal memory and task cards, and
+`buildSimplifiedHistory` resolves the window once through
+`resolveMinimalNoticeBodies` before the simplify loop. The restored body uses the
+same `ID:n` form as the memory and pending-task context lines so the model can
+match them. The lookup runs only when the window holds a title-only notice, and
+a deleted row leaves the notice as its bare title. Compaction
+(`historyExtraction.ts`) and the prompt snapshot resolve the same way.
 
 - **A notice title absent from `checkTargetEmbedTitle` is dropped silently**:
 whichever transport it uses, so a persona asked "did you already do that?" has no

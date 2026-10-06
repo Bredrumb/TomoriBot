@@ -876,6 +876,7 @@ describe("chat regression harness", () => {
       },
       currentPersona: tomoriState,
       isUserImpersonation: false,
+      contextItems: [],
     } as unknown as ChatTurnContext;
 
     const resultPromise = runToolLoop({
@@ -939,6 +940,7 @@ describe("chat regression harness", () => {
       },
       currentPersona: tomoriState,
       isUserImpersonation: false,
+      contextItems: [],
     } as unknown as ChatTurnContext;
 
     const result = await runToolLoop({
@@ -993,6 +995,7 @@ describe("chat regression harness", () => {
       streamingContext: { suppressUserErrors: true },
       currentPersona: tomoriState,
       isUserImpersonation: false,
+      contextItems: [],
     } as unknown as ChatTurnContext;
 
     try {

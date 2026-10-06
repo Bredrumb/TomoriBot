@@ -69,6 +69,7 @@ import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 import { getCachedImpersonatedUserIdForWebhook } from "@/utils/chat/webhookIdentity";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { primePersonaSpriteMessageRecords } from "@/utils/cache/personaSpriteMessageCache";
+import { resolveMinimalNoticeBodies } from "@/utils/discord/minimalNoticeBodies";
 import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import type { StreamingContext } from "@/types/tool/interfaces";
@@ -712,6 +713,7 @@ async function buildSimplifiedHistory(
   // Prime the sprite message cache with one batched query so per-message
   // "Name (sprite):" label lookups inside simplifyMessage() are cache hits.
   await primePersonaSpriteMessageRecords(visibleRawMessages.filter((msg) => msg.webhookId).map((msg) => msg.id));
+  const minimalNoticeBodies = await resolveMinimalNoticeBodies(visibleRawMessages);
 
   const simplifiedMessages: SimplifiedMessageForContext[] = [];
   const userIds = new Set<string>();
@@ -779,6 +781,7 @@ async function buildSimplifiedHistory(
       matrixUsers,
       reactionBudgetState,
       hiddenAuthorIds,
+      minimalNoticeBodies,
     );
     if (!result) continue;
     const { message: simplified, isDebug } = result;
@@ -922,6 +925,7 @@ async function simplifyMessage(
   matrixUsers: Map<string, string>,
   reactionBudgetState: ReactionContextBudgetState,
   blockedContextUserIds: Set<string>,
+  minimalNoticeBodies: ReadonlyMap<string, string>,
 ): Promise<{ message: SimplifiedMessageForContext; isDebug: boolean } | null> {
   const isJoin = msg.type === MessageType.UserJoin;
   const isDebug = !isJoin && msg.content.startsWith("$:");
@@ -1039,6 +1043,7 @@ async function simplifyMessage(
   const embedResult = processEmbedsFromMessage({
     embeds: msg.embeds,
     components: msg.components,
+    minimalNoticeBody: minimalNoticeBodies.get(msg.id),
     content,
     imageAttachments,
     isTomoriAuthoredMessage,

@@ -4,6 +4,7 @@ import { applyAssistantPrefixCompletion } from "@/providers/utils/strictChatComp
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import {
   applyAssistantPrefill,
+  foldPrefillIntoToolHistory,
   resolvePrefillBlocker,
   resolvePrefillMode,
   selectTurnPrefillText,
@@ -131,6 +132,23 @@ describe("applyAssistantPrefill", () => {
     });
   });
 
+  it("normalizes a prefill that already names the speaker instead of prefixing it twice", async () => {
+    const tomoriState = createPersona({
+      llm: createLlmRow({
+        llm_provider: "anthropic",
+        llm_codename: "claude-haiku-4-5",
+        supports_assistant_prefill: true,
+      }),
+    });
+    const prefillFor = async (text: string) =>
+      (await applyAssistantPrefill({ contextItems: [userTurn], prefill: { text, source: "server" }, tomoriState }))
+        .outputPrefill;
+
+    expect(await prefillFor("Mirri: *sighs*")).toBe("Mirri: *sighs*");
+    expect(await prefillFor("{bot}: *sighs*")).toBe("Mirri: *sighs*");
+    expect(await prefillFor("Mirri (mad)： *sighs*")).toBe("Mirri (mad): *sighs*");
+  });
+
   it("sends a manual prefill as an instruction, with no assistant turn, to a model that rejects one", async () => {
     const tomoriState = createPersona({
       llm: createLlmRow({ llm_provider: "anthropic", llm_codename: "claude-sonnet-4-6" }),
@@ -188,5 +206,59 @@ describe("applyAssistantPrefill", () => {
       content: "Mirri: Sure, here",
       prefix: true,
     });
+  });
+});
+
+describe("foldPrefillIntoToolHistory", () => {
+  // Regression: the prefill stayed as a trailing assistant turn into the tool continuation, so the
+  // tool-call turn followed it as a second consecutive assistant turn and Gemini rejected the request.
+  it("sends the prefill inside the tool-call turn so assistant turns never repeat", async () => {
+    const tomoriState = createPersona({
+      llm: createLlmRow({
+        llm_provider: "anthropic",
+        llm_codename: "claude-haiku-4-5",
+        supports_assistant_prefill: true,
+      }),
+    });
+    const prefilled = await applyAssistantPrefill({
+      contextItems: [userTurn],
+      prefill: { text: "Sure, here", source: "server" },
+      tomoriState,
+    });
+    const history = [
+      {
+        functionCall: { name: "web_search", args: { query: "fruit" } },
+        functionResponse: { status: "completed" },
+        preToolCallTextParts: [{ type: "text", text: " are some fruit" }],
+      },
+    ];
+
+    const request = foldPrefillIntoToolHistory(prefilled.contextItems, prefilled.outputPrefill, history);
+    const messages = await buildOpenAICompatibleMessages({
+      adapterName: "test",
+      contextItems: request.contextItems,
+      currentTurnModelParts: [],
+      functionInteractionHistory: request.functionHistory,
+    });
+
+    const roles = messages.map((message) => message.role);
+    expect(roles.some((role, index) => role === "assistant" && roles[index - 1] === "assistant")).toBe(false);
+    expect(messages.find((message) => message.role === "assistant")?.content).toBe("Mirri: Sure, here are some fruit");
+    // The key-rotation retry reruns the loop on the same context, which must still carry the prefill.
+    expect(prefilled.contextItems.at(-1)?.role).toBe("model");
+  });
+
+  it("leaves the first request and instruction-mode prefills untouched", () => {
+    const prefillTurn: StructuredContextItem = {
+      role: "model",
+      parts: [{ type: "text", text: "Mirri: Sure" }],
+      metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+    };
+    const unchanged = foldPrefillIntoToolHistory([userTurn, prefillTurn], "Mirri: Sure", []);
+    expect(unchanged.contextItems.at(-1)).toBe(prefillTurn);
+
+    const history = [{ functionCall: { name: "web_search", args: {} }, functionResponse: {} }];
+    const instruction = foldPrefillIntoToolHistory([userTurn], "Mirri: Sure", history);
+    expect(instruction.functionHistory).toBe(history);
   });
 });

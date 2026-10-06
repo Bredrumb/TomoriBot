@@ -174,6 +174,29 @@ export const personaSpriteMessageSchema = z.object({
 });
 export type PersonaSpriteMessageRow = z.infer<typeof personaSpriteMessageSchema>;
 
+const MINIMAL_NOTICE_REF_KINDS = ["server_memory", "personal_memory", "task"] as const;
+type MinimalNoticeRefKind = (typeof MINIMAL_NOTICE_REF_KINDS)[number];
+
+/** The row a Minimal tool notice confirmed, identified so context rebuilding can reload it live. */
+export interface MinimalNoticeRef {
+  kind: MinimalNoticeRefKind;
+  id: number;
+}
+
+/**
+ * A `minimal_notice_refs` row joined to its live target. The content columns are null when the
+ * referenced memory or task no longer exists.
+ */
+export const resolvedMinimalNoticeRefSchema = z.object({
+  message_disc_id: z.string().min(1),
+  ref_kind: z.enum(MINIMAL_NOTICE_REF_KINDS),
+  ref_id: z.number().int(),
+  memory_content: z.string().nullable(),
+  memory_tags: z.array(z.string()).nullable(),
+  reminder_purpose: z.string().nullable(),
+});
+export type ResolvedMinimalNoticeRefRow = z.infer<typeof resolvedMinimalNoticeRefSchema>;
+
 /**
  * Runtime autochat counters for a persona (Phase 6 Step #16B).
  * Separated from personas so identity rows are not mutated on every message tick.

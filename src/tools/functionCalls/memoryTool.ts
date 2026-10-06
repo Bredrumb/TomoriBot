@@ -326,6 +326,9 @@ export class MemoryTool extends BaseTool {
               footerKey: "genai.self_teach.server_memory_footer",
             },
             processedMemoryContent,
+            dbResult.server_memory_id === undefined
+              ? undefined
+              : { kind: "server_memory", id: dbResult.server_memory_id },
           );
 
           // Invalidate TomoriState cache so next message includes new memory
@@ -492,6 +495,9 @@ export class MemoryTool extends BaseTool {
                 footerKey: personalMemoryFooterKey,
               },
               processedMemoryContent,
+              dbResult.personal_memory_id === undefined
+                ? undefined
+                : { kind: "personal_memory", id: dbResult.personal_memory_id },
             );
           } catch (embedError) {
             log.warn("Failed to send personal memory notification notice (non-fatal)", embedError as Error);

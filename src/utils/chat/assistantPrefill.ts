@@ -1,9 +1,10 @@
 import { ThinkingLevel } from "@google/genai";
 import type { LlmRow, TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
-import type { ChatIncoming } from "@/utils/chat/types";
+import type { ChatIncoming, ToolHistoryEntry } from "@/utils/chat/types";
 import { log } from "@/utils/misc/logger";
 import { providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
+import { buildBotSpeakerLabelPattern } from "@/utils/text/processors/regexUtils";
 import { buildGoogleThinkingConfig } from "@/utils/provider/thinkingControl";
 import {
   providerPrefixCompletionExcludesTools,
@@ -144,7 +145,12 @@ export async function applyAssistantPrefill(args: {
   if (!text) return { contextItems: args.contextItems, outputPrefill: undefined };
 
   const botName = args.tomoriState.persona_nickname || process.env.DEFAULT_BOTNAME || "Tomori";
-  const outputPrefill = `${botName}: ${text}`;
+  // A prefill that already names the speaker keeps its sprite label but takes the real name,
+  // because nothing expands `{bot}` on this path.
+  const label = text.match(buildBotSpeakerLabelPattern(botName));
+  const outputPrefill = label
+    ? `${botName}${label[1]}: ${text.slice(label[0].length)}`.trimEnd()
+    : `${botName}: ${text}`;
 
   if (mode === "native") {
     return {
@@ -160,4 +166,37 @@ export async function applyAssistantPrefill(args: {
     `Begin your next reply with: "${outputPrefill}". Continue directly after it without repeating the prefix.`,
   );
   return { contextItems: directive ? [...args.contextItems, directive] : args.contextItems, outputPrefill };
+}
+
+/**
+ * Moves a native prefill out of the trailing assistant turn and into the first tool call's
+ * assistant turn once a tool continuation begins. Left trailing, the prefill would precede the
+ * tool-call turn as a second consecutive assistant turn, which Gemini and other strict-alternation
+ * backends reject. Every adapter joins `preToolCallTextParts` with no separator, so the folded turn
+ * reads exactly as the model continued it. Returns new arrays because the key-rotation retry reruns
+ * the tool loop on the same context, which must still end with the prefill.
+ */
+export function foldPrefillIntoToolHistory(
+  contextItems: StructuredContextItem[],
+  outputPrefill: string | undefined,
+  functionHistory: ToolHistoryEntry[],
+): { contextItems: StructuredContextItem[]; functionHistory: ToolHistoryEntry[] } {
+  const [first, ...rest] = functionHistory;
+  const trailing = contextItems.at(-1);
+  const trailingText =
+    trailing?.parts.length === 1 && trailing.parts[0].type === "text" ? trailing.parts[0].text : null;
+  if (!first || !outputPrefill || trailing?.role !== "model" || trailingText !== outputPrefill) {
+    return { contextItems, functionHistory };
+  }
+
+  return {
+    contextItems: contextItems.slice(0, -1),
+    functionHistory: [
+      {
+        ...first,
+        preToolCallTextParts: [{ type: "text", text: outputPrefill }, ...(first.preToolCallTextParts ?? [])],
+      },
+      ...rest,
+    ],
+  };
 }

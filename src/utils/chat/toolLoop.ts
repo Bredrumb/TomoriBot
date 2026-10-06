@@ -27,6 +27,7 @@ import {
   buildTailDirectiveMessage,
 } from "@/utils/chat/contextAnnotations";
 import { takeEnhancedContextItem } from "@/utils/chat/pendingEnhancedContext";
+import { foldPrefillIntoToolHistory } from "@/utils/chat/assistantPrefill";
 import { recordChatDiagnostic, runWithChatDiagnosticStage } from "@/utils/chat/diagnosticTimeline";
 import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 import type { ChatTurnContext, GenerationTurnResult, ToolHistoryEntry } from "@/utils/chat/types";
@@ -441,15 +442,20 @@ async function streamOnce(
   // Keep a handle to the provider call so the timeout branch can await it settling. Under
   // Promise.race the loser is otherwise abandoned (never awaited); its rejection is still observed
   // by race's internal handlers, so holding this reference does not create an unhandled rejection.
+  const request = foldPrefillIntoToolHistory(
+    params.context.contextItems,
+    params.context.streamingContext.outputPrefill,
+    functionHistory,
+  );
   const streamPromise = params.provider.streamToDiscord(
     params.context.channel as Parameters<LLMProvider["streamToDiscord"]>[0],
     params.context.client,
     params.tomoriState,
     params.providerConfig,
-    params.context.contextItems,
+    request.contextItems,
     accumulatedModelParts,
     params.context.emojiStrings,
-    functionHistory.length > 0 ? functionHistory : undefined,
+    request.functionHistory.length > 0 ? request.functionHistory : undefined,
     undefined,
     replyToMessage,
     params.context.streamingContext,

@@ -149,7 +149,9 @@ The live chat pipeline in `tomoriChat.ts` has inline helpers for these. Rather t
 The CV2 reader is required for snapshot fidelity: memory-learning and
 scheduled-task notices are sent as Components V2 containers with an **empty
 `message.embeds` array**, so a snapshot that only walked `message.embeds` would
-silently omit notices that live chat does include.
+silently omit notices that live chat does include. For the same reason the
+snapshot restores title-only Minimal notice bodies through
+`resolveMinimalNoticeBodies`, as live chat does.
 
 `tomoriChat.ts` still uses its inline versions (no functional change there), but future snapshot-like consumers should prefer the shared primitives.
 
