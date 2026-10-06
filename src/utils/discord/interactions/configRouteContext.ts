@@ -641,7 +641,7 @@ export async function repaint(
             general: {
               systemPrompt: state.config.system_prompt ?? null,
               responsePrefill: state.config.response_prefill ?? null,
-              prefillBlocker: resolvePrefillBlocker(state.llm, state.config.thinking_level),
+              prefillBlocker: resolvePrefillBlocker(state),
               prefillModelName: state.llm.llm_codename,
               contextNote: state.config.context_note ?? null,
               contextNoteDepth: state.config.context_note_depth ?? 0,

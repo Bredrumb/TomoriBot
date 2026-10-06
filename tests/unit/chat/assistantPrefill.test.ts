@@ -47,7 +47,7 @@ describe("selectTurnPrefillText", () => {
 describe("resolvePrefillBlocker", () => {
   it("degrades a model that cannot continue a prefill per source", () => {
     const sonnet = createLlmRow({ llm_provider: "anthropic", llm_codename: "claude-sonnet-4-6" });
-    const blocker = resolvePrefillBlocker(sonnet, "auto");
+    const blocker = resolvePrefillBlocker({ llm: sonnet, config: { thinking_level: "auto", tool_use_enabled: true } });
     expect(blocker).toBe("model");
     expect(resolvePrefillMode("manual", blocker)).toBe("instruction");
     expect(resolvePrefillMode("server", blocker)).toBe("skip");
@@ -55,10 +55,13 @@ describe("resolvePrefillBlocker", () => {
 
   it("treats NovelAI and prefix-completion providers as native without the column", () => {
     for (const provider of ["novelai", "deepseek", "zai"]) {
-      expect(resolvePrefillBlocker(createLlmRow({ llm_provider: provider, llm_codename: "m" }), "auto")).toBeNull();
+      const llm = createLlmRow({ llm_provider: provider, llm_codename: "m", has_tools: false });
+      expect(resolvePrefillBlocker({ llm, config: { thinking_level: "auto", tool_use_enabled: true } })).toBeNull();
     }
     const prefixEndpoint = createLlmRow({ llm_provider: "custom", supports_prefix_completion: true });
-    expect(resolvePrefillBlocker(prefixEndpoint, "auto")).toBeNull();
+    expect(
+      resolvePrefillBlocker({ llm: prefixEndpoint, config: { thinking_level: "auto", tool_use_enabled: true } }),
+    ).toBeNull();
   });
 
   it("only lets Gemini continue a prefill with thinking off or minimal", () => {
@@ -67,19 +70,42 @@ describe("resolvePrefillBlocker", () => {
       llm_codename: "gemini-3.1-flash-lite",
       supports_assistant_prefill: true,
     });
-    expect(resolvePrefillBlocker(flashLite, "minimal")).toBeNull();
-    expect(resolvePrefillBlocker(flashLite, "low")).toBe("thinking");
-    expect(resolvePrefillBlocker(flashLite, "auto")).toBe("thinking");
+    expect(
+      resolvePrefillBlocker({ llm: flashLite, config: { thinking_level: "minimal", tool_use_enabled: true } }),
+    ).toBeNull();
+    expect(resolvePrefillBlocker({ llm: flashLite, config: { thinking_level: "low", tool_use_enabled: true } })).toBe(
+      "thinking",
+    );
+    expect(resolvePrefillBlocker({ llm: flashLite, config: { thinking_level: "auto", tool_use_enabled: true } })).toBe(
+      "thinking",
+    );
 
     const flash25 = createLlmRow({
       llm_provider: "google",
       llm_codename: "gemini-2.5-flash",
       supports_assistant_prefill: true,
     });
-    expect(resolvePrefillBlocker(flash25, "none")).toBeNull();
-    expect(resolvePrefillBlocker(flash25, "auto")).toBe("thinking");
+    expect(
+      resolvePrefillBlocker({ llm: flash25, config: { thinking_level: "none", tool_use_enabled: true } }),
+    ).toBeNull();
+    expect(resolvePrefillBlocker({ llm: flash25, config: { thinking_level: "auto", tool_use_enabled: true } })).toBe(
+      "thinking",
+    );
     // Reasoning mode lifts "none" to a real budget, which would leak thoughts as visible text.
-    expect(resolvePrefillBlocker(flash25, "none", true)).toBe("thinking");
+    expect(
+      resolvePrefillBlocker({ llm: flash25, config: { thinking_level: "none", tool_use_enabled: true } }, true),
+    ).toBe("thinking");
+  });
+
+  // Regression: DeepSeek 400s "Function call should not be used with prefix" when a prefill turn
+  // and tools share one request.
+  it("blocks a DeepSeek prefill only while tools would ride along", () => {
+    const llm = createLlmRow({ llm_provider: "deepseek", llm_codename: "deepseek-flash", has_tools: true });
+    const blocker = resolvePrefillBlocker({ llm, config: { thinking_level: "auto", tool_use_enabled: true } });
+    expect(blocker).toBe("tools");
+    expect(resolvePrefillMode("server", blocker)).toBe("skip");
+    expect(resolvePrefillMode("manual", blocker)).toBe("instruction");
+    expect(resolvePrefillBlocker({ llm, config: { thinking_level: "auto", tool_use_enabled: false } })).toBeNull();
   });
 });
 
@@ -139,7 +165,7 @@ describe("applyAssistantPrefill", () => {
   // received a bare trailing assistant turn without `prefix: true`.
   it("hands a prefix-completion provider an outputPrefill that stamps prefix on the built body", async () => {
     const tomoriState = createPersona({
-      llm: createLlmRow({ llm_provider: "deepseek", llm_codename: "deepseek-chat" }),
+      llm: createLlmRow({ llm_provider: "deepseek", llm_codename: "deepseek-chat", has_tools: false }),
     });
     const result = await applyAssistantPrefill({
       contextItems: [userTurn],

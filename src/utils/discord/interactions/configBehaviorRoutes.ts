@@ -196,7 +196,7 @@ function fallbackBehaviorView(state: TomoriState): {
     general: {
       systemPrompt: state.config.system_prompt ?? null,
       responsePrefill: state.config.response_prefill ?? null,
-      prefillBlocker: resolvePrefillBlocker(state.llm, state.config.thinking_level),
+      prefillBlocker: resolvePrefillBlocker(state),
       prefillModelName: state.llm.llm_codename,
       contextNote: state.config.context_note ?? null,
       contextNoteDepth: state.config.context_note_depth ?? 0,
@@ -544,7 +544,7 @@ async function runGeneralWrite(
     const prefill = getText(modalInteraction, BEHAVIOR_PREFILL_FIELD, route.nonce).trim();
     // The thinking blocker is allowed through because the admin can lift it in one step; a model
     // that can never continue a prefill would store text that silently never applies.
-    if (prefill && resolvePrefillBlocker(state.llm, state.config.thinking_level) === "model") {
+    if (prefill && resolvePrefillBlocker(state) === "model") {
       return {
         receipt: receipt(
           locale,

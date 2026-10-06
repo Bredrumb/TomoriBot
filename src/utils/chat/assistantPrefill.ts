@@ -5,7 +5,11 @@ import type { ChatIncoming } from "@/utils/chat/types";
 import { log } from "@/utils/misc/logger";
 import { providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
 import { buildGoogleThinkingConfig } from "@/utils/provider/thinkingControl";
-import { providerRequiresPrefixCompletion } from "@/providers/utils/strictChatCompat";
+import {
+  providerPrefixCompletionExcludesTools,
+  providerRequiresPrefixCompletion,
+} from "@/providers/utils/strictChatCompat";
+import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
 /** Shared by the `/respond` prefill field and the server prefill modal. */
 export const ASSISTANT_PREFILL_MAX_LENGTH = 2000;
@@ -15,9 +19,10 @@ export type PrefillMode = "native" | "instruction" | "skip";
 
 /**
  * Why an attempt's model cannot continue a trailing assistant turn: `model` when the backend
- * rejects or ignores one outright, `thinking` when it continues only with thinking off.
+ * rejects or ignores one outright, `thinking` when it continues only with thinking off, `tools`
+ * when the backend rejects a prefill in a request that also offers tools.
  */
-export type PrefillBlocker = "model" | "thinking";
+export type PrefillBlocker = "model" | "thinking" | "tools";
 
 /** Tool macros stay unexpanded here: they resolve per provider, and each attempt may differ. */
 export interface TurnPrefill {
@@ -25,10 +30,13 @@ export interface TurnPrefill {
   source: PrefillSource;
 }
 
-type PrefillCapabilityRow = Pick<
-  LlmRow,
-  "llm_provider" | "llm_codename" | "supports_prefix_completion" | "supports_assistant_prefill"
->;
+interface PrefillCapabilityState {
+  llm: Pick<
+    LlmRow,
+    "llm_provider" | "llm_codename" | "has_tools" | "supports_prefix_completion" | "supports_assistant_prefill"
+  >;
+  config: Pick<TomoriState["config"], "thinking_level" | "tool_use_enabled">;
+}
 
 /**
  * Picks the prefill steering this turn. A `/respond` prefill replaces the server one rather than
@@ -73,19 +81,20 @@ export function selectTurnPrefillText(
  *
  * Gemini emits no thought parts while a prefill is present, so any thinking budget above off or
  * minimal surfaces as visible text after the continuation. The gate reuses the provider's own
- * thinking builder so it cannot drift from what the request actually sends.
+ * thinking builder so it cannot drift from what the request actually sends. The tools gate reuses
+ * the providers' own tool gate for the same reason.
  */
-export function resolvePrefillBlocker(
-  llm: PrefillCapabilityRow,
-  thinkingLevel: string | null | undefined,
-  forceReason?: boolean,
-): PrefillBlocker | null {
+export function resolvePrefillBlocker(state: PrefillCapabilityState, forceReason?: boolean): PrefillBlocker | null {
+  const { llm } = state;
   if (llm.llm_provider === "novelai") return null;
+  if (providerPrefixCompletionExcludesTools(llm.llm_provider) && resolveToolsEnabled(state, llm.has_tools)) {
+    return "tools";
+  }
   if (providerRequiresPrefixCompletion(llm.llm_provider) || llm.supports_prefix_completion) return null;
   if (!llm.supports_assistant_prefill) return "model";
 
   if (providerUsesApiFamily(llm.llm_provider, "google-genai")) {
-    const thinking = buildGoogleThinkingConfig(llm.llm_codename, thinkingLevel, forceReason);
+    const thinking = buildGoogleThinkingConfig(llm.llm_codename, state.config.thinking_level, forceReason);
     const thinkingOff = thinking?.thinkingBudget === 0 || thinking?.thinkingLevel === ThinkingLevel.MINIMAL;
     if (!thinkingOff) return "thinking";
   }
@@ -116,7 +125,7 @@ export async function applyAssistantPrefill(args: {
   if (!args.prefill) return { contextItems: args.contextItems, outputPrefill: undefined };
 
   const llm = args.tomoriState.llm;
-  const blocker = resolvePrefillBlocker(llm, args.tomoriState.config.thinking_level, args.forceReason);
+  const blocker = resolvePrefillBlocker(args.tomoriState, args.forceReason);
   const mode = resolvePrefillMode(args.prefill.source, blocker);
   if (mode === "skip") {
     log.warn(

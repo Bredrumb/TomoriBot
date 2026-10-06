@@ -364,8 +364,7 @@ export async function execute(
       resolvePrefillMode(
         "manual",
         resolvePrefillBlocker(
-          reasoningModel ?? selectedPersona.llm,
-          selectedPersona.config.thinking_level,
+          { llm: reasoningModel ?? selectedPersona.llm, config: selectedPersona.config },
           forceReason,
         ),
       ) === "instruction";

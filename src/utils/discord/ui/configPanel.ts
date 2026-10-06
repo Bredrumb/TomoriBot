@@ -2469,7 +2469,9 @@ function responsePrefillStatus(locale: string, view: ConfigBehaviorGeneralView):
       ? "commands.config.panel.response_prefill_inactive_model"
       : view.prefillBlocker === "thinking"
         ? "commands.config.panel.response_prefill_inactive_thinking"
-        : "commands.config.panel.response_prefill_active";
+        : view.prefillBlocker === "tools"
+          ? "commands.config.panel.response_prefill_inactive_tools"
+          : "commands.config.panel.response_prefill_active";
   return localizer(locale, key, { model: view.prefillModelName });
 }
 

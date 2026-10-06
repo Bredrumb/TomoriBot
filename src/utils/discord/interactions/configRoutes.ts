@@ -537,7 +537,7 @@ const defaultDependencies: ConfigRouteDependencies = {
     const general: ConfigBehaviorGeneralView = {
       systemPrompt: rawChatConfig?.system_prompt ?? state.config.system_prompt ?? null,
       responsePrefill: rawChatConfig?.response_prefill ?? state.config.response_prefill ?? null,
-      prefillBlocker: resolvePrefillBlocker(state.llm, state.config.thinking_level),
+      prefillBlocker: resolvePrefillBlocker(state),
       prefillModelName: state.llm.llm_codename,
       contextNote: rawChatConfig?.context_note ?? state.config.context_note ?? null,
       contextNoteDepth: rawChatConfig?.context_note_depth ?? state.config.context_note_depth ?? 0,

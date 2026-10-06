@@ -424,6 +424,7 @@ export default {
       response_prefill_active: `Active on {model}.`,
       response_prefill_inactive_model: `Inactive: {model} cannot continue a prefill, so I skip it.`,
       response_prefill_inactive_thinking: `Inactive: set Thinking to None or Minimal so {model} can continue it.`,
+      response_prefill_inactive_tools: `Inactive: {model} cannot continue a prefill while Tool Use is on, so I skip it.`,
       set_prefill_button: `Set Prefill`,
       global_response_style_description: "Choose how human-like responses feel and how much history they read.",
       humanizer_label: `Humanizer`,
