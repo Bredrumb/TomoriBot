@@ -78,6 +78,7 @@ import type { RawModalPayload } from "@/utils/discord/ui/configModals";
 import { buildPanelContainer } from "@/utils/discord/ui/panel";
 import type { RecordPanelActionInput } from "@/utils/stats/panelActionMetrics";
 import { localizer } from "@/utils/text/localizer";
+import { resolvePrefillBlocker, type PrefillBlocker } from "@/utils/chat/assistantPrefill";
 import { stPresetOperations } from "@/utils/stPreset/stPresetOperations";
 import type { StPresetsPanelRenderInput } from "@/utils/discord/ui/stPresetsPanel";
 import { HUMANIZER_DEFAULT } from "@/utils/discord/humanizerOptions";
@@ -108,6 +109,10 @@ export interface ConfigPersonaMemoryView {
 
 export interface ConfigBehaviorGeneralView {
   systemPrompt: string | null;
+  responsePrefill: string | null;
+  /** Resolved against the server's current text model and thinking level, for the status line. */
+  prefillBlocker: PrefillBlocker | null;
+  prefillModelName: string;
   contextNote: string | null;
   contextNoteDepth: number;
   humanizerDegree: number;
@@ -635,6 +640,9 @@ export async function repaint(
         : {
             general: {
               systemPrompt: state.config.system_prompt ?? null,
+              responsePrefill: state.config.response_prefill ?? null,
+              prefillBlocker: resolvePrefillBlocker(state.llm, state.config.thinking_level),
+              prefillModelName: state.llm.llm_codename,
               contextNote: state.config.context_note ?? null,
               contextNoteDepth: state.config.context_note_depth ?? 0,
               humanizerDegree: state.config.humanizer_degree ?? HUMANIZER_DEFAULT,

@@ -403,6 +403,7 @@ SELECT add_column_if_not_exists('llms', 'supports_structoutput', 'BOOLEAN', 'fal
 -- the per-provider required defaults (anthropic → alternation; deepseek/zai/zaicoding → prefix).
 SELECT add_column_if_not_exists('llms', 'strict_role_alternation', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'supports_prefix_completion', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('llms', 'supports_assistant_prefill', 'BOOLEAN', 'false', 'NOT NULL');
 SELECT add_column_if_not_exists('llms', 'verbatim_tool_calling', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'llm_description', 'TEXT');
 SELECT add_column_if_not_exists('llms', 'descriptions', 'JSONB');
@@ -2384,6 +2385,7 @@ CREATE TABLE IF NOT EXISTS custom_endpoints (
   supports_structoutput BOOLEAN DEFAULT false,
   strict_role_alternation BOOLEAN DEFAULT false,
   supports_prefix_completion BOOLEAN DEFAULT false,
+  supports_assistant_prefill BOOLEAN NOT NULL DEFAULT false,
   verbatim_tool_calling BOOLEAN NOT NULL DEFAULT false,
   is_default BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -2406,6 +2408,8 @@ BEGIN
       ON custom_endpoints(connection_id, COALESCE(model_name, ''));
   END IF;
 END $$;
+
+SELECT add_column_if_not_exists('custom_endpoints', 'supports_assistant_prefill', 'BOOLEAN', 'false', 'NOT NULL');
 
 DROP TRIGGER IF EXISTS update_custom_endpoints_timestamp ON custom_endpoints;
 CREATE TRIGGER update_custom_endpoints_timestamp
@@ -2618,6 +2622,7 @@ CREATE TABLE IF NOT EXISTS server_chat_configs (
   system_prompt                    TEXT,
   context_note                     TEXT,
   context_note_depth               INT         NOT NULL DEFAULT 0,
+  response_prefill                 TEXT,
   llm_stop_strings                 TEXT[]      NOT NULL DEFAULT '{}',
   llm_stop_speaker_pattern_enabled BOOLEAN     NOT NULL DEFAULT false,
   llm_max_output_tokens            INT,
@@ -2631,6 +2636,8 @@ CREATE TABLE IF NOT EXISTS server_chat_configs (
   created_at                       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+SELECT add_column_if_not_exists('server_chat_configs', 'response_prefill', 'TEXT');
 
 DROP TRIGGER IF EXISTS update_server_chat_configs_timestamp ON server_chat_configs;
 CREATE TRIGGER update_server_chat_configs_timestamp

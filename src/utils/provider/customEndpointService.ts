@@ -61,6 +61,7 @@ export interface CustomEndpointRegistrationInput {
   // row so the runtime resolves them uniformly with built-in providers.
   strictRoleAlternation?: boolean;
   supportsPrefixCompletion?: boolean;
+  supportsAssistantPrefill?: boolean;
   // Per-model verbatim tool-calling opt-in: the runtime reads it from the synthetic llms row while
   // the panel reads the endpoint row, so both must carry the same value.
   verbatimToolCalling?: boolean;
@@ -119,6 +120,7 @@ async function upsertSyntheticTextModel(
     supportsStructOutput: endpoint.supportsStructOutput ?? false,
     strictRoleAlternation: endpoint.strictRoleAlternation ?? false,
     supportsPrefixCompletion: endpoint.supportsPrefixCompletion ?? false,
+    supportsAssistantPrefill: endpoint.supportsAssistantPrefill ?? false,
     verbatimToolCalling: endpoint.verbatimToolCalling ?? false,
   });
 
@@ -222,6 +224,7 @@ async function writeSyntheticCapabilityModel(
     supportsStructOutput: endpoint.supportsStructOutput ?? false,
     strictRoleAlternation: endpoint.strictRoleAlternation ?? false,
     supportsPrefixCompletion: endpoint.supportsPrefixCompletion ?? false,
+    supportsAssistantPrefill: endpoint.supportsAssistantPrefill ?? false,
     verbatimToolCalling: endpoint.verbatimToolCalling ?? false,
   });
   // `model_ref_id` points at a different table per capability, so only a text id names an llms row.
@@ -527,6 +530,7 @@ export async function registerCustomEndpoint(
       supportsStructOutput: input.supportsStructOutput ?? false,
       strictRoleAlternation: input.strictRoleAlternation ?? false,
       supportsPrefixCompletion: input.supportsPrefixCompletion ?? false,
+      supportsAssistantPrefill: input.supportsAssistantPrefill ?? false,
       verbatimToolCalling: input.verbatimToolCalling ?? false,
       isDefault: shouldBeDefault,
       customEndpointId: isEdit ? input.editingEndpointId : null,

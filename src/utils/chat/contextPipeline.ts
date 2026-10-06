@@ -30,7 +30,8 @@ import {
   resolveDeliberateToolMode,
 } from "@/utils/tools/deliberateToolMode";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
-import { buildContext, type SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
+import { buildContext, convertMentions, type SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
+import { selectTurnPrefillText, type TurnPrefill } from "@/utils/chat/assistantPrefill";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getCachedChannelContextNote } from "@/utils/cache/channelContextNoteCache";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
@@ -520,6 +521,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     buildPersonaMentionCatalog(turn.allPersonas),
   );
 
+  const assistantPrefill = await resolveTurnAssistantPrefill(turn, effectivePersona);
+
   return {
     turn,
     client,
@@ -543,6 +546,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     tomoriState: effectivePersona,
     requestSnapshot: { ...turn.requestSnapshot, tomoriState: effectivePersona },
     contextItems,
+    assistantPrefill,
     simplifiedMessages: history.simplifiedMessages,
     streamingContext,
     messageIdMap,
@@ -1230,6 +1234,25 @@ async function withReactionContext(
   return content ? `${content}\n${annotation}` : annotation;
 }
 
+/**
+ * Identity and mention macros resolve once per turn. The triggerer's real name is passed (the
+ * system prompt passes "User") because the prefill sits at the tail of this specific exchange.
+ */
+async function resolveTurnAssistantPrefill(turn: ChatTurn, persona: TomoriState): Promise<TurnPrefill | null> {
+  const selected = selectTurnPrefillText(turn.lockedTurn.admission.incoming, persona.config.response_prefill);
+  if (!selected) return null;
+  const text = await convertMentions(
+    selected.text,
+    turn.lockedTurn.admission.client,
+    turn.serverDiscId,
+    turn.triggererName,
+    persona.persona_nickname,
+    persona.config.personal_memories_enabled,
+    { ...turn.requestSnapshot, tomoriState: persona },
+  );
+  return text.trim() ? { text: text.trim(), source: selected.source } : null;
+}
+
 function appendTailDirectives(args: {
   turn: ChatTurn;
   simplifiedMessages: SimplifiedMessageForContext[];
@@ -1259,10 +1282,8 @@ function appendTailDirectives(args: {
     tail.push(`The user has activated reasoning mode with the following query: "${incoming.reasoningQuery}".`);
   if (incoming.manualSystemPrompt?.trim()) tail.push(normalizeTailDirective(incoming.manualSystemPrompt));
 
-  // Inject persona self-continuation directive for manual triggers (Fix #1).
-  // When the selected persona was the last speaker, prompt it to continue rather
-  // than repeat itself. Also handles the manualPrefill hybrid-continuation case.
-  const trimmedPrefill = incoming.manualPrefill?.trim();
+  // When the selected persona was the last speaker, a manual trigger should continue that message
+  // rather than repeat it.
   if (
     incoming.isManuallyTriggered &&
     !incoming.sceneTurn &&
@@ -1280,32 +1301,11 @@ function appendTailDirectives(args: {
     const isEmbedMessage =
       lastMsg.content?.includes("[System: The following content came from a system-produced embed]") ?? false;
 
-    const isNovelaiKayraOrErato =
-      args.turn.persona.llm.llm_provider === "novelai" &&
-      (args.turn.persona.llm.llm_codename === "kayra-v1" || args.turn.persona.llm.llm_codename === "llama-3-erato-v1");
-    const usePrefillContinuation = Boolean(trimmedPrefill) && !isNovelaiKayraOrErato;
-
-    if (trimmedPrefill && isNovelaiKayraOrErato) {
-      log.info("Manual prefill directive skipped for NovelAI Kayra/Erato; relying on assistant prefill tail");
-    }
-
-    if ((isFromSelectedPersona && !isEmbedMessage) || usePrefillContinuation) {
-      const reason = usePrefillContinuation
-        ? "manual prefill"
-        : `${args.turn.persona.persona_nickname} as last speaker`;
-      log.info(`Manual trigger (${reason}) — injecting continuation directive`);
-
-      const botName = args.turn.persona.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori";
-      let continuationText: string;
-      if (usePrefillContinuation) {
-        continuationText =
-          isFromSelectedPersona && !isEmbedMessage
-            ? `[Continue your last message without repeating it. Begin exactly with: "${botName}: ${trimmedPrefill}". Continue directly after it without repeating the prefix.]`
-            : `[Begin your next reply with: "${botName}: ${trimmedPrefill}". Continue directly after it without repeating the prefix.]`;
-      } else {
-        continuationText = "[Continue your last message without repeating it]";
-      }
-      tail.push(continuationText);
+    if (isFromSelectedPersona && !isEmbedMessage) {
+      log.info(
+        `Manual trigger (${args.turn.persona.persona_nickname} as last speaker): injecting continuation directive`,
+      );
+      tail.push("[Continue your last message without repeating it]");
     }
   }
 
@@ -1378,14 +1378,6 @@ function appendTailDirectives(args: {
     if (item) {
       contextItems.push(item);
     }
-  }
-
-  if (incoming.manualPrefill?.trim()) {
-    contextItems.push({
-      role: "model",
-      parts: [{ type: "text", text: `${args.turn.persona.persona_nickname}: ${incoming.manualPrefill.trim()}` }],
-      metadataTag: ContextItemTag.DIALOGUE_HISTORY,
-    });
   }
 
   return contextItems;

@@ -158,6 +158,7 @@ export const PANEL_ACTIONS = [
   "server-config.workspace.system-prompt.preset",
   "server-config.workspace.system-prompt.remove",
   "server-config.workspace.context-note.set",
+  "server-config.workspace.response-prefill.set",
   "server-config.workspace.humanizer.set",
   "server-config.workspace.message-fetch-limit.set",
   "server-config.workspace.timezone.set",

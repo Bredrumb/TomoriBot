@@ -143,6 +143,7 @@ export default {
       structured: `Đầu ra có cấu trúc`,
       "strict-roles": `Luân phiên vai trò nghiêm ngặt`,
       prefix: `Hoàn thiện tiền tố`,
+      prefill: `Prefill trợ lý`,
       "verbatim-tools": `Gọi công cụ nguyên văn`,
     },
     model_flag_descriptions: {
@@ -151,6 +152,7 @@ export default {
       structured: `Tích chọn nếu model có thể trả về JSON chuẩn khi được yêu cầu.`,
       "strict-roles": `Gộp các lượt cùng vai trò và mở đầu bằng lượt người dùng. Tích chọn cho proxy đứng trước Claude.`,
       prefix: `Cho phép mình gửi lại lượt viết dở để tiếp tục. Tích chọn cho proxy đứng trước DeepSeek hoặc Z.ai.`,
+      prefill: `Chỉ tích chọn nếu model này tiếp tục câu trả lời mình bắt đầu cho nó thay vì khởi động lại hoặc từ chối.`,
       "verbatim-tools": `Chọn nếu endpoint không hỗ trợ gọi công cụ gốc. Phân tích lệnh gọi từ văn bản thô.`,
     },
     model_compat_label: `Tương thích Chat Completion`,

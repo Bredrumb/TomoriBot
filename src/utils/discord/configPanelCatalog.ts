@@ -512,6 +512,8 @@ export type ConfigPanelRoute =
   | { action: "behavior-preset-open"; locale: string }
   | { action: "behavior-preset-submit"; locale: string; nonce: string }
   | { action: "behavior-prompt-remove"; locale: string }
+  | { action: "behavior-prefill-open"; locale: string }
+  | { action: "behavior-prefill-submit"; locale: string; nonce: string }
   | { action: "behavior-context-open"; locale: string }
   | { action: "behavior-context-submit"; locale: string; nonce: string }
   | { action: "behavior-humanizer-open"; locale: string }
@@ -1013,6 +1015,8 @@ export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
   "behavior-preset-open": { wireToken: "beh-preset-open", fields: [] },
   "behavior-preset-submit": { wireToken: "beh-preset-sub", fields: [nonceField] },
   "behavior-prompt-remove": { wireToken: "beh-prompt-remove", fields: [] },
+  "behavior-prefill-open": { wireToken: "beh-prefill-open", fields: [] },
+  "behavior-prefill-submit": { wireToken: "beh-prefill-sub", fields: [nonceField] },
   "behavior-context-open": { wireToken: "beh-context-open", fields: [] },
   "behavior-context-submit": { wireToken: "beh-context-sub", fields: [nonceField] },
   "behavior-humanizer-open": { wireToken: "beh-humanizer-open", fields: [] },

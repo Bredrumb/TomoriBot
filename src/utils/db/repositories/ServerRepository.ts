@@ -86,6 +86,7 @@ type ServerChatConfigsRow = {
   self_debug_enabled: boolean;
   model_randomizer_enabled: boolean;
   system_prompt: string | null;
+  response_prefill: string | null;
   context_note: string | null;
   context_note_depth: number;
   llm_stop_strings: string[];
@@ -762,16 +763,20 @@ class ServerRepository implements IRepository<ServerExportShape> {
           const supportsStructOutput = caps.has("structured_output") || caps.has("json");
           const strictRoleAlternation = caps.has("strict_role_alternation");
           const supportsPrefixCompletion = caps.has("prefix_completion");
+          const supportsAssistantPrefill = caps.has("assistant_prefill");
+          const verbatimToolCalling = caps.has("verbatim_tool_calling");
 
           const [syntheticLlm] = await tx<Array<{ llm_id: number }>>`
             INSERT INTO llms (
               llm_provider, llm_codename, has_tools, sees_images, sees_videos,
               sees_youtube, supports_structoutput, strict_role_alternation, supports_prefix_completion,
+              supports_assistant_prefill, verbatim_tool_calling,
               is_smartest, is_default, is_reasoning, is_deprecated, is_free, is_uncensored,
               llm_description, descriptions
             ) VALUES (
               ${customProviderName}, ${codename}, ${hasTools}, ${seesImages}, ${seesVideos},
               false, ${supportsStructOutput}, ${strictRoleAlternation}, ${supportsPrefixCompletion},
+              ${supportsAssistantPrefill}, ${verbatimToolCalling},
               false, true, false, false, false, false,
               ${displayName}, ${{ "en-US": displayName }}
             )
@@ -782,6 +787,8 @@ class ServerRepository implements IRepository<ServerExportShape> {
               supports_structoutput = EXCLUDED.supports_structoutput,
               strict_role_alternation = EXCLUDED.strict_role_alternation,
               supports_prefix_completion = EXCLUDED.supports_prefix_completion,
+              supports_assistant_prefill = EXCLUDED.supports_assistant_prefill,
+              verbatim_tool_calling = EXCLUDED.verbatim_tool_calling,
               llm_description = EXCLUDED.llm_description,
               descriptions = jsonb_set(COALESCE(llms.descriptions, '{}'::jsonb), '{en-US}', to_jsonb(${displayName}::text)),
               updated_at = CURRENT_TIMESTAMP
@@ -800,11 +807,13 @@ class ServerRepository implements IRepository<ServerExportShape> {
             INSERT INTO custom_endpoints (
               connection_id, model_name, model_ref_id, num_ctx,
               extra_config, has_tools, sees_images, sees_videos,
-              supports_structoutput, strict_role_alternation, supports_prefix_completion, is_default
+              supports_structoutput, strict_role_alternation, supports_prefix_completion,
+              supports_assistant_prefill, verbatim_tool_calling, is_default
             ) VALUES (
               ${connectionId}, ${modelCode}, ${customLlmId}, ${resolvedAccess.textModel.numCtx ?? null},
               '{}'::jsonb, ${hasTools}, ${seesImages}, ${seesVideos},
-              ${supportsStructOutput}, ${strictRoleAlternation}, ${supportsPrefixCompletion}, true
+              ${supportsStructOutput}, ${strictRoleAlternation}, ${supportsPrefixCompletion},
+              ${supportsAssistantPrefill}, ${verbatimToolCalling}, true
             )
             ON CONFLICT (connection_id, COALESCE(model_name, ''))
             DO UPDATE SET
@@ -817,6 +826,8 @@ class ServerRepository implements IRepository<ServerExportShape> {
               supports_structoutput = EXCLUDED.supports_structoutput,
               strict_role_alternation = EXCLUDED.strict_role_alternation,
               supports_prefix_completion = EXCLUDED.supports_prefix_completion,
+              supports_assistant_prefill = EXCLUDED.supports_assistant_prefill,
+              verbatim_tool_calling = EXCLUDED.verbatim_tool_calling,
               is_default = EXCLUDED.is_default,
               updated_at = CURRENT_TIMESTAMP
           `;
@@ -1611,7 +1622,7 @@ class ServerRepository implements IRepository<ServerExportShape> {
       const [row] = await sql`
         SELECT humanizer_degree, message_fetch_limit, send_message_limit, match_limit,
                cascade_limit, timezone_offset, self_debug_enabled, model_randomizer_enabled,
-               system_prompt,
+               system_prompt, response_prefill,
                context_note, context_note_depth, llm_stop_strings,
                llm_stop_speaker_pattern_enabled, llm_max_output_tokens,
                llm_top_p, llm_top_k, llm_frequency_penalty, llm_presence_penalty,
@@ -1693,7 +1704,7 @@ class ServerRepository implements IRepository<ServerExportShape> {
         server_id, humanizer_degree, message_fetch_limit, send_message_limit,
         match_limit, cascade_limit, timezone_offset, self_debug_enabled,
         model_randomizer_enabled,
-        system_prompt, context_note, context_note_depth, llm_stop_strings,
+        system_prompt, response_prefill, context_note, context_note_depth, llm_stop_strings,
         llm_stop_speaker_pattern_enabled, llm_max_output_tokens,
         llm_top_p, llm_top_k, llm_frequency_penalty, llm_presence_penalty,
         llm_min_p, llm_logit_biases, fallback_model_refs
@@ -1701,7 +1712,7 @@ class ServerRepository implements IRepository<ServerExportShape> {
         ${serverId}, ${row.humanizer_degree}, ${row.message_fetch_limit},
         ${row.send_message_limit}, ${row.match_limit}, ${row.cascade_limit},
         ${row.timezone_offset}, ${row.self_debug_enabled}, ${row.model_randomizer_enabled},
-        ${row.system_prompt},
+        ${row.system_prompt}, ${row.response_prefill},
         ${row.context_note}, ${row.context_note_depth},
         ${sql.array(row.llm_stop_strings, "TEXT")}, ${row.llm_stop_speaker_pattern_enabled},
         ${row.llm_max_output_tokens}, ${row.llm_top_p}, ${row.llm_top_k},
@@ -1718,6 +1729,7 @@ class ServerRepository implements IRepository<ServerExportShape> {
         self_debug_enabled               = EXCLUDED.self_debug_enabled,
         model_randomizer_enabled         = EXCLUDED.model_randomizer_enabled,
         system_prompt                    = EXCLUDED.system_prompt,
+        response_prefill                 = EXCLUDED.response_prefill,
         context_note                     = EXCLUDED.context_note,
         context_note_depth               = EXCLUDED.context_note_depth,
         llm_stop_strings                 = EXCLUDED.llm_stop_strings,

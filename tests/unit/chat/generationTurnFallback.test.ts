@@ -787,6 +787,38 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(context.streamingContext.forceModelFallback).toBe(false);
   });
 
+  it("re-resolves the prefill per attempt so a fallback that rejects it gets no trailing assistant turn", async () => {
+    const primaryModel = {
+      ...makeLlm(1, "claude-haiku-4-5"),
+      llm_provider: "anthropic",
+      supports_assistant_prefill: true,
+    } as LlmRow;
+    const fallbackModel = { ...makeLlm(2, "claude-sonnet-4-6"), llm_provider: "anthropic" } as LlmRow;
+    const context = makeContext(primaryModel, fallbackModel);
+    context.assistantPrefill = { text: "Sure, here", source: "manual" };
+    const sink: ChatResponseSink = {
+      emitStreamResult: async () => undefined,
+      emitError: async () => undefined,
+      finalize: async () => undefined,
+    };
+    queuedResults.push(
+      {
+        status: "error",
+        streamResults: [{ status: "error", data: { type: "rate_limit", code: "429", message: "rate limited" } }],
+        personaResponses: [],
+      },
+      { status: "completed", streamResults: [{ status: "completed", accumulatedText: "ok" }], personaResponses: [] },
+    );
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    await runGenerationTurn(context, sink);
+
+    const [primaryCall, fallbackCall] = toolLoopCalls;
+    expect(primaryCall?.contextItems.at(-1)?.role).toBe("model");
+    expect(fallbackCall?.contextItems.some((item) => item.role === "model")).toBe(false);
+    expect(context.streamingContext.outputPrefill).toBe("Tomori: Sure, here");
+  });
+
   it("runs a user-scoped custom endpoint fallback on its own saved credentials and num_ctx", async () => {
     const primaryModel = makeLlm(1, "primary-model");
     const context = makeContext(primaryModel, makeLlm(2, "unused-fallback"));
@@ -808,6 +840,7 @@ describe("runGenerationTurn fallback behavior", () => {
       supports_structoutput: false,
       strict_role_alternation: false,
       supports_prefix_completion: false,
+      supports_assistant_prefill: false,
     } as CustomEndpointRow;
     context.currentPersona.fallback_chain = [{ kind: "custom_endpoint", endpoint }];
     queuedResults.push(

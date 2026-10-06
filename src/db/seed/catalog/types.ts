@@ -60,6 +60,12 @@ export interface LlmInput extends CommonInput {
    */
   supportsPrefixCompletion?: boolean;
   /**
+   * Continues a trailing assistant turn instead of rejecting it or restarting the answer. Measured
+   * per model with `plans/prefill-probe.ts`; leave unset for moving aliases, because the model
+   * behind one can drop support without the row changing.
+   */
+  supportsAssistantPrefill?: boolean;
+  /**
    * Official uncached input price in USD per million tokens. Omit for OpenRouter (priced live from its
    * API) and free/non-metered models, so the column stays NULL and the cost command falls back.
    */

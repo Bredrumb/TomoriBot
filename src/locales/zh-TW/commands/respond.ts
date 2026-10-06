@@ -7,6 +7,7 @@ export default {
     prefill_description: `選填的助理前綴，你想讓我接著寫下去。`,
     prefill_label: `前綴續寫（選填）`,
     prefill_placeholder: `加入助理前綴（選填）...`,
+    prefill_instruction_notice: `此模型無法接著前綴繼續寫，因此我改為將其作為指示傳入。`,
     success_title: `已手動觸發回應`,
     success_description: `以最後一個人格身分回應這個頻道的最新訊息...`,
     extra_options_description: `回應前顯示額外選項（人格挑選、推理、提示詞、前綴續寫）。`,

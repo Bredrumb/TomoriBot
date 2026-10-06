@@ -200,6 +200,7 @@ export interface SaveProviderModelInput {
   supportsStructOutput?: boolean;
   strictRoleAlternation?: boolean;
   supportsPrefixCompletion?: boolean;
+  supportsAssistantPrefill?: boolean;
   verbatimToolCalling?: boolean;
   // Raw checkbox values, because only the resolved connection knows the api style that decides
   // whether inpainting was offerable in the modal at all.
@@ -419,6 +420,7 @@ async function buildCuratedCapabilities(
           supportsStructOutput: row.supports_structoutput,
           strictRoleAlternation: row.strict_role_alternation,
           supportsPrefixCompletion: row.supports_prefix_completion,
+          supportsAssistantPrefill: row.supports_assistant_prefill,
           verbatimToolCalling: row.verbatim_tool_calling,
         },
       );
@@ -530,6 +532,7 @@ function buildEndpointCapabilities(
                 supportsStructOutput: endpoint.supports_structoutput,
                 strictRoleAlternation: endpoint.strict_role_alternation,
                 supportsPrefixCompletion: endpoint.supports_prefix_completion,
+                supportsAssistantPrefill: endpoint.supports_assistant_prefill,
                 verbatimToolCalling: endpoint.verbatim_tool_calling,
               }
             : undefined,
@@ -1204,6 +1207,7 @@ async function registerSharedProviderModel(
             supportsStructuredOutput: input.supportsStructOutput ?? false,
             strictRoleAlternation: input.strictRoleAlternation ?? false,
             supportsPrefixCompletion: input.supportsPrefixCompletion ?? false,
+            supportsAssistantPrefill: input.supportsAssistantPrefill ?? false,
           },
           provider,
         )
@@ -1375,6 +1379,7 @@ async function registerEndpointModel(input: SaveProviderModelInput): Promise<Sav
     supportsStructOutput: input.supportsStructOutput,
     strictRoleAlternation: input.strictRoleAlternation,
     supportsPrefixCompletion: input.supportsPrefixCompletion,
+    supportsAssistantPrefill: input.supportsAssistantPrefill,
     verbatimToolCalling: input.verbatimToolCalling,
     extraConfig,
     editingEndpointId: editingEndpoint?.custom_endpoint_id,

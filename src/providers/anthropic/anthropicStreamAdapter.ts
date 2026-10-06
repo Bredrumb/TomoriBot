@@ -241,16 +241,6 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       log.info(`AnthropicStreamAdapter: Added stop sequences`);
     }
 
-    if (context.outputPrefill?.trim()) {
-      // Anthropic supports assistant prefill natively by adding an assistant message
-      const prefill = context.outputPrefill.trim();
-      messages.push({
-        role: "assistant",
-        content: prefill,
-      });
-      log.info(`AnthropicStreamAdapter: Added prefill assistant message (${prefill.length} chars)`);
-    }
-
     log.info(`AnthropicStreamAdapter: Starting stream for model ${config.model}, max_tokens ${requestBody.max_tokens}`);
 
     this.logSanitizedRequest(requestBody);

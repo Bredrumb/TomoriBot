@@ -2,7 +2,7 @@
 title: "06: Segment Normalization"
 ---
 
-Normalizes a flushed text segment (capturing render modifiers, cleaning LLM output artifacts, resolving Discord mentions, enforcing the speaker guard, and managing output prefill) before handing it to stage 07 for Discord delivery.
+Normalizes a flushed text segment (capturing render modifiers, cleaning LLM output artifacts, resolving Discord mentions, enforcing the speaker guard, and stripping an echoed output prefill) before handing it to stage 07 for Discord delivery.
 
 - **File**: `src/utils/discord/stream/segmentProcessor.ts:21-233`
 
@@ -96,10 +96,11 @@ The transformation pipeline runs in this order:
    in the text (e.g., `@alice`) to Discord snowflake mentions (`<@1234567890>`) using the mention
    map built at stream init from `ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION` items.
 
-7. **Output prefill strip/inject** (`stripPrefillFromSegment` / `applyPrefillToSegment`): when
-   `context.outputPrefill` is set (hybrid prefix streaming for NAI), the first segment strips the
-   model-echoed prefill from its start and the cleaned prefill is prepended to the outgoing
-   segment (injected exactly once; subsequent segments are unmodified).
+7. **Output prefill strip** (`stripPrefillFromSegment`): when `context.outputPrefill` is set (a
+   `/respond` or server prefill applied to this attempt), the opening of the reply is matched
+   against the cleaned prefill and an exact echo is removed. A prefill is never shown in Discord,
+   so nothing is prepended: a model that continued the prefill without repeating it is delivered
+   as written. The first mismatched character stops matching for the rest of the stream.
 
 8. **Speaker guard** (`truncateBeforeGenericSpeakerLine`): if `llm_stop_speaker_pattern_enabled`
    is true and a speaker-label line (e.g., `User:`) appears in the segment, the text is truncated
@@ -134,8 +135,7 @@ No return value. The normalized segment (or its table-split parts) is forwarded 
 ## Side effects
 
 - **`state.pendingOrphanPunctuation`**: may be set (hold) or cleared (prepend to segment).
-- `state.prefillMatched` / `state.prefillInjected` / `state.prefillMatchFailed`:
-  updated as prefill stripping/injection progresses.
+- `state.prefillMatched` / `state.prefillMatchFailed`: updated as prefill stripping progresses.
 - **`state.activeRenderModifier`**: tracks the active render-modifier identity override so period
   or chunk splits keep using the sprite/copied identity. Expiry differs by modifier kind:
   - **Copied identities** (impersonating a user / another persona, no `spriteRecord`) expire at the
@@ -214,7 +214,7 @@ After this stage (per segment):
 | `extractMarkdownTableSegments()` + `renderMarkdownTableToPng()` | `src/utils/text/markdownTable.ts` + `src/utils/image/markdownTableRenderer.ts`. The table renderer path is the only place in the stream pipeline where image attachments are sent during streaming (as opposed to tool results). A plugin adding other attachment types mid-stream would extend here. → plugin plan candidate |
 | Speaker guard (`truncateBeforeGenericSpeakerLine`) | `src/utils/text/processors/llmOutputProcessor.ts`. Internal: speaker-label detection runs in both the adapter (stage 02) and the segment processor. The `llm_stop_speaker_pattern_enabled` DB flag is the configuration surface. |
 | Opening-label leak guard (`parseLeadingGenericSpeakerLabel` + `collectKnownSpeakerNames`) | `src/utils/discord/renderModifierParser.ts` + `src/utils/discord/renderModifierResolver.ts`. Internal: always-on response-start companion to the speaker guard; no configuration surface by design (the shapes it fires on are unambiguous leaks). |
-| Output prefill (`context.outputPrefill`) | Internal: NAI-specific hybrid prefix streaming mechanism; not a general extension point. |
+| Output prefill (`context.outputPrefill`) | Internal: set per attempt by `applyAssistantPrefill` (`src/utils/chat/assistantPrefill.ts`); strip-only, and the prefix-completion adapters read it to stamp `prefix: true`. Not a general extension point. |
 
 ## Configuration
 

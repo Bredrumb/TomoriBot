@@ -507,6 +507,9 @@ describe("config page text budgeting at stored maxima", () => {
         const behaviorView: ConfigBehaviorView = {
           general: {
             systemPrompt: "S".repeat(16000),
+            responsePrefill: "P".repeat(2000),
+            prefillBlocker: null,
+            prefillModelName: "gemini-2.5-flash",
             contextNote: "G".repeat(2000),
             contextNoteDepth: 0,
             humanizerDegree: 1,
@@ -535,6 +538,9 @@ describe("config page text budgeting at stored maxima", () => {
         const behaviorView: ConfigBehaviorView = {
           general: {
             systemPrompt: null,
+            responsePrefill: null,
+            prefillBlocker: null,
+            prefillModelName: "gemini-2.5-flash",
             contextNote: null,
             contextNoteDepth: 0,
             humanizerDegree: HUMANIZER_DEFAULT,
@@ -1851,6 +1857,9 @@ describe("bounded preview unicode and truncation boundary assertions", () => {
         const behaviorView: ConfigBehaviorView = {
           general: {
             systemPrompt: content,
+            responsePrefill: null,
+            prefillBlocker: null,
+            prefillModelName: "gemini-2.5-flash",
             contextNote: null,
             contextNoteDepth: 0,
             humanizerDegree: 0,
@@ -1926,6 +1935,9 @@ describe("bounded preview unicode and truncation boundary assertions", () => {
       behaviorView: {
         general: {
           systemPrompt: breakoutContent,
+          responsePrefill: null,
+          prefillBlocker: null,
+          prefillModelName: "gemini-2.5-flash",
           contextNote: null,
           contextNoteDepth: 0,
           humanizerDegree: 0,
@@ -1993,6 +2005,9 @@ describe("bounded preview unicode and truncation boundary assertions", () => {
       behaviorView: {
         general: {
           systemPrompt: `before ${run} after`,
+          responsePrefill: null,
+          prefillBlocker: null,
+          prefillModelName: "gemini-2.5-flash",
           contextNote: null,
           contextNoteDepth: 0,
           humanizerDegree: 0,

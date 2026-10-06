@@ -4,11 +4,7 @@ import { log } from "@/utils/misc/logger";
 import { cleanLLMOutput, truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import { filterDuplicateCustomEmojis } from "@/utils/text/emojiPenalty";
 import { extractMarkdownTableSegments } from "@/utils/text/markdownTable";
-import {
-  MAX_EMPTY_RESPONSE_RETRIES,
-  ORPHAN_PUNCTUATION_REGEX,
-  PREFILL_WHITESPACE_SENTINEL,
-} from "@/utils/discord/stream/constants";
+import { MAX_EMPTY_RESPONSE_RETRIES, ORPHAN_PUNCTUATION_REGEX } from "@/utils/discord/stream/constants";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { resolveGuildMentions } from "@/utils/discord/stream/mentionResolver";
 import type {
@@ -104,7 +100,8 @@ export class StreamSegmentProcessor {
     const renderModifierSourceNames = collectRenderModifierSourceNames(textConfig.botName, textConfig.botNameAliases);
     const renderModifierChainSourceNames = collectRenderModifierChainSourceNames(textConfig, renderModifierSourceNames);
     let deliveryOptions: StreamDeliveryOptions | undefined;
-    const canUseRenderModifier = !state.isInsideCodeBlock && !isUserImpersonationStreamContext(context);
+    const isUserImpersonation = isUserImpersonationStreamContext(context);
+    const canUseRenderModifier = !state.isInsideCodeBlock && !isUserImpersonation;
     const renderModifierMatch = canUseRenderModifier
       ? parseLeadingRenderModifier(workingSegment, renderModifierSourceNames, renderModifierChainSourceNames)
       : null;
@@ -166,9 +163,13 @@ export class StreamSegmentProcessor {
         await this.logUnresolvedRenderModifierTarget(renderModifierMatch.modifier, spriteResolution.status, context);
         state.activeRenderModifier = undefined;
       }
-    } else if (canUseRenderModifier && state.activeRenderModifier) {
+    } else if (!isUserImpersonation && state.activeRenderModifier) {
+      // Code-block content is still this speaker's turn, so the active identity carries into it;
+      // only label parsing is vetoed there. The flusher sends a closing-fence or overflow segment
+      // before clearing isInsideCodeBlock, so gating the carry on it drops the sprite and moves
+      // a main persona off its webhook onto the bot user for that segment.
       // The label itself is left in place: cleanLLMOutput strips it like any opening own-name label.
-      if (opensLine && hasLeadingPlainOwnNameLabel(workingSegment, renderModifierSourceNames)) {
+      if (canUseRenderModifier && opensLine && hasLeadingPlainOwnNameLabel(workingSegment, renderModifierSourceNames)) {
         state.activeRenderModifier = this.resolveBaseAppearanceRevert(state.activeRenderModifier, context, textConfig);
       }
       if (state.activeRenderModifier) {
@@ -215,7 +216,6 @@ export class StreamSegmentProcessor {
       }
     }
 
-    const wasPrefillInjected = state.prefillInjected;
     const leadingWhitespaceMatch = workingSegment.match(/^\s+/);
     const leadingWhitespace = leadingWhitespaceMatch?.[0] ?? "";
     const normalizedLeadingWhitespace = textConfig.uncensorUnicodeSpacesEnabled
@@ -257,13 +257,7 @@ export class StreamSegmentProcessor {
       resolvedSegment = normalizedLeadingWhitespace + resolvedSegment;
     }
 
-    const strippedSegment = this.stripPrefillFromSegment(resolvedSegment, state);
-    const prefixedSegment = this.applyPrefillToSegment(strippedSegment, state, context);
-    let segmentToSend = prefixedSegment;
-    const injectedPrefillThisSegment = !wasPrefillInjected && state.prefillInjected;
-    if (injectedPrefillThisSegment && state.prefillTarget && /^\s+/.test(strippedSegment)) {
-      segmentToSend = `${state.prefillTarget}${PREFILL_WHITESPACE_SENTINEL}${strippedSegment}`;
-    }
+    let segmentToSend = this.stripPrefillFromSegment(resolvedSegment, state);
 
     let shouldStopForSpeakerGuard = false;
     if (context.tomoriState.config.llm_stop_speaker_pattern_enabled ?? false) {
@@ -619,7 +613,7 @@ export class StreamSegmentProcessor {
     state.prefillTarget = resolvedPrefill;
     state.prefillMatched = 0;
     state.prefillMatchFailed = false;
-    state.prefillInjected = Boolean(context.outputPrefillState?.sent);
+    state.prefillHeld = "";
 
     log.info(`Stream Prefill: Prepared output prefill (${resolvedPrefill.length} chars).`);
   }
@@ -649,46 +643,34 @@ export class StreamSegmentProcessor {
     );
   }
 
-  private applyPrefillToSegment(segment: string, state: StreamState, context: StreamContext): string {
-    if (!state.prefillTarget) return segment;
-
-    if (!state.prefillInjected) {
-      if (!segment.trim()) return "";
-      state.prefillInjected = true;
-      if (context.outputPrefillState) {
-        context.outputPrefillState.sent = true;
-      }
-      return state.prefillTarget + segment;
-    }
-
-    return segment;
-  }
-
   private stripPrefillFromSegment(segment: string, state: StreamState): string {
     const target = state.prefillTarget;
     if (!target || state.prefillMatchFailed || state.prefillMatched >= target.length) {
       return segment;
     }
 
-    let index = 0;
+    // The target is trimmed, so whitespace before an echo would otherwise fail the match at index 0.
+    let index = state.prefillMatched === 0 ? (segment.match(/^\s*/)?.[0].length ?? 0) : 0;
     while (index < segment.length && state.prefillMatched < target.length) {
-      const expected = target[state.prefillMatched];
-      const actual = segment[index];
-
-      if (actual === expected) {
+      if (segment[index] === target[state.prefillMatched]) {
         state.prefillMatched += 1;
         index += 1;
         continue;
       }
+      // Text withheld by an earlier partial match is model output, not an echo, so it is released.
+      const released = state.prefillHeld + segment;
+      state.prefillHeld = "";
       state.prefillMatchFailed = true;
       state.prefillMatched = target.length;
-      return segment;
+      return released;
     }
 
     if (state.prefillMatched >= target.length) {
+      state.prefillHeld = "";
       return segment.slice(index);
     }
 
+    state.prefillHeld += segment;
     return "";
   }
 }

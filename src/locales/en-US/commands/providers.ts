@@ -142,6 +142,7 @@ export default {
       structured: `Structured output`,
       "strict-roles": `Strict role alternation`,
       prefix: `Prefix completion`,
+      prefill: `Assistant prefill`,
       "verbatim-tools": `Verbatim tool calling`,
     },
     model_flag_descriptions: {
@@ -150,6 +151,7 @@ export default {
       structured: `Tick if this model can return strict JSON when asked.`,
       "strict-roles": `Merge same-role turns and open on a user turn. Tick for a proxy fronting Claude.`,
       prefix: `Let me hand back a half-written turn to continue. Tick for a proxy fronting DeepSeek or Z.ai.`,
+      prefill: `Tick only if this model continues a reply I start for it instead of restarting or refusing.`,
       "verbatim-tools": `Tick for endpoints without native tool calling. Prompts and parses calls from raw text output.`,
     },
     model_compat_label: `Chat Completion Compatibilities`,

@@ -43,7 +43,7 @@ interface TableSpec<T extends RowLike> {
 const llmSpec: TableSpec<LlmInput> = {
   table: "llms",
   columns:
-    "llm_provider, llm_codename, is_smartest, is_default, is_reasoning, is_deprecated, is_free, has_tools, sees_images, sees_videos, sees_youtube, is_uncensored, supports_structoutput, strict_role_alternation, supports_prefix_completion, llm_description, descriptions, input_price_per_million, output_price_per_million, context_window, max_output_tokens",
+    "llm_provider, llm_codename, is_smartest, is_default, is_reasoning, is_deprecated, is_free, has_tools, sees_images, sees_videos, sees_youtube, is_uncensored, supports_structoutput, strict_role_alternation, supports_prefix_completion, supports_assistant_prefill, llm_description, descriptions, input_price_per_million, output_price_per_million, context_window, max_output_tokens",
   tuple: (m) =>
     [
       str(m.provider),
@@ -61,6 +61,7 @@ const llmSpec: TableSpec<LlmInput> = {
       bool(m.supportsStructoutput),
       bool(m.strictRoleAlternation),
       bool(m.supportsPrefixCompletion),
+      bool(m.supportsAssistantPrefill),
       desc(m.desc),
       jsonb(localizedDescriptions(m)),
       num(m.inputPricePerMillion),
@@ -91,6 +92,7 @@ const llmSpec: TableSpec<LlmInput> = {
   supports_structoutput = EXCLUDED.supports_structoutput,
   strict_role_alternation = EXCLUDED.strict_role_alternation,
   supports_prefix_completion = EXCLUDED.supports_prefix_completion,
+  supports_assistant_prefill = EXCLUDED.supports_assistant_prefill,
   input_price_per_million = EXCLUDED.input_price_per_million,
   output_price_per_million = EXCLUDED.output_price_per_million,
   context_window = EXCLUDED.context_window,

@@ -7,6 +7,7 @@ export default {
     prefill_description: `Optional assistant prefill you want me to continue.`,
     prefill_label: `Prefill (Optional)`,
     prefill_placeholder: `Add assistant prefill (optional)...`,
+    prefill_instruction_notice: `This model cannot continue a prefill, so I passed it on as an instruction instead.`,
     success_title: `Manual Response Triggered`,
     success_description: `Responding to the latest message in this channel as the last persona...`,
     extra_options_description: `Show extra options before responding (persona picker, reasoning, prompt, prefill).`,

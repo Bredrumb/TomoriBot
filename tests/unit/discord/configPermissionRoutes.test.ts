@@ -26,6 +26,7 @@ import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
+import { createLlmRow } from "../../helpers/fixtures";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -39,6 +40,7 @@ function makeState(overrides: Record<string, unknown> = {}): TomoriState {
     is_alter: false,
     trigger_words: [],
     naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
+    llm: createLlmRow(),
     config: {
       tool_use_enabled: false,
       self_teaching_enabled: true,

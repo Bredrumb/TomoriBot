@@ -393,6 +393,8 @@ export const BEHAVIOR_GENERAL_ACTION_BY_ROUTE: Partial<
   "behavior-preset-open": "prompt",
   "behavior-preset-submit": "prompt",
   "behavior-prompt-remove": "prompt",
+  "behavior-prefill-open": "prompt",
+  "behavior-prefill-submit": "prompt",
   "behavior-context-open": "context-note",
   "behavior-context-submit": "context-note",
   "behavior-humanizer-open": "humanizer",

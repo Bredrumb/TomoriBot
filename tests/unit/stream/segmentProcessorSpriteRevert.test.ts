@@ -190,6 +190,28 @@ describe("StreamSegmentProcessor plain-label sprite revert", () => {
     expect(harness.sent[3]?.options?.spriteRecord?.spriteName).toBe("smug");
   });
 
+  it("keeps the active sprite on code-block segments sent while the block is still open", async () => {
+    for (const isAlter of [false, true]) {
+      const harness = makeHarness({ isAlter });
+
+      await harness.send("Locke (smug): here you go\n");
+      // The flusher sends closing-fence and overflow segments before it clears isInsideCodeBlock.
+      harness.state.isInsideCodeBlock = true;
+      await harness.send("```js\nconsole.log(1);\n", "overflow");
+      await harness.send("Locke: not a revert\n```", "code_close");
+      harness.state.isInsideCodeBlock = false;
+      await harness.send("done\n");
+
+      expect(harness.sent.map((entry) => entry.options?.spriteRecord?.spriteName)).toEqual([
+        "smug",
+        "smug",
+        "smug",
+        "smug",
+      ]);
+      expect(harness.state.activeRenderModifier?.spriteRecord?.spriteName).toBe("smug");
+    }
+  });
+
   it("delivers an alter's revert under the group-break name when the sprite held the clean name", async () => {
     const harness = makeHarness({ isAlter: true });
 

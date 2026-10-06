@@ -1678,6 +1678,9 @@ describe("config Behavior pages", () => {
   const behaviorView = {
     general: {
       systemPrompt: "Keep replies concise.",
+      responsePrefill: null,
+      prefillBlocker: null,
+      prefillModelName: "gemini-2.5-flash",
       contextNote: "Stay on topic.",
       contextNoteDepth: 2,
       humanizerDegree: 2,

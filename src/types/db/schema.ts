@@ -222,6 +222,9 @@ export const llmSchema = z.object({
   // supports_prefix_completion: allow `prefix: true` on the trailing assistant prefill turn.
   strict_role_alternation: z.boolean().default(false),
   supports_prefix_completion: z.boolean().default(false),
+  // supports_assistant_prefill: the backend continues a trailing assistant turn at all (some
+  // reject it with a 400, others restart the answer). Unlisted models stay false.
+  supports_assistant_prefill: z.boolean().default(false),
   // verbatim_tool_calling: the model has no native tool channel, so schemas travel in-band and
   // the assistant's text is scanned for calls. Only the custom adapter runs that parser.
   verbatim_tool_calling: z.boolean().default(false),
@@ -363,6 +366,7 @@ export const customEndpointSchema = customEndpointConnectionSchema.extend({
   // endpoint's synthetic llms row so the runtime resolves them uniformly with built-in providers.
   strict_role_alternation: z.boolean().default(false),
   supports_prefix_completion: z.boolean().default(false),
+  supports_assistant_prefill: z.boolean().default(false),
   // Per model like the strict flags, and for a sharper reason: one connection can host both a
   // native-tool-calling model and a text-only one that needs the in-band schema dump and its parser.
   verbatim_tool_calling: z.boolean().default(false),
@@ -670,6 +674,7 @@ const serverChatConfigSchema = z.object({
   system_prompt: z.string().nullable().optional(),
   context_note: z.string().nullable().optional(),
   context_note_depth: z.number().int().default(0),
+  response_prefill: z.string().nullable().optional(),
   llm_stop_strings: z.preprocess((value) => normalizeStringArray(value), z.array(z.string()).default([])),
   llm_stop_speaker_pattern_enabled: z.boolean().default(false),
   llm_max_output_tokens: z.number().int().nullable().optional(),
@@ -1522,6 +1527,8 @@ export const setupCustomEndpointCapabilitySchema = z.enum([
   "json",
   "strict_role_alternation",
   "prefix_completion",
+  "assistant_prefill",
+  "verbatim_tool_calling",
 ]);
 export type SetupCustomEndpointCapability = z.infer<typeof setupCustomEndpointCapabilitySchema>;
 

@@ -636,6 +636,11 @@ const WIRE_CONTRACT_V2: ReadonlyArray<readonly [string, ConfigPanelRoute]> = [
     { action: "behavior-preset-submit", locale: "en-US", nonce: "nonce1234567" },
   ],
   ["config:v2:beh-prompt-remove:en-US", { action: "behavior-prompt-remove", locale: "en-US" }],
+  ["config:v2:beh-prefill-open:en-US", { action: "behavior-prefill-open", locale: "en-US" }],
+  [
+    "config:v2:beh-prefill-sub:en-US:nonce1234567",
+    { action: "behavior-prefill-submit", locale: "en-US", nonce: "nonce1234567" },
+  ],
   ["config:v2:beh-context-open:en-US", { action: "behavior-context-open", locale: "en-US" }],
   [
     "config:v2:beh-context-sub:en-US:nonce1234567",

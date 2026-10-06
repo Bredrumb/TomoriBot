@@ -16,7 +16,6 @@ import { setCachedRenderedMarkdownTable } from "@/utils/text/markdownTableCache"
 import { extractMarkdownTableSegments, MARKDOWN_TABLE_ATTACHMENT_PREFIX } from "@/utils/text/markdownTable";
 import { chunkMessage } from "@/utils/text/processors/chunkProcessor";
 import { humanizeString } from "@/utils/text/processors/formatters";
-import { PREFILL_WHITESPACE_SENTINEL } from "@/utils/discord/stream/constants";
 import type { StreamSendPayload, StreamUiUpdater } from "@/utils/discord/stream/uiUpdater";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 import type { ChatSendReason } from "@/utils/chat/diagnosticTimeline";
@@ -92,9 +91,7 @@ export class StreamMessageDelivery {
     state.pendingAggregatedText = "";
     state.pendingAggregateJoinNextWithBlankLine = false;
 
-    const messageChunks = chunkMessage(aggregatedText, HumanizerDegree.NONE, textConfig.maxMessageLength).map((chunk) =>
-      chunk.replaceAll(PREFILL_WHITESPACE_SENTINEL, ""),
-    );
+    const messageChunks = chunkMessage(aggregatedText, HumanizerDegree.NONE, textConfig.maxMessageLength);
     const finalMessageChunks = messageChunks.filter((chunk) => chunk.trim());
     if (!finalMessageChunks.length) {
       return;
@@ -227,9 +224,7 @@ export class StreamMessageDelivery {
       await this.flushAggregatedTextBuffer(textConfig, context, state);
     }
 
-    const rawMessageChunks = chunkMessage(segment, textConfig.humanizerDegree, textConfig.maxMessageLength).map(
-      (chunk) => chunk.replaceAll(PREFILL_WHITESPACE_SENTINEL, ""),
-    );
+    const rawMessageChunks = chunkMessage(segment, textConfig.humanizerDegree, textConfig.maxMessageLength);
     if (!rawMessageChunks.length) return;
 
     const finalMessageChunks: DeliveryChunk[] = [];

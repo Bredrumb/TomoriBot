@@ -44,6 +44,7 @@ interface WorkspaceConfigProjectionRow {
   send_message_limit: number;
   context_note: string | null;
   context_note_depth: number;
+  response_prefill: string | null;
   server_memteaching_enabled: boolean;
   attribute_memteaching_enabled: boolean;
   sampledialogue_memteaching_enabled: boolean;
@@ -357,6 +358,7 @@ export class ExportRepository {
           COALESCE(sbc.user_byok_mode, false)                       AS user_byok_mode,
           scc.context_note                                           AS context_note,
           COALESCE(scc.context_note_depth, 0)                       AS context_note_depth,
+          scc.response_prefill                                      AS response_prefill,
           COALESCE(scac.manage_message_enabled, true)               AS manage_message_enabled,
           COALESCE(scac.videogen_enabled, false)                    AS videogen_enabled,
           COALESCE(scac.voice_message_enabled, true)                AS voice_message_enabled,
@@ -536,6 +538,7 @@ export class ExportRepository {
             user_byok_mode: configData.user_byok_mode,
             context_note: configData.context_note ?? null,
             context_note_depth: configData.context_note_depth,
+            response_prefill: configData.response_prefill ?? null,
             manage_message_enabled: configData.manage_message_enabled,
             videogen_enabled: configData.videogen_enabled,
             voice_message_enabled: configData.voice_message_enabled,
@@ -700,6 +703,7 @@ export class ExportRepository {
           COALESCE(scc.send_message_limit, 0) AS send_message_limit,
           scc.context_note AS context_note,
           COALESCE(scc.context_note_depth, 0) AS context_note_depth,
+          scc.response_prefill AS response_prefill,
           COALESCE(smpc.server_memteaching_enabled, false) AS server_memteaching_enabled,
           COALESCE(smpc.attribute_memteaching_enabled, false) AS attribute_memteaching_enabled,
           COALESCE(smpc.sampledialogue_memteaching_enabled, false) AS sampledialogue_memteaching_enabled,
@@ -813,6 +817,7 @@ export class ExportRepository {
           send_message_limit: configData.send_message_limit,
           context_note: configData.context_note,
           context_note_depth: configData.context_note_depth,
+          response_prefill: configData.response_prefill ?? null,
           welcome_prompt: configData.welcome_prompt,
         },
         triggers: {

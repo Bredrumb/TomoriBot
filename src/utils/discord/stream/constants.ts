@@ -1,4 +1,3 @@
-export const PREFILL_WHITESPACE_SENTINEL = "\uE000";
 // Maximum number of empty-response regeneration attempts scheduled by
 // maybeScheduleEmptyResponseRetry (postTurnEffects). Lives here (a leaf module) so the stream
 // segment processor can consult the remaining retry budget without importing the chat pipeline.

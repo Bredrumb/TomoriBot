@@ -148,6 +148,7 @@ describe("shared fixture factories", () => {
       "supports_structoutput",
       "strict_role_alternation",
       "supports_prefix_completion",
+      "supports_assistant_prefill",
       "verbatim_tool_calling",
     ]);
     expect(row.has_tools).toBe(true);

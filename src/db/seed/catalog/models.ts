@@ -43,6 +43,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-2.5-flash-lite",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         inputPricePerMillion: 0.1,
@@ -107,6 +108,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-2.5-flash",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         inputPricePerMillion: 0.3,
@@ -155,6 +157,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-3-flash",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         isFree: true,
@@ -177,6 +180,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-3-flash-preview",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         isFree: true,
@@ -199,6 +203,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-3.1-flash-lite-preview",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         inputPricePerMillion: 0.25,
@@ -220,6 +225,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-3.1-flash-lite",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         inputPricePerMillion: 0.25,
@@ -242,6 +248,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "google",
         codename: "gemini-3.5-flash",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         inputPricePerMillion: 1.5,
@@ -516,6 +523,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertex",
         codename: "gemini-2.5-flash-lite",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         inputPricePerMillion: 0.1,
@@ -539,6 +547,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertex",
         codename: "gemini-2.5-flash",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         inputPricePerMillion: 0.3,
@@ -585,6 +594,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertex",
         codename: "gemini-3-flash",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         hasTools: true,
@@ -606,6 +616,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertex",
         codename: "gemini-3-flash-preview",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         hasTools: true,
@@ -627,6 +638,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertex",
         codename: "gemini-3.1-flash-lite-preview",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         inputPricePerMillion: 0.25,
@@ -650,6 +662,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertex",
         codename: "gemini-3.1-flash-lite",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         inputPricePerMillion: 0.25,
@@ -670,6 +683,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertex",
         codename: "gemini-3.5-flash",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         inputPricePerMillion: 1.5,
@@ -975,6 +989,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertexexpress",
         codename: "gemini-2.5-flash-lite",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         inputPricePerMillion: 0.1,
@@ -995,6 +1010,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertexexpress",
         codename: "gemini-2.5-flash",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         inputPricePerMillion: 0.3,
@@ -1037,6 +1053,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertexexpress",
         codename: "gemini-3-flash",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         hasTools: true,
@@ -1056,6 +1073,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertexexpress",
         codename: "gemini-3-flash-preview",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         hasTools: true,
@@ -1181,6 +1199,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "vertexexpress",
         codename: "gemini-3.5-flash",
+        supportsAssistantPrefill: true,
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
         inputPricePerMillion: 1.5,
@@ -1590,6 +1609,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "google/gemini-3-flash-preview",
+        supportsAssistantPrefill: true,
         hasTools: true,
         seesImages: true,
         seesVideos: true,
@@ -1609,6 +1629,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "google/gemini-3.1-flash-lite-preview",
+        supportsAssistantPrefill: true,
         inputPricePerMillion: 0.25,
         outputPricePerMillion: 1.5,
         hasTools: true,
@@ -1628,6 +1649,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "google/gemini-3.1-flash-lite",
+        supportsAssistantPrefill: true,
         isReasoning: true,
         hasTools: true,
         seesImages: true,
@@ -1755,6 +1777,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "anthropic/claude-sonnet-4.5",
+        supportsAssistantPrefill: true,
         hasTools: true,
         seesImages: true,
         supportsStructoutput: true,
@@ -1825,6 +1848,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "openrouter",
         codename: "anthropic/claude-haiku-4.5",
+        supportsAssistantPrefill: true,
         inputPricePerMillion: 1.0,
         outputPricePerMillion: 5.0,
         hasTools: true,
@@ -3360,6 +3384,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "anthropic",
         codename: "claude-haiku-4-5",
+        supportsAssistantPrefill: true,
         contextWindow: 200_000,
         maxOutputTokens: 64_000,
         inputPricePerMillion: 1.0,

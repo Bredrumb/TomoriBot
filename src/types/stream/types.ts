@@ -103,8 +103,8 @@ export interface StreamState {
   accumulatedText: string; // Track all text sent to Discord for short-term memory
   prefillTarget?: string; // Prefill text to strip from streamed output (hybrid prefix)
   prefillMatched: number; // Number of prefill chars matched/stripped so far
-  prefillInjected: boolean; // Whether the prefill has been injected into output
   prefillMatchFailed: boolean; // Whether prefill matching failed (no stripping)
+  prefillHeld: string; // Segment text withheld while a partial echo match spans segments
   thoughtSummarySegments: string[];
   thoughtRawSegments: string[];
   /** OpenRouter-only: upstream serving provider/endpoint (e.g. "minimax-cn") for thought logs. */
@@ -213,8 +213,8 @@ export function createDefaultStreamState(): StreamState {
     accumulatedText: "", // Initialize empty for short-term memory tracking
     prefillTarget: undefined,
     prefillMatched: 0,
-    prefillInjected: false,
     prefillMatchFailed: false,
+    prefillHeld: "",
     thoughtSummarySegments: [],
     thoughtRawSegments: [],
     firstReplyUrl: undefined,

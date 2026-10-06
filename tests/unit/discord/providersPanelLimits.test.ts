@@ -50,6 +50,7 @@ function model(id: number, codeName = `provider-model-${id}`, custom = true): Pr
       supportsStructOutput: false,
       strictRoleAlternation: false,
       supportsPrefixCompletion: true,
+      supportsAssistantPrefill: false,
       verbatimToolCalling: false,
     },
   };

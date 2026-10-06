@@ -143,6 +143,7 @@ export default {
       structured: `Saída estruturada`,
       "strict-roles": `Alternância estrita de papéis`,
       prefix: `Completamento de prefixo`,
+      prefill: `Preenchimento do assistente`,
       "verbatim-tools": `Chamada de ferramentas literal`,
     },
     model_flag_descriptions: {
@@ -151,6 +152,7 @@ export default {
       structured: `Marque se o modelo puder retornar JSON estrito quando solicitado.`,
       "strict-roles": `Mesclar turnos do mesmo papel. Marque para um proxy do Claude.`,
       prefix: `Me permita devolver um turno semi-escrito. Marque para proxy DeepSeek/Z.ai.`,
+      prefill: `Marque apenas se este modelo continuar uma resposta que eu comece para ele, em vez de reiniciar ou recusar.`,
       "verbatim-tools": `Marque para endpoints sem suporte nativo. Analisa chamadas direto do texto bruto.`,
     },
     model_compat_label: `Compatibilidade de Chat Completion`,

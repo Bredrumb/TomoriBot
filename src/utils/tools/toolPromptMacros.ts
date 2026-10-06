@@ -1,7 +1,7 @@
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { log } from "@/utils/misc/logger";
-import type { AssembledServerConfig } from "@/types/db/schema";
+import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
 import { renderPromptConditionals, type PromptConditionPredicate } from "./promptConditionals";
 
 const PROMPT_CAPABILITY_NAMES = [
@@ -405,4 +405,38 @@ function pickFirstAvailable(availableToolNames: Set<string>, preferredToolNames:
   }
 
   return null;
+}
+
+/**
+ * A resolver scoped to one generation attempt's provider and config. Macros are provider-specific,
+ * so a fallback attempt must not reuse the primary model's resolver.
+ */
+export function createToolPromptMacroResolverForState(tomoriState: TomoriState): ToolPromptMacroResolver {
+  return createToolPromptMacroResolver({
+    provider: tomoriState.llm.llm_provider,
+    capabilities: resolvePromptCapabilityValues(tomoriState.config),
+    stateForContext:
+      tomoriState.server_id && tomoriState.llm
+        ? {
+            server_id: tomoriState.server_id.toString(),
+            activePersonaHasElevenlabsVoice: false,
+            llm: tomoriState.llm,
+            diffusion_model_id: tomoriState.config.diffusion_model_id,
+            nai_diffusion_model_id: tomoriState.config.nai_diffusion_model_id,
+            video_model_id: tomoriState.config.video_model_id,
+            config: {
+              sticker_usage_enabled: tomoriState.config.sticker_usage_enabled,
+              web_search_enabled: tomoriState.config.web_search_enabled,
+              self_teaching_enabled: tomoriState.config.self_teaching_enabled,
+              manage_message_enabled: tomoriState.config.manage_message_enabled,
+              imagegen_enabled: tomoriState.config.imagegen_enabled,
+              videogen_enabled: tomoriState.config.videogen_enabled,
+              voice_message_enabled: tomoriState.config.voice_message_enabled,
+              user_blocking_enabled: tomoriState.config.user_blocking_enabled,
+              user_info_updates_enabled: tomoriState.config.user_info_updates_enabled,
+              thread_creation_enabled: tomoriState.config.thread_creation_enabled,
+            },
+          }
+        : undefined,
+  });
 }

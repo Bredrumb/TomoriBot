@@ -15,6 +15,7 @@ import type { ReunionPresenceScope } from "@/utils/chat/reunionPresence";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import type { TextQuotaTriggerState } from "@/utils/chat/textQuotaState";
+import type { TurnPrefill } from "@/utils/chat/assistantPrefill";
 
 export type TextQuotaSource = "user" | "system";
 
@@ -245,6 +246,8 @@ export interface ChatTurnContext {
   tomoriState: TomoriState;
   requestSnapshot: RequestSnapshot;
   contextItems: StructuredContextItem[];
+  /** Kept out of `contextItems` because each attempt decides how its own model takes it. */
+  assistantPrefill: TurnPrefill | null;
   simplifiedMessages: SimplifiedMessageForContext[];
   streamingContext: StreamingContext;
   messageIdMap: MessageIdMap;

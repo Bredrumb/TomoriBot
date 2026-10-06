@@ -170,6 +170,9 @@ function makeHarness(inGuild = true): Harness {
       },
       loadBehaviorView: async (current) => ({
         general: {
+          responsePrefill: null,
+          prefillBlocker: null,
+          prefillModelName: "gemini-2.5-flash",
           systemPrompt: current.config.system_prompt ?? null,
           contextNote: current.config.context_note ?? null,
           contextNoteDepth: current.config.context_note_depth ?? 0,
@@ -309,6 +312,11 @@ const D9_WIRE_CONTRACT: ReadonlyArray<readonly [string, Parameters<typeof buildC
     { action: "behavior-preset-submit", locale: "en-US", nonce: "nonce1234567" },
   ],
   ["config:v2:beh-prompt-remove:en-US", { action: "behavior-prompt-remove", locale: "en-US" }],
+  ["config:v2:beh-prefill-open:en-US", { action: "behavior-prefill-open", locale: "en-US" }],
+  [
+    "config:v2:beh-prefill-sub:en-US:nonce1234567",
+    { action: "behavior-prefill-submit", locale: "en-US", nonce: "nonce1234567" },
+  ],
   ["config:v2:beh-context-open:en-US", { action: "behavior-context-open", locale: "en-US" }],
   [
     "config:v2:beh-context-sub:en-US:nonce1234567",
@@ -426,6 +434,8 @@ describe("config Behavior routes", () => {
       "behavior-preset-open": { wireToken: "beh-preset-open", fields: [] },
       "behavior-preset-submit": { wireToken: "beh-preset-sub", fields: ["nonce"] },
       "behavior-prompt-remove": { wireToken: "beh-prompt-remove", fields: [] },
+      "behavior-prefill-open": { wireToken: "beh-prefill-open", fields: [] },
+      "behavior-prefill-submit": { wireToken: "beh-prefill-sub", fields: ["nonce"] },
       "behavior-context-open": { wireToken: "beh-context-open", fields: [] },
       "behavior-context-submit": { wireToken: "beh-context-sub", fields: ["nonce"] },
       "behavior-humanizer-open": { wireToken: "beh-humanizer-open", fields: [] },
@@ -1103,6 +1113,9 @@ describe("config Behavior routes", () => {
     const deleteTrigger = spyOn(serverScheduleRepository, "deleteTrigger").mockResolvedValue(true);
     harness.dependencies.loadBehaviorView = async (current) => ({
       general: {
+        responsePrefill: null,
+        prefillBlocker: null,
+        prefillModelName: "gemini-2.5-flash",
         systemPrompt: current.config.system_prompt ?? null,
         contextNote: current.config.context_note ?? null,
         contextNoteDepth: current.config.context_note_depth ?? 0,
@@ -1202,6 +1215,9 @@ describe("config Behavior routes", () => {
     const triggers = Array.from({ length: 51 }, (_entry, index) => ({ ...first, trigger_id: index + 1 }));
     harness.dependencies.loadBehaviorView = async (current) => ({
       general: {
+        responsePrefill: null,
+        prefillBlocker: null,
+        prefillModelName: "gemini-2.5-flash",
         systemPrompt: current.config.system_prompt ?? null,
         contextNote: current.config.context_note ?? null,
         contextNoteDepth: current.config.context_note_depth ?? 0,
@@ -1238,6 +1254,9 @@ describe("config Behavior routes", () => {
       const triggers = Array.from({ length: scheduleCount }, (_entry, index) => ({ ...first, trigger_id: index + 1 }));
       harness.dependencies.loadBehaviorView = async (current) => ({
         general: {
+          responsePrefill: null,
+          prefillBlocker: null,
+          prefillModelName: "gemini-2.5-flash",
           systemPrompt: current.config.system_prompt ?? null,
           contextNote: current.config.context_note ?? null,
           contextNoteDepth: current.config.context_note_depth ?? 0,
@@ -1284,6 +1303,9 @@ describe("config Behavior routes", () => {
     const triggers = Array.from({ length: 51 }, (_entry, index) => ({ ...first, trigger_id: index + 1 }));
     harness.dependencies.loadBehaviorView = async (current) => ({
       general: {
+        responsePrefill: null,
+        prefillBlocker: null,
+        prefillModelName: "gemini-2.5-flash",
         systemPrompt: current.config.system_prompt ?? null,
         contextNote: current.config.context_note ?? null,
         contextNoteDepth: current.config.context_note_depth ?? 0,
@@ -1320,6 +1342,9 @@ describe("config Behavior routes", () => {
     const triggers = Array.from({ length: 51 }, (_entry, index) => ({ ...first, trigger_id: index + 1 }));
     harness.dependencies.loadBehaviorView = async (current) => ({
       general: {
+        responsePrefill: null,
+        prefillBlocker: null,
+        prefillModelName: "gemini-2.5-flash",
         systemPrompt: current.config.system_prompt ?? null,
         contextNote: current.config.context_note ?? null,
         contextNoteDepth: current.config.context_note_depth ?? 0,
@@ -1354,6 +1379,9 @@ describe("config Behavior routes", () => {
     const triggers = Array.from({ length: 1300 }, (_entry, index) => ({ ...first, trigger_id: index + 1 }));
     harness.dependencies.loadBehaviorView = async (current) => ({
       general: {
+        responsePrefill: null,
+        prefillBlocker: null,
+        prefillModelName: "gemini-2.5-flash",
         systemPrompt: current.config.system_prompt ?? null,
         contextNote: current.config.context_note ?? null,
         contextNoteDepth: current.config.context_note_depth ?? 0,
@@ -1399,6 +1427,9 @@ describe("config Behavior routes", () => {
     const triggers = Array.from({ length: 1300 }, (_entry, index) => ({ ...first, trigger_id: index + 1 }));
     harness.dependencies.loadBehaviorView = async (current) => ({
       general: {
+        responsePrefill: null,
+        prefillBlocker: null,
+        prefillModelName: "gemini-2.5-flash",
         systemPrompt: current.config.system_prompt ?? null,
         contextNote: current.config.context_note ?? null,
         contextNoteDepth: current.config.context_note_depth ?? 0,

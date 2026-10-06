@@ -145,6 +145,7 @@ export default {
       structured: `Salida estructurada`,
       "strict-roles": `Alternancia estricta de roles`,
       prefix: `Finalización de prefijo`,
+      prefill: `Prellenado del asistente`,
       "verbatim-tools": `Llamadas literales a herramientas`,
     },
     model_flag_descriptions: {
@@ -153,6 +154,7 @@ export default {
       structured: `Marca si este modelo puede devolver JSON estricto cuando se le pide.`,
       "strict-roles": `Combina turnos del mismo rol y comienza con un turno de usuario. Márcalo para un proxy que expone Claude.`,
       prefix: `Permite que le entregue un turno a medio escribir para que lo continúe. Márcalo para un proxy que expone DeepSeek o Z.ai.`,
+      prefill: `Marca solo si este modelo continúa una respuesta que empiezo para él en lugar de reiniciarla o rechazarla.`,
       "verbatim-tools": `Marcar si el endpoint no admite herramientas nativas. Extrae llamadas del texto sin procesar.`,
     },
     model_compat_label: `Compatibilidades de finalización de chat`,

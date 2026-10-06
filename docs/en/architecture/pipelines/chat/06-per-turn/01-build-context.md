@@ -110,8 +110,23 @@ After this stage runs:
 - `contextItems` has tail directives appended in the correct priority order:
   emoji penalty (lower priority, inserted before the latest dialogue pair),
   stop/reasoning/manual directives (combined into one user message at the
-  tail), queued-reply directive, uncensor directive, and manual-prefill
-  model message (last).
+  tail), queued-reply directive, then uncensor directive. No prefill is in
+  `contextItems`.
+- `assistantPrefill` holds the turn's prefill, or null. A `/respond` prefill
+  replaces the server's `response_prefill`; the server one is skipped on user
+  impersonation, reasoning queries, reminders, scene turns, and stop
+  responses. Identity and mention macros are expanded here with the real
+  triggerer name; tool macros are not, because they depend on the attempt's
+  provider.
+- Each generation attempt applies the prefill in `runGenerationAttempts`
+  (`applyAssistantPrefill`), after media resolution and truncation, against
+  its own model. A model that continues a prefill gets a trailing `model`
+  item `"{bot}: {text}"`; otherwise a `/respond` prefill becomes a
+  `Begin your next reply with` tail directive and a server prefill is
+  dropped. Either way `streamingContext.outputPrefill` is set for the
+  attempt, so the stream strips an echo and the prefix-completion adapters
+  stamp `prefix: true`. Deciding per attempt is what keeps a fallback from
+  a model that accepts a prefill to one that rejects it from a 400.
 - `simplifiedMessages` excludes messages from privacy-FULL users.
 - Blocked-author content is not scanned for references; its synthetic block
   notice is excluded as well.

@@ -70,6 +70,7 @@ import type {
   ConfigChannelsView,
   ConfigChannelsOverridesView,
   ConfigBehaviorTriggerView,
+  ConfigBehaviorGeneralView,
   ConfigBehaviorView,
   ConfigPermissionsView,
   ConfigPersonaMemoryView,
@@ -2296,6 +2297,12 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
 
   const prompt = view.systemPrompt?.trim() || DEFAULT_SYSTEM_PROMPT.trim();
   const contextNote = view.contextNote?.trim() ?? "";
+  const responsePrefill = view.responsePrefill?.trim() ?? "";
+  const prefillHeader = `**${localizer(locale, "commands.config.panel.response_prefill_title")}**\n${localizer(
+    locale,
+    "commands.config.panel.response_prefill_description",
+  )}\n`;
+  const prefillStatus = responsePrefill ? `\n> ${responsePrefillStatus(locale, view)}` : "";
   const promptHeader = `**${localizer(locale, "commands.config.panel.system_prompt_title")}**\n${localizer(
     locale,
     "commands.config.panel.system_prompt_description",
@@ -2332,17 +2339,24 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
     measurePanelTextLength(promptHeader) +
     measurePanelTextLength(contextHeader) +
     (contextNote ? 0 : getDiscordTextLength(noneContent)) +
+    measurePanelTextLength(prefillHeader) +
+    measurePanelTextLength(prefillStatus) +
+    (responsePrefill ? 0 : getDiscordTextLength(noneContent)) +
     measureFormattedPanelTextLength(responseStyleTextDisplay);
   if (timezoneTextDisplay) {
     fixedTextLength += measureFormattedPanelTextLength(timezoneTextDisplay);
   }
   const generalDynamicAllowance = Math.max(0, baseAllowance - fixedTextLength);
-  const generalPerValueBudget = contextNote ? Math.floor(generalDynamicAllowance / 2) : generalDynamicAllowance;
+  const boundedValueCount = 1 + (contextNote ? 1 : 0) + (responsePrefill ? 1 : 0);
+  const generalPerValueBudget = Math.floor(generalDynamicAllowance / boundedValueCount);
 
   const renderedPrompt = renderBoundedFencedContent(locale, prompt, generalPerValueBudget).rendered;
   const renderedContextNote = contextNote
     ? renderBoundedFencedContent(locale, contextNote, generalPerValueBudget).rendered
     : renderFencedCollectionContent(localizer(locale, "commands.config.panel.none_label"));
+  const renderedPrefill = responsePrefill
+    ? renderBoundedFencedContent(locale, responsePrefill, generalPerValueBudget).rendered
+    : noneContent;
 
   components.push(
     {
@@ -2351,6 +2365,10 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
         locale,
         "commands.config.panel.system_prompt_description",
       )}\n${renderedPrompt}`,
+    },
+    {
+      type: ComponentType.TextDisplay,
+      content: `${prefillHeader}${renderedPrefill}${prefillStatus}`,
     },
     {
       type: ComponentType.ActionRow,
@@ -2367,6 +2385,13 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
           style: ButtonStyle.Secondary,
           customId: buildConfigRouteId({ action: "behavior-preset-open", locale }),
           label: localizer(locale, "commands.config.panel.apply_preset_button"),
+          disabled: writesDisabled,
+        },
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: buildConfigRouteId({ action: "behavior-prefill-open", locale }),
+          label: localizer(locale, "commands.config.panel.set_prefill_button"),
           disabled: writesDisabled,
         },
         {
@@ -2434,6 +2459,16 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
     });
   }
   return components;
+}
+
+function responsePrefillStatus(locale: string, view: ConfigBehaviorGeneralView): string {
+  const key =
+    view.prefillBlocker === "model"
+      ? "commands.config.panel.response_prefill_inactive_model"
+      : view.prefillBlocker === "thinking"
+        ? "commands.config.panel.response_prefill_inactive_thinking"
+        : "commands.config.panel.response_prefill_active";
+  return localizer(locale, key, { model: view.prefillModelName });
 }
 
 function cooldownLabel(locale: string, value: number): string {

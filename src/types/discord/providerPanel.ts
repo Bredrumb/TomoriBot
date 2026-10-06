@@ -19,6 +19,7 @@ export interface ProviderPanelModel {
     supportsStructOutput: boolean;
     strictRoleAlternation: boolean;
     supportsPrefixCompletion: boolean;
+    supportsAssistantPrefill: boolean;
     verbatimToolCalling: boolean;
   };
   imageSettings?: ImageEndpointSupports;

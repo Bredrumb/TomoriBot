@@ -105,6 +105,14 @@ Important implementation notes:
 - Gemini 2.5 Flash-Lite has a higher positive minimum than Flash, so Tomori clamps upward when needed.
 - Gemini 3 Pro does not get a true disable path in Tomori; `none` becomes the lowest supported level.
 
+Assistant prefill depends on this mapping. With a prefill present, Gemini emits no thought parts, so
+any real thinking budget comes out as visible text after the continuation. The prefill resolver
+(`resolvePrefillBlocker` in `src/utils/chat/assistantPrefill.ts`) calls `buildGoogleThinkingConfig`
+and treats the model as able only when it returns `thinkingBudget: 0` or `thinkingLevel: MINIMAL`.
+With the default `auto`, a server prefill on Gemini therefore stays inactive until Thinking is set to
+None or Minimal, which the `/config` panel says next to the prefill. Pro models never qualify, and
+`/respond` reasoning mode lifts `none` to a real budget, so it disqualifies the turn as well.
+
 ### Anthropic
 
 Tomori uses adaptive thinking for supported Claude 4.6 / 4.7 models.

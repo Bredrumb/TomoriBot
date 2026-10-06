@@ -39,6 +39,7 @@ import {
   recordChatProviderContext,
   runWithChatDiagnosticStage,
 } from "@/utils/chat/diagnosticTimeline";
+import { applyAssistantPrefill } from "@/utils/chat/assistantPrefill";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import { providerIsApiFamily, runToolLoop, sendStreamTimeoutNotice } from "@/utils/chat/toolLoop";
 import {
@@ -138,6 +139,14 @@ async function runGenerationAttempts(
         emptyResponseFinishReason: context.turn.lockedTurn.admission.incoming.emptyResponseFinishReason,
         retryCount: context.turn.lockedTurn.admission.incoming.retryCount,
       });
+      const prefilled = await applyAssistantPrefill({
+        contextItems: context.contextItems,
+        prefill: context.assistantPrefill,
+        tomoriState: attempt.tomoriState,
+        forceReason: context.streamingContext.forceReason,
+      });
+      context.contextItems = prefilled.contextItems;
+      context.streamingContext.outputPrefill = prefilled.outputPrefill;
       recordChatProviderContext(
         index + 1,
         context.contextItems.flatMap((item) =>
@@ -760,6 +769,7 @@ async function createFallbackAttempt(
         supports_structoutput: entry.endpoint.supports_structoutput,
         strict_role_alternation: entry.endpoint.strict_role_alternation,
         supports_prefix_completion: entry.endpoint.supports_prefix_completion,
+        supports_assistant_prefill: entry.endpoint.supports_assistant_prefill,
         verbatim_tool_calling: entry.endpoint.verbatim_tool_calling,
       },
     };

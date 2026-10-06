@@ -1096,6 +1096,7 @@ export function createProvidersInteractionRoute(
               supportsStructOutput: selectedModelFlags.includes("structured"),
               strictRoleAlternation: resolveCompatFlag("strict-roles", target?.textSettings?.strictRoleAlternation),
               supportsPrefixCompletion: resolveCompatFlag("prefix", target?.textSettings?.supportsPrefixCompletion),
+              supportsAssistantPrefill: resolveCompatFlag("prefill", target?.textSettings?.supportsAssistantPrefill),
               verbatimToolCalling: resolveCompatFlag("verbatim-tools", target?.textSettings?.verbatimToolCalling),
               imageSupportValues: route.capability === "image" ? selectedImageSupports : undefined,
               speechVoiceMode: route.capability === "speech" ? selectedVoiceMode : undefined,

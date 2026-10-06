@@ -953,6 +953,7 @@ class LlmModelRepository {
       supportsStructuredOutput: boolean;
       strictRoleAlternation?: boolean;
       supportsPrefixCompletion?: boolean;
+      supportsAssistantPrefill?: boolean;
     },
     provider = "openrouter",
     pricing?: { inputPerMillion: number; outputPerMillion: number } | null,
@@ -967,13 +968,13 @@ class LlmModelRepository {
           is_default, is_reasoning, is_deprecated, is_free, has_tools,
           sees_images, sees_videos, sees_youtube, is_uncensored,
           supports_structoutput, strict_role_alternation, supports_prefix_completion,
-          llm_description, descriptions,
+          supports_assistant_prefill, llm_description, descriptions,
           input_price_per_million, output_price_per_million
         ) VALUES (
           ${provider}, ${modelCodename}, true, false, false, false, false, false,
           ${caps.hasTools}, ${caps.seesImages}, ${caps.seesVideos}, ${caps.seesYoutube},
           false, ${caps.supportsStructuredOutput}, ${caps.strictRoleAlternation ?? false},
-          ${caps.supportsPrefixCompletion ?? false}, ${modelCodename},
+          ${caps.supportsPrefixCompletion ?? false}, ${caps.supportsAssistantPrefill ?? false}, ${modelCodename},
           ${{ "en-US": modelCodename }},
           ${inputPrice}, ${outputPrice}
         )
@@ -987,6 +988,7 @@ class LlmModelRepository {
           supports_structoutput   = EXCLUDED.supports_structoutput,
           strict_role_alternation = EXCLUDED.strict_role_alternation,
           supports_prefix_completion = EXCLUDED.supports_prefix_completion,
+          supports_assistant_prefill = EXCLUDED.supports_assistant_prefill,
           llm_description         = EXCLUDED.llm_description,
           descriptions            = COALESCE(llms.descriptions, EXCLUDED.descriptions),
           -- COALESCE, not EXCLUDED: a re-registration during an OpenRouter outage resolves no
@@ -1191,6 +1193,7 @@ class LlmModelRepository {
     supportsStructOutput: boolean;
     strictRoleAlternation: boolean;
     supportsPrefixCompletion: boolean;
+    supportsAssistantPrefill: boolean;
     verbatimToolCalling: boolean;
   }): Promise<number | null> {
     try {
@@ -1198,13 +1201,13 @@ class LlmModelRepository {
         INSERT INTO llms (
           llm_provider, llm_codename, has_tools, sees_images, sees_videos,
           sees_youtube, supports_structoutput, strict_role_alternation, supports_prefix_completion,
-          verbatim_tool_calling,
+          supports_assistant_prefill, verbatim_tool_calling,
           is_smartest, is_default, is_reasoning, is_deprecated, is_free, is_uncensored,
           llm_description, descriptions
         ) VALUES (
           ${params.provider}, ${params.codename}, ${params.hasTools}, ${params.seesImages}, ${params.seesVideos},
           false, ${params.supportsStructOutput}, ${params.strictRoleAlternation}, ${params.supportsPrefixCompletion},
-          ${params.verbatimToolCalling},
+          ${params.supportsAssistantPrefill}, ${params.verbatimToolCalling},
           false, true, false, false, false, false,
           ${params.displayName}, ${{ "en-US": params.displayName }}
         )
@@ -1215,6 +1218,7 @@ class LlmModelRepository {
           supports_structoutput = EXCLUDED.supports_structoutput,
           strict_role_alternation = EXCLUDED.strict_role_alternation,
           supports_prefix_completion = EXCLUDED.supports_prefix_completion,
+          supports_assistant_prefill = EXCLUDED.supports_assistant_prefill,
           verbatim_tool_calling = EXCLUDED.verbatim_tool_calling,
           llm_description = EXCLUDED.llm_description,
           descriptions = jsonb_set(COALESCE(llms.descriptions, '{}'::jsonb), '{en-US}', to_jsonb(${params.displayName}::text)),
@@ -1637,6 +1641,7 @@ class LlmModelRepository {
     supportsStructOutput: boolean;
     strictRoleAlternation: boolean;
     supportsPrefixCompletion: boolean;
+    supportsAssistantPrefill: boolean;
     verbatimToolCalling: boolean;
   }): Promise<void> {
     switch (params.capability) {
@@ -1650,6 +1655,7 @@ class LlmModelRepository {
             supports_structoutput = ${params.supportsStructOutput},
             strict_role_alternation = ${params.strictRoleAlternation},
             supports_prefix_completion = ${params.supportsPrefixCompletion},
+            supports_assistant_prefill = ${params.supportsAssistantPrefill},
             verbatim_tool_calling = ${params.verbatimToolCalling},
             llm_description = ${params.displayName},
             descriptions = jsonb_set(COALESCE(descriptions, '{}'::jsonb), '{en-US}', to_jsonb(${params.displayName}::text)),

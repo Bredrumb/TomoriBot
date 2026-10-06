@@ -710,6 +710,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           ce.supports_structoutput,
           ce.strict_role_alternation,
           ce.supports_prefix_completion,
+          ce.supports_assistant_prefill,
           ce.verbatim_tool_calling,
           ce.is_default,
           ce.created_at,
@@ -782,6 +783,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           ce.supports_structoutput,
           ce.strict_role_alternation,
           ce.supports_prefix_completion,
+          ce.supports_assistant_prefill,
           ce.verbatim_tool_calling,
           ce.is_default,
           ce.created_at,
@@ -842,6 +844,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           ce.supports_structoutput,
           ce.strict_role_alternation,
           ce.supports_prefix_completion,
+          ce.supports_assistant_prefill,
           ce.verbatim_tool_calling,
           ce.is_default,
           ce.created_at,
@@ -913,6 +916,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                 ce.supports_structoutput,
                 ce.strict_role_alternation,
                 ce.supports_prefix_completion,
+                ce.supports_assistant_prefill,
                 ce.verbatim_tool_calling,
                 ce.is_default,
                 ce.created_at,
@@ -947,6 +951,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                 ce.supports_structoutput,
                 ce.strict_role_alternation,
                 ce.supports_prefix_completion,
+                ce.supports_assistant_prefill,
                 ce.verbatim_tool_calling,
                 ce.is_default,
                 ce.created_at,
@@ -1022,6 +1027,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                 ce.supports_structoutput,
                 ce.strict_role_alternation,
                 ce.supports_prefix_completion,
+                ce.supports_assistant_prefill,
                 ce.verbatim_tool_calling,
                 ce.is_default,
                 ce.created_at,
@@ -1056,6 +1062,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                 ce.supports_structoutput,
                 ce.strict_role_alternation,
                 ce.supports_prefix_completion,
+                ce.supports_assistant_prefill,
                 ce.verbatim_tool_calling,
                 ce.is_default,
                 ce.created_at,
@@ -1130,6 +1137,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           ce.supports_structoutput,
           ce.strict_role_alternation,
           ce.supports_prefix_completion,
+          ce.supports_assistant_prefill,
           ce.verbatim_tool_calling,
           ce.is_default,
           ce.created_at,
@@ -1178,6 +1186,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                 ce.supports_structoutput,
                 ce.strict_role_alternation,
                 ce.supports_prefix_completion,
+                ce.supports_assistant_prefill,
                 ce.verbatim_tool_calling,
                 ce.is_default,
                 ce.created_at,
@@ -1211,6 +1220,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                 ce.supports_structoutput,
                 ce.strict_role_alternation,
                 ce.supports_prefix_completion,
+                ce.supports_assistant_prefill,
                 ce.verbatim_tool_calling,
                 ce.is_default,
                 ce.created_at,
@@ -2083,6 +2093,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       supportsStructOutput?: boolean;
       strictRoleAlternation?: boolean;
       supportsPrefixCompletion?: boolean;
+      supportsAssistantPrefill?: boolean;
       verbatimToolCalling?: boolean;
       isDefault?: boolean;
       // When set, update that exact row (edit path) instead of inserting. This lets an edit change
@@ -2109,6 +2120,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       supportsStructOutput = false,
       strictRoleAlternation = false,
       supportsPrefixCompletion = false,
+      supportsAssistantPrefill = false,
       verbatimToolCalling = false,
       isDefault = true,
       customEndpointId = null,
@@ -2150,6 +2162,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
               supports_structoutput = ${supportsStructOutput},
               strict_role_alternation = ${strictRoleAlternation},
               supports_prefix_completion = ${supportsPrefixCompletion},
+              supports_assistant_prefill = ${supportsAssistantPrefill},
               verbatim_tool_calling = ${verbatimToolCalling},
               is_default = ${isDefault},
               updated_at = CURRENT_TIMESTAMP
@@ -2186,12 +2199,12 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
               connection_id, model_name, model_ref_id, num_ctx,
               extra_config, has_tools, sees_images, sees_videos,
               supports_structoutput, strict_role_alternation, supports_prefix_completion,
-              verbatim_tool_calling, is_default
+              supports_assistant_prefill, verbatim_tool_calling, is_default
             ) VALUES (
               ${connectionId}, ${modelName}, ${modelRefId}, ${numCtx},
               ${extraConfig}, ${hasTools}, ${seesImages}, ${seesVideos},
               ${supportsStructOutput}, ${strictRoleAlternation}, ${supportsPrefixCompletion},
-              ${verbatimToolCalling}, ${isDefault}
+              ${supportsAssistantPrefill}, ${verbatimToolCalling}, ${isDefault}
             )
             ON CONFLICT (connection_id, COALESCE(model_name, ''))
             DO UPDATE SET
@@ -2204,6 +2217,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
               supports_structoutput = EXCLUDED.supports_structoutput,
               strict_role_alternation = EXCLUDED.strict_role_alternation,
               supports_prefix_completion = EXCLUDED.supports_prefix_completion,
+              supports_assistant_prefill = EXCLUDED.supports_assistant_prefill,
               verbatim_tool_calling = EXCLUDED.verbatim_tool_calling,
               is_default = EXCLUDED.is_default,
               updated_at = CURRENT_TIMESTAMP
@@ -2236,12 +2250,12 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
               connection_id, model_name, model_ref_id, num_ctx,
               extra_config, has_tools, sees_images, sees_videos,
               supports_structoutput, strict_role_alternation, supports_prefix_completion,
-              verbatim_tool_calling, is_default
+              supports_assistant_prefill, verbatim_tool_calling, is_default
             ) VALUES (
               ${connectionId}, ${modelName}, ${modelRefId}, ${numCtx},
               ${extraConfig}, ${hasTools}, ${seesImages}, ${seesVideos},
               ${supportsStructOutput}, ${strictRoleAlternation}, ${supportsPrefixCompletion},
-              ${verbatimToolCalling}, ${isDefault}
+              ${supportsAssistantPrefill}, ${verbatimToolCalling}, ${isDefault}
             )
             ON CONFLICT (connection_id, COALESCE(model_name, ''))
             DO UPDATE SET
@@ -2254,6 +2268,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
               supports_structoutput = EXCLUDED.supports_structoutput,
               strict_role_alternation = EXCLUDED.strict_role_alternation,
               supports_prefix_completion = EXCLUDED.supports_prefix_completion,
+              supports_assistant_prefill = EXCLUDED.supports_assistant_prefill,
               verbatim_tool_calling = EXCLUDED.verbatim_tool_calling,
               is_default = EXCLUDED.is_default,
               updated_at = CURRENT_TIMESTAMP

@@ -237,6 +237,7 @@ import { IMPORT_LIMITS, PERSONA_LIMITS } from "@/utils/security/rateLimiter";
 import { log } from "@/utils/misc/logger";
 import { recordPanelActionStat } from "@/utils/stats/panelActionMetrics";
 import { localizer } from "@/utils/text/localizer";
+import { resolvePrefillBlocker } from "@/utils/chat/assistantPrefill";
 import { buildSlugMap } from "@/utils/text/slugifyLabel";
 import { buildInitialMemoriesPanel } from "@/utils/discord/interactions/memoriesRoutes";
 import { buildInitialPersonalMemoriesPanel } from "@/utils/discord/interactions/personalMemoriesRoutes";
@@ -535,6 +536,9 @@ const defaultDependencies: ConfigRouteDependencies = {
     );
     const general: ConfigBehaviorGeneralView = {
       systemPrompt: rawChatConfig?.system_prompt ?? state.config.system_prompt ?? null,
+      responsePrefill: rawChatConfig?.response_prefill ?? state.config.response_prefill ?? null,
+      prefillBlocker: resolvePrefillBlocker(state.llm, state.config.thinking_level),
+      prefillModelName: state.llm.llm_codename,
       contextNote: rawChatConfig?.context_note ?? state.config.context_note ?? null,
       contextNoteDepth: rawChatConfig?.context_note_depth ?? state.config.context_note_depth ?? 0,
       // The assembled state may overlay a persona-specific degree; the General page is the raw
