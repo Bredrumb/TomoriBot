@@ -578,6 +578,11 @@ styles open a modal directly, so this only affects the paginated path:
   legacy selector has no Cancel and never returns it); callers gating on
   `outcome !== "submit"` already handle it.
 
+Callers may also pass `pageSelectTitleKey` and `pageSelectDescriptionKey` on `ModalOptions`
+to customize the intermediate page selector's strings (for example, to display entity-specific
+wording such as personas instead of the default generic items). When omitted, they default to
+`general.pagination.select_page_title` and `general.pagination.select_page_description`.
+
 The V2 selector renders `IsComponentsV2` onto the interaction's reply, which Discord then
 forbids editing with legacy embeds. The selector marks the interaction, and the shared
 sinks (`replyInfoEmbed`/`replySummaryEmbed`/`replyPaginatedStatusPages`) detect the mark

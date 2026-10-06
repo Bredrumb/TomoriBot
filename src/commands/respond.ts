@@ -278,6 +278,8 @@ export async function execute(
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: "respond_persona_select",
       modalTitleKey: "commands.respond.extra_options_title",
+      pageSelectTitleKey: "general.pagination.select_persona_title",
+      pageSelectDescriptionKey: "general.pagination.select_persona_page_description",
       components: modalComponents,
     });
 

@@ -1,4 +1,4 @@
-﻿export default {
+export default {
   general: {
     language_name: `English`,
     yes: `Yes`,
@@ -53,6 +53,7 @@
       select_page_title: `Select Page`,
       select_page_description: `Choose a page to view from {totalItems} items across {totalPages} pages:`,
       select_persona_title: `Select Persona`,
+      select_persona_page_description: `Choose a page to view from {totalItems} personas across {totalPages} pages:`,
       persona_no_attributes: `No attributes configured yet.`,
       persona_select_button: `Select`,
     },

@@ -37,7 +37,7 @@ const SWEEP_SIZE_THRESHOLD = 2000;
  * identity sprite or a copied identity is a different speaker on screen even when the same
  * persona produced it.
  */
-export type DeliveredSpeakerKind = "appearance" | "identity_sprite" | "copied";
+type DeliveredSpeakerKind = "appearance" | "identity_sprite" | "copied";
 
 export interface DeliveredSpeaker {
   /** Null when the speaker cannot be tied to one persona, which never matches another speaker. */

@@ -119,6 +119,7 @@ import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/contextBuilder";
 import { formatUTCOffset } from "@/utils/text/timezoneHelper";
 import { getCapabilitiesManagePermissionDefinitions } from "@/utils/discord/manageConfigMapping";
 import { buildDocsUrl, DOCS_PATHS } from "@/utils/discord/docsLinks";
+import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import {
   buildConfigVoiceBody,
@@ -1612,10 +1613,10 @@ ${localizer(locale, "commands.config.panel.response_style_description")}
 
   const textState = actionState("text-override");
   const textOverride = persona.persona_llm
-    ? `${persona.persona_llm.llm_provider} / ${persona.persona_llm.llm_codename}`
+    ? `${getProviderDisplayName(persona.persona_llm.llm_provider)} / ${persona.persona_llm.llm_codename}`
     : localizer(locale, "commands.config.panel.none_label");
   const serverModel = persona.llm
-    ? `${persona.llm.llm_provider} / ${persona.llm.llm_codename}`
+    ? `${getProviderDisplayName(persona.llm.llm_provider)} / ${persona.llm.llm_codename}`
     : localizer(locale, "commands.config.panel.none_label");
   const textOverrideTextDisplay: ComponentInContainerData | undefined =
     textState !== "omitted"
@@ -1681,7 +1682,7 @@ ${localizer(locale, "commands.config.panel.text_override_description")}
             customId: buildConfigRouteId({ action: "text-override-provider-select", locale, personaId }),
             placeholder: localizer(locale, "commands.config.panel.text_override_provider_placeholder"),
             options: input.view.providers.map((provider) => ({
-              label: safeSelectOptionText(provider, 100),
+              label: safeSelectOptionText(getProviderDisplayName(provider), 100),
               value: provider,
             })),
             disabled: writesDisabled || textState === "disabled",
@@ -2302,7 +2303,8 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
     locale,
     "commands.config.panel.response_prefill_description",
   )}\n`;
-  const prefillStatus = responsePrefill ? `\n> ${responsePrefillStatus(locale, view)}` : "";
+  // Above the fence: Discord pads below a code block, which detached a status line rendered under it.
+  const prefillStatus = responsePrefill ? `> ${responsePrefillStatus(locale, view)}\n` : "";
   const promptHeader = `**${localizer(locale, "commands.config.panel.system_prompt_title")}**\n${localizer(
     locale,
     "commands.config.panel.system_prompt_description",
@@ -2368,7 +2370,7 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
     },
     {
       type: ComponentType.TextDisplay,
-      content: `${prefillHeader}${renderedPrefill}${prefillStatus}`,
+      content: `${prefillHeader}${prefillStatus}${renderedPrefill}`,
     },
     {
       type: ComponentType.ActionRow,
@@ -3859,7 +3861,7 @@ ${localizer(locale, "commands.config.panel.channels_rules_description")}`,
 
 function channelOverrideModelLabel(locale: string, model: LlmRow | null): string {
   return model
-    ? `${model.llm_provider} / ${model.llm_codename}`
+    ? `${getProviderDisplayName(model.llm_provider)} / ${model.llm_codename}`
     : localizer(locale, "commands.config.panel.none_label");
 }
 
@@ -4073,7 +4075,7 @@ ${localizer(locale, "commands.config.panel.channels_overrides_text_model_descrip
             }),
             placeholder: localizer(locale, "commands.config.panel.text_override_provider_placeholder"),
             options: textView.providers.map((provider) => ({
-              label: safeSelectOptionText(provider, 100),
+              label: safeSelectOptionText(getProviderDisplayName(provider), 100),
               value: provider,
             })),
             disabled: actionDisabled,
@@ -4090,7 +4092,7 @@ ${localizer(locale, "commands.config.panel.channels_overrides_text_model_descrip
         return {
           label: safeSelectOptionText(
             localizer(locale, "commands.config.panel.provider_page_label", {
-              provider: textView.provider,
+              provider: getProviderDisplayName(textView.provider),
               page: pageIndex + 1,
             }),
             100,

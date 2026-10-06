@@ -2,7 +2,7 @@ import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 import type { ChannelLastDelivery, DeliveredSpeaker } from "@/utils/discord/stream/channelDeliveryContinuity";
 
 /** Which avatar a rate-limited line was delivered under instead of its own. */
-export type AvatarPatchFallbackSource = "previous_url" | "stored_avatar" | "bot_avatar";
+type AvatarPatchFallbackSource = "previous_url" | "stored_avatar" | "bot_avatar";
 
 export interface AvatarPatchFallback {
   identity: ResolvedWebhookIdentity;

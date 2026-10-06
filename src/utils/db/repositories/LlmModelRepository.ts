@@ -516,7 +516,7 @@ class LlmModelRepository {
       `;
 
       if (!rows || rows.length === 0) {
-        log.error(`No available embedding models found for provider: ${normalized}`);
+        log.warn(`No available embedding models found for provider: ${normalized}`);
         return null;
       }
 

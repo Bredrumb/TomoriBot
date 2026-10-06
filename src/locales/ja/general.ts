@@ -53,6 +53,7 @@ export default {
       select_page_title: `ページを選択`,
       select_page_description: `{totalItems}項目から{totalPages}ページ中の表示するページを選択してください：`,
       select_persona_title: `ペルソナを選択`,
+      select_persona_page_description: `{totalItems}人のペルソナから{totalPages}ページ中の表示するページを選択してください：`,
       persona_no_attributes: `属性はまだ設定されていません。`,
       persona_select_button: `選択`,
     },

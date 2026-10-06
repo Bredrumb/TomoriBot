@@ -88,6 +88,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
   let selectedStickerToSend: Sticker | null = null;
   let thoughtLog: GenerationTurnResult["thoughtLog"];
   let toolResponseDelivered = false;
+  let lastToolName: string | undefined;
 
   for (let iteration = 0; iteration < MAX_FUNCTION_CALL_ITERATIONS; iteration++) {
     if (iteration > 0) {
@@ -144,7 +145,28 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           undefined,
           toolResponseDelivered,
         );
-      case "empty_response":
+      case "empty_response": {
+        // The turn-level retry regenerates the whole reply, so after delivered text it posts a second
+        // reply under the first. It is skipped only when the empty follow-up is the model having
+        // nothing to add; a lookup result still waiting to be presented, or a failure the retry
+        // handles specifically, keeps it.
+        const deliveredText = streamResults.findLast((result) => result.accumulatedText?.trim())?.accumulatedText;
+        if (
+          (deliveredText || toolResponseDelivered) &&
+          (await isSettledAfterTool(params, streamResult, lastToolName))
+        ) {
+          resetChannelFollowUpCount(params.context.channel.id);
+          return buildResult(
+            "completed",
+            params.context,
+            streamResults,
+            deliveredText ?? finalText,
+            detailsText,
+            thoughtLog,
+            selectedStickerToSend ?? undefined,
+            toolResponseDelivered,
+          );
+        }
         return buildResult(
           "empty_response",
           params.context,
@@ -155,6 +177,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           undefined,
           toolResponseDelivered,
         );
+      }
       case "stopped_by_user":
         queueStopResponseIfPresent(params.context);
         resetChannelFollowUpCount(params.context.channel.id);
@@ -218,6 +241,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         }
 
         functionHistory.push(toolOutcome.historyEntry);
+        lastToolName = toolOutcome.functionName;
         toolResponseDelivered ||= toolOutcome.responseDelivered;
         // Visible text emitted before the tool call now lives on that history
         // entry's assistant tool-call turn. Remove the same buffered parts from
@@ -959,6 +983,27 @@ async function shouldEndAfterPreToolText(
   if (!applies) return false;
   if (functionName === "update_short_term_memory") return true;
   return !(await ToolRegistry.requiresFollowUp(functionName, providerName, serverId));
+}
+
+/**
+ * Whether an empty stream after a tool means the model had nothing to add. A held NovelAI fragment,
+ * an output-token cap (the retry trims context for it), and a speaker-guard discard (the retry
+ * injects the speaker directive) are failures. A tool that requires follow-up returned data only
+ * the follow-up can present, so an empty one lost the answer.
+ */
+async function isSettledAfterTool(
+  params: ToolLoopParams,
+  emptyResult: StreamResult,
+  lastToolName: string | undefined,
+): Promise<boolean> {
+  if (!lastToolName || emptyResult.naiContinuationPrefill) return false;
+  const data = emptyResult.data as { finishReason?: unknown; emptyResponseReason?: unknown } | undefined;
+  if (data?.finishReason === "length" || data?.emptyResponseReason) return false;
+  return !(await ToolRegistry.requiresFollowUp(
+    lastToolName,
+    params.provider.getInfo().name,
+    params.tomoriState.server_id,
+  ));
 }
 
 async function emitNaiToolRetryExhausted(context: ChatTurnContext): Promise<void> {

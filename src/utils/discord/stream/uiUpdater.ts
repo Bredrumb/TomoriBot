@@ -207,7 +207,7 @@ export function isUserImpersonationStreamContext(context: StreamContext): boolea
  * override without a sprite record is a copied identity unless it is the persona's own base
  * appearance; an alter's plain line has no override and is that alter's base appearance.
  */
-export function classifyWebhookSpeaker(
+function classifyWebhookSpeaker(
   payload: Pick<StreamSendPayload, "identityOverride" | "spriteRecord" | "isNeutralAppearance">,
   context: StreamContext,
   strictUserImpersonation: boolean,

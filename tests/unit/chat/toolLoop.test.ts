@@ -716,6 +716,55 @@ describe("runToolLoop — contract tests", () => {
     expect(requiresFollowUpCalls).toHaveLength(0);
   });
 
+  it("an empty follow-up after delivered text completes only when the model had nothing to add", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const cases: Array<{ label: string; empty: StreamResult; needsFollowUp: boolean; expected: string }> = [
+      { label: "settled", empty: { status: "empty_response" }, needsFollowUp: false, expected: "completed" },
+      { label: "lookup tool", empty: { status: "empty_response" }, needsFollowUp: true, expected: "empty_response" },
+      {
+        label: "token cap",
+        empty: { status: "empty_response", data: { finishReason: "length" } },
+        needsFollowUp: false,
+        expected: "empty_response",
+      },
+      {
+        label: "speaker guard",
+        empty: { status: "empty_response", data: { emptyResponseReason: "speaker_guard" } },
+        needsFollowUp: false,
+        expected: "empty_response",
+      },
+      {
+        label: "held NovelAI fragment",
+        empty: { status: "empty_response", naiContinuationPrefill: "and then" },
+        needsFollowUp: false,
+        expected: "empty_response",
+      },
+    ];
+
+    const failures: string[] = [];
+    for (const testCase of cases) {
+      const { provider } = makeProvider([
+        makeFunctionCallResult("echo_tool", {}, "Let me check that."),
+        testCase.empty,
+      ]);
+      toolExecuteQueue.push({ success: true, data: { saved: true } });
+      requiresFollowUp = testCase.needsFollowUp;
+
+      const result = await runToolLoop(makeParams(makeContext(), provider));
+      if (result.status !== testCase.expected) failures.push(`${testCase.label}: ${result.status}`);
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it("an empty first stream is still reported as empty so the turn retries", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { provider } = makeProvider([{ status: "empty_response" }]);
+
+    const result = await runToolLoop(makeParams(makeContext(), provider));
+
+    expect(result.status).toBe("empty_response");
+  });
+
   it("successful sticker selection is carried on the completed result", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
     const sticker = { id: "sticker_1", name: "Wave", url: "https://cdn.example/sticker.png" } as unknown as Sticker;

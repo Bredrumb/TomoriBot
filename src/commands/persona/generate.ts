@@ -50,7 +50,7 @@ import { generatePresetForProvider } from "@/providers/utils/providerFeatureExec
 import { analyzeImageWithVisionModel } from "@/utils/provider/visionCaption";
 import { resolvePresetGenerationMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 import { resolveModelLimits } from "@/utils/provider/modelLimits";
-import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
+import { getProviderDisplayName, providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
@@ -358,7 +358,7 @@ export async function execute(
         titleKey: "commands.persona.generate.wrong_provider_title",
         descriptionKey: "commands.persona.generate.wrong_provider_description",
         descriptionVars: {
-          current_provider: tomoriState.llm.llm_provider,
+          current_provider: getProviderDisplayName(tomoriState.llm.llm_provider),
         },
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
