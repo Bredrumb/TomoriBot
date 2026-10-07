@@ -552,6 +552,7 @@ export type ConfigPanelRoute =
   | { action: "behavior-speech-transcripts-set"; locale: string; enabled: boolean }
   | { action: "behavior-memory-tagging-open"; locale: string }
   | { action: "behavior-memory-tagging-submit"; locale: string; nonce: string }
+  | { action: "behavior-stm-enabled-set"; locale: string; enabled: boolean }
   | { action: "behavior-stm-parameters-open"; locale: string }
   | { action: "behavior-stm-parameters-submit"; locale: string; nonce: string }
   | { action: "behavior-stm-categories-open"; locale: string }
@@ -1055,6 +1056,7 @@ export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
   "behavior-speech-transcripts-set": { wireToken: "beh-transcripts-set", fields: [enabledField] },
   "behavior-memory-tagging-open": { wireToken: "beh-memory-tag-open", fields: [] },
   "behavior-memory-tagging-submit": { wireToken: "beh-memory-tag-sub", fields: [nonceField] },
+  "behavior-stm-enabled-set": { wireToken: "beh-stm-enabled-set", fields: [enabledField] },
   "behavior-stm-parameters-open": { wireToken: "beh-stm-params-open", fields: [] },
   "behavior-stm-parameters-submit": { wireToken: "beh-stm-params-sub", fields: [nonceField] },
   "behavior-stm-categories-open": { wireToken: "beh-stm-categories-open", fields: [] },

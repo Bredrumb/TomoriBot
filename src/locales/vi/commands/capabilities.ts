@@ -15,7 +15,6 @@ export default {
       imagegen_option: `Tạo hình ảnh`,
       videogen_option: `Tạo video`,
       voicemessage_option: `Tin nhắn thoại`,
-      shorttermmemory_option: `Tự động tóm tắt bộ nhớ ngắn hạn`,
       selfteaching_desc: `Học hỏi từ các cuộc trò chuyện trên máy chủ`,
       personalization_desc: `Bộ nhớ cá nhân & biệt danh`,
       userinfo_desc: `Cho phép persona cập nhật hồ sơ người dùng có cấu trúc`,
@@ -29,7 +28,6 @@ export default {
       imagegen_desc: `Tạo hình ảnh theo yêu cầu`,
       videogen_desc: `Tạo video ngắn theo yêu cầu`,
       voicemessage_desc: `Gửi tin nhắn thoại TTS của ElevenLabs`,
-      shorttermmemory_desc: `Tự động lưu bộ nhớ + nhắc nhở. Khi tắt, /persona stm thủ công & tin thô vẫn hiển thị`,
     },
   },
 };

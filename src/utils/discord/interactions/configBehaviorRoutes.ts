@@ -891,6 +891,7 @@ const CONFIG_BEHAVIOR_D10_DIRECT_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "behavior-self-debug-set",
   "behavior-notice-verbosity-set",
   "behavior-speech-transcripts-set",
+  "behavior-stm-enabled-set",
 ]);
 
 const MAX_TOOL_TRIGGER_ENTRIES = 50;
@@ -913,6 +914,8 @@ function fallbackD10View(state: TomoriState) {
     memory: {
       memoryTaggingEnabled: state.config.memory_tagging_enabled ?? false,
       channelMemoryEnabled: state.config.channel_memory_enabled ?? false,
+      stmEnabled: state.config.short_term_memory_enabled ?? true,
+      toolUseEnabled: state.config.tool_use_enabled ?? true,
       stmConfig: null,
       stmCategories: [],
     },
@@ -1187,6 +1190,19 @@ async function runD10Write(
     return {
       receipt: receipt(locale, "success", "state_updated_heading", "state_updated_detail"),
       telemetry: "server-config.workspace.notice-verbosity.set",
+    };
+  }
+  if (route.action === "behavior-stm-enabled-set") {
+    if ((state.config.short_term_memory_enabled ?? true) === route.enabled)
+      return { receipt: receipt(locale, "info", "state_no_changes_heading", "state_no_changes_detail") };
+    const updated = await repositories.configRepository.updateCapabilitiesConfig(state.server_id, {
+      short_term_memory_enabled: route.enabled,
+    });
+    if (!updated) return { receipt: writeFailed(locale) };
+    invalidateTomoriStateCache(scope.serverDiscId);
+    return {
+      receipt: receipt(locale, "success", "state_updated_heading", "state_updated_detail"),
+      telemetry: "server-config.workspace.capabilities.set",
     };
   }
   if (

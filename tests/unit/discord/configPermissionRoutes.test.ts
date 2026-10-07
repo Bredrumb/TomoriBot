@@ -247,7 +247,7 @@ function findComponentByCustomId(value: unknown, customId: string): Record<strin
 describe("permissions mapping and modal", () => {
   it("uses every presented definition and preserves the two-table partition", () => {
     const definitions = getCapabilitiesManagePermissionDefinitions();
-    expect(definitions).toHaveLength(14);
+    expect(definitions).toHaveLength(13);
     expect(definitions.map((definition) => [definition.value, definition.table, definition.dbColumn])).toEqual([
       ["selfteaching", "memberPermissions", "self_teaching_enabled"],
       ["userinfo", "capabilities", "user_info_updates_enabled"],
@@ -261,7 +261,6 @@ describe("permissions mapping and modal", () => {
       ["userblocking", "capabilities", "user_blocking_enabled"],
       ["personalization", "memberPermissions", "personal_memories_enabled"],
       ["emojiusage", "capabilities", "emoji_usage_enabled"],
-      ["shorttermmemory", "capabilities", "short_term_memory_enabled"],
       ["timeawareness", "capabilities", "time_awareness_enabled"],
     ]);
 
@@ -279,7 +278,7 @@ describe("permissions mapping and modal", () => {
     expect(noOp.patch).toEqual({ capabilities: {}, memberPermissions: {} });
 
     const withoutElevenLabs = getCapabilitiesManagePermissionDefinitions({ includeElevenLabs: false });
-    expect(withoutElevenLabs).toHaveLength(13);
+    expect(withoutElevenLabs).toHaveLength(12);
     expect(withoutElevenLabs.some((definition) => definition.value === "voicemessage")).toBe(false);
   });
 
@@ -732,7 +731,7 @@ describe("Plugins and Channel Rules panels", () => {
       }),
     );
     const contextDots = (contextSerialized.match(/🟢/gu)?.length ?? 0) + (contextSerialized.match(/🔴/gu)?.length ?? 0);
-    expect(contextDots).toBe(4);
+    expect(contextDots).toBe(3);
     expect(contextSerialized).toContain("Self-Debug");
     expect(contextSerialized).not.toContain("~~");
 

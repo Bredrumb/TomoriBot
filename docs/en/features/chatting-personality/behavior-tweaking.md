@@ -12,11 +12,18 @@ knobs; every command is in the [Command Reference](/features/command-reference/)
 ## Capabilities: What She's Allowed to Do
 <!-- anchor: capabilities-what-shes-allowed-to-do -->
 
-`/config` > Permissions toggles her features on and off: image generation, sticker usage, thread
-creation, message management, user blocking, self-teaching, voice messages, and more. Each
-toggle is the feature flag that gates the matching tool (see
-[Tools & Extensions](/features/capabilities/tools-and-extensions/)). Turn something off and she simply
-can't do it, no matter what a user asks.
+`/config` > Plugins toggles her features on and off across two pages:
+
+- **Available Tools**: image generation, sticker usage, thread creation, message management, user
+  blocking, self-teaching, voice messages, and more. Each toggle is the feature flag that gates the
+  matching tool (see [Tools & Extensions](/features/capabilities/tools-and-extensions/)), so turning
+  off Tool Use disables all of them at once.
+- **Context Additions**: personalization, emojis in replies, and time awareness. These only add
+  information to her prompt, so they keep working when Tool Use is off.
+
+Automatic STM summarization is a tool, but its toggle lives with the rest of the short-term memory
+settings in `/config` > Behavior > Advanced Memory. Turn something off and she simply can't do it,
+no matter what a user asks.
 
 ## Generation Tuning
 <!-- anchor: generation-tuning -->

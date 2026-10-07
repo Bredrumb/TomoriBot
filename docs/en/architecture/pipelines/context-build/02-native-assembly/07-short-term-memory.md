@@ -315,7 +315,7 @@ After this stage runs:
 | `/config` > Engine > Memory & STM | Define category labels and descriptions |
 | `/config` > Persona > Memories | Hand-edit live STM for a persona in the current channel (Manage Server) |
 | `/config` > Persona > Memories | Read-only inspect the live STM for a persona in the current channel (open to all members) |
-| `/config` > Permissions | "Short-Term Memory" toggle: turns OFF the bot's automatic STM management (write tool + cadence nudge) while leaving STM content visible |
+| `/config` > Behavior > Advanced Memory | "Automatic STM Summarization" toggle: turns OFF the bot's automatic STM management (write tool + cadence nudge) while leaving STM content visible. Server workspaces only, because the page is hidden in DMs. With Tool Use off the state line says summarization is paused, since the write tool needs `has_tools` |
 | `/help`, then Memory and Short-Term Memory | In-Discord guide to the STM customization surface |
 
 > Disabling STM: the `short_term_memory_enabled` capability flag

@@ -3062,6 +3062,37 @@ function buildBehaviorMemoryBody(input: ConfigPanelRenderInput): ComponentInCont
     },
     {
       type: ComponentType.TextDisplay,
+      content: `**[${localizer(locale, "commands.config.panel.stm_enabled_title")}](https://docs.tomoribot.app/en/features/knowledge/memory/#short-term-memory-stm)**\n${localizer(locale, "commands.config.panel.stm_enabled_description")}`,
+    },
+    buildStateControlRow(
+      [
+        {
+          value: false,
+          label: localizer(locale, "commands.config.panel.off_button"),
+          customId: buildConfigRouteId({ action: "behavior-stm-enabled-set", locale, enabled: false }),
+        },
+        {
+          value: true,
+          label: localizer(locale, "commands.config.panel.on_button"),
+          customId: buildConfigRouteId({ action: "behavior-stm-enabled-set", locale, enabled: true }),
+        },
+      ],
+      view.stmEnabled,
+      writesDisabled,
+    ),
+    {
+      type: ComponentType.TextDisplay,
+      content: `> ${localizer(
+        locale,
+        !view.stmEnabled
+          ? "commands.config.panel.stm_enabled_off"
+          : view.toolUseEnabled
+            ? "commands.config.panel.stm_enabled_on"
+            : "commands.config.panel.stm_enabled_tool_use_off",
+      )}`,
+    },
+    {
+      type: ComponentType.TextDisplay,
       content: `**[${localizer(locale, "commands.config.panel.stm_parameters_title")}](https://docs.tomoribot.app/en/features/knowledge/memory/#stm-configuration)**\n${localizer(locale, "commands.config.panel.stm_parameters_description")}\n> ${localizer(locale, "commands.config.panel.stm_refresh_cadence_value", { count: view.stmConfig?.refresh_cadence ?? 5 })}\n> ${localizer(locale, "commands.config.panel.stm_render_mode_value", { mode: view.stmConfig?.render_mode ?? "supersede" })}\n> ${localizer(locale, "commands.config.panel.stm_crude_messages_value", { count: view.stmConfig?.crude_message_count ?? 6 })}\n> ${localizer(locale, "commands.config.panel.stm_nudge_depth_value", { count: view.stmConfig?.nudge_injection_depth ?? 2 })}\n> ${localizer(locale, "commands.config.panel.stm_content_depth_value", { count: view.stmConfig?.content_injection_depth ?? -1 })}`,
     },
     {

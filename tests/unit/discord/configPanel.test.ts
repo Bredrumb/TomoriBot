@@ -1810,6 +1810,8 @@ describe("config Behavior pages", () => {
       memory: {
         memoryTaggingEnabled: true,
         channelMemoryEnabled: false,
+        stmEnabled: true,
+        toolUseEnabled: true,
         stmConfig: null,
         stmCategories: MEMORY_CATEGORIES,
       },
@@ -1854,6 +1856,20 @@ describe("config Behavior pages", () => {
     ).toBeDefined();
     expect(buttonFor(memory, { action: "behavior-stm-categories-open", locale: "en-US" })?.disabled).toBe(false);
     expect(walk(memory).some((component) => component.content?.includes("memory/#stm-configuration"))).toBe(true);
+    expect(buttonFor(memory, { action: "behavior-stm-enabled-set", locale: "en-US", enabled: false })?.disabled).toBe(
+      false,
+    );
+
+    const memoryToolUseOff = build(GUILD_MANAGER, {
+      category: "behavior",
+      page: "memory",
+      behaviorView: { ...d10View, memory: { ...d10View.memory, toolUseEnabled: false } },
+    });
+    const toolUseOffSerialized = walk(memoryToolUseOff)
+      .map((component) => component.content ?? "")
+      .join("\n");
+    expect(toolUseOffSerialized).toMatch(localizedProse("en-US", "commands.config.panel.stm_enabled_tool_use_off"));
+    expect(toolUseOffSerialized).not.toMatch(localizedProse("en-US", "commands.config.panel.stm_enabled_on"));
   });
 
   it("keeps the overflow removal selector off the ordinary Trigger page", () => {

@@ -32,7 +32,6 @@ const EXPECTED_CAPABILITY_PAGE_BY_VALUE = {
   videogen: "available-tools",
   voicemessage: "available-tools",
   userblocking: "available-tools",
-  shorttermmemory: "context-additions",
   timeawareness: "context-additions",
 } as const;
 

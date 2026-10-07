@@ -417,6 +417,34 @@ describe("config Behavior routes", () => {
     }
   });
 
+  it("writes Automatic STM Summarization to the capabilities table and repaints Memory", async () => {
+    const events: string[] = [];
+    const update = spyOn(configRepository, "updateCapabilitiesConfig").mockImplementation(async (_serverId, patch) => {
+      events.push("write");
+      expect(patch).toEqual({ short_term_memory_enabled: false });
+      return true;
+    });
+    const invalidate = spyOn(tomoriStateCache, "invalidateTomoriStateCache").mockImplementation(() => {
+      events.push("invalidate");
+    });
+    try {
+      const harness = makeHarness();
+      const interaction = makeInteraction(
+        harness,
+        buildConfigRouteId({ action: "behavior-stm-enabled-set", locale: "en-US", enabled: false }),
+      );
+
+      await dispatch(harness, interaction);
+
+      expect(events).toEqual(["write", "invalidate"]);
+      expect(harness.telemetry).toEqual(["server-config.workspace.capabilities.set"]);
+      expect(JSON.stringify(harness.edits.at(-1))).toContain("behavior:memory");
+    } finally {
+      update.mockRestore();
+      invalidate.mockRestore();
+    }
+  });
+
   it("round-trips the literal D9 custom-ID wire contract", () => {
     for (const [customId, expected] of D9_WIRE_CONTRACT) {
       const parsed = parseInteractionRoute(customId);
@@ -474,6 +502,7 @@ describe("config Behavior routes", () => {
       "behavior-speech-transcripts-set": { wireToken: "beh-transcripts-set", fields: ["enabled"] },
       "behavior-memory-tagging-open": { wireToken: "beh-memory-tag-open", fields: [] },
       "behavior-memory-tagging-submit": { wireToken: "beh-memory-tag-sub", fields: ["nonce"] },
+      "behavior-stm-enabled-set": { wireToken: "beh-stm-enabled-set", fields: ["enabled"] },
       "behavior-stm-parameters-open": { wireToken: "beh-stm-params-open", fields: [] },
       "behavior-stm-parameters-submit": { wireToken: "beh-stm-params-sub", fields: ["nonce"] },
       "behavior-stm-categories-open": { wireToken: "beh-stm-categories-open", fields: [] },

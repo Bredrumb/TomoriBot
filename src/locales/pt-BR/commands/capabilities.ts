@@ -15,7 +15,6 @@ export default {
       imagegen_option: `Geração de Imagens`,
       videogen_option: `Geração de Vídeos`,
       voicemessage_option: `Mensagens de Voz`,
-      shorttermmemory_option: `Resumo Automático de MCP`,
       selfteaching_desc: `Aprender das conversas do servidor`,
       personalization_desc: `Memórias pessoais e apelidos`,
       userinfo_desc: `Permitir que as personas atualizem perfis de usuários estruturados`,
@@ -29,7 +28,6 @@ export default {
       imagegen_desc: `Gerar imagens sob demanda`,
       videogen_desc: `Gerar vídeos curtos sob demanda`,
       voicemessage_desc: `Enviar mensagens de voz ElevenLabs TTS`,
-      shorttermmemory_desc: `Memória automática do bot. Se desligada, edições manuais /persona stm ainda aparecem`,
     },
   },
 };

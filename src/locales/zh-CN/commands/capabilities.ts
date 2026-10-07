@@ -15,7 +15,6 @@ export default {
       imagegen_option: `图像生成`,
       videogen_option: `视频生成`,
       voicemessage_option: `语音消息`,
-      shorttermmemory_option: `自动 STM 摘要`,
       selfteaching_desc: `从服务器对话里学习`,
       personalization_desc: `个人记忆与昵称`,
       userinfo_desc: `允许人格更新结构化的用户资料`,
@@ -29,7 +28,6 @@ export default {
       imagegen_desc: `按请求生成图像`,
       videogen_desc: `按请求生成短视频`,
       voicemessage_desc: `发送 ElevenLabs TTS 语音消息`,
-      shorttermmemory_desc: `bot 的自动记忆与提示。关闭后，手动执行的 /persona stm edit 和原始消息仍会显示`,
     },
   },
 };

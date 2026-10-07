@@ -15,7 +15,6 @@ export default {
       imagegen_option: `画像生成`,
       videogen_option: `動画生成`,
       voicemessage_option: `ボイスメッセージ（ElevenLabs）`,
-      shorttermmemory_option: `STMの自動要約`,
       selfteaching_desc: `サーバーの会話から学習する`,
       personalization_desc: `個人記憶とニックネーム`,
       userinfo_desc: `ペルソナによる構造化ユーザープロフィールの更新を許可`,
@@ -29,7 +28,6 @@ export default {
       imagegen_desc: `リクエストに応じて画像生成`,
       videogen_desc: `リクエストに応じて短い動画を生成`,
       voicemessage_desc: `ElevenLabs TTSボイスメッセージを送信`,
-      shorttermmemory_desc: `ボットの自動記憶＆促し。オフでも手動編集(/persona stm edit)と生メッセージは表示`,
     },
   },
 };

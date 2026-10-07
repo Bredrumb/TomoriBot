@@ -551,6 +551,8 @@ describe("config page text budgeting at stored maxima", () => {
           memory: {
             memoryTaggingEnabled: true,
             channelMemoryEnabled: true,
+            stmEnabled: true,
+            toolUseEnabled: true,
             stmCategories: [{ server_id: 9, position: 0, label: "Summary", description: "Scene summary" }],
             stmConfig: {
               server_id: 9,
