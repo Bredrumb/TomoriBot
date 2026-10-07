@@ -97,6 +97,7 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
   if (!context.isDMChannel && context.tomoriState.server_id && context.triggererUserId && result.usageEntries) {
     const lineageId = context.currentPersona.persona_lineage_id ?? 0;
     for (const entry of result.usageEntries) {
+      const metricKey = entry.kind === "decision" ? `decision:${entry.decisionModelId}` : entry.model;
       for (const [direction, delta] of [
         ["in", entry.usage.inputTokens],
         ["out", entry.usage.outputTokens],
@@ -107,16 +108,23 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
           userId: context.triggererUserId,
           lineageId,
           metric: direction === "in" ? "tokens_in" : "tokens_out",
-          metricKey: entry.model,
+          metricKey,
           delta,
         });
-        if (entry.kind === "reviewer")
+        if (entry.kind === "reviewer" || entry.kind === "decision")
           statRepository.recordStat({
             serverId: context.tomoriState.server_id,
             userId: context.triggererUserId,
             lineageId,
-            metric: direction === "in" ? "reviewer_tokens_in" : "reviewer_tokens_out",
-            metricKey: entry.model,
+            metric:
+              entry.kind === "reviewer"
+                ? direction === "in"
+                  ? "reviewer_tokens_in"
+                  : "reviewer_tokens_out"
+                : direction === "in"
+                  ? "decision_tokens_in"
+                  : "decision_tokens_out",
+            metricKey,
             delta,
           });
       }

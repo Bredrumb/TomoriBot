@@ -324,3 +324,13 @@ Tool-only terminal success completes without inventing prose or a final-text rev
 - Enhanced-context restart: → [stage 03: `handleEnhancedContextRestart`](03-enhanced-context-restart.md)
 - Deliberate tool mode: → `src/utils/tools/deliberateToolMode.ts`
 - Tool-loop coordinator: → [`README.md`](README.md)
+
+
+Decision routing uses the same admitted packet for each actual proposed request, with independent
+checks for explicit task mismatch, wrong target/arguments, and redundant completed actions. It can
+only skip detailed review after model-specific tool-rubric calibration. Calibration is currently
+inactive, so a saved Decision selection adds no paid requests. Custom reviewer prompts disable
+skipping. Missing evidence or answers, uncertainty, refusal, and decision failures continue to the
+reviewer, preserving its separate budgets and unavailable rules. Prose rule checks run only at
+response completion; arbitrary tool arguments never enter the checker. The configured internal
+checker name is blocked from author dispatch even if a model proposes it without a declaration.

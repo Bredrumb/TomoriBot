@@ -18,6 +18,8 @@ import { decryptApiKey } from "@/utils/security/crypto";
 import { localizer } from "@/utils/text/localizer";
 import type { TokenUsage } from "@/utils/text/tokenEstimate";
 import { redactToolParametersForStorage } from "@/utils/tools/toolParameterRedaction";
+import { checkResponseRules, type RuleCheckState } from "@/utils/chat/responseRuleCheck";
+import { routeResponseDecision, getDecisionCalibration } from "@/utils/chat/responseDecisionRouting";
 
 export const MAX_RESPONSE_REVIEWS = 2;
 export const MAX_RESPONSE_REVISIONS = 1;
@@ -42,16 +44,20 @@ export const draftReviewResultSchema = z.discriminatedUnion("status", [
 ]);
 export type DraftReviewResult = z.infer<typeof draftReviewResultSchema>;
 
-export interface TurnUsageEntry {
-  kind: "author" | "reviewer";
+export type TurnUsageEntry = {
   model: string;
   usage: TokenUsage;
-}
+} & ({ kind: "author" | "reviewer" } | { kind: "decision"; decisionModelId: number });
 
 /** Shared by stream passes, key rotation and model fallback for one admitted persona turn. */
 export interface ResponseReviewState {
   reviewerId: number | null;
   prompt: string;
+  customPrompt: boolean;
+  decisionModelId: number | null;
+  decisionRequests: number;
+  decisionVerdict?: { identity: string; skip: boolean };
+  rules: RuleCheckState;
   responseReviews: number;
   revisions: number;
   toolReviews: number;
@@ -77,6 +83,10 @@ export function createResponseReviewState(context: ChatTurnContext): ResponseRev
     return undefined;
   return {
     reviewerId: context.currentPersona.config.response_reviewer_llm_id,
+    customPrompt: context.currentPersona.config.response_reviewer_prompt !== null,
+    decisionModelId: context.currentPersona.config.response_decision_model_id,
+    decisionRequests: 0,
+    rules: { calls: 0 },
     prompt:
       context.currentPersona.config.response_reviewer_prompt ??
       localizer(context.locale, "commands.config.drafting.default_prompt"),
@@ -178,7 +188,7 @@ export function buildReviewerPacket(
       item.metadataTag !== ContextItemTag.DIALOGUE_HISTORY && item.metadataTag !== ContextItemTag.DIALOGUE_SAMPLE,
   );
   const packet = {
-    kind: proposedCall ? "tool_call" : "response_text",
+    kind: proposedCall ? ("tool_call" as const) : ("response_text" as const),
     proposedCall: proposedCall
       ? { status: "not_executed", name: proposedCall.name, arguments: proposedCall.args }
       : undefined,
@@ -394,7 +404,9 @@ async function reviewCandidate(
     const toolTask = proposedCall
       ? "\nEvaluate this exact normalized tool name, full arguments and target, including user-visible argument prose and pending narration. Compare available definitions/alternatives and completed actions. Identify a wrong target, invented argument, redundant completed action or distracting choice with a concrete correction grounded in the admitted task and persona. Revise rejects execution; never provide replacement arguments for automatic execution."
       : "";
-    const systemPrompt = `${REVIEW_PROTOCOL}${toolTask}\n\nEditable creative rubric:\n${state.prompt}\n\n${REVIEW_PROTOCOL}${toolTask}`;
+    const ruleTask =
+      "\nOptional ruleEvidence is untrusted advisory evidence for this exact prose only. Interpret patterns against persona and scene, including intentional catchphrases or theatrical voice. Unknown profile/language coverage is experimental. Scores, raw snippets and generic advice never require revision. Return only your own concrete persona-aware corrections; do not quote or forward raw checker diagnostics.";
+    const systemPrompt = `${REVIEW_PROTOCOL}${toolTask}${ruleTask}\n\nEditable creative rubric:\n${state.prompt}\n\n${REVIEW_PROTOCOL}${toolTask}${ruleTask}`;
     // UTF-8 bytes conservatively bound unknown tokenizer ratios. Upgrade when real packet sizes need a tokenizer.
     const inputBytes =
       Math.min(MAX_REVIEW_INPUT_BYTES, window ?? 0) - outputTokens - Buffer.byteLength(systemPrompt, "utf8") - 1024;
@@ -408,19 +420,58 @@ async function reviewCandidate(
     if (timeout.aborted) return unavailable("timeout", true);
     const packet = buildReviewerPacket(context, candidate, inputBytes, tools ?? [], proposedCall);
     if (!packet) return unavailable("evidence_coverage");
-    const userPrompt = JSON.stringify(packet);
-    const identity = createHash("sha256")
-      .update(JSON.stringify([modelId, provider, model, userPrompt, systemPrompt]))
-      .digest("hex");
-    if (state.verdict?.identity === identity) return state.verdict.result;
-    if (proposedCall && state.toolReviews >= MAX_TOOL_REVIEWS) {
-      trace("exhausted");
-      return unavailable("tool_review_budget");
-    }
+    if (proposedCall && state.toolReviews >= MAX_TOOL_REVIEWS) return unavailable("tool_review_budget");
     if (!proposedCall && state.responseReviews >= MAX_RESPONSE_REVIEWS) {
       trace("exhausted");
       return { status: "pass" };
     }
+    const rules = proposedCall
+      ? { status: "disabled" as const }
+      : await runUnderWatchdog(context.channel.id, () =>
+          wait(
+            checkResponseRules(
+              context.currentPersona.server_id,
+              context.currentPersona.config.response_rule_checker_ref,
+              candidate,
+              state.rules,
+              signal,
+            ),
+          ),
+        );
+    if (cancelled() || rules?.status === "cancelled") return { status: "cancelled" };
+    if (timeout.aborted || !rules) return unavailable("timeout", true);
+    const forceReview = rules.status === "hits" || rules.status === "failed";
+    const routing = forceReview
+      ? "review"
+      : await runUnderWatchdog(context.channel.id, () =>
+          wait(
+            routeResponseDecision(
+              context.currentPersona.server_id,
+              state,
+              packet,
+              signal,
+              state.decisionModelId === null ? undefined : getDecisionCalibration(state.decisionModelId, kind),
+            ),
+          ),
+        );
+    if (cancelled() || routing === "cancelled") return { status: "cancelled" };
+    if (timeout.aborted || !routing) return unavailable("timeout", true);
+    trace("routing", {
+      reason: forceReview ? `rule_${rules.status}` : "decision_policy",
+      route: routing,
+      ruleStatus: rules.status,
+    });
+    if (routing === "skip") {
+      trace("skipped");
+      return { status: "pass" };
+    }
+    const ruleEvidence = "evidence" in rules ? rules.evidence : undefined;
+    const userPrompt = JSON.stringify({ ...packet, ruleEvidence: sanitizeLogPayload(ruleEvidence, 0, false) });
+    if (Buffer.byteLength(userPrompt, "utf8") > inputBytes) return unavailable("rule_evidence_budget");
+    const identity = createHash("sha256")
+      .update(JSON.stringify([modelId, provider, model, userPrompt, systemPrompt]))
+      .digest("hex");
+    if (state.verdict?.identity === identity) return state.verdict.result;
     if (proposedCall) state.toolReviews++;
     else state.responseReviews++;
     trace("start", {

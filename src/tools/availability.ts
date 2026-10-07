@@ -192,7 +192,9 @@ export async function getAvailableToolsWithMCP(
         );
       }
 
-      mcpFunctionNames = filteredByFeatureFlags;
+      mcpFunctionNames = filteredByFeatureFlags.filter(
+        (name) => name !== stateForContext.config.response_rule_checker_ref?.toolName,
+      );
 
       log.info(
         `MCP tools: ${allMCPFunctionNames.length} total, ${mcpFunctionNames.length} after centralized filtering (feature flags + provider preferences)`,
@@ -214,6 +216,7 @@ export async function getAvailableToolsWithMCP(
           const guildUrlFetcherFunctionSet = new Set(guildUrlFetcherFunctionNames);
 
           const safeGuildNames = guildFunctionNames.filter((name) => {
+            if (name === stateForContext.config.response_rule_checker_ref?.toolName) return false;
             const isGuildFetchUrlReplacement = name === "fetch_url" && guildUrlFetcherFunctionSet.has(name);
             if ((!isGuildFetchUrlReplacement && builtInNames.has(name)) || globalMcpNames.has(name)) {
               log.warn(`[GuildMCP] Skipping guild MCP function "${name}" - collides with built-in or global MCP tool`);

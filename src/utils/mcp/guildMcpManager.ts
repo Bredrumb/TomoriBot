@@ -105,12 +105,26 @@ class GuildMcpManager {
    * @param serverId - Internal server_id (FK to servers table)
    */
   /** Reads the exact connected registration; a same-name replacement cannot inherit its binding. */
-  async getRegisteredTool(config: GuildMcpServerRow): Promise<CallableTool | null> {
+  async getRegisteredTool(config: GuildMcpServerRow, privateFailure = false): Promise<CallableTool | null> {
     if (!config.is_enabled) return null;
-    const connection = this.pool.get(this.poolKey(config.server_id, config.name)) ?? (await this.connectServer(config));
+    const connection =
+      this.pool.get(this.poolKey(config.server_id, config.name)) ?? (await this.connectServer(config, privateFailure));
     return connection && connection.guildMcpId === config.guild_mcp_id
       ? (connection.callableTool as CallableTool)
       : null;
+  }
+
+  /** The caller revalidates the owned row; dispatch also checks the exact pooled registration. */
+  async callInternalRuleChecker(config: GuildMcpServerRow, text: string, signal: AbortSignal): Promise<unknown> {
+    signal.throwIfAborted();
+    const connection = this.pool.get(this.poolKey(config.server_id, config.name));
+    if (!config.is_enabled || !connection || connection.guildMcpId !== config.guild_mcp_id)
+      throw new Error("Internal rule registration unavailable");
+    connection.lastUsedAt = Date.now();
+    return (connection.client as MCPClient).callTool({ name: "check_slop", arguments: { text } }, undefined, {
+      signal,
+      timeout: EXECUTION_TIMEOUT_MS,
+    });
   }
 
   async getGuildMCPTools(serverId: number): Promise<CallableTool[]> {
@@ -470,7 +484,7 @@ class GuildMcpManager {
    * Connect to a single guild MCP server and add it to the pool.
    * Handles transport creation, connection, tool discovery, and collision checks.
    */
-  private async connectServer(config: GuildMcpServerRow): Promise<GuildMCPConnection | null> {
+  private async connectServer(config: GuildMcpServerRow, privateFailure = false): Promise<GuildMCPConnection | null> {
     const key = this.poolKey(config.server_id, config.name);
 
     const existing = this.pool.get(key);
@@ -494,7 +508,7 @@ class GuildMcpManager {
     this.connectingKeys.add(key);
 
     try {
-      const authToken = await toolRepository.decryptMcpAuthToken(config);
+      const authToken = await toolRepository.decryptMcpAuthToken(config, privateFailure);
 
       // Connect with transport fallback (fresh client per attempt) + timeout
       const client = await this.connectWithFallback(
@@ -502,6 +516,7 @@ class GuildMcpManager {
         config.url,
         authToken ?? undefined,
         config.name,
+        privateFailure,
       );
 
       // Create CallableTool via mcpToTool (same as global MCP servers)
@@ -557,11 +572,12 @@ class GuildMcpManager {
       return conn;
     } catch (error) {
       this.connectFailures.set(key, Date.now() + CONNECT_FAILURE_COOLDOWN_MS);
-      log.error(
-        `[GuildMcpManager] Failed to connect to guild MCP server "${config.name}" (server: ${config.server_id}); ` +
-          `quarantining for ${Math.round(CONNECT_FAILURE_COOLDOWN_MS / 1000)}s`,
-        error,
-      );
+      if (!privateFailure)
+        log.error(
+          `[GuildMcpManager] Failed to connect to guild MCP server "${config.name}" (server: ${config.server_id}); ` +
+            `quarantining for ${Math.round(CONNECT_FAILURE_COOLDOWN_MS / 1000)}s`,
+          error,
+        );
       return null;
     } finally {
       this.connectingKeys.delete(key);
@@ -588,6 +604,7 @@ class GuildMcpManager {
     url: string,
     authToken?: string,
     serverLabel?: string,
+    privateFailure = false,
   ): Promise<MCPClient> {
     const label = serverLabel ?? url;
     const urlValidation = await validateRemoteUrl(url);
@@ -612,7 +629,11 @@ class GuildMcpManager {
         log.info(`[GuildMcpManager] Connected via Smithery Connect: ${label}`);
         return client;
       } catch (smitheryError) {
-        const message = smitheryError instanceof Error ? smitheryError.message : String(smitheryError);
+        const message = privateFailure
+          ? "Transport connection failed"
+          : smitheryError instanceof Error
+            ? smitheryError.message
+            : String(smitheryError);
         errors.push(`Smithery: ${message}`);
         await this.safeCloseClient(client);
         log.info(
@@ -644,7 +665,11 @@ class GuildMcpManager {
         log.info(`[GuildMcpManager] Connected via StreamableHTTP: ${label}`);
         return client;
       } catch (streamableError) {
-        const message = streamableError instanceof Error ? streamableError.message : String(streamableError);
+        const message = privateFailure
+          ? "Transport connection failed"
+          : streamableError instanceof Error
+            ? streamableError.message
+            : String(streamableError);
         errors.push(`StreamableHTTP: ${message}`);
         await this.safeCloseClient(client);
         log.info(`[GuildMcpManager] StreamableHTTP failed for "${label}", falling back to SSE: ${message}`);
@@ -665,7 +690,11 @@ class GuildMcpManager {
         log.info(`[GuildMcpManager] Connected via SSE fallback: ${label}`);
         return client;
       } catch (sseError) {
-        const message = sseError instanceof Error ? sseError.message : String(sseError);
+        const message = privateFailure
+          ? "Transport connection failed"
+          : sseError instanceof Error
+            ? sseError.message
+            : String(sseError);
         errors.push(`SSE: ${message}`);
         await this.safeCloseClient(client);
         throw new Error(`All MCP transports failed for '${label}' — ${errors.join("; ")}`);

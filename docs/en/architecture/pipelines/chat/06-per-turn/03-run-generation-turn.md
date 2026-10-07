@@ -357,4 +357,61 @@ Actual author tool requests use the [pre-execution checkpoint](../../tool-loop/0
 before any effect. The response allowance remains separate: eight tool reviews and two changed
 corrections cannot consume the two final-response review calls. Unavailability at either checkpoint
 ends review for the same turn, while earlier rejected actions remain blocked. The persisted setting
-controls both checkpoints; optional checker evidence and Decision routing are not connected yet.
+controls both checkpoints. Optional rule evidence and calibrated Decision routing share this owner.
+
+
+### Optional rule evidence and decision routing
+
+Response prose, including held narration, can be checked by an explicitly selected MCP
+`check_slop(text)` registration. None makes no checker calls. The runtime revalidates the enabled
+registration and workspace ownership, reads its declaration, and invokes its existing MCP client
+internally with a cancellation signal. The configured checker name is hidden from author tool
+schemas and blocked at registry dispatch. Internal checks produce no tool history or public notices.
+Tool candidates do not send their arguments or JSON to the prose checker.
+
+The checker has a 96,000-byte input ceiling, a 32,768-byte decoded result ceiling, a 30-second
+deadline, and at most two calls per logical turn. Strict validation covers the standard Slopguard
+payload, finite scores and aggregates, safe counts, bounded rule identifiers/strings, and at most
+64 findings. Python offsets remain Unicode code-point indices, checked against the exact input;
+JavaScript consumers must not interpret them as UTF-16 indices. Structural spans can be best-effort
+whole-text spans. Standard output supplies no engine/profile version or language coverage, so these
+stay unknown. Under-ten-word output is marked short-text coverage. Connection replacement or changed
+text invalidates turn-local reuse. A server that reloads its profile during a connection needs a
+profile identity contract before its changed results can be reused safely.
+
+Hits route straight to detailed review, including experimental hits with unknown applicability.
+The reviewer interprets them against the persona and may dismiss them. A configured checker failure
+also routes straight to review, with one normalized ERROR and no rewrite request. Clean or short
+analysis cannot approve a response. Bounded raw findings go only in the reviewer's private packet;
+the author receives only the reviewer's own concrete corrections. Raw scores, snippets and advice
+never enter logs, dialogue memory, author tool responses, or automatic thought logs. Insufficient
+space for required evidence makes review unavailable under the ordinary policy.
+
+Decision checks use separate `response-routing-v1` and `tool-routing-v1` rubrics. Response predicates
+cover generic voice inconsistent with the persona, repeated wording/beats, and explicit persona or
+continuity contradictions. Tool predicates cover explicit task mismatch, wrong targets/arguments,
+and repeated successful effects. Each predicate is independent. Agreement, profanity, mature/dark
+fiction, or brevity alone is excluded. Checks consume the full admitted packet and cannot invent
+arguments, dispatch actions, grant permissions, or write creative feedback.
+
+A skip requires a validated per-model/rubric calibration record and all required probabilities below
+its thresholds. The calibration registry is empty: no labeled hold-out evaluation has established
+accuracy. The panel reports skipping inactive, and a saved Decision selection makes no paid routing
+calls. Custom reviewer prompts also disable skipping while retaining the selection. Activation needs
+labeled character/scene examples for each model and checkpoint, measured false skips, coverage,
+thresholds, detailed-review frequency, latency, and cost. Synthetic probabilities verify plumbing
+only. No paid shadow evaluation runs automatically and no speed improvement is claimed.
+
+The integrated request path revalidates the selected owned registration through the Decision
+capability executor. Reduced history/samples, unsupported media, input limits, missing/refused or
+uncertain answers, and execution failures route to detailed review. Requests share a twelve-call
+turn budget across both checkpoints; exhausting it preserves the detailed-review budgets. Routing
+reuse requires the exact packet, model, rubric and calibration. Cancellation discards late approvals.
+Already reported adapter failures are preserved without a second ERROR. Expected disabled settings,
+missing calibration, refusal, uncertainty and cancellation remain INFO outcomes.
+
+Decision usage joins the actual-usage ledger separately, with `decision_tokens_in/out` as subsets of
+total tokens. Its totals use `decision:<catalog-id>` keys so pricing comes from the Decision catalog
+rather than the author's model. No deterministic checker tokens are invented. Operational traces
+record only outcomes/reasons, criterion probabilities for fixed application IDs, budgets, unknown
+coverage, counts and timing. Provider request/cancellation tracing remains in the existing executor.

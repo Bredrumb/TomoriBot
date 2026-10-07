@@ -11,10 +11,10 @@ export default {
       title: "Response Drafting",
       description: "Review my drafts before I send replies or use tools.",
       off: "When Off: I send replies and use tools without Response Drafting review.",
-      on: "When On: My replies and tool calls enter a review pipeline before I send them or act. A decision model, if selected, may skip detailed review.",
+      on: "When On: My replies and tool calls enter a review pipeline before I send them or act.",
       cost: "Turning this on can increase response time and cost because review and revisions can use additional model calls and tokens.",
       pending:
-        "This development build reviews replies and actual tool requests. Optional rule checks and decision routing are unfinished.",
+        "Decision skipping is inactive: model-specific writing and tool checks still need labeled validation. A saved decision model makes no paid calls while calibration is missing.",
       models_title: "Switch Models",
       models_description:
         "Choose who reviews my drafts and whether a decision model checks which ones need detailed review.",
@@ -27,12 +27,12 @@ export default {
       none: "None",
       unavailable: "Unavailable",
       decision_note:
-        "Decision models are experimental. They can reduce review time, but may miss issues. Leave this empty to review every draft.",
+        "Decision selection stays saved. Skipping needs validated thresholds for this model and each review rubric; detailed review remains active within its budgets.",
       custom_status:
-        "Custom instructions: Skipping is inactive. Every draft receives detailed review; the selected decision model stays saved.",
+        "Custom instructions: Skipping is inactive. Eligible drafts receive detailed review within turn limits; the selected decision model stays saved.",
       rules_title: "Rule Checks",
       rules_description:
-        "Choose an optional rule checker whose findings the reviewer can interpret in character. Diagnostics go to the reviewer.",
+        "Choose an optional text rule checker. Only the reviewer receives its advisory findings. Profile and language coverage are unknown unless separately verified; short replies may receive no analysis.",
       checker_button: "Choose Rule Checker",
       checker_status: "Rule checker: {checker}",
       prompt_title: "Reviewer Prompt",

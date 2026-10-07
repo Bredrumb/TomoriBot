@@ -219,6 +219,8 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   async executeTool(toolName: string, args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const startTime = Date.now();
     const resolvedToolName = resolveBuiltInToolAlias(toolName);
+    if (resolvedToolName === context.tomoriState?.config.response_rule_checker_ref?.toolName)
+      return { success: false, error: "Internal review evidence is unavailable to author tools" };
     const resolvedArgs =
       context.preparedToolRequest?.name === resolvedToolName && context.preparedToolRequest.args === args
         ? args

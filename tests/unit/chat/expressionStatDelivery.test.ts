@@ -153,6 +153,7 @@ describe("emoji stats count only what Discord accepted", () => {
         usageEntries: [
           { kind: "author", model: "first-author", usage: { inputTokens: 11, outputTokens: 7 } },
           { kind: "reviewer", model: "review-model", usage: { inputTokens: 20, outputTokens: 3 } },
+          { kind: "decision", model: "decision-model", decisionModelId: 7, usage: { inputTokens: 5, outputTokens: 0 } },
           { kind: "author", model: "fallback-author", usage: { inputTokens: 6, outputTokens: 2 } },
         ],
       }),
@@ -162,9 +163,13 @@ describe("emoji stats count only what Discord accepted", () => {
     ).toEqual([
       ["first-author", 11],
       ["review-model", 20],
+      ["decision:7", 5],
       ["fallback-author", 6],
     ]);
     expect(recorded.filter((entry) => entry.metric === "reviewer_tokens_out").map((entry) => entry.delta)).toEqual([3]);
+    expect(
+      recorded.filter((entry) => entry.metric === "decision_tokens_in").map((entry) => [entry.metricKey, entry.delta]),
+    ).toEqual([["decision:7", 5]]);
     expect(metricKeys("message_sent")).toEqual([]);
     expect(metricKeys("text_generated")).toEqual([]);
   });

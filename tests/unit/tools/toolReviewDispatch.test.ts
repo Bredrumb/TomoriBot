@@ -76,6 +76,17 @@ describe("reviewed requests at real dispatch owners", () => {
     },
   });
 
+  it("prevents author dispatch of the configured internal checker", async () => {
+    context.tomoriState.config.response_rule_checker_ref = {
+      scope: "global",
+      serviceName: "fixture-checker",
+      toolName: "check_slop",
+    };
+    globalTools.mockReturnValue([transport("check_slop")]);
+    expect((await ToolRegistry.executeTool("check_slop", { text: "PRIVATE_DRAFT" }, context)).success).toBe(false);
+    expect(effects).toHaveLength(0);
+  });
+
   it("fixes aliases and opaque targets before review and retains execution-time availability", async () => {
     ToolRegistry.registerTool({
       name: "create_long_term_memory",

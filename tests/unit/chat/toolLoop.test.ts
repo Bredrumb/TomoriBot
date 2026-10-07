@@ -1,6 +1,8 @@
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import * as capabilityResolver from "@/utils/provider/providerCapabilityResolver";
 import * as crypto from "@/utils/security/crypto";
+import * as ruleChecks from "@/utils/chat/responseRuleCheck";
+import * as decisionRouting from "@/utils/chat/responseDecisionRouting";
 import { savedProviderConfigSchema } from "@/types/db/schema";
 import { log } from "@/utils/misc/logger";
 import { requestFollowUp, deleteStopRequest } from "@/utils/discord/stream/stopRequests";
@@ -292,9 +294,11 @@ function makeProvider(
 ): {
   provider: LLMProvider;
   capturedHistories: Array<unknown[]>;
+  capturedContexts: unknown[];
   capturedModelParts: Array<Array<Record<string, unknown>>>;
 } {
   const capturedHistories: Array<unknown[]> = [];
+  const capturedContexts: unknown[] = [];
   const capturedModelParts: Array<Array<Record<string, unknown>>> = [];
   const queue = [...results];
 
@@ -333,6 +337,7 @@ function makeProvider(
       functionHistory: unknown[] | undefined,
     ) => {
       capturedHistories.push(functionHistory ? [...functionHistory] : []);
+      capturedContexts.push(JSON.parse(JSON.stringify(_ctx)));
       const modelParts = modelPartsInput as Array<Record<string, unknown>>;
       capturedModelParts.push([...modelParts]);
       const next = queue.shift();
@@ -365,7 +370,7 @@ function makeProvider(
     createConfig: async () => makeProviderConfig(),
   } as unknown as LLMProvider;
 
-  return { provider, capturedHistories, capturedModelParts };
+  return { provider, capturedHistories, capturedModelParts, capturedContexts };
 }
 
 /** Convenience: build ToolLoopParams from a context and provider. */
@@ -1580,6 +1585,133 @@ describe("runToolLoop — contract tests", () => {
     expect(JSON.stringify(packet?.tools)).not.toContain("PRIVATE_KEY");
     expect(packet?.candidate.text).toBe("pending");
     expect(buildReviewerPacket(context, `sk-proj-${"a".repeat(30)}`, 64000)).toBeNull();
+  });
+
+  it("routes checker hits/failures directly to review and keeps diagnostics out of author continuation and accepted dialogue", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const evidence = ruleChecks.validateRuleAnalysis(
+      {
+        score: 50,
+        band: "moderate",
+        word_count: 12,
+        violations: [
+          {
+            type: "Violation",
+            rule: "tone",
+            match: "PRIVATE_RULE_SNIPPET",
+            context: "PRIVATE_RULE_CONTEXT",
+            penalty: 4,
+            start: 0,
+            end: 4,
+          },
+        ],
+        counts: { tone: 1 },
+        total_penalty: 4,
+        weighted_sum: 4,
+        density: 1,
+        advice: ["PRIVATE_RULE_ADVICE"],
+      },
+      "A sufficiently long fictional reply with a quiet gesture by the door.",
+    );
+    const rules = spyOn(ruleChecks, "checkResponseRules");
+    const decisions = spyOn(decisionRouting, "routeResponseDecision").mockResolvedValue("review");
+    try {
+      for (const status of ["hits", "failed"] as const) {
+        rules.mockResolvedValue(status === "hits" ? { status, evidence } : { status });
+        const context = makeReviewContext();
+        const delivered: string[] = [];
+        const { provider, capturedHistories, capturedContexts } = makeProvider([
+          held("first pending reply", delivered),
+          held("chosen reply", delivered),
+        ]);
+        const packets: Array<Record<string, unknown>> = [];
+        Object.assign(provider, {
+          callStructuredJSON: async (request: ProviderStructuredJsonRequest) => {
+            packets.push(JSON.parse(request.userPrompt));
+            return {
+              success: true,
+              data:
+                packets.length === 1
+                  ? {
+                      status: "revise",
+                      findings: [
+                        {
+                          category: "voice",
+                          problem: "The reply contradicts the quiet persona.",
+                          direction: "Keep her voice quiet.",
+                        },
+                      ],
+                    }
+                  : { status: "pass" },
+            };
+          },
+        });
+        const result = await runToolLoop(makeParams(context, provider));
+        expect(packets).toHaveLength(2);
+        expect(Boolean(packets[0].ruleEvidence)).toBe(status === "hits");
+        expect(result.status).toBe("completed");
+        expect(delivered).toEqual(["chosen reply"]);
+        expect(JSON.stringify(capturedHistories)).not.toContain("PRIVATE_RULE_");
+        expect(JSON.stringify(capturedContexts)).not.toContain("PRIVATE_RULE_");
+        expect(JSON.stringify(result.personaResponses)).not.toContain("PRIVATE_RULE_");
+        expect(JSON.stringify(context.responseReview.functionHistory)).not.toContain("PRIVATE_RULE_");
+      }
+      expect(decisions).not.toHaveBeenCalled();
+    } finally {
+      rules.mockRestore();
+      decisions.mockRestore();
+    }
+  });
+
+  it("clean/short/disabled rules cannot approve prose and tool review never checks arbitrary argument JSON", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const rules = spyOn(ruleChecks, "checkResponseRules");
+    const decisions = spyOn(decisionRouting, "routeResponseDecision").mockResolvedValue("review");
+    try {
+      for (const status of ["clean", "short_text", "disabled"] as const) {
+        const text =
+          status === "clean" ? "A quiet character waits by the door while the rain falls outside." : "Stay here.";
+        const evidence = ruleChecks.validateRuleAnalysis(
+          {
+            score: 100,
+            band: "clean",
+            word_count: status === "clean" ? 13 : 2,
+            violations: [],
+            counts: {},
+            total_penalty: 0,
+            weighted_sum: 0,
+            density: 0,
+            advice: [],
+          },
+          text,
+        );
+        rules.mockResolvedValue(status === "disabled" ? { status } : { status, evidence });
+        const context = makeReviewContext();
+        context.responseReview.pending = [held(text, []).pendingResponse];
+        const { provider } = makeProvider([]);
+        let reviews = 0;
+        Object.assign(provider, {
+          callStructuredJSON: async () => {
+            reviews++;
+            return { success: true, data: { status: "pass" } };
+          },
+        });
+        expect((await reviewResponseCandidate(context, provider, makeProviderConfig())).status).toBe("pass");
+        expect(reviews).toBe(1);
+      }
+      rules.mockClear();
+      const context = makeReviewContext();
+      const first = held("", [], "function_call");
+      first.data = { name: "mirror_action", args: { text: "PRIVATE_ARGUMENT_JSON" } };
+      const { provider } = makeProvider([first, held("", [])]);
+      Object.assign(provider, { callStructuredJSON: async () => ({ success: true, data: { status: "pass" } }) });
+      await runToolLoop(makeParams(context, provider));
+      expect(rules).not.toHaveBeenCalled();
+      expect(decisions.mock.calls.some(([, , packet]) => packet.kind === "tool_call")).toBe(true);
+    } finally {
+      rules.mockRestore();
+      decisions.mockRestore();
+    }
   });
   const rejection = {
     status: "revise" as const,

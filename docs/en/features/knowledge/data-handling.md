@@ -44,8 +44,10 @@ privacy policies. Never share sensitive personal information with any AI.
 
 `/config` > `Plugins` > `Response Drafting` stores reviewer, Decision model, optional rule checker,
 and prompt choices for the workspace. When On, replies and actual tool requests are reviewed before
-they are sent or executed. Optional rule checks and Decision skipping are unfinished in this
-development build. Off keeps ordinary replies and tools without review requests.
+they are sent or executed. An optional checker receives pending reply text and sends advisory findings
+only to the reviewer. Decision skipping is inactive pending labeled validation, and saved Decision
+selections make no paid calls while calibration is missing. Off keeps ordinary replies and tools
+without review requests.
 
 The selected reviewer receives the pending response and context already admitted to its author:
 persona instructions, representative dialogues, trigger and reply target, relevant conversation,
