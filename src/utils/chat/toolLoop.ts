@@ -1,3 +1,9 @@
+import {
+  MAX_RESPONSE_REVISIONS,
+  reviewResponseCandidate,
+  responseReviewCancelled,
+  responseRevisionInstruction,
+} from "@/utils/chat/responseReview";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { ToolRegistry } from "@/tools/toolRegistry";
@@ -79,7 +85,8 @@ export function providerIsApiFamily(
 
 export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTurnResult> {
   const streamResults: StreamResult[] = [];
-  const functionHistory: ToolHistoryEntry[] = [];
+  const review = params.context.responseReview;
+  const functionHistory: ToolHistoryEntry[] = review?.functionHistory ?? [];
   const accumulatedModelParts: Array<Record<string, unknown>> = [];
   let finalText = "";
   let detailsText = "";
@@ -89,6 +96,83 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
   // An expression an earlier attempt of this turn delivered is still visible, so it still counts.
   let toolResponseDelivered = params.context.expressionDelivery.delivered !== null;
   let lastToolName: string | undefined;
+
+  const completeResponse = async (): Promise<GenerationTurnResult | null> => {
+    if (!review?.pending.some((part) => part.text.trim())) {
+      return buildResult(
+        "completed",
+        params.context,
+        streamResults,
+        finalText,
+        detailsText,
+        thoughtLog,
+        toolResponseDelivered,
+      );
+    }
+    const verdict = await reviewResponseCandidate(params.context, params.provider, params.providerConfig);
+    if (verdict.status === "cancelled" || responseReviewCancelled(params.context)) {
+      review.pending = [];
+      const followUp = StreamOrchestrator.isFollowUpRequest(params.context.channel.id);
+      if (followUp) incrementChannelFollowUpCount(params.context.channel.id);
+      queueStopResponseIfPresent(params.context);
+      return buildResult(
+        followUp ? "follow_up_interrupt" : "stopped_by_user",
+        params.context,
+        streamResults,
+        "",
+        "",
+        thoughtLog,
+        toolResponseDelivered,
+      );
+    }
+    if (verdict.status === "revise" && review.revisions < MAX_RESPONSE_REVISIONS) {
+      review.feedback = verdict;
+      review.revisionDraft = review.pending.map((part) => part.text).join("\n");
+      review.revisions++;
+      review.pending = [];
+      accumulatedModelParts.length = 0;
+      detailsText = "";
+      return null;
+    }
+    if (verdict.status === "revise")
+      log.info(
+        `Response review exhausted ${JSON.stringify({ reviews: review.responseReviews, revisions: review.revisions })}`,
+      );
+    const delivered: string[] = [];
+    let deliveryStatus: GenerationTurnResult["status"] | undefined;
+    for (const pending of review.pending) {
+      if (responseReviewCancelled(params.context)) break;
+      const presentation = await pending.deliver(getChannelTurnAbortSignal(params.context.channel.id));
+      streamResults.push(presentation);
+      if (presentation.accumulatedText) delivered.push(presentation.accumulatedText);
+      if (presentation.status !== "completed") {
+        deliveryStatus = presentation.status;
+        break;
+      }
+    }
+    review.pending = [];
+    if (responseReviewCancelled(params.context)) {
+      const followUp = StreamOrchestrator.isFollowUpRequest(params.context.channel.id);
+      deliveryStatus = followUp ? "follow_up_interrupt" : "stopped_by_user";
+      if (followUp) incrementChannelFollowUpCount(params.context.channel.id);
+      queueStopResponseIfPresent(params.context);
+    }
+    finalText = delivered.join("\n");
+    return buildResult(
+      deliveryStatus ??
+        (responseReviewCancelled(params.context)
+          ? "stopped_by_user"
+          : finalText.trim()
+            ? "completed"
+            : "empty_response"),
+      params.context,
+      streamResults,
+      finalText,
+      finalText.trim() ? detailsText : "",
+      thoughtLog,
+      toolResponseDelivered,
+    );
+  };
 
   for (let iteration = 0; iteration < MAX_FUNCTION_CALL_ITERATIONS; iteration++) {
     if (iteration > 0) {
@@ -115,6 +199,11 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
       streamOnce(params, accumulatedModelParts, functionHistory),
     );
     streamResults.push(streamResult);
+    if (review) {
+      if (streamResult.usage)
+        review.usage.push({ kind: "author", model: params.tomoriState.llm.llm_codename, usage: streamResult.usage });
+      if (streamResult.pendingResponse) review.pending.push(streamResult.pendingResponse);
+    }
     thoughtLog = streamResult.thoughtLog ?? thoughtLog;
 
     switch (streamResult.status) {
@@ -122,15 +211,11 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         resetChannelFollowUpCount(params.context.channel.id);
         finalText = streamResult.accumulatedText ?? finalText;
         detailsText = mergeDetails(detailsText, streamResult.detailsContent);
-        return buildResult(
-          "completed",
-          params.context,
-          streamResults,
-          finalText,
-          detailsText,
-          thoughtLog,
-          toolResponseDelivered,
-        );
+        {
+          const completed = await completeResponse();
+          if (completed) return completed;
+          continue;
+        }
       case "error":
       case "timeout":
         resetChannelFollowUpCount(params.context.channel.id);
@@ -144,6 +229,11 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           toolResponseDelivered,
         );
       case "empty_response": {
+        if (review?.pending.some((part) => part.text.trim())) {
+          const completed = await completeResponse();
+          if (completed) return completed;
+          continue;
+        }
         // The turn-level retry regenerates the whole reply, so after delivered text it posts a second
         // reply under the first. It is skipped only when the empty follow-up is the model having
         // nothing to add; a lookup result still waiting to be presented, or a failure the retry
@@ -260,6 +350,11 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         }
 
         if (toolOutcome.endTurn) {
+          if (review) {
+            const completed = await completeResponse();
+            if (completed) return completed;
+            continue;
+          }
           return buildResult(
             "completed",
             params.context,
@@ -307,6 +402,11 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
             params.tomoriState.server_id,
           ))
         ) {
+          if (review) {
+            const completed = await completeResponse();
+            if (completed) return completed;
+            continue;
+          }
           return buildResult(
             "completed",
             params.context,
@@ -425,8 +525,27 @@ async function streamOnce(
   // Keep a handle to the provider call so the timeout branch can await it settling. Under
   // Promise.race the loser is otherwise abandoned (never awaited); its rejection is still observed
   // by race's internal handlers, so holding this reference does not create an unhandled rejection.
+  const correction = params.context.responseReview && responseRevisionInstruction(params.context.responseReview);
+  const pendingNarration =
+    params.context.responseReview && functionHistory.some((entry) => entry.preToolCallTextParts?.length)
+      ? {
+          role: "user" as const,
+          parts: [
+            {
+              type: "text" as const,
+              text: "Assistant narration in tool history is pending and has not reached the user. Continue without repeating it.",
+            },
+          ],
+        }
+      : undefined;
   const request = foldPrefillIntoToolHistory(
-    params.context.contextItems,
+    pendingNarration || correction
+      ? [
+          ...params.context.contextItems,
+          ...(pendingNarration ? [pendingNarration] : []),
+          ...(correction ? [correction] : []),
+        ]
+      : params.context.contextItems,
     params.context.streamingContext.outputPrefill,
     functionHistory,
   );
@@ -468,7 +587,8 @@ async function streamOnce(
       // no superseded-message cleanup will consume in-flight sends. Return immediately; settling
       // here would just make the kill wait out the abandoned stream for no benefit.
       if (StreamOrchestrator.hasStopRequest(channelId)) {
-        return { status: "stopped_by_user" };
+        const settled = params.context.responseReview ? await settleAbandonedStream(streamPromise) : undefined;
+        return { status: "stopped_by_user", usage: settled?.usage };
       }
 
       const providerName = params.tomoriState.llm.llm_provider;
@@ -483,7 +603,7 @@ async function streamOnce(
       // in `deliveredMessageRefs` BEFORE the fallback path's superseded-message cleanup runs. Without
       // this, a late straggler would land after cleanup and be misattributed to the surviving
       // fallback attempt; leaving the exact orphaned partial message this feature exists to remove.
-      await settleAbandonedStream(streamPromise);
+      const settled = await settleAbandonedStream(streamPromise);
 
       if (!params.context.streamingContext.suppressUserErrors) {
         await sendStreamTimeoutNotice({
@@ -498,7 +618,11 @@ async function streamOnce(
         // still answer, and only the caller knows whether one did.
         params.context.streamingContext.deferredTimeoutNotice = { providerName, sawStreamProgress };
       }
-      return { status: "timeout", data: error };
+      return { status: "timeout", data: error, usage: settled?.usage };
+    }
+    if (params.context.responseReview && StreamOrchestrator.hasStopRequest(channelId)) {
+      const settled = await settleAbandonedStream(streamPromise);
+      return { status: "stopped_by_user", usage: settled?.usage };
     }
     throw error;
   } finally {
@@ -514,21 +638,20 @@ async function streamOnce(
  * indefinitely. After `abortController.abort()` the provider generator throws promptly, so in the
  * common (stalled-provider) case this resolves almost immediately; the wait only matters when a
  * Discord send was mid-flight when the watchdog fired, and it exists solely so that send is recorded
- * before the caller proceeds. The promise's outcome is intentionally ignored.
- * @param streamPromise - The abandoned provider call to let settle.
+ * before the caller proceeds. Reported usage survives a timed-out or cancelled attempt.
  */
-async function settleAbandonedStream(streamPromise: Promise<unknown>): Promise<void> {
+async function settleAbandonedStream(streamPromise: Promise<StreamResult>): Promise<StreamResult | undefined> {
   if (STREAM_ABANDONED_SETTLE_TIMEOUT_MS <= 0) {
     return;
   }
   let guardTimer: ReturnType<typeof setTimeout> | null = null;
-  const settleGuard = new Promise<void>((resolve) => {
-    guardTimer = setTimeout(resolve, STREAM_ABANDONED_SETTLE_TIMEOUT_MS);
+  const settleGuard = new Promise<undefined>((resolve) => {
+    guardTimer = setTimeout(() => resolve(undefined), STREAM_ABANDONED_SETTLE_TIMEOUT_MS);
   });
   try {
-    await Promise.race([
+    return await Promise.race([
       streamPromise.then(
-        () => undefined,
+        (result) => result,
         () => undefined,
       ),
       settleGuard,
@@ -789,12 +912,20 @@ async function executeToolCall(
   }
 
   if (toolResult.success && handleEnhancedContextRestart(params, toolResult.data)) {
+    if (params.context.responseReview)
+      params.context.responseReview.functionHistory.push({
+        functionCall,
+        functionResponse: {
+          functionResponse: { name: functionName, response: { result: toolResult.data ?? { status: "completed" } } },
+        },
+        preToolCallTextParts: buildPreToolCallTextParts(streamResult),
+      });
     return { kind: "restart" };
   }
 
   if (functionName === "update_short_term_memory" && toolResult.success) {
     params.context.streamingContext.disableShortTermMemoryUpdate = true;
-    log.info("Short-term memory updated — disabling further STM calls for this turn");
+    log.info("Short-term memory updated; disabling further STM calls for this turn");
   }
 
   const functionResponse = toolResult.success
@@ -805,8 +936,7 @@ async function executeToolCall(
         tool_name: functionName,
       };
 
-  // Preserve any visible text streamed before this tool call so the follow-up
-  // provider call knows it was already sent to Discord and doesn't repeat it.
+  // Preserve pre-tool narration for continuity. Collection keeps it pending until review.
   const preToolCallTextParts = buildPreToolCallTextParts(streamResult);
   if (preToolCallTextParts) {
     log.info(
@@ -843,7 +973,7 @@ async function executeToolCall(
  * merge these parts into the synthetic assistant tool-call turn on the next call.
  */
 function buildPreToolCallTextParts(streamResult: StreamResult): Array<Record<string, unknown>> | undefined {
-  const text = streamResult.accumulatedText;
+  const text = streamResult.pendingResponse?.text ?? streamResult.accumulatedText;
   return text?.trim() ? [{ type: "text", text }] : undefined;
 }
 
@@ -1073,12 +1203,14 @@ function buildResult(
   thoughtLog: GenerationTurnResult["thoughtLog"],
   toolResponseDelivered = false,
 ): GenerationTurnResult {
-  const text = detailsText.trim()
-    ? `${responseText.trim()}\n\n[Scene Metadata]\n${detailsText.trim()}`
-    : responseText.trim();
+  const text =
+    detailsText.trim() && (!context.responseReview || responseText.trim())
+      ? `${responseText.trim()}\n\n[Scene Metadata]\n${detailsText.trim()}`
+      : responseText.trim();
   return {
     status,
     streamResults,
+    usageEntries: context.responseReview?.usage,
     personaResponses:
       text.length > 0
         ? [

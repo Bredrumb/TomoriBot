@@ -32,6 +32,7 @@ with the first non-error result (or the last attempt's result if all fail).
   personaResponses: ChatPersonaResponse[];
   thoughtLog?: ThoughtLogPayload;
   thoughtLogOwner?: ThoughtLogOwner;
+  usageEntries?: TurnUsageEntry[];
 }
 ```
 
@@ -309,3 +310,44 @@ Plus `MAX_KEY_ATTEMPTS` from `keyRotation.ts`.
 - Key rotation: → no dedicated doc yet; `keyRotation.ts` helper only
 - Fallback chain schema: → [`docs/en/architecture/subsystems/database-schema.md`](../../../subsystems/database-schema) (`fallback_chain` column)
 - Personal-provider runtime substitution: → [provider pipeline](../../provider/)
+
+## Response-text review
+
+`runGenerationAttempts` creates one `ResponseReviewState` before selecting attempts when Response
+Drafting is On. Ordinary persona text uses `holdResponseText`; text-suppressed tool-only work and
+user impersonation retain their existing paths. Off makes no review request and keeps streaming.
+The state survives model fallback and key rotation: review/revision counters, correction feedback,
+successful tool history, verdict identity, and actual usage remain turn-local. Each failed author
+attempt discards its pending presentation without discarding successful tool results.
+
+`responseReview.ts` projects only admitted `contextItems` and actual function history into a JSON
+packet. The pending candidate has a separate label from historical replies. Persona instructions,
+trigger, explicit reply target, visible participant fields, memories/documents, and tool outcomes
+are required. The two most recent dialogue items are retained; older dialogue and complete sample
+pairs have bounded optional coverage. Emoji, sticker, sprite, and verbatim-tool catalogs are omitted.
+Participant fields come from the same privacy-filtered hydration used by the author, before mention
+rendering instructions. Tool arguments use the existing credential redactor.
+
+The packet requires complete text evidence. Uninspected media, tool image outcomes, a missing
+trigger/target/persona, redaction of the candidate, or required evidence exceeding the budget makes
+review unavailable. The model's admitted context window bounds input conservatively by UTF-8 bytes,
+with a 96,000-byte ceiling and space reserved for protocol and output. Unknown model limits also
+make review unavailable; review does not discover limits through an extra provider request.
+
+An inherited reviewer uses the actual author attempt's model, capability, and key. A pinned reviewer
+revalidates its workspace registration and resolves its own saved provider and endpoint. The existing
+structured-output capability performs one private request with strict `pass`, `revise`, or
+`unavailable` validation. Immutable evidence and output instructions surround the editable creative
+rubric. Candidate text and tool results are evidence and cannot change the review protocol.
+
+A turn allows two response reviews and one author revision. Pass delivers without another author
+request. Revise sends concise persona-aware findings and the whole pending reply back to the author,
+with successful tool outcomes retained. A second revise delivers the latest candidate within the
+budget. Refusal, malformed output, or a 120-second deadline makes review unavailable and delivers
+the current candidate without correction or another reviewer. A verdict can be reused only for the
+same model, candidate, rubric, and complete evidence packet.
+
+Reviewer resolution and execution use the channel watchdog. `/kill`, follow-up interruption, or turn
+abort cancels review and discards held prose. INFO records start/outcome, identities, budgets,
+coverage, timing, and reported usage. Each operational failure emits one normalized ERROR; expected
+refusals and cancellation remain INFO outcomes. Logs omit private packet and feedback content.

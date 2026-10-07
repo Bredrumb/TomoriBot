@@ -43,9 +43,23 @@ privacy policies. Never share sensitive personal information with any AI.
 ### Response Drafting selections
 
 `/config` > `Plugins` > `Response Drafting` stores reviewer, Decision model, optional rule checker,
-and prompt choices for the workspace. The current build saves these choices and does not execute
-reviews. A pinned reviewer identifies a separate provider with its own privacy policy and workspace
-credentials. Choosing an auxiliary model leaves the primary response provider unchanged.
+and prompt choices for the workspace. This development build reviews response text when On.
+Tool approval, optional rule evidence, and Decision skipping remain unfinished, and the page keeps
+its development notice. Off sends ordinary streamed responses without review requests.
+
+The selected reviewer receives the pending response and context already admitted to its author:
+persona instructions, representative dialogues, trigger and reply target, relevant conversation,
+visible participant relationships, memories, documents, and actual tool outcomes. Review adds no
+private profile lookup. Credentials and authentication arguments are redacted. Required evidence
+must fit; incomplete media coverage or missing model limits makes review unavailable.
+
+Inheritance uses the model and credentials actually answering, including personal routing, key
+rotation, overrides, and fallback. A pinned reviewer uses its own workspace registration and saved
+provider key. Its provider has its own privacy policy. Choosing it leaves the primary response
+provider unchanged. Pending replies and correction packets last only for the turn. Only dialogue
+accepted by Discord enters conversation memory; token accounting includes actual unsuccessful
+attempts when the provider reports usage. Diagnostics contain metadata and counts, without drafts,
+evidence, corrections, provider response bodies, or keys.
 
 Configuration exports include these settings without API keys or MCP authentication tokens. Imports
 preserve model and checker references only when they are available to the receiving workspace.

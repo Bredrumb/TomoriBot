@@ -167,3 +167,22 @@ embed and ends with the already-delivered text.
 | `NAI_TOOL_FAILURE_RETRY_THRESHOLD` | Constant in `toolLoop.ts` | `3` | NovelAI failures after visible pre-tool text before the retry-exhausted embed ends the turn |
 | `STREAM_SDK_CALL_TIMEOUT_MS` | `STREAM_SDK_CALL_TIMEOUT_MS` env | `120000` | Per-call SDK inactivity timeout (rolling; see stage 01) |
 | `TOOL_EXECUTION_TIMEOUT_MS` | `TOOL_EXECUTION_TIMEOUT_MS` env | `300000` | Per-tool execution timeout; fresh per tool call; chains are unaffected (see stage 02) |
+
+## Pending response completion
+
+With Response Drafting On, `runToolLoop` shares turn-local function history with generation fallback.
+Each stream pass contributes its pending prose and reported author usage. Pre-tool narration is
+included in the candidate and retained in tool history for continuity. Continuations are told that
+this narration is pending; the initial author generation receives no review announcement.
+
+`completeResponse` handles normal completion, a tool ending the turn, or an empty continuation after
+pending narration. It reviews the whole candidate, then either replays the chosen presentation or
+requests the single allowed revision. Revision discards all pending presentation, clears buffered
+model parts and details, and keeps actual tool calls/results. Successful tools are not dispatched
+again to reconstruct their outcomes. Enhanced-context restarts retain their actual outcome too.
+A tool-only turn with no prose does not invent a response candidate.
+
+Cancellation clears held presentation and uses the existing queued stop/follow-up handling.
+`buildResult` includes only accepted dialogue and the shared actual-usage ledger. Presentation
+results carry no second usage copy, so the accounting owner records each request once.
+Tool approval is still unfinished; this checkpoint reviews response text only.

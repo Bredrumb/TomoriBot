@@ -99,6 +99,7 @@ export interface StreamResult {
     | "empty_response"
     | "follow_up_interrupt";
   data?: unknown | Error; // Function call data or error details
+  pendingResponse?: import("@/types/stream/pendingResponse").PendingStreamResponse;
   accumulatedText?: string; // Text sent to Discord (for short-term memory storage)
   /** Extracted <details> block body text (with <summary> stripped), for routing to STM. */
   detailsContent?: string;

@@ -1,4 +1,18 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import * as capabilityResolver from "@/utils/provider/providerCapabilityResolver";
+import * as crypto from "@/utils/security/crypto";
+import { savedProviderConfigSchema } from "@/types/db/schema";
+import { log } from "@/utils/misc/logger";
+import { requestFollowUp, deleteStopRequest } from "@/utils/discord/stream/stopRequests";
+import {
+  buildReviewerPacket,
+  createResponseReviewState,
+  draftReviewResultSchema,
+  reviewResponseCandidate,
+} from "@/utils/chat/responseReview";
+import type { ProviderStructuredJsonRequest } from "@/types/provider/featureInterfaces";
+import { ContextItemTag } from "@/types/misc/context";
+import { beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 // Captured BEFORE the `mock.module` calls below run. Static imports are
 // evaluated at link time, ahead of any top-level statement, so this binds the
 // REAL deliberateToolMode module; we re-register it in afterAll to undo the
@@ -21,6 +35,8 @@ import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider
 import type { StandardEmbedOptions } from "@/types/discord/embed";
 import type { StructuredContextItem } from "@/types/misc/context";
 import type { ChatTurnContext } from "@/utils/chat/types";
+import type { ResponseReviewState } from "@/utils/chat/responseReview";
+import type { PendingStreamResponse } from "@/types/stream/pendingResponse";
 import type { TomoriState } from "@/types/db/schema";
 import type { ToolResult } from "@/types/tool/interfaces";
 import type { ToolLoopParams } from "@/utils/chat/toolLoop";
@@ -35,6 +51,7 @@ let isFollowUpRequest = false;
 let clearStopRequestCalls = 0;
 let standardEmbedCalls: StandardEmbedOptions[] = [];
 let hiddenToolNotices: string[] = [];
+let activeStreamKill: ((reason: Error) => void) | null = null;
 let onStopCheck: (() => void) | null = null;
 
 // Module mocks: all must appear before the first lazy import of toolLoop.ts
@@ -117,7 +134,9 @@ scopedMock.module("@/utils/tools/deliberateToolMode", () => ({ ...realDeliberate
 scopedMock.module("@/utils/chat/channelQueue", () => ({
   ...realChannelQueue,
   channelLocks: new Map(),
-  setChannelStreamKill: () => undefined,
+  setChannelStreamKill: (_channelId: string, kill: ((reason: Error) => void) | null) => {
+    activeStreamKill = kill;
+  },
   setChannelToolCallChainActive: () => undefined,
   getChannelTurnAbortSignal: () => undefined,
   incrementChannelFollowUpCount: () => undefined,
@@ -335,6 +354,61 @@ function makeParams(context: ChatTurnContext, provider: LLMProvider): ToolLoopPa
   return { context, provider, providerConfig: makeProviderConfig(), tomoriState: context.tomoriState };
 }
 
+function makeReviewContext(): ChatTurnContext & { responseReview: ResponseReviewState } {
+  const context = makeContext();
+  context.currentPersona.config.response_drafting_enabled = true;
+  context.currentPersona.config.response_reviewer_prompt = "Evaluate the character in the admitted scene.";
+  context.tomoriState.llm.supports_structoutput = true;
+  context.tomoriState.llm.context_window = 64000;
+  context.contextItems = [
+    {
+      role: "system",
+      metadataTag: ContextItemTag.SYSTEM_PERSONALITY,
+      parts: [{ type: "text", text: "Mirri is terse, stubborn and speaks softly." }],
+    },
+    {
+      role: "user",
+      metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+      messageId: context.message.id,
+      sender: { name: "Juno", type: "user" },
+      parts: [{ type: "text", text: "Stay here with me." }],
+    },
+    {
+      role: "user",
+      metadataTag: ContextItemTag.DIALOGUE_SAMPLE,
+      parts: [{ type: "text", text: "A sample invitation." }],
+    },
+    {
+      role: "model",
+      metadataTag: ContextItemTag.DIALOGUE_SAMPLE,
+      parts: [{ type: "text", text: "A sample quiet reply." }],
+    },
+  ];
+  const responseReview = createResponseReviewState(context);
+  if (!responseReview) throw new Error("Review fixture must be enabled");
+  context.streamingContext.holdResponseText = true;
+  return Object.assign(context, { responseReview });
+}
+
+function held(
+  text: string,
+  delivered: string[],
+  status: StreamResult["status"] = "completed",
+): StreamResult & { pendingResponse: PendingStreamResponse } {
+  return {
+    status,
+    accumulatedText: "",
+    usage: { inputTokens: 10, outputTokens: 5 },
+    pendingResponse: {
+      text,
+      deliver: async () => {
+        delivered.push(text);
+        return { status: "completed", accumulatedText: text };
+      },
+    },
+  };
+}
+
 describe("runToolLoop — contract tests", () => {
   beforeEach(() => {
     toolExecuteCalls = [];
@@ -347,6 +421,7 @@ describe("runToolLoop — contract tests", () => {
     standardEmbedCalls = [];
     hiddenToolNotices = [];
     onStopCheck = null;
+    activeStreamKill = null;
   });
 
   it("executes tool with correct args and delivers result to next provider call", async () => {
@@ -1076,5 +1151,414 @@ describe("runToolLoop — contract tests", () => {
 
     expect(result.status).toBe("error");
     expect(toolExecuteCalls).toHaveLength(0);
+  });
+
+  it("retains reported author usage when a held stream settles after cancellation", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const context = makeReviewContext();
+    const { provider } = makeProvider([]);
+    const review = mock(async () => ({ success: true, data: { status: "pass" } }));
+    Object.assign(provider, {
+      callStructuredJSON: review,
+      streamToDiscord: () =>
+        new Promise<StreamResult>((resolve) => {
+          context.streamingContext.abortSignal?.addEventListener(
+            "abort",
+            () => {
+              setTimeout(() => resolve({ status: "stopped_by_user", usage: { inputTokens: 25, outputTokens: 3 } }), 0);
+            },
+            { once: true },
+          );
+          queueMicrotask(() => {
+            hasStopRequest = true;
+            activeStreamKill?.(new Error("Fixture cancellation"));
+          });
+        }),
+    });
+    const result = await runToolLoop(makeParams(context, provider));
+    expect(result.status).toBe("stopped_by_user");
+    expect(result.personaResponses).toEqual([]);
+    expect(result.usageEntries).toEqual([
+      { kind: "author", model: "test-model", usage: { inputTokens: 25, outputTokens: 3 } },
+    ]);
+    expect(review).not.toHaveBeenCalled();
+  });
+
+  it("keeps Off on the ordinary path without an auxiliary request", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const context = makeContext();
+    const { provider } = makeProvider([{ status: "completed", accumulatedText: "A quiet reply." }]);
+    const review = mock(async () => ({ success: true, data: { status: "pass" } }));
+    Object.assign(provider, { callStructuredJSON: review });
+    const result = await runToolLoop(makeParams(context, provider));
+    expect(review).not.toHaveBeenCalled();
+    expect(result.personaResponses[0]?.text).toBe("A quiet reply.");
+    expect(result.usageEntries).toBeUndefined();
+  });
+
+  it("reviews a quiet short reply once, passes without another author request and delivers once", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const context = makeReviewContext();
+    const delivered: string[] = [];
+    const { provider, capturedHistories } = makeProvider([held("*nods*", delivered)]);
+    const calls: ProviderStructuredJsonRequest[] = [];
+    Object.assign(provider, {
+      callStructuredJSON: async (request: ProviderStructuredJsonRequest) => {
+        calls.push(request);
+        request.onUsage?.({ inputTokens: 20, outputTokens: 2 });
+        return { success: true, data: { status: "pass" } };
+      },
+    });
+    const result = await runToolLoop(makeParams(context, provider));
+    expect(calls).toHaveLength(1);
+    expect(capturedHistories).toHaveLength(1);
+    expect(delivered).toEqual(["*nods*"]);
+    expect(result.personaResponses[0]?.text).toBe("*nods*");
+    expect(result.usageEntries?.map((entry) => entry.kind)).toEqual(["author", "reviewer"]);
+    expect(calls[0]?.apiKey).toBe(makeProviderConfig().apiKey);
+    const packet = JSON.parse(calls[0]?.userPrompt ?? "{}");
+    expect(packet.candidate.status).toBe("pending");
+    expect(packet.trigger.sender.name).toBe("Juno");
+    expect(packet.representativeDialogues.length).toBeGreaterThan(0);
+  });
+
+  it("revises the whole held response once while preserving successful tools and their outcomes", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const context = makeReviewContext();
+    const delivered: string[] = [];
+    const preTool = held("I will check.", delivered, "function_call");
+    preTool.data = { name: "lookup", args: { query: "scene fact" } };
+    toolExecuteQueue.push({ success: true, data: { fact: "The door is closed." } });
+    const { provider, capturedHistories } = makeProvider([
+      preTool,
+      held("Generic assistant answer.", delivered),
+      held("*rests against the closed door* I stay.", delivered),
+    ]);
+    const requests: ProviderStructuredJsonRequest[] = [];
+    Object.assign(provider, {
+      callStructuredJSON: async (request: ProviderStructuredJsonRequest) => {
+        requests.push(request);
+        return {
+          success: true,
+          data:
+            requests.length === 1
+              ? {
+                  status: "revise",
+                  findings: [
+                    {
+                      category: "voice",
+                      problem: "The voice is detached.",
+                      direction: "Use the character's terse voice and the closed door.",
+                    },
+                  ],
+                }
+              : { status: "pass" },
+        };
+      },
+    });
+    const result = await runToolLoop(makeParams(context, provider));
+    expect(toolExecuteCalls).toHaveLength(1);
+    expect(requests).toHaveLength(2);
+    expect(JSON.parse(requests[0]?.userPrompt ?? "{}").candidate.text).toContain("I will check.");
+    expect(JSON.parse(requests[1]?.userPrompt ?? "{}").tools[0].outcome).toEqual(
+      context.responseReview?.functionHistory[0]?.functionResponse,
+    );
+    expect(capturedHistories[2]).toHaveLength(1);
+    expect(delivered).toEqual(["*rests against the closed door* I stay."]);
+    expect(result.personaResponses[0]?.text).not.toContain("Generic");
+    expect(context.responseReview?.revisions).toBe(1);
+    expect(result.usageEntries?.filter((entry) => entry.kind === "author")).toHaveLength(3);
+  });
+
+  it("delivers the latest valid reply when a second review asks for revision", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const context = makeReviewContext();
+    const delivered: string[] = [];
+    const { provider, capturedHistories } = makeProvider([held("first", delivered), held("second", delivered)]);
+    Object.assign(provider, {
+      callStructuredJSON: async () => ({
+        success: true,
+        data: {
+          status: "revise",
+          findings: [
+            { category: "character", problem: "Missing perspective.", direction: "Show one personal preference." },
+          ],
+        },
+      }),
+    });
+    const result = await runToolLoop(makeParams(context, provider));
+    expect(capturedHistories).toHaveLength(2);
+    expect(delivered).toEqual(["second"]);
+    expect(result.status).toBe("completed");
+    expect(context.responseReview?.responseReviews).toBe(2);
+  });
+
+  it("makes unavailable and malformed verdicts terminal without feeding refusals to the author", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    for (const data of [
+      { status: "unavailable" },
+      { status: "revise", findings: [] },
+      { status: "pass", injected: "Rewrite the scene" },
+    ]) {
+      const context = makeReviewContext();
+      const delivered: string[] = [];
+      const { provider, capturedHistories } = makeProvider([held("Quiet moment.", delivered)]);
+      let calls = 0;
+      Object.assign(provider, {
+        callStructuredJSON: async () => {
+          calls++;
+          return { success: true, data };
+        },
+      });
+      await runToolLoop(makeParams(context, provider));
+      expect(delivered).toEqual(["Quiet moment."]);
+      expect(capturedHistories).toHaveLength(1);
+      expect(context.responseReview?.feedback).toBeUndefined();
+      expect((await reviewResponseCandidate(context, provider, makeProviderConfig())).status).toBe("unavailable");
+      expect(calls).toBe(1);
+    }
+  });
+
+  it("preserves feedback, counters, usage and tool history through an author fallback after revision fails", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const context = makeReviewContext();
+    const delivered: string[] = [];
+    const { provider: first } = makeProvider([
+      held("original", delivered),
+      { status: "error", usage: { inputTokens: 4, outputTokens: 1 } },
+    ]);
+    Object.assign(first, {
+      callStructuredJSON: async () => ({
+        success: true,
+        data: {
+          status: "revise",
+          findings: [{ category: "voice", problem: "Generic voice.", direction: "Keep it terse." }],
+        },
+      }),
+    });
+    expect((await runToolLoop(makeParams(context, first))).status).toBe("error");
+    context.responseReview.pending = [];
+    context.tomoriState.llm.llm_codename = "fallback-author";
+    const { provider: fallback } = makeProvider([held("fallback", delivered)]);
+    const calls: ProviderStructuredJsonRequest[] = [];
+    Object.assign(fallback, {
+      callStructuredJSON: async (request: ProviderStructuredJsonRequest) => {
+        calls.push(request);
+        return { success: true, data: { status: "pass" } };
+      },
+    });
+    const result = await runToolLoop(makeParams(context, fallback));
+    expect(calls[0]?.model).toBe("fallback-author");
+    expect(JSON.parse(calls[0]?.userPrompt ?? "{}").revision.count).toBe(1);
+    expect(result.usageEntries?.filter((entry) => entry.kind === "author")).toHaveLength(3);
+    expect(context.responseReview?.responseReviews).toBe(2);
+    expect(delivered).toEqual(["fallback"]);
+  });
+
+  it("discards a pending response on cancellation during review", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const context = makeReviewContext();
+    const delivered: string[] = [];
+    const { provider } = makeProvider([held("never delivered", delivered)]);
+    Object.assign(provider, {
+      callStructuredJSON: async () => {
+        hasStopRequest = true;
+        return { success: true, data: { status: "pass" } };
+      },
+    });
+    const result = await runToolLoop(makeParams(context, provider));
+    expect(result.status).toBe("stopped_by_user");
+    expect(result.personaResponses).toEqual([]);
+    expect(delivered).toEqual([]);
+  });
+
+  it("requires persona, trigger and full candidate evidence and bounds optional history", () => {
+    const context = makeReviewContext();
+    context.contextItems.push(
+      ...Array.from(
+        { length: 50 },
+        (_, index): StructuredContextItem => ({
+          role: "model",
+          metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+          messageId: `history_${index}`,
+          parts: [{ type: "text", text: "A long historical reply. ".repeat(10) }],
+        }),
+      ),
+    );
+    const packet = buildReviewerPacket(context, "pending", 3000);
+    expect(packet?.candidate.text).toBe("pending");
+    expect(packet?.coverage.historyIncluded).toBeLessThan(50);
+    expect(packet?.coverage.historyIncluded).toBeGreaterThan(0);
+    expect(buildReviewerPacket(context, "x".repeat(5000), 3000)).toBeNull();
+    context.contextItems = [];
+    expect(buildReviewerPacket(context, "pending", 3000)).toBeNull();
+    expect(draftReviewResultSchema.safeParse({ status: "revise", findings: [] }).success).toBe(false);
+  });
+
+  it("pins only an owned reviewer and uses its saved credentials independently of the author", async () => {
+    const context = makeReviewContext();
+    context.responseReview.reviewerId = 88;
+    context.responseReview.pending = [held("quiet", []).pendingResponse];
+    const reviewer = createLlmRow({
+      llm_id: 88,
+      llm_provider: "openrouter",
+      llm_codename: "review-model",
+      context_window: 64000,
+      supports_structoutput: true,
+    });
+    const saved = savedProviderConfigSchema.parse({
+      server_id: context.currentPersona.server_id,
+      provider: "openrouter",
+      api_key: Buffer.from("owned-encrypted"),
+      llm_id: 88,
+      diffusion_model_id: null,
+      embedding_model_id: null,
+      nai_diffusion_model_id: null,
+      nai_preset_name: null,
+      llm_disabled_params: [],
+      llm_logit_biases: [],
+      fallback_model_refs: [],
+    });
+    const modelSpy = spyOn(llmModelRepo, "loadById").mockResolvedValue(reviewer);
+    const availableSpy = spyOn(llmModelRepo, "loadAvailableModelsForProvider").mockResolvedValue([reviewer]);
+    const savedSpy = spyOn(llmProviderRepo, "loadSavedProviderConfig").mockResolvedValue(saved);
+    const decryptSpy = spyOn(crypto, "decryptApiKey").mockResolvedValue("owned-review-key");
+    const { provider } = makeProvider([]);
+    const calls: ProviderStructuredJsonRequest[] = [];
+    Object.assign(provider, {
+      callStructuredJSON: async (request: ProviderStructuredJsonRequest) => {
+        calls.push(request);
+        return { success: true, data: { status: "pass" } };
+      },
+    });
+    const capabilitySpy = spyOn(capabilityResolver, "resolveStructuredOutputCapability").mockResolvedValue(
+      provider as Awaited<ReturnType<typeof capabilityResolver.resolveStructuredOutputCapability>>,
+    );
+    try {
+      expect((await reviewResponseCandidate(context, makeProvider([]).provider, makeProviderConfig())).status).toBe(
+        "pass",
+      );
+      expect(calls[0]?.apiKey).toBe("owned-review-key");
+      expect(calls[0]?.model).toBe("review-model");
+      expect(availableSpy.mock.calls[0]?.[2]).toEqual({ kind: "server", ownerId: context.currentPersona.server_id });
+      availableSpy.mockResolvedValue([]);
+      const inaccessible = makeReviewContext();
+      inaccessible.responseReview.reviewerId = 88;
+      inaccessible.responseReview.pending = [held("quiet", []).pendingResponse];
+      expect((await reviewResponseCandidate(inaccessible, provider, makeProviderConfig())).status).toBe("unavailable");
+      expect(calls).toHaveLength(1);
+    } finally {
+      modelSpy.mockRestore();
+      availableSpy.mockRestore();
+      savedSpy.mockRestore();
+      decryptSpy.mockRestore();
+      capabilitySpy.mockRestore();
+    }
+  });
+
+  it("logs operational reviewer failures once with safe metadata and treats refusal as an ordinary outcome", async () => {
+    const errorSpy = spyOn(log, "error").mockImplementation(async () => {});
+    const infoSpy = spyOn(log, "info").mockImplementation(() => {});
+    errorSpy.mockClear();
+    infoSpy.mockClear();
+    try {
+      const context = makeReviewContext();
+      const { provider } = makeProvider([]);
+      context.responseReview.pending = [held("PRIVATE_DRAFT", []).pendingResponse];
+      Object.assign(provider, {
+        callStructuredJSON: async () => {
+          throw new Error("PRIVATE_DRAFT PRIVATE_EVIDENCE PRIVATE_KEY https://example.invalid?token=secret");
+        },
+      });
+      expect((await reviewResponseCandidate(context, provider, makeProviderConfig())).status).toBe("unavailable");
+      await reviewResponseCandidate(context, provider, makeProviderConfig());
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain("PRIVATE_");
+      expect(JSON.stringify(infoSpy.mock.calls)).not.toContain("PRIVATE_");
+      errorSpy.mockClear();
+      const refusal = makeReviewContext();
+      refusal.responseReview.pending = [held("PRIVATE_DRAFT", []).pendingResponse];
+      Object.assign(provider, {
+        callStructuredJSON: async () => ({ success: false, error: "PRIVATE_REFUSAL", failure: "refusal" }),
+      });
+      expect((await reviewResponseCandidate(refusal, provider, makeProviderConfig())).status).toBe("unavailable");
+      expect(errorSpy).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockImplementation(async () => {});
+      infoSpy.mockImplementation(() => {});
+    }
+  });
+
+  it("bounds a silent reviewer timeout without triggering an author rewrite or another review", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const actualTimeout = AbortSignal.timeout.bind(AbortSignal);
+    const timeoutSpy = spyOn(AbortSignal, "timeout").mockImplementation(() => actualTimeout(5));
+    try {
+      const context = makeReviewContext();
+      const delivered: string[] = [];
+      const { provider, capturedHistories } = makeProvider([held("latest valid", delivered)]);
+      let calls = 0;
+      Object.assign(provider, {
+        callStructuredJSON: () => {
+          calls++;
+          return new Promise(() => {});
+        },
+      });
+      const result = await runToolLoop(makeParams(context, provider));
+      expect(result.status).toBe("completed");
+      expect(capturedHistories).toHaveLength(1);
+      expect(calls).toBe(1);
+      expect(delivered).toEqual(["latest valid"]);
+      expect(context.responseReview?.unavailable).toBe(true);
+    } finally {
+      timeoutSpy.mockRestore();
+    }
+  });
+
+  it("aborts reviewer transport promptly on a follow-up interruption", async () => {
+    const context = makeReviewContext();
+    context.responseReview.pending = [held("pending", []).pendingResponse];
+    const { provider } = makeProvider([]);
+    let signal: AbortSignal | undefined;
+    Object.assign(provider, {
+      callStructuredJSON: (request: ProviderStructuredJsonRequest) => {
+        signal = request.abortSignal;
+        requestFollowUp(context.channel.id, "fixture_user");
+        return new Promise(() => {});
+      },
+    });
+    try {
+      expect((await reviewResponseCandidate(context, provider, makeProviderConfig())).status).toBe("cancelled");
+      expect(signal?.aborted).toBe(true);
+      expect(context.responseReview?.unavailable).toBe(false);
+    } finally {
+      deleteStopRequest(context.channel.id);
+    }
+  });
+
+  it("reuses verdicts only for identical evidence and candidate, and excludes optional protocol instructions", async () => {
+    const context = makeReviewContext();
+    context.responseReview.pending = [held("pending", []).pendingResponse];
+    const { provider } = makeProvider([]);
+    let calls = 0;
+    Object.assign(provider, {
+      callStructuredJSON: async () => {
+        calls++;
+        return { success: true, data: { status: "pass" } };
+      },
+    });
+    await reviewResponseCandidate(context, provider, makeProviderConfig());
+    await reviewResponseCandidate(context, provider, makeProviderConfig());
+    expect(calls).toBe(1);
+    context.responseReview.functionHistory.push({
+      functionCall: { name: "lookup", args: { api_key: "PRIVATE_KEY" } },
+      functionResponse: { fact: "new outcome" },
+    });
+    await reviewResponseCandidate(context, provider, makeProviderConfig());
+    expect(calls).toBe(2);
+    const packet = buildReviewerPacket(context, "pending", 64000);
+    expect(JSON.stringify(packet?.tools)).not.toContain("PRIVATE_KEY");
+    expect(packet?.candidate.text).toBe("pending");
+    expect(buildReviewerPacket(context, `sk-proj-${"a".repeat(30)}`, 64000)).toBeNull();
   });
 });

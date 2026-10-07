@@ -14,7 +14,8 @@ determine the shape of the final `StreamResult`. Three concerns are woven throug
 
 1. **Stop / interrupt resolution**: the stop registry is checked both before processing each
    chunk and again immediately after it is written out. A user stop (`/kill`) flushes the pending
-   buffer and returns `{ status: "stopped_by_user" }`. A follow-up interrupt discards the buffer
+   buffer during ordinary streaming and returns `{ status: "stopped_by_user" }`. Held response text
+   is discarded on user stop. A follow-up interrupt discards the buffer
    and returns `{ status: "follow_up_interrupt" }` so the chat pipeline can restart for the new
    message. The post-write check exists because delivery-side stops (the send and flush limits in
    stage 07) are raised *during* the write; resolving them there cancels the upstream response one
@@ -38,7 +39,7 @@ determine the shape of the final `StreamResult`. Three concerns are woven throug
      normalized (`normalizeProviderUsage`) into `state.usage`, latest-wins. This captures providers
      that emit usage on a trailing empty-choices chunk (OpenAI `include_usage`) or that clobber the
      terminal `done` metadata (Anthropic `message_stop`). `state.usage` is drained into
-     `StreamResult.usage` on the `function_call` and `completed` results.
+     `StreamResult.usage` on terminal results, including errors, stops, and empty replies.
 
 3. **No local timeout**: every chunk calls `context.onStreamProgress`, and the stage 01 watchdog in
    the tool loop owns stall detection. The orchestrator used to keep its own inactivity flag, but
@@ -82,6 +83,7 @@ interface StreamResult {
   thoughtLog?: ThoughtLogPayload;
   naiContinuationPrefill?: string; // NAI-specific trailing fragment for retry
   spritesShown?: SpriteShownEntry[]; // { name, isIdentity } per delivered sprite (sprite_shown + sprite_emotion attribution)
+  pendingResponse?: PendingStreamResponse; // held prose plus single-use ordinary presentation
   usage?: TokenUsage;              // real provider token usage, normalized (when surfaced)
 }
 ```
@@ -149,3 +151,19 @@ After this stage:
 - Stage 05 (text path from this stage): → [`05-buffer-management.md`](05-buffer-management.md)
 - Tool-loop consumer of `StreamResult`: → [tool-loop pipeline: Stage 01](../tool-loop/01-stream-once)
 - `StreamResult` type: `src/types/provider/interfaces.ts:88`
+
+## Held response presentation
+
+`holdResponseText` collects normalized public prose and its original presentation segments through
+the existing parser. It differs from `suppressTextOutput`, which bypasses visible-text processing.
+Held text still strips reasoning and speaker labels, applies normal formatting, emoji processing,
+render modifiers, and speaker guards. Collection sends no message, advances no delivered-message
+receipt, and records no delivery statistics or sprite continuity.
+
+Completed and function-call results expose `pendingResponse.text` for review and a single-use
+`deliver(signal)` closure. The closure replays the original segments through ordinary presentation
+with a fresh delivery state, preserving webhook identity, humanizer behavior, code fences, and
+Discord limits. Only sends Discord accepts populate `accumulatedText` and delivery receipts.
+Presentation checks turn abort and channel stop before each segment and send. User cancellation
+never flushes held prose. A speaker guard can complete the valid collected prefix and clears its
+internal stop before review; an empty guarded prefix keeps the existing empty-response handling.

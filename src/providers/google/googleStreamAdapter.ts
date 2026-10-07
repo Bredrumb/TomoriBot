@@ -282,7 +282,7 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
 
     log.info(`Generating content with model ${config.model}`);
 
-    this.logSanitizedRequest(requestConfig, finalContents);
+    if (!context.holdResponseText) this.logSanitizedRequest(requestConfig, finalContents);
 
     try {
       const stream = await genAI.models.generateContentStream({

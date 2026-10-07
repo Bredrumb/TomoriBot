@@ -13,7 +13,7 @@ export default {
       off: "When Off: I send replies and use tools without Response Drafting review.",
       on: "When On: My replies and tool calls enter a review pipeline before I send them or act. A decision model, if selected, may skip detailed review.",
       cost: "Turning this on can increase response time and cost because review and revisions can use additional model calls and tokens.",
-      pending: "These settings are saved. Review execution is not available in this build.",
+      pending: "This development build reviews response text. Tool review and optional routing are unfinished.",
       models_title: "Switch Models",
       models_description:
         "Choose who reviews my drafts and whether a decision model checks which ones need detailed review.",

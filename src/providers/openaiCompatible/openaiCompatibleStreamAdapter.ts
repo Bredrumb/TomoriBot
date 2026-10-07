@@ -171,7 +171,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       log.info(`${this.options.adapterName}: Tools:\n${JSON.stringify(config.tools, null, 2)}`);
     }
 
-    logSanitizedOpenAICompatibleRequest(this.options.adapterName, messages);
+    if (!context.holdResponseText) logSanitizedOpenAICompatibleRequest(this.options.adapterName, messages);
 
     try {
       const disabledParams = config.disabledParams ?? [];

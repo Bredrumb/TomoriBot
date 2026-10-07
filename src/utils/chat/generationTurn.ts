@@ -1,3 +1,4 @@
+import { createResponseReviewState } from "@/utils/chat/responseReview";
 import type { FallbackEntry, LlmRow, TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
@@ -107,6 +108,8 @@ async function runGenerationAttempts(
   responseSink: ChatResponseSink,
 ): Promise<GenerationTurnResult> {
   try {
+    context.responseReview = createResponseReviewState(context);
+    context.streamingContext.holdResponseText = Boolean(context.responseReview);
     const plan = await buildGenerationPlan(context);
     const attempts = plan.attempts;
     const failures: FallbackNoticeAttempt[] = [];
@@ -176,6 +179,7 @@ async function runGenerationAttempts(
         setStreamUserErrorSuppression(context, hasFallbackKey || hasPendingModelFallback);
         context.streamingContext.forceModelFallback = hasPendingModelFallback;
 
+        if (context.responseReview) context.responseReview.pending = [];
         invocationStart = deliveredMessageRefs.length;
         result = await runWithChatDiagnosticStage({ attempt: index + 1, keyAttempt: keyAttemptCount }, () =>
           runToolLoop({
@@ -280,6 +284,7 @@ async function runGenerationAttempts(
         if (result.status === "error") {
           await emitStreamErrors(responseSink, result.streamResults);
         }
+        if (context.responseReview) result.usageEntries = context.responseReview.usage;
         await responseSink.finalize(result);
         return result;
       }
@@ -301,6 +306,7 @@ async function runGenerationAttempts(
     };
     setStreamUserErrorSuppression(context, false);
     context.streamingContext.forceModelFallback = false;
+    if (context.responseReview) skipped.usageEntries = context.responseReview.usage;
     await responseSink.finalize(skipped);
     return skipped;
   } catch (error) {
@@ -312,6 +318,7 @@ async function runGenerationAttempts(
       streamResults: [{ status: "error", data: error }],
       personaResponses: [],
     };
+    if (context.responseReview) result.usageEntries = context.responseReview.usage;
     await responseSink.finalize(result);
     return result;
   }

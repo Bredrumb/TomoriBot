@@ -8,7 +8,7 @@ Side-effect sequence after generation completes.
 
 ## Mission
 
-Run the post-generation side effects that depend on the produced result.
+Run the post-generation side effects that depend on accepted delivery and actual usage.
 Seven ordered steps: empty-response retry, text-quota consumption, self-reply chain bookkeeping, short-term memory write,
 thought-log emission, boomerang follow-up scheduling, and fire-and-forget usage
 statistics. Recoverable delivery/storage failures are logged without breaking
@@ -217,3 +217,18 @@ follow-up if operational tuning becomes useful.
 - Boomerang / cross-channel tool: → no dedicated doc;
   `crossChannelMessageTool.ts` helper only
 - Self-reply chain semantics: → folded into stage 05 docs (cascade limits)
+
+## Response review accounting
+
+With Response Drafting On, `GenerationTurnResult.usageEntries` contains actual author and reviewer
+usage by model, including failed attempts, discarded drafts, and refusals when usage is available.
+`recordUsageStats` records this ledger before checking delivered dialogue. Cancellation still records
+reported spend. Unknown usage stays unknown; discarded draft size does not become an estimate.
+`tokens_in` and `tokens_out` include review spend; `reviewer_tokens_in` and `reviewer_tokens_out` are
+subsets for attribution. Cost uses the existing total-token metrics and model prices. DM statistics
+retain their existing exclusion from persistent guild telemetry.
+
+Only Discord-accepted presentation produces `personaResponses`. Pending pre-tool narration and a
+superseded candidate never enter short-term memory or consume a reply quota. The existing
+expression receipts and independent tool telemetry still describe actual tool deliveries. Off uses
+the ordinary usage and character-estimate path.

@@ -34,9 +34,20 @@ export interface ProviderImageInput {
   mimeType?: string;
 }
 
-export type StructuredOutputResult<T> = { success: true; data: T } | { success: false; error: string };
+export type StructuredOutputResult<T> =
+  | { success: true; data: T }
+  | {
+      success: false;
+      error: string;
+      failure?: "transport" | "malformed" | "refusal" | "cancelled";
+      httpStatus?: number;
+    };
 
 export interface ProviderStructuredJsonRequest {
+  abortSignal?: AbortSignal;
+  onUsage?: (usage: import("@/utils/text/tokenEstimate").TokenUsage) => void;
+  /** Private output uses one attempt and returns safe failure metadata to its caller for logging. */
+  privateOutput?: boolean;
   apiKey: string;
   model: string;
   endpointUrl?: string;

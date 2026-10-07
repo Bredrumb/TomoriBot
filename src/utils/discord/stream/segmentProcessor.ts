@@ -70,6 +70,10 @@ export class StreamSegmentProcessor {
     context: StreamContext,
     state: StreamState,
   ): Promise<void> {
+    if (context.holdResponseText) {
+      state.pendingResponseSegments ??= [];
+      state.pendingResponseSegments.push({ text: segment, boundary, codeBlock: state.isInsideCodeBlock });
+    }
     const opensLine = state.nextSegmentOpensLine ?? true;
     state.nextSegmentOpensLine = segmentEndsLine(segment, boundary);
     if (!segment.trim()) return;
@@ -77,9 +81,10 @@ export class StreamSegmentProcessor {
     const trimmedGuard = segment.trim();
     if (ORPHAN_PUNCTUATION_REGEX.test(trimmedGuard) && (trimmedGuard.length >= 3 || trimmedGuard.includes("…"))) {
       state.pendingOrphanPunctuation = (state.pendingOrphanPunctuation ?? "") + trimmedGuard;
-      log.info(
-        `Stream Orphan: Holding "${trimmedGuard}" (pending="${state.pendingOrphanPunctuation}") for next segment`,
-      );
+      if (!context.holdResponseText)
+        log.info(
+          `Stream Orphan: Holding "${trimmedGuard}" (pending="${state.pendingOrphanPunctuation}") for next segment`,
+        );
       return;
     }
 
@@ -91,7 +96,8 @@ export class StreamSegmentProcessor {
     // happens BEFORE the anchored render-modifier parse and can single-handedly defeat it.
     let orphanPrefixApplied: string | undefined;
     if (state.pendingOrphanPunctuation) {
-      log.info(`Stream Orphan: Prepending held "${state.pendingOrphanPunctuation}" to next segment`);
+      if (!context.holdResponseText)
+        log.info(`Stream Orphan: Prepending held "${state.pendingOrphanPunctuation}" to next segment`);
       orphanPrefixApplied = state.pendingOrphanPunctuation;
       workingSegment = `${state.pendingOrphanPunctuation}${segment}`;
       state.pendingOrphanPunctuation = undefined;
@@ -138,7 +144,7 @@ export class StreamSegmentProcessor {
         // sprite's avatar. Identity sprites already use a distinct decorated name, so they
         // are excluded.
         const identity =
-          renderTarget.spriteRecord && !renderTarget.isIdentitySprite
+          renderTarget.spriteRecord && !renderTarget.isIdentitySprite && !context.holdResponseText
             ? this.resolveSpriteGroupBreakIdentity(
                 renderTarget.identity,
                 renderTarget.contextLabel,
@@ -190,7 +196,7 @@ export class StreamSegmentProcessor {
     if (
       !renderModifierMatch &&
       canUseRenderModifier &&
-      !state.accumulatedText.trim() &&
+      !(state.accumulatedText || state.pendingResponseText || "").trim() &&
       !state.pendingAggregatedText.trim()
     ) {
       const leak = await this.matchLeadingSpeakerLeak(workingSegment, context, renderModifierSourceNames);
@@ -200,17 +206,19 @@ export class StreamSegmentProcessor {
           // Budget remains: discard the whole attempt. The speaker_guard stop with nothing
           //    sent classifies the turn as empty_response, and maybeScheduleEmptyResponseRetry
           //    regenerates with the "reply only as {persona}" directive injected.
-          log.warn(
-            `Stream opening-label leak guard: discarding response opening with "${leak.matchedPrefix.trim()}" (retry ${retryCount + 1}/${MAX_EMPTY_RESPONSE_RETRIES} will be scheduled)`,
-          );
+          if (!context.holdResponseText)
+            log.warn(
+              `Stream opening-label leak guard: discarding response opening with "${leak.matchedPrefix.trim()}" (retry ${retryCount + 1}/${MAX_EMPTY_RESPONSE_RETRIES} will be scheduled)`,
+            );
           this.deps.requestStop(context.channel.id, "speaker_guard");
           return;
         }
         // Budget exhausted: better a stripped reply than silence, so drop the leaked label
         //    and deliver the body as the active persona.
-        log.warn(
-          `Stream opening-label leak guard: retry budget exhausted, stripping leaked label "${leak.matchedPrefix.trim()}" and delivering body`,
-        );
+        if (!context.holdResponseText)
+          log.warn(
+            `Stream opening-label leak guard: retry budget exhausted, stripping leaked label "${leak.matchedPrefix.trim()}" and delivering body`,
+          );
         workingSegment = leak.body;
         if (!workingSegment.trim()) return;
       }
@@ -262,13 +270,16 @@ export class StreamSegmentProcessor {
     let shouldStopForSpeakerGuard = false;
     if (context.tomoriState.config.llm_stop_speaker_pattern_enabled ?? false) {
       const speakerGuardResult = truncateBeforeGenericSpeakerLine(segmentToSend, {
-        includeStart: Boolean(state.accumulatedText.trim() || state.pendingAggregatedText.trim()),
+        includeStart: Boolean(
+          state.accumulatedText.trim() || state.pendingResponseText?.trim() || state.pendingAggregatedText.trim(),
+        ),
         isAllowedSpeakerLabel: (label) => isAllowedRenderModifierSpeakerLabel(label, renderModifierSourceNames),
       });
       if (speakerGuardResult.stopTriggered) {
-        log.warn(
-          `Stream speaker guard: stopping before speaker label "${speakerGuardResult.matchedSpeaker ?? "unknown"}"`,
-        );
+        if (!context.holdResponseText)
+          log.warn(
+            `Stream speaker guard: stopping before speaker label "${speakerGuardResult.matchedSpeaker ?? "unknown"}"`,
+          );
         segmentToSend = speakerGuardResult.text;
         shouldStopForSpeakerGuard = true;
       }
@@ -296,6 +307,13 @@ export class StreamSegmentProcessor {
       !deliveryOptions?.spriteRecord &&
       !state.activeRenderModifier?.isNeutralAppearance &&
       (boundary === "newline" || segmentToSend.includes("\n"));
+    if (context.holdResponseText) {
+      state.pendingResponseText =
+        (state.pendingResponseText ?? "") + (deliveryOptions?.accumulatedTextPrefix ?? "") + segmentToSend;
+      if (shouldClearActiveRenderModifier) state.activeRenderModifier = undefined;
+      if (shouldStopForSpeakerGuard) this.deps.requestStop(context.channel.id, "speaker_guard");
+      return;
+    }
     const segmentedParts = extractMarkdownTableSegments(segmentToSend);
     const hasRenderedTable = segmentedParts.some((part) => part.type === "table");
     if (!hasRenderedTable) {
@@ -390,6 +408,7 @@ export class StreamSegmentProcessor {
     renderModifierSourceNames: readonly string[];
     renderModifierChainSourceNames: readonly string[];
   }): void {
+    if (args.context.holdResponseText) return;
     // Only interesting when the strict parser declined text that still looks like a label.
     if (args.renderModifierMatch) return;
     const labelHead = args.workingSegment.slice(0, RENDER_MODIFIER_DIAGNOSTIC_HEAD_CHARS);
@@ -435,6 +454,7 @@ export class StreamSegmentProcessor {
     spriteStatus: SpriteRenderModifierResolution["status"],
     context: StreamContext,
   ): Promise<void> {
+    if (context.holdResponseText) return;
     const personaId = context.tomoriState.persona_id;
     // Read back the sprite roster actually visible to the lookup; a cache miss here is
     //    itself a finding, so failures degrade to an explicit marker rather than throwing.
@@ -504,6 +524,7 @@ export class StreamSegmentProcessor {
     context: StreamContext,
     textConfig: TextProcessingConfig,
   ): StreamState["activeRenderModifier"] {
+    if (context.holdResponseText) return undefined;
     if (previous.isNeutralAppearance) return previous;
 
     const sourceDisplayName = context.tomoriState.persona_nickname || textConfig.botName;
@@ -625,6 +646,11 @@ export class StreamSegmentProcessor {
     context: StreamContext,
     state: StreamState,
   ): Promise<void> {
+    if (context.holdResponseText) {
+      state.pendingResponseText = (state.pendingResponseText ?? "") + (state.pendingOrphanPunctuation ?? "");
+      state.pendingOrphanPunctuation = undefined;
+      return;
+    }
     const deliveryOptions =
       state.activeRenderModifier && !isUserImpersonationStreamContext(context)
         ? {

@@ -1,3 +1,5 @@
+import * as stm from "@/utils/cache/shortTermMemoryCache";
+import * as quotas from "@/utils/quota/textQuotaManager";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import type { RecordStatInput } from "@/utils/db/repositories/StatRepository";
 import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
@@ -139,5 +141,87 @@ describe("emoji stats count only what Discord accepted", () => {
       ["Think", 1],
       ["Smile", 2],
     ]);
+  });
+
+  it("accounts for author attempts and reviewer spend on cancellation without recording dialogue", async () => {
+    const context = makeContext();
+    await runPostTurnEffects(
+      context,
+      makeResult({
+        status: "stopped_by_user",
+        personaResponses: [],
+        usageEntries: [
+          { kind: "author", model: "first-author", usage: { inputTokens: 11, outputTokens: 7 } },
+          { kind: "reviewer", model: "review-model", usage: { inputTokens: 20, outputTokens: 3 } },
+          { kind: "author", model: "fallback-author", usage: { inputTokens: 6, outputTokens: 2 } },
+        ],
+      }),
+    );
+    expect(
+      recorded.filter((entry) => entry.metric === "tokens_in").map((entry) => [entry.metricKey, entry.delta]),
+    ).toEqual([
+      ["first-author", 11],
+      ["review-model", 20],
+      ["fallback-author", 6],
+    ]);
+    expect(recorded.filter((entry) => entry.metric === "reviewer_tokens_out").map((entry) => entry.delta)).toEqual([3]);
+    expect(metricKeys("message_sent")).toEqual([]);
+    expect(metricKeys("text_generated")).toEqual([]);
+  });
+
+  it("writes only delivered prose to memory and consumes one reply quota despite discarded drafts", async () => {
+    const context = makeContext();
+    context.turn.requestSnapshot = {};
+    context.streamingContext = { disableYouTubeProcessing: false };
+    context.userDiscId = "fixture_user";
+    context.serverDiscId = "fixture_server";
+    context.shouldApplyTextQuota = true;
+    context.textQuotaTriggerKey = "fixture_trigger";
+    context.textQuotaState = {
+      serverId: SERVER_ID,
+      userDiscId: "fixture_user",
+      consumed: false,
+    } as ChatTurnContext["textQuotaState"];
+    context.simplifiedMessages = [
+      { authorType: "user", authorName: "Juno", content: "Stay here." },
+    ] as ChatTurnContext["simplifiedMessages"];
+    const memory = spyOn(stm, "storeShortTermMemory").mockImplementation(() => {});
+    const cadence = spyOn(stm, "incrementStmTurnCounter").mockImplementation(async () => {});
+    const quota = spyOn(quotas, "incrementTextQuota").mockImplementation(async () => {});
+    try {
+      const result = makeResult({
+        streamResults: [
+          {
+            status: "completed",
+            accumulatedText: "",
+            pendingResponse: { text: "discarded draft", deliver: async () => ({ status: "completed" }) },
+          },
+          { status: "completed", accumulatedText: "delivered reply" },
+        ],
+        personaResponses: [{ text: "delivered reply", personaName: "Mirri", personaId: 3 }],
+        usageEntries: [
+          { kind: "author", model: "author", usage: { inputTokens: 10, outputTokens: 6 } },
+          { kind: "reviewer", model: "reviewer", usage: { inputTokens: 12, outputTokens: 2 } },
+        ],
+      });
+      await runPostTurnEffects(context, result);
+      expect(memory).toHaveBeenCalledTimes(1);
+      const stored = memory.mock.calls[0]?.[2] ?? [];
+      expect(stored.filter((entry) => entry.role === "model").map((entry) => entry.content)).toEqual([
+        "delivered reply",
+      ]);
+      expect(quota).toHaveBeenCalledTimes(1);
+      expect(context.textQuotaState?.consumed).toBe(true);
+      expect(metricKeys("message_sent")).toHaveLength(1);
+      expect(
+        recorded
+          .filter((entry) => entry.metric === "tokens_in")
+          .reduce((total, entry) => total + (entry.delta ?? 0), 0),
+      ).toBe(22);
+    } finally {
+      memory.mockRestore();
+      cadence.mockRestore();
+      quota.mockRestore();
+    }
   });
 });

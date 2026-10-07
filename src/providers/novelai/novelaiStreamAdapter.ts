@@ -358,7 +358,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     log.info(`Assembled NovelAI prompt (${isGlm ? "GLM" : "Kayra"}). Length: ${prompt.length} characters`);
 
     log.section("NovelAI Full Prompt");
-    log.info(prompt);
+    if (!context.holdResponseText) log.info(prompt);
 
     // Neutral values (topK=0, topP=1.0, minP=0.0) preserve the model preset defaults.
     // Non-schema NAI preset fields (order, TFS, phrase_rep_pen, etc.) are extracted
