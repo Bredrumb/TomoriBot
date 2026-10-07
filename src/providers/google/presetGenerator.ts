@@ -11,6 +11,7 @@ import { PRESET_MAX_STRING_LENGTH, type PresetExportData } from "../../types/pre
 import { log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import { resolvePresetGenerationMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
+import { omitGeminiSampling } from "@/utils/provider/samplingControl";
 import {
   buildPresetPrompt,
   extractPresetGenerationFields,
@@ -239,7 +240,7 @@ IMPORTANT: In any dialogue examples, use "{user}" ONLY where you would write the
         genAI.models.generateContent({
           model: MODEL_NAME,
           contents: [userPromptContent],
-          config: generationConfig,
+          config: omitGeminiSampling(MODEL_NAME, generationConfig),
         }),
         timeoutPromise,
       ]);
@@ -515,7 +516,7 @@ Use the web search information to accurately represent the character's personali
           genAI.models.generateContent({
             model: MODEL_NAME,
             contents: [userPromptContent],
-            config: generationConfig,
+            config: omitGeminiSampling(MODEL_NAME, generationConfig),
           }),
           timeoutPromise,
         ]);
