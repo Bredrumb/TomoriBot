@@ -1,5 +1,6 @@
 import { StickerFormatType } from "discord.js";
 import { z } from "zod";
+import { EmotionKey } from "@/types/misc/emotions";
 import { SUPPORTED_PARAM_VALUES, isSupportedParamValue, type SupportedParamValue } from "@/constants/supportedParams";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_VALUES } from "@/constants/thinkingLevels";
 import {
@@ -1111,6 +1112,62 @@ export const serverStickerSchema = z.object({
   updated_at: z.date().optional(),
 });
 export type ServerStickerRow = z.infer<typeof serverStickerSchema>;
+
+export const customExpressionMediaSchema = z
+  .object({
+    source_kind: z.enum(["link", "upload"]),
+    delivery_kind: z.enum(["link", "stored"]),
+    original_link: z.url().nullable(),
+    storage_reference: z.string().min(1).nullable(),
+    mime_type: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif", "video/mp4"]).nullable(),
+    extension: z.enum(["png", "jpg", "jpeg", "webp", "gif", "mp4"]).nullable(),
+    byte_size: z
+      .number()
+      .int()
+      .min(1)
+      .max(10 * 1024 * 1024)
+      .nullable(),
+  })
+  .refine(
+    (media) =>
+      (media.source_kind === "link" ? media.original_link !== null : media.original_link === null) &&
+      (media.delivery_kind === "link"
+        ? media.source_kind === "link" && media.storage_reference === null
+        : media.storage_reference !== null &&
+          media.mime_type !== null &&
+          media.extension !== null &&
+          media.byte_size !== null),
+  );
+export type CustomExpressionMedia = z.infer<typeof customExpressionMediaSchema>;
+
+export const customExpressionSchema = z
+  .object({
+    custom_expression_id: z.uuid(),
+    server_id: z.number().int().positive(),
+    name: z.string().trim().min(1).max(100),
+    name_key: z.string().min(1),
+    description: z.string().trim().min(1).max(500),
+    emotion_key: z.nativeEnum(EmotionKey),
+    source_kind: z.enum(["link", "upload"]),
+    delivery_kind: z.enum(["link", "stored"]),
+    original_link: z.url().nullable(),
+    storage_reference: z.string().min(1).nullable(),
+    mime_type: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif", "video/mp4"]).nullable(),
+    extension: z.enum(["png", "jpg", "jpeg", "webp", "gif", "mp4"]).nullable(),
+    byte_size: z
+      .number()
+      .int()
+      .min(1)
+      .max(10 * 1024 * 1024)
+      .nullable(),
+    restricted: z.boolean(),
+    revision: z.number().int().positive(),
+    created_at: z.date(),
+    updated_at: z.date(),
+    persona_ids: z.array(z.number().int().positive()),
+  })
+  .refine((row) => customExpressionMediaSchema.safeParse(row).success);
+export type CustomExpressionRow = z.infer<typeof customExpressionSchema>;
 
 export const serverMemorySchema = z.object({
   server_memory_id: z.number().optional(),

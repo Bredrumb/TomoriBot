@@ -66,6 +66,15 @@ still runs on host Bun. For a fully containerized bot and database, use
 Optional tuning lives in `.env.optional.example`. Copy over any values you want to
 customize (limits, timeouts, feature toggles, local server URLs, etc.).
 
+Custom expression uploads default to local files under `data/custom-expressions/`.
+Keep that directory on persistent storage. `EXPRESSION_STORAGE_BACKEND` accepts `local`,
+`gcs`, or `s3`. Cloud backends require `EXPRESSION_STORAGE_BUCKET` and the corresponding
+SDK credentials. S3 also uses `AWS_REGION` (default `us-east-1`) and optional `S3_ENDPOINT`.
+GCS uses application default credentials. Expressions use their own bucket setting;
+avatar storage settings do not select an expression bucket. Objects remain readable through
+the SDK and are attached as bytes, so a publicly served media URL is unnecessary.
+Preserve backend, bucket, and object keys when restoring existing references.
+
 ## 3. Run
 
 ```sh

@@ -87,8 +87,8 @@ Enséñale a TomoriBot cuándo usar los emojis y stickers personalizados de este
 
 | Comando | Resumen |
 |---|---|
-| `/expressions edit` | Edita la emoción y las instrucciones de uso de un solo emoji o sticker |
 | `/expressions initialize` | Analiza y clasifica todos los emojis y stickers personalizados usando visión de IA |
+| `/expressions manage` | Administra emojis, stickers, expresiones personalizadas y acceso de las personas. |
 
 ## `/generate`
 

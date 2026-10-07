@@ -25,6 +25,42 @@ Automatic STM summarization is a tool, but its toggle lives with the rest of the
 settings in `/config` > Behavior > Advanced Memory. Turn something off and she simply can't do it,
 no matter what a user asks.
 
+## Expressions
+
+Managers use `/expressions manage` to browse `Emojis`, `Stickers`, and `Customs` in an
+ephemeral panel. Native categories include uninitialized assets and distinguish usable
+assets from total assets. `/expressions initialize` classifies native assets automatically.
+`Edit` changes their description and emotion; `Clear Info` clears that classification while
+keeping the Discord asset and its usage history.
+
+In `Customs`, choose `+ Add a custom expression`. Enter a name, description (up to 500
+characters), and emotion, with exactly one link or file. Supported files are PNG, JPEG
+(`.jpg` or `.jpeg`), WebP, GIF, and MP4, up to 10 MiB and Discord's applicable limit. MP4
+requires H.264 video with 8-bit 4:2:0 pixels and optional AAC audio. Tenor share links stay
+links; Discord media links are imported into storage. Other direct media links depend on
+the external host remaining available. HTML pages other than supported Tenor shares are rejected.
+
+`Edit Expression` opens with the saved name, description, and emotion. Leave both media
+fields blank to keep the source, or provide one replacement. A failed replacement preserves
+the previous expression and media. Names must be distinct from other customs and native
+stickers after case and separator normalization. Native emojis and stickers keep their thumbnails.
+The bottom of `Customs` shows a large preview for images and GIFs, or a playable MP4.
+Direct media links use their registered URL; uploaded and imported media are attached privately.
+Tenor share pages show `Open Link`. If a preview fails, editing and deletion remain available.
+
+Customs initially allow every persona in the server. `Add Persona` restricts access to listed
+personas, one member at a time. The persona picker has pages for servers with more than 25
+personas. Manually removing the last member restores access for everyone. Deleting the sole
+allowed persona leaves the expression restricted with no eligible personas until a manager
+adds a member. `Delete Expression` asks for confirmation and deletes its owned media.
+
+The sticker tool selects eligible customs alongside native stickers. The bot posts the
+selected link or attachment after a completed response under the responding identity.
+Sticker Usage, provider support, roleplay, and impersonation restrictions still apply.
+Usage counts credit accepted delivery across all personas and triggering users in this server.
+They may lag until statistics flush. Custom counts survive renames; native counts follow
+asset names and can change after a rename. Deleting and recreating a custom starts a new history.
+
 ## Generation Tuning
 <!-- anchor: generation-tuning -->
 

@@ -2,103 +2,48 @@
 title: "02.5: Server Stickers"
 ---
 
-List of the server's custom stickers with metadata, framed for tool use.
+`buildServerStickerContextItem` in `src/utils/text/context/serverAssets.ts` emits one
+`KNOWLEDGE_SERVER_STICKERS` system item for the responding persona.
 
-- **File**: `src/utils/text/context/serverAssets.ts:128-221`
+## Input and output
 
-## Mission
+The contributor receives the client, guild ID, server and persona names, turn flags,
+server configuration, active persona state, optional preloaded native and custom rows,
+and the tool-prompt macro resolver and mention converter. Missing preloads are read
+through `ServerRepository`; an empty preload is a complete empty result.
 
-Emit one context item listing every server-custom sticker available, with
-optional emotion-key and description metadata. Unlike emojis (which the LLM
-can use inline via `:name:`), stickers must be emitted via the
-`{sticker_tool}` function call; so so the framing includes a tool-usage
-instruction expanded via the tool-prompt macro resolver.
+`projectStickerCandidates` in `src/utils/discord/stickerCandidates.ts` is shared with
+`select_sticker_for_response`. It projects sendable native stickers and customs eligible
+for the active persona. Native entries retain name deduplication, richest/latest metadata,
+and creation ordering. Customs append without a per-list limit; global context budgeting
+still applies. A server with only eligible customs receives this context item.
 
-## Input
+The list exposes each name, description, and emotion, followed by the instruction to call
+`{sticker_tool}` with a case-insensitive name. Source URLs, file formats, storage references,
+delivery kinds, and persona membership rules stay outside the model-visible list. The macro
+resolver expands the function name before mention conversion.
 
-- `client`, `guildId`, `serverName`, `botName`
-- `isDMChannel`, `isUserImpersonation`
-- `tomoriConfig.sticker_usage_enabled`,
-  `tomoriConfig.personal_memories_enabled`
-- `tomoriState` (provides `server_id`)
-- `preloadedStickers`: sticker metadata pre-loaded by the chat pipeline's
-  `loadPersonaAssets`; falls back to
-  `serverRepository.loadStickersByInternalId` if not provided
-- `toolPromptMacroResolver`, `convertMentions`
+## Eligibility and cache
 
-## Output
+The stage returns `null` when sticker usage is disabled, the turn is a DM or impersonation,
+there is no active server state or cached guild, or the projected list is empty. Roleplay
+uses the existing turn configuration that disables sticker usage. Provider availability
+remains enforced by tool assembly and execution.
 
-`Promise<StructuredContextItem | null>`: `null` if any precondition fails,
-otherwise one `system`-role item tagged `KNOWLEDGE_SERVER_STICKERS`.
+Native candidates pass `isStickerSendable`. Explicit `available === false` and IDs rejected
+by Discord are excluded; partial availability is accepted. Own-guild stickers need no
+external-sticker permission. Tool lookup still checks that permission for external assets.
 
-Content shape:
-
-```
-## {serverName}'s Stickers
-This server has the following stickers available for {botName} to use with the
-'{sticker_tool}' function:
-- "name1" (Expresses happy; "celebration mood")
-- "name2"
-- "name3" (Expresses sad)
-
-To use a sticker, call '{sticker_tool}' with the sticker's name (case-insensitive).
-```
-
-The `{sticker_tool}` macros expand to the provider-correct function name
-(e.g. `send_sticker_image` for OpenRouter, etc.).
-
-## Side effects
-
-- **Discord cache read**: `client.guilds.cache.get(guildId).stickers.cache`
-  for the live sticker list, filtered through `isStickerSendable()`
-  (`utils/discord/stickerAvailability.ts`).
-- **DB read (conditional)**: falls back to
-  `serverRepository.loadStickersByInternalId(server_id)` when
-  `preloadedStickers` is empty.
-- **Metadata dedup**: same pattern as emojis: pick richest metadata, then
-  latest timestamp.
-- **Sort stability**: sorted by `createdTimestamp` ascending.
-- **Tool-prompt macro expansion**: the `{sticker_tool}` macro is expanded
-  to the provider-correct function name before mention conversion.
-- **Mention conversion**: final text passes through `convertMentions`.
-
-## Invariants
-
-After this stage runs:
-
-- Returns `null` if: `sticker_usage_enabled === false`, DM channel,
-  impersonation, `tomoriState === null`, or the guild sticker cache is
-  empty.
-- Only sendable stickers are listed. A guild sticker stays in the Discord cache
-  after it stops being usable (the guild dropped below the boost tier that
-  unlocked the slot, so `Sticker.available` is `false`, or the sticker was
-  deleted and the cache has not caught up), and sending one returns
-  `50081 Cannot use this sticker`. `isStickerSendable()` also excludes IDs
-  retired at send time, so a rejected sticker stops being offered rather than
-  being reselected every turn. `available` is `null` on a partial sticker and
-  is treated as sendable: only an explicit `false` is a lock.
-- Stickers are referenced by *name* in the function call (case-insensitive),
-  not by Discord sticker ID; the LLM never needs the ID.
-- Skipped on impersonation (stickers are persona-flavored output, not
-  user-flavored).
-
-## Configuration
-
-| Source | Field | Effect |
-|---|---|---|
-| `tomoriConfig` | `sticker_usage_enabled` | Master switch; `false` returns `null` |
-
-## Extension points
-
-| Surface | Plugin-relevance |
-|---|---|
-| `StickerMetadata` shape | Defined in `serverAssets.ts:20-29`; tightly coupled to the `server_stickers` table schema. A plugin adding sticker-source kinds would extend the metadata-load path. |
-| `{sticker_tool}` tool-prompt macro | The macro expansion makes the contributor provider-agnostic; adding a new provider that names the sticker tool differently is a single registration in `toolPromptMacros.ts`, not an edit here. |
-| Sister contributor: emojis (stage 04) | Stickers and emojis share the same metadata + dedup pattern. A plugin formalizing "server asset" as a category should consider whether these two should generalize over a shared interface. → plugin plan candidate. |
+Custom rows are cached server-wide with their persona membership IDs. Unrestricted rows
+are eligible for every server persona. Restricted rows require the active persona's ID;
+a restricted empty list allows nobody. Each turn applies this filter independently.
+The tool reloads current rows before resolving a supplied name or ID and uses the same
+eligible projection for retry suggestions. A later native/custom normalized-name collision
+returns ambiguity. Delivery rechecks current custom access and revision after generation.
 
 ## Related docs
 
-- Emoji contributor: [`04-server-emojis.md`](/architecture/pipelines/context-build/02-native-assembly/04-server-emojis/)
-- Sticker tool execution: tool registry (→ [tool-loop pipeline](../../../tool-loop/))
-- Tool-prompt macros: covered in
-  [native-assembly README](/architecture/pipelines/context-build/02-native-assembly/#shared-helpers-used-across-contributors).
+- [Emoji contributor](/architecture/pipelines/context-build/02-native-assembly/04-server-emojis/)
+- [Caching](/architecture/subsystems/caching/)
+- [Tool loop](/architecture/pipelines/tool-loop/)
+- [Post-turn delivery](/architecture/pipelines/chat/06-per-turn/04-post-turn-effects/)

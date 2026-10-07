@@ -87,8 +87,8 @@ Dạy TomoriBot khi nào nên dùng emoji và sticker tùy chỉnh của máy ch
 
 | Lệnh | Tóm tắt |
 |---|---|
-| `/expressions edit` | Chỉnh sửa cảm xúc và hướng dẫn sử dụng của một emoji hoặc sticker |
 | `/expressions initialize` | Phân tích và phân loại toàn bộ emoji và sticker tùy chỉnh bằng AI vision |
+| `/expressions manage` | Quản lý emoji, sticker, biểu cảm tùy chỉnh và quyền truy cập của persona. |
 
 ## `/generate`
 

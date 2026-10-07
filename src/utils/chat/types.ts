@@ -1,4 +1,5 @@
-import type { BaseGuildTextChannel, Client, Guild, GuildMember, Message, Sticker, Webhook } from "discord.js";
+import type { StickerSelection } from "@/types/discord/stickerSelection";
+import type { BaseGuildTextChannel, Client, Guild, GuildMember, Message, Webhook } from "discord.js";
 import type { ForcedMention } from "@/types/discord/mentions";
 import type { ServerEmojiRow, ServerStickerRow, TomoriState, UserRow } from "@/types/db/schema";
 import type { RequestSnapshot, StructuredContextItem } from "@/types/misc/context";
@@ -320,5 +321,5 @@ export interface GenerationTurnResult {
   toolResponseDelivered?: boolean;
   thoughtLog?: ThoughtLogPayload;
   thoughtLogOwner?: ThoughtLogOwner;
-  selectedSticker?: Sticker;
+  selectedSticker?: StickerSelection;
 }

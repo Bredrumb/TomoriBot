@@ -509,6 +509,21 @@ export function takeRawModalFileUpload(interactionId: string, customId: string):
   return attachment;
 }
 
+export function takeRawModalFileUploads(interactionId: string, customId: string): APIAttachment[] {
+  const storedAttachments = modalResolvedAttachments.get(interactionId);
+  const storedValues = modalFileUploadValues.get(interactionId);
+  const ids = storedValues?.[customId] ?? [];
+  const files = ids.map((id) => storedAttachments?.[id]);
+  if (storedValues) {
+    delete storedValues[customId];
+    if (!Object.keys(storedValues).length) modalFileUploadValues.delete(interactionId);
+  }
+  for (const id of ids) if (storedAttachments) delete storedAttachments[id];
+  if (storedAttachments && !Object.keys(storedAttachments).length) modalResolvedAttachments.delete(interactionId);
+  if (files.some((file) => !file)) throw new Error("Modal upload attachment was not resolved");
+  return files.filter((file): file is APIAttachment => !!file);
+}
+
 /**
  * Safely localizes a string for modal usage, truncating if necessary to prevent Discord API errors
  * @param vars Variables for localization (optional)
@@ -3259,6 +3274,7 @@ export async function promptWithRawModal(
                   ? safeSelectOptionText(option.description, SELECT_OPTION_TEXT_MAX_LENGTH)
                   : undefined,
                 emoji: option.emoji,
+                default: option.default,
               })),
               required: component.required !== false,
             };

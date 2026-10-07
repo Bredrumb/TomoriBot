@@ -206,6 +206,7 @@ export interface ToolContext {
 
 export interface ToolResult {
   success: boolean;
+  stickerSelection?: StickerSelection;
   data?: unknown;
   error?: string;
   message?: string;
@@ -492,3 +493,4 @@ export interface ToolRegistryInterface {
    */
   executeTool(toolName: string, args: Record<string, unknown>, context: ToolContext): Promise<ToolResult>;
 }
+import type { StickerSelection } from "@/types/discord/stickerSelection";

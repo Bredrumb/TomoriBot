@@ -486,6 +486,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     snapshot: { ...turn.requestSnapshot, tomoriState: effectivePersona },
     preloadedEmojis: assets.loadedEmojis,
     preloadedStickers: assets.loadedStickers,
+    preloadedCustomExpressions: assets.loadedCustomExpressions,
     isUserImpersonation: incoming.isUserImpersonation,
     impersonatedUserId: incoming.impersonatedUserId,
     impersonatedUserNickname,
@@ -590,17 +591,24 @@ async function loadPersonaAssets(turn: ChatTurn): Promise<{
   emojiStrings: string[];
   loadedEmojis: ServerEmojiRow[] | null;
   loadedStickers: ServerStickerRow[] | null;
+  loadedCustomExpressions: import("@/types/db/schema").CustomExpressionRow[] | null;
   isRpChannel: boolean;
 }> {
   if (turn.isDMChannel || !turn.guild || !turn.persona.server_id) {
-    return { emojiStrings: [], loadedEmojis: null, loadedStickers: null, isRpChannel: false };
+    return {
+      emojiStrings: [],
+      loadedEmojis: null,
+      loadedStickers: null,
+      loadedCustomExpressions: null,
+      isRpChannel: false,
+    };
   }
 
   const rpParentId = turn.lockedTurn.admission.channel.isThread() ? turn.lockedTurn.admission.channel.parentId : null;
   const isRpChannel =
     turn.persona.config.rp_channel_ids.includes(turn.lockedTurn.channelId) ||
     (rpParentId !== null && turn.persona.config.rp_channel_ids.includes(rpParentId));
-  const { emojis, stickers } = await loadEmojiStickerCache(
+  const { emojis, stickers, customs } = await loadEmojiStickerCache(
     turn.persona.server_id,
     turn.guild,
     isRpChannel ? false : turn.persona.config.emoji_usage_enabled,
@@ -608,7 +616,13 @@ async function loadPersonaAssets(turn: ChatTurn): Promise<{
   );
   const emojiStrings =
     emojis?.map((emoji) => `<${emoji.is_animated ? "a" : ""}:${emoji.emoji_name}:${emoji.emoji_disc_id}>`) ?? [];
-  return { emojiStrings, loadedEmojis: emojis, loadedStickers: stickers, isRpChannel };
+  return {
+    emojiStrings,
+    loadedEmojis: emojis,
+    loadedStickers: stickers,
+    loadedCustomExpressions: customs,
+    isRpChannel,
+  };
 }
 
 async function buildSimplifiedHistory(

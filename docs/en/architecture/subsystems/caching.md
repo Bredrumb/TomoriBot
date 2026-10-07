@@ -114,7 +114,13 @@ fallback before rendering `@UnknownUser`. Sweeping a `User` still referenced by 
 ### 3) Emoji/sticker cache (`emojiStickerCache.ts`)
 
 - Key: internal `server_id`
-- Stores expression rows loaded from DB after lazy sync checks
+- Stores native expression rows loaded from DB after lazy sync checks and server-wide custom rows
+  with persona membership IDs when sticker usage is enabled. Each turn filters customs for its
+  active persona; the cache never stores one persona's filtered list as the server list.
+- Tracks whether each native category has loaded, so an emoji-only read cannot hide stickers
+  from a later sticker-enabled turn. Failed custom reads provide no customs for that turn.
+- Successful metadata, media, whitelist, and deletion writes invalidate this cache after commit.
+  Persona deletion also invalidates the server's expression cache after its membership cascade.
 - Default TTL: `MEMORY_CACHE_DURATION_MS` (10 minutes)
 - API: `loadEmojiStickerCache`, `invalidateEmojiStickerCache`
 

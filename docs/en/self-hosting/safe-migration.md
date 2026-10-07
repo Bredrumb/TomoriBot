@@ -10,7 +10,20 @@ When you `git pull` new code and restart TomoriBot, the bot automatically runs d
 
 TomoriBot's migration runner (in `src/db/migrationRunner.ts`) executes all unapplied migrations in version order. Migrations are forward-only: if something goes wrong, the runner does not auto-rollback. Most migrations are safe expansions (new columns, new tables), but per the project's internal design policy (OD-R-6), destructive operations such as `DROP COLUMN` or `DROP TABLE` are permitted. If a destructive migration runs without a backup, you lose data permanently. When in doubt, back up first.
 
+## Custom expression media backups
+
+Database backups retain custom expression metadata, persona memberships, and storage
+references. They do not include uploaded or imported media bytes. Stop the bot before
+backing up the database and media together. With local storage, copy `data/custom-expressions/`
+and restore it to the same location. With GCS or S3, back up the owned `custom-expressions/`
+objects and restore their keys in the configured expression bucket. Restore the matching
+`EXPRESSION_STORAGE_BACKEND` and `EXPRESSION_STORAGE_BUCKET` settings. Changing the backend
+or bucket alone leaves existing references unreadable. External direct links and Tenor links
+remain dependent on their external hosts. Discord JSON exports carry no expression registry
+or media archive.
+
 ## Pre-pull checklist
+
 
 Follow these steps BEFORE running `git pull`:
 

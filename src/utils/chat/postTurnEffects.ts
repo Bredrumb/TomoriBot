@@ -25,6 +25,11 @@ import { statRepository } from "@/utils/db/repositories";
 import { charsToTokensText, estimateContextItemsTokens, sumTurnUsage } from "@/utils/text/tokenEstimate";
 import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import { recordReunionPresence } from "@/utils/chat/reunionPresence";
+import { AttachmentBuilder, type MessageCreateOptions } from "discord.js";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
+import { customExpressionIsEligible, nativeStickerIsEligible } from "@/utils/discord/stickerCandidates";
+import { loadExpressionMedia } from "@/utils/storage/expressionStorage";
+import { EXPRESSION_MEDIA_MAX_BYTES } from "@/utils/storage/expressionMedia";
 
 /**
  * Matches a fully-resolved Discord custom emoji tag (`<:name:id>` / `<a:name:id>`).
@@ -71,8 +76,18 @@ function rememberLastReplyUsage(context: ChatTurnContext, result: GenerationTurn
 }
 
 async function sendSelectedSticker(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
-  const sticker = result.selectedSticker;
-  if (!sticker || result.status !== "completed") return;
+  const selection = result.selectedSticker;
+  if (!selection || result.status !== "completed") return;
+  if (selection.kind === "custom") {
+    await sendSelectedCustomExpression(context, selection.serverId, selection.expressionId);
+    return;
+  }
+  const sticker = selection.sticker;
+  const canUseExternal =
+    !!context.client.user &&
+    "permissionsFor" in context.channel &&
+    !!context.channel.permissionsFor(context.client.user)?.has("UseExternalStickers");
+  if (!context.guild || !nativeStickerIsEligible(sticker, context.guild, canUseExternal)) return;
 
   let stickerSent = false;
   // Post the sticker as whoever actually delivered the last message, so Discord groups the two
@@ -136,6 +151,72 @@ async function sendSelectedSticker(context: ChatTurnContext, result: GenerationT
       serverId: context.tomoriState.server_id,
       errorType: "StickerSendError",
       metadata: { stickerId: sticker.id },
+    });
+  }
+}
+
+async function sendSelectedCustomExpression(context: ChatTurnContext, serverId: number, id: string): Promise<void> {
+  if (context.isDMChannel || serverId !== context.tomoriState.server_id || !context.currentPersona.persona_id) return;
+  try {
+    const row = await serverRepository.loadCustomExpression(serverId, id);
+    if (!row || !customExpressionIsEligible(row, context.currentPersona.persona_id)) return;
+    const payload: MessageCreateOptions = { allowedMentions: { parse: [] } };
+    if (row.delivery_kind === "link") {
+      if (!row.original_link) return;
+      payload.content = row.original_link;
+    } else {
+      if (!row.storage_reference || !row.extension) return;
+      const buffer = await loadExpressionMedia(row.storage_reference, serverId, id);
+      if (buffer.length !== row.byte_size || buffer.length > EXPRESSION_MEDIA_MAX_BYTES) {
+        log.warn("Stored expression exceeds its validated delivery size", { serverId, metadata: { expressionId: id } });
+        return;
+      }
+      payload.files = [new AttachmentBuilder(buffer, { name: `expression-${id}.${row.extension}` })];
+    }
+    // Storage reads can outlive an edit or whitelist change. Recheck immediately before sending.
+    const current = await serverRepository.loadCustomExpression(serverId, id);
+    if (
+      !current ||
+      current.revision !== row.revision ||
+      !customExpressionIsEligible(current, context.currentPersona.persona_id)
+    )
+      return;
+    const identity = getChannelDeliveredWebhookIdentity(context.channel.id);
+    if (identity) {
+      const webhook = context.responseTarget?.webhook ?? (await resolveManagedChannelWebhook(context.channel));
+      if (!webhook) return;
+      await sendWebhookMessageWithIdentity(
+        webhook,
+        {
+          ...payload,
+          ...(context.channel.isThread() ? { threadId: context.channel.id } : {}),
+        },
+        identity,
+      );
+    } else if (context.isFromQueue) {
+      await context.message.reply(payload);
+    } else if ("send" in context.channel && typeof context.channel.send === "function") {
+      await context.channel.send(payload);
+    } else return;
+    if (context.triggererUserId) {
+      statRepository.recordStat({
+        serverId,
+        userId: context.triggererUserId,
+        lineageId: context.currentPersona.persona_lineage_id ?? context.tomoriState.persona_lineage_id ?? 0,
+        metric: "custom_expression_used",
+        metricKey: id,
+      });
+    }
+  } catch (error) {
+    const discordCode =
+      typeof error === "object" && error !== null && "code" in error && typeof error.code === "number"
+        ? error.code
+        : undefined;
+    // Discord errors can include the submitted content, including signed media links.
+    log.warn("Custom expression delivery failed", {
+      serverId,
+      errorType: discordCode === 40005 ? "CustomExpressionUploadRejected" : "CustomExpressionDeliveryError",
+      metadata: { expressionId: id, discordCode, errorName: error instanceof Error ? error.name : "unknown" },
     });
   }
 }

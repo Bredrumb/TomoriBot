@@ -1,4 +1,4 @@
-import type { Sticker } from "discord.js";
+import type { StickerSelection } from "@/types/discord/stickerSelection";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { ToolRegistry } from "@/tools/toolRegistry";
@@ -6,7 +6,6 @@ import { statRepository } from "@/utils/db/repositories";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
-import { isStickerSendable } from "@/utils/discord/stickerAvailability";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
 import {
@@ -86,7 +85,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
   let detailsText = "";
   let consecutiveToolErrors = 0;
   let naiConsecutiveToolFailures = 0;
-  let selectedStickerToSend: Sticker | null = null;
+  let selectedStickerToSend: StickerSelection | null = null;
   let thoughtLog: GenerationTurnResult["thoughtLog"];
   let toolResponseDelivered = false;
   let lastToolName: string | undefined;
@@ -568,7 +567,7 @@ async function executeToolCall(
       success: boolean;
       endTurn: boolean;
       responseDelivered: boolean;
-      stickerSelection?: Sticker | null;
+      stickerSelection?: StickerSelection | null;
       historyEntry: ToolHistoryEntry;
     }
 > {
@@ -798,12 +797,11 @@ async function executeToolCall(
     log.info("Short-term memory updated — disabling further STM calls for this turn");
   }
 
-  let stickerSelection: Sticker | null | undefined;
+  let stickerSelection: StickerSelection | null | undefined;
   if (functionName === "select_sticker_for_response") {
     const stickerData = toolResult.data as { status?: string; sticker_id?: string; sticker_name?: string } | undefined;
     if (stickerData?.status === "sticker_selected_successfully") {
-      const resolved = params.context.guild?.stickers.cache.get(stickerData.sticker_id ?? "") ?? null;
-      stickerSelection = resolved && isStickerSendable(resolved) ? resolved : null;
+      stickerSelection = toolResult.stickerSelection ?? null;
       if (stickerSelection) {
         log.success(`Sticker '${stickerData.sticker_name}' selected for sending`);
       } else {
@@ -1089,7 +1087,7 @@ function buildResult(
   responseText: string,
   detailsText: string,
   thoughtLog: GenerationTurnResult["thoughtLog"],
-  selectedSticker?: Sticker,
+  selectedSticker?: StickerSelection,
   toolResponseDelivered = false,
 ): GenerationTurnResult {
   const text = detailsText.trim()

@@ -38,7 +38,7 @@ A discriminated union:
     functionName: string;
     success: boolean;
     endTurn: boolean;
-    stickerSelection?: Sticker | null;
+    stickerSelection?: StickerSelection | null;
     historyEntry: ToolHistoryEntry;
   }
 ```
@@ -165,9 +165,10 @@ Steps in execution order:
    `streamingContext.disableShortTermMemoryUpdate = true`, so the tool's own
    availability and execution guards reject a second update in this turn.
 
-11. **Capture sticker selection**: `select_sticker_for_response` maps a
-    successful `sticker_id` through the guild sticker cache and returns it as
-    `stickerSelection`. Any other result from that tool returns `null`, so the
+11. **Capture sticker selection**: `select_sticker_for_response` returns its private
+    `ToolResult.stickerSelection` as a native sticker or scoped custom identity.
+    Provider history receives only model-visible `data`; transport details stay internal.
+    Any other result from that tool returns `null`, so the
     latest sticker call wins and a miss clears an earlier selection.
 
 12. **Build function response**: wraps `toolResult.data` (success) or a

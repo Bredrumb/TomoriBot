@@ -132,8 +132,45 @@ than externalising SQL. Size is the signal; the split must follow a coherent dom
 - `conditioning_history`
 - `server_emojis`
 - `server_stickers`
+- `custom_expressions`
+- `custom_expression_personas`
 - `persona_sprites`
 - `preset_sprites`
+
+Custom expressions are owned by `ServerRepository`. `custom_expressions` stores a UUID identity,
+per-server normalized name key, description, emotion, registration provenance, delivery kind,
+original link, validated MIME/extension/size, owned storage reference, restriction flag, and
+revision. Migration `097` adds the registry and its timestamp trigger to both upgrades and
+fresh schema initialization. Media is limited to 10 MiB. Usage remains in `stat_counters`.
+
+`custom_expression_personas` has unique expression/persona pairs and composite foreign keys
+that enforce the same server for both entities. Adding a member sets `restricted`; manually
+removing the last member clears it transactionally. Persona deletion cascades membership
+removal while preserving `restricted`, including an empty list. `PersonaRepository.removePersona`
+increments affected expression revisions and invalidates the server expression cache after commit.
+Native metadata writes schema-normalize the locked row before comparing its fingerprint,
+so nullable descriptions and emotions match the panel's empty and unset placeholders.
+Custom writes compare revisions.
+Discord synchronization updates names and formats while preserving current classification,
+including a manager edit committed after the synchronization snapshot was read.
+Custom-name writes lock the server row to serialize normalized-name collision checks.
+
+Both `/nuke` modes remove the custom registry and its persona memberships. The wipe locks
+the server and collects owned media references in the deletion transaction. After commit,
+it invalidates the expression cache and deletes the owned local or cloud objects. Cleanup
+failures log the scoped object key without reversing the committed wipe. Preserving personas
+keeps the persona rows, but removes their custom-expression memberships.
+Preserve-mode wipes cascade endpoint rows from their server-owned connections and only
+delete serverwide documents when the optional RAG schema exists.
+
+`custom_expression_used` records accepted delivery with the stable UUID as `metric_key`,
+using the existing actor and persona-lineage dimensions. The selected-expression count query
+sums one metric/key within a server across all users and personas using the all-time floor.
+Reads retain buffered-write lag and return unavailable on query failure. Emotion breakdowns
+join custom counts to the current registry emotion by server and UUID. Renaming preserves
+custom usage; deleting the row removes its metadata from emotion joins. Native counts still
+use canonical asset names. Expression tables and stored bytes are outside Discord JSON exports;
+full database backups and a separate owned-media backup are required.
 
 ### Permissions/privacy/routing
 

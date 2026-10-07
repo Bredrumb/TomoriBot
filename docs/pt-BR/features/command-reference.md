@@ -87,8 +87,8 @@ Ensine o TomoriBot quando usar os emojis e figurinhas personalizados deste servi
 
 | Comando | Resumo |
 |---|---|
-| `/expressions edit` | Edita a emoção e instruções de uso de um único emoji ou figurinha |
 | `/expressions initialize` | Analisa e classifica todos os emojis e figurinhas personalizados usando visão de IA |
+| `/expressions manage` | Gerencie emojis, figurinhas, expressões personalizadas e acesso das personas. |
 
 ## `/generate`
 

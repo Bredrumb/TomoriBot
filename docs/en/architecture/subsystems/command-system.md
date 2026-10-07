@@ -6,6 +6,35 @@ TomoriBot uses Discord slash commands loaded dynamically from `src/commands/`.
 
 ## Loader and Execution Pipeline
 
+`/expressions manage` is a guild-only manager panel with the global `expr:v1` route.
+Its ephemeral Components V2 categories cover native emojis, native stickers, and customs.
+Selectors use scoped IDs, reserving one of the custom selector's 25 slots for Add on every
+page. Native editing and clearing use metadata fingerprints; custom mutations use registry
+revisions. Fingerprints also bind the actor and server. Modals use nonce-scoped fields.
+Persona-select modals address at most 25 personas per page. Submitted writes defer before
+media work, reload membership and Manage Server permission, and check setup and entity scope.
+Modal-opening reads have a two-second deadline to leave time for Discord acknowledgement.
+Successful operations produce mutation receipts and invalidate caches after DB commit.
+`/expressions initialize` remains the automatic native classifier.
+
+The Customs category ends with a single-item Media Gallery for images, GIFs, and MP4s.
+Registered direct links use their validated URL after the SSRF gate runs again. Tenor share
+pages and other non-direct links show a localized link button, subject to Discord's 512-character
+button URL limit. The panel never downloads registered links for previews. Native categories
+keep their existing thumbnails.
+
+Stored previews follow the character-reference attachment pattern and the generated-video
+Media Gallery layout. Expression storage has no public-media URL capability: local files and
+private GCS/S3 objects are loaded with `loadExpressionMedia` and attached using `attachment://`.
+Both the 10 MiB registry limit and the interaction's attachment limit apply. The current panel
+message supplies attachment state; a filename fingerprint binds the server, expression, and
+immutable media identity. Matching attachments are retained by ID, even when metadata or persona
+access changes increment the row revision. Selection changes, media replacements, category
+changes, deletion, and terminal replies replace or clear obsolete attachments. No separate
+preview cache is maintained. Storage or preview delivery failures render an unavailable notice
+while preserving management controls and any mutation receipt. Preview work runs after
+acknowledgement; modal-opening routes do not load preview bytes.
+
 - Registration/building: `src/utils/discord/commandLoader.ts`
 - Runtime dispatch: `src/events/interactionCreate/handleCommands.ts`
 

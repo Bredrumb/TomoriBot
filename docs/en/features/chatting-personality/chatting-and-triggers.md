@@ -35,6 +35,8 @@ messages:
 
 - Custom emojis are used naturally in conversation with case-insensitive `:name:` syntax.
 - Stickers can accompany replies; she can also add emoji reactions.
+- Managers can register custom links and files with `/expressions manage`. Eligible customs
+  use the same sticker tool and arrive after the completed reply as links or attachments.
 - Run `/expressions initialize` to register your server's emojis and stickers so she
   uses them accurately.
 

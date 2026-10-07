@@ -32,6 +32,19 @@ Steps run in this order:
 
 If a completed `GenerationTurnResult` carries `selectedSticker`:
 
+The internal selection distinguishes native stickers from customs. Custom delivery reloads
+the scoped registry row and checks the active persona's access before reading media, then
+checks its revision and access again immediately before sending. A deleted, changed, or
+forbidden custom is suppressed. Link customs post their original URL with mentions disabled;
+stored customs attach owned bytes with the validated extension and size.
+
+Custom delivery reuses the identity of the preceding response, including thread routing.
+When that response used a webhook, a missing or failed webhook suppresses the companion.
+When it used the bot, queued turns reply to the trigger and ordinary turns send to the channel.
+Only accepted delivery records `custom_expression_used` under its stable UUID, actor, and
+responding persona lineage. It records no second native-sticker usage event. Discord upload
+rejections record no usage. The following native-sticker behavior remains:
+
 - The sticker URL is sent through a webhook using the identity the stream last
   delivered under, read from `getChannelDeliveredWebhookIdentity()`, forwarding
   the thread ID where applicable. The webhook is taken from

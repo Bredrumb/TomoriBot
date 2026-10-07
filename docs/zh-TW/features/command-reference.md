@@ -87,8 +87,8 @@ TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使�
 
 | 指令 | 摘要 |
 |---|---|
-| `/expressions edit` | 編輯單一表情符號或貼圖的情緒與用途說明 |
 | `/expressions initialize` | 用 AI 視覺分析並分類所有自訂表情符號與貼圖 |
+| `/expressions manage` | 管理表情符號、貼圖、自訂表情及人格存取權。 |
 
 ## `/generate`
 

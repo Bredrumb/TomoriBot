@@ -28,6 +28,7 @@
  *                         sprites. sprite_shown stays the all-inclusive leaderboard count.
  *   - emoji_used        → emoji name
  *   - sticker_used      → sticker name/id
+ *   - custom_expression_used → stable custom UUID (one per accepted delivery)
  *   - active_hour       → hour-of-day "0".."23"
  *   - text_generated    → "" (one per completed chat turn)
  *   - user_impersonation_triggered → impersonated Discord user id (one per
@@ -64,6 +65,7 @@ const STAT_METRICS = [
   "sprite_emotion",
   "emoji_used",
   "sticker_used",
+  "custom_expression_used",
   "active_hour",
   "text_generated",
   "user_impersonation_triggered",

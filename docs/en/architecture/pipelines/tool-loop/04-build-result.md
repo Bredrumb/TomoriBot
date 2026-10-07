@@ -30,7 +30,7 @@ terminal-status exits (completed, error, timeout, etc.) and the post-tool
   `streamResult.detailsContent` fields across tool-call iterations.
 - `thoughtLog: GenerationTurnResult["thoughtLog"] | undefined`: the last
   thought log payload emitted by any iteration, or `undefined`.
-- `selectedSticker?: Sticker`: the latest successful sticker selection. The
+- `selectedSticker?: StickerSelection`: the latest successful sticker selection. The
   loop supplies it only on completed exits; timeout/error/stop paths and the
   max-iterations exit omit it.
 
@@ -45,7 +45,7 @@ terminal-status exits (completed, error, timeout, etc.) and the post-tool
   personaResponses: ChatPersonaResponse[];   // empty if no text
   thoughtLog?: ThoughtLogPayload;
   thoughtLogOwner?: ThoughtLogOwner;
-  selectedSticker?: Sticker;
+  selectedSticker?: StickerSelection;
 }
 ```
 

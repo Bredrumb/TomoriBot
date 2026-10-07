@@ -1048,6 +1048,27 @@ class StatRepository implements IRepository<null> {
     }
   }
 
+  async getServerExpressionCount(
+    serverId: number,
+    metric: "emoji_used" | "sticker_used" | "custom_expression_used",
+    metricKey: string,
+  ): Promise<number | null> {
+    try {
+      const [row] = await sql`
+        SELECT COALESCE(SUM(count), 0) AS total FROM stat_counters
+        WHERE server_id = ${serverId} AND metric = ${metric} AND metric_key = ${metricKey}
+          AND bucket >= ${ALL_TIME_FLOOR}::date
+      `;
+      return Number(row?.total ?? 0);
+    } catch (error) {
+      log.error("StatRepository.getServerExpressionCount: failed", error, {
+        serverId,
+        metadata: { metric, metricKey },
+      });
+      return null;
+    }
+  }
+
   /**
    * Earliest bucket containing a metric in a scope. This lets visual summaries
    * normalize all-time weekday activity into a representative week.
@@ -1518,9 +1539,10 @@ class StatRepository implements IRepository<null> {
   }
 
   /**
-   * Top emotion categories expressed, highest first. Sums three streams by emotion:
+   * Top emotion categories expressed, highest first. Sums delivery metrics by emotion:
    *   - emoji_used  : joined to the per-server emotion_key on server_emojis
    *   - sticker_used: joined to the per-server emotion_key on server_stickers
+   *   - custom_expression_used: joined by server and stable custom UUID
    *   - sprite_emotion: the sprite's user-given tag IS the emotion key (no join;
    *      identity sprites were already excluded upstream when this metric was recorded)
    * Emojis/stickers not yet classified (NULL emotion_key) are excluded; sprite tags are
@@ -1563,6 +1585,15 @@ class StatRepository implements IRepository<null> {
           SELECT LOWER(sc.metric_key) AS emotion_key, sc.count AS cnt
           FROM stat_counters sc
           WHERE sc.metric = 'sprite_emotion'
+            AND (${userId}::int IS NULL OR sc.user_id = ${userId})
+            AND (${serverId}::int IS NULL OR sc.server_id = ${serverId})
+            AND (${lineageId}::bigint IS NULL OR sc.persona_lineage_id = ${lineageId})
+            AND sc.bucket >= ${from}::date
+          UNION ALL
+          SELECT ce.emotion_key AS emotion_key, sc.count AS cnt
+          FROM stat_counters sc
+          JOIN custom_expressions ce ON ce.server_id = sc.server_id AND ce.custom_expression_id::text = sc.metric_key
+          WHERE sc.metric = 'custom_expression_used'
             AND (${userId}::int IS NULL OR sc.user_id = ${userId})
             AND (${serverId}::int IS NULL OR sc.server_id = ${serverId})
             AND (${lineageId}::bigint IS NULL OR sc.persona_lineage_id = ${lineageId})

@@ -7,6 +7,7 @@ export interface SelectOption {
   label: string;
   value: string;
   description?: string;
+  default?: boolean;
   emoji?: {
     name: string;
   };

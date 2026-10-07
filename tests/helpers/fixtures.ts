@@ -10,6 +10,8 @@
 
 import type { AssembledServerConfig, LlmRow, TomoriState, UserRow } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
+import { customExpressionSchema, type CustomExpressionRow } from "@/types/db/schema";
+import { EmotionKey } from "@/types/misc/emotions";
 import { EMPTY_PERSONA_NAMING_CONFIG } from "@/types/personaNaming";
 import { DEFAULT_IMAGE_NEGATIVE_TAGS, DEFAULT_IMAGE_POSITIVE_TAGS } from "@/utils/image/tagDefaults";
 
@@ -209,4 +211,27 @@ export function createUserRow(overrides: UserFixtureOverrides = {}): UserRow {
     suffix_override: null,
     ...overrides,
   };
+}
+export function createCustomExpression(overrides: Partial<CustomExpressionRow> = {}): CustomExpressionRow {
+  return customExpressionSchema.strict().parse({
+    custom_expression_id: "00000000-0000-4000-8000-000000000001",
+    server_id: 1,
+    name: "Wave custom",
+    name_key: "wave custom",
+    description: "Use when greeting someone.",
+    emotion_key: EmotionKey.JOY,
+    source_kind: "link",
+    delivery_kind: "link",
+    original_link: "https://example.com/wave.png",
+    storage_reference: null,
+    mime_type: "image/png",
+    extension: "png",
+    byte_size: 100,
+    restricted: false,
+    revision: 1,
+    created_at: new Date(0),
+    updated_at: new Date(0),
+    persona_ids: [],
+    ...overrides,
+  });
 }

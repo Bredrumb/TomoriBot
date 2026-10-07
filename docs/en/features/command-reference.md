@@ -87,8 +87,8 @@ Teach TomoriBot when to use this server's custom emojis and stickers.
 
 | Command | Summary |
 |---|---|
-| `/expressions edit` | Edit the emotion and usage instructions of a single emoji or sticker |
 | `/expressions initialize` | Analyze and classify all custom emojis and stickers using AI vision |
+| `/expressions manage` | Manage emojis, stickers, custom expressions, and persona access. |
 
 ## `/generate`
 

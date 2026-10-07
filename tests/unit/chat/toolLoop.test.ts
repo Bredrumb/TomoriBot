@@ -775,6 +775,7 @@ describe("runToolLoop — contract tests", () => {
     toolExecuteQueue.push({
       success: true,
       data: { status: "sticker_selected_successfully", sticker_id: sticker.id, sticker_name: sticker.name },
+      stickerSelection: { kind: "native", sticker: sticker as Sticker },
     });
 
     const context = makeContext();
@@ -782,7 +783,26 @@ describe("runToolLoop — contract tests", () => {
     const result = await runToolLoop(makeParams(context, provider));
 
     expect(result.status).toBe("completed");
-    expect(result.selectedSticker).toBe(sticker);
+    expect(result.selectedSticker).toEqual({ kind: "native", sticker });
+  });
+
+  it("carries custom identity privately through completed provider history", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { provider, capturedHistories } = makeProvider([
+      makeFunctionCallResult("select_sticker_for_response", { sticker_name: "Wave" }),
+      { status: "completed", accumulatedText: "Hello!" },
+    ]);
+    const selection = { kind: "custom", serverId: 1, expressionId: "00000000-0000-4000-8000-000000000001" } as const;
+    toolExecuteQueue.push({
+      success: true,
+      data: { status: "sticker_selected_successfully", sticker_name: "Wave" },
+      stickerSelection: selection,
+    });
+    const result = await runToolLoop(makeParams(makeContext(), provider));
+    expect(result.selectedSticker).toEqual(selection);
+    expect(JSON.stringify(capturedHistories)).not.toContain("expressionId");
+    expect(JSON.stringify(capturedHistories)).not.toContain("serverId");
+    expect(JSON.stringify(capturedHistories)).toContain("sticker_selected_successfully");
   });
 
   it("a later failed sticker selection clears an earlier selection", async () => {
@@ -796,6 +816,7 @@ describe("runToolLoop — contract tests", () => {
     toolExecuteQueue.push({
       success: true,
       data: { status: "sticker_selected_successfully", sticker_id: sticker.id, sticker_name: sticker.name },
+      stickerSelection: { kind: "native", sticker: sticker as Sticker },
     });
     toolExecuteQueue.push({ success: false, data: { status: "sticker_not_found" }, error: "not found" });
 
@@ -817,6 +838,7 @@ describe("runToolLoop — contract tests", () => {
     toolExecuteQueue.push({
       success: true,
       data: { status: "sticker_selected_successfully", sticker_id: sticker.id, sticker_name: sticker.name },
+      stickerSelection: { kind: "native", sticker: sticker as Sticker },
     });
     for (let i = 0; i < 99; i++) {
       toolExecuteQueue.push({ success: true, data: { ok: true } });

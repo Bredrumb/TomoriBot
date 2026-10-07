@@ -87,8 +87,8 @@ TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同�
 
 | 指令 | 摘要 |
 |---|---|
-| `/expressions edit` | 编辑单个表情或贴纸的情绪与使用说明 |
 | `/expressions initialize` | 用 AI 视觉分析并分类所有自定义表情和贴纸 |
+| `/expressions manage` | 管理表情符号、贴纸、自定义表情及人格访问权限。 |
 
 ## `/generate`
 

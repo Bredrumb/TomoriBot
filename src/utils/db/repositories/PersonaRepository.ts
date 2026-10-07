@@ -918,11 +918,22 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
 
   async removePersona(personaId: number): Promise<boolean> {
     try {
-      const result = await sql`
-        DELETE FROM personas
-        WHERE persona_id = ${personaId}
-        RETURNING persona_id
-      `;
+      const result = await sql.transaction(async (tx) => {
+        const affected = await tx`
+          SELECT c.custom_expression_id FROM custom_expressions c
+          JOIN custom_expression_personas p USING (custom_expression_id)
+          WHERE p.persona_id = ${personaId} ORDER BY c.custom_expression_id FOR UPDATE OF c
+        `;
+        const deleted = await tx`
+          DELETE FROM personas WHERE persona_id = ${personaId} RETURNING persona_id, server_id
+        `;
+        for (const row of affected) {
+          // Cascading membership removal preserves restricted, including a now-empty whitelist.
+          await tx`UPDATE custom_expressions SET revision = revision + 1 WHERE custom_expression_id = ${row.custom_expression_id}`;
+        }
+        return deleted;
+      });
+      for (const row of result) invalidateEmojiStickerCache(Number(row.server_id));
       return result.length > 0;
     } catch (e) {
       log.error(`Error removing persona ${personaId}:`, e);
@@ -3339,3 +3350,4 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
 
 /** Singleton instance: import this in callers. */
 export const personaRepository = new PersonaRepository();
+import { invalidateEmojiStickerCache } from "@/utils/cache/emojiStickerCache";
