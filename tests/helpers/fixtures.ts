@@ -23,6 +23,11 @@ import { DEFAULT_IMAGE_NEGATIVE_TAGS, DEFAULT_IMAGE_POSITIVE_TAGS } from "@/util
  * `fixtures.test.ts` fails when a schema default moves away from the value recorded here.
  */
 const BASE_CONFIG: AssembledServerConfig = {
+  response_reviewer_llm_id: null,
+  response_decision_model_id: null,
+  response_reviewer_prompt: null,
+  response_rule_checker_ref: null,
+  response_drafting_enabled: false,
   llm_id: 1,
   api_key: null,
   key_version: 1,

@@ -1,3 +1,11 @@
+import type { DraftPicker } from "@/utils/discord/ui/responseDraftingPanel";
+import type { DraftModelSlot } from "@/utils/discord/configPanelCatalog";
+import type {
+  ResponseDraftingView,
+  ResponseDraftingOperations,
+  DraftModelGroup,
+  DraftCheckerChoice,
+} from "@/utils/discord/interactions/responseDraftingOperations";
 import {
   ComponentType,
   MessageFlags,
@@ -327,6 +335,10 @@ export interface ConfigRouteDependencies {
   loadFallbackOptions(state: TomoriState, provider: string, locale: string): Promise<ConfigFallbackOption[]>;
   loadModelProviders(state: TomoriState, capability: ConfigModelCapability): Promise<string[]>;
   createGuildIdentity(guildId: string, interaction: GlobalRoutableInteraction): GuildIdentityPort;
+  loadResponseDraftingView(state: TomoriState, locale: string): Promise<ResponseDraftingView>;
+  loadDraftModels(serverId: number, slot: DraftModelSlot, locale: string): Promise<DraftModelGroup[]>;
+  loadDraftCheckers(serverId: number): Promise<DraftCheckerChoice[]>;
+  draftingOperations: ResponseDraftingOperations;
   recordAction(input: RecordPanelActionInput): void;
   createNonce(): string;
   showModal(interaction: GlobalRoutableInteraction, payload: RawModalPayload): Promise<void>;
@@ -441,6 +453,8 @@ export function resolveSelectedPersona(
 }
 
 export interface ConfigRepaintOptions {
+  draftPicker?: DraftPicker;
+  responseDraftingView?: ResponseDraftingView;
   locale: string;
   scope: ConfigScope;
   category: ConfigCategory;
@@ -591,6 +605,12 @@ export async function repaint(
     }
   }
 
+  let responseDraftingView = options.responseDraftingView;
+  if (category === "plugins" && page === "response-drafting" && !responseDraftingView) {
+    const state = scope.personas[0];
+    if (state) responseDraftingView = await dependencies.loadResponseDraftingView(state, locale);
+  }
+
   let permissionsView = options.permissionsView;
   if (
     ((category === "plugins" && (page === "available-tools" || page === "context-additions")) ||
@@ -703,6 +723,8 @@ export async function repaint(
         readStatus: scope.readStatus,
         receipt: options.receipt,
         view: options.view,
+        responseDraftingView,
+        draftPicker: options.draftPicker,
         switchModelsView,
         modelParametersView,
         modelFallbacksView,

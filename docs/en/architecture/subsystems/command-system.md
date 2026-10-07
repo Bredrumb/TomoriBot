@@ -1089,6 +1089,20 @@ Behavior pages place Advanced Memory before Notice Behavior and keep Experimenta
 Trigger cooldown omits its stored duration while disabled. Notice Behavior marks each notice with
 a green or red status icon and explains that disabled notice embeds are redirected to Logs.
 
+`/config` > Plugins > Response Drafting persists workspace review settings. Guild managers and DM
+workspace owners can turn it Off or On, choose a structured-output-capable reviewer, choose an
+optional registered Decision model, bind an optional enabled MCP `check_slop(text)` tool, and edit
+reviewer instructions. Both auxiliary model pickers use the existing provider windows and model
+modals. Their selections leave the primary text provider unchanged. Clearing the reviewer restores
+inheritance from the response model; clearing Decisions or the checker stores None.
+
+The page shows effective model availability, a time/cost note in both states, and a fence-safe bounded
+prompt preview. `Set Prompt` opens the complete instructions in a prefilled paragraph modal with a
+4,000-character limit. `Use Default` clears the custom prompt. Custom instructions retain the saved
+Decision model and mark skipping inactive. Checker bindings retain their identity after disablement
+or removal and display Unavailable; selecting None clears them. The configuration page stores these
+settings; this build does not yet execute response or tool reviews, and the page says so explicitly.
+
 `/config` > Models > Switch Models exposes eight capability slots. The six ordinary model-routing
 slots select a model from the registered provider catalogs and persist their corresponding model-column
 choices. TTS and STT are workspace-wide speech slots: each selects a registered, server-scoped endpoint

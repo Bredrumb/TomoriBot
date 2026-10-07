@@ -14,6 +14,7 @@ beforeAll(async () => initializeLocalizer());
 const EXPECTED_PLUGIN_PAGES = [
   "available-tools",
   "context-additions",
+  "response-drafting",
   "mcp-servers",
   "sillytavern-presets",
   "nsfw-jailbreaks",

@@ -1,3 +1,4 @@
+import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 import { StickerFormatType } from "discord.js";
 import { z } from "zod";
 import { EmotionKey } from "@/types/misc/emotions";
@@ -719,7 +720,39 @@ const serverModelConfigSchema = z.object({
 });
 export type ServerModelConfigRow = z.infer<typeof serverModelConfigSchema>;
 
+export const responseRuleCheckerRefSchema = z.discriminatedUnion("scope", [
+  z
+    .object({
+      scope: z.literal("workspace"),
+      registrationId: z.number().int().positive(),
+      toolName: z.literal("check_slop"),
+    })
+    .strict(),
+  z
+    .object({ scope: z.literal("global"), serviceName: z.string().min(1).max(100), toolName: z.literal("check_slop") })
+    .strict(),
+]);
+export const responseRuleCheckerConfigSchema = z
+  .preprocess((value) => {
+    if (typeof value !== "string") return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }, responseRuleCheckerRefSchema.nullable())
+  .default(null);
+export type ResponseRuleCheckerRef = z.infer<typeof responseRuleCheckerRefSchema>;
+export const RESPONSE_REVIEWER_PROMPT_MAX_LENGTH = 4000;
+export const responseReviewerPromptSchema = z
+  .string()
+  .refine((value) => value.trim().length > 0 && getDiscordTextLength(value) <= RESPONSE_REVIEWER_PROMPT_MAX_LENGTH);
+
 const serverChatConfigSchema = z.object({
+  response_reviewer_llm_id: z.number().int().positive().nullable().default(null),
+  response_decision_model_id: z.number().int().positive().nullable().default(null),
+  response_reviewer_prompt: responseReviewerPromptSchema.nullable().default(null),
+  response_rule_checker_ref: responseRuleCheckerConfigSchema,
   server_id: z.number().int(),
   humanizer_degree: z.nativeEnum(HumanizerDegree).default(HumanizerDegree.LIGHT),
   message_fetch_limit: z.number().int().default(80),
@@ -769,6 +802,7 @@ const serverMemberPermissionsConfigSchema = z.object({
 export type ServerMemberPermissionsConfigRow = z.infer<typeof serverMemberPermissionsConfigSchema>;
 
 const serverCapabilitiesConfigSchema = z.object({
+  response_drafting_enabled: z.boolean().default(false),
   server_id: z.number().int(),
   emoji_usage_enabled: z.boolean().default(true),
   sticker_usage_enabled: z.boolean().default(true),

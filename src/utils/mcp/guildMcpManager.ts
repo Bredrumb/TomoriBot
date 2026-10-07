@@ -104,6 +104,15 @@ class GuildMcpManager {
    *
    * @param serverId - Internal server_id (FK to servers table)
    */
+  /** Reads the exact connected registration; a same-name replacement cannot inherit its binding. */
+  async getRegisteredTool(config: GuildMcpServerRow): Promise<CallableTool | null> {
+    if (!config.is_enabled) return null;
+    const connection = this.pool.get(this.poolKey(config.server_id, config.name)) ?? (await this.connectServer(config));
+    return connection && connection.guildMcpId === config.guild_mcp_id
+      ? (connection.callableTool as CallableTool)
+      : null;
+  }
+
   async getGuildMCPTools(serverId: number): Promise<CallableTool[]> {
     const configs = await getCachedEnabledGuildMcpConfigs(serverId);
     if (configs.length === 0) return [];

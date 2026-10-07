@@ -44,6 +44,11 @@ interface WorkspaceConfigProjectionRow {
   send_message_limit: number;
   context_note: string | null;
   context_note_depth: number;
+  response_reviewer_llm_id: number | null;
+  response_decision_model_id: number | null;
+  response_reviewer_prompt: string | null;
+  response_rule_checker_ref: import("@/types/db/schema").ResponseRuleCheckerRef | null;
+  response_drafting_enabled: boolean;
   response_prefill: string | null;
   server_memteaching_enabled: boolean;
   attribute_memteaching_enabled: boolean;
@@ -335,6 +340,11 @@ export class ExportRepository {
           COALESCE(snec.tool_notice_hidden_keys, ARRAY[]::TEXT[])   AS tool_notice_hidden_keys,
           snec.tool_notice_verbosity                                AS tool_notice_verbosity,
           COALESCE(scc.self_debug_enabled, false)                   AS self_debug_enabled,
+          scc.response_reviewer_llm_id AS response_reviewer_llm_id,
+          scc.response_decision_model_id AS response_decision_model_id,
+          scc.response_reviewer_prompt AS response_reviewer_prompt,
+          scc.response_rule_checker_ref AS response_rule_checker_ref,
+          scac.response_drafting_enabled AS response_drafting_enabled,
           COALESCE(scc.model_randomizer_enabled, false)             AS model_randomizer_enabled,
           snaic.image_default_positive_tags                                       AS image_default_positive_tags,
           snaic.image_default_negative_tags                                    AS image_default_negative_tags,
@@ -516,6 +526,11 @@ export class ExportRepository {
             tool_notice_verbosity: configData.tool_notice_verbosity ?? undefined,
             self_debug_enabled: configData.self_debug_enabled,
             model_randomizer_enabled: configData.model_randomizer_enabled,
+            response_reviewer_llm_id: configData.response_reviewer_llm_id,
+            response_decision_model_id: configData.response_decision_model_id,
+            response_reviewer_prompt: configData.response_reviewer_prompt,
+            response_rule_checker_ref: configData.response_rule_checker_ref,
+            response_drafting_enabled: configData.response_drafting_enabled,
             image_default_positive_tags: configData.image_default_positive_tags ?? undefined,
             image_default_negative_tags: configData.image_default_negative_tags ?? undefined,
             nai_sampler: configData.nai_sampler ?? null,
@@ -704,6 +719,11 @@ export class ExportRepository {
           scc.context_note AS context_note,
           COALESCE(scc.context_note_depth, 0) AS context_note_depth,
           scc.response_prefill AS response_prefill,
+          scc.response_reviewer_llm_id AS response_reviewer_llm_id,
+          scc.response_decision_model_id AS response_decision_model_id,
+          scc.response_reviewer_prompt AS response_reviewer_prompt,
+          scc.response_rule_checker_ref AS response_rule_checker_ref,
+          scac.response_drafting_enabled AS response_drafting_enabled,
           COALESCE(smpc.server_memteaching_enabled, false) AS server_memteaching_enabled,
           COALESCE(smpc.attribute_memteaching_enabled, false) AS attribute_memteaching_enabled,
           COALESCE(smpc.sampledialogue_memteaching_enabled, false) AS sampledialogue_memteaching_enabled,
@@ -818,6 +838,10 @@ export class ExportRepository {
           context_note: configData.context_note,
           context_note_depth: configData.context_note_depth,
           response_prefill: configData.response_prefill ?? null,
+          response_reviewer_llm_id: configData.response_reviewer_llm_id,
+          response_decision_model_id: configData.response_decision_model_id,
+          response_reviewer_prompt: configData.response_reviewer_prompt,
+          response_rule_checker_ref: configData.response_rule_checker_ref,
           welcome_prompt: configData.welcome_prompt,
         },
         triggers: {
@@ -830,6 +854,7 @@ export class ExportRepository {
           cooldown_length: configData.cooldown_length,
         },
         capabilities: {
+          response_drafting_enabled: configData.response_drafting_enabled,
           web_search_enabled: configData.web_search_enabled,
           emoji_usage_enabled: configData.emoji_usage_enabled,
           sticker_usage_enabled: configData.sticker_usage_enabled,

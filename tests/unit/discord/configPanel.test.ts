@@ -324,6 +324,7 @@ describe("config panel shell", () => {
     expect(dmPageSelect?.options?.map((option) => option.value)).toEqual([
       "available-tools",
       "context-additions",
+      "response-drafting",
       "mcp-servers",
       "sillytavern-presets",
       "nsfw-jailbreaks",
@@ -335,6 +336,7 @@ describe("config panel shell", () => {
     expect(managerPageSelect?.options?.map((option) => option.value)).toEqual([
       "available-tools",
       "context-additions",
+      "response-drafting",
       "mcp-servers",
       "sillytavern-presets",
       "nsfw-jailbreaks",

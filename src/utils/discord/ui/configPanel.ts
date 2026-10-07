@@ -1,3 +1,5 @@
+import { buildResponseDraftingBody, type DraftPicker } from "@/utils/discord/ui/responseDraftingPanel";
+import type { ResponseDraftingView } from "@/utils/discord/interactions/responseDraftingOperations";
 import {
   ButtonStyle,
   ChannelType,
@@ -200,6 +202,7 @@ export const PAGE_LOCALE_KEYS: Record<ConfigCategory, Record<string, string>> = 
     overrides: "commands.config.panel.page_channels_overrides",
   },
   plugins: {
+    "response-drafting": "commands.config.panel.page_plugins_response_drafting",
     "available-tools": "commands.config.panel.page_plugins_available_tools",
     "context-additions": "commands.config.panel.page_plugins_context_additions",
     "mcp-servers": "commands.mcps.title",
@@ -264,6 +267,8 @@ export interface ConfigPanelRenderInput {
   personaVoiceView?: ConfigPersonaVoiceRenderView;
   personaVoiceRemoteView?: ConfigPersonaVoiceRemoteView;
   personaVoicePageStart?: number;
+  responseDraftingView?: ResponseDraftingView;
+  draftPicker?: DraftPicker;
   switchModelsView?: ConfigSwitchModelsView;
   modelParametersView?: ConfigParametersView;
   modelFallbacksView?: ConfigFallbacksView;
@@ -4428,6 +4433,16 @@ export function buildConfigPanelPayload(input: ConfigPanelRenderInput): ConfigPa
 
   if (category === "behavior" && page === "memory") {
     components.push(...buildBehaviorMemoryBody(input));
+    return buildPayload(components, receipt);
+  }
+
+  if (category === "plugins" && page === "response-drafting") {
+    const state = input.personas[0];
+    if (state && resolveConfigPageState(category, page, actor) === "enabled") {
+      components.push(
+        ...buildResponseDraftingBody(state, locale, input.responseDraftingView, input.draftPicker, writesDisabled),
+      );
+    }
     return buildPayload(components, receipt);
   }
 

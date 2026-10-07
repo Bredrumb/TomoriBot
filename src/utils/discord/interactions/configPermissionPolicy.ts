@@ -739,6 +739,9 @@ export const MODELS_PAGE_BY_ROUTE: Partial<Record<ConfigPanelRoute["action"], Co
  * read the message, so the answer must come from the actor resolved on this interaction.
  */
 export function isConfigRouteAuthorized(route: ConfigPanelRoute, actor: ConfigActor): boolean {
+  if (route.action.startsWith("draft-")) {
+    return resolveConfigPageState("plugins", "response-drafting", actor) === "enabled";
+  }
   const personaAction = PERSONA_GENERAL_ACTION_BY_ROUTE[route.action];
   if (personaAction) {
     const page = personaAction === "trigger-add" || personaAction === "trigger-remove" ? "triggers" : "general";

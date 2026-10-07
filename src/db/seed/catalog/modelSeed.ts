@@ -1,3 +1,4 @@
+import { invalidateTomoriStateCaches } from "@/utils/cache/tomoriStateCacheStore";
 // Runtime model seeding from the typed catalog (`models.ts`), the single source of truth for
 // seeded models: the catalog is rendered into INSERT … ON CONFLICT statements and executed
 // directly during database initialization (see `seedModelsFromCatalog`). There is no generated
@@ -511,4 +512,15 @@ export async function seedModelsFromCatalog(client: SQL): Promise<void> {
   for (const statement of buildModelSeedStatements()) {
     await client.unsafe(statement);
   }
+  const changed = await client<Array<{ server_disc_id: string }>>`
+    WITH cleared AS (
+      UPDATE server_chat_configs SET
+        response_reviewer_llm_id = CASE WHEN response_reviewer_llm_id IN (SELECT llm_id FROM llms WHERE is_deprecated) THEN NULL ELSE response_reviewer_llm_id END,
+        response_decision_model_id = CASE WHEN response_decision_model_id IN (SELECT decision_model_id FROM decision_models WHERE is_deprecated) THEN NULL ELSE response_decision_model_id END
+      WHERE response_reviewer_llm_id IN (SELECT llm_id FROM llms WHERE is_deprecated)
+        OR response_decision_model_id IN (SELECT decision_model_id FROM decision_models WHERE is_deprecated)
+      RETURNING server_id
+    ) SELECT servers.server_disc_id FROM cleared JOIN servers USING (server_id)
+  `;
+  invalidateTomoriStateCaches(changed.map((row) => row.server_disc_id));
 }

@@ -40,6 +40,18 @@ Your chosen AI provider (Google, OpenRouter, NovelAI, …) processes messages un
 privacy policies. Never share sensitive personal information with any AI.
 :::
 
+### Response Drafting selections
+
+`/config` > `Plugins` > `Response Drafting` stores reviewer, Decision model, optional rule checker,
+and prompt choices for the workspace. The current build saves these choices and does not execute
+reviews. A pinned reviewer identifies a separate provider with its own privacy policy and workspace
+credentials. Choosing an auxiliary model leaves the primary response provider unchanged.
+
+Configuration exports include these settings without API keys or MCP authentication tokens. Imports
+preserve model and checker references only when they are available to the receiving workspace.
+Register a local equivalent or clear unavailable selections before importing. Server configuration
+reset restores Off, reviewer inheritance, no Decision model, the default prompt, and no checker.
+
 ## Export Your Data
 
 Everything exportable is sent to your DMs as a JSON file:

@@ -690,3 +690,24 @@ execution and exposure gate for the structured user-info tool.
 - Quota cleanup helpers exist for old image/text/video quota rows (`cleanup_old_image_quotas()`, `cleanup_old_text_quotas()`, `cleanup_old_video_quotas()`).
 - RAG tables are intentionally separate so local development can run without pgvector unless enabled.
 - `bun run db:lifecycle` creates a disposable database on the configured local PostgreSQL server, validates fresh schema/seed initialization twice, smoke-tests backup/restore and DB maintenance scripts, runs `nuke-db` against only that disposable DB, and verifies re-initialization afterward.
+
+## Response Drafting workspace settings
+
+`server_capabilities_configs.response_drafting_enabled` defaults to false. Four nullable fields in
+`server_chat_configs` store the reviewer LLM ID, Decision model ID, reviewer prompt override, and
+rule-checker binding. A NULL reviewer inherits the actual response model. NULL Decisions means
+always detailed review; NULL prompt resolves the canonical English locale value; NULL checker
+means no rule checks. Both assembled persona config SELECTs carry every field.
+
+The model columns reference `llms` and `decision_models` with `ON DELETE SET NULL`. Removing an owned
+provider or scoped registration clears only that workspace's dependent references in its deletion
+transaction. Model seeding clears deprecated selections. Successful writes invalidate affected
+workspace snapshots. A checker binding records either a workspace registration ID or an enabled
+global service name plus the exact `check_slop` tool name. Removing or disabling the service leaves
+the saved binding unavailable until it is cleared.
+
+Fresh installs and existing databases receive the columns through the idempotent main schema.
+Workspace exports carry the saved settings without credentials; import validates model and checker
+references against the receiving workspace before writing any section. An unavailable reference
+rejects the import with an actionable localized error. Server configuration reset restores all five
+settings to their database defaults and preserves provider registrations.

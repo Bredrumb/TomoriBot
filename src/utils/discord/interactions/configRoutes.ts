@@ -1,3 +1,10 @@
+import { handleDraftModalOpen, handleDraftRoutes } from "@/utils/discord/interactions/responseDraftingRoutes";
+import {
+  loadResponseDraftingView,
+  loadDraftingModelGroups,
+  loadDraftCheckerChoices,
+  responseDraftingOperations,
+} from "@/utils/discord/interactions/responseDraftingOperations";
 import {
   AttachmentBuilder,
   MessageFlags,
@@ -453,6 +460,10 @@ export async function loadConfigPersonaMemoryView(
 }
 
 const defaultDependencies: ConfigRouteDependencies = {
+  loadResponseDraftingView,
+  loadDraftModels: loadDraftingModelGroups,
+  loadDraftCheckers: loadDraftCheckerChoices,
+  draftingOperations: responseDraftingOperations,
   async resolveScope(interaction, forceRefresh = false) {
     const guildId = interaction.guildId ?? null;
     // Every absorbed command keys its workspace this way, so the panel must not invent a different
@@ -2862,6 +2873,8 @@ export function createConfigInteractionRoute(overrides: Partial<ConfigRouteDepen
         (interaction as { isChannelSelectMenu: () => boolean }).isChannelSelectMenu();
 
       const expectsStringSelect =
+        route.action === "draft-provider" ||
+        route.action === "draft-checker-select" ||
         route.action === "page" ||
         route.action === "persona-page-select" ||
         route.action === "persona-select" ||
@@ -2882,6 +2895,8 @@ export function createConfigInteractionRoute(overrides: Partial<ConfigRouteDepen
       const expectsPersonaVoiceSelect = route.action === "voice-select";
       const expectsChannelSelect = route.action === "channels-overrides-select";
       const expectsModal =
+        route.action === "draft-prompt-submit" ||
+        route.action === "draft-model-submit" ||
         route.action === "avatar-submit" ||
         route.action === "rename-submit" ||
         route.action === "naming-submit" ||
@@ -2970,6 +2985,8 @@ export function createConfigInteractionRoute(overrides: Partial<ConfigRouteDepen
         await handleTextOverrideModelModalOpen(interaction, route, dependencies, actor);
         return;
       }
+
+      if (await handleDraftModalOpen(interaction, route, dependencies, actor)) return;
 
       if (CONFIG_MODEL_MODAL_OPEN_ACTIONS.has(route.action)) {
         // A clearable slot's None entry rides the same select as its provider entries, and clearing
@@ -3078,6 +3095,8 @@ export function createConfigInteractionRoute(overrides: Partial<ConfigRouteDepen
       ) {
         return;
       }
+
+      if (await handleDraftRoutes({ interaction, route, scope, dependencies, selectedValue: submittedValue })) return;
 
       if (
         await handleConfigModelRoutes({
