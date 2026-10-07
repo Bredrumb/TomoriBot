@@ -43,15 +43,19 @@ privacy policies. Never share sensitive personal information with any AI.
 ### Response Drafting selections
 
 `/config` > `Plugins` > `Response Drafting` stores reviewer, Decision model, optional rule checker,
-and prompt choices for the workspace. This development build reviews response text when On.
-Tool approval, optional rule evidence, and Decision skipping remain unfinished, and the page keeps
-its development notice. Off sends ordinary streamed responses without review requests.
+and prompt choices for the workspace. When On, replies and actual tool requests are reviewed before
+they are sent or executed. Optional rule checks and Decision skipping are unfinished in this
+development build. Off keeps ordinary replies and tools without review requests.
 
 The selected reviewer receives the pending response and context already admitted to its author:
 persona instructions, representative dialogues, trigger and reply target, relevant conversation,
-visible participant relationships, memories, documents, and actual tool outcomes. Review adds no
+visible participant relationships, memories, documents, and actual tool outcomes. For a tool
+request, the reviewer also receives its exact target and arguments, including any message text,
+and available tool definitions. Review adds no
 private profile lookup. Credentials and authentication arguments are redacted. Required evidence
-must fit; incomplete media coverage or missing model limits makes review unavailable.
+must fit; incomplete media coverage, hidden tool arguments or missing model limits makes review
+unavailable. An unavailable review keeps ordinary application checks; an earlier rejected action
+stays blocked.
 
 Inheritance uses the model and credentials actually answering, including personal routing, key
 rotation, overrides, and fallback. A pinned reviewer uses its own workspace registration and saved

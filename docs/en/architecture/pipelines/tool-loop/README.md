@@ -185,4 +185,8 @@ A tool-only turn with no prose does not invent a response candidate.
 Cancellation clears held presentation and uses the existing queued stop/follow-up handling.
 `buildResult` includes only accepted dialogue and the shared actual-usage ledger. Presentation
 results carry no second usage copy, so the accounting owner records each request once.
-Tool approval is still unfinished; this checkpoint reviews response text only.
+The persisted setting enables both response-text review and the actual-request tool checkpoint.
+Tool review allows eight detailed requests and two correction attempts per logical persona turn,
+separate from the two response reviews and one response revision. Each rejected normalized tool
+name gets at most one changed correction. These counters and rejection identities survive author
+fallback. See [tool execution](02-execute-tool-call.md#actual-request-review) for dispatch outcomes.

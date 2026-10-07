@@ -1101,8 +1101,8 @@ prompt preview. `Set Prompt` opens the complete instructions in a prefilled para
 4,000-character limit. `Use Default` clears the custom prompt. Custom instructions retain the saved
 Decision model and mark skipping inactive. Checker bindings retain their identity after disablement
 or removal and display Unavailable; selecting None clears them. The configuration page stores these
-settings. This development build executes response-text review. Tool approval, optional rule
-evidence, and Decision skipping remain unfinished, so the page keeps its development notice. See
+settings. This development build reviews response text and actual tool requests before execution. Optional
+rule evidence and Decision skipping remain unfinished, so the page keeps its development notice. See
 [the generation lifecycle](../pipelines/chat/06-per-turn/03-run-generation-turn.md#response-text-review).
 
 `/config` > Models > Switch Models exposes eight capability slots. The six ordinary model-routing

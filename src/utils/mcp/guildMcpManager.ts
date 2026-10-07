@@ -231,6 +231,7 @@ class GuildMcpManager {
         };
       }
 
+      if (context?.isExecutionCancelled?.()) return { success: false };
       conn.lastUsedAt = Date.now();
 
       if (context?.channel && context.locale) {
@@ -264,6 +265,7 @@ class GuildMcpManager {
       log.info(`[GuildMcpManager] Executing guild MCP function: ${functionName} (server: ${conn.name})`);
 
       const callableTool = conn.callableTool as CallableTool;
+      if (context?.isExecutionCancelled?.()) return { success: false };
       const mcpResult = await Promise.race([
         callableTool.callTool([{ name: functionName, args }]),
         new Promise<never>((_, reject) =>

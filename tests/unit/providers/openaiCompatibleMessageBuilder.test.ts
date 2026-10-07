@@ -153,11 +153,14 @@ describe("buildOpenAICompatibleMessages — assistant media relocation (golden)"
     ]);
   });
 
-  it("serializes a text-only tool result once without a duplicate user turn", async () => {
+  it.each([
+    "completed",
+    "review_rejected",
+  ])("pairs a %s tool result once without a duplicate user turn", async (status) => {
     const functionResponse = {
       functionResponse: {
         name: "fetch_url",
-        response: { result: { summary: "Fetched page content" } },
+        response: { result: { status } },
       },
     };
     const messages = await buildOpenAICompatibleMessages({
@@ -175,6 +178,9 @@ describe("buildOpenAICompatibleMessages — assistant media relocation (golden)"
 
     expect(messages.map((message) => message.role)).toEqual(["assistant", "tool"]);
     expect(messages[1]?.content).toBe(JSON.stringify(functionResponse));
+    const calls = messages[0]?.tool_calls;
+    if (!Array.isArray(calls)) throw new Error("Expected paired tool calls");
+    expect(messages[1]?.tool_call_id).toBe((calls[0] as Record<string, unknown>)?.id);
   });
 
   it("inlines tool-returned images and corrects a misleading MIME label", async () => {

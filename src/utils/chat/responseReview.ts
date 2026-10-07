@@ -21,6 +21,8 @@ import { redactToolParametersForStorage } from "@/utils/tools/toolParameterRedac
 
 export const MAX_RESPONSE_REVIEWS = 2;
 export const MAX_RESPONSE_REVISIONS = 1;
+export const MAX_TOOL_REVIEWS = 8;
+export const MAX_TOOL_CORRECTIONS = 2;
 const REVIEW_OUTPUT_TOKENS = 1024;
 const REVIEW_TIMEOUT_MS = 120000;
 const MAX_REVIEW_INPUT_BYTES = 96000;
@@ -52,6 +54,11 @@ export interface ResponseReviewState {
   prompt: string;
   responseReviews: number;
   revisions: number;
+  toolReviews: number;
+  toolCorrections: number;
+  toolRejections: Map<string, Extract<DraftReviewResult, { status: "revise" }>>;
+  rejectedChains: Map<string, { retried: boolean; verdict: Extract<DraftReviewResult, { status: "revise" }> }>;
+  successfulTools: Map<string, ToolHistoryEntry>;
   unavailable: boolean;
   feedback?: Extract<DraftReviewResult, { status: "revise" }>;
   revisionDraft?: string;
@@ -75,6 +82,11 @@ export function createResponseReviewState(context: ChatTurnContext): ResponseRev
       localizer(context.locale, "commands.config.drafting.default_prompt"),
     responseReviews: 0,
     revisions: 0,
+    toolReviews: 0,
+    toolCorrections: 0,
+    toolRejections: new Map(),
+    rejectedChains: new Map(),
+    successfulTools: new Map(),
     unavailable: false,
     functionHistory: [],
     pending: [],
@@ -105,18 +117,43 @@ function projectItem(item: StructuredContextItem) {
   };
 }
 
+export interface ProposedToolRequest {
+  name: string;
+  args: Record<string, unknown>;
+}
+
 /** Uses admitted evidence only. Required prose is complete; optional dialogue carries coverage. */
 export function buildReviewerPacket(
   context: ChatTurnContext,
   candidate: string,
   inputBytes: number,
   tools: ProviderConfig["tools"] = [],
+  proposedCall?: ProposedToolRequest,
 ) {
   const state = context.responseReview;
   if (!state) return null;
   if (
     sanitizeLogPayload(candidate, 0, false) !== candidate ||
     state.functionHistory.some((entry) => entry.imageMetadata)
+  )
+    return null;
+  if (
+    proposedCall &&
+    JSON.stringify(
+      sanitizeLogPayload(redactToolParametersForStorage(proposedCall.name, proposedCall.args), 0, false),
+    ) !== JSON.stringify(proposedCall.args)
+  )
+    return null;
+  if (
+    proposedCall &&
+    !tools.some(
+      (tool) =>
+        tool.name === proposedCall.name ||
+        (tool.function as Record<string, unknown> | undefined)?.name === proposedCall.name ||
+        (tool.functionDeclarations as Array<Record<string, unknown>> | undefined)?.some(
+          (definition) => definition.name === proposedCall.name,
+        ),
+    )
   )
     return null;
   const items = context.contextItems.filter((item) => !item.metadataTag || !OMITTED_TAGS.has(item.metadataTag));
@@ -141,7 +178,10 @@ export function buildReviewerPacket(
       item.metadataTag !== ContextItemTag.DIALOGUE_HISTORY && item.metadataTag !== ContextItemTag.DIALOGUE_SAMPLE,
   );
   const packet = {
-    kind: "response_text" as const,
+    kind: proposedCall ? "tool_call" : "response_text",
+    proposedCall: proposedCall
+      ? { status: "not_executed", name: proposedCall.name, arguments: proposedCall.args }
+      : undefined,
     personaName: context.currentPersona.persona_nickname,
     candidate: { status: "pending", text: candidate },
     trigger: sanitizeLogPayload(projectItem(trigger), 0, false),
@@ -162,7 +202,11 @@ export function buildReviewerPacket(
       outcome: sanitizeLogPayload(entry.functionResponse, 0, false),
       status: "actual_outcome",
     })),
-    revision: { count: state.revisions, findings: state.feedback?.findings ?? [] },
+    revision: {
+      count: state.revisions,
+      toolCorrections: state.toolCorrections,
+      findings: state.feedback?.findings ?? [],
+    },
     coverage: {
       historyIncluded: Math.min(2, history.length),
       historyTotal: history.length,
@@ -244,15 +288,17 @@ export function responseReviewCancelled(context: ChatTurnContext): boolean {
   );
 }
 
-export async function reviewResponseCandidate(
+async function reviewCandidate(
   context: ChatTurnContext,
   author: LLMProvider,
   config: ProviderConfig,
+  proposedCall?: ProposedToolRequest,
 ): Promise<DraftReviewResult | { status: "cancelled" }> {
   const state = context.responseReview;
   if (!state) return { status: "unavailable" };
   if (responseReviewCancelled(context)) return { status: "cancelled" };
   if (state.unavailable) return { status: "unavailable" };
+  const kind = proposedCall ? "tool_call" : "response_text";
   const started = Date.now();
   const correlation = randomUUID();
   let modelId: number | undefined;
@@ -262,11 +308,14 @@ export async function reviewResponseCandidate(
     log.info(
       `Response review ${JSON.stringify({
         correlation,
-        candidateKind: "response_text",
+        candidateKind: kind,
         enabled: true,
         authorModel: context.tomoriState.llm.llm_codename,
         credentialSource: state.reviewerId === null ? context.textCredentialSource : "server",
-        maxReviews: MAX_RESPONSE_REVIEWS,
+        maxReviews: proposedCall ? MAX_TOOL_REVIEWS : MAX_RESPONSE_REVIEWS,
+        maxToolCorrections: MAX_TOOL_CORRECTIONS,
+        toolReviews: state.toolReviews,
+        toolCorrections: state.toolCorrections,
         maxRevisions: MAX_RESPONSE_REVISIONS,
         rubric: RUBRIC_VERSION,
         outcome,
@@ -290,7 +339,7 @@ export async function reviewResponseCandidate(
         errorType: "ResponseReviewError",
         metadata: {
           correlation,
-          operation: "response_review",
+          operation: kind,
           category,
           modelId,
           model,
@@ -342,23 +391,38 @@ export async function reviewResponseCandidate(
     if (timeout.aborted) return unavailable("timeout", true);
     const window = target?.numCtx ?? resolved.state.llm.context_window;
     const outputTokens = Math.min(REVIEW_OUTPUT_TOKENS, resolved.state.llm.max_output_tokens ?? REVIEW_OUTPUT_TOKENS);
-    const systemPrompt = `${REVIEW_PROTOCOL}\n\nEditable creative rubric:\n${state.prompt}\n\n${REVIEW_PROTOCOL}`;
+    const toolTask = proposedCall
+      ? "\nEvaluate this exact normalized tool name, full arguments and target, including user-visible argument prose and pending narration. Compare available definitions/alternatives and completed actions. Identify a wrong target, invented argument, redundant completed action or distracting choice with a concrete correction grounded in the admitted task and persona. Revise rejects execution; never provide replacement arguments for automatic execution."
+      : "";
+    const systemPrompt = `${REVIEW_PROTOCOL}${toolTask}\n\nEditable creative rubric:\n${state.prompt}\n\n${REVIEW_PROTOCOL}${toolTask}`;
     // UTF-8 bytes conservatively bound unknown tokenizer ratios. Upgrade when real packet sizes need a tokenizer.
     const inputBytes =
       Math.min(MAX_REVIEW_INPUT_BYTES, window ?? 0) - outputTokens - Buffer.byteLength(systemPrompt, "utf8") - 1024;
     const candidate = state.pending.map((part) => part.text).join("\n");
-    const packet = buildReviewerPacket(context, candidate, inputBytes, config.tools);
+    const tools = proposedCall
+      ? await runUnderWatchdog(context.channel.id, () =>
+          wait(author.getTools(context.tomoriState, context.streamingContext)),
+        )
+      : config.tools;
+    if (cancelled()) return { status: "cancelled" };
+    if (timeout.aborted) return unavailable("timeout", true);
+    const packet = buildReviewerPacket(context, candidate, inputBytes, tools ?? [], proposedCall);
     if (!packet) return unavailable("evidence_coverage");
     const userPrompt = JSON.stringify(packet);
     const identity = createHash("sha256")
       .update(JSON.stringify([modelId, provider, model, userPrompt, systemPrompt]))
       .digest("hex");
     if (state.verdict?.identity === identity) return state.verdict.result;
-    if (state.responseReviews >= MAX_RESPONSE_REVIEWS) {
+    if (proposedCall && state.toolReviews >= MAX_TOOL_REVIEWS) {
+      trace("exhausted");
+      return unavailable("tool_review_budget");
+    }
+    if (!proposedCall && state.responseReviews >= MAX_RESPONSE_REVIEWS) {
       trace("exhausted");
       return { status: "pass" };
     }
-    state.responseReviews++;
+    if (proposedCall) state.toolReviews++;
+    else state.responseReviews++;
     trace("start", {
       inputBytes: Buffer.byteLength(userPrompt, "utf8"),
       outputTokens,
@@ -374,7 +438,7 @@ export async function reviewResponseCandidate(
         userPrompt,
         temperature: 0.3,
         maxOutputTokens: outputTokens,
-        schemaName: "response_review",
+        schemaName: proposedCall ? "tool_review" : "response_review",
         privateOutput: true,
         abortSignal: signal,
         onUsage: (reported) => {
@@ -413,6 +477,70 @@ export async function reviewResponseCandidate(
   } finally {
     unobserve();
   }
+}
+
+export function reviewResponseCandidate(context: ChatTurnContext, author: LLMProvider, config: ProviderConfig) {
+  return reviewCandidate(context, author, config);
+}
+
+/** Object key order and provider call IDs cannot make an identical action new. */
+export function toolRequestIdentity(request: ProposedToolRequest): string {
+  const canonical = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === "object")
+      return Object.fromEntries(
+        Object.entries(value)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([key, entry]) => [key, canonical(entry)]),
+      );
+    return value;
+  };
+  return createHash("sha256")
+    .update(JSON.stringify([request.name, canonical(request.args)]))
+    .digest("hex");
+}
+
+export async function reviewToolCandidate(
+  context: ChatTurnContext,
+  author: LLMProvider,
+  config: ProviderConfig,
+  request: ProposedToolRequest,
+) {
+  const state = context.responseReview;
+  if (!state) return { status: "unavailable" } as const;
+  if (responseReviewCancelled(context)) return { status: "cancelled" } as const;
+  const identity = toolRequestIdentity(request);
+  const previous = state.toolRejections.get(identity);
+  if (previous) return previous;
+  // A rejected normalized name owns one correction chain. A passed correction closes it;
+  // a second rejection blocks further changed arguments for this name during the turn.
+  const chain = state.rejectedChains.get(request.name);
+  if (chain) {
+    if (
+      chain.retried ||
+      state.toolCorrections >= MAX_TOOL_CORRECTIONS ||
+      state.unavailable ||
+      state.toolReviews >= MAX_TOOL_REVIEWS
+    ) {
+      state.toolRejections.set(identity, chain.verdict);
+      log.info(
+        `Tool correction exhausted ${JSON.stringify({ toolReviews: state.toolReviews, toolCorrections: state.toolCorrections })}`,
+      );
+      return chain.verdict;
+    }
+    chain.retried = true;
+    state.toolCorrections++;
+  }
+  const verdict = await reviewCandidate(context, author, config, request);
+  if (verdict.status === "revise") {
+    state.toolRejections.set(identity, verdict);
+    state.rejectedChains.set(request.name, { retried: chain?.retried ?? false, verdict });
+  } else if (chain && verdict.status === "unavailable") {
+    // Unavailable cannot approve a correction to a rejected action.
+    state.toolRejections.set(identity, chain.verdict);
+    return chain.verdict;
+  } else if (verdict.status === "pass") state.rejectedChains.delete(request.name);
+  return verdict;
 }
 
 export function responseRevisionInstruction(state: ResponseReviewState): StructuredContextItem | undefined {

@@ -317,7 +317,8 @@ Plus `MAX_KEY_ATTEMPTS` from `keyRotation.ts`.
 Drafting is On. Ordinary persona text uses `holdResponseText`; text-suppressed tool-only work and
 user impersonation retain their existing paths. Off makes no review request and keeps streaming.
 The state survives model fallback and key rotation: review/revision counters, correction feedback,
-successful tool history, verdict identity, and actual usage remain turn-local. Each failed author
+successful tool history, tool-review and correction counters, rejected request identities, verdict
+identity, and actual usage remain turn-local. Each failed author
 attempt discards its pending presentation without discarding successful tool results.
 
 `responseReview.ts` projects only admitted `contextItems` and actual function history into a JSON
@@ -351,3 +352,9 @@ Reviewer resolution and execution use the channel watchdog. `/kill`, follow-up i
 abort cancels review and discards held prose. INFO records start/outcome, identities, budgets,
 coverage, timing, and reported usage. Each operational failure emits one normalized ERROR; expected
 refusals and cancellation remain INFO outcomes. Logs omit private packet and feedback content.
+
+Actual author tool requests use the [pre-execution checkpoint](../../tool-loop/02-execute-tool-call.md#actual-request-review)
+before any effect. The response allowance remains separate: eight tool reviews and two changed
+corrections cannot consume the two final-response review calls. Unavailability at either checkpoint
+ends review for the same turn, while earlier rejected actions remain blocked. The persisted setting
+controls both checkpoints; optional checker evidence and Decision routing are not connected yet.

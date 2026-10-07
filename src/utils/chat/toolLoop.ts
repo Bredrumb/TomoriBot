@@ -1,6 +1,10 @@
 import {
   MAX_RESPONSE_REVISIONS,
+  MAX_TOOL_REVIEWS,
+  MAX_TOOL_CORRECTIONS,
   reviewResponseCandidate,
+  reviewToolCandidate,
+  toolRequestIdentity,
   responseReviewCancelled,
   responseRevisionInstruction,
 } from "@/utils/chat/responseReview";
@@ -298,7 +302,9 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         recordChatDiagnostic({
           kind: "tool_outcome",
           outcome: toolOutcome.kind,
-          ...(toolOutcome.kind === "history" ? { success: toolOutcome.success } : {}),
+          ...(toolOutcome.kind === "history"
+            ? { success: toolOutcome.success, reviewStatus: toolOutcome.reviewStatus }
+            : {}),
         });
         if (toolOutcome.kind === "restart") {
           consecutiveToolErrors = 0;
@@ -306,6 +312,8 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           continue;
         }
         if (toolOutcome.kind === "abort") {
+          if (review) review.pending = [];
+          if (toolOutcome.status === "follow_up_interrupt") incrementChannelFollowUpCount(params.context.channel.id);
           if (toolOutcome.status === "stopped_by_user") {
             // A /kill that exits here was never consumed by the stream's own stop check, and an
             // unconsumed request aborts the channel's next turn at its pre-stream check.
@@ -333,7 +341,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         if (toolOutcome.success) {
           consecutiveToolErrors = 0;
           naiConsecutiveToolFailures = 0;
-        } else {
+        } else if (toolOutcome.reviewStatus !== "rejected") {
           consecutiveToolErrors += 1;
           if (consecutiveToolErrors >= MAX_CONSECUTIVE_TOOL_ERRORS) {
             await emitToolErrorLoop(params.context);
@@ -368,7 +376,12 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
 
         const hasPreToolText = (streamResult.accumulatedText ?? "").trim().length > 0;
         const providerName = params.provider.getInfo().name;
-        if (!toolOutcome.success && hasPreToolText && providerIsApiFamily(providerName, "novelai")) {
+        if (
+          !toolOutcome.success &&
+          toolOutcome.reviewStatus !== "rejected" &&
+          hasPreToolText &&
+          providerIsApiFamily(providerName, "novelai")
+        ) {
           naiConsecutiveToolFailures += 1;
           if (naiConsecutiveToolFailures >= NAI_TOOL_FAILURE_RETRY_THRESHOLD) {
             log.warn(
@@ -672,6 +685,7 @@ async function executeToolCall(
       kind: "history";
       functionName: string;
       success: boolean;
+      reviewStatus?: "rejected" | "reused";
       endTurn: boolean;
       responseDelivered: boolean;
       historyEntry: ToolHistoryEntry;
@@ -682,12 +696,23 @@ async function executeToolCall(
     return { kind: "abort", status: "error" };
   }
 
-  const functionCall = streamResult.data as ToolHistoryEntry["functionCall"];
-  const functionName = functionCall.name?.trim() ?? "";
+  const rawCall = streamResult.data as ToolHistoryEntry["functionCall"];
+  const functionCall = params.context.responseReview ? structuredClone(rawCall) : rawCall;
+  let functionName = functionCall.name?.trim() ?? "";
   if (!functionName) {
     return { kind: "abort", status: "error" };
   }
 
+  const cancelReviewedCall = () => {
+    if (params.context.responseReview) params.context.responseReview.pending = [];
+    return {
+      kind: "abort" as const,
+      status: StreamOrchestrator.isFollowUpRequest(params.context.channel.id)
+        ? ("follow_up_interrupt" as const)
+        : ("stopped_by_user" as const),
+    };
+  };
+  if (params.context.responseReview && responseReviewCancelled(params.context)) return cancelReviewedCall();
   if (shouldAbortToolCallForStopRequest(params.context.channel.id)) {
     return { kind: "abort", status: "stopped_by_user" };
   }
@@ -715,6 +740,7 @@ async function executeToolCall(
     messageIdMap: params.context.messageIdMap,
     showKillHint: iteration >= SOFT_WARN_ITERATION_THRESHOLD,
     abortSignal: turnAbortSignal,
+    isExecutionCancelled: params.context.responseReview ? () => responseReviewCancelled(params.context) : undefined,
   };
 
   // Deliberate-tool-mode allowlist enforcement. When mode is active and
@@ -778,6 +804,85 @@ async function executeToolCall(
     };
   }
 
+  let executionArgs = functionCall.args ?? {};
+  let requestIdentity: string | undefined;
+  const review = params.context.responseReview;
+  if (review && !isBlockedByDeliberateAllowlist) {
+    const prepared = await runUnderWatchdog(params.context.channel.id, () =>
+      ToolRegistry.prepareToolRequest(functionName, executionArgs, toolContext),
+    );
+    if (responseReviewCancelled(params.context)) return cancelReviewedCall();
+    functionName = prepared.name;
+    executionArgs = prepared.args;
+    toolContext.preparedToolRequest = prepared;
+    requestIdentity = toolRequestIdentity(prepared);
+    const completed = review.successfulTools.get(requestIdentity);
+    if (completed)
+      return {
+        kind: "history",
+        functionName,
+        success: true,
+        reviewStatus: "reused",
+        endTurn: false,
+        responseDelivered: false,
+        historyEntry: {
+          ...completed,
+          functionCall,
+          functionResponse: {
+            functionResponse: {
+              ...(completed.functionResponse.functionResponse as Record<string, unknown>),
+              name: functionCall.name,
+            },
+          },
+          preToolCallTextParts: buildPreToolCallTextParts(streamResult),
+        },
+      };
+    const tool = ToolRegistry.getTool(functionName);
+    const available =
+      !tool ||
+      ToolRegistry.getAvailableTools(toolContext.provider, toolContext).some((entry) => entry.name === functionName);
+    if (available) {
+      const verdict = await reviewToolCandidate(params.context, params.provider, params.providerConfig, prepared);
+      if (verdict.status === "cancelled" || responseReviewCancelled(params.context)) return cancelReviewedCall();
+      if (verdict.status === "revise") {
+        const correctionAllowed =
+          !review.unavailable &&
+          review.toolReviews < MAX_TOOL_REVIEWS &&
+          review.toolCorrections < MAX_TOOL_CORRECTIONS &&
+          !review.rejectedChains.get(functionName)?.retried;
+        return {
+          kind: "history",
+          functionName,
+          success: false,
+          reviewStatus: "rejected",
+          endTurn: false,
+          responseDelivered: false,
+          historyEntry: {
+            functionCall,
+            functionResponse: {
+              functionResponse: {
+                name: functionCall.name,
+                response: {
+                  result: {
+                    status: "review_rejected",
+                    findings: verdict.findings,
+                    actionExecuted: false,
+                    correctionAllowed,
+                    reason: correctionAllowed
+                      ? "The action has not happened. Correct the proposal once or continue using available results. Identical rejected requests will not execute."
+                      : "The action has not happened and no correction remains for this chain. Finish using available results; do not re-propose this rejected action.",
+                  },
+                },
+              },
+            },
+            preToolCallTextParts: buildPreToolCallTextParts(streamResult),
+          },
+        };
+      }
+    }
+  }
+  if (review && responseReviewCancelled(params.context)) return cancelReviewedCall();
+
   const startedAt = Date.now();
 
   const killPromise: Promise<ToolResult> | null = turnAbortSignal
@@ -807,7 +912,7 @@ async function executeToolCall(
     : await runUnderWatchdog(params.context.channel.id, () => {
         setChannelActiveToolName(params.context.channel.id, functionName);
         return Promise.race([
-          ToolRegistry.executeTool(functionName, functionCall.args ?? {}, toolContext),
+          ToolRegistry.executeTool(functionName, executionArgs, toolContext),
           new Promise<ToolResult>((resolve) =>
             setTimeout(
               () =>
@@ -821,6 +926,8 @@ async function executeToolCall(
           ...(killPromise ? [killPromise] : []),
         ]).finally(() => setChannelActiveToolName(params.context.channel.id, undefined));
       });
+
+  if (review && responseReviewCancelled(params.context)) return cancelReviewedCall();
 
   // If /kill fired, exit the turn immediately; don't feed the failed result back to the model.
   if (shouldAbortToolCallForStopRequest(params.context.channel.id)) {
@@ -911,12 +1018,24 @@ async function executeToolCall(
     );
   }
 
+  if (review && requestIdentity && toolResult.success)
+    review.successfulTools.set(requestIdentity, {
+      functionCall,
+      functionResponse: {
+        functionResponse: { name: functionCall.name, response: { result: toolResult.data ?? { status: "completed" } } },
+      },
+      imageMetadata: toolResult.imageMetadata,
+    });
+
   if (toolResult.success && handleEnhancedContextRestart(params, toolResult.data)) {
     if (params.context.responseReview)
       params.context.responseReview.functionHistory.push({
         functionCall,
         functionResponse: {
-          functionResponse: { name: functionName, response: { result: toolResult.data ?? { status: "completed" } } },
+          functionResponse: {
+            name: functionCall.name,
+            response: { result: toolResult.data ?? { status: "completed" } },
+          },
         },
         preToolCallTextParts: buildPreToolCallTextParts(streamResult),
       });
@@ -954,7 +1073,7 @@ async function executeToolCall(
       functionCall,
       functionResponse: {
         functionResponse: {
-          name: functionName,
+          name: functionCall.name,
           response: { result: functionResponse },
         },
       },

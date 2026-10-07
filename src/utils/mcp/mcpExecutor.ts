@@ -203,6 +203,70 @@ class MCPHandlerRegistry {
   }
 }
 
+function cancelledMCPResult(functionName: string): TypedMCPToolResult {
+  return {
+    success: false,
+    data: { source: "mcp", functionName, serverName: "unknown", rawResult: {}, executionTime: 0, status: "failed" },
+  };
+}
+
+export function normalizeMCPArguments(functionName: string, args: Record<string, unknown>): Record<string, unknown> {
+  const modifiedArgs = { ...args };
+
+  switch (functionName) {
+    case "brave_web_search":
+      modifiedArgs.count = 20; // Always 20 for optimal performance
+      modifiedArgs.summary = true; // Always enabled for better results
+      modifiedArgs.safesearch = "off"; // Always off (business requirement)
+      break;
+
+    case "brave_local_search":
+      modifiedArgs.safesearch = "off"; // Always off (business requirement)
+      break;
+
+    case "brave_image_search":
+      // Allow AI to override count, but limit to max 10 and default to 3
+      modifiedArgs.count = Math.min(Number(modifiedArgs.count) || 3, 10);
+      modifiedArgs.safesearch = "off"; // Always off (business requirement)
+      break;
+
+    case "brave_video_search":
+      // Allow AI to override count, but limit to max 10 and default to 5
+      modifiedArgs.count = Math.min(Number(modifiedArgs.count) || 5, 10);
+      modifiedArgs.safesearch = "off"; // Always off (business requirement)
+      break;
+
+    case "brave_news_search":
+      modifiedArgs.safesearch = "off"; // Always off (business requirement)
+      break;
+
+    case "web-search":
+      modifiedArgs.numResults = Math.min(Number(modifiedArgs.numResults) || 12, 20); // Default 12, max 20
+      modifiedArgs.page = 1; // Always start from first page
+      break;
+
+    case "fetch-url": {
+      const dynamicCharLimit = memoryGuard.getFetchCharLimit();
+
+      modifiedArgs.maxLength = Math.min(Number(modifiedArgs.maxLength) || dynamicCharLimit, dynamicCharLimit);
+
+      const memoryStatus = memoryGuard.getStatus();
+      if (memoryStatus !== "safe") {
+        log.warn(`Fetch character limit reduced to ${dynamicCharLimit} due to ${memoryStatus} memory status`);
+      }
+      modifiedArgs.extractMainContent = modifiedArgs.extractMainContent !== false; // Default true
+      modifiedArgs.includeLinks = modifiedArgs.includeLinks !== false; // Default true
+      modifiedArgs.includeImages = modifiedArgs.includeImages !== false; // Default true
+      break;
+    }
+
+    default:
+      break;
+  }
+
+  return modifiedArgs;
+}
+
 /**
  * MCP Executor Class
  * Provider-agnostic MCP function execution with proper error handling and result processing
@@ -223,68 +287,6 @@ export class MCPExecutor {
    */
   private constructor() {
     this.handlerRegistry = MCPHandlerRegistry.getInstance();
-  }
-
-  /**
-   * Apply business rules for MCP function parameters
-   * @param args - Original arguments
-   * @returns Modified arguments with business rules applied
-   */
-  private applyBusinessRules(functionName: string, args: Record<string, unknown>): Record<string, unknown> {
-    const modifiedArgs = { ...args };
-
-    switch (functionName) {
-      case "brave_web_search":
-        modifiedArgs.count = 20; // Always 20 for optimal performance
-        modifiedArgs.summary = true; // Always enabled for better results
-        modifiedArgs.safesearch = "off"; // Always off (business requirement)
-        break;
-
-      case "brave_local_search":
-        modifiedArgs.safesearch = "off"; // Always off (business requirement)
-        break;
-
-      case "brave_image_search":
-        // Allow AI to override count, but limit to max 10 and default to 3
-        modifiedArgs.count = Math.min(Number(modifiedArgs.count) || 3, 10);
-        modifiedArgs.safesearch = "off"; // Always off (business requirement)
-        break;
-
-      case "brave_video_search":
-        // Allow AI to override count, but limit to max 10 and default to 5
-        modifiedArgs.count = Math.min(Number(modifiedArgs.count) || 5, 10);
-        modifiedArgs.safesearch = "off"; // Always off (business requirement)
-        break;
-
-      case "brave_news_search":
-        modifiedArgs.safesearch = "off"; // Always off (business requirement)
-        break;
-
-      case "web-search":
-        modifiedArgs.numResults = Math.min(Number(modifiedArgs.numResults) || 12, 20); // Default 12, max 20
-        modifiedArgs.page = 1; // Always start from first page
-        break;
-
-      case "fetch-url": {
-        const dynamicCharLimit = memoryGuard.getFetchCharLimit();
-
-        modifiedArgs.maxLength = Math.min(Number(modifiedArgs.maxLength) || dynamicCharLimit, dynamicCharLimit);
-
-        const memoryStatus = memoryGuard.getStatus();
-        if (memoryStatus !== "safe") {
-          log.warn(`Fetch character limit reduced to ${dynamicCharLimit} due to ${memoryStatus} memory status`);
-        }
-        modifiedArgs.extractMainContent = modifiedArgs.extractMainContent !== false; // Default true
-        modifiedArgs.includeLinks = modifiedArgs.includeLinks !== false; // Default true
-        modifiedArgs.includeImages = modifiedArgs.includeImages !== false; // Default true
-        break;
-      }
-
-      default:
-        break;
-    }
-
-    return modifiedArgs;
   }
 
   /**
@@ -356,7 +358,9 @@ export class MCPExecutor {
             serverName: handler?.serverName || "unknown",
           } as unknown as MCPExecutionContext);
 
-      mcpContext.modifiedArgs = this.applyBusinessRules(functionName, args);
+      mcpContext.modifiedArgs =
+        context?.preparedToolRequest?.args === args ? args : normalizeMCPArguments(functionName, args);
+      if (context?.isExecutionCancelled?.()) return cancelledMCPResult(functionName);
 
       if (functionName === "fetch" && context?.channel && context.locale) {
         const startIndex = Number(mcpContext.modifiedArgs.start_index) || 0;
@@ -384,6 +388,7 @@ export class MCPExecutor {
               }
             }
 
+            if (context?.isExecutionCancelled?.()) return cancelledMCPResult(functionName);
             const mcpResult = await mcpTool.callTool([{ name: functionName, args: mcpContext.modifiedArgs }]);
 
             if (mcpResult && mcpResult.length > 0) {

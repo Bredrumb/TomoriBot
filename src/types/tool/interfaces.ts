@@ -203,6 +203,10 @@ export interface ToolContext {
 
   /** Turn-level AbortSignal. Tools should forward this to their fetch/HTTP calls for true cancellation on /kill. */
   abortSignal?: AbortSignal;
+  /** Review fixes normalization before dispatch; internal calls retain ordinary normalization. */
+  preparedToolRequest?: { name: string; args: Record<string, unknown> };
+  /** Rechecked after asynchronous routing and immediately before invoking a transport. */
+  isExecutionCancelled?: () => boolean;
 }
 
 export interface ToolResult {

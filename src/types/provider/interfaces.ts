@@ -240,7 +240,7 @@ export interface LLMProvider {
    * Get available tools/functions based on Tomori's configuration
    * @param tomoriState - The current Tomori state with configuration
    */
-  getTools(tomoriState: TomoriState): Promise<Array<Record<string, unknown>>>;
+  getTools(tomoriState: TomoriState, streamingContext?: StreamingContext): Promise<Array<Record<string, unknown>>>;
 
   /**
    * Stream LLM response directly to a Discord channel
@@ -302,7 +302,10 @@ export abstract class BaseLLMProvider implements LLMProvider {
   abstract getInfo(): ProviderInfo;
   abstract validateApiKey(apiKey: string): Promise<ApiKeyValidationResult>;
   abstract formatErrorDescription(error: ProviderError, locale: string): string | null;
-  abstract getTools(tomoriState: TomoriState): Promise<Array<Record<string, unknown>>>;
+  abstract getTools(
+    tomoriState: TomoriState,
+    streamingContext?: StreamingContext,
+  ): Promise<Array<Record<string, unknown>>>;
   abstract streamToDiscord(
     channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | AnyThreadChannel,
     client: Client,

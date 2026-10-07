@@ -256,6 +256,51 @@ After this stage runs:
 - Tool execution duration is logged at `INFO` level
   (`"Function call completed: ${name} (${ms}ms)"`).
 
+## Actual request review
+
+With Response Drafting On, the tool loop checks stop state, deliberate-mode admission and argument
+completeness, then calls `ToolRegistry.prepareToolRequest`. This fixes aliases, opaque message
+identities and global MCP argument defaults before review. The detached argument snapshot is the
+request execution receives. Built-in availability and permission checks already exposed by the
+registry run before a paid review; execution retains its own checks.
+
+The shared reviewer owner receives the exact normalized name and arguments, including target and
+user-visible argument text, pending narration, admitted task/persona evidence, current tool
+definitions and alternatives, and actual earlier outcomes. Missing definitions or redaction of
+an effect-bearing argument makes review unavailable. Review never probes the proposed action.
+
+Pass dispatches once through the existing built-in, global MCP, or workspace MCP owner. Revise
+returns paired provider-native history with `review_rejected`, concise findings,
+`actionExecuted: false` and `correctionAllowed`. The action has not happened. The author can correct
+it or finish with available results. Rejection contributes no execution failure, usage statistic,
+or failed-tool thought-log notice. Reviewer/decision requests and internal orchestration never
+enter this path as author tool requests.
+
+Exact rejected identities hash the normalized name and complete arguments with recursively sorted
+object keys. Provider call IDs and JSON key order do not change identity. A rejected normalized name
+owns one changed correction opportunity; another rejection blocks further changed arguments for
+that name for the turn. A passed correction closes that chain, while all exact rejected identities
+remain blocked. Different normalized names are independent chains. At most two changed corrections
+are allowed across the turn, with a separate eight-request tool-review budget. Counters, identities
+and successful outcomes survive author fallback.
+
+An unavailable reviewer ends review for the logical turn. A new independent request after tool
+review exhaustion uses ordinary tool rules. Previously rejected requests and their unavailable or
+exhausted corrections stay rejected. INFO diagnostics identify exhaustion and correction counts.
+A successful identical action returns its recorded outcome without dispatch, including during a
+response revision, so completed effects are never replayed to rebuild a reply.
+
+The normalized provider interface dispatches one actual call at a time. Google/Vertex and
+OpenAI-compatible adapters retain one call from provider batches; Anthropic yields at a tool-block
+boundary. The checkpoint decides each actual dispatched request separately. Each MCP transport
+invocation receives a one-call array; one approval never approves other entries.
+
+In review mode, `/kill`, turn abort and follow-up interruption discard pending prose and prevent
+further dispatch. Checks run after review and asynchronous registry/MCP discovery, and immediately
+before the MCP transport. A transport already invoked keeps its existing cancellation support;
+these guards prevent a later invocation from starting. Off retains ordinary follow-up/tool behavior.
+Tool-only terminal success completes without inventing prose or a final-text review.
+
 ## Extension points
 
 | Surface | Plugin-relevance |
