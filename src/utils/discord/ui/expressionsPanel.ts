@@ -59,6 +59,24 @@ export type ExpressionPanelPreview =
   | { kind: "link"; url: string }
   | { kind: "unavailable" };
 
+// One whole sentence per count combination, because translations inflect the noun and the clause together.
+const NATIVE_SUMMARY_KEYS = {
+  emojis: {
+    one: "emojis_usable_one",
+    oneUninitialized: "emojis_usable_one_uninitialized",
+    many: "emojis_usable",
+    manyOneUninitialized: "emojis_usable_uninitialized_one",
+    manyUninitialized: "emojis_usable_uninitialized",
+  },
+  stickers: {
+    one: "stickers_usable_one",
+    oneUninitialized: "stickers_usable_one_uninitialized",
+    many: "stickers_usable",
+    manyOneUninitialized: "stickers_usable_uninitialized_one",
+    manyUninitialized: "stickers_usable_uninitialized",
+  },
+} as const;
+
 export function resolveExpressionsSelection(
   data: ExpressionsPanelData,
   category: ExpressionCategory,
@@ -138,19 +156,34 @@ export function buildExpressionsPanelPayload(input: {
       })),
       category,
     ),
+    { type: ComponentType.Separator, divider: true, spacing: 1 },
     { type: ComponentType.TextDisplay, content: `## ${t("title")}` },
-    {
+  ];
+  if (category === "customs") {
+    const count = data.customs.length;
+    components.push({
       type: ComponentType.TextDisplay,
       content:
-        category === "customs"
-          ? t("custom_count", { count: data.customs.length })
-          : t("native_count", {
-              usable: data[category].filter((item) => item.usable).length,
-              initialized: data[category].filter((item) => item.initialized).length,
-              total: data[category].length,
-            }),
-    },
-  ];
+        count === 0 ? t("custom_count_none") : count === 1 ? t("custom_count_one") : t("custom_count", { count }),
+    });
+  } else if (data[category].length) {
+    const usable = data[category].filter((item) => item.usable);
+    const pending = usable.filter((item) => !item.initialized).length;
+    const keys = NATIVE_SUMMARY_KEYS[category];
+    const summaryKey =
+      usable.length === 1
+        ? pending
+          ? keys.oneUninitialized
+          : keys.one
+        : pending === 0
+          ? keys.many
+          : pending === 1
+            ? keys.manyOneUninitialized
+            : keys.manyUninitialized;
+    const lines = [t(summaryKey, { count: usable.length, uninitialized: pending })];
+    if (pending) lines.push(t(pending === 1 ? "initialize_hint_one" : "initialize_hint"));
+    components.push({ type: ComponentType.TextDisplay, content: lines.join("\n") });
+  }
   if (category === "customs" || visible.length) {
     components.push({
       type: ComponentType.ActionRow,
@@ -158,7 +191,7 @@ export function buildExpressionsPanelPayload(input: {
         {
           type: ComponentType.StringSelect,
           customId: buildExpressionsRouteId({ ...route, action: "select" }),
-          placeholder: t("select"),
+          placeholder: t(category === "customs" ? "select_custom" : "select"),
           options: [
             ...(category === "customs" ? [{ label: t("add"), value: "add" }] : []),
             ...visible.map((item) => ({
@@ -170,7 +203,11 @@ export function buildExpressionsPanelPayload(input: {
         },
       ],
     });
-  } else components.push({ type: ComponentType.TextDisplay, content: t("empty") });
+  } else
+    components.push({
+      type: ComponentType.TextDisplay,
+      content: t(category === "emojis" ? "empty_emojis" : "empty_stickers"),
+    });
   const pagination = buildPaginationRow({
     locale,
     namespace: EXPRESSIONS_ROUTE_NAMESPACE,
@@ -178,7 +215,8 @@ export function buildExpressionsPanelPayload(input: {
     rangeIndex: page,
     rangeCount: pageCount,
     buildSegments: {
-      page: (next) => buildExpressionsRouteSegments({ ...route, page: next, entityId: "none", fp: "none" }),
+      page: (next) =>
+        buildExpressionsRouteSegments({ ...route, action: "page", page: next, entityId: "none", fp: "none" }),
     },
   });
   if (pagination) components.push(pagination);
@@ -224,7 +262,12 @@ export function buildExpressionsPanelPayload(input: {
           button("edit", category === "customs" ? "edit_custom" : "edit"),
           category === "customs"
             ? button("delete", "delete", false, true)
-            : button("clear", "clear", !selected.description && (!selected.emotion || selected.emotion === "unset")),
+            : button(
+                "clear",
+                "clear",
+                !selected.description && (!selected.emotion || selected.emotion === "unset"),
+                true,
+              ),
         ],
       });
     }
@@ -343,12 +386,12 @@ export function buildExpressionsEditModal(route: ExpressionsPanelRoute, selected
       field(
         "link",
         { type: 4, style: TextInputStyle.Short, required: false, max_length: 2000 },
-        t(selected ? "replacement_help" : "source_help"),
+        t(selected ? "link_replace_help" : "link_help"),
       ),
       field(
         "file",
         { type: 19, required: false, min_values: 0, max_values: 1 },
-        t(selected ? "replacement_help" : "source_help"),
+        t(selected ? "file_replace_help" : "file_help"),
       ),
     );
   return {

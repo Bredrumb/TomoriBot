@@ -34,6 +34,8 @@ import { localizedCopy, localizedProse } from "../../helpers/localeCases";
 
 beforeAll(initializeLocalizer);
 
+const PNG_MEDIA = { mime_type: "image/png", extension: "png", byte_size: 100 } as const;
+
 function harness(overrides: Partial<ExpressionsRouteDependencies> = {}) {
   const actor = createRouteInteraction().user.id;
   const row = createCustomExpression();
@@ -166,6 +168,7 @@ describe("expressions routed mutations", () => {
       delivery_kind: "stored",
       original_link: null,
       storage_reference: newReference,
+      ...PNG_MEDIA,
     });
     const save = mock(async () => {
       throw new ExpressionWriteError("stale");
@@ -174,6 +177,7 @@ describe("expressions routed mutations", () => {
     h.data.customs[0].custom = createCustomExpression({
       delivery_kind: "stored",
       storage_reference: `custom-expressions/1/${id}/00000000-0000-4000-8000-000000000003.png`,
+      ...PNG_MEDIA,
     });
     await h.dispatch();
     expect(h.cleanup.mock.calls.map((call) => call[0])).toEqual([newReference]);
@@ -184,8 +188,12 @@ describe("expressions routed mutations", () => {
     const id = createCustomExpression().custom_expression_id;
     const oldReference = `custom-expressions/1/${id}/00000000-0000-4000-8000-000000000002.png`;
     const newReference = `custom-expressions/1/${id}/00000000-0000-4000-8000-000000000003.png`;
-    const old = createCustomExpression({ delivery_kind: "stored", storage_reference: oldReference });
-    const replacement = createCustomExpression({ delivery_kind: "stored", storage_reference: newReference });
+    const old = createCustomExpression({ delivery_kind: "stored", storage_reference: oldReference, ...PNG_MEDIA });
+    const replacement = createCustomExpression({
+      delivery_kind: "stored",
+      storage_reference: newReference,
+      ...PNG_MEDIA,
+    });
     let committed = false;
     const retired: string[] = [];
     const h = harness({
@@ -261,49 +269,35 @@ function setCustom(h: ReturnType<typeof harness>, row: CustomExpressionRow): voi
 }
 
 function stored(row: CustomExpressionRow): CustomExpressionRow {
+  const extension = row.extension ?? "png";
   return createCustomExpression({
     ...row,
     source_kind: "upload",
     delivery_kind: "stored",
     original_link: null,
-    storage_reference: `custom-expressions/${row.server_id}/${row.custom_expression_id}/00000000-0000-4000-8000-000000000002.${row.extension}`,
+    storage_reference: `custom-expressions/${row.server_id}/${row.custom_expression_id}/00000000-0000-4000-8000-000000000002.${extension}`,
+    mime_type: row.mime_type ?? "image/png",
+    extension,
+    byte_size: row.byte_size ?? 100,
   });
 }
 
 describe("custom expression panel previews", () => {
-  it("uses validated direct images, GIFs and MP4 URLs without downloading them", async () => {
-    for (const [mime_type, extension] of [
-      ["image/png", "png"],
-      ["image/gif", "gif"],
-      ["video/mp4", "mp4"],
-    ] as const) {
+  it("offers a validated link button for every link without downloading it", async () => {
+    for (const url of [
+      "https://tenor.com/view/wave-gif-12345",
+      "https://example.com/share/wave",
+      "https://example.com/wave.gif",
+    ]) {
       const h = harness();
-      const row = createCustomExpression({
-        mime_type,
-        extension,
-        original_link: `https://example.com/wave.${extension}`,
-      });
-      setCustom(h, row);
-      const payload = lastPanel(await h.dispatch({ action: "view" }, {}, "button"));
-      expect(gallery(payload)).toMatchObject({ items: [{ media: { url: row.original_link } }] });
-      expect(payload.files).toEqual([]);
-      expect(payload.attachments).toEqual([]);
-      expect(h.validateUrl).toHaveBeenCalledWith(row.original_link);
-      expect(h.loadMedia).not.toHaveBeenCalled();
-      expect(h.prepare).not.toHaveBeenCalled();
-    }
-  });
-
-  it("offers a localized link button for share pages and other non-direct links", async () => {
-    for (const url of ["https://tenor.com/view/wave-gif-12345", "https://example.com/share/wave"]) {
-      const h = harness();
-      setCustom(h, createCustomExpression({ original_link: url, mime_type: null, extension: null, byte_size: null }));
+      setCustom(h, createCustomExpression({ original_link: url }));
       const payload = lastPanel(await h.dispatch({ action: "view" }, {}, "button"));
       const container = payload.components?.[0] as ContainerComponentData;
       expect(container.components.at(-1)).toMatchObject({
         components: [{ style: 5, url, label: localizedCopy("en-US", "commands.expressions.manage.open_link") }],
       });
       expect(gallery(payload)).toBeUndefined();
+      expect(h.validateUrl).toHaveBeenCalledWith(url);
       expect(h.loadMedia).not.toHaveBeenCalled();
       expect(h.prepare).not.toHaveBeenCalled();
     }
@@ -393,10 +387,10 @@ describe("custom expression panel previews", () => {
     expect((switched.files?.[0] as AttachmentBuilder).name).not.toBe((replaced.files?.[0] as AttachmentBuilder).name);
     expect(h.loadMedia).toHaveBeenCalledTimes(3);
     setCustom(h, createCustomExpression({ ...h.row, revision: 3 }));
-    const direct = lastPanel(await h.dispatch({ action: "view" }, {}, "button", [], options));
-    expect(direct.attachments).toEqual([]);
-    expect(direct.files).toEqual([]);
-    expect(gallery(direct)).toMatchObject({ items: [{ media: { url: h.row.original_link } }] });
+    const linked = lastPanel(await h.dispatch({ action: "view" }, {}, "button", [], options));
+    expect(linked.attachments).toEqual([]);
+    expect(linked.files).toEqual([]);
+    expect(gallery(linked)).toBeUndefined();
     expect(h.loadMedia).toHaveBeenCalledTimes(3);
     const native = lastPanel(
       await h.dispatch({ action: "view", category: "emojis", entityId: "none" }, {}, "button", [], options),

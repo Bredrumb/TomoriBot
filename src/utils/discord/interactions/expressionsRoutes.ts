@@ -198,9 +198,8 @@ async function resolveCustomPreview(
     const url = new URL(row.original_link ?? "");
     if (url.username || url.password || url.toString().length > 2000 || !(await deps.validateUrl(url.toString())).valid)
       throw new ExpressionMediaError("url");
-    const direct = row.mime_type !== null && row.extension !== null && row.byte_size !== null;
-    if (!direct && url.toString().length > DISCORD_BUTTON_URL_MAX) throw new ExpressionMediaError("url");
-    return { preview: { kind: direct ? "gallery" : "link", url: url.toString() }, files: [], attachments: [] };
+    if (url.toString().length > DISCORD_BUTTON_URL_MAX) throw new ExpressionMediaError("url");
+    return { preview: { kind: "link", url: url.toString() }, files: [], attachments: [] };
   }
   const limit = Math.min(EXPRESSION_MEDIA_MAX_BYTES, interaction.attachmentSizeLimit);
   if (!row.byte_size || row.byte_size > limit || !row.storage_reference || !row.extension)
@@ -349,7 +348,7 @@ export function createExpressionsInteractionRoute(
         data = await beginPanelInteraction(interaction, {
           authorize: () => deps.authorize(interaction, true),
           onDenied: () => deny(interaction, route.locale, "general.errors.permission_denied_description"),
-          load: () => deps.load(interaction, route.action === "view" || route.action === "select"),
+          load: () => deps.load(interaction, ["view", "select", "page"].includes(route.action)),
           onMissing: () => deny(interaction, route.locale, "general.errors.tomori_not_setup_description"),
         });
         if (!data) return;
@@ -393,7 +392,8 @@ export function createExpressionsInteractionRoute(
           buildExpressionPersonaModal(modalRoute, choices, add),
         );
       }
-      if (["view", "select", "persona-page"].includes(route.action)) return repaint(interaction, route, data, deps);
+      if (["view", "select", "page", "persona-page"].includes(route.action))
+        return repaint(interaction, route, data, deps);
       if (route.action === "delete") {
         if (!selected?.custom || selected.fp !== route.fp)
           return repaint(interaction, route, data, deps, receipt(route.locale, "error_stale"));

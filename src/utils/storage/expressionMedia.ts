@@ -120,15 +120,8 @@ export async function validateExpressionBytes(
   return { mime_type: mime, extension: format, byte_size: buffer.length };
 }
 
-export function isTenorShareUrl(url: URL): boolean {
-  return (
-    url.protocol === "https:" &&
-    ["tenor.com", "www.tenor.com"].includes(url.hostname) &&
-    /^\/view\/[\w-]+-\d+\/?$/u.test(url.pathname) &&
-    !url.username &&
-    !url.password
-  );
-}
+// Discord attachment links expire, so they are the one kind of link imported into storage.
+const DISCORD_MEDIA_HOSTS = ["cdn.discordapp.com", "media.discordapp.net"];
 
 export async function prepareExpressionMedia(
   serverId: number,
@@ -149,7 +142,8 @@ export async function prepareExpressionMedia(
   } catch {
     throw new ExpressionMediaError("url");
   }
-  if (source && isTenorShareUrl(url)) {
+  // Links are posted verbatim for Discord to unfurl, so the bot never fetches them and web pages are valid.
+  if (source && !DISCORD_MEDIA_HOSTS.includes(url.hostname)) {
     const validation = await validateRemoteUrl(source);
     if (!validation.valid) throw new ExpressionMediaError("url");
     return {
@@ -177,13 +171,16 @@ export async function prepareExpressionMedia(
     files[0]?.content_type ?? downloaded.contentType,
     files[0]?.filename,
   );
-  const importMedia = files.length > 0 || ["cdn.discordapp.com", "media.discordapp.net"].includes(url.hostname);
-  const storageReference = importMedia
-    ? await storeExpressionMedia(serverId, id, downloaded.buffer, media.mime_type, media.extension)
-    : null;
+  const storageReference = await storeExpressionMedia(
+    serverId,
+    id,
+    downloaded.buffer,
+    media.mime_type,
+    media.extension,
+  );
   return {
     source_kind: files.length ? "upload" : "link",
-    delivery_kind: importMedia ? "stored" : "link",
+    delivery_kind: "stored",
     original_link: source ? url.toString() : null,
     storage_reference: storageReference,
     ...media,

@@ -17,11 +17,11 @@ Modal-opening reads have a two-second deadline to leave time for Discord acknowl
 Successful operations produce mutation receipts and invalidate caches after DB commit.
 `/expressions initialize` remains the automatic native classifier.
 
-The Customs category ends with a single-item Media Gallery for images, GIFs, and MP4s.
-Registered direct links use their validated URL after the SSRF gate runs again. Tenor share
-pages and other non-direct links show a localized link button, subject to Discord's 512-character
-button URL limit. The panel never downloads registered links for previews. Native categories
-keep their existing thumbnails.
+The Customs category ends with a single-item Media Gallery for stored images, GIFs, and MP4s.
+Link expressions are saved unfetched, so their media type is unknown: after the SSRF gate runs
+again, they show a localized link button, subject to Discord's 512-character button URL limit.
+The panel never downloads registered links for previews. Native categories keep their existing
+thumbnails.
 
 Stored previews follow the character-reference attachment pattern and the generated-video
 Media Gallery layout. Expression storage has no public-media URL capability: local files and

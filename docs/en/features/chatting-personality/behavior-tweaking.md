@@ -28,25 +28,29 @@ no matter what a user asks.
 ## Expressions
 
 Managers use `/expressions manage` to browse `Emojis`, `Stickers`, and `Customs` in an
-ephemeral panel. Native categories include uninitialized assets and distinguish usable
-assets from total assets. `/expressions initialize` classifies native assets automatically.
+ephemeral panel. Native categories list every emoji or sticker, including uninitialized ones,
+and the summary counts the ones the bot can use and how many of those are uninitialized.
+`/expressions initialize` classifies native assets automatically.
 `Edit` changes their description and emotion; `Clear Info` clears that classification while
 keeping the Discord asset and its usage history.
 
 In `Customs`, choose `+ Add a custom expression`. Enter a name, description (up to 500
 characters), and emotion, with exactly one link or file. Supported files are PNG, JPEG
 (`.jpg` or `.jpeg`), WebP, GIF, and MP4, up to 10 MiB and Discord's applicable limit. MP4
-requires H.264 video with 8-bit 4:2:0 pixels and optional AAC audio. Tenor share links stay
-links; Discord media links are imported into storage. Other direct media links depend on
-the external host remaining available. HTML pages other than supported Tenor shares are rejected.
+requires H.264 video with 8-bit 4:2:0 pixels and optional AAC audio. A link can point to
+anything, including a Tenor GIF, a direct image, or an ordinary website: the bot never fetches
+it and posts it verbatim, so Discord renders whatever embed the link produces. Links must be
+public HTTPS URLs without credentials. Discord attachment links are the exception: they
+expire, so they are downloaded, validated like uploaded files, and imported into storage.
 
 `Edit Expression` opens with the saved name, description, and emotion. Leave both media
 fields blank to keep the source, or provide one replacement. A failed replacement preserves
 the previous expression and media. Names must be distinct from other customs and native
 stickers after case and separator normalization. Native emojis and stickers keep their thumbnails.
-The bottom of `Customs` shows a large preview for images and GIFs, or a playable MP4.
-Direct media links use their registered URL; uploaded and imported media are attached privately.
-Tenor share pages show `Open Link`. If a preview fails, editing and deletion remain available.
+The bottom of `Customs` shows a large preview for stored images and GIFs, or a playable MP4.
+Uploaded and imported media are attached privately. Links show `Open Link`, because the bot
+cannot know what a link contains without fetching it. If a preview fails, editing and deletion
+remain available.
 
 Customs initially allow every persona in the server. `Add Persona` restricts access to listed
 personas, one member at a time. The persona picker has pages for servers with more than 25

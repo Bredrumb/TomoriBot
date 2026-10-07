@@ -260,6 +260,8 @@ describe("expression delivery at tool invocation", () => {
       original_link: null,
       delivery_kind: "stored",
       storage_reference: reference,
+      mime_type: "image/png",
+      extension: "png",
       byte_size: bytes.length,
     });
     const load = spyOn(serverRepository, "loadCustomExpression").mockResolvedValue(row);

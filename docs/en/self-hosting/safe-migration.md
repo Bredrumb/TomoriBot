@@ -18,8 +18,8 @@ backing up the database and media together. With local storage, copy `data/custo
 and restore it to the same location. With GCS or S3, back up the owned `custom-expressions/`
 objects and restore their keys in the configured expression bucket. Restore the matching
 `EXPRESSION_STORAGE_BACKEND` and `EXPRESSION_STORAGE_BUCKET` settings. Changing the backend
-or bucket alone leaves existing references unreadable. External direct links and Tenor links
-remain dependent on their external hosts. Discord JSON exports carry no expression registry
+or bucket alone leaves existing references unreadable. Link expressions are stored as URLs only
+and remain dependent on their external hosts. Discord JSON exports carry no expression registry
 or media archive.
 
 ## Pre-pull checklist
