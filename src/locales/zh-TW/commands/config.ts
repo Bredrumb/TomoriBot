@@ -427,6 +427,7 @@ export default {
       response_prefill_active: `已在 {model} 上啟用。`,
       response_prefill_inactive_model: `未啟用：{model}無法接著前綴繼續寫，因此我跳過它。`,
       response_prefill_inactive_thinking: `未啟用：請將思考等級設為「無」或「最少」，好讓{model}能接著寫下去。`,
+      response_prefill_inactive_tools: `未啟用：開啟「工具使用」時{model}無法接著前綴繼續寫，因此我跳過它。`,
       set_prefill_button: `設定前綴`,
       global_response_style_description: "選擇回覆要多像真人，以及會讀取多少 歷史紀錄。",
       humanizer_label: `擬人化`,

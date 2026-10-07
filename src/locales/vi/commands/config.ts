@@ -429,6 +429,7 @@ export default {
       response_prefill_active: `Đang hoạt động trên {model}.`,
       response_prefill_inactive_model: `Không hoạt động: {model} không thể tiếp tục prefill, vì vậy mình sẽ bỏ qua.`,
       response_prefill_inactive_thinking: `Không hoạt động: hãy đặt Mức độ suy nghĩ thành Không hoặc Tối thiểu để {model} có thể tiếp tục.`,
+      response_prefill_inactive_tools: `Không hoạt động: {model} không thể tiếp tục prefill khi Sử dụng công cụ đang bật, vì vậy mình sẽ bỏ qua.`,
       set_prefill_button: `Đặt prefill`,
       global_response_style_description: "Chọn mức độ tự nhiên của phản hồi và lượng lịch sử được đọc.",
       humanizer_label: `Humanizer`,

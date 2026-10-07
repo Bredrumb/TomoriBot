@@ -653,6 +653,7 @@ Exaggeration: **{exaggeration}**`,
       response_prefill_active: `{model}で有効です。`,
       response_prefill_inactive_model: `無効：{model}はプリフィルの続きを生成できないため、スキップします。`,
       response_prefill_inactive_thinking: `無効：{model}が続きを生成できるように、思考レベルを「なし」または「最小」に設定してください。`,
+      response_prefill_inactive_tools: `無効：{model}は「ツールの使用」が有効な間はプリフィルの続きを生成できないため、スキップします。`,
       set_prefill_button: `プリフィルを設定`,
       global_response_style_description:
         "人間のようなどのように感じられるか、また履歴を どれだけ読み込むかを選択します。",

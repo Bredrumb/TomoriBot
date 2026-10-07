@@ -427,6 +427,7 @@ export default {
       response_prefill_active: `已在 {model} 上生效。`,
       response_prefill_inactive_model: `未生效：{model}无法接着预填内容续写，因此我跳过了它。`,
       response_prefill_inactive_thinking: `未生效：请将思考等级设为「无」或「最小」，以便{model}能够接着续写。`,
+      response_prefill_inactive_tools: `未生效：开启「工具使用」时{model}无法接着预填内容续写，因此我跳过了它。`,
       set_prefill_button: `设置预填`,
       global_response_style_description: `选择回复有多像真人，以及要读多少历史记录。`,
       humanizer_label: `回复自然度`,

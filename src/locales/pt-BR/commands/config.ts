@@ -433,6 +433,7 @@ export default {
       response_prefill_active: `Ativo em {model}.`,
       response_prefill_inactive_model: `Inativo: {model} não pode continuar um preenchimento, então vou ignorá-lo.`,
       response_prefill_inactive_thinking: `Inativo: defina o Pensamento como Nenhum ou Mínimo para que {model} possa continuá-lo.`,
+      response_prefill_inactive_tools: `Inativo: {model} não pode continuar um preenchimento enquanto o Uso de Ferramentas estiver ativado, então vou ignorá-lo.`,
       set_prefill_button: `Definir Preenchimento`,
       global_response_style_description: "Escolha quão humanas as respostas parecem e quanto histórico elas leem.",
       humanizer_label: `Humanizador`,

@@ -440,6 +440,7 @@ export default {
       response_prefill_active: `Activo en {model}.`,
       response_prefill_inactive_model: `Inactivo: {model} no puede continuar un prellenado, así que lo omito.`,
       response_prefill_inactive_thinking: `Inactivo: establece Pensamiento en Ninguno o Mínimo para que {model} pueda continuarlo.`,
+      response_prefill_inactive_tools: `Inactivo: {model} no puede continuar un prellenado mientras Uso de herramientas esté activado, así que lo omito.`,
       set_prefill_button: `Definir prellenado`,
       global_response_style_description: "Elige qué tan humanas se sienten las respuestas y cuánto historial leen.",
       humanizer_label: `Humanizador`,
