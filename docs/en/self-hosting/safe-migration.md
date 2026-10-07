@@ -11,6 +11,7 @@ When you `git pull` new code and restart TomoriBot, the bot automatically runs d
 TomoriBot's migration runner (in `src/db/migrationRunner.ts`) executes all unapplied migrations in version order. Migrations are forward-only: if something goes wrong, the runner does not auto-rollback. Most migrations are safe expansions (new columns, new tables), but per the project's internal design policy (OD-R-6), destructive operations such as `DROP COLUMN` or `DROP TABLE` are permitted. If a destructive migration runs without a backup, you lose data permanently. When in doubt, back up first.
 
 ## Custom expression media backups
+<!-- anchor: custom-expression-media-backups -->
 
 Database backups retain custom expression metadata, persona memberships, and storage
 references. They do not include uploaded or imported media bytes. Stop the bot before
@@ -244,5 +245,5 @@ The command runs the selected `.down.sql` files in descending version order (so 
 
 ## See also
 
-- [Database schema documentation](../architecture/subsystems/database-schema): learn the current schema structure
+- [Database schema documentation](/en/architecture/subsystems/database-schema/): learn the current schema structure
 - [Bun documentation](https://bun.sh): learn Bun runtime fundamentals

@@ -140,7 +140,7 @@ than externalising SQL. Size is the signal; the split must follow a coherent dom
 Custom expressions are owned by `ServerRepository`. `custom_expressions` stores a UUID identity,
 per-server normalized name key, description, emotion, registration provenance, delivery kind,
 original link, validated MIME/extension/size, owned storage reference, restriction flag, and
-revision. Migration `097` adds the registry and its timestamp trigger to both upgrades and
+revision. Link rows are stored unfetched, so their media columns stay null. Migration `097` adds the registry and its timestamp trigger to both upgrades and
 fresh schema initialization. Media is limited to 10 MiB. Usage remains in `stat_counters`.
 
 `custom_expression_personas` has unique expression/persona pairs and composite foreign keys
@@ -670,7 +670,18 @@ maps for materialized personas. `persona_presets.preset_naming_config` is the co
 live pointer value. `server_capabilities_configs.user_info_updates_enabled` is a default-on
 execution and exposure gate for the structured user-info tool.
 
+### Reset domain classifications
+
+The reset family (`src/utils/db/repositories/ResetRepository.ts`) restores configuration back to DDL defaults:
+
+- **Server singletons restored to DDL defaults (18 tables)**: `server_chat_configs`, `server_model_configs`, `server_member_permissions_configs`, `server_capabilities_configs`, `server_notice_embed_configs`, `server_nsfw_configs`, `server_speech_configs`, `server_auto_trigger_configs`, `server_channel_scope_configs`, `server_trigger_behavior_configs`, `server_novelai_imagegen_configs`, `server_byok_configs`, `server_memory_configs`, `server_short_term_memory_configs`, `server_welcome_configs`, `image_quota_configs`, `text_quota_configs`, and `video_quota_configs`.
+- **Preserved server configuration**: Active model IDs, credentials, and custom endpoint parameters in `server_model_configs` (`llm_id`, `embedding_model_id`, `diffusion_model_id`, `video_model_id`, `vision_llm_id`, `api_key`, `key_version`, `custom_endpoint_url`, `custom_model_name`, `custom_num_ctx`, `other_model_codename`, `other_model_capabilities`, `other_model_capabilities_fetched_at`), plus active NovelAI diffusion model identity (`nai_diffusion_model_id` in `server_novelai_imagegen_configs`).
+- **Cleared server collections (11 tables)**: `server_auto_trigger_persona_overrides`, `stm_categories`, `random_triggers`, `channel_llm_overrides`, `channel_prompt_overrides`, `channel_context_notes`, `personalization_blacklist`, `persona_user_blocks`, `channel_whitelist`, `role_whitelist`, and `channel_persona_whitelist`.
+- **Preserved server domains**: Personas and persona settings, server memories, short-term memories, expressions (emojis, stickers, and customs), recorded quota consumption, saved provider configurations, and external integrations (Matrix and MCP).
+- **Personal reset**: Restores `users.language_pref` ('en-US') and `users.privacy_level` (0), restores all 13 columns in `user_personalization_configs` to schema defaults, deletes `user_persona_naming_preferences`, and removes all `personal_spotlights` (cascading to `personal_spotlight_personas`). User identity, personal memories, saved provider credentials, custom endpoints, and scheduled tasks/reminders are preserved.
+
 - `cleanup_expired_cooldowns()` is defined in schema and used by startup cleanup + optional pg_cron.
 - Quota cleanup helpers exist for old image/text/video quota rows (`cleanup_old_image_quotas()`, `cleanup_old_text_quotas()`, `cleanup_old_video_quotas()`).
 - RAG tables are intentionally separate so local development can run without pgvector unless enabled.
+
 - `bun run db:lifecycle` creates a disposable database on the configured local PostgreSQL server, validates fresh schema/seed initialization twice, smoke-tests backup/restore and DB maintenance scripts, runs `nuke-db` against only that disposable DB, and verifies re-initialization afterward.

@@ -113,3 +113,15 @@ A circuit breaker quarantines any server that fails to connect for `GUILD_MCP_FA
 ## NovelAI
 
 `fetch_url` is not exposed to NovelAI initially. NovelAI GLM tool calling is prompt-based and token-constrained, and fetched-page payloads need separate prompt-budget validation before enabling this tool.
+
+## Structured User Info Updates
+
+The built-in `update_user_info` tool (`src/tools/functionCalls/updateUserInfoTool.ts`) handles explicit requests to change a registered user's nickname, prefix, suffix, gender identity, pronouns, addressing style, or numeric UTC offset:
+
+- **Target resolution**: Uses `resolveUserTarget` across names, aliases, mentions, and Discord IDs. Omitted targets default to the invoking user; `all` and `everyone` are rejected as wildcard targets.
+- **Field scoping**:
+  - `nickname`, `prefix`, and `suffix` are stored per persona lineage in `user_persona_naming_preferences`. Only the persona that recorded the change addresses the user differently.
+  - `gender_identity`, `pronouns`, `addressing_style`, and `timezone_offset` are stored once per user in `user_personalization_configs`. Every persona reads the same global value.
+- **Clearing values**: Removals pass a `clear` array of field names. A blank string in a field update folds into a removal. A cleared affix persists as an explicit suppression (`none`), preventing lower precedence layers from resurfacing an old value.
+- **Affix deduplication**: When a nickname is submitted with an already-resolved affix, redundant affixes are stripped by comparing against the resolved value rather than tokenizing on whitespace.
+- **Validation and privacy**: All fields are validated before an atomic database write. Restrictive privacy levels block additions and mutations but still permit clearing values. The tool cannot edit persona-wide address terms. The `user_info_updates_enabled` flag in `/config` > Permissions gates both tool availability and execution.

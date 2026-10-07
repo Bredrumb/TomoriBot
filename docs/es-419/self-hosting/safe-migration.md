@@ -12,6 +12,11 @@ Cuando ejecutas `git pull` para obtener código nuevo y reinicias TomoriBot, el 
 
 El ejecutor de migraciones de TomoriBot (en `src/db/migrationRunner.ts`) ejecuta todas las migraciones no aplicadas en orden de versión. Las migraciones son solo hacia adelante: si algo sale mal, el ejecutor no hace una reversión automática. La mayoría de las migraciones son expansiones seguras (nuevas columnas, nuevas tablas), pero según la política de diseño interna (OD-R-6) del proyecto, se permiten operaciones destructivas como `DROP COLUMN` o `DROP TABLE`. Si una migración destructiva se ejecuta sin una copia de seguridad, pierdes datos de forma permanente. En caso de duda, haz una copia de seguridad primero.
 
+## Copias de seguridad de medios de expresión personalizados
+<!-- anchor: custom-expression-media-backups -->
+
+Las copias de seguridad de bases de datos conservan metadatos de expresiones personalizadas, membresías de personas y referencias de almacenamiento. No incluyen bytes de medios cargados o importados. Detén el bot antes de realizar una copia de seguridad de la base de datos y los medios juntos. Con almacenamiento local, copie `data/custom-expressions/` y restáurelo en la misma ubicación. Con GCS o S3, haga una copia de seguridad de los objetos `custom-expressions/` de su propiedad y restaure sus claves en el depósito de expresión configurado. Restaure las configuraciones `EXPRESSION_STORAGE_BACKEND` y `EXPRESSION_STORAGE_BUCKET` coincidentes. Cambiar el backend o el depósito por sí solo deja las referencias existentes ilegibles. Las expresiones de enlace se almacenan únicamente como URL y siguen dependiendo de sus hosts externos. Las exportaciones Discord JSON no incluyen registro de expresiones ni archivo multimedia.
+
 ## Lista de verificación antes de hacer pull
 
 Sigue estos pasos ANTES de ejecutar `git pull`:
@@ -150,10 +155,10 @@ Si el bot se bloquea o se congela durante la migración:
 3. **Decide si restaurar**: si el error es irrecuperable (por ejemplo, la migración intentó eliminar una columna que no existe), restaura desde tu copia de seguridad:
 
    ```bash
-   # Restauración de Opción A
+   # Option A restore
    bun run restore-backup --latest
 
-   # O restauración de Opción B
+   # Or Option B restore
    pg_restore \
      -h "$POSTGRES_HOST" \
      -p "$POSTGRES_PORT" \
@@ -214,12 +219,12 @@ El enfoque más seguro: apunta la rama a una base de datos desechable (una `POST
 Si probaste una rama contra tu base de datos real y quieres deshacer sus migraciones después, usa el ejecutor de reversión. A diferencia del ejecutor hacia adelante, nunca se ejecuta automáticamente: la reversión siempre es un acto manual deliberado porque los archivos `.down.sql` suelen tener pérdidas.
 
 ```bash
-# Solo vista previa (ejecución en seco): muestra lo que se revertiría
-bun run migrate:down 034          # esta migración + cada migración más nueva aplicada
-bun run migrate:down --last       # solo la migración aplicada más recientemente
-bun run migrate:down --last=2     # las dos migraciones aplicadas más recientemente
+# Preview only (dry run): show what would be rolled back
+bun run migrate:down 034          # this migration + every newer applied one
+bun run migrate:down --last       # only the most recently applied migration
+bun run migrate:down --last=2     # the two most recently applied migrations
 
-# Ejecuta la reversión (ejecuta los archivos .down.sql, elimina las filas de schema_migrations)
+# Execute the rollback (runs the .down.sql files, removes schema_migrations rows)
 bun run migrate:down 034 --yes
 ```
 

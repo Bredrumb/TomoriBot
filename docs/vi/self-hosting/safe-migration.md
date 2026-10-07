@@ -10,6 +10,11 @@ Khi bạn `git pull` mã nguồn mới và khởi động lại TomoriBot, bot s
 
 Trình chạy migration của TomoriBot (trong `src/db/migrationRunner.ts`) thực thi tất cả các migration chưa được áp dụng theo thứ tự phiên bản. Các migration chỉ tiến về phía trước: nếu xảy ra sự cố, trình chạy sẽ không tự động rollback. Hầu hết các migration là những mở rộng an toàn (thêm cột mới, bảng mới), nhưng theo chính sách thiết kế nội bộ của dự án (OD-R-6), các thao tác có tính phá hủy như `DROP COLUMN` hoặc `DROP TABLE` đều được cho phép. Nếu một migration phá hủy chạy mà không có bản sao lưu, bạn sẽ mất dữ liệu vĩnh viễn. Khi còn nghi ngờ, hãy sao lưu trước.
 
+## Sao lưu phương tiện biểu thức tùy chỉnh
+<!-- anchor: custom-expression-media-backups -->
+
+Bản sao lưu cơ sở dữ liệu giữ lại siêu dữ liệu biểu thức tùy chỉnh, tư cách thành viên cá nhân và tham chiếu lưu trữ. Chúng không bao gồm các byte phương tiện được tải lên hoặc nhập khẩu. Dừng bot trước khi sao lưu cơ sở dữ liệu và phương tiện cùng nhau. Với bộ nhớ cục bộ, sao chép `data/custom-expressions/` và khôi phục nó vào cùng một vị trí. Với GCS hoặc S3, hãy sao lưu các đối tượng `custom-expressions/` được sở hữu và khôi phục các khóa của chúng trong nhóm biểu thức đã định cấu hình. Khôi phục cài đặt `EXPRESSION_STORAGE_BACKEND` và `EXPRESSION_STORAGE_BUCKET` phù hợp. Chỉ thay đổi phần phụ trợ hoặc nhóm sẽ khiến các tài liệu tham khảo hiện có không thể đọc được. Biểu thức liên kết chỉ được lưu trữ dưới dạng URL và vẫn phụ thuộc vào máy chủ bên ngoài của chúng. Xuất JSON Discord không mang theo sổ đăng ký biểu thức hoặc kho lưu trữ phương tiện.
+
 ## Danh sách kiểm tra trước khi kéo mã nguồn
 
 Thực hiện theo các bước sau TRƯỚC KHI chạy `git pull`:
@@ -148,10 +153,10 @@ Nếu bot bị crash hoặc treo trong quá trình migration:
 3. **Quyết định xem có khôi phục hay không**: nếu lỗi không thể khắc phục được (ví dụ: migration cố gắng xóa một cột không tồn tại), hãy khôi phục từ bản sao lưu của bạn:
 
    ```bash
-   # Khôi phục theo Tùy chọn A
+   # Option A restore
    bun run restore-backup --latest
 
-   # Hoặc khôi phục theo Tùy chọn B
+   # Or Option B restore
    pg_restore \
      -h "$POSTGRES_HOST" \
      -p "$POSTGRES_PORT" \
@@ -212,12 +217,12 @@ Cách tiếp cận an toàn nhất: trỏ nhánh tới một cơ sở dữ liệ
 Nếu bạn đã thử nghiệm một nhánh với cơ sở dữ liệu thực của mình và muốn hoàn tác các migration của nó sau đó, hãy sử dụng trình chạy rollback. Không giống như trình chạy tiến, công cụ này không bao giờ chạy tự động: rollback luôn là một hành động thủ công có chủ đích vì các tệp `.down.sql` thường làm mất dữ liệu.
 
 ```bash
-# Chỉ xem trước (dry run): hiển thị những gì sẽ được rollback
-bun run migrate:down 034          # migration này + mọi migration mới hơn đã áp dụng
-bun run migrate:down --last       # chỉ migration được áp dụng gần đây nhất
-bun run migrate:down --last=2     # hai migration được áp dụng gần đây nhất
+# Preview only (dry run): show what would be rolled back
+bun run migrate:down 034          # this migration + every newer applied one
+bun run migrate:down --last       # only the most recently applied migration
+bun run migrate:down --last=2     # the two most recently applied migrations
 
-# Thực thi rollback (chạy các tệp .down.sql, xóa các hàng schema_migrations)
+# Execute the rollback (runs the .down.sql files, removes schema_migrations rows)
 bun run migrate:down 034 --yes
 ```
 

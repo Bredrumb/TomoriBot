@@ -3,6 +3,7 @@ title: "設定精靈"
 sidebar:
   label: "設定精靈"
   order: 1
+aiGenerated: false
 ---
 
 :::note

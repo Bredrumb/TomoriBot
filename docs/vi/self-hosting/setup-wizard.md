@@ -3,6 +3,7 @@ title: "Trình hướng dẫn thiết lập"
 sidebar:
   label: "Trình hướng dẫn thiết lập"
   order: 1
+aiGenerated: false
 ---
 
 :::note

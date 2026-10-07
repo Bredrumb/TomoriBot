@@ -4,9 +4,9 @@ sidebar:
   order: 5
 ---
 
-Operação diária de uma instância de hospedagem própria: os scripts de manutenção, como atualizar, e como fazer backup e restaurar seu banco de dados. Estas são operações do lado do host: você as executa a partir de um shell, não do Discord. Para os fluxos de exportar/importar/excluir por usuário dentro do Discord, veja [Manuseio de Dados](/pt-BR/features/knowledge/data-handling/) em vez disso.
+Gerencie sua instância TomoriBot auto-hospedada usando scripts de manutenção CLI para atualizar código, fazer backup ou restaurar dados, alternar chaves de criptografia e inspecionar variáveis de ambiente. Execute esses comandos em seu terminal host ou ambiente Docker. Para exportações e exclusões de dados em Discord, consulte [Manipulação de dados](/pt-BR/features/knowledge/data-handling/).
 
-Se você está prestes a fazer `git pull` de uma nova versão, leia [Migração Segura](/pt-BR/self-hosting/safe-migration/) primeiro: ela cobre a realização de backup *antes* que o executor de migração na inicialização toque no seu esquema.
+Se você estiver atualizando com `git pull`, revise [Migração Segura](/pt-BR/self-hosting/safe-migration/) primeiro para criar um backup antes que o executor de migração na inicialização aplique alterações de esquema.
 
 ## Scripts de manutenção
 
@@ -29,13 +29,15 @@ do PostgreSQL no host.
 
 ## Atualizando
 
-Pare o bot em execução primeiro, depois use o atualizador com backup prévio:
+Pare o bot em execução primeiro e depois use o atualizador de backup primeiro:
 
 ```sh
 bun run update
 ```
 
-Isso executa `bun run backup`, seguido de `git pull --rebase --autostash` e então `bun install --frozen-lockfile`. O pacote de backup é gravado em `backups/` e inclui tanto o dump do banco de dados quanto o `.env`. Adicione `--skip-backup` para pular o backup pré-atualização. Alternativa manual:
+Isso executa `bun run backup`, depois `git pull --rebase --autostash` e, finalmente, `bun install --frozen-lockfile`. O pacote de backup é salvo em `backups/` e inclui o dump do banco de dados e o `.env`. Adicione `--skip-backup` para ignorar o backup pré-atualização.
+
+Substituição manual:
 
 ```sh
 bun run backup
@@ -43,14 +45,13 @@ git pull --rebase --autostash
 bun install --frozen-lockfile
 ```
 
-Executando a partir de `dist/`? Use `bun run update --build`. Executando via Docker Compose? Use
-`bun run update --docker`; o atualizador começa com `docker compose run --rm tomoribot bun run backup`.
+Se você executar código pré-compilado de `dist/`, use `bun run update --build`. Para implantações Docker Compose, use `bun run update --docker`; o atualizador primeiro executa `docker compose run --rm tomoribot bun run backup`.
 
 ### Variáveis de ambiente removidas
 
-Essas variáveis ajustavam o comportamento interno: heurísticas de texto e contexto, duração de componentes do Discord, duração de caches, tempos de recarga de comandos, limites de esquema e padrões de amostragem dos provedores. Agora elas estão fixas no código com os valores padrão anteriores, então um valor antigo no `.env` é ignorado após a atualização. `bun run env-doctor` lista como não lidas as que permanecerem no seu `.env`, e você pode apagá-las. Configurações que dependem do seu host, rede, credenciais ou custos continuam sendo variáveis de ambiente.
+Essas variáveis configuraram anteriormente heurísticas de texto internas, tempos limite do componente Discord, durações de cache, resfriamento de comandos e padrões de amostragem. Eles agora estão corrigidos no código com seus padrões anteriores, portanto, os valores antigos em `.env` são ignorados após a atualização. Execute `bun run env-doctor` para listar quaisquer variáveis restantes em seu `.env` que você possa excluir com segurança. As configurações que dependem do seu host, rede, credenciais ou custos permanecem variáveis de ambiente.
 
-Os tempos de recarga de comandos são a exceção ao "fixo": os nomes `COOLDOWN_*` por categoria e `DEFAULT_COMMAND_COOLDOWN` foram substituídos por um único multiplicador, `COMMAND_COOLDOWN_SCALE` (padrão `1`; `0` desativa os tempos de recarga). Para manter um tempo de recarga ajustado, divida seu valor antigo pelo valor fixo da tabela: `COOLDOWN_PERSONA=1000` vira `COMMAND_COOLDOWN_SCALE=0.1`.
+Os resfriamentos de comando agora usam um único multiplicador, `COMMAND_COOLDOWN_SCALE` (padrão `1`; `0` desativa os resfriamentos), substituindo as variáveis individuais `COOLDOWN_*` e `DEFAULT_COMMAND_COOLDOWN`. Para manter um tempo de espera personalizado, divida o valor antigo pelo padrão anterior: por exemplo, `COOLDOWN_PERSONA=1000` se torna `COMMAND_COOLDOWN_SCALE=0.1`.
 
 <details>
 <summary>Todas as 177 variáveis removidas e seus valores fixos</summary>
@@ -67,21 +68,21 @@ Os tempos de recarga de comandos são a exceção ao "fixo": os nomes `COOLDOWN_
 | `BOT_MAX_FUNCTION_CALL_ITERATIONS` | `100` |
 | `BOT_MAX_STOP_STRINGS_PER_SERVER` | `40` |
 | `BOT_MAX_STOP_STRING_LENGTH` | `200` |
-| `BRAVE_IMAGE_COMPRESSION_TARGET_MB` | um a menos que `BRAVE_IMAGE_DISCORD_LIMIT_MB` (`7` por padrão) |
+| `BRAVE_IMAGE_COMPRESSION_TARGET_MB` | um abaixo de `BRAVE_IMAGE_DISCORD_LIMIT_MB` (`7` por padrão) |
 | `CHANNEL_WHITELIST_CACHE_TTL_MINUTES` | `5` |
 | `CONDITIONING_CONTEXT_MAX_GROUPS_PER_TYPE` | `10` |
 | `CONDITIONING_REASON_MAX_LENGTH` | `250` |
-| `COOLDOWN_CONDITIONING` | `3000`, multiplicado por `COMMAND_COOLDOWN_SCALE` |
-| `COOLDOWN_CONFIG` | `3000`, multiplicado por `COMMAND_COOLDOWN_SCALE` |
-| `COOLDOWN_FORGET` | `3000`, multiplicado por `COMMAND_COOLDOWN_SCALE` |
-| `COOLDOWN_MEMORY` | `3000`, multiplicado por `COMMAND_COOLDOWN_SCALE` |
-| `COOLDOWN_PERSONA` | `10000`, multiplicado por `COMMAND_COOLDOWN_SCALE` |
-| `COOLDOWN_PERSONAL` | `3000`, multiplicado por `COMMAND_COOLDOWN_SCALE` |
-| `COOLDOWN_SERVER` | `3000`, multiplicado por `COMMAND_COOLDOWN_SCALE` |
-| `COOLDOWN_TEACH` | `3000`, multiplicado por `COMMAND_COOLDOWN_SCALE` |
+| `COOLDOWN_CONDITIONING` | `3000`, dimensionado por `COMMAND_COOLDOWN_SCALE` |
+| `COOLDOWN_CONFIG` | `3000`, dimensionado por `COMMAND_COOLDOWN_SCALE` |
+| `COOLDOWN_FORGET` | `3000`, dimensionado por `COMMAND_COOLDOWN_SCALE` |
+| `COOLDOWN_MEMORY` | `3000`, dimensionado por `COMMAND_COOLDOWN_SCALE` |
+| `COOLDOWN_PERSONA` | `10000`, dimensionado por `COMMAND_COOLDOWN_SCALE` |
+| `COOLDOWN_PERSONAL` | `3000`, dimensionado por `COMMAND_COOLDOWN_SCALE` |
+| `COOLDOWN_SERVER` | `3000`, dimensionado por `COMMAND_COOLDOWN_SCALE` |
+| `COOLDOWN_TEACH` | `3000`, dimensionado por `COMMAND_COOLDOWN_SCALE` |
 | `DEEPSEEK_EXPRESSION_BATCH_SIZE` | `20` |
-| `DEFAULT_COMMAND_COOLDOWN` | `1600`, multiplicado por `COMMAND_COOLDOWN_SCALE` |
-| `DELIBERATE_TOOL_CONTEXT_TURNS` | `4`; um servidor ainda pode alterá-lo em `/config` (Contexto de Ferramentas, em Comportamento Experimental) |
+| `DEFAULT_COMMAND_COOLDOWN` | `1600`, dimensionado por `COMMAND_COOLDOWN_SCALE` |
+| `DELIBERATE_TOOL_CONTEXT_TURNS` | `4`; um servidor ainda pode alterá-lo em `/config` (contexto da ferramenta em comportamento experimental) |
 | `DISCORD_TYPING_KEEPALIVE_INTERVAL_MS` | `8000` |
 | `DOCUMENT_CHUNK_OVERLAP` | `200` |
 | `DOCUMENT_CHUNK_SIZE` | `1000` |
@@ -140,7 +141,7 @@ Os tempos de recarga de comandos são a exceção ao "fixo": os nomes `COOLDOWN_
 | `MEDIA_SIZE_LIMIT_BYTES` | `1048576` |
 | `MEMORY_EXPAND_BUTTON_TIMEOUT_MS` | `86400000` |
 | `MEMORY_NOTICE_PREVIEW_LIMIT` | `600` |
-| `NAI_CFG_RESCALE` | `0.0`; um servidor ainda pode alterá-lo em `/config` (Parâmetros do NovelAI) |
+| `NAI_CFG_RESCALE` | `0.0`; um servidor ainda pode alterá-lo em `/config` (configurações de imagem NovelAI) |
 | `NAI_CHAR_REF_DESCRIPTION` | `character&style` |
 | `NAI_CHAR_REF_INFO_EXTRACTED` | `1.0` |
 | `NAI_CHAR_REF_SECONDARY_STRENGTH` | `0.0` |
@@ -148,10 +149,10 @@ Os tempos de recarga de comandos são a exceção ao "fixo": os nomes `COOLDOWN_
 | `NAI_GLM_CHARS_PER_TOKEN` | `2.5` |
 | `NAI_GLM_CONTEXT_LIMIT` | `12288` |
 | `NAI_IMAGE_NEGATIVE_PROMPT` | texto embutido |
-| `NAI_IMAGE_NOISE_SCHEDULE` | `karras`; um servidor ainda pode alterá-lo em `/config` (Parâmetros do NovelAI) |
-| `NAI_IMAGE_SAMPLER` | `k_euler_ancestral`; um servidor ainda pode alterá-lo em `/config` (Parâmetros do NovelAI) |
-| `NAI_IMAGE_SCALE` | `5`; um servidor ainda pode alterá-lo em `/config` (Parâmetros do NovelAI) |
-| `NAI_IMAGE_STEPS` | `23`; um servidor ainda pode alterá-lo em `/config` (Parâmetros do NovelAI) |
+| `NAI_IMAGE_NOISE_SCHEDULE` | `karras`; um servidor ainda pode alterá-lo em `/config` (configurações de imagem NovelAI) |
+| `NAI_IMAGE_SAMPLER` | `k_euler_ancestral`; um servidor ainda pode alterá-lo em `/config` (configurações de imagem NovelAI) |
+| `NAI_IMAGE_SCALE` | `5`; um servidor ainda pode alterá-lo em `/config` (configurações de imagem NovelAI) |
+| `NAI_IMAGE_STEPS` | `23`; um servidor ainda pode alterá-lo em `/config` (configurações de imagem NovelAI) |
 | `NAI_INPAINT_PADDING` | `0.15` |
 | `NAI_INPAINT_STRENGTH` | `1.0` |
 | `NAI_KAYRA_CHARS_PER_TOKEN` | `3.5` |
@@ -192,7 +193,7 @@ Os tempos de recarga de comandos são a exceção ao "fixo": os nomes `COOLDOWN_
 | `SCHEDULED_WORK_RECONCILE_INTERVAL_MS` | `60000` |
 | `SEND_FAILURE_RETRY_MINUTES` | `15` |
 | `SETUP_DRAFT_MAX_ENTRIES` | `200` |
-| `SHORT_TERM_MEMORY_DEFAULT_CRUDE_MESSAGE_COUNT` | `6`; um servidor ainda pode alterá-lo em `/config` (Parâmetros de Memória de Curto Prazo) |
+| `SHORT_TERM_MEMORY_DEFAULT_CRUDE_MESSAGE_COUNT` | `6`; um servidor ainda pode alterá-lo em `/config` (configurações de memória de curto prazo) |
 | `SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL` | `10` |
 | `SHORT_TERM_MEMORY_MAX_OTHER_CHANNELS` | `3` |
 | `SHORT_TERM_MEMORY_MAX_SUMMARY_LENGTH` | `1500` |
@@ -239,19 +240,19 @@ Os tempos de recarga de comandos são a exceção ao "fixo": os nomes `COOLDOWN_
 
 ### Variáveis removidas dos servidores locais de TTS
 
-Os servidores locais de TTS em `servers/tts/` perderam seus valores de fallback compartilhados, limites por motor e configurações de autenticação. Um valor antigo no `.env` ou no seu shell é ignorado, então confira as linhas abaixo que mudam o comportamento, em vez de apenas repetir um padrão.
+Os servidores locais TTS em `servers/tts/` não usam mais fallbacks de porta compartilhada, limites por mecanismo ou configurações de autenticação. Configurações antigas em `.env` ou em seu shell são ignoradas:
 
-- Portas: `TOMORI_TTS_PORT` foi removida porque um único valor no `.env` colocava todos os servidores iniciados na mesma porta. Em vez disso, cada motor lê sua própria variável: `CHATTERBOX_PORT` (8011), `QWEN3TTS_PORT` (8012, ou 8014 no modo de design de voz), `IRODORI_TTS_PORT` (8013), `FISH_S2_PORT` (8015), `VOXCPM2_PORT` (8016), `COSYVOICE3_PORT` (8017) e `MOSS_TTS_PORT` (8018).
-- Autenticação: os servidores não verificam mais um token de portador nem recusam um bind fora do loopback. Se você definiu `FISH_S2_API_KEY`, `VOXCPM2_API_KEY`, `TOMORI_TTS_API_KEY` ou `COSYVOICE3_BEARER_TOKEN`, o endpoint agora aceita requisições sem elas. Leia [Acesso de rede](/pt-BR/self-hosting/local-endpoints/text-to-speech/#network-access) antes de fazer o bind fora do loopback.
-- Versões fixadas nos instaladores: o commit do runtime do Fish Speech e as revisões do runtime e do modelo do CosyVoice estão fixados nos instaladores. Para atualizá-los, edite a versão fixada no script.
+- **Portas:** `TOMORI_TTS_PORT` foi removido porque uma única variável compartilhada vinculava cada servidor iniciado à mesma porta. Cada mecanismo agora usa sua variável dedicada: `CHATTERBOX_PORT` (8011), `QWEN3TTS_PORT` (8012 ou 8014 no modo de design de voz), `IRODORI_TTS_PORT` (8013), `FISH_S2_PORT` (8015), `VOXCPM2_PORT` (8016), `COSYVOICE3_PORT` (8017) e `MOSS_TTS_PORT` (8018).
+- **Autenticação:** Os servidores locais não validam mais tokens de portador nem restringem a ligação de rede remota. Se você configurou anteriormente `FISH_S2_API_KEY`, `VOXCPM2_API_KEY`, `TOMORI_TTS_API_KEY` ou `COSYVOICE3_BEARER_TOKEN`, os terminais agora aceitam solicitações sem credenciais. Revise o [Acesso à rede](/pt-BR/self-hosting/local-endpoints/text-to-speech/#network-access) antes de desativar o loopback.
+- **Pinos do instalador:** Hashes de commit e revisões de modelo para Fish Speech e CosyVoice são fixados nos scripts do instalador. Atualizá-los requer a edição dos valores fixados em cada script.
 
 <details>
-<summary>Todas as variáveis removidas dos servidores locais de TTS</summary>
+<summary>Todas as variáveis do servidor local TTS removidas</summary>
 
 | Variável | Agora |
 |---|---|
-| `COSYVOICE3_ALLOW_REMOTE_BIND` | removida; qualquer `TOMORI_TTS_HOST` é aceito |
-| `COSYVOICE3_BEARER_TOKEN` | removida; sem autenticação |
+| `COSYVOICE3_ALLOW_REMOTE_BIND` | removido; qualquer `TOMORI_TTS_HOST` é aceito |
+| `COSYVOICE3_BEARER_TOKEN` | removido; sem autenticação |
 | `COSYVOICE3_MAX_REF_AUDIO_BYTES` | `26214400` |
 | `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` |
 | `COSYVOICE3_MODEL_ID` | `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` |
@@ -259,35 +260,35 @@ Os servidores locais de TTS em `servers/tts/` perderam seus valores de fallback 
 | `COSYVOICE3_RUNTIME_COMMIT` | fixado no instalador |
 | `COSYVOICE3_RUNTIME_DIR` | `servers/tts/cosyvoice3/CosyVoice` |
 | `COSYVOICE3_RUNTIME_REPO` | `https://github.com/QwenAudio/CosyVoice.git` |
-| `COSYVOICE3_UPDATE` | removida; uma nova execução usa as versões fixadas do instalador |
-| `FISH_S2_ALLOW_INSECURE_REMOTE` | removida; qualquer `TOMORI_TTS_HOST` é aceito |
-| `FISH_S2_API_KEY` | removida; sem autenticação |
-| `FISH_S2_LAUNCH_TIMEOUT_MS` | aplica-se `TOMORI_TTS_STARTUP_TIMEOUT_MS` (`300000`) |
+| `COSYVOICE3_UPDATE` | removido; uma nova execução verifica os pinos do instalador |
+| `FISH_S2_ALLOW_INSECURE_REMOTE` | removido; qualquer `TOMORI_TTS_HOST` é aceito |
+| `FISH_S2_API_KEY` | removido; sem autenticação |
+| `FISH_S2_LAUNCH_TIMEOUT_MS` | `TOMORI_TTS_STARTUP_TIMEOUT_MS` se aplica (`300000`) |
 | `FISH_S2_MAX_REF_AUDIO_BYTES` | `10485760` |
 | `FISH_S2_RUNTIME_REF` | fixado no instalador |
 | `FISH_S2_RUNTIME_REPOSITORY` | `https://github.com/Imagilux/fish-speech.git` |
 | `FISH_S2_STARTUP_TIMEOUT_SECONDS` | `180` |
 | `FISH_S2_SYNTHESIS_TIMEOUT_SECONDS` | `1800` |
-| `FISH_S2_UPDATE` | removida; uma nova execução usa a versão fixada do instalador e atualiza o modelo |
-| `FISH_S2_UPDATE_MODEL_REVISION` | use `FISH_S2_MODEL_REVISION` |
+| `FISH_S2_UPDATE` | removido; uma nova execução verifica o pin do instalador e atualiza o modelo |
+| `FISH_S2_UPDATE_MODEL_REVISION` | usar `FISH_S2_MODEL_REVISION` |
 | `FISH_S2_UPDATE_REF` | fixado no instalador |
 | `FISH_S2_UPSTREAM_HOST` | `127.0.0.1` |
 | `FISH_SPEECH_DIR` | `servers/tts/fishs2/fish-speech` |
 | `MOSS_TTS_MAX_REF_AUDIO_BYTES` | `10485760` |
-| `TOMORI_TTS_ALLOW_REMOTE_BIND` | removida; qualquer `TOMORI_TTS_HOST` é aceito |
-| `TOMORI_TTS_API_KEY` | removida; sem autenticação |
-| `TOMORI_TTS_MAX_REF_AUDIO_BYTES` | `10485760` (Fish) |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` (`1000` para o Irodori-TTS) |
-| `TOMORI_TTS_PORT` | a variável de porta própria de cada motor |
-| `TTS_CLONE_TIMEOUT_MS` | use `TTS_SYNTHESIZE_TIMEOUT_MS` |
-| `VOXCPM2_API_KEY` | removida; sem autenticação |
+| `TOMORI_TTS_ALLOW_REMOTE_BIND` | removido; qualquer `TOMORI_TTS_HOST` é aceito |
+| `TOMORI_TTS_API_KEY` | removido; sem autenticação |
+| `TOMORI_TTS_MAX_REF_AUDIO_BYTES` | `10485760` (Peixe) |
+| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` (`1000` para Irodori-TTS) |
+| `TOMORI_TTS_PORT` | a própria variável de porta do mecanismo |
+| `TTS_CLONE_TIMEOUT_MS` | usar `TTS_SYNTHESIZE_TIMEOUT_MS` |
+| `VOXCPM2_API_KEY` | removido; sem autenticação |
 | `VOXCPM2_MAX_REF_AUDIO_BYTES` | `10485760` |
 
 </details>
 
 ## Backups e restauração
 
-`bun run backup` cria um pacote com carimbo de data/hora em `backups/` (ou em seu `TOMORI_BACKUP_DIR` caso tenha sido substituído no `.env`) contendo todo o seu banco de dados PostgreSQL mais o `.env`. Restaure o pacote mais recente com:
+`bun run backup` cria um pacote com carimbo de data e hora em `backups/` (ou seu `TOMORI_BACKUP_DIR` se substituído em `.env`) contendo todo o seu banco de dados PostgreSQL mais `.env`. Restaure o pacote mais recente com:
 
 ```sh
 bun run restore-backup --latest
@@ -299,9 +300,9 @@ Ou restaure um pacote específico:
 bun run restore-backup --from backups/backup_2024-01-15_14-30-45
 ```
 
-`bun run backup:personas` é uma exportação mais restrita: apenas predefinições de persona e memórias do servidor por persona, através de todos os servidores. Ele deve ser reimportado manualmente via `/persona import` e não pode ser usado com `restore-backup` (isso causaria conflitos de chave primária).
+`bun run backup:personas` é uma exportação mais restrita: apenas predefinições de persona e memórias de servidor por persona, em todos os servidores. Deve ser reimportado manualmente via `/persona import` e não pode ser usado com `restore-backup` (isso causaria conflitos de chave primária).
 
-O TomoriBot também faz backups automáticos na inicialização em ambientes não produtivos, e uma restauração completa requer que a extensão `pgvector` esteja presente no banco de dados de destino. Ambos são abordados em detalhes em [Migração Segura](/pt-BR/self-hosting/safe-migration/), juntamente com um procedimento manual de `pg_dump` / `pg_restore` se você preferir conduzir as ferramentas diretamente.
+TomoriBot também faz backups de inicialização automáticos em ambientes que não sejam de produção, e uma restauração completa requer que a extensão `pgvector` esteja presente no banco de dados de destino. Ambos são abordados detalhadamente em [Migração segura](/pt-BR/self-hosting/safe-migration/), juntamente com um procedimento manual `pg_dump` e `pg_restore` se você preferir conduzir o ferramental diretamente.
 
 ## Backups com Docker Compose
 
