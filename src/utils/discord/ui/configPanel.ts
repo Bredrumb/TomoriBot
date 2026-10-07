@@ -2400,7 +2400,7 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
           type: ComponentType.Button,
           style: ButtonStyle.Danger,
           customId: buildConfigRouteId({ action: "behavior-prompt-remove", locale }),
-          label: localizer(locale, "commands.config.panel.remove_prompt_button"),
+          label: localizer(locale, "commands.config.panel.use_default_prompt_button"),
           disabled: writesDisabled || !view.systemPrompt,
         },
       ],
