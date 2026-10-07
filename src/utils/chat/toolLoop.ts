@@ -1,4 +1,3 @@
-import type { StickerSelection } from "@/types/discord/stickerSelection";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { ToolRegistry } from "@/tools/toolRegistry";
@@ -27,6 +26,7 @@ import {
 } from "@/utils/chat/contextAnnotations";
 import { takeEnhancedContextItem } from "@/utils/chat/pendingEnhancedContext";
 import { foldPrefillIntoToolHistory } from "@/utils/chat/assistantPrefill";
+import { buildExpressionToolResult, deliverExpression } from "@/utils/chat/expressionDelivery";
 import { recordChatDiagnostic, runWithChatDiagnosticStage } from "@/utils/chat/diagnosticTimeline";
 import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 import type { ChatTurnContext, GenerationTurnResult, ToolHistoryEntry } from "@/utils/chat/types";
@@ -85,9 +85,9 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
   let detailsText = "";
   let consecutiveToolErrors = 0;
   let naiConsecutiveToolFailures = 0;
-  let selectedStickerToSend: StickerSelection | null = null;
   let thoughtLog: GenerationTurnResult["thoughtLog"];
-  let toolResponseDelivered = false;
+  // An expression an earlier attempt of this turn delivered is still visible, so it still counts.
+  let toolResponseDelivered = params.context.expressionDelivery.delivered !== null;
   let lastToolName: string | undefined;
 
   for (let iteration = 0; iteration < MAX_FUNCTION_CALL_ITERATIONS; iteration++) {
@@ -129,7 +129,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           finalText,
           detailsText,
           thoughtLog,
-          selectedStickerToSend ?? undefined,
           toolResponseDelivered,
         );
       case "error":
@@ -142,7 +141,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           finalText,
           detailsText,
           thoughtLog,
-          undefined,
           toolResponseDelivered,
         );
       case "empty_response": {
@@ -163,7 +161,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
             deliveredText ?? finalText,
             detailsText,
             thoughtLog,
-            selectedStickerToSend ?? undefined,
             toolResponseDelivered,
           );
         }
@@ -174,7 +171,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           finalText,
           detailsText,
           thoughtLog,
-          undefined,
           toolResponseDelivered,
         );
       }
@@ -192,7 +188,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           finalText,
           detailsText,
           thoughtLog,
-          undefined,
           toolResponseDelivered,
         );
       case "follow_up_interrupt":
@@ -204,7 +199,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           finalText,
           detailsText,
           thoughtLog,
-          undefined,
           toolResponseDelivered,
         );
       case "function_call": {
@@ -235,7 +229,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
             finalText,
             detailsText,
             thoughtLog,
-            undefined,
             toolResponseDelivered,
           );
         }
@@ -247,9 +240,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         // entry's assistant tool-call turn. Remove the same buffered parts from
         // the trailing prefill so providers do not receive it a second time.
         accumulatedModelParts.length = 0;
-        if (toolOutcome.stickerSelection !== undefined) {
-          selectedStickerToSend = toolOutcome.stickerSelection;
-        }
         if (toolOutcome.success) {
           consecutiveToolErrors = 0;
           naiConsecutiveToolFailures = 0;
@@ -264,7 +254,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
               finalText,
               detailsText,
               thoughtLog,
-              undefined,
               toolResponseDelivered,
             );
           }
@@ -278,7 +267,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
             streamResult.accumulatedText ?? finalText,
             detailsText,
             thoughtLog,
-            selectedStickerToSend ?? undefined,
             toolResponseDelivered,
           );
         }
@@ -299,7 +287,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
               streamResult.accumulatedText ?? finalText,
               detailsText,
               thoughtLog,
-              selectedStickerToSend ?? undefined,
               toolResponseDelivered,
             );
           }
@@ -327,7 +314,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
             streamResult.accumulatedText ?? finalText,
             detailsText,
             thoughtLog,
-            selectedStickerToSend ?? undefined,
             toolResponseDelivered,
           );
         }
@@ -352,7 +338,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
       tipKeys: ["genai.tips.refresh_context"],
     });
   }
-  selectedStickerToSend = null;
   return buildResult(
     "timeout",
     params.context,
@@ -360,7 +345,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
     finalText,
     detailsText,
     thoughtLog,
-    undefined,
     toolResponseDelivered,
   );
 }
@@ -567,7 +551,6 @@ async function executeToolCall(
       success: boolean;
       endTurn: boolean;
       responseDelivered: boolean;
-      stickerSelection?: StickerSelection | null;
       historyEntry: ToolHistoryEntry;
     }
 > {
@@ -688,7 +671,7 @@ async function executeToolCall(
       })
     : null;
 
-  const toolResult = isBlockedByDeliberateAllowlist
+  const executedResult: ToolResult = isBlockedByDeliberateAllowlist
     ? {
         success: false,
         error: `Tool "${functionName}" was not exposed for this deliberate tool mode turn.`,
@@ -721,6 +704,24 @@ async function executeToolCall(
     return { kind: "abort", status: "stopped_by_user" };
   }
 
+  // The send is awaited outside the timeout and kill race above, so Discord's verdict is always
+  // known before history is built and a stop can never leave an accepted send unrecorded.
+  let toolResult = executedResult;
+  const stickerSelection = executedResult.success ? executedResult.stickerSelection : undefined;
+  if (stickerSelection) {
+    const stickerName = (executedResult.data as { sticker_name?: string } | undefined)?.sticker_name ?? "";
+    const delivery = await runUnderWatchdog(params.context.channel.id, () =>
+      deliverExpression(
+        params.context,
+        stickerSelection,
+        stickerName,
+        () => turnAbortSignal?.aborted === true || shouldAbortToolCallForStopRequest(params.context.channel.id),
+      ),
+    );
+    if (delivery.status === "cancelled") return { kind: "abort", status: "stopped_by_user" };
+    toolResult = buildExpressionToolResult(delivery, stickerName);
+  }
+
   if (isBlockedByDeliberateAllowlist) {
     log.warn(
       `Deliberate tool mode blocked unexposed tool call "${functionName}" in channel ${params.context.channel.id}. Allowed: ${
@@ -742,9 +743,8 @@ async function executeToolCall(
       const lineageId = params.context.currentPersona.persona_lineage_id ?? params.tomoriState.persona_lineage_id ?? 0;
       // userId is carried on the context (resolved once at turn planning), so no
       // per-tool-call DB lookup: recordStat just buffers in memory.
-      // The per-sticker `sticker_used` breakdown is deliberately NOT recorded here:
-      // selection only queues a sticker, and the send happens post-turn. It is recorded
-      // on confirmed delivery in postTurnEffects.recordStickerDelivery instead.
+      // `sticker_used` is not recorded here: a successful call can be a repeat that sent
+      // nothing, so the per-sticker count belongs to `deliverExpression` at Discord acceptance.
       try {
         statRepository.recordStat({
           serverId,
@@ -797,21 +797,6 @@ async function executeToolCall(
     log.info("Short-term memory updated — disabling further STM calls for this turn");
   }
 
-  let stickerSelection: StickerSelection | null | undefined;
-  if (functionName === "select_sticker_for_response") {
-    const stickerData = toolResult.data as { status?: string; sticker_id?: string; sticker_name?: string } | undefined;
-    if (stickerData?.status === "sticker_selected_successfully") {
-      stickerSelection = toolResult.stickerSelection ?? null;
-      if (stickerSelection) {
-        log.success(`Sticker '${stickerData.sticker_name}' selected for sending`);
-      } else {
-        log.warn(`Sticker '${stickerData.sticker_name}' is no longer sendable, dropping selection`);
-      }
-    } else {
-      stickerSelection = null;
-    }
-  }
-
   const functionResponse = toolResult.success
     ? ((toolResult.data as Record<string, unknown>) ?? { status: "completed" })
     : {
@@ -835,7 +820,6 @@ async function executeToolCall(
     success: toolResult.success,
     endTurn: toolResult.endTurn === true,
     responseDelivered: toolResult.success && toolResult.responseDelivered === true,
-    stickerSelection,
     historyEntry: {
       functionCall,
       functionResponse: {
@@ -1087,7 +1071,6 @@ function buildResult(
   responseText: string,
   detailsText: string,
   thoughtLog: GenerationTurnResult["thoughtLog"],
-  selectedSticker?: StickerSelection,
   toolResponseDelivered = false,
 ): GenerationTurnResult {
   const text = detailsText.trim()
@@ -1110,7 +1093,6 @@ function buildResult(
     toolResponseDelivered: toolResponseDelivered || undefined,
     thoughtLog,
     thoughtLogOwner: thoughtLog ? resolveThoughtLogOwner(context) : undefined,
-    selectedSticker,
   };
 }
 

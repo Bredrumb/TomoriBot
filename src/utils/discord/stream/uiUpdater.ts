@@ -587,7 +587,7 @@ export class StreamUiUpdater {
       state.firstReplyUrl = sentMessage.url;
     }
 
-    // Remember what Discord will group against, so post-turn artifacts (stickers, the
+    // Remember what Discord will group against, so artifacts that follow (expressions, the
     // "Fallback Used" notice) can reuse the same author instead of splitting off under a
     // different name. A bot-message send clears it: reverting to the bot means artifacts must
     // follow, or they would group with nothing.

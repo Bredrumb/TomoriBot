@@ -206,6 +206,7 @@ export interface ToolContext {
 
 export interface ToolResult {
   success: boolean;
+  /** A resolved expression the tool loop sends before building history. Never shown to the model. */
   stickerSelection?: StickerSelection;
   data?: unknown;
   error?: string;

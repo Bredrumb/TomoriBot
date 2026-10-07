@@ -7,7 +7,7 @@ import { log } from "@/utils/misc/logger";
 export class StickerTool extends BaseTool {
   name = "select_sticker_for_response";
   description =
-    "Selects a specific sticker from the available server stickers that is relevant to the current conversational context. Use this to choose a sticker that expresses an emotion or reaction aligning with the sticker's name or description. You will be informed of the selection result and will then generate the final text message for the user.";
+    "Sends one of the server's available stickers right now, as its own message, at this point in your reply. Choose a sticker whose name or description matches the emotion or reaction you want to show. Any text you wrote before the call is already posted, so you can react before speaking, between thoughts, or after your text, and you may keep writing once the result returns. One sticker per reply: a sent sticker cannot be replaced or removed.";
   category = "discord" as const;
   requiresFeatureFlag = "sticker_usage";
   requiresPermissions = ["SEND_MESSAGES"];
@@ -17,7 +17,7 @@ export class StickerTool extends BaseTool {
       sticker_name: {
         type: "string",
         description:
-          "The sticker name to select (case-insensitive). Use the names from the provided list; do not include IDs.",
+          "The sticker name to send (case-insensitive). Use the names from the provided list; do not include IDs.",
       },
       sticker_id: {
         type: "string",
@@ -146,16 +146,12 @@ export class StickerTool extends BaseTool {
         selected = lookup();
       }
       if (selected) {
+        // The tool loop sends the selection and replaces this result with the delivery outcome.
         return {
           success: true,
-          message: "Sticker selected successfully",
+          message: "Sticker resolved",
           stickerSelection: selected.selection,
-          data: {
-            status: "sticker_selected_successfully",
-            sticker_id: selected.id,
-            sticker_name: selected.name,
-            sticker_description: selected.description || "No description available",
-          },
+          data: { sticker_name: selected.name },
         };
       }
       const visible = (candidate: StickerCandidate) => ({

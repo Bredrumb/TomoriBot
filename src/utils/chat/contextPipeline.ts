@@ -85,6 +85,7 @@ import {
 import { userNamingRepository, userPersonaNamingPairKey } from "@/utils/db/repositories/UserNamingRepository";
 import { userRepository } from "@/utils/db/repositories/UserRepository";
 import { resolveEffectiveUserNaming } from "@/utils/text/userNaming";
+import { createExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
 
 const participantRequestScopes = new WeakMap<LockedChatTurn, ParticipantRequestScope>();
 
@@ -524,6 +525,9 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   );
 
   const assistantPrefill = await resolveTurnAssistantPrefill(turn, effectivePersona);
+  const carried = incoming.carriedExpressionDelivery;
+  const expressionDelivery =
+    carried && carried.personaId === effectivePersona.persona_id ? carried.state : createExpressionDeliveryState();
 
   return {
     turn,
@@ -549,6 +553,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     requestSnapshot: { ...turn.requestSnapshot, tomoriState: effectivePersona },
     contextItems,
     assistantPrefill,
+    expressionDelivery,
     simplifiedMessages: history.simplifiedMessages,
     streamingContext,
     messageIdMap,

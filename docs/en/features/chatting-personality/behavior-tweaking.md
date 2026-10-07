@@ -54,8 +54,9 @@ personas. Manually removing the last member restores access for everyone. Deleti
 allowed persona leaves the expression restricted with no eligible personas until a manager
 adds a member. `Delete Expression` asks for confirmation and deletes its owned media.
 
-The sticker tool selects eligible customs alongside native stickers. The bot posts the
-selected link or attachment after a completed response under the responding identity.
+The sticker tool offers eligible customs alongside native stickers. When the bot calls it, the
+link or attachment posts right away as its own message under the responding identity, so it can
+come before, between, or after the reply's text. Each reply sends at most one expression.
 Sticker Usage, provider support, roleplay, and impersonation restrictions still apply.
 Usage counts credit accepted delivery across all personas and triggering users in this server.
 They may lag until statistics flush. Custom counts survive renames; native counts follow

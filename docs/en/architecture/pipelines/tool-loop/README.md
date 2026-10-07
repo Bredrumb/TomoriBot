@@ -131,7 +131,7 @@ the growing conversation.
 | `finalText` / `detailsText` | `string` | Last non-empty accumulated text and NovelAI scene-metadata suffix; updated on `completed` or `function_call` with pre-tool text |
 | `consecutiveToolErrors` | `number` | Reset on success or restart; abort when it reaches `MAX_CONSECUTIVE_TOOL_ERRORS` |
 | `naiConsecutiveToolFailures` | `number` | Counts NovelAI tool failures after visible pre-tool text; retries with text delivery suppressed, then emits the localized retry-exhausted embed |
-| `selectedStickerToSend` | `StickerSelection \| null` | Native sticker or scoped custom identity. Later sticker misses clear it, and only completed results carry it to post-turn delivery. |
+| `toolResponseDelivered` | `boolean` | A tool delivered output directly. Starts true when this persona turn already delivered an expression, since a fallback attempt cannot retract it. |
 | `thoughtLog` | `ThoughtLogPayload \| undefined` | Carried from whichever iteration last emitted one |
 
 ### `shouldEndAfterPreToolText`: pre-tool-text exit policy

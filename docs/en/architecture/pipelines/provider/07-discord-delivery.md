@@ -13,14 +13,11 @@ Delivers a normalized text segment to Discord, applying typing simulation and ro
 This is the final stage of the provider pipeline: text that has passed through stages 05 and 06
 is delivered to Discord. Two classes share the responsibility:
 
-Sticker tools use a post-turn companion path rather than this text pipeline.
-`runToolLoop` carries the latest successful cached `Sticker` only on a
-completed `GenerationTurnResult`; `runPostTurnEffects` then sends it after the
-streamed text. Alter personas send the sticker URL through their identity
-webhook (including the thread ID when applicable). Main personas send the
-native Discord sticker as a reply for queued turns or directly to the channel
-otherwise. Webhook failure falls back to the native bot sticker send, and a
-final sticker-send failure is logged without failing the completed turn.
+Stickers and custom expressions bypass this text pipeline. The tool loop sends them when the
+model invokes `select_sticker_for_response`, after the function-call flush has committed any
+text written before the call, so an expression can land before, between, or after text
+segments. See [tool loop stage 02](../tool-loop/02-execute-tool-call) for identity, the
+one-per-turn allowance, and failure handling.
 
 `StreamMessageDelivery.sendSegment()` makes the delivery-mode decision:
 
@@ -64,9 +61,10 @@ payload. It handles:
   posted under the disguise would attribute the reply to the wrong speaker.
 - **Delivered-identity recording**: after every successful send, the identity Discord actually
   saw is recorded per channel in `channelDeliveryContinuity.ts`: the webhook identity on a
-  webhook send, or a cleared marker on an ordinary bot send. Post-turn artifacts (stickers, the
-  "Fallback Used" notice) read it back so they post as the same author and group with the
-  message they follow, instead of splitting off under the persona's default name.
+  webhook send, or a cleared marker on an ordinary bot send. Expressions sent after text in the same turn
+  and the "Fallback Used" notice read it back, so they post as the same author and group with
+  the message they follow instead of splitting off under the persona's default name. An
+  expression records its own delivery here too, so text after it groups against it.
 - **Render-modifier identity override**: when stage 06 resolves `SourcePersona (modifier): text`,
   the payload carries `identityOverride`. The UI updater lazily creates or reuses the managed
   channel webhook even for the main persona. Ordinary sprite matches send with the clean username
@@ -249,9 +247,9 @@ message ID), or `null` if the send was skipped (stop request, limit reached, emp
 
 - **Discord message sent**: the primary side effect; one or more Discord messages are created in
   `context.channel` (or via `context.webhook`).
-- **Post-turn sticker sent**: when a completed tool loop selects a sticker,
-  `postTurnEffects.ts` appends a webhook sticker URL or native Discord sticker
-  after text delivery; this is intentionally outside stream message counts.
+- **Expressions are not stream messages**: a sticker or custom sent at tool invocation is
+  outside `messageSentCount` and `deliveredMessageRefs`, so the send limits ignore it and a
+  superseded-attempt cleanup never deletes it.
 - **`state.messageSentCount`**: incremented per message sent.
 - **`state.accumulatedText`**: appended with the text of each sent message (used for STM write
   at pipeline end). Render-modifier sends append the visible `SourcePersona (modifier): ` label once

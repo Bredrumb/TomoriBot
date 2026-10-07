@@ -13,8 +13,8 @@ import { log } from "@/utils/misc/logger";
  *    username, or the second renders under the first one's avatar. Held per channel because
  *    grouping spans turns, and reset whenever a foreign message lands between our own
  *    deliveries, since Discord only ever groups a message with the one directly above it.
- * - **Last delivered webhook identity**: post-turn artifacts (stickers, the "Fallback Used"
- *    notice) should be posted as the identity that actually delivered the final message, so
+ * - **Last delivered webhook identity**: artifacts that follow text (expressions, the
+ *    "Fallback Used" notice) should be posted as the identity that delivered that text, so
  *    they group with it instead of splitting off under a different name.
  * - **Last speaker**: the rate-limited avatar fallback may reuse the avatar last displayed only
  *    when the same persona, in an ordinary appearance, delivered it.
@@ -56,7 +56,7 @@ interface ChannelDeliveryState {
   groupParity: boolean;
   /**
    * Identity of the most recent WEBHOOK delivery, or null when the last delivery was an
-   * ordinary bot message. Null is meaningful: it means post-turn artifacts must also go out
+   * ordinary bot message. Null is meaningful: it means following artifacts must also go out
    * as the bot, since that is what they would group with.
    */
   lastWebhookIdentity: ResolvedWebhookIdentity | null;

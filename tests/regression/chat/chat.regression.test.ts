@@ -16,6 +16,7 @@ import {
 import { shouldSurfaceChatUserErrors } from "@/utils/chat/errorVisibility";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
 import type { ChatIncoming, ChatTurnContext } from "@/utils/chat/types";
+import { createExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
 import { runToolLoop } from "@/utils/chat/toolLoop";
 import { determineMatchingPersonas, isSelfTriggerMessage } from "@/utils/chat/triggerProcessor";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
@@ -877,6 +878,7 @@ describe("chat regression harness", () => {
       currentPersona: tomoriState,
       isUserImpersonation: false,
       contextItems: [],
+      expressionDelivery: createExpressionDeliveryState(),
     } as unknown as ChatTurnContext;
 
     const resultPromise = runToolLoop({
@@ -941,6 +943,7 @@ describe("chat regression harness", () => {
       currentPersona: tomoriState,
       isUserImpersonation: false,
       contextItems: [],
+      expressionDelivery: createExpressionDeliveryState(),
     } as unknown as ChatTurnContext;
 
     const result = await runToolLoop({
@@ -996,6 +999,7 @@ describe("chat regression harness", () => {
       currentPersona: tomoriState,
       isUserImpersonation: false,
       contextItems: [],
+      expressionDelivery: createExpressionDeliveryState(),
     } as unknown as ChatTurnContext;
 
     try {

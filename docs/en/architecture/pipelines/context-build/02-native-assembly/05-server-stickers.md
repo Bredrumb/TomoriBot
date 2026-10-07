@@ -39,11 +39,12 @@ are eligible for every server persona. Restricted rows require the active person
 a restricted empty list allows nobody. Each turn applies this filter independently.
 The tool reloads current rows before resolving a supplied name or ID and uses the same
 eligible projection for retry suggestions. A later native/custom normalized-name collision
-returns ambiguity. Delivery rechecks current custom access and revision after generation.
+returns ambiguity. Delivery, which happens when the tool is invoked, rechecks current
+custom access and revision immediately before sending.
 
 ## Related docs
 
 - [Emoji contributor](/architecture/pipelines/context-build/02-native-assembly/04-server-emojis/)
 - [Caching](/architecture/subsystems/caching/)
 - [Tool loop](/architecture/pipelines/tool-loop/)
-- [Post-turn delivery](/architecture/pipelines/chat/06-per-turn/04-post-turn-effects/)
+- [Expression delivery](/architecture/pipelines/tool-loop/02-execute-tool-call/)
