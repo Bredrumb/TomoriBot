@@ -15,6 +15,7 @@
 import type { FunctionCall, FunctionResponseImageMetadata, ThoughtLogEntry } from "../../types/provider/interfaces";
 import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
+import { isProviderTimeoutMessage } from "@/utils/provider/providerErrorClassification";
 import { localizer } from "../../utils/text/localizer";
 import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
 import { isParamDisabled, selectAnthropicSamplingParams } from "@/utils/provider/samplingControl";
@@ -267,7 +268,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
         errorData = { message: errorText };
       }
 
-      log.error(`AnthropicStreamAdapter: HTTP ${response.status} error: ${errorText}`);
+      log.warn(`AnthropicStreamAdapter: HTTP ${response.status} error: ${errorText}`);
 
       const anthropicError = new Error(JSON.stringify({ error: errorData }));
       Object.assign(anthropicError, { statusCode: response.status });
@@ -546,7 +547,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
         const errorData = data as { error?: { type?: string; message?: string } };
         const error = errorData.error;
 
-        log.error(`AnthropicStreamAdapter: Stream error: ${error?.type} - ${error?.message}`);
+        log.warn(`AnthropicStreamAdapter: Stream error: ${error?.type} - ${error?.message}`);
 
         return {
           type: "error",
@@ -639,7 +640,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
         } else if (statusCode === 503) {
           providerErrorType = "provider_overloaded";
           retryable = true;
-        } else if (statusCode === 504 || statusCode === 408) {
+        } else if (statusCode === 504 || statusCode === 408 || isProviderTimeoutMessage(errorMessage)) {
           providerErrorType = "timeout";
           retryable = true;
         }

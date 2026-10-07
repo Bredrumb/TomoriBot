@@ -2983,7 +2983,10 @@ export async function replyPaginatedPersonaChoicesV2(
         if (isTimeout) {
           log.warn(`Pagination interaction timed out for user ${interaction.user.id}`);
         } else {
-          log.warn(`Pagination interaction failed for user ${interaction.user.id}`, innerError);
+          await log.error("Pagination interaction ended abnormally in replyPaginatedPersonaChoicesV2", innerError, {
+            errorType: "PaginationCollectorEnded",
+            metadata: { userDiscordId: interaction.user.id, currentPage },
+          });
         }
 
         // Best-effort: show a status message. We swallow any editReply failure
