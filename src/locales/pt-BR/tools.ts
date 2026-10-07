@@ -267,7 +267,6 @@ export default {
           "minhas informações*",
           "minhas infos*",
         ],
-        sticker: ["figurinha*", "enviar figurinha*", "mandar sticker*", "sticker*"],
         thread: [
           "criar thread",
           "crie uma thread*",

@@ -27,8 +27,8 @@ resolver expands the function name before mention conversion.
 
 The stage returns `null` when sticker usage is disabled, the turn is a DM or impersonation,
 there is no active server state or cached guild, or the projected list is empty. Roleplay
-uses the existing turn configuration that disables sticker usage. Provider availability
-remains enforced by tool assembly and execution.
+uses the existing turn configuration that disables sticker usage. The shared prompt resolver omits the item when
+`select_sticker_for_response` is unavailable to the provider, model, or turn allowlist.
 
 Native candidates pass `isStickerSendable`. Explicit `available === false` and IDs rejected
 by Discord are excluded; partial availability is accepted. Own-guild stickers need no

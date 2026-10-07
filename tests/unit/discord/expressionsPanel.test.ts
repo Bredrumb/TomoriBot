@@ -19,7 +19,7 @@ import { createCustomExpression } from "../../helpers/fixtures";
 import { expectForEveryLocale, localizedCopy, localizedProse } from "../../helpers/localeCases";
 import { collectTextDisplays, expectSafePanelPayload } from "../../helpers/panelLimits";
 
-beforeAll(initializeLocalizer);
+beforeAll(async () => initializeLocalizer());
 
 function data(size: number): ExpressionsPanelData {
   const customs = Array.from({ length: size }, (_, index) => {

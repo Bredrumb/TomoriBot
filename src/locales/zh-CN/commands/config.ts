@@ -323,7 +323,6 @@ export default {
       "tool_target_message-action": `消息操作`,
       "tool_target_user-blocking": `人格用户屏蔽`,
       "tool_target_user-info": `用户信息更新`,
-      tool_target_sticker: `贴纸选择`,
       tool_target_thread: `子区创建`,
       tool_target_capabilities: `功能查看`,
       tool_trigger_literal_label: `字面触发`,

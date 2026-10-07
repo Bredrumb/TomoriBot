@@ -328,7 +328,6 @@ export default {
       "tool_target_message-action": `Ações de mensagem`,
       "tool_target_user-blocking": `Bloqueio de usuário pela persona`,
       "tool_target_user-info": `Atualizações de informações do usuário`,
-      tool_target_sticker: `Seleção de figurinha`,
       tool_target_thread: `Criação de tópico`,
       tool_target_capabilities: `Revisão de capacidades`,
       tool_trigger_literal_label: `Gatilho literal`,

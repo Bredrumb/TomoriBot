@@ -339,7 +339,6 @@ export default {
           "información guardada*",
           "informacion guardada*",
         ],
-        sticker: ["sticker*", "stiker*", "estiker*", "calcomanía*", "calcomania*"],
         thread: ["hilo*", "thread*", "tema aparte*"],
         capabilities: [
           "qué puedes*",

@@ -323,7 +323,6 @@ export default {
       "tool_target_message-action": `訊息操作`,
       "tool_target_user-blocking": `人格使用者封鎖`,
       "tool_target_user-info": `使用者資訊更新`,
-      tool_target_sticker: `貼圖選擇`,
       tool_target_thread: `建立討論串`,
       tool_target_capabilities: `功能檢視`,
       tool_trigger_literal_label: `字面觸發詞`,

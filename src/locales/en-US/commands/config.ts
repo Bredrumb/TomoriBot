@@ -325,7 +325,6 @@ export default {
       "tool_target_message-action": `Message actions`,
       "tool_target_user-blocking": `Persona user blocking`,
       "tool_target_user-info": `User info updates`,
-      tool_target_sticker: `Sticker selection`,
       tool_target_thread: `Thread creation`,
       tool_target_capabilities: `Capability review`,
       tool_trigger_literal_label: `Literal trigger`,

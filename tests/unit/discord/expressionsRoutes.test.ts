@@ -32,7 +32,7 @@ import {
 import { collectTextDisplays } from "../../helpers/panelLimits";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
 
-beforeAll(initializeLocalizer);
+beforeAll(async () => initializeLocalizer());
 
 const PNG_MEDIA = { mime_type: "image/png", extension: "png", byte_size: 100 } as const;
 

@@ -153,8 +153,12 @@ an MCP's described tools before adding it.
 <!-- anchor: deliberate-tool-mode -->
 
 Every declared tool adds to the prompt. `Deliberate Tool Mode` keeps tool declarations out
-of ordinary chat turns unless the message looks like it actually needs a tool; this reduces
-prompt size and helps smaller/local models answer faster.
+of ordinary chat turns unless the message looks like it actually needs a task tool; this
+reduces prompt size and helps smaller/local models answer faster. Sticker selection remains
+available for spontaneous expression when stickers and tool use are enabled and the provider
+supports it. DM, impersonation, and roleplay restrictions still apply. Disable sticker usage
+to prevent sticker replies. A due short-term memory refresh also admits its maintenance tool
+without a user request.
 
 - She first checks the message for tool intent. Built-in triggers cover common requests
   (reminders, web search, memory updates, cross-channel messages, image/video/voice

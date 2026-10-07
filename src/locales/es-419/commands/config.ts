@@ -333,7 +333,6 @@ export default {
       "tool_target_message-action": `Acciones de mensaje`,
       "tool_target_user-blocking": `Bloqueo de usuario por persona`,
       "tool_target_user-info": `Actualizaciones de información de usuario`,
-      tool_target_sticker: `Selección de sticker`,
       tool_target_thread: `Creación de hilo`,
       tool_target_capabilities: `Revisión de capacidades`,
       tool_trigger_literal_label: `Activación literal`,
