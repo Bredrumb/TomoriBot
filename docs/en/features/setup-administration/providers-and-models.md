@@ -97,6 +97,39 @@ retains six personal model-routing slots and does not add personal TTS/STT endpo
 You can also manage this server's backup keys for automatic failover and load balancing with
 `/providers`.
 
+## Decision Models
+
+Decision Models are a separate category in `/providers` and `/personal providers`. They answer typed
+predicates with probabilities. Registration does not change the active chat model, establish
+calibration, or enable response-review skipping. These panels do not yet select a Decision model.
+
+OpenRouter is the supported native provider. Save its key, open its model dropdown, and choose
+`+ Add a Decisions Model`. Enter an ID from its verified Decision catalog. The global catalog
+includes `typesafe/jev-1.13`; additional registrations belong to their server or personal owner.
+Native discovery supplies the documented input limit and prices. Chat catalogs cannot establish
+Decision support.
+
+For a custom service, choose `Add New Custom Endpoint`, then `System One compatible` or
+`OpenAI Decisions compatible` in `API Compatibility`. Save the API base URL and optional Bearer
+credential. Its model dropdown offers `+ Add a Decisions Model` and inherits that protocol. Enter
+the documented model ID and input token limit (at least 512). Jev, Laya, and Kev use System One
+compatibility. Existing chat-compatible and Ollama-native endpoints do not offer this action.
+
+Bare origins normalize to `/v1`. Explicit versions and gateway prefixes remain intact:
+`https://decision.example.invalid/gateway/v1` calls `/gateway/v1/systemone` for System One, or
+`/gateway/v1/decisions` for OpenAI Decisions. Reachability uses `GET <stored-base>/models` without sending conversation
+data; it does not certify model capabilities. Custom models are registered manually from their
+service documentation when discovery cannot establish the necessary capability metadata.
+
+Open a saved Decision registration to edit it. Custom edits preserve its exact model and endpoint
+identity. Choose `Delete This Decision Registration` under `Registration Action` to remove it while
+retaining the connection and credentials. Removing its parent provider or endpoint removes that
+owner's registrations. Other owners retain shared entries. Model lists paginate after 18 editable
+registrations using the existing page controls.
+
+Provider registrations and credentials remain outside persona/configuration exports and imports.
+Configuration reset preserves saved registrations; parent deletion explicitly cleans them up.
+
 ## Custom Endpoints
 <!-- anchor: custom-endpoints -->
 

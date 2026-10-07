@@ -1,6 +1,7 @@
 import { log } from "../misc/logger";
 import { sql } from "@/utils/db/client";
 import { keyManager } from "./keyManager";
+import type { ErrorContext } from "@/types/db/schema";
 /**
  * Encrypts an API key before storing it in the database using pgcrypto's PGP symmetric encryption.
  *
@@ -50,7 +51,11 @@ export const encryptApiKey = async (apiKey: string): Promise<{ encrypted: Buffer
  *
  * @param keyVersion - The version of the key used to encrypt (defaults to 1 for backward compatibility)
  */
-export const decryptApiKey = async (encryptedKey: Buffer, keyVersion: number = 1): Promise<string> => {
+export const decryptApiKey = async (
+  encryptedKey: Buffer,
+  keyVersion: number = 1,
+  failureContext?: ErrorContext,
+): Promise<string> => {
   if (!encryptedKey || encryptedKey.length === 0) {
     log.warn("Empty encrypted key provided for decryption");
     return "";
@@ -71,12 +76,15 @@ export const decryptApiKey = async (encryptedKey: Buffer, keyVersion: number = 1
 
     return result.decrypted_key.toString();
   } catch (error) {
-    log.error(
-      `Failed to decrypt API key with version ${keyVersion}. ` +
-        `Available versions: ${keyManager.getAvailableVersions().join(", ")}. ` +
-        `Run 'bun run audit-keys' to diagnose.`,
-      error,
-    );
+    if (failureContext) {
+      await log.error("Decision operation failed", new Error("Decision credential decryption failed"), failureContext);
+    } else
+      log.error(
+        `Failed to decrypt API key with version ${keyVersion}. ` +
+          `Available versions: ${keyManager.getAvailableVersions().join(", ")}. ` +
+          `Run 'bun run audit-keys' to diagnose.`,
+        error,
+      );
     throw new Error("API key decryption failed");
   }
 };

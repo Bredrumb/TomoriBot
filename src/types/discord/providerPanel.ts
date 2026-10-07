@@ -22,6 +22,7 @@ export interface ProviderPanelModel {
     supportsAssistantPrefill: boolean;
     verbatimToolCalling: boolean;
   };
+  decisionSettings?: { inputTokenLimit: number };
   imageSettings?: ImageEndpointSupports;
   speechSettings?: SpeechEndpointSettings;
 }

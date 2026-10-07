@@ -53,7 +53,7 @@ import { buildTextPreview, textPreviewFooterKey, textPreviewFooterVars } from "@
 import { localizer } from "@/utils/text/localizer";
 
 export const PROVIDERS_ENTRIES_PER_SELECTOR_PAGE = 23;
-export const PROVIDERS_MODELS_PER_SELECTOR_PAGE = 19;
+export const PROVIDERS_MODELS_PER_SELECTOR_PAGE = 18;
 export const PROVIDERS_ADD_PROVIDER_VALUE = "action:add-provider";
 export const PROVIDERS_ADD_ENDPOINT_VALUE = "action:add-endpoint";
 
@@ -143,6 +143,7 @@ const ENDPOINT_API_STYLES: Readonly<Record<CustomEndpointCapability, readonly Cu
   video: ["openai-compatible", "comfyui"],
   speech: ["tts-clone"],
   transcription: ["openai-compatible-transcription"],
+  decision: ["system-one", "openai-decisions"],
 };
 
 export type AddEndpointModalField = "label" | "url" | "api-style" | "auth-token";
@@ -389,6 +390,7 @@ export type ProvidersPanelPage =
   | { kind: "remove"; entryId: string };
 
 export type ProviderModelModalField =
+  | "decision-action"
   | "code-name"
   | "num-ctx"
   | "flags"
@@ -406,6 +408,7 @@ const MODEL_SELECTION_CAPABILITIES: readonly ProviderPanelCapability[] = [
   "video",
   "speech",
   "transcription",
+  "decision",
 ];
 
 const TEXT_CAPABILITY_FLAGS = ["tools", "images", "structured"] as const;
@@ -452,6 +455,7 @@ const IMAGE_SUPPORT_FIELDS: ReadonlyArray<keyof ImageEndpointSupports> = [
 export interface ProviderModelModalDefaults {
   codeName?: string;
   text?: ProviderPanelModel["textSettings"];
+  decision?: ProviderPanelModel["decisionSettings"];
   image?: { supports: ImageEndpointSupports; allowInpaint: boolean };
   speech?: { settings: SpeechEndpointSettings; allowVoiceMode: boolean };
 }
@@ -534,19 +538,34 @@ export function buildProviderModelModal(
       },
     },
   ];
-  if (capability === "text" && entryKind === "endpoint") {
+  if ((capability === "text" || capability === "decision") && entryKind === "endpoint") {
     components.push({
       type: 18,
       label: safeSelectOptionText(localizer(locale, "commands.providers.model_num_ctx_label"), 45),
-      description: safeSelectOptionText(localizer(locale, "commands.providers.model_num_ctx_description"), 100),
+      description: safeSelectOptionText(
+        localizer(
+          locale,
+          capability === "decision"
+            ? "commands.providers.decision_input_limit_description"
+            : "commands.providers.model_num_ctx_description",
+        ),
+        100,
+      ),
       component: {
         type: 4,
         custom_id: buildProviderModelModalFieldId("num-ctx", nonce),
         style: TextInputStyle.Short,
         placeholder: "16384",
-        value: defaults?.text?.numCtx ? String(defaults.text.numCtx) : undefined,
+        value:
+          capability === "decision"
+            ? defaults?.decision
+              ? String(defaults.decision.inputTokenLimit)
+              : undefined
+            : defaults?.text?.numCtx
+              ? String(defaults.text.numCtx)
+              : undefined,
         max_length: 8,
-        required: false,
+        required: capability === "decision",
       },
     });
   }
@@ -595,6 +614,21 @@ export function buildProviderModelModal(
         },
       });
     }
+  }
+  if (capability === "decision" && editingModelId) {
+    components.push({
+      type: 18,
+      label: localizer(locale, "commands.providers.decision_action_label"),
+      component: {
+        type: 21,
+        custom_id: buildProviderModelModalFieldId("decision-action", nonce),
+        required: true,
+        options: [
+          { value: "save", label: localizer(locale, "commands.providers.decision_action_save"), default: true },
+          { value: "delete", label: localizer(locale, "commands.providers.decision_action_delete") },
+        ],
+      },
+    });
   }
   // A curated provider has no speech capability at all, so these only ever reach an endpoint. The
   // clone/VoiceDesign/Auto split describes a `tts-clone` server, which is why the ElevenLabs preset
@@ -966,9 +1000,13 @@ function buildEntryModelSelector(
   );
   const addOptions: SelectMenuComponentOptionData[] = offeredCapabilities.map((capability) => ({
     label: safeSelectOptionText(
-      localizer(locale, "commands.providers.add_capability_model", {
-        capability: localizer(locale, `commands.providers.capabilities.${capability}`),
-      }),
+      localizer(
+        locale,
+        capability === "decision" ? "commands.providers.add_decision_model" : "commands.providers.add_capability_model",
+        {
+          capability: localizer(locale, `commands.providers.capabilities.${capability}`),
+        },
+      ),
       100,
     ),
     value: buildModelSelectionValue("add", capability),

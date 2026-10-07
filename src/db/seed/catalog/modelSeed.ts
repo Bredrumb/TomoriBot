@@ -4,9 +4,9 @@
 // .sql file to keep in sync, and seeding stays an idempotent upsert on every startup.
 
 import type { SQL } from "bun";
-import { embeddingSections, imageSections, llmSections, videoSections } from "./models";
+import { decisionSections, embeddingSections, imageSections, llmSections, videoSections } from "./models";
 import { bool, desc, jsonb, num, str } from "./sql";
-import type { EmbeddingInput, ImageInput, LlmInput, ModelSection, VideoInput } from "./types";
+import type { DecisionInput, EmbeddingInput, ImageInput, LlmInput, ModelSection, VideoInput } from "./types";
 
 /** Providers exempt from the default/smartest invariants (bootstrap placeholders). */
 const INVARIANT_EXEMPT = new Set<string>(["custom"]);
@@ -194,6 +194,32 @@ const embeddingSpec: TableSpec<EmbeddingInput> = {
      OR EXCLUDED.is_deprecated = false`,
   hasSmartest: false,
   sections: embeddingSections,
+};
+
+const decisionSpec: TableSpec<DecisionInput> = {
+  table: "decision_models",
+  columns:
+    "provider, codename, descriptions, is_default, is_deprecated, input_token_limit, sees_images, input_price_per_million, output_price_per_million",
+  tuple: (m) =>
+    [
+      str(m.provider),
+      str(m.codename),
+      jsonb(localizedDescriptions(m)),
+      bool(m.isDefault),
+      bool(m.isDeprecated),
+      num(m.inputTokenLimit),
+      bool(m.seesImages),
+      num(m.inputPricePerMillion),
+      num(m.outputPricePerMillion),
+    ].join(", "),
+  onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
+    descriptions = EXCLUDED.descriptions, is_default = EXCLUDED.is_default,
+    is_deprecated = EXCLUDED.is_deprecated, input_token_limit = EXCLUDED.input_token_limit,
+    sees_images = EXCLUDED.sees_images, input_price_per_million = EXCLUDED.input_price_per_million,
+    output_price_per_million = EXCLUDED.output_price_per_million, updated_at = CURRENT_TIMESTAMP
+    WHERE decision_models.is_scoped_registration = false`,
+  hasSmartest: false,
+  sections: decisionSections,
 };
 
 function rowsOf<T extends RowLike>(spec: TableSpec<T>): T[] {
@@ -385,6 +411,22 @@ export function validateModels(): string[] {
   validateSpec(imageSpec, errors);
   validateSpec(videoSpec, errors);
   validateSpec(embeddingSpec, errors);
+  validateSpec(decisionSpec, errors);
+  for (const model of rowsOf(decisionSpec)) {
+    if (
+      model.provider !== "openrouter" ||
+      !Number.isSafeInteger(model.inputTokenLimit) ||
+      model.inputTokenLimit < 512 ||
+      model.inputTokenLimit > 10_000_000
+    ) {
+      errors.push(`decision_models/${model.codename}: invalid provider or input limit`);
+    }
+    for (const price of [model.inputPricePerMillion, model.outputPricePerMillion]) {
+      if (price !== undefined && (!Number.isFinite(price) || price < 0)) {
+        errors.push(`decision_models/${model.codename}: invalid price`);
+      }
+    }
+  }
   errors.push(...collectStrictChatFlagViolations(rowsOf(llmSpec)));
   errors.push(...collectMeteredPriceViolations(rowsOf(llmSpec)));
   errors.push(...collectTokenLimitViolations(rowsOf(llmSpec)));
@@ -452,6 +494,7 @@ export function buildModelSeedStatements(): string[] {
     renderStatement(imageSpec),
     renderStatement(videoSpec),
     renderStatement(embeddingSpec),
+    renderStatement(decisionSpec),
   ];
 }
 

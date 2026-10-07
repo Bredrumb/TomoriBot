@@ -31,6 +31,7 @@ type ImageGenerationStyle = "chat-completion" | "nai-pipeline" | "none";
 type VideoGenerationStyle = "chat-completion" | "none";
 
 interface ProviderFeatureSupport {
+  decisions: boolean;
   imageGeneration: ImageGenerationStyle;
   videoGeneration: VideoGenerationStyle;
   embeddings: boolean;

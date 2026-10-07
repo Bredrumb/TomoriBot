@@ -4,7 +4,7 @@
 // is no generated SQL file. Edit and commit; the change seeds on the next boot.
 // Run `bun run check-seed-catalogs` to validate the per-provider invariants offline.
 
-import type { EmbeddingInput, ImageInput, LlmInput, ModelSection, VideoInput } from "./types";
+import type { DecisionInput, EmbeddingInput, ImageInput, LlmInput, ModelSection, VideoInput } from "./types";
 
 // inputPricePerMillion / outputPricePerMillion are official standard USD rates per million tokens
 // (uncached base input and output). Vertex and Vertex Express reuse the Gemini SKU prices, and a
@@ -4365,6 +4365,24 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
           vi: "Model embedding NVIDIA NIM mặc định cho truy xuất và lập chỉ mục tài liệu",
           "zh-CN": "用于检索与文档索引的 NVIDIA NIM 默认嵌入模型",
         },
+      },
+    ],
+  },
+];
+
+// https://openrouter.ai/typesafe/jev-1.13 and the catalog's explicit decisions output modality.
+export const decisionSections: ModelSection<DecisionInput>[] = [
+  {
+    comment: "OpenRouter Decisions",
+    rows: [
+      {
+        provider: "openrouter",
+        codename: "typesafe/jev-1.13",
+        isDefault: true,
+        inputTokenLimit: 32000,
+        inputPricePerMillion: 0.042,
+        outputPricePerMillion: 0,
+        desc: "Text predicates through the Decisions API. Registration does not activate response-review skipping.",
       },
     ],
   },

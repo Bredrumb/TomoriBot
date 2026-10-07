@@ -131,6 +131,7 @@ export interface ProvidersRouteDependencies {
   ): Promise<void>;
   takeEndpointBehavior(interactionId: string, nonce: string): string[] | undefined;
   takeDeleteRotation(interactionId: string, nonce: string): string | undefined;
+  takeDecisionAction(interactionId: string, nonce: string): string | undefined;
 }
 
 export interface ProvidersRouteConfiguration {
@@ -292,10 +293,17 @@ function modelReceipt(
   if (result.status === "success") {
     return {
       tone: "success",
-      heading: localizer(locale, "commands.providers.model_added"),
-      detail: localizer(locale, "commands.providers.model_added_detail", {
-        model: result.codeName,
-      }),
+      heading: localizer(
+        locale,
+        result.removed ? "commands.providers.decision_removed" : "commands.providers.model_added",
+      ),
+      detail: localizer(
+        locale,
+        result.removed ? "commands.providers.decision_removed_detail" : "commands.providers.model_added_detail",
+        {
+          model: result.codeName,
+        },
+      ),
     };
   }
   const keys: Record<Exclude<SaveProviderModelResult["status"], "success">, string> = {
@@ -594,6 +602,8 @@ export function createProvidersInteractionRoute(
       ),
     showEndpointEditModal: (interaction, locale, context, nonce) =>
       showRoutedRawModal(interaction, buildEditEndpointModal(locale, context, nonce, configuration.namespace)),
+    takeDecisionAction: (interactionId, nonce) =>
+      takeRawModalSelectValue(interactionId, buildProviderModelModalFieldId("decision-action", nonce)),
     takeDeleteRotation: (interactionId, nonce) =>
       takeRawModalSelectValue(interactionId, buildEditProviderModalFieldId("delete-rotation", nonce)),
     ...overrides,
@@ -753,6 +763,7 @@ export function createProvidersInteractionRoute(
           {
             codeName: editing?.codeName,
             text: editing?.textSettings,
+            decision: editing?.decisionSettings,
             ...imageModalDefaults(selection.capability, route.entryKind, route.entryKey, section, editing),
             ...speechModalDefaults(selection.capability, section, editing),
           },
@@ -764,6 +775,11 @@ export function createProvidersInteractionRoute(
         route.action === "add-submit" ? dependencies.takeProvider(interaction.id, route.nonce) : undefined;
       const selectedApiStyle =
         route.action === "endpoint-submit" ? dependencies.takeApiStyle(interaction.id, route.nonce) : undefined;
+      const removeDecisionModel =
+        route.action === "model-submit" &&
+        route.capability === "decision" &&
+        Boolean(route.editingModelId) &&
+        dependencies.takeDecisionAction(interaction.id, route.nonce) === "delete";
       const selectedModelFlags =
         route.action === "model-submit" ? (dependencies.takeModelFlags(interaction.id, route.nonce) ?? []) : [];
       const selectedImageSupports =
@@ -1075,7 +1091,7 @@ export function createProvidersInteractionRoute(
           return;
         }
         const rawNumCtx =
-          route.entryKind === "endpoint" && route.capability === "text"
+          route.entryKind === "endpoint" && (route.capability === "text" || route.capability === "decision")
             ? modal.fields.getTextInputValue(buildProviderModelModalFieldId("num-ctx", route.nonce)).trim()
             : "";
         const numCtx = rawNumCtx ? Number(rawNumCtx) : null;
@@ -1090,6 +1106,7 @@ export function createProvidersInteractionRoute(
               capability: route.capability,
               codeName: modal.fields.getTextInputValue(buildProviderModelModalFieldId("code-name", route.nonce)).trim(),
               editingModelId: route.editingModelId ?? undefined,
+              removeDecisionModel,
               numCtx: rawNumCtx ? (Number.isSafeInteger(numCtx) ? numCtx : Number.NaN) : null,
               hasTools: selectedModelFlags.includes("tools"),
               seesImages: selectedModelFlags.includes("images"),

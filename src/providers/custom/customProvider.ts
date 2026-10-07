@@ -1,3 +1,5 @@
+import { callCustomDecisions } from "@/providers/custom/customDecisions";
+import type { ProviderDecisionRequest, DecisionResult, SupportsDecisions } from "@/types/provider/featureInterfaces";
 /**
  * Custom provider implementation for self-hosted OpenAI-compatible endpoints
  *
@@ -123,6 +125,7 @@ export class CustomProvider
   extends BaseLLMProvider
   implements
     LLMProvider,
+    SupportsDecisions,
     SupportsStructuredOutput,
     SupportsConversationCompaction,
     SupportsPresetGeneration,
@@ -130,9 +133,10 @@ export class CustomProvider
     SupportsNativeImageGeneration,
     SupportsNativeVideoGeneration
 {
-  /**
-   * Get provider information and capabilities
-   */
+  async callDecisions(request: ProviderDecisionRequest): Promise<DecisionResult> {
+    return await callCustomDecisions(request);
+  }
+
   getInfo(): ProviderInfo {
     return customProviderInfo;
   }

@@ -67,6 +67,22 @@ Repository file past ~1,000 lines, that signals the domain is too broad: **split
 (e.g. `LlmRepository` → `LlmModelRepository` + `LlmProviderRepository` + `LlmOverrideRepository`) rather
 than externalising SQL. Size is the signal; the split must follow a coherent domain boundary.
 
+## Decision models
+
+`decision_models` stores provider/codename, documented input limit, predicate capability, image
+metadata, optional prices, and catalog flags independently of `llms`. Migration
+`098_decision_models.sql` adds a cascading `decision_model_id` foreign key to
+`scoped_model_registrations`, owner-specific partial unique indexes, and a one-model check across
+all five catalog references. Fresh schema and idempotent migration preserve the same constraints.
+Down migration refuses to discard scoped registrations or Decision endpoint connections.
+
+OpenRouter seeds are visible to owners with saved credentials. Scoped registrations require exact
+owner matches. Custom registrations use existing connections, endpoints, synthetic catalog rows,
+and encrypted saved-provider credentials. Only System One and OpenAI Decisions styles admit this
+category. Registration does not write text assignments or activate a default endpoint. Parent
+deletion removes owned references and orphaned custom catalog rows. Provider registrations and
+secrets remain separate from transferable configuration and survive configuration reset.
+
 ## Main Tables (Current)
 
 ### Core identity/config

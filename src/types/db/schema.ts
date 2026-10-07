@@ -320,7 +320,31 @@ export const embeddingModelSchema = z.object({
 });
 export type EmbeddingModelRow = z.infer<typeof embeddingModelSchema>;
 
-const customEndpointCapabilitySchema = z.enum(["text", "embedding", "image", "video", "speech", "transcription"]);
+export const decisionModelSchema = z.object({
+  decision_model_id: z.number().int().positive(),
+  provider: z.string(),
+  codename: z.string().min(1).max(200),
+  descriptions: z.record(z.string(), z.string()).nullable().optional(),
+  is_scoped_registration: z.boolean().default(false),
+  is_default: z.boolean().default(false),
+  is_deprecated: z.boolean().default(false),
+  input_token_limit: z.number().int().min(512).max(10_000_000),
+  sees_images: z.boolean().default(false),
+  supported_primitives: z.array(z.literal("predicate")).length(1),
+  input_price_per_million: z.coerce.number().finite().nonnegative().nullable().optional(),
+  output_price_per_million: z.coerce.number().finite().nonnegative().nullable().optional(),
+});
+export type DecisionModelRow = z.infer<typeof decisionModelSchema>;
+
+const customEndpointCapabilitySchema = z.enum([
+  "text",
+  "embedding",
+  "image",
+  "video",
+  "speech",
+  "transcription",
+  "decision",
+]);
 export type CustomEndpointCapability = z.infer<typeof customEndpointCapabilitySchema>;
 
 export const customEndpointApiStyleSchema = z.enum([
@@ -331,6 +355,8 @@ export const customEndpointApiStyleSchema = z.enum([
   "elevenlabs-transcription",
   "tts-clone",
   "openai-compatible-transcription",
+  "system-one",
+  "openai-decisions",
 ]);
 export type CustomEndpointApiStyle = z.infer<typeof customEndpointApiStyleSchema>;
 
@@ -437,6 +463,14 @@ export const openRouterVideoModelRegistrationSchema = z.object({
   updated_at: z.coerce.date().optional(),
 });
 export type OpenRouterVideoModelRegistrationRow = z.infer<typeof openRouterVideoModelRegistrationSchema>;
+
+export const decisionModelRegistrationSchema = z.object({
+  scoped_model_registration_id: z.number().int().positive(),
+  server_id: z.number().nullable(),
+  user_id: z.number().nullable(),
+  decision_model_id: z.number().int().positive(),
+});
+export type DecisionModelRegistrationRow = z.infer<typeof decisionModelRegistrationSchema>;
 
 /**
  * Normalizes a JSONB array value from the database driver.
