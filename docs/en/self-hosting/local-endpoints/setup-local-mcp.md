@@ -22,8 +22,6 @@ npx -y <some-mcp-server> --port 3000
 
 The exact command depends on the server you are running. Note the URL and transport path it prints (commonly `http://localhost:3000/sse`).
 
-TomoriBot's tooling expects Node.js v20+ to be available on the host for local MCP servers.
-
 ## 2. Register it in Discord
 
 Open `/config` > Plugins > MCP Servers, choose `+ Add MCP`, set the `Server URL` field to your local endpoint, and keep `Server Type` on its default `General Purpose` setting:

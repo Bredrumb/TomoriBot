@@ -34,8 +34,6 @@ import {
   generateRoleplaySummaryAnthropic,
 } from "@/providers/anthropic/compactGenerator";
 import { generatePresetFromPromptAnthropic } from "@/providers/anthropic/presetGenerator";
-import { isBraveSearchAvailable } from "@/tools/restAPIs/brave/braveSearchService";
-import { getMCPManager } from "@/utils/mcp/mcpManager";
 import type { TomoriState } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 import type {
@@ -378,15 +376,6 @@ export class AnthropicProvider
     if (!request.toolContext) {
       log.warn("Anthropic preset generation skipped search tools: no tool context available.");
       return undefined;
-    }
-
-    const hasBraveApiKey = await isBraveSearchAvailable(request.tomoriState.server_id);
-
-    if (!hasBraveApiKey) {
-      const mcpManager = getMCPManager();
-      if (!mcpManager.isReady()) {
-        await mcpManager.initializeMCPServers();
-      }
     }
 
     const toolStateForContext: ToolStateForContext = {

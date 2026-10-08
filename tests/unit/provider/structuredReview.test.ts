@@ -206,8 +206,8 @@ describe("private structured review transports", () => {
     const script = `
       import {reviewResponseCandidate, createResponseReviewState} from "./src/utils/chat/responseReview";
       import {checkResponseRules} from "./src/utils/chat/responseRuleCheck";
-      import {getMCPManager} from "./src/utils/mcp/mcpManager";
       import {getGuildMcpManager} from "./src/utils/mcp/guildMcpManager";
+      import {mcpRepository} from "./src/utils/db/repositories";
       import {createPersona, createLlmRow} from "./tests/helpers/fixtures";
       import {ContextItemTag} from "./src/types/misc/context";
       const persona = createPersona({llm:createLlmRow({supports_structoutput:true,context_window:64000}),config:{response_drafting_enabled:true,response_reviewer_prompt:"PRIVATE_RUBRIC"}});
@@ -220,10 +220,9 @@ describe("private structured review transports", () => {
       const result = await reviewResponseCandidate(context,{callStructuredJSON:async()=>{throw new Error("PRIVATE_BODY PRIVATE_KEY");}},{apiKey:"PRIVATE_KEY",model:persona.llm.llm_codename});
       if(result.status !== "unavailable") process.exit(1);
       await reviewResponseCandidate(context,{},{});
-      const manager = getMCPManager();
-      manager.getEnhancedServerConfigurations = () => [{name:"fixture"}];
-      manager.getMCPTool = () => ({tool:async()=>{throw new Error("PRIVATE_RULE_BODY PRIVATE_KEY");}});
-      const rule = await checkResponseRules(42,{scope:"global",serviceName:"fixture",toolName:"check_slop"},"PRIVATE_DRAFT",{calls:0},new AbortController().signal);
+      mcpRepository.loadGuildMcpConfigsResult = async () => ({status:"fresh",configs:[{server_id:42,guild_mcp_id:7,is_enabled:true,name:"fixture",url:"https://rules.example.test/mcp"}]});
+      getGuildMcpManager().getRegisteredTool = async () => ({tool:async()=>{throw new Error("PRIVATE_RULE_BODY PRIVATE_KEY");}});
+      const rule = await checkResponseRules(42,{scope:"workspace",registrationId:7,toolName:"check_slop"},"PRIVATE_DRAFT",{calls:0},new AbortController().signal);
       if(rule.status !== "failed") process.exit(1);
       await getGuildMcpManager().cleanup();
     `;

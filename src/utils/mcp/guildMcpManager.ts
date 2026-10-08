@@ -28,7 +28,7 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import { getCachedEnabledGuildMcpConfigs } from "@/utils/cache/guildMcpConfigCache";
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { sendToolNotice } from "@/utils/discord/toolProgressNotice";
-import { sendFetchProgressNotice } from "@/utils/mcp/mcpExecutor";
+import { sendFetchProgressNotice } from "@/tools/fetchUrl/fetchProgressNotice";
 import { validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { localizer } from "@/utils/text/localizer";
@@ -804,7 +804,6 @@ class GuildMcpManager {
 
   /**
    * Default result processing for guild MCP tools.
-   * Mirrors the processDefaultMCPResult logic from mcpExecutor.ts.
    */
   private processDefaultResult(
     functionName: string,

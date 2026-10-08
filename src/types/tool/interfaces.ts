@@ -16,7 +16,6 @@ import type {
   AnyThreadChannel,
   Webhook,
 } from "discord.js";
-import type { TypedMCPToolResult } from "./mcpTypes";
 import type { FunctionResponseImageMetadata } from "../provider/interfaces";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 
@@ -434,8 +433,8 @@ interface ToolAdapter {
 }
 
 /**
- * Enhanced tool adapter interface that includes MCP capabilities
- * Provides provider-agnostic access to both built-in and MCP tools
+ * Tool adapter that also declares the server's guild MCP tools
+ * Provides provider-agnostic access to both built-in and guild MCP tools
  */
 export interface MCPCapableToolAdapter extends ToolAdapter {
   /**
@@ -448,22 +447,6 @@ export interface MCPCapableToolAdapter extends ToolAdapter {
     serverId?: number,
     allowedMCPFunctions?: string[],
   ): Promise<Array<Record<string, unknown>>>;
-
-  /**
-   * Check if a function name belongs to an MCP tool
-   * @returns Promise<boolean> - True if this is an MCP tool function
-   */
-  isMCPFunction(functionName: string): Promise<boolean>;
-
-  /**
-   * Execute an MCP tool function
-   * @param context - Tool execution context for Discord operations
-   */
-  executeMCPFunction(
-    functionName: string,
-    args: Record<string, unknown>,
-    context?: ToolContext,
-  ): Promise<TypedMCPToolResult>;
 }
 
 export interface ToolExecutionEvent {

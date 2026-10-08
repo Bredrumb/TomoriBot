@@ -6,7 +6,7 @@ sidebar:
 
 Add private, self-hosted web search to TomoriBot using [SearXNG](https://docs.searxng.org/).
 
-The `web_search` tool queries an engine fallback chain: Brave, SearXNG, DuckDuckGo, and IAsk. Running a local SearXNG instance provides a self-hosted search source when an external provider hits rate limits or fails, and enables specialized search categories: `science`, `it`, `files`, and `music`.
+The `web_search` tool queries an engine fallback chain: Brave, SearXNG, and DuckDuckGo. Running a local SearXNG instance provides a self-hosted search source when an external provider hits rate limits or fails, and enables specialized search categories: `science`, `it`, `files`, and `music`.
 
 Choose a setup path:
 
@@ -68,9 +68,9 @@ Without `SEARXNG_SECRET` in the container environment, the image generates an ep
 
 ### Option C: No SearXNG
 
-Leave `SEARXNG_BASE_URL` unset. The chain falls back to `Brave → DuckDuckGo → IAsk`.
+Leave `SEARXNG_BASE_URL` unset. The chain falls back to `Brave → DuckDuckGo`.
 
-When no SearXNG server is configured, the assembled `web_search` schema no longer advertises SearXNG-only categories. The common categories (`text`, `image`, `video`, `news`) still appear when Brave is configured, and text-only search appears when only the DuckDuckGo/IAsk MCP fallback is available.
+When no SearXNG server is configured, the assembled `web_search` schema no longer advertises SearXNG-only categories. The common categories (`text`, `image`, `video`, `news`) still appear when Brave is configured, and text-only search appears when only the built-in DuckDuckGo fallback is available.
 
 ---
 

@@ -118,7 +118,7 @@ application configuration via `GET /applications/@me` before client construction
 Once the gateway connection is confirmed, `eventHandler` runs sorted handlers under `src/events/clientReady/`:
 
 1. `01_registercommands.ts`: Registers application slash commands with the Discord REST API.
-2. `02_registerMCPs.ts`: Connects configured Model Context Protocol servers.
+2. `02_guildMcpLifecycle.ts`: Registers guild MCP shutdown cleanup and, outside production, pre-connects enabled guild servers. No local MCP process starts.
 3. `03_initCommandRegistry.ts`: Builds fast-lookup routing maps for slash commands.
 4. `04_syncCommandCatalog.ts`: Synchronizes command metadata and descriptions with database tables.
 5. `status.ts`: Configures the bot's user status and activity message.

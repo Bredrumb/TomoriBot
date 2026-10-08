@@ -18,7 +18,6 @@ for you.
 ## Prerequisites
 
 - [Bun](https://bun.sh/)
-- Node.js v20+ (used for MCP tooling)
 - PostgreSQL installed natively, or run in a Docker container (see step 2)
 
 PostgreSQL schema, `pgcrypto`, seeds, and migrations initialize automatically on bot startup.
@@ -192,8 +191,8 @@ HF_TOKEN=hf_xxx bun run setup:tokenizers
 
 Without this step logit bias is silently disabled and everything else works normally.
 
-The secure `fetch_url` fallback runs in process and needs no Python package. DuckDuckGo/IAsk
-`web_search` ships with `bun install --frozen-lockfile`, so it also needs no extra installation.
+The secure `fetch_url` fallback and the DuckDuckGo `web_search` fallback both run in process, so
+neither needs an extra installation.
 
 ## Maintenance, updating & backups
 

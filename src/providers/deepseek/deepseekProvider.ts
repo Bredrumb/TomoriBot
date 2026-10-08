@@ -23,8 +23,6 @@ import {
   generateRoleplaySummaryDeepseek,
 } from "@/providers/deepseek/compactGenerator";
 import { generatePresetFromPromptDeepseek } from "@/providers/deepseek/presetGenerator";
-import { isBraveSearchAvailable } from "@/tools/restAPIs/brave/braveSearchService";
-import { getMCPManager } from "@/utils/mcp/mcpManager";
 import { buildActiveSamplingParams, getActiveTemperature } from "@/utils/provider/samplingControl";
 import type { TomoriState } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
@@ -359,15 +357,6 @@ export class DeepseekProvider
     if (!request.toolContext) {
       log.warn("DeepSeek preset generation skipped search tools: no tool context available.");
       return undefined;
-    }
-
-    const hasBraveApiKey = await isBraveSearchAvailable(request.tomoriState.server_id);
-
-    if (!hasBraveApiKey) {
-      const mcpManager = getMCPManager();
-      if (!mcpManager.isReady()) {
-        await mcpManager.initializeMCPServers();
-      }
     }
 
     const toolStateForContext: ToolStateForContext = {

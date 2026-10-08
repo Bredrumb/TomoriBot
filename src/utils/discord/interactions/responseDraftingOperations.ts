@@ -20,7 +20,6 @@ import {
 import type { DraftModelSlot } from "@/utils/discord/configPanelCatalog";
 import { getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
-import { getMCPManager } from "@/utils/mcp/mcpManager";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { localizer, resolveDescription } from "@/utils/text/localizer";
 
@@ -116,16 +115,6 @@ export async function loadDraftingModelGroups(
 
 export async function loadDraftCheckerChoices(serverId: number): Promise<DraftCheckerChoice[]> {
   const choices: DraftCheckerChoice[] = [];
-  const manager = getMCPManager();
-  for (const config of manager.getEnhancedServerConfigurations()) {
-    const tool = manager.getMCPTool(config.name);
-    if (await hasCompatibleChecker(tool, serverId)) {
-      choices.push({
-        reference: { scope: "global", serviceName: config.name, toolName: "check_slop" },
-        label: config.displayName,
-      });
-    }
-  }
   const read = await mcpRepository.loadGuildMcpConfigsResult(serverId);
   if (read.status !== "fresh") return choices;
   const guildManager = getGuildMcpManager();

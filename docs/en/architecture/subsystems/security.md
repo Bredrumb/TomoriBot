@@ -113,7 +113,7 @@ Guild MCP servers, custom LLM endpoints, and `safeDownload()` media requests use
 
 - **Deterministic lockfiles**: builds use `--frozen-lockfile` with strict dependency pinning.
 - **Pinned runtime images**: production Docker containers pin Bun base images by digest; GitHub Actions workflows pin external actions by full commit SHA.
-- **Bundled MCP packages**: built-in npm MCP servers are pinned in `package.json`; production uses pre-installed binaries rather than runtime `bunx` resolution.
+- **No bundled MCP processes**: the bot starts no local or stdio MCP server. Default search and page reading run in process; MCP tools come only from administrator-registered remote guild servers.
 - **Dependency audits**: continuous integration enforces `bun audit` and container vulnerability scanning.
 - **OIDC authentication**: production deployment workflows use short-lived OIDC tokens for cloud provider authentication rather than static credentials.
 

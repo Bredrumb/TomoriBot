@@ -283,15 +283,7 @@ async function loadToolPromptMacroAvailability(
       getAvailableToolsWithMCP(provider, stateForContext),
       loadGuildToolFamilyNames(stateForContext.server_id),
     ]);
-    // Names that are filtered globally in `availability.ts` but might still
-    // appear in MCP listings, so kept here as a defensive trim.
-    const providerHiddenGlobalFunctions = new Set([
-      "iask-search",
-      "monica-search",
-      "fetch",
-      "fetch-url",
-      "url-metadata",
-    ]);
+    const hiddenGenericFetchNames = new Set(["fetch", "fetch-url", "url-metadata"]);
     const availableToolNames = new Set<string>();
 
     for (const tool of builtInTools) {
@@ -299,7 +291,7 @@ async function loadToolPromptMacroAvailability(
     }
 
     for (const functionName of mcpFunctionNames) {
-      if (providerHiddenGlobalFunctions.has(functionName)) {
+      if (hiddenGenericFetchNames.has(functionName)) {
         continue;
       }
       availableToolNames.add(functionName);

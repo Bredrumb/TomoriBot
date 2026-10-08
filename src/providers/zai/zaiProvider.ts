@@ -24,8 +24,6 @@ import type { TomoriState } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 import { generateConversationSummaryZai, generateRoleplaySummaryZai } from "@/providers/zai/compactGenerator";
 import { generatePresetFromPromptZai } from "@/providers/zai/presetGenerator";
-import { isBraveSearchAvailable } from "@/tools/restAPIs/brave/braveSearchService";
-import { getMCPManager } from "@/utils/mcp/mcpManager";
 import { buildActiveSamplingParams, getActiveTemperature } from "@/utils/provider/samplingControl";
 import type {
   CompactConversationResult,
@@ -395,15 +393,6 @@ export class ZaiProvider
     if (!request.toolContext) {
       log.warn("Z.ai preset generation skipped search tools: no tool context available.");
       return undefined;
-    }
-
-    const hasBraveApiKey = await isBraveSearchAvailable(request.tomoriState.server_id);
-
-    if (!hasBraveApiKey) {
-      const mcpManager = getMCPManager();
-      if (!mcpManager.isReady()) {
-        await mcpManager.initializeMCPServers();
-      }
     }
 
     const toolStateForContext: ToolStateForContext = {

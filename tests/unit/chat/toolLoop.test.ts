@@ -50,7 +50,7 @@ import { createExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
 let toolExecuteCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 let toolExecuteQueue: ToolResult[] = [];
 let requiresFollowUp = false;
-let requiresFollowUpCalls: Array<{ name: string; provider: string; serverId?: number }> = [];
+let requiresFollowUpCalls: Array<{ name: string; serverId?: number }> = [];
 let hasStopRequest = false;
 let isFollowUpRequest = false;
 let clearStopRequestCalls = 0;
@@ -168,8 +168,8 @@ scopedMock.module("@/tools/toolRegistry", () => ({
       const next = toolExecuteQueue.shift();
       return next ?? { success: true, data: { result: "ok" } };
     },
-    requiresFollowUp: async (name: string, provider: string, serverId?: number) => {
-      requiresFollowUpCalls.push({ name, provider, serverId });
+    requiresFollowUp: async (name: string, serverId?: number) => {
+      requiresFollowUpCalls.push({ name, serverId });
       return requiresFollowUp;
     },
   }),
@@ -981,7 +981,7 @@ describe("runToolLoop — contract tests", () => {
     expect(capturedHistories).toHaveLength(2);
     expect(result.personaResponses[0]?.text).toBe("Here is what I found.");
     expect(context.streamingContext.suppressTextOutput).toBe(false);
-    expect(requiresFollowUpCalls).toEqual([{ name: "web_search", provider: "novelai", serverId: 1 }]);
+    expect(requiresFollowUpCalls).toEqual([{ name: "web_search", serverId: 1 }]);
   });
 
   it("NovelAI ends after pre-tool text when the successful tool does not require follow-up", async () => {
@@ -997,7 +997,7 @@ describe("runToolLoop — contract tests", () => {
     expect(result.status).toBe("completed");
     expect(capturedHistories).toHaveLength(1);
     expect(result.personaResponses[0]?.text).toBe("That is done.");
-    expect(requiresFollowUpCalls).toEqual([{ name: "non_follow_up_tool", provider: "novelai", serverId: 1 }]);
+    expect(requiresFollowUpCalls).toEqual([{ name: "non_follow_up_tool", serverId: 1 }]);
   });
 
   it("NovelAI suppresses repeated text and retries a tool failure after pre-tool text", async () => {

@@ -4,8 +4,6 @@ import { ToolRegistry } from "@/tools/toolRegistry";
 import type { ToolContext } from "@/types/tool/interfaces";
 import type { GuildMCPConnection } from "@/types/tool/mcpTypes";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
-import { getMCPManager } from "@/utils/mcp/mcpManager";
-import { getMCPExecutor } from "@/utils/mcp/mcpExecutor";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { createPersona } from "../../helpers/fixtures";
 import { stubLogMembers } from "../../helpers/mockSurface";
@@ -17,11 +15,7 @@ describe("reviewed requests at real dispatch owners", () => {
   let effects: Array<{ name: string; args: Record<string, unknown> }>;
   let context: ToolContext;
   const guild = getGuildMcpManager();
-  const global = getMCPManager();
-  const executor = getMCPExecutor();
   const guildRoute = spyOn(guild, "isGuildMCPFunction");
-  const ready = spyOn(global, "isReady");
-  const globalTools = spyOn(global, "getMCPTools");
   const finder = spyOn(
     guild as unknown as {
       findConnectionForFunction(serverId: number, name: string): Promise<GuildMCPConnection | null>;
@@ -45,26 +39,16 @@ describe("reviewed requests at real dispatch owners", () => {
     };
     guildRoute.mockResolvedValue(false);
     finder.mockResolvedValue(null);
-    ready.mockReturnValue(true);
-    globalTools.mockReturnValue([]);
-    ToolRegistry.registerMCPAdapter({
-      getProviderName: () => context.provider,
-      convertTool: () => ({}),
-      convertResult: () => ({}),
-      getAllToolsInProviderFormat: async () => [],
-      isMCPFunction: (name) => executor.isMCPFunction(name),
-      executeMCPFunction: (name, args, toolContext) => executor.executeMCPFunction(name, args, toolContext),
-    });
   });
 
   afterEach(() => {
     ToolRegistry.clearRegistry();
   });
   afterAll(() => {
-    for (const spy of [guildRoute, ready, globalTools, finder]) spy.mockRestore();
+    for (const spy of [guildRoute, finder]) spy.mockRestore();
   });
 
-  // These spies replace discovery only. The registry and MCP executors invoke real fake transports.
+  // These spies replace discovery only. The registry and guild MCP manager invoke real fake transports.
   const transport = (name: string, interruptOnDiscovery = false): CallableTool => ({
     tool: async () => {
       if (interruptOnDiscovery) cancelled = true;
@@ -78,11 +62,21 @@ describe("reviewed requests at real dispatch owners", () => {
 
   it("prevents author dispatch of the configured internal checker", async () => {
     context.tomoriState.config.response_rule_checker_ref = {
-      scope: "global",
-      serviceName: "fixture-checker",
+      scope: "workspace",
+      registrationId: 91,
       toolName: "check_slop",
     };
-    globalTools.mockReturnValue([transport("check_slop")]);
+    guildRoute.mockResolvedValue(true);
+    finder.mockResolvedValue({
+      guildMcpId: 91,
+      serverId: context.tomoriState.server_id,
+      name: "fixture-checker",
+      client: {},
+      callableTool: transport("check_slop"),
+      functionNames: ["check_slop"],
+      connectedAt: 0,
+      lastUsedAt: 0,
+    });
     expect((await ToolRegistry.executeTool("check_slop", { text: "PRIVATE_DRAFT" }, context)).success).toBe(false);
     expect(effects).toHaveLength(0);
   });
@@ -112,25 +106,6 @@ describe("reviewed requests at real dispatch owners", () => {
     context.guildId = "allowed";
     expect((await ToolRegistry.executeTool(prepared.name, prepared.args, context)).success).toBe(true);
     expect(effects).toEqual([prepared]);
-  });
-
-  it("global MCP sends the prepared defaults exactly once through its existing executor", async () => {
-    globalTools.mockReturnValue([transport("brave_web_search")]);
-    const prepared = await ToolRegistry.prepareToolRequest(
-      "brave_web_search",
-      { query: "fictional fixture", count: 1 },
-      context,
-    );
-    expect(prepared.args).toMatchObject({ count: 20, summary: true, safesearch: "off" });
-    context.preparedToolRequest = prepared;
-    expect((await ToolRegistry.executeTool(prepared.name, prepared.args, context)).success).toBe(true);
-    expect(effects).toEqual([prepared]);
-  });
-
-  it("global MCP cancels after asynchronous discovery before calling the transport", async () => {
-    globalTools.mockReturnValue([transport("fixture_lookup", true)]);
-    expect((await ToolRegistry.executeTool("fixture_lookup", { target: "fixture" }, context)).success).toBe(false);
-    expect(effects).toEqual([]);
   });
 
   for (const cancelAfterLookup of [false, true]) {

@@ -2,7 +2,6 @@ import { afterAll, afterEach, describe, expect, it, spyOn } from "bun:test";
 import { Type, type CallableTool } from "@google/genai";
 import type { GuildMcpServerRow } from "@/types/db/schema";
 import { checkResponseRules, validateRuleAnalysis, type RuleCheckState } from "@/utils/chat/responseRuleCheck";
-import { getMCPManager } from "@/utils/mcp/mcpManager";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { mcpRepository } from "@/utils/db/repositories";
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
@@ -212,32 +211,20 @@ describe("optional response rule evidence", () => {
     expect(errors).not.toHaveBeenCalled();
   });
 
-  it("requires an enabled exact global service instead of a matching display name", async () => {
-    const global = getMCPManager();
-    const configs = spyOn(global, "getEnhancedServerConfigurations").mockReturnValue([]);
-    const tools = spyOn(global, "getMCPTool").mockReturnValue(checker);
-    const call = spyOn(global, "callInternalRuleChecker").mockResolvedValue({
-      content: [],
-      structuredContent: analysis(),
-    });
-    try {
-      expect(
-        (
-          await checkResponseRules(
-            42,
-            { scope: "global", serviceName: "fixture", toolName: "check_slop" },
-            prose,
-            { calls: 0 },
-            new AbortController().signal,
-          )
-        ).status,
-      ).toBe("failed");
-      expect(call).not.toHaveBeenCalled();
-    } finally {
-      configs.mockRestore();
-      tools.mockRestore();
-      call.mockRestore();
-    }
+  it("reports a saved bot-wide checker as failed without calling any service", async () => {
+    expect(
+      (
+        await checkResponseRules(
+          42,
+          { scope: "global", serviceName: "fixture", toolName: "check_slop" },
+          prose,
+          { calls: 0 },
+          new AbortController().signal,
+        )
+      ).status,
+    ).toBe("failed");
+    expect(discovery).not.toHaveBeenCalled();
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it("bounds a stalled checker deadline separately from turn cancellation", async () => {
@@ -252,44 +239,6 @@ describe("optional response rule evidence", () => {
       expect(errors).toHaveBeenCalledTimes(1);
     } finally {
       timeout.mockRestore();
-    }
-  });
-
-  it("uses the real global manager client with fixed text arguments and SDK cancellation options", async () => {
-    const global = getMCPManager();
-    const clients = (global as unknown as { mcpClients: Map<string, unknown> }).mcpClients;
-    const calls: Array<{ params: unknown; options: { signal: AbortSignal } }> = [];
-    const config = {
-      name: "private-rule-fixture",
-      displayName: "Fixture",
-      description: "Fixture",
-      requiredEnvVars: [],
-      optionalEnvVars: [],
-      enabled: true,
-      category: "utility" as const,
-      priority: 1,
-      transport: "stdio" as const,
-    };
-    const configs = spyOn(global, "getEnhancedServerConfigurations").mockReturnValue([config]);
-    clients.set(config.name, {
-      callTool: async (params: unknown, _schema: unknown, options: { signal: AbortSignal }) => {
-        calls.push({ params, options });
-        return { content: [], structuredContent: analysis() };
-      },
-    });
-    try {
-      const controller = new AbortController();
-      await global.callInternalRuleChecker(config.name, prose, controller.signal);
-      expect(calls[0].params).toEqual({ name: "check_slop", arguments: { text: prose } });
-      expect(calls[0].options.signal).toBe(controller.signal);
-      controller.abort();
-      await expect(global.callInternalRuleChecker(config.name, prose, controller.signal)).rejects.toThrow();
-      configs.mockReturnValue([]);
-      await expect(global.callInternalRuleChecker(config.name, prose, new AbortController().signal)).rejects.toThrow();
-      expect(calls).toHaveLength(1);
-    } finally {
-      clients.delete(config.name);
-      configs.mockRestore();
     }
   });
 });

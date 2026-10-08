@@ -3,7 +3,6 @@ import { z } from "zod";
 import type { ResponseRuleCheckerRef } from "@/types/db/schema";
 import { mcpRepository } from "@/utils/db/repositories";
 import { isCompatibleRuleChecker } from "@/utils/discord/interactions/responseDraftingOperations";
-import { getMCPManager } from "@/utils/mcp/mcpManager";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { log } from "@/utils/misc/logger";
 
@@ -121,7 +120,6 @@ export async function checkResponseRules(
   try {
     signal.throwIfAborted();
     if (Buffer.byteLength(text, "utf8") > MAX_RULE_INPUT_BYTES) throw new Error("Rule input size");
-    const global = getMCPManager();
     const guild = getGuildMcpManager();
     const registration =
       reference.scope === "workspace" ? await bounded(mcpRepository.loadGuildMcpConfigsResult(serverId)) : null;
@@ -132,14 +130,7 @@ export async function checkResponseRules(
             (row) => row.server_id === serverId && row.guild_mcp_id === reference.registrationId && row.is_enabled,
           )
         : undefined;
-    const tool =
-      reference.scope === "global"
-        ? global.getEnhancedServerConfigurations().some((entry) => entry.name === reference.serviceName)
-          ? global.getMCPTool(reference.serviceName)
-          : null
-        : config
-          ? await bounded(guild.getRegisteredTool(config, true))
-          : null;
+    const tool = config ? await bounded(guild.getRegisteredTool(config, true)) : null;
     signal.throwIfAborted();
     if (!tool || !(await bounded(tool.tool())).functionDeclarations?.some(isCompatibleRuleChecker))
       throw new Error("Rule binding unavailable");
@@ -175,12 +166,7 @@ export async function checkResponseRules(
           throw new Error("Rule registration changed");
       }
       signal.throwIfAborted();
-      const raw =
-        reference.scope === "global"
-          ? await bounded(global.callInternalRuleChecker(reference.serviceName, text, signal))
-          : config
-            ? await bounded(guild.callInternalRuleChecker(config, text, signal))
-            : null;
+      const raw = config ? await bounded(guild.callInternalRuleChecker(config, text, signal)) : null;
       signal.throwIfAborted();
       stage = "validation";
       const envelope = z

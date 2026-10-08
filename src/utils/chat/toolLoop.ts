@@ -1224,7 +1224,7 @@ async function shouldEndAfterPreToolText(
     providerIsApiFamily(providerName, "novelai") || TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT.has(functionName);
   if (!applies) return false;
   if (functionName === "update_short_term_memory") return true;
-  return !(await ToolRegistry.requiresFollowUp(functionName, providerName, serverId));
+  return !(await ToolRegistry.requiresFollowUp(functionName, serverId));
 }
 
 /**
@@ -1241,11 +1241,7 @@ async function isSettledAfterTool(
   if (!lastToolName || emptyResult.naiContinuationPrefill) return false;
   const data = emptyResult.data as { finishReason?: unknown; emptyResponseReason?: unknown } | undefined;
   if (data?.finishReason === "length" || data?.emptyResponseReason) return false;
-  return !(await ToolRegistry.requiresFollowUp(
-    lastToolName,
-    params.provider.getInfo().name,
-    params.tomoriState.server_id,
-  ));
+  return !(await ToolRegistry.requiresFollowUp(lastToolName, params.tomoriState.server_id));
 }
 
 async function emitNaiToolRetryExhausted(context: ChatTurnContext): Promise<void> {

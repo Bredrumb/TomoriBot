@@ -44,7 +44,6 @@ bun run setup
 ## What to have ready
 
 - **[Bun](https://bun.sh/)** to run the bot and the wizard itself.
-- **Node.js v20+** (used for MCP tooling).
 - **A Discord bot token** with the `GuildMembers`, `MessageContent`, and `GuildPresences`
   privileged intents enabled.
 - **A database.** TomoriBot stores everything in PostgreSQL. You don't set it up by hand as

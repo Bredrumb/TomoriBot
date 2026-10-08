@@ -122,25 +122,14 @@ visible text and surface their contents as `raw`. Replay-only fields (Gemini `th
 OpenRouter `reasoning_details`, DeepSeek `reasoning_content`) may go back to the vendor inside a
 tool loop, but never into thought logs or Discord messages.
 
-## 6. Register the MCP tool adapter
+## 6. Add guild MCP declarations to the tool adapter
 
-If the provider calls tools, register its adapter in `src/events/clientReady/02_registerMCPs.ts`:
-
-```ts
-import { getExampleToolAdapter } from "../../providers/example/exampleToolAdapter";
-
-registerMCPAdapter(getExampleToolAdapter());
-```
-
-Tool definitions come from `getAvailableToolsWithMCP()` and work without registration, but execution
-looks the adapter up in `ToolRegistry.mcpAdapters`. An unregistered provider offers MCP tools such as
-`fetch` to the model and then fails each call with "Tool not found in registry". Built-in tools use
-a different path and keep working, which hides the gap.
-
-The adapter's `getAllToolsIn*Format()` must also add guild MCP tools (registered through `/config` >
-Plugins > MCP Servers). After adding global MCP tools, when `serverId && allowedMCPFunctions`, call
-`getGuildMcpManager().getGuildMCPTools(serverId)`, keep only the declarations in
-`allowedMCPFunctions`, convert them, and append. Without this step the model never sees guild tools.
+Tool definitions come from `getAvailableToolsWithMCP()`, and `ToolRegistry.executeTool()` dispatches
+both built-in and guild MCP calls, so the adapter needs no registration. Its `getAllToolsIn*Format()`
+must still add guild MCP tools (registered through `/config` > Plugins > MCP Servers): when
+`serverId && allowedMCPFunctions`, call `getGuildMcpManager().getGuildMCPTools(serverId)`, keep only
+the declarations in `allowedMCPFunctions`, convert them, and append. Without this step the model
+never sees guild tools.
 
 ## 7. Implement optional capabilities
 
@@ -252,5 +241,4 @@ such as a response parser or error mapping (see [Tests](/contributing/developmen
 - `src/types/provider/interfaces.ts`, `src/types/provider/featureInterfaces.ts`
 - `src/utils/provider/providerFactory.ts`, `src/utils/provider/providerInfoRegistry.ts`
 - `src/utils/provider/providerCapabilityResolver.ts`, `src/providers/utils/providerFeatureExecutors.ts`
-- `src/events/clientReady/02_registerMCPs.ts`
 - `src/db/seed/catalog/models.ts`, `types.ts`, `modelSeed.ts`

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { parseFetchUrlEngineOrder } from "@/tools/fetchUrl/dispatcher";
-import { convertFetchedContent, SafeHttpFetchEngine } from "@/tools/fetchUrl/mcpFetchEngine";
+import { convertFetchedContent, SafeHttpFetchEngine } from "@/tools/fetchUrl/safeHttpFetchEngine";
 import type { ToolContext } from "@/types/tool/interfaces";
 import {
   checkCrossOriginRedirect,

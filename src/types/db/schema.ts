@@ -728,6 +728,8 @@ export const responseRuleCheckerRefSchema = z.discriminatedUnion("scope", [
       toolName: z.literal("check_slop"),
     })
     .strict(),
+  // Bot-wide checkers no longer exist, but saved rows and exports still hold this shape. Parsing it keeps
+  // the owner's choice visible as unavailable instead of failing the whole config row.
   z
     .object({ scope: z.literal("global"), serviceName: z.string().min(1).max(100), toolName: z.literal("check_slop") })
     .strict(),

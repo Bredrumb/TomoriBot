@@ -28,7 +28,6 @@ budget:
 | `update_short_term_memory` | `src/tools/functionCalls/updateShortTermMemoryTool.ts` | Schema and invocation definitions consume prompt budget. The memory summary text remains in context, but the update tool is withheld. |
 | `cross_channel_message` | `src/tools/functionCalls/crossChannelMessageTool.ts` | Tool definition and execution overhead exceed token budgets. |
 | `fetch_url` | `src/tools/fetchUrl/fetchUrlTool.ts` | Arbitrary web page content can flood prompt limits. |
-| `iask-search`, `monica-search` | `src/providers/novelai/novelaiToolAdapter.ts` | Raw MCP search endpoints are stripped from the tool list. Search queries route through the unified `web_search` tool instead. |
 
 ### Short-term memory instruction suppression
 

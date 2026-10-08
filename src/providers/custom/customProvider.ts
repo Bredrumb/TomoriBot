@@ -33,8 +33,6 @@ import {
 } from "@/providers/custom/customCompactGenerator";
 import { generatePresetFromPromptCustom } from "@/providers/custom/customPresetGenerator";
 import { callCustomStructuredJSON } from "@/providers/custom/customStructuredOutput";
-import { isBraveSearchAvailable } from "@/tools/restAPIs/brave/braveSearchService";
-import { getMCPManager } from "@/utils/mcp/mcpManager";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 import { buildActiveSamplingParams, getActiveTemperature } from "@/utils/provider/samplingControl";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
@@ -342,15 +340,6 @@ export class CustomProvider
     if (!request.toolContext) {
       log.warn("Custom preset generation skipped search tools: no tool context available.");
       return undefined;
-    }
-
-    const hasBraveApiKey = await isBraveSearchAvailable(request.tomoriState.server_id);
-
-    if (!hasBraveApiKey) {
-      const mcpManager = getMCPManager();
-      if (!mcpManager.isReady()) {
-        await mcpManager.initializeMCPServers();
-      }
     }
 
     const toolStateForContext: ToolStateForContext = {

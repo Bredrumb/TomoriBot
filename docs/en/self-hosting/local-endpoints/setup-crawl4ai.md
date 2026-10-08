@@ -158,7 +158,7 @@ Cookie values are sensitive, so treat them like passwords. They grant full sessi
 |---|---|---|
 | `CRAWL4AI_BASE_URL` | unset | Enables Crawl4AI when set. Use `http://crawl4ai:11235/` from Docker Compose, or `http://localhost:11235/` when TomoriBot runs directly on your machine. |
 | `CRAWL4AI_TOKEN` | unset | Optional bearer token. Must match `CRAWL4AI_API_TOKEN` on the Crawl4AI container when enabled. |
-| `FETCH_URL_ENGINE_ORDER` | `safe_http` | Comma-separated engine list. `safe_http` is always appended as the final fallback; the legacy `mcp_fetch` name aliases it. Crawl4AI entries are ignored where private-network fetching is not permitted (production without an opt-in). |
+| `FETCH_URL_ENGINE_ORDER` | `safe_http` | Comma-separated engine list. `safe_http` is always appended as the final fallback. Crawl4AI entries are ignored where private-network fetching is not permitted (production without an opt-in). |
 | `FETCH_URL_TIMEOUT_MS` | `15000` | Per-engine request timeout for Crawl4AI and the other URL-fetch engines. |
 | `FETCH_URL_MAX_CONTENT_LENGTH` | `50000` | Maximum characters returned by one fetch call before continuation is required. |
 | `FETCH_URL_ALLOW_PRIVATE_NETWORK` | `false` | Production-only opt-in. Outside production (`RUN_ENV` != `production`) the SSRF guard auto-relaxes, so localhost/private/internal fetches and Crawl4AI dispatch work with no setup. Set `true` only to permit private-network fetches in a trusted production deployment. |

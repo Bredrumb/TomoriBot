@@ -2,13 +2,13 @@
 title: "Tool System"
 ---
 
-The tool system owns tool registration, availability filtering, dynamic schema assembly, and execution dispatch across built-in tools, global Model Context Protocol (MCP) servers, and guild MCP integrations. Model orchestration, multi-turn tool loops, and result serialization belong to the [tool loop](/architecture/pipelines/tool-loop/).
+The tool system owns tool registration, availability filtering, dynamic schema assembly, and execution dispatch across built-in tools and guild Model Context Protocol (MCP) integrations. The bot starts no local or stdio MCP server. Model orchestration, multi-turn tool loops, and result serialization belong to the [tool loop](/architecture/pipelines/tool-loop/).
 
 ## Registration and availability filtering
 
 Tool registration and discovery coordinate through two core modules:
 
-- **Registration (`src/tools/toolRegistry.ts`):** Built-in tools implement `BaseTool` and register with `ToolRegistry.registerTool()`. Provider MCP adapters register through `registerMCPAdapter()`.
+- **Registration (`src/tools/toolRegistry.ts`):** Built-in tools implement `BaseTool` and register with `ToolRegistry.registerTool()`. Provider tool adapters convert declarations only; dispatch never routes through them.
 - **Availability filtering (`src/tools/availability.ts`):** `getAvailableToolsWithMCP()` provides centralized availability checks before tools are exposed to the model.
 
 Filtering evaluates multiple layers:
@@ -24,7 +24,7 @@ Filtering evaluates multiple layers:
 
 Before provider serialization, tools pass through `assembleToolsForContext()` in `src/tools/assembly.ts`. Most tools return their static definition unchanged. Capability-sensitive tools implement `assembleForContext(context)` and return tailored variants via `createToolVariant()`:
 
-- `web_search`: Narrows category enums to the active search backend. SearXNG exposes all categories; Brave exposes text, image, video, and news; and DuckDuckGo or iAsk MCP fallbacks expose text search only.
+- `web_search`: Narrows category enums to the active search backend. SearXNG exposes all categories; Brave exposes text, image, video, and news; and the built-in DuckDuckGo fallback exposes text search only.
 - `generate_image`: Prunes parameters to match active backend capabilities (text-to-image, reference image fields, and ComfyUI inpaint or outpaint controls). Parameter descriptions omit instructions for unconfigured modes, preventing the model from receiving unsupported guidance.
 - `generate_voice_message`: Prunes script markup and voice instruction schemas based on the active speech endpoint and persona voice design. Delivery logic is shared with `/generate voice-message`; see [Voice System](/architecture/integrations/voice/).
 
@@ -42,9 +42,8 @@ ToolRegistry.executeTool()
 Resolve opaque IDs (media_id, message_id) & aliases
        ↓
 Dispatch:
-├─ Provider MCP Adapter ──→ adapter.executeMCPFunction()
-├─ Guild MCP Manager    ──→ guildMcpManager.executeGuildMCPFunction()
-└─ Built-in Tool        ──→ tool.execute() (availability & context checked)
+├─ Guild MCP Manager ──→ guildMcpManager.executeGuildMCPFunction()
+└─ Built-in Tool     ──→ tool.execute() (availability & context checked)
        ↓
 Redact parameters & record ToolExecutionEvent
        ↓
@@ -54,11 +53,10 @@ Return ToolResult (success / error)
 Execution dispatch enforces the following rules:
 
 1. **Alias and opaque ID resolution:** Built-in aliases (`BUILTIN_TOOL_ALIASES`) resolve to canonical names. Opaque identifiers (`media_id`, `message_id`, `end_message_id`) resolve to Discord snowflakes via `MessageIdMap` before reaching tool code.
-2. **Provider MCP dispatch:** If `isMCPFunction()` identifies the call as a provider MCP tool, dispatch delegates to `executeMCPFunction()`.
-3. **Guild MCP dispatch:** If `guildMcpManager.isGuildMCPFunction()` matches the name for the current server, dispatch delegates to `guildMcpManager.executeGuildMCPFunction()`.
-4. **Built-in tool execution:** If the name matches a registered built-in tool, `executeBuiltInTool()` validates existence (suggesting the closest matching name on failure), static provider compatibility, and live context availability (`isAvailableForContext`).
-5. **Execution history and redaction:** Parameters are sanitized via `redactToolParametersForStorage()` before recording in `ToolExecutionEvent` history.
-6. **Error handling:** Thrown exceptions are caught and wrapped in a structured `ToolResult` with `success: false` and a localized or descriptive error message. The error returns to the model turn so the persona can adapt or explain the failure; see [Execute Tool Call](/architecture/pipelines/tool-loop/02-execute-tool-call/).
+2. **Guild MCP dispatch:** If `guildMcpManager.isGuildMCPFunction()` matches the name for the current server, dispatch delegates to `guildMcpManager.executeGuildMCPFunction()`.
+3. **Built-in tool execution:** If the name matches a registered built-in tool, `executeBuiltInTool()` validates existence (suggesting the closest matching name on failure), static provider compatibility, and live context availability (`isAvailableForContext`).
+4. **Execution history and redaction:** Parameters are sanitized via `redactToolParametersForStorage()` before recording in `ToolExecutionEvent` history.
+5. **Error handling:** Thrown exceptions are caught and wrapped in a structured `ToolResult` with `success: false` and a localized or descriptive error message. The error returns to the model turn so the persona can adapt or explain the failure; see [Execute Tool Call](/architecture/pipelines/tool-loop/02-execute-tool-call/).
 
 ## Guild MCP integrations
 
@@ -67,13 +65,13 @@ Guilds manage remote MCP servers through `/config` > Plugins > MCP Servers (`src
 - **Connection pooling and lifecycle:** `GuildMcpManager` (`src/utils/mcp/guildMcpManager.ts`) connects servers lazily on the critical path of tool gathering. Connection attempts try transports in order: Smithery Connect (for `*.run.tools`), StreamableHTTP, and SSE. Each attempt creates a fresh client bounded by `GUILD_MCP_CONNECT_TIMEOUT_MS`.
 - **Circuit breaker quarantine:** Servers that fail to connect enter quarantine for `GUILD_MCP_FAILURE_COOLDOWN_MS` (default 5 minutes). This prevents unreachable endpoints from exhausting connection timeouts on every generation turn.
 - **Tool name snapshots:** Discovered tool names persist in `last_discovered_tool_names` as a bounded display cache, capped at 100 names and 128 Unicode characters per name (`mcpToolSnapshot.ts`). Live `listTools()` output remains authoritative for invocation.
-- **Collision and replacement policy:** Guild MCP tools append after built-in and global MCP filtering. If a guild enables a `url_fetcher` MCP server, the bundled `fetch_url` tool is suppressed for that guild, and the `{url_fetch_tool}` prompt macro routes to the guild replacement.
+- **Collision and replacement policy:** Guild MCP tools append after built-in filtering. If a guild enables a `url_fetcher` MCP server, the bundled `fetch_url` tool is suppressed for that guild, and the `{url_fetch_tool}` prompt macro routes to the guild replacement.
 
 ## Web tools and network security
 
 Web access tools enforce security boundaries before network dispatch:
 
-- `web_search`: Dispatches queries through internal search engines while hiding engine-specific tool names from the model.
+- `web_search`: Tries the Brave, SearXNG, and DuckDuckGo engines in that order and returns the first success. Engine-specific names stay hidden from the model. DuckDuckGo reads its fixed HTML results endpoint through the strict pinned fetcher, with a deadline and a 1 MiB cap, and sends no credentials. It unwraps result links without following them. A challenge, rate limit, or changed markup returns a failure, so the model cannot mistake a blocked search for zero results. Search results are untrusted model input.
 - `fetch_url`: The primary URL-reading tool. In production (`RUN_ENV === "production"`), requests to private, localhost, or reserved IP ranges are blocked unless `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` is set.
 - **Cloud metadata protection:** Cloud instance metadata and link-local ranges (`169.254.0.0/16`, IPv6 link-local, AWS IMDS) are blocked unconditionally by `src/utils/security/cloudMetadata.ts`. This check cannot be bypassed by configuration.
 - **Safe HTTP engine:** The `safe_http` engine validates and pins DNS, follows a bounded number of redirects (revalidating each hop), limits downloaded byte counts, and converts HTML to Markdown.
@@ -125,4 +123,5 @@ The `fetch_url` tool is excluded from NovelAI models. NovelAI tool calling is pr
 - `src/utils/mcp/guildMcpManager.ts`: Guild MCP connection pooling, circuit breaking, and dispatch.
 - `src/tools/functionCalls/updateUserInfoTool.ts`: Structured user profile and naming preferences.
 - `src/tools/fetchUrl/dispatcher.ts`: URL fetch security and safe HTTP engine dispatch.
+- `src/tools/webSearch/duckduckgoEngine.ts`: Native DuckDuckGo request, parsing, and failure classification.
 - `src/utils/security/cloudMetadata.ts`: Cloud instance metadata denylist.

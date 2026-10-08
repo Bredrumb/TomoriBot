@@ -40,9 +40,7 @@ export function convertFetchedContent(body: string, contentType: string, raw = f
 /**
  * In-process fallback for the built-in fetch_url tool.
  *
- * The historical name remains in this filename for import stability, but this
- * no longer delegates network access to mcp-server-fetch. Keeping the request
- * in process lets fetchUserRemoteUrl validate and DNS-pin every redirect hop.
+ * Keeping the request in process lets fetchUserRemoteUrl validate and DNS-pin every redirect hop.
  */
 export class SafeHttpFetchEngine implements FetchEngine {
   readonly name = "safe_http" as const;

@@ -12,11 +12,10 @@ import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
 import { getCachedEnabledGuildMcpConfigs } from "@/utils/cache/guildMcpConfigCache";
 import { sql } from "@/utils/db/client";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
-import { getMCPManager } from "@/utils/mcp/mcpManager";
 import { log } from "@/utils/misc/logger";
 import { resolveActiveSpeechEndpoint } from "@/utils/provider/speechEndpointResolver";
 import { hasOptApiKey } from "@/utils/security/crypto";
-import { configToFeatureFlags, filterToolsByFeatureFlags } from "@/utils/tools/featureFlagMapper";
+import { configToFeatureFlags } from "@/utils/tools/featureFlagMapper";
 
 /**
  * Minimal state interface for context building operations.
@@ -153,53 +152,7 @@ export async function getAvailableToolsWithMCP(
 ): Promise<AvailableToolsWithMCP> {
   try {
     let builtInTools = getAvailableToolsForContext(tools, provider, stateForContext);
-    const featureFlags = configToFeatureFlags(stateForContext.config);
     let mcpFunctionNames: string[] = [];
-    const mcpManager = getMCPManager();
-
-    if (mcpManager.isReady()) {
-      const allMCPFunctionNames: string[] = [];
-      const mcpTools = mcpManager.getMCPTools();
-
-      for (const mcpTool of mcpTools) {
-        try {
-          const geminiTool = await mcpTool.tool();
-          if (geminiTool.functionDeclarations) {
-            for (const declaration of geminiTool.functionDeclarations) {
-              allMCPFunctionNames.push((declaration as { name: string }).name);
-            }
-          }
-        } catch (error) {
-          log.warn("Failed to extract function names from MCP tool:", error as Error);
-        }
-      }
-
-      let filteredByFeatureFlags = filterToolsByFeatureFlags(allMCPFunctionNames, featureFlags);
-
-      // Unconditionally hide internal MCP function names from the LLM.
-      //    They are now consumed only via the unified `web_search` tool through
-      //    `webSearch/duckduckgoEngine.ts` / `iaskEngine.ts`.
-      const hiddenWebSearchMcpFunctions = ["web-search", "iask-search", "monica-search"];
-      const originalCount = filteredByFeatureFlags.length;
-      filteredByFeatureFlags = filteredByFeatureFlags.filter(
-        (functionName) => !hiddenWebSearchMcpFunctions.includes(functionName),
-      );
-      const excludedCount = originalCount - filteredByFeatureFlags.length;
-
-      if (excludedCount > 0) {
-        log.info(
-          `Excluded ${excludedCount} web-search MCP function names — now consumed only via unified web_search tool.`,
-        );
-      }
-
-      mcpFunctionNames = filteredByFeatureFlags.filter(
-        (name) => name !== stateForContext.config.response_rule_checker_ref?.toolName,
-      );
-
-      log.info(
-        `MCP tools: ${allMCPFunctionNames.length} total, ${mcpFunctionNames.length} after centralized filtering (feature flags + provider preferences)`,
-      );
-    }
 
     const serverIdNum = stateForContext.server_id ? Number.parseInt(stateForContext.server_id, 10) : undefined;
     if (serverIdNum) {
@@ -212,20 +165,19 @@ export async function getAvailableToolsWithMCP(
 
         if (guildFunctionNames.length > 0) {
           const builtInNames = new Set(builtInTools.map((t) => t.name));
-          const globalMcpNames = new Set(mcpFunctionNames);
           const guildUrlFetcherFunctionSet = new Set(guildUrlFetcherFunctionNames);
 
           const safeGuildNames = guildFunctionNames.filter((name) => {
             if (name === stateForContext.config.response_rule_checker_ref?.toolName) return false;
             const isGuildFetchUrlReplacement = name === "fetch_url" && guildUrlFetcherFunctionSet.has(name);
-            if ((!isGuildFetchUrlReplacement && builtInNames.has(name)) || globalMcpNames.has(name)) {
-              log.warn(`[GuildMCP] Skipping guild MCP function "${name}" - collides with built-in or global MCP tool`);
+            if (!isGuildFetchUrlReplacement && builtInNames.has(name)) {
+              log.warn(`[GuildMCP] Skipping guild MCP function "${name}" - collides with a built-in tool`);
               return false;
             }
             return true;
           });
 
-          mcpFunctionNames.push(...safeGuildNames);
+          mcpFunctionNames = safeGuildNames;
           log.info(
             `Guild MCP tools: ${guildFunctionNames.length} discovered, ${safeGuildNames.length} after collision check (server: ${serverIdNum})`,
           );
@@ -241,10 +193,7 @@ export async function getAvailableToolsWithMCP(
         const guildServerTypes = new Set(enabledConfigs.map((c) => c.server_type).filter(Boolean));
 
         if (guildServerTypes.has("web_search")) {
-          // After the unified `web_search` tool migration the only LLM-visible
-          //    search name is `web_search` itself. The previous brave_*/DDG MCP
-          //    names are no longer LLM-visible, so we just need to dedup against
-          //    the unified tool name when a guild brings its own web_search MCP.
+          // Deduplicates against the built-in `web_search` name when a guild brings its own search server.
           const webSearchFunctions = ["web_search", "url-metadata"];
           const beforeCount = mcpFunctionNames.length;
           mcpFunctionNames = mcpFunctionNames.filter((name) => !webSearchFunctions.includes(name));

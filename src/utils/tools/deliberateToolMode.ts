@@ -170,8 +170,6 @@ const TOOL_FOLLOW_UP_PATTERNS: RegExp[] = [
 const WEB_TOOL_NAMES = [
   "web_search",
   "web-search",
-  "iask-search",
-  "monica-search",
   "brave_web_search",
   "brave_image_search",
   "brave_video_search",
