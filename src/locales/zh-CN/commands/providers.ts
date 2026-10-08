@@ -141,6 +141,7 @@ export default {
       structured: `结构化输出`,
       "strict-roles": `严格角色交替`,
       prefix: `前缀补全`,
+      prefill: `助手预填`,
       "verbatim-tools": `逐字工具调用`,
     },
     model_flag_descriptions: {
@@ -149,6 +150,7 @@ export default {
       structured: `如果要求时这个模型可以返回严格的 JSON 就勾上。`,
       "strict-roles": `合并同角色轮次，并以用户轮次开头。代理转发 Claude 时勾上。`,
       prefix: `允许我把写了一半的回复交回去继续写。代理转发 DeepSeek 或 Z.ai 时勾上。`,
+      prefill: `仅当这个模型能够接着我给出的开头继续写、而不是重新开始或拒绝时才勾选。`,
       "verbatim-tools": `适用于不支持原生工具调用的端点。直接从原始文本输出解析调用。`,
     },
     model_compat_label: `聊天补全兼容性`,

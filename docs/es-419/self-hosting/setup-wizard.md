@@ -1,9 +1,9 @@
 ---
 title: "Asistente de instalación"
-aiGenerated: true
 sidebar:
   label: "Asistente de instalación"
   order: 1
+aiGenerated: false
 ---
 
 :::note

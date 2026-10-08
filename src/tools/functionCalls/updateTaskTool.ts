@@ -548,6 +548,7 @@ export class UpdateTaskTool extends BaseTool {
         footerKey: "reminders.task_updated_footer",
       },
       parsedArgs.newPurpose,
+      { kind: "task", id: parsedArgs.reminderId },
     );
 
     return {

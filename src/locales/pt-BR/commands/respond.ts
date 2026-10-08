@@ -7,6 +7,7 @@ export default {
     prefill_description: `Preenchimento opcional do assistente que você quer que eu continue.`,
     prefill_label: `Preenchimento (Opcional)`,
     prefill_placeholder: `Adicionar preenchimento do assistente (opcional)...`,
+    prefill_instruction_notice: `Este modelo não pode continuar um preenchimento, então passei como uma instrução.`,
     success_title: `Resposta Manual Acionada`,
     success_description: `Respondendo à última mensagem neste canal como a última persona...`,
     extra_options_description: `Mostrar opções extras antes de responder (seletor de persona, raciocínio, prompt, prefill).`,

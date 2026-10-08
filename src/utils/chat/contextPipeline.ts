@@ -21,6 +21,7 @@ import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
 import {
   type DeliberateToolIntentMatch,
+  getAutonomousDeliberateToolNames,
   getDeliberateToolIntentResult,
   getFollowUpToolIntentResult,
   getRecentToolAffordanceNames,
@@ -30,7 +31,8 @@ import {
   resolveDeliberateToolMode,
 } from "@/utils/tools/deliberateToolMode";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
-import { buildContext, type SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
+import { buildContext, convertMentions, type SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
+import { selectTurnPrefillText, type TurnPrefill } from "@/utils/chat/assistantPrefill";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getCachedChannelContextNote } from "@/utils/cache/channelContextNoteCache";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
@@ -68,6 +70,7 @@ import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 import { getCachedImpersonatedUserIdForWebhook } from "@/utils/chat/webhookIdentity";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { primePersonaSpriteMessageRecords } from "@/utils/cache/personaSpriteMessageCache";
+import { resolveMinimalNoticeBodies } from "@/utils/discord/minimalNoticeBodies";
 import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import type { StreamingContext } from "@/types/tool/interfaces";
@@ -83,6 +86,7 @@ import {
 import { userNamingRepository, userPersonaNamingPairKey } from "@/utils/db/repositories/UserNamingRepository";
 import { userRepository } from "@/utils/db/repositories/UserRepository";
 import { resolveEffectiveUserNaming } from "@/utils/text/userNaming";
+import { createExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
 
 const participantRequestScopes = new WeakMap<LockedChatTurn, ParticipantRequestScope>();
 
@@ -369,11 +373,11 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     }
   }
 
-  // Fail-closed gate: when deliberate-tool mode is active and the turn
-  // shows no explicit tool intent, suppress all tools for the turn. This is
-  // the universal "tools off unless asked" semantic from main. Otherwise,
-  // when intent is detected, surface a scoped allowlist for provider
-  // adapters to filter their tool exposure list.
+  if (deliberateToolModeActive && !turn.isDMChannel && !assets.isRpChannel && !turn.isUserImpersonation) {
+    deliberateToolAllowedNames.push(...getAutonomousDeliberateToolNames(turn.persona));
+  }
+
+  // Task tools require intent; expression tools and due maintenance can be admitted autonomously.
   const deliberateToolIntent =
     deliberateToolAllowedNames.length > 0 || (streamingContext.endTurnAfterTools?.length ?? 0) > 0;
   const toolsDisabledByDeliberateMode =
@@ -484,6 +488,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     snapshot: { ...turn.requestSnapshot, tomoriState: effectivePersona },
     preloadedEmojis: assets.loadedEmojis,
     preloadedStickers: assets.loadedStickers,
+    preloadedCustomExpressions: assets.loadedCustomExpressions,
     isUserImpersonation: incoming.isUserImpersonation,
     impersonatedUserId: incoming.impersonatedUserId,
     impersonatedUserNickname,
@@ -520,6 +525,11 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     buildPersonaMentionCatalog(turn.allPersonas),
   );
 
+  const assistantPrefill = await resolveTurnAssistantPrefill(turn, effectivePersona);
+  const carried = incoming.carriedExpressionDelivery;
+  const expressionDelivery =
+    carried && carried.personaId === effectivePersona.persona_id ? carried.state : createExpressionDeliveryState();
+
   return {
     turn,
     client,
@@ -543,6 +553,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     tomoriState: effectivePersona,
     requestSnapshot: { ...turn.requestSnapshot, tomoriState: effectivePersona },
     contextItems,
+    assistantPrefill,
+    expressionDelivery,
     simplifiedMessages: history.simplifiedMessages,
     streamingContext,
     messageIdMap,
@@ -585,17 +597,24 @@ async function loadPersonaAssets(turn: ChatTurn): Promise<{
   emojiStrings: string[];
   loadedEmojis: ServerEmojiRow[] | null;
   loadedStickers: ServerStickerRow[] | null;
+  loadedCustomExpressions: import("@/types/db/schema").CustomExpressionRow[] | null;
   isRpChannel: boolean;
 }> {
   if (turn.isDMChannel || !turn.guild || !turn.persona.server_id) {
-    return { emojiStrings: [], loadedEmojis: null, loadedStickers: null, isRpChannel: false };
+    return {
+      emojiStrings: [],
+      loadedEmojis: null,
+      loadedStickers: null,
+      loadedCustomExpressions: null,
+      isRpChannel: false,
+    };
   }
 
   const rpParentId = turn.lockedTurn.admission.channel.isThread() ? turn.lockedTurn.admission.channel.parentId : null;
   const isRpChannel =
     turn.persona.config.rp_channel_ids.includes(turn.lockedTurn.channelId) ||
     (rpParentId !== null && turn.persona.config.rp_channel_ids.includes(rpParentId));
-  const { emojis, stickers } = await loadEmojiStickerCache(
+  const { emojis, stickers, customs } = await loadEmojiStickerCache(
     turn.persona.server_id,
     turn.guild,
     isRpChannel ? false : turn.persona.config.emoji_usage_enabled,
@@ -603,7 +622,13 @@ async function loadPersonaAssets(turn: ChatTurn): Promise<{
   );
   const emojiStrings =
     emojis?.map((emoji) => `<${emoji.is_animated ? "a" : ""}:${emoji.emoji_name}:${emoji.emoji_disc_id}>`) ?? [];
-  return { emojiStrings, loadedEmojis: emojis, loadedStickers: stickers, isRpChannel };
+  return {
+    emojiStrings,
+    loadedEmojis: emojis,
+    loadedStickers: stickers,
+    loadedCustomExpressions: customs,
+    isRpChannel,
+  };
 }
 
 async function buildSimplifiedHistory(
@@ -708,6 +733,7 @@ async function buildSimplifiedHistory(
   // Prime the sprite message cache with one batched query so per-message
   // "Name (sprite):" label lookups inside simplifyMessage() are cache hits.
   await primePersonaSpriteMessageRecords(visibleRawMessages.filter((msg) => msg.webhookId).map((msg) => msg.id));
+  const minimalNoticeBodies = await resolveMinimalNoticeBodies(visibleRawMessages);
 
   const simplifiedMessages: SimplifiedMessageForContext[] = [];
   const userIds = new Set<string>();
@@ -775,6 +801,7 @@ async function buildSimplifiedHistory(
       matrixUsers,
       reactionBudgetState,
       hiddenAuthorIds,
+      minimalNoticeBodies,
     );
     if (!result) continue;
     const { message: simplified, isDebug } = result;
@@ -918,6 +945,7 @@ async function simplifyMessage(
   matrixUsers: Map<string, string>,
   reactionBudgetState: ReactionContextBudgetState,
   blockedContextUserIds: Set<string>,
+  minimalNoticeBodies: ReadonlyMap<string, string>,
 ): Promise<{ message: SimplifiedMessageForContext; isDebug: boolean } | null> {
   const isJoin = msg.type === MessageType.UserJoin;
   const isDebug = !isJoin && msg.content.startsWith("$:");
@@ -1035,6 +1063,7 @@ async function simplifyMessage(
   const embedResult = processEmbedsFromMessage({
     embeds: msg.embeds,
     components: msg.components,
+    minimalNoticeBody: minimalNoticeBodies.get(msg.id),
     content,
     imageAttachments,
     isTomoriAuthoredMessage,
@@ -1230,6 +1259,25 @@ async function withReactionContext(
   return content ? `${content}\n${annotation}` : annotation;
 }
 
+/**
+ * Identity and mention macros resolve once per turn. The triggerer's real name is passed (the
+ * system prompt passes "User") because the prefill sits at the tail of this specific exchange.
+ */
+async function resolveTurnAssistantPrefill(turn: ChatTurn, persona: TomoriState): Promise<TurnPrefill | null> {
+  const selected = selectTurnPrefillText(turn.lockedTurn.admission.incoming, persona.config.response_prefill);
+  if (!selected) return null;
+  const text = await convertMentions(
+    selected.text,
+    turn.lockedTurn.admission.client,
+    turn.serverDiscId,
+    turn.triggererName,
+    persona.persona_nickname,
+    persona.config.personal_memories_enabled,
+    { ...turn.requestSnapshot, tomoriState: persona },
+  );
+  return text.trim() ? { text: text.trim(), source: selected.source } : null;
+}
+
 function appendTailDirectives(args: {
   turn: ChatTurn;
   simplifiedMessages: SimplifiedMessageForContext[];
@@ -1259,10 +1307,8 @@ function appendTailDirectives(args: {
     tail.push(`The user has activated reasoning mode with the following query: "${incoming.reasoningQuery}".`);
   if (incoming.manualSystemPrompt?.trim()) tail.push(normalizeTailDirective(incoming.manualSystemPrompt));
 
-  // Inject persona self-continuation directive for manual triggers (Fix #1).
-  // When the selected persona was the last speaker, prompt it to continue rather
-  // than repeat itself. Also handles the manualPrefill hybrid-continuation case.
-  const trimmedPrefill = incoming.manualPrefill?.trim();
+  // When the selected persona was the last speaker, a manual trigger should continue that message
+  // rather than repeat it.
   if (
     incoming.isManuallyTriggered &&
     !incoming.sceneTurn &&
@@ -1280,32 +1326,11 @@ function appendTailDirectives(args: {
     const isEmbedMessage =
       lastMsg.content?.includes("[System: The following content came from a system-produced embed]") ?? false;
 
-    const isNovelaiKayraOrErato =
-      args.turn.persona.llm.llm_provider === "novelai" &&
-      (args.turn.persona.llm.llm_codename === "kayra-v1" || args.turn.persona.llm.llm_codename === "llama-3-erato-v1");
-    const usePrefillContinuation = Boolean(trimmedPrefill) && !isNovelaiKayraOrErato;
-
-    if (trimmedPrefill && isNovelaiKayraOrErato) {
-      log.info("Manual prefill directive skipped for NovelAI Kayra/Erato; relying on assistant prefill tail");
-    }
-
-    if ((isFromSelectedPersona && !isEmbedMessage) || usePrefillContinuation) {
-      const reason = usePrefillContinuation
-        ? "manual prefill"
-        : `${args.turn.persona.persona_nickname} as last speaker`;
-      log.info(`Manual trigger (${reason}) — injecting continuation directive`);
-
-      const botName = args.turn.persona.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori";
-      let continuationText: string;
-      if (usePrefillContinuation) {
-        continuationText =
-          isFromSelectedPersona && !isEmbedMessage
-            ? `[Continue your last message without repeating it. Begin exactly with: "${botName}: ${trimmedPrefill}". Continue directly after it without repeating the prefix.]`
-            : `[Begin your next reply with: "${botName}: ${trimmedPrefill}". Continue directly after it without repeating the prefix.]`;
-      } else {
-        continuationText = "[Continue your last message without repeating it]";
-      }
-      tail.push(continuationText);
+    if (isFromSelectedPersona && !isEmbedMessage) {
+      log.info(
+        `Manual trigger (${args.turn.persona.persona_nickname} as last speaker): injecting continuation directive`,
+      );
+      tail.push("[Continue your last message without repeating it]");
     }
   }
 
@@ -1378,14 +1403,6 @@ function appendTailDirectives(args: {
     if (item) {
       contextItems.push(item);
     }
-  }
-
-  if (incoming.manualPrefill?.trim()) {
-    contextItems.push({
-      role: "model",
-      parts: [{ type: "text", text: `${args.turn.persona.persona_nickname}: ${incoming.manualPrefill.trim()}` }],
-      metadataTag: ContextItemTag.DIALOGUE_HISTORY,
-    });
   }
 
   return contextItems;

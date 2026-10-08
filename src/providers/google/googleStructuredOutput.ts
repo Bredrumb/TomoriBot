@@ -3,6 +3,7 @@ import type { Content, GenerateContentConfig, Part } from "@google/genai";
 import type { z } from "zod";
 import type { ProviderStructuredJsonRequest, StructuredOutputResult } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
+import { omitGeminiSampling } from "@/utils/provider/samplingControl";
 import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
 type GenericStructuredOutputRequest = ProviderStructuredJsonRequest;
 
@@ -37,13 +38,13 @@ export async function callGoogleStructuredJSON<T>(
       }
     }
 
-    const generationConfig: GenerateContentConfig = {
+    const generationConfig: GenerateContentConfig = omitGeminiSampling(request.model, {
       temperature: request.temperature ?? 1.0,
       maxOutputTokens: request.maxOutputTokens ?? 8192,
       responseMimeType: "application/json",
       responseSchema,
       systemInstruction: request.systemPrompt,
-    };
+    });
 
     const contents: Content = { role: "user", parts };
     const result = await genAI.models.generateContent({

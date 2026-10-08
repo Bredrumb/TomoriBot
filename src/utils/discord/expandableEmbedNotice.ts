@@ -32,9 +32,11 @@ import {
   type Webhook,
 } from "discord.js";
 import type { ToolNoticeKey } from "@/constants/toolNotices";
+import type { MinimalNoticeRef } from "@/types/db/schema";
 import type { StandardEmbedOptions } from "@/types/discord/embed";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { createStandardEmbed, type WebhookEmbedContext } from "@/utils/discord/embedHelper";
+import { recordMinimalNoticeRef } from "@/utils/discord/minimalNoticeBodies";
 import {
   isMinimalNotice,
   isNoticeEmbedVisible,
@@ -217,7 +219,7 @@ async function sendNoticeContainerMessage(
   locale: string,
   embedOptions: StandardEmbedOptions,
   webhookContext?: WebhookEmbedContext,
-): Promise<void> {
+): Promise<Message | null> {
   const components = buildNoticeContainer({
     locale,
     color: embedOptions.color ?? ColorCode.INFO,
@@ -231,7 +233,7 @@ async function sendNoticeContainerMessage(
     configHint: embedOptions.configHint,
     minimal: embedOptions.minimal,
   });
-  await deliverNoticeComponents(channel, components, webhookContext, locale);
+  return (await deliverNoticeComponents(channel, components, webhookContext, locale)).message;
 }
 
 async function sendEmbedWithExpand(
@@ -241,7 +243,7 @@ async function sendEmbedWithExpand(
   fullContent: string,
   config: ExpandableNoticeConfig,
   webhookContext?: WebhookEmbedContext,
-): Promise<void> {
+): Promise<Message | null> {
   const truncationThreshold = config.truncationThreshold ?? DEFAULT_TRUNCATION_THRESHOLD;
   const thresholdPreview = buildTextPreview(fullContent, truncationThreshold);
   const fenceSafeContent = buildTextPreview(fullContent, Number.MAX_SAFE_INTEGER).text;
@@ -268,7 +270,7 @@ async function sendEmbedWithExpand(
 
   // Short content was not truncated, so there is no collector to wire.
   if (!noticeMessage || !shouldAttachExpandButton) {
-    return;
+    return noticeMessage;
   }
 
   // Build the ephemeral "full content" embed once: reused for every click.
@@ -321,13 +323,15 @@ async function sendEmbedWithExpand(
         .catch((err: unknown) => log.warn("[ExpandEmbed] Failed to disable expand button after collector end", err));
     }
   });
+
+  return noticeMessage;
 }
 
 type NoticeDelivery = (
   channel: SupportedChannel,
   options: StandardEmbedOptions,
   webhookContext: WebhookEmbedContext | undefined,
-) => Promise<void>;
+) => Promise<Message | null>;
 
 /**
  * Delivers a hideable tool notice in the conversation and/or the thought log.
@@ -336,6 +340,9 @@ type NoticeDelivery = (
  * thought log when one is configured. Verbose notices post the full card in conversation alone to
  * avoid redundancy. Hidden notices suppress conversation output and reroute the full card to the
  * thought log.
+ *
+ * A Minimal card given `ref` records it against the posted message, because the model rebuilds
+ * context from Discord and would otherwise see only the title. Verbose cards carry their body.
  *
  * Deliberately ignores `suppressProgressNotices`: that flag silences "working..." progress cards,
  * while these confirm a change the persona already made, which flows like the silent turn have
@@ -346,6 +353,7 @@ async function routeHideableNotice(
   noticeKey: ToolNoticeKey,
   embedOptions: StandardEmbedOptions,
   deliver: NoticeDelivery,
+  ref?: MinimalNoticeRef,
 ): Promise<void> {
   const { config } = context.tomoriState;
   const hintedOptions: StandardEmbedOptions = { ...embedOptions, configHint: true };
@@ -354,13 +362,16 @@ async function routeHideableNotice(
 
   if (isVisible) {
     const visibleOptions = isMinimal ? { ...embedOptions, minimal: true } : hintedOptions;
-    await deliver(context.channel, visibleOptions, {
+    const message = await deliver(context.channel, visibleOptions, {
       webhook: context.webhook,
       personaUsername: context.personaUsername,
       personaAvatarUrl: context.personaAvatarUrl,
     });
     if (!isMinimal) {
       return;
+    }
+    if (message && ref) {
+      await recordMinimalNoticeRef(message.id, ref);
     }
   }
 
@@ -380,9 +391,15 @@ function sendToolEmbedWithExpand(
   embedOptions: StandardEmbedOptions,
   fullContent: string,
   config: ExpandableNoticeConfig,
+  ref: MinimalNoticeRef | undefined,
 ): Promise<void> {
-  return routeHideableNotice(context, noticeKey, embedOptions, (channel, options, webhookContext) =>
-    sendEmbedWithExpand(channel, context.locale, options, fullContent, config, webhookContext),
+  return routeHideableNotice(
+    context,
+    noticeKey,
+    embedOptions,
+    (channel, options, webhookContext) =>
+      sendEmbedWithExpand(channel, context.locale, options, fullContent, config, webhookContext),
+    ref,
   );
 }
 
@@ -392,19 +409,28 @@ function sendToolEmbedWithExpand(
  * truncation threshold.
  *
  * @param fullMemoryContent - Full, processed (post-{user}/{bot}) memory content.
+ * @param ref - The memory the notice confirms; omit for deletions, whose row no longer exists.
  */
 export async function sendMemoryEmbedWithExpand(
   context: ToolContext,
   embedOptions: StandardEmbedOptions,
   fullMemoryContent: string,
+  ref?: MinimalNoticeRef,
 ): Promise<void> {
-  await sendToolEmbedWithExpand(context, "memory_update", embedOptions, fullMemoryContent, {
-    customId: "memory_notice_expand",
-    buttonLabelKey: "genai.self_teach.expand_memory_button",
-    expandTitleKey: "genai.self_teach.expand_memory_title",
-    truncationThreshold: MEMORY_NOTICE_PREVIEW_LIMIT,
-    timeoutMs: EXPAND_BUTTON_TIMEOUT_MS,
-  });
+  await sendToolEmbedWithExpand(
+    context,
+    "memory_update",
+    embedOptions,
+    fullMemoryContent,
+    {
+      customId: "memory_notice_expand",
+      buttonLabelKey: "genai.self_teach.expand_memory_button",
+      expandTitleKey: "genai.self_teach.expand_memory_title",
+      truncationThreshold: MEMORY_NOTICE_PREVIEW_LIMIT,
+      timeoutMs: EXPAND_BUTTON_TIMEOUT_MS,
+    },
+    ref,
+  );
 }
 
 /**
@@ -413,18 +439,27 @@ export async function sendMemoryEmbedWithExpand(
  * truncation threshold (created, updated, and deleted task notices).
  *
  * @param fullReminderPurpose - Full, un-truncated reminder/task purpose.
+ * @param ref - The task the notice confirms; omit for deletions, whose row no longer exists.
  */
 export async function sendTaskEmbedWithExpand(
   context: ToolContext,
   embedOptions: StandardEmbedOptions,
   fullReminderPurpose: string,
+  ref?: MinimalNoticeRef,
 ): Promise<void> {
-  await sendToolEmbedWithExpand(context, "task_update", embedOptions, fullReminderPurpose, {
-    customId: "task_notice_expand",
-    buttonLabelKey: "reminders.expand_task_button",
-    expandTitleKey: "reminders.expand_task_title",
-    timeoutMs: EXPAND_BUTTON_TIMEOUT_MS,
-  });
+  await sendToolEmbedWithExpand(
+    context,
+    "task_update",
+    embedOptions,
+    fullReminderPurpose,
+    {
+      customId: "task_notice_expand",
+      buttonLabelKey: "reminders.expand_task_button",
+      expandTitleKey: "reminders.expand_task_title",
+      timeoutMs: EXPAND_BUTTON_TIMEOUT_MS,
+    },
+    ref,
+  );
 }
 
 /**

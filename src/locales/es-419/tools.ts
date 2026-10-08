@@ -70,6 +70,13 @@ export default {
     },
     user_info_update: {
       success_title: `✅ Se actualizó el perfil de {target_user}`,
+      success_title_fields: `✅ Se actualizó el perfil de {target_user}: {fields}`,
+      success_title_cleared_fields: `🗑️ Datos borrados del perfil de {target_user}: {fields}`,
+      subject_nickname: `apodo`,
+      subject_gender_identity: `identidad de género`,
+      subject_pronouns: `pronombres`,
+      subject_addressing_style: `forma de dirigirse`,
+      subject_timezone_offset: `zona horaria`,
       success_intro: `Se actualizó lo siguiente:`,
       change_line: `{index}. {field}: \`{previous}\` → \`{next}\``,
       success_summary: `{persona_name} ahora llama «{formatted_name}» a {target_user}.`,
@@ -332,7 +339,6 @@ export default {
           "información guardada*",
           "informacion guardada*",
         ],
-        sticker: ["sticker*", "stiker*", "estiker*", "calcomanía*", "calcomania*"],
         thread: ["hilo*", "thread*", "tema aparte*"],
         capabilities: [
           "qué puedes*",

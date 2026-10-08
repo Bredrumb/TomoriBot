@@ -6,6 +6,46 @@ TomoriBot uses Discord slash commands loaded dynamically from `src/commands/`.
 
 ## Loader and Execution Pipeline
 
+`/expressions manage` is a guild-only manager panel with the global `expr:v1` route.
+Its ephemeral Components V2 categories cover native emojis, native stickers, and customs.
+Selectors use scoped IDs, reserving one of the custom selector's 25 slots for Add on every
+page. Native editing and clearing use metadata fingerprints; custom mutations use registry
+revisions. Fingerprints also bind the actor and server. Modals use nonce-scoped fields.
+Persona-select modals address at most 25 personas per page. Submitted writes defer before
+media work, reload membership and Manage Server permission, and check setup and entity scope.
+Modal-opening reads have a two-second deadline to leave time for Discord acknowledgement.
+Successful operations produce mutation receipts and invalidate caches after DB commit.
+`/expressions initialize` remains the automatic native classifier.
+
+Custom media comes from exactly one link or one file. Links other than Discord attachment URLs are
+stored unfetched after `validateRemoteUrl` (HTTPS in production, no credentials, at most 2,000
+characters) and delivered verbatim as message content, so Discord renders whatever embed the link
+produces, ordinary web pages included. Discord attachment URLs expire, so they are downloaded and
+stored like uploads. Stored media is validated by content: PNG, JPEG (`.jpg` or `.jpeg`), WebP, GIF,
+or MP4 within 10 MiB and the interaction's attachment limit, with the declared MIME type and filename
+matching the bytes. MP4 needs H.264 video with 8-bit 4:2:0 pixels and optional AAC audio, and nothing
+is transcoded. Editing with both media fields blank keeps the current media. A replacement is
+prepared before the write and the old object is retired only after commit, so a failed replacement
+keeps the previous expression and media.
+
+The Customs category ends with a single-item Media Gallery for stored images, GIFs, and MP4s.
+Link expressions are saved unfetched, so their media type is unknown: after the SSRF gate runs
+again, they show a localized link button, subject to Discord's 512-character button URL limit.
+The panel never downloads registered links for previews. Native categories keep their existing
+thumbnails.
+
+Stored previews follow the character-reference attachment pattern and the generated-video
+Media Gallery layout. Expression storage has no public-media URL capability: local files and
+private GCS/S3 objects are loaded with `loadExpressionMedia` and attached using `attachment://`.
+Both the 10 MiB registry limit and the interaction's attachment limit apply. The current panel
+message supplies attachment state; a filename fingerprint binds the server, expression, and
+immutable media identity. Matching attachments are retained by ID, even when metadata or persona
+access changes increment the row revision. Selection changes, media replacements, category
+changes, deletion, and terminal replies replace or clear obsolete attachments. No separate
+preview cache is maintained. Storage or preview delivery failures render an unavailable notice
+while preserving management controls and any mutation receipt. Preview work runs after
+acknowledgement; modal-opening routes do not load preview bytes.
+
 - Registration/building: `src/utils/discord/commandLoader.ts`
 - Runtime dispatch: `src/events/interactionCreate/handleCommands.ts`
 
@@ -314,6 +354,7 @@ handler.
 - `compact`
 - `conditioning`
 - `config`
+- `context`
 - `contribute`
 - `donate`
 - `export`
@@ -576,6 +617,11 @@ styles open a modal directly, so this only affects the paginated path:
   (`buildRangeSelectorPayload`). Its Cancel button returns `outcome: "cancelled"` (the
   legacy selector has no Cancel and never returns it); callers gating on
   `outcome !== "submit"` already handle it.
+
+Callers may also pass `pageSelectTitleKey` and `pageSelectDescriptionKey` on `ModalOptions`
+to customize the intermediate page selector's strings (for example, to display entity-specific
+wording such as personas instead of the default generic items). When omitted, they default to
+`general.pagination.select_page_title` and `general.pagination.select_page_description`.
 
 The V2 selector renders `IsComponentsV2` onto the interaction's reply, which Discord then
 forbids editing with legacy embeds. The selector marks the interaction, and the shared
@@ -1006,7 +1052,7 @@ than an invocation-scoped modal collector, so a supported open modal can survive
 - `personal`: `/personal config` contains privacy, language, naming, appearance, model routing, and spotlight controls. Other personal subcommands cover providers, memories, and reset flows.
 - `scheduled-task`: edit, remove
 - `conditioning`: manage, reward(headpat/hug/kiss/tickle), punish(spank/pinch/bite/squeeze)
-- `tool`: ping, status, refresh, compact, comment
+- `tool`: delete(turn), estimate(cost), prompt(snapshot)
 - `stats`: personal(scope toggle), persona(autocomplete), server; each takes an optional `timeframe` (default All-Time)
 
 `/stats` is a guild-only category that reads the `stat_counters` telemetry table (see [database-schema](database-schema)). Each subcommand (`personal`, `persona`, `server`) takes an optional `timeframe` choice (`Today` / `Last 7 Days` / `Last 30 Days` / `Last Year` / `All-Time`), defaulting to `All-Time` when omitted; `personal` adds a required `scope` choice (`This Server` / `All Servers`), declared before `timeframe` because Discord rejects a required option after an optional one. The result is a public, invoker-controlled tabbed dashboard (`src/utils/stats/statsDashboard.ts`) built on Components V2: each tab is a single container (H3 title, separator-divided stat sections, and the tab buttons living inside the card). A row of named tab buttons swaps which container is shown (a tabbed view, not item pagination). Only the invoker can operate the tabs; the buttons are stripped on collector timeout (5 minutes). The renderer uses a single persistent `createMessageComponentCollector` (not a one-shot `awaitMessageComponent` loop) so rapid tab switching can't land in a no-collector gap, and wraps each `button.update` in try/catch so a stale/expired interaction (DiscordAPIError 10062) can never tear down the dashboard. Dashboard and infographic entry points drain the in-memory stat buffer before querying, so their snapshots include all successfully buffered work from the current process.

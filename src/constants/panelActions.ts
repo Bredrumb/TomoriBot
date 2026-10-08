@@ -12,6 +12,13 @@
  */
 
 export const PANEL_ACTIONS = [
+  "expressions.workspace.native.edit",
+  "expressions.workspace.native.clear",
+  "expressions.workspace.custom.add",
+  "expressions.workspace.custom.edit",
+  "expressions.workspace.custom.delete",
+  "expressions.workspace.whitelist.add",
+  "expressions.workspace.whitelist.remove",
   // mcps
   "mcps.workspace.server.add",
   "mcps.workspace.server.enable",
@@ -158,6 +165,7 @@ export const PANEL_ACTIONS = [
   "server-config.workspace.system-prompt.preset",
   "server-config.workspace.system-prompt.remove",
   "server-config.workspace.context-note.set",
+  "server-config.workspace.response-prefill.set",
   "server-config.workspace.humanizer.set",
   "server-config.workspace.message-fetch-limit.set",
   "server-config.workspace.timezone.set",

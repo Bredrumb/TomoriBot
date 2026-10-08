@@ -30,6 +30,29 @@ Role alternation and prefix completion pull in opposite directions and must stay
 
 A single bundled "strict mode" boolean would force the wrong combination on one group.
 
+### Assistant prefill (a capability, not a normalization)
+
+`supports_assistant_prefill` records whether the model continues a trailing assistant turn at all.
+It is separate from prefix completion: prefix completion means the backend needs the `prefix: true`
+marker, while this flag means the backend accepts the trailing turn instead of rejecting it with a
+400 (Claude 4.6 and later, Gemini 3.5 Flash-Lite and later) or restarting its answer (most
+OpenRouter hosts). The prefill resolver in
+[`src/utils/chat/assistantPrefill.ts`](../../src/utils/chat/assistantPrefill.ts) reads it per
+generation attempt; NovelAI and prefix-completion backends count as able regardless of the column.
+The exception is DeepSeek, which rejects `prefix: true` in a request that also carries `tools`
+("Function call should not be used with prefix"). While Tool Use is on there, the resolver reports a
+`tools` blocker: a server prefill is skipped and a `/respond` prefill is sent as an instruction.
+Once the model calls a tool, the prefill no longer trails the request: the tool loop moves it into the
+first tool call's assistant turn (`foldPrefillIntoToolHistory`), because leaving it in place would put
+two assistant turns in a row, which Gemini and other strict-alternation backends reject. A prefill
+that already opens with the persona's speaker label (its name, `{bot}`, or a sprite label such as
+`Name (mad):`) is normalized to that label rather than prefixed a second time.
+Unlisted models default to `false`, so a new model never receives a prefill until its seed row is
+flipped after a probe (`plans/prefill-probe.ts`). Moving `~` aliases stay `false`, because the model
+behind one can drop support without the row changing. See
+[Chat build context](/architecture/pipelines/chat/06-per-turn/01-build-context/) for how the
+resolver applies it.
+
 ### Media relocation is always-on
 
 Media relocation runs unconditionally in every provider path, regardless of either toggle; a
@@ -67,14 +90,15 @@ and prefix-completion goldens remain unchanged.
 
 ## Resolution: column-is-truth (D4)
 
-Both flags are stored as boolean columns on `llms` and `custom_endpoints`
+The flags are stored as boolean columns on `llms` and `custom_endpoints`
 ([`src/types/db/schema.ts`](../../src/types/db/schema.ts), [`src/db/schema.sql`](../../src/db/schema.sql)).
 At request time the active model's `llms` row is the source of truth: the adapter reads
 `context.tomoriState.llm.strict_role_alternation` / `.supports_prefix_completion`:
 
 - **Built-in providers**: Seeded with the required flag in the typed catalog
   ([`src/db/seed/catalog/models.ts`](../../src/db/seed/catalog/models.ts)): anthropic →
-  alternation; deepseek/zai/zaicoding → prefix.
+  alternation; deepseek/zai/zaicoding → prefix. `supportsAssistantPrefill` is set per measured
+  model, and no provider-wide invariant covers it.
 - **Custom endpoints**: Carry the user's toggle choices on the `custom_endpoints` row, synced to the
   endpoint's synthetic `llms` row (`upsertSyntheticCustomLlm`), so the runtime reads them the
   same way as built-ins.
@@ -102,15 +126,20 @@ the `REQUIRED_*_PROVIDERS` sets in `modelSeed.ts` in lockstep with `providerRequ
 
 ## Configuring a custom endpoint
 
-The two toggles appear under `Chat Completion Compatibilities` in the Text model modal opened from the
+The toggles appear under `Chat Completion Compatibilities` in the Text model modal opened from the
 model dropdown on a `/providers` or `/personal providers` entry page. They are deliberately separate from
-Text Capabilities: tool calling, image input, and structured output describe the model, while these two
+Text Capabilities: tool calling, image input, and structured output describe the model, while these
 describe the backend's message parser.
 
 The group is offered only where the request path can act on it, which is the `openai-compatible` api family
 minus any flag that family already forces on. Custom endpoints resolve through the `custom` provider and so
-keep both. Anthropic forces alternation and never reads prefix completion; DeepSeek, Z.ai, and Z.ai Coding
-force prefix completion; OpenRouter, Google/Vertex, and NovelAI read neither column. Where a flag is not
+keep every flag. Anthropic forces alternation, never reads prefix completion, and takes its prefill support
+from the seed; DeepSeek, Z.ai, and Z.ai Coding force prefix completion, which also makes a prefill native,
+so neither prefix toggle is offered there. OpenRouter is offered only Assistant Prefill, because a
+user-registered OpenRouter codename has no seed row to declare it. The OpenRouter adapter does honor
+strict alternation and prefix completion, but no seed row sets either for OpenRouter and the panel
+does not offer them, so both stay off there. Google/Vertex and NovelAI are offered
+none: the seed decides Gemini, and NovelAI continues a prefill by construction. Where a flag is not
 offered, its stored value is preserved rather than rewritten, so nothing changes for a workspace that set it
 before. `offeredChatCompatFlags` derives this from `apiFamily` plus `providerRequires*`, and the submit path
 re-derives it rather than trusting the submission.
@@ -119,8 +148,14 @@ re-derives it rather than trusting the submission.
   user/assistant alternation and a leading user turn (e.g. Claude behind an OpenAI-shaped proxy).
 - **Prefix Completion**: enable when your proxy fronts a backend that supports continuing a partial
   assistant turn (e.g. DeepSeek / Z.ai-style `prefix: true`, or vLLM/SGLang continue modes).
+- **Assistant Prefill**: enable only when the model continues a reply started for it instead of
+  rejecting the request or restarting the answer. Without it, a `/respond` prefill is sent as a
+  written instruction and a server prefill is skipped.
 
-Both default OFF. With both OFF a custom endpoint behaves exactly as before (media relocation still
+The `/setup` custom endpoint step offers these flags (plus Verbatim Tool Calling) as checkboxes in its
+model modal, and writes them to both the synthetic `llms` row and the `custom_endpoints` row.
+
+All default OFF. With all OFF a custom endpoint behaves exactly as before (media relocation still
 applies; no alternation merge; no `prefix: true`).
 
 ## Migration
@@ -129,3 +164,6 @@ applies; no alternation merge; no `prefix: true`).
 the built-in requirements: `strict_role_alternation = true` for `anthropic`, and
 `supports_prefix_completion = true` for `deepseek`/`zai`/`zaicoding`. Fresh installs get the same
 values from the seed catalog + `schema.sql`.
+
+`095_assistant_prefill` adds `supports_assistant_prefill` to both tables (defaulting OFF) and
+backfills the measured seed rows; the per-boot reseed keeps them authoritative afterwards.

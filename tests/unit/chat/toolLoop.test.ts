@@ -24,6 +24,7 @@ import type { ChatTurnContext } from "@/utils/chat/types";
 import type { TomoriState } from "@/types/db/schema";
 import type { ToolResult } from "@/types/tool/interfaces";
 import type { ToolLoopParams } from "@/utils/chat/toolLoop";
+import { createExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
 
 let toolExecuteCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 let toolExecuteQueue: ToolResult[] = [];
@@ -34,6 +35,7 @@ let isFollowUpRequest = false;
 let clearStopRequestCalls = 0;
 let standardEmbedCalls: StandardEmbedOptions[] = [];
 let hiddenToolNotices: string[] = [];
+let onStopCheck: (() => void) | null = null;
 
 // Module mocks: all must appear before the first lazy import of toolLoop.ts
 
@@ -77,7 +79,10 @@ scopedMock.module("@/utils/discord/streamOrchestrator", () => ({
   ...realStreamOrchestrator,
   // Statics are non-enumerable, so a spread would drop the whole class surface.
   StreamOrchestrator: overrideMembers(realStreamOrchestrator.StreamOrchestrator, {
-    hasStopRequest: (_channelId: string) => hasStopRequest,
+    hasStopRequest: (_channelId: string) => {
+      onStopCheck?.();
+      return hasStopRequest;
+    },
     isFollowUpRequest: (_channelId: string) => isFollowUpRequest,
     clearStopRequest: (_channelId: string) => {
       clearStopRequestCalls += 1;
@@ -212,6 +217,7 @@ function makeContext(): ChatTurnContext {
     deliberateToolModeActive: false,
     deliberateToolContextTurns: 0,
     deliberateToolTriggerMatchByToolName: new Map(),
+    expressionDelivery: createExpressionDeliveryState(),
     responseTarget: undefined,
     turn: {
       lockedTurn: {
@@ -223,6 +229,20 @@ function makeContext(): ChatTurnContext {
       },
     },
   } as unknown as ChatTurnContext;
+}
+
+/** A guild text channel whose sends record into `events`, with sticker sends eligible to deliver. */
+function makeStickerContext(events: string[]): ChatTurnContext {
+  const context = makeContext();
+  const send = async () => {
+    events.push("send");
+    return { id: "900000000000000001", webhookId: null };
+  };
+  context.channel = { id: "ch_test", send, isThread: () => false } as unknown as ChatTurnContext["channel"];
+  context.message = { id: "msg_1", channel: context.channel, reply: send } as unknown as ChatTurnContext["message"];
+  context.guild = { id: "guild_1" } as unknown as ChatTurnContext["guild"];
+  context.client = { user: null } as unknown as ChatTurnContext["client"];
+  return context;
 }
 
 function makeProviderConfig(): ProviderConfig {
@@ -326,6 +346,7 @@ describe("runToolLoop — contract tests", () => {
     clearStopRequestCalls = 0;
     standardEmbedCalls = [];
     hiddenToolNotices = [];
+    onStopCheck = null;
   });
 
   it("executes tool with correct args and delivers result to next provider call", async () => {
@@ -716,69 +737,129 @@ describe("runToolLoop — contract tests", () => {
     expect(requiresFollowUpCalls).toHaveLength(0);
   });
 
-  it("successful sticker selection is carried on the completed result", async () => {
+  it("an empty follow-up after delivered text completes only when the model had nothing to add", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
-    const sticker = { id: "sticker_1", name: "Wave", url: "https://cdn.example/sticker.png" } as unknown as Sticker;
-    const { provider } = makeProvider([
-      makeFunctionCallResult("select_sticker_for_response", { sticker_name: "Wave" }),
-      { status: "completed", accumulatedText: "Hello!" },
-    ]);
-    toolExecuteQueue.push({
-      success: true,
-      data: { status: "sticker_selected_successfully", sticker_id: sticker.id, sticker_name: sticker.name },
-    });
+    const cases: Array<{ label: string; empty: StreamResult; needsFollowUp: boolean; expected: string }> = [
+      { label: "settled", empty: { status: "empty_response" }, needsFollowUp: false, expected: "completed" },
+      { label: "lookup tool", empty: { status: "empty_response" }, needsFollowUp: true, expected: "empty_response" },
+      {
+        label: "token cap",
+        empty: { status: "empty_response", data: { finishReason: "length" } },
+        needsFollowUp: false,
+        expected: "empty_response",
+      },
+      {
+        label: "speaker guard",
+        empty: { status: "empty_response", data: { emptyResponseReason: "speaker_guard" } },
+        needsFollowUp: false,
+        expected: "empty_response",
+      },
+      {
+        label: "held NovelAI fragment",
+        empty: { status: "empty_response", naiContinuationPrefill: "and then" },
+        needsFollowUp: false,
+        expected: "empty_response",
+      },
+    ];
 
-    const context = makeContext();
-    context.guild = { stickers: { cache: new Map([[sticker.id, sticker]]) } } as unknown as ChatTurnContext["guild"];
-    const result = await runToolLoop(makeParams(context, provider));
+    const failures: string[] = [];
+    for (const testCase of cases) {
+      const { provider } = makeProvider([
+        makeFunctionCallResult("echo_tool", {}, "Let me check that."),
+        testCase.empty,
+      ]);
+      toolExecuteQueue.push({ success: true, data: { saved: true } });
+      requiresFollowUp = testCase.needsFollowUp;
 
-    expect(result.status).toBe("completed");
-    expect(result.selectedSticker).toBe(sticker);
-  });
-
-  it("a later failed sticker selection clears an earlier selection", async () => {
-    const { runToolLoop } = await import("@/utils/chat/toolLoop");
-    const sticker = { id: "sticker_1", name: "Wave", url: "https://cdn.example/sticker.png" };
-    const { provider } = makeProvider([
-      makeFunctionCallResult("select_sticker_for_response", { sticker_name: "Wave" }),
-      makeFunctionCallResult("select_sticker_for_response", { sticker_name: "Missing" }),
-      { status: "completed", accumulatedText: "No sticker this time." },
-    ]);
-    toolExecuteQueue.push({
-      success: true,
-      data: { status: "sticker_selected_successfully", sticker_id: sticker.id, sticker_name: sticker.name },
-    });
-    toolExecuteQueue.push({ success: false, data: { status: "sticker_not_found" }, error: "not found" });
-
-    const context = makeContext();
-    context.guild = { stickers: { cache: new Map([[sticker.id, sticker]]) } } as unknown as ChatTurnContext["guild"];
-    const result = await runToolLoop(makeParams(context, provider));
-
-    expect(result.status).toBe("completed");
-    expect(result.selectedSticker).toBeUndefined();
-  });
-
-  it("max-iterations timeout clears a selected sticker", async () => {
-    const { runToolLoop } = await import("@/utils/chat/toolLoop");
-    const sticker = { id: "sticker_1", name: "Wave", url: "https://cdn.example/sticker.png" };
-    const { provider } = makeProvider([
-      makeFunctionCallResult("select_sticker_for_response", { sticker_name: "Wave" }),
-      ...Array.from({ length: 99 }, () => makeFunctionCallResult("infinite_tool")),
-    ]);
-    toolExecuteQueue.push({
-      success: true,
-      data: { status: "sticker_selected_successfully", sticker_id: sticker.id, sticker_name: sticker.name },
-    });
-    for (let i = 0; i < 99; i++) {
-      toolExecuteQueue.push({ success: true, data: { ok: true } });
+      const result = await runToolLoop(makeParams(makeContext(), provider));
+      if (result.status !== testCase.expected) failures.push(`${testCase.label}: ${result.status}`);
     }
+    expect(failures).toEqual([]);
+  });
 
-    const context = makeContext();
-    context.guild = { stickers: { cache: new Map([[sticker.id, sticker]]) } } as unknown as ChatTurnContext["guild"];
+  it("an empty first stream is still reported as empty so the turn retries", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { provider } = makeProvider([{ status: "empty_response" }]);
+
+    const result = await runToolLoop(makeParams(makeContext(), provider));
+
+    expect(result.status).toBe("empty_response");
+  });
+
+  it("sends a resolved sticker at invocation, after pre-tool text and before continuing text", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const events: string[] = [];
+    const { provider, capturedHistories } = makeProvider([
+      makeFunctionCallResult("select_sticker_for_response", { sticker_name: "Wave" }, "Oh hi!"),
+      { status: "completed", accumulatedText: "Nice to see you." },
+    ]);
+    const originalStream = provider.streamToDiscord;
+    provider.streamToDiscord = async (...args: Parameters<LLMProvider["streamToDiscord"]>) => {
+      const result = await originalStream(...args);
+      events.push(`text:${result.accumulatedText ?? ""}`);
+      return result;
+    };
+    const sticker = { id: "sticker_1", name: "Wave", url: "https://cdn.example/s.png", available: true };
+    toolExecuteQueue.push({
+      success: true,
+      data: { sticker_name: "Wave" },
+      stickerSelection: { kind: "native", sticker: sticker as unknown as Sticker },
+    });
+    const context = makeStickerContext(events);
+
     const result = await runToolLoop(makeParams(context, provider));
 
-    expect(result.status).toBe("timeout");
-    expect(result.selectedSticker).toBeUndefined();
+    expect(events).toEqual(["text:Oh hi!", "send", "text:Nice to see you."]);
+    expect(result.status).toBe("completed");
+    expect(JSON.stringify(capturedHistories)).toContain("sticker_sent");
+    expect(JSON.stringify(capturedHistories)).not.toContain("sticker_1");
+  });
+
+  it("treats a sticker-only reply as delivered output rather than an empty response", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { provider } = makeProvider([
+      makeFunctionCallResult("select_sticker_for_response", { sticker_name: "Wave" }),
+      { status: "empty_response" },
+    ]);
+    const sticker = { id: "sticker_1", name: "Wave", url: "https://cdn.example/s.png", available: true };
+    toolExecuteQueue.push({
+      success: true,
+      data: { sticker_name: "Wave" },
+      stickerSelection: { kind: "native", sticker: sticker as unknown as Sticker },
+    });
+
+    const result = await runToolLoop(makeParams(makeStickerContext([]), provider));
+
+    expect(result.status).toBe("completed");
+    expect(result.toolResponseDelivered).toBe(true);
+    expect(result.personaResponses).toEqual([]);
+  });
+
+  it("a stop raised after the tool resolved but before the send prevents the send", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const events: string[] = [];
+    const { provider } = makeProvider([
+      makeFunctionCallResult("select_sticker_for_response", { sticker_name: "Wave" }),
+    ]);
+    const sticker = { id: "sticker_1", name: "Wave", url: "https://cdn.example/s.png", available: true };
+    toolExecuteQueue.push({
+      success: true,
+      data: { sticker_name: "Wave" },
+      stickerSelection: { kind: "native", sticker: sticker as unknown as Sticker },
+    });
+    // The stop lands after the dispatcher's own pre- and post-execution checks, so only the
+    // delivery's recheck immediately before the send can observe it.
+    let stopChecks = 0;
+    onStopCheck = () => {
+      stopChecks += 1;
+      if (stopChecks === 3) hasStopRequest = true;
+    };
+
+    const result = await runToolLoop(makeParams(makeStickerContext(events), provider));
+
+    expect(stopChecks).toBeGreaterThanOrEqual(3);
+    expect(result.status).toBe("stopped_by_user");
+    expect(events).not.toContain("send");
   });
 
   it("NovelAI continues after pre-tool text when the successful tool requires follow-up", async () => {

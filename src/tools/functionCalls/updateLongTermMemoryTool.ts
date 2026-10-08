@@ -307,6 +307,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
               footerKey: "genai.self_teach.server_memory_footer",
             },
             processedMemoryContent,
+            { kind: "server_memory", id: memoryId },
           );
 
           invalidateTomoriStateCache(serverDiscId);
@@ -546,6 +547,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
           footerKey,
         },
         processedMemoryContent,
+        { kind: "personal_memory", id: memoryId },
       );
 
       return {

@@ -3,6 +3,7 @@ title: "セットアップウィザード"
 sidebar:
   label: "セットアップウィザード"
   order: 1
+aiGenerated: false
 ---
 
 :::note

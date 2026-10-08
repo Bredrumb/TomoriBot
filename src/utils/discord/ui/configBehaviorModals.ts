@@ -26,6 +26,7 @@ import {
 } from "@/utils/discord/ui/configModals";
 import type { RawModalPayload } from "@/utils/discord/ui/configModals";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { ASSISTANT_PREFILL_MAX_LENGTH } from "@/utils/chat/assistantPrefill";
 import { selectablePersonas, SELECT_OPTION_LIMIT } from "@/utils/discord/ui/configChannelModals";
 import { localizer, resolveDescription } from "@/utils/text/localizer";
 import { splitPromptIntoModalParts } from "@/utils/text/modalPromptParts";
@@ -33,6 +34,7 @@ import { promptPartDescription, promptPartLabel } from "@/utils/discord/ui/modal
 
 export const BEHAVIOR_HUMANIZER_FIELD = "behavior_humanizer";
 export const BEHAVIOR_FETCH_LIMIT_FIELD = "behavior_fetch_limit";
+export const BEHAVIOR_PREFILL_FIELD = "behavior_prefill";
 export const BEHAVIOR_TIMEZONE_FIELD = "behavior_timezone";
 export const BEHAVIOR_CASCADE_LIMIT_FIELD = "behavior_cascade_limit";
 export const BEHAVIOR_MATCH_LIMIT_FIELD = "behavior_match_limit";
@@ -669,6 +671,31 @@ export function buildBehaviorPresetModal(
             description: resolveDescription(preset.descriptions, locale) ?? "",
           })),
         ],
+      ),
+    ],
+  };
+}
+
+/** An empty submit clears the prefill, matching the Context Note modal. */
+export function buildBehaviorPrefillModal(
+  locale: string,
+  nonce: string,
+  prefill: string | null | undefined,
+): RawModalPayload {
+  return {
+    custom_id: buildConfigRouteId({ action: "behavior-prefill-submit", locale, nonce }),
+    title: title(locale, "commands.config.response-prefill.modal_title"),
+    components: [
+      textField(
+        locale,
+        nonce,
+        BEHAVIOR_PREFILL_FIELD,
+        "commands.config.response-prefill.text_label",
+        "commands.config.response-prefill.text_description",
+        TextInputStyle.Paragraph,
+        false,
+        ASSISTANT_PREFILL_MAX_LENGTH,
+        prefill ?? undefined,
       ),
     ],
   };

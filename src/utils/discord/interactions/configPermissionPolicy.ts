@@ -53,7 +53,12 @@ export type ConfigBehaviorTriggerAction =
 
 export type ConfigBehaviorExperimentalAction = "tool-mode" | "tool-context" | "tool-trigger" | "send-limit";
 export type ConfigBehaviorNoticesAction = "notice-visibility" | "notice-verbosity" | "speech-transcripts";
-export type ConfigBehaviorMemoryAction = "memory-tagging" | "stm-parameters" | "stm-categories" | "stm-prompt";
+export type ConfigBehaviorMemoryAction =
+  | "memory-tagging"
+  | "stm-enabled"
+  | "stm-parameters"
+  | "stm-categories"
+  | "stm-prompt";
 export type ConfigPermissionsCapabilitiesAction = "tool-use" | "manage";
 export type ConfigPermissionsPrivacyAction = "privacy-bypass";
 export type ConfigPluginsContextAdditionsAction = "self-debug";
@@ -393,6 +398,8 @@ export const BEHAVIOR_GENERAL_ACTION_BY_ROUTE: Partial<
   "behavior-preset-open": "prompt",
   "behavior-preset-submit": "prompt",
   "behavior-prompt-remove": "prompt",
+  "behavior-prefill-open": "prompt",
+  "behavior-prefill-submit": "prompt",
   "behavior-context-open": "context-note",
   "behavior-context-submit": "context-note",
   "behavior-humanizer-open": "humanizer",
@@ -450,6 +457,7 @@ export const BEHAVIOR_MEMORY_ACTION_BY_ROUTE: Partial<Record<ConfigPanelRoute["a
   {
     "behavior-memory-tagging-open": "memory-tagging",
     "behavior-memory-tagging-submit": "memory-tagging",
+    "behavior-stm-enabled-set": "stm-enabled",
     "behavior-stm-parameters-open": "stm-parameters",
     "behavior-stm-parameters-submit": "stm-parameters",
     "behavior-stm-categories-open": "stm-categories",

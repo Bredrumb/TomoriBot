@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS personas (
   sample_dialogues_in TEXT[] DEFAULT '{}', -- array index is soft id of sample dialogue pairs
   sample_dialogues_out TEXT[] DEFAULT '{}',
   -- autoch_counter and autoch_next_target were here; moved to persona_autoch_runtime_state by migration 015.
+  is_nsfw BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE
@@ -156,6 +157,8 @@ ALTER TABLE personas ALTER COLUMN is_pointer SET NOT NULL;
 -- applied_avatar_hash: preset_avatar_hash last PATCHed onto this persona's guild
 -- member avatar by the main-avatar fan-out reconciler (migration 033). NULL = never synced.
 SELECT add_column_if_not_exists('personas', 'applied_avatar_hash', 'TEXT');
+-- is_nsfw: copied from the preset at creation (migration 094); gates `/persona import`.
+SELECT add_column_if_not_exists('personas', 'is_nsfw', 'BOOLEAN', 'false', 'NOT NULL');
 -- elevenlabs_voice_id / elevenlabs_voice_name were added here (March 2026) and
 -- dropped by migration 010_complete_speech_voice_migration.sql (Phase 6 Step #14.2).
 -- physical_appearance_tags and nai_char_ref_url were added here and later
@@ -276,6 +279,21 @@ CREATE TABLE IF NOT EXISTS persona_sprite_messages (
 -- Retention pruning deletes by age.
 CREATE INDEX IF NOT EXISTS idx_persona_sprite_messages_created
   ON persona_sprite_messages(created_at);
+
+-- Maps a Minimal tool notice message to the memory or task it confirmed. A Minimal card shows only
+-- its title, so context rebuilding joins this reference to the live row to restore the body the
+-- model needs to avoid repeating the tool call. Storing the reference rather than the text keeps no
+-- second copy of personal data: a deleted or erased row simply stops resolving. No FK because
+-- `ref_id` points into a different table per kind; dangling references are harmless and pruned.
+CREATE TABLE IF NOT EXISTS minimal_notice_refs (
+  message_disc_id TEXT PRIMARY KEY,
+  ref_kind TEXT NOT NULL CHECK (ref_kind IN ('server_memory', 'personal_memory', 'task')),
+  ref_id INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_minimal_notice_refs_created
+  ON minimal_notice_refs(created_at);
 
 -- Create lineage sequence (start high so reserved low IDs stay available)
 CREATE SEQUENCE IF NOT EXISTS persona_lineage_id_seq
@@ -400,6 +418,7 @@ SELECT add_column_if_not_exists('llms', 'supports_structoutput', 'BOOLEAN', 'fal
 -- the per-provider required defaults (anthropic → alternation; deepseek/zai/zaicoding → prefix).
 SELECT add_column_if_not_exists('llms', 'strict_role_alternation', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'supports_prefix_completion', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('llms', 'supports_assistant_prefill', 'BOOLEAN', 'false', 'NOT NULL');
 SELECT add_column_if_not_exists('llms', 'verbatim_tool_calling', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'llm_description', 'TEXT');
 SELECT add_column_if_not_exists('llms', 'descriptions', 'JSONB');
@@ -409,6 +428,10 @@ SELECT add_column_if_not_exists('llms', 'descriptions', 'JSONB');
 -- catalog (src/db/seed/catalog/models.ts) — see seedModelsFromCatalog.
 SELECT add_column_if_not_exists('llms', 'input_price_per_million', 'NUMERIC');
 SELECT add_column_if_not_exists('llms', 'output_price_per_million', 'NUMERIC');
+-- Per-model token limits, seeded from the same catalog. NULL means unknown, which skips history
+-- truncation and output clamping. OpenRouter rows stay NULL because its live capability cache answers.
+SELECT add_column_if_not_exists('llms', 'context_window', 'INTEGER');
+SELECT add_column_if_not_exists('llms', 'max_output_tokens', 'INTEGER');
 
 -- Removed updated_at trigger for llms table (static metadata, rarely changes)
 DROP TRIGGER IF EXISTS update_llms_timestamp ON llms;
@@ -707,6 +730,7 @@ CREATE TABLE IF NOT EXISTS persona_presets (
   preset_language TEXT NOT NULL,
   preset_trigger_words TEXT[] DEFAULT '{}',
   preset_naming_config JSONB NOT NULL DEFAULT '{"prefixes":{},"suffixes":{},"addressTerms":{}}'::JSONB,
+  is_nsfw BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -724,6 +748,8 @@ SELECT add_column_if_not_exists('persona_presets', 'preset_attribute_public_flag
 SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_shared_url', 'TEXT');
 SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_hash', 'TEXT');
 SELECT add_column_if_not_exists('persona_presets', 'preset_naming_config', 'JSONB', '''{"prefixes":{},"suffixes":{},"addressTerms":{}}''::JSONB', 'NOT NULL');
+-- is_nsfw (migration 094): hides the preset from `/persona default`; only `/nsfw persona default` lists it.
+SELECT add_column_if_not_exists('persona_presets', 'is_nsfw', 'BOOLEAN', 'false', 'NOT NULL');
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_persona_presets_lineage_language_unique
   ON persona_presets(preset_lineage_id, preset_language)
@@ -829,6 +855,52 @@ END $$;
 
 -- Removed updated_at trigger for server_stickers table (uses DELETE+INSERT refresh pattern, not real updates)
 DROP TRIGGER IF EXISTS update_server_stickers_timestamp ON server_stickers;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_personas_id_server ON personas(persona_id, server_id);
+
+CREATE TABLE IF NOT EXISTS custom_expressions (
+  custom_expression_id UUID PRIMARY KEY,
+  server_id INT NOT NULL REFERENCES servers(server_id) ON DELETE CASCADE,
+  name TEXT NOT NULL CHECK (char_length(btrim(name)) BETWEEN 1 AND 100),
+  name_key TEXT NOT NULL CHECK (char_length(name_key) > 0),
+  description TEXT NOT NULL CHECK (char_length(btrim(description)) BETWEEN 1 AND 500),
+  emotion_key TEXT NOT NULL,
+  source_kind TEXT NOT NULL CHECK (source_kind IN ('link', 'upload')),
+  delivery_kind TEXT NOT NULL CHECK (delivery_kind IN ('link', 'stored')),
+  original_link TEXT,
+  storage_reference TEXT,
+  mime_type TEXT,
+  extension TEXT,
+  byte_size INT CHECK (byte_size BETWEEN 1 AND 10485760),
+  restricted BOOLEAN NOT NULL DEFAULT false,
+  revision INT NOT NULL DEFAULT 1 CHECK (revision > 0),
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (server_id, name_key),
+  UNIQUE (custom_expression_id, server_id),
+  CHECK ((source_kind = 'link' AND original_link IS NOT NULL) OR
+         (source_kind = 'upload' AND original_link IS NULL)),
+  CHECK ((delivery_kind = 'link' AND source_kind = 'link' AND storage_reference IS NULL) OR
+         (delivery_kind = 'stored' AND storage_reference IS NOT NULL AND mime_type IS NOT NULL
+          AND extension IS NOT NULL AND byte_size IS NOT NULL))
+);
+
+CREATE TABLE IF NOT EXISTS custom_expression_personas (
+  custom_expression_id UUID NOT NULL,
+  server_id INT NOT NULL,
+  persona_id INT NOT NULL,
+  PRIMARY KEY (custom_expression_id, persona_id),
+  FOREIGN KEY (custom_expression_id, server_id)
+    REFERENCES custom_expressions(custom_expression_id, server_id) ON DELETE CASCADE,
+  FOREIGN KEY (persona_id, server_id) REFERENCES personas(persona_id, server_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_custom_expression_personas_persona ON custom_expression_personas(persona_id);
+
+DROP TRIGGER IF EXISTS update_custom_expressions_timestamp ON custom_expressions;
+CREATE TRIGGER update_custom_expressions_timestamp
+BEFORE UPDATE ON custom_expressions
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 CREATE TABLE IF NOT EXISTS users (
   user_id SERIAL PRIMARY KEY,
@@ -2374,6 +2446,7 @@ CREATE TABLE IF NOT EXISTS custom_endpoints (
   supports_structoutput BOOLEAN DEFAULT false,
   strict_role_alternation BOOLEAN DEFAULT false,
   supports_prefix_completion BOOLEAN DEFAULT false,
+  supports_assistant_prefill BOOLEAN NOT NULL DEFAULT false,
   verbatim_tool_calling BOOLEAN NOT NULL DEFAULT false,
   is_default BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -2396,6 +2469,8 @@ BEGIN
       ON custom_endpoints(connection_id, COALESCE(model_name, ''));
   END IF;
 END $$;
+
+SELECT add_column_if_not_exists('custom_endpoints', 'supports_assistant_prefill', 'BOOLEAN', 'false', 'NOT NULL');
 
 DROP TRIGGER IF EXISTS update_custom_endpoints_timestamp ON custom_endpoints;
 CREATE TRIGGER update_custom_endpoints_timestamp
@@ -2608,6 +2683,7 @@ CREATE TABLE IF NOT EXISTS server_chat_configs (
   system_prompt                    TEXT,
   context_note                     TEXT,
   context_note_depth               INT         NOT NULL DEFAULT 0,
+  response_prefill                 TEXT,
   llm_stop_strings                 TEXT[]      NOT NULL DEFAULT '{}',
   llm_stop_speaker_pattern_enabled BOOLEAN     NOT NULL DEFAULT false,
   llm_max_output_tokens            INT,
@@ -2621,6 +2697,8 @@ CREATE TABLE IF NOT EXISTS server_chat_configs (
   created_at                       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+SELECT add_column_if_not_exists('server_chat_configs', 'response_prefill', 'TEXT');
 
 DROP TRIGGER IF EXISTS update_server_chat_configs_timestamp ON server_chat_configs;
 CREATE TRIGGER update_server_chat_configs_timestamp

@@ -10,6 +10,8 @@
 
 import type { AssembledServerConfig, LlmRow, TomoriState, UserRow } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
+import { customExpressionSchema, type CustomExpressionRow } from "@/types/db/schema";
+import { EmotionKey } from "@/types/misc/emotions";
 import { EMPTY_PERSONA_NAMING_CONFIG } from "@/types/personaNaming";
 import { DEFAULT_IMAGE_NEGATIVE_TAGS, DEFAULT_IMAGE_POSITIVE_TAGS } from "@/utils/image/tagDefaults";
 
@@ -131,6 +133,7 @@ export function createLlmRow(overrides: Partial<LlmRow> = {}): LlmRow {
     supports_structoutput: false,
     strict_role_alternation: false,
     supports_prefix_completion: false,
+    supports_assistant_prefill: false,
     verbatim_tool_calling: false,
     ...overrides,
   };
@@ -159,6 +162,7 @@ export function createPersona(overrides: PersonaFixtureOverrides = {}): TomoriSt
     persona_nickname: "Mirri",
     is_alter: false,
     is_pointer: false,
+    is_nsfw: false,
     attribute_list: [],
     sample_dialogues_in: [],
     sample_dialogues_out: [],
@@ -207,4 +211,27 @@ export function createUserRow(overrides: UserFixtureOverrides = {}): UserRow {
     suffix_override: null,
     ...overrides,
   };
+}
+export function createCustomExpression(overrides: Partial<CustomExpressionRow> = {}): CustomExpressionRow {
+  return customExpressionSchema.strict().parse({
+    custom_expression_id: "00000000-0000-4000-8000-000000000001",
+    server_id: 1,
+    name: "Wave custom",
+    name_key: "wave custom",
+    description: "Use when greeting someone.",
+    emotion_key: EmotionKey.JOY,
+    source_kind: "link",
+    delivery_kind: "link",
+    original_link: "https://example.com/wave.png",
+    storage_reference: null,
+    mime_type: null,
+    extension: null,
+    byte_size: null,
+    restricted: false,
+    revision: 1,
+    created_at: new Date(0),
+    updated_at: new Date(0),
+    persona_ids: [],
+    ...overrides,
+  });
 }

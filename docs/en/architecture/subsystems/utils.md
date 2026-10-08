@@ -136,7 +136,7 @@ the `What You Can Do` button below an error (e.g. in `stream/errorUi.ts` and `ui
 - `llmCache.ts`
 - `openrouterCatalog.ts`: shared refresh machinery for the OpenRouter model catalogs
 - `openrouterCapabilityCache.ts`, `openrouterEmbeddingModelCache.ts`, `openrouterImageModelCache.ts`, `openrouterVideoModelCache.ts`
-- `geminiCapabilityCache.ts`
+- `liveModelLimitsCache.ts`: Anthropic and Gemini token limits from each provider's models API
 - `novelaiCapabilityCache.ts`
 - `emergencyCacheClearer.ts`: critical-memory cleanup for recoverable caches
 - lazy sync helpers (`emojiLazySync.ts`, `stickerLazySync.ts`)

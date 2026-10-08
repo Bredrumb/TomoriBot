@@ -26,6 +26,8 @@ export function processEmbedsFromMessage(args: {
    * drop them entirely and Tomori would re-run tools she already ran.
    */
   components?: readonly unknown[];
+  /** Body restored from `resolveMinimalNoticeBodies` for a Minimal notice that rendered its title alone. */
+  minimalNoticeBody?: string;
   content: string;
   imageAttachments: SimplifiedMessageForContext["imageAttachments"];
   isTomoriAuthoredMessage: boolean;
@@ -83,7 +85,7 @@ export function processEmbedsFromMessage(args: {
     const noticeCheck = checkTargetEmbedTitle(notice.title);
     if (noticeCheck.isTarget && (notice.description || isMinimalTitleKind(noticeCheck.type))) {
       const noticeContent = formatTargetEmbedForContext(
-        { title: notice.title, description: notice.description ?? "" },
+        { title: notice.title, description: notice.description ?? args.minimalNoticeBody ?? "" },
         noticeCheck.type,
         args.tomoriNickname,
       );

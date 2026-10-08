@@ -1,4 +1,4 @@
-import type { BaseGuildTextChannel, Client, Guild, GuildMember, Message, Sticker, Webhook } from "discord.js";
+import type { BaseGuildTextChannel, Client, Guild, GuildMember, Message, Webhook } from "discord.js";
 import type { ForcedMention } from "@/types/discord/mentions";
 import type { ServerEmojiRow, ServerStickerRow, TomoriState, UserRow } from "@/types/db/schema";
 import type { RequestSnapshot, StructuredContextItem } from "@/types/misc/context";
@@ -15,6 +15,8 @@ import type { ReunionPresenceScope } from "@/utils/chat/reunionPresence";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import type { TextQuotaTriggerState } from "@/utils/chat/textQuotaState";
+import type { TurnPrefill } from "@/utils/chat/assistantPrefill";
+import type { ExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
 
 export type TextQuotaSource = "user" | "system";
 
@@ -60,6 +62,16 @@ export interface SceneTurnMetadata {
   additionalInstructions?: string;
 }
 
+/**
+ * A persona turn's expression allowance handed to its own empty-response retry, so the retry
+ * cannot send a second expression after one is already visible. Keyed by persona because one
+ * invocation can plan turns for several personas, each with its own allowance.
+ */
+export interface CarriedExpressionDelivery {
+  personaId: number;
+  state: ExpressionDeliveryState;
+}
+
 /** Public input to tomoriChat(): optional fields apply defaults in normalizeChatInvocation. */
 export interface TomoriChatInput {
   client: Client;
@@ -93,6 +105,7 @@ export interface TomoriChatInput {
   systemTriggerIdentity?: SystemTriggerIdentity;
   manualStreamingContextOverrides?: Partial<StreamingContext>;
   sceneTurn?: SceneTurnMetadata;
+  carriedExpressionDelivery?: CarriedExpressionDelivery;
   onGenerationResult?: ChatGenerationResultHandler;
   onQueueDiscard?: QueuedMessageDiscardHandler;
 }
@@ -129,6 +142,7 @@ export interface ChatIncoming {
   systemTriggerIdentity?: SystemTriggerIdentity;
   manualStreamingContextOverrides?: Partial<StreamingContext>;
   sceneTurn?: SceneTurnMetadata;
+  carriedExpressionDelivery?: CarriedExpressionDelivery;
   onGenerationResult?: ChatGenerationResultHandler;
   onQueueDiscard?: QueuedMessageDiscardHandler;
 }
@@ -245,6 +259,10 @@ export interface ChatTurnContext {
   tomoriState: TomoriState;
   requestSnapshot: RequestSnapshot;
   contextItems: StructuredContextItem[];
+  /** Kept out of `contextItems` because each attempt decides how its own model takes it. */
+  assistantPrefill: TurnPrefill | null;
+  /** Shared by every attempt of this persona turn; see {@link ExpressionDeliveryState}. */
+  expressionDelivery: ExpressionDeliveryState;
   simplifiedMessages: SimplifiedMessageForContext[];
   streamingContext: StreamingContext;
   messageIdMap: MessageIdMap;
@@ -317,5 +335,4 @@ export interface GenerationTurnResult {
   toolResponseDelivered?: boolean;
   thoughtLog?: ThoughtLogPayload;
   thoughtLogOwner?: ThoughtLogOwner;
-  selectedSticker?: Sticker;
 }

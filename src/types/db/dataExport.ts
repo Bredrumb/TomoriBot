@@ -187,6 +187,7 @@ const serverChatConfigExportSchema = z.object({
   send_message_limit: z.number().int().min(0).max(40).optional(),
   context_note: z.string().nullable().optional(),
   context_note_depth: z.number().int().min(0).max(100).optional(),
+  response_prefill: z.string().nullable().optional(),
   self_debug_enabled: z.boolean().default(false),
   model_randomizer_enabled: z.boolean().default(false),
 });

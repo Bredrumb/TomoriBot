@@ -119,8 +119,8 @@ export interface StreamContext {
     userId: string;
   }>;
 
+  /** The attempt's `{bot}: {text}` prefill: stripped when the model echoes it, never shown. */
   outputPrefill?: string;
-  outputPrefillState?: { sent: boolean };
 
   suppressTextOutput?: boolean;
 

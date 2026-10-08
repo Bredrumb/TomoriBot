@@ -1,6 +1,6 @@
 import { errorMessageNamesRejectableParam } from "@/providers/utils/paramDegradation";
 import type { ProviderError } from "@/types/stream/interfaces";
-import { isProviderModelErrorMessage } from "@/utils/provider/providerErrorClassification";
+import { isProviderModelErrorMessage, isProviderTimeoutMessage } from "@/utils/provider/providerErrorClassification";
 import { localizer } from "@/utils/text/localizer";
 
 interface ParsedOpenAICompatibleErrorPayload {
@@ -119,7 +119,7 @@ export function normalizeOpenAICompatibleProviderError(
     retryable = false;
   }
 
-  if (normalizedMessage.includes("timeout")) {
+  if (isProviderTimeoutMessage(normalizedMessage)) {
     errorType = "timeout";
     retryable = true;
   }

@@ -2466,7 +2466,7 @@ describe("setupWizardRoutes", () => {
       // Read back through the spied method first: if some earlier case left its own spy installed,
       // the fixture below would be silently ignored and this test would pass against the real
       // catalog instead of the one it declared.
-      const personaRows = await configRepository.loadPresetRowsByLocale("en-US");
+      const personaRows = await configRepository.loadPresetRowsByLocale("en-US", { nsfw: false });
       expect(personaRows?.map((row) => row.persona_preset_id)).toEqual([3585]);
 
       await expectRependAfterCatalogDrift({
@@ -3070,6 +3070,12 @@ describe("setupWizardFinish", () => {
       await dispatchGlobalInteraction({} as Client, interaction);
 
       expect(stubs.setupSpy).not.toHaveBeenCalled();
+      // /setup is not age-restricted, so every catalog read it makes must exclude NSFW presets; a stored
+      // NSFW preset id then fails this same "left the catalog" check.
+      expect(personaSpy).toHaveBeenCalled();
+      for (const [, options] of personaSpy.mock.calls) {
+        expect(options).toEqual({ nsfw: false });
+      }
       const repainted = JSON.stringify(interaction.editReplyCalls[0]);
       expect(repainted).toContain(localizer("en-US", "commands.setup.wizard.settings_button_start"));
       // A disabled Finish is the visible form of the refusal.

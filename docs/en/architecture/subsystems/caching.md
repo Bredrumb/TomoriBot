@@ -114,7 +114,13 @@ fallback before rendering `@UnknownUser`. Sweeping a `User` still referenced by 
 ### 3) Emoji/sticker cache (`emojiStickerCache.ts`)
 
 - Key: internal `server_id`
-- Stores expression rows loaded from DB after lazy sync checks
+- Stores native expression rows loaded from DB after lazy sync checks and server-wide custom rows
+  with persona membership IDs when sticker usage is enabled. Each turn filters customs for its
+  active persona; the cache never stores one persona's filtered list as the server list.
+- Tracks whether each native category has loaded, so an emoji-only read cannot hide stickers
+  from a later sticker-enabled turn. Failed custom reads provide no customs for that turn.
+- Successful metadata, media, whitelist, and deletion writes invalidate this cache after commit.
+  Persona deletion also invalidates the server's expression cache after its membership cascade.
 - Default TTL: `MEMORY_CACHE_DURATION_MS` (10 minutes)
 - API: `loadEmojiStickerCache`, `invalidateEmojiStickerCache`
 
@@ -200,9 +206,15 @@ The catalogs are deliberately excluded from `emergencyCacheClearer.ts`: they are
 metadata rather than per-guild growth, and dropping one would gate chat on database flags until
 the next refresh window to reclaim a few hundred KB.
 
-### 8) Gemini token-limit map (`geminiCapabilityCache.ts`)
+### 8) Live model limits (`liveModelLimitsCache.ts`)
 
-- Static in-memory lookup map for known Gemini model token limits
+- Keys: `<provider>:<codename>` for `anthropic` (`GET /v1/models/{id}`) and `google` (`models.get`)
+- Filled in the background by `resolveModelLimits()` with the server's own key; the turn that misses
+  keeps the catalog limits, so no message waits on the lookup
+- A success refreshes after 24 hours; a failure keeps any earlier success and retries after 10 minutes,
+  so a transient outage never disables the lookup until restart. A 404 (a codename the models API does
+  not know) waits the full 24 hours. Failures emit the `live_model_limits_lookup_failed` metric
+- Vertex and Vertex Express are not looked up, so their limits come from the catalog alone
 
 ### 9) NovelAI token-limit map (`novelaiCapabilityCache.ts`)
 

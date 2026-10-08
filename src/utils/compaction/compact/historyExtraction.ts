@@ -4,6 +4,7 @@ import { getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/u
 import { extractNoticeTextFromComponents } from "@/utils/discord/componentNoticeReader";
 import { MAX_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
 import { classifyProtocolEmbed, classifyProtocolTitle, isMinimalTitleKind } from "@/utils/discord/embedProtocol";
+import { resolveMinimalNoticeBodies } from "@/utils/discord/minimalNoticeBodies";
 import type { ConversationContext, ImageReference } from "./types";
 
 export async function buildConversationContext(
@@ -14,6 +15,7 @@ export async function buildConversationContext(
   const messagesArray = Array.from(fetchedMessages.values()).reverse();
   const resetIndex = findLastResetIndex(messagesArray);
   const relevantMessages = messagesArray.slice(resetIndex === -1 ? 0 : resetIndex + 1);
+  const minimalNoticeBodies = await resolveMinimalNoticeBodies(relevantMessages);
   const conversationLines: string[] = [];
   const imageReferences: ImageReference[] = [];
   const userIdSet = new Set<string>();
@@ -42,7 +44,10 @@ export async function buildConversationContext(
     // silently dropped from the compaction summary.
     const notice = extractNoticeTextFromComponents(msg.components);
     if (notice) {
-      messageContent = appendEmbedContent(messageContent, notice);
+      messageContent = appendEmbedContent(messageContent, {
+        title: notice.title,
+        description: notice.description ?? minimalNoticeBodies.get(msg.id) ?? null,
+      });
     }
 
     const messageImages: ImageReference[] = [];

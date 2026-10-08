@@ -114,8 +114,8 @@ export interface StreamingContext {
   disableAllTools?: boolean; // Flag to disable all tool calling (e.g., during user impersonation)
   deliberateToolAllowedNames?: string[]; // Optional per-turn allowlist when deliberate tool mode detects scoped intent
   disableReminderTool?: boolean; // Flag to prevent create_task from being called during a reminder-triggered turn
-  outputPrefill?: string; // Optional prefill to output before streaming (hybrid prefix)
-  outputPrefillState?: { sent: boolean }; // Tracks if prefill was already output (avoid duplicates on retry)
+  /** Set per attempt by `applyAssistantPrefill`; the stream strips an echo of it and never displays it. */
+  outputPrefill?: string;
   replyNoticeState?: { attempted: boolean; sent: boolean }; // Tracks the standalone alter reply notice across tool-call stream retries
   /**
    * True once the turn has logged its generation failure. One failed turn reaches the emitter
@@ -206,6 +206,8 @@ export interface ToolContext {
 
 export interface ToolResult {
   success: boolean;
+  /** A resolved expression the tool loop sends before building history. Never shown to the model. */
+  stickerSelection?: StickerSelection;
   data?: unknown;
   error?: string;
   message?: string;
@@ -492,3 +494,4 @@ export interface ToolRegistryInterface {
    */
   executeTool(toolName: string, args: Record<string, unknown>, context: ToolContext): Promise<ToolResult>;
 }
+import type { StickerSelection } from "@/types/discord/stickerSelection";

@@ -7,6 +7,7 @@ export default {
     prefill_description: `可选，你想让我接着续写的助手预填内容。`,
     prefill_label: `预填（可选）`,
     prefill_placeholder: `添加助手预填内容（可选）……`,
+    prefill_instruction_notice: `这个模型无法接着预填内容续写，因此我改将其作为指令传入。`,
     success_title: `已手动触发回复`,
     success_description: `正在以最后一个人格的身份回复这个频道的最新消息……`,
     extra_options_description: `回复前显示额外选项（人格选择、推理、提示词、预填）。`,

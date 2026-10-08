@@ -7,6 +7,7 @@ export default {
     prefill_description: `私に続きを書いてほしい、アシスタントの返答の書き出し（任意）。`,
     prefill_label: `プリフィル（任意）`,
     prefill_placeholder: `アシスタントのプリフィルを追加（任意）...`,
+    prefill_instruction_notice: `このモデルはプリフィルの続きを生成できないため、代わりに指示として渡しました。`,
     success_title: `手動応答がトリガーされました`,
     success_description: `このチャンネルの最新メッセージに応答しています...`,
     extra_options_description: `応答前に追加オプションを表示（ペルソナ選択、推論、プロンプト、プリフィル）。`,

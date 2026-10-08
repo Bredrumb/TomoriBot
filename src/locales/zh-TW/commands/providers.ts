@@ -141,6 +141,7 @@ export default {
       structured: `結構化輸出`,
       "strict-roles": `嚴格角色交替`,
       prefix: `前綴續寫`,
+      prefill: `助理前綴`,
       "verbatim-tools": `逐字工具呼叫`,
     },
     model_flag_descriptions: {
@@ -149,6 +150,7 @@ export default {
       structured: `如果這個模型可以在要求時回傳嚴格 JSON 請勾選。`,
       "strict-roles": `合併同角色的對話輪，並以使用者對話輪開場。代理 Claude 的前端請勾選。`,
       prefix: `讓我交回寫到一半的對話輪繼續寫。代理 DeepSeek 或 Z.ai 的前端請勾選。`,
+      prefill: `只有當此模型能接著我給的開頭繼續回覆、而不是重新開始或拒絕時才勾選。`,
       "verbatim-tools": `適用於不支援原生工具呼叫的端點。直接從原始文字輸出解析呼叫。`,
     },
     model_compat_label: `聊天完成相容性`,

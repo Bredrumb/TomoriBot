@@ -54,6 +54,7 @@ function providerEntry(id: string, name = "Google"): ProviderPanelEntry {
               supportsStructOutput: false,
               strictRoleAlternation: false,
               supportsPrefixCompletion: true,
+              supportsAssistantPrefill: false,
               verbatimToolCalling: false,
             },
           },
@@ -622,7 +623,12 @@ describe("providers panel rendering", () => {
     )?.component;
 
     expect(capabilities?.options?.map((option) => option.value)).toEqual(["tools", "images", "structured"]);
-    expect(compat?.options?.map((option) => option.value)).toEqual(["strict-roles", "prefix", "verbatim-tools"]);
+    expect(compat?.options?.map((option) => option.value)).toEqual([
+      "strict-roles",
+      "prefix",
+      "prefill",
+      "verbatim-tools",
+    ]);
     expect(JSON.stringify(endpointModal)).toContain(localizedCopy("en-US", "commands.providers.model_compat_label"));
     // Every option says what it does and when to tick it.
     expect(compat?.options?.every((option) => (option.description?.length ?? 0) > 0)).toBe(true);
@@ -648,6 +654,7 @@ describe("providers panel rendering", () => {
         supportsStructOutput: false,
         strictRoleAlternation: false,
         supportsPrefixCompletion: false,
+        supportsAssistantPrefill: false,
         verbatimToolCalling: true,
       },
     });
@@ -660,20 +667,21 @@ describe("providers panel rendering", () => {
   it("offers each compatibility only where the request path can honour it", () => {
     // Endpoints resolve through the `custom` provider, whose adapter reads both compat columns and
     // runs the only verbatim parser in the codebase.
-    expect(offeredChatCompatFlags("endpoint", "73")).toEqual(["strict-roles", "prefix", "verbatim-tools"]);
-    expect(offeredChatCompatFlags("provider", "nvidia")).toEqual(["strict-roles", "prefix"]);
-    // DeepSeek and Z.ai force prefix completion on regardless of the column, so the toggle is inert.
+    expect(offeredChatCompatFlags("endpoint", "73")).toEqual(["strict-roles", "prefix", "prefill", "verbatim-tools"]);
+    expect(offeredChatCompatFlags("provider", "nvidia")).toEqual(["strict-roles", "prefix", "prefill"]);
+    // DeepSeek and Z.ai force prefix completion on regardless of the column, so both prefix toggles are inert.
     expect(offeredChatCompatFlags("provider", "deepseek")).toEqual(["strict-roles"]);
     expect(offeredChatCompatFlags("provider", "zai")).toEqual(["strict-roles"]);
-    // Anthropic forces alternation and never reads prefix; the rest never read either column.
+    // Anthropic forces alternation, never reads prefix, and its seed decides prefill.
     expect(offeredChatCompatFlags("provider", "anthropic")).toEqual([]);
-    expect(offeredChatCompatFlags("provider", "openrouter")).toEqual([]);
+    // A user-registered OpenRouter codename has no seed row to declare prefill support.
+    expect(offeredChatCompatFlags("provider", "openrouter")).toEqual(["prefill"]);
     expect(offeredChatCompatFlags("provider", "google")).toEqual([]);
     expect(offeredChatCompatFlags("provider", "novelai")).toEqual([]);
   });
 
-  it("renders no compatibility group for a provider that cannot honour either flag", () => {
-    const json = JSON.stringify(buildProviderModelModal("en-US", "provider", "openrouter", "text", null, "abcdefgh"));
+  it("renders no compatibility group for a provider that honours no compatibility flag", () => {
+    const json = JSON.stringify(buildProviderModelModal("en-US", "provider", "google", "text", null, "abcdefgh"));
     expect(json).toContain("flags_abcdefgh");
     expect(json).not.toContain("compat_abcdefgh");
     expect(json).not.toContain(localizedCopy("en-US", "commands.providers.model_compat_label"));
@@ -735,6 +743,7 @@ describe("providers panel rendering", () => {
         supportsStructOutput: false,
         strictRoleAlternation: false,
         supportsPrefixCompletion: true,
+        supportsAssistantPrefill: false,
         verbatimToolCalling: false,
       },
     });
@@ -880,6 +889,7 @@ describe("Provider entry body stays inside the TextDisplay budget", () => {
         supportsStructOutput: false,
         strictRoleAlternation: false,
         supportsPrefixCompletion: false,
+        supportsAssistantPrefill: false,
         verbatimToolCalling: false,
       },
     }));

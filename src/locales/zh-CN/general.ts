@@ -53,6 +53,7 @@ export default {
       select_page_title: `选择页面`,
       select_page_description: `从 {totalPages} 页共 {totalItems} 个项目中选一页查看：`,
       select_persona_title: `选择人格`,
+      select_persona_page_description: `从 {totalPages} 页共 {totalItems} 个人格中选一页查看：`,
       persona_no_attributes: `还没有配置属性。`,
       persona_select_button: `选择`,
     },

@@ -5,7 +5,8 @@ import { promptWithPaginatedModal, replyInfoEmbed, safeSelectOptionText } from "
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-import type { UserRow } from "@/types/db/schema";
+import type { LlmRow, UserRow } from "@/types/db/schema";
+import { ASSISTANT_PREFILL_MAX_LENGTH, resolvePrefillBlocker, resolvePrefillMode } from "@/utils/chat/assistantPrefill";
 import type { ModalComponent, SelectOption } from "@/types/discord/modal";
 import { tomoriChat } from "@/events/messageCreate/tomoriChat";
 import { llmModelRepo, personaRepository } from "@/utils/db/repositories";
@@ -219,6 +220,7 @@ export async function execute(
   let manualPrefill: string | undefined;
   let forceReason: boolean | undefined;
   let llmOverrideCodename: string | undefined;
+  let reasoningModel: LlmRow | undefined;
 
   if (extraOptions) {
     const modalComponents: ModalComponent[] = [];
@@ -269,13 +271,15 @@ export async function execute(
       descriptionKey: "commands.respond.prefill_description",
       placeholder: localizer(locale, "commands.respond.prefill_placeholder"),
       required: false,
-      maxLength: 2000,
+      maxLength: ASSISTANT_PREFILL_MAX_LENGTH,
       style: 2, // TextInputStyle.Paragraph
     });
 
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: "respond_persona_select",
       modalTitleKey: "commands.respond.extra_options_title",
+      pageSelectTitleKey: "general.pagination.select_persona_title",
+      pageSelectDescriptionKey: "general.pagination.select_persona_page_description",
       components: modalComponents,
     });
 
@@ -335,6 +339,7 @@ export async function execute(
 
       forceReason = true;
       llmOverrideCodename = smartestModel.llm_codename;
+      reasoningModel = smartestModel;
     }
   } else {
     await interaction.deferReply({ flags: deferFlags });
@@ -353,9 +358,24 @@ export async function execute(
   }
 
   try {
+    // Fallback attempts can resolve differently, but a mismatch only costs an inaccurate hint.
+    const prefillBecomesInstruction =
+      manualPrefill !== undefined &&
+      resolvePrefillMode(
+        "manual",
+        resolvePrefillBlocker(
+          { llm: reasoningModel ?? selectedPersona.llm, config: selectedPersona.config },
+          forceReason,
+        ),
+      ) === "instruction";
+    const successDescription = localizer(locale, "commands.respond.success_description");
     const successEmbed = new EmbedBuilder()
       .setTitle(localizedStatusTitle(locale, "commands.respond.success_title", ColorCode.SUCCESS))
-      .setDescription(localizer(locale, "commands.respond.success_description"))
+      .setDescription(
+        prefillBecomesInstruction
+          ? `${successDescription}\n${localizer(locale, "commands.respond.prefill_instruction_notice")}`
+          : successDescription,
+      )
       .setColor(ColorCode.SUCCESS);
 
     if (!hideEmbed) {

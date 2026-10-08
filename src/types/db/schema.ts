@@ -1,5 +1,6 @@
 import { StickerFormatType } from "discord.js";
 import { z } from "zod";
+import { EmotionKey } from "@/types/misc/emotions";
 import { SUPPORTED_PARAM_VALUES, isSupportedParamValue, type SupportedParamValue } from "@/constants/supportedParams";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_VALUES } from "@/constants/thinkingLevels";
 import {
@@ -111,6 +112,7 @@ export const tomoriSchema = z.object({
   is_alter: z.boolean().default(false), // Added January 2026 - Distinguishes main persona (false) from alter personas (true)
   webhook_avatar_url: z.string().nullable().optional(), // Added January 2026 - Stored alter avatar reference (production URL; non-production URL or local avatar path)
   applied_avatar_hash: z.string().nullable().optional(), // Added migration 033 - preset_avatar_hash last PATCHed onto this persona's guild member avatar (NULL = never synced)
+  is_nsfw: z.boolean().default(false),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -173,6 +175,29 @@ export const personaSpriteMessageSchema = z.object({
 });
 export type PersonaSpriteMessageRow = z.infer<typeof personaSpriteMessageSchema>;
 
+const MINIMAL_NOTICE_REF_KINDS = ["server_memory", "personal_memory", "task"] as const;
+type MinimalNoticeRefKind = (typeof MINIMAL_NOTICE_REF_KINDS)[number];
+
+/** The row a Minimal tool notice confirmed, identified so context rebuilding can reload it live. */
+export interface MinimalNoticeRef {
+  kind: MinimalNoticeRefKind;
+  id: number;
+}
+
+/**
+ * A `minimal_notice_refs` row joined to its live target. The content columns are null when the
+ * referenced memory or task no longer exists.
+ */
+export const resolvedMinimalNoticeRefSchema = z.object({
+  message_disc_id: z.string().min(1),
+  ref_kind: z.enum(MINIMAL_NOTICE_REF_KINDS),
+  ref_id: z.number().int(),
+  memory_content: z.string().nullable(),
+  memory_tags: z.array(z.string()).nullable(),
+  reminder_purpose: z.string().nullable(),
+});
+export type ResolvedMinimalNoticeRefRow = z.infer<typeof resolvedMinimalNoticeRefSchema>;
+
 /**
  * Runtime autochat counters for a persona (Phase 6 Step #16B).
  * Separated from personas so identity rows are not mutated on every message tick.
@@ -221,6 +246,9 @@ export const llmSchema = z.object({
   // supports_prefix_completion: allow `prefix: true` on the trailing assistant prefill turn.
   strict_role_alternation: z.boolean().default(false),
   supports_prefix_completion: z.boolean().default(false),
+  // supports_assistant_prefill: the backend continues a trailing assistant turn at all (some
+  // reject it with a 400, others restart the answer). Unlisted models stay false.
+  supports_assistant_prefill: z.boolean().default(false),
   // verbatim_tool_calling: the model has no native tool channel, so schemas travel in-band and
   // the assistant's text is scanned for calls. Only the custom adapter runs that parser.
   verbatim_tool_calling: z.boolean().default(false),
@@ -232,6 +260,9 @@ export const llmSchema = z.object({
   // stays authoritative for request-time math. Coerced because Postgres NUMERIC arrives as a string.
   input_price_per_million: z.coerce.number().nullable().optional(),
   output_price_per_million: z.coerce.number().nullable().optional(),
+  // Token limits; read through resolveModelLimits(), which prefers a live provider value.
+  context_window: z.number().int().nullable().optional(),
+  max_output_tokens: z.number().int().nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -359,6 +390,7 @@ export const customEndpointSchema = customEndpointConnectionSchema.extend({
   // endpoint's synthetic llms row so the runtime resolves them uniformly with built-in providers.
   strict_role_alternation: z.boolean().default(false),
   supports_prefix_completion: z.boolean().default(false),
+  supports_assistant_prefill: z.boolean().default(false),
   // Per model like the strict flags, and for a sharper reason: one connection can host both a
   // native-tool-calling model and a text-only one that needs the in-band schema dump and its parser.
   verbatim_tool_calling: z.boolean().default(false),
@@ -666,6 +698,7 @@ const serverChatConfigSchema = z.object({
   system_prompt: z.string().nullable().optional(),
   context_note: z.string().nullable().optional(),
   context_note_depth: z.number().int().default(0),
+  response_prefill: z.string().nullable().optional(),
   llm_stop_strings: z.preprocess((value) => normalizeStringArray(value), z.array(z.string()).default([])),
   llm_stop_speaker_pattern_enabled: z.boolean().default(false),
   llm_max_output_tokens: z.number().int().nullable().optional(),
@@ -1022,6 +1055,7 @@ const tomoriPresetSchema = z.object({
       return value;
     }
   }, personaNamingConfigSchema.default(EMPTY_PERSONA_NAMING_CONFIG)),
+  is_nsfw: z.boolean().default(false),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -1078,6 +1112,62 @@ export const serverStickerSchema = z.object({
   updated_at: z.date().optional(),
 });
 export type ServerStickerRow = z.infer<typeof serverStickerSchema>;
+
+export const customExpressionMediaSchema = z
+  .object({
+    source_kind: z.enum(["link", "upload"]),
+    delivery_kind: z.enum(["link", "stored"]),
+    original_link: z.url().nullable(),
+    storage_reference: z.string().min(1).nullable(),
+    mime_type: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif", "video/mp4"]).nullable(),
+    extension: z.enum(["png", "jpg", "jpeg", "webp", "gif", "mp4"]).nullable(),
+    byte_size: z
+      .number()
+      .int()
+      .min(1)
+      .max(10 * 1024 * 1024)
+      .nullable(),
+  })
+  .refine(
+    (media) =>
+      (media.source_kind === "link" ? media.original_link !== null : media.original_link === null) &&
+      (media.delivery_kind === "link"
+        ? media.source_kind === "link" && media.storage_reference === null
+        : media.storage_reference !== null &&
+          media.mime_type !== null &&
+          media.extension !== null &&
+          media.byte_size !== null),
+  );
+export type CustomExpressionMedia = z.infer<typeof customExpressionMediaSchema>;
+
+export const customExpressionSchema = z
+  .object({
+    custom_expression_id: z.uuid(),
+    server_id: z.number().int().positive(),
+    name: z.string().trim().min(1).max(100),
+    name_key: z.string().min(1),
+    description: z.string().trim().min(1).max(500),
+    emotion_key: z.nativeEnum(EmotionKey),
+    source_kind: z.enum(["link", "upload"]),
+    delivery_kind: z.enum(["link", "stored"]),
+    original_link: z.url().nullable(),
+    storage_reference: z.string().min(1).nullable(),
+    mime_type: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif", "video/mp4"]).nullable(),
+    extension: z.enum(["png", "jpg", "jpeg", "webp", "gif", "mp4"]).nullable(),
+    byte_size: z
+      .number()
+      .int()
+      .min(1)
+      .max(10 * 1024 * 1024)
+      .nullable(),
+    restricted: z.boolean(),
+    revision: z.number().int().positive(),
+    created_at: z.date(),
+    updated_at: z.date(),
+    persona_ids: z.array(z.number().int().positive()),
+  })
+  .refine((row) => customExpressionMediaSchema.safeParse(row).success);
+export type CustomExpressionRow = z.infer<typeof customExpressionSchema>;
 
 export const serverMemorySchema = z.object({
   server_memory_id: z.number().optional(),
@@ -1517,6 +1607,8 @@ export const setupCustomEndpointCapabilitySchema = z.enum([
   "json",
   "strict_role_alternation",
   "prefix_completion",
+  "assistant_prefill",
+  "verbatim_tool_calling",
 ]);
 export type SetupCustomEndpointCapability = z.infer<typeof setupCustomEndpointCapabilitySchema>;
 

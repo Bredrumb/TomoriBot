@@ -17,6 +17,7 @@
 import type { FunctionCall, FunctionResponseImageMetadata, ThoughtLogEntry } from "../../types/provider/interfaces";
 import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
+import { isProviderTimeoutMessage } from "@/utils/provider/providerErrorClassification";
 import { localizer } from "../../utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
@@ -42,7 +43,6 @@ import { inlineToolResponseImage } from "@/providers/utils/toolImageContent";
 import { buildOpenrouterProviderRouting } from "./providerRouting";
 import { buildOpenRouterReasoningRequest } from "@/utils/provider/thinkingControl";
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
-import { logRawProviderError } from "@/utils/provider/providerErrorLogging";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import { DISCORD_STREAMING_CONSTANTS } from "../../types/stream/types";
 import { ReasoningContentSpillGuard } from "@/providers/utils/reasoningContentSpillGuard";
@@ -2037,7 +2037,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       finalMessage.includes("503")
     ) {
       return { type: "provider_overloaded", retryable: true };
-    } else if (finalMessage.toLowerCase().includes("timeout")) {
+    } else if (isProviderTimeoutMessage(finalMessage)) {
       return { type: "timeout", retryable: true };
     } else if (finalMessage.toLowerCase().includes("content")) {
       return { type: "content_blocked", retryable: false };
@@ -2049,9 +2049,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
    * Handle OpenRouter-specific errors using official error codes
    */
   handleProviderError(error: unknown): ProviderError {
-    // Pino's error serializer handles non-enumerable Error properties, so the full object is logged.
-    logRawProviderError("OpenRouter", error);
-
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     let errorCode: string | undefined;

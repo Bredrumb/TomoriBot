@@ -1,4 +1,5 @@
 import TurndownService from "turndown";
+import { readBoundedResponse } from "@/utils/security/boundedResponse";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { FETCH_LIMITS } from "@/utils/security/rateLimiter";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
@@ -22,44 +23,6 @@ function sliceContent(content: string, opts: FetchOpts): { text: string; startIn
     startIndex,
     nextIndex: endIndex < content.length ? endIndex : undefined,
   };
-}
-
-async function readBodyWithLimit(response: Response, maxBytes: number): Promise<string> {
-  if (!response.body) return "";
-
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let totalBytes = 0;
-  let completed = false;
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        completed = true;
-        break;
-      }
-      totalBytes += value.byteLength;
-      if (totalBytes > maxBytes) {
-        throw new Error(`Fetched content exceeds the ${FETCH_LIMITS.MAX_FETCH_SIZE_MB} MB limit.`);
-      }
-      chunks.push(value);
-    }
-  } finally {
-    // `releaseLock` only detaches the reader: the body stays open and keeps its buffers and
-    // connection. The oversized-response throw above is exactly the case where that matters.
-    if (!completed) {
-      await reader.cancel().catch(() => undefined);
-    }
-  }
-
-  const body = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(body);
 }
 
 export function convertFetchedContent(body: string, contentType: string, raw = false): string {
@@ -115,7 +78,7 @@ export class SafeHttpFetchEngine implements FetchEngine {
       };
     }
 
-    const body = await readBodyWithLimit(response, FETCH_LIMITS.MAX_FETCH_SIZE_MB * 1024 * 1024);
+    const body = (await readBoundedResponse(response, FETCH_LIMITS.MAX_FETCH_SIZE_MB * 1024 * 1024)).toString("utf8");
     const content = convertFetchedContent(body, response.headers.get("content-type") ?? "", opts.raw);
     const sliced = sliceContent(content, opts);
 

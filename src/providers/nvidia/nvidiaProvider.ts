@@ -1,3 +1,4 @@
+import { resolveRequestMaxOutputTokens } from "@/utils/provider/modelLimits";
 import type {
   AnyThreadChannel,
   BaseGuildTextChannel,
@@ -380,7 +381,7 @@ export class NvidiaProvider
       apiKey,
       temperature: tomoriState.config.llm_temperature,
       disabledParams: tomoriState.config.llm_disabled_params ?? [],
-      maxOutputTokens: tomoriState.config.llm_max_output_tokens ?? 4096,
+      maxOutputTokens: await resolveRequestMaxOutputTokens(tomoriState),
       endpointUrl: NVIDIA_CHAT_COMPLETIONS_URL,
       seesImages: tomoriState.llm.sees_images,
       seesVideos: tomoriState.llm.sees_videos,

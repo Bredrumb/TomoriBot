@@ -21,6 +21,10 @@ This stage is the thin chat-side wrapper around a much larger inner
 pipeline. The heavy lifting (mentions, memories, RAG, persona prompt,
 participants, dialogue history) lives in [context-build](../../context-build/).
 
+Sticker selection is admitted on eligible server turns without a sticker request. The
+sticker setting, tool-use setting, model/provider support, and DM, impersonation, and
+roleplay restrictions still apply. Task tools retain their deliberate intent filtering.
+
 When Deliberate Tool Mode is active, the intent wrapper performs an autonomous
 STM maintenance preflight before calling the base builder. A due refresh is
 carried through the existing `endTurnAfterTools` allowlist path so
@@ -110,8 +114,23 @@ After this stage runs:
 - `contextItems` has tail directives appended in the correct priority order:
   emoji penalty (lower priority, inserted before the latest dialogue pair),
   stop/reasoning/manual directives (combined into one user message at the
-  tail), queued-reply directive, uncensor directive, and manual-prefill
-  model message (last).
+  tail), queued-reply directive, then uncensor directive. No prefill is in
+  `contextItems`.
+- `assistantPrefill` holds the turn's prefill, or null. A `/respond` prefill
+  replaces the server's `response_prefill`; the server one is skipped on user
+  impersonation, reasoning queries, reminders, scene turns, and stop
+  responses. Identity and mention macros are expanded here with the real
+  triggerer name; tool macros are not, because they depend on the attempt's
+  provider.
+- Each generation attempt applies the prefill in `runGenerationAttempts`
+  (`applyAssistantPrefill`), after media resolution and truncation, against
+  its own model. A model that continues a prefill gets a trailing `model`
+  item `"{bot}: {text}"`; otherwise a `/respond` prefill becomes a
+  `Begin your next reply with` tail directive and a server prefill is
+  dropped. Either way `streamingContext.outputPrefill` is set for the
+  attempt, so the stream strips an echo and the prefix-completion adapters
+  stamp `prefix: true`. Deciding per attempt is what keeps a fallback from
+  a model that accepts a prefill to one that rejects it from a 400.
 - `simplifiedMessages` excludes messages from privacy-FULL users.
 - Blocked-author content is not scanned for references; its synthetic block
   notice is excluded as well.
@@ -156,6 +175,7 @@ This stage is a coordinator over many extension-relevant helpers:
 | `simplifyMessage` + sub-helpers (`withReplyContext`, `withReactionContext`, `buildForwardContext`) | this file | Per-message annotation pipeline; new annotation types hook here |
 | `processEmbedsFromMessage` | `contextEmbeds.ts` | Embed classification + content extraction; new embed type plugins hook here |
 | `extractNoticeTextFromComponents` | `discord/componentNoticeReader.ts` | Reconstructs `{title, description, footer}` from a Components V2 container so CV2 notices classify like embeds |
+| `resolveMinimalNoticeBodies` | `discord/minimalNoticeBodies.ts` | Restores the body of title-only Minimal memory and task notices from the live rows they reference |
 | `appendSupportedMediaFromMessage`, `appendStickersFromMessage`, etc. | `contextMedia.ts` | Media attachment extractors; new media kinds hook here |
 | `buildReactionContextAnnotation`, `buildReplyReferenceContextAnnotation` | `contextAnnotations.ts` | Annotation builders; reaction/reply formatting hooks here |
 | `appendTailDirectives` | this file | Tail-directive assembly; new directive kinds insert here |
@@ -202,6 +222,17 @@ specifically so both paths emit byte-identical `[System: ...]` context. Current
 CV2 senders: `expandableEmbedNotice.ts` (memory + task via
 `sendMemoryEmbedWithExpand` / `sendTaskEmbedWithExpand`, `update_user_info` via
 `sendToolNoticeContainer`). All other notice types are still embed-based.
+
+- **A Minimal notice is a title with no body**: at Minimal verbosity the card
+shows only its title, so without help the model would know it saved a memory but
+not which one, and save it again. `routeHideableNotice` records a
+`minimal_notice_refs` row for Minimal memory and task cards, and
+`buildSimplifiedHistory` resolves the window once through
+`resolveMinimalNoticeBodies` before the simplify loop. The restored body uses the
+same `ID:n` form as the memory and pending-task context lines so the model can
+match them. The lookup runs only when the window holds a title-only notice, and
+a deleted row leaves the notice as its bare title. Compaction
+(`historyExtraction.ts`) and the prompt snapshot resolve the same way.
 
 - **A notice title absent from `checkTargetEmbedTitle` is dropped silently**:
 whichever transport it uses, so a persona asked "did you already do that?" has no

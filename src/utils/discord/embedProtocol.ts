@@ -29,7 +29,11 @@ export const PROTOCOL_KEYS: ProtocolEntry[] = [
     "personal_memory_updated_title",
     "personal_memory_deleted_title",
   ].map((name) => ({ key: `genai.self_teach.${name}`, kind: "memory_learning" as const, match: "template" as const })),
-  { key: "tools.user_info_update.success_title", kind: "user_info_update", match: "template" },
+  ...["success_title", "success_title_fields", "success_title_cleared_fields"].map((name) => ({
+    key: `tools.user_info_update.${name}`,
+    kind: "user_info_update" as const,
+    match: "template" as const,
+  })),
   ...["block_mute_title", "block_block_title", "unmute_success_title", "unblock_success_title"].map((name) => ({
     key: `tools.user_block.${name}`,
     kind: "user_moderation" as const,

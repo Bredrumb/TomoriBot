@@ -357,7 +357,7 @@ async function readSetupSettingsCatalogs(
 /** The same read for a path that needs the catalogs themselves rather than a drift verdict. */
 async function loadSetupSettingsCatalogs(locale: string): Promise<SetupSettingsCatalogs | null> {
   const [personaPresets, promptPresets] = await Promise.all([
-    configRepository.loadPresetRowsByLocale(locale),
+    configRepository.loadPresetRowsByLocale(locale, { nsfw: false }),
     configRepository.loadSystemPromptPresets(),
   ]);
   return toSetupSettingsCatalogs(personaPresets, promptPresets, locale);
@@ -960,7 +960,7 @@ async function finishSetupWizardDraft(
     const presetRow =
       typeof presetId === "number"
         ? await configRepository
-            .loadPresetRowsByLocale(locale)
+            .loadPresetRowsByLocale(locale, { nsfw: false })
             .then((rows) => rows?.find((row) => row.persona_preset_id === presetId) ?? null)
         : null;
 

@@ -10,6 +10,11 @@ Quando você faz `git pull` de um código novo e reinicia a TomoriBot, o bot exe
 
 O executor de migração da TomoriBot (em `src/db/migrationRunner.ts`) executa todas as migrações não aplicadas na ordem de versão. As migrações são somente para frente: se algo der errado, o executor não faz a reversão automática. A maioria das migrações são expansões seguras (novas colunas, novas tabelas), mas de acordo com a política de design interna (OD-R-6) do projeto, operações destrutivas, como `DROP COLUMN` ou `DROP TABLE`, são permitidas. Se uma migração destrutiva for executada sem um backup, você perde dados permanentemente. Em caso de dúvida, faça o backup primeiro.
 
+## Backups de mídia de expressão personalizada
+<!-- anchor: custom-expression-media-backups -->
+
+Os backups de banco de dados retêm metadados de expressões personalizadas, associações pessoais e referências de armazenamento. Eles não incluem bytes de mídia carregados ou importados. Pare o bot antes de fazer backup do banco de dados e da mídia juntos. Com armazenamento local, copie `data/custom-expressions/` e restaure-o no mesmo local. Com GCS ou S3, faça backup dos objetos `custom-expressions/` de propriedade e restaure suas chaves no bucket de expressão configurado. Restaure as configurações `EXPRESSION_STORAGE_BACKEND` e `EXPRESSION_STORAGE_BUCKET` correspondentes. Alterar apenas o back-end ou bucket deixa as referências existentes ilegíveis. As expressões de link são armazenadas apenas como URLs e permanecem dependentes de seus hosts externos. As exportações JSON Discord não carregam registro de expressão ou arquivo de mídia.
+
 ## Lista de verificação pré-pull
 
 Siga estas etapas ANTES de executar `git pull`:
@@ -148,10 +153,10 @@ Se o bot travar ou congelar durante a migração:
 3. **Decida se deseja restaurar**: se o erro for irrecuperável (por exemplo, a migração tentou descartar uma coluna que não existe), restaure a partir de seu backup:
 
    ```bash
-   # Restauração Opção A
+   # Option A restore
    bun run restore-backup --latest
 
-   # Ou Restauração Opção B
+   # Or Option B restore
    pg_restore \
      -h "$POSTGRES_HOST" \
      -p "$POSTGRES_PORT" \
@@ -212,12 +217,12 @@ A abordagem mais segura: aponte a branch para um banco de dados descartável (um
 Se você testou uma branch contra o seu banco de dados real e deseja desfazer suas migrações em seguida, use o executor de rollback. Ao contrário do executor para frente, ele nunca roda automaticamente: o rollback é sempre um ato manual deliberado, já que os arquivos `.down.sql` tipicamente envolvem perda de dados.
 
 ```bash
-# Apenas visualização (dry run): mostrar o que seria revertido
-bun run migrate:down 034          # esta migração + todas as mais recentes aplicadas
-bun run migrate:down --last       # apenas a migração mais recentemente aplicada
-bun run migrate:down --last=2     # as duas migrações mais recentemente aplicadas
+# Preview only (dry run): show what would be rolled back
+bun run migrate:down 034          # this migration + every newer applied one
+bun run migrate:down --last       # only the most recently applied migration
+bun run migrate:down --last=2     # the two most recently applied migrations
 
-# Executar a reversão (roda os arquivos .down.sql, remove as linhas em schema_migrations)
+# Execute the rollback (runs the .down.sql files, removes schema_migrations rows)
 bun run migrate:down 034 --yes
 ```
 

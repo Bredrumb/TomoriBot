@@ -1,4 +1,3 @@
-import type { Sticker } from "discord.js";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { ToolRegistry } from "@/tools/toolRegistry";
@@ -6,7 +5,6 @@ import { statRepository } from "@/utils/db/repositories";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
-import { isStickerSendable } from "@/utils/discord/stickerAvailability";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
 import {
@@ -27,6 +25,8 @@ import {
   buildTailDirectiveMessage,
 } from "@/utils/chat/contextAnnotations";
 import { takeEnhancedContextItem } from "@/utils/chat/pendingEnhancedContext";
+import { foldPrefillIntoToolHistory } from "@/utils/chat/assistantPrefill";
+import { buildExpressionToolResult, deliverExpression } from "@/utils/chat/expressionDelivery";
 import { recordChatDiagnostic, runWithChatDiagnosticStage } from "@/utils/chat/diagnosticTimeline";
 import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 import type { ChatTurnContext, GenerationTurnResult, ToolHistoryEntry } from "@/utils/chat/types";
@@ -85,9 +85,10 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
   let detailsText = "";
   let consecutiveToolErrors = 0;
   let naiConsecutiveToolFailures = 0;
-  let selectedStickerToSend: Sticker | null = null;
   let thoughtLog: GenerationTurnResult["thoughtLog"];
-  let toolResponseDelivered = false;
+  // An expression an earlier attempt of this turn delivered is still visible, so it still counts.
+  let toolResponseDelivered = params.context.expressionDelivery.delivered !== null;
+  let lastToolName: string | undefined;
 
   for (let iteration = 0; iteration < MAX_FUNCTION_CALL_ITERATIONS; iteration++) {
     if (iteration > 0) {
@@ -128,7 +129,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           finalText,
           detailsText,
           thoughtLog,
-          selectedStickerToSend ?? undefined,
           toolResponseDelivered,
         );
       case "error":
@@ -141,10 +141,29 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           finalText,
           detailsText,
           thoughtLog,
-          undefined,
           toolResponseDelivered,
         );
-      case "empty_response":
+      case "empty_response": {
+        // The turn-level retry regenerates the whole reply, so after delivered text it posts a second
+        // reply under the first. It is skipped only when the empty follow-up is the model having
+        // nothing to add; a lookup result still waiting to be presented, or a failure the retry
+        // handles specifically, keeps it.
+        const deliveredText = streamResults.findLast((result) => result.accumulatedText?.trim())?.accumulatedText;
+        if (
+          (deliveredText || toolResponseDelivered) &&
+          (await isSettledAfterTool(params, streamResult, lastToolName))
+        ) {
+          resetChannelFollowUpCount(params.context.channel.id);
+          return buildResult(
+            "completed",
+            params.context,
+            streamResults,
+            deliveredText ?? finalText,
+            detailsText,
+            thoughtLog,
+            toolResponseDelivered,
+          );
+        }
         return buildResult(
           "empty_response",
           params.context,
@@ -152,9 +171,9 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           finalText,
           detailsText,
           thoughtLog,
-          undefined,
           toolResponseDelivered,
         );
+      }
       case "stopped_by_user":
         queueStopResponseIfPresent(params.context);
         resetChannelFollowUpCount(params.context.channel.id);
@@ -169,7 +188,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           finalText,
           detailsText,
           thoughtLog,
-          undefined,
           toolResponseDelivered,
         );
       case "follow_up_interrupt":
@@ -181,7 +199,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           finalText,
           detailsText,
           thoughtLog,
-          undefined,
           toolResponseDelivered,
         );
       case "function_call": {
@@ -212,20 +229,17 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
             finalText,
             detailsText,
             thoughtLog,
-            undefined,
             toolResponseDelivered,
           );
         }
 
         functionHistory.push(toolOutcome.historyEntry);
+        lastToolName = toolOutcome.functionName;
         toolResponseDelivered ||= toolOutcome.responseDelivered;
         // Visible text emitted before the tool call now lives on that history
         // entry's assistant tool-call turn. Remove the same buffered parts from
         // the trailing prefill so providers do not receive it a second time.
         accumulatedModelParts.length = 0;
-        if (toolOutcome.stickerSelection !== undefined) {
-          selectedStickerToSend = toolOutcome.stickerSelection;
-        }
         if (toolOutcome.success) {
           consecutiveToolErrors = 0;
           naiConsecutiveToolFailures = 0;
@@ -240,7 +254,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
               finalText,
               detailsText,
               thoughtLog,
-              undefined,
               toolResponseDelivered,
             );
           }
@@ -254,7 +267,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
             streamResult.accumulatedText ?? finalText,
             detailsText,
             thoughtLog,
-            selectedStickerToSend ?? undefined,
             toolResponseDelivered,
           );
         }
@@ -275,7 +287,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
               streamResult.accumulatedText ?? finalText,
               detailsText,
               thoughtLog,
-              selectedStickerToSend ?? undefined,
               toolResponseDelivered,
             );
           }
@@ -303,7 +314,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
             streamResult.accumulatedText ?? finalText,
             detailsText,
             thoughtLog,
-            selectedStickerToSend ?? undefined,
             toolResponseDelivered,
           );
         }
@@ -328,7 +338,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
       tipKeys: ["genai.tips.refresh_context"],
     });
   }
-  selectedStickerToSend = null;
   return buildResult(
     "timeout",
     params.context,
@@ -336,7 +345,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
     finalText,
     detailsText,
     thoughtLog,
-    undefined,
     toolResponseDelivered,
   );
 }
@@ -417,15 +425,20 @@ async function streamOnce(
   // Keep a handle to the provider call so the timeout branch can await it settling. Under
   // Promise.race the loser is otherwise abandoned (never awaited); its rejection is still observed
   // by race's internal handlers, so holding this reference does not create an unhandled rejection.
+  const request = foldPrefillIntoToolHistory(
+    params.context.contextItems,
+    params.context.streamingContext.outputPrefill,
+    functionHistory,
+  );
   const streamPromise = params.provider.streamToDiscord(
     params.context.channel as Parameters<LLMProvider["streamToDiscord"]>[0],
     params.context.client,
     params.tomoriState,
     params.providerConfig,
-    params.context.contextItems,
+    request.contextItems,
     accumulatedModelParts,
     params.context.emojiStrings,
-    functionHistory.length > 0 ? functionHistory : undefined,
+    request.functionHistory.length > 0 ? request.functionHistory : undefined,
     undefined,
     replyToMessage,
     params.context.streamingContext,
@@ -538,7 +551,6 @@ async function executeToolCall(
       success: boolean;
       endTurn: boolean;
       responseDelivered: boolean;
-      stickerSelection?: Sticker | null;
       historyEntry: ToolHistoryEntry;
     }
 > {
@@ -659,7 +671,7 @@ async function executeToolCall(
       })
     : null;
 
-  const toolResult = isBlockedByDeliberateAllowlist
+  const executedResult: ToolResult = isBlockedByDeliberateAllowlist
     ? {
         success: false,
         error: `Tool "${functionName}" was not exposed for this deliberate tool mode turn.`,
@@ -692,6 +704,24 @@ async function executeToolCall(
     return { kind: "abort", status: "stopped_by_user" };
   }
 
+  // The send is awaited outside the timeout and kill race above, so Discord's verdict is always
+  // known before history is built and a stop can never leave an accepted send unrecorded.
+  let toolResult = executedResult;
+  const stickerSelection = executedResult.success ? executedResult.stickerSelection : undefined;
+  if (stickerSelection) {
+    const stickerName = (executedResult.data as { sticker_name?: string } | undefined)?.sticker_name ?? "";
+    const delivery = await runUnderWatchdog(params.context.channel.id, () =>
+      deliverExpression(
+        params.context,
+        stickerSelection,
+        stickerName,
+        () => turnAbortSignal?.aborted === true || shouldAbortToolCallForStopRequest(params.context.channel.id),
+      ),
+    );
+    if (delivery.status === "cancelled") return { kind: "abort", status: "stopped_by_user" };
+    toolResult = buildExpressionToolResult(delivery, stickerName);
+  }
+
   if (isBlockedByDeliberateAllowlist) {
     log.warn(
       `Deliberate tool mode blocked unexposed tool call "${functionName}" in channel ${params.context.channel.id}. Allowed: ${
@@ -713,9 +743,8 @@ async function executeToolCall(
       const lineageId = params.context.currentPersona.persona_lineage_id ?? params.tomoriState.persona_lineage_id ?? 0;
       // userId is carried on the context (resolved once at turn planning), so no
       // per-tool-call DB lookup: recordStat just buffers in memory.
-      // The per-sticker `sticker_used` breakdown is deliberately NOT recorded here:
-      // selection only queues a sticker, and the send happens post-turn. It is recorded
-      // on confirmed delivery in postTurnEffects.recordStickerDelivery instead.
+      // `sticker_used` is not recorded here: a successful call can be a repeat that sent
+      // nothing, so the per-sticker count belongs to `deliverExpression` at Discord acceptance.
       try {
         statRepository.recordStat({
           serverId,
@@ -768,22 +797,6 @@ async function executeToolCall(
     log.info("Short-term memory updated — disabling further STM calls for this turn");
   }
 
-  let stickerSelection: Sticker | null | undefined;
-  if (functionName === "select_sticker_for_response") {
-    const stickerData = toolResult.data as { status?: string; sticker_id?: string; sticker_name?: string } | undefined;
-    if (stickerData?.status === "sticker_selected_successfully") {
-      const resolved = params.context.guild?.stickers.cache.get(stickerData.sticker_id ?? "") ?? null;
-      stickerSelection = resolved && isStickerSendable(resolved) ? resolved : null;
-      if (stickerSelection) {
-        log.success(`Sticker '${stickerData.sticker_name}' selected for sending`);
-      } else {
-        log.warn(`Sticker '${stickerData.sticker_name}' is no longer sendable, dropping selection`);
-      }
-    } else {
-      stickerSelection = null;
-    }
-  }
-
   const functionResponse = toolResult.success
     ? ((toolResult.data as Record<string, unknown>) ?? { status: "completed" })
     : {
@@ -807,7 +820,6 @@ async function executeToolCall(
     success: toolResult.success,
     endTurn: toolResult.endTurn === true,
     responseDelivered: toolResult.success && toolResult.responseDelivered === true,
-    stickerSelection,
     historyEntry: {
       functionCall,
       functionResponse: {
@@ -961,6 +973,27 @@ async function shouldEndAfterPreToolText(
   return !(await ToolRegistry.requiresFollowUp(functionName, providerName, serverId));
 }
 
+/**
+ * Whether an empty stream after a tool means the model had nothing to add. A held NovelAI fragment,
+ * an output-token cap (the retry trims context for it), and a speaker-guard discard (the retry
+ * injects the speaker directive) are failures. A tool that requires follow-up returned data only
+ * the follow-up can present, so an empty one lost the answer.
+ */
+async function isSettledAfterTool(
+  params: ToolLoopParams,
+  emptyResult: StreamResult,
+  lastToolName: string | undefined,
+): Promise<boolean> {
+  if (!lastToolName || emptyResult.naiContinuationPrefill) return false;
+  const data = emptyResult.data as { finishReason?: unknown; emptyResponseReason?: unknown } | undefined;
+  if (data?.finishReason === "length" || data?.emptyResponseReason) return false;
+  return !(await ToolRegistry.requiresFollowUp(
+    lastToolName,
+    params.provider.getInfo().name,
+    params.tomoriState.server_id,
+  ));
+}
+
 async function emitNaiToolRetryExhausted(context: ChatTurnContext): Promise<void> {
   await sendStandardEmbed(
     context.channel as Parameters<typeof sendStandardEmbed>[0],
@@ -1038,7 +1071,6 @@ function buildResult(
   responseText: string,
   detailsText: string,
   thoughtLog: GenerationTurnResult["thoughtLog"],
-  selectedSticker?: Sticker,
   toolResponseDelivered = false,
 ): GenerationTurnResult {
   const text = detailsText.trim()
@@ -1061,7 +1093,6 @@ function buildResult(
     toolResponseDelivered: toolResponseDelivered || undefined,
     thoughtLog,
     thoughtLogOwner: thoughtLog ? resolveThoughtLogOwner(context) : undefined,
-    selectedSticker,
   };
 }
 

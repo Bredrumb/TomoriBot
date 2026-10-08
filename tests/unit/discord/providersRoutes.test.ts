@@ -136,6 +136,7 @@ const scope: LoadedProviderPanelScope = {
                   supportsStructOutput: false,
                   strictRoleAlternation: false,
                   supportsPrefixCompletion: false,
+                  supportsAssistantPrefill: false,
                   verbatimToolCalling: false,
                 },
               },
@@ -899,6 +900,7 @@ describe("providers routes", () => {
         supportsStructOutput: false,
         strictRoleAlternation: false,
         supportsPrefixCompletion: false,
+        supportsAssistantPrefill: false,
         verbatimToolCalling: false,
       },
     });
@@ -1168,6 +1170,7 @@ describe("providers routes", () => {
                       supportsStructOutput: false,
                       strictRoleAlternation: true,
                       supportsPrefixCompletion: true,
+                      supportsAssistantPrefill: false,
                       verbatimToolCalling: false,
                     },
                   },

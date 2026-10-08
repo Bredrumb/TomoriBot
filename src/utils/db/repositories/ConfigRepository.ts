@@ -9,6 +9,7 @@
  * and consumed by the Phase 6 (#16.7) export pipeline composition.
  */
 import type { SQL } from "bun";
+import { presetFallbackLanguages, selectPresetsForLocale } from "@/utils/persona/presetLocale";
 import type {
   ErrorContext,
   AssembledServerConfig,
@@ -261,46 +262,25 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
     }
   }
 
-  async loadPresetRowsByLocale(locale: string): Promise<TomoriPresetRow[] | null> {
+  /**
+   * Loads one preset per lineage in the locale's best available language (see `selectPresetsForLocale`).
+   * `nsfw` is required so every caller picks a side; only the age-restricted `/nsfw` routes pass true.
+   */
+  async loadPresetRowsByLocale(locale: string, options: { nsfw: boolean }): Promise<TomoriPresetRow[] | null> {
     try {
-      let presets = await sql`
+      const rows = await sql<TomoriPresetRow[]>`
         SELECT * FROM persona_presets
-        WHERE preset_language = ${locale}
-        ORDER BY persona_preset_name ASC
+        WHERE preset_language = ANY(${sql.array(presetFallbackLanguages(locale), "TEXT")})
       `;
+      const presets = selectPresetsForLocale(rows, locale, options);
 
       if (presets.length === 0) {
-        const baseLanguage = locale.split("-")[0];
-        presets = await sql`
-          SELECT * FROM persona_presets
-          WHERE preset_language = ${baseLanguage}
-          ORDER BY persona_preset_name ASC
-        `;
-
-        if (presets.length > 0) {
-          log.info(`No presets found for locale '${locale}', using base language '${baseLanguage}' instead.`);
-        }
-      }
-
-      if (presets.length === 0 && locale !== "en-US") {
-        presets = await sql`
-          SELECT * FROM persona_presets
-          WHERE preset_language = 'en-US'
-          ORDER BY persona_preset_name ASC
-        `;
-
-        if (presets.length > 0) {
-          log.info(`No presets found for locale '${locale}', falling back to English presets.`);
-        }
-      }
-
-      if (!presets || presets.length === 0) {
         log.warn(`No personality presets found for locale '${locale}' or any fallback language.`);
         return null;
       }
 
       log.info(`Found ${presets.length} personality preset rows for locale '${locale}'.`);
-      return presets as TomoriPresetRow[];
+      return presets;
     } catch (error) {
       log.error(`Error loading preset rows for locale '${locale}' from database:`, error);
       return null;

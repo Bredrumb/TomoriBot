@@ -4,7 +4,7 @@ title: "02: Execute Tool Call"
 
 Validate, gate, dispatch, and record one tool call from the provider.
 
-- **File**: `src/utils/chat/toolLoop.ts:237-475`
+- **File**: `src/utils/chat/toolLoop.ts`
 
 ## Mission
 
@@ -38,7 +38,7 @@ A discriminated union:
     functionName: string;
     success: boolean;
     endTurn: boolean;
-    stickerSelection?: Sticker | null;
+    responseDelivered: boolean;
     historyEntry: ToolHistoryEntry;
   }
 ```
@@ -46,7 +46,7 @@ A discriminated union:
 - **`"restart"`**: `handleEnhancedContextRestart` consumed the result; the
   outer loop does `continue` without pushing to `functionHistory`.
 - **`"abort"`**: a fatal condition was hit (malformed call, stop request,
-  consecutive error cap); outer loop calls `buildResult(status)` immediately.
+  a stop observed just before an expression send); outer loop calls `buildResult(status)` immediately.
 - **`"history"`**: normal outcome; outer loop pushes `historyEntry` to
   `functionHistory` and checks `endTurn` / `shouldEndAfterPreToolText`.
 
@@ -145,30 +145,66 @@ Steps in execution order:
      message?: string; endTurn?: boolean; imageMetadata?: … }
    ```
 
-7. **`retainSuccessfulToolAffordance`**: on success, extends the deliberate-
+7. **Expression delivery**: a successful result carrying the private
+   `ToolResult.stickerSelection` (only `select_sticker_for_response` sets it) is
+   sent now by `deliverExpression` (`src/utils/chat/expressionDelivery.ts`), and
+   the tool result is replaced by the delivery outcome before any later step reads
+   it. Text the model wrote before the call is already posted, because the stream
+   flushes pending text before it returns `function_call`.
+   - The send is awaited outside the timeout and kill race, so the outcome is
+     always known before history is built. The stop check runs once more
+     immediately before each outbound POST, after webhook resolution and any
+     avatar update; a stop there returns `{kind: "abort", status: "stopped_by_user"}`
+     and nothing is posted.
+   - Each persona turn allows one delivered expression through
+     `ChatTurnContext.expressionDelivery`, shared by every tool-loop iteration,
+     context restart, key rotation, and model fallback of that turn. Repeating the
+     delivered expression returns `sticker_already_sent` without a send; a
+     different one is refused and the first is never replaced. A definite refusal
+     or a failed recheck leaves the allowance free for another attempt.
+   - A send Discord never confirmed (a timeout or network failure) stays recorded
+     as unconfirmed, and every later call in the turn is refused rather than risk
+     a second visible copy. The REST client retries timeouts and 5xx responses on
+     its own, so bot sends carry an enforced nonce that makes those retries return
+     the first message. Webhook execution accepts no nonce, so webhook expressions
+     go through `sendWebhookMessageOnce`, which makes a single attempt. A rate limit
+     cannot duplicate, so this function waits and posts again within a shared
+     30-second retry budget. It checks for a stop every 100 ms during waits and
+     before every attempt. A delay beyond the remaining budget fails immediately
+     with the expression allowance free. Stale-lock expiry is disabled while this
+     delivery phase holds its watchdog exemption, so the retry budget bounds
+     repeated rate-limit refusals.
+   - Text this turn already delivered decides the identity, reusing the recorded
+     webhook identity verbatim (including a sprite-decorated username). Before any
+     text, the persona's `responseTarget` decides, never an earlier turn's speaker.
+     The send is recorded in channel continuity, but never in
+     `deliveredMessageRefs`, so a model fallback's superseded-message cleanup
+     cannot delete it.
+   - Accepted delivery records `sticker_used` (native, keyed by name) or
+     `custom_expression_used` (keyed by stable id) once, and sets
+     `responseDelivered`, so a sticker-only reply settles as `completed` rather
+     than an empty response. The model sees only the sticker name and the
+     outcome, never ids, links, or the media kind.
+
+8. **`retainSuccessfulToolAffordance`**: on success, extends the deliberate-
    tool-mode affordance window for this channel so short follow-up turns
    ("do it again") keep the tool exposed for `deliberateToolContextTurns`
    additional turns. No-op when deliberate-tool-mode is inactive.
 
-8. **Deliberate-trigger hidden notice**: if `deliberateToolTriggerMatchByToolName`
+9. **Deliberate-trigger hidden notice**: if `deliberateToolTriggerMatchByToolName`
    has an entry for this tool and mode is active, sends a hidden embed via
    `routeHiddenToolNotice` (thought-log only; not shown to users) describing
    which trigger phrase caused deliberate mode to expose the tool.
 
-9. **Enhanced-context restart check**: calls
+10. **Enhanced-context restart check**: calls
    [`handleEnhancedContextRestart`](03-enhanced-context-restart.md)
    (`toolLoop.ts:537-568`) with `toolResult.data`. If it returns `true`,
    returns `{kind: "restart"}`.
 
-10. **Reactivate one-shot STM guard**: a successful
+11. **Reactivate one-shot STM guard**: a successful
    `update_short_term_memory` sets
    `streamingContext.disableShortTermMemoryUpdate = true`, so the tool's own
    availability and execution guards reject a second update in this turn.
-
-11. **Capture sticker selection**: `select_sticker_for_response` maps a
-    successful `sticker_id` through the guild sticker cache and returns it as
-    `stickerSelection`. Any other result from that tool returns `null`, so the
-    latest sticker call wins and a miss clears an earlier selection.
 
 12. **Build function response**: wraps `toolResult.data` (success) or a
    standardized error object (failure) into the `functionResponse` shape:
@@ -213,6 +249,8 @@ After this stage runs:
   `success: false`: the model is informed and can decide how to proceed.
 - A queued follow-up never converts an in-progress tool chain into
   `stopped_by_user`; only a genuine stop does.
+- At most one expression is delivered per persona turn, and an accepted one is
+  never resent, replaced, or deleted by a later failure in the same turn.
 - After a successful STM update, the live streaming context prevents another
   STM update in the same turn.
 - Tool execution duration is logged at `INFO` level

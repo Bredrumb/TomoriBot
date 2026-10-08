@@ -1,3 +1,5 @@
+import type { TomoriState } from "@/types/db/schema";
+import { StickerTool } from "@/tools/functionCalls/stickerTool";
 import type { Message } from "discord.js";
 import { isAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import {
@@ -133,11 +135,6 @@ const CROSS_CHANNEL_INTENT_PATTERNS: RegExp[] = [
   /\b(?:boomerang|report\s+back)\b.{0,120}\b(?:channel|thread|<#\d+>|#[^\s]+|`[^`]+`)\b/iu,
 ];
 
-const STICKER_INTENT_PATTERNS: RegExp[] = [
-  /\b(?:send|use|pick|choose|select|add)\b.{0,80}\b(?:sticker|stickers|emote|reaction\s+sticker)\b/i,
-  /\b(?:sticker|stickers)\b.{0,80}\b(?:please|pls|plz|too|also|instead|for\s+that|with\s+that)\b/i,
-];
-
 const MESSAGE_METADATA_INTENT_PATTERNS: RegExp[] = [
   /\b(?:metadata|message\s+id|message\s+link|timestamp|jump\s+link)\b/i,
   /\b(?:when|what\s+time)\b.{0,80}\b(?:was|did)\b.{0,80}\b(?:sent|posted|say|write)\b/i,
@@ -201,7 +198,6 @@ const MEDIA_ANALYSIS_TOOL_NAMES = [
 ];
 const MESSAGE_ACTION_TOOL_NAMES = ["interact_with_recent_message", "manage_message", "reveal_message_metadata"];
 const CAPABILITY_TOOL_NAMES = ["review_capabilities"];
-const STICKER_TOOL_NAMES = ["select_sticker_for_response"];
 const USER_BLOCKING_TOOL_NAMES = ["block_user", "unblock_user"];
 const USER_INFO_TOOL_NAMES = ["update_user_info"];
 
@@ -224,7 +220,6 @@ export const DELIBERATE_TOOL_TRIGGER_TARGETS = [
   { value: "message-action", label: "Message actions", toolNames: MESSAGE_ACTION_TOOL_NAMES },
   { value: "user-blocking", label: "Persona user blocking", toolNames: USER_BLOCKING_TOOL_NAMES },
   { value: "user-info", label: "User info updates", toolNames: USER_INFO_TOOL_NAMES },
-  { value: "sticker", label: "Sticker selection", toolNames: STICKER_TOOL_NAMES },
   { value: "thread", label: "Thread creation", toolNames: ["create_thread"] },
   { value: "capabilities", label: "Capability review", toolNames: CAPABILITY_TOOL_NAMES },
 ] as const;
@@ -375,10 +370,6 @@ export function hasDeliberateToolIntent(
   }
 
   if (VIDEO_GENERATION_REQUEST_PATTERNS.some((pattern) => pattern.test(text))) {
-    return true;
-  }
-
-  if (STICKER_INTENT_PATTERNS.some((pattern) => pattern.test(text))) {
     return true;
   }
 
@@ -598,10 +589,6 @@ export function getDeliberateToolIntentResult(
     addToolMatches(allowedToolNames, matches, ["cross_channel_message"], "cross-channel request", "built-in");
   }
 
-  if (STICKER_INTENT_PATTERNS.some((pattern) => pattern.test(text))) {
-    addToolMatches(allowedToolNames, matches, STICKER_TOOL_NAMES, "sticker request", "built-in");
-  }
-
   if (/\b(create|make|start|open)\b.*\b(thread)\b/i.test(text)) {
     addToolMatches(allowedToolNames, matches, ["create_thread"], "thread request", "built-in");
   }
@@ -793,4 +780,17 @@ export function getRecentTriggeredToolIntentResult(
       new Map(matches.map((match) => [`${match.toolName}\0${match.trigger}\0${match.source}`, match])).values(),
     ),
   };
+}
+
+/** Expression tools remain available without a task request; their feature toggles still apply. */
+export function getAutonomousDeliberateToolNames(state: TomoriState): string[] {
+  const stickerTool = new StickerTool();
+  if (
+    !state.llm.has_tools ||
+    state.config.tool_use_enabled === false ||
+    !state.config.sticker_usage_enabled ||
+    !stickerTool.isAvailableFor(state.llm.llm_provider)
+  )
+    return [];
+  return [stickerTool.name];
 }

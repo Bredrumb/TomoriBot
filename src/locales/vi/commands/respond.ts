@@ -7,6 +7,7 @@ export default {
     prefill_description: `Prefill trợ lý tùy chọn mà bạn muốn mình tiếp tục.`,
     prefill_label: `Prefill (Tùy chọn)`,
     prefill_placeholder: `Thêm prefill trợ lý (tùy chọn)...`,
+    prefill_instruction_notice: `Model này không thể tiếp tục prefill, vì vậy mình đã chuyển nó thành một hướng dẫn thay thế.`,
     success_title: `Đã kích hoạt phản hồi thủ công`,
     success_description: `Đang phản hồi tin nhắn mới nhất trong kênh này bằng persona gần nhất...`,
     extra_options_description: `Hiện tùy chọn trước khi phản hồi (chọn persona, suy luận, prompt, prefill).`,

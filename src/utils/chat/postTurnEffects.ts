@@ -1,11 +1,9 @@
 import { PrivacyLevel } from "@/types/db/schema";
 import { ContextItemTag } from "@/types/misc/context";
+import { recordLastReplyUsage } from "@/utils/cache/lastReplyUsageCache";
 import { incrementStmTurnCounter, storeShortTermMemory } from "@/utils/cache/shortTermMemoryCache";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { hasThoughtLogContent, sendAttributionOnlyEmbed, sendThoughtLogEmbed } from "@/utils/discord/thoughtLog";
-import { resolveManagedChannelWebhook, sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/webhookCore";
-import { getChannelDeliveredWebhookIdentity } from "@/utils/discord/stream/channelDeliveryContinuity";
-import { isStickerUnusableError, markStickerRejected } from "@/utils/discord/stickerAvailability";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { incrementTextQuota } from "@/utils/quota/textQuotaManager";
@@ -42,112 +40,30 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
   // Empty-response retries rebuild context recursively, so release or commit the
   // claim before that retry tries to acquire it again.
   await recordReunionPresence(context.reunionPresence, result);
-  await sendSelectedSticker(context, result);
   await maybeScheduleEmptyResponseRetry(context, result);
   await consumeTextQuota(context, result);
   updateSelfReplyBookkeeping(context, result);
   await writeShortTermMemory(context, result);
   await emitThoughtLog(context, result);
   scheduleBoomerangFollowUp(context);
+  rememberLastReplyUsage(context, result);
   // Fire-and-forget so stat tracking never adds latency to the response path.
   void recordUsageStats(context, result);
 }
 
-async function sendSelectedSticker(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
-  const sticker = result.selectedSticker;
-  if (!sticker || result.status !== "completed") return;
-
-  let stickerSent = false;
-  // Post the sticker as whoever actually delivered the last message, so Discord groups the two
-  // instead of splitting the sticker off under a different author. Crucially this reuses the
-  // recorded username verbatim: which may be the decorated `Persona (sprite)` form picked by
-  // the group-break alternation. Re-resolving the persona's default identity here would produce
-  // a different name and force exactly the split we are avoiding.
-  //
-  // Not gated on `is_alter`: the main persona also delivers through a webhook whenever a sprite
-  // renders. A null identity means the last delivery was an ordinary bot message, so the sticker
-  // should be one too: which the bot path below handles.
-  const deliveredIdentity = getChannelDeliveredWebhookIdentity(context.channel.id);
-
-  if (deliveredIdentity) {
-    const threadId = context.channel.isThread() ? context.channel.id : undefined;
-    try {
-      const webhook = context.responseTarget?.webhook ?? (await resolveManagedChannelWebhook(context.channel));
-      if (webhook) {
-        await sendWebhookMessageWithIdentity(
-          webhook,
-          {
-            content: sticker.url,
-            ...(threadId ? { threadId } : {}),
-          },
-          deliveredIdentity,
-        );
-        stickerSent = true;
-        log.info(`Sent sticker URL for '${sticker.name}' via webhook as "${deliveredIdentity.username}".`);
-      }
-    } catch (error) {
-      log.warn("Failed to send sticker URL via webhook, falling back to bot sticker send", error);
-    }
-  }
-
-  if (stickerSent) {
-    recordStickerDelivery(context, sticker.name);
-    return;
-  }
-
-  try {
-    if (context.isFromQueue) {
-      await context.message.reply({ stickers: [sticker.id] });
-    } else {
-      if (!("send" in context.channel) || typeof context.channel.send !== "function") {
-        throw new Error(`Channel ${context.channel.id} does not support sticker sends.`);
-      }
-      await context.channel.send({ stickers: [sticker.id] });
-    }
-    log.info(`Sent selected sticker '${sticker.name}' after stream.`);
-    recordStickerDelivery(context, sticker.name);
-  } catch (error) {
-    // Discord refusing the sticker outright is permanent for that ID (lost boost tier, deleted
-    // but still cached), so retiring it here is what stops the model reselecting it every turn.
-    if (isStickerUnusableError(error)) {
-      markStickerRejected(sticker.id);
-      log.warn(`Discord rejected sticker '${sticker.name}' (${sticker.id}) as unusable; retiring it for this process.`);
-      return;
-    }
-
-    log.error("Failed to send selected sticker after stream:", error, {
-      serverId: context.tomoriState.server_id,
-      errorType: "StickerSendError",
-      metadata: { stickerId: sticker.id },
-    });
-  }
-}
-
 /**
- * Records `sticker_used` for a sticker Discord actually accepted, keyed by the canonical
- * resolved name (matching `server_stickers.sticker_name`, which getEmotionBreakdown joins on).
- *
- * Counting at tool-selection time instead would credit stickers the delivery path dropped:
- * a turn that never reached "completed", or a webhook send that failed and took the native
- * fallback down with it. DMs are skipped (stat_counters.server_id is a NOT NULL FK).
+ * Keeps the first request's reported input tokens for `/context`. Later tool-loop requests also
+ * carry the tool results, so only the first one matches the prompt `/context` rebuilds.
  */
-function recordStickerDelivery(context: ChatTurnContext, stickerName: string): void {
-  if (context.isDMChannel) return;
-  const serverId = context.tomoriState.server_id;
-  const userId = context.triggererUserId;
-  if (!serverId || !userId) return;
-
-  try {
-    statRepository.recordStat({
-      serverId,
-      userId,
-      lineageId: context.currentPersona.persona_lineage_id ?? context.tomoriState.persona_lineage_id ?? 0,
-      metric: "sticker_used",
-      metricKey: stickerName,
-    });
-  } catch (error) {
-    log.warn(`Failed to record sticker_used stat for '${stickerName}'`, error);
-  }
+function rememberLastReplyUsage(context: ChatTurnContext, result: GenerationTurnResult): void {
+  if (result.personaResponses.length === 0 || context.isDMChannel) return;
+  const personaId = context.currentPersona.persona_id;
+  const inputTokens = result.streamResults.find((stream) => stream.usage)?.usage?.inputTokens ?? 0;
+  if (typeof personaId !== "number" || inputTokens <= 0) return;
+  recordLastReplyUsage(context.channel.id, personaId, {
+    inputTokens,
+    modelCodename: context.tomoriState.llm.llm_codename,
+  });
 }
 
 /**
@@ -160,8 +76,8 @@ function recordStickerDelivery(context: ChatTurnContext, stickerName: string): v
  * Expression metrics (emoji_used, sprite_shown, sprite_emotion) are delivery-gated:
  * they count only what Discord accepted, never what the model merely produced. Text
  * the output cleaner stripped, `<details>` scene metadata, and an abandoned attempt's
- * purged messages therefore score nothing. `sticker_used` follows the same rule from
- * its own delivery site (see recordStickerDelivery).
+ * purged messages therefore score nothing. `sticker_used` and `custom_expression_used`
+ * follow the same rule from their own delivery site in `expressionDelivery.ts`.
  *
  * Tokens prefer REAL provider usage when available: the orchestrator normalizes
  * each provider's reported usage onto `StreamResult.usage`, and these are summed
@@ -444,6 +360,9 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     manualTriggerInvoker: incoming.manualTriggerInvoker,
     manualStreamingContextOverrides: incoming.manualStreamingContextOverrides,
     sceneTurn: incoming.sceneTurn,
+    carriedExpressionDelivery: context.currentPersona.persona_id
+      ? { personaId: context.currentPersona.persona_id, state: context.expressionDelivery }
+      : undefined,
     onGenerationResult: incoming.onGenerationResult,
     onQueueDiscard: incoming.onQueueDiscard,
   });

@@ -19,6 +19,20 @@ there change `docs/` directly. `apps/docs/src/pages` holds custom Astro routes a
 ## Audience
 <!-- anchor: audience -->
 
+Only `docs/en/architecture/` explains how TomoriBot works inside. Every other folder is written for a
+reader with a task, so keep its pages plain and short:
+
+- Lead with what the reader can do and what they will see.
+- Keep a detail only when the reader needs it to act: a command to run, a setting to choose, a limit
+  they will hit.
+- Leave out how it works inside (validation rules, storage layout, retry and ordering mechanics). Put
+  that on the owning architecture page, and link to it when a curious reader might want it.
+
+`features/`, `introduction/`, and `meet-tomori/` are read by Discord users who never see the code.
+Write them in everyday words, and open a feature with why someone would want it before how to set it
+up. `self-hosting/` readers run their own bot and are often not developers: use plain words and a
+clear order, but keep every step, command, and setting, because a missing step is a failed install.
+
 The repository is public and every page outside `docs/en/wiki/` is indexed by search engines. Decide
 which kind of page you are writing, because the rules are opposite:
 
@@ -55,11 +69,14 @@ sidebar:
 | `sidebar.groupLabel` | Folder label, set on that folder's README |
 | `sidebar.order` | Order among siblings |
 | `sidebar.hidden` | Hide a page or top-level folder |
-| `aiGenerated` | `false` removes the draft disclaimer after human review |
+| `aiGenerated` | `false` marks human-reviewed substantive content and removes the draft disclaimer |
 
 The sidebar builder reads strings, numbers, booleans, and one nested level. The disclaimer is added
-at render time by `MarkdownContent.astro`, never written into Markdown. Translated pages follow the
-review rules in [Docs Site Localization](/contributing/localization/docs-site/#review-state).
+at render time by `MarkdownContent.astro`, never written into Markdown. Human review here covers
+substantive content: the page's claims, instructions, and meaning. Every translated page must mirror
+its English source's `aiGenerated` field, including its absence. AI translation alone does not change
+this status, and the field does not certify translation quality. See
+[Docs Site Localization](/contributing/localization/docs-site/#review-state).
 
 ## Search and `llms.txt`
 

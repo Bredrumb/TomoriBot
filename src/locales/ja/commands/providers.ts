@@ -142,6 +142,7 @@ export default {
       structured: `構造化出力`,
       "strict-roles": `厳格なロール交互`,
       prefix: `プレフィックス補完`,
+      prefill: `アシスタントプリフィル`,
       "verbatim-tools": `逐語的ツール呼び出し`,
     },
     model_flag_descriptions: {
@@ -150,6 +151,7 @@ export default {
       structured: `このモデルが要求時に厳格なJSONを返せる場合はチェックしてください。`,
       "strict-roles": `同じロールのターンを結合し、userターンで開始します。Claudeをフロントに置くプロキシではチェックしてください。`,
       prefix: `途中で終わったターンの続きを生成させます。DeepSeekやZ.aiをフロントに置くプロキシではチェックしてください。`,
+      prefill: `このモデルが返答をやり直したり拒否したりせず、こちらが用意した書き出しの続きを生成できる場合にのみチェックしてください。`,
       "verbatim-tools": `ネイティブのツール呼び出しに対応していないエンドポイント向け。テキスト出力から呼び出しを解析します。`,
     },
     model_compat_label: `チャット補完の互換性`,

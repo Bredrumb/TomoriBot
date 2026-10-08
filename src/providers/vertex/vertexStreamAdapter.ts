@@ -27,6 +27,7 @@ import {
 import type { FunctionCall, ThoughtLogEntry } from "../../types/provider/interfaces";
 import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
+import { isProviderTimeoutMessage } from "@/utils/provider/providerErrorClassification";
 import { localizer } from "../../utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import {
@@ -902,7 +903,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
         ) {
           errorType = "rate_limit";
           retryable = true;
-        } else if (errorMessage.includes("timeout") || errorMessage.includes("DEADLINE_EXCEEDED")) {
+        } else if (isProviderTimeoutMessage(errorMessage) || errorMessage.includes("DEADLINE_EXCEEDED")) {
           errorType = "timeout";
           retryable = true;
         } else if (errorMessage.includes("overloaded") || errorMessage.includes("UNAVAILABLE")) {

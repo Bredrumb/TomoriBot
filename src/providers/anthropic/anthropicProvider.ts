@@ -13,6 +13,7 @@
  * - API key sent via `x-api-key` header with `anthropic-version` header
  */
 
+import { resolveRequestMaxOutputTokens } from "@/utils/provider/modelLimits";
 import type {
   AnyThreadChannel,
   BaseGuildTextChannel,
@@ -73,7 +74,6 @@ import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_API_VERSION = "2023-06-01";
-const ANTHROPIC_MAX_OUTPUT_TOKENS = parseInt(process.env.ANTHROPIC_MAX_OUTPUT_TOKENS ?? "8192", 10);
 
 export interface AnthropicProviderConfig extends ProviderConfig {
   seesImages?: boolean;
@@ -264,7 +264,7 @@ export class AnthropicProvider
     const config: AnthropicProviderConfig = {
       model: tomoriState.llm.llm_codename,
       apiKey,
-      maxOutputTokens: tomoriState.config.llm_max_output_tokens ?? ANTHROPIC_MAX_OUTPUT_TOKENS,
+      maxOutputTokens: await resolveRequestMaxOutputTokens(tomoriState),
       seesImages: tomoriState.llm.sees_images,
       temperature: tomoriState.config.llm_temperature,
       disabledParams: tomoriState.config.llm_disabled_params ?? [],

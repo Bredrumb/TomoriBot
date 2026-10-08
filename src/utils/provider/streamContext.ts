@@ -84,7 +84,6 @@ export function buildStreamContext(params: BuildStreamContextParams): StreamCont
     suppressTextOutput: streamingContext?.suppressTextOutput,
     rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
     outputPrefill: streamingContext?.outputPrefill,
-    outputPrefillState: streamingContext?.outputPrefillState,
     replyNoticeState: streamingContext?.replyNoticeState,
 
     webhook: params.webhook,

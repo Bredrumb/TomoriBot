@@ -1,9 +1,10 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import type { RecordStatInput } from "@/utils/db/repositories/StatRepository";
 import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import { statRepository } from "@/utils/db/repositories";
 import { runPostTurnEffects } from "@/utils/chat/postTurnEffects";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { createPersona } from "../../helpers/fixtures";
 
 const recorded: RecordStatInput[] = [];
 
@@ -23,16 +24,11 @@ function metricKeys(metric: string): string[] {
   return recorded.filter((entry) => entry.metric === metric).map((entry) => entry.metricKey ?? "");
 }
 
-function makeContext(options?: { sendFails?: boolean }): ChatTurnContext {
-  const send = mock(async (_payload: unknown) => {
-    if (options?.sendFails) throw new Error("Discord rejected the sticker send");
-    return undefined;
-  });
+function makeContext(): ChatTurnContext {
   const channel = {
     // Unique per context so the delivered-identity and self-reply channel caches
     // never carry state between cases.
     id: `channel_${Math.random().toString(36).slice(2)}`,
-    send,
     isThread: () => false,
   };
   const message = { id: "message_1", channel, createdTimestamp: Date.now() };
@@ -46,17 +42,17 @@ function makeContext(options?: { sendFails?: boolean }): ChatTurnContext {
     isUserImpersonation: false,
     textQuotaSource: "user",
   } as unknown as ChatIncoming;
-  const tomoriState = {
+  const tomoriState = createPersona({
     server_id: SERVER_ID,
     persona_lineage_id: LINEAGE_ID,
-    llm: { llm_codename: "test-model" },
     config: { thought_log_channel_disc_id: null, private_channel_ids: [] },
-  };
+  });
 
   return {
     client: incoming.client,
     message,
     channel,
+    guild: { id: "123456789012345678" },
     locale: "en-US",
     turn: { lockedTurn: { admission: { incoming } } },
     currentPersona: { ...tomoriState, persona_id: 3, persona_nickname: "Tomori" },
@@ -83,7 +79,7 @@ function makeResult(overrides: Partial<GenerationTurnResult>): GenerationTurnRes
   };
 }
 
-describe("expression stats count only what Discord accepted", () => {
+describe("emoji stats count only what Discord accepted", () => {
   beforeAll(async () => {
     await initializeLocalizer();
   });
@@ -143,31 +139,5 @@ describe("expression stats count only what Discord accepted", () => {
       ["Think", 1],
       ["Smile", 2],
     ]);
-  });
-
-  it("records sticker_used once the sticker send succeeds", async () => {
-    const context = makeContext();
-    await runPostTurnEffects(
-      context,
-      makeResult({
-        streamResults: [{ status: "completed", accumulatedText: "here" }],
-        selectedSticker: { id: "s1", name: "WowSticker", url: "https://cdn.example/s1.png" } as never,
-      }),
-    );
-
-    expect(metricKeys("sticker_used")).toEqual(["WowSticker"]);
-  });
-
-  it("does not record sticker_used when the send fails", async () => {
-    const context = makeContext({ sendFails: true });
-    await runPostTurnEffects(
-      context,
-      makeResult({
-        streamResults: [{ status: "completed", accumulatedText: "here" }],
-        selectedSticker: { id: "s1", name: "WowSticker", url: "https://cdn.example/s1.png" } as never,
-      }),
-    );
-
-    expect(metricKeys("sticker_used")).toEqual([]);
   });
 });

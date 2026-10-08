@@ -31,6 +31,7 @@ import {
   BEHAVIOR_FETCH_LIMIT_FIELD,
   BEHAVIOR_HUMANIZER_FIELD,
   BEHAVIOR_MATCH_LIMIT_FIELD,
+  BEHAVIOR_PREFILL_FIELD,
   BEHAVIOR_PRESET_BUILT_IN,
   BEHAVIOR_PRESET_FIELD,
   BEHAVIOR_RANDOM_CHANNEL_FIELD,
@@ -44,6 +45,7 @@ import {
   buildBehaviorFetchModal,
   buildBehaviorHumanizerModal,
   buildBehaviorLimitsModal,
+  buildBehaviorPrefillModal,
   buildBehaviorPresetModal,
   buildBehaviorPromptModal,
   buildBehaviorRandomAddModal,
@@ -51,6 +53,7 @@ import {
   buildBehaviorTimezoneModal,
 } from "@/utils/discord/ui/configBehaviorModals";
 import { CONTEXT_NOTE_DEPTH_MAX } from "@/utils/discord/contextNoteOptions";
+import { resolvePrefillBlocker } from "@/utils/chat/assistantPrefill";
 import {
   DEFAULT_MESSAGE_FETCH_LIMIT,
   MAX_MESSAGE_FETCH_LIMIT,
@@ -108,6 +111,7 @@ import {
 export const CONFIG_BEHAVIOR_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "behavior-prompt-open",
   "behavior-preset-open",
+  "behavior-prefill-open",
   "behavior-context-open",
   "behavior-humanizer-open",
   "behavior-fetch-open",
@@ -128,6 +132,7 @@ export const CONFIG_BEHAVIOR_SELECT_ACTIONS = new Set<ConfigPanelRoute["action"]
 export const CONFIG_BEHAVIOR_MODAL_SUBMIT_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "behavior-prompt-submit",
   "behavior-preset-submit",
+  "behavior-prefill-submit",
   "behavior-context-submit",
   "behavior-humanizer-submit",
   "behavior-fetch-submit",
@@ -190,6 +195,9 @@ function fallbackBehaviorView(state: TomoriState): {
   return {
     general: {
       systemPrompt: state.config.system_prompt ?? null,
+      responsePrefill: state.config.response_prefill ?? null,
+      prefillBlocker: resolvePrefillBlocker(state),
+      prefillModelName: state.llm.llm_codename,
       contextNote: state.config.context_note ?? null,
       contextNoteDepth: state.config.context_note_depth ?? 0,
       humanizerDegree: HUMANIZER_DEFAULT,
@@ -348,6 +356,11 @@ export async function handleConfigBehaviorModalOpen(
   } else if (route.action === "behavior-preset-open") {
     const presets = await (await import("@/utils/db/repositories")).configRepository.loadSystemPromptPresets();
     await dependencies.showModal(interaction, buildBehaviorPresetModal(route.locale, nonce, presets ?? []));
+  } else if (route.action === "behavior-prefill-open") {
+    await dependencies.showModal(
+      interaction,
+      buildBehaviorPrefillModal(route.locale, nonce, view?.general.responsePrefill),
+    );
   } else if (route.action === "behavior-context-open") {
     await dependencies.showModal(
       interaction,
@@ -527,6 +540,35 @@ async function runGeneralWrite(
     };
   }
   if (route.action === "behavior-prompt-remove") return clearCustomSystemPrompt(scope, state, locale);
+  if (route.action === "behavior-prefill-submit" && modalInteraction) {
+    const prefill = getText(modalInteraction, BEHAVIOR_PREFILL_FIELD, route.nonce).trim();
+    // The thinking blocker is allowed through because the admin can lift it in one step; a model
+    // that can never continue a prefill would store text that silently never applies.
+    if (prefill && resolvePrefillBlocker(state) === "model") {
+      return {
+        receipt: receipt(
+          locale,
+          "error",
+          "response_prefill_unsupported_heading",
+          "response_prefill_unsupported_detail",
+          {
+            model: state.llm.llm_codename,
+          },
+        ),
+      };
+    }
+    const updated = await (await import("@/utils/db/repositories")).configRepository.updateChatConfig(state.server_id, {
+      response_prefill: prefill || null,
+    });
+    if (!updated) return { receipt: writeFailed(locale) };
+    invalidateTomoriStateCache(scope.serverDiscId);
+    return {
+      receipt: prefill
+        ? receipt(locale, "success", "response_prefill_updated_heading", "response_prefill_updated_detail")
+        : receipt(locale, "success", "response_prefill_cleared_heading", "response_prefill_cleared_detail"),
+      telemetry: "server-config.workspace.response-prefill.set",
+    };
+  }
   if (route.action === "behavior-context-submit" && modalInteraction) {
     const note = getText(modalInteraction, "context_note_text", route.nonce).trim();
     const rawDepth = getText(modalInteraction, "context_note_depth", route.nonce).trim();
@@ -849,6 +891,7 @@ const CONFIG_BEHAVIOR_D10_DIRECT_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "behavior-self-debug-set",
   "behavior-notice-verbosity-set",
   "behavior-speech-transcripts-set",
+  "behavior-stm-enabled-set",
 ]);
 
 const MAX_TOOL_TRIGGER_ENTRIES = 50;
@@ -871,6 +914,8 @@ function fallbackD10View(state: TomoriState) {
     memory: {
       memoryTaggingEnabled: state.config.memory_tagging_enabled ?? false,
       channelMemoryEnabled: state.config.channel_memory_enabled ?? false,
+      stmEnabled: state.config.short_term_memory_enabled ?? true,
+      toolUseEnabled: state.config.tool_use_enabled ?? true,
       stmConfig: null,
       stmCategories: [],
     },
@@ -1145,6 +1190,19 @@ async function runD10Write(
     return {
       receipt: receipt(locale, "success", "state_updated_heading", "state_updated_detail"),
       telemetry: "server-config.workspace.notice-verbosity.set",
+    };
+  }
+  if (route.action === "behavior-stm-enabled-set") {
+    if ((state.config.short_term_memory_enabled ?? true) === route.enabled)
+      return { receipt: receipt(locale, "info", "state_no_changes_heading", "state_no_changes_detail") };
+    const updated = await repositories.configRepository.updateCapabilitiesConfig(state.server_id, {
+      short_term_memory_enabled: route.enabled,
+    });
+    if (!updated) return { receipt: writeFailed(locale) };
+    invalidateTomoriStateCache(scope.serverDiscId);
+    return {
+      receipt: receipt(locale, "success", "state_updated_heading", "state_updated_detail"),
+      telemetry: "server-config.workspace.capabilities.set",
     };
   }
   if (
@@ -1483,6 +1541,7 @@ export async function handleConfigBehaviorRoutes(context: ConfigBehaviorRouteCon
   const isGeneral =
     route.action.startsWith("behavior-prompt") ||
     route.action.startsWith("behavior-preset") ||
+    route.action.startsWith("behavior-prefill") ||
     route.action.startsWith("behavior-context") ||
     route.action.startsWith("behavior-humanizer") ||
     route.action.startsWith("behavior-fetch") ||

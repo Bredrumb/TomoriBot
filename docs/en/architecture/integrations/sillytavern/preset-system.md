@@ -430,7 +430,7 @@ This section documents what our implementation supports versus what native Silly
 | **Token budgeting** | Per-node token limits, total prompt budget management | Not implemented. All enabled nodes are included regardless of token count. Context may exceed provider limits if many large nodes are enabled. |
 | **Multiple active presets** | Some ST setups layer presets | One preset per server. By design. |
 | **HTML rendering** | ST frontend renders HTML in chat | Discord cannot render HTML. Nodes with HTML are flagged (`hasHtmlWarning`) but not auto-stripped. |
-| **Assistant prefill** | `model`-role nodes at end of context force the AI to start with specific text | Passed through, but provider-dependent. Works on some providers (Anthropic), ignored by others (Gemini). |
+| **Assistant prefill** | `model`-role nodes at end of context force the AI to start with specific text | Passed through as a trailing `model` turn without the prefill resolver's capability check. Claude 4.6 and later and Gemini 3.5 Flash-Lite and later reject it with a 400; most OpenRouter hosts ignore it. The server Response Prefill in `/config` is the capability-checked alternative. |
 
 ### Architectural Differences
 

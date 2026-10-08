@@ -94,6 +94,10 @@ Extend `BaseLLMProvider` and implement `getInfo()`, `validateApiKey()`, `formatE
 `getTools()`, `createConfig()`, `streamToDiscord()`, and `getDefaultModel()`.
 
 - `getInfo()` returns the object from `providerInfo.ts`.
+- In `createConfig()`, set `maxOutputTokens` from `resolveRequestMaxOutputTokens(tomoriState)`. History
+  truncation reserves the same figure, and it clamps to the model's ceiling. A provider with its own
+  env cap or default adds an entry to `CHAT_OUTPUT_BUDGETS` in `src/utils/provider/maxOutputTokens.ts`;
+  otherwise it falls back to 4096. Either default shrinks to a quarter of a known context window.
 - `formatErrorDescription()` owns the provider's user-facing error text, so commands never format
   vendor errors themselves.
 - Build the `StreamContext` with `buildStreamContext()` from `src/utils/provider/streamContext.ts`.
@@ -195,6 +199,10 @@ so list only the true ones:
 
 Set `hasTools` and `supportsStructoutput` per model, only for models you tested. To retire a model
 set `isDeprecated: true`; to remove it, delete the row.
+
+Set `contextWindow` and `maxOutputTokens` from the vendor's official docs. Without a window, history
+truncation is skipped and a long channel fails with a context-length error instead of trimming. Add the
+provider to `LIMIT_REQUIRED_PROVIDERS` in `modelSeed.ts` so a future row cannot forget them.
 
 The seeder throws before any write, and `bun run check-seed-catalogs` fails offline, unless each
 provider has exactly one non-deprecated `isDefault`, `llms` has exactly one non-deprecated

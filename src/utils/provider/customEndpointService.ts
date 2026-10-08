@@ -7,6 +7,7 @@ import type {
   SavedProviderConfigUpsert,
   SavedProviderConfigRow,
   AssembledServerConfig,
+  TomoriState,
   UserSavedProviderConfigUpsert,
   UserSavedProviderConfigRow,
 } from "@/types/db/schema";
@@ -60,6 +61,7 @@ export interface CustomEndpointRegistrationInput {
   // row so the runtime resolves them uniformly with built-in providers.
   strictRoleAlternation?: boolean;
   supportsPrefixCompletion?: boolean;
+  supportsAssistantPrefill?: boolean;
   // Per-model verbatim tool-calling opt-in: the runtime reads it from the synthetic llms row while
   // the panel reads the endpoint row, so both must carry the same value.
   verbatimToolCalling?: boolean;
@@ -118,6 +120,7 @@ async function upsertSyntheticTextModel(
     supportsStructOutput: endpoint.supportsStructOutput ?? false,
     strictRoleAlternation: endpoint.strictRoleAlternation ?? false,
     supportsPrefixCompletion: endpoint.supportsPrefixCompletion ?? false,
+    supportsAssistantPrefill: endpoint.supportsAssistantPrefill ?? false,
     verbatimToolCalling: endpoint.verbatimToolCalling ?? false,
   });
 
@@ -221,6 +224,7 @@ async function writeSyntheticCapabilityModel(
     supportsStructOutput: endpoint.supportsStructOutput ?? false,
     strictRoleAlternation: endpoint.strictRoleAlternation ?? false,
     supportsPrefixCompletion: endpoint.supportsPrefixCompletion ?? false,
+    supportsAssistantPrefill: endpoint.supportsAssistantPrefill ?? false,
     verbatimToolCalling: endpoint.verbatimToolCalling ?? false,
   });
   // `model_ref_id` points at a different table per capability, so only a text id names an llms row.
@@ -526,6 +530,7 @@ export async function registerCustomEndpoint(
       supportsStructOutput: input.supportsStructOutput ?? false,
       strictRoleAlternation: input.strictRoleAlternation ?? false,
       supportsPrefixCompletion: input.supportsPrefixCompletion ?? false,
+      supportsAssistantPrefill: input.supportsAssistantPrefill ?? false,
       verbatimToolCalling: input.verbatimToolCalling ?? false,
       isDefault: shouldBeDefault,
       customEndpointId: isEdit ? input.editingEndpointId : null,
@@ -659,6 +664,35 @@ export async function resolveCustomEndpointForProvider(
   }
 
   return await llmProviderRepo.loadCustomEndpointByConnection(parsed.connectionId, capability, activeModelId);
+}
+
+/**
+ * The endpoint a custom text request targets and the `num_ctx` it sends.
+ *
+ * Shared by the request builder and the context budget because the truncation window must equal
+ * the `num_ctx` actually sent. The model config mirror wins when set (a fallback hop pins it), and
+ * only then is the endpoint row skipped.
+ */
+export async function resolveCustomTextEndpointTarget(tomoriState: TomoriState): Promise<{
+  endpointUrl: string | null;
+  modelNameHint: string | null;
+  numCtx: number | null;
+}> {
+  const mirroredUrl = tomoriState.config.custom_endpoint_url ?? null;
+  if (mirroredUrl) {
+    return { endpointUrl: mirroredUrl, modelNameHint: null, numCtx: tomoriState.config.custom_num_ctx ?? null };
+  }
+
+  const textEndpoint = await resolveCustomEndpointForProvider(
+    tomoriState.llm.llm_provider.toLowerCase(),
+    "text",
+    tomoriState.llm.llm_id,
+  );
+  return {
+    endpointUrl: textEndpoint?.endpoint_url ?? null,
+    modelNameHint: textEndpoint?.model_name ?? null,
+    numCtx: tomoriState.config.custom_num_ctx ?? textEndpoint?.num_ctx ?? null,
+  };
 }
 
 export async function validateCustomEndpointReachability(params: {

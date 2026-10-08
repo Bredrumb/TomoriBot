@@ -1,6 +1,7 @@
 import { EmbedBuilder, type BaseGuildTextChannel, type Client } from "discord.js";
 import type { ThoughtLogPayload } from "@/types/provider/interfaces";
 import { getLlmDisplayName } from "@/utils/provider/modelDisplay";
+import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { StreamContext } from "@/types/stream/interfaces";
@@ -77,10 +78,10 @@ function buildThoughtLogEmbeds(args: {
   // can identify a backend that bled reasoning into content and pin/avoid it.
   const provider = thoughtLog.servingProvider
     ? localizer(locale, "genai.thought_log.provider_with_serving", {
-        provider: tomoriState.llm.llm_provider,
+        provider: getProviderDisplayName(tomoriState.llm.llm_provider),
         serving_provider: thoughtLog.servingProvider,
       })
-    : tomoriState.llm.llm_provider;
+    : getProviderDisplayName(tomoriState.llm.llm_provider);
   const model = getLlmDisplayName(tomoriState.llm, tomoriState.config.custom_model_name);
   const hasThinkingContent = Boolean(
     normalizeThoughtLogText(thoughtLog.summary) || normalizeThoughtLogText(thoughtLog.raw),
