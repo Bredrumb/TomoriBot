@@ -2,6 +2,8 @@ import { afterAll, afterEach, describe, expect, it, spyOn } from "bun:test";
 import * as executors from "@/providers/utils/providerFeatureExecutors";
 import { decisionModelSchema } from "@/types/db/schema";
 import type { DecisionModelOption, DecisionResult } from "@/types/provider/featureInterfaces";
+import type { DecisionExecutionRequest } from "@/providers/utils/providerFeatureExecutors";
+import { callOpenRouterDecisions } from "@/providers/openrouter/openrouterDecisions";
 import {
   decisionQuestions,
   decisionCanSkip,
@@ -99,14 +101,20 @@ const option: DecisionModelOption = {
   reference: { provider: "openrouter", modelId: 7, registrationId: 9, customEndpointId: null },
 };
 
+async function reportedAnswer(request: DecisionExecutionRequest) {
+  const result = answer();
+  if (result.status === "completed" && result.usage) request.onUsage?.(result.usage);
+  return result;
+}
+
 describe("response and tool decision routing", () => {
   const load = spyOn(executors, "loadDecisionModelsForScope").mockResolvedValue([option]);
-  const call = spyOn(executors, "callDecisionsForProvider").mockResolvedValue(answer());
+  const call = spyOn(executors, "callDecisionsForProvider").mockImplementation(reportedAnswer);
   const info = spyOn(log, "info").mockImplementation(() => {});
   const errors = spyOn(log, "error").mockImplementation(async () => {});
   afterEach(() => {
     load.mockResolvedValue([option]);
-    call.mockResolvedValue(answer());
+    call.mockImplementation(reportedAnswer);
     for (const spy of [load, call, info, errors]) spy.mockClear();
   });
   afterAll(() => {
@@ -219,6 +227,68 @@ describe("response and tool decision routing", () => {
     });
     expect(await routeResponseDecision(42, state(), packet(), controller.signal, calibration())).toBe("cancelled");
     expect(errors).not.toHaveBeenCalled();
+  });
+
+  it("accounts for malformed transport usage and late deadline usage once without approving stale evidence", async () => {
+    const current = state();
+    call.mockImplementation((request) =>
+      callOpenRouterDecisions(
+        {
+          ...request,
+          reference: option.reference,
+          model: option.model.codename,
+          apiStyle: "openrouter-decisions",
+          apiKey: "fixture",
+          correlationId: "fixture",
+          inputTokenLimit: option.model.input_token_limit,
+        },
+        async () =>
+          Response.json({
+            model: option.model.codename,
+            answers: {},
+            usage: { input_tokens: 19, output_tokens: 1 },
+          }),
+      ),
+    );
+    expect(await routeResponseDecision(42, current, packet(), new AbortController().signal, calibration())).toBe(
+      "review",
+    );
+    expect(current.usage).toEqual([
+      {
+        kind: "decision",
+        model: option.model.codename,
+        decisionModelId: 7,
+        usage: { inputTokens: 19, outputTokens: 1 },
+      },
+    ]);
+    expect(errors).toHaveBeenCalledTimes(1);
+    errors.mockClear();
+    const actualTimeout = AbortSignal.timeout.bind(AbortSignal);
+    const timeout = spyOn(AbortSignal, "timeout").mockImplementation(() => actualTimeout(5));
+    let complete: (() => void) | undefined;
+    call.mockImplementation(
+      (request) =>
+        new Promise<DecisionResult>((resolve) => {
+          complete = () => {
+            request.onUsage?.({ inputTokens: 23, outputTokens: 0 });
+            resolve(answer());
+          };
+        }),
+    );
+    try {
+      const late = state();
+      expect(await routeResponseDecision(42, late, packet(), new AbortController().signal, calibration())).toBe(
+        "review",
+      );
+      complete?.();
+      await Promise.resolve();
+      expect(late.usage).toHaveLength(1);
+      expect(late.usage[0]?.usage.inputTokens).toBe(23);
+      expect(late.decisionVerdict).toBeUndefined();
+      expect(errors).toHaveBeenCalledTimes(1);
+    } finally {
+      timeout.mockRestore();
+    }
   });
 
   it("revalidates ownership before using a cached skip and bounds silent routing failures", async () => {

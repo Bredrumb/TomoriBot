@@ -23,7 +23,7 @@ carry their exact scoped registration ID. Custom entries use `custom:<connection
 endpoint row ID, with a null native registration ID. Deletion and re-registration invalidate old
 references even when a codename repeats.
 
-`callDecisionsForProvider({scope, reference, evidence, questions, abortSignal?})` rechecks ownership,
+`callDecisionsForProvider({scope, reference, evidence, questions, abortSignal?, onUsage?})` rechecks ownership,
 the exact registration, saved credentials, and the stored custom protocol. Null selection returns
 `unavailable/not-selected`. Evidence is text; questions are `{type: "predicate", id, instructions}`.
 IDs are unique application-owned identifiers, start with a lowercase letter, contain lowercase
@@ -41,6 +41,11 @@ Completed/refused results carry ordered typed answers, optional actual usage/cos
 bounded provider request identity, and returned model ID. Probabilities must be finite in [0, 1].
 Missing/extra/duplicate answers, wrong types/order, invalid usage, and explicit evidence truncation
 fail validation. Partial OpenAI refusals return `refused`. No chat or prose interpretation is used.
+
+`onUsage` receives validated usage before answer validation. A malformed verdict or cancellation
+after response decoding retains reported spend. Routing records this callback once, including
+responses settling after its deadline, without accepting their late verdict. Missing or invalid
+usage stays unknown; raw HTTP error bodies are discarded without parsing private prose.
 
 Requests compose caller cancellation with the existing `STREAM_SDK_CALL_TIMEOUT_MS` policy. Responses
 are bounded to 1 MiB. Until callers need a model-specific tokenizer, the serialized request's UTF-8

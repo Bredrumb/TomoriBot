@@ -2,11 +2,13 @@ import * as stm from "@/utils/cache/shortTermMemoryCache";
 import * as quotas from "@/utils/quota/textQuotaManager";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import type { RecordStatInput } from "@/utils/db/repositories/StatRepository";
-import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
+import type { ChatIncoming, ChatTurnContext, GenerationTurnResult, SceneTurnMetadata } from "@/utils/chat/types";
 import { statRepository } from "@/utils/db/repositories";
 import { runPostTurnEffects } from "@/utils/chat/postTurnEffects";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createPersona } from "../../helpers/fixtures";
+import { createResponseReviewState, recordResponseReviewUsage } from "@/utils/chat/responseReview";
+import { buildSceneTextQuotaTriggerKey } from "@/utils/chat/sceneTurn";
 
 const recorded: RecordStatInput[] = [];
 
@@ -174,6 +176,42 @@ describe("emoji stats count only what Discord accepted", () => {
     expect(metricKeys("text_generated")).toEqual([]);
   });
 
+  it("records auxiliary usage arriving after post-turn accounting once without dialogue effects", async () => {
+    const context = makeContext();
+    context.streamingContext = { disableYouTubeProcessing: false };
+    context.currentPersona.config.response_drafting_enabled = true;
+    const review = createResponseReviewState(context);
+    if (!review) throw new Error("Missing review fixture");
+    context.responseReview = review;
+    recordResponseReviewUsage(review, { kind: "author", model: "author", usage: { inputTokens: 11, outputTokens: 2 } });
+    await runPostTurnEffects(
+      context,
+      makeResult({ status: "stopped_by_user", personaResponses: [], usageEntries: review.usage }),
+    );
+    recordResponseReviewUsage(review, {
+      kind: "reviewer",
+      model: "reviewer",
+      usage: { inputTokens: 13, outputTokens: 3 },
+    });
+    recordResponseReviewUsage(review, {
+      kind: "decision",
+      model: "decision",
+      decisionModelId: 7,
+      usage: { inputTokens: 17, outputTokens: 0 },
+    });
+    expect(
+      recorded.filter((entry) => entry.metric === "tokens_in").map((entry) => [entry.metricKey, entry.delta]),
+    ).toEqual([
+      ["author", 11],
+      ["reviewer", 13],
+      ["decision:7", 17],
+    ]);
+    expect(metricKeys("reviewer_tokens_in")).toEqual(["reviewer"]);
+    expect(metricKeys("decision_tokens_in")).toEqual(["decision:7"]);
+    expect(metricKeys("message_sent")).toEqual([]);
+    expect(metricKeys("text_generated")).toEqual([]);
+  });
+
   it("writes only delivered prose to memory and consumes one reply quota despite discarded drafts", async () => {
     const context = makeContext();
     context.turn.requestSnapshot = {};
@@ -226,6 +264,131 @@ describe("emoji stats count only what Discord accepted", () => {
     } finally {
       memory.mockRestore();
       cadence.mockRestore();
+      quota.mockRestore();
+    }
+  });
+
+  it("keeps cancelled drafts out of memory/quota and shares one quota across queued persona deliveries", async () => {
+    const first = makeContext();
+    first.streamingContext = { disableYouTubeProcessing: false };
+    first.turn.requestSnapshot = {} as ChatTurnContext["turn"]["requestSnapshot"];
+    first.shouldApplyTextQuota = true;
+    first.textQuotaTriggerKey = `fixture_${first.channel.id}`;
+    first.textQuotaState = { serverId: SERVER_ID, userDiscId: "fixture_user", consumed: false, createdAt: Date.now() };
+    first.userDiscId = "fixture_user";
+    first.serverDiscId = "fixture_server";
+    first.isFromQueue = true;
+    first.simplifiedMessages = [
+      { authorType: "user", authorName: "Juno", content: "Stay here." },
+    ] as ChatTurnContext["simplifiedMessages"];
+    const memory = spyOn(stm, "storeShortTermMemory").mockImplementation(() => {});
+    const cadence = spyOn(stm, "incrementStmTurnCounter").mockImplementation(async () => {});
+    const quota = spyOn(quotas, "incrementTextQuota").mockImplementation(async () => {});
+    try {
+      await runPostTurnEffects(
+        first,
+        makeResult({ status: "stopped_by_user", personaResponses: [], usageEntries: [] }),
+      );
+      expect(memory).not.toHaveBeenCalled();
+      expect(quota).not.toHaveBeenCalled();
+      for (const personaId of [3, 4]) {
+        const context = { ...first, currentPersona: createPersona({ persona_id: personaId, server_id: SERVER_ID }) };
+        await runPostTurnEffects(
+          context,
+          makeResult({
+            personaResponses: [
+              { personaId, personaName: context.currentPersona.persona_nickname, text: `delivered_${personaId}` },
+            ],
+            usageEntries: [],
+          }),
+        );
+      }
+      expect(quota).toHaveBeenCalledTimes(1);
+      expect(memory).toHaveBeenCalledTimes(2);
+      expect(memory.mock.calls.map((call) => call[6])).toEqual([3, 4]);
+      const dm = { ...first, isDMChannel: true };
+      const before = recorded.length;
+      await runPostTurnEffects(
+        dm,
+        makeResult({
+          status: "stopped_by_user",
+          personaResponses: [],
+          usageEntries: [{ kind: "reviewer", model: "reviewer", usage: { inputTokens: 9, outputTokens: 1 } }],
+        }),
+      );
+      expect(recorded).toHaveLength(before);
+    } finally {
+      memory.mockRestore();
+      cadence.mockRestore();
+      quota.mockRestore();
+    }
+  });
+
+  it("accounts reviewed scene speakers as separate delivered turns without sharing review state", async () => {
+    const first = makeContext();
+    first.streamingContext = { disableYouTubeProcessing: false };
+    first.turn.requestSnapshot = {} as ChatTurnContext["turn"]["requestSnapshot"];
+    first.shouldApplyTextQuota = true;
+    first.userDiscId = "fixture_user";
+    const scene: SceneTurnMetadata = {
+      commandId: "fixture_scene",
+      sequence: [
+        { personaId: 3, personaName: "Mirri" },
+        { personaId: 4, personaName: "Juno" },
+      ],
+      turnIndex: 0,
+      totalTurns: 2,
+    };
+    const quota = spyOn(quotas, "incrementTextQuota").mockImplementation(async () => {});
+    try {
+      const reviews = [];
+      for (const [turnIndex, speaker] of scene.sequence.entries()) {
+        const incoming = { ...first.turn.lockedTurn.admission.incoming, sceneTurn: { ...scene, turnIndex } };
+        const context = {
+          ...first,
+          currentPersona: createPersona({
+            persona_id: speaker.personaId,
+            persona_nickname: speaker.personaName,
+            server_id: SERVER_ID,
+            config: { response_drafting_enabled: true },
+          }),
+          turn: {
+            ...first.turn,
+            lockedTurn: {
+              ...first.turn.lockedTurn,
+              admission: { ...first.turn.lockedTurn.admission, incoming },
+            },
+          },
+          textQuotaTriggerKey: buildSceneTextQuotaTriggerKey(incoming.sceneTurn),
+          textQuotaState: { serverId: SERVER_ID, userDiscId: "fixture_user", consumed: false, createdAt: Date.now() },
+        };
+        const review = createResponseReviewState(context);
+        if (!review) throw new Error("Missing review fixture");
+        reviews.push(review);
+        context.responseReview = review;
+        recordResponseReviewUsage(review, {
+          kind: "reviewer",
+          model: "fixture_reviewer",
+          usage: { inputTokens: 13, outputTokens: 3 },
+        });
+        await runPostTurnEffects(
+          context,
+          makeResult({
+            personaResponses: [
+              { personaId: speaker.personaId, personaName: speaker.personaName, text: `delivered_${turnIndex}` },
+            ],
+            usageEntries: review.usage,
+          }),
+        );
+      }
+      expect(quota).toHaveBeenCalledTimes(scene.sequence.length);
+      expect(metricKeys("message_sent")).toHaveLength(scene.sequence.length);
+      expect(recorded.filter((entry) => entry.metric === "reviewer_tokens_in").map((entry) => entry.delta)).toEqual([
+        13, 13,
+      ]);
+      expect(reviews[0].usage).not.toBe(reviews[1].usage);
+      expect(reviews[0].functionHistory).not.toBe(reviews[1].functionHistory);
+    } finally {
       quota.mockRestore();
     }
   });

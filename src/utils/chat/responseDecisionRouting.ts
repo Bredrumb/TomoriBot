@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 import type { DecisionPredicateQuestion, DecisionResult } from "@/types/provider/featureInterfaces";
 import { callDecisionsForProvider, loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
 import { log } from "@/utils/misc/logger";
-import type { ResponseReviewState, buildReviewerPacket } from "@/utils/chat/responseReview";
+import {
+  recordResponseReviewUsage,
+  type ResponseReviewState,
+  type buildReviewerPacket,
+} from "@/utils/chat/responseReview";
 
 export const MAX_DECISION_REQUESTS = 12;
 const DECISION_ROUTING_TIMEOUT_MS = 30000;
@@ -208,17 +212,15 @@ export async function routeResponseDecision(
         evidence,
         questions,
         abortSignal: requestSignal,
+        onUsage: (usage) =>
+          recordResponseReviewUsage(state, {
+            kind: "decision",
+            model: selected.model.codename,
+            decisionModelId: selected.model.decision_model_id,
+            usage: { inputTokens: usage.inputTokens ?? 0, outputTokens: usage.outputTokens ?? 0 },
+          }),
       }),
     );
-    if (result.status === "completed" || result.status === "refused") {
-      if (result.usage)
-        state.usage.push({
-          kind: "decision",
-          model: selected.model.codename,
-          decisionModelId: selected.model.decision_model_id,
-          usage: { inputTokens: result.usage.inputTokens ?? 0, outputTokens: result.usage.outputTokens ?? 0 },
-        });
-    }
     if (signal.aborted) return "cancelled";
     if (result.status === "cancelled") throw new Error("Decision request cancelled without turn cancellation");
     const skip =

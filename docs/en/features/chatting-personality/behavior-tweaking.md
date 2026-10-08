@@ -12,7 +12,7 @@ knobs; every command is in the [Command Reference](/features/command-reference/)
 ## Capabilities: What She's Allowed to Do
 <!-- anchor: capabilities-what-shes-allowed-to-do -->
 
-`/config` > Plugins toggles her features on and off across two pages:
+`/config` > Plugins controls tools, context additions, and optional response review:
 
 - **Available Tools**: image generation, sticker usage, thread creation, message management, user
   blocking, self-teaching, voice messages, and more. Each toggle is the feature flag that gates the
@@ -24,6 +24,42 @@ knobs; every command is in the [Command Reference](/features/command-reference/)
 Automatic STM summarization is a tool, but its toggle lives with the rest of the short-term memory
 settings in `/config` > Behavior > Advanced Memory. Turn something off and she simply can't do it,
 no matter what a user asks.
+
+## Response drafting
+
+Open `/config` > `Plugins` > `Response Drafting` to turn review On. It starts Off and applies to
+every persona in that workspace, including queued replies and generated scenes. Guild managers
+change guild settings; your DM workspace has its own settings.
+
+When On, Tomori holds her reply while a reviewer checks its character voice and scene fit. The
+reviewer can ask for one complete revision. Tool requests also enter review before execution;
+rejected requests can receive a bounded correction. Successful actions are retained while the
+reply is revised. Text still uses the usual persona identity, emoji handling, and formatting.
+Review and revisions can increase response time and token cost; the page shows this in both states.
+
+`Choose Reviewer Model` selects an eligible registered text model. `Use current response model`
+uses the model and credentials actually answering, including your personal provider or a fallback.
+A pinned reviewer uses the workspace's own registration and credentials. Text-only authors and
+authors with Tool Use disabled can still use an eligible reviewer. An unsupported inherited model
+shows `Unavailable`; choose a supported reviewer to enable detailed review.
+
+`Set Prompt` edits the review instructions, up to 4,000 characters. `Use Default` restores the
+persona-aware default. `Choose Rule Checker` selects an already registered compatible MCP checker,
+or `None`. Its findings go privately to the reviewer, which decides whether they matter for this
+character. The checker has no validated language/profile guarantee in this release.
+
+`Choose Decisions Model` saves a Decision registration from `/providers`. Skipping detailed review
+is inactive until each model and review rubric has labeled quality evidence. A saved selection
+makes no paid Decision requests in this release. Custom prompts also keep skipping inactive.
+Clearing either model restores reviewer inheritance or `None`; turning Off keeps your choices.
+
+Review is optional quality checking. A refusal, unavailable model, timeout, incomplete evidence, or
+exhausted review budget lets an otherwise valid reply or independent tool request continue under
+ordinary application rules. Previously rejected actions stay blocked. `/kill` and follow-up
+interruption discard held text. Files, voice, and remote posts receive review of their proposed tool
+arguments; their generated media is outside the held-text review. Hidden generation and user
+impersonation keep their existing paths. Provider judgment and checker usefulness still need human
+evaluation. See [review data handling](/features/knowledge/data-handling/#response-drafting-selections).
 
 ## Expressions
 

@@ -314,6 +314,8 @@ export interface DecisionInput {
   evidence: string;
   questions: readonly DecisionPredicateQuestion[];
   abortSignal?: AbortSignal;
+  /** Report validated usage before verdict validation, including late cancelled responses. */
+  onUsage?: (usage: DecisionUsage) => void;
 }
 
 export interface ProviderDecisionRequest extends DecisionInput {

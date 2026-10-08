@@ -224,6 +224,9 @@ With Response Drafting On, `GenerationTurnResult.usageEntries` contains actual a
 usage by model, including failed attempts, discarded drafts, and refusals when usage is available.
 `recordUsageStats` records this ledger before checking delivered dialogue. Cancellation still records
 reported spend. Unknown usage stays unknown; discarded draft size does not become an estimate.
+Reviewer and Decision transports report validated usage independently of verdict success. A late
+reported count joins the same turn ledger. After the initial drain, the turn keeps a recorder for
+late entries using the same model and attribution metrics. No late verdict creates delivery or quota.
 `tokens_in` and `tokens_out` include review spend; `reviewer_tokens_in` and `reviewer_tokens_out` are
 subsets for attribution. Cost uses the existing total-token metrics and model prices. DM statistics
 retain their existing exclusion from persistent guild telemetry.

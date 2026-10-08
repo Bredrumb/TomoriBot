@@ -1,7 +1,7 @@
 import { observeStopRequest } from "@/utils/discord/stream/stopRequests";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
-import type { TomoriState } from "@/types/db/schema";
+import type { ErrorContext, TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { SupportsStructuredOutput } from "@/types/provider/featureInterfaces";
 import type { LLMProvider, ProviderConfig } from "@/types/provider/interfaces";
@@ -71,7 +71,14 @@ export interface ResponseReviewState {
   functionHistory: ToolHistoryEntry[];
   pending: PendingStreamResponse[];
   usage: TurnUsageEntry[];
+  usageRecorder?: (entry: TurnUsageEntry) => void;
   verdict?: { identity: string; result: DraftReviewResult };
+}
+
+/** Late auxiliary usage still reaches accounting after post-turn effects drain the ledger. */
+export function recordResponseReviewUsage(state: ResponseReviewState, entry: TurnUsageEntry): void {
+  state.usage.push(entry);
+  state.usageRecorder?.(entry);
 }
 
 export function createResponseReviewState(context: ChatTurnContext): ResponseReviewState | undefined {
@@ -260,7 +267,10 @@ async function resolveReviewer(
   context: ChatTurnContext,
   author: LLMProvider,
   config: ProviderConfig,
-): Promise<{ capability: SupportsStructuredOutput; state: TomoriState; apiKey: string } | null> {
+  failureContext: ErrorContext,
+): Promise<
+  { capability: SupportsStructuredOutput; state: TomoriState; apiKey: string } | { errorLogged: true } | null
+> {
   const review = context.responseReview;
   if (!review) return null;
   if (review.reviewerId === null) {
@@ -289,7 +299,11 @@ async function resolveReviewer(
   const state = withSavedProviderConfig({ ...context.currentPersona, llm: model }, saved);
   // A pinned model must resolve its own endpoint rather than the author's mirrored endpoint.
   state.config = { ...state.config, custom_endpoint_url: null, custom_num_ctx: null };
-  return { capability, state, apiKey: await decryptApiKey(saved.api_key, saved.key_version ?? 1) };
+  try {
+    return { capability, state, apiKey: await decryptApiKey(saved.api_key, saved.key_version ?? 1, failureContext) };
+  } catch {
+    return { errorLogged: true };
+  }
 }
 
 export function responseReviewCancelled(context: ChatTurnContext): boolean {
@@ -381,13 +395,21 @@ async function reviewCandidate(
         .catch(() => undefined);
     });
   try {
-    const resolved = await runUnderWatchdog(context.channel.id, () => wait(resolveReviewer(context, author, config)));
+    const resolved = await runUnderWatchdog(context.channel.id, () =>
+      wait(
+        resolveReviewer(context, author, config, {
+          errorType: "ResponseReviewError",
+          metadata: { correlation, operation: kind, category: "credentials", reviewerId: state.reviewerId },
+        }),
+      ),
+    );
     if (cancelled()) {
       trace("cancelled");
       return { status: "cancelled" };
     }
     if (timeout.aborted) return unavailable("timeout", true);
     if (!resolved) return unavailable("registration_or_capability", true);
+    if ("errorLogged" in resolved) return unavailable("credentials");
     modelId = resolved.state.llm.llm_id;
     model = resolved.state.llm.llm_codename;
     provider = resolved.state.llm.llm_provider;
@@ -494,7 +516,7 @@ async function reviewCandidate(
         abortSignal: signal,
         onUsage: (reported) => {
           usage = reported;
-          state.usage.push({ kind: "reviewer", model: model ?? "", usage: reported });
+          recordResponseReviewUsage(state, { kind: "reviewer", model: model ?? "", usage: reported });
         },
       },
       z.toJSONSchema(draftReviewResultSchema, { target: "openapi-3.0" }),

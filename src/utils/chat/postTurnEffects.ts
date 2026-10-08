@@ -21,6 +21,7 @@ import { textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { statRepository } from "@/utils/db/repositories";
 import { charsToTokensText, estimateContextItemsTokens, sumTurnUsage } from "@/utils/text/tokenEstimate";
 import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
+import type { TurnUsageEntry } from "@/utils/chat/responseReview";
 import { recordReunionPresence } from "@/utils/chat/reunionPresence";
 
 /**
@@ -96,7 +97,9 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
   // Actual spend survives cancellation and discarded drafts; dialogue metrics require delivery.
   if (!context.isDMChannel && context.tomoriState.server_id && context.triggererUserId && result.usageEntries) {
     const lineageId = context.currentPersona.persona_lineage_id ?? 0;
-    for (const entry of result.usageEntries) {
+    const serverId = context.tomoriState.server_id;
+    const userId = context.triggererUserId;
+    const recordEntry = (entry: TurnUsageEntry) => {
       const metricKey = entry.kind === "decision" ? `decision:${entry.decisionModelId}` : entry.model;
       for (const [direction, delta] of [
         ["in", entry.usage.inputTokens],
@@ -104,8 +107,8 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
       ] as const) {
         if (delta <= 0) continue;
         statRepository.recordStat({
-          serverId: context.tomoriState.server_id,
-          userId: context.triggererUserId,
+          serverId,
+          userId,
           lineageId,
           metric: direction === "in" ? "tokens_in" : "tokens_out",
           metricKey,
@@ -113,8 +116,8 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
         });
         if (entry.kind === "reviewer" || entry.kind === "decision")
           statRepository.recordStat({
-            serverId: context.tomoriState.server_id,
-            userId: context.triggererUserId,
+            serverId,
+            userId,
             lineageId,
             metric:
               entry.kind === "reviewer"
@@ -128,7 +131,9 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
             delta,
           });
       }
-    }
+    };
+    for (const entry of result.usageEntries) recordEntry(entry);
+    if (context.responseReview?.usage === result.usageEntries) context.responseReview.usageRecorder = recordEntry;
   }
   if (result.personaResponses.length === 0 || context.isDMChannel) return;
   const serverId = context.tomoriState.server_id;

@@ -77,7 +77,7 @@ export const decryptApiKey = async (
     return result.decrypted_key.toString();
   } catch (error) {
     if (failureContext) {
-      await log.error("Decision operation failed", new Error("Decision credential decryption failed"), failureContext);
+      await log.error("Credential decryption failed", new Error("Credential decryption failed"), failureContext);
     } else
       log.error(
         `Failed to decrypt API key with version ${keyVersion}. ` +

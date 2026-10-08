@@ -1514,6 +1514,55 @@ describe("runToolLoop — contract tests", () => {
     }
   });
 
+  it("reports pinned reviewer decryption failure once without raw error or credential content", async () => {
+    const context = makeReviewContext();
+    context.responseReview.reviewerId = 88;
+    context.responseReview.pending = [held("PRIVATE_DRAFT", []).pendingResponse];
+    const reviewer = createLlmRow({ llm_id: 88, supports_structoutput: true });
+    const saved = savedProviderConfigSchema.parse({
+      server_id: context.currentPersona.server_id,
+      provider: reviewer.llm_provider,
+      api_key: Buffer.from("PRIVATE_KEY"),
+      key_version: 2147483647,
+      llm_id: 88,
+      diffusion_model_id: null,
+      embedding_model_id: null,
+      nai_diffusion_model_id: null,
+      nai_preset_name: null,
+      llm_disabled_params: [],
+      llm_logit_biases: [],
+      fallback_model_refs: [],
+    });
+    const model = spyOn(llmModelRepo, "loadById").mockResolvedValue(reviewer);
+    const available = spyOn(llmModelRepo, "loadAvailableModelsForProvider").mockResolvedValue([reviewer]);
+    const registration = spyOn(llmProviderRepo, "loadSavedProviderConfig").mockResolvedValue(saved);
+    const { provider } = makeProvider([]);
+    const structured = mock(async () => ({ success: true, data: { status: "pass" } }));
+    Object.assign(provider, { callStructuredJSON: structured });
+    const capability = spyOn(capabilityResolver, "resolveStructuredOutputCapability").mockResolvedValue(
+      provider as Awaited<ReturnType<typeof capabilityResolver.resolveStructuredOutputCapability>>,
+    );
+    const errors = spyOn(log, "error").mockImplementation(async () => {});
+    errors.mockClear();
+    try {
+      expect((await reviewResponseCandidate(context, provider, makeProviderConfig())).status).toBe("unavailable");
+      expect(errors).toHaveBeenCalledTimes(1);
+      expect(errors.mock.calls[0]?.[2]).toMatchObject({ metadata: { category: "credentials", reviewerId: 88 } });
+      const records = JSON.stringify(
+        errors.mock.calls.map(([message, cause, metadata]) => ({
+          message,
+          cause: cause instanceof Error ? { message: cause.message, stack: cause.stack } : cause,
+          metadata,
+        })),
+      );
+      expect(records).not.toContain("PRIVATE_");
+      expect(structured).not.toHaveBeenCalled();
+    } finally {
+      for (const spy of [model, available, registration, capability]) spy.mockRestore();
+      errors.mockImplementation(async () => {});
+    }
+  });
+
   it("bounds a silent reviewer timeout without triggering an author rewrite or another review", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
     const actualTimeout = AbortSignal.timeout.bind(AbortSignal);

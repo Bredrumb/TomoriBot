@@ -159,6 +159,42 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Response Drafting persistence", () => {
     expect(await configRepository.updateChatConfig(-1, { response_reviewer_prompt: "fixture" })).toBe(false);
   });
 
+  it("preserves cached and durable settings after a rejected write and reloads them in a fresh process", async () => {
+    const [before] =
+      await testSql`SELECT response_reviewer_llm_id, response_decision_model_id, response_reviewer_prompt, response_rule_checker_ref FROM server_chat_configs WHERE server_id = ${refs.serverId}`;
+    const cached = await personaRepository.loadState(FIXTURE_IDS.serverDiscId);
+    if (!cached) throw new Error("Missing workspace fixture");
+    cache.set(FIXTURE_IDS.serverDiscId, { personas: [cached], mainPersona: cached, cachedAt: Date.now() });
+    expect(await configRepository.updateChatConfig(refs.serverId, { response_reviewer_llm_id: 2147483647 })).toBe(
+      false,
+    );
+    expect(cache.get(FIXTURE_IDS.serverDiscId)?.mainPersona).toBe(cached);
+    const [after] =
+      await testSql`SELECT response_reviewer_llm_id, response_decision_model_id, response_reviewer_prompt, response_rule_checker_ref FROM server_chat_configs WHERE server_id = ${refs.serverId}`;
+    expect(after).toEqual(before);
+    // A new process has no persona cache and reads the committed config through the runtime repository.
+    const script = `
+      import {personaRepository} from "./src/utils/db/repositories";
+      const state = await personaRepository.loadState(${JSON.stringify(FIXTURE_IDS.serverDiscId)});
+      const expected = ${JSON.stringify(before)};
+      if(!state || !Object.entries(expected).every(([key,value])=>JSON.stringify(state.config[key])===JSON.stringify(value))) process.exit(1);
+      process.exit(0);
+    `;
+    const child = Bun.spawn([process.execPath, "--eval", script], {
+      cwd: process.cwd(),
+      env: process.env,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [exit] = await Promise.all([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ]);
+    expect(exit).toBe(0);
+    cache.delete(FIXTURE_IDS.serverDiscId);
+  });
+
   it("round-trips local selections, rejects external imports before writes, and resets to defaults", async () => {
     const result = await exportRepository.exportWorkspaceConfig(FIXTURE_IDS.serverDiscId);
     expect(result.success).toBe(true);

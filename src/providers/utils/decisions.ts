@@ -233,8 +233,12 @@ export async function executeDecisionTransport(
     }
     stage = "response";
     const raw = (await readBoundedResponse(response, MAX_DECISION_RESPONSE_BYTES)).toString("utf8");
-    if (request.abortSignal?.aborted) return cancelled();
     stage = "validation";
+    const payload = parseDecisionJson(raw);
+    const reportedUsage = z.object({ usage: z.unknown().optional() }).parse(payload);
+    const usage = parseDecisionUsage(reportedUsage.usage);
+    if (usage) request.onUsage?.(usage);
+    if (request.abortSignal?.aborted) return cancelled();
     const envelope = z
       .object({
         model: z.string().min(1).max(200),
@@ -243,10 +247,9 @@ export async function executeDecisionTransport(
         id: z.string().optional(),
         truncated: z.boolean().optional(),
       })
-      .parse(parseDecisionJson(raw));
+      .parse(payload);
     if (envelope.truncated) throw new Error("Decision evidence was truncated");
     const answers = transport.parseAnswers(envelope.answers);
-    const usage = parseDecisionUsage(envelope.usage);
     const outcome = answers.some((answer) => answer.type === "refusal") ? "refused" : "completed";
     const suppliedId =
       response.headers.get("x-typesafe-request-id") ?? response.headers.get("x-request-id") ?? envelope.id;

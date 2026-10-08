@@ -353,6 +353,10 @@ abort cancels review and discards held prose. INFO records start/outcome, identi
 coverage, timing, and reported usage. Each operational failure emits one normalized ERROR; expected
 refusals and cancellation remain INFO outcomes. Logs omit private packet and feedback content.
 
+Pinned credential decryption supplies safe review-operation metadata to the credential owner.
+That owner reports the failure once; review records the unavailable outcome without another ERROR.
+The logger's production filter and `TEST_PRODUCTION` override remain unchanged.
+
 Actual author tool requests use the [pre-execution checkpoint](../../tool-loop/02-execute-tool-call.md#actual-request-review)
 before any effect. The response allowance remains separate: eight tool reviews and two changed
 corrections cannot consume the two final-response review calls. Unavailability at either checkpoint
@@ -411,7 +415,8 @@ Already reported adapter failures are preserved without a second ERROR. Expected
 missing calibration, refusal, uncertainty and cancellation remain INFO outcomes.
 
 Decision usage joins the actual-usage ledger separately, with `decision_tokens_in/out` as subsets of
-total tokens. Its totals use `decision:<catalog-id>` keys so pricing comes from the Decision catalog
+total tokens. Valid usage is captured before verdict validation and survives malformed answers or
+late cancellation; late verdicts cannot approve a candidate. Its totals use `decision:<catalog-id>` keys so pricing comes from the Decision catalog
 rather than the author's model. No deterministic checker tokens are invented. Operational traces
 record only outcomes/reasons, criterion probabilities for fixed application IDs, budgets, unknown
 coverage, counts and timing. Provider request/cancellation tracing remains in the existing executor.

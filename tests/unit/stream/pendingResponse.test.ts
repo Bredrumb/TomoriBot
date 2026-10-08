@@ -144,4 +144,32 @@ describe("pending stream presentation", () => {
     expect((await result.pendingResponse?.deliver(controller.signal))?.status).toBe("stopped_by_user");
     expect(send).not.toHaveBeenCalled();
   });
+
+  it("discards an approved candidate when a follow-up stops the turn before delivery", async () => {
+    const { context, provider, send } = fixture([{ type: "text", content: "Still pending." }, { type: "done" }]);
+    const result = await new StreamOrchestrator().streamToDiscord(provider, config, context);
+    StreamOrchestrator.requestStop(context.channel.id, "fixture_user");
+    expect((await result.pendingResponse?.deliver())?.status).toBe("stopped_by_user");
+    expect(context.deliveredMessageRefs).toEqual([]);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("retains only accepted text when cancellation interrupts split presentation", async () => {
+    const { context, provider, send } = fixture([
+      { type: "text", content: "quiet words ".repeat(400) },
+      { type: "done" },
+    ]);
+    send.mockImplementation(async () => {
+      StreamOrchestrator.requestStop(context.channel.id, "fixture_user");
+      return { id: "sent_1", url: "", author: { id: "bot_1" } };
+    });
+    const result = await new StreamOrchestrator().streamToDiscord(provider, config, context);
+    const delivered = await result.pendingResponse?.deliver();
+    expect(delivered?.status).toBe("stopped_by_user");
+    expect(send).toHaveBeenCalledTimes(1);
+    const accepted = send.mock.calls[0][0] as { content: string };
+    expect(delivered?.accumulatedText).toBe(accepted.content);
+    expect(context.deliveredMessageRefs).toHaveLength(1);
+    expect(accepted.content.length).toBeLessThanOrEqual(config.maxMessageLength);
+  });
 });

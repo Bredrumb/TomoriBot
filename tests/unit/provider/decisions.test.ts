@@ -127,6 +127,46 @@ describe("Decision transports", () => {
     }
   });
 
+  it("retains validated usage when answers fail or the turn stops during response decoding", async () => {
+    const reported: unknown[] = [];
+    const controller = new AbortController();
+    const tracked = { ...request, abortSignal: controller.signal, onUsage: (usage: unknown) => reported.push(usage) };
+    const malformed = await callOpenRouterDecisions(tracked, async () =>
+      Response.json({ model: request.model, answers: {}, usage: { input_tokens: 17, output_tokens: 2 } }),
+    );
+    expect(malformed).toMatchObject({ status: "failed", errorLogged: true });
+    expect(reported).toEqual([expect.objectContaining({ inputTokens: 17, outputTokens: 2 })]);
+    expect(error).toHaveBeenCalledTimes(1);
+    error.mockClear();
+    const cancelled = await callOpenRouterDecisions(
+      tracked,
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(stream) {
+              stream.enqueue(
+                new TextEncoder().encode(
+                  JSON.stringify({
+                    model: request.model,
+                    answers: { criterion: { type: "noul", noul: 0.01 } },
+                    usage: { input_tokens: 21, output_tokens: 0 },
+                  }),
+                ),
+              );
+            },
+            pull(stream) {
+              controller.abort();
+              stream.close();
+            },
+          }),
+        ),
+    );
+    expect(cancelled.status).toBe("cancelled");
+    expect(reported).toHaveLength(2);
+    expect(reported[1]).toMatchObject({ inputTokens: 21, outputTokens: 0 });
+    expect(error).not.toHaveBeenCalled();
+  });
+
   it("reports operational failures safely and leaves cancellation and rejected input expected", async () => {
     for (const status of [401, 403, 429, 500]) {
       error.mockClear();

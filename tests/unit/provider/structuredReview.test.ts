@@ -200,4 +200,63 @@ describe("private structured review transports", () => {
       generate.mockRestore();
     }
   });
+
+  it("keeps recovered reviewer and rule failures visible under production filtering and TEST_PRODUCTION", async () => {
+    // A child process must reload the logger's import-time environment policy.
+    const script = `
+      import {reviewResponseCandidate, createResponseReviewState} from "./src/utils/chat/responseReview";
+      import {checkResponseRules} from "./src/utils/chat/responseRuleCheck";
+      import {getMCPManager} from "./src/utils/mcp/mcpManager";
+      import {getGuildMcpManager} from "./src/utils/mcp/guildMcpManager";
+      import {createPersona, createLlmRow} from "./tests/helpers/fixtures";
+      import {ContextItemTag} from "./src/types/misc/context";
+      const persona = createPersona({llm:createLlmRow({supports_structoutput:true,context_window:64000}),config:{response_drafting_enabled:true,response_reviewer_prompt:"PRIVATE_RUBRIC"}});
+      const context = {currentPersona:persona,tomoriState:persona,streamingContext:{},channel:{id:"fixture"},message:{id:"trigger"},textCredentialSource:"personal",contextItems:[
+        {role:"system",metadataTag:ContextItemTag.SYSTEM_PERSONALITY,parts:[{type:"text",text:"PRIVATE_PERSONA"}]},
+        {role:"user",messageId:"trigger",parts:[{type:"text",text:"PRIVATE_TRIGGER"}]}
+      ]};
+      context.responseReview = createResponseReviewState(context);
+      context.responseReview.pending = [{text:"PRIVATE_DRAFT",deliver:async()=>{throw new Error("Unexpected delivery");}}];
+      const result = await reviewResponseCandidate(context,{callStructuredJSON:async()=>{throw new Error("PRIVATE_BODY PRIVATE_KEY");}},{apiKey:"PRIVATE_KEY",model:persona.llm.llm_codename});
+      if(result.status !== "unavailable") process.exit(1);
+      await reviewResponseCandidate(context,{},{});
+      const manager = getMCPManager();
+      manager.getEnhancedServerConfigurations = () => [{name:"fixture"}];
+      manager.getMCPTool = () => ({tool:async()=>{throw new Error("PRIVATE_RULE_BODY PRIVATE_KEY");}});
+      const rule = await checkResponseRules(42,{scope:"global",serviceName:"fixture",toolName:"check_slop"},"PRIVATE_DRAFT",{calls:0},new AbortController().signal);
+      if(rule.status !== "failed") process.exit(1);
+      await getGuildMcpManager().cleanup();
+    `;
+    for (const testProduction of ["false", "true"]) {
+      const child = Bun.spawn([process.execPath, "--eval", script], {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          RUN_ENV: "production",
+          TEST_PRODUCTION: testProduction,
+          ERROR_DB_LOGGING_ENABLED: "false",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [stdout, stderr, exit] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+      ]);
+      expect(exit).toBe(0);
+      expect(stdout.match(/Response review unavailable/g)).toHaveLength(1);
+      expect(stdout.match(/Response rule check failed/g)).toHaveLength(1);
+      expect(stdout.includes("Response review {")).toBe(testProduction === "true");
+      expect(stdout.includes("Response rule check {")).toBe(testProduction === "true");
+      expect(stdout + stderr).not.toContain("PRIVATE_");
+      if (testProduction === "false") {
+        const records = stdout
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line));
+        expect(records.every((record) => record.level >= 50)).toBe(true);
+      }
+    }
+  });
 });

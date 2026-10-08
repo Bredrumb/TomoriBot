@@ -3,6 +3,7 @@ import {
   MAX_TOOL_REVIEWS,
   MAX_TOOL_CORRECTIONS,
   reviewResponseCandidate,
+  recordResponseReviewUsage,
   reviewToolCandidate,
   toolRequestIdentity,
   responseReviewCancelled,
@@ -205,7 +206,11 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
     streamResults.push(streamResult);
     if (review) {
       if (streamResult.usage)
-        review.usage.push({ kind: "author", model: params.tomoriState.llm.llm_codename, usage: streamResult.usage });
+        recordResponseReviewUsage(review, {
+          kind: "author",
+          model: params.tomoriState.llm.llm_codename,
+          usage: streamResult.usage,
+        });
       if (streamResult.pendingResponse) review.pending.push(streamResult.pendingResponse);
     }
     thoughtLog = streamResult.thoughtLog ?? thoughtLog;
