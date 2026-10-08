@@ -610,8 +610,12 @@ capabilities, official prices, and the commented flag options before merging. Dr
 show every reviewable capability as an active or commented `true` property. `isFree` and
 `isUncensored` have no source metadata.
 Fixed OpenRouter model IDs get draft fallback prices;
-floating aliases stay unpriced because their targets change. The action does not draft media rows
-for providers whose current generation implementation cannot serve them. Run
+floating aliases stay unpriced because their targets change.
+Fixed OpenRouter text models are reported as covered when a carried floating alias shares their
+models.dev family. The alias counts as the latest model for that family regardless of its recorded
+release date. Covered models do not become draft rows or new seen entries. Families without a
+carried alias still use the release-date comparison; missing family metadata does not imply coverage.
+The action does not draft media rows for providers whose current generation implementation cannot serve them. Run
 `bun scripts/checks/modelDrift.ts` for a local read-only check against current models.dev data.
 The first run may contain a large backlog. Review the dry-run output before dispatching the action.
 `--baseline` records every currently offered model as declined without adding catalog rows; use it
