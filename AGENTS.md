@@ -190,14 +190,19 @@ Fixes belong on `main` and flow forward.
 
 ## Documentation Maintenance
 
-When a change alters behavior, update docs in the same change:
+Update docs in the same change when an existing explanation becomes inaccurate or a change
+introduces a cross-component contract, constraint, or workflow readers need. Prefer revising existing
+text over appending; do not narrate implementation branches.
 
 1. Update the page that already owns the topic (behavior, flow, config, schema, constraints). Add a
    page only when no owner exists, and update `docs/README.md` when adding, removing, or renaming one.
 2. Docs describe current behavior. Roadmaps and refactor proposals belong in `plans/`; changelogs,
    progress reports, and summaries restating a page belong nowhere.
-3. Only `docs/en/architecture/` documents internals: system flows, invariants, and edge-case
-   mechanics. Every other folder is written for its reader's task, plainly and concisely, keeping only
+3. Architecture pages explain system flows, ownership, and constraints that require reading across
+   components. Keep local algorithms, exhaustive branches, and copied field definitions in source; use
+   source pointers instead of duplicating them. Follow the scope and review budgets in
+   `docs/en/contributing/localization/docs-authoring.md` ("Architecture scope"). Every other folder
+   is written for its reader's task, plainly and concisely, keeping only
    the details a reader needs to act. User-facing pages (`features/`, `introduction/`,
    `meet-tomori/`) use everyday words. Self-hosting guides use plain words but keep every step,
    command, and setting. Contributor guides are recipes: files to touch, types and limits to satisfy,
