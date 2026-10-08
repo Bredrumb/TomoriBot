@@ -19,7 +19,7 @@ import { createCustomExpression } from "../../helpers/fixtures";
 import { expectForEveryLocale, localizedCopy, localizedProse } from "../../helpers/localeCases";
 import { collectTextDisplays, expectSafePanelPayload } from "../../helpers/panelLimits";
 
-beforeAll(initializeLocalizer);
+beforeAll(async () => initializeLocalizer());
 
 function data(size: number): ExpressionsPanelData {
   const customs = Array.from({ length: size }, (_, index) => {
@@ -79,13 +79,18 @@ describe("expressions manager panel", () => {
             { kind: "link", url: "https://tenor.com/view/wave-gif-12345" },
             { kind: "unavailable" },
           ] as const) {
-            for (const confirmDelete of [false, true]) {
+            for (const [confirmDelete, page] of [
+              [false, 0],
+              [false, 1],
+              [true, 0],
+              [true, 1],
+            ] as const) {
               const payload = buildExpressionsPanelPayload({
                 locale,
                 category,
-                page: 1,
+                page,
                 selectedId: "none",
-                personaPage: 1,
+                personaPage: page,
                 data: data(count),
                 usageCount: null,
                 confirmDelete,
@@ -96,7 +101,7 @@ describe("expressions manager panel", () => {
                   detail: localizedCopy("en-US", "commands.expressions.manage.saved_detail"),
                 },
               });
-              expectSafePanelPayload(payload, `${locale}:${category}:${count}:${confirmDelete}`);
+              expectSafePanelPayload(payload, `${locale}:${category}:${count}:${confirmDelete}:${page}`);
             }
           }
         }

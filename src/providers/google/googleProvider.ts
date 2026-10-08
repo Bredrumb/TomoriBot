@@ -59,7 +59,7 @@ import { callGoogleStructuredJSON } from "./googleStructuredOutput";
 import { getCachedDefaultLLM, isLLMCacheReady } from "../../utils/cache/llmCache";
 import { llmModelRepo } from "@/utils/db/repositories";
 import { googleProviderInfo } from "./providerInfo";
-import { getActiveTemperature, isParamDisabled } from "@/utils/provider/samplingControl";
+import { getActiveTemperature, isParamDisabled, omitGeminiSampling } from "@/utils/provider/samplingControl";
 import { resolveRequestMaxOutputTokens } from "@/utils/provider/modelLimits";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 import { buildStreamContext } from "@/utils/provider/streamContext";
@@ -501,7 +501,7 @@ export class GoogleProvider
           threshold: "BLOCK_NONE",
         },
       ],
-      generationConfig: {
+      generationConfig: omitGeminiSampling(tomoriState.llm.llm_codename, {
         ...(temperature !== undefined && {
           temperature,
         }),
@@ -525,7 +525,7 @@ export class GoogleProvider
         }),
         maxOutputTokens,
         stopSequences: [],
-      },
+      }),
     };
 
     // Only attach tools for models that explicitly support function calling.

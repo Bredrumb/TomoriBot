@@ -51,7 +51,7 @@ import { callGoogleStructuredJSON } from "@/providers/google/googleStructuredOut
 import { generateConversationSummaryGoogle, generateRoleplaySummaryGoogle } from "@/providers/google/compactGenerator";
 import { generatePresetFromPrompt } from "@/providers/google/presetGenerator";
 import { validateGoogleModelsEndpoint } from "@/providers/google/googleCredentialValidation";
-import { getActiveTemperature, isParamDisabled } from "@/utils/provider/samplingControl";
+import { getActiveTemperature, isParamDisabled, omitGeminiSampling } from "@/utils/provider/samplingControl";
 import type { VertexStreamConfig } from "@/providers/vertex/vertexStreamAdapter";
 import { createVertexexpressClient } from "@/providers/vertexexpress/vertexexpressClient";
 import { vertexexpressProviderInfo } from "@/providers/vertexexpress/providerInfo";
@@ -355,7 +355,7 @@ export class VertexexpressProvider
           threshold: "BLOCK_NONE",
         },
       ],
-      generationConfig: {
+      generationConfig: omitGeminiSampling(tomoriState.llm.llm_codename, {
         ...(temperature !== undefined && {
           temperature,
         }),
@@ -369,7 +369,7 @@ export class VertexexpressProvider
           }),
         maxOutputTokens,
         stopSequences: [],
-      },
+      }),
     };
 
     if (resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {

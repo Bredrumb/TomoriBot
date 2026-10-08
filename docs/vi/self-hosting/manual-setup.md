@@ -2,6 +2,7 @@
 title: "Cài đặt thủ công"
 sidebar:
   order: 2
+aiGenerated: false
 ---
 
 :::note
@@ -29,20 +30,20 @@ bun install --frozen-lockfile
 
 ## 2. Cấu hình
 
-Tạo tệp môi trường từ tệp mẫu và điền các giá trị bắt buộc:
+Tạo tệp môi trường của bạn từ ví dụ và điền vào các giá trị được yêu cầu:
 
 ```sh
 cp .env.example .env
 ```
 
-Bắt buộc:
+Yêu cầu:
 
-- `DISCORD_TOKEN`: token bot Discord của bạn (bật các privileged intent `GuildMembers`, `MessageContent` và `GuildPresences`).
-- `CRYPTO_SECRET`: khóa mã hóa 32 ký tự (dùng để mã hóa các khóa API đã lưu).
+- `DISCORD_TOKEN`: mã thông báo bot Discord của bạn (kích hoạt các ý định đặc quyền `GuildMembers`, `MessageContent` và `GuildPresences`).
+- `CRYPTO_SECRET`: khóa mã hóa 32 ký tự (được sử dụng để mã hóa các khóa API được lưu trữ).
 - Kết nối PostgreSQL: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`.
 
-:::note[Chưa cài sẵn PostgreSQL trên máy?]
-Chỉ chạy riêng cơ sở dữ liệu trong một container, sau đó trỏ các giá trị `POSTGRES_*` vào đó:
+:::note[No native PostgreSQL?]
+Chỉ chạy cơ sở dữ liệu trong một vùng chứa, sau đó trỏ các giá trị `POSTGRES_*` vào đó:
 
 ```sh
 docker run -d --name tomori-db \
@@ -50,10 +51,12 @@ docker run -d --name tomori-db \
   -p 5432:5432 pgvector/pgvector:pg16
 ```
 
-Sau đó đặt `POSTGRES_HOST=localhost`, `POSTGRES_PORT=5432`, cùng user/password/db ở trên. Image `pgvector/pgvector` đi kèm tiện ích mở rộng RAG đã cài sẵn; thay bằng `postgres:16` nếu bạn không cần bộ nhớ tài liệu/RAG. Thiết lập này chỉ chạy cơ sở dữ liệu trong Docker và bot vẫn chạy trên Bun của máy chủ lưu trữ. Để đóng gói toàn bộ bot và cơ sở dữ liệu trong container, hãy sử dụng [Docker Compose](/vi/self-hosting/docker-compose/) để thay thế.
+Sau đó đặt `POSTGRES_HOST=localhost`, `POSTGRES_PORT=5432` và người dùng/mật khẩu/db ở trên. Hình ảnh `pgvector/pgvector` gửi tiện ích mở rộng RAG được cài đặt sẵn; đổi nó lấy `postgres:16` nếu bạn không cần bộ nhớ tài liệu/RAG. Điều này chỉ chạy cơ sở dữ liệu trong Docker và bot vẫn chạy trên máy chủ Bun. Để có bot và cơ sở dữ liệu được chứa đầy đủ, hãy sử dụng [Docker Compose](/vi/self-hosting/docker-compose/).
 :::
 
-Các tùy chỉnh bổ sung nằm trong `.env.optional.example`. Sao chép bất kỳ giá trị nào bạn muốn tùy chỉnh (giới hạn, thời gian chờ, bật tắt tính năng, URL của máy chủ cục bộ, v.v.).
+Điều chỉnh tùy chọn tồn tại trong `.env.optional.example`. Sao chép bất kỳ giá trị nào bạn muốn tùy chỉnh (giới hạn, thời gian chờ, chuyển đổi tính năng, URL máy chủ cục bộ, v.v.).
+
+Biểu cảm tùy chỉnh tải lên mặc định cho các tệp cục bộ trong `data/custom-expressions/`. Giữ thư mục đó trên bộ lưu trữ liên tục. `EXPRESSION_STORAGE_BACKEND` chấp nhận `local`, `gcs` hoặc `s3`. Phần phụ trợ đám mây yêu cầu `EXPRESSION_STORAGE_BUCKET` và thông tin xác thực SDK tương ứng. S3 cũng sử dụng `AWS_REGION` (`us-east-1` mặc định) và `S3_ENDPOINT` tùy chọn. GCS sử dụng thông tin xác thực mặc định của ứng dụng. Biểu thức sử dụng cài đặt nhóm riêng của chúng; cài đặt lưu trữ hình đại diện không chọn nhóm biểu thức. Các đối tượng vẫn có thể đọc được thông qua SDK và được đính kèm dưới dạng byte, do đó, URL phương tiện được cung cấp công khai là không cần thiết. Giữ nguyên các khóa phụ trợ, nhóm và đối tượng khi khôi phục các tham chiếu hiện có.
 
 ## 3. Chạy
 
@@ -67,7 +70,7 @@ Sử dụng `bun run launch` thay vì `bun run dev` nếu bạn muốn các máy
 
 ```sh
 bun run launch --searxng --crawl4ai
-bun run launch --help        # xem tất cả các cờ
+bun run launch --help        # see all flags
 ```
 
 ## Tiện ích bổ sung tùy chọn (bản "Full Install" thủ công)
@@ -80,7 +83,7 @@ Phương thức Full Install của [trình hướng dẫn thiết lập](/vi/sel
 RAG (tải lên tài liệu và truy xuất liên kênh) lưu trữ các vector nhúng trong cột `vector`, đòi hỏi tiện ích mở rộng [pgvector](https://github.com/pgvector/pgvector). Cài đặt tiện ích này cho phiên bản chính PostgreSQL của bạn:
 
 ```sh
-# Debian/Ubuntu, ví dụ cho PostgreSQL 16
+# Debian/Ubuntu, e.g. for PostgreSQL 16
 sudo apt-get install -y postgresql-16-pgvector
 ```
 
@@ -91,10 +94,10 @@ Không có gói pgvector dựng sẵn cho PostgreSQL nguyên bản trên Windows
 :::
 
 ```sh
-# psql trực tiếp trên máy chủ lưu trữ (thay thế POSTGRES_USER và POSTGRES_DB của bạn):
+# Native / host psql (substitute your own POSTGRES_USER and POSTGRES_DB):
 psql -h localhost -p 5432 -U tomori -d tomodb
 
-# Hoặc, nếu cơ sở dữ liệu chạy trong Docker container từ bước 2:
+# Or, if the database runs in the Docker container from step 2:
 docker exec -it tomori-db psql -U tomori -d tomori
 ```
 
@@ -123,7 +126,7 @@ SHOW config_file;
 Bật tiện ích mở rộng trong `postgresql.conf`: thêm vào `shared_preload_libraries` nếu tệp đã liệt kê các thư viện khác:
 
 ```ini
-shared_preload_libraries = 'pg_cron'   # ví dụ 'pg_stat_statements,pg_cron'
+shared_preload_libraries = 'pg_cron'   # e.g. 'pg_stat_statements,pg_cron'
 cron.database_name = 'your_dbname'
 ```
 

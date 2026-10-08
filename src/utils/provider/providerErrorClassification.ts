@@ -114,6 +114,93 @@ export function isCreditAffordabilityError(error: ProviderError): boolean {
   );
 }
 
+// Adapters write `code` in their own vocabulary: HTTP statuses, Google status names, Anthropic error
+// types, Vertex's own config codes, and the OpenAI-compatible composites. Each entry names a
+// failure the server's own key, account, or endpoint causes, or one that clears on its own.
+const NON_INCIDENT_PROVIDER_CODES = new Set([
+  "401",
+  "402",
+  "403",
+  "404",
+  "429_balance",
+  "429_plan_access",
+  "ECONNREFUSED",
+  "PERMISSION_DENIED",
+  "UNAUTHENTICATED",
+  "authentication_error",
+  "billing_error",
+  "permission_error",
+  "not_found_error",
+  // Anthropic's mid-stream SSE error event arrives as a non-retryable api_error whatever its cause.
+  "rate_limit_error",
+  // NovelAI's adapter already records this at error level with the raw tool-call block, which
+  // cannot ride on the ProviderError because the embed would show it to the user as "Details".
+  "tool_call_parse_error",
+  "vertex_auth_error",
+  "vertex_config_error",
+]);
+
+// Google answers a bad key and a billing problem with a plain 400, and some providers report a
+// moderation refusal the same way, so these are only distinguishable by message. Bun's fetch words
+// its connection failures without the errno text the adapters look for ("Unable to connect", "The
+// socket connection was closed unexpectedly"), so those arrive as `unknown` and would file every
+// message to a server's dead custom endpoint as an incident.
+const NON_INCIDENT_MESSAGE_PATTERNS: RegExp[] = [
+  /\bunable\s+to\s+connect\b/i,
+  /\bconnection\s+refused\b/i,
+  /\bsocket\s+connection\s+was\s+closed\s+unexpectedly\b/i,
+  /\b(?:ENOTFOUND|ECONNRESET|EHOSTUNREACH|ENETUNREACH)\b/,
+  /\bapi[\s_-]?key\s+(?:is\s+)?(?:not\s+valid|invalid|expired|revoked)\b/i,
+  /\b(?:invalid|incorrect|expired)\s+api[\s_-]?key\b/i,
+  /\bPERMISSION_DENIED\b/,
+  /\bUNAUTHENTICATED\b/,
+  /\bbilling\b/i,
+  /\bfree\s+tier\b/i,
+  /\bcontent[\s_-]?(?:filter|policy|management)\b/i,
+  /\bmoderation\b/i,
+  /\bflagged\b/i,
+];
+
+/**
+ * Decides whether a provider failure belongs in `error_logs`, which production reads as the
+ * operator's incident feed.
+ *
+ * Transient failures and anything the server can repair itself (its key, balance, model choice,
+ * conversation length, or content) stay at warn level: on a public instance they arrive constantly
+ * and only that server can act on them. What remains is mostly a request TomoriBot built wrong or a
+ * failure no classifier recognized, and those need the raw provider text to diagnose.
+ */
+export function isOperatorActionableProviderError(error: ProviderError): boolean {
+  if (error.retryable || (error.type !== "api_error" && error.type !== "unknown")) {
+    return false;
+  }
+  if (error.code !== undefined && NON_INCIDENT_PROVIDER_CODES.has(String(error.code))) {
+    return false;
+  }
+  if (
+    isProviderModelError(error) ||
+    isContextLengthError(error) ||
+    isCreditAffordabilityError(error) ||
+    isAccountBalanceExhaustedError(error)
+  ) {
+    return false;
+  }
+  return !collectProviderErrorMessages(error).some((message) =>
+    matchesAnyPattern(message, NON_INCIDENT_MESSAGE_PATTERNS),
+  );
+}
+
+/**
+ * Detects a timeout from error text, for classifiers that have no status code to go on.
+ *
+ * Bun's fetch abandons a server that has sent nothing for 300 seconds with "The operation timed
+ * out.", which has no "timeout" substring. A slow local backend processing a long prompt hits that
+ * ceiling, and matching only "timeout" told the user to check their API key.
+ */
+export function isProviderTimeoutMessage(message: string): boolean {
+  return /timeout|timed\s+out/i.test(message);
+}
+
 /**
  * Tests a message against a set of patterns after collapsing whitespace.
  * @param message - Candidate message (nullable).

@@ -1,9 +1,9 @@
 ---
 title: "Assistente de Configuração"
-aiGenerated: true
 sidebar:
   label: "Assistente de Configuração"
   order: 1
+aiGenerated: false
 ---
 
 :::note

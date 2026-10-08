@@ -3,6 +3,7 @@ title: "安装向导"
 sidebar:
   label: "安装向导"
   order: 1
+aiGenerated: false
 ---
 
 :::note

@@ -4,6 +4,7 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import { StickerTool } from "@/tools/functionCalls/stickerTool";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import { buildServerStickerContextItem } from "@/utils/text/context/serverAssets";
+import { createToolPromptMacroResolver, resolvePromptCapabilityValues } from "@/utils/tools/toolPromptMacros";
 import { createCustomExpression, createPersona } from "../../helpers/fixtures";
 
 afterEach(() => {
@@ -104,7 +105,11 @@ describe("custom sticker selection", () => {
       tomoriState: state,
       preloadedStickers: [],
       preloadedCustomExpressions: customs,
-      toolPromptMacroResolver: { expand: async (text: string) => text } as never,
+      toolPromptMacroResolver: createToolPromptMacroResolver({
+        provider: state.llm.llm_provider,
+        stateForContext: { ...state, server_id: String(state.server_id), activePersonaHasElevenlabsVoice: false },
+        availableToolNames: new Set(["select_sticker_for_response"]),
+      }),
       convertMentions: async (text) => text,
     });
     const text = JSON.stringify(item);
@@ -113,5 +118,43 @@ describe("custom sticker selection", () => {
     expect(text).not.toContain("example.com");
     expect(text).not.toContain("delivery_kind");
     expect(text).not.toContain("persona_ids");
+  });
+  it("omits sticker context whenever the selection tool is unavailable for the turn", async () => {
+    const { client, guild, state } = fixture();
+    for (const overrides of [
+      { deliberateToolAllowedNames: ["web_search"] },
+      { availableToolNames: new Set<string>() },
+      { capabilities: { tool_use: false } },
+      {
+        stateForContext: {
+          ...state,
+          server_id: String(state.server_id),
+          activePersonaHasElevenlabsVoice: false,
+          llm: { ...state.llm, has_tools: false },
+        },
+      },
+    ]) {
+      const item = await buildServerStickerContextItem({
+        client,
+        guildId: guild.id,
+        serverName: "Example",
+        botName: "Mirri",
+        isDMChannel: false,
+        isUserImpersonation: false,
+        tomoriConfig: state.config,
+        tomoriState: state,
+        preloadedStickers: [],
+        preloadedCustomExpressions: [createCustomExpression()],
+        toolPromptMacroResolver: createToolPromptMacroResolver({
+          provider: state.llm.llm_provider,
+          capabilities: resolvePromptCapabilityValues(state.config),
+          stateForContext: { ...state, server_id: String(state.server_id), activePersonaHasElevenlabsVoice: false },
+          availableToolNames: new Set(["select_sticker_for_response"]),
+          ...overrides,
+        }),
+        convertMentions: async (text) => text,
+      });
+      expect(item).toBeNull();
+    }
   });
 });

@@ -101,16 +101,30 @@ function outputIs(model: SourceModel, kind: "text" | "image" | "video"): boolean
   return kind === "text" ? output?.length === 1 && output[0] === "text" : output?.includes(kind) === true;
 }
 
-function familyCandidates(models: SourceModel[], provider: string, carried: Set<string>): SourceModel[] {
+function familyCandidates(
+  models: SourceModel[],
+  provider: string,
+  carried: Set<string>,
+): { drafts: SourceModel[]; covered: string[] } {
   const newest = new Map<string, string>();
+  const aliases = new Map<string, string>();
+  const covered: string[] = [];
   for (const codename of carried) {
     const model = models.find((row) => row.id === codename || row.id.endsWith(`/${codename}`));
+    if (model?.family && POLICIES[provider].floatingAliases && /^~.*-latest$/.test(codename)) {
+      aliases.set(model.family, codename);
+    }
     if (!model?.family || !model.release_date) continue;
     const prior = newest.get(model.family);
     if (!prior || prior < model.release_date) newest.set(model.family, model.release_date);
   }
-  return models.filter((model) => {
+  const drafts = models.filter((model) => {
     if (!outputIs(model, "text") || carriedHas(carried, provider, model.id)) return false;
+    const coveringAlias = model.family ? aliases.get(model.family) : undefined;
+    if (coveringAlias && !FLOATING_ALIAS.test(model.id)) {
+      covered.push(`\`${model.id}\` covered by \`${coveringAlias}\` (family: \`${model.family}\`)`);
+      return false;
+    }
     const sibling =
       !!model.family &&
       !!model.release_date &&
@@ -119,6 +133,7 @@ function familyCandidates(models: SourceModel[], provider: string, carried: Set<
     const alias = POLICIES[provider].floatingAliases && FLOATING_ALIAS.test(model.id);
     return sibling || alias;
   });
+  return { drafts, covered };
 }
 
 function generationCandidates(models: SourceModel[], provider: string, carried: Set<string>): SourceModel[] {
@@ -219,19 +234,21 @@ export function findCandidates(
   source: SourceCatalog,
   seen: SeenEntry[],
   catalog: CatalogLookup = catalogRows,
-): { candidates: Candidate[]; free: Candidate[] } {
+): { candidates: Candidate[]; free: Candidate[]; covered: string[] } {
   const seenKeys = new Set(seen.map(seenKey));
   const candidates: Candidate[] = [];
   const free: Candidate[] = [];
+  const covered: string[] = [];
   for (const [provider, policy] of Object.entries(POLICIES)) {
     const models = Object.values(source[policy.source].models);
     const carried = carriedCodenames(catalog, "llmSections", provider);
-    const text =
+    const selection =
       policy.tier === "generation"
-        ? generationCandidates(models, provider, carried)
+        ? { drafts: generationCandidates(models, provider, carried), covered: [] }
         : familyCandidates(models, provider, carried);
+    covered.push(...selection.covered);
     for (const [table, drafts] of [
-      ["llmSections", text],
+      ["llmSections", selection.drafts],
       ["imageSections", mediaCandidates(models, provider, "imageSections", catalog)],
       ["videoSections", mediaCandidates(models, provider, "videoSections", catalog)],
     ] as const) {
@@ -244,7 +261,7 @@ export function findCandidates(
       }
     }
   }
-  return { candidates, free };
+  return { candidates, free, covered };
 }
 
 function renderRow(candidate: Candidate): string {
@@ -446,6 +463,7 @@ export function report(
   free: Candidate[],
   advisories: ReturnType<typeof sourceAdvisories>,
   now = new Date(),
+  covered: string[] = [],
 ): string {
   const greeting = APHEL_GREETINGS[isoWeek(now) % APHEL_GREETINGS.length](candidates.length);
   const byProvider = new Map<string, Candidate[]>();
@@ -489,6 +507,11 @@ export function report(
   }
   lines.push(
     ...collapsible(
+      "OpenRouter models covered by catalog aliases",
+      covered,
+      "A carried floating alias covers its models.dev family regardless of the alias's recorded release date. Fixed versions in that family are not drafted.",
+    ),
+    ...collapsible(
       "Free variants recorded but not drafted",
       free.map((item) => reviewLabel(item.provider, item.table, item.codename)),
       "These are marked seen. Add a row by hand if one is worth carrying.",
@@ -529,9 +552,10 @@ async function main(): Promise<void> {
   const seenRaw: unknown = await Bun.file(SEEN_URL).json();
   if (!isSeenEntries(seenRaw)) throw new Error("Invalid model drift seen file");
   const seen = seenRaw;
-  const { candidates, free } = findCandidates(raw, seen);
+  const { candidates, free, covered } = findCandidates(raw, seen);
   for (const candidate of candidates) console.log(`${candidate.provider}\t${candidate.table}\t${candidate.codename}`);
-  console.log(`Drafts: ${candidates.length}; free variants: ${free.length}`);
+  for (const item of covered) console.log(item);
+  console.log(`Drafts: ${candidates.length}; free variants: ${free.length}; alias-covered: ${covered.length}`);
   if (process.env.GITHUB_OUTPUT) {
     await appendFile(
       process.env.GITHUB_OUTPUT,
@@ -539,7 +563,8 @@ async function main(): Promise<void> {
 `,
     );
   }
-  if (reportIndex !== -1) await writeFile(args[reportIndex + 1], report(candidates, free, sourceAdvisories(raw)));
+  if (reportIndex !== -1)
+    await writeFile(args[reportIndex + 1], report(candidates, free, sourceAdvisories(raw), new Date(), covered));
   if (!write && !baseline) return;
   const offeredAt = new Date().toISOString().slice(0, 10);
   const additions = [...candidates, ...free].map((candidate) => ({

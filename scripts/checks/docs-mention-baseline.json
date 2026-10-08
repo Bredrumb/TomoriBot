@@ -38,10 +38,6 @@
       "reason": "Stale documentation path with no decided replacement; owed a fix in the docs-accuracy burn-down."
     },
     {
-      "path": "natres",
-      "reason": "Stale documentation path with no decided replacement; owed a fix in the docs-accuracy burn-down."
-    },
-    {
       "path": "novelai image params",
       "reason": "Stale documentation path with no decided replacement; owed a fix in the docs-accuracy burn-down."
     },
@@ -63,10 +59,6 @@
     },
     {
       "path": "server dtm",
-      "reason": "Stale documentation path with no decided replacement; owed a fix in the docs-accuracy burn-down."
-    },
-    {
-      "path": "server memberpermissions",
       "reason": "Stale documentation path with no decided replacement; owed a fix in the docs-accuracy burn-down."
     },
     {

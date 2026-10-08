@@ -52,6 +52,7 @@ import { prepareParticipantContext } from "@/utils/text/participants/preparation
 import { resolveEffectiveUserNaming } from "@/utils/text/userNaming";
 import {
   filterDeliberateToolNames,
+  getAutonomousDeliberateToolNames,
   getDeliberateToolIntentResult,
   getFollowUpToolIntentResult,
   resolveDeliberateToolMode,
@@ -239,7 +240,13 @@ async function buildSnapshotToolFilter(params: {
     intentText,
     latestUserMessage ? getSnapshotRecentToolAffordanceNames(messagesArray, latestUserMessage.id, clientUserId) : [],
   );
-  const allowedToolNames = Array.from(new Set([...directIntent.allowedToolNames, ...followUpIntent.allowedToolNames]));
+  const allowedToolNames = Array.from(
+    new Set([
+      ...directIntent.allowedToolNames,
+      ...followUpIntent.allowedToolNames,
+      ...getAutonomousDeliberateToolNames(persona),
+    ]),
+  );
 
   return {
     disabledByDeliberateMode: allowedToolNames.length === 0,
@@ -455,14 +462,12 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
 
   // Respect /refresh and /compact_refresh boundaries with the same slicing tomoriChat.ts uses.
   const { sliced: messagesArray } = sliceMessagesAtResetMarker(allMessagesArray);
-  const snapshotToolFilter = request.includeTools
-    ? await buildSnapshotToolFilter({
-        messagesArray,
-        clientUserId: client.user?.id,
-        persona: answeringState,
-        invokingUserData: userData,
-      })
-    : null;
+  const snapshotToolFilter = await buildSnapshotToolFilter({
+    messagesArray,
+    clientUserId: client.user?.id,
+    persona: answeringState,
+    invokingUserData: userData,
+  });
 
   const personaByNickname = new Map<string, TomoriState>();
   for (const p of personas) {
@@ -743,7 +748,14 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
     triggererFormattedName: snapshotNaming.formattedName,
     triggererAddressTerm: snapshotNaming.addressTerm,
     // snapshot.triggererUserRow unlocks STM context (actualTriggeringUserId guard inside buildContext)
-    snapshot: { triggererUserRow: userData, tomoriState: effectivePersona, isTriggererBlacklisted },
+    snapshot: {
+      triggererUserRow: userData,
+      tomoriState: snapshotToolFilter?.disabledByDeliberateMode
+        ? { ...effectivePersona, llm: { ...effectivePersona.llm, has_tools: false } }
+        : effectivePersona,
+      isTriggererBlacklisted,
+    },
+    deliberateToolAllowedNames: snapshotToolFilter?.allowedToolNames,
     tomoriNickname: selectedPersona.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
     tomoriAttributes: selectedPersona.attribute_list,
     tomoriConfig: effectivePersona.config,

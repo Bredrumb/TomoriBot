@@ -21,6 +21,10 @@ This stage is the thin chat-side wrapper around a much larger inner
 pipeline. The heavy lifting (mentions, memories, RAG, persona prompt,
 participants, dialogue history) lives in [context-build](../../context-build/).
 
+Sticker selection is admitted on eligible server turns without a sticker request. The
+sticker setting, tool-use setting, model/provider support, and DM, impersonation, and
+roleplay restrictions still apply. Task tools retain their deliberate intent filtering.
+
 When Deliberate Tool Mode is active, the intent wrapper performs an autonomous
 STM maintenance preflight before calling the base builder. A due refresh is
 carried through the existing `endTurnAfterTools` allowlist path so

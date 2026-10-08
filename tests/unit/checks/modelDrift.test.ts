@@ -14,6 +14,7 @@ import {
   type CatalogLookup,
   type ModelTable,
   type SeenEntry,
+  type SourceModel,
 } from "../../../scripts/checks/modelDrift";
 
 const fixture = new URL("../../fixtures/modelDrift.json", import.meta.url);
@@ -26,6 +27,45 @@ const catalogSnapshot: Record<ModelTable, { provider: string; codename: string }
 const frozenCatalog: CatalogLookup = (table) => catalogSnapshot[table];
 
 describe("model drift", () => {
+  it("treats a carried OpenRouter alias as covering its family despite stale release dates", async () => {
+    const source = await Bun.file(fixture).json();
+    const models: SourceModel[] = [
+      { id: "~openai/gpt-sol-latest", family: "gpt-sol", release_date: "2026-01-01" },
+      { id: "openai/gpt-6-sol", family: "gpt-sol", release_date: "2026-02-01" },
+      { id: "openai/gpt-6.1-sol", family: "gpt-sol", release_date: "2026-03-01" },
+      { id: "openai/gpt-luna-old", family: "gpt-luna", release_date: "2026-01-01" },
+      { id: "openai/gpt-luna-new", family: "gpt-luna", release_date: "2026-02-01" },
+      { id: "~openai/gpt-luna-latest", family: "gpt-luna", release_date: "2026-01-01" },
+      { id: "~openai/gpt-unknown-latest" },
+      { id: "openai/gpt-unknown-old", family: "unknown", release_date: "2026-01-01" },
+      { id: "openai/gpt-unknown-new", family: "unknown", release_date: "2026-02-01" },
+    ].map((model) => ({ ...model, modalities: { output: ["text"] } }));
+    source.openrouter.models = Object.fromEntries(models.map((model) => [model.id, model]));
+    const lookup: CatalogLookup = (table) =>
+      table === "llmSections"
+        ? ["~openai/gpt-sol-latest", "openai/gpt-luna-old", "~openai/gpt-unknown-latest", "openai/gpt-unknown-old"].map(
+            (codename) => ({ provider: "openrouter", codename }),
+          )
+        : [];
+    const { candidates, covered } = findCandidates(source, [], lookup);
+    expect(candidates.some((row) => row.model.family === "gpt-sol")).toBe(false);
+    expect(covered.some((item) => item.includes("openai/gpt-6.1-sol") && item.includes("~openai/gpt-sol-latest"))).toBe(
+      true,
+    );
+    for (const codename of ["openai/gpt-luna-new", "~openai/gpt-luna-latest", "openai/gpt-unknown-new"]) {
+      expect(candidates.some((row) => row.codename === codename)).toBe(true);
+    }
+    const body = report(candidates, [], { absent: [], unsupportedMedia: [] }, new Date(), covered);
+    expect(body).toContain(covered[0]);
+    source.nvidia.models = source.openrouter.models;
+    const nvidiaLookup: CatalogLookup = (table) => lookup(table).map((row) => ({ ...row, provider: "nvidia" }));
+    expect(
+      findCandidates(source, [], nvidiaLookup).candidates.some(
+        (row) => row.provider === "nvidia" && row.codename === "openai/gpt-6.1-sol",
+      ),
+    ).toBe(true);
+  });
+
   it("declines one provider row without suppressing another", async () => {
     const source = await Bun.file(fixture).json();
     const first = findCandidates(source, [], frozenCatalog);

@@ -41,7 +41,7 @@ import { normalizeStickerNameForLoose } from "@/utils/text/stickerNames";
 import { invalidateEmojiStickerCache } from "@/utils/cache/emojiStickerCache";
 import { nativeExpressionRevision } from "@/utils/text/expressionRevision";
 
-export type CustomExpressionWrite = {
+type CustomExpressionWrite = {
   name: string;
   description: string;
   emotion_key: string;

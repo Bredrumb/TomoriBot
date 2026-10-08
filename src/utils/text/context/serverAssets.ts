@@ -161,13 +161,18 @@ export async function buildServerStickerContextItem(params: {
   }
   stickerContent += "To use a sticker, call '{sticker_tool}' with the sticker's name (case-insensitive).\n";
 
+  const expandedContent = await params.toolPromptMacroResolver.expand(
+    `{{if tool:select_sticker_for_response}}${stickerContent}{{/if}}`,
+  );
+  if (!expandedContent.trim()) return null;
+
   return {
     role: "system",
     parts: [
       {
         type: "text",
         text: await params.convertMentions(
-          await params.toolPromptMacroResolver.expand(stickerContent),
+          expandedContent,
           params.client,
           params.guildId,
           "User",

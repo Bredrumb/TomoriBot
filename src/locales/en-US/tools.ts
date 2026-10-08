@@ -180,7 +180,6 @@ export default {
         "message-action": [],
         "user-blocking": [],
         "user-info": [],
-        sticker: [],
         thread: [],
         capabilities: [],
       },

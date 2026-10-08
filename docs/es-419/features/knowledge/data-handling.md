@@ -4,82 +4,78 @@ sidebar:
   order: 4
 ---
 
-TomoriBot está diseñada para ser transparente sobre tus datos. Puedes exportar, importar o
-eliminar todo lo que almacena, y esta página detalla exactamente qué es eso. Para el texto
-legal, consulta `/legal privacy-policy` y `/legal terms-of-service`.
+Exporta, respalda, importa o elimina tus ajustes, recuerdos y personas con los comandos de barra de Discord. Para conocer las condiciones del servicio y la privacidad, consulta `/legal terms-of-service` y `/legal privacy-policy`.
 
 :::note
-Esta página cubre los controles por usuario dentro de Discord. **¿Autoalojas tu propia
-instancia?** Las copias de seguridad y restauraciones de toda la base de datos son una
-operación del lado del host; consulta
-[Mantenimiento y copias de seguridad](/es-419/self-hosting/maintenance/).
+Esta página cubre los controles de usuario en-Discord. En instancias autohospedadas, las copias de seguridad y restauraciones completas de la base de datos son operaciones del lado del host; consulte [Mantenimiento y copias de seguridad](/es-419/self-hosting/maintenance/).
 :::
 
-## Qué almacena
+## Lo que ella almacena
 
-Almacenado:
+### Datos almacenados
 
-- Memorias del servidor y personales
-- Sus ajustes y datos de persona
-- Configuración del servidor
-- Claves de API cifradas
+- Servidor y recuerdos personales.
+- Perfiles de personas, rasgos y ejemplos de diálogo.
+- Ajustes de configuración del servidor
+- Claves cifradas del proveedor API
+- Metadatos de expresión, reglas de acceso de personas y medios de expresión cargados
 
-No almacenado:
+### No almacenado
 
-- Tus mensajes de Discord
-- Historial de chat
+- Historial de mensajes Discord (los mensajes no se archivan en un registro de mensajes persistentes)
 
-Enviado a tu proveedor de IA: cada vez que se activa, obtiene los **mensajes más
-recientes del canal más cualquier memoria relevante** como contexto para el modelo. No
-monitorea ni lee mensajes fuera de esas activaciones.
+### Enviado a su proveedor de IA
+
+Siempre que se activa, TomoriBot recupera mensajes recientes en el canal junto con recuerdos relevantes como contexto para el modelo. Ella no lee ni procesa mensajes fuera de esos desencadenantes.
 
 :::note
-Tu proveedor de IA elegido (Google, OpenRouter, NovelAI, …) procesa los mensajes bajo *sus
-propias* políticas de privacidad. Nunca compartas información personal sensible con ninguna IA.
+El proveedor de IA que elija (Google, OpenRouter, NovelAI,…) procesa los mensajes según su propia política de privacidad. Evite compartir credenciales personales sensibles o datos confidenciales.
 :::
 
 ## Exporta tus datos
 
-Todo lo exportable se envía a tus mensajes directos como un archivo JSON:
+Los datos exportables se envían a sus mensajes directos como un archivo JSON:
 
-- `/export config`: valores de configuración del servidor (sin claves de API, credenciales ni ajustes de proveedor).
-- `/export personal config`: tus ajustes personales (perfil, privacidad, apariencia, modos de respuesta).
-- `/export memories`: memorias del servidor, con alcance a la persona principal, a una persona seleccionada, o a cada persona por separado.
-- `/export personal memories`: tus memorias personales, con alcance global, a una persona, o a cada persona por separado.
-- `/persona export`: definiciones completas de persona.
+- `/export config`: valores de configuración del servidor (excluye claves y credenciales de API).
+- `/export personal config`: configuración de perfil personal (privacidad, etiquetas de apariencia, nombres).
+- `/export memories`: memorias del servidor, con alcance para la persona principal, una persona o todas las personas.
+- `/export personal memories`: recuerdos personales, de alcance global o por persona.
+- `/persona export`: definiciones completas de personas.
+
+Los medios de expresión cargados se almacenan en el host del servidor y están fuera de estas exportaciones JSON. Los autohospedadores deben realizar copias de seguridad del almacenamiento de la base de datos y de los activos multimedia juntos; consulte [copias de seguridad de medios personalizados](/es-419/self-hosting/safe-migration/#custom-expression-media-backups).
 
 ## Importa tus datos
 
-Adjunta un archivo exportado previamente para restaurarlo:
+Adjunte un archivo exportado para restaurarlo:
 
-- `/import config`: configuración del servidor; requiere Administrar servidor. Elige qué secciones detectadas aplicar.
-- `/import personal config`: tus ajustes personales. Elige qué secciones detectadas aplicar.
-- `/import memories`: memorias del servidor; requiere Administrar servidor. Combina o reemplaza, y asigna cada persona de origen si el archivo tiene más de una.
-- `/import personal memories`: tus memorias personales. Combina o reemplaza, y asigna cada persona de origen si el archivo tiene más de una.
-- `/persona import`: restaura una persona. También acepta tarjetas PNG y JSON de SillyTavern y
-  archivos `.charx` de Character Card V3, que importan solo el texto del personaje (consulta
-  [Compatibilidad con SillyTavern](/es-419/features/integrations/sillytavern-support/)).
+- `/import config`: configuración del servidor (requiere Administrar Servidor). Elige qué secciones aplicar.
+- `/import personal config`: configuración personal. Elige qué secciones detectadas aplicar.
+- `/import memories`: memorias del servidor (requiere Manage Server). Fusionar o reemplazar y asignar personas.
+- `/import personal memories`: recuerdos personales. Fusionar o reemplazar y asignar personas.
+- `/persona import`: restaurar una persona. También importa tarjetas SillyTavern PNG, tarjetas JSON y archivos `.charx` (consulte [Soporte SillyTavern](/es-419/features/integrations/sillytavern-support/)).
 
 ## Elimina tus datos
 
-Estos eliminan o restablecen datos de forma permanente: no se pueden deshacer:
+Estas acciones eliminan o restablecen permanentemente los datos almacenados:
 
-- `/personal memories`, `/memories`
-- `/reset config`: restablece la configuración del servidor en las 29 tablas de configuración a los valores predeterminados de la base de datos.
-  - Singletons restaurados a los valores predeterminados de DDL (18 tablas): configuraciones de chat, configuraciones de modelo, permisos de miembros, capacidades, embeds de aviso, configuraciones nsfw, configuraciones de voz, configuraciones de activación automática, configuraciones de alcance de canal, configuraciones de comportamiento de activación, configuraciones de generación de imágenes de NovelAI, configuraciones BYOK, configuraciones de memoria, configuraciones de memoria a corto plazo, configuraciones de bienvenida, configuraciones de cuota de imágenes, configuraciones de cuota de texto y configuraciones de cuota de video.
-  - Configuración preservada (dos conjuntos): los ID de modelo activos, las credenciales y los parámetros de endpoint personalizado en `server_model_configs` (`llm_id`, `embedding_model_id`, `diffusion_model_id`, `video_model_id`, `vision_llm_id`, `api_key`, `key_version`, `custom_endpoint_url`, `custom_model_name`, `custom_num_ctx`, `other_model_codename`, `other_model_capabilities`, `other_model_capabilities_fetched_at`), además de la identidad activa del modelo de difusión de NovelAI (`nai_diffusion_model_id` en `server_novelai_imagegen_configs`).
-  - Colecciones vaciadas (11 tablas): `server_auto_trigger_persona_overrides`, `stm_categories`, `random_triggers`, `channel_llm_overrides`, `channel_prompt_overrides`, `channel_context_notes`, `personalization_blacklist`, `persona_user_blocks`, `channel_whitelist`, `role_whitelist` y `channel_persona_whitelist`.
-  - Dominios preservados: Personas y ajustes de persona, memorias del servidor, memorias a corto plazo, expresiones (emojis y stickers), consumo de cuota registrado, configuraciones de proveedor guardadas e integraciones externas (Matrix y MCP).
-  - Contexto y permisos: Requiere el permiso Administrar servidor en servidores. Compatible en mensajes directos (DM) usando el snowflake del espacio de trabajo del usuario que invoca el comando.
-- `/reset personal config`: restablece la configuración del usuario y los focos personales de canal en todos los servidores a los valores predeterminados de la base de datos.
-  - Campos restablecidos: Restaura `users.language_pref` ('en-US') y `users.privacy_level` (0), restaura las 13 columnas de `user_personalization_configs` (apodo, opción de multiservidor, etiquetas de apariencia, URL de referencia de personaje, prompt de suplantación, DTM personal, modo de herramientas deliberado, desfase de zona horaria, excepciones de prefijo/sufijo, identidad de género, pronombres, estilo de trato) a los valores predeterminados del esquema, y elimina todas las `user_persona_naming_preferences`.
-  - Colecciones vaciadas: Elimina todos los `personal_spotlights` del usuario en todos los espacios de trabajo, con propagación en cascada a `personal_spotlight_personas`.
-  - Dominios personales preservados: Identidad de la cuenta de usuario, configuración regional de registro, memorias personales, configuraciones de proveedor guardadas (`user_saved_provider_configs`), endpoints personalizados y tareas/recordatorios programados.
-  - Contexto: Disponible para todos los usuarios tanto en servidores como en mensajes directos.
+- `/personal memories`: gestiona o elimina recuerdos personales.
+- `/memories`: administrar o eliminar memorias del servidor (requiere Administrar Servidor).
+- `/personal nuke`: elimina permanentemente todos los datos personales en los servidores.
+- `/nuke`: borra los datos del servidor, incluidas las expresiones personalizadas y las reglas de acceso de personas. Configura `preserve_personas: true` para conservar las personas y al mismo tiempo eliminar expresiones y medios personalizados.
+- `/reset config`: restaura la configuración del servidor a los valores predeterminados de la base de datos.
+  - **Conservas**: asignaciones de modelos activos, claves API, puntos finales personalizados, personas, memorias de servidor e integraciones.
+  - **Borrar**: anulaciones de canales, reglas de activación automática, listas negras de usuarios y listas blancas de canales.
+  - Requiere el permiso Administrar servidor en servidores; también disponible en DM.
+- `/reset personal config`: restaura la configuración del perfil personal y los focos del canal a los valores predeterminados.
+  - **Conserva**: identidad del usuario, recuerdos personales, claves API del proveedor guardadas, puntos finales personalizados y tareas programadas.
+  - **Se borra**: anulación de apodos, etiquetas de apariencia, pronombres, estilo de dirección y aspectos destacados del canal.
+  - Disponible para todos los usuarios en servidores y DM.
+
+Para obtener tablas de bases de datos exactas y listas de columnas conservadas, consulte [arquitectura de esquema de base de datos](/en/architecture/subsystems/database-schema/#reset-domain-classifications).
 
 ## Optar por no participar
 
-- `/personal config`: controla tu visibilidad ante ella, hasta llegar a la invisibilidad total (optar por no participar de las funciones de memoria por completo).
-- `/config` > Permisos: los administradores del servidor pueden desactivar el autoaprendizaje y otras funciones.
+- `/personal config`: controle su visibilidad, hasta la invisibilidad total (optando fuera del contexto de la memoria).
+- `/config` > `Permisos`: los administradores del servidor pueden desactivar las funciones de memoria y autoaprendizaje.
 
-Consulta [Memoria](/es-419/features/knowledge/memory/) para saber cómo funcionan las memorias día a día.
+Consulta [Memoria](/es-419/features/knowledge/memory/) para conocer la administración de la memoria diaria.

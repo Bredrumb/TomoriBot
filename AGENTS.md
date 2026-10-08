@@ -190,21 +190,30 @@ Fixes belong on `main` and flow forward.
 
 ## Documentation Maintenance
 
-When a change alters behavior, update docs in the same change:
+Update docs in the same change when an existing explanation becomes inaccurate or a change
+introduces a cross-component contract, constraint, or workflow readers need. Prefer revising existing
+text over appending; do not narrate implementation branches.
 
 1. Update the page that already owns the topic (behavior, flow, config, schema, constraints). Add a
    page only when no owner exists, and update `docs/README.md` when adding, removing, or renaming one.
 2. Docs describe current behavior. Roadmaps and refactor proposals belong in `plans/`; changelogs,
    progress reports, and summaries restating a page belong nowhere.
-3. Contributor guides are recipes: files to touch, types and limits to satisfy, commands to run. System flows
-   and invariants belong in `docs/en/architecture/`.
+3. Architecture pages explain system flows, ownership, and constraints that require reading across
+   components. Keep local algorithms, exhaustive branches, and copied field definitions in source; use
+   source pointers instead of duplicating them. Follow the scope and review budgets in
+   `docs/en/contributing/localization/docs-authoring.md` ("Architecture scope"). Every other folder
+   is written for its reader's task, plainly and concisely, keeping only
+   the details a reader needs to act. User-facing pages (`features/`, `introduction/`,
+   `meet-tomori/`) use everyday words. Self-hosting guides use plain words but keep every step,
+   command, and setting. Contributor guides are recipes: files to touch, types and limits to satisfy,
+   commands to run.
 4. A page centered on a cloud provider service goes under `docs/en/wiki/cloud/<provider>/` on
    `release`. `docs/en/self-hosting/` is for provider-agnostic hosting on the user's own machines.
 5. This repo is public and every page outside `docs/en/wiki/` is indexed. Guides use placeholders
    (`<gcp-project-id>`, `<resource-group>`); a literal value a reader would copy is a bug. Runbooks act
    on our production, so they go in `docs/en/wiki/` (hidden + `noindex`) and keep real names. Never
    write credentials, tenant IDs, or the production public IP into any page. Full rules:
-   `docs/en/contributing/localization/docs-authoring.md` ("Audience: Guide or Runbook").
+   `docs/en/contributing/localization/docs-authoring.md` ("Audience").
 
 ## Maintaining This File
 

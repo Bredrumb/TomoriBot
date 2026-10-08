@@ -17,11 +17,22 @@ Modal-opening reads have a two-second deadline to leave time for Discord acknowl
 Successful operations produce mutation receipts and invalidate caches after DB commit.
 `/expressions initialize` remains the automatic native classifier.
 
-The Customs category ends with a single-item Media Gallery for images, GIFs, and MP4s.
-Registered direct links use their validated URL after the SSRF gate runs again. Tenor share
-pages and other non-direct links show a localized link button, subject to Discord's 512-character
-button URL limit. The panel never downloads registered links for previews. Native categories
-keep their existing thumbnails.
+Custom media comes from exactly one link or one file. Links other than Discord attachment URLs are
+stored unfetched after `validateRemoteUrl` (HTTPS in production, no credentials, at most 2,000
+characters) and delivered verbatim as message content, so Discord renders whatever embed the link
+produces, ordinary web pages included. Discord attachment URLs expire, so they are downloaded and
+stored like uploads. Stored media is validated by content: PNG, JPEG (`.jpg` or `.jpeg`), WebP, GIF,
+or MP4 within 10 MiB and the interaction's attachment limit, with the declared MIME type and filename
+matching the bytes. MP4 needs H.264 video with 8-bit 4:2:0 pixels and optional AAC audio, and nothing
+is transcoded. Editing with both media fields blank keeps the current media. A replacement is
+prepared before the write and the old object is retired only after commit, so a failed replacement
+keeps the previous expression and media.
+
+The Customs category ends with a single-item Media Gallery for stored images, GIFs, and MP4s.
+Link expressions are saved unfetched, so their media type is unknown: after the SSRF gate runs
+again, they show a localized link button, subject to Discord's 512-character button URL limit.
+The panel never downloads registered links for previews. Native categories keep their existing
+thumbnails.
 
 Stored previews follow the character-reference attachment pattern and the generated-video
 Media Gallery layout. Expression storage has no public-media URL capability: local files and

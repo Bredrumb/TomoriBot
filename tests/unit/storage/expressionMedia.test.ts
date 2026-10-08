@@ -8,7 +8,6 @@ import ffmpeg from "ffmpeg-static";
 import type { APIAttachment } from "discord.js";
 import {
   EXPRESSION_MEDIA_MAX_BYTES,
-  isTenorShareUrl,
   prepareExpressionMedia,
   validateExpressionBytes,
 } from "@/utils/storage/expressionMedia";
@@ -148,13 +147,9 @@ describe("expression media validation and owned storage", () => {
       code: "files",
     });
     expect(await prepareExpressionMedia(1, id, "", [], true)).toBeNull();
-    expect(isTenorShareUrl(new URL("https://tenor.com/view/wave-gif-12345"))).toBe(true);
-    for (const url of [
-      "https://tenor.com/search/wave",
-      "https://tenor.com.evil.example/view/wave-12345",
-      "https://user:secret@tenor.com/view/wave-12345",
-    ])
-      expect(isTenorShareUrl(new URL(url))).toBe(false);
+    await expect(
+      prepareExpressionMedia(1, id, "https://user:secret@example.com/page", [], false),
+    ).rejects.toMatchObject({ code: "url" });
   });
   it("uses immutable keys, reads private bytes and rejects cross-owner references", async () => {
     const id = randomUUID();
@@ -172,10 +167,12 @@ describe("expression media validation and owned storage", () => {
       await deleteExpressionMedia(second, 1, id);
     }
   });
-  it("probes direct media, stores uploads and blocks unsafe redirect destinations", async () => {
+  it("keeps links unfetched, stores uploads and blocks unsafe redirect destinations", async () => {
+    let requests = 0;
     const server = Bun.serve({
       port: 0,
       fetch(request) {
+        requests++;
         if (new URL(request.url).pathname === "/redirect")
           return Response.redirect("http://169.254.169.254/latest/meta-data");
         return new Response(new Uint8Array(png), { headers: { "content-type": "image/png" } });
@@ -185,11 +182,17 @@ describe("expression media validation and owned storage", () => {
     let reference: string | null = null;
     try {
       const url = `http://localhost:${server.port}/image.png`;
-      expect(await prepareExpressionMedia(1, id, url, [], false)).toMatchObject({
-        source_kind: "link",
-        delivery_kind: "link",
-        storage_reference: null,
-      });
+      for (const link of [url, `http://localhost:${server.port}/hospital`])
+        expect(await prepareExpressionMedia(1, id, link, [], false)).toEqual({
+          source_kind: "link",
+          delivery_kind: "link",
+          original_link: link,
+          storage_reference: null,
+          mime_type: null,
+          extension: null,
+          byte_size: null,
+        });
+      expect(requests).toBe(0);
       const upload = await prepareExpressionMedia(
         1,
         id,

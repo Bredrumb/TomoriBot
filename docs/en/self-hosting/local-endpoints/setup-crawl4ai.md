@@ -3,17 +3,16 @@ title: "Setup: Crawl4AI"
 sidebar:
   order: 4
 ---
-# Setup: Crawl4AI
 
-The `fetch_url` tool uses the in-process `safe_http` engine by default. It can optionally try a browser-rendering local server in trusted development environments when you need rendered content for JS-heavy pages.
+Render JavaScript-heavy web pages into clean Markdown for TomoriBot using a local [Crawl4AI](https://github.com/unclecode/crawl4ai) server.
 
-Default engine order is `safe_http`. Because Crawl4AI follows redirects outside TomoriBot's guarded HTTP client, it is only admitted where private-network fetching is permitted. Outside production this is automatic (no configuration needed). In production it requires an explicit `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` opt-in, which is not recommended.
+The built-in `fetch_url` tool uses the lightweight `safe_http` engine by default. Crawl4AI adds an optional headless Playwright browser that executes client-side scripts and extracts page content before returning Markdown to the bot.
 
-Crawl4AI is a browser-rendered markdown server. It runs a Playwright-based headless browser and extracts LLM-friendly markdown server-side using its own content filters (no post-processing needed on TomoriBot's side).
+Because Crawl4AI follows redirects outside TomoriBot's guarded HTTP client, it is only admitted where private-network fetching is permitted. Outside production (`RUN_ENV` != `production`), private-network fetching is enabled automatically. In production environments, it requires setting `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`.
 
-Choose one Crawl4AI setup path:
+Choose a setup path:
 
-### A. Docker Compose (when TomoriBot runs in Docker)
+### Option A: Docker Compose (when TomoriBot runs in Docker)
 
 Use this path if you run TomoriBot with the repo's Docker Compose stack. First, set `CRAWL4AI_BASE_URL=http://crawl4ai:11235/` and `FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http` in `.env`. Outside production no private-network opt-in is needed; only add `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` if you run this stack with `RUN_ENV=production`.
 
@@ -33,11 +32,11 @@ If you also want SearXNG, chain the profiles:
 docker compose --profile searxng --profile fetch-crawl4ai up -d
 ```
 
-If you enable Crawl4AI API-token auth, set `CRAWL4AI_TOKEN` in `.env`; Compose passes it to the container as `CRAWL4AI_API_TOKEN`, and TomoriBot sends it as a bearer token.
+   If you enable Crawl4AI API-token auth, set `CRAWL4AI_TOKEN` in `.env`; Compose passes it to the container as `CRAWL4AI_API_TOKEN`, and TomoriBot sends it as a bearer token.
 
 ---
 
-### B. Standalone Docker (when running `bun run dev`)
+### Option B: Standalone Docker (when running `bun run dev`)
 
 First, set `CRAWL4AI_BASE_URL=http://localhost:11235/` and `FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http` in `.env` so the bot connects to the host-published container port. Outside production no private-network opt-in is needed; only add `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` if you run with `RUN_ENV=production`.
 
@@ -75,15 +74,15 @@ Then run `bun run dev` once the container is healthy (`docker ps` shows `(health
 
 ---
 
-### C. No Browser-Rendering Server
+### Option C: No browser-rendering server
 
 Leave `CRAWL4AI_BASE_URL` unset. The `fetch_url` tool uses the guarded `safe_http` engine.
 
 ---
 
-## Starting Order (Important)
+## Starting order
 
-TomoriBot probes server health on the first `fetch_url` call after startup and caches the result for 60 seconds. If the container isn't ready when that first probe fires, the bot treats it as unavailable for the next minute.
+TomoriBot probes server health on the first `fetch_url` call after startup and caches the result for 60 seconds. If the container is not ready when that first probe fires, the bot treats it as unavailable for the next minute.
 
 For standalone Docker, start your Crawl4AI container before starting TomoriBot. `bun run launch --crawl4ai` already does this for you.
 
@@ -112,13 +111,15 @@ Then start TomoriBot as normal. Restarting `bun run dev` resets the in-memory he
 
 ---
 
-## Cookie Injection (Authenticated Fetches: Optional)
+## Cookie injection
 
 Crawl4AI supports injecting browser-level cookies so the headless browser appears already logged in when fetching a page. This is useful for sites that require a session to view content (e.g. paywalled news, private forums, login-gated dashboards).
 
 The `safe_http` fallback does not support cookie injection. Cookies only apply when Crawl4AI is active.
 
-> Limitation: Cookie injection bypasses login walls but not bot fingerprinting. Sites with aggressive anti-bot detection (notably Twitter/X) detect headless Playwright via canvas/WebGL fingerprinting and serve empty pages even with valid session cookies. Cookie injection works well for sites that gate on authentication alone.
+:::note[Bot detection limits]
+Cookie injection bypasses login walls but not bot fingerprinting. Sites with aggressive anti-bot detection (notably Twitter/X) detect headless Playwright via canvas/WebGL fingerprinting and serve empty pages even with valid session cookies. Cookie injection works well for sites that gate on authentication alone.
+:::
 
 ### Getting your cookies
 
@@ -145,11 +146,13 @@ When this is set, `fetch_url` automatically switches from the `/md` endpoint to 
 | `domain` | No | Domain scope (e.g. `.x.com`). Recommended for correctness. |
 | `path` | No | Path scope. Defaults to `/` if omitted. |
 
-> Note: Cookie values are sensitive, so treat them like passwords. They grant full session access to your account. Do not commit `.env` to version control.
+:::caution[Protect session tokens]
+Cookie values are sensitive, so treat them like passwords. They grant full session access to your account. Do not commit `.env` to version control.
+:::
 
 ---
 
-## Engine Order & Env Vars
+## Engine order and environment variables
 
 | Variable | Default | Description |
 |---|---|---|

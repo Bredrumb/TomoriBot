@@ -21,6 +21,7 @@ import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
 import {
   type DeliberateToolIntentMatch,
+  getAutonomousDeliberateToolNames,
   getDeliberateToolIntentResult,
   getFollowUpToolIntentResult,
   getRecentToolAffordanceNames,
@@ -372,11 +373,11 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     }
   }
 
-  // Fail-closed gate: when deliberate-tool mode is active and the turn
-  // shows no explicit tool intent, suppress all tools for the turn. This is
-  // the universal "tools off unless asked" semantic from main. Otherwise,
-  // when intent is detected, surface a scoped allowlist for provider
-  // adapters to filter their tool exposure list.
+  if (deliberateToolModeActive && !turn.isDMChannel && !assets.isRpChannel && !turn.isUserImpersonation) {
+    deliberateToolAllowedNames.push(...getAutonomousDeliberateToolNames(turn.persona));
+  }
+
+  // Task tools require intent; expression tools and due maintenance can be admitted autonomously.
   const deliberateToolIntent =
     deliberateToolAllowedNames.length > 0 || (streamingContext.endTurnAfterTools?.length ?? 0) > 0;
   const toolsDisabledByDeliberateMode =

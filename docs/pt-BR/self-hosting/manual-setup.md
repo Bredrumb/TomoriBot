@@ -1,8 +1,8 @@
 ---
 title: "Configuração Manual"
-aiGenerated: true
 sidebar:
   order: 2
+aiGenerated: false
 ---
 
 :::note
@@ -30,21 +30,20 @@ bun install --frozen-lockfile
 
 ## 2. Configurar
 
-Crie seu arquivo de ambiente a partir do exemplo e preencha os valores obrigatórios:
+Crie seu arquivo de ambiente a partir do exemplo e preencha os valores necessários:
 
 ```sh
 cp .env.example .env
 ```
 
-Obrigatórios:
+Obrigatória:
 
-- `DISCORD_TOKEN`: o token do seu bot do Discord (ative as intents privilegiadas `GuildMembers`, `MessageContent` e `GuildPresences`).
-- `CRYPTO_SECRET`: uma chave de criptografia de 32 caracteres (usada para criptografar as chaves de API armazenadas).
-- Conexão com o PostgreSQL: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`,
-  `POSTGRES_PASSWORD`, `POSTGRES_DB`.
+- `DISCORD_TOKEN`: seu token de bot Discord (habilite as intenções privilegiadas `GuildMembers`, `MessageContent` e `GuildPresences`).
+- `CRYPTO_SECRET`: uma chave de criptografia de 32 caracteres (usada para criptografar chaves API armazenadas).
+- Conexão PostgreSQL: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`.
 
-:::note[Sem PostgreSQL nativo?]
-Execute apenas o banco de dados em um contêiner e, em seguida, aponte os valores `POSTGRES_*` para ele:
+:::note[No native PostgreSQL?]
+Execute apenas o banco de dados em um contêiner e aponte os valores `POSTGRES_*` para ele:
 
 ```sh
 docker run -d --name tomori-db \
@@ -52,15 +51,12 @@ docker run -d --name tomori-db \
   -p 5432:5432 pgvector/pgvector:pg16
 ```
 
-Então defina `POSTGRES_HOST=localhost`, `POSTGRES_PORT=5432`, e o usuário/senha/db acima.
-A imagem `pgvector/pgvector` traz a extensão RAG pré-instalada; troque-a por `postgres:16`
-se você não precisa de memória de documentos/RAG. Isso executa apenas o banco de dados no Docker e o bot
-ainda é executado no Bun do host. Para um bot e banco de dados totalmente em contêineres, use
-o [Docker Compose](/pt-BR/self-hosting/docker-compose/).
+Em seguida, defina `POSTGRES_HOST=localhost`, `POSTGRES_PORT=5432` e o usuário/senha/db acima. A imagem `pgvector/pgvector` vem com a extensão RAG pré-instalada; troque-o por `postgres:16` se você não precisar de memória de documento/RAG. Isso executa apenas o banco de dados em Docker e o bot ainda é executado no host Bun. Para um bot e banco de dados totalmente conteinerizados, use [Docker Compose](/pt-BR/self-hosting/docker-compose/).
 :::
 
-Ajustes opcionais ficam em `.env.optional.example`. Copie quaisquer valores que você queira
-personalizar (limites, tempos limite, alternância de recursos, URLs de servidores locais, etc.).
+O ajuste opcional reside em `.env.optional.example`. Copie quaisquer valores que você deseja personalizar (limites, tempos limite, alternância de recursos, URLs do servidor local, etc.).
+
+A expressão personalizada carrega o padrão para arquivos locais em `data/custom-expressions/`. Mantenha esse diretório em armazenamento persistente. `EXPRESSION_STORAGE_BACKEND` aceita `local`, `gcs` ou `s3`. Os back-ends em nuvem exigem `EXPRESSION_STORAGE_BUCKET` e as credenciais SDK correspondentes. S3 também usa `AWS_REGION` (padrão `us-east-1`) e `S3_ENDPOINT` opcional. GCS usa credenciais padrão do aplicativo. As expressões usam sua própria configuração de intervalo; as configurações de armazenamento de avatar não selecionam um intervalo de expressão. Os objetos permanecem legíveis por meio do SDK e são anexados como bytes, portanto, um URL de mídia veiculado publicamente é desnecessário. Preserve chaves de back-end, bucket e objeto ao restaurar referências existentes.
 
 ## 3. Executar
 
@@ -78,7 +74,7 @@ Use `bun run launch` em vez de `bun run dev` se você quiser que servidores loca
 
 ```sh
 bun run launch --searxng --crawl4ai
-bun run launch --help        # ver todas as flags
+bun run launch --help        # see all flags
 ```
 
 ## Extras opcionais (a "Instalação Completa" manual)
@@ -95,7 +91,7 @@ precisa da extensão [pgvector](https://github.com/pgvector/pgvector). Instale-a
 versão principal do PostgreSQL:
 
 ```sh
-# Debian/Ubuntu, ex. para PostgreSQL 16
+# Debian/Ubuntu, e.g. for PostgreSQL 16
 sudo apt-get install -y postgresql-16-pgvector
 ```
 
@@ -111,10 +107,10 @@ caminho mais simples no Windows é executar o banco de dados no contêiner `pgve
 :::
 
 ```sh
-# psql Nativo / host (substitua pelos seus próprios POSTGRES_USER e POSTGRES_DB):
+# Native / host psql (substitute your own POSTGRES_USER and POSTGRES_DB):
 psql -h localhost -p 5432 -U tomori -d tomodb
 
-# Ou, se o banco de dados rodar no contêiner Docker do passo 2:
+# Or, if the database runs in the Docker container from step 2:
 docker exec -it tomori-db psql -U tomori -d tomori
 ```
 
@@ -148,8 +144,8 @@ Habilite a extensão no `postgresql.conf`: anexe a `shared_preload_libraries` se
 listar outras bibliotecas:
 
 ```ini
-shared_preload_libraries = 'pg_cron'   # ex. 'pg_stat_statements,pg_cron'
-cron.database_name = 'seu_bd'
+shared_preload_libraries = 'pg_cron'   # e.g. 'pg_stat_statements,pg_cron'
+cron.database_name = 'your_dbname'
 ```
 
 Reinicie o PostgreSQL, depois:

@@ -2,6 +2,8 @@
  * Enum of 28 emotion categories for emoji and sticker classification
  * Used by /expressions initialize command
  * to categorize emojis/stickers based on their visual emotional expression
+ * All members are consumed dynamically by schemas and classifier prompts.
+ * @public
  */
 export enum EmotionKey {
   ADMIRATION = "admiration",

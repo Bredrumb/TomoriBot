@@ -8,6 +8,7 @@ import {
   isContextLengthError,
   isCreditAffordabilityError,
   isNvidiaCredentialRejected,
+  isOperatorActionableProviderError,
   isProviderModelError,
 } from "@/utils/provider/providerErrorClassification";
 import { localizer } from "@/utils/text/localizer";
@@ -27,7 +28,30 @@ export class StreamErrorUi {
         reason: providerError.type || "unknown",
       });
 
-    log.warn(`Stream error: ${errorMessage}`, error);
+    if (isOperatorActionableProviderError(providerError)) {
+      const providerName = provider.getProviderInfo().name;
+      // Not awaited: an unacknowledged initialInteraction is replied to below. The raw provider
+      // error is the payload because errorMessage is localized for the guild, not the operator.
+      void log.error(
+        `Provider stream error (${providerName} ${providerError.type}/${providerError.code ?? "unknown"}): ${providerError.message}`,
+        providerError.originalError ?? providerError,
+        {
+          serverId: context.tomoriState.server_id,
+          userId: context.triggererUserId ?? null,
+          errorType: "ProviderStreamError",
+          metadata: {
+            // A personal route ran on the user's own key and endpoint, not the server's provider.
+            textCredentialSource: context.textCredentialSource ?? "server",
+            provider: providerName,
+            providerErrorType: providerError.type,
+            providerErrorCode: providerError.code ?? "unknown",
+            channelId: context.channel.id,
+          },
+        },
+      );
+    } else {
+      log.warn(`Stream error: ${errorMessage}`, error);
+    }
 
     if (context.initialInteraction) {
       if (!context.initialInteraction.replied && !context.initialInteraction.deferred) {

@@ -105,7 +105,10 @@ billed separately, so the sum is billing-accurate, and falls back to the charact
   truncated to Discord's embed description limit. This means providers that map known codes to
   hardcoded locale strings (e.g. OpenRouter) no longer hide the actual provider message; the detail
   is de-duped so a provider that already appended it is not echoed twice. Recognized `model_error`
-  failures additionally get a dedicated "Model Configuration Error" title. This is the sole
+  failures additionally get a dedicated "Model Configuration Error" title. The failure is logged
+  at `error` level (and so reaches `error_logs`) only when `isOperatorActionableProviderError`
+  holds; every other provider failure logs at `warn`, which production filters out, and is
+  counted by the `provider_error` stat instead. This is the sole
   embed send path for `ProviderError` types: the downstream response sink (`emitStreamResult` in
   `responseEmitter.ts`) deliberately skips the generic fallback embed when `result.data` is a
   `ProviderError`, to avoid double-sending.

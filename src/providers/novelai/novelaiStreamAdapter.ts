@@ -20,6 +20,7 @@
 import type { FunctionCall, ThoughtLogEntry } from "@/types/provider/interfaces";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { log, sanitizeLogPayload } from "@/utils/misc/logger";
+import { isProviderTimeoutMessage } from "@/utils/provider/providerErrorClassification";
 import { localizer } from "@/utils/text/localizer";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { findMarkdownCodeRanges } from "@/utils/text/processors/llmOutputProcessor";
@@ -2067,7 +2068,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     } else if (statusCode === 503) {
       errorType = "provider_overloaded";
       retryable = true;
-    } else if (statusCode === 504 || errorMessage.toLowerCase().includes("timeout")) {
+    } else if (statusCode === 504 || isProviderTimeoutMessage(errorMessage)) {
       errorType = "timeout";
       retryable = true;
     } else {

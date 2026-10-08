@@ -4,37 +4,36 @@ sidebar:
   order: 5
 ---
 
-自架執行個體的日常運作：維護指令稿、如何更新，以及如何備份與還原你的資料庫。這些都是主機端操作，你要從 shell 執行，不是從 Discord。Discord 內、以使用者為單位的匯出、匯入與刪除流程，請改看
-[資料處理](/zh-TW/features/knowledge/data-handling/)。
+使用CLI維護腳本來管理你的自架TomoriBot實例，以更新程式碼、備份或還原資料、輪換加密金鑰以及檢查環境變數。從主機終端機或Docker環境執行這些命令。關於Discord內的資料匯出和刪除，請參閱[資料處理](/zh-TW/features/knowledge/data-handling/)。
 
-如果你正準備 `git pull` 新版本，請先讀[安全移轉](/zh-TW/self-hosting/safe-migration/)，它涵蓋了在開機時執行的移轉程式碰觸你的結構描述之前先備份。
+如果你使用`git pull`進行更新，請先查看 [安全遷移](/zh-TW/self-hosting/safe-migration/) 以在啟動遷移運行程式應用架構變更之前建立備份。
 
 ## 維護指令稿
 
 | 指令 | 說明 |
 |---|---|
-| `bun run setup` | 開啟設定精靈，進行基礎安裝與選用模組。 |
-| `bun run update` | 先備份，再拉取最新程式碼並安裝相依套件。 |
-| `bun run backup` | 在 `backups/` 建立包含你的資料庫傾印與 `.env` 的套件，裡面有你所有的資料。 |
-| `bun run restore-backup` | 從套件還原 `.env` 與資料庫（`--latest` 或 `--from backups/<dir>`）。 |
-| `bun run backup:personas` | 只匯出所有伺服器上的人格（含伺服器記憶）；用 `/persona import` 重新匯入。 |
-| `bun run nuke-db` | 刪除所有資料表（之後啟動 bot 即可重新初始化）。 |
-| `bun run purge-commands` | 清除所有已註冊的 Discord 斜線指令。 |
-| `bun run rotate-keys` | 把所有加密欄位重新加密到目前的金鑰版本。 |
+| `bun run setup` | 開啟設定精靈，進行基礎安裝與選用模組。|
+| `bun run update` | 先備份，再拉取最新程式碼並安裝相依套件。|
+| `bun run backup` | 在`backups/`建立包含你的資料庫傾印與`.env`的套件，裡面有你所有的資料。|
+| `bun run restore-backup` | 從套件還原`.env`與資料庫（`--latest`或`--from backups/<dir>`）。|
+| `bun run backup:personas` | 只匯出所有伺服器上的人格（含伺服器記憶）；用`/persona import`重新匯入。|
+| `bun run nuke-db` | 刪除所有資料表（之後啟動bot即可重新初始化）。|
+| `bun run purge-commands` | 清除所有已註冊的Discord斜線指令。|
+| `bun run rotate-keys` | 把所有加密欄位重新加密到目前的金鑰版本。|
 
-`bun run backup` 與 `bun run update` 需要在 PATH 中有 PostgreSQL 用戶端工具（`pg_dump`、`psql`）。
+`bun run backup`與`bun run update`需要在PATH中有PostgreSQL用戶端工具（`pg_dump`、`psql`）。
 
 ## 更新
 
-先停止運行中的 bot，再使用備份優先的更新工具：
+首先停止正在運行的機器人，然後使用備份優先更新程式：
 
 ```sh
 bun run update
 ```
 
-它會依序執行 `bun run backup`、`git pull --rebase --autostash`、`bun install --frozen-lockfile`。備份套件會寫入
-`backups/`，內容同時包含資料庫傾印與 `.env`。加上
-`--skip-backup` 可跳過更新前的備份。手動備援流程：
+它運行`bun run backup`，然後運行`git pull --rebase --autostash`，最後運行`bun install --frozen-lockfile`。備份包保存到`backups/`，並包括資料庫轉儲和`.env`。新增`--skip-backup`以繞過更新前備份。
+
+手動回退：
 
 ```sh
 bun run backup
@@ -42,21 +41,20 @@ git pull --rebase --autostash
 bun install --frozen-lockfile
 ```
 
-從 `dist/` 執行嗎？請用 `bun run update --build`。使用 Docker Compose 嗎？請用
-`bun run update --docker`。
+如果你從`dist/`執行預編譯程式碼，請使用`bun run update --build`。對於Docker Compose部署，請使用`bun run update --docker`；更新程式首先執行`docker compose run --rm tomoribot bun run backup`。
 
 ### 已移除的環境變數
 
-這些變數原本用來調整內部行為：文字與脈絡啟發式、Discord 元件的存活時間、快取的存活時間、指令冷卻、結構上限，以及供應商的取樣預設值。現在它們在程式碼裡固定為原本的預設值，所以升級後 `.env` 裡的舊值會被忽略。`bun run env-doctor` 會把 `.env` 裡殘留的這類變數列為未讀取，你可以刪掉它們。取決於你的主機、網路、憑證或費用的設定仍然是環境變數。
+這些變數先前配置了內部文字啟發式、Discord元件逾時、快取持續時間、命令冷卻時間和取樣預設值。現在它們已在程式碼中修復為先前的預設值，因此升級後`.env`中的舊值將被忽略。執行`bun run env-doctor`以列出`.env`中你可以安全刪除的所有剩餘變數。取決於你的主機、網路、憑證或成本的設定仍然是環境變數。
 
-指令冷卻是「固定」的例外：依類別區分的 `COOLDOWN_*` 和 `DEFAULT_COMMAND_COOLDOWN` 被一個倍率 `COMMAND_COOLDOWN_SCALE` 取代（預設 `1`，`0` 代表關閉冷卻）。想保留調整過的冷卻，請把舊值除以下表中的固定值：`COOLDOWN_PERSONA=1000` 會變成 `COMMAND_COOLDOWN_SCALE=0.1`。
+命令冷卻時間現在使用單一乘數`COMMAND_COOLDOWN_SCALE`（預設`1`；`0`停用冷卻時間），取代單一`COOLDOWN_*`變數和`DEFAULT_COMMAND_COOLDOWN`。若要保留自訂冷卻時間，請將舊值除以先前的預設值：例如，`COOLDOWN_PERSONA=1000`變為`COMMAND_COOLDOWN_SCALE=0.1`。
 
 <details>
-<summary>全部 177 個已移除的變數及其固定值</summary>
+<summary>所有177個已刪除的變數及其固定值</summary>
 
-| 變數 | 固定值 |
+| 多變的 | 固定值 |
 |---|---|
-| `ALLOW_PERSONAL_LOCAL_ENDPOINTS` | 無（從未被讀取） |
+| `ALLOW_PERSONAL_LOCAL_ENDPOINTS` | 無（從未讀過） |
 | `BLOCK_USER_MAX_DURATION_HOURS` | `168` |
 | `BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS` | `5` |
 | `BOT_GENERATE_IMAGE_HISTORY_LIMIT` | `24` |
@@ -66,21 +64,21 @@ bun install --frozen-lockfile
 | `BOT_MAX_FUNCTION_CALL_ITERATIONS` | `100` |
 | `BOT_MAX_STOP_STRINGS_PER_SERVER` | `40` |
 | `BOT_MAX_STOP_STRING_LENGTH` | `200` |
-| `BRAVE_IMAGE_COMPRESSION_TARGET_MB` | 比 `BRAVE_IMAGE_DISCORD_LIMIT_MB` 小 1（預設為 `7`） |
+| `BRAVE_IMAGE_COMPRESSION_TARGET_MB` | `BRAVE_IMAGE_DISCORD_LIMIT_MB`以下之一（預設為`7`） |
 | `CHANNEL_WHITELIST_CACHE_TTL_MINUTES` | `5` |
 | `CONDITIONING_CONTEXT_MAX_GROUPS_PER_TYPE` | `10` |
 | `CONDITIONING_REASON_MAX_LENGTH` | `250` |
-| `COOLDOWN_CONDITIONING` | `3000`，再乘以 `COMMAND_COOLDOWN_SCALE` |
-| `COOLDOWN_CONFIG` | `3000`，再乘以 `COMMAND_COOLDOWN_SCALE` |
-| `COOLDOWN_FORGET` | `3000`，再乘以 `COMMAND_COOLDOWN_SCALE` |
-| `COOLDOWN_MEMORY` | `3000`，再乘以 `COMMAND_COOLDOWN_SCALE` |
-| `COOLDOWN_PERSONA` | `10000`，再乘以 `COMMAND_COOLDOWN_SCALE` |
-| `COOLDOWN_PERSONAL` | `3000`，再乘以 `COMMAND_COOLDOWN_SCALE` |
-| `COOLDOWN_SERVER` | `3000`，再乘以 `COMMAND_COOLDOWN_SCALE` |
-| `COOLDOWN_TEACH` | `3000`，再乘以 `COMMAND_COOLDOWN_SCALE` |
+| `COOLDOWN_CONDITIONING` | `3000`，按`COMMAND_COOLDOWN_SCALE`縮放 |
+| `COOLDOWN_CONFIG` | `3000`，按`COMMAND_COOLDOWN_SCALE`縮放 |
+| `COOLDOWN_FORGET` | `3000`，按`COMMAND_COOLDOWN_SCALE`縮放 |
+| `COOLDOWN_MEMORY` | `3000`，按`COMMAND_COOLDOWN_SCALE`縮放 |
+| `COOLDOWN_PERSONA` | `10000`，按`COMMAND_COOLDOWN_SCALE`縮放 |
+| `COOLDOWN_PERSONAL` | `3000`，按`COMMAND_COOLDOWN_SCALE`縮放 |
+| `COOLDOWN_SERVER` | `3000`，按`COMMAND_COOLDOWN_SCALE`縮放 |
+| `COOLDOWN_TEACH` | `3000`，按`COMMAND_COOLDOWN_SCALE`縮放 |
 | `DEEPSEEK_EXPRESSION_BATCH_SIZE` | `20` |
-| `DEFAULT_COMMAND_COOLDOWN` | `1600`，再乘以 `COMMAND_COOLDOWN_SCALE` |
-| `DELIBERATE_TOOL_CONTEXT_TURNS` | `4`；伺服器仍可在 `/config` 中修改（實驗性行為下的工具脈絡） |
+| `DEFAULT_COMMAND_COOLDOWN` | `1600`，按`COMMAND_COOLDOWN_SCALE`縮放 |
+| `DELIBERATE_TOOL_CONTEXT_TURNS` | `4`;伺服器仍然可以在`/config`中更改它（實驗行為下的工具上下文） |
 | `DISCORD_TYPING_KEEPALIVE_INTERVAL_MS` | `8000` |
 | `DOCUMENT_CHUNK_OVERLAP` | `200` |
 | `DOCUMENT_CHUNK_SIZE` | `1000` |
@@ -139,7 +137,7 @@ bun install --frozen-lockfile
 | `MEDIA_SIZE_LIMIT_BYTES` | `1048576` |
 | `MEMORY_EXPAND_BUTTON_TIMEOUT_MS` | `86400000` |
 | `MEMORY_NOTICE_PREVIEW_LIMIT` | `600` |
-| `NAI_CFG_RESCALE` | `0.0`；伺服器仍可在 `/config` 中修改（NovelAI 參數） |
+| `NAI_CFG_RESCALE` | `0.0`;伺服器仍然可以在`/config`（NovelAI圖像設定）中更改它 |
 | `NAI_CHAR_REF_DESCRIPTION` | `character&style` |
 | `NAI_CHAR_REF_INFO_EXTRACTED` | `1.0` |
 | `NAI_CHAR_REF_SECONDARY_STRENGTH` | `0.0` |
@@ -147,10 +145,10 @@ bun install --frozen-lockfile
 | `NAI_GLM_CHARS_PER_TOKEN` | `2.5` |
 | `NAI_GLM_CONTEXT_LIMIT` | `12288` |
 | `NAI_IMAGE_NEGATIVE_PROMPT` | 內建文字 |
-| `NAI_IMAGE_NOISE_SCHEDULE` | `karras`；伺服器仍可在 `/config` 中修改（NovelAI 參數） |
-| `NAI_IMAGE_SAMPLER` | `k_euler_ancestral`；伺服器仍可在 `/config` 中修改（NovelAI 參數） |
-| `NAI_IMAGE_SCALE` | `5`；伺服器仍可在 `/config` 中修改（NovelAI 參數） |
-| `NAI_IMAGE_STEPS` | `23`；伺服器仍可在 `/config` 中修改（NovelAI 參數） |
+| `NAI_IMAGE_NOISE_SCHEDULE` | `karras`;伺服器仍然可以在`/config`（NovelAI圖像設定）中更改它 |
+| `NAI_IMAGE_SAMPLER` | `k_euler_ancestral`;伺服器仍然可以在`/config`（NovelAI圖像設定）中更改它 |
+| `NAI_IMAGE_SCALE` | `5`;伺服器仍然可以在`/config`（NovelAI圖像設定）中更改它 |
+| `NAI_IMAGE_STEPS` | `23`;伺服器仍然可以在`/config`（NovelAI圖像設定）中更改它 |
 | `NAI_INPAINT_PADDING` | `0.15` |
 | `NAI_INPAINT_STRENGTH` | `1.0` |
 | `NAI_KAYRA_CHARS_PER_TOKEN` | `3.5` |
@@ -191,7 +189,7 @@ bun install --frozen-lockfile
 | `SCHEDULED_WORK_RECONCILE_INTERVAL_MS` | `60000` |
 | `SEND_FAILURE_RETRY_MINUTES` | `15` |
 | `SETUP_DRAFT_MAX_ENTRIES` | `200` |
-| `SHORT_TERM_MEMORY_DEFAULT_CRUDE_MESSAGE_COUNT` | `6`；伺服器仍可在 `/config` 中修改（短期記憶參數） |
+| `SHORT_TERM_MEMORY_DEFAULT_CRUDE_MESSAGE_COUNT` | `6`;伺服器仍然可以在`/config`（短期記憶體設定）中更改它 |
 | `SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL` | `10` |
 | `SHORT_TERM_MEMORY_MAX_OTHER_CHANNELS` | `3` |
 | `SHORT_TERM_MEMORY_MAX_SUMMARY_LENGTH` | `1500` |
@@ -203,7 +201,7 @@ bun install --frozen-lockfile
 | `STATS_CARD_THEME_BG` | `#1d100e` |
 | `STATS_CARD_THEME_SURFACE` | `#2c1815` |
 | `STATS_CARD_W` | `1080` |
-| `STATS_DASHBOARD_TIMEOUT_MS` | 無（從未被讀取） |
+| `STATS_DASHBOARD_TIMEOUT_MS` | 無（從未讀過） |
 | `STAT_FLUSH_INTERVAL_MS` | `5000` |
 | `STAT_FLUSH_MAX_BUFFER` | `1000` |
 | `STM_FRESH_INJECTION_DEPTH` | `2` |
@@ -213,8 +211,8 @@ bun install --frozen-lockfile
 | `ST_PRESET_CACHE_TTL_MINUTES` | `10` |
 | `SYSPROMPT_SHOW_MAX_PREVIEW` | `3800` |
 | `TASK_EXPAND_BUTTON_TIMEOUT_MS` | `86400000` |
-| `TENOR_FETCH_TIMEOUT_MS` | 無（從未被讀取） |
-| `TEST_POSTGRES_DB` | 無（從未被讀取） |
+| `TENOR_FETCH_TIMEOUT_MS` | 無（從未讀過） |
+| `TEST_POSTGRES_DB` | 無（從未讀過） |
 | `THINKING_LEVEL_BUDGET_HIGH_TOKENS` | `8192` |
 | `THINKING_LEVEL_BUDGET_LOW_TOKENS` | `1024` |
 | `THINKING_LEVEL_BUDGET_MEDIUM_TOKENS` | `4096` |
@@ -236,78 +234,77 @@ bun install --frozen-lockfile
 
 </details>
 
-### 已移除的 TTS 本機伺服器變數
+### 已移除的TTS本機伺服器變數
 
-`servers/tts/` 底下的 TTS 本機伺服器不再有共用的後備值、依引擎設定的上限與驗證設定。`.env` 或 shell 裡的舊值會被忽略，所以請留意下面那些會改變行為的列，而不是只把它當成重複一次預設值。
+`servers/tts/`下的TTS本機伺服器不再使用共用連接埠回退、每引擎限製或驗證設定。`.env`或shell中的舊設定將被忽略：
 
-- 連接埠： `TOMORI_TTS_PORT` 已移除，因為 `.env` 裡的一個值會讓所有啟動的伺服器使用同一個連接埠。現在每個引擎讀取自己的變數：`CHATTERBOX_PORT`（8011）、`QWEN3TTS_PORT`（8012，語音設計模式下為 8014）、`IRODORI_TTS_PORT`（8013）、`FISH_S2_PORT`（8015）、`VOXCPM2_PORT`（8016）、`COSYVOICE3_PORT`（8017）和 `MOSS_TTS_PORT`（8018）。
-- 驗證： 伺服器不再檢查 bearer 權杖，也不再拒絕綁定到非迴路位址。如果你設定過 `FISH_S2_API_KEY`、`VOXCPM2_API_KEY`、`TOMORI_TTS_API_KEY` 或 `COSYVOICE3_BEARER_TOKEN`，端點現在不帶它們也會接受請求。綁定到迴路位址以外之前，請先讀[網路存取](/zh-TW/self-hosting/local-endpoints/text-to-speech/#network-access)。
-- 安裝腳本固定的版本： Fish Speech 執行環境的提交，以及 CosyVoice 執行環境與模型的修訂，都固定在安裝腳本裡。要更新它們，就得改腳本裡固定的版本。
+- **連接埠：**`TOMORI_TTS_PORT`已移除，因為單一共用變數會讓所有啟動的伺服器綁定同一個連接埠。每個引擎改用各自的變數：`CHATTERBOX_PORT`（8011）、`QWEN3TTS_PORT`（8012，語音設計模式為8014）、`IRODORI_TTS_PORT`（8013）、`FISH_S2_PORT`（8015）、`VOXCPM2_PORT`（8016）、`COSYVOICE3_PORT`（8017）及`MOSS_TTS_PORT`（8018）。
+- **身份驗證：**本機伺服器不再驗證承載令牌或限制遠端網路綁定。如果你之前設定了`FISH_S2_API_KEY`、`VOXCPM2_API_KEY`、`TOMORI_TTS_API_KEY`或`COSYVOICE3_BEARER_TOKEN`，則端點現在無需憑證即可接受請求。在綁定環回之前檢查[網路存取](/zh-TW/self-hosting/local-endpoints/text-to-speech/#network-access)。
+- **安裝程式固定：** Fish Speech和CosyVoice的提交雜湊值和模型修訂固定在安裝程式腳本中。更新它們需要編輯每個腳本中的固定值。
 
 <details>
-<summary>全部已移除的 TTS 本機伺服器變數</summary>
+<summary>全部刪除TTS本機伺服器變數</summary>
 
-| 變數 | 現況 |
+| 多變的 | 現在 |
 |---|---|
-| `COSYVOICE3_ALLOW_REMOTE_BIND` | 已移除；`TOMORI_TTS_HOST` 可填任意值 |
-| `COSYVOICE3_BEARER_TOKEN` | 已移除；不再驗證 |
+| `COSYVOICE3_ALLOW_REMOTE_BIND` | 刪除；接受任何`TOMORI_TTS_HOST` |
+| `COSYVOICE3_BEARER_TOKEN` | 刪除；沒有認證 |
 | `COSYVOICE3_MAX_REF_AUDIO_BYTES` | `26214400` |
 | `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` |
 | `COSYVOICE3_MODEL_ID` | `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` |
-| `COSYVOICE3_MODEL_REVISION` | 固定在安裝腳本裡 |
-| `COSYVOICE3_RUNTIME_COMMIT` | 固定在安裝腳本裡 |
+| `COSYVOICE3_MODEL_REVISION` | 固定在安裝程序中 |
+| `COSYVOICE3_RUNTIME_COMMIT` | 固定在安裝程序中 |
 | `COSYVOICE3_RUNTIME_DIR` | `servers/tts/cosyvoice3/CosyVoice` |
 | `COSYVOICE3_RUNTIME_REPO` | `https://github.com/QwenAudio/CosyVoice.git` |
-| `COSYVOICE3_UPDATE` | 已移除；重新執行會簽出安裝腳本固定的版本 |
-| `FISH_S2_ALLOW_INSECURE_REMOTE` | 已移除；`TOMORI_TTS_HOST` 可填任意值 |
-| `FISH_S2_API_KEY` | 已移除；不再驗證 |
-| `FISH_S2_LAUNCH_TIMEOUT_MS` | 改用 `TOMORI_TTS_STARTUP_TIMEOUT_MS`（`300000`） |
+| `COSYVOICE3_UPDATE` | 刪除；重新執行檢查安裝程式的引腳 |
+| `FISH_S2_ALLOW_INSECURE_REMOTE` | 刪除；接受任何`TOMORI_TTS_HOST` |
+| `FISH_S2_API_KEY` | 刪除；沒有認證 |
+| `FISH_S2_LAUNCH_TIMEOUT_MS` | `TOMORI_TTS_STARTUP_TIMEOUT_MS`適用（`300000`） |
 | `FISH_S2_MAX_REF_AUDIO_BYTES` | `10485760` |
-| `FISH_S2_RUNTIME_REF` | 固定在安裝腳本裡 |
+| `FISH_S2_RUNTIME_REF` | 固定在安裝程序中 |
 | `FISH_S2_RUNTIME_REPOSITORY` | `https://github.com/Imagilux/fish-speech.git` |
 | `FISH_S2_STARTUP_TIMEOUT_SECONDS` | `180` |
 | `FISH_S2_SYNTHESIS_TIMEOUT_SECONDS` | `1800` |
-| `FISH_S2_UPDATE` | 已移除；重新執行會簽出安裝腳本固定的版本並重新整理模型 |
-| `FISH_S2_UPDATE_MODEL_REVISION` | 改用 `FISH_S2_MODEL_REVISION` |
-| `FISH_S2_UPDATE_REF` | 固定在安裝腳本裡 |
+| `FISH_S2_UPDATE` | 刪除；重新執行檢查安裝程式的PIN並刷新模型 |
+| `FISH_S2_UPDATE_MODEL_REVISION` | 使用`FISH_S2_MODEL_REVISION` |
+| `FISH_S2_UPDATE_REF` | 固定在安裝程序中 |
 | `FISH_S2_UPSTREAM_HOST` | `127.0.0.1` |
 | `FISH_SPEECH_DIR` | `servers/tts/fishs2/fish-speech` |
 | `MOSS_TTS_MAX_REF_AUDIO_BYTES` | `10485760` |
-| `TOMORI_TTS_ALLOW_REMOTE_BIND` | 已移除；`TOMORI_TTS_HOST` 可填任意值 |
-| `TOMORI_TTS_API_KEY` | 已移除；不再驗證 |
-| `TOMORI_TTS_MAX_REF_AUDIO_BYTES` | `10485760`（Fish） |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000`（Irodori-TTS 為 `1000`） |
-| `TOMORI_TTS_PORT` | 各引擎自己的連接埠變數 |
-| `TTS_CLONE_TIMEOUT_MS` | 改用 `TTS_SYNTHESIZE_TIMEOUT_MS` |
-| `VOXCPM2_API_KEY` | 已移除；不再驗證 |
+| `TOMORI_TTS_ALLOW_REMOTE_BIND` | 刪除；接受任何`TOMORI_TTS_HOST` |
+| `TOMORI_TTS_API_KEY` | 刪除；沒有認證 |
+| `TOMORI_TTS_MAX_REF_AUDIO_BYTES` | `10485760`（魚） |
+| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000`（`1000`為Irodori-TTS） |
+| `TOMORI_TTS_PORT` | 引擎自己的連接埠變量 |
+| `TTS_CLONE_TIMEOUT_MS` | 使用`TTS_SYNTHESIZE_TIMEOUT_MS` |
+| `VOXCPM2_API_KEY` | 刪除；沒有認證 |
 | `VOXCPM2_MAX_REF_AUDIO_BYTES` | `10485760` |
 
 </details>
 
-## 備份與還原
+## 備份和復原
 
-`bun run backup` 會在 `backups/`（或你在 `.env` 覆寫的 `TOMORI_BACKUP_DIR`）建立一個帶時間戳的套件，內容包含你整個 PostgreSQL 資料庫加上 `.env`。用下列指令還原最新的套件：
+`bun run backup`在`backups/`（或你的`TOMORI_BACKUP_DIR`，如果在`.env`中被覆蓋）中建立一個帶有時間戳記的包，其中包含整個PostgreSQL資料庫以及`.env`。使用以下命令恢復最新的捆綁包：
 
 ```sh
 bun run restore-backup --latest
 ```
 
-或還原指定的套件：
+或恢復特定的包：
 
 ```sh
 bun run restore-backup --from backups/backup_2024-01-15_14-30-45
 ```
 
-`bun run backup:personas` 是範圍更窄的匯出，只含人格預設集與每個人格的伺服器記憶，涵蓋所有伺服器。它必須透過 `/persona import`
-手動重新匯入，而且不能搭配 `restore-backup` 使用（那會造成主鍵衝突）。
+`bun run backup:personas`是一個較窄的導出：僅限人格預設和每個人格伺服器內存，跨所有伺服器。它必須透過`/persona import`手動重新匯入，並且不能與`restore-backup`一起使用（這會導致主鍵衝突）。
 
-TomoriBot 在非正式環境也會進行自動啟動備份，而完整還原需要目標資料庫上已有 `pgvector` 擴充功能。這兩件事都詳述於[安全移轉](/zh-TW/self-hosting/safe-migration/)，那裡也有手動的 `pg_dump` 與 `pg_restore` 流程，供你偏好直接操作工具時使用。
+TomoriBot也在非生產環境中進行自動啟動備份，且完整復原需要目標資料庫上存在`pgvector`擴充。[安全遷移](/zh-TW/self-hosting/safe-migration/) 中詳細介紹了兩者，如果你希望直接驅動工具，你也可以查看手動`pg_dump`和`pg_restore`程式。
 
-## Docker Compose 備份
+## Docker Compose備份
 
-Docker Compose 支援在應用程式容器內自動進行啟動備份。套件會寫到主機的 `backups/` 目錄，因為 Compose 會將它掛載進容器。
+Docker Compose支援在應用程式容器內自動進行啟動備份。套件會寫到主機的`backups/`目錄，因為Compose會將它掛載進容器。
 
-手動的 Docker 備份：
+手動的Docker備份：
 
 ```sh
 docker compose stop tomoribot
@@ -315,7 +312,7 @@ docker compose run --rm tomoribot bun run backup
 docker compose start tomoribot
 ```
 
-Docker 還原：
+Docker還原：
 
 ```sh
 docker compose stop tomoribot
@@ -323,7 +320,9 @@ docker compose run --rm tomoribot bun run restore-backup --latest
 docker compose up -d
 ```
 
-`bun run backup`、`bun run update`、`bun run nuke-db` 這類主機端指令稿不會自動透過 Docker 執行。若想改為對 Compose 資料庫執行主機端指令稿，請在主機上安裝 Bun 與 PostgreSQL 用戶端工具後執行，並設定：
+`bun run backup`、`bun run update`、`bun run nuke-db`這類主機端指令稿不會自動透過Docker執行。若想改為對Compose資料庫執行主機端指令稿，請在主機上安裝Bun與PostgreSQL用戶端工具後執行，並設定：
+
+備份與還原還需要PostgreSQL用戶端工具；`nuke-db`只需要Bun。
 
 ```dotenv
 POSTGRES_HOST=localhost
@@ -335,10 +334,10 @@ POSTGRES_DB=tomodb
 
 ## 乾淨重裝
 
-`bun run nuke-db` 會刪除所有資料表；之後啟動 bot 會從零重新初始化結構描述、種子資料與移轉。當你想要一個仍然能回溯的乾淨狀態時，請搭配新的 `bun run backup` 一起使用，而且永遠不要在沒有現行備份的情況下執行它。
+`bun run nuke-db`會刪除所有資料表；之後啟動bot會從零重新初始化結構描述、種子資料與移轉。當你想要一個仍然能回溯的乾淨狀態時，請搭配新的`bun run backup`一起使用，而且永遠不要在沒有現行備份的情況下執行它。
 
 ## 延伸閱讀
 
-- [安全移轉](/zh-TW/self-hosting/safe-migration/)：拉取前先備份，以及 `pgvector` 的還原前置條件
-- [資料處理](/zh-TW/features/knowledge/data-handling/)：Discord 內、以使用者為單位的匯出、匯入與刪除
-- [設定精靈](/zh-TW/self-hosting/setup-wizard/)：引導式的 `bun run setup` 安裝
+- [安全移轉](/zh-TW/self-hosting/safe-migration/)：拉取前先備份，以及`pgvector`的還原前置條件
+- [資料處理](/zh-TW/features/knowledge/data-handling/)：Discord內、以使用者為單位的匯出、匯入與刪除
+- [設定精靈](/zh-TW/self-hosting/setup-wizard/)：引導式的`bun run setup`安裝
