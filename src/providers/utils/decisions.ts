@@ -62,7 +62,7 @@ const usageSchema = z.object({
   output_tokens_details: z.object({ reasoning_tokens: z.number().int().nonnegative().optional() }).optional(),
 });
 
-export function parseDecisionUsage(payload: unknown): DecisionUsage | undefined {
+function parseDecisionUsage(payload: unknown): DecisionUsage | undefined {
   if (payload === undefined) return undefined;
   const usage = usageSchema.parse(payload);
   return {

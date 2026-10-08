@@ -21,7 +21,7 @@ import { redactToolParametersForStorage } from "@/utils/tools/toolParameterRedac
 import { checkResponseRules, type RuleCheckState } from "@/utils/chat/responseRuleCheck";
 import { routeResponseDecision, getDecisionCalibration } from "@/utils/chat/responseDecisionRouting";
 
-export const MAX_RESPONSE_REVIEWS = 2;
+const MAX_RESPONSE_REVIEWS = 2;
 export const MAX_RESPONSE_REVISIONS = 1;
 export const MAX_TOOL_REVIEWS = 8;
 export const MAX_TOOL_CORRECTIONS = 2;

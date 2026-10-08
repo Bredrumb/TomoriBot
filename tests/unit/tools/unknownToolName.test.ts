@@ -4,6 +4,7 @@ import { InteractWithRecentMessageTool } from "@/tools/functionCalls/interactWit
 import { ToolRegistry } from "@/tools/toolRegistry";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { log } from "@/utils/misc/logger";
+import { createPersona } from "../../helpers/fixtures";
 
 it("returns the closest registered name to the model for an unknown tool", async () => {
   if (!ToolRegistry.getTool("interact_with_recent_message")) {
@@ -13,7 +14,7 @@ it("returns the closest registered name to the model for an unknown tool", async
   try {
     const result = await ToolRegistry.executeTool("interact_using_recent_message", {}, {
       provider: "google",
-      tomoriState: { server_id: 0 },
+      tomoriState: createPersona({ server_id: 0 }),
     } as ToolContext);
     expect(result.success).toBe(false);
     expect(result.error).toContain("interact_with_recent_message");
@@ -36,7 +37,7 @@ it("suggests only tools the current turn can run", async () => {
   try {
     const result = await ToolRegistry.executeTool("block_usr", {}, {
       provider: "google",
-      tomoriState: { server_id: 0, config: {} },
+      tomoriState: createPersona({ server_id: 0, config: { user_blocking_enabled: false } }),
     } as ToolContext);
     expect(result.success).toBe(false);
     expect(result.error).not.toContain("block_user");

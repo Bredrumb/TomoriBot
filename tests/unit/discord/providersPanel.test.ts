@@ -13,7 +13,10 @@ import {
   offeredChatCompatFlags,
   parseModelSelectionValue,
   buildProvidersPanelPayload,
+  ENDPOINT_API_STYLES,
+  PROVIDERS_MODELS_PER_SELECTOR_PAGE,
 } from "@/utils/discord/ui/providersPanel";
+import { DISCORD_SELECT_OPTIONS_MAX, validateRawModalLimits } from "@/utils/discord/ui/componentsV2Limits";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
 
@@ -134,7 +137,10 @@ describe("providers panel rendering", () => {
     expect(serialized).toContain("comfyui");
     expect(serialized).toContain("tts-clone");
     expect(serialized).toContain("openai-compatible-transcription");
-    expect((select?.options as unknown[])?.length).toBe(5);
+    expect((select?.options as Array<{ value: string }>).map((option) => option.value)).toEqual([
+      ...new Set(Object.values(ENDPOINT_API_STYLES).flat()),
+    ]);
+    expect(validateRawModalLimits(modal).violations).toEqual([]);
   });
 
   it("renders an empty selector with both add destinations and a routing hint", () => {
@@ -522,12 +528,20 @@ describe("providers panel rendering", () => {
     ]);
     expect(firstOptions.map((option) => option.value)).not.toContain("add:speech");
     expect(firstOptions.map((option) => option.value)).not.toContain("add:transcription");
-    expect(firstOptions).toHaveLength(23);
-    expect(firstOptions.length).toBeLessThanOrEqual(25);
+    // Decision is absent from this fixture, so only four add actions appear. Paging reserves room
+    // for all endpoint capabilities, including decision, even when this entry offers fewer.
+    expect(firstOptions.map((option) => option.value)).not.toContain("add:decision");
+    const addCount = entry.capabilities.filter((section) => section.availability !== "unavailable").length;
+    const editCapacity = DISCORD_SELECT_OPTIONS_MAX - Object.keys(ENDPOINT_API_STYLES).length;
+    expect(PROVIDERS_MODELS_PER_SELECTOR_PAGE).toBe(editCapacity);
+    expect(firstOptions).toHaveLength(addCount + editCapacity);
+    expect(firstOptions.length).toBeLessThanOrEqual(DISCORD_SELECT_OPTIONS_MAX);
     expect(firstOptions[4]?.value).toBe("edit:text:1");
     expect(firstOptions[4]?.description).toBe("Text · custom registration");
-    expect(secondOptions).toHaveLength(5);
-    expect(secondOptions[4]?.value).toBe("edit:text:20");
+    expect(secondOptions).toHaveLength(addCount + entry.capabilities[0].models.length - editCapacity);
+    expect(secondOptions.slice(addCount).map((option) => option.value)).toEqual(
+      entry.capabilities[0].models.slice(editCapacity).map((model) => `edit:text:${model.id}`),
+    );
 
     const panelSelect = collectComponents(first).find(
       (component) =>

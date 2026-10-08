@@ -6,7 +6,7 @@ import { isCompatibleRuleChecker } from "@/utils/discord/interactions/responseDr
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { log } from "@/utils/misc/logger";
 
-export const MAX_RULE_CALLS = 2;
+const MAX_RULE_CALLS = 2;
 const MAX_RULE_INPUT_BYTES = 96000;
 const MAX_RULE_OUTPUT_BYTES = 32768;
 const RULE_TIMEOUT_MS = 30000;

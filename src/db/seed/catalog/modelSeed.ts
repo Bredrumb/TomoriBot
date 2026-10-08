@@ -218,7 +218,7 @@ const decisionSpec: TableSpec<DecisionInput> = {
     is_deprecated = EXCLUDED.is_deprecated, input_token_limit = EXCLUDED.input_token_limit,
     sees_images = EXCLUDED.sees_images, input_price_per_million = EXCLUDED.input_price_per_million,
     output_price_per_million = EXCLUDED.output_price_per_million, updated_at = CURRENT_TIMESTAMP
-    WHERE decision_models.is_scoped_registration = false`,
+    WHERE COALESCE(decision_models.is_scoped_registration, false) = false`,
   hasSmartest: false,
   sections: decisionSections,
 };

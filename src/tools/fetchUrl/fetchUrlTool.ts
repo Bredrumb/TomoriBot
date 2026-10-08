@@ -6,7 +6,7 @@ import { localizer } from "@/utils/text/localizer";
 import { executeFetchUrlWithFallback } from "./dispatcher";
 import { sendFetchProgressNotice } from "./fetchProgressNotice";
 import type { FetchOpts } from "./types";
-import { validateFetchUrlTarget } from "./urlSafety";
+import { isPrivateNetworkFetchAllowed, validateFetchUrlTarget } from "./urlSafety";
 
 /**
  * Validates fetch URL size before downloading
@@ -20,10 +20,14 @@ async function validateFetchSize(url: string): Promise<{ allowed: boolean; reaso
     // Use the same DNS validation, pinning, and per-hop redirect checks as the
     // body fetch. A plain fetch() here could be redirected to IMDS or another
     // private address before the guarded engine runs.
-    const headResponse = await fetchUserRemoteUrl(url, {
-      method: "HEAD",
-      signal: AbortSignal.timeout(5000), // 5 second timeout
-    });
+    const headResponse = await fetchUserRemoteUrl(
+      url,
+      {
+        method: "HEAD",
+        signal: AbortSignal.timeout(5000), // 5 second timeout
+      },
+      { allowPrivateNetwork: isPrivateNetworkFetchAllowed() },
+    );
 
     // Get Content-Length header (may not always be present)
     const contentLengthHeader = headResponse.headers.get("content-length");

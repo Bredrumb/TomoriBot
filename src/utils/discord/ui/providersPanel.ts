@@ -136,7 +136,7 @@ export function buildAddProviderModal(
   };
 }
 
-const ENDPOINT_API_STYLES: Readonly<Record<CustomEndpointCapability, readonly CustomEndpointApiStyle[]>> = {
+export const ENDPOINT_API_STYLES: Readonly<Record<CustomEndpointCapability, readonly CustomEndpointApiStyle[]>> = {
   text: ["openai-compatible", "ollama-native"],
   embedding: ["openai-compatible", "ollama-native"],
   image: ["openai-compatible", "comfyui"],

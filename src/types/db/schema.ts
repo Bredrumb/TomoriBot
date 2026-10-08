@@ -734,7 +734,7 @@ export const responseRuleCheckerRefSchema = z.discriminatedUnion("scope", [
     .object({ scope: z.literal("global"), serviceName: z.string().min(1).max(100), toolName: z.literal("check_slop") })
     .strict(),
 ]);
-export const responseRuleCheckerConfigSchema = z
+const responseRuleCheckerConfigSchema = z
   .preprocess((value) => {
     if (typeof value !== "string") return value;
     try {

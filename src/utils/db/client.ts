@@ -5,7 +5,7 @@ import { log } from "@/utils/misc/logger";
 import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 import { recordPoolEvent, recordPoolRetryExhausted, recordPoolRetryRecovered } from "@/utils/db/poolEvents";
 
-export interface PostgresPoolOptions {
+interface PostgresPoolOptions {
   idleTimeout: number;
   maxLifetime: number;
   connectionTimeout: number;
