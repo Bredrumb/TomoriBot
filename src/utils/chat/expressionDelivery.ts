@@ -31,7 +31,7 @@ import { EXPRESSION_MEDIA_MAX_BYTES } from "@/utils/storage/expressionMedia";
 import { loadExpressionMedia } from "@/utils/storage/expressionStorage";
 
 /** Discord acceptance of one expression message. Internal only: the model sees the name alone. */
-export interface ExpressionDeliveryReceipt {
+interface ExpressionDeliveryReceipt {
   /** Native sticker id or custom expression id, which is what a repeated call is compared by. */
   expressionKey: string;
   name: string;

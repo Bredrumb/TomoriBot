@@ -67,7 +67,7 @@ export interface SceneTurnMetadata {
  * cannot send a second expression after one is already visible. Keyed by persona because one
  * invocation can plan turns for several personas, each with its own allowance.
  */
-export interface CarriedExpressionDelivery {
+interface CarriedExpressionDelivery {
   personaId: number;
   state: ExpressionDeliveryState;
 }

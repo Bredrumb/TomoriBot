@@ -23,7 +23,7 @@ const ACTIONS = [
   "persona-page",
   "page",
 ] as const;
-export type ExpressionAction = (typeof ACTIONS)[number];
+type ExpressionAction = (typeof ACTIONS)[number];
 const TOKENS = ["v", "s", "e", "w", "c", "d", "x", "a", "r", "y", "n", "p", "g"] as const;
 const CATEGORY_TOKENS = ["e", "s", "c"] as const;
 

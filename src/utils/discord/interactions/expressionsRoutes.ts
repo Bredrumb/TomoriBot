@@ -59,7 +59,7 @@ async function authorize(interaction: ExpressionInteraction, refresh: boolean): 
   return member?.permissions.has("ManageGuild") ?? false;
 }
 
-export async function loadExpressionsPanelData(
+async function loadExpressionsPanelData(
   interaction: ExpressionInteraction,
   refresh: boolean,
 ): Promise<ExpressionsPanelData | null> {
