@@ -74,7 +74,12 @@ metadata, optional prices, and catalog flags independently of `llms`. Migration
 `098_decision_models.sql` adds a cascading `decision_model_id` foreign key to
 `scoped_model_registrations`, owner-specific partial unique indexes, and a one-model check across
 all five catalog references. Fresh schema and idempotent migration preserve the same constraints.
-Down migration refuses to discard scoped registrations or Decision endpoint connections.
+Down migration requires clearing saved response Decision selections and removing scoped
+registrations and Decision endpoint connections. Its guards and schema changes execute in one
+atomic block. When those references are unused, rollback removes the response Decision selection
+column before its catalog table and restores the four-catalog registration check. An unexpected
+dependency failure preserves the schema. Startup restores the column and its foreign key through
+the normal schema initialization path.
 
 OpenRouter seeds are visible to owners with saved credentials. Scoped registrations require exact
 owner matches. Custom registrations use existing connections, endpoints, synthetic catalog rows,
