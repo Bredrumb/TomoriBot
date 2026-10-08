@@ -246,6 +246,13 @@ function addReceipt(locale: string, result: AddServerProviderResult, scopeKind: 
   };
 }
 
+function endpointUnreachableDetail(locale: string, result: { reason: string; credentialsWithheld: boolean }): string {
+  if (result.credentialsWithheld) return localizer(locale, "commands.providers.endpoint_redirect_credentials_withheld");
+  return localizer(locale, "commands.providers.endpoint_unreachable", {
+    reason: escapeDiscordMarkdown(result.reason.replace(/\s+/g, " ").trim().slice(0, 300)),
+  });
+}
+
 function addEndpointReceipt(
   locale: string,
   result: AddCustomEndpointConnectionResult,
@@ -262,9 +269,7 @@ function addEndpointReceipt(
     return {
       tone: "error",
       heading: localizer(locale, "commands.providers.add_endpoint_failed"),
-      detail: localizer(locale, "commands.providers.endpoint_unreachable", {
-        reason: escapeDiscordMarkdown(result.reason.replace(/\s+/g, " ").trim().slice(0, 300)),
-      }),
+      detail: endpointUnreachableDetail(locale, result),
       reason: "endpoint_add_unreachable",
       action: resolveProviderPanelAction(scopeKind, "endpoint.add"),
     };
@@ -382,9 +387,7 @@ function endpointEditReceipt(
     return {
       tone: "error",
       heading: localizer(locale, "commands.providers.change_failed"),
-      detail: localizer(locale, "commands.providers.endpoint_unreachable", {
-        reason: escapeDiscordMarkdown(result.reason.replace(/\s+/g, " ").trim().slice(0, 300)),
-      }),
+      detail: endpointUnreachableDetail(locale, result),
       reason: "endpoint_edit_unreachable",
       action: resolveProviderPanelAction(scopeKind, "endpoint.edit"),
     };

@@ -24,6 +24,8 @@ If you are updating with `git pull`, review [Safe Migration](/self-hosting/safe-
 
 Host `bun run backup` needs `pg_dump`, and host `bun run restore-backup` needs `psql` in your PATH. `bun run update` needs `pg_dump` for its backup. The `--docker` update path runs the backup in the container, so it needs host Bun, Git, and Docker but no host PostgreSQL tools.
 
+The backup and restore commands hand your database password to `pg_dump` and `psql` through a short-lived password file in the system temporary folder, so other users on the machine cannot read it from the process list. That folder must be writable. The file is deleted when the command finishes.
+
 ## Updating
 
 Stop the running bot first, then use the backup-first updater:

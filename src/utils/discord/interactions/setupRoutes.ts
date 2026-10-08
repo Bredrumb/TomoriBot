@@ -471,11 +471,17 @@ function safeCustomEndpointProbeReason(
 
 function customEndpointProbeFailureReceipt(
   locale: string,
-  reason: string,
+  probe: { reason: string; credentialsWithheld?: true },
   endpointUrl: string,
   authToken: string | undefined,
 ): PanelReceipt {
-  const safeReason = safeCustomEndpointProbeReason(reason, endpointUrl, authToken);
+  if (probe.credentialsWithheld) {
+    return customEndpointFailureReceipt(
+      locale,
+      localizer(locale, "commands.providers.endpoint_redirect_credentials_withheld"),
+    );
+  }
+  const safeReason = safeCustomEndpointProbeReason(probe.reason, endpointUrl, authToken);
   return customEndpointFailureReceipt(
     locale,
     safeReason
@@ -1634,7 +1640,7 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
         if (!probe.ok) {
           await repaintSetupWizard(interaction, draft, locale, nonce, {
             method: "editReply",
-            receipt: customEndpointProbeFailureReceipt(locale, probe.reason, normalizedUrl, rawToken),
+            receipt: customEndpointProbeFailureReceipt(locale, probe, normalizedUrl, rawToken),
           });
           return;
         }

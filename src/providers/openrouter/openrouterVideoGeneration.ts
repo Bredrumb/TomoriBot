@@ -119,12 +119,41 @@ async function pwshHttpRequest(
 }
 
 /**
+ * Quotes a value for a curl config file. Inside double quotes curl unescapes only backslash,
+ * double quote, and the `t`, `n`, `r`, and `v` control escapes, so escaping exactly those keeps
+ * any header or JSON body byte-exact.
+ */
+function quoteCurlConfigValue(value: string): string {
+  const escaped = value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\t/g, "\\t")
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\v/g, "\\v");
+  return `"${escaped}"`;
+}
+
+/**
+ * Builds the curl config read from stdin, so the bearer token and request body never appear in
+ * the process table where other local users can read command-line arguments.
+ */
+export function buildCurlRequestConfig(headers: Record<string, string>, body?: string): string {
+  const lines = Object.entries(headers).map(([key, value]) => `header = ${quoteCurlConfigValue(`${key}: ${value}`)}`);
+  if (body !== undefined) {
+    // `data-raw` keeps a body that starts with `@` from being read as a file name.
+    lines.push(`data-raw = ${quoteCurlConfigValue(body)}`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+/**
  * Used on Linux where curl has HTTP/2 support (via nghttp2) and produces a standard
  * TLS fingerprint that Cloudflare allows through.
  *
  * Key curl flags for correctness and security:
  *   --proto =https: restricts to HTTPS only (blocks file://, ftp://, gopher://, etc.)
- *   --data-raw: prevents @filename expansion in the body
+ *   -K -: reads headers and body from stdin instead of argv
  *   -H "Expect:"; suppresses 100-Continue which breaks the -i header/body parser
  */
 async function curlHttpRequest(
@@ -133,30 +162,23 @@ async function curlHttpRequest(
   headers: Record<string, string>,
   body?: string,
 ): Promise<ExternalHttpResponse> {
-  const args: string[] = ["-s", "-S", "--max-time", "120", "--proto", "=https", "-X", method];
+  const args: string[] = ["-s", "-S", "--max-time", "120", "--proto", "=https", "-X", method, "-K", "-"];
 
   // Suppress Expect: 100-continue because curl sends this for POST bodies over ~1KB,
   //    which inserts an intermediate "HTTP/1.1 100 Continue" block before the real response.
   //    Our -i parser splits on the first \r\n\r\n, so 100-Continue would break parsing.
   args.push("-H", "Expect:");
-
-  // Add each header, stripping CRLF to prevent header injection
-  for (const [key, value] of Object.entries(headers)) {
-    args.push("-H", `${key}: ${value}`);
-  }
-
-  if (body !== undefined) {
-    args.push("--data-raw", body);
-  }
-
   args.push("-i");
-
   args.push(url);
 
   const proc = Bun.spawn(["curl", ...args], {
+    stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
   });
+
+  proc.stdin.write(buildCurlRequestConfig(headers, body));
+  proc.stdin.end();
 
   const [rawOutput, rawStderr] = await Promise.all([
     new Response(proc.stdout).arrayBuffer(),

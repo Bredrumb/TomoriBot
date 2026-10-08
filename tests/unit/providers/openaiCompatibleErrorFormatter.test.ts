@@ -4,6 +4,7 @@ import {
   createOpenAICompatibleHttpError,
   normalizeOpenAICompatibleProviderError,
 } from "@/providers/openaiCompatible/openaiCompatibleErrorFormatter";
+import { RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy } from "../../helpers/localeCases";
 
@@ -44,6 +45,26 @@ describe("openAI-compatible provider error formatting", () => {
     expect(description).toContain(localizedCopy("en-US", "genai.stream.model_error_description"));
     expect(description).toContain("Unsupported model `Deepseek`");
     expect(description).toContain("Supported IDs: `deepseek-auto`");
+  });
+
+  it("explains withheld redirect credentials without echoing the destination origin", () => {
+    const error = normalizeOpenAICompatibleProviderError(
+      new RemoteUrlPolicyError(
+        "Credentials were not forwarded to 'https://private-gateway.example'.",
+        "private-gateway.example",
+        "REDIRECT_CREDENTIALS_WITHHELD",
+      ),
+      { errorMessagePrefix: "Custom provider" },
+    );
+
+    const description = createOpenAICompatibleErrorDescription(error, "en-US", {
+      localeNamespace: "genai.custom",
+      fallbackMessage: "Fallback should not be needed",
+    });
+
+    expect(error.retryable).toBe(false);
+    expect(description).toContain(localizedCopy("en-US", "genai.custom.REDIRECT_CREDENTIALS_WITHHELD_default_message"));
+    expect(description).not.toContain("private-gateway.example");
   });
 
   it("uses generic unknown fallbacks for OpenAI-compatible provider namespaces", () => {

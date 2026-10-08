@@ -46,7 +46,7 @@ it does not establish a permanent rule about the provider's TLS filtering.
 To preserve connectivity, `src/providers/openrouter/openrouterVideoGeneration.ts` delegates requests to `externalHttpRequest()`, which spawns an external process with standard TLS fingerprints:
 
 - **Windows:** PowerShell 7 (`pwsh`) with `Invoke-WebRequest`, using .NET Schannel TLS with HTTP/2 negotiation. Request data passes via stdin as JSON, and binary output returns base64-encoded.
-- **Linux and Docker:** `curl` with HTTP/2 via `nghttp2` (`--proto =https`, `--data-raw`, `-H "Expect:"`).
+- **Linux and Docker:** `curl` with HTTP/2 via `nghttp2` (`--proto =https`, `-H "Expect:"`). Headers, including the bearer token, and the request body travel through stdin as a curl config (`-K -`), so neither appears in the process table.
 
 Google and Z.ai adapters use the native transport.
 

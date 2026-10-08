@@ -1,7 +1,7 @@
 import { sql } from "bun";
 import { log } from "@/utils/misc/logger";
 import { config } from "dotenv";
-import { resolveBackupsRoot, runDataBackup } from "@/utils/backup/dataBackup";
+import { resolveBackupsRoot, runDataBackup, withPostgresPassfile } from "@/utils/backup/dataBackup";
 import { existsSync, copyFileSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -23,11 +23,12 @@ if (mode !== "--backup" && mode !== "--restore") {
 async function runExternalCommand(
   command: string,
   args: string[],
-  options: { stdout?: "inherit" | "ignore" } = {},
+  options: { stdout?: "inherit" | "ignore"; env?: Record<string, string | undefined> } = {},
 ): Promise<void> {
   const subprocess = Bun.spawn([command, ...args], {
     stdout: options.stdout ?? "inherit",
     stderr: "inherit",
+    env: options.env,
   });
 
   const exitCode = await subprocess.exited;
@@ -196,16 +197,13 @@ async function runRestore(bundlePath: string): Promise<void> {
   log.info("Restoring database from dump (running psql)...");
   try {
     const nullDevice = process.platform === "win32" ? "NUL" : "/dev/null";
-    await runExternalCommand("psql", [
-      "--quiet",
-      "-o",
-      nullDevice,
-      targetDatabaseUrl,
-      "-v",
-      "ON_ERROR_STOP=1",
-      "-f",
-      dbDumpPath,
-    ]);
+    await withPostgresPassfile(targetDatabaseUrl, ({ connectionUrl, env }) =>
+      runExternalCommand(
+        "psql",
+        ["--quiet", "-o", nullDevice, connectionUrl, "-v", "ON_ERROR_STOP=1", "-f", dbDumpPath],
+        { env },
+      ),
+    );
     log.success("Database restored successfully.");
   } catch (_error) {
     log.error("psql restore failed. Ensure psql is installed and in your PATH.");

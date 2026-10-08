@@ -31,7 +31,7 @@ import { buildFallbackModelPersistence, prunePrimaryFallbackRefs } from "@/utils
 import { assignPersonalCapabilityToProvider, withPersonalTextPrimary } from "@/utils/provider/personalProviderHelpers";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
 import { decryptApiKey, encryptApiKey } from "@/utils/security/crypto";
-import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
+import { fetchUserRemoteUrl, RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
 
 type RegistrationScope =
   | {
@@ -744,7 +744,7 @@ export async function validateCustomEndpointReachability(params: {
   endpointUrl: string;
   apiKey?: string | null;
   strict?: boolean;
-}): Promise<{ ok: true } | { ok: false; reason: string }> {
+}): Promise<{ ok: true } | { ok: false; reason: string; credentialsWithheld?: true }> {
   const headers: Record<string, string> = {};
   if (params.apiKey?.trim()) {
     headers.Authorization = `Bearer ${params.apiKey.trim()}`;
@@ -810,6 +810,9 @@ export async function validateCustomEndpointReachability(params: {
     const response = await fetchUserRemoteUrl(`${baseUrl}/models`, { headers }, fetchOptions);
     return response.ok ? { ok: true } : { ok: false, reason: `HTTP ${response.status} ${response.statusText}` };
   } catch (error) {
+    if (error instanceof RemoteUrlPolicyError && error.failureCode === "REDIRECT_CREDENTIALS_WITHHELD") {
+      return { ok: false, reason: error.message, credentialsWithheld: true };
+    }
     return {
       ok: false,
       reason:

@@ -284,7 +284,7 @@ describe("provider panel mutations", () => {
       },
     );
 
-    expect(result).toEqual({ status: "unreachable", reason: "HTTP 404 Not Found" });
+    expect(result).toEqual({ status: "unreachable", reason: "HTTP 404 Not Found", credentialsWithheld: false });
   });
 
   it("rejects an unsupported API format before probing", async () => {

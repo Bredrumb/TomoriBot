@@ -149,7 +149,7 @@ export interface AddServerProviderDependencies {
 
 export type AddCustomEndpointConnectionResult =
   | { status: "success"; entryId: string; label: string }
-  | { status: "unreachable"; reason: string }
+  | { status: "unreachable"; reason: string; credentialsWithheld: boolean }
   | {
       status: "invalid-label" | "invalid-style" | "already-exists" | "label-url-conflict" | "write-failed";
     };
@@ -234,7 +234,7 @@ interface EditProviderInput {
 export type EditEndpointResult =
   | { status: "success"; entryId: string; label: string }
   | { status: "unchanged"; entryId: string }
-  | { status: "unreachable"; reason: string }
+  | { status: "unreachable"; reason: string; credentialsWithheld: boolean }
   | { status: "invalid-label" | "not-found" | "write-failed" | "handoff-unsupported" };
 
 interface EditEndpointInput {
@@ -1035,7 +1035,11 @@ export async function addCustomEndpointConnection(
       apiStyle: input.apiStyle,
       detail: reachable.reason.slice(0, 200),
     });
-    return { status: "unreachable", reason: reachable.reason };
+    return {
+      status: "unreachable",
+      reason: reachable.reason,
+      credentialsWithheld: reachable.credentialsWithheld === true,
+    };
   }
 
   const createdConnectionIds: number[] = [];
@@ -1636,7 +1640,11 @@ async function editServerEndpoint(input: EditEndpointInput): Promise<EditEndpoin
           apiStyle: connection.api_style,
           detail: reachable.reason.slice(0, 200),
         });
-        return { status: "unreachable", reason: reachable.reason };
+        return {
+          status: "unreachable",
+          reason: reachable.reason,
+          credentialsWithheld: reachable.credentialsWithheld === true,
+        };
       }
     }
   }

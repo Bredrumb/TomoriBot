@@ -169,7 +169,7 @@ const pinoLogger = pino(
 interface CustomLevelLogger extends pino.Logger {
   success(message: string): void;
   section(message: string): void;
-  metric(payload: Record<string, number | string>, message: string): void;
+  metric(payload: Record<string, unknown>, message: string): void;
   rateLimit(payload: Record<string, unknown>, message: string): void;
 }
 
@@ -262,6 +262,15 @@ export function sanitizeLogPayload(value: unknown, depth = 0, truncateStrings = 
   return output;
 }
 
+/**
+ * Metric fields reach the production sinks at a level above `error`, so free-text values such as
+ * an endpoint failure reason get the same redaction as every other record. Numbers pass through
+ * unchanged, which keeps metric queries typed.
+ */
+export function buildMetricPayload(name: string, fields: Record<string, number | string>): Record<string, unknown> {
+  return sanitizeLogPayload({ metric: name, ...fields }) as Record<string, unknown>;
+}
+
 const toLoggableError = (err: unknown): Record<string, unknown> => {
   if (err instanceof Error) {
     const safeExtraFields = Object.fromEntries(Object.entries(err).filter(([, value]) => isCloneSafeLogValue(value)));
@@ -339,8 +348,7 @@ export const log = {
    * @param name - Short metric name (used as the `metric` field for filtering).
    */
   metric: (name: string, fields: Record<string, number | string>) => {
-    const payload = { metric: name, ...fields };
-    customLevels.metric(payload, `metric:${name}`);
+    customLevels.metric(buildMetricPayload(name, fields), `metric:${name}`);
   },
 
   /**

@@ -2,12 +2,14 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { log } from "@/utils/misc/logger";
 
@@ -66,13 +68,14 @@ class ExternalCommandError extends Error {
 async function runExternalCommand(
   command: string,
   args: string[],
-  options: { stdout?: "inherit" | "ignore" } = {},
+  options: { stdout?: "inherit" | "ignore"; env?: Record<string, string | undefined> } = {},
 ): Promise<void> {
   let subprocess: ReturnType<typeof Bun.spawn>;
   try {
     subprocess = Bun.spawn([command, ...args], {
       stdout: options.stdout ?? "inherit",
       stderr: "pipe",
+      env: options.env,
     });
   } catch (error) {
     throw new ExternalCommandError(command, null, "", error);
@@ -170,6 +173,59 @@ function resolveDatabaseUrl(): string {
   }
 
   return `postgresql://${user}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
+}
+
+/** Connection settings for one PostgreSQL client process, with the password kept out of argv. */
+export interface PostgresClientConnection {
+  connectionUrl: string;
+  env: Record<string, string | undefined>;
+}
+
+/** Environment variables that hold this bot's database password and that libpq never reads. */
+const BOT_DATABASE_CREDENTIAL_ENV = ["DATABASE_URL", "POSTGRES_URL", "POSTGRES_PASSWORD"] as const;
+
+function escapePassfileField(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/:/g, "\\:");
+}
+
+/**
+ * Runs a PostgreSQL client with its password in a private, short-lived `PGPASSFILE`.
+ *
+ * Command-line arguments are readable by other local users through the process table, and
+ * `PGPASSWORD` stays readable in the child's environment, so the password travels only through
+ * a file in a fresh temp directory outside every backup bundle. The single wildcard entry matches
+ * whatever host form the URL or its query options select. The URL keeps every other component,
+ * including query options such as `sslmode`, so the target stays exactly the one the caller chose.
+ */
+export async function withPostgresPassfile<T>(
+  databaseUrl: string,
+  run: (connection: PostgresClientConnection) => Promise<T>,
+): Promise<T> {
+  let url: URL;
+  try {
+    url = new URL(databaseUrl);
+  } catch {
+    throw new Error("The database connection string is not a valid URL.");
+  }
+
+  const password = decodeURIComponent(url.password);
+  url.password = "";
+
+  const env: Record<string, string | undefined> = { ...process.env };
+  for (const name of BOT_DATABASE_CREDENTIAL_ENV) delete env[name];
+  if (!password) return await run({ connectionUrl: url.toString(), env });
+
+  const passfileDir = mkdtempSync(join(tmpdir(), "tomoribot-pgpass-"));
+  try {
+    const passfilePath = join(passfileDir, "pgpass");
+    // libpq ignores a passfile readable by group or others on POSIX systems.
+    writeFileSync(passfilePath, `*:*:*:*:${escapePassfileField(password)}\n`, { mode: 0o600 });
+    delete env.PGPASSWORD;
+    env.PGPASSFILE = passfilePath;
+    return await run({ connectionUrl: url.toString(), env });
+  } finally {
+    rmSync(passfileDir, { recursive: true, force: true });
+  }
 }
 
 function getCurrentBotVersion(): string {
@@ -362,15 +418,13 @@ export async function runDataBackup(options: DataBackupOptions = {}): Promise<Da
   try {
     // --no-owner/--no-privileges keep dumps restorable across role names (e.g. Cloud SQL
     // `postgres` → Azure `tomoriadmin`); objects are owned by whichever role runs the restore.
-    await runExternalCommand("pg_dump", [
-      dbUrl,
-      "--clean",
-      "--if-exists",
-      "--no-owner",
-      "--no-privileges",
-      "-f",
-      dbDumpPath,
-    ]);
+    await withPostgresPassfile(dbUrl, ({ connectionUrl, env }) =>
+      runExternalCommand(
+        "pg_dump",
+        [connectionUrl, "--clean", "--if-exists", "--no-owner", "--no-privileges", "-f", dbDumpPath],
+        { env },
+      ),
+    );
     log.success("Database dump completed.");
   } catch (error) {
     await log.error("pg_dump failed. No database changes were made.", error);

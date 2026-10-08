@@ -179,6 +179,7 @@ The selected model requires allowing data for paid model training, but your Open
     },
     custom: {
       "402_default_message": `Your account with this endpoint has insufficient balance`,
+      REDIRECT_CREDENTIALS_WITHHELD_default_message: `This endpoint redirected to a different address, so TomoriBot did not send its API key there. Whoever manages this endpoint in \`/providers\` can fix it by changing its URL to the final address the server redirects to.`,
       unknown_default_message: `An unexpected error occurred`,
     },
     deepseek: {

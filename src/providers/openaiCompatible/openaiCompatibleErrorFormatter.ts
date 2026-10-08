@@ -1,6 +1,7 @@
 import { errorMessageNamesRejectableParam } from "@/providers/utils/paramDegradation";
 import type { ProviderError } from "@/types/stream/interfaces";
 import { isProviderModelErrorMessage, isProviderTimeoutMessage } from "@/utils/provider/providerErrorClassification";
+import { RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
 import { localizer } from "@/utils/text/localizer";
 
 interface ParsedOpenAICompatibleErrorPayload {
@@ -91,6 +92,18 @@ export function normalizeOpenAICompatibleProviderError(
   options: NormalizeProviderErrorOptions,
 ): ProviderError {
   const errorMessage = error instanceof Error ? error.message : String(error);
+
+  // Keyed by code so the channel-facing copy explains the redirect without echoing the
+  // destination origin that the message carries for the operator's logs.
+  if (error instanceof RemoteUrlPolicyError && error.failureCode === "REDIRECT_CREDENTIALS_WITHHELD") {
+    return {
+      type: "api_error",
+      message: `${options.errorMessagePrefix}: ${errorMessage}`,
+      code: error.failureCode,
+      retryable: false,
+      originalError: error,
+    };
+  }
 
   let errorCode = "unknown";
   let errorType: ProviderError["type"] = "unknown";
