@@ -2,49 +2,29 @@
 title: "02.5: Server Stickers"
 ---
 
-`buildServerStickerContextItem` in `src/utils/text/context/serverAssets.ts` emits one
-`KNOWLEDGE_SERVER_STICKERS` system item for the responding persona.
+The server sticker contributor emits available native and custom server stickers that the persona can send using the sticker tool.
 
-## Input and output
+## Flow and ownership
 
-The contributor receives the client, guild ID, server and persona names, turn flags,
-server configuration, active persona state, optional preloaded native and custom rows,
-and the tool-prompt macro resolver and mention converter. Missing preloads are read
-through `ServerRepository`; an empty preload is a complete empty result.
+The contributor `buildServerStickerContextItem` in `src/utils/text/context/serverAssets.ts` emits a `system`-role item tagged `KNOWLEDGE_SERVER_STICKERS`:
 
-`projectStickerCandidates` in `src/utils/discord/stickerCandidates.ts` is shared with
-`select_sticker_for_response`. It projects sendable native stickers and customs eligible
-for the active persona. Native entries retain name deduplication, richest/latest metadata,
-and creation ordering. Customs append without a per-list limit; global context budgeting
-still applies. A server with only eligible customs receives this context item.
+1. **Eligibility**: Returns `null` if sticker usage is disabled (`sticker_usage_enabled === false`), the turn is a DM or user impersonation, or persona state is missing.
+2. **Candidate projection**: Loads sticker metadata and custom expressions (using preloaded collections or querying `ServerRepository`). `projectStickerCandidates` in `src/utils/discord/stickerCandidates.ts` filters sendable native guild stickers and custom stickers assigned to the persona ID.
+3. **Tool macro gating**: Wraps the projected sticker list inside `{{if tool:select_sticker_for_response}}...{{/if}}`. The tool macro resolver suppresses the entire block if `select_sticker_for_response` is unavailable to the provider, model, or turn allowlist.
+4. **Formatting**: Formats entries as `- "<name>" (Expresses <emotion>; <description>)`, followed by an instruction to invoke `{sticker_tool}` with the sticker's case-insensitive name.
 
-The list exposes each name, description, and emotion, followed by the instruction to call
-`{sticker_tool}` with a case-insensitive name. Source URLs, file formats, storage references,
-delivery kinds, and persona membership rules stay outside the model-visible list. The macro
-resolver expands the function name before mention conversion.
+The output passes through `convertMentions` before emission.
 
-## Eligibility and cache
+## Constraints and rationale
 
-The stage returns `null` when sticker usage is disabled, the turn is a DM or impersonation,
-there is no active server state or cached guild, or the projected list is empty. Roleplay
-uses the existing turn configuration that disables sticker usage. The shared prompt resolver omits the item when
-`select_sticker_for_response` is unavailable to the provider, model, or turn allowlist.
+- **Sendability filtering**: Native stickers check `isStickerSendable`. Explicitly unavailable stickers and IDs rejected by Discord are excluded from the candidate list.
+- **Persona restriction**: Custom expressions can restrict access to specific persona IDs. Unrestricted expressions are available to all personas in the guild; restricted expressions require an exact match with the active persona.
+- **Preset reassembly**: Tagged as `KNOWLEDGE_SERVER_STICKERS`, which SillyTavern preset reassembly flushes at the first knowledge anchor.
 
-Native candidates pass `isStickerSendable`. Explicit `available === false` and IDs rejected
-by Discord are excluded; partial availability is accepted. Own-guild stickers need no
-external-sticker permission. Tool lookup still checks that permission for external assets.
+## Source pointers
 
-Custom rows are cached server-wide with their persona membership IDs. Unrestricted rows
-are eligible for every server persona. Restricted rows require the active persona's ID;
-a restricted empty list allows nobody. Each turn applies this filter independently.
-The tool reloads current rows before resolving a supplied name or ID and uses the same
-eligible projection for retry suggestions. A later native/custom normalized-name collision
-returns ambiguity. Delivery, which happens when the tool is invoked, rechecks current
-custom access and revision immediately before sending.
-
-## Related docs
-
-- [Emoji contributor](/architecture/pipelines/context-build/02-native-assembly/04-server-emojis/)
-- [Caching](/architecture/subsystems/caching/)
-- [Tool loop](/architecture/pipelines/tool-loop/)
-- [Expression delivery](/architecture/pipelines/tool-loop/02-execute-tool-call/)
+- `src/utils/text/context/serverAssets.ts`: `buildServerStickerContextItem`.
+- `src/utils/discord/stickerCandidates.ts`: `projectStickerCandidates`.
+- `src/utils/db/repositories/ServerRepository.ts`: `loadStickersByInternalId` and `loadCustomExpressions`.
+- [04: Server Emojis](/architecture/pipelines/context-build/02-native-assembly/04-server-emojis/): companion asset contributor.
+- [Execute Tool Call](/architecture/pipelines/tool-loop/02-execute-tool-call/): tool execution and sticker delivery.
