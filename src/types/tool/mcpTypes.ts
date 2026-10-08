@@ -4,48 +4,11 @@
  * Replaces 'any' declarations with proper type safety
  */
 
-import type { ToolResult } from "./interfaces";
+import type { ToolResult } from "@/types/tool/interfaces";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
-/**
- * Base MCP server response structure
- * Common interface for all MCP server responses
- */
-export interface MCPServerResponse {
-  text?: string;
-  isError?: boolean;
-  functionResponse?: {
-    response?: {
-      text?: string;
-      content?: MCPContentItem[];
-      /** Error envelope used by the Gemini SDK when an MCP tool call fails */
-      error?: {
-        content?: MCPContentItem[];
-        isError?: boolean;
-      };
-    };
-  };
-  content?: MCPContentItem[];
-  response?: {
-    content?: MCPContentItem[];
-    text?: string;
-  };
-  data?: MCPContentItem[];
-}
-
-/**
- * MCP content item structure
- * Represents individual content items in MCP responses
- */
-interface MCPContentItem {
-  type: "text" | "image" | "audio" | "video";
-  text?: string;
-  image_url?: string;
-  url?: string;
-  source_url?: string;
-  original_url?: string;
-  src?: string;
-  metadata?: Record<string, unknown>;
-}
+/** Guild results use the SDK envelope validated at receipt. */
+export type MCPServerResponse = CallToolResult;
 
 /**
  * MCP tool result with enhanced typing
@@ -56,7 +19,7 @@ export interface TypedMCPToolResult extends ToolResult {
     source: "mcp";
     functionName: string;
     serverName: string;
-    rawResult: MCPServerResponse;
+    rawResult?: MCPServerResponse;
     executionTime: number;
     overridesApplied?: string[];
 

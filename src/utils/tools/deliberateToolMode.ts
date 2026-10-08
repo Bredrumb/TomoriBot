@@ -1,3 +1,4 @@
+import { isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
 import type { TomoriState } from "@/types/db/schema";
 import { StickerTool } from "@/tools/functionCalls/stickerTool";
 import type { Message } from "discord.js";
@@ -656,13 +657,29 @@ export function isToolAllowedByDeliberateMode(
   return !allowedToolNames?.length || allowedToolNames.includes(toolName);
 }
 
+/** Family intent follows the configured service's discovered names without changing its argument schema. */
+export function expandDeliberateToolAllowedNames(
+  allowedToolNames: readonly string[] | null | undefined,
+  families: Record<string, string> = {},
+): string[] | null | undefined {
+  if (!allowedToolNames?.length) return allowedToolNames ? [...allowedToolNames] : allowedToolNames;
+  const names = new Set(allowedToolNames);
+  for (const [name, family] of Object.entries(families)) {
+    if ((family === "web_search" && names.has("web_search")) || (family === "url_fetcher" && names.has("fetch_url")))
+      names.add(name);
+  }
+  return [...names];
+}
+
 export function applyDeliberateToolAllowlist<T extends { name: string }>(params: {
   providerLabel: string;
   builtInTools: T[];
   mcpFunctionNames: string[];
   allowedToolNames?: string[] | null;
+  mcpToolFamilies?: Record<string, string>;
 }): { builtInTools: T[]; mcpFunctionNames: string[] } {
-  const { providerLabel, builtInTools, mcpFunctionNames, allowedToolNames } = params;
+  const { providerLabel, builtInTools, mcpFunctionNames } = params;
+  const allowedToolNames = expandDeliberateToolAllowedNames(params.allowedToolNames, params.mcpToolFamilies);
   if (!allowedToolNames?.length) {
     return { builtInTools, mcpFunctionNames };
   }
@@ -711,7 +728,7 @@ export function getRecentToolAffordanceNames(
     .reverse();
 
   for (const msg of lookbackMessages) {
-    const isPersonaOutput = Boolean(msg.webhookId) || (Boolean(clientUserId) && msg.author.id === clientUserId);
+    const isPersonaOutput = isManagedWebhookMessage(msg) || (Boolean(clientUserId) && msg.author.id === clientUserId);
 
     if (!isPersonaOutput) {
       const recentIntentResult = getDeliberateToolIntentResult(msg.content, customTriggers);
@@ -758,7 +775,7 @@ export function getRecentTriggeredToolIntentResult(
     .slice(-lookbackMessageCount);
 
   for (const msg of lookbackMessages) {
-    const isPersonaOutput = Boolean(msg.webhookId) || (Boolean(clientUserId) && msg.author.id === clientUserId);
+    const isPersonaOutput = isManagedWebhookMessage(msg) || (Boolean(clientUserId) && msg.author.id === clientUserId);
     if (msg.author.bot || isPersonaOutput) continue;
 
     const recentIntentResult = getDeliberateToolIntentResult(msg.content, customTriggers);

@@ -328,6 +328,7 @@ export class NvidiaProvider
       const {
         builtInTools: availableBuiltInTools,
         mcpFunctionNames: availableMcpFunctionNames,
+        mcpToolFamilies,
         totalCount,
       } = await getAvailableToolsWithMCP("nvidia", toolStateForContext);
 
@@ -344,6 +345,7 @@ export class NvidiaProvider
         providerLabel: "NVIDIA provider",
         builtInTools: finalBuiltInTools,
         mcpFunctionNames: finalMcpFunctionNames,
+        mcpToolFamilies,
         allowedToolNames: streamingContext?.deliberateToolAllowedNames,
       }));
 

@@ -1,3 +1,4 @@
+import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 /**
  * Matrix Relay Handler
  * Auto-discovered by eventHandler.ts via messageCreate folder scanning.
@@ -287,6 +288,7 @@ const handler = async (client: Client, message: Message): Promise<void> => {
   // Only relay messages that originate from TomoriBot itself
   //    (main persona bot account OR alter persona webhook messages)
   const allPersonas: TomoriState[] = await getCachedAllPersonas(message.guild.id);
+  await verifyMessageWebhook(message);
   if (!isSelfTriggerMessage(message, allPersonas)) return;
 
   const roomId = await getLinkedMatrixRoom(message.channelId);

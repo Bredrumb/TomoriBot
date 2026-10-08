@@ -5,7 +5,9 @@
  * The ID is shown in participant context as "ID:N".
  */
 
-import { extractBridgeUserId, isMatrixBridgeWebhookUsername } from "@/utils/bridges";
+import { extractBridgeUserId } from "@/utils/bridges";
+import { isMatrixRelayMessage } from "@/utils/chat/triggerProcessor";
+import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 import { sendTaskEmbedWithExpand } from "@/utils/discord/expandableEmbedNotice";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
@@ -359,8 +361,8 @@ export class UpdateTaskTool extends BaseTool {
 
     const { serverScheduleRepository, userRepository } = await import("@/utils/db/repositories");
 
-    const isMatrixRelayRequester =
-      !!context.message?.webhookId && isMatrixBridgeWebhookUsername(context.message.author.username ?? "");
+    if (context.message) await verifyMessageWebhook(context.message);
+    const isMatrixRelayRequester = !!context.message && isMatrixRelayMessage(context.message);
     const requesterBridgeUserId = isMatrixRelayRequester
       ? (extractBridgeUserId(context.message?.author.username ?? "") ?? undefined)
       : undefined;

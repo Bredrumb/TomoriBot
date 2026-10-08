@@ -1,28 +1,44 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { initializeLocalizer } from "@/utils/text/localizer";
+import { beforeAll, afterAll, afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { type CallableTool, Type } from "@google/genai";
 import { ToolRegistry } from "@/tools/toolRegistry";
 import type { ToolContext } from "@/types/tool/interfaces";
+import type { GuildMcpServerRow } from "@/types/db/schema";
 import type { GuildMCPConnection } from "@/types/tool/mcpTypes";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { createPersona } from "../../helpers/fixtures";
 import { stubLogMembers } from "../../helpers/mockSurface";
+import { ManageMessageTool } from "@/tools/functionCalls/manageMessageTool";
+import { WebSearchTool } from "@/tools/webSearch/webSearchTool";
+import * as searchDispatcher from "@/tools/webSearch/dispatcher";
+import * as stateCache from "@/utils/cache/tomoriStateCache";
+import * as mcpCache from "@/utils/cache/guildMcpConfigCache";
+import { localizedCopy } from "../../helpers/localeCases";
 
 stubLogMembers({ error: async () => {}, warn: () => {}, info: () => {}, success: () => {} });
+
+function registration(): GuildMcpServerRow {
+  return {
+    guild_mcp_id: 91,
+    server_id: 1,
+    name: "fixture",
+    url: "https://example.com/mcp",
+    is_enabled: true,
+    key_version: 1,
+    server_type: null,
+  };
+}
 
 describe("reviewed requests at real dispatch owners", () => {
   let cancelled = false;
   let effects: Array<{ name: string; args: Record<string, unknown> }>;
   let context: ToolContext;
   const guild = getGuildMcpManager();
-  const guildRoute = spyOn(guild, "isGuildMCPFunction");
-  const finder = spyOn(
-    guild as unknown as {
-      findConnectionForFunction(serverId: number, name: string): Promise<GuildMCPConnection | null>;
-    },
-    "findConnectionForFunction",
-  );
+  const guildRoute = spyOn(guild, "getGuildMCPRouting");
+  const configRead = spyOn(mcpCache, "getGuildMcpConfigReadResult");
 
+  beforeAll(initializeLocalizer);
   beforeEach(() => {
     cancelled = false;
     effects = [];
@@ -37,15 +53,15 @@ describe("reviewed requests at real dispatch owners", () => {
       messageIdMap: new MessageIdMap(),
       isExecutionCancelled: () => cancelled,
     };
-    guildRoute.mockResolvedValue(false);
-    finder.mockResolvedValue(null);
+    guildRoute.mockResolvedValue({ routes: new Map(), replaced: new Set() });
+    configRead.mockResolvedValue({ status: "fresh", configs: [registration()] });
   });
 
   afterEach(() => {
     ToolRegistry.clearRegistry();
   });
   afterAll(() => {
-    for (const spy of [guildRoute, finder]) spy.mockRestore();
+    for (const spy of [guildRoute, configRead]) spy.mockRestore();
   });
 
   // These spies replace discovery only. The registry and guild MCP manager invoke real fake transports.
@@ -66,8 +82,7 @@ describe("reviewed requests at real dispatch owners", () => {
       registrationId: 91,
       toolName: "check_slop",
     };
-    guildRoute.mockResolvedValue(true);
-    finder.mockResolvedValue({
+    const connection: GuildMCPConnection = {
       guildMcpId: 91,
       serverId: context.tomoriState.server_id,
       name: "fixture-checker",
@@ -76,6 +91,10 @@ describe("reviewed requests at real dispatch owners", () => {
       functionNames: ["check_slop"],
       connectedAt: 0,
       lastUsedAt: 0,
+    };
+    guildRoute.mockResolvedValue({
+      replaced: new Set(),
+      routes: new Map([["check_slop", { connection, config: registration() }]]),
     });
     expect((await ToolRegistry.executeTool("check_slop", { text: "PRIVATE_DRAFT" }, context)).success).toBe(false);
     expect(effects).toHaveLength(0);
@@ -88,7 +107,7 @@ describe("reviewed requests at real dispatch owners", () => {
       category: "memory",
       parameters: { type: "object", properties: {}, required: [] },
       isAvailableFor: () => true,
-      isAvailableForContext: () => context.guildId === "allowed",
+      isAvailableForContext: (_provider, current) => current.userId === "allowed",
       execute: async (args) => {
         effects.push({ name: "create_long_term_memory", args });
         return { success: true };
@@ -103,26 +122,31 @@ describe("reviewed requests at real dispatch owners", () => {
     });
     expect((await ToolRegistry.executeTool(prepared.name, prepared.args, context)).success).toBe(false);
     expect(effects).toEqual([]);
-    context.guildId = "allowed";
+    context.userId = "allowed";
     expect((await ToolRegistry.executeTool(prepared.name, prepared.args, context)).success).toBe(true);
     expect(effects).toEqual([prepared]);
   });
 
   for (const cancelAfterLookup of [false, true]) {
     it(`workspace MCP ${cancelAfterLookup ? "cancels after" : "executes after"} asynchronous connection lookup`, async () => {
-      guildRoute.mockResolvedValue(true);
-      finder.mockImplementation(async () => {
+      guildRoute.mockImplementation(async () => {
         cancelled = cancelAfterLookup;
-        return {
+        const connection: GuildMCPConnection = {
           guildMcpId: 91,
           serverId: context.tomoriState.server_id,
           name: "fixture",
-          client: {},
+          client: {
+            callTool: async (call: { name: string; arguments: Record<string, unknown> }) => {
+              effects.push({ name: call.name, args: call.arguments });
+              return { content: [{ type: "text", text: "fixture-result" }] };
+            },
+          },
           callableTool: transport("fixture_lookup"),
           functionNames: ["fixture_lookup"],
           connectedAt: 0,
           lastUsedAt: 0,
         };
+        return { replaced: new Set(), routes: new Map([["fixture_lookup", { connection, config: registration() }]]) };
       });
       const request = { name: "fixture_lookup", args: { target: "fixture", text: "Quiet note" } };
       context.preparedToolRequest = request;
@@ -145,9 +169,129 @@ describe("reviewed requests at real dispatch owners", () => {
     });
     guildRoute.mockImplementation(async () => {
       cancelled = true;
-      return false;
+      return { routes: new Map(), replaced: new Set() };
     });
     expect((await ToolRegistry.executeTool("fixture_action", {}, context)).success).toBe(false);
     expect(effects).toEqual([]);
+  });
+
+  it("refuses accidental, hallucinated, stale and replayed disabled manage_message calls", async () => {
+    const tool = new ManageMessageTool();
+    const effect = spyOn(tool, "execute").mockResolvedValue({ success: true });
+    ToolRegistry.registerTool(tool);
+    context.provider = "google";
+    context.tomoriState.config.manage_message_enabled = true;
+    expect(ToolRegistry.getAvailableTools(context.provider, context)).toContain(tool);
+    context.tomoriState.config.manage_message_enabled = false;
+    for (let call = 0; call < 4; call++) {
+      const result = await ToolRegistry.executeTool(
+        "manage_message",
+        { action: "delete", message_id: "fixture" },
+        context,
+      );
+      expect(result.success).toBe(false);
+      expect(result.error).toBe(localizedCopy("en-US", "tools.execution.unavailable", { tool: "manage_message" }));
+    }
+    expect(effect).not.toHaveBeenCalled();
+    context.tomoriState.config.manage_message_enabled = true;
+    context.tomoriState.config.tool_use_enabled = false;
+    expect((await ToolRegistry.executeTool("manage_message", {}, context)).success).toBe(true);
+    effect.mockRestore();
+  });
+
+  it("rechecks guild flags after asynchronous routing while preserving personal provider state", async () => {
+    const current = createPersona({ config: { manage_message_enabled: true } });
+    const read = spyOn(stateCache, "getCachedTomoriState").mockResolvedValue(current);
+    const tool = new ManageMessageTool();
+    const effect = spyOn(tool, "execute").mockResolvedValue({ success: true });
+    ToolRegistry.registerTool(tool);
+    context.provider = "google";
+    context.guildId = "fixture-guild";
+    context.tomoriState.config.manage_message_enabled = true;
+    guildRoute.mockImplementation(async () => {
+      current.config.manage_message_enabled = false;
+      return { routes: new Map(), replaced: new Set() };
+    });
+    try {
+      expect((await ToolRegistry.executeTool("manage_message", {}, context)).success).toBe(false);
+      expect(effect).not.toHaveBeenCalled();
+      current.config.manage_message_enabled = true;
+      guildRoute.mockImplementation(async () => {
+        current.config.manage_message_enabled = false;
+        throw new Error("Current MCP registrations unavailable");
+      });
+      expect((await ToolRegistry.executeTool("manage_message", {}, context)).success).toBe(false);
+      expect(effect).not.toHaveBeenCalled();
+      guildRoute.mockResolvedValue({ routes: new Map(), replaced: new Set() });
+      current.config.manage_message_enabled = true;
+      context.tomoriState.persona_nickname = "Mirri";
+      context.tomoriState.llm.llm_codename = "personal-model";
+      context.tomoriState.config.api_key = Buffer.from("personal-key");
+      expect((await ToolRegistry.executeTool("manage_message", {}, context)).success).toBe(true);
+      const executed = effect.mock.calls[0]?.[1];
+      expect(executed?.tomoriState.persona_nickname).toBe("Mirri");
+      expect(executed?.tomoriState.llm.llm_codename).toBe("personal-model");
+      expect(executed?.tomoriState.config.api_key).toEqual(Buffer.from("personal-key"));
+      effect.mockClear();
+      read.mockRejectedValue(new Error("unavailable"));
+      expect((await ToolRegistry.executeTool("manage_message", {}, context)).success).toBe(false);
+      expect(effect).not.toHaveBeenCalled();
+    } finally {
+      read.mockRestore();
+      effect.mockRestore();
+    }
+  });
+
+  it("checks declared bot permissions and model capabilities before effects", async () => {
+    ToolRegistry.registerTool({
+      name: "fixture_action",
+      description: "Permission fixture",
+      category: "utility",
+      parameters: { type: "object", properties: {}, required: [] },
+      requiredModelCapabilities: { sees_images: true },
+      requiresPermissions: ["SEND_MESSAGES"],
+      isAvailableFor: () => true,
+      execute: async (args) => {
+        effects.push({ name: "fixture_action", args });
+        return { success: true };
+      },
+    });
+    context.tomoriState.llm.sees_images = false;
+    expect((await ToolRegistry.executeTool("fixture_action", {}, context)).success).toBe(false);
+    context.tomoriState.llm.sees_images = true;
+    expect((await ToolRegistry.executeTool("fixture_action", {}, context)).success).toBe(false);
+    expect(effects).toEqual([]);
+    context.client = { user: { id: "fixture-bot" } } as ToolContext["client"];
+    context.channel = {
+      id: "fixture-channel",
+      permissionsFor: () => ({ has: () => true }),
+    } as unknown as ToolContext["channel"];
+    expect((await ToolRegistry.executeTool("fixture_action", {}, context)).success).toBe(true);
+  });
+
+  it("refuses retired engine names while search is off and preserves admitted engine execution", async () => {
+    ToolRegistry.registerTool(new WebSearchTool());
+    const search = spyOn(searchDispatcher, "executeWebSearchWithFallback").mockResolvedValue({
+      success: true,
+      message: "fixture result",
+    });
+    context.tomoriState.config.web_search_enabled = false;
+    try {
+      for (const name of [
+        "web_search",
+        "brave_web_search",
+        "brave_image_search",
+        "brave_video_search",
+        "brave_news_search",
+      ]) {
+        expect((await ToolRegistry.executeTool(name, { query: "fixture" }, context)).success).toBe(false);
+      }
+      expect(search).not.toHaveBeenCalled();
+      context.tomoriState.config.web_search_enabled = true;
+      expect((await ToolRegistry.executeTool("web_search", { query: "fixture" }, context)).success).toBe(true);
+      expect(search).toHaveBeenCalledTimes(1);
+    } finally {
+      search.mockRestore();
+    }
   });
 });

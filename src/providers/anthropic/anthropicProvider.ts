@@ -217,6 +217,7 @@ export class AnthropicProvider
       const {
         builtInTools: availableBuiltInTools,
         mcpFunctionNames: availableMcpFunctionNames,
+        mcpToolFamilies,
         totalCount,
       } = await getAvailableToolsWithMCP("anthropic", toolStateForContext);
 
@@ -233,6 +234,7 @@ export class AnthropicProvider
         providerLabel: "Anthropic provider",
         builtInTools: finalBuiltInTools,
         mcpFunctionNames: finalMcpFunctionNames,
+        mcpToolFamilies,
         allowedToolNames: streamingContext?.deliberateToolAllowedNames,
       }));
 

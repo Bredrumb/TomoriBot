@@ -1,5 +1,8 @@
 export default {
   tools: {
+    execution: {
+      unavailable: `The tool \`{tool}\` is unavailable under the current settings, model capabilities, or bot permissions.`,
+    },
     generate_image: {
       quota_exceeded_generic: `Image generation quota has been exceeded.`,
       user_quota_exceeded: `You have reached your daily image generation quota. {reset_info}`,

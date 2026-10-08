@@ -16,7 +16,8 @@ import {
   UTC_OFFSET_MAX,
 } from "../../utils/text/timezoneHelper";
 import { localizer } from "@/utils/text/localizer";
-import { isMatrixBridgeWebhookUsername } from "../../utils/bridges";
+import { isMatrixRelayMessage } from "@/utils/chat/triggerProcessor";
+import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 import { resolveChannelTarget, resolveUserTarget } from "@/utils/discord/targetResolver";
 
 /**
@@ -175,8 +176,8 @@ export class ReminderTool extends BaseTool {
     // The webhook bot has no users table record, so loadUserRow returns null.
     // Detect this case so we can relax the requestingUserRow guard below and
     // store created_by_user_id = null (the column is nullable for this reason).
-    const isMatrixRelayRequester =
-      !!context.message?.webhookId && isMatrixBridgeWebhookUsername(context.message?.author?.username ?? "");
+    if (context.message) await verifyMessageWebhook(context.message);
+    const isMatrixRelayRequester = !!context.message && isMatrixRelayMessage(context.message);
 
     const requestingUserRow = resolvedUserId ? await userRepository.loadByDiscordId(resolvedUserId) : null;
     const channelId = context.channel.id;

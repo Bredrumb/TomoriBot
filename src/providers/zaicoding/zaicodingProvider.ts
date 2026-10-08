@@ -198,6 +198,7 @@ export class ZaicodingProvider
       const {
         builtInTools: availableBuiltInTools,
         mcpFunctionNames: availableMcpFunctionNames,
+        mcpToolFamilies,
         totalCount,
       } = await getAvailableToolsWithMCP("zaicoding", toolStateForContext);
 
@@ -214,6 +215,7 @@ export class ZaicodingProvider
         providerLabel: "Z.ai Coding provider",
         builtInTools: finalBuiltInTools,
         mcpFunctionNames: finalMcpFunctionNames,
+        mcpToolFamilies,
         allowedToolNames: streamingContext?.deliberateToolAllowedNames,
       }));
 

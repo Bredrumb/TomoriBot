@@ -475,6 +475,7 @@ export class OpenrouterProvider
       const {
         builtInTools: availableBuiltInTools,
         mcpFunctionNames: availableMcpFunctionNames,
+        mcpToolFamilies,
         totalCount,
       } = await getAvailableToolsWithMCP("openrouter", toolStateForContext);
 
@@ -491,6 +492,7 @@ export class OpenrouterProvider
         providerLabel: "OpenRouter provider",
         builtInTools: finalBuiltInTools,
         mcpFunctionNames: finalMcpFunctionNames,
+        mcpToolFamilies,
         allowedToolNames: streamingContext?.deliberateToolAllowedNames,
       }));
 

@@ -222,6 +222,7 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
       const {
         builtInTools: availableBuiltInTools,
         mcpFunctionNames: availableMcpFunctionNames,
+        mcpToolFamilies,
         totalCount,
       } = await getAvailableToolsWithMCP("novelai", toolStateForContext);
 
@@ -238,6 +239,7 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
         providerLabel: "NovelAI provider",
         builtInTools: finalBuiltInTools,
         mcpFunctionNames: finalMcpFunctionNames,
+        mcpToolFamilies,
         allowedToolNames: streamingContext?.deliberateToolAllowedNames,
       }));
 

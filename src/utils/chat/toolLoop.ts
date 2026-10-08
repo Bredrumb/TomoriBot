@@ -1,3 +1,5 @@
+import { expandDeliberateToolAllowedNames } from "@/utils/tools/deliberateToolMode";
+import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import {
   MAX_RESPONSE_REVISIONS,
   MAX_TOOL_REVIEWS,
@@ -751,7 +753,21 @@ async function executeToolCall(
   // Deliberate-tool-mode allowlist enforcement. When mode is active and
   // the model attempts a tool that wasn't exposed for this turn, short-circuit
   // with a synthetic failure response (visible to the model) so it can adapt.
-  const allowedNames = params.context.streamingContext.deliberateToolAllowedNames;
+  const families: Record<string, string> = {};
+  const requestedNames = params.context.streamingContext.deliberateToolAllowedNames;
+  if (
+    params.context.deliberateToolModeActive &&
+    requestedNames?.some((name) => name === "fetch_url" || name === "web_search") &&
+    params.tomoriState.server_id
+  ) {
+    try {
+      const { routes } = await getGuildMcpManager().getGuildMCPRouting(params.tomoriState.server_id);
+      for (const [name, route] of routes) families[name] = route.config.server_type ?? "general";
+    } catch {
+      // Execution refuses unreadable registrations; an unavailable service grants no extra intent.
+    }
+  }
+  const allowedNames = expandDeliberateToolAllowedNames(requestedNames, families);
   const deliberateAllowedSet = allowedNames?.length ? new Set(allowedNames) : null;
   const isBlockedByDeliberateAllowlist =
     params.context.deliberateToolModeActive && deliberateAllowedSet !== null && !deliberateAllowedSet.has(functionName);

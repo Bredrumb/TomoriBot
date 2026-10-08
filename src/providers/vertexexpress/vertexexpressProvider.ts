@@ -283,6 +283,7 @@ export class VertexexpressProvider
       const {
         builtInTools: availableBuiltInTools,
         mcpFunctionNames: availableMcpFunctionNames,
+        mcpToolFamilies,
         totalCount,
       } = await getAvailableToolsWithMCP("vertexexpress", toolStateForContext);
 
@@ -299,6 +300,7 @@ export class VertexexpressProvider
         providerLabel: "Vertex AI Express provider",
         builtInTools: finalBuiltInTools,
         mcpFunctionNames: finalMcpFunctionNames,
+        mcpToolFamilies,
         allowedToolNames: streamingContext?.deliberateToolAllowedNames,
       }));
 

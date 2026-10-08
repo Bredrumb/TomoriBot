@@ -9,12 +9,12 @@ import type {
 } from "@/types/tool/interfaces";
 import { assembleToolsForContext } from "@/tools/assembly";
 import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
-import { getCachedEnabledGuildMcpConfigs } from "@/utils/cache/guildMcpConfigCache";
 import { sql } from "@/utils/db/client";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { log } from "@/utils/misc/logger";
 import { resolveActiveSpeechEndpoint } from "@/utils/provider/speechEndpointResolver";
 import { hasOptApiKey } from "@/utils/security/crypto";
+import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { configToFeatureFlags } from "@/utils/tools/featureFlagMapper";
 
 /**
@@ -27,6 +27,50 @@ export interface AvailableToolsWithMCP {
   builtInTools: Tool[];
   mcpFunctionNames: string[];
   totalCount: number;
+  mcpToolFamilies?: Record<string, string>;
+}
+
+export async function refreshToolExecutionContext(context: ToolContext): Promise<ToolContext | null> {
+  const scopeId = context.guildId ?? ("recipientId" in context.channel ? context.channel.recipientId : undefined);
+  if (scopeId) {
+    const current = await getCachedTomoriState(scopeId).catch(() => null);
+    if (!current || current.server_id !== context.tomoriState.server_id) {
+      return null;
+    }
+    // Keep persona and personal-provider state, but re-read guild switches after cache invalidation.
+    context = {
+      ...context,
+      tomoriState: {
+        ...context.tomoriState,
+        config: {
+          ...context.tomoriState.config,
+          sticker_usage_enabled: current.config.sticker_usage_enabled,
+          web_search_enabled: current.config.web_search_enabled,
+          self_teaching_enabled: current.config.self_teaching_enabled,
+          manage_message_enabled: current.config.manage_message_enabled,
+          imagegen_enabled: current.config.imagegen_enabled,
+          videogen_enabled: current.config.videogen_enabled,
+          voice_message_enabled: current.config.voice_message_enabled,
+          user_blocking_enabled: current.config.user_blocking_enabled,
+          user_info_updates_enabled: current.config.user_info_updates_enabled,
+          thread_creation_enabled: current.config.thread_creation_enabled,
+          response_rule_checker_ref: current.config.response_rule_checker_ref,
+        },
+      },
+    };
+  }
+  return context;
+}
+
+/** Dispatch uses the same policy as declarations; bot permissions do not authorize the invoking user. */
+export function isBuiltInToolAvailable(tool: Tool, provider: string, context: ToolContext): boolean {
+  return (
+    tool.isAvailableFor(provider) &&
+    tool.isAvailableForContext?.(provider, context) !== false &&
+    meetsModelCapabilityRequirements(tool, context.tomoriState.llm) &&
+    (!tool.requiresFeatureFlag || checkFeatureFlag(tool.requiresFeatureFlag, context)) &&
+    (!tool.requiresPermissions?.length || checkPermissions(tool.requiresPermissions, context))
+  );
 }
 
 export function getAvailableToolsForProvider(tools: Iterable<Tool>, provider: string, context: ToolContext): Tool[] {
@@ -34,23 +78,7 @@ export function getAvailableToolsForProvider(tools: Iterable<Tool>, provider: st
 
   for (const tool of tools) {
     try {
-      const isToolAvailable = tool.isAvailableForContext
-        ? tool.isAvailableForContext(provider, context)
-        : tool.isAvailableFor(provider);
-
-      if (!isToolAvailable) {
-        continue;
-      }
-
-      if (!meetsModelCapabilityRequirements(tool, context.tomoriState.llm)) {
-        continue;
-      }
-
-      if (tool.requiresFeatureFlag && !checkFeatureFlag(tool.requiresFeatureFlag, context)) {
-        continue;
-      }
-
-      if (tool.requiresPermissions?.length && !checkPermissions(tool.requiresPermissions, context)) {
+      if (!isBuiltInToolAvailable(tool, provider, context)) {
         continue;
       }
 
@@ -153,85 +181,27 @@ export async function getAvailableToolsWithMCP(
   try {
     let builtInTools = getAvailableToolsForContext(tools, provider, stateForContext);
     let mcpFunctionNames: string[] = [];
+    const mcpToolFamilies: Record<string, string> = {};
 
     const serverIdNum = stateForContext.server_id ? Number.parseInt(stateForContext.server_id, 10) : undefined;
     if (serverIdNum) {
-      try {
-        const guildMcpManager = getGuildMcpManager();
-        const [guildFunctionNames, guildUrlFetcherFunctionNames] = await Promise.all([
-          guildMcpManager.getGuildMCPFunctionNames(serverIdNum),
-          guildMcpManager.getGuildMCPFunctionNamesByServerType(serverIdNum, "url_fetcher"),
-        ]);
-
-        if (guildFunctionNames.length > 0) {
-          const builtInNames = new Set(builtInTools.map((t) => t.name));
-          const guildUrlFetcherFunctionSet = new Set(guildUrlFetcherFunctionNames);
-
-          const safeGuildNames = guildFunctionNames.filter((name) => {
-            if (name === stateForContext.config.response_rule_checker_ref?.toolName) return false;
-            const isGuildFetchUrlReplacement = name === "fetch_url" && guildUrlFetcherFunctionSet.has(name);
-            if (!isGuildFetchUrlReplacement && builtInNames.has(name)) {
-              log.warn(`[GuildMCP] Skipping guild MCP function "${name}" - collides with a built-in tool`);
-              return false;
-            }
-            return true;
-          });
-
-          mcpFunctionNames = safeGuildNames;
-          log.info(
-            `Guild MCP tools: ${guildFunctionNames.length} discovered, ${safeGuildNames.length} after collision check (server: ${serverIdNum})`,
-          );
-        }
-      } catch (error) {
-        log.warn("[GuildMCP] Failed to get guild MCP function names, continuing without", error);
+      const routing = await getGuildMcpManager().getGuildMCPRouting(serverIdNum);
+      for (const [name, route] of routing.routes) {
+        if (route.config.server_type) mcpToolFamilies[name] = route.config.server_type;
       }
-    }
-
-    if (serverIdNum) {
-      try {
-        const enabledConfigs = await getCachedEnabledGuildMcpConfigs(serverIdNum);
-        const guildServerTypes = new Set(enabledConfigs.map((c) => c.server_type).filter(Boolean));
-
-        if (guildServerTypes.has("web_search")) {
-          // Deduplicates against the built-in `web_search` name when a guild brings its own search server.
-          const webSearchFunctions = ["web_search", "url-metadata"];
-          const beforeCount = mcpFunctionNames.length;
-          mcpFunctionNames = mcpFunctionNames.filter((name) => !webSearchFunctions.includes(name));
-          const excludedCount = beforeCount - mcpFunctionNames.length;
-          if (excludedCount > 0) {
-            log.info(`Excluded ${excludedCount} web search MCP functions (guild has web_search server type)`);
-          }
-        }
-
-        if (guildServerTypes.has("url_fetcher")) {
-          const guildUrlFetcherFunctionNames = await getGuildMcpManager().getGuildMCPFunctionNamesByServerType(
-            serverIdNum,
-            "url_fetcher",
-          );
-          const guildUrlFetcherFunctionSet = new Set(guildUrlFetcherFunctionNames);
-
-          if (guildUrlFetcherFunctionNames.length > 0) {
-            const beforeBuiltInCount = builtInTools.length;
-            builtInTools = builtInTools.filter((tool) => tool.name !== "fetch_url");
-            const excludedBuiltInCount = beforeBuiltInCount - builtInTools.length;
-            if (excludedBuiltInCount > 0) {
-              log.info("Excluded bundled fetch_url (guild has url_fetcher server type)");
-            }
-          }
-
-          const fetchFunctions = ["fetch", "fetch-url"];
-          const beforeCount = mcpFunctionNames.length;
-          mcpFunctionNames = mcpFunctionNames.filter(
-            (name) => !fetchFunctions.includes(name) || guildUrlFetcherFunctionSet.has(name),
-          );
-          const excludedCount = beforeCount - mcpFunctionNames.length;
-          if (excludedCount > 0) {
-            log.info(`Excluded ${excludedCount} URL fetch MCP functions (guild has url_fetcher server type)`);
-          }
-        }
-      } catch (error) {
-        log.warn("[GuildMCP] Failed to check server types for deduplication, continuing without", error);
-      }
+      builtInTools = builtInTools.filter(
+        (tool) =>
+          !(tool.name === "fetch_url" && routing.replaced.has("url_fetcher")) &&
+          !(tool.name === "web_search" && routing.replaced.has("web_search")),
+      );
+      mcpFunctionNames = [...routing.routes]
+        .filter(
+          ([name, route]) =>
+            name !== stateForContext.config.response_rule_checker_ref?.toolName &&
+            (!(route.config.server_type === "url_fetcher" || route.config.server_type === "web_search") ||
+              configToFeatureFlags(stateForContext.config).web_search),
+        )
+        .map(([name]) => name);
     }
 
     const serverIdNumber = stateForContext.server_id ? Number.parseInt(stateForContext.server_id, 10) : undefined;
@@ -320,11 +290,14 @@ export async function getAvailableToolsWithMCP(
       builtInTools,
       mcpFunctionNames,
       totalCount,
+      mcpToolFamilies,
     };
   } catch (error) {
     log.error("Failed to get available tools with MCP:", error as Error);
 
-    const builtInTools = getAvailableToolsForContext(tools, provider, stateForContext);
+    const builtInTools = getAvailableToolsForContext(tools, provider, stateForContext).filter(
+      (tool) => !stateForContext.server_id || (tool.name !== "web_search" && tool.name !== "fetch_url"),
+    );
     return {
       builtInTools,
       mcpFunctionNames: [],

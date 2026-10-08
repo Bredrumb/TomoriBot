@@ -1,3 +1,4 @@
+import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 import { GoogleGenAI, type CountTokensParameters } from "@google/genai";
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
@@ -645,9 +646,10 @@ async function buildRuntimeParityContext(
       personaName = authorName;
     } else if (message.webhookId) {
       const webhookName = message.author.username?.trim();
-      const resolvedPersona = webhookName
-        ? await resolveWebhookPersonaAuthor(message.id, webhookName, personaByNickname)
-        : null;
+      const resolvedPersona =
+        webhookName && (await verifyMessageWebhook(message))
+          ? await resolveWebhookPersonaAuthor(message.id, webhookName, personaByNickname)
+          : null;
 
       if (resolvedPersona) {
         authorName = resolvedPersona.displayName;

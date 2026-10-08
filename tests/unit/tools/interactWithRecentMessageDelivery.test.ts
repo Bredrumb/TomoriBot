@@ -4,9 +4,12 @@ import type { TomoriState } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { InteractWithRecentMessageTool } from "@/tools/functionCalls/interactWithRecentMessageTool";
 import * as tomoriStateCache from "@/utils/cache/tomoriStateCache";
+import { serverRepository } from "@/utils/db/repositories/ServerRepository";
+import { clearWebhookIdentityCache } from "@/utils/chat/webhookIdentity";
+import { createPersona } from "../../helpers/fixtures";
 
-const MAIN = { persona_id: 1, persona_nickname: "Tomori", is_alter: false } as unknown as TomoriState;
-const ALTER = { persona_id: 2, persona_nickname: "Mirri", is_alter: true } as unknown as TomoriState;
+const MAIN = createPersona({ persona_id: 1, persona_nickname: "Tomori", is_alter: false });
+const ALTER = createPersona({ persona_id: 2, persona_nickname: "Mirri", is_alter: true });
 const BOT_USER_ID = "bot-user";
 
 interface DeliveryResult {
@@ -22,6 +25,9 @@ interface DeliveryResolver {
 
 const alterWebhookMessage = {
   webhookId: "webhook-1",
+  guildId: "guild-1",
+  channelId: "channel-1",
+  channel: { isThread: () => false },
   author: { id: "webhook-1", username: ALTER.persona_nickname },
 } as unknown as Message;
 
@@ -49,13 +55,26 @@ function resolve(context: ToolContext, message: Message): Promise<DeliveryResult
 
 describe("interact_with_recent_message reply delivery identity", () => {
   let personas: ReturnType<typeof spyOn<typeof tomoriStateCache, "getCachedAllPersonas">>;
+  let managed: ReturnType<typeof spyOn<typeof serverRepository, "loadManagedWebhookByChannelAndWebhookId">>;
 
   beforeEach(() => {
     personas = spyOn(tomoriStateCache, "getCachedAllPersonas");
+    clearWebhookIdentityCache();
+    managed = spyOn(serverRepository, "loadManagedWebhookByChannelAndWebhookId").mockResolvedValue({
+      managed_webhook_id: 1,
+      guild_disc_id: "guild-1",
+      channel_disc_id: "channel-1",
+      webhook_disc_id: "webhook-1",
+      kind: "shared_channel",
+      webhook_token: Buffer.from("fixture"),
+      key_version: 1,
+    });
   });
 
   afterEach(() => {
     personas.mockRestore();
+    managed.mockRestore();
+    clearWebhookIdentityCache();
   });
 
   it("speaks as the active persona when the target message belongs to a different persona", async () => {

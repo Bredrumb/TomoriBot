@@ -17,10 +17,14 @@ import { redactToolParametersForStorage } from "@/utils/tools/toolParameterRedac
 import {
   getAvailableToolsForContext as getAvailableToolsForContextFromRegistry,
   getAvailableToolsForProvider,
+  isBuiltInToolAvailable,
   getAvailableToolsWithMCP as getAvailableToolsWithMCPFromRegistry,
   type AvailableToolsWithMCP,
   type ToolStateForContext,
 } from "@/tools/availability";
+import { localizer } from "@/utils/text/localizer";
+import { refreshToolExecutionContext } from "@/tools/availability";
+import { configToFeatureFlags } from "@/utils/tools/featureFlagMapper";
 
 const BUILTIN_TOOL_ALIASES: Record<string, string> = {
   remember_this_fact: "create_long_term_memory",
@@ -151,6 +155,10 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     return Array.from(this.tools.values());
   }
 
+  getReservedToolNames(): Set<string> {
+    return new Set([...this.tools.keys(), ...Object.keys(BUILTIN_TOOL_ALIASES)]);
+  }
+
   /**
    * Check if a tool requires a follow-up generation after execution
    * Built-in tools check the `requiresFollowUp` property; guild MCP tools always return true
@@ -163,7 +171,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
 
     if (serverId) {
       try {
-        const isGuildMcp = await getGuildMcpManager().isGuildMCPFunction(serverId, resolvedFunctionName);
+        const isGuildMcp = (await getGuildMcpManager().getGuildMCPRouting(serverId)).routes.has(resolvedFunctionName);
         if (isGuildMcp) return true;
       } catch {}
     }
@@ -179,6 +187,13 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   async executeTool(toolName: string, args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const startTime = Date.now();
     const resolvedToolName = resolveBuiltInToolAlias(toolName);
+    const unavailable = (): ToolResult => ({
+      success: false,
+      error: localizer(context.locale, "tools.execution.unavailable", { tool: toolName }),
+    });
+    const refreshed = await refreshToolExecutionContext(context);
+    if (!refreshed) return unavailable();
+    context = refreshed;
     if (resolvedToolName === context.tomoriState?.config.response_rule_checker_ref?.toolName)
       return { success: false, error: "Internal review evidence is unavailable to author tools" };
     const resolvedArgs =
@@ -190,8 +205,28 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     if (serverId) {
       try {
         const guildMcpManager = getGuildMcpManager();
-        const isGuildMcp = await guildMcpManager.isGuildMCPFunction(serverId, resolvedToolName);
+        const routing = await guildMcpManager.getGuildMCPRouting(serverId);
+        const current = await refreshToolExecutionContext(context);
+        if (!current) return unavailable();
+        context = current;
+        if (resolvedToolName === context.tomoriState.config.response_rule_checker_ref?.toolName) return unavailable();
+        const route = routing.routes.get(resolvedToolName);
+        const isGuildMcp = Boolean(route);
         if (context.isExecutionCancelled?.()) return { success: false };
+        const replacementFamily =
+          route?.config.server_type === "web_search" || route?.config.server_type === "url_fetcher";
+        const replacedBuiltIn =
+          (resolvedToolName === "fetch_url" && routing.replaced.has("url_fetcher")) ||
+          (resolvedToolName === "web_search" && routing.replaced.has("web_search"));
+        if (
+          (replacementFamily && !configToFeatureFlags(context.tomoriState.config).web_search) ||
+          (replacedBuiltIn && !route)
+        ) {
+          return {
+            success: false,
+            error: localizer(context.locale, "tools.execution.unavailable", { tool: toolName }),
+          };
+        }
         if (isGuildMcp) {
           log.info(`Executing guild MCP function: ${resolvedToolName} for server ${serverId}`);
           const result = await guildMcpManager.executeGuildMCPFunction(
@@ -225,6 +260,13 @@ class ToolRegistryImpl implements ToolRegistryInterface {
         }
       } catch (error) {
         log.warn(`Error checking/executing guild MCP function '${resolvedToolName}':`, error as Error);
+        if (!this.getTool(resolvedToolName) || resolvedToolName === "fetch_url" || resolvedToolName === "web_search")
+          return unavailable();
+        // MCP cannot own other built-ins, but flags may have changed during the failed lookup.
+        const current = await refreshToolExecutionContext(context);
+        if (!current || resolvedToolName === current.tomoriState.config.response_rule_checker_ref?.toolName)
+          return unavailable();
+        context = current;
       }
     }
 
@@ -269,34 +311,8 @@ class ToolRegistryImpl implements ToolRegistryInterface {
       return errorResult;
     }
 
-    // Static provider support and live turn availability must stay separate:
-    // `error` is fed back to the model, and reporting a per-turn rejection
-    // ("already ran this turn") as a provider capability gap teaches the persona
-    // it cannot do something it can.
-    if (!tool.isAvailableFor(context.provider)) {
-      const errorResult: ToolResult = {
-        success: false,
-        error: `Tool '${toolName}' is not available for provider '${context.provider}'`,
-      };
-
-      log.error(`Tool execution failed - provider not supported: ${toolName} for provider ${context.provider}`);
-
-      return errorResult;
-    }
-
-    if (tool.isAvailableForContext?.(context.provider, context) === false) {
-      const errorResult: ToolResult = {
-        success: false,
-        error:
-          `Tool '${toolName}' is not available for the current turn. It has either already run this turn, or the active model or server configuration does not support it. ` +
-          "Do not call it again for the rest of this turn; work with the context you already have.",
-      };
-
-      log.warn(
-        `Tool execution rejected - unavailable in current turn context: ${toolName} for provider ${context.provider}`,
-      );
-
-      return errorResult;
+    if (!isBuiltInToolAvailable(tool, context.provider, context)) {
+      return { success: false, error: localizer(context.locale, "tools.execution.unavailable", { tool: toolName }) };
     }
 
     try {
@@ -472,10 +488,6 @@ export async function requiresFollowUp(functionName: string, serverId?: number):
 export async function getAvailableToolsWithMCP(
   provider: string,
   stateForContext: ToolStateForContext,
-): Promise<{
-  builtInTools: Tool[];
-  mcpFunctionNames: string[];
-  totalCount: number;
-}> {
+): Promise<AvailableToolsWithMCP> {
   return ToolRegistry.getAvailableToolsWithMCP(provider, stateForContext);
 }

@@ -189,6 +189,7 @@ export class DeepseekProvider
       const {
         builtInTools: availableBuiltInTools,
         mcpFunctionNames: availableMcpFunctionNames,
+        mcpToolFamilies,
         totalCount,
       } = await getAvailableToolsWithMCP("deepseek", toolStateForContext);
 
@@ -205,6 +206,7 @@ export class DeepseekProvider
         providerLabel: "DeepSeek provider",
         builtInTools: finalBuiltInTools,
         mcpFunctionNames: finalMcpFunctionNames,
+        mcpToolFamilies,
         allowedToolNames: streamingContext?.deliberateToolAllowedNames,
       }));
 

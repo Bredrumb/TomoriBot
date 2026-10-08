@@ -1,3 +1,4 @@
+import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 import type { Client, Message } from "discord.js";
 import { ChannelType } from "discord.js";
 import { log } from "../utils/misc/logger";
@@ -142,6 +143,7 @@ export class RandomTriggerProcessor {
       if (!trigger.respond_to_self && lastMessage) {
         const isPersonaLastSpeaker =
           lastMessage.webhookId !== null &&
+          (await verifyMessageWebhook(lastMessage)) &&
           resolvePersonaForMessage(lastMessage, allPersonas)?.persona_id === chosenPersona.persona_id;
 
         if (isPersonaLastSpeaker) {

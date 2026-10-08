@@ -654,7 +654,7 @@ export async function getOrCreateWebhook(channel: TextChannel | BaseGuildTextCha
 
     log.info(`[Webhook Manager] Cache MISS for channel ${channelId}, fetching webhooks`);
     const webhooks = await channel.fetchWebhooks();
-    let webhook = webhooks.find((wh) => wh.name === WEBHOOK_NAME);
+    let webhook = webhooks.find((wh) => wh.name === WEBHOOK_NAME && wh.owner?.id === channel.client.user?.id);
 
     if (webhook && !webhook.token) {
       log.warn(

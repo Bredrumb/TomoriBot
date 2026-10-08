@@ -1,3 +1,4 @@
+import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 import type { Client, Guild, Message, TextBasedChannel, User } from "discord.js";
 import { PrivacyLevel, type TomoriState, type UserRow } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -525,9 +526,10 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
       personaName = authorName;
     } else if (message.webhookId) {
       const webhookName = message.author.username?.trim();
-      const resolvedPersona = webhookName
-        ? await resolveWebhookPersonaAuthor(message.id, webhookName, personaByNickname)
-        : null;
+      const resolvedPersona =
+        webhookName && (await verifyMessageWebhook(message))
+          ? await resolveWebhookPersonaAuthor(message.id, webhookName, personaByNickname)
+          : null;
       if (resolvedPersona) {
         authorName = resolvedPersona.displayName;
         authorType = "persona";

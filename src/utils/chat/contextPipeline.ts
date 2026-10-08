@@ -1,3 +1,4 @@
+import { verifyMessageWebhook, isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
 import type { Message } from "discord.js";
 import { MessageReferenceType, MessageType } from "discord.js";
 import type { ForcedMention } from "@/types/discord/mentions";
@@ -21,6 +22,7 @@ import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
 import {
   type DeliberateToolIntentMatch,
+  expandDeliberateToolAllowedNames,
   getAutonomousDeliberateToolNames,
   getDeliberateToolIntentResult,
   getFollowUpToolIntentResult,
@@ -295,20 +297,23 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   );
   const deliberateToolAllowedNames = [...deliberateToolIntentResult.allowedToolNames];
   const deliberateToolTriggerMatches: DeliberateToolIntentMatch[] = [...deliberateToolIntentResult.matches];
-  if (deliberateToolAllowedNames.includes("fetch_url")) {
+  if (deliberateToolAllowedNames.includes("fetch_url") || deliberateToolAllowedNames.includes("web_search")) {
     const serverId = Number(turn.persona.server_id);
     if (Number.isFinite(serverId)) {
-      const guildUrlFetcherNames = await getGuildMcpManager().getGuildMCPFunctionNamesByServerType(
-        serverId,
-        "url_fetcher",
-      );
-      for (const toolName of guildUrlFetcherNames) {
-        deliberateToolAllowedNames.push(toolName);
-        deliberateToolTriggerMatches.push({
-          toolName,
-          trigger: "URL fetch request",
-          source: "built-in",
-        });
+      try {
+        const { routes } = await getGuildMcpManager().getGuildMCPRouting(serverId);
+        const families = Object.fromEntries(
+          [...routes].map(([name, route]) => [name, route.config.server_type ?? "general"]),
+        );
+        for (const toolName of expandDeliberateToolAllowedNames(deliberateToolAllowedNames, families) ?? []) {
+          if (deliberateToolAllowedNames.includes(toolName)) continue;
+          const canonical = families[toolName] === "url_fetcher" ? "fetch_url" : "web_search";
+          const match = deliberateToolTriggerMatches.find((entry) => entry.toolName === canonical);
+          deliberateToolAllowedNames.push(toolName);
+          if (match) deliberateToolTriggerMatches.push({ ...match, toolName });
+        }
+      } catch {
+        // An unreadable selection cannot admit remote intent; dispatch will refuse it too.
       }
     }
   }
@@ -655,6 +660,7 @@ async function buildSimplifiedHistory(
     messages.push(turn.lockedTurn.admission.message);
   }
   const fetchedMessages = messages;
+  await Promise.all(messages.map(verifyMessageWebhook));
   messages = excludeMessagesAwaitingOwnTurn(
     messages,
     turn.lockedTurn.channelId,
@@ -948,8 +954,9 @@ async function simplifyMessage(
   minimalNoticeBodies: ReadonlyMap<string, string>,
 ): Promise<{ message: SimplifiedMessageForContext; isDebug: boolean } | null> {
   const isJoin = msg.type === MessageType.UserJoin;
-  const isDebug = !isJoin && msg.content.startsWith("$:");
   const isWebhook = Boolean(msg.webhookId);
+  const isManagedWebhook = isManagedWebhookMessage(msg);
+  const isDebug = !isJoin && (!isWebhook || isManagedWebhook) && msg.content.startsWith("$:");
   let content = isJoin
     ? `[System: <@${msg.author.id}> has just joined ${turn.serverName}]`
     : isDebug
@@ -998,9 +1005,13 @@ async function simplifyMessage(
     authorPersonaId = turn.mainPersona?.persona_id ?? turn.persona.persona_id ?? null;
     authorPersonaLineageId = turn.mainPersona?.persona_lineage_id ?? turn.persona.persona_lineage_id;
   } else if (isWebhook) {
-    const webhookName = stripBridgePrefix(msg.author.username);
-    const renderModifierSource = resolveRenderModifierSourcePersona(webhookName, personaByName);
-    const matchedPersona = renderModifierSource?.persona ?? personaByName.get(normalizeRenderModifierName(webhookName));
+    const webhookName = isManagedWebhook ? stripBridgePrefix(msg.author.username) : msg.author.username;
+    const renderModifierSource = isManagedWebhook
+      ? resolveRenderModifierSourcePersona(webhookName, personaByName)
+      : null;
+    const matchedPersona = isManagedWebhook
+      ? (renderModifierSource?.persona ?? personaByName.get(normalizeRenderModifierName(webhookName)))
+      : undefined;
     if (matchedPersona) {
       const spriteDisplayName =
         renderModifierSource && !renderModifierSource.isNeutralAppearance
@@ -1016,13 +1027,15 @@ async function simplifyMessage(
     } else {
       authorId = msg.webhookId ?? msg.author.id;
       authorName = webhookName || msg.author.username;
-      const cachedImpersonatedUserId = getCachedImpersonatedUserIdForWebhook(msg.webhookId);
+      const cachedImpersonatedUserId = isManagedWebhookMessage(msg)
+        ? getCachedImpersonatedUserIdForWebhook(msg.webhookId)
+        : null;
       if (cachedImpersonatedUserId) {
         authorId = cachedImpersonatedUserId;
       }
-      const matrixId = extractBridgeUserId(msg.author.username);
+      const matrixId = isManagedWebhook ? extractBridgeUserId(msg.author.username) : undefined;
       if (matrixId) matrixUsers.set(matrixId, authorName);
-      if (!isMatrixBridgeWebhookUsername(msg.author.username) && !cachedImpersonatedUserId) {
+      if (!(isManagedWebhook && isMatrixBridgeWebhookUsername(msg.author.username)) && !cachedImpersonatedUserId) {
         syntheticUsers.set(authorId, { displayName: authorName, type: "webhook" });
       }
     }
@@ -1179,6 +1192,7 @@ async function withReplyContext(
     }
     const referenced =
       msg.channel.messages.cache.get(referenceMessageId) ?? (await msg.channel.messages.fetch(referenceMessageId));
+    await verifyMessageWebhook(referenced);
     if (blockedContextUserIds.has(getBlockComparableAuthorId(referenced))) {
       return { content };
     }
@@ -1209,7 +1223,9 @@ async function loadActivePersonaUserBlocks(turn: ChatTurn): Promise<PersonaUserB
 
 function getBlockComparableAuthorId(msg: Message): string {
   if (msg.webhookId) {
-    return getCachedImpersonatedUserIdForWebhook(msg.webhookId) ?? msg.author.id;
+    return (
+      (isManagedWebhookMessage(msg) ? getCachedImpersonatedUserIdForWebhook(msg.webhookId) : null) ?? msg.author.id
+    );
   }
   return msg.author.id;
 }
@@ -1220,7 +1236,7 @@ function getBlockComparableAuthorId(msg: Message): string {
  */
 function getBlacklistCandidateAuthorId(msg: Message): string | null {
   if (msg.webhookId) {
-    return getCachedImpersonatedUserIdForWebhook(msg.webhookId) ?? null;
+    return (isManagedWebhookMessage(msg) ? getCachedImpersonatedUserIdForWebhook(msg.webhookId) : null) ?? null;
   }
   return msg.author.bot ? null : msg.author.id;
 }
@@ -1344,7 +1360,7 @@ function appendTailDirectives(args: {
     if (queuedMessage.author.id === queuedClient.user?.id) {
       queuedReplyTargetName =
         args.turn.mainPersona?.persona_nickname ?? args.turn.tomoriState.persona_nickname ?? queuedReplyTargetName;
-    } else if (queuedMessage.webhookId) {
+    } else if (isManagedWebhookMessage(queuedMessage)) {
       const webhookName = stripBridgePrefix(queuedMessage.author.username);
       const personaByNicknameMap = new Map<string, (typeof args.turn.allPersonas)[number]>();
       for (const p of args.turn.allPersonas) {

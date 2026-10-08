@@ -1,5 +1,6 @@
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
+import { expandDeliberateToolAllowedNames } from "@/utils/tools/deliberateToolMode";
 import { log } from "@/utils/misc/logger";
 import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
 import { renderPromptConditionals, type PromptConditionPredicate } from "./promptConditionals";
@@ -119,7 +120,7 @@ const DYNAMIC_TOOL_PROMPT_MACROS = {
         availability.guildUrlFetcherToolNames,
         [/metadata/, /meta/, /head/, /headers/, /preview/, /info/],
         [/fetch/, /read/, /crawl/],
-      ) || pickFirstAvailable(availability.availableToolNames, ["url-metadata", "fetch_url", "fetch"]),
+      ) || pickFirstAvailable(availability.availableToolNames, ["fetch_url"]),
   },
 } as const;
 
@@ -265,25 +266,40 @@ async function loadToolPromptMacroAvailability(
     return fallbackAvailability;
   }
 
-  const preloadedToolNames = context?.availableToolNames;
-  if (preloadedToolNames) {
-    const deliberateToolAllowedNames = context?.deliberateToolAllowedNames;
-    const availableToolNames = deliberateToolAllowedNames
-      ? new Set([...preloadedToolNames].filter((name) => deliberateToolAllowedNames.includes(name)))
-      : new Set(preloadedToolNames);
-    return {
-      availableToolNames,
-      guildWebSearchToolNames: [],
-      guildUrlFetcherToolNames: [],
-    };
-  }
-
   try {
-    const [{ builtInTools, mcpFunctionNames }, guildToolNames] = await Promise.all([
-      getAvailableToolsWithMCP(provider, stateForContext),
-      loadGuildToolFamilyNames(stateForContext.server_id),
-    ]);
-    const hiddenGenericFetchNames = new Set(["fetch", "fetch-url", "url-metadata"]);
+    const preloadedToolNames = context?.availableToolNames;
+    if (preloadedToolNames) {
+      const guildToolNames = await loadGuildToolFamilyNames(stateForContext.server_id).catch(() => ({
+        webSearch: [],
+        urlFetcher: [],
+      }));
+      const families = Object.fromEntries([
+        ...guildToolNames.webSearch.map((name) => [name, "web_search"]),
+        ...guildToolNames.urlFetcher.map((name) => [name, "url_fetcher"]),
+      ]);
+      const deliberateToolAllowedNames = expandDeliberateToolAllowedNames(
+        context?.deliberateToolAllowedNames,
+        families,
+      );
+      const availableToolNames = deliberateToolAllowedNames
+        ? new Set([...preloadedToolNames].filter((name) => deliberateToolAllowedNames.includes(name)))
+        : new Set(preloadedToolNames);
+      return {
+        availableToolNames,
+        guildWebSearchToolNames: guildToolNames.webSearch.filter((name) => availableToolNames.has(name)),
+        guildUrlFetcherToolNames: guildToolNames.urlFetcher.filter((name) => availableToolNames.has(name)),
+      };
+    }
+
+    const {
+      builtInTools,
+      mcpFunctionNames,
+      mcpToolFamilies = {},
+    } = await getAvailableToolsWithMCP(provider, stateForContext);
+    const guildToolNames = {
+      webSearch: mcpFunctionNames.filter((name) => mcpToolFamilies[name] === "web_search"),
+      urlFetcher: mcpFunctionNames.filter((name) => mcpToolFamilies[name] === "url_fetcher"),
+    };
     const availableToolNames = new Set<string>();
 
     for (const tool of builtInTools) {
@@ -291,13 +307,14 @@ async function loadToolPromptMacroAvailability(
     }
 
     for (const functionName of mcpFunctionNames) {
-      if (hiddenGenericFetchNames.has(functionName)) {
-        continue;
-      }
       availableToolNames.add(functionName);
     }
 
-    const deliberateToolAllowedNames = context?.deliberateToolAllowedNames;
+    const families = Object.fromEntries([
+      ...guildToolNames.webSearch.map((name) => [name, "web_search"]),
+      ...guildToolNames.urlFetcher.map((name) => [name, "url_fetcher"]),
+    ]);
+    const deliberateToolAllowedNames = expandDeliberateToolAllowedNames(context?.deliberateToolAllowedNames, families);
     const filteredAvailableToolNames = deliberateToolAllowedNames
       ? new Set([...availableToolNames].filter((name) => deliberateToolAllowedNames.includes(name)))
       : availableToolNames;
@@ -320,12 +337,11 @@ async function loadGuildToolFamilyNames(serverId: string): Promise<{ webSearch: 
   }
 
   const guildMcpManager = getGuildMcpManager();
-  const [webSearch, urlFetcher] = await Promise.all([
-    guildMcpManager.getGuildMCPFunctionNamesByServerType(parsedServerId, "web_search"),
-    guildMcpManager.getGuildMCPFunctionNamesByServerType(parsedServerId, "url_fetcher"),
-  ]);
-
-  return { webSearch, urlFetcher };
+  const { routes } = await guildMcpManager.getGuildMCPRouting(parsedServerId);
+  return {
+    webSearch: [...routes].filter(([, route]) => route.config.server_type === "web_search").map(([name]) => name),
+    urlFetcher: [...routes].filter(([, route]) => route.config.server_type === "url_fetcher").map(([name]) => name),
+  };
 }
 
 function resolveWebSearchToolName(availability: ToolPromptMacroAvailability): string | null {
@@ -377,15 +393,12 @@ function resolveGuildFamilyToolName(
 }
 
 function resolveUrlFetchToolName(availability: ToolPromptMacroAvailability): string | null {
-  const inferredUrlFetcherNames = [...availability.availableToolNames].filter(
-    (name) => name === "fetch" || /(?:url|web|http|fetch|crawl|page|visit)/i.test(name),
-  );
   return (
     resolveGuildFamilyToolName(
-      [...availability.guildUrlFetcherToolNames, ...inferredUrlFetcherNames],
+      availability.guildUrlFetcherToolNames,
       [/fetch/, /read/, /crawl/, /page/, /open/, /visit/, /url/],
       [/metadata/, /meta/, /head/],
-    ) || pickFirstAvailable(availability.availableToolNames, ["fetch_url", "fetch"])
+    ) || pickFirstAvailable(availability.availableToolNames, ["fetch_url"])
   );
 }
 

@@ -42,7 +42,7 @@ The status dashboard must not expose plaintext credentials, tokens, or private e
 - **Custom endpoint URLs:** Display configured status without revealing hostnames or paths.
 - **Matrix room IDs:** Omit room identifiers; show linked channel names and counts only.
 - **Automated trigger prompts:** Display configured status without printing custom prompt text.
-- **First-party prompts:** Preview pages display system and persona prompts because they represent bot instructions configured by the guild owner.
+- **Prompt and context previews:** `canViewPromptText` gates system prompts, persona prompts, and context notes, matching prompt snapshots. Members can see them when prompt inspection is enabled; `ManageGuild` holders can also inspect them when that setting is disabled. Without verified permissions, a caller cannot claim the administrator exception. Initial replies and every category, page, and persona-selection route evaluate current permissions and settings before building previews. Hidden fields retain a localized label, and safe status information remains available.
 
 New durable settings need a view in the owning status category, with the same credential and endpoint redaction as existing fields. The management command remains the write owner; the dashboard only reads and directs users to it.
 
