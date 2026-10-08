@@ -28,8 +28,8 @@ holds:
    to travel together: docs, migrations, cache invalidation, and English locale keys.
 
 Reuse without speculating:
-- Extract a shared helper when a second real caller exists now, not for an imagined one.
-- Fix a bug in the shared function after checking every caller, not only the reported path.
+- Extract a shared helper only when a second real caller exists.
+- Check every caller before fixing a bug in a shared function.
 - No compatibility shims, fallback paths, or options for states the code cannot reach. Validate at
   trust boundaries (user input, provider responses, URLs, stored JSON); trust typed internal values.
 - A deliberate shortcut with a known ceiling gets a comment naming the ceiling and the upgrade trigger.
@@ -50,7 +50,7 @@ proposed follow-up's premise in source before suggesting it.
    - Use path alias imports (`@/*`) for `src/*`.
    - Avoid `any`; use typed interfaces/schemas.
    - Full conventions: `docs/en/contributing/development-tasks.md` (Coding Conventions section).
-2. Comment for rationale, not narration.
+2. Comment to explain rationale.
    - Explain why a constraint, quirk, or invariant exists; never restate the line below it.
    - No step numbering or `Rule N:` scaffolding in comments and JSDoc.
    - No prose em/en dashes or spaced double hyphens in comments, JSDoc, `docs/`, or locale strings.
@@ -64,9 +64,13 @@ proposed follow-up's premise in source before suggesting it.
    - Docs, code comments, tests, and locale strings ship publicly: use invented placeholder names
      (`Mirri`, `Juno`, `Bau (@bau_h)`), never a real contributor, advisor, or user's name, handle,
      or account.
-   - Attribute guidance to its reason, not its author: "by domain constraint", not "per <person>".
+   - Attribute guidance to its reason, such as "by domain constraint". Omit author attribution
+     such as "per <person>".
    - Omit dates describing when work happened, broke, or was decided. Keep dates that belong to the
      subject: API versions, deprecation deadlines, legal effective dates.
+   - One deliberate exception: `docs/en/wiki/threat-models.md` opens with a visible `Updated on:`
+     line, because a reader deciding how far to trust a security page needs to see how current the
+     review is. Update it in the same change that revises the page.
    - Git-ignored files (`plans/`, local notes) may name people and dates freely.
 4. Localize all user-facing text.
    - Use `localizer()` for replies, embeds, command metadata, and choices.
@@ -107,7 +111,7 @@ proposed follow-up's premise in source before suggesting it.
       stored data shape, a Discord limit). A bug fix gets the regression test that would have caught
       it. No tests that only prove wiring or a helper exists, and no dedicated test suites or CI jobs
       for optional local servers (`servers/`), installers, or devtools.
-    - Loop locales inside one test that reports every failure, not one test per locale.
+    - Use one test to loop over locales and report every failure.
     - Assert localized copy by key (`localizedCopy` or `localizedProse` from
       `tests/helpers/localeCases.ts`), never by quoting its English text. Unlocalized prose (error
       messages, generated reports) is not asserted verbatim either; assert count, structure, or behavior.
@@ -124,8 +128,13 @@ proposed follow-up's premise in source before suggesting it.
 
 ## Review Findings
 
-Every finding gets one disposition before anyone implements it: accept now, defer with a concrete
-trigger, not worth its maintenance cost, or reject because its premise is false or already handled.
+Every finding gets one disposition before anyone implements it:
+
+- Accept now.
+- Defer with a concrete trigger.
+- Not worth its maintenance cost.
+- Reject because its premise is false or already handled.
+
 Severity describes impact if the finding is real; it does not make a fix mandatory. Implement only
 accepted findings. Full rubric: `docs/en/contributing/development-tasks.md` (Proportionality section).
 
