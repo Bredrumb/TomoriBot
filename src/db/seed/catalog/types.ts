@@ -95,6 +95,14 @@ export interface VideoInput extends CommonInput {
   isFree?: boolean;
 }
 
+/** A predicate-capable row in the decision catalog. */
+export interface DecisionInput extends CommonInput {
+  inputTokenLimit: number;
+  seesImages?: boolean;
+  inputPricePerMillion?: number;
+  outputPricePerMillion?: number;
+}
+
 /** A row in the `embedding_models` table. */
 export interface EmbeddingInput extends CommonInput {
   /** Embedding family key (groups codenames that share vector dimensionality). */

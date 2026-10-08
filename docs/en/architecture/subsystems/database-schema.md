@@ -108,12 +108,25 @@ persistence and schema initialization, use the shared SQL client directly.
 
 ### Model catalog and custom endpoints
 
-- **`llms`, `image_diffusion_models`, `video_generation_models`, `embedding_models`**: global model catalogs seeded from typed code definitions.
+- **`llms`, `image_diffusion_models`, `video_generation_models`, `embedding_models`, `decision_models`**: global model catalogs seeded from typed code definitions.
 - **Pricing storage**: first-party models record token prices directly in `llms.input_price_per_million` and `output_price_per_million`. OpenRouter pricing uses the live API cache first, falling back to database column values.
 - **Token limits**: `context_window` and `max_output_tokens` record model ceilings. Runtime code queries them through `resolveModelLimits()`, where live provider responses take precedence.
 - **`custom_endpoint_connections`**: logical connection metadata scoped to either `server_id` or `user_id`, grouped by `(owner, label, capability)`.
 - **`custom_endpoints`**: model registrations under a connection, linking to synthetic catalog rows through `model_ref_id`.
 - **`scoped_model_registrations`**: exclusive arc table mapping extra catalog rows under shared provider names to a specific `server_id` or `user_id`.
+
+### Decision registration lifecycle
+
+Decision catalogs remain independent of text assignments. Migration 098 extends the scoped
+registration arc to five catalogs. Native scoped references require the exact owner and registration;
+custom entries reuse encrypted provider credentials and endpoint ownership. Only System One and
+OpenAI Decisions styles admit custom Decision registrations. Deleting parents removes owned
+references and orphaned custom catalog rows. Registration alone activates no endpoint or review gate.
+
+Downgrade requires clearing saved response Decision selections and removing scoped registrations
+and Decision connections. Guards and DDL execute atomically: an unused dependent selection column
+is removed before the catalog table, and the four-catalog registration check is restored. Unexpected
+dependency failures preserve the schema. Normal startup restores the selection column and foreign key.
 
 ### Operational state, counters, and admission limits
 
@@ -123,6 +136,19 @@ persistence and schema initialization, use the shared SQL client directly.
 - **`command_catalog`**: dimension table recording all registered slash commands. Synced at boot by `StatRepository.syncCommandCatalog()`, enabling telemetry joins to identify unused commands.
 - **`api_key_rotation` and `api_key_rotation_runtime_state`**: provider key rotation pool and error cooldown tracking per server. Excluded from export.
 - **`persona_autoch_runtime_state`**: high-frequency autochat counter per persona. Excluded from export.
+
+## Response Drafting workspace settings
+
+The capability toggle defaults Off. Nullable fields in `server_chat_configs` store the reviewer,
+Decision selection, prompt override and checker binding. A null reviewer inherits the actual response
+model; other nulls mean no Decision routing, default locale instructions and no checker. Both assembled
+persona reads carry these fields from the idempotent schema into runtime snapshots.
+
+Reviewer and Decision foreign keys use `ON DELETE SET NULL`. Owned registration/provider deletion
+clears the workspace's dependent selections in its transaction, then invalidates snapshots. Checker
+removal leaves a saved binding unavailable. Exports contain settings without credentials; imports
+validate model/checker ownership before writing. Configuration reset restores these defaults while
+preserving registrations and credentials.
 
 ## Encryption at rest
 

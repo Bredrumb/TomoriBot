@@ -41,7 +41,7 @@ export class StreamBufferFlusher {
     state: StreamState,
     metrics: StreamMetrics,
   ): Promise<void> {
-    log.info(`Stream API: Raw chunk received: "${textContent}"`);
+    if (!context.holdResponseText) log.info(`Stream API: Raw chunk received: "${textContent}"`);
 
     const normalizedTextContent = this.deduplicateIncomingTextChunk(textContent, state);
     if (normalizedTextContent !== textContent) {
@@ -160,7 +160,8 @@ export class StreamBufferFlusher {
           ? "contains semantic markers"
           : "regular";
 
-      log.info(`Stream Seg: Flushing final buffer content (${blockStatus}): "${state.buffer}"`);
+      if (!context.holdResponseText)
+        log.info(`Stream Seg: Flushing final buffer content (${blockStatus}): "${state.buffer}"`);
 
       if (state.isInsideCodeBlock) {
         log.warn("Stream Seg: Final flush occurred while still inside a code block. The block might be incomplete.");
@@ -262,7 +263,7 @@ export class StreamBufferFlusher {
         segmentToProcess = trimmedSegment;
       }
     }
-    log.info(`Stream Seg: Flushing buffer for function call: "${segmentToProcess}"`);
+    if (!context.holdResponseText) log.info(`Stream Seg: Flushing buffer for function call: "${segmentToProcess}"`);
 
     await this.deps.segmentProcessor.sendBufferSegment(
       segmentToProcess,
@@ -304,7 +305,7 @@ export class StreamBufferFlusher {
   }
 
   private getRecentStreamTextTail(state: StreamState): string {
-    const combined = `${state.accumulatedText}${state.pendingAggregatedText}${state.buffer}`;
+    const combined = `${state.accumulatedText}${state.pendingResponseText ?? ""}${state.pendingAggregatedText}${state.buffer}`;
     if (!combined) {
       return "";
     }

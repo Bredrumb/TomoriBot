@@ -3,7 +3,7 @@
  * This abstracts tools away from specific LLM provider formats
  */
 
-import type { LlmRow, TomoriState } from "../db/schema";
+import type { LlmRow, TomoriState, ResponseRuleCheckerRef } from "@/types/db/schema";
 import type { StructuredContextItem } from "../misc/context";
 import type {
   BaseGuildTextChannel,
@@ -127,6 +127,7 @@ export interface StreamingContext {
     handle: string;
     userId: string;
   }>; // Additional mention handles to force-resolve (e.g., reminder recipients)
+  holdResponseText?: boolean;
   suppressTextOutput?: boolean; // Suppress text output to Discord (NAI tool retry mode : keeps model state coherent but hides repeated text)
   /** NAI GLM-4.6: incomplete trailing fragment from previous stream, to append as prompt continuation on retry */
   naiContinuationPrefill?: string;
@@ -202,6 +203,10 @@ export interface ToolContext {
 
   /** Turn-level AbortSignal. Tools should forward this to their fetch/HTTP calls for true cancellation on /kill. */
   abortSignal?: AbortSignal;
+  /** Review fixes normalization before dispatch; internal calls retain ordinary normalization. */
+  preparedToolRequest?: { name: string; args: Record<string, unknown> };
+  /** Rechecked after asynchronous routing and immediately before invoking a transport. */
+  isExecutionCancelled?: () => boolean;
 }
 
 export interface ToolResult {
@@ -247,6 +252,7 @@ export interface ToolAssemblyState {
   nai_diffusion_model_id?: number | null;
   video_model_id?: number | null;
   config: {
+    response_rule_checker_ref?: ResponseRuleCheckerRef | null;
     sticker_usage_enabled: boolean;
     web_search_enabled: boolean;
     self_teaching_enabled: boolean;

@@ -26,6 +26,8 @@ interface MCPServerConfig {
   timeout?: number;
 }
 
+const INTERNAL_RULE_TIMEOUT_MS = 30000;
+
 /**
  * Global MCP manager singleton for handling all MCP server connections
  */
@@ -265,6 +267,18 @@ export class MCPManager {
    */
   getMCPTool(serverName: string): CallableTool | null {
     return this.mcpTools.get(serverName) || null;
+  }
+
+  /** Internal evidence bypasses public notices and provider tool history. */
+  async callInternalRuleChecker(serverName: string, text: string, signal: AbortSignal): Promise<unknown> {
+    signal.throwIfAborted();
+    const client = this.mcpClients.get(serverName);
+    if (!client || !this.getEnhancedServerConfigurations().some((config) => config.name === serverName))
+      throw new Error("Internal rule service unavailable");
+    return client.callTool({ name: "check_slop", arguments: { text } }, undefined, {
+      signal,
+      timeout: INTERNAL_RULE_TIMEOUT_MS,
+    });
   }
 
   /**

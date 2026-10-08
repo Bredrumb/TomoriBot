@@ -274,7 +274,7 @@ export class StreamUiUpdater {
       repliedUser: false,
     };
 
-    if (this.deps.hasStopRequest(context.channel.id)) {
+    if (context.abortSignal?.aborted || this.deps.hasStopRequest(context.channel.id)) {
       log.info("Stream Send: Stop request detected before Discord API call, skipping message send");
       return null;
     }

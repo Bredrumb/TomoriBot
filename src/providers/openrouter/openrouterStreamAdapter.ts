@@ -455,7 +455,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     }
 
     // Log sanitized request for debugging
-    this.logSanitizedRequest(messages);
+    if (!context.holdResponseText) this.logSanitizedRequest(messages);
 
     let controller: AbortController | null = null;
 
@@ -1679,7 +1679,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
     // Log full chunk when we have tool calls to debug thought_signature location
     if (deltaToolCalls || finishReason === "tool_calls") {
-      log.info(`OpenRouter: FULL CHUNK with tool calls: ${JSON.stringify(openrouterChunk, null, 2)}`);
+      log.info("OpenRouter: Chunk contains tool calls");
     }
 
     if (finishReason !== null && finishReason !== undefined)
@@ -1735,7 +1735,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           }
 
           // Log raw deltaToolCall for debugging
-          log.info(`OpenRouter: Raw deltaToolCall [${index}]: ${JSON.stringify(deltaToolCall)}`);
+          log.info(`OpenRouter: Tool delta at index ${index}`);
 
           if (deltaToolCall.id) {
             accumulated.id = deltaToolCall.id;
@@ -1805,7 +1805,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         rawArguments: accumulated.functionArguments,
       });
       if (argumentsParsed) {
-        log.info(`OpenRouter: Successfully parsed tool call arguments: ${JSON.stringify(parsedArgs)}`);
+        log.info("OpenRouter: Parsed tool call arguments");
       }
 
       const functionCall: FunctionCall = {
@@ -1832,9 +1832,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         );
       }
 
-      log.info(
-        `OpenRouter: Returning function_call - name: "${functionCall.name}", args: ${JSON.stringify(functionCall.args)}`,
-      );
+      log.info(`OpenRouter: Returning function_call - name: "${functionCall.name}"`);
 
       this.toolCallAccumulator.clear();
       this.reasoningDetailsAccumulator = [];
@@ -1922,7 +1920,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         }
 
         // Log raw deltaToolCall for debugging (intermediate chunks)
-        log.info(`OpenRouter: [INTERMEDIATE] Raw deltaToolCall [${index}]: ${JSON.stringify(deltaToolCall)}`);
+        log.info(`OpenRouter: Intermediate tool delta at index ${index}`);
 
         if (deltaToolCall.id) {
           accumulated.id = deltaToolCall.id;

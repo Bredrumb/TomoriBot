@@ -1,3 +1,4 @@
+import { parsePrivateStructuredOutput, privateStructuredFailure } from "@/providers/utils/structuredReview";
 import { GoogleGenAI, type GoogleGenAI as GoogleGenAIType } from "@google/genai";
 import type { Content, GenerateContentConfig, Part } from "@google/genai";
 import type { z } from "zod";
@@ -39,6 +40,7 @@ export async function callGoogleStructuredJSON<T>(
     }
 
     const generationConfig: GenerateContentConfig = omitGeminiSampling(request.model, {
+      abortSignal: request.abortSignal,
       temperature: request.temperature ?? 1.0,
       maxOutputTokens: request.maxOutputTokens ?? 8192,
       responseMimeType: "application/json",
@@ -54,6 +56,17 @@ export async function callGoogleStructuredJSON<T>(
     });
 
     const responseText = result.text?.trim() ?? "";
+    if (request.privateOutput)
+      return parsePrivateStructuredOutput(
+        request,
+        responseText,
+        zodSchema,
+        result.usageMetadata,
+        Boolean(result.promptFeedback?.blockReason) ||
+          ["SAFETY", "PROHIBITED_CONTENT", "RECITATION", "BLOCKLIST"].includes(
+            result.candidates?.[0]?.finishReason ?? "",
+          ),
+      );
     if (!responseText) {
       log.error("Google structured JSON returned empty response", new Error("Empty response"), {
         errorType: "GoogleStructuredJSONEmptyResponse",
@@ -102,6 +115,7 @@ export async function callGoogleStructuredJSON<T>(
 
     return { success: true, data: validationResult.data };
   } catch (error) {
+    if (request.privateOutput) return privateStructuredFailure(request);
     log.error("Error calling Google structured JSON", error as Error, {
       errorType: "GoogleStructuredJSONError",
       metadata: { model: request.model },

@@ -1,3 +1,5 @@
+import { callOpenRouterDecisions } from "@/providers/openrouter/openrouterDecisions";
+import type { ProviderDecisionRequest, DecisionResult, SupportsDecisions } from "@/types/provider/featureInterfaces";
 /**
  * OpenRouter provider implementation
  * Implements the LLMProvider interface for OpenRouter's multi-provider API
@@ -145,14 +147,16 @@ export class OpenrouterProvider
   extends BaseLLMProvider
   implements
     LLMProvider,
+    SupportsDecisions,
     SupportsEmbeddings,
     SupportsStructuredOutput,
     SupportsPresetGeneration,
     SupportsConversationCompaction
 {
-  /**
-   * Get provider information and capabilities
-   */
+  async callDecisions(request: ProviderDecisionRequest): Promise<DecisionResult> {
+    return await callOpenRouterDecisions(request);
+  }
+
   getInfo(): ProviderInfo {
     return openrouterProviderInfo;
   }
@@ -474,6 +478,7 @@ export class OpenrouterProvider
           voice_message_enabled: tomoriState.config.voice_message_enabled,
           user_blocking_enabled: tomoriState.config.user_blocking_enabled,
           user_info_updates_enabled: tomoriState.config.user_info_updates_enabled,
+          response_rule_checker_ref: tomoriState.config.response_rule_checker_ref,
           thread_creation_enabled: tomoriState.config.thread_creation_enabled,
         },
       };

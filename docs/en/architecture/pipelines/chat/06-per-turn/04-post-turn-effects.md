@@ -65,6 +65,19 @@ ChatTurnContext & GenerationTurnResult
   the active lock (`skipLock=true`), whereas cross-channel boomerangs defer execution until after lock release
   via `setImmediate`.
 
+## Response review accounting
+
+With Response Drafting On, `GenerationTurnResult.usageEntries` carries actual author, reviewer and
+Decision usage across failed attempts, discarded drafts and cancellation. `recordUsageStats` drains
+that ledger before requiring delivered dialogue and retains a recorder for late usage. Late verdicts
+cannot authorize delivery. Missing usage stays unknown; discarded draft length supplies no estimate.
+Reviewer and Decision counters are subsets of total tokens, so cost attribution does not bill them
+twice. DMs retain their exclusion from persistent guild telemetry. Off keeps ordinary usage accounting.
+
+Only Discord-accepted presentation populates `personaResponses` for memory and reply quotas.
+Superseded drafts and held narration consume neither. Expression receipts and tool telemetry still
+describe their actual effects independently of prose review.
+
 ## Source pointers
 
 - `src/utils/chat/postTurnEffects.ts`: `runPostTurnEffects()` and side effect helpers.

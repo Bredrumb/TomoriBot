@@ -15,6 +15,7 @@ import type {
 import { getGuildMcpManager } from "../utils/mcp/guildMcpManager";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { redactToolParametersForStorage } from "@/utils/tools/toolParameterRedaction";
+import { normalizeMCPArguments } from "@/utils/mcp/mcpExecutor";
 import {
   getAvailableToolsForContext as getAvailableToolsForContextFromRegistry,
   getAvailableToolsForProvider,
@@ -218,9 +219,15 @@ class ToolRegistryImpl implements ToolRegistryInterface {
   async executeTool(toolName: string, args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const startTime = Date.now();
     const resolvedToolName = resolveBuiltInToolAlias(toolName);
-    const resolvedArgs = resolveOpaqueIds(args, context.messageIdMap);
+    if (resolvedToolName === context.tomoriState?.config.response_rule_checker_ref?.toolName)
+      return { success: false, error: "Internal review evidence is unavailable to author tools" };
+    const resolvedArgs =
+      context.preparedToolRequest?.name === resolvedToolName && context.preparedToolRequest.args === args
+        ? args
+        : resolveOpaqueIds(args, context.messageIdMap);
 
     const isMcp = await this.isMCPFunction(resolvedToolName, context.provider);
+    if (context.isExecutionCancelled?.()) return { success: false };
     if (isMcp) {
       return this.executeMCPFunction(resolvedToolName, resolvedArgs, context, startTime);
     }
@@ -230,6 +237,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
       try {
         const guildMcpManager = getGuildMcpManager();
         const isGuildMcp = await guildMcpManager.isGuildMCPFunction(serverId, resolvedToolName);
+        if (context.isExecutionCancelled?.()) return { success: false };
         if (isGuildMcp) {
           log.info(`Executing guild MCP function: ${resolvedToolName} for server ${serverId}`);
           const result = await guildMcpManager.executeGuildMCPFunction(
@@ -267,6 +275,16 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     }
 
     return this.executeBuiltInTool(resolvedToolName, resolvedArgs, context, startTime);
+  }
+
+  /** Alias, opaque targets and global MCP defaults must be fixed before reviewing effects. */
+  async prepareToolRequest(toolName: string, args: Record<string, unknown>, context: ToolContext) {
+    const name = resolveBuiltInToolAlias(toolName);
+    const resolved = resolveOpaqueIds(structuredClone(args), context.messageIdMap);
+    return {
+      name,
+      args: (await this.isMCPFunction(name, context.provider)) ? normalizeMCPArguments(name, resolved) : resolved,
+    };
   }
 
   /**
@@ -358,6 +376,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     context: ToolContext,
     startTime: number,
   ): Promise<ToolResult> {
+    if (context.isExecutionCancelled?.()) return { success: false };
     const tool = this.getTool(toolName);
 
     if (!tool) {
@@ -408,6 +427,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     }
 
     try {
+      if (context.isExecutionCancelled?.()) return { success: false };
       log.info(`Executing built-in tool: ${toolName} (${tool.category}) for provider ${context.provider}`);
 
       const result = await tool.execute(args, context);

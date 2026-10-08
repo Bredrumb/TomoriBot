@@ -312,7 +312,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
     log.info(`Generating content with Vertex AI model ${config.model}`);
 
     // Log sanitized request
-    this.logSanitizedRequest(requestConfig, finalContents);
+    if (!context.holdResponseText) this.logSanitizedRequest(requestConfig, finalContents);
 
     try {
       const stream = await genAI.models.generateContentStream({

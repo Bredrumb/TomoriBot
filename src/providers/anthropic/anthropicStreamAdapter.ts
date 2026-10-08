@@ -244,7 +244,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
     log.info(`AnthropicStreamAdapter: Starting stream for model ${config.model}, max_tokens ${requestBody.max_tokens}`);
 
-    this.logSanitizedRequest(requestBody);
+    if (!context.holdResponseText) this.logSanitizedRequest(requestBody);
 
     const headers: Record<string, string> = {
       "content-type": "application/json",

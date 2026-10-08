@@ -412,9 +412,7 @@ function appendUnbalancedMarkerClosers(buffer: string): string {
   }
 
   if (fixes.length > 0) {
-    log.info(
-      `Stream Auto-Close: Applied fixes - ${fixes.join(", ")} to buffer: "${buffer.substring(0, 100)}${buffer.length > 100 ? "..." : ""}"`,
-    );
+    log.info(`Stream Auto-Close: Applied fixes - ${fixes.join(", ")} (${buffer.length} buffer chars)`);
   }
 
   return fixedBuffer;

@@ -128,6 +128,20 @@ The anchor message workflow in `src/utils/discord/ui/personaWorkflow.ts` powers 
 | Pagination helper | No (before helper) | `replyPaginatedChoices(...)` / `promptWithPaginatedModal(...)` |
 | Persona workflow | No | `runPersonaPickerWorkflow(...)`; phase operation owns acknowledgement |
 
+## Response Drafting panel
+
+`/config` > Plugins > Response Drafting stores workspace settings for guild managers and DM owners.
+Reviewer and Decision pickers use the existing provider windows and modals without changing the
+primary text model. Clearing the reviewer restores inheritance from the actual response model;
+clearing Decisions or the checker stores None. A removed checker binding stays saved and unavailable.
+
+The page shows availability, added time/cost and a bounded prompt preview. `Set Prompt` opens the
+complete instructions in a prefilled 4,000-character modal; `Use Default` clears the override. Custom
+prompts retain the Decision selection but disable skipping. Selected Decisions are visibly inactive
+while calibration is absent. Persistence is described in
+[database settings](database-schema.md#response-drafting-workspace-settings); runtime ownership is in
+[generation review](../pipelines/chat/06-per-turn/03-run-generation-turn.md#response-text-review).
+
 ## Contributor guides
 
 Procedures for adding commands and authoring UI panels belong to dedicated contributor guides:

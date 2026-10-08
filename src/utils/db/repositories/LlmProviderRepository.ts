@@ -1,4 +1,6 @@
 import {
+  decisionModelRegistrationSchema,
+  type DecisionModelRegistrationRow,
   customEndpointConnectionSchema,
   customEndpointSchema,
   diffusionModelSchema,
@@ -30,7 +32,7 @@ import {
   type VramHandoffBackend,
 } from "@/types/db/schema";
 import type { SQL } from "bun";
-import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
+import { cache, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { buildIntegerParameterList } from "@/utils/db/parameterBinding";
@@ -93,6 +95,138 @@ async function applyVramHandoffChange(tx: SQL, change: VramHandoffChange | undef
  * scoped_model_registrations, scoped_model_registrations.
  */
 class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
+  private invalidateWorkspace(serverId: number): void {
+    // A committed deletion must invalidate even if the next database read fails.
+    for (const [workspaceId, entry] of cache) {
+      if (entry.mainPersona.server_id === serverId) invalidateTomoriStateCache(workspaceId);
+    }
+  }
+
+  async deleteOwnedDecisionRegistration(
+    scope: OpenRouterModelScope,
+    provider: string,
+    modelId: number,
+  ): Promise<boolean> {
+    const serverId = scope.kind === "server" ? scope.ownerId : null;
+    const userId = scope.kind === "personal" ? scope.ownerId : null;
+    const deleted = await sql.begin(async (tx) => {
+      const models = await tx`
+        SELECT decision_model_id FROM decision_models
+        WHERE decision_model_id = ${modelId} AND provider = ${provider} AND is_scoped_registration = true
+        FOR UPDATE
+      `;
+      if (!models.length) return false;
+      const endpoints = await tx`
+        DELETE FROM custom_endpoints endpoint USING custom_endpoint_connections connection
+        WHERE endpoint.connection_id = connection.connection_id AND connection.capability = 'decision'
+          AND connection.server_id IS NOT DISTINCT FROM ${serverId}::int
+          AND connection.user_id IS NOT DISTINCT FROM ${userId}::int
+          AND ${provider} = 'custom:' || connection.connection_id
+          AND endpoint.model_ref_id = ${modelId}
+      `;
+      const registrations = await tx`
+        DELETE FROM scoped_model_registrations
+        WHERE decision_model_id = ${modelId}
+          AND server_id IS NOT DISTINCT FROM ${serverId}::int
+          AND user_id IS NOT DISTINCT FROM ${userId}::int
+      `;
+      if (endpoints.count === 0 && registrations.count === 0) return false;
+      if (serverId !== null)
+        await tx`UPDATE server_chat_configs SET response_decision_model_id = NULL WHERE server_id = ${serverId} AND response_decision_model_id = ${modelId}`;
+      await tx`
+        DELETE FROM decision_models model WHERE decision_model_id = ${modelId}
+          AND NOT EXISTS (SELECT 1 FROM scoped_model_registrations WHERE decision_model_id = ${modelId})
+          AND NOT EXISTS (
+            SELECT 1 FROM custom_endpoints endpoint JOIN custom_endpoint_connections connection USING (connection_id)
+            WHERE endpoint.model_ref_id = ${modelId} AND connection.capability = 'decision'
+          )
+      `;
+      return true;
+    });
+    if (deleted && serverId !== null) this.invalidateWorkspace(serverId);
+    return deleted;
+  }
+  async upsertDecisionModelRegistration(params: {
+    serverId?: number | null;
+    userId?: number | null;
+    decisionModelId: number;
+  }): Promise<DecisionModelRegistrationRow | null> {
+    const { serverId = null, userId = null, decisionModelId } = params;
+
+    try {
+      const rows =
+        serverId !== null
+          ? await sql`
+              INSERT INTO scoped_model_registrations (server_id, user_id, decision_model_id)
+              VALUES (${serverId}, NULL, ${decisionModelId})
+              ON CONFLICT (server_id, decision_model_id) WHERE user_id IS NULL AND decision_model_id IS NOT NULL
+              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+              RETURNING *
+            `
+          : await sql`
+              INSERT INTO scoped_model_registrations (server_id, user_id, decision_model_id)
+              VALUES (NULL, ${userId}, ${decisionModelId})
+              ON CONFLICT (user_id, decision_model_id) WHERE server_id IS NULL AND decision_model_id IS NOT NULL
+              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+              RETURNING *
+            `;
+
+      if (!rows.length) return null;
+
+      const parsed = decisionModelRegistrationSchema.safeParse(rows[0]);
+      if (!parsed.success) {
+        log.warn(
+          `Failed to validate decision model registration for decision_model_id ${decisionModelId}: ${parsed.error.message}`,
+        );
+        return null;
+      }
+      return parsed.data;
+    } catch (error) {
+      const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
+      log.error(
+        `Error upserting decision model registration for decision_model_id ${decisionModelId} on ${owner}:`,
+        error,
+      );
+      return null;
+    }
+  }
+
+  async deleteDecisionModelRegistration(params: {
+    serverId?: number | null;
+    userId?: number | null;
+    decisionModelId: number;
+  }): Promise<boolean> {
+    const { serverId = null, userId = null, decisionModelId } = params;
+
+    try {
+      const deleted = await sql.begin(async (tx) => {
+        const result =
+          serverId !== null
+            ? await tx`
+              DELETE FROM scoped_model_registrations
+              WHERE server_id = ${serverId} AND user_id IS NULL AND decision_model_id = ${decisionModelId}
+            `
+            : await tx`
+              DELETE FROM scoped_model_registrations
+              WHERE user_id = ${userId} AND server_id IS NULL AND decision_model_id = ${decisionModelId}
+            `;
+        if (result.count === 0) return false;
+        if (serverId !== null)
+          await tx`UPDATE server_chat_configs SET response_decision_model_id = NULL WHERE server_id = ${serverId} AND response_decision_model_id = ${decisionModelId}`;
+        return true;
+      });
+      if (deleted && serverId !== null) this.invalidateWorkspace(serverId);
+      return deleted;
+    } catch (error) {
+      const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
+      log.error(
+        `Error deleting decision model registration for decision_model_id ${decisionModelId} on ${owner}:`,
+        error,
+      );
+      return false;
+    }
+  }
+
   private hydrateCustomEndpointRow(row: unknown): CustomEndpointRow | null {
     const parsed = customEndpointSchema.safeParse(row);
     if (!parsed.success) return null;
@@ -1423,7 +1557,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   async deleteServerProviderRegistration(serverId: number, provider: string): Promise<boolean> {
     const normalizedProvider = provider.toLowerCase();
     try {
-      return await sql.begin(async (tx) => {
+      const deleted = await sql.begin(async (tx) => {
         const deleted = await tx`
           DELETE FROM saved_provider_configs
           WHERE server_id = ${serverId} AND provider = ${normalizedProvider}
@@ -1453,14 +1587,25 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                   AND model.provider = ${normalizedProvider}
               )
               OR EXISTS (
+                SELECT 1 FROM decision_models model
+                WHERE model.decision_model_id = registration.decision_model_id
+                  AND model.provider = ${normalizedProvider}
+              )
+              OR EXISTS (
                 SELECT 1 FROM video_generation_models model
                 WHERE model.video_model_id = registration.video_model_id
                   AND model.provider = ${normalizedProvider}
               )
             )
         `;
+        await tx`UPDATE server_chat_configs SET
+          response_reviewer_llm_id = CASE WHEN response_reviewer_llm_id IN (SELECT llm_id FROM llms WHERE llm_provider = ${normalizedProvider}) THEN NULL ELSE response_reviewer_llm_id END,
+          response_decision_model_id = CASE WHEN response_decision_model_id IN (SELECT decision_model_id FROM decision_models WHERE provider = ${normalizedProvider}) THEN NULL ELSE response_decision_model_id END
+          WHERE server_id = ${serverId}`;
         return true;
       });
+      if (deleted) this.invalidateWorkspace(serverId);
+      return deleted;
     } catch (error) {
       log.error(`Error deleting server provider registration ${provider}:`, error);
       return false;
@@ -1497,6 +1642,11 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                   AND model.provider = ${normalizedProvider}
               )
               OR EXISTS (
+                SELECT 1 FROM decision_models model
+                WHERE model.decision_model_id = registration.decision_model_id
+                  AND model.provider = ${normalizedProvider}
+              )
+              OR EXISTS (
                 SELECT 1 FROM video_generation_models model
                 WHERE model.video_model_id = registration.video_model_id
                   AND model.provider = ${normalizedProvider}
@@ -1516,7 +1666,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     const uniqueIds = [...new Set(connectionIds)];
     if (uniqueIds.length === 0) return false;
     try {
-      return await sql.begin(async (tx) => {
+      const deleted = await sql.begin(async (tx) => {
         const owned = await tx<Array<{ connection_id: number }>>`
           SELECT connection_id
           FROM custom_endpoint_connections
@@ -1541,8 +1691,11 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         await tx`DELETE FROM embedding_models WHERE provider = ANY(${sql.array(providerKeys, "text")})`;
         await tx`DELETE FROM image_diffusion_models WHERE provider = ANY(${sql.array(providerKeys, "text")})`;
         await tx`DELETE FROM video_generation_models WHERE provider = ANY(${sql.array(providerKeys, "text")})`;
+        await tx`DELETE FROM decision_models WHERE provider = ANY(${sql.array(providerKeys, "text")})`;
         return true;
       });
+      if (deleted) this.invalidateWorkspace(serverId);
+      return deleted;
     } catch (error) {
       log.error(`Error deleting server endpoint connection group ${connectionIds.join(",")}:`, error);
       return false;
@@ -1579,6 +1732,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         await tx`DELETE FROM embedding_models WHERE provider = ANY(${sql.array(providerKeys, "text")})`;
         await tx`DELETE FROM image_diffusion_models WHERE provider = ANY(${sql.array(providerKeys, "text")})`;
         await tx`DELETE FROM video_generation_models WHERE provider = ANY(${sql.array(providerKeys, "text")})`;
+        await tx`DELETE FROM decision_models WHERE provider = ANY(${sql.array(providerKeys, "text")})`;
         return true;
       });
     } catch (error) {
@@ -2596,17 +2750,24 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     const { serverId = null, userId = null, llmId } = params;
 
     try {
-      const result =
-        serverId !== null
-          ? await sql`
+      const deleted = await sql.begin(async (tx) => {
+        const result =
+          serverId !== null
+            ? await tx`
               DELETE FROM scoped_model_registrations
               WHERE server_id = ${serverId} AND user_id IS NULL AND llm_id = ${llmId}
             `
-          : await sql`
+            : await tx`
               DELETE FROM scoped_model_registrations
               WHERE user_id = ${userId} AND server_id IS NULL AND llm_id = ${llmId}
             `;
-      return result.count > 0;
+        if (result.count === 0) return false;
+        if (serverId !== null)
+          await tx`UPDATE server_chat_configs SET response_reviewer_llm_id = NULL WHERE server_id = ${serverId} AND response_reviewer_llm_id = ${llmId}`;
+        return true;
+      });
+      if (deleted && serverId !== null) this.invalidateWorkspace(serverId);
+      return deleted;
     } catch (error) {
       const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
       log.error(`Error deleting OpenRouter model registration for llm_id ${llmId} on ${owner}:`, error);

@@ -78,10 +78,11 @@ class ToolRepository implements IRepository<ToolExportShape> {
    * Decrypts the auth token for a guild MCP server row.
    *
    * @param row - GuildMcpServerRow with an encrypted auth token
-   * @returns Decrypted token string or null if absent / decryption failed
+   * Internal private callers report a normalized failure at their orchestration owner.
+   * @returns Decrypted token or null when absent; private failures throw without SDK details.
    */
-  async decryptMcpAuthToken(row: GuildMcpServerRow): Promise<string | null> {
-    return this.sqlDecryptGuildMcpAuthToken(row);
+  async decryptMcpAuthToken(row: GuildMcpServerRow, privateFailure = false): Promise<string | null> {
+    return this.sqlDecryptGuildMcpAuthToken(row, privateFailure);
   }
 
   /**
@@ -383,7 +384,7 @@ class ToolRepository implements IRepository<ToolExportShape> {
     }
   }
 
-  private async sqlDecryptGuildMcpAuthToken(row: GuildMcpServerRow): Promise<string | null> {
+  private async sqlDecryptGuildMcpAuthToken(row: GuildMcpServerRow, privateFailure = false): Promise<string | null> {
     if (!row.auth_token) return null;
 
     try {
@@ -395,6 +396,7 @@ class ToolRepository implements IRepository<ToolExportShape> {
       `;
 
       if (!result?.decrypted_token) {
+        if (privateFailure) throw new Error("MCP credential resolution failed");
         log.warn(`[GuildMcpDb] Decryption returned empty for MCP server "${row.name}"`);
         return null;
       }
@@ -416,6 +418,7 @@ class ToolRepository implements IRepository<ToolExportShape> {
 
       return decryptedToken;
     } catch (error) {
+      if (privateFailure) throw new Error("MCP credential resolution failed");
       log.error(`[GuildMcpDb] Failed to decrypt auth token for MCP server "${row.name}"`, error);
       return null;
     }

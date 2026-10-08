@@ -806,7 +806,12 @@ class StatRepository implements IRepository<null> {
           SELECT llm_codename,
             MAX(input_price_per_million) AS input_price_per_million,
             MAX(output_price_per_million) AS output_price_per_million
-          FROM llms
+          FROM (
+            SELECT llm_codename, input_price_per_million, output_price_per_million FROM llms
+            UNION ALL
+            SELECT 'decision:' || decision_model_id::text AS llm_codename,
+              input_price_per_million, output_price_per_million FROM decision_models
+          ) prices
           GROUP BY llm_codename
         ) l ON l.llm_codename = sc.metric_key
         WHERE sc.metric IN ('tokens_in', 'tokens_out')
@@ -1151,7 +1156,12 @@ class StatRepository implements IRepository<null> {
           SELECT llm_codename,
             MAX(input_price_per_million) AS input_price_per_million,
             MAX(output_price_per_million) AS output_price_per_million
-          FROM llms
+          FROM (
+            SELECT llm_codename, input_price_per_million, output_price_per_million FROM llms
+            UNION ALL
+            SELECT 'decision:' || decision_model_id::text AS llm_codename,
+              input_price_per_million, output_price_per_million FROM decision_models
+          ) prices
           GROUP BY llm_codename
         ) l ON l.llm_codename = sc.metric_key
         WHERE sc.metric IN ('tokens_in', 'tokens_out')
@@ -1494,7 +1504,7 @@ class StatRepository implements IRepository<null> {
       const rows = await sql<
         { model: string; in_tokens: number | string; out_tokens: number | string; cost: number | string }[]
       >`
-        SELECT sc.metric_key AS model,
+        SELECT COALESCE(MAX(l.display_name), sc.metric_key) AS model,
           COALESCE(SUM(CASE WHEN sc.metric = 'tokens_in'  THEN sc.count ELSE 0 END), 0) AS in_tokens,
           COALESCE(SUM(CASE WHEN sc.metric = 'tokens_out' THEN sc.count ELSE 0 END), 0) AS out_tokens,
           COALESCE(SUM(
@@ -1510,8 +1520,14 @@ class StatRepository implements IRepository<null> {
         LEFT JOIN (
           SELECT llm_codename,
             MAX(input_price_per_million) AS input_price_per_million,
-            MAX(output_price_per_million) AS output_price_per_million
-          FROM llms
+            MAX(output_price_per_million) AS output_price_per_million,
+            MAX(display_name) AS display_name
+          FROM (
+            SELECT llm_codename, llm_codename AS display_name, input_price_per_million, output_price_per_million FROM llms
+            UNION ALL
+            SELECT 'decision:' || decision_model_id::text AS llm_codename, codename AS display_name,
+              input_price_per_million, output_price_per_million FROM decision_models
+          ) prices
           GROUP BY llm_codename
         ) l ON l.llm_codename = sc.metric_key
         WHERE sc.metric IN ('tokens_in', 'tokens_out')

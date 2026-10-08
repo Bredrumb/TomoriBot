@@ -232,6 +232,7 @@ export interface ChatTurn {
 }
 
 export interface ChatTurnContext {
+  responseReview?: import("@/utils/chat/responseReview").ResponseReviewState;
   turn: ChatTurn;
   client: Client;
   message: Message;
@@ -330,6 +331,7 @@ export interface ToolHistoryEntry {
 export interface GenerationTurnResult {
   status: StreamResult["status"] | "skipped";
   streamResults: StreamResult[];
+  usageEntries?: import("@/utils/chat/responseReview").TurnUsageEntry[];
   personaResponses: ChatPersonaResponse[];
   /** A tool delivered the response directly even though no streamed text was captured. */
   toolResponseDelivered?: boolean;

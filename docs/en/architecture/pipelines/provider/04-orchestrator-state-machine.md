@@ -57,8 +57,8 @@ Stop handling distinguishes these cases:
 - **Follow-up interrupts:** When a user sends a new message while generation is in flight, the
   orchestrator clears the stop request, discards the buffer, and exits immediately with
   `{ status: "follow_up_interrupt" }`. This lets the chat pipeline start the next turn without delay.
-- **Graceful user stops:** A stop request observed by the orchestrator flushes pending buffered text
-  and exits with `{ status: "stopped_by_user" }`. `/kill` additionally aborts the transport and
+- **Graceful user stops:** Ordinary streaming flushes pending buffered text and exits with
+  `{ status: "stopped_by_user" }`. Held response text is discarded. `/kill` additionally aborts the transport and
   rejects the [stream race](/architecture/pipelines/tool-loop/01-stream-once/), which can bypass this flush.
 - **Internal delivery stops:** Stops triggered by delivery caps (`send_message_limit`, `flush_limit`,
   `speaker_guard`, `channel_deleted`, `missing_access`) skip the pending buffer flush. Flushing into
@@ -80,7 +80,8 @@ The orchestrator routes normalized chunks based on `ProcessedChunk.type`:
   (unless suppressed by retries or user impersonation), returning `{ status: "error" }`.
 - **Done metadata:** Captures terminal completion data such as `finishReason`.
 - **Token usage:** Captured from `metadata.usage` on any chunk (latest non-null wins). This handles
-  providers that report usage on trailing empty chunks or override terminal metadata.
+  providers that report usage on trailing empty chunks or override terminal metadata. Terminal results
+  retain reported usage, including errors, stops and empty replies.
 
 ## Stream completion
 
@@ -90,6 +91,18 @@ clears internal stop requests, and constructs the completed `StreamResult`.
 The outer `streamToDiscord()` wrapper inspects the completed result. If `wasEmptyStreamResponse()`
 detects that no visible text and no tool call were delivered, it returns `{ status: "empty_response" }`
 instead of `"completed"`, allowing upstream fallback and retry logic to trigger.
+
+## Held response presentation
+
+Response Drafting sets `holdResponseText` to collect normalized prose and its presentation segments
+without sending messages or recording delivery receipts. Unlike `suppressTextOutput`, collection
+still runs ordinary formatting, reasoning removal, emoji processing and speaker guards.
+
+Completed and function-call results expose `pendingResponse.text` and a single-use `deliver(signal)`
+closure. Approval replays the saved segments through ordinary delivery with webhook identity and
+Discord limits intact. Only accepted sends create accumulated text and receipts. Cancellation never
+flushes held prose. A speaker guard can complete a valid collected prefix for review; an empty prefix
+retains ordinary empty-response handling.
 
 ## Source pointers
 

@@ -21,6 +21,7 @@ import { textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { statRepository } from "@/utils/db/repositories";
 import { charsToTokensText, estimateContextItemsTokens, sumTurnUsage } from "@/utils/text/tokenEstimate";
 import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
+import type { TurnUsageEntry } from "@/utils/chat/responseReview";
 import { recordReunionPresence } from "@/utils/chat/reunionPresence";
 
 /**
@@ -93,7 +94,47 @@ function rememberLastReplyUsage(context: ChatTurnContext, result: GenerationTurn
  * @param result  - The turn result; personaResponses carry the responding lineages.
  */
 async function recordUsageStats(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
-  // Only count turns that produced a real persona response, and not DMs.
+  // Actual spend survives cancellation and discarded drafts; dialogue metrics require delivery.
+  if (!context.isDMChannel && context.tomoriState.server_id && context.triggererUserId && result.usageEntries) {
+    const lineageId = context.currentPersona.persona_lineage_id ?? 0;
+    const serverId = context.tomoriState.server_id;
+    const userId = context.triggererUserId;
+    const recordEntry = (entry: TurnUsageEntry) => {
+      const metricKey = entry.kind === "decision" ? `decision:${entry.decisionModelId}` : entry.model;
+      for (const [direction, delta] of [
+        ["in", entry.usage.inputTokens],
+        ["out", entry.usage.outputTokens],
+      ] as const) {
+        if (delta <= 0) continue;
+        statRepository.recordStat({
+          serverId,
+          userId,
+          lineageId,
+          metric: direction === "in" ? "tokens_in" : "tokens_out",
+          metricKey,
+          delta,
+        });
+        if (entry.kind === "reviewer" || entry.kind === "decision")
+          statRepository.recordStat({
+            serverId,
+            userId,
+            lineageId,
+            metric:
+              entry.kind === "reviewer"
+                ? direction === "in"
+                  ? "reviewer_tokens_in"
+                  : "reviewer_tokens_out"
+                : direction === "in"
+                  ? "decision_tokens_in"
+                  : "decision_tokens_out",
+            metricKey,
+            delta,
+          });
+      }
+    };
+    for (const entry of result.usageEntries) recordEntry(entry);
+    if (context.responseReview?.usage === result.usageEntries) context.responseReview.usageRecorder = recordEntry;
+  }
   if (result.personaResponses.length === 0 || context.isDMChannel) return;
   const serverId = context.tomoriState.server_id;
   if (!serverId) return;
@@ -184,8 +225,12 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     //    Cost is derived at read time from catalog pricing (getEstimatedCost), so
     //    input vs output rate applies exactly per direction either way.
     const realUsage = sumTurnUsage(result.streamResults);
-    const inputTokens = realUsage ? realUsage.inputTokens : estimateContextItemsTokens(context.contextItems);
-    const outputTokens = realUsage ? realUsage.outputTokens : estimatedOutputTokens;
+    const inputTokens = result.usageEntries
+      ? 0
+      : realUsage
+        ? realUsage.inputTokens
+        : estimateContextItemsTokens(context.contextItems);
+    const outputTokens = result.usageEntries ? 0 : realUsage ? realUsage.outputTokens : estimatedOutputTokens;
     if (realUsage) {
       log.info(`Stats: recording real provider usage (in=${inputTokens}, out=${outputTokens}) for ${modelCodename}`);
     }

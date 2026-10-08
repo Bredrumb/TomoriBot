@@ -9,7 +9,7 @@ or record a history entry and continue the tool chain.
 ## Gating and dispatch flow
 <!-- anchor: gating-and-dispatch-flow -->
 
-When the provider emits a `function_call` status, the stage processes the call through an ordered
+When the provider emits `function_call`, the stage processes the call through an ordered
 sequence of validation and safety gates before invoking the registry:
 
 1. **Payload validation:**
@@ -18,24 +18,17 @@ sequence of validation and safety gates before invoking the registry:
 
 2. **Stop request check:**
    The stage inspects `StreamOrchestrator` for pending stop requests. If a user issued `/kill`, it
-   returns `{ kind: "abort", status: "stopped_by_user" }`. If a follow-up message arrived instead,
-   it clears the interrupt flag and proceeds with tool execution; the follow-up message is already
-   queued in the channel queue and does not abort an in-flight tool chain.
+   returns `{ kind: "abort", status: "stopped_by_user" }`. With Response Drafting On, a follow-up
+   interrupts review and prevents further dispatch. Off clears that flag and continues the tool chain;
+   the follow-up message remains queued.
 
 3. **Truncated arguments refusal:**
-   If the stream adapter flagged `functionCall.argumentsTruncated`, the tool is refused without
-   dispatch. Adapters set this flag when a provider cuts off a JSON payload mid-stream. Dispatching a
-   tool with only the subset of keys that arrived whole would cause tools that overwrite stored state
-   (such as memory categories) to delete missing keys. The stage drops the recovered arguments from
-   `functionCall.args`, logs an error, emits a hidden thought log, and returns `{ kind: "history" }`
-   with a synthetic failure response explaining the truncation. The outer loop increments its
-   consecutive error counter, giving the model an opportunity to reissue a complete call.
+   Adapter-flagged truncated arguments are refused before dispatch. Partial keys could delete stored
+   state in replacement-style tools. A synthetic failure history entry allows a complete retry.
 
 4. **Deliberate tool mode allowlist gate:**
-   When deliberate tool mode is active for the turn, the stage checks `deliberateToolAllowedNames`.
-   If the tool was not admitted by trigger intent during context planning, dispatch is blocked. The
-   stage returns a synthetic failure response (`blocked_by_deliberate_tool_mode`) directly to the model,
-   allowing it to adapt its response without surfacing a user-visible error.
+   Deliberate mode blocks names outside the trigger-admitted allowlist and returns a synthetic failure
+   directly to the model.
 
 5. **Registry execution under watchdog:**
    The stage marks the channel's active tool name via `setChannelActiveToolName` and runs
@@ -45,6 +38,28 @@ sequence of validation and safety gates before invoking the registry:
    signal returns `{ kind: "abort", status: "stopped_by_user" }`. The active tool name is cleared
    in the `finally` block when the race settles. Tools that do not honor abort can continue their
    external work after the caller stops awaiting them. A timeout does not roll back their effects.
+
+## Actual request review
+
+Response Drafting On calls `ToolRegistry.prepareToolRequest` after admission checks. It resolves
+aliases, message identities and MCP defaults before the private reviewer sees the detached request
+that execution will receive. Built-in availability and permission checks precede paid review;
+dispatch retains its own checks.
+
+Pass dispatches that request once. Rejection returns `review_rejected` history with
+`actionExecuted: false`, correction eligibility and concise findings. It adds no failed-tool notice
+or execution statistic. Exact rejected identities remain blocked; each normalized name permits one
+changed correction, with two corrections and eight detailed tool reviews across the logical turn.
+These limits remain separate from response review and survive fallback.
+
+Successful identical requests reuse recorded outcomes, including after a response revision.
+Unavailability ends review for the turn but preserves prior rejections. New independent requests
+after exhaustion use ordinary tool rules. Cancellation is checked after review and asynchronous
+discovery, and before MCP transport. Already-started tools retain their own cancellation support.
+The normalized adapter interface dispatches one call at a time; approval covers only that actual call.
+
+Optional Decision routing and internal prose-checker ownership follow the
+[generation review lifecycle](../chat/06-per-turn/03-run-generation-turn.md#response-text-review).
 
 ## Expression delivery and side effects
 <!-- anchor: expression-delivery-and-side-effects -->

@@ -87,6 +87,12 @@ interface StreamRenderModifierState {
  * Stream state tracking for buffer management and code block and think block detection
  */
 export interface StreamState {
+  pendingResponseText?: string;
+  pendingResponseSegments?: Array<{
+    text: string;
+    boundary?: import("@/utils/discord/stream/messageDelivery").BufferedDeliveryBoundary;
+    codeBlock: boolean;
+  }>;
   buffer: string;
   isInsideCodeBlock: boolean;
   isInsideThinkBlock: boolean;

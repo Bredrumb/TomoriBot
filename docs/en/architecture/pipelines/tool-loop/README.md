@@ -114,6 +114,19 @@ and calling format nudge) is owned by `runGenerationTurn` during context prepara
 
 Stream and tool deadlines bound each external operation. Stream inactivity deadlines advance on progress, while first-token waiting has a separate budget. An aborted stream receives a bounded settling window before cleanup; late sends can outlive that window. Iteration and consecutive-error ceilings prevent indefinitely repeating tool requests. `toolLoop.ts` owns their values; [Stream Once](/architecture/pipelines/tool-loop/01-stream-once/) explains timeout and cancellation ownership.
 
+## Pending response completion
+
+With Response Drafting On, `runToolLoop` shares function history and review state across attempts.
+Pre-tool narration stays pending and joins the final candidate. `completeResponse` reviews that
+candidate before replaying approved presentation or requesting the bounded revision. Revision clears
+pending presentation and model parts while keeping actual tool outcomes; successful tools are not
+replayed to reconstruct a reply. Tool-only turns do not invent prose.
+
+Cancellation discards held text and retains the existing queued stop/follow-up handling. Result
+assembly includes accepted dialogue and the actual-usage ledger; presentation carries no second
+usage copy. The [tool checkpoint](02-execute-tool-call.md#actual-request-review) runs before dispatch,
+with correction budgets independent of final-response review.
+
 ## Source pointers
 <!-- anchor: source-pointers -->
 

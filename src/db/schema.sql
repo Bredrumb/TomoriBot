@@ -504,6 +504,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_video_generation_models_provider_codename
   ON video_generation_models(provider, codename);
 
 -- Embedding Models table for document embedding/search
+CREATE TABLE IF NOT EXISTS decision_models (
+  decision_model_id SERIAL PRIMARY KEY,
+  provider TEXT NOT NULL,
+  codename TEXT NOT NULL,
+  descriptions JSONB,
+  is_scoped_registration BOOLEAN NOT NULL DEFAULT false,
+  is_default BOOLEAN NOT NULL DEFAULT false,
+  is_deprecated BOOLEAN NOT NULL DEFAULT false,
+  input_token_limit INT NOT NULL CHECK (input_token_limit BETWEEN 512 AND 10000000),
+  sees_images BOOLEAN NOT NULL DEFAULT false,
+  supported_primitives JSONB NOT NULL DEFAULT '["predicate"]'::jsonb
+    CHECK (supported_primitives = '["predicate"]'::jsonb),
+  input_price_per_million NUMERIC CHECK (input_price_per_million >= 0),
+  output_price_per_million NUMERIC CHECK (output_price_per_million >= 0),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (provider, codename)
+);
+CREATE INDEX IF NOT EXISTS idx_decision_models_provider ON decision_models(provider);
+
 CREATE TABLE IF NOT EXISTS embedding_models (
   embedding_model_id SERIAL PRIMARY KEY,
   provider TEXT NOT NULL,
@@ -2489,6 +2509,7 @@ CREATE TABLE IF NOT EXISTS scoped_model_registrations (
   embedding_model_id INT NULL,
   diffusion_model_id INT NULL,
   video_model_id INT NULL,
+  decision_model_id INT NULL REFERENCES decision_models(decision_model_id) ON DELETE CASCADE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
@@ -2498,8 +2519,33 @@ CREATE TABLE IF NOT EXISTS scoped_model_registrations (
   FOREIGN KEY (diffusion_model_id) REFERENCES image_diffusion_models(diffusion_model_id) ON DELETE CASCADE,
   FOREIGN KEY (video_model_id) REFERENCES video_generation_models(video_model_id) ON DELETE CASCADE,
   CHECK ((server_id IS NULL) <> (user_id IS NULL)),
-  CHECK (num_nonnulls(llm_id, embedding_model_id, diffusion_model_id, video_model_id) = 1)
+  CONSTRAINT scoped_model_registrations_one_model CHECK (num_nonnulls(llm_id, embedding_model_id, diffusion_model_id, video_model_id, decision_model_id) = 1)
 );
+
+SELECT add_column_if_not_exists('scoped_model_registrations', 'decision_model_id', 'INT');
+DO $$
+DECLARE old_check RECORD;
+BEGIN
+  FOR old_check IN
+    SELECT conname FROM pg_constraint
+    WHERE conrelid = 'scoped_model_registrations'::regclass AND contype = 'c'
+      AND pg_get_constraintdef(oid) LIKE '%num_nonnulls%'
+  LOOP
+    EXECUTE format('ALTER TABLE scoped_model_registrations DROP CONSTRAINT %I', old_check.conname);
+  END LOOP;
+  ALTER TABLE scoped_model_registrations ADD CONSTRAINT scoped_model_registrations_one_model
+    CHECK (num_nonnulls(llm_id, embedding_model_id, diffusion_model_id, video_model_id, decision_model_id) = 1);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'scoped_model_registrations'::regclass
+                 AND conname = 'scoped_model_registrations_decision_model_id_fkey') THEN
+    ALTER TABLE scoped_model_registrations ADD CONSTRAINT scoped_model_registrations_decision_model_id_fkey
+      FOREIGN KEY (decision_model_id) REFERENCES decision_models(decision_model_id) ON DELETE CASCADE;
+  END IF;
+END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scoped_model_registrations_server_decision
+  ON scoped_model_registrations(server_id, decision_model_id) WHERE user_id IS NULL AND decision_model_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scoped_model_registrations_user_decision
+  ON scoped_model_registrations(user_id, decision_model_id) WHERE server_id IS NULL AND decision_model_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_scoped_model_registrations_decision ON scoped_model_registrations(decision_model_id);
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_scoped_model_registrations_server_llm
   ON scoped_model_registrations(server_id, llm_id) WHERE user_id IS NULL AND llm_id IS NOT NULL;
@@ -2671,6 +2717,10 @@ SELECT add_column_if_not_exists('user_saved_provider_configs', 'model_randomizer
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS server_chat_configs (
+  response_reviewer_llm_id INT REFERENCES llms(llm_id) ON DELETE SET NULL,
+  response_decision_model_id INT REFERENCES decision_models(decision_model_id) ON DELETE SET NULL,
+  response_reviewer_prompt TEXT CHECK (char_length(response_reviewer_prompt) BETWEEN 1 AND 4000),
+  response_rule_checker_ref JSONB,
   server_id                        INT         PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
   humanizer_degree                 INT         NOT NULL DEFAULT 1,
   message_fetch_limit              INT         NOT NULL DEFAULT 80,
@@ -2699,6 +2749,10 @@ CREATE TABLE IF NOT EXISTS server_chat_configs (
 );
 
 SELECT add_column_if_not_exists('server_chat_configs', 'response_prefill', 'TEXT');
+SELECT add_column_if_not_exists('server_chat_configs', 'response_reviewer_llm_id', 'INT REFERENCES llms(llm_id) ON DELETE SET NULL');
+SELECT add_column_if_not_exists('server_chat_configs', 'response_decision_model_id', 'INT REFERENCES decision_models(decision_model_id) ON DELETE SET NULL');
+SELECT add_column_if_not_exists('server_chat_configs', 'response_reviewer_prompt', 'TEXT CHECK (char_length(response_reviewer_prompt) BETWEEN 1 AND 4000)');
+SELECT add_column_if_not_exists('server_chat_configs', 'response_rule_checker_ref', 'JSONB');
 
 DROP TRIGGER IF EXISTS update_server_chat_configs_timestamp ON server_chat_configs;
 CREATE TRIGGER update_server_chat_configs_timestamp
@@ -2813,6 +2867,7 @@ CREATE TRIGGER update_server_auto_trigger_configs_timestamp
   FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 CREATE TABLE IF NOT EXISTS server_capabilities_configs (
+  response_drafting_enabled BOOLEAN NOT NULL DEFAULT false,
   server_id              INT     PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
   emoji_usage_enabled    BOOLEAN NOT NULL DEFAULT true,
   sticker_usage_enabled  BOOLEAN NOT NULL DEFAULT true,
@@ -2830,6 +2885,8 @@ CREATE TABLE IF NOT EXISTS server_capabilities_configs (
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+SELECT add_column_if_not_exists('server_capabilities_configs', 'response_drafting_enabled', 'BOOLEAN NOT NULL', 'false');
 
 DROP TRIGGER IF EXISTS update_server_capabilities_configs_timestamp ON server_capabilities_configs;
 CREATE TRIGGER update_server_capabilities_configs_timestamp
