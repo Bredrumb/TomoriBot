@@ -90,6 +90,11 @@ moment chat gets unhinged. Links must start with `https://`.
 
 Files can be PNG, JPEG, WebP, GIF, or MP4, up to 10 MB.
 
+Each server can have up to 20 custom expressions by default, shared across all personas. Files and
+links both count; native emojis and stickers do not. At the limit, delete an expression before
+adding another. Existing expressions can still be used and edited. Self-hosted bots can change
+this limit in their environment settings.
+
 Every persona can use a new custom expression. To keep one for specific personas, select it and use
 `Add Persona`. Removing the last persona from that list opens it to everyone again.
 

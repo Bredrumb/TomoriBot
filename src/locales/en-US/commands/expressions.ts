@@ -91,6 +91,7 @@ export default {
       error_title: `Expression could not be saved`,
       error_stale: `This expression changed or was removed. Select it again to use the current version.`,
       error_collision: `This name matches another custom expression or native sticker. Choose a different name.`,
+      error_limit: `This server has reached its limit of {limit} custom expressions. Delete one before adding another. Emojis and native stickers do not count toward this limit.`,
       error_invalid: `Enter a name, a description of up to 500 characters, and a valid emotion.`,
       error_scope: `Your server access or the selected persona changed. Reopen \`/expressions manage\`.`,
       error_sources: `Provide exactly one link or file when adding. When editing, leave both blank to keep the current media, or provide one replacement.`,

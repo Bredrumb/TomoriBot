@@ -31,6 +31,7 @@ import {
 } from "../../helpers/routeInteraction";
 import { collectTextDisplays } from "../../helpers/panelLimits";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
+import { MAX_CUSTOM_EXPRESSIONS_PER_SERVER } from "@/constants/expressionLimits";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -124,6 +125,74 @@ function harness(overrides: Partial<ExpressionsRouteDependencies> = {}) {
 }
 
 describe("expressions routed mutations", () => {
+  it("rejects additions at capacity before opening a modal or processing media and still allows edits", async () => {
+    const h = harness();
+    h.data.customs = Array.from({ length: MAX_CUSTOM_EXPRESSIONS_PER_SERVER }, (_, index) => {
+      if (index === 0) return h.data.customs[0];
+      const row = createCustomExpression({
+        custom_expression_id: `00000000-0000-4000-8000-${String(index + 100).padStart(12, "0")}`,
+        name: `Expression ${index}`,
+      });
+      return {
+        ...h.data.customs[0],
+        id: row.custom_expression_id,
+        name: row.name,
+        custom: row,
+        fp: expressionPanelFingerprint(
+          row.server_id,
+          createRouteInteraction().user.id,
+          row.custom_expression_id,
+          row.revision,
+        ),
+      };
+    });
+    const opened = await h.dispatch({ action: "select" }, {}, "string-select", ["add"]);
+    expect(opened.calls[0]?.method).toBe("reply");
+    expect(h.show).not.toHaveBeenCalled();
+    const id = "00000000-0000-4000-8000-999999999999";
+    const submitted = await h.dispatch({
+      entityId: id,
+      fp: expressionPanelFingerprint(h.data.serverId, opened.user.id, id, 0),
+    });
+    expect(submitted.calls[0]?.method).toBe("deferUpdate");
+    expect(h.prepare).not.toHaveBeenCalled();
+    expect(h.save).not.toHaveBeenCalled();
+    const payload = submitted.calls.find((call) => call.method === "editReply")?.payload as InteractionEditReplyOptions;
+    expect(collectTextDisplays(payload).join(" ")).toMatch(
+      localizedProse("en-US", "commands.expressions.manage.error_limit", { limit: MAX_CUSTOM_EXPRESSIONS_PER_SERVER }),
+    );
+    await h.dispatch();
+    expect(h.save).toHaveBeenCalledTimes(1);
+  });
+
+  it("cleans uploaded media when another manager fills the last slot during preparation", async () => {
+    const id = "00000000-0000-4000-8000-999999999999";
+    const reference = `custom-expressions/1/${id}/00000000-0000-4000-8000-000000000002.png`;
+    const stored = createCustomExpression({
+      source_kind: "upload",
+      delivery_kind: "stored",
+      original_link: null,
+      storage_reference: reference,
+      ...PNG_MEDIA,
+    });
+    const h = harness({
+      prepareMedia: async () => stored,
+      saveCustom: async () => {
+        throw new ExpressionWriteError("limit");
+      },
+    });
+    const interaction = await h.dispatch({
+      entityId: id,
+      fp: expressionPanelFingerprint(h.data.serverId, createRouteInteraction().user.id, id, 0),
+    });
+    expect(h.cleanup.mock.calls.map((call) => call[0])).toEqual([reference]);
+    const payload = interaction.calls.find((call) => call.method === "editReply")
+      ?.payload as InteractionEditReplyOptions;
+    expect(collectTextDisplays(payload).join(" ")).toMatch(
+      localizedProse("en-US", "commands.expressions.manage.error_limit", { limit: MAX_CUSTOM_EXPRESSIONS_PER_SERVER }),
+    );
+  });
+
   it("opens a prefilled editor without deferring and rejects a stale row before writing", async () => {
     const h = harness();
     const opened = await h.dispatch({ action: "edit" }, {}, "button");

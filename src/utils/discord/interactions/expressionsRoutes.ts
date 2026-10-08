@@ -49,6 +49,7 @@ import { buildPanelReceiptContainer } from "@/utils/discord/ui/panel";
 import type { PanelAction } from "@/constants/panelActions";
 import { localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
+import { MAX_CUSTOM_EXPRESSIONS_PER_SERVER } from "@/constants/expressionLimits";
 
 type ExpressionInteraction = GlobalRoutableInteraction | ChatInputCommandInteraction;
 
@@ -185,7 +186,7 @@ function receipt(locale: string, key: string, success = false): PanelReceipt {
   return {
     tone: success ? "success" : "error",
     heading: localizer(locale, `commands.expressions.manage.${success ? "saved_title" : "error_title"}`),
-    detail: localizer(locale, `commands.expressions.manage.${key}`),
+    detail: localizer(locale, `commands.expressions.manage.${key}`, { limit: MAX_CUSTOM_EXPRESSIONS_PER_SERVER }),
   };
 }
 
@@ -362,6 +363,15 @@ export function createExpressionsInteractionRoute(
       const selected = data[route.category].find((item) => item.id === route.entityId);
       if (opensModal) {
         if (route.action === "select") {
+          if (data.customs.length >= MAX_CUSTOM_EXPRESSIONS_PER_SERVER) {
+            await interaction.reply({
+              content: localizer(route.locale, "commands.expressions.manage.error_limit", {
+                limit: MAX_CUSTOM_EXPRESSIONS_PER_SERVER,
+              }),
+              flags: MessageFlags.Ephemeral,
+            });
+            return;
+          }
           const id = randomUUID();
           return deps.showModal(
             interaction as Parameters<typeof showRoutedRawModal>[0],
@@ -412,6 +422,8 @@ export function createExpressionsInteractionRoute(
         )
           throw new ExpressionWriteError("stale");
         if (isSubmit && route.nonce === "none") throw new ExpressionWriteError("invalid");
+        if (creating && data.customs.length >= MAX_CUSTOM_EXPRESSIONS_PER_SERVER)
+          throw new ExpressionWriteError("limit");
         if (route.action === "save") {
           const modal = interaction as ModalSubmitInteraction;
           const description = modal.fields.getTextInputValue(expressionFieldId(route.nonce, "description")).trim();

@@ -106,6 +106,11 @@ persistence and schema initialization, use the shared SQL client directly.
 - **`server_emojis` and `server_stickers`**: native Discord expression metadata synchronized on demand.
 - **`custom_expressions` and `custom_expression_personas`**: server-managed custom media registry. Supports unique UUID identities, delivery kinds, validated media limits (10 MiB ceiling), and persona membership scoping.
 
+Custom expression creation in `ServerRepository.saveCustomExpression` locks the owning server row
+before checking the per-server count and inserting. This enforces
+`MAX_CUSTOM_EXPRESSIONS_PER_SERVER` (default 20) across concurrent managers and all personas,
+including link expressions. Existing rows remain editable when the limit is reached or lowered.
+
 ### Model catalog and custom endpoints
 
 - **`llms`, `image_diffusion_models`, `video_generation_models`, `embedding_models`, `decision_models`**: global model catalogs seeded from typed code definitions.

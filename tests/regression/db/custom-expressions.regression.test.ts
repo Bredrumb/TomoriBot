@@ -10,6 +10,7 @@ import { deleteExpressionMedia, loadExpressionMedia, storeExpressionMedia } from
 import { createCustomExpression } from "../../helpers/fixtures";
 import { cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, executeTestSqlFile, setupTestDb, testSql } from "./setup/testDb";
+import { MAX_CUSTOM_EXPRESSIONS_PER_SERVER } from "@/constants/expressionLimits";
 
 describe.skipIf(!DB_TESTS_AVAILABLE)("custom expression persistence", () => {
   let refs: FixtureRefs;
@@ -80,6 +81,58 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("custom expression persistence", () => {
     expect(writes.filter((result) => result.status === "rejected")).toHaveLength(1);
     await testSql`INSERT INTO server_stickers (server_id, sticker_disc_id, sticker_name) VALUES (${refs.serverId}, '123456789012345678', 'Native-Wave')`;
     await expect(create("native_wave")).rejects.toMatchObject({ code: "collision" });
+  });
+
+  it("enforces the shared server limit under concurrent creation while allowing edits and slot reuse", async () => {
+    for (let index = 0; index < MAX_CUSTOM_EXPRESSIONS_PER_SERVER - 1; index++) {
+      await create(`Expression ${index}`);
+    }
+    const uploadId = randomUUID();
+    const upload = {
+      ...input("Uploaded expression"),
+      media: createCustomExpression({
+        source_kind: "upload",
+        delivery_kind: "stored",
+        original_link: null,
+        storage_reference: `custom-expressions/${refs.serverId}/${uploadId}/${randomUUID()}.png`,
+        mime_type: "image/png",
+        extension: "png",
+        byte_size: 100,
+      }),
+    };
+    const writes = await Promise.allSettled([
+      serverRepository.saveCustomExpression(refs.serverId, uploadId, null, upload),
+      create("Linked expression"),
+    ]);
+    expect(writes.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    const rejected = writes.filter((result) => result.status === "rejected");
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toMatchObject({ reason: { code: "limit" } });
+    const rows = await serverRepository.loadCustomExpressions(refs.serverId);
+    expect(rows).toHaveLength(MAX_CUSTOM_EXPRESSIONS_PER_SERVER);
+    await expect(create("One too many")).rejects.toMatchObject({ code: "limit" });
+    await expect(
+      serverRepository.saveCustomExpression(refs.serverId, randomUUID(), null, { ...upload, name: "Extra upload" }),
+    ).rejects.toMatchObject({ code: "limit" });
+    const existing = rows[0];
+    await serverRepository.setCustomExpressionPersona(
+      refs.serverId,
+      existing.custom_expression_id,
+      1,
+      refs.personaId,
+      true,
+    );
+    await serverRepository.saveCustomExpression(refs.serverId, existing.custom_expression_id, 2, input("Edited"));
+    const otherId = randomUUID();
+    try {
+      await serverRepository.saveCustomExpression(otherServer, otherId, null, input("Independent server"));
+      expect(await serverRepository.loadCustomExpression(otherServer, otherId)).not.toBeNull();
+    } finally {
+      await testSql`DELETE FROM custom_expressions WHERE server_id = ${otherServer} AND custom_expression_id = ${otherId}`;
+    }
+    expect(await serverRepository.deleteCustomExpression(refs.serverId, existing.custom_expression_id, 3)).toBe(true);
+    await create("Reused slot");
+    expect(await serverRepository.loadCustomExpressions(refs.serverId)).toHaveLength(MAX_CUSTOM_EXPRESSIONS_PER_SERVER);
   });
 
   it("preserves the row on stale or colliding replacement and keeps identity on rename", async () => {

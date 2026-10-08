@@ -40,6 +40,7 @@ import { isValidEmotionKey } from "@/types/misc/emotions";
 import { normalizeStickerNameForLoose } from "@/utils/text/stickerNames";
 import { invalidateEmojiStickerCache } from "@/utils/cache/emojiStickerCache";
 import { nativeExpressionRevision } from "@/utils/text/expressionRevision";
+import { MAX_CUSTOM_EXPRESSIONS_PER_SERVER } from "@/constants/expressionLimits";
 
 type CustomExpressionWrite = {
   name: string;
@@ -50,7 +51,7 @@ type CustomExpressionWrite = {
 };
 
 export class ExpressionWriteError extends Error {
-  constructor(public readonly code: "stale" | "collision" | "invalid" | "scope") {
+  constructor(public readonly code: "stale" | "collision" | "invalid" | "scope" | "limit") {
     super(`Expression write rejected: ${code}`);
   }
 }
@@ -303,7 +304,7 @@ class ServerRepository implements IRepository<ServerExportShape> {
     }
     const media = customExpressionMediaSchema.parse(input.media);
     await sql.transaction(async (tx) => {
-      // The server lock serializes custom names even when two managers create different IDs.
+      // The server lock serializes name and count checks across concurrent creations.
       const [server] = await tx`SELECT server_id FROM servers WHERE server_id = ${serverId} FOR UPDATE`;
       if (!server) throw new ExpressionWriteError("scope");
       const [current] = await tx`
@@ -312,6 +313,12 @@ class ServerRepository implements IRepository<ServerExportShape> {
       `;
       if (expectedRevision === null ? current : !current || current.revision !== expectedRevision) {
         throw new ExpressionWriteError("stale");
+      }
+      if (expectedRevision === null) {
+        const [row] = await tx<Array<{ count: number }>>`
+          SELECT COUNT(*)::int AS count FROM custom_expressions WHERE server_id = ${serverId}
+        `;
+        if (row.count >= MAX_CUSTOM_EXPRESSIONS_PER_SERVER) throw new ExpressionWriteError("limit");
       }
       const stickers = await tx<
         Array<{ sticker_name: string }>

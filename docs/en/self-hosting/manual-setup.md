@@ -78,6 +78,11 @@ avatar storage settings do not select an expression bucket. Objects remain reada
 the SDK and are attached as bytes, so a publicly served media URL is unnecessary.
 Preserve backend, bucket, and object keys when restoring existing references.
 
+`MAX_CUSTOM_EXPRESSIONS_PER_SERVER` caps custom expressions per server (default `20`, minimum `1`).
+Links and uploaded files share the limit across all personas; native emojis and stickers are excluded.
+Restart the bot after changing it. Lowering the limit preserves existing expressions and allows edits
+and deletions, but blocks additions until the count falls below the limit.
+
 ## 3. Run
 
 ```sh
