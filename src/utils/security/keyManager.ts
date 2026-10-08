@@ -1,4 +1,4 @@
-import { log } from "../misc/logger";
+import { log } from "@/utils/misc/logger";
 
 /**
  * Rotation status information for monitoring and diagnostics
@@ -10,7 +10,7 @@ interface RotationStatus {
 }
 
 /**
- * Manages multiple versions of encryption keys for zero-downtime key rotation
+ * Retains encryption versions so old ciphertext remains readable during migration.
  *
  * Key Features:
  * - Auto-loads all CRYPTO_SECRET_V* environment variables
@@ -34,12 +34,21 @@ class CryptoKeyManager {
   private currentVersion: number = 0;
 
   public initialize() {
+    this.keys.clear();
+    this.currentVersion = 0;
     this.loadKeysFromEnv();
 
     const versions = this.getAvailableVersions();
 
     if (process.env.CRYPTO_SECRET_CURRENT) {
-      this.currentVersion = Number.parseInt(process.env.CRYPTO_SECRET_CURRENT, 10);
+      if (
+        !/^[1-9]\d*$/.test(process.env.CRYPTO_SECRET_CURRENT) ||
+        !Number.isSafeInteger(Number(process.env.CRYPTO_SECRET_CURRENT))
+      ) {
+        this.keys.clear();
+        throw new Error("CRYPTO_SECRET_CURRENT must be a positive integer version.");
+      }
+      this.currentVersion = Number(process.env.CRYPTO_SECRET_CURRENT);
       log.info(`Using explicit current version: V${this.currentVersion}`);
     } else {
       this.currentVersion = Math.max(...versions);
@@ -47,10 +56,11 @@ class CryptoKeyManager {
     }
 
     if (!this.keys.has(this.currentVersion)) {
-      // Safety check: current version must exist in environment
+      const missingVersion = this.currentVersion;
+      this.currentVersion = 0;
       const availableVersionsStr = versions.map((v) => `V${v}`).join(", ");
       throw new Error(
-        `Current encryption key version V${this.currentVersion} not found in environment! ` +
+        `Current encryption key version V${missingVersion} not found in environment! ` +
           `Available versions: ${availableVersionsStr}. ` +
           `Check your .env configuration.`,
       );
@@ -59,7 +69,6 @@ class CryptoKeyManager {
     log.info(`Crypto key manager initialized with ${this.keys.size} key version(s)`);
 
     if (this.keys.size === 1) {
-      // Warn if only one version (no rotation capability)
       log.warn("Only one key version available - rotation not possible until additional version added");
     }
   }
@@ -71,9 +80,9 @@ class CryptoKeyManager {
   private loadKeysFromEnv(): void {
     log.section(`Loading Keys from Environment`);
     for (const [key, value] of Object.entries(process.env)) {
-      const match = key.match(/^CRYPTO_SECRET_V(\d+)$/);
-      if (match && value) {
-        const version = Number.parseInt(match[1], 10);
+      const match = key.match(/^CRYPTO_SECRET_V([1-9]\d*)$/);
+      if (match && value && Number.isSafeInteger(Number(match[1]))) {
+        const version = Number(match[1]);
         this.keys.set(version, value);
         log.info(`Loaded crypto key version ${version}`);
       }
@@ -110,6 +119,7 @@ class CryptoKeyManager {
    * Get the current active key version number
    */
   getCurrentVersion(): number {
+    this.getCurrentKey();
     return this.currentVersion;
   }
 

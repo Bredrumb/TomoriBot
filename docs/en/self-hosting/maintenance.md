@@ -14,17 +14,45 @@ If you are updating with `git pull`, review [Safe Migration](/self-hosting/safe-
 |---|---|
 | `bun run setup` | Open the setup wizard for base install and optional modules. |
 | `bun run update` | Back up first, then pull latest code and install dependencies. |
-| `bun run backup` | Create a bundle in `backups/` with your DB dump and `.env`: contains all of your data. |
-| `bun run restore-backup` | Restore `.env` and database from a bundle (`--latest` or `--from backups/<dir>`). |
+| `bun run backup` | Create a bundle in `backups/` with your database dump and required encryption-version metadata. Secrets stay separate. |
+| `bun run restore-backup` | Restore the database using separately provisioned encryption keys (`--latest` or `--from backups/<dir>`). |
 | `bun run backup:personas` | Export ONLY personas (with server memories) across all servers; re-import via `/persona import`. |
 | `bun run nuke-db` | Drop all tables (start the bot afterward to reinitialize). |
 | `bun run purge-commands` | Clear all registered Discord slash commands. |
-| `bun run rotate-keys` | Re-encrypt all encrypted fields to the current key version. |
+| `bun run rotate-keys --bot-stopped` | Re-encrypt all encrypted fields to the current key version. |
 | `bun run env-doctor` | Read-only check of your configuration: lists `.env` entries that nothing reads (names only, never values) and where each variable is used. |
 
 Host `bun run backup` needs `pg_dump`, and host `bun run restore-backup` needs `psql` in your PATH. `bun run update` needs `pg_dump` for its backup. The `--docker` update path runs the backup in the container, so it needs host Bun, Git, and Docker but no host PostgreSQL tools.
 
 The backup and restore commands hand your database password to `pg_dump` and `psql` through a short-lived password file in the system temporary folder, so other users on the machine cannot read it from the process list. That folder must be writable. The file is deleted when the command finishes.
+
+## Database backups and recovery keys
+
+`bun run backup` and automatic startup backups produce `database.sql` and `bundle_info.json`. The manifest identifies a database-only bundle and lists encryption versions found in that dump. The version inventory describes which keys recovery needs; restore checks actual decryptability. Creating a dump does not require old keys to be present, so a missing historical key does not prevent preserving the rest of the database. It never copies `.env`. A database-only dump still contains private conversations and memories, so restrict access to the backup directory.
+
+Keep the encryption versions in separate protected storage, such as an encrypted password manager or secret manager. If you copy `.env` yourself, protect it as credentials and keep it separate from the dump. Losing a required encryption version makes those stored credentials unrecoverable; users must enter their API keys again. Provider-side keys remain valid until revoked.
+
+To restore:
+
+1. Stop every bot instance. Provision the target database settings, Discord token, and the matching encryption versions in the normal secret source before running the command. Preserve the original keys exactly.
+2. Install `psql` and the extensions used by the dump, including `pgvector` when present. Run `bun run restore-backup --from backups/<bundle-directory>` or use `--latest`. Restore enables `pgcrypto` before checking keys, including on a fresh target. The database account must be allowed to create that extension, or a database administrator must enable it first. Extension setup errors are reported separately from credential recovery failures.
+3. Restore checks every encrypted credential with the supplied keys before loading the dump. Missing or wrong keys stop it before any destructive SQL; `pgcrypto` may already have been enabled. Review the target and confirm `RESTORE`; a non-empty target also requires `RESTORE ANYWAY`. Only restore trusted SQL dumps.
+4. Keep the keys in place. Before restarting, run `bun run audit-keys` and `bun run rotate-keys --dry-run`. If credentials need migration to the active version, run `bun run rotate-keys --bot-stopped` and audit again before starting any instance. `ON_ERROR_STOP=1` stops at the first SQL error, but earlier statements may already have changed data. Fix the error and retry while the bot remains stopped.
+
+Legacy bundles include raw secrets in `config.env`. Restore identifies them and warns, but never copies or loads that file. Deliberately review it in a private location and provision its encryption versions into the target secret source yourself. Keep target database settings in place. Existing bundles remain secret-bearing even after upgrading.
+
+## Rotating encryption keys
+
+1. Keep a protected copy of every key needed by live data and retained backups. Take a database backup and test recovery on a disposable database before retiring any version.
+2. Add the new `CRYPTO_SECRET_V<version>` to the same secret source the bot uses. Set `CRYPTO_SECRET_CURRENT` to that version if you want explicit selection. Retain all older keys. Legacy `CRYPTO_SECRET` is V1.
+3. Stop every bot instance and pause credential writers. In production, run the scripts with `RUN_ENV=production` and the same mounted `SECRET_FILE`, legacy `GCP_SECRET_FILE`, or AWS secret and access configuration as startup. Audit and rotation use the bot's `POSTGRES_*` settings from that source.
+4. Run `bun run audit-keys`, then `bun run rotate-keys --dry-run`. Both must succeed. Audit reports failing tables, columns, row IDs, and versions while continuing credential checks. Its version counts include failed recovery and cannot establish success when the exit status is non-zero. Dry-run decrypts the credentials without changing rows.
+5. Run `bun run rotate-keys --bot-stopped`, then `bun run audit-keys`. Any failed query or row gives a non-zero exit, including partial success. Keep every version, correct the failure, and rerun. Concurrent row replacement is refused rather than overwritten.
+6. In a disposable restored database, test an audit with only the retained current key configured. Retained older backups need their own tested recovery with archived keys. Only after those checks may you remove old versions from the live secret source. Keep the separate protected key archive for as long as its backups are retained, then restart all bot instances.
+
+The `--bot-stopped` flag records your confirmation; it cannot detect other running instances. Rotation scripts do not clear another process's credential caches. Versions need not be consecutive: a V1 credential can move directly to V4 when both keys are available.
+
+Rotation also replaces legacy null version tags with the explicit current version, including when the current version is V1.
 
 ## Updating
 
@@ -34,7 +62,7 @@ Stop the running bot first, then use the backup-first updater:
 bun run update
 ```
 
-This runs `bun run backup`, then `git pull --rebase --autostash`, and finally `bun install --frozen-lockfile`. The backup bundle is saved to `backups/` and includes both your database dump and `.env`. Add `--skip-backup` to bypass the pre-update backup.
+This runs `bun run backup`, then `git pull --rebase --autostash`, and finally `bun install --frozen-lockfile`. The backup bundle is saved to `backups/` and contains your database dump and manifest. Copy and protect `.env` separately if you need to retain it. Add `--skip-backup` to bypass the pre-update backup.
 
 Manual fallback:
 

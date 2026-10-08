@@ -159,8 +159,10 @@ Sensitive provider credentials are encrypted using PostgreSQL `pgcrypto` (`pgp_s
 - `api_key_rotation.api_key`
 - `saved_provider_configs.api_key`
 - `user_saved_provider_configs.api_key`
+- `guild_mcp_servers.auth_token`
+- `discord_managed_webhooks.webhook_token`
 
-`CryptoKeyManager` manages active encryption keys (`CRYPTO_SECRET_V1`, `CRYPTO_SECRET_V2`, etc.). New writes use the active version, while reads decrypt using the row's stored `key_version`. Re-encryption is executed via `bun run rotate-keys`.
+`CryptoKeyManager` manages active encryption keys (`CRYPTO_SECRET_V1`, `CRYPTO_SECRET_V2`, etc.). New writes use the active version, while reads decrypt using the row's stored `key_version`. Re-encryption is executed via `bun run rotate-keys --bot-stopped`; see the [operator procedure](/self-hosting/maintenance/#rotating-encryption-keys).
 
 ## Reset domain classifications
 <!-- anchor: reset-domain-classifications -->

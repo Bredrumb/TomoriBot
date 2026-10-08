@@ -13,8 +13,8 @@ Application secrets are managed by `src/utils/security/secretsManager.ts` during
   2. Production with `SECRET_FILE`: reads mounted JSON secret file (such as `/run/secrets/tomoribot.json` in Azure or Docker Compose).
   3. Production with `GCP_SECRET_FILE`: reads mounted GCP Secret Manager volume file (legacy Cloud Run).
   4. Production fallback: queries AWS Secrets Manager (`tomoribot/production`, region from `AWS_REGION`, default `us-east-1`).
-- **Startup validation**: the loader verifies core database credentials (`POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`), Discord authentication (`DISCORD_TOKEN`), and encryption keys (`CRYPTO_SECRET`).
-- **Environment mapping**: verified secrets populate `process.env`. `CryptoKeyManager.initialize()` executes immediately after secret loading so encryption keys are ready before database connection initialization.
+- **Startup validation**: the loader verifies core database credentials (`POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`), Discord authentication (`DISCORD_TOKEN`), and at least one encryption key (`CRYPTO_SECRET` or a versioned key).
+- **Environment mapping**: verified secrets populate `process.env`. `CryptoKeyManager.initialize()` executes immediately after secret loading so encryption keys are ready before database connection initialization. The selected secret source replaces the entire encryption-version set, including `CRYPTO_SECRET_CURRENT`; undeclared ambient versions are cleared. Runtime and maintenance scripts use this same loader.
 - **Subprocess arguments**: other local users can read a process's command line, so secrets never go there. `withPostgresPassfile()` in `src/utils/backup/dataBackup.ts` gives `pg_dump` and `psql` the database password through a private temporary `PGPASSFILE` and removes the bot's own database credential variables from their environment. The OpenRouter video `curl` fallback reads its headers and body from stdin (`-K -`).
 - **Log redaction**: every `log` method, including `log.metric`, passes its fields through `sanitizeLogPayload()` before either sink, so free-text values such as endpoint failure reasons get the same credential redaction as structured fields. Numeric fields keep their type.
 
@@ -23,17 +23,12 @@ Application secrets are managed by `src/utils/security/secretsManager.ts` during
 External provider API keys stored in PostgreSQL are encrypted using symmetric cryptography via PostgreSQL `pgcrypto` (`pgp_sym_encrypt` with AES-256 and compression).
 
 - **Storage format**: encrypted keys are stored as `BYTEA` alongside an integer `key_version`.
-- **Encrypted targets**:
-  - `server_model_configs.api_key`
-  - `opt_api_keys.api_key`
-  - `api_key_rotation.api_key`
-  - `saved_provider_configs.api_key`
-  - `user_saved_provider_configs.api_key`
-- **Key versioning**: `src/utils/security/keyManager.ts` discovers versioned environment keys (`CRYPTO_SECRET_V1`, `CRYPTO_SECRET_V2`, etc.). New encryptions use the active key version specified by `CRYPTO_SECRET_CURRENT` or the highest discovered version number.
-- **Decryption**: `decryptApiKey()` reads the row's stored `key_version` and fetches the matching key from `CryptoKeyManager`, supporting reads across multiple key generations without downtime.
-- **Rotation tools**:
-  - Diagnostic inspection: `bun run audit-keys` (`scripts/devtools/auditKeyVersions.ts`) reports key version distribution across all encrypted tables.
-  - Re-encryption migration: `bun run rotate-keys` (`scripts/devtools/rotateAllKeys.ts`) re-encrypts older rows using the current active key version within transactional batches.
+- **Inventory**: `src/utils/security/encryptedColumns.ts` owns the columns shared by audit, rotation, and backup recovery checks: saved server and personal provider credentials, rotation pool members, optional API keys, MCP auth tokens, managed webhook tokens, and the legacy `server_model_configs.api_key` mirror while it exists. Null ciphertext and main-key pointer rows are skipped. Null version tags mean V1.
+- **Key selection**: all `CRYPTO_SECRET_V<positive integer>` fields are loaded. Legacy `CRYPTO_SECRET` supplies V1 unless `CRYPTO_SECRET_V1` is present. New writes use `CRYPTO_SECRET_CURRENT` or the highest available version. JSON sources accept the current version as a string or numeric positive safe integer; master keys must be strings. Invalid or unavailable current versions stop initialization before writes.
+- **Decryption**: each row requires the key matching its stored version. Conversion can go directly from any retained version to the current one; versions need not be consecutive.
+- **Audit and rotation**: `bun run audit-keys` and `bun run rotate-keys --dry-run` check actual decryptability across the inventory. Audit reports secret-free table, column, row ID, and version failure context and continues checking later credentials. Incomplete queries, missing or wrong keys, and failed rows produce a non-zero exit. Rotation uses atomic conditional updates of ciphertext and version, refusing rows changed since the scan. It normalizes null V1 tags even when V1 is current. Successful earlier updates remain committed after partial failure.
+- **Process caches**: stop every bot instance before `bun run rotate-keys --bot-stopped`, audit afterward, then restart all instances. A separate script cannot invalidate another process's caches. See [Maintenance & Backups](/self-hosting/maintenance/#rotating-encryption-keys) for the operator procedure.
+- **Backup recovery**: new bundles contain the database dump and a version inventory, with no secret configuration. Restore enables `pgcrypto` on the target and then decrypts every credential in the dump using separately provisioned keys before loading SQL. Extension setup failure is reported separately and stops recovery. Legacy bundles still contain raw `config.env` secrets; restore warns and leaves that file untouched. Keep a protected key archive separate from retained backups. A live-row audit cannot establish that old backups are recoverable.
 
 ## Provider API key pool and failover
 

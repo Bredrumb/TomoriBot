@@ -46,6 +46,10 @@ Required:
 - PostgreSQL connection: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`,
   `POSTGRES_PASSWORD`, `POSTGRES_DB`.
 
+Keep a protected copy of your encryption secret separately from database backups. New backups contain no `.env`. For rotation, use `CRYPTO_SECRET_V1`, `CRYPTO_SECRET_V2`, or any later positive integer version, with optional `CRYPTO_SECRET_CURRENT` selection. `CRYPTO_SECRET` remains V1. Startup and maintenance commands load the same source: local environment values in development, or mounted JSON / AWS Secrets Manager in production. See [Rotating encryption keys](/self-hosting/maintenance/#rotating-encryption-keys) before replacing a secret.
+
+In JSON secret sources, master keys must be strings. `CRYPTO_SECRET_CURRENT` accepts a string such as `"2"` or a numeric positive safe integer such as `2` that names an available version.
+
 :::note[No native PostgreSQL?]
 Run just the database in a container, then point the `POSTGRES_*` values at it:
 

@@ -1,5 +1,4 @@
 import {
-  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -31,6 +30,9 @@ interface DataBackupManifest {
   botVersion: string;
   backupType: DataBackupType;
   triggerReasons: string[];
+  formatVersion: 2;
+  contents: "database-only";
+  requiredKeyVersions: number[];
   files: string[];
 }
 
@@ -146,10 +148,6 @@ function logPgDumpFailureGuidance(error: unknown): void {
   log.info("pg_dump is installed, but PostgreSQL rejected or failed the dump request. Check the pg_dump output above.");
 }
 
-function resolveEnvPath(): string {
-  return process.env.TOMORI_ENV_FILE ? resolve(process.env.TOMORI_ENV_FILE) : join(process.cwd(), ".env");
-}
-
 export function resolveBackupsRoot(): string {
   return process.env.TOMORI_BACKUP_DIR ? resolve(process.env.TOMORI_BACKUP_DIR) : join(process.cwd(), "backups");
 }
@@ -249,7 +247,7 @@ function createBundleDirectory(backupsRoot: string, backupType: DataBackupType):
     const suffix = attempt === 0 ? "" : `_${attempt + 1}`;
     const bundleDir = join(backupsRoot, `${baseName}${suffix}`);
     if (!existsSync(bundleDir)) {
-      mkdirSync(bundleDir, { recursive: false });
+      mkdirSync(bundleDir, { recursive: false, mode: 0o700 });
       return bundleDir;
     }
   }
@@ -394,28 +392,24 @@ export async function runDataBackup(options: DataBackupOptions = {}): Promise<Da
   const botVersion = options.botVersion ?? getCurrentBotVersion();
 
   log.section(backupType === "automatic" ? "Automatic Data Backup" : "Transfer Backup");
-  log.info("Creating a migration bundle with your database and config...");
-
-  const envPath = resolveEnvPath();
-  if (!existsSync(envPath)) {
-    throw new Error(`Environment file not found: ${envPath}. Cannot bundle config.`);
-  }
+  log.info("Creating a database-only bundle. Retain encryption keys separately in protected storage.");
 
   const backupsRoot = resolveBackupsRoot();
   if (!existsSync(backupsRoot)) {
-    mkdirSync(backupsRoot, { recursive: true });
+    mkdirSync(backupsRoot, { recursive: true, mode: 0o700 });
   }
 
   const bundleDir = createBundleDirectory(backupsRoot, backupType);
   const dbDumpPath = join(bundleDir, "database.sql");
-  const envBackupPath = join(bundleDir, "config.env");
   const manifestPath = join(bundleDir, "bundle_info.json");
 
   log.info(`Bundle directory: ${bundleDir}`);
 
   const dbUrl = resolveDatabaseUrl();
   log.info("Running pg_dump...");
+  let requiredKeyVersions: number[];
   try {
+    writeFileSync(dbDumpPath, "", { mode: 0o600 });
     // --no-owner/--no-privileges keep dumps restorable across role names (e.g. Cloud SQL
     // `postgres` → Azure `tomoriadmin`); objects are owned by whichever role runs the restore.
     await withPostgresPassfile(dbUrl, ({ connectionUrl, env }) =>
@@ -425,9 +419,11 @@ export async function runDataBackup(options: DataBackupOptions = {}): Promise<Da
         { env },
       ),
     );
-    log.success("Database dump completed.");
+    const { inspectBackupKeyVersions } = await import("@/utils/backup/backupRecovery");
+    requiredKeyVersions = await inspectBackupKeyVersions(dbDumpPath);
+    log.success("Database dump completed and encryption versions inventoried.");
   } catch (error) {
-    await log.error("pg_dump failed. No database changes were made.", error);
+    await log.error("Backup failed. No database changes were made.", new Error("Dump or version inventory failed."));
     logPgDumpFailureGuidance(error);
     const resolvedBundleDir = resolve(bundleDir);
     if (isPathInside(backupsRoot, resolvedBundleDir) && existsSync(resolvedBundleDir)) {
@@ -437,23 +433,23 @@ export async function runDataBackup(options: DataBackupOptions = {}): Promise<Da
     throw error;
   }
 
-  copyFileSync(envPath, envBackupPath);
-  log.success("Config (.env) copied.");
-
   const manifest: DataBackupManifest = {
     createdAt: new Date().toISOString(),
     botVersion,
     backupType,
     triggerReasons,
-    files: ["database.sql", "config.env"],
+    formatVersion: 2,
+    contents: "database-only",
+    requiredKeyVersions,
+    files: ["database.sql"],
   };
-  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), { mode: 0o600 });
 
   log.section("Bundle Created");
   log.info(`Location:    ${bundleDir}`);
   log.info("Contents:");
   log.info("  database.sql     - PostgreSQL dump (restore with: bun run restore-backup)");
-  log.info("  config.env       - Copy of your .env (review before restoring!)");
+  log.info(`  Required encryption versions: ${requiredKeyVersions.join(", ") || "none"} (stored separately)`);
   log.info("  bundle_info.json - Bundle metadata");
   log.info("");
   log.info("To restore on a new install:");
