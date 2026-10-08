@@ -1870,6 +1870,26 @@ class ServerRepository implements IRepository<ServerExportShape> {
     }
   }
 
+  /**
+   * Removes the link for a room by its room ID, so a link replaced concurrently with another room
+   * is left alone.
+   *
+   * @returns The unlinked Discord channel ID, or null when no link remained or the delete failed.
+   */
+  async unlinkMatrixRoom(matrixRoomId: string): Promise<string | null> {
+    try {
+      const [row] = await sql<[{ channel_disc_id: string }]>`
+        DELETE FROM matrix_channel_links
+        WHERE matrix_room_id = ${matrixRoomId}
+        RETURNING channel_disc_id
+      `;
+      return row?.channel_disc_id ?? null;
+    } catch (e) {
+      log.error(`Error unlinking matrix room ${matrixRoomId}:`, e);
+      return null;
+    }
+  }
+
   private async resolveServerInternalId(serverDiscId: string): Promise<number | null> {
     const [row] = await sql`
       SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId} LIMIT 1

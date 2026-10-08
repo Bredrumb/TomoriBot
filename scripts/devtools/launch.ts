@@ -92,6 +92,9 @@ interface PythonLocalServer {
 
 type LocalServerDef = DockerLocalServer | PythonLocalServer;
 
+// Pinned so its egress policy and token requirement match the self-hosting guide.
+const CRAWL4AI_IMAGE = "unclecode/crawl4ai:0.9.4";
+
 /** Registry of all supported --flag → local server definitions. */
 const LOCAL_SERVERS: Record<string, LocalServerDef> = {
   searxng: {
@@ -126,7 +129,7 @@ const LOCAL_SERVERS: Record<string, LocalServerDef> = {
   crawl4ai: {
     kind: "docker",
     containerName: "crawl4ai",
-    image: "unclecode/crawl4ai:latest",
+    image: CRAWL4AI_IMAGE,
     // Crawl4AI has a longer first-run startup (model download), give it 3 min.
     healthTimeoutMs: 180_000,
     httpHealthUrl: "http://localhost:11235/health",
@@ -135,7 +138,7 @@ const LOCAL_SERVERS: Record<string, LocalServerDef> = {
       "--name",
       "crawl4ai",
       "-p",
-      "11235:11235",
+      "127.0.0.1:11235:11235",
       "--shm-size=3g",
       ...(process.env.CRAWL4AI_TOKEN ? ["-e", `CRAWL4AI_API_TOKEN=${process.env.CRAWL4AI_TOKEN}`] : []),
       "--health-cmd",
@@ -148,7 +151,7 @@ const LOCAL_SERVERS: Record<string, LocalServerDef> = {
       "12",
       "--health-start-period",
       "45s",
-      "unclecode/crawl4ai:latest",
+      CRAWL4AI_IMAGE,
     ],
   },
 
@@ -450,6 +453,10 @@ async function main(): Promise<void> {
             { cwd: ROOT, stdout: "inherit", stderr: "inherit" },
           );
           if ((await build.exited) !== 0) throw new Error("SearXNG image build failed.");
+        }
+        // Without a token the pinned image binds only the container's loopback, so the bot could never connect.
+        if (flag === "crawl4ai" && !process.env.CRAWL4AI_TOKEN) {
+          throw new Error("Set CRAWL4AI_TOKEN in .env; Crawl4AI refuses outside connections without an API token.");
         }
         await ensureDockerLocalServer(def);
       } else {

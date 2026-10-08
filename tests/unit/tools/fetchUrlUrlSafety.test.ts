@@ -13,6 +13,10 @@ const ENV_NAME = "FETCH_URL_ALLOW_PRIVATE_NETWORK";
 const RUN_ENV_NAME = "RUN_ENV";
 const originalAllowPrivateNetwork = process.env[ENV_NAME];
 const originalRunEnv = process.env[RUN_ENV_NAME];
+const ENGINE_ORDER_ENV_NAME = "FETCH_URL_ENGINE_ORDER";
+const CRAWL4AI_BASE_URL_ENV_NAME = "CRAWL4AI_BASE_URL";
+const originalEngineOrder = process.env[ENGINE_ORDER_ENV_NAME];
+const originalCrawl4aiBaseUrl = process.env[CRAWL4AI_BASE_URL_ENV_NAME];
 
 function restoreEnv(name: string, original: string | undefined): void {
   if (original === undefined) {
@@ -25,6 +29,8 @@ function restoreEnv(name: string, original: string | undefined): void {
 afterEach(() => {
   restoreEnv(ENV_NAME, originalAllowPrivateNetwork);
   restoreEnv(RUN_ENV_NAME, originalRunEnv);
+  restoreEnv(ENGINE_ORDER_ENV_NAME, originalEngineOrder);
+  restoreEnv(CRAWL4AI_BASE_URL_ENV_NAME, originalCrawl4aiBaseUrl);
 });
 
 // The blocklist only engages in production; pin RUN_ENV so these cases
@@ -144,6 +150,33 @@ describe("validateFetchUrlTarget outside production", () => {
     expect(result.allowed).toBe(false);
     expect(result.failureCode).toBe("PRIVATE_NETWORK_BLOCKED");
     expect(result.error).toContain("metadata");
+  });
+
+  it("refuses an unresolvable host before dispatching to the external Crawl4AI browser", async () => {
+    process.env[ENGINE_ORDER_ENV_NAME] = "crawl4ai,safe_http";
+    process.env[CRAWL4AI_BASE_URL_ENV_NAME] = "http://127.0.0.1:11235";
+    const context: ToolContext = {
+      channel: { id: "fixture-channel" } as ToolContext["channel"],
+      client: {} as ToolContext["client"],
+      locale: "en-US",
+      provider: "google",
+      tomoriState: createPersona({ config: { web_search_enabled: true } }),
+      suppressProgressNotices: true,
+    };
+    const requests: string[] = [];
+    const fetchSpy = stubGlobalFetch((input) => {
+      requests.push(String(input));
+      return new Response("unexpected");
+    });
+    try {
+      // RFC 6761 reserves .invalid, so this name never resolves.
+      const result = await new FetchUrlTool().execute({ url: "https://tomori-fixture.invalid/page" }, context);
+
+      expect(result.success).toBe(false);
+      expect(requests).toEqual([]);
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it("still blocks cloud-metadata addresses even with an explicit opt-in", async () => {

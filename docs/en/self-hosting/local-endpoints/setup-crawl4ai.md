@@ -10,11 +10,19 @@ The built-in `fetch_url` tool uses the lightweight `safe_http` engine by default
 
 Because Crawl4AI follows redirects outside TomoriBot's guarded HTTP client, it is only admitted where private-network fetching is permitted. Outside production (`RUN_ENV` != `production`), private-network fetching is enabled automatically. In production environments, it requires setting `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`.
 
+:::caution[What TomoriBot can and cannot check]
+TomoriBot refuses a URL whose hostname does not resolve, or resolves to a cloud metadata address, before it asks Crawl4AI to open it. It cannot control what the browser does next: Crawl4AI resolves the name again, follows redirects, and loads images and scripts on its own. TomoriBot's always-on metadata block does not cover those requests.
+
+The pinned image (`unclecode/crawl4ai:0.9.4`) sends its browser through its own proxy, which blocks private, loopback, and metadata addresses on every request and redirect. Leave `CRAWL4AI_ALLOW_INTERNAL_URLS` unset: setting it to `true` turns that proxy off, metadata included.
+:::
+
+Crawl4AI 0.9.4 needs an API token before it accepts connections from outside its own container. Generate one (for example `openssl rand -hex 32`) and set it as `CRAWL4AI_TOKEN` in `.env` for every setup path below. Without it, the container starts but TomoriBot cannot reach it and falls back to `safe_http`.
+
 Choose a setup path:
 
 ### Option A: Docker Compose (when TomoriBot runs in Docker)
 
-Use this path if you run TomoriBot with the repo's Docker Compose stack. First, set `CRAWL4AI_BASE_URL=http://crawl4ai:11235/` and `FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http` in `.env`. Outside production no private-network opt-in is needed; only add `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` if you run this stack with `RUN_ENV=production`.
+Use this path if you run TomoriBot with the repo's Docker Compose stack. First, set `CRAWL4AI_BASE_URL=http://crawl4ai:11235/`, `CRAWL4AI_TOKEN`, and `FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http` in `.env`. Outside production no private-network opt-in is needed; only add `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` if you run this stack with `RUN_ENV=production`.
 
 Then, start with:
 
@@ -22,7 +30,7 @@ Then, start with:
 docker compose --profile fetch-crawl4ai up -d
 ```
 
-This starts the Compose stack with the Crawl4AI container on TomoriBot's Docker network.
+This starts the Compose stack with the Crawl4AI container on TomoriBot's Docker network. Compose passes `CRAWL4AI_TOKEN` to the container as `CRAWL4AI_API_TOKEN`, and TomoriBot sends it as a bearer token. Port 11235 is published on `127.0.0.1` only, for local debugging; TomoriBot itself connects over the Docker network.
 
 If you run TomoriBot directly with `bun run dev`, use the standalone path below instead.
 
@@ -32,15 +40,13 @@ If you also want SearXNG, chain the profiles:
 docker compose --profile searxng --profile fetch-crawl4ai up -d
 ```
 
-   If you enable Crawl4AI API-token auth, set `CRAWL4AI_TOKEN` in `.env`; Compose passes it to the container as `CRAWL4AI_API_TOKEN`, and TomoriBot sends it as a bearer token.
-
 ---
 
 ### Option B: Standalone Docker (when running `bun run dev`)
 
-First, set `CRAWL4AI_BASE_URL=http://localhost:11235/` and `FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http` in `.env` so the bot connects to the host-published container port. Outside production no private-network opt-in is needed; only add `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` if you run with `RUN_ENV=production`.
+First, set `CRAWL4AI_BASE_URL=http://localhost:11235/`, `CRAWL4AI_TOKEN`, and `FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http` in `.env` so the bot connects to the container port published on `127.0.0.1`. Outside production no private-network opt-in is needed; only add `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` if you run with `RUN_ENV=production`.
 
-Then, instead of running TomoriBot directly with `bun run dev`, use `bun run launch --crawl4ai`. This handles the container lifecycle automatically and waits for the server to be healthy before starting the bot:
+Then, instead of running TomoriBot directly with `bun run dev`, use `bun run launch --crawl4ai`. This handles the container lifecycle automatically and waits for the server to be healthy before starting the bot. It stops with an error if `CRAWL4AI_TOKEN` is missing:
 
 ```sh
 bun run launch --crawl4ai
@@ -57,18 +63,18 @@ If you prefer to manage the container yourself, keep `CRAWL4AI_BASE_URL=http://l
 PowerShell:
 
 ```powershell
-docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g `
-  unclecode/crawl4ai:latest
+docker run -d --name crawl4ai -p 127.0.0.1:11235:11235 --shm-size=3g `
+  -e CRAWL4AI_API_TOKEN=<your-token> unclecode/crawl4ai:0.9.4
 ```
 
 Bash (Linux/macOS):
 
 ```bash
-docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
-  unclecode/crawl4ai:latest
+docker run -d --name crawl4ai -p 127.0.0.1:11235:11235 --shm-size=3g \
+  -e CRAWL4AI_API_TOKEN=<your-token> unclecode/crawl4ai:0.9.4
 ```
 
-If you secure the container, pass `-e CRAWL4AI_API_TOKEN=your_token` to `docker run` and set `CRAWL4AI_TOKEN=your_token` in `.env`.
+Use the same value for `<your-token>` as `CRAWL4AI_TOKEN` in `.env`.
 
 Then run `bun run dev` once the container is healthy (`docker ps` shows `(healthy)`).
 
@@ -94,6 +100,16 @@ For standalone Docker, start your Crawl4AI container before starting TomoriBot. 
    ```
 2. Set `CRAWL4AI_BASE_URL` in `.env` using the value for your setup path above.
 3. Start TomoriBot (`bun run dev` or `docker compose up`).
+
+### Upgrading from `latest`
+
+An existing `crawl4ai` container keeps the image it was created from, so `docker start` does not upgrade it. Remove it once, then use your setup path again:
+
+```powershell
+docker rm -f crawl4ai
+```
+
+With Compose, `docker compose --profile fetch-crawl4ai up -d` recreates the container from the pinned image.
 
 ### Returning after a restart
 
@@ -157,7 +173,7 @@ Cookie values are sensitive, so treat them like passwords. They grant full sessi
 | Variable | Default | Description |
 |---|---|---|
 | `CRAWL4AI_BASE_URL` | unset | Enables Crawl4AI when set. Use `http://crawl4ai:11235/` from Docker Compose, or `http://localhost:11235/` when TomoriBot runs directly on your machine. |
-| `CRAWL4AI_TOKEN` | unset | Optional bearer token. Must match `CRAWL4AI_API_TOKEN` on the Crawl4AI container when enabled. |
+| `CRAWL4AI_TOKEN` | unset | Required bearer token. Must match `CRAWL4AI_API_TOKEN` on the Crawl4AI container, which refuses outside connections without one. |
 | `FETCH_URL_ENGINE_ORDER` | `safe_http` | Comma-separated engine list. `safe_http` is always appended as the final fallback. Crawl4AI entries are ignored where private-network fetching is not permitted (production without an opt-in). |
 | `FETCH_URL_TIMEOUT_MS` | `15000` | Per-engine request timeout for Crawl4AI and the other URL-fetch engines. |
 | `FETCH_URL_MAX_CONTENT_LENGTH` | `50000` | Maximum characters returned by one fetch call before continuation is required. |

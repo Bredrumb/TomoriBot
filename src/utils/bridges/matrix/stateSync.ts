@@ -1,10 +1,10 @@
 import type { TextBasedChannel } from "discord.js";
 import type { ReminderRow } from "@/types/db/schema";
 import { log } from "@/utils/misc/logger";
-import { getLinkedMatrixRoom } from "./rooms";
+import { ensureRoomRelayable, getLinkedMatrixRoom } from "./rooms";
 import {
   MATRIX_MAX_TRACKED_SENT_EVENTS,
-  MATRIX_MEDIA_TIMEOUT_MS,
+  getMatrixSettings,
   pendingMatrixReplyChannels,
   sentEventPersonas,
 } from "./state";
@@ -59,7 +59,7 @@ export async function getPersonaReplyEventMetadata(
     const url = `${homeserverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/event/${encodeURIComponent(eventId)}`;
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${asToken}` },
-      signal: AbortSignal.timeout(MATRIX_MEDIA_TIMEOUT_MS),
+      signal: AbortSignal.timeout(getMatrixSettings().mediaTimeoutMs),
     });
     if (!response.ok) return { isPersonaReply: false };
 
@@ -91,6 +91,7 @@ export async function sendMatrixReminderMention(
 ): Promise<void> {
   const matrixRoomId = await getLinkedMatrixRoom(reminder.channel_disc_id);
   if (!matrixRoomId || !botUserId || !("messages" in channel)) return;
+  if (!(await ensureRoomRelayable(matrixRoomId, channel.client))) return;
 
   const matrixLocalpart = reminder.user_discord_id.split(":")[0].replace(/^@/, "");
   const mentionPlaceholder = `@{${matrixLocalpart}}`;
