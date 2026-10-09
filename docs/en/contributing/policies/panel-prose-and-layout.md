@@ -127,7 +127,8 @@ page body with a range chooser inside the panel, keeping the category row and se
 opens that range's modal, and every path returns to the previous page. `Previous` and `Next` appear only
 when the chooser has several pages; `Cancel` always appears. Keep at most 10 ranges per chooser page,
 because the chooser shares the panel's 40-component budget. Reuse the `general.pagination.*` keys for its
-wording.
+wording. A list the panel already pages, with every page fitting one modal, needs no chooser: its Remove
+acts on the visible page (`/moderation`).
 
 ## Buttons
 

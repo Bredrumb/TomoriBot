@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { validateFetchUrlTarget } from "@/tools/fetchUrl/urlSafety";
 import { FetchUrlTool } from "@/tools/fetchUrl/fetchUrlTool";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { FETCH_LIMITS } from "@/utils/security/rateLimiter";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { useEnvSandbox } from "../../helpers/env";
 import { createPersona } from "../../helpers/fixtures";
 import { stubGlobalFetch } from "../../helpers/fetchStub";
 
@@ -11,24 +12,9 @@ await initializeLocalizer();
 
 const ENV_NAME = "FETCH_URL_ALLOW_PRIVATE_NETWORK";
 const RUN_ENV_NAME = "RUN_ENV";
-const originalAllowPrivateNetwork = process.env[ENV_NAME];
-const originalRunEnv = process.env[RUN_ENV_NAME];
 const CRAWL4AI_BASE_URL_ENV_NAME = "CRAWL4AI_BASE_URL";
-const originalCrawl4aiBaseUrl = process.env[CRAWL4AI_BASE_URL_ENV_NAME];
 
-function restoreEnv(name: string, original: string | undefined): void {
-  if (original === undefined) {
-    delete process.env[name];
-    return;
-  }
-  process.env[name] = original;
-}
-
-afterEach(() => {
-  restoreEnv(ENV_NAME, originalAllowPrivateNetwork);
-  restoreEnv(RUN_ENV_NAME, originalRunEnv);
-  restoreEnv(CRAWL4AI_BASE_URL_ENV_NAME, originalCrawl4aiBaseUrl);
-});
+useEnvSandbox([ENV_NAME, RUN_ENV_NAME, CRAWL4AI_BASE_URL_ENV_NAME]);
 
 // The blocklist only engages in production; pin RUN_ENV so these cases
 // exercise the guarded path rather than the dev auto-relax.

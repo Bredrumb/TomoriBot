@@ -9,28 +9,15 @@ import {
   RemoteUrlPolicyError,
   resolveValidatedUserRedirect,
 } from "@/utils/security/userRemoteFetch";
+import { useEnvSandbox } from "../../helpers/env";
 
 const PRIVATE_NETWORK_ENV = "FETCH_URL_ALLOW_PRIVATE_NETWORK";
 const RUN_ENV_NAME = "RUN_ENV";
 const CRAWL4AI_BASE_URL_ENV = "CRAWL4AI_BASE_URL";
-const originalRunEnv = process.env[RUN_ENV_NAME];
-const originalCrawl4aiBaseUrl = process.env[CRAWL4AI_BASE_URL_ENV];
 
-function restoreEnv(name: string, original: string | undefined): void {
-  if (original === undefined) {
-    delete process.env[name];
-  } else {
-    process.env[name] = original;
-  }
-}
+useEnvSandbox([PRIVATE_NETWORK_ENV, RUN_ENV_NAME, CRAWL4AI_BASE_URL_ENV]);
 
 describe("safe HTTP fetch engine", () => {
-  afterEach(() => {
-    delete process.env[PRIVATE_NETWORK_ENV];
-    restoreEnv(RUN_ENV_NAME, originalRunEnv);
-    restoreEnv(CRAWL4AI_BASE_URL_ENV, originalCrawl4aiBaseUrl);
-  });
-
   it("uses only the guarded in-process engine when Crawl4AI is not configured", () => {
     delete process.env[RUN_ENV_NAME];
     delete process.env[CRAWL4AI_BASE_URL_ENV];
@@ -40,6 +27,7 @@ describe("safe HTTP fetch engine", () => {
   it("does not enable a configured external browser fetcher in production without an explicit opt-in", () => {
     process.env[RUN_ENV_NAME] = "production";
     process.env[CRAWL4AI_BASE_URL_ENV] = "http://127.0.0.1:11235/";
+    delete process.env[PRIVATE_NETWORK_ENV];
     expect(getFetchUrlEngineOrder()).toEqual(["safe_http"]);
 
     process.env[PRIVATE_NETWORK_ENV] = "true";
@@ -248,11 +236,6 @@ describe("user remote fetch redirect credentials", () => {
 
   afterEach(() => {
     for (const server of servers.splice(0)) server.stop(true);
-    if (originalRunEnv === undefined) {
-      delete process.env[RUN_ENV_NAME];
-    } else {
-      process.env[RUN_ENV_NAME] = originalRunEnv;
-    }
   });
 
   /**

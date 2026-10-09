@@ -74,7 +74,7 @@ async function submitQuotaEdit(
     isButton: () => false,
     isStringSelectMenu: () => false,
     isModalSubmit: () => true,
-    customId: `moderation:v1:quota-edit-submit:en-US:text:${nonce}`,
+    customId: `moderation:v2:quota-edit-submit:en-US:text:${nonce}`,
     guildId: "guild-1",
     memberPermissions: { has: () => true },
     deferUpdate: async () => undefined,
@@ -92,7 +92,7 @@ async function submitQuotaEdit(
 
   await route.execute({} as Client, interaction, {
     namespace: "moderation",
-    version: "v1",
+    version: "v2",
     segments: ["quota-edit-submit", "en-US", "text", nonce],
   });
 }

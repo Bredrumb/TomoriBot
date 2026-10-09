@@ -92,7 +92,7 @@ The `block_user` and `unblock_user` tools allow personas to manage interpersonal
 
 - **Scoping:** Blocks persist in `persona_user_blocks`, keyed by server, local persona ID, and target user ID.
 - **Channel permission check:** Before saving a block, `block_user` checks whether the bot can view the channel and send embeds. Missing permissions abort the save and return an error to the model.
-- **Dialogue filtering:** Active blocks suppress the target user's messages in dialogue history, replacing them with a system notice: `[System: ... sent a message but is currently blocked by you ...]`. The notice is an English system injection, mirroring reminder and join injections. Blocking suppresses dialogue turns and reply annotations without deleting stored long-term memories or documents.
+- **Dialogue filtering:** Active blocks suppress the target user's messages in dialogue history, replacing them with a system notice: `[System: ... sent a message but is currently blocked by you ...]`. The notice is an English system injection, mirroring reminder and join injections. The pointer to `unblock_user` lives in the active-blocks knowledge item instead, inside `{{if tool:unblock_user}}`, so it appears only on turns that expose the tool. Blocking suppresses dialogue turns and reply annotations without deleting stored long-term memories or documents.
 
 ## Structured user info updates
 <!-- anchor: structured-user-info-updates -->

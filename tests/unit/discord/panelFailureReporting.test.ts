@@ -88,7 +88,7 @@ describe("panel failure reporting chokepoint", () => {
   it("falls back to a namespace and tone key when the receipt names no cause", async () => {
     const { metrics, restore } = captureMetrics();
     try {
-      await deliverGuardedPanel(fakeInteraction("moderation:v1:page:en-US"), validPayload(), {
+      await deliverGuardedPanel(fakeInteraction("moderation:v2:page:en-US"), validPayload(), {
         locale: "en-US",
         receipt: { tone: "error", heading: "Update Failed", detail: "Try again." },
       });
@@ -117,7 +117,7 @@ describe("panel failure reporting chokepoint", () => {
   it("reports a warning receipt as well, because a stale panel still failed the actor's intent", async () => {
     const { metrics, restore } = captureMetrics();
     try {
-      await deliverGuardedPanel(fakeInteraction("moderation:v1:page:en-US"), validPayload(), {
+      await deliverGuardedPanel(fakeInteraction("moderation:v2:page:en-US"), validPayload(), {
         locale: "en-US",
         receipt: WARNING_RECEIPT,
       });
@@ -196,7 +196,7 @@ describe("panel failure Postgres sink", () => {
       },
     });
     try {
-      await deliverGuardedPanel(fakeInteraction("moderation:v1:page:en-US"), validPayload(), {
+      await deliverGuardedPanel(fakeInteraction("moderation:v2:page:en-US"), validPayload(), {
         locale: "en-US",
         receipt: { tone: "error", heading: "Update Failed", detail: "Try again.", reason: "quota_edit_failed" },
       });
@@ -359,7 +359,7 @@ describe("panel action correlation key", () => {
   it("emits the action in the stat_counters key space when the receipt names one", async () => {
     const { metrics, restore } = captureMetrics();
     try {
-      await deliverGuardedPanel(fakeInteraction("moderation:v1:page:en-US"), validPayload(), {
+      await deliverGuardedPanel(fakeInteraction("moderation:v2:page:en-US"), validPayload(), {
         locale: "en-US",
         receipt: {
           tone: "error",

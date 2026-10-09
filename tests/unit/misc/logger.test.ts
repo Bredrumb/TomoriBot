@@ -1,16 +1,9 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { buildLogStreams, buildMetricPayload, LOG_REDACTION_PATHS, log, sanitizeLogPayload } from "@/utils/misc/logger";
 import pino from "pino";
+import { useEnvSandbox } from "../../helpers/env";
 
-const originalLogMaxStringLength = process.env.LOG_MAX_STRING_LENGTH;
-
-afterEach(() => {
-  if (originalLogMaxStringLength === undefined) {
-    delete process.env.LOG_MAX_STRING_LENGTH;
-  } else {
-    process.env.LOG_MAX_STRING_LENGTH = originalLogMaxStringLength;
-  }
-});
+useEnvSandbox(["LOG_MAX_STRING_LENGTH"]);
 
 /**
  * Minimal in-memory sink implementing pino's DestinationStream contract.
@@ -137,21 +130,17 @@ describe("buildLogStreams", () => {
 
   test("long strings are capped when LOG_MAX_STRING_LENGTH is explicitly configured", () => {
     process.env.LOG_MAX_STRING_LENGTH = "4096";
-    try {
-      const secret = "straddling-password";
-      // The password starts just before the 4096-character cap and ends past it.
-      const prefix = "x".repeat(4096 - 30);
-      const sanitized = sanitizeLogPayload(
-        `${prefix} postgresql://tomori:${secret}@db.example.com/tomori ${"y".repeat(100_000)}`,
-      ) as string;
+    const secret = "straddling-password";
+    // The password starts just before the 4096-character cap and ends past it.
+    const prefix = "x".repeat(4096 - 30);
+    const sanitized = sanitizeLogPayload(
+      `${prefix} postgresql://tomori:${secret}@db.example.com/tomori ${"y".repeat(100_000)}`,
+    ) as string;
 
-      expect(sanitized).not.toContain(secret);
-      expect(sanitized).not.toContain("straddling");
-      expect(sanitized).toContain("[TRUNCATED");
-      expect(sanitized.length).toBeLessThan(4200);
-    } finally {
-      delete process.env.LOG_MAX_STRING_LENGTH;
-    }
+    expect(sanitized).not.toContain(secret);
+    expect(sanitized).not.toContain("straddling");
+    expect(sanitized).toContain("[TRUNCATED");
+    expect(sanitized.length).toBeLessThan(4200);
   });
 
   test("strings under the cap are only redacted, never truncated", () => {
@@ -210,14 +199,10 @@ describe("buildLogStreams", () => {
 
   test("truncated colored strings preserve ANSI reset sequence", () => {
     process.env.LOG_MAX_STRING_LENGTH = "4096";
-    try {
-      const longColoredText = `\x1b[33m${"x".repeat(5000)}\x1b[0m`;
-      const sanitized = sanitizeLogPayload(longColoredText) as string;
-      expect(sanitized).toContain("[TRUNCATED");
-      expect(sanitized.endsWith("\x1b[0m")).toBe(true);
-    } finally {
-      delete process.env.LOG_MAX_STRING_LENGTH;
-    }
+    const longColoredText = `\x1b[33m${"x".repeat(5000)}\x1b[0m`;
+    const sanitized = sanitizeLogPayload(longColoredText) as string;
+    expect(sanitized).toContain("[TRUNCATED");
+    expect(sanitized.endsWith("\x1b[0m")).toBe(true);
   });
 
   test("metric payloads redact free-text credentials while numeric fields keep their type", () => {
