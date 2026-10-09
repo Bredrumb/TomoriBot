@@ -130,16 +130,28 @@ Use a provider's direct HTTPS endpoint supporting MCP Streamable HTTP or SSE:
 3. Paste the endpoint into `URL`, enter its bearer token in `Auth Token` if required, and
    choose the required `Server Type`. **General Purpose** is selected by default.
 
-Smithery managed-key connections are unavailable. A service listed in Smithery needs a
-separate supported endpoint to work here. A Smithery account key cannot be used as that
-service's direct bearer token.
+### Adding a Smithery Server
 
-Existing Smithery registrations stay saved, but their managed-key tools cannot connect. Disable the
-old registration before adding a supported direct endpoint with its own credentials. If the provider
-offers no supported endpoint, its tools remain unavailable. Disabling a registration selected for
-search or URL reading restores TomoriBot's built-in selection; leaving it enabled prevents an
-automatic switch. Saved tool names describe the last discovery, so they do not prove a connection
-still works.
+Servers hosted on Smithery have addresses ending in `.run.tools`. Paste that address into `URL`
+and your Smithery API key into `Auth Token`. TomoriBot sends the key only to Smithery's API at
+`api.smithery.ai`, never to the server address itself. Smithery then passes each tool call to the
+server, so Smithery sees every tool request and result. Registrations saved before this support
+returned work again without changes.
+
+TomoriBot keeps one Smithery connection per server address in the first namespace of your Smithery
+account (Smithery creates a namespace if you have none) and reuses it, so adding, testing, and
+reconnecting do not pile up connections. TomoriBot never deletes connections. Earlier TomoriBot
+versions made a new connection on every reconnect, so your account may hold many unused ones for
+the same server; you can remove them from your Smithery dashboard.
+
+Some servers ask you to sign in with the service they wrap. Adding one fails with a message that
+authorization is needed, and TomoriBot never shows the sign-in link in Discord. Open your Smithery
+dashboard, finish the sign-in for the connection whose name starts with `tomoribot-`, then add the
+server again. Connecting and listing tools must finish within 15 seconds.
+
+Disabling a registration selected for search or URL reading restores TomoriBot's built-in
+selection; leaving it enabled prevents an automatic switch. Saved tool names describe the last
+discovery, so they do not prove a connection still works.
 
 Responses stop at 8 MiB while downloading. Large tool catalogs or results can leave a
 plugin unavailable or cause a tool call to fail. For SSE connections, the limit covers

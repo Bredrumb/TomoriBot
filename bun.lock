@@ -12,7 +12,7 @@
         "@modelcontextprotocol/sdk": "^1.28.0",
         "@openrouter/sdk": "0.1.27",
         "@resvg/resvg-js": "^2.6.2",
-        "@smithery/api": "^0.56.0",
+        "@smithery/api": "^0.68.0",
         "@types/bun": "^1.3.10",
         "@types/node": "^25.3.5",
         "bing-translate-api": "^4.2.0",
@@ -643,7 +643,7 @@
 
     "@sindresorhus/is": ["@sindresorhus/is@4.6.0", "", {}, "sha512-t09vSN3MdfsyCHoFcTRCH/iUtG7OJ0CsjzB8cjAmKc/va/kIgeDI/TxsigdncE/4be734m0cvIYwNaV4i2XqAw=="],
 
-    "@smithery/api": ["@smithery/api@0.56.1", "", { "peerDependencies": { "@modelcontextprotocol/sdk": ">=1.0.0" }, "optionalPeers": ["@modelcontextprotocol/sdk"] }, "sha512-u5q9vxakP4T6WHAjx8oE2evgZzy4xjuncHr+P81OAN17bmBwh3dKPpQjUT++1JEgRs7IjoKcFvjKZzxZ/qJNGQ=="],
+    "@smithery/api": ["@smithery/api@0.68.0", "", { "peerDependencies": { "@modelcontextprotocol/sdk": ">=1.0.0" }, "optionalPeers": ["@modelcontextprotocol/sdk"] }, "sha512-u5gMqEIW271Z9kOI2QXLROz+5iEwGLkQre0JriUye15BdDLwCkXYjuW/f42lqxDyiGwxZPcNkU3YKtNSf4GYHg=="],
 
     "@smithy/chunked-blob-reader": ["@smithy/chunked-blob-reader@5.2.2", "", { "dependencies": { "tslib": "^2.6.2" } }, "sha512-St+kVicSyayWQca+I1rGitaOEH6uKgE8IUWoYnnEX26SWdWQcL6LvMSD19Lg+vYHKdT9B2Zuu7rd3i6Wnyb/iw=="],
 

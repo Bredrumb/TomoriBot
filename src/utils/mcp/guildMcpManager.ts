@@ -5,8 +5,7 @@
  * MCP servers registered by guild admins. Each connection is keyed by
  * "${serverId}:${name}" and auto-evicted after a configurable idle TTL.
  *
- * Streamable HTTP and SSE share pinned URL validation and response-byte limits.
- * Smithery managed connections are disabled because their requests bypass those controls.
+ * Streamable HTTP, SSE, and Smithery Connect share pinned URL validation and response-byte limits.
  */
 
 import { Client as MCPClient } from "@modelcontextprotocol/sdk/client/index.js";
@@ -34,6 +33,7 @@ import { refreshToolExecutionContext } from "@/tools/availability";
 import { configToFeatureFlags } from "@/utils/tools/featureFlagMapper";
 import { validateFetchUrlTarget } from "@/tools/fetchUrl/urlSafety";
 import { createGuildMcpFetch } from "@/utils/mcp/guildMcpFetch";
+import { connectSmithery, isSmitheryUrl } from "@/utils/mcp/smitheryConnection";
 
 export interface GuildMcpRoute {
   config: GuildMcpServerRow;
@@ -58,17 +58,6 @@ async function validateReplacementUrls(value: unknown, schema: unknown, property
     for (const [name, childSchema] of Object.entries(definition.properties)) {
       await validateReplacementUrls((value as Record<string, unknown>)[name], childSchema, name);
     }
-  }
-}
-
-/**
- * A Smithery key needs its managed transport, so it cannot become a direct bearer token.
- */
-function isSmitheryUrl(url: string): boolean {
-  try {
-    return new URL(url).hostname.endsWith(".run.tools");
-  } catch {
-    return false;
   }
 }
 
@@ -461,10 +450,9 @@ class GuildMcpManager {
     try {
       // Connection testing uses the same guarded transports as runtime discovery.
       // Returns the fresh client from whichever transport succeeded.
-      client = await this.connectWithFallback("tomoribot-test", url, authToken, "test");
-
-      const toolResult = await client.listTools();
-      const functionNames = toolResult.tools.map((t) => t.name);
+      const discovered = await this.connectAndDiscover("tomoribot-test", url, authToken, "test");
+      client = discovered.client;
+      const { functionNames } = discovered;
 
       await client.close();
 
@@ -601,8 +589,7 @@ class GuildMcpManager {
     try {
       const authToken = await toolRepository.decryptMcpAuthToken(config, privateFailure);
 
-      // Connect with transport fallback (fresh client per attempt) + timeout
-      const client = await this.connectWithFallback(
+      const { client, functionNames } = await this.connectAndDiscover(
         `tomoribot-guild-${config.server_id}-${config.name}`,
         config.url,
         authToken ?? undefined,
@@ -612,9 +599,6 @@ class GuildMcpManager {
 
       // Create CallableTool via mcpToTool (same as global MCP servers)
       const callableTool = mcpToTool(client);
-
-      const toolResult = await client.listTools();
-      const functionNames = toolResult.tools.map((t) => t.name);
 
       const conn: GuildMCPConnection = {
         guildMcpId: config.guild_mcp_id ?? 0,
@@ -675,9 +659,31 @@ class GuildMcpManager {
     }
   }
 
+  /** A client whose discovery fails is closed here, so callers never hold a half-open transport. */
+  private async connectAndDiscover(
+    clientName: string,
+    url: string,
+    authToken?: string,
+    serverLabel?: string,
+    privateFailure = false,
+  ): Promise<{ client: MCPClient; functionNames: string[] }> {
+    if (isSmitheryUrl(url) && authToken) {
+      return await connectSmithery(clientName, url, authToken, AbortSignal.timeout(CONNECT_TIMEOUT_MS));
+    }
+    const client = await this.connectWithFallback(clientName, url, authToken, serverLabel, privateFailure);
+    try {
+      const toolResult = await client.listTools();
+      return { client, functionNames: toolResult.tools.map((tool) => tool.name) };
+    } catch (error) {
+      await this.safeCloseClient(client);
+      throw error;
+    }
+  }
+
   /**
    * SSE-only servers reject the Streamable HTTP handshake, so both attempts need
-   * fresh clients and the same guarded fetcher. Smithery keys cannot use this fallback.
+   * fresh clients and the same guarded fetcher. A Smithery account key must never
+   * become a bearer token for the upstream server, even after a Smithery failure.
    */
   private async connectWithFallback(
     clientName: string,
@@ -688,7 +694,7 @@ class GuildMcpManager {
   ): Promise<MCPClient> {
     const label = serverLabel ?? url;
     if (isSmitheryUrl(url) && authToken) {
-      throw new Error("Smithery managed MCP transport is unavailable until it supports guarded, bounded requests");
+      throw new Error("Smithery account keys are sent only to Smithery Connect");
     }
     const urlValidation = await validateRemoteUrl(url);
     if (!urlValidation.valid) {

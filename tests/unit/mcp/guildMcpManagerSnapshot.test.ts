@@ -186,30 +186,6 @@ describe("guild MCP transport receipt", () => {
       fetchSpy.mockRestore();
     }
   });
-
-  it("leaves a saved Smithery registration unavailable without changing its discovery snapshot", async () => {
-    const manager = getGuildMcpManager();
-    const row = {
-      ...config(912, "saved-smithery"),
-      url: "https://fixture.run.tools/mcp",
-      auth_token: Buffer.from("encrypted-fixture"),
-    };
-    const decrypt = spyOn(toolRepository, "decryptMcpAuthToken").mockResolvedValue("fixture-key");
-    const snapshot = spyOn(toolRepository, "updateMcpToolNameSnapshot");
-    const fetchSpy = spyOn(globalThis, "fetch");
-    try {
-      expect(await manager.getRegisteredTool(row, true)).toBeNull();
-      expect(row.is_enabled).toBe(true);
-      expect(row.last_discovered_tool_names).toEqual(["prior_tool"]);
-      expect(snapshot).not.toHaveBeenCalled();
-      expect(fetchSpy).not.toHaveBeenCalled();
-    } finally {
-      await manager.disconnectGuildServer(42, row.name);
-      fetchSpy.mockRestore();
-      snapshot.mockRestore();
-      decrypt.mockRestore();
-    }
-  });
 });
 
 function config(id: number, name: string): GuildMcpServerRow {
