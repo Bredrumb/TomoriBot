@@ -142,6 +142,50 @@ while calibration is absent. Persistence is described in
 [database settings](database-schema.md#response-drafting-workspace-settings); runtime ownership is in
 [generation review](../pipelines/chat/06-per-turn/03-run-generation-turn.md#response-text-review).
 
+## Current Top-Level Categories
+
+- `comment`
+- `compact`
+- `conditioning`
+- `config`
+- `context`
+- `contribute`
+- `donate`
+- `export`
+- `expressions`
+- `generate`
+- `help`
+- `impersonate`
+- `import`
+- `kill`
+- `learn`
+- `legal`
+- `matrix`
+- `memories`
+- `model`
+- `moderation`
+- `novelai`
+- `nsfw`
+- `nuke`
+- `persona`
+- `personal`
+- `ping`
+- `providers`
+- `punish`
+- `quota`
+- `refresh`
+- `reset`
+- `respond`
+- `reward`
+- `scheduled-task`
+- `setup`
+- `stats`
+- `status`
+- `support`
+- `tool`
+- `troubleshoot`
+- `update`
+
 ## Contributor guides
 
 Procedures for adding commands and authoring UI panels belong to dedicated contributor guides:

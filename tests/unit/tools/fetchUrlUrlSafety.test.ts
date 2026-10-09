@@ -13,9 +13,7 @@ const ENV_NAME = "FETCH_URL_ALLOW_PRIVATE_NETWORK";
 const RUN_ENV_NAME = "RUN_ENV";
 const originalAllowPrivateNetwork = process.env[ENV_NAME];
 const originalRunEnv = process.env[RUN_ENV_NAME];
-const ENGINE_ORDER_ENV_NAME = "FETCH_URL_ENGINE_ORDER";
 const CRAWL4AI_BASE_URL_ENV_NAME = "CRAWL4AI_BASE_URL";
-const originalEngineOrder = process.env[ENGINE_ORDER_ENV_NAME];
 const originalCrawl4aiBaseUrl = process.env[CRAWL4AI_BASE_URL_ENV_NAME];
 
 function restoreEnv(name: string, original: string | undefined): void {
@@ -29,7 +27,6 @@ function restoreEnv(name: string, original: string | undefined): void {
 afterEach(() => {
   restoreEnv(ENV_NAME, originalAllowPrivateNetwork);
   restoreEnv(RUN_ENV_NAME, originalRunEnv);
-  restoreEnv(ENGINE_ORDER_ENV_NAME, originalEngineOrder);
   restoreEnv(CRAWL4AI_BASE_URL_ENV_NAME, originalCrawl4aiBaseUrl);
 });
 
@@ -153,7 +150,6 @@ describe("validateFetchUrlTarget outside production", () => {
   });
 
   it("refuses an unresolvable host before dispatching to the external Crawl4AI browser", async () => {
-    process.env[ENGINE_ORDER_ENV_NAME] = "crawl4ai,safe_http";
     process.env[CRAWL4AI_BASE_URL_ENV_NAME] = "http://127.0.0.1:11235";
     const context: ToolContext = {
       channel: { id: "fixture-channel" } as ToolContext["channel"],

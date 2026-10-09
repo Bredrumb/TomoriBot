@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { parseFetchUrlEngineOrder } from "@/tools/fetchUrl/dispatcher";
+import { getFetchUrlEngineOrder } from "@/tools/fetchUrl/dispatcher";
 import { convertFetchedContent, SafeHttpFetchEngine } from "@/tools/fetchUrl/safeHttpFetchEngine";
 import type { ToolContext } from "@/types/tool/interfaces";
 import {
@@ -12,36 +12,44 @@ import {
 
 const PRIVATE_NETWORK_ENV = "FETCH_URL_ALLOW_PRIVATE_NETWORK";
 const RUN_ENV_NAME = "RUN_ENV";
+const CRAWL4AI_BASE_URL_ENV = "CRAWL4AI_BASE_URL";
 const originalRunEnv = process.env[RUN_ENV_NAME];
+const originalCrawl4aiBaseUrl = process.env[CRAWL4AI_BASE_URL_ENV];
+
+function restoreEnv(name: string, original: string | undefined): void {
+  if (original === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = original;
+  }
+}
 
 describe("safe HTTP fetch engine", () => {
   afterEach(() => {
     delete process.env[PRIVATE_NETWORK_ENV];
-    if (originalRunEnv === undefined) {
-      delete process.env[RUN_ENV_NAME];
-    } else {
-      process.env[RUN_ENV_NAME] = originalRunEnv;
-    }
+    restoreEnv(RUN_ENV_NAME, originalRunEnv);
+    restoreEnv(CRAWL4AI_BASE_URL_ENV, originalCrawl4aiBaseUrl);
   });
 
-  it("uses only the guarded in-process engine by default", () => {
-    process.env[RUN_ENV_NAME] = "production";
-    expect(parseFetchUrlEngineOrder(undefined)).toEqual(["safe_http"]);
-    expect(parseFetchUrlEngineOrder("mcp_fetch")).toEqual(["safe_http"]);
+  it("uses only the guarded in-process engine when Crawl4AI is not configured", () => {
+    delete process.env[RUN_ENV_NAME];
+    delete process.env[CRAWL4AI_BASE_URL_ENV];
+    expect(getFetchUrlEngineOrder()).toEqual(["safe_http"]);
   });
 
-  it("does not enable the external browser fetcher in production without an explicit opt-in", () => {
+  it("does not enable a configured external browser fetcher in production without an explicit opt-in", () => {
     process.env[RUN_ENV_NAME] = "production";
-    expect(parseFetchUrlEngineOrder("crawl4ai,safe_http")).toEqual(["safe_http"]);
+    process.env[CRAWL4AI_BASE_URL_ENV] = "http://127.0.0.1:11235/";
+    expect(getFetchUrlEngineOrder()).toEqual(["safe_http"]);
 
     process.env[PRIVATE_NETWORK_ENV] = "true";
-    expect(parseFetchUrlEngineOrder("crawl4ai,safe_http")).toEqual(["crawl4ai", "safe_http"]);
+    expect(getFetchUrlEngineOrder()).toEqual(["crawl4ai", "safe_http"]);
   });
 
-  it("admits the external browser fetcher outside production without an opt-in", () => {
+  it("tries a configured external browser fetcher first outside production, with safe_http as fallback", () => {
     delete process.env[RUN_ENV_NAME];
-    delete process.env[PRIVATE_NETWORK_ENV];
-    expect(parseFetchUrlEngineOrder("crawl4ai,safe_http")).toEqual(["crawl4ai", "safe_http"]);
+    process.env[CRAWL4AI_BASE_URL_ENV] = "http://127.0.0.1:11235/";
+    expect(getFetchUrlEngineOrder()).toEqual(["crawl4ai", "safe_http"]);
   });
 
   it("removes executable HTML content while converting readable content", () => {
