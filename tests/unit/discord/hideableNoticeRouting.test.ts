@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from "bun:test";
+import { ChannelType, PermissionFlagsBits, PermissionsBitField } from "discord.js";
 import { NOTICE_CONFIG_HINT_KEY, type NoticeVerbosity, type ToolNoticeKey } from "@/constants/toolNotices";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { sendMemoryEmbedWithExpand, sendToolNoticeContainer } from "@/utils/discord/expandableEmbedNotice";
@@ -11,12 +12,22 @@ beforeAll(async () => initializeLocalizer());
 
 const SOURCE_URL = "https://discord.com/channels/1/200/300";
 
-function fakeChannel(id: string, options: { dm?: boolean; parentId?: string } = {}) {
+/** A guild channel every member can read unless `restricted` denies `@everyone` the channel. */
+function fakeChannel(id: string, options: { dm?: boolean; parentId?: string; restricted?: boolean } = {}) {
   const sent: string[] = [];
+  const audience = (restricted: boolean) => ({
+    permissionsFor: () => new PermissionsBitField(restricted ? 0n : PermissionFlagsBits.ViewChannel),
+    permissionOverwrites: { cache: [] },
+  });
   return {
     id,
     sent,
+    guildId: "guild_1",
+    guild: { roles: { everyone: { id: "guild_1" } } },
+    type: options.parentId === undefined ? ChannelType.GuildText : ChannelType.PublicThread,
     parentId: options.parentId ?? null,
+    parent: options.parentId === undefined ? null : { id: options.parentId, ...audience(false) },
+    ...audience(options.restricted ?? false),
     isThread: () => options.parentId !== undefined,
     isDMBased: () => options.dm ?? false,
     send: async (payload: unknown) => {
@@ -261,6 +272,10 @@ describe("hideable tool notices", () => {
     [
       "the notice came from a private channel",
       { conversation: fakeChannel("200"), thoughtLog: fakeChannel("900"), privateChannelIds: ["200"] },
+    ],
+    [
+      "the notice came from a channel @everyone cannot read",
+      { conversation: fakeChannel("200", { restricted: true }), thoughtLog: fakeChannel("900") },
     ],
     [
       "the notice came from a thread under a private channel",

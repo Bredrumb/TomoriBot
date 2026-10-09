@@ -1,5 +1,8 @@
 export default {
   tools: {
+    execution: {
+      unavailable: `Công cụ \`{tool}\` không khả dụng theo cài đặt hiện tại, khả năng của model hoặc quyền hạn của bot.`,
+    },
     generate_image: {
       quota_exceeded_generic: `Đã vượt quá hạn mức tạo ảnh.`,
       user_quota_exceeded: `Bạn đã đạt hạn mức tạo ảnh hàng ngày. {reset_info}`,

@@ -17,7 +17,10 @@
 import type { FunctionCall, FunctionResponseImageMetadata, ThoughtLogEntry } from "../../types/provider/interfaces";
 import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
-import { isProviderTimeoutMessage } from "@/utils/provider/providerErrorClassification";
+import {
+  formatProviderErrorCodeForDisplay,
+  isProviderTimeoutMessage,
+} from "@/utils/provider/providerErrorClassification";
 import { localizer } from "../../utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
@@ -2183,59 +2186,34 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       return localizer(locale, "genai.openrouter.429_free_models_message");
     }
 
-    let openrouterMessage = error.userMessage;
-
-    if (!openrouterMessage) {
-      // Fallback to locale-based default messages
-      const errorCode = error.code;
-      let messageKey: string;
-
-      // Map error types to OpenRouter-specific locale keys
-      switch (error.type) {
-        case "content_blocked":
-          messageKey = "403_default_message";
-          break;
-        case "rate_limit":
-          messageKey = "429_default_message";
-          break;
-        case "timeout":
-          messageKey = "408_default_message";
-          break;
-        case "provider_overloaded":
-          messageKey = errorCode === "502" ? "502_default_message" : "503_default_message";
-          break;
-        case "api_error":
-          messageKey = `${errorCode}_default_message`;
-          break;
-        default:
-          messageKey = "unknown_default_message";
-          break;
-      }
-
-      const localeKey = `genai.openrouter.${messageKey}`;
-      openrouterMessage = localizer(locale, localeKey);
-
-      // If localizer returns the key itself, it means the key doesn't exist
-      // (localizer returns the key when it can't find a translation)
-      if (openrouterMessage === localeKey) {
-        // Fallback to generic unknown message
-        openrouterMessage = localizer(locale, "genai.openrouter.unknown_default_message");
-        // Append actual API error for unknown errors
-        const maxErrorLength = 1000;
-        const apiErrorSnippet =
-          error.message.length > maxErrorLength ? `${error.message.substring(0, maxErrorLength)}...` : error.message;
-        openrouterMessage += `\n\n**API Response:**\n${apiErrorSnippet}`;
-      } else if (messageKey === "unknown_default_message") {
-        // Even if we found the key, if it's the unknown message, append API error
-        const maxErrorLength = 1000;
-        const apiErrorSnippet =
-          error.message.length > maxErrorLength ? `${error.message.substring(0, maxErrorLength)}...` : error.message;
-        openrouterMessage += `\n\n**API Response:**\n${apiErrorSnippet}`;
-      }
+    // Upstream text (`userMessage`, `message`) stays in the operator log; see StreamErrorUi.
+    const errorCode = formatProviderErrorCodeForDisplay(error.code);
+    let messageKey: string;
+    switch (error.type) {
+      case "content_blocked":
+        messageKey = "403_default_message";
+        break;
+      case "rate_limit":
+        messageKey = "429_default_message";
+        break;
+      case "timeout":
+        messageKey = "408_default_message";
+        break;
+      case "provider_overloaded":
+        messageKey = errorCode === "502" ? "502_default_message" : "503_default_message";
+        break;
+      case "api_error":
+        messageKey = `${errorCode}_default_message`;
+        break;
+      default:
+        messageKey = "unknown_default_message";
+        break;
     }
 
-    // Format as "Error Code {code}: {OpenRouter message}"
-    const errorCode = error.code || "unknown";
+    const localeKey = `genai.openrouter.${messageKey}`;
+    const localized = localizer(locale, localeKey);
+    const openrouterMessage =
+      localized === localeKey ? localizer(locale, "genai.openrouter.unknown_default_message") : localized;
     return `Error Code ${errorCode}: ${openrouterMessage}`;
   }
 

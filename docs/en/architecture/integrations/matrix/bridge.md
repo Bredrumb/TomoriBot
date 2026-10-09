@@ -75,6 +75,11 @@ Matrix Room
    - `/kill` aborts active streams, empties channel queues, and clears persona typing indicators.
    - `/refresh` clears short-term memory for the channel and posts a confirmation notice.
 
+   Any member of a linked room can run both, as any member of the Discord channel can. Linking a
+   room requires `Manage Server` in Discord, so a linked room's members are an audience that
+   manager chose. The bridge applies no Matrix power-level check to relayed messages, uploads, or
+   these commands. It joins rooms it is invited to but relays nothing until a room is linked.
+
 ### Outbound relay (Discord to Matrix)
 
 1. When TomoriBot sends an AI response in a Discord channel, `matrixRelay.ts` receives the Discord

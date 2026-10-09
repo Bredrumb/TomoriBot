@@ -112,8 +112,9 @@ async function runRestore(bundlePath: string): Promise<void> {
     throw new Error("Unsupported or invalid backup manifest.");
   }
   // Explicit URL targets keep the runtime's verified production TLS policy.
-  const production = process.env.RUN_ENV === "production" && process.env.TEST_PRODUCTION !== "true";
-  const { resolveProductionPostgresTls } = await import("@/utils/db/client");
+  const { resolveProductionPostgresTls, skipsTlsForTestProduction } = await import("@/utils/db/client");
+  const production =
+    process.env.RUN_ENV === "production" && !skipsTlsForTestProduction(new URL(targetDatabaseUrl).hostname);
   const sql = new SQL(targetDatabaseUrl, {
     ...(production ? { tls: resolveProductionPostgresTls(new URL(targetDatabaseUrl).hostname) } : {}),
   });

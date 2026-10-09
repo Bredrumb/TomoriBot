@@ -1,7 +1,6 @@
 export default {
   genai: {
     generic_error_title: `生成エラー`,
-    generic_error_description: `申し訳ありません、応答を生成中にエラーが発生しました ({error_message})。`,
     error_stream_timeout_title: `接続タイムアウト`,
     error_stream_timeout_description: `この問題が続く場合、選択したAIプロバイダーに一時的な問題がある可能性があります。後でもう一度お試しいただくか、\`/refresh\`を使用してコンテキスト履歴をリフレッシュしてください。`,
     empty_response_title: `空の応答`,
@@ -135,6 +134,10 @@ export default {
       content_blocked_default_message: `あなたのコンテンツは安全フィルターによってブロックされました`,
       unknown_default_message: `予期しないエラーが発生しました`,
     },
+    vertex: {
+      config_error_message: `Vertex AI がこのプロバイダーの設定を読み取れませんでした。\`/providers\` でキーを \`project-id::location\` の形式で入力してください。`,
+      auth_error_message: `Vertex AI の認証に失敗しました。TomoriBot のホスト管理者が Google Cloud の Application Default Credentials（\`gcloud auth application-default login\` または \`GOOGLE_APPLICATION_CREDENTIALS\`）を設定する必要があります。`,
+    },
     vertexexpress: {
       "403_predict_permission_message": `このキーでは Vertex AI Express モデルを呼び出せません。Express Mode のキーを使うか、フル Google Cloud プロジェクトなら別プロバイダーの \`vertex\` を使ってください。`,
       unknown_default_message: `予期しないエラーが発生しました`,
@@ -178,6 +181,7 @@ export default {
     },
     custom: {
       "402_default_message": `このエンドポイントのアカウント残高が不足しています`,
+      REDIRECT_CREDENTIALS_WITHHELD_default_message: `このエンドポイントは別のアドレスにリダイレクトされたため、TomoriBotはAPIキーを送信しませんでした。\`/providers\` でこのエンドポイントを管理している人は、URLをサーバーのリダイレクト先の最終アドレスに変更することで修正できます。`,
       unknown_default_message: `予期しないエラーが発生しました`,
     },
     deepseek: {
@@ -194,10 +198,10 @@ export default {
       "401_default_message": `NVIDIAはこのキーを認識できませんでした。\`nvapi-\` プレフィックスを含め、全体が正しくコピーされているか確認してください。`,
       "403_default_message": `NVIDIAがこのキーを拒否しました。入力ミス、期限切れ、またはアカウントに推論のアクセス権がない可能性があります。`,
       "404_default_message": `要求されたNVIDIA NIMモデルが見つかりませんでした。NVIDIAによって非推奨にされた可能性があります。`,
-      "500_default_message": `このモデルを提供している NVIDIA のバックエンドで障害が発生しました。多くの場合は一時的なものなので、少し待ってからもう一度お試しください。以下の詳細は NVIDIA 自身の報告であり、これが正確な情報です：リクエストパラメータが記載されている場合は、推測せずにその設定を見直してください。`,
+      "500_default_message": `このモデルを提供している NVIDIA のバックエンドで障害が発生しました。多くの場合は一時的なものなので、少し待ってからもう一度お試しください。失敗が続く場合は、TomoriBot のホスト管理者がボットのログで NVIDIA の完全な報告を確認できます。`,
       // NVIDIA 自身のテキストが除去可能なリクエストパラメータを名指しした場合のみ、500_default_message の代わりに表示されます。
       // すべての 500 でこの原因を断定していたため、実際には送信していない設定をユーザーに変更させていました。
-      "500_parameter_default_message": `NVIDIA はこのモデルで一部のリクエストパラメータを拒否しました。詳細に \`min_p\` などの未対応サンプラーパラメータが表示されている場合は、\`/config\` > モデル > テキストサンプラーとパラメーター で \`0\` に設定して無効にしてください。詳細に \`logit_bias\` が表示されている場合は、\`/config\` > モデル > テキストサンプラーとパラメーター で保存済みエントリを削除してください。`,
+      "500_parameter_default_message": `NVIDIA はこのモデルで一部のリクエストパラメータを拒否しました。\`/config\` > モデル > テキストサンプラーとパラメーター で、\`min_p\` などの未対応サンプラーを \`0\` に設定し、保存済みの \`logit_bias\` エントリを削除してください。`,
       unknown_default_message: `予期しないエラーが発生しました`,
     },
     self_teach: {

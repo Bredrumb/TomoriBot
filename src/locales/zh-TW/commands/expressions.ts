@@ -91,6 +91,7 @@ export default {
       error_title: `無法儲存表情`,
       error_stale: `此表情已變更或已被移除。請重新選取以使用最新版本。`,
       error_collision: `此名稱與現有的自訂表情或原生貼圖衝突。請選擇其他名稱。`,
+      error_limit: `此伺服器的自訂表情已達 {limit} 個的上限。新增表情前請先刪除一個。Emoji 與原生貼圖不計入此上限。`,
       error_invalid: `請輸入名稱、不超過 500 字的說明，以及有效的情緒。`,
       error_scope: `你的伺服器存取權或選取的人格已變更。請重新開啟 \`/expressions manage\`。`,
       error_sources: `新增時請僅提供一個連結或檔案。編輯時兩項皆留白以保留目前媒體，或提供一個取代檔案。`,

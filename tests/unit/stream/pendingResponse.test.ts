@@ -48,6 +48,121 @@ function fixture(chunks: ProcessedChunk[], holdResponseText = true) {
 
 afterEach(() => StreamOrchestrator.clearStopRequest("pending_fixture"));
 
+/** Records how far the provider stream was consumed and whether early teardown closed it. */
+function trackConsumption(provider: StreamProvider) {
+  const progress = { yielded: 0, closed: false };
+  const startStream = provider.startStream.bind(provider);
+  provider.startStream = async function* (streamConfig, streamContext) {
+    try {
+      for await (const raw of startStream(streamConfig, streamContext)) {
+        progress.yielded++;
+        yield raw;
+      }
+    } finally {
+      progress.closed = true;
+    }
+  };
+  return progress;
+}
+
+/** Numbered so the stream's overlap de-duplication keeps every chunk. */
+function textChunks(count: number, content: string): ProcessedChunk[] {
+  return [
+    ...Array.from({ length: count }, (_, index) => ({
+      type: "text" as const,
+      content: `${index} ${content}`,
+      metadata: index === 0 ? { usage: { prompt_tokens: 40, completion_tokens: 1 } } : undefined,
+    })),
+    { type: "done" },
+  ];
+}
+
+describe("held collection ceiling", () => {
+  it("stops the upstream stream once many normal chunks reach the byte ceiling", async () => {
+    const { context, provider, send } = fixture(textChunks(400, "Mirri hums a quiet tune.\n"));
+    context.pendingResponseLimit = { maxBytes: 2000, maxSegments: 4096 };
+    const progress = trackConsumption(provider);
+    const result = await new StreamOrchestrator().streamToDiscord(provider, config, context);
+    expect(result.status).toBe("completed");
+    expect(result.stopReason).toBe("pending_response_limit");
+    expect(result.pendingResponse?.truncation).toBe("retention_limit");
+    expect(result.pendingResponse?.retainedBytes).toBeLessThanOrEqual(2000);
+    expect(result.pendingResponse?.text).toContain("quiet tune");
+    expect(progress.closed).toBe(true);
+    expect(progress.yielded).toBeLessThan(400);
+    expect(result.usage).toEqual({ inputTokens: 40, outputTokens: 1 });
+    expect(send).not.toHaveBeenCalled();
+    expect(StreamOrchestrator.hasStopRequest(context.channel.id)).toBe(false);
+  });
+
+  it("cuts multibyte text on a character boundary within the byte ceiling", async () => {
+    const { context, provider } = fixture(textChunks(80, "静かな夜に灯りがともる。🌙\n"));
+    context.pendingResponseLimit = { maxBytes: 301, maxSegments: 4096 };
+    const result = await new StreamOrchestrator().streamToDiscord(provider, config, context);
+    const pending = result.pendingResponse;
+    expect(pending?.truncation).toBe("retention_limit");
+    expect(pending?.retainedBytes).toBeLessThanOrEqual(301);
+    expect(pending?.text).not.toContain("�");
+    expect(pending?.text).toMatch(/^[\s\S]*[灯夜静🌙。\n]/u);
+  });
+
+  it("counts blank and discarded segments against the segment ceiling", async () => {
+    const { context, provider } = fixture([{ type: "text", content: "Mirri nods.\n" }, ...textChunks(200, "\n.\n")]);
+    context.pendingResponseLimit = { maxBytes: 64 * 1024, maxSegments: 12 };
+    const progress = trackConsumption(provider);
+    const result = await new StreamOrchestrator().streamToDiscord(provider, config, context);
+    expect(result.status).toBe("completed");
+    expect(result.pendingResponse?.truncation).toBe("retention_limit");
+    expect(result.pendingResponse?.segments).toBe(12);
+    expect(result.pendingResponse?.text).toContain("Mirri nods.");
+    expect(progress.yielded).toBeLessThan(200);
+  });
+
+  it("bounds a single oversized chunk and an unterminated code fence that never flushes", async () => {
+    for (const content of ["soft words ".repeat(20000), `\`\`\`ts\n${"const x = 1;\n".repeat(20000)}`]) {
+      const { context, provider } = fixture([{ type: "text", content }, { type: "done" }]);
+      context.pendingResponseLimit = { maxBytes: 4096, maxSegments: 4096 };
+      const result = await new StreamOrchestrator().streamToDiscord(provider, config, context);
+      expect(result.status).toBe("completed");
+      expect(result.pendingResponse?.truncation).toBe("retention_limit");
+      expect(result.pendingResponse?.retainedBytes).toBeLessThanOrEqual(4096);
+      expect(Buffer.byteLength(result.pendingResponse?.text ?? "", "utf8")).toBeLessThanOrEqual(4096 * 2);
+    }
+  });
+
+  it("stops a LIGHT-humanizer one-message reply near what delivery can send", async () => {
+    const sentence = `${"soft words ".repeat(97)}end.\n`;
+    const { context, provider, send } = fixture(textChunks(121, sentence));
+    context.tomoriState.config.humanizer_degree = HumanizerDegree.LIGHT;
+    context.tomoriState.config.send_message_limit = 1;
+    const progress = trackConsumption(provider);
+    const result = await new StreamOrchestrator().streamToDiscord(
+      provider,
+      { ...config, humanizerDegree: HumanizerDegree.LIGHT },
+      context,
+    );
+    expect(result.status).toBe("completed");
+    expect(result.pendingResponse?.truncation).toBe("send_message_limit");
+    expect(progress.closed).toBe(true);
+    expect(progress.yielded).toBeLessThanOrEqual(3);
+    expect(result.pendingResponse?.retainedBytes).toBeLessThan(121 * sentence.length);
+    expect(send).not.toHaveBeenCalled();
+    const delivered = await result.pendingResponse?.deliver();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(delivered?.accumulatedText).toContain("soft words");
+  });
+
+  it("keeps an under-limit reply whole with no truncation marker", async () => {
+    const { context, provider } = fixture(textChunks(5, "Mirri hums a quiet tune.\n"));
+    context.pendingResponseLimit = { maxBytes: 64 * 1024, maxSegments: 4096 };
+    const result = await new StreamOrchestrator().streamToDiscord(provider, config, context);
+    expect(result.status).toBe("completed");
+    expect(result.stopReason).toBeUndefined();
+    expect(result.pendingResponse?.truncation).toBeUndefined();
+    expect(result.pendingResponse?.text.match(/quiet tune/g)).toHaveLength(5);
+  });
+});
+
 describe("pending stream presentation", () => {
   it("holds early flushes and pre-tool prose, strips reasoning and keeps terminal usage", async () => {
     const { context, provider, send } = fixture([

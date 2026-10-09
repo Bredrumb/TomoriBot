@@ -93,6 +93,8 @@ export interface StreamState {
     boundary?: import("@/utils/discord/stream/messageDelivery").BufferedDeliveryBoundary;
     codeBlock: boolean;
   }>;
+  pendingResponseBytes?: number;
+  pendingResponseTruncation?: import("@/types/stream/pendingResponse").PendingResponseTruncation;
   buffer: string;
   isInsideCodeBlock: boolean;
   isInsideThinkBlock: boolean;

@@ -8,7 +8,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadSecrets } from "@/init/secrets";
-import { keyManager } from "@/utils/security/keyManager";
+import { log } from "@/utils/misc/logger";
+import { isGeneratedLengthKey, keyManager, MIN_GENERATED_KEY_LENGTH } from "@/utils/security/keyManager";
 
 const initialEnv = { ...process.env };
 const directories: string[] = [];
@@ -63,7 +64,7 @@ describe("Encryption secret initialization", () => {
     expect(process.env.CRYPTO_SECRET).toBeUndefined();
     delete process.env.SECRET_FILE;
     delete process.env.GCP_SECRET_FILE;
-    process.env.CRYPTO_SECRET_V9 = "synthetic_ambient";
+    Object.assign(process.env, { CRYPTO_SECRET_V9: "synthetic_ambient" });
     const sender: { send(command: GetSecretValueCommand): Promise<GetSecretValueCommandOutput> } =
       SecretsManagerClient.prototype;
     const send = spyOn(sender, "send").mockResolvedValue({
@@ -80,6 +81,26 @@ describe("Encryption secret initialization", () => {
     }
   });
 
+  it("warns about keys too short to be generated without naming their values, and still loads them", () => {
+    for (const name of Object.keys(process.env)) if (name.startsWith("CRYPTO_SECRET")) delete process.env[name];
+    Object.assign(process.env, {
+      CRYPTO_SECRET_V1: "short_legacy_secret",
+      CRYPTO_SECRET_V2: "g".repeat(MIN_GENERATED_KEY_LENGTH),
+    });
+    const warn = spyOn(log, "warn").mockImplementation(() => undefined);
+    try {
+      keyManager.initialize();
+      const warnings = warn.mock.calls.map(([message]) => String(message));
+      expect(warnings.filter((message) => message.includes("shorter than"))).toHaveLength(1);
+      expect(warnings.some((message) => message.includes("V1") && !message.includes("V2"))).toBe(true);
+      expect(warnings.some((message) => message.includes("short_legacy_secret"))).toBe(false);
+      expect(keyManager.getKey(1)).toBe("short_legacy_secret");
+      expect(isGeneratedLengthKey(keyManager.getCurrentKey())).toBe(true);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("rejects invalid or unavailable current selection and clears obsolete manager keys on reinitialization", () => {
     for (const name of Object.keys(process.env)) if (name.startsWith("CRYPTO_SECRET")) delete process.env[name];
     Object.assign(process.env, secrets);
@@ -90,7 +111,7 @@ describe("Encryption secret initialization", () => {
     expect(keyManager.getAvailableVersions()).toEqual([4]);
     expect(keyManager.getCurrentVersion()).toBe(4);
     for (const current of ["2junk", "0", "-1", "1.5", "9007199254740992", "2"]) {
-      process.env.CRYPTO_SECRET_CURRENT = current;
+      Object.assign(process.env, { CRYPTO_SECRET_CURRENT: current });
       expect(() => keyManager.initialize()).toThrow();
       expect(() => keyManager.getCurrentKey()).toThrow();
     }

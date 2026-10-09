@@ -77,10 +77,10 @@ Do not promise to save long-term memories.
 
 モデルには、単一の統合された`web_search(query, category)`ツールが表示されます。その背後で、ディスパッチャーがエンジンチェーンを通じて各呼び出しをルーティングし、最初の成功を返します。
 
-ブレイブ → SearXNG → DuckDuckGo → IAsk
+Brave → SearXNG → DuckDuckGo
 
 - **Brave** は、Brave APIキーが設定されている場合 (`/providers`で設定)、最初に実行されます。画像、ビデオ、ニュース検索が追加されます。⚠️ 突然の請求を避けるために、Braveダッシュボードで5ドルの使用制限を設定します。
-- DuckDuckGoはキーが設定されていない場合のデフォルトであり、レート制限または空の結果でIAskにカスケードされます。
+- DuckDuckGoはキーが設定されていない場合のデフォルトです。テキスト検索のみを対象とします。DuckDuckGoがボットにレート制限を適用するかボットチェックを表示した場合、検索は失敗し、Braveの利用を提案する通知が投稿されます。
 - SearXNGおよびCrawl4AIは、より多くのカテゴリとブラウザでレンダリングされたページの取得を追加するオプションのセルフホストサーバーです。[セルフホスティング](/ja/self-hosting/)を参照してください。
 
 特定のページを読むには、`fetch_url`を使用します。NovelAIでは利用できません。

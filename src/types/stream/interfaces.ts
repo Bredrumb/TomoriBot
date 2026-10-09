@@ -123,6 +123,7 @@ export interface StreamContext {
   outputPrefill?: string;
 
   holdResponseText?: boolean;
+  pendingResponseLimit?: import("@/types/stream/pendingResponse").PendingResponseLimit;
   suppressTextOutput?: boolean;
 
   // NAI GLM-4.6 prompt continuation: incomplete trailing fragment from previous stream, appended to the

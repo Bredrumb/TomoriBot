@@ -4,7 +4,8 @@
  * Supports text-to-image, and image-to-image only when the active provider supports it
  */
 
-import { AttachmentBuilder } from "discord.js";
+import { AttachmentBuilder, type Channel } from "discord.js";
+import { canMirrorToThoughtLog } from "@/utils/discord/thoughtLogAudience";
 import { GoogleGenAI } from "@google/genai";
 import sharp from "sharp";
 import { log, ColorCode } from "../../utils/misc/logger";
@@ -666,31 +667,12 @@ export class GenerateImageTool extends BaseTool {
       : rawMediaId;
   }
 
-  private shouldSuppressThoughtLogDiagnostic(context: ToolContext): boolean {
-    if (!context.tomoriState.config.thought_log_channel_disc_id) {
-      return true;
-    }
-    if (
-      "isDMBased" in context.channel &&
-      typeof context.channel.isDMBased === "function" &&
-      context.channel.isDMBased()
-    ) {
-      return true;
-    }
-
-    const privateChannelIds = context.tomoriState.config.private_channel_ids ?? [];
-    const parentId = context.channel.isThread() ? context.channel.parentId : null;
-    return (
-      privateChannelIds.includes(context.channel.id) || (parentId !== null && privateChannelIds.includes(parentId))
-    );
-  }
-
   private async sendDiagnosticImagesToThoughtLog(
     context: ToolContext,
     diagnostics: ProviderNativeImageGenerationResult["diagnosticImages"],
     prompt: string,
   ): Promise<void> {
-    if (!diagnostics?.length || this.shouldSuppressThoughtLogDiagnostic(context)) {
+    if (!diagnostics?.length) {
       return;
     }
 
@@ -709,6 +691,15 @@ export class GenerateImageTool extends BaseTool {
         thoughtLogChannel.isDMBased())
     ) {
       log.warn(`GenerateImageTool: Thought log channel ${thoughtLogChannelId} is missing. Skipping diagnostic image.`);
+      return;
+    }
+    if (
+      !canMirrorToThoughtLog(
+        context.channel as Channel,
+        thoughtLogChannel,
+        context.tomoriState.config.private_channel_ids ?? [],
+      )
+    ) {
       return;
     }
 
@@ -1503,7 +1494,7 @@ export class GenerateImageTool extends BaseTool {
 
       return {
         success: false,
-        error: `Failed to generate image: ${errorMessage}`,
+        error: "Failed to generate the image because the provider returned an error.",
       };
     }
   }

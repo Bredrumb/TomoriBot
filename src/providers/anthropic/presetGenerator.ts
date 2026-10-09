@@ -127,7 +127,7 @@ export async function generatePresetFromPromptAnthropic(
         },
       });
       return {
-        error: `Anthropic request failed (${response.status}): ${response.statusText}`,
+        error: `Anthropic request failed (HTTP ${response.status}).`,
         errorType: "CONNECTION",
       };
     }

@@ -15,7 +15,10 @@
 import type { FunctionCall, FunctionResponseImageMetadata, ThoughtLogEntry } from "../../types/provider/interfaces";
 import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
-import { isProviderTimeoutMessage } from "@/utils/provider/providerErrorClassification";
+import {
+  formatProviderErrorCodeForDisplay,
+  isProviderTimeoutMessage,
+} from "@/utils/provider/providerErrorClassification";
 import { localizer } from "../../utils/text/localizer";
 import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
 import { isParamDisabled, selectAnthropicSamplingParams } from "@/utils/provider/samplingControl";
@@ -661,34 +664,22 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
    * Create provider-specific error description for display in embeds
    */
   createErrorDescription(error: ProviderError, locale: string): string | null {
-    const errorCode = error.code;
-    let message = error.userMessage;
+    const errorCode = formatProviderErrorCodeForDisplay(error.code);
     const isTemperatureTopPConflict =
-      errorCode === "invalid_request_error" &&
+      error.code === "invalid_request_error" &&
       typeof error.userMessage === "string" &&
       error.userMessage.includes("`temperature` and `top_p` cannot both be specified");
 
+    let message: string;
     if (isTemperatureTopPConflict) {
       message = localizer(locale, "genai.anthropic.temperature_top_p_conflict_message");
+    } else {
+      const messageKey = `genai.anthropic.${errorCode}_default_message`;
+      message = localizer(locale, messageKey);
+      if (message === messageKey) message = localizer(locale, "genai.anthropic.unknown_default_message");
     }
 
-    if (!message) {
-      const messageKey = errorCode ? `genai.anthropic.${errorCode}_default_message` : null;
-
-      if (messageKey) {
-        message = localizer(locale, messageKey);
-      }
-
-      if (!message || message === messageKey) {
-        message = localizer(locale, "genai.anthropic.unknown_default_message");
-      }
-    }
-
-    if (errorCode) {
-      return `Error Code ${errorCode}: ${message}`;
-    }
-
-    return message || null;
+    return error.code ? `Error Code ${errorCode}: ${message}` : message;
   }
 
   /**

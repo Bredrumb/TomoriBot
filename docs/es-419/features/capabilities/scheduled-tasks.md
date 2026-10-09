@@ -34,6 +34,8 @@ Dos comandos de barra diagonal le permiten revisar y ajustar los horarios existe
 
 Ambos comandos abren un selector que enumera sus programaciones existentes por persona, hora, canal y recurrencia.
 
+Un servidor puede almacenar hasta 100 recordatorios y tareas pendientes a la vez. Cuando esté lleno, TomoriBot te avisará en lugar de agregar otro; elimina los anteriores con `/scheduled-task remove` para liberar espacio.
+
 ## Cómo se entregan
 
 Los recordatorios solo se marcan como completos después de que la entrega se realiza correctamente. Si se interrumpe la entrega, TomoriBot vuelve a intentarlo automáticamente sin alterar el cronograma recurrente.

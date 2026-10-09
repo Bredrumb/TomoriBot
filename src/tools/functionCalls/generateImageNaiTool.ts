@@ -13,7 +13,6 @@
 
 import { AttachmentBuilder } from "discord.js";
 import { prepareGeneratedImage } from "@/utils/image/generatedImageMetadata";
-import JSZip from "jszip";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import { buildGeneratedImageComponentsV2Payload } from "@/utils/discord/generatedImageMessage";
@@ -38,7 +37,10 @@ import {
   NAI_CHAR_REF_STRENGTH,
   NAI_DEFAULT_NEGATIVE_PROMPT,
   classifyNaiImageError,
+  extractPngFromZipResponse,
   generateNovelAiImage,
+  naiImageRequestSignal,
+  readNaiErrorSnippet,
   usesNaiStructuredPromptFormat,
   type NaiGenerationCharacterPayload,
 } from "@/utils/image/naiImageGeneration";
@@ -529,7 +531,7 @@ export class GenerateImageNaiTool extends BaseTool {
           resolvedTags = personaProfile?.tags ?? [];
 
           if (personaProfile?.refUrl && allowCharacterReferences) {
-            refImageBase64 = await loadCharRefAsBase64(personaProfile.refUrl);
+            refImageBase64 = await loadCharRefAsBase64(personaProfile.refUrl, "personas", personaId);
           } else if (personaProfile?.refUrl) {
             if (NAI_ENABLE_CHAR_REFERENCES) {
               skippedReferenceBecauseMultiCharacter = true;
@@ -543,7 +545,7 @@ export class GenerateImageNaiTool extends BaseTool {
           resolvedTags = userProfile?.tags ?? [];
 
           if (userProfile?.refUrl && allowCharacterReferences) {
-            refImageBase64 = await loadCharRefAsBase64(userProfile.refUrl);
+            refImageBase64 = await loadCharRefAsBase64(userProfile.refUrl, "users", normalizedId);
           } else if (userProfile?.refUrl) {
             if (NAI_ENABLE_CHAR_REFERENCES) {
               skippedReferenceBecauseMultiCharacter = true;
@@ -729,6 +731,7 @@ export class GenerateImageNaiTool extends BaseTool {
     width: number,
     height: number,
     imageParams: EffectiveNaiImageParams,
+    abortSignal: AbortSignal | undefined,
   ): Promise<Buffer> {
     const seed = Math.floor(Math.random() * 2147483647);
 
@@ -832,28 +835,18 @@ export class GenerateImageNaiTool extends BaseTool {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(requestPayload),
+      signal: naiImageRequestSignal(abortSignal),
     });
 
     if (!response.ok) {
       const correlationId = response.headers.get("x-correlation-id");
-      const errorText = await response.text().catch(() => "");
-      const snippet = errorText.slice(0, 500);
+      const snippet = await readNaiErrorSnippet(response);
       throw new Error(
         `NovelAI inpainting failed (${response.status} ${response.statusText})${correlationId ? ` [correlation-id: ${correlationId}]` : ""}: ${snippet}`,
       );
     }
 
-    const zipBuffer = Buffer.from(await response.arrayBuffer());
-    const zip = await JSZip.loadAsync(zipBuffer);
-
-    const pngFileName = Object.keys(zip.files).find((name) => name.toLowerCase().endsWith(".png"));
-
-    if (!pngFileName) {
-      throw new Error("NovelAI inpainting response ZIP did not contain a PNG file");
-    }
-
-    const pngData = await zip.files[pngFileName].async("nodebuffer");
-    return Buffer.from(pngData);
+    return await extractPngFromZipResponse(response);
   }
 
   /**
@@ -1225,6 +1218,7 @@ export class GenerateImageNaiTool extends BaseTool {
           segResult.imageWidth,
           segResult.imageHeight,
           effectiveImageParams,
+          context.abortSignal,
         );
 
         log.success(`[NAI] Inpainting complete with model "${inpaintModel}"`);
@@ -1348,13 +1342,13 @@ export class GenerateImageNaiTool extends BaseTool {
       if (errorMessage.includes("segmentation") || errorMessage.includes("segment")) {
         return {
           success: false,
-          error: `Segmentation failed: ${errorMessage}`,
+          error: "Segmentation failed because NovelAI returned an error.",
         };
       }
 
       return {
         success: false,
-        error: `Failed to ${isInpaintMode ? "inpaint" : "generate"} NAI image: ${errorMessage}`,
+        error: `Failed to ${isInpaintMode ? "inpaint" : "generate"} the NAI image because NovelAI returned an error.`,
       };
     }
   }

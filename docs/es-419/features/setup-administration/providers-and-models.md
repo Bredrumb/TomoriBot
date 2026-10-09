@@ -71,6 +71,21 @@ Los primeros seis espacios eligen registros del catálogo de modelos. En su luga
 
 También puede administrar claves de respaldo para conmutación por error automática y equilibrio de carga en `/providers`.
 
+## Modelos de decisiones
+<!-- anchor: decision-models -->
+
+Los modelos de decisiones son una categoría independiente en `/providers` y `/personal providers`. Responden a predicados tipados con probabilidades. El registro no cambia el modelo de chat activo, no establece calibración ni habilita la omisión de la revisión de respuestas. Estos paneles aún no seleccionan un modelo de decisiones.
+
+OpenRouter es el proveedor nativo admitido. Guarda su clave, abre el menú desplegable de modelos y elige `+ Agregar un modelo de decisiones`. Ingresa un ID de su catálogo de decisiones verificado. El catálogo global incluye `typesafe/jev-1.13`; los registros adicionales pertenecen a su servidor o propietario personal. El descubrimiento nativo proporciona el límite de entrada documentado y los precios. Los catálogos de chat no pueden establecer compatibilidad con decisiones.
+
+Para un servicio personalizado, elige `Agregar nuevo punto de conexión`, luego `Compatible con System One` o `Compatible con OpenAI Decisions` en `Compatibilidad de API`. Guarda la URL base de la API y la credencial Bearer opcional. Su menú desplegable de modelos ofrece `+ Agregar un modelo de decisiones` y hereda ese protocolo. Ingresa el ID de modelo documentado y el límite de tokens de entrada (al menos 512). Jev, Laya y Kev usan compatibilidad con System One. Los puntos de conexión existentes compatibles con chat y nativos de Ollama no ofrecen esta acción.
+
+Los orígenes sin ruta se normalizan a `/v1`. Las versiones explícitas y los prefijos de gateway se conservan intactos: `https://decision.example.invalid/gateway/v1` llama a `/gateway/v1/systemone` para System One o a `/gateway/v1/decisions` para OpenAI Decisions. La comprobación de disponibilidad utiliza `GET <stored-base>/models` sin enviar datos de conversación; no certifica las capacidades del modelo. Los modelos personalizados se registran manualmente a partir de la documentación del servicio cuando el descubrimiento no puede establecer los metadatos de capacidad necesarios.
+
+Abre un registro de decisión guardado para editarlo. Las ediciones personalizadas conservan la identidad exacta del modelo y del punto de conexión. Elige `Eliminar este registro de decisión` en `Acción de registro` para quitarlo mientras conservas la conexión y las credenciales. Al eliminar el proveedor o punto de conexión principal, se eliminan los registros de ese propietario. Otros propietarios conservan las entradas compartidas. Las listas de modelos se paginan después de 18 registros editables utilizando los controles de página existentes.
+
+Los registros y credenciales del proveedor permanecen fuera de las exportaciones e importaciones de personas o configuraciones. El restablecimiento de la configuración conserva los registros guardados; la eliminación principal los limpia explícitamente.
+
 ## Endpoints personalizados
 <!-- anchor: custom-endpoints -->
 

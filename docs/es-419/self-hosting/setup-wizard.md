@@ -40,7 +40,6 @@ bun run setup
 ## Qué tener listo
 
 - [Bun](https://bun.sh/) para ejecutar el bot y el propio asistente.
-- Node.js v20+ (usado para las herramientas de MCP).
 - Un token de bot de Discord con los intents privilegiados `GuildMembers`, `MessageContent` y
   `GuildPresences` habilitados.
 - Una base de datos. TomoriBot almacena todo en PostgreSQL. No necesitas configurarla a mano, ya

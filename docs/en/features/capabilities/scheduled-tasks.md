@@ -46,6 +46,9 @@ Two slash commands let you review and adjust existing schedules:
 Both commands open a picker listing your existing schedules by persona, time, channel,
 and recurrence.
 
+A server can hold up to 100 pending reminders and tasks at once. When it is full, TomoriBot
+tells you instead of adding another; remove old ones with `/scheduled-task remove` to make room.
+
 ## How Delivery Works
 
 Reminders are only marked complete after delivery succeeds. If delivery is interrupted,

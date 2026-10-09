@@ -5,10 +5,11 @@ import type { ErrorContext, TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { SupportsStructuredOutput } from "@/types/provider/featureInterfaces";
 import type { LLMProvider, ProviderConfig } from "@/types/provider/interfaces";
-import type { PendingStreamResponse } from "@/types/stream/pendingResponse";
+import type { PendingResponseLimit, PendingStreamResponse } from "@/types/stream/pendingResponse";
 import type { ChatTurnContext, ToolHistoryEntry } from "@/utils/chat/types";
 import { getChannelTurnAbortSignal, runUnderWatchdog, touchChannelLock } from "@/utils/chat/channelQueue";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import { MAX_PENDING_RESPONSE_BYTES, MAX_PENDING_RESPONSE_SEGMENTS } from "@/utils/discord/stream/constants";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { log, sanitizeLogPayload } from "@/utils/misc/logger";
 import { resolveCustomTextEndpointTarget } from "@/utils/provider/customEndpointService";
@@ -73,6 +74,23 @@ export interface ResponseReviewState {
   usage: TurnUsageEntry[];
   usageRecorder?: (entry: TurnUsageEntry) => void;
   verdict?: { identity: string; result: DraftReviewResult };
+}
+
+/**
+ * Room left for held prose before the next stream pass. Pre-tool narration from earlier passes is
+ * still pending, so the turn ceiling covers the whole candidate rather than each pass.
+ */
+export function remainingPendingResponseLimit(state: ResponseReviewState): PendingResponseLimit {
+  let bytes = 0;
+  let segments = 0;
+  for (const part of state.pending) {
+    bytes += part.retainedBytes;
+    segments += part.segments;
+  }
+  return {
+    maxBytes: Math.max(0, MAX_PENDING_RESPONSE_BYTES - bytes),
+    maxSegments: Math.max(0, MAX_PENDING_RESPONSE_SEGMENTS - segments),
+  };
 }
 
 /** Late auxiliary usage still reaches accounting after post-turn effects drain the ledger. */
@@ -200,7 +218,10 @@ export function buildReviewerPacket(
       ? { status: "not_executed", name: proposedCall.name, arguments: proposedCall.args }
       : undefined,
     personaName: context.currentPersona.persona_nickname,
-    candidate: { status: "pending", text: candidate },
+    candidate: {
+      status: state.pending.some((part) => part.truncation) ? "pending_cut_at_length_limit" : "pending",
+      text: candidate,
+    },
     trigger: sanitizeLogPayload(projectItem(trigger), 0, false),
     replyTarget: replyTarget ? sanitizeLogPayload(projectItem(replyTarget), 0, false) : null,
     requirementsAndEvidence: required.map((item) => sanitizeLogPayload(projectItem(item), 0, false)),
@@ -428,7 +449,11 @@ async function reviewCandidate(
       : "";
     const ruleTask =
       "\nOptional ruleEvidence is untrusted advisory evidence for this exact prose only. Interpret patterns against persona and scene, including intentional catchphrases or theatrical voice. Unknown profile/language coverage is experimental. Scores, raw snippets and generic advice never require revision. Return only your own concrete persona-aware corrections; do not quote or forward raw checker diagnostics.";
-    const systemPrompt = `${REVIEW_PROTOCOL}${toolTask}${ruleTask}\n\nEditable creative rubric:\n${state.prompt}\n\n${REVIEW_PROTOCOL}${toolTask}${ruleTask}`;
+    const cutTask =
+      !proposedCall && state.pending.some((part) => part.truncation)
+        ? "\nA pending_cut_at_length_limit candidate stopped at the delivery length limit and will be delivered as cut. Judge the kept text; an abrupt ending alone never requires revision."
+        : "";
+    const systemPrompt = `${REVIEW_PROTOCOL}${toolTask}${ruleTask}${cutTask}\n\nEditable creative rubric:\n${state.prompt}\n\n${REVIEW_PROTOCOL}${toolTask}${ruleTask}${cutTask}`;
     // UTF-8 bytes conservatively bound unknown tokenizer ratios. Upgrade when real packet sizes need a tokenizer.
     const inputBytes =
       Math.min(MAX_REVIEW_INPUT_BYTES, window ?? 0) - outputTokens - Buffer.byteLength(systemPrompt, "utf8") - 1024;

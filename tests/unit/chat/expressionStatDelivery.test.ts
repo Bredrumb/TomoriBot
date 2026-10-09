@@ -237,7 +237,12 @@ describe("emoji stats count only what Discord accepted", () => {
           {
             status: "completed",
             accumulatedText: "",
-            pendingResponse: { text: "discarded draft", deliver: async () => ({ status: "completed" }) },
+            pendingResponse: {
+              text: "discarded draft",
+              retainedBytes: 15,
+              segments: 1,
+              deliver: async () => ({ status: "completed" }),
+            },
           },
           { status: "completed", accumulatedText: "delivered reply" },
         ],

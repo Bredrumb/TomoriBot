@@ -120,7 +120,7 @@ export async function generatePresetFromPromptDeepseek(
         },
       });
       return {
-        error: `DeepSeek request failed (${response.status}): ${response.statusText}`,
+        error: `DeepSeek request failed (HTTP ${response.status}).`,
         errorType: "CONNECTION",
       };
     }

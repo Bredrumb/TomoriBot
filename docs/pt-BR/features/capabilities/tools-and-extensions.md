@@ -77,10 +77,10 @@ As condições da ferramenta refletem o suporte do provedor/modelo, a configura�
 
 O modelo vê uma única ferramenta `web_search(query, category)` unificada. Atrás dele, um despachante encaminha cada chamada através de uma cadeia de mecanismos e retorna o primeiro sucesso:
 
-Corajoso → SearXNG → DuckDuckGo → IAsk
+Brave → SearXNG → DuckDuckGo
 
 - **Brave** é executado primeiro quando uma chave Brave API é configurada (configure-a com `/providers`); adiciona pesquisa de imagens, vídeos e notícias. ⚠️ Defina um limite de uso de US$ 5 no painel do Brave para evitar cobranças surpresa.
-- DuckDuckGo é o padrão quando nenhuma chave é definida, em cascata para IAsk em limites de taxa ou resultados vazios.
+- O DuckDuckGo é o padrão quando nenhuma chave está configurada. Ele abrange apenas pesquisas de texto. Quando o DuckDuckGo limita a taxa do bot ou exibe uma verificação de bot, a pesquisa falha e ela publica um aviso sugerindo o Brave.
 - SearXNG e Crawl4AI são servidores auto-hospedados opcionais que adicionam mais categorias e buscas de páginas renderizadas pelo navegador; consulte [Auto-hospedagem](/pt-BR/self-hosting/).
 
 Para ler uma página específica, ela usa `fetch_url`. Não está disponível em NovelAI.

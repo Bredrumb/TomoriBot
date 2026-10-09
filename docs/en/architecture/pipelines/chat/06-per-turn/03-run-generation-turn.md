@@ -55,6 +55,8 @@ before the next attempt:
   models remain available, preventing transient provider hiccups from posting false failure notices.
 - **Fallback notice**: if a fallback model succeeds (`index > 0`), `sendFallbackModelUsageNotice()`
   renders a compact Discord button notice informing users that a fallback model answered the turn.
+  Each failed attempt is listed by error type and display-safe code only, because context assembly
+  reads the notice back for the model; the upstream message stays in the operator log.
 - **Final emission**: if all attempts fail, only the terminal error is emitted to the response sink.
 
 ## Constraints and rationale

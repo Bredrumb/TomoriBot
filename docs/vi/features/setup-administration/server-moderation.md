@@ -48,6 +48,8 @@ Sử dụng `/moderation` > `Whitelist` để hạn chế vị trí và cách To
 
 Trong `/config` > `Kênh` > Nhật ký & Chào mừng, nhấp vào `Đặt kênh nhật ký` để chỉ định kênh nơi TomoriBot đăng lý luận nội bộ, thông báo dự phòng và lệnh gọi công cụ thành công. Điều này rất hữu ích cho việc kiểm tra những gì cô ấy đang làm, bao gồm cả trình kích hoạt nào đã hiển thị một công cụ trong [Chế độ công cụ có chủ ý](/vi/features/capabilities/tools-and-extensions/#deliberate-tool-mode).
 
+Nhật ký chỉ sao chép từ các kênh mà mọi thành viên trong máy chủ của bạn đều có thể xem. Hoạt động trong kênh hoặc luồng mà một số thành viên không thể mở sẽ không được đưa vào nhật ký, do đó nhật ký không bao giờ hiển thị nội dung mà họ không thể đọc tại nơi diễn ra. Kênh nhật ký phải nằm trong cùng một máy chủ.
+
 ## Lời chào mừng
 
 Trong `/config` > `Kênh` > Nhật ký & Chào mừng, định cấu hình lời chào tự động cho thành viên mới trong kênh đã chọn. TomoriBot đợi cho đến khi thành viên mới hoàn thành việc sàng lọc và giới thiệu các quy tắc của Discord trước khi gửi lời chào. Nếu một thành viên rời đi trước khi kết thúc buổi chiếu, sẽ không có lời chào nào được gửi đi. Nhấp vào `Xóa lời chào` trên cùng trang đó để tắt lời chào.

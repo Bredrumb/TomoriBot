@@ -22,8 +22,6 @@ npx -y <some-mcp-server> --port 3000
 
 Lệnh chính xác phụ thuộc vào máy chủ bạn đang chạy. Lưu ý URL và đường dẫn truyền tải mà nó in ra (thường là `http://localhost:3000/sse`).
 
-Công cụ của TomoriBot dự kiến Node.js v20+ sẽ có sẵn trên máy chủ dành cho các máy chủ MCP cục bộ.
-
 ## 2. Đăng ký trong Discord
 
 Mở `/config` > `Plugin` > Máy chủ MCP, chọn `+ Thêm MCP`, đặt trường `URL máy chủ` thành điểm cuối cục bộ của bạn và giữ `Loại máy chủ` ở cài đặt `Mục đích chung` mặc định của nó:

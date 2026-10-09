@@ -1,10 +1,11 @@
-import { escapeMarkdown, type BaseGuildTextChannel } from "discord.js";
+import { escapeMarkdown, type BaseGuildTextChannel, type Channel } from "discord.js";
 import type { StandardEmbedOptions } from "@/types/discord/embed";
 import type { ToolContext } from "@/types/tool/interfaces";
 import type { AssembledServerConfig } from "@/types/db/schema";
 import { type ToolNoticeKey, TOOL_NOTICE_DEFINITIONS, VERBOSITY_EXEMPT_NOTICE_KEYS } from "@/constants/toolNotices";
 import { sendStandardEmbed, type WebhookEmbedContext } from "@/utils/discord/embedHelper";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
+import { canMirrorToThoughtLog } from "@/utils/discord/thoughtLogAudience";
 import { localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
 
@@ -75,10 +76,6 @@ function getWebhookContext(context: ToolContext) {
     personaUsername: context.personaUsername,
     personaAvatarUrl: context.personaAvatarUrl,
   };
-}
-
-function isDMBasedChannel(channel: ToolContext["channel"]): boolean {
-  return "isDMBased" in channel && typeof channel.isDMBased === "function" ? channel.isDMBased() : false;
 }
 
 function getSourceLine(context: ToolContext): string {
@@ -241,25 +238,6 @@ export interface ThoughtLogTarget {
   webhookContext: WebhookEmbedContext | undefined;
 }
 
-/**
- * Whether a hidden notice from this channel may be copied to the thought log at all. DMs and
- * private channels stay out of it because the thought log is readable by people who cannot see
- * those conversations.
- */
-function isHiddenNoticeRoutable(context: ToolContext): boolean {
-  if (isDMBasedChannel(context.channel)) {
-    return false;
-  }
-
-  const privateChannelIds = context.tomoriState.config.private_channel_ids ?? [];
-  // Threads whose parent channel is private must also be suppressed from the thought log.
-  const toolNoticeParentId = context.channel.isThread() ? context.channel.parentId : null;
-  return !(
-    privateChannelIds.includes(context.channel.id) ||
-    (toolNoticeParentId !== null && privateChannelIds.includes(toolNoticeParentId))
-  );
-}
-
 async function resolveThoughtLogTarget(context: ToolContext, logLabel: string): Promise<ThoughtLogTarget | null> {
   const thoughtLogChannelId = context.tomoriState.config.thought_log_channel_disc_id;
   if (!thoughtLogChannelId) {
@@ -276,6 +254,15 @@ async function resolveThoughtLogTarget(context: ToolContext, logLabel: string): 
       thoughtLogChannel.isDMBased())
   ) {
     log.warn(`${logLabel}: Thought log channel ${thoughtLogChannelId} is missing or unavailable. Skipping reroute.`);
+    return null;
+  }
+  if (
+    !canMirrorToThoughtLog(
+      context.channel as Channel,
+      thoughtLogChannel,
+      context.tomoriState.config.private_channel_ids ?? [],
+    )
+  ) {
     return null;
   }
 
@@ -302,15 +289,12 @@ async function resolveThoughtLogTarget(context: ToolContext, logLabel: string): 
  * Resolves where a hidden notice should go instead of the conversation channel.
  *
  * @returns `null` when the notice must be dropped: no thought log is set, it is unreachable, or
- *   the source conversation is a DM or private channel.
+ *   its readers are not demonstrably allowed to read the source (see `canMirrorToThoughtLog`).
  */
 export async function resolveHiddenNoticeTarget(
   context: ToolContext,
   logLabel: string,
 ): Promise<ThoughtLogTarget | null> {
-  if (!isHiddenNoticeRoutable(context)) {
-    return null;
-  }
   return resolveThoughtLogTarget(context, logLabel);
 }
 
@@ -355,10 +339,6 @@ export async function sendToolNotice(
       }
     }
 
-    if (!isHiddenNoticeRoutable(context)) {
-      return;
-    }
-
     await routeToolNoticeToThoughtLog(context, options, logLabel);
   } catch (error) {
     log.warn(`${logLabel}: Failed to send tool notice embed`, error as Error);
@@ -371,10 +351,6 @@ export async function routeHiddenToolNotice(
   logLabel: string,
 ): Promise<boolean> {
   if (context.suppressProgressNotices) return false;
-
-  if (!isHiddenNoticeRoutable(context)) {
-    return false;
-  }
 
   try {
     return await routeToolNoticeToThoughtLog(context, options, logLabel);

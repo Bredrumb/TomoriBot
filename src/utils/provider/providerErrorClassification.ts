@@ -223,16 +223,32 @@ export function isProviderModelErrorMessage(message: string | null | undefined):
   return MODEL_ERROR_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
+const DISPLAYABLE_ERROR_CODE_PATTERNS = [/^\d{3}(?:_[a-z]+)*$/, /^[A-Z]+(?:_[A-Z]+)*$/, /^[a-z]+(?:_[a-z]+)*$/];
+
+/**
+ * Error codes can come from a response body, so a hostile endpoint can return its received bearer
+ * value as the code. Only HTTP statuses (including re-coded ones such as `429_balance`) and
+ * single-case enum words are shown, which excludes the digits and mixed case keys carry.
+ */
+export function formatProviderErrorCodeForDisplay(code: string | number | null | undefined): string {
+  const value = code === null || code === undefined ? "" : String(code);
+  return value.length <= 40 && DISPLAYABLE_ERROR_CODE_PATTERNS.some((pattern) => pattern.test(value))
+    ? value
+    : "unknown";
+}
+
+/**
+ * Raw upstream text for restricted operator logs. Endpoints can echo request headers here, so it
+ * never belongs in a channel, an interaction reply, or model context.
+ */
 export function getProviderErrorDetail(error: ProviderError): string | null {
   const messages = collectProviderErrorMessages(error);
   return messages.find((message) => message.trim().length > 0) ?? null;
 }
 
 function collectProviderErrorMessages(error: ProviderError): string[] {
-  // Order matters: prefer the raw provider message and original error payload over the
-  // friendly `userMessage`. Callers append this as a "Details" section beneath a localized
-  // headline, so surfacing the raw provider text (e.g. "Unsupported model X. Supported IDs: ...")
-  // is more actionable than echoing the headline, and keeps the de-dupe check meaningful.
+  // The raw provider message and original payload come first because they name the actual cause
+  // (e.g. "Unsupported model X. Supported IDs: ...") for the operator reading the log.
   const messages: string[] = [];
   appendMessage(messages, error.message);
   appendMessage(messages, extractUnknownErrorMessage(error.originalError));

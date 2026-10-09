@@ -1,4 +1,4 @@
-import { EmbedBuilder, type BaseGuildTextChannel, type Client } from "discord.js";
+import { EmbedBuilder, type BaseGuildTextChannel, type Channel, type Client } from "discord.js";
 import type { ThoughtLogPayload } from "@/types/provider/interfaces";
 import { getLlmDisplayName } from "@/utils/provider/modelDisplay";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
@@ -7,6 +7,7 @@ import { localizer } from "@/utils/text/localizer";
 import type { StreamContext } from "@/types/stream/interfaces";
 import type { TomoriState } from "@/types/db/schema";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
+import { canMirrorToThoughtLog } from "@/utils/discord/thoughtLogAudience";
 import { resolvePersonaWebhookIdentity, type ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { sendWebhookMessagesWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 
@@ -270,6 +271,11 @@ export async function sendAttributionOnlyEmbed({
     log.warn(`Thought log channel ${thoughtLogChannelId} is missing or unavailable. Skipping attribution-only post.`);
     return;
   }
+  if (
+    !canMirrorToThoughtLog(sourceChannel as Channel, thoughtLogChannel, tomoriState.config.private_channel_ids ?? [])
+  ) {
+    return;
+  }
 
   const descriptionLines = [
     localizer(locale, "genai.thought_log.description", { source_line: sourceChannel.toString() }),
@@ -327,6 +333,11 @@ export async function sendThoughtLogEmbed({
       thoughtLogChannel.isDMBased())
   ) {
     log.warn(`Thought log channel ${thoughtLogChannelId} is missing or unavailable. Skipping thought log post.`);
+    return;
+  }
+  if (
+    !canMirrorToThoughtLog(sourceChannel as Channel, thoughtLogChannel, tomoriState.config.private_channel_ids ?? [])
+  ) {
     return;
   }
 

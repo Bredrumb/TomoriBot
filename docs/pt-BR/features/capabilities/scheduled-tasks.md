@@ -34,6 +34,8 @@ Dois comandos de barra permitem revisar e ajustar programações existentes:
 
 Ambos os comandos abrem um seletor listando suas programações existentes por pessoa, horário, canal e recorrência.
 
+Um servidor pode conter até 100 lembretes e tarefas pendentes por vez. Quando estiver cheio, a TomoriBot avisará você em vez de adicionar outro; remova os antigos com `/scheduled-task remove` para liberar espaço.
+
 ## Como Funciona a Entrega
 
 Os lembretes só são marcados como concluídos após a entrega ser bem-sucedida. Se a entrega for interrompida, TomoriBot tenta novamente automaticamente sem alterar a programação recorrente.

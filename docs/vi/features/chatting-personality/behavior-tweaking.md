@@ -9,12 +9,26 @@ Bạn có thể điều chỉnh các hành động TomoriBot được phép th�
 ## Tính năng: Những gì bot được phép làm
 <!-- anchor: capabilities-what-shes-allowed-to-do -->
 
-`/config` > `Plugin` chuyển đổi các tính năng trên hai trang:
+`/config` > `Plugin` kiểm soát các công cụ, bổ sung ngữ cảnh và duyệt phản hồi tùy chọn:
 
 - **Các `Công cụ khả dụng`**: tạo hình ảnh, `Sử dụng sticker`, tạo chủ đề, quản lý tin nhắn, chặn người dùng, tự dạy, tin nhắn thoại, v.v. Mỗi nút chuyển đổi sẽ chuyển đổi công cụ phù hợp (xem [Công cụ & Tiện ích mở rộng](/vi/features/capabilities/tools-and-extensions/)), do đó, việc tắt `Sử dụng công cụ` sẽ vô hiệu hóa tất cả chúng cùng một lúc.
 - **`Bổ sung ngữ cảnh`**: cá nhân hóa, biểu tượng cảm xúc trong câu trả lời và nhận thức về thời gian. Những thông tin này thêm thông tin vào lời nhắc của cô ấy để chúng tiếp tục hoạt động khi tính năng `Sử dụng công cụ` bị tắt.
 
 Tính năng tóm tắt bộ nhớ ngắn hạn tự động được bật trong `/config` > `Hành vi` > `Bộ nhớ nâng cao`. Khi một khả năng bị tắt, cô ấy không thể thực hiện hành động đó bất kể người dùng có yêu cầu hay không.
+
+## Duyệt bản nháp phản hồi
+
+Mở `/config` > `Plugin` > `Duyệt phản hồi` để bật tính năng duyệt. Tính năng này bắt đầu ở trạng thái Tắt và áp dụng cho mọi persona trong không gian làm việc đó, bao gồm cả câu trả lời trong hàng đợi và phân cảnh được tạo. Người quản lý máy chủ có thể thay đổi cài đặt máy chủ; không gian làm việc DM của bạn có cài đặt riêng.
+
+Khi Bật, Tomori giữ lại câu trả lời trong khi người duyệt kiểm tra giọng điệu nhân vật và sự phù hợp với phân cảnh. Người duyệt có thể yêu cầu một lần sửa đổi hoàn chỉnh. Các yêu cầu công cụ cũng được đưa vào duyệt trước khi thực thi; các yêu cầu bị từ chối có thể nhận được sửa đổi trong giới hạn. Các hành động thành công được giữ lại trong khi câu trả lời được sửa đổi. Văn bản vẫn sử dụng danh tính persona thông thường, cách xử lý emoji và định dạng. Việc duyệt và sửa đổi có thể làm tăng thời gian phản hồi và chi phí token; trang này hiển thị điều đó ở cả hai trạng thái.
+
+`Chọn model duyệt` chọn một model văn bản đã đăng ký đủ điều kiện. `Dùng model phản hồi hiện tại` sử dụng model và thông tin xác thực thực sự trả lời, bao gồm cả nhà cung cấp cá nhân của bạn hoặc model dự phòng. Người duyệt được ghim sử dụng thông tin đăng ký và xác thực riêng của không gian làm việc. Tác giả chỉ dùng văn bản và tác giả đã tắt Sử dụng công cụ vẫn có thể sử dụng người duyệt đủ điều kiện. Model kế thừa không được hỗ trợ sẽ hiển thị `Không khả dụng`; hãy chọn người duyệt được hỗ trợ để bật duyệt chi tiết.
+
+`Đặt prompt` chỉnh sửa hướng dẫn duyệt, tối đa 4.000 ký tự. `Dùng mặc định` khôi phục mặc định nhận biết persona. `Chọn công cụ kiểm tra quy tắc` chọn một công cụ kiểm tra MCP tương thích đã đăng ký, hoặc `Không có`. Kết quả của nó được gửi riêng cho người duyệt, người duyệt sẽ quyết định xem chúng có quan trọng đối với nhân vật này hay không. Công cụ kiểm tra không có bảo đảm ngôn ngữ/hồ sơ đã được xác thực trong bản phát hành này.
+
+`Chọn model quyết định` lưu một đăng ký Quyết định từ `/providers`. Việc bỏ qua duyệt chi tiết sẽ không hoạt động cho đến khi mỗi model và tiêu chí duyệt có bằng chứng chất lượng được gắn nhãn. Lựa chọn đã lưu không thực hiện các yêu cầu Quyết định trả phí trong bản phát hành này. Prompt tùy chỉnh cũng giữ cho tính năng bỏ qua không hoạt động. Việc xóa một trong hai model sẽ khôi phục quyền kế thừa của người duyệt hoặc `Không có`; việc Tắt vẫn giữ nguyên các lựa chọn của bạn.
+
+Duyệt là bước kiểm tra chất lượng tùy chọn. Việc từ chối, model không khả dụng, hết thời gian chờ, bằng chứng không đầy đủ hoặc hết ngân sách duyệt sẽ cho phép một câu trả lời hợp lệ hoặc yêu cầu công cụ độc lập tiếp tục theo các quy tắc ứng dụng thông thường. Các hành động bị từ chối trước đó vẫn bị chặn. `/kill` và việc ngắt quãng tiếp theo sẽ hủy bỏ văn bản bị giữ lại. Tệp, giọng nói và bài đăng từ xa sẽ nhận được sự xem xét đối với các đối số công cụ được đề xuất của chúng; phương tiện được tạo ra của chúng nằm ngoài phạm vi duyệt văn bản bị giữ lại. Tạo nội dung ẩn và mạo danh người dùng vẫn giữ nguyên các đường dẫn hiện có. Sự phán đoán của nhà cung cấp và tính hữu ích của công cụ kiểm tra vẫn cần sự đánh giá của con người. Xem [xử lý dữ liệu duyệt](/vi/features/knowledge/data-handling/#response-drafting-selections).
 
 ## Biểu cảm
 <!-- anchor: expressions -->
@@ -34,6 +48,8 @@ Trong `Tùy chỉnh`, mở menu và chọn `+ Thêm biểu cảm tùy chỉnh`. 
 Liên kết có thể trỏ tới bất kỳ nội dung nào. Bot đăng nguyên liên kết đã lưu, và Discord hiển thị như mọi liên kết khác: liên kết GIF từ trang như Tenor phát GIF, liên kết ảnh hiện ảnh, còn trang web hiện thẻ xem trước. Bạn có thể dùng liên kết để đùa, chẳng hạn gửi trang web của bệnh viện khi cuộc trò chuyện trở nên hỗn loạn. Liên kết phải bắt đầu bằng `https://`.
 
 Tệp có thể là PNG, JPEG, WebP, GIF hoặc MP4, tối đa 10 MB.
+
+Mỗi máy chủ có thể có tối đa 20 biểu cảm tùy chỉnh theo mặc định, dùng chung cho tất cả các persona. Cả tệp và liên kết đều được tính; emoji và sticker gốc thì không. Khi đạt giới hạn, hãy xóa một biểu cảm trước khi thêm biểu cảm khác. Các biểu cảm hiện có vẫn có thể được sử dụng và chỉnh sửa. Bot tự lưu trữ có thể thay đổi giới hạn này trong cài đặt môi trường của mình.
 
 Mọi persona đều có thể dùng biểu cảm tùy chỉnh mới. Để giới hạn cho một số persona, chọn biểu cảm và dùng `Thêm persona`. Xóa persona cuối cùng khỏi danh sách sẽ cho phép tất cả persona dùng lại.
 

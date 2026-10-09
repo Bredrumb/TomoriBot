@@ -1,4 +1,5 @@
 import { loadInitializedKeyManager } from "../lib/keyManagerBootstrap";
+import { isGeneratedLengthKey, MIN_GENERATED_KEY_LENGTH } from "@/utils/security/keyManager";
 import {
   scanEncryptedRows,
   storedKeyVersion,
@@ -12,6 +13,14 @@ async function rotateAllKeys(): Promise<void> {
     throw new Error("Stop every bot instance and pass --bot-stopped. Restart after rotation to clear process caches.");
   }
   const manager = await loadInitializedKeyManager();
+  // Rotation moves every credential onto the current version, so that is where weak new key
+  // material would spread. Older versions keep loading for decryption.
+  if (!dryRun && !isGeneratedLengthKey(manager.getCurrentKey())) {
+    console.error(
+      `Current key V${manager.getCurrentVersion()} is shorter than ${MIN_GENERATED_KEY_LENGTH} characters. Generate a new version with \`openssl rand -base64 32\`, select it, and rerun.`,
+    );
+    throw new Error("Weak current key.");
+  }
   const { sql } = await import("@/utils/db/client");
   let scanned = 0;
   let migrated = 0;

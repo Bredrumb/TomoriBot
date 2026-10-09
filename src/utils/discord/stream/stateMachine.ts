@@ -105,8 +105,11 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     );
 
     const result = await this.executeStream(provider, config, context);
+    // An empty prefix at the held ceiling is not an empty reply: rescheduling would regenerate the
+    // same oversized output.
     if (
       result.status === "completed" &&
+      !result.pendingResponse?.truncation &&
       !result.pendingResponse?.text.trim() &&
       wasEmptyStreamResponse(result) &&
       !context.suppressTextOutput
@@ -307,20 +310,18 @@ export class StreamOrchestrator implements IStreamOrchestrator {
       return { status: "empty_response", data: { emptyResponseReason: "speaker_guard" }, usage: state.usage };
     }
 
+    // A held speaker-guard or ceiling stop leaves a valid prefix for review, the same text ordinary
+    // streaming would already have sent before stopping.
+    const completesHeldPrefix =
+      context.holdResponseText && (stopReason === "speaker_guard" || stopReason === "pending_response_limit");
     // Carry the same payload `completeStreamAfterProviderEnd` assembles. A stop is an early return
     // out of the loop, so without this the turn's delivered text, usage, thoughts and sprite records
     // never reach short-term memory, stat recording, or the thought log.
     return {
-      status: context.holdResponseText && stopReason === "speaker_guard" ? "completed" : "stopped_by_user",
-      pendingResponse:
-        context.holdResponseText && stopReason === "speaker_guard"
-          ? this.collectPendingResponse(
-              state,
-              textConfig,
-              context,
-              createTypingSimulationConfig(config.humanizerDegree),
-            )
-          : undefined,
+      status: completesHeldPrefix ? "completed" : "stopped_by_user",
+      pendingResponse: completesHeldPrefix
+        ? this.collectPendingResponse(state, textConfig, context, createTypingSimulationConfig(config.humanizerDegree))
+        : undefined,
       stopReason,
       accumulatedText: state.accumulatedText,
       detailsContent: state.detailsSegments.length > 0 ? state.detailsSegments.join("\n\n") : undefined,
@@ -473,6 +474,9 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     let consumed = false;
     return {
       text: collected.pendingResponseText ?? "",
+      retainedBytes: collected.pendingResponseBytes ?? 0,
+      segments: segments.length,
+      truncation: collected.pendingResponseTruncation,
       deliver: async (abortSignal) => {
         if (consumed) return { status: "completed" };
         consumed = true;

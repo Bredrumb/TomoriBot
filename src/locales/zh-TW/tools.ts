@@ -1,5 +1,8 @@
 export default {
   tools: {
+    execution: {
+      unavailable: `在目前的設定、模型功能或 bot 權限下，工具 \`{tool}\` 無法使用。`,
+    },
     generate_image: {
       quota_exceeded_generic: `圖片生成額度已用完。`,
       user_quota_exceeded: `你已經用完今天的圖片生成額度。{reset_info}`,

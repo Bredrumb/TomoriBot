@@ -122,6 +122,15 @@ candidate before replaying approved presentation or requesting the bounded revis
 pending presentation and model parts while keeping actual tool outcomes; successful tools are not
 replayed to reconstruct a reply. Tool-only turns do not invent prose.
 
+Each pass receives the room left under the turn's
+[held-prose ceiling](/architecture/pipelines/provider/04-orchestrator-state-machine/#held-response-presentation).
+A pass that stops at that ceiling aborts its provider request, because an adapter that does not
+cancel its reader on early return would keep generating undeliverable text. The reviewer packet
+labels a cut candidate `pending_cut_at_length_limit` and is told the kept text will be delivered as
+cut. A cut pass without reported usage records estimated author usage. After delivery,
+`completeResponse` posts the ordinary `flush_limit` notice unless the replay already posted it or the
+operator's `send_message_limit` caused the cut, which stays silent as it does when streaming.
+
 Cancellation discards held text and retains the existing queued stop/follow-up handling. Result
 assembly includes accepted dialogue and the actual-usage ledger; presentation carries no second
 usage copy. The [tool checkpoint](02-execute-tool-call.md#actual-request-review) runs before dispatch,

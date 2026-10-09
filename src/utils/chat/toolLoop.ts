@@ -6,11 +6,13 @@ import {
   MAX_TOOL_CORRECTIONS,
   reviewResponseCandidate,
   recordResponseReviewUsage,
+  remainingPendingResponseLimit,
   reviewToolCandidate,
   toolRequestIdentity,
   responseReviewCancelled,
   responseRevisionInstruction,
 } from "@/utils/chat/responseReview";
+import { charsToTokensText, estimateContextItemsTokens } from "@/utils/text/tokenEstimate";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { ToolRegistry } from "@/tools/toolRegistry";
@@ -105,7 +107,12 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
   let lastToolName: string | undefined;
 
   const completeResponse = async (): Promise<GenerationTurnResult | null> => {
+    // The send limit is deliberate operator config and stays silent, as it does when streaming.
+    const cutByLengthLimit = review?.pending.some(
+      (part) => part.truncation === "flush_limit" || part.truncation === "retention_limit",
+    );
     if (!review?.pending.some((part) => part.text.trim())) {
+      if (cutByLengthLimit) await emitHeldResponseLimitNotice(params.context);
       return buildResult(
         "completed",
         params.context,
@@ -147,6 +154,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
       );
     const delivered: string[] = [];
     let deliveryStatus: GenerationTurnResult["status"] | undefined;
+    let replayStopReason: StreamResult["stopReason"];
     for (const pending of review.pending) {
       if (responseReviewCancelled(params.context)) break;
       const presentation = await pending.deliver(getChannelTurnAbortSignal(params.context.channel.id));
@@ -154,6 +162,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
       if (presentation.accumulatedText) delivered.push(presentation.accumulatedText);
       if (presentation.status !== "completed") {
         deliveryStatus = presentation.status;
+        replayStopReason = presentation.stopReason;
         break;
       }
     }
@@ -163,6 +172,9 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
       deliveryStatus = followUp ? "follow_up_interrupt" : "stopped_by_user";
       if (followUp) incrementChannelFollowUpCount(params.context.channel.id);
       queueStopResponseIfPresent(params.context);
+    } else if (cutByLengthLimit && replayStopReason !== "flush_limit") {
+      // A replay that reaches the flush cap already posted this notice through ordinary delivery.
+      await emitHeldResponseLimitNotice(params.context);
     }
     finalText = delivered.join("\n");
     return buildResult(
@@ -207,12 +219,18 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
     );
     streamResults.push(streamResult);
     if (review) {
-      if (streamResult.usage)
-        recordResponseReviewUsage(review, {
-          kind: "author",
-          model: params.tomoriState.llm.llm_codename,
-          usage: streamResult.usage,
-        });
+      // Stopping at the held ceiling ends the stream before providers send trailing usage. Ordinary
+      // turns fall back to the same estimates, so the cut pass is not recorded as free.
+      const usage =
+        streamResult.usage ??
+        (streamResult.pendingResponse?.truncation
+          ? {
+              inputTokens: estimateContextItemsTokens(params.context.contextItems),
+              outputTokens: charsToTokensText(streamResult.pendingResponse.text.length),
+            }
+          : undefined);
+      if (usage)
+        recordResponseReviewUsage(review, { kind: "author", model: params.tomoriState.llm.llm_codename, usage });
       if (streamResult.pendingResponse) review.pending.push(streamResult.pendingResponse);
     }
     thoughtLog = streamResult.thoughtLog ?? thoughtLog;
@@ -515,6 +533,9 @@ async function streamOnce(
   params.context.streamingContext.abortSignal = abortController.signal;
   // A notice held by an earlier attempt describes that attempt, not this one.
   params.context.streamingContext.deferredTimeoutNotice = undefined;
+  params.context.streamingContext.pendingResponseLimit = params.context.responseReview
+    ? remainingPendingResponseLimit(params.context.responseReview)
+    : undefined;
   let timeoutId: NodeJS.Timeout | null = null;
 
   // Unified kill: aborts the HTTP request AND rejects the Promise.race.
@@ -589,7 +610,7 @@ async function streamOnce(
   );
 
   try {
-    return await runUnderWatchdog(channelId, () =>
+    const result = await runUnderWatchdog(channelId, () =>
       Promise.race([
         streamPromise,
         new Promise<never>((_, reject) => {
@@ -601,6 +622,10 @@ async function streamOnce(
         }),
       ]),
     );
+    // Leaving the chunk loop closes the provider generator, but an adapter that does not cancel its
+    // reader on early return would keep the request generating text nobody can deliver.
+    if (result.stopReason === "pending_response_limit") abortController.abort();
+    return result;
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("SDK_CALL_TIMEOUT:")) {
       // A pending stop request (e.g. /kill) makes this a terminal stop; no fallback runs, so
@@ -1311,6 +1336,30 @@ async function emitToolErrorLoop(context: ChatTurnContext): Promise<void> {
       personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
     },
   );
+}
+
+/** Matches the notice ordinary streaming posts when a reply reaches its length cap. */
+async function emitHeldResponseLimitNotice(context: ChatTurnContext): Promise<void> {
+  if (!context.shouldSurfaceUserErrors) return;
+  await sendStandardEmbed(
+    context.channel as Parameters<typeof sendStandardEmbed>[0],
+    context.locale,
+    {
+      color: ColorCode.WARN,
+      titleKey: "genai.stream.flush_limit_title",
+      descriptionKey: "genai.stream.flush_limit_description",
+    },
+    {
+      webhook: context.responseTarget?.webhook,
+      personaUsername: context.responseTarget?.personaUsername,
+      personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
+    },
+  ).catch((embedError) => {
+    log.warn(
+      "Failed to send held response limit notice",
+      embedError instanceof Error ? embedError : new Error(String(embedError)),
+    );
+  });
 }
 
 function queueStopResponseIfPresent(context: ChatTurnContext): void {

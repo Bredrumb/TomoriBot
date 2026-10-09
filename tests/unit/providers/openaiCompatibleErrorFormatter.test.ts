@@ -25,7 +25,7 @@ describe("openAI-compatible provider error formatting", () => {
     );
   });
 
-  it("classifies unsupported-model errors as non-retryable model errors with details", () => {
+  it("classifies unsupported-model errors as non-retryable model errors without upstream text", () => {
     const rawError = new Error(
       "HTTP 400: Unsupported model `Deepseek` for provider `DeepSeek`. Supported IDs: `deepseek-auto`.",
     );
@@ -43,8 +43,7 @@ describe("openAI-compatible provider error formatting", () => {
     });
 
     expect(description).toContain(localizedCopy("en-US", "genai.stream.model_error_description"));
-    expect(description).toContain("Unsupported model `Deepseek`");
-    expect(description).toContain("Supported IDs: `deepseek-auto`");
+    expect(description).not.toContain("Deepseek");
   });
 
   it("explains withheld redirect credentials without echoing the destination origin", () => {
@@ -133,7 +132,7 @@ describe("openAI-compatible provider error formatting", () => {
     expect(description).toContain(localizedCopy("en-US", "genai.openrouter.503_default_message"));
   });
 
-  it("uses NVIDIA 500 parameter guidance and keeps provider details visible", () => {
+  it("uses NVIDIA 500 parameter guidance without repeating the upstream text", () => {
     const description = createOpenAICompatibleErrorDescription(
       {
         type: "provider_overloaded",
@@ -146,13 +145,11 @@ describe("openAI-compatible provider error formatting", () => {
       {
         localeNamespace: "genai.nvidia",
         fallbackMessage: "Fallback should not be needed",
-        appendDetailsForCodes: ["500"],
       },
     );
 
     expect(description).toContain(localizedCopy("en-US", "genai.nvidia.500_parameter_default_message"));
-    expect(description).toContain("**Details:**");
-    expect(description).toContain("min_p and logit_bias");
+    expect(description).not.toContain("speculative decoding");
   });
 
   it("does not blame a parameter on an opaque NVIDIA 500", () => {
@@ -169,13 +166,11 @@ describe("openAI-compatible provider error formatting", () => {
       {
         localeNamespace: "genai.nvidia",
         fallbackMessage: "Fallback should not be needed",
-        appendDetailsForCodes: ["500"],
       },
     );
 
     expect(description).not.toContain(localizedCopy("en-US", "genai.nvidia.500_parameter_default_message"));
     expect(description).toContain(localizedCopy("en-US", "genai.nvidia.500_default_message"));
-    expect(description).toContain("**Details:**");
-    expect(description).toContain("internal_server_error");
+    expect(description).not.toContain("internal_server_error");
   });
 });

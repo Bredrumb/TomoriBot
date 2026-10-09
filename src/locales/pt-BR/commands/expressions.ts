@@ -91,6 +91,7 @@ export default {
       error_title: `Não foi possível salvar a expressão`,
       error_stale: `Esta expressão mudou ou foi removida. Selecione-a novamente para usar a versão atual.`,
       error_collision: `Este nome coincide com outra expressão personalizada ou figurinha nativa. Escolha um nome diferente.`,
+      error_limit: `Este servidor atingiu o limite de {limit} expressões personalizadas. Exclua uma antes de adicionar outra. Emojis e figurinhas nativas não contam para este limite.`,
       error_invalid: `Digite um nome, uma descrição de até 500 caracteres e uma emoção válida.`,
       error_scope: `Seu acesso ao servidor ou a persona selecionada mudou. Reabra \`/expressions manage\`.`,
       error_sources: `Envie exatamente um link ou arquivo ao adicionar. Ao editar, deixe ambos vazios para manter a mídia atual ou envie um substituto.`,

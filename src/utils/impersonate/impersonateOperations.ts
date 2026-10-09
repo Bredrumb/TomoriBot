@@ -515,9 +515,8 @@ export async function executeUserImpersonation(
         ? localizer(locale, "genai.error_stream_timeout_description")
         : isSkippedError
           ? localizer(locale, "commands.impersonate.user_generation_skipped_description")
-          : localizer(locale, "genai.generic_error_description", {
-              error_message: error instanceof Error ? error.message : "Unknown error",
-            });
+          : // The error text can carry a provider response; the full error is logged above.
+            localizer(locale, "general.errors.generic_error_description");
       const errorEmbed = new EmbedBuilder()
         .setTitle(
           localizedStatusTitle(

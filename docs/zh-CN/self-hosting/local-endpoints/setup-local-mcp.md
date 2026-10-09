@@ -22,8 +22,6 @@ npx -y <some-mcp-server> --port 3000
 
 确切的命令取决于你正在运行的服务器。记下它打印的URL和传输路径（通常为`http://localhost:3000/sse`）。
 
-TomoriBot的工具预计Node.js v20+ 可在本地MCP服务器的主机上使用。
-
 ## 2. 在Discord里注册它
 
 打开`/config` > `插件` > MCP服务器，选择`+ 添加MCP`，将`服务器URL`字段设置为本地端点，并将`服务器类型`保留为其默认`通用型`设置：

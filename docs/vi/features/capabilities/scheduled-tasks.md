@@ -34,6 +34,8 @@ Hai lệnh gạch chéo cho phép bạn xem lại và điều chỉnh lịch tr�
 
 Cả hai lệnh đều mở một bộ chọn liệt kê các lịch trình hiện có của bạn theo cá nhân, thời gian, kênh và tần suất lặp lại.
 
+Một máy chủ có thể lưu tối đa 100 lời nhắc và tác vụ đang chờ xử lý cùng một lúc. Khi đạt giới hạn, TomoriBot sẽ thông báo cho bạn thay vì thêm mới; hãy xóa các mục cũ bằng `/scheduled-task remove` để có thêm chỗ trống.
+
 ## Cách thức gửi hoạt động
 
 Lời nhắc chỉ được đánh dấu là hoàn thành sau khi gửi thành công. Nếu quá trình phân phối bị gián đoạn, TomoriBot sẽ tự động thử lại mà không làm thay đổi lịch định kỳ.

@@ -20,7 +20,10 @@
 import type { FunctionCall, ThoughtLogEntry } from "@/types/provider/interfaces";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { log, sanitizeLogPayload } from "@/utils/misc/logger";
-import { isProviderTimeoutMessage } from "@/utils/provider/providerErrorClassification";
+import {
+  formatProviderErrorCodeForDisplay,
+  isProviderTimeoutMessage,
+} from "@/utils/provider/providerErrorClassification";
 import { localizer } from "@/utils/text/localizer";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { findMarkdownCodeRanges } from "@/utils/text/processors/llmOutputProcessor";
@@ -2124,23 +2127,8 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    try {
-      const novelaiMessage = localizer(locale, `genai.novelai.${messageKey}`);
-
-      // If this is an unknown error, append the actual API response for debugging
-      if (messageKey === "unknown_default_message") {
-        // Truncate error message to avoid Discord embed limits (max description is 4096, leave room for other text)
-        const maxErrorLength = 1000;
-        const apiErrorSnippet =
-          error.message.length > maxErrorLength ? `${error.message.substring(0, maxErrorLength)}...` : error.message;
-        return `Error Code ${errorCode}: ${novelaiMessage}\n\n**API Response:**\n${apiErrorSnippet}`;
-      }
-
-      return `Error Code ${errorCode}: ${novelaiMessage}`;
-    } catch {
-      // Fallback if locale key doesn't exist
-      return `Error Code ${errorCode}: ${error.message}`;
-    }
+    // Upstream text stays in the operator log (see StreamErrorUi); the message only picked the key.
+    return `Error Code ${formatProviderErrorCodeForDisplay(errorCode)}: ${localizer(locale, `genai.novelai.${messageKey}`)}`;
   }
 
   /**

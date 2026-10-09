@@ -1,5 +1,8 @@
 export default {
   tools: {
+    execution: {
+      unavailable: `ツール \`{tool}\` は、現在の設定、モデルの機能、またはBotの権限では利用できません。`,
+    },
     generate_image: {
       quota_exceeded_generic: `画像生成クォータを超過しました。`,
       user_quota_exceeded: `日次画像生成クォータに達しました。{reset_info}`,

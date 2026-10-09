@@ -1,7 +1,6 @@
 export default {
   genai: {
     generic_error_title: `Generation Error`,
-    generic_error_description: `{error_message}`,
     error_stream_timeout_title: `Connection Timeout`,
     error_stream_timeout_description: `If this keeps happening, there might be a temporary issue with your chosen AI provider. Please try again later or use \`/refresh\` to refresh the context history.`,
     empty_response_title: `Empty Response`,
@@ -136,6 +135,10 @@ export default {
       content_blocked_default_message: `Your content was blocked by safety filters`,
       unknown_default_message: `An unexpected error occurred`,
     },
+    vertex: {
+      config_error_message: `Vertex AI could not read this provider's settings. Enter the key as \`project-id::location\` in \`/providers\`.`,
+      auth_error_message: `Vertex AI could not authenticate. Whoever hosts TomoriBot needs to set up Google Cloud Application Default Credentials (\`gcloud auth application-default login\`, or \`GOOGLE_APPLICATION_CREDENTIALS\`).`,
+    },
     vertexexpress: {
       "403_predict_permission_message": `This key can't call Vertex AI Express models. Use an Express-mode key, or use the separate \`vertex\` provider for full Google Cloud projects.`,
       unknown_default_message: `An unexpected error occurred`,
@@ -196,11 +199,11 @@ The selected model requires allowing data for paid model training, but your Open
       "401_default_message": `NVIDIA did not recognize this key. Check that it was copied in full, including its \`nvapi-\` prefix.`,
       "403_default_message": `NVIDIA refused this key. It may be mistyped, expired, or missing inference access on its account.`,
       "404_default_message": `The requested NVIDIA NIM model could not be found. It may be deprecated by NVIDIA.`,
-      "500_default_message": `The NVIDIA backend serving this model failed. This is usually transient, so try again in a moment. The details below are NVIDIA's own report and are authoritative: if they name a request parameter, adjust that setting rather than guessing.`,
+      "500_default_message": `The NVIDIA backend serving this model failed. This is usually transient, so try again in a moment. If it keeps failing, whoever hosts TomoriBot can read NVIDIA's full report in the bot logs.`,
       // Shown instead of 500_default_message only when NVIDIA's own text names a droppable request
       // parameter. Asserting this cause on every 500 previously sent users to change settings the
       // failing payload never carried.
-      "500_parameter_default_message": `NVIDIA rejected one or more request parameters for this model. If the details name unsupported sampler parameters such as \`min_p\`, set them to \`0\` with \`/config\` > Models > Samplers & Parameters to turn them off. If the details name \`logit_bias\`, clear saved entries with \`/config\` > Models > Samplers & Parameters.`,
+      "500_parameter_default_message": `NVIDIA rejected one or more request parameters for this model. In \`/config\` > Models > Samplers & Parameters, set unsupported samplers such as \`min_p\` to \`0\` and clear saved \`logit_bias\` entries.`,
       unknown_default_message: `An unexpected error occurred`,
     },
     self_teach: {

@@ -32,6 +32,17 @@ Sempre que acionado, TomoriBot busca mensagens recentes no canal junto com memó
 O provedor de IA escolhido (Google, OpenRouter, NovelAI,…) processa mensagens de acordo com sua própria política de privacidade. Evite compartilhar credenciais pessoais confidenciais ou dados confidenciais.
 :::
 
+### Seleções de Revisão de respostas
+<!-- anchor: response-drafting-selections -->
+
+`/config` > `Plugins` > `Revisão de respostas` armazena as escolhas de revisor, modelo de decisões, verificador de regras opcional e prompt para o espaço de trabalho. Quando ativada, as respostas e as solicitações reais de ferramentas são revisadas antes de serem enviadas ou executadas. Um verificador opcional recebe o texto da resposta pendente e envia conclusões consultivas apenas ao revisor. A dispensa por decisão permanece inativa até que haja validação rotulada, e as seleções de decisões salvas não fazem chamadas pagas enquanto faltar calibração. Desativar mantém respostas e ferramentas normais sem solicitações de revisão.
+
+O revisor selecionado recebe a resposta pendente e o contexto já admitido para seu autor: instruções de persona, diálogos representativos, gatilho e alvo da resposta, conversa relevante, relacionamentos visíveis entre participantes, memórias, documentos e resultados reais de ferramentas. Para uma solicitação de ferramenta, o revisor também recebe seu alvo exato e argumentos, incluindo qualquer texto de mensagem, e as definições de ferramentas disponíveis. A revisão não adiciona consulta a perfis privados. Credenciais e argumentos de autenticação são ocultados. As evidências necessárias precisam caber; cobertura incompleta de mídia, argumentos de ferramentas ocultos ou limites de modelo ausentes tornam a revisão indisponível. Uma revisão indisponível mantém as verificações normais do aplicativo; uma ação rejeitada anteriormente permanece bloqueada.
+
+A herança usa o modelo e as credenciais que realmente respondem, incluindo roteamento pessoal, rotação de chaves, substituições e fallback. Um revisor fixado usa o registro do próprio espaço de trabalho e a chave do provedor salva. Seu provedor tem sua própria política de privacidade. Escolhê-lo mantém o provedor de respostas principal inalterado. Respostas pendentes e pacotes de correção duram apenas durante o turno. Apenas diálogos aceitos pelo Discord entram na memória de conversa; a contabilidade de tokens inclui tentativas reais sem sucesso quando o provedor relata o uso. Os diagnósticos contêm metadados e contagens, sem rascunhos, evidências, correções, corpos de resposta do provedor ou chaves.
+
+As exportações de configuração incluem essas definições sem chaves de API ou tokens de autenticação MCP. As importações preservam referências de modelo e verificador apenas quando disponíveis no espaço de trabalho receptor. Registre um equivalente local ou limpe seleções indisponíveis antes de importar. A redefinição de configuração do servidor restaura o estado desativado, herança de revisor, nenhum modelo de decisões, o prompt padrão e nenhum verificador.
+
 ## Exporte Seus Dados
 
 Os dados exportáveis são entregues aos seus DMs como um arquivo JSON:

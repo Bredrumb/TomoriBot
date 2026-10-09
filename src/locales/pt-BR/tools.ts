@@ -1,5 +1,8 @@
 export default {
   tools: {
+    execution: {
+      unavailable: `A ferramenta \`{tool}\` não está disponível nas configurações atuais, nas capacidades do modelo ou nas permissões do bot.`,
+    },
     generate_image: {
       quota_exceeded_generic: `A cota de geração de imagens foi excedida.`,
       user_quota_exceeded: `Você atingiu sua cota diária de geração de imagens. {reset_info}`,

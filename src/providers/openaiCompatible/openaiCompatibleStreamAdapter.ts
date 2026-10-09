@@ -783,7 +783,6 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       localeNamespace: this.options.localeNamespace,
       fallbackMessage: localizer(locale, `${this.options.localeNamespace}.unknown_default_message`),
       connectionRefusedMessage: localizer(locale, `${this.options.localeNamespace}.connection_refused`),
-      appendDetailsForCodes: this.options.appendErrorDetailsForCodes,
     });
   }
 

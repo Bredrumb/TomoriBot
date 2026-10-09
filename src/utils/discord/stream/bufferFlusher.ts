@@ -145,6 +145,19 @@ export class StreamBufferFlusher {
         return;
       }
     }
+
+    if (context.holdResponseText && this.deps.segmentProcessor.exceedsHeldRetention(state.buffer, context, state)) {
+      const unflushable = state.buffer;
+      state.buffer = "";
+      await this.deps.segmentProcessor.sendBufferSegment(
+        unflushable,
+        "overflow",
+        textConfig,
+        typingConfig,
+        context,
+        state,
+      );
+    }
   }
 
   public async flushFinalBuffer(

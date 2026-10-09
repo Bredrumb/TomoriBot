@@ -28,6 +28,7 @@ import type { FunctionCall, ThoughtLogEntry } from "../../types/provider/interfa
 import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
 import { isProviderTimeoutMessage } from "@/utils/provider/providerErrorClassification";
+import { createGoogleApiErrorDescription } from "@/providers/google/googleStreamAdapter";
 import { localizer } from "../../utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import {
@@ -941,65 +942,17 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
   }
 
   createErrorDescription(error: ProviderError, locale: string): string | null {
+    // The configuration message quotes the stored composite key, and the authentication message
+    // carries SDK text, so both use fixed copy.
     if (error.code === "vertex_config_error") {
-      return `Vertex Configuration Error: ${error.userMessage ?? error.message}`;
+      return localizer(locale, "genai.vertex.config_error_message");
     }
 
     if (error.code === "vertex_auth_error") {
-      return `Vertex Authentication Error: ${error.userMessage ?? error.message}`;
+      return localizer(locale, "genai.vertex.auth_error_message");
     }
 
-    let apiMessage = error.userMessage;
-
-    if (!apiMessage) {
-      const errorCode = error.code;
-      let messageKey: string;
-
-      switch (error.type) {
-        case "content_blocked":
-          messageKey = "content_blocked_default_message";
-          break;
-        case "rate_limit":
-          messageKey = "429_default_message";
-          break;
-        case "timeout":
-          messageKey = "504_default_message";
-          break;
-        case "provider_overloaded":
-          messageKey = "503_default_message";
-          break;
-        case "api_error":
-          if (errorCode === "400" && error.message.includes("billing")) {
-            messageKey = "400_billing_default_message";
-          } else {
-            messageKey = `${errorCode}_default_message`;
-          }
-          break;
-        default:
-          messageKey = "unknown_default_message";
-          break;
-      }
-
-      try {
-        apiMessage = localizer(locale, `genai.google.${messageKey}`);
-
-        if (messageKey === "unknown_default_message") {
-          const maxErrorLength = 1000;
-          const apiErrorSnippet =
-            error.message.length > maxErrorLength ? `${error.message.substring(0, maxErrorLength)}...` : error.message;
-          apiMessage += `\n\n**API Response:**\n${apiErrorSnippet}`;
-        }
-      } catch {
-        apiMessage = localizer(locale, "genai.google.unknown_default_message");
-        const maxErrorLength = 1000;
-        const apiErrorSnippet =
-          error.message.length > maxErrorLength ? `${error.message.substring(0, maxErrorLength)}...` : error.message;
-        apiMessage += `\n\n**API Response:**\n${apiErrorSnippet}`;
-      }
-    }
-
-    const errorCode = error.code || "unknown";
-    return `Error Code ${errorCode}: ${apiMessage}`;
+    return createGoogleApiErrorDescription(error, locale);
   }
 
   private async assembleVertexContext(

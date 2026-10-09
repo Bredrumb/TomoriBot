@@ -63,6 +63,16 @@ differentiate failure causes:
 - **Context overflow:** Identifies token window limits that prompt history trimming.
 - **Provider timeouts:** Normalizes network read and socket timeouts into the `timeout` category.
 
+Public sinks show only the provider's localized, classified headline from `createErrorDescription()`.
+The upstream response text never reaches error embeds, interaction replies, the fallback notice, or
+tool results returned to the model, because an endpoint can echo the bearer value it received in an
+encoding that pattern redaction misses, and self-debug reads those notices back into context. Error
+codes appear only when `formatProviderErrorCodeForDisplay()` recognizes an HTTP status or single-case
+enum word; anything else shows as `unknown`. `getProviderErrorDetail()` supplies the raw text to the
+operator log, capped at 2,000 characters. `/persona generate` and speech synthesis follow the same
+rule: preset generators reply with a classified message and HTTP status, and speech adapters put only
+the status or fixed text in `details`, which reaches both `/generate voice-message` and the voice tool.
+
 ## Credential-scoped recovery tips
 <!-- anchor: credential-scoped-recovery-tips -->
 

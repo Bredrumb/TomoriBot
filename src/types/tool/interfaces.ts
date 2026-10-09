@@ -127,6 +127,7 @@ export interface StreamingContext {
     userId: string;
   }>; // Additional mention handles to force-resolve (e.g., reminder recipients)
   holdResponseText?: boolean;
+  pendingResponseLimit?: import("@/types/stream/pendingResponse").PendingResponseLimit;
   suppressTextOutput?: boolean; // Suppress text output to Discord (NAI tool retry mode : keeps model state coherent but hides repeated text)
   /** NAI GLM-4.6: incomplete trailing fragment from previous stream, to append as prompt continuation on retry */
   naiContinuationPrefill?: string;
@@ -213,6 +214,10 @@ export interface ToolResult {
   /** A resolved expression the tool loop sends before building history. Never shown to the model. */
   stickerSelection?: StickerSelection;
   data?: unknown;
+  /**
+   * Returned to the model as context. Keep provider response text out of it and log that text
+   * instead: an endpoint can echo the request credential in its error body.
+   */
   error?: string;
   message?: string;
   imageMetadata?: FunctionResponseImageMetadata;

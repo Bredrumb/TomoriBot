@@ -48,6 +48,8 @@ Configura el tiempo de reutilización de la respuesta global en todo el servidor
 
 En `/config` > `Canales` > Registros y bienvenida, haga clic en `Establecer canal de registros` para designar un canal donde TomoriBot publica su razonamiento interno, avisos alternativos y llamadas de herramientas exitosas. Esto es útil para auditar lo que está haciendo, incluido qué disparador expuso una herramienta en [Modo de herramienta deliberada](/es-419/features/capabilities/tools-and-extensions/#deliberate-tool-mode).
 
+El registro solo copia de canales que todos los miembros de tu servidor ya pueden ver. La actividad en un canal o hilo que algunos miembros no pueden abrir queda fuera del registro, por lo que el registro nunca muestra contenido que no pudieran leer donde ocurrió. El canal de registros debe estar en el mismo servidor.
+
 ## Saludos de bienvenida
 
 En `/config` > `Canales` > Registros y bienvenida, configure saludos automatizados para nuevos miembros en un canal elegido. TomoriBot espera hasta que el nuevo miembro complete la evaluación y la incorporación de las reglas de Discord antes de enviar el saludo. Si un miembro se va antes de finalizar la evaluación, no se envía ningún saludo. Haz clic en `Borrar bienvenida` en esa misma página para desactivar los saludos.

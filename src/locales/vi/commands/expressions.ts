@@ -91,6 +91,7 @@ export default {
       error_title: `Không thể lưu biểu cảm`,
       error_stale: `Biểu cảm này đã thay đổi hoặc bị xóa. Hãy chọn lại để dùng phiên bản mới nhất.`,
       error_collision: `Tên này trùng với biểu cảm tùy chỉnh khác hoặc sticker gốc. Vui lòng chọn tên khác.`,
+      error_limit: `Máy chủ này đã đạt giới hạn {limit} biểu cảm tùy chỉnh. Hãy xóa bớt một biểu cảm trước khi thêm mới. Emoji và sticker gốc không tính vào giới hạn này.`,
       error_invalid: `Nhập tên, mô tả tối đa 500 ký tự và một cảm xúc hợp lệ.`,
       error_scope: `Quyền truy cập máy chủ của bạn hoặc persona được chọn đã thay đổi. Hãy mở lại \`/expressions manage\`.`,
       error_sources: `Cung cấp đúng một liên kết hoặc tệp khi thêm mới. Khi sửa, để trống cả hai để giữ phương tiện hiện tại hoặc cung cấp một tệp thay thế.`,

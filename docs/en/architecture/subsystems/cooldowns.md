@@ -50,7 +50,7 @@ Cooldown records are persisted in the `cooldowns` table in `src/db/schema.sql`.
 - **Unlogged storage**: `cooldowns` is an `UNLOGGED` PostgreSQL table. Ephemeral rate limits bypass write-ahead logging (WAL), reducing disk I/O on busy instances. An unclean database restart empties the table safely, resetting active cooldowns without risking application data integrity.
 - **Scope columns**: records store `cooldown_type`, `server_disc_id`, `user_disc_id`, `channel_disc_id`, `command_category`, and `expiry_time` (Unix timestamp in milliseconds).
 - **Idempotent upsert**: unique index `uq_cooldown_scope` uses `COALESCE` across all scope identifiers to handle null values safely. Calling `setCommandCategoryCooldown()` or `setMessageTriggerCooldownWithWhitelist()` updates `expiry_time` on conflict.
-- **Fail-open behavior**: database query errors during cooldown checks log warnings and report `isOnCooldown: false`. A database brownout does not lock users out of chat, though it creates a window for repeated invocations.
+- **Fail-open behavior**: database query errors during cooldown checks log warnings and report `isOnCooldown: false`. A database brownout does not lock users out of chat, though it creates a window for repeated invocations. Text, image, and video quotas fail open the same way, so failing cooldowns closed alone would not bound spend during a brownout. Change both together if an outage is observed admitting traffic above its limits, or if unprivileged senders can saturate the database pool.
 - **Cleanup**: PostgreSQL stored procedure `cleanup_expired_cooldowns()` deletes expired rows (`expiry_time <= current_ms`). It executes at startup in `src/index.ts` and runs hourly via `src/db/pgcron.sql` when `pg_cron` is enabled.
 
 ## Cache interaction

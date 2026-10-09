@@ -9,12 +9,26 @@ Puedes ajustar lo que TomoriBot puede hacer y cómo genera respuestas en `/confi
 ## Capacidades: lo que puede hacer
 <!-- anchor: capabilities-what-shes-allowed-to-do -->
 
-`/config` > `Plugins` alterna funciones en dos páginas:
+`/config` > `Plugins` controla las herramientas, las adiciones de contexto y la revisión de respuestas opcional:
 
 - **`Herramientas disponibles`**: generación de imágenes, `Uso de Stickers`, creación de hilos, administración de mensajes, bloqueo de usuarios, autoaprendizaje, mensajes de voz y más. Cada palanca activa la herramienta correspondiente (consulte [Herramientas y extensiones](/es-419/features/capabilities/tools-and-extensions/)), por lo que desactivar el `Uso de Herramientas` las desactiva todas a la vez.
 - **`Adiciones de contexto`**: personalización, emojis en las respuestas y reconocimiento del tiempo. Estos agregan información a su mensaje, por lo que continúan funcionando cuando el `Uso de Herramientas` está desactivado.
 
 El resumen automático de memoria a corto plazo se activa en `/config` > `Comportamiento` > `Memoria avanzada`. Cuando una capacidad está desactivada, no puede realizar esa acción independientemente de las solicitudes del usuario.
+
+## Revisión de respuestas
+
+Abre `/config` > `Plugins` > `Revisión de respuestas` para activar la revisión. Comienza desactivada y se aplica a cada persona en ese espacio de trabajo, incluidas las respuestas en cola y las escenas generadas. Los administradores del servidor modifican los ajustes del servidor; tu espacio de trabajo de DM tiene sus propios ajustes.
+
+Cuando está activada, Tomori retiene su respuesta mientras un revisor comprueba la voz de su personaje y el encaje con la escena. El revisor puede solicitar una revisión completa. Las solicitudes de herramientas también entran en revisión antes de su ejecución; las solicitudes rechazadas pueden recibir una corrección acotada. Las acciones exitosas se conservan mientras se revisa la respuesta. El texto sigue utilizando la identidad habitual de la persona, el manejo de emojis y el formato. La revisión y las correcciones pueden aumentar el tiempo de respuesta y el costo de tokens; la página muestra esto en ambos estados.
+
+`Elegir modelo revisor` selecciona un modelo de texto registrado elegible. `Usar el modelo de respuesta actual` utiliza el modelo y las credenciales que realmente responden, incluido tu proveedor personal o un modelo de respaldo. Un revisor fijado utiliza el registro y las credenciales propios del espacio de trabajo. Los creadores de solo texto y los creadores con el uso de herramientas desactivado aún pueden utilizar un revisor elegible. Un modelo heredado no admitido muestra `No disponible`; elige un revisor admitido para habilitar la revisión detallada.
+
+`Establecer prompt` edita las instrucciones de revisión, hasta 4,000 caracteres. `Usar predeterminado` restaura el valor predeterminado adaptado a la persona. `Elegir verificador de reglas` selecciona un verificador MCP compatible ya registrado, o `Ninguno`. Sus observaciones se envían de forma privada al revisor, que decide si son relevantes para este personaje. El verificador no ofrece garantías validadas de idioma o perfil en esta versión.
+
+`Elegir modelo de decisiones` guarda un registro de decisión de `/providers`. La omisión de la revisión detallada permanece inactiva hasta que cada modelo y rúbrica de revisión cuente con evidencia de calidad etiquetada. Una selección guardada no realiza solicitudes de decisión de pago en esta versión. Los prompts personalizados también mantienen la omisión inactiva. Borrar cualquiera de los modelos restaura la herencia del revisor o `Ninguno`; desactivar la opción conserva tus elecciones.
+
+La revisión es un control de calidad opcional. Un rechazo, un modelo no disponible, un tiempo de espera agotado, evidencia incompleta o un presupuesto de revisión agotado permiten que una respuesta válida o una solicitud de herramienta independiente continúe bajo las reglas normales de la aplicación. Las acciones previamente rechazadas permanecen bloqueadas. `/kill` y las interrupciones posteriores descartan el texto retenido. Los archivos, la voz y las publicaciones remotas reciben una revisión de sus argumentos de herramientas propuestos; sus medios generados quedan fuera de la revisión del texto retenido. La generación oculta y la suplantación de usuario mantienen sus vías existentes. El criterio del proveedor y la utilidad del verificador aún requieren evaluación humana. Consulta el [manejo de datos de revisión](/es-419/features/knowledge/data-handling/#response-drafting-selections).
 
 ## Expresiones
 <!-- anchor: expressions -->
@@ -34,6 +48,8 @@ En `Personalizadas`, abre el menú y elige `+ Agregar una expresión personaliza
 Un enlace puede apuntar a cualquier cosa. Lo publica exactamente como se guardó, y Discord lo muestra como cualquier enlace: un enlace GIF de un sitio como Tenor se reproduce como GIF, un enlace de imagen muestra la imagen y un sitio web muestra su tarjeta de vista previa. Eso hace que los enlaces sean buenos para bromas, como el sitio web de un hospital para cuando el chat se descontrole. Los enlaces deben comenzar con `https://`.
 
 Los archivos pueden ser PNG, JPEG, WebP, GIF o MP4, de hasta 10 MB.
+
+Cada servidor puede tener hasta 20 expresiones personalizadas por defecto, compartidas entre todas las personas. Tanto los archivos como los enlaces cuentan; los emojis y stickers nativos no. Al llegar al límite, elimina una expresión antes de agregar otra. Las expresiones existentes aún se pueden usar y editar. Los bots autohospedados pueden cambiar este límite en sus ajustes de entorno.
 
 Cada persona puede usar una nueva expresión personalizada. Para guardarla para personas específicas, selecciónala y usa `Agregar persona`. Eliminar a la última persona de esa lista la abre a todos de nuevo.
 

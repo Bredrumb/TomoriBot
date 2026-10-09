@@ -425,6 +425,8 @@ function held(
     usage: { inputTokens: 10, outputTokens: 5 },
     pendingResponse: {
       text,
+      retainedBytes: Buffer.byteLength(text, "utf8"),
+      segments: 1,
       deliver: async () => {
         delivered.push(text);
         return { status: "completed", accumulatedText: text };
@@ -1293,6 +1295,77 @@ describe("runToolLoop — contract tests", () => {
     expect(result.personaResponses[0]?.text).not.toContain("Generic");
     expect(context.responseReview?.revisions).toBe(1);
     expect(result.usageEntries?.filter((entry) => entry.kind === "author")).toHaveLength(3);
+  });
+
+  it("carries the held-prose ceiling across tool passes", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { MAX_PENDING_RESPONSE_BYTES, MAX_PENDING_RESPONSE_SEGMENTS } = await import(
+      "@/utils/discord/stream/constants"
+    );
+    const context = makeReviewContext();
+    const delivered: string[] = [];
+    const narration = held("I will check the shelf.", delivered, "function_call");
+    narration.data = { name: "lookup", args: {} };
+    const { provider } = makeProvider([narration, held("It is here.", delivered)]);
+    const limits: unknown[] = [];
+    const streamToDiscord = provider.streamToDiscord.bind(provider);
+    provider.streamToDiscord = (...args: Parameters<LLMProvider["streamToDiscord"]>) => {
+      limits.push({ ...context.streamingContext.pendingResponseLimit });
+      return streamToDiscord(...args);
+    };
+    Object.assign(provider, { callStructuredJSON: async () => ({ success: true, data: { status: "pass" } }) });
+    await runToolLoop(makeParams(context, provider));
+    const narrationBytes = Buffer.byteLength("I will check the shelf.", "utf8");
+    expect(limits).toEqual([
+      { maxBytes: MAX_PENDING_RESPONSE_BYTES, maxSegments: MAX_PENDING_RESPONSE_SEGMENTS },
+      { maxBytes: MAX_PENDING_RESPONSE_BYTES - narrationBytes, maxSegments: MAX_PENDING_RESPONSE_SEGMENTS - 1 },
+    ]);
+    expect(delivered).toEqual(["I will check the shelf.", "It is here."]);
+  });
+
+  it("reviews a reply cut at the held ceiling as cut, then delivers it with usage and the length notice", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const context = makeReviewContext();
+    context.shouldSurfaceUserErrors = true;
+    const delivered: string[] = [];
+    const cut = held("Mirri keeps talking", delivered);
+    cut.usage = undefined;
+    cut.stopReason = "pending_response_limit";
+    cut.pendingResponse.truncation = "retention_limit";
+    const { provider } = makeProvider([cut]);
+    const requests: ProviderStructuredJsonRequest[] = [];
+    Object.assign(provider, {
+      callStructuredJSON: async (request: ProviderStructuredJsonRequest) => {
+        requests.push(request);
+        expect(delivered).toEqual([]);
+        return { success: true, data: { status: "pass" } };
+      },
+    });
+    const result = await runToolLoop(makeParams(context, provider));
+    const review = requests.find((request) => request.schemaName === "response_review");
+    expect(JSON.parse(review?.userPrompt ?? "{}").candidate.status).toBe("pending_cut_at_length_limit");
+    expect(review?.systemPrompt).toContain("pending_cut_at_length_limit");
+    expect(context.streamingContext.abortSignal?.aborted).toBe(true);
+    expect(delivered).toEqual(["Mirri keeps talking"]);
+    expect(result.status).toBe("completed");
+    const author = result.usageEntries?.find((entry) => entry.kind === "author");
+    expect(author?.usage.inputTokens).toBeGreaterThan(0);
+    expect(author?.usage.outputTokens).toBeGreaterThan(0);
+    expect(standardEmbedCalls.map((call) => call.titleKey)).toEqual(["genai.stream.flush_limit_title"]);
+  });
+
+  it("stays silent when the operator send limit cut the held reply", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const context = makeReviewContext();
+    context.shouldSurfaceUserErrors = true;
+    const delivered: string[] = [];
+    const cut = held("Mirri keeps talking", delivered);
+    cut.pendingResponse.truncation = "send_message_limit";
+    const { provider } = makeProvider([cut]);
+    Object.assign(provider, { callStructuredJSON: async () => ({ success: true, data: { status: "pass" } }) });
+    await runToolLoop(makeParams(context, provider));
+    expect(delivered).toEqual(["Mirri keeps talking"]);
+    expect(standardEmbedCalls).toEqual([]);
   });
 
   it("delivers the latest valid reply when a second review asks for revision", async () => {

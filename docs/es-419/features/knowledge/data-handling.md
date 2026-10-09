@@ -32,6 +32,17 @@ Siempre que se activa, TomoriBot recupera mensajes recientes en el canal junto c
 El proveedor de IA que elija (Google, OpenRouter, NovelAI,…) procesa los mensajes según su propia política de privacidad. Evite compartir credenciales personales sensibles o datos confidenciales.
 :::
 
+### Opciones de Revisión de respuestas
+<!-- anchor: response-drafting-selections -->
+
+`/config` > `Plugins` > `Revisión de respuestas` almacena las elecciones de revisor, modelo de decisiones, verificador de reglas opcional y prompt para el espacio de trabajo. Cuando está activada, las respuestas y las solicitudes reales de herramientas se revisan antes de enviarse o ejecutarse. Un verificador opcional recibe el texto de la respuesta pendiente y envía sus observaciones solo al revisor. La omisión por decisiones permanece inactiva a la espera de validación etiquetada, y las selecciones de decisiones guardadas no realizan llamadas de pago mientras falte la calibración. Desactivarla conserva las respuestas y herramientas habituales sin solicitudes de revisión.
+
+El revisor seleccionado recibe la respuesta pendiente y el contexto ya admitido para su autor: instrucciones de la persona, diálogos representativos, activador y objetivo de respuesta, conversación relevante, relaciones visibles entre participantes, memorias, documentos y resultados reales de herramientas. Para una solicitud de herramienta, el revisor también recibe su destino exacto y sus argumentos, incluido cualquier texto de mensaje, y las definiciones de herramientas disponibles. La revisión no agrega búsquedas de perfiles privados. Las credenciales y los argumentos de autenticación se redactan. La evidencia requerida debe caber; una cobertura incompleta de medios, argumentos de herramientas ocultos o límites de modelo ausentes hacen que la revisión no esté disponible. Una revisión no disponible mantiene las comprobaciones habituales de la aplicación; una acción previamente rechazada permanece bloqueada.
+
+La herencia utiliza el modelo y las credenciales que realmente responden, incluidos el enrutamiento personal, la rotación de claves, las excepciones y el respaldo. Un revisor fijado utiliza su propio registro de espacio de trabajo y la clave de proveedor guardada. Su proveedor tiene su propia política de privacidad. Elegirlo no modifica el proveedor de respuestas principal. Las respuestas pendientes y los paquetes de corrección duran solo durante el turno. Solo el diálogo aceptado por Discord ingresa a la memoria de conversación; la contabilidad de tokens incluye los intentos reales no exitosos cuando el proveedor informa el uso. Los diagnósticos contienen metadatos y recuentos, sin borradores, evidencia, correcciones, cuerpos de respuesta del proveedor ni claves.
+
+Las exportaciones de configuración incluyen estos ajustes sin claves de API ni tokens de autenticación MCP. Las importaciones conservan las referencias de modelos y verificadores solo cuando están disponibles para el espacio de trabajo receptor. Registra un equivalente local o borra las selecciones no disponibles antes de importar. El restablecimiento de la configuración del servidor restaura el estado desactivado, la herencia del revisor, ningún modelo de decisiones, el prompt predeterminado y ningún verificador.
+
 ## Exporta tus datos
 
 Los datos exportables se envían a sus mensajes directos como un archivo JSON:

@@ -91,6 +91,7 @@ export default {
       error_title: `No se pudo guardar la expresión`,
       error_stale: `Esta expresión cambió o se eliminó. Selecciónala de nuevo para usar la versión actual.`,
       error_collision: `Este nombre coincide con otra expresión personalizada o sticker nativo. Elige un nombre diferente.`,
+      error_limit: `Este servidor ha alcanzado su límite de {limit} expresiones personalizadas. Elimina una antes de agregar otra. Los emojis y los stickers nativos no cuentan para este límite.`,
       error_invalid: `Ingresa un nombre, una descripción de hasta 500 caracteres y una emoción válida.`,
       error_scope: `Tu acceso al servidor o la persona seleccionada cambió. Vuelve a abrir \`/expressions manage\`.`,
       error_sources: `Proporciona exactamente un enlace o archivo al agregar. Al editar, deja ambos en blanco para conservar el archivo actual, o proporciona uno de reemplazo.`,

@@ -19,6 +19,7 @@ import { localizer } from "@/utils/text/localizer";
 import { isMatrixRelayMessage } from "@/utils/chat/triggerProcessor";
 import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 import { resolveChannelTarget, resolveUserTarget } from "@/utils/discord/targetResolver";
+import { MAX_REMINDERS_PER_SERVER, ReminderLimitError } from "@/utils/db/repositories/ServerScheduleRepository";
 
 /**
  * Tool for creating scheduled tasks that trigger messages at specific times
@@ -639,6 +640,16 @@ export class ReminderTool extends BaseTool {
         },
       };
     } catch (error) {
+      if (error instanceof ReminderLimitError) {
+        return {
+          success: false,
+          error: `This server already has ${MAX_REMINDERS_PER_SERVER} pending reminders and tasks. Ask the user to remove some with /scheduled-task remove before adding another.`,
+          data: {
+            status: "reminder_creation_failed_limit",
+            reason: `The server reached its limit of ${MAX_REMINDERS_PER_SERVER} pending reminders.`,
+          },
+        };
+      }
       log.error("Error during reminder creation", error as Error);
       return {
         success: false,

@@ -77,10 +77,10 @@ Las condiciones de la herramienta reflejan la compatibilidad del proveedor/model
 
 El modelo ve una única herramienta `web_search(query, category)` unificada. Detrás de él, un despachador dirige cada llamada a través de una cadena de motores y devuelve el primer éxito:
 
-Valiente → SearXNG → DuckDuckGo → IAsk
+Brave → SearXNG → DuckDuckGo
 
 - **Brave** se ejecuta primero cuando se configura una clave Brave API (configúrela con `/providers`); Agrega búsqueda de imágenes, videos y noticias. ⚠️ Establece un límite de uso de $5 en el panel de Brave para evitar cargos sorpresa.
-- DuckDuckGo es el valor predeterminado cuando no se establece ninguna clave, y se conecta en cascada a IAsk sobre límites de velocidad o resultados vacíos.
+- DuckDuckGo es la opción predeterminada cuando no se ha configurado ninguna clave. Solo cubre búsquedas de texto. Cuando DuckDuckGo aplica un límite de velocidad al bot o muestra una verificación antibot, la búsqueda falla y TomoriBot publica un aviso sugiriendo Brave.
 - SearXNG y Crawl4AI son servidores autohospedados opcionales que agregan más categorías y búsquedas de páginas renderizadas por el navegador; consulte [Autohospedaje](/es-419/self-hosting/).
 
 Para leer una página específica, utiliza `fetch_url`. No está disponible en NovelAI.

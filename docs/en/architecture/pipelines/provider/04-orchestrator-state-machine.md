@@ -61,7 +61,8 @@ Stop handling distinguishes these cases:
   `{ status: "stopped_by_user" }`. Held response text is discarded. `/kill` additionally aborts the transport and
   rejects the [stream race](/architecture/pipelines/tool-loop/01-stream-once/), which can bypass this flush.
 - **Internal delivery stops:** Stops triggered by delivery caps (`send_message_limit`, `flush_limit`,
-  `speaker_guard`, `channel_deleted`, `missing_access`) skip the pending buffer flush. Flushing into
+  `speaker_guard`, `channel_deleted`, `missing_access`, `pending_response_limit`) skip the pending
+  buffer flush. Flushing into
   an inaccessible or rate-limited destination would trigger redundant rejected Discord requests and
   risk re-registering stops that leak into subsequent turns. A speaker-guard stop can still flush
   already-accepted aggregated text; it discards the unsafe remainder.
@@ -103,6 +104,16 @@ closure. Approval replays the saved segments through ordinary delivery with webh
 Discord limits intact. Only accepted sends create accumulated text and receipts. Cancellation never
 flushes held prose. A speaker guard can complete a valid collected prefix for review; an empty prefix
 retains ordinary empty-response handling.
+
+Collection is bounded before text is retained, because a reviewer limit checked afterwards cannot
+stop a runaway provider. One turn holds at most `MAX_PENDING_RESPONSE_BYTES` (64 KiB, below the
+reviewer's 96,000-byte packet) and `MAX_PENDING_RESPONSE_SEGMENTS` across all tool-loop passes; the
+tool loop passes the remaining room as `pendingResponseLimit`. Each pass also stops at the length one
+replay could send (`send_message_limit`, or the flush cap times the message length), and a buffer that
+can never flush, such as an unterminated table or fence, is cut once it exceeds the byte room. The cut
+lands on a code-point boundary, records `pendingResponse.truncation`, and raises the internal
+`pending_response_limit` stop, which completes with the kept prefix like a speaker guard. A truncated
+result never becomes `empty_response`, because rescheduling would regenerate the same oversized output.
 
 ## Source pointers
 

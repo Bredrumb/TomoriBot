@@ -14,7 +14,7 @@ import { deleteSupersededStreamMessages } from "@/utils/discord/stream/supersede
 import { log } from "@/utils/misc/logger";
 import { buildCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
-import { getProviderErrorDetail } from "@/utils/provider/providerErrorClassification";
+import { formatProviderErrorCodeForDisplay } from "@/utils/provider/providerErrorClassification";
 import { applyProviderContextTruncation } from "@/utils/provider/contextBudget";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
@@ -852,43 +852,19 @@ function extractErrorCode(streamResult: StreamResult | undefined): string {
   return String(record.code ?? record.type ?? record.message ?? streamResult?.status ?? "unknown");
 }
 
-// Per-line readability cap for a single failure detail in the fallback notice summary. This keeps
-// one verbose provider message from crowding out the others; the authoritative Discord embed
-// description limit is enforced on the joined list in `buildFailureList` (fallbackModelNotice.ts).
-const MAX_FALLBACK_DETAIL_LENGTH = 600;
-
 /**
- * Resolves a human-readable failure detail for the "Fallback Model Used" notice. Unlike
- * {@link extractErrorCode} (which prefers terse codes for key-rotation bookkeeping), this prefers
- * the provider's verbose message: e.g. "Unsupported model X. Supported IDs: ...", so users see
- * the actionable reason instead of an opaque error code.
+ * Classified failure reason for the public "Fallback Model Used" notice. Context assembly reads
+ * the notice back for the model, and an endpoint can echo request headers in its message, so the
+ * upstream text stays in the operator log the error path already wrote.
  * @param streamResult - The last stream result recorded for the failed attempt.
  */
 function extractErrorDetail(streamResult: StreamResult | undefined): string {
   const data = streamResult?.data;
-  if (!data || typeof data !== "object") {
-    return streamResult?.status ?? "unknown";
+  if (data && typeof data === "object" && !(data instanceof Error) && "type" in data) {
+    const error = data as ProviderError;
+    return `${formatProviderErrorCodeForDisplay(error.type)} (${formatProviderErrorCodeForDisplay(error.code)})`;
   }
-  if (data instanceof Error) {
-    return truncateFallbackDetail(data.message || "error");
-  }
-
-  const providerDetail = getProviderErrorDetail(data as ProviderError);
-  if (providerDetail) {
-    return truncateFallbackDetail(providerDetail);
-  }
-
-  const record = data as Record<string, unknown>;
-  return truncateFallbackDetail(
-    String(record.message ?? record.code ?? record.type ?? streamResult?.status ?? "unknown"),
-  );
-}
-
-function truncateFallbackDetail(detail: string): string {
-  const normalized = detail.replace(/\s+/g, " ").trim();
-  return normalized.length > MAX_FALLBACK_DETAIL_LENGTH
-    ? `${normalized.substring(0, MAX_FALLBACK_DETAIL_LENGTH)}...`
-    : normalized;
+  return streamResult?.status ?? "unknown";
 }
 
 async function prepareProviderContextItems(args: {

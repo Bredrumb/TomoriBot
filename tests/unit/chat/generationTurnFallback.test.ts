@@ -764,7 +764,12 @@ describe("runGenerationTurn fallback behavior", () => {
     queuedResults.push(
       {
         status: "error",
-        streamResults: [{ status: "error", data: { type: "rate_limit", code: "429", message: "rate limited" } }],
+        streamResults: [
+          {
+            status: "error",
+            data: { type: "rate_limit", code: "429", message: "rate limited for key sk-live-CANARY0001 <@&42>" },
+          },
+        ],
         personaResponses: [],
       },
       fallbackSuccess,
@@ -781,7 +786,9 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(emittedErrors).toHaveLength(0);
     expect(finalizedResults).toEqual([fallbackSuccess]);
     expect(fallbackNoticeCalls).toHaveLength(1);
-    expect(fallbackNoticeCalls[0]?.failures).toEqual([{ modelCodename: "primary-model", errorDetail: "rate limited" }]);
+    expect(fallbackNoticeCalls[0]?.failures).toEqual([
+      { modelCodename: "primary-model", errorDetail: "rate_limit (429)" },
+    ]);
     expect(fallbackNoticeCalls[0]?.successModel.llm_codename).toBe("fallback-model");
     expect(context.streamingContext.suppressUserErrors).toBe(false);
     expect(context.streamingContext.forceModelFallback).toBe(false);
@@ -900,7 +907,7 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(fallbackNoticeCalls).toHaveLength(1);
     expect(fallbackNoticeCalls[0]?.offerPersonalFallbackOptOut).toBe(true);
     expect(fallbackNoticeCalls[0]?.failures).toEqual([
-      { modelCodename: "personal-primary", errorDetail: "rate limited" },
+      { modelCodename: "personal-primary", errorDetail: "rate_limit (429)" },
     ]);
   });
 

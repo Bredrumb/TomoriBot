@@ -46,7 +46,11 @@ ChatTurnContext & GenerationTurnResult
    refresh nudges in future turns.
 6. **Thought log emission**: if a thought-log channel is configured in a guild text channel, `emitThoughtLog()`
    sends reasoning and duration details via `sendThoughtLogEmbed()`. If personal BYOK was used without reasoning,
-   it sends an attribution embed crediting the user's provider.
+   it sends an attribution embed crediting the user's provider. Like tool notices and image diagnostics, it
+   copies only when `canMirrorToThoughtLog()` confirms the log is in the same guild and everyone there can
+   already read the source channel (or a public thread's parent) with no `ViewChannel` deny overwrite.
+   The bot cannot list who reads the log, so a private thread, a private-listed channel, or an
+   undeterminable audience is never mirrored.
 7. **Boomerang follow-up**: if the turn invoked the cross-channel message tool, `scheduleBoomerangFollowUp()`
    consumes the pending boomerang. It schedules a re-entry in the source channel via `setImmediate`,
    calling `suppressNextSelfReply()` so the follow-up does not trigger self-reply suppression.

@@ -48,6 +48,8 @@ Configure o resfriamento da resposta global em todo o servidor em `/config` > `C
 
 Em `/config` > `Canais` > Logs e boas-vindas, clique em `Definir Canal de Logs` para designar um canal onde TomoriBot publica seu raciocínio interno, avisos de fallback e chamadas de ferramenta bem-sucedidas. Isso é útil para auditar o que ela está fazendo, incluindo qual gatilho expôs uma ferramenta no [Modo Ferramenta Deliberada](/pt-BR/features/capabilities/tools-and-extensions/#deliberate-tool-mode).
 
+O registro só copia de canais que todos os membros do seu servidor já podem ver. A atividade em um canal ou tópico que alguns membros não conseguem abrir fica fora do registro, de modo que o registro nunca exibe conteúdos que eles não poderiam ler onde ocorreram. O canal de registros deve estar no mesmo servidor.
+
 ## Saudações de Boas-Vindas
 
 Em `/config` > `Canais` > Logs e boas-vindas, configure saudações automatizadas para novos membros em um canal escolhido. TomoriBot espera até que o novo membro conclua a triagem e integração das regras do Discord antes de enviar a saudação. Se um membro sair antes de terminar a triagem, nenhuma saudação será enviada. Clique em `Limpar Boas-vindas` na mesma página para desativar as saudações.

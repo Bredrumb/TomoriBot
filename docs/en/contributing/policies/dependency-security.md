@@ -45,9 +45,10 @@ GHSA ID is the one to use: `bun audit --json` shows the `url`, and a missing CVE
 
 ## Active exceptions
 
-- **`CVE-2026-25128`, fast-xml-parser (Trivy only)**: required by AWS SDK v3; upgrading to v5 breaks it.
-Its input comes only from AWS endpoints. The `@aws-sdk/xml-builder` patch pins a fixed version in the
-transitive tree.
+- **`CVE-2026-25128`, fast-xml-parser (Trivy only)**: reached through the AWS SDK v3, whose input comes
+only from AWS endpoints. The global `"fast-xml-parser": ">=5.7.0"` override in `package.json` raises
+every copy, including the one nested under `@aws-sdk/xml-builder` (5.7.0 in `bun.lock`). Recheck with
+Trivy whether the advisory still matches before keeping this entry.
 
 ## Adding an exception
 

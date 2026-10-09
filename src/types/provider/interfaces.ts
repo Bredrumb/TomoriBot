@@ -68,6 +68,7 @@ export type StreamStopReason =
   | "flush_limit"
   | "channel_deleted"
   | "missing_access"
+  | "pending_response_limit"
   | "unknown";
 
 type ThoughtLogKind = "summary" | "raw";

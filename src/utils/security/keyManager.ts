@@ -1,6 +1,17 @@
 import { log } from "@/utils/misc/logger";
 
 /**
+ * Generated master keys (`bun run setup`, `openssl rand -base64 32`) are at least this long.
+ * pgcrypto applies no application KDF and length cannot prove entropy, so this only identifies
+ * keys too short to have come from a generator.
+ */
+export const MIN_GENERATED_KEY_LENGTH = 32;
+
+export function isGeneratedLengthKey(key: string): boolean {
+  return key.length >= MIN_GENERATED_KEY_LENGTH;
+}
+
+/**
  * Rotation status information for monitoring and diagnostics
  */
 interface RotationStatus {
@@ -67,6 +78,16 @@ class CryptoKeyManager {
     }
 
     log.info(`Crypto key manager initialized with ${this.keys.size} key version(s)`);
+
+    // Refusing a short version would strand the credentials it already protects, so it still
+    // loads; rotation onto a new version is what retires it.
+    const shortVersions = versions.filter((version) => !isGeneratedLengthKey(this.keys.get(version) ?? ""));
+    if (shortVersions.length > 0) {
+      log.warn(
+        `Encryption key version(s) ${shortVersions.map((v) => `V${v}`).join(", ")} are shorter than ${MIN_GENERATED_KEY_LENGTH} characters. ` +
+          "Generate a new version with `openssl rand -base64 32` and rotate onto it.",
+      );
+    }
 
     if (this.keys.size === 1) {
       log.warn("Only one key version available - rotation not possible until additional version added");

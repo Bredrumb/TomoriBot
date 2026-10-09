@@ -34,6 +34,8 @@ every Friday at 8pm, post a reminder that game night is starting
 
 這兩個指令都會開啟一個選擇器，按人格、時間、頻道和重複次數列出你現有的計畫。
 
+一個伺服器最多可以同時保留 100 個待處理的提醒與任務。達到上限時，TomoriBot 會通知你而不是繼續新增；使用 `/scheduled-task remove` 刪除舊的即可騰出空間。
+
 ## 傳送方式
 
 僅在發送成功後，提醒才會標記為完成。如果交付中斷，TomoriBot會自動重試，而不會更改重複計劃。

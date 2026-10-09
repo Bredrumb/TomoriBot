@@ -71,6 +71,21 @@ Sáu vị trí đầu tiên chọn bản ghi danh mục model. Thay vào đó, c
 
 Bạn cũng có thể quản lý các khóa dự phòng để tự động chuyển đổi dự phòng và cân bằng tải trong `/providers`.
 
+## Model quyết định
+<!-- anchor: decision-models -->
+
+Model quyết định là một danh mục riêng biệt trong `/providers` và `/personal providers`. Chúng trả lời các vị từ được định kiểu bằng xác suất. Việc đăng ký không làm thay đổi model trò chuyện đang hoạt động, không thiết lập hiệu chuẩn hoặc kích hoạt tính năng bỏ qua duyệt phản hồi. Các bảng điều khiển này vẫn chưa chọn một model quyết định.
+
+OpenRouter là nhà cung cấp gốc được hỗ trợ. Hãy lưu khóa của nó, mở menu thả xuống model và chọn `+ Thêm một model quyết định`. Nhập ID từ danh mục Quyết định đã được xác minh của nó. Danh mục toàn cầu bao gồm `typesafe/jev-1.13`; các đăng ký bổ sung thuộc về máy chủ hoặc chủ sở hữu cá nhân của chúng. Tính năng khám phá gốc cung cấp giới hạn đầu vào và giá đã được ghi nhận. Danh mục trò chuyện không thể thiết lập hỗ trợ Quyết định.
+
+Đối với dịch vụ tùy chỉnh, chọn `Thêm endpoint tùy chỉnh mới`, sau đó chọn `Tương thích System One` hoặc `Tương thích OpenAI Decisions` trong `Độ tương thích API`. Lưu URL cơ sở API và thông tin xác thực Bearer tùy chọn. Menu thả xuống model của nó cung cấp `+ Thêm một model quyết định` và kế thừa giao thức đó. Nhập ID model đã được ghi nhận và giới hạn token đầu vào (tối thiểu 512). Jev, Laya và Kev sử dụng khả năng tương thích System One. Các endpoint tương thích trò chuyện và gốc Ollama hiện có không cung cấp hành động này.
+
+Nguồn gốc thuần túy được chuẩn hóa thành `/v1`. Các phiên bản rõ ràng và tiền tố gateway vẫn được giữ nguyên: `https://decision.example.invalid/gateway/v1` gọi `/gateway/v1/systemone` cho System One hoặc `/gateway/v1/decisions` cho OpenAI Decisions. Khả năng truy cập sử dụng `GET <stored-base>/models` mà không gửi dữ liệu cuộc trò chuyện; điều này không chứng nhận khả năng của model. Các model tùy chỉnh được đăng ký thủ công từ tài liệu dịch vụ của chúng khi tính năng khám phá không thể thiết lập siêu dữ liệu tính năng cần thiết.
+
+Mở đăng ký Quyết định đã lưu để chỉnh sửa. Các chỉnh sửa tùy chỉnh bảo toàn chính xác danh tính model và endpoint của nó. Chọn `Xóa đăng ký quyết định này` trong `Thao tác đăng ký` để xóa nó trong khi vẫn giữ lại kết nối và thông tin xác thực. Việc xóa nhà cung cấp hoặc endpoint chính của nó sẽ xóa các đăng ký của chủ sở hữu đó. Các chủ sở hữu khác giữ lại các mục được chia sẻ. Danh sách model phân trang sau 18 đăng ký có thể chỉnh sửa bằng các điều khiển trang hiện có.
+
+Đăng ký và thông tin xác thực của nhà cung cấp vẫn nằm ngoài việc xuất và nhập persona/cấu hình. Đặt lại cấu hình sẽ giữ nguyên các đăng ký đã lưu; việc xóa mục cha sẽ dọn dẹp chúng một cách rõ ràng.
+
 ## Endpoint tùy chỉnh
 <!-- anchor: custom-endpoints -->
 

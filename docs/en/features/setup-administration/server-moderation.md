@@ -71,6 +71,10 @@ TomoriBot posts her internal reasoning, fallback notices, and successful tool ca
 useful for auditing what she is doing, including which trigger exposed a tool in
 [Deliberate Tool Mode](/features/capabilities/tools-and-extensions/#deliberate-tool-mode).
 
+The log only copies from channels every member of your server can already see. Activity in a
+channel or thread that some members cannot open stays out of the log, so the log never shows
+people something they could not read where it happened. The log channel must be in the same server.
+
 ## Welcome Greetings
 
 In `/config` > Channels > Logs & Welcome, configure automated greetings for new members in a

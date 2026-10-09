@@ -522,7 +522,7 @@ async function writeShortTermMemory(context: ChatTurnContext, result: Generation
 async function emitThoughtLog(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
   const thoughtLog = result.thoughtLog;
   const thoughtLogChannelId = context.tomoriState.config.thought_log_channel_disc_id;
-  if (!thoughtLogChannelId || context.isDMChannel || isThoughtLogPrivate(context)) {
+  if (!thoughtLogChannelId || context.isDMChannel) {
     return;
   }
 
@@ -559,12 +559,6 @@ async function emitThoughtLog(context: ChatTurnContext, result: GenerationTurnRe
       attributionLine,
     });
   }
-}
-
-function isThoughtLogPrivate(context: ChatTurnContext): boolean {
-  const privateIds = context.tomoriState.config.private_channel_ids ?? [];
-  const parentId = context.channel.isThread() ? context.channel.parentId : null;
-  return privateIds.includes(context.channel.id) || (parentId !== null && privateIds.includes(parentId));
 }
 
 function scheduleBoomerangFollowUp(context: ChatTurnContext): void {

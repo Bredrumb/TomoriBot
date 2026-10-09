@@ -1,10 +1,22 @@
 import type { StreamContext } from "@/types/stream/interfaces";
-import type { StreamState, TextProcessingConfig, TypingSimulationConfig } from "@/types/stream/types";
+import type { PendingResponseLimit, PendingResponseTruncation } from "@/types/stream/pendingResponse";
+import {
+  DISCORD_STREAMING_CONSTANTS,
+  type StreamState,
+  type TextProcessingConfig,
+  type TypingSimulationConfig,
+} from "@/types/stream/types";
 import { log } from "@/utils/misc/logger";
+import { STREAMING_LIMITS } from "@/utils/security/rateLimiter";
 import { cleanLLMOutput, truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import { filterDuplicateCustomEmojis } from "@/utils/text/emojiPenalty";
 import { extractMarkdownTableSegments } from "@/utils/text/markdownTable";
-import { MAX_EMPTY_RESPONSE_RETRIES, ORPHAN_PUNCTUATION_REGEX } from "@/utils/discord/stream/constants";
+import {
+  MAX_EMPTY_RESPONSE_RETRIES,
+  MAX_PENDING_RESPONSE_BYTES,
+  MAX_PENDING_RESPONSE_SEGMENTS,
+  ORPHAN_PUNCTUATION_REGEX,
+} from "@/utils/discord/stream/constants";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { resolveGuildMentions } from "@/utils/discord/stream/mentionResolver";
 import type {
@@ -63,17 +75,17 @@ export class StreamSegmentProcessor {
   public constructor(private readonly deps: StreamSegmentProcessorDependencies) {}
 
   public async sendBufferSegment(
-    segment: string,
+    flushedSegment: string,
     boundary: BufferedDeliveryBoundary | undefined,
     textConfig: TextProcessingConfig,
     typingConfig: TypingSimulationConfig,
     context: StreamContext,
     state: StreamState,
   ): Promise<void> {
-    if (context.holdResponseText) {
-      state.pendingResponseSegments ??= [];
-      state.pendingResponseSegments.push({ text: segment, boundary, codeBlock: state.isInsideCodeBlock });
-    }
+    const segment = context.holdResponseText
+      ? this.retainHeldSegment(flushedSegment, boundary, context, state)
+      : flushedSegment;
+    if (segment === null) return;
     const opensLine = state.nextSegmentOpensLine ?? true;
     state.nextSegmentOpensLine = segmentEndsLine(segment, boundary);
     if (!segment.trim()) return;
@@ -312,6 +324,10 @@ export class StreamSegmentProcessor {
         (state.pendingResponseText ?? "") + (deliveryOptions?.accumulatedTextPrefix ?? "") + segmentToSend;
       if (shouldClearActiveRenderModifier) state.activeRenderModifier = undefined;
       if (shouldStopForSpeakerGuard) this.deps.requestStop(context.channel.id, "speaker_guard");
+      const deliverable = resolveDeliverableHeldLength(context);
+      if (deliverable && !state.pendingResponseTruncation && state.pendingResponseText.length > deliverable.chars) {
+        this.truncateHeldCollection(deliverable.truncation, context, state);
+      }
       return;
     }
     const segmentedParts = extractMarkdownTableSegments(segmentToSend);
@@ -699,6 +715,96 @@ export class StreamSegmentProcessor {
     state.prefillHeld += segment;
     return "";
   }
+
+  /**
+   * Whether `text` waiting in the stream buffer could no longer be retained as held prose. An
+   * unterminated table, code fence or semantic marker can keep the buffer from ever flushing a
+   * segment, so the segment ceiling alone cannot bound it.
+   */
+  public exceedsHeldRetention(text: string, context: StreamContext, state: StreamState): boolean {
+    const room = resolveHeldLimit(context).maxBytes - (state.pendingResponseBytes ?? 0);
+    // A UTF-16 code unit encodes to 1-3 UTF-8 bytes, which skips the byte count for short buffers.
+    if (text.length * 3 <= room) return false;
+    return text.length > room || Buffer.byteLength(text, "utf8") > room;
+  }
+
+  /**
+   * Records a flushed segment for replay within the turn's held-prose ceiling, cutting it at the
+   * ceiling when it does not fit.
+   *
+   * @returns The text to normalize, or null once collection has stopped.
+   */
+  private retainHeldSegment(
+    segment: string,
+    boundary: BufferedDeliveryBoundary | undefined,
+    context: StreamContext,
+    state: StreamState,
+  ): string | null {
+    if (state.pendingResponseTruncation) return null;
+    const limit = resolveHeldLimit(context);
+    state.pendingResponseSegments ??= [];
+    if (state.pendingResponseSegments.length >= limit.maxSegments) {
+      this.truncateHeldCollection("retention_limit", context, state);
+      return null;
+    }
+    const usedBytes = state.pendingResponseBytes ?? 0;
+    let retained = segment;
+    let bytes = Buffer.byteLength(segment, "utf8");
+    if (usedBytes + bytes > limit.maxBytes) {
+      retained = sliceToUtf8Bytes(segment, Math.max(0, limit.maxBytes - usedBytes));
+      bytes = Buffer.byteLength(retained, "utf8");
+      this.truncateHeldCollection("retention_limit", context, state);
+      if (!retained) return null;
+    }
+    state.pendingResponseBytes = usedBytes + bytes;
+    state.pendingResponseSegments.push({ text: retained, boundary, codeBlock: state.isInsideCodeBlock });
+    return retained;
+  }
+
+  private truncateHeldCollection(
+    truncation: PendingResponseTruncation,
+    context: StreamContext,
+    state: StreamState,
+  ): void {
+    state.pendingResponseTruncation = truncation;
+    log.warn(
+      `Stream: Held response stopped at its ${truncation} (${state.pendingResponseBytes ?? 0} bytes, ${state.pendingResponseSegments?.length ?? 0} segments)`,
+    );
+    this.deps.requestStop(context.channel.id, "pending_response_limit");
+  }
+}
+
+function resolveHeldLimit(context: StreamContext): PendingResponseLimit {
+  return (
+    context.pendingResponseLimit ?? {
+      maxBytes: MAX_PENDING_RESPONSE_BYTES,
+      maxSegments: MAX_PENDING_RESPONSE_SEGMENTS,
+    }
+  );
+}
+
+/**
+ * The longest held text one replay could send, using the same caps `StreamUiUpdater` applies to
+ * each delivery. Text past this length can never reach Discord, so collecting it only spends
+ * generation and memory. Each pass replays with fresh counters, so the length applies per pass.
+ */
+function resolveDeliverableHeldLength(
+  context: StreamContext,
+): { chars: number; truncation: PendingResponseTruncation } | null {
+  const sendMessageLimit = context.tomoriState.config.send_message_limit ?? 0;
+  const operatorLimited = sendMessageLimit > 0 && sendMessageLimit <= STREAMING_LIMITS.MAX_FLUSH_COUNT;
+  const messages = operatorLimited ? sendMessageLimit : STREAMING_LIMITS.MAX_FLUSH_COUNT;
+  if (!Number.isFinite(messages)) return null;
+  return {
+    chars: messages * DISCORD_STREAMING_CONSTANTS.MAX_SINGLE_MESSAGE_LENGTH,
+    truncation: operatorLimited ? "send_message_limit" : "flush_limit",
+  };
+}
+
+/** `encodeInto` writes only whole code points, so `read` never splits a character. */
+function sliceToUtf8Bytes(text: string, maxBytes: number): string {
+  if (maxBytes <= 0) return "";
+  return text.slice(0, new TextEncoder().encodeInto(text, new Uint8Array(maxBytes)).read);
 }
 
 /** Only sentence and overflow flushes cut mid-line. */

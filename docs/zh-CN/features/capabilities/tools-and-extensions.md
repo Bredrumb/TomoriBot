@@ -77,10 +77,10 @@ Do not promise to save long-term memories.
 
 该模型看到一个统一的`web_search(query, category)`工具。在其后面，调度程序通过引擎链路由每个调用并返回第一个成功：
 
-勇敢 → SearXNG → DuckDuckGo → IAsk
+Brave → SearXNG → DuckDuckGo
 
 - 当配置了Brave API密钥（使用`/providers`设置）时，**Brave** 首先运行； 它增加了图像、视频和新闻搜索。⚠️ 在Brave仪表板中设置5美元的使用限额，以避免意外收费。
-- 当未设置密钥时，DuckDuckGo是默认值，在速率限制或空结果时级联到IAsk。
+- DuckDuckGo 是未设置密钥时的默认引擎。它仅涵盖文本搜索。当 DuckDuckGo 对 bot 施加速度限制或显示人机验证时，搜索将失败，她会发布通知建议使用 Brave。
 - SearXNG和Crawl4AI是可选的自部署服务器，可添加更多类别和浏览器呈现的页面获取； 请参阅[自部署](/zh-CN/self-hosting/)。
 
 为了阅读特定页面，她使用`fetch_url`。NovelAI上不可用。
