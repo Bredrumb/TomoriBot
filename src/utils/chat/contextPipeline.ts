@@ -44,7 +44,11 @@ import { checkTargetEmbed } from "@/utils/discord/embedClassifier";
 import { getCachedVoiceTranscript, setCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { isAudioAttachment, transcribeMessageAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import { resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
-import { buildQueuedReplyDirective, normalizeTailDirective } from "@/utils/chat/contextDirectives";
+import {
+  answersQueuedTriggerMessage,
+  buildQueuedReplyDirective,
+  normalizeTailDirective,
+} from "@/utils/chat/contextDirectives";
 import { excludeMessagesAwaitingOwnTurn } from "@/utils/chat/channelQueue";
 import { recordChatContextHistory } from "@/utils/chat/diagnosticTimeline";
 import {
@@ -205,11 +209,11 @@ async function buildHistoryNamingProjection(params: {
 }
 
 /**
- * Scene turns share a single trigger message and carry their own per-turn directive via
- * `manualSystemPrompt` (buildSceneTurnDirective), so they are not replies to their queued message.
+ * The stop response answers its trigger natively but carries its own stop tail directive, so the
+ * generic reply directive would compete with it.
  */
 function isQueuedReplyTurn(incoming: LockedChatTurn["admission"]["incoming"]): boolean {
-  return incoming.isFromQueue && !incoming.isStopResponse && !incoming.sceneTurn;
+  return answersQueuedTriggerMessage(incoming) && !incoming.isStopResponse;
 }
 
 /**
@@ -1393,9 +1397,6 @@ function appendTailDirectives(args: {
     }
   }
 
-  // A generic "reply to <trigger>'s message" directive on a scene turn would point every
-  // turn at the same unrelated message and compete with the scene script (mirrors the
-  // visual reply suppression in toolLoop.ts).
   const queuedDirective = isQueuedReplyTurn(incoming)
     ? buildQueuedReplyDirective(
         args.turn.lockedTurn.admission.message,

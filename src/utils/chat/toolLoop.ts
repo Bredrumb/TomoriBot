@@ -39,6 +39,7 @@ import {
   buildRevealedMessageMetadataTailDirective,
   buildTailDirectiveMessage,
 } from "@/utils/chat/contextAnnotations";
+import { answersQueuedTriggerMessage } from "@/utils/chat/contextDirectives";
 import { takeEnhancedContextItem } from "@/utils/chat/pendingEnhancedContext";
 import { foldPrefillIntoToolHistory } from "@/utils/chat/assistantPrefill";
 import { buildExpressionToolResult, deliverExpression } from "@/utils/chat/expressionDelivery";
@@ -556,12 +557,9 @@ async function streamOnce(
   };
   armTimeout(STREAM_FIRST_TOKEN_TIMEOUT_MS);
 
-  // Scene turns are queued (isFromQueue=true) but all share the same trigger
-  // message. Replying to it would make every queued persona render "replying to"
-  // the very same message, so suppress the reply reference for scene turns and let
-  // them read as a free-standing back-and-forth dialogue instead.
-  const isSceneTurn = Boolean(params.context.turn.lockedTurn.admission.incoming.sceneTurn);
-  const replyToMessage = params.context.isFromQueue && !isSceneTurn ? params.context.message : undefined;
+  const replyToMessage = answersQueuedTriggerMessage(params.context.turn.lockedTurn.admission.incoming)
+    ? params.context.message
+    : undefined;
 
   // Keep a handle to the provider call so the timeout branch can await it settling. Under
   // Promise.race the loser is otherwise abandoned (never awaited); its rejection is still observed
