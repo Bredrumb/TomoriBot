@@ -436,21 +436,23 @@ function assertBackupBundleCreated(): string {
   }
 
   const bundleDir = join(backupRoot, bundleNames[0]);
-  for (const filename of ["database.sql", "config.env", "bundle_info.json"]) {
+  for (const filename of ["database.sql", "bundle_info.json"]) {
     const filePath = join(bundleDir, filename);
     if (!existsSync(filePath)) {
       throw new Error(`Backup bundle is missing ${filename}.`);
     }
   }
+  // A bundle holding both the ciphertext dump and the master keys defeats credential encryption.
+  if (existsSync(join(bundleDir, "config.env"))) {
+    throw new Error("Backup bundle contains config.env; bundles must stay database-only.");
+  }
 
   const manifest = JSON.parse(readFileSync(join(bundleDir, "bundle_info.json"), "utf-8")) as {
+    contents?: string;
     files?: string[];
   };
-  const manifestFiles = new Set(manifest.files ?? []);
-  for (const filename of ["database.sql", "config.env"]) {
-    if (!manifestFiles.has(filename)) {
-      throw new Error(`Backup manifest does not list ${filename}.`);
-    }
+  if (manifest.contents !== "database-only" || !manifest.files?.includes("database.sql")) {
+    throw new Error("Backup manifest does not describe a database-only bundle listing database.sql.");
   }
 
   return bundleDir;

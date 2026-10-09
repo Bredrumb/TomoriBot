@@ -39,7 +39,7 @@ To restore:
 3. Restore checks every encrypted credential with the supplied keys before loading the dump. Missing or wrong keys stop it before any destructive SQL; `pgcrypto` may already have been enabled. Review the target and confirm `RESTORE`; a non-empty target also requires `RESTORE ANYWAY`. Only restore trusted SQL dumps.
 4. Keep the keys in place. Before restarting, run `bun run audit-keys` and `bun run rotate-keys --dry-run`. If credentials need migration to the active version, run `bun run rotate-keys --bot-stopped` and audit again before starting any instance. `ON_ERROR_STOP=1` stops at the first SQL error, but earlier statements may already have changed data. Fix the error and retry while the bot remains stopped.
 
-Legacy bundles include raw secrets in `config.env`. Restore identifies them and warns, but never copies or loads that file. Deliberately review it in a private location and provision its encryption versions into the target secret source yourself. Keep target database settings in place. Existing bundles remain secret-bearing even after upgrading.
+Legacy bundles include raw secrets in `config.env`. Restore identifies them and warns, but never copies or loads that file. Deliberately review it in a private location and provision its encryption versions into the target secret source yourself. Keep target database settings in place. Existing bundles remain secret-bearing even after upgrading. Once its encryption keys are archived in protected storage, you can delete `config.env` from a legacy bundle; restore still accepts the bundle and checks the keys by decrypting the dump.
 
 ## Rotating encryption keys
 
@@ -314,7 +314,7 @@ TTS local servers under `servers/tts/` no longer use shared port fallbacks, per-
 
 ## Backups and restore
 
-`bun run backup` creates a timestamped bundle in `backups/` (or your `TOMORI_BACKUP_DIR` if overridden in `.env`) containing your entire PostgreSQL database plus `.env`. Restore the latest bundle with:
+`bun run backup` creates a timestamped bundle in `backups/` (or your `TOMORI_BACKUP_DIR` if overridden in `.env`) containing your entire PostgreSQL database. It does not include `.env`, so keep your encryption keys in separate protected storage (see [Database backups and recovery keys](#database-backups-and-recovery-keys)). Restore the latest bundle with:
 
 ```sh
 bun run restore-backup --latest

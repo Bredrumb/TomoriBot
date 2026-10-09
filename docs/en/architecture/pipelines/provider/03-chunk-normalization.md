@@ -68,9 +68,14 @@ The upstream response text never reaches error embeds, interaction replies, the 
 tool results returned to the model, because an endpoint can echo the bearer value it received in an
 encoding that pattern redaction misses, and self-debug reads those notices back into context. Error
 codes appear only when `formatProviderErrorCodeForDisplay()` recognizes an HTTP status or single-case
-enum word; anything else shows as `unknown`. `getProviderErrorDetail()` supplies the raw text to the
-operator log, capped at 2,000 characters. `/persona generate` and speech synthesis follow the same
-rule: preset generators reply with a classified message and HTTP status, and speech adapters put only
+enum word; anything else shows as `unknown`. The chat logger caps the diagnostic snippet from
+`getProviderErrorDetail()` at 2,000 characters, then passes it and the attached error through
+credential-pattern redaction. Attached errors and stack traces can be longer; log string truncation
+is opt-in. Routine provider failures use warning-level logs, which normal production logging hides.
+Logs remain private operator diagnostics. See
+[Production tuning](/wiki/production-tuning/) for log controls. `/persona generate` and speech
+synthesis also keep upstream text out of public replies: preset generators reply with a classified
+message and HTTP status, and speech adapters put only
 the status or fixed text in `details`, which reaches both `/generate voice-message` and the voice tool.
 
 ## Credential-scoped recovery tips

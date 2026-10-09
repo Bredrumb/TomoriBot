@@ -30,6 +30,98 @@ function endlessBody(totalBytes: number, counter: { produced: number }): Readabl
 }
 
 describe("Crawl4AI response handling", () => {
+  it("keeps native and crawler body limits effective with malformed deployment settings", async () => {
+    const failures: string[] = [];
+    for (const runEnv of ["production", "development"]) {
+      for (const value of [
+        undefined,
+        "1",
+        "",
+        "invalid",
+        "0",
+        "-1",
+        "0.5",
+        "5junk",
+        "Infinity",
+        "1e309",
+        "9007199254740992",
+      ]) {
+        const expectedLimit = value === "1" ? 1 : runEnv === "production" ? 5 : 50;
+        // Fresh processes exercise module-load settings without changing another suite's imports.
+        const script = `
+          import { spyOn } from "bun:test";
+          import * as policy from "./src/utils/security/remoteUrlSecurity";
+          import { SafeHttpFetchEngine } from "./src/tools/fetchUrl/safeHttpFetchEngine";
+          import { crawl4aiMarkdown } from "./src/tools/restAPIs/crawl4ai/crawl4aiService";
+          import { FETCH_LIMITS } from "./src/utils/security/rateLimiter";
+          import { createPersona } from "./tests/helpers/fixtures";
+          spyOn(policy, "validateRemoteUrl").mockResolvedValue({
+            valid: true, hostname: "example.org", resolvedAddresses: ["203.0.113.10"]
+          });
+          const total = (${expectedLimit} + 1) * 1024 * 1024;
+          let produced = 0;
+          const body = () => new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('{"url":"https://example.org/","filter":"fit","query":null,"cache":"0","success":true,"markdown":"'));
+            },
+            pull(controller) {
+              if (produced >= total) {
+                controller.enqueue(new TextEncoder().encode('"}'));
+                controller.close();
+              } else {
+                produced += 64 * 1024;
+                controller.enqueue(new Uint8Array(64 * 1024).fill(0x61));
+              }
+            }
+          });
+          spyOn(globalThis, "fetch").mockImplementation(async () => new Response(body(), {
+            headers: { "content-type": "application/json" }
+          }));
+          let nativeRefused = false;
+          try {
+            await new SafeHttpFetchEngine().fetch("https://example.org/", {}, {
+              tomoriState: createPersona(), abortSignal: AbortSignal.timeout(5000)
+            });
+          } catch { nativeRefused = true; }
+          const nativeStopped = produced < total;
+          produced = 0;
+          const crawler = await crawl4aiMarkdown({url: "https://example.org/", f: "fit"}, {
+            baseUrl: "http://127.0.0.1:11235", timeoutMs: 5000
+          });
+          console.log(JSON.stringify({
+            limit: FETCH_LIMITS.MAX_FETCH_SIZE_MB,
+            nativeRefused, nativeStopped,
+            crawlerRefused: !crawler.success, crawlerStopped: produced < total
+          }));
+        `;
+        const child = Bun.spawn([process.execPath, "--no-env-file", "--eval", script], {
+          cwd: process.cwd(),
+          env: { ...process.env, RUN_ENV: runEnv, MAX_FETCH_SIZE_MB: value, ERROR_DB_LOGGING_ENABLED: "false" },
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        const [stdout, stderr, exitCode] = await Promise.all([
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+          child.exited,
+        ]);
+        const result = JSON.parse(stdout.split("\n").find((line) => line.startsWith('{"limit":')) ?? "null");
+        if (
+          exitCode !== 0 ||
+          result?.limit !== expectedLimit ||
+          !result?.nativeRefused ||
+          !result?.nativeStopped ||
+          !result?.crawlerRefused ||
+          !result?.crawlerStopped
+        )
+          failures.push(
+            `${runEnv}/${JSON.stringify(value)}: ${JSON.stringify(result)} (exit ${exitCode}, stderr ${stderr.length} bytes)`,
+          );
+      }
+    }
+    expect(failures).toEqual([]);
+  }, 60_000);
+
   it("accepts a well-formed /md response", async () => {
     route = () =>
       Response.json({ url: request.url, filter: "fit", query: null, cache: "0", markdown: "# Page", success: true });

@@ -181,6 +181,17 @@ function describeBodyFailure(endpoint: string, error: unknown): Crawl4aiApiResul
   return null;
 }
 
+/**
+ * Returns a parenthesized log suffix naming the likely token problem for an auth rejection, or an
+ * empty string for any other status.
+ */
+function authFailureHint(status: number): string {
+  if (status !== 401 && status !== 403) return "";
+  return getCrawl4aiToken()
+    ? " (verify CRAWL4AI_TOKEN in .env matches CRAWL4AI_API_TOKEN on the container)"
+    : " (CRAWL4AI_TOKEN is not set in .env)";
+}
+
 export async function isCrawl4aiAvailable(force = false): Promise<boolean> {
   const baseUrl = getCrawl4aiBaseUrl();
   if (!baseUrl) return false;
@@ -202,12 +213,16 @@ export async function isCrawl4aiAvailable(force = false): Promise<boolean> {
     const available = response.ok;
     healthcheckCache = { available, expiresAt: now + HEALTHCHECK_CACHE_MS };
     if (!available) {
-      log.warn(`${SERVICE_NAME} health check returned status ${response.status}`);
+      log.warn(`${SERVICE_NAME} health check returned status ${response.status}${authFailureHint(response.status)}`);
     }
     return available;
   } catch (error) {
     healthcheckCache = { available: false, expiresAt: now + HEALTHCHECK_CACHE_MS };
-    log.warn(`${SERVICE_NAME} health check failed:`, error as Error);
+    // A stopped container fails the same way, so the missing token is offered as a possibility, not the cause.
+    const tokenHint = getCrawl4aiToken()
+      ? ""
+      : " (CRAWL4AI_TOKEN is unset; Crawl4AI 0.9.4 refuses outside connections without one)";
+    log.warn(`${SERVICE_NAME} health check failed${tokenHint}:`, error as Error);
     return false;
   } finally {
     clearTimeout(timeoutId);
@@ -238,7 +253,9 @@ export async function crawl4aiMarkdown(
 
     if (!response.ok) {
       const errorText = await readErrorSummary(response);
-      log.warn(`${SERVICE_NAME} /md failed with status ${response.status}: ${errorText}`);
+      log.warn(
+        `${SERVICE_NAME} /md failed with status ${response.status}${authFailureHint(response.status)}: ${errorText}`,
+      );
       return {
         success: false,
         error: `Crawl4AI request failed: ${response.statusText || response.status}`,
@@ -316,7 +333,9 @@ export async function crawl4aiCrawlWithCookies(
 
     if (!response.ok) {
       const errorText = await readErrorSummary(response);
-      log.warn(`${SERVICE_NAME} /crawl failed with status ${response.status}: ${errorText}`);
+      log.warn(
+        `${SERVICE_NAME} /crawl failed with status ${response.status}${authFailureHint(response.status)}: ${errorText}`,
+      );
       return {
         success: false,
         error: `Crawl4AI /crawl request failed: ${response.statusText || response.status}`,

@@ -252,6 +252,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Encrypted credential recovery", () => {
     expect((await run("backupData", ["--restore", "--from", legacy], { CRYPTO_SECRET_V1: undefined })).code).toBe(1);
     expect((await run("backupData", ["--restore", "--from", legacy])).code).toBe(0);
     expect(existsSync(join(legacy, "config.env"))).toBe(true);
+    rmSync(join(legacy, "config.env"));
+    expect((await run("backupData", ["--restore", "--from", legacy])).code).toBe(0);
     expect(readFileSync(childEnv.TOMORI_ENV_FILE ?? "", "utf8")).toBe(selectedEnv);
     expect((await run("rotateAllKeys", ["--bot-stopped"])).code).toBe(0);
     await testSql`UPDATE guild_mcp_servers SET auth_token = pgp_sym_encrypt(${CREDENTIAL}, ${KEYS.CRYPTO_SECRET_V1}), key_version = NULL WHERE server_id = ${serverId} AND name = 'synthetic'`;

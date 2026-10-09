@@ -123,14 +123,28 @@ external tools you register yourself.
 
 ### Adding an Online MCP
 
-Any publicly hosted MCP server with an HTTPS endpoint works. Using
-[Smithery.ai](https://smithery.ai) as an example:
+Use a provider's direct HTTPS endpoint supporting MCP Streamable HTTP or SSE:
 
-1. Create an account and generate an API key from your profile.
-2. Open an MCP in the catalog and copy its connection URL (e.g. `https://youtube.run.tools`).
-3. Open `/config` > Plugins > MCP Servers, choose `Add MCP`, paste the connection URL into `URL`, paste your
-   Smithery key into `Auth Token`, and choose the required `Server Type`. **General
-   Purpose** is selected by default.
+1. Get the MCP endpoint and its authentication requirements from the provider.
+2. Open `/config` > Plugins > MCP Servers and choose `Add MCP`.
+3. Paste the endpoint into `URL`, enter its bearer token in `Auth Token` if required, and
+   choose the required `Server Type`. **General Purpose** is selected by default.
+
+Smithery managed-key connections are unavailable. A service listed in Smithery needs a
+separate supported endpoint to work here. A Smithery account key cannot be used as that
+service's direct bearer token.
+
+Existing Smithery registrations stay saved, but their managed-key tools cannot connect. Disable the
+old registration before adding a supported direct endpoint with its own credentials. If the provider
+offers no supported endpoint, its tools remain unavailable. Disabling a registration selected for
+search or URL reading restores TomoriBot's built-in selection; leaving it enabled prevents an
+automatic switch. Saved tool names describe the last discovery, so they do not prove a connection
+still works.
+
+Responses stop at 8 MiB while downloading. Large tool catalogs or results can leave a
+plugin unavailable or cause a tool call to fail. For SSE connections, the limit covers
+the whole response stream, including successive updates. Ask the provider for smaller
+results, pagination, or file links when a tool returns large documents or embedded media.
 
 If a server needs no auth, leave `Auth Token` blank. Your auth token is encrypted at rest
 and never shown again. Open the same Config page to inspect configured state, enable or disable a server,

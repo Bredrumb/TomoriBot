@@ -1,7 +1,7 @@
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { ResponseSizeError } from "@/utils/security/boundedResponse";
 
-const MAX_MCP_RESPONSE_BYTES = 4 * 1024 * 1024;
+const MAX_MCP_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 /** The SDK parses JSON and SSE after this byte counter, including discovery and internal checks. */
 export function createGuildMcpFetch(endpoint: string): typeof fetchUserRemoteUrl {

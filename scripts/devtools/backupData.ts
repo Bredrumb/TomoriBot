@@ -99,10 +99,13 @@ async function runRestore(bundlePath: string): Promise<void> {
   const metadata = manifest as Record<string, unknown>;
   const legacy = metadata.formatVersion === undefined;
   if (legacy) {
-    if (!existsSync(legacyConfigPath)) throw new Error("Legacy bundle is missing config.env.");
-    log.warn(
-      "Legacy bundle contains raw secrets in config.env. It is not loaded or copied; provision matching keys separately.",
-    );
+    // Restore never reads config.env, and operators may delete it after archiving its keys, so its
+    // absence must not block recovery; the decrypt preflight below is the real key check.
+    if (existsSync(legacyConfigPath)) {
+      log.warn(
+        "Legacy bundle contains raw secrets in config.env. It is not loaded or copied; provision matching keys separately.",
+      );
+    }
   } else if (
     metadata.formatVersion !== 2 ||
     metadata.contents !== "database-only" ||

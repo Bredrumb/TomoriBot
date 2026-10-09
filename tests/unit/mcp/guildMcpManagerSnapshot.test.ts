@@ -24,7 +24,7 @@ describe("guild MCP transport receipt", () => {
       });
       const decrypt = spyOn(toolRepository, "decryptMcpAuthToken").mockResolvedValue(null);
       const snapshot = spyOn(toolRepository, "updateMcpToolNameSnapshot").mockResolvedValue("updated");
-      let mode: "valid" | "invalid" | "oversized" = "valid";
+      let mode: "valid" | "large" | "invalid" | "oversized" = "valid";
       let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
       const encoder = new TextEncoder();
       const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (input, init) => {
@@ -61,7 +61,17 @@ describe("guild MCP transport receipt", () => {
               : mode === "invalid"
                 ? { content: [{ type: "text", text: 7 }] }
                 : {
-                    content: [{ type: "text", text: mode === "oversized" ? "x".repeat(4 * 1024 * 1024) : "accepted" }],
+                    content: [
+                      {
+                        type: "text",
+                        text:
+                          mode === "oversized"
+                            ? "x".repeat(8 * 1024 * 1024)
+                            : mode === "large"
+                              ? "x".repeat(6 * 1024 * 1024)
+                              : "accepted",
+                      },
+                    ],
                   };
         const body = JSON.stringify({ jsonrpc: "2.0", id: request.id, result });
         if (transport === "sse") {
@@ -80,6 +90,11 @@ describe("guild MCP transport receipt", () => {
         const signal = new AbortController().signal;
         const result = await manager.callInternalRuleChecker(row, "fixture", signal);
         expect(result).toEqual({ content: [{ type: "text", text: "accepted" }] });
+        mode = "large";
+        const largeResult = (await manager.callInternalRuleChecker(row, "fixture", AbortSignal.timeout(2000))) as {
+          content: Array<{ type: string; text: string }>;
+        };
+        expect(largeResult.content[0]?.text.length).toBe(6 * 1024 * 1024);
         mode = "invalid";
         await expect(manager.callInternalRuleChecker(row, "fixture", signal)).rejects.toThrow();
         mode = "oversized";
@@ -138,6 +153,8 @@ describe("guild MCP transport receipt", () => {
           },
         });
       for (const type of ["application/json", "text/event-stream"]) {
+        fetchSpy.mockResolvedValue(new Response("x".repeat(8 * 1024 * 1024), { headers: { "content-type": type } }));
+        expect((await (await guarded("https://mcp.example.org/mcp")).text()).length).toBe(8 * 1024 * 1024);
         cancelled = false;
         fetchSpy.mockResolvedValue(new Response(oversized(), { headers: { "content-type": type } }));
         const response = await guarded("https://mcp.example.org/mcp");
@@ -145,7 +162,7 @@ describe("guild MCP transport receipt", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
         expect(cancelled).toBe(true);
       }
-      fetchSpy.mockResolvedValue(new Response(oversized(), { headers: { "content-length": String(5 * 1024 * 1024) } }));
+      fetchSpy.mockResolvedValue(new Response(oversized(), { headers: { "content-length": String(9 * 1024 * 1024) } }));
       await expect(guarded("https://mcp.example.org/mcp")).rejects.toBeInstanceOf(ResponseSizeError);
       validation.mockResolvedValue({ valid: false, failureCode: "PRODUCTION_BLOCKED_ADDRESS" });
       fetchSpy.mockClear();
@@ -167,6 +184,30 @@ describe("guild MCP transport receipt", () => {
       expect(fetchSpy).not.toHaveBeenCalled();
     } finally {
       fetchSpy.mockRestore();
+    }
+  });
+
+  it("leaves a saved Smithery registration unavailable without changing its discovery snapshot", async () => {
+    const manager = getGuildMcpManager();
+    const row = {
+      ...config(912, "saved-smithery"),
+      url: "https://fixture.run.tools/mcp",
+      auth_token: Buffer.from("encrypted-fixture"),
+    };
+    const decrypt = spyOn(toolRepository, "decryptMcpAuthToken").mockResolvedValue("fixture-key");
+    const snapshot = spyOn(toolRepository, "updateMcpToolNameSnapshot");
+    const fetchSpy = spyOn(globalThis, "fetch");
+    try {
+      expect(await manager.getRegisteredTool(row, true)).toBeNull();
+      expect(row.is_enabled).toBe(true);
+      expect(row.last_discovered_tool_names).toEqual(["prior_tool"]);
+      expect(snapshot).not.toHaveBeenCalled();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      await manager.disconnectGuildServer(42, row.name);
+      fetchSpy.mockRestore();
+      snapshot.mockRestore();
+      decrypt.mockRestore();
     }
   });
 });

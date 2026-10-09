@@ -386,13 +386,33 @@ function pruneAutomaticBackups(maxAutomaticBackups: number): void {
   }
 }
 
+/**
+ * Reminds the operator that the bundle excludes `.env` and names the master keys a restore needs.
+ * Bundles deliberately omit `.env` so a copied bundle never carries the keys that decrypt its own
+ * credentials. Manual runs warn because the operator is present and about to move the bundle;
+ * automatic runs log at info level so routine startup output is not flagged as a problem.
+ */
+function logMissingKeyReminder(backupType: DataBackupType, requiredKeyVersions: number[]): void {
+  const reminder =
+    requiredKeyVersions.length === 0
+      ? "This bundle does not include .env. It holds no encrypted credentials, so restore only needs normal startup settings."
+      : `This bundle does not include .env. Save ${requiredKeyVersions.map((version) => `CRYPTO_SECRET_V${version}`).join(", ")} ` +
+        "(or legacy CRYPTO_SECRET for V1) in protected storage such as a password manager, separate from this bundle. " +
+        "Without them, a restore cannot decrypt stored API keys.";
+
+  if (backupType === "manual") {
+    log.warn(reminder);
+  } else {
+    log.info(reminder);
+  }
+}
+
 export async function runDataBackup(options: DataBackupOptions = {}): Promise<DataBackupResult> {
   const backupType = options.backupType ?? "manual";
   const triggerReasons = options.triggerReasons ?? [];
   const botVersion = options.botVersion ?? getCurrentBotVersion();
 
   log.section(backupType === "automatic" ? "Automatic Data Backup" : "Transfer Backup");
-  log.info("Creating a database-only bundle. Retain encryption keys separately in protected storage.");
 
   const backupsRoot = resolveBackupsRoot();
   if (!existsSync(backupsRoot)) {
@@ -449,11 +469,13 @@ export async function runDataBackup(options: DataBackupOptions = {}): Promise<Da
   log.info(`Location:    ${bundleDir}`);
   log.info("Contents:");
   log.info("  database.sql     - PostgreSQL dump (restore with: bun run restore-backup)");
-  log.info(`  Required encryption versions: ${requiredKeyVersions.join(", ") || "none"} (stored separately)`);
+  log.info(`  Required encryption versions: ${requiredKeyVersions.join(", ") || "none"} (not included)`);
   log.info("  bundle_info.json - Bundle metadata");
   log.info("");
   log.info("To restore on a new install:");
   log.info(`  bun run restore-backup --from ${bundleDir}`);
+  log.info("");
+  logMissingKeyReminder(backupType, requiredKeyVersions);
 
   return { bundleDir, manifest };
 }
