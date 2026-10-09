@@ -6,7 +6,7 @@ sidebar:
 
 Agrega búsqueda web privada y autohospedada a TomoriBot usando [SearXNG](https://docs.searxng.org/).
 
-La herramienta `web_search` consulta una cadena de respaldo del motor: Brave, SearXNG, DuckDuckGo e IAsk. La ejecución de una instancia local de SearXNG proporciona una fuente de búsqueda autohospedada cuando un proveedor externo alcanza límites de velocidad o falla, y permite categorías de búsqueda especializadas: `science`, `it`, `files` y `music`.
+La herramienta `web_search` consulta una cadena de respaldo del motor: Brave, SearXNG y DuckDuckGo. La ejecución de una instancia local de SearXNG proporciona una fuente de búsqueda autohospedada cuando un proveedor externo alcanza límites de velocidad o falla, y permite categorías de búsqueda especializadas: `science`, `it`, `files` y `music`.
 
 Elige una ruta de instalación:
 
@@ -66,9 +66,9 @@ Luego ejecute `bun run dev` una vez que el contenedor esté en buen estado (`doc
 
 ### Opción C: Sin SearXNG
 
-Deja `SEARXNG_BASE_URL` sin configurar. La cadena vuelve a caer hasta `Brave → DuckDuckGo → IAsk`.
+Deja `SEARXNG_BASE_URL` sin configurar. La cadena vuelve a caer hasta `Brave → DuckDuckGo`.
 
-Cuando no se configura ningún servidor SearXNG, el esquema `web_search` ensamblado ya no anuncia categorías exclusivas de SearXNG. Las categorías comunes (`text`, `image`, `video`, `news`) aún aparecen cuando Brave está configurado, y la búsqueda de solo texto aparece cuando solo está disponible el respaldo DuckDuckGo/IAsk MCP.
+Cuando no se configura ningún servidor SearXNG, el esquema `web_search` ensamblado ya no anuncia categorías exclusivas de SearXNG. Las categorías comunes (`text`, `image`, `video`, `news`) aún aparecen cuando Brave está configurado, y la búsqueda de solo texto aparece cuando solo está disponible el respaldo integrado de DuckDuckGo.
 
 ---
 

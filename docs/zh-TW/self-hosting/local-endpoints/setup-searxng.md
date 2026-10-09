@@ -6,7 +6,7 @@ sidebar:
 
 使用 [SearXNG](https://docs.searxng.org/) 將私有、自架的Web搜尋新增至TomoriBot。
 
-`web_search`工具查詢引擎後備鏈：Brave、SearXNG、DuckDuckGo和IAsk。當外部供應商達到速率限製或失敗時，執行本機SearXNG執行個體可提供自架搜尋來源，並啟用專屬的搜尋類別：`science`、`it`、`files`和`music`。
+`web_search`工具查詢引擎後備鏈：Brave、SearXNG和DuckDuckGo。當外部供應商達到速率限製或失敗時，執行本機SearXNG執行個體可提供自架搜尋來源，並啟用專屬的搜尋類別：`science`、`it`、`files`和`music`。
 
 選擇安裝路徑：
 
@@ -66,9 +66,9 @@ docker run -d --name searxng -p 8080:8080 \
 
 ### 選項C：無SearXNG
 
-保留`SEARXNG_BASE_URL`未設定。鏈條回落至`Brave → DuckDuckGo → IAsk`。
+保留`SEARXNG_BASE_URL`未設定。鏈條回落至`Brave → DuckDuckGo`。
 
-當未設定SearXNG伺服器時，組裝的`web_search`模式不再通告僅SearXNG類別。配置Brave時，常見類別（`text`、`image`、`video`、`news`）仍會顯示，並且當僅DuckDuckGo/IAsk MCP後備可用時，會顯示純文字搜尋。
+當未設定SearXNG伺服器時，組裝的`web_search`模式不再通告僅SearXNG類別。配置Brave時，常見類別（`text`、`image`、`video`、`news`）仍會顯示，並且當僅內建的DuckDuckGo後備可用時，會顯示純文字搜尋。
 
 ---
 

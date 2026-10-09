@@ -10,11 +10,19 @@ sidebar:
 
 Crawl4AIは、TomoriBotの保護されたHTTPクライアントの外部のリダイレクトに従うため、プライベートネットワークのフェッチが許可されている場合にのみ許可されます。本番環境 (`RUN_ENV` != `production`) の外では、プライベートネットワークのフェッチが自動的に有効になります。運用環境では、`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`を設定する必要があります。
 
+:::caution[TomoriBotがチェックできることとできないこと]
+TomoriBotは、ホスト名が解決されないURLや、クラウドのメタデータアドレスに解決されるURLを、Crawl4AIに開くよう要求する前に拒否します。ブラウザが次に何を行うかを制御することはできません：Crawl4AIは独自に名前を再解決し、リダイレクトに従い、画像やスクリプトを読み込みます。TomoriBotの常時有効なメタデータブロックは、これらのリクエストには適用されません。
+
+固定されたイメージ（`unclecode/crawl4ai:0.9.4`）は、独自のリバースプロキシを経由してブラウザを実行し、すべてのリクエストとリダイレクトでプライベート、ループバック、メタデータアドレスをブロックします。`CRAWL4AI_ALLOW_INTERNAL_URLS`は未設定のままにしてください：これを`true`に設定すると、メタデータも含めてそのプロキシが無効化されます。
+:::
+
+Crawl4AI 0.9.4では、自身のコンテナ外からの接続を受け入れる前にAPIトークンが必要です。トークンを生成し（例：`openssl rand -hex 32`）、以下のすべてのセットアップパスについて`.env`に`CRAWL4AI_TOKEN`として設定してください。これが設定されていない場合、コンテナは起動しますがTomoriBotは到達できず、`safe_http`にフォールバックします。
+
 セットアップパスを選択します。
 
 ### オプションA: Docker Compose (TomoriBotがDockerで実行される場合)
 
-リポジトリのDocker ComposeスタックでTomoriBotを実行する場合は、このパスを使用します。まず、`.env`に`CRAWL4AI_BASE_URL=http://crawl4ai:11235/`と`FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http`を設定します。外部運用ではプライベートネットワークのオプトインは必要ありません。このスタックを`RUN_ENV=production`で実行する場合のみ、`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`を追加してください。
+リポジトリのDocker ComposeスタックでTomoriBotを実行する場合は、このパスを使用します。まず、`.env`に`CRAWL4AI_BASE_URL=http://crawl4ai:11235/`、`CRAWL4AI_TOKEN`、および`FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http`を設定します。外部運用ではプライベートネットワークのオプトインは必要ありません。このスタックを`RUN_ENV=production`で実行する場合のみ、`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`を追加してください。
 
 次に、以下から始めます。
 
@@ -22,7 +30,7 @@ Crawl4AIは、TomoriBotの保護されたHTTPクライアントの外部のリ�
 docker compose --profile fetch-crawl4ai up -d
 ```
 
-これにより、TomoriBotのDockerネットワーク上のCrawl4AIコンテナを使用してComposeスタックが開始されます。
+これにより、TomoriBotのDockerネットワーク上のCrawl4AIコンテナを使用してComposeスタックが開始されます。Composeは`CRAWL4AI_TOKEN`を`CRAWL4AI_API_TOKEN`としてコンテナに渡し、TomoriBotはそれをベアラートークンとして送信します。ポート11235はローカルデバッグ用として`127.0.0.1`にのみ公開され、TomoriBot自体はDockerネットワーク経由で接続します。
 
 TomoriBotを`bun run dev`とともに直接実行する場合は、代わりに以下のスタンドアロンパスを使用してください。
 
@@ -32,15 +40,13 @@ SearXNGも必要な場合は、プロファイルをチェーンします。
 docker compose --profile searxng --profile fetch-crawl4ai up -d
 ```
 
-Crawl4AI APIトークン認証を有効にする場合は、`.env`に`CRAWL4AI_TOKEN`を設定します。Composeはそれを`CRAWL4AI_API_TOKEN`としてコンテナに渡し、TomoriBotはそれをベアラー トークンとして送信します。
-
 ---
 
 ### オプションB: スタンドアロンDocker (`bun run dev`実行時)
 
-まず、`.env`に`CRAWL4AI_BASE_URL=http://localhost:11235/`と`FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http`を設定して、ボットがホストが公開するコンテナー ポートに接続するようにします。外部運用ではプライベートネットワークのオプトインは必要ありません。`RUN_ENV=production`で実行する場合のみ、`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`を追加してください。
+まず、`.env`に`CRAWL4AI_BASE_URL=http://localhost:11235/`、`CRAWL4AI_TOKEN`、および`FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http`を設定して、ボットが`127.0.0.1`に公開されたコンテナポートに接続するようにします。外部運用ではプライベートネットワークのオプトインは必要ありません。`RUN_ENV=production`で実行する場合のみ、`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`を追加してください。
 
-次に、TomoriBotを`bun run dev`で直接実行する代わりに、`bun run launch --crawl4ai`を使用します。これにより、コンテナーのライフサイクルが自動的に処理され、サーバーが正常になるまで待機してからボットが開始されます。
+次に、TomoriBotを`bun run dev`で直接実行する代わりに、`bun run launch --crawl4ai`を使用します。これにより、コンテナのライフサイクルが自動的に処理され、サーバーが正常になるまで待機してからボットが開始されます。`CRAWL4AI_TOKEN`が存在しない場合はエラーで停止します：
 
 ```sh
 bun run launch --crawl4ai
@@ -57,18 +63,18 @@ bun run launch --searxng --crawl4ai
 パワーシェル:
 
 ```powershell
-docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g `
-  unclecode/crawl4ai:latest
+docker run -d --name crawl4ai -p 127.0.0.1:11235:11235 --shm-size=3g `
+  -e CRAWL4AI_API_TOKEN=<your-token> unclecode/crawl4ai:0.9.4
 ```
 
 Bash (Linux/macOS):
 
 ```bash
-docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
-  unclecode/crawl4ai:latest
+docker run -d --name crawl4ai -p 127.0.0.1:11235:11235 --shm-size=3g \
+  -e CRAWL4AI_API_TOKEN=<your-token> unclecode/crawl4ai:0.9.4
 ```
 
-コンテナを確保したら、`-e CRAWL4AI_API_TOKEN=your_token`を`docker run`に渡し、`.env`に`CRAWL4AI_TOKEN=your_token`を設定します。
+`<your-token>`には`.env`の`CRAWL4AI_TOKEN`と同じ値を使用してください。
 
 次に、コンテナーが正常になったら、`bun run dev`を実行します (`docker ps`は`(healthy)`を示します)。
 
@@ -94,6 +100,16 @@ TomoriBotは、起動後の最初の`fetch_url`呼び出しでサーバーの健
    ```
 2. 上記のセットアップパスの値を使用して、`.env`に`CRAWL4AI_BASE_URL`を設定します。
 3. TomoriBot (`bun run dev`または`docker compose up`) を開始します。
+
+### `latest`からのアップグレード
+
+既存の`crawl4ai`コンテナは作成元のイメージを保持するため、`docker start`ではアップグレードされません。一度削除してから、再度セットアップパスを実行してください：
+
+```powershell
+docker rm -f crawl4ai
+```
+
+Composeを使用している場合、`docker compose --profile fetch-crawl4ai up -d`によって固定されたイメージからコンテナが再作成されます。
 
 ### 再起動後に戻る
 
@@ -157,8 +173,8 @@ Cookieの値は機密性が高いため、パスワードと同様に扱って�
 | 変数 | デフォルト | 説明 |
 |---|---|---|
 | `CRAWL4AI_BASE_URL` | 設定を解除する | 設定すると、Crawl4AIが有効になります。Docker Composeから`http://crawl4ai:11235/`を使用するか、TomoriBotがマシン上で直接実行されている場合は`http://localhost:11235/`を使用します。|
-| `CRAWL4AI_TOKEN` | 設定を解除する | オプションのベアラートークン。有効な場合は、Crawl4AIコンテナ上の`CRAWL4AI_API_TOKEN`と一致する必要があります。|
-| `FETCH_URL_ENGINE_ORDER` | `safe_http` | カンマ区切りのエンジンリスト。`safe_http`は常に最終フォールバックとして追加されます。従来の`mcp_fetch`名はエイリアスになります。プライベートネットワークのフェッチが許可されていない場合 (オプトインなしの運用)、Crawl4AIエントリは無視されます。|
+| `CRAWL4AI_TOKEN` | 設定を解除する | 必須のベアラートークン。Crawl4AIコンテナ上の`CRAWL4AI_API_TOKEN`と一致する必要があります（トークンがない場合、コンテナは外部からの接続を拒否します）。|
+| `FETCH_URL_ENGINE_ORDER` | `safe_http` | カンマ区切りのエンジンリスト。`safe_http`は常に最終フォールバックとして追加されます。プライベートネットワークのフェッチが許可されていない場合 (オプトインなしの運用)、Crawl4AIエントリは無視されます。|
 | `FETCH_URL_TIMEOUT_MS` | `15000` | Crawl4AIおよびその他のURLフェッチエンジンのエンジンごとのリクエストタイムアウト。|
 | `FETCH_URL_MAX_CONTENT_LENGTH` | `50000` | 継続が必要になる前に1回のフェッチ呼び出しで返される最大文字数。|
 | `FETCH_URL_ALLOW_PRIVATE_NETWORK` | `false` | 本番環境のみのオプトイン。運用環境外 (`RUN_ENV` != `production`) では、SSRFガードが自動的に緩和されるため、localhost/private/internalフェッチとCrawl4AIディスパッチはセットアップなしで機能します。`true`は、信頼できる運用環境でプライベートネットワークのフェッチを許可するようにのみ設定します。|

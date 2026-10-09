@@ -6,7 +6,7 @@ sidebar:
 
 [SearXNG](https://docs.searxng.org/) を使用して、プライベートの自己ホスト型Web検索をTomoriBotに追加します。
 
-`web_search`ツールは、エンジンフォールバックチェーン (Brave、SearXNG、DuckDuckGo、IAsk) をクエリします。ローカルのSearXNGインスタンスを実行すると、外部プロバイダーがレート制限に達するか失敗したときに自己ホスト型の検索ソースが提供され、特殊な検索カテゴリ (`science`、`it`、`files`、および`music`) が有効になります。
+`web_search`ツールは、エンジンフォールバックチェーン (Brave、SearXNG、DuckDuckGo) をクエリします。ローカルのSearXNGインスタンスを実行すると、外部プロバイダーがレート制限に達するか失敗したときに自己ホスト型の検索ソースが提供され、特殊な検索カテゴリ (`science`、`it`、`files`、および`music`) が有効になります。
 
 セットアップパスを選択します。
 
@@ -66,9 +66,9 @@ docker run -d --name searxng -p 8080:8080 \
 
 ### オプションC: SearXNGなし
 
-`SEARXNG_BASE_URL`は未設定のままにしておきます。チェーンは`Brave → DuckDuckGo → IAsk`にフォールバックします。
+`SEARXNG_BASE_URL`は未設定のままにしておきます。チェーンは`Brave → DuckDuckGo`にフォールバックします。
 
-SearXNGサーバーが構成されていない場合、アセンブルされた`web_search`スキーマはSearXNGのみのカテゴリをアドバタイズしなくなります。Braveが設定されている場合でも、共通カテゴリ (`text`、`image`、`video`、`news`) が表示され、DuckDuckGo/IAsk MCPフォールバックのみが使用可能な場合はテキストのみの検索が表示されます。
+SearXNGサーバーが構成されていない場合、アセンブルされた`web_search`スキーマはSearXNGのみのカテゴリをアドバタイズしなくなります。Braveが設定されている場合でも、共通カテゴリ (`text`、`image`、`video`、`news`) が表示され、組み込みのDuckDuckGoフォールバックのみが使用可能な場合はテキストのみの検索が表示されます。
 
 ---
 

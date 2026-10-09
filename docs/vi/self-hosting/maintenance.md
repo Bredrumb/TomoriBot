@@ -14,15 +14,47 @@ Nếu bạn đang cập nhật với `git pull`, trước tiên hãy xem lại [
 |---|---|
 | `bun run setup` | Mở trình hướng dẫn thiết lập cho bản cài đặt cơ bản và các mô-đun tùy chọn. |
 | `bun run update` | Sao lưu trước, sau đó kéo mã nguồn mới nhất và cài đặt các phần phụ thuộc. |
-| `bun run backup` | Tạo một gói trong `backups/` chứa bản dump DB và `.env`: bao gồm toàn bộ dữ liệu của bạn. |
-| `bun run restore-backup` | Khôi phục `.env` và cơ sở dữ liệu từ một gói (`--latest` hoặc `--from backups/<dir>`). |
+| `bun run backup` | Tạo một gói trong `backups/` chứa bản dump cơ sở dữ liệu và siêu dữ liệu phiên bản mã hóa bắt buộc. Các secret được giữ riêng biệt. |
+| `bun run restore-backup` | Khôi phục cơ sở dữ liệu bằng các khóa mã hóa được cung cấp riêng biệt (`--latest` hoặc `--from backups/<dir>`). |
 | `bun run backup:personas` | CHỈ xuất các persona (kèm theo bộ nhớ máy chủ) trên tất cả các máy chủ; nhập lại qua `/persona import`. |
 | `bun run nuke-db` | Xóa tất cả các bảng (khởi động lại bot sau đó để tái khởi tạo). |
 | `bun run purge-commands` | Xóa tất cả các lệnh slash Discord đã đăng ký. |
-| `bun run rotate-keys` | Mã hóa lại tất cả các trường đã mã hóa sang phiên bản khóa hiện tại. |
+| `bun run rotate-keys --bot-stopped` | Mã hóa lại tất cả các trường đã mã hóa sang phiên bản khóa hiện tại. |
+| `bun run env-doctor` | Kiểm tra cấu hình ở chế độ chỉ đọc: liệt kê các mục `.env` không có mã nào đọc (chỉ tên, không bao giờ hiển thị giá trị) và nơi từng biến được sử dụng. |
 
-`bun run backup` và `bun run update` yêu cầu các công cụ client PostgreSQL (`pg_dump`, `psql`)
-có sẵn trong biến môi trường PATH của bạn.
+`bun run backup` trên máy chủ cần `pg_dump`, và `bun run restore-backup` trên máy chủ cần `psql` trong biến môi trường PATH. `bun run update` cần `pg_dump` cho bản sao lưu của nó. Lộ trình cập nhật `--docker` chạy sao lưu bên trong container, do đó cần Bun, Git và Docker trên máy chủ nhưng không cần các công cụ PostgreSQL trên máy chủ.
+
+Các lệnh sao lưu và khôi phục chuyển mật khẩu cơ sở dữ liệu của bạn tới `pg_dump` và `psql` thông qua một tệp mật khẩu tạm thời có vòng đời ngắn trong thư mục tạm thời của hệ thống, giúp những người dùng khác trên máy không thể đọc được mật khẩu từ danh sách tiến trình. Thư mục đó phải có quyền ghi. Tệp sẽ bị xóa khi lệnh hoàn tất.
+
+## Sao lưu cơ sở dữ liệu và khóa khôi phục
+<!-- anchor: database-backups-and-recovery-keys -->
+
+`bun run backup` và sao lưu tự động khi khởi động tạo ra `database.sql` và `bundle_info.json`. Bản manifest xác định một gói chỉ chứa cơ sở dữ liệu và liệt kê các phiên bản mã hóa được tìm thấy trong bản dump đó. Bảng kiểm kê phiên bản mô tả các khóa mà quá trình khôi phục cần; quá trình khôi phục sẽ kiểm tra khả năng giải mã thực tế. Việc tạo bản dump không yêu cầu phải có các khóa cũ, do đó việc thiếu khóa lịch sử không ngăn cản việc bảo toàn phần còn lại của cơ sở dữ liệu. Lệnh này không bao giờ sao chép `.env`. Bản dump chỉ chứa cơ sở dữ liệu vẫn bao gồm các cuộc trò chuyện và bộ nhớ riêng tư, vì vậy hãy hạn chế quyền truy cập vào thư mục sao lưu.
+
+Hãy lưu giữ các phiên bản mã hóa trong bộ lưu trữ được bảo vệ riêng biệt, chẳng hạn như trình quản lý mật khẩu được mã hóa hoặc trình quản lý secret. Nếu bạn tự sao chép `.env`, hãy bảo vệ nó như thông tin xác thực và giữ riêng biệt với bản dump. Việc mất phiên bản mã hóa cần thiết sẽ khiến các thông tin xác thực đã lưu trữ đó không thể khôi phục được; người dùng phải nhập lại khóa API của họ. Các khóa phía nhà cung cấp vẫn có hiệu lực cho đến khi bị thu hồi.
+
+Để khôi phục:
+
+1. Dừng mọi phiên bản bot. Cung cấp các cài đặt cơ sở dữ liệu đích, token Discord và các phiên bản mã hóa phù hợp trong nguồn secret thông thường trước khi chạy lệnh. Bảo toàn chính xác các khóa gốc.
+2. Cài đặt `psql` và các tiện ích mở rộng được bản dump sử dụng, bao gồm cả `pgvector` khi có. Chạy `bun run restore-backup --from backups/<bundle-directory>` hoặc sử dụng `--latest`. Quá trình khôi phục bật `pgcrypto` trước khi kiểm tra các khóa, bao gồm cả trên cơ sở dữ liệu đích mới. Tài khoản cơ sở dữ liệu phải được phép tạo tiện ích mở rộng đó, hoặc quản trị viên cơ sở dữ liệu phải bật nó trước. Các lỗi thiết lập tiện ích mở rộng được báo cáo riêng biệt với lỗi khôi phục thông tin xác thực.
+3. Quá trình khôi phục kiểm tra từng thông tin xác thực được mã hóa bằng các khóa đã cung cấp trước khi nạp bản dump. Các khóa bị thiếu hoặc sai sẽ dừng quá trình trước khi thực thi bất kỳ câu lệnh SQL phá hủy nào; `pgcrypto` có thể đã được bật. Xem xét cơ sở dữ liệu đích và xác nhận `RESTORE`; một đích không trống cũng yêu cầu xác nhận `RESTORE ANYWAY`. Chỉ khôi phục các bản dump SQL đáng tin cậy.
+4. Giữ nguyên các khóa tại chỗ. Trước khi khởi động lại, hãy chạy `bun run audit-keys` và `bun run rotate-keys --dry-run`. Nếu thông tin xác thực cần di chuyển sang phiên bản đang hoạt động, hãy chạy `bun run rotate-keys --bot-stopped` và audit lại trước khi khởi động bất kỳ phiên bản nào. `ON_ERROR_STOP=1` sẽ dừng lại ở lỗi SQL đầu tiên, nhưng các câu lệnh trước đó có thể đã làm thay đổi dữ liệu. Khắc phục lỗi và thử lại trong khi bot vẫn đang dừng.
+
+Các gói cũ chứa các secret thô trong `config.env`. Quá trình khôi phục sẽ nhận diện chúng và cảnh báo, nhưng không bao giờ sao chép hoặc nạp tệp đó. Hãy chủ động xem lại tệp ở một vị trí riêng tư và tự cung cấp các phiên bản mã hóa của nó vào nguồn secret đích. Giữ nguyên cài đặt cơ sở dữ liệu đích tại chỗ. Các gói hiện có vẫn chứa secret ngay cả sau khi nâng cấp.
+
+## Xoay vòng khóa mã hóa
+<!-- anchor: rotating-encryption-keys -->
+
+1. Giữ một bản sao được bảo vệ của mọi khóa mà dữ liệu đang hoạt động và các bản sao lưu được giữ lại cần. Hãy sao lưu cơ sở dữ liệu và thử nghiệm khôi phục trên một cơ sở dữ liệu dùng một lần trước khi loại bỏ bất kỳ phiên bản nào.
+2. Tạo khóa mới bằng `openssl rand -base64 32` (hoặc `docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"`) và thêm nó dưới dạng `CRYPTO_SECRET_V<version>` vào cùng nguồn secret mà bot sử dụng. Quá trình xoay vòng từ chối khóa hiện tại ngắn hơn 32 ký tự. Đặt `CRYPTO_SECRET_CURRENT` thành phiên bản đó nếu bạn muốn chọn rõ ràng. Giữ lại tất cả các khóa cũ hơn. `CRYPTO_SECRET` cũ là V1.
+3. Dừng mọi phiên bản bot và tạm dừng các tiến trình ghi thông tin xác thực. Trong production, hãy chạy các tập lệnh với `RUN_ENV=production` và cùng cấu hình `SECRET_FILE` đã gắn kết, `GCP_SECRET_FILE` cũ hoặc cấu hình secret và truy cập AWS như khi khởi động. Quá trình audit và xoay vòng sử dụng cài đặt `POSTGRES_*` của bot từ nguồn đó.
+4. Chạy `bun run audit-keys`, sau đó chạy `bun run rotate-keys --dry-run`. Cả hai đều phải thành công. Quá trình audit báo cáo các bảng, cột, ID hàng và phiên bản bị lỗi trong khi vẫn tiếp tục kiểm tra thông tin xác thực. Số lượng phiên bản của nó bao gồm cả quá trình khôi phục thất bại và không thể xác định thành công khi mã thoát khác 0. Dry-run giải mã thông tin xác thực mà không làm thay đổi các hàng.
+5. Chạy `bun run rotate-keys --bot-stopped`, sau đó chạy `bun run audit-keys`. Bất kỳ truy vấn hoặc hàng nào bị lỗi đều cho mã thoát khác không, bao gồm cả trường hợp thành công một phần. Giữ nguyên mọi phiên bản, sửa lỗi và chạy lại. Việc thay thế hàng đồng thời bị từ chối thay vì bị ghi đè.
+6. Trong cơ sở dữ liệu đã khôi phục dùng một lần, hãy thử nghiệm quy trình audit chỉ với khóa hiện tại được giữ lại đã cấu hình. Các bản sao lưu cũ hơn được giữ lại cần có quy trình khôi phục đã được kiểm tra của riêng chúng với các khóa đã lưu trữ. Chỉ sau các bước kiểm tra đó, bạn mới có thể xóa các phiên bản cũ khỏi nguồn secret đang hoạt động. Giữ kho lưu trữ khóa được bảo vệ riêng biệt trong thời gian các bản sao lưu của nó được giữ lại, sau đó khởi động lại tất cả các phiên bản bot.
+
+Cờ `--bot-stopped` ghi lại xác nhận của bạn; nó không thể phát hiện các phiên bản bot đang chạy khác. Tập lệnh xoay vòng không xóa bộ nhớ cache thông tin xác thực của tiến trình khác. Các phiên bản không cần phải liên tiếp: một thông tin xác thực V1 có thể chuyển trực tiếp lên V4 khi cả hai khóa đều khả dụng.
+
+Quá trình xoay vòng cũng thay thế các thẻ phiên bản null cũ bằng phiên bản hiện tại rõ ràng, bao gồm cả khi phiên bản hiện tại là V1.
 
 ## Cập nhật
 
@@ -32,7 +64,7 @@ Trước tiên hãy dừng bot đang chạy, sau đó sử dụng trình cập n
 bun run update
 ```
 
-Điều này chạy `bun run backup`, sau đó là `git pull --rebase --autostash` và cuối cùng là `bun install --frozen-lockfile`. Gói sao lưu được lưu vào `backups/` và bao gồm cả kết xuất cơ sở dữ liệu của bạn và `.env`. Thêm `--skip-backup` để bỏ qua bản sao lưu trước khi cập nhật.
+Điều này chạy `bun run backup`, sau đó là `git pull --rebase --autostash` và cuối cùng là `bun install --frozen-lockfile`. Gói sao lưu được lưu vào `backups/` và chứa bản dump cơ sở dữ liệu và manifest của bạn. Hãy sao chép và bảo vệ `.env` riêng biệt nếu bạn cần giữ lại nó. Thêm `--skip-backup` để bỏ qua bản sao lưu trước khi cập nhật.
 
 Dự phòng thủ công:
 
@@ -131,7 +163,6 @@ Thời gian hồi chiêu của lệnh hiện sử dụng một hệ số duy nh�
 | `MAX_SAMPLE_DIALOGUES` | `15` |
 | `MAX_SAMPLE_DIALOGUE_LENGTH` | `2000` |
 | `MAX_TRIGGER_WORDS` | `10` |
-| `MCP_STDIO_DIAGNOSTIC_MAX_CHARS` | `8192` |
 | `MCP_TOOL_SNAPSHOT_MAX_NAMES` | `100` |
 | `MCP_TOOL_SNAPSHOT_NAME_MAX_CHARS` | `128` |
 | `MEDIA_MAX_DIMENSION` | `768` |

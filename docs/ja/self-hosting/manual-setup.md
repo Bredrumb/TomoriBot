@@ -16,7 +16,6 @@ Docker Composeを使用したいユーザーはこのウィザードをスキッ
 ## 前提条件
 
 - [Bun](https://bun.sh/)
-- Node.js v20以上（MCPツールに使用）
 - ネイティブにインストールされたPostgreSQL、またはDockerコンテナで実行されているPostgreSQL（ステップ2を参照）
 
 PostgreSQLスキーマ、`pgcrypto`、シード、および移行は、ボットの起動時に自動的に初期化されます。
@@ -43,6 +42,10 @@ cp .env.example .env
 - `CRYPTO_SECRET`: 32文字の暗号化キー (保存されているAPIキーの暗号化に使用されます)。
 - PostgreSQL接続: `POSTGRES_HOST`、`POSTGRES_PORT`、`POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_DB`。
 
+データベースのバックアップとは別に、暗号化シークレットの保護されたコピーを保管してください。新しいバックアップには `.env` が含まれません。ローテーションには、`CRYPTO_SECRET_V1`、`CRYPTO_SECRET_V2`、またはそれ以降の正の整数バージョンを使用し、オプションで `CRYPTO_SECRET_CURRENT` を選択できます。`CRYPTO_SECRET` は V1 のままです。起動コマンドとメンテナンスコマンドは同じソースを読み込みます：開発環境ではローカルの環境変数の値、本番環境ではマウントされたJSONまたはAWS Secrets Managerです。シークレットを置き換える前に、[暗号化キーのローテーション](/ja/self-hosting/maintenance/#rotating-encryption-keys) を参照してください。
+
+JSONシークレットソースでは、マスターキーは文字列である必要があります。`CRYPTO_SECRET_CURRENT` は、利用可能なバージョンを指定する `"2"` などの文字列、または `2` などの正の安全な整数値を受け入れます。
+
 :::note[No native PostgreSQL?]
 コンテナー内でデータベースのみを実行し、そのデータベースに`POSTGRES_*`値を指定します。
 
@@ -58,6 +61,8 @@ docker run -d --name tomori-db \
 オプションのチューニングは`.env.optional.example`にあります。カスタマイズしたい値 (制限、タイムアウト、機能の切り替え、ローカルサーバー URLなど) をコピーします。
 
 カスタム表現のアップロードは、デフォルトで`data/custom-expressions/`の下のローカルファイルにアップロードされます。そのディレクトリを永続ストレージに保存します。`EXPRESSION_STORAGE_BACKEND`は、`local`、`gcs`、または`s3`を受け入れます。クラウドバックエンドには、`EXPRESSION_STORAGE_BUCKET`と対応するSDK認証情報が必要です。S3は、`AWS_REGION` (デフォルト`us-east-1`) とオプションの`S3_ENDPOINT`も使用します。GCSはアプリケーションのデフォルトの資格情報を使用します。式は独自のバケット設定を使用します。アバターのストレージ設定では式バケットは選択されません。オブジェクトはSDKを通じて読み取り可能であり、バイトとして添付されるため、公開されているメディアURLは必要ありません。既存の参照を復元するときに、バックエンド、バケット、およびオブジェクトのキーを保持します。
+
+`MAX_CUSTOM_EXPRESSIONS_PER_SERVER` はサーバーあたりのカスタム表現を制限します（デフォルト `20`、最小 `1`）。リンクとアップロードされたファイルは、すべてのペルソナ間で制限を共有します。ネイティブの絵文字とスタンプは除外されます。変更後はボットを再起動してください。制限を引き下げても既存の表現は保持され、編集や削除は可能ですが、数が制限を下回るまで新規追加はブロックされます。
 
 ## 3. 実行
 
@@ -167,8 +172,7 @@ HF_TOKEN=hf_xxx bun run setup:tokenizers
 
 この手順を行わないとロジットバイアスは暗黙のうちに無効化されますが、その他のすべては正常に動作します。
 
-安全な`fetch_url`フォールバックはプロセス内で実行されるため、Pythonパッケージは不要です。
-DuckDuckGo/IAskの`web_search`も`bun install --frozen-lockfile`に含まれているため、追加のインストールは不要です。
+安全な `fetch_url` フォールバックと DuckDuckGo の `web_search` フォールバックはどちらもプロセス内で実行されるため、どちらも追加のインストールは不要です。
 
 ## メンテナンス、更新とバックアップ
 

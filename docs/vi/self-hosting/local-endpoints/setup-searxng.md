@@ -6,7 +6,7 @@ sidebar:
 
 Thêm tìm kiếm web riêng tư, self-hosting vào TomoriBot bằng [SearXNG](https://docs.searxng.org/).
 
-Công cụ `web_search` truy vấn chuỗi dự phòng động cơ: Brave, SearXNG, DuckDuckGo và IAsk. Chạy phiên bản SearXNG cục bộ sẽ cung cấp nguồn tìm kiếm self-hosting khi nhà cung cấp bên ngoài đạt đến giới hạn tốc độ hoặc không thành công, đồng thời kích hoạt các danh mục tìm kiếm chuyên biệt: `science`, `it`, `files` và `music`.
+Công cụ `web_search` truy vấn chuỗi dự phòng động cơ: Brave, SearXNG và DuckDuckGo. Chạy phiên bản SearXNG cục bộ sẽ cung cấp nguồn tìm kiếm self-hosting khi nhà cung cấp bên ngoài đạt đến giới hạn tốc độ hoặc không thành công, đồng thời kích hoạt các danh mục tìm kiếm chuyên biệt: `science`, `it`, `files` và `music`.
 
 Chọn đường dẫn thiết lập:
 
@@ -66,9 +66,9 @@ Sau đó chạy `bun run dev` khi vùng chứa hoạt động tốt (`docker ps`
 
 ### Tùy chọn C: Không SearXNG
 
-Không đặt `SEARXNG_BASE_URL`. Chuỗi rơi trở lại `Brave → DuckDuckGo → IAsk`.
+Không đặt `SEARXNG_BASE_URL`. Chuỗi rơi trở lại `Brave → DuckDuckGo`.
 
-Khi không có máy chủ SearXNG nào được định cấu hình, lược đồ `web_search` đã tập hợp không còn quảng cáo các danh mục chỉ dành cho SearXNG nữa. Các danh mục phổ biến (`text`, `image`, `video`, `news`) vẫn xuất hiện khi Brave được định cấu hình và tìm kiếm chỉ có văn bản xuất hiện khi chỉ có dự phòng DuckDuckGo/IAsk MCP.
+Khi không có máy chủ SearXNG nào được định cấu hình, lược đồ `web_search` đã tập hợp không còn quảng cáo các danh mục chỉ dành cho SearXNG nữa. Các danh mục phổ biến (`text`, `image`, `video`, `news`) vẫn xuất hiện khi Brave được định cấu hình và tìm kiếm chỉ có văn bản xuất hiện khi chỉ có phần dự phòng DuckDuckGo tích hợp sẵn.
 
 ---
 

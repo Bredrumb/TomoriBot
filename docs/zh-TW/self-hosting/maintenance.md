@@ -14,14 +14,47 @@ sidebar:
 |---|---|
 | `bun run setup` | 開啟設定精靈，進行基礎安裝與選用模組。|
 | `bun run update` | 先備份，再拉取最新程式碼並安裝相依套件。|
-| `bun run backup` | 在`backups/`建立包含你的資料庫傾印與`.env`的套件，裡面有你所有的資料。|
-| `bun run restore-backup` | 從套件還原`.env`與資料庫（`--latest`或`--from backups/<dir>`）。|
+| `bun run backup` | 在`backups/`中建立包含資料庫傾印與所需加密版本中繼資料的套件。秘密資訊分開保存。|
+| `bun run restore-backup` | 使用分開佈建的加密金鑰還原資料庫（`--latest`或`--from backups/<dir>`）。|
 | `bun run backup:personas` | 只匯出所有伺服器上的人格（含伺服器記憶）；用`/persona import`重新匯入。|
 | `bun run nuke-db` | 刪除所有資料表（之後啟動bot即可重新初始化）。|
 | `bun run purge-commands` | 清除所有已註冊的Discord斜線指令。|
-| `bun run rotate-keys` | 把所有加密欄位重新加密到目前的金鑰版本。|
+| `bun run rotate-keys --bot-stopped` | 把所有加密欄位重新加密到目前的金鑰版本。|
+| `bun run env-doctor` | 唯讀檢查你的設定：列出沒有任何程式碼讀取的`.env`項目（僅名稱，絕不包含值）以及每個變數的使用位置。|
 
-`bun run backup`與`bun run update`需要在PATH中有PostgreSQL用戶端工具（`pg_dump`、`psql`）。
+主機上的`bun run backup`需要PATH中有`pg_dump`，主機上的`bun run restore-backup`需要PATH中有`psql`。`bun run update`的備份也需要`pg_dump`。`--docker`更新路徑在容器內執行備份，因此需要主機具備Bun、Git和Docker，但不需要主機具備PostgreSQL工具。
+
+備份與還原指令透過系統暫存資料夾中的暫存密碼檔案將資料庫密碼傳遞給`pg_dump`與`psql`，因此機器上的其他使用者無法從處理程序清單中讀取該密碼。該資料夾必須可寫入。指令執行完畢後該檔案會被刪除。
+
+## 資料庫備份與復原金鑰
+<!-- anchor: database-backups-and-recovery-keys -->
+
+`bun run backup`和自動啟動備份會產生`database.sql`與`bundle_info.json`。資訊清單檔案識別僅含資料庫的套件，並列出在該傾印中找到的加密版本。版本清單說明復原所需的金鑰；還原程序會檢查實際的可解密性。建立傾印並不要求舊金鑰存在，因此遺失的歷史金鑰不會阻止保留資料庫的其餘部分。它絕不會複製`.env`。僅含資料庫的傾印仍包含私密對話與記憶，因此請限制對備份目錄的存取。
+
+請將加密版本保存在分開的受保護儲存空間中，例如加密密碼管理器或機密管理器。如果你自行複製`.env`，請將其作為認證資訊進行保護並與傾印分開存放。遺失所需的加密版本將導致這些已儲存的認證資訊無法復原；使用者必須重新輸入其API金鑰。提供者端的金鑰在撤銷前保持有效。
+
+還原步驟：
+
+1. 停止所有機器人執行個體。在執行指令之前，在常規機密來源中佈建目標資料庫設定、Discord權杖以及相符的加密版本。務必完全保留原始金鑰。
+2. 安裝`psql`以及傾印所使用的擴充功能，包括存在時的`pgvector`。執行`bun run restore-backup --from backups/<bundle-directory>`或使用`--latest`。還原程式在檢查金鑰之前會啟用`pgcrypto`，包括在全新的目標資料庫上。資料庫帳戶必須擁有建立該擴充功能的權限，或者必須由資料庫管理員預先啟用它。擴充功能設定錯誤會與認證資訊復原失敗分開回報。
+3. 還原程式在載入傾印之前會使用提供的金鑰檢查每個加密認證資訊。缺少或錯誤的金鑰會在執行破壞性SQL之前停止操作；`pgcrypto`可能已被啟用。檢查目標並確認`RESTORE`；非空目標還需要確認`RESTORE ANYWAY`。僅還原受信任的SQL傾印。
+4. 保持金鑰就位。在重新啟動之前，執行`bun run audit-keys`和`bun run rotate-keys --dry-run`。如果認證資訊需要遷移到作用中版本，請執行`bun run rotate-keys --bot-stopped`並在啟動任何執行個體前再次稽核。`ON_ERROR_STOP=1`會在出現第一個SQL錯誤時停止，但先前的陳述式可能已經變更了資料。在機器人保持停止的狀態下修復錯誤並重試。
+
+舊版套件在`config.env`中包含原始秘密資訊。還原程式會識別它們並發出警告，但絕不會複製或載入該檔案。請在私密位置仔細檢查它，並自行將其加密版本佈建到目標機密來源中。保持目標資料庫設定就位。即使在升級後，現有的套件仍包含秘密資訊。
+
+## 輪換加密金鑰
+<!-- anchor: rotating-encryption-keys -->
+
+1. 保留作用中資料和已保留備份所需的每個金鑰的受保護複本。在淘汰任何版本之前，先進行資料庫備份並在一次性資料庫上測試復原。
+2. 使用`openssl rand -base64 32`（或`docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"`）產生新金鑰，並將其作為`CRYPTO_SECRET_V<version>`新增到機器人使用的相同機密來源中。輪換操作拒絕短於32個字元的目前金鑰。如果你需要明確選擇，請將`CRYPTO_SECRET_CURRENT`設定為該版本。保留所有舊金鑰。舊版`CRYPTO_SECRET`即為V1。
+3. 停止所有機器人執行個體並暫停認證資訊寫入處理程序。在實際執行環境中，使用`RUN_ENV=production`以及與啟動時相同的掛載`SECRET_FILE`、舊版`GCP_SECRET_FILE`或AWS機密與存取設定執行指令稿。稽核和輪換使用來自該機密來源的機器人的`POSTGRES_*`設定。
+4. 執行`bun run audit-keys`，然後執行`bun run rotate-keys --dry-run`。兩者都必須成功。稽核會回報失敗的資料表、欄、資料列識別碼和版本，同時繼續檢查認證資訊。其版本計數包含復原失敗的項目，如果結束狀態非零則不能視為成功。模擬執行在不變更資料列的情況下解密認證資訊。
+5. 執行`bun run rotate-keys --bot-stopped`，然後執行`bun run audit-keys`。任何失敗的查詢或資料列都會產生非零結束狀態，包括部分成功的情況。保留所有版本，修復錯誤並重新執行。並行的資料列取代將被拒絕而不是覆寫。
+6. 在一次性還原的資料庫中，測試僅設定了保留的目前金鑰的稽核。保留的較舊備份需要使用封存金鑰進行其各自經過測試的復原。只有在完成這些檢查之後，你才可以從作用中機密來源中移除舊版本。在保留其備份的期間內保留分開受保護的金鑰封存，然後重新啟動所有機器人執行個體。
+
+`--bot-stopped`旗標記錄你的確認；它無法偵測其他正在運行的執行個體。輪換指令稿不會清除另一個處理程序的認證快取。版本不必連續：當兩個金鑰均可用時，V1認證資訊可以直接遷移到V4。
+
+輪換還會將舊版的null版本標籤取代為明確的目前版本，包括目前版本為V1的情況。
 
 ## 更新
 
@@ -31,7 +64,7 @@ sidebar:
 bun run update
 ```
 
-它運行`bun run backup`，然後運行`git pull --rebase --autostash`，最後運行`bun install --frozen-lockfile`。備份包保存到`backups/`，並包括資料庫轉儲和`.env`。新增`--skip-backup`以繞過更新前備份。
+它運行`bun run backup`，然後運行`git pull --rebase --autostash`，最後運行`bun install --frozen-lockfile`。備份套件保存到`backups/`，並包含資料庫傾印與資訊清單。如果需要保留`.env`，請單獨複製並保護它。新增`--skip-backup`以繞過更新前備份。
 
 手動回退：
 
@@ -130,7 +163,6 @@ bun install --frozen-lockfile
 | `MAX_SAMPLE_DIALOGUES` | `15` |
 | `MAX_SAMPLE_DIALOGUE_LENGTH` | `2000` |
 | `MAX_TRIGGER_WORDS` | `10` |
-| `MCP_STDIO_DIAGNOSTIC_MAX_CHARS` | `8192` |
 | `MCP_TOOL_SNAPSHOT_MAX_NAMES` | `100` |
 | `MCP_TOOL_SNAPSHOT_NAME_MAX_CHARS` | `128` |
 | `MEDIA_MAX_DIMENSION` | `768` |

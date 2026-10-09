@@ -14,15 +14,47 @@ Si está actualizando con `git pull`, revise primero [Migración segura](/es-419
 |---|---|
 | `bun run setup` | Abre el asistente de instalación para la instalación base y los módulos opcionales. |
 | `bun run update` | Hace una copia de seguridad primero, luego descarga el código más reciente e instala las dependencias. |
-| `bun run backup` | Crea un paquete en `backups/` con el volcado de tu base de datos y tu `.env`: contiene todos tus datos. |
-| `bun run restore-backup` | Restaura `.env` y la base de datos a partir de un paquete (`--latest` o `--from backups/<dir>`). |
+| `bun run backup` | Crea un paquete en `backups/` con el volcado de tu base de datos y los metadatos de versiones de cifrado requeridos. Los secretos se mantienen separados. |
+| `bun run restore-backup` | Restaura la base de datos utilizando claves de cifrado aprovisionadas por separado (`--latest` o `--from backups/<dir>`). |
 | `bun run backup:personas` | Exporta SOLO personas (con memorias de servidor) en todos los servidores; se reimporta mediante `/persona import`. |
 | `bun run nuke-db` | Elimina todas las tablas (inicia el bot después para reinicializar). |
 | `bun run purge-commands` | Borra todos los comandos de barra de Discord registrados. |
-| `bun run rotate-keys` | Vuelve a cifrar todos los campos cifrados con la versión de clave actual. |
+| `bun run rotate-keys --bot-stopped` | Vuelve a cifrar todos los campos cifrados con la versión de clave actual. |
+| `bun run env-doctor` | Comprobación de solo lectura de tu configuración: enumera las entradas de `.env` que nada lee (solo nombres, nunca valores) y dónde se usa cada variable. |
 
-`bun run backup` y `bun run update` requieren las herramientas de cliente de PostgreSQL (`pg_dump`,
-`psql`) en tu PATH.
+`bun run backup` en el host necesita `pg_dump`, y `bun run restore-backup` en el host necesita `psql` en tu PATH. `bun run update` necesita `pg_dump` para su copia de seguridad. La ruta de actualización con `--docker` ejecuta la copia de seguridad dentro del contenedor, por lo que necesita Bun, Git y Docker en el host, pero no herramientas de PostgreSQL en el host.
+
+Los comandos de copia de seguridad y restauración pasan la contraseña de tu base de datos a `pg_dump` y `psql` a través de un archivo de contraseña efímero en la carpeta temporal del sistema, de modo que otros usuarios en la máquina no puedan leerla desde la lista de procesos. Esa carpeta debe tener permisos de escritura. El archivo se elimina cuando finaliza el comando.
+
+## Copias de seguridad de la base de datos y claves de recuperación
+<!-- anchor: database-backups-and-recovery-keys -->
+
+`bun run backup` y las copias de seguridad automáticas al inicio producen `database.sql` y `bundle_info.json`. El manifiesto identifica un paquete que solo contiene la base de datos y enumera las versiones de cifrado encontradas en ese volcado. El inventario de versiones describe qué claves necesita la recuperación; la restauración comprueba la capacidad real de descifrado. Crear un volcado no requiere que las claves antiguas estén presentes, por lo que una clave histórica faltante no impide preservar el resto de la base de datos. Nunca copia `.env`. Un volcado que solo contiene la base de datos aún contiene conversaciones y memorias privadas, por lo que debes restringir el acceso al directorio de copias de seguridad.
+
+Guarda las versiones de cifrado en un almacenamiento protegido independiente, como un gestor de contraseñas cifrado o un gestor de secretos. Si copias `.env` tú mismo, protégelo como credenciales y mantenlo separado del volcado. Perder una versión de cifrado requerida hace que esas credenciales almacenadas sean irrecuperables; los usuarios deberán ingresar sus claves de API nuevamente. Las claves del lado del proveedor siguen siendo válidas hasta que se revoquen.
+
+Para restaurar:
+
+1. Detén todas las instancias del bot. Aprovisiona la configuración de la base de datos de destino, el token de Discord y las versiones de cifrado correspondientes en la fuente habitual de secretos antes de ejecutar el comando. Conserva las claves originales con exactitud.
+2. Instala `psql` y las extensiones utilizadas por el volcado, incluyendo `pgvector` cuando esté presente. Ejecuta `bun run restore-backup --from backups/<bundle-directory>` o usa `--latest`. La restauración habilita `pgcrypto` antes de comprobar las claves, incluso en un destino nuevo. La cuenta de base de datos debe tener permisos para crear esa extensión, o un administrador de base de datos debe habilitarla primero. Los errores de configuración de extensiones se informan por separado de los fallos de recuperación de credenciales.
+3. La restauración comprueba cada credencial cifrada con las claves proporcionadas antes de cargar el volcado. Las claves faltantes o incorrectas detienen el proceso antes de cualquier SQL destructivo; es posible que `pgcrypto` ya se haya habilitado. Revisa el destino y confirma `RESTORE`; un destino no vacío también requiere `RESTORE ANYWAY`. Restaura solo volcados SQL de confianza.
+4. Mantén las claves en su lugar. Antes de reiniciar, ejecuta `bun run audit-keys` y `bun run rotate-keys --dry-run`. Si las credenciales necesitan migración a la versión activa, ejecuta `bun run rotate-keys --bot-stopped` y audita nuevamente antes de iniciar cualquier instancia. `ON_ERROR_STOP=1` se detiene en el primer error de SQL, pero las declaraciones anteriores ya pueden haber modificado datos. Corrige el error y vuelve a intentarlo mientras el bot permanece detenido.
+
+Los paquetes heredados incluyen secretos sin procesar en `config.env`. La restauración los identifica y advierte, pero nunca copia ni carga ese archivo. Revísalo minuciosamente en una ubicación privada y aprovisiona tú mismo sus versiones de cifrado en la fuente de secretos de destino. Mantén la configuración de la base de datos de destino en su lugar. Los paquetes existentes continúan conteniendo secretos incluso después de actualizar.
+
+## Rotación de claves de cifrado
+<!-- anchor: rotating-encryption-keys -->
+
+1. Mantén una copia protegida de cada clave requerida por los datos activos y las copias de seguridad conservadas. Realiza una copia de seguridad de la base de datos y prueba la recuperación en una base de datos desechable antes de retirar cualquier versión.
+2. Genera la nueva clave con `openssl rand -base64 32` (o `docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"`) y agrégala como `CRYPTO_SECRET_V<version>` a la misma fuente de secretos que utiliza el bot. La rotación rechaza una clave actual de menos de 32 caracteres. Establece `CRYPTO_SECRET_CURRENT` en esa versión si deseas una selección explícita. Conserva todas las claves más antiguas. El `CRYPTO_SECRET` heredado es V1.
+3. Detén todas las instancias del bot y pausa los procesos que escriben credenciales. En producción, ejecuta los scripts con `RUN_ENV=production` y el mismo `SECRET_FILE` montado, el `GCP_SECRET_FILE` heredado o la configuración de secretos y acceso de AWS que en el inicio. La auditoría y la rotación utilizan la configuración `POSTGRES_*` del bot de esa fuente.
+4. Ejecuta `bun run audit-keys`, luego `bun run rotate-keys --dry-run`. Ambos deben tener éxito. La auditoría informa sobre tablas, columnas, ID de fila y versiones fallidas mientras continúa con las comprobaciones de credenciales. Sus recuentos de versiones incluyen la recuperación fallida y no pueden establecer el éxito cuando el estado de salida es distinto de cero. La ejecución en seco descifra las credenciales sin modificar las filas.
+5. Ejecuta `bun run rotate-keys --bot-stopped`, luego `bun run audit-keys`. Cualquier consulta o fila fallida genera una salida distinta de cero, incluso en caso de éxito parcial. Conserva todas las versiones, corrige la falla y vuelve a ejecutar. El reemplazo concurrente de filas se rechaza en lugar de sobrescribirse.
+6. En una base de datos restaurada desechable, prueba una auditoría con solo la clave actual conservada configurada. Las copias de seguridad más antiguas conservadas necesitan su propia recuperación probada con claves archivadas. Solo después de esas comprobaciones puedes eliminar versiones antiguas de la fuente activa de secretos. Mantén el archivo de claves protegido por separado durante el tiempo que se conserven sus copias de seguridad, luego reinicia todas las instancias del bot.
+
+El indicador `--bot-stopped` registra tu confirmación; no puede detectar otras instancias en ejecución. Los scripts de rotación no borran las cachés de credenciales de otro proceso. Las versiones no necesitan ser consecutivas: una credencial V1 puede pasar directamente a V4 cuando ambas claves están disponibles.
+
+La rotación también reemplaza las etiquetas de versión nula heredadas con la versión actual explícita, incluso cuando la versión actual es V1.
 
 ## Actualización
 
@@ -32,7 +64,7 @@ Primero detenga el bot en ejecución, luego use el actualizador de respaldo prim
 bun run update
 ```
 
-Esto ejecuta `bun run backup`, luego `git pull --rebase --autostash` y finalmente `bun install --frozen-lockfile`. El paquete de respaldo se guarda en `backups/` e incluye tanto el volcado de su base de datos como `.env`. Agrega `--skip-backup` para omitir la copia de seguridad previa a la actualización.
+Esto ejecuta `bun run backup`, luego `git pull --rebase --autostash` y finalmente `bun install --frozen-lockfile`. El paquete de respaldo se guarda en `backups/` y contiene el volcado de su base de datos y el manifiesto. Copie y proteja `.env` por separado si necesita conservarlo. Agregue `--skip-backup` para omitir la copia de seguridad previa a la actualización.
 
 Respaldo manual:
 
@@ -131,7 +163,6 @@ Los tiempos de reutilización de comandos ahora usan un único multiplicador, `C
 | `MAX_SAMPLE_DIALOGUES` | `15` |
 | `MAX_SAMPLE_DIALOGUE_LENGTH` | `2000` |
 | `MAX_TRIGGER_WORDS` | `10` |
-| `MCP_STDIO_DIAGNOSTIC_MAX_CHARS` | `8192` |
 | `MCP_TOOL_SNAPSHOT_MAX_NAMES` | `100` |
 | `MCP_TOOL_SNAPSHOT_NAME_MAX_CHARS` | `128` |
 | `MEDIA_MAX_DIMENSION` | `768` |

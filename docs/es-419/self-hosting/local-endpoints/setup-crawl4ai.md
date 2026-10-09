@@ -10,11 +10,19 @@ La herramienta `fetch_url` incorporada utiliza el motor liviano `safe_http` de f
 
 Debido a que Crawl4AI sigue redireccionamientos fuera del cliente HTTP protegido de TomoriBot, solo se admite donde se permite la recuperación de redes privadas. Fuera de producción (`RUN_ENV` != `production`), la recuperación de red privada se habilita automáticamente. En entornos de producción, es necesario configurar `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`.
 
+:::caution[Lo que TomoriBot puede y no puede comprobar]
+TomoriBot rechaza una URL cuyo nombre de host no se resuelve, o se resuelve en una dirección de metadatos en la nube, antes de pedirle a Crawl4AI que la abra. No puede controlar lo que hace el navegador a continuación: Crawl4AI vuelve a resolver el nombre, sigue las redirecciones y carga imágenes y scripts por su cuenta. El bloqueo de metadatos siempre activo de TomoriBot no cubre esas solicitudes.
+
+La imagen fijada (`unclecode/crawl4ai:0.9.4`) envía su navegador a través de su propio proxy, que bloquea las direcciones privadas, de bucle invertido y de metadatos en cada solicitud y redirección. Deja `CRAWL4AI_ALLOW_INTERNAL_URLS` sin configurar: establecerlo en `true` desactiva ese proxy, metadatos incluidos.
+:::
+
+Crawl4AI 0.9.4 necesita un token de API antes de aceptar conexiones desde fuera de su propio contenedor. Genera uno (por ejemplo, `openssl rand -hex 32`) y configúralo como `CRAWL4AI_TOKEN` en `.env` para cada ruta de configuración a continuación. Sin él, el contenedor se inicia pero TomoriBot no puede alcanzarlo y recurre a `safe_http`.
+
 Elige una ruta de instalación:
 
 ### Opción A: Docker Compose (cuando TomoriBot se ejecuta en Docker)
 
-Utilice esta ruta si ejecuta TomoriBot con la pila Docker Compose del repositorio. Primero, configure `CRAWL4AI_BASE_URL=http://crawl4ai:11235/` y `FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http` en `.env`. Fuera de la producción no es necesario optar por una red privada; Solo agregue `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` si ejecuta esta pila con `RUN_ENV=production`.
+Utilice esta ruta si ejecuta TomoriBot con la pila Docker Compose del repositorio. Primero, configure `CRAWL4AI_BASE_URL=http://crawl4ai:11235/`, `CRAWL4AI_TOKEN` y `FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http` en `.env`. Fuera de la producción no es necesario optar por una red privada; solo agregue `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` si ejecuta esta pila con `RUN_ENV=production`.
 
 Luego, comienza con:
 
@@ -22,7 +30,7 @@ Luego, comienza con:
 docker compose --profile fetch-crawl4ai up -d
 ```
 
-Esto inicia la pila Compose con el contenedor Crawl4AI en la red Docker de TomoriBot.
+Esto inicia la pila Compose con el contenedor Crawl4AI en la red Docker de TomoriBot. Compose pasa `CRAWL4AI_TOKEN` al contenedor como `CRAWL4AI_API_TOKEN`, y TomoriBot lo envía como un token bearer. El puerto 11235 se publica solo en `127.0.0.1` para depuración local; TomoriBot se conecta a través de la red de Docker.
 
 Si ejecuta TomoriBot directamente con `bun run dev`, utilice la ruta independiente a continuación.
 
@@ -32,15 +40,13 @@ Si también quieres SearXNG, encadena los perfiles:
 docker compose --profile searxng --profile fetch-crawl4ai up -d
 ```
 
-Si habilita la autenticación de token Crawl4AI API, configure `CRAWL4AI_TOKEN` en `.env`; Compose lo pasa al contenedor como `CRAWL4AI_API_TOKEN` y TomoriBot lo envía como token al portador.
-
 ---
 
 ### Opción B: Docker independiente (cuando se ejecuta `bun run dev`)
 
-Primero, configure `CRAWL4AI_BASE_URL=http://localhost:11235/` y `FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http` en `.env` para que el bot se conecte al puerto del contenedor publicado por el host. Fuera de la producción no es necesario optar por una red privada; Solo agregue `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` si ejecuta `RUN_ENV=production`.
+Primero, configure `CRAWL4AI_BASE_URL=http://localhost:11235/`, `CRAWL4AI_TOKEN` y `FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http` en `.env` para que el bot se conecte al puerto del contenedor publicado en `127.0.0.1`. Fuera de la producción no es necesario optar por una red privada; solo agregue `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` si ejecuta `RUN_ENV=production`.
 
-Luego, en lugar de ejecutar TomoriBot directamente con `bun run dev`, use `bun run launch --crawl4ai`. Esto maneja el ciclo de vida del contenedor automáticamente y espera a que el servidor esté en buen estado antes de iniciar el bot:
+Luego, en lugar de ejecutar TomoriBot directamente con `bun run dev`, use `bun run launch --crawl4ai`. Esto maneja el ciclo de vida del contenedor automáticamente y espera a que el servidor esté en buen estado antes de iniciar el bot. Se detiene con un error si falta `CRAWL4AI_TOKEN`:
 
 ```sh
 bun run launch --crawl4ai
@@ -57,18 +63,18 @@ Si prefiere administrar el contenedor usted mismo, mantenga `CRAWL4AI_BASE_URL=h
 PowerShell:
 
 ```powershell
-docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g `
-  unclecode/crawl4ai:latest
+docker run -d --name crawl4ai -p 127.0.0.1:11235:11235 --shm-size=3g `
+  -e CRAWL4AI_API_TOKEN=<your-token> unclecode/crawl4ai:0.9.4
 ```
 
 Intento (Linux/macOS):
 
 ```bash
-docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
-  unclecode/crawl4ai:latest
+docker run -d --name crawl4ai -p 127.0.0.1:11235:11235 --shm-size=3g \
+  -e CRAWL4AI_API_TOKEN=<your-token> unclecode/crawl4ai:0.9.4
 ```
 
-Si asegura el contenedor, pase `-e CRAWL4AI_API_TOKEN=your_token` a `docker run` y configure `CRAWL4AI_TOKEN=your_token` en `.env`.
+Usa el mismo valor para `<your-token>` que `CRAWL4AI_TOKEN` en `.env`.
 
 Luego ejecute `bun run dev` una vez que el contenedor esté en buen estado (`docker ps` muestra `(healthy)`).
 
@@ -94,6 +100,16 @@ Para Docker independiente, inicie su contenedor Crawl4AI antes de iniciar Tomori
    ```
 2. Configura `CRAWL4AI_BASE_URL` en `.env` usando el valor de su ruta de configuración anterior.
 3. Inicia TomoriBot (`bun run dev` o `docker compose up`).
+
+### Actualización desde `latest`
+
+Un contenedor `crawl4ai` existente conserva la imagen a partir de la cual se creó, por lo que `docker start` no lo actualiza. Elimínalo una vez y luego vuelve a usar tu ruta de instalación:
+
+```powershell
+docker rm -f crawl4ai
+```
+
+Con Compose, `docker compose --profile fetch-crawl4ai up -d` recrea el contenedor a partir de la imagen fijada.
 
 ### Regresar después de un reinicio
 
@@ -157,8 +173,8 @@ Los valores de las cookies son confidenciales, así que trátelos como contrase�
 | Variable | Por defecto | Descripción |
 |---|---|---|
 | `CRAWL4AI_BASE_URL` | desarmada | Habilita Crawl4AI cuando está configurado. Utilice `http://crawl4ai:11235/` de Docker Compose o `http://localhost:11235/` cuando TomoriBot se ejecute directamente en su máquina. |
-| `CRAWL4AI_TOKEN` | desarmada | Token al portador opcional. Debe coincidir con `CRAWL4AI_API_TOKEN` en el contenedor Crawl4AI cuando esté habilitado. |
-| `FETCH_URL_ENGINE_ORDER` | `safe_http` | Lista de motores separados por comas. `safe_http` siempre se añade como último recurso; el nombre heredado `mcp_fetch` lo alias. Las entradas Crawl4AI se ignoran cuando no se permite la recuperación de redes privadas (producción sin suscripción voluntaria). |
+| `CRAWL4AI_TOKEN` | desarmada | Token bearer obligatorio. Debe coincidir con `CRAWL4AI_API_TOKEN` en el contenedor Crawl4AI, que rechaza conexiones externas sin él. |
+| `FETCH_URL_ENGINE_ORDER` | `safe_http` | Lista de motores separados por comas. `safe_http` siempre se añade como respaldo final. Las entradas de Crawl4AI se ignoran cuando no se permite la recuperación en redes privadas (producción sin suscripción voluntaria). |
 | `FETCH_URL_TIMEOUT_MS` | `15000` | Tiempo de espera de solicitud por motor para Crawl4AI y otros motores de búsqueda de URL. |
 | `FETCH_URL_MAX_CONTENT_LENGTH` | `50000` | Máximo de caracteres devueltos por una llamada de recuperación antes de que se requiera la continuación. |
 | `FETCH_URL_ALLOW_PRIVATE_NETWORK` | `false` | Opción de inscripción solo para producción. Fuera de producción (`RUN_ENV`! = `production`), la protección SSRF se relaja automáticamente, por lo que las recuperaciones locales/privadas/internas y el envío de Crawl4AI funcionan sin configuración. Configura `true` solo para permitir recuperaciones de redes privadas en una implementación de producción confiable. |

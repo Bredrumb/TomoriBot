@@ -10,11 +10,19 @@ sidebar:
 
 由於Crawl4AI遵循TomoriBot受保護的HTTP使用者端外部的重定向，因此僅在允許專用網路取得的情況下才允許其進行。外部生產（`RUN_ENV`！= `production`），私網抓取會自動啟用。在生產環境中，需要設定`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`。
 
+:::caution[TomoriBot 能檢查什麼與不能檢查什麼]
+TomoriBot 在請求 Crawl4AI 開啟 URL 之前，會拒絕主機名稱無法解析或解析為雲端中繼資料位址的 URL。但它無法控制瀏覽器接下來的操作：Crawl4AI 會自行重新解析網域名稱、跟隨重新導向並載入圖片與指令碼。TomoriBot 的全天候中繼資料攔截不涵蓋這些請求。
+
+固定映像檔（`unclecode/crawl4ai:0.9.4`）會使其瀏覽器透過自身 Proxy 發送請求，該 Proxy 會在每次請求與重新導向時攔截私有位址、回環位址和中繼資料位址。請保留 `CRAWL4AI_ALLOW_INTERNAL_URLS` 未設定：將其設定為 `true` 會關閉該 Proxy，包括中繼資料攔截。
+:::
+
+Crawl4AI 0.9.4 在接受來自其自身容器外部的連線之前需要 API 權杖。請產生一個權杖（例如 `openssl rand -hex 32`）並在下方所有設定路徑中將其設定為 `.env` 中的 `CRAWL4AI_TOKEN`。若缺少該權杖，容器雖然能啟動，但 TomoriBot 無法連線並會後備到 `safe_http`。
+
 選擇安裝路徑：
 
 ### 選項A：Docker Compose（當TomoriBot在Docker中運作時）
 
-如果你使用存储库的Docker Compose堆栈运行TomoriBot，请使用此路径。首先，在`.env`中設定`CRAWL4AI_BASE_URL=http://crawl4ai:11235/`和`FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http`。外部制作无需选择加入专用网络；仅当你使用`RUN_ENV=production`运行此堆栈时才添加`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`。
+如果你使用存储库的Docker Compose堆栈运行TomoriBot，请使用此路径。首先，在`.env`中設定`CRAWL4AI_BASE_URL=http://crawl4ai:11235/`、`CRAWL4AI_TOKEN`以及`FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http`。外部制作无需选择加入专用网络；仅当你使用`RUN_ENV=production`运行此堆栈时才添加`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`。
 
 然後，從以下開始：
 
@@ -22,7 +30,7 @@ sidebar:
 docker compose --profile fetch-crawl4ai up -d
 ```
 
-這將使用TomoriBot的Docker網路上的Crawl4AI容器啟動Compose堆疊。
+這將使用TomoriBot的Docker網路上的Crawl4AI容器啟動Compose堆疊。Compose 會將 `CRAWL4AI_TOKEN` 作為 `CRAWL4AI_API_TOKEN` 傳遞給容器，而 TomoriBot 會將其作為 Bearer 權杖發送。連接埠 11235 僅發布在 `127.0.0.1` 上以供本機偵錯；TomoriBot 本身透過 Docker 網路進行連線。
 
 如果你直接與`bun run dev`一起運行TomoriBot，請改用下面的獨立路徑。
 
@@ -32,15 +40,13 @@ docker compose --profile fetch-crawl4ai up -d
 docker compose --profile searxng --profile fetch-crawl4ai up -d
 ```
 
-如果啟用Crawl4AI API-token認證，則在`.env`中設定`CRAWL4AI_TOKEN`； Compose將其作為`CRAWL4AI_API_TOKEN`傳遞給容器，TomoriBot將其作為不記名令牌發送。
-
 ---
 
 ### 選項B：獨立Docker（運行`bun run dev`時）
 
-首先，在`.env`中設定`CRAWL4AI_BASE_URL=http://localhost:11235/`和`FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http`，以便機器人連接到主機發布的容器連接埠。外部製作無需選擇加入專用網路；如果你使用`RUN_ENV=production`運行，則僅新增`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`。
+首先，在`.env`中設定`CRAWL4AI_BASE_URL=http://localhost:11235/`、`CRAWL4AI_TOKEN`以及`FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http`，以便機器人連接到發布在 `127.0.0.1` 上的容器連接埠。外部製作無需選擇加入專用網路；如果你使用`RUN_ENV=production`運行，則僅新增`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`。
 
-然後，不要直接使用`bun run dev`運行TomoriBot，而是使用`bun run launch --crawl4ai`。這會自動處理容器生命週期，並在啟動機器人之前等待伺服器健康：
+然後，不要直接使用`bun run dev`運行TomoriBot，而是使用`bun run launch --crawl4ai`。這會自動處理容器生命週期，並在啟動機器人之前等待伺服器就緒。如果缺少 `CRAWL4AI_TOKEN`，它將報錯停止：
 
 ```sh
 bun run launch --crawl4ai
@@ -57,18 +63,18 @@ bun run launch --searxng --crawl4ai
 電源外殼：
 
 ```powershell
-docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g `
-  unclecode/crawl4ai:latest
+docker run -d --name crawl4ai -p 127.0.0.1:11235:11235 --shm-size=3g `
+  -e CRAWL4AI_API_TOKEN=<your-token> unclecode/crawl4ai:0.9.4
 ```
 
 Bash（Linux/macOS）：
 
 ```bash
-docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
-  unclecode/crawl4ai:latest
+docker run -d --name crawl4ai -p 127.0.0.1:11235:11235 --shm-size=3g \
+  -e CRAWL4AI_API_TOKEN=<your-token> unclecode/crawl4ai:0.9.4
 ```
 
-如果保護容器，請將`-e CRAWL4AI_API_TOKEN=your_token`傳遞給`docker run`並在`.env`中設定`CRAWL4AI_TOKEN=your_token`。
+`<your-token>` 使用與 `.env` 中 `CRAWL4AI_TOKEN` 相同的值。
 
 然後在容器正常運作後執行`bun run dev`（`docker ps`顯示`(healthy)`）。
 
@@ -94,6 +100,16 @@ TomoriBot在啟動後第一次呼叫`fetch_url`時探測伺服器運作狀況，
    ```
 2. 使用上面設定路徑的值在`.env`中設定`CRAWL4AI_BASE_URL`。
 3. 啟動TomoriBot（`bun run dev`或`docker compose up`）。
+
+### 從 `latest` 升級
+
+現有的 `crawl4ai` 容器保留建立它時使用的映像檔，因此 `docker start` 不會升級它。將其刪除一次，然後重新使用你的設定路徑：
+
+```powershell
+docker rm -f crawl4ai
+```
+
+使用 Compose 時，`docker compose --profile fetch-crawl4ai up -d` 會從固定映像檔重新建立容器。
 
 ### 重啟後返回
 
@@ -157,8 +173,8 @@ Cookie值很敏感，因此請將它們視為密碼。他們授予你帳戶的�
 | 多變的 | 預設 | 描述 |
 |---|---|---|
 | `CRAWL4AI_BASE_URL` | 未設定 | 設定後啟用Crawl4AI。使用Docker Compose中的`http://crawl4ai:11235/`，或當TomoriBot直接在電腦上執行時使用`http://localhost:11235/`。|
-| `CRAWL4AI_TOKEN` | 未設定 | 可選的不記名令牌。啟用時必須與Crawl4AI容器上的`CRAWL4AI_API_TOKEN`相符。|
-| `FETCH_URL_ENGINE_ORDER` | `safe_http` | 以逗號分隔的引擎清單。`safe_http`總是作為最終後備附加；舊的`mcp_fetch`名稱為其別名。在不允許專用網路取得的情況下（無需選擇加入的生產），Crawl4AI條目將被忽略。|
+| `CRAWL4AI_TOKEN` | 未設定 | 必需的 Bearer 權杖。必須與 Crawl4AI 容器上的 `CRAWL4AI_API_TOKEN` 相符，否則容器會拒絕外部連線。|
+| `FETCH_URL_ENGINE_ORDER` | `safe_http` | 逗號分隔的引擎列表。`safe_http` 始終作為最終後備附加。在不允許私有網路擷取的環境中（未選擇加入的生產環境），Crawl4AI 項目會被忽略。|
 | `FETCH_URL_TIMEOUT_MS` | `15000` | Crawl4AI和其他URL取得引擎的每個引擎請求逾時。|
 | `FETCH_URL_MAX_CONTENT_LENGTH` | `50000` | 在需要繼續之前，一次fetch呼叫傳回的最大字元數。|
 | `FETCH_URL_ALLOW_PRIVATE_NETWORK` | `false` | 僅限生產選擇加入。外部生產（`RUN_ENV`！= `production`）SSRF防護自動放鬆，因此localhost/private/internal獲取和Crawl4AI調度工作無需設定。僅設定`true`以允許在受信任的生產部署中進行專用網路提取。|

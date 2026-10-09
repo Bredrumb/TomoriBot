@@ -20,7 +20,7 @@ Os backups de banco de dados retêm metadados de expressões personalizadas, ass
 Siga estas etapas ANTES de executar `git pull`:
 
 1. **Pare o bot**: desligue o processo da TomoriBot para que nenhuma conexão de banco de dados ativa interfira com o backup.
-2. **Faça backup do banco de dados**: use um dos dois métodos abaixo.
+2. **Faça backup do banco de dados e retenha suas chaves**: use um dos dois métodos abaixo. Mantenha uma cópia protegida separada de cada versão de criptografia necessária para o dump e teste a recuperação em um banco de dados descartável.
 3. **Anote o commit atual**: execute `git rev-parse HEAD` e salve a saída, caso seja necessário reverter.
 4. **Faça o pull e reinicie**: uma vez que o backup esteja seguro no disco, você estará seguro para fazer o pull e reiniciar.
 
@@ -58,7 +58,7 @@ Para uma migração segura, use o backup completo:
 bun run backup
 ```
 
-Isso cria um pacote com carimbo de data e hora em `backups/` (ou em seu `TOMORI_BACKUP_DIR` se for substituído no `.env`) contendo o banco de dados PostgreSQL inteiro como um dump SQL puro. Para restaurar mais tarde, execute:
+Isso cria um pacote com carimbo de data/hora em `backups/` (ou seu `TOMORI_BACKUP_DIR` se substituído no `.env`) contendo todo o banco de dados PostgreSQL como um dump SQL simples. O pacote não contém `.env` nem segredos mestres. Antes de restaurar, provisione versões de criptografia correspondentes separadamente na fonte de segredos de destino e pare todas as instâncias do bot. Consulte [Backups de banco de dados e chaves de recuperação](/pt-BR/self-hosting/maintenance/#database-backups-and-recovery-keys) para o procedimento completo. Chaves ausentes ou incorretas interrompem a restauração antes do SQL destrutivo. Pacotes legados ainda contêm segredos brutos em `config.env`; revise-os em particular e provisione suas chaves você mesmo. A restauração nunca copia esse arquivo. Para restaurar mais tarde, execute:
 
 ```bash
 bun run restore-backup --latest
@@ -193,7 +193,7 @@ De acordo com o design do projeto (OD-R-6), migrações destrutivas não podem s
 
 Para essas operações, a única recuperação é o seu backup. Sempre faça backup antes do pull se você estiver em uma versão mais antiga e um novo refatoramento tiver sido lançado.
 
-O design de ir apenas para frente do executor de migração é intencional: os arquivos de reversão (`.down.sql`) existem para a segurança do desenvolvedor durante os testes, mas a recuperação na produção depende de backups, e não da reexecução de operações irreversíveis.
+O design apenas para frente do executor de migração é intencional: arquivos de reversão (`.down.sql`) existem para a segurança do desenvolvedor durante os testes, mas a recuperação em produção usa backups e suas chaves de criptografia retidas separadamente. A reexecução de uma migração destrutiva não pode recuperar dados excluídos.
 
 ## Testando uma branch de funcionalidade, e então voltando para a `main`
 
@@ -201,13 +201,13 @@ Um caso comum: alguém pede que você teste uma branch na sua instalação exist
 
 Os fatos principais:
 
-- O Git e o PostgreSQL são mundos separados. `git checkout` apenas troca os arquivos no disco; ele nunca se conecta ou modifica o seu banco de dados. Seu estado de migração aplicada vive na tabela `schema_migrations`, não no git.
+- Git e PostgreSQL são mundos separados. O `git checkout` apenas troca arquivos no disco; ele nunca se conecta nem modifica seu banco de dados. O PostgreSQL armazena o estado das migrações aplicadas na tabela `schema_migrations`. Mudar de branch do git não altera essa tabela.
 - Migrações são executadas automaticamente na inicialização (via `initializeDatabase.ts`), de modo que no momento em que você iniciar a branch, suas novas migrações serão aplicadas ao banco de dados para o qual você apontou.
 - O executor para frente nunca faz reversão automática. Ao voltar para a `main`, ele varre os arquivos no disco, não encontra nada pendente e não faz nada. Migrações que a branch aplicou continuam aplicadas.
 
 Então, é seguro? Depende inteiramente do que as migrações da branch fizeram:
 
-- Apenas aditivo (novas tabelas / novas colunas) → seguro. Os novos objetos simplesmente ficam sem uso; o código da `main` nunca faz referência a eles, então eles não podem causar resultados incorretos ou falhas. Eles são um peso morto inofensivo.
+- **Somente aditivo** (novas tabelas / novas colunas) → seguro. Os novos objetos simplesmente ficam sem uso; o código da `main` nunca faz referência a eles, então eles não podem causar resultados errados ou falhas. Remova objetos não utilizados apenas por meio de uma migração revisada.
 - Destrutivo (`DROP`/`RENAME`/`ALTER` em uma tabela que a `main` ainda usa) → não seguro. A mudança da branch deixa o código da `main` trabalhando contra uma coluna/tabela que agora não existe mais ou foi alterada.
 
 A abordagem mais segura: aponte a branch para um banco de dados descartável (um `POSTGRES_DB` separado), assim seus dados reais nunca serão tocados. Você já constrói a conexão a partir das variáveis `POSTGRES_*`, e o `bun run nuke-db` pode resetar um banco de dados de rascunho.

@@ -10,11 +10,19 @@ A ferramenta `fetch_url` integrada usa o mecanismo leve `safe_http` por padrão.
 
 Como Crawl4AI segue redirecionamentos fora do cliente HTTP protegido de TomoriBot, ele só é admitido onde a busca em rede privada é permitida. Fora da produção (`RUN_ENV` != `production`), a busca de rede privada é habilitada automaticamente. Em ambientes de produção, é necessária a configuração de `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`.
 
+:::caution[O que o TomoriBot pode e não pode verificar]
+O TomoriBot recusa uma URL cujo nome de host não seja resolvido ou seja resolvido para um endereço de metadados de nuvem, antes de solicitar que o Crawl4AI a abra. Ele não pode controlar o que o navegador faz em seguida: o Crawl4AI resolve o nome novamente, segue redirecionamentos e carrega imagens e scripts por conta própria. O bloqueio de metadados sempre ativo do TomoriBot não cobre essas solicitações.
+
+A imagem fixada (`unclecode/crawl4ai:0.9.4`) envia seu navegador por meio de seu próprio proxy, que bloqueia endereços privados, de loopback e de metadados em todas as solicitações e redirecionamentos. Deixe `CRAWL4AI_ALLOW_INTERNAL_URLS` indefinido: defini-lo como `true` desativa esse proxy, metadados incluídos.
+:::
+
+O Crawl4AI 0.9.4 precisa de um token de API antes de aceitar conexões de fora de seu próprio contêiner. Gere um (por exemplo, `openssl rand -hex 32`) e defina-o como `CRAWL4AI_TOKEN` no `.env` para cada caminho de configuração abaixo. Sem ele, o contêiner inicia, mas o TomoriBot não consegue alcançá-lo e recorre ao `safe_http`.
+
 Escolha um caminho de configuração:
 
 ### Opção A: Docker Compose (quando TomoriBot é executado em Docker)
 
-Use este caminho se você executar TomoriBot com a pilha Docker Compose do repositório. Primeiro, defina `CRAWL4AI_BASE_URL=http://crawl4ai:11235/` e `FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http` em `.env`. Fora da produção, não é necessária a adesão à rede privada; adicione `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` apenas se você executar esta pilha com `RUN_ENV=production`.
+Use este caminho se você executar TomoriBot com a pilha Docker Compose do repositório. Primeiro, defina `CRAWL4AI_BASE_URL=http://crawl4ai:11235/`, `CRAWL4AI_TOKEN` e `FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http` em `.env`. Fora da produção, nenhuma adesão à rede privada é necessária; adicione `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` apenas se você executar esta pilha com `RUN_ENV=production`.
 
 Então, comece com:
 
@@ -22,7 +30,7 @@ Então, comece com:
 docker compose --profile fetch-crawl4ai up -d
 ```
 
-Isso inicia a pilha do Compose com o contêiner Crawl4AI na rede Docker de TomoriBot.
+Isso inicia a pilha do Compose com o contêiner Crawl4AI na rede Docker de TomoriBot. O Compose passa `CRAWL4AI_TOKEN` para o contêiner como `CRAWL4AI_API_TOKEN`, e o TomoriBot o envia como um token bearer. A porta 11235 é publicada apenas em `127.0.0.1`, para depuração local; o TomoriBot conecta-se pela rede Docker.
 
 Se você executar TomoriBot diretamente com `bun run dev`, use o caminho independente abaixo.
 
@@ -32,15 +40,13 @@ Se você também deseja SearXNG, encadeie os perfis:
 docker compose --profile searxng --profile fetch-crawl4ai up -d
 ```
 
-Se você ativar a autenticação de token Crawl4AI API, defina `CRAWL4AI_TOKEN` em `.env`; O Compose passa-o para o contêiner como `CRAWL4AI_API_TOKEN` e TomoriBot o envia como um token ao portador.
-
 ---
 
 ### Opção B: Docker independente (ao executar `bun run dev`)
 
-Primeiro, defina `CRAWL4AI_BASE_URL=http://localhost:11235/` e `FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http` em `.env` para que o bot se conecte à porta do contêiner publicada pelo host. Fora da produção, não é necessária a adesão à rede privada; adicione `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` apenas se você executar com `RUN_ENV=production`.
+Primeiro, defina `CRAWL4AI_BASE_URL=http://localhost:11235/`, `CRAWL4AI_TOKEN` e `FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http` em `.env` para que o bot se conecte à porta do contêiner publicada em `127.0.0.1`. Fora da produção, nenhuma adesão à rede privada é necessária; adicione `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` apenas se você executar com `RUN_ENV=production`.
 
-Então, em vez de executar TomoriBot diretamente com `bun run dev`, use `bun run launch --crawl4ai`. Isso lida com o ciclo de vida do contêiner automaticamente e espera que o servidor esteja íntegro antes de iniciar o bot:
+Depois, em vez de executar o TomoriBot diretamente com `bun run dev`, use `bun run launch --crawl4ai`. Isso gerencia o ciclo de vida do contêiner automaticamente e espera até que o servidor esteja íntegro antes de iniciar o bot. Ele é interrompido com um erro se `CRAWL4AI_TOKEN` estiver ausente:
 
 ```sh
 bun run launch --crawl4ai
@@ -57,18 +63,18 @@ Se preferir gerenciar o contêiner sozinho, mantenha `CRAWL4AI_BASE_URL=http://l
 PowerShell:
 
 ```powershell
-docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g `
-  unclecode/crawl4ai:latest
+docker run -d --name crawl4ai -p 127.0.0.1:11235:11235 --shm-size=3g `
+  -e CRAWL4AI_API_TOKEN=<your-token> unclecode/crawl4ai:0.9.4
 ```
 
 Bash (Linux/macOS):
 
 ```bash
-docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
-  unclecode/crawl4ai:latest
+docker run -d --name crawl4ai -p 127.0.0.1:11235:11235 --shm-size=3g \
+  -e CRAWL4AI_API_TOKEN=<your-token> unclecode/crawl4ai:0.9.4
 ```
 
-Se você proteger o contêiner, passe `-e CRAWL4AI_API_TOKEN=your_token` para `docker run` e defina `CRAWL4AI_TOKEN=your_token` em `.env`.
+Use o mesmo valor para `<your-token>` que `CRAWL4AI_TOKEN` no `.env`.
 
 Em seguida, execute `bun run dev` quando o contêiner estiver íntegro (`docker ps` mostra `(healthy)`).
 
@@ -94,6 +100,16 @@ Para Docker independente, inicie seu contêiner Crawl4AI antes de iniciar Tomori
    ```
 2. Defina `CRAWL4AI_BASE_URL` em `.env` usando o valor do caminho de configuração acima.
 3. Inicie TomoriBot (`bun run dev` ou `docker compose up`).
+
+### Atualizando de `latest`
+
+Um contêiner `crawl4ai` existente mantém a imagem a partir da qual foi criado, portanto, `docker start` não o atualiza. Remova-o uma vez e use seu caminho de configuração novamente:
+
+```powershell
+docker rm -f crawl4ai
+```
+
+Com o Compose, `docker compose --profile fetch-crawl4ai up -d` recria o contêiner a partir da imagem fixada.
 
 ### Retornando após uma reinicialização
 
@@ -157,8 +173,8 @@ Os valores dos cookies são confidenciais, portanto trate-os como senhas. Eles c
 | Variável | Padrão | Descrição |
 |---|---|---|
 | `CRAWL4AI_BASE_URL` | desarmar | Ativa Crawl4AI quando definido. Use `http://crawl4ai:11235/` de Docker Compose ou `http://localhost:11235/` quando TomoriBot for executado diretamente em sua máquina. |
-| `CRAWL4AI_TOKEN` | desarmar | Token ao portador opcional. Deve corresponder a `CRAWL4AI_API_TOKEN` no contêiner Crawl4AI quando ativado. |
-| `FETCH_URL_ENGINE_ORDER` | `safe_http` | Lista de mecanismos separados por vírgula. `safe_http` é sempre anexado como substituto final; o nome herdado `mcp_fetch` o alia. As entradas Crawl4AI são ignoradas quando a busca em rede privada não é permitida (produção sem aceitação). |
+| `CRAWL4AI_TOKEN` | desarmar | Token bearer obrigatório. Deve corresponder a `CRAWL4AI_API_TOKEN` no contêiner Crawl4AI, que recusa conexões externas sem ele. |
+| `FETCH_URL_ENGINE_ORDER` | `safe_http` | Lista de mecanismos separados por vírgula. `safe_http` é sempre anexado como fallback final. Entradas do Crawl4AI são ignoradas onde a busca em rede privada não é permitida (produção sem adesão explícita). |
 | `FETCH_URL_TIMEOUT_MS` | `15000` | Tempo limite de solicitação por mecanismo para Crawl4AI e outros mecanismos de busca de URL. |
 | `FETCH_URL_MAX_CONTENT_LENGTH` | `50000` | Máximo de caracteres retornados por uma chamada de busca antes que a continuação seja necessária. |
 | `FETCH_URL_ALLOW_PRIVATE_NETWORK` | `false` | Ativação apenas de produção. Fora da produção (`RUN_ENV` != `production`) o guarda SSRF relaxa automaticamente, então buscas localhost/privadas/internas e despacho Crawl4AI funcionam sem configuração. Defina `true` apenas para permitir buscas de rede privada em uma implantação de produção confiável. |

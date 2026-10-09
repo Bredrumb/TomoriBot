@@ -15,7 +15,6 @@ Este é o procedimento de instalação manual para usuários técnicos que prefe
 ## Pré-requisitos
 
 - [Bun](https://bun.sh/)
-- Node.js v20+ (usado para as ferramentas MCP)
 - PostgreSQL instalado nativamente ou executado em um contêiner Docker (veja o passo 2)
 
 O esquema do PostgreSQL, `pgcrypto`, sementes e migrações são inicializados automaticamente na inicialização do bot.
@@ -42,6 +41,10 @@ Obrigatória:
 - `CRYPTO_SECRET`: uma chave de criptografia de 32 caracteres (usada para criptografar chaves API armazenadas).
 - Conexão PostgreSQL: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`.
 
+Mantenha uma cópia protegida do seu segredo de criptografia separada dos backups do banco de dados. Novos backups não contêm `.env`. Para rotação, use `CRYPTO_SECRET_V1`, `CRYPTO_SECRET_V2` ou qualquer versão posterior com número inteiro positivo, com a seleção opcional de `CRYPTO_SECRET_CURRENT`. `CRYPTO_SECRET` permanece V1. Os comandos de inicialização e manutenção carregam a mesma fonte: valores de ambiente locais em desenvolvimento, ou JSON montado / AWS Secrets Manager em produção. Consulte [Rotacionando chaves de criptografia](/pt-BR/self-hosting/maintenance/#rotating-encryption-keys) antes de substituir um segredo.
+
+Em fontes de segredos JSON, as chaves mestras devem ser strings. `CRYPTO_SECRET_CURRENT` aceita uma string como `"2"` ou um número inteiro positivo seguro como `2` que indica uma versão disponível.
+
 :::note[No native PostgreSQL?]
 Execute apenas o banco de dados em um contêiner e aponte os valores `POSTGRES_*` para ele:
 
@@ -57,6 +60,8 @@ Em seguida, defina `POSTGRES_HOST=localhost`, `POSTGRES_PORT=5432` e o usuário/
 O ajuste opcional reside em `.env.optional.example`. Copie quaisquer valores que você deseja personalizar (limites, tempos limite, alternância de recursos, URLs do servidor local, etc.).
 
 A expressão personalizada carrega o padrão para arquivos locais em `data/custom-expressions/`. Mantenha esse diretório em armazenamento persistente. `EXPRESSION_STORAGE_BACKEND` aceita `local`, `gcs` ou `s3`. Os back-ends em nuvem exigem `EXPRESSION_STORAGE_BUCKET` e as credenciais SDK correspondentes. S3 também usa `AWS_REGION` (padrão `us-east-1`) e `S3_ENDPOINT` opcional. GCS usa credenciais padrão do aplicativo. As expressões usam sua própria configuração de intervalo; as configurações de armazenamento de avatar não selecionam um intervalo de expressão. Os objetos permanecem legíveis por meio do SDK e são anexados como bytes, portanto, um URL de mídia veiculado publicamente é desnecessário. Preserve chaves de back-end, bucket e objeto ao restaurar referências existentes.
+
+`MAX_CUSTOM_EXPRESSIONS_PER_SERVER` limita as expressões personalizadas por servidor (padrão `20`, mínimo `1`). Links e arquivos enviados compartilham o limite entre todas as personas; emojis e figurinhas nativos estão excluídos. Reinicie o bot após alterá-lo. Diminuir o limite preserva as expressões existentes e permite edições e exclusões, mas bloqueia adições até que a contagem fique abaixo do limite.
 
 ## 3. Executar
 
@@ -175,8 +180,7 @@ HF_TOKEN=hf_xxx bun run setup:tokenizers
 
 Sem esta etapa, o logit bias é silenciosamente desativado e tudo mais funciona normalmente.
 
-O fallback seguro `fetch_url` é executado no processo e não precisa de nenhum pacote Python. DuckDuckGo/IAsk
-`web_search` vem com `bun install --frozen-lockfile`, então ele também não precisa de nenhuma instalação extra.
+O fallback seguro do `fetch_url` e o fallback do `web_search` do DuckDuckGo são executados dentro do processo, portanto, nenhum deles precisa de instalação extra.
 
 ## Manutenção, atualização e backups
 

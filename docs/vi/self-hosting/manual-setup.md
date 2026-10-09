@@ -15,7 +15,6 @@ Người dùng muốn sử dụng Docker Compose nên bỏ qua trình hướng d
 ## Điều kiện tiên quyết
 
 - [Bun](https://bun.sh/)
-- Node.js v20+ (được sử dụng cho các công cụ MCP)
 - PostgreSQL được cài đặt trực tiếp trên hệ thống, hoặc chạy trong Docker container (xem bước 2)
 
 Schema PostgreSQL, `pgcrypto`, seed dữ liệu và migration sẽ tự động khởi tạo khi bot khởi động.
@@ -42,6 +41,10 @@ Yêu cầu:
 - `CRYPTO_SECRET`: khóa mã hóa 32 ký tự (được sử dụng để mã hóa các khóa API được lưu trữ).
 - Kết nối PostgreSQL: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`.
 
+Giữ một bản sao được bảo vệ của bí mật mã hóa riêng biệt với các bản sao lưu cơ sở dữ liệu. Các bản sao lưu mới không chứa `.env`. Để xoay vòng, hãy sử dụng `CRYPTO_SECRET_V1`, `CRYPTO_SECRET_V2` hoặc bất kỳ phiên bản số nguyên dương nào sau đó, với tùy chọn chọn `CRYPTO_SECRET_CURRENT`. `CRYPTO_SECRET` vẫn là V1. Các lệnh khởi động và bảo trì sẽ tải cùng một nguồn: các giá trị môi trường cục bộ trong quá trình phát triển hoặc JSON được gắn / AWS Secrets Manager trong production. Xem [Xoay vòng khóa mã hóa](/vi/self-hosting/maintenance/#rotating-encryption-keys) trước khi thay thế một bí mật.
+
+Trong các nguồn bí mật JSON, khóa chính phải là chuỗi. `CRYPTO_SECRET_CURRENT` chấp nhận một chuỗi chẳng hạn như `"2"` hoặc một số nguyên an toàn dương như `2` để đặt tên cho một phiên bản khả dụng.
+
 :::note[No native PostgreSQL?]
 Chỉ chạy cơ sở dữ liệu trong một vùng chứa, sau đó trỏ các giá trị `POSTGRES_*` vào đó:
 
@@ -57,6 +60,8 @@ Sau đó đặt `POSTGRES_HOST=localhost`, `POSTGRES_PORT=5432` và người dù
 Điều chỉnh tùy chọn tồn tại trong `.env.optional.example`. Sao chép bất kỳ giá trị nào bạn muốn tùy chỉnh (giới hạn, thời gian chờ, chuyển đổi tính năng, URL máy chủ cục bộ, v.v.).
 
 Biểu cảm tùy chỉnh tải lên mặc định cho các tệp cục bộ trong `data/custom-expressions/`. Giữ thư mục đó trên bộ lưu trữ liên tục. `EXPRESSION_STORAGE_BACKEND` chấp nhận `local`, `gcs` hoặc `s3`. Phần phụ trợ đám mây yêu cầu `EXPRESSION_STORAGE_BUCKET` và thông tin xác thực SDK tương ứng. S3 cũng sử dụng `AWS_REGION` (`us-east-1` mặc định) và `S3_ENDPOINT` tùy chọn. GCS sử dụng thông tin xác thực mặc định của ứng dụng. Biểu thức sử dụng cài đặt nhóm riêng của chúng; cài đặt lưu trữ hình đại diện không chọn nhóm biểu thức. Các đối tượng vẫn có thể đọc được thông qua SDK và được đính kèm dưới dạng byte, do đó, URL phương tiện được cung cấp công khai là không cần thiết. Giữ nguyên các khóa phụ trợ, nhóm và đối tượng khi khôi phục các tham chiếu hiện có.
+
+`MAX_CUSTOM_EXPRESSIONS_PER_SERVER` giới hạn các biểu cảm tùy chỉnh trên mỗi máy chủ (mặc định `20`, tối thiểu `1`). Các liên kết và tệp đã tải lên chia sẻ giới hạn này trên tất cả các persona; biểu tượng cảm xúc và nhãn dán gốc bị loại trừ. Khởi động lại bot sau khi thay đổi. Việc giảm giới hạn sẽ giữ nguyên các biểu cảm hiện có và cho phép chỉnh sửa cũng như xóa, nhưng chặn các bổ sung mới cho đến khi số lượng giảm xuống dưới giới hạn.
 
 ## 3. Chạy
 
@@ -156,7 +161,7 @@ HF_TOKEN=hf_xxx bun run setup:tokenizers
 
 Nếu không có bước này, logit bias sẽ tự động bị tắt trong im lặng và mọi thứ khác vẫn hoạt động bình thường.
 
-Phương án dự phòng an toàn `fetch_url` chạy ngay trong tiến trình và không cần gói Python. Công cụ `web_search` của DuckDuckGo/IAsk đi kèm sẵn với `bun install --frozen-lockfile`, vì vậy cũng không cần cài đặt thêm gì.
+Phương án dự phòng `fetch_url` an toàn và phương án dự phòng `web_search` của DuckDuckGo đều chạy trong tiến trình, vì vậy cả hai đều không cần cài đặt thêm.
 
 ## Bảo trì, cập nhật và sao lưu
 

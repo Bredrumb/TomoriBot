@@ -15,7 +15,6 @@ aiGenerated: false
 ## 环境要求
 
 - [Bun](https://bun.sh/)
-- Node.js v20+（MCP工具链需要）
 - PostgreSQL，可以原生安装，也可以跑在Docker容器里（见第2步）
 
 PostgreSQL的数据库结构、`pgcrypto`、种子数据和迁移都会在bot启动时自动初始化。
@@ -42,6 +41,10 @@ cp .env.example .env
 - `CRYPTO_SECRET`：32个字符的加密密钥（用于加密存储的API密钥）。
 - PostgreSQL连接：`POSTGRES_HOST`、`POSTGRES_PORT`、`POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_DB`。
 
+请将加密密钥的受保护副本与数据库备份分开保存。新的备份不包含 `.env`。对于密钥轮换，请使用 `CRYPTO_SECRET_V1`、`CRYPTO_SECRET_V2` 或任何后续的正整数版本，并可选择使用 `CRYPTO_SECRET_CURRENT`。`CRYPTO_SECRET` 仍为 V1。启动和维护命令加载相同的配置来源：开发环境中为本地环境变量值，生产环境中为挂载的 JSON 或 AWS Secrets Manager。在替换密钥之前，请参阅[轮换加密密钥](/zh-CN/self-hosting/maintenance/#rotating-encryption-keys)。
+
+在 JSON 密钥源中，主密钥必须是字符串。`CRYPTO_SECRET_CURRENT` 接受指示可用版本的字符串（如 `"2"`）或正安全整数数值（如 `2`）。
+
 :::note[No native PostgreSQL?]
 仅运行容器中的数据库，然后将`POSTGRES_*`值指向它：
 
@@ -57,6 +60,8 @@ docker run -d --name tomori-db \
 `.env.optional.example`中有可选的调音功能。复制你想要自定义的任何值（限制、超时、功能切换、本地服务器URL等）。
 
 自定义表达式默认上传到`data/custom-expressions/`下的本地文件。将该目录保留在持久存储中。`EXPRESSION_STORAGE_BACKEND`接受`local`、`gcs`或`s3`。云后端需要`EXPRESSION_STORAGE_BUCKET`和相应的SDK凭证。S3还使用`AWS_REGION`（默认`us-east-1`）和可选`S3_ENDPOINT`。GCS使用应用程序默认凭据。表达式使用自己的存储桶设置； 头像存储设置未选择表情桶。对象仍然可以通过SDK读取，并以字节形式附加，因此不需要公开提供的媒体URL。恢复现有引用时保留后端、存储桶和对象键。
+
+`MAX_CUSTOM_EXPRESSIONS_PER_SERVER` 限制每个服务器的自定义表情数量（默认 `20`，最小 `1`）。链接和上传的文件在所有预设之间共享该限制；原生表情符号和贴图不计入。更改后请重启机器人。调低限制会保留现有表情并允许编辑和删除，但会阻止新增，直到数量低于限制为止。
 
 ## 3. 运行
 
@@ -164,8 +169,7 @@ HF_TOKEN=hf_xxx bun run setup:tokenizers
 
 不做这一步，词元偏置会被静默禁用，其他一切照常工作。
 
-安全的`fetch_url`兜底在进程内运行，不需要任何Python包。DuckDuckGo与IAsk的
-`web_search`随`bun install --frozen-lockfile`一起装好，也不需要额外安装。
+安全的 `fetch_url` 回退和 DuckDuckGo 的 `web_search` 回退均在进程内运行，因此两者都不需要额外安装。
 
 ## 维护、更新与备份
 

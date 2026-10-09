@@ -14,14 +14,47 @@ sidebar:
 |---|---|
 | `bun run setup` | 打开安装向导，可做基础安装与可选模块。|
 | `bun run update` | 先备份，再拉取最新代码并安装依赖。|
-| `bun run backup` | 在`backups/`里生成一个包含数据库转储和`.env`的包：里面有你的全部数据。|
-| `bun run restore-backup` | 从某个包还原`.env`和数据库（`--latest`或`--from backups/<dir>`）。|
+| `bun run backup` | 在`backups/`中创建包含数据库转储和所需加密版本元数据的包。凭据单独保留。|
+| `bun run restore-backup` | 使用单独配置的加密密钥恢复数据库（`--latest`或`--from backups/<dir>`）。|
 | `bun run backup:personas` | 只导出所有服务器上的人格（含服务器记忆）；用`/persona import`重新导入。|
 | `bun run nuke-db` | 删除所有表（之后启动bot会重新初始化）。|
 | `bun run purge-commands` | 清除所有已注册的Discord斜杠指令。|
-| `bun run rotate-keys` | 把所有加密字段重新加密到当前密钥版本。|
+| `bun run rotate-keys --bot-stopped` | 把所有加密字段重新加密到当前密钥版本。|
+| `bun run env-doctor` | 只读检查你的配置：列出没有任何代码读取的`.env`条目（仅名称，绝不包含值）以及每个变量的使用位置。|
 
-`bun run backup`和`bun run update`需要PATH里有PostgreSQL客户端工具（`pg_dump`、`psql`）。
+宿主机上的`bun run backup`需要PATH中有`pg_dump`，宿主机上的`bun run restore-backup`需要PATH中有`psql`。`bun run update`的备份也需要`pg_dump`。`--docker`更新路径在容器内运行备份，因此需要宿主机具备Bun、Git和Docker，但不需要宿主机具备PostgreSQL工具。
+
+备份和恢复命令通过系统临时文件夹中的临时密码文件将数据库密码传递给`pg_dump`和`psql`，因此机器上的其他用户无法从进程列表中读取该密码。该文件夹必须可写。命令执行完毕后该文件会被删除。
+
+## 数据库备份与恢复密钥
+<!-- anchor: database-backups-and-recovery-keys -->
+
+`bun run backup`和自动启动备份会生成`database.sql`与`bundle_info.json`。清单文件标识仅含数据库的包，并列出在该转储中找到的加密版本。版本清单说明恢复所需的密钥；恢复过程会检查实际的可解密性。创建转储并不要求旧密钥存在，因此缺失的历史密钥不会阻止保留数据库的其余部分。它绝不会复制`.env`。仅含数据库的转储仍包含私密对话和记忆，因此请限制对备份目录的访问。
+
+请将加密版本保存在单独的受保护存储中，例如加密密码管理器或凭据管理器。如果你自行复制`.env`，请将其作为凭据进行保护并与转储分开存放。丢失所需的加密版本将导致这些已存储的凭据无法恢复；用户必须重新输入其API密钥。提供商端的密钥在撤销前保持有效。
+
+恢复步骤：
+
+1. 停止所有机器人实例。在运行命令之前，在常规凭据源中配置目标数据库设置、Discord令牌以及匹配的加密版本。务必完全保留原始密钥。
+2. 安装`psql`以及转储所使用的扩展，包括存在时的`pgvector`。运行`bun run restore-backup --from backups/<bundle-directory>`或使用`--latest`。恢复程序在检查密钥之前会启用`pgcrypto`，包括在全新的目标数据库上。数据库账户必须拥有创建该扩展的权限，或者必须由数据库管理员预先启用它。扩展设置错误会与凭据恢复失败分开报告。
+3. 恢复程序在加载转储之前会使用提供的密钥检查每个加密凭据。缺失或错误的密钥会在执行破坏性SQL之前停止操作；`pgcrypto`可能已被启用。检查目标并确认`RESTORE`；非空目标还需要确认`RESTORE ANYWAY`。仅恢复受信任的SQL转储。
+4. 保持密钥就位。在重启之前，运行`bun run audit-keys`和`bun run rotate-keys --dry-run`。如果凭据需要迁移到活动版本，请运行`bun run rotate-keys --bot-stopped`并在启动任何实例前再次审计。`ON_ERROR_STOP=1`会在出现第一个SQL错误时停止，但先前的语句可能已经更改了数据。在机器人保持停止的状态下修复错误并重试。
+
+旧版备份包在`config.env`中包含原始凭据。恢复程序会识别它们并发出警告，但绝不会复制或加载该文件。请在私密位置仔细检查它，并自行将其加密版本配置到目标凭据源中。保持目标数据库设置就位。即使在升级后，现有的备份包仍包含凭据。
+
+## 轮换加密密钥
+<!-- anchor: rotating-encryption-keys -->
+
+1. 保留活动数据和已保留备份所需的每个密钥的受保护副本。在废弃任何版本之前，先进行数据库备份并在一次性数据库上测试恢复。
+2. 使用`openssl rand -base64 32`（或`docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"`）生成新密钥，并将其作为`CRYPTO_SECRET_V<version>`添加到机器人使用的相同凭据源中。轮换操作拒绝短于32个字符的当前密钥。如果你需要明确选择，请将`CRYPTO_SECRET_CURRENT`设置为该版本。保留所有旧密钥。旧版`CRYPTO_SECRET`即为V1。
+3. 停止所有机器人实例并暂停凭据写入进程。在生产环境中，使用`RUN_ENV=production`以及与启动时相同的挂载`SECRET_FILE`、旧版`GCP_SECRET_FILE`或AWS机密与访问配置运行脚本。审计和轮换使用来自该凭据源的机器人的`POSTGRES_*`设置。
+4. 运行`bun run audit-keys`，然后运行`bun run rotate-keys --dry-run`。两者都必须成功。审计会报告失败的表、列、行ID和版本，同时继续检查凭据。其版本计数包含恢复失败的项，如果退出状态非零则不能视为成功。模拟运行在不更改行的情况下解密凭据。
+5. 运行`bun run rotate-keys --bot-stopped`，然后运行`bun run audit-keys`。任何失败的查询或行都会产生非零退出，包括部分成功的情况。保留所有版本，修复故障并重新运行。并发的行替换将被拒绝而不是覆盖。
+6. 在一次性恢复的数据库中，测试仅配置了保留的当前密钥的审计。保留的较旧备份需要使用存档密钥进行其各自经过测试的恢复。只有在完成这些检查之后，你才可以从活动凭据源中删除旧版本。在保留其备份的期间内保留单独受保护的密钥存档，然后重启所有机器人实例。
+
+`--bot-stopped`标志记录你的确认；它无法检测其他正在运行的实例。轮换脚本不会清除另一个进程的凭据缓存。版本不必连续：当两个密钥均可用时，V1凭据可以直接迁移到V4。
+
+轮换还会将旧版的null版本标记替换为明确的当前版本，包括当前版本为V1的情况。
 
 ## 更新
 
@@ -31,7 +64,7 @@ sidebar:
 bun run update
 ```
 
-它运行`bun run backup`，然后运行 `git pull --rebase --autostash`，最后运行`bun install --frozen-lockfile`。备份包保存到`backups/`，并包括数据库转储和`.env`。添加`--skip-backup`以绕过更新前备份。
+它运行`bun run backup`，然后运行 `git pull --rebase --autostash`，最后运行`bun install --frozen-lockfile`。备份包保存到`backups/`，并包含数据库转储和清单。如果需要保留`.env`，请单独复制并保护它。添加`--skip-backup`以绕过更新前备份。
 
 手动回退：
 
@@ -130,7 +163,6 @@ bun install --frozen-lockfile
 | `MAX_SAMPLE_DIALOGUES` | `15` |
 | `MAX_SAMPLE_DIALOGUE_LENGTH` | `2000` |
 | `MAX_TRIGGER_WORDS` | `10` |
-| `MCP_STDIO_DIAGNOSTIC_MAX_CHARS` | `8192` |
 | `MCP_TOOL_SNAPSHOT_MAX_NAMES` | `100` |
 | `MCP_TOOL_SNAPSHOT_NAME_MAX_CHARS` | `128` |
 | `MEDIA_MAX_DIMENSION` | `768` |

@@ -20,7 +20,7 @@ Bản sao lưu cơ sở dữ liệu giữ lại siêu dữ liệu biểu thức 
 Thực hiện theo các bước sau TRƯỚC KHI chạy `git pull`:
 
 1. **Dừng bot**: tắt tiến trình TomoriBot để không có kết nối cơ sở dữ liệu nào đang hoạt động can thiệp vào quá trình sao lưu.
-2. **Sao lưu cơ sở dữ liệu**: sử dụng một trong hai phương pháp bên dưới.
+2. **Sao lưu cơ sở dữ liệu và lưu giữ khóa**: sử dụng một trong hai phương pháp bên dưới. Giữ một bản sao được bảo vệ riêng biệt của mỗi phiên bản mã hóa mà bản dump cần và kiểm tra quá trình khôi phục trên một cơ sở dữ liệu dùng một lần.
 3. **Ghi lại commit hiện tại**: chạy `git rev-parse HEAD` và lưu lại kết quả phòng trường hợp cần rollback.
 4. **Kéo mã nguồn và khởi động lại**: khi bản sao lưu đã nằm an toàn trên ổ đĩa, bạn có thể yên tâm kéo mã nguồn mới và khởi động lại.
 
@@ -58,7 +58,7 @@ TomoriBot đi kèm hai script sao lưu, mỗi script nhắm vào các dữ liệ
 bun run backup
 ```
 
-Lệnh này tạo một gói có gắn nhãn thời gian trong `backups/` (hoặc `TOMORI_BACKUP_DIR` nếu được ghi đè trong `.env`) chứa toàn bộ cơ sở dữ liệu PostgreSQL dưới dạng bản dump SQL thuần. Để khôi phục sau này, hãy chạy:
+Lệnh này tạo một gói có gắn nhãn thời gian trong `backups/` (hoặc `TOMORI_BACKUP_DIR` nếu được ghi đè trong `.env`) chứa toàn bộ cơ sở dữ liệu PostgreSQL dưới dạng bản dump SQL thuần. Gói không chứa `.env` hoặc secret chính nào. Trước khi khôi phục, hãy cung cấp các phiên bản mã hóa phù hợp một cách riêng biệt trong nguồn secret đích và dừng tất cả các phiên bản bot. Xem [Sao lưu cơ sở dữ liệu và khóa khôi phục](/vi/self-hosting/maintenance/#database-backups-and-recovery-keys) để biết quy trình đầy đủ. Các khóa bị thiếu hoặc sai sẽ dừng việc khôi phục trước khi thực thi SQL mang tính phá hủy. Các gói cũ vẫn chứa các secret `config.env` thô; hãy xem lại chúng một cách riêng tư và tự cung cấp các khóa của chúng. Khôi phục không bao giờ sao chép tệp đó. Để khôi phục sau này, hãy chạy:
 
 ```bash
 bun run restore-backup --latest
@@ -193,7 +193,7 @@ Theo thiết kế của dự án (OD-R-6), các migration phá hủy không th�
 
 Đối với các thao tác này, cách khôi phục duy nhất là sử dụng bản sao lưu của bạn. Luôn sao lưu trước khi kéo mã nguồn nếu bạn đang ở phiên bản cũ và một đợt tái cấu trúc mới được phát hành.
 
-Thiết kế chỉ tiến về phía trước của trình chạy migration là có chủ đích: các tệp rollback (`.down.sql`) tồn tại vì sự an toàn của nhà phát triển trong quá trình thử nghiệm, nhưng việc khôi phục trên môi trường production phụ thuộc vào các bản sao lưu chứ không phải việc thực thi lại các thao tác không thể hoàn tác.
+Thiết kế chỉ tiến về phía trước của trình chạy migration là có chủ đích: các tệp rollback (`.down.sql`) tồn tại vì sự an toàn của nhà phát triển trong quá trình thử nghiệm, nhưng việc khôi phục trên production sử dụng các bản sao lưu và các khóa mã hóa được giữ riêng biệt của chúng. Việc thực thi lại một migration có tính phá hủy không thể khôi phục dữ liệu đã bị xóa.
 
 ## Thử nghiệm một nhánh tính năng, sau đó quay lại `main`
 
@@ -201,13 +201,13 @@ Một trường hợp phổ biến: ai đó yêu cầu bạn thử nghiệm mộ
 
 Các sự thật then chốt:
 
-- Git và PostgreSQL là hai thế giới tách biệt. Lệnh `git checkout` chỉ hoán đổi các tệp trên ổ đĩa; nó không bao giờ kết nối hay sửa đổi cơ sở dữ liệu của bạn. Trạng thái migration đã áp dụng nằm trong bảng `schema_migrations`, không phải trong git.
+- Git và PostgreSQL là hai thế giới tách biệt. Lệnh `git checkout` chỉ hoán đổi các tệp trên ổ đĩa; nó không bao giờ kết nối hay sửa đổi cơ sở dữ liệu của bạn. PostgreSQL lưu trữ trạng thái migration đã áp dụng trong bảng `schema_migrations`. Việc chuyển đổi nhánh git không làm thay đổi bảng đó.
 - Các migration chạy tự động khi khởi động (thông qua `initializeDatabase.ts`), vì vậy ngay khi bạn khởi động nhánh đó, các migration mới của nó sẽ được áp dụng cho bất kỳ cơ sở dữ liệu nào mà bạn trỏ tới.
 - Trình chạy tiến không bao giờ tự động rollback. Khi bạn quay lại `main`, nó quét các tệp trên ổ đĩa, không tìm thấy mục nào đang chờ xử lý và không làm gì cả. Các migration mà nhánh đó đã áp dụng vẫn sẽ giữ nguyên.
 
 Vậy điều đó có an toàn không? Điều này hoàn toàn phụ thuộc vào những gì các migration của nhánh đó đã thực hiện:
 
-- Chỉ bổ sung (bảng mới / cột mới) → an toàn. Các đối tượng mới chỉ nằm đó và không được sử dụng; mã nguồn của `main` không bao giờ tham chiếu đến chúng, vì vậy chúng không thể gây ra kết quả sai hoặc crash. Chúng chỉ là phần dư thừa vô hại.
+- **Chỉ bổ sung** (bảng mới / cột mới) → an toàn. Các đối tượng mới chỉ nằm đó và không được sử dụng; mã nguồn của `main` không bao giờ tham chiếu đến chúng, vì vậy chúng không thể gây ra kết quả sai hoặc crash. Chỉ xóa các đối tượng không sử dụng thông qua một migration đã được duyệt.
 - Có tính phá hủy (`DROP`/`RENAME`/`ALTER` trên bảng mà `main` vẫn sử dụng) → không an toàn. Thay đổi của nhánh khiến mã nguồn của `main` bị lỗi khi truy cập một cột/bảng hiện đã bị xóa hoặc thay đổi.
 
 Cách tiếp cận an toàn nhất: trỏ nhánh tới một cơ sở dữ liệu dùng một lần (một `POSTGRES_DB` riêng biệt), để dữ liệu thực của bạn không bao giờ bị ảnh hưởng. Bạn đã thiết lập kết nối từ các biến `POSTGRES_*`, và `bun run nuke-db` có thể đặt lại cơ sở dữ liệu thử nghiệm.
