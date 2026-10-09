@@ -6,6 +6,7 @@ import { execute as executeMatrixLink } from "@/commands/matrix/link";
 import { initializeMatrixClient } from "@/utils/bridges/matrix/client";
 import { downloadMatrixMedia, parseMxcUri } from "@/utils/bridges/matrix/media";
 import { ensureRoomRelayable, getRoomEncryptionState } from "@/utils/bridges/matrix/rooms";
+import { getPersonaReplyEventMetadata } from "@/utils/bridges/matrix/stateSync";
 import {
   getMatrixBridge,
   MatrixConfigError,
@@ -276,6 +277,52 @@ describe("authenticated media download", () => {
     } finally {
       cdn.stop(true);
     }
+  });
+});
+
+describe("reply event lookup", () => {
+  const roomId = "!room:synthetic.test";
+
+  it("cancels an oversized event body instead of buffering it", async () => {
+    let producedBytes = 0;
+    homeserverRoute = () =>
+      new Response(
+        new ReadableStream({
+          pull(controller) {
+            producedBytes += 64 * 1024;
+            controller.enqueue(new TextEncoder().encode(" ".repeat(64 * 1024)));
+            if (producedBytes >= 64 * MIB) controller.close();
+          },
+        }),
+      );
+
+    const result = await getPersonaReplyEventMetadata(roomId, "$large", "synthetic.test");
+
+    expect(result).toEqual({ isPersonaReply: false });
+    expect(producedBytes).toBeLessThan(64 * MIB);
+  });
+
+  it("recognizes a persona event and refuses malformed shapes", async () => {
+    const events: Record<string, unknown> = {
+      $persona: { sender: "@_tomori_mirri:synthetic.test", content: { body: "hello  there" } },
+      $foreign: { sender: "@_tomori_mirri:elsewhere.test", content: { body: "hi" } },
+      $array: [{ sender: "@_tomori_mirri:synthetic.test" }],
+      $badBody: { sender: "@_tomori_mirri:synthetic.test", content: { body: 42 } },
+    };
+    homeserverRoute = (_request, path) => Response.json(events[decodeURIComponent(path.split("/").at(-1) ?? "")]);
+
+    const results = Object.fromEntries(
+      await Promise.all(
+        Object.keys(events).map(async (id) => [id, await getPersonaReplyEventMetadata(roomId, id, "synthetic.test")]),
+      ),
+    );
+
+    expect(results).toEqual({
+      $persona: { isPersonaReply: true, replySnippet: "hello there" },
+      $foreign: { isPersonaReply: false },
+      $array: { isPersonaReply: false },
+      $badBody: { isPersonaReply: true, replySnippet: undefined },
+    });
   });
 });
 

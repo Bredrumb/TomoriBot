@@ -40,7 +40,7 @@ sidebar:
 3. 還原程式在載入傾印之前會使用提供的金鑰檢查每個加密認證資訊。缺少或錯誤的金鑰會在執行破壞性SQL之前停止操作；`pgcrypto`可能已被啟用。檢查目標並確認`RESTORE`；非空目標還需要確認`RESTORE ANYWAY`。僅還原受信任的SQL傾印。
 4. 保持金鑰就位。在重新啟動之前，執行`bun run audit-keys`和`bun run rotate-keys --dry-run`。如果認證資訊需要遷移到作用中版本，請執行`bun run rotate-keys --bot-stopped`並在啟動任何執行個體前再次稽核。`ON_ERROR_STOP=1`會在出現第一個SQL錯誤時停止，但先前的陳述式可能已經變更了資料。在機器人保持停止的狀態下修復錯誤並重試。
 
-舊版套件在`config.env`中包含原始秘密資訊。還原程式會識別它們並發出警告，但絕不會複製或載入該檔案。請在私密位置仔細檢查它，並自行將其加密版本佈建到目標機密來源中。保持目標資料庫設定就位。即使在升級後，現有的套件仍包含秘密資訊。
+舊版套件在`config.env`中包含原始秘密資訊。還原程式會識別它們並發出警告，但絕不會複製或載入該檔案。請在私密位置仔細檢查它，並自行將其加密版本佈建到目標機密來源中。保持目標資料庫設定就位。即使在升級後，現有的套件仍包含秘密資訊。一旦將加密金鑰封存在受保護的儲存空間中，你就可以從舊版套件中刪除 `config.env`；還原程式仍會接受該套件，並透過解密傾印來檢查金鑰。
 
 ## 輪換加密金鑰
 <!-- anchor: rotating-encryption-keys -->
@@ -316,7 +316,7 @@ bun install --frozen-lockfile
 
 ## 備份和復原
 
-`bun run backup`在`backups/`（或你的`TOMORI_BACKUP_DIR`，如果在`.env`中被覆蓋）中建立一個帶有時間戳記的包，其中包含整個PostgreSQL資料庫以及`.env`。使用以下命令恢復最新的捆綁包：
+`bun run backup` 會在 `backups/`（如果在 `.env` 中覆寫，則為 `TOMORI_BACKUP_DIR`）中建立一個帶有時間戳記的套件，其中包含你的整個 PostgreSQL 資料庫。它不包含 `.env`，因此請將加密金鑰保存在獨立且受保護的儲存空間中（請參閱[資料庫備份與復原金鑰](#database-backups-and-recovery-keys)）。使用以下指令還原最新的套件：
 
 ```sh
 bun run restore-backup --latest

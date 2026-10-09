@@ -1,4 +1,5 @@
 import type { SQL } from "bun";
+import { log } from "@/utils/misc/logger";
 import { keyManager } from "@/utils/security/keyManager";
 
 /** The legacy mirror remains recoverable until its credential column is removed by migration. */
@@ -94,5 +95,24 @@ export async function rotateEncryptedRow(client: SQL, target: EncryptedColumn, r
     if (updated.length !== 1) throw new Error("Concurrent credential replacement.");
   } catch {
     throw new Error(`Rotation failed or row changed: ${target.table}, row ${row.id}.`);
+  }
+}
+
+/**
+ * Re-encrypts a row that a running instance just decrypted under an older key. The row may have
+ * been replaced since that read, so this reuses the conditional update and skips the row instead
+ * of writing the stale credential back; a skipped row stays readable and rotates on a later read.
+ */
+export async function lazyRotateEncryptedRow(
+  client: SQL,
+  table: EncryptedColumn["table"],
+  row: EncryptedRow,
+): Promise<void> {
+  if (storedKeyVersion(row.key_version) === keyManager.getCurrentVersion()) return;
+  const target = ENCRYPTED_COLUMNS.find((column) => column.table === table) as EncryptedColumn;
+  try {
+    await rotateEncryptedRow(client, target, row);
+  } catch (error) {
+    log.warn(`Lazy key rotation skipped. ${(error as Error).message}`);
   }
 }

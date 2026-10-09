@@ -10,6 +10,7 @@
 import type { GuildMcpServerRow } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
+import { lazyRotateEncryptedRow } from "@/utils/security/encryptedColumns";
 import { keyManager } from "@/utils/security/keyManager";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import { invalidateGuildMcpConfigCache } from "@/utils/cache/guildMcpConfigCache";
@@ -402,18 +403,12 @@ class ToolRepository implements IRepository<ToolExportShape> {
       }
 
       const decryptedToken = result.decrypted_token.toString();
-
-      const currentVersion = keyManager.getCurrentVersion();
-      if (keyVersion !== currentVersion) {
-        log.info(`[GuildMcpDb] Rotating auth token for "${row.name}" from key v${keyVersion} to v${currentVersion}`);
-        const currentKey = keyManager.getCurrentKey();
-        await sql`
-          UPDATE guild_mcp_servers
-          SET auth_token = pgp_sym_encrypt(${decryptedToken}, ${currentKey}, 'compress-algo=1, cipher-algo=aes256'),
-              key_version = ${currentVersion}
-          WHERE guild_mcp_id = ${row.guild_mcp_id}
-        `;
-        log.success(`[GuildMcpDb] Key rotation completed for MCP server "${row.name}"`);
+      if (row.guild_mcp_id !== undefined) {
+        await lazyRotateEncryptedRow(sql, "guild_mcp_servers", {
+          id: row.guild_mcp_id,
+          ciphertext: row.auth_token,
+          key_version: row.key_version,
+        });
       }
 
       return decryptedToken;

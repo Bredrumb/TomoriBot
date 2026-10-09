@@ -40,7 +40,7 @@ Hãy lưu giữ các phiên bản mã hóa trong bộ lưu trữ được bảo 
 3. Quá trình khôi phục kiểm tra từng thông tin xác thực được mã hóa bằng các khóa đã cung cấp trước khi nạp bản dump. Các khóa bị thiếu hoặc sai sẽ dừng quá trình trước khi thực thi bất kỳ câu lệnh SQL phá hủy nào; `pgcrypto` có thể đã được bật. Xem xét cơ sở dữ liệu đích và xác nhận `RESTORE`; một đích không trống cũng yêu cầu xác nhận `RESTORE ANYWAY`. Chỉ khôi phục các bản dump SQL đáng tin cậy.
 4. Giữ nguyên các khóa tại chỗ. Trước khi khởi động lại, hãy chạy `bun run audit-keys` và `bun run rotate-keys --dry-run`. Nếu thông tin xác thực cần di chuyển sang phiên bản đang hoạt động, hãy chạy `bun run rotate-keys --bot-stopped` và audit lại trước khi khởi động bất kỳ phiên bản nào. `ON_ERROR_STOP=1` sẽ dừng lại ở lỗi SQL đầu tiên, nhưng các câu lệnh trước đó có thể đã làm thay đổi dữ liệu. Khắc phục lỗi và thử lại trong khi bot vẫn đang dừng.
 
-Các gói cũ chứa các secret thô trong `config.env`. Quá trình khôi phục sẽ nhận diện chúng và cảnh báo, nhưng không bao giờ sao chép hoặc nạp tệp đó. Hãy chủ động xem lại tệp ở một vị trí riêng tư và tự cung cấp các phiên bản mã hóa của nó vào nguồn secret đích. Giữ nguyên cài đặt cơ sở dữ liệu đích tại chỗ. Các gói hiện có vẫn chứa secret ngay cả sau khi nâng cấp.
+Các gói cũ chứa các secret thô trong `config.env`. Quá trình khôi phục sẽ nhận diện chúng và cảnh báo, nhưng không bao giờ sao chép hoặc nạp tệp đó. Hãy chủ động xem lại tệp ở một vị trí riêng tư và tự cung cấp các phiên bản mã hóa của nó vào nguồn secret đích. Giữ nguyên cài đặt cơ sở dữ liệu đích tại chỗ. Các gói hiện có vẫn chứa secret ngay cả sau khi nâng cấp. Khi các khóa mã hóa đã được lưu trữ trong bộ nhớ an toàn được bảo vệ, bạn có thể xóa `config.env` khỏi gói cũ; quá trình khôi phục vẫn chấp nhận gói đó và kiểm tra các khóa bằng cách giải mã bản dump.
 
 ## Xoay vòng khóa mã hóa
 <!-- anchor: rotating-encryption-keys -->
@@ -316,7 +316,7 @@ Các máy chủ cục bộ TTS trong `servers/tts/` không còn sử dụng dự
 
 ## Sao lưu và khôi phục
 
-`bun run backup` tạo gói có dấu thời gian trong `backups/` (hoặc `TOMORI_BACKUP_DIR` của bạn nếu bị ghi đè trong `.env`) chứa toàn bộ cơ sở dữ liệu PostgreSQL của bạn cùng với `.env`. Khôi phục gói mới nhất với:
+`bun run backup` tạo một gói có gắn dấu thời gian trong `backups/` (hoặc `TOMORI_BACKUP_DIR` của bạn nếu được ghi đè trong `.env`) chứa toàn bộ cơ sở dữ liệu PostgreSQL của bạn. Gói này không bao gồm `.env`, vì vậy hãy giữ các khóa mã hóa của bạn trong bộ nhớ an toàn được bảo vệ riêng biệt (xem [Sao lưu cơ sở dữ liệu và khóa khôi phục](#database-backups-and-recovery-keys)). Khôi phục gói mới nhất bằng:
 
 ```sh
 bun run restore-backup --latest

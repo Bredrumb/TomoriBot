@@ -26,6 +26,7 @@ import { buildCustomProviderName, buildSyntheticCustomModelCodename } from "@/ut
 import { getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 import { CUSTOM_ENDPOINT_PLACEHOLDER_KEY } from "@/utils/provider/legacyCustomProvider";
 import { encryptApiKey } from "@/utils/security/crypto";
+import { lazyRotateEncryptedRow } from "@/utils/security/encryptedColumns";
 import { keyManager } from "@/utils/security/keyManager";
 import { getBaseTriggerWords } from "@/utils/text/localizer";
 import { dedupeTriggerWords } from "@/utils/text/triggerWords";
@@ -1583,17 +1584,11 @@ class ServerRepository implements IRepository<ServerExportShape> {
       }
 
       const decryptedToken = result.decrypted_token.toString();
-      const currentVersion = keyManager.getCurrentVersion();
-      if (keyVersion !== currentVersion) {
-        const currentKey = keyManager.getCurrentKey();
-        await sql`
-          UPDATE discord_managed_webhooks
-          SET webhook_token = pgp_sym_encrypt(${decryptedToken}, ${currentKey}, 'compress-algo=1, cipher-algo=aes256'),
-              key_version = ${currentVersion},
-              updated_at = CURRENT_TIMESTAMP
-          WHERE managed_webhook_id = ${row.managed_webhook_id}
-        `;
-      }
+      await lazyRotateEncryptedRow(sql, "discord_managed_webhooks", {
+        id: row.managed_webhook_id,
+        ciphertext: row.webhook_token,
+        key_version: row.key_version,
+      });
 
       return decryptedToken;
     } catch (error) {

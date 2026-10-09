@@ -40,7 +40,7 @@ Para restaurar:
 3. A restauração verifica cada credencial criptografada com as chaves fornecidas antes de carregar o dump. Chaves ausentes ou incorretas interrompem a operação antes de qualquer SQL destrutivo; o `pgcrypto` já pode ter sido habilitado. Revise o destino e confirme `RESTORE`; um destino não vazio também requer `RESTORE ANYWAY`. Restaure apenas dumps SQL confiáveis.
 4. Mantenha as chaves no lugar. Antes de reiniciar, execute `bun run audit-keys` e `bun run rotate-keys --dry-run`. Se as credenciais precisarem de migração para a versão ativa, execute `bun run rotate-keys --bot-stopped` e audite novamente antes de iniciar qualquer instância. `ON_ERROR_STOP=1` para no primeiro erro de SQL, mas instruções anteriores já podem ter alterado dados. Corrija o erro e tente novamente enquanto o bot permanece parado.
 
-Pacotes legados incluem segredos brutos em `config.env`. A restauração os identifica e emite um aviso, mas nunca copia nem carrega esse arquivo. Revise-o com cuidado em um local privado e provisione você mesmo suas versões de criptografia na fonte de segredos de destino. Mantenha as configurações do banco de dados de destino no lugar. Pacotes existentes continuam contendo segredos mesmo após a atualização.
+Pacotes legados incluem segredos brutos em `config.env`. A restauração os identifica e emite um aviso, mas nunca copia nem carrega esse arquivo. Revise-o com cuidado em um local privado e provisione você mesmo suas versões de criptografia na fonte de segredos de destino. Mantenha as configurações do banco de dados de destino no lugar. Pacotes existentes continuam contendo segredos mesmo após a atualização. Depois que as chaves de criptografia estiverem arquivadas em um armazenamento protegido, você poderá excluir o `config.env` de um pacote legado; a restauração ainda aceitará o pacote e verificará as chaves descriptografando o dump.
 
 ## Rotacionando chaves de criptografia
 <!-- anchor: rotating-encryption-keys -->
@@ -316,7 +316,7 @@ Os servidores locais TTS em `servers/tts/` não usam mais fallbacks de porta com
 
 ## Backups e restauração
 
-`bun run backup` cria um pacote com carimbo de data e hora em `backups/` (ou seu `TOMORI_BACKUP_DIR` se substituído em `.env`) contendo todo o seu banco de dados PostgreSQL mais `.env`. Restaure o pacote mais recente com:
+`bun run backup` cria um pacote com carimbo de data e hora em `backups/` (ou seu `TOMORI_BACKUP_DIR` se substituído em `.env`) contendo todo o seu banco de dados PostgreSQL. Ele não inclui o `.env`, portanto, mantenha suas chaves de criptografia em um armazenamento protegido separado (consulte [Backups de banco de dados e chaves de recuperação](#database-backups-and-recovery-keys)). Restaure o pacote mais recente com:
 
 ```sh
 bun run restore-backup --latest

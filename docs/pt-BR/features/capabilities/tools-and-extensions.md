@@ -90,15 +90,27 @@ Para ler uma página específica, ela usa `fetch_url`. Não está disponível em
 
 Servidores [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) estendem as capacidades dela com ferramentas externas que você mesmo registra.
 
-### Adicionando um MCP Online
+### Adicionando um MCP online
 
-Qualquer servidor MCP hospedado publicamente com um endpoint HTTPS funciona. Usando o [Smithery.ai](https://smithery.ai) como exemplo:
+Use o endpoint HTTPS direto de um provedor compatível com MCP Streamable HTTP ou SSE:
 
-1. Crie uma conta e gere uma chave de API a partir do seu perfil.
-2. Abra um MCP no catálogo e copie a URL de conexão (por exemplo, `https://youtube.run.tools`).
-3. Abra `/config` > Plugins > MCP Servers, escolha `Adicionar MCP`, cole a URL de conexão em URL, cole sua chave do Smithery em `Token de Autenticação` e escolha o `Tipo de Servidor` necessário. `Propósito Geral` fica selecionado por padrão.
+1. Obtenha o endpoint MCP e os requisitos de autenticação com o provedor.
+2. Abra `/config` > Plugins > Servidores MCP e escolha `+ Adicionar MCP`.
+3. Cole o endpoint em `URL`, insira o token Bearer em `Token de Autenticação` se necessário e escolha o `Tipo de Servidor` desejado. **Propósito Geral** fica selecionado por padrão.
 
-Se um servidor não precisar de autenticação, deixe `Token de Autenticação` em branco. Seu token de autenticação é criptografado em repouso e nunca é exibido novamente. Abra a mesma página de Configuração para inspecionar o estado configurado, ativar ou desativar um servidor, ou remover um com confirmação explícita. A remoção o desconecta imediatamente e libera um slot. Cada linha salva também mostra os nomes das ferramentas delimitadas de sua última descoberta bem-sucedida. None discovered é um resultado conhecido de zero ferramentas; Discovery unknown identifica uma linha legada ou um servidor que ainda não possui um snapshot bem-sucedido. Abrir a interface de gerenciamento de MCP apenas lê os metadados salvos e não entra em contato com o servidor remoto.
+### Adicionando um servidor Smithery
+
+Servidores hospedados no Smithery têm endereços terminados em `.run.tools`. Cole esse endereço em `URL` e sua chave de API do Smithery em `Token de Autenticação`. O TomoriBot envia a chave apenas para a API do Smithery em `api.smithery.ai`, nunca para o endereço do servidor em si. O Smithery então encaminha cada chamada de ferramenta para o servidor, portanto, o Smithery vê todas as solicitações e resultados de ferramentas. Os registros salvos antes do retorno deste suporte voltam a funcionar sem alterações.
+
+O TomoriBot mantém uma conexão do Smithery por endereço de servidor no primeiro namespace da sua conta do Smithery (o Smithery cria um namespace se você não tiver nenhum) e a reutiliza, evitando o acúmulo de conexões ao adicionar, testar e reconectar. O TomoriBot nunca exclui conexões. Versões anteriores do TomoriBot criavam uma nova conexão a cada reconexão, então sua conta pode ter várias conexões não utilizadas para o mesmo servidor; você pode removê-las no painel do Smithery.
+
+Alguns servidores exigem que você faça login no serviço que eles encapsulam. Tentar adicionar um servidor desse tipo falhará com uma mensagem informando que a autorização é necessária, e o TomoriBot nunca exibe o link de login no Discord. Abra o painel do Smithery, conclua o login para a conexão cujo nome começa com `tomoribot-` e adicione o servidor novamente. A conexão e a listagem de ferramentas devem ser concluídas em até 15 segundos.
+
+Desativar um registro selecionado para pesquisa ou leitura de URL restaura a seleção integrada do TomoriBot; mantê-lo ativado impede a troca automática. Os nomes de ferramentas salvos descrevem a última descoberta realizada, portanto, não comprovam que a conexão ainda esteja funcionando.
+
+As respostas são interrompidas em 8 MiB durante o download. Catálogos grandes de ferramentas ou resultados volumosos podem deixar um plugin indisponível ou fazer uma chamada de ferramenta falhar. Para conexões SSE, o limite abrange todo o fluxo de resposta, incluindo atualizações sucessivas. Solicite ao provedor resultados menores, paginação ou links de arquivos quando uma ferramenta retornar documentos grandes ou mídias incorporadas.
+
+Se um servidor não precisar de autenticação, deixe `Token de Autenticação` em branco. Seu token de autenticação é criptografado em repouso e nunca é exibido novamente. Abra a mesma página de Configuração para inspecionar o estado configurado, ativar ou desativar um servidor, ou remover um com confirmação explícita. A remoção o desconecta imediatamente e libera um slot. Cada linha salva também mostra os nomes das ferramentas delimitadas de sua última descoberta bem-sucedida. `Nenhuma descoberta` é um resultado conhecido de zero ferramentas; `Descoberta desconhecida` identifica uma linha legada ou um servidor que ainda não possui um snapshot bem-sucedido. Abrir a interface de gerenciamento de MCP apenas lê os metadados salvos e não entra em contato com o servidor remoto.
 
 ### Servidores MCP Locais
 

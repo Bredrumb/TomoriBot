@@ -65,6 +65,11 @@ interface DockerLocalServer {
   image: string;
   /** args passed after "docker run" when creating a fresh container */
   runArgs: string[];
+  /**
+   * Environment for the `docker run` process. Secrets go here and runArgs names them with a bare
+   * `-e NAME`, because argv is readable by every local user through the process list.
+   */
+  runEnv?: Record<string, string>;
   /** milliseconds to wait for healthcheck before aborting (default 120s) */
   healthTimeoutMs?: number;
   /**
@@ -130,6 +135,7 @@ const LOCAL_SERVERS: Record<string, LocalServerDef> = {
     kind: "docker",
     containerName: "crawl4ai",
     image: CRAWL4AI_IMAGE,
+    runEnv: process.env.CRAWL4AI_TOKEN ? { CRAWL4AI_API_TOKEN: process.env.CRAWL4AI_TOKEN } : undefined,
     // Crawl4AI has a longer first-run startup (model download), give it 3 min.
     healthTimeoutMs: 180_000,
     httpHealthUrl: "http://localhost:11235/health",
@@ -140,7 +146,7 @@ const LOCAL_SERVERS: Record<string, LocalServerDef> = {
       "-p",
       "127.0.0.1:11235:11235",
       "--shm-size=3g",
-      ...(process.env.CRAWL4AI_TOKEN ? ["-e", `CRAWL4AI_API_TOKEN=${process.env.CRAWL4AI_TOKEN}`] : []),
+      ...(process.env.CRAWL4AI_TOKEN ? ["-e", "CRAWL4AI_API_TOKEN"] : []),
       "--health-cmd",
       "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:11235/health', timeout=3).read()\"",
       "--health-interval",
@@ -342,6 +348,7 @@ async function ensureDockerLocalServer(def: DockerLocalServer): Promise<void> {
   if (state === null) {
     console.log(`${label} Container not found. Running docker run...`);
     const run = Bun.spawn(["docker", "run", ...def.runArgs], {
+      env: { ...process.env, ...def.runEnv },
       stdout: "inherit",
       stderr: "inherit",
     });

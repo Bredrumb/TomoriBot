@@ -91,24 +91,27 @@ Brave → SearXNG → DuckDuckGo
 Máy chủ [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) mở rộng khả năng của bot với
 các công cụ bên ngoài do bạn tự đăng ký.
 
-### Thêm máy chủ MCP trực tuyến
+### Thêm MCP trực tuyến
 
-Bất kỳ máy chủ MCP nào được lưu trữ công khai với endpoint HTTPS đều hoạt động. Lấy
-[Smithery.ai](https://smithery.ai) làm ví dụ:
+Sử dụng endpoint HTTPS trực tiếp của nhà cung cấp hỗ trợ MCP Streamable HTTP hoặc SSE:
 
-1. Tạo một tài khoản và tạo một khóa API từ hồ sơ của bạn.
-2. Mở một MCP trong danh mục và sao chép URL kết nối của nó (ví dụ: `https://youtube.run.tools`).
-3. Mở `/config` > Plugins > MCP Servers, chọn `Thêm MCP`, dán URL kết nối vào ô URL, dán khóa
-   Smithery vào ô `Token xác thực`, và chọn `Loại máy chủ` bắt buộc. Tùy chọn **General
-   Purpose** được chọn theo mặc định.
+1. Lấy endpoint MCP và các yêu cầu xác thực từ nhà cung cấp.
+2. Mở `/config` > Plugins > MCP server và chọn `+ Thêm MCP`.
+3. Dán endpoint vào `URL`, nhập token Bearer vào `Token xác thực` nếu được yêu cầu, và chọn `Loại máy chủ` bắt buộc. **Mục đích chung** được chọn theo mặc định.
 
-Nếu máy chủ không yêu cầu xác thực, hãy để trống ô `Token xác thực`. Mã xác thực của bạn được mã hóa ở trạng
-thái lưu trữ và không bao giờ hiển thị lại. Hãy mở cùng trang Config đó để kiểm tra trạng thái cấu hình, bật
-hoặc tắt máy chủ, hoặc xóa máy chủ với xác nhận rõ ràng. Việc xóa sẽ ngắt kết nối ngay lập tức và giải phóng
-một vị trí. Mỗi hàng đã lưu cũng hiển thị tên các công cụ có giới hạn từ lần phát hiện thành công gần nhất.
-None discovered là kết quả xác nhận không có công cụ nào; Discovery unknown xác định một hàng cũ
-hoặc một máy chủ chưa có bản ghi nhanh thành công nào. Việc mở giao diện quản lý MCP chỉ đọc siêu dữ liệu đã
-lưu và không liên hệ với máy chủ từ xa.
+### Thêm máy chủ Smithery
+
+Các máy chủ được lưu trữ trên Smithery có địa chỉ kết thúc bằng `.run.tools`. Dán địa chỉ đó vào `URL` và khóa API Smithery của bạn vào `Token xác thực`. TomoriBot chỉ gửi khóa đến API của Smithery tại `api.smithery.ai`, không bao giờ gửi đến chính địa chỉ máy chủ. Sau đó, Smithery sẽ chuyển từng lệnh gọi công cụ đến máy chủ, vì vậy Smithery có thể thấy mọi yêu cầu và kết quả công cụ. Các đăng ký đã lưu trước khi tính năng hỗ trợ này quay lại sẽ hoạt động bình thường mà không cần thay đổi gì.
+
+TomoriBot duy trì một kết nối Smithery cho mỗi địa chỉ máy chủ trong không gian tên đầu tiên của tài khoản Smithery của bạn (Smithery sẽ tạo một không gian tên nếu bạn chưa có) và tái sử dụng nó, do đó việc thêm, thử nghiệm và kết nối lại sẽ không làm tích lũy kết nối. TomoriBot không bao giờ xóa kết nối. Các phiên bản TomoriBot trước đây đã tạo một kết nối mới mỗi khi kết nối lại, vì vậy tài khoản của bạn có thể chứa nhiều kết nối không sử dụng cho cùng một máy chủ; bạn có thể xóa chúng khỏi trang quản trị Smithery của mình.
+
+Một số máy chủ yêu cầu bạn đăng nhập bằng dịch vụ mà chúng bao bọc. Thao tác thêm máy chủ đó sẽ thất bại với thông báo cần ủy quyền, và TomoriBot không bao giờ hiển thị liên kết đăng nhập trong Discord. Hãy mở trang quản trị Smithery của bạn, hoàn tất đăng nhập cho kết nối có tên bắt đầu bằng `tomoribot-`, sau đó thêm lại máy chủ. Việc kết nối và liệt kê công cụ phải hoàn tất trong vòng 15 giây.
+
+Việc tắt đăng ký đã chọn cho tìm kiếm hoặc đọc URL sẽ khôi phục lựa chọn tích hợp sẵn của TomoriBot; giữ cho đăng ký này bật sẽ ngăn việc chuyển đổi tự động. Tên công cụ đã lưu chỉ mô tả kết quả lần khám phá gần nhất, vì vậy chúng không chứng minh rằng kết nối vẫn đang hoạt động.
+
+Phản hồi sẽ dừng ở mức 8 MiB trong khi tải xuống. Danh mục công cụ hoặc kết quả lớn có thể khiến plugin không khả dụng hoặc khiến lệnh gọi công cụ thất bại. Đối với các kết nối SSE, giới hạn này bao gồm toàn bộ luồng phản hồi, bao gồm cả các bản cập nhật liên tiếp. Hãy yêu cầu nhà cung cấp cung cấp kết quả nhỏ hơn, phân trang hoặc liên kết tệp khi một công cụ trả về tài liệu lớn hoặc phương tiện nhúng.
+
+Nếu máy chủ không yêu cầu xác thực, hãy để trống ô `Token xác thực`. Token xác thực của bạn được mã hóa ở trạng thái lưu trữ và không bao giờ hiển thị lại. Hãy mở cùng trang Config đó để kiểm tra trạng thái cấu hình, bật hoặc tắt máy chủ, hoặc xóa máy chủ với xác nhận rõ ràng. Việc xóa sẽ ngắt kết nối ngay lập tức và giải phóng một vị trí. Mỗi hàng đã lưu cũng hiển thị tên các công cụ có giới hạn từ lần phát hiện thành công gần nhất. `Không tìm thấy` là kết quả xác nhận không có công cụ nào; `Chưa xác định` xác định một hàng cũ hoặc một máy chủ chưa có bản ghi nhanh thành công nào. Việc mở giao diện quản lý MCP chỉ đọc siêu dữ liệu đã lưu và không liên hệ với máy chủ từ xa.
 
 ### Máy chủ MCP cục bộ
 

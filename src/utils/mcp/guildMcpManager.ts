@@ -35,7 +35,7 @@ import { validateFetchUrlTarget } from "@/tools/fetchUrl/urlSafety";
 import { createGuildMcpFetch } from "@/utils/mcp/guildMcpFetch";
 import { connectSmithery, isSmitheryUrl } from "@/utils/mcp/smitheryConnection";
 
-export interface GuildMcpRoute {
+interface GuildMcpRoute {
   config: GuildMcpServerRow;
   connection: GuildMCPConnection;
 }

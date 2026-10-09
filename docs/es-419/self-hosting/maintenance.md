@@ -40,7 +40,7 @@ Para restaurar:
 3. La restauración comprueba cada credencial cifrada con las claves proporcionadas antes de cargar el volcado. Las claves faltantes o incorrectas detienen el proceso antes de cualquier SQL destructivo; es posible que `pgcrypto` ya se haya habilitado. Revisa el destino y confirma `RESTORE`; un destino no vacío también requiere `RESTORE ANYWAY`. Restaura solo volcados SQL de confianza.
 4. Mantén las claves en su lugar. Antes de reiniciar, ejecuta `bun run audit-keys` y `bun run rotate-keys --dry-run`. Si las credenciales necesitan migración a la versión activa, ejecuta `bun run rotate-keys --bot-stopped` y audita nuevamente antes de iniciar cualquier instancia. `ON_ERROR_STOP=1` se detiene en el primer error de SQL, pero las declaraciones anteriores ya pueden haber modificado datos. Corrige el error y vuelve a intentarlo mientras el bot permanece detenido.
 
-Los paquetes heredados incluyen secretos sin procesar en `config.env`. La restauración los identifica y advierte, pero nunca copia ni carga ese archivo. Revísalo minuciosamente en una ubicación privada y aprovisiona tú mismo sus versiones de cifrado en la fuente de secretos de destino. Mantén la configuración de la base de datos de destino en su lugar. Los paquetes existentes continúan conteniendo secretos incluso después de actualizar.
+Los paquetes heredados incluyen secretos sin procesar en `config.env`. La restauración los identifica y advierte, pero nunca copia ni carga ese archivo. Revísalo minuciosamente en una ubicación privada y aprovisiona tú mismo sus versiones de cifrado en la fuente de secretos de destino. Mantén la configuración de la base de datos de destino en su lugar. Los paquetes existentes continúan conteniendo secretos incluso después de actualizar. Una vez que sus claves de cifrado estén archivadas en un almacenamiento protegido, puedes eliminar `config.env` de un paquete heredado; la restauración seguirá aceptando el paquete y comprobará las claves al descifrar el volcado.
 
 ## Rotación de claves de cifrado
 <!-- anchor: rotating-encryption-keys -->
@@ -316,7 +316,7 @@ Los servidores locales TTS en `servers/tts/` ya no utilizan respaldos de puertos
 
 ## Copias de seguridad y restauración
 
-`bun run backup` crea un paquete con marca de tiempo en `backups/` (o su `TOMORI_BACKUP_DIR` si se anula en `.env`) que contiene su base de datos PostgreSQL completa más `.env`. Restaure el último paquete con:
+`bun run backup` crea un paquete con marca de tiempo en `backups/` (o tu `TOMORI_BACKUP_DIR` si se anula en `.env`) que contiene tu base de datos PostgreSQL completa. No incluye `.env`, así que mantén tus claves de cifrado en un almacenamiento protegido independiente (consulta [Copias de seguridad de la base de datos y claves de recuperación](#database-backups-and-recovery-keys)). Restaura el último paquete con:
 
 ```sh
 bun run restore-backup --latest

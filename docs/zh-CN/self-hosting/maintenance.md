@@ -40,7 +40,7 @@ sidebar:
 3. 恢复程序在加载转储之前会使用提供的密钥检查每个加密凭据。缺失或错误的密钥会在执行破坏性SQL之前停止操作；`pgcrypto`可能已被启用。检查目标并确认`RESTORE`；非空目标还需要确认`RESTORE ANYWAY`。仅恢复受信任的SQL转储。
 4. 保持密钥就位。在重启之前，运行`bun run audit-keys`和`bun run rotate-keys --dry-run`。如果凭据需要迁移到活动版本，请运行`bun run rotate-keys --bot-stopped`并在启动任何实例前再次审计。`ON_ERROR_STOP=1`会在出现第一个SQL错误时停止，但先前的语句可能已经更改了数据。在机器人保持停止的状态下修复错误并重试。
 
-旧版备份包在`config.env`中包含原始凭据。恢复程序会识别它们并发出警告，但绝不会复制或加载该文件。请在私密位置仔细检查它，并自行将其加密版本配置到目标凭据源中。保持目标数据库设置就位。即使在升级后，现有的备份包仍包含凭据。
+旧版备份包在`config.env`中包含原始凭据。恢复程序会识别它们并发出警告，但绝不会复制或加载该文件。请在私密位置仔细检查它，并自行将其加密版本配置到目标凭据源中。保持目标数据库设置就位。即使在升级后，现有的备份包仍包含凭据。一旦将加密密钥归档在受保护的存储中，你就可以从旧版备份包中删除 `config.env`；恢复程序仍会接受该备份包，并通过解密转储来检查密钥。
 
 ## 轮换加密密钥
 <!-- anchor: rotating-encryption-keys -->
@@ -316,7 +316,7 @@ bun install --frozen-lockfile
 
 ## 备份和恢复
 
-`bun run backup`在`backups/`（或者你的`TOMORI_BACKUP_DIR`，如果在`.env`中被覆盖）中创建一个带时间戳的包，其中包含整个PostgreSQL数据库以及`.env`。使用以下命令恢复最新的捆绑包：
+`bun run backup` 会在 `backups/`（如果在 `.env` 中覆盖，则为 `TOMORI_BACKUP_DIR`）中创建一个带有时间戳的备份包，其中包含你的整个 PostgreSQL 数据库。它不包含 `.env`，因此请将加密密钥保存在独立的受保护存储中（请参阅[数据库备份与恢复密钥](#database-backups-and-recovery-keys)）。使用以下命令恢复最新的备份包：
 
 ```sh
 bun run restore-backup --latest
