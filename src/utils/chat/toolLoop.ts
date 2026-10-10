@@ -635,11 +635,11 @@ async function streamOnce(
       }
 
       const providerName = params.tomoriState.llm.llm_provider;
-      log.metric("stream_sdk_timeout", {
-        provider: providerName,
-        phase: sawStreamProgress ? "idle" : "first_token",
-        reason: error.message.slice("SDK_CALL_TIMEOUT:".length).trim(),
-      });
+      const phase = sawStreamProgress ? "idle" : "first_token";
+      log.metric("stream_sdk_timeout", { provider: providerName, phase });
+      log.warn(
+        `Stream SDK call timed out (${providerName}, ${phase}): ${error.message.slice("SDK_CALL_TIMEOUT:".length).trim()}`,
+      );
 
       // Genuine timeout → the fallback path may run. The stream was aborted, not cancelled: wait
       // (bounded) for it to actually settle so any Discord send it had already dispatched is recorded

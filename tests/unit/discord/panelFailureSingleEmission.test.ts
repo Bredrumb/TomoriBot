@@ -155,8 +155,8 @@ describe("panel_failure has exactly one emitter", () => {
    *
    * A route that emits its own `panel_failure` and then repaints with a receipt counts one failure
    * twice, under two different reason keys, and no unit test over `deliverGuardedPanel` can see it.
-   * Guarding the invariant by source means a future call site cannot quietly revoke it, and detail
-   * that a receipt cannot carry belongs under `panel_failure_detail` instead.
+   * Guarding the invariant by source means a future call site cannot quietly revoke it. Counts a
+   * receipt cannot carry belong under `panel_failure_detail`, and free-text cause detail in `log.warn`.
    */
   it('declares log.metric("panel_failure") in interactionCore.ts only', () => {
     const root = join(import.meta.dir, "..", "..", "..", "src");

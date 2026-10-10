@@ -2005,11 +2005,11 @@ function recordPanelFailureSample(fields: Record<string, number | string>): void
  * place a receipt can be observed without an opt-in line in each of the roughly sixteen `repaint`
  * helpers.
  *
- * Emitted as a metric rather than an error record: the metric level is never filtered out of the
- * production stream, while `error_logs` is reserved for incidents. Most of these receipts are
- * expected outcomes the actor can correct (bad input, stale panel, unavailable read), and writing
- * every one of them at error level is the storm the repository's circuit breaker exists to absorb.
- * The genuinely broken paths log at error level where their cause is still in scope.
+ * Emitted as a metric rather than an error record, because `error_logs` is reserved for incidents.
+ * Most of these receipts are expected outcomes the actor can correct (bad input, stale panel,
+ * unavailable read), and writing every one of them at error level is the storm the repository's
+ * circuit breaker exists to absorb. The genuinely broken paths log at error level where their cause
+ * is still in scope, and a site with free-text cause detail writes it to `log.warn`.
  *
  * Both sinks carry the same fields, so `stat_counters.panel_action` (successes) and
  * `metric_samples.panel_failure` (failures) join on `metric_key` / `fields->>'reason'` and answer
@@ -2032,11 +2032,10 @@ function reportPanelFailure(
     const fields = {
       locale: options?.locale ?? "en-US",
       tone: receipt.tone,
-      // Deliberately not the heading as the grouping key: a localized heading files the same defect
-      // under a different label per locale.
+      // The heading is left out entirely: it is localized free text, so it files the same defect
+      // under a different value per locale and cannot be grouped.
       reason: receipt.reason ?? `${namespace}_${receipt.tone}`,
       namespace,
-      heading: receipt.heading,
       // Omitted rather than defaulted when the site does not know its action: the field shares the
       // `stat_counters.panel_action` key space, and a placeholder would join to nothing while
       // looking like it had.

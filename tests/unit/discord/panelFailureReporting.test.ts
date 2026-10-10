@@ -4,7 +4,7 @@ import type { PanelReceipt } from "@/types/discord/panel";
 import { deliverGuardedPanel, setPanelFailureSampleSink } from "@/utils/discord/ui/interactionCore";
 import { setupNoticeReceipt } from "@/utils/discord/ui/setupPanel";
 import { log } from "@/utils/misc/logger";
-import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { initializeLocalizer } from "@/utils/text/localizer";
 
 await initializeLocalizer();
 
@@ -78,7 +78,8 @@ describe("panel failure reporting chokepoint", () => {
       expect(metrics[0]?.fields.tone).toBe("error");
       expect(metrics[0]?.fields.namespace).toBe("config");
       expect(metrics[0]?.fields.reason).toBe("custom_endpoint_unreachable");
-      expect(metrics[0]?.fields.heading).toBe(localizer("en-US", "commands.conditioning.panel.write_failed_heading"));
+      // Localized free text cannot be grouped, so it never rides on the metric.
+      expect(metrics[0]?.fields).not.toHaveProperty("heading");
       expect(metrics[0]?.fields.locale).toBe("en-US");
     } finally {
       restore();
