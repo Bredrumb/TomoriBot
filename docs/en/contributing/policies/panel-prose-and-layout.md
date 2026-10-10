@@ -29,6 +29,10 @@ Wrapping is visual; length limits are separate and use two different tools:
   `validateComponentsV2MessageLimits` checks the whole message. Discord allows 4,000 code points
   across all `TextDisplay` components, so a body that fits alone can still overflow the message.
   `safeSelectOptionText` cannot bound body text.
+- **Stored prompts and notes** use `renderFencedPreview`, which fences them as markdown, caps them at
+  `FENCED_PREVIEW_MAX_CHARS`, and ends cut text with an `<!-- N more characters hidden -->` marker.
+  Discord colors the marker like a code comment. Pass the label of the button whose modal shows the
+  complete text so the marker can name it.
 
 ## Markers
 

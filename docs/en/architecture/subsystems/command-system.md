@@ -131,14 +131,14 @@ The anchor message workflow in `src/utils/discord/ui/personaWorkflow.ts` powers 
 ## Response Drafting panel
 
 `/config` > Plugins > Response Drafting stores workspace settings for guild managers and DM owners.
-Reviewer and Decision pickers use the existing provider windows and modals without changing the
-primary text model. Clearing the reviewer restores inheritance from the actual response model;
+Reviewer, Decision and checker dropdowns render directly, like `/config` > Models; picking a provider
+opens its model modal without changing the primary text model. Clearing the reviewer restores inheritance from the actual response model;
 clearing Decisions or the checker stores None. A removed checker binding stays saved and unavailable.
 
-The page shows availability, added time/cost and a bounded prompt preview. `Set Prompt` opens the
+The page shows availability, added time/cost and a shortened prompt preview. `Set Prompt` opens the
 complete instructions in a prefilled 4,000-character modal; `Use Default` clears the override. Custom
-prompts retain the Decision selection but disable skipping. Selected Decisions are visibly inactive
-while calibration is absent. Persistence is described in
+prompts retain the Decision selection but disable skipping, and Decisions stay inactive while
+calibration is absent; the page labels Decision models experimental. Persistence is described in
 [database settings](database-schema.md#response-drafting-workspace-settings); runtime ownership is in
 [generation review](../pipelines/chat/06-per-turn/03-run-generation-turn.md#response-text-review).
 
