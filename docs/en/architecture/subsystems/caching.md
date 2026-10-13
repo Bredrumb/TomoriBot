@@ -61,7 +61,7 @@ Application caches are partitioned by domain ownership, lifetime, and storage ba
 - **LLM model cache (`llmCacheStore.ts`)**: static model catalog warmed from the `llms` table at startup. Remains immutable during normal runtime.
 - **OpenRouter catalogs (`openrouterCatalog.ts`)**: separates models into text, embedding, image, and video catalogs (`openrouterCapabilityCache.ts`, `openrouterEmbeddingModelCache.ts`, `openrouterImageModelCache.ts`, `openrouterVideoModelCache.ts`). Keyed by lowercase model codename. Refreshed on misses and in the background via a 6-hour TTL. Collapses concurrent lookups into single network requests and enforces a 60-second minimum refresh interval. Excluded from emergency clearing to prevent chat traffic from blocking on provider discovery.
 - **Live model limits cache (`liveModelLimitsCache.ts`)**: keyed by `provider:codename` for Anthropic and Google models APIs. Successful lookups persist for 24 hours. Failed attempts cache a 10-minute retry interval while serving catalog defaults.
-- **NovelAI caches (`novelaiCapabilityCache.ts`, `novelaiSubscriptionCache.ts`)**: static model token limits and subscription tier definitions.
+- **NovelAI caches (`novelaiCapabilityCache.ts`, `novelaiSubscriptionCache.ts`)**: static model allowances and subscription facts cached for 24 hours by SHA-256 of the actual credential. Personal, DM, and rotation requests use their selected key. Failed or malformed subscription lookups leave the cache cold and retain the existing default allowance. Credential identities stay inside the cache and are omitted from logs and prompt exports.
 - **Guild MCP configuration cache (`guildMcpConfigCache.ts`)**: caches active MCP server registrations and discovered tool name snapshots.
 
 ### Ephemeral workflow sessions
@@ -88,6 +88,7 @@ records an existing notification-ordering limitation. Domain invalidators includ
 - Personal spotlight updates: `invalidatePersonalSpotlightCache(serverId, userId?, channelDiscId?)` (drops the server gate alongside matching result entries).
 - Webhook deletion or recreation: webhook invalidation helpers in `src/utils/discord/webhook/cache.ts`.
 - MCP tool discovery updates: `invalidateGuildMcpConfigCache(serverId)`.
+- NovelAI credential add/replacement: saved-config repository upserts invalidate the old and new credentials after successful writes. Adding a rotation key invalidates that key after insertion. Unchanged stored credentials retain their entries.
 
 Invalidating before write success is forbidden: a rolled-back transaction would leave the cache empty, prompting an immediate refetch of the pre-write database state.
 

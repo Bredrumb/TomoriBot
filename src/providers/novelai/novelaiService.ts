@@ -4,6 +4,7 @@
  * Supports streaming via Server-Sent Events (SSE)
  */
 
+import { z } from "zod";
 import { mergeStopStrings } from "@/providers/utils/stopStrings";
 import { log } from "@/utils/misc/logger";
 
@@ -709,41 +710,19 @@ export function isNovelAIRateLimitError(error: string, statusCode?: number): boo
  */
 const NOVELAI_ACCOUNT_API_BASE_URL = "https://text.novelai.net";
 
-/**
- * Shape of the perks object returned by GET /user/subscription.
- * Only contextTokens is used here; other perks are preserved for completeness.
- */
-interface NovelAISubscriptionPerks {
-  maxPriorityActions: number;
-  startPriority: number;
-  /** Maximum context size in tokens for this subscription tier */
-  contextTokens: number;
-  unlimitedMaxPriority: boolean;
-  moduleTrainingSteps: number;
-}
+const novelAISubscriptionSchema = z.object({
+  tier: z.number().int().nonnegative(),
+  active: z.boolean(),
+  usage: z
+    .object({
+      isNegative: z.boolean(),
+      percent: z.number().finite(),
+      timeUntilNextPercent: z.number().finite(),
+    })
+    .optional(),
+});
 
-/**
- * Opus image-generation usage status returned with a subscription.
- * `percent` is the API's meter value and `timeUntilNextPercent` is the time
- * until its next one-percent recovery.
- */
-interface NovelAIUsageLimitStatus {
-  isNegative: boolean;
-  percent: number;
-  timeUntilNextPercent: number;
-}
-
-/**
- * Shape of the response returned by GET /user/subscription.
- */
-export interface NovelAISubscription {
-  tier: number;
-  active: boolean;
-  expiresAt: number;
-  perks: NovelAISubscriptionPerks;
-  isGracePeriod: boolean;
-  usage?: NovelAIUsageLimitStatus;
-}
+export type NovelAISubscription = z.infer<typeof novelAISubscriptionSchema>;
 
 /**
  * Fetches the current NovelAI subscription for a given API key.
@@ -752,7 +731,7 @@ export interface NovelAISubscription {
  * host as text generation. See NOVELAI_ACCOUNT_API_BASE_URL for why the legacy
  * api.novelai.net host can no longer be used.
  *
- * @returns Subscription data including perks.contextTokens, or null on failure
+ * Returns only validated subscription facts consumed by caching and the usage command.
  */
 export async function fetchNovelAISubscription(apiKey: string): Promise<NovelAISubscription | null> {
   const url = `${NOVELAI_ACCOUNT_API_BASE_URL}/user/subscription`;
@@ -772,20 +751,19 @@ export async function fetchNovelAISubscription(apiKey: string): Promise<NovelAIS
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      log.warn(
-        `NovelAI subscription fetch failed with status ${response.status}, so falling back to env var context limit`,
-      );
+      log.warn(`NovelAI subscription fetch failed with status ${response.status}; using default token limits.`);
       return null;
     }
 
-    const data = (await response.json()) as NovelAISubscription;
-    log.info(
-      `NovelAI subscription: tier=${data.tier}, active=${data.active}, perks.contextTokens=${data.perks?.contextTokens ?? "unknown"} (note: contextTokens is NOT the context window; tier number determines that)`,
-    );
-    return data;
-  } catch (error) {
+    const parsed = novelAISubscriptionSchema.safeParse(await response.json());
+    if (!parsed.success) {
+      log.warn("NovelAI subscription response failed validation; using default token limits.");
+      return null;
+    }
+    return parsed.data;
+  } catch {
     clearTimeout(timeoutId);
-    log.warn("NovelAI subscription fetch threw an error, so falling back to env var context limit", error);
+    log.warn("NovelAI subscription fetch failed; using default token limits.");
     return null;
   }
 }

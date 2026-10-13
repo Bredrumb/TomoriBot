@@ -40,10 +40,15 @@ import { normalizeRenderModifierName } from "@/utils/discord/renderModifierParse
 import { resolveWebhookPersonaAuthor } from "@/utils/discord/webhookPersonaAuthor";
 import { log } from "@/utils/misc/logger";
 import { resolveSelectedPersona } from "@/utils/persona/personaOptionValue";
+import { decryptApiKey } from "@/utils/security/crypto";
 import { type ContextBudget, resolveContextBudget } from "@/utils/provider/contextBudget";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
-import { getStaticProviderInfo, normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
+import {
+  getStaticProviderInfo,
+  normalizeProviderName,
+  providerUsesApiFamily,
+} from "@/utils/provider/providerInfoRegistry";
 import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
 import { buildContext } from "@/utils/text/contextBuilder";
 import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
@@ -845,7 +850,15 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
 
   // generationTurn truncates after media resolution, so the inspection must too or it reports
   // history the model never receives once a channel outgrows the window.
-  const budget = await resolveContextBudget(answeringState, guild.id);
+  let inspectionApiKey: string | undefined;
+  if (providerUsesApiFamily(answeringState.llm.llm_provider, "novelai") && answeringState.config.api_key) {
+    try {
+      inspectionApiKey = await decryptApiKey(answeringState.config.api_key, answeringState.config.key_version || 1);
+    } catch {
+      log.warn("Prompt inspection could not resolve the NovelAI credential; using default token limits.");
+    }
+  }
+  const budget = await resolveContextBudget(answeringState, inspectionApiKey);
   const truncation = budget
     ? truncateDialogueHistory(resolvedContextItems, budget.contextLength, budget.outputReserve)
     : null;

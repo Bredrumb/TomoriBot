@@ -32,6 +32,8 @@ import {
   type VramHandoffBackend,
 } from "@/types/db/schema";
 import type { SQL } from "bun";
+import { clearNovelaiSubscriptionCache, invalidateNovelAISubscription } from "@/utils/cache/novelaiSubscriptionCache";
+import { decryptApiKey } from "@/utils/security/crypto";
 import { cache, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
@@ -95,6 +97,31 @@ async function applyVramHandoffChange(tx: SQL, change: VramHandoffChange | undef
  * scoped_model_registrations, scoped_model_registrations.
  */
 class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
+  private async invalidateNovelaiCredentials(
+    previous: Pick<SavedProviderConfigRow, "api_key" | "key_version"> | null,
+    saved: Pick<SavedProviderConfigRow, "api_key" | "key_version">,
+  ): Promise<void> {
+    if (
+      previous?.api_key &&
+      saved.api_key &&
+      previous.api_key.equals(saved.api_key) &&
+      previous.key_version === saved.key_version
+    ) {
+      return;
+    }
+    try {
+      for (const credential of [previous, saved]) {
+        if (credential?.api_key) {
+          invalidateNovelAISubscription(await decryptApiKey(credential.api_key, credential.key_version));
+        }
+      }
+    } catch {
+      // Corrupt stored ciphertext cannot identify the affected entry after a committed replacement.
+      clearNovelaiSubscriptionCache();
+      log.warn("Could not identify replaced NovelAI credentials; cleared subscription cache.");
+    }
+  }
+
   private invalidateWorkspace(serverId: number): void {
     // A committed deletion must invalidate even if the next database read fails.
     for (const [workspaceId, entry] of cache) {
@@ -2010,6 +2037,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   ): Promise<boolean> {
     try {
       const provider = config.provider.toLowerCase();
+      const previous = provider === "novelai" ? await this.loadSavedProviderConfig(serverId, provider) : null;
       const fallbackModelRefsJson = JSON.stringify(config.fallback_model_refs ?? []);
       const logitBiasesJson = JSON.stringify(config.llm_logit_biases ?? []);
       const disabledParamsLiteral = this.toPostgresTextArrayLiteral(config.llm_disabled_params);
@@ -2070,6 +2098,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         }
       }
 
+      if (provider === "novelai") await this.invalidateNovelaiCredentials(previous, config);
       log.info(`Upserted saved provider config for server ${serverId}, provider ${provider}`);
       if (options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
       return true;
@@ -2111,6 +2140,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   async upsertUserSavedProviderConfig(userId: number, config: UserSavedProviderConfigUpsert): Promise<boolean> {
     try {
       const provider = config.provider.toLowerCase();
+      const previous = provider === "novelai" ? await this.loadUserSavedProviderConfig(userId, provider) : null;
       const enabledCapabilitiesLiteral = this.toPostgresTextArrayLiteral(config.enabled_capabilities);
       const assignedCapabilitiesLiteral = this.toPostgresTextArrayLiteral(config.assigned_capabilities);
       const fallbackModelRefsJson = JSON.stringify(config.fallback_model_refs ?? []);
@@ -2176,6 +2206,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         }
       }
 
+      if (provider === "novelai") await this.invalidateNovelaiCredentials(previous, config);
       log.info(`Upserted user saved provider config for user ${userId}, provider ${provider}`);
       return true;
     } catch (error) {

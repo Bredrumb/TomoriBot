@@ -135,28 +135,31 @@ async function runGenerationAttempts(
       // planned attempt keeps its errors suppressed while a later model may yet answer.
       const hasPendingModelFallback = index < attempts.length - 1 || plan.extendWithServerRoute !== null;
       context.tomoriState = attempt.tomoriState;
-      context.contextItems = await prepareProviderContextItems({
-        contextItems: baseContextItems,
-        tomoriState: attempt.tomoriState,
-        deliberateToolAllowedNames: context.streamingContext.deliberateToolAllowedNames,
-        serverDiscId: context.serverDiscId,
-        emptyResponseFinishReason: context.turn.lockedTurn.admission.incoming.emptyResponseFinishReason,
-        retryCount: context.turn.lockedTurn.admission.incoming.retryCount,
-      });
-      const prefilled = await applyAssistantPrefill({
-        contextItems: context.contextItems,
-        prefill: context.assistantPrefill,
-        tomoriState: attempt.tomoriState,
-        forceReason: context.streamingContext.forceReason,
-      });
-      context.contextItems = prefilled.contextItems;
-      context.streamingContext.outputPrefill = prefilled.outputPrefill;
-      recordChatProviderContext(
-        index + 1,
-        context.contextItems.flatMap((item) =>
-          item.metadataTag === ContextItemTag.DIALOGUE_HISTORY && item.messageId ? [item.messageId] : [],
-        ),
-      );
+      const prepareAttemptContext = async () => {
+        context.contextItems = await prepareProviderContextItems({
+          contextItems: baseContextItems,
+          tomoriState: attempt.tomoriState,
+          deliberateToolAllowedNames: context.streamingContext.deliberateToolAllowedNames,
+          apiKey: attempt.providerConfig.apiKey,
+          emptyResponseFinishReason: context.turn.lockedTurn.admission.incoming.emptyResponseFinishReason,
+          retryCount: context.turn.lockedTurn.admission.incoming.retryCount,
+        });
+        const prefilled = await applyAssistantPrefill({
+          contextItems: context.contextItems,
+          prefill: context.assistantPrefill,
+          tomoriState: attempt.tomoriState,
+          forceReason: context.streamingContext.forceReason,
+        });
+        context.contextItems = prefilled.contextItems;
+        context.streamingContext.outputPrefill = prefilled.outputPrefill;
+        recordChatProviderContext(
+          index + 1,
+          context.contextItems.flatMap((item) =>
+            item.metadataTag === ContextItemTag.DIALOGUE_HISTORY && item.messageId ? [item.messageId] : [],
+          ),
+        );
+      };
+      await prepareAttemptContext();
 
       // Key rotation inner loop: try multiple keys for this attempt before giving up.
       let rotationKeyId = attempt.rotationKeyId;
@@ -214,6 +217,10 @@ async function runGenerationAttempts(
         // retry so the eventual response is not stacked on top of a truncated first attempt.
         await purgeSupersededDeliveries(context, deliveredMessageRefs, invocationStart);
         attempt.providerConfig.apiKey = nextKey.apiKey;
+        if (providerIsApiFamily(attempt.tomoriState.llm.llm_provider, "novelai")) {
+          // A larger rotated allowance must restore history from before the first truncation.
+          await prepareAttemptContext();
+        }
         rotationKeyId = nextKey.rotationKeyId;
         log.warn(
           `Key rotation: retrying ${attempt.label} with key ${rotationKeyId ?? "main"} (attempt ${keyAttemptCount + 1}).`,
@@ -872,7 +879,7 @@ async function prepareProviderContextItems(args: {
   contextItems: StructuredContextItem[];
   tomoriState: TomoriState;
   deliberateToolAllowedNames: string[] | undefined;
-  serverDiscId: string;
+  apiKey: string;
   emptyResponseFinishReason: string | null | undefined;
   retryCount: number;
 }): Promise<StructuredContextItem[]> {
@@ -907,7 +914,7 @@ async function prepareProviderContextItems(args: {
     contextItems = stripAllVerbatimItems(contextItems);
   }
 
-  contextItems = await applyProviderContextTruncation(contextItems, args.tomoriState, args.serverDiscId);
+  contextItems = await applyProviderContextTruncation(contextItems, args.tomoriState, args.apiKey);
   if (
     shouldApplyLengthEmptyRetryTrim(args.tomoriState.llm.llm_provider, args.emptyResponseFinishReason, args.retryCount)
   ) {

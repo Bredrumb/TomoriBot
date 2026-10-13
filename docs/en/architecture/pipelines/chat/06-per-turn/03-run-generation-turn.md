@@ -37,6 +37,11 @@ Running such an attempt switches credential attribution to the server. Tools ret
 Each attempt prepares media for its capabilities, trims history to known context limits with an
 output reserve, and formats prefill as a model continuation or tail directive.
 
+NovelAI budgeting uses the actual key in the attempt's provider config after key selection.
+When rotation changes that key, context preparation starts again from the original turn context
+and reapplies the assistant prefill. A larger allowance can restore history dropped for the previous
+key; a smaller allowance trims it further. Subscription-cache reads in the adapter use the same key.
+
 ### Superseded message cleanup
 
 After a partially delivered failure, `deleteSupersededStreamMessages()` removes tracked messages

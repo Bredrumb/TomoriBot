@@ -26,6 +26,10 @@ Prompt assembly mirrors the production `messageCreate → tomoriChat` pipeline t
 - **History truncation**: Truncates conversation history against `resolveContextBudget()`, reproducing the drop policy applied during generation turns.
 - **UI exclusion**: Diagnostic embeds and internal debug notices are omitted because they represent interface elements rather than model prompt input.
 
+NovelAI inspection budgets against its resolved personal or server credential without selecting a
+rotation key. A snapshot reconstructs that credential's current allowance; it cannot reproduce a
+previous rotated request. Credential identities are omitted from both export formats.
+
 ## Output formats
 
 Snapshots can be exported in two formats:

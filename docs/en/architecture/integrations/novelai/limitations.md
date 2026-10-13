@@ -16,14 +16,17 @@ GLM uses a chat template with role tags; Kayra and Erato use story-format prompt
 labels. The adapter assembles system instructions, persona content, memories, and dialogue into
 these formats. It does not inject tool guides or tool interaction history.
 
-`SYSTEM_INSTRUCTION_TAGS_BASE` in `src/providers/novelai/novelaiStreamAdapter.ts` selects the system
+`SYSTEM_INSTRUCTION_TAGS_BASE` in `src/providers/novelai/promptRenderers.ts` selects the system
 instruction blocks. Server emoji and sticker inventories are absent from that list. The short-term
 memory summary remains in context, while `buildShortTermMemoryContext` omits tool-usage directives
 for NovelAI.
 
 The adapter estimates token usage from the final prompt and clamps the requested output length
 against the model's context limit. Kayra and Erato use the cached subscription context allowance
-when available. This estimate does not guarantee that an oversized prompt fits.
+when available, keyed by the selected request credential. Generation warms that entry during
+budgeting and recalculates from the original context when rotation changes the key. Allowance
+values and lookup-failure defaults are inherited policy pending model/tier verification. This
+estimate does not guarantee that an oversized prompt fits.
 
 ## Incomplete GLM responses
 
@@ -37,5 +40,6 @@ captured for thought logs and stripped from visible output.
 - `src/providers/novelai/providerInfo.ts`: Provider capabilities.
 - `src/providers/novelai/novelaiProvider.ts`: Tool list and continuation metadata.
 - `src/providers/novelai/novelaiStreamAdapter.ts`: Prompt assembly, context estimates, and stream guards.
+- `src/providers/novelai/promptRenderers.ts`: Story and GLM rendering, ATTG metadata, and tag admission.
 - `src/utils/text/context/memories.ts`: Short-term memory context.
 - `src/utils/text/promptInspection/assemble.ts`: Prompt inspection tool admission.

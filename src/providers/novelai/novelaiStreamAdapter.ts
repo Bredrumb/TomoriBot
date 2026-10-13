@@ -17,7 +17,7 @@
  */
 
 import type { ThoughtLogEntry } from "@/types/provider/interfaces";
-import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
+import { ContextItemTag } from "@/types/misc/context";
 import { log } from "@/utils/misc/logger";
 import {
   formatProviderErrorCodeForDisplay,
@@ -47,7 +47,7 @@ import {
 } from "./novelaiService";
 import { buildProviderStopStrings } from "@/providers/utils/stopStrings";
 import { isParamDisabled } from "@/utils/provider/samplingControl";
-import { getNovelAiThinkingDirective } from "@/utils/provider/thinkingControl";
+import { buildAttgBlock, assembleNovelAIPrompt, assembleGlmChatPrompt } from "@/providers/novelai/promptRenderers";
 import { NAI_KAYRA_CHARS_PER_TOKEN, NAI_KAYRA_CONTEXT_LIMIT } from "@/utils/cache/novelaiCapabilityCache";
 import { getCachedContextTokens } from "@/utils/cache/novelaiSubscriptionCache";
 
@@ -88,16 +88,11 @@ const NAI_GLM_CHARS_PER_TOKEN = 2.5;
 const NAI_GLM_CONTEXT_LIMIT = 12288;
 
 /**
- * Resolves the Kayra context ceiling for the turn's guild from the subscription cache, which
- * `generationTurn` warms before the stream starts. The cache is keyed like the turn itself: the
- * guild id, or the user id for a DM.
- *
- * @param channel - Channel the turn streams into
- * @returns The subscription tier's limit, or the Scroll-tier fallback when the cache is cold
+ * Budgeting warms the selected credential's allowance before streaming. A cold entry retains
+ * the existing default, including direct adapter callers that do not run generic budgeting.
  */
-export function resolveKayraContextLimit(channel: StreamContext["channel"]): number {
-  const cacheKey = channel.isDMBased() ? channel.recipientId : channel.guildId;
-  return getCachedContextTokens(cacheKey) ?? NAI_KAYRA_CONTEXT_LIMIT;
+export function resolveKayraContextLimit(apiKey: string): number {
+  return getCachedContextTokens(apiKey) ?? NAI_KAYRA_CONTEXT_LIMIT;
 }
 
 /**
@@ -136,19 +131,6 @@ function extractNonSchemaPresetParams(params: Record<string, unknown>): Partial<
  * BotName:
  */
 export class NovelaiStreamAdapter extends BaseStreamAdapter {
-  /**
-   * Tags that should be prepended as system instructions
-   */
-  private static readonly SYSTEM_INSTRUCTION_TAGS_BASE: ContextItemTag[] = [
-    ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
-    ContextItemTag.SYSTEM_PERSONALITY,
-    ContextItemTag.SYSTEM_HUMANIZER_RULES,
-    ContextItemTag.SYSTEM_PERSONA_PROMPT,
-    ContextItemTag.KNOWLEDGE_SERVER_INFO,
-    ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-    ContextItemTag.KNOWLEDGE_PERSONA_SPRITES,
-  ];
-
   private insideThinkBlock = false;
   private pendingThinkBlockThoughtText = "";
 
@@ -248,15 +230,20 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     let prompt: string;
     if (isGlm) {
       // GLM 4.6: Official chat template with role tags and forced thinking
-      prompt = this.assembleGlmChatPrompt(context.contextItems, context.tomoriState.persona_nickname, {
-        thinkingLevel: context.tomoriState.config.thinking_level,
-        forceReason: config.forceReason,
-      });
+      prompt = assembleGlmChatPrompt(
+        context.contextItems,
+        context.tomoriState.persona_nickname,
+        NAI_GLM_CHAR_PREFIX_ENABLED,
+        {
+          thinkingLevel: context.tomoriState.config.thinking_level,
+          forceReason: config.forceReason,
+        },
+      );
     } else {
       // Kayra: Flat text prompt with NAI prompt-convention formatting
       // Build ATTG block from persona metadata (null if not configured)
-      const attgBlock = this.buildAttgBlock(context.tomoriState, config.model);
-      const basePrompt = this.assembleNovelAIPrompt(context.contextItems, context.tomoriState.persona_nickname, {
+      const attgBlock = buildAttgBlock(context.tomoriState, config.model);
+      const basePrompt = assembleNovelAIPrompt(context.contextItems, context.tomoriState.persona_nickname, {
         attgBlock,
       });
       // Append bot name to signal it should generate the bot's response, unless
@@ -335,7 +322,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       // but Kayra tokenizes at roughly 3.0-3.5, so the assembled prompt can still overshoot the
       // tier ceiling. Re-estimating here clamps max_length when the output would overflow, and
       // warns when the input alone already does, which output clamping cannot fix.
-      const kayraContextLimit = resolveKayraContextLimit(context.channel);
+      const kayraContextLimit = resolveKayraContextLimit(config.apiKey);
       const estimatedInputTokens = Math.ceil(prompt.length / NAI_KAYRA_CHARS_PER_TOKEN);
       const maxAllowedOutput = kayraContextLimit - estimatedInputTokens;
       const currentMaxLength = parameters.max_length ?? 0;
@@ -1025,329 +1012,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
 
     // Upstream text stays in the operator log (see StreamErrorUi); the message only picked the key.
     return `Error Code ${formatProviderErrorCodeForDisplay(errorCode)}: ${localizer(locale, `genai.novelai.${messageKey}`)}`;
-  }
-
-  /**
-   * Assemble context items into NovelAI's expected flat text format
-   *
-   * Format:
-   * [System instructions]
-   *
-   * Username1: message1
-   * BotName: response1
-   * Username2: message2
-   * BotName:
-   */
-  /**
-   * Builds the ATTG metadata block for Kayra/Erato prompts.
-   *
-   * Kayra was trained on stories prefixed with [ Author: X; Title: Y; Tags: Z; Genre: W ] blocks.
-   * Erato additionally supports a [ S: N ] quality-star block.
-   * Returns null when no ATTG metadata is configured on the persona.
-   *
-   * @param tomoriState - Current persona state with optional ATTG fields
-   * @param model - NAI model codename (e.g. 'llama-3-erato-v1')
-   * @returns Formatted ATTG string or null
-   */
-  private buildAttgBlock(tomoriState: import("@/types/db/schema").TomoriState, model: string): string | null {
-    const parts: string[] = [];
-    if (tomoriState.nai_attg_author?.trim()) parts.push(`Author: ${tomoriState.nai_attg_author.trim()}`);
-    if (tomoriState.nai_attg_title?.trim()) parts.push(`Title: ${tomoriState.nai_attg_title.trim()}`);
-    if (tomoriState.nai_attg_tags?.trim()) parts.push(`Tags: ${tomoriState.nai_attg_tags.trim()}`);
-    if (tomoriState.nai_attg_genre?.trim()) parts.push(`Genre: ${tomoriState.nai_attg_genre.trim()}`);
-
-    // Build the main block only if at least one field is populated
-    const mainBlock = parts.length > 0 ? `[ ${parts.join("; ")} ]` : "";
-
-    const isErato = model === "llama-3-erato-v1";
-    const stars = tomoriState.nai_attg_stars;
-    const starsBlock = isErato && stars != null && stars >= 1 && stars <= 5 ? `[ S: ${stars} ]` : "";
-
-    const full = `${mainBlock}${starsBlock}`;
-    return full || null;
-  }
-
-  /**
-   * Assemble a Kayra/Erato prompt using NovelAI story-format conventions.
-   *
-   * These models were trained on story data that uses specific formatting tokens.
-   * Matching that format improves coherence and persona consistency.
-   *
-   * Output structure:
-   * ```
-   * [ Tags: X; Genre: Y ][ S: N ]   ← ATTG block (if configured)
-   *
-   * Characters:
-   * {botName}
-   * {SYSTEM_PERSONALITY text}
-   *
-   * {SYSTEM_INSTRUCTION_BLOCK / SYSTEM_HUMANIZER_RULES / KNOWLEDGE_SERVER_INFO text}
-   *
-   * Server Notes:
-   * {KNOWLEDGE_SERVER_MEMORIES text}   ← only if non-empty
-   * ***
-   * {CONTEXT_INJECTION text}           ← e.g. [System: users in conversation]  (only if non-empty)
-   * ***
-   * [ Style: chat ]
-   * {sample dialogue turns}            ← reference examples  (only if non-empty)
-   * ***
-   * [ Style: chat ]
-   * {live history turns}
-   * ```
-   *
-   */
-  private assembleNovelAIPrompt(
-    contextItems: StructuredContextItem[],
-    botName: string,
-    options?: {
-      attgBlock?: string | null;
-    },
-  ): string {
-    // Separate sample dialogue (reference) from live history so a *** dinkus
-    // can be inserted between them in the assembled prompt.
-    const sampleDialogueParts: string[] = [];
-    const contextParts: string[] = []; // pre-chat injections (e.g. [System: users info])
-    const historyParts: string[] = [];
-    const systemTags = NovelaiStreamAdapter.SYSTEM_INSTRUCTION_TAGS_BASE;
-
-    let personalityText = "";
-    let memoriesText = "";
-    const instructionParts: string[] = [];
-
-    // Pre-scan: extract the primary user speaker label from DIALOGUE_HISTORY items
-    // so DIALOGUE_SAMPLE user turns can be labeled consistently (e.g. "Ellen: message").
-    let defaultSpeakerLabel = "User";
-    for (const scanItem of contextItems) {
-      if (scanItem.metadataTag === ContextItemTag.DIALOGUE_HISTORY && scanItem.role === "user") {
-        const scanText = scanItem.parts
-          .filter((p) => p.type === "text")
-          .map((p) => (p as { type: "text"; text: string }).text)
-          .join("\n");
-        const labelMatch = scanText.match(/^([^\n:]+):\s/);
-        if (labelMatch) {
-          defaultSpeakerLabel = labelMatch[1];
-          break;
-        }
-      }
-    }
-
-    for (const item of contextItems) {
-      // Extract text content from parts (images/video unsupported in NAI)
-      const textContent = item.parts
-        .filter((p) => p.type === "text")
-        .map((p) => (p as { type: "text"; text: string }).text)
-        .join("\n");
-
-      if (!textContent) continue;
-
-      if (item.metadataTag && systemTags.includes(item.metadataTag)) {
-        switch (item.metadataTag) {
-          case ContextItemTag.SYSTEM_PERSONALITY:
-            personalityText = textContent;
-            break;
-          case ContextItemTag.KNOWLEDGE_SERVER_MEMORIES:
-            memoriesText = textContent;
-            break;
-          default:
-            instructionParts.push(textContent);
-        }
-      } else if (!item.metadataTag && item.role === "system") {
-        instructionParts.push(textContent);
-      }
-
-      // Dialogue turns (user/model) that are not system-tagged go to dialogue.
-      //    DIALOGUE_SAMPLE  → sampleDialogueParts (reference material)
-      //    DIALOGUE_HISTORY → historyParts (live conversation turns)
-      //    Untagged items   → contextParts (e.g. [System: users in conversation];
-      //                       placed before samples so context precedes reference)
-      if (
-        (item.role === "user" || item.role === "model") &&
-        !(item.metadataTag && systemTags.includes(item.metadataTag))
-      ) {
-        if (item.metadataTag === ContextItemTag.DIALOGUE_SAMPLE) {
-          // Prepend speaker label to user turns that lack one, matching DIALOGUE_HISTORY format
-          if (item.role === "user" && !/^[^\n:]+:\s/.test(textContent)) {
-            sampleDialogueParts.push(`${defaultSpeakerLabel}: ${textContent}`);
-          } else {
-            sampleDialogueParts.push(textContent);
-          }
-        } else if (item.metadataTag === ContextItemTag.DIALOGUE_HISTORY) {
-          historyParts.push(textContent);
-        } else {
-          contextParts.push(textContent);
-        }
-      }
-    }
-
-    // Assemble formatted blocks using NAI story-format conventions.
-    //    Each section is preceded by a '----' info divider.
-    const systemBlocks: string[] = [];
-
-    if (personalityText) {
-      systemBlocks.push(`Characters:\n${botName}\n${personalityText}`);
-    }
-
-    const instructionText = instructionParts.join("\n\n");
-    if (instructionText) {
-      systemBlocks.push(`${instructionText}`);
-    }
-
-    if (memoriesText) {
-      systemBlocks.push(`Server Notes:\n${memoriesText}`);
-    }
-
-    const attgPrefix = options?.attgBlock ? `${options.attgBlock}\n` : "";
-    const systemHeader = systemBlocks.length > 0 ? `${attgPrefix}${systemBlocks.join("\n")}` : attgPrefix.trimEnd();
-
-    // Combine: system header + context + [ Style: chat ] + samples + *** + [ Style: chat ] + history.
-    //    Context injections (e.g. [System: users in conversation]) sit with the system header
-    //    so the model sees who's present before reading any dialogue.
-    //    [ Style: chat ] precedes BOTH the sample dialogues and the live history so Kayra/Erato
-    //    recognises each dialogue block independently as chat-format content.
-    const contextText = contextParts.join("\n");
-    const sampleText = sampleDialogueParts.join("\n");
-    const historyText = historyParts.join("\n");
-
-    const systemSection = [systemHeader, contextText].filter((p) => p?.trim()).join("\n***\n");
-
-    // Each dialogue block gets its own [ Style: chat ] tag so the model treats both
-    //     reference samples and live history as chat-format exchanges.
-    const styledSampleText = sampleText.trim() ? `[ Style: chat ]\n${sampleText}` : "";
-    const styledHistoryText = historyText.trim() ? `[ Style: chat ]\n${historyText}` : "";
-
-    const parts = [systemSection, styledSampleText, styledHistoryText].filter((p) => p?.trim());
-    return parts.join("\n***\n");
-  }
-
-  /**
-   * Assemble a GLM 4.6 chat prompt using the official chat template.
-   *
-   * Structure:
-   * ```
-   * [gMASK]<sop>
-   * <|system|>
-   * {consolidated system instructions}
-   *
-   * <|user|>
-   * Alice: Hello there!
-   * <|assistant|>
-   * <think></think>
-   * Hi Alice!
-   * ...
-   * <|assistant|>
-   * <think></think>
-   * ```
-   *
-   * Key decisions:
-   * - User turns keep speaker labels (multi-user Discord needs disambiguation)
-   * - Assistant turns have bot name STRIPPED by default: <|assistant|> is sufficient, and
-   *   including "Tomori:" causes garbled name artifacts (e.g., "Tomo", "Tomorleasing").
-   *   Set NAI_GLM_CHAR_PREFIX_ENABLED=false to strip the name (legacy behaviour).
-   * - Thinking mode is controlled by NAI_GLM_THINKING_ENABLED env var (default: true).
-   *   When enabled, <think></think> seeds each assistant turn; when disabled, /nothink
-   *   is appended instead to suppress internal reasoning.
-   * - If the model decides to think, any <think>...</think> blocks are stripped by
-   *   stripThinkBlocks() in the streaming pipeline
-   *
-   */
-  private assembleGlmChatPrompt(
-    contextItems: StructuredContextItem[],
-    botName: string,
-    options?: {
-      thinkingLevel?: string | null;
-      forceReason?: boolean;
-    },
-  ): string {
-    const systemInstructionParts: string[] = [];
-    const dialogueTurns: Array<{
-      role: "user" | "model";
-      content: string;
-    }> = [];
-    const systemTags = NovelaiStreamAdapter.SYSTEM_INSTRUCTION_TAGS_BASE;
-
-    for (const item of contextItems) {
-      const textContent = item.parts
-        .filter((p) => p.type === "text")
-        .map((p) => (p as { type: "text"; text: string }).text)
-        .join("\n");
-
-      if (!textContent) {
-        // Skip items with no text (images/videos: NovelAI doesn't support these)
-        continue;
-      }
-
-      if (item.metadataTag) {
-        if (systemTags.includes(item.metadataTag)) {
-          systemInstructionParts.push(textContent);
-        }
-      } else if (item.role === "system") {
-        systemInstructionParts.push(textContent);
-      }
-
-      if ((item.role === "user" || item.role === "model") && textContent) {
-        const isInSystemTags = item.metadataTag && systemTags.includes(item.metadataTag);
-
-        if (!isInSystemTags) {
-          dialogueTurns.push({
-            role: item.role,
-            content: textContent,
-          });
-        }
-      }
-    }
-
-    // Thinking directive: <think></think> seeds the expected format when thinking is enabled;
-    // /nothink explicitly disables internal reasoning when thinking is turned off.
-    const thinkDirective = getNovelAiThinkingDirective(options?.thinkingLevel, options?.forceReason);
-    const promptParts: string[] = [];
-
-    promptParts.push("[gMASK]<sop>");
-
-    if (systemInstructionParts.length > 0) {
-      promptParts.push("<|system|>");
-      promptParts.push(systemInstructionParts.join("\n\n"));
-    }
-
-    // Dialogue turns with proper role tags
-    // By default, strip the bot's speaker label from assistant turns:
-    // the <|assistant|> tag already identifies who's speaking, and including
-    // "Tomori:" in the content causes the model to try re-generating partial/garbled
-    // name prefixes (e.g., "Tomo", "Tomorleasing").
-    // When NAI_GLM_CHAR_PREFIX_ENABLED is enabled, the prefix is kept to mirror how other
-    // providers format context (sample dialogues + history both include "{char}: message"),
-    // which may help the model adopt the persona voice more consistently.
-    const botNamePrefixPattern = new RegExp(`^${escapeRegExp(botName)}:\\s*`, "i");
-
-    for (const turn of dialogueTurns) {
-      if (turn.role === "user") {
-        promptParts.push("<|user|>");
-        promptParts.push(turn.content);
-      } else if (turn.role === "model") {
-        promptParts.push("<|assistant|>");
-        promptParts.push(thinkDirective);
-        if (NAI_GLM_CHAR_PREFIX_ENABLED) {
-          // Debug: keep "BotName:" prefix to test persona-voice consistency
-          promptParts.push(turn.content);
-        } else {
-          // Default: strip prefix: <|assistant|> tag is the structural signal
-          promptParts.push(turn.content.replace(botNamePrefixPattern, ""));
-        }
-      }
-    }
-
-    // Generation prompt: signal the model to generate the assistant's response.
-    // thinkDirective is either <think></think> (seeds thinking format) or /nothink (disables reasoning).
-    promptParts.push("<|assistant|>");
-    promptParts.push(thinkDirective);
-
-    // Debug: append "{botName}:" as a true prefill after the think directive, mirroring how
-    // Kayra (flat prompt) appends the bot name at the end. This steers the model to respond
-    // in the persona's voice from the very first token.
-    if (NAI_GLM_CHAR_PREFIX_ENABLED) {
-      promptParts.push(`${botName}:`);
-    }
-
-    return promptParts.join("\n");
   }
 
   private logSanitizedRequest(request: NovelAIGenerationRequest, promptLength: number): void {

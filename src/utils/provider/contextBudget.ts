@@ -6,7 +6,6 @@ import { log } from "@/utils/misc/logger";
 import { resolveChatMaxOutputTokens, resolveMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 import { resolveModelLimits } from "@/utils/provider/modelLimits";
 import { normalizeProviderName, providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
-import { decryptApiKey } from "@/utils/security/crypto";
 import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
 
 /**
@@ -23,19 +22,11 @@ export interface ContextBudget {
  * Resolves the budget the live pipeline truncates against, or null for a provider whose window
  * TomoriBot does not know (truncation is then skipped).
  */
-export async function resolveContextBudget(
-  tomoriState: TomoriState,
-  serverDiscId: string,
-): Promise<ContextBudget | null> {
+export async function resolveContextBudget(tomoriState: TomoriState, apiKey?: string): Promise<ContextBudget | null> {
   if (providerUsesApiFamily(tomoriState.llm.llm_provider, "novelai")) {
-    let naiSubscriptionTokens = getCachedContextTokens(serverDiscId);
-    if (naiSubscriptionTokens === undefined && tomoriState.config.api_key) {
-      try {
-        const tempKey = await decryptApiKey(tomoriState.config.api_key, tomoriState.config.key_version || 1);
-        naiSubscriptionTokens = await refreshNovelAISubscription(serverDiscId, tempKey);
-      } catch (error) {
-        log.warn("Failed to refresh NovelAI subscription for context truncation; using default token limits.", error);
-      }
+    let naiSubscriptionTokens = apiKey ? getCachedContextTokens(apiKey) : undefined;
+    if (naiSubscriptionTokens === undefined && apiKey) {
+      naiSubscriptionTokens = await refreshNovelAISubscription(apiKey);
     }
     const tokenLimits = getNovelAITokenLimits(tomoriState.llm.llm_codename, naiSubscriptionTokens);
     if (!tokenLimits || tokenLimits.contextLength <= 0 || !tokenLimits.maxCompletionTokens) return null;
@@ -74,9 +65,9 @@ export async function resolveContextBudget(
 export async function applyProviderContextTruncation(
   contextItems: StructuredContextItem[],
   tomoriState: TomoriState,
-  serverDiscId: string,
+  apiKey?: string,
 ): Promise<StructuredContextItem[]> {
-  const budget = await resolveContextBudget(tomoriState, serverDiscId);
+  const budget = await resolveContextBudget(tomoriState, apiKey);
   if (!budget) return contextItems;
 
   const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(
