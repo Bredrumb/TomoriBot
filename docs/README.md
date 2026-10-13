@@ -136,7 +136,7 @@ Supporting services that pipelines depend on.
 ### Integrations
 
 - [`architecture/integrations/`](./en/architecture/integrations/README.md): Discord platform, Matrix bridge,
-  NovelAI, SillyTavern, and voice pipeline internals
+  NovelAI text limitations and inpainting, SillyTavern, and voice pipeline internals
 
 ### Cloud
 

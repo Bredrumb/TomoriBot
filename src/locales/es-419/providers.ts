@@ -9,8 +9,6 @@ export default {
     max_iterations_streaming_description: `Me quedé atascado en un bucle de pensamiento y no pude completar la solicitud, usa \`/refresh\` si este problema persiste.`,
     still_working_title: `Sigo trabajando...`,
     still_working_description: `Esta tarea está tomando más pasos de lo habitual. Usa \`/kill\` si crees que estoy atascado.`,
-    nai_tool_retry_exhausted_title: `Error de herramienta`,
-    nai_tool_retry_exhausted_description: `Una herramienta falló varias veces y no pudo completar la solicitud. Por favor, inténtalo de nuevo o usa \`/refresh\` si este problema persiste.`,
     tool_error_loop_title: `Bucle de error de herramienta`,
     tool_error_loop_description: `Seguí encontrando errores de herramientas y no pude completar la solicitud. Intenta reformular o usa \`/refresh\` si este problema persiste.`,
     fallback_used_title: `Modelo de respaldo utilizado`,

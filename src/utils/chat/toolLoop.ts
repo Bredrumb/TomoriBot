@@ -55,8 +55,6 @@ export const MAX_FUNCTION_CALL_ITERATIONS = 100;
 const SOFT_WARN_ITERATION_THRESHOLD = 20;
 /** Consecutive tool failures before the loop gives up and surfaces a tool-error embed. */
 export const MAX_CONSECUTIVE_TOOL_ERRORS = 5;
-/** NovelAI failures after visible pre-tool text before the retry-exhausted embed ends the turn. */
-export const NAI_TOOL_FAILURE_RETRY_THRESHOLD = 3;
 const STREAM_SDK_CALL_TIMEOUT_MS = parseIntegerEnvFlag(process.env.STREAM_SDK_CALL_TIMEOUT_MS, 120000, 10000);
 const STREAM_FIRST_TOKEN_TIMEOUT_MS = Math.max(
   STREAM_SDK_CALL_TIMEOUT_MS,
@@ -101,7 +99,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
   let finalText = "";
   let detailsText = "";
   let consecutiveToolErrors = 0;
-  let naiConsecutiveToolFailures = 0;
   let thoughtLog: GenerationTurnResult["thoughtLog"];
   // An expression an earlier attempt of this turn delivered is still visible, so it still counts.
   let toolResponseDelivered = params.context.expressionDelivery.delivered !== null;
@@ -334,7 +331,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         });
         if (toolOutcome.kind === "restart") {
           consecutiveToolErrors = 0;
-          naiConsecutiveToolFailures = 0;
           continue;
         }
         if (toolOutcome.kind === "abort") {
@@ -366,7 +362,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         accumulatedModelParts.length = 0;
         if (toolOutcome.success) {
           consecutiveToolErrors = 0;
-          naiConsecutiveToolFailures = 0;
         } else if (toolOutcome.reviewStatus !== "rejected") {
           consecutiveToolErrors += 1;
           if (consecutiveToolErrors >= MAX_CONSECUTIVE_TOOL_ERRORS) {
@@ -400,46 +395,9 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           );
         }
 
-        const hasPreToolText = (streamResult.accumulatedText ?? "").trim().length > 0;
-        const providerName = params.provider.getInfo().name;
-        if (
-          !toolOutcome.success &&
-          toolOutcome.reviewStatus !== "rejected" &&
-          hasPreToolText &&
-          providerIsApiFamily(providerName, "novelai")
-        ) {
-          naiConsecutiveToolFailures += 1;
-          if (naiConsecutiveToolFailures >= NAI_TOOL_FAILURE_RETRY_THRESHOLD) {
-            log.warn(
-              `NovelAI GLM: Tool "${toolOutcome.functionName}" failed ${naiConsecutiveToolFailures} consecutive times after text was sent — showing error embed and ending turn`,
-            );
-            await emitNaiToolRetryExhausted(params.context);
-            return buildResult(
-              "completed",
-              params.context,
-              streamResults,
-              streamResult.accumulatedText ?? finalText,
-              detailsText,
-              thoughtLog,
-              toolResponseDelivered,
-            );
-          }
-
-          params.context.streamingContext.suppressTextOutput = true;
-          log.info(
-            `NovelAI GLM: Tool "${toolOutcome.functionName}" failed (attempt ${naiConsecutiveToolFailures}/${NAI_TOOL_FAILURE_RETRY_THRESHOLD}) — suppressing text output for retry`,
-          );
-          continue;
-        }
-
         if (
           toolOutcome.success &&
-          (await shouldEndAfterPreToolText(
-            params.provider,
-            streamResult,
-            toolOutcome.functionName,
-            params.tomoriState.server_id,
-          ))
+          (await shouldEndAfterPreToolText(streamResult, toolOutcome.functionName, params.tomoriState.server_id))
         ) {
           if (review) {
             const completed = await completeResponse();
@@ -457,9 +415,6 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           );
         }
 
-        if (toolOutcome.success && hasPreToolText && providerIsApiFamily(providerName, "novelai")) {
-          params.context.streamingContext.suppressTextOutput = false;
-        }
         break;
       }
       default: {
@@ -1251,17 +1206,13 @@ function resolveEnhancedContextItem(record: Record<string, unknown>, type: strin
 }
 
 async function shouldEndAfterPreToolText(
-  provider: LLMProvider,
   streamResult: StreamResult,
   functionName: string,
   serverId: number | undefined,
 ): Promise<boolean> {
   const hasPreToolText = (streamResult.accumulatedText ?? "").trim().length > 0;
   if (!hasPreToolText) return false;
-  const providerName = provider.getInfo().name;
-  const applies =
-    providerIsApiFamily(providerName, "novelai") || TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT.has(functionName);
-  if (!applies) return false;
+  if (!TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT.has(functionName)) return false;
   if (functionName === "update_short_term_memory") return true;
   return !(await ToolRegistry.requiresFollowUp(functionName, serverId));
 }
@@ -1281,23 +1232,6 @@ async function isSettledAfterTool(
   const data = emptyResult.data as { finishReason?: unknown; emptyResponseReason?: unknown } | undefined;
   if (data?.finishReason === "length" || data?.emptyResponseReason) return false;
   return !(await ToolRegistry.requiresFollowUp(lastToolName, params.tomoriState.server_id));
-}
-
-async function emitNaiToolRetryExhausted(context: ChatTurnContext): Promise<void> {
-  await sendStandardEmbed(
-    context.channel as Parameters<typeof sendStandardEmbed>[0],
-    context.locale,
-    {
-      color: ColorCode.ERROR,
-      titleKey: "genai.nai_tool_retry_exhausted_title",
-      descriptionKey: "genai.nai_tool_retry_exhausted_description",
-    },
-    {
-      webhook: context.responseTarget?.webhook,
-      personaUsername: context.responseTarget?.personaUsername,
-      personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
-    },
-  );
 }
 
 function shouldAbortToolCallForStopRequest(channelId: string): boolean {

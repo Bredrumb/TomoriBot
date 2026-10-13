@@ -4,7 +4,6 @@
  *
  * NovelAI is a roleplay-focused provider that:
  * - Uses flat text prompts (no structured messages)
- * - Supports prompt-based tool calling for GLM-4.6 via manual parsing
  * - Does not support images or videos
  * - Specializes in creative storytelling and roleplay
  */
@@ -28,8 +27,6 @@ import type { StreamingContext } from "@/types/tool/interfaces";
 import type { TomoriState } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 import { log } from "@/utils/misc/logger";
-import { getAvailableToolsWithMCP, type ToolStateForContext } from "@/tools/toolRegistry";
-import { applyStreamContextAvailability } from "@/tools/availability";
 import {
   BaseLLMProvider,
   type FunctionCall,
@@ -41,12 +38,9 @@ import {
 } from "@/types/provider/interfaces";
 import { getCachedDefaultLLM, isLLMCacheReady } from "@/utils/cache/llmCache";
 import { llmModelRepo } from "@/utils/db/repositories";
-import { getNovelaiToolAdapter } from "./novelaiToolAdapter";
-import { usesOpenAIEndpoint, validateNovelAIApiKey } from "./novelaiService";
+import { validateNovelAIApiKey } from "./novelaiService";
 import { novelaiProviderInfo } from "./providerInfo";
 import { getActiveTemperature } from "@/utils/provider/samplingControl";
-import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
-import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
 /**
  * Gets the default NovelAI model with a robust fallback chain:
@@ -156,108 +150,8 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
     return novelaiAdapter.createErrorDescription(error, locale);
   }
 
-  /**
-   * Get available tools/functions based on Tomori's configuration
-   * Prompt-based tool calling is supported for GLM-4.6 via manual parsing.
-   * Returns empty array when tools are disabled or the model doesn't support them.
-   * @param streamingContext - Optional streaming context for context-aware tool availability
-   */
-  async getTools(
-    tomoriState: TomoriState,
-    streamingContext?: StreamingContext,
-  ): Promise<Array<Record<string, unknown>>> {
-    if (streamingContext?.disableAllTools) {
-      log.info("NovelAI provider: Tools disabled via streaming context (disableAllTools)");
-      return [];
-    }
-
-    if (!resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
-      log.info(
-        `NovelAI provider: Tools unavailable (tool_use_enabled=${tomoriState.config.tool_use_enabled}, has_tools=${tomoriState.llm.has_tools})`,
-      );
-      return [];
-    }
-
-    if (!usesOpenAIEndpoint(tomoriState.llm.llm_codename)) {
-      log.info("NovelAI provider: Tool calling is only supported on GLM-4.6 (OpenAI endpoint models)");
-      return [];
-    }
-
-    try {
-      const toolStateForContext: ToolStateForContext = {
-        server_id: tomoriState.server_id.toString(),
-        activePersonaHasElevenlabsVoice: Boolean(
-          tomoriState.speech_voice_sample_id ||
-            tomoriState.speech_voice_design_prompt?.trim() ||
-            tomoriState.speech_voice_id?.trim(),
-        ),
-        activePersonaVoiceDesignPrompt: tomoriState.speech_voice_design_prompt?.trim() || null,
-        activePersonaVoiceName: tomoriState.speech_voice_name,
-        diffusion_model_id: tomoriState.config.diffusion_model_id,
-        nai_diffusion_model_id: tomoriState.config.nai_diffusion_model_id,
-        video_model_id: tomoriState.config.video_model_id,
-        llm: {
-          llm_codename: tomoriState.llm.llm_codename,
-          has_tools: tomoriState.llm.has_tools,
-          sees_images: tomoriState.llm.sees_images,
-          sees_videos: tomoriState.llm.sees_videos,
-          sees_youtube: tomoriState.llm.sees_youtube,
-          supports_structoutput: tomoriState.llm.supports_structoutput,
-        },
-        config: {
-          sticker_usage_enabled: tomoriState.config.sticker_usage_enabled,
-          web_search_enabled: tomoriState.config.web_search_enabled,
-          self_teaching_enabled: tomoriState.config.self_teaching_enabled,
-          manage_message_enabled: tomoriState.config.manage_message_enabled,
-          imagegen_enabled: tomoriState.config.imagegen_enabled,
-          videogen_enabled: tomoriState.config.videogen_enabled,
-          voice_message_enabled: tomoriState.config.voice_message_enabled,
-          user_blocking_enabled: tomoriState.config.user_blocking_enabled,
-          user_info_updates_enabled: tomoriState.config.user_info_updates_enabled,
-          thread_creation_enabled: tomoriState.config.thread_creation_enabled,
-        },
-      };
-
-      const {
-        builtInTools: availableBuiltInTools,
-        mcpFunctionNames: availableMcpFunctionNames,
-        mcpToolFamilies,
-        totalCount,
-      } = await getAvailableToolsWithMCP("novelai", toolStateForContext);
-
-      let finalBuiltInTools = applyStreamContextAvailability({
-        providerLabel: "NovelAI provider",
-        provider: "novelai",
-        builtInTools: availableBuiltInTools,
-        streamContext: streamingContext,
-        tomoriState,
-      });
-      let finalMcpFunctionNames = availableMcpFunctionNames;
-
-      ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
-        providerLabel: "NovelAI provider",
-        builtInTools: finalBuiltInTools,
-        mcpFunctionNames: finalMcpFunctionNames,
-        mcpToolFamilies,
-        allowedToolNames: streamingContext?.deliberateToolAllowedNames,
-      }));
-
-      const novelaiAdapter = getNovelaiToolAdapter();
-      const allToolsConfig = await novelaiAdapter.getAllToolsInProviderFormat(
-        finalBuiltInTools,
-        tomoriState.server_id,
-        finalMcpFunctionNames,
-      );
-
-      log.info(
-        `NovelAI provider tools loaded: ${finalBuiltInTools.length} built-in + ${finalMcpFunctionNames.length} MCP = ${totalCount} total tools`,
-      );
-
-      return allToolsConfig;
-    } catch (error) {
-      log.error(`Failed to get tools for NovelAI provider: ${tomoriState.llm.llm_codename}`, error as Error);
-      return [];
-    }
+  async getTools(): Promise<Array<Record<string, unknown>>> {
+    return [];
   }
 
   /**
@@ -272,7 +166,7 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
    * Convert provider-specific configuration from TomoriState
    */
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<NovelaiProviderConfig> {
-    const tools = await this.getTools(tomoriState);
+    const tools = await this.getTools();
 
     return {
       model: tomoriState.llm.llm_codename,
@@ -314,6 +208,7 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
     try {
       const streamConfig: StreamConfig = {
         ...config,
+        tools: [],
         maxMessageLength: DISCORD_STREAMING_CONSTANTS.MAX_SINGLE_MESSAGE_LENGTH,
         flushBufferSize: DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_REGULAR,
         flushBufferSizeCodeBlock: DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_CODE_BLOCK,
@@ -324,12 +219,6 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
         humanizerDegree: tomoriState.config.humanizer_degree,
         emojiUsageEnabled: tomoriState.config.emoji_usage_enabled,
       };
-
-      if (streamingContext) {
-        log.info("NovelAIProvider: Reloading tools with streaming context for context-aware availability");
-        const contextAwareTools = await this.getTools(tomoriState, streamingContext);
-        streamConfig.tools = contextAwareTools;
-      }
 
       const streamContext: StreamContext = buildStreamContext({
         provider: "novelai",
@@ -362,19 +251,6 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
       // tomoriChat can use it as a prompt continuation on the retry, instead of
       // starting a fresh generation that produces the same truncated output.
       const pendingPrefill = novelaiAdapter.getPendingContinuationPrefill();
-      const emptySuppressedRetry =
-        result.status === "completed" &&
-        streamingContext?.suppressTextOutput === true &&
-        !streamingContext.endTurnAfterTools?.length &&
-        !result.accumulatedText?.trim();
-      if (emptySuppressedRetry) {
-        // A normal GLM tool retry still needs the empty-response path; hidden image turns end independently.
-        return {
-          ...result,
-          status: "empty_response",
-          naiContinuationPrefill: pendingPrefill ?? undefined,
-        };
-      }
       if (result.status === "empty_response" && pendingPrefill) {
         log.info(`NovelAIProvider: Attaching continuation prefill to StreamResult (${pendingPrefill.length} chars)`);
         return { ...result, naiContinuationPrefill: pendingPrefill };

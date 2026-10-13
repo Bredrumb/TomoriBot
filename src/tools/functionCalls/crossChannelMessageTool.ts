@@ -176,15 +176,6 @@ export class CrossChannelMessageTool extends BaseTool {
     required: ["target_channel", "task"],
   };
 
-  /**
-   * Check if cross-channel message tool is available for the given provider.
-   * Excluded for NovelAI (GLM) due to token budget limitations.
-   * @returns True if provider supports this tool
-   */
-  isAvailableFor(provider: string): boolean {
-    return provider.toLowerCase() !== "novelai";
-  }
-
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
     if (!this.isAvailableFor(provider)) {
       return false;

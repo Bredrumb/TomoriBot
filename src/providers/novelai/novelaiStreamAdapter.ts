@@ -11,13 +11,12 @@
  * - Map NovelAI errors to normalized ProviderError type
  *
  * NovelAI Specifics:
- * - Prompt-based tool calling for GLM-4.6 (manual parsing of <tool_call> blocks)
  * - Uses flat text prompts with "{username}: {message}\n" format
  * - Uses `prefix` parameter to force bot name at start of generation
  * - Uses `stop_sequences` to prevent multi-speaker generation
  */
 
-import type { FunctionCall, ThoughtLogEntry } from "@/types/provider/interfaces";
+import type { ThoughtLogEntry } from "@/types/provider/interfaces";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { log } from "@/utils/misc/logger";
 import {
@@ -125,28 +124,6 @@ function extractNonSchemaPresetParams(params: Record<string, unknown>): Partial<
   return result as Partial<NovelAIParameters>;
 }
 
-type ToolParamType = "string" | "number" | "boolean" | "array" | "object";
-
-interface ToolParameterSchema {
-  type?: "object";
-  properties?: Record<
-    string,
-    {
-      type?: ToolParamType;
-      description?: string;
-      enum?: string[];
-      items?: { type?: ToolParamType };
-    }
-  >;
-  required?: string[];
-}
-
-interface NormalizedToolDefinition {
-  name: string;
-  description?: string;
-  parameters?: ToolParameterSchema;
-}
-
 /**
  * NovelAI streaming adapter implementation
  *
@@ -161,7 +138,6 @@ interface NormalizedToolDefinition {
 export class NovelaiStreamAdapter extends BaseStreamAdapter {
   /**
    * Tags that should be prepended as system instructions
-   * Tool-related tags are conditionally included when prompt-based tool calling is enabled.
    */
   private static readonly SYSTEM_INSTRUCTION_TAGS_BASE: ContextItemTag[] = [
     ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
@@ -173,21 +149,8 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     ContextItemTag.KNOWLEDGE_PERSONA_SPRITES,
   ];
 
-  private static readonly SYSTEM_INSTRUCTION_TAGS_TOOLING: ContextItemTag[] = [
-    ContextItemTag.SYSTEM_FUNCTION_GUIDE,
-    // REMOVED: KNOWLEDGE_SERVER_EMOJIS, KNOWLEDGE_SERVER_STICKERS: GLM 4.6 is text-only
-    // and cannot use emojis/stickers. Omitting saves significant tokens toward the ~2800
-    // token quality threshold.
-  ];
-
-  private toolsEnabled = false;
-  private toolDefinitions: NormalizedToolDefinition[] = [];
-  private toolCallMode: "disabled" | "undecided" | "text" | "tool_call" = "disabled";
-  private toolPreludeBuffer = "";
-  private toolCallBuffer = "";
   private insideThinkBlock = false;
   private pendingThinkBlockThoughtText = "";
-  private textScanBuffer = "";
 
   /**
    * Speaker names extracted from DIALOGUE_HISTORY for no-colon turn detection.
@@ -196,21 +159,12 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
    */
   private knownSpeakers: Set<string> = new Set();
   private speakerStopPatternEnabled = false;
-  private static readonly TOOL_CALL_TAG = "<tool_call>";
-  private static readonly TOOL_CALL_TAG_LENGTH = NovelaiStreamAdapter.TOOL_CALL_TAG.length;
 
   /**
    * Whether the current stream is using GLM 4.6 (enables sentence-boundary buffering).
    * Set in startStream() based on model type.
    */
   private isGlmModel = false;
-
-  /**
-   * Tracks whether any visible text has been emitted to the user during this stream.
-   * Used to suppress stray tool calls that appear after text output: these are model
-   * hallucinations (e.g., empty select_sticker_for_response) that fail on execution.
-   */
-  private hasEmittedVisibleText = false;
 
   /**
    * Sentence-boundary trailing buffer for GLM 4.6.
@@ -238,7 +192,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     super({
       name: "novelai",
       version: "1.0",
-      supportsFunctionCalling: true,
+      supportsFunctionCalling: false,
     });
   }
 
@@ -261,17 +215,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
    */
   private static readonly SENTENCE_BOUNDARY_PATTERN = /[.!?*~)\]"\u300D\u2026\u2014]\s*$/;
 
-  private getSystemInstructionTags(includeTools: boolean): ContextItemTag[] {
-    if (!includeTools) {
-      return NovelaiStreamAdapter.SYSTEM_INSTRUCTION_TAGS_BASE;
-    }
-
-    return [
-      ...NovelaiStreamAdapter.SYSTEM_INSTRUCTION_TAGS_BASE,
-      ...NovelaiStreamAdapter.SYSTEM_INSTRUCTION_TAGS_TOOLING,
-    ];
-  }
-
   /**
    *
    * For GLM 4.6 (OpenAI endpoint):
@@ -290,18 +233,11 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
 
     this.generationBuffer = "";
     this.sentenceTrailingBuffer = "";
-    this.hasEmittedVisibleText = false;
     this.pendingContinuationPrefill = undefined;
     this.kayraHoldBuffer = "";
     this.kayraSpeakerBoundaryStopPending = false;
     this.pendingThinkBlockThoughtText = "";
-    this.toolDefinitions = this.normalizeToolDefinitions(config.tools ?? []);
-    this.toolsEnabled = this.toolDefinitions.length > 0;
-    this.resetToolParsingState();
-    if (this.toolsEnabled) {
-      log.info(`NovelAIStreamAdapter: Tool calling enabled with ${this.toolDefinitions.length} tools`);
-    }
-
+    this.insideThinkBlock = false;
     if (!config.model) {
       throw new Error("Model must be specified in config. Use NovelAIProvider.getDefaultModel() if needed.");
     }
@@ -313,9 +249,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     if (isGlm) {
       // GLM 4.6: Official chat template with role tags and forced thinking
       prompt = this.assembleGlmChatPrompt(context.contextItems, context.tomoriState.persona_nickname, {
-        toolDefinitions: this.toolDefinitions,
-        functionInteractionHistory: context.functionInteractionHistory,
-        messageIdMap: context.messageIdMap,
         thinkingLevel: context.tomoriState.config.thinking_level,
         forceReason: config.forceReason,
       });
@@ -324,10 +257,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       // Build ATTG block from persona metadata (null if not configured)
       const attgBlock = this.buildAttgBlock(context.tomoriState, config.model);
       const basePrompt = this.assembleNovelAIPrompt(context.contextItems, context.tomoriState.persona_nickname, {
-        toolDefinitions: this.toolDefinitions,
-        functionInteractionHistory: context.functionInteractionHistory,
         attgBlock,
-        messageIdMap: context.messageIdMap,
       });
       // Append bot name to signal it should generate the bot's response, unless
       // /respond already injected a final assistant prefill turn as the tail.
@@ -380,7 +310,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     //
     // contextTruncator runs earlier on raw context items using a 4 chars/token estimate.
     // GLM 4.6 actually tokenizes at ~2.2-2.5 chars/token, so the assembled prompt (which
-    // also includes GLM role tags, the tool guide, and /nothink directives not present
+    // also includes GLM role tags and /nothink directives not present
     // in raw context items) can still exceed the API's 12 288-token ceiling.
     //
     // Here we re-estimate input tokens from the final prompt length and shrink
@@ -540,61 +470,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     }
 
     if (novelaiChunk.final) {
-      // GLM 4.6: If the stream ends while accumulating a tool call (model hit token cap
-      // before generating </tool_call>), try to parse what we have. NAI's token limit
-      // often cuts off the closing tag, so we synthesize it from the accumulated buffer.
-      // Text preamble before the tool call is fine, so it's already been emitted.
-      if (this.toolCallMode === "tool_call" && this.toolCallBuffer.trim()) {
-        log.info("NovelAI GLM: Stream ended during tool call accumulation — attempting to parse without closing tag");
-        const patched = `${this.toolCallBuffer.trimEnd()}\n</tool_call>`;
-        const toolCallBlock = this.extractToolCallBlock(patched);
-        if (toolCallBlock) {
-          const parsedCall = this.parseToolCallBlock(toolCallBlock);
-          if (parsedCall) {
-            log.info(`NovelAI GLM: Successfully parsed truncated tool call: ${parsedCall.name}`);
-            this.generationBuffer = "";
-            this.sentenceTrailingBuffer = "";
-            this.resetToolParsingState();
-            return withThoughts({
-              type: "function_call",
-              functionCall: parsedCall,
-            });
-          }
-        }
-        log.warn("NovelAI GLM: Failed to parse truncated tool call — treating as empty response");
-      }
-
-      // GLM 4.6: If still in undecided mode with a prelude buffer that looks like
-      // an incomplete tool call (e.g., just the function name, waiting for <arg_key>),
-      // try to parse it as a tool call before discarding.
-      if (this.toolCallMode === "undecided" && this.toolPreludeBuffer.trim()) {
-        const trimmedPrelude = this.toolPreludeBuffer.trim();
-        const firstLine = trimmedPrelude.split("\n")[0].trim();
-        const normalizedName = firstLine ? this.normalizeToolName(firstLine) : "";
-        const matchedTool = normalizedName ? this.toolDefinitions.find((t) => t.name === normalizedName) : undefined;
-
-        if (matchedTool && trimmedPrelude.includes("<arg_key>")) {
-          log.info(
-            `NovelAI GLM: Stream ended with unwrapped tool call in prelude — attempting parse for "${matchedTool.name}"`,
-          );
-          const patched = `<tool_call>${trimmedPrelude}\n</tool_call>`;
-          const toolCallBlock = this.extractToolCallBlock(patched);
-          if (toolCallBlock) {
-            const parsedCall = this.parseToolCallBlock(toolCallBlock);
-            if (parsedCall) {
-              log.info(`NovelAI GLM: Successfully parsed truncated prelude tool call: ${parsedCall.name}`);
-              this.generationBuffer = "";
-              this.sentenceTrailingBuffer = "";
-              this.resetToolParsingState();
-              return withThoughts({
-                type: "function_call",
-                functionCall: parsedCall,
-              });
-            }
-          }
-        }
-      }
-
       // For GLM 4.6: check if the sentence trailing buffer has a complete thought.
       // If it ends at a sentence boundary, flush it before signaling done.
       // If not (NAI cut off mid-sentence), silently drop it for a clean ending.
@@ -625,8 +500,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
 
       this.generationBuffer = "";
       this.sentenceTrailingBuffer = "";
-      this.hasEmittedVisibleText = false;
-      this.resetToolParsingState();
+      this.insideThinkBlock = false;
       this.kayraHoldBuffer = "";
       this.kayraSpeakerBoundaryStopPending = false;
 
@@ -646,10 +520,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     }
 
     if (novelaiChunk.token) {
-      if (this.toolsEnabled) {
-        return withThoughts(this.processTokenWithToolParsing(novelaiChunk.token));
-      }
-
       // GLM 4.6: Strip any <think>...</think> blocks before visible text processing.
       // With /nothink removed, the model may emit thinking blocks in its response.
       if (this.isGlmModel) {
@@ -714,10 +584,8 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
         // Clear buffers, so stream will end naturally after this return
         this.generationBuffer = "";
         this.sentenceTrailingBuffer = "";
-        this.hasEmittedVisibleText = false;
         if (cleanBefore) {
           // Emit clean text directly (skip speaker detection since we're stopping).
-          this.hasEmittedVisibleText = true;
           return { type: "text", content: cleanBefore };
         }
         return { type: "done" };
@@ -729,7 +597,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     if (!this.speakerStopPatternEnabled) {
       if (!this.isGlmModel) {
         this.generationBuffer = "";
-        if (text.trim()) this.hasEmittedVisibleText = true;
         return { type: "text", content: text };
       }
       this.generationBuffer = "";
@@ -824,7 +691,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
           this.kayraHoldBuffer = "";
           if (safeToEmit.length > 0) {
             this.kayraSpeakerBoundaryStopPending = true;
-            if (safeToEmit.trim()) this.hasEmittedVisibleText = true;
             return { type: "text", content: safeToEmit };
           }
           this.kayraSpeakerBoundaryStopPending = true;
@@ -832,10 +698,8 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
         }
 
         this.kayraHoldBuffer = combined.slice(lastNewlineIdx);
-        if (safeToEmit.trim()) this.hasEmittedVisibleText = true;
         return { type: "text", content: safeToEmit };
       }
-      if (combined.trim()) this.hasEmittedVisibleText = true;
       return { type: "text", content: combined };
     }
 
@@ -857,7 +721,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     const emitText = this.sentenceTrailingBuffer.slice(0, lastBoundaryIndex + 1);
     this.sentenceTrailingBuffer = this.sentenceTrailingBuffer.slice(lastBoundaryIndex + 1);
 
-    if (emitText.trim()) this.hasEmittedVisibleText = true;
     return {
       type: "text",
       content: emitText,
@@ -962,736 +825,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     return -1;
   }
 
-  private processTokenWithToolParsing(token: string): ProcessedChunk {
-    if (this.toolCallMode === "disabled") {
-      return this.processVisibleText(token);
-    }
-
-    // Normalize Unicode bracket variants in tokens entering the tool parsing pipeline.
-    // GLM 4.6 in Japanese conversations sometimes outputs full-width ＜ ＞ instead of ASCII < >,
-    // which breaks all downstream tag detection (indexOf, includes, startsWith, regex).
-    // This is safe for visible text since full-width angle brackets are extremely rare in
-    // conversational text because the model only produces them when attempting XML tool call tags.
-    const normalizedToken = this.normalizeXmlBrackets(token);
-
-    if (this.toolCallMode === "undecided") {
-      this.toolPreludeBuffer += normalizedToken;
-      const decision = this.decideToolCallMode(this.toolPreludeBuffer);
-
-      if (decision.mode === "wait") {
-        return { type: "text", content: "" };
-      }
-
-      if (decision.mode === "tool_call") {
-        // Accept tool calls regardless of whether text was already emitted.
-        // Text + tool call is a valid pattern (model announces intent then acts).
-        // Invalid tool calls (wrong name, no args) are handled at the executor level.
-        if (this.hasEmittedVisibleText) {
-          log.info("NovelAI GLM: Tool call detected after visible text — accepting (text preamble pattern)");
-        }
-        this.toolCallMode = "tool_call";
-        this.toolCallBuffer = decision.toolCallText ?? "";
-        this.toolPreludeBuffer = "";
-        return { type: "text", content: "" };
-      }
-
-      this.toolCallMode = "text";
-      const visibleText = this.stripThinkBlocks(decision.visibleText ?? "");
-      this.toolPreludeBuffer = "";
-      if (!visibleText) {
-        return { type: "text", content: "" };
-      }
-      return this.processTextWithToolScan(visibleText);
-    }
-
-    if (this.toolCallMode === "tool_call") {
-      this.toolCallBuffer += normalizedToken;
-      const toolCallBlock = this.extractToolCallBlock(this.toolCallBuffer);
-      if (!toolCallBlock) {
-        return { type: "text", content: "" };
-      }
-
-      const parsedCall = this.parseToolCallBlock(toolCallBlock);
-      if (!parsedCall) {
-        log.error("NovelAIStreamAdapter: Failed to parse tool call block", {
-          toolCallBlock,
-        });
-        return {
-          type: "error",
-          error: {
-            type: "api_error",
-            message: "Failed to parse tool call from model output.",
-            code: "tool_call_parse_error",
-            retryable: false,
-          },
-        };
-      }
-
-      this.generationBuffer = "";
-      this.resetToolParsingState();
-      return {
-        type: "function_call",
-        functionCall: parsedCall,
-      };
-    }
-
-    return this.processTextWithToolScan(normalizedToken);
-  }
-
-  private processTextWithToolScan(token: string): ProcessedChunk {
-    if (!token) {
-      return { type: "text", content: "" };
-    }
-
-    this.textScanBuffer += token;
-
-    const tagIndex = this.textScanBuffer.indexOf(NovelaiStreamAdapter.TOOL_CALL_TAG);
-
-    if (tagIndex !== -1) {
-      const visiblePart = this.textScanBuffer.slice(0, tagIndex);
-      const toolPart = this.textScanBuffer.slice(tagIndex);
-      this.textScanBuffer = "";
-
-      // Accept tool calls found after text: text + tool call is a valid pattern
-      // (model announces "Let me search for that" then calls the tool).
-      // Emit any remaining visible text before the tag as preamble.
-      this.toolCallMode = "tool_call";
-      this.toolCallBuffer = toolPart;
-
-      if (this.hasEmittedVisibleText || visiblePart.trim().length > 0) {
-        log.info("NovelAI GLM: <tool_call> found after visible text — accepting as text+tool pattern");
-      }
-
-      if (visiblePart.trim().length > 0) {
-        const cleaned = this.stripThinkBlocks(visiblePart);
-        if (cleaned) {
-          return this.processVisibleText(cleaned);
-        }
-      }
-
-      const toolCallBlock = this.extractToolCallBlock(this.toolCallBuffer);
-      if (toolCallBlock) {
-        const parsedCall = this.parseToolCallBlock(toolCallBlock);
-        if (parsedCall) {
-          this.generationBuffer = "";
-          this.resetToolParsingState();
-          return { type: "function_call", functionCall: parsedCall };
-        }
-
-        log.error("NovelAIStreamAdapter: Failed to parse tool call block", {
-          toolCallBlock,
-        });
-        return {
-          type: "error",
-          error: {
-            type: "api_error",
-            message: "Failed to parse tool call from model output.",
-            code: "tool_call_parse_error",
-            retryable: false,
-          },
-        };
-      }
-
-      return { type: "text", content: "" };
-    }
-
-    // Check for unwrapped tool call: bare function name on a new line followed by <arg_key>.
-    //    GLM sometimes outputs text then switches to a tool call without <tool_call> wrapper.
-    //    Scan for "\n{tool_name}\n<arg_key>" pattern in the buffer.
-    if (this.isGlmModel && this.textScanBuffer.includes("<arg_key>")) {
-      const unwrappedMatch = this.detectUnwrappedToolCallInText(this.textScanBuffer);
-      if (unwrappedMatch) {
-        const visiblePart = this.textScanBuffer.slice(0, unwrappedMatch.startIndex);
-        const toolPart = this.textScanBuffer.slice(unwrappedMatch.startIndex);
-        this.textScanBuffer = "";
-
-        if (this.hasEmittedVisibleText || visiblePart.trim().length > 0) {
-          log.info(
-            `NovelAI GLM: Unwrapped tool call "${unwrappedMatch.toolName}" found after visible text — accepting as text+tool pattern`,
-          );
-        }
-
-        if (visiblePart.trim().length > 0) {
-          const cleaned = this.stripThinkBlocks(visiblePart);
-          if (cleaned) {
-            // Emit text first; tool call will be picked up on subsequent tokens
-            this.toolCallMode = "tool_call";
-            this.toolCallBuffer = `<tool_call>${toolPart.trim()}`;
-            return this.processVisibleText(cleaned);
-          }
-        }
-
-        log.info(
-          `NovelAI GLM: Detected unwrapped tool call "${unwrappedMatch.toolName}" mid-text — wrapping in <tool_call> tags`,
-        );
-        this.toolCallMode = "tool_call";
-        this.toolCallBuffer = `<tool_call>${toolPart.trim()}`;
-        return { type: "text", content: "" };
-      }
-    }
-
-    // No tool tag found yet, so flush everything except a small tail to avoid leaking partial tags
-    const holdLength = NovelaiStreamAdapter.TOOL_CALL_TAG_LENGTH - 1;
-    if (this.textScanBuffer.length <= holdLength) {
-      return { type: "text", content: "" };
-    }
-
-    const flushText = this.textScanBuffer.slice(0, this.textScanBuffer.length - holdLength);
-    this.textScanBuffer = this.textScanBuffer.slice(this.textScanBuffer.length - holdLength);
-
-    const cleaned = this.stripThinkBlocks(flushText);
-    if (!cleaned) {
-      return { type: "text", content: "" };
-    }
-    return this.processVisibleText(cleaned);
-  }
-
-  /**
-   * Detect an unwrapped tool call in mid-text: a bare function name on its own line
-   * followed by `<arg_key>`. Returns the match position and tool name, or null.
-   *
-   * Scans for pattern: `\n{known_tool_name}\n<arg_key>` (newline-delimited tool name
-   * that matches a registered tool, with at least one argument following).
-   *
-   * @returns Object with startIndex and toolName, or null if no match
-   */
-  private detectUnwrappedToolCallInText(buffer: string): { startIndex: number; toolName: string } | null {
-    // Split into lines and check if any line matches a tool name with <arg_key> after it.
-    // Track position through buffer using cumulative line lengths (no indexOf needed).
-    const lines = buffer.split("\n");
-    let currentIndex = 0;
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (line) {
-        const normalizedName = this.normalizeToolName(line);
-        const matchedTool = this.toolDefinitions.find((t) => t.name === normalizedName);
-
-        if (matchedTool) {
-          const remainingText = lines.slice(i + 1).join("\n");
-          if (remainingText.includes("<arg_key>")) {
-            // currentIndex points to the start of lines[i].
-            // Walk back one char to include the preceding newline separator.
-            const startIndex = currentIndex > 0 ? currentIndex - 1 : currentIndex;
-            return { startIndex, toolName: matchedTool.name };
-          }
-        }
-      }
-      currentIndex += lines[i].length;
-      if (i < lines.length - 1) {
-        currentIndex += 1;
-      }
-    }
-
-    return null;
-  }
-
-  private decideToolCallMode(prelude: string): {
-    mode: "wait" | "tool_call" | "text";
-    toolCallText?: string;
-    visibleText?: string;
-  } {
-    let buffer = prelude;
-
-    while (true) {
-      const trimmedStart = buffer.trimStart();
-
-      if (!trimmedStart) {
-        return { mode: "wait" };
-      }
-
-      if (trimmedStart.startsWith("</think>")) {
-        buffer = trimmedStart.slice("</think>".length);
-        continue;
-      }
-
-      if (trimmedStart.startsWith("<think>")) {
-        const thinkEndIndex = trimmedStart.indexOf("</think>");
-        if (thinkEndIndex === -1) {
-          return { mode: "wait" };
-        }
-
-        buffer = trimmedStart.slice(thinkEndIndex + "</think>".length);
-        continue;
-      }
-
-      if (trimmedStart.startsWith("<tool_call>")) {
-        return { mode: "tool_call", toolCallText: trimmedStart };
-      }
-
-      // Partial <tool_call> tag: buffer is a prefix of the full tag.
-      //     NAI chunks can split the tag at any point (e.g., "<to", "<tool_cal").
-      //     Wait for more tokens until the full tag arrives or we can rule it out.
-      if (
-        trimmedStart.startsWith("<tool_call") ||
-        (trimmedStart.startsWith("<") && "<tool_call>".startsWith(trimmedStart))
-      ) {
-        return { mode: "wait" };
-      }
-
-      // Unwrapped tool call: model outputs function name directly without <tool_call> tag.
-      //    GLM 4.6 sometimes omits the wrapper tag and generates:
-      //      web_search\n<arg_key>query</arg_key>\n<arg_value>...</arg_value>
-      //    Detect this by checking if the first line matches a known tool name.
-      //    Uses normalizeToolName() to handle underscore/hyphen variations
-      //    (model may output "web-search" but tool is registered as "web_search").
-      const firstLine = trimmedStart.split("\n")[0].trim();
-      if (firstLine) {
-        const normalizedName = this.normalizeToolName(firstLine);
-        const matchedTool = this.toolDefinitions.find((t) => t.name === normalizedName);
-
-        if (matchedTool) {
-          if (trimmedStart.includes("<arg_key>")) {
-            // Confirmed unwrapped tool call: wrap in <tool_call> for parsing.
-            // Use the ORIGINAL name from the model (not normalized) so parseToolCallBlock
-            // can normalize it during parsing.
-            log.info(
-              `NovelAI GLM: Detected unwrapped tool call for "${matchedTool.name}" — wrapping in <tool_call> tags`,
-            );
-            return {
-              mode: "tool_call",
-              toolCallText: `<tool_call>${trimmedStart}`,
-            };
-          }
-          log.info(
-            `NovelAI GLM: decideToolCallMode — tool name "${matchedTool.name}" matched, waiting for <arg_key>. Prelude length: ${prelude.length}`,
-          );
-          return { mode: "wait" };
-        }
-        // No tool match: log for debugging unwrapped tool call detection failures
-        log.info(
-          `NovelAI GLM: decideToolCallMode — firstLine "${firstLine}" did not match any tool (normalized: "${normalizedName}"). Falling through to text mode.`,
-        );
-      }
-
-      return { mode: "text", visibleText: buffer };
-    }
-  }
-
-  private extractToolCallBlock(buffer: string): string | null {
-    const match = buffer.match(/<tool_call>[\s\S]*?<\/tool_call>/);
-    return match ? match[0] : null;
-  }
-
-  private parseToolCallBlock(toolCallBlock: string): FunctionCall | null {
-    const inner = toolCallBlock
-      .replace(/^<tool_call>/, "")
-      .replace(/<\/tool_call>$/, "")
-      .trim();
-
-    const nameMatch = inner.match(/^([^\n<]+)/);
-    if (!nameMatch?.[1]) {
-      return null;
-    }
-
-    const rawName = nameMatch[1].trim();
-    const functionName = this.normalizeToolName(rawName);
-    const args: Record<string, unknown> = {};
-
-    // GLM 4.6 in non-English (especially Japanese) conversations sometimes outputs
-    // full-width Unicode angle brackets (＜ ＞) instead of ASCII < >.
-    // Normalize to ASCII before parsing to ensure the regex matches.
-    let normalizedInner = this.normalizeXmlBrackets(inner);
-
-    // Truncated closing tags are the common case: the stream frequently cuts off right
-    // before the final ">" of the last </arg_value> or </arg_key>. The >? keeps the
-    // substitution idempotent, so an already-complete tag is left unchanged.
-    normalizedInner = normalizedInner
-      .replace(/<\/arg_value>?\s*$/, "</arg_value>")
-      .replace(/<\/arg_key>?\s*$/, "</arg_key>");
-
-    // Primary format: XML <arg_key>/<arg_value> pairs (standard GLM tool format)
-    const argMatches = normalizedInner.matchAll(/<arg_key>([\s\S]*?)<\/arg_key>\s*<arg_value>([\s\S]*?)<\/arg_value>/g);
-
-    for (const match of argMatches) {
-      const rawArgKey = match[1]?.trim();
-      const rawValue = match[2]?.trim();
-      if (!rawArgKey) continue;
-
-      // Normalize garbled param names because GLM drops tokens at high temperature.
-      // e.g., "ave_wuery" → "query", "ount" → "count"
-      const argKey = this.normalizeParamName(functionName, rawArgKey);
-      const expectedType = this.getToolParamType(functionName, argKey);
-      args[argKey] = this.coerceArgValue(rawValue ?? "", expectedType);
-    }
-
-    // Fallback: when GLM outputs args in non-XML formats (common in Japanese conversations).
-    //    GLM 4.6 sometimes drops the XML arg tags entirely when responding in Japanese, outputting:
-    //    - JSON object: {"query": "search term"}
-    //    - Key-value lines: query: "search term" or query="search term"
-    //    Only attempt fallback if the primary XML parser found zero arguments.
-    if (Object.keys(args).length === 0) {
-      const bodyAfterName = normalizedInner.slice(nameMatch[0].length).trim();
-      if (bodyAfterName) {
-        this.parseToolCallArgsFallback(functionName, bodyAfterName, args);
-      }
-    }
-
-    // Diagnostic: log hex dump of characters around "arg_key" to identify invisible/non-ASCII issues
-    if (Object.keys(args).length === 0 && inner.includes("\n")) {
-      const argKeyIdx = inner.indexOf("arg_key");
-      let hexContext = "";
-      if (argKeyIdx >= 0) {
-        // Show 5 chars before "arg_key" as hex codes to catch non-ASCII brackets
-        const start = Math.max(0, argKeyIdx - 5);
-        const snippet = inner.slice(start, argKeyIdx + 12);
-        hexContext = ` | Hex near arg_key: ${[...snippet].map((c) => `U+${c.codePointAt(0)?.toString(16).toUpperCase().padStart(4, "0")}`).join(" ")}`;
-      }
-      log.warn(
-        `NovelAI GLM: Tool call "${functionName}" parsed with empty args.${hexContext} | Raw body: ${inner.slice(0, 300)}`,
-      );
-    }
-
-    return {
-      name: functionName,
-      args,
-    };
-  }
-
-  /**
-   * Normalize Unicode angle bracket variants to ASCII for reliable XML tag parsing.
-   *
-   * GLM 4.6 in non-English conversations (especially Japanese) sometimes outputs
-   * full-width angle brackets (＜ ＞), other Unicode bracket variants, or
-   * adds zero-width characters adjacent to brackets. This method normalizes all
-   * known variants to standard ASCII < > so the arg parsing regex can match.
-   *
-   * @param text - Raw text that may contain non-ASCII angle brackets
-   */
-  private normalizeXmlBrackets(text: string): string {
-    return (
-      text
-        // Full-width angle brackets: ＜ (ï¼) → <, ＞ (ï¼) → >
-        .replace(/\uff1c/g, "<")
-        .replace(/\uff1e/g, ">")
-        // Angle brackets: 〈 〉 (deprecated but still used)
-        .replace(/\u2329/g, "<")
-        .replace(/\u232a/g, ">")
-        // Mathematical angle brackets: ⟨ ⟩
-        .replace(/\u27e8/g, "<")
-        .replace(/\u27e9/g, ">")
-        .replace(/\u2039/g, "<")
-        .replace(/\u203a/g, ">")
-        .replace(/\u200b/g, "")
-        .replace(/\u200c/g, "")
-        .replace(/\u200d/g, "")
-        .replace(/\ufeff/g, "")
-    );
-  }
-
-  /**
-   * Fallback argument parser for non-XML tool call formats.
-   *
-   * GLM 4.6 in non-English conversations sometimes drops the <arg_key>/<arg_value> XML
-   * tags and outputs arguments in alternative formats:
-   * - JSON object: {"query": "search term", "count": 3}
-   * - YAML-style key-value: query: "search term"\ncount: 3
-   * - Assignment-style: query="search term"
-   *
-   * This method attempts each format in order, populating the args object in-place.
-   * Parsed keys are normalized through normalizeParamName() and values through coerceArgValue().
-   *
-   * @param body - Raw text after the function name line, without XML wrapper tags
-   * @param args - Args object to populate (mutated in-place)
-   */
-  private parseToolCallArgsFallback(functionName: string, body: string, args: Record<string, unknown>): void {
-    const jsonMatch = body.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          for (const [rawKey, rawVal] of Object.entries(parsed)) {
-            const argKey = this.normalizeParamName(functionName, rawKey.trim());
-            const expectedType = this.getToolParamType(functionName, argKey);
-            args[argKey] = this.coerceArgValue(
-              typeof rawVal === "string" ? rawVal : JSON.stringify(rawVal),
-              expectedType,
-            );
-          }
-          if (Object.keys(args).length > 0) {
-            log.info(
-              `NovelAI GLM: Fallback parsed ${Object.keys(args).length} arg(s) for "${functionName}" via JSON format`,
-            );
-            return;
-          }
-        }
-      } catch {}
-    }
-
-    // Strategy B: Key-value lines: e.g. "query: LCK LoL schedule\ncount: 5"
-    //    Matches patterns: "key: value", "key:value", 'key: "value"', "key: 'value'"
-    //    Also handles assignment style: "key=value", 'key="value"'
-    const kvLines = body.split("\n");
-    for (const line of kvLines) {
-      const trimmedLine = line.trim();
-      if (!trimmedLine) continue;
-
-      const kvMatch = trimmedLine.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*[:=]\s*(.+)$/);
-      if (kvMatch) {
-        const rawKey = kvMatch[1].trim();
-        let rawValue = kvMatch[2].trim();
-
-        if (
-          (rawValue.startsWith('"') && rawValue.endsWith('"')) ||
-          (rawValue.startsWith("'") && rawValue.endsWith("'"))
-        ) {
-          rawValue = rawValue.slice(1, -1);
-        }
-
-        const argKey = this.normalizeParamName(functionName, rawKey);
-        const expectedType = this.getToolParamType(functionName, argKey);
-        args[argKey] = this.coerceArgValue(rawValue, expectedType);
-      }
-    }
-
-    if (Object.keys(args).length > 0) {
-      log.info(
-        `NovelAI GLM: Fallback parsed ${Object.keys(args).length} arg(s) for "${functionName}" via key-value format`,
-      );
-    }
-  }
-
-  /**
-   * Normalize a tool name from model output to match a registered tool definition.
-   *
-   * GLM 4.6 frequently outputs tool names that don't exactly match the registration:
-   * - Underscore/hyphen swaps: "web_search" vs "web-search"
-   * - Truncated prefixes: "eb_search" instead of "web_search" (high-temp sampling drops tokens)
-   *
-   * Matching strategy (in priority order):
-   * 1. Exact match
-   * 2. Underscore → hyphen conversion
-   * 3. Hyphen → underscore conversion
-   * 4. Suffix match: if the raw name is a suffix of exactly one registered tool (handles dropped prefix tokens)
-   *
-   */
-  private normalizeToolName(rawName: string): string {
-    if (this.toolDefinitions.some((tool) => tool.name === rawName)) {
-      return rawName;
-    }
-
-    const hyphenName = rawName.replace(/_/g, "-");
-    if (this.toolDefinitions.some((tool) => tool.name === hyphenName)) {
-      return hyphenName;
-    }
-
-    const underscoreName = rawName.replace(/-/g, "_");
-    if (this.toolDefinitions.some((tool) => tool.name === underscoreName)) {
-      return underscoreName;
-    }
-
-    // Suffix match: handles dropped prefix tokens from high-temperature sampling.
-    //    e.g., model outputs "eb_search" (missing "w"), match "web_search".
-    //    Also try with underscore/hyphen normalization on both sides.
-    const candidates = [rawName, hyphenName, underscoreName];
-    const suffixMatches = this.toolDefinitions.filter((tool) =>
-      candidates.some((candidate) => tool.name.endsWith(candidate) && candidate.length >= 4),
-    );
-    if (suffixMatches.length === 1) {
-      log.info(`NovelAI GLM: Fuzzy-matched tool name "${rawName}" → "${suffixMatches[0].name}" (suffix match)`);
-      return suffixMatches[0].name;
-    }
-
-    // Levenshtein distance: catch garbled names that aren't simple suffix truncations.
-    //    Use stricter threshold (40%) than param matching since tool namespace is larger.
-    let bestLevMatch: NormalizedToolDefinition | undefined;
-    let bestLevDist = Number.POSITIVE_INFINITY;
-    let secondBestDist = Number.POSITIVE_INFINITY;
-    for (const tool of this.toolDefinitions) {
-      const minDist = Math.min(...candidates.map((c) => this.levenshteinDistance(c, tool.name)));
-      const maxLen = Math.max(rawName.length, tool.name.length);
-      if (minDist < bestLevDist && minDist <= Math.ceil(maxLen * 0.4)) {
-        secondBestDist = bestLevDist;
-        bestLevDist = minDist;
-        bestLevMatch = tool;
-      } else if (minDist < secondBestDist) {
-        secondBestDist = minDist;
-      }
-    }
-    if (bestLevMatch && (secondBestDist - bestLevDist >= 2 || this.toolDefinitions.length <= 2)) {
-      log.info(
-        `NovelAI GLM: Fuzzy-matched tool name "${rawName}" → "${bestLevMatch.name}" (edit distance: ${bestLevDist})`,
-      );
-      return bestLevMatch.name;
-    }
-
-    return rawName;
-  }
-
-  /**
-   * Normalize a garbled parameter name from model output to match a registered parameter.
-   *
-   * GLM 4.6 at higher temperatures drops or garbles tokens in argument names,
-   * e.g., "ave_wuery" instead of "query", "ount" instead of "count".
-   *
-   * Matching strategy:
-   * 1. Exact match: parameter exists in the tool definition
-   * 2. Suffix match: raw name is a suffix of a known parameter (handles dropped prefix tokens)
-   * 3. Best substring match: find the parameter whose name contains the most of the raw name
-   *
-   */
-  private normalizeParamName(functionName: string, rawParamName: string): string {
-    const tool = this.toolDefinitions.find((t) => t.name === functionName);
-    if (!tool?.parameters?.properties) return rawParamName;
-
-    const knownParams = Object.keys(tool.parameters.properties);
-
-    if (knownParams.includes(rawParamName)) {
-      return rawParamName;
-    }
-
-    // Suffix match: "uery" matches "query", "ount" matches "count"
-    const suffixMatches = knownParams.filter((p) => p.endsWith(rawParamName) && rawParamName.length >= 3);
-    if (suffixMatches.length === 1) {
-      log.info(`NovelAI GLM: Fuzzy-matched param name "${rawParamName}" → "${suffixMatches[0]}" (suffix match)`);
-      return suffixMatches[0];
-    }
-
-    // Containment match: raw name contains a known param or vice versa
-    //    Handles cases like "ave_wuery" where the model garbles across the name.
-    //    Find the known param with the longest common subsequence in the raw name.
-    const containmentMatches = knownParams.filter((p) => rawParamName.includes(p) || p.includes(rawParamName));
-    if (containmentMatches.length === 1) {
-      log.info(
-        `NovelAI GLM: Fuzzy-matched param name "${rawParamName}" → "${containmentMatches[0]}" (containment match)`,
-      );
-      return containmentMatches[0];
-    }
-
-    // Best suffix overlap: find the param that shares the longest suffix with rawParamName
-    //    e.g., "ave_wuery" shares no direct suffix with "query", but we can check
-    //    if the raw name ends with a significant portion of any known param.
-    let bestMatch = "";
-    let bestOverlap = 0;
-    for (const param of knownParams) {
-      let overlap = 0;
-      const minLen = Math.min(rawParamName.length, param.length);
-      for (let i = 1; i <= minLen; i++) {
-        if (rawParamName[rawParamName.length - i] === param[param.length - i]) {
-          overlap++;
-        } else {
-          break;
-        }
-      }
-      // Require at least 3 chars overlap and >50% of the shorter name
-      if (overlap > bestOverlap && overlap >= 3 && overlap > minLen * 0.5) {
-        bestOverlap = overlap;
-        bestMatch = param;
-      }
-    }
-    if (bestMatch) {
-      log.info(
-        `NovelAI GLM: Fuzzy-matched param name "${rawParamName}" → "${bestMatch}" (suffix overlap: ${bestOverlap} chars)`,
-      );
-      return bestMatch;
-    }
-
-    // Levenshtein distance: catch severely garbled names like "ave_wuery" → "query".
-    //    The wide tolerance is safe only because the param namespace is small (typically
-    //    3-8 params per tool), so a false positive needs a near-tie that the
-    //    runner-up check below rejects.
-    let bestLevMatch = "";
-    let bestLevDistance = Number.POSITIVE_INFINITY;
-    let secondBestDistance = Number.POSITIVE_INFINITY;
-    for (const param of knownParams) {
-      const distance = this.levenshteinDistance(rawParamName, param);
-      const maxLen = Math.max(rawParamName.length, param.length);
-      if (distance < bestLevDistance && distance <= Math.ceil(maxLen * 0.6)) {
-        secondBestDistance = bestLevDistance;
-        bestLevDistance = distance;
-        bestLevMatch = param;
-      } else if (distance < secondBestDistance) {
-        secondBestDistance = distance;
-      }
-    }
-    // Only accept if there's a clear winner (best is at least 2 edits better than runner-up)
-    if (bestLevMatch && (secondBestDistance - bestLevDistance >= 2 || knownParams.length <= 2)) {
-      log.info(
-        `NovelAI GLM: Fuzzy-matched param name "${rawParamName}" → "${bestLevMatch}" (edit distance: ${bestLevDistance})`,
-      );
-      return bestLevMatch;
-    }
-
-    log.warn(
-      `NovelAI GLM: Could not match param name "${rawParamName}" to any known parameter of "${functionName}". Known params: [${knownParams.join(", ")}]`,
-    );
-    return rawParamName;
-  }
-
-  /**
-   * Compute the Levenshtein (edit) distance between two strings.
-   * Used for fuzzy matching garbled parameter names from GLM output.
-   *
-   */
-  private levenshteinDistance(a: string, b: string): number {
-    const m = a.length;
-    const n = b.length;
-
-    const prev = new Array<number>(n + 1);
-    for (let j = 0; j <= n; j++) prev[j] = j;
-
-    for (let i = 1; i <= m; i++) {
-      let prevDiag = prev[0];
-      prev[0] = i;
-      for (let j = 1; j <= n; j++) {
-        const temp = prev[j];
-        if (a[i - 1] === b[j - 1]) {
-          prev[j] = prevDiag;
-        } else {
-          prev[j] = 1 + Math.min(prevDiag, prev[j - 1], prev[j]);
-        }
-        prevDiag = temp;
-      }
-    }
-
-    return prev[n];
-  }
-
-  private getToolParamType(functionName: string, argKey: string): ToolParamType | undefined {
-    const tool = this.toolDefinitions.find((definition) => definition.name === functionName);
-    return tool?.parameters?.properties?.[argKey]?.type;
-  }
-
-  private coerceArgValue(rawValue: string, expectedType?: ToolParamType): unknown {
-    const trimmed = rawValue.trim();
-    const parsed = this.tryParseJson(trimmed);
-    if (parsed.success) {
-      // If tool schema expects a string but JSON parsed as number/boolean,
-      // coerce to string. GLM often outputs bare numbers for ID fields
-      // (e.g., discord_id: 684462114022490100 instead of "684462114022490100").
-      if (expectedType === "string" && typeof parsed.value !== "string") {
-        return String(parsed.value);
-      }
-      return parsed.value;
-    }
-
-    if (expectedType === "number") {
-      const numValue = Number.parseFloat(trimmed);
-      if (!Number.isNaN(numValue)) {
-        return numValue;
-      }
-    }
-
-    if (expectedType === "boolean") {
-      if (trimmed === "true") return true;
-      if (trimmed === "false") return false;
-    }
-
-    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
-      return trimmed.slice(1, -1);
-    }
-
-    return trimmed;
-  }
-
-  private tryParseJson(value: string): { success: boolean; value?: unknown } {
-    try {
-      return { success: true, value: JSON.parse(value) };
-    } catch {
-      return { success: false };
-    }
-  }
-
   private stripThinkBlocks(text: string): string {
     if (!text) return "";
 
@@ -1736,14 +869,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     return output;
   }
 
-  private resetToolParsingState(): void {
-    this.toolCallMode = this.toolsEnabled ? "undecided" : "disabled";
-    this.toolPreludeBuffer = "";
-    this.toolCallBuffer = "";
-    this.textScanBuffer = "";
-    this.insideThinkBlock = false;
-  }
-
   private captureThinkBlockThoughtText(text: string): void {
     if (!text) {
       return;
@@ -1783,228 +908,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     };
   }
 
-  private normalizeToolDefinitions(tools: Array<Record<string, unknown>>): NormalizedToolDefinition[] {
-    const normalized: NormalizedToolDefinition[] = [];
-
-    for (const tool of tools) {
-      if (!tool || typeof tool !== "object") continue;
-      const toolObj = tool as Record<string, unknown>;
-
-      if ("function" in toolObj && toolObj.function) {
-        const fn = toolObj.function as {
-          name?: string;
-          description?: string;
-          parameters?: ToolParameterSchema;
-        };
-        if (fn.name) {
-          normalized.push({
-            name: fn.name,
-            description: fn.description,
-            parameters: fn.parameters,
-          });
-        }
-        continue;
-      }
-
-      if (typeof toolObj.name === "string") {
-        normalized.push({
-          name: toolObj.name,
-          description: typeof toolObj.description === "string" ? toolObj.description : undefined,
-          parameters: typeof toolObj.parameters === "object" ? (toolObj.parameters as ToolParameterSchema) : undefined,
-        });
-      }
-    }
-
-    return normalized;
-  }
-
-  /**
-   * Build tool calling guide using GLM 4.6's official <tools> XML format.
-   * Matches the Jinja chat template structure from the reference implementation.
-   *
-   * @returns Formatted tool guide string, or null if no tools
-   */
-  private buildToolCallingGuide(toolDefinitions: NormalizedToolDefinition[]): string | null {
-    if (!toolDefinitions.length) return null;
-
-    const lines: string[] = [
-      "# Tools",
-      "",
-      "You may call one or more functions to assist with the user query.",
-      "",
-      "You are provided with function signatures within <tools></tools> XML tags:",
-      "<tools>",
-    ];
-
-    // Emit each tool as a JSON object (matching the Jinja template's `tool | tojson`)
-    for (const tool of toolDefinitions) {
-      const toolJson: Record<string, unknown> = {
-        name: tool.name,
-      };
-      if (tool.description) {
-        toolJson.description = tool.description;
-      }
-      if (tool.parameters) {
-        toolJson.parameters = tool.parameters;
-      }
-      lines.push(JSON.stringify(toolJson));
-    }
-
-    lines.push("</tools>");
-    lines.push("");
-    lines.push("For each function call, output the function name and arguments within the following XML format:");
-    lines.push("<tool_call>{function-name}");
-    lines.push("<arg_key>{arg-key-1}</arg_key>");
-    lines.push("<arg_value>{arg-value-1}</arg_value>");
-    lines.push("<arg_key>{arg-key-2}</arg_key>");
-    lines.push("<arg_value>{arg-value-2}</arg_value>");
-    lines.push("...");
-    lines.push("</tool_call>");
-
-    return lines.join("\n");
-  }
-
-  /**
-   * Recursively strip fetch capability reminder fields from tool response objects.
-   * GLM 4.6 has a strict prompt token budget, and these fields waste tokens on
-   * a capability (fetch MCP) that is disabled for NovelAI.
-   * @returns A deep copy with agentInstructions and fetchCapabilityReminder removed
-   */
-  private stripFetchReminderFields(obj: Record<string, unknown>): Record<string, unknown> {
-    const keysToStrip = new Set(["agentInstructions", "fetchCapabilityReminder"]);
-
-    const strip = (value: unknown): unknown => {
-      if (Array.isArray(value)) {
-        return value.map(strip);
-      }
-      if (value !== null && typeof value === "object") {
-        const result: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-          if (!keysToStrip.has(k)) {
-            result[k] = strip(v);
-          }
-        }
-        return result;
-      }
-      return value;
-    };
-
-    return strip(obj) as Record<string, unknown>;
-  }
-
-  /**
-   * Build tool interaction history in flat text format (Kayra).
-   * Uses simple [Tool Result] labels without GLM role tags.
-   */
-  private buildToolHistoryFlat(
-    history: StreamContext["functionInteractionHistory"] = [],
-    messageIdMap?: StreamContext["messageIdMap"],
-  ): string | null {
-    if (!history.length) return null;
-
-    const lines: string[] = ["[System: Tool Call History]"];
-
-    for (const item of history) {
-      lines.push(this.formatToolCallForPrompt(item.functionCall));
-
-      // Strip fetch capability reminder fields recursively to save tokens
-      const sanitizedResponse = this.stripFetchReminderFields(item.functionResponse);
-      lines.push(`[System: Tool result] ${JSON.stringify(sanitizedResponse)}`);
-
-      if (item.imageMetadata?.messageIds?.length) {
-        lines.push(
-          `[System: Images sent to Discord message ID(s): ${item.imageMetadata.messageIds.map((id) => messageIdMap?.register(id, "media") ?? id).join(", ")}]`,
-        );
-      }
-    }
-
-    return lines.join("\n");
-  }
-
-  /**
-   * Build tool interaction history using GLM 4.6 role tags.
-   * Each tool call/response pair uses proper <|assistant|> + <|observation|> structure.
-   *
-   */
-  private buildToolHistoryGlm(
-    history: StreamContext["functionInteractionHistory"] = [],
-    messageIdMap?: StreamContext["messageIdMap"],
-  ): Array<{ role: "assistant" | "observation"; content: string }> {
-    if (!history.length) return [];
-
-    const turns: Array<{
-      role: "assistant" | "observation";
-      content: string;
-    }> = [];
-
-    for (const item of history) {
-      // Assistant turn: include any text the model already streamed before the tool call,
-      // so it doesn't repeat itself on the continuation pass.
-      const assistantParts: string[] = [];
-
-      if (item.preToolCallTextParts?.length) {
-        for (const part of item.preToolCallTextParts) {
-          const text = (part as { text?: string }).text;
-          if (text?.trim()) {
-            assistantParts.push(text.trim());
-          }
-        }
-      }
-
-      const toolCallLines: string[] = [];
-      toolCallLines.push(`<tool_call>${item.functionCall.name}`);
-      const args = item.functionCall.args ?? {};
-      for (const [key, value] of Object.entries(args)) {
-        toolCallLines.push(`<arg_key>${key}</arg_key>`);
-        toolCallLines.push(`<arg_value>${JSON.stringify(value)}</arg_value>`);
-      }
-      toolCallLines.push("</tool_call>");
-      assistantParts.push(toolCallLines.join("\n"));
-
-      turns.push({
-        role: "assistant",
-        content: assistantParts.join("\n"),
-      });
-
-      // Observation turn with tool response
-      // Strip fetch capability reminder fields recursively to save tokens because
-      // GLM 4.6 has a strict prompt budget, and fetch MCP is disabled for NovelAI.
-      const sanitizedResponse = this.stripFetchReminderFields(item.functionResponse);
-      const responseLines: string[] = ["<tool_response>"];
-      responseLines.push(JSON.stringify(sanitizedResponse));
-      responseLines.push("</tool_response>");
-
-      if (item.imageMetadata?.messageIds?.length) {
-        responseLines.push(
-          `[System: Images sent to Discord message ID(s): ${item.imageMetadata.messageIds.map((id) => messageIdMap?.register(id, "media") ?? id).join(", ")}]`,
-        );
-      }
-
-      turns.push({
-        role: "observation",
-        content: responseLines.join("\n"),
-      });
-    }
-
-    return turns;
-  }
-
-  private formatToolCallForPrompt(functionCall: FunctionCall): string {
-    const lines: string[] = [`<tool_call>${functionCall.name}`];
-    const args = functionCall.args ?? {};
-
-    for (const [key, value] of Object.entries(args)) {
-      lines.push(`<arg_key>${key}</arg_key><arg_value>${JSON.stringify(value)}</arg_value>`);
-    }
-
-    lines.push("</tool_call>");
-    return lines.join("\n");
-  }
-
-  /**
-   * Adds the response body (e.g. the context-overflow numbers) as trace beside the base
-   * `provider_error` counter, which carries only the code and type.
-   */
   protected override onProviderError(error: unknown, providerError: ProviderError, context?: StreamContext): void {
     super.onProviderError(error, providerError, context);
     log.warn(
@@ -2192,16 +1095,12 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
    * {live history turns}
    * ```
    *
-   * @param options - Tool definitions, function interaction history, and optional ATTG block
    */
   private assembleNovelAIPrompt(
     contextItems: StructuredContextItem[],
     botName: string,
     options?: {
-      toolDefinitions?: NormalizedToolDefinition[];
-      functionInteractionHistory?: StreamContext["functionInteractionHistory"];
       attgBlock?: string | null;
-      messageIdMap?: StreamContext["messageIdMap"];
     },
   ): string {
     // Separate sample dialogue (reference) from live history so a *** dinkus
@@ -2209,8 +1108,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     const sampleDialogueParts: string[] = [];
     const contextParts: string[] = []; // pre-chat injections (e.g. [System: users info])
     const historyParts: string[] = [];
-    const includeTools = (options?.toolDefinitions?.length ?? 0) > 0;
-    const systemTags = this.getSystemInstructionTags(includeTools);
+    const systemTags = NovelaiStreamAdapter.SYSTEM_INSTRUCTION_TAGS_BASE;
 
     let personalityText = "";
     let memoriesText = "";
@@ -2281,14 +1179,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    if (includeTools) {
-      const toolGuide = this.buildToolCallingGuide(options?.toolDefinitions ?? []);
-      if (toolGuide) instructionParts.push(toolGuide);
-
-      const toolHistory = this.buildToolHistoryFlat(options?.functionInteractionHistory ?? [], options?.messageIdMap);
-      if (toolHistory) instructionParts.push(toolHistory);
-    }
-
     // Assemble formatted blocks using NAI story-format conventions.
     //    Each section is preceded by a '----' info divider.
     const systemBlocks: string[] = [];
@@ -2336,7 +1226,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
    * ```
    * [gMASK]<sop>
    * <|system|>
-   * {consolidated system instructions + tool definitions}
+   * {consolidated system instructions}
    *
    * <|user|>
    * Alice: Hello there!
@@ -2358,17 +1248,12 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
    *   is appended instead to suppress internal reasoning.
    * - If the model decides to think, any <think>...</think> blocks are stripped by
    *   stripThinkBlocks() in the streaming pipeline
-   * - Tool definitions use <tools> XML format in the system block
-   * - Tool history uses <|assistant|> + <tool_call> + <|observation|> structure
    *
    */
   private assembleGlmChatPrompt(
     contextItems: StructuredContextItem[],
     botName: string,
     options?: {
-      toolDefinitions?: NormalizedToolDefinition[];
-      functionInteractionHistory?: StreamContext["functionInteractionHistory"];
-      messageIdMap?: StreamContext["messageIdMap"];
       thinkingLevel?: string | null;
       forceReason?: boolean;
     },
@@ -2378,8 +1263,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       role: "user" | "model";
       content: string;
     }> = [];
-    const includeTools = (options?.toolDefinitions?.length ?? 0) > 0;
-    const systemTags = this.getSystemInstructionTags(includeTools);
+    const systemTags = NovelaiStreamAdapter.SYSTEM_INSTRUCTION_TAGS_BASE;
 
     for (const item of contextItems) {
       const textContent = item.parts
@@ -2409,13 +1293,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
             content: textContent,
           });
         }
-      }
-    }
-
-    if (includeTools) {
-      const toolGuide = this.buildToolCallingGuide(options?.toolDefinitions ?? []);
-      if (toolGuide) {
-        systemInstructionParts.push(toolGuide);
       }
     }
 
@@ -2458,24 +1335,6 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // Tool interaction history (after dialogue, before generation prompt).
-    //    Include even when tools are disabled for the current iteration:
-    //    the model needs to see prior tool calls (and failures) plus any text
-    //    it already streamed, so it doesn't repeat itself.
-    if (options?.functionInteractionHistory?.length) {
-      const toolTurns = this.buildToolHistoryGlm(options.functionInteractionHistory, options.messageIdMap);
-      for (const toolTurn of toolTurns) {
-        if (toolTurn.role === "assistant") {
-          promptParts.push("<|assistant|>");
-          promptParts.push(thinkDirective);
-          promptParts.push(toolTurn.content);
-        } else if (toolTurn.role === "observation") {
-          promptParts.push("<|observation|>");
-          promptParts.push(toolTurn.content);
-        }
-      }
-    }
-
     // Generation prompt: signal the model to generate the assistant's response.
     // thinkDirective is either <think></think> (seeds thinking format) or /nothink (disables reasoning).
     promptParts.push("<|assistant|>");
@@ -2497,8 +1356,5 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     log.info(`Model: ${request.model}`);
     log.info(`Prompt Length: ${promptLength} characters`);
     log.info(`Parameters: temperature=${request.parameters.temperature}, max_length=${request.parameters.max_length}`);
-    if (this.toolsEnabled) {
-      log.info(`Tool calling enabled (tools=${this.toolDefinitions.length})`);
-    }
   }
 }

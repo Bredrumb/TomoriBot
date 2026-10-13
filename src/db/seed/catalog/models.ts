@@ -1268,7 +1268,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         codename: "glm-4-6",
         isDefault: true,
         isSmartest: true,
-        hasTools: true,
+        hasTools: false,
         desc: "Latest NovelAI roleplay model with enhanced creativity and character consistency",
         i18n: {
           ja: "創造性とキャラクター一貫性を強化した最新のNovelAIロールプレイモデル",

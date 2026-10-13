@@ -6,9 +6,6 @@
  * tool that takes a `category` enum. The dispatcher routes to whichever
  * engine in the chain (Brave → SearXNG → DuckDuckGo) can serve the
  * requested category.
- *
- * Saves ~400 tokens/turn from removed tool declarations and eliminates
- * wrong-tool-name fuzzy-matching errors observed in NovelAI streams.
  */
 
 import {

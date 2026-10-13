@@ -9,8 +9,6 @@ export default {
     max_iterations_streaming_description: `Mình bị kẹt trong vòng lặp suy nghĩ và không thể hoàn thành yêu cầu, hãy dùng \`/refresh\` nếu sự cố vẫn tiếp diễn.`,
     still_working_title: `Vẫn đang xử lý...`,
     still_working_description: `Tác vụ này đang mất nhiều bước hơn bình thường. Dùng \`/kill\` nếu bạn nghĩ mình bị kẹt.`,
-    nai_tool_retry_exhausted_title: `Lỗi công cụ`,
-    nai_tool_retry_exhausted_description: `Một công cụ đã thất bại nhiều lần và không thể hoàn tất yêu cầu. Vui lòng thử lại hoặc dùng \`/refresh\` nếu sự cố vẫn tiếp diễn.`,
     tool_error_loop_title: `Vòng lặp lỗi công cụ`,
     tool_error_loop_description: `Mình liên tục gặp lỗi công cụ và không thể hoàn tất yêu cầu. Hãy thử diễn đạt lại hoặc dùng \`/refresh\` nếu sự cố vẫn tiếp diễn.`,
     fallback_used_title: `Đã dùng model dự phòng`,

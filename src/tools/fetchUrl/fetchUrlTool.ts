@@ -92,10 +92,6 @@ export class FetchUrlTool extends BaseTool {
     required: ["url"],
   };
 
-  isAvailableFor(provider: string): boolean {
-    return provider.toLowerCase() !== "novelai";
-  }
-
   protected isEnabled(context: ToolContext): boolean {
     return context.tomoriState.config.web_search_enabled;
   }

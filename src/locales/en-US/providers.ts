@@ -9,8 +9,6 @@ export default {
     max_iterations_streaming_description: `I got stuck in a thinking loop and couldn't complete the request, use \`/refresh\` if this issue persists.`,
     still_working_title: `Still Working...`,
     still_working_description: `This task is taking more steps than usual. Use \`/kill\` if you think I'm stuck.`,
-    nai_tool_retry_exhausted_title: `Tool Error`,
-    nai_tool_retry_exhausted_description: `A tool failed multiple times and couldn't complete the request. Please try again or use \`/refresh\` if this issue persists.`,
     tool_error_loop_title: `Tool Error Loop`,
     tool_error_loop_description: `I kept running into tool errors and couldn't complete the request. Try rephrasing or use \`/refresh\` if this issue persists.`,
     fallback_used_title: `Fallback Model Used`,

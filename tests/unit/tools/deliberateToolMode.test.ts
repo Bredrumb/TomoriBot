@@ -38,7 +38,6 @@ describe("deliberate tool mode", () => {
       createPersona({ config: { sticker_usage_enabled: false } }),
       createPersona({ config: { sticker_usage_enabled: true, tool_use_enabled: false } }),
       createPersona({ llm: { ...state.llm, has_tools: false }, config: { sticker_usage_enabled: true } }),
-      createPersona({ llm: { ...state.llm, llm_provider: "novelai" }, config: { sticker_usage_enabled: true } }),
     ])
       expect(getAutonomousDeliberateToolNames(disabled)).toEqual([]);
   });

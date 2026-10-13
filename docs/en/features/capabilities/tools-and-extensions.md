@@ -32,7 +32,8 @@ Here are a few examples of what tools enable in conversation:
 ## Built-In Tools
 <!-- anchor: built-in-tools -->
 
-Tools depend on the active provider and model supporting tool calling. Many are gated behind
+Tools depend on the active provider and model supporting tool calling. NovelAI text models cannot
+call tools. Many tools are gated behind
 a feature flag (`/config` > Permissions), a Discord permission, a model capability, or an
 optional API key.
 
@@ -40,9 +41,9 @@ optional API key.
 |---|---|---|---|
 | Review capabilities | `{capabilities_tool}` | - | Check current chat abilities, commands, or settings before answering. |
 | Create / update long-term memory | `{memory_tool}` / `{memory_update_tool}` | `self_teaching_enabled` | Save or replace a stable server fact or user preference. |
-| Update short-term memory | `{short_term_memory_tool}` | (not on NovelAI) | Save temporary working memory for the current channel or story arc. |
+| Update short-term memory | `{short_term_memory_tool}` | - | Save temporary working memory for the current channel or story arc. |
 | Create / update task | `{task_tool}` / `{task_update_tool}` | - | Schedule or edit reminders and self-tasks (see [Scheduled Tasks](/features/capabilities/scheduled-tasks/)). |
-| Cross-channel message | `{cross_channel_tool}` | (not on NovelAI) | Act in another channel or thread, with an optional report-back. |
+| Cross-channel message | `{cross_channel_tool}` | - | Act in another channel or thread, with an optional report-back. |
 | Create thread | `{create_thread_tool}` | `thread_creation_enabled` + thread perms | Open a public thread and post its starter message. |
 | Select sticker | `{sticker_tool}` | `sticker_usage_enabled` | Add a matching server sticker or custom expression to a reply. |
 | Manage message | `{manage_message_tool}` | `manage_message_enabled` | Pin, edit, or delete recent messages (pin needs `Manage Messages`). |
@@ -114,7 +115,7 @@ Brave → SearXNG → DuckDuckGo
 - SearXNG and Crawl4AI are optional self-hosted servers that add more categories
   and browser-rendered page fetches; see [Self-Hosting](/self-hosting/).
 
-For reading a specific page, she uses `fetch_url`. It's unavailable on NovelAI.
+For reading a specific page, she uses `fetch_url`.
 
 ## MCP Servers
 <!-- anchor: mcp-servers -->

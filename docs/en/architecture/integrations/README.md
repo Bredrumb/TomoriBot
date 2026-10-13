@@ -32,8 +32,6 @@ formats that connect to TomoriBot's core pipelines.
   coordinate space translation.
 - [NovelAI Limitations](/architecture/integrations/novelai/limitations/): Context window caps, prompt
   prefix requirements, and token-level constraints.
-- [NovelAI Tool Calling](/architecture/integrations/novelai/tool-calling/): Deliberate tool calling
-  emulation and retry suppression for models lacking native function calling.
 
 ### Character and preset formats
 

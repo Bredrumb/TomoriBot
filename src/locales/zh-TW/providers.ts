@@ -9,8 +9,6 @@ export default {
     max_iterations_streaming_description: `我卡在思考迴圈裡，無法完成要求，如果問題持續發生請使用 \`/refresh\`。`,
     still_working_title: `還在處理...`,
     still_working_description: `這個任務比平常需要更多步驟。如果你覺得我卡住了，請使用 \`/kill\`。`,
-    nai_tool_retry_exhausted_title: `工具錯誤`,
-    nai_tool_retry_exhausted_description: `某個工具連續失敗多次，無法完成要求。請再試一次，如果問題持續發生請使用 \`/refresh\`。`,
     tool_error_loop_title: `工具錯誤迴圈`,
     tool_error_loop_description: `我一直遇到工具錯誤，無法完成要求。請換個說法，如果問題持續發生請使用 \`/refresh\`。`,
     fallback_used_title: `已使用備援模型`,

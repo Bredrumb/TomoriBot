@@ -118,7 +118,9 @@ The `review_capabilities` tool inspects system configuration dynamically:
 
 ## NovelAI constraints
 
-The `fetch_url` tool is excluded from NovelAI models. NovelAI tool calling is prompt-based and token-constrained, requiring dedicated budget validation before large URL payloads can be admitted.
+NovelAI text models do not support tool calling. The provider returns an empty tool list, and
+prompt inspection omits tool schemas. NovelAI image generation remains available through its
+dedicated commands and through tools called by other text providers.
 
 ## Source pointers
 

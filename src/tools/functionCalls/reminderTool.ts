@@ -132,39 +132,16 @@ export class ReminderTool extends BaseTool {
     const targetUserArg = args.target_user as string | undefined;
     const legacyTargetUserNicknameArg = args.target_user_nickname as string | undefined;
     const legacyTargetUserDiscordIdArg = args.target_user_discord_id as string | undefined;
-    let reminderTimeArg = args.reminder_time as string | undefined;
+    const reminderTimeArg = args.reminder_time as string | undefined;
     const utcOffsetArg = args.utc_offset as number | undefined;
     const minutesFromNowArg = args.minutes_from_now as number | undefined;
     const hoursFromNowArg = args.hours_from_now as number | undefined;
     const daysFromNowArg = args.days_from_now as number | undefined;
     const monthsFromNowArg = args.months_from_now as number | undefined;
-    let repetitionIntervalHoursArg = args.repetition_interval_hours as number | undefined;
+    const repetitionIntervalHoursArg = args.repetition_interval_hours as number | undefined;
     const selfReminderArg = args.self_reminder as boolean | undefined;
     const targetChannelArg = args.target_channel as string | undefined;
     const legacyChannelIdArg = args.channel_id as string | undefined;
-
-    // NovelAI GLM recovery: normalize absolute time format.
-    // GLM may output "2025-09-05 15:30" (space), "2025-09-05T15:30" (ISO), or
-    // "2025/09/05_15:30" (slashes) instead of the expected "YYYY-MM-DD_HH:MM" format.
-    // Normalize common variants before parseTimeWithOffset rejects them.
-    if (reminderTimeArg && typeof reminderTimeArg === "string") {
-      let normalized = reminderTimeArg.trim();
-      normalized = normalized.replace(/^(\d{4})\/(\d{2})\/(\d{2})/, "$1-$2-$3");
-      normalized = normalized.replace(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/, "$1_$2");
-      if (normalized !== reminderTimeArg) {
-        log.info(`Reminder tool: Normalized time format "${reminderTimeArg}" → "${normalized}"`);
-        reminderTimeArg = normalized;
-      }
-    }
-
-    // NovelAI GLM recovery: default repetition_interval_hours to 0 (one-time) when missing.
-    // GLM frequently omits this required parameter for simple "remind me in X" requests.
-    // Only for NovelAI, so other providers have retries and should be required to explicitly
-    // set this so the model is "conscious" of whether the reminder is one-time or recurring.
-    if (context.provider === "novelai" && typeof repetitionIntervalHoursArg !== "number") {
-      log.info("Reminder tool: Auto-filling missing repetition_interval_hours with 0 (one-time reminder)");
-      repetitionIntervalHoursArg = 0;
-    }
 
     const { userRepository, serverScheduleRepository } = await import("@/utils/db/repositories");
     const { sendTaskEmbedWithExpand } = await import("../../utils/discord/expandableEmbedNotice");

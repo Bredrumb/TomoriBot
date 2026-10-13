@@ -7,7 +7,6 @@ import { getAnthropicToolAdapter } from "@/providers/anthropic/anthropicToolAdap
 import { getCustomToolAdapter } from "@/providers/custom/customToolAdapter";
 import { getDeepseekToolAdapter } from "@/providers/deepseek/deepseekToolAdapter";
 import { getGoogleToolAdapter } from "@/providers/google/googleToolAdapter";
-import { getNovelaiToolAdapter } from "@/providers/novelai/novelaiToolAdapter";
 import { getNvidiaToolAdapter } from "@/providers/nvidia/nvidiaToolAdapter";
 import { getOpenrouterToolAdapter } from "@/providers/openrouter/openrouterToolAdapter";
 import { getVertexToolAdapter } from "@/providers/vertex/vertexToolAdapter";
@@ -293,7 +292,7 @@ async function resolveSnapshotAnsweringState(params: {
 /**
  * Resolves the tool adapter matching the given provider. Non-OpenAI providers
  * (google/vertex/vertexexpress/anthropic) have dedicated adapters; OpenAI-compatible providers
- * share the openrouter-style adapter via subclasses. NovelAI keeps its own.
+ * share the openrouter-style adapter via subclasses.
  * Unknown providers fall back to the OpenRouter adapter for OpenAI-compat shape.
  */
 function selectToolAdapter(providerName: string): MCPCapableToolAdapter {
@@ -307,7 +306,6 @@ function selectToolAdapter(providerName: string): MCPCapableToolAdapter {
     zai: getZaiToolAdapter,
     zaicoding: getZaicodingToolAdapter,
     nvidia: getNvidiaToolAdapter,
-    novelai: getNovelaiToolAdapter,
     custom: getCustomToolAdapter,
   };
   const providerKey = getStaticProviderInfo(providerName)?.name ?? normalizeProviderName(providerName);
@@ -328,7 +326,11 @@ async function fetchProviderTools(
 ): Promise<Array<Record<string, unknown>>> {
   const activeLlm = persona.persona_llm ?? persona.llm;
 
-  if (!activeLlm.has_tools || toolFilter?.disabledByDeliberateMode) {
+  if (
+    getStaticProviderInfo(providerName)?.supportsFunctionCalling === false ||
+    !activeLlm.has_tools ||
+    toolFilter?.disabledByDeliberateMode
+  ) {
     return [];
   }
 

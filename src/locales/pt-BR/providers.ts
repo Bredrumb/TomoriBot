@@ -9,8 +9,6 @@ export default {
     max_iterations_streaming_description: `Fiquei presa em um ciclo de pensamento e não consegui concluir a solicitação, use \`/refresh\` se este problema persistir.`,
     still_working_title: `Ainda Trabalhando...`,
     still_working_description: `Esta tarefa está levando mais etapas do que o normal. Use \`/kill\` se você achar que estou travada.`,
-    nai_tool_retry_exhausted_title: `Erro de Ferramenta`,
-    nai_tool_retry_exhausted_description: `Uma ferramenta falhou várias vezes e não conseguiu concluir a solicitação. Por favor, tente novamente ou use \`/refresh\` se este problema persistir.`,
     tool_error_loop_title: `Ciclo de Erros de Ferramenta`,
     tool_error_loop_description: `Continuei encontrando erros de ferramenta e não consegui concluir a solicitação. Tente reformular ou use \`/refresh\` se este problema persistir.`,
     fallback_used_title: `Modelo Secundário Usado`,

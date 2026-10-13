@@ -1,13 +1,19 @@
 import { afterEach, describe, expect, it, spyOn } from "bun:test";
+import { NovelaiProvider } from "@/providers/novelai/novelaiProvider";
+import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { ContextItemTag } from "@/types/misc/context";
+import { createPersona } from "../../helpers/fixtures";
 import { NovelaiStreamAdapter } from "@/providers/novelai/novelaiStreamAdapter";
 import type { RawStreamChunk, StreamConfig, StreamContext } from "@/types/stream/interfaces";
 import { log } from "@/utils/misc/logger";
 import { isContextLengthError } from "@/utils/provider/providerErrorClassification";
 
 const originalFetch = globalThis.fetch;
+const restoreSpies: Array<() => void> = [];
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  for (const restore of restoreSpies.splice(0)) restore();
 });
 
 function makeChunk(data: Record<string, unknown>): RawStreamChunk {
@@ -31,14 +37,9 @@ function makeStreamContext(): StreamContext {
       guildId: "guild-1",
     },
     client: {},
-    tomoriState: {
-      persona_nickname: "Tomori",
-      config: {
-        thinking_level: "none",
-        llm_stop_speaker_pattern_enabled: false,
-        llm_stop_strings: null,
-      },
-    },
+    tomoriState: createPersona({
+      config: { thinking_level: "none", llm_stop_speaker_pattern_enabled: false, llm_stop_strings: [] },
+    }),
     contextItems: [],
     currentTurnModelParts: [],
     provider: "novelai",
@@ -287,5 +288,106 @@ describe("NovelaiStreamAdapter.startStream error propagation", () => {
     expect(errorProcessed.error?.message).toContain("too much context");
 
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("too much context"), undefined, expect.anything());
+  });
+});
+
+describe("NovelAI text generation without tools", () => {
+  it("omits supplied tool schemas and tool history for every text model", async () => {
+    for (const model of ["glm-4-6", "kayra-v1", "llama-3-erato-v1"]) {
+      let prompt = "";
+      globalThis.fetch = (async (_input, init) => {
+        const body = JSON.parse(String(init?.body)) as { input?: string; prompt?: string };
+        prompt = body.prompt ?? body.input ?? "";
+        return new Response("data: [DONE]\n\n", { headers: { "Content-Type": "text/event-stream" } });
+      }) as typeof fetch;
+      const context = makeStreamContext();
+      context.contextItems = [
+        {
+          role: "system",
+          parts: [{ type: "text", text: "tool-guide-marker" }],
+          metadataTag: ContextItemTag.SYSTEM_FUNCTION_GUIDE,
+        },
+        { role: "user", parts: [{ type: "text", text: "Juno: Hello!" }], metadataTag: ContextItemTag.DIALOGUE_HISTORY },
+      ];
+      context.functionInteractionHistory = [
+        { functionCall: { name: "tool-history-marker", args: {} }, functionResponse: { result: "tool-result-marker" } },
+      ];
+      context.naiContinuationPrefill = "unfinished-fragment";
+      const adapter = new NovelaiStreamAdapter();
+      for await (const chunk of adapter.startStream(
+        { ...makeStreamConfig(model), tools: [{ name: "tool-schema-marker" }] },
+        context,
+      )) {
+        adapter.processChunk(chunk);
+      }
+      expect(prompt).toContain("Juno: Hello!");
+      for (const marker of [
+        "tool-guide-marker",
+        "tool-history-marker",
+        "tool-result-marker",
+        "tool-schema-marker",
+        "<tools>",
+      ]) {
+        expect(prompt).not.toContain(marker);
+      }
+      if (model === "glm-4-6") expect(prompt).toContain("unfinished-fragment");
+      const literalCall = "<tool_call>unused_tool<arg_key>value</arg_key><arg_value>1</arg_value></tool_call>.";
+      const processed = adapter.processChunk(makeChunk({ token: literalCall }));
+      expect(processed.type).toBe("text");
+      expect(processed.content).toBe(literalCall);
+    }
+  });
+
+  it("keeps complete sentences, captures thinking, and retains the unfinished fragment", async () => {
+    globalThis.fetch = (async () =>
+      new Response("data: [DONE]\n\n", {
+        headers: { "Content-Type": "text/event-stream" },
+      })) as unknown as typeof fetch;
+    const adapter = new NovelaiStreamAdapter();
+    for await (const chunk of adapter.startStream(makeStreamConfig(), makeStreamContext())) adapter.processChunk(chunk);
+
+    const thought = adapter.processChunk(makeChunk({ token: "<think>consider" }));
+    const visible = adapter.processChunk(makeChunk({ token: " carefully</think>Hello. unfinished" }));
+    expect(thought.content).toBe("");
+    expect([...(thought.thoughts ?? []), ...(visible.thoughts ?? [])].map((entry) => entry.content).join("")).toBe(
+      "consider carefully",
+    );
+    expect(visible.content).toBe("Hello.");
+    expect(adapter.processChunk(makeChunk({ final: true })).type).toBe("done");
+    expect(adapter.getPendingContinuationPrefill()).toBe(" unfinished");
+
+    for await (const chunk of adapter.startStream(makeStreamConfig(), makeStreamContext())) adapter.processChunk(chunk);
+    expect(adapter.getPendingContinuationPrefill()).toBeUndefined();
+    expect(adapter.processChunk(makeChunk({ token: "Clean ending!" })).content).toBe("Clean ending!");
+  });
+
+  it("returns no tools and forwards continuation metadata only for an empty response", async () => {
+    const stream = spyOn(StreamOrchestrator.prototype, "streamToDiscord").mockResolvedValue({
+      status: "empty_response",
+      accumulatedText: "",
+    });
+    const prefill = spyOn(NovelaiStreamAdapter.prototype, "getPendingContinuationPrefill").mockReturnValue(
+      "unfinished",
+    );
+    restoreSpies.push(
+      () => stream.mockRestore(),
+      () => prefill.mockRestore(),
+    );
+    const provider = new NovelaiProvider();
+    expect(await provider.getTools()).toEqual([]);
+    expect(provider.getInfo().supportsFunctionCalling).toBe(false);
+    const context = makeStreamContext();
+    const config = { model: "glm-4-6", apiKey: "test-key", temperature: 1, tools: [{ name: "unused_tool" }] };
+    const generate = () =>
+      provider.streamToDiscord(context.channel, context.client, context.tomoriState, config, [], []);
+    const empty = await generate();
+    expect(empty.status).toBe("empty_response");
+    expect(empty.naiContinuationPrefill).toBe("unfinished");
+    expect(stream.mock.calls[0]?.[1].tools).toEqual([]);
+
+    stream.mockResolvedValue({ status: "completed", accumulatedText: "Complete." });
+    const complete = await generate();
+    expect(complete.status).toBe("completed");
+    expect(complete.naiContinuationPrefill).toBeUndefined();
   });
 });

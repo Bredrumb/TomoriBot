@@ -198,7 +198,7 @@ cloud services. Not every feature is available on every provider.
 | Google Gemini | ✅ | ✅ | ✅ | ✅ | Free models available |
 | OpenRouter | ✅ | ✅ | ✅ | ✅ | Free models available |
 | Anthropic (API) | ✅ | ✅ | ✅ | - | Not Claude Code |
-| NovelAI | ✅ | ✅ | - | - | Only GLM 4.6 can use tools |
+| NovelAI | ✅ | - | - | - | Text models cannot use tools |
 | NVIDIA NIM | ✅ | ✅ | ✅ | ✅ | Free models available |
 | DeepSeek | ✅ | ✅ | - | - | - |
 | Z.ai | ✅ | ✅ | ✅ | - | Free models; ⚠️ ToS = coding and agent use only |
