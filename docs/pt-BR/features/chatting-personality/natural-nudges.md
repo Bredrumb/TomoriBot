@@ -35,34 +35,58 @@ Há no máximo um toque ativo por canal (incluindo tópicos) por hora, além de 
 ## Toques Ociosos
 <!-- anchor: idle-nudges -->
 
-Cada toque ocioso pertence a uma categoria:
+Os toques ociosos esperam até que um canal fique em silêncio por um tempo, durante os horários em que seu servidor costuma estar acordado. Existem 28 toques integrados em quatro categorias. Você pode ajustá-los e adicionar os seus para todo o servidor no `/nudge-studio`, e cada persona pode ter toques ociosos próprios (veja [Toques ociosos de persona](#persona-idle-nudges)).
 
-| Categoria | O que acontece |
-|---|---|
-| **Mencionar Usuário** | Uma persona menciona um membro que conhece: para saber como está, dar seguimento a algo comentado, compartilhar um link interessante, brincar sobre o jogo que está jogando ou oferecer um lembrete. |
-| **Retomar Tópico** | Uma persona retoma uma conversa que ficou pendente: uma pergunta sem resposta, uma segunda opinião ou algo que ela pesquisou. |
-| **Iniciar Tópico** | Uma persona traz algo novo, geralmente baseado em seus próprios interesses: um pensamento, uma opinião controversa, um dilema de escolha, uma notícia, uma imagem ou uma nota de voz. |
-| **Encenar Cena** | Duas ou três personas conversam entre si em uma cena curta de duas a quatro mensagens: uma discussão divertida, um plano "secreto" para um membro, pedir conselhos mútuos ou mostrar uma imagem. |
+| Categoria | O que faz | Pré-requisitos | Notas |
+|---|---|---|---|
+| <a id="ping-user"></a>Mencionar Usuário | Confere como um membro está ou compartilha algo que ele possa gostar. | Conversa recente com esta persona neste servidor, uma memória e permissão para mencionar. Privacidade total, listas de bloqueio de personalização e bloqueios de persona excluem membros. | Contatos frequentes têm preferência; menções recentes reduzem as chances de repetição. Desative em `/personal config` > `Privacidade` > `Menções de Personas`. |
+| Retomar Tópico | Retoma uma conversa que ficou pendente. | Uma conversa inacabada. | N/A |
+| Iniciar Tópico | Traz algo novo, geralmente sobre os interesses da persona. | Sem requisitos adicionais de categoria. | N/A |
+| <a id="play-scene"></a>Encenar Cena | Inicia uma breve conversa entre duas ou três personas. | Outra persona permitida a dar toques naquele canal. | Personas tagarelas participam com mais frequência; as silenciosas nunca participam. Se um membro enviar mensagem, a cena para e uma persona responde a ele. Cenas surpresa não mencionam seu alvo. |
 
-O `/nudge-studio` (requer Gerenciar Servidor) tem uma aba para cada categoria. Cada aba lista os toques ociosos daquela categoria com um ponto colorido:
+### Escolher e criar toques ociosos
 
-- 🟢 **Ativado**: pode ser selecionado.
-- 🟡 **Ativado, mas não pode ser executado aqui ainda**: nenhuma persona tem a ferramenta necessária, uma cena não tem uma segunda persona ou nenhuma das personas restritas pode intervir. A linha informa o que está faltando.
-- 🔴 **Desativado**.
+Abra `/nudge-studio` (requer `Gerenciar Servidor`) para explorar cada categoria. O ponto colorido mostra se um toque está ativado, se falta um pré-requisito ou se está desativado. Cada linha termina com sua origem: `Integrado`, `Personalizado do servidor` ou `Para <persona>` no caso de toques de uma persona. Categorias com mais de 12 linhas continuam em páginas seguintes.
 
-**Alternar Disponibilidade...** abre um toque ocioso com uma caixa de seleção para cada persona:
+`Alternar disponibilidade...` escolhe quais personas podem usar um toque:
 
-- **Todas marcadas**: qualquer persona pode usá-lo, incluindo as que você adicionar depois.
-- **Algumas marcadas**: apenas essas personas, e a linha exibe os nomes, como "Lembrar você? (apenas Mirri e Juno)". Uma persona adicionada posteriormente permanece de fora até que você a marque.
-- **Nenhuma marcada**: o toque ocioso fica desativado.
+- **Todas marcadas:** qualquer persona no canal pode usá-lo, incluindo as que você adicionar depois.
+- **Algumas marcadas:** apenas essas personas podem usá-lo. Novas personas permanecem de fora até você marcá-las.
+- **Nenhuma marcada:** o toque fica desativado.
 
-Abaixo da lista você pode adicionar até 25 toques personalizados para todo o servidor. Ao clicar em um, ele é aberto para edição; **Remover Toques Personalizados** lista seus toques, e desmarcar um remove o toque. Cada um contém:
+Um toque pertencente a uma persona tem apenas uma caixa de seleção, `Disponível para <persona>`, pois apenas a dona pode usá-lo. Desmarcá-lo desativa o toque sem excluí-lo.
 
-- **Nome**.
+Limitar um toque do servidor a uma persona não o move para a página daquela persona. Ele continua sendo um toque do servidor, e apenas as entradas próprias da persona viajam com o cartão da persona.
+
+Abaixo da lista você pode adicionar até 25 toques próprios para todo o servidor. Escolher um toque do servidor ou de uma persona abre-o para edição, e a mesma entrada pode ser editada na página de `Toques` da persona. Novos toques criados aqui são sempre toques do servidor. `Remover Toques` lista os toques editáveis na página atual, e desmarcar um remove o toque. Cada um contém:
+
+- **Nome**: o rótulo exibido no estúdio.
 - **Instrução**: o que a persona pretende fazer. Escreva `{persona}` onde vai o nome dela, `{partner}` para a outra persona em uma cena e `{target}` para o membro envolvido.
 - **Objetivo oculto** (opcional): a pequena meta pessoal que a persona mantém após sua abertura.
-- **Pré-requisitos**: o que precisa estar presente antes que o toque possa ser executado, como uma memória recente ou uma ferramenta disponível. Cada categoria já traz os seus: um membro para mencionar, uma conversa pendente ou uma segunda persona.
-- **Ferramentas recomendadas**: ferramentas que a persona é incentivada a usar quando as possui. O toque ocioso ainda é executado sem elas. Uma ferramenta escolhida nos Pré-requisitos já é considerada obrigatória, por isso é removida desta lista ao salvar.
+- **Pré-requisitos**: o que precisa estar presente antes da execução, como uma memória recente ou uma ferramenta disponível. Uma ferramenta escolhida nos Pré-requisitos já está incluída, sendo removida desta lista ao salvar.
+- **Ferramentas recomendadas**: ferramentas que a persona é incentivada a usar quando as possui. O toque ainda é executado sem elas.
+
+### Toques ociosos de persona
+<!-- anchor: persona-idle-nudges -->
+
+Uma persona pode carregar toques ociosos que correspondam ao seu caráter, como Rose conferindo uma roupa de cosplay ou Aphel recomendando um álbum. Eles se somam aos toques integrados e do servidor e não os substituem.
+
+Abra `/config` > `Persona` > `Toques`. `Toques Ociosos` fica abaixo de `Interesses`:
+
+- `Selecione ou adicione um toque ocioso...` adiciona um com `+ Adicionar <categoria>` ou edita um existente. Todas as quatro categorias estão disponíveis, com os mesmos campos de um toque do servidor. Uma persona suporta até 20, separados dos 25 do servidor.
+- `Alternar disponibilidade...` ativa ou desativa entradas individuais para esta persona.
+- `Remover Toques Ociosos` exclui as entradas desmarcadas.
+- `Restaurar Toques da Predefinição` aparece para uma persona que segue uma predefinição oficial e tem sua própria cópia da lista.
+
+Como funcionam:
+
+- Apenas a persona dona os inicia. Em uma cena, a dona lidera e qualquer outra persona autorizada pode entrar como parceira.
+- Eles seguem os mesmos pré-requisitos, horários de silêncio, nível de frequência e limite diário de qualquer outro toque ocioso. Mais entradas dão mais opções à persona, mas não a fazem falar com mais frequência.
+- Interesses guiam toques ativos. Toques ociosos de persona guiam apenas toques ociosos.
+
+Predefinições oficiais incluem toques ociosos. Uma persona que segue sua predefinição lê essa lista à medida que a predefinição é atualizada. Na primeira vez em que você adiciona, edita ou remove uma entrada, a persona obtém sua própria cópia de toda a lista, e atualizações futuras da predefinição não a alterarão mais. Ativar ou desativar uma entrada não cria uma cópia. `Restaurar Toques da Predefinição` substitui a lista da persona pela lista atual da predefinição e mantém seus interesses, loquacidade e as escolhas de ativação das entradas existentes. `Ressincronizar com predefinição` em `Identidade e Personalidade` também redefine a lista e as opções de ativação.
+
+Cartões de persona (`/persona export`) incluem os toques ociosos da persona, seja da predefinição ou de sua cópia própria, e importar o cartão os restaura. Opções de ativação são locais do servidor e não são exportadas, portanto entradas importadas começam ativadas. Toques do servidor nunca vão para um cartão. Um cartão antigo que ainda corresponda a uma predefinição oficial segue os toques ociosos atuais dessa predefinição. Outros cartões antigos são importados sem toques ociosos de persona.
 
 ### Mencionar Usuário
 <!-- anchor: ping-user -->
@@ -118,9 +142,13 @@ Cada persona tem sua própria página de **Toques** em `/config` > Persona:
 
 - **Loquacidade**: com que frequência essa persona é quem toma a iniciativa de falar. Personas Silenciosas nunca iniciam toques ociosos nem participam de toques ativos; tímidas falam menos e tagarelas com mais frequência.
 - **Interesses**: até 8 tópicos que a persona gosta de trazer e participar, cada um com uma breve descrição e exemplos (por exemplo, **anime de mecha**: ficção sobre robôs gigantes pilotados, como Gundam).
+- **Toques Ociosos**: até 20 toques que apenas esta persona usa, descritos em [Toques ociosos de persona](#persona-idle-nudges).
 
-Predefinições oficiais vêm com seus próprios interesses e loquacidade. O comando `/persona generate` sugere interesses para novos personagens, e as exportações de personas os incluem.
+Predefinições oficiais incluem essas configurações. O comando `/persona generate` sugere interesses para novas personas; `Gerar Interesses` adiciona novos por meio de seu modelo de texto atual. Exportações de personas incluem os três.
 
 ## O Que É Armazenado
 
-O Natural Nudges armazena suas configurações, toques ociosos personalizados e interesses de personas junto com o restante das configurações do servidor. Ele também registra quais toques ociosos e ativos foram executados recentemente, se alguém respondeu e para quem um toque de menção foi direcionado por 30 dias, e cada objetivo oculto por até 90 dias. Executar `/reset` restaura as configurações e remove os toques personalizados. `/export config` e `/import config` transferem as configurações e toques personalizados, mas não a lista de canais escolhidos (que pertence a um servidor específico). Sua própria preferência de Menções de Personas faz parte de suas configurações pessoais: `/reset personal config` a mantém, `/export personal config` a transfere e `/personal nuke` a apaga junto com os seus demais dados.
+Configurações, toques personalizados, interesses e toques ociosos de persona são salvos com a configuração do seu servidor. O histórico de toques, incluindo se alguém respondeu e quem foi mencionado, é mantido por 30 dias. Objetivos são mantidos por até 90 dias.
+
+- **Configuração do servidor:** `/reset` restaura as configurações de toques e remove toques personalizados. Exportações e importações de configuração trazem configurações e toques personalizados, excluindo a lista de canais específicos do servidor. Toques ociosos de persona permanecem com sua persona após uma redefinição e viajam em seu cartão de persona. `/persona default` e a exclusão de uma persona removem seus toques ociosos.
+- **Configuração pessoal:** sua escolha de `Menções de Personas` sobrevive a `/reset personal config`, é incluída em `/export personal config` e é apagada com `/personal nuke`.

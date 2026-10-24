@@ -35,34 +35,58 @@ Mỗi kênh (bao gồm cả thread) chỉ có tối đa một gợi ý chủ đ�
 ## Gợi ý nhàn rỗi
 <!-- anchor: idle-nudges -->
 
-Mỗi gợi ý nhàn rỗi thuộc về một danh mục cụ thể:
+Gợi ý nhàn rỗi sẽ chờ cho đến khi kênh yên ắng được một khoảng thời gian, trong những giờ máy chủ của bạn thường hoạt động. Có 28 gợi ý tích hợp sẵn trong 4 danh mục. Bạn có thể điều chỉnh và thêm gợi ý riêng cho toàn máy chủ trong `/nudge-studio`, đồng thời mỗi persona cũng có thể sở hữu các gợi ý nhàn rỗi của riêng mình (xem [Gợi ý nhàn rỗi của persona](#persona-idle-nudges)).
 
-| Danh mục | Hoạt động diễn ra |
-|---|---|
-| **Tag thành viên** | Persona tag một thành viên mà mình quen biết: hỏi thăm, theo sát điều họ từng đề cập, gửi một liên kết họ có thể thích, trêu đùa về tựa game họ đang chơi hoặc đề nghị nhắc nhở họ điều gì đó. |
-| **Nối lại chủ đề** | Persona tiếp tục một cuộc trò chuyện còn dang dở: trả lời câu hỏi chưa có lời đáp, đưa ra ý kiến thứ hai hoặc chia sẻ điều gì đó vừa tìm hiểu được. |
-| **Bắt đầu chủ đề** | Persona nêu ra điều gì đó mới mẻ, thường từ chính sở thích của mình: một suy nghĩ, một góc nhìn thú vị, câu hỏi tình huống "bạn chọn cái nào", một mẩu tin tức, một bức ảnh hoặc một đoạn ghi âm giọng nói. |
-| **Diễn hoạt cảnh** | Hai hoặc ba persona cùng trò chuyện với nhau trong một hoạt cảnh ngắn từ hai đến bốn tin nhắn: một cuộc tranh luận vui vẻ, bàn tán kế hoạch "bí mật" dành cho một thành viên, hỏi xin lời khuyên của nhau hoặc khoe một bức ảnh. |
+| Danh mục | Hoạt động diễn ra | Điều kiện tiên quyết | Ghi chú |
+|---|---|---|---|
+| <a id="ping-user"></a>Tag thành viên | Hỏi thăm một thành viên hoặc chia sẻ điều họ có thể thích. | Trò chuyện gần đây với persona này trong máy chủ, có bộ nhớ và được phép tag. Quyền riêng tư đầy đủ, danh sách đen cá nhân hóa và chặn persona sẽ loại trừ thành viên. | Ưu tiên người liên hệ thường xuyên; các lần tag gần đây làm giảm cơ hội lặp lại. Chọn không tham gia trong `/personal config` > `Quyền riêng tư` > `Tag từ Persona`. |
+| Nối lại chủ đề | Tiếp tục một cuộc trò chuyện còn dang dở. | Cuộc trò chuyện đang bỏ ngỏ. | N/A |
+| Bắt đầu chủ đề | Nêu ra điều gì đó mới, thường về sở thích của persona. | Không có yêu cầu danh mục bổ sung. | N/A |
+| <a id="play-scene"></a>Diễn hoạt cảnh | Bắt đầu một đoạn tương tác ngắn giữa 2 hoặc 3 persona. | Một persona khác được phép gợi ý trong kênh đó. | Persona hoạt ngôn tham gia thường xuyên hơn; persona im lặng không bao giờ tham gia. Nếu có thành viên gửi tin nhắn, hoạt cảnh dừng lại và một persona sẽ trả lời họ. Hoạt cảnh bất ngờ không tag đối tượng của chúng. |
 
-`/nudge-studio` (cần quyền Quản lý máy chủ) có một tab riêng cho từng danh mục. Mỗi tab liệt kê các gợi ý nhàn rỗi của danh mục đó kèm theo một chấm tròn màu:
+### Chọn và tạo gợi ý nhàn rỗi
 
-- 🟢 **Bật**: có thể được chọn để chạy.
-- 🟡 **Bật, nhưng chưa thể chạy tại đây**: không persona nào có công cụ cần thiết, hoạt cảnh thiếu persona thứ hai hoặc không persona nào trong danh sách giới hạn có thể đưa ra gợi ý. Dòng đó sẽ nêu rõ điều còn thiếu.
-- 🔴 **Tắt**.
+Mở `/nudge-studio` (yêu cầu `Quản lý máy chủ`) để duyệt qua từng danh mục. Chấm màu cho biết gợi ý đang bật, thiếu điều kiện tiên quyết hay đang tắt. Mỗi hàng kết thúc bằng nguồn của nó: `Tích hợp sẵn`, `Tùy chỉnh máy chủ` hoặc `Dành cho <persona>` đối với gợi ý thuộc về persona. Các danh mục có hơn 12 hàng sẽ tiếp tục ở các trang sau.
 
-**Bật/tắt tính khả dụng...** sẽ mở một gợi ý nhàn rỗi kèm theo ô đánh dấu cho từng persona:
+`Bật/tắt tính khả dụng...` chọn persona nào có thể dùng gợi ý:
 
-- **Đánh dấu tất cả**: mọi persona đều có thể sử dụng, bao gồm cả các persona bạn thêm vào sau này.
-- **Đánh dấu một số persona**: chỉ những persona đó mới được dùng, và dòng hiển thị sẽ nêu tên họ, chẳng hạn như "Nhắc nhở bạn? (chỉ Mirri và Juno)". Persona bạn thêm sau này sẽ không tham gia cho đến khi bạn tích chọn.
-- **Không đánh dấu ô nào**: gợi ý nhàn rỗi đó sẽ bị tắt.
+- **Đánh dấu tất cả:** bất kỳ persona nào trong kênh đều có thể dùng, bao gồm cả persona bạn thêm sau này.
+- **Đánh dấu một số:** chỉ những persona đó mới được dùng. Persona mới sẽ không tham gia cho đến khi bạn tích chọn.
+- **Không đánh dấu ô nào:** gợi ý sẽ tắt.
 
-Bên dưới danh sách, bạn có thể tự thêm tối đa 25 gợi ý tùy chỉnh cho toàn bộ máy chủ. Nhấp vào một mục để chỉnh sửa; **Xóa gợi ý tùy chỉnh** liệt kê các gợi ý của bạn, và việc bỏ chọn sẽ xóa gợi ý đó. Mỗi gợi ý gồm có:
+Gợi ý thuộc về persona chỉ có một ô đánh dấu, `Khả dụng cho <persona>`, vì chỉ chủ sở hữu mới có thể dùng. Bỏ chọn sẽ tắt nó mà không xóa.
 
-- **Tên**.
-- **Tóm tắt chỉ dẫn**: điều persona dự định làm. Viết `{persona}` vào vị trí tên của persona đó, `{partner}` cho persona đồng hành trong hoạt cảnh và `{target}` cho thành viên được nhắm tới.
-- **Mục tiêu ẩn** (tùy chọn): loại mục tiêu nhỏ mà persona tiếp tục theo đuổi sau câu mở đầu.
-- **Điều kiện tiên quyết**: điều kiện phải thỏa mãn trước khi gợi ý nhàn rỗi có thể chạy, chẳng hạn như bộ nhớ gần đây hoặc công cụ khả dụng. Mỗi danh mục đã tự mang theo điều kiện riêng: một thành viên để tag, một cuộc trò chuyện dang dở hoặc persona thứ hai.
-- **Công cụ khuyến nghị**: các công cụ persona được khuyến khích sử dụng khi có sẵn. Gợi ý nhàn rỗi vẫn chạy được nếu không có chúng. Công cụ đã chọn trong Điều kiện tiên quyết đã mặc định bắt buộc nên sẽ được bỏ khỏi danh sách này khi lưu.
+Giới hạn một gợi ý máy chủ cho một persona không làm nó chuyển sang trang của persona đó. Nó vẫn là gợi ý máy chủ, và chỉ các mục của riêng persona mới đi kèm thẻ persona.
+
+Bên dưới danh sách, bạn có thể thêm tối đa 25 gợi ý riêng cho toàn máy chủ. Chọn một gợi ý máy chủ hoặc gợi ý thuộc về persona để mở chỉnh sửa, và mục tương tự cũng có thể chỉnh sửa trên trang `Gợi ý` của persona. Các gợi ý mới tạo tại đây luôn là gợi ý máy chủ. `Xóa gợi ý` liệt kê các gợi ý có thể chỉnh sửa trên trang hiện tại, và bỏ chọn một mục sẽ xóa nó. Mỗi mục gồm:
+
+- **Tên**: nhãn hiển thị trong studio.
+- **Tóm tắt chỉ dẫn**: điều persona dự định làm. Viết `{persona}` vào vị trí tên persona, `{partner}` cho persona đồng hành và `{target}` cho thành viên được nhắm tới.
+- **Mục tiêu ẩn** (tùy chọn): mục tiêu cá nhân nhỏ mà persona tiếp tục theo đuổi sau câu mở đầu.
+- **Điều kiện tiên quyết**: điều kiện phải thỏa mãn trước khi chạy, như bộ nhớ gần đây hoặc công cụ khả dụng. Công cụ chọn trong Điều kiện tiên quyết đã mặc định được bao gồm, vì vậy sẽ bị xóa khỏi danh sách công cụ khuyến nghị khi lưu.
+- **Công cụ khuyến nghị**: công cụ khuyến khích persona sử dụng khi có sẵn. Gợi ý vẫn chạy được nếu không có chúng.
+
+### Gợi ý nhàn rỗi của persona
+<!-- anchor: persona-idle-nudges -->
+
+Một persona có thể mang theo các gợi ý nhàn rỗi thuộc về tính cách của mình, như Rose kiểm tra trang phục cosplay hoặc Aphel giới thiệu một album. Chúng bổ sung vào các gợi ý tích hợp sẵn và gợi ý máy chủ chứ không thay thế chúng.
+
+Mở `/config` > `Persona` > `Gợi ý`. `Gợi ý nhàn rỗi` nằm bên dưới `Sở thích`:
+
+- `Chọn hoặc thêm một gợi ý nhàn rỗi...` thêm mới bằng `+ Thêm <danh mục>` hoặc chỉnh sửa mục hiện có. Cả 4 danh mục đều khả dụng, với các trường tương tự như gợi ý máy chủ. Một persona giữ tối đa 20 mục, tách biệt với 25 mục của máy chủ.
+- `Bật/tắt tính khả dụng...` bật hoặc tắt từng mục riêng lẻ cho persona này.
+- `Xóa gợi ý nhàn rỗi` xóa các mục bạn bỏ chọn.
+- `Khôi phục gợi ý từ preset` xuất hiện cho persona đang tuân theo một preset chính thức và có bản sao danh sách riêng.
+
+Cách thức hoạt động:
+
+- Chỉ persona sở hữu mới khởi xướng chúng. Trong Diễn hoạt cảnh, chủ sở hữu dẫn dắt và bất kỳ persona nào khác được phép gợi ý đều có thể tham gia cùng.
+- Chúng tuân theo cùng các điều kiện tiên quyết, giờ yên tĩnh, mức tần suất và giới hạn hàng ngày như mọi gợi ý nhàn rỗi khác. Nhiều mục hơn giúp persona có nhiều lựa chọn hơn nhưng không làm cho nó nói thường xuyên hơn.
+- Sở thích thúc đẩy Gợi ý chủ động. Gợi ý nhàn rỗi của persona chỉ thúc đẩy Gợi ý nhàn rỗi.
+
+Preset chính thức đi kèm với các gợi ý nhàn rỗi. Persona vẫn đang theo sát preset sẽ đọc danh sách đó khi preset được cập nhật. Lần đầu tiên bạn thêm, sửa hoặc xóa một mục, persona sẽ nhận bản sao riêng của toàn bộ danh sách, và các cập nhật preset sau này sẽ không còn làm thay đổi nó nữa. Việc bật hoặc tắt một mục không tạo bản sao. `Khôi phục gợi ý từ preset` thay thế danh sách của persona bằng danh sách hiện tại của preset và giữ lại sở thích, độ hoạt ngôn cũng như các lựa chọn bật/tắt cho các mục vẫn còn tồn tại. `Đồng bộ lại với preset` trong `Danh tính & Tính cách` cũng đặt lại danh sách và các lựa chọn bật/tắt.
+
+Thẻ persona (`/persona export`) bao gồm các gợi ý nhàn rỗi của persona, từ preset hoặc từ bản sao riêng, và nhập thẻ sẽ khôi phục chúng. Các lựa chọn bật/tắt chỉ mang tính cục bộ cho máy chủ và không được xuất ra, vì vậy các mục được nhập sẽ bắt đầu ở trạng thái bật. Gợi ý máy chủ không bao giờ nằm trong thẻ. Thẻ cũ hơn mà vẫn khớp với preset chính thức sẽ theo các gợi ý nhàn rỗi hiện tại của preset đó. Các thẻ cũ khác khi nhập sẽ không có gợi ý nhàn rỗi của persona.
 
 ### Tag thành viên
 <!-- anchor: ping-user -->
@@ -118,9 +142,13 @@ Mỗi persona có một trang **Gợi ý** riêng trong `/config` > Persona:
 
 - **Độ hoạt ngôn**: mức độ thường xuyên persona này là người lên tiếng. Các persona Im lặng không bao giờ khởi xướng gợi ý nhàn rỗi cũng như không tham gia gợi ý chủ động; persona ngại ngùng ít nói hơn, persona hoạt ngôn sẽ nói nhiều hơn.
 - **Sở thích**: tối đa 8 chủ đề persona thích nêu ra và tham gia thảo luận, mỗi chủ đề kèm theo mô tả ngắn gọn và ví dụ (chẳng hạn như **anime mecha**: thể loại hư cấu về robot khổng lồ có người lái, như Gundam).
+- **Gợi ý nhàn rỗi**: tối đa 20 gợi ý nhàn rỗi chỉ persona này sử dụng, được mô tả tại [Gợi ý nhàn rỗi của persona](#persona-idle-nudges).
 
-Các preset chính thức được tích hợp sẵn sở thích và độ hoạt ngôn riêng. `/persona generate` sẽ gợi ý sở thích cho các nhân vật mới, và tệp xuất persona cũng sẽ mang theo các thiết lập này.
+Các preset chính thức bao gồm các cài đặt này. `/persona generate` gợi ý sở thích cho các persona mới; `Tạo sở thích` thêm sở thích mới thông qua model văn bản hiện tại của bạn. Bản xuất persona bao gồm cả ba cài đặt.
 
 ## Dữ liệu được lưu trữ
 
-Natural Nudges lưu trữ cài đặt của bạn, các gợi ý nhàn rỗi tùy chỉnh và sở thích của persona cùng với các cấu hình máy chủ khác. Tính năng này cũng ghi nhớ các gợi ý nhàn rỗi và chủ động đã chạy gần đây, liệu có ai phản hồi hay không và ai là người nhận gợi ý tag trong 30 ngày, đồng thời lưu giữ từng mục tiêu ẩn tối đa 90 ngày. Chạy `/reset` sẽ khôi phục cài đặt gốc và xóa các gợi ý tùy chỉnh. `/export config` và `/import config` mang theo các cài đặt và gợi ý tùy chỉnh, nhưng không bao gồm danh sách kênh đã chọn (vốn thuộc về một máy chủ cụ thể). Tùy chọn Persona tag bạn của riêng bạn thuộc về cài đặt cá nhân: `/reset personal config` sẽ giữ lại, `/export personal config` sẽ xuất ra và `/personal nuke` sẽ xóa sạch cùng với phần còn lại của dữ liệu cá nhân của bạn.
+Cài đặt, gợi ý tùy chỉnh, sở thích và gợi ý nhàn rỗi của persona được lưu cùng với cấu hình máy chủ của bạn. Lịch sử gợi ý (bao gồm việc có ai trả lời hay không và ai đã được tag) được giữ trong 30 ngày. Mục tiêu được giữ tối đa 90 ngày.
+
+- **Cấu hình máy chủ:** `/reset` khôi phục cài đặt gợi ý và xóa các gợi ý tùy chỉnh. Xuất và nhập cấu hình mang theo cài đặt và gợi ý tùy chỉnh, ngoại trừ danh sách kênh dành riêng cho máy chủ. Gợi ý nhàn rỗi của persona vẫn ở lại với persona của chúng sau khi thiết lập lại và thay vào đó sẽ chuyển tiếp trong thẻ persona. `/persona default` và xóa một persona sẽ xóa các gợi ý nhàn rỗi của persona đó.
+- **Cấu hình cá nhân:** lựa chọn `Tag từ Persona` của bạn vẫn tồn tại sau `/reset personal config`, được bao gồm trong `/export personal config` và bị xóa bởi `/personal nuke`.

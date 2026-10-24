@@ -23,17 +23,25 @@ export default {
     description_play_scene:
       "[Intervenciones espontáneas](https://docs.tomoribot.app/es-419/features/chatting-personality/natural-nudges/#idle-nudges) donde dos personas representan una breve escena frente a todos.",
     row_notes: "{title} ({notes})",
+    note_source_builtin: "Integrada",
+    note_source_server: "Personalizada del servidor",
+    note_source_persona: "Para {persona}",
     note_scope: "Solo {personas}",
     note_scope_more: "{count} más",
+    option_owner: "{title} ({persona})",
     blocker_tool: "necesita {tool}",
     blocker_two_personas: "necesita 2 personas",
     blocker_no_persona: "ninguna persona puede usarla",
     toggle_placeholder: "Cambiar disponibilidad...",
-    custom_title_ping_user: "Menciones personalizadas",
-    custom_title_revive_topic: "Reanudaciones personalizadas",
-    custom_title_start_topic: "Nuevos temas personalizados",
-    custom_title_play_scene: "Escenas personalizadas",
-    custom_intro: "Crea tus propias intervenciones de {category} abajo. Consejos:",
+    persona_toggle_option: "Disponible para {persona}",
+    persona_toggle_group_description:
+      "Desmarcar desactiva esta intervención para {persona}. La intervención permanece en la página de Intervenciones de esa persona.",
+    custom_title_ping_user: "Menciones del servidor",
+    custom_title_revive_topic: "Reanudaciones del servidor",
+    custom_title_start_topic: "Nuevos temas del servidor",
+    custom_title_play_scene: "Escenas del servidor",
+    custom_intro:
+      "Añade abajo intervenciones de {category} para todo el servidor. Las intervenciones de personas se editan en la lista de arriba. Consejos:",
     tips_ping_user:
       "Escribe {target} para el miembro al que menciono, así funcionará con cualquiera que conozca.\nLimítalo a un motivo breve para contactar; un mensaje corto se responde más a menudo.\nSolicita un recuerdo o una actividad en Requisitos cuando la indicación dependa de ello.",
     tips_revive_topic:
@@ -46,7 +54,7 @@ export default {
     add_option: "+ Añadir intervención",
     limit_reached:
       "Este servidor ya tiene {max} intervenciones personalizadas, el máximo permitido. Elimina una para añadir otra.",
-    remove_button: "Eliminar intervenciones personalizadas",
+    remove_button: "Eliminar intervenciones",
     config_hint:
       "Activa las intervenciones espontáneas, elige canales y configura su frecuencia en /config > Plugins > Natural Nudges.",
     modal_add_title_ping_user: "Nueva intervención para mencionar usuario",
@@ -111,6 +119,7 @@ export default {
     prerequisite_tool: "La herramienta {tool} está disponible",
     tool_web_search: "Búsqueda web",
     tool_fetch_url: "Leer un enlace",
+    tool_danbooru_search_tags: "Búsqueda de etiquetas en Danbooru",
     tool_image: "Generación de imágenes",
     tool_generate_voice_message: "Mensaje de voz",
     tool_generate_video: "Generación de video",

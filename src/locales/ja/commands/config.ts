@@ -162,6 +162,42 @@ export default {
       interest_label_description: "「ロボットアニメ」などの短い名前（最大{max}文字）。",
       interest_description_label: "説明",
       interest_description_description: "例を含む1行の説明（最大{max}文字）。",
+      idle_title: "アイドルナッジ",
+      idle_description:
+        "このペルソナが自発的に開始できるアイドルナッジ。組み込みやサーバーのナッジに追加されます。会話に参加するタイミングは上の興味・関心で決定されます。",
+      idle_none: "アイドルナッジはまだありません。",
+      idle_entry_row: "{title}（{category}）：{note}",
+      idle_entry_available: "利用可能",
+      idle_entry_off: "オフ",
+      idle_entry_blocked_label: "ブロック中",
+      idle_entry_blocked: "ブロック中、{reason}",
+      idle_add_option: "+ {category}を追加",
+      idle_select_placeholder: "アイドルナッジを選択または追加…",
+      idle_availability_placeholder: "利用可否を切り替え…",
+      idle_remove_button: "アイドルナッジを削除",
+      idle_restore_button: "プリセットのナッジを復元",
+      idle_limit_note:
+        "このペルソナには既に上限の{max}件のアイドルナッジが登録されています。新しく追加するには既存のものを削除してください。",
+      idle_inherited_note:
+        "このリストはプリセットから継承されています。編集するとこのペルソナ独自のコピーが作成されます。",
+      idle_availability_modal_title: "利用可否を切り替え",
+      idle_availability_description: "チェックを入れるとこのナッジが利用可能になります。外すと削除せずにオフにします。",
+      idle_availability_option: "利用可能",
+      idle_remove_modal_title: "アイドルナッジを削除",
+      idle_remove_description: "チェックを外すとこのペルソナからナッジが削除されます。この操作は取り消せません。",
+      idle_restore_confirm_title: "プリセットのナッジを復元しますか？",
+      idle_restore_confirm_description:
+        "このペルソナ独自のアイドルナッジ一覧がプリセットの一覧で置き換えられます。ここに追加・編集したアイドルナッジはすべて破棄されます。",
+      idle_restore_kept_detail:
+        "興味・関心、おしゃべり度、およびプリセット一覧に存在する項目の利用可否設定は維持されます。",
+      idle_saved_heading: "アイドルナッジを更新しました",
+      idle_saved_detail: "このペルソナのアイドルナッジを保存しました。",
+      idle_removed_detail: "チェックを外したアイドルナッジを削除しました。",
+      idle_restore_success_heading: "プリセットのナッジを復元しました",
+      idle_restore_success_detail:
+        "このペルソナのアイドルナッジ一覧が再びプリセットに従うようになりました。興味・関心、おしゃべり度、有効な利用可否設定は維持されました。",
+      unchanged_heading: "変更はありません",
+      unchanged_detail: "すべて既にそのように設定されています。",
     },
     panel: {
       avatar_preset_sprites_removed_detail:
@@ -1003,7 +1039,8 @@ Exaggeration: **{exaggeration}**`,
       resync_avatar_diff: `カスタムアバターが削除されます。`,
       resync_main_avatar_detail: `サーバーアバターがプリセットのものにリセットされます。`,
       resync_sprites_diff: `追加したスプライト：{count}件が削除されます。`,
-      resync_nudges_diff: "Natural Nudgesのおしゃべり度と興味・関心がプリセットの初期値に戻ります。",
+      resync_nudges_diff:
+        "Natural Nudgesのおしゃべり度、興味・関心、作成したアイドルナッジ、およびそれらのローカルの利用可否設定がプリセットの初期値に戻ります。",
       resync_kept_detail: `名前、トリガーワード、呼び方の習慣、記憶、履歴、その他のペルソナ設定は保持されます。`,
       resync_irreversible_detail: `この操作は取り消せません。`,
       resync_success_heading: `ペルソナをプリセットと同期しました`,

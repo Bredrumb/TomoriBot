@@ -62,7 +62,7 @@ Discord向けの自ホスト可能でカスタマイズ自在な個人AIアシ�
 
 TomoriBotは、SillyTavernとDiscordの廃止されたClydeにインスパイアされた、無料でオープンソースの自ホスト型個人AIアシスタント兼ロールプレイシステムです。DMでは自分専用の、Discordサーバーでは全員のための、実用的なアシスタント、カスタマイズ可能なコンパニオン、ロールプレイの相手として使えます。
 
-TomoriBotは長期記憶、マルチペルソナ動作、WebおよびMCPツール、チャット内でのメディア生成、200以上のDiscordスラッシュコマンド、そしてカスタムプロキシや自前モデルの自ホストを含む複数のプロバイダーをサポートし、テキスト生成から動画生成まで幅広く対応します。
+TomoriBotは長期記憶、マルチペルソナ動作、WebおよびMCPツール、チャット内でのメディア生成、Discordスラッシュコマンド、そしてカスタムプロキシや自前モデルの自ホストを含む複数のプロバイダーをサポートし、テキスト生成から動画生成まで幅広く対応します。
 
 ### はじめに
 
@@ -80,30 +80,30 @@ TomoriBotは長期記憶、マルチペルソナ動作、WebおよびMCPツー�
 <br />
 
 
-![Screenshots 2](../assets/img/scs/2.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/ja/features/capabilities/media-generation/">完全なマルチモーダル入出力</a></h3>
-<p align="center">TomoriBotはDiscordで直接送信された画像・音声・動画を処理し、あなた自身のローカルモデルエンドポイントやAPIキーを使ってそれらを生成して返せます。これらはすべて暗号化され、永続的なデータベースに安全に保存されます。すぐに使えるComfyUIワークフローは<code>assets/comfyui-workflows/</code>に、ローカル音声推論サーバーは<code>servers/</code>にあります！</p>
-
-<br />
-
 ![Screenshots 3](../assets/img/scs/3.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/ja/features/chatting-personality/multiple-personas/">マルチペルソナサポート</a></h3>
 <p align="center">TomoriBotのサーバー内でのパーソナリティ、行動、アバターは簡単に変更・作成でき、ペルソナとして他のユーザーへエクスポートすることもできます（共有可能なAIキャラクターカードのようなもの）。<code>/persona generate</code>でお気に入りのSillyTavernカードをインポート・変換することも可能です。1つのサーバーに無制限のペルソナを持たせることができ、それぞれが独自の記憶とアジェンダを持ちます。さらに、複数のペルソナを連携させてサーバー内で協働させる（あるいはただじゃれ合わせる）こともできます。</p>
 
 <br />
 
-
-![Screenshots 4](../assets/img/scs/4.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/en/features/command-reference/">200以上のネイティブ設定コマンド</a></h3>
-<p align="center">すべてDiscordのネイティブなスラッシュコマンドとインタラクティブUIで管理できます。ペルソナやプロンプトの完全な管理、モデルパラメータの調整、MCPツールサーバーの設定、権限の調整、記憶の設定、サーバーメンバーのレート制限など、さらに多くのことが可能です。TomoriBotに、彼女ができることやスラッシュコマンドを直接尋ねることもできます。現在、さらに簡単な管理のためにWebダッシュボードを開発中です。</p>
+![Screenshots 2](../assets/img/scs/2.png)
+<h3 align="center"><a href="https://docs.tomoribot.app/ja/features/capabilities/media-generation/">完全なマルチモーダル入出力</a></h3>
+<p align="center">TomoriBotはDiscordで直接送信された画像・音声・動画を処理し、あなた自身のローカルモデルエンドポイントやAPIキーを使ってそれらを生成して返せます。これらはすべて暗号化され、永続的なデータベースに安全に保存されます。すぐに使えるComfyUIワークフローは<code>assets/comfyui-workflows/</code>に、ローカル音声推論サーバーは<code>servers/</code>にあります！</p>
 
 <br />
 
 
-![Screenshots 6](../assets/img/scs/6.png)
+![ComfyUIによる完全ローカルセットアップ](../assets/img/docs/intro/05-fully-local-setup.png)
+<h3 align="center"><a href="https://docs.tomoribot.app/ja/self-hosting/local-endpoints/">完全ローカルセットアップ</a></h3>
+<p align="center">会話用のローカルLLM、画像生成用のComfyUI、音声生成および文字起こし用のローカル音声モデルを備え、TomoriBotとそのデータベースをご自身のPC上で実行できます。これらすべてのAI処理はクラウドAIプロバイダーを使用せず、お使いのハードウェア上で完結します。Discordへの接続にはインターネット接続が必要で、ボットとのメッセージやメディアのやり取りを仲介します。</p>
 
-<h3 align="center"><a href="https://docs.tomoribot.app/ja/features/integrations/sillytavern-support/">SillyTavern統合（ベータ）</a></h3>
-<p align="center">お気に入りのSillyTavernプリセットをTomoriBotを通じてDiscordで直接使用でき、彼女のプロンプトを丸ごと調整します。<code>st-preset</code>で.jsonをそのまま入れるだけです。Discordの新しいモーダル用ネイティブチェックボックスグループにより、SillyTavernのようにノードのオン/オフを簡単に切り替えられます。<code>/persona import</code>でSillyTavernキャラクターカードを直接インポートするか、<code>/persona generate</code>で先に手を加えることもできます。</p>
+<br />
+
+![Screenshots 4](../assets/img/scs/4.png)
+<h3 align="center"><a href="https://docs.tomoribot.app/ja/features/command-reference/">ネイティブな設定用スラッシュコマンド</a></h3>
+<p align="center">すべてDiscordのネイティブなスラッシュコマンドとインタラクティブUIで管理できます。ペルソナやプロンプトの完全な管理、モデルパラメータの調整、MCPツールサーバーの設定、権限の調整、記憶の設定、サーバーメンバーのレート制限など、さらに多くのことが可能です。TomoriBotに、彼女ができることやスラッシュコマンドを直接尋ねることもできます。現在、さらに簡単な管理のためにWebダッシュボードを開発中です。</p>
+
+<br />
 
 ![Screenshots 5](../assets/img/scs/5.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/ja/features/">さらに多くの機能が続々追加中！</a></h3>
@@ -120,117 +120,7 @@ TomoriBotは長期記憶、マルチペルソナ動作、WebおよびMCPツー�
 <!-- GETTING STARTED -->
 ## セルフホスティング
 
-インストール方法を1つ選んでください：
-
-- **A. ローカルBunセットアップ（推奨）:** Bun、およびデータベース用にPostgreSQLまたはDockerのいずれかが必要です。
-- **B. Docker Composeセットアップ:** ボット/データベースの実行にはDockerのみが必要ですが、ホスト側のメンテナンススクリプトには依然としてホストのツールが必要です。
-
-ほとんどのセルフホスターにおすすめなのは、ローカルBunのセットアップウィザードです。デフォルトの**フルインストール**では、`.env`の作成、安全な`CRYPTO_SECRET`の生成、Discordボットトークンの入力、PostgreSQLの設定、`bun install --frozen-lockfile`の実行を行い、続いて軽量なデータベースおよびAIヘルパーの追加機能のインストールを試みます。
-
-### A. ローカルBunセットアップ
-
-1. **リポジトリをクローン**
-   ```sh
-   git clone https://github.com/Bredrumb/TomoriBot.git
-   cd TomoriBot
-   ```
-
-2. **セットアップウィザードを実行**（詳細は**[セットアップウィザードガイド](https://docs.tomoribot.app/ja/self-hosting/setup-wizard/)**を参照）
-   ```sh
-   bun run setup
-   ```
-
-3. **TomoriBotを起動**
-    ```sh
-    bun run dev
-    ```
-
-`TomoriBot up and running!`と表示されたら、Discordで`/setup`を実行してください。
-
-### B. Docker Composeセットアップ
-
-Docker ComposeはTomoriBotとPostgreSQLをビルドして実行します。セットアップウィザードは使用しません。
-
-**Docker Composeに必要な`.env`変数：**
-- `DISCORD_TOKEN` - Discordボットトークン
-- `CRYPTO_SECRET` - 32文字の暗号化キー
-- `POSTGRES_PASSWORD` - データベースパスワード（他のDB設定は自動設定されます）
-
-Docker Composeの場合は、`.env.example`をベースにして、まだ設定していなければ`POSTGRES_PASSWORD`を追加してください。任意のDockerやランタイム調整用の値は`.env.optional.example`からコピーできます。
-
-```sh
-# TomoriBotとそのデータベースをビルドして起動
-docker compose up --build
-```
-
-以降の起動では、コードや依存関係を変更していない限り`docker compose up`だけで十分です。
-
-### C. オプションのローカルサーバー
-
-TomoriBotは、どちらのセットアップ方法でも併用できるオプトイン方式のローカルサーバーをサポートしており、ツールの強化やローカルモニタリングに利用できます：Web検索用のSearXNG、ブラウザレンダリングによるページ取得用のCrawl4AI、ローカルTTS/STT音声サーバーが含まれます。
-
-**ローカルBunセットアップ（A）の場合**は、`bun run dev`の代わりに`bun run launch`を使用します。実行例：
-
-```sh
-# SearXNGとCrawl4AIのDockerコンテナを併用
-bun run launch --searxng --crawl4ai
-
-# 音声セットアップ手順に従った後、ローカルTTSサーバーを併用
-bun run launch --qwen3tts
-
-# 利用可能なフラグをすべて表示
-bun run launch --help
-```
-
-利用可能なフラグ： `--searxng`、`--crawl4ai`、`--qwen3tts`、`--chatterbox`、`--irodoritts`、`--voxcpm2`、`--fishs2`、`--cosyvoice3`、`--moss`、`--whisperx`、`--help`
-
-**Ctrl+C**でボットとPython製サーバープロセスが停止します。Dockerコンテナ（`--searxng``--crawl4ai`）は意図的に起動したまま残されます。終了時は`docker stop searxng` / `docker stop crawl4ai`で手動停止してください。
-
-**Docker Composeセットアップ（B）の場合**は、代わりにComposeプロファイルでローカルサーバーをオプトインします：
-
-```sh
-# + SearXNG Web検索（自ホスト型メタ検索）
-docker compose --profile searxng up
-
-# + Crawl4AI ブラウザレンダリングによるページ取得
-docker compose --profile fetch-crawl4ai up
-
-# + 両方同時に
-docker compose --profile searxng --profile fetch-crawl4ai up
-```
-
-詳細なセットアップ手順については、以下のガイドを参照してください：
-
-- **[SearXNG Web検索](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/setup-searxng/)** - `web_search`ツールで単一エンジンのAPI制限を回避するための自ホスト型メタ検索インスタンス。
-- **[Crawl4AI](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/setup-crawl4ai/)** - `fetch_url`ツールでJavaScriptの多いWebページを取得・処理するためのブラウザレンダリングサーバー。
-- **[テキスト読み上げ（TTS）](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/text-to-speech/)** / **[音声認識（STT）](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/speech-to-text/)** - TomoriBotのボイスメッセージ用のPython製音声サーバー。事前に一度venvのセットアップが必要です。
-
-### TomoriBotの更新
-
-セルフホストしているインスタンスを最新バージョンに更新するには、まずボットを停止し（バックアップとマイグレーションが静かなデータベースに対して実行されるように）、バックアップ優先の更新コマンドを実行します：
-
-```sh
-bun run update
-```
-
-このコマンドは以下の手順を順番に実行し、いずれかの手順が失敗した場合は即座に停止します：
-
-1. **`bun run backup`** - コードに触れる*前に*データベースの完全バックアップを`/backups/`へ取得します。バックアップに失敗した場合、デプロイに一切変更を加えずに更新を中断します。
-2. **`git pull --rebase --autostash`**
-3. **`bun install --frozen-lockfile`**
-
-その後、`bun run dev`または`bun run launch`でTomoriBotを再起動してください。
-
-便利なフラグ：
-
-| フラグ | 効果 |
-|---|---|
-| `--build` | 依存関係のインストール後に`bun run build`も実行します |
-| `--docker` | Docker Compose用：手順3を`docker compose build` + `docker compose up -d`に置き換えます |
-| `--skip-backup` | 更新前のバックアップをスキップします（非推奨） |
-| `--yes` | 開始前の確認プロンプトをスキップします |
-
-すべてのホスト側スクリプトの詳細については、**[メンテナンスドキュメント](https://docs.tomoribot.app/en/features/command-reference/)**の全文を参照してください。
+セットアップ手順、Docker Compose、オプションのローカルサーバーについては、[セルフホスティングドキュメント](https://docs.tomoribot.app/ja/self-hosting/)を参照してください。
 
 <!-- AFTER SETUP -->
 ### 招待・セットアップ後
@@ -243,7 +133,7 @@ bun run update
 - `/memories` - サーバーの記憶、ドキュメント、および短期記憶の管理
 - `/moderation` - メンバーのアクセス、ユーザーブラックリスト、チャンネル、ペルソナ、およびロールの制限の管理
 
-すべてのスラッシュコマンドについては、**[コマンドリファレンス](https://docs.tomoribot.app/en/features/command-reference/)**の全文を参照してください。
+すべてのスラッシュコマンドについては、**[コマンドリファレンス](https://docs.tomoribot.app/ja/features/command-reference/)**の全文を参照してください。
 
 #### チャットでのやり取り
 
@@ -254,36 +144,63 @@ bun run update
 
 または、TomoriBotのDMに入って挨拶してください！
 
-<!-- CONTRIBUTING -->
-## コントリビュート
+## 謝辞
 
-TomoriBotへのコントリビュートは大歓迎です！プルリクエストを作成する前に、以下のリソースをご確認ください：
+TomoriBotを現在の形に形作ってくれたコードの貢献や助言をいただいた以下の素晴らしい方々をはじめ、すべての人に心から感謝します！
 
-- **[コントリビュートドキュメント](https://docs.tomoribot.app/en/contributing/)**: スラッシュコマンド、ツール、イベントハンドラ、新しいAIプロバイダー、およびロケールの追加に関する包括的なステップバイステップガイド。
-- **[コントリビュートガイドライン](CONTRIBUTING.md)**: ブランチ運用、品質ゲートのチェック、そして事前相談なしで歓迎されるコントリビュートの範囲がまとめられたリポジトリルール。
-
-<!-- LEGAL -->
-## 法的事項とライセンス
-
-### 公式ホスティング版TomoriBotインスタンスのユーザー向け
-- **[利用規約](https://docs.tomoribot.app/ja/legal/terms-of-service/)** - ボット使用のルールとガイドライン
-- **[プライバシーポリシー](https://docs.tomoribot.app/ja/legal/privacy-policy/)** - データの取り扱いについて
-
-これらのドキュメントは、Discord内で`/legal terms-of-service`および`/legal privacy-policy`コマンドを使用してもアクセスできます。
-
-### セルフホスティングまたはフォークを使用するユーザー向け
-あなたは自分自身のデータを管理し、[**GNU Affero General Public License v3.0**](https://github.com/Bredrumb/TomoriBot/blob/main/LICENSE)の下でのデプロイのコンプライアンスに責任を負います。
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/Bredrumb" title="Bredrumb: Creator, maintainer, and code contributions">
+        <img src="https://avatars.githubusercontent.com/u/65227425?s=128" width="64" height="64" alt="Bredrumb: Creator, maintainer, and code contributions"><br>
+        Bredrumb
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/palinalif" title="palinalif: Code contributions">
+        <img src="https://avatars.githubusercontent.com/u/31247276?s=128" width="64" height="64" alt="palinalif: Code contributions"><br>
+        palinalif
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/baetican" title="baetican: Code contributions">
+        <img src="https://avatars.githubusercontent.com/u/280696164?s=128" width="64" height="64" alt="baetican: Code contributions"><br>
+        baetican
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/struffl" title="struffl: Software design and technical guidance">
+        <img src="https://avatars.githubusercontent.com/u/1026348?s=128" width="64" height="64" alt="struffl: Software design and technical guidance"><br>
+        struffl
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/Rhapsody-Sky" title="Rhapsody-Sky: Software design and technical guidance">
+        <img src="https://avatars.githubusercontent.com/u/8095300?s=128" width="64" height="64" alt="Rhapsody-Sky: Software design and technical guidance"><br>
+        Rhapsody-Sky
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/aph31" title="aph31: Code contributions">
+        <img src="https://avatars.githubusercontent.com/u/251111747?s=128" width="64" height="64" alt="aph31: Code contributions"><br>
+        aph31
+      </a>
+    </td>
+  </tr>
+</table>
 
 <!-- CONTACT -->
 ## 連絡先とリンク
 
 **公式ウェブサイト**: [https://tomoribot.app](https://tomoribot.app/)
 
-**プロジェクトリンク**: [https://github.com/Bredrumb/TomoriBot](https://github.com/Bredrumb/TomoriBot)
-
 **Email**: bredrumb@gmail.com
 
 **Discord**: [公式サポートサーバー](https://discord.gg/bjCfHm9QsB)
+
+
+## ライセンス
+このプロジェクトは[AGPLv3](LICENSE)の下でライセンスされています。
 
 <!-- SUPPORT -->
 ## プロジェクトのサポート

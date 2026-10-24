@@ -23,17 +23,25 @@ export default {
     description_play_scene:
       "2〜3人のペルソナがみんなの前で短い掛け合いを演じる[アイドルナッジ](https://docs.tomoribot.app/ja/features/chatting-personality/natural-nudges/#idle-nudges)。",
     row_notes: "{title} ({notes})",
+    note_source_builtin: "組み込み",
+    note_source_server: "サーバーカスタム",
+    note_source_persona: "{persona}用",
     note_scope: "{personas}のみ",
     note_scope_more: "他{count}件",
+    option_owner: "{title}（{persona}）",
     blocker_tool: "{tool}が必要",
     blocker_two_personas: "2人のペルソナが必要",
     blocker_no_persona: "使用可能なペルソナがいません",
     toggle_placeholder: "利用可否を切り替え…",
-    custom_title_ping_user: "カスタムメンション",
-    custom_title_revive_topic: "カスタム話題再開",
-    custom_title_start_topic: "カスタム新話題",
-    custom_title_play_scene: "カスタムシーン",
-    custom_intro: "下で独自の{category}ナッジを作成できます。ヒント：",
+    persona_toggle_option: "{persona}で利用可能",
+    persona_toggle_group_description:
+      "チェックを外すと{persona}に対して無効化されます。ナッジ自体はそのペルソナのナッジページに残ります。",
+    custom_title_ping_user: "サーバーメンション",
+    custom_title_revive_topic: "サーバー話題再開",
+    custom_title_start_topic: "サーバー新話題",
+    custom_title_play_scene: "サーバーシーン",
+    custom_intro:
+      "下でサーバー全体の{category}ナッジを追加できます。ペルソナ所有のナッジは上のリストで編集します。ヒント：",
     tips_ping_user:
       "メンションする相手には {target} と記述すると、誰に対しても機能します。\n連絡する理由は1つに絞りましょう。短いメッセージのほうが返信をもらいやすくなります。\n記憶やアクティビティに依存する場合は「前提条件」で指定してください。",
     tips_revive_topic:
@@ -46,7 +54,7 @@ export default {
     add_option: "+ ナッジを追加",
     limit_reached:
       "このサーバーには既に上限の{max}件のカスタムナッジが登録されています。新しく追加するには既存のものを削除してください。",
-    remove_button: "カスタムナッジを削除",
+    remove_button: "ナッジを削除",
     config_hint: "/config > プラグイン > Natural Nudges でアイドルナッジの有効化、チャンネル選択、頻度設定ができます。",
     modal_add_title_ping_user: "ユーザーメンションナッジの新規作成",
     modal_add_title_revive_topic: "話題再開ナッジの新規作成",
@@ -107,6 +115,7 @@ export default {
     prerequisite_tool: "{tool} ツールが利用可能",
     tool_web_search: "Web検索",
     tool_fetch_url: "リンクを読む",
+    tool_danbooru_search_tags: "Danbooruタグ検索",
     tool_image: "画像生成",
     tool_generate_voice_message: "音声メッセージ",
     tool_generate_video: "動画生成",

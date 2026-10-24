@@ -35,34 +35,58 @@ Existe como máximo una intervención activa por canal (incluidos hilos) por hor
 ## Intervenciones espontáneas
 <!-- anchor: idle-nudges -->
 
-Cada intervención espontánea pertenece a una categoría:
+Las intervenciones espontáneas esperan hasta que un canal haya estado en silencio por un tiempo, durante las horas en las que tu servidor suele estar despierto. Hay 28 intervenciones integradas en cuatro categorías. Puedes ajustarlas y añadir las tuyas para todo el servidor en `/nudge-studio`, y cada persona puede tener sus propias intervenciones espontáneas (consulta [Intervenciones espontáneas de persona](#persona-idle-nudges)).
 
-| Categoría | Qué ocurre |
-|---|---|
-| **Mencionar a un usuario** | Una persona menciona a un miembro que conoce: para saludar, dar seguimiento a algo que comentaron, compartir un enlace que les pueda gustar, bromear sobre el juego al que están jugando u ofrecerles un recordatorio. |
-| **Reanudar tema** | Una persona retoma una conversación que quedó pendiente: una pregunta sin respuesta, una segunda opinión o algo que buscó e investigó. |
-| **Iniciar tema** | Una persona plantea algo nuevo, generalmente basado en sus propios intereses: un pensamiento, una opinión controvertida, un dilema de "qué preferirías", una noticia, una imagen o una nota de voz. |
-| **Interpretar escena** | Dos o tres personas conversan entre sí en una escena breve de dos a cuatro mensajes: una discusión divertida, un plan "secreto" para un miembro, pedirse consejo mutuamente o mostrar una imagen. |
+| Categoría | Qué hace | Requisitos | Notas |
+|---|---|---|---|
+| <a id="ping-user"></a>Mencionar usuario | Saluda a un miembro o comparte algo que le pueda gustar. | Conversación reciente con esta persona en este servidor, una memoria y permiso para mencionar. Privacidad total, listas negras de personalización y bloqueos de persona excluyen a los miembros. | Se favorece a los contactos frecuentes; las menciones recientes reducen las posibilidades de repetición. Desactívalo en `/personal config` > `Privacidad` > `Pings de personas`. |
+| Reanudar tema | Retoma una conversación que quedó pendiente. | Una conversación inconclusa. | N/A |
+| Iniciar tema | Plantea algo nuevo, a menudo sobre los intereses de la persona. | Sin requisitos de categoría adicionales. | N/A |
+| <a id="play-scene"></a>Interpretar escena | Inicia un breve intercambio entre dos o tres personas. | Otra persona autorizada a intervenir en ese canal. | Las personas habladoras se unen con más frecuencia; las silenciosas nunca lo hacen. Si un miembro publica, la escena se detiene y una persona le responde. Las escenas sorpresa no mencionan a su objetivo. |
 
-`/nudge-studio` (requiere Gestionar servidor) cuenta con una pestaña para cada categoría. Cada pestaña enumera las intervenciones espontáneas de esa categoría con un punto de color:
+### Elegir y crear intervenciones espontáneas
 
-- 🟢 **Activada**: puede ser seleccionada.
-- 🟡 **Activada, pero no puede ejecutarse aquí todavía**: ninguna persona cuenta con una herramienta necesaria, una escena no tiene una segunda persona o ninguna de las personas a las que está limitada puede intervenir. La fila indica qué falta.
-- 🔴 **Desactivada**.
+Abre `/nudge-studio` (requiere `Administrar servidor`) para explorar cada categoría. El punto de color muestra si una intervención está activada, si le falta un requisito o si está desactivada. Cada fila termina con su origen: `Integrada`, `Personalizada del servidor` o `Para <persona>` en caso de pertenecer a una persona. Las categorías con más de 12 filas continúan en páginas siguientes.
 
-**Cambiar disponibilidad...** abre una intervención espontánea con una casilla para cada persona:
+`Alternar disponibilidad...` elige qué personas pueden usar una intervención:
 
-- **Todas las casillas marcadas**: cualquier persona puede usarla, incluidas las que agregues más adelante.
-- **Algunas marcadas**: solo esas personas, y su fila las nombra, como "¿Te recuerdo algo? (solo Mirri y Juno)". Las personas que agregues más adelante quedan fuera hasta que las marques.
-- **Ninguna marcada**: la intervención espontánea queda desactivada.
+- **Todas marcadas:** cualquier persona en el canal puede usarla, incluidas las que añadas más adelante.
+- **Algunas marcadas:** solo esas personas pueden usarla. Las personas nuevas quedan fuera hasta que las marques.
+- **Ninguna marcada:** la intervención queda desactivada.
 
-Debajo de la lista puedes añadir hasta 25 intervenciones propias para todo el servidor. Al elegir una se abre para edición; **Eliminar intervenciones personalizadas** muestra tus intervenciones espontáneas, y desmarcar una la elimina. Cada una incluye:
+Una intervención que pertenece a una persona tiene una sola casilla de verificación, `Disponible para <persona>`, ya que solo su dueña puede usarla. Desmarcarla la desactiva sin eliminarla.
 
-- **Nombre**.
+Limitar una intervención del servidor a una sola persona no la traslada a la página de esa persona. Sigue siendo una intervención del servidor, y solo las entradas propias de la persona viajan con su tarjeta de persona.
+
+Debajo de la lista puedes añadir hasta 25 intervenciones propias para todo el servidor. Elegir una intervención del servidor o de una persona la abre para edición, y esa misma entrada se puede editar en la página de `Intervenciones` de la persona. Las nuevas intervenciones creadas aquí son siempre intervenciones del servidor. `Eliminar intervenciones` enumera las editables en la página actual, y desmarcar una la elimina. Cada una incluye:
+
+- **Nombre**: la etiqueta que se muestra en el panel.
 - **Instrucción**: lo que la persona se propone hacer. Escribe `{persona}` donde va su nombre, `{partner}` para la otra persona en una escena y `{target}` para el miembro involucrado.
 - **Propósito oculto** (opcional): la pequeña meta personal que la persona mantiene tras su mensaje inicial.
-- **Requisitos**: lo que debe cumplirse antes de que la intervención espontánea pueda ejecutarse, como un recuerdo reciente o una herramienta disponible. Cada categoría ya incluye los suyos: un miembro al que mencionar, una conversación pendiente o una segunda persona.
-- **Herramientas recomendadas**: herramientas que se alienta a la persona a usar cuando las tiene disponibles. La intervención espontánea se ejecuta igualmente sin ellas. Una herramienta seleccionada en Requisitos ya se considera obligatoria, por lo que se quita de esta lista al guardar.
+- **Requisitos**: lo que debe cumplirse antes de ejecutarse, como un recuerdo reciente o una herramienta disponible. Una herramienta seleccionada en Requisitos ya está incluida, por lo que se quita de la lista de herramientas recomendadas al guardar.
+- **Herramientas recomendadas**: herramientas que se alienta a la persona a usar cuando las tiene disponibles. La intervención se ejecuta igualmente sin ellas.
+
+### Intervenciones espontáneas de persona
+<!-- anchor: persona-idle-nudges -->
+
+Una persona puede tener intervenciones espontáneas que correspondan a su carácter, como Rose revisando un atuendo de cosplay o Aphel recomendando un álbum. Se suman a las intervenciones integradas y del servidor y no las reemplazan.
+
+Abre `/config` > `Persona` > `Intervenciones`. `Intervenciones espontáneas` se ubica debajo de `Intereses`:
+
+- `Selecciona o añade una intervención espontánea...` añade una con `+ Añadir <categoría>` o edita una existente. Las cuatro categorías están disponibles, con los mismos campos que una intervención del servidor. Una persona admite hasta 20, independientemente de las 25 del servidor.
+- `Alternar disponibilidad...` activa o desactiva entradas individuales para esta persona.
+- `Eliminar intervenciones espontáneas` elimina las entradas que desmarques.
+- `Restaurar intervenciones del preajuste` aparece para una persona que sigue un preajuste oficial y tiene su propia copia de la lista.
+
+Cómo funcionan:
+
+- Solo la persona propietaria las inicia. En una escena, la propietaria lidera y cualquier otra persona autorizada a intervenir puede unirse como compañera.
+- Siguen los mismos requisitos, horas de silencio, nivel de frecuencia y límite diario que cualquier otra intervención espontánea. Más entradas le dan a una persona más de dónde elegir, pero no hacen que hable más a menudo.
+- Los intereses guían las intervenciones activas. Las intervenciones espontáneas de persona guían únicamente las intervenciones espontáneas.
+
+Los preajustes oficiales incluyen intervenciones espontáneas. Una persona que sigue su preajuste lee esa lista a medida que el preajuste se actualiza. La primera vez que añades, editas o eliminas una entrada, la persona obtiene su propia copia de toda la lista, y las actualizaciones posteriores del preajuste ya no la modificarán. Activar o desactivar una entrada no crea una copia. `Restaurar intervenciones del preajuste` reemplaza la lista de la persona con la lista actual del preajuste y mantiene sus intereses, locuacidad y las opciones de activación de las entradas que aún existan. `Resincronizar con preajuste` en `Identidad y personalidad` también restablece la lista y las opciones de activación.
+
+Las tarjetas de persona (`/persona export`) incluyen las intervenciones espontáneas de la persona, ya sea del preajuste o de su propia copia, e importar la tarjeta las restaura. Las opciones de activación son locales del servidor y no se exportan, por lo que las entradas importadas comienzan activadas. Las intervenciones del servidor nunca van en una tarjeta. Una tarjeta más antigua que aún coincida con un preajuste oficial sigue las intervenciones espontáneas actuales de dicho preajuste. Otras tarjetas antiguas se importan sin intervenciones espontáneas de persona.
 
 ### Mencionar a un usuario
 <!-- anchor: ping-user -->
@@ -118,9 +142,13 @@ Cada persona tiene su propia página de **Intervenciones** en `/config` > Person
 
 - **Locuacidad**: con qué frecuencia esta persona es la que interviene. Las personas en silencio nunca inician intervenciones espontáneas ni participan en las activas; las tímidas hablan menos y las habladoras con más frecuencia.
 - **Intereses**: hasta 8 temas que a la persona le gusta plantear y sobre los que le gusta opinar, cada uno con una breve descripción y ejemplos (por ejemplo, **anime de mechas**: ficción sobre robots gigantes tripulados, como Gundam).
+- **Intervenciones espontáneas**: hasta 20 intervenciones que solo esta persona usa, descritas en [Intervenciones espontáneas de persona](#persona-idle-nudges).
 
-Los preajustes oficiales vienen con sus propios intereses y locuacidad. `/persona generate` sugiere intereses para nuevos personajes, y las exportaciones de personas los incluyen.
+Los preajustes oficiales vienen con estos ajustes. `/persona generate` sugiere intereses para nuevas personas; `Generar intereses` añade nuevos a través de tu modelo de texto actual. Las exportaciones de personas incluyen los tres.
 
-## Datos que se almacenan
+## Qué se almacena
 
-Natural Nudges almacena tus ajustes, intervenciones espontáneas personalizadas e intereses de personas junto con el resto de la configuración del servidor. También recuerda qué intervenciones espontáneas y activas se ejecutaron recientemente, si alguien respondió y a quién se dirigió una mención durante 30 días, y cada propósito oculto hasta por 90 días. Al ejecutar `/reset` se restauran los ajustes y se eliminan las intervenciones personalizadas. `/export config` e `/import config` transfieren los ajustes y las intervenciones personalizadas, pero no la lista de canales elegidos (que pertenece a un servidor específico). Tu preferencia personal de Menciones de personas forma parte de tus ajustes personales: `/reset personal config` la conserva, `/export personal config` la transfiere y `/personal nuke` la elimina junto con el resto de tus datos.
+Los ajustes, intervenciones personalizadas, intereses e intervenciones espontáneas de persona se guardan con la configuración de tu servidor. El historial de intervenciones, incluido si alguien respondió y a quién se mencionó, se conserva durante 30 días. Los propósitos se conservan hasta 90 días.
+
+- **Configuración del servidor:** `/reset` restaura los ajustes de intervención y elimina las intervenciones personalizadas. Las exportaciones e importaciones de configuración incluyen los ajustes y las intervenciones personalizadas, excluyendo la lista de canales específicos del servidor. Las intervenciones espontáneas de persona permanecen con su persona tras un restablecimiento y viajan en su tarjeta de persona. `/persona default` y eliminar una persona quitan sus intervenciones espontáneas.
+- **Configuración personal:** tu elección de `Pings de personas` sobrevive a `/reset personal config`, se incluye en `/export personal config` y se borra con `/personal nuke`.
