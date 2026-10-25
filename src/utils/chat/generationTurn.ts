@@ -5,8 +5,8 @@ import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ProviderError } from "@/types/stream/interfaces";
 import type { ToolContext } from "@/types/tool/interfaces";
-import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
-import { llmProviderRepo } from "@/utils/db/repositories";
+import { resolveServerTextModel } from "@/utils/provider/textModelSelection";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { type FallbackNoticeAttempt, sendFallbackModelUsageNotice } from "@/utils/discord/fallbackModelNotice";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import type { sendStandardEmbed } from "@/utils/discord/embedHelper";
@@ -736,19 +736,14 @@ async function resolveTomoriStateForRoute(context: ChatTurnContext, route: TextR
     ? (await applyPersonalProviderSelectionsToTomoriState(context.currentPersona, context.personalRoutingUserId))
         .tomoriState
     : context.currentPersona;
-  const channelLlmOverride =
-    context.isUserImpersonation || usePersonalRoute
-      ? null
-      : await getCachedChannelLlm(
-          context.currentPersona.server_id,
-          context.channel.id,
-          context.channel.isThread() ? context.channel.parentId : null,
-        );
-  const effectiveLlm =
-    usePersonalRoute || context.isUserImpersonation ? base.llm : (base.persona_llm ?? channelLlmOverride ?? base.llm);
-  const overriddenLlm = incoming.llmOverrideCodename
-    ? { ...effectiveLlm, llm_codename: incoming.llmOverrideCodename }
-    : effectiveLlm;
+  const overriddenLlm = usePersonalRoute
+    ? incoming.llmOverrideCodename
+      ? ((await llmModelRepo.loadByProviderAndCodename(base.llm.llm_provider, incoming.llmOverrideCodename)) ?? {
+          ...base.llm,
+          llm_codename: incoming.llmOverrideCodename,
+        })
+      : base.llm
+    : await resolveServerTextModel(base, context.channel, context.isUserImpersonation, incoming.llmOverrideCodename);
   let state: TomoriState = { ...base, llm: overriddenLlm };
 
   if (overriddenLlm.llm_provider.toLowerCase() !== base.llm.llm_provider.toLowerCase()) {

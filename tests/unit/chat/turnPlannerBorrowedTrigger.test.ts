@@ -9,6 +9,7 @@ import { normalizeChatInvocation } from "@/utils/chat/admission";
 import { planChatTurns } from "@/utils/chat/turnPlanner";
 import type { LockedChatTurn } from "@/utils/chat/types";
 import * as credentialResolver from "@/utils/provider/credentialResolver";
+import * as textModels from "@/utils/provider/textModelSelection";
 import { userNamingRepository } from "@/utils/db/repositories/UserNamingRepository";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 
@@ -84,6 +85,8 @@ async function planWithAnchorAuthor(options: {
 
   const credentialUsers: Array<number | null | undefined> = [];
   spies.push(
+    spyOn(textModels, "resolveServerTextModel").mockImplementation(async (state) => state.persona_llm ?? state.llm),
+    spyOn(credentialResolver, "resolvePersonalCapabilityCredentials").mockResolvedValue(null),
     spyOn(tomoriStateCache, "getCachedAllPersonas").mockResolvedValue([persona]),
     spyOn(userCache, "getCachedUserRow").mockImplementation(async (id) =>
       id === PING_USER_TARGET.user_disc_id ? PING_USER_TARGET : BYSTANDER,

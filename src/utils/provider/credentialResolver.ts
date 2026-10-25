@@ -1,5 +1,6 @@
 import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 import type {
+  LlmRow,
   CustomEndpointRow,
   PersonalProviderCapability,
   SavedProviderConfigRow,
@@ -33,6 +34,7 @@ export interface ResolvedCredentials {
 
 interface ResolverOptions {
   userId?: number | null;
+  textModel?: LlmRow;
   modelSelection?: GenerationModelSelection | null;
 }
 
@@ -304,7 +306,10 @@ async function decryptResolvedApiKey(
   };
 }
 
-async function resolvePersonalCredentials(userId: number, capability: Capability): Promise<ResolvedCredentials | null> {
+export async function resolvePersonalCapabilityCredentials(
+  userId: number,
+  capability: Capability,
+): Promise<ResolvedCredentials | null> {
   const personalCapability = mapCapabilityToPersonalCapability(capability);
   personalProviderCapabilitySchema.parse(personalCapability);
 
@@ -369,7 +374,7 @@ export async function resolveCapabilityCredentials(
   }
 
   if (userId !== null) {
-    const personalResolved = await resolvePersonalCredentials(userId, capability);
+    const personalResolved = await resolvePersonalCapabilityCredentials(userId, capability);
     if (personalResolved) {
       return personalResolved;
     }
@@ -379,7 +384,9 @@ export async function resolveCapabilityCredentials(
     }
   }
 
-  const provider = await resolveProviderForCapability(capabilityConfig, capability);
+  const provider =
+    options?.textModel?.llm_provider.toLowerCase() ??
+    (await resolveProviderForCapability(capabilityConfig, capability));
   const savedConfig = await llmProviderRepo.loadSavedProviderConfig(serverId, provider);
 
   if (!savedConfig) {
@@ -392,6 +399,6 @@ export async function resolveCapabilityCredentials(
     capability,
     "server",
     `server ${serverId}`,
-    capabilityModelIdFromColumns(capabilityConfig, capability),
+    options?.textModel?.llm_id ?? capabilityModelIdFromColumns(capabilityConfig, capability),
   );
 }

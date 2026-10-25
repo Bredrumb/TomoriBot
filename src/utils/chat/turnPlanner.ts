@@ -1,4 +1,5 @@
 import type { GenerationModelSelection } from "@/types/provider/generationModels";
+import { resolveServerTextModel } from "@/utils/provider/textModelSelection";
 import { GenerationModelUnavailableError } from "@/utils/provider/generationModels";
 import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
 import type { Guild, GuildMember, Message } from "discord.js";
@@ -17,6 +18,7 @@ import {
   CredentialUnavailableError,
   PersonalProviderRequiredError,
   resolveCapabilityCredentials,
+  resolvePersonalCapabilityCredentials,
 } from "@/utils/provider/credentialResolver";
 import {
   checkTextQuotaForAdmission,
@@ -248,6 +250,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
       locale,
       isDMChannel,
       shouldSurfaceUserErrors,
+      llmOverrideCodename: incoming.llmOverrideCodename,
       refusalNoticeKey,
       modelSelection: incoming.sceneTurn?.modelSelection,
     });
@@ -610,6 +613,7 @@ export async function resolveTextCredentialPolicy(params: {
   locale: string;
   isDMChannel: boolean;
   shouldSurfaceUserErrors: boolean;
+  llmOverrideCodename?: string;
   refusalNoticeKey?: string;
   modelSelection?: GenerationModelSelection;
 }): Promise<{
@@ -630,10 +634,26 @@ export async function resolveTextCredentialPolicy(params: {
   };
 
   try {
-    const textCreds = await resolveCapabilityCredentials(params.tomoriState.server_id, "text", {
-      userId: personalRoutingUserId,
-      ...(params.modelSelection ? { modelSelection: params.modelSelection } : {}),
-    });
+    const personalCredentials =
+      !params.modelSelection && personalRoutingUserId !== null
+        ? await resolvePersonalCapabilityCredentials(personalRoutingUserId, "text")
+        : null;
+    const effectiveModel =
+      !params.modelSelection && !personalCredentials
+        ? await resolveServerTextModel(
+            params.tomoriState,
+            params.channel,
+            params.isUserImpersonation,
+            params.llmOverrideCodename,
+          )
+        : undefined;
+    const textCreds =
+      personalCredentials ??
+      (await resolveCapabilityCredentials(params.tomoriState.server_id, "text", {
+        userId: personalRoutingUserId,
+        ...(effectiveModel ? { textModel: effectiveModel } : {}),
+        ...(params.modelSelection ? { modelSelection: params.modelSelection } : {}),
+      }));
     let modelState: TomoriState | undefined;
     if (params.modelSelection) {
       const model = await llmModelRepo.loadById(params.modelSelection.modelId);

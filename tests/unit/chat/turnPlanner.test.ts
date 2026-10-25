@@ -8,6 +8,7 @@ import * as guards from "@/utils/chat/admissionGuards";
 import * as userCache from "@/utils/cache/userCache";
 import * as triggers from "@/utils/chat/triggerProcessor";
 import * as replyDecision from "@/utils/chat/replyDecision";
+import * as textModels from "@/utils/provider/textModelSelection";
 import { userNamingRepository } from "@/utils/db/repositories/UserNamingRepository";
 import { normalizeChatInvocation } from "@/utils/chat/admission";
 import type { LockedChatTurn } from "@/utils/chat/types";
@@ -27,7 +28,11 @@ const scoped = createScopedModuleMocker(mock, {
   "@/utils/provider/credentialResolver": credentials,
   "@/utils/discord/embedHelper": embeds,
 });
-scoped.module("@/utils/provider/credentialResolver", () => ({ ...credentials, resolveCapabilityCredentials: resolve }));
+scoped.module("@/utils/provider/credentialResolver", () => ({
+  ...credentials,
+  resolveCapabilityCredentials: resolve,
+  resolvePersonalCapabilityCredentials: async () => null,
+}));
 scoped.module("@/utils/discord/embedHelper", () => ({ ...embeds, sendStandardEmbed: send }));
 stubLogMembers({ info: () => undefined, warn: () => undefined });
 const { planChatTurns, resolveTextCredentialPolicy } = await import("@/utils/chat/turnPlanner");
@@ -104,6 +109,7 @@ beforeEach(() => {
   send.mockClear();
   resolutions = [];
   restores.push(
+    spyOn(textModels, "resolveServerTextModel").mockImplementation(async (state) => state.persona_llm ?? state.llm),
     spyOn(userCache, "getCachedUserRow").mockResolvedValue(user),
     spyOn(userCache, "getCachedBlacklistStatus").mockResolvedValue(false),
     spyOn(userCache, "getCachedPrivacyLevel").mockResolvedValue(PrivacyLevel.MINIMAL),

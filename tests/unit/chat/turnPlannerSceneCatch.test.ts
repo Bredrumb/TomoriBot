@@ -8,6 +8,7 @@ import { normalizeChatInvocation } from "@/utils/chat/admission";
 import { planChatTurns } from "@/utils/chat/turnPlanner";
 import type { LockedChatTurn } from "@/utils/chat/types";
 import * as credentialResolver from "@/utils/provider/credentialResolver";
+import * as textModels from "@/utils/provider/textModelSelection";
 import { userNamingRepository } from "@/utils/db/repositories/UserNamingRepository";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 
@@ -76,6 +77,8 @@ async function planInterruption(content: string, personalDtm: "off" | "on" = "of
   } as unknown as LockedChatTurn;
 
   spies.push(
+    spyOn(textModels, "resolveServerTextModel").mockImplementation(async (state) => state.persona_llm ?? state.llm),
+    spyOn(credentialResolver, "resolvePersonalCapabilityCredentials").mockResolvedValue(null),
     spyOn(tomoriStateCache, "getCachedAllPersonas").mockResolvedValue(personas),
     spyOn(userCache, "getCachedUserRow").mockResolvedValue(member),
     spyOn(userCache, "getCachedBlacklistStatus").mockResolvedValue(false),
