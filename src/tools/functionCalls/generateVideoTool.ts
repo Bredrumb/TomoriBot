@@ -36,7 +36,10 @@ import { getResolvedCapabilityModelId } from "@/utils/provider/credentialResolve
 import { resolveCredentialsWithMediaQuota } from "@/utils/quota/mediaQuotaGate";
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
-import { isOpenRouterVideoCapabilityError } from "@/providers/openrouter/openrouterVideoRequest";
+import {
+  getDefaultOpenRouterVideoResolution,
+  isOpenRouterVideoCapabilityError,
+} from "@/providers/openrouter/openrouterVideoRequest";
 import {
   isExpectedVideoFailure,
   isVideoContentRefusal,
@@ -49,7 +52,6 @@ import { beginTextModelHandoffBeforeComfyUi } from "@/utils/provider/textModelCo
 const DISCORD_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 const DEFAULT_VIDEO_DURATION_SECONDS = 5;
 const MAX_VIDEO_DURATION_SECONDS = 20;
-const DEFAULT_VIDEO_RESOLUTION: ProviderNativeVideoResolution = "720p";
 
 /**
  * Tool for generating videos using the active provider's native video API.
@@ -93,7 +95,7 @@ export class GenerateVideoTool extends BaseTool {
       resolution: {
         type: "string",
         description:
-          "Optional: Target video resolution. Defaults to '720p'. Supported values are '480p' (SD), '720p' (HD), and '1080p' (FHD). Providers may fall back to the nearest supported resolution.",
+          "Optional: Target video resolution. Defaults to '480p' for Grok Imagine Video 1.5 Lite and '720p' otherwise. Supported values are '480p' (SD), '720p' (HD), and '1080p' (FHD). Providers may fall back to the nearest supported resolution.",
         enum: ["480p", "720p", "1080p"],
       },
       generate_audio: {
@@ -128,12 +130,12 @@ export class GenerateVideoTool extends BaseTool {
     return Math.min(normalized, MAX_VIDEO_DURATION_SECONDS);
   }
 
-  private normalizeResolution(rawResolution: unknown): ProviderNativeVideoResolution {
+  private normalizeResolution(rawResolution: unknown, model: string): ProviderNativeVideoResolution {
     if (rawResolution === "480p" || rawResolution === "720p" || rawResolution === "1080p") {
       return rawResolution;
     }
 
-    return DEFAULT_VIDEO_RESOLUTION;
+    return getDefaultOpenRouterVideoResolution(model);
   }
 
   private resolveMediaId(rawMediaId: string | undefined, context: ToolContext): string | undefined {
@@ -396,7 +398,6 @@ export class GenerateVideoTool extends BaseTool {
     const messageId = this.resolveMediaId(rawMediaId, context);
     const aspectRatio = (args.aspect_ratio as string) || "16:9";
     const durationSeconds = this.normalizeDuration(args.duration);
-    const resolution = this.normalizeResolution(args.resolution);
     const generateAudio = args.generate_audio === true;
     const audioPrompt =
       typeof args.audio_prompt === "string" && args.audio_prompt.trim() ? args.audio_prompt.trim() : undefined;
@@ -486,6 +487,7 @@ export class GenerateVideoTool extends BaseTool {
       }
 
       const modelCodename = await this.getVideoModelCodename(videoModelId);
+      const resolution = this.normalizeResolution(args.resolution, modelCodename);
       const displayModelName = creds.customEndpoint ? formatCustomModelDisplay(creds.customEndpoint) : modelCodename;
       log.info(`Using video model: ${modelCodename} for video generation`);
 

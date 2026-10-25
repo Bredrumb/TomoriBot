@@ -115,7 +115,10 @@ async function generateViaChatCompletions(
       model: modelCodename,
       messages: [{ role: "user", content: contentParts }],
       modalities: ["image", "text"],
-      image_config: { aspect_ratio: aspectRatio },
+      image_config: {
+        aspect_ratio: aspectRatio,
+        ...(modelCodename === "google/gemini-nano-banana-2.1" ? { image_size: "1K" } : {}),
+      },
     }),
     ...(abortSignal ? { signal: abortSignal } : {}),
   });

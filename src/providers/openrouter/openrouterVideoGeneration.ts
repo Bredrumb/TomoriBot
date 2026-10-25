@@ -372,17 +372,26 @@ export async function fetchOpenRouterVideoApi(url: string, init: RequestInit): P
   )
     throw new Error("Invalid OpenRouter video API request");
   const headers = Object.fromEntries(new Headers(init.headers).entries());
-  const raw = await externalHttpRequest(
-    url,
-    init.method,
-    headers,
-    { maxBodyBytes: MAX_API_RESPONSE_BYTES, abortSignal: init.signal ?? undefined },
-    init.body ?? undefined,
-  );
-  return new Response([204, 205, 304].includes(raw.status) ? null : new Uint8Array(raw.bodyBuffer), {
-    status: raw.status,
-    headers: raw.headers,
-  });
+  try {
+    const raw = await externalHttpRequest(
+      url,
+      init.method,
+      headers,
+      { maxBodyBytes: MAX_API_RESPONSE_BYTES, abortSignal: init.signal ?? undefined },
+      init.body ?? undefined,
+    );
+    return new Response([204, 205, 304].includes(raw.status) ? null : new Uint8Array(raw.bodyBuffer), {
+      status: raw.status,
+      headers: raw.headers,
+    });
+  } catch (error) {
+    throw new Error(
+      safeVideoErrorText(
+        error instanceof Error ? error.message : "Video API transport failed",
+        new Headers(init.headers).get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "",
+      ),
+    );
+  }
 }
 
 /** Polling interval for OpenRouter video jobs (30 seconds, per OpenRouter docs) */
@@ -597,7 +606,6 @@ async function generateVideo(
   hold?.reportCost(usageReport.costUsd);
   const rawVideoUrl = completedJob.unsigned_urls?.[0] ?? `${OPENROUTER_VIDEO_URL}/${jobId}/content?index=0`;
   const videoUrl = new URL(rawVideoUrl, OPENROUTER_ORIGIN).href;
-
   log.info(`OpenRouter video generation: downloading video (jobId: ${jobId}, url: ${videoUrl.slice(0, 80)})`);
 
   const maxDownloadAttempts = 4;
