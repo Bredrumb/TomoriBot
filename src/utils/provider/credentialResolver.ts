@@ -25,6 +25,8 @@ import type { SupporterFundingContext } from "@/modules/supporter-billing/runtim
 import { getSupporterUsageContext } from "@/modules/supporter-billing/runtime/types";
 import { SupporterRequestDeniedError } from "@/modules/supporter-billing/runtime/funding";
 import { localizer } from "@/utils/text/localizer";
+import type { GenerationModelSelection } from "@/types/provider/generationModels";
+import { GenerationModelUnavailableError, validateGenerationModelSelection } from "@/utils/provider/generationModels";
 
 export type Capability = "text" | "embedding" | "image-standard" | "image-nai" | "video" | "vision";
 
@@ -44,6 +46,7 @@ export interface ResolvedCredentials {
 interface ResolverOptions {
   userId?: number | null;
   textModel?: LlmRow;
+  modelSelection?: GenerationModelSelection | null;
 }
 
 type CapabilityConfigColumns = Pick<
@@ -430,6 +433,31 @@ export async function resolveCapabilityCredentials(
 ): Promise<ResolvedCredentials> {
   const userId = options?.userId ?? null;
   const capabilityConfig = await loadCapabilityConfig(serverId);
+
+  if (options?.modelSelection) {
+    const selection = options.modelSelection;
+    const expectedKind = capability === "image-standard" ? "image" : capability;
+    if (selection.kind !== expectedKind) throw new GenerationModelUnavailableError();
+    await validateGenerationModelSelection(serverId, userId, selection);
+    const savedConfig =
+      selection.source === "personal" && userId !== null
+        ? await llmProviderRepo.loadUserSavedProviderConfig(userId, selection.provider)
+        : selection.source === "server"
+          ? await llmProviderRepo.loadSavedProviderConfig(serverId, selection.provider)
+          : null;
+    if (!savedConfig) throw new GenerationModelUnavailableError();
+    const resolved = await decryptResolvedApiKey(
+      savedConfig,
+      selection.provider,
+      capability,
+      selection.source,
+      selection.source === "server" ? `server ${serverId}` : `user ${userId}`,
+      selection.modelId,
+    );
+    if (isCustomProvider(selection.provider) && resolved.customEndpoint?.model_ref_id !== selection.modelId)
+      throw new GenerationModelUnavailableError();
+    return resolved;
+  }
 
   if (userId !== null) {
     try {

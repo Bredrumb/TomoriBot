@@ -9,7 +9,7 @@ export type DanbooruGalleryPayload = Required<Pick<MessageCreateOptions, "compon
 
 /**
  * Danbooru images as one gallery, with a footer naming the searched tags (NovelAI form) and linking
- * each post. Every image rated above general is spoilered.
+ * each post. Questionable and explicit images are spoilered.
  *
  * @param typedTags - What the user typed for each of `tags`, shown beside a tag that resolution changed
  */
@@ -37,7 +37,10 @@ export function buildDanbooruGalleryPayload(
     components: [
       {
         type: ComponentType.MediaGallery,
-        items: images.map(({ post, imageUrl }) => ({ media: { url: imageUrl }, spoiler: post.rating !== "g" })),
+        items: images.map(({ post, imageUrl }) => ({
+          media: { url: imageUrl },
+          spoiler: post.rating === "q" || post.rating === "e",
+        })),
       },
       {
         type: ComponentType.TextDisplay,

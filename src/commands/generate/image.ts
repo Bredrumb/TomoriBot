@@ -1,5 +1,12 @@
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import {
+  addGenerationModelOption,
+  createGenerationModelAutocomplete,
+  resolveGenerationModelOption,
+  replyGenerationModelUnavailable,
+} from "@/utils/discord/autocomplete/generationModelAutocomplete";
+import { GenerationModelUnavailableError } from "@/utils/provider/generationModels";
+import {
   findProviderRequestDeniedError,
   reportProviderUsage,
   getProviderRequestFailureCopy,
@@ -57,19 +64,29 @@ const ASPECT_RATIO_SELECT_ID = "aspect_ratio_select";
 const REFERENCE_IMAGE_INPUT_IDS = ["image_upload_1", "image_upload_2", "image_upload_3"] as const;
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
-  subcommand
-    .setName("image")
-    .setDescription(localizer("en-US", "commands.generate.image.description"))
-    .addStringOption((option) =>
-      option
-        .setName("mode")
-        .setDescription(localizer("en-US", "commands.generate.image.mode_description"))
-        .setRequired(true)
-        .addChoices(
-          { name: localizer("en-US", "commands.generate.image.mode_choice_manual"), value: "manual" },
-          { name: localizer("en-US", "commands.generate.image.mode_choice_auto"), value: "auto" },
-        ),
-    );
+  addGenerationModelOption(
+    subcommand
+      .setName("image")
+      .setDescription(localizer("en-US", "commands.generate.image.description"))
+      .addStringOption((option) =>
+        option
+          .setName("mode")
+          .setDescription(localizer("en-US", "commands.generate.image.mode_description"))
+          .setRequired(true)
+          .addChoices(
+            { name: localizer("en-US", "commands.generate.image.mode_choice_manual"), value: "manual" },
+            { name: localizer("en-US", "commands.generate.image.mode_choice_auto"), value: "auto" },
+          ),
+      )
+      .addBooleanOption((option) =>
+        option
+          .setName("nsfw")
+          .setDescription(localizer("en-US", "commands.generate.image.nsfw_description"))
+          .setRequired(false),
+      ),
+  );
+
+export const autocomplete = createGenerationModelAutocomplete("image");
 
 /**
  * @param diffusionModelId - Database ID of the diffusion model
@@ -157,6 +174,7 @@ export async function execute(
   locale: string,
 ): Promise<void> {
   const mode = interaction.options.getString("mode", true);
+  const spoiler = interaction.options.getBoolean("nsfw") ?? false;
   if (mode === "auto") {
     await executeAutoImageCommand(client, interaction, userData, locale);
     return;
@@ -185,6 +203,14 @@ export async function execute(
     return;
   }
 
+  const modelSelection = await resolveGenerationModelOption(
+    interaction,
+    baseTomoriState.server_id,
+    userData.user_id ?? null,
+    locale,
+    "image",
+  );
+  if (modelSelection === false) return;
   const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
   const nudgeTips = (tipKeys: string[], credentialSource: "server" | "personal") =>
     withSupporterNudge(tipKeys, { userDiscId: interaction.user.id, serverId: tomoriState.server_id, credentialSource });
@@ -203,8 +229,13 @@ export async function execute(
   try {
     imageCreds = await resolveCapabilityCredentials(tomoriState.server_id, "image-standard", {
       userId: userData.user_id ?? null,
+      modelSelection,
     });
   } catch (error) {
+    if (error instanceof GenerationModelUnavailableError) {
+      await replyGenerationModelUnavailable(interaction, locale);
+      return;
+    }
     const denied = findProviderRequestDeniedError(error);
     if (denied) {
       await replyInfoEmbed(interaction, locale, {
@@ -314,10 +345,10 @@ export async function execute(
     return;
   }
 
-  const apiKey = imageCreds.apiKey;
+  let apiKey = imageCreds.apiKey;
   const executionProvider = imageCreds.provider;
 
-  const imageRoute = await resolveStandardImageRoute(imageCreds);
+  let imageRoute = await resolveStandardImageRoute(imageCreds);
   if (!imageRoute) {
     if (executionProvider === "novelai") {
       await replyInfoEmbed(interaction, locale, {
@@ -469,6 +500,15 @@ export async function execute(
     }
 
     modalSubmitInteraction = modalResult.interaction;
+    if (modelSelection) {
+      imageCreds = await resolveCapabilityCredentials(tomoriState.server_id, "image-standard", {
+        userId: userData.user_id ?? null,
+        modelSelection,
+      });
+      apiKey = imageCreds.apiKey;
+      imageRoute = await resolveStandardImageRoute(imageCreds);
+      if (!imageRoute) throw new GenerationModelUnavailableError();
+    }
     const prompt = modalResult.values?.[PROMPT_INPUT_ID];
     const aspectRatio = modalResult.values?.[ASPECT_RATIO_SELECT_ID];
     const imageAttachments = REFERENCE_IMAGE_INPUT_IDS.map((customId) => modalResult.attachments?.[customId]).filter(
@@ -636,7 +676,7 @@ export async function execute(
       modalSubmitInteraction.attachmentSizeLimit,
     );
     const filename = `generated_${Date.now()}.${preparedImage.extension}`;
-    const attachment = new AttachmentBuilder(preparedImage.buffer, { name: filename });
+    const attachment = new AttachmentBuilder(preparedImage.buffer, { name: filename }).setSpoiler(spoiler);
 
     // Increment quota after successful generation (server providers only)
     if (imageCreds.source === "server") {
@@ -659,7 +699,6 @@ export async function execute(
     const successEmbed = new EmbedBuilder()
       .setTitle(localizedStatusTitle(locale, "commands.generate.image.success_title", ColorCode.SUCCESS))
       .setColor(ColorCode.SUCCESS)
-      .setImage(`attachment://${filename}`)
       .setFooter({
         text: localizer(
           locale,
@@ -686,7 +725,9 @@ export async function execute(
         },
       ]);
 
-    if (referenceImageUrl) {
+    if (!spoiler) successEmbed.setImage(`attachment://${filename}`);
+
+    if (referenceImageUrl && !spoiler) {
       successEmbed.setThumbnail(referenceImageUrl);
     }
 
@@ -697,6 +738,10 @@ export async function execute(
 
     log.success(`Successfully generated and sent image (${generationTimeSeconds}s)`);
   } catch (error) {
+    if (error instanceof GenerationModelUnavailableError) {
+      await replyGenerationModelUnavailable(modalSubmitInteraction ?? interaction, locale);
+      return;
+    }
     const denied = findProviderRequestDeniedError(error, imageCreds?.usageContext);
     if (denied) {
       await replyInfoEmbed(modalSubmitInteraction ?? interaction, locale, {

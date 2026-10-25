@@ -524,6 +524,7 @@ function resolveServerRouteExtension(
   const isPersonal =
     context.textCredentialSource === "personal" || context.supporterFunding?.fundingScope === "personal";
   if (
+    context.turn.lockedTurn.admission.incoming.sceneTurn?.modelSelection ||
     !isPersonal ||
     context.isUserImpersonation ||
     (context.isDMChannel &&
@@ -923,6 +924,7 @@ type TextRoute = "planned" | "server";
 
 async function resolveTomoriStateForRoute(context: ChatTurnContext, route: TextRoute): Promise<TomoriState> {
   const incoming = context.turn.lockedTurn.admission.incoming;
+  if (incoming.sceneTurn?.modelSelection) return context.currentPersona;
   const funding = context.supporterFunding;
   const usePersonalRoute =
     route === "planned" && (context.textCredentialSource === "personal" || funding?.fundingScope === "personal");

@@ -62,6 +62,10 @@ export class GenerateVideoTool extends BaseTool {
   parameters: ToolParameterSchema = {
     type: "object",
     properties: {
+      nsfw: {
+        type: "boolean",
+        description: "Set true when the video requires a Discord spoiler, useful for NSFW videos.",
+      },
       prompt: {
         type: "string",
         description:
@@ -193,12 +197,13 @@ export class GenerateVideoTool extends BaseTool {
     videoData: Buffer,
     filename: string,
     elapsedMs: number,
+    spoiler: boolean,
   ): Promise<import("discord.js").Message> {
     const threadId =
       "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
         ? context.channel.id
         : undefined;
-    const componentsPayload = buildGeneratedVideoComponentsV2Payload(filename, elapsedMs, context.locale);
+    const componentsPayload = buildGeneratedVideoComponentsV2Payload(filename, elapsedMs, context.locale, spoiler);
 
     // Try persona webhook first (Components V2, then plain attachment fallback)
     if (context.webhook && context.personaUsername) {
@@ -665,7 +670,11 @@ export class GenerateVideoTool extends BaseTool {
       );
 
       const elapsedMs = Date.now() - startedAtMs;
-      const sentMessage = await this.sendGeneratedVideo(context, videoData, videoFilename, elapsedMs);
+      const spoiler = args.nsfw === true;
+      if (spoiler) {
+        videoFilename = `SPOILER_${videoFilename}`;
+      }
+      const sentMessage = await this.sendGeneratedVideo(context, videoData, videoFilename, elapsedMs, spoiler);
 
       log.success("Successfully generated and sent video to Discord");
 

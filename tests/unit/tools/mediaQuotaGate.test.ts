@@ -96,6 +96,31 @@ describe("media quota gating", () => {
     expect(order).toEqual(["credentials", "quota"]);
   });
 
+  it("bases quota admission on an explicit model's credential source", async () => {
+    for (const source of ["server", "personal"] as const) {
+      const selection = { kind: "image" as const, source, provider: "google", modelId: 5 };
+      let quotaChecks = 0;
+      const gate = await resolveCredentialsWithMediaQuota(
+        SERVER_ID,
+        "image-standard",
+        INTERNAL_USER_ID,
+        async () => {
+          quotaChecks++;
+          return { allowed: false };
+        },
+        USER_DISC_ID,
+        { allowed: true },
+        async (_serverId, _capability, options) => {
+          expect(options.modelSelection).toEqual(selection);
+          return makeCredentials(source);
+        },
+        selection,
+      );
+      expect(quotaChecks).toBe(source === "server" ? 1 : 0);
+      expect(gate.quotaCheck.allowed).toBe(source === "personal");
+    }
+  });
+
   it("passes a null user id through for an anonymous caller", async () => {
     const resolverCalls: Array<{ userId: number | null }> = [];
 

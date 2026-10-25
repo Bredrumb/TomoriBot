@@ -19,7 +19,7 @@ Find existing anime art
 
 | Command | Summary |
 |---|---|
-| `/booru search` | Post 4 random well-rated Danbooru images for one or two tags |
+| `/booru search` | Post random well-rated Danbooru images for one or two tags |
 
 ## `/comment`
 

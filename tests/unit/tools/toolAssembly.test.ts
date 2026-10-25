@@ -164,7 +164,7 @@ describe("tool schema assembly", () => {
 
     const tool = buildGenerateImageToolVariant(new GenerateImageTool(), capabilities);
 
-    expect(getPropertyNames(tool as Tool)).toEqual(["aspect_ratio", "prompt"]);
+    expect(getPropertyNames(tool as Tool)).toEqual(["aspect_ratio", "nsfw", "prompt"]);
     expect((tool as Tool).description).toContain("text-to-image");
     // Prompt guidance must not reference modes the backend cannot perform
     const promptDescription = (tool as Tool).parameters.properties.prompt.description;

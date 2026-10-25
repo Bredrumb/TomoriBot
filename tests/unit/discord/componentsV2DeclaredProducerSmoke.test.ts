@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { type BaseMessageOptions, ButtonStyle, MessageFlags } from "discord.js";
+import { type BaseMessageOptions, ButtonStyle, ComponentType, MessageFlags } from "discord.js";
 import { terminalPayload as buildConfigTerminalPayload } from "@/utils/discord/interactions/configRouteContext";
 import { terminalPayload as buildPersonalConfigTerminalPayload } from "@/utils/discord/interactions/personalConfigRouteContext";
 import { buildDanbooruGalleryPayload } from "@/utils/discord/danbooruGalleryMessage";
@@ -62,6 +62,19 @@ describe("Declared Components V2 producer smoke fixtures", () => {
       buildGeneratedVideoComponentsV2Payload("generated.mp4", 2_500, "en-US"),
       "generatedVideoMessage.buildGeneratedVideoComponentsV2Payload",
     );
+  });
+
+  it("hides generated video galleries only when requested", () => {
+    for (const spoiler of [false, true]) {
+      const filename = `${spoiler ? "SPOILER_" : ""}generated.mp4`;
+      const payload = buildGeneratedVideoComponentsV2Payload(filename, 2_500, "en-US", spoiler);
+
+      assertValidPayload(payload, "generatedVideoMessage.buildGeneratedVideoComponentsV2Payload");
+      expect(payload.components[0]).toEqual({
+        type: ComponentType.MediaGallery,
+        items: [{ ...(spoiler ? { spoiler: true } : {}), media: { url: `attachment://${filename}` } }],
+      });
+    }
   });
 
   it("validates the Danbooru gallery payload at the 4-image maximum", async () => {

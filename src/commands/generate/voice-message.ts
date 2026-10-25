@@ -1,3 +1,10 @@
+import {
+  addGenerationModelOption,
+  createGenerationModelAutocomplete,
+  resolveGenerationModelOption,
+  replyGenerationModelUnavailable,
+} from "@/utils/discord/autocomplete/generationModelAutocomplete";
+import { GenerationModelUnavailableError } from "@/utils/provider/generationModels";
 /**
  * `/generate voice-message`
  *
@@ -107,35 +114,41 @@ const BACKEND_LABEL_KEYS: Record<VoiceBackendKey, string> = {
 };
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
-  subcommand
-    .setName("voice-message")
-    .setDescription(localizer("en-US", "commands.generate.voice-message.description"))
-    .addStringOption((option) =>
-      option
-        .setName("persona")
-        .setDescription(localizer("en-US", "commands.generate.voice-message.persona_description"))
-        .setRequired(false)
-        .setAutocomplete(true),
-    )
-    .addAttachmentOption((option) =>
-      option
-        .setName("voice_sample")
-        .setDescription(localizer("en-US", "commands.generate.voice-message.voice_sample_description"))
-        .setRequired(false),
-    )
-    .addStringOption((option) =>
-      option
-        .setName("voice_design")
-        .setDescription(localizer("en-US", "commands.generate.voice-message.voice_design_description"))
-        .setRequired(false)
-        .setMaxLength(MAX_VOICE_DESIGN_PROMPT_LENGTH),
-    );
+  addGenerationModelOption(
+    subcommand
+      .setName("voice-message")
+      .setDescription(localizer("en-US", "commands.generate.voice-message.description"))
+      .addStringOption((option) =>
+        option
+          .setName("persona")
+          .setDescription(localizer("en-US", "commands.generate.voice-message.persona_description"))
+          .setRequired(false)
+          .setAutocomplete(true),
+      )
+      .addAttachmentOption((option) =>
+        option
+          .setName("voice_sample")
+          .setDescription(localizer("en-US", "commands.generate.voice-message.voice_sample_description"))
+          .setRequired(false),
+      )
+      .addStringOption((option) =>
+        option
+          .setName("voice_design")
+          .setDescription(localizer("en-US", "commands.generate.voice-message.voice_design_description"))
+          .setRequired(false)
+          .setMaxLength(MAX_VOICE_DESIGN_PROMPT_LENGTH),
+      ),
+  );
 
 /**
  * Autocomplete is the same persona list `/impersonate persona` uses: already filtered through
  * `filterPersonasForTrigger`, so a suggestion never reveals a persona the actor cannot use here.
  */
-export const autocomplete = handlePersonaAutocomplete;
+const modelAutocomplete = createGenerationModelAutocomplete("speech");
+export const autocomplete: typeof handlePersonaAutocomplete = (client, interaction) =>
+  interaction.options.getFocused(true).name === "model"
+    ? modelAutocomplete(client, interaction)
+    : handlePersonaAutocomplete(client, interaction);
 
 type PreModalFailure = {
   titleKey: string;
@@ -412,11 +425,20 @@ export async function execute(
   }
   const persona = personaResolution.persona;
 
-  const targets = await resolveSpeechTargets(mainPersona.server_id, userData.user_id);
+  const modelSelection = await resolveGenerationModelOption(
+    interaction,
+    mainPersona.server_id,
+    userData.user_id ?? null,
+    locale,
+    "speech",
+  );
+  if (modelSelection === false) return;
+  const targets = await resolveSpeechTargets(mainPersona.server_id, userData.user_id, modelSelection);
   let elevenLabsApiKey =
     targets.clone?.endpoint?.api_style === "elevenlabs"
       ? targets.clone.apiKey
-      : !targets.clone &&
+      : !modelSelection &&
+          !targets.clone &&
           (!userData.user_id || (await loadSpeechRoutingPolicy(mainPersona.server_id, userData.user_id)).serverAllowed)
         ? ((await getOptApiKey(mainPersona.server_id, ELEVENLABS_SERVICE_NAME)) ?? "")
         : "";
@@ -622,14 +644,22 @@ export async function execute(
   }
 
   const selectedSourceId = modalResult.values?.[VOICE_MESSAGE_SOURCE_INPUT_ID] ?? defaultSource?.id;
-  const freshTargets = await resolveSpeechTargets(mainPersona.server_id, userData.user_id);
+  let freshTargets: Awaited<ReturnType<typeof resolveSpeechTargets>>;
+  try {
+    freshTargets = await resolveSpeechTargets(mainPersona.server_id, userData.user_id, modelSelection);
+  } catch (error) {
+    if (!(error instanceof GenerationModelUnavailableError)) throw error;
+    await replyGenerationModelUnavailable(modalInteraction, locale);
+    return;
+  }
   const freshPersona = (await personaRepository.loadAllForServer(serverDiscId)).find(
     (entry) => entry.persona_id === persona.persona_id,
   );
   elevenLabsApiKey =
     freshTargets.clone?.endpoint?.api_style === "elevenlabs"
       ? freshTargets.clone.apiKey
-      : !freshTargets.clone &&
+      : !modelSelection &&
+          !freshTargets.clone &&
           (!userData.user_id || (await loadSpeechRoutingPolicy(mainPersona.server_id, userData.user_id)).serverAllowed)
         ? ((await getOptApiKey(mainPersona.server_id, ELEVENLABS_SERVICE_NAME)) ?? "")
         : "";
@@ -774,6 +804,7 @@ export async function execute(
     selectedSource.id === "typed-design" ||
     (candidates.length > 1 && selectedSource.id !== defaultSource?.id);
   const synthesisResult = await synthesizeVoiceMessage({
+    modelIsExplicit: Boolean(modelSelection),
     target: speechEndpoint ?? undefined,
     maxOutputBytes: modalInteraction.attachmentSizeLimit,
     ...(userData.user_id && freshPersona?.persona_id

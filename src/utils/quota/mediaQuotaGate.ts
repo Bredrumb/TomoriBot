@@ -1,5 +1,6 @@
 import type { Capability, ResolvedCredentials } from "@/utils/provider/credentialResolver";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import type { GenerationModelSelection } from "@/types/provider/generationModels";
 
 /**
  * What a generation tool needs before it may run: the credentials it will generate with,
@@ -14,7 +15,7 @@ export interface MediaQuotaGateResult<TCheckResult> {
 export type CapabilityCredentialResolver = (
   serverId: number,
   capability: Capability,
-  options: { userId: number | null },
+  options: { userId: number | null; modelSelection?: GenerationModelSelection },
 ) => Promise<ResolvedCredentials>;
 
 /**
@@ -37,8 +38,12 @@ export async function resolveCredentialsWithMediaQuota<TCheckResult>(
   userDiscId: string,
   allowedResult: TCheckResult,
   resolveCredentials: CapabilityCredentialResolver = resolveCapabilityCredentials,
+  modelSelection?: GenerationModelSelection,
 ): Promise<MediaQuotaGateResult<TCheckResult>> {
-  const credentials = await resolveCredentials(serverId, capability, { userId });
+  const credentials = await resolveCredentials(serverId, capability, {
+    userId,
+    ...(modelSelection ? { modelSelection } : {}),
+  });
   const quotaCheck = credentials.source === "server" ? await checkQuota(serverId, userDiscId) : allowedResult;
 
   return { credentials, quotaCheck };

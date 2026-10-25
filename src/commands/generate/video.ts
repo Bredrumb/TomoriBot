@@ -1,5 +1,12 @@
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import {
+  addGenerationModelOption,
+  createGenerationModelAutocomplete,
+  resolveGenerationModelOption,
+  replyGenerationModelUnavailable,
+} from "@/utils/discord/autocomplete/generationModelAutocomplete";
+import { GenerationModelUnavailableError } from "@/utils/provider/generationModels";
+import {
   findProviderRequestDeniedError,
   reportProviderUsage,
   getProviderRequestFailureCopy,
@@ -90,7 +97,19 @@ function parseModalInteger(raw: string | undefined, min: number, max: number): {
 }
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
-  subcommand.setName("video").setDescription(localizer("en-US", "commands.generate.video.description"));
+  addGenerationModelOption(
+    subcommand
+      .setName("video")
+      .setDescription(localizer("en-US", "commands.generate.video.description"))
+      .addBooleanOption((option) =>
+        option
+          .setName("nsfw")
+          .setDescription(localizer("en-US", "commands.generate.video.nsfw_description"))
+          .setRequired(false),
+      ),
+  );
+
+export const autocomplete = createGenerationModelAutocomplete("video");
 
 /**
  * @param videoModelId - Database ID of the video generation model
@@ -172,6 +191,14 @@ export async function execute(
     return;
   }
 
+  const modelSelection = await resolveGenerationModelOption(
+    interaction,
+    baseTomoriState.server_id,
+    userData.user_id ?? null,
+    locale,
+    "video",
+  );
+  if (modelSelection === false) return;
   const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
   const nudgeTips = (credentialSource: "server" | "personal") =>
     withSupporterNudge([], { userDiscId: interaction.user.id, serverId: tomoriState.server_id, credentialSource });
@@ -190,8 +217,13 @@ export async function execute(
   try {
     videoCreds = await resolveCapabilityCredentials(tomoriState.server_id, "video", {
       userId: userData.user_id ?? null,
+      modelSelection,
     });
   } catch (error) {
+    if (error instanceof GenerationModelUnavailableError) {
+      await replyGenerationModelUnavailable(interaction, locale);
+      return;
+    }
     const denied = findProviderRequestDeniedError(error);
     if (denied) {
       await replyInfoEmbed(interaction, locale, {
@@ -290,7 +322,7 @@ export async function execute(
     return;
   }
 
-  const apiKey = videoCreds.apiKey;
+  let apiKey = videoCreds.apiKey;
   const executionProvider = videoCreds.provider;
 
   // Check video quota before showing modal (personal-provider users bypass quota)
@@ -406,6 +438,13 @@ export async function execute(
     }
 
     modalSubmitInteraction = modalResult.interaction;
+    if (modelSelection) {
+      videoCreds = await resolveCapabilityCredentials(tomoriState.server_id, "video", {
+        userId: userData.user_id ?? null,
+        modelSelection,
+      });
+      apiKey = videoCreds.apiKey;
+    }
     const prompt = modalResult.values?.[PROMPT_INPUT_ID];
     const aspectRatio = modalResult.values?.[ASPECT_RATIO_SELECT_ID] ?? "16:9";
     const imageAttachment = modalResult.attachments?.[REFERENCE_IMAGE_INPUT_ID];
@@ -587,7 +626,7 @@ export async function execute(
 
     const attachment = new AttachmentBuilder(videoData, {
       name: videoFilename,
-    });
+    }).setSpoiler(interaction.options.getBoolean("nsfw") ?? false);
 
     await modalSubmitInteraction.editReply({
       embeds: [
@@ -622,6 +661,10 @@ export async function execute(
     }
     log.success(`Video generated in ${elapsedSec}s via ${displayModelName}`);
   } catch (error) {
+    if (error instanceof GenerationModelUnavailableError) {
+      await replyGenerationModelUnavailable(modalSubmitInteraction ?? interaction, locale);
+      return;
+    }
     const denied = findProviderRequestDeniedError(error, videoCreds?.usageContext);
     if (!denied && !(error instanceof ProviderVideoFilteredError))
       log.error("Video generation command failed:", error as Error);

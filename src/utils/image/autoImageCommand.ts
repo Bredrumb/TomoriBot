@@ -1,4 +1,9 @@
 import {
+  resolveGenerationModelOption,
+  replyGenerationModelUnavailable,
+} from "@/utils/discord/autocomplete/generationModelAutocomplete";
+import { GenerationModelUnavailableError, validateGenerationModelSelection } from "@/utils/provider/generationModels";
+import {
   MessageFlags,
   PermissionFlagsBits,
   TextInputStyle,
@@ -308,11 +313,29 @@ export async function executeAutoImageCommand(
     });
     return;
   }
+  const modelSelection = await resolveGenerationModelOption(
+    interaction,
+    baseTomoriState.server_id,
+    userData.user_id ?? null,
+    locale,
+    "image",
+  );
+  if (modelSelection === false) return;
+
   let activeConfigs:
     | Awaited<ReturnType<typeof applyPersonalProviderSelectionsToTomoriState>>["activeConfigs"]
     | undefined;
   const overlay = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
-  const { tomoriState } = overlay;
+  const tomoriState = modelSelection
+    ? {
+        ...overlay.tomoriState,
+        config: {
+          ...overlay.tomoriState.config,
+          diffusion_model_id: modelSelection.kind === "image" ? modelSelection.modelId : null,
+          nai_diffusion_model_id: modelSelection.kind === "image-nai" ? modelSelection.modelId : null,
+        },
+      }
+    : overlay.tomoriState;
   activeConfigs = overlay.activeConfigs;
   const nudgeTips = (tipKeys: string[]) =>
     withSupporterNudge(tipKeys, {
@@ -424,11 +447,18 @@ export async function executeAutoImageCommand(
   }
 
   const provider = tomoriState.llm.llm_provider.toLowerCase();
-  const backendAvailability = await resolveSceneImageBackendAvailability({
-    provider,
-    tomoriState,
-    serverId: serverDiscId,
-  });
+  const backendAvailability: SceneImageBackendAvailability = modelSelection
+    ? {
+        currentProvider: modelSelection.kind === "image",
+        novelAi: modelSelection.kind === "image-nai",
+        showBackendSelector: false,
+        defaultBackend: modelSelection.kind === "image-nai" ? "novelai" : "current_provider",
+      }
+    : await resolveSceneImageBackendAvailability({
+        provider,
+        tomoriState,
+        serverId: serverDiscId,
+      });
   if (!backendAvailability.defaultBackend) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.tool.visualize.no_backend_title",
@@ -444,7 +474,10 @@ export async function executeAutoImageCommand(
   }
 
   // Quota check before showing the modal (avoids wasting user interaction).
-  const quotaCheck = await checkImageQuota(tomoriState.server_id, interaction.user.id);
+  const quotaCheck: ImageQuotaCheckResult =
+    modelSelection?.source === "personal"
+      ? { allowed: true }
+      : await checkImageQuota(tomoriState.server_id, interaction.user.id);
   if (!quotaCheck.allowed) {
     await replyQuotaExceeded(interaction, locale, quotaCheck, await nudgeTips([]));
     return;
@@ -509,6 +542,8 @@ export async function executeAutoImageCommand(
   const modalSubmitInteraction = modalResult.interaction;
 
   try {
+    if (modelSelection)
+      await validateGenerationModelSelection(tomoriState.server_id, userData.user_id ?? null, modelSelection);
     const selectedSetting = (modalResult.values?.[SETTING_INPUT_ID] as SceneSettingId | undefined) ?? "storybeat";
     const settingPreset = SCENE_SETTING_PRESETS[selectedSetting] ?? SCENE_SETTING_PRESETS.storybeat;
 
@@ -604,6 +639,8 @@ export async function executeAutoImageCommand(
         : undefined;
 
     const agentResult = await runHiddenImageTurn({
+      spoiler: interaction.options.getBoolean("nsfw") ?? false,
+      imageModelSelection: modelSelection ?? undefined,
       channel: interaction.channel as Parameters<typeof runHiddenImageTurn>[0]["channel"],
       client,
       guild: interaction.guild ?? null,
@@ -664,6 +701,10 @@ export async function executeAutoImageCommand(
       invokingMember,
     );
   } catch (error) {
+    if (error instanceof GenerationModelUnavailableError) {
+      await replyGenerationModelUnavailable(modalSubmitInteraction, locale);
+      return;
+    }
     log.error("Error in /generate image:auto", error as Error, {
       errorType: "GenerateImageAutoCommandError",
       metadata: {

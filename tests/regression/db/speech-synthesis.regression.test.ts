@@ -853,8 +853,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech synthesis lifecycle and fall
     }
   });
 
-  it("withholds fallback for opt-out, BYOK, invalid input, cancellation, and successful synthesis", async () => {
-    for (const condition of ["disabled", "byok", "invalid", "cancelled", "success"] as const) {
+  it("withholds fallback for explicit models, opt-out, BYOK, invalid input, cancellation, and successful synthesis", async () => {
+    for (const condition of ["explicit-model", "disabled", "byok", "invalid", "cancelled", "success"] as const) {
       await testSql`DELETE FROM speech_voice_bindings`;
       requests.length = 0;
       await testSql`UPDATE user_personalization_configs SET personal_server_fallback_enabled = ${condition !== "disabled"} WHERE user_id = ${refs.userId}`;
@@ -863,6 +863,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech synthesis lifecycle and fall
       const input = {
         ...(await request(true)),
         routing: routing(),
+        modelIsExplicit: condition === "explicit-model",
         ...(condition === "invalid" ? { script: "x".repeat(2001) } : {}),
         ...(condition === "cancelled" ? { abortSignal: AbortSignal.abort() } : {}),
       };

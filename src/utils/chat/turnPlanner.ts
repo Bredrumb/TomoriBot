@@ -1,11 +1,14 @@
 import { resolveServerTextModel } from "@/utils/provider/textModelSelection";
+import type { GenerationModelSelection } from "@/types/provider/generationModels";
+import { GenerationModelUnavailableError } from "@/utils/provider/generationModels";
+import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
 import type { Guild, GuildMember, Message } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { getCachedUserRow, getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { configRepository, userRepository, whitelistRepository } from "@/utils/db/repositories";
+import { configRepository, llmModelRepo, userRepository, whitelistRepository } from "@/utils/db/repositories";
 import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
@@ -259,6 +262,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
       shouldSurfaceUserErrors,
       llmOverrideCodename: incoming.llmOverrideCodename,
       refusalNoticeKey,
+      modelSelection: incoming.sceneTurn?.modelSelection,
     });
     if (!policy) continue;
     const quota = await prepareTextQuota(
@@ -452,11 +456,11 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
 
     return {
       lockedTurn,
-      persona,
+      persona: credentialPolicy.modelState ?? persona,
       personaIndex,
       totalPersonas: personasToRespond.length,
       allPersonas,
-      tomoriState: persona,
+      tomoriState: credentialPolicy.modelState ?? persona,
       mainPersona,
       userRow,
       requestSnapshot,
@@ -639,11 +643,13 @@ export async function resolveTextCredentialPolicy(params: {
   llmOverrideCodename?: string;
   refusalNoticeKey?: string;
   dependencies?: Partial<TextCredentialPolicyDependencies>;
+  modelSelection?: GenerationModelSelection;
 }): Promise<{
   source: TextCredentialSource;
   personalRoutingUserId: number | null;
   personalTextProvider: string | null;
   supporterFunding: SupporterFundingContext | null;
+  modelState?: TomoriState;
 } | null> {
   const dependencies: TextCredentialPolicyDependencies = {
     resolvePersonalCapabilityCredentials,
@@ -665,6 +671,33 @@ export async function resolveTextCredentialPolicy(params: {
   };
 
   try {
+    if (params.modelSelection) {
+      const textCreds = await dependencies.resolveCapabilityCredentials(params.tomoriState.server_id, "text", {
+        userId: personalRoutingUserId,
+        modelSelection: params.modelSelection,
+      });
+      const model = await llmModelRepo.loadById(params.modelSelection.modelId);
+      if (!model) throw new GenerationModelUnavailableError();
+      const base = withSavedProviderConfig(params.tomoriState, textCreds.savedConfig);
+      const modelState: TomoriState = {
+        ...base,
+        llm: model,
+        fallback_llms: undefined,
+        fallback_chain: undefined,
+        rotation_keys: undefined,
+        config: {
+          ...base.config,
+          llm_id: params.modelSelection.modelId,
+          llm_max_output_tokens: textCreds.savedConfig?.llm_max_output_tokens ?? base.config.llm_max_output_tokens,
+          model_randomizer_enabled: false,
+          fallback_llm_ids: [],
+          custom_endpoint_url: textCreds.customEndpoint?.endpoint_url ?? null,
+          custom_model_name: textCreds.customEndpoint?.model_name ?? null,
+          custom_num_ctx: textCreds.customEndpoint?.num_ctx ?? null,
+        },
+      };
+      return { ...buildCredentialPolicyFromCredentials(textCreds, personalRoutingUserId), modelState };
+    }
     let personalCredentials: ResolvedCredentials | null;
     try {
       personalCredentials =
@@ -702,8 +735,18 @@ export async function resolveTextCredentialPolicy(params: {
     });
     return buildCredentialPolicyFromCredentials(textCreds, personalRoutingUserId);
   } catch (error) {
+    if (error instanceof GenerationModelUnavailableError) {
+      if (params.shouldSurfaceUserErrors)
+        await sendFailureNotice({
+          color: ColorCode.WARN,
+          titleKey: "commands.generate.model_unavailable_title",
+          descriptionKey: "commands.generate.model_unavailable_description",
+        });
+      return null;
+    }
     if (error instanceof SupporterRequestDeniedError) {
       if (
+        !params.modelSelection &&
         error.fundingScope === "server" &&
         error.reason !== "billing_unavailable" &&
         !params.tomoriState.config.user_byok_mode &&

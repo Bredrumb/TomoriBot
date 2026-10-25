@@ -41,8 +41,13 @@ Clone` to set priority; if the preferred input has no matching model or usable v
 saved input can be used. The page explains which source is effective for the server's selections.
 
 Run `/generate voice-message` to enter a short script, or ask the persona to send a voice message.
-The command also accepts a one-off description or reference upload. Saved descriptions reuse a
-Gemini voice identity; edits retire it. One-off descriptions create a temporary identity that the
+The command also accepts a one-off description or reference upload.
+
+The optional `model` parameter chooses a compatible speech model or server endpoint for this message.
+Personal entries show `(via Personal Provider)`. It keeps your saved defaults, and an explicit model
+selection does not fall back to another model if generation fails. Leave it blank for normal routing.
+
+Saved descriptions reuse a Gemini voice identity; edits retire it. One-off descriptions create a temporary identity that the
 bot deletes after generation. Failed cleanup is retried when those credentials are used again;
 operators may need to remove voices in the provider console after a crash or ambiguous timeout.
 Descriptions are included in exported PNG and JSON persona cards; remote voice identities and
