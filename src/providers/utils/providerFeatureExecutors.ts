@@ -140,7 +140,7 @@ export async function callDecisionsForProvider(request: DecisionExecutionRequest
         return { status: "unavailable", reason: "not-owned", correlationId, errorLogged: false };
       if (
         owner.catalogProvider !== reference.provider ||
-        !(await owner.availability(request.scope)).eligible ||
+        !owner.capabilities.includes("decision") ||
         !owner.selection.resolveCredentials
       )
         return { status: "unavailable", reason: "not-owned", correlationId, errorLogged: false };

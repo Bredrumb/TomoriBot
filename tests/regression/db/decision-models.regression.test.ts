@@ -13,8 +13,9 @@ import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { callDecisionsForProvider, loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
 import { loadProviderModelChoices } from "@/utils/provider/modelCatalog";
 import { registerProviderOption } from "@/utils/provider/providerOptionRegistry";
+import { resolveMatcherBackend } from "@/modules/natural-nudges/runtime/matcher";
 import { registerCustomEndpoint } from "@/utils/provider/customEndpointService";
-import { createServerConfig } from "../../helpers/fixtures";
+import { createPersona, createServerConfig } from "../../helpers/fixtures";
 import { resetRepository } from "@/utils/db/repositories/ResetRepository";
 import { initializeDatabase } from "@/utils/db/initializeDatabase";
 import { splitSqlStatements } from "@/utils/db/sqlSplitter";
@@ -271,6 +272,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
       inputTokenLimit: 8192,
     });
     await llmProviderRepo.upsertDecisionModelRegistration({ serverId, decisionModelId: modelId });
+    await testSql`UPDATE decision_models SET supported_primitives = '["predicate", "choice"]'::jsonb WHERE decision_model_id = ${modelId}`;
     let entitled = true;
     const contexts = {
       server: { credentialProvider: "test-decision" },
@@ -299,7 +301,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
     const dispose = registerProviderOption({
       value: "test-decision",
       catalogProvider: "openrouter",
-      capabilities: ["decision"],
+      capabilities: ["decision", "nudge-checker"],
       copy: {
         labelKey: "commands.providers.entry_kind_provider",
         entryDescriptionKeys: {
@@ -319,6 +321,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
         ensure: async () => true,
         claim: async () => true,
         remove: async () => "removed",
+        owns: (scope, slot) => scope.state !== undefined && slot === "nudge-checker",
         validateModel: async ({ capability, modelCodename }) =>
           entitled && capability === "decision" && modelCodename === "fixture-managed-decision",
         resolveCredentials: async (input) => {
@@ -361,8 +364,29 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
         expect((await callDecisionsForProvider(request)).status).toBe("denied");
         entitled = true;
       }
-      expect(calls).toHaveLength(2);
-      expect(reports).toHaveLength(2);
+      const state = createPersona({ server_id: serverId });
+      const checker = await resolveMatcherBackend(state, {
+        llm_id: null,
+        checker_llm_id: null,
+        checker_decision_model_id: modelId,
+      });
+      expect(checker.backend).toMatchObject({ kind: "decision", slot: "nudge-checker" });
+      if (checker.backend?.kind !== "decision") throw new Error("Missing pinned checker");
+      expect(
+        (
+          await callDecisionsForProvider({
+            scope: { ...server, state },
+            slot: checker.backend.slot,
+            credentials: checker.backend.credentials,
+            reference: checker.backend.reference,
+            evidence: "fixture",
+            questions: [{ type: "predicate", id: "q", instructions: "fixture" }],
+          })
+        ).status,
+      ).toBe("completed");
+      expect(calls.at(-1)).toEqual({ key: "managed-server", context: contexts.server });
+      expect(calls).toHaveLength(3);
+      expect(reports).toHaveLength(3);
       expect(
         reports.every(
           (report) =>
