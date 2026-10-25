@@ -1,9 +1,5 @@
 import type { GenerationModelSelection } from "@/types/provider/generationModels";
-import {
-  reportProviderUsage,
-  withProviderUsageContext,
-  type ProviderUsageContext,
-} from "@/utils/provider/providerUsage";
+import { reportProviderUsage, withProviderUsageContext } from "@/utils/provider/providerUsage";
 /**
  * Hidden Image Agent Turn
  *
@@ -32,7 +28,8 @@ import type { TomoriState } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { FunctionCall } from "@/types/provider/interfaces";
-import { decryptApiKey } from "@/utils/security/crypto";
+import { getCapabilityCredentialFailureCopy, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
 import { stripBridgePrefix } from "@/utils/bridges";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
@@ -167,7 +164,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     channel,
     client,
     guild,
-    tomoriState,
+    tomoriState: baseState,
     locale,
     interactingUserId,
     backend,
@@ -183,7 +180,20 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     internalUserId,
   } = params;
 
-  // Verify the active model supports function calling: required for tool-based generation.
+  let tomoriState: TomoriState;
+  let credentials: Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
+  try {
+    credentials = await resolveCapabilityCredentials(baseState.server_id, "text", {
+      userId: internalUserId,
+      textModel: baseState.llm,
+    });
+    tomoriState = await resolveTextCredentialState(baseState, credentials);
+  } catch (error) {
+    const failure = getCapabilityCredentialFailureCopy(error, locale);
+    if (!failure) throw error;
+    return { success: false, error: failure.description };
+  }
+
   if (!tomoriState.llm.has_tools) {
     return {
       success: false,
@@ -192,17 +202,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     };
   }
 
-  // Decrypt the API key.
-  const decryptedApiKey = await decryptApiKey(
-    // biome-ignore lint/style/noNonNullAssertion: api_key presence was validated by the command before invoking this helper
-    tomoriState.config.api_key!,
-    tomoriState.config.key_version || 1,
-  );
-  if (!decryptedApiKey) {
-    return { success: false, error: "Failed to decrypt API key." };
-  }
-
-  let usageContext: ProviderUsageContext | undefined;
+  const usageContext = credentials.usageContext;
   const rawMessages = await channel.messages.fetch({
     limit: BOT_GENERATE_IMAGE_HISTORY_LIMIT,
   });
@@ -352,6 +352,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   const streamingContext: StreamingContext = {
     imageModelSelection: params.imageModelSelection,
     usageContext,
+    textCredentialSource: credentials.source,
     disableYouTubeProcessing: true,
     disableProfilePictureProcessing: true,
     disableGifProcessing: true,
@@ -380,7 +381,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
 
   let providerConfig: Awaited<ReturnType<typeof provider.createConfig>>;
   try {
-    providerConfig = await provider.createConfig(tomoriState, decryptedApiKey);
+    providerConfig = await provider.createConfig(tomoriState, credentials.apiKey);
   } catch (error) {
     log.error("Hidden image agent: failed to create provider config", error as Error, {
       errorType: "HiddenImageAgentConfigError",

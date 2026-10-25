@@ -30,7 +30,8 @@ import { attachImportNowCollector, importNowButton } from "@/utils/persona/impor
 import { validateAndFallbackPanelPayload } from "@/utils/discord/ui/interactionCore";
 import type { UserRow } from "../../types/db/schema";
 import { personaRepository } from "@/utils/db/repositories";
-import { decryptApiKey } from "../../utils/security/crypto";
+import { getCapabilityCredentialFailureCopy, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
 import { memoryGuard, PERSONA_LIMITS, reservePersonaQuota } from "../../utils/security/rateLimiter";
 import { safeDownload } from "../../utils/security/safeDownload";
 import type { GeneratePresetParams } from "../../providers/google/presetGenerator";
@@ -354,13 +355,10 @@ export async function execute(
     //    /generate image, /memories) and ensures generation uses the
     //    user's personal text provider when configured, instead of always falling
     //    back to the server's configured model.
-    const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(
-      baseTomoriState,
-      userData.user_id ?? null,
-    );
+    let { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
 
-    const providerName = tomoriState.llm.llm_provider.toLowerCase();
-    const effectiveModelName = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
+    let providerName = tomoriState.llm.llm_provider.toLowerCase();
+    let effectiveModelName = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
 
     if (!providerSupportsFeature(providerName, "presetGeneration")) {
       log.warn(
@@ -408,50 +406,6 @@ export async function execute(
         descriptionVars: {
           model_name: effectiveModelName,
         },
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    if (!tomoriState.config.api_key) {
-      log.warn(`[Generate Persona] API key missing for provider "${tomoriState.llm.llm_provider}"`, undefined, {
-        userId: userData.user_id,
-        serverId: tomoriState.server_id,
-        personaId: tomoriState.persona_id,
-        metadata: {
-          command: "persona generate",
-          provider: tomoriState.llm.llm_provider,
-        },
-      });
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.persona.generate.no_api_key_title",
-        descriptionKey: "commands.persona.generate.no_api_key_description",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const keyVersion = tomoriState.config.key_version || 1; // Default to V1 for backward compatibility
-    const decryptedApiKey = await decryptApiKey(tomoriState.config.api_key, keyVersion);
-    if (!decryptedApiKey) {
-      log.warn(
-        `[Generate Persona] Failed to decrypt API key for provider "${tomoriState.llm.llm_provider}"`,
-        undefined,
-        {
-          userId: userData.user_id,
-          serverId: tomoriState.server_id,
-          personaId: tomoriState.persona_id,
-          metadata: {
-            command: "persona generate",
-            provider: tomoriState.llm.llm_provider,
-          },
-        },
-      );
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.persona.generate.api_key_decrypt_failed_title",
-        descriptionKey: "commands.persona.generate.api_key_decrypt_failed_description",
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
       });
@@ -567,6 +521,38 @@ export async function execute(
         imageMimeType: imageMimeType ?? imageAttachment?.content_type,
       });
 
+    let decryptedApiKey: string;
+    let usageContext: ProviderUsageContext | undefined;
+    try {
+      const credentials = await resolveCapabilityCredentials(baseTomoriState.server_id, "text", {
+        userId: userData.user_id,
+        textModel: baseTomoriState.llm,
+      });
+      ({ apiKey: decryptedApiKey, usageContext } = credentials);
+      tomoriState = await resolveTextCredentialState(baseTomoriState, credentials);
+      providerName = credentials.provider;
+      effectiveModelName = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
+    } catch (error) {
+      const failure = getCapabilityCredentialFailureCopy(error, locale);
+      if (!failure) throw error;
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        ...failure,
+        color: ColorCode.ERROR,
+        files: [getInputAttachment()],
+      });
+      return;
+    }
+    if (!providerSupportsFeature(providerName, "presetGeneration") || !tomoriState.llm.supports_structoutput) {
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "commands.persona.generate.model_incompatible_title",
+        descriptionKey: "commands.persona.generate.model_incompatible_description",
+        descriptionVars: { model_name: effectiveModelName },
+        color: ColorCode.ERROR,
+        files: [getInputAttachment()],
+      });
+      return;
+    }
+
     // Reserve persona operation quota (atomic check+increment for DDoS protection)
     const quotaReserve = reservePersonaQuota(interaction.user.id);
     if (!quotaReserve.allowed) {
@@ -590,7 +576,6 @@ export async function execute(
 
     // The primary model always performs generation, so these stay the primary model's own
     // resolved provider and key. A vision model only ever contributes a text description.
-    let usageContext: ProviderUsageContext | undefined;
     const generationTomoriState = tomoriState;
     const generationProviderName = providerName;
     const generationApiKey = decryptedApiKey;

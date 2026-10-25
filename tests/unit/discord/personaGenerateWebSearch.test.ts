@@ -2,10 +2,10 @@ import { afterEach, beforeAll, expect, spyOn, test } from "bun:test";
 import type { ChatInputCommandInteraction, Client, ModalSubmitInteraction } from "discord.js";
 import { execute } from "@/commands/persona/generate";
 import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
+import { llmModelRepo } from "@/utils/db/repositories";
 import * as personalProviders from "@/utils/provider/personalProviderRuntime";
-import * as crypto from "@/utils/security/crypto";
 import * as credentials from "@/utils/provider/credentialResolver";
-import { savedProviderConfigSchema } from "@/types/db/schema";
+import { userSavedProviderConfigSchema } from "@/types/db/schema";
 import * as interactions from "@/utils/discord/interactionHelper";
 import * as rateLimiter from "@/utils/security/rateLimiter";
 import * as modelLimits from "@/utils/provider/modelLimits";
@@ -25,28 +25,37 @@ afterEach(() => {
 
 test("a failed persona search renders one localized abort with the inputs and no provider detail", async () => {
   const state = createPersona({
-    llm: createLlmRow({ llm_provider: "openrouter", supports_structoutput: true }),
-    config: { web_search_enabled: true, api_key: Buffer.from("fixture-encrypted-key") },
+    llm: createLlmRow({ llm_provider: "google", supports_structoutput: true }),
+    config: { web_search_enabled: true, api_key: null, custom_endpoint_url: "https://stale.invalid" },
   });
+  const selected = createLlmRow({
+    llm_id: 9,
+    llm_provider: "openrouter",
+    llm_codename: "fixture/selected-persona",
+    supports_structoutput: true,
+  });
+  const requests: Parameters<typeof features.generatePresetForProvider>[0][] = [];
   let fake = createRouteInteraction({ kind: "modal" });
   const canary = "fixture-private-provider-detail";
   restore.push(
     spyOn(personaRepository, "loadState").mockResolvedValue(state),
+    spyOn(llmModelRepo, "loadById").mockResolvedValue(selected),
     spyOn(personalProviders, "applyPersonalProviderSelectionsToTomoriState").mockResolvedValue({
       tomoriState: state,
       activeConfigs: {},
     }),
-    spyOn(crypto, "decryptApiKey").mockResolvedValue("fixture-api-key"),
     spyOn(credentials, "resolveCapabilityCredentials").mockResolvedValue({
       provider: "openrouter",
       apiKey: "fixture-api-key",
       keyVersion: 1,
-      source: "server",
-      savedConfig: savedProviderConfigSchema.parse({
-        server_id: state.server_id,
-        provider: "openrouter",
+      source: "personal",
+      modelId: 9,
+      savedConfig: userSavedProviderConfigSchema.parse({
+        user_id: 1,
+        provider: "test-option",
         api_key: state.config.api_key,
-        llm_id: state.llm.llm_id,
+        llm_id: 9,
+        llm_temperature: 0.42,
         diffusion_model_id: null,
         embedding_model_id: null,
         nai_diffusion_model_id: null,
@@ -60,7 +69,9 @@ test("a failed persona search renders one localized abort with the inputs and no
     })),
     spyOn(rateLimiter, "reservePersonaQuota").mockReturnValue({ allowed: true }),
     spyOn(modelLimits, "resolveModelLimits").mockResolvedValue({ contextWindow: 8192, maxOutputTokens: 4096 }),
-    spyOn(features, "generatePresetForProvider").mockImplementation(async ({ toolContext }) => {
+    spyOn(features, "generatePresetForProvider").mockImplementation(async (request) => {
+      requests.push(request);
+      const { toolContext } = request;
       if (!toolContext) throw new Error("Missing persona search context");
       const denied = new ProviderRequestDeniedError(undefined, () => ({
         titleKey: "general.errors.api_key_error_title",
@@ -99,4 +110,12 @@ test("a failed persona search renders one localized abort with the inputs and no
     });
   }
   failures.expectNoFailures();
+  expect(requests).toHaveLength(RUNTIME_LOCALES.length);
+  for (const request of requests) {
+    expect(request).toMatchObject({
+      providerName: "openrouter",
+      apiKey: "fixture-api-key",
+      tomoriState: { llm: selected, config: { llm_temperature: 0.42, custom_endpoint_url: null } },
+    });
+  }
 });

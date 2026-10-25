@@ -33,10 +33,14 @@ import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/mod
 import { generateEmbeddingsBatched, providerSupportsEmbeddingTaskType } from "@/utils/embeddings/embeddingProvider";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
-import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import {
+  getCapabilityCredentialFailureCopy,
+  getResolvedCapabilityModelId,
+  resolveCapabilityCredentials,
+} from "@/utils/provider/credentialResolver";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
-import { decryptApiKey } from "@/utils/security/crypto";
+import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
 import { localizer } from "@/utils/text/localizer";
 import { buildConversationContext } from "./historyExtraction";
 import { promptForCompactOptions, promptForManualOptions } from "./modal";
@@ -87,8 +91,8 @@ export async function executeCompactCommand(
   if (!modalSelection) return;
 
   const serverDiscId = interaction.guild?.id ?? interaction.user.id;
-  const tomoriState = await personaRepository.loadState(serverDiscId);
-  if (!tomoriState) {
+  const baseState = await personaRepository.loadState(serverDiscId);
+  if (!baseState) {
     await editError(
       modalSelection.submitInteraction,
       locale,
@@ -98,9 +102,34 @@ export async function executeCompactCommand(
     return;
   }
 
+  let tomoriState: typeof baseState;
+  let apiKey: string;
+  let usageContext: ProviderUsageContext | undefined;
+  try {
+    const credentials = await resolveCapabilityCredentials(baseState.server_id, "text", {
+      userId: userData.user_id,
+      textModel: baseState.llm,
+    });
+    ({ apiKey, usageContext } = credentials);
+    tomoriState = await resolveTextCredentialState(baseState, credentials);
+  } catch (error) {
+    const failure = getCapabilityCredentialFailureCopy(error, locale);
+    if (failure) {
+      await replyInfoEmbed(modalSelection.submitInteraction, locale, { ...failure, color: ColorCode.ERROR });
+    } else {
+      await log.error("Failed to resolve compact credentials", error as Error);
+      await editError(
+        modalSelection.submitInteraction,
+        locale,
+        "general.errors.unknown_error_title",
+        "general.errors.unknown_error_description",
+      );
+    }
+    return;
+  }
+
   const providerName = tomoriState.llm.llm_provider.toLowerCase();
   const effectiveModelName = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
-  const encryptedApiKey = tomoriState.config.api_key;
   if (
     !(await validateProviderReadiness({
       interaction: modalSelection.submitInteraction,
@@ -112,39 +141,12 @@ export async function executeCompactCommand(
       seesImages: tomoriState.llm.sees_images,
       wantsRoleplay: modalSelection.summaryType === "roleplay",
       wantsImages: modalSelection.analyzeImages,
-      encryptedApiKey,
       userId: userData.user_id,
       serverId: tomoriState.server_id,
       personaId: tomoriState.persona_id,
     }))
-  ) {
+  )
     return;
-  }
-
-  if (!encryptedApiKey) {
-    return;
-  }
-
-  let usageContext: ProviderUsageContext | undefined;
-  const apiKey = await decryptApiKey(encryptedApiKey, tomoriState.config.key_version || 1);
-  if (!apiKey) {
-    log.warn(`[Compact] Failed to decrypt API key for provider "${providerName}"`, undefined, {
-      userId: userData.user_id,
-      serverId: tomoriState.server_id,
-      personaId: tomoriState.persona_id,
-      metadata: {
-        command: "compact",
-        provider: providerName,
-      },
-    });
-    await editError(
-      modalSelection.submitInteraction,
-      locale,
-      "general.errors.api_key_error_title",
-      "general.errors.api_key_error_description",
-    );
-    return;
-  }
 
   await modalSelection.submitInteraction.editReply({
     embeds: [
@@ -337,7 +339,6 @@ async function validateProviderReadiness(params: {
   seesImages: boolean;
   wantsRoleplay: boolean;
   wantsImages: boolean;
-  encryptedApiKey: Buffer | null | undefined;
   userId?: number | null;
   serverId?: number;
   personaId?: number;
@@ -407,24 +408,6 @@ async function validateProviderReadiness(params: {
       {
         model_name: params.modelName,
       },
-    );
-    return false;
-  }
-  if (!params.encryptedApiKey) {
-    log.warn(`[Compact] API key missing for provider "${params.providerLabel}"`, undefined, {
-      userId: params.userId,
-      serverId: params.serverId,
-      personaId: params.personaId,
-      metadata: {
-        command: "compact",
-        provider: params.providerName,
-      },
-    });
-    await editError(
-      params.interaction,
-      params.locale,
-      "general.errors.api_key_missing_title",
-      "general.errors.api_key_missing_description",
     );
     return false;
   }

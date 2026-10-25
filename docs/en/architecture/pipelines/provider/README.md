@@ -220,6 +220,11 @@ BYOK restriction. Resolved credentials retain the selected model ID, scope, sett
 context; built-in custom providers also retain their model-specific endpoint and API style.
 `resolveTextCredentialState` builds request state from those resolved values, so a personal key uses
 its selected model and sampler settings instead of the persona's server model or endpoint.
+Expressions can resolve the `vision` slot through the same state builder. Persona generation,
+compaction, cost probing, and hidden image planning resolve credentials before choosing their
+request model and endpoint; cost estimation keeps its legacy estimate when server credentials are
+missing. Persona generation resolves after modal submission, so a refusal retains the submitted
+inputs and does not consume the operation quota.
 
 Deployment behavior maps onto these fields:
 

@@ -1,4 +1,9 @@
-import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
+import {
+  findProviderRequestDeniedError,
+  getProviderRequestFailureCopy,
+  type ProviderUsageContext,
+} from "@/utils/provider/providerUsage";
+import { localizer } from "@/utils/text/localizer";
 import type {
   LlmRow,
   CustomEndpointRow,
@@ -71,6 +76,37 @@ export class PersonalProviderRequiredError extends Error {
     super(`A personal provider is required for ${capability}`);
     this.name = "PersonalProviderRequiredError";
   }
+}
+
+export function getCapabilityCredentialFailureCopy(
+  error: unknown,
+  locale: string,
+): { titleKey: string; description: string } | null {
+  const denied = findProviderRequestDeniedError(error);
+  if (denied) return getProviderRequestFailureCopy(denied, locale);
+  const keys =
+    error instanceof PersonalProviderRequiredError
+      ? {
+          titleKey: "general.errors.personal_provider_required_title",
+          descriptionKey: "general.errors.personal_provider_required_description",
+        }
+      : error instanceof CredentialUnavailableError
+        ? error.source === "personal"
+          ? {
+              titleKey: "general.errors.personal_provider_credentials_error_title",
+              descriptionKey: "general.errors.personal_provider_credentials_error_description",
+            }
+          : error.reason === "decryption_failed"
+            ? {
+                titleKey: "general.errors.api_key_error_title",
+                descriptionKey: "general.errors.api_key_error_description",
+              }
+            : {
+                titleKey: "general.errors.api_key_missing_title",
+                descriptionKey: "general.errors.api_key_missing_description",
+              }
+        : null;
+  return keys ? { titleKey: keys.titleKey, description: localizer(locale, keys.descriptionKey) } : null;
 }
 
 function mapCapabilityToPersonalCapability(capability: Capability): PersonalProviderCapability {

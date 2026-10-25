@@ -17,8 +17,12 @@ import { replyInfoEmbed, replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { getAvailableToolsForContext } from "@/tools/toolRegistry";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
-import { decryptApiKey } from "@/utils/security/crypto";
+import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
+import {
+  CredentialUnavailableError,
+  getCapabilityCredentialFailureCopy,
+  resolveCapabilityCredentials,
+} from "@/utils/provider/credentialResolver";
 import { buildContext } from "@/utils/text/contextBuilder";
 import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/context/templates";
 import { prepareParticipantContext } from "@/utils/text/participants/preparation";
@@ -1700,15 +1704,36 @@ export async function execute(
       return;
     }
 
-    // Overlay the invoking user's personal (BYOK) provider so the live estimate
-    // reflects the model/key that would actually run for them, keeping cost
-    // estimates in parity with runtime (see buildRuntimeParityContext).
-    const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(
-      baseTomoriState,
-      userData.user_id ?? null,
-    );
-    if (!tomoriState.config.api_key) {
-      await sendLegacyEstimateEmbed(interaction, locale, true);
+    let tomoriState = baseTomoriState;
+    let decryptedApiKey = "";
+    let usageContext: ProviderUsageContext | undefined;
+    try {
+      const credentials = await resolveCapabilityCredentials(baseTomoriState.server_id, "text", {
+        userId: userData.user_id,
+        textModel: baseTomoriState.llm,
+      });
+      ({ apiKey: decryptedApiKey, usageContext } = credentials);
+      tomoriState = await resolveTextCredentialState(baseTomoriState, credentials);
+    } catch (decryptError) {
+      if (
+        decryptError instanceof CredentialUnavailableError &&
+        decryptError.source === "server" &&
+        (decryptError.reason === "no_saved_config" || decryptError.reason === "placeholder_key")
+      ) {
+        await sendLegacyEstimateEmbed(interaction, locale, true);
+        return;
+      }
+      const failure = getCapabilityCredentialFailureCopy(decryptError, locale);
+      if (failure) {
+        await replyInfoEmbed(interaction, locale, { ...failure, color: ColorCode.ERROR });
+        return;
+      }
+      await log.error(
+        "/tool estimate cost failed to resolve credentials for live counting",
+        decryptError as Error,
+        errorContext,
+      );
+      await sendLiveEstimateUnavailableEmbed(interaction, locale, tomoriState.llm.llm_provider);
       return;
     }
 
@@ -1716,35 +1741,9 @@ export async function execute(
       await sendNoCostProviderEmbed(interaction, locale);
       return;
     }
-
     const provider = resolveProvider(tomoriState.llm.llm_provider);
     if (!provider) {
-      // Track A: the provider has no live token-counting API. Instead of reporting
-      // "unavailable", fall back to a character-based estimate over the real channel context.
       await sendCharacterEstimateFallbackEmbed(client, interaction, tomoriState, locale, errorContext);
-      return;
-    }
-
-    let decryptedApiKey = "";
-    let usageContext: ProviderUsageContext | undefined;
-    try {
-      const keyVersion = tomoriState.config.key_version || 1;
-      decryptedApiKey = await decryptApiKey(tomoriState.config.api_key, keyVersion);
-    } catch (decryptError) {
-      const denied = findProviderRequestDeniedError(decryptError, usageContext);
-      if (denied) {
-        await replyInfoEmbed(interaction, locale, {
-          ...getProviderRequestFailureCopy(denied, locale),
-          color: ColorCode.ERROR,
-        });
-        return;
-      }
-      await log.error(
-        "/tool estimate cost failed to decrypt API key for live counting",
-        decryptError as Error,
-        errorContext,
-      );
-      await sendLiveEstimateUnavailableEmbed(interaction, locale, tomoriState.llm.llm_provider);
       return;
     }
 
