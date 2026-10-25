@@ -279,6 +279,7 @@ export interface ProviderNativeVideoGenerationResult {
   filename?: string;
   durationSeconds?: number;
   costUsd?: number;
+  /** The provider's job identifier, so a cost reported by repeated polling is recorded once. */
   providerRequestId?: string;
 }
 

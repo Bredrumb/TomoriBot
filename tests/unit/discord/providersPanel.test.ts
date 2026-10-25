@@ -71,6 +71,7 @@ function providerEntry(id: string, name = "Google"): ProviderPanelEntry {
     ],
   };
 }
+
 describe("providers panel rendering", () => {
   it("builds one provider modal for curated providers, ElevenLabs, and Brave", () => {
     const modal = buildAddProviderModal("en-US", "abcdefgh");

@@ -50,7 +50,7 @@ fail validation. Partial OpenAI refusals return `refused`. No chat or prose inte
 `onUsage` receives validated usage before answer validation. A malformed verdict or cancellation
 after response decoding retains reported spend. Routing records this callback once, including
 responses settling after its deadline, without accepting their late verdict. Missing or invalid
-usage stays unknown; raw HTTP error bodies are discarded without parsing private prose.
+usage stays unknown; HTTP failures retain only validated limit metadata and the numeric media minimum.
 
 Requests compose caller cancellation with the existing `STREAM_SDK_CALL_TIMEOUT_MS` policy. Responses
 are bounded to 1 MiB. Until callers need a model-specific tokenizer, the serialized request's UTF-8
