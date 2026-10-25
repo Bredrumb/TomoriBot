@@ -709,7 +709,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
         reference: decision.reference,
         evidence: "Fixture evidence",
         questions: [{ type: "predicate" as const, id: "criterion", instructions: "Fixture criterion" }],
-        supporterFunding: personalFunding.context,
+        credentialProvider: "supporter",
       };
       expect(await callDecisionsForProvider(decisionRequest)).toMatchObject({
         status: "failed",
@@ -754,7 +754,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
       ).toMatchObject({ status: "unavailable", reason: "not-owned" });
       const serverScope = { kind: "server" as const, ownerId: refs.serverId };
       expect(
-        await callDecisionsForProvider({ ...decisionRequest, scope: serverScope, supporterFunding: undefined }),
+        await callDecisionsForProvider({ ...decisionRequest, scope: serverScope, credentialProvider: undefined }),
       ).toMatchObject({ status: "unavailable", reason: "not-owned" });
       await new SupporterSponsorshipRepository(testSql).startActiveSponsorship({
         serverId: refs.serverId,
@@ -814,10 +814,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
           ...decisionRequest,
           scope: serverScope,
           reference: serverDecision.reference,
-          supporterFunding: serverDecisionFunding.context,
+          credentialProvider: "supporter",
         }),
       ).toMatchObject({ status: "completed" });
-      expect(await callDecisionsForProvider({ ...decisionRequest, supporterFunding: undefined })).toMatchObject({
+      expect(await callDecisionsForProvider({ ...decisionRequest, credentialProvider: undefined })).toMatchObject({
         status: "completed",
       });
       expect(decisionCredentials).toEqual([
@@ -833,7 +833,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
         error: { reason: "model_not_allowed" },
       });
       expect(decisionCredentials).toHaveLength(4);
-      expect(await callDecisionsForProvider({ ...decisionRequest, supporterFunding: undefined })).toMatchObject({
+      expect(await callDecisionsForProvider({ ...decisionRequest, credentialProvider: undefined })).toMatchObject({
         status: "completed",
       });
       expect(decisionCredentials[4]).toBe("Bearer test-personal-openrouter-key");

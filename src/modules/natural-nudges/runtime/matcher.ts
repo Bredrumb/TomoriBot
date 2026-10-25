@@ -44,6 +44,7 @@ export type MatcherBackend =
       reference: DecisionModelReference;
       model: string;
       credentials?: ProviderOptionCredentials;
+      slot?: "decision" | "nudge-checker";
     }
   | ({ kind: "llm"; model: string } & NudgeModelRef);
 
@@ -124,6 +125,7 @@ async function decisionBackend(
       kind: "decision",
       reference: option.reference,
       model: option.model.codename,
+      slot,
       ...(credentials ? { credentials } : {}),
     },
   };
@@ -182,6 +184,7 @@ function decisionOutcome(result: DecisionResult, model: string, optionIds: reado
     "usage" in result && result.usage
       ? { inputTokens: result.usage.inputTokens ?? 0, outputTokens: result.usage.outputTokens ?? 0 }
       : undefined;
+  if (result.status === "denied") return { ...base, choice: null, reason: "denied" };
   if (result.status === "refused") return { ...base, choice: null, reason: "refused", usage };
   if (result.status === "failed")
     return { ...base, choice: null, reason: result.category === "malformed" ? "malformed" : "failed" };
@@ -201,7 +204,8 @@ async function matchWithDecision(
   evidence: string,
 ): Promise<MatcherResult> {
   const result = await callDecisionsForProvider({
-    scope: { kind: "server", ownerId: state.server_id },
+    scope: { kind: "server", ownerId: state.server_id, state },
+    slot: backend.slot,
     reference: backend.reference,
     credentials: backend.credentials,
     evidence,

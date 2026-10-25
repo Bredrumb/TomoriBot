@@ -449,7 +449,11 @@ export const supporterProviderOption: ProviderOptionDefinition = {
     owns: ownsCapability,
     validateModel,
     resolveCredentials: async (input) => {
-      if (!billingAvailable()) return null;
+      if (!billingAvailable()) {
+        if (!("usageContext" in input) && input.capability === "decision")
+          throw new SupporterRequestDeniedError("unsupported_capability", undefined, "decision", input.scope.kind);
+        return null;
+      }
       if ("usageContext" in input) {
         const funding = getSupporterFundingFromUsageContext(input.usageContext);
         if (!funding) return null;

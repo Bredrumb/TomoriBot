@@ -3,6 +3,7 @@ import {
   supporterProviderOption,
   registerSupporterProviderOption,
 } from "@/modules/supporter-billing/discord/providerOption";
+import * as decisionCatalog from "@/utils/cache/openrouterDecisionModelCache";
 import * as managedProvider from "@/modules/supporter-billing/runtime/managedProvider";
 import { SupporterRequestDeniedError } from "@/modules/supporter-billing/runtime/funding";
 import { getSupporterUsageContext } from "@/modules/supporter-billing/runtime/types";
@@ -232,7 +233,7 @@ describe("Subscription structured-call payer ownership", () => {
           displayNameKey: "fixture",
           patreonTierIds: ["fixture-tier"],
           monthlyBudgetMicros: 100000,
-          defaultModelByCapability: { decision: decision.model.codename },
+          defaultModelByCapability: { text: model.llm_codename, decision: decision.model.codename },
         },
       },
     });
@@ -281,6 +282,14 @@ describe("Subscription structured-call payer ownership", () => {
         updated_at: now,
       }),
     );
+    track(
+      spyOn(decisionCatalog, "getOrFetchOpenRouterDecisionModel").mockResolvedValue({
+        id: decision.model.codename,
+        context_length: 32000,
+        architecture: { input_modalities: ["text"], output_modalities: ["decisions"] },
+        pricing: { prompt: 0, completion: 0 },
+      }),
+    );
     track(spyOn(llmModelRepo, "loadDecisionModelOptions").mockResolvedValue([decision]));
     track(spyOn(llmProviderRepo, "loadSavedProviderConfig").mockResolvedValue(saved));
     const member = track(
@@ -312,13 +321,16 @@ describe("Subscription structured-call payer ownership", () => {
       const { backend } = await resolveMatcherBackend(state, config);
       expect(backend?.kind).toBe("decision");
       if (backend?.kind !== "decision") throw new Error("Expected the selected Decision model");
-      await callDecisionsForProvider({
-        scope: { kind: "server", ownerId: 7 },
-        reference: backend.reference,
-        credentials: backend.credentials,
-        evidence: "fixture",
-        questions: [{ type: "predicate", id: "q", instructions: "fixture" }],
-      });
+      expect(
+        await callDecisionsForProvider({
+          scope: { kind: "server", ownerId: 7, state },
+          slot: backend.slot,
+          reference: backend.reference,
+          credentials: backend.credentials,
+          evidence: "fixture",
+          questions: [{ type: "predicate", id: "q", instructions: "fixture" }],
+        }),
+      ).toMatchObject({ status: "completed" });
     }
     expect(seen).toEqual([
       { key: "fixture-byok", context: undefined },
@@ -329,7 +341,7 @@ describe("Subscription structured-call payer ownership", () => {
       await callDecisionsForProvider({
         scope: { kind: "server", ownerId: 7 },
         reference: decision.reference,
-        supporterFunding: funding,
+        credentialProvider: "supporter",
         evidence: "fixture",
         questions: [{ type: "predicate", id: "q", instructions: "fixture" }],
       }),
