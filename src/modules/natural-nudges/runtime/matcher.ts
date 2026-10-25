@@ -12,11 +12,16 @@ import {
   resolveNudgeModel,
   resolveStructuredCallTarget,
 } from "@/modules/natural-nudges/runtime/model";
-import { llmModelRepo } from "@/utils/db/repositories";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import { findProviderRequestDeniedError, withProviderUsageContext } from "@/utils/provider/providerUsage";
+import {
+  findProviderOptionByActiveProvider,
+  type ProviderOptionCapability,
+  type ProviderOptionCredentials,
+} from "@/utils/provider/providerOptionRegistry";
 import { log } from "@/utils/misc/logger";
 import { formatStructuredRetryNote } from "@/utils/provider/serverStructuredOutput";
 import type { TokenUsage } from "@/utils/text/tokenEstimate";
-import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 
 /** A matcher that answers after the conversation moved on has nothing left to match. */
 const MATCHER_TIMEOUT_MS = 30_000;
@@ -34,7 +39,13 @@ export interface MatcherOption {
 }
 
 export type MatcherBackend =
-  | { kind: "decision"; reference: DecisionModelReference; model: string }
+  | {
+      kind: "decision";
+      reference: DecisionModelReference;
+      model: string;
+      credentials?: ProviderOptionCredentials;
+      slot?: "decision" | "nudge-checker";
+    }
   | ({ kind: "llm"; model: string } & NudgeModelRef);
 
 /** `pinned` is the admin's Active Nudge Checker choice; `recommended` is resolved from the server's keys. */
@@ -76,9 +87,48 @@ export function matcherOptionId(index: number): string {
   return `i${String(index + 1).padStart(2, "0")}`;
 }
 
-function decisionBackend(option: DecisionModelOption | undefined): MatcherBackend | null {
-  if (!option || !supportsCheckerChoice(option.model)) return null;
-  return { kind: "decision", reference: option.reference, model: option.model.codename };
+async function decisionBackend(
+  state: TomoriState,
+  option: DecisionModelOption | undefined,
+  slot: Extract<ProviderOptionCapability, "decision" | "nudge-checker">,
+): Promise<Pick<ResolvedChecker, "backend" | "denied">> {
+  if (!option || !supportsCheckerChoice(option.model)) return { backend: null };
+  const scope = { kind: "server", ownerId: state.server_id, state } as const;
+  const owner = findProviderOptionByActiveProvider(option.model.provider, scope, slot);
+  let credentials: ProviderOptionCredentials | undefined;
+  if (owner) {
+    if (!(await owner.availability(scope)).eligible || !owner.selection.resolveCredentials)
+      return { backend: null, denied: true };
+    try {
+      credentials =
+        (await owner.selection.resolveCredentials({
+          scope,
+          capability: "decision",
+          modelId: option.model.decision_model_id,
+        })) ?? undefined;
+      if (!credentials) return { backend: null, denied: true };
+    } catch (error) {
+      if (!findProviderRequestDeniedError(error)) throw error;
+      log.warn("Natural Nudges: provider option refused the Decision checker", undefined, {
+        serverId: state.server_id,
+      });
+      return { backend: null, denied: true };
+    }
+  } else if (
+    option.model.provider === "openrouter" &&
+    !(await llmProviderRepo.loadSavedProviderConfig(state.server_id, "openrouter"))?.api_key
+  ) {
+    return { backend: null };
+  }
+  return {
+    backend: {
+      kind: "decision",
+      reference: option.reference,
+      model: option.model.codename,
+      slot,
+      ...(credentials ? { credentials } : {}),
+    },
+  };
 }
 
 async function llmBackend(
@@ -102,7 +152,7 @@ export async function resolveMatcherBackend(
   if (config.checker_decision_model_id !== null) {
     const options = await loadDecisionModelsForScope(scope);
     const selected = options.find((option) => option.model.decision_model_id === config.checker_decision_model_id);
-    return { backend: decisionBackend(selected), source: "pinned" };
+    return { ...(await decisionBackend(state, selected, "nudge-checker")), source: "pinned" };
   }
   if (config.checker_llm_id !== null)
     return { ...(await llmBackend(state, { llmId: config.checker_llm_id, slot: "nudge-checker" })), source: "pinned" };
@@ -112,12 +162,14 @@ export async function resolveMatcherBackend(
   // A Decision model the admin selected in Models predates the checker setting, so it does not fall back either.
   if (serverDecisionModelId !== null) {
     const selected = options.find((option) => option.model.decision_model_id === serverDecisionModelId);
-    return { backend: decisionBackend(selected), source: "recommended" };
+    return { ...(await decisionBackend(state, selected, "decision")), source: "recommended" };
   }
-  const openRouterDefault = decisionBackend(
+  const openRouterDefault = await decisionBackend(
+    state,
     options.find((option) => option.model.provider === "openrouter" && option.model.is_default),
+    "decision",
   );
-  if (openRouterDefault) return { backend: openRouterDefault, source: "recommended" };
+  if (openRouterDefault.backend || openRouterDefault.denied) return { ...openRouterDefault, source: "recommended" };
   for (const recommended of RECOMMENDED_CHECKER_LLMS) {
     const model = await llmModelRepo.loadByProviderAndCodename(recommended.provider, recommended.codename);
     const resolved = model?.llm_id ? await llmBackend(state, { llmId: model.llm_id, slot: "nudge-checker" }) : null;
@@ -132,6 +184,7 @@ function decisionOutcome(result: DecisionResult, model: string, optionIds: reado
     "usage" in result && result.usage
       ? { inputTokens: result.usage.inputTokens ?? 0, outputTokens: result.usage.outputTokens ?? 0 }
       : undefined;
+  if (result.status === "denied") return { ...base, choice: null, reason: "denied" };
   if (result.status === "refused") return { ...base, choice: null, reason: "refused", usage };
   if (result.status === "failed")
     return { ...base, choice: null, reason: result.category === "malformed" ? "malformed" : "failed" };
@@ -151,8 +204,10 @@ async function matchWithDecision(
   evidence: string,
 ): Promise<MatcherResult> {
   const result = await callDecisionsForProvider({
-    scope: { kind: "server", ownerId: state.server_id },
+    scope: { kind: "server", ownerId: state.server_id, state },
+    slot: backend.slot,
     reference: backend.reference,
+    credentials: backend.credentials,
     evidence,
     abortSignal: AbortSignal.timeout(MATCHER_TIMEOUT_MS),
     questions: [

@@ -32,6 +32,10 @@ references even when a codename repeats.
 `callDecisionsForProvider({scope, reference, evidence, questions, abortSignal?, onUsage?})` rechecks ownership,
 the exact registration, saved credentials, and the stored custom protocol. Null selection returns
 `unavailable/not-selected`. Evidence is text; questions are `{type: "predicate", id, instructions}`.
+Managed execution resolves credentials through the owning option with capability `decision`.
+The caller retains its selected slot (`decision` or `nudge-checker`) and scope state, so a pinned
+checker uses its own payer. Previously resolved credentials are revalidated by the same option;
+removing that option or refusing the request never switches to a saved catalog key.
 IDs are unique application-owned identifiers, start with a lowercase letter, contain lowercase
 letters/digits/underscores, and have at most 64 characters. Requests admit 1-64 questions. Rubrics,
 thresholds, calibration, and response routing belong to consumers.

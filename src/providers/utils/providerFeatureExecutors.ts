@@ -1,5 +1,16 @@
-import { withProviderUsageContext } from "@/utils/provider/providerUsage";
-import { findProviderOption, getProviderOptions } from "@/utils/provider/providerOptionRegistry";
+import {
+  findProviderRequestDeniedError,
+  reportProviderUsage,
+  withProviderUsageContext,
+  type ProviderUsageContext,
+} from "@/utils/provider/providerUsage";
+import {
+  findProviderOption,
+  findProviderOptionByActiveProvider,
+  getProviderOptions,
+  type ProviderOptionCredentials,
+  type ProviderOptionScope,
+} from "@/utils/provider/providerOptionRegistry";
 import type {
   DecisionInput,
   DecisionModelOption,
@@ -42,8 +53,11 @@ import {
 } from "@/utils/provider/providerCapabilityResolver";
 
 export interface DecisionExecutionRequest extends DecisionInput {
-  scope: OpenRouterModelScope;
+  scope: ProviderOptionScope;
   reference: DecisionModelReference | null;
+  slot?: "decision" | "nudge-checker";
+  credentialProvider?: string;
+  credentials?: ProviderOptionCredentials;
 }
 
 /** The Decision models `callDecisionsForProvider` accepts for a scope, so pickers offer exactly what it will call. */
@@ -102,8 +116,36 @@ export async function callDecisionsForProvider(request: DecisionExecutionRequest
     return { status: "cancelled", correlationId, errorLogged: false };
   };
   if (request.abortSignal?.aborted) return cancelled();
+  let usageContext: ProviderUsageContext | undefined;
+  let resolvingCredentials = true;
   try {
-    const options = await loadDecisionModelsForScope(request.scope);
+    const requestedOwner = request.credentialProvider ?? request.credentials?.usageContext?.credentialProvider;
+    const owner = requestedOwner
+      ? findProviderOption(requestedOwner)
+      : findProviderOptionByActiveProvider(reference.provider, request.scope, request.slot ?? "decision");
+    let credentials: ProviderOptionCredentials | null = null;
+    if (requestedOwner && !owner)
+      return { status: "unavailable", reason: "not-owned", correlationId, errorLogged: false };
+    if (owner) {
+      if (
+        owner.catalogProvider !== reference.provider ||
+        !(await owner.availability(request.scope)).eligible ||
+        !owner.selection.resolveCredentials
+      )
+        return { status: "unavailable", reason: "not-owned", correlationId, errorLogged: false };
+      credentials = await owner.selection.resolveCredentials({
+        scope: request.scope,
+        capability: "decision",
+        modelId: reference.modelId,
+        previous: request.credentials,
+      });
+      if (!credentials) return { status: "unavailable", reason: "not-owned", correlationId, errorLogged: false };
+      usageContext = credentials.usageContext;
+    } else if (request.credentials) {
+      return { status: "unavailable", reason: "not-owned", correlationId, errorLogged: false };
+    }
+    resolvingCredentials = false;
+    const options = await loadDecisionModelsForScope(request.scope, owner?.value);
     const selected = options.find(
       (option) =>
         option.reference.provider === reference.provider &&
@@ -142,15 +184,16 @@ export async function callDecisionsForProvider(request: DecisionExecutionRequest
         elapsedMs: Date.now() - startedAt,
       },
     };
-    const nativeConfig = connection
-      ? null
-      : request.scope.kind === "server"
-        ? await llmProviderRepo.loadSavedProviderConfig(request.scope.ownerId, reference.provider)
-        : await llmProviderRepo.loadUserSavedProviderConfig(request.scope.ownerId, reference.provider);
-    let apiKey: string | null;
+    const nativeConfig =
+      connection || credentials
+        ? null
+        : request.scope.kind === "server"
+          ? await llmProviderRepo.loadSavedProviderConfig(request.scope.ownerId, reference.provider)
+          : await llmProviderRepo.loadUserSavedProviderConfig(request.scope.ownerId, reference.provider);
+    let apiKey: string | null = credentials?.apiKey ?? null;
     try {
       if (connection) apiKey = await loadCustomConnectionCredential(connection, failureContext);
-      else {
+      else if (!credentials) {
         apiKey = nativeConfig?.api_key
           ? await decryptApiKey(nativeConfig.api_key, nativeConfig.key_version, failureContext)
           : null;
@@ -165,7 +208,7 @@ export async function callDecisionsForProvider(request: DecisionExecutionRequest
     }
     const capability = await resolveDecisionsCapability(custom ? "custom" : reference.provider);
     if (!capability) return { status: "unavailable", reason: "unsupported", correlationId, errorLogged: false };
-    return await withProviderUsageContext(undefined, async () =>
+    const result = await withProviderUsageContext(usageContext, async () =>
       capability.callDecisions({
         ...request,
         reference,
@@ -175,9 +218,29 @@ export async function callDecisionsForProvider(request: DecisionExecutionRequest
         apiStyle,
         apiKey,
         endpointUrl: connection?.endpoint_url,
+        onUsage: (usage) => {
+          reportProviderUsage(usageContext, {
+            modelCodename: selected.model.codename,
+            costUsd: usage.costUsd,
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+          });
+          request.onUsage?.(usage);
+        },
       }),
     );
-  } catch {
+    const denied =
+      result.status === "failed"
+        ? findProviderRequestDeniedError(result.cause, usageContext)
+        : result.status === "denied"
+          ? findProviderRequestDeniedError(result.error, usageContext)
+          : null;
+    return denied ? { status: "denied", error: denied, correlationId, errorLogged: false } : result;
+  } catch (error) {
+    const denied = resolvingCredentials
+      ? findProviderRequestDeniedError(error)
+      : findProviderRequestDeniedError(error, usageContext);
+    if (denied) return { status: "denied", error: denied, correlationId, errorLogged: false };
     if (request.abortSignal?.aborted) return cancelled();
     return await reportDecisionFailure(trace(), "unexpected", "execution", startedAt);
   }

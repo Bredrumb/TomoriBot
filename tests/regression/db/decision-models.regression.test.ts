@@ -1,4 +1,13 @@
-import { beforeAll, describe, expect, it } from "bun:test";
+import { beforeAll, describe, expect, it, spyOn } from "bun:test";
+import * as capabilities from "@/utils/provider/providerCapabilityResolver";
+import { OpenrouterProvider } from "@/providers/openrouter/openrouterProvider";
+import { callOpenRouterDecisions } from "@/providers/openrouter/openrouterDecisions";
+import {
+  currentProviderUsageContext,
+  ProviderRequestDeniedError,
+  registerProviderUsageReporter,
+  type ProviderUsageReport,
+} from "@/utils/provider/providerUsage";
 import { decisionSections } from "@/db/seed/catalog/models";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { callDecisionsForProvider, loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
@@ -263,6 +272,30 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
     });
     await llmProviderRepo.upsertDecisionModelRegistration({ serverId, decisionModelId: modelId });
     let entitled = true;
+    const contexts = {
+      server: { credentialProvider: "test-decision" },
+      personal: { credentialProvider: "test-decision" },
+    };
+    const reports: ProviderUsageReport[] = [];
+    const calls: Array<{ key: string | null; context: unknown }> = [];
+    const stopReporting = registerProviderUsageReporter((context, report) => {
+      expect(context === contexts.server || context === contexts.personal).toBe(true);
+      reports.push(report);
+    });
+    const transport = spyOn(capabilities, "resolveDecisionsCapability").mockResolvedValue(
+      Object.assign(new OpenrouterProvider(), {
+        callDecisions: async (request: import("@/types/provider/featureInterfaces").ProviderDecisionRequest) => {
+          calls.push({ key: request.apiKey, context: currentProviderUsageContext() });
+          return callOpenRouterDecisions(request, async () =>
+            Response.json({
+              model: "fixture-managed-decision",
+              answers: { q: { type: "noul", noul: 0.8 } },
+              usage: { input_tokens: 10, cost: 0.001 },
+            }),
+          );
+        },
+      }),
+    );
     const dispose = registerProviderOption({
       value: "test-decision",
       catalogProvider: "openrouter",
@@ -288,6 +321,17 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
         remove: async () => "removed",
         validateModel: async ({ capability, modelCodename }) =>
           entitled && capability === "decision" && modelCodename === "fixture-managed-decision",
+        resolveCredentials: async (input) => {
+          if ("usageContext" in input) return null;
+          if (!entitled)
+            throw new ProviderRequestDeniedError(contexts[input.scope.kind], () => ({
+              titleKey: "general.errors.api_key_error_title",
+              description: "fixture",
+            }));
+          expect(input.capability).toBe("decision");
+          expect(input.modelId).toBe(modelId);
+          return { apiKey: `managed-${input.scope.kind}`, usageContext: contexts[input.scope.kind] };
+        },
       },
     });
     try {
@@ -299,15 +343,37 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
       expect(await loadProviderModelChoices(personal, "decision", "test-decision")).toEqual([]);
       await llmProviderRepo.upsertDecisionModelRegistration({ userId, decisionModelId: modelId });
       for (const scope of [server, personal]) {
+        const request = {
+          scope,
+          reference: (await loadDecisionModelsForScope(scope, "test-decision"))[0].reference,
+          credentialProvider: "test-decision",
+          evidence: "fixture",
+          questions: [{ type: "predicate" as const, id: "q", instructions: "fixture" }],
+        };
         expect(
           (await loadDecisionModelsForScope(scope, "test-decision")).map((entry) => entry.model.decision_model_id),
         ).toEqual([modelId]);
+        expect((await callDecisionsForProvider(request)).status).toBe("completed");
+        expect(calls.at(-1)).toEqual({ key: `managed-${scope.kind}`, context: contexts[scope.kind] });
         entitled = false;
         expect(await loadDecisionModelsForScope(scope, "test-decision")).toEqual([]);
         expect(await loadProviderModelChoices(scope, "decision", "test-decision")).toEqual([]);
+        expect((await callDecisionsForProvider(request)).status).toBe("denied");
         entitled = true;
       }
+      expect(calls).toHaveLength(2);
+      expect(reports).toHaveLength(2);
+      expect(
+        reports.every(
+          (report) =>
+            report.costUsd === 0.001 &&
+            report.inputTokens === 10 &&
+            report.modelCodename === "fixture-managed-decision",
+        ),
+      ).toBe(true);
     } finally {
+      transport.mockRestore();
+      stopReporting();
       dispose();
       await llmProviderRepo.deleteDecisionModelRegistration({ serverId, decisionModelId: modelId });
       await llmProviderRepo.deleteDecisionModelRegistration({ userId, decisionModelId: modelId });
