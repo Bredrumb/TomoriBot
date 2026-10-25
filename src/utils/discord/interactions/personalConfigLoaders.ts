@@ -30,7 +30,9 @@ import {
 } from "@/utils/provider/personalProviderHelpers";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { findProviderOption, providerOptionOffersPersonalCapability } from "@/utils/provider/providerOptionRegistry";
-import { localizer, resolveDescription } from "@/utils/text/localizer";
+import { getProviderOptionFallbackRefOwner } from "@/utils/provider/providerOptionRegistry";
+import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import { resolveDescription } from "@/utils/text/localizer";
 import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
 import { formatManagedIdentityLabel } from "@/utils/discord/interactions/managedIdentityPanelRoutes";
 
@@ -291,7 +293,7 @@ export async function loadFallbackSelectionOptions(
     .flatMap((row) =>
       choices.map((choice) => ({
         refKey: row.provider === SUPPORTER_PROVIDER_VALUE ? `${choice.refKey}:supporter` : choice.refKey,
-        label: `${choice.label} (${row.provider === SUPPORTER_PROVIDER_VALUE ? localizer(locale, "commands.providers.subscription_label") : "OpenRouter"})`,
+        label: `${choice.label} (${getProviderDisplayName(row.provider, locale)})`,
       })),
     );
 }
@@ -495,8 +497,9 @@ export async function loadPersonalModelDisplayInfo(
       try {
         if (ref.type === "llm") {
           const m = await llmModelRepo.loadById(ref.id);
+          const owner = getProviderOptionFallbackRefOwner(ref);
           modelName = m
-            ? `${m.llm_codename}${m.llm_provider === "openrouter" ? ` (${ref.credentialProvider === "supporter" ? localizer(locale, "commands.providers.subscription_label") : "OpenRouter"})` : ""}`
+            ? `${m.llm_codename}${owner || m.llm_provider === "openrouter" ? ` (${getProviderDisplayName(owner ?? m.llm_provider, locale)})` : ""}`
             : null;
         } else if (ref.type === "custom_endpoint") {
           const endpoints = await llmProviderRepo.loadCustomEndpointsByIds([ref.id]);

@@ -40,6 +40,7 @@ import { buildCustomProviderName, isCustomProvider, parseCustomProvider } from "
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import {
   findProviderOption,
+  getProviderOptionFallbackRefOwner,
   findProviderOptionByActiveProvider,
   providerOptionCapabilityForModelView,
   type ProviderOptionModelViewCapability,
@@ -332,7 +333,8 @@ function describeFallbackEntry(
     return `${localizer(locale, "general.unknown")} (#${rawRef.id})`;
   }
   if (entry.kind === "llm") {
-    return `${entry.model.llm_codename} (${entry.credentialProvider === "supporter" ? localizer(locale, "commands.providers.subscription_label") : getProviderDisplayName(entry.model.llm_provider, locale)})`;
+    const provider = (rawRef && getProviderOptionFallbackRefOwner(rawRef)) ?? entry.model.llm_provider;
+    return `${entry.model.llm_codename} (${getProviderDisplayName(provider, locale)})`;
   }
   return `${entry.endpoint.label}:${entry.endpoint.model_name ?? entry.endpoint.label} (${localizer(
     locale,
