@@ -1,0 +1,252 @@
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import type { Message } from "discord.js";
+import type { GenerationModelSelection } from "@/types/provider/generationModels";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import { resolveTextCredentialPolicy } from "@/utils/chat/turnPlanner";
+import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import {
+  generationModelValue,
+  GenerationModelUnavailableError,
+  loadGenerationModelChoices,
+  validateGenerationModelSelection,
+} from "@/utils/provider/generationModels";
+import { resolveSpeechTargets } from "@/utils/provider/speechEndpointResolver";
+import { encryptApiKey } from "@/utils/security/crypto";
+import { createPersona, createUserRow } from "../../helpers/fixtures";
+import { cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
+import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
+
+describe.skipIf(!DB_TESTS_AVAILABLE)("Invocation model selection", () => {
+  let refs: FixtureRefs;
+  let imageId: number;
+  let personalImageId: number;
+  let textId: number;
+
+  beforeAll(async () => {
+    await setupTestDb();
+    refs = await insertFixtures(testSql);
+    const [image] =
+      await testSql`SELECT diffusion_model_id FROM image_diffusion_models WHERE provider = 'google' AND NOT is_deprecated LIMIT 1`;
+    const [text] = await testSql`SELECT llm_id FROM llms WHERE llm_provider = 'google' AND NOT is_deprecated LIMIT 1`;
+    imageId = image.diffusion_model_id;
+    textId = text.llm_id;
+    await testSql`UPDATE server_model_configs SET llm_id = ${textId}, diffusion_model_id = ${imageId} WHERE server_id = ${refs.serverId}`;
+    const [personal] = await testSql`
+      INSERT INTO image_diffusion_models (provider, codename, is_scoped_registration)
+      VALUES ('openrouter', '_rt_personal_generation_image', true) RETURNING diffusion_model_id
+    `;
+    personalImageId = personal.diffusion_model_id;
+    await testSql`INSERT INTO scoped_model_registrations (user_id, diffusion_model_id) VALUES (${refs.userId}, ${personalImageId})`;
+    for (const provider of ["google", "openrouter", "novelai"]) {
+      for (const source of ["server", "personal"]) {
+        const key = await encryptApiKey(`synthetic-${source}-${provider}`);
+        if (source === "server") {
+          await testSql`INSERT INTO saved_provider_configs (server_id, provider, api_key, key_version, llm_id, diffusion_model_id)
+            VALUES (${refs.serverId}, ${provider}, ${key.encrypted}, ${key.version}, ${provider === "google" ? textId : null}, ${provider === "google" ? imageId : null})`;
+        } else {
+          await testSql`INSERT INTO user_saved_provider_configs (user_id, provider, api_key, key_version)
+            VALUES (${refs.userId}, ${provider}, ${key.encrypted}, ${key.version})`;
+        }
+      }
+    }
+  });
+
+  afterAll(async () => {
+    await cleanupFixtures(testSql);
+    await testSql`DELETE FROM image_diffusion_models WHERE diffusion_model_id = ${personalImageId}`;
+  });
+
+  it("offers all registered models on saved providers while keeping server and personal routes distinct", async () => {
+    const choices = await loadGenerationModelChoices(refs.serverId, refs.userId, "image");
+    const sameModel = choices.filter((choice) => choice.modelId === imageId && choice.provider === "google");
+    expect(new Set(sameModel.map((choice) => choice.source))).toEqual(new Set(["server", "personal"]));
+    expect(new Set(sameModel.map(generationModelValue)).size).toBe(2);
+    expect(choices).toContainEqual(
+      expect.objectContaining({ modelId: personalImageId, source: "personal", provider: "openrouter" }),
+    );
+    expect(choices.some((choice) => choice.modelId === personalImageId && choice.source === "server")).toBe(false);
+    expect(
+      (await loadGenerationModelChoices(refs.serverId, null, "image")).some(
+        (choice) => choice.modelId === personalImageId,
+      ),
+    ).toBe(false);
+  });
+
+  it("uses an inactive personal provider's key for an explicit model and leaves saved selections unchanged", async () => {
+    const selection: GenerationModelSelection = {
+      source: "personal",
+      kind: "image",
+      modelId: personalImageId,
+      provider: "openrouter",
+    };
+    const creds = await resolveCapabilityCredentials(refs.serverId, "image-standard", {
+      userId: refs.userId,
+      modelSelection: selection,
+    });
+    expect(creds).toMatchObject({
+      source: "personal",
+      modelId: personalImageId,
+      provider: "openrouter",
+      apiKey: "synthetic-personal-openrouter",
+    });
+    const saved = await llmProviderRepo.loadUserSavedProviderConfig(refs.userId, "openrouter");
+    expect(saved?.diffusion_model_id).toBeNull();
+    expect(saved?.enabled_capabilities).toEqual([]);
+    expect((await resolveCapabilityCredentials(refs.serverId, "image-standard", { userId: refs.userId })).source).toBe(
+      "server",
+    );
+  });
+
+  it("rejects forged scope, capability, missing models, and server routes in BYOK mode", async () => {
+    const selection: GenerationModelSelection = {
+      source: "server",
+      kind: "image",
+      modelId: personalImageId,
+      provider: "openrouter",
+    };
+    for (const candidate of [
+      selection,
+      { ...selection, source: "personal" as const, modelId: -1 },
+      { ...selection, kind: "video" as const },
+    ]) {
+      await expect(
+        resolveCapabilityCredentials(refs.serverId, "image-standard", {
+          userId: refs.userId,
+          modelSelection: candidate,
+        }),
+      ).rejects.toBeInstanceOf(GenerationModelUnavailableError);
+    }
+    await testSql`UPDATE server_byok_configs SET user_byok_mode = true WHERE server_id = ${refs.serverId}`;
+    try {
+      const choices = await loadGenerationModelChoices(refs.serverId, refs.userId, "image");
+      expect(choices.length).toBeGreaterThan(0);
+      expect(choices.every((choice) => choice.source === "personal")).toBe(true);
+      await expect(
+        resolveCapabilityCredentials(refs.serverId, "image-standard", {
+          userId: refs.userId,
+          modelSelection: { ...selection, provider: "google", modelId: imageId },
+        }),
+      ).rejects.toBeInstanceOf(GenerationModelUnavailableError);
+    } finally {
+      await testSql`UPDATE server_byok_configs SET user_byok_mode = false WHERE server_id = ${refs.serverId}`;
+    }
+  });
+
+  it("revalidates a removed registration instead of using a default", async () => {
+    await testSql`DELETE FROM scoped_model_registrations WHERE user_id = ${refs.userId} AND diffusion_model_id = ${personalImageId}`;
+    try {
+      await expect(
+        resolveCapabilityCredentials(refs.serverId, "image-standard", {
+          userId: refs.userId,
+          modelSelection: { source: "personal", kind: "image", modelId: personalImageId, provider: "openrouter" },
+        }),
+      ).rejects.toBeInstanceOf(GenerationModelUnavailableError);
+    } finally {
+      await testSql`INSERT INTO scoped_model_registrations (user_id, diffusion_model_id) VALUES (${refs.userId}, ${personalImageId})`;
+    }
+  });
+
+  it("builds scene state with the chosen model and personal samplers without changing the persona", async () => {
+    await testSql`UPDATE user_saved_provider_configs SET llm_temperature = 0.42, llm_max_output_tokens = 123 WHERE user_id = ${refs.userId} AND provider = 'google'`;
+    const model = await llmModelRepo.loadById(textId);
+    if (!model) throw new Error("Missing text fixture");
+    const persona = createPersona({
+      server_id: refs.serverId,
+      llm: model,
+      config: { model_randomizer_enabled: true, fallback_llm_ids: [textId] },
+    });
+    const policy = await resolveTextCredentialPolicy({
+      tomoriState: persona,
+      isSelfMessage: false,
+      isPersonaJob: false,
+      isUserImpersonation: false,
+      borrowsTriggerMessage: false,
+      userRow: createUserRow({ user_id: refs.userId }),
+      channel: {} as Message["channel"],
+      locale: "en-US",
+      isDMChannel: false,
+      shouldSurfaceUserErrors: false,
+      modelSelection: { source: "personal", kind: "text", modelId: textId, provider: "google" },
+    });
+    expect(policy?.source).toBe("personal");
+    expect(policy?.modelState?.llm.llm_id).toBe(textId);
+    expect(policy?.modelState?.config.llm_temperature).toBeCloseTo(0.42);
+    expect(policy?.modelState?.config.llm_max_output_tokens).toBe(123);
+    expect(policy?.modelState?.config.model_randomizer_enabled).toBe(false);
+    expect(policy?.modelState?.config.fallback_llm_ids).toEqual([]);
+    expect(persona.config.model_randomizer_enabled).toBe(true);
+    expect(persona.config.fallback_llm_ids).toEqual([textId]);
+  });
+
+  it("lists NovelAI models in the dedicated command for personal providers and a server optional key", async () => {
+    const choices = await loadGenerationModelChoices(refs.serverId, refs.userId, "image-nai");
+    expect(choices.length).toBeGreaterThan(0);
+    expect(choices.every((choice) => choice.kind === "image-nai" && choice.provider === "novelai")).toBe(true);
+    const personal = choices.find((choice) => choice.source === "personal");
+    if (!personal) throw new Error("Missing personal NovelAI model");
+    expect(
+      await resolveCapabilityCredentials(refs.serverId, "image-nai", { userId: refs.userId, modelSelection: personal }),
+    ).toMatchObject({
+      source: "personal",
+      modelId: personal.modelId,
+      apiKey: "synthetic-personal-novelai",
+    });
+    const saved = await llmProviderRepo.loadSavedProviderConfig(refs.serverId, "novelai");
+    if (!saved) throw new Error("Missing NovelAI credential fixture");
+    const key = await encryptApiKey("synthetic-optional-novelai");
+    await testSql`DELETE FROM saved_provider_configs WHERE server_id = ${refs.serverId} AND provider = 'novelai'`;
+    await testSql`INSERT INTO opt_api_keys (server_id, service_name, api_key, key_version) VALUES (${refs.serverId}, 'novelai', ${key.encrypted}, ${key.version})`;
+    try {
+      const optionalChoices = await loadGenerationModelChoices(refs.serverId, refs.userId, "image-nai");
+      const server = optionalChoices.find((choice) => choice.source === "server");
+      if (!server) throw new Error("Missing optional-key NovelAI model");
+      expect(await validateGenerationModelSelection(refs.serverId, refs.userId, server)).toMatchObject({
+        modelId: server.modelId,
+        source: "server",
+      });
+    } finally {
+      await testSql`DELETE FROM opt_api_keys WHERE server_id = ${refs.serverId} AND service_name = 'novelai'`;
+      await llmProviderRepo.upsertSavedProviderConfig(refs.serverId, saved);
+    }
+  });
+
+  it("resolves an unselected hosted speech model and custom endpoint with their credential owners", async () => {
+    const models = await llmModelRepo.loadAvailableSpeechModels("google", { kind: "personal", ownerId: refs.userId });
+    const model = models.find((entry) => entry.voice_mode === "design");
+    if (!model) throw new Error("Missing speech fixture");
+    const targets = await resolveSpeechTargets(refs.serverId, refs.userId, {
+      source: "personal",
+      kind: "speech",
+      provider: "google",
+      modelId: model.speech_model_id,
+    });
+    expect(targets.design).toMatchObject({
+      kind: "hosted-model",
+      owner: { kind: "personal", ownerId: refs.userId },
+      apiKey: "synthetic-personal-google",
+    });
+    expect(targets.clone).toBeNull();
+    const endpoint = await llmProviderRepo.upsertCustomEndpoint({
+      serverId: refs.serverId,
+      label: "Invocation speech",
+      capability: "speech",
+      apiStyle: "tts-clone",
+      endpointUrl: "http://127.0.0.1:9001",
+      requiresAuth: false,
+      extraConfig: { voice_mode: "clone" },
+    });
+    if (!endpoint?.custom_endpoint_id || !endpoint.connection_id) throw new Error("Missing endpoint fixture");
+    const custom = await resolveSpeechTargets(refs.serverId, refs.userId, {
+      source: "server",
+      kind: "speech-endpoint",
+      provider: `custom:${endpoint.connection_id}`,
+      modelId: endpoint.custom_endpoint_id,
+    });
+    expect(custom.clone).toMatchObject({
+      kind: "custom-endpoint",
+      owner: { kind: "server", ownerId: refs.serverId },
+      apiKey: "",
+    });
+    expect(custom.design).toBeNull();
+  });
+});

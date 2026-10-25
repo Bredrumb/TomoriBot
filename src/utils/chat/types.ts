@@ -1,3 +1,4 @@
+import type { GenerationModelSelection } from "@/types/provider/generationModels";
 import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 import type { BaseGuildTextChannel, Client, Guild, GuildMember, Message, Webhook } from "discord.js";
 import type { ForcedMention } from "@/types/discord/mentions";
@@ -57,6 +58,7 @@ export interface SceneTurnSpeaker {
 }
 
 export interface SceneTurnMetadata {
+  modelSelection?: GenerationModelSelection;
   commandId: string;
   sequence: SceneTurnSpeaker[];
   turnIndex: number;

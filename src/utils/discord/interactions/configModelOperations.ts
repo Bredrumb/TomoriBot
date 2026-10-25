@@ -1,17 +1,15 @@
+import { loadProviderModelChoices } from "@/utils/provider/modelCatalog";
 import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
 import { setHostedSpeechSelection, setSpeechEndpointSelection } from "@/utils/db/repositories/SpeechRepository";
 import { supportsSpeechMode, type VoiceSourceMode } from "@/utils/speech/voiceSourceCapabilities";
 import type {
   CustomEndpointRow,
-  EmbeddingModelRow,
   FallbackModelRef,
-  DiffusionModelRow,
   LlmRow,
   NaiPresetRow,
   SavedProviderConfigRow,
   SavedProviderConfigUpsert,
   TomoriState,
-  VideoGenerationModelRow,
 } from "@/types/db/schema";
 import { DEFAULT_THINKING_LEVEL, isThinkingLevelValue, type ThinkingLevelValue } from "@/constants/thinkingLevels";
 import {
@@ -48,7 +46,6 @@ import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { log } from "@/utils/misc/logger";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { buildCustomProviderName, isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
-import { resolveDescription } from "@/utils/text/localizer";
 import {
   buildFallbackModelPersistence,
   getFallbackModelRefKey,
@@ -274,100 +271,7 @@ export async function loadConfigModelChoices(
   locale = "en-US",
   textModelFilter?: (model: LlmRow) => boolean,
 ): Promise<ConfigModelChoice[]> {
-  const option = findProviderOption(provider);
-  if (option) {
-    if (!providerOptionOffersModelViewCapability(option, capability as ProviderOptionModelViewCapability)) return [];
-    if (!(await option.availability({ kind: "server", ownerId: serverId })).eligible) return [];
-    provider = option.catalogProvider;
-  }
-  const owner = { kind: "server", ownerId: serverId } as const;
-  switch (capability) {
-    case "text":
-    case "vision": {
-      const models = (await llmModelRepo.loadAvailableModelsForProvider(provider, false, owner)) ?? [];
-      const eligible = capability === "vision" ? models.filter((model) => model.sees_images) : models;
-      return eligible
-        .filter((model) => !textModelFilter || textModelFilter(model))
-        .filter((model): model is LlmRow & { llm_id: number } => model.llm_id !== undefined)
-        .map((model) => ({
-          id: model.llm_id,
-          name: model.llm_codename,
-          description: resolveDescription(model.descriptions, locale),
-        }));
-    }
-    case "embedding": {
-      const models = (await llmModelRepo.loadAvailableEmbeddingModels(provider, false, owner)) ?? [];
-      return models
-        .filter(
-          (model): model is EmbeddingModelRow & { embedding_model_id: number } =>
-            model.embedding_model_id !== undefined && model.embedding_model_id !== null,
-        )
-        .map((model) => ({
-          id: model.embedding_model_id,
-          name: model.codename,
-          description: resolveDescription(model.descriptions, locale),
-        }));
-    }
-    case "decision":
-      return (await llmModelRepo.loadDecisionModelOptions(owner))
-        .filter(({ model }) => model.provider === provider)
-        .map(({ model }) => ({
-          id: model.decision_model_id,
-          name: model.codename,
-          description: resolveDescription(model.descriptions, locale),
-        }));
-    case "image":
-    case "nai-image": {
-      const models = (await llmModelRepo.loadAvailableDiffusionModels(provider, false, owner)) ?? [];
-      return models
-        .filter(
-          (model): model is DiffusionModelRow & { diffusion_model_id: number } =>
-            model.diffusion_model_id !== undefined && model.diffusion_model_id !== null,
-        )
-        .map((model) => ({
-          id: model.diffusion_model_id,
-          name: model.codename,
-          description: resolveDescription(model.descriptions, locale),
-        }));
-    }
-    case "video": {
-      const models = (await llmModelRepo.loadAvailableVideoGenerationModels(provider, false, owner)) ?? [];
-      return models
-        .filter(
-          (model): model is VideoGenerationModelRow & { video_model_id: number } =>
-            model.video_model_id !== undefined && model.video_model_id !== null,
-        )
-        .map((model) => ({
-          id: model.video_model_id,
-          name: model.codename,
-          description: resolveDescription(model.descriptions, locale),
-        }));
-    }
-    case "tts-design":
-    case "tts-clone": {
-      const mode = speechModeForCapability(capability);
-      if (isCustomProvider(provider)) {
-        const connectionId = parseCustomProvider(provider)?.connectionId;
-        return (await loadServerSpeechEndpoints(serverId, mode))
-          .filter(
-            (endpoint): endpoint is CustomEndpointRow & { custom_endpoint_id: number } =>
-              endpoint.connection_id === connectionId && endpoint.custom_endpoint_id !== undefined,
-          )
-          .map((endpoint) => ({
-            id: endpoint.custom_endpoint_id,
-            name: endpoint.model_name ?? endpoint.label,
-            description: null,
-          }));
-      }
-      return (await llmModelRepo.loadAvailableSpeechModels(provider, owner))
-        .filter((model) => supportsSpeechMode(model, mode))
-        .map((model) => ({
-          id: model.speech_model_id,
-          name: model.codename,
-          description: resolveDescription(model.descriptions, locale),
-        }));
-    }
-  }
+  return loadProviderModelChoices({ kind: "server", ownerId: serverId }, capability, provider, locale, textModelFilter);
 }
 
 type ConfigModelSetResult =

@@ -1,7 +1,13 @@
 export default {
   generate: {
+    model_personal_suffix: ` ({provider}) (via Personal Provider)`,
+    model_server_suffix: ` ({provider})`,
+    model_unavailable_title: `Model Unavailable`,
+    model_unavailable_description: `This model is no longer available with the selected provider. Choose an available model from autocomplete and try again.`,
     description: `Generate AI images, videos, and voice messages.`,
     image: {
+      nsfw_description: `Add a Discord spoiler to the image only; does not change generation or content filters`,
+      model_description: `Use this model for this generation only; leave blank to use your current default`,
       description: `Generate an AI image from your own prompt or the current channel scene`,
       mode_description: `Choose how to create the image`,
       mode_choice_manual: `Write my own prompt`,
@@ -57,6 +63,8 @@ export default {
       quota_exceeded_footer: `This quota is configured by this server's managers via \`/moderation\`.`,
     },
     video: {
+      nsfw_description: `Add a Discord spoiler to the video only; does not change generation or content filters`,
+      model_description: `Use this model for this generation only; leave blank to use your current default`,
       description: `Generate an AI video using Google Veo, OpenRouter, or Z.ai`,
       modal: {
         title: `Generate Video`,
@@ -111,6 +119,7 @@ export default {
     },
 
     scene: {
+      model_description: `Use this model for this generation only; leave blank to use your current default`,
       description: `Generate a short scripted text scene between selected personas.`,
       missing_permissions_title: `Missing Permissions`,
       missing_permissions_description: `I need permission to view this channel, read message history, and send messages before I can generate a scene here.`,
@@ -153,6 +162,7 @@ export default {
     },
 
     "voice-message": {
+      model_description: `Use this model for this generation only; leave blank to use your current default`,
       success_routing_field: `Speech Routing`,
       routing_server: `Server speech model`,
       routing_personal: `Personal speech model`,

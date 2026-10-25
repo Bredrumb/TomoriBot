@@ -1,3 +1,4 @@
+import type { GenerationModelSelection } from "@/types/provider/generationModels";
 import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 /**
  * Generic tool interface for provider-agnostic function calling
@@ -84,6 +85,7 @@ export interface DeliveredStreamMessage {
  * Streaming context for enhanced functionality during streaming
  */
 export interface StreamingContext {
+  imageModelSelection?: GenerationModelSelection;
   /** When set, delivered text may ping only these users: no roles, no everyone, nobody else. */
   mentionableUserIds?: readonly string[];
   usageContext?: ProviderUsageContext;

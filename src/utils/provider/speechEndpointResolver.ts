@@ -6,6 +6,10 @@ import { loadHostedSpeechSelection, type HostedSpeechSelection } from "@/utils/d
 import { log } from "@/utils/misc/logger";
 import { buildCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { decryptApiKey } from "@/utils/security/crypto";
+import type { GenerationModelSelection } from "@/types/provider/generationModels";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import { GenerationModelUnavailableError, validateGenerationModelSelection } from "@/utils/provider/generationModels";
+import { supportsSpeechMode } from "@/utils/speech/voiceSourceCapabilities";
 import {
   loadActiveEndpoint,
   loadEndpointCredentials,
@@ -134,7 +138,52 @@ export async function resolveActiveTranscriptionEndpoint(serverId: number): Prom
 export async function resolveSpeechTargets(
   serverId: number,
   userId?: number,
+  modelSelection?: GenerationModelSelection | null,
 ): Promise<{ design: SpeechTargetResult | null; clone: SpeechTargetResult | null }> {
+  if (modelSelection) {
+    if (modelSelection.kind !== "speech" && modelSelection.kind !== "speech-endpoint")
+      throw new GenerationModelUnavailableError();
+    await validateGenerationModelSelection(serverId, userId ?? null, modelSelection);
+    const saved =
+      modelSelection.source === "personal" && userId !== undefined
+        ? await llmProviderRepo.loadUserSavedProviderConfig(userId, modelSelection.provider)
+        : modelSelection.source === "server"
+          ? await llmProviderRepo.loadSavedProviderConfig(serverId, modelSelection.provider)
+          : null;
+    let target: SpeechTargetResult;
+    if (modelSelection.kind === "speech-endpoint") {
+      const endpoint = (await llmProviderRepo.loadCustomEndpointsForServer(serverId)).find(
+        (entry) => entry.custom_endpoint_id === modelSelection.modelId,
+      );
+      if (!endpoint || (endpoint.requires_auth && !saved?.api_key)) throw new GenerationModelUnavailableError();
+      const apiKey =
+        endpoint.requires_auth && saved?.api_key ? await decryptApiKey(saved.api_key, saved.key_version) : "";
+      if (endpoint.requires_auth && !apiKey) throw new GenerationModelUnavailableError();
+      target = { kind: "custom-endpoint", endpoint, apiKey, owner: { kind: "server", ownerId: serverId } };
+    } else {
+      const model = await llmModelRepo.loadSpeechModelById(modelSelection.modelId);
+      if (!model || !saved?.api_key) throw new GenerationModelUnavailableError();
+      const apiKey = await decryptApiKey(saved.api_key, saved.key_version);
+      if (!apiKey) throw new GenerationModelUnavailableError();
+      const personal = "user_id" in saved;
+      const credentialId = personal ? saved.user_saved_config_id : saved.saved_config_id;
+      if (credentialId === undefined) throw new GenerationModelUnavailableError();
+      target = {
+        kind: "hosted-model",
+        endpoint: null,
+        model,
+        apiKey,
+        owner: personal ? { kind: "personal", ownerId: saved.user_id } : { kind: "server", ownerId: serverId },
+        credentialId,
+        credentialRevision: saved.credential_revision,
+      };
+    }
+    const source = speechTargetSource(target);
+    return {
+      design: source && supportsSpeechMode(source, "design") ? target : null,
+      clone: source && supportsSpeechMode(source, "clone") ? target : null,
+    };
+  }
   const serverAllowed = userId === undefined || (await loadSpeechRoutingPolicy(serverId, userId)).serverAllowed;
   async function resolve(mode: VoiceSourceMode): Promise<SpeechTargetResult | null> {
     const hosted = await loadHostedSpeechSelection(serverId, mode, userId);

@@ -1,3 +1,4 @@
+import type { GenerationModelSelection } from "@/types/provider/generationModels";
 import { reportProviderUsage, type ProviderUsageContext } from "@/utils/provider/providerUsage";
 /**
  * Hidden Image Agent Turn
@@ -60,6 +61,8 @@ const SKIPPED_MESSAGE_TYPES = new Set<number>([
 
 /** Configuration for the hidden image agent. Caller (image.ts) owns preset/backend logic. */
 export interface HiddenImageTurnParams {
+  spoiler?: boolean;
+  imageModelSelection?: GenerationModelSelection;
   /** Discord text channel to read history from and post the image to. */
   channel: ToolContext["channel"];
   client: Client;
@@ -343,6 +346,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   const targetToolName = backend === "current_provider" ? "generate_image" : "generate_image_nai";
 
   const streamingContext: StreamingContext = {
+    imageModelSelection: params.imageModelSelection,
     usageContext,
     disableYouTubeProcessing: true,
     disableProfilePictureProcessing: true,
@@ -465,7 +469,10 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       const funcName = funcCall.name?.trim() ?? "";
       log.info(`[Hidden Image Agent] Model called tool: ${funcName}`);
 
-      const toolResult = await ToolRegistry.executeTool(funcName, funcCall.args || {}, toolContext);
+      const args = { ...(funcCall.args || {}) };
+      if (params.spoiler !== undefined && (funcName === "generate_image" || funcName === "generate_image_nai"))
+        args.nsfw = params.spoiler;
+      const toolResult = await ToolRegistry.executeTool(funcName, args, toolContext);
       log.info(
         `[Hidden Image Agent] Tool "${funcName}" ${toolResult.success ? "succeeded" : "failed"}: ${toolResult.message ?? toolResult.error ?? ""}`,
       );

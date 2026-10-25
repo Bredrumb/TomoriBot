@@ -1,10 +1,13 @@
+import type { GenerationModelSelection } from "@/types/provider/generationModels";
+import { GenerationModelUnavailableError } from "@/utils/provider/generationModels";
+import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
 import type { Guild, GuildMember, Message } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { getCachedUserRow, getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { configRepository, userRepository, whitelistRepository } from "@/utils/db/repositories";
+import { configRepository, llmModelRepo, userRepository, whitelistRepository } from "@/utils/db/repositories";
 import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
@@ -246,6 +249,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
       isDMChannel,
       shouldSurfaceUserErrors,
       refusalNoticeKey,
+      modelSelection: incoming.sceneTurn?.modelSelection,
     });
     if (!policy) continue;
     const quota = await prepareTextQuota(lockedTurn, persona, policy.source, userRow, shouldSurfaceUserErrors);
@@ -433,11 +437,11 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
 
     return {
       lockedTurn,
-      persona,
+      persona: credentialPolicy.modelState ?? persona,
       personaIndex,
       totalPersonas: personasToRespond.length,
       allPersonas,
-      tomoriState: persona,
+      tomoriState: credentialPolicy.modelState ?? persona,
       mainPersona,
       userRow,
       requestSnapshot,
@@ -607,10 +611,12 @@ export async function resolveTextCredentialPolicy(params: {
   isDMChannel: boolean;
   shouldSurfaceUserErrors: boolean;
   refusalNoticeKey?: string;
+  modelSelection?: GenerationModelSelection;
 }): Promise<{
   source: "server" | "personal";
   personalRoutingUserId: number | null;
   personalTextProvider: string | null;
+  modelState?: TomoriState;
 } | null> {
   // A borrowed trigger's author is whoever spoke last, so a personal key there would bill a bystander.
   const personalRoutingUserId =
@@ -626,13 +632,47 @@ export async function resolveTextCredentialPolicy(params: {
   try {
     const textCreds = await resolveCapabilityCredentials(params.tomoriState.server_id, "text", {
       userId: personalRoutingUserId,
+      ...(params.modelSelection ? { modelSelection: params.modelSelection } : {}),
     });
+    let modelState: TomoriState | undefined;
+    if (params.modelSelection) {
+      const model = await llmModelRepo.loadById(params.modelSelection.modelId);
+      if (!model) throw new GenerationModelUnavailableError();
+      const base = withSavedProviderConfig(params.tomoriState, textCreds.savedConfig);
+      modelState = {
+        ...base,
+        llm: model,
+        fallback_llms: undefined,
+        fallback_chain: undefined,
+        rotation_keys: undefined,
+        config: {
+          ...base.config,
+          llm_id: params.modelSelection.modelId,
+          llm_max_output_tokens: textCreds.savedConfig.llm_max_output_tokens ?? base.config.llm_max_output_tokens,
+          model_randomizer_enabled: false,
+          fallback_llm_ids: [],
+          custom_endpoint_url: textCreds.customEndpoint?.endpoint_url ?? null,
+          custom_model_name: textCreds.customEndpoint?.model_name ?? null,
+          custom_num_ctx: textCreds.customEndpoint?.num_ctx ?? null,
+        },
+      };
+    }
     return {
       source: textCreds.source,
+      modelState,
       personalRoutingUserId,
       personalTextProvider: textCreds.source === "personal" ? textCreds.provider : null,
     };
   } catch (error) {
+    if (error instanceof GenerationModelUnavailableError) {
+      if (params.shouldSurfaceUserErrors)
+        await sendFailureNotice({
+          color: ColorCode.WARN,
+          titleKey: "commands.generate.model_unavailable_title",
+          descriptionKey: "commands.generate.model_unavailable_description",
+        });
+      return null;
+    }
     // Checked ahead of CredentialUnavailableError because an unreadable database used to arrive
     // here as `no_saved_config` and render "API Key Missing", telling an admin to run
     // /config setup during a transient blip. That embed logged 41 times in one cascade.

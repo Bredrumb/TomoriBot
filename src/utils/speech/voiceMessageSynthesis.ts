@@ -109,6 +109,7 @@ interface VoiceSynthesisAttempt {
 }
 
 export interface VoiceMessageSynthesisRequest {
+  modelIsExplicit?: boolean;
   target?: SpeechTargetResult;
   maxOutputBytes?: number;
   routing?: {
@@ -556,6 +557,7 @@ export async function synthesizeVoiceMessage(
   const result = await run(request);
   if (
     result.success ||
+    request.modelIsExplicit ||
     request.abortSignal?.aborted ||
     !request.routing ||
     request.target?.owner.kind !== "personal" ||

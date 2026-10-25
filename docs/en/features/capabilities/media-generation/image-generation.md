@@ -18,6 +18,17 @@ TomoriBot can generate images from a text prompt or by editing a reference image
 - **Reference images**: draw from message attachments, stickers, emojis, or user and
   persona avatars. Mention a user or persona to pull their avatar in as a reference.
 
+The optional `model` parameter chooses a model for this image without changing your defaults.
+Autocomplete includes compatible models from your server's saved providers and your personal providers;
+personal entries show `(via Personal Provider)`. Leave it blank to use the usual model. In Auto mode,
+this selects the image model while the model that plans the prompt stays the same.
+
+Set `nsfw` to `true` to hide the generated image behind a Discord spoiler, in either mode. This only
+changes how Discord displays the image; it does not change generation or provider content filters.
+
+Manual NovelAI generation uses `/novelai generate image`, which has the same `model` and `nsfw` options.
+Its model picker includes your personal NovelAI providers and the server's saved or optional NovelAI key.
+
 Which editing modes are available depends on the active backend. Text-to-image and
 image-to-image work on cloud providers (Google, Vertex, OpenRouter). Inpainting and
 outpainting are supported by local [ComfyUI](/self-hosting/local-endpoints/setup-comfyui/)

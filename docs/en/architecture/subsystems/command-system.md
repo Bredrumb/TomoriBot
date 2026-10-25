@@ -93,6 +93,26 @@ Panel failure metrics maintain visibility:
 - Failure metrics emit to two destinations: structured host logs via `log.metric`, and the database via `metricSampleRepository.recordSample("panel_failure", fields)`. The database write is non-blocking.
 - Metric aggregation groups on the machine `reason` key rather than localized heading text, so failures across different languages aggregate into uniform defect categories.
 
+## Generation model overrides
+
+Each `/generate` subcommand and `/novelai generate image` accepts an optional `model` autocomplete. The choices combine compatible
+models from saved server providers and the invoking user's personal providers, including providers
+that are not the current default. Personal choices show `(via Personal Provider)`. The value identifies
+the model, provider, and credential source; execution checks scope access again. Server BYOK rules and
+media quotas still apply to the selected credential source. Omitting the option preserves normal routing.
+
+The override stays in the invocation and never updates saved selections. Auto image generation keeps
+its text planner and passes the image selection to its tool calls. A scene carries its text selection
+through every queued speaker turn, without model randomization or model fallback. Voice generation
+checks Design and Clone compatibility and keeps an explicit model from falling back to server speech.
+`src/utils/provider/modelCatalog.ts` supplies the same scoped catalogs to configuration panels and
+`src/utils/provider/generationModels.ts`.
+
+The optional `nsfw` boolean on `/generate image`, `/generate video`, and `/novelai generate image`
+controls Discord spoilers only.
+Auto image generation passes it to image tool delivery; it does not change the planner's instructions,
+the generation request, or provider content filters.
+
 ## Interaction timing rules
 
 Discord requires interaction acknowledgement within approximately three seconds of generation (`interaction.createdTimestamp`). An acknowledgement taking longer than 1.5 seconds emits a rate-limited latency warning (`INTERACTION_ACK_WARN_MS`). After acknowledgement, the bot has up to 15 minutes to complete work.

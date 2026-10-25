@@ -158,6 +158,10 @@ export class GenerateImageNaiTool extends BaseTool {
   parameters: ToolParameterSchema = {
     type: "object",
     properties: {
+      nsfw: {
+        type: "boolean",
+        description: "Set true when the image requires a Discord spoiler, useful for NSFW images.",
+      },
       prompt: {
         type: "string",
         description:
@@ -271,6 +275,7 @@ export class GenerateImageNaiTool extends BaseTool {
       context.locale,
       [],
       Boolean(promptAttachment),
+      attachment.spoiler,
     );
     const files = promptAttachment ? [attachment, promptAttachment] : [attachment];
 
@@ -923,6 +928,8 @@ export class GenerateImageNaiTool extends BaseTool {
         checkImageQuota,
         userDiscId,
         quotaCheck,
+        undefined,
+        context.streamContext?.imageModelSelection,
       );
       quotaCheck = serverQuotaCheck;
 
@@ -1250,7 +1257,7 @@ export class GenerateImageNaiTool extends BaseTool {
         context.locale,
         effectiveNegativePrompt,
       );
-      const attachmentFilename = `${filePrefix}_${Date.now()}.${preparedImage.extension}`;
+      const attachmentFilename = `${args.nsfw === true ? "SPOILER_" : ""}${filePrefix}_${Date.now()}.${preparedImage.extension}`;
       const attachment = new AttachmentBuilder(preparedImage.buffer, {
         name: attachmentFilename,
       });

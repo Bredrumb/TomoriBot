@@ -1021,6 +1021,40 @@ describe("runGenerationTurn fallback behavior", () => {
     });
   }
 
+  it("keeps an explicit scene model on its selected route when the personal default fails", async () => {
+    const chosen = makeLlm(4, "chosen-scene-model");
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-default"),
+    );
+    context.currentPersona = {
+      ...context.currentPersona,
+      llm: chosen,
+      config: {
+        ...context.currentPersona.config,
+        api_key: Buffer.from("personal-key"),
+        model_randomizer_enabled: false,
+        fallback_llm_ids: [],
+      },
+      fallback_chain: undefined,
+      fallback_llms: undefined,
+    };
+    context.turn.lockedTurn.admission.incoming.sceneTurn = {
+      commandId: "scene-command",
+      sequence: [{ personaId: 1, personaName: "Mirri" }],
+      totalTurns: 1,
+      turnIndex: 0,
+      modelSelection: { kind: "text", source: "personal", provider: chosen.llm_provider, modelId: 4 },
+    };
+    queuedResults.push(personalRouteFailure(), successfulReply());
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    expect((await runGenerationTurn(context, collectingSink())).status).toBe("error");
+    expect(toolLoopCalls.map((call) => call.model)).toEqual(["chosen-scene-model"]);
+    expect(serverSavedConfigLoads).toEqual([]);
+    expect(textQuotaAdmissions).toEqual([]);
+  });
+
   it("falls back from a failed personal text model to the configured server model", async () => {
     const context = makePersonalContext(
       makeLlm(1, "server-primary"),

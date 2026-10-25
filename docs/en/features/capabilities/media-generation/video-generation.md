@@ -8,6 +8,13 @@ aiGenerated: true
 TomoriBot can generate short videos from a text prompt or by animating an existing image.
 Use `/generate video`, or ask her directly in chat.
 
+Use the optional `model` parameter to choose a video model for this generation without changing
+your defaults. Autocomplete includes compatible server and personal providers, with personal entries
+marked `(via Personal Provider)`. Leaving it blank uses the usual model.
+
+Set `nsfw` to `true` to hide the generated video behind a Discord spoiler. This only changes how
+Discord displays the video; it does not change generation or provider content filters.
+
 ## What She Can Do
 
 - **Text-to-video**: generate a short clip from a description.

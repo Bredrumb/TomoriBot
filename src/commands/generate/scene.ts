@@ -1,4 +1,9 @@
 import {
+  addGenerationModelOption,
+  createGenerationModelAutocomplete,
+  resolveGenerationModelOption,
+} from "@/utils/discord/autocomplete/generationModelAutocomplete";
+import {
   EmbedBuilder,
   MessageFlags,
   PermissionFlagsBits,
@@ -42,7 +47,10 @@ const MAX_PERSONA_SELECT_OPTIONS = 25;
 const GENERATE_SCENE_MAX_CYCLES = 10;
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
-  subcommand.setName("scene").setDescription(localizer("en-US", "commands.generate.scene.description"));
+  addGenerationModelOption(
+    subcommand.setName("scene").setDescription(localizer("en-US", "commands.generate.scene.description")),
+  );
+export const autocomplete = createGenerationModelAutocomplete("text");
 
 function getPersonaOptions(personas: TomoriState[], locale: string) {
   return personas
@@ -183,6 +191,15 @@ export async function execute(
     });
     return;
   }
+
+  const modelSelection = await resolveGenerationModelOption(
+    interaction,
+    tomoriState.server_id,
+    userData.user_id ?? null,
+    locale,
+    "text",
+  );
+  if (modelSelection === false) return;
 
   const invokingMember = interaction.member as GuildMember | null;
   const cooldownType = tomoriState.config.cooldown_type ?? CooldownType.OFF;
@@ -393,6 +410,7 @@ export async function execute(
     turnIndex: 0,
     totalTurns: sequence.length,
     additionalInstructions,
+    modelSelection: modelSelection ?? undefined,
   };
 
   const speakingOrder = speakers.map((speaker) => speaker.personaName).join(" → ");

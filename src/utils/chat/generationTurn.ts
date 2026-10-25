@@ -367,7 +367,11 @@ async function buildGenerationPlan(context: ChatTurnContext): Promise<Generation
 function resolveServerRouteExtension(
   context: ChatTurnContext,
 ): ((startIndex: number) => Promise<GenerationAttempt[]>) | null {
-  if (context.textCredentialSource !== "personal" || context.isUserImpersonation) {
+  if (
+    context.turn.lockedTurn.admission.incoming.sceneTurn?.modelSelection ||
+    context.textCredentialSource !== "personal" ||
+    context.isUserImpersonation
+  ) {
     return null;
   }
   if (context.currentPersona.config.user_byok_mode) {
@@ -723,6 +727,7 @@ type TextRoute = "planned" | "server";
 
 async function resolveTomoriStateForRoute(context: ChatTurnContext, route: TextRoute): Promise<TomoriState> {
   const incoming = context.turn.lockedTurn.admission.incoming;
+  if (incoming.sceneTurn?.modelSelection) return context.currentPersona;
   const usePersonalRoute = route === "planned" && context.textCredentialSource === "personal";
   const base = usePersonalRoute
     ? (await applyPersonalProviderSelectionsToTomoriState(context.currentPersona, context.personalRoutingUserId))
