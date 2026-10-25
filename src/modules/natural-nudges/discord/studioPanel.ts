@@ -199,11 +199,11 @@ export function nudgeBlockerLabel(locale: string, blocker: IdleNudgeBlocker): st
   );
 }
 
-export function studioEntryTitle(locale: string, entry: StudioEntry): string {
+function studioEntryTitle(locale: string, entry: StudioEntry): string {
   return entry.definition.titleKey ? localizer(locale, entry.definition.titleKey) : (entry.definition.title ?? "");
 }
 
-export function studioEntrySource(entry: StudioEntry): "builtin" | "server" | "persona" {
+function studioEntrySource(entry: StudioEntry): "builtin" | "server" | "persona" {
   if (entry.definition.builtIn) return "builtin";
   return entry.definition.ownerPersonaId === undefined ? "server" : "persona";
 }
@@ -671,7 +671,7 @@ export function buildAvailabilityModal(
 }
 
 /** A persona-owned row may only enable or disable its own owner, so its checklist holds one option. */
-export function personaAvailabilityOptions(locale: string, entry: StudioEntry, ownerName: string): ChecklistOption[] {
+function personaAvailabilityOptions(locale: string, entry: StudioEntry, ownerName: string): ChecklistOption[] {
   return [
     {
       value: "available",
@@ -711,7 +711,7 @@ export function buildPersonaAvailabilityModal(
 }
 
 /** Removal keys tag their source, so one checklist can present server and persona entries without mixing them up. */
-export function studioRemovalKey(entry: StudioEntry): string | null {
+function studioRemovalKey(entry: StudioEntry): string | null {
   if (entry.custom) return `c:${entry.custom.custom_idle_nudge_id}`;
   const ownerId = entry.definition.ownerPersonaId;
   const idleNudgeId = personaNudgeLocalId(entry.definition);

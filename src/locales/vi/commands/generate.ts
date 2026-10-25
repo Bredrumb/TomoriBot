@@ -153,6 +153,10 @@ export default {
     },
 
     "voice-message": {
+      incompatible_upload_title: `Cần model sao chép giọng đọc`,
+      incompatible_upload_description: `Tệp bạn tải lên trong \`voice_sample\` cần model \`TTS (Sao chép giọng đọc)\` tương thích. Chọn model trong \`/config\` > Model > Chuyển đổi model, hoặc \`/personal config\` cho model riêng của bạn. Để dùng Thiết kế giọng đọc, hãy bỏ tệp đính kèm và nhập mô tả vào \`voice_design\`.`,
+      incompatible_design_title: `Cần model thiết kế giọng đọc`,
+      incompatible_design_description: `Mô tả bạn nhập trong \`voice_design\` cần model \`TTS (Thiết kế giọng đọc)\` tương thích. Chọn model trong \`/config\` > Model > Chuyển đổi model, hoặc \`/personal config\` cho model riêng của bạn. Để dùng Sao chép giọng đọc, hãy xóa mô tả và đính kèm âm thanh tham chiếu trong \`voice_sample\`.`,
       success_routing_field: `Định tuyến giọng nói`,
       routing_server: `Model giọng nói của máy chủ`,
       routing_personal: `Model giọng nói cá nhân`,

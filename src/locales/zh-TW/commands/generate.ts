@@ -153,6 +153,10 @@ export default {
     },
 
     "voice-message": {
+      incompatible_upload_title: `需要語音複製模型`,
+      incompatible_upload_description: `你在\`voice_sample\`上傳的音訊需要相容的\`TTS（語音複製）\`模型。請在\`/config\` > 模型 > 切換模型中選擇，或在\`/personal config\`中選擇你自己的模型。要使用語音設計，請移除上傳的音訊，並在\`voice_design\`中輸入聲音描述。`,
+      incompatible_design_title: `需要語音設計模型`,
+      incompatible_design_description: `你在\`voice_design\`輸入的描述需要相容的\`TTS（語音設計）\`模型。請在\`/config\` > 模型 > 切換模型中選擇，或在\`/personal config\`中選擇你自己的模型。要使用語音複製，請清除描述，並在\`voice_sample\`中附上參考音訊。`,
       success_routing_field: `語音路由`,
       routing_server: `伺服器語音模型`,
       routing_personal: `個人語音模型`,

@@ -153,6 +153,10 @@ export default {
     },
 
     "voice-message": {
+      incompatible_upload_title: `需要声音克隆模型`,
+      incompatible_upload_description: `你在\`voice_sample\`上传的音频需要兼容的\`TTS（声音克隆）\`模型。请在\`/config\` > 模型 > 切换模型中选择，或在\`/personal config\`中选择你自己的模型。要使用语音设计，请移除上传的音频，并在\`voice_design\`中输入声音描述。`,
+      incompatible_design_title: `需要语音设计模型`,
+      incompatible_design_description: `你在\`voice_design\`输入的描述需要兼容的\`TTS（语音设计）\`模型。请在\`/config\` > 模型 > 切换模型中选择，或在\`/personal config\`中选择你自己的模型。要使用声音克隆，请清除描述，并在\`voice_sample\`中附上参考音频。`,
       success_routing_field: `语音路由`,
       routing_server: `服务器语音模型`,
       routing_personal: `个人语音模型`,
