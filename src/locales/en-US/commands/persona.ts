@@ -264,6 +264,8 @@ Use \`/config\` > Models > Switch Models to switch to a model that supports stru
 **Next steps:**
 1. Use \`/config\` > Models > Switch Models to switch to a tool-enabled model, OR
 2. Regenerate without web search (choose "No" when asked)`,
+      api_key_decrypt_failed_title: `API Key Error`,
+      api_key_decrypt_failed_description: `Failed to decrypt the active provider credentials. Please reconfigure them using \`/providers\`.`,
       web_search_failed_title: `Persona Generation Aborted`,
       web_search_failed_description: `Persona generation was aborted because the requested web search failed.
 

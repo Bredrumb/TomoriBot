@@ -264,6 +264,8 @@ Usa \`/config\` > Modelos > Cambiar modelos para cambiar a un modelo que admita 
 **Próximos pasos:**
 1. Usa \`/config\` > Modelos > Cambiar modelos para cambiar a un modelo con herramientas, O
 2. Vuelve a generar sin búsqueda web (elige "No" cuando se te pregunte)`,
+      api_key_decrypt_failed_title: `🔴 Error de clave de API`,
+      api_key_decrypt_failed_description: `Falló la desencriptación de las credenciales del proveedor activo. Por favor, reconfigúralas usando \`/providers\`.`,
       web_search_failed_title: `Generación de persona cancelada`,
       web_search_failed_description: `Se canceló la generación de persona porque falló la búsqueda web solicitada.
 

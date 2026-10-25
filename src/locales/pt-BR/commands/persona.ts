@@ -264,6 +264,8 @@ Use \`/config\` > Modelos > Mudar Modelos para mudar para um modelo que suporte 
 **Próximos passos:**
 1. Use \`/config\` > Modelos > Mudar Modelos para mudar para um modelo com ferramentas habilitadas, OU
 2. Gere novamente sem a pesquisa na web (escolha "Não" quando perguntado)`,
+      api_key_decrypt_failed_title: `🔴 Erro na Chave de API`,
+      api_key_decrypt_failed_description: `Falha ao descriptografar as credenciais do provedor ativo. Por favor, reconfigure-as usando \`/providers\`.`,
       web_search_failed_title: `Geração da persona cancelada`,
       web_search_failed_description: `A geração da persona foi cancelada porque a busca na web solicitada falhou.
 

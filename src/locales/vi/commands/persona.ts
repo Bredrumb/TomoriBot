@@ -264,6 +264,8 @@ Dùng \`/config\` > Models > Switch Models để chuyển sang model hỗ trợ 
 **Các bước tiếp theo:**
 1. Dùng \`/config\` > Models > Switch Models để đổi sang model hỗ trợ công cụ, HOẶC
 2. Tạo lại mà không dùng tìm kiếm web (chọn "Không" khi được hỏi)`,
+      api_key_decrypt_failed_title: `🔴 Lỗi khóa API`,
+      api_key_decrypt_failed_description: `Không thể giải mã thông tin nhà cung cấp đang hoạt động. Hãy cấu hình lại bằng \`/providers\`.`,
       web_search_failed_title: `Đã hủy tạo persona`,
       web_search_failed_description: `Quá trình tạo persona đã bị hủy vì tìm kiếm web theo yêu cầu thất bại.
 

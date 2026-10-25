@@ -264,6 +264,8 @@ export default {
 **次のステップ:**
 1. \`/config\` > モデル > モデルの切り替えを使用してツール対応モデルに切り替える、または
 2. ウェブ検索なしで再生成する（質問されたら「いいえ」を選択）`,
+      api_key_decrypt_failed_title: `🔴 APIキーエラー`,
+      api_key_decrypt_failed_description: `有効なプロバイダー認証情報の復号化に失敗しました。\`/providers\`で再設定してください。`,
       web_search_failed_title: `ペルソナの生成を中止しました`,
       web_search_failed_description: `要求されたウェブ検索に失敗したため、ペルソナの生成を中止しました。
 

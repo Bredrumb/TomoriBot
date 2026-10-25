@@ -264,6 +264,8 @@ export default {
 **接下來可以這樣做：**
 1. 用 \`/config\` > 模型 > 切換模型切換到支援工具的模型，或
 2. 不要網路搜尋，重新生成一次（被問到時選「否」）`,
+      api_key_decrypt_failed_title: `🔴 API 金鑰錯誤`,
+      api_key_decrypt_failed_description: `無法解密使用中供應商的憑證。請用 \`/providers\` 重新設定。`,
       web_search_failed_title: `已中止人格生成`,
       web_search_failed_description: `因請求的網路搜尋失敗，人格生成已中止。
 
