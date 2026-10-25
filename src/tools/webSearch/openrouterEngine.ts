@@ -17,6 +17,7 @@ import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAt
 import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
 import { readBoundedResponse } from "@/utils/security/boundedResponse";
 import { decryptApiKey } from "@/utils/security/crypto";
+import { findProviderOption } from "@/utils/provider/providerOptionRegistry";
 
 const SEARCH_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 const REQUEST_TIMEOUT_MS = Math.max(1000, Number.parseInt(process.env.WEB_SEARCH_TIMEOUT_MS ?? "5000", 10) || 5000);
@@ -48,7 +49,13 @@ export class OpenRouterEngine implements WebSearchEngine {
   readonly name = "openrouter" as const;
 
   async available(context: ToolContext): Promise<boolean> {
-    return context.provider === "openrouter" && context.tomoriState.config.api_key !== null;
+    const owner = context.usageContext?.credentialProvider;
+    return (
+      context.provider === "openrouter" &&
+      (owner
+        ? Boolean(findProviderOption(owner)?.selection.resolveCredentials)
+        : context.tomoriState.config.api_key !== null)
+    );
   }
 
   supportsCategory(category: SearchCategory): boolean {
@@ -68,8 +75,13 @@ export class OpenRouterEngine implements WebSearchEngine {
     try {
       signal.throwIfAborted();
       const { api_key: encryptedKey, key_version: keyVersion } = context.tomoriState.config;
-      if (!encryptedKey) return this.fail("missing_key");
-      const apiKey = await decryptApiKey(encryptedKey, keyVersion);
+      const usageContext = context.usageContext;
+      const owner = usageContext?.credentialProvider;
+      const credentials = owner
+        ? await findProviderOption(owner)?.selection.resolveCredentials?.({ usageContext })
+        : null;
+      if (owner && (!credentials || credentials.usageContext !== usageContext)) return this.fail("missing_key");
+      const apiKey = owner ? credentials?.apiKey : encryptedKey ? await decryptApiKey(encryptedKey, keyVersion) : null;
       if (!apiKey) return this.fail("missing_key");
       signal.throwIfAborted();
 

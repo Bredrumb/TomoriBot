@@ -207,6 +207,12 @@ The option must revalidate that payer and credential, refusing a changed identit
 revalidation returns the current usage context. The dispatcher refuses a missing option, unavailable
 resolver, or changed key before sending audio.
 
+An option's usage context identifies its credential owner through `credentialProvider`. Nested
+OpenRouter search calls that option's resolver with the initiating `usageContext` alone, preserving
+the fallback or pinned request's owner and model. The callback returns that same context and its
+current key. A missing resolver, refusal, or different returned context stops the search without
+trying a saved key or resolving the current default text provider.
+
 `resolveCapabilityCredentials` uses this callback for explicit option selections and for the active
 option owning a default capability. Default server resolution passes the loaded capability columns
 as `scope.modelConfig` to the ownership lookup. Personal routing keeps its existing precedence and
