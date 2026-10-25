@@ -663,6 +663,7 @@ const IMAGE_SUPPORT_FIELDS: ReadonlyArray<keyof ImageEndpointSupports> = [
 ];
 
 export interface ProviderModelModalDefaults {
+  apiStyle?: CustomEndpointApiStyle;
   codeName?: string;
   text?: ProviderPanelModel["textSettings"];
   decision?: ProviderPanelModel["decisionSettings"];
@@ -903,7 +904,11 @@ export function buildProviderModelModal(
       });
     }
   }
-  if (capability === "image" || capability === "video") {
+  if (
+    entryKind === "endpoint" &&
+    defaults?.apiStyle === "comfyui" &&
+    (capability === "image" || capability === "video")
+  ) {
     components.push({
       type: 18,
       label: safeSelectOptionText(localizer(locale, "commands.providers.model_workflow_label"), 45),

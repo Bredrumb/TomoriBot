@@ -352,6 +352,7 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
 
     components.push(
       buildModelRoutingControl({
+        locale,
         capabilityLabel,
         activeModelName: slot.currentModelName,
         activeProvider: slot.currentProvider,

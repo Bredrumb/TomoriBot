@@ -1059,8 +1059,10 @@ describe("providers routes", () => {
 
     expect(calls).toEqual(["show:image:42"]);
     expect(openedWith).toEqual({
+      apiStyle: "comfyui",
       codeName: "anima-v1",
       text: undefined,
+      decision: undefined,
       image: {
         supports: { txt2img: true, img2img: false, inpaint: true, negative_prompt: false },
         allowInpaint: true,

@@ -18,6 +18,8 @@ import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistr
 import { createProvidersInteractionRoute } from "@/utils/discord/interactions/providersRoutes";
 import { buildConfigModelsBody } from "@/utils/discord/ui/configModelsPanel";
 import { buildResponseDraftingBody } from "@/utils/discord/ui/responseDraftingPanel";
+import { buildModelRoutingControl, buildProviderPageEntries } from "@/utils/discord/ui/modelRoutingControls";
+import { buildProviderSelectWindow } from "@/utils/discord/ui/providerSelectWindow";
 import { buildProvidersPanelPayload, providersEntriesPerPage } from "@/utils/discord/ui/providersPanel";
 import { buildSetupWizardPayload } from "@/utils/discord/ui/setupPanel";
 import {
@@ -770,6 +772,44 @@ describe("provider option registry", () => {
   it("renders option provider labels using the model panel locale", () => {
     registerTestOption();
     expectForEveryLocale((locale) => {
+      const label = localizedCopy(locale, LABEL_KEY);
+      const control = buildModelRoutingControl({
+        locale,
+        capabilityLabel: "Text",
+        activeModelName: "example/model",
+        activeProvider: TEST_VALUE,
+        eligibleProviders: [TEST_VALUE],
+        customId: "routing:text",
+        serverDefaultDisplay: "",
+        disabled: false,
+      });
+      expect(control.components[0].options[0]?.label).toBe(label);
+      expect(control.components[0].placeholder).toContain(label);
+      const entries = buildProviderPageEntries({
+        providers: [TEST_VALUE],
+        expandedProvider: TEST_VALUE,
+        expandedOptionCount: 26,
+        pageSize: 25,
+        locale,
+        pageLabelKey: "commands.config.panel.provider_page_label",
+        encodeProviderValue: (provider) => provider,
+        encodePageValue: (provider, start) => `${provider}:${start}`,
+      });
+      expect(entries.entries[0]?.label).toBe(
+        localizedCopy(locale, "commands.config.panel.provider_page_label", { provider: label, page: 1 }),
+      );
+      const window = buildProviderSelectWindow({
+        entries: entries.entries,
+        entryStart: 0,
+        directLimit: 25,
+        expandedProvider: TEST_VALUE,
+        expandedPageCount: 2,
+        locale,
+        capabilityLabel: "Text",
+        pagePlaceholderKey: "commands.config.panel.model_provider_page_placeholder",
+        encodeAdvanceValue: (start) => `${start}`,
+      });
+      expect(window.placeholderOverride).toContain(label);
       const parameters = buildConfigModelsBody({
         locale,
         page: "parameters",

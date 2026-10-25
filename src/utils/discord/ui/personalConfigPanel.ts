@@ -1301,6 +1301,7 @@ ${localizer(locale, "commands.personal.config.models_description")}`,
 
         components.push(
           buildModelRoutingControl({
+            locale,
             capabilityLabel,
             activeModelName: row?.activeModelName ?? null,
             activeProvider: row?.storedProvider ?? null,

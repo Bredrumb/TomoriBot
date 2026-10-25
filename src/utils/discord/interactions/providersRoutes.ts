@@ -842,6 +842,9 @@ export function createProvidersInteractionRoute(
           selection.editingModelId,
           nonce,
           {
+            ...(route.entryKind === "endpoint" && (selection.capability === "image" || selection.capability === "video")
+              ? { apiStyle: section.apiStyle }
+              : {}),
             codeName: editing?.codeName,
             text: editing?.textSettings,
             decision: editing?.decisionSettings,
