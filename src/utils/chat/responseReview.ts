@@ -133,6 +133,7 @@ export function remainingPendingResponseLimit(state: ResponseReviewState): Pendi
   };
 }
 
+/** Late auxiliary usage still reaches accounting after post-turn effects drain the ledger. */
 export function recordResponseReviewUsage(state: ResponseReviewState, entry: TurnUsageEntry): void {
   state.usage.push(entry);
   state.usageRecorder?.(entry);

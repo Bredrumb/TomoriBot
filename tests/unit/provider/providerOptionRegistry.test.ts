@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
+import { afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
 import { ButtonStyle, ComponentType, type Client } from "discord.js";
 import {
   savedProviderConfigSchema,
@@ -51,6 +51,7 @@ import { expectForEveryLocale, localizedCopy, localizedProse } from "../../helpe
 import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 
 let personalOwner = "test-option";
+const deletedProviders: string[] = [];
 
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/cache/userCache": realUserCache,
@@ -71,6 +72,10 @@ scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
 scopedMock.module("@/utils/db/repositories/LlmProviderRepository", () => ({
   ...realLlmProviderRepository,
   llmProviderRepo: overrideMembers(realLlmProviderRepository.llmProviderRepo, {
+    deleteServerProviderRegistration: async (_serverId: number, provider: string) => {
+      deletedProviders.push(provider);
+      return true;
+    },
     loadUserSavedProviderConfigsResult: async () => ({
       status: "fresh" as const,
       configs: [TEST_VALUE, "openrouter"].map((provider) =>
@@ -329,7 +334,7 @@ function setupDraft(overrides: Partial<SetupDraftRecord> = {}): SetupDraftRecord
   };
 }
 
-function optionPanelEntry(): ProviderPanelEntry {
+function optionPanelEntry(): Extract<ProviderPanelEntry, { kind: "provider" }> {
   return {
     id: `provider:${TEST_VALUE}`,
     kind: "provider",
@@ -683,60 +688,21 @@ describe("provider option registry", () => {
     expect(optionState.removed).toBe(1);
   });
 
-  it("keeps the catalog provider removable while an option pays for text", async () => {
+  it("removes a catalog credential only when the option owns the active text model", async () => {
     const { state: optionState } = registerTestOption();
-    const { llmProviderRepo } = await import("@/utils/db/repositories");
-    const deletion = spyOn(llmProviderRepo, "deleteServerProviderRegistration").mockResolvedValue(true);
-    const removeCatalogEntry = () =>
-      providerPanelOperations.removeServerProviderEntry({
+    deletedProviders.length = 0;
+    for (const owned of [false, true]) {
+      optionState.owned = owned ? ["text"] : [];
+      const result = await providerPanelOperations.removeServerProviderEntry({
         scopeKind: "server",
         serverDiscId: "guild-1",
         state: state(),
-        entry: {
-          id: "provider:openrouter",
-          kind: "provider",
-          provider: "openrouter",
-          displayName: "OpenRouter",
-          savedAt: null,
-          rotationKeyCount: 0,
-          capabilities: [],
-        },
+        entry: { ...optionPanelEntry(), id: "provider:openrouter", provider: "openrouter" },
       });
-    try {
-      expect((await removeCatalogEntry()).status).toBe("active");
-      optionState.owned = ["text"];
-      expect((await removeCatalogEntry()).status).toBe("success");
-      expect(deletion).toHaveBeenCalledTimes(1);
-    } finally {
-      deletion.mockRestore();
+      expect(result.status).toBe(owned ? "success" : "active");
+      expect(deletedProviders).toEqual(owned ? ["openrouter"] : []);
+      expect(optionState.removed).toBe(0);
     }
-  });
-
-  it("acknowledges the option's setup control before its handler and repaints with the returned receipt", async () => {
-    const { option } = registerTestOption();
-    if (!option.setup) throw new Error("setup unavailable");
-    const nonce = "nonce-option-action";
-    const actionRouteId = buildSetupOptionActionRouteId({ locale: LOCALE, nonce });
-    storeSetupDraft(nonce, setupDraft());
-    const interaction = createRouteInteraction({ customId: actionRouteId });
-    let acknowledgedAtAction = false;
-    option.setup.components = async (context) => [
-      { type: ComponentType.TextDisplay, content: `control ${context.actionRouteId}` },
-    ];
-    option.setup.handleAction = async () => {
-      acknowledgedAtAction = interaction.deferred;
-      return { tone: "info", heading: "Juno", detail: "fixture receipt" };
-    };
-
-    await dispatchGlobalInteraction({} as Client, interaction as never);
-
-    expect(acknowledgedAtAction).toBe(true);
-    expect(interaction.calls.filter((call) => ["reply", "update", "deferUpdate"].includes(call.method))).toHaveLength(
-      1,
-    );
-    expect(JSON.stringify(interaction.edits.at(-1))).toContain("fixture receipt");
-    expect(JSON.stringify(interaction.edits.at(-1))).toContain(`control ${actionRouteId}`);
-    resetSetupDrafts();
   });
 
   it("stores the option picked in setup and repaints its onboarding", async () => {

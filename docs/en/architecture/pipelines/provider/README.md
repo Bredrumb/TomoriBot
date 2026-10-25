@@ -77,9 +77,6 @@ Protocol references: [OpenRouter Decisions](https://openrouter.ai/docs/api/api-r
 and stream contexts. `ProviderUsageContext` is a branded interface that deployment modules augment
 through TypeScript declaration merging. Keep the same context object through a request: denial
 matching uses object identity, so a nested request cannot claim another request's refusal.
-`withProviderUsageContext` binds that owner for the duration of provider work, including awaited
-adapter calls. The release spend guard reads this context at admission, so concurrent scopes sharing
-one member key cannot replace each other's request owner; a nested operation binds its own context.
 
 `withProviderUsageContext(context, execute)` binds asynchronous work to its request owner.
 `currentProviderUsageContext()` exposes that owner to the transport admission callback. Bind every
@@ -93,7 +90,8 @@ Callers report provider usage once per completed provider response, or pass
 reported cost, tokens, and provider request identity; they do not estimate missing charges. Job
 polling reports the final job identity once at the caller. A registered reporter owns persistence and
 deduplication. Reporting does not await storage, and reporter failures cannot fail inference.
-Without a reporter, reporting does nothing.
+Without a reporter, reporting does nothing. Document retrieval and re-embedding accept the same
+embedding `onUsage` callback; the caller supplies the recorder for each response.
 
 `ProviderRequestDeniedError` carries its context and a locale-dependent renderer. The renderer returns
 a title locale key and localized description, and accepts a flag for fallback notices. A registered
