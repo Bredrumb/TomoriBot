@@ -65,7 +65,7 @@ export async function loadProviderModelChoices(
         }));
     }
     case "decision":
-      return (await loadDecisionModelsForScope(owner))
+      return (await loadDecisionModelsForScope(owner, option?.value))
         .filter(({ model }) => model.provider === provider)
         .map(({ model }) => ({
           id: model.decision_model_id,

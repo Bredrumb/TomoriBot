@@ -80,7 +80,7 @@ class LlmModelRepository {
 
   async loadDecisionModelOptions(
     scope: OpenRouterModelScope,
-    includeManagedOpenRouter = false,
+    managedProviders: readonly string[] = [],
   ): Promise<DecisionModelOption[]> {
     const serverId = scope.kind === "server" ? scope.ownerId : null;
     const userId = scope.kind === "personal" ? scope.ownerId : null;
@@ -108,7 +108,7 @@ class LlmModelRepository {
         AND (
           EXISTS (SELECT 1 FROM saved_provider_configs saved WHERE saved.server_id = ${serverId} AND saved.provider = model.provider)
           OR EXISTS (SELECT 1 FROM user_saved_provider_configs saved WHERE saved.user_id = ${userId} AND saved.provider = model.provider)
-          OR (${includeManagedOpenRouter} AND model.provider = 'openrouter')
+          OR model.provider = ANY(${sql.array([...managedProviders], "text")})
         )
       ORDER BY model.provider, model.decision_model_id
     `,

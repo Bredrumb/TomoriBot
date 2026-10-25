@@ -1,7 +1,9 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { decisionSections } from "@/db/seed/catalog/models";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
-import { callDecisionsForProvider } from "@/providers/utils/providerFeatureExecutors";
+import { callDecisionsForProvider, loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
+import { loadProviderModelChoices } from "@/utils/provider/modelCatalog";
+import { registerProviderOption } from "@/utils/provider/providerOptionRegistry";
 import { registerCustomEndpoint } from "@/utils/provider/customEndpointService";
 import { createServerConfig } from "../../helpers/fixtures";
 import { resetRepository } from "@/utils/db/repositories/ResetRepository";
@@ -251,6 +253,66 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
         .catch(() => null),
     ).toBeNull();
     expect(await llmModelRepo.loadDecisionModelByProviderAndCodename("openrouter", "fixture-invalid")).toBeNull();
+  });
+
+  it("admits managed Decisions through option validation without admitting another scope's registrations", async () => {
+    const modelId = await llmModelRepo.upsertDecisionModel({
+      provider: "openrouter",
+      codename: "fixture-managed-decision",
+      inputTokenLimit: 8192,
+    });
+    await llmProviderRepo.upsertDecisionModelRegistration({ serverId, decisionModelId: modelId });
+    let entitled = true;
+    const dispose = registerProviderOption({
+      value: "test-decision",
+      catalogProvider: "openrouter",
+      capabilities: ["decision"],
+      copy: {
+        labelKey: "commands.providers.entry_kind_provider",
+        entryDescriptionKeys: {
+          server: "commands.providers.entry_kind_provider",
+          personal: "commands.providers.entry_kind_provider",
+        },
+        addActionLabelKey: "commands.providers.select_add_provider",
+        addActionDescriptionKeys: {
+          server: "commands.providers.select_add_provider_description",
+          personal: "commands.providers.select_add_provider_description",
+        },
+        removeImpactKey: "commands.providers.remove_impact_provider",
+      },
+      availability: () => ({ eligible: true }),
+      selection: {
+        load: async () => null,
+        ensure: async () => true,
+        claim: async () => true,
+        remove: async () => "removed",
+        validateModel: async ({ capability, modelCodename }) =>
+          entitled && capability === "decision" && modelCodename === "fixture-managed-decision",
+      },
+    });
+    try {
+      const server = { kind: "server", ownerId: serverId } as const;
+      const personal = { kind: "personal", ownerId: userId } as const;
+      expect((await loadProviderModelChoices(server, "decision", "test-decision")).map((model) => model.id)).toEqual([
+        modelId,
+      ]);
+      expect(await loadProviderModelChoices(personal, "decision", "test-decision")).toEqual([]);
+      await llmProviderRepo.upsertDecisionModelRegistration({ userId, decisionModelId: modelId });
+      for (const scope of [server, personal]) {
+        expect(
+          (await loadDecisionModelsForScope(scope, "test-decision")).map((entry) => entry.model.decision_model_id),
+        ).toEqual([modelId]);
+        entitled = false;
+        expect(await loadDecisionModelsForScope(scope, "test-decision")).toEqual([]);
+        expect(await loadProviderModelChoices(scope, "decision", "test-decision")).toEqual([]);
+        entitled = true;
+      }
+    } finally {
+      dispose();
+      await llmProviderRepo.deleteDecisionModelRegistration({ serverId, decisionModelId: modelId });
+      await llmProviderRepo.deleteDecisionModelRegistration({ userId, decisionModelId: modelId });
+      await llmModelRepo.deleteOrphanedDecisionModel(modelId);
+    }
   });
 
   it("executes through exact server and personal credentials using a local fake transport", async () => {
