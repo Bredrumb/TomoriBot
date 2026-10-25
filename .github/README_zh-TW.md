@@ -62,7 +62,7 @@
 
 TomoriBot 是一套免費且開源的 Discord 自架個人 AI 助理與角色扮演系統，靈感來自 SillyTavern 與 Discord 已停止服務的 Clyde。你可以把它當成實用的助理、可客製的夥伴或角色扮演對象，在私訊裡自己用，也能讓整個 Discord 伺服器一起用。
 
-TomoriBot 支援長期記憶、多個人格運作、網頁與 MCP 工具、聊天室內的媒體生成、200 多個 Discord 斜線指令，以及多種供應商，包含自訂代理與自架自己的模型，從文字生成到影片生成都涵蓋在內。
+TomoriBot 支援長期記憶、多個人格運作、網頁與 MCP 工具、聊天室內的媒體生成、Discord 斜線指令，以及多種供應商，包含自訂代理與自架自己的模型，從文字生成到影片生成都涵蓋在內。
 
 ### 開始使用
 
@@ -80,30 +80,30 @@ TomoriBot 支援長期記憶、多個人格運作、網頁與 MCP 工具、聊�
 <br />
 
 
-![Screenshots 2](../assets/img/scs/2.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/zh-TW/features/capabilities/media-generation/">完整的多模態輸入輸出</a></h3>
-<p align="center">TomoriBot 能處理直接傳進 Discord 的圖片、音訊與影片，並用你自己的本機模型端點或 API 金鑰生成這些內容，全部都會加密存放在持久化資料庫中。現成可用的 ComfyUI 工作流程放在 <code>assets/comfyui-workflows/</code>，本機音訊推論伺服器則在 <code>servers/</code>！</p>
-
-<br />
-
 ![Screenshots 3](../assets/img/scs/3.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/zh-TW/features/chatting-personality/multiple-personas/">多個人格支援</a></h3>
 <p align="center">TomoriBot 在伺服器裡的人格、行為與頭像都能輕鬆修改、建立，也能匯出成「人格」分享給其他人（類似可分享的 AI 角色卡）。你可以透過 <code>/persona generate</code> 匯入甚至轉換自己喜歡的 SillyTavern 角色卡。單一伺服器能擁有無限多個不同人格，每個都有自己的記憶與目標。你也可以安排它們互相合作，在伺服器裡一起做事（或只是互相打鬧）。</p>
 
 <br />
 
-
-![Screenshots 4](../assets/img/scs/4.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/zh-TW/features/command-reference/">200 多個原生設定指令</a></h3>
-<p align="center">所有設定都能透過 Discord 原生的斜線指令與互動介面完成。完整管理人格與提示詞、調整模型參數、設定 MCP 工具伺服器、調整權限、設定記憶、設定伺服器成員的速率限制，還有更多！你也可以直接問 TomoriBot 她會做什麼、有哪些斜線指令。目前正在開發網頁儀表板，讓管理更方便。</p>
+![Screenshots 2](../assets/img/scs/2.png)
+<h3 align="center"><a href="https://docs.tomoribot.app/zh-TW/features/capabilities/media-generation/">完整的多模態輸入輸出</a></h3>
+<p align="center">TomoriBot 能處理直接傳進 Discord 的圖片、音訊與影片，並用你自己的本機模型端點或 API 金鑰生成這些內容，全部都會加密存放在持久化資料庫中。現成可用的 ComfyUI 工作流程放在 <code>assets/comfyui-workflows/</code>，本機音訊推論伺服器則在 <code>servers/</code>！</p>
 
 <br />
 
 
-![Screenshots 6](../assets/img/scs/6.png)
+![搭配 ComfyUI 的完全本機設定](../assets/img/docs/intro/05-fully-local-setup.png)
+<h3 align="center"><a href="https://docs.tomoribot.app/zh-TW/self-hosting/local-endpoints/">完全本機設定</a></h3>
+<p align="center">你可以在自己的電腦上執行 TomoriBot 及其資料庫，搭配用於對話的本機 LLM、用於圖片生成的 ComfyUI，以及用於語音生成與文字轉錄的本機語音模型。所有這些 AI 運算都能在你自己的硬體上進行，無需使用雲端 AI 供應商。Discord 仍需要網際網路連線，並負責傳輸你與 bot 之間交流的訊息與媒體。</p>
 
-<h3 align="center"><a href="https://docs.tomoribot.app/zh-TW/features/integrations/sillytavern-support/">SillyTavern 整合（Beta）</a></h3>
-<p align="center">你可以透過 TomoriBot 在 Discord 裡直接使用自己喜歡的 SillyTavern 預設集，她會完整調整自己的提示詞，只要用 <code>st-preset</code> 把 .json 丟進來就好。Discord 為表單新增的原生核取方塊群組，讓你能像在 SillyTavern 一樣輕鬆開關節點。你也可以用 <code>/persona import</code> 直接匯入 SillyTavern 角色卡，或先用 <code>/persona generate</code> 修改它們。</p>
+<br />
+
+![Screenshots 4](../assets/img/scs/4.png)
+<h3 align="center"><a href="https://docs.tomoribot.app/zh-TW/features/command-reference/">原生設定斜線指令</a></h3>
+<p align="center">所有設定都能透過 Discord 原生的斜線指令與互動介面完成。完整管理人格與提示詞、調整模型參數、設定 MCP 工具伺服器、調整權限、設定記憶、設定伺服器成員的速率限制，還有更多！你也可以直接問 TomoriBot 她會做什麼、有哪些斜線指令。目前正在開發網頁儀表板，讓管理更方便。</p>
+
+<br />
 
 ![Screenshots 5](../assets/img/scs/5.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/zh-TW/features/">還有更多功能，持續增加中！</a></h3>
@@ -120,119 +120,7 @@ TomoriBot 支援長期記憶、多個人格運作、網頁與 MCP 工具、聊�
 <!-- GETTING STARTED -->
 ## 自架
 
-選擇一種安裝方式：
-
-- **A. 本機 Bun 安裝（建議）：**需要 Bun，以及 PostgreSQL 或 Docker 作為資料庫。
-- **B. Docker Compose 安裝：**只要 Docker 就能執行 bot 與資料庫，但主機端的維護腳本仍需要主機上的工具。
-
-對大多數自架者來說，建議走本機 Bun 設定精靈。預設的 **Full Install** 路徑會建立 `.env`、產生安全的 `CRYPTO_SECRET`、詢問你的 Discord bot token、設定 PostgreSQL、執行 `bun install --frozen-lockfile`，接著嘗試安裝輕量的資料庫與 AI 輔助額外項目。
-
-### A. 本機 Bun 安裝
-
-1. **複製儲存庫**
-   ```sh
-   git clone https://github.com/Bredrumb/TomoriBot.git
-   cd TomoriBot
-   ```
-
-2. **執行設定精靈**（更多資訊請見**[設定精靈指南](https://docs.tomoribot.app/zh-TW/self-hosting/setup-wizard/)**）
-   ```sh
-   bun run setup
-   ```
-
-3. **啟動 TomoriBot**
-    ```sh
-    bun run dev
-    ```
-
-看到 `TomoriBot up and running!` 之後，在 Discord 執行 `/setup`。
-
-### B. Docker Compose 安裝
-
-Docker Compose 會建置並執行 TomoriBot 與 PostgreSQL，不會使用設定精靈。
-
-**Docker Compose 必填的 `.env` 變數：**
-- `DISCORD_TOKEN` - 你的 Discord bot token
-- `CRYPTO_SECRET` - 32 字元的加密金鑰
-- `POSTGRES_PASSWORD` - 資料庫密碼（其他資料庫設定會自動處理）
-
-使用 Docker Compose 時，從 `.env.example` 開始，如果還沒設定就補上 `POSTGRES_PASSWORD`。選用的 Docker 或執行階段調校值仍然可以從 `.env.optional.example` 複製。
-
-```sh
-# 建置並啟動 TomoriBot 與她的資料庫
-docker compose up --build
-```
-
-之後要再啟動時，只要沒有改過程式碼或相依套件，執行 `docker compose up` 就夠了。
-
-### C. 選用的本機伺服器
-
-不論用哪種安裝方式，TomoriBot 都支援自行選擇啟用的本機伺服器，用來強化她的工具並加入本機監控：用於網頁搜尋的 SearXNG、用於瀏覽器渲染頁面抓取的 Crawl4AI，以及本機 TTS/STT 語音伺服器。
-
-**使用本機 Bun 安裝（A）時**，改用 `bun run launch` 取代 `bun run dev`，執行範例：
-
-```sh
-# 搭配 SearXNG 與 Crawl4AI 的 Docker 容器
-bun run launch --searxng --crawl4ai
-
-# 依照語音設定文件完成後，搭配本機 TTS 伺服器
-bun run launch --qwen3tts
-bun run launch --voxcpm2
-bun run launch --cosyvoice3
-
-# 查看所有可用旗標
-bun run launch --help
-```
-
-可用旗標：`--searxng`、`--crawl4ai`、`--qwen3tts`、`--chatterbox`、`--irodoritts`、`--voxcpm2`、`--fishs2`、`--cosyvoice3`、`--moss`、`--whisperx`、`--help`
-
-**Ctrl+C** 會停止 bot 與所有 Python 伺服器程序。Docker 容器（`--searxng`、`--crawl4ai`）刻意保持執行，結束時請用 `docker stop searxng` / `docker stop crawl4ai` 手動停止。
-
-**使用 Docker Compose（B）時**，本機伺服器改為透過 Compose profile 選擇性啟用：
-
-```sh
-# + SearXNG 網頁搜尋（自架的元搜尋引擎）
-docker compose --profile searxng up
-
-# + Crawl4AI 瀏覽器渲染頁面抓取
-docker compose --profile fetch-crawl4ai up
-
-# + 兩者同時啟用
-docker compose --profile searxng --profile fetch-crawl4ai up
-```
-
-完整設定細節請見以下指南：
-
-- **[SearXNG 網頁搜尋](https://docs.tomoribot.app/zh-TW/self-hosting/local-endpoints/setup-searxng/)** - 自架的元搜尋引擎執行個體，讓 `web_search` 工具不受單一引擎的 API 限制。
-- **[Crawl4AI](https://docs.tomoribot.app/zh-TW/self-hosting/local-endpoints/setup-crawl4ai/)** - 瀏覽器渲染的伺服器，為 `fetch_url` 工具抓取並處理大量 JavaScript 的網頁。
-- **[文字轉語音](https://docs.tomoribot.app/zh-TW/self-hosting/local-endpoints/text-to-speech/)** / **[語音轉文字](https://docs.tomoribot.app/zh-TW/self-hosting/local-endpoints/speech-to-text/)** - 供 TomoriBot 語音訊息使用的 Python 語音伺服器；需要事先設定一次它們的 venv。
-
-### 更新 TomoriBot
-
-要把自架的執行個體更新到最新版本，請先停止 bot（讓備份與任何移轉都在資料庫沒有寫入負載時執行），然後執行先備份再更新的指令：
-
-```sh
-bun run update
-```
-
-這個指令會依序執行以下步驟，任何一步失敗就立刻停止：
-
-1. **`bun run backup`** - 在動到任何程式碼*之前*，把完整的資料庫備份存到 `/backups/`。如果備份失敗，更新會中止，你的部署完全不會被改動。
-2. **`git pull --rebase --autostash`**
-3. **`bun install --frozen-lockfile`**
-
-接著用 `bun run dev` 或 `bun run launch` 重新啟動 TomoriBot
-
-實用旗標：
-
-| 旗標 | 效果 |
-|---|---|
-| `--build` | 安裝相依套件後也會執行 `bun run build` |
-| `--docker` | Docker Compose 路徑：把步驟 3 換成 `docker compose build` + `docker compose up -d` |
-| `--skip-backup` | 略過更新前的備份（不建議） |
-| `--yes` | 開始前略過確認提示 |
-
-所有主機端腳本的詳細說明，請見完整的**[維護文件](https://docs.tomoribot.app/zh-TW/features/command-reference/)**。
+安裝步驟、Docker Compose 與選用的本機伺服器，請參閱[自架文件](https://docs.tomoribot.app/zh-TW/self-hosting/)。
 
 <!-- AFTER SETUP -->
 ### 邀請或設定完成後
@@ -256,36 +144,63 @@ bun run update
 
 或者直接私訊 TomoriBot 跟她打招呼！
 
-<!-- CONTRIBUTING -->
-## 貢獻
+## 致謝
 
-非常歡迎大家為 TomoriBot 貢獻！送出 pull request 之前，請先看過以下資源：
+衷心感謝所有人，特別是以下這些優秀的朋友，他們提供的程式碼貢獻與建議塑造了 TomoriBot 的今日樣貌！
 
-- **[貢獻文件](https://docs.tomoribot.app/en/contributing/)**：新增斜線指令、工具、事件處理器、新的 AI 供應商與 locale 的完整逐步指南。
-- **[貢獻準則](CONTRIBUTING.md)**：涵蓋分支流程、品質檢查，以及不需事先討論就歡迎的貢獻範圍等儲存庫規則。
-
-<!-- LEGAL -->
-## 法律與授權
-
-### 給使用官方代管 TomoriBot 執行個體的使用者
-- **[服務條款](https://docs.tomoribot.app/zh-TW/legal/terms-of-service/)** - 使用 bot 的規則與指引
-- **[隱私權政策](https://docs.tomoribot.app/zh-TW/legal/privacy-policy/)** - 我們如何處理你的資料
-
-這些文件也能在 Discord 裡用 `/legal terms-of-service` 與 `/legal privacy-policy` 指令開啟。
-
-### 給自架或使用分支版本的使用者
-資料由你自己掌控，你的部署也必須自行負責遵循 [**GNU Affero General Public License v3.0**](https://github.com/Bredrumb/TomoriBot/blob/main/LICENSE) 的規範。
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/Bredrumb" title="Bredrumb: Creator, maintainer, and code contributions">
+        <img src="https://avatars.githubusercontent.com/u/65227425?s=128" width="64" height="64" alt="Bredrumb: Creator, maintainer, and code contributions"><br>
+        Bredrumb
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/palinalif" title="palinalif: Code contributions">
+        <img src="https://avatars.githubusercontent.com/u/31247276?s=128" width="64" height="64" alt="palinalif: Code contributions"><br>
+        palinalif
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/baetican" title="baetican: Code contributions">
+        <img src="https://avatars.githubusercontent.com/u/280696164?s=128" width="64" height="64" alt="baetican: Code contributions"><br>
+        baetican
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/struffl" title="struffl: Software design and technical guidance">
+        <img src="https://avatars.githubusercontent.com/u/1026348?s=128" width="64" height="64" alt="struffl: Software design and technical guidance"><br>
+        struffl
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/Rhapsody-Sky" title="Rhapsody-Sky: Software design and technical guidance">
+        <img src="https://avatars.githubusercontent.com/u/8095300?s=128" width="64" height="64" alt="Rhapsody-Sky: Software design and technical guidance"><br>
+        Rhapsody-Sky
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/aph31" title="aph31: Code contributions">
+        <img src="https://avatars.githubusercontent.com/u/251111747?s=128" width="64" height="64" alt="aph31: Code contributions"><br>
+        aph31
+      </a>
+    </td>
+  </tr>
+</table>
 
 <!-- CONTACT -->
 ## 聯絡與連結
 
 **官方網站**：[https://tomoribot.app](https://tomoribot.app/)
 
-**專案連結**：[https://github.com/Bredrumb/TomoriBot](https://github.com/Bredrumb/TomoriBot)
-
 **電子郵件**：bredrumb@gmail.com
 
 **Discord**：[官方支援伺服器](https://discord.gg/bjCfHm9QsB)
+
+
+## 授權條款
+本專案採用 [AGPLv3](LICENSE) 授權。
 
 <!-- SUPPORT -->
 ## 支持專案

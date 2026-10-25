@@ -168,6 +168,43 @@ export default {
       interest_label_description: 'Un nombre corto como "anime de mechas", de hasta {max} caracteres.',
       interest_description_label: "Descripción",
       interest_description_description: "Una línea con ejemplos, de hasta {max} caracteres.",
+      idle_title: "Intervenciones espontáneas",
+      idle_description:
+        "Intervenciones espontáneas que esta persona puede iniciar por su cuenta. Se suman a mis intervenciones integradas y del servidor; los intereses de arriba deciden cuándo me uno a una conversación.",
+      idle_none: "Aún no hay intervenciones espontáneas.",
+      idle_entry_row: "{title} ({category}): {note}",
+      idle_entry_available: "disponible",
+      idle_entry_off: "desactivada",
+      idle_entry_blocked_label: "bloqueada",
+      idle_entry_blocked: "bloqueada, {reason}",
+      idle_add_option: "+ Añadir {category}",
+      idle_select_placeholder: "Selecciona o añade una intervención espontánea...",
+      idle_availability_placeholder: "Alternar disponibilidad...",
+      idle_remove_button: "Eliminar intervenciones espontáneas",
+      idle_restore_button: "Restaurar intervenciones del preajuste",
+      idle_limit_note:
+        "Esta persona ya tiene {max} intervenciones espontáneas, el máximo permitido. Elimina una para añadir otra.",
+      idle_inherited_note: "Esta lista proviene del preajuste. Si editas una, esta persona tendrá su propia copia.",
+      idle_availability_modal_title: "Alternar disponibilidad",
+      idle_availability_description:
+        "Marcada hace que esta intervención esté disponible. Desmarcada la desactiva sin eliminarla.",
+      idle_availability_option: "Disponible",
+      idle_remove_modal_title: "Eliminar intervenciones espontáneas",
+      idle_remove_description:
+        "Desmarca una intervención para eliminarla de esta persona. Esta acción no se puede deshacer.",
+      idle_restore_confirm_title: "¿Restaurar intervenciones del preajuste?",
+      idle_restore_confirm_description:
+        "Esto reemplaza la lista de intervenciones espontáneas de esta persona por la del preajuste. Se descartarán las que hayas añadido o editado aquí.",
+      idle_restore_kept_detail:
+        "Se conservan los intereses, la locuacidad y la disponibilidad elegida para las entradas del preajuste.",
+      idle_saved_heading: "Intervenciones espontáneas actualizadas",
+      idle_saved_detail: "Se han guardado las intervenciones espontáneas de esta persona.",
+      idle_removed_detail: "Se han eliminado las intervenciones espontáneas desmarcadas.",
+      idle_restore_success_heading: "Intervenciones del preajuste restauradas",
+      idle_restore_success_detail:
+        "La lista de intervenciones de esta persona vuelve a seguir el preajuste. Se conservaron los intereses, la locuacidad y las opciones válidas de disponibilidad.",
+      unchanged_heading: "Sin cambios",
+      unchanged_detail: "Todo ya estaba configurado de esa manera.",
     },
     panel: {
       page_plugins_response_drafting: "Revisión de respuestas",
@@ -869,7 +906,7 @@ export default {
       resync_main_avatar_detail: `El avatar del servidor se restablecerá al del preajuste.`,
       resync_sprites_diff: `Sprites que añadiste: se eliminarán {count}.`,
       resync_nudges_diff:
-        "La locuacidad y los intereses de Natural Nudges volverán a los valores predeterminados del preajuste.",
+        "La locuacidad, los intereses, las intervenciones espontáneas creadas y su disponibilidad local en Natural Nudges volverán a los valores predeterminados del preajuste.",
       resync_kept_detail: `Tu nombre, palabras de activación, hábitos de nombramiento, memorias, historial y otros ajustes de la persona se mantendrán.`,
       resync_irreversible_detail: `Esto no se puede deshacer.`,
       resync_success_heading: `Persona sincronizada con preajuste`,

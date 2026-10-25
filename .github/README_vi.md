@@ -62,7 +62,7 @@ Một trợ lý AI cá nhân và hệ thống nhập vai (role-playing) self-hos
 
 TomoriBot là một trợ lý AI cá nhân và hệ thống nhập vai mã nguồn mở miễn phí, self-hosting dành cho Discord, lấy cảm hứng từ SillyTavern và Clyde đã ngừng hoạt động của Discord. Bot có thể được dùng làm trợ lý thực tế, người bạn đồng hành có thể tùy chỉnh và bạn diễn nhập vai cho riêng bạn trong tin nhắn trực tiếp (DM), hoặc cho mọi người trong máy chủ Discord của bạn.
 
-TomoriBot hỗ trợ bộ nhớ dài hạn, hành vi nhiều persona, các công cụ web và MCP, tạo nội dung đa phương tiện ngay trong cuộc trò chuyện, hơn 200 lệnh slash Discord và nhiều nhà cung cấp bao gồm các proxy tùy chỉnh cũng như self-hosting model của riêng bạn cho mọi tác vụ từ tạo văn bản đến tạo video.
+TomoriBot hỗ trợ bộ nhớ dài hạn, hành vi nhiều persona, các công cụ web và MCP, tạo nội dung đa phương tiện ngay trong cuộc trò chuyện, các lệnh slash Discord và nhiều nhà cung cấp bao gồm các proxy tùy chỉnh cũng như self-hosting model của riêng bạn cho mọi tác vụ từ tạo văn bản đến tạo video.
 
 ### Bắt đầu
 
@@ -80,30 +80,30 @@ Sau khi thêm bot vào máy chủ của bạn bằng một trong hai cách trên
 <br />
 
 
-![Screenshots 2](../assets/img/scs/2.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/vi/features/capabilities/media-generation/">Đầu vào/Đầu ra đa phương thức hoàn chỉnh</a></h3>
-<p align="center">TomoriBot có thể xử lý hình ảnh, âm thanh và video được gửi trực tiếp trong Discord cũng như tạo lại chúng bằng các endpoint model cục bộ của riêng bạn hoặc thông qua các API key, tất cả đều được mã hóa bên trong cơ sở dữ liệu bền vững. Các quy trình (workflow) ComfyUI có sẵn để sử dụng trong <code>assets/comfyui-workflows/</code> và các máy chủ suy luận âm thanh cục bộ trong <code>servers/</code>!</p>
-
-<br />
-
 ![Screenshots 3](../assets/img/scs/3.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/vi/features/chatting-personality/multiple-personas/">Hỗ trợ nhiều persona</a></h3>
 <p align="center">Tính cách, hành vi và ảnh đại diện trong máy chủ của TomoriBot có thể dễ dàng thay đổi, tạo mới cũng như xuất cho người khác dưới dạng Persona (tương tự như các thẻ nhân vật AI có thể chia sẻ). Nhập và thậm chí biến đổi các thẻ SillyTavern yêu thích của bạn thông qua <code>/persona generate</code>. Bạn có thể sở hữu số lượng không giới hạn các persona khác nhau trong một máy chủ duy nhất, mỗi persona có bộ nhớ và mục tiêu riêng. Bạn cũng có thể điều phối chúng phối hợp cùng nhau để thực hiện công việc trong máy chủ (hoặc đơn giản là trêu chọc lẫn nhau).</p>
 
 <br />
 
-
-![Screenshots 4](../assets/img/scs/4.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/vi/features/command-reference/">Hơn 200 lệnh gốc để cấu hình</a></h3>
-<p align="center">Mọi thứ đều có thể được quản lý thông qua các lệnh slash gốc của Discord và giao diện người dùng (UI) tương tác. Quản lý hoàn toàn các persona, prompt, tinh chỉnh tham số model, thiết lập máy chủ công cụ MCP, điều chỉnh quyền hạn, cấu hình bộ nhớ, đặt giới hạn tần suất cho thành viên máy chủ và nhiều hơn nữa! Bạn cũng có thể hỏi trực tiếp TomoriBot về những việc bot có thể làm và các lệnh slash của bot. Hiện tại, một Web Dashboard đang được phát triển để giúp việc quản lý thuận tiện hơn nữa.</p>
+![Screenshots 2](../assets/img/scs/2.png)
+<h3 align="center"><a href="https://docs.tomoribot.app/vi/features/capabilities/media-generation/">Đầu vào/Đầu ra đa phương thức hoàn chỉnh</a></h3>
+<p align="center">TomoriBot có thể xử lý hình ảnh, âm thanh và video được gửi trực tiếp trong Discord cũng như tạo lại chúng bằng các endpoint model cục bộ của riêng bạn hoặc thông qua các API key, tất cả đều được mã hóa bên trong cơ sở dữ liệu bền vững. Các quy trình (workflow) ComfyUI có sẵn để sử dụng trong <code>assets/comfyui-workflows/</code> và các máy chủ suy luận âm thanh cục bộ trong <code>servers/</code>!</p>
 
 <br />
 
 
-![Screenshots 6](../assets/img/scs/6.png)
+![Thiết lập hoàn toàn cục bộ với ComfyUI](../assets/img/docs/intro/05-fully-local-setup.png)
+<h3 align="center"><a href="https://docs.tomoribot.app/vi/self-hosting/local-endpoints/">Thiết lập hoàn toàn cục bộ</a></h3>
+<p align="center">Bạn có thể chạy TomoriBot và cơ sở dữ liệu của nó ngay trên PC của mình, với một LLM cục bộ cho các cuộc trò chuyện, ComfyUI để tạo hình ảnh và các model giọng nói cục bộ để tạo và chép lại giọng nói. Toàn bộ quá trình xử lý AI đó có thể diễn ra trên phần cứng của bạn mà không cần nhà cung cấp AI đám mây. Discord vẫn cần kết nối internet và truyền tải các tin nhắn cũng như tệp đa phương tiện bạn trao đổi với bot.</p>
 
-<h3 align="center"><a href="https://docs.tomoribot.app/vi/features/integrations/sillytavern-support/">Tích hợp SillyTavern (Beta)</a></h3>
-<p align="center">Sử dụng các preset SillyTavern yêu thích của bạn trực tiếp trong Discord thông qua TomoriBot để điều chỉnh toàn bộ prompt của bot, chỉ cần thả tệp .json vào thông qua <code>st-preset</code>. Nhóm hộp kiểm gốc mới của Discord dành cho các modal giúp bạn dễ dàng bật tắt các nút như trong SillyTavern. Bạn cũng có thể nhập trực tiếp các thẻ nhân vật SillyTavern thông qua <code>/persona import</code> hoặc chỉnh sửa chúng trước bằng <code>/persona generate</code>.</p>
+<br />
+
+![Screenshots 4](../assets/img/scs/4.png)
+<h3 align="center"><a href="https://docs.tomoribot.app/vi/features/command-reference/">Các lệnh slash gốc để cấu hình</a></h3>
+<p align="center">Mọi thứ đều có thể được quản lý thông qua các lệnh slash gốc của Discord và giao diện người dùng (UI) tương tác. Quản lý hoàn toàn các persona, prompt, tinh chỉnh tham số model, thiết lập máy chủ công cụ MCP, điều chỉnh quyền hạn, cấu hình bộ nhớ, đặt giới hạn tần suất cho thành viên máy chủ và nhiều hơn nữa! Bạn cũng có thể hỏi trực tiếp TomoriBot về những việc bot có thể làm và các lệnh slash của bot. Hiện tại, một Web Dashboard đang được phát triển để giúp việc quản lý thuận tiện hơn nữa.</p>
+
+<br />
 
 ![Screenshots 5](../assets/img/scs/5.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/vi/features/">Nhiều tính năng hơn nữa, và còn tiếp tục tăng!</a></h3>
@@ -120,119 +120,7 @@ Sau khi thêm bot vào máy chủ của bạn bằng một trong hai cách trên
 <!-- GETTING STARTED -->
 ## Self-Hosting
 
-Chọn một phương thức cài đặt:
-
-- **A. Cài đặt Bun cục bộ (Khuyến nghị):** yêu cầu Bun và PostgreSQL hoặc Docker cho cơ sở dữ liệu.
-- **B. Cài đặt Docker Compose:** chỉ yêu cầu Docker để chạy bot/cơ sở dữ liệu, nhưng các tập lệnh bảo trì phía máy chủ host vẫn cần các công cụ trên host.
-
-Phương thức được khuyến nghị cho hầu hết người dùng self-hosting là trình hướng dẫn cài đặt Bun cục bộ. Quy trình **Full Install** mặc định của nó sẽ tạo `.env`, tạo một `CRYPTO_SECRET` an toàn, yêu cầu token bot Discord của bạn, cấu hình PostgreSQL, chạy `bun install --frozen-lockfile`, sau đó thử cài đặt cơ sở dữ liệu gọn nhẹ và các tiện ích hỗ trợ AI bổ sung.
-
-### A. Cài đặt Bun cục bộ
-
-1. **Clone kho lưu trữ**
-   ```sh
-   git clone https://github.com/Bredrumb/TomoriBot.git
-   cd TomoriBot
-   ```
-
-2. **Chạy trình hướng dẫn cài đặt** (xem thêm thông tin tại **[Hướng dẫn về trình hướng dẫn cài đặt](https://docs.tomoribot.app/vi/self-hosting/setup-wizard/)**)
-   ```sh
-   bun run setup
-   ```
-
-3. **Khởi động TomoriBot**
-    ```sh
-    bun run dev
-    ```
-
-Khi bạn thấy thông báo `TomoriBot up and running!`, hãy chạy lệnh `/setup` trong Discord.
-
-### B. Cài đặt Docker Compose
-
-Docker Compose sẽ build và chạy TomoriBot cùng với PostgreSQL. Phương thức này không sử dụng trình hướng dẫn cài đặt.
-
-**Các biến `.env` bắt buộc cho Docker Compose:**
-- `DISCORD_TOKEN` - Token bot Discord của bạn
-- `CRYPTO_SECRET` - Khóa mã hóa 32 ký tự
-- `POSTGRES_PASSWORD` - Mật khẩu cơ sở dữ liệu (các cài đặt DB khác được tự động cấu hình)
-
-Đối với Docker Compose, hãy bắt đầu từ `.env.example`, sau đó thêm `POSTGRES_PASSWORD` nếu bạn chưa thiết lập. Các giá trị tùy chọn để tinh chỉnh Docker hoặc runtime vẫn có thể được sao chép từ `.env.optional.example`.
-
-```sh
-# Build và khởi động TomoriBot cùng cơ sở dữ liệu
-docker compose up --build
-```
-
-Đối với những lần khởi động sau, chỉ cần `docker compose up` là đủ trừ khi bạn đã thay đổi mã nguồn hoặc các phần phụ thuộc (dependencies).
-
-### C. Máy chủ cục bộ tùy chọn
-
-TomoriBot hỗ trợ các máy chủ cục bộ tùy chọn đi kèm với một trong hai phương thức cài đặt để tăng cường công cụ và bổ sung giám sát cục bộ: SearXNG để tìm kiếm web, Crawl4AI để thu thập trang web được render bằng trình duyệt, và các máy chủ giọng nói TTS/STT cục bộ.
-
-**Với bản cài đặt Bun cục bộ (A)**, sử dụng `bun run launch` thay vì `bun run dev`, các ví dụ chạy:
-
-```sh
-# Với các container Docker SearXNG và Crawl4AI
-bun run launch --searxng --crawl4ai
-
-# Với một máy chủ TTS cục bộ sau khi làm theo tài liệu hướng dẫn cài đặt giọng nói
-bun run launch --qwen3tts
-bun run launch --voxcpm2
-bun run launch --cosyvoice3
-
-# Xem tất cả các cờ có sẵn
-bun run launch --help
-```
-
-Các cờ có sẵn: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--voxcpm2`, `--fishs2`, `--cosyvoice3`, `--moss`, `--whisperx`, `--help`
-
-**Ctrl+C** sẽ dừng bot và mọi tiến trình máy chủ Python. Các container Docker (`--searxng`, `--crawl4ai`) được chủ ý giữ tiếp tục chạy, hãy dừng chúng thủ công bằng lệnh `docker stop searxng` / `docker stop crawl4ai` khi bạn hoàn tất.
-
-**Với Docker Compose (B)**, các máy chủ cục bộ là tùy chọn thông qua các profile trong Compose:
-
-```sh
-# + Tìm kiếm web SearXNG (công cụ siêu tìm kiếm self-hosting)
-docker compose --profile searxng up
-
-# + Thu thập trang web render bằng trình duyệt Crawl4AI
-docker compose --profile fetch-crawl4ai up
-
-# + Cả hai cùng lúc
-docker compose --profile searxng --profile fetch-crawl4ai up
-```
-
-Xem các hướng dẫn bên dưới để biết chi tiết cài đặt đầy đủ:
-
-- **[Tìm kiếm web SearXNG](https://docs.tomoribot.app/vi/self-hosting/local-endpoints/setup-searxng/)** - Phiên bản siêu tìm kiếm self-hosting để vượt qua giới hạn API của một công cụ tìm kiếm đơn lẻ cho công cụ `web_search`.
-- **[Crawl4AI](https://docs.tomoribot.app/vi/self-hosting/local-endpoints/setup-crawl4ai/)** - Máy chủ render bằng trình duyệt để tải và xử lý các trang web nặng JavaScript cho công cụ `fetch_url`.
-- **[Chuyển văn bản thành giọng nói (Text-to-Speech)](https://docs.tomoribot.app/vi/self-hosting/local-endpoints/text-to-speech/)** / **[Chuyển giọng nói thành văn bản (Speech-to-Text)](https://docs.tomoribot.app/vi/self-hosting/local-endpoints/speech-to-text/)** - Các máy chủ giọng nói Python cho tin nhắn thoại của TomoriBot; môi trường ảo (venv) của chúng cần được thiết lập một lần từ trước.
-
-### Cập nhật TomoriBot
-
-Để cập nhật phiên bản self-hosting của bạn lên bản mới nhất, trước tiên hãy dừng bot (để việc sao lưu và mọi migration chạy trên cơ sở dữ liệu không có hoạt động), sau đó chạy trình cập nhật ưu tiên sao lưu:
-
-```sh
-bun run update
-```
-
-Lệnh này sẽ chạy trình tự sau, dừng ngay lập tức nếu có bất kỳ bước nào thất bại:
-
-1. **`bun run backup`** - sao lưu toàn bộ cơ sở dữ liệu vào `/backups/` *trước khi* chạm vào bất kỳ mã nguồn nào. Nếu việc sao lưu thất bại, quá trình cập nhật sẽ hủy bỏ và giữ nguyên trạng bản triển khai của bạn.
-2. **`git pull --rebase --autostash`**
-3. **`bun install --frozen-lockfile`**
-
-Sau đó khởi động lại TomoriBot bằng `bun run dev` hoặc `bun run launch`
-
-Các cờ hữu ích:
-
-| Cờ | Tác dụng |
-|---|---|
-| `--build` | Đồng thời chạy `bun run build` sau khi cài đặt các phần phụ thuộc |
-| `--docker` | Quy trình Docker Compose: thay thế bước 3 bằng `docker compose build` + `docker compose up -d` |
-| `--skip-backup` | Bỏ qua bước sao lưu trước khi cập nhật (không khuyến nghị) |
-| `--yes` | Bỏ qua bước xác nhận trước khi bắt đầu |
-
-Xem toàn bộ **[Tài liệu bảo trì](https://docs.tomoribot.app/vi/features/command-reference/)** để biết thêm chi tiết về tất cả các tập lệnh phía máy chủ host.
+Xem [tài liệu self-hosting](https://docs.tomoribot.app/vi/self-hosting/) để biết hướng dẫn cài đặt, Docker Compose và các máy chủ cục bộ tùy chọn.
 
 <!-- AFTER SETUP -->
 ### Sau khi mời / cài đặt
@@ -256,36 +144,63 @@ Chỉ cần đề cập bot trong một máy chủ hoặc sử dụng các từ 
 
 Hoặc nhắn tin trực tiếp (DM) cho TomoriBot và nói lời chào!
 
-<!-- CONTRIBUTING -->
-## Đóng góp
+## Lời cảm ơn
 
-Mọi đóng góp cho TomoriBot đều được đánh giá rất cao! Vui lòng xem lại các tài nguyên sau trước khi mở một pull request:
+Gửi lời cảm ơn sâu sắc tới mọi người, đặc biệt là những người tuyệt vời sau đây vì những đóng góp mã nguồn và lời khuyên giúp tạo nên TomoriBot của ngày hôm nay!
 
-- **[Tài liệu đóng góp](https://docs.tomoribot.app/en/contributing/)**: Hướng dẫn từng bước toàn diện để thêm các lệnh slash, công cụ, trình xử lý sự kiện (event handler), nhà cung cấp AI mới và ngôn ngữ mới.
-- **[Hướng dẫn đóng góp](CONTRIBUTING.md)**: Các quy tắc của kho lưu trữ bao gồm việc tạo nhánh, kiểm tra cổng chất lượng (quality gate) và phạm vi đóng góp được hoan nghênh mà không cần thảo luận trước.
-
-<!-- LEGAL -->
-## Pháp lý & giấy phép
-
-### Dành cho người dùng bản TomoriBot chính thức được lưu trữ
-- **[Điều khoản dịch vụ](https://docs.tomoribot.app/vi/legal/terms-of-service/)** - Các quy tắc và hướng dẫn khi sử dụng bot
-- **[Chính sách bảo mật](https://docs.tomoribot.app/vi/legal/privacy-policy/)** - Cách chúng tôi xử lý dữ liệu của bạn
-
-Bạn cũng có thể truy cập các tài liệu này ngay trong Discord bằng các lệnh `/legal terms-of-service` và `/legal privacy-policy`.
-
-### Dành cho người dùng self-hosting hoặc sử dụng bản fork
-Bạn kiểm soát dữ liệu của chính mình và chịu trách nhiệm về tính tuân thủ của bản triển khai theo giấy phép [**GNU Affero General Public License v3.0**](https://github.com/Bredrumb/TomoriBot/blob/main/LICENSE).
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/Bredrumb" title="Bredrumb: Creator, maintainer, and code contributions">
+        <img src="https://avatars.githubusercontent.com/u/65227425?s=128" width="64" height="64" alt="Bredrumb: Creator, maintainer, and code contributions"><br>
+        Bredrumb
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/palinalif" title="palinalif: Code contributions">
+        <img src="https://avatars.githubusercontent.com/u/31247276?s=128" width="64" height="64" alt="palinalif: Code contributions"><br>
+        palinalif
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/baetican" title="baetican: Code contributions">
+        <img src="https://avatars.githubusercontent.com/u/280696164?s=128" width="64" height="64" alt="baetican: Code contributions"><br>
+        baetican
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/struffl" title="struffl: Software design and technical guidance">
+        <img src="https://avatars.githubusercontent.com/u/1026348?s=128" width="64" height="64" alt="struffl: Software design and technical guidance"><br>
+        struffl
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/Rhapsody-Sky" title="Rhapsody-Sky: Software design and technical guidance">
+        <img src="https://avatars.githubusercontent.com/u/8095300?s=128" width="64" height="64" alt="Rhapsody-Sky: Software design and technical guidance"><br>
+        Rhapsody-Sky
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/aph31" title="aph31: Code contributions">
+        <img src="https://avatars.githubusercontent.com/u/251111747?s=128" width="64" height="64" alt="aph31: Code contributions"><br>
+        aph31
+      </a>
+    </td>
+  </tr>
+</table>
 
 <!-- CONTACT -->
 ## Liên hệ & liên kết
 
 **Trang web chính thức**: [https://tomoribot.app](https://tomoribot.app/)
 
-**Liên kết dự án**: [https://github.com/Bredrumb/TomoriBot](https://github.com/Bredrumb/TomoriBot)
-
 **Email**: bredrumb@gmail.com
 
 **Discord**: [Máy chủ hỗ trợ chính thức](https://discord.gg/bjCfHm9QsB)
+
+
+## Giấy phép
+Dự án này được cấp phép theo [AGPLv3](LICENSE).
 
 <!-- SUPPORT -->
 ## Ủng hộ dự án

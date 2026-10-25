@@ -23,17 +23,25 @@ export default {
     description_play_scene:
       "[Toques ociosos](https://docs.tomoribot.app/pt-BR/features/chatting-personality/natural-nudges/#idle-nudges) onde duas personas encenam uma breve conversa na frente de todos.",
     row_notes: "{title} ({notes})",
+    note_source_builtin: "Integrado",
+    note_source_server: "Personalizado do servidor",
+    note_source_persona: "Para {persona}",
     note_scope: "Apenas {personas}",
     note_scope_more: "mais {count}",
+    option_owner: "{title} ({persona})",
     blocker_tool: "precisa de {tool}",
     blocker_two_personas: "precisa de 2 personas",
     blocker_no_persona: "nenhuma persona pode usá-lo",
     toggle_placeholder: "Alternar Disponibilidade...",
-    custom_title_ping_user: "Menções Personalizadas",
-    custom_title_revive_topic: "Retomadas Personalizadas",
-    custom_title_start_topic: "Novos Tópicos Personalizados",
-    custom_title_play_scene: "Cenas Personalizadas",
-    custom_intro: "Crie seus próprios toques de {category} abaixo. Dicas:",
+    persona_toggle_option: "Disponível para {persona}",
+    persona_toggle_group_description:
+      "Desmarcar desativa este toque para {persona}. O toque permanece na página de Toques dessa persona.",
+    custom_title_ping_user: "Menções do Servidor",
+    custom_title_revive_topic: "Retomadas do Servidor",
+    custom_title_start_topic: "Novos Tópicos do Servidor",
+    custom_title_play_scene: "Cenas do Servidor",
+    custom_intro:
+      "Adicione toques de {category} para todo o servidor abaixo. Toques de uma persona são editados na lista acima. Dicas:",
     tips_ping_user:
       "Escreva {target} para o membro que menciono, assim a instrução funcionará com qualquer pessoa que eu conheça.\nMantenha um motivo breve para falar; mensagens curtas são respondidas com mais frequência.\nPeça uma memória ou atividade nos Pré-requisitos quando a instrução depender disso.",
     tips_revive_topic:
@@ -46,7 +54,7 @@ export default {
     add_option: "+ Adicionar Toque",
     limit_reached:
       "Este servidor já tem {max} toques personalizados, o máximo permitido. Remova um para adicionar outro.",
-    remove_button: "Remover Toques Personalizados",
+    remove_button: "Remover Toques",
     config_hint:
       "Ative os toques ociosos, escolha os canais e defina a frequência em /config > Plugins > Natural Nudges.",
     modal_add_title_ping_user: "Novo Toque de Menção a Usuário",
@@ -111,6 +119,7 @@ export default {
     prerequisite_tool: "A ferramenta {tool} está disponível",
     tool_web_search: "Busca na web",
     tool_fetch_url: "Ler um link",
+    tool_danbooru_search_tags: "Busca de tags do Danbooru",
     tool_image: "Geração de imagens",
     tool_generate_voice_message: "Mensagem de voz",
     tool_generate_video: "Geração de vídeo",
