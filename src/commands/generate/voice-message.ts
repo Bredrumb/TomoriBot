@@ -456,14 +456,22 @@ export async function execute(
     uploadFilename: uploadAttachment?.name ?? null,
     typedDesignPrompt,
   };
+  if (uploadAttachment && !resolveVoiceSourceCapabilities(speechTargetSource(targets.clone)).acceptsCloneShape) {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "commands.generate.voice-message.incompatible_upload_title",
+      descriptionKey: "commands.generate.voice-message.incompatible_upload_description",
+      color: ColorCode.ERROR,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
   if (
-    (uploadAttachment && !resolveVoiceSourceCapabilities(speechTargetSource(targets.clone)).acceptsCloneShape) ||
-    (typedDesignPrompt?.trim() &&
-      !resolveVoiceSourceCapabilities(speechTargetSource(targets.design)).acceptsDesignShape)
+    typedDesignPrompt?.trim() &&
+    !resolveVoiceSourceCapabilities(speechTargetSource(targets.design)).acceptsDesignShape
   ) {
     await replyInfoEmbed(interaction, locale, {
-      titleKey: "commands.generate.voice-message.no_voice_source_title",
-      descriptionKey: "commands.generate.voice-message.incompatible_override_description",
+      titleKey: "commands.generate.voice-message.incompatible_design_title",
+      descriptionKey: "commands.generate.voice-message.incompatible_design_description",
       color: ColorCode.ERROR,
       flags: MessageFlags.Ephemeral,
     });
