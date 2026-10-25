@@ -1,14 +1,13 @@
 import type { GenerationModelSelection } from "@/types/provider/generationModels";
-import { resolveServerTextModel } from "@/utils/provider/textModelSelection";
+import { resolveServerTextModel, resolveTextCredentialState } from "@/utils/provider/textModelSelection";
 import { GenerationModelUnavailableError } from "@/utils/provider/generationModels";
-import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
 import type { Guild, GuildMember, Message } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { getCachedUserRow, getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { configRepository, llmModelRepo, userRepository, whitelistRepository } from "@/utils/db/repositories";
+import { configRepository, userRepository, whitelistRepository } from "@/utils/db/repositories";
 import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
@@ -656,24 +655,17 @@ export async function resolveTextCredentialPolicy(params: {
       }));
     let modelState: TomoriState | undefined;
     if (params.modelSelection) {
-      const model = await llmModelRepo.loadById(params.modelSelection.modelId);
-      if (!model) throw new GenerationModelUnavailableError();
-      const base = withSavedProviderConfig(params.tomoriState, textCreds.savedConfig);
+      const base = await resolveTextCredentialState(params.tomoriState, textCreds);
       modelState = {
         ...base,
-        llm: model,
         fallback_llms: undefined,
         fallback_chain: undefined,
         rotation_keys: undefined,
         config: {
           ...base.config,
           llm_id: params.modelSelection.modelId,
-          llm_max_output_tokens: textCreds.savedConfig.llm_max_output_tokens ?? base.config.llm_max_output_tokens,
           model_randomizer_enabled: false,
           fallback_llm_ids: [],
-          custom_endpoint_url: textCreds.customEndpoint?.endpoint_url ?? null,
-          custom_model_name: textCreds.customEndpoint?.model_name ?? null,
-          custom_num_ctx: textCreds.customEndpoint?.num_ctx ?? null,
         },
       };
     }

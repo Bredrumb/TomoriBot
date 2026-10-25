@@ -208,6 +208,8 @@ option owning a default capability. Default server resolution passes the loaded 
 as `scope.modelConfig` to the ownership lookup. Personal routing keeps its existing precedence and
 BYOK restriction. Resolved credentials retain the selected model ID, scope, settings row, and usage
 context; built-in custom providers also retain their model-specific endpoint and API style.
+`resolveTextCredentialState` builds request state from those resolved values, so a personal key uses
+its selected model and sampler settings instead of the persona's server model or endpoint.
 
 Deployment behavior maps onto these fields:
 

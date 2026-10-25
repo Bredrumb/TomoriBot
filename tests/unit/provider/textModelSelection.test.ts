@@ -1,17 +1,78 @@
 import { afterEach, expect, it, spyOn } from "bun:test";
 import type { Message } from "discord.js";
-import { savedProviderConfigSchema, userSavedProviderConfigSchema } from "@/types/db/schema";
+import { customEndpointSchema, savedProviderConfigSchema, userSavedProviderConfigSchema } from "@/types/db/schema";
 import { clearChannelLlmCache, setChannelLlmCache } from "@/utils/cache/channelLlmCache";
 import { resolveTextCredentialPolicy } from "@/utils/chat/turnPlanner";
 import { llmModelRepo } from "@/utils/db/repositories";
 import * as credentials from "@/utils/provider/credentialResolver";
-import { resolveServerTextModel } from "@/utils/provider/textModelSelection";
+import { resolveServerTextModel, resolveTextCredentialState } from "@/utils/provider/textModelSelection";
 import { createLlmRow, createPersona, createUserRow } from "../../helpers/fixtures";
 
 const restore: Array<{ mockRestore(): void }> = [];
 afterEach(() => {
   for (const spy of restore.splice(0).reverse()) spy.mockRestore();
   clearChannelLlmCache();
+});
+
+it("keeps the resolved model, sampler settings and endpoint together without changing the persona", async () => {
+  const state = createPersona({
+    config: { custom_endpoint_url: "https://stale.invalid", custom_model_name: "stale-model" },
+  });
+  const savedConfig = userSavedProviderConfigSchema.parse({
+    user_id: 13,
+    provider: "custom:7",
+    api_key: Buffer.from("fixture-key"),
+    llm_id: 9,
+    diffusion_model_id: null,
+    embedding_model_id: null,
+    nai_diffusion_model_id: null,
+    nai_preset_name: null,
+    llm_temperature: 0.42,
+    llm_top_p: 0.8,
+    llm_max_output_tokens: 123,
+  });
+  const model = createLlmRow({ llm_id: 9, llm_provider: "custom:7" });
+  const load = spyOn(llmModelRepo, "loadById").mockResolvedValue(model);
+  restore.push(load);
+  const resolved: credentials.ResolvedCredentials = {
+    source: "personal",
+    provider: "custom:7",
+    modelId: 9,
+    apiKey: "fixture-key",
+    keyVersion: 1,
+    savedConfig,
+    customEndpoint: customEndpointSchema.parse({
+      custom_endpoint_id: 5,
+      connection_id: 7,
+      server_id: state.server_id,
+      label: "Fixture endpoint",
+      capability: "text",
+      api_style: "openai-compatible",
+      endpoint_url: "https://selected.invalid",
+      model_name: "selected-model",
+      model_ref_id: 9,
+      num_ctx: 8192,
+    }),
+  };
+  expect(await resolveTextCredentialState(state, resolved)).toMatchObject({
+    llm: model,
+    config: {
+      llm_id: 9,
+      llm_temperature: 0.42,
+      llm_top_p: 0.8,
+      llm_max_output_tokens: 123,
+      custom_endpoint_url: "https://selected.invalid",
+      custom_model_name: "selected-model",
+      custom_num_ctx: 8192,
+    },
+  });
+  expect(state.config.custom_endpoint_url).toBe("https://stale.invalid");
+  resolved.customEndpoint = undefined;
+  expect((await resolveTextCredentialState(state, resolved)).config.custom_endpoint_url).toBeNull();
+  load.mockResolvedValue(null);
+  await expect(resolveTextCredentialState(state, resolved)).rejects.toBeInstanceOf(
+    credentials.CredentialUnavailableError,
+  );
 });
 
 it("shares persona, channel, thread-parent and workspace precedence with credential admission", async () => {
