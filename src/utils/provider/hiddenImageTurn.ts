@@ -73,7 +73,7 @@ export interface HiddenImageTurnParams {
   interactingUserId: string;
   /** Internal database user ID of the invoking user, if known. */
   internalUserId?: number | null;
-  /** "current_provider" → generate_image, "novelai" → generate_image_nai */
+  /** "current_provider" â†’ generate_image, "novelai" â†’ generate_image_nai */
   backend: "current_provider" | "novelai";
   /** Human-readable label for the framing preset (e.g. "Character Focus"). */
   presetLabel: string;
@@ -126,7 +126,7 @@ export function buildHiddenImageDirective(
 
   const dirLines: string[] = [
     toolInstruction,
-    `Framing: ${presetLabel} — ${presetInstruction}`,
+    `Framing: ${presetLabel} â€” ${presetInstruction}`,
     backend === "current_provider" ? `Aspect ratio: ${aspectRatio}` : `Orientation: ${naiOrientation}`,
   ];
   if (extraDirection?.trim()) {
@@ -155,7 +155,7 @@ export function buildHiddenImageDirective(
  * exits immediately after the target image tool returns successfully.
  *
  * @returns `{ success: true }` if an image was generated, or
- *          `{ success: false, error: "…" }` with a human-readable reason.
+ *          `{ success: false, error: "â€¦" }` with a human-readable reason.
  */
 export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise<{ success: boolean; error?: string }> {
   const serverDiscId = params.guild?.id ?? params.interactingUserId;
@@ -389,7 +389,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
 
   // Run the simplified tool loop.
   //    We mimic the structure of tomoriChat's streaming loop but stripped down to
-  //    only what a hidden image agent needs: stream → execute tool → check endTurn.
+  //    only what a hidden image agent needs: stream â†’ execute tool â†’ check endTurn.
   const functionInteractionHistory: Array<{
     functionCall: FunctionCall;
     functionResponse: Record<string, unknown>;
@@ -418,7 +418,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   };
 
   log.info(
-    `[Hidden Image Agent] Starting hidden turn for channel ${channel.id} — backend=${backend}, tool=${targetToolName}, maxIterations=${BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS}`,
+    `[Hidden Image Agent] Starting hidden turn for channel ${channel.id} â€” backend=${backend}, tool=${targetToolName}, maxIterations=${BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS}`,
   );
 
   for (let i = 0; i < BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS; i++) {
@@ -503,7 +503,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
 
       if (toolResult.endTurn) {
         if (toolResult.success) {
-          log.info(`[Hidden Image Agent] Image tool "${funcName}" completed successfully — ending hidden turn.`);
+          log.info(`[Hidden Image Agent] Image tool "${funcName}" completed successfully â€” ending hidden turn.`);
           return { success: true };
         }
         log.warn(`[Hidden Image Agent] Image tool "${funcName}" requested endTurn but reported failure.`);

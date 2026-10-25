@@ -51,7 +51,9 @@ let requestContext: ProviderUsageContext | undefined = firstContext;
 let credentialFailure: Error | undefined;
 let providerFailure: Error | undefined;
 let providerResponse: Response | undefined;
+const transportContexts: Array<ProviderUsageContext | undefined> = [];
 const remoteFetch = mock(async () => {
+  transportContexts.push(currentProviderUsageContext());
   if (providerFailure) throw providerFailure;
   if (providerResponse) return providerResponse;
   return Response.json({
@@ -130,6 +132,7 @@ beforeAll(() => initializeLocalizer());
 afterEach(() => {
   for (const restore of restores.splice(0).reverse()) restore();
   remoteFetch.mockClear();
+  transportContexts.length = 0;
   requestContext = firstContext;
   credentialFailure = undefined;
   providerFailure = undefined;
@@ -137,6 +140,23 @@ afterEach(() => {
 });
 
 describe("provider usage and denial request integration", () => {
+  test("nested vision calls use their resolved owner and restore the initiating owner", async () => {
+    await withProviderUsageContext(otherContext, async () => {
+      for (const usageContext of [firstContext, undefined]) {
+        requestContext = usageContext;
+        const result = await analyzeImageWithVisionModel({
+          serverId: 1,
+          image: { data: "aW1hZ2U=", mimeType: "image/png" },
+          prompt: "fixture",
+          cachedVisionLlm: model,
+        });
+        expect(result.ok).toBe(true);
+        expect(transportContexts.at(-1)).toBe(usageContext);
+        expect(currentProviderUsageContext()).toBe(otherContext);
+      }
+    });
+  });
+
   test("isolates interleaved requests and restores nested owners after failures", async () => {
     const gate = Promise.withResolvers<void>();
     const first = withProviderUsageContext(firstContext, async () => {
