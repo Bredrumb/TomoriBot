@@ -7,6 +7,7 @@ declare const providerUsageContextBrand: unique symbol;
 
 export interface ProviderUsageContext {
   readonly [providerUsageContextBrand]?: never;
+  readonly credentialProvider?: string;
 }
 
 const requestUsageContext = new AsyncLocalStorage<ProviderUsageContext | undefined>();

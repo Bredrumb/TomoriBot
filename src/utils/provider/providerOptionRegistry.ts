@@ -148,12 +148,16 @@ export interface ProviderOptionDefinition {
       modelCodename: string;
     }): Promise<boolean>;
     /** Resolves only the chosen scope and model; throws `ProviderRequestDeniedError` to refuse without changing the payer. */
-    resolveCredentials?(input: {
-      scope: ProviderOptionScope;
-      capability: ProviderOptionCapability;
-      modelId: number;
-      previous?: ProviderOptionCredentials;
-    }): Promise<ProviderOptionCredentials | null>;
+    resolveCredentials?(
+      input:
+        | {
+            scope: ProviderOptionScope;
+            capability: ProviderOptionCapability;
+            modelId: number;
+            previous?: ProviderOptionCredentials;
+          }
+        | { usageContext: ProviderUsageContext },
+    ): Promise<ProviderOptionCredentials | null>;
   };
   panel?: {
     entryComponents?(context: ProviderOptionEntryContext): readonly ComponentInContainerData[];

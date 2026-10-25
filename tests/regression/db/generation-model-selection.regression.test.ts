@@ -284,7 +284,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Invocation model selection", () => {
         claim: async () => true,
         remove: async () => "removed",
         owns: (scope) => owns && scope.kind === "server" && scope.modelConfig?.llm_id === text.llm_id,
-        resolveCredentials: async ({ scope }) => {
+        resolveCredentials: async (input) => {
+          if ("usageContext" in input) return null;
+          const { scope } = input;
           if (refuse)
             throw new ProviderRequestDeniedError(contexts[scope.kind], () => ({
               titleKey: "fixture",

@@ -1,4 +1,5 @@
-import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { useEnvSandbox } from "../../helpers/env";
 import * as managedProvider from "@/modules/supporter-billing/runtime/managedProvider";
 import * as usageStatistics from "@/modules/supporter-billing/runtime/usageStatistics";
 import { supporterSpendGuard } from "@/modules/supporter-billing/runtime/spendGuard";
@@ -39,6 +40,11 @@ beforeAll(async () => {
 });
 
 describe("OpenRouter engine funded searches", () => {
+  useEnvSandbox(["RUN_ENV", "TOMORI_SUPPORTER_BILLING_ENABLED"]);
+  beforeEach(() => {
+    process.env.RUN_ENV = "production";
+    process.env.TOMORI_SUPPORTER_BILLING_ENABLED = "true";
+  });
   const engine = new OpenRouterEngine();
   let restore: Array<{ mockRestore(): void }> = [];
 

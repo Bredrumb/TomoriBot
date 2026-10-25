@@ -83,7 +83,9 @@ describe("hosted speech transports", () => {
         ensure: async () => true,
         claim: async () => true,
         remove: async () => "removed",
-        resolveCredentials: async ({ scope, capability, modelId, previous }) => {
+        resolveCredentials: async (input) => {
+          if ("usageContext" in input) return null;
+          const { scope, capability, modelId, previous } = input;
           previousCredentials = previous;
           expect(scope.ownerId).toBe(scope.kind === "personal" ? 9 : 7);
           expect(modelId).toBe(capability === "speech-design" ? 1 : 2);

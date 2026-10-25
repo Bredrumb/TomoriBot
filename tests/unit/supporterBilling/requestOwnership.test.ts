@@ -1,4 +1,5 @@
-import { beforeAll, describe, expect, it, spyOn } from "bun:test";
+import { beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { useEnvSandbox } from "../../helpers/env";
 import * as managedProvider from "@/modules/supporter-billing/runtime/managedProvider";
 import { supporterSpendGuard } from "@/modules/supporter-billing/runtime/spendGuard";
 import { getSupporterUsageContext } from "@/modules/supporter-billing/runtime/types";
@@ -15,6 +16,11 @@ import { createServerFunding, installSpendHarness } from "./guards/utils-funding
 beforeAll(initializeLocalizer);
 
 describe("supporter request ownership", () => {
+  useEnvSandbox(["RUN_ENV", "TOMORI_SUPPORTER_BILLING_ENABLED"]);
+  beforeEach(() => {
+    process.env.RUN_ENV = "production";
+    process.env.TOMORI_SUPPORTER_BILLING_ENABLED = "true";
+  });
   it("keeps a funded credential refusal scoped to its resolved funding", async () => {
     const funding = createServerFunding();
     const refusal: unknown = await managedProvider

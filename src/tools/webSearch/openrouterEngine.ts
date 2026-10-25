@@ -5,8 +5,6 @@ import {
   findProviderRequestDeniedError,
   notifyProviderToolFailure,
 } from "@/utils/provider/providerUsage";
-import { resolveSupporterMemberKey } from "@/modules/supporter-billing/runtime/managedProvider";
-import { getSupporterFundingFromUsageContext } from "@/modules/supporter-billing/runtime/types";
 import { normalizeProviderUsage } from "@/utils/text/tokenEstimate";
 import { z } from "zod";
 import { addFetchCapabilityReminder } from "@/tools/restAPIs/brave/braveSearchService";
@@ -19,6 +17,7 @@ import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAt
 import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
 import { readBoundedResponse } from "@/utils/security/boundedResponse";
 import { decryptApiKey } from "@/utils/security/crypto";
+import { findProviderOption } from "@/utils/provider/providerOptionRegistry";
 
 const SEARCH_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 const REQUEST_TIMEOUT_MS = Math.max(1000, Number.parseInt(process.env.WEB_SEARCH_TIMEOUT_MS ?? "5000", 10) || 5000);
@@ -50,10 +49,12 @@ export class OpenRouterEngine implements WebSearchEngine {
   readonly name = "openrouter" as const;
 
   async available(context: ToolContext): Promise<boolean> {
+    const owner = context.usageContext?.credentialProvider;
     return (
       context.provider === "openrouter" &&
-      (Boolean(getSupporterFundingFromUsageContext(context.usageContext)) ||
-        context.tomoriState.config.api_key !== null)
+      (owner
+        ? Boolean(findProviderOption(owner)?.selection.resolveCredentials)
+        : context.tomoriState.config.api_key !== null)
     );
   }
 
@@ -74,12 +75,13 @@ export class OpenRouterEngine implements WebSearchEngine {
     try {
       signal.throwIfAborted();
       const { api_key: encryptedKey, key_version: keyVersion } = context.tomoriState.config;
-      const funding = getSupporterFundingFromUsageContext(context.usageContext);
-      const apiKey = funding
-        ? await resolveSupporterMemberKey(funding)
-        : encryptedKey
-          ? await decryptApiKey(encryptedKey, keyVersion)
-          : null;
+      const usageContext = context.usageContext;
+      const owner = usageContext?.credentialProvider;
+      const credentials = owner
+        ? await findProviderOption(owner)?.selection.resolveCredentials?.({ usageContext })
+        : null;
+      if (owner && (!credentials || credentials.usageContext !== usageContext)) return this.fail("missing_key");
+      const apiKey = owner ? credentials?.apiKey : encryptedKey ? await decryptApiKey(encryptedKey, keyVersion) : null;
       if (!apiKey) return this.fail("missing_key");
       signal.throwIfAborted();
 

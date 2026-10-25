@@ -1,4 +1,5 @@
-import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { useEnvSandbox } from "../../../helpers/env";
 import { supporterUsageStatisticsRepository } from "@/modules/supporter-billing/db/repositories";
 import { supporterSpendGuard } from "@/modules/supporter-billing/runtime/spendGuard";
 import * as managedProvider from "@/modules/supporter-billing/runtime/managedProvider";
@@ -40,6 +41,11 @@ afterEach(() => {
 beforeAll(initializeLocalizer);
 
 describe("OpenRouter web search billing guards", () => {
+  useEnvSandbox(["RUN_ENV", "TOMORI_SUPPORTER_BILLING_ENABLED"]);
+  beforeEach(() => {
+    process.env.RUN_ENV = "production";
+    process.env.TOMORI_SUPPORTER_BILLING_ENABLED = "true";
+  });
   it("records one usage entry against the funding that paid for a successful search", async () => {
     const funding = createSupporterFunding({ modelCodename: MODEL });
     spies.push(spyOn(managedProvider, "resolveSupporterMemberKey").mockResolvedValue("synthetic-member-key"));

@@ -20,6 +20,12 @@ import * as toolProgressNotice from "@/utils/discord/toolProgressNotice";
 import * as remoteFetch from "@/utils/security/userRemoteFetch";
 import * as crypto from "@/utils/security/crypto";
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
+import { registerProviderOption, type ProviderOptionDefinition } from "@/utils/provider/providerOptionRegistry";
+import {
+  currentProviderUsageContext,
+  registerProviderUsageReporter,
+  type ProviderUsageContext,
+} from "@/utils/provider/providerUsage";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
 import { localizedCopy } from "../../helpers/localeCases";
@@ -295,6 +301,96 @@ describe("OpenRouter engine requests", () => {
     restore.push(decrypt, request);
     return { decrypt, request };
   }
+
+  it("keeps concurrent fallback and pinned searches on their initiating option context and refuses another credential", async () => {
+    const contexts: ProviderUsageContext[] = [
+      { credentialProvider: "test-option" },
+      { credentialProvider: "test-option" },
+    ];
+    const reports: ProviderUsageContext[] = [];
+    const option: ProviderOptionDefinition = {
+      value: "test-option",
+      catalogProvider: "openrouter",
+      capabilities: ["text"],
+      copy: {
+        labelKey: "commands.providers.entry_kind_provider",
+        entryDescriptionKeys: {
+          server: "commands.providers.entry_kind_provider",
+          personal: "commands.providers.entry_kind_provider",
+        },
+        addActionLabelKey: "commands.providers.select_add_provider",
+        addActionDescriptionKeys: {
+          server: "commands.providers.select_add_provider_description",
+          personal: "commands.providers.select_add_provider_description",
+        },
+        removeImpactKey: "commands.providers.remove_impact_provider",
+      },
+      availability: () => ({ eligible: true }),
+      selection: {
+        load: async () => null,
+        ensure: async () => true,
+        claim: async () => true,
+        remove: async () => "removed",
+        resolveCredentials: async (input) =>
+          "usageContext" in input
+            ? {
+                apiKey: `key-${contexts.indexOf(input.usageContext)}`,
+                usageContext: input.usageContext,
+                savedProvider: "test-option",
+              }
+            : null,
+      },
+    };
+    const dispose = registerProviderOption(option);
+    const report = registerProviderUsageReporter((context) => {
+      reports.push(context);
+    });
+    const { decrypt, request } = stubOpenRouter((init) => {
+      const context = currentProviderUsageContext();
+      const index = context ? contexts.indexOf(context) : -1;
+      expect(index).toBeGreaterThanOrEqual(0);
+      expect(new Headers(init?.headers).get("Authorization")).toBe(`Bearer key-${index}`);
+      expect(JSON.parse(String(init?.body)).model).toBe(index === 0 ? "fixture/fallback" : "fixture/pinned");
+      return Response.json({
+        usage: { cost: 0.01, prompt_tokens: 10, completion_tokens: 1 },
+        choices: [{ message: { annotations: [citation("https://example.com/result", "Fixture", "Excerpt")] } }],
+      });
+    });
+    const toolContexts = contexts.map((usageContext, index) =>
+      openRouterContext({
+        usageContext,
+        tomoriState: createPersona({
+          llm: createLlmRow({
+            llm_provider: "openrouter",
+            llm_codename: index === 0 ? "fixture/fallback" : "fixture/pinned",
+          }),
+          config: { api_key: Buffer.from("unrelated-saved-key") },
+        }),
+      }),
+    );
+    try {
+      expect(
+        (await Promise.all(toolContexts.map((context) => engine.search("fixture", "text", context)))).every(
+          (result) => result.success,
+        ),
+      ).toBe(true);
+      expect(new Set(reports)).toEqual(new Set(contexts));
+      expect(decrypt).not.toHaveBeenCalled();
+      const sent = request.mock.calls.length;
+      option.selection.resolveCredentials = async () => null;
+      expect((await engine.search("fixture", "text", toolContexts[0])).success).toBe(false);
+      option.selection.resolveCredentials = async () => ({ apiKey: "wrong-context-key", usageContext: contexts[1] });
+      expect((await engine.search("fixture", "text", toolContexts[0])).success).toBe(false);
+      dispose();
+      expect(await engine.available(toolContexts[0])).toBe(false);
+      expect((await engine.search("fixture", "text", toolContexts[0])).success).toBe(false);
+      expect(request.mock.calls.length).toBe(sent);
+      expect(decrypt).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+      report();
+    }
+  });
 
   it("is available only on OpenRouter turns with a saved credential and supports text-like categories", async () => {
     expect(await engine.available(openRouterContext())).toBe(true);

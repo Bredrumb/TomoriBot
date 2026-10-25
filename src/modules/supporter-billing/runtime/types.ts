@@ -9,6 +9,7 @@ import type {
   SupporterCapability,
 } from "@/modules/supporter-billing/config";
 import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
+import { SUPPORTER_PROVIDER_VALUE } from "@/modules/supporter-billing/config";
 
 declare module "@/utils/provider/providerUsage" {
   interface ProviderUsageContext {
@@ -101,7 +102,7 @@ const usageContexts = new WeakMap<SupporterFundingContext, SupporterUsageContext
 export function getSupporterUsageContext(funding: SupporterFundingContext): SupporterUsageContext {
   const existing = usageContexts.get(funding);
   if (existing) return existing;
-  const context: SupporterUsageContext = { supporterFunding: funding };
+  const context: SupporterUsageContext = { credentialProvider: SUPPORTER_PROVIDER_VALUE, supporterFunding: funding };
   usageContexts.set(funding, context);
   return context;
 }

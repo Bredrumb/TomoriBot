@@ -31,6 +31,7 @@ import { createPatreonOAuthUrlForDiscordUser } from "@/modules/supporter-billing
 import { SupporterRequestDeniedError } from "@/modules/supporter-billing/runtime/funding";
 import {
   resolveSupporterCapabilityCredentials,
+  resolveSupporterMemberKey,
   validateSupporterModelRegistration,
 } from "@/modules/supporter-billing/runtime/managedProvider";
 import {
@@ -447,8 +448,18 @@ export const supporterProviderOption: ProviderOptionDefinition = {
     remove: removeSelection,
     owns: ownsCapability,
     validateModel,
-    resolveCredentials: async ({ scope, capability, modelId, previous }) => {
+    resolveCredentials: async (input) => {
       if (!billingAvailable()) return null;
+      if ("usageContext" in input) {
+        const funding = getSupporterFundingFromUsageContext(input.usageContext);
+        if (!funding) return null;
+        return {
+          apiKey: await resolveSupporterMemberKey(funding),
+          usageContext: input.usageContext,
+          savedProvider: SUPPORTER_PROVIDER_VALUE,
+        };
+      }
+      const { scope, capability, modelId, previous } = input;
       const credentials = await resolveSupporterCapabilityCredentials({
         scope:
           scope.kind === "personal"
