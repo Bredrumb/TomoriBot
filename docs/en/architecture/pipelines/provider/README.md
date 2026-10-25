@@ -81,6 +81,13 @@ matching uses object identity, so a nested request cannot claim another request'
 adapter calls. The release spend guard reads this context at admission, so concurrent scopes sharing
 one member key cannot replace each other's request owner; a nested operation binds its own context.
 
+`withProviderUsageContext(context, execute)` binds asynchronous work to its request owner.
+`currentProviderUsageContext()` exposes that owner to the transport admission callback. Bind every
+auxiliary operation explicitly, including an undefined context for an unfunded nested request; the
+outer owner is restored when it returns. The release consumer is
+`src/modules/supporter-billing/runtime/spendGuard.ts`, which uses the context to distinguish scopes
+that share a credential. Its context factory returns the same object for the same funding object.
+
 Callers report provider usage once per completed provider response, or pass
 `createProviderUsageRecorder(context, model)` as the provider's `onUsage` callback. Reports preserve
 reported cost, tokens, and provider request identity; they do not estimate missing charges. Job
@@ -106,7 +113,7 @@ ownership still apply.
 
 Commands and streams render `getProviderRequestFailureCopy`. Tools use
 `notifyProviderToolFailure`, which returns the description and posts the same notice to the channel.
-User impersonation returns the description without posting. Channel-send failures preserve the
+`isUserImpersonation` or `suppressFailureNotices` returns the description without posting. Channel-send failures preserve the
 returned tool error. `StreamingContext` copies usage context through `buildStreamContext` so stream
 error handling sees the same owner as its caller.
 

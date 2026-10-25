@@ -11,6 +11,10 @@ import * as realRemoteFetch from "@/utils/security/userRemoteFetch";
 import * as realImages from "@/utils/image/imageExtractor";
 import {
   ProviderRequestDeniedError,
+  currentProviderUsageContext,
+  findProviderRequestDeniedError,
+  notifyProviderToolFailure,
+  withProviderUsageContext,
   registerProviderRequestDenialTranslator,
   registerProviderUsageReporter,
   type ProviderUsageContext,
@@ -133,6 +137,45 @@ afterEach(() => {
 });
 
 describe("provider usage and denial request integration", () => {
+  test("isolates interleaved requests and restores nested owners after failures", async () => {
+    const gate = Promise.withResolvers<void>();
+    const first = withProviderUsageContext(firstContext, async () => {
+      await gate.promise;
+      expect(currentProviderUsageContext()).toBe(firstContext);
+      await expect(
+        withProviderUsageContext(undefined, async () => {
+          await Promise.resolve();
+          expect(currentProviderUsageContext()).toBeUndefined();
+          throw denial(undefined);
+        }),
+      ).rejects.toBeInstanceOf(ProviderRequestDeniedError);
+      expect(currentProviderUsageContext()).toBe(firstContext);
+      return denial(currentProviderUsageContext());
+    });
+    const other = withProviderUsageContext(otherContext, async () => {
+      gate.resolve();
+      await Promise.resolve();
+      return denial(currentProviderUsageContext());
+    });
+    const [firstError, otherError] = await Promise.all([first, other]);
+    expect(findProviderRequestDeniedError(firstError, firstContext)).toBe(firstError);
+    expect(findProviderRequestDeniedError(firstError, otherContext)).toBeNull();
+    expect(findProviderRequestDeniedError(otherError, otherContext)).toBe(otherError);
+    expect(currentProviderUsageContext()).toBeUndefined();
+  });
+
+  test("returns denial copy while suppressing public failure notices", async () => {
+    const { context, send } = toolFixture();
+    for (const suppressFailureNotices of [false, true]) {
+      context.suppressFailureNotices = suppressFailureNotices;
+      send.mockClear();
+      expect(await notifyProviderToolFailure(context, denial(firstContext))).toBe(
+        localizedCopy(context.locale, "general.errors.api_key_error_description"),
+      );
+      expect(send).toHaveBeenCalledTimes(suppressFailureNotices ? 0 : 1);
+    }
+  });
+
   test("reports each successful vision request once with its own resolved context", async () => {
     const reports: Array<{ context: ProviderUsageContext; report: ProviderUsageReport }> = [];
     restores.push(
