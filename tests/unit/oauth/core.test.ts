@@ -76,8 +76,27 @@ describe("shared OAuth boundaries", () => {
     }
   });
 
+  it("accepts provider lifetimes longer than ten years when their expiration is representable", async () => {
+    const expiresIn = 353_687_193;
+    const result = await requestOAuthToken({
+      ...requestOptions,
+      fetchImpl: async () => Response.json({ ...token, expires_in: expiresIn }),
+    });
+    expect(result.expires_in).toBe(expiresIn);
+    expect(result.refresh_token).toBe(token.refresh_token);
+  });
+
   it("validates token shape, refuses redirects, and never includes upstream secrets in failures", async () => {
-    for (const body of [{ access_token: "secret" }, { ...token, expires_in: -1 }, { ...token, token_type: "MAC" }]) {
+    for (const body of [
+      { access_token: "secret" },
+      { ...token, expires_in: -1 },
+      { ...token, expires_in: 0 },
+      { ...token, expires_in: "3600" },
+      { ...token, expires_in: null },
+      { ...token, expires_in: Number.MAX_VALUE },
+      { ...token, expires_in: 8.64e12 },
+      { ...token, token_type: "MAC" },
+    ]) {
       const fetchImpl = mock<OAuthFetch>(async (_url, init) => {
         expect(init?.redirect).toBe("manual");
         return Response.json(body);
