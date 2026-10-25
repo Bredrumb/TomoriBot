@@ -7,6 +7,7 @@ import * as videoGeneration from "@/providers/openrouter/openrouterVideoGenerati
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
 import { savedProviderConfigSchema, videoGenerationModelSchema } from "@/types/db/schema";
 import { createPersona } from "../../helpers/fixtures";
+import { createRouteInteraction } from "../../helpers/routeInteraction";
 import {
   buildOpenRouterVideoRequestBody,
   normalizeOpenRouterVideoOptions,
@@ -74,15 +75,19 @@ describe("OpenRouter stable video request", () => {
     });
     try {
       const tool = new GenerateVideoTool();
-      const context = {
+      const interaction = createRouteInteraction();
+      const context: ToolContext = {
+        channel: interaction.channel as unknown as ToolContext["channel"],
+        client: interaction.client as ToolContext["client"],
         tomoriState: createPersona({ config: { videogen_enabled: true, video_model_id: 2 } }),
         locale: "en-US",
         provider: "openrouter",
         userId: "12345678901234567",
         suppressProgressNotices: true,
-      } as ToolContext;
+      };
       for (model of ["x-ai/grok-imagine-video-1.5-lite", "example/video-model"]) {
         for (const resolution of [undefined, "720p", "1080p"]) {
+          generate.mockClear();
           await tool.execute({ prompt: "A moon rising", ...(resolution ? { resolution } : {}) }, context);
           expect(generate.mock.lastCall?.[0]).toMatchObject({
             model,
