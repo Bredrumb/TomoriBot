@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import { z } from "zod";
 import { generateConversationSummaryOpenrouter } from "@/providers/openrouter/compactGenerator";
-import { findOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
+import { OpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
 import { callOpenrouterStructuredJSON } from "@/providers/openrouter/openrouterStructuredOutput";
 import { generatePresetFromPromptOpenrouter } from "@/providers/openrouter/presetGenerator";
 import { extractHistoryWindowForProvider } from "@/providers/utils/providerFeatureExecutors";
@@ -31,42 +31,41 @@ function answer(body: Record<string, unknown>) {
 }
 
 const usageOf = (onUsage: ReturnType<typeof mock>) => onUsage.mock.calls.map((call) => call[0] as TokenUsage);
-const memberKey = "synthetic-member-key";
+const apiKey = "synthetic-api-key";
 
-/**
- * Direct text commands receive failures as result objects rather than thrown errors, so the limit
- * has to ride on the result for the command to show the subscription notice.
- */
 describe("OpenRouter result-object transports", () => {
   it("keeps the key limit on preset, summary, structured, and history failures", async () => {
     for (const status of [402, 403] as const) {
       rejectWithKeyLimit(status);
       const preset = await generatePresetFromPromptOpenrouter(
-        memberKey,
+        apiKey,
         { characterName: "Mirri", characterDescription: "Fixture", speechExamples: "Hello" },
         "en-US",
         { model: "example/text-model" },
       );
       const summary = await generateConversationSummaryOpenrouter({
-        apiKey: memberKey,
+        apiKey,
         model: "example/text-model",
         userPrompt: "Summarize",
       });
       const structured = await callOpenrouterStructuredJSON(
-        { apiKey: memberKey, model: "example/text-model", systemPrompt: "", userPrompt: "Classify" },
+        { apiKey, model: "example/text-model", systemPrompt: "", userPrompt: "Classify" },
         {},
         z.object({}),
         "fixture_result",
       );
       const history = await extractHistoryWindowForProvider({
         providerName: "openrouter",
-        apiKey: memberKey,
+        apiKey,
         model: "example/text-model",
         systemPrompt: "",
         userPrompt: "Extract",
       });
       for (const result of [preset, summary, structured, history]) {
-        expect(findOpenRouterLimitError("cause" in result ? result.cause : undefined)).toMatchObject({
+        let cause: unknown = "cause" in result ? result.cause : undefined;
+        while (cause instanceof Error && !(cause instanceof OpenRouterLimitError)) cause = cause.cause;
+        expect(cause).toBeInstanceOf(OpenRouterLimitError);
+        expect(cause).toMatchObject({
           limitSource: "openrouter_key_limit",
           status,
         });
@@ -79,7 +78,7 @@ describe("OpenRouter result-object transports", () => {
     const onUsage = mock(() => undefined);
     answer({ choices: [] });
     await generatePresetFromPromptOpenrouter(
-      memberKey,
+      apiKey,
       { characterName: "Mirri", characterDescription: "Fixture", speechExamples: "Hello" },
       "en-US",
       { model: "example/text-model", onUsage },
@@ -88,7 +87,7 @@ describe("OpenRouter result-object transports", () => {
     answer({ choices: [{ message: { content: "Summary text" } }] });
     expect(
       await generateConversationSummaryOpenrouter({
-        apiKey: memberKey,
+        apiKey,
         model: "example/text-model",
         userPrompt: "Summarize",
         onUsage,
@@ -98,7 +97,7 @@ describe("OpenRouter result-object transports", () => {
     answer({ choices: [{ message: { content: "{}" } }] });
     expect(
       await callOpenrouterStructuredJSON(
-        { apiKey: memberKey, model: "example/text-model", systemPrompt: "", userPrompt: "Classify", onUsage },
+        { apiKey, model: "example/text-model", systemPrompt: "", userPrompt: "Classify", onUsage },
         {},
         z.object({}),
         "fixture_result",
