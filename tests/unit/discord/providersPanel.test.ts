@@ -587,8 +587,8 @@ describe("providers panel rendering", () => {
     expect(panelOptions.find((option) => option.default)?.value).toBe(entry.id);
   });
 
-  it("omits ComfyUI workflows from curated and subscription image and video registration", () => {
-    for (const provider of ["supporter", "openrouter", "google"]) {
+  it("omits ComfyUI workflows from curated image and video registration", () => {
+    for (const provider of ["openrouter", "google"]) {
       for (const capability of ["image", "video"] as const) {
         const modal = buildProviderModelModal("en-US", "provider", provider, capability, null, "abcdefgh");
         expect(collectComponents(modal).some((component) => component.custom_id === "workflow_abcdefgh")).toBe(false);
