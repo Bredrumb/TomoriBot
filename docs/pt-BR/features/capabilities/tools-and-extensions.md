@@ -91,10 +91,10 @@ Cada busca envia um card de **Busca de tags no Danbooru** listando o que foi enc
 
 A mesma opção permite que ela compartilhe arte existente e leia as tags de uma postagem:
 
-- Ao pedir para ela mostrar arte de algo, ela envia até 4 imagens aleatórias bem avaliadas do Danbooru em uma única mensagem, com link para cada postagem. Todas as imagens com classificação acima de livre recebem aviso de spoiler. O Danbooru permite apenas 2 tags por busca, portanto ela escolhe as mais específicas, geralmente o personagem ou a série.
+- Ao pedir para ela mostrar arte de algo, ela envia até 4 imagens aleatórias bem avaliadas do Danbooru em uma única mensagem, com link para cada postagem. Imagens questionáveis e explícitas recebem aviso de spoiler. O Danbooru permite apenas 2 tags por busca, portanto ela escolhe as mais específicas, geralmente o personagem ou a série.
 - Ao receber o ID de uma postagem do Danbooru ou um link `danbooru.donmai.us/posts/`, ela lê suas tags agrupadas em personagem, série, artista, meta e geral. Sob o Modo de Ferramenta Deliberada, um link de postagem na mensagem é suficiente para oferecer essa ferramenta a ela.
 
-Qualquer pessoa também pode executar `/booru search` para obter a mesma galeria sem precisar pedir a ela. O comando sugere tags conforme você digita e converte apelidos ou erros de digitação na tag real, e o rodapé exibe o que foi buscado. Essa opção controla apenas as ferramentas dela, não o comando; para limitar quem pode executar o `/booru search`, use **Configurações do Servidor > Integrações** no Discord.
+Qualquer pessoa também pode executar `/booru search` para obter a mesma galeria sem precisar pedir a ela. O comando sugere tags conforme você digita e converte apelidos ou erros de digitação na tag real, e o rodapé exibe o que foi buscado. O parâmetro opcional `count` define quantas imagens enviar, de 1 a 10 (padrão: 4). Se houver menos postagens correspondentes, ele envia os resultados disponíveis. Essa opção controla apenas as ferramentas dela, não o comando; para limitar quem pode executar o `/booru search`, use **Configurações do Servidor > Integrações** no Discord.
 
 As classificações seguem o canal. Postagens livres e sensíveis funcionam em qualquer lugar; postagens questionáveis e explícitas apenas em canais com restrição de idade. Um tópico segue seu canal principal, e mensagens diretas contam como sem restrição de idade. Uma postagem com classificação acima de livre que tenha as tags `loli`, `shota` ou `toddlercon` nunca é enviada ou lida, em nenhum canal.
 

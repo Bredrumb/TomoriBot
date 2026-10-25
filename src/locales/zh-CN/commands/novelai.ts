@@ -30,6 +30,8 @@ export default {
     generate: {
       description: `生成 NovelAI 图像和媒体。`,
       image: {
+        model_description: `仅在本次生成中使用此 NovelAI 模型；留空则使用当前默认值`,
+        nsfw_description: `仅给图像添加 Discord 防剧透遮罩；不会改变生成内容或内容过滤器`,
         description: `用图库式标签和可选的参考图像生成 NovelAI 图像。`,
         modal_title: `NovelAI 图像生成`,
         prompt_label: `提示词标签`,

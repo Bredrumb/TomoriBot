@@ -19,7 +19,7 @@ Tìm tranh anime có sẵn
 
 | Lệnh | Tóm tắt |
 |---|---|
-| `/booru search` | Gửi 4 ảnh Danbooru ngẫu nhiên được đánh giá cao cho một hoặc hai thẻ |
+| `/booru search` | Gửi ảnh Danbooru ngẫu nhiên được đánh giá cao cho một hoặc hai thẻ |
 
 ## `/comment`
 

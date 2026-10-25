@@ -137,6 +137,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
           .setRequired(false)
           .setMaxLength(MAX_VOICE_DESIGN_PROMPT_LENGTH),
       ),
+    "commands.generate.voice-message.model_description",
   );
 
 /**

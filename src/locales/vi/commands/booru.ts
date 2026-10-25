@@ -2,10 +2,11 @@ export default {
   booru: {
     description: `Tìm tranh anime có sẵn`,
     search: {
-      description: `Gửi 4 ảnh Danbooru ngẫu nhiên được đánh giá cao cho một hoặc hai thẻ`,
+      description: `Gửi ảnh Danbooru ngẫu nhiên được đánh giá cao cho một hoặc hai thẻ`,
       tag_description: `Một nhân vật, tác phẩm hoặc thẻ (gợi ý xuất hiện khi bạn nhập)`,
       second_tag_description: `Thẻ thứ hai tùy chọn để thu hẹp tìm kiếm`,
       rating_description: `Mức đánh giá nào cần hiển thị (mặc định: chung và nhạy cảm)`,
+      count_description: `Số lượng ảnh cần gửi, từ 1 đến 10 (mặc định: 4, ít hơn nếu không đủ kết quả)`,
       general_option: `Chung (General)`,
       sensitive_option: `Nhạy cảm (Sensitive)`,
       questionable_option: `Nghi vấn (Questionable, chỉ kênh giới hạn độ tuổi)`,

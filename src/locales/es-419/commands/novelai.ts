@@ -30,6 +30,8 @@ export default {
     generate: {
       description: `Genera imágenes y medios de NovelAI.`,
       image: {
+        model_description: `Usa este modelo de NovelAI solo para esta generación; en blanco usa tu valor predeterminado`,
+        nsfw_description: `Añade un spoiler de Discord a la imagen; no cambia la generación ni los filtros de contenido`,
         description: `Genera una imagen de NovelAI con etiquetas estilo imageboard y referencia de personaje opcional.`,
         modal_title: `Generar Imagen de NovelAI`,
         prompt_label: `Etiquetas del Prompt`,

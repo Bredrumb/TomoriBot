@@ -1,7 +1,13 @@
 export default {
   generate: {
+    model_personal_suffix: ` ({provider}) (via provedor pessoal)`,
+    model_server_suffix: ` ({provider})`,
+    model_unavailable_title: `Modelo indisponível`,
+    model_unavailable_description: `Este modelo não está mais disponível no provedor selecionado. Escolha um modelo disponível no preenchimento automático e tente novamente.`,
     description: `Gere imagens, vídeos e mensagens de voz por IA.`,
     image: {
+      nsfw_description: `Adiciona spoiler do Discord apenas à imagem; não altera a geração nem os filtros de conteúdo`,
+      model_description: `Use este modelo apenas nesta geração; deixe em branco para usar seu padrão atual`,
       description: `Gere uma imagem por IA do seu próprio prompt ou da cena do canal`,
       mode_description: `Escolha como criar a imagem`,
       mode_choice_manual: `Escrever meu próprio prompt`,
@@ -57,6 +63,8 @@ export default {
       quota_exceeded_footer: `Esta cota é configurada pelos administradores deste servidor via \`/moderation\`.`,
     },
     video: {
+      nsfw_description: `Adiciona spoiler do Discord apenas ao vídeo; não altera a geração nem os filtros de conteúdo`,
+      model_description: `Use este modelo apenas nesta geração; deixe em branco para usar seu padrão atual`,
       description: `Gere um vídeo por IA usando Google Veo, OpenRouter, ou Z.ai`,
       modal: {
         title: `Gerar Vídeo`,
@@ -111,6 +119,7 @@ export default {
     },
 
     scene: {
+      model_description: `Use este modelo apenas nesta geração; deixe em branco para usar seu padrão atual`,
       description: `Gere uma curta cena de texto roteirizada entre as personas selecionadas.`,
       missing_permissions_title: `Permissões Ausentes`,
       missing_permissions_description: `Preciso de permissão para ver este canal, ler o histórico e enviar mensagens para poder gerar uma cena aqui.`,
@@ -153,6 +162,7 @@ export default {
     },
 
     "voice-message": {
+      model_description: `Use este modelo apenas nesta geração; deixe em branco para usar seu padrão atual`,
       incompatible_upload_title: `Modelo de clone de voz necessário`,
       incompatible_upload_description: `O áudio enviado em \`voice_sample\` precisa de um modelo compatível de \`TTS (Clone de Voz)\`. Escolha um em \`/config\` > Modelos > Trocar Modelos, ou em \`/personal config\` para seus próprios modelos. Para usar Design de Voz, remova o áudio e digite uma descrição em \`voice_design\`.`,
       incompatible_design_title: `Modelo de design de voz necessário`,

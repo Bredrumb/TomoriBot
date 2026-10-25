@@ -19,7 +19,7 @@ TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使�
 
 | 指令 | 摘要 |
 |---|---|
-| `/booru search` | 根據一個或兩個標籤隨機發送 4 張評價良好的 Danbooru 圖片 |
+| `/booru search` | 根據一個或兩個標籤隨機發送評價良好的 Danbooru 圖片 |
 
 ## `/comment`
 

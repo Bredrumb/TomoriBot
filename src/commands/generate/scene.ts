@@ -49,6 +49,7 @@ const GENERATE_SCENE_MAX_CYCLES = 10;
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   addGenerationModelOption(
     subcommand.setName("scene").setDescription(localizer("en-US", "commands.generate.scene.description")),
+    "commands.generate.scene.model_description",
   );
 export const autocomplete = createGenerationModelAutocomplete("text");
 

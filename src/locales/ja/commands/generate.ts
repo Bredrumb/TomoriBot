@@ -1,7 +1,13 @@
 export default {
   generate: {
+    model_personal_suffix: ` ({provider})（個人のプロバイダー経由）`,
+    model_server_suffix: ` ({provider})`,
+    model_unavailable_title: `モデルを利用できません`,
+    model_unavailable_description: `選択したプロバイダーでは、このモデルは利用できなくなりました。オートコンプリートから利用可能なモデルを選択して、もう一度お試しください。`,
     description: `AI 画像・動画・ボイスメッセージを生成します。`,
     image: {
+      nsfw_description: `画像にDiscordのスポイラーを追加します（生成内容やコンテンツフィルターには影響しません）`,
+      model_description: `今回の生成にのみこのモデルを使用します。空欄の場合は現在のデフォルトを使用します`,
       description: `自分で入力したプロンプトまたは現在のチャンネルのシーンからAI画像を生成します`,
       mode_description: `画像の作り方を選択します`,
       mode_choice_manual: `自分でプロンプトを書く`,
@@ -57,6 +63,8 @@ export default {
       quota_exceeded_footer: `このクォータは、このサーバーの管理者が \`/moderation\` で設定しています。`,
     },
     video: {
+      nsfw_description: `動画にDiscordのスポイラーを追加します（生成内容やコンテンツフィルターには影響しません）`,
+      model_description: `今回の生成にのみこのモデルを使用します。空欄の場合は現在のデフォルトを使用します`,
       description: `Google Veo、OpenRouter、またはZ.aiを使用してAI動画を生成します`,
       modal: {
         title: `動画を生成`,
@@ -111,6 +119,7 @@ export default {
     },
 
     scene: {
+      model_description: `今回の生成にのみこのモデルを使用します。空欄の場合は現在のデフォルトを使用します`,
       description: `選択したペルソナ同士の短いテキストシーンを生成します。`,
       missing_permissions_title: `権限がありません`,
       missing_permissions_description: `このチャンネルでシーンを生成するには、チャンネルの閲覧、メッセージ履歴の読み取り、メッセージ送信の権限が必要です。`,
@@ -153,6 +162,7 @@ export default {
     },
 
     "voice-message": {
+      model_description: `今回の生成にのみこのモデルを使用します。空欄の場合は現在のデフォルトを使用します`,
       incompatible_upload_title: `ボイスクローン対応モデルが必要です`,
       incompatible_upload_description: `\`voice_sample\`にアップロードした音声には、対応する\`TTS（ボイスクローン）\`モデルが必要です。\`/config\` > モデル > モデルを切り替えるで選択してください。個人のモデルは\`/personal config\`で選択できます。ボイスデザインを使う場合は、添付音声を削除し、\`voice_design\`に声の説明を入力してください。`,
       incompatible_design_title: `ボイスデザイン対応モデルが必要です`,

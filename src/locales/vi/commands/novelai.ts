@@ -30,6 +30,8 @@ export default {
     generate: {
       description: `Tạo hình ảnh và phương tiện NovelAI.`,
       image: {
+        model_description: `Chỉ dùng model NovelAI này cho lần tạo này; để trống để dùng mặc định`,
+        nsfw_description: `Chỉ thêm spoiler Discord vào ảnh; không thay đổi nội dung tạo hay bộ lọc`,
         description: `Tạo ảnh NovelAI dùng thẻ kiểu imageboard và tham chiếu nhân vật tùy chọn.`,
         modal_title: `Tạo ảnh NovelAI`,
         prompt_label: `Thẻ prompt`,
