@@ -1,4 +1,5 @@
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
+import { findProviderOption, getProviderOptions } from "@/utils/provider/providerOptionRegistry";
 import type {
   DecisionInput,
   DecisionModelOption,
@@ -46,8 +47,44 @@ export interface DecisionExecutionRequest extends DecisionInput {
 }
 
 /** The Decision models `callDecisionsForProvider` accepts for a scope, so pickers offer exactly what it will call. */
-export function loadDecisionModelsForScope(scope: OpenRouterModelScope): Promise<DecisionModelOption[]> {
-  return llmModelRepo.loadDecisionModelOptions(scope);
+export async function loadDecisionModelsForScope(
+  scope: OpenRouterModelScope,
+  providerOption?: string,
+): Promise<DecisionModelOption[]> {
+  const registered = providerOption
+    ? [findProviderOption(providerOption)].filter((option) => option !== undefined)
+    : getProviderOptions();
+  const eligible = [];
+  for (const option of registered) {
+    if (option.capabilities.includes("decision") && (await option.availability(scope)).eligible) eligible.push(option);
+  }
+  const models = await llmModelRepo.loadDecisionModelOptions(
+    scope,
+    eligible.map((option) => option.catalogProvider),
+  );
+  if (!eligible.length) return providerOption ? [] : models;
+  const owned = providerOption ? [] : await llmModelRepo.loadDecisionModelOptions(scope);
+  const admitted = [];
+  for (const model of models) {
+    if (owned.some((entry) => entry.model.decision_model_id === model.model.decision_model_id)) {
+      admitted.push(model);
+      continue;
+    }
+    for (const option of eligible) {
+      if (
+        option.catalogProvider === model.model.provider &&
+        (await option.selection.validateModel?.({
+          scope,
+          capability: "decision",
+          modelCodename: model.model.codename,
+        }))
+      ) {
+        admitted.push(model);
+        break;
+      }
+    }
+  }
+  return admitted;
 }
 
 export async function callDecisionsForProvider(request: DecisionExecutionRequest): Promise<DecisionResult> {

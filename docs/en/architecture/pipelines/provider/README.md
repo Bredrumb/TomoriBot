@@ -19,8 +19,11 @@ a `StreamConfig`, then delegates to `StreamOrchestrator.streamToDiscord()`.
 
 `SupportsDecisions` extends the optional capability map and resolver. `OpenrouterProvider` and
 `CustomProvider` own its implementations; other providers remain unsupported.
-`llmModelRepo.loadDecisionModelOptions(scope)` returns `DecisionModelOption`
-records. Consumers persist their `reference`: `provider`, `modelId`, nullable `registrationId`, and
+`loadDecisionModelsForScope(scope)` in `providerFeatureExecutors.ts` supplies model menus and execution
+validation with `DecisionModelOption` records. Managed options must pass availability and their
+`selection.validateModel` entitlement check; availability alone does not admit a model. The repository
+retains scoped registration and custom endpoint ownership checks even for managed catalogs.
+Consumers persist their `reference`: `provider`, `modelId`, nullable `registrationId`, and
 nullable `customEndpointId`. Global native entries have null registration IDs. Scoped native entries
 carry their exact scoped registration ID. Custom entries use `custom:<connection_id>` and the exact
 endpoint row ID, with a null native registration ID. Deletion and re-registration invalidate old

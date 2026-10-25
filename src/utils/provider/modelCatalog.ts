@@ -5,6 +5,7 @@ import type {
   LlmRow,
   VideoGenerationModelRow,
 } from "@/types/db/schema";
+import { loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import type { OpenRouterModelScope } from "@/utils/db/repositories/LlmModelRepository";
 import type { ConfigCatalogModelCapability } from "@/utils/discord/configPanelCatalog";
@@ -64,7 +65,7 @@ export async function loadProviderModelChoices(
         }));
     }
     case "decision":
-      return (await llmModelRepo.loadDecisionModelOptions(owner))
+      return (await loadDecisionModelsForScope(owner, option?.value))
         .filter(({ model }) => model.provider === provider)
         .map(({ model }) => ({
           id: model.decision_model_id,

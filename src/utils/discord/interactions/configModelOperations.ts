@@ -1,4 +1,5 @@
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
+import { loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
 import { loadProviderModelChoices } from "@/utils/provider/modelCatalog";
 import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
 import { setHostedSpeechSelection, setSpeechEndpointSelection } from "@/utils/db/repositories/SpeechRepository";
@@ -214,7 +215,7 @@ export async function loadConfigModelProviders(serverId: number, capability: Con
 
 /** Decision models are not a saved-provider capability, so their providers come from owned registrations. */
 async function loadDecisionModelProviders(serverId: number): Promise<SavedProviderConfigRow[]> {
-  const options = await llmModelRepo.loadDecisionModelOptions({ kind: "server", ownerId: serverId });
+  const options = await loadDecisionModelsForScope({ kind: "server", ownerId: serverId });
   const owned = new Set(
     options.map(({ model }) => findProviderOption(model.provider)?.catalogProvider ?? model.provider),
   );
