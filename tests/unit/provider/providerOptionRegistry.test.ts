@@ -350,15 +350,16 @@ function optionPanelEntry(): Extract<ProviderPanelEntry, { kind: "provider" }> {
 
 describe("provider option registry", () => {
   it("removes a registered option from every surface when its disposer runs", async () => {
+    const deploymentOptions = getProviderOptions();
     const { option } = registerTestOption();
     expect(findProviderOption(TEST_VALUE)).toBe(option);
-    expect(getProviderOptions()).toHaveLength(1);
+    expect(getProviderOptions()).toEqual([...deploymentOptions, option]);
 
     for (const dispose of disposers) dispose();
     disposers = [];
 
     expect(findProviderOption(TEST_VALUE)).toBeUndefined();
-    expect(getProviderOptions()).toHaveLength(0);
+    expect(getProviderOptions()).toEqual(deploymentOptions);
     expect(findProviderOption(TEST_VALUE)?.availability(SERVER_SCOPE)).toBeUndefined();
   });
 
