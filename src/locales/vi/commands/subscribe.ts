@@ -1,6 +1,6 @@
 export default {
   subscribe: {
-    conversion_nudge: "Đăng ký TomoriBot bằng `/subscribe` để có dịch vụ ổn định hơn.",
+    conversion_nudge: "Để có dịch vụ ổn định hơn, hãy đăng ký TomoriBot bằng `/subscribe`, chỉ từ $7/tháng.",
     request: {
       title: `Quyền truy cập gói đăng ký`,
       allowance_title: `Hạn mức không đủ`,

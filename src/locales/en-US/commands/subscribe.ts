@@ -2,7 +2,7 @@
 
 export default {
   subscribe: {
-    conversion_nudge: "Subscribe to TomoriBot using `/subscribe` for more reliable service.",
+    conversion_nudge: "For more reliable service, subscribe to TomoriBot with `/subscribe`, starting at just $7/month.",
     request: {
       title: `Subscription Access`,
       allowance_title: `Not Enough Allowance`,

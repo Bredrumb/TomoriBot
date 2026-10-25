@@ -1,6 +1,6 @@
 export default {
   subscribe: {
-    conversion_nudge: "使用 `/subscribe` 訂閱TomoriBot以獲得更穩定的服務。",
+    conversion_nudge: "如需更穩定的服務，可以使用 `/subscribe` 訂閱TomoriBot，每月最低只要 $7。",
     request: {
       title: `訂閱存取`,
       allowance_title: `配額不足`,

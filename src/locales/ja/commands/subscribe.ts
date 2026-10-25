@@ -3,7 +3,7 @@
 export default {
   subscribe: {
     conversion_nudge:
-      "より安定したサービスを利用するには、`/subscribe`でTomoriBotのサブスクリプションを契約してください。",
+      "より安定したサービスを利用するには、`/subscribe`でTomoriBotのサブスクリプションを契約してください（月額わずか$7から）。",
     request: {
       title: `サブスクリプションの利用`,
       allowance_title: `利用枠が不足しています`,

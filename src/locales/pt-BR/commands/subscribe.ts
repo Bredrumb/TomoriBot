@@ -1,6 +1,6 @@
 export default {
   subscribe: {
-    conversion_nudge: "Assine o TomoriBot usando `/subscribe` para um serviço mais confiável.",
+    conversion_nudge: "Para um serviço mais confiável, assine o TomoriBot com `/subscribe`, a partir de apenas $7/mês.",
     request: {
       title: `Acesso por Assinatura`,
       allowance_title: `Cota insuficiente`,
