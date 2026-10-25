@@ -1,3 +1,4 @@
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import { z } from "zod";
 import type { TomoriState } from "@/types/db/schema";
 import type { DecisionModelOption, DecisionModelReference, DecisionResult } from "@/types/provider/featureInterfaces";
@@ -195,25 +196,27 @@ async function matchWithLlm(
   const abortSignal = AbortSignal.timeout(MATCHER_TIMEOUT_MS);
   let usage: TokenUsage | undefined;
   const ask = (prompt: string) =>
-    resolved.capability.callStructuredJSON<z.infer<typeof answerSchema>>(
-      {
-        apiKey: resolved.apiKey,
-        model,
-        endpointUrl,
-        systemPrompt: `${MATCHER_INSTRUCTIONS} Answer with the id of exactly one option.`,
-        userPrompt: prompt,
-        temperature: 0,
-        maxOutputTokens,
-        thinkingLevel: "none",
-        schemaName: "natural_nudge_active_match",
-        privateOutput: true,
-        abortSignal,
-        onUsage: (reported) => {
-          usage = recordNudgeUsage(resolved, model, usage, reported);
+    withProviderUsageContext(resolved.usageContext, () =>
+      resolved.capability.callStructuredJSON<z.infer<typeof answerSchema>>(
+        {
+          apiKey: resolved.apiKey,
+          model,
+          endpointUrl,
+          systemPrompt: `${MATCHER_INSTRUCTIONS} Answer with the id of exactly one option.`,
+          userPrompt: prompt,
+          temperature: 0,
+          maxOutputTokens,
+          thinkingLevel: "none",
+          schemaName: "natural_nudge_active_match",
+          privateOutput: true,
+          abortSignal,
+          onUsage: (reported) => {
+            usage = recordNudgeUsage(resolved, model, usage, reported);
+          },
         },
-      },
-      z.toJSONSchema(answerSchema, { target: "openapi-3.0" }),
-      answerSchema,
+        z.toJSONSchema(answerSchema, { target: "openapi-3.0" }),
+        answerSchema,
+      ),
     );
 
   let result = await ask(userPrompt);

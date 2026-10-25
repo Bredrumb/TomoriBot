@@ -1,3 +1,4 @@
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import { z } from "zod";
 import type { TomoriState } from "@/types/db/schema";
 import { NATURAL_NUDGE_AGENDA_MAX, type NaturalNudgeInterest } from "@/modules/natural-nudges/db/types";
@@ -245,25 +246,27 @@ export async function planIdleNudge(input: PlannerInput): Promise<PlannerOutcome
   const abortSignal = AbortSignal.timeout(PLANNER_TIMEOUT_MS);
   let usage: TokenUsage | null = null;
   const ask = (prompt: string, thinkingLevel: string | undefined) =>
-    resolved.capability.callStructuredJSON<PlannerResult>(
-      {
-        apiKey: resolved.apiKey,
-        model,
-        endpointUrl,
-        systemPrompt,
-        userPrompt: prompt,
-        temperature: resolved.state.config.llm_temperature,
-        maxOutputTokens,
-        thinkingLevel,
-        schemaName: "natural_nudge_plan",
-        privateOutput: true,
-        abortSignal,
-        onUsage: (reported) => {
-          usage = recordNudgeUsage(resolved, model, usage, reported);
+    withProviderUsageContext(resolved.usageContext, () =>
+      resolved.capability.callStructuredJSON<PlannerResult>(
+        {
+          apiKey: resolved.apiKey,
+          model,
+          endpointUrl,
+          systemPrompt,
+          userPrompt: prompt,
+          temperature: resolved.state.config.llm_temperature,
+          maxOutputTokens,
+          thinkingLevel,
+          schemaName: "natural_nudge_plan",
+          privateOutput: true,
+          abortSignal,
+          onUsage: (reported) => {
+            usage = recordNudgeUsage(resolved, model, usage, reported);
+          },
         },
-      },
-      jsonSchema,
-      buildAcceptedResult(input.partners.length),
+        jsonSchema,
+        buildAcceptedResult(input.partners.length),
+      ),
     );
 
   let result = await ask(userPrompt, resolved.state.config.thinking_level);

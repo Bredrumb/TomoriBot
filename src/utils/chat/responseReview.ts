@@ -1,3 +1,4 @@
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import {
   findProviderRequestDeniedError,
   reportProviderUsage,
@@ -719,32 +720,34 @@ async function reviewCandidate(
     const ask = (prompt: string, thinking: string | undefined) =>
       runUnderWatchdog(context.channel.id, () =>
         wait(
-          resolved.capability.callStructuredJSON(
-            {
-              apiKey: resolved.apiKey,
-              model: resolved.state.llm.llm_codename,
-              endpointUrl: target?.endpointUrl ?? undefined,
-              systemPrompt,
-              userPrompt: prompt,
-              temperature: resolved.state.config.llm_temperature,
-              maxOutputTokens: outputTokens,
-              thinkingLevel: thinking,
-              schemaName: proposedCall ? "tool_review" : "response_review",
-              privateOutput: true,
-              abortSignal: signal,
-              onUsage: (reported) => {
-                usage = reported;
-                recordResponseReviewUsage(state, { kind: "reviewer", model: model ?? "", usage: reported });
-                reportProviderUsage(resolved.usageContext, {
-                  modelCodename: model ?? "",
-                  costUsd: reported.costUsd,
-                  inputTokens: reported.inputTokens,
-                  outputTokens: reported.outputTokens,
-                });
+          withProviderUsageContext(resolved.usageContext, async () =>
+            resolved.capability.callStructuredJSON(
+              {
+                apiKey: resolved.apiKey,
+                model: resolved.state.llm.llm_codename,
+                endpointUrl: target?.endpointUrl ?? undefined,
+                systemPrompt,
+                userPrompt: prompt,
+                temperature: resolved.state.config.llm_temperature,
+                maxOutputTokens: outputTokens,
+                thinkingLevel: thinking,
+                schemaName: proposedCall ? "tool_review" : "response_review",
+                privateOutput: true,
+                abortSignal: signal,
+                onUsage: (reported) => {
+                  usage = reported;
+                  recordResponseReviewUsage(state, { kind: "reviewer", model: model ?? "", usage: reported });
+                  reportProviderUsage(resolved.usageContext, {
+                    modelCodename: model ?? "",
+                    costUsd: reported.costUsd,
+                    inputTokens: reported.inputTokens,
+                    outputTokens: reported.outputTokens,
+                  });
+                },
               },
-            },
-            jsonSchema,
-            acceptReviewResult(resultSchema),
+              jsonSchema,
+              acceptReviewResult(resultSchema),
+            ),
           ),
         ),
       );

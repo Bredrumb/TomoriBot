@@ -1,3 +1,4 @@
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import {
   findProviderRequestDeniedError,
   type ProviderRequestDeniedError,
@@ -320,6 +321,7 @@ async function synthesizeHostedVoiceMessage(
   );
   const startedAt = Date.now();
   let cleanupPending = false;
+  const usageContext = target.usageContext;
   try {
     signal.throwIfAborted();
     if (
@@ -336,17 +338,19 @@ async function synthesizeHostedVoiceMessage(
     let audio: Buffer;
     if (target.model.provider === "openrouter" && source.kind === "design") {
       if (!validDesign) throw new HostedSpeechError("invalid_request");
-      audio = await synthesizeOpenRouterSpeech({
-        shape: "design",
-        model: target.model.codename,
-        apiKey: target.apiKey,
-        description: source.designPrompt,
-        script: request.script,
-        direction: request.voiceInstructions,
-        signal,
-        maxBytes,
-        operations: attempt.operations,
-      });
+      audio = await withProviderUsageContext(usageContext, async () =>
+        synthesizeOpenRouterSpeech({
+          shape: "design",
+          model: target.model.codename,
+          apiKey: target.apiKey,
+          description: source.designPrompt,
+          script: request.script,
+          direction: request.voiceInstructions,
+          signal,
+          maxBytes,
+          operations: attempt.operations,
+        }),
+      );
     } else if (target.model.provider === "openrouter") {
       if (source.kind !== "clone" && source.kind !== "clone-buffer") throw new HostedSpeechError("invalid_request");
       const sample = source.kind === "clone" ? await loadVoiceSampleById(source.voiceSampleId) : null;
@@ -375,18 +379,20 @@ async function synthesizeHostedVoiceMessage(
       const { format } = await parseBuffer(wav, { mimeType: "audio/wav" });
       if (!format.duration || format.duration > SPEECH_SAMPLE_MAX_DURATION_SECS)
         throw new HostedSpeechError("invalid_request");
-      audio = await synthesizeOpenRouterSpeech({
-        shape: "clone",
-        model: target.model.codename,
-        apiKey: target.apiKey,
-        script: request.script,
-        direction: request.voiceInstructions,
-        reference: wav,
-        transcript,
-        signal,
-        maxBytes,
-        operations: attempt.operations,
-      });
+      audio = await withProviderUsageContext(usageContext, async () =>
+        synthesizeOpenRouterSpeech({
+          shape: "clone",
+          model: target.model.codename,
+          apiKey: target.apiKey,
+          script: request.script,
+          direction: request.voiceInstructions,
+          reference: wav,
+          transcript,
+          signal,
+          maxBytes,
+          operations: attempt.operations,
+        }),
+      );
     } else {
       if (source.kind !== "design" || !validDesign) throw new HostedSpeechError("invalid_request");
       const transport = createGoogleSpeechTransport(target.model.provider, target.apiKey);
@@ -418,7 +424,7 @@ async function synthesizeHostedVoiceMessage(
     attempt.synthesisSuccess = true;
     if (target.model.provider === "openrouter") {
       const synthesis = attempt.operations.find((operation) => operation.operation === "synthesize");
-      reportProviderUsage(target.usageContext, {
+      reportProviderUsage(usageContext, {
         modelCodename: target.model.codename,
         costUsd: attempt.operations.find((operation) => operation.operation === "cost")?.actualCost,
         providerRequestId: synthesis?.generationId,
@@ -434,7 +440,7 @@ async function synthesizeHostedVoiceMessage(
       cleanupPending,
     };
   } catch (error) {
-    const requestDenied = findProviderRequestDeniedError(error, target.usageContext);
+    const requestDenied = findProviderRequestDeniedError(error, usageContext);
     if (requestDenied) {
       return { success: false, backendKey, requestDenied, cleanupPending };
     }

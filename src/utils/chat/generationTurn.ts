@@ -1,3 +1,4 @@
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import { createResponseReviewState } from "@/utils/chat/responseReview";
 import type { FallbackEntry, LlmRow, TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -208,12 +209,14 @@ async function runGenerationAttempts(
           ),
         );
         result = await runWithChatDiagnosticStage({ attempt: index + 1, keyAttempt: keyAttemptCount }, () =>
-          runToolLoop({
-            context,
-            provider: attempt.provider,
-            providerConfig: attempt.providerConfig,
-            tomoriState: attempt.tomoriState,
-          }),
+          withProviderUsageContext(context.usageContext, async () =>
+            runToolLoop({
+              context,
+              provider: attempt.provider,
+              providerConfig: attempt.providerConfig,
+              tomoriState: attempt.tomoriState,
+            }),
+          ),
         );
         supersededResult = result;
         if (carried.text && result.status === "empty_response" && !isRetryableEmptyResponse(result)) {

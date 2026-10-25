@@ -1,3 +1,4 @@
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import { z } from "zod";
 import type { TomoriState } from "@/types/db/schema";
 import {
@@ -94,25 +95,27 @@ export async function generatePersonaInterests(
   const { resolved } = resolution;
 
   const { model, endpointUrl, maxOutputTokens } = await resolveStructuredCallTarget(resolved);
-  const result = await resolved.capability.callStructuredJSON(
-    {
-      apiKey: resolved.apiKey,
-      model,
-      endpointUrl,
-      systemPrompt: buildSystemPrompt(persona.persona_nickname, count),
-      userPrompt: buildUserPrompt(persona, existing),
-      temperature: resolved.state.config.llm_temperature,
-      maxOutputTokens,
-      thinkingLevel: resolved.state.config.thinking_level,
-      schemaName: "persona_interests",
-      privateOutput: true,
-      abortSignal: AbortSignal.timeout(INTEREST_GENERATION_TIMEOUT_MS),
-      onUsage: (reported) => {
-        recordNudgeUsage(resolved, model, null, reported);
+  const result = await withProviderUsageContext(resolved.usageContext, () =>
+    resolved.capability.callStructuredJSON(
+      {
+        apiKey: resolved.apiKey,
+        model,
+        endpointUrl,
+        systemPrompt: buildSystemPrompt(persona.persona_nickname, count),
+        userPrompt: buildUserPrompt(persona, existing),
+        temperature: resolved.state.config.llm_temperature,
+        maxOutputTokens,
+        thinkingLevel: resolved.state.config.thinking_level,
+        schemaName: "persona_interests",
+        privateOutput: true,
+        abortSignal: AbortSignal.timeout(INTEREST_GENERATION_TIMEOUT_MS),
+        onUsage: (reported) => {
+          recordNudgeUsage(resolved, model, null, reported);
+        },
       },
-    },
-    z.toJSONSchema(responseSchema, { target: "openapi-3.0" }),
-    acceptedSchema,
+      z.toJSONSchema(responseSchema, { target: "openapi-3.0" }),
+      acceptedSchema,
+    ),
   );
   if (!result.success && isNudgeCallDenied(resolved, result.cause)) {
     log.warn(

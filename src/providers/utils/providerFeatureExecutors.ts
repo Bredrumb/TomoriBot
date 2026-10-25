@@ -1,3 +1,4 @@
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import type {
   DecisionInput,
   DecisionModelOption,
@@ -127,16 +128,18 @@ export async function callDecisionsForProvider(request: DecisionExecutionRequest
     }
     const capability = await resolveDecisionsCapability(custom ? "custom" : reference.provider);
     if (!capability) return { status: "unavailable", reason: "unsupported", correlationId, errorLogged: false };
-    return await capability.callDecisions({
-      ...request,
-      reference,
-      correlationId,
-      model: selected.model.codename,
-      inputTokenLimit: selected.model.input_token_limit,
-      apiStyle,
-      apiKey,
-      endpointUrl: connection?.endpoint_url,
-    });
+    return await withProviderUsageContext(undefined, async () =>
+      capability.callDecisions({
+        ...request,
+        reference,
+        correlationId,
+        model: selected.model.codename,
+        inputTokenLimit: selected.model.input_token_limit,
+        apiStyle,
+        apiKey,
+        endpointUrl: connection?.endpoint_url,
+      }),
+    );
   } catch {
     if (request.abortSignal?.aborted) return cancelled();
     return await reportDecisionFailure(trace(), "unexpected", "execution", startedAt);

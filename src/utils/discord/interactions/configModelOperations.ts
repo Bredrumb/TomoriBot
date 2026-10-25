@@ -1,3 +1,4 @@
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import { loadProviderModelChoices } from "@/utils/provider/modelCatalog";
 import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
 import { setHostedSpeechSelection, setSpeechEndpointSelection } from "@/utils/db/repositories/SpeechRepository";
@@ -735,13 +736,15 @@ export const configModelOperations: ConfigModelOperations = {
         if (documentCount > 0) {
           const credentials = await resolveCapabilityCredentials(tomoriState.server_id, "embedding");
           const limits = getMemoryLimits();
-          await ragRepository.reembedServerDocuments({
-            serverId: tomoriState.server_id,
-            embeddingModel: chosenModel,
-            apiKey: credentials.apiKey,
-            chunkSize: limits.documentChunkSize,
-            chunkOverlap: limits.documentChunkOverlap,
-          });
+          await withProviderUsageContext(credentials.usageContext, async () =>
+            ragRepository.reembedServerDocuments({
+              serverId: tomoriState.server_id,
+              embeddingModel: chosenModel,
+              apiKey: credentials.apiKey,
+              chunkSize: limits.documentChunkSize,
+              chunkOverlap: limits.documentChunkOverlap,
+            }),
+          );
           reembedded = true;
         }
       }
