@@ -199,8 +199,12 @@ export function registerProviderOptionFallbackRefOwner(owner: ProviderOptionFall
   };
 }
 
+export function getProviderOptionFallbackRefOwner(ref: FallbackModelRef): string | null {
+  return fallbackRefOwner?.(ref) ?? null;
+}
+
 export function providerOptionFallbackRefServes(ref: FallbackModelRef, provider: string): boolean {
-  const owner = fallbackRefOwner?.(ref) ?? null;
+  const owner = getProviderOptionFallbackRefOwner(ref);
   const option = findProviderOption(provider);
   if (option) return owner === option.value;
   return owner === null || owner === provider;

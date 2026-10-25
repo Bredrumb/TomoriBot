@@ -189,6 +189,9 @@ built-in one. `getProviderDisplayName` resolves the option's `copy.labelKey`, an
 `loadConfigModelChoices` loads models from its `catalogProvider`. Model views attribute a slot to
 the option only while its `owns` answers for that capability, so the same model ID under the catalog
 provider and under the option stay distinct.
+Reviewer labels and picker defaults use the active slot owner. Fallback displays resolve each stored
+reference through the registry's fallback-owner callback before choosing its provider label; the
+callback leaves payer persistence and retry policy with their owning module.
 `claimProviderModelSelection` records ownership after a successful selection write, and
 `clearProviderModelSelection` releases it when a slot is emptied. Built-in selections release the
 previous option's marker even when the new model comes from another catalog. Removing a built-in

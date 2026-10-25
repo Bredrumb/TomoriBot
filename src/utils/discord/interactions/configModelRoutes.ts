@@ -84,6 +84,7 @@ import { NAI_IMAGE_NOISE_SCHEDULES, NAI_IMAGE_SAMPLERS } from "@/utils/image/nai
 import { safeDownload } from "@/utils/security/safeDownload";
 import { log } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import { getProviderOptionFallbackRefOwner } from "@/utils/provider/providerOptionRegistry";
 import { localizer } from "@/utils/text/localizer";
 import { getProviderRequestFailureCopy, type ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 
@@ -554,7 +555,7 @@ export async function handleConfigModelModalOpen(
     const entry = chain[index];
     if (entry) {
       return entry.kind === "llm"
-        ? `${entry.model.llm_codename} (${getProviderDisplayName(entry.model.llm_provider)})`
+        ? `${entry.model.llm_codename} (${getProviderDisplayName((refs[index] && getProviderOptionFallbackRefOwner(refs[index])) ?? entry.model.llm_provider, locale)})`
         : `${entry.endpoint.label}:${entry.endpoint.model_name ?? entry.endpoint.label}`;
     }
     return refs[index] ? `${localizer(locale, "general.unknown")} (#${refs[index].id})` : noneLabel;

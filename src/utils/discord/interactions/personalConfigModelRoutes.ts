@@ -345,7 +345,14 @@ export async function handlePersonalConfigModelRoutes(context: PersonalConfigPos
     }
 
     const rows = await dependencies.loadUserSavedProviders(context.scope.userId);
-    const displayInfo = await dependencies.loadPersonalModelDisplayInfo(context.scope.userId, rows, "text");
+    const displayInfo = await dependencies.loadPersonalModelDisplayInfo(
+      context.scope.userId,
+      rows,
+      "text",
+      undefined,
+      undefined,
+      route.locale,
+    );
     const { entries } = buildProviderPageEntries({
       providers: displayInfo.fallbacksProviders,
       expandedProvider: route.provider,

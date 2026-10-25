@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import { ButtonStyle, ComponentType, type Client } from "discord.js";
 import {
   savedProviderConfigSchema,
@@ -17,7 +17,8 @@ import { buildProvidersRouteId, PROVIDERS_ROUTE_NAMESPACE } from "@/utils/discor
 import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import { createProvidersInteractionRoute } from "@/utils/discord/interactions/providersRoutes";
 import { buildConfigModelsBody } from "@/utils/discord/ui/configModelsPanel";
-import { buildResponseDraftingBody } from "@/utils/discord/ui/responseDraftingPanel";
+import { buildDraftModelModal, buildResponseDraftingBody } from "@/utils/discord/ui/responseDraftingPanel";
+import { loadConfigFallbacksView } from "@/utils/discord/interactions/configModelLoaders";
 import { buildModelRoutingControl, buildProviderPageEntries } from "@/utils/discord/ui/modelRoutingControls";
 import { buildProviderSelectWindow } from "@/utils/discord/ui/providerSelectWindow";
 import { buildProvidersPanelPayload, providersEntriesPerPage } from "@/utils/discord/ui/providersPanel";
@@ -41,6 +42,7 @@ import {
   providerOptionCapabilityForModelView,
   providerOptionOffersModelViewCapability,
   registerProviderOption,
+  registerProviderOptionFallbackRefOwner,
   type ProviderOptionCapability,
   type ProviderOptionDefinition,
   type ProviderOptionScope,
@@ -770,7 +772,7 @@ describe("provider option registry", () => {
   });
 
   it("renders option provider labels using the model panel locale", () => {
-    registerTestOption();
+    registerTestOption({ owned: ["reviewer"] });
     expectForEveryLocale((locale) => {
       const label = localizedCopy(locale, LABEL_KEY);
       const control = buildModelRoutingControl({
@@ -839,6 +841,46 @@ describe("provider option registry", () => {
       );
       expect(JSON.stringify(drafting)).toContain(localizedCopy(locale, LABEL_KEY));
     });
+  });
+
+  it("keeps reviewer defaults and fallback labels with their registered owner", async () => {
+    const { state: optionState } = registerTestOption({ owned: ["reviewer"] });
+    disposers.push(
+      registerProviderOptionFallbackRefOwner((ref) => (ref.type === "llm" && ref.id === 1 ? TEST_VALUE : null)),
+    );
+    const model = createLlmRow({ llm_id: 1, llm_provider: "openrouter", llm_codename: "fixture-model" });
+    const input = createPersona({
+      config: { response_reviewer_llm_id: 1, fallback_model_refs: [{ type: "llm", id: 1 }] },
+      fallback_chain: [{ kind: "llm", model }],
+    });
+    const builtIn = { provider: "openrouter", models: [{ id: 1, name: model.llm_codename, description: null }] };
+    const managed = { ...builtIn, provider: TEST_VALUE };
+    for (const owned of [true, false]) {
+      optionState.owned = owned ? ["reviewer"] : [];
+      for (const group of [builtIn, managed]) {
+        const modal = buildDraftModelModal(input, LOCALE, "nonce123", group, 0);
+        expect(modal.components[0]?.component?.options?.find((option) => option.value === "1")?.default).toBe(
+          owned === (group.provider === TEST_VALUE),
+        );
+      }
+      const body = JSON.stringify(
+        buildResponseDraftingBody(
+          input,
+          LOCALE,
+          { inheritedReviewerAvailable: true, checkers: [], reviewers: [builtIn, managed] },
+          undefined,
+          false,
+        ),
+      );
+      expect(body).toContain(owned ? localizedCopy(LOCALE, LABEL_KEY) : "OpenRouter");
+    }
+    const saved = spyOn(realLlmProviderRepository.llmProviderRepo, "loadSavedProviderConfigs").mockResolvedValue([]);
+    try {
+      const fallback = await loadConfigFallbacksView(input, LOCALE, null);
+      expect(fallback.slots[0]?.label).toContain(localizedCopy(LOCALE, LABEL_KEY));
+    } finally {
+      saved.mockRestore();
+    }
   });
 
   it("acknowledges setup before waiting for option readiness or components", async () => {

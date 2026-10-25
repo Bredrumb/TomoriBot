@@ -25,6 +25,7 @@ import type { RawModalPayload } from "@/utils/discord/ui/configModals";
 import { DISCORD_SELECT_OPTION_LABEL_MAX, DISCORD_SELECT_OPTIONS_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import { findProviderOption, findProviderOptionByActiveProvider } from "@/utils/provider/providerOptionRegistry";
 import { localizer } from "@/utils/text/localizer";
 import { renderFencedPreview } from "@/utils/text/textPreview";
 
@@ -83,6 +84,14 @@ export function buildDraftPromptModal(state: TomoriState, locale: string, nonce:
   };
 }
 
+function reviewerProvider(state: TomoriState, provider: string): string {
+  const catalogProvider = findProviderOption(provider)?.catalogProvider ?? provider;
+  return (
+    findProviderOptionByActiveProvider(catalogProvider, { kind: "server", ownerId: state.server_id, state }, "reviewer")
+      ?.value ?? catalogProvider
+  );
+}
+
 export function buildDraftModelModal(
   state: TomoriState,
   locale: string,
@@ -96,7 +105,7 @@ export function buildDraftModelModal(
     group.provider,
     nonce,
     group.models.slice(start, start + CONFIG_MODEL_PAGE_SIZE),
-    state.config.response_reviewer_llm_id,
+    reviewerProvider(state, group.provider) === group.provider ? state.config.response_reviewer_llm_id : null,
   );
   payload.custom_id = buildConfigRouteId({ action: "draft-model-submit", locale, nonce, provider: group.provider });
   payload.title = localizer(locale, "commands.config.drafting.reviewer_button");
@@ -128,12 +137,21 @@ export function buildResponseDraftingBody(
   const reviewerLabel = (): string => {
     const id = state.config.response_reviewer_llm_id;
     if (id === null) {
-      const inherited = formatModel(safeSelectOptionText(state.llm.llm_codename, 150), state.llm.llm_provider);
+      const owner = findProviderOptionByActiveProvider(
+        state.llm.llm_provider,
+        { kind: "server", ownerId: state.server_id, state },
+        "text",
+      );
+      const inherited = formatModel(
+        safeSelectOptionText(state.llm.llm_codename, 150),
+        owner?.value ?? state.llm.llm_provider,
+      );
       return view?.inheritedReviewerAvailable
         ? inherited
         : `${inherited}: ${t("commands.config.drafting.unavailable")}`;
     }
     for (const group of view?.reviewers ?? []) {
+      if (reviewerProvider(state, group.provider) !== group.provider) continue;
       const model = group.models.find((candidate) => candidate.id === id);
       if (model) return safeSelectOptionText(formatModel(model.name, group.provider), 180);
     }

@@ -28,6 +28,8 @@ import {
 } from "@/utils/provider/personalProviderHelpers";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { findProviderOption, providerOptionOffersPersonalCapability } from "@/utils/provider/providerOptionRegistry";
+import { getProviderOptionFallbackRefOwner } from "@/utils/provider/providerOptionRegistry";
+import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { resolveDescription } from "@/utils/text/localizer";
 import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
 import { formatManagedIdentityLabel } from "@/utils/discord/interactions/managedIdentityPanelRoutes";
@@ -285,6 +287,7 @@ export async function loadPersonalModelDisplayInfo(
   _selectedCap: PersonalConfigManagedCapability = "text",
   selectedParamsProvider?: string,
   selectedFallbacksProvider?: string,
+  locale = "en-US",
 ): Promise<PersonalConfigModelDisplayInfo> {
   const resolveCapName = async (
     row: UserSavedProviderConfigRow | null | undefined,
@@ -477,7 +480,10 @@ export async function loadPersonalModelDisplayInfo(
       try {
         if (ref.type === "llm") {
           const m = await llmModelRepo.loadById(ref.id);
-          modelName = m?.llm_codename ?? null;
+          const owner = getProviderOptionFallbackRefOwner(ref);
+          modelName = m
+            ? `${m.llm_codename}${owner || m.llm_provider === "openrouter" ? ` (${getProviderDisplayName(owner ?? m.llm_provider, locale)})` : ""}`
+            : null;
         } else if (ref.type === "custom_endpoint") {
           const endpoints = await llmProviderRepo.loadCustomEndpointsByIds([ref.id]);
           modelName = endpoints[0]?.model_name ?? endpoints[0]?.label ?? `Endpoint #${ref.id}`;
