@@ -38,6 +38,23 @@ import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 
 beforeAll(async () => initializeLocalizer());
 
+it("returns a provider panel with a receipt from an already acknowledged component", async () => {
+  for (const build of [buildInitialProvidersPanel, buildInitialPersonalProvidersPanel]) {
+    const interaction = createRouteInteraction();
+    await interaction.deferUpdate();
+    const payload = await build(interaction as never, "en-US", {
+      resolveScope: async () => scope,
+      receipt: {
+        tone: "info",
+        heading: localizedCopy("en-US", "commands.providers.entry_kind_provider"),
+        detail: "fixture completion",
+      },
+    });
+    expect(JSON.stringify(payload)).toContain("fixture completion");
+    expect(interaction.calls.map(({ method }) => method)).toEqual(["deferUpdate"]);
+  }
+});
+
 const WIRE_CONTRACT_V1: ReadonlyArray<readonly [string, ProvidersPanelRoute]> = [
   ["providers:v1:select:en-US", { action: "select", locale: "en-US" }],
   ["providers:v1:retry:en-US", { action: "retry", locale: "en-US" }],

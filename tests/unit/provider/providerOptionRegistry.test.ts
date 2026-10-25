@@ -22,8 +22,8 @@ import { buildProvidersPanelPayload, providersEntriesPerPage } from "@/utils/dis
 import { buildSetupWizardPayload } from "@/utils/discord/ui/setupPanel";
 import {
   buildSetupFinishRouteId,
-  buildSetupOptionActionRouteId,
   buildSetupProviderModeRouteId,
+  buildSetupOptionActionRouteId,
 } from "@/utils/discord/interactions/setupRoutes";
 import { readSetupDraft, resetSetupDrafts, storeSetupDraft } from "@/utils/discord/interactions/setupDraftStore";
 import { dispatchGlobalInteraction } from "@/utils/discord/interactions/router";
@@ -758,6 +758,46 @@ describe("provider option registry", () => {
     if (stored.status !== "ok") throw new Error("setup draft did not read back");
     expect(stored.draft.providerAccess).toEqual({ mode: "option", value: TEST_VALUE });
     expect(JSON.stringify(interaction.calls)).toContain("test onboarding");
+    resetSetupDrafts();
+  });
+
+  it("acknowledges option actions before the handler and repaints its receipt with the next action ID", async () => {
+    const { option } = registerTestOption();
+    if (!option.setup) throw new Error("setup unavailable");
+    const nonce = "nonce-option-action";
+    const customId = buildSetupOptionActionRouteId({ locale: LOCALE, nonce });
+    storeSetupDraft(nonce, setupDraft({ providerAccess: { mode: "option", value: TEST_VALUE } }));
+    const interaction = createRouteInteraction({ customId, kind: "button" });
+    let nextAction: string | undefined;
+    option.setup.components = async ({ actionRouteId }) => {
+      nextAction = actionRouteId;
+      return [];
+    };
+    option.setup.handleAction = async ({ interaction: actionInteraction, draft }) => {
+      expect(actionInteraction.deferred).toBe(true);
+      expect(draft.providerAccess).toEqual({ mode: "option", value: TEST_VALUE });
+      await Promise.resolve();
+      return { tone: "info", heading: localizedCopy(LOCALE, LABEL_KEY), detail: "fixture action receipt" };
+    };
+    await dispatchGlobalInteraction({} as Client, interaction as never);
+    expect(interaction.calls[0]?.method).toBe("deferUpdate");
+    expect(JSON.stringify(interaction.edits)).toContain("fixture action receipt");
+    expect(nextAction).toBe(customId);
+    resetSetupDrafts();
+  });
+
+  it("does not dispatch an option action after that option becomes unavailable", async () => {
+    const { option } = registerTestOption();
+    if (!option.setup) throw new Error("setup unavailable");
+    const handleAction = mock(async () => undefined);
+    option.setup.handleAction = handleAction;
+    option.setup.available = () => false;
+    const nonce = "nonce-option-unavailable";
+    storeSetupDraft(nonce, setupDraft({ providerAccess: { mode: "option", value: TEST_VALUE } }));
+    const interaction = createRouteInteraction({ customId: buildSetupOptionActionRouteId({ locale: LOCALE, nonce }) });
+    await dispatchGlobalInteraction({} as Client, interaction as never);
+    expect(interaction.deferred).toBe(true);
+    expect(handleAction).not.toHaveBeenCalled();
     resetSetupDrafts();
   });
 

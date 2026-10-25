@@ -129,6 +129,29 @@ function renderedPayloads(): Array<[string, unknown]> {
     });
 
   return [
+    [
+      "provider option action",
+      buildSetupWizardPayload({
+        draft: createDraft({ providerAccess: { mode: "option", value: "fixture-option" } }),
+        locale: LOCALE,
+        isHosted: false,
+        nonce: NONCE,
+        settingsCatalogs: CATALOGS,
+        optionComponents: [
+          {
+            type: 1,
+            components: [
+              {
+                type: 2,
+                style: 1,
+                label: "fixture action",
+                customId: buildSetupOptionActionRouteId({ locale: LOCALE, nonce: NONCE }),
+              },
+            ],
+          },
+        ],
+      }),
+    ],
     ["pending hosted", wizard(createDraft({ requiresPolicies: true }), true)],
     ["pending non-hosted", wizard(createDraft(), false)],
     ["pending dm", wizard(createDraft({ context: "dm" }), false)],
