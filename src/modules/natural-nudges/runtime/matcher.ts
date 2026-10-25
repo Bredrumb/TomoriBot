@@ -44,6 +44,7 @@ export type MatcherBackend =
       reference: DecisionModelReference;
       model: string;
       credentials?: ProviderOptionCredentials;
+      credentialProvider?: string;
       slot?: "decision" | "nudge-checker";
     }
   | ({ kind: "llm"; model: string } & NudgeModelRef);
@@ -126,6 +127,7 @@ async function decisionBackend(
       reference: option.reference,
       model: option.model.codename,
       slot,
+      credentialProvider: owner?.value,
       ...(credentials ? { credentials } : {}),
     },
   };
@@ -208,6 +210,7 @@ async function matchWithDecision(
     slot: backend.slot,
     reference: backend.reference,
     credentials: backend.credentials,
+    credentialProvider: backend.credentialProvider,
     evidence,
     abortSignal: AbortSignal.timeout(MATCHER_TIMEOUT_MS),
     questions: [

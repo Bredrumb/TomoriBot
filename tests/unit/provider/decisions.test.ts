@@ -7,7 +7,11 @@ import { parseOpenRouterDecisionModelList } from "@/utils/cache/openrouterDecisi
 import { log } from "@/utils/misc/logger";
 import { llmModelRepo } from "@/utils/db/repositories";
 import { OpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
-import { ProviderRequestDeniedError, withProviderUsageContext } from "@/utils/provider/providerUsage";
+import {
+  ProviderRequestDeniedError,
+  registerProviderRequestDenialTranslator,
+  withProviderUsageContext,
+} from "@/utils/provider/providerUsage";
 
 const customReference = { provider: "custom:3", modelId: 8, registrationId: null, customEndpointId: 2 };
 
@@ -61,6 +65,28 @@ describe("Decision transports", () => {
     });
     expect(result).toMatchObject({ status: "denied", errorLogged: false, error: denied });
     expect(error).not.toHaveBeenCalled();
+  });
+
+  it("translates an owned provider limit before logging an operational failure", async () => {
+    const context = {};
+    const denied = new ProviderRequestDeniedError(context, () => ({
+      titleKey: "general.errors.api_key_error_title",
+      description: "fixture",
+    }));
+    const dispose = registerProviderRequestDenialTranslator((cause, owner) =>
+      owner === context && cause instanceof OpenRouterLimitError ? denied : null,
+    );
+    try {
+      const result = await withProviderUsageContext(context, () =>
+        callOpenRouterDecisions(request, async () =>
+          Response.json({ error: { metadata: { limit_source: "openrouter_key_limit" } } }, { status: 402 }),
+        ),
+      );
+      expect(result).toMatchObject({ status: "denied", error: denied, errorLogged: false });
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
   });
 
   it("keeps interleaved Decision denials with their request owner", async () => {

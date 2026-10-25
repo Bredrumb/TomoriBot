@@ -12,7 +12,7 @@ import { decisionSections } from "@/db/seed/catalog/models";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { callDecisionsForProvider, loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
 import { loadProviderModelChoices } from "@/utils/provider/modelCatalog";
-import { registerProviderOption } from "@/utils/provider/providerOptionRegistry";
+import { findProviderOption, registerProviderOption } from "@/utils/provider/providerOptionRegistry";
 import { resolveMatcherBackend } from "@/modules/natural-nudges/runtime/matcher";
 import { registerCustomEndpoint } from "@/utils/provider/customEndpointService";
 import { createPersona, createServerConfig } from "../../helpers/fixtures";
@@ -353,7 +353,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
         const request = {
           scope,
           reference: (await loadDecisionModelsForScope(scope, "test-decision"))[0].reference,
-          credentialProvider: "test-decision",
+          credentials:
+            (await findProviderOption("test-decision")?.selection.resolveCredentials?.({
+              scope,
+              capability: "decision",
+              modelId,
+            })) ?? undefined,
           evidence: "fixture",
           questions: [{ type: "predicate" as const, id: "q", instructions: "fixture" }],
         };

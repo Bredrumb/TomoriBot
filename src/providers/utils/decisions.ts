@@ -306,6 +306,8 @@ export async function executeDecisionTransport(
     }
     if (!response.ok) {
       const limit = await readOpenRouterLimitResponse(response);
+      const denied = limit && findProviderRequestDeniedError(limit, currentProviderUsageContext());
+      if (denied) return { status: "denied", error: denied, correlationId, errorLogged: false };
       return await reportDecisionFailure(
         request,
         [401, 403].includes(response.status) && !limit ? "authentication" : "http",
