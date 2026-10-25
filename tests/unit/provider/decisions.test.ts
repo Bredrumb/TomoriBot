@@ -7,7 +7,7 @@ import { parseOpenRouterDecisionModelList } from "@/utils/cache/openrouterDecisi
 import { log } from "@/utils/misc/logger";
 import { llmModelRepo } from "@/utils/db/repositories";
 import { OpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
-import { ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
+import { ProviderRequestDeniedError, withProviderUsageContext } from "@/utils/provider/providerUsage";
 
 const customReference = { provider: "custom:3", modelId: 8, registrationId: null, customEndpointId: 2 };
 
@@ -61,6 +61,27 @@ describe("Decision transports", () => {
     });
     expect(result).toMatchObject({ status: "denied", errorLogged: false, error: denied });
     expect(error).not.toHaveBeenCalled();
+  });
+
+  it("keeps interleaved Decision denials with their request owner", async () => {
+    const first = {};
+    const second = {};
+    const denied = new ProviderRequestDeniedError(first, () => ({
+      titleKey: "general.errors.api_key_error_title",
+      description: "fixture",
+    }));
+    const execute = async () =>
+      callOpenRouterDecisions(request, async () => {
+        await Promise.resolve();
+        throw new Error("wrapped", { cause: denied });
+      });
+    const [owned, foreign] = await Promise.all([
+      withProviderUsageContext(first, execute),
+      withProviderUsageContext(second, execute),
+    ]);
+    expect(owned).toMatchObject({ status: "denied", error: denied, errorLogged: false });
+    expect(foreign).toMatchObject({ status: "failed", category: "network", errorLogged: true });
+    expect(error).toHaveBeenCalledTimes(1);
   });
 
   it("translates native and System One requests without chat routes", async () => {
