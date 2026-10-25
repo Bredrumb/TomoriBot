@@ -39,7 +39,9 @@ thresholds, calibration, and response routing belong to consumers.
 | Custom System One | `POST <stored-base>/systemone`: the same named `noul` protocol |
 | Custom OpenAI Decisions | `POST <stored-base>/decisions`: text `input`, ordered predicates and predicate/refusal answers |
 
-Results distinguish `completed`, `refused`, `cancelled`, `invalid-input`, `unavailable`, and `failed`.
+Results distinguish `completed`, `refused`, `denied`, `cancelled`, `invalid-input`, `unavailable`, and `failed`.
+Request admission denials retain their error without logging an operational failure. Failed HTTP
+responses preserve validated OpenRouter limit metadata as a cause; provider prose is discarded.
 Completed/refused results carry ordered typed answers, optional actual usage/cost, local correlation,
 bounded provider request identity, and returned model ID. Probabilities must be finite in [0, 1].
 Missing/extra/duplicate answers, wrong types/order, invalid usage, and explicit evidence truncation
