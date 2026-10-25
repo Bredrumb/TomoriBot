@@ -58,6 +58,15 @@ describe("Decision matcher", () => {
       ],
       [{ status: "failed", category: "malformed", correlationId: "f", errorLogged: true }, "malformed"],
       [{ status: "failed", category: "http", correlationId: "f", errorLogged: true }, "failed"],
+      [
+        {
+          status: "denied",
+          error: new ProviderRequestDeniedError(undefined, () => ({ titleKey: "fixture", description: "fixture" })),
+          correlationId: "f",
+          errorLogged: false,
+        },
+        "denied",
+      ],
     ];
     for (const [answer, reason] of cases) {
       spies.push(spyOn(executors, "callDecisionsForProvider").mockResolvedValue(answer));

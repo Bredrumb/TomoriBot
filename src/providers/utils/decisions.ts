@@ -12,7 +12,7 @@ import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 import { readBoundedResponse } from "@/utils/security/boundedResponse";
 import { RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
 import { readOpenRouterLimitResponse } from "@/providers/openrouter/openrouterLimit";
-import { findProviderRequestDeniedError } from "@/utils/provider/providerUsage";
+import { currentProviderUsageContext, findProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 
 const DECISION_TIMEOUT_MS = parseIntegerEnvFlag(process.env.STREAM_SDK_CALL_TIMEOUT_MS, 120_000, 10_000);
 const MAX_DECISION_RESPONSE_BYTES = 1024 * 1024;
@@ -341,7 +341,7 @@ export async function executeDecisionTransport(
     decisionTrace(request, outcome, { questionCount: answers.length, elapsedMs: Date.now() - startedAt, usage });
     return { status: outcome, answers, usage, correlationId, providerRequestId, actualModel: envelope.model };
   } catch (error) {
-    const denied = findProviderRequestDeniedError(error);
+    const denied = findProviderRequestDeniedError(error, currentProviderUsageContext());
     if (denied) return { status: "denied", error: denied, correlationId, errorLogged: false };
     if (request.abortSignal?.aborted) return cancelled();
     if (error instanceof RemoteUrlPolicyError) return { status: "invalid-input", correlationId, errorLogged: false };
