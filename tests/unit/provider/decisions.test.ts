@@ -6,6 +6,8 @@ import type { ProviderDecisionRequest } from "@/types/provider/featureInterfaces
 import { parseOpenRouterDecisionModelList } from "@/utils/cache/openrouterDecisionModelCache";
 import { log } from "@/utils/misc/logger";
 import { llmModelRepo } from "@/utils/db/repositories";
+import { OpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
+import { ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 
 const customReference = { provider: "custom:3", modelId: 8, registrationId: null, customEndpointId: 2 };
 
@@ -30,6 +32,35 @@ describe("Decision transports", () => {
   afterAll(() => {
     info.mockRestore();
     error.mockRestore();
+  });
+
+  it("preserves validated limit causes without retaining provider prose", async () => {
+    for (const status of [402, 403]) {
+      const result = await callOpenRouterDecisions(request, async () =>
+        Response.json(
+          { error: { message: "PRIVATE_PROVIDER_DETAIL", metadata: { limit_source: "openrouter_key_limit" } } },
+          { status },
+        ),
+      );
+      expect(result.status).toBe("failed");
+      if (result.status !== "failed") throw new Error("Expected failed Decision");
+      expect(result.category).toBe("http");
+      expect(result.cause).toBeInstanceOf(OpenRouterLimitError);
+      expect(result.cause).toMatchObject({ status, limitSource: "openrouter_key_limit" });
+      expect(JSON.stringify(result)).not.toContain("PRIVATE_PROVIDER_DETAIL");
+    }
+  });
+
+  it("preserves a request denial as an expected outcome without logging an operational error", async () => {
+    const denied = new ProviderRequestDeniedError(undefined, () => ({
+      titleKey: "general.errors.api_key_error_title",
+      description: "fixture refusal",
+    }));
+    const result = await callOpenRouterDecisions(request, async () => {
+      throw new Error("wrapped refusal", { cause: denied });
+    });
+    expect(result).toMatchObject({ status: "denied", errorLogged: false, error: denied });
+    expect(error).not.toHaveBeenCalled();
   });
 
   it("translates native and System One requests without chat routes", async () => {

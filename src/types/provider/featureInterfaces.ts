@@ -380,6 +380,7 @@ export type DecisionFailureCategory =
   | "credentials";
 
 export type DecisionResult =
+  | { status: "denied"; error: Error; correlationId: string; errorLogged: false }
   | {
       status: "completed" | "refused";
       answers: DecisionAnswer[];
@@ -395,7 +396,7 @@ export type DecisionResult =
       correlationId: string;
       errorLogged: false;
     }
-  | { status: "failed"; category: DecisionFailureCategory; correlationId: string; errorLogged: true };
+  | { status: "failed"; category: DecisionFailureCategory; correlationId: string; errorLogged: true; cause?: Error };
 
 export interface SupportsDecisions {
   callDecisions(request: ProviderDecisionRequest): Promise<DecisionResult>;
