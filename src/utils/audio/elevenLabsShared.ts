@@ -20,6 +20,8 @@ const DISCORD_MESSAGE_MAX_CHARS = 2_000;
 
 /** A rejected key, a missing permission, an exhausted quota, or a rate limit is the key owner's to fix. */
 const EXPECTED_ELEVENLABS_STATUSES = new Set([401, 402, 403, 429]);
+/** ElevenLabs answers a key ID pasted in place of the key with a 400 rather than a 401. */
+const ELEVENLABS_AUTH_ERROR_BODY = /"type"\s*:\s*"authentication_error"/;
 
 interface ElevenLabsFailure {
   errorKind?: string;
@@ -28,10 +30,11 @@ interface ElevenLabsFailure {
   providerDetail?: string;
 }
 
-function isExpectedElevenLabsFailure({ errorKind, statusCode }: ElevenLabsFailure): boolean {
+function isExpectedElevenLabsFailure({ errorKind, statusCode, providerDetail }: ElevenLabsFailure): boolean {
   if (errorKind === "invalid_response") return false;
   if (errorKind !== "request_failed") return true;
-  return statusCode !== undefined && EXPECTED_ELEVENLABS_STATUSES.has(statusCode);
+  if (statusCode === undefined) return false;
+  return EXPECTED_ELEVENLABS_STATUSES.has(statusCode) || ELEVENLABS_AUTH_ERROR_BODY.test(providerDetail ?? "");
 }
 
 /** The status and response body behind a failed request, or the transport error when none arrived. */

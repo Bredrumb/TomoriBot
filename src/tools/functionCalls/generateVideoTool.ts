@@ -5,6 +5,7 @@ import {
   reportProviderUsage,
   type ProviderUsageContext,
 } from "@/utils/provider/providerUsage";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 /**
  * Video Generation Tool
  * Allows TomoriBot to generate videos using the active provider's native video API.
@@ -39,7 +40,11 @@ import {
   getDefaultOpenRouterVideoResolution,
   isOpenRouterVideoCapabilityError,
 } from "@/providers/openrouter/openrouterVideoRequest";
-import { ProviderVideoFilteredError } from "@/providers/utils/providerVideoErrors";
+import {
+  isExpectedVideoFailure,
+  isVideoContentRefusal,
+  ProviderVideoFilteredError,
+} from "@/providers/utils/providerVideoErrors";
 import { resolveMessageImageUrls } from "@/utils/image/imageExtractor";
 import { beginTextModelHandoffBeforeComfyUi } from "@/utils/provider/textModelComfyUiHandoff";
 
@@ -419,6 +424,7 @@ export class GenerateVideoTool extends BaseTool {
     // Default to allowed; overwritten below for server-credential users
     let quotaCheck: VideoQuotaCheckResult = { allowed: true };
     let usageContext: ProviderUsageContext | undefined;
+    let failureProvider: string | undefined;
 
     try {
       const { credentials: creds, quotaCheck: serverQuotaCheck } = await resolveCredentialsWithMediaQuota(
@@ -488,6 +494,7 @@ export class GenerateVideoTool extends BaseTool {
       const apiKey = creds.apiKey;
       usageContext = creds.usageContext;
       const executionProvider = creds.provider;
+      failureProvider = executionProvider;
 
       // Send progress notice, so video generation takes 1-3 minutes
       if (!context.suppressProgressNotices) {
@@ -716,7 +723,17 @@ export class GenerateVideoTool extends BaseTool {
       const denied = findProviderRequestDeniedError(error, usageContext);
       if (denied) return { success: false, error: await notifyProviderToolFailure(context, denied) };
       const errorMessage = error instanceof Error ? error.message : String(error);
-      if (!(error instanceof ProviderVideoFilteredError)) log.error("Video generation failed:", error as Error);
+      if (!(error instanceof ProviderVideoFilteredError)) {
+        await reportProviderFailure({
+          summary: "Video generation failed",
+          errorType: "VideoGenerationFailed",
+          error,
+          expected: isExpectedVideoFailure(errorMessage),
+          serverId: context.tomoriState.server_id,
+          userId: context.internalUserId ?? null,
+          dimensions: { operation: "video-generation", provider: failureProvider ?? "unknown" },
+        });
+      }
 
       if (isOpenRouterVideoCapabilityError(error)) {
         const localizedMessage = localizer(
@@ -740,7 +757,7 @@ export class GenerateVideoTool extends BaseTool {
         };
       }
 
-      if (errorMessage.includes("content") || errorMessage.includes("safety") || errorMessage.includes("blocked")) {
+      if (isVideoContentRefusal(errorMessage)) {
         return {
           success: false,
           error: "Video generation was blocked by the provider's content safety filter. Please try a different prompt.",

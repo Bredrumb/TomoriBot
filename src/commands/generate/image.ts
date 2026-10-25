@@ -11,6 +11,7 @@ import {
   reportProviderUsage,
   getProviderRequestFailureCopy,
 } from "@/utils/provider/providerUsage";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 /**
  * Image Generation Command
  * Allows users to generate AI images using the configured provider
@@ -755,19 +756,35 @@ export async function execute(
     }
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    log.error("Image generation failed:", error as Error);
+    const isBillingRefusal =
+      errorMessage.includes("billing") ||
+      errorMessage.includes("payment") ||
+      errorMessage.includes("quota") ||
+      errorMessage.includes("PERMISSION_DENIED");
+    const isSafetyRefusal =
+      errorMessage.includes("safety") || errorMessage.includes("blocked") || errorMessage.includes("RECITATION");
+
+    await reportProviderFailure({
+      summary: "Image generation failed",
+      errorType: "ImageGenerationFailed",
+      error,
+      expected: isBillingRefusal || isSafetyRefusal,
+      serverId: tomoriState.server_id,
+      userId: userData.user_id ?? null,
+      dimensions: {
+        operation: "image-generation",
+        provider: executionProvider,
+        refusal: isBillingRefusal ? "billing" : isSafetyRefusal ? "safety" : "none",
+      },
+      metadata: { credentialSource: imageCreds.source },
+    });
 
     // Use modalSubmitInteraction if available (error after modal), otherwise interaction (error during modal)
     const replyTarget = modalSubmitInteraction ?? interaction;
 
     const isPersonalImage = imageCreds?.source === "personal";
 
-    if (
-      errorMessage.includes("billing") ||
-      errorMessage.includes("payment") ||
-      errorMessage.includes("quota") ||
-      errorMessage.includes("PERMISSION_DENIED")
-    ) {
+    if (isBillingRefusal) {
       const tipKeys = await nudgeTips(
         isPersonalImage
           ? ["genai.tips.top_up_provider_balance", "genai.tips.disable_personal_text_override"]
@@ -785,7 +802,7 @@ export async function execute(
       return;
     }
 
-    if (errorMessage.includes("safety") || errorMessage.includes("blocked") || errorMessage.includes("RECITATION")) {
+    if (isSafetyRefusal) {
       await replyInfoEmbed(replyTarget, locale, {
         titleKey: "commands.generate.image.error_safety_title",
         descriptionKey: "commands.generate.image.error_safety_description",

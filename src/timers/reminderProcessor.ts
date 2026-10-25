@@ -1,4 +1,11 @@
-import type { Client, Message, TextBasedChannel, TextChannel } from "discord.js";
+import {
+  type Client,
+  DiscordAPIError,
+  type Message,
+  RESTJSONErrorCodes,
+  type TextBasedChannel,
+  type TextChannel,
+} from "discord.js";
 import { log, ColorCode } from "../utils/misc/logger";
 import { serverScheduleRepository } from "@/utils/db/repositories";
 
@@ -16,6 +23,7 @@ import type { GenerationTurnResult, QueuedMessageDiscardReason } from "@/utils/c
 import { runWithErrorContext } from "@/utils/misc/errorContextStore";
 import { neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
 import { localizer } from "@/utils/text/localizer";
+import { isCredentialRejection } from "@/utils/provider/providerErrorClassification";
 
 const REMINDER_DELIVERY_RETRY_DELAY_MS = 60_000;
 
@@ -271,9 +279,9 @@ export class ReminderProcessor {
       }
     };
 
-    const deferRetry = async (reason: string): Promise<void> => {
+    const deferRetry = async (reason: string, retryable = true): Promise<void> => {
       await settle(async () => {
-        await this.deferReminderRetry(args.reminder, reason);
+        await this.deferReminderRetry(args.reminder, reason, retryable);
       });
     };
 
@@ -287,7 +295,11 @@ export class ReminderProcessor {
           return;
         }
 
-        await deferRetry(`generation_${result.status}`);
+        const credentialRejected = isCredentialRejection(result.streamResults.at(-1)?.data);
+        await deferRetry(
+          credentialRejected ? "generation_credential_rejected" : `generation_${result.status}`,
+          !credentialRejected,
+        );
       },
       handleQueueDiscard: async (reason) => {
         await deferRetry(`queue_${reason}`);
@@ -336,7 +348,7 @@ export class ReminderProcessor {
     }
   }
 
-  private async deferReminderRetry(reminder: ReminderRow, reason: string): Promise<void> {
+  private async deferReminderRetry(reminder: ReminderRow, reason: string, retryable = true): Promise<void> {
     if (!reminder.reminder_id) {
       log.error(`Cannot defer reminder retry for missing reminder_id (reason: ${reason})`);
       return;
@@ -344,14 +356,18 @@ export class ReminderProcessor {
 
     const attempts = (reminder.delivery_retry_count ?? 0) + 1;
     const isDegraded = (reminder.failed_occurrence_count ?? 0) >= REMINDER_DEGRADED_AFTER_FAILED_OCCURRENCES;
-    const maxRetries = isDegraded ? 0 : REMINDER_DELIVERY_MAX_RETRIES;
+    const maxRetries = isDegraded || !retryable ? 0 : REMINDER_DELIVERY_MAX_RETRIES;
     if (attempts > maxRetries) {
-      if (isDegraded) {
+      if (!retryable) {
+        log.warn(
+          `Reminder ${reminder.reminder_id} was refused by its provider's credentials (last reason: ${reason}); skipping retries and falling back to a plain reminder embed.`,
+        );
+      } else if (isDegraded) {
         log.warn(
           `Reminder ${reminder.reminder_id} has failed ${reminder.failed_occurrence_count} occurrences in a row (last reason: ${reason}); skipping retries and falling back to a plain reminder embed.`,
         );
       } else {
-        log.error(
+        log.warn(
           `Reminder ${reminder.reminder_id} exhausted ${REMINDER_DELIVERY_MAX_RETRIES} delivery retries (last reason: ${reason}); falling back to a plain reminder embed.`,
         );
       }
@@ -526,7 +542,16 @@ export class ReminderProcessor {
       });
       return true;
     } catch (fallbackError) {
-      log.error(`Failed to send fallback reminder info embed for reminder ${reminder.reminder_id}:`, fallbackError);
+      const failure = `Failed to send fallback reminder info embed for reminder ${reminder.reminder_id}:`;
+      if (
+        fallbackError instanceof DiscordAPIError &&
+        (fallbackError.code === RESTJSONErrorCodes.MissingAccess ||
+          fallbackError.code === RESTJSONErrorCodes.MissingPermissions)
+      ) {
+        log.warn(failure, fallbackError);
+      } else {
+        await log.error(failure, fallbackError);
+      }
       return false;
     }
   }

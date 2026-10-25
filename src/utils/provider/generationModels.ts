@@ -70,21 +70,21 @@ export async function loadGenerationModelChoices(
           (await hasOptApiKey(serverId, "novelai"))
         )
           providerNames.push("novelai");
-        const models = await Promise.all(
-          providerNames.map(async (provider) => {
-            const nai =
-              !isCustomProvider(provider) &&
-              getStaticProviderInfo(provider)?.featureSupport.imageGeneration === "nai-pipeline";
-            const catalogCapability: ConfigCatalogModelCapability =
-              savedCapability === "speech_design"
-                ? "tts-design"
-                : savedCapability === "speech_clone"
-                  ? "tts-clone"
-                  : (capability === "image" || capability === "image-nai") && nai
-                    ? "nai-image"
-                    : (capability as "text" | "image" | "video");
-            const choices = await loadProviderModelChoices(scope, catalogCapability, provider);
-            return choices.map(
+        for (const provider of providerNames) {
+          const nai =
+            !isCustomProvider(provider) &&
+            getStaticProviderInfo(provider)?.featureSupport.imageGeneration === "nai-pipeline";
+          const catalogCapability: ConfigCatalogModelCapability =
+            savedCapability === "speech_design"
+              ? "tts-design"
+              : savedCapability === "speech_clone"
+                ? "tts-clone"
+                : (capability === "image" || capability === "image-nai") && nai
+                  ? "nai-image"
+                  : (capability as "text" | "image" | "video");
+          const choices = await loadProviderModelChoices(scope, catalogCapability, provider);
+          result.push(
+            ...choices.map(
               (model): GenerationModelChoice => ({
                 source: scope.kind,
                 provider,
@@ -95,10 +95,9 @@ export async function loadGenerationModelChoices(
                   ? { speechModes: [savedCapability === "speech_design" ? "design" : "clone"] }
                   : {}),
               }),
-            );
-          }),
-        );
-        result.push(...models.flat());
+            ),
+          );
+        }
       }
       if (capability === "speech" && scope.kind === "server") {
         const endpoints = await llmProviderRepo.loadCustomEndpointsForServer(scope.ownerId);

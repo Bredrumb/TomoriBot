@@ -1,3 +1,4 @@
+import { DiscordAPIError } from "discord.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 
 // Static imports are hoisted and evaluated before any `mock.module` runs, so
@@ -462,6 +463,60 @@ describe("ReminderProcessor delivery retry cap", () => {
     expect(deleteReminderByIdMock).toHaveBeenCalledWith(reminder.reminder_id);
     expect(rescheduleReminderMock).not.toHaveBeenCalled();
     expect(client.dmUser.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back on the first attempt when the provider refuses the key, but retries a transient failure", async () => {
+    for (const [providerError, retries] of [
+      [{ type: "api_error", code: "403", message: "PERMISSION_DENIED", retryable: false }, 0],
+      [{ type: "provider_overloaded", code: "503", message: "Service unavailable", retryable: true }, 1],
+    ] as const) {
+      scheduleReminderRetryMock.mockClear();
+      rescheduleReminderMock.mockClear();
+      const reminder = makeReminder({ repetition_interval_hours: 24 });
+      getDueRemindersMock.mockImplementation(async () => [reminder]);
+      tomoriChatMock.mockImplementation(async (input) => {
+        await input.onGenerationResult?.({
+          status: "error",
+          streamResults: [{ status: "error", data: providerError }],
+          personaResponses: [],
+        });
+        return "run";
+      });
+      const client = makeClient();
+      const channel = await client.channels.fetch();
+      await new ReminderProcessor(client as never).processDueReminders();
+
+      expect(scheduleReminderRetryMock).toHaveBeenCalledTimes(retries);
+      expect(channel.send).toHaveBeenCalledTimes(1 - retries);
+      expect(rescheduleReminderMock).toHaveBeenCalledTimes(1 - retries);
+    }
+  });
+
+  it("files an exhausted retry budget and a channel that denies the fallback as warnings, not incidents", async () => {
+    const [errorLog, , , warnLog] = logSpies;
+    const logged = (spy: typeof errorLog, prefix: string) =>
+      spy.mock.calls.filter(([message]) => String(message).startsWith(prefix)).length;
+    for (const [fallbackError, fallbackErrorLogs] of [
+      [new DiscordAPIError({ code: 50013, message: "Missing Permissions" }, 50013, 403, "POST", "/", {}), 0],
+      [new Error("socket hang up"), 1],
+    ] as const) {
+      errorLog.mockClear();
+      warnLog.mockClear();
+      const reminder = makeReminder({ repetition_interval_hours: 24, delivery_retry_count: 5 });
+      getDueRemindersMock.mockImplementation(async () => [reminder]);
+      alwaysFailDelivery();
+      const client = makeClient();
+      const channel = await client.channels.fetch();
+      channel.send.mockImplementation(async () => {
+        throw fallbackError;
+      });
+      await new ReminderProcessor(client as never).processDueReminders();
+
+      expect(logged(errorLog, "Reminder 42 exhausted")).toBe(0);
+      expect(logged(warnLog, "Reminder 42 exhausted")).toBe(1);
+      expect(logged(errorLog, "Failed to send fallback reminder")).toBe(fallbackErrorLogs);
+      expect(logged(warnLog, "Failed to send fallback reminder")).toBe(1 - fallbackErrorLogs);
+    }
   });
 
   it("does not DM the bot itself when removing a dead recurring self-task", async () => {

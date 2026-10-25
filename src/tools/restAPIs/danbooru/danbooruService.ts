@@ -69,6 +69,9 @@ const EXPECTED_FAILURE_KINDS: ReadonlySet<DanbooruFailureKind> = new Set([
   "cancelled",
 ]);
 
+/** Danbooru's own outage or maintenance answers, which clear without any action from TomoriBot. */
+const TRANSIENT_UNAVAILABLE_STATUSES: ReadonlySet<number> = new Set([502, 503, 504]);
+
 const autocompleteEntrySchema = z.object({
   type: z.string(),
   value: z.string(),
@@ -259,7 +262,7 @@ export function fetchPosts(
 
 /**
  * Logs a Danbooru failure at the point a caller turns it into a tool error or reply.
- * Rate limits, the 2-tag limit, a missing post, and cancellation are expected refusals.
+ * Rate limits, the 2-tag limit, a missing post, cancellation, and a Danbooru outage status are expected.
  *
  * @param scope.expected - Logs every kind as expected, for callers whose only symptom is an empty result
  */
@@ -271,7 +274,12 @@ export async function reportDanbooruFailure(
     summary: "Danbooru request failed",
     errorType: "DanbooruRequestFailed",
     error: undefined,
-    expected: scope.expected === true || EXPECTED_FAILURE_KINDS.has(failure.kind),
+    expected:
+      scope.expected === true ||
+      EXPECTED_FAILURE_KINDS.has(failure.kind) ||
+      (failure.kind === "unavailable" &&
+        failure.status !== undefined &&
+        TRANSIENT_UNAVAILABLE_STATUSES.has(failure.status)),
     detail: failure.detail,
     serverId: scope.serverId,
     userId: scope.userId,

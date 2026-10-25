@@ -495,10 +495,10 @@ export class InteractWithRecentMessageTool extends BaseTool {
           },
         };
       } catch (error) {
-        log.error(`InteractWithRecentMessageTool: Failed to react to message ${targetMessage.id}`, error as Error);
-
+        const failure = `InteractWithRecentMessageTool: Failed to react to message ${targetMessage.id}`;
         if (error instanceof Error) {
           if (error.message.includes("10014") || error.message.includes("Unknown Emoji")) {
+            log.warn(failure, error);
             return {
               success: false,
               error: "Invalid emoji",
@@ -512,6 +512,7 @@ export class InteractWithRecentMessageTool extends BaseTool {
           }
 
           if (error.message.includes("Missing Permissions") || error.message.includes("50013")) {
+            log.warn(failure, error);
             return {
               success: false,
               error: "Insufficient permissions to react",
@@ -525,6 +526,7 @@ export class InteractWithRecentMessageTool extends BaseTool {
           }
         }
 
+        await log.error(failure, error);
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown reaction failure",

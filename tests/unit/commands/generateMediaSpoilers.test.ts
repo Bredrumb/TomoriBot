@@ -27,6 +27,7 @@ import * as credentials from "@/utils/provider/credentialResolver";
 import * as personal from "@/utils/provider/personalProviderRuntime";
 import * as imageQuota from "@/utils/quota/imageQuotaManager";
 import * as videoQuota from "@/utils/quota/videoQuotaManager";
+import { log } from "@/utils/misc/logger";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 import { makeFakeInteraction } from "../../helpers/fakeInteraction";
@@ -160,6 +161,36 @@ describe("Generation command spoilers", () => {
       for (const [request] of (method as ReturnType<typeof spyOn>).mock.calls) {
         expect(request).not.toHaveProperty("nsfw");
         expect(request).toMatchObject({ prompt: expect.stringContaining("fixture prompt") });
+      }
+    }
+  });
+});
+
+describe("Media generation failures", () => {
+  it("keeps quota and safety refusals out of error_logs while still logging other failures", async () => {
+    const errorLog = spyOn(log, "error").mockResolvedValue(undefined);
+    const warnLog = spyOn(log, "warn").mockImplementation(() => undefined);
+    for (const [command, endpoint, summary] of [
+      [image, "generateCustomImageViaEndpoint", "Image generation failed"],
+      [video, "generateCustomVideoViaEndpoint", "Video generation command failed"],
+    ] as const) {
+      for (const [message, expected] of [
+        ["RESOURCE_EXHAUSTED: You exceeded your current quota", true],
+        ["Prompt blocked by the provider's safety filter", true],
+        ["Upstream returned malformed output", false],
+      ] as const) {
+        errorLog.mockClear();
+        warnLog.mockClear();
+        modal = makeFakeInteraction();
+        spyOn(dispatcher, endpoint).mockRejectedValue(new Error(message));
+        const { interaction } = makeFakeInteraction({
+          channel: {},
+          options: { getString: (name) => (name === "mode" ? "manual" : null), getBoolean: () => null },
+        });
+        await command({} as Client, interaction as unknown as ChatInputCommandInteraction, createUserRow(), "en-US");
+        const recorded = (calls: unknown[][]) => calls.some(([text]) => String(text).startsWith(summary));
+        expect(recorded(errorLog.mock.calls)).toBe(!expected);
+        expect(recorded(warnLog.mock.calls)).toBe(expected);
       }
     }
   });

@@ -5,6 +5,7 @@ import {
   reportProviderUsage,
   type ProviderUsageContext,
 } from "@/utils/provider/providerUsage";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 /**
  * Image Generation Tool
  * Allows TomoriBot to generate images using the active provider's native image API
@@ -1498,25 +1499,37 @@ export class GenerateImageTool extends BaseTool {
         return localized === key ? fallback : localized;
       };
 
-      log.error("Image generation failed:", error, {
-        serverId: context.tomoriState.server_id,
-        userId: context.internalUserId ?? null,
-        metadata: generationRoute,
-      });
-
-      if (
+      const isBillingRefusal =
         errorMessage.includes("billing") ||
         errorMessage.includes("payment") ||
         errorMessage.includes("quota") ||
-        errorMessage.includes("PERMISSION_DENIED")
-      ) {
+        errorMessage.includes("PERMISSION_DENIED");
+      const isSafetyRefusal =
+        errorMessage.includes("safety") || errorMessage.includes("blocked") || errorMessage.includes("RECITATION");
+
+      await reportProviderFailure({
+        summary: "Image generation failed",
+        errorType: "ImageGenerationFailed",
+        error,
+        expected: isBillingRefusal || isSafetyRefusal,
+        serverId: context.tomoriState.server_id,
+        userId: context.internalUserId ?? null,
+        dimensions: {
+          operation: "image-generation",
+          provider: generationRoute?.provider ?? "unknown",
+          refusal: isBillingRefusal ? "billing" : isSafetyRefusal ? "safety" : "none",
+        },
+        metadata: generationRoute,
+      });
+
+      if (isBillingRefusal) {
         return {
           success: false,
           error: getReadableError("genai.google.400_billing_default_message", "Billing is required for this service"),
         };
       }
 
-      if (errorMessage.includes("safety") || errorMessage.includes("blocked") || errorMessage.includes("RECITATION")) {
+      if (isSafetyRefusal) {
         return {
           success: false,
           error: getReadableError(

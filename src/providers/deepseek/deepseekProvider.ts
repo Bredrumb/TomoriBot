@@ -15,7 +15,7 @@ import { DeepseekStreamAdapter, type DeepseekStreamConfig } from "@/providers/de
 import { getDeepseekToolAdapter } from "@/providers/deepseek/deepseekToolAdapter";
 import {
   createOpenAICompatibleHttpError,
-  normalizeOpenAICompatibleProviderError,
+  reportOpenAICompatibleKeyValidationFailure,
 } from "@/providers/openaiCompatible/openaiCompatibleErrorFormatter";
 import { callDeepseekStructuredJSON } from "@/providers/deepseek/deepseekStructuredOutput";
 import {
@@ -106,12 +106,16 @@ export class DeepseekProvider
 
       return { valid: true };
     } catch (error) {
-      log.error("DeepSeek API key validation failed", error as Error);
       return {
         valid: false,
-        error: normalizeOpenAICompatibleProviderError(error, {
-          errorMessagePrefix: "DeepSeek API error",
-        }),
+        error: await reportOpenAICompatibleKeyValidationFailure(
+          error,
+          "deepseek",
+          "DeepSeek API key validation failed",
+          {
+            errorMessagePrefix: "DeepSeek API error",
+          },
+        ),
       };
     }
   }

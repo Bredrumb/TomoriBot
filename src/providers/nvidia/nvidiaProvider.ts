@@ -23,7 +23,7 @@ import {
 } from "@/providers/nvidia/nvidiaConstants";
 import {
   createOpenAICompatibleHttpError,
-  normalizeOpenAICompatibleProviderError,
+  reportOpenAICompatibleKeyValidationFailure,
 } from "@/providers/openaiCompatible/openaiCompatibleErrorFormatter";
 import { callNvidiaStructuredJSON } from "@/providers/nvidia/nvidiaStructuredOutput";
 import { generateNvidiaNativeImage } from "@/providers/nvidia/nvidiaImageGeneration";
@@ -218,10 +218,9 @@ export class NvidiaProvider
       if (controller.signal.aborted) {
         return { valid: true };
       }
-      log.error("NVIDIA API key validation failed", error as Error);
       return {
         valid: false,
-        error: normalizeOpenAICompatibleProviderError(error, {
+        error: await reportOpenAICompatibleKeyValidationFailure(error, "nvidia", "NVIDIA API key validation failed", {
           errorMessagePrefix: "NVIDIA API error",
         }),
       };
