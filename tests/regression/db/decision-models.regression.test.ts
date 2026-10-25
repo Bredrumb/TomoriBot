@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, spyOn } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import * as capabilities from "@/utils/provider/providerCapabilityResolver";
 import { OpenrouterProvider } from "@/providers/openrouter/openrouterProvider";
 import { callOpenRouterDecisions } from "@/providers/openrouter/openrouterDecisions";
@@ -29,6 +29,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
     await setupTestDb();
     await executeTestSqlFile("src/db/migrations/098_decision_models.sql");
     ({ serverId, userId } = await insertFixtures(testSql));
+  });
+
+  afterAll(async () => {
+    await executeTestSqlFile("src/db/migrations/102_hosted_speech_models.sql");
   });
 
   async function runDecisionRollback(): Promise<void> {
