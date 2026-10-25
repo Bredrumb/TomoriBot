@@ -12,11 +12,12 @@ import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
 export async function resolveTextCredentialState(
   state: TomoriState,
   credentials: ResolvedCredentials,
+  capability: "text" | "vision" = "text",
 ): Promise<TomoriState> {
-  const modelId = getResolvedCapabilityModelId(credentials, "text");
+  const modelId = getResolvedCapabilityModelId(credentials, capability);
   const model = modelId === null ? null : await llmModelRepo.loadById(modelId);
   if (!model || model.is_deprecated || model.llm_provider.toLowerCase() !== credentials.provider)
-    throw new CredentialUnavailableError(credentials.provider, "text", "missing_model_id", credentials.source);
+    throw new CredentialUnavailableError(credentials.provider, capability, "missing_model_id", credentials.source);
   const base = withSavedProviderConfig(state, credentials.savedConfig);
   return {
     ...base,

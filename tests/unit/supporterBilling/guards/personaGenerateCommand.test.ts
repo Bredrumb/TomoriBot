@@ -3,7 +3,7 @@ import type { ChatInputCommandInteraction, Client, ModalSubmitInteraction } from
 import { execute as generatePersona } from "@/commands/persona/generate";
 import { supporterUsageStatisticsRepository } from "@/modules/supporter-billing/db/repositories";
 import * as presetExecutors from "@/providers/utils/providerFeatureExecutors";
-import { personaRepository } from "@/utils/db/repositories";
+import { llmModelRepo, personaRepository } from "@/utils/db/repositories";
 import * as personalProviders from "@/utils/provider/personalProviderRuntime";
 import * as credentials from "@/utils/provider/credentialResolver";
 import * as modelLimits from "@/utils/provider/modelLimits";
@@ -32,10 +32,11 @@ function makeHarness(): {
     channel: { id: "synthetic-channel", send: async () => ({ id: "notice" }) },
   });
   const persona = createPersona({
-    llm: createLlmRow({ llm_provider: "openrouter", llm_codename: MODEL, supports_structoutput: true }),
+    llm: createLlmRow({ llm_id: 12, llm_provider: "openrouter", llm_codename: MODEL, supports_structoutput: true }),
     config: { api_key: Buffer.from("synthetic-encrypted-key") },
   });
   spies.push(spyOn(personaRepository, "loadState").mockResolvedValue(persona));
+  spies.push(spyOn(llmModelRepo, "loadById").mockResolvedValue(persona.llm));
   spies.push(
     spyOn(personalProviders, "applyPersonalProviderSelectionsToTomoriState").mockResolvedValue({
       tomoriState: persona,

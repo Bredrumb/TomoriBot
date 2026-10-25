@@ -4,7 +4,7 @@ import { execute as initializeExpressions } from "@/commands/expressions/initial
 import { supporterUsageStatisticsRepository } from "@/modules/supporter-billing/db/repositories";
 import { getAllEmotionKeys } from "@/types/misc/emotions";
 import * as presetExecutors from "@/providers/utils/providerFeatureExecutors";
-import { personaRepository, serverRepository } from "@/utils/db/repositories";
+import { llmModelRepo, personaRepository, serverRepository } from "@/utils/db/repositories";
 import * as emojiSync from "@/utils/cache/emojiLazySync";
 import * as stickerSync from "@/utils/cache/stickerLazySync";
 import * as emojiStickerCache from "@/utils/cache/emojiStickerCache";
@@ -45,12 +45,14 @@ function harness(): {
   const persona = createPersona({
     llm: createLlmRow({
       llm_provider: "openrouter",
+      llm_id: 12,
       llm_codename: MODEL,
       sees_images: true,
       supports_structoutput: true,
     }),
   });
   spies.push(spyOn(personaRepository, "loadState").mockResolvedValue(persona));
+  spies.push(spyOn(llmModelRepo, "loadById").mockResolvedValue(persona.llm));
   spies.push(
     spyOn(personalProviders, "applyPersonalProviderSelectionsToTomoriState").mockResolvedValue({
       tomoriState: persona,

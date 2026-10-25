@@ -234,7 +234,7 @@ function installHiddenTurnHarness(funding: ReturnType<typeof createServerFunding
   const state = createPersona({
     llm: createLlmRow({ llm_provider: "openrouter", llm_codename: "fixture/text-model", has_tools: true }),
   });
-  const resolved = createResolvedCredentials(funding);
+  const resolved = createResolvedCredentials(funding, { modelId: state.llm.llm_id });
   const provider = new OpenrouterProvider();
   const stream = trackSpy(
     spyOn(provider, "streamToDiscord").mockResolvedValue({
@@ -251,6 +251,7 @@ function installHiddenTurnHarness(funding: ReturnType<typeof createServerFunding
     }),
   );
   trackSpy(spyOn(credentials, "resolveCapabilityCredentials").mockResolvedValue(resolved));
+  trackSpy(spyOn(llmModelRepo, "loadById").mockResolvedValue(state.llm));
   trackSpy(spyOn(factory, "getProviderForTomori").mockResolvedValue(provider));
   trackSpy(spyOn(prompts, "getCachedChannelPrompt").mockResolvedValue(null));
   trackSpy(spyOn(personas, "getCachedAllPersonas").mockResolvedValue([state]));

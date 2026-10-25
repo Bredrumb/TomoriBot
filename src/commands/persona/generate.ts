@@ -31,8 +31,8 @@ import { validateAndFallbackPanelPayload } from "@/utils/discord/ui/interactionC
 import type { UserRow } from "../../types/db/schema";
 import { personaRepository } from "@/utils/db/repositories";
 import { getCapabilityCredentialFailureCopy, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
-import { isSupporterBillingEnabled } from "@/modules/supporter-billing/config";
-import { resolveEnvironment } from "@/types/config";
+import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
+import { withSupporterNudge } from "@/modules/supporter-billing/discord/conversionNudge";
 import { memoryGuard, PERSONA_LIMITS, reservePersonaQuota } from "../../utils/security/rateLimiter";
 import { safeDownload } from "../../utils/security/safeDownload";
 import type { GeneratePresetParams } from "../../providers/google/presetGenerator";
@@ -63,7 +63,6 @@ import { getProviderDisplayName, providerSupportsFeature } from "@/utils/provide
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
-import { withSupporterNudge } from "@/modules/supporter-billing/discord/conversionNudge";
 
 const MODAL_CUSTOM_ID = "preset_generate_modal";
 const CHARACTER_NAME_ID = "character_name";
@@ -357,19 +356,16 @@ export async function execute(
     //    /generate image, /memories) and ensures generation uses the
     //    user's personal text provider when configured, instead of always falling
     //    back to the server's configured model.
-    const { tomoriState, activeConfigs } = await applyPersonalProviderSelectionsToTomoriState(
+    let { tomoriState, activeConfigs } = await applyPersonalProviderSelectionsToTomoriState(
       baseTomoriState,
       userData.user_id ?? null,
     );
+    let credentialSource: "server" | "personal" = activeConfigs.text ? "personal" : "server";
     const nudgeTips = () =>
-      withSupporterNudge([], {
-        userDiscId: interaction.user.id,
-        serverId: tomoriState.server_id,
-        credentialSource: activeConfigs.text ? "personal" : "server",
-      });
+      withSupporterNudge([], { userDiscId: interaction.user.id, serverId: tomoriState.server_id, credentialSource });
 
-    const providerName = tomoriState.llm.llm_provider.toLowerCase();
-    const effectiveModelName = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
+    let providerName = tomoriState.llm.llm_provider.toLowerCase();
+    let effectiveModelName = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
 
     if (!providerSupportsFeature(providerName, "presetGeneration")) {
       log.warn(
@@ -417,27 +413,6 @@ export async function execute(
         descriptionVars: {
           model_name: effectiveModelName,
         },
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    if (tomoriState.config.user_byok_mode && !activeConfigs.text) {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.personal_provider_required_title",
-        descriptionKey: "general.errors.personal_provider_required_description",
-        tipKeys: await nudgeTips(),
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-    if (!tomoriState.config.api_key && !isSupporterBillingEnabled(resolveEnvironment())) {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.persona.generate.no_api_key_title",
-        descriptionKey: "commands.persona.generate.no_api_key_description",
-        tipKeys: await nudgeTips(),
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
       });
@@ -555,11 +530,16 @@ export async function execute(
 
     let decryptedApiKey: string;
     let usageContext: ProviderUsageContext | undefined;
-
     try {
-      ({ apiKey: decryptedApiKey, usageContext } = await resolveCapabilityCredentials(tomoriState.server_id, "text", {
+      const credentials = await resolveCapabilityCredentials(baseTomoriState.server_id, "text", {
         userId: userData.user_id,
-      }));
+        textModel: baseTomoriState.llm,
+      });
+      ({ apiKey: decryptedApiKey, usageContext } = credentials);
+      credentialSource = credentials.source;
+      tomoriState = await resolveTextCredentialState(baseTomoriState, credentials);
+      providerName = credentials.provider;
+      effectiveModelName = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
     } catch (error) {
       const failure = getCapabilityCredentialFailureCopy(error, locale);
       if (!failure) throw error;
@@ -567,6 +547,16 @@ export async function execute(
         ...failure,
         color: ColorCode.ERROR,
         tipKeys: await nudgeTips(),
+        files: [getInputAttachment()],
+      });
+      return;
+    }
+    if (!providerSupportsFeature(providerName, "presetGeneration") || !tomoriState.llm.supports_structoutput) {
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "commands.persona.generate.model_incompatible_title",
+        descriptionKey: "commands.persona.generate.model_incompatible_description",
+        descriptionVars: { model_name: effectiveModelName },
+        color: ColorCode.ERROR,
         files: [getInputAttachment()],
       });
       return;

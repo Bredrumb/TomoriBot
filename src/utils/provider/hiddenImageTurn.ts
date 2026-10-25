@@ -29,6 +29,7 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { FunctionCall } from "@/types/provider/interfaces";
 import { getCapabilityCredentialFailureCopy, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
 import { stripBridgePrefix } from "@/utils/bridges";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
@@ -163,7 +164,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     channel,
     client,
     guild,
-    tomoriState,
+    tomoriState: baseState,
     locale,
     interactingUserId,
     backend,
@@ -179,22 +180,26 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     internalUserId,
   } = params;
 
-  // Verify the active model supports function calling: required for tool-based generation.
+  let tomoriState: TomoriState;
+  let credentials: Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
+  try {
+    credentials = await resolveCapabilityCredentials(baseState.server_id, "text", {
+      userId: internalUserId,
+      textModel: baseState.llm,
+    });
+    tomoriState = await resolveTextCredentialState(baseState, credentials);
+  } catch (error) {
+    const failure = getCapabilityCredentialFailureCopy(error, locale);
+    if (!failure) throw error;
+    return { success: false, error: failure.description };
+  }
+
   if (!tomoriState.llm.has_tools) {
     return {
       success: false,
       error:
         "The active model does not support function calling (has_tools=false). A tool-capable model is required for the hidden image agent.",
     };
-  }
-
-  let credentials: Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
-  try {
-    credentials = await resolveCapabilityCredentials(tomoriState.server_id, "text", { userId: internalUserId });
-  } catch (error) {
-    const failure = getCapabilityCredentialFailureCopy(error, locale);
-    if (!failure) throw error;
-    return { success: false, error: failure.description };
   }
 
   const usageContext = credentials.usageContext;
@@ -347,7 +352,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   const streamingContext: StreamingContext = {
     imageModelSelection: params.imageModelSelection,
     usageContext,
-    textCredentialSource: usageContext ? "supporter" : credentials.source,
+    textCredentialSource: credentials.source,
     disableYouTubeProcessing: true,
     disableProfilePictureProcessing: true,
     disableGifProcessing: true,

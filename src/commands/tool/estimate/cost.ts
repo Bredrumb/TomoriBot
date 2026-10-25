@@ -17,7 +17,7 @@ import { replyInfoEmbed, replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { getAvailableToolsForContext } from "@/tools/toolRegistry";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
+import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
 import {
   CredentialUnavailableError,
   getCapabilityCredentialFailureCopy,
@@ -1704,33 +1704,16 @@ export async function execute(
       return;
     }
 
-    // Overlay the invoking user's personal (BYOK) provider so the live estimate
-    // reflects the model/key that would actually run for them, keeping cost
-    // estimates in parity with runtime (see buildRuntimeParityContext).
-    const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(
-      baseTomoriState,
-      userData.user_id ?? null,
-    );
-
-    if (providerHasNoUsageCosts(tomoriState.llm.llm_provider)) {
-      await sendNoCostProviderEmbed(interaction, locale);
-      return;
-    }
-
-    const provider = resolveProvider(tomoriState.llm.llm_provider);
-    if (!provider) {
-      // Track A: the provider has no live token-counting API. Instead of reporting
-      // "unavailable", fall back to a character-based estimate over the real channel context.
-      await sendCharacterEstimateFallbackEmbed(client, interaction, tomoriState, locale, errorContext);
-      return;
-    }
-
+    let tomoriState = baseTomoriState;
     let decryptedApiKey = "";
     let usageContext: ProviderUsageContext | undefined;
     try {
-      ({ apiKey: decryptedApiKey, usageContext } = await resolveCapabilityCredentials(tomoriState.server_id, "text", {
+      const credentials = await resolveCapabilityCredentials(baseTomoriState.server_id, "text", {
         userId: userData.user_id,
-      }));
+        textModel: baseTomoriState.llm,
+      });
+      ({ apiKey: decryptedApiKey, usageContext } = credentials);
+      tomoriState = await resolveTextCredentialState(baseTomoriState, credentials);
     } catch (decryptError) {
       if (
         decryptError instanceof CredentialUnavailableError &&
@@ -1751,6 +1734,16 @@ export async function execute(
         errorContext,
       );
       await sendLiveEstimateUnavailableEmbed(interaction, locale, tomoriState.llm.llm_provider);
+      return;
+    }
+
+    if (providerHasNoUsageCosts(tomoriState.llm.llm_provider)) {
+      await sendNoCostProviderEmbed(interaction, locale);
+      return;
+    }
+    const provider = resolveProvider(tomoriState.llm.llm_provider);
+    if (!provider) {
+      await sendCharacterEstimateFallbackEmbed(client, interaction, tomoriState, locale, errorContext);
       return;
     }
 

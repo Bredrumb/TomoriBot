@@ -5,6 +5,7 @@ import { supporterUsageStatisticsRepository } from "@/modules/supporter-billing/
 import { OpenrouterProvider, type OpenrouterProviderConfig } from "@/providers/openrouter/openrouterProvider";
 import { OpenrouterStreamAdapter } from "@/providers/openrouter/openrouterStreamAdapter";
 import * as stateCache from "@/utils/cache/tomoriStateCache";
+import { llmModelRepo, personaRepository } from "@/utils/db/repositories";
 import * as channelPromptCache from "@/utils/cache/channelPromptCache";
 import * as openrouterCache from "@/utils/cache/openrouterCapabilityCache";
 import * as contextBudget from "@/utils/provider/contextBudget";
@@ -53,6 +54,7 @@ function harness(): {
   const persona = createPersona({
     llm: createLlmRow({
       llm_provider: "openrouter",
+      llm_id: 12,
       llm_codename: MODEL,
       supports_structoutput: true,
       input_price_per_million: 1,
@@ -60,6 +62,8 @@ function harness(): {
     }),
   });
   spies.push(spyOn(stateCache, "getCachedTomoriState").mockResolvedValue(persona));
+  spies.push(spyOn(personaRepository, "loadState").mockResolvedValue(persona));
+  spies.push(spyOn(llmModelRepo, "loadById").mockResolvedValue(persona.llm));
   spies.push(spyOn(stateCache, "getCachedAllPersonas").mockResolvedValue([persona]));
   spies.push(
     spyOn(personalProviders, "applyPersonalProviderSelectionsToTomoriState").mockResolvedValue({

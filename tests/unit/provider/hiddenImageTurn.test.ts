@@ -11,47 +11,55 @@ import * as personas from "@/utils/cache/tomoriStateCache";
 import { OpenrouterProvider } from "@/providers/openrouter/openrouterProvider";
 import { ToolRegistry } from "@/tools/toolRegistry";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
-import type { SupporterFundingContext } from "@/modules/supporter-billing/runtime/types";
-import { getSupporterUsageContext } from "@/modules/supporter-billing/runtime/types";
+import { userSavedProviderConfigSchema } from "@/types/db/schema";
+import { llmModelRepo } from "@/utils/db/repositories";
+import { currentProviderUsageContext } from "@/utils/provider/providerUsage";
 
 describe("hidden image planning credentials", () => {
-  it("runs keyless text planning with resolved subscription credentials and passes funding to image tools", async () => {
+  it("uses the resolved planning model, settings and key and passes its usage owner to image tools", async () => {
     const state = createPersona({
-      config: { api_key: null, subscription_capabilities: ["text"] },
-      llm: createLlmRow({ llm_provider: "openrouter", has_tools: true }),
+      config: { api_key: null, custom_endpoint_url: "https://stale.invalid" },
+      llm: createLlmRow({ llm_provider: "google", has_tools: false }),
     });
-    const funding: SupporterFundingContext = {
-      credentialSource: "supporter",
-      fundingScope: "personal",
-      capability: "text",
-      provider: "openrouter",
-      modelCodename: state.llm.llm_codename,
-      tierKey: "synthetic",
-      sponsorshipId: null,
-      serverId: null,
-      personalUserId: 1,
-      sponsorIdentityId: 1,
-      sponsorDiscordUserId: "synthetic-user",
-      entitlementId: 1,
-      renewalAt: null,
-    };
+    const usageContext = { credentialProvider: "test-option" };
+    const model = createLlmRow({
+      llm_id: 9,
+      llm_provider: "openrouter",
+      has_tools: true,
+      llm_codename: "fixture/selected-planner",
+    });
     const provider = new OpenrouterProvider();
     const resolve = spyOn(credentials, "resolveCapabilityCredentials").mockResolvedValue({
       provider: "openrouter",
       apiKey: "synthetic-member",
       keyVersion: 1,
       source: "personal",
-      savedConfig: null,
-      usageContext: getSupporterUsageContext(funding),
+      modelId: 9,
+      savedConfig: userSavedProviderConfigSchema.parse({
+        user_id: 1,
+        provider: "test-option",
+        api_key: null,
+        llm_id: 9,
+        llm_temperature: 0.42,
+        diffusion_model_id: null,
+        embedding_model_id: null,
+        nai_diffusion_model_id: null,
+        nai_preset_name: null,
+      }),
+      usageContext: usageContext,
     });
-    const config = spyOn(provider, "createConfig").mockImplementation(async (_state, apiKey) => ({
-      apiKey,
-      model: state.llm.llm_codename,
-      temperature: 1,
-    }));
-    const stream = spyOn(provider, "streamToDiscord").mockResolvedValue({
-      status: "function_call",
-      data: { name: "generate_image", args: {} },
+    const config = spyOn(provider, "createConfig").mockImplementation(async (resolved, apiKey) => {
+      expect(resolved.llm).toBe(model);
+      expect(resolved.config.llm_temperature).toBe(0.42);
+      expect(resolved.config.custom_endpoint_url).toBeNull();
+      return { apiKey, model: resolved.llm.llm_codename, temperature: resolved.config.llm_temperature };
+    });
+    const stream = spyOn(provider, "streamToDiscord").mockImplementation(async () => {
+      expect(currentProviderUsageContext()).toBe(usageContext);
+      return {
+        status: "function_call",
+        data: { name: "generate_image", args: {} },
+      };
     });
     const execute = spyOn(ToolRegistry, "executeTool").mockResolvedValue({ success: true, endTurn: true });
     const spies = [
@@ -59,6 +67,7 @@ describe("hidden image planning credentials", () => {
       config,
       stream,
       execute,
+      spyOn(llmModelRepo, "loadById").mockResolvedValue(model),
       spyOn(factory, "getProviderForTomori").mockResolvedValue(provider),
       spyOn(prompts, "getCachedChannelPrompt").mockResolvedValue(null),
       spyOn(personas, "getCachedAllPersonas").mockResolvedValue([state]),
@@ -129,10 +138,10 @@ describe("hidden image planning credentials", () => {
         naiOrientation: "square",
       });
       expect(result.success).toBe(true);
-      expect(resolve).toHaveBeenCalledWith(state.server_id, "text", { userId: 1 });
+      expect(resolve).toHaveBeenCalledWith(state.server_id, "text", { userId: 1, textModel: state.llm });
       expect(config.mock.calls[0]?.[1]).toBe("synthetic-member");
-      expect(execute.mock.calls[0]?.[2]?.usageContext).toBe(getSupporterUsageContext(funding));
-      expect(stream.mock.calls[0]?.[10]?.textCredentialSource).toBe("supporter");
+      expect(execute.mock.calls[0]?.[2]?.usageContext).toBe(usageContext);
+      expect(stream.mock.calls[0]?.[10]?.textCredentialSource).toBe("personal");
     } finally {
       for (const spy of spies) spy.mockRestore();
     }

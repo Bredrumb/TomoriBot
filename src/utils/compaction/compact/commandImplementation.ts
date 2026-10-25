@@ -40,7 +40,7 @@ import {
 } from "@/utils/provider/credentialResolver";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
-import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
+import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
 import { localizer } from "@/utils/text/localizer";
 import { buildConversationContext } from "./historyExtraction";
 import { promptForCompactOptions, promptForManualOptions } from "./modal";
@@ -102,7 +102,32 @@ export async function executeCompactCommand(
     return;
   }
 
-  const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseState, userData.user_id);
+  let tomoriState: typeof baseState;
+  let apiKey: string;
+  let usageContext: ProviderUsageContext | undefined;
+  try {
+    const credentials = await resolveCapabilityCredentials(baseState.server_id, "text", {
+      userId: userData.user_id,
+      textModel: baseState.llm,
+    });
+    ({ apiKey, usageContext } = credentials);
+    tomoriState = await resolveTextCredentialState(baseState, credentials);
+  } catch (error) {
+    const failure = getCapabilityCredentialFailureCopy(error, locale);
+    if (failure) {
+      await replyInfoEmbed(modalSelection.submitInteraction, locale, { ...failure, color: ColorCode.ERROR });
+    } else {
+      await log.error("Failed to resolve compact credentials", error as Error);
+      await editError(
+        modalSelection.submitInteraction,
+        locale,
+        "general.errors.unknown_error_title",
+        "general.errors.unknown_error_description",
+      );
+    }
+    return;
+  }
+
   const providerName = tomoriState.llm.llm_provider.toLowerCase();
   const effectiveModelName = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
   if (
@@ -120,31 +145,8 @@ export async function executeCompactCommand(
       serverId: tomoriState.server_id,
       personaId: tomoriState.persona_id,
     }))
-  ) {
+  )
     return;
-  }
-
-  let apiKey: string;
-  let usageContext: ProviderUsageContext | undefined;
-  try {
-    ({ apiKey, usageContext } = await resolveCapabilityCredentials(tomoriState.server_id, "text", {
-      userId: userData.user_id,
-    }));
-  } catch (error) {
-    const failure = getCapabilityCredentialFailureCopy(error, locale);
-    if (failure) {
-      await replyInfoEmbed(modalSelection.submitInteraction, locale, { ...failure, color: ColorCode.ERROR });
-    } else {
-      await log.error("Failed to resolve compact credentials", error as Error);
-      await editError(
-        modalSelection.submitInteraction,
-        locale,
-        "general.errors.unknown_error_title",
-        "general.errors.unknown_error_description",
-      );
-    }
-    return;
-  }
 
   await modalSelection.submitInteraction.editReply({
     embeds: [

@@ -2,7 +2,6 @@ import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import {
   findProviderRequestDeniedError,
   createProviderUsageRecorder,
-  type ProviderUsageContext,
   getProviderRequestFailureCopy,
 } from "@/utils/provider/providerUsage";
 /**
@@ -26,6 +25,7 @@ import { getAllEmotionKeys } from "@/types/misc/emotions";
 import { type ExpressionBatchResult, ExpressionBatchResultSchema } from "@/providers/utils/structuredOutput";
 import type { StructuredOutputResult } from "@/types/provider/featureInterfaces";
 import { getCapabilityCredentialFailureCopy, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
 import { invalidateEmojiStickerCache } from "@/utils/cache/emojiStickerCache";
 import { lazySyncGuildEmojis } from "@/utils/cache/emojiLazySync";
 import { lazySyncGuildStickers } from "@/utils/cache/stickerLazySync";
@@ -161,11 +161,24 @@ export async function execute(
   // Overlay the invoking user's personal (BYOK) provider so the expression
   //     generation runs on their personal model/key when configured. Done after
   //     deferReply since it performs DB reads (keeps the 3s ack window safe).
-  const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
+  let { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
 
   const overwrite = interaction.options.getBoolean("overwrite") ?? false;
 
   try {
+    let credentials: Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
+    try {
+      credentials = await resolveCapabilityCredentials(baseTomoriState.server_id, "text", {
+        userId: userData.user_id,
+        textModel: baseTomoriState.llm,
+      });
+      tomoriState = await resolveTextCredentialState(tomoriState, credentials);
+    } catch (error) {
+      const failure = getCapabilityCredentialFailureCopy(error, locale);
+      if (!failure) throw error;
+      await replyInfoEmbed(interaction, locale, { ...failure, color: ColorCode.ERROR });
+      return;
+    }
     log.info(`[Initialize Expressions] Force syncing emojis/stickers for guild ${interaction.guild.name}`);
 
     await lazySyncGuildEmojis(interaction.guild, tomoriState.server_id, true);
@@ -179,7 +192,25 @@ export async function execute(
     let effectiveLlm = llm;
 
     if (!llm.sees_images || !llm.supports_structoutput) {
-      const visionLlm = tomoriState.vision_llm;
+      let visionLlm = tomoriState.vision_llm;
+      if (visionLlm) {
+        try {
+          const visionCredentials = await resolveCapabilityCredentials(tomoriState.server_id, "vision", {
+            userId: userData.user_id,
+          });
+          const visionState = await resolveTextCredentialState(tomoriState, visionCredentials, "vision");
+          visionLlm = visionState.llm;
+          if (visionLlm.sees_images && visionLlm.supports_structoutput) {
+            tomoriState = visionState;
+            credentials = visionCredentials;
+          }
+        } catch (error) {
+          const failure = getCapabilityCredentialFailureCopy(error, locale);
+          if (!failure) throw error;
+          await replyInfoEmbed(interaction, locale, { ...failure, color: ColorCode.ERROR });
+          return;
+        }
+      }
 
       if (visionLlm?.sees_images && visionLlm.supports_structoutput) {
         log.info(
@@ -291,21 +322,7 @@ export async function execute(
     const structuredOutputCapability = await resolveStructuredOutputCapability(provider);
     const expressionBatchSize = structuredOutputCapability?.getExpressionInitializationBatchSize?.() ?? null;
 
-    let decryptedApiKey: string;
-    let usageContext: ProviderUsageContext | undefined;
-
-    try {
-      ({ apiKey: decryptedApiKey, usageContext } = await resolveCapabilityCredentials(
-        tomoriState.server_id,
-        effectiveLlm === llm ? "text" : "vision",
-        { userId: userData.user_id },
-      ));
-    } catch (error) {
-      const failure = getCapabilityCredentialFailureCopy(error, locale);
-      if (!failure) throw error;
-      await replyInfoEmbed(interaction, locale, { ...failure, color: ColorCode.ERROR });
-      return;
-    }
+    const { apiKey: decryptedApiKey, usageContext } = credentials;
 
     // Overwrite never clears up front: a provider outage mid-run must leave the old
     // classifications intact, so rows are replaced only as each batch succeeds.

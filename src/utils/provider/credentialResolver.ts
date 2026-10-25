@@ -1,5 +1,9 @@
-import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
-import { findProviderRequestDeniedError, getProviderRequestFailureCopy } from "@/utils/provider/providerUsage";
+import {
+  findProviderRequestDeniedError,
+  getProviderRequestFailureCopy,
+  type ProviderUsageContext,
+} from "@/utils/provider/providerUsage";
+import { localizer } from "@/utils/text/localizer";
 import type {
   LlmRow,
   CustomEndpointRow,
@@ -20,7 +24,6 @@ import { getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 import { isSupporterBillingEnabled, SUPPORTER_PROVIDER_VALUE } from "@/modules/supporter-billing/config";
 import { resolveEnvironment } from "@/types/config";
 import { SupporterRequestDeniedError } from "@/modules/supporter-billing/runtime/funding";
-import { localizer } from "@/utils/text/localizer";
 import type { GenerationModelSelection } from "@/types/provider/generationModels";
 import { GenerationModelUnavailableError, validateGenerationModelSelection } from "@/utils/provider/generationModels";
 import {
@@ -383,10 +386,9 @@ async function resolveSavedCredentials(
   };
 }
 
-async function resolvePersonalCredentials(
+export async function resolvePersonalCapabilityCredentials(
   userId: number,
   capability: Capability,
-  retainUnavailable = false,
 ): Promise<ResolvedCredentials | null> {
   const personalCapability = mapCapabilityToPersonalCapability(capability);
   personalProviderCapabilitySchema.parse(personalCapability);
@@ -409,31 +411,14 @@ async function resolvePersonalCredentials(
   }
 
   const savedConfig = qualifyingRows[0];
-  try {
-    return await resolveSavedCredentials(
-      savedConfig,
-      savedConfig.provider.toLowerCase(),
-      capability,
-      "personal",
-      `user ${userId}`,
-      getCapabilityModelId(savedConfig, capability),
-    );
-  } catch (error) {
-    if (
-      !retainUnavailable &&
-      savedConfig.provider === SUPPORTER_PROVIDER_VALUE &&
-      isUnavailablePersonalSubscription(error)
-    )
-      return null;
-    throw error;
-  }
-}
-
-export async function resolvePersonalCapabilityCredentials(
-  userId: number,
-  capability: Capability,
-): Promise<ResolvedCredentials | null> {
-  return await resolvePersonalCredentials(userId, capability, true);
+  return await resolveSavedCredentials(
+    savedConfig,
+    savedConfig.provider.toLowerCase(),
+    capability,
+    "personal",
+    `user ${userId}`,
+    getCapabilityModelId(savedConfig, capability),
+  );
 }
 
 export async function resolveCapabilityCredentials(
@@ -471,7 +456,7 @@ export async function resolveCapabilityCredentials(
 
   if (userId !== null) {
     try {
-      const personalResolved = await resolvePersonalCredentials(userId, capability, true);
+      const personalResolved = await resolvePersonalCapabilityCredentials(userId, capability);
       if (personalResolved) {
         return personalResolved;
       }

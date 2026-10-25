@@ -2,6 +2,7 @@ import { afterEach, beforeAll, expect, spyOn, test } from "bun:test";
 import type { ChatInputCommandInteraction, Client, ModalSubmitInteraction } from "discord.js";
 import { execute } from "@/commands/persona/generate";
 import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
+import { llmModelRepo } from "@/utils/db/repositories";
 import * as personalProviders from "@/utils/provider/personalProviderRuntime";
 import * as credentials from "@/utils/provider/credentialResolver";
 import * as interactions from "@/utils/discord/interactionHelper";
@@ -52,6 +53,7 @@ test("persona web search uses the selected subscription's key and records its se
     { ...common, fundingScope: "server", sponsorshipId: 40, serverId: 1, personalUserId: null },
   ];
   const load = spyOn(personaRepository, "loadState").mockResolvedValue(state);
+  const model = spyOn(llmModelRepo, "loadById").mockResolvedValue(state.llm);
   const overlay = spyOn(personalProviders, "applyPersonalProviderSelectionsToTomoriState").mockResolvedValue({
     tomoriState: state,
     activeConfigs: {},
@@ -96,7 +98,7 @@ test("persona web search uses the selected subscription's key and records its se
     }
     return { error: "fixture_generation_unavailable", errorType: "VALIDATION_ERROR" };
   });
-  restore.push(load, overlay, credential, modal, quota, limits, memberKey, fetch, usage, generation);
+  restore.push(load, model, overlay, credential, modal, quota, limits, memberKey, fetch, usage, generation);
   for (const funding of fundingCases) {
     credential.mockResolvedValue({
       provider: "openrouter",
@@ -104,6 +106,7 @@ test("persona web search uses the selected subscription's key and records its se
       keyVersion: 1,
       savedConfig: null,
       source: funding.fundingScope,
+      modelId: state.llm.llm_id,
       usageContext: getSupporterUsageContext(funding),
     });
     searchSucceeded = false;

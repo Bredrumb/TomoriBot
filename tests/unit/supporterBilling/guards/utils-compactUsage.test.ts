@@ -106,6 +106,7 @@ function createHarness(
       systemPrompt: "fixture prompt",
     } as never),
     spyOn(personaRepository, "loadState").mockResolvedValue(persona),
+    spyOn(llmModelRepo, "loadById").mockResolvedValue(persona.llm),
     spyOn(personaRepository, "loadAllForServer").mockResolvedValue([persona]),
     spyOn(personalProviderRuntime, "applyPersonalProviderSelectionsToTomoriState").mockResolvedValue({
       tomoriState: persona,
@@ -119,7 +120,9 @@ function createHarness(
               : options.embeddingFunding,
             { modelId: embeddingModel.embedding_model_id },
           )
-        : createResolvedCredentials(options.textFunding === undefined ? createServerFunding() : options.textFunding),
+        : createResolvedCredentials(options.textFunding === undefined ? createServerFunding() : options.textFunding, {
+            modelId: persona.llm.llm_id,
+          }),
     ),
     spyOn(compactHistory, "buildConversationContext").mockResolvedValue({
       conversationText: "fixture conversation",
