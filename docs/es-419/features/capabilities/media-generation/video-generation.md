@@ -7,6 +7,13 @@ aiGenerated: true
 
 TomoriBot puede generar videos cortos a partir de un mensaje de texto o animando una imagen existente. Utilice `/generate video` o pregúntele directamente en el chat.
 
+Usa el parámetro opcional `model` para elegir un modelo de video para esta generación sin cambiar tus
+valores predeterminados. El autocompletado incluye proveedores compatibles del servidor y personales,
+con las entradas personales marcadas como `(vía proveedor personal)`. Dejarlo en blanco usa el modelo habitual.
+
+Establece `nsfw` en `true` para ocultar el video generado detrás de un spoiler de Discord. Esto solo cambia
+la forma en que Discord muestra el video; no cambia la generación ni los filtros de contenido del proveedor.
+
 ## Qué puede hacer
 
 - **Texto a vídeo**: genera un clip corto a partir de una descripción.

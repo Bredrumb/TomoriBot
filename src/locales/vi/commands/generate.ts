@@ -1,7 +1,13 @@
 export default {
   generate: {
+    model_personal_suffix: ` ({provider}) (qua nhà cung cấp cá nhân)`,
+    model_server_suffix: ` ({provider})`,
+    model_unavailable_title: `Model không khả dụng`,
+    model_unavailable_description: `Model này không còn khả dụng với nhà cung cấp đã chọn. Vui lòng chọn một model khả dụng từ gợi ý tự động và thử lại.`,
     description: `Tạo hình ảnh, video và tin nhắn thoại bằng AI.`,
     image: {
+      nsfw_description: `Chỉ thêm spoiler Discord vào ảnh; không thay đổi nội dung tạo hay bộ lọc`,
+      model_description: `Chỉ dùng model này cho lần tạo này; để trống để dùng mặc định hiện tại`,
       description: `Tạo ảnh AI từ prompt của bạn hoặc từ ngữ cảnh kênh hiện tại`,
       mode_description: `Chọn cách tạo hình ảnh`,
       mode_choice_manual: `Tự viết prompt`,
@@ -57,6 +63,8 @@ export default {
       quota_exceeded_footer: `Hạn ngạch này do người quản lý máy chủ cấu hình qua \`/moderation\`.`,
     },
     video: {
+      nsfw_description: `Chỉ thêm spoiler Discord vào video; không thay đổi nội dung tạo hay bộ lọc`,
+      model_description: `Chỉ dùng model này cho lần tạo này; để trống để dùng mặc định hiện tại`,
       description: `Tạo video AI bằng Google Veo, OpenRouter hoặc Z.ai`,
       modal: {
         title: `Tạo video`,
@@ -111,6 +119,7 @@ export default {
     },
 
     scene: {
+      model_description: `Chỉ dùng model này cho lần tạo này; để trống để dùng mặc định hiện tại`,
       description: `Tạo một đoạn kịch bản ngắn giữa các persona đã chọn.`,
       missing_permissions_title: `Thiếu quyền hạn`,
       missing_permissions_description: `Mình cần quyền xem kênh này, đọc lịch sử tin nhắn và gửi tin nhắn trước khi có thể tạo kịch bản tại đây.`,
@@ -153,6 +162,7 @@ export default {
     },
 
     "voice-message": {
+      model_description: `Chỉ dùng model này cho lần tạo này; để trống để dùng mặc định hiện tại`,
       incompatible_upload_title: `Cần model sao chép giọng đọc`,
       incompatible_upload_description: `Tệp bạn tải lên trong \`voice_sample\` cần model \`TTS (Sao chép giọng đọc)\` tương thích. Chọn model trong \`/config\` > Model > Chuyển đổi model, hoặc \`/personal config\` cho model riêng của bạn. Để dùng Thiết kế giọng đọc, hãy bỏ tệp đính kèm và nhập mô tả vào \`voice_design\`.`,
       incompatible_design_title: `Cần model thiết kế giọng đọc`,

@@ -26,7 +26,7 @@ const AUTOCOMPLETE_TIMEOUT_MS = 2_000;
 
 export function addGenerationModelOption(
   subcommand: SlashCommandSubcommandBuilder,
-  descriptionKey = `commands.generate.${subcommand.name}.model_description`,
+  descriptionKey: string,
 ): SlashCommandSubcommandBuilder {
   return subcommand.addStringOption((option) =>
     option.setName("model").setDescription(localizer("en-US", descriptionKey)).setRequired(false).setAutocomplete(true),

@@ -19,7 +19,7 @@ TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同�
 
 | 指令 | 摘要 |
 |---|---|
-| `/booru search` | 根据一个或两个标签随机发送 4 张评价良好的 Danbooru 图像 |
+| `/booru search` | 根据一个或两个标签随机发送评价良好的 Danbooru 图像 |
 
 ## `/comment`
 

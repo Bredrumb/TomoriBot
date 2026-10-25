@@ -2,10 +2,11 @@ export default {
   booru: {
     description: `寻找现有的动漫插画`,
     search: {
-      description: `根据一个或两个标签随机发送 4 张评价良好的 Danbooru 图像`,
+      description: `根据一个或两个标签随机发送评价良好的 Danbooru 图像`,
       tag_description: `角色、作品名或标签（输入时显示建议）`,
       second_tag_description: `可选的第二个标签，用于缩小搜索范围`,
       rating_description: `显示哪个分级的图像（默认：全年龄与敏感）`,
+      count_description: `发送的图像数量，1 到 10 张（默认：4；匹配结果不足时会减少）`,
       general_option: `全年龄（General）`,
       sensitive_option: `敏感（Sensitive）`,
       questionable_option: `存疑（Questionable，仅限年龄限制频道）`,

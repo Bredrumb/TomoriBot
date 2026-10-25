@@ -91,10 +91,10 @@ Mỗi lần tra cứu sẽ gửi một thẻ thông báo **Tra cứu thẻ Danbo
 
 Công tắc này cũng cho phép mình chia sẻ tranh ảnh có sẵn và đọc các thẻ của bài đăng:
 
-- Khi được yêu cầu hiển thị tranh ảnh về điều gì đó, mình sẽ gửi tối đa 4 ảnh Danbooru ngẫu nhiên được đánh giá cao trong một tin nhắn, kèm liên kết đến từng bài đăng. Mọi hình ảnh có mức đánh giá trên mức chung đều được ẩn sau cảnh báo spoiler. Danbooru chỉ cho phép 2 thẻ mỗi lần tìm kiếm, vì vậy mình sẽ chọn các thẻ cụ thể nhất, thường là nhân vật hoặc tác phẩm.
+- Khi được yêu cầu hiển thị tranh ảnh về điều gì đó, mình sẽ gửi tối đa 4 ảnh Danbooru ngẫu nhiên được đánh giá cao trong một tin nhắn, kèm liên kết đến từng bài đăng. Hình ảnh nghi vấn và 18+ đều được ẩn sau cảnh báo spoiler. Danbooru chỉ cho phép 2 thẻ mỗi lần tìm kiếm, vì vậy mình sẽ chọn các thẻ cụ thể nhất, thường là nhân vật hoặc tác phẩm.
 - Khi nhận được ID bài đăng Danbooru hoặc liên kết `danbooru.donmai.us/posts/`, mình sẽ đọc các thẻ của bài đăng được nhóm thành nhân vật, tác phẩm, họa sĩ, siêu dữ liệu và chung. Trong Chế độ công cụ có chủ ý, chỉ cần có liên kết bài đăng trong tin nhắn là đủ để cung cấp công cụ này cho mình.
 
-Bất kỳ ai cũng có thể chạy `/booru search` để nhận cùng một bộ sưu tập mà không cần hỏi mình. Lệnh sẽ gợi ý thẻ khi bạn nhập và chuyển biệt danh hoặc lỗi chính tả thành thẻ thực tế, và phần chân trang hiển thị nội dung đã tìm kiếm. Công tắc này chỉ kiểm soát công cụ của mình, không kiểm soát lệnh; để giới hạn người có thể chạy `/booru search`, hãy dùng **Cài đặt máy chủ > Tích hợp** trong Discord.
+Bất kỳ ai cũng có thể chạy `/booru search` để nhận cùng một bộ sưu tập mà không cần hỏi mình. Lệnh sẽ gợi ý thẻ khi bạn nhập và chuyển biệt danh hoặc lỗi chính tả thành thẻ thực tế, và phần chân trang hiển thị nội dung đã tìm kiếm. Tham số tùy chọn `count` đặt số lượng ảnh cần gửi, từ 1 đến 10 (mặc định: 4). Nếu có ít bài đăng phù hợp hơn, lệnh sẽ gửi các kết quả khả dụng. Công tắc này chỉ kiểm soát công cụ của mình, không kiểm soát lệnh; để giới hạn người có thể chạy `/booru search`, hãy dùng **Cài đặt máy chủ > Tích hợp** trong Discord.
 
 Đánh giá tuân theo kênh. Các bài đăng chung và nhạy cảm hoạt động ở mọi nơi; các bài đăng nghi vấn và 18+ chỉ hoạt động trong các kênh giới hạn độ tuổi. Luồng tuân theo kênh chính và tin nhắn trực tiếp được tính là không giới hạn độ tuổi. Bài đăng có mức đánh giá trên mức chung được gắn thẻ `loli`, `shota` hoặc `toddlercon` sẽ không bao giờ được gửi hoặc đọc, ở bất kỳ kênh nào.
 

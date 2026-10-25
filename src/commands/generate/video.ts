@@ -107,6 +107,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
           .setDescription(localizer("en-US", "commands.generate.video.nsfw_description"))
           .setRequired(false),
       ),
+    "commands.generate.video.model_description",
   );
 
 export const autocomplete = createGenerationModelAutocomplete("video");

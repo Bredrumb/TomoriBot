@@ -2,10 +2,11 @@ export default {
   booru: {
     description: `既存のアニメイラストを検索`,
     search: {
-      description: `1つまたは2つのタグでDanbooruの高評価画像をランダムに4枚投稿`,
+      description: `1つまたは2つのタグでDanbooruの高評価画像をランダムに投稿`,
       tag_description: `キャラクター、作品名、またはタグ（入力時にサジェスト表示）`,
       second_tag_description: `絞り込み用の追加タグ（任意）`,
       rating_description: `表示するレーティング（デフォルト：全年齢およびセンシティブ）`,
+      count_description: `投稿する画像の枚数（1-10、デフォルト：4、一致件数が不足している場合は少なくなります）`,
       general_option: `全年齢（General）`,
       sensitive_option: `センシティブ（Sensitive）`,
       questionable_option: `クエスチョナブル（年齢制限チャンネル限定）`,

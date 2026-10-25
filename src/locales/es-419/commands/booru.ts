@@ -2,10 +2,11 @@ export default {
   booru: {
     description: `Encuentra arte anime existente`,
     search: {
-      description: `Publica 4 imágenes aleatorias bien valoradas de Danbooru para una o dos etiquetas`,
+      description: `Publica imágenes aleatorias bien valoradas de Danbooru para una o dos etiquetas`,
       tag_description: `Un personaje, serie o etiqueta (aparecen sugerencias mientras escribes)`,
       second_tag_description: `Una segunda etiqueta opcional para filtrar la búsqueda`,
       rating_description: `Qué clasificación mostrar (por defecto: general y sensible)`,
+      count_description: `Cuántas imágenes enviar, de 1 a 10 (por defecto: 4; menos si no hay suficientes)`,
       general_option: `General`,
       sensitive_option: `Sensible`,
       questionable_option: `Cuestionable (solo canales para mayores de edad)`,

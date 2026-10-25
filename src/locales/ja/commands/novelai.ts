@@ -30,6 +30,8 @@ export default {
     generate: {
       description: `NovelAIで画像やメディアを生成します。`,
       image: {
+        model_description: `今回の生成にのみこのNovelAIモデルを使用します。空欄の場合は現在のデフォルトを使用します`,
+        nsfw_description: `画像にDiscordのスポイラーを追加します（生成内容やコンテンツフィルターには影響しません）`,
         description: `画像掲示板タグ形式のプロンプトと任意のキャラクター参照画像でNovelAI画像を生成します。`,
         modal_title: `NovelAI画像生成`,
         prompt_label: `プロンプトタグ`,

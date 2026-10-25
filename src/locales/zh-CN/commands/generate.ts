@@ -1,7 +1,13 @@
 export default {
   generate: {
+    model_personal_suffix: ` ({provider})（通过个人提供方）`,
+    model_server_suffix: ` ({provider})`,
+    model_unavailable_title: `模型不可用`,
+    model_unavailable_description: `所选提供方已不再提供此模型。请从自动补全中选择可用模型后再试。`,
     description: `生成 AI 图像、视频和语音消息。`,
     image: {
+      nsfw_description: `仅给图像添加 Discord 防剧透遮罩；不会改变生成内容或内容过滤器`,
+      model_description: `仅在本次生成中使用此模型；留空则使用当前默认值`,
       description: `用你自己写的提示词或当前频道场景生成 AI 图像`,
       mode_description: `选择图像的生成方式`,
       mode_choice_manual: `自己写提示词`,
@@ -57,6 +63,8 @@ export default {
       quota_exceeded_footer: `这个配额由本服务器的管理员通过 \`/moderation\` 设置。`,
     },
     video: {
+      nsfw_description: `仅给视频添加 Discord 防剧透遮罩；不会改变生成内容或内容过滤器`,
+      model_description: `仅在本次生成中使用此模型；留空则使用当前默认值`,
       description: `用 Google Veo、OpenRouter 或 Z.ai 生成 AI 视频`,
       modal: {
         title: `生成新视频`,
@@ -111,6 +119,7 @@ export default {
     },
 
     scene: {
+      model_description: `仅在本次生成中使用此模型；留空则使用当前默认值`,
       description: `让选定的人格之间生成一段简短的剧本式文字场景。`,
       missing_permissions_title: `权限不足`,
       missing_permissions_description: `我需要有查看此频道、读取消息历史和发送消息的权限，才能在这里生成场景。`,
@@ -153,6 +162,7 @@ export default {
     },
 
     "voice-message": {
+      model_description: `仅在本次生成中使用此模型；留空则使用当前默认值`,
       incompatible_upload_title: `需要声音克隆模型`,
       incompatible_upload_description: `你在\`voice_sample\`上传的音频需要兼容的\`TTS（声音克隆）\`模型。请在\`/config\` > 模型 > 切换模型中选择，或在\`/personal config\`中选择你自己的模型。要使用语音设计，请移除上传的音频，并在\`voice_design\`中输入声音描述。`,
       incompatible_design_title: `需要语音设计模型`,

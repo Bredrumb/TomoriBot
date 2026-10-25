@@ -84,6 +84,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
           .setDescription(localizer("en-US", "commands.generate.image.nsfw_description"))
           .setRequired(false),
       ),
+    "commands.generate.image.model_description",
   );
 
 export const autocomplete = createGenerationModelAutocomplete("image");

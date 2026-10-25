@@ -2,10 +2,11 @@ export default {
   booru: {
     description: `尋找現有的動漫插圖`,
     search: {
-      description: `根據一個或兩個標籤隨機發送 4 張評價良好的 Danbooru 圖片`,
+      description: `根據一個或兩個標籤隨機發送評價良好的 Danbooru 圖片`,
       tag_description: `角色、作品名稱或標籤（輸入時顯示建議）`,
       second_tag_description: `可選的第二個標籤，用於縮小搜尋範圍`,
       rating_description: `顯示哪個分級的圖片（預設：普遍級與敏感）`,
+      count_description: `要發送的圖片數量，介於 1 到 10 張（預設：4，若相符結果不足則發送較少張）`,
       general_option: `普遍級（General）`,
       sensitive_option: `敏感（Sensitive）`,
       questionable_option: `存疑（Questionable，僅限年齡限制頻道）`,

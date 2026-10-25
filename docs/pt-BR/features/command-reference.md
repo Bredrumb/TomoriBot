@@ -19,7 +19,7 @@ Encontrar arte de anime existente
 
 | Comando | Resumo |
 |---|---|
-| `/booru search` | Enviar 4 imagens aleatórias bem avaliadas do Danbooru para uma ou duas tags |
+| `/booru search` | Enviar imagens aleatórias bem avaliadas do Danbooru para uma ou duas tags |
 
 ## `/comment`
 
