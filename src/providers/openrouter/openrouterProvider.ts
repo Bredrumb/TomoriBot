@@ -1,3 +1,5 @@
+import { HTTPClient } from "@openrouter/sdk/lib/http";
+import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
 import { normalizeProviderUsage } from "@/utils/text/tokenEstimate";
 import { findProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
@@ -299,7 +301,11 @@ export class OpenrouterProvider
     }
 
     try {
-      const openRouter = new OpenRouter({ apiKey: request.apiKey });
+      const openRouter = new OpenRouter({
+        apiKey: request.apiKey,
+        httpClient: new HTTPClient({ fetcher: fetchWithProviderRequest }),
+        debugLogger: { group: () => {}, groupEnd: () => {}, log: () => {} },
+      });
       const response = await openRouter.embeddings.generate(
         {
           model: request.model,
