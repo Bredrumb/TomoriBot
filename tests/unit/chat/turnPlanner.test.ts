@@ -3,12 +3,12 @@ import type { Client, Message } from "discord.js";
 import { PrivacyLevel, savedProviderConfigSchema, userSavedProviderConfigSchema } from "@/types/db/schema";
 import { DatabaseUnavailableError } from "@/types/errors";
 import * as credentials from "@/utils/provider/credentialResolver";
-import * as textModels from "@/utils/provider/textModelSelection";
 import * as embeds from "@/utils/discord/embedHelper";
 import * as guards from "@/utils/chat/admissionGuards";
 import * as userCache from "@/utils/cache/userCache";
 import * as triggers from "@/utils/chat/triggerProcessor";
 import * as replyDecision from "@/utils/chat/replyDecision";
+import * as textModels from "@/utils/provider/textModelSelection";
 import { userNamingRepository } from "@/utils/db/repositories/UserNamingRepository";
 import { normalizeChatInvocation } from "@/utils/chat/admission";
 import type { LockedChatTurn } from "@/utils/chat/types";
@@ -26,7 +26,6 @@ const resolve = mock(async () => {
 });
 const scoped = createScopedModuleMocker(mock, {
   "@/utils/provider/credentialResolver": credentials,
-  "@/utils/provider/textModelSelection": textModels,
   "@/utils/discord/embedHelper": embeds,
 });
 scoped.module("@/utils/provider/credentialResolver", () => ({
@@ -36,11 +35,6 @@ scoped.module("@/utils/provider/credentialResolver", () => ({
     const next = resolutions[0];
     return next instanceof Error || next?.source === "personal" ? resolve() : null;
   },
-}));
-scoped.module("@/utils/provider/textModelSelection", () => ({
-  ...textModels,
-  resolveServerTextModel: async (state: Parameters<typeof textModels.resolveServerTextModel>[0]) =>
-    state.persona_llm ?? state.llm,
 }));
 scoped.module("@/utils/discord/embedHelper", () => ({ ...embeds, sendStandardEmbed: send }));
 stubLogMembers({ info: () => undefined, warn: () => undefined });
@@ -118,6 +112,7 @@ beforeEach(() => {
   send.mockClear();
   resolutions = [];
   restores.push(
+    spyOn(textModels, "resolveServerTextModel").mockImplementation(async (state) => state.persona_llm ?? state.llm),
     spyOn(userCache, "getCachedUserRow").mockResolvedValue(user),
     spyOn(userCache, "getCachedBlacklistStatus").mockResolvedValue(false),
     spyOn(userCache, "getCachedPrivacyLevel").mockResolvedValue(PrivacyLevel.MINIMAL),

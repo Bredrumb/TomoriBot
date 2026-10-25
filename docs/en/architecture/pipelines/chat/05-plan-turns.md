@@ -80,6 +80,11 @@ stops at the refusal, while a user with no personal provider keeps the server ro
 capabilities can use an available configured server route when the personal subscription is inactive
 or missing. Billing and storage failures remain visible failures.
 
+Server admission and generation use `src/utils/provider/textModelSelection.ts` for the same model
+choice: persona override, channel override (including a thread's parent), then workspace default.
+Impersonation uses the workspace model. An invocation codename override loads that provider's model
+metadata when registered. Personal credentials keep their own model routing ahead of server selection.
+
 ### Channel lock state arming
 
 When `turns.length > 0`, `planChatTurns()` updates the channel lock entry via `setActiveChannelTurnState()`.

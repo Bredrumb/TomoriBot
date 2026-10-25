@@ -5,6 +5,7 @@ import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSur
 import * as realCrypto from "@/utils/security/crypto";
 import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { savedProviderConfigSchema } from "@/types/db/schema";
+import { createLlmRow, createServerConfig } from "../../helpers/fixtures";
 
 let rows: UserSavedProviderConfigRow[] = [];
 
@@ -224,6 +225,39 @@ describe("personal credential resolution for capability split", () => {
     expect(configReads).toBe(1);
     expect(credentials.provider).toBe("google");
     expect(getResolvedCapabilityModelId(credentials, "image-standard")).toBe(3);
+  });
+
+  it("uses an effective text model's provider and ID instead of the workspace default", async () => {
+    const selected = createLlmRow({ llm_id: 19, llm_provider: "openrouter" });
+    const providerLoads: string[] = [];
+    scopedMock.module("@/utils/db/repositories", () => ({
+      ...realRepositories,
+      configRepository: overrideMembers(realRepositories.configRepository, {
+        loadModelCapabilityIds: async () => createServerConfig({ llm_id: 1 }),
+      }),
+      llmProviderRepo: overrideMembers(realRepositories.llmProviderRepo, {
+        loadSavedProviderConfig: async (serverId: number, provider: string) => {
+          providerLoads.push(provider);
+          return savedProviderConfigSchema.parse({
+            server_id: serverId,
+            provider,
+            api_key: Buffer.from("fixture-selected-provider-key"),
+            llm_id: 1,
+            diffusion_model_id: null,
+            embedding_model_id: null,
+            nai_diffusion_model_id: null,
+            nai_preset_name: null,
+          });
+        },
+      }),
+    }));
+    expect(await resolveCapabilityCredentials(1, "text", { textModel: selected })).toMatchObject({
+      provider: "openrouter",
+      modelId: 19,
+      apiKey: "fixture-selected-provider-key",
+      source: "server",
+    });
+    expect(providerLoads).toEqual(["openrouter"]);
   });
 
   it("rejects server image-standard resolution when server diffusion model belongs to novelai", async () => {
