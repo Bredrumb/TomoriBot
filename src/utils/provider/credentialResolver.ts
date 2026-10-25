@@ -26,6 +26,7 @@ export interface ResolvedCredentials {
   source: "server" | "personal";
   customEndpoint?: CustomEndpointRow;
   apiStyle?: string;
+  modelId?: number;
 }
 
 interface ResolverOptions {
@@ -126,9 +127,10 @@ function capabilityModelIdFromColumns(config: CapabilityConfigColumns | null, ca
 }
 
 export function getResolvedCapabilityModelId(
-  resolved: Pick<ResolvedCredentials, "savedConfig" | "source">,
+  resolved: Pick<ResolvedCredentials, "savedConfig" | "source" | "modelId">,
   capability: Capability,
 ): number | null {
+  if (resolved.modelId !== undefined) return resolved.modelId;
   if (resolved.source === "server") {
     return null;
   }
@@ -156,8 +158,10 @@ function providerSupportsCapability(provider: string, capability: Capability): b
   return true;
 }
 
-async function resolveProviderForCapability(serverId: number, capability: Capability): Promise<string> {
-  const config = await loadCapabilityConfig(serverId);
+async function resolveProviderForCapability(
+  config: CapabilityConfigColumns | null,
+  capability: Capability,
+): Promise<string> {
   if (!config) {
     throw new CredentialUnavailableError("unknown", capability, "missing_model_id");
   }
@@ -273,6 +277,7 @@ async function decryptResolvedApiKey(
     if (customEndpoint && customEndpoint.requires_auth === false) {
       return {
         provider,
+        modelId: activeModelId ?? undefined,
         apiKey: "",
         keyVersion: savedConfig.key_version || 1,
         savedConfig,
@@ -286,6 +291,7 @@ async function decryptResolvedApiKey(
 
   return {
     provider,
+    modelId: activeModelId ?? undefined,
     apiKey: decryptedKey,
     keyVersion: savedConfig.key_version || 1,
     savedConfig,
@@ -345,7 +351,7 @@ export async function resolveCapabilityCredentials(
     }
   }
 
-  const provider = await resolveProviderForCapability(serverId, capability);
+  const provider = await resolveProviderForCapability(capabilityConfig, capability);
   const savedConfig = await llmProviderRepo.loadSavedProviderConfig(serverId, provider);
 
   if (!savedConfig) {

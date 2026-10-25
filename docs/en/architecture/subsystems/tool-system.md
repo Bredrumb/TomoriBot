@@ -51,6 +51,10 @@ Redact parameters & record ToolExecutionEvent
 Return ToolResult (success / error)
 ```
 
+Capability credential resolution captures the active model ID with its provider from one server
+settings read. Media, vision, and embedding callers use `getResolvedCapabilityModelId()` to keep that
+model paired with its credentials when their turn's cached settings predate a model change.
+
 Execution dispatch enforces the following rules:
 
 1. **Alias and opaque ID resolution:** Built-in aliases (`BUILTIN_TOOL_ALIASES`) resolve to canonical names. Opaque identifiers (`media_id`, `message_id`, `end_message_id`) resolve to Discord snowflakes via `MessageIdMap` before reaching tool code.

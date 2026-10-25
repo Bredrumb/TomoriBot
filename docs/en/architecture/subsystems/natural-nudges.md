@@ -28,6 +28,10 @@ servers with `message_sent` inside the heat window, not from config rows: a serv
 the page runs on the column defaults, and a server with no recent activity is never read. A server
 that turned idle nudges off is skipped, as is any server with an attempt in flight.
 
+Repository reads retry retired database connections through `withTransientDbRetry`. Exhausted metric
+reads fail the evaluation instead of supplying empty activity data that could be cached for later
+cycles. Reads inside a caller's transaction stay with that transaction and do not retry independently.
+
 ```
 reconcile tick
   └─ NaturalNudgeProcessor.processDueIdleNudges

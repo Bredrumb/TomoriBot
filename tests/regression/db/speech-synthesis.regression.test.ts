@@ -491,17 +491,18 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech synthesis lifecycle and fall
         { operation: "delete", success: false },
       ]);
       expect(errorSpy.mock.calls.map(([, , context]) => context?.errorType).sort()).toEqual([
-        "SpeechOperationFailed",
         "SpeechVoiceCleanupFailed",
       ]);
-      const synthesisLog = errorSpy.mock.calls.find(([, , context]) => context?.errorType === "SpeechOperationFailed");
+      const synthesisLog = warnSpy.mock.calls.find(([, , context]) => context?.errorType === "SpeechOperationFailed");
       expect(result.providerDetail).toStartWith("HTTP 500: ");
       expect(synthesisLog?.[0]).toContain(result.providerDetail ?? "missing");
       expect(apiKey.length).toBeGreaterThan(0);
       expect(JSON.stringify({ result, errors: errorSpy.mock.calls, warnings: warnSpy.mock.calls })).not.toContain(
         apiKey,
       );
-      const metadata = JSON.stringify(errorSpy.mock.calls.map(([, , context]) => context?.metadata));
+      const metadata = JSON.stringify(
+        [...errorSpy.mock.calls, ...warnSpy.mock.calls].map(([, , context]) => context?.metadata),
+      );
       const userOutput = JSON.stringify({ details: result.details, attempts: result.attempts });
       for (const value of requestText) {
         expect(metadata).not.toContain(value);
@@ -551,20 +552,60 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech synthesis lifecycle and fall
     }
   });
 
-  it("logs each failed attempt when personal synthesis and its server fallback both fail", async () => {
-    synthesisStatuses = [500, 500];
+  it("reports temporary voice creation failures without repeating creation or writing incidents", async () => {
     const errorSpy = spyOn(log, "error").mockResolvedValue(undefined);
+    const warnSpy = spyOn(log, "warn").mockImplementation(() => undefined);
+    const metricSpy = spyOn(log, "metric").mockImplementation(() => undefined);
+    try {
+      for (const status of [500, 502, 503, 504]) {
+        fetchSpy?.mockImplementation(
+          Object.assign(async () => Response.json({ error: { message: upstreamError } }, { status }), {
+            preconnect: () => undefined,
+          }),
+        );
+        fetchSpy?.mockClear();
+        const result = await synthesizeVoiceMessage(await request(false, true));
+        expect(result.success).toBe(false);
+        expect(result.errorKind).toBe("provider_error");
+        expect(result.providerDetail).toStartWith(`HTTP ${status}: `);
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+      }
+      expect(errorSpy).not.toHaveBeenCalled();
+      expect(
+        metricSpy.mock.calls.filter(([name]) => name === "provider_failure").map(([, fields]) => fields.providerStatus),
+      ).toEqual([500, 502, 503, 504]);
+      expect(warnSpy.mock.calls.filter(([, , context]) => context?.errorType === "SpeechOperationFailed")).toHaveLength(
+        4,
+      );
+    } finally {
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+      metricSpy.mockRestore();
+    }
+  });
+
+  it("counts temporary provider failures for both credential owners without writing incidents", async () => {
+    synthesisStatuses = [500, 503];
+    const errorSpy = spyOn(log, "error").mockResolvedValue(undefined);
+    const warnSpy = spyOn(log, "warn").mockImplementation(() => undefined);
+    const metricSpy = spyOn(log, "metric").mockImplementation(() => undefined);
     try {
       const result = await synthesizeVoiceMessage({ ...(await request(true)), routing: routing() });
       expect(result.success).toBe(false);
       expect(result.usedServerFallback).toBe(true);
       expect(
-        errorSpy.mock.calls
+        warnSpy.mock.calls
           .filter(([, , context]) => context?.errorType === "SpeechOperationFailed")
           .map(([, , context]) => context?.metadata?.owner),
       ).toEqual(["personal", "server"]);
+      expect(errorSpy).not.toHaveBeenCalled();
+      expect(
+        metricSpy.mock.calls.filter(([name]) => name === "provider_failure").map(([, fields]) => fields.owner),
+      ).toEqual(["personal", "server"]);
     } finally {
       errorSpy.mockRestore();
+      warnSpy.mockRestore();
+      metricSpy.mockRestore();
     }
   });
 

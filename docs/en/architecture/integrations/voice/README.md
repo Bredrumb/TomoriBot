@@ -240,13 +240,15 @@ including server fallback: a custom endpoint's label or a hosted model's codenam
 
 The dispatcher reports every failed hosted or ElevenLabs attempt through `reportProviderFailure`, so a
 failed personal attempt and its server fallback each produce a record. Provider 400 and 422 responses,
-5xx responses, malformed responses, and network failures become `log.error` records carrying the
-provider status and response body, with the request's own key removed. Cancellation, timeouts, local
-input checks, and authentication, quota, or rate-limit refusals become a `provider_failure` metric and a
-warning. A provider `invalid_request` is told apart from a local one by the status it carries. The
-command's failure notice offers that same detail behind **Show Full Error**, gated like the chat error
-modal: Manage Server for a server credential, and only the requester for a personal one. The voice tool
-keeps the detail out of its result because the model reads tool results.
+malformed responses, and network failures become `log.error` records carrying the provider status and
+response body, with the request's own key removed. Cancellation, timeouts, local input checks,
+authentication, quota, rate-limit refusals, and hosted HTTP 500, 502, 503, and 504 responses become a
+`provider_failure` metric and a warning. Other unexpected HTTP errors remain operator errors. Voice
+creation is not automatically repeated because a failed request may have created a stored voice
+without returning its ID. A provider `invalid_request` is told apart from a local one by the status
+it carries. The command's failure notice offers that same detail behind **Show Full Error**, gated
+like the chat error modal: Manage Server for a server credential, and only the requester for a personal
+one. The voice tool keeps the detail out of its result because the model reads tool results.
 
 ## Native Discord delivery constraints
 

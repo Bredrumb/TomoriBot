@@ -145,6 +145,7 @@ const EXPECTED_HOSTED_SPEECH_KINDS: ReadonlySet<HostedSpeechErrorKind> = new Set
   "authentication",
   "quota",
 ]);
+const TRANSIENT_HOSTED_SPEECH_STATUSES = new Set([500, 502, 503, 504]);
 
 function speechFailureOwner(
   request: VoiceMessageSynthesisRequest,
@@ -456,6 +457,9 @@ async function synthesizeHostedVoiceMessage(
       error,
       expected:
         EXPECTED_HOSTED_SPEECH_KINDS.has(errorKind) ||
+        (errorKind === "provider_error" &&
+          providerStatus !== undefined &&
+          TRANSIENT_HOSTED_SPEECH_STATUSES.has(providerStatus)) ||
         (errorKind === "invalid_request" && providerStatus === undefined),
       detail: providerDetail,
       ...speechFailureOwner(request, target.owner),

@@ -3,7 +3,8 @@ import type { UserSavedProviderConfigRow } from "@/types/db/schema";
 import * as realRepositories from "@/utils/db/repositories";
 import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 import * as realCrypto from "@/utils/security/crypto";
-import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { savedProviderConfigSchema } from "@/types/db/schema";
 
 let rows: UserSavedProviderConfigRow[] = [];
 
@@ -174,6 +175,55 @@ describe("personal credential resolution for capability split", () => {
     await expect(resolveCapabilityCredentials(1, "image-standard", { userId: 1 })).rejects.toThrow(
       "No usable credentials for server-img-provider (image-standard, server): no_saved_config",
     );
+  });
+
+  it("pins server image credentials and their model to one config read", async () => {
+    let configReads = 0;
+    const savedConfig = savedProviderConfigSchema.parse({
+      server_id: 1,
+      provider: "google",
+      api_key: Buffer.from("fixture-google-key"),
+      key_version: 1,
+      credential_revision: 1,
+      llm_id: null,
+      diffusion_model_id: 3,
+      embedding_model_id: null,
+      nai_diffusion_model_id: null,
+      nai_preset_name: null,
+    });
+    scopedMock.module("@/utils/db/repositories", () => ({
+      ...realRepositories,
+      configRepository: overrideMembers(realRepositories.configRepository, {
+        loadModelCapabilityIds: async () => ({
+          user_byok_mode: false,
+          llm_id: 1,
+          embedding_model_id: 2,
+          diffusion_model_id: ++configReads === 1 ? 3 : 99,
+          nai_diffusion_model_id: 4,
+          video_model_id: 5,
+          vision_llm_id: 6,
+        }),
+      }),
+      llmModelRepo: overrideMembers(realRepositories.llmModelRepo, {
+        loadDiffusionModelById: async (id: number) => ({
+          diffusion_model_id: id,
+          codename: id === 3 ? "gemini-2.5-flash-image" : "google/gemini-2.5-flash-image",
+          provider: id === 3 ? "google" : "openrouter",
+        }),
+      }),
+      llmProviderRepo: overrideMembers(realRepositories.llmProviderRepo, {
+        loadSavedProviderConfig: async (_serverId: number, provider: string) => ({
+          ...savedConfig,
+          provider,
+          diffusion_model_id: provider === "google" ? 3 : 99,
+          api_key: Buffer.from(`fixture-${provider}-key`),
+        }),
+      }),
+    }));
+    const credentials = await resolveCapabilityCredentials(1, "image-standard");
+    expect(configReads).toBe(1);
+    expect(credentials.provider).toBe("google");
+    expect(getResolvedCapabilityModelId(credentials, "image-standard")).toBe(3);
   });
 
   it("rejects server image-standard resolution when server diffusion model belongs to novelai", async () => {
