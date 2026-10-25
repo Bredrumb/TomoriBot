@@ -31,7 +31,10 @@ const scoped = createScopedModuleMocker(mock, {
 scoped.module("@/utils/provider/credentialResolver", () => ({
   ...credentials,
   resolveCapabilityCredentials: resolve,
-  resolvePersonalCapabilityCredentials: async () => null,
+  resolvePersonalCapabilityCredentials: async () => {
+    const next = resolutions[0];
+    return next instanceof Error || next?.source === "personal" ? resolve() : null;
+  },
 }));
 scoped.module("@/utils/discord/embedHelper", () => ({ ...embeds, sendStandardEmbed: send }));
 stubLogMembers({ info: () => undefined, warn: () => undefined });
