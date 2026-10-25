@@ -1,5 +1,12 @@
 import { fetchOpenRouterVideoApi } from "@/providers/openrouter/openrouterVideoGeneration";
 import { describe, expect, it, spyOn } from "bun:test";
+import { GenerateVideoTool } from "@/tools/functionCalls/generateVideoTool";
+import type { ToolContext } from "@/types/tool/interfaces";
+import * as credentialResolver from "@/utils/provider/credentialResolver";
+import * as videoGeneration from "@/providers/openrouter/openrouterVideoGeneration";
+import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
+import { savedProviderConfigSchema, videoGenerationModelSchema } from "@/types/db/schema";
+import { createPersona } from "../../helpers/fixtures";
 import {
   buildOpenRouterVideoRequestBody,
   normalizeOpenRouterVideoOptions,
@@ -39,6 +46,56 @@ function createRequest(
 }
 
 describe("OpenRouter stable video request", () => {
+  it("passes the selected model's default resolution through the video tool", async () => {
+    let model = "x-ai/grok-imagine-video-1.5-lite";
+    const credentials = spyOn(credentialResolver, "resolveCapabilityCredentials").mockResolvedValue({
+      provider: "openrouter",
+      apiKey: "fixture-key",
+      keyVersion: 1,
+      source: "personal",
+      savedConfig: savedProviderConfigSchema.parse({
+        server_id: 1,
+        provider: "openrouter",
+        video_model_id: 2,
+        api_key: null,
+        llm_id: null,
+        diffusion_model_id: null,
+        embedding_model_id: null,
+        nai_diffusion_model_id: null,
+        nai_preset_name: null,
+      }),
+    });
+    const loadModel = spyOn(llmModelRepo, "loadVideoGenerationModelById").mockImplementation(async () =>
+      videoGenerationModelSchema.parse({ video_model_id: 2, provider: "openrouter", codename: model }),
+    );
+    const generate = spyOn(videoGeneration, "generateOpenRouterNativeVideo").mockResolvedValue({
+      videoData: null,
+      mimeType: null,
+    });
+    try {
+      const tool = new GenerateVideoTool();
+      const context = {
+        tomoriState: createPersona({ config: { videogen_enabled: true, video_model_id: 2 } }),
+        locale: "en-US",
+        provider: "openrouter",
+        userId: "12345678901234567",
+        suppressProgressNotices: true,
+      } as ToolContext;
+      for (model of ["x-ai/grok-imagine-video-1.5-lite", "example/video-model"]) {
+        for (const resolution of [undefined, "720p", "1080p"]) {
+          await tool.execute({ prompt: "A moon rising", ...(resolution ? { resolution } : {}) }, context);
+          expect(generate.mock.lastCall?.[0]).toMatchObject({
+            model,
+            resolution: resolution ?? (model === "x-ai/grok-imagine-video-1.5-lite" ? "480p" : "720p"),
+          });
+        }
+      }
+    } finally {
+      generate.mockRestore();
+      loadModel.mockRestore();
+      credentials.mockRestore();
+    }
+  });
   it("defaults Grok Lite to 480p while preserving explicit resolution choices", () => {
     const model = "x-ai/grok-imagine-video-1.5-lite";
     const capabilities = createCapabilities({ id: model, supportedResolutions: ["480p", "720p", "1080p"] });
