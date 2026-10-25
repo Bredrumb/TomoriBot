@@ -32,7 +32,7 @@ type FundingOverrides = Partial<
     | { fundingScope: "personal"; sponsorshipId?: null; serverId?: null; personalUserId?: number }
   );
 
-type CredentialOverrides = Partial<Omit<ResolvedCredentials, "supporterFunding" | "usageContext">>;
+type CredentialOverrides = Partial<Omit<ResolvedCredentials, "usageContext">>;
 
 export function createSupporterFunding(overrides: FundingOverrides = {}): SupporterFundingContext {
   if (overrides.fundingScope === "personal") {
@@ -65,7 +65,6 @@ export function createSupporterCredentials({
     savedConfig: null,
     source: funding.fundingScope,
     modelId: 12,
-    supporterFunding: funding,
     usageContext: getSupporterUsageContext(funding),
     ...overrides,
   };

@@ -1,14 +1,13 @@
-import { resolveServerTextModel } from "@/utils/provider/textModelSelection";
 import type { GenerationModelSelection } from "@/types/provider/generationModels";
+import { resolveServerTextModel, resolveTextCredentialState } from "@/utils/provider/textModelSelection";
 import { GenerationModelUnavailableError } from "@/utils/provider/generationModels";
-import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
 import type { Guild, GuildMember, Message } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { getCachedUserRow, getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { configRepository, llmModelRepo, userRepository, whitelistRepository } from "@/utils/db/repositories";
+import { configRepository, userRepository, whitelistRepository } from "@/utils/db/repositories";
 import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
@@ -28,6 +27,10 @@ import {
   type SupporterFundingResult,
 } from "@/modules/supporter-billing/runtime";
 import { SupporterRequestDeniedError } from "@/modules/supporter-billing/runtime/funding";
+import {
+  getSupporterFundingFromUsageContext,
+  getSupporterUsageContext,
+} from "@/modules/supporter-billing/runtime/types";
 import { getSupporterRequestFailureCopy } from "@/modules/supporter-billing/discord/requestFailure";
 import {
   checkTextQuotaForAdmission,
@@ -676,24 +679,17 @@ export async function resolveTextCredentialPolicy(params: {
         userId: personalRoutingUserId,
         modelSelection: params.modelSelection,
       });
-      const model = await llmModelRepo.loadById(params.modelSelection.modelId);
-      if (!model) throw new GenerationModelUnavailableError();
-      const base = withSavedProviderConfig(params.tomoriState, textCreds.savedConfig);
+      const base = await resolveTextCredentialState(params.tomoriState, textCreds);
       const modelState: TomoriState = {
         ...base,
-        llm: model,
         fallback_llms: undefined,
         fallback_chain: undefined,
         rotation_keys: undefined,
         config: {
           ...base.config,
           llm_id: params.modelSelection.modelId,
-          llm_max_output_tokens: textCreds.savedConfig?.llm_max_output_tokens ?? base.config.llm_max_output_tokens,
           model_randomizer_enabled: false,
           fallback_llm_ids: [],
-          custom_endpoint_url: textCreds.customEndpoint?.endpoint_url ?? null,
-          custom_model_name: textCreds.customEndpoint?.model_name ?? null,
-          custom_num_ctx: textCreds.customEndpoint?.num_ctx ?? null,
         },
       };
       return { ...buildCredentialPolicyFromCredentials(textCreds, personalRoutingUserId), modelState };
@@ -709,7 +705,7 @@ export async function resolveTextCredentialPolicy(params: {
       return { source: "personal", personalRoutingUserId, personalTextProvider: "supporter", supporterFunding: null };
     }
     if (personalCredentials) {
-      if (!personalCredentials.supporterFunding || !params.llmOverrideCodename) {
+      if (!getSupporterFundingFromUsageContext(personalCredentials.usageContext) || !params.llmOverrideCodename) {
         return buildCredentialPolicyFromCredentials(personalCredentials, personalRoutingUserId);
       }
       const funding = await dependencies.resolveSupporterFunding({
@@ -719,7 +715,7 @@ export async function resolveTextCredentialPolicy(params: {
       });
       if (!funding.ok) throw new SupporterRequestDeniedError(funding.reason, undefined, "text", "personal");
       return buildCredentialPolicyFromCredentials(
-        { ...personalCredentials, supporterFunding: funding.context },
+        { ...personalCredentials, usageContext: getSupporterUsageContext(funding.context) },
         personalRoutingUserId,
       );
     }
@@ -853,11 +849,12 @@ function buildCredentialPolicyFromCredentials(
   personalTextProvider: string | null;
   supporterFunding: SupporterFundingContext | null;
 } {
+  const funding = getSupporterFundingFromUsageContext(textCreds.usageContext);
   return {
-    source: textCreds.supporterFunding ? "supporter" : textCreds.source,
+    source: funding ? "supporter" : textCreds.source,
     personalRoutingUserId,
     personalTextProvider: textCreds.source === "personal" ? textCreds.provider : null,
-    supporterFunding: textCreds.supporterFunding ?? null,
+    supporterFunding: funding,
   };
 }
 

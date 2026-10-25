@@ -19,8 +19,6 @@ import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import { getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 import { isSupporterBillingEnabled, SUPPORTER_PROVIDER_VALUE } from "@/modules/supporter-billing/config";
 import { resolveEnvironment } from "@/types/config";
-import type { SupporterFundingContext } from "@/modules/supporter-billing/runtime/types";
-import { getSupporterFundingFromUsageContext } from "@/modules/supporter-billing/runtime/types";
 import { SupporterRequestDeniedError } from "@/modules/supporter-billing/runtime/funding";
 import { localizer } from "@/utils/text/localizer";
 import type { GenerationModelSelection } from "@/types/provider/generationModels";
@@ -42,7 +40,6 @@ export interface ResolvedCredentials {
   source: "server" | "personal";
   customEndpoint?: CustomEndpointRow;
   apiStyle?: string;
-  supporterFunding?: SupporterFundingContext;
   modelId?: number;
 }
 
@@ -329,7 +326,6 @@ async function resolveSavedCredentials(
       source,
       modelId,
       usageContext: credentials.usageContext,
-      supporterFunding: getSupporterFundingFromUsageContext(credentials.usageContext) ?? undefined,
     };
   }
   const customEndpointCapability =

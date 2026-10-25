@@ -945,7 +945,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
         source: "personal",
         provider: "openrouter",
         apiKey: "synthetic-member-key",
-        supporterFunding: { capability: "video", fundingScope: "personal" },
+        usageContext: { supporterFunding: { capability: "video", fundingScope: "personal" } },
       });
       expect(
         (await loadAvailableModelsForCapability(refs.userId, "supporter", "video")).some(
@@ -958,7 +958,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
       expect(imageBinding).toMatchObject({
         provider: "openrouter",
         source: "personal",
-        supporterFunding: { capability: "image", fundingScope: "personal", modelCodename: "test/personal-image" },
+        usageContext: {
+          supporterFunding: { capability: "image", fundingScope: "personal", modelCodename: "test/personal-image" },
+        },
       });
       expect(
         (await loadAvailableModelsForCapability(refs.userId, "supporter", "image")).some(
@@ -974,10 +976,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
       expect(binding).toMatchObject({
         provider: "openrouter",
         source: "personal",
-        supporterFunding: {
-          fundingScope: "personal",
-          capability: "embedding",
-          modelCodename: "test/personal-embedding",
+        usageContext: {
+          supporterFunding: {
+            fundingScope: "personal",
+            capability: "embedding",
+            modelCodename: "test/personal-embedding",
+          },
         },
       });
       expect(
@@ -1055,9 +1059,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Supporter billing — gated DB schema", ()
         const personal = await resolveCapabilityCredentials(refs.serverId, capability, { userId: refs.userId });
         const server = await resolveCapabilityCredentials(refs.serverId, capability);
         expect(personal.apiKey).toBe("synthetic-member-key");
-        expect(personal.supporterFunding?.fundingScope).toBe("personal");
+        expect(personal.usageContext?.supporterFunding?.fundingScope).toBe("personal");
         expect(server.apiKey).toBe("synthetic-server-member-key");
-        expect(server.supporterFunding?.fundingScope).toBe("server");
+        expect(server.usageContext?.supporterFunding?.fundingScope).toBe("server");
       }
       const currentKey = await memberKeys.load(serverMember.patreon_member_id);
       if (!currentKey) throw new Error("Missing server member key");

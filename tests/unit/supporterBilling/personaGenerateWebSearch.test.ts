@@ -104,7 +104,6 @@ test("persona web search uses the selected subscription's key and records its se
       keyVersion: 1,
       savedConfig: null,
       source: funding.fundingScope,
-      supporterFunding: funding,
       usageContext: getSupporterUsageContext(funding),
     });
     searchSucceeded = false;

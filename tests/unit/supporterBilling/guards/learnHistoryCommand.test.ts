@@ -88,7 +88,7 @@ function harness(): {
   const persona = createPersona({
     llm: createLlmRow({
       llm_provider: "openrouter",
-      llm_codename: TEXT_MODEL,
+      llm_codename: "synthetic/server-text",
       supports_structoutput: true,
     }),
   });
@@ -103,6 +103,11 @@ function harness(): {
   );
   spies.push(spyOn(personaRepository, "loadAllForServer").mockResolvedValue([persona]));
   spies.push(spyOn(llmModelRepo, "loadEmbeddingModelById").mockResolvedValue(embeddingsModel));
+  spies.push(
+    spyOn(llmModelRepo, "loadById").mockResolvedValue(
+      createLlmRow({ llm_id: 12, llm_provider: "openrouter", llm_codename: TEXT_MODEL }),
+    ),
+  );
   spies.push(
     spyOn(modals, "promptWithRawModal").mockResolvedValue({
       outcome: "submit",
@@ -160,6 +165,7 @@ function payload(calls: Array<{ method: string; args: unknown[] }>): string {
 function successfulExtraction(): void {
   spies.push(
     spyOn(presetExecutors, "extractHistoryWindowForProvider").mockImplementation(async (request) => {
+      expect(request.model).toBe(TEXT_MODEL);
       request.onUsage?.({ inputTokens: 300, outputTokens: 40, costUsd: 0.02 });
       return { ok: true, entries: [{ lossless_restatement: "A synthetic fact." }], discarded: 0 } as never;
     }),

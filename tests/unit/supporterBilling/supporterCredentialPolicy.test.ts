@@ -6,6 +6,7 @@ import type { TomoriState, UserRow } from "@/types/db/schema";
 import { PersonalProviderRequiredError, type ResolvedCredentials } from "@/utils/provider/credentialResolver";
 import { resolveTextCredentialPolicy, type TextCredentialPolicyDependencies } from "@/utils/chat/turnPlanner";
 import type { SupporterFundingContext } from "@/modules/supporter-billing";
+import { getSupporterUsageContext } from "@/modules/supporter-billing/runtime/types";
 
 function makeTomoriState(overrides: Partial<TomoriState> = {}): TomoriState {
   return createPersona({
@@ -101,7 +102,7 @@ describe("supporter-aware text credential policy", () => {
       sponsorshipId: null,
       serverId: null,
     };
-    const credentials = { ...makeResolvedCredentials("personal"), supporterFunding: context };
+    const credentials = { ...makeResolvedCredentials("personal"), usageContext: getSupporterUsageContext(context) };
     let scope: unknown;
     const params = makeBaseParams({
       resolvePersonalCapabilityCredentials: async () => credentials,
@@ -189,7 +190,7 @@ describe("supporter-aware text credential policy", () => {
         }),
         resolveCapabilityCredentials: async () => {
           serverCalled = true;
-          return { ...makeResolvedCredentials("server"), supporterFunding: supporterContext };
+          return { ...makeResolvedCredentials("server"), usageContext: getSupporterUsageContext(supporterContext) };
         },
       }),
     );

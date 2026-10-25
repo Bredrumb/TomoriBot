@@ -68,6 +68,7 @@ import {
 import { truncateForEmbedDescription } from "@/utils/discord/embedHelper";
 import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
+import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
 import {
   CredentialUnavailableError,
   getResolvedCapabilityModelId,
@@ -1008,6 +1009,7 @@ async function resolveHistoryImportRuntime(
     };
   }
 
+  const textState = await resolveTextCredentialState(tomoriState, textCreds);
   return {
     ok: true,
     runtime: {
@@ -1022,11 +1024,9 @@ async function resolveHistoryImportRuntime(
         embeddingApiKey: embeddingCreds.apiKey,
         embeddingUsageContext: embeddingCreds.usageContext,
       },
-      provider: textCreds.supporterFunding?.provider ?? tomoriState.llm.llm_provider.toLowerCase(),
-      model:
-        textCreds.supporterFunding?.modelCodename ??
-        getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name),
-      endpointUrl: textCreds.supporterFunding ? undefined : (tomoriState.config.custom_endpoint_url ?? undefined),
+      provider: textCreds.provider,
+      model: getEffectiveLlmModelName(textState.llm, textState.config.custom_model_name),
+      endpointUrl: textCreds.customEndpoint?.endpoint_url,
     },
   };
 }

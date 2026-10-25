@@ -255,7 +255,6 @@ describe("funded document writes", () => {
       savedConfig: SAVED_PROVIDER_CONFIG,
       source: "server",
       modelId: 5,
-      supporterFunding: MEMBER_FUNDING,
       usageContext: getSupporterUsageContext(MEMBER_FUNDING),
     });
     const modelIdSpy = spyOn(credentialResolver, "getResolvedCapabilityModelId").mockReturnValue(5);

@@ -42,7 +42,6 @@ describe("hidden image planning credentials", () => {
       keyVersion: 1,
       source: "personal",
       savedConfig: null,
-      supporterFunding: funding,
       usageContext: getSupporterUsageContext(funding),
     });
     const config = spyOn(provider, "createConfig").mockImplementation(async (_state, apiKey) => ({

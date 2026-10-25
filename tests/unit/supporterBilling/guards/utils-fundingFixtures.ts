@@ -80,7 +80,7 @@ export function createResolvedCredentials(
     keyVersion: 1,
     savedConfig: null,
     source: funding?.fundingScope === "personal" ? "personal" : "server",
-    ...(funding ? { supporterFunding: funding, usageContext: getSupporterUsageContext(funding) } : {}),
+    ...(funding ? { usageContext: getSupporterUsageContext(funding) } : {}),
     ...overrides,
   };
 }

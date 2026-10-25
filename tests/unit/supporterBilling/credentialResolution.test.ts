@@ -136,7 +136,7 @@ describe("personal credential resolution for capability split", () => {
         const resolved = await resolveCapabilityCredentials(1, capability, { userId: 1 });
         expect(resolved.apiKey).toBe("synthetic-personal-byok");
         expect(resolved.source).toBe("personal");
-        expect(resolved.supporterFunding).toBeUndefined();
+        expect(resolved.usageContext).toBeUndefined();
       }
       expect(memberKey).not.toHaveBeenCalled();
     } finally {
@@ -169,7 +169,7 @@ describe("personal credential resolution for capability split", () => {
     try {
       const resolved = await resolveCapabilityCredentials(1, "embedding");
       expect(resolved).toMatchObject({ provider: "openrouter", apiKey: "server-fixture-key", source: "server" });
-      expect(resolved.supporterFunding).toBeUndefined();
+      expect(resolved.usageContext).toBeUndefined();
       funding.mockRejectedValue(new SupporterRequestDeniedError("model_unavailable", undefined, "embedding", "server"));
       expect((await resolveCapabilityCredentials(1, "embedding")).apiKey).toBe("server-fixture-key");
       expect(funding).not.toHaveBeenCalled();

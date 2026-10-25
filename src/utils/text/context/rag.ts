@@ -8,6 +8,7 @@ import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context
 import type { TomoriState } from "@/types/db/schema";
 import type { SimplifiedMessageForContext } from "./types";
 import { createSupporterUsageRecorder } from "@/modules/supporter-billing/runtime/usageStatistics";
+import { getSupporterFundingFromUsageContext } from "@/modules/supporter-billing/runtime/types";
 import { channelScopeCandidates } from "@/utils/discord/channelScope";
 
 const DOCUMENT_QUERY_MAX_LENGTH = 1000;
@@ -79,7 +80,10 @@ export async function buildServerDocumentContextItem(params: {
         query: queryText,
         embeddingModel,
         apiKey: creds.apiKey,
-        onUsage: createSupporterUsageRecorder(creds.supporterFunding, embeddingModel.codename),
+        onUsage: createSupporterUsageRecorder(
+          getSupporterFundingFromUsageContext(creds.usageContext),
+          embeddingModel.codename,
+        ),
         maxResults: DOCUMENT_MAX_RESULTS,
         minSimilarity: DOCUMENT_MIN_SIMILARITY,
         channelIds: channelFilter,

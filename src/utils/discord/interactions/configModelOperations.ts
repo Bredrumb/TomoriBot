@@ -48,6 +48,7 @@ import { NAI_IMAGE_NOISE_SCHEDULES, NAI_IMAGE_SAMPLERS } from "@/utils/image/nai
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { log } from "@/utils/misc/logger";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { getSupporterFundingFromUsageContext } from "@/modules/supporter-billing/runtime/types";
 import { buildCustomProviderName, isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import {
   buildFallbackModelPersistence,
@@ -755,13 +756,19 @@ export const configModelOperations: ConfigModelOperations = {
                 serverId: tomoriState.server_id,
                 embeddingModel: chosenModel,
                 apiKey: credentials.apiKey,
-                onUsage: createSupporterUsageRecorder(credentials.supporterFunding, chosenModel.codename),
+                onUsage: createSupporterUsageRecorder(
+                  getSupporterFundingFromUsageContext(credentials.usageContext),
+                  chosenModel.codename,
+                ),
                 chunkSize: limits.documentChunkSize,
                 chunkOverlap: limits.documentChunkOverlap,
               }),
             );
           } catch (error) {
-            const denied = findSupporterRequestDeniedError(error, credentials.supporterFunding);
+            const denied = findSupporterRequestDeniedError(
+              error,
+              getSupporterFundingFromUsageContext(credentials.usageContext),
+            );
             if (denied) return { status: "subscription", denied };
             throw error;
           }
