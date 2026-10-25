@@ -1289,10 +1289,15 @@ export const personalProvidersInteractionRoute = createProvidersInteractionRoute
   },
 );
 
+export interface InitialProvidersPanelOptions {
+  resolveScope?: ProvidersRouteDependencies["resolveScope"];
+  receipt?: PanelReceipt;
+}
+
 export async function buildInitialProvidersPanel(
-  interaction: ChatInputCommandInteraction,
+  interaction: ChatInputCommandInteraction | GlobalRoutableInteraction,
   locale: string,
-  resolveScope: ProvidersRouteDependencies["resolveScope"] = defaultResolveScope,
+  { resolveScope = defaultResolveScope, receipt }: InitialProvidersPanelOptions = {},
 ): Promise<InteractionEditReplyOptions> {
   if (!isAuthorized(interaction)) {
     return terminalPayload(locale, "general.errors.permission_denied_description");
@@ -1305,6 +1310,7 @@ export async function buildInitialProvidersPanel(
     initialEntryId: scope.data.initialEntryId,
     readStatus: scope.data.readStatus,
     page: { kind: "entry" },
+    receipt,
     enabledActions: actionsForNamespace(scope.routeNamespace),
     routeNamespace: scope.routeNamespace,
     footerCommand: scope.footerCommand,
@@ -1316,9 +1322,9 @@ export async function buildInitialProvidersPanel(
 }
 
 export async function buildInitialPersonalProvidersPanel(
-  interaction: ChatInputCommandInteraction,
+  interaction: ChatInputCommandInteraction | GlobalRoutableInteraction,
   locale: string,
-  resolveScope: ProvidersRouteDependencies["resolveScope"] = defaultResolvePersonalScope,
+  { resolveScope = defaultResolvePersonalScope, receipt }: InitialProvidersPanelOptions = {},
 ): Promise<InteractionEditReplyOptions> {
   const scope = await resolveScope(interaction, false);
   if (!scope) return terminalPayload(locale, providersNotSetupKey(interaction));
@@ -1328,6 +1334,7 @@ export async function buildInitialPersonalProvidersPanel(
     initialEntryId: scope.data.initialEntryId,
     readStatus: scope.data.readStatus,
     page: { kind: "entry" },
+    receipt,
     enabledActions: enabledPersonalProviderActions,
     routeNamespace: PERSONAL_PROVIDERS_ROUTE_NAMESPACE,
     footerCommand: scope.footerCommand,

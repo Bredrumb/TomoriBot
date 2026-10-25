@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import {
+  buildSetupOptionActionRouteId,
   parseSetupRoute,
   SETUP_ROUTE_NAMESPACE,
   SETUP_ROUTE_VERSION,
@@ -52,6 +53,7 @@ const EMITTED_ACTIONS: SetupWizardAction[] = [
   "provider-mode",
   "settings",
   "settings-submit",
+  "option-action",
 ];
 
 /** Members of the `SetupWizardAction` union, read from the declaration that defines the codec. */
@@ -115,6 +117,29 @@ function renderedPayloads(): Array<[string, unknown]> {
     buildSetupWizardPayload({ draft, locale: LOCALE, isHosted, nonce: NONCE, settingsCatalogs: CATALOGS });
 
   return [
+    [
+      "provider option action",
+      buildSetupWizardPayload({
+        draft: createDraft({ providerAccess: { mode: "option", value: "fixture-option" } }),
+        locale: LOCALE,
+        isHosted: false,
+        nonce: NONCE,
+        settingsCatalogs: CATALOGS,
+        optionComponents: [
+          {
+            type: 1,
+            components: [
+              {
+                type: 2,
+                style: 1,
+                label: "fixture action",
+                customId: buildSetupOptionActionRouteId({ locale: LOCALE, nonce: NONCE }),
+              },
+            ],
+          },
+        ],
+      }),
+    ],
     ["pending hosted", wizard(createDraft({ requiresPolicies: true }), true)],
     ["pending non-hosted", wizard(createDraft(), false)],
     ["pending dm", wizard(createDraft({ context: "dm" }), false)],

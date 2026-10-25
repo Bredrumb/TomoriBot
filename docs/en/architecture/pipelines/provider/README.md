@@ -161,7 +161,14 @@ The registry never adds storage of its own.
 An option's panel `handleAction` owns interaction acknowledgement. It may show a modal immediately,
 or acknowledge before awaiting its lazy `loadSelection()` callback, which loads the scope and edit
 entry. Returning false repaints an acknowledged interaction or sends a refusal on an unacknowledged
-one. Setup acknowledges option selection before awaiting readiness and component rendering.
+one. Setup acknowledges option selection and `setup.handleAction` buttons before awaiting provider work.
+`setup.components` receives `actionRouteId`; controls using that ID dispatch to `setup.handleAction`,
+whose optional receipt appears on the repainted wizard. This route supports one option control; add
+a sub-action segment before introducing a second. `startSetupWizard` also accepts an acknowledged
+button, and the initial provider-panel builders accept component interactions and a receipt.
+The release consumers are `src/modules/supporter-billing/discord/providerOption.ts` for setup
+onboarding and `src/modules/supporter-billing/subscribe/components.ts` for returning to setup or
+provider panels after subscription actions.
 
 Surfaces resolve an option through `findProviderOption` before treating a provider value as a
 built-in one. `getProviderDisplayName` resolves the option's `copy.labelKey`, and
@@ -202,7 +209,7 @@ Deployment behavior maps onto these fields:
 | Panel select action and its copy | `copy.addActionLabelKey`, `copy.addActionDescriptionKeys`, `panel.handleAction` |
 | Panel entry buttons and extra components | `panel.entryActions`, `panel.entryComponents`, `panel.entryOwned` |
 | Model option description | `copy.modelDescriptionKey` |
-| Setup option, summary, receipt, onboarding, and commit | `setup.optionLabelKey`, `setup.optionDescriptionKey`, `setup.summaryKey`, `setup.receiptDescriptionKey`, `setup.available`, `setup.ready`, `setup.components`, `setup.committed` |
+| Setup option, summary, receipt, onboarding, and commit | `setup.optionLabelKey`, `setup.optionDescriptionKey`, `setup.summaryKey`, `setup.receiptDescriptionKey`, `setup.available`, `setup.ready`, `setup.components`, `setup.committed`, `setup.handleAction` |
 
 One deployment-managed behavior stays outside the registry because main has no field for it: a
 fallback ref's payer tag. A deployment that needs it keeps that tag on its own branch, where

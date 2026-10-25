@@ -5,6 +5,7 @@ import type {
   ComponentInContainerData,
 } from "discord.js";
 import type { FallbackModelRef, TomoriState } from "@/types/db/schema";
+import type { PanelReceipt } from "@/types/discord/panel";
 import type { ProviderPanelCapability, ProviderPanelEntry } from "@/types/discord/providerPanel";
 import type { SetupDraftRecord } from "@/types/discord/setupWizard";
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
@@ -77,6 +78,8 @@ export interface ProviderOptionSetupContext {
   draft: SetupDraftRecord;
   /** Present when a live interaction triggered the render; absent during commit revalidation. */
   interaction?: GlobalRoutableInteraction | ChatInputCommandInteraction;
+  /** Routes a control back to `handleAction`; the route has no sub-action segment, so add one before a second control. */
+  actionRouteId?: string;
 }
 
 interface ProviderOptionSetupCommitContext extends ProviderOptionSetupContext {
@@ -99,6 +102,9 @@ interface ProviderOptionSetup {
   ready?(context: ProviderOptionSetupContext): Promise<ProviderOptionReadiness>;
   components?(context: ProviderOptionSetupContext): Promise<readonly ComponentInContainerData[]>;
   committed?(context: ProviderOptionSetupCommitContext): Promise<void>;
+  handleAction?(
+    context: ProviderOptionSetupContext & { interaction: GlobalRoutableInteraction },
+  ): Promise<PanelReceipt | undefined>;
 }
 
 /** @public Release-only `src/modules/supporter-billing/discord/providerOption.ts` imports this. */

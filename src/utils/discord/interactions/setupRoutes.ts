@@ -2,6 +2,7 @@ import {
   MessageFlags,
   PermissionsBitField,
   type ChatInputCommandInteraction,
+  type ButtonInteraction,
   type Client,
   type ComponentInContainerData,
   type Guild,
@@ -135,6 +136,7 @@ export type SetupWizardAction =
   | "endpoint-connection-submit"
   | "endpoint-model"
   | "endpoint-model-submit"
+  | "option-action"
   | "finish";
 
 const SETUP_WIZARD_ACTIONS = new Set<SetupWizardAction>([
@@ -150,6 +152,7 @@ const SETUP_WIZARD_ACTIONS = new Set<SetupWizardAction>([
   "endpoint-connection-submit",
   "endpoint-model",
   "endpoint-model-submit",
+  "option-action",
   "finish",
 ]);
 
@@ -229,6 +232,10 @@ export function buildSetupEndpointModelSubmitRouteId(input: { locale: string; no
   return buildSetupRouteId({ action: "endpoint-model-submit", locale: input.locale, nonce: input.nonce });
 }
 
+export function buildSetupOptionActionRouteId(input: { locale: string; nonce: string }): string {
+  return buildSetupRouteId({ action: "option-action", locale: input.locale, nonce: input.nonce });
+}
+
 export function buildSetupFinishRouteId(input: { locale: string; nonce: string }): string {
   return buildSetupRouteId({ action: "finish", locale: input.locale, nonce: input.nonce });
 }
@@ -275,7 +282,7 @@ async function readSetupHealth(workspaceKey: string): Promise<SetupHealthStatus>
  * commands that change it than by a sentence saying no.
  */
 async function replyWorkspaceAlreadySetup(
-  interaction: ChatInputCommandInteraction,
+  interaction: ChatInputCommandInteraction | ButtonInteraction,
   locale: string,
   workspaceKey: string,
 ): Promise<void> {
@@ -334,7 +341,10 @@ async function replyWorkspaceAlreadySetup(
  * Setup deliberately does not clear this state, because the alters on the workspace may be healthy
  * and only the config row or the model it points at is gone.
  */
-async function replyWorkspaceBroken(interaction: ChatInputCommandInteraction, locale: string): Promise<void> {
+async function replyWorkspaceBroken(
+  interaction: ChatInputCommandInteraction | ButtonInteraction,
+  locale: string,
+): Promise<void> {
   log.warn("[Setup] Workspace has a main persona row but state validation failed, surfacing repair guidance");
   await replyInfoEmbed(interaction, locale, {
     titleKey: "commands.setup.broken_state_title",
@@ -390,7 +400,7 @@ async function deliverSetupWizard(
     settingsCatalogs: SetupSettingsCatalogs | null | undefined;
   },
 ): Promise<void> {
-  const optionRender = await resolveSetupProviderOptionRender(interaction, draft, locale);
+  const optionRender = await resolveSetupProviderOptionRender(interaction, draft, locale, nonce);
   const payload = buildSetupWizardPayload({
     draft,
     locale,
@@ -416,6 +426,7 @@ async function resolveSetupProviderOptionRender(
   interaction: ChatInputCommandInteraction | GlobalRoutableInteraction,
   draft: SetupDraftRecord,
   locale: string,
+  nonce: string,
 ): Promise<SetupProviderOptionRender> {
   const render: SetupProviderOptionRender = { options: [], components: [], ready: false };
   const selected = draft.providerAccess?.mode === "option" ? findProviderOption(draft.providerAccess.value) : undefined;
@@ -429,7 +440,7 @@ async function resolveSetupProviderOptionRender(
       summaryKey: setup.summaryKey,
     });
     if (option !== selected) continue;
-    const context = { locale, draft, interaction };
+    const context = { locale, draft, interaction, actionRouteId: buildSetupOptionActionRouteId({ locale, nonce }) };
     render.ready = setup.ready ? (await setup.ready(context)).ready : true;
     render.components = (await setup.components?.(context)) ?? [];
   }
@@ -1221,7 +1232,7 @@ async function finishSetupWizardDraft(
 }
 
 export interface SetupWizardDependencies {
-  isSetupAuthorized: (interaction: ChatInputCommandInteraction) => boolean;
+  isSetupAuthorized: (interaction: ChatInputCommandInteraction | ButtonInteraction) => boolean;
   checkExistingSetup: (workspaceKey: string) => Promise<SetupHealthStatus>;
   createNonce: () => string;
   isHostedPolicyEnvironment: () => boolean;
@@ -1231,7 +1242,7 @@ export interface SetupWizardDependencies {
 }
 
 export async function startSetupWizard(
-  interaction: ChatInputCommandInteraction,
+  interaction: ChatInputCommandInteraction | ButtonInteraction,
   dependencies: Partial<SetupWizardDependencies> = {},
 ): Promise<void> {
   const locale = dependencies.locale ?? interaction.locale ?? interaction.guildLocale ?? "en-US";
@@ -1240,7 +1251,7 @@ export async function startSetupWizard(
 
   // Acknowledged before the existing-setup lookup, not after it: Discord drops an interaction that is not
   // acknowledged within three seconds, and that lookup can miss its cache and reach the database.
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  if (!interaction.replied && !interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const isAuthorized = dependencies.isSetupAuthorized
     ? dependencies.isSetupAuthorized(interaction)
@@ -1609,6 +1620,17 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
           });
         }
         break;
+      }
+
+      case "option-action": {
+        if (!interaction.isButton()) return;
+        await interaction.deferUpdate();
+        const access = draft.providerAccess;
+        const setup = access?.mode === "option" ? findProviderOption(access.value)?.setup : undefined;
+        if (!setup?.handleAction || (setup.available && !setup.available({ context }))) return;
+        const receipt = await setup.handleAction({ locale, draft, interaction });
+        await repaintSetupWizard(interaction, draft, locale, nonce, { method: "editReply", receipt });
+        return;
       }
 
       case "provider-catalog-submit": {

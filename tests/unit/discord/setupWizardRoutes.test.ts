@@ -377,6 +377,14 @@ describe("setupWizardRoutes", () => {
     expect(mockStore).toHaveBeenCalledTimes(1);
   });
 
+  it("starts setup from an acknowledged button without acknowledging it again", async () => {
+    const interaction = createRouteInteraction();
+    await interaction.deferUpdate();
+    await startSetupWizard(interaction as never, { checkExistingSetup: async () => "ready" });
+    expect(interaction.calls.filter(({ method }) => method.startsWith("defer"))).toHaveLength(1);
+    expect(interaction.edits.length).toBeGreaterThan(0);
+  });
+
   it("acknowledges before refusing an unauthorized actor in startSetupWizard", async () => {
     const mockStore = mock(() => {});
     const interaction = createRouteInteraction({ isManager: false });
