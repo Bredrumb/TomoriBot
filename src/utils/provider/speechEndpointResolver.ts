@@ -1,4 +1,9 @@
-import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
+import {
+  findProviderRequestDeniedError,
+  type ProviderRequestDeniedError,
+  type ProviderUsageContext,
+} from "@/utils/provider/providerUsage";
+import { findProviderOption } from "@/utils/provider/providerOptionRegistry";
 import type { VoiceSourceMode } from "@/utils/speech/voiceSourceCapabilities";
 import { createHash } from "node:crypto";
 import type { CustomEndpointRow } from "@/types/db/schema";
@@ -50,6 +55,7 @@ export function speechTargetFingerprint(target: SpeechTargetResult | null | unde
               target.owner,
               target.credentialId,
               target.credentialRevision,
+              target.credentialProvider,
             ]
           : [
               target.kind,
@@ -139,7 +145,11 @@ export async function resolveSpeechTargets(
   serverId: number,
   userId?: number,
   modelSelection?: GenerationModelSelection | null,
-): Promise<{ design: SpeechTargetResult | null; clone: SpeechTargetResult | null }> {
+): Promise<{
+  design: SpeechTargetResult | null;
+  clone: SpeechTargetResult | null;
+  denials?: Partial<Record<VoiceSourceMode, ProviderRequestDeniedError>>;
+}> {
   if (modelSelection) {
     if (modelSelection.kind !== "speech" && modelSelection.kind !== "speech-endpoint")
       throw new GenerationModelUnavailableError();
@@ -162,21 +172,19 @@ export async function resolveSpeechTargets(
       target = { kind: "custom-endpoint", endpoint, apiKey, owner: { kind: "server", ownerId: serverId } };
     } else {
       const model = await llmModelRepo.loadSpeechModelById(modelSelection.modelId);
-      if (!model || !saved?.api_key) throw new GenerationModelUnavailableError();
-      const apiKey = await decryptApiKey(saved.api_key, saved.key_version);
-      if (!apiKey) throw new GenerationModelUnavailableError();
+      if (!model || !saved) throw new GenerationModelUnavailableError();
       const personal = "user_id" in saved;
       const credentialId = personal ? saved.user_saved_config_id : saved.saved_config_id;
       if (credentialId === undefined) throw new GenerationModelUnavailableError();
-      target = {
-        kind: "hosted-model",
-        endpoint: null,
+      target = await resolveHostedSpeechTarget({
         model,
-        apiKey,
+        apiKey: saved.api_key,
+        keyVersion: saved.key_version,
         owner: personal ? { kind: "personal", ownerId: saved.user_id } : { kind: "server", ownerId: serverId },
         credentialId,
         credentialRevision: saved.credential_revision,
-      };
+        credentialProvider: modelSelection.provider,
+      });
     }
     const source = speechTargetSource(target);
     return {
@@ -185,15 +193,20 @@ export async function resolveSpeechTargets(
     };
   }
   const serverAllowed = userId === undefined || (await loadSpeechRoutingPolicy(serverId, userId)).serverAllowed;
+  const denials: Partial<Record<VoiceSourceMode, ProviderRequestDeniedError>> = {};
   async function resolve(mode: VoiceSourceMode): Promise<SpeechTargetResult | null> {
     const hosted = await loadHostedSpeechSelection(serverId, mode, userId);
     if (hosted) {
       if (hosted.owner.kind === "server" && !serverAllowed) return null;
       try {
-        const apiKey = await decryptApiKey(hosted.apiKey, hosted.keyVersion);
-        return apiKey ? { ...hosted, kind: "hosted-model", endpoint: null, apiKey } : null;
-      } catch {
-        log.warn("SpeechResolver: hosted credential decryption failed", { serverId, mode, owner: hosted.owner });
+        return await resolveHostedSpeechTarget(hosted);
+      } catch (error) {
+        const denied = findProviderRequestDeniedError(error);
+        if (denied) denials[mode] = denied;
+        log.warn("SpeechResolver: hosted credential unavailable", error, {
+          serverId,
+          metadata: { mode, owner: hosted.owner },
+        });
         return null;
       }
     }
@@ -202,5 +215,33 @@ export async function resolveSpeechTargets(
     return endpoint ? { ...endpoint, kind: "custom-endpoint", owner: { kind: "server", ownerId: serverId } } : null;
   }
   const [design, clone] = await Promise.all([resolve("design"), resolve("clone")]);
-  return { design, clone };
+  return { design, clone, ...(Object.keys(denials).length > 0 ? { denials } : {}) };
+}
+
+async function resolveHostedSpeechTarget(
+  hosted: HostedSpeechSelection,
+): Promise<Extract<SpeechTargetResult, { kind: "hosted-model" }>> {
+  const option = findProviderOption(hosted.credentialProvider);
+  let apiKey: string | null = null;
+  let usageContext: ProviderUsageContext | undefined;
+  if (option) {
+    const capability = hosted.model.voice_mode === "clone" ? "speech-clone" : "speech-design";
+    if (
+      !option.capabilities.includes(capability) ||
+      !(await option.availability(hosted.owner)).eligible ||
+      !option.selection.resolveCredentials
+    )
+      throw new GenerationModelUnavailableError();
+    const credentials = await option.selection.resolveCredentials({
+      scope: hosted.owner,
+      capability,
+      modelId: hosted.model.speech_model_id,
+    });
+    apiKey = credentials?.apiKey ?? null;
+    usageContext = credentials?.usageContext;
+  } else if (hosted.apiKey) {
+    apiKey = await decryptApiKey(hosted.apiKey, hosted.keyVersion);
+  }
+  if (!apiKey) throw new GenerationModelUnavailableError();
+  return { ...hosted, kind: "hosted-model", endpoint: null, apiKey, usageContext };
 }

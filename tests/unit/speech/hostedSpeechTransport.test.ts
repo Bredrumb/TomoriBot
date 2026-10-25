@@ -9,6 +9,10 @@ import { speechModelSchema } from "@/types/db/schema";
 import { SPEECH_SAMPLE_MAX_DURATION_SECS } from "@/utils/speech/voiceSampleAddOperation";
 import { readBoundedResponse } from "@/utils/security/boundedResponse";
 import { createSpeechWav, createSpeechMp3 } from "../../helpers/speechAudio";
+import * as speechRepository from "@/utils/db/repositories/SpeechRepository";
+import { registerProviderOption, type ProviderOptionDefinition } from "@/utils/provider/providerOptionRegistry";
+import { ProviderRequestDeniedError, type ProviderUsageContext } from "@/utils/provider/providerUsage";
+import { resolveSpeechTargets, speechTargetFingerprint } from "@/utils/provider/speechEndpointResolver";
 
 const wav = createSpeechWav();
 let mp3: Buffer;
@@ -42,6 +46,101 @@ afterEach(() => {
 });
 
 describe("hosted speech transports", () => {
+  it("resolves keyless managed speech for both scopes and keeps a denial separate from the other mode", async () => {
+    const context: ProviderUsageContext = {};
+    let denyClone = false;
+    const option: ProviderOptionDefinition = {
+      value: "test-option",
+      catalogProvider: "openrouter",
+      capabilities: ["speech-design", "speech-clone"],
+      copy: {
+        labelKey: "commands.providers.entry_kind_provider",
+        entryDescriptionKeys: {
+          server: "commands.providers.entry_kind_provider",
+          personal: "commands.providers.entry_kind_provider",
+        },
+        addActionLabelKey: "commands.providers.select_add_provider",
+        addActionDescriptionKeys: {
+          server: "commands.providers.select_add_provider_description",
+          personal: "commands.providers.select_add_provider_description",
+        },
+        removeImpactKey: "commands.providers.remove_impact_provider",
+      },
+      availability: () => ({ eligible: true }),
+      selection: {
+        load: async () => null,
+        ensure: async () => true,
+        claim: async () => true,
+        remove: async () => "removed",
+        resolveCredentials: async ({ scope, capability, modelId }) => {
+          expect(scope.ownerId).toBe(scope.kind === "personal" ? 9 : 7);
+          expect(modelId).toBe(capability === "speech-design" ? 1 : 2);
+          if (denyClone && capability === "speech-clone")
+            throw new ProviderRequestDeniedError(context, () => ({ titleKey: "fixture", description: "fixture" }));
+          return { apiKey: "fixture-managed-key", usageContext: context, savedProvider: "test-option" };
+        },
+      },
+    };
+    const dispose = registerProviderOption(option);
+    const policy = spyOn(speechRepository, "loadSpeechRoutingPolicy").mockResolvedValue({
+      serverAllowed: true,
+      fallbackEnabled: true,
+    });
+    const load = spyOn(speechRepository, "loadHostedSpeechSelection").mockImplementation(
+      async (_serverId, mode, userId) => ({
+        model: speechModelSchema.parse({
+          speech_model_id: mode === "design" ? 1 : 2,
+          provider: "openrouter",
+          voice_mode: mode,
+          codename: mode === "design" ? "bytedance-seed/seed-audio-1-0" : "fish-audio/s2.1-pro",
+        }),
+        owner: userId === undefined ? { kind: "server", ownerId: 7 } : { kind: "personal", ownerId: userId },
+        credentialId: 12,
+        credentialRevision: 3,
+        credentialProvider: "test-option",
+        apiKey: null,
+        keyVersion: 1,
+      }),
+    );
+    try {
+      for (const userId of [undefined, 9]) {
+        const targets = await resolveSpeechTargets(7, userId);
+        for (const mode of ["design", "clone"] as const) {
+          const target = targets[mode];
+          expect(target).toMatchObject({
+            kind: "hosted-model",
+            apiKey: "fixture-managed-key",
+            credentialProvider: "test-option",
+            credentialId: 12,
+            credentialRevision: 3,
+          });
+          if (target?.kind !== "hosted-model") throw new Error("Missing managed speech target");
+          expect(target.usageContext).toBe(context);
+          expect(speechTargetFingerprint({ ...target, credentialProvider: "openrouter" })).not.toBe(
+            speechTargetFingerprint(target),
+          );
+          expect(speechTargetFingerprint({ ...target, credentialRevision: 4 })).not.toBe(
+            speechTargetFingerprint(target),
+          );
+        }
+      }
+      denyClone = true;
+      const denied = await resolveSpeechTargets(7);
+      expect(denied.design?.apiKey).toBe("fixture-managed-key");
+      expect(denied.clone).toBeNull();
+      expect(denied.denials?.clone?.usageContext).toBe(context);
+      denyClone = false;
+      option.availability = () => ({ eligible: false });
+      expect(await resolveSpeechTargets(7)).toMatchObject({ design: null, clone: null });
+      option.availability = () => ({ eligible: true });
+      delete option.selection.resolveCredentials;
+      expect(await resolveSpeechTargets(7)).toMatchObject({ design: null, clone: null });
+    } finally {
+      dispose();
+      policy.mockRestore();
+      load.mockRestore();
+    }
+  });
   it("keeps prompted identity, spoken text, and direction in separate Gemini fields and preserves only usage fields", async () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
     stubFetch(async (url, init) => {
@@ -287,6 +386,7 @@ describe("hosted speech transports", () => {
       apiKey: "synthetic",
       credentialId: 1,
       credentialRevision: 1,
+      credentialProvider: "openrouter",
     };
     const description = "x".repeat(HOSTED_SPEECH_LIMITS.descriptionCharacters);
     const request = (script: string) => ({
@@ -419,6 +519,7 @@ describe("hosted speech transports", () => {
       apiKey: "synthetic",
       credentialId: 1,
       credentialRevision: 1,
+      credentialProvider: "openrouter",
     };
     const base = {
       target,
