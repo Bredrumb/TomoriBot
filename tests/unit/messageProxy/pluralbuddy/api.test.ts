@@ -216,7 +216,9 @@ describe("PluralBuddy message lookup", () => {
     await expect(fetchPluralBuddyMessage(official, messageId)).rejects.toThrow(PluralBuddyLookupUnavailableError);
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(Date.now() - start).toBeLessThan(2400);
-    expect(warning).toHaveBeenCalledTimes(1);
+    expect(warning).toHaveBeenCalledWith(expect.any(String), undefined, {
+      metadata: { instanceId: official.instanceId, errorClass: "TimeoutError" },
+    });
     expect(JSON.stringify(warning.mock.calls)).not.toContain(secretToken);
   });
 

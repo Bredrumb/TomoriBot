@@ -31,7 +31,7 @@ export const RELATIONSHIP_USER_PREREQUISITE = "relationship_user";
 export const RECENT_MEMORY_PREREQUISITE = "recent_memory";
 export const PRESENCE_ACTIVITY_PREREQUISITE = "presence_activity";
 export const TWO_PERSONAS_PREREQUISITE = "two_personas";
-export const TOOL_PREREQUISITE_PREFIX = "tool:";
+const TOOL_PREREQUISITE_PREFIX = "tool:";
 
 export const NUDGE_PREREQUISITE_IDS: readonly string[] = [
   HANGING_CONVERSATION_PREREQUISITE,
@@ -178,7 +178,7 @@ export type CustomIdleNudgeRow = z.infer<typeof customIdleNudgeRowSchema>;
 
 /** Four add actions plus 20 entries fill one 25-option select. */
 export const PERSONA_AUTHORED_IDLE_NUDGE_LIMIT = 20;
-export const PERSONA_AUTHORED_IDLE_NUDGE_ID_MAX = 24;
+const PERSONA_AUTHORED_IDLE_NUDGE_ID_MAX = 24;
 export const PERSONA_AUTHORED_IDLE_NUDGE_ID_PATTERN = new RegExp(
   `^[A-Za-z0-9_-]{1,${PERSONA_AUTHORED_IDLE_NUDGE_ID_MAX}}$`,
 );

@@ -153,11 +153,14 @@ export default {
     },
 
     "voice-message": {
+      incompatible_upload_title: `Modelo de clone de voz necessário`,
+      incompatible_upload_description: `O áudio enviado em \`voice_sample\` precisa de um modelo compatível de \`TTS (Clone de Voz)\`. Escolha um em \`/config\` > Modelos > Trocar Modelos, ou em \`/personal config\` para seus próprios modelos. Para usar Design de Voz, remova o áudio e digite uma descrição em \`voice_design\`.`,
+      incompatible_design_title: `Modelo de design de voz necessário`,
+      incompatible_design_description: `Sua descrição em \`voice_design\` precisa de um modelo compatível de \`TTS (Design de Voz)\`. Escolha um em \`/config\` > Modelos > Trocar Modelos, ou em \`/personal config\` para seus próprios modelos. Para usar Clone de Voz, remova a descrição e anexe um áudio de referência em \`voice_sample\`.`,
       success_routing_field: `Roteamento de Fala`,
       routing_server: `Modelo de fala do servidor`,
       routing_personal: `Modelo de fala pessoal`,
       routing_server_fallback: `Modelo de fala do servidor após falha do provedor pessoal`,
-      incompatible_override_description: `Os modelos de fala selecionados não suportam sua referência enviada nem sua descrição digitada. Escolha um modelo compatível em /providers.`,
       description: `Fale uma mensagem com uma voz que você escolher`,
       persona_description: `Persona que fala a mensagem`,
       voice_sample_description: `Voz para clonar apenas nesta mensagem; nunca salva`,

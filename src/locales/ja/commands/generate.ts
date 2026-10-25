@@ -153,11 +153,14 @@ export default {
     },
 
     "voice-message": {
+      incompatible_upload_title: `ボイスクローン対応モデルが必要です`,
+      incompatible_upload_description: `\`voice_sample\`にアップロードした音声には、対応する\`TTS（ボイスクローン）\`モデルが必要です。\`/config\` > モデル > モデルを切り替えるで選択してください。個人のモデルは\`/personal config\`で選択できます。ボイスデザインを使う場合は、添付音声を削除し、\`voice_design\`に声の説明を入力してください。`,
+      incompatible_design_title: `ボイスデザイン対応モデルが必要です`,
+      incompatible_design_description: `\`voice_design\`に入力した説明には、対応する\`TTS（ボイスデザイン）\`モデルが必要です。\`/config\` > モデル > モデルを切り替えるで選択してください。個人のモデルは\`/personal config\`で選択できます。ボイスクローンを使う場合は、説明を削除し、\`voice_sample\`に参照音声を添付してください。`,
       success_routing_field: `音声のルーティング`,
       routing_server: `サーバーの音声モデル`,
       routing_personal: `個人の音声モデル`,
       routing_server_fallback: `個人のプロバイダーが失敗した後のサーバーの音声モデル`,
-      incompatible_override_description: `選択された音声モデルは、アップロードした参照や入力した声の説明に対応していません。/providers で対応するモデルを選んでください。`,
       description: `選んだ声でメッセージを読み上げます`,
       persona_description: `メッセージを読み上げるペルソナ`,
       voice_sample_description: `このメッセージ限りで複製する声。保存はされません`,

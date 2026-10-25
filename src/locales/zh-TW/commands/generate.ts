@@ -153,11 +153,14 @@ export default {
     },
 
     "voice-message": {
+      incompatible_upload_title: `需要語音複製模型`,
+      incompatible_upload_description: `你在\`voice_sample\`上傳的音訊需要相容的\`TTS（語音複製）\`模型。請在\`/config\` > 模型 > 切換模型中選擇，或在\`/personal config\`中選擇你自己的模型。要使用語音設計，請移除上傳的音訊，並在\`voice_design\`中輸入聲音描述。`,
+      incompatible_design_title: `需要語音設計模型`,
+      incompatible_design_description: `你在\`voice_design\`輸入的描述需要相容的\`TTS（語音設計）\`模型。請在\`/config\` > 模型 > 切換模型中選擇，或在\`/personal config\`中選擇你自己的模型。要使用語音複製，請清除描述，並在\`voice_sample\`中附上參考音訊。`,
       success_routing_field: `語音路由`,
       routing_server: `伺服器語音模型`,
       routing_personal: `個人語音模型`,
       routing_server_fallback: `個人供應商失敗後改用的伺服器語音模型`,
-      incompatible_override_description: `選取的語音模型不支援你上傳的參考或輸入的描述。請在 /providers 選擇相容的模型。`,
       description: `用你挑選的語音說出一則訊息`,
       persona_description: `說出這則訊息的人格`,
       voice_sample_description: `只在這則訊息複製的語音樣本，不會儲存`,
