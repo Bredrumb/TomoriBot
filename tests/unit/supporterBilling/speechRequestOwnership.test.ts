@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, spyOn } from "bun:test";
+import { beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import * as managedProvider from "@/modules/supporter-billing/runtime/managedProvider";
 import { SupporterRequestDeniedError } from "@/modules/supporter-billing/runtime/funding";
 import { getSupporterUsageContext } from "@/modules/supporter-billing/runtime/types";
@@ -6,6 +6,7 @@ import { speechModelSchema } from "@/types/db/schema";
 import type { SpeechTargetResult } from "@/utils/provider/speechEndpointResolver";
 import { synthesizeVoiceMessage } from "@/utils/speech/voiceMessageSynthesis";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { useEnvSandbox } from "../../helpers/env";
 import {
   captureUsageRecords,
   createServerFunding,
@@ -16,6 +17,11 @@ import {
 beforeAll(initializeLocalizer);
 
 describe("speech request ownership after preflight", () => {
+  useEnvSandbox(["RUN_ENV", "TOMORI_SUPPORTER_BILLING_ENABLED"]);
+  beforeEach(() => {
+    process.env.RUN_ENV = "production";
+    process.env.TOMORI_SUPPORTER_BILLING_ENABLED = "true";
+  });
   it("uses fresh preflight funding for a spend refusal and preserves unscoped credential refusals", async () => {
     const harness = installSpendHarness();
     const key = harness.register({ appliedLimit: 0, funding: createServerFunding({ capability: "voice" }) });
@@ -58,6 +64,14 @@ describe("speech request ownership after preflight", () => {
       resolve.mockRejectedValueOnce(refusal);
       const unavailable = await synthesizeVoiceMessage(request);
       expect(unavailable.requestDenied).toBe(refusal);
+      for (const changed of [
+        { apiKey: "rotated-key", funding: key.funding },
+        { apiKey: key.apiKey, funding: { ...key.funding, sponsorIdentityId: key.funding.sponsorIdentityId + 1 } },
+        { apiKey: key.apiKey, funding: { ...key.funding, modelCodename: "fixture/changed-voice" } },
+      ]) {
+        resolve.mockResolvedValueOnce(changed);
+        expect(await synthesizeVoiceMessage(request)).toMatchObject({ success: false, errorKind: "invalid_request" });
+      }
       await settleUsage();
       expect(fetch).not.toHaveBeenCalled();
       expect(usage.rows).toHaveLength(0);

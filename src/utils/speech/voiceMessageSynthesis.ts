@@ -1,4 +1,5 @@
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
+import { findProviderOption } from "@/utils/provider/providerOptionRegistry";
 import {
   findProviderRequestDeniedError,
   type ProviderRequestDeniedError,
@@ -48,11 +49,6 @@ import {
 } from "@/utils/audio/elevenLabsShared";
 import { ZodError } from "zod";
 import { ResponseSizeError } from "@/utils/security/boundedResponse";
-import { resolveSupporterCapabilityCredentials } from "@/modules/supporter-billing/runtime/managedProvider";
-import {
-  getSupporterFundingFromUsageContext,
-  getSupporterUsageContext,
-} from "@/modules/supporter-billing/runtime/types";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 
 /** Metric key recorded against the `audio_generated` stat. */
@@ -341,26 +337,33 @@ async function synthesizeHostedVoiceMessage(
       !!source.designPrompt.trim() &&
       source.designPrompt.length <= HOSTED_SPEECH_LIMITS.descriptionCharacters;
     let audio: Buffer;
-    const targetFunding = getSupporterFundingFromUsageContext(target.usageContext);
-    if (target.model.provider === "openrouter" && targetFunding) {
-      const credentials = await resolveSupporterCapabilityCredentials({
-        scope:
-          target.owner.kind === "personal"
-            ? { kind: "personal", userId: target.owner.ownerId }
-            : { kind: "server", serverId: target.owner.ownerId },
-        capability: "voice",
-        modelId: target.model.speech_model_id,
-      }).catch((error: unknown) => {
-        const denied = findProviderRequestDeniedError(error);
-        if (denied) usageContext = denied.usageContext;
-        throw error;
-      });
+    const option = findProviderOption(target.credentialProvider);
+    if (option || target.credentialProvider !== target.model.provider) {
+      const capability = target.model.voice_mode === "clone" ? "speech-clone" : "speech-design";
       if (
-        credentials.funding.sponsorIdentityId !== targetFunding.sponsorIdentityId ||
-        credentials.apiKey !== target.apiKey
+        !option?.capabilities.includes(capability) ||
+        !(await option.availability(target.owner)).eligible ||
+        !option.selection.resolveCredentials
       )
         throw new HostedSpeechError("invalid_request");
-      usageContext = getSupporterUsageContext(credentials.funding);
+      const credentials = await option.selection
+        .resolveCredentials({
+          scope: target.owner,
+          capability,
+          modelId: target.model.speech_model_id,
+          previous: {
+            apiKey: target.apiKey,
+            usageContext: target.usageContext,
+            savedProvider: target.credentialProvider,
+          },
+        })
+        .catch((error: unknown) => {
+          const denied = findProviderRequestDeniedError(error);
+          if (denied) usageContext = denied.usageContext;
+          throw error;
+        });
+      if (!credentials || credentials.apiKey !== target.apiKey) throw new HostedSpeechError("invalid_request");
+      usageContext = credentials.usageContext;
     }
     if (target.model.provider === "openrouter" && source.kind === "design") {
       if (!validDesign) throw new HostedSpeechError("invalid_request");

@@ -1,4 +1,5 @@
-import { beforeAll, afterEach, describe, expect, it, spyOn } from "bun:test";
+import { beforeAll, beforeEach, afterEach, describe, expect, it, spyOn } from "bun:test";
+import { useEnvSandbox } from "../../../helpers/env";
 import type { Client } from "discord.js";
 import { createLlmRow, createPersona } from "../../../helpers/fixtures";
 import { SupporterRequestDeniedError } from "@/modules/supporter-billing/runtime/funding";
@@ -396,6 +397,11 @@ function installVoiceHttp() {
 }
 
 describe("hosted speech usage recording", () => {
+  useEnvSandbox(["RUN_ENV", "TOMORI_SUPPORTER_BILLING_ENABLED"]);
+  beforeEach(() => {
+    process.env.RUN_ENV = "production";
+    process.env.TOMORI_SUPPORTER_BILLING_ENABLED = "true";
+  });
   it("records one usage row for a funded speech success", async () => {
     const funding = createServerFunding({ capability: "voice", modelCodename: VOICE_MODEL_CODENAME });
     const resolved = createResolvedCredentials(funding);

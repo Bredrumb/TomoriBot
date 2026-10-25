@@ -208,6 +208,10 @@ the request, and the exact catalog model ID. It returns an API key, its usage co
 a managed option can use an OpenRouter model without using the saved OpenRouter key. The callback
 resolves one chosen credential; callers own routing and fallback policy. Null means unavailable and
 must not cause the caller to try the catalog provider's key.
+Speech synthesis passes the admitted key and usage context as `previous` to the same callback.
+The option must revalidate that payer and credential, refusing a changed identity or key; a successful
+revalidation returns the current usage context. The dispatcher refuses a missing option, unavailable
+resolver, or changed key before sending audio.
 
 `resolveCapabilityCredentials` uses this callback for explicit option selections and for the active
 option owning a default capability. Default server resolution passes the loaded capability columns

@@ -152,6 +152,7 @@ export interface ProviderOptionDefinition {
       scope: ProviderOptionScope;
       capability: ProviderOptionCapability;
       modelId: number;
+      previous?: ProviderOptionCredentials;
     }): Promise<ProviderOptionCredentials | null>;
   };
   panel?: {

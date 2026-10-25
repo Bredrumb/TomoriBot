@@ -33,7 +33,10 @@ import {
   resolveSupporterCapabilityCredentials,
   validateSupporterModelRegistration,
 } from "@/modules/supporter-billing/runtime/managedProvider";
-import { getSupporterUsageContext } from "@/modules/supporter-billing/runtime/types";
+import {
+  getSupporterFundingFromUsageContext,
+  getSupporterUsageContext,
+} from "@/modules/supporter-billing/runtime/types";
 import { buildSubscriptionRouteId } from "@/modules/supporter-billing/subscribe/catalog";
 import {
   refreshSubscriptionMembership,
@@ -444,7 +447,7 @@ export const supporterProviderOption: ProviderOptionDefinition = {
     remove: removeSelection,
     owns: ownsCapability,
     validateModel,
-    resolveCredentials: async ({ scope, capability, modelId }) => {
+    resolveCredentials: async ({ scope, capability, modelId, previous }) => {
       if (!billingAvailable()) return null;
       const credentials = await resolveSupporterCapabilityCredentials({
         scope:
@@ -459,6 +462,19 @@ export const supporterProviderOption: ProviderOptionDefinition = {
               : capability,
         modelId,
       });
+      const admitted = getSupporterFundingFromUsageContext(previous?.usageContext);
+      if (
+        previous &&
+        (!admitted ||
+          credentials.apiKey !== previous.apiKey ||
+          credentials.funding.sponsorIdentityId !== admitted.sponsorIdentityId ||
+          credentials.funding.fundingScope !== admitted.fundingScope ||
+          credentials.funding.serverId !== admitted.serverId ||
+          credentials.funding.personalUserId !== admitted.personalUserId ||
+          credentials.funding.sponsorshipId !== admitted.sponsorshipId ||
+          credentials.funding.modelCodename !== admitted.modelCodename)
+      )
+        return null;
       return {
         apiKey: credentials.apiKey,
         usageContext: getSupporterUsageContext(credentials.funding),
