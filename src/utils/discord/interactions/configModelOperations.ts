@@ -1,4 +1,9 @@
-import { withProviderUsageContext } from "@/utils/provider/providerUsage";
+import {
+  createProviderUsageRecorder,
+  findProviderRequestDeniedError,
+  withProviderUsageContext,
+  type ProviderRequestDeniedError,
+} from "@/utils/provider/providerUsage";
 import { loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
 import { loadProviderModelChoices } from "@/utils/provider/modelCatalog";
 import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
@@ -280,6 +285,7 @@ type ConfigModelSetResult =
   | { status: "success"; modelName: string; reembedded: boolean; sourceChanged?: boolean }
   | { status: "already-selected"; modelName: string }
   | { status: "openrouter-moved" }
+  | { status: "provider-denied"; denied: ProviderRequestDeniedError }
   | { status: "not-found" | "no-models" | "write-failed" };
 
 type ConfigModelClearResult =
@@ -735,17 +741,31 @@ export const configModelOperations: ConfigModelOperations = {
       if (shouldReembed && isRagAvailable()) {
         const documentCount = await serverMemoryRepository.countDocuments(tomoriState.server_id);
         if (documentCount > 0) {
-          const credentials = await resolveCapabilityCredentials(tomoriState.server_id, "embedding");
+          let credentials: Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
+          try {
+            credentials = await resolveCapabilityCredentials(tomoriState.server_id, "embedding");
+          } catch (error) {
+            const denied = findProviderRequestDeniedError(error);
+            if (denied) return { status: "provider-denied", denied };
+            throw error;
+          }
           const limits = getMemoryLimits();
-          await withProviderUsageContext(credentials.usageContext, async () =>
-            ragRepository.reembedServerDocuments({
-              serverId: tomoriState.server_id,
-              embeddingModel: chosenModel,
-              apiKey: credentials.apiKey,
-              chunkSize: limits.documentChunkSize,
-              chunkOverlap: limits.documentChunkOverlap,
-            }),
-          );
+          try {
+            await withProviderUsageContext(credentials.usageContext, async () =>
+              ragRepository.reembedServerDocuments({
+                serverId: tomoriState.server_id,
+                embeddingModel: chosenModel,
+                apiKey: credentials.apiKey,
+                onUsage: createProviderUsageRecorder(credentials.usageContext, chosenModel.codename),
+                chunkSize: limits.documentChunkSize,
+                chunkOverlap: limits.documentChunkOverlap,
+              }),
+            );
+          } catch (error) {
+            const denied = findProviderRequestDeniedError(error, credentials.usageContext);
+            if (denied) return { status: "provider-denied", denied };
+            throw error;
+          }
           reembedded = true;
         }
       }

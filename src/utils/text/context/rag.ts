@@ -1,4 +1,4 @@
-import { withProviderUsageContext } from "@/utils/provider/providerUsage";
+import { createProviderUsageRecorder, withProviderUsageContext } from "@/utils/provider/providerUsage";
 import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
@@ -78,6 +78,7 @@ export async function buildServerDocumentContextItem(params: {
         query: queryText,
         embeddingModel,
         apiKey: creds.apiKey,
+        onUsage: createProviderUsageRecorder(creds.usageContext, embeddingModel.codename),
         maxResults: DOCUMENT_MAX_RESULTS,
         minSimilarity: DOCUMENT_MIN_SIMILARITY,
         channelIds: channelFilter,

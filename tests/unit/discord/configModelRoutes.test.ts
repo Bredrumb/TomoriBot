@@ -16,6 +16,13 @@ import * as ragAvailability from "@/utils/db/ragAvailability";
 import { ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import * as credentialResolver from "@/utils/provider/credentialResolver";
 import {
+  currentProviderUsageContext,
+  ProviderRequestDeniedError,
+  registerProviderUsageReporter,
+  type ProviderUsageReport,
+  withProviderUsageContext,
+} from "@/utils/provider/providerUsage";
+import {
   buildConfigRouteId,
   CONFIG_MODEL_CLEAR_VALUE,
   CONFIG_MODEL_PAGE_SIZE,
@@ -60,7 +67,7 @@ import {
   type ComponentsV2MessagePayload,
 } from "@/utils/discord/ui/componentsV2Limits";
 import { initializeLocalizer } from "@/utils/text/localizer";
-import { localizedCopy } from "../../helpers/localeCases";
+import { expectForEveryLocale, localizedCopy, localizedProse, RUNTIME_LOCALES } from "../../helpers/localeCases";
 import {
   createInteractionRecorder,
   createRouteInteraction,
@@ -1309,6 +1316,39 @@ describe("config models switch page", () => {
 });
 
 describe("config models capability writes", () => {
+  it("renders provider-owned denial copy on the acknowledged model route in every locale", async () => {
+    const denied = new ProviderRequestDeniedError(undefined, (locale) => ({
+      titleKey: "general.errors.api_key_error_title",
+      description: localizedCopy(locale, "general.errors.api_key_error_description"),
+    }));
+    const rendered = new Map<string, string>();
+    for (const locale of RUNTIME_LOCALES) {
+      const harness = makeHarness({
+        modelOperationsOverrides: { setCapabilityModel: async () => ({ status: "provider-denied", denied }) },
+      });
+      harness.selectValues[buildConfigModalFieldId("model_choice", "nonce1234567")] = "7";
+      await dispatch(
+        harness,
+        makeInteraction({
+          customId: buildConfigRouteId({
+            action: "model-modal-submit",
+            locale,
+            capability: "vision",
+            provider: "google",
+            nonce: "nonce1234567",
+          }),
+          kind: "modal",
+          harness,
+        }),
+      );
+      rendered.set(locale, JSON.stringify(harness.edits.at(-1)));
+    }
+    expectForEveryLocale((locale) => {
+      expect(rendered.get(locale)).toMatch(localizedProse(locale, "general.errors.api_key_error_description"));
+      expect(rendered.get(locale)).toContain(localizedCopy(locale, "general.errors.api_key_error_title"));
+    });
+  });
+
   it("rejects endpoint capabilities without model repository or cache writes", async () => {
     const providers = spyOn(llmProviderRepo, "loadSavedProviderConfigs").mockResolvedValue([]);
     const modelUpdate = spyOn(configRepository, "updateModelConfig").mockResolvedValue(true);
@@ -1543,10 +1583,26 @@ describe("config models capability writes", () => {
     const update = spyOn(configRepository, "updateModelConfig").mockResolvedValue(true);
     const ragAvailable = spyOn(ragAvailability, "isRagAvailable").mockReturnValue(true);
     const countDocuments = spyOn(serverMemoryRepository, "countDocuments").mockResolvedValue(4);
+    const context = {};
+    const otherContext = {};
+    const denied = new ProviderRequestDeniedError(context, (locale) => ({
+      titleKey: "general.errors.api_key_error_title",
+      description: localizedCopy(locale, "general.errors.api_key_error_description"),
+    }));
+    const reports: ProviderUsageReport[] = [];
+    const dispose = registerProviderUsageReporter((owner, report) => {
+      expect(owner).toBe(context);
+      reports.push(report);
+    });
     const credentials = spyOn(credentialResolver, "resolveCapabilityCredentials").mockResolvedValue({
       apiKey: "key",
+      usageContext: context,
     } as never);
-    const reembed = spyOn(ragRepository, "reembedServerDocuments").mockResolvedValue(undefined as never);
+    const reembed = spyOn(ragRepository, "reembedServerDocuments").mockImplementation(async (request) => {
+      expect(currentProviderUsageContext()).toBe(context);
+      request.onUsage?.({ inputTokens: 10, outputTokens: 0, costUsd: 0.01 });
+      request.onUsage?.({ inputTokens: 20, outputTokens: 0, costUsd: 0.02 });
+    });
 
     const result = await configModelOperations.setCapabilityModel({
       tomoriState: makeState({ config: { embedding_model_id: 2 } }),
@@ -1558,6 +1614,27 @@ describe("config models capability writes", () => {
 
     expect(result).toMatchObject({ status: "success", reembedded: true });
     expect(reembed).toHaveBeenCalledTimes(1);
+    expect(reports.map((report) => [report.inputTokens, report.costUsd])).toEqual([
+      [10, 0.01],
+      [20, 0.02],
+    ]);
+    const input = {
+      tomoriState: makeState({ config: { embedding_model_id: 2 } }),
+      serverDiscId: "guild-1",
+      capability: "embedding" as const,
+      provider: "google",
+      modelId: 3,
+    };
+    reembed.mockRejectedValue(new Error("wrapped", { cause: denied }));
+    expect(await withProviderUsageContext(otherContext, () => configModelOperations.setCapabilityModel(input))).toEqual(
+      { status: "provider-denied", denied },
+    );
+    const foreign = new ProviderRequestDeniedError(otherContext, denied.render);
+    reembed.mockRejectedValue(new Error("wrapped", { cause: foreign }));
+    await expect(configModelOperations.setCapabilityModel(input)).rejects.toMatchObject({ cause: foreign });
+    credentials.mockRejectedValue(new Error("wrapped", { cause: denied }));
+    expect(await configModelOperations.setCapabilityModel(input)).toEqual({ status: "provider-denied", denied });
+    dispose();
 
     for (const spy of [providers, embeddings, byId, update, ragAvailable, countDocuments, credentials, reembed]) {
       spy.mockRestore();

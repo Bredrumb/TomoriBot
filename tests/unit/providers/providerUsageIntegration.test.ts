@@ -1,9 +1,12 @@
 import * as realCrypto from "@/utils/security/crypto";
 import { stubGlobalFetch } from "../../helpers/fetchStub";
 import { OpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
-import { afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeAll, describe, expect, mock, spyOn, test } from "bun:test";
+import { llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
+import * as ragAvailability from "@/utils/db/ragAvailability";
+import { buildServerDocumentContextItem } from "@/utils/text/context/rag";
 import type { Client, EmbedBuilder, TextChannel } from "discord.js";
-import { savedProviderConfigSchema } from "@/types/db/schema";
+import { embeddingModelSchema, savedProviderConfigSchema } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
 import type { StreamProvider } from "@/types/stream/interfaces";
 import * as realCredentials from "@/utils/provider/credentialResolver";
@@ -140,6 +143,60 @@ afterEach(() => {
 });
 
 describe("provider usage and denial request integration", () => {
+  test("RAG query embeddings report once under their resolved owner and restore the outer request", async () => {
+    const reports: Array<{ context: ProviderUsageContext; report: ProviderUsageReport }> = [];
+    restores.push(
+      registerProviderUsageReporter((context, report) => {
+        reports.push({ context, report });
+      }),
+    );
+    const spies = [
+      spyOn(ragAvailability, "isRagAvailable").mockReturnValue(true),
+      spyOn(serverMemoryRepository, "hasDocumentInScope").mockResolvedValue(true),
+      spyOn(llmModelRepo, "loadEmbeddingModelById").mockResolvedValue(
+        embeddingModelSchema.parse({
+          embedding_model_id: 3,
+          provider: "openrouter",
+          codename: "fixture-embedding",
+          model_family: "fixture",
+        }),
+      ),
+      spyOn(ragRepository, "retrieveRelevantChunks").mockImplementation(async (request) => {
+        expect(currentProviderUsageContext()).toBe(firstContext);
+        request.onUsage?.({ inputTokens: 12, outputTokens: 0, costUsd: 0.01 });
+        return [];
+      }),
+      spyOn(ragRepository, "formatChunksForPrompt").mockReturnValue("fixture document"),
+    ];
+    for (const spy of spies) restores.push(() => spy.mockRestore());
+    await withProviderUsageContext(otherContext, async () => {
+      expect(
+        await buildServerDocumentContextItem({
+          tomoriState: createPersona({ config: { embedding_model_id: 3 } }),
+          simplifiedMessageHistory: [
+            {
+              id: "fixture",
+              authorId: "1",
+              authorName: "Juno",
+              authorType: "user",
+              content: "fixture query",
+              imageAttachments: [],
+              videoAttachments: [],
+            },
+          ],
+          channelId: "fixture-channel",
+        }),
+      ).not.toBeNull();
+      expect(currentProviderUsageContext()).toBe(otherContext);
+    });
+    expect(reports).toEqual([
+      {
+        context: firstContext,
+        report: { modelCodename: "fixture-embedding", inputTokens: 12, outputTokens: 0, costUsd: 0.01 },
+      },
+    ]);
+  });
+
   test("nested vision calls use their resolved owner and restore the initiating owner", async () => {
     await withProviderUsageContext(otherContext, async () => {
       for (const usageContext of [firstContext, undefined]) {

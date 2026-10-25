@@ -85,6 +85,7 @@ import { safeDownload } from "@/utils/security/safeDownload";
 import { log } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { localizer } from "@/utils/text/localizer";
+import { getProviderRequestFailureCopy, type ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 
 /** Routes that answer with a modal, which is its own acknowledgement and must not be deferred. */
 export const CONFIG_MODEL_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"]>([
@@ -137,6 +138,11 @@ function receipt(
   vars: Record<string, string | number> = {},
 ): PanelReceipt {
   return { tone, heading: localizer(locale, headingKey), detail: localizer(locale, detailKey, vars) };
+}
+
+function providerDeniedReceipt(locale: string, denied: ProviderRequestDeniedError): PanelReceipt {
+  const copy = getProviderRequestFailureCopy(denied, locale);
+  return { tone: "error", heading: localizer(locale, copy.titleKey), detail: copy.description };
 }
 
 function writeFailedReceipt(locale: string): PanelReceipt {
@@ -742,25 +748,27 @@ async function handleSwitchModels(context: ConfigModelRouteContext): Promise<boo
 
   await baseRepaint(context, "switch", {
     receipt:
-      result.status === "already-selected"
-        ? noChangesReceipt(locale, "commands.config.panel.model_already_selected_detail")
-        : result.status === "openrouter-moved"
-          ? receipt(
-              locale,
-              "warning",
-              "commands.config.panel.model_moved_heading",
-              "commands.config.panel.model_moved_detail",
-            )
-          : result.status === "no-models"
+      result.status === "provider-denied"
+        ? providerDeniedReceipt(locale, result.denied)
+        : result.status === "already-selected"
+          ? noChangesReceipt(locale, "commands.config.panel.model_already_selected_detail")
+          : result.status === "openrouter-moved"
             ? receipt(
                 locale,
-                "error",
-                "commands.model.text.no_models_title",
-                "commands.model.text.no_models_description",
+                "warning",
+                "commands.config.panel.model_moved_heading",
+                "commands.config.panel.model_moved_detail",
               )
-            : result.status === "not-found"
-              ? staleReceipt(locale)
-              : writeFailedReceipt(locale),
+            : result.status === "no-models"
+              ? receipt(
+                  locale,
+                  "error",
+                  "commands.model.text.no_models_title",
+                  "commands.model.text.no_models_description",
+                )
+              : result.status === "not-found"
+                ? staleReceipt(locale)
+                : writeFailedReceipt(locale),
   });
   return true;
 }

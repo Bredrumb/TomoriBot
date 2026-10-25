@@ -18,10 +18,11 @@ The contributor `buildServerDocumentContextItem` in `src/utils/text/context/rag.
    - Truncates query text to `DOCUMENT_QUERY_MAX_LENGTH` (1,000 characters). Queries shorter than `DOCUMENT_QUERY_MIN_LENGTH` (3 characters) return `null`.
 3. **Scope and credentials**:
    - Checks `serverMemoryRepository.hasDocumentInScope(serverId, personaId)`. If no documents exist for the persona or server, returns `null`.
-   - Resolves embedding credentials via `resolveCapabilityCredentials`, supporting server-wide keys or personal BYOK credentials.
+   - Resolves embedding credentials via `resolveCapabilityCredentials`, supporting server and personal providers, including registered managed options.
    - Loads the configured embedding model via `llmModelRepo.loadEmbeddingModelById`.
 4. **Vector retrieval**:
    - Calls `ragRepository.retrieveRelevantChunks` with a similarity threshold of `DOCUMENT_MIN_SIMILARITY` (0.5) and a result limit of `DOCUMENT_MAX_RESULTS` (6 chunks).
+   - Binds the resolved usage context and supplies `createProviderUsageRecorder` for each embedding response.
    - When `channel_memory_enabled` is true, retrieval filters by the active channel name.
 5. **Formatting and emission**:
    - `ragRepository.formatChunksForPrompt` formats matching chunks into document sections.
