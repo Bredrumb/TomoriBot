@@ -124,27 +124,28 @@ export async function getCachedPrivacyLevel(userDiscId: string): Promise<Privacy
  * @returns boolean indicating if user is blacklisted in this server
  */
 export async function getCachedBlacklistStatus(serverDiscId: string, userDiscId: string): Promise<boolean> {
-  const entry = await getOrCreateCacheEntry(userDiscId);
-
-  if (entry.blacklistStatus.has(serverDiscId)) {
-    blacklistCacheHits++;
-    // biome-ignore lint/style/noNonNullAssertion: has() check guarantees existence
-    return entry.blacklistStatus.get(serverDiscId)!;
-  }
-
-  blacklistCacheMisses++;
-
   try {
-    const isUserBlacklisted = await userRepository.isBlacklisted(serverDiscId, userDiscId);
-    entry.blacklistStatus.set(serverDiscId, isUserBlacklisted);
-    return isUserBlacklisted;
+    return await getCachedBlacklistStatusOrThrow(serverDiscId, userDiscId);
   } catch (error) {
-    // Treat the restriction as still in force, and do not record it: a moderation control that
-    // lifts itself on a database hiccup is not a control, but neither should an unreadable
-    // database pin a user as blacklisted once the database recovers.
+    // Unknown moderation status must block access without caching a blacklist entry.
     log.error(`[User Cache] Error checking blacklist for user ${userDiscId} in server ${serverDiscId}:`, error);
     return true;
   }
+}
+
+export async function getCachedBlacklistStatusOrThrow(serverDiscId: string, userDiscId: string): Promise<boolean> {
+  const entry = await getOrCreateCacheEntry(userDiscId);
+
+  const cachedStatus = entry.blacklistStatus.get(serverDiscId);
+  if (cachedStatus !== undefined) {
+    blacklistCacheHits++;
+    return cachedStatus;
+  }
+
+  blacklistCacheMisses++;
+  const isUserBlacklisted = await userRepository.isBlacklisted(serverDiscId, userDiscId);
+  entry.blacklistStatus.set(serverDiscId, isUserBlacklisted);
+  return isUserBlacklisted;
 }
 
 /**
