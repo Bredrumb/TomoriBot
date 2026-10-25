@@ -4,7 +4,7 @@ import type {
   ChatInputCommandInteraction,
   ComponentInContainerData,
 } from "discord.js";
-import type { FallbackModelRef, TomoriState } from "@/types/db/schema";
+import type { AssembledServerConfig, FallbackModelRef, TomoriState } from "@/types/db/schema";
 import type { PanelReceipt } from "@/types/discord/panel";
 import type { ProviderPanelCapability, ProviderPanelEntry } from "@/types/discord/providerPanel";
 import type { SetupDraftRecord } from "@/types/discord/setupWizard";
@@ -31,6 +31,7 @@ export interface ProviderOptionScope {
   ownerId: number;
   discordId?: string;
   state?: TomoriState | null;
+  modelConfig?: Partial<AssembledServerConfig> | null;
 }
 
 interface ProviderOptionAvailability {
