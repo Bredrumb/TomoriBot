@@ -157,7 +157,6 @@ export default {
       routing_server: `服务器语音模型`,
       routing_personal: `个人语音模型`,
       routing_server_fallback: `个人提供方失败后使用的服务器语音模型`,
-      incompatible_override_description: `所选的语音模型不支持你上传的参考或输入的描述。请在 /providers 选择兼容的模型。`,
       description: `用你挑选的声音说出一条消息`,
       persona_description: `说出这条消息的人格`,
       voice_sample_description: `只为这条消息克隆的声音，不会保存`,

@@ -157,7 +157,6 @@ export default {
       routing_server: `サーバーの音声モデル`,
       routing_personal: `個人の音声モデル`,
       routing_server_fallback: `個人のプロバイダーが失敗した後のサーバーの音声モデル`,
-      incompatible_override_description: `選択された音声モデルは、アップロードした参照や入力した声の説明に対応していません。/providers で対応するモデルを選んでください。`,
       description: `選んだ声でメッセージを読み上げます`,
       persona_description: `メッセージを読み上げるペルソナ`,
       voice_sample_description: `このメッセージ限りで複製する声。保存はされません`,

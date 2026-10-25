@@ -157,7 +157,6 @@ export default {
       routing_server: `Model giọng nói của máy chủ`,
       routing_personal: `Model giọng nói cá nhân`,
       routing_server_fallback: `Model giọng nói của máy chủ sau khi nhà cung cấp cá nhân gặp lỗi`,
-      incompatible_override_description: `Các model giọng nói đã chọn không hỗ trợ mẫu tham chiếu bạn tải lên hoặc mô tả bạn nhập. Hãy chọn model tương thích trong /providers.`,
       description: `Nói tin nhắn bằng giọng đọc bạn chọn`,
       persona_description: `Persona sẽ đọc tin nhắn`,
       voice_sample_description: `Giọng đọc mẫu để sao chép chỉ cho tin nhắn này; không bao giờ lưu lại`,

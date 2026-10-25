@@ -157,7 +157,6 @@ export default {
       routing_server: `Modelo de voz del servidor`,
       routing_personal: `Modelo de voz personal`,
       routing_server_fallback: `Modelo de voz del servidor tras una falla del proveedor personal`,
-      incompatible_override_description: `Los modelos de voz seleccionados no admiten tu referencia subida ni tu descripción escrita. Elige un modelo compatible en /providers.`,
       description: `Habla un mensaje con una voz que elijas`,
       persona_description: `Persona que habla el mensaje`,
       voice_sample_description: `Voz a clonar solo para este mensaje; nunca se guarda`,
