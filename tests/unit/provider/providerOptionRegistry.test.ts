@@ -51,6 +51,7 @@ import { expectForEveryLocale, localizedCopy, localizedProse } from "../../helpe
 import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 
 let personalOwner = "test-option";
+const deletedProviders: string[] = [];
 
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/cache/userCache": realUserCache,
@@ -71,6 +72,10 @@ scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
 scopedMock.module("@/utils/db/repositories/LlmProviderRepository", () => ({
   ...realLlmProviderRepository,
   llmProviderRepo: overrideMembers(realLlmProviderRepository.llmProviderRepo, {
+    deleteServerProviderRegistration: async (_serverId: number, provider: string) => {
+      deletedProviders.push(provider);
+      return true;
+    },
     loadUserSavedProviderConfigsResult: async () => ({
       status: "fresh" as const,
       configs: [TEST_VALUE, "openrouter"].map((provider) =>
@@ -329,7 +334,7 @@ function setupDraft(overrides: Partial<SetupDraftRecord> = {}): SetupDraftRecord
   };
 }
 
-function optionPanelEntry(): ProviderPanelEntry {
+function optionPanelEntry(): Extract<ProviderPanelEntry, { kind: "provider" }> {
   return {
     id: `provider:${TEST_VALUE}`,
     kind: "provider",
@@ -680,6 +685,23 @@ describe("provider option registry", () => {
 
     expect(result.status).toBe("success");
     expect(optionState.removed).toBe(1);
+  });
+
+  it("removes a catalog credential only when the option owns the active text model", async () => {
+    const { state: optionState } = registerTestOption();
+    deletedProviders.length = 0;
+    for (const owned of [false, true]) {
+      optionState.owned = owned ? ["text"] : [];
+      const result = await providerPanelOperations.removeServerProviderEntry({
+        scopeKind: "server",
+        serverDiscId: "guild-1",
+        state: state(),
+        entry: { ...optionPanelEntry(), id: "provider:openrouter", provider: "openrouter" },
+      });
+      expect(result.status).toBe(owned ? "success" : "active");
+      expect(deletedProviders).toEqual(owned ? ["openrouter"] : []);
+      expect(optionState.removed).toBe(0);
+    }
   });
 
   it("stores the option picked in setup and repaints its onboarding", async () => {

@@ -90,7 +90,8 @@ Callers report provider usage once per completed provider response, or pass
 reported cost, tokens, and provider request identity; they do not estimate missing charges. Job
 polling reports the final job identity once at the caller. A registered reporter owns persistence and
 deduplication. Reporting does not await storage, and reporter failures cannot fail inference.
-Without a reporter, reporting does nothing.
+Without a reporter, reporting does nothing. Document retrieval and re-embedding accept the same
+embedding `onUsage` callback; the caller supplies the recorder for each response.
 
 `ProviderRequestDeniedError` carries its context and a locale-dependent renderer. The renderer returns
 a title locale key and localized description, and accepts a flag for fallback notices. A registered
@@ -177,7 +178,9 @@ the option only while its `owns` answers for that capability, so the same model 
 provider and under the option stay distinct.
 `claimProviderModelSelection` records ownership after a successful selection write, and
 `clearProviderModelSelection` releases it when a slot is emptied. Built-in selections release the
-previous option's marker even when the new model comes from another catalog. The model-write
+previous option's marker even when the new model comes from another catalog. Removing a built-in
+server provider checks text ownership the same way, so a catalog provider whose models an option
+pays for is not reported as the active payer. The model-write
 wrapper runs `onWritten` after every successful model write, including failed or throwing ownership
 updates, so callers can invalidate cached state.
 
