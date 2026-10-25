@@ -78,6 +78,13 @@ and stream contexts. `ProviderUsageContext` is a branded interface that deployme
 through TypeScript declaration merging. Keep the same context object through a request: denial
 matching uses object identity, so a nested request cannot claim another request's refusal.
 
+`withProviderUsageContext(context, execute)` binds asynchronous work to its request owner.
+`currentProviderUsageContext()` exposes that owner to the transport admission callback. Bind every
+auxiliary operation explicitly, including an undefined context for an unfunded nested request; the
+outer owner is restored when it returns. The release consumer is
+`src/modules/supporter-billing/runtime/spendGuard.ts`, which uses the context to distinguish scopes
+that share a credential. Its context factory returns the same object for the same funding object.
+
 Callers report provider usage once per completed provider response, or pass
 `createProviderUsageRecorder(context, model)` as the provider's `onUsage` callback. Reports preserve
 reported cost, tokens, and provider request identity; they do not estimate missing charges. Job
@@ -97,7 +104,7 @@ state machine leave a notice to the retry owner rather than posting it before fa
 
 Commands and streams render `getProviderRequestFailureCopy`. Tools use
 `notifyProviderToolFailure`, which returns the description and posts the same notice to the channel.
-User impersonation returns the description without posting. Channel-send failures preserve the
+`isUserImpersonation` or `suppressFailureNotices` returns the description without posting. Channel-send failures preserve the
 returned tool error. `StreamingContext` copies usage context through `buildStreamContext` so stream
 error handling sees the same owner as its caller.
 
