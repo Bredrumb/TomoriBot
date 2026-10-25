@@ -190,11 +190,18 @@ Structured calls outside the persona's own turn (the pinned response reviewer an
 resolve their model through `resolveServerStructuredModel`
 (`src/utils/provider/serverStructuredOutput.ts`), which names the slot that pays: `reviewer`,
 `nudge-planner`, `nudge-checker`, or `text` when the call borrows the server's chat model. An option
-that owns that slot must supply the key through `selection.resolveServerCredentials`, together with
+that owns that slot must supply the key through `selection.resolveCredentials`, together with
 its usage context and optionally the saved row whose settings the call mirrors. An owning option that
 is unavailable or has no resolver leaves the call unavailable rather than falling back to the
 server's saved key, and a `ProviderRequestDeniedError` it throws reaches the caller. Each selection
 of a pinned slot claims or releases it like any other model write.
+
+`selection.resolveCredentials` accepts a personal or server scope, the capability whose slot owns
+the request, and the exact catalog model ID. It returns an API key, its usage context, and an optional
+`savedProvider` identifying the settings row. That saved provider can differ from `catalogProvider`:
+a managed option can use an OpenRouter model without using the saved OpenRouter key. The callback
+resolves one chosen credential; callers own routing and fallback policy. Null means unavailable and
+must not cause the caller to try the catalog provider's key.
 
 Deployment behavior maps onto these fields:
 
@@ -208,7 +215,7 @@ Deployment behavior maps onto these fields:
 | Capability ownership read, write, and clear | `selection.owns`, `selection.claim`, `selection.release` |
 | Model admission and refusal | `selection.validateModel` |
 | Payer-aware speech selection and registration | `selection.setSpeech` |
-| Credentials for server-pinned structured calls | `selection.resolveServerCredentials` |
+| Credentials for a selected scope, capability, and model | `selection.resolveCredentials` |
 | Removing the stored selection | `selection.remove` |
 | Panel entry, description, and removal copy | `copy.labelKey`, `copy.entryDescriptionKeys`, `copy.removeImpactKey` |
 | Panel select action and its copy | `copy.addActionLabelKey`, `copy.addActionDescriptionKeys`, `panel.handleAction` |
