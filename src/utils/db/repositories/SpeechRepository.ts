@@ -24,9 +24,9 @@ export interface HostedSpeechSelection {
   owner: OpenRouterModelScope;
   credentialId: number;
   credentialRevision: number;
+  credentialProvider: string;
   apiKey: Buffer | null;
   keyVersion: number;
-  subscription?: boolean;
 }
 
 export async function loadHostedSpeechSelection(
@@ -38,7 +38,7 @@ export async function loadHostedSpeechSelection(
   const capability = mode === "design" ? "speech_design" : "speech_clone";
   if (userId !== undefined) {
     const [row] = await sql`
-      SELECT m.*, c.user_saved_config_id AS credential_id, c.credential_revision, c.api_key, c.key_version,
+      SELECT m.*, c.provider AS credential_provider, c.user_saved_config_id AS credential_id, c.credential_revision, c.api_key, c.key_version,
         c.provider = 'supporter' AS subscription
       FROM user_saved_provider_configs c JOIN speech_models m
         ON m.speech_model_id = CASE WHEN ${mode} = 'design' THEN c.speech_design_model_id ELSE c.speech_clone_model_id END
@@ -54,14 +54,14 @@ export async function loadHostedSpeechSelection(
         owner: { kind: "personal", ownerId: userId },
         credentialId: row.credential_id,
         credentialRevision: row.credential_revision,
+        credentialProvider: row.credential_provider,
         apiKey: row.api_key,
         keyVersion: row.key_version,
-        subscription: row.subscription,
       };
     }
   }
   const [row] = await sql`
-    SELECT m.*, c.saved_config_id AS credential_id,
+    SELECT m.*, c.provider AS credential_provider, c.saved_config_id AS credential_id,
       c.credential_revision, c.api_key, c.key_version,
       ${capability} = ANY(selection.subscription_capabilities) AS subscription
     FROM server_speech_configs s JOIN speech_models m
@@ -79,9 +79,9 @@ export async function loadHostedSpeechSelection(
     owner: { kind: "server", ownerId: serverId },
     credentialId: row.credential_id,
     credentialRevision: row.credential_revision,
+    credentialProvider: row.credential_provider,
     apiKey: row.api_key,
     keyVersion: row.key_version,
-    subscription: row.subscription,
   };
 }
 

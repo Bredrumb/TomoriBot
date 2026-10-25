@@ -26,6 +26,7 @@ describe("speech request ownership after preflight", () => {
       owner: { kind: "server", ownerId: key.funding.serverId ?? 7 },
       credentialId: 11,
       credentialRevision: 1,
+      credentialProvider: "supporter",
       apiKey: key.apiKey,
       usageContext: getSupporterUsageContext(originalFunding),
       model: speechModelSchema.parse({

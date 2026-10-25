@@ -263,7 +263,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Invocation model selection", () => {
     const option: ProviderOptionDefinition = {
       value: "test-option",
       catalogProvider: "openrouter",
-      capabilities: ["text", "image", "video"],
+      capabilities: ["text", "image", "video", "speech-design", "speech-clone"],
       copy: {
         labelKey: "commands.providers.entry_kind_provider",
         entryDescriptionKeys: {
@@ -339,6 +339,31 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Invocation model selection", () => {
           await expect(
             resolveCapabilityCredentials(refs.serverId, capability, { userId: refs.userId, modelSelection: selected }),
           ).rejects.toBeInstanceOf(ProviderRequestDeniedError);
+          refuse = false;
+        }
+      }
+      const speech = await llmModelRepo.loadAvailableSpeechModels("openrouter", {
+        kind: "server",
+        ownerId: refs.serverId,
+      });
+      for (const source of ["server", "personal"] as const) {
+        for (const mode of ["design", "clone"] as const) {
+          const model = speech.find((entry) => entry.voice_mode === mode);
+          if (!model) throw new Error("Missing managed speech catalog fixture");
+          const selected = { source, provider: "test-option", kind: "speech" as const, modelId: model.speech_model_id };
+          const targets = await resolveSpeechTargets(refs.serverId, refs.userId, selected);
+          expect(targets[mode]).toMatchObject({
+            apiKey: `synthetic-managed-${source}`,
+            credentialProvider: "test-option",
+            model: { speech_model_id: model.speech_model_id },
+            owner: { kind: source, ownerId: source === "server" ? refs.serverId : refs.userId },
+          });
+          expect(targets[mode]?.kind === "hosted-model" && targets[mode].usageContext).toBe(contexts[source]);
+          expect(targets[mode === "design" ? "clone" : "design"]).toBeNull();
+          refuse = true;
+          await expect(resolveSpeechTargets(refs.serverId, refs.userId, selected)).rejects.toBeInstanceOf(
+            ProviderRequestDeniedError,
+          );
           refuse = false;
         }
       }

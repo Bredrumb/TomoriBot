@@ -216,9 +216,13 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("subscription capability ownership", () => 
   it("keeps both speech selections on their selected payer even when a BYOK key exists", async () => {
     const scope = { kind: "server" as const, ownerId: refs.serverId };
     expect(await setHostedSpeechSelection(scope, speechId, "clone", false, undefined, "supporter")).toBe(true);
-    expect((await loadHostedSpeechSelection(refs.serverId, "clone", undefined, true))?.subscription).toBe(true);
+    expect((await loadHostedSpeechSelection(refs.serverId, "clone", undefined, true))?.credentialProvider).toBe(
+      "supporter",
+    );
     expect(await setHostedSpeechSelection(scope, speechId, "clone", false, undefined, "openrouter")).toBe(true);
-    expect((await loadHostedSpeechSelection(refs.serverId, "clone", undefined, true))?.subscription).toBe(false);
+    expect((await loadHostedSpeechSelection(refs.serverId, "clone", undefined, true))?.credentialProvider).toBe(
+      "openrouter",
+    );
   });
 
   it("pays an explicitly chosen supporter speech model through the subscription instead of a stored key", async () => {
@@ -499,7 +503,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("subscription capability ownership", () => 
         WHERE server_id = ${refs.serverId} AND provider = 'openrouter'`;
     }
     expect((await configRepository.loadModelCapabilityIds(refs.serverId))?.subscription_capabilities).toContain("text");
-    expect((await loadHostedSpeechSelection(refs.serverId, "clone", undefined, true))?.subscription).toBe(true);
+    expect((await loadHostedSpeechSelection(refs.serverId, "clone", undefined, true))?.credentialProvider).toBe(
+      "supporter",
+    );
   });
 
   it("posts one quota refusal for a trigger that matched several personas", async () => {

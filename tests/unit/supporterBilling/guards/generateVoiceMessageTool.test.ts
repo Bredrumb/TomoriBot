@@ -17,6 +17,7 @@ const hostedTarget: realTargets.SpeechTargetResult = {
   owner: { kind: "server", ownerId: 1 },
   credentialId: 10,
   credentialRevision: 1,
+  credentialProvider: "supporter",
   apiKey: "synthetic-key",
   model: speechModelSchema.parse({
     speech_model_id: 2,

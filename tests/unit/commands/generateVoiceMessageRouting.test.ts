@@ -66,6 +66,7 @@ function hostedTarget(mode: "design" | "clone", personal = false): realTargets.S
     owner: { kind: personal ? "personal" : "server", ownerId: 1 },
     credentialId: 10,
     credentialRevision: 1,
+    credentialProvider: mode === "design" ? "google" : "openrouter",
     apiKey: "synthetic-key",
     model: speechModelSchema.parse({
       speech_model_id: mode === "design" ? 1 : 2,

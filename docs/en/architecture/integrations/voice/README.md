@@ -115,8 +115,11 @@ ElevenLabs, and admitted Fish models. Hosted rows are never `auto`, so a hosted 
 Transcription continues to use `is_default`.
 
 `speechEndpointResolver.ts` returns a discriminated hosted-model or custom-endpoint target with its
-credential owner. BYOK hosted credentials come from that model's provider snapshot; custom endpoint keys
-remain connection-bound. Personal `speech_design` and `speech_clone` assignments override their server
+credential owner. Explicit and default hosted targets share credential acquisition: built-in providers
+decrypt their saved snapshot, while a registered provider option resolves its selected scope and
+model through `selection.resolveCredentials`. The saved credential provider stays separate from the
+catalog provider, so a managed target can have a null stored key. Custom endpoint keys remain
+connection-bound. Personal `speech_design` and `speech_clone` assignments override their server
 slots independently when enabled. Disabling one mode preserves its saved model and owner, while
 resolution inherits the server target for that mode. Personal local endpoints are unsupported.
 
@@ -151,7 +154,7 @@ is unavailable, the other usable pair wins. Existing Auto personas with a sample
 The command puts an uploaded reference first, then a typed description, then saved sources in persona
 priority order. Its source selection applies only to that invocation. Submission rechecks the target
 and saved source; stale forms require a new invocation. Revalidation includes target kind, model
-identity, provider, credential owner, credential revision, and a hash of the resolved credential. Tool assembly records the selected
+identity, catalog and credential providers, credential owner, credential revision, and a hash of the resolved credential. Tool assembly records the selected
 source and target identity in the turn context; execution checks them against fresh selections and
 persona state before synthesis. Delivery direction and expressiveness apply
 to the selected target. Neither caller retries synthesis through the other slot after a failure.

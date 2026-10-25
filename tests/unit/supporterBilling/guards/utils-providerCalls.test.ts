@@ -339,6 +339,7 @@ function createVoiceTarget(
     owner: { kind: "server", ownerId: 7 },
     credentialId: 11,
     credentialRevision: 1,
+    credentialProvider: funding ? "supporter" : "openrouter",
     apiKey,
     ...fundingContext(funding),
     model: speechModelSchema.parse({

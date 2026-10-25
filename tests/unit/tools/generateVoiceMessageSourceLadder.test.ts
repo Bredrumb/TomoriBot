@@ -46,6 +46,7 @@ function hostedTarget(mode: "design" | "clone"): realSpeechEndpointResolver.Spee
     owner: { kind: mode === "design" ? "personal" : "server", ownerId: 1 },
     credentialId: 12,
     credentialRevision: 1,
+    credentialProvider: mode === "design" ? "google" : "openrouter",
     apiKey: "synthetic-key",
     model: speechModelSchema.parse({
       speech_model_id: 1,
