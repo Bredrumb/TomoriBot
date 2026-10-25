@@ -127,6 +127,17 @@ export async function callDecisionsForProvider(request: DecisionExecutionRequest
     if (requestedOwner && !owner)
       return { status: "unavailable", reason: "not-owned", correlationId, errorLogged: false };
     if (owner) {
+      const registered = await llmModelRepo.loadDecisionModelOptions(request.scope, [owner.catalogProvider]);
+      if (
+        !registered.some(
+          (option) =>
+            option.reference.provider === reference.provider &&
+            option.reference.modelId === reference.modelId &&
+            option.reference.registrationId === reference.registrationId &&
+            option.reference.customEndpointId === reference.customEndpointId,
+        )
+      )
+        return { status: "unavailable", reason: "not-owned", correlationId, errorLogged: false };
       if (
         owner.catalogProvider !== reference.provider ||
         !(await owner.availability(request.scope)).eligible ||
