@@ -1,5 +1,11 @@
 import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
-import { ComponentType } from "discord.js";
+import {
+  ApplicationCommandOptionType,
+  ComponentType,
+  type MediaGalleryComponentData,
+  SlashCommandSubcommandBuilder,
+} from "discord.js";
+import { configureSubcommand, execute as executeSearchCommand } from "@/commands/booru/search";
 import {
   buildDanbooruTagCard,
   DanbooruGetPostTool,
@@ -39,13 +45,16 @@ import {
 import type { ToolContext } from "@/types/tool/interfaces";
 import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 import { buildDanbooruGalleryPayload } from "@/utils/discord/danbooruGalleryMessage";
+import type { ComponentsV2MessagePayload } from "@/utils/discord/ui/componentsV2Limits";
 import { buildNoticeContainer } from "@/utils/discord/ui/statusComponents";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { stubGlobalFetch } from "../../helpers/fetchStub";
-import { createPersona } from "../../helpers/fixtures";
+import { makeFakeInteraction } from "../../helpers/fakeInteraction";
+import { createPersona, createUserRow } from "../../helpers/fixtures";
 import { expectForEveryLocale, localizedCopy } from "../../helpers/localeCases";
 import { stubLogMembers } from "../../helpers/mockSurface";
+import { expectSafePanelPayload } from "../../helpers/panelLimits";
 
 stubLogMembers({ info: () => undefined, warn: () => undefined, metric: () => undefined });
 
@@ -466,7 +475,7 @@ describe("Danbooru post filtering", () => {
 });
 
 describe("Danbooru gallery", () => {
-  it("spoilers every image rated above general and leaves general images open", async () => {
+  it("spoilers questionable and explicit images and leaves general and sensitive images open", async () => {
     const [base] = await posts();
     const images = (["g", "s", "q", "e"] as const).map((rating, index) => ({
       post: { ...base, id: index + 1, rating },
@@ -477,7 +486,7 @@ describe("Danbooru gallery", () => {
       (component) => "type" in component && component.type === ComponentType.MediaGallery,
     ) as { items: Array<{ spoiler?: boolean }> } | undefined;
 
-    expect(gallery?.items.map((item) => item.spoiler)).toEqual([false, true, true, true]);
+    expect(gallery?.items.map((item) => item.spoiler)).toEqual([false, false, true, true]);
   });
 
   it("shows what was typed beside a tag that resolution changed, and only there", async () => {
@@ -496,6 +505,55 @@ describe("Danbooru gallery", () => {
       tag: "reisalin stout",
     });
     expect(footer?.content).toContain(`${resolved}, \`swimsuit\``);
+  });
+});
+
+describe("/booru search image count", () => {
+  it("registers an optional integer bounded by one Discord gallery", () => {
+    const command = configureSubcommand(new SlashCommandSubcommandBuilder()).toJSON();
+    const count = command.options?.find((option) => option.name === "count");
+
+    expect(count).toMatchObject({
+      type: ApplicationCommandOptionType.Integer,
+      required: false,
+      min_value: 1,
+      max_value: 10,
+    });
+  });
+
+  it.each([
+    { count: null, available: 12, expected: 4 },
+    { count: 1, available: 12, expected: 1 },
+    { count: 7, available: 12, expected: 7 },
+    { count: 10, available: 12, expected: 10 },
+    { count: 10, available: 2, expected: 2 },
+  ])("posts $expected images for count=$count with $available matches", async ({ count, available, expected }) => {
+    const candidates = (await posts()).slice(0, available);
+    fetchSpy = stubGlobalFetch(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/autocomplete.json") return Response.json(await autocomplete("ryza"));
+      return Response.json(candidates);
+    });
+    const { interaction, calls } = makeFakeInteraction({
+      channel: guildChannel(false),
+      options: {
+        getString: (name) => (name === "tag" ? "ryza" : null),
+        getInteger: () => count,
+        getBoolean: () => null,
+      },
+    });
+
+    await executeSearchCommand({} as never, interaction as never, createUserRow(), "en-US");
+
+    expect(calls.map(({ method }) => method)).toEqual(["deferReply", "editReply"]);
+    const payload = calls.find(({ method }) => method === "editReply")?.args[0] as ComponentsV2MessagePayload;
+    const gallery = payload.components.find(
+      (component) => "type" in component && component.type === ComponentType.MediaGallery,
+    ) as MediaGalleryComponentData;
+    expect(gallery.items).toHaveLength(expected);
+    expect(gallery.items.every(({ spoiler }) => spoiler === false)).toBe(true);
+    expect(new Set(gallery.items.map(({ media }) => media.url)).size).toBe(expected);
+    expectSafePanelPayload(payload, `/booru search count=${count}`);
   });
 });
 

@@ -24,6 +24,10 @@ import {
 import { resolveDanbooruTag, suggestDanbooruTags } from "@/tools/restAPIs/danbooru/tagLookup";
 import type { UserRow } from "@/types/db/schema";
 import { buildDanbooruGalleryPayload } from "@/utils/discord/danbooruGalleryMessage";
+import {
+  DISCORD_MEDIA_GALLERY_ITEMS_MAX,
+  DISCORD_MEDIA_GALLERY_ITEMS_MIN,
+} from "@/utils/discord/ui/componentsV2Limits";
 import { replyInfoEmbed, safeSelectOptionText } from "@/utils/discord/ui/interactionCore";
 import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
@@ -63,6 +67,14 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
           { name: localizer("en-US", "commands.booru.search.questionable_option"), value: "questionable" },
           { name: localizer("en-US", "commands.booru.search.explicit_option"), value: "explicit" },
         ),
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName("count")
+        .setDescription(localizer("en-US", "commands.booru.search.count_description"))
+        .setRequired(false)
+        .setMinValue(DISCORD_MEDIA_GALLERY_ITEMS_MIN)
+        .setMaxValue(DISCORD_MEDIA_GALLERY_ITEMS_MAX),
     );
 
 function ratingsForChoice(choice: string | null): readonly DanbooruRating[] {
@@ -159,7 +171,7 @@ export async function execute(
   const search = await searchDanbooruPosts(
     pairs.map(({ tag }) => toDanbooruTag(tag)),
     ratings,
-    MAX_POSTED_IMAGES,
+    interaction.options.getInteger("count") ?? MAX_POSTED_IMAGES,
   );
   if (!search.ok) {
     await replyFailure(search.failure);

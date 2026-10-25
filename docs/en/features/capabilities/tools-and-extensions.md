@@ -124,7 +124,7 @@ under `/config` > Behavior > Notices like any other notice.
 The same toggle lets her share existing art and read a post's tags:
 
 - Asked to show art of something, she posts up to 4 random well-rated Danbooru images in one
-  message, with a link to each post. Every image rated above general is spoilered. Danbooru allows
+  message, with a link to each post. Questionable and explicit images are spoilered. Danbooru allows
   only 2 tags per search, so she picks the most specific ones, usually the character or series.
 - Given a Danbooru post ID or `danbooru.donmai.us/posts/` link, she reads its tags grouped into
   character, series, artist, meta, and general.
@@ -135,6 +135,8 @@ An image generation request also offers the tag lookup, so she can check a chara
 
 Anyone can also run `/booru search` to get the same gallery without asking her. It suggests tags as
 you type and turns a nickname or typo into the real tag, and the footer shows what it searched for.
+The optional `count` sets how many images to send, from 1 to 10 (default: 4). If fewer posts match,
+it sends the available results.
 The toggle only controls her tools, not the command; to limit who can run `/booru search`, use
 Discord's **Server Settings > Integrations**.
 
