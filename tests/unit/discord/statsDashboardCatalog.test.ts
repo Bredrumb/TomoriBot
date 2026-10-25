@@ -4,6 +4,7 @@ import {
   buildStatsDashboardButtonId,
   buildStatsDashboardRouteId,
   parseStatsDashboardRoute,
+  type StatsDashboardRoute,
   STATS_ROUTE_NAMESPACE,
   STATS_ROUTE_VERSION,
 } from "@/utils/discord/statsDashboardCatalog";
@@ -37,7 +38,7 @@ describe("stats dashboard route catalog", () => {
         serverId: 9,
         timeframe: "all_time" as const,
         scope: "this_server" as const,
-        tab: "people" as const,
+        tab: "personas" as const,
       },
       {
         view: "persona" as const,
@@ -130,5 +131,22 @@ describe("stats dashboard route catalog", () => {
     expect(buildStatsDashboardButtonId(context, "models")).toBe(
       buildStatsDashboardRouteId({ ...context, tab: "models" }),
     );
+  });
+
+  it("rejects tabs belonging to another dashboard view", () => {
+    const common = { locale: "en-US", ownerId, serverId: 9, timeframe: "all_time" as const };
+    const cases: { route: StatsDashboardRoute; invalidTabs: string[] }[] = [
+      { route: { ...common, view: "personal", scope: "global", tab: "overview" }, invalidTabs: ["people"] },
+      { route: { ...common, view: "persona", personaId: 42, tab: "overview" }, invalidTabs: ["personas", "tools"] },
+      { route: { ...common, view: "server", tab: "overview" }, invalidTabs: ["people", "personas"] },
+    ];
+    for (const { route, invalidTabs } of cases) {
+      for (const invalidTab of invalidTabs) {
+        expect(() => buildStatsDashboardButtonId(route, invalidTab)).toThrow();
+        const customId = buildStatsDashboardRouteId(route).replace(/:overview$/, `:${invalidTab}`);
+        const parsed = parseInteractionRoute(customId);
+        expect(parsed ? parseStatsDashboardRoute(parsed) : null).toBeNull();
+      }
+    }
   });
 });

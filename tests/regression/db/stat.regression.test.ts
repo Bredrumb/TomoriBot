@@ -9,6 +9,19 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { statRepository, userRepository } from "@/utils/db/repositories";
+import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
+import { buildStatsDashboardButtonId, parseStatsDashboardRoute } from "@/utils/discord/statsDashboardCatalog";
+import {
+  buildPersonalTabs,
+  buildPersonaTabs,
+  buildServerTabs,
+  buildStatsDashboardPayload,
+  resolveWindowFrom,
+  type StatsDashboardViewContext,
+  TIMEFRAME_VALUES,
+} from "@/utils/stats/statsDashboard";
+import { initializeLocalizer } from "@/utils/text/localizer";
+import { collectCaseFailures } from "../../helpers/localeCases";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
@@ -80,6 +93,55 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     });
     await statRepository.flush();
     expect(await readCount("message_sent", "", lineageA, refs.userId)).toBe(1);
+  });
+
+  it("renders actual dashboard tabs with round-trippable routes for every view and timeframe", async () => {
+    await initializeLocalizer();
+    const cases = collectCaseFailures();
+    for (const timeframe of TIMEFRAME_VALUES) {
+      const common = {
+        locale: "en-US",
+        ownerId: "123456789012345678",
+        serverId: refs.serverId,
+        guildId: FIXTURE_IDS.serverDiscId,
+        timeframe,
+      };
+      const contexts: StatsDashboardViewContext[] = [
+        { ...common, view: "personal", scope: "this_server" },
+        { ...common, view: "personal", scope: "global" },
+        { ...common, view: "persona", personaId: refs.personaId },
+        { ...common, view: "server" },
+      ];
+      const args = { ...common, from: resolveWindowFrom(timeframe), subtitle: "Stats" };
+      for (const context of contexts) {
+        const tabs =
+          context.view === "personal"
+            ? await buildPersonalTabs({
+                ...args,
+                userId: refs.userId,
+                userDiscId: FIXTURE_IDS.userDiscId,
+                scopeServerId: context.scope === "this_server" ? refs.serverId : undefined,
+              })
+            : context.view === "persona"
+              ? await buildPersonaTabs({ ...args, lineageId: lineageA, personaName: "Mirri" })
+              : await buildServerTabs(args);
+        expect(tabs.length).toBeGreaterThan(0);
+        for (const [activeIndex, tab] of tabs.entries()) {
+          const scope = context.view === "personal" ? context.scope : context.view;
+          cases.check(`${context.view}/${scope}/${timeframe}/${tab.id}`, () => {
+            const payload = buildStatsDashboardPayload(context, tabs, activeIndex, true);
+            const customId = buildStatsDashboardButtonId(context, tab.id);
+            const parsed = parseInteractionRoute(customId);
+            expect(parsed ? parseStatsDashboardRoute(parsed) : null).toMatchObject({
+              view: context.view,
+              tab: tab.id,
+            });
+            expect(JSON.stringify(payload)).toContain(customId);
+          });
+        }
+      }
+    }
+    cases.expectNoFailures();
   });
 
   it("restores unique guild participants from successful turns while excluding command-only activity and DMs", async () => {
