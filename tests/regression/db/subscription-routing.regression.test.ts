@@ -14,10 +14,12 @@ import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { configRepository, llmModelRepo, llmProviderRepo, personaRepository } from "@/utils/db/repositories";
 import { loadHostedSpeechSelection, setHostedSpeechSelection } from "@/utils/db/repositories/SpeechRepository";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import * as generationModels from "@/utils/provider/generationModels";
+import { resolveSpeechTargets } from "@/utils/provider/speechEndpointResolver";
 import { encryptApiKey } from "@/utils/security/crypto";
 import { initializeDatabase } from "@/utils/db/initializeDatabase";
 import * as managed from "@/modules/supporter-billing/runtime/managedProvider";
-import type { SupporterFundingContext } from "@/modules/supporter-billing/runtime/types";
+import { getSupporterUsageContext, type SupporterFundingContext } from "@/modules/supporter-billing/runtime/types";
 import { SupporterRequestDeniedError } from "@/modules/supporter-billing/runtime/funding";
 import { useEnvSandbox } from "../../helpers/env";
 import { cleanupFixtures, insertFixtures, type FixtureRefs, FIXTURE_IDS } from "./setup/fixtures";
@@ -217,6 +219,51 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("subscription capability ownership", () => 
     expect((await loadHostedSpeechSelection(refs.serverId, "clone", undefined, true))?.subscription).toBe(true);
     expect(await setHostedSpeechSelection(scope, speechId, "clone", false, undefined, "openrouter")).toBe(true);
     expect((await loadHostedSpeechSelection(refs.serverId, "clone", undefined, true))?.subscription).toBe(false);
+  });
+
+  it("pays an explicitly chosen supporter speech model through the subscription instead of a stored key", async () => {
+    process.env.RUN_ENV = "production";
+    process.env.TOMORI_SUPPORTER_BILLING_ENABLED = "true";
+    const funding: SupporterFundingContext = {
+      credentialSource: "supporter",
+      fundingScope: "server",
+      capability: "voice",
+      provider: "openrouter",
+      modelCodename: "_rt/subscription-speech",
+      tierKey: "synthetic",
+      sponsorshipId: 1,
+      serverId: refs.serverId,
+      personalUserId: null,
+      sponsorIdentityId: 1,
+      sponsorDiscordUserId: "_rt_sponsor",
+      entitlementId: 1,
+      renewalAt: null,
+    };
+    const selection = { source: "server", kind: "speech", provider: "supporter", modelId: speechId } as const;
+    const validate = spyOn(generationModels, "validateGenerationModelSelection").mockResolvedValue({
+      ...selection,
+      name: "_rt/subscription-speech",
+    });
+    const resolve = spyOn(managed, "resolveSupporterCapabilityCredentials").mockResolvedValue({
+      apiKey: "synthetic-supporter-key",
+      funding,
+    });
+    try {
+      const targets = await resolveSpeechTargets(refs.serverId, undefined, selection);
+      expect(resolve).toHaveBeenCalledWith({
+        scope: { kind: "server", serverId: refs.serverId },
+        capability: "voice",
+        modelId: speechId,
+      });
+      expect(targets.clone).toMatchObject({
+        kind: "hosted-model",
+        apiKey: "synthetic-supporter-key",
+        usageContext: getSupporterUsageContext(funding),
+      });
+    } finally {
+      resolve.mockRestore();
+      validate.mockRestore();
+    }
   });
 
   it("admits and consumes server-funded quota once while personal subscription routes stay outside it", async () => {

@@ -6,7 +6,7 @@ import { loadHostedSpeechSelection, type HostedSpeechSelection } from "@/utils/d
 import { log } from "@/utils/misc/logger";
 import { buildCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { decryptApiKey } from "@/utils/security/crypto";
-import { isSupporterBillingEnabled } from "@/modules/supporter-billing/config";
+import { isSupporterBillingEnabled, SUPPORTER_PROVIDER_VALUE } from "@/modules/supporter-billing/config";
 import { resolveEnvironment } from "@/types/config";
 import { resolveSupporterCapabilityCredentials } from "@/modules/supporter-billing/runtime/managedProvider";
 import { getSupporterUsageContext } from "@/modules/supporter-billing/runtime/types";
@@ -173,12 +173,25 @@ export async function resolveSpeechTargets(
       target = { kind: "custom-endpoint", endpoint, apiKey, owner: { kind: "server", ownerId: serverId } };
     } else {
       const model = await llmModelRepo.loadSpeechModelById(modelSelection.modelId);
-      if (!model || !saved?.api_key) throw new GenerationModelUnavailableError();
-      const apiKey = await decryptApiKey(saved.api_key, saved.key_version);
-      if (!apiKey) throw new GenerationModelUnavailableError();
+      if (!model || !saved) throw new GenerationModelUnavailableError();
       const personal = "user_id" in saved;
       const credentialId = personal ? saved.user_saved_config_id : saved.saved_config_id;
       if (credentialId === undefined) throw new GenerationModelUnavailableError();
+      let apiKey: string | null;
+      let usageContext: ProviderUsageContext | undefined;
+      if (modelSelection.provider === SUPPORTER_PROVIDER_VALUE) {
+        if (!isSupporterBillingEnabled(resolveEnvironment())) throw new GenerationModelUnavailableError();
+        const credentials = await resolveSupporterCapabilityCredentials({
+          scope: personal ? { kind: "personal", userId: saved.user_id } : { kind: "server", serverId },
+          capability: "voice",
+          modelId: model.speech_model_id,
+        });
+        apiKey = credentials.apiKey;
+        usageContext = getSupporterUsageContext(credentials.funding);
+      } else {
+        apiKey = saved.api_key ? await decryptApiKey(saved.api_key, saved.key_version) : null;
+      }
+      if (!apiKey) throw new GenerationModelUnavailableError();
       target = {
         kind: "hosted-model",
         endpoint: null,
@@ -187,6 +200,7 @@ export async function resolveSpeechTargets(
         owner: personal ? { kind: "personal", ownerId: saved.user_id } : { kind: "server", ownerId: serverId },
         credentialId,
         credentialRevision: saved.credential_revision,
+        ...(usageContext ? { usageContext } : {}),
       };
     }
     const source = speechTargetSource(target);
