@@ -195,7 +195,9 @@ async function setFunded(
 function ownsCapability(scope: ProviderOptionScope, capability: ProviderOptionCapability): boolean {
   const marker = FUNDED_MARKERS[capability];
   return (
-    scope.kind === "server" && !!marker && (scope.state?.config.subscription_capabilities.includes(marker) ?? false)
+    scope.kind === "server" &&
+    !!marker &&
+    ((scope.modelConfig ?? scope.state?.config)?.subscription_capabilities?.includes(marker) ?? false)
   );
 }
 

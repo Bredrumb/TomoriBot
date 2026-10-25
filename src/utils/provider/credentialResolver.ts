@@ -2,7 +2,6 @@ import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 import { findProviderRequestDeniedError, getProviderRequestFailureCopy } from "@/utils/provider/providerUsage";
 import type {
   LlmRow,
-  SubscriptionCapability,
   CustomEndpointRow,
   PersonalProviderCapability,
   SavedProviderConfigRow,
@@ -20,13 +19,17 @@ import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import { getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 import { isSupporterBillingEnabled, SUPPORTER_PROVIDER_VALUE } from "@/modules/supporter-billing/config";
 import { resolveEnvironment } from "@/types/config";
-import { resolveSupporterCapabilityCredentials } from "@/modules/supporter-billing/runtime/managedProvider";
 import type { SupporterFundingContext } from "@/modules/supporter-billing/runtime/types";
-import { getSupporterUsageContext } from "@/modules/supporter-billing/runtime/types";
+import { getSupporterFundingFromUsageContext } from "@/modules/supporter-billing/runtime/types";
 import { SupporterRequestDeniedError } from "@/modules/supporter-billing/runtime/funding";
 import { localizer } from "@/utils/text/localizer";
 import type { GenerationModelSelection } from "@/types/provider/generationModels";
 import { GenerationModelUnavailableError, validateGenerationModelSelection } from "@/utils/provider/generationModels";
+import {
+  findProviderOption,
+  findProviderOptionByActiveProvider,
+  providerOptionCapabilityForPersonal,
+} from "@/utils/provider/providerOptionRegistry";
 
 export type Capability = "text" | "embedding" | "image-standard" | "image-nai" | "video" | "vision";
 
@@ -286,7 +289,7 @@ async function resolveProviderForCapability(
   }
 }
 
-async function decryptResolvedApiKey(
+async function resolveSavedCredentials(
   savedConfig: SavedProviderConfigRow | UserSavedProviderConfigRow,
   provider: string,
   capability: Capability,
@@ -294,28 +297,39 @@ async function decryptResolvedApiKey(
   contextLabel: string,
   activeModelId?: number | null,
 ): Promise<ResolvedCredentials> {
-  if (provider === SUPPORTER_PROVIDER_VALUE) {
+  const option = findProviderOption(provider);
+  if (option) {
     const modelId = activeModelId ?? getCapabilityModelId(savedConfig, capability);
-    if (!modelId || capability === "image-nai" || !isSupporterBillingEnabled(resolveEnvironment())) {
+    const optionCapability = providerOptionCapabilityForPersonal(mapCapabilityToPersonalCapability(capability));
+    const scope = {
+      kind: source,
+      ownerId: "user_id" in savedConfig ? savedConfig.user_id : savedConfig.server_id,
+    };
+    if (
+      modelId === null ||
+      optionCapability === null ||
+      !option.capabilities.includes(optionCapability) ||
+      !(await option.availability(scope)).eligible ||
+      !option.selection.resolveCredentials
+    )
       throw new CredentialUnavailableError(provider, capability, "no_saved_config", source);
-    }
-    const credentials = await resolveSupporterCapabilityCredentials({
-      scope:
-        "user_id" in savedConfig
-          ? { kind: "personal", userId: savedConfig.user_id }
-          : { kind: "server", serverId: savedConfig.server_id },
-      capability: capability === "image-standard" ? "image" : capability,
-      modelId,
-    });
+    const credentials = await option.selection.resolveCredentials({ scope, capability: optionCapability, modelId });
+    if (!credentials) throw new CredentialUnavailableError(provider, capability, "no_saved_config", source);
+    const settings = credentials.savedProvider
+      ? source === "personal"
+        ? await llmProviderRepo.loadUserSavedProviderConfig(scope.ownerId, credentials.savedProvider)
+        : await llmProviderRepo.loadSavedProviderConfig(scope.ownerId, credentials.savedProvider)
+      : savedConfig;
+    if (!settings) throw new CredentialUnavailableError(provider, capability, "no_saved_config", source);
     return {
-      provider: "openrouter",
+      provider: option.catalogProvider,
       apiKey: credentials.apiKey,
-      keyVersion: 1,
-      savedConfig,
+      keyVersion: settings.key_version || 1,
+      savedConfig: settings,
       source,
-      supporterFunding: credentials.funding,
-      usageContext: getSupporterUsageContext(credentials.funding),
       modelId,
+      usageContext: credentials.usageContext,
+      supporterFunding: getSupporterFundingFromUsageContext(credentials.usageContext) ?? undefined,
     };
   }
   const customEndpointCapability =
@@ -400,7 +414,7 @@ async function resolvePersonalCredentials(
 
   const savedConfig = qualifyingRows[0];
   try {
-    return await decryptResolvedApiKey(
+    return await resolveSavedCredentials(
       savedConfig,
       savedConfig.provider.toLowerCase(),
       capability,
@@ -446,7 +460,7 @@ export async function resolveCapabilityCredentials(
           ? await llmProviderRepo.loadSavedProviderConfig(serverId, selection.provider)
           : null;
     if (!savedConfig) throw new GenerationModelUnavailableError();
-    const resolved = await decryptResolvedApiKey(
+    const resolved = await resolveSavedCredentials(
       savedConfig,
       selection.provider,
       capability,
@@ -482,28 +496,28 @@ export async function resolveCapabilityCredentials(
   const provider =
     options?.textModel?.llm_provider.toLowerCase() ??
     (await resolveProviderForCapability(capabilityConfig, capability));
-  const modelId = options?.textModel?.llm_id ?? capabilityModelIdFromColumns(capabilityConfig, capability);
-  const subscription =
-    provider === "openrouter" &&
-    capabilityConfig?.subscription_capabilities.includes(
-      mapCapabilityToPersonalCapability(capability) as SubscriptionCapability,
-    );
-  const savedConfig = await llmProviderRepo.loadSavedProviderConfig(
-    serverId,
-    subscription ? SUPPORTER_PROVIDER_VALUE : provider,
-  );
+  const optionCapability = providerOptionCapabilityForPersonal(mapCapabilityToPersonalCapability(capability));
+  const owner = optionCapability
+    ? findProviderOptionByActiveProvider(
+        provider,
+        { kind: "server", ownerId: serverId, modelConfig: capabilityConfig },
+        optionCapability,
+      )
+    : undefined;
+  const credentialProvider = owner?.value ?? provider;
+  const savedConfig = await llmProviderRepo.loadSavedProviderConfig(serverId, credentialProvider);
 
   if (!savedConfig) {
     throw new CredentialUnavailableError(provider, capability, "no_saved_config", "server");
   }
 
-  return await decryptResolvedApiKey(
+  return await resolveSavedCredentials(
     savedConfig,
-    subscription ? SUPPORTER_PROVIDER_VALUE : provider,
+    credentialProvider,
     capability,
     "server",
     `server ${serverId}`,
-    modelId,
+    options?.textModel?.llm_id ?? capabilityModelIdFromColumns(capabilityConfig, capability),
   );
 }
 

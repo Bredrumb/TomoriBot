@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import type { Message } from "discord.js";
 import type { GenerationModelSelection } from "@/types/provider/generationModels";
-import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { resolveTextCredentialPolicy } from "@/utils/chat/turnPlanner";
-import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { CredentialUnavailableError, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { registerProviderOption, type ProviderOptionDefinition } from "@/utils/provider/providerOptionRegistry";
+import { ProviderRequestDeniedError, type ProviderUsageContext } from "@/utils/provider/providerUsage";
 import {
   generationModelValue,
   GenerationModelUnavailableError,
@@ -248,5 +250,144 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Invocation model selection", () => {
       apiKey: "",
     });
     expect(custom.design).toBeNull();
+  });
+
+  it("keeps explicit and default managed credentials separate from the catalog's BYOK selection", async () => {
+    const text = (await llmModelRepo.loadAvailableModelsForProvider("openrouter", false))?.[0];
+    const video = (await llmModelRepo.loadAvailableVideoGenerationModels("openrouter"))?.[0];
+    if (!text?.llm_id || !video?.video_model_id) throw new Error("Missing managed catalog fixtures");
+    const config = await configRepository.loadModelCapabilityIds(refs.serverId);
+    const contexts: Record<"server" | "personal", ProviderUsageContext> = { server: {}, personal: {} };
+    let owns = false;
+    let refuse = false;
+    const option: ProviderOptionDefinition = {
+      value: "test-option",
+      catalogProvider: "openrouter",
+      capabilities: ["text", "image", "video"],
+      copy: {
+        labelKey: "commands.providers.entry_kind_provider",
+        entryDescriptionKeys: {
+          server: "commands.providers.entry_kind_provider",
+          personal: "commands.providers.entry_kind_provider",
+        },
+        addActionLabelKey: "commands.providers.select_add_provider",
+        addActionDescriptionKeys: {
+          server: "commands.providers.select_add_provider_description",
+          personal: "commands.providers.select_add_provider_description",
+        },
+        removeImpactKey: "commands.providers.remove_impact_provider",
+      },
+      availability: () => ({ eligible: true }),
+      selection: {
+        load: async () => null,
+        ensure: async () => true,
+        claim: async () => true,
+        remove: async () => "removed",
+        owns: (scope) => owns && scope.kind === "server" && scope.modelConfig?.llm_id === text.llm_id,
+        resolveCredentials: async ({ scope }) => {
+          if (refuse)
+            throw new ProviderRequestDeniedError(contexts[scope.kind], () => ({
+              titleKey: "fixture",
+              description: "fixture",
+            }));
+          return {
+            apiKey: `synthetic-managed-${scope.kind}`,
+            usageContext: contexts[scope.kind],
+            savedProvider: "test-option",
+          };
+        },
+      },
+    };
+    const dispose = registerProviderOption(option);
+    await testSql`INSERT INTO saved_provider_configs (server_id, provider, llm_id, llm_temperature)
+      VALUES (${refs.serverId}, 'test-option', ${text.llm_id}, 0.37)`;
+    await testSql`INSERT INTO user_saved_provider_configs (user_id, provider, llm_id, diffusion_model_id, video_model_id, llm_temperature)
+      VALUES (${refs.userId}, 'test-option', ${text.llm_id}, ${personalImageId}, ${video.video_model_id}, 0.42)`;
+    await testSql`INSERT INTO scoped_model_registrations (server_id, diffusion_model_id) VALUES (${refs.serverId}, ${personalImageId})`;
+    try {
+      for (const source of ["server", "personal"] as const) {
+        for (const [kind, capability, modelId] of [
+          ["text", "text", text.llm_id],
+          ["image", "image-standard", personalImageId],
+          ["video", "video", video.video_model_id],
+        ] as const) {
+          const selected = { source, kind, modelId, provider: "test-option" };
+          const before =
+            source === "personal"
+              ? await llmProviderRepo.loadUserSavedProviderConfig(refs.userId, "test-option")
+              : await llmProviderRepo.loadSavedProviderConfig(refs.serverId, "test-option");
+          if (!before) throw new Error("Missing managed settings fixture");
+          const credentials = await resolveCapabilityCredentials(refs.serverId, capability, {
+            userId: refs.userId,
+            modelSelection: selected,
+          });
+          expect(credentials).toMatchObject({
+            source,
+            provider: "openrouter",
+            modelId,
+            apiKey: `synthetic-managed-${source}`,
+            savedConfig: { provider: "test-option" },
+          });
+          expect(credentials.savedConfig).toEqual(before);
+          expect(credentials.usageContext).toBe(contexts[source]);
+          const after =
+            source === "personal"
+              ? await llmProviderRepo.loadUserSavedProviderConfig(refs.userId, "test-option")
+              : await llmProviderRepo.loadSavedProviderConfig(refs.serverId, "test-option");
+          expect(after).toEqual(before);
+          refuse = true;
+          await expect(
+            resolveCapabilityCredentials(refs.serverId, capability, { userId: refs.userId, modelSelection: selected }),
+          ).rejects.toBeInstanceOf(ProviderRequestDeniedError);
+          refuse = false;
+        }
+      }
+      await testSql`UPDATE user_saved_provider_configs SET enabled_capabilities = ARRAY['text', 'image', 'video'], assigned_capabilities = ARRAY['text', 'image', 'video'] WHERE user_id = ${refs.userId} AND provider = 'test-option'`;
+      for (const [capability, modelId] of [
+        ["text", text.llm_id],
+        ["image-standard", personalImageId],
+        ["video", video.video_model_id],
+      ] as const) {
+        expect(await resolveCapabilityCredentials(refs.serverId, capability, { userId: refs.userId })).toMatchObject({
+          source: "personal",
+          modelId,
+          apiKey: "synthetic-managed-personal",
+        });
+      }
+      await testSql`UPDATE user_saved_provider_configs SET enabled_capabilities = '{}' WHERE user_id = ${refs.userId} AND provider = 'test-option'`;
+      await testSql`UPDATE server_model_configs SET llm_id = ${text.llm_id}, diffusion_model_id = ${personalImageId}, video_model_id = ${video.video_model_id} WHERE server_id = ${refs.serverId}`;
+      owns = true;
+      for (const [capability, modelId] of [
+        ["text", text.llm_id],
+        ["image-standard", personalImageId],
+        ["video", video.video_model_id],
+      ] as const) {
+        expect(await resolveCapabilityCredentials(refs.serverId, capability)).toMatchObject({
+          source: "server",
+          modelId,
+          apiKey: "synthetic-managed-server",
+        });
+      }
+      expect(
+        await resolveCapabilityCredentials(refs.serverId, "text", {
+          modelSelection: { source: "server", kind: "text", modelId: text.llm_id, provider: "openrouter" },
+        }),
+      ).toMatchObject({ apiKey: "synthetic-server-openrouter" });
+      option.availability = () => ({ eligible: false });
+      await expect(resolveCapabilityCredentials(refs.serverId, "text")).rejects.toBeInstanceOf(
+        CredentialUnavailableError,
+      );
+      option.availability = () => ({ eligible: true });
+      delete option.selection.resolveCredentials;
+      await expect(resolveCapabilityCredentials(refs.serverId, "text")).rejects.toBeInstanceOf(
+        CredentialUnavailableError,
+      );
+    } finally {
+      dispose();
+      await testSql`DELETE FROM user_saved_provider_configs WHERE user_id = ${refs.userId} AND provider = 'test-option'`;
+      await testSql`DELETE FROM saved_provider_configs WHERE server_id = ${refs.serverId} AND provider = 'test-option'`;
+      await testSql`UPDATE server_model_configs SET llm_id = ${config?.llm_id}, diffusion_model_id = ${config?.diffusion_model_id}, video_model_id = ${config?.video_model_id} WHERE server_id = ${refs.serverId}`;
+      await testSql`DELETE FROM scoped_model_registrations WHERE server_id = ${refs.serverId} AND diffusion_model_id = ${personalImageId}`;
+    }
   });
 });

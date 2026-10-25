@@ -209,6 +209,12 @@ a managed option can use an OpenRouter model without using the saved OpenRouter 
 resolves one chosen credential; callers own routing and fallback policy. Null means unavailable and
 must not cause the caller to try the catalog provider's key.
 
+`resolveCapabilityCredentials` uses this callback for explicit option selections and for the active
+option owning a default capability. Default server resolution passes the loaded capability columns
+as `scope.modelConfig` to the ownership lookup. Personal routing keeps its existing precedence and
+BYOK restriction. Resolved credentials retain the selected model ID, scope, settings row, and usage
+context; built-in custom providers also retain their model-specific endpoint and API style.
+
 Deployment behavior maps onto these fields:
 
 | Behavior | Field |
