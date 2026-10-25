@@ -210,7 +210,10 @@ describe("shared OAuth boundaries", () => {
       { access_token: "secret" },
       { ...token, expires_in: -1 },
       { ...token, expires_in: 0 },
+      { ...token, expires_in: "3600" },
+      { ...token, expires_in: null },
       { ...token, expires_in: Number.MAX_VALUE },
+      { ...token, expires_in: 8.64e12 },
       { ...token, token_type: "MAC" },
     ]) {
       const fetchImpl = mock<OAuthFetch>(async (_url, init) => {
