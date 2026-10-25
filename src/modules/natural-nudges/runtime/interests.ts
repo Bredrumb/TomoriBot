@@ -1,4 +1,3 @@
-import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import { z } from "zod";
 import type { TomoriState } from "@/types/db/schema";
 import {
@@ -16,6 +15,7 @@ import {
 } from "@/modules/natural-nudges/runtime/model";
 import { acceptGeneratedInterests } from "@/providers/utils/presetCommon";
 import { log } from "@/utils/misc/logger";
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 
 /** Matches what `/persona generate` asks for, so one press leaves room for a few hand-written interests. */
 export const GENERATED_INTEREST_BATCH = 5;

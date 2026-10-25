@@ -1,4 +1,3 @@
-import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import { z } from "zod";
 import type { TomoriState } from "@/types/db/schema";
 import { NATURAL_NUDGE_AGENDA_MAX, type NaturalNudgeInterest } from "@/modules/natural-nudges/db/types";
@@ -16,6 +15,7 @@ import { PLAY_SCENE_MAX_TURNS, PLAY_SCENE_MIN_TURNS } from "@/modules/natural-nu
 import { formatStructuredRetryNote } from "@/utils/provider/serverStructuredOutput";
 import { log } from "@/utils/misc/logger";
 import type { TokenUsage } from "@/utils/text/tokenEstimate";
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 
 /** A planner that hangs past this would plan for a moment that has already passed. */
 const PLANNER_TIMEOUT_MS = 90_000;

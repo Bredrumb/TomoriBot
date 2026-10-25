@@ -1,4 +1,3 @@
-import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import { z } from "zod";
 import type { TomoriState } from "@/types/db/schema";
 import type { DecisionModelOption, DecisionModelReference, DecisionResult } from "@/types/provider/featureInterfaces";
@@ -17,6 +16,7 @@ import { llmModelRepo } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { formatStructuredRetryNote } from "@/utils/provider/serverStructuredOutput";
 import type { TokenUsage } from "@/utils/text/tokenEstimate";
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 
 /** A matcher that answers after the conversation moved on has nothing left to match. */
 const MATCHER_TIMEOUT_MS = 30_000;
