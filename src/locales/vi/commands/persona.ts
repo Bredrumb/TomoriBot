@@ -266,6 +266,11 @@ Dùng \`/config\` > Models > Switch Models để chuyển sang model hỗ trợ 
 2. Tạo lại mà không dùng tìm kiếm web (chọn "Không" khi được hỏi)`,
       api_key_decrypt_failed_title: `🔴 Lỗi khóa API`,
       api_key_decrypt_failed_description: `Không thể giải mã thông tin nhà cung cấp đang hoạt động. Hãy cấu hình lại bằng \`/providers\`.`,
+      web_search_failed_title: `Đã hủy tạo persona`,
+      web_search_failed_description: `Quá trình tạo persona đã bị hủy vì tìm kiếm web theo yêu cầu thất bại.
+
+**Những gì bạn có thể làm**
+Hãy thử lại sau giây lát, hoặc chọn \`Không\` ở mục \`Tìm kiếm trên web?\` để tạo từ mô tả của bạn. Nếu tìm kiếm tiếp tục thất bại, hãy nhờ người quản lý máy chủ kiểm tra tìm kiếm web trong \`/config\` và quyền truy cập nhà cung cấp trong \`/providers\`.`,
       vision_credentials_unavailable_title: `🔴 Không dùng được thông tin xác thực của model thị giác`,
       vision_credentials_unavailable_description: `Model thị giác của bạn (**{vision_model_name}**) chạy trên nhà cung cấp **{vision_provider}**, nhưng không thể dùng khóa API đã lưu của nó để mô tả hình ảnh. Hãy cấu hình lại thông tin xác thực của nhà cung cấp đó bằng \`/providers\`, hoặc kiểm tra \`/config\` > Models.`,
       invalid_image_title: `🔴 Ảnh không hợp lệ`,

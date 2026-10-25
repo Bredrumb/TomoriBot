@@ -370,6 +370,7 @@ export async function generatePresetFromPrompt(
         return {
           error: searchResult.error,
           errorType: searchResult.errorType,
+          failureStage: "web_search",
         };
       }
 
