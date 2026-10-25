@@ -4,6 +4,7 @@ import {
   reportProviderUsage,
   type ProviderUsageContext,
 } from "@/utils/provider/providerUsage";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 /**
  * Image Generation Tool
  * Allows TomoriBot to generate images using the active provider's native image API
@@ -1495,18 +1496,28 @@ export class GenerateImageTool extends BaseTool {
         return localized === key ? fallback : localized;
       };
 
-      log.error("Image generation failed:", error, {
-        serverId: context.tomoriState.server_id,
-        userId: context.internalUserId ?? null,
-        metadata: generationRoute,
-      });
-
-      if (
+      const isBillingRefusal =
         errorMessage.includes("billing") ||
         errorMessage.includes("payment") ||
         errorMessage.includes("quota") ||
-        errorMessage.includes("PERMISSION_DENIED")
-      ) {
+        errorMessage.includes("PERMISSION_DENIED");
+
+      await reportProviderFailure({
+        summary: "Image generation failed",
+        errorType: "ImageGenerationFailed",
+        error,
+        expected: isBillingRefusal,
+        serverId: context.tomoriState.server_id,
+        userId: context.internalUserId ?? null,
+        dimensions: {
+          operation: "image-generation",
+          provider: generationRoute?.provider ?? "unknown",
+          refusal: isBillingRefusal ? "billing" : "none",
+        },
+        metadata: generationRoute,
+      });
+
+      if (isBillingRefusal) {
         return {
           success: false,
           error: getReadableError("genai.google.400_billing_default_message", "Billing is required for this service"),

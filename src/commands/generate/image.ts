@@ -10,6 +10,7 @@ import {
   reportProviderUsage,
   getProviderRequestFailureCopy,
 } from "@/utils/provider/providerUsage";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 /**
  * Image Generation Command
  * Allows users to generate AI images using the configured provider
@@ -742,19 +743,33 @@ export async function execute(
     }
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    log.error("Image generation failed:", error as Error);
+    const isBillingRefusal =
+      errorMessage.includes("billing") ||
+      errorMessage.includes("payment") ||
+      errorMessage.includes("quota") ||
+      errorMessage.includes("PERMISSION_DENIED");
+
+    await reportProviderFailure({
+      summary: "Image generation failed",
+      errorType: "ImageGenerationFailed",
+      error,
+      expected: isBillingRefusal,
+      serverId: tomoriState.server_id,
+      userId: userData.user_id ?? null,
+      dimensions: {
+        operation: "image-generation",
+        provider: executionProvider,
+        refusal: isBillingRefusal ? "billing" : "none",
+      },
+      metadata: { credentialSource: imageCreds.source },
+    });
 
     // Use modalSubmitInteraction if available (error after modal), otherwise interaction (error during modal)
     const replyTarget = modalSubmitInteraction ?? interaction;
 
     const isPersonalImage = imageCreds?.source === "personal";
 
-    if (
-      errorMessage.includes("billing") ||
-      errorMessage.includes("payment") ||
-      errorMessage.includes("quota") ||
-      errorMessage.includes("PERMISSION_DENIED")
-    ) {
+    if (isBillingRefusal) {
       const tipKeys = isPersonalImage
         ? ["genai.tips.top_up_provider_balance", "genai.tips.disable_personal_text_override"]
         : ["genai.tips.wait_and_retry"];
