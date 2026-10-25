@@ -10,8 +10,16 @@ import { SPEECH_SAMPLE_MAX_DURATION_SECS } from "@/utils/speech/voiceSampleAddOp
 import { readBoundedResponse } from "@/utils/security/boundedResponse";
 import { createSpeechWav, createSpeechMp3 } from "../../helpers/speechAudio";
 import * as speechRepository from "@/utils/db/repositories/SpeechRepository";
-import { registerProviderOption, type ProviderOptionDefinition } from "@/utils/provider/providerOptionRegistry";
-import { ProviderRequestDeniedError, type ProviderUsageContext } from "@/utils/provider/providerUsage";
+import {
+  registerProviderOption,
+  type ProviderOptionCredentials,
+  type ProviderOptionDefinition,
+} from "@/utils/provider/providerOptionRegistry";
+import {
+  currentProviderUsageContext,
+  ProviderRequestDeniedError,
+  type ProviderUsageContext,
+} from "@/utils/provider/providerUsage";
 import { resolveSpeechTargets, speechTargetFingerprint } from "@/utils/provider/speechEndpointResolver";
 
 const wav = createSpeechWav();
@@ -48,6 +56,9 @@ afterEach(() => {
 describe("hosted speech transports", () => {
   it("resolves keyless managed speech for both scopes and keeps a denial separate from the other mode", async () => {
     const context: ProviderUsageContext = {};
+    let resolvedContext = context;
+    let resolvedKey = "fixture-managed-key";
+    let previousCredentials: ProviderOptionCredentials | undefined;
     let denyClone = false;
     const option: ProviderOptionDefinition = {
       value: "test-option",
@@ -72,12 +83,13 @@ describe("hosted speech transports", () => {
         ensure: async () => true,
         claim: async () => true,
         remove: async () => "removed",
-        resolveCredentials: async ({ scope, capability, modelId }) => {
+        resolveCredentials: async ({ scope, capability, modelId, previous }) => {
+          previousCredentials = previous;
           expect(scope.ownerId).toBe(scope.kind === "personal" ? 9 : 7);
           expect(modelId).toBe(capability === "speech-design" ? 1 : 2);
           if (denyClone && capability === "speech-clone")
             throw new ProviderRequestDeniedError(context, () => ({ titleKey: "fixture", description: "fixture" }));
-          return { apiKey: "fixture-managed-key", usageContext: context, savedProvider: "test-option" };
+          return { apiKey: resolvedKey, usageContext: resolvedContext, savedProvider: "test-option" };
         },
       },
     };
@@ -122,6 +134,9 @@ describe("hosted speech transports", () => {
           expect(speechTargetFingerprint({ ...target, credentialRevision: 4 })).not.toBe(
             speechTargetFingerprint(target),
           );
+          expect(speechTargetFingerprint({ ...target, apiKey: "rotated-key" })).not.toBe(
+            speechTargetFingerprint(target),
+          );
         }
       }
       denyClone = true;
@@ -130,11 +145,44 @@ describe("hosted speech transports", () => {
       expect(denied.clone).toBeNull();
       expect(denied.denials?.clone?.usageContext).toBe(context);
       denyClone = false;
+      const admitted = (await resolveSpeechTargets(7)).design;
+      if (!admitted) throw new Error("Missing admitted speech fixture");
+      const request = {
+        target: admitted,
+        endpoint: null,
+        endpointApiKey: "",
+        elevenLabsApiKey: "",
+        script: "Hello",
+        source: { kind: "design" as const, designPrompt: "Warm narration" },
+      };
+      let requests = 0;
+      resolvedContext = {};
+      stubFetch(async (_url, init) => {
+        requests++;
+        expect(currentProviderUsageContext()).toBe(resolvedContext);
+        expect(new Headers(init.headers).get("Authorization")).toBe("Bearer fixture-managed-key");
+        return new Response(new Uint8Array(mp3), { headers: { "Content-Type": "audio/mpeg" } });
+      });
+      expect((await synthesizeVoiceMessage(request)).success).toBe(true);
+      expect(previousCredentials).toEqual({
+        apiKey: admitted.apiKey,
+        usageContext: context,
+        savedProvider: "test-option",
+      });
+      resolvedKey = "rotated-key";
+      expect((await synthesizeVoiceMessage(request)).success).toBe(false);
+      expect(requests).toBe(1);
+      resolvedKey = admitted.apiKey;
       option.availability = () => ({ eligible: false });
       expect(await resolveSpeechTargets(7)).toMatchObject({ design: null, clone: null });
+      expect((await synthesizeVoiceMessage(request)).success).toBe(false);
       option.availability = () => ({ eligible: true });
       delete option.selection.resolveCredentials;
       expect(await resolveSpeechTargets(7)).toMatchObject({ design: null, clone: null });
+      expect((await synthesizeVoiceMessage(request)).success).toBe(false);
+      dispose();
+      expect((await synthesizeVoiceMessage(request)).success).toBe(false);
+      expect(requests).toBe(1);
     } finally {
       dispose();
       policy.mockRestore();

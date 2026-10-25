@@ -1,4 +1,5 @@
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
+import { findProviderOption } from "@/utils/provider/providerOptionRegistry";
 import {
   findProviderRequestDeniedError,
   type ProviderRequestDeniedError,
@@ -321,7 +322,7 @@ async function synthesizeHostedVoiceMessage(
   );
   const startedAt = Date.now();
   let cleanupPending = false;
-  const usageContext = target.usageContext;
+  let usageContext = target.usageContext;
   try {
     signal.throwIfAborted();
     if (
@@ -336,6 +337,34 @@ async function synthesizeHostedVoiceMessage(
       !!source.designPrompt.trim() &&
       source.designPrompt.length <= HOSTED_SPEECH_LIMITS.descriptionCharacters;
     let audio: Buffer;
+    const option = findProviderOption(target.credentialProvider);
+    if (option || target.credentialProvider !== target.model.provider) {
+      const capability = target.model.voice_mode === "clone" ? "speech-clone" : "speech-design";
+      if (
+        !option?.capabilities.includes(capability) ||
+        !(await option.availability(target.owner)).eligible ||
+        !option.selection.resolveCredentials
+      )
+        throw new HostedSpeechError("invalid_request");
+      const credentials = await option.selection
+        .resolveCredentials({
+          scope: target.owner,
+          capability,
+          modelId: target.model.speech_model_id,
+          previous: {
+            apiKey: target.apiKey,
+            usageContext: target.usageContext,
+            savedProvider: target.credentialProvider,
+          },
+        })
+        .catch((error: unknown) => {
+          const denied = findProviderRequestDeniedError(error);
+          if (denied) usageContext = denied.usageContext;
+          throw error;
+        });
+      if (!credentials || credentials.apiKey !== target.apiKey) throw new HostedSpeechError("invalid_request");
+      usageContext = credentials.usageContext;
+    }
     if (target.model.provider === "openrouter" && source.kind === "design") {
       if (!validDesign) throw new HostedSpeechError("invalid_request");
       audio = await withProviderUsageContext(usageContext, async () =>

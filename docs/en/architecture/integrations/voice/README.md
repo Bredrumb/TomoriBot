@@ -149,7 +149,9 @@ is unavailable, the other usable pair wins. Existing Auto personas with a sample
 The command puts an uploaded reference first, then a typed description, then saved sources in persona
 priority order. Its source selection applies only to that invocation. Submission rechecks the target
 and saved source; stale forms require a new invocation. Revalidation includes target kind, model
-identity, catalog and credential providers, credential owner, and credential revision. Tool assembly records the selected
+identity, catalog and credential providers, credential owner, credential revision, and a hash of the
+resolved key and usage context. Managed synthesis revalidates the admitted payer and key through the
+option's credential callback immediately before provider work. Tool assembly records the selected
 source and target identity in the turn context; execution checks them against fresh selections and
 persona state before synthesis. Delivery direction and expressiveness apply
 to the selected target. Neither caller retries synthesis through the other slot after a failure.

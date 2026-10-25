@@ -56,6 +56,8 @@ export function speechTargetFingerprint(target: SpeechTargetResult | null | unde
               target.credentialId,
               target.credentialRevision,
               target.credentialProvider,
+              target.usageContext,
+              target.apiKey,
             ]
           : [
               target.kind,
