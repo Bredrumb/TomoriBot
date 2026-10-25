@@ -101,6 +101,10 @@ polling reports the final job identity once at the caller. A registered reporter
 deduplication. Reporting does not await storage, and reporter failures cannot fail inference.
 Without a reporter, reporting does nothing. Document retrieval and re-embedding accept the same
 embedding `onUsage` callback; the caller supplies the recorder for each response.
+Decision execution owns its usage recorder and forwards validated usage to consumer callbacks.
+RAG query retrieval and config model re-embedding supply the same recorder under their resolved
+credential context. A model-switch denial retains that context through the result and localized
+panel receipt; the successful selection write and cache invalidation still precede re-embedding.
 
 `ProviderRequestDeniedError` carries its context and a locale-dependent renderer. The renderer returns
 a title locale key and localized description, and accepts a flag for fallback notices. A registered

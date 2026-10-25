@@ -1,4 +1,9 @@
-import { withProviderUsageContext } from "@/utils/provider/providerUsage";
+import {
+  createProviderUsageRecorder,
+  findProviderRequestDeniedError,
+  withProviderUsageContext,
+  type ProviderRequestDeniedError,
+} from "@/utils/provider/providerUsage";
 import { loadProviderModelChoices } from "@/utils/provider/modelCatalog";
 import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
 import { loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
@@ -48,7 +53,6 @@ import { NAI_IMAGE_NOISE_SCHEDULES, NAI_IMAGE_SAMPLERS } from "@/utils/image/nai
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { log } from "@/utils/misc/logger";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
-import { getSupporterFundingFromUsageContext } from "@/modules/supporter-billing/runtime/types";
 import { buildCustomProviderName, isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import {
   buildFallbackModelPersistence,
@@ -81,11 +85,6 @@ import {
   mergeConfiguredStopStrings,
   parseCommaSeparatedStopStrings,
 } from "@/utils/provider/stopStringConfig";
-import { createSupporterUsageRecorder } from "@/modules/supporter-billing/runtime/usageStatistics";
-import {
-  findSupporterRequestDeniedError,
-  type SupporterRequestDeniedError,
-} from "@/modules/supporter-billing/runtime/funding";
 
 /** Sentinel a fallback slot select carries to empty that slot. */
 export const CONFIG_FALLBACK_CLEAR_VALUE = "__none__";
@@ -287,7 +286,7 @@ type ConfigModelSetResult =
   | { status: "success"; modelName: string; reembedded: boolean; sourceChanged?: boolean }
   | { status: "already-selected"; modelName: string }
   | { status: "openrouter-moved" }
-  | { status: "subscription"; denied: SupporterRequestDeniedError }
+  | { status: "provider-denied"; denied: ProviderRequestDeniedError }
   | { status: "not-found" | "no-models" | "write-failed" };
 
 type ConfigModelClearResult =
@@ -748,7 +747,14 @@ export const configModelOperations: ConfigModelOperations = {
       if (shouldReembed && isRagAvailable()) {
         const documentCount = await serverMemoryRepository.countDocuments(tomoriState.server_id);
         if (documentCount > 0) {
-          const credentials = await resolveCapabilityCredentials(tomoriState.server_id, "embedding");
+          let credentials: Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
+          try {
+            credentials = await resolveCapabilityCredentials(tomoriState.server_id, "embedding");
+          } catch (error) {
+            const denied = findProviderRequestDeniedError(error);
+            if (denied) return { status: "provider-denied", denied };
+            throw error;
+          }
           const limits = getMemoryLimits();
           try {
             await withProviderUsageContext(credentials.usageContext, async () =>
@@ -756,20 +762,14 @@ export const configModelOperations: ConfigModelOperations = {
                 serverId: tomoriState.server_id,
                 embeddingModel: chosenModel,
                 apiKey: credentials.apiKey,
-                onUsage: createSupporterUsageRecorder(
-                  getSupporterFundingFromUsageContext(credentials.usageContext),
-                  chosenModel.codename,
-                ),
+                onUsage: createProviderUsageRecorder(credentials.usageContext, chosenModel.codename),
                 chunkSize: limits.documentChunkSize,
                 chunkOverlap: limits.documentChunkOverlap,
               }),
             );
           } catch (error) {
-            const denied = findSupporterRequestDeniedError(
-              error,
-              getSupporterFundingFromUsageContext(credentials.usageContext),
-            );
-            if (denied) return { status: "subscription", denied };
+            const denied = findProviderRequestDeniedError(error, credentials.usageContext);
+            if (denied) return { status: "provider-denied", denied };
             throw error;
           }
           reembedded = true;

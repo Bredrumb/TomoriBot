@@ -1,4 +1,4 @@
-import { withProviderUsageContext } from "@/utils/provider/providerUsage";
+import { createProviderUsageRecorder, withProviderUsageContext } from "@/utils/provider/providerUsage";
 import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
@@ -7,8 +7,6 @@ import { memoryGuard } from "@/utils/security/rateLimiter";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { TomoriState } from "@/types/db/schema";
 import type { SimplifiedMessageForContext } from "./types";
-import { createSupporterUsageRecorder } from "@/modules/supporter-billing/runtime/usageStatistics";
-import { getSupporterFundingFromUsageContext } from "@/modules/supporter-billing/runtime/types";
 import { channelScopeCandidates } from "@/utils/discord/channelScope";
 
 const DOCUMENT_QUERY_MAX_LENGTH = 1000;
@@ -80,10 +78,7 @@ export async function buildServerDocumentContextItem(params: {
         query: queryText,
         embeddingModel,
         apiKey: creds.apiKey,
-        onUsage: createSupporterUsageRecorder(
-          getSupporterFundingFromUsageContext(creds.usageContext),
-          embeddingModel.codename,
-        ),
+        onUsage: createProviderUsageRecorder(creds.usageContext, embeddingModel.codename),
         maxResults: DOCUMENT_MAX_RESULTS,
         minSimilarity: DOCUMENT_MIN_SIMILARITY,
         channelIds: channelFilter,

@@ -85,8 +85,7 @@ import { safeDownload } from "@/utils/security/safeDownload";
 import { log } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { localizer } from "@/utils/text/localizer";
-import type { SupporterRequestDeniedError } from "@/modules/supporter-billing/runtime/funding";
-import { getSupporterRequestFailureMessage } from "@/modules/supporter-billing/discord/requestFailure";
+import { getProviderRequestFailureCopy, type ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 
 /** Routes that answer with a modal, which is its own acknowledgement and must not be deferred. */
 export const CONFIG_MODEL_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"]>([
@@ -141,9 +140,9 @@ function receipt(
   return { tone, heading: localizer(locale, headingKey), detail: localizer(locale, detailKey, vars) };
 }
 
-function subscriptionReceipt(locale: string, denied: SupporterRequestDeniedError): PanelReceipt {
-  const message = getSupporterRequestFailureMessage(denied, locale);
-  return receipt(locale, "error", message.titleKey, message.descriptionKey, message.descriptionVars);
+function providerDeniedReceipt(locale: string, denied: ProviderRequestDeniedError): PanelReceipt {
+  const copy = getProviderRequestFailureCopy(denied, locale);
+  return { tone: "error", heading: localizer(locale, copy.titleKey), detail: copy.description };
 }
 
 function writeFailedReceipt(locale: string): PanelReceipt {
@@ -749,8 +748,8 @@ async function handleSwitchModels(context: ConfigModelRouteContext): Promise<boo
 
   await baseRepaint(context, "switch", {
     receipt:
-      result.status === "subscription"
-        ? subscriptionReceipt(locale, result.denied)
+      result.status === "provider-denied"
+        ? providerDeniedReceipt(locale, result.denied)
         : result.status === "already-selected"
           ? noChangesReceipt(locale, "commands.config.panel.model_already_selected_detail")
           : result.status === "openrouter-moved"
