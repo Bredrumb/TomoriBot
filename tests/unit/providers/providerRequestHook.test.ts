@@ -1,6 +1,8 @@
 import { afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { OpenrouterStreamAdapter, type OpenrouterStreamConfig } from "@/providers/openrouter/openrouterStreamAdapter";
 import { synthesizeOpenRouterSpeech } from "@/providers/openrouter/openrouterSpeech";
+import { OpenrouterProvider } from "@/providers/openrouter/openrouterProvider";
+import { ProviderRequestDeniedError, findProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 import { HumanizerDegree } from "@/types/db/schema";
 import type { StreamContext } from "@/types/stream/interfaces";
 import type { SpeechOperation } from "@/utils/speech/hostedSpeech";
@@ -169,6 +171,69 @@ describe("provider request hook in the stream adapter", () => {
       expect(fetchStub).not.toHaveBeenCalled();
       expect(holds[0].reports).toEqual([0]);
       expect(holds[0].releases).toEqual([false]);
+    } finally {
+      fetchStub.mockRestore();
+    }
+  });
+});
+
+describe("provider request hook in the embedding SDK", () => {
+  it("admits the request before sending and settles its cost without consuming the embedding response", async () => {
+    const holds = installTestHook();
+    const fetchStub = stubGlobalFetch(() => {
+      expect(holds[0].released).toBe(false);
+      return Response.json({
+        object: "list",
+        data: [{ object: "embedding", index: 0, embedding: [0.25, 0.75] }],
+        model: "example/embedding",
+        usage: { prompt_tokens: 3, total_tokens: 3, cost: 0.01 },
+      });
+    });
+    try {
+      const result = await new OpenrouterProvider().generateEmbeddings({
+        provider: "openrouter",
+        apiKey: "fixture-key",
+        model: "example/embedding",
+        inputs: ["fixture input"],
+      });
+      expect(result).toEqual([[0.25, 0.75]]);
+      expect(holds).toHaveLength(1);
+      expect(holds[0].context).toMatchObject({
+        apiKey: "fixture-key",
+        path: "/api/v1/embeddings",
+        body: { model: "example/embedding", input: ["fixture input"] },
+      });
+      expect(holds[0].reports).toEqual([0.01]);
+      expect(holds[0].releases).toEqual([true]);
+    } finally {
+      fetchStub.mockRestore();
+    }
+  });
+
+  it("preserves an admission refusal without sending the embedding input", async () => {
+    const denied = new ProviderRequestDeniedError(undefined, () => ({
+      titleKey: "general.errors.api_key_error_title",
+      description: "fixture refusal",
+    }));
+    restores.push(
+      registerProviderRequestHook(() => {
+        throw denied;
+      }),
+    );
+    const fetchStub = stubGlobalFetch(() => {
+      throw new Error("Unexpected request");
+    });
+    try {
+      const error: unknown = await new OpenrouterProvider()
+        .generateEmbeddings({
+          provider: "openrouter",
+          apiKey: "fixture-key",
+          model: "example/embedding",
+          inputs: ["fixture input"],
+        })
+        .catch((error: unknown) => error);
+      expect(findProviderRequestDeniedError(error)).toBe(denied);
+      expect(fetchStub).not.toHaveBeenCalled();
     } finally {
       fetchStub.mockRestore();
     }

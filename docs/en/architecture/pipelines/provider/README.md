@@ -142,7 +142,8 @@ the URL path, and the parsed body; reads the response through the bounded reader
 response's `usage.cost`; and returns an equivalent response so callers still read the body. Callers
 that need a gated transport pass it as the third argument. Hooks must never log the API key, path, or
 body. A registered hook also disables the OpenRouter adapter's verbose fetch output, because that
-output can print the headers and body the hook accounts for.
+output can print the headers and body the hook accounts for. The OpenRouter embedding SDK uses
+`fetchWithProviderRequest` through its `HTTPClient` and always disables SDK debug output.
 
 The hook has no in-tree implementation on main. The release branch registers its deployment
 implementation at startup, and the registration returns a disposer like the usage and denial ones.
