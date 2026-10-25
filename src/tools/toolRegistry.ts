@@ -300,7 +300,7 @@ class ToolRegistryImpl implements ToolRegistryInterface {
         error: `Tool '${toolName}' not found. ${closest ? `Did you mean '${closest}'? ` : ""}Available tools: ${available.join(", ")}`,
       };
 
-      log.error(
+      log.warn(
         `Tool execution failed - tool not found: ${toolName}. Available: ${Array.from(this.tools.keys()).join(", ")}`,
       );
 

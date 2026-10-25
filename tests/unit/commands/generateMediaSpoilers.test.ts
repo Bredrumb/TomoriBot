@@ -166,27 +166,32 @@ describe("Generation command spoilers", () => {
   });
 });
 
-describe("Image generation failures", () => {
-  it("keeps a quota refusal on the caller's own key out of error_logs while still logging other failures", async () => {
+describe("Media generation failures", () => {
+  it("keeps quota and safety refusals out of error_logs while still logging other failures", async () => {
     const errorLog = spyOn(log, "error").mockResolvedValue(undefined);
     const warnLog = spyOn(log, "warn").mockImplementation(() => undefined);
-    for (const [message, expected] of [
-      ["RESOURCE_EXHAUSTED: You exceeded your current quota", true],
-      ["Upstream returned malformed output", false],
+    for (const [command, endpoint, summary] of [
+      [image, "generateCustomImageViaEndpoint", "Image generation failed"],
+      [video, "generateCustomVideoViaEndpoint", "Video generation command failed"],
     ] as const) {
-      errorLog.mockClear();
-      warnLog.mockClear();
-      modal = makeFakeInteraction();
-      spyOn(dispatcher, "generateCustomImageViaEndpoint").mockRejectedValue(new Error(message));
-      const { interaction } = makeFakeInteraction({
-        channel: {},
-        options: { getString: (name) => (name === "mode" ? "manual" : null), getBoolean: () => null },
-      });
-      await image({} as Client, interaction as unknown as ChatInputCommandInteraction, createUserRow(), "en-US");
-      const recorded = (calls: unknown[][]) =>
-        calls.some(([text]) => String(text).startsWith("Image generation failed"));
-      expect(recorded(errorLog.mock.calls)).toBe(!expected);
-      expect(recorded(warnLog.mock.calls)).toBe(expected);
+      for (const [message, expected] of [
+        ["RESOURCE_EXHAUSTED: You exceeded your current quota", true],
+        ["Prompt blocked by the provider's safety filter", true],
+        ["Upstream returned malformed output", false],
+      ] as const) {
+        errorLog.mockClear();
+        warnLog.mockClear();
+        modal = makeFakeInteraction();
+        spyOn(dispatcher, endpoint).mockRejectedValue(new Error(message));
+        const { interaction } = makeFakeInteraction({
+          channel: {},
+          options: { getString: (name) => (name === "mode" ? "manual" : null), getBoolean: () => null },
+        });
+        await command({} as Client, interaction as unknown as ChatInputCommandInteraction, createUserRow(), "en-US");
+        const recorded = (calls: unknown[][]) => calls.some(([text]) => String(text).startsWith(summary));
+        expect(recorded(errorLog.mock.calls)).toBe(!expected);
+        expect(recorded(warnLog.mock.calls)).toBe(expected);
+      }
     }
   });
 });

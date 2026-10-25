@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { classifyOpenAICompatibleStatus } from "@/providers/openaiCompatible/openaiCompatibleErrorFormatter";
 import { OpenAICompatibleStreamAdapter } from "@/providers/openaiCompatible/openaiCompatibleStreamAdapter";
-import type { RawStreamChunk } from "@/types/stream/interfaces";
+import type { ProviderError, RawStreamChunk } from "@/types/stream/interfaces";
+import { isOperatorActionableProviderError } from "@/utils/provider/providerErrorClassification";
 
 function makeAdapter(): OpenAICompatibleStreamAdapter {
   return new OpenAICompatibleStreamAdapter({
@@ -58,6 +59,16 @@ describe("processChunk on an SSE error event", () => {
     expect(processed.error?.type).toBe("provider_overloaded");
     expect(processed.error?.retryable).toBe(true);
     expect(processed.error?.code).toBe("500");
+  });
+
+  it("classifies a statusless timeout event as a retryable timeout that stays out of error logs", () => {
+    const processed = makeAdapter().processChunk(
+      makeChunk({ error: { message: "The operation timed out.", type: "timeout" } }),
+    );
+
+    expect(processed.error?.type).toBe("timeout");
+    expect(processed.error?.retryable).toBe(true);
+    expect(isOperatorActionableProviderError(processed.error as ProviderError)).toBe(false);
   });
 
   it("surfaces the provider error type alongside an opaque message", () => {

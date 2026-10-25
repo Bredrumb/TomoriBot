@@ -15,7 +15,7 @@ import { ZaicodingStreamAdapter, type ZaicodingStreamConfig } from "@/providers/
 import { getZaicodingToolAdapter } from "@/providers/zaicoding/zaicodingToolAdapter";
 import {
   createOpenAICompatibleHttpError,
-  normalizeOpenAICompatibleProviderError,
+  reportOpenAICompatibleKeyValidationFailure,
 } from "@/providers/openaiCompatible/openaiCompatibleErrorFormatter";
 import { callZaiStructuredJSON } from "@/providers/zai/zaiStructuredOutput";
 import { generateZaiNativeImage } from "@/providers/zai/zaiImageGeneration";
@@ -109,12 +109,16 @@ export class ZaicodingProvider
 
       return { valid: true };
     } catch (error) {
-      log.error("Z.ai Coding API key validation failed", error as Error);
       return {
         valid: false,
-        error: normalizeOpenAICompatibleProviderError(error, {
-          errorMessagePrefix: "Z.ai API error",
-        }),
+        error: await reportOpenAICompatibleKeyValidationFailure(
+          error,
+          "zaicoding",
+          "Z.ai Coding API key validation failed",
+          {
+            errorMessagePrefix: "Z.ai API error",
+          },
+        ),
       };
     }
   }

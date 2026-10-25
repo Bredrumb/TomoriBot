@@ -1501,18 +1501,20 @@ export class GenerateImageTool extends BaseTool {
         errorMessage.includes("payment") ||
         errorMessage.includes("quota") ||
         errorMessage.includes("PERMISSION_DENIED");
+      const isSafetyRefusal =
+        errorMessage.includes("safety") || errorMessage.includes("blocked") || errorMessage.includes("RECITATION");
 
       await reportProviderFailure({
         summary: "Image generation failed",
         errorType: "ImageGenerationFailed",
         error,
-        expected: isBillingRefusal,
+        expected: isBillingRefusal || isSafetyRefusal,
         serverId: context.tomoriState.server_id,
         userId: context.internalUserId ?? null,
         dimensions: {
           operation: "image-generation",
           provider: generationRoute?.provider ?? "unknown",
-          refusal: isBillingRefusal ? "billing" : "none",
+          refusal: isBillingRefusal ? "billing" : isSafetyRefusal ? "safety" : "none",
         },
         metadata: generationRoute,
       });
@@ -1524,7 +1526,7 @@ export class GenerateImageTool extends BaseTool {
         };
       }
 
-      if (errorMessage.includes("safety") || errorMessage.includes("blocked") || errorMessage.includes("RECITATION")) {
+      if (isSafetyRefusal) {
         return {
           success: false,
           error: getReadableError(

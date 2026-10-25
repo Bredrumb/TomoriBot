@@ -748,18 +748,20 @@ export async function execute(
       errorMessage.includes("payment") ||
       errorMessage.includes("quota") ||
       errorMessage.includes("PERMISSION_DENIED");
+    const isSafetyRefusal =
+      errorMessage.includes("safety") || errorMessage.includes("blocked") || errorMessage.includes("RECITATION");
 
     await reportProviderFailure({
       summary: "Image generation failed",
       errorType: "ImageGenerationFailed",
       error,
-      expected: isBillingRefusal,
+      expected: isBillingRefusal || isSafetyRefusal,
       serverId: tomoriState.server_id,
       userId: userData.user_id ?? null,
       dimensions: {
         operation: "image-generation",
         provider: executionProvider,
-        refusal: isBillingRefusal ? "billing" : "none",
+        refusal: isBillingRefusal ? "billing" : isSafetyRefusal ? "safety" : "none",
       },
       metadata: { credentialSource: imageCreds.source },
     });
@@ -784,7 +786,7 @@ export async function execute(
       return;
     }
 
-    if (errorMessage.includes("safety") || errorMessage.includes("blocked") || errorMessage.includes("RECITATION")) {
+    if (isSafetyRefusal) {
       await replyInfoEmbed(replyTarget, locale, {
         titleKey: "commands.generate.image.error_safety_title",
         descriptionKey: "commands.generate.image.error_safety_description",

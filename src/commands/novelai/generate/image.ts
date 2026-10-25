@@ -31,6 +31,7 @@ import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { checkImageQuota, incrementImageQuota } from "@/utils/quota/imageQuotaManager";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { statRepository } from "@/utils/db/repositories";
 import { resolveNaiImageParams } from "@/utils/image/naiImageParams";
 import { resolveNaiDiffusionModel } from "@/utils/image/naiDiffusionModels";
@@ -526,8 +527,14 @@ export async function execute(
     }
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorKind = classifyNaiImageError(error);
-    await log.error("Error in /novelai generate image command", error, {
+    await reportProviderFailure({
+      summary: "Error in /novelai generate image command",
       errorType: "CommandExecutionError",
+      error,
+      expected: errorKind !== "other",
+      serverId: tomoriState?.server_id ?? null,
+      userId: userData.user_id ?? null,
+      dimensions: { operation: "image-generation", provider: "novelai", errorKind },
       metadata: {
         command: "novelai generate image",
         guildId: interaction.guild?.id ?? null,

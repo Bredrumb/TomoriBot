@@ -24,8 +24,10 @@ describe("ElevenLabs transcription failure reporting", () => {
   const spies: Array<{ mockRestore(): void }> = [];
   let errorSpy: ReturnType<typeof spyOn<typeof log, "error">>;
   let status = 200;
+  let detail: Record<string, string>;
 
   beforeEach(() => {
+    detail = { status: "synthetic_outage", message: `rejected ${API_KEY}` };
     spies.push(
       spyOn(speechEndpointResolver, "resolveActiveTranscriptionEndpoint").mockResolvedValue({
         endpoint: { api_style: "elevenlabs-transcription", requires_auth: true } as CustomEndpointRow,
@@ -33,9 +35,7 @@ describe("ElevenLabs transcription failure reporting", () => {
       }),
       spyOn(safeDownloadModule, "safeDownload").mockResolvedValue({ success: true, buffer: Buffer.from("ogg") }),
       spyOn(log, "warn").mockImplementation(() => undefined),
-      stubGlobalFetch(() =>
-        Response.json({ detail: { status: "synthetic_outage", message: `rejected ${API_KEY}` } }, { status }),
-      ),
+      stubGlobalFetch(() => Response.json({ detail }, { status })),
     );
     errorSpy = spyOn(log, "error").mockResolvedValue(undefined);
     spies.push(errorSpy);
@@ -43,6 +43,19 @@ describe("ElevenLabs transcription failure reporting", () => {
 
   afterEach(() => {
     for (const spy of spies.splice(0)) spy.mockRestore();
+  });
+
+  it("keeps a key ID pasted as the key out of error logs although ElevenLabs answers it with a 400", async () => {
+    for (const [type, errorLogs] of [
+      ["authentication_error", 0],
+      ["validation_error", 1],
+    ] as const) {
+      status = 400;
+      detail = { type, code: "invalid_api_key", message: "API key ID used as API key" };
+      errorSpy.mockClear();
+      await transcribeMessageAudioAttachment(audioMessage(), SERVER_ID);
+      expect(errorSpy).toHaveBeenCalledTimes(errorLogs);
+    }
   });
 
   it("logs a provider outage with its body and keeps a rejected key out of error logs", async () => {

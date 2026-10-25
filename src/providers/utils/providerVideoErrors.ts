@@ -8,3 +8,20 @@ export class ProviderVideoFilteredError extends Error {
     this.name = "ProviderVideoFilteredError";
   }
 }
+
+/** Matches the content refusals both video handlers answer with their blocked-content reply. */
+export function isVideoContentRefusal(errorMessage: string): boolean {
+  return errorMessage.includes("content") || errorMessage.includes("safety") || errorMessage.includes("blocked");
+}
+
+/** A quota, billing, permission, or content refusal, or a provider that timed out. */
+export function isExpectedVideoFailure(errorMessage: string): boolean {
+  return (
+    errorMessage.includes("billing") ||
+    errorMessage.includes("payment") ||
+    errorMessage.includes("quota") ||
+    errorMessage.includes("PERMISSION_DENIED") ||
+    errorMessage.includes("timed out") ||
+    isVideoContentRefusal(errorMessage)
+  );
+}

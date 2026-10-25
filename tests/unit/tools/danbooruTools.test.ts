@@ -268,6 +268,28 @@ describe("danbooru_search_tags tool", () => {
     }
   });
 
+  it("keeps a Danbooru outage status out of error logs while still logging a server error", async () => {
+    const errorSpy = spyOn(log, "error").mockImplementation(async () => undefined);
+    const warnSpy = spyOn(log, "warn").mockImplementation(() => undefined);
+    try {
+      for (const [status, errorLogs] of [
+        [503, 0],
+        [500, 1],
+      ] as const) {
+        fetchSpy?.mockRestore();
+        fetchSpy = stubGlobalFetch(() => Response.json({ message: "The database is unavailable." }, { status }));
+        errorSpy.mockClear();
+        const result = await new DanbooruSearchTagsTool().execute({ queries: ["ryza"] }, context);
+
+        expect(result).toEqual({ success: false, error: DANBOORU_FAILURE_MESSAGES.unavailable });
+        expect(errorSpy).toHaveBeenCalledTimes(errorLogs);
+      }
+    } finally {
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
+
   it("refuses an empty query list before any request", async () => {
     const requests: RecordedRequest[] = [];
     fetchSpy = stubDanbooru(requests);

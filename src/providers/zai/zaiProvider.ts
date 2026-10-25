@@ -15,7 +15,7 @@ import { ZaiStreamAdapter, type ZaiStreamConfig } from "@/providers/zai/zaiStrea
 import { getZaiToolAdapter } from "@/providers/zai/zaiToolAdapter";
 import {
   createOpenAICompatibleHttpError,
-  normalizeOpenAICompatibleProviderError,
+  reportOpenAICompatibleKeyValidationFailure,
 } from "@/providers/openaiCompatible/openaiCompatibleErrorFormatter";
 import { callZaiStructuredJSON } from "@/providers/zai/zaiStructuredOutput";
 import { generateZaiNativeImage } from "@/providers/zai/zaiImageGeneration";
@@ -113,10 +113,9 @@ export class ZaiProvider
 
       return { valid: true };
     } catch (error) {
-      log.error("Z.ai API key validation failed", error as Error);
       return {
         valid: false,
-        error: normalizeOpenAICompatibleProviderError(error, {
+        error: await reportOpenAICompatibleKeyValidationFailure(error, "zai", "Z.ai API key validation failed", {
           errorMessagePrefix: "Z.ai API error",
         }),
       };

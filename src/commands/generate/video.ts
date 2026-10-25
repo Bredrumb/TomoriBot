@@ -10,6 +10,7 @@ import {
   reportProviderUsage,
   getProviderRequestFailureCopy,
 } from "@/utils/provider/providerUsage";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 /**
  * Video Generation Command (/generate video)
  * Allows users to generate AI videos using Google Veo, OpenRouter, or Z.ai.
@@ -47,7 +48,11 @@ import { formatCustomModelDisplay } from "@/utils/provider/customProviderUtils";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { isOpenRouterVideoCapabilityError } from "@/providers/openrouter/openrouterVideoRequest";
-import { ProviderVideoFilteredError } from "@/providers/utils/providerVideoErrors";
+import {
+  isExpectedVideoFailure,
+  isVideoContentRefusal,
+  ProviderVideoFilteredError,
+} from "@/providers/utils/providerVideoErrors";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 import { parsePositiveIntegerEnv } from "@/utils/misc/envFlags";
 
@@ -652,8 +657,18 @@ export async function execute(
       return;
     }
     const denied = findProviderRequestDeniedError(error, videoCreds?.usageContext);
-    if (!denied && !(error instanceof ProviderVideoFilteredError))
-      log.error("Video generation command failed:", error as Error);
+    if (!denied && !(error instanceof ProviderVideoFilteredError)) {
+      await reportProviderFailure({
+        summary: "Video generation command failed",
+        errorType: "VideoGenerationFailed",
+        error,
+        expected: isExpectedVideoFailure(error instanceof Error ? error.message : String(error)),
+        serverId: tomoriState.server_id,
+        userId: userData.user_id ?? null,
+        dimensions: { operation: "video-generation", provider: executionProvider },
+        metadata: { credentialSource: videoCreds.source },
+      });
+    }
     if (denied) {
       await replyInfoEmbed(modalSubmitInteraction ?? interaction, locale, {
         ...getProviderRequestFailureCopy(denied, locale),
@@ -670,7 +685,7 @@ export async function execute(
         : "commands.generate.video.reference_unsupported_description"
       : errorMessage.includes("timed out")
         ? "commands.generate.video.timeout_description"
-        : errorMessage.includes("content") || errorMessage.includes("safety") || errorMessage.includes("blocked")
+        : isVideoContentRefusal(errorMessage)
           ? "commands.generate.video.blocked_description"
           : "commands.generate.video.generic_error_description";
 

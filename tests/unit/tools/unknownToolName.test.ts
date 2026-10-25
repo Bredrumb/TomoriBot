@@ -24,18 +24,20 @@ it("returns the closest registered name to the model for an unknown tool", async
     ToolRegistry.registerTool(new InteractWithRecentMessageTool());
   }
   const errorSpy = spyOn(log, "error").mockImplementation(async () => {});
+  const warnSpy = spyOn(log, "warn").mockImplementation(() => {});
   try {
     const result = await ToolRegistry.executeTool("interact_using_recent_message", {}, context());
     expect(result.success).toBe(false);
     expect(result.error).toContain("interact_with_recent_message");
     // Earlier files in a shared batch leave background health checks that log through the same
     // singleton while this spy is live, so only the unknown-tool line is countable.
-    const unknownToolLogs = errorSpy.mock.calls.filter(([message]) =>
-      String(message).includes("interact_using_recent_message"),
-    );
-    expect(unknownToolLogs).toHaveLength(1);
+    const unknownToolLogs = (spy: typeof errorSpy | typeof warnSpy) =>
+      spy.mock.calls.filter(([message]) => String(message).includes("interact_using_recent_message"));
+    expect(unknownToolLogs(errorSpy)).toHaveLength(0);
+    expect(unknownToolLogs(warnSpy)).toHaveLength(1);
   } finally {
     errorSpy.mockRestore();
+    warnSpy.mockRestore();
   }
 });
 
