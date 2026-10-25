@@ -11,11 +11,12 @@ import * as realMetadata from "@/utils/audio/voiceMessageMetadata";
 import * as realModals from "@/utils/discord/ui/modals";
 import * as realWhitelist from "@/utils/cache/channelWhitelistCache";
 import * as realSpotlight from "@/utils/cache/personalSpotlightCache";
+import * as realCrypto from "@/utils/security/crypto";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 import { makeFakeInteraction } from "../../helpers/fakeInteraction";
 import { createScopedModuleMocker } from "../../helpers/mockSurface";
-import { initializeLocalizer } from "@/utils/text/localizer";
-import { localizedCopy } from "../../helpers/localeCases";
+import { hasLocaleKey, initializeLocalizer } from "@/utils/text/localizer";
+import { collectCaseFailures, localizedCopy, RUNTIME_LOCALES } from "../../helpers/localeCases";
 import * as realSamples from "@/utils/db/repositories/SpeechRepository";
 
 const design: CustomEndpointRow = {
@@ -187,6 +188,9 @@ async function run(
     sourceOnly?: "design" | "clone";
     changeHosted?: () => void;
     synthesisResult?: Partial<realSynthesis.VoiceMessageSynthesisResult>;
+    upload?: boolean;
+    voiceDesign?: string;
+    locale?: string;
   } = {},
 ) {
   requests.length = 0;
@@ -220,6 +224,7 @@ async function run(
     if (options.replacementVoiceId) persona = { ...persona, speech_voice_id: options.replacementVoiceId };
   };
   spyOn(statRepository, "recordStat").mockImplementation(() => undefined);
+  spyOn(realCrypto, "getOptApiKey").mockResolvedValue(null);
   spyOn(personaRepository, "loadAllForServer").mockImplementation(async () => [persona]);
   spyOn(cooldownRepository, "checkMessageTriggerCooldownWithWhitelist").mockResolvedValue({
     isOnCooldown: false,
@@ -230,12 +235,65 @@ async function run(
     guildId: "guild-1",
     channel: { id: "channel-1", type: ChannelType.GuildText, isThread: () => false },
   });
-  Object.assign(command.interaction.options, { getAttachment: () => null });
-  await execute({} as Client, command.interaction as unknown as ChatInputCommandInteraction, createUserRow(), "en-US");
-  return modal.calls;
+  Object.assign(command.interaction.options, {
+    getAttachment: () =>
+      options.upload
+        ? {
+            name: "reference.wav",
+            url: "https://cdn.discordapp.com/attachments/reference.wav",
+            contentType: "audio/wav",
+            size: 1000,
+          }
+        : null,
+    getString: (name: string) => (name === "voice_design" ? (options.voiceDesign ?? null) : null),
+  });
+  await execute(
+    {} as Client,
+    command.interaction as unknown as ChatInputCommandInteraction,
+    createUserRow(),
+    options.locale ?? "en-US",
+  );
+  return [...command.calls, ...modal.calls];
 }
 
 describe("Voice message command routing", () => {
+  it("explains which explicit voice input needs a compatible model before opening the modal in every locale", async () => {
+    const failures = collectCaseFailures();
+    for (const locale of RUNTIME_LOCALES) {
+      for (const input of ["upload", "design"] as const) {
+        const calls = await run({
+          locale,
+          upload: input === "upload",
+          voiceDesign: input === "design" ? "Warm voice" : undefined,
+          targets: {
+            design: input === "upload" ? hostedTarget("design") : null,
+            clone: input === "design" ? hostedTarget("clone") : null,
+          },
+        });
+        failures.check(`${locale}: ${input}`, () => {
+          expect(requests).toHaveLength(0);
+          expect(modal.calls).toHaveLength(0);
+          expect(calls.some((call) => call.method === "reply")).toBe(true);
+          const payload = JSON.stringify(calls);
+          for (const part of ["title", "description"]) {
+            const key = `commands.generate.voice-message.incompatible_${input}_${part}`;
+            expect(payload).toContain(localizedCopy(hasLocaleKey(locale, key) ? locale : "en-US", key));
+          }
+        });
+      }
+    }
+    failures.expectNoFailures();
+  });
+
+  it("uses a typed voice description with a hosted Design model", async () => {
+    await run({
+      voiceDesign: "Quiet voice",
+      targets: { design: hostedTarget("design"), clone: null },
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.source).toEqual({ kind: "design", designPrompt: "Quiet voice" });
+  });
+
   it("renders the final target label after server fallback even when its model name is empty", async () => {
     const targetLabel = "Server fallback speech";
     const calls = await run({

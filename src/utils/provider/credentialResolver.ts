@@ -203,8 +203,10 @@ function providerSupportsCapability(provider: string, capability: Capability): b
   return true;
 }
 
-async function resolveProviderForCapability(serverId: number, capability: Capability): Promise<string> {
-  const config = await loadCapabilityConfig(serverId);
+async function resolveProviderForCapability(
+  config: CapabilityConfigColumns | null,
+  capability: Capability,
+): Promise<string> {
   if (!config) {
     throw new CredentialUnavailableError("unknown", capability, "missing_model_id");
   }
@@ -344,6 +346,7 @@ async function decryptResolvedApiKey(
     if (customEndpoint && customEndpoint.requires_auth === false) {
       return {
         provider,
+        modelId: activeModelId ?? undefined,
         apiKey: "",
         keyVersion: savedConfig.key_version || 1,
         savedConfig,
@@ -357,6 +360,7 @@ async function decryptResolvedApiKey(
 
   return {
     provider,
+    modelId: activeModelId ?? undefined,
     apiKey: decryptedKey,
     keyVersion: savedConfig.key_version || 1,
     savedConfig,
@@ -448,7 +452,8 @@ export async function resolveCapabilityCredentials(
   }
 
   const provider =
-    options?.textModel?.llm_provider.toLowerCase() ?? (await resolveProviderForCapability(serverId, capability));
+    options?.textModel?.llm_provider.toLowerCase() ??
+    (await resolveProviderForCapability(capabilityConfig, capability));
   const modelId = options?.textModel?.llm_id ?? capabilityModelIdFromColumns(capabilityConfig, capability);
   const subscription =
     provider === "openrouter" &&

@@ -13,7 +13,7 @@ import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 
 describe("history reply context", () => {
-  it("resolves a reply target inside the fetched window without a per-message fetch", async () => {
+  it.each([false, true])("preserves fetched history when a target channel was evicted: %s", async (channelEvicted) => {
     const persona = createPersona({
       config: {
         time_awareness_enabled: false,
@@ -25,13 +25,17 @@ describe("history reply context", () => {
     const fetchById = mock(async (_id: string) => {
       throw new Error("reply target fetched individually");
     });
+    let historyFetched = false;
     const channel = {
       id: "fixture-channel",
       isThread: () => false,
       messages: {
         cache: new Map(),
-        fetch: async (options: string | { limit: number }) =>
-          typeof options === "string" ? fetchById(options) : new Map(messages.map((message) => [message.id, message])),
+        fetch: async (options: string | { limit: number }) => {
+          if (typeof options === "string") return fetchById(options);
+          historyFetched = true;
+          return new Map(messages.map((message) => [message.id, message]));
+        },
       },
     };
     const client = {
@@ -70,6 +74,11 @@ describe("history reply context", () => {
         reference: null,
       },
     ] as unknown as Message[];
+    for (const message of messages) {
+      Object.defineProperty(message, "channel", {
+        get: () => (channelEvicted && historyFetched ? null : channel),
+      });
+    }
     const incoming = normalizeChatInvocation({ client: messages[0].client, message: messages[0], isFromQueue: false });
     const turn = {
       persona,
@@ -103,9 +112,11 @@ describe("history reply context", () => {
     try {
       const result = await buildChatTurnContext(turn);
       const reply = result.simplifiedMessages.find((message) => message.id === "reply");
+      const target = result.simplifiedMessages.find((message) => message.id === "target");
       expect(fetchById).not.toHaveBeenCalled();
-      expect(reply?.content).toContain("the second option");
-      expect(reply?.content).toContain("what did you mean?");
+      expect(target?.content).toContain(messages[1].content);
+      expect(reply?.content).toContain(messages[0].content);
+      if (!channelEvicted) expect(reply?.content).toContain(messages[1].content);
     } finally {
       for (const spy of [sql, read, privacy, blacklist, blocks, builder]) spy.mockRestore();
     }

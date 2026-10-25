@@ -925,6 +925,7 @@ export class GenerateImageTool extends BaseTool {
     // Default to allowed; overwritten below for server-credential users
     let quotaCheck: QuotaCheckResult = { allowed: true };
     let usageContext: ProviderUsageContext | undefined;
+    let generationRoute: { provider: string; modelId: number; model: string; credentialSource: string } | undefined;
 
     try {
       const { credentials: creds, quotaCheck: serverQuotaCheck } = await resolveCredentialsWithMediaQuota(
@@ -989,6 +990,12 @@ export class GenerateImageTool extends BaseTool {
       }
 
       const modelCodename = await this.getDiffusionModelCodename(diffusionModelId);
+      generationRoute = {
+        provider: creds.provider,
+        modelId: diffusionModelId,
+        model: modelCodename,
+        credentialSource: creds.source,
+      };
       const displayModelName = creds.customEndpoint ? formatCustomModelDisplay(creds.customEndpoint) : modelCodename;
 
       log.info(`Using diffusion model: ${modelCodename} for image generation`);
@@ -1484,7 +1491,11 @@ export class GenerateImageTool extends BaseTool {
         return localized === key ? fallback : localized;
       };
 
-      log.error("Image generation failed:", error as Error);
+      log.error("Image generation failed:", error, {
+        serverId: context.tomoriState.server_id,
+        userId: context.internalUserId ?? null,
+        metadata: generationRoute,
+      });
 
       if (
         errorMessage.includes("billing") ||

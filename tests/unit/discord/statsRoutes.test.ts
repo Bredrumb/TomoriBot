@@ -124,7 +124,7 @@ function registryFor(
         expect(harness.interaction.deferred).toBe(true);
         return builders.personal
           ? builders.personal(args)
-          : [tab("overview"), tab("people"), tab("models"), tab("expression")];
+          : [tab("overview"), tab("personas"), tab("models"), tab("tools"), tab("expression")];
       },
       buildPersonaTabs: async (args) => {
         harness.events.push("persona-tabs");

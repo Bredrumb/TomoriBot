@@ -16,13 +16,14 @@ export const STATS_ROUTE_VERSION = "v1";
 export type StatsDashboardView = "personal" | "persona" | "server";
 export type StatsDashboardTimeframe = "today" | "week" | "month" | "year" | "all_time";
 export type StatsDashboardScope = "this_server" | "global";
-type PersonalStatsTab = "overview" | "people" | "models" | "expression";
-type PersonaStatsTab = PersonalStatsTab;
+type PersonalStatsTab = "overview" | "personas" | "models" | "tools" | "expression";
+type PersonaStatsTab = "overview" | "people" | "models" | "expression";
 type ServerStatsTab = "overview" | "leaderboard" | "models" | "tools" | "expression";
-type StatsDashboardTab = PersonalStatsTab | ServerStatsTab;
+type StatsDashboardTab = PersonalStatsTab | PersonaStatsTab | ServerStatsTab;
 
 const TIMEFRAMES: readonly StatsDashboardTimeframe[] = ["today", "week", "month", "year", "all_time"];
-const PERSONAL_TABS: readonly PersonalStatsTab[] = ["overview", "people", "models", "expression"];
+const PERSONAL_TABS: readonly PersonalStatsTab[] = ["overview", "personas", "models", "tools", "expression"];
+const PERSONA_TABS: readonly PersonaStatsTab[] = ["overview", "people", "models", "expression"];
 const SERVER_TABS: readonly ServerStatsTab[] = ["overview", "leaderboard", "models", "tools", "expression"];
 
 export type StatsDashboardRoute =
@@ -83,7 +84,7 @@ function encodeScope(value: StatsDashboardScope): string {
 }
 
 function encodeTab(value: string, view: StatsDashboardView): string {
-  const tabs = view === "server" ? SERVER_TABS : PERSONAL_TABS;
+  const tabs = view === "server" ? SERVER_TABS : view === "persona" ? PERSONA_TABS : PERSONAL_TABS;
   if (!isOneOf(value, tabs)) throw new Error("Stats dashboard tab is invalid");
   return value;
 }
@@ -160,7 +161,7 @@ function parseScope(value: string | undefined): StatsDashboardScope | null {
 }
 
 function parseTab(value: string | undefined, view: StatsDashboardView): StatsDashboardTab | null {
-  const tabs = view === "server" ? SERVER_TABS : PERSONAL_TABS;
+  const tabs = view === "server" ? SERVER_TABS : view === "persona" ? PERSONA_TABS : PERSONAL_TABS;
   return isOneOf(value, tabs) ? value : null;
 }
 
@@ -187,7 +188,7 @@ export function parseStatsDashboardRoute(route: ParsedInteractionRoute): StatsDa
     if (tail.length !== 2) return null;
     const personaId = parsePositiveId(tail[0]);
     const tab = parseTab(tail[1], rawView);
-    if (personaId === null || !tab || !PERSONAL_TABS.includes(tab as PersonalStatsTab)) return null;
+    if (personaId === null || !tab || !PERSONA_TABS.includes(tab as PersonaStatsTab)) return null;
     return { view: rawView, locale, ownerId, serverId, timeframe, personaId, tab: tab as PersonaStatsTab };
   }
 

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { SQL } from "bun";
 import { z } from "zod";
 import { PrivacyLevel } from "@/types/db/schema";
-import { sql } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import { NATURAL_NUDGE_FAILURE_STOP_THRESHOLD } from "@/modules/natural-nudges/runtime/tuning";
 import {
@@ -75,12 +75,15 @@ function generatePersonaIdleNudgeId(usedIds: ReadonlySet<string>): string | null
 
 class NaturalNudgeRepository {
   async loadServerConfig(serverId: number, client: SQL = sql): Promise<ServerNaturalNudgeConfig> {
-    const rows = await client`
+    const loadRows = () => client`
       SELECT server_id, idle_nudges_enabled, active_nudges_enabled, channel_disc_ids, llm_id,
         checker_llm_id, checker_decision_model_id,
         idle_nudge_frequency, active_nudge_frequency, disabled_builtin_idle_nudges
       FROM server_natural_nudge_configs WHERE server_id = ${serverId}
     `;
+    const rows = await (client === sql
+      ? withTransientDbRetry(loadRows, "load natural nudge server config")
+      : loadRows());
     const [row] = parseRows(serverNaturalNudgeConfigSchema, rows, "server config");
     return row ?? defaultServerNaturalNudgeConfig(serverId);
   }
@@ -131,7 +134,8 @@ class NaturalNudgeRepository {
    * settings; those get the column defaults.
    */
   async listEnabledIdleNudgeServers(since: Date): Promise<EnabledIdleNudgeServer[]> {
-    const rows = await sql`
+    const rows = await withTransientDbRetry(
+      () => sql`
       SELECT s.server_id, s.server_disc_id, scc.timezone_offset,
         CASE WHEN c.server_id IS NULL THEN NULL ELSE json_build_object(
           'server_id', c.server_id, 'idle_nudges_enabled', c.idle_nudges_enabled,
@@ -152,7 +156,9 @@ class NaturalNudgeRepository {
             AND sc.metric = 'message_sent'
             AND sc.bucket >= ${since.toISOString().slice(0, 10)}::date
         )
-    `;
+    `,
+      "list enabled idle nudge servers",
+    );
     return parseRows(idleNudgeServerRowSchema, rows, "enabled server").map((row) => ({
       ...row,
       config: row.config ?? defaultServerNaturalNudgeConfig(row.server_id),
@@ -161,7 +167,8 @@ class NaturalNudgeRepository {
 
   /** Channels with a turn since `since`, minus roleplay channels, where in-character talk is not a lull to fill. */
   async loadAutomaticChannelIds(serverId: number, since: Date): Promise<string[]> {
-    const rows = await sql<{ metric_key: string }[]>`
+    const rows = await withTransientDbRetry(
+      () => sql<{ metric_key: string }[]>`
       SELECT DISTINCT sc.metric_key
       FROM stat_counters sc
       LEFT JOIN server_channel_scope_configs scope ON scope.server_id = sc.server_id
@@ -170,17 +177,20 @@ class NaturalNudgeRepository {
         AND sc.bucket >= ${since.toISOString().slice(0, 10)}::date
         AND NOT (sc.metric_key = ANY(COALESCE(scope.rp_channel_ids, '{}')))
       ORDER BY sc.metric_key
-    `;
+    `,
+      "load natural nudge automatic channels",
+    );
     return rows.map((row) => row.metric_key);
   }
 
   async listCustomIdleNudges(serverId: number, client: SQL = sql): Promise<CustomIdleNudgeRow[]> {
-    const rows = await client`
+    const loadRows = () => client`
       SELECT custom_idle_nudge_id, server_id, category, title, brief, agenda_hint, prerequisites, recommended_tools, enabled
       FROM server_natural_nudge_custom_idle_nudges
       WHERE server_id = ${serverId}
       ORDER BY custom_idle_nudge_id
     `;
+    const rows = await (client === sql ? withTransientDbRetry(loadRows, "load custom idle nudges") : loadRows());
     return parseRows(customIdleNudgeRowSchema, rows, "custom idle nudge");
   }
 
@@ -294,9 +304,12 @@ class NaturalNudgeRepository {
   }
 
   async loadPersonaScopes(serverId: number): Promise<IdleNudgePersonaScopes> {
-    const rows = await sql`
+    const rows = await withTransientDbRetry(
+      () => sql`
       SELECT idle_nudge_key, persona_ids FROM server_natural_nudge_persona_scopes WHERE server_id = ${serverId}
-    `;
+    `,
+      "load natural nudge persona scopes",
+    );
     return new Map(
       parseRows(personaScopeRowSchema, rows, "persona scope").map((row) => [row.idle_nudge_key, row.persona_ids]),
     );
@@ -330,7 +343,7 @@ class NaturalNudgeRepository {
   ): Promise<Map<number, PersonaNaturalNudgeConfig>> {
     const configs = new Map<number, PersonaNaturalNudgeConfig>();
     if (personaIds.length === 0) return configs;
-    const rows = await client`
+    const loadRows = () => client`
       SELECT p.persona_id,
         COALESCE(c.talkativeness, CASE WHEN p.is_pointer THEN pp.natural_nudge_talkativeness END,
           ${DEFAULT_NATURAL_NUDGE_TALKATIVENESS}) AS talkativeness,
@@ -348,6 +361,9 @@ class NaturalNudgeRepository {
         AND pp.preset_language = p.preset_language
       WHERE p.persona_id = ANY(${sql.array([...personaIds], "INT")})
     `;
+    const rows = await (client === sql
+      ? withTransientDbRetry(loadRows, "load natural nudge persona configs")
+      : loadRows());
     for (const config of parseRows(personaNaturalNudgeConfigSchema, rows, "persona config")) {
       configs.set(config.persona_id, config);
     }
@@ -604,10 +620,13 @@ class NaturalNudgeRepository {
   }
 
   async loadRuntimeState(serverId: number): Promise<NaturalNudgeRuntimeState> {
-    const rows = await sql`
+    const rows = await withTransientDbRetry(
+      () => sql`
       SELECT server_id, idle_nudge_jitter, consecutive_failures, stopped_at
       FROM server_natural_nudge_runtime_state WHERE server_id = ${serverId}
-    `;
+    `,
+      "load natural nudge runtime state",
+    );
     const [row] = parseRows(runtimeStateSchema, rows, "runtime state");
     return row ?? { server_id: serverId, idle_nudge_jitter: 1, consecutive_failures: 0, stopped_at: null };
   }
@@ -652,15 +671,17 @@ class NaturalNudgeRepository {
     since: Date,
     latestIdleNudgeCount: number,
   ): Promise<{ recent: NaturalNudgeFireRow[]; latestIdleNudges: NaturalNudgeFireRow[] }> {
-    const [recentRows, latestRows] = await Promise.all([
-      sql`
+    const [recentRows, latestRows] = await withTransientDbRetry(
+      () =>
+        Promise.all([
+          sql`
         SELECT fire_id, server_id, channel_disc_id, persona_id, mode, category, idle_nudge_key, target_user_id,
           opener_message_disc_id, answered, fired_at
         FROM natural_nudge_fires
         WHERE server_id = ${serverId} AND fired_at >= ${since}
         ORDER BY fired_at DESC
       `,
-      sql`
+          sql`
         SELECT fire_id, server_id, channel_disc_id, persona_id, mode, category, idle_nudge_key, target_user_id,
           opener_message_disc_id, answered, fired_at
         FROM natural_nudge_fires
@@ -668,7 +689,9 @@ class NaturalNudgeRepository {
         ORDER BY fired_at DESC
         LIMIT ${latestIdleNudgeCount}
       `,
-    ]);
+        ]),
+      "load idle nudge fire history",
+    );
     return {
       recent: parseRows(fireRowSchema, recentRows, "fire"),
       latestIdleNudges: parseRows(fireRowSchema, latestRows, "fire"),
@@ -685,13 +708,16 @@ class NaturalNudgeRepository {
     targetUserId: number,
     since: Date,
   ): Promise<Map<string, Date>> {
-    const rows = await sql<Array<{ idle_nudge_key: string; fired_at: Date }>>`
+    const rows = await withTransientDbRetry(
+      () => sql<Array<{ idle_nudge_key: string; fired_at: Date }>>`
       SELECT idle_nudge_key, MAX(fired_at) AS fired_at
       FROM natural_nudge_fires
       WHERE server_id = ${serverId} AND persona_id = ${personaId} AND target_user_id = ${targetUserId}
         AND mode = 'idle' AND fired_at >= ${since}
       GROUP BY idle_nudge_key
-    `;
+    `,
+      "load targeted idle nudge history",
+    );
     return new Map(rows.map((row) => [row.idle_nudge_key, row.fired_at]));
   }
 
@@ -772,7 +798,8 @@ class NaturalNudgeRepository {
     memorySince: Date;
     onlyUserId?: number;
   }): Promise<PingUserCandidate[]> {
-    const rows = await sql`
+    const rows = await withTransientDbRetry(
+      () => sql`
       WITH turns_here AS (
         SELECT sc.user_id, SUM(sc.count) AS turns
         FROM stat_counters sc
@@ -806,7 +833,9 @@ class NaturalNudgeRepository {
           WHERE pub.server_id = ${args.serverId} AND pub.persona_id = ${args.personaId}
             AND pub.user_disc_id = u.user_disc_id AND pub.expires_at > NOW()
         )
-    `;
+    `,
+      "load natural nudge ping candidates",
+    );
     return parseRows(pingUserCandidateSchema, rows, "Ping User nudge candidate");
   }
 
@@ -814,10 +843,13 @@ class NaturalNudgeRepository {
   async loadAgendas(personaId: number, messageDiscIds: readonly string[]): Promise<Map<string, string>> {
     const agendas = new Map<string, string>();
     if (messageDiscIds.length === 0) return agendas;
-    const rows = await sql<Array<{ message_disc_id: string; agenda: string }>>`
+    const rows = await withTransientDbRetry(
+      () => sql<Array<{ message_disc_id: string; agenda: string }>>`
       SELECT message_disc_id, agenda FROM natural_nudge_agendas
       WHERE persona_id = ${personaId} AND message_disc_id = ANY(${sql.array([...messageDiscIds], "TEXT")})
-    `;
+    `,
+      "load natural nudge agendas",
+    );
     for (const row of rows) agendas.set(row.message_disc_id, row.agenda);
     return agendas;
   }

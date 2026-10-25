@@ -1336,7 +1336,7 @@ async function withReplyContext(
   messageProxyIdentitiesByMessageId: Map<string, MessageProxyHistoryIdentity>,
   fetchedMessagesById: ReadonlyMap<string, Message>,
 ): Promise<{ content: string; referencedMessage?: Message }> {
-  if (msg.reference?.type === MessageReferenceType.Forward || !("messages" in msg.channel)) {
+  if (msg.reference?.type === MessageReferenceType.Forward || !msg.channel || !("messages" in msg.channel)) {
     return { content };
   }
 

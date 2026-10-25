@@ -166,11 +166,11 @@ describe("status Components V2 limits and redaction", () => {
         },
       },
       {
-        id: "people",
-        labelKey: "commands.stats.tab.people",
+        id: "personas",
+        labelKey: "commands.stats.tabs.personas_label",
         page: {
           titleKey: "commands.stats.server.title",
-          subtitle: "People overview.",
+          subtitle: "Persona overview.",
           fields: [{ kind: "stat", nameKey: "commands.stats.messages", value: "2", inline: true }],
         },
       },
