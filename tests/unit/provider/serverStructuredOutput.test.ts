@@ -86,7 +86,7 @@ function registerPayingOption(input: { owned: ProviderOptionCapability[]; eligib
       claim: async () => true,
       remove: async () => "removed",
       owns: (_scope, capability) => input.owned.includes(capability),
-      resolveServerCredentials: async ({ capability, modelId }) => {
+      resolveCredentials: async ({ capability, modelId }) => {
         requests.push({ capability, modelId });
         if (input.refuse)
           throw new ProviderRequestDeniedError(usageContext, () => ({ titleKey: "fixture", description: "fixture" }));

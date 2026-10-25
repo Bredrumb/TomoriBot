@@ -442,11 +442,19 @@ export const supporterProviderOption: ProviderOptionDefinition = {
     remove: removeSelection,
     owns: ownsCapability,
     validateModel,
-    resolveServerCredentials: async ({ scope, capability, modelId }) => {
-      if (scope.kind !== "server" || !billingAvailable()) return null;
+    resolveCredentials: async ({ scope, capability, modelId }) => {
+      if (!billingAvailable()) return null;
       const credentials = await resolveSupporterCapabilityCredentials({
-        scope: { kind: "server", serverId: scope.ownerId },
-        capability: capability === "decision" ? "decision" : "text",
+        scope:
+          scope.kind === "personal"
+            ? { kind: "personal", userId: scope.ownerId }
+            : { kind: "server", serverId: scope.ownerId },
+        capability:
+          capability === "speech-design" || capability === "speech-clone"
+            ? "voice"
+            : capability === "reviewer" || capability === "nudge-planner" || capability === "nudge-checker"
+              ? "text"
+              : capability,
         modelId,
       });
       return {

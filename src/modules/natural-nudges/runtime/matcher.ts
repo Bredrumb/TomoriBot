@@ -17,7 +17,7 @@ import { findProviderRequestDeniedError, withProviderUsageContext } from "@/util
 import {
   findProviderOptionByActiveProvider,
   type ProviderOptionCapability,
-  type ProviderOptionServerCredentials,
+  type ProviderOptionCredentials,
 } from "@/utils/provider/providerOptionRegistry";
 import { log } from "@/utils/misc/logger";
 import { formatStructuredRetryNote } from "@/utils/provider/serverStructuredOutput";
@@ -43,7 +43,7 @@ export type MatcherBackend =
       kind: "decision";
       reference: DecisionModelReference;
       model: string;
-      credentials?: ProviderOptionServerCredentials;
+      credentials?: ProviderOptionCredentials;
     }
   | ({ kind: "llm"; model: string } & NudgeModelRef);
 
@@ -94,13 +94,13 @@ async function decisionBackend(
   if (!option || !supportsCheckerChoice(option.model)) return { backend: null };
   const scope = { kind: "server", ownerId: state.server_id, state } as const;
   const owner = findProviderOptionByActiveProvider(option.model.provider, scope, slot);
-  let credentials: ProviderOptionServerCredentials | undefined;
+  let credentials: ProviderOptionCredentials | undefined;
   if (owner) {
-    if (!(await owner.availability(scope)).eligible || !owner.selection.resolveServerCredentials)
+    if (!(await owner.availability(scope)).eligible || !owner.selection.resolveCredentials)
       return { backend: null, denied: true };
     try {
       credentials =
-        (await owner.selection.resolveServerCredentials({
+        (await owner.selection.resolveCredentials({
           scope,
           capability: "decision",
           modelId: option.model.decision_model_id,

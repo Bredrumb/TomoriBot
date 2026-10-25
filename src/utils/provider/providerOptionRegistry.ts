@@ -119,7 +119,7 @@ export interface ProviderOptionSpeechSelectionInput {
 }
 
 /** @public Natural Nudges and `providerFeatureExecutors.ts` import this on the subscription launch branch. */
-export interface ProviderOptionServerCredentials {
+export interface ProviderOptionCredentials {
   apiKey: string;
   usageContext?: ProviderUsageContext;
   /** The saved provider row whose settings the call mirrors; absent means the persona's own settings. */
@@ -146,12 +146,12 @@ export interface ProviderOptionDefinition {
       capability: ProviderPanelCapability;
       modelCodename: string;
     }): Promise<boolean>;
-    /** Pays for a server-pinned structured call in a slot this option owns; throws `ProviderRequestDeniedError` to refuse. */
-    resolveServerCredentials?(input: {
+    /** Resolves only the chosen scope and model; throws `ProviderRequestDeniedError` to refuse without changing the payer. */
+    resolveCredentials?(input: {
       scope: ProviderOptionScope;
       capability: ProviderOptionCapability;
       modelId: number;
-    }): Promise<ProviderOptionServerCredentials | null>;
+    }): Promise<ProviderOptionCredentials | null>;
   };
   panel?: {
     entryComponents?(context: ProviderOptionEntryContext): readonly ComponentInContainerData[];

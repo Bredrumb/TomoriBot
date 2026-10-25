@@ -53,13 +53,13 @@ import {
   getSupporterUsageContext,
   type SupporterFundingContext,
 } from "@/modules/supporter-billing/runtime/types";
-import type { ProviderOptionServerCredentials } from "@/utils/provider/providerOptionRegistry";
+import type { ProviderOptionCredentials } from "@/utils/provider/providerOptionRegistry";
 
 export interface DecisionExecutionRequest extends DecisionInput {
   scope: OpenRouterModelScope;
   reference: DecisionModelReference | null;
   supporterFunding?: SupporterFundingContext;
-  credentials?: ProviderOptionServerCredentials;
+  credentials?: ProviderOptionCredentials;
 }
 
 export async function loadDecisionModelsForScope(scope: OpenRouterModelScope): Promise<DecisionModelOption[]> {

@@ -32,7 +32,7 @@ import { currentProviderUsageContext } from "@/utils/provider/providerUsage";
 import { resolveServerStructuredModel } from "@/utils/provider/serverStructuredOutput";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
 import { useEnvSandbox } from "../../helpers/env";
-import { createServerFunding } from "./guards/utils-fundingFixtures";
+import { createPersonalFunding, createServerFunding } from "./guards/utils-fundingFixtures";
 import { findProviderOption } from "@/utils/provider/providerOptionRegistry";
 
 const cleanups: Array<() => void> = [];
@@ -76,6 +76,50 @@ describe("Subscription structured-call payer ownership", () => {
     process.env.RUN_ENV = "production";
     process.env.TOMORI_SUPPORTER_BILLING_ENABLED = "true";
     if (!findProviderOption("supporter")) cleanups.push(registerSupporterProviderOption());
+  });
+
+  it("resolves the selected scope and capability with the option's saved identity", async () => {
+    const member = track(
+      spyOn(managedProvider, "resolveSupporterCapabilityCredentials").mockImplementation(
+        async ({ scope, capability }) => ({
+          apiKey: "fixture-member",
+          funding:
+            scope.kind === "personal"
+              ? createPersonalFunding({ capability, personalUserId: scope.userId })
+              : createServerFunding({ capability, serverId: scope.serverId }),
+        }),
+      ),
+    );
+    for (const kind of ["server", "personal"] as const) {
+      for (const [capability, transport] of [
+        ["text", "text"],
+        ["vision", "vision"],
+        ["embedding", "embedding"],
+        ["image", "image"],
+        ["video", "video"],
+        ["decision", "decision"],
+        ["reviewer", "text"],
+        ["nudge-planner", "text"],
+        ["nudge-checker", "text"],
+        ["speech-design", "voice"],
+        ["speech-clone", "voice"],
+      ] as const) {
+        const credentials = await supporterProviderOption.selection.resolveCredentials?.({
+          scope: { kind, ownerId: 7 },
+          capability,
+          modelId: 51,
+        });
+        expect(credentials).toMatchObject({ apiKey: "fixture-member", savedProvider: "supporter" });
+        expect(credentials?.usageContext).toMatchObject({
+          supporterFunding: { fundingScope: kind, capability: transport },
+        });
+        expect(member.mock.lastCall?.[0]).toEqual({
+          scope: kind === "personal" ? { kind, userId: 7 } : { kind, serverId: 7 },
+          capability: transport,
+          modelId: 51,
+        });
+      }
+    }
   });
 
   it("resolves each real Subscription structured slot and carries its context through calls and format retries", async () => {

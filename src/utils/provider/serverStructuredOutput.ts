@@ -54,8 +54,8 @@ export async function resolveServerStructuredModel(
   const scope = { kind: "server", ownerId: baseState.server_id, state: baseState } as const;
   const option = findProviderOptionByActiveProvider(model.llm_provider, scope, slot);
   if (option) {
-    if (!(await option.availability(scope)).eligible || !option.selection.resolveServerCredentials) return null;
-    const credentials = await option.selection.resolveServerCredentials({
+    if (!(await option.availability(scope)).eligible || !option.selection.resolveCredentials) return null;
+    const credentials = await option.selection.resolveCredentials({
       scope,
       capability: slot,
       modelId: model.llm_id,
