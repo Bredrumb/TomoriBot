@@ -472,7 +472,12 @@ describe("runToolLoop — contract tests", () => {
       makeFunctionCallResult("echo_tool", { text: "hello" }),
       { status: "completed", accumulatedText: "I echoed: hello" },
     ]);
-    toolExecuteQueue.push({ success: true, data: { echoed: "hello" } });
+    toolExecuteQueue.push({
+      success: true,
+      message: "The echo was delivered. Continue without repeating it.",
+      data: { echoed: "hello" },
+      responseDelivered: true,
+    });
 
     const context = makeContext();
     context.usageContext = { credentialProvider: "test-option", credentialScope: "personal" };
@@ -493,18 +498,69 @@ describe("runToolLoop — contract tests", () => {
 
     const secondHistory = capturedHistories[1] as Array<{
       functionCall: { name: string };
-      functionResponse: { functionResponse: { name: string; response: { result: unknown } } };
+      functionResponse: { functionResponse: { name: string; response: { result: unknown; message?: string } } };
     }>;
     expect(secondHistory).toHaveLength(1);
     expect(secondHistory[0]?.functionCall?.name).toBe("echo_tool");
     expect(secondHistory[0]?.functionResponse?.functionResponse?.name).toBe("echo_tool");
 
-    const resultData = secondHistory[0]?.functionResponse?.functionResponse?.response?.result as {
-      echoed: string;
-    };
-    expect(resultData?.echoed).toBe("hello");
+    const response = secondHistory[0]?.functionResponse?.functionResponse?.response;
+    expect(response?.result).toEqual({ echoed: "hello" });
+    expect(response?.message).toBe("The echo was delivered. Continue without repeating it.");
+    expect(response).not.toHaveProperty("responseDelivered");
+    expect(response).not.toHaveProperty("endTurn");
 
     expect(result.streamResults).toHaveLength(2);
+  });
+
+  it("preserves message-only, empty, array, scalar and message-bearing payload successes", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const cases: Array<{ label: string; result: ToolResult; expected: Record<string, unknown> }> = [
+      {
+        label: "message only",
+        result: { success: true, message: "The gesture was delivered. Continue without repeating it." },
+        expected: {
+          result: { status: "completed" },
+          message: "The gesture was delivered. Continue without repeating it.",
+        },
+      },
+      {
+        label: "empty",
+        result: { success: true },
+        expected: { result: { status: "completed" } },
+      },
+      {
+        label: "array",
+        result: { success: true, data: ["first", "second"] },
+        expected: { result: ["first", "second"] },
+      },
+      {
+        label: "scalar",
+        result: { success: true, data: "plain text" },
+        expected: { result: "plain text" },
+      },
+      {
+        label: "payload message field",
+        result: { success: true, data: { message: "payload field" }, message: "Continue without repeating it." },
+        expected: { result: { message: "payload field" }, message: "Continue without repeating it." },
+      },
+    ];
+    const failures: string[] = [];
+    for (const testCase of cases) {
+      const { provider, capturedHistories } = makeProvider([
+        makeFunctionCallResult("outcome_tool", { target: "Juno" }),
+        { status: "completed", accumulatedText: "Noted." },
+      ]);
+      toolExecuteQueue.push(testCase.result);
+      await runToolLoop(makeParams(makeContext(), provider));
+      const history = capturedHistories[1] as Array<{
+        functionResponse: { functionResponse: { response: Record<string, unknown> } };
+      }>;
+      const response = history[0]?.functionResponse?.functionResponse?.response;
+      if (JSON.stringify(response) !== JSON.stringify(testCase.expected))
+        failures.push(`${testCase.label}: ${JSON.stringify(response)}`);
+    }
+    expect(failures).toEqual([]);
   });
 
   it("preserves direct tool delivery when the tool ends without streamed text", async () => {
@@ -527,7 +583,12 @@ describe("runToolLoop — contract tests", () => {
       { status: "completed", accumulatedText: "sorry about that" },
     ]);
     // One failure: below the consecutive-error cap (3).
-    toolExecuteQueue.push({ success: false, error: "something broke" });
+    toolExecuteQueue.push({
+      success: false,
+      error: "something broke",
+      message: "The workspace refused the write.",
+      data: { private: "PRIVATE_FAILURE_DATA" },
+    });
 
     const context = makeContext();
     const result = await runToolLoop(makeParams(context, provider));
@@ -546,6 +607,9 @@ describe("runToolLoop — contract tests", () => {
     const failResult = secondHistory[0]?.functionResponse?.functionResponse?.response?.result;
     expect(failResult?.status).toBe("tool_execution_failed");
     expect(failResult?.tool_name).toBe("bad_tool");
+    expect(JSON.stringify(secondHistory)).toContain("The workspace refused the write.");
+    expect(JSON.stringify(secondHistory)).not.toContain("PRIVATE_FAILURE_DATA");
+    expect(JSON.stringify(secondHistory)).not.toContain("something broke");
 
     // The raw internal error string is not surfaced as the final response text.
     expect(result.personaResponses[0]?.text).not.toContain("something broke");
@@ -739,6 +803,37 @@ describe("runToolLoop — contract tests", () => {
     await runToolLoop(makeParams(context, provider));
 
     expect(context.contextItems.length).toBe(initialItemCount + 1);
+  });
+
+  it("context-restart review history keeps the control payload and continuation message for the next provider call", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const context = makeReviewContext();
+    const delivered: string[] = [];
+    const { provider, capturedHistories } = makeProvider([
+      makeFunctionCallResult("lookup", {}),
+      held("A quiet look.", delivered),
+    ]);
+    const fakeContextItem: StructuredContextItem = {
+      role: "user",
+      parts: [{ type: "text", text: "Profile picture: ..." }],
+    };
+    const data = { type: "context_restart_with_image", enhanced_context_item: fakeContextItem };
+    toolExecuteQueue.push({ success: true, message: "The profile picture is ready.", data });
+    Object.assign(provider, { callStructuredJSON: async () => ({ success: true, data: { status: "pass" } }) });
+
+    const result = await runToolLoop(makeParams(context, provider));
+
+    expect(result.status).toBe("completed");
+    expect(context.contextItems).toContain(fakeContextItem);
+    expect(delivered).toEqual(["A quiet look."]);
+    const history = capturedHistories[1] as Array<{
+      functionResponse: { functionResponse: { response: { result: unknown; message?: string } } };
+    }>;
+    expect(history).toHaveLength(1);
+    expect(history[0]?.functionResponse?.functionResponse?.response).toEqual({
+      result: data,
+      message: "The profile picture is ready.",
+    });
   });
 
   // Pre-tool text preservation (post-tool-call amnesia regression)
@@ -2285,7 +2380,10 @@ describe("runToolLoop — contract tests", () => {
       const context = makeReviewContext();
       const delivered: string[] = [];
       const args = { target: "fixture" };
-      const { provider } = makeProvider([
+      const data = { written: true };
+      const message = "The action completed. Continue without repeating it.";
+      toolExecuteQueue.push({ success: true, message, data });
+      const { provider, capturedHistories } = makeProvider([
         makeFunctionCallResult(name, args),
         held("generic", delivered),
         makeFunctionCallResult(name, args),
@@ -2306,6 +2404,13 @@ describe("runToolLoop — contract tests", () => {
       );
       expect(context.responseReview.toolReviews).toBe(1);
       expect(delivered).toEqual(["quiet"]);
+      expect(capturedHistories).toHaveLength(4);
+      const revisedHistory = capturedHistories[3] as Array<{
+        functionResponse: { functionResponse: { response: { result: unknown; message?: string } } };
+      }>;
+      expect(revisedHistory).toHaveLength(2);
+      for (const entry of revisedHistory)
+        expect(entry.functionResponse.functionResponse.response).toEqual({ result: data, message });
     });
 
     it(`${name}: Off executes ordinarily without review or same-invocation replay suppression`, async () => {
@@ -2338,6 +2443,26 @@ describe("runToolLoop — contract tests", () => {
     expect((fallback.capturedContexts[0] as unknown[]).length).toBe(baseItems + 1);
     expect(JSON.stringify(fallback.capturedContexts[0])).toContain("lookup");
     expect(fallback.capturedHistories[1]).toHaveLength(1);
+  });
+
+  it("Off reuse gives the replacement attempt the recorded continuation message and data without executing again", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const context = makeContext();
+    const args = { target: "Juno" };
+    const data = { action: "hug", target: "Juno" };
+    const message = "The gesture was delivered. Continue without repeating it.";
+    toolExecuteQueue.push({ success: true, message, data });
+    const first = makeProvider([makeFunctionCallResult("lookup", args), { status: "error" }]);
+    await runToolLoop(makeParams(context, first.provider));
+    const fallback = makeProvider([makeFunctionCallResult("lookup", args), { status: "completed" }]);
+    await runToolLoop(makeParams(context, fallback.provider));
+
+    expect(toolExecuteCalls).toEqual([{ name: "lookup", args }]);
+    const history = fallback.capturedHistories[1] as Array<{
+      functionResponse: { functionResponse: { response: { result: unknown; message?: string } } };
+    }>;
+    expect(history).toHaveLength(1);
+    expect(history[0]?.functionResponse?.functionResponse?.response).toEqual({ result: data, message });
   });
 
   it("Off does not reuse a context-restart result, whose injected media a replacement attempt lacks", async () => {
