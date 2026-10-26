@@ -12,7 +12,8 @@ import {
   type PersonaAuthoredIdleNudge,
 } from "@/modules/natural-nudges/db/types";
 import { resolveEffectiveChannelIds } from "@/modules/natural-nudges/runtime/channels";
-import { idleNudgesPerDay, heatWindowStart } from "@/modules/natural-nudges/runtime/meters";
+import { countUnansweredStreak, idleNudgesPerDay, heatWindowStart } from "@/modules/natural-nudges/runtime/meters";
+import { UNANSWERED_STOP_STREAK } from "@/modules/natural-nudges/runtime/tuning";
 import { workspaceConfigExportSchema } from "@/types/db/dataExport";
 import { exportRepository } from "@/utils/db/repositories/ExportRepository";
 import { importRepository } from "@/utils/db/repositories/ImportRepository";
@@ -810,6 +811,50 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
     await naturalNudgeRepository.setFireAnswered(history.latestIdleNudges[0].fire_id, true);
     const answered = await naturalNudgeRepository.loadFireHistory(refs.serverId, new Date(0), 5);
     expect(answered.latestIdleNudges[0]?.answered).toBe(true);
+  });
+
+  it("counts unanswered invitations across scenes while retaining the latest fire and pending verdict", async () => {
+    const categories = [
+      "start_topic",
+      "play_scene",
+      "revive_topic",
+      "play_scene",
+      "play_scene",
+      "ping_user",
+      "play_scene",
+    ] as const;
+    const baseTime = Date.now() - 20 * 86_400_000;
+    const [persona] =
+      await testSql`INSERT INTO personas (server_id, persona_nickname) VALUES (${otherServerId}, '_rt_invitation_persona') RETURNING persona_id`;
+    try {
+      await testSql`DELETE FROM natural_nudge_fires WHERE server_id = ${otherServerId}`;
+      for (const [index, category] of categories.entries()) {
+        await testSql`
+          INSERT INTO natural_nudge_fires (
+            server_id, channel_disc_id, persona_id, mode, category, idle_nudge_key,
+            opener_message_disc_id, answered, fired_at
+          ) VALUES (
+            ${otherServerId}, '1200000000000000001', ${persona.persona_id}, 'idle', ${category},
+            ${`${category}.fixture`}, ${`130000000000000010${index}`},
+            ${index === categories.length - 1 ? null : category === "play_scene"},
+            ${new Date(baseTime + index * 60_000)}
+          )
+        `;
+      }
+      const history = await naturalNudgeRepository.loadFireHistory(otherServerId, new Date(), UNANSWERED_STOP_STREAK);
+      expect(history.recent).toEqual([]);
+      expect(history.latestIdleNudges[0]).toMatchObject({ category: "play_scene", answered: null });
+      expect(countUnansweredStreak(history.latestIdleNudges, null)).toBe(UNANSWERED_STOP_STREAK);
+      expect(countUnansweredStreak(history.latestIdleNudges, new Date(baseTime + 1))).toBe(2);
+      const invitation = history.latestIdleNudges.find((fire) => fire.category === "revive_topic");
+      if (!invitation) throw new Error("Missing invitation fixture");
+      await testSql`UPDATE natural_nudge_fires SET answered = true WHERE fire_id = ${invitation.fire_id}`;
+      const answered = await naturalNudgeRepository.loadFireHistory(otherServerId, new Date(), UNANSWERED_STOP_STREAK);
+      expect(countUnansweredStreak(answered.latestIdleNudges, null)).toBe(1);
+    } finally {
+      await testSql`DELETE FROM natural_nudge_fires WHERE server_id = ${otherServerId}`;
+      await testSql`DELETE FROM personas WHERE persona_id = ${persona.persona_id}`;
+    }
   });
 
   it("stops a server after repeated failures and lifts the stop when cleared", async () => {

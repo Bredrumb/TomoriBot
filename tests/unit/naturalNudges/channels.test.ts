@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
-import type { Client } from "discord.js";
+import { ChannelType, PermissionFlagsBits, type Client } from "discord.js";
 import { resolveAllowedChannels } from "@/modules/natural-nudges/runtime/channels";
 import { resetSendFailureCacheForTesting } from "@/utils/discord/stream/sendFailureCache";
 
@@ -14,6 +14,29 @@ afterEach(() => {
 });
 
 describe("resolveAllowedChannels", () => {
+  it("excludes readable channels without send permission and admits them after permission changes", async () => {
+    let canSend = false;
+    const checked: bigint[] = [];
+    const channel = {
+      id: DELETED_CHANNEL,
+      type: ChannelType.GuildText,
+      guild: { members: { me: { id: "bot" } } },
+      permissionsFor: () => ({
+        has: (permission: bigint) => {
+          checked.push(permission);
+          return canSend;
+        },
+      }),
+    };
+    const client = clientWithFetch(async () => channel);
+    expect(await resolveAllowedChannels(client, [channel.id])).toEqual([]);
+    canSend = true;
+    expect((await resolveAllowedChannels(client, [channel.id])).map((entry) => entry.channel.id)).toEqual([channel.id]);
+    expect(checked).toEqual([PermissionFlagsBits.SendMessages, PermissionFlagsBits.SendMessages]);
+    channel.guild.members.me = null as never;
+    expect(await resolveAllowedChannels(client, [channel.id])).toEqual([]);
+  });
+
   it("stops fetching a deleted channel on later ticks", async () => {
     const fetch = mock(() => Promise.reject(Object.assign(new Error("Unknown Channel"), { code: 10003 })));
     const client = clientWithFetch(fetch);

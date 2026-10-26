@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, spyOn, type Mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn, type Mock } from "bun:test";
+import type { StructuredOutputResult } from "@/types/provider/featureInterfaces";
 import { Collection, type Client, type GuildTextBasedChannel, type Message } from "discord.js";
 import * as tomoriChatModule from "@/events/messageCreate/tomoriChat";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
@@ -14,6 +15,7 @@ import {
 import * as configCache from "@/modules/natural-nudges/runtime/configCache";
 import * as inFlight from "@/modules/natural-nudges/runtime/inFlight";
 import * as matcher from "@/modules/natural-nudges/runtime/matcher";
+import * as model from "@/modules/natural-nudges/runtime/model";
 import {
   ACTIVE_NUDGE_DAILY_CHECK_CAPS,
   ACTIVE_NUDGE_OPTION_BUDGET,
@@ -32,6 +34,7 @@ import * as serverStructuredOutput from "@/utils/provider/serverStructuredOutput
 import { createPersona } from "../../helpers/fixtures";
 
 const realResolveMatcherBackend = matcher.resolveMatcherBackend;
+const realMatchActiveNudge = matcher.matchActiveNudge;
 
 const SERVER_ID = 7;
 const GUILD_ID = "fixture-guild";
@@ -231,7 +234,11 @@ describe("Active Nudge check", () => {
     historySpy = spyOn(naturalNudgeRepository, "loadFireHistory");
     historySpy.mockResolvedValue({ recent: [], latestIdleNudges: [] });
     matches = [];
-    match = spyOn(matcher, "matchActiveNudge").mockImplementation(async () => matches.shift() ?? defaultMatch);
+    match = spyOn(matcher, "matchActiveNudge").mockImplementation(async (args) =>
+      args.admitRequest()
+        ? (matches.shift() ?? defaultMatch)
+        : { choice: null, reason: "check_cap_reached", kind: args.backend.kind, model: args.backend.model },
+    );
     spies.push(
       match,
       spyOn(tomoriStateCache, "getCachedAllPersonas").mockResolvedValue([main, alter]),
@@ -316,6 +323,24 @@ describe("Active Nudge check", () => {
   const postHumans = async (count: number) => {
     window = Array.from({ length: count }, () => member(channel));
     for (let index = 0; index < count; index++) await observeActiveNudgeMessage(client, member(channel));
+  };
+
+  const useRealMatcher = (respond: () => StructuredOutputResult<{ topic: string }>) => {
+    match.mockImplementation(realMatchActiveNudge);
+    const request = mock(async () => respond());
+    spies.push(
+      spyOn(serverStructuredOutput, "resolveServerStructuredModel").mockResolvedValue({
+        capability: { callStructuredJSON: request } as never,
+        state: main,
+        apiKey: "fixture-key",
+      }),
+      spyOn(model, "resolveStructuredCallTarget").mockResolvedValue({
+        model: "fixture",
+        maxOutputTokens: 256,
+        endpointUrl: undefined,
+      }),
+    );
+    return request;
   };
 
   it("speaks as the interest's owner, told which interest drew it in, and records the fire", async () => {
@@ -476,11 +501,52 @@ describe("Active Nudge check", () => {
     expect(matcher.matchActiveNudge).not.toHaveBeenCalled();
   });
 
-  it("stays quiet when the winner already spoke in the matcher's window", async () => {
+  it("offers only interests with an owner who has not spoken in the window", async () => {
+    spies.push(recordFire());
+    window = [member(channel), self(channel)];
+    expect(await runActiveNudgeCheck(check, options())).toBe("fired");
+    expect(match.mock.calls[0][0].options.map((option) => option.text)).toEqual([
+      `${BAKING.label}: ${BAKING.description}`,
+    ]);
+    expect(chatInputs[0].selectedPersonaId).toBe(ALTER_ID);
+  });
+
+  it("skips matching when every interest owner already spoke", async () => {
+    spies.push(spyOn(tomoriStateCache, "getCachedAllPersonas").mockResolvedValue([main]));
     window = [member(channel), self(channel)];
     expect(await runActiveNudgeCheck(check, options())).toBe("aborted");
-    expect(chatInputs).toEqual([]);
-    expect(samples.at(-1)).toMatchObject({ reason: "winner_spoke", phase: "a" });
+    expect(match).not.toHaveBeenCalled();
+    expect(samples.at(-1)).toMatchObject({ reason: "no_interests", phase: "a" });
+  });
+
+  it("keeps a shared interest when one of its owners already spoke", async () => {
+    const configs = await naturalNudgeRepository.loadPersonaConfigs([MAIN_ID, ALTER_ID]);
+    const alterConfig = configs.get(ALTER_ID);
+    if (!alterConfig) throw new Error("Missing persona config fixture");
+    configs.set(ALTER_ID, { ...alterConfig, interests: [MECHA] });
+    spies.push(spyOn(naturalNudgeRepository, "loadPersonaConfigs").mockResolvedValue(configs), recordFire());
+    window = [member(channel), self(channel)];
+    expect(await runActiveNudgeCheck(check, options())).toBe("fired");
+    expect(match.mock.calls[0][0].options.map((option) => option.text)).toEqual([
+      `${MECHA.label}: ${MECHA.description}`,
+    ]);
+    expect(chatInputs[0].selectedPersonaId).toBe(ALTER_ID);
+  });
+
+  it("skips the initial matcher when the channel is busy or a persona replied during its reads", async () => {
+    locked = true;
+    expect(await runActiveNudgeCheck(check, options())).toBe("aborted");
+    expect(samples.at(-1)).toMatchObject({ reason: "channel_busy", phase: "a" });
+    locked = false;
+    spies.push(
+      spyOn(channels, "buildMatcherEvidence").mockImplementation(async () => {
+        await observeActiveNudgeMessage(client, self(channel));
+        return "Juno: a new Gundam";
+      }),
+    );
+    expect(await runActiveNudgeCheck(check, options())).toBe("aborted");
+    expect(samples.at(-1)).toMatchObject({ reason: "persona_spoke", phase: "a" });
+    expect(match).not.toHaveBeenCalled();
   });
 
   it("aborts after the delay when a persona spoke or the channel became busy, before any re-match", async () => {
@@ -653,19 +719,37 @@ describe("Active Nudge check", () => {
 
   it("stops calling the checker once the day's check cap is spent, re-matches included", async () => {
     spies.push(recordFire());
+    let topic = "none";
+    const request = useRealMatcher(() => ({ success: true, data: { topic } }));
     const budget = new ActiveNudgeCheckBudget();
     const cap = ACTIVE_NUDGE_DAILY_CHECK_CAPS[defaultServerNaturalNudgeConfig(SERVER_ID).active_nudge_frequency];
-    match.mockResolvedValue({ choice: null, reason: "none", kind: "llm", model: "fixture" });
     for (let index = 0; index < cap - 1; index++) await runActiveNudgeCheck(check, options(undefined, budget));
-    expect(match).toHaveBeenCalledTimes(cap - 1);
+    expect(request).toHaveBeenCalledTimes(cap - 1);
 
-    match.mockResolvedValue(defaultMatch);
+    topic = "i01";
     const duringDelay = () => postHumans(ACTIVE_NUDGE_STALE_HUMAN_MESSAGES);
     expect(await runActiveNudgeCheck(check, options(duringDelay, budget))).toBe("aborted");
-    expect(samples.at(-1)).toMatchObject({ phase: "c", reason: "check_cap_reached" });
+    expect(samples.at(-1)).toMatchObject({ phase: "c", reason: "check_cap_reached", rematched: 0 });
     expect(await runActiveNudgeCheck(check, options(undefined, budget))).toBe("aborted");
     expect(samples.at(-1)).toMatchObject({ phase: "a", reason: "check_cap_reached" });
-    expect(match).toHaveBeenCalledTimes(cap);
+    expect(request).toHaveBeenCalledTimes(cap);
+    expect(chatInputs).toEqual([]);
+  });
+
+  it("exhausts the actual checker request allowance through malformed responses", async () => {
+    const request = useRealMatcher(() => ({
+      success: false,
+      error: "fixture",
+      failure: "malformed",
+      malformed: { reason: "unparsable" },
+    }));
+    const budget = new ActiveNudgeCheckBudget();
+    const cap = ACTIVE_NUDGE_DAILY_CHECK_CAPS[defaultServerNaturalNudgeConfig(SERVER_ID).active_nudge_frequency];
+    for (let attempt = 0; attempt <= cap; attempt++) {
+      expect(await runActiveNudgeCheck(check, options(undefined, budget))).toBe("aborted");
+    }
+    expect(request).toHaveBeenCalledTimes(cap);
+    expect(samples.at(-1)).toMatchObject({ reason: "check_cap_reached", phase: "a" });
     expect(chatInputs).toEqual([]);
   });
 

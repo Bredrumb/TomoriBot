@@ -50,7 +50,9 @@ reconcile tick
 
 Nothing decays on a job. Every meter is an elapsed-time read over the fire log
 (`natural_nudge_fires`): persona, category, and idle nudge rest; the level's daily cap; the pending
-opener; and the unanswered streak. Heat and waking hours come from `stat_counters`:
+opener; and the unanswered streak. History reads retain both the latest idle fires and the latest
+invitations, so intervening scenes cannot hide the three-invitation unanswered stop. Heat and waking
+hours come from `stat_counters`:
 
 - **Heat** is the server's `message_sent` per day, each day halved every three days
   (`computeHeat` in `runtime/meters.ts`).
@@ -69,8 +71,9 @@ times. Token and model stats still record.
   keys of the last 14 days, minus Channel Rules `rp_channel_ids`. `channel_turn` is recorded beside
   `active_hour` with the channel ID (a thread's parent), and turns that borrow a trigger skip it, so
   only human-triggered turns make a channel eligible. 14 days is heat's horizon; with stat tracking
-  off, the automatic set stays empty along with heat. Fire-time admission still enforces send
-  permission, the channel whitelist, and persona access.
+  off, the automatic set stays empty along with heat. Idle planning excludes channels where the bot
+  lacks send permission. Fire-time admission still enforces send permission, the channel whitelist,
+  and persona access.
 - **Channel purpose**: Phase B receives each offered channel's name, description (Discord topic),
   and recent messages. The planner must fit the opener and agenda to the channel's purpose, even
   when recent messages drift off topic, and decline if no offered channel suits the brief.
@@ -264,8 +267,8 @@ messageCreate (activeNudge.ts, not awaited)
   not fire rests the channel before a new roll: 10 minutes, doubling with each empty check in a row up
   to 3 hours, and a fire resets it. A restart only resets the counts.
 - **Check budget.** `ActiveNudgeCheckBudget` caps checker calls per server per server-day (10, 20, 40,
-  or 60 by level, re-matches included), because the fire cap never stops checks that find nothing. A
-  text-model checker that answers HTTP 429 pauses the whole server for 3 hours, since the quota
+  or 60 by level, including format retries and re-matches), because the fire cap never stops checks
+  that find nothing. A text-model checker that answers HTTP 429 pauses the whole server for 3 hours, since the quota
   belongs to its key; the Decision path reports no status, so it cannot trigger the pause. The
   budget is in memory, so a restart forgets the day's count.
 - **Gate cache.** The counter reads settings, effective channels, and heat through a 5-minute
@@ -288,9 +291,10 @@ messageCreate (activeNudge.ts, not awaited)
 - **Member text stays data.** The evidence is `Name: text` lines read through the same privacy filter
   as planner transcripts. A text-model checker sees it inside an escaped `<<< >>>` block; the
   Decision API receives it as its separate evidence field.
-- **Winner rule.** Shared labels become one option with every owner, under the first owner's
-  description. Owners who spoke in the window are dropped, since without probabilities there is no
-  runner-up; if none remain, nothing fires.
+- **Winner rule.** Owners who spoke in the evidence window are excluded before options are built.
+  Shared labels become one option with every remaining owner, under the first owner's description.
+  With no remaining interests, a busy channel, or a persona reply observed during the initial reads,
+  no matcher request is sent.
 - **Detours.** 10% of the time another persona allowed in the channel, with talkativeness above 0, a
   `message_sent` in the last 60 days, and no message in the window, takes the turn. Its tickets are talkativeness times rested
   share times an underdog boost of 1-4 from its share of the top persona's 30-day count. The fire row

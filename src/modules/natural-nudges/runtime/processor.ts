@@ -77,8 +77,6 @@ const METER_CACHE_TTL_MS = 15 * 60 * 1000;
 /** A pending verdict needs a Discord read, so it is checked at most this often per server. */
 const VERDICT_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const PRUNE_INTERVAL_MS = HOUR_MS;
-/** Idle nudge rows kept in view beyond the rest window: enough for the unanswered streak and the pending row. */
-const LATEST_IDLE_NUDGE_ROWS = UNANSWERED_STOP_STREAK + 2;
 
 type NudgePersona = TomoriState & { persona_id: number };
 
@@ -216,7 +214,7 @@ export class NaturalNudgeProcessor {
     const history = await naturalNudgeRepository.loadFireHistory(
       serverId,
       new Date(now.getTime() - IDLE_NUDGE_REST_MS),
-      LATEST_IDLE_NUDGE_ROWS,
+      UNANSWERED_STOP_STREAK,
     );
     const pending = history.latestIdleNudges.find((fire) => fire.answered === null);
     if (pending) {

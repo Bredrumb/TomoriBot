@@ -122,6 +122,19 @@ beforeAll(async () => {
   await initializeLocalizer();
 });
 
+it("uses each mode's own off-state copy independently of the other toggle", () => {
+  for (const idleEnabled of [false, true]) {
+    for (const activeEnabled of [false, true]) {
+      const view = makeView();
+      view.config.idle_nudges_enabled = idleEnabled;
+      view.config.active_nudges_enabled = activeEnabled;
+      const text = collectTextDisplays(buildNaturalNudgesSettingsBody(LOCALE, view, false, false)).join("\n");
+      expect(text.includes(t("commands.config.natural_nudges.idle_nudges_off"))).toBe(!idleEnabled);
+      expect(text.includes(t("commands.config.natural_nudges.active_nudges_off"))).toBe(!activeEnabled);
+    }
+  }
+});
+
 function makePersonaNudgeConfig(overrides: Partial<PersonaNaturalNudgeConfig> = {}): PersonaNaturalNudgeConfig {
   return {
     persona_id: 55,

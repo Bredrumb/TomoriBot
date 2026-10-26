@@ -1,4 +1,11 @@
-import { ChannelType, SnowflakeUtil, type Client, type GuildTextBasedChannel, type Message } from "discord.js";
+import {
+  ChannelType,
+  PermissionFlagsBits,
+  SnowflakeUtil,
+  type Client,
+  type GuildTextBasedChannel,
+  type Message,
+} from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { PrivacyLevel } from "@/types/db/schema";
@@ -49,6 +56,8 @@ export async function resolveAllowedChannels(client: Client, channelIds: readonl
   for (const channelId of channelIds) {
     const channel = client.channels.cache.get(channelId) ?? (await fetchUncachedChannel(client, channelId));
     if (!channel || channel.type !== ChannelType.GuildText) continue;
+    const me = channel.guild.members.me;
+    if (!me || !channel.permissionsFor(me)?.has(PermissionFlagsBits.SendMessages)) continue;
     const lastMessageId = channel.lastMessageId ?? null;
     channels.push({
       channel,
