@@ -5,7 +5,6 @@ export {
   type WebhookIdentityDelivery,
   type WebhookIdentitySelection,
   runWithWebhookIdentity,
-  sendAsPersona,
   sendWebhookMessageWithIdentity,
   sendWebhookMessagesWithIdentity,
 } from "./webhookCore";

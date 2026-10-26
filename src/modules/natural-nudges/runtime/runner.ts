@@ -36,7 +36,7 @@ import type { ChatAdmissionDisposition, GenerationTurnResult, SceneTurnMetadata 
 import { verifyMessageWebhook, isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
 import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
 import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
-import { ensureDiscordUserMention, sendAlterPersonaMention } from "@/utils/discord/mentionHelper";
+import { ensureDiscordUserMention, sendPersonaMention } from "@/utils/discord/mentionHelper";
 import { seedTurnAnchor } from "@/utils/discord/turnAnchor";
 import { log } from "@/utils/misc/logger";
 
@@ -454,7 +454,7 @@ export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<Atte
       triggerStartTime,
       contextLabel: `Ping User nudge in server ${attempt.serverId}`,
       fallbackSender: (content) =>
-        sendAlterPersonaMention(target.channel, attempt.persona, pingUserTarget.userDiscId, content),
+        sendPersonaMention(target.channel, attempt.persona, pingUserTarget.userDiscId, content),
     });
   }
   if (outcome) return outcome;

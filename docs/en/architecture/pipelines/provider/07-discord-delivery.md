@@ -53,7 +53,8 @@ or interrupt arrives.
   The initial message answering a source message sends a standalone reply notice built by
   `buildWebhookReplyNoticePayload()` under the same selected identity. Invalid webhook errors (Discord codes 10015 and 50027) trigger cache
   invalidation and retry with a recreated webhook.
-- **Bot messages:** Used for standard bot personas via `channel.send()` or `message.reply()`.
+- **Bot messages:** Used for the main persona's base appearance through single-attempt channel delivery,
+  with native reply references when applicable.
 
 `sendWebhookMessageWithIdentity()` and its batch variant use the managed pool dispatcher in
 `webhookCore.ts`. Local avatars reuse verified image assignments across threads; a deferred avatar
@@ -81,15 +82,24 @@ store and its invalidators are described in [Caching](/architecture/subsystems/c
 Appearance memory is separate from the channel adjacency used to choose group-break usernames.
 Adjacent posts retain the exact delivered username; later posts resolve the remembered sprite
 against current sprite data. Webhook selection still uses the managed pool and the thread's parent,
-while receipts and appearance state use the actual destination thread. Existing pre-resolved
-webhook callers retain their selected route through `sendPersonaPostViaWebhook()`.
+while receipts and appearance state use the actual destination thread. Expressions, fallback notices,
+media, and voice resolve the active persona through this same author contract, including tool-only turns.
+The channel's last speaker never selects a later artifact's author.
 
 The shared sender distinguishes `sent`, `pre_dispatch`, `definite_refusal`, and `unconfirmed`.
 Avatar preparation finishes before dispatch, and cancellation is checked immediately before each
 send. Held drafts publish no receipt or appearance until approved delivery. The stream may recreate
 a definitely invalid webhook; an uncertain POST cannot trigger its webhook retry or bot fallback.
-Raw voice and expression transports use the same pool selection and must record the selected
-identity and authoring webhook ID.
+Raw voice and expression transports use the same author resolution and pool selection, then commit
+one receipt containing the selected identity and authoring webhook ID. Standard sends use isolated
+REST clients with transport retries disabled. A proven invalid-webhook refusal permits one recreation;
+a definite component refusal permits the media helper's one component-free downgrade. Avatar recovery
+finishes before POST. Lost responses, AbortError, and uncertain server failures end recovery.
+
+`deliveryState` is shared by reference across provider contexts, tool delivery, and approved draft
+presentation. Once a POST is unconfirmed, the turn clears held text and stops before response review,
+key rotation, model fallback, or another tool call. No successful receipt or appearance is inferred
+from that outcome. A successful earlier message keeps its own receipt.
 
 `context.deliveredMessageRefs` retains successful stream-body references across attempts. Button
 expiry and reply-notice cleanup resolve each message's authoring webhook ID. The shared

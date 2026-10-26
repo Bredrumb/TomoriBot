@@ -1,3 +1,4 @@
+import { sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -13,21 +14,12 @@ import {
   type BaseGuildTextChannel,
   type BaseGuildVoiceChannel,
   type AnyThreadChannel,
-  type Webhook,
 } from "discord.js";
 import { ColorCode, log } from "../misc/logger";
 import { localizer } from "../text/localizer";
-import type { TomoriState } from "@/types/db/schema";
 import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
-import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
-import {
-  type PersonaDeliveryMode,
-  type PersonaDeliveryReceipt,
-  sendPersonaPost,
-  sendPersonaPostViaWebhook,
-} from "@/utils/discord/webhook/personaPost";
+import { type PersonaPostContext, recordPersonaDelivery, sendPersonaPost } from "@/utils/discord/webhook/personaPost";
 import { resolveAuthoringWebhook } from "@/utils/discord/webhook/fallback";
-import { recordChannelDeliveredBotMessage } from "@/utils/discord/stream/channelDeliveryContinuity";
 import { attachTextDisplayModalCollector, buildTextDisplayModalRow } from "./textDisplayModal";
 import { withStatusCircle } from "./ui/statusTitle";
 import { resolveFooterLines } from "./ui/noticeFooter";
@@ -68,34 +60,9 @@ export function truncateForEmbedDescription(value: string, reservedChars = 0): s
   return available <= 3 ? value.substring(0, available) : `${value.substring(0, available - 3)}...`;
 }
 
-/**
- * Delivery context for a notice. `persona` selects shared author and appearance resolution; the
- * webhook fields remain for callers outside the tool and notice migration that still supply a
- * resolved identity directly.
- */
-export type WebhookEmbedContext = {
-  persona?: TomoriState;
-  deliveryMode?: PersonaDeliveryMode;
-  impersonatedIdentity?: ResolvedWebhookIdentity;
-  deliveryReceipts?: PersonaDeliveryReceipt[];
-  abortSignal?: AbortSignal;
-  isExecutionCancelled?: () => boolean;
-  webhook?: Webhook;
-  personaUsername?: string;
-  personaAvatarUrl?: string;
-  personaId?: number;
+export type WebhookEmbedContext = Omit<PersonaPostContext, "channel" | "persona"> & {
+  persona?: PersonaPostContext["persona"];
 };
-
-function canUseWebhookForChannel(
-  channel: TextChannel | NewsChannel | DMChannel | BaseGuildTextChannel | AnyThreadChannel | BaseGuildVoiceChannel,
-  webhook: Webhook,
-): boolean {
-  if ("isThread" in channel && typeof channel.isThread === "function" && channel.isThread()) {
-    return channel.parentId === webhook.channelId;
-  }
-
-  return webhook.channelId === channel.id;
-}
 
 /**
  * Truncates a field value to Discord's maximum allowed length.
@@ -272,7 +239,6 @@ export async function sendStandardEmbed(
   let sentViaWebhook = false;
   let threadId: string | undefined;
 
-  const personaUsername = webhookContext?.personaUsername;
   if (webhookContext?.persona) {
     threadId =
       "isThread" in channel && typeof channel.isThread === "function" && channel.isThread() ? channel.id : undefined;
@@ -286,6 +252,8 @@ export async function sendStandardEmbed(
         abortSignal: webhookContext.abortSignal,
         isExecutionCancelled: webhookContext.isExecutionCancelled,
         deliveryReceipts: webhookContext.deliveryReceipts,
+        deliveryState: webhookContext.deliveryState,
+        holdResponseText: webhookContext.holdResponseText,
       },
       { embeds: [embed], components },
     );
@@ -297,28 +265,19 @@ export async function sendStandardEmbed(
     }
     sentMessage = outcome.message;
     sentViaWebhook = outcome.receipt.route === "webhook";
-  } else if (webhookContext?.webhook && personaUsername && canUseWebhookForChannel(channel, webhookContext.webhook)) {
-    threadId =
-      "isThread" in channel && typeof channel.isThread === "function" && channel.isThread() ? channel.id : undefined;
-    try {
-      sentMessage = await sendPersonaPostViaWebhook(
-        webhookContext.webhook,
-        {
-          embeds: [embed],
-          components,
-          ...(threadId ? { threadId } : {}),
-        },
-        { username: personaUsername, avatarUrl: webhookContext.personaAvatarUrl, personaId: webhookContext.personaId },
-        channel,
-      );
-      sentViaWebhook = true;
-    } catch (error) {
-      log.warn("Failed to send embed via webhook", error as Error);
-      return;
-    }
   } else {
-    sentMessage = await channel.send({ embeds: [embed], components });
-    recordChannelDeliveredBotMessage(channel.id);
+    sentMessage = await sendChannelMessageOnce(channel, { embeds: [embed], components }, () => undefined);
+    recordPersonaDelivery({
+      messageId: sentMessage.id,
+      channelId: sentMessage.channelId,
+      route: "bot",
+      webhookId: null,
+      identity: {
+        username: sentMessage.member?.displayName ?? sentMessage.author?.username,
+        avatarUrl: sentMessage.member?.displayAvatarURL?.() ?? sentMessage.author?.displayAvatarURL?.(),
+      },
+      speaker: null,
+    });
   }
 
   if (!sentMessage) return;

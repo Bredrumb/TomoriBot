@@ -1,3 +1,4 @@
+import { REST } from "discord.js";
 import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import {
   ApplicationCommandOptionType,
@@ -388,6 +389,7 @@ const posts = () => fixture<DanbooruPost[]>("posts_reisalin_stout");
 
 const guildChannel = (nsfw: boolean, sent: unknown[] = []) => ({
   id: "channel",
+  client: { rest: new REST() },
   guildId: "guild",
   nsfw,
   lastMessageId: null as string | null,
@@ -665,6 +667,7 @@ describe("danbooru_search_posts tool", () => {
       channelId: "channel",
       guildId: "guild",
       token: "fixture",
+      client: { rest: new REST() },
       send: async (payload: Record<string, unknown>) => {
         webhookMessages.push(payload);
         return { id: "gallery-message", channelId: "channel", webhookId: webhook.id };

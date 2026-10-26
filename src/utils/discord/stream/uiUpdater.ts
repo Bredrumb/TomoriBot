@@ -1,3 +1,4 @@
+import { sendChannelMessageOnce, sendSelectedWebhookMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
 import type { BaseGuildTextChannel, Message, ReplyOptions } from "discord.js";
 import type { StreamContext } from "@/types/stream/interfaces";
 import type { SpriteMessageRecordInfo, StreamState } from "@/types/stream/types";
@@ -13,11 +14,15 @@ import {
 } from "@/utils/discord/resolveSendableChannel";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { invalidateWebhookCache } from "@/utils/discord/webhook/cache";
-import { dispatchWebhookWithIdentity, sendSelectedWebhookMessage } from "@/utils/discord/webhook/personaDispatch";
+import { dispatchWebhookWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import { resolveAuthoringWebhook } from "@/utils/discord/webhook/fallback";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { recordPersonaDelivery, type PersonaDeliveryReceipt } from "@/utils/discord/webhook/personaPost";
-import { classifyDiscordDeliveryFailure, DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
+import {
+  classifyDiscordDeliveryFailure,
+  DiscordDeliveryError,
+  isInvalidWebhookError,
+} from "@/utils/discord/webhook/deliveryOutcome";
 import { buildWebhookReplyNoticePayload } from "@/utils/discord/webhookReply";
 import { classifySendFailure, clearSendFailure, noteSendFailure } from "@/utils/discord/stream/sendFailureCache";
 import type { DeliveredSpeaker } from "@/utils/discord/stream/channelDeliveryContinuity";
@@ -50,11 +55,6 @@ type StreamUiUpdaterDependencies = {
   requestStop: (channelId: string, requesterId?: string) => boolean;
   notifyStreamProgress: (context: StreamContext) => void;
 };
-
-function isInvalidWebhookError(error: unknown): boolean {
-  const code = (error as { code?: number | string })?.code;
-  return code === 10015 || code === "10015" || code === 50027 || code === "50027";
-}
 
 function resolveWebhookTargetChannel(channel: StreamContext["channel"]): BaseGuildTextChannel | null {
   const isThread = "isThread" in channel && typeof channel.isThread === "function" && channel.isThread();
@@ -252,7 +252,12 @@ export class StreamUiUpdater {
         repliedUser: false,
       };
 
-    if (context.holdResponseText || context.abortSignal?.aborted || this.deps.hasStopRequest(context.channel.id)) {
+    if (
+      context.deliveryState?.unconfirmed ||
+      context.holdResponseText ||
+      context.abortSignal?.aborted ||
+      this.deps.hasStopRequest(context.channel.id)
+    ) {
       log.info("Stream Send: Stop request detected before Discord API call, skipping message send");
       return null;
     }
@@ -392,7 +397,9 @@ export class StreamUiUpdater {
           this.assertCanDispatch(context);
           if (noticePayload) {
             try {
-              replyNoticeMessage = await sendSelectedWebhookMessage(selected, noticePayload);
+              replyNoticeMessage = await sendSelectedWebhookMessageOnce(selected, noticePayload, () =>
+                this.assertCanDispatch(context),
+              );
               this.commitDelivery(
                 context,
                 replyNoticeMessage,
@@ -408,13 +415,17 @@ export class StreamUiUpdater {
             }
           }
           this.assertCanDispatch(context);
-          return await sendSelectedWebhookMessage(selected, {
-            ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
-            ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
-            ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
-            allowedMentions: webhookAllowedMentions,
-            ...(threadId ? { threadId } : {}),
-          });
+          return await sendSelectedWebhookMessageOnce(
+            selected,
+            {
+              ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
+              ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
+              ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
+              allowedMentions: webhookAllowedMentions,
+              ...(threadId ? { threadId } : {}),
+            },
+            () => this.assertCanDispatch(context),
+          );
         });
 
         sentMessage = webhookSend.result;
@@ -432,22 +443,30 @@ export class StreamUiUpdater {
         }
 
         this.assertCanDispatch(context);
-        sentMessage = await target.channel.send({
-          ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
-          ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
-          ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
-          ...(target.reply ? { reply: target.reply } : {}),
-          allowedMentions: regularAllowedMentions,
-        });
+        sentMessage = await sendChannelMessageOnce(
+          target.channel,
+          {
+            ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
+            ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
+            ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
+            ...(target.reply ? { reply: target.reply } : {}),
+            allowedMentions: regularAllowedMentions,
+          },
+          () => this.assertCanDispatch(context),
+        );
         state.hasRepliedToOriginalMessage = true;
       } else {
         this.assertCanDispatch(context);
-        sentMessage = await context.channel.send({
-          ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
-          ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
-          ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
-          allowedMentions: regularAllowedMentions,
-        });
+        sentMessage = await sendChannelMessageOnce(
+          context.channel,
+          {
+            ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
+            ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
+            ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
+            allowedMentions: regularAllowedMentions,
+          },
+          () => this.assertCanDispatch(context),
+        );
       }
 
       // Clears any cached refusal so a lifted timeout or a granted permission takes effect at
@@ -466,6 +485,8 @@ export class StreamUiUpdater {
       );
       return sentMessage;
     } catch (discordError) {
+      if (classifyDiscordDeliveryFailure(discordError) === "unconfirmed" && context.deliveryState)
+        context.deliveryState.unconfirmed = true;
       if (context.abortSignal?.aborted || this.deps.hasStopRequest(context.channel.id)) return null;
       // An unreachable destination is final: nothing can be posted, and neither webhook recovery
       // nor the bot fallback can change that. Tearing the stream down quietly is the same treatment
@@ -537,7 +558,6 @@ export class StreamUiUpdater {
         metadata: {
           channelId: context.channel.id,
           contentLength: textForAccumulation.length,
-          contentPreview: textForAccumulation.substring(0, 200),
           usingWebhook: !!context.webhook || !!identityOverride,
           ...(sendFailureReason ? { sendFailureReason } : {}),
         },
@@ -559,6 +579,8 @@ export class StreamUiUpdater {
         log.error("Stream Send: Discord API error when sending message", terminalError, sendErrorMetadata);
       }
 
+      if (classifyDiscordDeliveryFailure(terminalError) === "unconfirmed" && context.deliveryState)
+        context.deliveryState.unconfirmed = true;
       throw new DiscordDeliveryError(classifyDiscordDeliveryFailure(terminalError), terminalError);
     }
   }
@@ -654,7 +676,12 @@ export class StreamUiUpdater {
   }
 
   private assertCanDispatch(context: StreamContext): void {
-    if (context.holdResponseText || context.abortSignal?.aborted || this.deps.hasStopRequest(context.channel.id)) {
+    if (
+      context.deliveryState?.unconfirmed ||
+      context.holdResponseText ||
+      context.abortSignal?.aborted ||
+      this.deps.hasStopRequest(context.channel.id)
+    ) {
       throw new DiscordDeliveryError("pre_dispatch", new Error("Stream delivery withheld or cancelled"));
     }
   }
@@ -728,13 +755,17 @@ export class StreamUiUpdater {
 
       const delivery = await dispatchWebhookWithIdentity(recreatedWebhook, recoveredIdentity, (selected) => {
         this.assertCanDispatch(context);
-        return sendSelectedWebhookMessage(selected, {
-          ...(payload.content !== undefined ? { content: payload.content } : {}),
-          ...(payload.files?.length ? { files: payload.files } : {}),
-          ...(payload.components?.length ? { components: payload.components } : {}),
-          allowedMentions: webhookAllowedMentions,
-          ...(recoveredThreadId ? { threadId: recoveredThreadId } : {}),
-        });
+        return sendSelectedWebhookMessageOnce(
+          selected,
+          {
+            ...(payload.content !== undefined ? { content: payload.content } : {}),
+            ...(payload.files?.length ? { files: payload.files } : {}),
+            ...(payload.components?.length ? { components: payload.components } : {}),
+            allowedMentions: webhookAllowedMentions,
+            ...(recoveredThreadId ? { threadId: recoveredThreadId } : {}),
+          },
+          () => this.assertCanDispatch(context),
+        );
       });
       const recoveredReplyMessage = delivery.result;
 
@@ -754,7 +785,10 @@ export class StreamUiUpdater {
       log.info("Stream Send: Recreated webhook after invalid webhook error and resumed persona sending");
       return recoveredReplyMessage;
     } catch (recoveryError) {
-      if (classifyDiscordDeliveryFailure(recoveryError) === "unconfirmed") throw recoveryError;
+      if (classifyDiscordDeliveryFailure(recoveryError) === "unconfirmed") {
+        if (context.deliveryState) context.deliveryState.unconfirmed = true;
+        throw recoveryError;
+      }
       log.warn(
         "Stream Send: Webhook recovery attempt failed, falling back to regular bot message",
         recoveryError as Error,
@@ -793,13 +827,17 @@ export class StreamUiUpdater {
       }
 
       this.assertCanDispatch(context);
-      const fallbackMessage = await target.channel.send({
-        ...(payload.content !== undefined ? { content: payload.content } : {}),
-        ...(payload.files?.length ? { files: payload.files } : {}),
-        ...(payload.components?.length ? { components: payload.components } : {}),
-        ...(target.reply ? { reply: target.reply } : {}),
-        allowedMentions: regularAllowedMentions,
-      });
+      const fallbackMessage = await sendChannelMessageOnce(
+        target.channel,
+        {
+          ...(payload.content !== undefined ? { content: payload.content } : {}),
+          ...(payload.files?.length ? { files: payload.files } : {}),
+          ...(payload.components?.length ? { components: payload.components } : {}),
+          ...(target.reply ? { reply: target.reply } : {}),
+          allowedMentions: regularAllowedMentions,
+        },
+        () => this.assertCanDispatch(context),
+      );
 
       state.hasRepliedToOriginalMessage = true;
       this.recordSuccessfulSend(payload, textForState, context, state, fallbackMessage, undefined, "bot_fallback");

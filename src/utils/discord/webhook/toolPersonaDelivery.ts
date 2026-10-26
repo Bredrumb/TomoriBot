@@ -2,25 +2,11 @@ import type { TomoriState } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
 import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
 import {
-  type PersonaDeliveryMode,
   type PersonaPostContext,
   type PersonaPostOutcome,
   type PersonaPostPayload,
   sendPersonaPost,
 } from "@/utils/discord/webhook/personaPost";
-
-/**
- * Delivery mode for a tool post. The chat turn records the mode on both the direct field and the
- * shared streaming context, and the legacy impersonation flag is the only remaining source for a
- * caller that predates both.
- */
-export function resolveToolPersonaDeliveryMode(context: ToolContext): PersonaDeliveryMode {
-  return (
-    context.deliveryMode ??
-    context.streamContext?.deliveryMode ??
-    (context.isUserImpersonation ? "user_impersonation" : "persona")
-  );
-}
 
 /**
  * Builds the shared delivery context for a tool post.
@@ -36,9 +22,22 @@ export function buildToolPersonaPostContext(
   return {
     channel: destination,
     persona,
-    deliveryMode: resolveToolPersonaDeliveryMode(context),
+    deliveryMode:
+      context.deliveryMode ??
+      context.streamContext?.deliveryMode ??
+      (context.isUserImpersonation ? "user_impersonation" : "persona"),
     webhook: context.webhook,
-    abortSignal: context.abortSignal,
+    impersonatedIdentity: context.personaUsername
+      ? {
+          username: context.personaUsername,
+          avatarUrl: context.personaAvatarUrl,
+          avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
+        }
+      : undefined,
+    holdResponseText: context.streamContext?.holdResponseText,
+    locale: context.locale,
+    deliveryState: context.streamContext?.deliveryState,
+    abortSignal: context.abortSignal ?? context.streamContext?.abortSignal,
     isExecutionCancelled: context.isExecutionCancelled,
     deliveryReceipts: context.streamContext?.deliveryReceipts,
   };

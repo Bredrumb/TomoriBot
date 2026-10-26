@@ -1,3 +1,4 @@
+import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { createHash } from "node:crypto";
 import {
@@ -41,8 +42,7 @@ import {
   getChannelLastDelivery,
   recordChannelDeliveredWebhookIdentity,
 } from "@/utils/discord/stream/channelDeliveryContinuity";
-import { sendPersonaPostViaWebhook } from "@/utils/discord/webhook/personaPost";
-import { sendWebhookReplyWithContext } from "@/utils/discord/webhookReply";
+import { sendPersonaPost, recordPersonaDelivery } from "@/utils/discord/webhook/personaPost";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { attachShowMarkdownCollector } from "@/utils/discord/markdownTableButton";
 import { sendFallbackModelUsageNotice } from "@/utils/discord/fallbackModelNotice";
@@ -762,11 +762,13 @@ describe("managed local avatar dispatch", () => {
     });
     expect(stream.state.spritesShown).toContainEqual({ name: "joy", isIdentity: false });
     expect(recordSprite.mock.calls[0][0]).toMatchObject({ spriteName: "joy" });
-    await sendPersonaPostViaWebhook(
-      primary as unknown as Webhook,
-      { content: "artifact", threadId: stream.channel.id },
-      { username: "Juno", avatarUrl: avatarB, personaId: 2 },
-      stream.channel,
+    await sendPersonaPost(
+      {
+        channel: stream.channel as unknown as SendableChannel,
+        persona: stream.context.tomoriState,
+        webhook: primary as unknown as Webhook,
+      },
+      { content: "artifact" },
     );
     await sendFallbackModelUsageNotice({
       context: {
@@ -798,20 +800,28 @@ describe("managed local avatar dispatch", () => {
       pool.channel.createWebhook.mockRejectedValue(Object.assign(new Error(), { code: 50013 }));
       const stream = makeStream(pool, primary as unknown as Webhook, true);
       if (caller === "persona") {
-        await sendPersonaPostViaWebhook(
-          primary as unknown as Webhook,
-          { content: "artifact", threadId: stream.channel.id },
-          { username: "Juno", avatarUrl: avatarB, personaId: 2 },
-          stream.channel,
+        await sendPersonaPost(
+          {
+            channel: stream.channel as unknown as SendableChannel,
+            persona: createPersona({
+              persona_id: 2,
+              is_alter: true,
+              persona_nickname: "Juno",
+              webhook_avatar_url: avatarB,
+            }),
+            webhook: primary as unknown as Webhook,
+          },
+          { content: "artifact" },
         );
       } else if (caller === "notice") {
-        recordChannelDeliveredWebhookIdentity(
-          stream.channel.id,
-          { username: "Juno", avatarDataUri: avatarB },
-          "_previous",
-          { personaId: 2, kind: "appearance" },
-          primary.id,
-        );
+        recordPersonaDelivery({
+          channelId: stream.channel.id,
+          messageId: "_previous",
+          route: "webhook",
+          webhookId: primary.id,
+          identity: { username: "Juno", avatarDataUri: avatarB },
+          speaker: { personaId: 2, kind: "appearance" },
+        });
         await sendFallbackModelUsageNotice({
           context: {
             channel: stream.channel,
@@ -824,16 +834,25 @@ describe("managed local avatar dispatch", () => {
         });
       } else {
         if (!stream.context.replyToMessage) throw new Error("Missing reply fixture");
-        const delivery = await sendWebhookReplyWithContext(
-          primary as unknown as Webhook,
-          stream.context.replyToMessage,
-          "en-US",
-          "body",
-          { username: "Juno", avatarDataUri: avatarB },
-          { threadId: stream.channel.id },
+        const delivery = await sendPersonaPost(
+          {
+            channel: stream.channel as unknown as SendableChannel,
+            persona: createPersona({
+              persona_id: 2,
+              is_alter: true,
+              persona_nickname: "Juno",
+              webhook_avatar_url: avatarB,
+            }),
+            webhook: primary as unknown as Webhook,
+            replyToMessage: stream.context.replyToMessage,
+            locale: "en-US",
+          },
+          { content: "body" },
         );
-        expect(delivery.identity.avatarDataUri).toBeUndefined();
-        expect(delivery.identity.avatarUrl).toBe(GENERIC_WEBHOOK_AVATAR_URL);
+        expect(delivery.status).toBe("sent");
+        if (delivery.status !== "sent") throw new Error("Missing receipt");
+        expect(delivery.receipt.identity.avatarDataUri).toBeUndefined();
+        expect(delivery.receipt.identity.avatarUrl).toBe(GENERIC_WEBHOOK_AVATAR_URL);
       }
       if (caller !== "reply") {
         const last = getChannelLastDelivery(stream.channel.id);
@@ -959,16 +978,25 @@ describe("managed local avatar dispatch", () => {
       if (!send || !stream.context.replyToMessage) throw new Error("Missing reply fixture");
       extra.send.mockImplementationOnce(send).mockRejectedValueOnce(Object.assign(new Error(), { code: 50013 }));
       if (route === "tool") {
-        await expect(
-          sendWebhookReplyWithContext(
-            primary as unknown as Webhook,
-            stream.context.replyToMessage,
-            "en-US",
-            "body",
-            { username: "Juno", avatarDataUri: avatarB },
-            { threadId: stream.channel.id },
-          ),
-        ).rejects.toThrow();
+        recordPersonaDelivery({
+          messageId: "_prior",
+          channelId: stream.channel.id,
+          route: "webhook",
+          webhookId: primary.id,
+          identity: { username: "Juno", avatarDataUri: avatarB },
+          speaker: { personaId: 2, kind: "appearance" },
+        });
+        const outcome = await sendPersonaPost(
+          {
+            channel: stream.channel as unknown as SendableChannel,
+            persona: stream.context.tomoriState,
+            webhook: primary as unknown as Webhook,
+            replyToMessage: stream.context.replyToMessage,
+            locale: "en-US",
+          },
+          { content: "body" },
+        );
+        expect(outcome.status).toBe("definite_refusal");
       } else {
         await stream.updater.sendSinglePayload({ content: "body" }, "body", stream.context, stream.state);
         expect(pool.channel.send).toHaveBeenCalledTimes(1);
@@ -990,6 +1018,14 @@ describe("managed local avatar dispatch", () => {
       const primary = await pool.primary(avatarA);
       const extra = await pool.store("_extra", "avatar_pool_1", avatarB);
       const channel = pool.thread("_buttons_thread");
+      recordPersonaDelivery({
+        messageId: "_prior",
+        channelId: channel.id,
+        route: "webhook",
+        webhookId: primary.id,
+        identity: { username: "Juno", avatarDataUri: avatarB },
+        speaker: { personaId: 2, kind: "appearance" },
+      });
       if (artifact === "embed") {
         await sendStandardEmbed(
           channel as unknown as BaseGuildTextChannel,
@@ -1001,7 +1037,15 @@ describe("managed local avatar dispatch", () => {
               access: { canOpen: () => true, deniedKey: "genai.fallback_used_title" },
             },
           },
-          { webhook: primary as unknown as Webhook, personaUsername: "Juno", personaAvatarUrl: avatarB, personaId: 2 },
+          {
+            webhook: primary as unknown as Webhook,
+            persona: createPersona({
+              persona_id: 2,
+              is_alter: true,
+              persona_nickname: "Juno",
+              webhook_avatar_url: avatarB,
+            }),
+          },
         );
       } else if (artifact === "expand") {
         await sendTaskEmbedWithExpand(
@@ -1011,7 +1055,13 @@ describe("managed local avatar dispatch", () => {
             personaUsername: "Juno",
             personaAvatarUrl: avatarB,
             personaId: 2,
-            tomoriState: createPersona({ is_alter: true, config: { tool_notice_verbosity: "verbose" } }),
+            tomoriState: createPersona({
+              persona_id: 2,
+              persona_nickname: "Juno",
+              webhook_avatar_url: avatarB,
+              is_alter: true,
+              config: { tool_notice_verbosity: "verbose" },
+            }),
             locale: "en-US",
           } as unknown as ToolContext,
           { titleKey: "genai.fallback_used_title" },
@@ -1036,7 +1086,12 @@ describe("managed local avatar dispatch", () => {
           context: {
             channel,
             webhook: primary,
-            tomoriState: createPersona({ is_alter: true }),
+            tomoriState: createPersona({
+              persona_id: 2,
+              persona_nickname: "Juno",
+              webhook_avatar_url: avatarB,
+              is_alter: true,
+            }),
             locale: "en-US",
           } as unknown as ToolContext,
           failures: [],
@@ -1175,6 +1230,14 @@ describe("managed local avatar dispatch", () => {
         pool.channel.createWebhook.mockRejectedValue(Object.assign(new Error(), { code: 50013 }));
     }
     const channel = pool.thread("_expression_thread");
+    recordPersonaDelivery({
+      messageId: "_prior",
+      channelId: channel.id,
+      route: "webhook",
+      webhookId: primary.id,
+      identity: { username: "Juno", avatarDataUri: avatarB },
+      speaker: { personaId: 2, kind: "appearance" },
+    });
     const persona = createPersona({ persona_id: 2, persona_nickname: "Juno", is_alter: true });
     const context = {
       channel,
@@ -1186,6 +1249,7 @@ describe("managed local avatar dispatch", () => {
       streamingContext: { deliveredMessageRefs: [] },
       responseTarget: { webhook: primary, personaUsername: "Juno", personaAvatarUrl: avatarB },
       expressionDelivery: createExpressionDeliveryState(),
+      turn: { lockedTurn: { admission: { incoming: {} } } },
     } as unknown as ChatTurnContext;
     const selectedId = route === "reuse" ? "_expression" : route === "generic" ? primary.id : "_created_1";
     const posts = spyOn(getSingleAttemptWebhookRest(), "post").mockImplementation(async (path, options) => {
@@ -1215,7 +1279,7 @@ describe("managed local avatar dispatch", () => {
     );
     expect(posts).toHaveBeenCalledTimes(1);
     expect(pool.channel.send).not.toHaveBeenCalled();
-    if (route === "unconfirmed") expect(getChannelLastDelivery(channel.id)).toBeNull();
+    if (route === "unconfirmed") expect(getChannelLastDelivery(channel.id)).toMatchObject({ webhookId: primary.id });
     else
       expect(getChannelLastDelivery(channel.id)).toMatchObject({
         via: "webhook",

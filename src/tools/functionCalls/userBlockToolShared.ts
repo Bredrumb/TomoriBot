@@ -3,7 +3,7 @@ import type { PersonaUserBlockRow, PersonaUserBlockType } from "@/types/db/schem
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { invalidatePersonaUserBlockCache } from "@/utils/cache/personaUserBlockCache";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
-import { resolveToolPersonaDeliveryMode } from "@/utils/discord/webhook/toolPersonaDelivery";
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { resolveUserTarget } from "@/utils/discord/targetResolver";
 import { personaUserBlockRepository } from "@/utils/db/repositories";
 import { ColorCode, log } from "@/utils/misc/logger";
@@ -284,14 +284,7 @@ export async function sendUserBlockedEmbed(params: {
       footerKey: "tools.user_block.block_footer",
       color: params.blockType === "mute" ? ColorCode.WARN : ColorCode.ERROR,
     },
-    {
-      persona: params.context.tomoriState,
-      deliveryMode: resolveToolPersonaDeliveryMode(params.context),
-      webhook: params.context.webhook,
-      deliveryReceipts: params.context.streamContext?.deliveryReceipts,
-      abortSignal: params.context.abortSignal,
-      isExecutionCancelled: params.context.isExecutionCancelled,
-    },
+    buildToolPersonaPostContext(params.context, params.context.tomoriState),
   );
 }
 
@@ -327,14 +320,7 @@ export async function sendUserUnblockedEmbed(params: {
       },
       color: ColorCode.SUCCESS,
     },
-    {
-      persona: params.context.tomoriState,
-      deliveryMode: resolveToolPersonaDeliveryMode(params.context),
-      webhook: params.context.webhook,
-      deliveryReceipts: params.context.streamContext?.deliveryReceipts,
-      abortSignal: params.context.abortSignal,
-      isExecutionCancelled: params.context.isExecutionCancelled,
-    },
+    buildToolPersonaPostContext(params.context, params.context.tomoriState),
   );
 }
 

@@ -49,7 +49,12 @@ interface NativeVoiceSendOptions {
 
 function assertCanDispatch(target: VoiceDeliveryTarget): void {
   const context = target.personaPost;
-  if (context?.holdResponseText || context?.abortSignal?.aborted || context?.isExecutionCancelled?.())
+  if (
+    context?.deliveryState?.unconfirmed ||
+    context?.holdResponseText ||
+    context?.abortSignal?.aborted ||
+    context?.isExecutionCancelled?.()
+  )
     throw new DiscordDeliveryError("pre_dispatch", new Error("Voice delivery withheld or cancelled"));
 }
 
@@ -194,6 +199,8 @@ async function sendNativeVoice(
         : dispatched
           ? classifyDiscordDeliveryFailure(error)
           : "pre_dispatch";
+    if (status === "unconfirmed" && target.personaPost?.deliveryState)
+      target.personaPost.deliveryState.unconfirmed = true;
     log.warn("Native voice delivery was not confirmed", {
       channelId: target.channel.id,
       outcome: status,
@@ -276,6 +283,8 @@ export async function postVoiceTranscriptCaption(target: VoiceDeliveryTarget, ca
       allowedMentions: { parse: [], repliedUser: false },
     });
   } catch (error) {
+    if (classifyDiscordDeliveryFailure(error) === "unconfirmed" && target.personaPost?.deliveryState)
+      target.personaPost.deliveryState.unconfirmed = true;
     log.warn("Voice transcript caption was not confirmed", {
       channelId: target.channel.id,
       outcome: classifyDiscordDeliveryFailure(error),

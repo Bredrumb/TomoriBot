@@ -3,10 +3,15 @@ import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 import {
   advanceChannelSpriteGroupParity,
   clearAllChannelDeliveryContinuity,
-  getChannelDeliveredWebhookIdentity,
+  getChannelLastDelivery,
   recordChannelDeliveredBotMessage,
   recordChannelDeliveredWebhookIdentity,
 } from "@/utils/discord/stream/channelDeliveryContinuity";
+
+function lastWebhookIdentity(channelId: string): ResolvedWebhookIdentity | null {
+  const last = getChannelLastDelivery(channelId);
+  return last?.via === "webhook" ? last.identity : null;
+}
 
 const CHANNEL = "1382235263668846612";
 const OTHER_CHANNEL = "1382235263668846613";
@@ -17,7 +22,7 @@ describe("channel delivery continuity — last delivered identity", () => {
   });
 
   it("returns null for a channel that has delivered nothing", () => {
-    expect(getChannelDeliveredWebhookIdentity(CHANNEL)).toBeNull();
+    expect(lastWebhookIdentity(CHANNEL)).toBeNull();
   });
 
   /**
@@ -33,7 +38,7 @@ describe("channel delivery continuity — last delivered identity", () => {
 
     recordChannelDeliveredWebhookIdentity(CHANNEL, decorated, "1400000000000000001", null, "1400000000000000002");
 
-    expect(getChannelDeliveredWebhookIdentity(CHANNEL)).toEqual(decorated);
+    expect(lastWebhookIdentity(CHANNEL)).toEqual(decorated);
   });
 
   it("stores a copy so later mutation of the caller's identity cannot corrupt it", () => {
@@ -42,7 +47,7 @@ describe("channel delivery continuity — last delivered identity", () => {
 
     identity.username = "MUTATED";
 
-    expect(getChannelDeliveredWebhookIdentity(CHANNEL)?.username).toBe("Ellen");
+    expect(lastWebhookIdentity(CHANNEL)?.username).toBe("Ellen");
   });
 
   it("keeps only the most recent identity", () => {
@@ -61,7 +66,7 @@ describe("channel delivery continuity — last delivered identity", () => {
       "1400000000000000002",
     );
 
-    expect(getChannelDeliveredWebhookIdentity(CHANNEL)?.username).toBe("Ellen (mad)");
+    expect(lastWebhookIdentity(CHANNEL)?.username).toBe("Ellen (mad)");
   });
 
   /**
@@ -79,7 +84,7 @@ describe("channel delivery continuity — last delivered identity", () => {
     );
     recordChannelDeliveredBotMessage(CHANNEL);
 
-    expect(getChannelDeliveredWebhookIdentity(CHANNEL)).toBeNull();
+    expect(lastWebhookIdentity(CHANNEL)).toBeNull();
   });
 
   it("tracks identities per channel", () => {
@@ -98,8 +103,8 @@ describe("channel delivery continuity — last delivered identity", () => {
       "1400000000000000002",
     );
 
-    expect(getChannelDeliveredWebhookIdentity(CHANNEL)?.username).toBe("Ellen (shy)");
-    expect(getChannelDeliveredWebhookIdentity(OTHER_CHANNEL)?.username).toBe("Tomori");
+    expect(lastWebhookIdentity(CHANNEL)?.username).toBe("Ellen (shy)");
+    expect(lastWebhookIdentity(OTHER_CHANNEL)?.username).toBe("Tomori");
   });
 
   it("keeps the sprite alternation and the delivered identity independent within a channel", () => {
@@ -107,7 +112,7 @@ describe("channel delivery continuity — last delivered identity", () => {
 
     // Priming the alternation must not fabricate an identity: only a real send does that.
     advanceChannelSpriteGroupParity(CHANNEL, "mad", messageId);
-    expect(getChannelDeliveredWebhookIdentity(CHANNEL)).toBeNull();
+    expect(lastWebhookIdentity(CHANNEL)).toBeNull();
 
     recordChannelDeliveredWebhookIdentity(CHANNEL, { username: "Ellen" }, messageId, null, "1400000000000000002");
     // ...and recording an identity must not disturb the alternation: a sprite CHANGE still
@@ -131,6 +136,6 @@ describe("channel delivery continuity — last delivered identity", () => {
 
     advanceChannelSpriteGroupParity(CHANNEL, "mad", "1400000000000000009");
 
-    expect(getChannelDeliveredWebhookIdentity(CHANNEL)?.username).toBe("Ellen (shy)");
+    expect(lastWebhookIdentity(CHANNEL)?.username).toBe("Ellen (shy)");
   });
 });

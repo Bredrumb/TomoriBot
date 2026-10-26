@@ -398,6 +398,10 @@ async function runToolLoopMock(params: ToolLoopParams): Promise<GenerationTurnRe
       params.context.streamingContext.deliveredMessageRefs.push(...deliveries);
     }
     const next = queuedResults.shift();
+    if ((next?.streamResults[0]?.data as { deliveryStatus?: string } | undefined)?.deliveryStatus === "unconfirmed") {
+      params.context.streamingContext.deliveryState ??= { unconfirmed: false };
+      params.context.streamingContext.deliveryState.unconfirmed = true;
+    }
     if (!next) {
       throw new Error("No queued generation result for test");
     }
@@ -884,6 +888,30 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(fallbackNoticeCalls[0]?.successModel.llm_codename).toBe("fallback-model");
     expect(context.streamingContext.suppressUserErrors).toBe(false);
     expect(context.streamingContext.forceModelFallback).toBe(false);
+  });
+
+  it("does not rotate keys, try another model, or emit a notice after uncertain delivery", async () => {
+    const context = makeContext(makeLlm(1, "primary-model"), makeLlm(2, "fallback-model"));
+    rotationEnabled = true;
+    const uncertain: GenerationTurnResult = {
+      status: "error",
+      streamResults: [{ status: "error", data: { deliveryStatus: "unconfirmed" } }],
+      personaResponses: [],
+    };
+    queuedResults.push(uncertain, { status: "completed", streamResults: [], personaResponses: [] });
+    const sink: ChatResponseSink = {
+      emitStreamResult: mock(async () => undefined),
+      emitError: mock(async () => undefined),
+      finalize: mock(async () => undefined),
+    };
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    expect(await runGenerationTurn(context, sink)).toBe(uncertain);
+    expect(toolLoopCalls).toHaveLength(1);
+    expect(queuedResults).toHaveLength(1);
+    expect(fallbackNoticeCalls).toEqual([]);
+    expect(timeoutNotices).toEqual([]);
+    expect(sink.emitStreamResult).not.toHaveBeenCalled();
+    expect(sink.finalize).toHaveBeenCalledWith(uncertain);
   });
 
   it("re-resolves the prefill per attempt so a fallback that rejects it gets no trailing assistant turn", async () => {

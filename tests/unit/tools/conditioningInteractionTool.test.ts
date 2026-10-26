@@ -1,3 +1,13 @@
+import { StreamUiUpdater } from "@/utils/discord/stream/uiUpdater";
+import { createDefaultStreamState } from "@/types/stream/types";
+import type { StreamContext } from "@/types/stream/interfaces";
+import { ToolRegistry } from "@/tools/toolRegistry";
+import type { LLMProvider, StreamResult } from "@/types/provider/interfaces";
+import type { ToolResult } from "@/types/tool/interfaces";
+import type { ChatTurnContext, ToolHistoryEntry } from "@/utils/chat/types";
+import { createExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
+import { runToolLoop } from "@/utils/chat/toolLoop";
+import { REST } from "discord.js";
 import { afterEach, beforeAll, expect, it, mock, spyOn } from "bun:test";
 import { Collection, MessageFlags, type EmbedBuilder, type Message, type Webhook } from "discord.js";
 import { ConditioningInteractionTool } from "@/tools/functionCalls/conditioningInteractionTool";
@@ -15,7 +25,7 @@ import { createPersona } from "../../helpers/fixtures";
 import { localizedCopy } from "../../helpers/localeCases";
 import * as lifecycle from "@/utils/discord/webhook/lifecycle";
 import * as identity from "@/utils/discord/webhook/identity";
-import { clearPersonaAppearances, commitPersonaAppearance } from "@/utils/cache/personaAppearanceCacheStore";
+import { clearPersonaAppearances } from "@/utils/cache/personaAppearanceCacheStore";
 import { clearPersonaSpriteCache, setPersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
 import {
   clearAllChannelDeliveryContinuity,
@@ -59,6 +69,7 @@ function fixture(targetType: "persona" | "user" = "persona") {
   const delivered: Message[] = [];
   const channel: Record<string, unknown> = {
     id: CHANNEL,
+    client: { user: { id: "bot" }, rest: new REST() },
     guildId: guild.id,
     lastMessageId: null as string | null,
     guild,
@@ -180,6 +191,7 @@ function webhookFixture() {
     channelId: CHANNEL,
     guildId: "guild",
     token: "fixture",
+    client: { rest: new REST() },
     send: mock(async (payload: Record<string, unknown>) => {
       messages.push(payload);
       return {
@@ -291,12 +303,33 @@ it("keeps the invoking persona's committed sprite for main-persona and threaded 
       f.channel.lastMessageId = "1400000000000009999";
       f.context.webhook = undefined;
       setPersonaSpriteCache(ACTOR_ID, [spriteRow(isIdentity)]);
-      commitPersonaAppearance({
-        channelId: CHANNEL,
-        personaId: ACTOR_ID,
-        sprite: { personaId: ACTOR_ID, spriteName: "shy", isIdentity },
-        genericAvatar: false,
+      const updater = new StreamUiUpdater({
+        hasStopRequest: () => false,
+        requestStop: () => true,
+        notifyStreamProgress: () => undefined,
       });
+      await updater.sendSinglePayload(
+        {
+          content: "sprite text",
+          identityOverride: { username: isIdentity ? "shy (Juno)" : "Juno", avatarUrl: "https://example.com/shy.png" },
+          spriteRecord: { personaId: 1, spriteName: "shy", isIdentity: isIdentity },
+        },
+        "sprite text",
+        {
+          ...f.context,
+          client: f.context.client,
+          tomoriState: f.actor,
+          webhook,
+          personaUsername: "Juno",
+          deliveryMode: "persona",
+          contextItems: [],
+          currentTurnModelParts: [],
+        } as unknown as StreamContext,
+        createDefaultStreamState(),
+      );
+      messages.length = 0;
+      webhook.send.mockClear();
+      f.channel.lastMessageId = "1500000000000000000";
 
       const result = await new ConditioningInteractionTool().execute(
         { target: "Mirri", action: "kiss", reason: "being kind" },
@@ -499,4 +532,74 @@ it("omits the disabled tool and permits it autonomously when enabled, independen
   f.context.tomoriState.config.sticker_usage_enabled = false;
   expect(isBuiltInToolAvailable(tool, "google", f.context)).toBe(true);
   expect(getAutonomousDeliberateToolNames(f.context.tomoriState)).toContain(tool.name);
+});
+
+it("keeps the queued interaction source and its continuation together through successful-call replay", async () => {
+  const f = fixture();
+  const tool = new ConditioningInteractionTool();
+  let deliveredOutcome: ToolResult | undefined;
+  const execute = track(
+    spyOn(ToolRegistry, "executeTool").mockImplementation(async (_name, args, context) => {
+      deliveredOutcome = await tool.execute(args, context);
+      return deliveredOutcome;
+    }),
+  );
+  const context = {
+    ...f.context,
+    currentPersona: f.actor,
+    tomoriState: f.actor,
+    guild: { id: "guild" },
+    message: { id: "source", channelId: CHANNEL, channel: f.context.channel },
+    streamingContext: f.context.streamContext,
+    expressionDelivery: createExpressionDeliveryState(),
+    contextItems: [],
+    emojiStrings: [],
+    messageIdMap: new Map(),
+    deliberateToolTriggerMatchByToolName: new Map(),
+    shouldSurfaceUserErrors: false,
+    isDMChannel: false,
+    turn: { lockedTurn: { channelId: CHANNEL, admission: { incoming: { retryCount: 0 } } } },
+  } as unknown as ChatTurnContext;
+  const args = { target: "Mirri", action: "feed", reason: "sharing snacks", food: "a cookie" };
+  const results: StreamResult[] = [{ status: "function_call", data: { name: tool.name, args } }, { status: "error" }];
+  const histories: ToolHistoryEntry[][] = [];
+  const stream: LLMProvider["streamToDiscord"] = async (...params) => {
+    histories.push([...(params[7] ?? [])]);
+    const result = results.shift();
+    if (!result) throw new Error("Missing stream result");
+    return result;
+  };
+  const provider = { getInfo: () => ({ name: "google" }), streamToDiscord: stream } as unknown as LLMProvider;
+  const params = {
+    context,
+    provider,
+    providerConfig: { model: "fixture", apiKey: "fixture", temperature: 0.7 },
+    tomoriState: f.actor,
+  };
+  await runToolLoop(params);
+  expect(deliveredOutcome?.success).toBe(true);
+  const event = queuedEvent(f.queued, 0);
+  const original = f.delivered[0];
+  expect(event).toContain(original.url);
+  expect(event).toContain(f.actor.persona_nickname);
+  expect(event).toContain(f.target.persona_nickname);
+  expect(event).toContain(args.reason);
+  await f.channel.send({ content: "later unrelated embed" });
+  results.push({ status: "function_call", data: { name: tool.name, args } }, { status: "completed" });
+  await runToolLoop(params);
+  expect(execute).toHaveBeenCalledTimes(1);
+  expect(f.queued).toHaveBeenCalledTimes(1);
+  expect(queuedEvent(f.queued, 0)).toBe(event);
+  const replay = histories.at(-1)?.[0]?.functionResponse as {
+    functionResponse: { response: { result: unknown; message?: string } };
+  };
+  expect(replay.functionResponse.response).toEqual({
+    result: deliveredOutcome?.data,
+    message: deliveredOutcome?.message,
+  });
+  expect(replay.functionResponse.response.result).toMatchObject({
+    message_id: original.id,
+    action: args.action,
+    target: f.target.persona_nickname,
+  });
 });

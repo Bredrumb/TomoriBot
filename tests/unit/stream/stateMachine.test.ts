@@ -1,3 +1,4 @@
+import { REST } from "discord.js";
 import { ProviderRequestDeniedError, type ProviderUsageContext } from "@/utils/provider/providerUsage";
 import { localizer } from "@/utils/text/localizer";
 import { afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
@@ -36,9 +37,15 @@ const UNFINISHED_CLAUSE = "and then started anoth";
 const providerError: ProviderError = { type: "api_error", message: "upstream reset", code: "502", retryable: true };
 
 function fixture(steps: Array<ProcessedChunk | (() => void)>, suppressUserErrors: boolean) {
-  const send = mock(async (_payload: unknown) => ({ id: "sent_1", url: "", author: { id: "bot_1" } }));
+  const send = mock(async (_payload: unknown) => ({
+    id: "sent_1",
+    channelId: CHANNEL_ID,
+    webhookId: null,
+    url: "",
+    author: { id: "bot_1" },
+  }));
   const context: StreamContext = {
-    channel: { id: CHANNEL_ID, send, isThread: () => false } as unknown as TextChannel,
+    channel: { id: CHANNEL_ID, send, client: { rest: new REST() }, isThread: () => false } as unknown as TextChannel,
     client: {} as Client,
     tomoriState: createPersona({ persona_nickname: "Mirri", config: { humanizer_degree: HumanizerDegree.LIGHT } }),
     contextItems: [],

@@ -1,6 +1,7 @@
+import * as personaIdentity from "@/utils/discord/webhook/identity";
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client, Message, TextChannel, Webhook, WebhookMessageCreateOptions } from "discord.js";
-import { REST } from "discord.js";
+import { REST, ChannelType } from "discord.js";
 import type { PersonaSpriteRow } from "@/types/db/schema";
 import type { StreamContext } from "@/types/stream/interfaces";
 import { createDefaultStreamState } from "@/types/stream/types";
@@ -386,6 +387,96 @@ describe("committed persona appearance", () => {
     expect(getPersonaAppearance("2000", 7)).toBeDefined();
     clock.mockReturnValue(1000 + 120 * 60 * 1000);
     expect(getPersonaAppearance("2000", 7)).toBeUndefined();
+  });
+
+  it("keeps main and alter mentions on their own committed appearance", async () => {
+    const { sendPersonaMention } = await import("@/utils/discord/mentionHelper");
+    spyOn(personaIdentity, "resolvePersonaWebhookIdentity").mockResolvedValue({ username: "Juno", avatarUrl: BASE });
+    for (const isAlter of [false, true]) {
+      const f = fixture(isAlter);
+      await f.deliverSprite();
+      Object.assign(f.channel, {
+        guild: { id: "guild", members: { me: { displayAvatarURL: () => BASE } } },
+        type: ChannelType.GuildText,
+      });
+      f.channel.lastMessageId = "1500000000000000000";
+      expect(
+        await sendPersonaMention(
+          f.context.channel as TextChannel,
+          f.context.persona,
+          "123456789012345678",
+          "<@123456789012345678>",
+        ),
+      ).toBe(true);
+      expect(f.webhook.send.mock.calls.at(-1)?.[0]).toMatchObject({
+        username: "Juno",
+        avatarURL: SPRITE,
+        allowedMentions: { users: ["123456789012345678"], parse: [] },
+      });
+      expect(getPersonaAppearance(CHANNEL, 7)?.sprite?.spriteName).toBe("joy");
+    }
+  });
+
+  it("recovers one proven invalid webhook refusal and stops if its replacement is uncertain", async () => {
+    for (const uncertain of [false, true]) {
+      clearPersonaAppearances();
+      clearAllChannelDeliveryContinuity();
+      const f = fixture(true);
+      f.context.deliveryState = { unconfirmed: false };
+      f.webhook.send.mockRejectedValueOnce(Object.assign(new Error(), { code: 10015, status: 404 }));
+      if (uncertain) f.webhook.send.mockRejectedValueOnce(Object.assign(new Error(), { name: "AbortError" }));
+      const result = await sendPersonaPost(f.context, { content: "bounded recovery" });
+      expect(result.status).toBe(uncertain ? "unconfirmed" : "sent");
+      expect(f.webhook.send).toHaveBeenCalledTimes(2);
+      expect(f.channel.send).not.toHaveBeenCalled();
+      expect(f.context.deliveryReceipts).toHaveLength(uncertain ? 0 : 1);
+      expect(f.context.deliveryState.unconfirmed).toBe(uncertain);
+      if (uncertain) {
+        expect((await sendPersonaPost(f.context, { content: "later artifact" })).status).toBe("pre_dispatch");
+        expect(f.webhook.send).toHaveBeenCalledTimes(2);
+        expect(getPersonaAppearance(CHANNEL, 7)).toBeUndefined();
+      }
+    }
+  });
+
+  it("preserves the own sprite for a fallback notice after another persona and after bot fallback", async () => {
+    const { sendFallbackModelUsageNotice } = await import("@/utils/discord/fallbackModelNotice");
+    for (const via of ["bot", "webhook"] as const) {
+      const f = fixture(true, true);
+      await f.deliverSprite();
+      recordPersonaDelivery({
+        messageId: "1500000000000000000",
+        channelId: CHANNEL,
+        route: via,
+        webhookId: via === "webhook" ? "other" : null,
+        identity: { username: "Mirri" },
+        speaker: { personaId: via === "webhook" ? 8 : null, kind: "appearance" },
+      });
+      f.channel.lastMessageId = "1500000000000000000";
+      const on = mock();
+      const send = f.webhook.send.getMockImplementation();
+      if (!send) throw new Error("Missing sender");
+      f.webhook.send.mockImplementation(async (payload) =>
+        Object.assign(await send(payload), { createMessageComponentCollector: () => ({ on }) }),
+      );
+      await sendFallbackModelUsageNotice({
+        context: {
+          client: f.streamContext.client,
+          provider: "fixture",
+          channel: f.context.channel,
+          tomoriState: f.context.persona,
+          locale: "en-US",
+          streamContext: { disableYouTubeProcessing: false, deliveryReceipts: f.context.deliveryReceipts },
+        },
+        failures: [],
+        successModel: f.context.persona.llm,
+      });
+      expect(f.webhook.send.mock.calls.at(-1)?.[0]).toMatchObject({ username: "joy (Juno)", avatarURL: SPRITE });
+      expect(f.context.deliveryReceipts?.at(-1)).toMatchObject({
+        route: "webhook",
+        speaker: { personaId: 7, kind: "identity_sprite" },
+      });
+    }
   });
 
   it("does not retry or use a bot fallback after an unconfirmed streaming POST", async () => {

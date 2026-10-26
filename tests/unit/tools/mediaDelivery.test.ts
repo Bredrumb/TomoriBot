@@ -1,3 +1,6 @@
+import { StreamUiUpdater } from "@/utils/discord/stream/uiUpdater";
+import { createDefaultStreamState } from "@/types/stream/types";
+import type { StreamContext } from "@/types/stream/interfaces";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import {
   AttachmentBuilder,
@@ -38,7 +41,7 @@ import * as identity from "@/utils/discord/webhook/identity";
 import { recordPersonaDelivery, type PersonaDeliveryReceipt } from "@/utils/discord/webhook/personaPost";
 import { getSingleAttemptWebhookRest } from "@/utils/discord/webhook/webhookCore";
 import { deliverVoiceMessage, postVoiceTranscriptCaption } from "@/utils/discord/webhook/voiceMessageDelivery";
-import { toolMediaPostContext } from "@/utils/discord/webhook/toolMediaDelivery";
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
 import * as remoteFetch from "@/utils/security/userRemoteFetch";
 import * as download from "@/utils/security/safeDownload";
 import { initializeLocalizer } from "@/utils/text/localizer";
@@ -153,7 +156,12 @@ function fixture(isAlter = false, isIdentity = false, inThread = true, rememberS
     tomoriState: persona,
     locale: "en-US",
     provider: "fixture",
-    streamContext: { disableYouTubeProcessing: false, deliveryMode: "persona", deliveryReceipts: receipts },
+    streamContext: {
+      disableYouTubeProcessing: false,
+      deliveryMode: "persona",
+      deliveryReceipts: receipts,
+      deliveryState: { unconfirmed: false },
+    },
   };
   const outcomes: Outcome[] = [];
   const requests: Array<{ url: URL; payload: Record<string, unknown>; form?: FormData }> = [];
@@ -229,7 +237,11 @@ function fixture(isAlter = false, isIdentity = false, inThread = true, rememberS
         { preconnect: () => undefined },
       ),
     );
-  const target = { ownership: "persona" as const, channel, personaPost: toolMediaPostContext(context) };
+  const target = {
+    ownership: "persona" as const,
+    channel,
+    personaPost: buildToolPersonaPostContext(context, context.tomoriState),
+  };
   return { context, channel, parent, webhook, receipts, outcomes, requests, transport, target, voiceFetch, persona };
 }
 
@@ -591,4 +603,80 @@ describe("persona media delivery", () => {
     expect(getChannelLastDelivery(f.channel.id)?.via).toBe("bot");
     expect(getPersonaAppearance(f.channel.id, 7)?.sprite?.spriteName).toBe("joy");
   });
+});
+
+it("delivers sprite text then generated media under the same persona across another speaker", async () => {
+  const f = fixture(false, true, true, false);
+  const updater = new StreamUiUpdater({
+    hasStopRequest: () => false,
+    requestStop: () => true,
+    notifyStreamProgress: () => undefined,
+  });
+  const stream: StreamContext = {
+    channel: f.channel,
+    client: f.context.client,
+    tomoriState: f.persona,
+    contextItems: [],
+    currentTurnModelParts: [],
+    locale: "en-US",
+    provider: "fixture",
+    deliveryMode: "persona",
+    deliveryReceipts: f.receipts,
+  };
+  await updater.sendSinglePayload(
+    {
+      content: "sprite text",
+      identityOverride: { username: "joy (Juno)", avatarUrl: SPRITE },
+      spriteRecord: { personaId: 7, spriteName: "joy", isIdentity: true },
+    },
+    "sprite text",
+    stream,
+    createDefaultStreamState(),
+  );
+  f.channel.lastMessageId = String(++serial);
+  await generatedSenders[0].send(f.context);
+  expect(f.requests.map((request) => request.payload.username)).toEqual(["joy (Juno)", "joy (Juno)"]);
+  expect(f.receipts.map((receipt) => receipt.sprite?.spriteName)).toEqual(["joy", "joy"]);
+  expect(f.receipts.every((receipt) => receipt.channelId === f.channel.id && receipt.speaker?.personaId === 7)).toBe(
+    true,
+  );
+});
+
+it("never retries uncertain streaming text through webhook or bot REST", async () => {
+  for (const isAlter of [false, true]) {
+    const f = fixture(isAlter, false, true, false);
+    const deliveryState = { unconfirmed: false };
+    const updater = new StreamUiUpdater({
+      hasStopRequest: () => false,
+      requestStop: () => true,
+      notifyStreamProgress: () => undefined,
+    });
+    const context: StreamContext = {
+      channel: f.channel,
+      client: f.context.client,
+      tomoriState: f.persona,
+      contextItems: [],
+      currentTurnModelParts: [],
+      locale: "en-US",
+      provider: "fixture",
+      deliveryMode: "persona",
+      webhook: isAlter ? f.webhook : undefined,
+      personaUsername: isAlter ? "Juno" : undefined,
+      deliveryReceipts: f.receipts,
+      deliveryState,
+    };
+    f.outcomes.push(isAlter ? "lost" : "server");
+    await expect(
+      updater.sendSinglePayload({ content: "pending text" }, "pending text", context, createDefaultStreamState()),
+    ).rejects.toThrow();
+    expect(f.requests).toHaveLength(1);
+    expect(deliveryState.unconfirmed).toBe(true);
+    expect(f.receipts).toEqual([]);
+    expect(getPersonaAppearance(f.channel.id, 7)).toBeUndefined();
+    expect(
+      await updater.sendSinglePayload({ content: "later text" }, "later text", context, createDefaultStreamState()),
+    ).toBeNull();
+    expect(f.requests).toHaveLength(1);
+    mock.restore();
+  }
 });

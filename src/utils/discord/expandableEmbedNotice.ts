@@ -1,3 +1,4 @@
+import { sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
 /**
  * Expandable Components V2 notification helper.
  *
@@ -37,7 +38,6 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import { createStandardEmbed, type WebhookEmbedContext } from "@/utils/discord/embedHelper";
 import { recordMinimalNoticeRef } from "@/utils/discord/minimalNoticeBodies";
 import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
-import { recordChannelDeliveredBotMessage } from "@/utils/discord/stream/channelDeliveryContinuity";
 import {
   isMinimalNotice,
   isNoticeEmbedVisible,
@@ -48,8 +48,8 @@ import { buildNoticeContainer } from "@/utils/discord/ui/statusComponents";
 import { validateAndFallbackPanelPayload } from "@/utils/discord/ui/interactionCore";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { buildTextPreview } from "@/utils/text/textPreview";
-import { sendPersonaPost } from "@/utils/discord/webhook/personaPost";
-import { resolveToolPersonaDeliveryMode } from "@/utils/discord/webhook/toolPersonaDelivery";
+import { recordPersonaDelivery, sendPersonaPost } from "@/utils/discord/webhook/personaPost";
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { resolveAuthoringWebhook } from "@/utils/discord/webhook/fallback";
 
 type SupportedChannel =
@@ -173,6 +173,8 @@ async function deliverNoticeComponents(
         abortSignal: webhookContext.abortSignal,
         isExecutionCancelled: webhookContext.isExecutionCancelled,
         deliveryReceipts: webhookContext.deliveryReceipts,
+        deliveryState: webhookContext.deliveryState,
+        holdResponseText: webhookContext.holdResponseText,
       },
       { ...payload, withComponents: true },
     );
@@ -186,8 +188,18 @@ async function deliverNoticeComponents(
   }
 
   try {
-    const message = await channel.send(payload);
-    recordChannelDeliveredBotMessage(channel.id);
+    const message = await sendChannelMessageOnce(channel, payload, () => undefined);
+    recordPersonaDelivery({
+      messageId: message.id,
+      channelId: message.channelId,
+      route: "bot",
+      webhookId: null,
+      identity: {
+        username: message.member?.displayName ?? message.author?.username,
+        avatarUrl: message.member?.displayAvatarURL?.() ?? message.author?.displayAvatarURL?.(),
+      },
+      speaker: null,
+    });
     return { message, sentViaWebhook: false, threadId };
   } catch (error) {
     log.warn("CV2 notice: channel send failed", error as Error);
@@ -353,14 +365,11 @@ async function routeHideableNotice(
 
   if (isVisible) {
     const visibleOptions = isMinimal ? { ...embedOptions, minimal: true } : hintedOptions;
-    const message = await deliver(context.channel, visibleOptions, {
-      persona: context.tomoriState,
-      deliveryMode: resolveToolPersonaDeliveryMode(context),
-      webhook: context.webhook,
-      deliveryReceipts: context.streamContext?.deliveryReceipts,
-      abortSignal: context.abortSignal,
-      isExecutionCancelled: context.isExecutionCancelled,
-    });
+    const message = await deliver(
+      context.channel,
+      visibleOptions,
+      buildToolPersonaPostContext(context, context.tomoriState),
+    );
     if (!isMinimal) {
       return;
     }

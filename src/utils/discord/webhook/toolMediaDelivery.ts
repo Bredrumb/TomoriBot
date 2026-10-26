@@ -1,32 +1,9 @@
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
 import type { Message } from "discord.js";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { DiscordDeliveryError, type DiscordDeliveryFailureKind } from "@/utils/discord/webhook/deliveryOutcome";
-import { type PersonaPostContext, type PersonaPostPayload, sendPersonaPost } from "@/utils/discord/webhook/personaPost";
+import { type PersonaPostPayload, sendPersonaPost } from "@/utils/discord/webhook/personaPost";
 import { localizer } from "@/utils/text/localizer";
-
-export function toolMediaPostContext(context: ToolContext): PersonaPostContext {
-  return {
-    channel: context.channel,
-    persona: context.tomoriState,
-    deliveryMode:
-      context.deliveryMode ??
-      context.streamContext?.deliveryMode ??
-      (context.isUserImpersonation ? "user_impersonation" : "persona"),
-    webhook: context.webhook,
-    impersonatedIdentity: context.personaUsername
-      ? {
-          username: context.personaUsername,
-          avatarUrl: context.personaAvatarUrl,
-          avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
-        }
-      : undefined,
-    abortSignal: context.abortSignal ?? context.streamContext?.abortSignal,
-    isExecutionCancelled: context.isExecutionCancelled,
-    holdResponseText: context.streamContext?.holdResponseText,
-    locale: context.locale,
-    deliveryReceipts: context.streamContext?.deliveryReceipts,
-  };
-}
 
 function isComponentRefusal(error: unknown): boolean {
   const cause = error instanceof DiscordDeliveryError ? error.cause : error;
@@ -42,7 +19,7 @@ export async function sendToolMediaPost(
   payload: () => PersonaPostPayload,
   componentFreePayload?: () => PersonaPostPayload,
 ): Promise<Message> {
-  const postContext = toolMediaPostContext(context);
+  const postContext = buildToolPersonaPostContext(context, context.tomoriState);
   let outcome = await sendPersonaPost(postContext, payload());
   if (outcome.status === "definite_refusal" && componentFreePayload && isComponentRefusal(outcome.error)) {
     outcome = await sendPersonaPost(postContext, componentFreePayload());
@@ -52,6 +29,8 @@ export async function sendToolMediaPost(
 }
 
 export function mediaDeliveryFailure(context: ToolContext, status: DiscordDeliveryFailureKind): ToolResult {
+  if (status === "unconfirmed" && context.streamContext?.deliveryState)
+    context.streamContext.deliveryState.unconfirmed = true;
   return {
     success: false,
     error: localizer(

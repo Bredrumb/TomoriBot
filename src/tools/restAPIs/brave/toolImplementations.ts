@@ -7,7 +7,7 @@
 import { log } from "../../../utils/misc/logger";
 import type { ToolContext, ToolResult } from "../../../types/tool/interfaces";
 import { sendStandardEmbed } from "../../../utils/discord/embedHelper";
-import { resolveToolPersonaDeliveryMode } from "@/utils/discord/webhook/toolPersonaDelivery";
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { mediaDeliveryFailure, sendToolMediaPost } from "@/utils/discord/webhook/toolMediaDelivery";
 import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 import { ColorCode } from "../../../utils/misc/logger";
@@ -70,14 +70,7 @@ async function sendApiKeyErrorEmbed(context?: ToolContext, searchType = "search"
         color: ColorCode.ERROR,
         footerKey: "general.errors.brave_api.missing_key.footer",
       },
-      {
-        persona: context.tomoriState,
-        deliveryMode: resolveToolPersonaDeliveryMode(context),
-        webhook: context.webhook,
-        deliveryReceipts: context.streamContext?.deliveryReceipts,
-        abortSignal: context.abortSignal,
-        isExecutionCancelled: context.isExecutionCancelled,
-      },
+      buildToolPersonaPostContext(context, context.tomoriState),
     );
   } catch (embedError) {
     log.warn(`Failed to send Brave API key error embed: ${embedError}`);

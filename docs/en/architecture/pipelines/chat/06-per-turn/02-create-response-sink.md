@@ -49,7 +49,8 @@ appearance, and receipt contract.
 Context construction and generation entry set it from the turn's impersonation flag, including
 manual turns. Every provider copies it through `buildStreamContext()`. A username, avatar, or
 webhook on a main persona does not imply user impersonation. The same streaming context carries
-the receipt array across provider attempts.
+the receipt array and terminal delivery state across provider attempts. An unconfirmed Discord POST
+stops the turn before another provider attempt or recovery notice; held drafts are discarded.
 
 ### Error emission and suppression
 

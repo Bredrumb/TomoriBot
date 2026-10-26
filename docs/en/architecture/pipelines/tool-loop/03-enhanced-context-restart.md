@@ -55,8 +55,10 @@ When `handleEnhancedContextRestart` returns `true`:
 
 1. `executeToolCall` returns `{ kind: "restart" }`.
 2. `runToolLoop` resets `consecutiveToolErrors` and `naiConsecutiveToolFailures` to 0.
-3. The tool call is omitted from `functionHistory`. The model never sees the tool invocation or response
-   as a conversational exchange; it sees only the enriched context injected into `contextItems`.
+3. With Response Drafting Off, the restart call is omitted from `functionHistory`. With it On, the
+   review state retains the call and its successful result plus continuation message. The raw control
+   payload still selects the enrichment, and restart outcomes are excluded from successful-call replay
+   because a replacement attempt rebuilds context without the injected media.
 4. The loop issues a `continue` statement, advancing the iteration counter and calling `streamOnce`
    with the updated context.
 
