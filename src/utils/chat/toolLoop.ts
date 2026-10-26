@@ -819,6 +819,7 @@ async function executeToolCall(
     tomoriState: params.tomoriState,
     locale: params.context.locale,
     provider: params.provider.getInfo().name,
+    usageContext: params.context.usageContext,
     streamContext: params.context.streamingContext,
     webhook: params.context.responseTarget?.webhook,
     personaUsername: params.context.responseTarget?.personaUsername,

@@ -5,6 +5,7 @@ import { speechModelSchema, type CustomEndpointRow } from "@/types/db/schema";
 import { personaRepository, statRepository } from "@/utils/db/repositories";
 import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import * as realTargets from "@/utils/provider/speechEndpointResolver";
+import { ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 import * as realSynthesis from "@/utils/speech/voiceMessageSynthesis";
 import * as realDelivery from "@/utils/discord/webhook/voiceMessageDelivery";
 import * as realMetadata from "@/utils/audio/voiceMessageMetadata";
@@ -258,6 +259,73 @@ async function run(
 }
 
 describe("Voice message command routing", () => {
+  it("renders the requested mode's denial before compatibility and missing-source errors", async () => {
+    const denied = new ProviderRequestDeniedError(undefined, (locale) => ({
+      titleKey: "general.errors.personal_provider_credentials_error_title",
+      description: localizedCopy(locale, "general.errors.personal_provider_credentials_error_description"),
+    }));
+    for (const input of ["no-source", "upload", "design"] as const) {
+      const mode = input === "design" ? "design" : "clone";
+      const calls = await run({
+        upload: input === "upload",
+        voiceDesign: input === "design" ? "Warm voice" : undefined,
+        targets: { design: null, clone: null, denials: { [mode]: denied } },
+      });
+      expect(requests).toHaveLength(0);
+      expect(modal.calls).toHaveLength(0);
+      expect(JSON.stringify(calls)).toContain(
+        localizedCopy("en-US", "general.errors.personal_provider_credentials_error_description"),
+      );
+      expect(calls.some((call) => call.method === "reply")).toBe(true);
+    }
+  });
+
+  it("keeps a usable mode available when the other mode is denied", async () => {
+    const denied = new ProviderRequestDeniedError(undefined, (locale) => ({
+      titleKey: "general.errors.personal_provider_credentials_error_title",
+      description: localizedCopy(locale, "general.errors.personal_provider_credentials_error_description"),
+    }));
+    for (const mode of ["design", "clone"] as const) {
+      const target = hostedTarget(mode);
+      const calls = await run({
+        targets: {
+          design: mode === "design" ? target : null,
+          clone: mode === "clone" ? target : null,
+          denials: { [mode === "design" ? "clone" : "design"]: denied },
+        },
+        sourceOnly: mode,
+      });
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.target).toBe(target);
+      expect(JSON.stringify(calls)).not.toContain(
+        localizedCopy("en-US", "general.errors.personal_provider_credentials_error_description"),
+      );
+    }
+  });
+
+  it("renders the selected mode's current denial after modal revocation without switching modes", async () => {
+    const denied = new ProviderRequestDeniedError(undefined, (locale) => ({
+      titleKey: "general.errors.personal_provider_credentials_error_title",
+      description: localizedCopy(locale, "general.errors.personal_provider_credentials_error_description"),
+    }));
+    for (const mode of ["design", "clone"] as const) {
+      const targets = { design: hostedTarget("design"), clone: hostedTarget("clone") };
+      const calls = await run({
+        targets,
+        priority: mode,
+        changeHosted: () => {
+          hostedTargets = { ...targets, [mode]: null, denials: { [mode]: denied } };
+        },
+      });
+      expect(requests).toHaveLength(0);
+      expect(modal.calls[0]?.method).toBe("deferReply");
+      expect(calls.some((call) => call.method === "editReply")).toBe(true);
+      expect(JSON.stringify(calls)).toContain(
+        localizedCopy("en-US", "general.errors.personal_provider_credentials_error_description"),
+      );
+    }
+  });
+
   it("explains which explicit voice input needs a compatible model before opening the modal in every locale", async () => {
     const failures = collectCaseFailures();
     for (const locale of RUNTIME_LOCALES) {

@@ -45,11 +45,15 @@ import type { ChatTurnContext } from "@/utils/chat/types";
 import type { ResponseReviewState } from "@/utils/chat/responseReview";
 import type { PendingStreamResponse } from "@/types/stream/pendingResponse";
 import type { TomoriState } from "@/types/db/schema";
-import type { ToolResult } from "@/types/tool/interfaces";
+import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import type { ToolLoopParams } from "@/utils/chat/toolLoop";
 import { createExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
 
-let toolExecuteCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+let toolExecuteCalls: Array<{
+  name: string;
+  args: Record<string, unknown>;
+  usageContext?: ToolContext["usageContext"];
+}> = [];
 let toolExecuteQueue: ToolResult[] = [];
 let requiresFollowUp = false;
 let requiresFollowUpCalls: Array<{ name: string; serverId?: number }> = [];
@@ -165,8 +169,8 @@ scopedMock.module("@/tools/toolRegistry", () => ({
   // A class instance: its methods live on the prototype, so delegate rather
   // than spread or the remaining registry methods vanish for later files.
   ToolRegistry: overrideMembers(realToolRegistry.ToolRegistry, {
-    executeTool: async (name: string, args: Record<string, unknown>) => {
-      toolExecuteCalls.push({ name, args });
+    executeTool: async (name: string, args: Record<string, unknown>, context: ToolContext) => {
+      toolExecuteCalls.push({ name, args, usageContext: context.usageContext });
       const next = toolExecuteQueue.shift();
       return next ?? { success: true, data: { result: "ok" } };
     },
@@ -471,6 +475,7 @@ describe("runToolLoop — contract tests", () => {
     toolExecuteQueue.push({ success: true, data: { echoed: "hello" } });
 
     const context = makeContext();
+    context.usageContext = { credentialProvider: "test-option", credentialScope: "personal" };
     const result = await runToolLoop(makeParams(context, provider));
 
     expect(result.status).toBe("completed");
@@ -480,6 +485,7 @@ describe("runToolLoop — contract tests", () => {
     expect(toolExecuteCalls).toHaveLength(1);
     expect(toolExecuteCalls[0]?.name).toBe("echo_tool");
     expect(toolExecuteCalls[0]?.args).toEqual({ text: "hello" });
+    expect(toolExecuteCalls[0]?.usageContext).toBe(context.usageContext);
 
     expect(capturedHistories).toHaveLength(2);
 
