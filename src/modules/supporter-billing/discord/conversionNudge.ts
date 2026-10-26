@@ -40,7 +40,9 @@ export async function resolveSupporterNudgeKey(
       const entitlement = await dependencies.entitlements.loadByIdentityId(identity.supporter_identity_id);
       if (!entitlement || isSupporterEntitlementActive(entitlement)) return null;
     }
-    return "commands.subscribe.conversion_nudge";
+    return context.surface === "registration_failed"
+      ? "commands.subscribe.conversion_nudge_registration_failed"
+      : "commands.subscribe.conversion_nudge";
   } catch {
     log.warn("Subscription conversion eligibility could not be checked", {
       metadata: { credentialScope: context.credentialScope },

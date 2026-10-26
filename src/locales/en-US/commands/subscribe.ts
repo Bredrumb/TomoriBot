@@ -3,6 +3,8 @@
 export default {
   subscribe: {
     conversion_nudge: "For more reliable service, subscribe to TomoriBot with `/subscribe`, starting at just $7/month.",
+    conversion_nudge_registration_failed:
+      "Skip the setup: subscribe to TomoriBot with `/subscribe` for AI access without your own API key or endpoint, starting at just $7/month.",
     request: {
       title: `Subscription Access`,
       allowance_title: `Not Enough Allowance`,

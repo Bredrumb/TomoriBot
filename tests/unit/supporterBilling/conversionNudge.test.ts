@@ -117,6 +117,17 @@ describe("subscription conversion eligibility", () => {
     expect(await resolveSupporterNudgeKey(context, deps)).toBeNull();
   });
 
+  it("uses the registration-failure copy only on that surface", async () => {
+    const deps = dependencies();
+    for (const [surface, key] of [
+      ["recovery", "commands.subscribe.conversion_nudge"],
+      ["completion", "commands.subscribe.conversion_nudge"],
+      ["registration_failed", "commands.subscribe.conversion_nudge_registration_failed"],
+    ] as const) {
+      expect(await resolveSupporterNudgeKey({ ...context, surface }, deps)).toBe(key);
+    }
+  });
+
   it("keeps guidance available across repeated calls", async () => {
     const deps = dependencies();
     for (const credentialScope of ["server", "personal", "server", "personal"] as const) {
