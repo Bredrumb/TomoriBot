@@ -1,16 +1,11 @@
+import { createSpeechCallerFixture } from "../../helpers/speechCallers";
 import { getAvailableToolsWithMCP } from "@/tools/availability";
-import { ChannelType, type ChatInputCommandInteraction, type Client } from "discord.js";
+import type { ChatInputCommandInteraction, Client } from "discord.js";
 import { execute as generateVoiceMessage } from "@/commands/generate/voice-message";
 import { GenerateVoiceMessageTool } from "@/tools/functionCalls/generateVoiceMessageTool";
 import type { ToolContext, ToolAssemblyState } from "@/types/tool/interfaces";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 import { makeFakeInteraction } from "../../helpers/fakeInteraction";
-import * as delivery from "@/utils/discord/webhook/voiceMessageDelivery";
-import * as metadata from "@/utils/audio/voiceMessageMetadata";
-import * as modals from "@/utils/discord/ui/modals";
-import * as whitelist from "@/utils/cache/channelWhitelistCache";
-import * as spotlight from "@/utils/cache/personalSpotlightCache";
-import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { storeVoiceSample, deleteStoredVoiceSample } from "@/utils/storage/voiceSampleStorage";
 import { activateProviderSpeechDefaults } from "@/utils/provider/providerActivation";
 import { initializeLocalizer } from "@/utils/text/localizer";
@@ -207,8 +202,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech synthesis lifecycle and fall
       api_key: key.encrypted,
       key_version: key.version,
     });
-    const spies: Array<{ mockRestore(): void }> = [];
-    let delivered = 0;
     let persona = createPersona({
       persona_id: refs.personaId,
       server_id: refs.serverId,
@@ -217,39 +210,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech synthesis lifecycle and fall
       speech_voice_id: "preset_synthetic",
       config: { voice_message_enabled: true },
     });
-    const channel = { id: "channel-1", type: ChannelType.GuildText, isThread: () => false };
-    const modal = makeFakeInteraction();
-    spies.push(spyOn(personaRepository, "loadAllForServer").mockImplementation(async () => [persona]));
-    spies.push(
-      spyOn(cooldownRepository, "checkMessageTriggerCooldownWithWhitelist").mockResolvedValue({
-        isOnCooldown: false,
-        remainingSeconds: 0,
-        cooldownType: 0,
-      }),
-    );
-    spies.push(
-      spyOn(whitelist, "getCachedWhitelistStatus").mockResolvedValue({
-        hasActiveWhitelist: false,
-        hasActiveChannelWhitelist: false,
-        isChannelWhitelisted: false,
-        hasActiveRoleWhitelist: false,
-        isRoleWhitelisted: false,
-        hasActivePersonaWhitelist: false,
-        isTriggerAllowed: true,
-        hasChannelCooldownOverride: false,
-      }),
-    );
-    spies.push(spyOn(spotlight, "getCachedPersonalSpotlightStatus").mockResolvedValue(null));
-    spies.push(spyOn(metadata, "generateVoiceMessageMetadata").mockResolvedValue(null));
-    spies.push(
-      spyOn(delivery, "deliverVoiceMessage").mockImplementation(async () => `synthetic-message-${++delivered}`),
-    );
-    spies.push(
-      spyOn(modals, "promptWithRawModal").mockImplementation(
-        async () =>
-          ({ outcome: "submit", interaction: modal.interaction, values: { voice_message_script: "Hello" } }) as never,
-      ),
-    );
+    const callers = createSpeechCallerFixture(() => persona);
+    const { channel } = callers;
     try {
       for (const previous of [endpoint, preset]) {
         for (const personal of [false, true]) {
@@ -311,9 +273,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech synthesis lifecycle and fall
           }
         }
       }
-      expect(delivered).toBe(16);
+      expect(callers.delivered).toBe(16);
     } finally {
-      for (const spy of spies) spy.mockRestore();
+      callers.restore();
       await deleteStoredVoiceSample(storedPath);
       await testSql`UPDATE persona_voice_configs SET speech_voice_sample_id = NULL WHERE persona_id = ${refs.personaId}`;
       await testSql`DELETE FROM voice_samples WHERE sample_id = ${sample.sample_id}`;
