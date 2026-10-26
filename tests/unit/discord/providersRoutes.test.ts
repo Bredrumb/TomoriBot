@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "bun:test";
+import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { ChatInputCommandInteraction, Client } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
@@ -33,6 +33,7 @@ import {
 } from "@/utils/discord/ui/providersPanel";
 import { createPersona } from "../../helpers/fixtures";
 import { createRouteInteraction } from "../../helpers/routeInteraction";
+import * as providerOptionRegistry from "@/utils/provider/providerOptionRegistry";
 import { localizedCopy } from "../../helpers/localeCases";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 
@@ -1818,6 +1819,95 @@ describe("providers routes", () => {
       return { components: [], flags: 32768 };
     });
     expect(calls).toEqual(["deferReply", "load", "editReply"]);
+  });
+
+  it("offers registration-failed copy only when the provider rejects the key", async () => {
+    const key = "genai.tips.wait_and_retry";
+    const surfaces: string[] = [];
+    const copy = spyOn(providerOptionRegistry, "withProviderOptionCopy").mockImplementation(async (keys, context) => {
+      surfaces.push(context.surface);
+      return [...keys, key];
+    });
+    try {
+      for (const status of ["validation-failed", "no-balance", "invalid-key", "write-failed"] as const) {
+        const customId = buildProvidersRouteId(PROVIDERS_ROUTE_NAMESPACE, {
+          action: "add-submit",
+          locale: "en-US",
+          nonce: "nonce-12345678",
+        });
+        const replies: unknown[] = [];
+        const interaction = {
+          id: "interaction-add",
+          customId,
+          guildId: "123",
+          user: { id: "user-456" },
+          memberPermissions: { has: () => true },
+          fields: { getTextInputValue: () => "api-key" },
+          isStringSelectMenu: () => false,
+          isModalSubmit: () => true,
+          isButton: () => false,
+          deferUpdate: async () => {},
+          editReply: async (payload: unknown) => replies.push(payload),
+        };
+        const route = createProvidersInteractionRoute({
+          resolveScope: async () => scope,
+          operations: { addServerProvider: async () => ({ status }) } as never,
+        });
+        surfaces.length = 0;
+        await route.execute({} as Client, interaction as never, parsed(customId));
+        const rejected = status === "validation-failed" || status === "no-balance";
+        expect(surfaces).toEqual(rejected ? ["registration_failed"] : []);
+        expect(JSON.stringify(replies.at(-1)).includes(localizedCopy("en-US", key))).toBe(rejected);
+      }
+    } finally {
+      copy.mockRestore();
+    }
+  });
+
+  it("offers registration-failed copy only when a new endpoint is unreachable", async () => {
+    const key = "genai.tips.wait_and_retry";
+    const surfaces: string[] = [];
+    const copy = spyOn(providerOptionRegistry, "withProviderOptionCopy").mockImplementation(async (keys, context) => {
+      surfaces.push(context.surface);
+      return [...keys, key];
+    });
+    try {
+      for (const result of [
+        { status: "unreachable", reason: "timeout", credentialsWithheld: false },
+        { status: "write-failed" },
+      ] as const) {
+        const customId = buildProvidersRouteId(PROVIDERS_ROUTE_NAMESPACE, {
+          action: "endpoint-submit",
+          locale: "en-US",
+          nonce: "nonce-12345678",
+        });
+        const replies: unknown[] = [];
+        const interaction = {
+          id: "interaction-endpoint",
+          customId,
+          guildId: "123",
+          user: { id: "user-456" },
+          memberPermissions: { has: () => true },
+          fields: { getTextInputValue: () => "value" },
+          isStringSelectMenu: () => false,
+          isModalSubmit: () => true,
+          isButton: () => false,
+          deferUpdate: async () => {},
+          editReply: async (payload: unknown) => replies.push(payload),
+        };
+        const route = createProvidersInteractionRoute({
+          resolveScope: async () => scope,
+          operations: { addCustomEndpointConnection: async () => result } as never,
+        });
+        surfaces.length = 0;
+        await route.execute({} as Client, interaction as never, parsed(customId));
+        const unreachable = result.status === "unreachable";
+        expect(surfaces).toEqual(unreachable ? ["registration_failed"] : []);
+        expect(JSON.stringify(replies.at(-1)).includes(localizedCopy("en-US", key))).toBe(unreachable);
+      }
+    } finally {
+      copy.mockRestore();
+    }
   });
 
   it("records panel_action telemetry on provider operations across scopes", async () => {

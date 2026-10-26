@@ -1,4 +1,4 @@
-import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
+import { withProviderOptionCopy, type ProviderOptionCopyContext } from "@/utils/provider/providerOptionRegistry";
 import {
   ComponentType,
   MessageFlags,
@@ -538,16 +538,19 @@ function providerOptionScope(
   };
 }
 
+const REGISTRATION_FAILURE_STATUSES: ReadonlySet<string> = new Set(["validation-failed", "no-balance", "unreachable"]);
+
 async function addCompletionCopy(
   receipt: PanelReceipt,
   interaction: GlobalRoutableInteraction,
   locale: string,
   scope: LoadedProviderPanelScope,
   eligible: boolean,
+  surface: ProviderOptionCopyContext["surface"] = "completion",
 ): Promise<PanelReceipt> {
   if (!eligible) return receipt;
   const keys = await withProviderOptionCopy([], {
-    surface: "completion",
+    surface,
     managedProvider: null,
     userDiscId: interaction.user.id,
     serverId: scope.state?.server_id,
@@ -967,6 +970,7 @@ export function createProvidersInteractionRoute(
             userDiscId: interaction.user?.id ?? "",
           });
         }
+        const keyRejected = REGISTRATION_FAILURE_STATUSES.has(action.result.status);
         await repaint(
           interaction,
           route.locale,
@@ -978,7 +982,8 @@ export function createProvidersInteractionRoute(
             interaction,
             route.locale,
             scope,
-            action.result.status === "success" && selectedProvider !== "brave",
+            (action.result.status === "success" || keyRejected) && selectedProvider !== "brave",
+            keyRejected ? "registration_failed" : "completion",
           ),
         );
         return;
@@ -1068,7 +1073,14 @@ export function createProvidersInteractionRoute(
           nextScope,
           action.result.status === "success" ? { kind: "entry", entryId: action.result.entryId } : { kind: "entry" },
           action.result.status === "success" ? rangeForEntry(nextScope, action.result.entryId) : 0,
-          addEndpointReceipt(route.locale, action.result, scope.scopeKind),
+          await addCompletionCopy(
+            addEndpointReceipt(route.locale, action.result, scope.scopeKind),
+            interaction,
+            route.locale,
+            scope,
+            REGISTRATION_FAILURE_STATUSES.has(action.result.status),
+            "registration_failed",
+          ),
         );
         return;
       }
@@ -1108,7 +1120,14 @@ export function createProvidersInteractionRoute(
           nextScope,
           { kind: "entry", entryId },
           rangeForEntry(nextScope, entryId),
-          providerEditReceipt(route.locale, action.result, scope.scopeKind),
+          await addCompletionCopy(
+            providerEditReceipt(route.locale, action.result, scope.scopeKind),
+            interaction,
+            route.locale,
+            scope,
+            REGISTRATION_FAILURE_STATUSES.has(action.result.status) && route.provider !== "brave",
+            "registration_failed",
+          ),
         );
         return;
       }
@@ -1156,7 +1175,14 @@ export function createProvidersInteractionRoute(
           nextScope,
           { kind: "entry", entryId },
           rangeForEntry(nextScope, entryId),
-          endpointEditReceipt(route.locale, action.result, scope.scopeKind),
+          await addCompletionCopy(
+            endpointEditReceipt(route.locale, action.result, scope.scopeKind),
+            interaction,
+            route.locale,
+            scope,
+            REGISTRATION_FAILURE_STATUSES.has(action.result.status),
+            "registration_failed",
+          ),
         );
         return;
       }

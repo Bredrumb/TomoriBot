@@ -171,7 +171,7 @@ export interface ProviderOptionDefinition {
 }
 
 export interface ProviderOptionCopyContext {
-  surface: "recovery" | "completion";
+  surface: "recovery" | "completion" | "registration_failed";
   userDiscId: string | undefined;
   serverId: number | null | undefined;
   credentialScope: "server" | "personal" | undefined;

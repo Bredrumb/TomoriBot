@@ -486,6 +486,23 @@ function providerNoBalanceReceipt(locale: string): PanelReceipt {
   };
 }
 
+async function withRegistrationFailureCopy(
+  receipt: PanelReceipt,
+  locale: string,
+  actorDiscId: string,
+): Promise<PanelReceipt> {
+  const keys = await withProviderOptionCopy([], {
+    surface: "registration_failed",
+    managedProvider: null,
+    userDiscId: actorDiscId,
+    serverId: undefined,
+    credentialScope: "server",
+  });
+  return keys.length
+    ? { ...receipt, detail: [receipt.detail, ...keys.map((key) => localizer(locale, key))].join("\n") }
+    : receipt;
+}
+
 function setupFailureReceipt(locale: string, detail: string): PanelReceipt {
   return {
     tone: "error",
@@ -1683,10 +1700,13 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
         if (!validation.valid) {
           await repaintSetupWizard(interaction, draft, locale, nonce, {
             method: "editReply",
-            receipt:
+            receipt: await withRegistrationFailureCopy(
               validation.error && isAccountBalanceExhaustedError(validation.error)
                 ? providerNoBalanceReceipt(locale)
                 : providerValidationFailureReceipt(locale),
+              locale,
+              actorDiscId,
+            ),
           });
           return;
         }
@@ -1815,7 +1835,11 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
         if (!probe.ok) {
           await repaintSetupWizard(interaction, draft, locale, nonce, {
             method: "editReply",
-            receipt: customEndpointProbeFailureReceipt(locale, probe, normalizedUrl, rawToken),
+            receipt: await withRegistrationFailureCopy(
+              customEndpointProbeFailureReceipt(locale, probe, normalizedUrl, rawToken),
+              locale,
+              actorDiscId,
+            ),
           });
           return;
         }
