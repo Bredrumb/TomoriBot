@@ -45,6 +45,7 @@ import { safeSelectOptionText } from "@/utils/discord/ui/interactionCore";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import type { ModalComponent } from "@/types/discord/modal";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
+import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
 import {
   deliverVoiceMessage,
@@ -764,11 +765,7 @@ export async function execute(
     return;
   }
 
-  // The main persona is the bot, so it posts under the bot's own name and avatar and needs no
-  // webhook at all. Only an alter needs an identity override, which is the same main-versus-alter
-  // split `resolveResponseTarget` makes on the chat path. Resolving a webhook here anyway would
-  // demand Manage Webhooks for a message that never uses one.
-  let target: VoiceDeliveryTarget = { channel };
+  let target: VoiceDeliveryTarget = { ownership: "base", channel, personaId: persona.persona_id };
 
   if (persona.is_alter) {
     // Persona identity is the point of this command, so a webhook failure is an error rather than
@@ -797,6 +794,7 @@ export async function execute(
 
     const identity = await resolvePersonaWebhookIdentity(persona, interaction.guild);
     target = {
+      ownership: "base",
       channel,
       webhook,
       threadId: resolveGuildWebhookThreadId(channel),
@@ -893,13 +891,13 @@ export async function execute(
     log.warn("[VoiceMessage] Waveform generation returned null: delivering a plain attachment");
   }
 
-  const sentMessageId = await deliverVoiceMessage({
-    target,
-    audioBuffer,
-    mimeType,
-    filename,
-    voiceMeta,
-  });
+  let sentMessageId: string | undefined;
+  try {
+    sentMessageId = await deliverVoiceMessage({ target, audioBuffer, mimeType, filename, voiceMeta });
+  } catch (error) {
+    if (!(error instanceof DiscordDeliveryError)) throw error;
+    log.warn("Voice command delivery was not confirmed", { channelId: channel.id, outcome: error.outcome });
+  }
 
   if (!sentMessageId) {
     await replyInfoEmbed(modalInteraction, locale, {

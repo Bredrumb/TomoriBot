@@ -207,7 +207,7 @@ export default {
       script_too_long_title: `Script Too Long`,
       script_too_long_description: `This voice shares its prompt between the persona's description and the spoken script. Shorten this message's script and try again.`,
       delivery_failed_title: `Delivery Failed`,
-      delivery_failed_description: `The audio was generated but Discord rejected the voice message. Please try again.`,
+      delivery_failed_description: `Voice message delivery was not confirmed. Check the channel before generating again to avoid posting a duplicate.`,
       success_title: `Voice Message Sent`,
       success_description: `**{persona}** spoke this message through \`{backend}\` in {elapsed}s.`,
       success_target_field: `Speech target`,

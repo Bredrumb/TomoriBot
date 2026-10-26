@@ -36,6 +36,7 @@ import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { resolveManagedWebhookForChannel } from "@/utils/discord/webhook/fallback";
 import { buildWebhookReplyNoticePayload } from "@/utils/discord/webhookReply";
 import { dispatchWebhookWithIdentity, sendSelectedWebhookMessage } from "@/utils/discord/webhook/personaDispatch";
+import { sendChannelMessageOnce, sendSelectedWebhookMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
 import {
   classifyDiscordDeliveryFailure,
   DiscordDeliveryError,
@@ -273,7 +274,7 @@ export async function sendPersonaPost(
         if (notice) {
           if (context.replyNoticeState) context.replyNoticeState.attempted = true;
           dispatched = true;
-          const posted = await sendSelectedWebhookMessage(selected, notice);
+          const posted = await sendSelectedWebhookMessageOnce(selected, notice, () => assertCanDispatch(context));
           const receipt: PersonaDeliveryReceipt = {
             messageId: posted.id,
             channelId: posted.channelId,
@@ -291,7 +292,9 @@ export async function sendPersonaPost(
         assertCanDispatch(context);
         dispatched = true;
         const { reply: _reply, ...webhookPayload } = payload;
-        return sendSelectedWebhookMessage(selected, { ...webhookPayload, allowedMentions, threadId });
+        return sendSelectedWebhookMessageOnce(selected, { ...webhookPayload, allowedMentions, threadId }, () =>
+          assertCanDispatch(context),
+        );
       });
       message = delivery.result;
       identity = delivery.identity;
@@ -304,7 +307,9 @@ export async function sendPersonaPost(
         (context.replyToMessage?.channelId === context.channel.id
           ? { messageReference: context.replyToMessage.id, failIfNotExists: false }
           : undefined);
-      message = await context.channel.send({ ...payload, allowedMentions, reply });
+      message = await sendChannelMessageOnce(context.channel, { ...payload, allowedMentions, reply }, () =>
+        assertCanDispatch(context),
+      );
       identity = {
         username: message.member?.displayName ?? message.author?.username,
         avatarUrl: message.member?.displayAvatarURL?.() ?? message.author?.displayAvatarURL?.(),
@@ -325,7 +330,11 @@ export async function sendPersonaPost(
     return { status: "sent", message, receipt };
   } catch (error) {
     const status = dispatched ? classifyDiscordDeliveryFailure(error) : "pre_dispatch";
-    log.warn("Persona post was not confirmed", { outcome: status, channelId: context.channel.id, error });
+    log.warn("Persona post was not confirmed", {
+      outcome: status,
+      channelId: context.channel.id,
+      code: (error as { code?: number | string } | null)?.code,
+    });
     return { status, error };
   }
 }

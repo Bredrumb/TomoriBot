@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client, Message, TextChannel, Webhook, WebhookMessageCreateOptions } from "discord.js";
+import { REST } from "discord.js";
 import type { PersonaSpriteRow } from "@/types/db/schema";
 import type { StreamContext } from "@/types/stream/interfaces";
 import { createDefaultStreamState } from "@/types/stream/types";
@@ -63,7 +64,7 @@ function fixture(isAlter = false, isIdentity = false, channelId = CHANNEL) {
     isThread: () => false,
     fetchWebhooks: mock(),
     createWebhook: mock(),
-    client: { user: author },
+    client: { user: author, rest: new REST() },
     send: mock(async (_payload: unknown) => message(null)),
   };
   function message(webhookId: string | null, channelId = channel.id): Message {
@@ -76,6 +77,7 @@ function fixture(isAlter = false, isIdentity = false, channelId = CHANNEL) {
     channelId,
     guildId: "guild",
     token: "fixture",
+    client: channel.client,
     send: mock(async (payload: WebhookMessageCreateOptions) => message(webhook.id, payload.threadId)),
   };
   spyOn(lifecycle, "getOrCreateWebhook").mockResolvedValue({ webhook: webhook as unknown as Webhook });
