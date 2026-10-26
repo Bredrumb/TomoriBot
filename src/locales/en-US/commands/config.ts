@@ -476,6 +476,7 @@ export default {
       "tool_target_user-blocking": `Persona user blocking`,
       "tool_target_user-info": `User info updates`,
       tool_target_thread: `Thread creation`,
+      tool_target_dice: "Dice rolling",
       tool_target_capabilities: `Capability review`,
       tool_trigger_literal_label: `Literal trigger`,
       tool_trigger_literal_description: `A phrase to match. Enter this or a regular expression, not both.`,

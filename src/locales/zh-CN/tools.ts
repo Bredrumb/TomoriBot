@@ -1,5 +1,11 @@
 export default {
   tools: {
+    roll_dice: {
+      missing_permissions: "机器人需要查看此频道、发送消息和嵌入链接的权限才能发送掷骰结果。",
+      disabled: "掷骰功能已禁用。请通过 `/config` > 插件 > 可用工具启用它。",
+      cancelled: "掷骰已在发送前取消。",
+      delivery_failed: "无法发送掷骰结果。未能成功完成掷骰。",
+    },
     execution: {
       unavailable: `在当前设置、模型能力或 bot 权限下，工具 \`{tool}\` 不可用。`,
     },
@@ -196,6 +202,7 @@ export default {
       // English stays empty because the built-in patterns in deliberateToolMode.ts already cover
       // English grammar; keywords here would widen English matching beyond those patterns.
       deliberate: {
+        dice: ["骰子", "掷骰"],
         image: ["画一", "画一张", "画个", "生成图", "做图", "来张图", "生成一张", "改图", "修图", "重绘", "图片"],
         video: ["视频", "生成视频", "做个视频", "来段视频", "动图", "短视频", "视频生成", "剪辑"],
         voice: ["语音", "朗读", "念出来", "念一下", "配音", "语音合成", "转写", "语音识别", "说出", "读出来"],

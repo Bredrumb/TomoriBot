@@ -1,7 +1,8 @@
 import type { Embed } from "discord.js";
+import { CONDITIONING_ACTION_LOCALE_KEYS } from "@/utils/conditioning/conditioning";
 import { stripLeadingEmoji, stripStatusCircle } from "@/utils/discord/ui/statusTitle";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
-import { getLocaleSubKeys, getSupportedLocales, hasLocaleKey, localizer } from "@/utils/text/localizer";
+import { getSupportedLocales, hasLocaleKey, localizer } from "@/utils/text/localizer";
 
 export type TargetEmbedType =
   | "memory_learning"
@@ -15,9 +16,10 @@ export type TargetEmbedType =
   | "punish"
   | "user_info_update"
   | "user_moderation"
-  | "danbooru_tags";
+  | "danbooru_tags"
+  | "dice_roll";
 
-export type ProtocolKind = TargetEmbedType | "diagnostic" | "reply_context";
+export type ProtocolKind = TargetEmbedType | "diagnostic" | "reply_context" | "unshared_dice_roll";
 type ProtocolEntry = { key: string; kind: ProtocolKind; match?: "template" | "prefix" };
 
 /** These rendered strings are persisted in Discord and must remain recognizable after a locale ships. */
@@ -41,6 +43,7 @@ export const PROTOCOL_KEYS: ProtocolEntry[] = [
     match: "template" as const,
   })),
   { key: "tools.danbooru.tags_title", kind: "danbooru_tags" },
+  { key: "commands.roll.title", kind: "dice_roll" },
   { key: "commands.refresh.title", kind: "reset" },
   { key: "commands.impersonate.system_title", kind: "system_injection" },
   { key: "commands.generate.scene.success_title", kind: "scene_directive" },
@@ -100,6 +103,7 @@ const targetKinds = new Set<ProtocolKind>([
   "user_info_update",
   "user_moderation",
   "danbooru_tags",
+  "dice_roll",
 ]);
 const knownKinds = new Set<ProtocolKind>([...targetKinds, "diagnostic", "reply_context"]);
 
@@ -124,6 +128,7 @@ type Match = { key: string; kind: ProtocolKind; value: string; pattern?: RegExp;
 let exactTitles = new Map<string, Match>();
 let templates: Match[] = [];
 let prefixes: Match[] = [];
+let diceRollFooterKinds = new Map<string, ProtocolKind>();
 
 // Most locales author the reply-context description as a bare `{message_url}`. A template that is
 // only a placeholder compiles to `^.+?$`, which would classify any embed with a description as one.
@@ -191,13 +196,10 @@ export function buildProtocolLookup(
 }
 
 export function initializeEmbedProtocol(): void {
-  for (const locale of getSupportedLocales()) {
-    for (const namespace of ["commands.reward", "commands.punish"] as const) {
-      for (const name of getLocaleSubKeys(locale, namespace)) {
-        const key = `${namespace}.${name}.embed_title`;
-        if (hasLocaleKey(locale, key) && !PROTOCOL_KEYS.some((entry) => entry.key === key)) {
-          PROTOCOL_KEYS.push({ key, kind: namespace === "commands.reward" ? "reward" : "punish" });
-        }
+  for (const keys of Object.values(CONDITIONING_ACTION_LOCALE_KEYS)) {
+    for (const key of keys.embed_titles) {
+      if (!PROTOCOL_KEYS.some((entry) => entry.key === key)) {
+        PROTOCOL_KEYS.push({ key, kind: key.startsWith("commands.reward.") ? "reward" : "punish" });
       }
     }
   }
@@ -207,6 +209,15 @@ export function initializeEmbedProtocol(): void {
   exactTitles = lookup.exact;
   templates = lookup.templates;
   prefixes = lookup.prefixes;
+  const diceFooterKeys = [
+    { key: "commands.roll.footer_public", kind: "unshared_dice_roll" },
+    { key: "commands.roll.footer_hidden", kind: "unshared_dice_roll" },
+    { key: "commands.roll.footer_shared", kind: "dice_roll" },
+  ] as const;
+  const footerLookup = buildProtocolLookup(diceFooterKeys, getSupportedLocales(), (locale, key) =>
+    hasLocaleKey(locale, key) ? localizer(locale, key) : undefined,
+  );
+  diceRollFooterKinds = new Map([...footerLookup.exact].map(([text, match]) => [text, match.kind]));
 }
 
 export function classifyProtocolTitle(title: string | null | undefined): ProtocolKind | null {
@@ -232,9 +243,11 @@ function classifyMinimalTitle(title: string): ProtocolKind | null {
 }
 
 export function classifyProtocolEmbed(embed: Pick<Embed, "title" | "footer">): ProtocolKind | null {
+  const diceKind = diceRollFooterKinds.get(embed.footer?.text ?? "");
+  if (diceKind) return diceKind;
   const marker = embed.footer?.text?.match(TOKEN_PATTERN)?.[1] as ProtocolKind | undefined;
-  if (marker && knownKinds.has(marker)) return marker;
-  return classifyProtocolTitle(embed.title);
+  const kind = marker && knownKinds.has(marker) ? marker : classifyProtocolTitle(embed.title);
+  return kind === "dice_roll" ? "unshared_dice_roll" : kind;
 }
 
 export function isTargetProtocolKind(kind: ProtocolKind | null): kind is TargetEmbedType {

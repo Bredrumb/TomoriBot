@@ -5,6 +5,7 @@ import type { DeliberateToolTriggerTarget } from "@/utils/tools/deliberateToolMo
 // Full literals rather than a prefix plus target: the locale checker and the unused-key report only
 // recognize complete key strings, so a built key would read as missing and its lists as deletable.
 export const DELIBERATE_TOOL_PACK_KEYS = {
+  dice: "tools.intent_packs.deliberate.dice",
   image: "tools.intent_packs.deliberate.image",
   video: "tools.intent_packs.deliberate.video",
   voice: "tools.intent_packs.deliberate.voice",

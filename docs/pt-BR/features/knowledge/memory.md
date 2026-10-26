@@ -150,6 +150,8 @@ Escolha `user` ou `persona`, apenas um por vez. Interações com usuários não 
 respostas da IA, mesmo com uma `reason`; o rodapé "vai se lembrar disso" é só uma brincadeira.
 Tanto para usuários quanto para personas, o motivo aparece em itálico na frase da ação.
 
+Ative `Interações divertidas` em `/config` > `Plugins` > `Ferramentas Disponíveis` para permitir que personas façam gestos deliberados para usuários ou outras personas. A opção vem ativada por padrão e pode ser desativada nesse mesmo menu. Cada gesto precisa de alvo, ação e motivo; alimentar também exige informar a comida. Usuários recebem um embed de brincadeira. Personas recebem condicionamento e entram na fila para reagir quando a persona atual terminar de falar. A persona que reage não pode usar essa ferramenta durante a resposta. Tanto a ferramenta quanto os comandos de barra variam os títulos traduzidos.
+
 Cada `/reward` ou `/punish` direcionado a uma persona é contabilizado, mas só se torna uma memória
 sobre a qual ela realmente age quando você fornece uma `reason`, que aparece assim no prompt dela:
 

@@ -11,7 +11,7 @@ sidebar:
 
 Todos los comandos de barra que TomoriBot tiene registrados actualmente, generados a partir de los mismos constructores de comandos y descripciones en español que se usan para el registro en Discord (las descripciones sin traducir aparecen en inglés).
 
-Grupos de comandos de nivel superior: **43**. Comandos de barra ejecutables: **90**.
+Grupos de comandos de nivel superior: **44**. Comandos de barra ejecutables: **91**.
 
 ## `/booru`
 
@@ -331,6 +331,14 @@ Recompénsame con interacciones divertidas.
 | `/reward hug` | ¡Dame un abrazo! |
 | `/reward kiss` | ¡Dame un beso! |
 | `/reward tickle` | ¡Hazme cosquillas! |
+
+## `/roll`
+
+Tira dados para juegos de rol y partidas de mesa.
+
+| Comando | Resumen |
+|---|---|
+| `/roll` | Tira dados para juegos de rol y partidas de mesa. |
 
 ## `/scheduled-task`
 

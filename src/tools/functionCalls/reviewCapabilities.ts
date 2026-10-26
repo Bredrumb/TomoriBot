@@ -56,6 +56,8 @@ function buildToolAssemblyState(context: ToolContext): ToolStateForContext {
       user_blocking_enabled: config.user_blocking_enabled ?? true,
       user_info_updates_enabled: config.user_info_updates_enabled ?? true,
       thread_creation_enabled: config.thread_creation_enabled,
+      conditioning_interactions_enabled: config.conditioning_interactions_enabled,
+      dice_rolling_enabled: config.dice_rolling_enabled,
       danbooru_enabled: config.danbooru_enabled,
     },
   };
@@ -315,6 +317,8 @@ export class ReviewCapabilitiesTool extends BaseTool {
       ["self teaching", config.self_teaching_enabled],
       ["message management", config.manage_message_enabled],
       ["thread creation", config.thread_creation_enabled],
+      ["playful interactions", config.conditioning_interactions_enabled],
+      ["dice rolling", config.dice_rolling_enabled],
       ["Danbooru search", config.danbooru_enabled],
     ].filter((entry): entry is [string, false] => entry[1] === false);
 
@@ -338,6 +342,8 @@ export class ReviewCapabilitiesTool extends BaseTool {
       `- Self teaching: ${config.self_teaching_enabled ? "enabled" : "disabled"}`,
       `- Message management: ${config.manage_message_enabled ? "enabled" : "disabled"}`,
       `- Thread creation: ${config.thread_creation_enabled ? "enabled" : "disabled"}`,
+      `- Playful interactions: ${config.conditioning_interactions_enabled ? "enabled" : "disabled"}`,
+      `- Dice rolling: ${config.dice_rolling_enabled ? "enabled" : "disabled"}`,
       `- Danbooru search: ${config.danbooru_enabled ? "enabled" : "disabled"}`,
       "",
       "## Disabled Reasons",

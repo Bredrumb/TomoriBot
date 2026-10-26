@@ -168,6 +168,8 @@ Elige `user` o `persona`, solo uno a la vez. Las interacciones con usuarios no g
 respuestas de IA, incluso con una `reason`; el pie de página "recordará esto" es solo una broma.
 Tanto para usuarios como para personas, el motivo aparece en cursiva dentro de la frase de la acción.
 
+Activa `Interacciones juguetonas` en `/config` > `Plugins` > `Herramientas disponibles` para que las personas hagan gestos deliberados hacia usuarios u otras personas. La opción viene activada de forma predeterminada y puedes desactivarla en ese mismo menú. Cada gesto necesita un objetivo, una acción y un motivo; alimentar también requiere indicar la comida. Los usuarios reciben un embed de broma. Las personas reciben condicionamiento y entran en la fila para reaccionar cuando termine quien está hablando. La persona que reacciona no puede usar esta herramienta durante esa respuesta. Tanto la herramienta como los comandos de barra alternan entre títulos traducidos.
+
 Cada `/reward` o `/punish` dirigido a una persona se contabiliza, pero solo se convierte en una memoria
 sobre la que realmente actúa cuando le das una `reason`, que aparece así en su prompt:
 

@@ -39,6 +39,7 @@ import provider from "./commands/provider";
 import update from "./commands/update";
 import stats from "./commands/stats";
 import ping from "./commands/ping";
+import roll from "./commands/roll";
 import comment from "./commands/comment";
 import kill from "./commands/kill";
 import refresh from "./commands/refresh";
@@ -107,6 +108,7 @@ export default {
     ...update,
     ...stats,
     ...ping,
+    ...roll,
     ...comment,
     ...kill,
     ...refresh,

@@ -21,6 +21,22 @@ Filtering evaluates multiple layers:
 5. **Backend slot availability:** Feature tools verify configured backend slots before admission. `generate_image` requires a standard diffusion model; `generate_image_nai` requires a NovelAI image slot; `generate_video` requires a video model slot; and `generate_voice_message` requires a saved persona source with a usable matching Design or Clone target for the triggering user.
 6. **Streaming context filtering:** `applyStreamContextAvailability()` evaluates live-turn constraints (`isAvailableForContext`) before schema declaration. This removes tools whose turn eligibility has lapsed (such as per-turn deduplication flags) so unavailable tools are not advertised to the model.
 
+## Dice rolling
+
+`roll_dice` requires `dice_rolling_enabled`, which defaults to false and is
+managed through `/config` > Plugins > Available Tools. The switch controls tool
+advertisement and execution independently of the `/roll` command. Both callers
+use `src/utils/dice/diceRoll.ts` for validated dice notation and OS-backed random
+integers, and `diceRollEmbed.ts` for their result embeds.
+
+Dice result embeds have no title. The embed protocol reads their localized
+visibility footers and admits only shared results into model history, including
+prompt inspection. These footer strings must remain recognizable in stored
+Discord messages after copy changes. Unshared dice embeds are excluded from Self Debug and link
+preview extraction too, so a red natural 1 does not disclose an unshared roll.
+Shared results become available in subsequent chat context without triggering
+a reply. Tool rolls also return their structured result to the current model turn.
+
 ## Dynamic tool assembly
 
 Before provider serialization, tools pass through `assembleToolsForContext()` in `src/tools/assembly.ts`. Most tools return their static definition unchanged. Capability-sensitive tools implement `assembleForContext(context)` and return tailored variants via `createToolVariant()`:

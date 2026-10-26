@@ -57,6 +57,8 @@ const TOOL_STATE = {
     user_blocking_enabled: true,
     user_info_updates_enabled: true,
     thread_creation_enabled: true,
+    conditioning_interactions_enabled: false,
+    dice_rolling_enabled: false,
     danbooru_enabled: true,
   },
 } satisfies ToolStateForContext;
@@ -368,6 +370,8 @@ describe("prompt macro resolver condition integration", () => {
       web_search_enabled: true,
       manage_message_enabled: false,
       thread_creation_enabled: true,
+      conditioning_interactions_enabled: false,
+      dice_rolling_enabled: false,
       danbooru_enabled: true,
       imagegen_enabled: false,
       videogen_enabled: true,

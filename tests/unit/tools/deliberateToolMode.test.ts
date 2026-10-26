@@ -21,7 +21,7 @@ const ALL_PACK_KEYS = [...Object.values(DELIBERATE_TOOL_PACK_KEYS), EXPLICIT_MEM
 
 describe("deliberate tool mode", () => {
   it("admits spontaneous stickers while retaining task restrictions", () => {
-    const state = createPersona({ config: { sticker_usage_enabled: true } });
+    const state = createPersona({ config: { sticker_usage_enabled: true, conditioning_interactions_enabled: false } });
     for (const prompt of ["hello", "search the web for cats"]) {
       const allowed = [...getDeliberateToolAllowedNames(prompt), ...getAutonomousDeliberateToolNames(state)];
       const result = applyDeliberateToolAllowlist({
@@ -35,10 +35,13 @@ describe("deliberate tool mode", () => {
       );
     }
     for (const disabled of [
-      createPersona({ config: { sticker_usage_enabled: false } }),
+      createPersona({ config: { sticker_usage_enabled: false, conditioning_interactions_enabled: false } }),
       createPersona({ config: { sticker_usage_enabled: true, tool_use_enabled: false } }),
       createPersona({ llm: { ...state.llm, has_tools: false }, config: { sticker_usage_enabled: true } }),
-      createPersona({ llm: { ...state.llm, llm_provider: "novelai" }, config: { sticker_usage_enabled: true } }),
+      createPersona({
+        llm: { ...state.llm, llm_provider: "novelai" },
+        config: { sticker_usage_enabled: true, conditioning_interactions_enabled: false },
+      }),
     ])
       expect(getAutonomousDeliberateToolNames(disabled)).toEqual([]);
   });

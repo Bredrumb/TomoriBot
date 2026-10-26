@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   buildCapabilitiesManageConfigWritePlan,
+  getCapabilitiesManagePermissionDefinitions,
   type CapabilitiesManageConfigState,
 } from "@/utils/discord/manageConfigMapping";
 import {
@@ -20,6 +21,8 @@ const disabledCapabilitiesManageState: CapabilitiesManageConfigState = {
   web_search_enabled: false,
   manage_message_enabled: false,
   thread_creation_enabled: false,
+  conditioning_interactions_enabled: false,
+  dice_rolling_enabled: false,
   imagegen_enabled: false,
   danbooru_enabled: false,
   videogen_enabled: false,
@@ -37,6 +40,8 @@ const enabledCapabilitiesManageState: CapabilitiesManageConfigState = {
   web_search_enabled: true,
   manage_message_enabled: true,
   thread_creation_enabled: true,
+  conditioning_interactions_enabled: false,
+  dice_rolling_enabled: false,
   imagegen_enabled: true,
   danbooru_enabled: true,
   videogen_enabled: true,
@@ -62,6 +67,16 @@ const enabledServerMemberPermissionsState: ServerMemberPermissionsCommandConfigS
 
 describe("config command write mappings", () => {
   describe("/capabilities manage", () => {
+    it("keeps Playful Interactions last with or without voice tools", () => {
+      for (const includeElevenLabs of [true, false]) {
+        const definitions = getCapabilitiesManagePermissionDefinitions({
+          page: "available-tools",
+          includeElevenLabs,
+        });
+        expect(definitions.at(-1)?.value).toBe("conditioninginteractions");
+      }
+    });
+
     it("routes personalization and selfteaching to server_member_permissions_configs", () => {
       const plan = buildCapabilitiesManageConfigWritePlan(
         disabledCapabilitiesManageState,
@@ -90,6 +105,7 @@ describe("config command write mappings", () => {
           "websearch",
           "managemessage",
           "threadcreation",
+          "conditioninginteractions",
           "imagegen",
           "danbooru",
           "videogen",
@@ -107,6 +123,7 @@ describe("config command write mappings", () => {
         web_search_enabled: true,
         manage_message_enabled: true,
         thread_creation_enabled: true,
+        conditioning_interactions_enabled: true,
         imagegen_enabled: true,
         danbooru_enabled: true,
         videogen_enabled: true,

@@ -263,6 +263,8 @@ export class CustomProvider
           user_blocking_enabled: tomoriState.config.user_blocking_enabled,
           user_info_updates_enabled: tomoriState.config.user_info_updates_enabled,
           thread_creation_enabled: tomoriState.config.thread_creation_enabled,
+          conditioning_interactions_enabled: tomoriState.config.conditioning_interactions_enabled,
+          dice_rolling_enabled: tomoriState.config.dice_rolling_enabled,
           danbooru_enabled: tomoriState.config.danbooru_enabled,
         },
       };
@@ -385,6 +387,8 @@ export class CustomProvider
         user_blocking_enabled: false,
         user_info_updates_enabled: false,
         thread_creation_enabled: false,
+        conditioning_interactions_enabled: false,
+        dice_rolling_enabled: false,
         danbooru_enabled: false,
       },
     };

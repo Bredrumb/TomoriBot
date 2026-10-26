@@ -1,6 +1,6 @@
 import { CONDITIONING_ACTION_LOCALE_KEYS, CONDITIONING_FOOTER_LOCALE_KEYS } from "@/utils/conditioning/conditioning";
 import type { ChatInputCommandInteraction, Client, Message, SlashCommandSubcommandBuilder } from "discord.js";
-import { EmbedBuilder, MessageFlags, PermissionFlagsBits, escapeMarkdown } from "discord.js";
+import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
@@ -19,12 +19,7 @@ import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/pe
 import { handlePersonaAutocomplete } from "@/utils/discord/autocomplete/personaAutocomplete";
 import { resolveFallbackPersona } from "@/utils/discord/personaTurnDetectionResolver";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
-import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
-
-const EMBED_COLOR_BY_TYPE: Record<ConditioningType, ColorCode> = {
-  reward: ColorCode.AFFECTION,
-  punish: ColorCode.ERROR,
-};
+import { buildConditioningInteractionEmbed } from "@/utils/conditioning/conditioningEmbed";
 
 interface ConditioningCommandOptions {
   /** Returns extra interpolation context for the embed description localizer. */
@@ -60,38 +55,6 @@ export function createConditioningInteractionCommand(
           .setRequired(false),
       );
 
-  function buildInteractionEmbed(
-    interaction: ChatInputCommandInteraction,
-    locale: string,
-    targetName: string,
-    reasonText: string,
-    extraContext: Record<string, string>,
-    footerKey: string | null,
-    targetMention?: string,
-  ): EmbedBuilder {
-    const description = localizer(
-      locale,
-      reasonText.length > 0 ? commandKeys.embed_description_with_reason : commandKeys.embed_description,
-      {
-        user: `<@${interaction.user.id}>`,
-        bot: targetMention ?? targetName,
-        reason: escapeMarkdown(reasonText),
-        ...extraContext,
-      },
-    );
-    const embed = new EmbedBuilder()
-      .setTitle(localizedStatusTitle(locale, commandKeys.embed_title, EMBED_COLOR_BY_TYPE[type]))
-      .setColor(EMBED_COLOR_BY_TYPE[type]);
-
-    if (reasonText.length > 0 && footerKey) {
-      embed.setFooter({
-        text: localizer(locale, footerKey, { bot: targetName }),
-      });
-    }
-
-    return embed.setDescription(description);
-  }
-
   async function execute(
     client: Client,
     interaction: ChatInputCommandInteraction,
@@ -126,15 +89,17 @@ export function createConditioningInteractionCommand(
           : (targetMember?.nick ?? targetUser.displayName);
       await interaction.reply({
         embeds: [
-          buildInteractionEmbed(
-            interaction,
+          buildConditioningInteractionEmbed({
             locale,
+            type,
+            actionKey,
+            actorLabel: `<@${interaction.user.id}>`,
             targetName,
-            normalizeConditioningReason(interaction.options.getString("reason")),
-            cmdOptions?.getExtraContext?.(interaction) ?? {},
-            "commands.conditioning.shared.user_footer",
-            `<@${targetUser.id}>`,
-          ),
+            targetMention: `<@${targetUser.id}>`,
+            reasonText: normalizeConditioningReason(interaction.options.getString("reason")),
+            extraContext: cmdOptions?.getExtraContext?.(interaction) ?? {},
+            footerKey: "commands.conditioning.shared.user_footer",
+          }),
         ],
         flags: MessageFlags.SuppressNotifications,
       });
@@ -301,14 +266,16 @@ export function createConditioningInteractionCommand(
         actionText: actionTextValue,
       });
 
-      const interactionEmbed = buildInteractionEmbed(
-        interaction,
+      const interactionEmbed = buildConditioningInteractionEmbed({
         locale,
-        botName,
+        type,
+        actionKey,
+        actorLabel: `<@${interaction.user.id}>`,
+        targetName: botName,
         reasonText,
         extraContext,
-        conditioningEvent ? CONDITIONING_FOOTER_LOCALE_KEYS[type] : null,
-      );
+        footerKey: conditioningEvent ? CONDITIONING_FOOTER_LOCALE_KEYS[type] : null,
+      });
 
       await interaction.reply({
         embeds: [interactionEmbed],

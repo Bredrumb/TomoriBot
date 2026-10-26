@@ -150,6 +150,7 @@ const MEMORY_CONDITIONING: ConditioningGroup = {
   totalCount: 1,
   updatedAt: new Date("2026-01-01T00:00:00Z"),
   userDiscIds: ["user-1"],
+  personaActors: [],
   conditioningIds: [1],
 };
 

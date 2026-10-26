@@ -518,6 +518,7 @@ export default {
       "tool_target_user-blocking": `Bloqueo de usuario por persona`,
       "tool_target_user-info": `Actualizaciones de información de usuario`,
       tool_target_thread: `Creación de hilo`,
+      tool_target_dice: "Tirada de dados",
       tool_target_capabilities: `Revisión de capacidades`,
       tool_trigger_literal_label: `Activación literal`,
       tool_trigger_literal_description: `Una frase a coincidir. Ingresa esto o una expresión regular, no ambos.`,

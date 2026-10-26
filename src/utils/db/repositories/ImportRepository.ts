@@ -168,6 +168,8 @@ const WORKSPACE_SECTION_TABLES: Record<WorkspaceConfigSection, readonly SectionT
         "sticker_usage_enabled",
         "imagegen_enabled",
         "danbooru_enabled",
+        "conditioning_interactions_enabled",
+        "dice_rolling_enabled",
         "manage_message_enabled",
         "videogen_enabled",
         "voice_message_enabled",
@@ -1021,6 +1023,12 @@ class ImportRepository {
         imagegen_enabled: config.imagegen_enabled,
         web_search_enabled: config.web_search_enabled,
         ...(config.danbooru_enabled !== undefined && { danbooru_enabled: config.danbooru_enabled }),
+        ...(config.conditioning_interactions_enabled !== undefined && {
+          conditioning_interactions_enabled: config.conditioning_interactions_enabled,
+        }),
+        ...(config.dice_rolling_enabled !== undefined && {
+          dice_rolling_enabled: config.dice_rolling_enabled,
+        }),
         ...(config.manage_message_enabled !== undefined && { manage_message_enabled: config.manage_message_enabled }),
         ...(config.videogen_enabled !== undefined && { videogen_enabled: config.videogen_enabled }),
         ...(config.voice_message_enabled !== undefined && { voice_message_enabled: config.voice_message_enabled }),

@@ -102,7 +102,7 @@ deleting those messages restore that exact webhook independently of the primary 
   - `server_channel_scope_configs`: channel roleplay rules, blocklists, and thought-log routing.
   - `server_trigger_behavior_configs`: cooldown modes, durations, and trigger styles.
   - `server_auto_trigger_configs` and `server_auto_trigger_persona_overrides`: auto-trigger thresholds and per-channel persona routing.
-  - `server_capabilities_configs`: tool exposure switches (video generation, user blocking, time awareness, short-term memory).
+  - `server_capabilities_configs`: tool exposure switches (video generation, user blocking, time awareness, short-term memory, and dice rolling, which defaults to off).
   - `server_notice_embeds_configs`: notice verbosity modes (`minimal` or `verbose`) and hidden notice filters.
   - `server_welcome_configs`: welcome greeting channels, prompts, and persona assignments.
   - `server_speech_configs`: independent Design and Clone hosted-model or endpoint selections, transcript behavior, and synthesizer parameters.
@@ -149,7 +149,7 @@ matching credential revision, including after the persona is removed.
 
 - **`server_memories`**: shared server-wide long-term memories.
 - **`personal_memories`**: personal memories scoped by user ID and cross-server `persona_lineage_id`.
-- **`conditioning_history`**: behavioral reinforcement records from `/reward` and `/punish`, grouped by `server_id`, `persona_lineage_id`, conditioning type, action key, and normalized reason.
+- **`conditioning_history`**: behavioral reinforcement records from `/reward`, `/punish`, and `interact_with_target`, grouped by server, target persona lineage, conditioning type, action, and normalized reason. Each row has exactly one actor: `user_id` or `actor_persona_id`, with separate repeat counts per actor and cascading deletion when that actor is deleted. The tool's workspace capability, `conditioning_interactions_enabled`, defaults to true.
 - **`minimal_notice_refs`**: maps minimal memory and task notice message IDs to confirmed entity rows, allowing context rebuilders to restore full prompt bodies from live records.
 - **`server_emojis` and `server_stickers`**: native Discord expression metadata synchronized on demand.
 - **`custom_expressions` and `custom_expression_personas`**: server-managed custom media registry. Supports unique UUID identities, delivery kinds, validated media limits (10 MiB ceiling), and persona membership scoping.

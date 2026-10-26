@@ -1,0 +1,32 @@
+export default {
+  roll: {
+    description: "Tung xúc xắc cho board game và nhập vai.",
+    dice_description: "Xúc xắc cần tung, chẳng hạn 3d4 hoặc 1d20+5 (mặc định: 1d20).",
+    mode_description: "Tung bình thường, hoặc giữ giá trị cao hơn hay thấp hơn trong hai xúc xắc d20.",
+    reason_description: "Nhãn ngắn cho lượt tung, chẳng hạn Kiểm tra lén lút.",
+    visibility_description: "Ai có thể xem kết quả, bao gồm việc bot có nhận được trong ngữ cảnh trò chuyện hay không.",
+    normal_option: "Bình thường",
+    advantage_option: "Lợi thế",
+    disadvantage_option: "Bất lợi",
+    public_option: "Công khai",
+    hidden_option: "Ẩn",
+    shared_option: "Công khai + Bot",
+    title: "🎲 Tung xúc xắc",
+    rolled: "**{actor}** đã tung `{dice}`:",
+    rolled_with_reason: "**{actor}** đã tung `{dice}` vì *{reason}*:",
+    advantage_line: "Lợi thế: {rolls}{modifier}",
+    disadvantage_line: "Bất lợi: {rolls}{modifier}",
+    calculation_line: "Tính toán: {calculation}",
+    footer_public: "Công khai • Không chia sẻ với bot",
+    footer_hidden: "Ẩn • Chỉ bạn mới thấy nội dung này",
+    footer_shared: "Công khai • Đã chia sẻ với bot",
+    invalid_title: "Biểu thức xúc xắc không hợp lệ",
+    invalid_input: "Nhập biểu thức xúc xắc tối đa 64 ký tự, chế độ hợp lệ và lý do tối đa 100 ký tự. Ví dụ: `1d20+5`.",
+    invalid_notation:
+      "Dùng một nhóm xúc xắc kèm bộ điều chỉnh tùy chọn, chẳng hạn `d20`, `3d4`, `2d6+3` hoặc `1d20-2`.",
+    invalid_limits:
+      "Tung 1-100 xúc xắc với 2-1.000 mặt mỗi viên và bộ điều chỉnh từ -10.000 đến +10.000. Ví dụ: `2d6+3`.",
+    invalid_mode: "Lợi thế và bất lợi yêu cầu `1d20` kèm bộ điều chỉnh tùy chọn, chẳng hạn `1d20+5`.",
+    invalid_visibility: "Chọn Công khai, Ẩn hoặc Công khai + Bot.",
+  },
+};

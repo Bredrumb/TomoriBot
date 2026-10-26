@@ -219,6 +219,7 @@ Persistence is described in
 - `reset`
 - `respond`
 - `reward`
+- `roll`
 - `scheduled-task`
 - `setup`
 - `stats`

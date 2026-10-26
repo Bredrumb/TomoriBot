@@ -382,9 +382,10 @@ export async function buildConditioningContextItem(params: {
         : `## Punished Behaviors\nHere are past things ${params.botName} did that got punished for. Avoid doing them again:`;
 
     const lines = visibleGroups.map((group) => {
-      const users = group.userDiscIds
-        .map((userDiscId) => (isExternalUserId(userDiscId) ? userDiscId : `<@${userDiscId}>`))
-        .join(", ");
+      const users = [
+        ...group.userDiscIds.map((userDiscId) => (isExternalUserId(userDiscId) ? userDiscId : `<@${userDiscId}>`)),
+        ...group.personaActors.map((actor) => actor.name),
+      ].join(", ");
       const action = getConditioningContextPastParticiple(conditioningType, group.actionKey);
       const countSuffix = group.totalCount > 1 ? ` (${group.totalCount} times)` : "";
       const actionTextSuffix = group.actionText ? ` with \`${group.actionText}\`` : "";
