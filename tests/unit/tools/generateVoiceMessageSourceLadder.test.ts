@@ -255,7 +255,7 @@ describe("GenerateVoiceMessageTool source ladder", () => {
       if (target?.kind !== "hosted-model") throw new Error("Missing hosted fixture");
       for (const changed of [
         { ...target, credentialRevision: 2 },
-        { ...target, apiKey: "synthetic-rotated-member-key" },
+        { ...target, apiKey: "synthetic-rotated-provider-key" },
       ]) {
         hostedTargets[mode] = changed;
         synthesisRequests.length = 0;

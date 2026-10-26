@@ -266,6 +266,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech synthesis lifecycle and fall
               locale: "en-US",
             } as unknown as ToolContext);
             expect(result.success).toBe(true);
+            if (mode === "clone") {
+              const speechRequests = requests.slice(before).filter(({ url }) => url.endsWith("/audio/speech"));
+              expect(speechRequests).toHaveLength(2);
+              for (const { init } of speechRequests)
+                expect(new Headers(init.headers).get("Authorization")).toBe("Bearer synthetic-openrouter");
+            }
             expect(result.data).toMatchObject({
               mode,
               target: mode === "design" ? "gemini-3.8-flash-tts" : "fish-audio/s2.1-pro",

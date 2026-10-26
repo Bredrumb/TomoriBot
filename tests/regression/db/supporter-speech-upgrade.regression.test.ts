@@ -179,7 +179,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Subscription speech upgrade regressions", 
     expect(await readSelection(testSql, scenario.serverId)).toBe(scenario.cloneModelId);
     expect(await readCapabilities(testSql, scenario.serverId)).toContain("speech_clone");
     expect(await loadHostedSpeechSelection(scenario.serverId, "clone", undefined, true)).toMatchObject({
-      subscription: true,
+      credentialProvider: "supporter",
       credentialId: scenario.supporterConfigId,
       apiKey: null,
       model: { speech_model_id: scenario.cloneModelId },
@@ -191,7 +191,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Subscription speech upgrade regressions", 
       await setHostedSpeechSelection(personalScope, scenario.cloneModelId, "clone", false, undefined, "supporter"),
     ).toBe(true);
     expect(await loadHostedSpeechSelection(scenario.serverId, "clone", scenario.userId, true)).toMatchObject({
-      subscription: true,
+      credentialProvider: "supporter",
       credentialId: scenario.personalConfigId,
       model: { speech_model_id: scenario.cloneModelId },
     });
@@ -209,7 +209,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Subscription speech upgrade regressions", 
     expect(await readSelection(testSql, scenario.serverId)).toBe(scenario.cloneModelId);
     expect(await readCapabilities(testSql, scenario.serverId)).toContain("speech_clone");
     expect(await loadHostedSpeechSelection(scenario.serverId, "clone", undefined, true)).toMatchObject({
-      subscription: true,
+      credentialProvider: "supporter",
       credentialId: scenario.supporterConfigId,
     });
 
@@ -217,7 +217,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Subscription speech upgrade regressions", 
     expect(await readSelection(testSql, scenario.serverId)).toBe(scenario.cloneModelId);
     expect(await readCapabilities(testSql, scenario.serverId)).toContain("speech_clone");
     expect(await loadHostedSpeechSelection(scenario.serverId, "clone", undefined, true)).toMatchObject({
-      subscription: true,
+      credentialProvider: "supporter",
       credentialId: scenario.supporterConfigId,
     });
 
@@ -298,7 +298,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Subscription speech upgrade regressions", 
       expect(target).toMatchObject({
         kind: "hosted-model",
         apiKey: "synthetic-supporter-speech-upgrade-member",
-        subscription: true,
+        credentialProvider: "supporter",
         model: { speech_model_id: scenario.cloneModelId },
       });
     } finally {

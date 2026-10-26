@@ -27,7 +27,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Subscription speech across repeated initia
       );
       await initializeDatabase({ client: testSql, includeRag: false, maxRetries: 1 });
       expect(await loadHostedSpeechSelection(server.server_id, "clone", undefined, true)).toMatchObject({
-        subscription: true,
+        credentialProvider: "supporter",
         model: { speech_model_id: model.speech_model_id },
       });
       expect(await setHostedSpeechSelection(scope, model.speech_model_id, "clone", false, undefined, "supporter")).toBe(
@@ -44,11 +44,11 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Subscription speech across repeated initia
       await testSql`UPDATE saved_provider_configs SET api_key = NULL
         WHERE server_id = ${server.server_id} AND provider = 'openrouter'`;
       expect(await loadHostedSpeechSelection(server.server_id, "clone", undefined, true)).toMatchObject({
-        subscription: true,
+        credentialProvider: "supporter",
       });
       await testSql`DELETE FROM saved_provider_configs WHERE server_id = ${server.server_id} AND provider = 'openrouter'`;
       expect(await loadHostedSpeechSelection(server.server_id, "clone", undefined, true)).toMatchObject({
-        subscription: true,
+        credentialProvider: "supporter",
       });
       await testSql`DELETE FROM saved_provider_configs WHERE server_id = ${server.server_id} AND provider = 'supporter'`;
       expect(await loadHostedSpeechSelection(server.server_id, "clone", undefined, true)).toBeNull();

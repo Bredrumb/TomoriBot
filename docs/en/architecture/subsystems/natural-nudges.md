@@ -115,7 +115,8 @@ retry-after-abort time, and a 15-minute cache of heat and waking hours. A restar
   [Provider options](/architecture/pipelines/provider/#provider-options)). Checker Decision models
   come from `loadDecisionModelsForScope`, the same list `callDecisionsForProvider` accepts. A pinned
   Decision checker uses `nudge-checker`; a selected or default Decision checker uses `decision`.
-  The picker keeps Subscription and OpenRouter BYOK separate even when they share a catalog model.
+  The picker keeps the selected provider alias when it shares a catalog with BYOK, so pinning claims
+  that option's `nudge-checker` slot and selecting BYOK releases it.
   Subscription ownership is stored in `server_model_configs.subscription_capabilities` as
   `nudge_planner`, `nudge_checker`, or `decision`; having a sponsor alone does not select that payer.
   Imports preserve an unchanged pin's payer and infer a changed pin's Subscription payer only when

@@ -108,6 +108,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("supporter guard usage through the real cre
   });
 
   afterAll(async () => {
+    await testSql`DELETE FROM supporter_member_keys WHERE supporter_identity_id = ${identity.supporter_identity_id}`;
+    await testSql`DELETE FROM supporter_identities WHERE supporter_identity_id = ${identity.supporter_identity_id}`;
     await cleanupFixtures(testSql);
     await testSql`DELETE FROM llms WHERE llm_id = ${llmId}`;
   });
