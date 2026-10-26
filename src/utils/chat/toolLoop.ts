@@ -1130,12 +1130,7 @@ async function executeToolCall(
     if (params.context.responseReview)
       params.context.responseReview.functionHistory.push({
         functionCall,
-        functionResponse: {
-          functionResponse: {
-            name: functionCall.name,
-            response: { result: toolResult.data ?? { status: "completed" } },
-          },
-        },
+        functionResponse: buildSuccessfulFunctionResponse(toolResult, functionCall.name),
         preToolCallTextParts: buildPreToolCallTextParts(streamResult),
       });
     return { kind: "restart" };
@@ -1146,9 +1141,7 @@ async function executeToolCall(
   if (requestIdentity && toolResult.success)
     params.context.completedToolCalls?.set(requestIdentity, {
       functionCall,
-      functionResponse: {
-        functionResponse: { name: functionCall.name, response: { result: toolResult.data ?? { status: "completed" } } },
-      },
+      functionResponse: buildSuccessfulFunctionResponse(toolResult, functionCall.name),
       imageMetadata: toolResult.imageMetadata,
     });
 
@@ -1158,11 +1151,18 @@ async function executeToolCall(
   }
 
   const functionResponse = toolResult.success
-    ? ((toolResult.data as Record<string, unknown>) ?? { status: "completed" })
+    ? buildSuccessfulFunctionResponse(toolResult, functionCall.name)
     : {
-        status: "tool_execution_failed",
-        reason: toolResult.message || toolResult.error || "Tool execution failed without specific error",
-        tool_name: functionName,
+        functionResponse: {
+          name: functionCall.name,
+          response: {
+            result: {
+              status: "tool_execution_failed",
+              reason: toolResult.message || toolResult.error || "Tool execution failed without specific error",
+              tool_name: functionName,
+            },
+          },
+        },
       };
 
   // Preserve pre-tool narration for continuity. Collection keeps it pending until review.
@@ -1181,16 +1181,17 @@ async function executeToolCall(
     responseDelivered: toolResult.success && toolResult.responseDelivered === true,
     historyEntry: {
       functionCall,
-      functionResponse: {
-        functionResponse: {
-          name: functionCall.name,
-          response: { result: functionResponse },
-        },
-      },
+      functionResponse,
       imageMetadata: toolResult.imageMetadata,
       preToolCallTextParts,
     },
   };
+}
+
+function buildSuccessfulFunctionResponse(toolResult: ToolResult, functionName: string): Record<string, unknown> {
+  const response: Record<string, unknown> = { result: toolResult.data ?? { status: "completed" } };
+  if (toolResult.message) response.message = toolResult.message;
+  return { functionResponse: { name: functionName, response } };
 }
 
 /**

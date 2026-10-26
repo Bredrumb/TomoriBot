@@ -113,10 +113,30 @@ The stage returns one of three outcome kinds:
    entry, and the outer loop clears `accumulatedModelParts` so trailing prefill does not duplicate
    already-delivered text.
 
+## Successful and failed result payloads
+<!-- anchor: successful-and-failed-result-payloads -->
+
+A successful history response carries `result` and, when the tool returned one, `message`. `result`
+is the tool's `data`; a tool that returns no data stores `{ "status": "completed" }`. `message` sits
+beside `result`, so a payload object with its own `message` field keeps that field. The normal history
+entry, the reusable outcome recorded for later attempts, and a context-restart entry retained for
+review all use the same builder. The next provider call, a replacement attempt that reuses the
+outcome, and a revised reply therefore see both fields. Internal delivery fields (`responseDelivered`,
+`endTurn`, `stickerSelection`) stay out of the response.
+
+With Response Drafting On, an enhanced-context restart is also appended to review function history
+with this payload, so a later revision and the next provider call see the restart data and its
+message. The loop still passes the raw tool data to `handleEnhancedContextRestart`, so control fields
+such as `type` and `enhanced_context_item` retain their meaning. Off omits the restart call from
+history because the injected context replaces it.
+
+A failed call stores `{ status: "tool_execution_failed", reason, tool_name }`, built from the tool's
+message or error. Its data is not copied into model history.
+
 ## Source pointers
 <!-- anchor: source-pointers -->
 
-- `src/utils/chat/toolLoop.ts`: `executeToolCall`, `buildPreToolCallTextParts`, `emitFailedToolCallThoughtLog`.
+- `src/utils/chat/toolLoop.ts`: `executeToolCall`, `buildPreToolCallTextParts`, `buildSuccessfulFunctionResponse`, `emitFailedToolCallThoughtLog`.
 - `src/tools/toolRegistry.ts`: `ToolRegistry.executeTool`.
 - `src/utils/chat/expressionDelivery.ts`: `deliverExpression`, `buildExpressionToolResult`.
 - `src/types/tool/interfaces.ts`: `ToolContext`, `ToolResult`.
