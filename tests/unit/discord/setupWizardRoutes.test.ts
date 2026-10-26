@@ -1029,6 +1029,38 @@ describe("setupWizardRoutes", () => {
     }
   });
 
+  it("offers registration-failed copy when the provider rejects the catalog key", async () => {
+    const nonce = "nonce-cat-submit-fail-copy";
+    storeSetupDraft(nonce, makeDraft({ providerAccess: null }));
+    const key = "genai.tips.wait_and_retry";
+    let received: providerOptionRegistry.ProviderOptionCopyContext | undefined;
+    const copy = spyOn(providerOptionRegistry, "withProviderOptionCopy").mockImplementation(async (keys, context) => {
+      received = context;
+      return [...keys, key];
+    });
+    const providerSpy = spyOn(ProviderFactory, "getProviderByName").mockResolvedValue({
+      validateApiKey: mock(async () => ({ valid: false, reason: "invalid key" })),
+    } as never);
+    const selectSpy = spyOn(modalModule, "takeRawModalSelectValue").mockReturnValue("google");
+
+    try {
+      const interaction = makeMockInteraction({
+        customId: buildSetupProviderCatalogSubmitRouteId({ locale: "en-US", nonce }),
+        kind: "modal",
+        fields: { [buildSetupCatalogModalFieldId("api-key", nonce)]: "invalid-key-attempt" },
+      });
+
+      await dispatchGlobalInteraction({} as Client, interaction);
+
+      expect(received?.surface).toBe("registration_failed");
+      expect(JSON.stringify(interaction.editReplyCalls[0])).toContain(localizedCopy("en-US", key));
+    } finally {
+      copy.mockRestore();
+      providerSpy.mockRestore();
+      selectSpy.mockRestore();
+    }
+  });
+
   it("tells the actor to add credit when the provider reports an empty balance", async () => {
     const nonce = "nonce-cat-submit-no-balance";
     storeSetupDraft(nonce, makeDraft({ providerAccess: null }));

@@ -437,7 +437,7 @@ describe("provider option registry", () => {
       throw new Error("Storage unavailable");
     };
     expect(await withProviderOptionCopy(keys, context)).toBe(keys);
-    for (const surface of ["recovery", "completion"] as const) {
+    for (const surface of ["recovery", "completion", "registration_failed"] as const) {
       for (const credentialSource of ["server", "personal"] as const) {
         const input = { ...context, surface, credentialScope: credentialSource };
         const receivedContexts: ProviderOptionCopyContext[] = [];
