@@ -64,7 +64,13 @@ function providerCopyContext(context: StreamContext): ProviderOptionCopyContext 
     managedProvider: context.usageContext?.credentialProvider ?? null,
     userDiscId: context.triggererDiscId,
     serverId: context.tomoriState.server_id,
-    credentialSource: context.textCredentialSource,
+    credentialScope:
+      context.usageContext?.credentialScope ??
+      (context.textCredentialSource === "personal"
+        ? "personal"
+        : context.textCredentialSource === "server"
+          ? "server"
+          : undefined),
   };
 }
 

@@ -237,7 +237,13 @@ async function emitGenerationError(context: ChatTurnContext, error: unknown): Pr
         managedProvider: context.usageContext?.credentialProvider ?? null,
         userDiscId: context.userDiscId,
         serverId: context.tomoriState.server_id,
-        credentialSource: context.textCredentialSource,
+        credentialScope:
+          context.usageContext?.credentialScope ??
+          (context.textCredentialSource === "personal"
+            ? "personal"
+            : context.textCredentialSource === "server"
+              ? "server"
+              : undefined),
       }),
       footerKey: TOMORIBOT_ERROR_FOOTER_KEY,
     },

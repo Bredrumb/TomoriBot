@@ -4,6 +4,9 @@ import type { TomoriState } from "@/types/db/schema";
 import type { ProviderError, StreamContext, StreamProvider } from "@/types/stream/interfaces";
 import { StreamErrorUi } from "@/utils/discord/stream/errorUi";
 import { ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
+import { findProviderOption } from "@/utils/provider/providerOptionRegistry";
+import { getSupporterUsageContext } from "@/modules/supporter-billing/runtime/types";
+import { createServerFunding, createPersonalFunding } from "./guards/utils-fundingFixtures";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy, collectCaseFailures, RUNTIME_LOCALES } from "../../helpers/localeCases";
 import { useEnvSandbox } from "../../helpers/env";
@@ -62,7 +65,13 @@ function makeProvider(name = "openrouter"): StreamProvider {
 async function renderTips(
   error: unknown,
   textCredentialSource: StreamContext["textCredentialSource"],
-  options: { providerName?: string; fallbackChain?: unknown[]; userDiscId?: string; locale?: string } = {},
+  options: {
+    providerName?: string;
+    fallbackChain?: unknown[];
+    userDiscId?: string;
+    locale?: string;
+    usageContext?: StreamContext["usageContext"];
+  } = {},
 ): Promise<string> {
   let modal: ReturnType<ModalBuilder["toJSON"]> | undefined;
   const tipClick = {
@@ -89,6 +98,7 @@ async function renderTips(
     ...makeContext(send, textCredentialSource, options.fallbackChain ?? []),
     triggererDiscId: options.userDiscId,
     locale: options.locale ?? "en-US",
+    usageContext: options.usageContext,
   });
   await Promise.resolve();
   return (
@@ -160,6 +170,30 @@ describe("provider error subscription guidance", () => {
   it("does not promote subscriptions for the same OpenRouter transport when the member key paid", async () => {
     const tips = await renderTips(RATE_LIMIT_ERROR, "supporter", { userDiscId: "123456789012345678" });
     expect(tips).not.toContain(localizedCopy("en-US", "commands.subscribe.conversion_nudge"));
+  });
+
+  it("passes the managed provider and its exact credential scope to the registered contribution", async () => {
+    const option = findProviderOption("supporter");
+    if (!option?.contributeCopy) throw new Error("Missing registered Subscription copy contribution");
+    const copy = spyOn(option, "contributeCopy").mockResolvedValue(null);
+    try {
+      for (const funding of [createServerFunding(), createPersonalFunding()]) {
+        const usageContext = getSupporterUsageContext(funding);
+        copy.mockClear();
+        const tips = await renderTips(RATE_LIMIT_ERROR, "supporter", {
+          userDiscId: "123456789012345678",
+          usageContext,
+        });
+        expect(copy.mock.calls[0]?.[0]).toMatchObject({
+          surface: "recovery",
+          managedProvider: "supporter",
+          credentialScope: funding.fundingScope,
+        });
+        expect(tips).not.toContain(localizedCopy("en-US", "commands.subscribe.conversion_nudge"));
+      }
+    } finally {
+      copy.mockRestore();
+    }
   });
 
   it("keeps billing denials free of conversion copy and eligibility reads", async () => {

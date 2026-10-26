@@ -27,7 +27,7 @@ export async function resolveSupporterNudgeKey(
     !isSupporterBillingEnabled(resolveEnvironment()) ||
     !context.userDiscId ||
     context.managedProvider ||
-    (context.credentialSource !== "server" && context.credentialSource !== "personal")
+    !context.credentialScope
   ) {
     return null;
   }
@@ -43,7 +43,7 @@ export async function resolveSupporterNudgeKey(
     return "commands.subscribe.conversion_nudge";
   } catch {
     log.warn("Subscription conversion eligibility could not be checked", {
-      metadata: { credentialSource: context.credentialSource },
+      metadata: { credentialScope: context.credentialScope },
     });
     return null;
   }

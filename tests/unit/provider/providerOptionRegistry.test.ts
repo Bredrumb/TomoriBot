@@ -414,7 +414,7 @@ describe("provider option registry", () => {
     expect(received).toEqual(
       (["server", "personal"] as const).map((credentialSource) => ({
         surface: "completion",
-        credentialSource,
+        credentialScope: credentialSource,
         managedProvider: null,
         userDiscId: "user-1",
         serverId: 12,
@@ -428,7 +428,7 @@ describe("provider option registry", () => {
       surface: "recovery",
       userDiscId: "user-1",
       serverId: 12,
-      credentialSource: "personal",
+      credentialScope: "personal",
       managedProvider: null,
     };
     expect(await withProviderOptionCopy(keys, context)).toBe(keys);
@@ -439,7 +439,7 @@ describe("provider option registry", () => {
     expect(await withProviderOptionCopy(keys, context)).toBe(keys);
     for (const surface of ["recovery", "completion"] as const) {
       for (const credentialSource of ["server", "personal"] as const) {
-        const input = { ...context, surface, credentialSource };
+        const input = { ...context, surface, credentialScope: credentialSource };
         const receivedContexts: ProviderOptionCopyContext[] = [];
         option.contributeCopy = async (received) => {
           receivedContexts.push(received);

@@ -8,7 +8,6 @@ import type { AssembledServerConfig, FallbackModelRef, TomoriState } from "@/typ
 import type { PanelReceipt } from "@/types/discord/panel";
 import type { ProviderPanelCapability, ProviderPanelEntry } from "@/types/discord/providerPanel";
 import type { SetupDraftRecord } from "@/types/discord/setupWizard";
-import type { StreamContext } from "@/types/stream/interfaces";
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 import type { VoiceSourceMode } from "@/utils/speech/voiceSourceCapabilities";
@@ -175,7 +174,7 @@ export interface ProviderOptionCopyContext {
   surface: "recovery" | "completion";
   userDiscId: string | undefined;
   serverId: number | null | undefined;
-  credentialSource: StreamContext["textCredentialSource"];
+  credentialScope: "server" | "personal" | undefined;
   managedProvider: string | null;
 }
 

@@ -377,7 +377,7 @@ export async function execute(
             )?.value ?? null),
         userDiscId: interaction.user.id,
         serverId: tomoriState.server_id,
-        credentialSource,
+        credentialScope: credentialSource,
       });
 
     let providerName = tomoriState.llm.llm_provider.toLowerCase();

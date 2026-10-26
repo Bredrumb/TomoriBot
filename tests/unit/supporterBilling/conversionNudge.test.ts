@@ -37,7 +37,7 @@ const context = {
   managedProvider: null,
   userDiscId: identity.discord_user_id,
   serverId: 10,
-  credentialSource: "server" as const,
+  credentialScope: "server" as const,
 };
 
 function dependencies() {
@@ -69,12 +69,10 @@ describe("subscription conversion eligibility", () => {
     }
   });
 
-  it("requires an identified user and a known BYOK funding source", async () => {
-    for (const credentialSource of ["supporter", undefined] as const) {
-      const deps = dependencies();
-      expect(await resolveSupporterNudgeKey({ ...context, credentialSource }, deps)).toBeNull();
-      expect(deps.identities.loadByDiscordUserId).not.toHaveBeenCalled();
-    }
+  it("requires an identified user and a known credential scope", async () => {
+    const unknownScope = dependencies();
+    expect(await resolveSupporterNudgeKey({ ...context, credentialScope: undefined }, unknownScope)).toBeNull();
+    expect(unknownScope.identities.loadByDiscordUserId).not.toHaveBeenCalled();
     const deps = dependencies();
     expect(await resolveSupporterNudgeKey({ ...context, userDiscId: undefined }, deps)).toBeNull();
     expect(deps.identities.loadByDiscordUserId).not.toHaveBeenCalled();
@@ -121,8 +119,8 @@ describe("subscription conversion eligibility", () => {
 
   it("keeps guidance available across repeated calls", async () => {
     const deps = dependencies();
-    for (const credentialSource of ["server", "personal", "server", "personal"] as const) {
-      expect(await resolveSupporterNudgeKey({ ...context, credentialSource }, deps)).toBe(
+    for (const credentialScope of ["server", "personal", "server", "personal"] as const) {
+      expect(await resolveSupporterNudgeKey({ ...context, credentialScope }, deps)).toBe(
         "commands.subscribe.conversion_nudge",
       );
     }

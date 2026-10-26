@@ -212,7 +212,7 @@ export async function execute(
       managedProvider: videoCreds?.usageContext?.credentialProvider ?? null,
       userDiscId: interaction.user.id,
       serverId: tomoriState.server_id,
-      credentialSource,
+      credentialScope: credentialSource,
     });
   };
 

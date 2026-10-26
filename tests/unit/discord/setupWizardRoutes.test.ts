@@ -2952,7 +2952,7 @@ describe("setupWizardFinish", () => {
           surface: "completion",
           userDiscId: "actor-1",
           serverId: 42,
-          credentialSource: "server",
+          credentialScope: "server",
           managedProvider: null,
         });
         const receipt = JSON.stringify(interaction.editReplyCalls.at(-1));

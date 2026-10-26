@@ -909,7 +909,7 @@ async function runSetupPostCommitEffects(input: {
           managedProvider: null,
           userDiscId: input.interaction.user.id,
           serverId: input.serverInternalId,
-          credentialSource: "server",
+          credentialScope: "server",
         })
       : footerKey
         ? [footerKey]

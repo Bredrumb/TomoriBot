@@ -182,7 +182,7 @@ describe("Media generation failures", () => {
         expect(context).toMatchObject({
           surface: "recovery",
           userDiscId: interaction.user.id,
-          credentialSource: "personal",
+          credentialScope: "personal",
           managedProvider: null,
         });
         entered.resolve();

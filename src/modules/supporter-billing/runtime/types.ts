@@ -102,7 +102,11 @@ const usageContexts = new WeakMap<SupporterFundingContext, SupporterUsageContext
 export function getSupporterUsageContext(funding: SupporterFundingContext): SupporterUsageContext {
   const existing = usageContexts.get(funding);
   if (existing) return existing;
-  const context: SupporterUsageContext = { credentialProvider: SUPPORTER_PROVIDER_VALUE, supporterFunding: funding };
+  const context: SupporterUsageContext = {
+    credentialProvider: SUPPORTER_PROVIDER_VALUE,
+    credentialScope: funding.fundingScope,
+    supporterFunding: funding,
+  };
   usageContexts.set(funding, context);
   return context;
 }
