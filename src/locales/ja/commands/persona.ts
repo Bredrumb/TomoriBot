@@ -244,8 +244,6 @@ export default {
       field_additional_inst: `追加の指示`,
       wrong_provider_title: `🔴 互換性のないプロバイダー`,
       wrong_provider_description: `ペルソナ生成には対応プロバイダーが必要です。現在のプロバイダーは **{current_provider}** です。\`/config\` > モデル > モデルの切り替えで対応プロバイダーに切り替えてください。`,
-      no_api_key_title: `🔴 APIキーがありません`,
-      no_api_key_description: `有効なプロバイダーが設定されていません。\`/setup\`（初回）または\`/providers\`で登録してください。`,
       model_incompatible_title: `互換性のないモデル`,
       model_incompatible_description: `現在のモデル（**{model_name}**）は、ペルソナ生成に必要な**構造化出力**をサポートしていません。
 
@@ -264,8 +262,6 @@ export default {
 **次のステップ:**
 1. \`/config\` > モデル > モデルの切り替えを使用してツール対応モデルに切り替える、または
 2. ウェブ検索なしで再生成する（質問されたら「いいえ」を選択）`,
-      api_key_decrypt_failed_title: `🔴 APIキーエラー`,
-      api_key_decrypt_failed_description: `有効なプロバイダー認証情報の復号化に失敗しました。\`/providers\`で再設定してください。`,
       web_search_failed_title: `ペルソナの生成を中止しました`,
       web_search_failed_description: `要求されたウェブ検索に失敗したため、ペルソナの生成を中止しました。
 

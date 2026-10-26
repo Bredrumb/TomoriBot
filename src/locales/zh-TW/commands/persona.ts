@@ -244,8 +244,6 @@ export default {
       field_additional_inst: `補充指示`,
       wrong_provider_title: `🔴 供應商不相容`,
       wrong_provider_description: `生成預設集需要相容的供應商。你目前的供應商是 **{current_provider}**。請用 \`/config\` > 模型 > 切換模型切換到支援的供應商。`,
-      no_api_key_title: `🔴 沒有 API 金鑰`,
-      no_api_key_description: `沒有設定使用中的供應商。請用 \`/setup\`（第一次）或 \`/providers\` 註冊一個。`,
       model_incompatible_title: `模型不相容`,
       model_incompatible_description: `你目前的模型（**{model_name}**）不支援 **STRUCTURED OUTPUT**，而這是生成人格的必要條件。
 
@@ -264,8 +262,6 @@ export default {
 **接下來可以這樣做：**
 1. 用 \`/config\` > 模型 > 切換模型切換到支援工具的模型，或
 2. 不要網路搜尋，重新生成一次（被問到時選「否」）`,
-      api_key_decrypt_failed_title: `🔴 API 金鑰錯誤`,
-      api_key_decrypt_failed_description: `無法解密使用中供應商的憑證。請用 \`/providers\` 重新設定。`,
       web_search_failed_title: `已中止人格生成`,
       web_search_failed_description: `因請求的網路搜尋失敗，人格生成已中止。
 

@@ -244,8 +244,6 @@ Palabras de activación ({trigger_word_count}): {triggers}`,
       field_additional_inst: `Instrucciones adicionales`,
       wrong_provider_title: `🔴 Proveedor incompatible`,
       wrong_provider_description: `La generación de preajustes requiere un proveedor compatible. Tu actual es **{current_provider}**. Usa \`/config\` > Modelos > Cambiar modelos para usar uno compatible.`,
-      no_api_key_title: `🔴 Sin clave de API`,
-      no_api_key_description: `No hay un proveedor activo configurado. Usa \`/setup\` (primera vez) o \`/providers\` para registrar uno.`,
       model_incompatible_title: `Modelo incompatible`,
       model_incompatible_description: `Tu modelo actual (**{model_name}**) no admite **SALIDA ESTRUCTURADA**, lo cual es necesario para generar personas.
 
@@ -264,8 +262,6 @@ Usa \`/config\` > Modelos > Cambiar modelos para cambiar a un modelo que admita 
 **Próximos pasos:**
 1. Usa \`/config\` > Modelos > Cambiar modelos para cambiar a un modelo con herramientas, O
 2. Vuelve a generar sin búsqueda web (elige "No" cuando se te pregunte)`,
-      api_key_decrypt_failed_title: `🔴 Error de clave de API`,
-      api_key_decrypt_failed_description: `Falló la desencriptación de las credenciales del proveedor activo. Por favor, reconfigúralas usando \`/providers\`.`,
       web_search_failed_title: `Generación de persona cancelada`,
       web_search_failed_description: `Se canceló la generación de persona porque falló la búsqueda web solicitada.
 

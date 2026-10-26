@@ -244,8 +244,6 @@ Từ kích hoạt ({trigger_word_count}): {triggers}`,
       field_additional_inst: `Hướng dẫn bổ sung`,
       wrong_provider_title: `🔴 Nhà cung cấp không tương thích`,
       wrong_provider_description: `Tạo preset yêu cầu nhà cung cấp tương thích. Nhà cung cấp hiện tại của bạn là **{current_provider}**. Dùng \`/config\` > Models > Switch Models để chuyển sang nhà cung cấp được hỗ trợ.`,
-      no_api_key_title: `🔴 Không có khóa API`,
-      no_api_key_description: `Chưa cấu hình nhà cung cấp nào. Dùng \`/setup\` (lần đầu) hoặc \`/providers\` để đăng ký.`,
       model_incompatible_title: `Model không tương thích`,
       model_incompatible_description: `Model hiện tại (**{model_name}**) không hỗ trợ **STRUCTURED OUTPUT**, vốn là tính năng bắt buộc để tạo persona.
 
@@ -264,8 +262,6 @@ Dùng \`/config\` > Models > Switch Models để chuyển sang model hỗ trợ 
 **Các bước tiếp theo:**
 1. Dùng \`/config\` > Models > Switch Models để đổi sang model hỗ trợ công cụ, HOẶC
 2. Tạo lại mà không dùng tìm kiếm web (chọn "Không" khi được hỏi)`,
-      api_key_decrypt_failed_title: `🔴 Lỗi khóa API`,
-      api_key_decrypt_failed_description: `Không thể giải mã thông tin nhà cung cấp đang hoạt động. Hãy cấu hình lại bằng \`/providers\`.`,
       web_search_failed_title: `Đã hủy tạo persona`,
       web_search_failed_description: `Quá trình tạo persona đã bị hủy vì tìm kiếm web theo yêu cầu thất bại.
 
