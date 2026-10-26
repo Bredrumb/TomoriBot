@@ -1,4 +1,5 @@
 import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
+import type { PersonaDeliveryMode, PersonaDeliveryReceipt } from "@/utils/discord/webhook/personaPost";
 /**
  * Streaming interfaces for modular LLM provider architecture
  *
@@ -83,6 +84,8 @@ export interface StreamConfig extends ProviderConfig {
  * Contains all the Discord and application context needed for streaming
  */
 export interface StreamContext {
+  deliveryMode?: PersonaDeliveryMode;
+  deliveryReceipts?: PersonaDeliveryReceipt[];
   usageContext?: ProviderUsageContext;
   channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | NewsChannel | TextChannel | AnyThreadChannel;
   client: Client;

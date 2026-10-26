@@ -4,11 +4,13 @@ import type { TomoriState } from "@/types/db/schema";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import { type BuildStreamContextParams, buildStreamContext } from "@/utils/provider/streamContext";
+import { isUserImpersonationStreamContext } from "@/utils/discord/stream/uiUpdater";
+import { createPersona } from "../../helpers/fixtures";
 
 // Minimal Discord/Tomori stand-ins: the helper only shuttles references, never invokes them.
 const CHANNEL = { id: "channel_1" } as unknown as TextChannel;
 const CLIENT = {} as Client;
-const TOMORI_STATE = { server_id: 1, config: {} } as unknown as TomoriState;
+const TOMORI_STATE: TomoriState = createPersona();
 
 /**
  * Build the minimal required params, letting each test override specifics.
@@ -26,6 +28,25 @@ function makeParams(overrides: Partial<BuildStreamContextParams> = {}): BuildStr
 }
 
 describe("buildStreamContext", () => {
+  it("uses explicit delivery mode for main and alter personas regardless of webhook identity", () => {
+    for (const isAlter of [false, true]) {
+      for (const deliveryMode of ["persona", "user_impersonation"] as const) {
+        const receipts: NonNullable<StreamingContext["deliveryReceipts"]> = [];
+        const ctx = buildStreamContext(
+          makeParams({
+            tomoriState: createPersona({ is_alter: isAlter }),
+            personaUsername: "Juno",
+            personaAvatarUrl: "https://example.com/juno.png",
+            webhook: { id: "webhook" } as Webhook,
+            streamingContext: { disableYouTubeProcessing: false, deliveryMode, deliveryReceipts: receipts },
+          }),
+        );
+        expect(isUserImpersonationStreamContext(ctx)).toBe(deliveryMode === "user_impersonation");
+        expect(ctx.deliveryReceipts).toBe(receipts);
+      }
+    }
+    expect(isUserImpersonationStreamContext(buildStreamContext(makeParams({ personaUsername: "Juno" })))).toBe(false);
+  });
   it("copies common copy-through fields from the streaming context", () => {
     const messageIdMap = { resolve: () => undefined } as unknown as MessageIdMap;
     const replyNoticeState = { attempted: false, sent: false };

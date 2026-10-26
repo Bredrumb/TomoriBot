@@ -1,5 +1,6 @@
 import type { PersonaSpriteRow } from "@/types/db/schema";
 import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
+import { clearPersonaAppearances, invalidatePersonaAppearance } from "@/utils/cache/personaAppearanceCacheStore";
 
 const CACHE_TTL_MS = TOMORI_STATE_CACHE_TTL_MS;
 
@@ -26,10 +27,12 @@ export function setPersonaSpriteCache(personaId: number, sprites: PersonaSpriteR
 
 export function invalidatePersonaSpriteCache(personaId: number): void {
   personaSpriteCache.delete(personaId);
+  invalidatePersonaAppearance(personaId);
 }
 
 export function clearPersonaSpriteCache(): void {
   personaSpriteCache.clear();
+  clearPersonaAppearances();
 }
 
 export function getPersonaSpriteCacheSize(): number {

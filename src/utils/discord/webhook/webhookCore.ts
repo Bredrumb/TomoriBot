@@ -17,6 +17,7 @@ import {
   Routes,
 } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
+import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 import {
   MANAGED_WEBHOOK_KIND_SHARED_CHANNEL,
   MANAGED_WEBHOOK_KINDS,
@@ -1095,19 +1096,27 @@ export async function dispatchWebhookWithIdentity<T>(
   identity: ResolvedWebhookIdentity | undefined,
   operation: (selection: WebhookIdentitySelection) => Promise<T>,
 ): Promise<WebhookIdentityDelivery<T>> {
+  let operationStarted = false;
   if (!managedWebhookSlots.has(webhook.id)) {
     try {
       return await runWithWebhookIdentity(webhook, identity, async () => {
         const selection = { webhook, webhookId: webhook.id, identity: identity ?? {} };
+        operationStarted = true;
         return { ...selection, result: await operation(selection) };
       });
     } catch (error) {
       if (isInvalidWebhookError(error) && webhook.channelId) invalidateWebhookCache(webhook.channelId, webhook.id);
+      if (!operationStarted) throw new DiscordDeliveryError("pre_dispatch", error);
       throw error;
     }
   }
   const run = async () => {
-    const selection = await selectManagedWebhookIdentity(webhook, identity ?? {});
+    let selection: WebhookIdentitySelection;
+    try {
+      selection = await selectManagedWebhookIdentity(webhook, identity ?? {});
+    } catch (error) {
+      throw new DiscordDeliveryError("pre_dispatch", error);
+    }
     try {
       const result = await operation(selection);
       recordManagedWebhookUse(selection.webhook);
@@ -1169,9 +1178,9 @@ const EXPRESSION_RATE_LIMIT_BUDGET_MS = 30_000;
 const EXPRESSION_STOP_CHECK_INTERVAL_MS = 100;
 
 /** All POSTs were refused, so exhausting this budget is a definite non-delivery. */
-export class WebhookExpressionRateLimitTimeoutError extends Error {
+export class WebhookExpressionRateLimitTimeoutError extends DiscordDeliveryError {
   constructor() {
-    super("Webhook expression rate-limit budget exhausted");
+    super("definite_refusal", new Error("Webhook expression rate-limit budget exhausted"));
     this.name = "WebhookExpressionRateLimitTimeoutError";
   }
 }

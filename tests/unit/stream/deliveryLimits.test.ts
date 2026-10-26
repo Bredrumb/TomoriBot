@@ -91,7 +91,6 @@ function makeUpdater() {
 function makeContext(options: {
   channelSends: unknown[];
   sendMessageLimit?: number;
-  /** Set to give the context a copied identity, which is what marks it as user impersonation. */
   personaUsername?: string;
 }): StreamContext {
   return {
@@ -99,12 +98,13 @@ function makeContext(options: {
       id: CHANNEL_ID,
       send: async (payload: unknown) => {
         options.channelSends.push(payload);
-        return {};
+        return { id: "1400000000000000001", channelId: CHANNEL_ID, webhookId: null, author: { username: "Mirri" } };
       },
     },
     locale: "en-US",
     suppressUserErrors: false,
     personaUsername: options.personaUsername,
+    deliveryMode: options.personaUsername ? "user_impersonation" : "persona",
     // Present so a flush that does reach the send path can build its payload rather than throwing
     // inside the segment processor.
     contextItems: [],

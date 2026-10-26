@@ -10,10 +10,10 @@
  */
 
 import type { Client, CommandInteraction, Message, Webhook } from "discord.js";
-import type { StreamContext } from "../../types/stream/interfaces";
-import type { StreamingContext } from "../../types/tool/interfaces";
-import type { TomoriState } from "../../types/db/schema";
-import type { StructuredContextItem } from "../../types/misc/context";
+import type { StreamContext } from "@/types/stream/interfaces";
+import type { StreamingContext } from "@/types/tool/interfaces";
+import type { TomoriState } from "@/types/db/schema";
+import type { StructuredContextItem } from "@/types/misc/context";
 
 /**
  * Inputs a provider supplies when asking the shared helper to assemble a {@link StreamContext}.
@@ -64,6 +64,8 @@ export function buildStreamContext(params: BuildStreamContextParams): StreamCont
   const { streamingContext } = params;
 
   return {
+    deliveryMode: streamingContext?.deliveryMode ?? "persona",
+    deliveryReceipts: streamingContext?.deliveryReceipts,
     // Discord context
     channel: params.channel,
     client: params.client,
