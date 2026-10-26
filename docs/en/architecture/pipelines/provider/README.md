@@ -129,6 +129,22 @@ exception to the dead-code rule: the release branch is a real consumer of this s
 Registration belongs at startup; each registration returns a disposer that restores the previous
 handler, which also lets tests isolate their registrations.
 
+## Recovery and completion copy
+
+Provider options may supply `contributeCopy(context)` in `providerOptionRegistry.ts` to return one
+locale key or null. `withProviderOptionCopy(keys, context)` appends those contributions to existing
+recovery tips or completion receipts. Callers choose the eligible surfaces explicitly and pass the
+user Discord ID, internal workspace ID, credential source, and managed provider identity (null for
+ordinary credentials). Credential sources retain deployment-owned values alongside `server` and
+`personal`; a catalog transport name does not identify the managed provider that paid for a request.
+
+The callback owns eligibility and copy only. It cannot send messages, acknowledge interactions, or
+change billing state. Commands acknowledge an error response before awaiting eligibility; successful
+modal and pagination paths keep their own acknowledgement. Request-denial surfaces skip recovery
+contributions. Missing contributions preserve existing tips and receipts, and a failed lookup cannot
+prevent the original response. Release registers Subscription eligibility on its provider option,
+including active member and workspace sponsorship suppression.
+
 ## Request holds
 
 `src/utils/provider/providerRequestHook.ts` owns the optional request hook. A registered hook returns

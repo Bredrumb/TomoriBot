@@ -43,6 +43,8 @@ import {
   providerOptionOffersModelViewCapability,
   registerProviderOption,
   registerProviderOptionFallbackRefOwner,
+  withProviderOptionCopy,
+  type ProviderOptionCopyContext,
   type ProviderOptionCapability,
   type ProviderOptionDefinition,
   type ProviderOptionScope,
@@ -353,6 +355,39 @@ function optionPanelEntry(): Extract<ProviderPanelEntry, { kind: "provider" }> {
 }
 
 describe("provider option registry", () => {
+  it("preserves recovery and completion copy through missing, failed, and removed contributions", async () => {
+    const keys = ["genai.tips.refresh_context"];
+    const context: ProviderOptionCopyContext = {
+      surface: "recovery",
+      userDiscId: "user-1",
+      serverId: 12,
+      credentialSource: "personal",
+      managedProvider: null,
+    };
+    expect(await withProviderOptionCopy(keys, context)).toBe(keys);
+    const { option } = registerTestOption();
+    option.contributeCopy = async () => {
+      throw new Error("Storage unavailable");
+    };
+    expect(await withProviderOptionCopy(keys, context)).toBe(keys);
+    for (const surface of ["recovery", "completion"] as const) {
+      for (const credentialSource of ["server", "personal"]) {
+        const input = { ...context, surface, credentialSource };
+        const receivedContexts: ProviderOptionCopyContext[] = [];
+        option.contributeCopy = async (received) => {
+          receivedContexts.push(received);
+          return received.managedProvider ? null : ADD_LABEL_KEY;
+        };
+        expect(await withProviderOptionCopy(keys, input)).toEqual([...keys, ADD_LABEL_KEY]);
+        const managed = { ...input, managedProvider: TEST_VALUE };
+        expect(await withProviderOptionCopy(keys, managed)).toBe(keys);
+        expect(receivedContexts).toEqual([input, managed]);
+      }
+    }
+    for (const dispose of disposers.splice(0)) dispose();
+    expect(await withProviderOptionCopy(keys, context)).toBe(keys);
+  });
+
   it("removes a registered option from every surface when its disposer runs", async () => {
     const deploymentOptions = getProviderOptions();
     const { option } = registerTestOption();
