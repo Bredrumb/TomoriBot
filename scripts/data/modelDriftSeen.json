@@ -859,5 +859,33 @@
     "codename": "nvidia/nemotron-3.5-super-vl:free",
     "releaseDate": "2026-10-15",
     "offeredAt": "2026-10-19"
+  },
+  {
+    "provider": "nvidia",
+    "table": "llmSections",
+    "codename": "meta/llama-guard-4-12b",
+    "releaseDate": "2025-04-29",
+    "offeredAt": "2026-10-26"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "baseten/mammoth-1:free",
+    "releaseDate": null,
+    "offeredAt": "2026-10-26"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "baseten/elephant-1:free",
+    "releaseDate": null,
+    "offeredAt": "2026-10-26"
+  },
+  {
+    "provider": "openrouter",
+    "table": "decisionSections",
+    "codename": "nace-ai/drex-max",
+    "releaseDate": null,
+    "offeredAt": "2026-10-26"
   }
 ]
