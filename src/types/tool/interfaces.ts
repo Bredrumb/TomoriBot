@@ -85,6 +85,8 @@ export interface DeliveredStreamMessage {
  * Streaming context for enhanced functionality during streaming
  */
 export interface StreamingContext {
+  deliveryMode?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryMode;
+  deliveryReceipts?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryReceipt[];
   imageModelSelection?: GenerationModelSelection;
   /** When set, delivered text may ping only these users: no roles, no everyone, nobody else. */
   mentionableUserIds?: readonly string[];
@@ -188,6 +190,7 @@ export interface StreamingContext {
  * Contains all necessary Discord and Tomori state information
  */
 export interface ToolContext {
+  deliveryMode?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryMode;
   usageContext?: ProviderUsageContext;
   channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | NewsChannel | TextChannel | AnyThreadChannel;
   client: Client;

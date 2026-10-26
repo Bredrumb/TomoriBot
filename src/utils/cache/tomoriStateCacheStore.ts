@@ -1,16 +1,7 @@
 import type { TomoriState } from "@/types/db/schema";
+import { invalidateServerPersonaAppearances } from "@/utils/cache/personaAppearanceCacheStore";
 
-/**
- * Leaf-level store for the TomoriState in-memory cache.
- *
- * Owns the mutable Maps and the invalidation entry point. Kept deliberately
- * dependency-free (only a type import) so writer modules (e.g. repositories)
- * can invalidate the cache without pulling in `tomoriStateCache.ts`, which
- * imports the repositories barrel and would create a circular dependency.
- *
- * Reader functions (getCachedAllPersonas, getCachedMainPersona, etc.) live
- * in `tomoriStateCache.ts` and share state with writers via this module.
- */
+/** Repository writers import this store instead of the readers to avoid a repository dependency cycle. */
 
 /**
  * Cache entry structure for TomoriState data per server.
@@ -43,6 +34,7 @@ export const lastDbError = new Map<string, { message: string; timestamp: number 
  * @param serverDiscId - Discord server ID to invalidate
  */
 export function invalidateTomoriStateCache(serverDiscId: string): void {
+  invalidateServerPersonaAppearances(serverDiscId);
   cache.delete(serverDiscId);
   lastDbError.delete(serverDiscId);
 }

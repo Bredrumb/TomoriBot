@@ -40,13 +40,7 @@ const NEUTRAL_APPEARANCE_GROUP_KEY = "(neutral)";
 // once the map grows past this size rather than wiring up a timer.
 const SWEEP_SIZE_THRESHOLD = 2000;
 
-/**
- * How a delivered message presented its speaker. `appearance` is an ordinary sprite or the base
- * appearance: the persona as itself, so a stale expression still names the right speaker. An
- * identity sprite or a copied identity is a different speaker on screen even when the same
- * persona produced it.
- */
-type DeliveredSpeakerKind = "appearance" | "identity_sprite" | "copied";
+export type DeliveredSpeakerKind = "appearance" | "identity_sprite" | "copied";
 
 export interface DeliveredSpeaker {
   /** Null when the speaker cannot be tied to one persona, which never matches another speaker. */
@@ -232,36 +226,35 @@ export function resolveChannelBaseAppearanceIdentity(
   );
 }
 
-/**
- * Picks the identity a persona post outside the response stream (tool notice, generated media) is
- * sent under.
- *
- * Directly after the same persona's own line, the post reuses that line's identity verbatim so it
- * stays inside the speaker's block instead of splitting it. Anywhere else it shows the base
- * appearance, which joins the sprite alternation so a following sprite cannot merge under the
- * post's avatar.
- *
- * @param personaId - Persona the post speaks for; null never matches a previous speaker
- * @param channelLastMessageId - The channel's current `lastMessageId`, used for the adjacency test
- */
 export function resolveChannelPersonaPostIdentity(
   channelId: string,
   baseIdentity: ResolvedWebhookIdentity & { username: string },
   personaId: number | null,
   channelLastMessageId: string | null,
 ): ResolvedWebhookIdentity {
+  const adjacent = getAdjacentPersonaIdentity(channelId, personaId, channelLastMessageId);
+  if (adjacent) return adjacent;
+  return resolveChannelBaseAppearanceIdentity(channelId, baseIdentity, baseIdentity.username, channelLastMessageId);
+}
+
+export function getAdjacentPersonaIdentity(
+  channelId: string,
+  personaId: number | null,
+  channelLastMessageId: string | null,
+): ResolvedWebhookIdentity | null {
   const entry = getLiveEntry(channelId, Date.now());
   const previousIdentity = entry.lastDeliveryVia === "webhook" ? entry.lastWebhookIdentity : null;
   const continuesOwnLine =
     previousIdentity !== null &&
     personaId !== null &&
-    entry.lastSpeaker?.kind === "appearance" &&
+    entry.lastSpeaker !== null &&
+    entry.lastSpeaker.kind !== "copied" &&
     entry.lastSpeaker.personaId === personaId &&
     !hasForeignMessageSinceDelivery(entry.lastDeliveredMessageId, channelLastMessageId);
   if (previousIdentity && continuesOwnLine) {
     return { ...previousIdentity };
   }
-  return resolveChannelBaseAppearanceIdentity(channelId, baseIdentity, baseIdentity.username, channelLastMessageId);
+  return null;
 }
 
 /**

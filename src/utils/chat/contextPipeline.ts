@@ -288,6 +288,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     Object.assign(streamingContext, incoming.manualStreamingContextOverrides);
   }
   streamingContext.suppressUserErrors = !turn.shouldSurfaceUserErrors || streamingContext.suppressUserErrors === true;
+  streamingContext.deliveryMode = incoming.isUserImpersonation ? "user_impersonation" : "persona";
+  streamingContext.deliveryReceipts = [];
 
   // Initialize reply notice state for any queued turn so the "Replying to..." embed can fire
   // before the first webhook chunk is sent. Deliberately NOT gated on `is_alter`: the main

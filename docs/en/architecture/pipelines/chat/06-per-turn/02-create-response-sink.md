@@ -39,6 +39,18 @@ createChatResponseSink() ─────────────────► 
 After target resolution, `prepare()` updates the channel lock entry with the active persona ID,
 follow-up eligibility, and impersonation status.
 
+The response target is a transport hint. The invoking `currentPersona` supplies the author to
+`sendPersonaPost()`, which can lazily resolve a webhook for a main persona's remembered sprite.
+Streaming sprite selection therefore does not need to mutate the tool loop's response target.
+See [Discord delivery](/architecture/pipelines/provider/07-discord-delivery/) for the shared author,
+appearance, and receipt contract.
+
+`StreamingContext.deliveryMode` explicitly identifies `persona` or `user_impersonation` delivery.
+Context construction and generation entry set it from the turn's impersonation flag, including
+manual turns. Every provider copies it through `buildStreamContext()`. A username, avatar, or
+webhook on a main persona does not imply user impersonation. The same streaming context carries
+the receipt array across provider attempts.
+
 ### Error emission and suppression
 
 - `emitStreamResult()`: handles completed streams ending in error status. If `result.data` is an

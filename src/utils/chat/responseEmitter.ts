@@ -144,6 +144,7 @@ async function resolveResponseTarget(context: ChatTurnContext): Promise<ChatResp
   const identity = await resolvePersonaWebhookIdentity(currentPersona, guild);
   return {
     webhook: webhookResult.webhook,
+    deliveryMode: "persona",
     personaUsername: identity.username ?? currentPersona.persona_nickname,
     personaAvatarUrl: identity.avatarDataUri ?? identity.avatarUrl,
     webhookTargetChannel: webhookTargetChannel as BaseGuildTextChannel,
@@ -179,6 +180,7 @@ async function createUserImpersonationTarget(
   return {
     webhook,
     temporaryWebhook: webhook,
+    deliveryMode: "user_impersonation",
     personaUsername: displayName,
     personaAvatarUrl: identity.avatarUrl,
     prefixStrippingName: displayName,

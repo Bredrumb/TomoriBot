@@ -32,6 +32,7 @@ import {
 import { shouldRejectWebhookRateLimit } from "@/utils/discord/webhook/avatarEditRateLimit";
 import { log } from "@/utils/misc/logger";
 import type { StreamContext } from "@/types/stream/interfaces";
+import { clearPersonaAppearances } from "@/utils/cache/personaAppearanceCacheStore";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { createDefaultStreamState } from "@/types/stream/types";
 import { StreamUiUpdater } from "@/utils/discord/stream/uiUpdater";
@@ -111,7 +112,9 @@ function makePool() {
     guildId,
     lastMessageId: null as string | null,
     isThread: () => false,
-    send: mock(async () => ({ id: "_bot_message", webhookId: null, channelId }) as Message),
+    send: mock(async function (this: { id: string }) {
+      return { id: "_bot_message", webhookId: null, channelId: this.id } as Message;
+    }),
     messages: {
       fetch: mock(async () => new Collection([...messages].reverse())),
       delete: mock(async () => {
@@ -278,6 +281,7 @@ function makeStream(pool: ReturnType<typeof makePool>, webhook: Webhook, withRep
         }
       : undefined,
     deliveredMessageRefs: [],
+    deliveryReceipts: [],
   } as unknown as StreamContext;
   const state = createDefaultStreamState();
   state.hasRepliedToOriginalMessage = !withReply;
@@ -292,6 +296,7 @@ function makeStream(pool: ReturnType<typeof makePool>, webhook: Webhook, withRep
 describe("managed local avatar dispatch", () => {
   beforeAll(initializeLocalizer);
   beforeEach(() => {
+    clearPersonaAppearances();
     clearWebhookCache();
     clearAllChannelDeliveryContinuity();
     clearWebhookIdentityCache();
@@ -747,6 +752,14 @@ describe("managed local avatar dispatch", () => {
     });
     const last = getChannelLastDelivery(stream.channel.id);
     expect(last?.via === "webhook" ? last.identity.avatarDataUri : "unexpected").toBeUndefined();
+    expect(stream.context.deliveryReceipts?.at(-1)).toMatchObject({
+      channelId: stream.channel.id,
+      route: "webhook",
+      webhookId: primary.id,
+      identity: { avatarUrl: GENERIC_WEBHOOK_AVATAR_URL },
+      speaker: { personaId: 2, kind: "appearance" },
+      sprite: { spriteName: "joy" },
+    });
     expect(stream.state.spritesShown).toContainEqual({ name: "joy", isIdentity: false });
     expect(recordSprite.mock.calls[0][0]).toMatchObject({ spriteName: "joy" });
     await sendPersonaPostViaWebhook(

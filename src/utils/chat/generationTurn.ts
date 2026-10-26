@@ -103,6 +103,8 @@ export async function runGenerationTurn(
     if (responseTarget) {
       context.responseTarget = responseTarget;
     }
+    context.streamingContext.deliveryMode = context.isUserImpersonation ? "user_impersonation" : "persona";
+    context.streamingContext.deliveryReceipts ??= [];
 
     return await runGenerationAttempts(context, responseSink);
   } finally {

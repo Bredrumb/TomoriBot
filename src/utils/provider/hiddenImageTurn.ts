@@ -350,6 +350,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   const targetToolName = backend === "current_provider" ? "generate_image" : "generate_image_nai";
 
   const streamingContext: StreamingContext = {
+    deliveryMode: "persona",
     imageModelSelection: params.imageModelSelection,
     usageContext,
     textCredentialSource: credentials.source,
@@ -402,6 +403,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   }> = [];
 
   const toolContext: ToolContext = {
+    deliveryMode: "persona",
     channel,
     client,
     userId: interactingUserId,

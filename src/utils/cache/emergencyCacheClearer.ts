@@ -7,6 +7,7 @@ import { clearGuildMcpConfigCache, getGuildMcpConfigCacheStats } from "@/utils/c
 import { clearNovelaiSubscriptionCache, getNovelaiSubscriptionCacheSize } from "@/utils/cache/novelaiSubscriptionCache";
 import { clearPersonalSpotlightCache, getPersonalSpotlightCacheStats } from "@/utils/cache/personalSpotlightCache";
 import { clearPersonaSpriteCache, getPersonaSpriteCacheSize } from "@/utils/cache/personaSpriteCacheStore";
+import { clearPersonaAppearances, getPersonaAppearanceCacheSize } from "@/utils/cache/personaAppearanceCacheStore";
 import {
   clearPersonaSpriteMessageCache,
   getPersonaSpriteMessageCacheSize,
@@ -206,6 +207,7 @@ export function clearEmergencyCaches(options: EmergencyCacheClearOptions = {}): 
     };
   }
 
+  clearMeasured(steps, "personaAppearance", getPersonaAppearanceCacheSize, clearPersonaAppearances);
   clearMeasured(steps, "tomoriState", () => getTomoriStateCacheStats().cacheSize, clearTomoriStateCache);
   clearMeasured(steps, "user", () => getUserCacheStats().cacheSize, clearUserCache);
   clearMeasured(steps, "channelWhitelist", () => getWhitelistCacheStats().size, clearWhitelistCache);

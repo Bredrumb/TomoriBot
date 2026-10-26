@@ -8,6 +8,7 @@ import {
   resetSendFailureCacheForTesting,
 } from "@/utils/discord/stream/sendFailureCache";
 import { StreamUiUpdater } from "@/utils/discord/stream/uiUpdater";
+import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 
 const CHANNEL_ID = "1382235263668846612";
 const SOURCE_MESSAGE_ID = "1382235263668846613";
@@ -339,7 +340,7 @@ describe("a transient failure while resolving the destination", () => {
     // left alone and no log claims the channel is gone.
     await expect(
       updater.sendSinglePayload({ content: "hello" }, "hello", context, createDefaultStreamState()),
-    ).rejects.toThrow(/Discord send failed/);
+    ).rejects.toBeInstanceOf(DiscordDeliveryError);
     expect(stopCalls).toEqual([]);
   });
 
