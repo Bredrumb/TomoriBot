@@ -2,6 +2,8 @@ import type { APIAttachment, Attachment } from "discord.js";
 import type { PersonaSpriteRow, TomoriPresetRow, TomoriState } from "@/types/db/schema";
 import type { ConditioningGroup } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import {
+  PERSONA_NICKNAME_MAX_LENGTH,
+  PERSONA_NICKNAME_MIN_LENGTH,
   personaNamingConfigSchema,
   validatePersonaNamingAuthoring,
   type AddressingStyle,
@@ -47,9 +49,6 @@ import {
   parseSampleDialogueBatch,
   readTxtUpload,
 } from "@/utils/teach/batchUploadUtils";
-
-export const PERSONA_NICKNAME_MIN_LENGTH = 2;
-export const PERSONA_NICKNAME_MAX_LENGTH = 32;
 
 const AVATAR_DOWNLOAD_TIMEOUT_MS = 15000;
 

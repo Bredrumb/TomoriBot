@@ -7,6 +7,9 @@ export type AddressingStyle = z.infer<typeof addressingStyleSchema>;
 export const USER_NICKNAME_MAX_LENGTH = 100;
 export const USER_IDENTITY_FIELD_MAX_LENGTH = 200;
 export const PERSONA_NAMING_VALUE_MAX_LENGTH = 100;
+export const PERSONA_NICKNAME_MIN_LENGTH = 2;
+// Discord caps a server nickname at 32, and the persona name is synced to the bot's nickname.
+export const PERSONA_NICKNAME_MAX_LENGTH = 32;
 
 const namingValueSchema = z
   .string()

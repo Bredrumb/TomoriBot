@@ -1,3 +1,4 @@
+import { PERSONA_NICKNAME_MAX_LENGTH } from "@/types/personaNaming";
 /**
  * Preset Create Command
  * Manual personality creation with simple form fields
@@ -180,6 +181,15 @@ export async function execute(
       return;
     }
     const characterName = parsedNames[0];
+    if (characterName.length > PERSONA_NICKNAME_MAX_LENGTH) {
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "commands.persona.name_too_long_title",
+        descriptionKey: "commands.persona.name_too_long_description",
+        descriptionVars: { max: PERSONA_NICKNAME_MAX_LENGTH },
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
 
     // Validate content lengths (server-side validation, modal maxLength can be bypassed)
     const descValidation = validateAttribute(characterDesc);

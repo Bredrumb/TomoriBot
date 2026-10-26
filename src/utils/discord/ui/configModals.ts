@@ -9,7 +9,12 @@ import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
 import type { CheckboxGroupOption } from "@/types/discord/modal";
 import type { ConditioningGroup } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import type { ShortTermMemoryEntry } from "@/utils/cache/shortTermMemoryCache";
-import { PERSONA_NAMING_VALUE_MAX_LENGTH, type AddressingStyle } from "@/types/personaNaming";
+import {
+  PERSONA_NAMING_VALUE_MAX_LENGTH,
+  PERSONA_NICKNAME_MAX_LENGTH,
+  PERSONA_NICKNAME_MIN_LENGTH,
+  type AddressingStyle,
+} from "@/types/personaNaming";
 import {
   CONFIG_CONDITIONING_CHECKBOX_CAPACITY,
   CONFIG_CONDITIONING_CHECKBOX_GROUP_SIZE,
@@ -17,10 +22,6 @@ import {
   CONFIG_TRIGGER_CHECKBOX_GROUP_SIZE,
   buildConfigRouteId,
 } from "@/utils/discord/configPanelCatalog";
-import {
-  PERSONA_NICKNAME_MAX_LENGTH,
-  PERSONA_NICKNAME_MIN_LENGTH,
-} from "@/utils/discord/interactions/configPersonaOperations";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { truncateDiscordText } from "@/utils/text/discordTextLimits";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";

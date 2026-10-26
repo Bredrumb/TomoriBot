@@ -29,7 +29,7 @@ import {
   validateRawModalLimits,
 } from "@/utils/discord/ui/componentsV2Limits";
 import { buildConfigModalFieldId, buildPersonaRenameModal } from "@/utils/discord/ui/configModals";
-import { PERSONA_NICKNAME_MAX_LENGTH } from "@/utils/discord/interactions/configPersonaOperations";
+import { PERSONA_NICKNAME_MAX_LENGTH } from "@/types/personaNaming";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import type { ToolNoticeDefinition, ToolNoticeKey } from "@/constants/toolNotices";
 import { RUNTIME_LOCALES } from "../../helpers/localeCases";

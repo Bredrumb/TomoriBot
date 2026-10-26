@@ -266,7 +266,8 @@ const RETIRED_CONNECTION_ERROR_CODES = new Set([
   "ERR_POSTGRES_UNSUPPORTED_INTEGER_SIZE",
 ]);
 
-function isRetiredConnectionError(error: unknown): boolean {
+/** @public Release-only `src/modules/supporter-billing/db/repositories/memberKeys.ts` imports this. */
+export function isRetiredConnectionError(error: unknown): boolean {
   if (typeof error !== "object" || error === null || !("code" in error)) {
     return false;
   }

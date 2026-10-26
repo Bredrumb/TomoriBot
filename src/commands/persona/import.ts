@@ -326,6 +326,9 @@ function localizeError(locale: string, errorString: string): string {
   if (key === "commands.persona.import.error_invalid_type") {
     return localizer(locale, key, { type: parts[1] });
   }
+  if (key === "commands.persona.import.error_nickname_too_long") {
+    return localizer(locale, key, { max: parts[1] });
+  }
   if (key === "commands.persona.import.error_name_conflict") {
     return localizer(locale, key, { name: parts[1] });
   }
