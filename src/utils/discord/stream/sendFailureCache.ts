@@ -38,7 +38,13 @@ const SEND_FAILURE_RETRY_MS = 15 * 60_000;
  * a bad minute, which is worse than the wasted call this exists to prevent.
  */
 export function classifySendFailure(error: unknown): SendFailureReason | null {
-  const code = (error as { code?: number | string })?.code;
+  const candidate =
+    error && typeof error === "object" && "code" in error
+      ? error
+      : error && typeof error === "object" && "cause" in error
+        ? (error as { cause?: unknown }).cause
+        : error;
+  const code = (candidate as { code?: number | string })?.code;
 
   if (code === 50013 || code === "50013") {
     return "missing_permissions";

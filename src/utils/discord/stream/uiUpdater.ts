@@ -491,12 +491,13 @@ export class StreamUiUpdater {
         return recoveredMessage;
       }
 
+      let terminalError: unknown = discordError;
       if (
         !strictUserImpersonation &&
         ((context.webhook && context.personaUsername) || identityOverride) &&
         !state.hasRepliedToOriginalMessage
       ) {
-        const fallbackMessage = await this.tryFallbackBotSend(
+        const fallback = await this.tryFallbackBotSend(
           discordError,
           replyNoticeMessage,
           threadId,
@@ -506,9 +507,13 @@ export class StreamUiUpdater {
           state,
           regularAllowedMentions,
         );
-        if (fallbackMessage) {
-          return fallbackMessage;
+        if (fallback.outcome === "sent") {
+          return fallback.message;
         }
+        if (fallback.outcome === "stopped") {
+          return null;
+        }
+        terminalError = fallback.error;
       }
 
       if (strictUserImpersonation) {
@@ -521,7 +526,7 @@ export class StreamUiUpdater {
       // A refused send is cached so the admission gate can stop generating for this channel.
       // Only the first refusal of an episode is logged at error level: the rest are the same
       // fact repeated, and at error level they crowd out unrelated signal.
-      const sendFailureReason = classifySendFailure(discordError);
+      const sendFailureReason = classifySendFailure(terminalError);
       recordChatDiagnostic({ kind: "send_failed", reason: sendFailureReason ?? "other" });
       const isFirstOfEpisode = sendFailureReason
         ? noteSendFailure(context.channel.id, sendFailureReason).isFirstOfEpisode
@@ -539,17 +544,25 @@ export class StreamUiUpdater {
         },
       };
 
-      if (isFirstOfEpisode) {
-        log.error("Stream Send: Discord API error when sending message", discordError, sendErrorMetadata);
-      } else {
+      if (sendFailureReason) {
+        log.metric("discord_send_failure", {
+          reason: sendFailureReason,
+          route: context.webhook || identityOverride ? "webhook" : "bot",
+        });
         log.warn(
-          `Stream Send: suppressed repeat ${sendFailureReason} for channel ${context.channel.id}`,
-          discordError as Error,
+          isFirstOfEpisode
+            ? "Stream Send: Discord API error when sending message"
+            : `Stream Send: suppressed repeat ${sendFailureReason} for channel ${context.channel.id}`,
+          terminalError as Error,
+          sendErrorMetadata,
         );
+      } else {
+        log.error("Stream Send: Discord API error when sending message", terminalError, sendErrorMetadata);
       }
 
       throw new Error(
-        `Discord send failed: ${discordError instanceof Error ? discordError.message : String(discordError)}`,
+        `Discord send failed: ${terminalError instanceof Error ? terminalError.message : String(terminalError)}`,
+        { cause: terminalError },
       );
     }
   }
@@ -751,7 +764,7 @@ export class StreamUiUpdater {
     context: StreamContext,
     state: StreamState,
     regularAllowedMentions: NonNullable<StreamSendPayload["allowedMentions"]>,
-  ): Promise<Message | null> {
+  ): Promise<{ outcome: "sent"; message: Message } | { outcome: "stopped" } | { outcome: "failed"; error: unknown }> {
     log.warn("Stream Send: Webhook send failed, falling back to regular bot message", discordError);
 
     try {
@@ -782,18 +795,18 @@ export class StreamUiUpdater {
       state.hasRepliedToOriginalMessage = true;
       this.recordSuccessfulSend(payload, textForState, context, state, fallbackMessage, undefined, "bot_fallback");
       log.info("Stream Send: Successfully sent message via fallback after webhook failure");
-      return fallbackMessage;
+      return { outcome: "sent", message: fallbackMessage };
     } catch (fallbackError) {
       // This path is a retry of a send that already failed, so an unreachable channel reaches it
-      // whenever the webhook was the first thing to notice it. Returning null lets the caller's
-      // own handler stop the stream; treating it as a plain failure here would log an error and
+      // whenever the webhook was the first thing to notice it. The "stopped" outcome makes the
+      // caller end the send quietly; treating it as "failed" would log an error and
       // leave generation running against a channel that cannot receive anything.
       if (isChannelGoneError(fallbackError)) {
         stopForUnreachableChannel(this.deps, context.channel.id, unreachableReasonFor(fallbackError), fallbackError);
-        return null;
+        return { outcome: "stopped" };
       }
 
-      log.error("Stream Send: Both webhook and fallback failed", fallbackError, {
+      const fallbackMetadata = {
         serverId: context.tomoriState?.server_id,
         errorType: "StreamOrchestrator",
         metadata: {
@@ -801,8 +814,13 @@ export class StreamUiUpdater {
           webhookError: String(discordError),
           fallbackError: String(fallbackError),
         },
-      });
-      return null;
+      };
+      if (classifySendFailure(fallbackError)) {
+        log.warn("Stream Send: Both webhook and fallback failed", fallbackError, fallbackMetadata);
+      } else {
+        log.error("Stream Send: Both webhook and fallback failed", fallbackError, fallbackMetadata);
+      }
+      return { outcome: "failed", error: fallbackError };
     }
   }
 }

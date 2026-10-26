@@ -775,11 +775,7 @@ export async function execute(
     }
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    const isBillingRefusal =
-      errorMessage.includes("billing") ||
-      errorMessage.includes("payment") ||
-      errorMessage.includes("quota") ||
-      errorMessage.includes("PERMISSION_DENIED");
+    const isBillingRefusal = /\b(?:billing|payment|quota|balance|credits?|402|PERMISSION_DENIED)\b/i.test(errorMessage);
     const isSafetyRefusal =
       errorMessage.includes("safety") || errorMessage.includes("blocked") || errorMessage.includes("RECITATION");
 

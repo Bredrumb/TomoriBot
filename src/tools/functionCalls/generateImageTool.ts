@@ -6,6 +6,7 @@ import {
   type ProviderUsageContext,
 } from "@/utils/provider/providerUsage";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
+import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
 /**
  * Image Generation Tool
  * Allows TomoriBot to generate images using the active provider's native image API
@@ -1499,11 +1500,9 @@ export class GenerateImageTool extends BaseTool {
         return localized === key ? fallback : localized;
       };
 
-      const isBillingRefusal =
-        errorMessage.includes("billing") ||
-        errorMessage.includes("payment") ||
-        errorMessage.includes("quota") ||
-        errorMessage.includes("PERMISSION_DENIED");
+      const isBillingRefusal = /\b(?:billing|payment|quota|balance|credits?|402|PERMISSION_DENIED)\b/i.test(
+        errorMessage,
+      );
       const isSafetyRefusal =
         errorMessage.includes("safety") || errorMessage.includes("blocked") || errorMessage.includes("RECITATION");
 
@@ -1511,7 +1510,7 @@ export class GenerateImageTool extends BaseTool {
         summary: "Image generation failed",
         errorType: "ImageGenerationFailed",
         error,
-        expected: isBillingRefusal || isSafetyRefusal,
+        expected: isBillingRefusal || isSafetyRefusal || classifySendFailure(error) !== null,
         serverId: context.tomoriState.server_id,
         userId: context.internalUserId ?? null,
         dimensions: {

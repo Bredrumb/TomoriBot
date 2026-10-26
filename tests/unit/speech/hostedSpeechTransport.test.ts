@@ -204,7 +204,7 @@ describe("hosted speech transports", () => {
     });
     const transport = createGoogleSpeechTransport("google", "synthetic-google-key");
     const operations: SpeechOperation[] = [];
-    const voice = await transport.create("Warm narration", "gemini-3.8-flash-tts", signal(), operations);
+    const voice = await transport.create("Warm narration", "gemini-3.8-flash-lite-tts", signal(), operations);
     const audio = await transport.synthesize(
       voice.voiceId,
       "Hello",
@@ -216,7 +216,7 @@ describe("hosted speech transports", () => {
     );
     await transport.delete(voice.voiceId, signal(), operations);
     expect(audio).toEqual(wav);
-    expect(JSON.parse(String(calls[0].init.body))).toMatchObject({
+    expect(JSON.parse(String(calls[0].init.body))).toEqual({
       store: true,
       voice: { type: "prompted", prompted: { input: "Warm narration" } },
     });

@@ -9,7 +9,12 @@ import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
 import type { CheckboxGroupOption } from "@/types/discord/modal";
 import type { ConditioningGroup } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import type { ShortTermMemoryEntry } from "@/utils/cache/shortTermMemoryCache";
-import { PERSONA_NAMING_VALUE_MAX_LENGTH, type AddressingStyle } from "@/types/personaNaming";
+import {
+  PERSONA_NAMING_VALUE_MAX_LENGTH,
+  PERSONA_NICKNAME_MAX_LENGTH,
+  PERSONA_NICKNAME_MIN_LENGTH,
+  type AddressingStyle,
+} from "@/types/personaNaming";
 import {
   CONFIG_CONDITIONING_CHECKBOX_CAPACITY,
   CONFIG_CONDITIONING_CHECKBOX_GROUP_SIZE,
@@ -17,11 +22,8 @@ import {
   CONFIG_TRIGGER_CHECKBOX_GROUP_SIZE,
   buildConfigRouteId,
 } from "@/utils/discord/configPanelCatalog";
-import {
-  PERSONA_NICKNAME_MAX_LENGTH,
-  PERSONA_NICKNAME_MIN_LENGTH,
-} from "@/utils/discord/interactions/configPersonaOperations";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { getDiscordTextLength, truncateDiscordText } from "@/utils/text/discordTextLimits";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { formatImageTagsForModalValue, TAGS_MODAL_MAX_LENGTH } from "@/utils/image/tagHelpers";
 import { CONTEXT_NOTE_MAX_LENGTH } from "@/utils/discord/contextNoteOptions";
@@ -682,6 +684,7 @@ export function buildPersonaRenameModal(
   nonce: string,
   currentNickname: string,
 ): RawModalPayload {
+  const prefilledNickname = truncateDiscordText(currentNickname, PERSONA_NICKNAME_MAX_LENGTH, "");
   return {
     custom_id: buildConfigRouteId({ action: "rename-submit", locale, personaId, nonce }),
     title: modalTitle(locale, "commands.config.panel.rename_modal_title"),
@@ -694,10 +697,12 @@ export function buildPersonaRenameModal(
           type: 4,
           custom_id: buildConfigModalFieldId("nickname", nonce),
           style: TextInputStyle.Short,
-          min_length: PERSONA_NICKNAME_MIN_LENGTH,
+          // A legacy 1-character name prefilled below the floor makes Discord reject the whole modal, so the floor yields to it.
+          min_length: Math.min(PERSONA_NICKNAME_MIN_LENGTH, getDiscordTextLength(prefilledNickname)),
           max_length: PERSONA_NICKNAME_MAX_LENGTH,
           required: true,
-          value: currentNickname,
+          // Discord rejects the whole modal when a prefilled value exceeds max_length, and nicknames stored before the cap existed can be longer.
+          value: prefilledNickname,
         },
       },
     ],

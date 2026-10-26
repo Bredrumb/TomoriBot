@@ -67,9 +67,9 @@ or service account. An AI Studio API key alone does not authenticate full Vertex
 Google Cloud project must have billing and the Vertex AI API enabled, and the host identity needs
 Vertex access. The setup guide is available from Google Vertex AI on the `API Keys` page in `/help`.
 
-Google-backed provider setup validates credentials through the authenticated model-listing
-endpoint. It does not generate text or depend on whichever chat model is currently marked as the
-catalog default, so a retired default model cannot prevent a valid credential from being saved.
+Google Gemini and Vertex AI setup validate credentials through the authenticated model-listing
+endpoint, and Vertex AI Express validates API keys with `countTokens`, so setup never generates
+text.
 
 ### Optional: Brave Search key
 

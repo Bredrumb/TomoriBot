@@ -72,6 +72,8 @@ import { callGoogleStructuredJSON } from "../google/googleStructuredOutput";
 import { generateConversationSummaryGoogle, generateRoleplaySummaryGoogle } from "../google/compactGenerator";
 import { generatePresetFromPrompt } from "../google/presetGenerator";
 import { validateGoogleModelsEndpoint } from "../google/googleCredentialValidation";
+import { isOperatorActionableProviderError } from "@/utils/provider/providerErrorClassification";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { getActiveTemperature, isParamDisabled, omitGeminiSampling } from "@/utils/provider/samplingControl";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
@@ -193,10 +195,17 @@ export class VertexProvider
       const adapter = new VertexStreamAdapter();
       const providerError = adapter.handleProviderError(error);
 
-      await log.error("Vertex AI configuration validation failed", error, {
+      await reportProviderFailure({
+        summary: "Vertex AI configuration validation failed",
         errorType: "APIKeyValidationError",
-        metadata: {
+        error,
+        expected: !isOperatorActionableProviderError(providerError),
+        dimensions: {
+          operation: "key-validation",
           provider: "vertex",
+          providerErrorCode: providerError.code ?? "unknown",
+        },
+        metadata: {
           errorCode: providerError.code,
           errorType: providerError.type,
         },

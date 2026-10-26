@@ -74,7 +74,9 @@ export function classifyNaiImageError(error: unknown): NaiImageErrorKind {
     /\b403\b/.test(errorMessage) ||
     normalizedErrorMessage.includes("unauthorized") ||
     normalizedErrorMessage.includes("forbidden") ||
-    normalizedErrorMessage.includes("invalid api key")
+    normalizedErrorMessage.includes("invalid api key") ||
+    normalizedErrorMessage.includes("recaptcha") ||
+    normalizedErrorMessage.includes("trial generation")
   ) {
     return "auth";
   }

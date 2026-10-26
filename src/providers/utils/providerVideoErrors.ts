@@ -17,10 +17,7 @@ export function isVideoContentRefusal(errorMessage: string): boolean {
 /** A quota, billing, permission, or content refusal, or a provider that timed out. */
 export function isExpectedVideoFailure(errorMessage: string): boolean {
   return (
-    errorMessage.includes("billing") ||
-    errorMessage.includes("payment") ||
-    errorMessage.includes("quota") ||
-    errorMessage.includes("PERMISSION_DENIED") ||
+    /\b(?:billing|payment|quota|balance|credits?|402|PERMISSION_DENIED)\b/i.test(errorMessage) ||
     errorMessage.includes("timed out") ||
     isVideoContentRefusal(errorMessage)
   );

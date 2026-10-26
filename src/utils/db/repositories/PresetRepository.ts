@@ -25,6 +25,8 @@ import {
   type ValidationResult,
   type PresetExportData,
 } from "@/types/preset/presetExport";
+import { PERSONA_NICKNAME_MAX_LENGTH } from "@/types/personaNaming";
+import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 import { log } from "@/utils/misc/logger";
 import { invalidateStPresetCache } from "@/utils/cache/stPresetCache";
 import { validatePersonaConfigFields } from "@/utils/db/sqlSecurity";
@@ -1367,6 +1369,13 @@ class PresetRepository {
 
     if (normalizedData.sample_dialogues_in.length !== normalizedData.sample_dialogues_out.length) {
       return { valid: false, error: "commands.persona.import.error_dialogue_mismatch" };
+    }
+
+    if (getDiscordTextLength(normalizedData.tomori_nickname) > PERSONA_NICKNAME_MAX_LENGTH) {
+      return {
+        valid: false,
+        error: `commands.persona.import.error_nickname_too_long|${PERSONA_NICKNAME_MAX_LENGTH}`,
+      };
     }
 
     return { valid: true, data: normalizedData };

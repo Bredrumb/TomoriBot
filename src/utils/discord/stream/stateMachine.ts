@@ -21,6 +21,7 @@ import {
 import { StreamBufferFlusher } from "@/utils/discord/stream/bufferFlusher";
 import { StreamErrorUi } from "@/utils/discord/stream/errorUi";
 import { StreamMessageDelivery } from "@/utils/discord/stream/messageDelivery";
+import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
 import { StreamSegmentProcessor } from "@/utils/discord/stream/segmentProcessor";
 import {
   cleanupOldStopRequests,
@@ -219,14 +220,21 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     } catch (error) {
       lastError = error as Error;
       clearStopRequest(context.channel.id);
-      log.error(`Stream orchestrator failed: ${lastError.message}`, lastError, {
+      const sendFailureReason = classifySendFailure(lastError);
+      const orchestratorMetadata = {
         serverId: context.tomoriState.server_id,
         errorType: "StreamOrchestrator",
         metadata: {
           channelId: context.channel.id,
           provider: provider.getProviderInfo().name,
+          ...(sendFailureReason ? { sendFailureReason } : {}),
         },
-      });
+      };
+      if (sendFailureReason) {
+        log.warn(`Stream orchestrator failed: ${lastError.message}`, lastError, orchestratorMetadata);
+      } else {
+        log.error(`Stream orchestrator failed: ${lastError.message}`, lastError, orchestratorMetadata);
+      }
 
       const deferredDenialNotice =
         findProviderRequestDeniedError(lastError, context.usageContext)?.deferNotice ?? false;

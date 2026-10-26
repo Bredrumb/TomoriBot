@@ -128,7 +128,6 @@ export function createGoogleSpeechTransport(provider: "google" | "vertex", apiKe
         {
           store: true,
           voice: {
-            ...(config ? {} : { model }),
             type: config ? "VOICE_TYPE_PROMPTED" : "prompted",
             prompted: { input: prompt },
           },

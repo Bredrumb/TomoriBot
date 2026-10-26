@@ -188,6 +188,9 @@ describe("operator-actionable provider errors", () => {
       malformedVertexKey: new VertexStreamAdapter().handleProviderError(
         new Error("Vertex composite key is empty. Expected format: {project_id}::{location}"),
       ),
+      novelaiTrialRecaptcha: new NovelaiStreamAdapter().handleProviderError(
+        Object.assign(new Error("Recaptcha token is required for trial generations."), { status: 400 }),
+      ),
       anthropicMidStreamRateLimit: {
         type: "api_error",
         message: "Number of request tokens has exceeded your per-minute rate limit",

@@ -161,6 +161,8 @@ const NON_INCIDENT_MESSAGE_PATTERNS: RegExp[] = [
   /\bUNAUTHENTICATED\b/,
   /\bbilling\b/i,
   /\bfree\s+tier\b/i,
+  /\brecaptcha\b/i,
+  /\btrial\s+generations?\b/i,
   /\bcontent[\s_-]?(?:filter|policy|management)\b/i,
   /\bmoderation\b/i,
   /\bflagged\b/i,

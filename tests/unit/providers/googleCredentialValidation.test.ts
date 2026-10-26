@@ -1,6 +1,16 @@
 import { describe, expect, it } from "bun:test";
-import type { GoogleGenAI, ListModelsParameters, Model, Pager } from "@google/genai";
-import { validateGoogleModelsEndpoint } from "@/providers/google/googleCredentialValidation";
+import type {
+  CountTokensParameters,
+  CountTokensResponse,
+  GoogleGenAI,
+  ListModelsParameters,
+  Model,
+  Pager,
+} from "@google/genai";
+import {
+  validateGoogleModelsEndpoint,
+  validateVertexExpressEndpoint,
+} from "@/providers/google/googleCredentialValidation";
 
 describe("validateGoogleModelsEndpoint", () => {
   it("checks the authenticated base-model listing without generating content", async () => {
@@ -38,5 +48,28 @@ describe("validateGoogleModelsEndpoint", () => {
     } as Pick<GoogleGenAI, "models">;
 
     expect(validateGoogleModelsEndpoint(client)).rejects.toBe(expectedError);
+  });
+});
+
+describe("validateVertexExpressEndpoint", () => {
+  it("validates Vertex AI Express keys via countTokens instead of the publisher model listing", async () => {
+    const calls: unknown[] = [];
+    const client = {
+      models: {
+        countTokens: async (params: CountTokensParameters): Promise<CountTokensResponse> => {
+          calls.push(params);
+          return { totalTokens: 1 };
+        },
+      },
+    } as Pick<GoogleGenAI, "models">;
+
+    await validateVertexExpressEndpoint(client, "gemini-3.5-flash-lite");
+
+    expect(calls).toEqual([
+      {
+        model: "gemini-3.5-flash-lite",
+        contents: "test",
+      },
+    ]);
   });
 });

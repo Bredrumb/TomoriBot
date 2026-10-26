@@ -26,6 +26,9 @@ describe("send failure classification", () => {
   // classifier cannot separate them and deliberately does not try.
   it.each([50013, "50013"])("treats %s as a permission refusal", (code) => {
     expect(classifySendFailure(discordError(code))).toBe("missing_permissions");
+    expect(
+      classifySendFailure(new Error("Discord send failed: Missing Permissions", { cause: discordError(code) })),
+    ).toBe("missing_permissions");
   });
 
   it.each([50001, "50001"])("treats %s as an access refusal", (code) => {

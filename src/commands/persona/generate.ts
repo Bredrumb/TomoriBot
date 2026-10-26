@@ -1,3 +1,5 @@
+import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
+import { PERSONA_NICKNAME_MAX_LENGTH } from "@/types/personaNaming";
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import {
   findProviderRequestDeniedError,
@@ -527,6 +529,15 @@ export async function execute(
       return;
     }
     const characterName = parsedNames[0];
+    if (getDiscordTextLength(characterName) > PERSONA_NICKNAME_MAX_LENGTH) {
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "commands.persona.name_too_long_title",
+        descriptionKey: "commands.persona.name_too_long_description",
+        descriptionVars: { max: PERSONA_NICKNAME_MAX_LENGTH },
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
 
     const imageAttachment = modalResult.attachments?.[FILE_UPLOAD_ID];
     let imageBase64: string | undefined;
