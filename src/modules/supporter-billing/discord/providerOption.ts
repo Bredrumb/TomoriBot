@@ -7,6 +7,7 @@ import {
   type ActionRowData,
 } from "discord.js";
 import { z } from "zod";
+import { resolveSupporterNudgeKey } from "@/modules/supporter-billing/discord/conversionNudge";
 import {
   isSupporterBillingEnabled,
   SUPPORTER_PROVIDER_VALUE,
@@ -429,6 +430,7 @@ export const supporterProviderOption: ProviderOptionDefinition = {
     removeImpactKey: "commands.providers.remove_impact_subscription",
     modelDescriptionKey: "commands.providers.subscription_model_description",
   },
+  contributeCopy: (context) => resolveSupporterNudgeKey(context),
   availability: () =>
     billingAvailable() ? { eligible: true } : { eligible: false, reasonKey: "commands.providers.unavailable" },
   selection: {

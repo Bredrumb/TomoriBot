@@ -6,13 +6,14 @@ import {
   supporterSponsorshipRepository,
 } from "@/modules/supporter-billing/db";
 import { resolveEnvironment } from "@/types/config";
-import type { StreamContext } from "@/types/stream/interfaces";
+import type { ProviderOptionCopyContext } from "@/utils/provider/providerOptionRegistry";
 import { log } from "@/utils/misc/logger";
 
 export interface SupporterNudgeContext {
   userDiscId?: string;
   serverId?: number | null;
-  credentialSource: StreamContext["textCredentialSource"];
+  credentialSource: string | undefined;
+  managedProvider?: ProviderOptionCopyContext["managedProvider"];
 }
 
 interface NudgeDependencies {
@@ -32,6 +33,7 @@ export async function resolveSupporterNudgeKey(
   if (
     !isSupporterBillingEnabled(resolveEnvironment()) ||
     !context.userDiscId ||
+    context.managedProvider ||
     (context.credentialSource !== "server" && context.credentialSource !== "personal")
   ) {
     return null;

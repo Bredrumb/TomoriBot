@@ -12,6 +12,7 @@ import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/rou
 import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 import type { VoiceSourceMode } from "@/utils/speech/voiceSourceCapabilities";
 import { localizer } from "@/utils/text/localizer";
+import { log } from "@/utils/misc/logger";
 
 export type ProviderOptionCapability =
   | "text"
@@ -132,6 +133,7 @@ export interface ProviderOptionDefinition {
   catalogProvider: string;
   capabilities: readonly ProviderOptionCapability[];
   copy: ProviderOptionCopy;
+  contributeCopy?(context: ProviderOptionCopyContext): Promise<string | null>;
   availability(scope: ProviderOptionScope): ProviderOptionAvailability | Promise<ProviderOptionAvailability>;
   selection: {
     load(scope: ProviderOptionScope): Promise<ProviderOptionStoredSelection | null>;
@@ -168,6 +170,14 @@ export interface ProviderOptionDefinition {
   setup?: ProviderOptionSetup;
 }
 
+export interface ProviderOptionCopyContext {
+  surface: "recovery" | "completion";
+  userDiscId: string | undefined;
+  serverId: number | null | undefined;
+  credentialSource: string | undefined;
+  managedProvider: string | null;
+}
+
 type ProviderOptionFallbackRefOwner = (ref: FallbackModelRef) => string | null;
 
 let options: readonly ProviderOptionDefinition[] = [];
@@ -182,6 +192,20 @@ export function registerProviderOption(option: ProviderOptionDefinition): () => 
 
 export function getProviderOptions(): readonly ProviderOptionDefinition[] {
   return options;
+}
+
+export async function withProviderOptionCopy(keys: string[], context: ProviderOptionCopyContext): Promise<string[]> {
+  const contributions: string[] = [];
+  for (const option of options) {
+    if (!option.contributeCopy) continue;
+    try {
+      const key = await option.contributeCopy(context);
+      if (key) contributions.push(key);
+    } catch {
+      log.warn("Provider option copy eligibility could not be checked", { metadata: { option: option.value } });
+    }
+  }
+  return contributions.length ? [...new Set([...keys, ...contributions])] : keys;
 }
 
 export function findProviderOption(value: string | null | undefined): ProviderOptionDefinition | undefined {
