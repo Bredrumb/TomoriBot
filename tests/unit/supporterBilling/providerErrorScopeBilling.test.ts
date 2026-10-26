@@ -3,8 +3,9 @@ import type { Client, ModalBuilder, TextChannel } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type { ProviderError, StreamContext, StreamProvider } from "@/types/stream/interfaces";
 import { StreamErrorUi } from "@/utils/discord/stream/errorUi";
+import { ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 import { initializeLocalizer } from "@/utils/text/localizer";
-import { localizedCopy } from "../../helpers/localeCases";
+import { localizedCopy, collectCaseFailures, RUNTIME_LOCALES } from "../../helpers/localeCases";
 import { useEnvSandbox } from "../../helpers/env";
 import { supporterIdentityRepository, supporterSponsorshipRepository } from "@/modules/supporter-billing/db";
 
@@ -59,7 +60,7 @@ function makeProvider(name = "openrouter"): StreamProvider {
 }
 
 async function renderTips(
-  error: ProviderError,
+  error: unknown,
   textCredentialSource: StreamContext["textCredentialSource"],
   options: { providerName?: string; fallbackChain?: unknown[]; userDiscId?: string; locale?: string } = {},
 ): Promise<string> {
@@ -122,21 +123,25 @@ describe("provider error subscription guidance", () => {
   });
 
   it("adds localized guidance to BYOK reliability tips while retaining existing recovery actions", async () => {
-    for (const locale of ["en-US", "ja"]) {
+    const failures = collectCaseFailures();
+    for (const locale of RUNTIME_LOCALES) {
       for (const credentialSource of ["personal", "server"] as const) {
         const tips = await renderTips(RATE_LIMIT_ERROR, credentialSource, {
           userDiscId: "123456789012345678",
           locale,
         });
-        expect(tips).toContain(localizedCopy(locale, "commands.subscribe.conversion_nudge"));
-        expect(tips).toContain(
-          localizedCopy(
-            locale,
-            credentialSource === "personal" ? "genai.tips.model_fallback_personal" : "genai.tips.model_fallback",
-          ),
-        );
+        failures.check(`${locale}/${credentialSource}`, () => {
+          expect(tips).toContain(localizedCopy(locale, "commands.subscribe.conversion_nudge"));
+          expect(tips).toContain(
+            localizedCopy(
+              locale,
+              credentialSource === "personal" ? "genai.tips.model_fallback_personal" : "genai.tips.model_fallback",
+            ),
+          );
+        });
       }
     }
+    failures.expectNoFailures();
   });
 
   it("adds guidance to BYOK failures beyond capacity and quota errors", async () => {
@@ -154,6 +159,24 @@ describe("provider error subscription guidance", () => {
 
   it("does not promote subscriptions for the same OpenRouter transport when the member key paid", async () => {
     const tips = await renderTips(RATE_LIMIT_ERROR, "supporter", { userDiscId: "123456789012345678" });
+    expect(tips).not.toContain(localizedCopy("en-US", "commands.subscribe.conversion_nudge"));
+  });
+
+  it("keeps billing denials free of conversion copy and eligibility reads", async () => {
+    const denied = new ProviderRequestDeniedError(undefined, () => ({
+      titleKey: "general.errors.api_key_error_title",
+      description: localizedCopy("en-US", "general.errors.personal_provider_required_description"),
+    }));
+    const tips = await renderTips(denied, "server", { userDiscId: "123456789012345678" });
+    expect(tips).not.toContain(localizedCopy("en-US", "commands.subscribe.conversion_nudge"));
+    expect(supporterIdentityRepository.loadByDiscordUserId).not.toHaveBeenCalled();
+    expect(supporterSponsorshipRepository.loadActiveSponsorshipForServer).not.toHaveBeenCalled();
+  });
+
+  it("retains ordinary recovery actions when eligibility storage fails", async () => {
+    spyOn(supporterIdentityRepository, "loadByDiscordUserId").mockRejectedValue(new Error("Storage unavailable"));
+    const tips = await renderTips(RATE_LIMIT_ERROR, "personal", { userDiscId: "123456789012345678" });
+    expect(tips).toContain(localizedCopy("en-US", "genai.tips.model_fallback_personal"));
     expect(tips).not.toContain(localizedCopy("en-US", "commands.subscribe.conversion_nudge"));
   });
 

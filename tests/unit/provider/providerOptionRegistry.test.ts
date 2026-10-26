@@ -13,7 +13,11 @@ import * as realStateCache from "@/utils/cache/tomoriStateCache";
 import * as realLlmProviderRepository from "@/utils/db/repositories/LlmProviderRepository";
 import * as realKeyRotation from "@/utils/security/keyRotation";
 import * as realLlmModelRepository from "@/utils/db/repositories/LlmModelRepository";
-import { buildProvidersRouteId, PROVIDERS_ROUTE_NAMESPACE } from "@/utils/discord/providersPanelCatalog";
+import {
+  buildProvidersRouteId,
+  PROVIDERS_ROUTE_NAMESPACE,
+  PERSONAL_PROVIDERS_ROUTE_NAMESPACE,
+} from "@/utils/discord/providersPanelCatalog";
 import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import { createProvidersInteractionRoute } from "@/utils/discord/interactions/providersRoutes";
 import { buildConfigModelsBody } from "@/utils/discord/ui/configModelsPanel";
@@ -355,6 +359,69 @@ function optionPanelEntry(): Extract<ProviderPanelEntry, { kind: "provider" }> {
 }
 
 describe("provider option registry", () => {
+  it("contributes localized copy to successful provider saves after acknowledgement for both scopes", async () => {
+    const { option } = registerTestOption();
+    const contributionKey = "genai.tips.wait_and_retry";
+    const received: ProviderOptionCopyContext[] = [];
+    const acknowledged: boolean[] = [];
+    for (const personal of [false, true]) {
+      for (const success of [false, true]) {
+        const namespace = personal ? PERSONAL_PROVIDERS_ROUTE_NAMESPACE : PROVIDERS_ROUTE_NAMESPACE;
+        const customId = buildProvidersRouteId(namespace, { action: "add-submit", locale: LOCALE, nonce: "abcdefgh" });
+        const interaction = createRouteInteraction({
+          customId,
+          kind: "modal",
+          fields: { "api-key_abcdefgh": "fixture-key" },
+        });
+        const scope = await providerPanelOperations.loadServerProviderPanelScope("guild-1", false, panelDependencies());
+        if (!scope) throw new Error("Missing provider scope");
+        option.contributeCopy = async (context) => {
+          received.push(context);
+          acknowledged.push(interaction.deferred);
+          return contributionKey;
+        };
+        const route = createProvidersInteractionRoute(
+          {
+            takeProvider: () => "google",
+            resolveScope: async () =>
+              personal
+                ? { ...scope, scopeKind: "personal", ownerId: 13, routeNamespace: namespace }
+                : { ...scope, scopeKind: "server", state: state(), routeNamespace: namespace },
+            recordAction: () => {},
+            operations: {
+              ...providerPanelOperations,
+              addServerProvider: async () =>
+                success
+                  ? {
+                      status: "success",
+                      entryId: "provider:google",
+                      displayName: "Google Gemini",
+                      modelName: "fixture-model",
+                      updated: false,
+                    }
+                  : { status: "write-failed" },
+            },
+          },
+          { namespace, authorize: () => true, includeBrave: !personal, allowRotation: !personal },
+        );
+        const parsed = parseInteractionRoute(customId);
+        if (!parsed) throw new Error("Missing provider route");
+        await route.execute({} as Client, interaction as never, parsed);
+        expect(JSON.stringify(interaction.edits).includes(localizedCopy(LOCALE, contributionKey))).toBe(success);
+      }
+    }
+    expect(acknowledged).toEqual([true, true]);
+    expect(received).toEqual(
+      (["server", "personal"] as const).map((credentialSource) => ({
+        surface: "completion",
+        credentialSource,
+        managedProvider: null,
+        userDiscId: "user-1",
+        serverId: 12,
+      })),
+    );
+  });
+
   it("preserves recovery and completion copy through missing, failed, and removed contributions", async () => {
     const keys = ["genai.tips.refresh_context"];
     const context: ProviderOptionCopyContext = {
@@ -371,7 +438,7 @@ describe("provider option registry", () => {
     };
     expect(await withProviderOptionCopy(keys, context)).toBe(keys);
     for (const surface of ["recovery", "completion"] as const) {
-      for (const credentialSource of ["server", "personal"]) {
+      for (const credentialSource of ["server", "personal"] as const) {
         const input = { ...context, surface, credentialSource };
         const receivedContexts: ProviderOptionCopyContext[] = [];
         option.contributeCopy = async (received) => {

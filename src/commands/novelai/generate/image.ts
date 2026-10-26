@@ -41,7 +41,7 @@ import { buildImageGenerationInputAttachment } from "@/utils/image/imageGenerati
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
-import { withSupporterNudge } from "@/modules/supporter-billing/discord/conversionNudge";
+import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 import {
   NAI_CHAR_REF_INFO_EXTRACTED,
   NAI_CHAR_REF_STRENGTH,
@@ -161,12 +161,15 @@ export async function execute(
           files: [buildImageGenerationInputAttachment(locale, { kind: "novelai", ...submittedInput })],
         }
       : {};
-  const nudgeTips = (tipKeys: string[], credentialSource: "server" | "personal") =>
-    withSupporterNudge(tipKeys, {
+  const recoveryTips = async (tipKeys: string[], credentialSource: "server" | "personal") => {
+    return withProviderOptionCopy(tipKeys, {
+      surface: "recovery",
+      managedProvider: null,
       userDiscId: interaction.user.id,
       serverId: tomoriState?.server_id,
       credentialSource,
     });
+  };
 
   try {
     tomoriState = await getCachedTomoriState(serverId);
@@ -220,10 +223,12 @@ export async function execute(
         };
       } catch (error) {
         if (error instanceof CredentialUnavailableError) {
+          if (!interaction.replied && !interaction.deferred)
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
           await replyInfoEmbed(interaction, locale, {
             titleKey: "general.errors.personal_provider_credentials_error_title",
             descriptionKey: "general.errors.personal_provider_credentials_error_description",
-            tipKeys: await nudgeTips([], "personal"),
+            tipKeys: await recoveryTips([], "personal"),
             color: ColorCode.ERROR,
             flags: MessageFlags.Ephemeral,
           });
@@ -237,10 +242,12 @@ export async function execute(
     }
 
     if (!imageCreds) {
+      if (!interaction.replied && !interaction.deferred)
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.novelai.generate.image.no_api_key_title",
         descriptionKey: "commands.novelai.generate.image.no_api_key_description",
-        tipKeys: await nudgeTips([], "server"),
+        tipKeys: await recoveryTips([], "server"),
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
       });
@@ -266,10 +273,12 @@ export async function execute(
           },
         },
       );
+      if (!interaction.replied && !interaction.deferred)
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.novelai.generate.image.no_model_title",
         descriptionKey: "commands.novelai.generate.image.no_model_description",
-        tipKeys: await nudgeTips([], imageCreds.source),
+        tipKeys: await recoveryTips([], imageCreds.source),
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
       });
@@ -308,12 +317,14 @@ export async function execute(
           errorDescriptionKey = "commands.generate.image.serverwide_quota_exceeded_description";
         }
 
+        if (!interaction.replied && !interaction.deferred)
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await replyInfoEmbed(interaction, locale, {
           titleKey: errorTitleKey,
           descriptionKey: errorDescriptionKey,
           descriptionVars,
           footerKey: "commands.generate.image.quota_exceeded_footer",
-          tipKeys: await nudgeTips([], imageCreds.source),
+          tipKeys: await recoveryTips([], imageCreds.source),
           color: ColorCode.ERROR,
           flags: MessageFlags.Ephemeral,
         });
@@ -559,7 +570,7 @@ export async function execute(
     const credentialSource = imageCreds?.source ?? "server";
 
     if (errorKind === "quota") {
-      const tipKeys = await nudgeTips(
+      const tipKeys = await recoveryTips(
         isPersonalNai
           ? ["genai.tips.top_up_provider_balance", "genai.tips.disable_personal_text_override"]
           : ["genai.tips.wait_and_retry"],
@@ -576,7 +587,7 @@ export async function execute(
     }
 
     if (errorKind === "auth") {
-      const tipKeys = await nudgeTips(
+      const tipKeys = await recoveryTips(
         isPersonalNai ? ["genai.tips.verify_api_key_personal"] : ["genai.tips.verify_api_key"],
         credentialSource,
       );
@@ -595,13 +606,13 @@ export async function execute(
         titleKey: "commands.novelai.generate.image.rate_limit_error_title",
         descriptionKey: "commands.novelai.generate.image.rate_limit_error_description",
         color: ColorCode.ERROR,
-        tipKeys: await nudgeTips(["genai.tips.wait_and_retry"], credentialSource),
+        tipKeys: await recoveryTips(["genai.tips.wait_and_retry"], credentialSource),
         ...recoveryOptions(),
       });
       return;
     }
 
-    const tipKeys = await nudgeTips(
+    const tipKeys = await recoveryTips(
       isPersonalNai ? ["genai.tips.disable_personal_text_override"] : ["genai.tips.wait_and_retry"],
       credentialSource,
     );

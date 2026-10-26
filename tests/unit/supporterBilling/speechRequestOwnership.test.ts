@@ -58,6 +58,7 @@ describe("speech request ownership after preflight", () => {
     };
     try {
       const result = await synthesizeVoiceMessage(request);
+      expect(result.attempts?.[0]?.managedProvider).toBe("supporter");
       expect(result.requestDenied?.usageContext).toBe(getSupporterUsageContext(key.funding));
       expect(result.requestDenied).toMatchObject({ reason: "allowance_exhausted" });
       const refusal = new SupporterRequestDeniedError("inactive_entitlement", undefined, "voice", "server");

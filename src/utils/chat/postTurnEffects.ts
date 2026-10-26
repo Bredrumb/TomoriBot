@@ -2,7 +2,7 @@ import { PrivacyLevel } from "@/types/db/schema";
 import { ContextItemTag } from "@/types/misc/context";
 import { recordLastReplyUsage } from "@/utils/cache/lastReplyUsageCache";
 import { incrementStmTurnCounter, storeShortTermMemory } from "@/utils/cache/shortTermMemoryCache";
-import { withSupporterNudge } from "@/modules/supporter-billing/discord/conversionNudge";
+import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { resolveProviderErrorFooter } from "@/utils/discord/stream/errorUi";
 import { hasThoughtLogContent, sendAttributionOnlyEmbed, sendThoughtLogEmbed } from "@/utils/discord/thoughtLog";
@@ -345,7 +345,7 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     }
 
     const isPersonal = context.textCredentialSource === "personal";
-    const tipKeys = await withSupporterNudge(
+    const tipKeys = await withProviderOptionCopy(
       [
         "genai.tips.refresh_context",
         ...(isPersonal
@@ -353,6 +353,8 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
           : ["genai.tips.switch_model_provider"]),
       ],
       {
+        surface: "recovery",
+        managedProvider: context.usageContext?.credentialProvider ?? null,
         userDiscId: context.userDiscId,
         serverId: context.tomoriState.server_id,
         credentialSource: context.textCredentialSource,

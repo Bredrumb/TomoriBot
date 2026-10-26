@@ -85,6 +85,9 @@ The command, tool availability, tool assembly, and execution resolve speech targ
 triggering user independently of the chat provider. Both callers pass the discriminated target,
 source, credential ownership, and fallback context to the shared dispatcher.
 
+Synthesis attempts retain the managed provider identity separately from the catalog provider, so
+command recovery copy follows the final attempt even after a personal-to-server fallback.
+
 Both callers converge on shared synthesis and delivery modules:
 
 | Module | Responsibility |

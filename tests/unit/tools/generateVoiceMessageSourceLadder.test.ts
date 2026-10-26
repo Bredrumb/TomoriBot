@@ -191,6 +191,7 @@ describe("GenerateVoiceMessageTool source ladder", () => {
           owner: { kind: "server", ownerId: 1 },
           source: "design",
           synthesisSuccess: true,
+          managedProvider: null,
           operations: [],
         },
       ],

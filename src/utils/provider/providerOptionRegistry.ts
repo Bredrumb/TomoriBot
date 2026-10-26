@@ -8,6 +8,7 @@ import type { AssembledServerConfig, FallbackModelRef, TomoriState } from "@/typ
 import type { PanelReceipt } from "@/types/discord/panel";
 import type { ProviderPanelCapability, ProviderPanelEntry } from "@/types/discord/providerPanel";
 import type { SetupDraftRecord } from "@/types/discord/setupWizard";
+import type { StreamContext } from "@/types/stream/interfaces";
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 import type { VoiceSourceMode } from "@/utils/speech/voiceSourceCapabilities";
@@ -174,7 +175,7 @@ export interface ProviderOptionCopyContext {
   surface: "recovery" | "completion";
   userDiscId: string | undefined;
   serverId: number | null | undefined;
-  credentialSource: string | undefined;
+  credentialSource: StreamContext["textCredentialSource"];
   managedProvider: string | null;
 }
 
@@ -205,7 +206,7 @@ export async function withProviderOptionCopy(keys: string[], context: ProviderOp
       log.warn("Provider option copy eligibility could not be checked", { metadata: { option: option.value } });
     }
   }
-  return contributions.length ? [...new Set([...keys, ...contributions])] : keys;
+  return contributions.length ? [...keys, ...contributions] : keys;
 }
 
 export function findProviderOption(value: string | null | undefined): ProviderOptionDefinition | undefined {

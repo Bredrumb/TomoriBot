@@ -29,7 +29,11 @@ import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/p
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
 import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
-import { withSupporterNudge } from "@/modules/supporter-billing/discord/conversionNudge";
+import {
+  findProviderOption,
+  findProviderOptionByActiveProvider,
+  withProviderOptionCopy,
+} from "@/utils/provider/providerOptionRegistry";
 
 const MODAL_CUSTOM_ID = "generate_image_auto_modal";
 const PROMPT_INPUT_ID = "generate_image_auto_prompt";
@@ -337,12 +341,21 @@ export async function executeAutoImageCommand(
       }
     : overlay.tomoriState;
   activeConfigs = overlay.activeConfigs;
-  const nudgeTips = (tipKeys: string[]) =>
-    withSupporterNudge(tipKeys, {
+  const recoveryTips = async (tipKeys: string[]) => {
+    return withProviderOptionCopy(tipKeys, {
+      surface: "recovery",
+      managedProvider: activeConfigs?.text
+        ? (findProviderOption(activeConfigs.text.provider)?.value ?? null)
+        : (findProviderOptionByActiveProvider(
+            tomoriState.llm.llm_provider,
+            { kind: "server", ownerId: tomoriState.server_id, state: tomoriState },
+            "text",
+          )?.value ?? null),
       userDiscId: interaction.user.id,
       serverId: tomoriState.server_id,
       credentialSource: activeConfigs?.text ? "personal" : "server",
     });
+  };
 
   const personaSummaries = await loadServerPersonaSummaries(tomoriState.server_id);
   const invokingMember = interaction.member as import("discord.js").GuildMember | null;
@@ -436,10 +449,11 @@ export async function executeAutoImageCommand(
   // The hidden image agent requires function-calling support on the active model.
   //    Without tool support the model cannot call generate_image / generate_image_nai.
   if (!tomoriState.llm.has_tools) {
+    if (!interaction.replied && !interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.tool.visualize.planner_unavailable_title",
       descriptionKey: "commands.tool.visualize.planner_unavailable_description",
-      tipKeys: await nudgeTips([]),
+      tipKeys: await recoveryTips([]),
       color: ColorCode.ERROR,
       flags: MessageFlags.Ephemeral,
     });
@@ -460,13 +474,14 @@ export async function executeAutoImageCommand(
         serverId: serverDiscId,
       });
   if (!backendAvailability.defaultBackend) {
+    if (!interaction.replied && !interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.tool.visualize.no_backend_title",
       descriptionKey: "commands.tool.visualize.no_backend_description",
       descriptionVars: {
         current_provider: tomoriState.llm.llm_provider,
       },
-      tipKeys: await nudgeTips([]),
+      tipKeys: await recoveryTips([]),
       color: ColorCode.ERROR,
       flags: MessageFlags.Ephemeral,
     });
@@ -479,7 +494,8 @@ export async function executeAutoImageCommand(
       ? { allowed: true }
       : await checkImageQuota(tomoriState.server_id, interaction.user.id);
   if (!quotaCheck.allowed) {
-    await replyQuotaExceeded(interaction, locale, quotaCheck, await nudgeTips([]));
+    if (!interaction.replied && !interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await replyQuotaExceeded(interaction, locale, quotaCheck, await recoveryTips([]));
     return;
   }
 
@@ -563,7 +579,7 @@ export async function executeAutoImageCommand(
         descriptionVars: {
           current_provider: tomoriState.llm.llm_provider,
         },
-        tipKeys: await nudgeTips([]),
+        tipKeys: await recoveryTips([]),
         color: ColorCode.ERROR,
       });
       return;
@@ -662,7 +678,7 @@ export async function executeAutoImageCommand(
 
     if (!agentResult.success) {
       const isPersonalText = Boolean(activeConfigs?.text);
-      const tipKeys = await nudgeTips([
+      const tipKeys = await recoveryTips([
         "genai.tips.refresh_context",
         ...(isPersonalText
           ? ["genai.tips.disable_personal_text_override", "genai.tips.switch_model_provider_personal"]
@@ -716,7 +732,7 @@ export async function executeAutoImageCommand(
 
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     const isPersonalText = Boolean(activeConfigs?.text);
-    const tipKeys = await nudgeTips([
+    const tipKeys = await recoveryTips([
       "genai.tips.refresh_context",
       ...(isPersonalText
         ? ["genai.tips.disable_personal_text_override", "genai.tips.switch_model_provider_personal"]

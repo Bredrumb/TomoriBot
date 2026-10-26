@@ -1,4 +1,4 @@
-import { resolveSupporterNudgeKey } from "@/modules/supporter-billing/discord/conversionNudge";
+import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 import {
   ComponentType,
   MessageFlags,
@@ -538,7 +538,7 @@ function providerOptionScope(
   };
 }
 
-async function addCompletionNudge(
+async function addCompletionCopy(
   receipt: PanelReceipt,
   interaction: GlobalRoutableInteraction,
   locale: string,
@@ -546,12 +546,16 @@ async function addCompletionNudge(
   eligible: boolean,
 ): Promise<PanelReceipt> {
   if (!eligible) return receipt;
-  const nudgeKey = await resolveSupporterNudgeKey({
+  const keys = await withProviderOptionCopy([], {
+    surface: "completion",
+    managedProvider: null,
     userDiscId: interaction.user.id,
     serverId: scope.state?.server_id,
     credentialSource: scope.scopeKind === "personal" ? "personal" : "server",
   });
-  return nudgeKey ? { ...receipt, detail: `${receipt.detail}\n${localizer(locale, nudgeKey)}` } : receipt;
+  return keys.length
+    ? { ...receipt, detail: [receipt.detail, ...keys.map((key) => localizer(locale, key))].join("\n") }
+    : receipt;
 }
 
 function repaint(
@@ -969,7 +973,7 @@ export function createProvidersInteractionRoute(
           nextScope,
           action.result.status === "success" ? { kind: "entry", entryId: action.result.entryId } : { kind: "entry" },
           action.result.status === "success" ? rangeForEntry(nextScope, action.result.entryId) : 0,
-          await addCompletionNudge(
+          await addCompletionCopy(
             addReceipt(route.locale, action.result, scope.scopeKind),
             interaction,
             route.locale,
@@ -1232,7 +1236,7 @@ export function createProvidersInteractionRoute(
           nextScope,
           { kind: "entry", entryId },
           rangeForEntry(nextScope, entryId),
-          await addCompletionNudge(
+          await addCompletionCopy(
             modelReceipt(route.locale, action.result, scope.scopeKind),
             interaction,
             route.locale,

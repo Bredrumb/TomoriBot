@@ -33,6 +33,8 @@ const entitlement: SupporterEntitlementRow = {
   updated_at: now,
 };
 const context = {
+  surface: "recovery" as const,
+  managedProvider: null,
   userDiscId: identity.discord_user_id,
   serverId: 10,
   credentialSource: "server" as const,
@@ -76,6 +78,10 @@ describe("subscription conversion eligibility", () => {
     const deps = dependencies();
     expect(await resolveSupporterNudgeKey({ ...context, userDiscId: undefined }, deps)).toBeNull();
     expect(deps.identities.loadByDiscordUserId).not.toHaveBeenCalled();
+    const managedDeps = dependencies();
+    expect(await resolveSupporterNudgeKey({ ...context, managedProvider: "test-option" }, managedDeps)).toBeNull();
+    expect(managedDeps.identities.loadByDiscordUserId).not.toHaveBeenCalled();
+    expect(managedDeps.sponsorships.loadActiveSponsorshipForServer).not.toHaveBeenCalled();
   });
 
   it("does not promote subscriptions to active members or already sponsored servers", async () => {

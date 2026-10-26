@@ -891,6 +891,7 @@ async function sendDeferredTimeoutNoticeIfPending(context: ChatTurnContext): Pro
     providerName: notice.providerName,
     textCredentialSource: context.streamingContext.textCredentialSource,
     sawStreamProgress: notice.sawStreamProgress,
+    managedProvider: context.usageContext?.credentialProvider ?? null,
     userDiscId: context.userDiscId,
     serverId: context.tomoriState.server_id,
   });

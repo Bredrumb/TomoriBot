@@ -9,13 +9,6 @@ import { resolveEnvironment } from "@/types/config";
 import type { ProviderOptionCopyContext } from "@/utils/provider/providerOptionRegistry";
 import { log } from "@/utils/misc/logger";
 
-export interface SupporterNudgeContext {
-  userDiscId?: string;
-  serverId?: number | null;
-  credentialSource: string | undefined;
-  managedProvider?: ProviderOptionCopyContext["managedProvider"];
-}
-
 interface NudgeDependencies {
   identities: Pick<typeof supporterIdentityRepository, "loadByDiscordUserId">;
   entitlements: Pick<typeof supporterEntitlementRepository, "loadByIdentityId">;
@@ -23,7 +16,7 @@ interface NudgeDependencies {
 }
 
 export async function resolveSupporterNudgeKey(
-  context: SupporterNudgeContext,
+  context: ProviderOptionCopyContext,
   dependencies: NudgeDependencies = {
     identities: supporterIdentityRepository,
     entitlements: supporterEntitlementRepository,
@@ -54,10 +47,4 @@ export async function resolveSupporterNudgeKey(
     });
     return null;
   }
-}
-
-/** Appends the subscription tip to a failure's recovery tips when the user is eligible for it. */
-export async function withSupporterNudge(tipKeys: string[], context: SupporterNudgeContext): Promise<string[]> {
-  const nudgeKey = await resolveSupporterNudgeKey(context);
-  return nudgeKey ? [...tipKeys, nudgeKey] : tipKeys;
 }

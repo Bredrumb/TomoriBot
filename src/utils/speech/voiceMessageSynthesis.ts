@@ -102,6 +102,7 @@ export interface VoiceMessageSynthesisResult {
 
 interface VoiceSynthesisAttempt {
   provider: string;
+  managedProvider: string | null;
   model: string;
   owner: SpeechTargetResult["owner"];
   source: ResolvedVoiceSource["kind"];
@@ -536,6 +537,8 @@ export async function synthesizeVoiceMessage(
     const target = current.target;
     const attempt: VoiceSynthesisAttempt = {
       provider: target.kind === "hosted-model" ? target.model.provider : target.endpoint.api_style,
+      managedProvider:
+        target.kind === "hosted-model" ? (findProviderOption(target.credentialProvider)?.value ?? null) : null,
       model: target.kind === "hosted-model" ? target.model.codename : (target.endpoint.model_name ?? ""),
       owner: target.owner,
       source: current.source.kind,

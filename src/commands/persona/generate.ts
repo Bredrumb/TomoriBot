@@ -32,7 +32,11 @@ import type { UserRow } from "../../types/db/schema";
 import { personaRepository } from "@/utils/db/repositories";
 import { getCapabilityCredentialFailureCopy, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
-import { withSupporterNudge } from "@/modules/supporter-billing/discord/conversionNudge";
+import {
+  findProviderOption,
+  findProviderOptionByActiveProvider,
+  withProviderOptionCopy,
+} from "@/utils/provider/providerOptionRegistry";
 import { memoryGuard, PERSONA_LIMITS, reservePersonaQuota } from "../../utils/security/rateLimiter";
 import { safeDownload } from "../../utils/security/safeDownload";
 import type { GeneratePresetParams } from "../../providers/google/presetGenerator";
@@ -361,8 +365,20 @@ export async function execute(
       userData.user_id ?? null,
     );
     let credentialSource: "server" | "personal" = activeConfigs.text ? "personal" : "server";
-    const nudgeTips = () =>
-      withSupporterNudge([], { userDiscId: interaction.user.id, serverId: tomoriState.server_id, credentialSource });
+    const recoveryTips = () =>
+      withProviderOptionCopy([], {
+        surface: "recovery",
+        managedProvider: activeConfigs?.text
+          ? (findProviderOption(activeConfigs.text.provider)?.value ?? null)
+          : (findProviderOptionByActiveProvider(
+              tomoriState.llm.llm_provider,
+              { kind: "server", ownerId: tomoriState.server_id, state: tomoriState },
+              "text",
+            )?.value ?? null),
+        userDiscId: interaction.user.id,
+        serverId: tomoriState.server_id,
+        credentialSource,
+      });
 
     let providerName = tomoriState.llm.llm_provider.toLowerCase();
     let effectiveModelName = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
@@ -546,7 +562,7 @@ export async function execute(
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         ...failure,
         color: ColorCode.ERROR,
-        tipKeys: await nudgeTips(),
+        tipKeys: findProviderRequestDeniedError(error) ? [] : await recoveryTips(),
         files: [getInputAttachment()],
       });
       return;
