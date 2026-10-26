@@ -163,7 +163,12 @@ funciona con ellas.
 persona con el tiempo. Un empujón más liviano que un atributo completo o un prompt del sistema.
 Úsalo para reforzar cómo debería actuar un personaje específico en un servidor específico.
 
-Cada `/reward` o `/punish` se contabiliza de todos modos, pero solo se convierte en una memoria
+Usa la opción `user` de `/reward` o `/punish` para enviar un embed de broma dirigido a ese usuario.
+Elige `user` o `persona`, solo uno a la vez. Las interacciones con usuarios no guardan condicionamiento ni generan
+respuestas de IA, incluso con una `reason`; el pie de página "recordará esto" es solo una broma.
+Tanto para usuarios como para personas, el motivo aparece en cursiva dentro de la frase de la acción.
+
+Cada `/reward` o `/punish` dirigido a una persona se contabiliza, pero solo se convierte en una memoria
 sobre la que realmente actúa cuando le das una `reason`, que aparece así en su prompt:
 
 ```text

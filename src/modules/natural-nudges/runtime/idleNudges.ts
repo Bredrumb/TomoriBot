@@ -483,19 +483,29 @@ export function idleNudgeNeedsTarget(idleNudge: IdleNudgeDefinition): boolean {
 }
 
 /** An unknown prerequisite (the registry shrank since the idle nudge was saved) makes the idle nudge ineligible. */
-export function isIdleNudgeEligible(idleNudge: IdleNudgeDefinition, facts: PrerequisiteFacts): boolean {
-  if (idleNudgeNeedsTarget(idleNudge) && !facts.target) return false;
+export function isIdleNudgeChannelEligible(
+  idleNudge: IdleNudgeDefinition,
+  facts: Omit<PrerequisiteFacts, "target">,
+): boolean {
   // A category implies its scenario, so a custom idle nudge that omits the matching prerequisite still needs it.
   if (idleNudge.category === "play_scene" && !facts.hasScenePartner) return false;
   if (idleNudge.category === "revive_topic" && !facts.hasHangingConversation) return false;
   return idleNudge.prerequisites.every((id) => {
     if (id === HANGING_CONVERSATION_PREREQUISITE) return facts.hasHangingConversation;
-    if (id === RELATIONSHIP_USER_PREREQUISITE) return facts.target !== null;
-    if (id === RECENT_MEMORY_PREREQUISITE) return facts.target?.hasRecentMemories ?? false;
-    if (id === PRESENCE_ACTIVITY_PREREQUISITE) return facts.target?.isActive ?? false;
+    if (TARGET_PREREQUISITES.includes(id)) return true;
     if (id === TWO_PERSONAS_PREREQUISITE) return facts.hasScenePartner;
     const tool = prerequisiteTool(id);
     return tool !== null && hasNudgeTool(tool, facts.availableTools);
+  });
+}
+
+export function isIdleNudgeEligible(idleNudge: IdleNudgeDefinition, facts: PrerequisiteFacts): boolean {
+  if (!isIdleNudgeChannelEligible(idleNudge, facts)) return false;
+  if (idleNudgeNeedsTarget(idleNudge) && !facts.target) return false;
+  return idleNudge.prerequisites.every((id) => {
+    if (id === RECENT_MEMORY_PREREQUISITE) return facts.target?.hasRecentMemories ?? false;
+    if (id === PRESENCE_ACTIVITY_PREREQUISITE) return facts.target?.isActive ?? false;
+    return true;
   });
 }
 

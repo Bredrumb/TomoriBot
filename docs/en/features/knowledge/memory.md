@@ -155,6 +155,7 @@ how a specific character should act in a specific server.
 Use the optional `user` option on `/reward` or `/punish` for a playful embed named after that user.
 Choose either `user` or `persona`, not both. User targets never save conditioning or trigger an AI
 reply, even with a `reason`; the "will remember this" footer is just for fun.
+For both users and personas, the reason appears in italics within the action sentence.
 
 Every `/reward` or `/punish` targeting a persona is tallied, but it only
 becomes a memory she actually acts on when you give it a `reason`, which appears like this in her prompt:

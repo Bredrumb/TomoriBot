@@ -2,7 +2,8 @@ export default {
   conditioning: {
     description: `Quản lý bộ nhớ điều hòa thưởng và phạt dài hạn.`,
     shared: {
-      reason_line: `Lý do: \`\`{reason}\`\``,
+      target_conflict_description: `Chọn một người dùng hoặc một persona cho tương tác này.`,
+      user_footer: `{bot} sẽ nhớ chuyện này.`,
       reward_footer: `❤️ {bot} sẽ ghi nhớ điều này. Dùng /conditioning để quản lý.`,
       punish_footer: `💀 {bot} sẽ ghi nhớ điều này. Dùng /conditioning để quản lý.`,
       persona_access_blocked_title: `Không có persona khả dụng`,

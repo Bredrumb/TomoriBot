@@ -2,7 +2,8 @@ export default {
   conditioning: {
     description: `ご褒美・おしおきの条件付け記憶を管理します。`,
     shared: {
-      reason_line: `理由: \`\`{reason}\`\``,
+      target_conflict_description: `ユーザーかペルソナのどちらか一方を選んでください。`,
+      user_footer: `{bot}はこのことを覚えているでしょう。`,
       reward_footer: `❤️ {bot}はこれを覚えておきます。管理は /conditioning remove を使用してください。`,
       punish_footer: `💀 {bot}はこれを覚えておきます。管理は /conditioning remove を使用してください。`,
       persona_access_blocked_title: `利用できるペルソナがありません`,

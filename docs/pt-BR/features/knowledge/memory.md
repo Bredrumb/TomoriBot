@@ -145,8 +145,13 @@ Importações de histórico são armazenadas como documentos, então `/memories`
 longo do tempo. Um empurrãozinho mais leve do que um atributo completo ou prompt de sistema. Use para reforçar
 como um personagem específico deve agir em um servidor específico.
 
-Cada `/reward` ou `/punish` é contabilizado independentemente, mas só
-se torna uma memória sobre a qual ela realmente age quando você fornece uma `reason`, que aparece assim no prompt dela:
+Use a opção `user` de `/reward` ou `/punish` para enviar um embed de brincadeira com esse usuário como alvo.
+Escolha `user` ou `persona`, apenas um por vez. Interações com usuários não salvam condicionamento nem geram
+respostas da IA, mesmo com uma `reason`; o rodapé "vai se lembrar disso" é só uma brincadeira.
+Tanto para usuários quanto para personas, o motivo aparece em itálico na frase da ação.
+
+Cada `/reward` ou `/punish` direcionado a uma persona é contabilizado, mas só se torna uma memória
+sobre a qual ela realmente age quando você fornece uma `reason`, que aparece assim no prompt dela:
 
 ```text
 ## Rewarded Behaviors

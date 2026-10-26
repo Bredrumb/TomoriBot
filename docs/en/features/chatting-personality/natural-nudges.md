@@ -22,6 +22,10 @@ usually awake. There are 28 built-in idle nudges across four categories. You can
 your own for the whole server in `/nudge-studio`, and each persona can have idle nudges of its own
 (see [Persona idle nudges](#persona-idle-nudges)).
 
+The bot first picks a category, then the planner chooses an idle nudge and channel together from
+a shortlist of available activities in that category.
+It considers channel names, descriptions, and recent messages, and can skip the attempt when none fits.
+
 | Category | What it does | Prerequisites | Notes |
 |---|---|---|---|
 | <a id="ping-user"></a>Ping User | Checks in on a member or shares something they might like. | Recent conversation with this persona in this server, a memory, and permission to ping. Full privacy, personalization blacklists, and persona blocks exclude members. | Frequent contacts are favored; recent pings reduce repeat chances. Opt out in `/personal config` > `Privacy` > `Pings from Personas`. |

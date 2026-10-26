@@ -18,8 +18,8 @@ calls never delay reminders.
 
 | Phase | Owner | Work |
 |---|---|---|
-| A, decide | `NaturalNudgeProcessor` (`runtime/processor.ts`), the third processor in `ScheduledWorkCoordinator` | Plain code, no model call: due time, waking hours, lull, then the persona, category, and idle nudge raffles |
-| B, plan | `planIdleNudge` (`runtime/planner.ts`) | One structured-output call to the planner model (`resolvePlannerModel`): channel, opener direction, agenda, or `proceed: false` |
+| A, decide | `NaturalNudgeProcessor` (`runtime/processor.ts`), the third processor in `ScheduledWorkCoordinator` | Plain code, no model call: due time, waking hours, lull, persona and category raffles, then a weighted shortlist within that category with allowed channels |
+| B, plan | `planIdleNudge` (`runtime/planner.ts`) | One structured-output call to the planner model (`resolvePlannerModel`): nudge and channel within the drawn category, opener direction, agenda, or `proceed: false` |
 | C, speak | `runIdleNudgeAttempt` (`runtime/runner.ts`) | Fresh re-checks, then a normal `tomoriChat` turn on the channel's latest message, run like reminders |
 
 Phase A runs every 60 seconds on the coordinator's reconcile tick, because no due-time column
@@ -40,8 +40,9 @@ reconcile tick
        ├─ heat → idle nudges per day → due time, level's daily cap, waking hours
        ├─ lull: effective channels quiet for 1-3 hours (gateway lastMessageId)
        ├─ planner model: llm_id, else the chat model; no_model abort and backoff unless it resolves
-       ├─ persona raffle → persona scope filter → Ping User target lottery → category raffle → idle nudge raffle
-       │    └─ Play Scene: scene partner draw
+       ├─ persona raffle → persona scope filter → channel sample → channel/tool eligibility
+       ├─ category raffle → target lottery when required → full prerequisites → weighted nudge shortlist
+       │    └─ Play Scene: one shared partner draw and compatible channels
        └─ detached: planIdleNudge → recheckBeforeSend → tomoriChat({ naturalNudge, sceneTurn? })
                                                        └─ fire row + one agenda row per speaker
 ```
@@ -76,7 +77,17 @@ times. Token and model stats still record.
   and persona access.
 - **Channel purpose**: Phase B receives each offered channel's name, description (Discord topic),
   and recent messages. The planner must fit the opener and agenda to the channel's purpose, even
-  when recent messages drift off topic, and decline if no offered channel suits the brief.
+  when recent messages drift off topic, and decline if no offered nudge and channel fit.
+- **Nudge shortlist**: Phase A raffles one category using category weights and rest among categories
+  with a nudge that passes channel and tool checks. Only then does it load target context when a
+  candidate in that category needs it, check full eligibility, and sample up to six distinct nudges
+  using nudge rest and target-repeat penalties. If no option remains eligible, the attempt stops
+  without drawing another category. Phase B chooses the final nudge and channel within that
+  category together in one call. Each option carries its allowed channels and the shared cast for
+  a Scene attempt. The response schema limits
+  `nudge` to the offered IDs, and acceptance checks the channel pairing and selected scene's script.
+  Only the selected option supplies tools, target behavior, fire records, and agendas to Phase C.
+  Planner failures and declines include the drawn category but have no selected nudge in telemetry.
 - **Planner model** (`resolvePlannerModel` in `runtime/model.ts`): `llm_id` when pinned, else the
   server's chat model (`tomoriState.llm`, never a persona override). Either must pass
   `resolveServerStructuredModel`; a failed pin does not fall back. Without a usable model the
@@ -148,9 +159,10 @@ retry-after-abort time, and a 15-minute cache of heat and waking hours. A restar
 
 ## Ping User targets
 
-`drawPingUserTarget` (`runtime/targets.ts`) runs once per attempt, after the persona raffle and before
-the category raffle, because three prerequisites read the drawn target. It is skipped when no runnable
-idle nudge needs a target. One query,
+`drawPingUserTarget` (`runtime/targets.ts`) runs once per attempt after the category raffle and before
+the shortlist draw, because three prerequisites read the drawn target. It is skipped when no
+channel-eligible nudge in that category needs a target. Custom and persona-authored nudges can
+require a target in any category. One query,
 `listPingUserCandidates`, applies every hard exclusion in SQL and is read fresh rather than through
 `userCache`, so the before-send re-check (`onlyUserId`) sees an opt-out made a moment earlier.
 
@@ -161,8 +173,8 @@ idle nudge needs a target. One query,
 | Relationship gate | A memory with this lineage (or lineage 0) touched in the last 30 days, or a live short-term memory with it in this server (candidates' short-term memory is warmed from the database in one query first, because the cache starts empty after a restart). Memories count only when the persona has `personal_memories_enabled` |
 | Lottery | Tickets from capped counts of the member's turns with this lineage in this server and short-term memory channels, current activity, and penalties for a ping inside the idle nudge rest window (`pingUserTickets`); never below 1. Memories only gate eligibility and feed the planner, because they carry no server |
 
-The lottery decides who; the idle nudge raffle then avoids repeating what. When the drawn category holds
-an idle nudge that needs a target, `loadTargetIdleNudgeFires` reads this persona's idle nudges on that
+The lottery decides who; shortlist sampling then reduces repeats. When an eligible option needs a
+target, `loadTargetIdleNudgeFires` reads this persona's idle nudges on that
 member over the last 14 days (`PING_USER_REPEAT_REST_MS`), and `idleNudgeTickets` multiplies each one's
 server-wide rest by its rest on that pair. A repeat is rare but never excluded, so a member with only
 one eligible idle nudge still gets it. The window is keyed on `persona_id`, so a re-created persona
@@ -173,8 +185,12 @@ only at `PrivacyLevel.MINIMAL` with `personal_memories_enabled`, and their activ
 privacy with the GuildPresences intent. `recent_memory` and `presence_activity` pass only when that
 exposure exists, so an idle nudge never plans around data the planner cannot see.
 
-The planner plans only among channels the target can view, and the before-send re-check confirms that
-view permission again. Member-written text (the target's name, activity, and memories) appears only inside the
+When target context is exposed, every channel offered in that call must be visible to the target,
+including channels for untargeted alternatives, because that context can shape any chosen plan.
+The before-send re-check confirms target eligibility and view permission again even when an
+untargeted alternative wins, because the plan may use the exposed target context.
+Selecting an untargeted nudge clears the target before generation and recording.
+Member-written text (the target's name, activity, and memories) appears only inside the
 `<target>` block, escaped so it cannot close the block; briefs and the opener instruction refer to the
 target rather than quoting their name, so a crafted nickname or activity cannot become an instruction.
 
@@ -203,12 +219,15 @@ A Play Scene idle nudge reuses the `/generate scene` machinery: the runner passe
 - **Partners.** `drawScenePartners` (`runtime/partners.ts`) draws one partner, and a second at
   `PLAY_SCENE_SECOND_PARTNER_CHANCE`, by the lead's own ticket formula (talkativeness times rested
   share) among personas whose channel whitelist shares a channel with every speaker so far. The
-  planner channels narrow to that shared set, and `two_personas` passes when such a partner exists.
+  cast is drawn once for the attempt, and its profiles appear once in the planner prompt. Every
+  offered scene nudge uses that cast; each option's allowed channels narrow to the shared set,
+  and options with no compatible channel are removed. `two_personas` passes when such a partner exists.
   Every Play Scene idle nudge needs one, even a custom one that omits `two_personas`.
 - **Script.** The planner returns `script` (speaker numbers, 2-4 turns, lead first, no speaker twice
   in a row, everyone at least once) and one `partner_agendas` entry per partner. `sceneScriptIssues`
   checks every one of these rules, the lengths included, because Anthropic's output grammar rejects
-  `minItems` above 1; a violation gets the one format retry.
+  `minItems` above 1; a violation gets the one format retry. Other categories omit these fields
+  from the planner response schema and receive no scene partner profiles.
 - **Private goals per speaker.** `SceneTurnMetadata.turnContextItems` replaces turn 0's injected
   context for each queued turn, so a partner's first turn carries only its own agenda and never the
   lead's. The fire row and every speaker's agenda row anchor to turn 0's opener, written when turn 0

@@ -4,7 +4,6 @@ export default {
     shared: {
       target_conflict_description: `Choose either a user or a persona for this interaction.`,
       user_footer: `{bot} will remember this.`,
-      reason_line: `Reason: \`\`{reason}\`\``,
       reward_footer: `❤️ {bot} will remember this. Use /conditioning to manage.`,
       punish_footer: `💀 {bot} will remember this. Use /conditioning to manage.`,
       persona_access_blocked_title: `No Available Personas`,

@@ -1,6 +1,6 @@
 import { CONDITIONING_ACTION_LOCALE_KEYS, CONDITIONING_FOOTER_LOCALE_KEYS } from "@/utils/conditioning/conditioning";
 import type { ChatInputCommandInteraction, Client, Message, SlashCommandSubcommandBuilder } from "discord.js";
-import { EmbedBuilder, MessageFlags, PermissionFlagsBits } from "discord.js";
+import { EmbedBuilder, MessageFlags, PermissionFlagsBits, escapeMarkdown } from "discord.js";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
@@ -67,25 +67,26 @@ export function createConditioningInteractionCommand(
     reasonText: string,
     extraContext: Record<string, string>,
     footerKey: string | null,
+    targetMention?: string,
   ): EmbedBuilder {
-    let description = localizer(locale, commandKeys.embed_description, {
-      user: `<@${interaction.user.id}>`,
-      bot: targetName,
-      ...extraContext,
-    });
+    const description = localizer(
+      locale,
+      reasonText.length > 0 ? commandKeys.embed_description_with_reason : commandKeys.embed_description,
+      {
+        user: `<@${interaction.user.id}>`,
+        bot: targetMention ?? targetName,
+        reason: escapeMarkdown(reasonText),
+        ...extraContext,
+      },
+    );
     const embed = new EmbedBuilder()
       .setTitle(localizedStatusTitle(locale, commandKeys.embed_title, EMBED_COLOR_BY_TYPE[type]))
       .setColor(EMBED_COLOR_BY_TYPE[type]);
 
-    if (reasonText.length > 0) {
-      description = `${description}\n${localizer(locale, "commands.conditioning.shared.reason_line", {
-        reason: reasonText,
-      })}`;
-      if (footerKey) {
-        embed.setFooter({
-          text: localizer(locale, footerKey, { bot: targetName }),
-        });
-      }
+    if (reasonText.length > 0 && footerKey) {
+      embed.setFooter({
+        text: localizer(locale, footerKey, { bot: targetName }),
+      });
     }
 
     return embed.setDescription(description);
@@ -132,6 +133,7 @@ export function createConditioningInteractionCommand(
             normalizeConditioningReason(interaction.options.getString("reason")),
             cmdOptions?.getExtraContext?.(interaction) ?? {},
             "commands.conditioning.shared.user_footer",
+            `<@${targetUser.id}>`,
           ),
         ],
         flags: MessageFlags.SuppressNotifications,

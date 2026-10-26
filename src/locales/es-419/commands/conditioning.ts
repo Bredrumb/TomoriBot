@@ -2,7 +2,8 @@ export default {
   conditioning: {
     description: `Administra las memorias persistentes de recompensa y castigo.`,
     shared: {
-      reason_line: `Motivo: \`\`{reason}\`\``,
+      target_conflict_description: `Elige un usuario o una persona para esta interacción.`,
+      user_footer: `{bot} recordará esto.`,
       reward_footer: `❤️ {bot} recordará esto. Usa /conditioning para administrar.`,
       punish_footer: `💀 {bot} recordará esto. Usa /conditioning para administrar.`,
       persona_access_blocked_title: `No hay personas disponibles`,

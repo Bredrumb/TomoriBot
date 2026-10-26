@@ -17,7 +17,8 @@ import { initializeLocalizer } from "@/utils/text/localizer";
 import { execute as executeFeed } from "@/commands/reward/feed";
 import { createUserRow } from "../../helpers/fixtures";
 import { makeFakeInteraction } from "../../helpers/fakeInteraction";
-import { localizedCopy } from "../../helpers/localeCases";
+import { collectCaseFailures, localizedCopy, RUNTIME_LOCALES } from "../../helpers/localeCases";
+import { CONDITIONING_ACTION_LOCALE_KEYS } from "@/utils/conditioning/conditioning";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -94,16 +95,17 @@ describe("conditioning user targets", () => {
       const payload = calls[0].args[0] as { embeds: EmbedBuilder[]; flags: number };
       const embed = payload.embeds[0].toJSON();
       expect(embed.title).toBe(localizedCopy("en-US", `${testCase.key}.embed_title`));
-      const actionDescription = localizedCopy("en-US", `${testCase.key}.embed_description`, {
-        user: `<@${interaction.user.id}>`,
-        bot: testCase.name,
-        food_text: " `cookies`",
-      });
-      expect(embed.description).toBe(
-        testCase.withReason
-          ? `${actionDescription}\n${localizedCopy("en-US", "commands.conditioning.shared.reason_line", { reason: "being helpful" })}`
-          : actionDescription,
+      const actionDescription = localizedCopy(
+        "en-US",
+        `${testCase.key}.${testCase.withReason ? "embed_description_with_reason" : "embed_description"}`,
+        {
+          user: `<@${interaction.user.id}>`,
+          bot: "<@target-1>",
+          food_text: " `cookies`",
+          reason: "being helpful",
+        },
       );
+      expect(embed.description).toBe(actionDescription);
       expect(embed.footer?.text).toBe(
         testCase.withReason
           ? localizedCopy("en-US", "commands.conditioning.shared.user_footer", { bot: testCase.name })
@@ -115,6 +117,48 @@ describe("conditioning user targets", () => {
     expect(loadSpy).not.toHaveBeenCalled();
     expect(recordSpy).not.toHaveBeenCalled();
     expect(chatSpy).not.toHaveBeenCalled();
+  });
+
+  it("renders an inline italic reason for every action and locale while escaping user Markdown", async () => {
+    const failures = collectCaseFailures();
+    for (const locale of RUNTIME_LOCALES) {
+      for (const [actionKey, keys] of Object.entries(CONDITIONING_ACTION_LOCALE_KEYS)) {
+        const { interaction, calls } = makeFakeInteraction({ guild: { id: "guild-1" }, channel: { messages: {} } });
+        Object.assign(interaction.options, {
+          getUser: () => ({ id: "target-1", displayName: "Mirri" }),
+          getMember: () => null,
+          getString: (name: string) =>
+            name === "reason" ? "  being   *helpful*  " : name === "food" ? "cookies" : null,
+        });
+        const execute =
+          actionKey === "feed"
+            ? executeFeed
+            : createConditioningInteractionCommand(
+                keys.description.includes(".reward.") ? "reward" : "punish",
+                actionKey as keyof typeof CONDITIONING_ACTION_LOCALE_KEYS,
+              ).execute;
+        await execute(client, interaction as unknown as ChatInputCommandInteraction, createUserRow(), locale);
+
+        failures.check(`${locale}/${actionKey}`, () => {
+          const payload = calls[0].args[0] as { embeds: EmbedBuilder[] };
+          const embed = payload.embeds[0].toJSON();
+          expect(embed.description).toBe(
+            localizedCopy(locale, keys.embed_description_with_reason, {
+              user: `<@${interaction.user.id}>`,
+              bot: "<@target-1>",
+              food_text: " `cookies`",
+              reason: "being \\*helpful\\*",
+            }),
+          );
+          expect(embed.description).toContain("*being \\*helpful\\**");
+          expect(embed.description).not.toContain("\n");
+          expect(embed.footer?.text).toBe(
+            localizedCopy(locale, "commands.conditioning.shared.user_footer", { bot: "Mirri" }),
+          );
+        });
+      }
+    }
+    failures.expectNoFailures();
   });
 
   it("rejects selecting a user and persona together before recording or triggering chat", async () => {

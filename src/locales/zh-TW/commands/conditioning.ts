@@ -2,7 +2,8 @@ export default {
   conditioning: {
     description: `管理長期保留的獎勵與懲罰制約記憶。`,
     shared: {
-      reason_line: `原因：\`\`{reason}\`\``,
+      target_conflict_description: `請選擇使用者或人格其中一個作為互動對象。`,
+      user_footer: `{bot}會記住這件事。`,
       reward_footer: `❤️ {bot} 會記住這件事。用 /conditioning 管理。`,
       punish_footer: `💀 {bot} 會記住這件事。用 /conditioning 管理。`,
       persona_access_blocked_title: `沒有可用的人格`,

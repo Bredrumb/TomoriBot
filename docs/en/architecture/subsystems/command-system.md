@@ -118,6 +118,7 @@ the generation request, or provider content filters.
 `/reward` and `/punish` accept an optional `user` target alongside the existing `persona` option.
 Supplying both is rejected. User targets return an embed before persona loading, persona access checks,
 conditioning writes, or manual chat dispatch. A reason adds a playful footer without saving anything.
+Reasons appear in italics within the localized action sentence for both user and persona targets.
 Persona targets retain conditioning and manual chat behavior, including fallback persona selection
 when neither target option is supplied.
 
