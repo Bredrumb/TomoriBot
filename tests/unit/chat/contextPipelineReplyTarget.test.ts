@@ -1,6 +1,6 @@
 import { describe, expect, it, mock, spyOn } from "bun:test";
 import type { Message } from "discord.js";
-import { MessageReferenceType } from "discord.js";
+import { Collection, MessageReferenceType, MessageType } from "discord.js";
 import { buildChatTurnContext } from "@/utils/chat/contextPipeline";
 import { normalizeChatInvocation } from "@/utils/chat/admission";
 import type { ChatTurn } from "@/utils/chat/types";
@@ -13,7 +13,9 @@ import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 
 describe("history reply context", () => {
-  it.each([false, true])("preserves fetched history when a target channel was evicted: %s", async (channelEvicted) => {
+  it.each(["cached", "evicted", "forwarded-thread"])("resolves history references: %s", async (scenario) => {
+    const channelEvicted = scenario === "evicted";
+    const forwardedThread = scenario === "forwarded-thread";
     const persona = createPersona({
       config: {
         time_awareness_enabled: false,
@@ -34,7 +36,7 @@ describe("history reply context", () => {
         fetch: async (options: string | { limit: number }) => {
           if (typeof options === "string") return fetchById(options);
           historyFetched = true;
-          return new Map(messages.map((message) => [message.id, message]));
+          return new Map((forwardedThread ? messages.slice(0, 1) : messages).map((message) => [message.id, message]));
         },
       },
     };
@@ -53,6 +55,7 @@ describe("history reply context", () => {
       components: [],
       attachments: new Map(),
       stickers: new Map(),
+      messageSnapshots: new Collection(),
       reactions: { cache: new Map() },
       createdTimestamp: 1700000000000,
       type: 0,
@@ -74,6 +77,41 @@ describe("history reply context", () => {
         reference: null,
       },
     ] as unknown as Message[];
+    const fetchReference = mock(async () => messages[1]);
+    if (forwardedThread) {
+      Object.assign(messages[0], {
+        type: MessageType.ThreadStarterMessage,
+        content: "",
+        reference: { messageId: "target", channelId: "parent-channel", type: MessageReferenceType.Default },
+        fetchReference,
+      });
+      Object.assign(messages[1], {
+        channelId: "parent-channel",
+        content: "",
+        reference: { messageId: "original", channelId: "source-channel", type: MessageReferenceType.Forward },
+        messageSnapshots: new Collection([
+          [
+            "original",
+            {
+              content: "",
+              attachments: new Collection([
+                [
+                  "image",
+                  {
+                    name: "image.png",
+                    url: "https://cdn.discordapp.com/attachments/1/2/image.png",
+                    proxyURL: "https://media.discordapp.net/attachments/1/2/image.png",
+                    contentType: "image/png",
+                  },
+                ],
+              ]),
+              embeds: [],
+              stickers: new Collection(),
+            },
+          ],
+        ]),
+      });
+    }
     for (const message of messages) {
       Object.defineProperty(message, "channel", {
         get: () => (channelEvicted && historyFetched ? null : channel),
@@ -114,6 +152,14 @@ describe("history reply context", () => {
       const reply = result.simplifiedMessages.find((message) => message.id === "reply");
       const target = result.simplifiedMessages.find((message) => message.id === "target");
       expect(fetchById).not.toHaveBeenCalled();
+      if (forwardedThread) {
+        expect(fetchReference).toHaveBeenCalledTimes(1);
+        expect(reply?.imageAttachments).toHaveLength(1);
+        expect(reply?.imageAttachments[0]?.sourceMessageId).toBe("reply");
+        expect(reply?.mediaSourceMessageIds).toEqual(["reply"]);
+        expect(reply?.remoteMediaSourceKind).toBe("reply");
+        return;
+      }
       expect(target?.content).toContain(messages[1].content);
       expect(reply?.content).toContain(messages[0].content);
       if (!channelEvicted) expect(reply?.content).toContain(messages[1].content);

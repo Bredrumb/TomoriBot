@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Collection, ComponentType, type Message } from "discord.js";
+import { Collection, ComponentType, MessageType, type Message } from "discord.js";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { collectImageUrlsFromMessage, resolveMessageImageUrls } from "@/utils/image/imageExtractor";
 
@@ -53,6 +53,49 @@ function mediaGalleryComponent(url: string, contentType: string | null = "image/
 }
 
 describe("collectImageUrlsFromMessage", () => {
+  test("resolves a thread starter referencing a forwarded image in its parent channel", async () => {
+    const imageUrl = "https://cdn.discordapp.com/attachments/1/2/image.png";
+    const parent = makeMessage({
+      snapshots: [
+        makeMessage({
+          attachments: [
+            {
+              id: "image",
+              name: "image.png",
+              url: imageUrl,
+              proxyURL: imageUrl,
+              contentType: "image/png",
+            },
+          ],
+        }),
+      ],
+    });
+    const starter = Object.assign(makeMessage({}), {
+      type: MessageType.ThreadStarterMessage,
+      reference: { messageId: "parent-message", channelId: "parent-channel" },
+      fetchReference: async () => parent,
+    });
+    const fetchedIds: string[] = [];
+    const context = {
+      channel: {
+        id: "thread",
+        messages: {
+          fetch: async (id: string) => {
+            fetchedIds.push(id);
+            if (id !== "starter") throw new Error("Message is outside the thread");
+            return starter;
+          },
+        },
+      },
+    } as unknown as ToolContext;
+
+    const resolved = await resolveMessageImageUrls("starter", context);
+
+    expect(fetchedIds).toEqual(["starter"]);
+    expect(resolved.imageUrls.map((image) => image.url)).toEqual([imageUrl]);
+    expect(resolved.sourceMessageId).toBe("parent-message");
+  });
+
   test("discovers an image referenced only inside a Components V2 media gallery", async () => {
     // Regression: bot-generated images live in a Media Gallery component, not in
     // top-level attachments/embeds. Discovery must still find them.

@@ -321,7 +321,10 @@ export async function resolveMessageImageUrls(
 
   let repliedToMessage: Message;
   try {
-    repliedToMessage = await context.channel.messages.fetch(repliedToMessageId);
+    repliedToMessage =
+      message.reference?.channelId && message.reference.channelId !== context.channel.id
+        ? await message.fetchReference()
+        : await context.channel.messages.fetch(repliedToMessageId);
   } catch (error) {
     log.warn(
       `Failed to fetch replied-to message ${repliedToMessageId} while resolving images for ${messageId}:`,
