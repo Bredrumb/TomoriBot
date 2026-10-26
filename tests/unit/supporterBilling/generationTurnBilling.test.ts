@@ -46,7 +46,7 @@ const toolLoopCalls: Array<{
   numCtx: number | null | undefined;
   apiKey: string;
   credentialSource: ChatTurnContext["textCredentialSource"];
-  supporterFunding?: ToolLoopParams["supporterFunding"];
+  usageContext?: ChatTurnContext["usageContext"];
 }> = [];
 const providerConfigCalls: Array<{ model: string; apiKey: string }> = [];
 const fallbackNoticeCalls: Array<{
@@ -419,7 +419,7 @@ async function runToolLoopMock(params: ToolLoopParams): Promise<GenerationTurnRe
       numCtx: params.tomoriState.config.custom_num_ctx,
       apiKey: params.providerConfig.apiKey,
       credentialSource: params.context.textCredentialSource,
-      supporterFunding: params.supporterFunding,
+      usageContext: params.context.usageContext,
     });
     const deliveries = queuedDeliveries.shift();
     if (deliveries) {
@@ -1175,7 +1175,11 @@ describe("runGenerationTurn fallback behavior", () => {
     );
     const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
     expect((await runGenerationTurn(context, collectingSink())).status).toBe("completed");
-    expect(toolLoopCalls.map((call) => call.supporterFunding?.sponsorIdentityId)).toEqual([10, undefined]);
+    expect(
+      toolLoopCalls.map(
+        (call) => realSupporterRuntime.getSupporterFundingFromUsageContext(call.usageContext)?.sponsorIdentityId,
+      ),
+    ).toEqual([10, undefined]);
     expect(usageRecords.filter((record) => record.costUsd !== undefined)).toEqual([
       { sponsorIdentityId: 10, modelCodename: primary.llm_codename, costUsd: 0.001, inputTokens: 10, outputTokens: 2 },
       {

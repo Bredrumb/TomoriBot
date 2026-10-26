@@ -259,7 +259,6 @@ async function runGenerationAttempts(
               context,
               provider: attempt.provider,
               providerConfig: attempt.providerConfig,
-              supporterFunding: attempt.funding ?? undefined,
               tomoriState: attempt.tomoriState,
             }),
           ),
