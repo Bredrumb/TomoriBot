@@ -499,7 +499,10 @@ async function withRegistrationFailureCopy(
     credentialScope: "server",
   });
   return keys.length
-    ? { ...receipt, detail: [receipt.detail, ...keys.map((key) => localizer(locale, key))].join("\n") }
+    ? {
+        ...receipt,
+        metadata: [receipt.metadata, ...keys.map((key) => localizer(locale, key))].filter(Boolean).join(" "),
+      }
     : receipt;
 }
 
