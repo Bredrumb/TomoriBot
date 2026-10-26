@@ -2,6 +2,8 @@ export default {
   conditioning: {
     description: `Manage persistent reward and punishment conditioning memories.`,
     shared: {
+      target_conflict_description: `Choose either a user or a persona for this interaction.`,
+      user_footer: `{bot} will remember this.`,
       reason_line: `Reason: \`\`{reason}\`\``,
       reward_footer: `❤️ {bot} will remember this. Use /conditioning to manage.`,
       punish_footer: `💀 {bot} will remember this. Use /conditioning to manage.`,

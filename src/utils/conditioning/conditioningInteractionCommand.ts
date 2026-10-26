@@ -49,6 +49,9 @@ export function createConditioningInteractionCommand(
           .setAutocomplete(true)
           .setRequired(false),
       )
+      .addUserOption((option) =>
+        option.setName("user").setDescription(localizer("en-US", commandKeys.user_description)).setRequired(false),
+      )
       .addStringOption((option) =>
         option
           .setName("reason")
@@ -56,6 +59,37 @@ export function createConditioningInteractionCommand(
           .setMaxLength(CONDITIONING_REASON_MAX_LENGTH)
           .setRequired(false),
       );
+
+  function buildInteractionEmbed(
+    interaction: ChatInputCommandInteraction,
+    locale: string,
+    targetName: string,
+    reasonText: string,
+    extraContext: Record<string, string>,
+    footerKey: string | null,
+  ): EmbedBuilder {
+    let description = localizer(locale, commandKeys.embed_description, {
+      user: `<@${interaction.user.id}>`,
+      bot: targetName,
+      ...extraContext,
+    });
+    const embed = new EmbedBuilder()
+      .setTitle(localizedStatusTitle(locale, commandKeys.embed_title, EMBED_COLOR_BY_TYPE[type]))
+      .setColor(EMBED_COLOR_BY_TYPE[type]);
+
+    if (reasonText.length > 0) {
+      description = `${description}\n${localizer(locale, "commands.conditioning.shared.reason_line", {
+        reason: reasonText,
+      })}`;
+      if (footerKey) {
+        embed.setFooter({
+          text: localizer(locale, footerKey, { bot: targetName }),
+        });
+      }
+    }
+
+    return embed.setDescription(description);
+  }
 
   async function execute(
     client: Client,
@@ -68,6 +102,39 @@ export function createConditioningInteractionCommand(
         titleKey: "general.errors.guild_only_title",
         descriptionKey: "general.errors.guild_only_description",
         color: ColorCode.ERROR,
+      });
+      return;
+    }
+
+    const targetUser = interaction.options.getUser("user");
+    if (targetUser) {
+      if (interaction.options.getString("persona") !== null) {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "general.errors.invalid_option_title",
+          descriptionKey: "commands.conditioning.shared.target_conflict_description",
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      const targetMember = interaction.options.getMember("user");
+      const targetName =
+        targetMember && "displayName" in targetMember
+          ? targetMember.displayName
+          : (targetMember?.nick ?? targetUser.displayName);
+      await interaction.reply({
+        embeds: [
+          buildInteractionEmbed(
+            interaction,
+            locale,
+            targetName,
+            normalizeConditioningReason(interaction.options.getString("reason")),
+            cmdOptions?.getExtraContext?.(interaction) ?? {},
+            "commands.conditioning.shared.user_footer",
+          ),
+        ],
+        flags: MessageFlags.SuppressNotifications,
       });
       return;
     }
@@ -232,30 +299,14 @@ export function createConditioningInteractionCommand(
         actionText: actionTextValue,
       });
 
-      let embedDescription = localizer(locale, commandKeys.embed_description, {
-        user: `<@${interaction.user.id}>`,
-        bot: botName,
-        ...extraContext,
-      });
-
-      const interactionEmbed = new EmbedBuilder()
-        .setTitle(localizedStatusTitle(locale, commandKeys.embed_title, EMBED_COLOR_BY_TYPE[type]))
-        .setColor(EMBED_COLOR_BY_TYPE[type]);
-
-      if (reasonText.length > 0) {
-        embedDescription = `${embedDescription}\n${localizer(locale, "commands.conditioning.shared.reason_line", {
-          reason: reasonText,
-        })}`;
-        if (conditioningEvent) {
-          interactionEmbed.setFooter({
-            text: localizer(locale, CONDITIONING_FOOTER_LOCALE_KEYS[type], {
-              bot: botName,
-            }),
-          });
-        }
-      }
-
-      interactionEmbed.setDescription(embedDescription);
+      const interactionEmbed = buildInteractionEmbed(
+        interaction,
+        locale,
+        botName,
+        reasonText,
+        extraContext,
+        conditioningEvent ? CONDITIONING_FOOTER_LOCALE_KEYS[type] : null,
+      );
 
       await interaction.reply({
         embeds: [interactionEmbed],

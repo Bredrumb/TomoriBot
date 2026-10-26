@@ -152,7 +152,11 @@ History imports are stored as documents, so `/memories` works on them too.
 time. A lighter-weight nudge than a full attribute or system prompt. Use it to reinforce
 how a specific character should act in a specific server.
 
-Every `/reward` or `/punish` is tallied regardless, but it only
+Use the optional `user` option on `/reward` or `/punish` for a playful embed named after that user.
+Choose either `user` or `persona`, not both. User targets never save conditioning or trigger an AI
+reply, even with a `reason`; the "will remember this" footer is just for fun.
+
+Every `/reward` or `/punish` targeting a persona is tallied, but it only
 becomes a memory she actually acts on when you give it a `reason`, which appears like this in her prompt:
 
 ```text

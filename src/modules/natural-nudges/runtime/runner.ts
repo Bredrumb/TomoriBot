@@ -330,6 +330,7 @@ export async function runIdleNudgeAttempt(attempt: IdleNudgeAttempt): Promise<At
     idleNudge: attempt.idleNudge,
     channels: attempt.plannerChannels.map((channel) => ({
       name: channel.channel.name,
+      description: "topic" in channel.channel ? channel.channel.topic : null,
       transcript: channel.transcript,
     })),
     plannerModel: attempt.plannerModel,

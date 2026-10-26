@@ -4,6 +4,7 @@ export default {
     spank: {
       description: `Give me a playful spank!`,
       persona_description: `Select the persona to target.`,
+      user_description: `Select a user for a playful embed without conditioning or an AI reply.`,
       reason_description: `Why are you punishing me?`,
       embed_title: `🖐️ Spank Time!`,
       embed_description: `{user} just spanked {bot}.`,
@@ -13,6 +14,7 @@ export default {
     pinch: {
       description: `Give me a pinch!`,
       persona_description: `Select the persona to target.`,
+      user_description: `Select a user for a playful embed without conditioning or an AI reply.`,
       reason_description: `Why are you punishing me?`,
       embed_title: `🤏 Pinch Time!`,
       embed_description: `{user} just pinched {bot}.`,
@@ -22,6 +24,7 @@ export default {
     bite: {
       description: `Give me a playful bite!`,
       persona_description: `Select the persona to target.`,
+      user_description: `Select a user for a playful embed without conditioning or an AI reply.`,
       reason_description: `Why are you punishing me?`,
       embed_title: `🦷 Snack Time!`,
       embed_description: `{user} just bit {bot}.`,
@@ -31,6 +34,7 @@ export default {
     bonk: {
       description: `Give me a bonk on the head!`,
       persona_description: `Select the persona to target.`,
+      user_description: `Select a user for a playful embed without conditioning or an AI reply.`,
       reason_description: `Why are you punishing me?`,
       embed_title: `🔨 Bonk!`,
       embed_description: `{user} just bonked {bot}.`,
@@ -40,6 +44,7 @@ export default {
     squeeze: {
       description: `Give me a squeeze!`,
       persona_description: `Select the persona to target.`,
+      user_description: `Select a user for a playful embed without conditioning or an AI reply.`,
       reason_description: `Why are you punishing me?`,
       embed_title: `👐 Squishy squishy!`,
       embed_description: `{user} just squeezed {bot}.`,

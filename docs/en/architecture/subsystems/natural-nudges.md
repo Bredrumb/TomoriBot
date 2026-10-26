@@ -71,6 +71,9 @@ times. Token and model stats still record.
   only human-triggered turns make a channel eligible. 14 days is heat's horizon; with stat tracking
   off, the automatic set stays empty along with heat. Fire-time admission still enforces send
   permission, the channel whitelist, and persona access.
+- **Channel purpose**: Phase B receives each offered channel's name, description (Discord topic),
+  and recent messages. The planner must fit the opener and agenda to the channel's purpose, even
+  when recent messages drift off topic, and decline if no offered channel suits the brief.
 - **Planner model** (`resolvePlannerModel` in `runtime/model.ts`): `llm_id` when pinned, else the
   server's chat model (`tomoriState.llm`, never a persona override). Either must pass
   `resolveServerStructuredModel`; a failed pin does not fall back. Without a usable model the

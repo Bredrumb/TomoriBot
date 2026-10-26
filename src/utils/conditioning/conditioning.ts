@@ -11,6 +11,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
   {
     description: string;
     persona_description: string;
+    user_description: string;
     reason_description: string;
     embed_title: string;
     embed_description: string;
@@ -21,6 +22,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
   headpat: {
     description: "commands.reward.headpat.description",
     persona_description: "commands.reward.headpat.persona_description",
+    user_description: "commands.reward.headpat.user_description",
     reason_description: "commands.reward.headpat.reason_description",
     embed_title: "commands.reward.headpat.embed_title",
     embed_description: "commands.reward.headpat.embed_description",
@@ -30,6 +32,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
   hug: {
     description: "commands.reward.hug.description",
     persona_description: "commands.reward.hug.persona_description",
+    user_description: "commands.reward.hug.user_description",
     reason_description: "commands.reward.hug.reason_description",
     embed_title: "commands.reward.hug.embed_title",
     embed_description: "commands.reward.hug.embed_description",
@@ -39,6 +42,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
   kiss: {
     description: "commands.reward.kiss.description",
     persona_description: "commands.reward.kiss.persona_description",
+    user_description: "commands.reward.kiss.user_description",
     reason_description: "commands.reward.kiss.reason_description",
     embed_title: "commands.reward.kiss.embed_title",
     embed_description: "commands.reward.kiss.embed_description",
@@ -48,6 +52,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
   tickle: {
     description: "commands.reward.tickle.description",
     persona_description: "commands.reward.tickle.persona_description",
+    user_description: "commands.reward.tickle.user_description",
     reason_description: "commands.reward.tickle.reason_description",
     embed_title: "commands.reward.tickle.embed_title",
     embed_description: "commands.reward.tickle.embed_description",
@@ -57,6 +62,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
   feed: {
     description: "commands.reward.feed.description",
     persona_description: "commands.reward.feed.persona_description",
+    user_description: "commands.reward.feed.user_description",
     reason_description: "commands.reward.feed.reason_description",
     embed_title: "commands.reward.feed.embed_title",
     embed_description: "commands.reward.feed.embed_description",
@@ -66,6 +72,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
   spank: {
     description: "commands.punish.spank.description",
     persona_description: "commands.punish.spank.persona_description",
+    user_description: "commands.punish.spank.user_description",
     reason_description: "commands.punish.spank.reason_description",
     embed_title: "commands.punish.spank.embed_title",
     embed_description: "commands.punish.spank.embed_description",
@@ -75,6 +82,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
   pinch: {
     description: "commands.punish.pinch.description",
     persona_description: "commands.punish.pinch.persona_description",
+    user_description: "commands.punish.pinch.user_description",
     reason_description: "commands.punish.pinch.reason_description",
     embed_title: "commands.punish.pinch.embed_title",
     embed_description: "commands.punish.pinch.embed_description",
@@ -84,6 +92,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
   bite: {
     description: "commands.punish.bite.description",
     persona_description: "commands.punish.bite.persona_description",
+    user_description: "commands.punish.bite.user_description",
     reason_description: "commands.punish.bite.reason_description",
     embed_title: "commands.punish.bite.embed_title",
     embed_description: "commands.punish.bite.embed_description",
@@ -93,6 +102,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
   squeeze: {
     description: "commands.punish.squeeze.description",
     persona_description: "commands.punish.squeeze.persona_description",
+    user_description: "commands.punish.squeeze.user_description",
     reason_description: "commands.punish.squeeze.reason_description",
     embed_title: "commands.punish.squeeze.embed_title",
     embed_description: "commands.punish.squeeze.embed_description",
@@ -102,6 +112,7 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
   bonk: {
     description: "commands.punish.bonk.description",
     persona_description: "commands.punish.bonk.persona_description",
+    user_description: "commands.punish.bonk.user_description",
     reason_description: "commands.punish.bonk.reason_description",
     embed_title: "commands.punish.bonk.embed_title",
     embed_description: "commands.punish.bonk.embed_description",

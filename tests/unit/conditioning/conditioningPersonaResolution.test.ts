@@ -5,7 +5,7 @@
  * actor may currently trigger is rejected before any repository write.
  */
 import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
-import type { ChatInputCommandInteraction, Client } from "discord.js";
+import { MessageFlags, type ChatInputCommandInteraction, type Client, type EmbedBuilder } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { personaRepository } from "@/utils/db/repositories";
 import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
@@ -14,6 +14,10 @@ import * as spotlightCache from "@/utils/cache/personalSpotlightCache";
 import * as tomoriChatModule from "@/events/messageCreate/tomoriChat";
 import { createConditioningInteractionCommand } from "@/utils/conditioning/conditioningInteractionCommand";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { execute as executeFeed } from "@/commands/reward/feed";
+import { createUserRow } from "../../helpers/fixtures";
+import { makeFakeInteraction } from "../../helpers/fakeInteraction";
+import { localizedCopy } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -45,6 +49,101 @@ afterEach(() => {
   }
 });
 
+describe("conditioning user targets", () => {
+  it("posts user embeds with names, reasons, and food without loading personas, recording events, or triggering chat", async () => {
+    const loadSpy = track(spyOn(personaRepository, "loadState").mockResolvedValue(null));
+    const recordSpy = track(spyOn(conditioningMemoryRepository, "recordEvent").mockResolvedValue(null));
+    const chatSpy = track(spyOn(tomoriChatModule, "tomoriChat").mockResolvedValue("run"));
+    const cases = [
+      {
+        execute: createConditioningInteractionCommand("reward", "headpat").execute,
+        key: "commands.reward.headpat",
+        member: { displayName: "Mirri" },
+        name: "Mirri",
+        withReason: true,
+      },
+      {
+        execute: createConditioningInteractionCommand("punish", "bonk").execute,
+        key: "commands.punish.bonk",
+        member: { nick: "Juno" },
+        name: "Juno",
+        withReason: true,
+      },
+      { execute: executeFeed, key: "commands.reward.feed", member: null, name: "Bau", withReason: true },
+      {
+        execute: createConditioningInteractionCommand("punish", "bite").execute,
+        key: "commands.punish.bite",
+        member: null,
+        name: "Bau",
+        withReason: false,
+      },
+    ];
+
+    for (const testCase of cases) {
+      const { interaction, calls } = makeFakeInteraction({ guild: { id: "guild-1" }, channel: { messages: {} } });
+      Object.assign(interaction.options, {
+        getUser: () => ({ id: "target-1", displayName: "Bau" }),
+        getMember: () => testCase.member,
+        getString: (name: string) =>
+          name === "reason" && testCase.withReason ? "  being   helpful  " : name === "food" ? "cookies" : null,
+      });
+
+      await testCase.execute(client, interaction as unknown as ChatInputCommandInteraction, createUserRow(), "en-US");
+
+      expect(calls.map((call) => call.method)).toEqual(["reply"]);
+      const payload = calls[0].args[0] as { embeds: EmbedBuilder[]; flags: number };
+      const embed = payload.embeds[0].toJSON();
+      expect(embed.title).toBe(localizedCopy("en-US", `${testCase.key}.embed_title`));
+      const actionDescription = localizedCopy("en-US", `${testCase.key}.embed_description`, {
+        user: `<@${interaction.user.id}>`,
+        bot: testCase.name,
+        food_text: " `cookies`",
+      });
+      expect(embed.description).toBe(
+        testCase.withReason
+          ? `${actionDescription}\n${localizedCopy("en-US", "commands.conditioning.shared.reason_line", { reason: "being helpful" })}`
+          : actionDescription,
+      );
+      expect(embed.footer?.text).toBe(
+        testCase.withReason
+          ? localizedCopy("en-US", "commands.conditioning.shared.user_footer", { bot: testCase.name })
+          : undefined,
+      );
+      expect(payload.flags).toBe(MessageFlags.SuppressNotifications);
+    }
+
+    expect(loadSpy).not.toHaveBeenCalled();
+    expect(recordSpy).not.toHaveBeenCalled();
+    expect(chatSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects selecting a user and persona together before recording or triggering chat", async () => {
+    const recordSpy = track(spyOn(conditioningMemoryRepository, "recordEvent").mockResolvedValue(null));
+    const chatSpy = track(spyOn(tomoriChatModule, "tomoriChat").mockResolvedValue("run"));
+    const { interaction, calls } = makeFakeInteraction({ guild: { id: "guild-1" }, channel: { messages: {} } });
+    Object.assign(interaction.options, {
+      getUser: () => ({ id: "target-1", displayName: "Mirri" }),
+      getString: (name: string) => (name === "persona" ? "1" : null),
+    });
+
+    await createConditioningInteractionCommand("punish", "bonk").execute(
+      client,
+      interaction as unknown as ChatInputCommandInteraction,
+      createUserRow(),
+      "en-US",
+    );
+
+    expect(calls.map((call) => call.method)).toEqual(["reply"]);
+    const payload = calls[0].args[0] as { embeds: EmbedBuilder[]; flags: number };
+    expect(payload.embeds[0].toJSON().description).toBe(
+      localizedCopy("en-US", "commands.conditioning.shared.target_conflict_description"),
+    );
+    expect(payload.flags).toBe(MessageFlags.Ephemeral);
+    expect(recordSpy).not.toHaveBeenCalled();
+    expect(chatSpy).not.toHaveBeenCalled();
+  });
+});
+
 /** Builds an interaction that clears every guard ahead of persona resolution. */
 function createInteraction(personaOption: string | null) {
   const replies: unknown[] = [];
@@ -67,6 +166,7 @@ function createInteraction(personaOption: string | null) {
       user: { id: "user-1" },
       options: {
         getString: (name: string) => (name === "persona" ? personaOption : null),
+        getUser: () => null,
       },
       reply: async (payload: unknown) => {
         replies.push(payload);
