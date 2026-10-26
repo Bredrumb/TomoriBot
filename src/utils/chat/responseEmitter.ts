@@ -5,6 +5,7 @@ import { getOrCreateWebhook, resolvePersonaWebhookIdentity } from "@/utils/disco
 import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { TOMORIBOT_ERROR_FOOTER_KEY } from "@/utils/discord/stream/errorUi";
+import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { channelLocks, setActiveChannelTurnState, setChannelToolCallChainActive } from "@/utils/chat/channelQueue";
 import { cacheUserImpersonationWebhook, resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
@@ -216,7 +217,11 @@ async function emitGenerationError(context: ChatTurnContext, error: unknown): Pr
     context.streamingContext.generationErrorReported = true;
   }
 
-  log.error(`Generation failed for message ${context.message.id}`, error);
+  if (classifySendFailure(error)) {
+    log.warn(`Generation failed for message ${context.message.id}`, error);
+  } else {
+    log.error(`Generation failed for message ${context.message.id}`, error);
+  }
   if (context.isUserImpersonation) {
     throw error instanceof Error ? error : new Error("User impersonation failed before a reply could be sent.");
   }

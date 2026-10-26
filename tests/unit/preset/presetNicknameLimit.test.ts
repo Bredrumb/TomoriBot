@@ -17,6 +17,13 @@ describe("preset import nickname limit", () => {
     expect(validation.valid).toBe(true);
   });
 
+  it("counts astral characters as one, matching Discord", () => {
+    const validation = presetRepository.validatePresetData(
+      presetNamed("\u{1F338}".repeat(PERSONA_NICKNAME_MAX_LENGTH)),
+    );
+    expect(validation.valid).toBe(true);
+  });
+
   it("rejects a name past the cap with a localized error carrying the limit", () => {
     const validation = presetRepository.validatePresetData(presetNamed("n".repeat(PERSONA_NICKNAME_MAX_LENGTH + 1)));
     expect(validation.valid).toBe(false);

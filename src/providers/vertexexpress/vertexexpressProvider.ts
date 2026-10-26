@@ -50,7 +50,9 @@ import { llmModelRepo } from "@/utils/db/repositories";
 import { callGoogleStructuredJSON } from "@/providers/google/googleStructuredOutput";
 import { generateConversationSummaryGoogle, generateRoleplaySummaryGoogle } from "@/providers/google/compactGenerator";
 import { generatePresetFromPrompt } from "@/providers/google/presetGenerator";
-import { validateGoogleModelsEndpoint } from "@/providers/google/googleCredentialValidation";
+import { validateVertexExpressEndpoint } from "@/providers/google/googleCredentialValidation";
+import { isOperatorActionableProviderError } from "@/utils/provider/providerErrorClassification";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { getActiveTemperature, isParamDisabled, omitGeminiSampling } from "@/utils/provider/samplingControl";
 import type { VertexStreamConfig } from "@/providers/vertex/vertexStreamAdapter";
 import { createVertexexpressClient } from "@/providers/vertexexpress/vertexexpressClient";
@@ -141,18 +143,26 @@ export class VertexexpressProvider
       log.info("Validating Vertex AI Express API key...");
 
       const genAI = this.buildClient(apiKey);
-      await validateGoogleModelsEndpoint(genAI);
+      const defaultModel = await getDefaultVertexexpressModel();
+      await validateVertexExpressEndpoint(genAI, defaultModel);
 
-      log.success("Vertex AI Express API key validation successful via models endpoint");
+      log.success("Vertex AI Express API key validation successful");
       return { valid: true };
     } catch (error) {
       const adapter = new VertexexpressStreamAdapter();
       const providerError = adapter.handleProviderError(error);
 
-      await log.error("Vertex AI Express configuration validation failed", error, {
+      await reportProviderFailure({
+        summary: "Vertex AI Express configuration validation failed",
         errorType: "APIKeyValidationError",
-        metadata: {
+        error,
+        expected: !isOperatorActionableProviderError(providerError),
+        dimensions: {
+          operation: "key-validation",
           provider: "vertexexpress",
+          providerErrorCode: providerError.code ?? "unknown",
+        },
+        metadata: {
           errorCode: providerError.code,
           errorType: providerError.type,
         },

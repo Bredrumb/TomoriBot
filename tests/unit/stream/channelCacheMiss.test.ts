@@ -2,6 +2,11 @@ import { describe, expect, it } from "bun:test";
 import type { Message } from "discord.js";
 import type { StreamContext } from "@/types/stream/interfaces";
 import { createDefaultStreamState } from "@/types/stream/types";
+import {
+  classifySendFailure,
+  getBlockedSendReason,
+  resetSendFailureCacheForTesting,
+} from "@/utils/discord/stream/sendFailureCache";
 import { StreamUiUpdater } from "@/utils/discord/stream/uiUpdater";
 
 const CHANNEL_ID = "1382235263668846612";
@@ -265,6 +270,42 @@ describe("a deleted destination channel", () => {
 
     expect(sent).toBeNull();
     expect(stopCalls).toEqual([{ channelId: CHANNEL_ID, requesterId: "channel_deleted" }]);
+  });
+
+  it("caches and propagates a 50013 refusal from the bot fallback when the webhook fails first", async () => {
+    resetSendFailureCacheForTesting();
+    try {
+      const { updater } = makeUpdater();
+      const webhookError = Object.assign(new Error("Unknown Webhook"), { code: 10015 });
+      const fallbackError = Object.assign(new Error("Missing Permissions"), { code: 50013 });
+
+      const context = {
+        channel: {
+          id: CHANNEL_ID,
+          send: async () => {
+            throw fallbackError;
+          },
+        },
+        webhook: { id: "webhook-1", send: async () => Promise.reject(webhookError) },
+        personaUsername: "Tomori",
+        client: { channels: { cache: new Map(), fetch: async () => null } },
+        locale: "en-US",
+        suppressUserErrors: false,
+        tomoriState: { is_alter: true, config: {} },
+      } as unknown as StreamContext;
+
+      let thrown: unknown;
+      try {
+        await updater.sendSinglePayload({ content: "hello" }, "hello", context, createDefaultStreamState());
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(getBlockedSendReason(CHANNEL_ID)).toBe("missing_permissions");
+      expect(classifySendFailure(thrown)).toBe("missing_permissions");
+    } finally {
+      resetSendFailureCacheForTesting();
+    }
   });
 });
 

@@ -1,3 +1,4 @@
+import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 import { PERSONA_NICKNAME_MAX_LENGTH } from "@/types/personaNaming";
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import {
@@ -528,7 +529,7 @@ export async function execute(
       return;
     }
     const characterName = parsedNames[0];
-    if (characterName.length > PERSONA_NICKNAME_MAX_LENGTH) {
+    if (getDiscordTextLength(characterName) > PERSONA_NICKNAME_MAX_LENGTH) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.persona.name_too_long_title",
         descriptionKey: "commands.persona.name_too_long_description",

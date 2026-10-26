@@ -23,7 +23,7 @@ import {
   buildConfigRouteId,
 } from "@/utils/discord/configPanelCatalog";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
-import { truncateDiscordText } from "@/utils/text/discordTextLimits";
+import { getDiscordTextLength, truncateDiscordText } from "@/utils/text/discordTextLimits";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { formatImageTagsForModalValue, TAGS_MODAL_MAX_LENGTH } from "@/utils/image/tagHelpers";
 import { CONTEXT_NOTE_MAX_LENGTH } from "@/utils/discord/contextNoteOptions";
@@ -684,6 +684,7 @@ export function buildPersonaRenameModal(
   nonce: string,
   currentNickname: string,
 ): RawModalPayload {
+  const prefilledNickname = truncateDiscordText(currentNickname, PERSONA_NICKNAME_MAX_LENGTH, "");
   return {
     custom_id: buildConfigRouteId({ action: "rename-submit", locale, personaId, nonce }),
     title: modalTitle(locale, "commands.config.panel.rename_modal_title"),
@@ -696,11 +697,12 @@ export function buildPersonaRenameModal(
           type: 4,
           custom_id: buildConfigModalFieldId("nickname", nonce),
           style: TextInputStyle.Short,
-          min_length: PERSONA_NICKNAME_MIN_LENGTH,
+          // A legacy 1-character name prefilled below the floor makes Discord reject the whole modal, so the floor yields to it.
+          min_length: Math.min(PERSONA_NICKNAME_MIN_LENGTH, getDiscordTextLength(prefilledNickname)),
           max_length: PERSONA_NICKNAME_MAX_LENGTH,
           required: true,
           // Discord rejects the whole modal when a prefilled value exceeds max_length, and nicknames stored before the cap existed can be longer.
-          value: truncateDiscordText(currentNickname, PERSONA_NICKNAME_MAX_LENGTH, ""),
+          value: prefilledNickname,
         },
       },
     ],

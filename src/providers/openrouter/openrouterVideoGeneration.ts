@@ -495,10 +495,6 @@ async function generateVideo(
 
   if (submitRaw.status < 200 || submitRaw.status >= 300) {
     hold?.reportCost(0);
-    log.error(
-      `OpenRouter video generation request failed (model: ${request.model}, status: ${submitRaw.status})`,
-      new Error(videoApiErrorSummary(submitBodyText, request.apiKey)),
-    );
     throw new Error(
       `OpenRouter video generation failed: ${submitRaw.status}: ${videoApiErrorSummary(submitBodyText, request.apiKey)}`,
       { cause: readOpenRouterLimitError(submitRaw.status, submitResponse.headers, submitBodyText) ?? undefined },

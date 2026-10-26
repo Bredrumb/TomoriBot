@@ -46,6 +46,7 @@ import {
 } from "@/utils/image/naiImageGeneration";
 import { loadCharRefAsBase64 } from "@/utils/storage/charrefStorage";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
+import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
 import { CredentialUnavailableError, getResolvedCapabilityModelId } from "@/utils/provider/credentialResolver";
 import { resolveCredentialsWithMediaQuota } from "@/utils/quota/mediaQuotaGate";
 
@@ -1323,7 +1324,7 @@ export class GenerateImageNaiTool extends BaseTool {
         summary: `NAI ${isInpaintMode ? "inpainting" : "image generation"} failed`,
         errorType: "NaiImageGenerationFailed",
         error,
-        expected: errorKind !== "other",
+        expected: errorKind !== "other" || classifySendFailure(error) !== null,
         serverId: context.tomoriState.server_id,
         userId: context.internalUserId ?? null,
         dimensions: { operation: isInpaintMode ? "image-inpaint" : "image-generation", provider: "novelai", errorKind },

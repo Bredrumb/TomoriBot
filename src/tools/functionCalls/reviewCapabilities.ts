@@ -61,10 +61,6 @@ function buildToolAssemblyState(context: ToolContext): ToolStateForContext {
   };
 }
 
-async function describeProvider(context: ToolContext): Promise<string> {
-  return getProviderDisplayName(context.tomoriState.llm.llm_provider);
-}
-
 async function loadToolSnapshot(context: ToolContext): Promise<ToolSnapshot> {
   const liveBuiltInTools = ToolRegistry.getAvailableTools(context.provider, context);
   const assembled = await ToolRegistry.getAvailableToolsWithMCP(context.provider, buildToolAssemblyState(context));
@@ -227,13 +223,12 @@ export class ReviewCapabilitiesTool extends BaseTool {
     const { config, llm } = context.tomoriState;
     const snapshot = await loadToolSnapshot(context);
     const displayModelName = getLlmDisplayName(llm, config.custom_model_name);
-    const providerLabel = await describeProvider(context);
     const builtInNames = new Set(snapshot.builtInTools.map((tool) => tool.name));
     const content: string[] = [
       "# Your Current Chat Capabilities",
       "",
       `- **Model**: ${displayModelName}`,
-      `- **Provider**: ${providerLabel}`,
+      `- **Provider**: ${getProviderDisplayName(llm.llm_provider)}`,
       `- **Function calling**: ${llm.has_tools ? "supported" : "not supported"}`,
       `- **Image input**: ${llm.sees_images ? "supported" : "not supported"}`,
       `- **Video input**: ${llm.sees_videos ? "supported" : "not supported"}`,
@@ -296,7 +291,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         status: "capabilities_retrieved",
         capability_type: "chat",
         model: displayModelName,
-        provider: providerLabel,
+        provider: getProviderDisplayName(llm.llm_provider),
         built_in_tools: snapshot.builtInTools.map((tool) => tool.name),
         mcp_tools: snapshot.mcpFunctionNames,
         summary: message,
@@ -310,7 +305,6 @@ export class ReviewCapabilitiesTool extends BaseTool {
     const canViewOperationalDetails =
       context.message?.member?.permissions.has(PermissionsBitField.Flags.ManageGuild) ?? false;
     const displayModelName = getLlmDisplayName(llm, config.custom_model_name);
-    const providerLabel = await describeProvider(context);
     const disabledFeatures = [
       ["web search", config.web_search_enabled],
       ["image generation", config.imagegen_enabled],
@@ -328,7 +322,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       "# Current Runtime Settings",
       "",
       `- **Model**: ${displayModelName}`,
-      `- **Provider**: ${providerLabel}`,
+      `- **Provider**: ${getProviderDisplayName(llm.llm_provider)}`,
       `- **Tool calling**: ${llm.has_tools ? "supported" : "not supported by this model"}`,
       `- **Available tools**: ${snapshot.builtInTools.length + snapshot.mcpFunctionNames.length} (${snapshot.builtInTools.length} built-in, ${snapshot.mcpFunctionNames.length} MCP)`,
       "",

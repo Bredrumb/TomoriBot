@@ -6,6 +6,7 @@ import {
   type ProviderUsageContext,
 } from "@/utils/provider/providerUsage";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
+import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
 /**
  * Video Generation Tool
  * Allows TomoriBot to generate videos using the active provider's native video API.
@@ -304,7 +305,8 @@ export class GenerateVideoTool extends BaseTool {
           url?: string;
           rawError?: unknown;
         };
-        log.error(
+        const logSendFailure = classifySendFailure(fallbackError) ? log.warn : log.error;
+        logSendFailure(
           `Failed to send generated video via bot message ${JSON.stringify({
             filename,
             bytes: videoData.length,
@@ -728,7 +730,7 @@ export class GenerateVideoTool extends BaseTool {
           summary: "Video generation failed",
           errorType: "VideoGenerationFailed",
           error,
-          expected: isExpectedVideoFailure(errorMessage),
+          expected: isExpectedVideoFailure(errorMessage) || classifySendFailure(error) !== null,
           serverId: context.tomoriState.server_id,
           userId: context.internalUserId ?? null,
           dimensions: { operation: "video-generation", provider: failureProvider ?? "unknown" },

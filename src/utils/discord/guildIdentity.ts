@@ -86,11 +86,22 @@ async function patchGuildMemberSelf(
           fields: summary.fields,
         },
       };
-      await log.error(
-        `Failed to update guild ${operation}: ${response.status} ${response.statusText}`,
-        undefined,
-        context,
-      );
+      if (response.status === 403 || summary.code === 50013 || summary.code === "50013") {
+        log.metric("guild_identity_patch_failure", {
+          guildId,
+          operation,
+          httpStatus: response.status,
+          discordCode: String(summary.code),
+          fields: summary.fields.join(",") || "none",
+        });
+        log.warn(`Failed to update guild ${operation}: ${response.status} ${response.statusText}`, undefined, context);
+      } else {
+        await log.error(
+          `Failed to update guild ${operation}: ${response.status} ${response.statusText}`,
+          undefined,
+          context,
+        );
+      }
       return {
         success: false,
         error: "api_error",

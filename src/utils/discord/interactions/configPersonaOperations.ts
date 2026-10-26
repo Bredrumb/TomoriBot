@@ -10,6 +10,7 @@ import {
   type PersonaNamingConfig,
 } from "@/types/personaNaming";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import { personaRepository, personaSpriteRepository } from "@/utils/db/repositories";
 import { invalidatePersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
@@ -529,7 +530,8 @@ export const configPersonaOperations: ConfigPersonaOperations = {
     if (!personaId) return { status: "write-failed" };
 
     const trimmed = newNickname.trim();
-    if (trimmed.length < PERSONA_NICKNAME_MIN_LENGTH || trimmed.length > PERSONA_NICKNAME_MAX_LENGTH) {
+    const nicknameLength = getDiscordTextLength(trimmed);
+    if (nicknameLength < PERSONA_NICKNAME_MIN_LENGTH || nicknameLength > PERSONA_NICKNAME_MAX_LENGTH) {
       return { status: "invalid-length" };
     }
 

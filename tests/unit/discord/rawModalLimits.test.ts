@@ -585,6 +585,12 @@ describe("clampRawModalText", () => {
 });
 
 describe("buildPersonaRenameModal", () => {
+  it("lets a legacy 1-character name open the modal instead of failing its own floor", () => {
+    const field = buildPersonaRenameModal("en-US", 55, "nonce1234567", "\u611B").components[0]?.component;
+    expect(field?.value).toBe("\u611B");
+    expect(field?.min_length).toBeLessThanOrEqual(1);
+  });
+
   it("opens within Discord limits when the stored nickname exceeds the cap", () => {
     const modal = buildPersonaRenameModal("en-US", 55, "nonce1234567", "n".repeat(PERSONA_NICKNAME_MAX_LENGTH + 2));
     assertWithinDiscordLimits(modal, "rename");
