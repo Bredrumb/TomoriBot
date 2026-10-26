@@ -22,6 +22,7 @@ import {
   PERSONA_NICKNAME_MIN_LENGTH,
 } from "@/utils/discord/interactions/configPersonaOperations";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { truncateDiscordText } from "@/utils/text/discordTextLimits";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { formatImageTagsForModalValue, TAGS_MODAL_MAX_LENGTH } from "@/utils/image/tagHelpers";
 import { CONTEXT_NOTE_MAX_LENGTH } from "@/utils/discord/contextNoteOptions";
@@ -697,7 +698,8 @@ export function buildPersonaRenameModal(
           min_length: PERSONA_NICKNAME_MIN_LENGTH,
           max_length: PERSONA_NICKNAME_MAX_LENGTH,
           required: true,
-          value: currentNickname,
+          // Discord rejects the whole modal when a prefilled value exceeds max_length, and nicknames stored before the cap existed can be longer.
+          value: truncateDiscordText(currentNickname, PERSONA_NICKNAME_MAX_LENGTH, ""),
         },
       },
     ],
