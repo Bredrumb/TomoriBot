@@ -72,6 +72,8 @@ export default {
     },
     name_conflict_title: `🔴 ペルソナ名の競合`,
     name_conflict_description: `**{name}** という名前のペルソナは既にこのサーバーに存在します。ペルソナ名はサーバー内で一意である必要があります。`,
+    name_too_long_title: `ペルソナ名が長すぎます`,
+    name_too_long_description: `先頭の名前は私の表示名として使用され、最大{max}文字まで設定できます。短くしてもう一度お試しください。`,
     export: {
       persona_description: "エクスポートするペルソナ",
       export_json_description: "PNGの代わりにインポート可能なJSONファイルとしてエクスポートします（アバター画像なし）",
@@ -170,6 +172,7 @@ export default {
       error_invalid_config: `ペルソナデータに無効な設定フィールドがあります`,
       error_no_server_data: `データベースにサーバーが見つかりません。まず \`/setup\` を実行してください。`,
       error_name_conflict: `**{name}** という名前のペルソナは既にこのサーバーに存在します。別の名前を使用してください。`,
+      error_nickname_too_long: `このペルソナの名前はサーバーニックネームの上限である{max}文字を超えています。ファイル内の名前を短くして、再度インポートしてください。`,
       error_nsfw_persona: `このペルソナはNSFWに指定されているため、\`/persona import\`では読み込めません。代わりに\`/nsfw persona import\`を使ってください。`,
       error_import_failed: `ペルソナデータのインポートに失敗しました`,
       error_not_json: `インポートしたファイルには有効なJSONデータが含まれている必要があります`,
@@ -223,7 +226,7 @@ export default {
       modal: {
         title: `AI人格生成`,
         character_name_label: `キャラクター名`,
-        character_name_description: `名前をカンマ（"," または "、"）区切りで入力してください。すべてトリガーワードとして追加され、先頭の名前が表示名になります。`,
+        character_name_description: `名前をカンマ（"," または "、"）区切りで入力：すべてトリガーワードになり、先頭が表示名（最大32文字）になります。`,
         character_name_placeholder: `例: 初音ミク, ミク, Hatsune Miku`,
         character_info_label: `キャラクター情報と話し方の例`,
         character_info_description: `キャラクターとその話し方を説明してください`,
@@ -318,7 +321,7 @@ export default {
       modal: {
         title: `ペルソナ作成`,
         character_name_label: `キャラクター名`,
-        character_name_description: `名前をカンマ（"," または "、"）区切りで入力してください。すべてトリガーワードとして追加され、先頭の名前が表示名になります。`,
+        character_name_description: `名前をカンマ（"," または "、"）区切りで入力：すべてトリガーワードになり、先頭が表示名（最大32文字）になります。`,
         character_name_placeholder: `例: 初音ミク, ミク, Hatsune Miku`,
         character_desc_label: `キャラクター説明`,
         character_desc_placeholder: `キャラクターを説明してください（性格、外見、背景など）`,

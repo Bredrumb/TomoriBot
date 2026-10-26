@@ -72,6 +72,8 @@ export default {
     },
     name_conflict_title: `🔴 人格名稱衝突`,
     name_conflict_description: `這個伺服器已經有人格叫 **{name}**。同一個伺服器內的人格名稱必須唯一。`,
+    name_too_long_title: `人格名稱過長`,
+    name_too_long_description: `第一個名稱會用作我的顯示名稱，最多 {max} 個字元。請縮短後再試一次。`,
     export: {
       persona_description: "要匯出的人格",
       export_json_description: "匯出可匯入的JSON檔案，取代PNG（不含頭像）",
@@ -170,6 +172,7 @@ export default {
       error_invalid_config: `人格資料中的設定欄位無效`,
       error_no_server_data: `資料庫找不到這個伺服器。請先執行 \`/setup\`。`,
       error_name_conflict: `這個伺服器已經有人格叫 **{name}**。請改用其他名稱。`,
+      error_nickname_too_long: `這個人格的名稱超過伺服器暱稱上限 {max} 個字元。請在檔案中縮短名稱後重新匯入。`,
       error_nsfw_persona: `這個人格被標記為 NSFW，所以 \`/persona import\` 無法載入。請改用 \`/nsfw persona import\`。`,
       error_import_failed: `人格資料匯入失敗`,
       error_not_json: `匯入的檔案必須包含有效的 JSON 資料`,
@@ -223,7 +226,7 @@ export default {
       modal: {
         title: `生成 AI 人格`,
         character_name_label: `角色名稱`,
-        character_name_description: `以逗號分隔的名稱（「,」或「、」）：全部都會成為觸發詞，第一個會成為顯示名稱。`,
+        character_name_description: `以逗號分隔的名稱（「,」或「、」）：全部都會成為觸發詞，第一個是顯示名稱（最多 32 字）。`,
         character_name_placeholder: `例如 Hatsune Miku、Miku、初音ミク`,
         character_info_label: `角色資訊與說話範例`,
         character_info_description: `描述這個角色以及說話方式`,
@@ -317,7 +320,7 @@ export default {
       modal: {
         title: `建立新的人格`,
         character_name_label: `角色名稱`,
-        character_name_description: `以逗號分隔的名稱（「,」或「、」）：全部都會成為觸發詞，第一個會成為顯示名稱。`,
+        character_name_description: `以逗號分隔的名稱（「,」或「、」）：全部都會成為觸發詞，第一個是顯示名稱（最多 32 字）。`,
         character_name_placeholder: `例如 Hatsune Miku、Miku、初音ミク`,
         character_desc_label: `角色描述`,
         character_desc_placeholder: `描述你的角色（性格、外觀、背景故事等）`,

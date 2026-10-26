@@ -45,7 +45,7 @@ TomoriBot連接到外部AI供應商，而不是託管內建模型。你可以連
 
 Vertex AI使用應用程式預設憑證 (ADC) 而不是儲存的機密進行身份驗證。對於本機託管，ADC可以來自`gcloud`；託管部署應使用工作負載身分或服務帳戶。AI Studio API金鑰單獨無法驗證完整的Vertex AI。所選的Google雲端專案必須啟用計費和Vertex AI API，且主機身分需要Vertex存取權限。設定指南可從`/help`中的`API Keys`頁面上的Google Vertex AI取得。
 
-Google支援的供應商設定透過經過驗證的模型清單端點來驗證憑證。它不會生成文本，也不依賴當前標記為目錄預設值的聊天模型，因此已停用的預設模型無法阻止保存有效憑證。
+Google Gemini 與 Vertex AI 的設定透過已通過驗證的模型清單端點來驗證憑證，而 Vertex AI Express 則使用 `countTokens` 驗證 API 金鑰，因此設定過程絕不會生成文字。
 
 ### 選用：Brave Search金鑰
 
