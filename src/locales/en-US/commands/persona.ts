@@ -244,8 +244,6 @@ Trigger Words ({trigger_word_count}): {triggers}`,
       field_additional_inst: `Additional Instructions`,
       wrong_provider_title: `Incompatible Provider`,
       wrong_provider_description: `Preset generation requires a compatible provider. Your current provider is **{current_provider}**. Use \`/config\` > Models > Switch Models to switch to a supported provider.`,
-      no_api_key_title: `No API Key`,
-      no_api_key_description: `No active provider is configured. Use \`/setup\` (first time) or \`/providers\` to register one.`,
       model_incompatible_title: `Incompatible Model`,
       model_incompatible_description: `Your current model (**{model_name}**) does not support **STRUCTURED OUTPUT**, which is required for persona generation.
 
@@ -264,8 +262,6 @@ Use \`/config\` > Models > Switch Models to switch to a model that supports stru
 **Next steps:**
 1. Use \`/config\` > Models > Switch Models to switch to a tool-enabled model, OR
 2. Regenerate without web search (choose "No" when asked)`,
-      api_key_decrypt_failed_title: `API Key Error`,
-      api_key_decrypt_failed_description: `Failed to decrypt the active provider credentials. Please reconfigure them using \`/providers\`.`,
       web_search_failed_title: `Persona Generation Aborted`,
       web_search_failed_description: `Persona generation was aborted because the requested web search failed.
 

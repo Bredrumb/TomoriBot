@@ -244,8 +244,6 @@ export default {
       field_additional_inst: `附加指令`,
       wrong_provider_title: `🔴 提供方不兼容`,
       wrong_provider_description: `生成预设集需要兼容的提供方。你当前的提供方是 **{current_provider}**。请到 \`/config\` > 模型 > 切换模型 换成受支持的提供方。`,
-      no_api_key_title: `🔴 没有 API 密钥`,
-      no_api_key_description: `还没有配置可用的提供方。请用 \`/setup\`（首次）或 \`/providers\` 注册一个。`,
       model_incompatible_title: `模型不兼容`,
       model_incompatible_description: `你当前的模型（**{model_name}**）不支持 **STRUCTURED OUTPUT**，而生成人格需要这项能力。
 
@@ -264,8 +262,6 @@ export default {
 **接下来可以这样做：**
 1. 到 \`/config\` > 模型 > 切换模型，换成支持工具的模型，或者
 2. 去掉网络搜索重新生成（被问到时选「否」）`,
-      api_key_decrypt_failed_title: `🔴 API 密钥错误`,
-      api_key_decrypt_failed_description: `无法解密当前提供方的凭据。请用 \`/providers\` 重新配置。`,
       web_search_failed_title: `已中止人格生成`,
       web_search_failed_description: `因请求的网络搜索失败，人格生成已中止。
 

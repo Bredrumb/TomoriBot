@@ -244,8 +244,6 @@ Palavras-gatilho ({trigger_word_count}): {triggers}`,
       field_additional_inst: `Instruções Adicionais`,
       wrong_provider_title: `🔴 Provedor Incompatível`,
       wrong_provider_description: `A geração de predefinição requer um provedor compatível. Seu provedor atual é **{current_provider}**. Use \`/config\` > Modelos > Mudar Modelos para mudar para um provedor suportado.`,
-      no_api_key_title: `🔴 Nenhuma Chave de API`,
-      no_api_key_description: `Nenhum provedor ativo está configurado. Use \`/setup\` (primeira vez) ou \`/providers\` para registrar um.`,
       model_incompatible_title: `Modelo Incompatível`,
       model_incompatible_description: `Seu modelo atual (**{model_name}**) não suporta **SAÍDA ESTRUTURADA**, que é necessária para a geração de persona.
 
@@ -264,8 +262,6 @@ Use \`/config\` > Modelos > Mudar Modelos para mudar para um modelo que suporte 
 **Próximos passos:**
 1. Use \`/config\` > Modelos > Mudar Modelos para mudar para um modelo com ferramentas habilitadas, OU
 2. Gere novamente sem a pesquisa na web (escolha "Não" quando perguntado)`,
-      api_key_decrypt_failed_title: `🔴 Erro na Chave de API`,
-      api_key_decrypt_failed_description: `Falha ao descriptografar as credenciais do provedor ativo. Por favor, reconfigure-as usando \`/providers\`.`,
       web_search_failed_title: `Geração da persona cancelada`,
       web_search_failed_description: `A geração da persona foi cancelada porque a busca na web solicitada falhou.
 
