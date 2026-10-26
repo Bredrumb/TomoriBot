@@ -66,6 +66,7 @@ export function buildStreamContext(params: BuildStreamContextParams): StreamCont
   return {
     deliveryMode: streamingContext?.deliveryMode ?? "persona",
     deliveryReceipts: streamingContext?.deliveryReceipts,
+    deliveryState: streamingContext?.deliveryState,
     // Discord context
     channel: params.channel,
     client: params.client,

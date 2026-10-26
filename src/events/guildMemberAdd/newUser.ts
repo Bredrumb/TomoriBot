@@ -11,7 +11,7 @@ import { userRepository } from "@/utils/db/repositories";
 import {
   buildForcedMentionsForUser,
   ensureDiscordUserMention,
-  sendAlterPersonaMention,
+  sendPersonaMention,
 } from "@/utils/discord/mentionHelper";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { downloadImage } from "@/utils/image/avatarHelper";
@@ -400,7 +400,7 @@ async function sendWelcome(params: {
     afterMessageId: lastMessage.id,
     triggerStartTime: welcomeStartTime,
     contextLabel: `welcome for member ${member.id} in server ${member.guild.id}`,
-    fallbackSender: (content) => sendAlterPersonaMention(welcomeChannel, chosenPersona, member.id, content),
+    fallbackSender: (content) => sendPersonaMention(welcomeChannel, chosenPersona, member.id, content),
   });
 }
 

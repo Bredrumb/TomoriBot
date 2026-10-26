@@ -84,13 +84,14 @@ Tool execution coordinates several turn-level side effects:
   the stage calls `deliverExpression` immediately. Expression delivery enforces a strict single-expression
   allowance per persona turn via `ChatTurnContext.expressionDelivery`. A repeated call returns
   `sticker_already_sent` without posting to Discord. If an earlier send timed out or was unconfirmed,
-  subsequent expression attempts in that turn are refused to avoid duplicate visible messages.
+  delivery stops for the whole turn before further tool calls, response review, key rotation, or model
+  fallback. The shared terminal state survives provider-context rebuilding.
   Successful delivery marks `responseDelivered = true`, which allows a sticker-only turn to settle
   as `completed` rather than failing as an empty response.
 - **Usage tracking:** Successful non-blocked tool calls record a `tool_used` metric in `statRepository`
   for non-DM channels.
 - **Diagnostic notices:** Failed tool calls emit a hidden thought-log notice containing redacted
-  arguments. When deliberate tool mode admitted a tool via a trigger match, the stage emits a hidden
+  arguments unless their Discord delivery is unconfirmed. When deliberate tool mode admitted a tool via a trigger match, the stage emits a hidden
   notice recording the matched trigger pattern.
 - **One-shot memory guard:** A successful `update_short_term_memory` call sets
   `streamingContext.disableShortTermMemoryUpdate = true`, blocking subsequent memory updates within the

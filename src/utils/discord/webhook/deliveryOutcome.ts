@@ -24,3 +24,8 @@ export function classifyDiscordDeliveryFailure(error: unknown): DiscordDeliveryF
   if ([10003, 10015, 50001, 50013, 50027, 50035].includes(Number(code))) return "definite_refusal";
   return "unconfirmed";
 }
+
+export function isInvalidWebhookError(error: unknown): boolean {
+  const code = Number((error as { code?: number | string } | null)?.code);
+  return code === 10015 || code === 50027;
+}

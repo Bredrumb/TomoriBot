@@ -139,7 +139,7 @@ Resolution follows this sequence:
 
 ### Tool posts and notices
 
-Tool results, galleries, dice rolls, replies, and persona tool notices go through `sendPersonaPost`. It
+Tool results, galleries, dice rolls, replies, mentions, and persona notices go through `sendPersonaPost`. It
 resolves the invoking persona's base or committed appearance, selects the bot or managed webhook route,
 and records one delivery receipt. A main persona keeps bot delivery unless it has a committed sprite or
 generic avatar; an alter always uses the managed pool. An uncertain POST is never reposted as the bot.
@@ -148,8 +148,11 @@ explicit author.
 
 ### Stickers
 
-Webhooks cannot dispatch native Discord stickers. For alters, TomoriBot posts the sticker CDN preview URL
-via webhook; if delivery fails, it falls back to a standard bot message.
+Expressions resolve the invoking persona's committed appearance, including main-persona sprites and
+identity sprites after tool-only turns. Webhooks post native stickers as their CDN preview URL. Only a
+definite Discord refusal permits a native bot-sticker fallback; custom expressions keep their selected
+author. A bot fallback records the actual bot identity and preserves an alter's own appearance memory.
+An unconfirmed send blocks further delivery for that turn.
 
 ## Source pointers
 

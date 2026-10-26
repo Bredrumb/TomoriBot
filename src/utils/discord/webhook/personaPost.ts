@@ -1,3 +1,4 @@
+import { invalidateWebhookCache } from "@/utils/discord/webhook/cache";
 import type {
   BaseGuildTextChannel,
   Message,
@@ -17,12 +18,10 @@ import { recordPersonaSpriteMessage } from "@/utils/cache/personaSpriteMessageCa
 import {
   type DeliveredSpeaker,
   getAdjacentPersonaIdentity,
-  getChannelLastDelivery,
   recordChannelDeliveredBotMessage,
   recordChannelDeliveredWebhookIdentity,
   resolveChannelBaseAppearanceIdentity,
   resolveChannelGroupBreakIdentity,
-  resolveChannelPersonaPostIdentity,
 } from "@/utils/discord/stream/channelDeliveryContinuity";
 import { resolveSpriteIdentity } from "@/utils/discord/renderModifierResolver";
 import { formatRenderModifierWebhookName } from "@/utils/discord/renderModifierParser";
@@ -35,10 +34,11 @@ import {
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { resolveManagedWebhookForChannel } from "@/utils/discord/webhook/fallback";
 import { buildWebhookReplyNoticePayload } from "@/utils/discord/webhookReply";
-import { dispatchWebhookWithIdentity, sendSelectedWebhookMessage } from "@/utils/discord/webhook/personaDispatch";
+import { dispatchWebhookWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import { sendChannelMessageOnce, sendSelectedWebhookMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
 import {
   classifyDiscordDeliveryFailure,
+  isInvalidWebhookError,
   DiscordDeliveryError,
   type DiscordDeliveryFailureKind,
 } from "@/utils/discord/webhook/deliveryOutcome";
@@ -70,6 +70,7 @@ export interface PersonaPostContext {
   locale?: string;
   replyNoticeState?: { attempted: boolean; sent: boolean };
   deliveryReceipts?: PersonaDeliveryReceipt[];
+  deliveryState?: { unconfirmed: boolean };
 }
 
 export interface PersonaPostAuthor {
@@ -84,16 +85,9 @@ export type PersonaPostOutcome =
   | { status: "sent"; message: Message; receipt: PersonaDeliveryReceipt }
   | { status: DiscordDeliveryFailureKind; error: unknown };
 
-export interface PersonaPostSpeaker {
-  username: string;
-  avatarUrl?: string | null;
-  personaId?: number;
-}
-
-export interface PersonaPostChannel {
+interface PersonaPostChannel {
   id: string;
   lastMessageId: string | null;
-  guildId?: string;
 }
 
 export function recordPersonaDelivery(receipt: PersonaDeliveryReceipt): void {
@@ -237,7 +231,12 @@ export async function resolvePersonaPostAuthor(context: PersonaPostContext): Pro
 }
 
 function assertCanDispatch(context: PersonaPostContext): void {
-  if (context.holdResponseText || context.abortSignal?.aborted || context.isExecutionCancelled?.())
+  if (
+    context.deliveryState?.unconfirmed ||
+    context.holdResponseText ||
+    context.abortSignal?.aborted ||
+    context.isExecutionCancelled?.()
+  )
     throw new DiscordDeliveryError("pre_dispatch", new Error("Persona delivery withheld or cancelled"));
 }
 
@@ -249,6 +248,18 @@ export type PersonaPostPayload = Omit<
 export async function sendPersonaPost(
   context: PersonaPostContext,
   payload: PersonaPostPayload,
+): Promise<PersonaPostOutcome> {
+  return sendPersonaPostAttempt(
+    { ...context, replyNoticeState: context.replyNoticeState ?? { attempted: false, sent: false } },
+    payload,
+    true,
+  );
+}
+
+async function sendPersonaPostAttempt(
+  context: PersonaPostContext,
+  payload: PersonaPostPayload,
+  recoverInvalidWebhook: boolean,
 ): Promise<PersonaPostOutcome> {
   let dispatched = false;
   try {
@@ -271,10 +282,12 @@ export async function sendPersonaPost(
           : undefined;
       const delivery = await dispatchWebhookWithIdentity(author.webhook, identity, async (selected) => {
         assertCanDispatch(context);
+        let noticeMessage: Message | undefined;
         if (notice) {
           if (context.replyNoticeState) context.replyNoticeState.attempted = true;
           dispatched = true;
           const posted = await sendSelectedWebhookMessageOnce(selected, notice, () => assertCanDispatch(context));
+          noticeMessage = posted;
           const receipt: PersonaDeliveryReceipt = {
             messageId: posted.id,
             channelId: posted.channelId,
@@ -292,9 +305,24 @@ export async function sendPersonaPost(
         assertCanDispatch(context);
         dispatched = true;
         const { reply: _reply, ...webhookPayload } = payload;
-        return sendSelectedWebhookMessageOnce(selected, { ...webhookPayload, allowedMentions, threadId }, () =>
-          assertCanDispatch(context),
-        );
+        try {
+          return await sendSelectedWebhookMessageOnce(selected, { ...webhookPayload, allowedMentions, threadId }, () =>
+            assertCanDispatch(context),
+          );
+        } catch (error) {
+          if (noticeMessage && classifyDiscordDeliveryFailure(error) === "definite_refusal") {
+            await selected.webhook
+              .deleteMessage(noticeMessage.id, threadId)
+              .then(() => {
+                if (context.replyNoticeState) {
+                  context.replyNoticeState.attempted = false;
+                  context.replyNoticeState.sent = false;
+                }
+              })
+              .catch(() => undefined);
+          }
+          throw error;
+        }
       });
       message = delivery.result;
       identity = delivery.identity;
@@ -330,6 +358,20 @@ export async function sendPersonaPost(
     return { status: "sent", message, receipt };
   } catch (error) {
     const status = dispatched ? classifyDiscordDeliveryFailure(error) : "pre_dispatch";
+    if (
+      recoverInvalidWebhook &&
+      status === "definite_refusal" &&
+      isInvalidWebhookError(error) &&
+      context.deliveryMode !== "user_impersonation"
+    ) {
+      const parentId = context.channel.isThread() ? context.channel.parentId : context.channel.id;
+      if (parentId) {
+        invalidateWebhookCache(parentId);
+        if (context.replyNoticeState && !context.replyNoticeState.sent) context.replyNoticeState.attempted = false;
+        return sendPersonaPostAttempt({ ...context, webhook: undefined }, payload, false);
+      }
+    }
+    if (status === "unconfirmed" && context.deliveryState) context.deliveryState.unconfirmed = true;
     log.warn("Persona post was not confirmed", {
       outcome: status,
       channelId: context.channel.id,
@@ -337,84 +379,4 @@ export async function sendPersonaPost(
     });
     return { status, error };
   }
-}
-
-export function resolvePersonaPostIdentity(
-  channel: PersonaPostChannel,
-  speaker: PersonaPostSpeaker,
-): ResolvedWebhookIdentity {
-  return resolveChannelPersonaPostIdentity(
-    channel.id,
-    {
-      username: speaker.username,
-      avatarUrl: speaker.avatarUrl ?? undefined,
-      avatarDataUri: speaker.avatarUrl?.startsWith("data:image/") ? speaker.avatarUrl : undefined,
-    },
-    speaker.personaId ?? null,
-    channel.lastMessageId,
-  );
-}
-
-export function recordPersonaPostDelivery(
-  channel: PersonaPostChannel,
-  identity: ResolvedWebhookIdentity,
-  messageId: string,
-  speaker: PersonaPostSpeaker,
-  webhookId: string,
-): void {
-  const previous = getChannelLastDelivery(channel.id);
-  const inherits =
-    previous?.via === "webhook" &&
-    previous.speaker != null &&
-    previous.speaker.personaId === speaker.personaId &&
-    previous.speaker.kind !== "copied" &&
-    previous.identity.username === identity.username &&
-    previous.identity.avatarUrl === identity.avatarUrl &&
-    previous.identity.avatarDataUri === identity.avatarDataUri;
-  const sprite =
-    inherits && speaker.personaId != null ? getPersonaAppearance(channel.id, speaker.personaId)?.sprite : undefined;
-  recordPersonaDelivery({
-    messageId,
-    channelId: channel.id,
-    route: "webhook",
-    webhookId,
-    identity,
-    speaker: {
-      personaId: speaker.personaId ?? null,
-      kind: inherits ? (previous.speaker?.kind ?? "appearance") : "appearance",
-    },
-    sprite,
-    serverDiscId: channel.guildId,
-  });
-}
-
-export async function sendPersonaPostViaWebhook(
-  webhook: Webhook,
-  payload: WebhookMessageCreateOptions,
-  speaker: PersonaPostSpeaker,
-  channel: PersonaPostChannel,
-): Promise<Message> {
-  const own = await resolveOwnAppearance(
-    channel,
-    {
-      username: speaker.username,
-      avatarUrl: speaker.avatarUrl ?? undefined,
-      avatarDataUri: speaker.avatarUrl?.startsWith("data:image/") ? speaker.avatarUrl : undefined,
-    },
-    speaker.personaId,
-  );
-  const delivery = await dispatchWebhookWithIdentity(webhook, own.identity, (selected) =>
-    sendSelectedWebhookMessage(selected, payload),
-  );
-  recordPersonaDelivery({
-    messageId: delivery.result.id,
-    channelId: delivery.result.channelId,
-    route: "webhook",
-    webhookId: delivery.webhookId,
-    identity: delivery.identity,
-    speaker: { personaId: speaker.personaId ?? null, kind: own.sprite?.isIdentity ? "identity_sprite" : "appearance" },
-    sprite: own.sprite,
-    serverDiscId: webhook.guildId ?? undefined,
-  });
-  return delivery.result;
 }

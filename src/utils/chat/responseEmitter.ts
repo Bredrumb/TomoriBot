@@ -1,3 +1,5 @@
+import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
+import type { PersonaPostContext } from "@/utils/discord/webhook/personaPost";
 import type { AnyThreadChannel, BaseGuildTextChannel, Client, Message, TextChannel } from "discord.js";
 import { ChannelType } from "discord.js";
 import type { WebhookCreateErrorReason } from "@/utils/discord/webhook/fallback";
@@ -11,6 +13,29 @@ import { channelLocks, setActiveChannelTurnState, setChannelToolCallChainActive 
 import { cacheUserImpersonationWebhook, resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
 import type { ChatResponseSink, ChatResponseTarget, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import type { ProviderError } from "@/types/stream/interfaces";
+
+export function buildChatPersonaPostContext(context: ChatTurnContext): PersonaPostContext {
+  const target = context.responseTarget;
+  return {
+    channel: context.channel as SendableChannel,
+    persona: context.currentPersona,
+    deliveryMode:
+      context.streamingContext.deliveryMode ?? (context.isUserImpersonation ? "user_impersonation" : "persona"),
+    webhook: target?.webhook,
+    impersonatedIdentity: target
+      ? {
+          username: target.personaUsername,
+          avatarUrl: target.personaAvatarUrl,
+          avatarDataUri: target.personaAvatarUrl?.startsWith("data:image/") ? target.personaAvatarUrl : undefined,
+        }
+      : undefined,
+    abortSignal: context.streamingContext.abortSignal,
+    holdResponseText: context.streamingContext.holdResponseText,
+    deliveryReceipts: context.streamingContext.deliveryReceipts,
+    deliveryState: context.streamingContext.deliveryState,
+    locale: context.locale,
+  };
+}
 
 const WEBHOOK_ERROR_COOLDOWN_MS = 10 * 60_000;
 const webhookErrorCooldowns = new Map<string, number>();
@@ -254,11 +279,7 @@ async function emitGenerationError(context: ChatTurnContext, error: unknown): Pr
       }),
       footerKey: TOMORIBOT_ERROR_FOOTER_KEY,
     },
-    {
-      webhook: context.responseTarget?.webhook,
-      personaUsername: context.responseTarget?.personaUsername,
-      personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
-    },
+    buildChatPersonaPostContext(context),
   ).catch((embedError: unknown) => {
     // Reporting a failure must not itself fail. The two causes worth naming are a channel the
     // send cannot reach (deleted, or the bot lost access), where the retry this would trigger

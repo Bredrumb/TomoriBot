@@ -50,6 +50,7 @@ describe("buildStreamContext", () => {
   it("copies common copy-through fields from the streaming context", () => {
     const messageIdMap = { resolve: () => undefined } as unknown as MessageIdMap;
     const replyNoticeState = { attempted: false, sent: false };
+    const deliveryState = { unconfirmed: false };
     const forcedMentions = [{ handle: "@alice", userId: "42" }];
     const abortSignal = new AbortController().signal;
 
@@ -60,6 +61,7 @@ describe("buildStreamContext", () => {
       rotationKeyRetriesUsed: true,
       outputPrefill: "prefix ",
       replyNoticeState,
+      deliveryState,
       forcedMentions,
       naiContinuationPrefill: "…mid-sentence",
       abortSignal,
@@ -74,6 +76,9 @@ describe("buildStreamContext", () => {
     expect(ctx.rotationKeyRetriesUsed).toBe(true);
     expect(ctx.outputPrefill).toBe("prefix ");
     expect(ctx.replyNoticeState).toBe(replyNoticeState);
+    if (!ctx.deliveryState) throw new Error("Missing delivery state");
+    ctx.deliveryState.unconfirmed = true;
+    expect(streamingContext.deliveryState?.unconfirmed).toBe(true);
     expect(ctx.forcedMentions).toBe(forcedMentions);
     expect(ctx.naiContinuationPrefill).toBe("…mid-sentence");
     expect(ctx.abortSignal).toBe(abortSignal);

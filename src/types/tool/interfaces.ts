@@ -87,6 +87,7 @@ export interface DeliveredStreamMessage {
 export interface StreamingContext {
   deliveryMode?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryMode;
   deliveryReceipts?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryReceipt[];
+  deliveryState?: { unconfirmed: boolean };
   imageModelSelection?: GenerationModelSelection;
   /** When set, delivered text may ping only these users: no roles, no everyone, nobody else. */
   mentionableUserIds?: readonly string[];

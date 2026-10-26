@@ -1,3 +1,4 @@
+import { buildChatPersonaPostContext } from "@/utils/chat/responseEmitter";
 import { expandDeliberateToolAllowedNames } from "@/utils/tools/deliberateToolMode";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import {
@@ -97,6 +98,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
   const streamResults: StreamResult[] = [];
   const review = params.context.responseReview;
   const functionHistory: ToolHistoryEntry[] = review?.functionHistory ?? [];
+  params.context.streamingContext.deliveryState ??= { unconfirmed: false };
   params.context.completedToolCalls ??= new Map();
   const completedToolCalls = params.context.completedToolCalls;
   // Off keeps ordinary same-invocation replays, so only calls an earlier invocation finished are
@@ -112,6 +114,16 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
   // An expression an earlier attempt of this turn delivered is still visible, so it still counts.
   let toolResponseDelivered = params.context.expressionDelivery.delivered !== null;
   let lastToolName: string | undefined;
+  if (params.context.streamingContext.deliveryState.unconfirmed)
+    return buildResult(
+      "error",
+      params.context,
+      streamResults,
+      finalText,
+      detailsText,
+      thoughtLog,
+      toolResponseDelivered,
+    );
 
   const completeResponse = async (): Promise<GenerationTurnResult | null> => {
     // The send limit is deliberate operator config and stays silent, as it does when streaming.
@@ -120,6 +132,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
     );
     if (!review?.pending.some((part) => part.text.trim())) {
       if (cutByLengthLimit) await emitHeldResponseLimitNotice(params.context);
+      params.context.streamingContext.holdResponseText = false;
       return buildResult(
         "completed",
         params.context,
@@ -130,6 +143,16 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         toolResponseDelivered,
       );
     }
+    if (params.context.streamingContext.deliveryState?.unconfirmed)
+      return buildResult(
+        "error",
+        params.context,
+        streamResults,
+        finalText,
+        detailsText,
+        thoughtLog,
+        toolResponseDelivered,
+      );
     const verdict = await reviewResponseCandidate(params.context, params.provider, params.providerConfig);
     if (verdict.status === "cancelled" || responseReviewCancelled(params.context)) {
       review.pending = [];
@@ -183,6 +206,8 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
       // A replay that reaches the flush cap already posted this notice through ordinary delivery.
       await emitHeldResponseLimitNotice(params.context);
     }
+    if (!deliveryStatus && !responseReviewCancelled(params.context))
+      params.context.streamingContext.holdResponseText = false;
     finalText = delivered.join("\n");
     return buildResult(
       deliveryStatus ??
@@ -225,6 +250,19 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
       streamOnce(params, accumulatedModelParts, functionHistory, earlierToolNames),
     );
     streamResults.push(streamResult);
+    if (params.context.streamingContext.deliveryState.unconfirmed) {
+      if (review) review.pending = [];
+      return buildResult(
+        "error",
+        params.context,
+        streamResults,
+        finalText,
+        detailsText,
+        thoughtLog,
+        toolResponseDelivered,
+      );
+    }
+
     if (review) {
       // Stopping at the held ceiling ends the stream before providers send trailing usage. Ordinary
       // turns fall back to the same estimates, so the cut pass is not recorded as free.
@@ -332,6 +370,19 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         detailsText = mergeDetails(detailsText, streamResult.detailsContent);
         setChannelToolCallChainActive(channelLocks.get(params.context.turn.lockedTurn.channelId), true);
         const toolOutcome = await executeToolCall(params, streamResult, iteration, reusableToolCalls);
+        if (params.context.streamingContext.deliveryState.unconfirmed) {
+          if (review) review.pending = [];
+          return buildResult(
+            "error",
+            params.context,
+            streamResults,
+            finalText,
+            detailsText,
+            thoughtLog,
+            toolResponseDelivered,
+          );
+        }
+
         recordChatDiagnostic({
           kind: "tool_outcome",
           outcome: toolOutcome.kind,
@@ -688,6 +739,7 @@ async function streamOnce(
       // Genuine timeout, so a fallback may continue this stream's text: wait (bounded) for the
       // aborted stream to settle so a send it already dispatched is in the `accumulatedText` it reads.
       const settled = await settleAbandonedStream(streamPromise);
+      if (params.context.streamingContext.deliveryState?.unconfirmed) return settled ?? { status: "error" };
 
       if (!params.context.streamingContext.suppressUserErrors) {
         await sendStreamTimeoutNotice({
@@ -1060,6 +1112,15 @@ async function executeToolCall(
     toolResult = buildExpressionToolResult(delivery, stickerName);
   }
 
+  if (
+    !toolResult.success &&
+    (toolResult.data as { deliveryStatus?: unknown } | undefined)?.deliveryStatus === "unconfirmed"
+  ) {
+    params.context.streamingContext.deliveryState ??= { unconfirmed: false };
+    params.context.streamingContext.deliveryState.unconfirmed = true;
+  }
+  if (params.context.streamingContext.deliveryState?.unconfirmed) return { kind: "abort", status: "error" };
+
   if (isBlockedByDeliberateAllowlist) {
     log.warn(
       `Deliberate tool mode blocked unexposed tool call "${functionName}" in channel ${params.context.channel.id}. Allowed: ${
@@ -1359,11 +1420,7 @@ async function emitNaiToolRetryExhausted(context: ChatTurnContext): Promise<void
       titleKey: "genai.nai_tool_retry_exhausted_title",
       descriptionKey: "genai.nai_tool_retry_exhausted_description",
     },
-    {
-      webhook: context.responseTarget?.webhook,
-      personaUsername: context.responseTarget?.personaUsername,
-      personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
-    },
+    buildChatPersonaPostContext(context),
   );
 }
 
@@ -1407,11 +1464,7 @@ async function emitToolErrorLoop(context: ChatTurnContext): Promise<void> {
               : undefined),
       }),
     },
-    {
-      webhook: context.responseTarget?.webhook,
-      personaUsername: context.responseTarget?.personaUsername,
-      personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
-    },
+    buildChatPersonaPostContext(context),
   );
 }
 
@@ -1426,11 +1479,7 @@ async function emitHeldResponseLimitNotice(context: ChatTurnContext): Promise<vo
       titleKey: "genai.stream.flush_limit_title",
       descriptionKey: "genai.stream.flush_limit_description",
     },
-    {
-      webhook: context.responseTarget?.webhook,
-      personaUsername: context.responseTarget?.personaUsername,
-      personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
-    },
+    buildChatPersonaPostContext(context),
   ).catch((embedError) => {
     log.warn(
       "Failed to send held response limit notice",

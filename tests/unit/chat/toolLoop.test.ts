@@ -1,3 +1,4 @@
+import { REST } from "discord.js";
 import { RESPONSE_REVIEW_ITEM_VALUES } from "@/constants/responseReview";
 import type { z } from "zod";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
@@ -266,9 +267,14 @@ function makeStickerContext(events: string[]): ChatTurnContext {
   const context = makeContext();
   const send = async () => {
     events.push("send");
-    return { id: "900000000000000001", webhookId: null };
+    return { id: "900000000000000001", channelId: "ch_test", webhookId: null, author: { username: "Bot" } };
   };
-  context.channel = { id: "ch_test", send, isThread: () => false } as unknown as ChatTurnContext["channel"];
+  context.channel = {
+    id: "ch_test",
+    send,
+    client: { rest: new REST() },
+    isThread: () => false,
+  } as unknown as ChatTurnContext["channel"];
   context.message = { id: "msg_1", channel: context.channel, reply: send } as unknown as ChatTurnContext["message"];
   context.guild = { id: "guild_1" } as unknown as ChatTurnContext["guild"];
   context.client = { user: null } as unknown as ChatTurnContext["client"];
@@ -2443,6 +2449,35 @@ describe("runToolLoop — contract tests", () => {
     expect((fallback.capturedContexts[0] as unknown[]).length).toBe(baseItems + 1);
     expect(JSON.stringify(fallback.capturedContexts[0])).toContain("lookup");
     expect(fallback.capturedHistories[1]).toHaveLength(1);
+  });
+
+  it("ends uncertain tool delivery before review, continuation, or a replacement invocation", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    for (const drafting of [false, true]) {
+      toolExecuteCalls.length = 0;
+      const context = drafting ? makeReviewContext() : makeContext();
+      const delivered: string[] = [];
+      if (context.responseReview) context.responseReview.pending = [held("pending", delivered).pendingResponse];
+      toolExecuteQueue.push({ success: false, endTurn: true, data: { deliveryStatus: "unconfirmed" } });
+      const first = makeProvider([makeFunctionCallResult("lookup", {}), { status: "completed" }]);
+      const review = mock(async (_request: ProviderStructuredJsonRequest) => ({
+        success: true,
+        data: { status: "pass" },
+      }));
+      Object.assign(first.provider, { callStructuredJSON: review });
+      const noticesBefore = hiddenToolNotices.length;
+      expect((await runToolLoop(makeParams(context, first.provider))).status).toBe("error");
+      const replacement = makeProvider([makeFunctionCallResult("lookup", {})]);
+      expect((await runToolLoop(makeParams(context, replacement.provider))).status).toBe("error");
+      expect(first.capturedHistories).toHaveLength(1);
+      expect(replacement.capturedHistories).toHaveLength(0);
+      expect(toolExecuteCalls).toHaveLength(1);
+      expect(delivered).toEqual([]);
+      expect(hiddenToolNotices.length).toBe(noticesBefore);
+      expect(context.streamingContext.deliveryState?.unconfirmed).toBe(true);
+      if (context.responseReview) expect(context.responseReview.pending).toEqual([]);
+      expect(review.mock.calls.every(([request]) => request.schemaName === "tool_review")).toBe(true);
+    }
   });
 
   it("Off reuse gives the replacement attempt the recorded continuation message and data without executing again", async () => {

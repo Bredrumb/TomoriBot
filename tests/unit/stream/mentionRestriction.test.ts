@@ -1,3 +1,4 @@
+import { REST } from "discord.js";
 import { describe, expect, it } from "bun:test";
 import type { StreamContext } from "@/types/stream/interfaces";
 import { createDefaultStreamState } from "@/types/stream/types";
@@ -16,9 +17,10 @@ async function sendAndCapture(mentionableUserIds: readonly string[] | undefined)
   const context = {
     channel: {
       id: CHANNEL_ID,
+      client: { rest: new REST() },
       send: async (payload: unknown) => {
         sends.push(payload);
-        return {};
+        return { id: "1400000000000000001", channelId: CHANNEL_ID, webhookId: null, author: { username: "Bot" } };
       },
     },
     client: { channels: { cache: new Map(), fetch: async () => null } },

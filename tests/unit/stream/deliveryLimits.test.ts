@@ -1,3 +1,4 @@
+import { REST } from "discord.js";
 import { describe, expect, it } from "bun:test";
 import { HumanizerDegree } from "@/types/db/schema";
 import type { StreamConfig, StreamContext } from "@/types/stream/interfaces";
@@ -96,6 +97,7 @@ function makeContext(options: {
   return {
     channel: {
       id: CHANNEL_ID,
+      client: { rest: new REST() },
       send: async (payload: unknown) => {
         options.channelSends.push(payload);
         return { id: "1400000000000000001", channelId: CHANNEL_ID, webhookId: null, author: { username: "Mirri" } };

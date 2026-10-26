@@ -1,3 +1,4 @@
+import { REST } from "discord.js";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import {
   ChannelType,
@@ -38,6 +39,7 @@ function fakeChannel(id: string, options: { dm?: boolean; parentId?: string; res
   });
   return {
     id,
+    client: { user: { id: "bot" }, rest: new REST() },
     lastMessageId: null as string | null,
     sent,
     delivered,
@@ -380,6 +382,7 @@ for (const format of ["components", "embed"] as const) {
         channelId: channel.id,
         guildId: "guild_1",
         token: "fixture",
+        client: { rest: new REST() },
         send: mock(async () => {
           throw Object.assign(new Error("Webhook send refused"), { code: 50013 });
         }),
@@ -445,6 +448,7 @@ for (const format of ["components", "embed"] as const) {
         channelId: channel.id,
         guildId: "guild_1",
         token: "fixture",
+        client: { rest: new REST() },
         send: mock(async (_payload: Record<string, unknown>) => ({ id: "301", channelId: channel.id })),
       };
       recordChannelDeliveredWebhookIdentity(
@@ -495,6 +499,7 @@ for (const format of ["components", "embed"] as const) {
         channelId: channel.id,
         guildId: "guild_1",
         token: "fixture",
+        client: { rest: new REST() },
         send: mock(async (_payload: Record<string, unknown>) => ({ id: "301", channelId: channel.id })),
       };
       spyOn(lifecycle, "getOrCreateWebhook").mockResolvedValue({ webhook: webhook as unknown as Webhook });

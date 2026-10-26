@@ -1,9 +1,10 @@
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { localizer } from "@/utils/text/localizer";
 import { HOSTED_SPEECH_LIMITS } from "@/utils/speech/hostedSpeech";
 import { loadSpeechRoutingPolicy } from "@/utils/db/repositories/SpeechRepository";
 import { personaRepository } from "@/utils/db/repositories";
 import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
-import { mediaDeliveryFailure, toolMediaPostContext } from "@/utils/discord/webhook/toolMediaDelivery";
+import { mediaDeliveryFailure } from "@/utils/discord/webhook/toolMediaDelivery";
 import {
   BaseTool,
   type Tool,
@@ -328,7 +329,7 @@ export class GenerateVoiceMessageTool extends BaseTool {
     const target: VoiceDeliveryTarget = {
       ownership: "persona",
       channel: context.channel as VoiceDeliveryTarget["channel"],
-      personaPost: toolMediaPostContext(context),
+      personaPost: buildToolPersonaPostContext(context, context.tomoriState),
     };
 
     let sentMessageId: string | undefined;

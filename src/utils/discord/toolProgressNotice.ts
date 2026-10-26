@@ -4,7 +4,7 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import type { AssembledServerConfig } from "@/types/db/schema";
 import { type ToolNoticeKey, TOOL_NOTICE_DEFINITIONS, VERBOSITY_EXEMPT_NOTICE_KEYS } from "@/constants/toolNotices";
 import { sendStandardEmbed, type WebhookEmbedContext } from "@/utils/discord/embedHelper";
-import { resolveToolPersonaDeliveryMode } from "@/utils/discord/webhook/toolPersonaDelivery";
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { canMirrorToThoughtLog } from "@/utils/discord/thoughtLogAudience";
 import { localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
@@ -71,14 +71,7 @@ export function withThoughtLogSource(context: ToolContext, options: StandardEmbe
 }
 
 function getWebhookContext(context: ToolContext): WebhookEmbedContext {
-  return {
-    persona: context.tomoriState,
-    deliveryMode: resolveToolPersonaDeliveryMode(context),
-    webhook: context.webhook,
-    deliveryReceipts: context.streamContext?.deliveryReceipts,
-    abortSignal: context.abortSignal,
-    isExecutionCancelled: context.isExecutionCancelled,
-  };
+  return buildToolPersonaPostContext(context, context.tomoriState);
 }
 
 function getSourceLine(context: ToolContext): string {
@@ -271,13 +264,11 @@ async function resolveThoughtLogTarget(context: ToolContext, logLabel: string): 
 
   return {
     channel: thoughtLogChannel as BaseGuildTextChannel,
-    webhookContext: {
-      persona: context.tomoriState,
-      deliveryMode: resolveToolPersonaDeliveryMode(context),
-      deliveryReceipts: context.streamContext?.deliveryReceipts,
-      abortSignal: context.abortSignal,
-      isExecutionCancelled: context.isExecutionCancelled,
-    },
+    webhookContext: buildToolPersonaPostContext(
+      context,
+      context.tomoriState,
+      thoughtLogChannel as BaseGuildTextChannel,
+    ),
   };
 }
 

@@ -1,10 +1,14 @@
+import { StreamUiUpdater } from "@/utils/discord/stream/uiUpdater";
+import { createDefaultStreamState } from "@/types/stream/types";
+import type { StreamContext } from "@/types/stream/interfaces";
+import { REST } from "discord.js";
 import { afterEach, beforeAll, expect, it, mock, spyOn } from "bun:test";
 import { type EmbedBuilder, MessageFlags, PermissionFlagsBits } from "discord.js";
 import { RollDiceTool } from "@/tools/functionCalls/rollDiceTool";
 import { getAvailableToolsForContext, isBuiltInToolAvailable, type ToolStateForContext } from "@/tools/availability";
 import type { ToolContext } from "@/types/tool/interfaces";
 import type { DiceRollResult } from "@/utils/dice/diceRoll";
-import { clearPersonaAppearances, commitPersonaAppearance } from "@/utils/cache/personaAppearanceCacheStore";
+import { clearPersonaAppearances } from "@/utils/cache/personaAppearanceCacheStore";
 import { clearPersonaSpriteCache, setPersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
 import {
   buildCapabilitiesManageConfigWritePlan,
@@ -41,6 +45,7 @@ function fixture(options: { enabled?: boolean; isAlter?: boolean } = {}) {
   });
   const channel = {
     id: CHANNEL,
+    client: { user: { id: "bot" }, rest: new REST() },
     guildId: "guild",
     lastMessageId: null as string | null,
     guild: { id: "guild", members: { me: { id: "bot", displayAvatarURL: () => undefined } } },
@@ -79,6 +84,7 @@ function webhookFixture() {
     channelId: CHANNEL,
     guildId: "guild",
     token: "fixture",
+    client: { rest: new REST() },
     send: mock(async (payload: Record<string, unknown>) => {
       messages.push(payload);
       return { id: `webhook-message-${messages.length}`, channelId: CHANNEL, webhookId: "webhook-1", author: {} };
@@ -203,12 +209,33 @@ it("inherits a main persona's committed sprite across intervening messages", asy
   const f = fixture();
   const { webhook, messages } = webhookFixture();
   setPersonaSpriteCache(1, [spriteRow()]);
-  commitPersonaAppearance({
-    channelId: CHANNEL,
-    personaId: 1,
-    sprite: { personaId: 1, spriteName: "joy", isIdentity: false },
-    genericAvatar: false,
+  const updater = new StreamUiUpdater({
+    hasStopRequest: () => false,
+    requestStop: () => true,
+    notifyStreamProgress: () => undefined,
   });
+  await updater.sendSinglePayload(
+    {
+      content: "sprite text",
+      identityOverride: { username: "Juno", avatarUrl: "https://example.com/joy.png" },
+      spriteRecord: { personaId: 1, spriteName: "joy", isIdentity: false },
+    },
+    "sprite text",
+    {
+      ...f.context,
+      client: f.context.client,
+      tomoriState: f.context.tomoriState,
+      webhook,
+      personaUsername: "Juno",
+      deliveryMode: "persona",
+      contextItems: [],
+      currentTurnModelParts: [],
+    } as unknown as StreamContext,
+    createDefaultStreamState(),
+  );
+  messages.length = 0;
+  webhook.send.mockClear();
+  f.channel.lastMessageId = "1500000000000000000";
   f.channel.lastMessageId = "1500000000000000000";
 
   const result = await new RollDiceTool().execute({ dice: "d20" }, f.context);
@@ -240,6 +267,7 @@ it("does not repost as the bot when an alter roll's webhook outcome is unconfirm
     channelId: CHANNEL,
     guildId: "guild",
     token: "fixture",
+    client: { rest: new REST() },
     send: mock(async () => {
       throw new Error("socket hang up");
     }),
@@ -265,6 +293,7 @@ it("does not repost as the bot when an alter roll is definitely refused", async 
     channelId: CHANNEL,
     guildId: "guild",
     token: "fixture",
+    client: { rest: new REST() },
     send: mock(async () => {
       throw Object.assign(new Error("Missing Permissions"), { code: 50013 });
     }),

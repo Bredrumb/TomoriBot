@@ -86,6 +86,7 @@ export interface StreamConfig extends ProviderConfig {
 export interface StreamContext {
   deliveryMode?: PersonaDeliveryMode;
   deliveryReceipts?: PersonaDeliveryReceipt[];
+  deliveryState?: { unconfirmed: boolean };
   usageContext?: ProviderUsageContext;
   channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | NewsChannel | TextChannel | AnyThreadChannel;
   client: Client;
