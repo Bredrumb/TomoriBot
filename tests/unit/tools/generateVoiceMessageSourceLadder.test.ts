@@ -29,6 +29,7 @@ import * as realVoiceMessageDelivery from "@/utils/discord/webhook/voiceMessageD
 import * as realVoiceMessageMetadata from "@/utils/audio/voiceMessageMetadata";
 import { createScopedModuleMocker } from "../../helpers/mockSurface";
 import { GenerateVoiceMessageTool } from "@/tools/functionCalls/generateVoiceMessageTool";
+import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 
 beforeAll(initializeLocalizer);
 
@@ -60,6 +61,8 @@ function hostedTarget(mode: "design" | "clone"): realSpeechEndpointResolver.Spee
 const dispatchedSources: ResolvedVoiceSource[] = [];
 const dispatchedSignals: Array<AbortSignal | undefined> = [];
 let deliveryCount = 0;
+let deliveryError: DiscordDeliveryError | undefined;
+let captionCount = 0;
 
 const endpointResolverMock = mock(async () =>
   activeEndpoint ? { endpoint: activeEndpoint, apiKey: "endpoint-key" } : null,
@@ -117,9 +120,12 @@ scopedMock.module("@/utils/discord/webhook/voiceMessageDelivery", () => ({
   ...realVoiceMessageDelivery,
   deliverVoiceMessage: async () => {
     deliveryCount += 1;
+    if (deliveryError) throw deliveryError;
     return "message-id";
   },
-  postVoiceTranscriptCaption: async () => undefined,
+  postVoiceTranscriptCaption: async () => {
+    captionCount += 1;
+  },
 }));
 
 function makeEndpoint(voiceMode: VoiceMode): CustomEndpointRow {
@@ -353,6 +359,38 @@ describe("GenerateVoiceMessageTool source ladder", () => {
 });
 
 describe("GenerateVoiceMessageTool refusals", () => {
+  it("ends an uncertain voice delivery without success, a caption, or another synthesis", async () => {
+    activeEndpoint = makeEndpoint("voice-design");
+    hostedTargets = null;
+    deliveryCount = 0;
+    captionCount = 0;
+    dispatchedSources.length = 0;
+    synthesisResultOverride = { cleanedCaptionText: "Hello" };
+    deliveryError = new DiscordDeliveryError("unconfirmed", new Error("Accepted POST response lost"));
+    try {
+      const result = await new GenerateVoiceMessageTool().execute(
+        { title: "greeting", script: "Hello" },
+        {
+          ...makeContext(DESIGN_PROMPT),
+          locale: "en-US",
+          tomoriState: createPersona({ ...DESIGN_PROMPT, config: { voice_transcript_chat_mode: true } }),
+        },
+      );
+      expect(result).toMatchObject({
+        success: false,
+        endTurn: true,
+        error: localizedCopy("en-US", "tools.media.delivery_unconfirmed"),
+      });
+      expect(result.responseDelivered).not.toBe(true);
+      expect(deliveryCount).toBe(1);
+      expect(captionCount).toBe(0);
+      expect(dispatchedSources).toHaveLength(1);
+    } finally {
+      deliveryError = undefined;
+      synthesisResultOverride = {};
+    }
+  });
+
   it("does not synthesize when no saved source matches its selected target", async () => {
     for (const [fields, endpoint] of [
       [{}, makeEndpoint("clone")],

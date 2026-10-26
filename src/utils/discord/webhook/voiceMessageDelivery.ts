@@ -1,15 +1,6 @@
-/**
- * Shared delivery path for native Discord voice messages.
- *
- * Extracted from `GenerateVoiceMessageTool` so the tool and `/generate voice-message`
- * converge on one sender. Everything below is a Discord-quirk surface, not a
- * generic "send a file" helper: the raw multipart bodies, `passThroughBody`, and
- * `wait=true` each work around a failure mode that degrades silently instead of
- * erroring, so none of it may be simplified away.
- */
-
 import {
   AttachmentBuilder,
+  MessageFlags,
   Routes,
   type AnyThreadChannel,
   type BaseGuildTextChannel,
@@ -18,35 +9,26 @@ import {
 } from "discord.js";
 import type { VoiceMessageMetadata } from "@/utils/audio/voiceMessageMetadata";
 import { log } from "@/utils/misc/logger";
-import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
-import { dispatchWebhookWithIdentity, type WebhookIdentityDelivery } from "@/utils/discord/webhook/personaDispatch";
-import { recordChannelDeliveredBotMessage } from "@/utils/discord/stream/channelDeliveryContinuity";
+import { classifyDiscordDeliveryFailure, DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
+import { dispatchWebhookWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import {
-  type PersonaPostSpeaker,
-  recordPersonaPostDelivery,
-  resolvePersonaPostIdentity,
-  sendPersonaPostViaWebhook,
+  type PersonaDeliveryReceipt,
+  type PersonaPostAuthor,
+  type PersonaPostContext,
+  type PersonaPostPayload,
+  recordPersonaDelivery,
+  resolvePersonaPostAuthor,
+  sendPersonaPost,
 } from "@/utils/discord/webhook/personaPost";
-
-/** Discord IS_VOICE_MESSAGE flag value (1 << 13). */
-const IS_VOICE_MESSAGE_FLAG = 8192;
+import {
+  getSingleAttemptBotRest,
+  sendChannelMessageOnce,
+  sendSelectedWebhookMessageOnce,
+} from "@/utils/discord/webhook/singleAttemptMessage";
 
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 
-/**
- * Where a voice message should be delivered.
- *
- * `webhook` is optional so bot-identity callers (main persona in a normal chat
- * turn) can omit it, but persona-identity callers should resolve one first: the
- * internal fallback only covers the webhook-token-null case, it does not paper
- * over a webhook that was never resolved.
- */
-export interface VoiceDeliveryTarget {
-  /**
-   * Where the bot-identity paths post. A thread is a valid target: both of them address the
-   * channel by id, which Discord routes to the thread itself, so this must be the channel the
-   * message belongs in rather than a thread's webhook-hosting parent.
-   */
+interface VoiceDeliveryDestination {
   channel: TextChannel | BaseGuildTextChannel | AnyThreadChannel;
   webhook?: Webhook | null;
   threadId?: string;
@@ -55,11 +37,8 @@ export interface VoiceDeliveryTarget {
   personaId?: number;
 }
 
-function toPersonaPostSpeaker(target: VoiceDeliveryTarget): PersonaPostSpeaker | null {
-  return target.personaUsername
-    ? { username: target.personaUsername, avatarUrl: target.personaAvatarUrl, personaId: target.personaId }
-    : null;
-}
+export type VoiceDeliveryTarget = VoiceDeliveryDestination &
+  ({ ownership: "persona"; personaPost: PersonaPostContext } | { ownership?: "base"; personaPost?: never });
 
 interface NativeVoiceSendOptions {
   audioBuffer: Buffer;
@@ -68,122 +47,197 @@ interface NativeVoiceSendOptions {
   voiceMeta: VoiceMessageMetadata;
 }
 
-/**
- * Bypasses discord.js's MessagePayload serialization, which drops unknown attachment fields like
- * `waveform` and `duration_secs`.
- *
- * @returns The sent message ID, or undefined if the request failed
- */
-async function sendNativeVoiceMessageViaRest(
+function assertCanDispatch(target: VoiceDeliveryTarget): void {
+  const context = target.personaPost;
+  if (context?.holdResponseText || context?.abortSignal?.aborted || context?.isExecutionCancelled?.())
+    throw new DiscordDeliveryError("pre_dispatch", new Error("Voice delivery withheld or cancelled"));
+}
+
+async function resolveAuthor(target: VoiceDeliveryTarget): Promise<PersonaPostAuthor> {
+  assertCanDispatch(target);
+  if (target.ownership === "persona") {
+    try {
+      return await resolvePersonaPostAuthor(target.personaPost);
+    } catch (error) {
+      throw new DiscordDeliveryError("pre_dispatch", error);
+    }
+  }
+  return {
+    route: target.webhook ? "webhook" : "bot",
+    webhook: target.webhook ?? undefined,
+    identity: {
+      username: target.personaUsername,
+      avatarUrl: target.personaAvatarUrl ?? undefined,
+      avatarDataUri: target.personaAvatarUrl?.startsWith("data:image/") ? target.personaAvatarUrl : undefined,
+    },
+    speaker: { personaId: target.personaId ?? null, kind: "appearance" },
+  };
+}
+
+function botAuthor(target: VoiceDeliveryTarget, author: PersonaPostAuthor): PersonaPostAuthor {
+  const bot = target.channel.client.user;
+  const member = target.channel.guild?.members?.me;
+  return {
+    route: "bot",
+    identity: {
+      username: member?.displayName ?? bot?.username,
+      avatarUrl: member?.displayAvatarURL?.() ?? bot?.displayAvatarURL?.(),
+    },
+    speaker: {
+      personaId:
+        author.route === "bot" || target.personaPost?.persona.is_alter === false ? author.speaker.personaId : null,
+      kind: "appearance",
+    },
+  };
+}
+
+function commitDelivery(
   target: VoiceDeliveryTarget,
-  identity: ResolvedWebhookIdentity,
+  author: PersonaPostAuthor,
+  message: { id: string; channel_id?: string },
+  webhookId: string | null,
+): void {
+  const receipt: PersonaDeliveryReceipt = {
+    messageId: message.id,
+    channelId: message.channel_id ?? target.channel.id,
+    route: author.route,
+    webhookId,
+    identity: author.identity,
+    speaker: author.speaker,
+    sprite: author.sprite,
+    serverDiscId: target.channel.guildId,
+  };
+  recordPersonaDelivery(receipt);
+  target.personaPost?.deliveryReceipts?.push(receipt);
+}
+
+function requireMessage(value: unknown): { id: string; channel_id?: string } {
+  if (!value || typeof value !== "object" || !("id" in value) || typeof value.id !== "string" || !value.id)
+    throw new DiscordDeliveryError("unconfirmed", new Error("Discord voice response has no message ID"));
+  if ("channel_id" in value && typeof value.channel_id !== "string")
+    throw new DiscordDeliveryError("unconfirmed", new Error("Discord voice response has an invalid channel ID"));
+  return value as { id: string; channel_id?: string };
+}
+
+function voiceForm(options: NativeVoiceSendOptions, author: PersonaPostAuthor): FormData {
+  const { audioBuffer, filename, voiceMeta } = options;
+  const mimeType = options.mimeType.split(";")[0].trim();
+  const payload: Record<string, unknown> = {
+    flags: MessageFlags.IsVoiceMessage,
+    attachments: [{ id: 0, filename, waveform: voiceMeta.waveform, duration_secs: voiceMeta.durationSecs }],
+    allowed_mentions: { parse: [] },
+  };
+  if (author.route === "webhook") {
+    if (author.identity.username) payload.username = author.identity.username;
+    if (!author.identity.avatarDataUri && author.identity.avatarUrl) payload.avatar_url = author.identity.avatarUrl;
+  }
+  const form = new FormData();
+  form.append("payload_json", JSON.stringify(payload));
+  form.append("files[0]", new Blob([new Uint8Array(audioBuffer)], { type: mimeType }), filename);
+  return form;
+}
+
+async function sendNativeVoice(
+  target: VoiceDeliveryTarget,
+  author: PersonaPostAuthor,
   options: NativeVoiceSendOptions,
-): Promise<WebhookIdentityDelivery<string | undefined> | undefined> {
+): Promise<string> {
+  let dispatched = false;
   try {
-    const { webhook } = target;
-    const { audioBuffer, mimeType, filename, voiceMeta } = options;
-    if (!webhook?.token) return undefined;
-
-    return await dispatchWebhookWithIdentity(webhook, identity, async (selected) => {
-      const { username, avatarUrl, avatarDataUri } = selected.identity;
-      const form = new FormData();
-      const payloadJson: Record<string, unknown> = {
-        flags: IS_VOICE_MESSAGE_FLAG,
-        attachments: [
-          {
-            id: 0,
-            filename,
-            waveform: voiceMeta.waveform,
-            duration_secs: voiceMeta.durationSecs,
-          },
-        ],
-        allowed_mentions: { parse: [] },
-      };
-
-      if (username) payloadJson.username = username;
-      if (!avatarDataUri && avatarUrl) payloadJson.avatar_url = avatarUrl;
-
-      form.append("payload_json", JSON.stringify(payloadJson));
-      form.append("files[0]", new Blob([new Uint8Array(audioBuffer)], { type: mimeType }), filename);
-
-      // Discord returns an empty 204 unless `wait=true` is set, so delivery needs it to record the message ID.
-      const threadParam = target.threadId ? `&thread_id=${encodeURIComponent(target.threadId)}` : "";
-      const url = `${DISCORD_API_BASE}/webhooks/${selected.webhookId}/${selected.webhook.token}?wait=true${threadParam}`;
-      const response = await fetch(url, { method: "POST", body: form });
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => "unknown");
-        log.warn(`[VoiceWaveform] Discord API rejected native voice message: HTTP ${response.status}: ${errorText}`);
-        return undefined;
-      }
-
-      const data = (await response.json()) as { id?: string };
-      return data.id;
+    if (author.route === "webhook") {
+      const webhook = author.webhook;
+      if (!webhook?.token) throw new DiscordDeliveryError("pre_dispatch", new Error("Voice webhook token unavailable"));
+      const delivery = await dispatchWebhookWithIdentity(webhook, author.identity, async (selected) => {
+        if (!selected.webhook.token)
+          throw new DiscordDeliveryError("pre_dispatch", new Error("Voice webhook token unavailable"));
+        const actualAuthor = { ...author, identity: selected.identity };
+        const form = voiceForm(options, actualAuthor);
+        const threadId = target.channel.isThread() ? target.channel.id : target.threadId;
+        const threadParam = threadId ? `&thread_id=${encodeURIComponent(threadId)}` : "";
+        // Discord returns an empty 204 unless wait=true requests the created message.
+        const url = `${DISCORD_API_BASE}/webhooks/${selected.webhookId}/${selected.webhook.token}?wait=true${threadParam}`;
+        assertCanDispatch(target);
+        dispatched = true;
+        const response = await fetch(url, {
+          method: "POST",
+          body: form,
+          redirect: "error",
+          signal: target.personaPost?.abortSignal,
+        });
+        if (!response.ok) {
+          const error = Object.assign(new Error("Discord refused native voice delivery"), { status: response.status });
+          throw new DiscordDeliveryError(classifyDiscordDeliveryFailure(error), error);
+        }
+        return requireMessage(await response.json());
+      });
+      commitDelivery(target, { ...author, identity: delivery.identity }, delivery.result, delivery.webhookId);
+      return delivery.result.id;
+    }
+    const form = voiceForm(options, author);
+    const rest = target.channel.client.rest;
+    assertCanDispatch(target);
+    dispatched = true;
+    // Bot REST needs passThroughBody because JSON serialization would corrupt the multipart boundary and drop native waveform metadata.
+    const message = requireMessage(
+      await rest.post.call(getSingleAttemptBotRest(target.channel.client), Routes.channelMessages(target.channel.id), {
+        body: form,
+        passThroughBody: true,
+        signal: target.personaPost?.abortSignal,
+      }),
+    );
+    commitDelivery(target, botAuthor(target, author), message, null);
+    return message.id;
+  } catch (error) {
+    const status =
+      error instanceof DiscordDeliveryError
+        ? error.outcome
+        : dispatched
+          ? classifyDiscordDeliveryFailure(error)
+          : "pre_dispatch";
+    log.warn("Native voice delivery was not confirmed", {
+      channelId: target.channel.id,
+      outcome: status,
+      code: (error as { code?: unknown })?.code,
     });
-  } catch (error) {
-    log.warn("[VoiceWaveform] Exception during native voice message send", error);
-    return undefined;
+    throw new DiscordDeliveryError(status, error);
   }
 }
 
-/**
- * Sends a native Discord voice message via the bot's REST client, bypassing
- * webhook delivery. Used when no persona webhook is in scope (e.g. main
- * persona or non-alter context). Does not support username/avatar overrides.
- *
- * @returns The sent message ID, or undefined if the request failed
- */
-async function sendNativeVoiceMessageViaBotRest(
-  target: VoiceDeliveryTarget,
-  options: NativeVoiceSendOptions,
-): Promise<string | undefined> {
+async function sendVoicePayload(target: VoiceDeliveryTarget, payload: PersonaPostPayload): Promise<string> {
   try {
-    const { audioBuffer, mimeType, filename, voiceMeta } = options;
-    const channel = target.channel;
-
-    // Build multipart form: same payload_json structure as the webhook path
-    const form = new FormData();
-
-    const payloadJson: Record<string, unknown> = {
-      flags: IS_VOICE_MESSAGE_FLAG,
-      attachments: [
-        {
-          id: 0,
-          filename,
-          waveform: voiceMeta.waveform,
-          duration_secs: voiceMeta.durationSecs,
-        },
-      ],
-      allowed_mentions: { parse: [] },
-    };
-
-    form.append("payload_json", JSON.stringify(payloadJson));
-    form.append("files[0]", new Blob([new Uint8Array(audioBuffer)], { type: mimeType }), filename);
-
-    // Post directly to the channel via bot identity.
-    // passThroughBody: true prevents the REST manager from JSON-serializing
-    // the FormData body, which would corrupt the multipart boundary.
-    // channel.id is correct for both regular channels and threads.
-    const data = (await channel.client.rest.post(Routes.channelMessages(channel.id), {
-      body: form,
-      passThroughBody: true,
-    })) as { id?: string };
-
-    return data.id;
+    if (target.ownership === "persona") {
+      const outcome = await sendPersonaPost(target.personaPost, payload);
+      if (outcome.status !== "sent") throw new DiscordDeliveryError(outcome.status, outcome.error);
+      return outcome.message.id;
+    }
+    const author = await resolveAuthor(target);
+    if (author.route === "webhook" && author.webhook) {
+      const delivery = await dispatchWebhookWithIdentity(author.webhook, author.identity, (selected) => {
+        assertCanDispatch(target);
+        return sendSelectedWebhookMessageOnce(
+          selected,
+          { ...payload, threadId: target.channel.isThread() ? target.channel.id : target.threadId },
+          () => assertCanDispatch(target),
+        );
+      });
+      commitDelivery(
+        target,
+        { ...author, identity: delivery.identity },
+        { id: delivery.result.id, channel_id: delivery.result.channelId },
+        delivery.webhookId,
+      );
+      return delivery.result.id;
+    }
+    assertCanDispatch(target);
+    const sent = await sendChannelMessageOnce(target.channel, payload, () => assertCanDispatch(target));
+    commitDelivery(target, botAuthor(target, author), { id: sent.id, channel_id: sent.channelId }, null);
+    return sent.id;
   } catch (error) {
-    log.warn("[VoiceWaveform] Exception during bot REST voice message send", error);
-    return undefined;
+    if (error instanceof DiscordDeliveryError) throw error;
+    throw new DiscordDeliveryError(classifyDiscordDeliveryFailure(error), error);
   }
 }
 
-/**
- * Delivers a synthesized voice message through the best available path:
- * 1. Native REST with waveform metadata (webhook identity)
- * 2. Native REST with waveform metadata (bot identity)
- * 3. Plain attachment fallback (discord.js)
- *
- * @returns The delivered message ID, or undefined when every path failed
- */
 export async function deliverVoiceMessage(input: {
   target: VoiceDeliveryTarget;
   audioBuffer: Buffer;
@@ -192,91 +246,39 @@ export async function deliverVoiceMessage(input: {
   voiceMeta: VoiceMessageMetadata | null;
 }): Promise<string | undefined> {
   const { target, audioBuffer, mimeType, filename, voiceMeta } = input;
-  const { webhook, threadId } = target;
-  const speaker = toPersonaPostSpeaker(target);
-  let sentMessageId: string | undefined;
-
   if (voiceMeta) {
-    if (webhook?.token) {
-      const identity: ResolvedWebhookIdentity = speaker
-        ? resolvePersonaPostIdentity(target.channel, speaker)
-        : { avatarUrl: target.personaAvatarUrl ?? undefined };
-      const delivery = await sendNativeVoiceMessageViaRest(target, identity, {
-        audioBuffer,
-        mimeType,
-        filename,
-        voiceMeta,
-      });
-      sentMessageId = delivery?.result;
-      if (sentMessageId && speaker && delivery) {
-        recordPersonaPostDelivery(target.channel, delivery.identity, sentMessageId, speaker, delivery.webhookId);
-      }
-      if (!sentMessageId) {
-        log.warn("[VoiceWaveform] Webhook REST send failed — trying bot REST path");
-      }
-    } else if (webhook && !webhook.token) {
-      log.warn(`[VoiceWaveform] Webhook token is null (id=${webhook.id}) — trying bot REST path`);
-    }
-
-    if (!sentMessageId) {
-      sentMessageId = await sendNativeVoiceMessageViaBotRest(target, { audioBuffer, mimeType, filename, voiceMeta });
-      if (sentMessageId) recordChannelDeliveredBotMessage(target.channel.id);
-      if (!sentMessageId) {
-        log.warn("[VoiceWaveform] Bot REST send failed — falling back to plain attachment");
-      }
+    const author = await resolveAuthor(target);
+    const options = { audioBuffer, mimeType, filename, voiceMeta };
+    try {
+      return await sendNativeVoice(target, author, options);
+    } catch (error) {
+      if (!(error instanceof DiscordDeliveryError) || error.outcome === "unconfirmed") throw error;
+      assertCanDispatch(target);
+      if (author.route === "webhook") {
+        try {
+          return await sendNativeVoice(target, botAuthor(target, author), options);
+        } catch (botError) {
+          if (!(botError instanceof DiscordDeliveryError) || botError.outcome !== "definite_refusal") throw botError;
+        }
+      } else if (error.outcome !== "definite_refusal") throw error;
     }
   }
-
-  if (!sentMessageId) {
-    const attachment = new AttachmentBuilder(audioBuffer, { name: filename });
-    if (webhook && speaker) {
-      const sent = await sendPersonaPostViaWebhook(
-        webhook,
-        {
-          files: [attachment],
-          allowedMentions: { parse: [], repliedUser: false },
-          ...(threadId ? { threadId } : {}),
-        },
-        speaker,
-        target.channel,
-      );
-      sentMessageId = sent.id;
-    } else {
-      const sent = await target.channel.send({ files: [attachment] });
-      sentMessageId = sent.id;
-      recordChannelDeliveredBotMessage(target.channel.id);
-    }
-  }
-
-  return sentMessageId;
+  return sendVoicePayload(target, {
+    files: [new AttachmentBuilder(audioBuffer, { name: filename })],
+    allowedMentions: { parse: [], repliedUser: false },
+  });
 }
 
-/**
- * Posts the TTS caption text as a visible blockquote in the channel.
- * Respects webhook persona identity when available.
- */
 export async function postVoiceTranscriptCaption(target: VoiceDeliveryTarget, captionText: string): Promise<void> {
-  const { webhook, threadId } = target;
-  const speaker = toPersonaPostSpeaker(target);
-  const quotedCaption = `> ${captionText.replace(/\n/g, "\n> ")}`;
   try {
-    if (webhook && speaker) {
-      await sendPersonaPostViaWebhook(
-        webhook,
-        {
-          content: quotedCaption,
-          allowedMentions: { parse: [] },
-          ...(threadId ? { threadId } : {}),
-        },
-        speaker,
-        target.channel,
-      );
-    } else {
-      await target.channel.send({ content: quotedCaption, allowedMentions: { parse: [] } });
-      recordChannelDeliveredBotMessage(target.channel.id);
-    }
-    log.info(`[VoiceChat] Posted TTS transcript | persona="${target.personaUsername ?? "bot"}"`);
+    await sendVoicePayload(target, {
+      content: `> ${captionText.replace(/\n/g, "\n> ")}`,
+      allowedMentions: { parse: [], repliedUser: false },
+    });
   } catch (error) {
-    log.warn("[VoiceChat] Failed to post TTS transcript", error);
+    log.warn("Voice transcript caption was not confirmed", {
+      channelId: target.channel.id,
+      outcome: classifyDiscordDeliveryFailure(error),
+    });
   }
 }

@@ -16,7 +16,8 @@ import { prepareGeneratedImage } from "@/utils/image/generatedImageMetadata";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import { buildGeneratedImageComponentsV2Payload } from "@/utils/discord/generatedImageMessage";
-import { sendPersonaPostViaWebhook } from "@/utils/discord/webhook/personaPost";
+import { mediaDeliveryFailure, sendToolMediaPost } from "@/utils/discord/webhook/toolMediaDelivery";
+import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 import {
   buildImageToolNoticeDescription,
   buildReferencedMessageUrl,
@@ -256,10 +257,6 @@ export class GenerateImageNaiTool extends BaseTool {
     return context.tomoriState.config.imagegen_enabled;
   }
 
-  /**
-   * Sends a generated image to the Discord channel via webhook (for persona avatar) or direct message.
-   * Prefers webhook for consistent persona appearance, falls back to bot message.
-   */
   private async sendGeneratedImage(
     context: ToolContext,
     attachment: AttachmentBuilder,
@@ -267,10 +264,6 @@ export class GenerateImageNaiTool extends BaseTool {
     elapsedMs: number,
     promptAttachment?: AttachmentBuilder,
   ): Promise<import("discord.js").Message> {
-    const threadId =
-      "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
-        ? context.channel.id
-        : undefined;
     const componentsPayload = buildGeneratedImageComponentsV2Payload(
       attachmentFilename,
       elapsedMs,
@@ -279,62 +272,19 @@ export class GenerateImageNaiTool extends BaseTool {
       Boolean(promptAttachment),
       attachment.spoiler,
     );
-    const files = promptAttachment ? [attachment, promptAttachment] : [attachment];
-
-    if (context.webhook && context.personaUsername) {
-      try {
-        return await sendPersonaPostViaWebhook(
-          context.webhook,
-          {
-            files,
-            ...componentsPayload,
-            withComponents: true,
-            ...(threadId ? { threadId } : {}),
-          },
-          {
-            username: context.personaUsername,
-            avatarUrl: context.personaAvatarUrl,
-            personaId: context.tomoriState.persona_id,
-          },
-          context.channel,
-        );
-      } catch (error) {
-        log.warn(
-          "Failed to send NAI generated image via webhook with Components V2, retrying without components",
-          error,
-        );
-        try {
-          return await sendPersonaPostViaWebhook(
-            context.webhook,
-            {
-              files,
-              ...(threadId ? { threadId } : {}),
-            },
-            {
-              username: context.personaUsername,
-              avatarUrl: context.personaAvatarUrl,
-              personaId: context.tomoriState.persona_id,
-            },
-            context.channel,
-          );
-        } catch (fallbackError) {
-          log.warn(
-            "Failed to send NAI generated image via webhook, falling back to bot message",
-            fallbackError as Error,
-          );
-        }
-      }
-    }
-
-    try {
-      return await context.channel.send({
-        files,
-        ...componentsPayload,
-      });
-    } catch (error) {
-      log.warn("Failed to send NAI generated image with Components V2, falling back to attachment-only message", error);
-      return await context.channel.send({ files });
-    }
+    const files = () =>
+      [attachment, ...(promptAttachment ? [promptAttachment] : [])].map(
+        (file) =>
+          new AttachmentBuilder(file.attachment, {
+            name: file.name ?? undefined,
+            description: file.description ?? undefined,
+          }),
+      );
+    return sendToolMediaPost(
+      context,
+      () => ({ files: files(), ...componentsPayload, withComponents: true }),
+      () => ({ files: files() }),
+    );
   }
 
   /**
@@ -1314,6 +1264,7 @@ export class GenerateImageNaiTool extends BaseTool {
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };
     } catch (error) {
+      if (error instanceof DiscordDeliveryError) return mediaDeliveryFailure(context, error.outcome);
       if (context.abortSignal?.aborted) {
         return { success: false, error: "NAI image generation was cancelled." };
       }
