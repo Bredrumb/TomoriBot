@@ -1,5 +1,7 @@
 import { MessageFlags, PermissionFlagsBits, escapeMarkdown } from "discord.js";
 import { z } from "zod";
+import type { StructuredContextItem } from "@/types/misc/context";
+import type { TomoriState } from "@/types/db/schema";
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import { tomoriChat, suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
@@ -9,21 +11,18 @@ import {
   CONDITIONING_ACTION_TYPES,
   CONDITIONING_FOOTER_LOCALE_KEYS,
   CONDITIONING_REASON_MAX_LENGTH,
+  getConditioningContextPastParticiple,
   normalizeConditioningReason,
   type ConditioningActionKey,
 } from "@/utils/conditioning/conditioning";
 import { buildConditioningInteractionEmbed } from "@/utils/conditioning/conditioningEmbed";
 import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import { resolveIdentityTarget, resolveTriggererDiscordId } from "@/utils/discord/targetResolver";
+import { buildReferencedMessageUrl } from "@/utils/discord/toolProgressNotice";
 import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { ContextItemTag } from "@/types/misc/context";
 import { log } from "@/utils/misc/logger";
-import { sendPersonaPostViaWebhook } from "@/utils/discord/webhook/personaPost";
-import { resolveAuthoringWebhook } from "@/utils/discord/webhook/fallback";
-import {
-  getChannelLastDelivery,
-  recordChannelDeliveredBotMessage,
-} from "@/utils/discord/stream/channelDeliveryContinuity";
+import { sendToolPersonaPost } from "@/utils/discord/webhook/toolPersonaDelivery";
 
 const actionKeys = Object.keys(CONDITIONING_ACTION_TYPES) as [ConditioningActionKey, ...ConditioningActionKey[]];
 const interactionArgs = z
@@ -41,6 +40,32 @@ const interactionArgs = z
       ctx.addIssue({ code: "custom", path: ["food"], message: "food is required when action is feed" });
     }
   });
+
+function buildInteractionEvent(params: {
+  context: ToolContext;
+  actor: TomoriState;
+  targetName: string;
+  action: ConditioningActionKey;
+  reason: string;
+  food: string | undefined;
+  messageId: string;
+  messageUrl: string | undefined;
+}): StructuredContextItem {
+  const sourceReference =
+    params.messageUrl || buildReferencedMessageUrl(params.context, params.messageId) || params.messageId;
+  const action = getConditioningContextPastParticiple(CONDITIONING_ACTION_TYPES[params.action], params.action);
+  const food = params.action === "feed" && params.food ? ` with ${normalizeConditioningReason(params.food)}` : "";
+  return {
+    role: "system",
+    metadataTag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
+    parts: [
+      {
+        type: "text",
+        text: `${params.actor.persona_nickname} just ${action} ${params.targetName}${food}: ${params.reason}. That interaction is the message at ${sourceReference}. React to that interaction specifically; a later message or embed is not this event.`,
+      },
+    ],
+  };
+}
 
 export class ConditioningInteractionTool extends BaseTool {
   name = "interact_with_target";
@@ -191,12 +216,6 @@ export class ConditioningInteractionTool extends BaseTool {
             ? CONDITIONING_FOOTER_LOCALE_KEYS[type]
             : "commands.conditioning.shared.user_footer",
       });
-      const lastDelivery = getChannelLastDelivery(context.channel.id);
-      const webhook =
-        lastDelivery?.via === "webhook" && lastDelivery.speaker?.personaId === actor.persona_id
-          ? ((await resolveAuthoringWebhook(context.channel, lastDelivery.webhookId, context.webhook)) ??
-            context.webhook)
-          : context.webhook;
       if (cancelled())
         return {
           success: conditioningSaved,
@@ -204,21 +223,36 @@ export class ConditioningInteractionTool extends BaseTool {
           data: { conditioningSaved },
         };
       suppressNextSelfReply(context.channel.id);
-      const payload = { embeds: [embed], flags: MessageFlags.SuppressNotifications as const };
-      const message = webhook
-        ? await sendPersonaPostViaWebhook(
-            webhook,
-            { ...payload, ...(context.channel.isThread() ? { threadId: context.channel.id } : {}) },
-            {
-              username: context.personaUsername ?? actor.persona_nickname,
-              avatarUrl: context.personaAvatarUrl,
-              personaId: actor.persona_id,
-            },
-            context.channel,
-          )
-        : await context.channel.send(payload);
-      if (!webhook)
-        recordChannelDeliveredBotMessage(context.channel.id, { personaId: actor.persona_id, kind: "appearance" });
+      const outcome = await sendToolPersonaPost(context, actor, {
+        embeds: [embed],
+        flags: MessageFlags.SuppressNotifications,
+      });
+      if (outcome.status !== "sent") {
+        log.warn("Conditioning interaction was not delivered", outcome.error, {
+          errorType: "conditioning_interaction_delivery_failed",
+          metadata: {
+            outcome: outcome.status,
+            guildId: context.guildId,
+            action,
+            channelId: context.channel.id,
+          },
+        });
+        if (cancelled())
+          return {
+            success: conditioningSaved,
+            message: "Interaction cancelled before delivery.",
+            data: { conditioningSaved },
+          };
+        return conditioningSaved
+          ? {
+              success: true,
+              responseDelivered: false,
+              message: "The interaction was saved but could not be posted; do not repeat it.",
+              data: { conditioningSaved, responseDelivered: false },
+            }
+          : { success: false, error: "The interaction could not be posted." };
+      }
+      const message = outcome.message;
       responseDelivered = true;
       if (resolution.targetType === "persona" && !cancelled()) {
         await tomoriChat({
@@ -236,24 +270,24 @@ export class ConditioningInteractionTool extends BaseTool {
           borrowsTriggerMessage: !invoker || invoker.user.bot,
           manualStreamingContextOverrides: { disableConditioningInteraction: true },
           injectedContextItems: [
-            {
-              role: "system",
-              metadataTag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
-              parts: [
-                {
-                  type: "text",
-                  text: "React to the interaction directed at you in the latest embed.",
-                },
-              ],
-            },
+            buildInteractionEvent({
+              context,
+              actor,
+              targetName: resolution.displayLabel,
+              action,
+              reason,
+              food,
+              messageId: message.id,
+              messageUrl: message.url,
+            }),
           ],
         });
       }
       return {
         success: true,
         responseDelivered: true,
-        message: "The interaction was delivered. Continue without repeating the gesture.",
-        data: { action, target: resolution.displayLabel },
+        message: `The ${action} interaction was delivered to ${resolution.displayLabel}. Continue without repeating the gesture.`,
+        data: { action, target: resolution.displayLabel, message_id: message.id },
       };
     } catch (error) {
       await log.error("Failed to perform a conditioning interaction", error, {

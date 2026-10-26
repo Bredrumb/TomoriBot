@@ -13,8 +13,10 @@ import { getAutonomousDeliberateToolNames } from "@/utils/tools/deliberateToolMo
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createPersona } from "../../helpers/fixtures";
 import { localizedCopy } from "../../helpers/localeCases";
-import * as webhookDispatch from "@/utils/discord/webhook/personaDispatch";
-import * as webhookFallback from "@/utils/discord/webhook/fallback";
+import * as lifecycle from "@/utils/discord/webhook/lifecycle";
+import * as identity from "@/utils/discord/webhook/identity";
+import { clearPersonaAppearances, commitPersonaAppearance } from "@/utils/cache/personaAppearanceCacheStore";
+import { clearPersonaSpriteCache, setPersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
 import {
   clearAllChannelDeliveryContinuity,
   getChannelLastDelivery,
@@ -26,16 +28,22 @@ const spies: { mockRestore(): void }[] = [];
 afterEach(() => {
   for (const spy of spies.splice(0)) spy.mockRestore();
   clearAllChannelDeliveryContinuity();
+  clearPersonaAppearances();
+  clearPersonaSpriteCache();
 });
 function track<T extends { mockRestore(): void }>(spy: T): T {
   spies.push(spy);
   return spy;
 }
 
+const CHANNEL = "channel";
+const ACTOR_ID = 1;
+
 function fixture(targetType: "persona" | "user" = "persona") {
   const actor = createPersona({
-    persona_id: 1,
+    persona_id: ACTOR_ID,
     persona_nickname: "Juno",
+    webhook_avatar_url: "https://example.com/juno.png",
     config: { conditioning_interactions_enabled: true },
   });
   const target = createPersona({ persona_id: 2, persona_lineage_id: 102, persona_nickname: "Mirri", is_alter: true });
@@ -44,22 +52,42 @@ function fixture(targetType: "persona" | "user" = "persona") {
     user: { username: "Bau", bot: false },
     roles: { cache: new Collection() },
   };
-  const guild = { id: "guild", members: { me: { id: "bot" }, fetch: async () => invoker } };
-  const channel = {
-    id: "channel",
+  const guild = {
+    id: "guild",
+    members: { me: { id: "bot", displayAvatarURL: () => undefined }, fetch: async () => invoker },
+  };
+  const delivered: Message[] = [];
+  const channel: Record<string, unknown> = {
+    id: CHANNEL,
+    guildId: guild.id,
     lastMessageId: null as string | null,
     guild,
     isThread: () => false,
+    fetchWebhooks: mock(),
+    createWebhook: mock(),
     permissionsFor: () => ({ has: () => true }),
-    send: mock(async (_payload: unknown) => message),
+    send: mock(async () => {
+      const id = `14000000000000000${delivered.length + 10}`;
+      const message = {
+        id,
+        channelId: CHANNEL,
+        url: `https://discord.com/channels/guild/channel/${id}`,
+        webhookId: null,
+        channel,
+        author: { id: "bot", bot: true },
+      } as unknown as Message;
+      delivered.push(message);
+      return message;
+    }),
   };
-  const message = { id: "1400000000000000002", channel, author: { id: "bot", bot: true } };
+  channel.parent = channel;
   const context = {
     client: {},
     channel,
     guildId: guild.id,
     tomoriState: actor,
-    activePersonaId: 1,
+    activePersonaId: ACTOR_ID,
+    deliveryMode: "persona",
     locale: "en-US",
     provider: "google",
     userId: invoker.id,
@@ -114,10 +142,73 @@ function fixture(targetType: "persona" | "user" = "persona") {
   );
   const queued = track(spyOn(chat, "tomoriChat").mockResolvedValue("queued"));
   track(spyOn(chat, "suppressNextSelfReply").mockImplementation(() => undefined));
-  return { context, actor, target, channel, message, record, queued, whitelistSpy, whitelist };
+  return {
+    context,
+    actor,
+    target,
+    channel: channel as unknown as {
+      id: string;
+      lastMessageId: string | null;
+      isThread: () => boolean;
+      send: ReturnType<typeof mock>;
+    },
+    message: delivered[0],
+    delivered,
+    record,
+    queued,
+    whitelistSpy,
+    whitelist,
+  };
 }
 
-it("saves persona-attributed feedback and queues the target with interaction recursion disabled", async () => {
+function spriteRow(isIdentity = false) {
+  return {
+    sprite_id: 3,
+    persona_id: ACTOR_ID,
+    sprite_name: "shy",
+    sprite_key: "shy",
+    avatar_url: "https://example.com/shy.png",
+    usage_instructions: "",
+    is_identity: isIdentity,
+  };
+}
+
+function webhookFixture() {
+  const messages: Array<Record<string, unknown>> = [];
+  const webhook = {
+    id: "sprite-webhook",
+    channelId: CHANNEL,
+    guildId: "guild",
+    token: "fixture",
+    send: mock(async (payload: Record<string, unknown>) => {
+      messages.push(payload);
+      return {
+        id: `1400000000000000002`,
+        channelId: CHANNEL,
+        url: "https://discord.com/channels/guild/channel/1400000000000000002",
+        webhookId: webhook.id,
+        channel: {},
+        author: {},
+      };
+    }),
+  };
+  track(spyOn(lifecycle, "getOrCreateWebhook").mockResolvedValue({ webhook: webhook as unknown as Webhook }));
+  track(
+    spyOn(identity, "resolvePersonaWebhookIdentity").mockImplementation(async (persona) => ({
+      username: persona.persona_nickname,
+      avatarUrl: persona.webhook_avatar_url ?? undefined,
+    })),
+  );
+  return { webhook, messages };
+}
+
+function queuedEvent(queued: ReturnType<typeof spyOn>, call: number): string {
+  const args = (queued.mock.calls[call][0] ?? {}) as unknown as Record<string, unknown>;
+  const item = (args.injectedContextItems as Array<{ parts: Array<{ text?: string }> }>)[0];
+  return item.parts[0].text ?? "";
+}
+
+it("saves persona-attributed feedback and queues the target with the exact interaction event", async () => {
   const f = fixture();
   const tool = new ConditioningInteractionTool();
   const result = await tool.execute(
@@ -125,6 +216,9 @@ it("saves persona-attributed feedback and queues the target with interaction rec
     f.context,
   );
   expect(result.success).toBe(true);
+  expect(result.responseDelivered).toBe(true);
+  expect(result.message).toContain("Continue without repeating the gesture.");
+  expect((result.data as { message_id: string }).message_id).toBe(f.delivered[0].id);
   expect(f.record).toHaveBeenCalledWith(
     expect.objectContaining({ actorPersonaId: 1, personaLineageId: 102, actionKey: "feed", actionText: "a cookie" }),
   );
@@ -141,12 +235,21 @@ it("saves persona-attributed feedback and queues the target with interaction rec
   expect(payload.flags).toBe(MessageFlags.SuppressNotifications);
   expect(f.queued).toHaveBeenCalledWith(
     expect.objectContaining({
-      message: f.message,
+      message: f.delivered[0],
       selectedPersonaId: 2,
       isManuallyTriggered: true,
+      textQuotaSource: "system",
       manualStreamingContextOverrides: { disableConditioningInteraction: true },
     }),
   );
+  const event = queuedEvent(f.queued, 0);
+  expect(event).toContain("Juno");
+  expect(event).toContain("Mirri");
+  expect(event).toContain("fed");
+  expect(event).toContain("sharing snacks");
+  expect(event).toContain("a cookie");
+  expect(event).toContain(f.delivered[0].url);
+  expect(event).not.toMatch(/latest embed/i);
   expect(tool.isAvailableForContext("google", f.context)).toBe(false);
   expect((await tool.execute({ target: "Mirri", action: "bonk", reason: "being silly" }, f.context)).success).toBe(
     false,
@@ -173,69 +276,60 @@ it("posts user interactions without writing conditioning or queueing a response"
   );
 });
 
-it("keeps the invoking persona's latest sprite identity for main-persona and threaded alter embeds", async () => {
-  const f = fixture("user");
-  const sprite = { username: "Juno (shy)", avatarUrl: "https://example.com/shy.png" };
-  const webhook = { id: "sprite-webhook" } as Webhook;
-  const resolveWebhook = track(spyOn(webhookFallback, "resolveAuthoringWebhook").mockResolvedValue(webhook));
-  const sendWebhook = track(
-    spyOn(webhookDispatch, "sendWebhookMessageWithIdentityDelivery").mockImplementation(
-      async (_webhook, _payload, identity) => ({
-        result: f.message as unknown as Message,
-        identity: identity ?? {},
-        webhookId: webhook.id,
-        webhook,
-      }),
-    ),
-  );
-
+it("keeps the invoking persona's committed sprite for main-persona and threaded alter embeds", async () => {
+  const { webhook, messages } = webhookFixture();
   for (const isAlter of [false, true]) {
-    clearAllChannelDeliveryContinuity();
-    f.actor.is_alter = isAlter;
-    f.channel.isThread = () => isAlter;
-    f.channel.lastMessageId = "1400000000000000001";
-    f.context.webhook = isAlter ? ({ id: "base-webhook" } as Webhook) : undefined;
-    f.context.personaUsername = isAlter ? "Juno" : undefined;
-    f.context.streamContext = { disableYouTubeProcessing: false };
-    recordChannelDeliveredWebhookIdentity(
-      f.channel.id,
-      sprite,
-      f.channel.lastMessageId,
-      { personaId: 1, kind: "appearance" },
-      webhook.id,
-    );
+    for (const isIdentity of [false, true]) {
+      clearAllChannelDeliveryContinuity();
+      clearPersonaAppearances();
+      clearPersonaSpriteCache();
+      messages.length = 0;
+      webhook.send.mockClear();
+      const f = fixture("user");
+      f.actor.is_alter = isAlter;
+      f.channel.isThread = () => isAlter;
+      f.channel.lastMessageId = "1400000000000009999";
+      f.context.webhook = undefined;
+      setPersonaSpriteCache(ACTOR_ID, [spriteRow(isIdentity)]);
+      commitPersonaAppearance({
+        channelId: CHANNEL,
+        personaId: ACTOR_ID,
+        sprite: { personaId: ACTOR_ID, spriteName: "shy", isIdentity },
+        genericAvatar: false,
+      });
 
-    const result = await new ConditioningInteractionTool().execute(
-      { target: "Mirri", action: "kiss", reason: "being kind" },
-      f.context,
-    );
+      const result = await new ConditioningInteractionTool().execute(
+        { target: "Mirri", action: "kiss", reason: "being kind" },
+        f.context,
+      );
 
-    expect(result.success).toBe(true);
-    expect(resolveWebhook).toHaveBeenLastCalledWith(f.context.channel, webhook.id, f.context.webhook);
-    expect(sendWebhook).toHaveBeenLastCalledWith(
-      webhook,
-      expect.objectContaining({
-        embeds: expect.any(Array),
-        flags: MessageFlags.SuppressNotifications,
-        ...(isAlter ? { threadId: f.channel.id } : {}),
-      }),
-      sprite,
-    );
-    expect(getChannelLastDelivery(f.channel.id)).toMatchObject({
-      via: "webhook",
-      identity: sprite,
-      speaker: { personaId: 1 },
-    });
+      expect(result.success).toBe(true);
+      expect(f.channel.send).not.toHaveBeenCalled();
+      expect(webhook.send).toHaveBeenCalledTimes(1);
+      const payload = messages[0] as { username?: string; avatarURL?: string; threadId?: string };
+      expect(payload.username).toBe(isIdentity ? "shy (Juno)" : "Juno");
+      expect(payload.avatarURL).toBe("https://example.com/shy.png");
+      expect(payload.threadId).toBe(isAlter ? CHANNEL : undefined);
+      const embed = (messages[0] as { embeds: EmbedBuilder[] }).embeds[0];
+      expect(embed.data.description).toBe(
+        localizedCopy("en-US", "commands.reward.kiss.embed_description_with_reason", {
+          user: "Juno",
+          bot: "<@223456789012345678>",
+          reason: "being kind",
+        }),
+      );
+      expect(getChannelLastDelivery(CHANNEL)).toMatchObject({
+        via: "webhook",
+        webhookId: webhook.id,
+        speaker: { personaId: ACTOR_ID },
+      });
+    }
   }
-  expect(f.channel.send).not.toHaveBeenCalled();
 });
 
 it("uses the actor's base identity instead of another persona's last sprite", async () => {
   const f = fixture("user");
-  const webhook = { id: "base-webhook" } as Webhook;
-  f.context.webhook = webhook;
-  f.context.personaUsername = "Juno";
-  f.context.personaAvatarUrl = "https://example.com/juno.png";
+  f.context.webhook = { id: "actor-webhook", channelId: CHANNEL } as Webhook;
   f.channel.lastMessageId = "1400000000000000001";
   recordChannelDeliveredWebhookIdentity(
     f.channel.id,
@@ -244,27 +338,104 @@ it("uses the actor's base identity instead of another persona's last sprite", as
     { personaId: 2, kind: "appearance" },
     "other-webhook",
   );
-  const sendWebhook = track(
-    spyOn(webhookDispatch, "sendWebhookMessageWithIdentityDelivery").mockImplementation(
-      async (_webhook, _payload, identity) => ({
-        result: f.message as unknown as Message,
-        identity: identity ?? {},
-        webhookId: webhook.id,
-        webhook,
-      }),
-    ),
+
+  const result = await new ConditioningInteractionTool().execute(
+    { target: "Mirri", action: "hug", reason: "being kind" },
+    f.context,
   );
 
-  expect(
-    (
-      await new ConditioningInteractionTool().execute(
-        { target: "Mirri", action: "hug", reason: "being kind" },
-        f.context,
-      )
-    ).success,
-  ).toBe(true);
-  expect(sendWebhook.mock.calls[0][2]).toMatchObject({ username: "Juno", avatarUrl: f.context.personaAvatarUrl });
+  expect(result.success).toBe(true);
+  expect(f.channel.send).toHaveBeenCalledTimes(1);
+  const payload = f.channel.send.mock.calls[0][0] as { embeds: EmbedBuilder[] };
+  expect(payload.embeds[0].data.description).toBe(
+    localizedCopy("en-US", "commands.reward.hug.embed_description_with_reason", {
+      user: "Juno",
+      bot: "<@223456789012345678>",
+      reason: "being kind",
+    }),
+  );
+});
+
+it("queues two interactions with their own actors, actions, reasons, and source references", async () => {
+  const f = fixture();
+  const tool = new ConditioningInteractionTool();
+
+  await tool.execute({ target: "Mirri", action: "hug", reason: "the first kind moment" }, f.context);
+  f.context.streamContext = { disableYouTubeProcessing: false };
+  await tool.execute({ target: "Mirri", action: "bonk", reason: "the second silly moment" }, f.context);
+
+  expect(f.queued).toHaveBeenCalledTimes(2);
+  const first = queuedEvent(f.queued, 0);
+  const second = queuedEvent(f.queued, 1);
+  expect(first).toContain("hugged");
+  expect(first).toContain("the first kind moment");
+  expect(first).toContain(f.delivered[0].url);
+  expect(first).not.toContain("the second silly moment");
+  expect(second).toContain("bonked");
+  expect(second).toContain("the second silly moment");
+  expect(second).toContain(f.delivered[1].url);
+  expect(second).not.toContain("the first kind moment");
+  for (const call of [0, 1]) {
+    const args = (f.queued.mock.calls[call][0] ?? {}) as unknown as Record<string, unknown>;
+    expect(args.selectedPersonaId).toBe(2);
+    expect(args.textQuotaSource).toBe("system");
+  }
+});
+
+it("does not queue a reaction or claim delivery when the post fails", async () => {
+  const f = fixture();
+  f.channel.send.mockRejectedValueOnce(new Error("socket hang up"));
+
+  const result = await new ConditioningInteractionTool().execute(
+    { target: "Mirri", action: "bonk", reason: "being silly" },
+    f.context,
+  );
+
+  expect(result.success).toBe(true);
+  expect(result.responseDelivered).toBe(false);
+  expect(result.message).toContain("could not be posted");
+  expect(f.queued).not.toHaveBeenCalled();
+  expect(getChannelLastDelivery(CHANNEL)).toBeNull();
+});
+
+it("reports failure without queueing when a user interaction cannot be posted", async () => {
+  const f = fixture("user");
+  f.channel.send.mockRejectedValueOnce(new Error("socket hang up"));
+
+  const result = await new ConditioningInteractionTool().execute(
+    { target: "Mirri", action: "bonk", reason: "being silly" },
+    f.context,
+  );
+
+  expect(result.success).toBe(false);
+  expect(f.queued).not.toHaveBeenCalled();
+});
+
+it("keeps a completed conditioning write when delivery is cancelled afterwards", async () => {
+  const f = fixture();
+  f.record.mockImplementation(async () => {
+    f.context.isExecutionCancelled = () => true;
+    return {
+      server_id: f.actor.server_id,
+      persona_lineage_id: 102,
+      conditioning_type: "reward",
+      action_key: "bonk",
+      reason_text: "being silly",
+      reason_normalized: "being silly",
+      user_id: null,
+      actor_persona_id: ACTOR_ID,
+      count: 1,
+    };
+  });
+
+  const result = await new ConditioningInteractionTool().execute(
+    { target: "Mirri", action: "bonk", reason: "being silly" },
+    f.context,
+  );
+
+  expect(result.success).toBe(true);
   expect(f.channel.send).not.toHaveBeenCalled();
+  expect(f.queued).not.toHaveBeenCalled();
 });
 
 it("rejects missing feed food, blank reasons, and oversized input before any side effects", async () => {

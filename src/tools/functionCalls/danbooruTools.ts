@@ -33,7 +33,8 @@ import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult }
 import { buildDanbooruGalleryPayload, type DanbooruGalleryPayload } from "@/utils/discord/danbooruGalleryMessage";
 import { sendToolNoticeContainer } from "@/utils/discord/expandableEmbedNotice";
 import { sendToolProgressNotice } from "@/utils/discord/toolProgressNotice";
-import { sendPersonaPostViaWebhook } from "@/utils/discord/webhook/personaPost";
+import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
+import { sendToolPersonaPost } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -214,23 +215,9 @@ function toolResult(shape: { status: string } & Record<string, unknown>): ToolRe
 }
 
 async function sendGallery(context: ToolContext, payload: DanbooruGalleryPayload): Promise<Message> {
-  const threadId =
-    "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
-      ? context.channel.id
-      : undefined;
-  if (context.webhook && context.personaUsername) {
-    return await sendPersonaPostViaWebhook(
-      context.webhook,
-      { ...payload, withComponents: true, ...(threadId ? { threadId } : {}) },
-      {
-        username: context.personaUsername,
-        avatarUrl: context.personaAvatarUrl,
-        personaId: context.tomoriState.persona_id,
-      },
-      context.channel,
-    );
-  }
-  return await context.channel.send(payload);
+  const outcome = await sendToolPersonaPost(context, context.tomoriState, { ...payload, withComponents: true });
+  if (outcome.status !== "sent") throw new DiscordDeliveryError(outcome.status, outcome.error);
+  return outcome.message;
 }
 
 export class DanbooruGetPostTool extends BaseTool {
