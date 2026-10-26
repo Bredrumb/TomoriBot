@@ -3579,27 +3579,27 @@ describe("Quick-Toggle modal structure and routing copy", () => {
 
     const values = component?.options.map((opt: { value: string }) => opt.value);
     expect(values).toEqual([
-      "speech_design",
-      "speech_clone",
       "text",
       "vision",
       "embedding",
       "image",
       "image_nai",
       "video",
+      "speech_design",
+      "speech_clone",
     ]);
 
     const labels = component?.options.map((opt: { label: string }) => opt.label);
     expect(labels).toEqual(
       [
-        "commands.config.panel.capability_tts_design",
-        "commands.config.panel.capability_tts_clone",
         "commands.personal.config.routing_text",
         "commands.personal.config.routing_vision",
         "commands.personal.config.routing_embedding",
         "commands.personal.config.routing_image_standard",
         "commands.personal.config.routing_image_nai",
         "commands.personal.config.routing_video",
+        "commands.config.panel.capability_tts_design",
+        "commands.config.panel.capability_tts_clone",
       ].map((key) => localizedCopy("en-US", key)),
     );
 
