@@ -27,6 +27,12 @@ Only the runtime strings are required. Everything optional falls back to English
 A change to `en-US` may leave translations behind. Catching up is welcome but never blocks a merge;
 `bun run find-stale-translations --reason=unfollowed --base=origin/main` lists the follow-up.
 
+Author shared English copy and its translations on `main`, then merge `main` into `release`.
+Use the `sync-locales` skill for translation changes. Translate release-only Subscription keys
+and docs on `release`. If a shared translation is corrected there, apply the exact key or passage
+correction on `main` before another translation pass, then merge it forward. Reconcile individual
+keys and passages so release-only copy survives; replacing whole locale files can discard it.
+
 ## Work split
 
 Each locale owns `src/locales/{code}/**`, `docs/{locale}/**`, and `.github/README_{code}.md`, so
