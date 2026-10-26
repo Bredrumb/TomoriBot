@@ -353,7 +353,7 @@ export async function executeAutoImageCommand(
           )?.value ?? null),
       userDiscId: interaction.user.id,
       serverId: tomoriState.server_id,
-      credentialSource: activeConfigs?.text ? "personal" : "server",
+      credentialScope: activeConfigs?.text ? "personal" : "server",
     });
   };
 

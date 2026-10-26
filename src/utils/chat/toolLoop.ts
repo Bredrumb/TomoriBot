@@ -486,7 +486,13 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         managedProvider: params.context.usageContext?.credentialProvider ?? null,
         userDiscId: params.context.userDiscId,
         serverId: params.context.tomoriState.server_id,
-        credentialSource: params.context.textCredentialSource,
+        credentialScope:
+          params.context.usageContext?.credentialScope ??
+          (params.context.textCredentialSource === "personal"
+            ? "personal"
+            : params.context.textCredentialSource === "server"
+              ? "server"
+              : undefined),
       }),
     });
   }
@@ -515,6 +521,7 @@ export async function sendStreamTimeoutNotice(params: {
   textCredentialSource: ChatTurnContext["textCredentialSource"] | undefined;
   sawStreamProgress: boolean;
   managedProvider: string | null;
+  credentialScope: "server" | "personal" | undefined;
   userDiscId: string;
   serverId: number | undefined;
 }): Promise<void> {
@@ -537,7 +544,7 @@ export async function sendStreamTimeoutNotice(params: {
         managedProvider: params.managedProvider,
         userDiscId: params.userDiscId,
         serverId: params.serverId,
-        credentialSource: params.textCredentialSource,
+        credentialScope: params.credentialScope,
       },
     ),
     ...resolveProviderErrorFooter({
@@ -690,6 +697,13 @@ async function streamOnce(
           textCredentialSource: params.context.streamingContext.textCredentialSource,
           sawStreamProgress,
           managedProvider: params.context.usageContext?.credentialProvider ?? null,
+          credentialScope:
+            params.context.usageContext?.credentialScope ??
+            (params.context.textCredentialSource === "personal"
+              ? "personal"
+              : params.context.textCredentialSource === "server"
+                ? "server"
+                : undefined),
           userDiscId: params.context.userDiscId,
           serverId: params.context.tomoriState.server_id,
         });
@@ -1382,7 +1396,13 @@ async function emitToolErrorLoop(context: ChatTurnContext): Promise<void> {
         managedProvider: context.usageContext?.credentialProvider ?? null,
         userDiscId: context.userDiscId,
         serverId: context.tomoriState.server_id,
-        credentialSource: context.textCredentialSource,
+        credentialScope:
+          context.usageContext?.credentialScope ??
+          (context.textCredentialSource === "personal"
+            ? "personal"
+            : context.textCredentialSource === "server"
+              ? "server"
+              : undefined),
       }),
     },
     {

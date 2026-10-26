@@ -551,7 +551,7 @@ async function addCompletionCopy(
     managedProvider: null,
     userDiscId: interaction.user.id,
     serverId: scope.state?.server_id,
-    credentialSource: scope.scopeKind === "personal" ? "personal" : "server",
+    credentialScope: scope.scopeKind === "personal" ? "personal" : "server",
   });
   return keys.length
     ? { ...receipt, detail: [receipt.detail, ...keys.map((key) => localizer(locale, key))].join("\n") }

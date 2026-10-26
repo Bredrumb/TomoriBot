@@ -167,7 +167,7 @@ export async function execute(
       managedProvider: null,
       userDiscId: interaction.user.id,
       serverId: tomoriState?.server_id,
-      credentialSource,
+      credentialScope: credentialSource,
     });
   };
 

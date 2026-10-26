@@ -134,9 +134,10 @@ handler, which also lets tests isolate their registrations.
 Provider options may supply `contributeCopy(context)` in `providerOptionRegistry.ts` to return one
 locale key or null. `withProviderOptionCopy(keys, context)` appends those contributions to existing
 recovery tips or completion receipts. Callers choose the eligible surfaces explicitly and pass the
-user Discord ID, internal workspace ID, credential source, and managed provider identity (null for
-ordinary credentials). Credential sources retain deployment-owned values alongside `server` and
-`personal`; a catalog transport name does not identify the managed provider that paid for a request.
+user Discord ID, internal workspace ID, `server` or `personal` credential scope, and managed provider
+identity (null for ordinary credentials). Managed usage contexts carry `credentialScope` independently
+of deployment-specific source tags; a catalog transport name does not identify the managed provider
+that paid for a request.
 
 The callback owns eligibility and copy only. It cannot send messages, acknowledge interactions, or
 change billing state. Commands acknowledge an error response before awaiting eligibility; successful

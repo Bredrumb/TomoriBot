@@ -357,7 +357,7 @@ export async function execute(
       managedProvider,
       userDiscId: interaction.user.id,
       serverId: mainPersona.server_id,
-      credentialSource,
+      credentialScope: credentialSource,
     });
   };
   if (!mainPersona.config.voice_message_enabled) {

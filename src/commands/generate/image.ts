@@ -220,7 +220,7 @@ export async function execute(
       managedProvider: imageCreds?.usageContext?.credentialProvider ?? null,
       userDiscId: interaction.user.id,
       serverId: tomoriState.server_id,
-      credentialSource,
+      credentialScope: credentialSource,
     });
   };
 
