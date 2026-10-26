@@ -4,9 +4,9 @@ import {
   withProviderUsageContext,
   type ProviderRequestDeniedError,
 } from "@/utils/provider/providerUsage";
+import { loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
 import { loadProviderModelChoices } from "@/utils/provider/modelCatalog";
 import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
-import { loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
 import { setHostedSpeechSelection, setSpeechEndpointSelection } from "@/utils/db/repositories/SpeechRepository";
 import { supportsSpeechMode, type VoiceSourceMode } from "@/utils/speech/voiceSourceCapabilities";
 import type {
