@@ -1857,7 +1857,7 @@ describe("providers routes", () => {
         await route.execute({} as Client, interaction as never, parsed(customId));
         const rejected = status === "validation-failed" || status === "no-balance";
         expect(surfaces).toEqual(rejected ? ["registration_failed"] : []);
-        expect(JSON.stringify(replies.at(-1)).includes(localizedCopy("en-US", key))).toBe(rejected);
+        expect(JSON.stringify(replies.at(-1)).includes(`-# ${localizedCopy("en-US", key)}`)).toBe(rejected);
       }
     } finally {
       copy.mockRestore();
@@ -1903,7 +1903,7 @@ describe("providers routes", () => {
         await route.execute({} as Client, interaction as never, parsed(customId));
         const unreachable = result.status === "unreachable";
         expect(surfaces).toEqual(unreachable ? ["registration_failed"] : []);
-        expect(JSON.stringify(replies.at(-1)).includes(localizedCopy("en-US", key))).toBe(unreachable);
+        expect(JSON.stringify(replies.at(-1)).includes(`-# ${localizedCopy("en-US", key)}`)).toBe(unreachable);
       }
     } finally {
       copy.mockRestore();

@@ -556,9 +556,11 @@ async function addCompletionCopy(
     serverId: scope.state?.server_id,
     credentialScope: scope.scopeKind === "personal" ? "personal" : "server",
   });
-  return keys.length
-    ? { ...receipt, detail: [receipt.detail, ...keys.map((key) => localizer(locale, key))].join("\n") }
-    : receipt;
+  if (!keys.length) return receipt;
+  const copy = keys.map((key) => localizer(locale, key));
+  return surface === "registration_failed"
+    ? { ...receipt, metadata: [receipt.metadata, ...copy].filter(Boolean).join(" ") }
+    : { ...receipt, detail: [receipt.detail, ...copy].join("\n") };
 }
 
 function repaint(

@@ -1053,7 +1053,7 @@ describe("setupWizardRoutes", () => {
       await dispatchGlobalInteraction({} as Client, interaction);
 
       expect(received?.surface).toBe("registration_failed");
-      expect(JSON.stringify(interaction.editReplyCalls[0])).toContain(localizedCopy("en-US", key));
+      expect(JSON.stringify(interaction.editReplyCalls[0])).toContain(`-# ${localizedCopy("en-US", key)}`);
     } finally {
       copy.mockRestore();
       providerSpy.mockRestore();
