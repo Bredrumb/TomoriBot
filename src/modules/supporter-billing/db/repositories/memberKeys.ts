@@ -1,6 +1,6 @@
 import type { SQL } from "bun";
 import { z } from "zod";
-import { sql as defaultSql } from "@/utils/db/client";
+import { isRetiredConnectionError, sql as defaultSql } from "@/utils/db/client";
 import { keyManager } from "@/utils/security/keyManager";
 import { lazyRotateEncryptedRow } from "@/utils/security/encryptedColumns";
 import { MemberKeyError } from "@/modules/supporter-billing/openrouter/management";
@@ -44,6 +44,15 @@ export type MemberKeyRow = z.infer<typeof memberKeySchema>;
 
 let memberKeyWork: Promise<unknown> = Promise.resolve();
 
+async function unlockMemberKeys(connection: SQL): Promise<void> {
+  try {
+    await connection`SELECT pg_advisory_unlock(${MEMBER_KEY_LOCK_ID})`;
+  } catch (error) {
+    // The session lock dies with the connection, and rethrowing would replace the error that retired it.
+    if (!isRetiredConnectionError(error)) throw error;
+  }
+}
+
 export async function withMemberKeyLock<T>(client: SQL, run: (client: SQL) => Promise<T>): Promise<T> {
   const previous = memberKeyWork;
   const operation = previous
@@ -53,11 +62,12 @@ export async function withMemberKeyLock<T>(client: SQL, run: (client: SQL) => Pr
       try {
         await connection`SELECT pg_advisory_lock(${MEMBER_KEY_LOCK_ID})`;
         return await run(connection as SQL);
-      } catch {
-        throw new MemberKeyError();
+      } catch (error) {
+        // A retired connection carries no secret and must stay recognizable so idempotent callers can replay on a fresh one.
+        throw isRetiredConnectionError(error) ? error : new MemberKeyError();
       } finally {
         try {
-          await connection`SELECT pg_advisory_unlock(${MEMBER_KEY_LOCK_ID})`;
+          await unlockMemberKeys(connection);
         } finally {
           connection.release();
         }

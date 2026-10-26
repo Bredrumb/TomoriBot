@@ -2,9 +2,12 @@ import { ApplicationCommandOptionType, PermissionsBitField, type ApplicationComm
 import { ToolRegistry, type ToolStateForContext } from "@/tools/toolRegistry";
 import type { Tool } from "@/types/tool/interfaces";
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
+import { getSupporterFundingFromUsageContext } from "@/modules/supporter-billing/runtime/types";
+import { getCachedUserRow } from "@/utils/cache/userCache";
 import { loadCommandData } from "@/utils/discord/commandLoader";
 import { log } from "@/utils/misc/logger";
 import { getLlmDisplayName } from "@/utils/provider/modelDisplay";
+import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 
 interface ToolSnapshot {
   builtInTools: Tool[];
@@ -58,6 +61,14 @@ function buildToolAssemblyState(context: ToolContext): ToolStateForContext {
       danbooru_enabled: config.danbooru_enabled,
     },
   };
+}
+
+async function describeProvider(context: ToolContext): Promise<string> {
+  const funding = getSupporterFundingFromUsageContext(context.usageContext);
+  if (!funding) return context.tomoriState.llm.llm_provider;
+  const sponsor = await getCachedUserRow(funding.sponsorDiscordUserId);
+  const label = getProviderDisplayName(funding.credentialSource);
+  return sponsor?.user_nickname ? `${label} from ${sponsor.user_nickname}` : label;
 }
 
 async function loadToolSnapshot(context: ToolContext): Promise<ToolSnapshot> {
@@ -222,12 +233,13 @@ export class ReviewCapabilitiesTool extends BaseTool {
     const { config, llm } = context.tomoriState;
     const snapshot = await loadToolSnapshot(context);
     const displayModelName = getLlmDisplayName(llm, config.custom_model_name);
+    const providerLabel = await describeProvider(context);
     const builtInNames = new Set(snapshot.builtInTools.map((tool) => tool.name));
     const content: string[] = [
       "# Your Current Chat Capabilities",
       "",
       `- **Model**: ${displayModelName}`,
-      `- **Provider**: ${llm.llm_provider}`,
+      `- **Provider**: ${providerLabel}`,
       `- **Function calling**: ${llm.has_tools ? "supported" : "not supported"}`,
       `- **Image input**: ${llm.sees_images ? "supported" : "not supported"}`,
       `- **Video input**: ${llm.sees_videos ? "supported" : "not supported"}`,
@@ -290,7 +302,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         status: "capabilities_retrieved",
         capability_type: "chat",
         model: displayModelName,
-        provider: llm.llm_provider,
+        provider: providerLabel,
         built_in_tools: snapshot.builtInTools.map((tool) => tool.name),
         mcp_tools: snapshot.mcpFunctionNames,
         summary: message,
@@ -304,6 +316,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
     const canViewOperationalDetails =
       context.message?.member?.permissions.has(PermissionsBitField.Flags.ManageGuild) ?? false;
     const displayModelName = getLlmDisplayName(llm, config.custom_model_name);
+    const providerLabel = await describeProvider(context);
     const disabledFeatures = [
       ["web search", config.web_search_enabled],
       ["image generation", config.imagegen_enabled],
@@ -321,7 +334,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       "# Current Runtime Settings",
       "",
       `- **Model**: ${displayModelName}`,
-      `- **Provider**: ${llm.llm_provider}`,
+      `- **Provider**: ${providerLabel}`,
       `- **Tool calling**: ${llm.has_tools ? "supported" : "not supported by this model"}`,
       `- **Available tools**: ${snapshot.builtInTools.length + snapshot.mcpFunctionNames.length} (${snapshot.builtInTools.length} built-in, ${snapshot.mcpFunctionNames.length} MCP)`,
       "",

@@ -4,6 +4,7 @@ import { describe, expect, it, spyOn } from "bun:test";
 import { createMemberKeyProvider, MemberKeyError } from "@/modules/supporter-billing/openrouter/management";
 import { SQL } from "bun";
 import { withMemberKeyLock } from "@/modules/supporter-billing/db/repositories/memberKeys";
+import { runSupporterBillingMaintenance } from "@/modules/supporter-billing/runtime/maintenance";
 import { useEnvSandbox } from "../../helpers/env";
 
 const env = { TOMORI_SUPPORTER_OPENROUTER_MANAGEMENT_KEY: "synthetic-management-secret" };
@@ -179,5 +180,41 @@ describe("member key metadata fixture", () => {
     });
     const invalid = { usage: 1, unknown_override: true };
     expect(() => metadata(invalid)).toThrow();
+  });
+});
+
+describe("member-key lock on a retired connection", () => {
+  const retired = () =>
+    Object.assign(new Error("Max lifetime timeout reached after 30m"), { code: "ERR_POSTGRES_LIFETIME_TIMEOUT" });
+
+  function fakeConnection(fail: boolean) {
+    const query = (() => (fail ? Promise.reject(retired()) : Promise.resolve([]))) as unknown as SQL;
+    return Object.assign(query, { release: () => {} });
+  }
+
+  function fakeClient(failures: number) {
+    let reservations = 0;
+    const client = { reserve: async () => fakeConnection(reservations++ < failures) } as unknown as SQL;
+    return { client, reservations: () => reservations };
+  }
+
+  it("surfaces the retired-connection error even though the unlock also fails", async () => {
+    const { client } = fakeClient(1);
+    await expect(withMemberKeyLock(client, async () => 1)).rejects.toMatchObject({
+      code: "ERR_POSTGRES_LIFETIME_TIMEOUT",
+    });
+  });
+
+  it("replays the usage-statistics purge on a fresh connection instead of waiting for the next tick", async () => {
+    const { client, reservations } = fakeClient(2);
+    const purgeAgedStatistics = async () => 3;
+    const result = await runSupporterBillingMaintenance({
+      client,
+      oauthStateRepository: { purgeFinishedStates: async () => ({ purgedStates: 0 }) },
+      webhookEventRepository: { purgeAgedEvents: async () => ({ purgedEvents: 0 }) },
+      usageStatisticsRepository: { purgeAgedStatistics },
+    } as unknown as Parameters<typeof runSupporterBillingMaintenance>[0]);
+    expect(result.purgedUsageStatistics).toBe(3);
+    expect(reservations()).toBeGreaterThan(2);
   });
 });

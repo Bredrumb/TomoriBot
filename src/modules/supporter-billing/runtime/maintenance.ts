@@ -1,7 +1,7 @@
 import { OAuthStateRepository } from "@/utils/db/repositories/OAuthStateRepository";
 import type { SQL } from "bun";
 import { SupporterWebhookEventRepository, SupporterUsageStatisticsRepository } from "@/modules/supporter-billing/db";
-import { sql as defaultSql } from "@/utils/db/client";
+import { sql as defaultSql, withTransientDbRetry } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import { MemberKeyRepository, withMemberKeyLock } from "@/modules/supporter-billing/db/repositories/memberKeys";
 
@@ -62,18 +62,23 @@ export async function runSupporterBillingMaintenance(
   }
 
   try {
-    result.purgedUsageStatistics = await withMemberKeyLock(client, (connection) =>
-      (options.usageStatisticsRepository ?? new SupporterUsageStatisticsRepository(connection)).purgeAgedStatistics(
-        new Date(now.getTime() - USAGE_STATISTICS_RETENTION_DAYS * MILLISECONDS_PER_DAY),
-      ),
+    result.purgedUsageStatistics = await withTransientDbRetry(
+      () =>
+        withMemberKeyLock(client, (connection) =>
+          (options.usageStatisticsRepository ?? new SupporterUsageStatisticsRepository(connection)).purgeAgedStatistics(
+            new Date(now.getTime() - USAGE_STATISTICS_RETENTION_DAYS * MILLISECONDS_PER_DAY),
+          ),
+        ),
+      "purge supporter usage statistics",
     );
   } catch (error) {
     log.error("Supporter periodic usage-statistics purge failed", error);
   }
 
   try {
-    const purged = await withMemberKeyLock(client, (connection) =>
-      new MemberKeyRepository(connection).purgeDetachedAccounting(now),
+    const purged = await withTransientDbRetry(
+      () => withMemberKeyLock(client, (connection) => new MemberKeyRepository(connection).purgeDetachedAccounting(now)),
+      "purge supporter detached accounting",
     );
     log.metric("supporter_detached_accounting_purge", { purgedRecords: purged });
   } catch (error) {
