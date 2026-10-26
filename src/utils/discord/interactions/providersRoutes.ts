@@ -1,3 +1,4 @@
+import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 import {
   ComponentType,
   MessageFlags,
@@ -537,6 +538,26 @@ function providerOptionScope(
   };
 }
 
+async function addCompletionCopy(
+  receipt: PanelReceipt,
+  interaction: GlobalRoutableInteraction,
+  locale: string,
+  scope: LoadedProviderPanelScope,
+  eligible: boolean,
+): Promise<PanelReceipt> {
+  if (!eligible) return receipt;
+  const keys = await withProviderOptionCopy([], {
+    surface: "completion",
+    managedProvider: null,
+    userDiscId: interaction.user.id,
+    serverId: scope.state?.server_id,
+    credentialSource: scope.scopeKind === "personal" ? "personal" : "server",
+  });
+  return keys.length
+    ? { ...receipt, detail: [receipt.detail, ...keys.map((key) => localizer(locale, key))].join("\n") }
+    : receipt;
+}
+
 function repaint(
   interaction: GlobalRoutableInteraction,
   locale: string,
@@ -952,7 +973,13 @@ export function createProvidersInteractionRoute(
           nextScope,
           action.result.status === "success" ? { kind: "entry", entryId: action.result.entryId } : { kind: "entry" },
           action.result.status === "success" ? rangeForEntry(nextScope, action.result.entryId) : 0,
-          addReceipt(route.locale, action.result, scope.scopeKind),
+          await addCompletionCopy(
+            addReceipt(route.locale, action.result, scope.scopeKind),
+            interaction,
+            route.locale,
+            scope,
+            action.result.status === "success" && selectedProvider !== "brave",
+          ),
         );
         return;
       }
@@ -1209,7 +1236,13 @@ export function createProvidersInteractionRoute(
           nextScope,
           { kind: "entry", entryId },
           rangeForEntry(nextScope, entryId),
-          modelReceipt(route.locale, action.result, scope.scopeKind),
+          await addCompletionCopy(
+            modelReceipt(route.locale, action.result, scope.scopeKind),
+            interaction,
+            route.locale,
+            scope,
+            action.result.status === "success" && !action.result.removed && !findProviderOption(route.entryKey),
+          ),
         );
         return;
       }

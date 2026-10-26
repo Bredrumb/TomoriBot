@@ -16,6 +16,7 @@ import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { ToolRegistry } from "@/tools/toolRegistry";
 import { statRepository } from "@/utils/db/repositories";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { isDirectMessageChannel, resolveProviderErrorFooter } from "@/utils/discord/stream/errorUi";
 import { routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
@@ -480,7 +481,13 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
       color: ColorCode.WARN,
       titleKey: "genai.max_iterations_title",
       descriptionKey: "genai.max_iterations_streaming_description",
-      tipKeys: ["genai.tips.refresh_context"],
+      tipKeys: await withProviderOptionCopy(["genai.tips.refresh_context"], {
+        surface: "recovery",
+        managedProvider: params.context.usageContext?.credentialProvider ?? null,
+        userDiscId: params.context.userDiscId,
+        serverId: params.context.tomoriState.server_id,
+        credentialSource: params.context.textCredentialSource,
+      }),
     });
   }
   return buildResult(
@@ -505,8 +512,11 @@ export async function sendStreamTimeoutNotice(params: {
   channel: Parameters<typeof sendStandardEmbed>[0];
   locale: string;
   providerName: string;
-  textCredentialSource: "server" | "personal" | undefined;
+  textCredentialSource: ChatTurnContext["textCredentialSource"] | undefined;
   sawStreamProgress: boolean;
+  managedProvider: string | null;
+  userDiscId: string;
+  serverId: number | undefined;
 }): Promise<void> {
   await sendStandardEmbed(params.channel, params.locale, {
     titleKey: "genai.stream.inactivity_timeout_title",
@@ -514,14 +524,22 @@ export async function sendStreamTimeoutNotice(params: {
       ? "genai.stream.inactivity_timeout_description"
       : "genai.stream.first_token_timeout_description",
     color: ColorCode.WARN,
-    tipKeys:
+    tipKeys: await withProviderOptionCopy(
       params.providerName === "nvidia"
         ? [
             params.textCredentialSource === "personal"
               ? "genai.tips.nvidia_register_free_model_personal"
               : "genai.tips.nvidia_register_free_model",
           ]
-        : undefined,
+        : [],
+      {
+        surface: "recovery",
+        managedProvider: params.managedProvider,
+        userDiscId: params.userDiscId,
+        serverId: params.serverId,
+        credentialSource: params.textCredentialSource,
+      },
+    ),
     ...resolveProviderErrorFooter({
       providerName: params.providerName,
       textCredentialSource: params.textCredentialSource,
@@ -671,6 +689,9 @@ async function streamOnce(
           providerName,
           textCredentialSource: params.context.streamingContext.textCredentialSource,
           sawStreamProgress,
+          managedProvider: params.context.usageContext?.credentialProvider ?? null,
+          userDiscId: params.context.userDiscId,
+          serverId: params.context.tomoriState.server_id,
         });
       } else {
         // The notice is held for the caller: this attempt was suppressed because a later model may
@@ -1356,7 +1377,13 @@ async function emitToolErrorLoop(context: ChatTurnContext): Promise<void> {
       color: ColorCode.ERROR,
       titleKey: "genai.tool_error_loop_title",
       descriptionKey: "genai.tool_error_loop_description",
-      tipKeys: ["genai.tips.refresh_context"],
+      tipKeys: await withProviderOptionCopy(["genai.tips.refresh_context"], {
+        surface: "recovery",
+        managedProvider: context.usageContext?.credentialProvider ?? null,
+        userDiscId: context.userDiscId,
+        serverId: context.tomoriState.server_id,
+        credentialSource: context.textCredentialSource,
+      }),
     },
     {
       webhook: context.responseTarget?.webhook,

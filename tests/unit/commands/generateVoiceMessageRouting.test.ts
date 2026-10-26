@@ -306,6 +306,7 @@ describe("Voice message command routing", () => {
         attempts: [
           {
             provider: "tts-clone",
+            managedProvider: null,
             model: "",
             owner: { kind: "server", ownerId: 1 },
             source: "design",

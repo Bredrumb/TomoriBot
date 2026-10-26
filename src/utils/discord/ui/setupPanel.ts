@@ -679,8 +679,7 @@ interface SetupReceiptInput {
   notes: readonly SetupReceiptNote[];
   /** Pre-composed body for the Learn More field, built by the caller from its live command mentions. */
   learnMore: string;
-  /** Footer locale key for the skipped or failed avatar update, when one applies. */
-  footerKey?: string;
+  footerKeys?: readonly string[];
   optionReceiptDescriptionKey?: string;
 }
 
@@ -766,11 +765,11 @@ export function buildSetupSuccessPayload(
     });
   }
 
-  if (input.footerKey) {
+  if (input.footerKeys?.length) {
     components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
     components.push({
       type: ComponentType.TextDisplay,
-      content: withLinePrefix("-# ", localizer(locale, input.footerKey)),
+      content: withLinePrefix("-# ", input.footerKeys.map((key) => localizer(locale, key)).join("\n")),
     });
   }
 

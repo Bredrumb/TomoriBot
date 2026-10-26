@@ -24,6 +24,7 @@ import * as dispatcher from "@/providers/custom/customEndpointDispatcher";
 import { llmModelRepo, personaRepository, statRepository } from "@/utils/db/repositories";
 import * as modals from "@/utils/discord/ui/modals";
 import * as credentials from "@/utils/provider/credentialResolver";
+import * as providerOptions from "@/utils/provider/providerOptionRegistry";
 import * as personal from "@/utils/provider/personalProviderRuntime";
 import * as imageQuota from "@/utils/quota/imageQuotaManager";
 import * as videoQuota from "@/utils/quota/videoQuotaManager";
@@ -167,6 +168,46 @@ describe("Generation command spoilers", () => {
 });
 
 describe("Media generation failures", () => {
+  it("acknowledges missing-credential errors before awaiting recovery copy and leaves successful modal flows alone", async () => {
+    for (const command of [image, video]) {
+      const pending = Promise.withResolvers<string[]>();
+      const entered = Promise.withResolvers<void>();
+      const { interaction, calls } = makeFakeInteraction({
+        channel: {},
+        options: { getString: (name) => (name === "mode" ? "manual" : null), getBoolean: () => null },
+      });
+      let acknowledged = false;
+      const copy = spyOn(providerOptions, "withProviderOptionCopy").mockImplementation(async (_keys, context) => {
+        acknowledged = interaction.deferred;
+        expect(context).toMatchObject({
+          surface: "recovery",
+          userDiscId: interaction.user.id,
+          credentialSource: "personal",
+          managedProvider: null,
+        });
+        entered.resolve();
+        return pending.promise;
+      });
+      spyOn(credentials, "resolveCapabilityCredentials").mockRejectedValue(
+        new credentials.PersonalProviderRequiredError(command === image ? "image-standard" : "video"),
+      );
+      const execution = command(
+        {} as Client,
+        interaction as unknown as ChatInputCommandInteraction,
+        createUserRow(),
+        "en-US",
+      );
+      await entered.promise;
+      expect(acknowledged).toBe(true);
+      expect(calls.map(({ method }) => method)).toEqual(["deferReply"]);
+      pending.resolve([]);
+      await execution;
+      expect(calls.some(({ method }) => method === "editReply")).toBe(true);
+      expect(modals.promptWithRawModal).not.toHaveBeenCalled();
+      copy.mockRestore();
+    }
+  });
+
   it("keeps quota and safety refusals out of error_logs while still logging other failures", async () => {
     const errorLog = spyOn(log, "error").mockResolvedValue(undefined);
     const warnLog = spyOn(log, "warn").mockImplementation(() => undefined);

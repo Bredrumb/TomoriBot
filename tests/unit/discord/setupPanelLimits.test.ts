@@ -633,7 +633,7 @@ describe("setupPanel Components V2 layout and limits", () => {
             { label: "Expressions Disabled", detail: "Emoji and sticker usage have been automatically disabled." },
           ],
           learnMore: localizer("en-US", "commands.setup.wizard.receipt_learn_more", { help: "/help" }),
-          footerKey: context === "dm" ? "commands.setup.wizard.receipt_footer_avatar_skipped_dm" : undefined,
+          footerKeys: context === "dm" ? ["commands.setup.wizard.receipt_footer_avatar_skipped_dm"] : [],
         });
 
         const validation = validateComponentsV2MessageLimits(payload);

@@ -57,6 +57,7 @@ import { executeAutoImageCommand } from "@/utils/image/autoImageCommand";
 import { prepareGeneratedImage } from "@/utils/image/generatedImageMetadata";
 import { buildImageGenerationInputAttachment } from "@/utils/image/imageGenerationInput";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
+import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 
 const MODAL_CUSTOM_ID = "generate_image_modal";
 const PROMPT_INPUT_ID = "prompt_input";
@@ -213,6 +214,15 @@ export async function execute(
   );
   if (modelSelection === false) return;
   const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
+  const recoveryTips = async (tipKeys: string[], credentialSource: "server" | "personal") => {
+    return withProviderOptionCopy(tipKeys, {
+      surface: "recovery",
+      managedProvider: imageCreds?.usageContext?.credentialProvider ?? null,
+      userDiscId: interaction.user.id,
+      serverId: tomoriState.server_id,
+      credentialSource,
+    });
+  };
 
   if (!tomoriState.config.imagegen_enabled) {
     await replyInfoEmbed(interaction, locale, {
@@ -253,9 +263,12 @@ export async function execute(
           command: "generate image",
         },
       });
+      if (!interaction.replied && !interaction.deferred)
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.personal_provider_required_title",
         descriptionKey: "general.errors.personal_provider_required_description",
+        tipKeys: await recoveryTips([], "personal"),
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
       });
@@ -278,9 +291,12 @@ export async function execute(
         },
       );
       if (error.source === "personal") {
+        if (!interaction.replied && !interaction.deferred)
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.personal_provider_credentials_error_title",
           descriptionKey: "general.errors.personal_provider_credentials_error_description",
+          tipKeys: await recoveryTips([], "personal"),
           color: ColorCode.ERROR,
           flags: MessageFlags.Ephemeral,
         });
@@ -298,18 +314,24 @@ export async function execute(
           return;
         }
 
+        if (!interaction.replied && !interaction.deferred)
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await replyInfoEmbed(interaction, locale, {
           titleKey: "commands.generate.image.no_diffusion_model_title",
           descriptionKey: "commands.generate.image.no_diffusion_model_description",
+          tipKeys: await recoveryTips([], "server"),
           color: ColorCode.ERROR,
           flags: MessageFlags.Ephemeral,
         });
         return;
       }
 
+      if (!interaction.replied && !interaction.deferred)
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.generate.image.no_api_key_title",
         descriptionKey: "commands.generate.image.no_api_key_description",
+        tipKeys: await recoveryTips([], "server"),
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
       });
@@ -330,9 +352,11 @@ export async function execute(
         command: "generate image",
       },
     });
+    if (!interaction.replied && !interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.generate.image.no_diffusion_model_title",
       descriptionKey: "commands.generate.image.no_diffusion_model_description",
+      tipKeys: await recoveryTips([], imageCreds.source),
       color: ColorCode.ERROR,
       flags: MessageFlags.Ephemeral,
     });
@@ -354,10 +378,12 @@ export async function execute(
       return;
     }
 
+    if (!interaction.replied && !interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.generate.image.unsupported_provider_title",
       descriptionKey: "commands.generate.image.unsupported_provider_description",
       descriptionVars: { provider: getProviderDisplayName(executionProvider) },
+      tipKeys: await recoveryTips([], imageCreds.source),
       color: ColorCode.ERROR,
       flags: MessageFlags.Ephemeral,
     });
@@ -396,11 +422,14 @@ export async function execute(
         errorDescriptionKey = "commands.generate.image.serverwide_quota_exceeded_description";
       }
 
+      if (!interaction.replied && !interaction.deferred)
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await replyInfoEmbed(interaction, locale, {
         titleKey: errorTitleKey,
         descriptionKey: errorDescriptionKey,
         descriptionVars,
         footerKey: "commands.generate.image.quota_exceeded_footer",
+        tipKeys: await recoveryTips([], imageCreds.source),
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
       });
@@ -775,9 +804,12 @@ export async function execute(
     const isPersonalImage = imageCreds?.source === "personal";
 
     if (isBillingRefusal) {
-      const tipKeys = isPersonalImage
-        ? ["genai.tips.top_up_provider_balance", "genai.tips.disable_personal_text_override"]
-        : ["genai.tips.wait_and_retry"];
+      const tipKeys = await recoveryTips(
+        isPersonalImage
+          ? ["genai.tips.top_up_provider_balance", "genai.tips.disable_personal_text_override"]
+          : ["genai.tips.wait_and_retry"],
+        imageCreds.source,
+      );
       await replyInfoEmbed(replyTarget, locale, {
         titleKey: "commands.generate.image.error_billing_title",
         descriptionKey: "commands.generate.image.error_billing_description",
@@ -795,15 +827,18 @@ export async function execute(
         descriptionKey: "commands.generate.image.error_safety_description",
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
-        tipKeys: ["genai.tips.shorten_message"],
+        tipKeys: await recoveryTips(["genai.tips.shorten_message"], imageCreds.source),
         ...recoveryOptions(),
       });
       return;
     }
 
-    const tipKeys = isPersonalImage
-      ? ["genai.tips.disable_personal_text_override", "genai.tips.switch_model_provider_personal"]
-      : ["genai.tips.wait_and_retry"];
+    const tipKeys = await recoveryTips(
+      isPersonalImage
+        ? ["genai.tips.disable_personal_text_override", "genai.tips.switch_model_provider_personal"]
+        : ["genai.tips.wait_and_retry"],
+      imageCreds.source,
+    );
     await replyInfoEmbed(replyTarget, locale, {
       titleKey: "commands.generate.image.error_generation_failed_title",
       descriptionKey: "commands.generate.image.error_generation_failed_description",

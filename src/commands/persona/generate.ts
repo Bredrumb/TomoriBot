@@ -32,6 +32,11 @@ import type { UserRow } from "../../types/db/schema";
 import { personaRepository } from "@/utils/db/repositories";
 import { getCapabilityCredentialFailureCopy, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
+import {
+  findProviderOption,
+  findProviderOptionByActiveProvider,
+  withProviderOptionCopy,
+} from "@/utils/provider/providerOptionRegistry";
 import { memoryGuard, PERSONA_LIMITS, reservePersonaQuota } from "../../utils/security/rateLimiter";
 import { safeDownload } from "../../utils/security/safeDownload";
 import type { GeneratePresetParams } from "../../providers/google/presetGenerator";
@@ -355,7 +360,25 @@ export async function execute(
     //    /generate image, /memories) and ensures generation uses the
     //    user's personal text provider when configured, instead of always falling
     //    back to the server's configured model.
-    let { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
+    let { tomoriState, activeConfigs } = await applyPersonalProviderSelectionsToTomoriState(
+      baseTomoriState,
+      userData.user_id ?? null,
+    );
+    let credentialSource: "server" | "personal" = activeConfigs.text ? "personal" : "server";
+    const recoveryTips = () =>
+      withProviderOptionCopy([], {
+        surface: "recovery",
+        managedProvider: activeConfigs?.text
+          ? (findProviderOption(activeConfigs.text.provider)?.value ?? null)
+          : (findProviderOptionByActiveProvider(
+              tomoriState.llm.llm_provider,
+              { kind: "server", ownerId: tomoriState.server_id, state: tomoriState },
+              "text",
+            )?.value ?? null),
+        userDiscId: interaction.user.id,
+        serverId: tomoriState.server_id,
+        credentialSource,
+      });
 
     let providerName = tomoriState.llm.llm_provider.toLowerCase();
     let effectiveModelName = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
@@ -529,6 +552,7 @@ export async function execute(
         textModel: baseTomoriState.llm,
       });
       ({ apiKey: decryptedApiKey, usageContext } = credentials);
+      credentialSource = credentials.source;
       tomoriState = await resolveTextCredentialState(baseTomoriState, credentials);
       providerName = credentials.provider;
       effectiveModelName = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
@@ -538,6 +562,7 @@ export async function execute(
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         ...failure,
         color: ColorCode.ERROR,
+        tipKeys: findProviderRequestDeniedError(error) ? [] : await recoveryTips(),
         files: [getInputAttachment()],
       });
       return;

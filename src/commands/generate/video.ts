@@ -56,6 +56,7 @@ import {
 } from "@/providers/utils/providerVideoErrors";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 import { parsePositiveIntegerEnv } from "@/utils/misc/envFlags";
+import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 
 const MODAL_CUSTOM_ID = "generate_video_modal";
 const PROMPT_INPUT_ID = "prompt_input";
@@ -205,6 +206,15 @@ export async function execute(
   );
   if (modelSelection === false) return;
   const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
+  const recoveryTips = async (credentialSource: "server" | "personal") => {
+    return withProviderOptionCopy([], {
+      surface: "recovery",
+      managedProvider: videoCreds?.usageContext?.credentialProvider ?? null,
+      userDiscId: interaction.user.id,
+      serverId: tomoriState.server_id,
+      credentialSource,
+    });
+  };
 
   if (!tomoriState.config.videogen_enabled) {
     await replyInfoEmbed(interaction, locale, {
@@ -245,9 +255,12 @@ export async function execute(
           command: "generate video",
         },
       });
+      if (!interaction.replied && !interaction.deferred)
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.personal_provider_required_title",
         descriptionKey: "general.errors.personal_provider_required_description",
+        tipKeys: await recoveryTips("personal"),
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
       });
@@ -270,9 +283,12 @@ export async function execute(
         },
       );
       if (error.source === "personal") {
+        if (!interaction.replied && !interaction.deferred)
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.personal_provider_credentials_error_title",
           descriptionKey: "general.errors.personal_provider_credentials_error_description",
+          tipKeys: await recoveryTips("personal"),
           color: ColorCode.ERROR,
           flags: MessageFlags.Ephemeral,
         });
@@ -280,18 +296,24 @@ export async function execute(
       }
 
       if (error.reason === "missing_model_id") {
+        if (!interaction.replied && !interaction.deferred)
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await replyInfoEmbed(interaction, locale, {
           titleKey: "commands.generate.video.no_video_model_title",
           descriptionKey: "commands.generate.video.no_video_model_description",
+          tipKeys: await recoveryTips("server"),
           color: ColorCode.ERROR,
           flags: MessageFlags.Ephemeral,
         });
         return;
       }
 
+      if (!interaction.replied && !interaction.deferred)
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.generate.video.no_api_key_title",
         descriptionKey: "commands.generate.video.no_api_key_description",
+        tipKeys: await recoveryTips("server"),
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
       });
@@ -311,9 +333,11 @@ export async function execute(
         command: "generate video",
       },
     });
+    if (!interaction.replied && !interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.generate.video.no_video_model_title",
       descriptionKey: "commands.generate.video.no_video_model_description",
+      tipKeys: await recoveryTips(videoCreds.source),
       color: ColorCode.ERROR,
       flags: MessageFlags.Ephemeral,
     });
@@ -345,6 +369,8 @@ export async function execute(
         }
       }
 
+      if (!interaction.replied && !interaction.deferred)
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.generate.video.quota_exceeded_title",
         descriptionKey:
@@ -355,6 +381,7 @@ export async function execute(
               : "commands.generate.video.quota_exceeded_description",
         descriptionVars,
         footerKey: "commands.generate.video.quota_exceeded_footer",
+        tipKeys: await recoveryTips("server"),
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
       });
@@ -584,6 +611,7 @@ export async function execute(
         descriptionKey: "commands.generate.video.unsupported_provider_description",
         descriptionVars: { provider: executionProvider },
         color: ColorCode.ERROR,
+        tipKeys: await recoveryTips(videoCreds.source),
       });
       return;
     }
@@ -593,6 +621,7 @@ export async function execute(
         titleKey: "commands.generate.video.error_title",
         descriptionKey: "commands.generate.video.no_data_description",
         color: ColorCode.ERROR,
+        tipKeys: await recoveryTips(videoCreds.source),
       });
       return;
     }
@@ -604,6 +633,7 @@ export async function execute(
         descriptionKey: "commands.generate.video.file_too_large_description",
         descriptionVars: { size_mb: sizeMB },
         color: ColorCode.ERROR,
+        tipKeys: await recoveryTips(videoCreds.source),
       });
       return;
     }
@@ -681,6 +711,7 @@ export async function execute(
       return;
     }
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const tipKeys = await recoveryTips(videoCreds.source);
     const capabilityError = isOpenRouterVideoCapabilityError(error) ? error : undefined;
     const descriptionKey = capabilityError
       ? capabilityError.code === "last_frame_unsupported"
@@ -698,6 +729,7 @@ export async function execute(
         descriptionKey,
         descriptionVars: capabilityError ? { model: capabilityError.model } : undefined,
         color: ColorCode.ERROR,
+        tipKeys,
       }),
       "video error embed",
     );

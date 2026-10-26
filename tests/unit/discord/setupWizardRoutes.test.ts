@@ -69,6 +69,7 @@ import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/rou
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { ProviderFactory } from "@/utils/provider/providerFactory";
+import * as providerOptionRegistry from "@/utils/provider/providerOptionRegistry";
 import { normalizeOpenAICompatibleProviderError } from "@/providers/openaiCompatible/openaiCompatibleErrorFormatter";
 import * as cryptoModule from "@/utils/security/crypto";
 import * as customEndpointService from "@/utils/provider/customEndpointService";
@@ -2925,6 +2926,41 @@ describe("setupWizardFinish", () => {
       expect(readSetupDraft(COMMIT_NONCE, "actor-1", "guild-1", "guild").status).toBe("missing");
       expect(receipt).not.toContain(localizer("en-US", "commands.setup.channel_access_warning_field"));
     } finally {
+      stubs.restore();
+    }
+  });
+
+  it("adds completion copy after acknowledgement and preserves a completed setup without contributions", async () => {
+    const stubs = stubCommitDependencies();
+    const key = "genai.tips.wait_and_retry";
+    let acknowledged = false;
+    let received: providerOptionRegistry.ProviderOptionCopyContext | undefined;
+    const copy = spyOn(providerOptionRegistry, "withProviderOptionCopy");
+    try {
+      for (const contributes of [true, false]) {
+        storeSetupDraft(COMMIT_NONCE, makeCompleteDraft());
+        const customId = buildSetupFinishRouteId({ locale: "en-US", nonce: COMMIT_NONCE });
+        const interaction = makeMockInteraction({ customId, guild: COMMIT_GUILD });
+        copy.mockImplementation(async (keys, context) => {
+          acknowledged = interaction.deferred;
+          received = context;
+          return contributes ? [...keys, key] : keys;
+        });
+        await dispatchGlobalInteraction({} as Client, interaction);
+        expect(acknowledged).toBe(true);
+        expect(received).toEqual({
+          surface: "completion",
+          userDiscId: "actor-1",
+          serverId: 42,
+          credentialSource: "server",
+          managedProvider: null,
+        });
+        const receipt = JSON.stringify(interaction.editReplyCalls.at(-1));
+        expect(receipt).toContain(localizedCopy("en-US", "commands.setup.wizard.receipt_title"));
+        expect(receipt.includes(localizedCopy("en-US", key))).toBe(contributes);
+      }
+    } finally {
+      copy.mockRestore();
       stubs.restore();
     }
   });
