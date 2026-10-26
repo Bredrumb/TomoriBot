@@ -82,7 +82,7 @@ type ConfigInteraction = Parameters<ReturnType<typeof createConfigInteractionRou
 const CATALOG_MODEL_CAPABILITIES: readonly ConfigCatalogModelCapability[] =
   CONFIG_MODEL_CAPABILITY_ORDER.filter(isConfigCatalogModelCapability);
 
-function makeState(overrides: Record<string, unknown> = {}): TomoriState {
+function makeState({ config, ...overrides }: Record<string, unknown> = {}): TomoriState {
   return {
     server_id: 9,
     persona_id: 55,
@@ -129,7 +129,7 @@ function makeState(overrides: Record<string, unknown> = {}): TomoriState {
       nai_scale: null,
       nai_noise_schedule: null,
       nai_cfg_rescale: null,
-      ...((overrides.config as Record<string, unknown>) ?? {}),
+      ...((config as Record<string, unknown>) ?? {}),
     },
     ...overrides,
   } as unknown as TomoriState;

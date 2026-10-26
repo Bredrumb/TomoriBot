@@ -113,7 +113,9 @@ retry-after-abort time, and a 15-minute cache of heat and waking hours. A restar
   `text`. Pinning or clearing a model claims or releases its slot, so a provider option that owns the
   slot pays and reports usage through the call's usage context (see
   [Provider options](/architecture/pipelines/provider/#provider-options)). Checker Decision models
-  come from `loadDecisionModelsForScope`, the same list `callDecisionsForProvider` accepts. A
+  come from `loadDecisionModelsForScope`, the same list `callDecisionsForProvider` accepts. The picker
+  keeps the selected provider alias when it shares a catalog with BYOK, so pinning claims that
+  option's `nudge-checker` slot and selecting BYOK releases it. A
   refusal from the paying option is an abort with reason `denied`, logged as a warning; on the checker
   it also pauses the server's checks like an HTTP 429.
 - **The borrowed trigger lends no identity.** Phase C passes the channel's newest message to

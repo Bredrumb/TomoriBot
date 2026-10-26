@@ -1,3 +1,4 @@
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
 import * as dbClient from "@/utils/db/client";
 import { describe, expect, it, spyOn } from "bun:test";
 import type {
@@ -26,7 +27,7 @@ import { configRepository } from "@/utils/db/repositories/ConfigRepository";
 import { normalizeOpenAICompatibleProviderError } from "@/providers/openaiCompatible/openaiCompatibleErrorFormatter";
 
 function state(): TomoriState {
-  return { server_id: 7, config: {}, llm: { llm_provider: "google" } } as TomoriState;
+  return createPersona({ server_id: 7, llm: createLlmRow({ llm_provider: "google" }) });
 }
 
 function dependencies(calls: string[]): AddServerProviderDependencies {

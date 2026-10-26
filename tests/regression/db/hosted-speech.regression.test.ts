@@ -21,7 +21,7 @@ import { activateProviderSpeechDefaults } from "@/utils/provider/providerActivat
 import { registerHostedSpeechModelForScope } from "@/utils/provider/openrouterModelRegistry";
 import { saveProviderModel } from "@/utils/provider/providerPanelOperations";
 import { cache } from "@/utils/cache/tomoriStateCacheStore";
-import { seedModelsFromCatalog } from "@/db/seed/catalog/modelSeed";
+import { initializeDatabase } from "@/utils/db/initializeDatabase";
 import { createPersona } from "../../helpers/fixtures";
 import { DB_TESTS_AVAILABLE, executeTestSqlFile, setupTestDb, testSql } from "./setup/testDb";
 import { insertFixtures, cleanupFixtures, FIXTURE_IDS, type FixtureRefs } from "./setup/fixtures";
@@ -121,8 +121,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech persistence", () => {
     );
     expect(await llmModelRepo.loadSpeechModelById(seedId)).toBeNull();
     expect(await providerModeChecks()).not.toContain("speech_models_provider_mode");
-    await executeTestSqlFile(path.join(process.cwd(), "src/db/schema.sql"));
-    await seedModelsFromCatalog(testSql);
+    await initializeDatabase({ client: testSql, includeRag: false });
     expect(await providerModeChecks()).toEqual(["speech_models_provider_mode"]);
     const seeded = await llmModelRepo.loadAvailableSpeechModels("openrouter", scope());
     seedId = seeded.find((model) => model.codename === "bytedance-seed/seed-audio-1-0")?.speech_model_id ?? 0;
@@ -170,6 +169,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech persistence", () => {
       await testSql`INSERT INTO servers (server_disc_id) VALUES ('_rt_speech_seed_defaults') RETURNING server_id`;
     const [user] =
       await testSql`INSERT INTO users (user_disc_id) VALUES ('_rt_speech_seed_defaults') RETURNING user_id`;
+    await testSql`INSERT INTO server_model_configs (server_id) VALUES (${server.server_id})`;
     try {
       const owners = [
         { kind: "server" as const, ownerId: server.server_id as number },
