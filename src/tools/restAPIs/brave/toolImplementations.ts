@@ -7,6 +7,7 @@
 import { log } from "../../../utils/misc/logger";
 import type { ToolContext, ToolResult } from "../../../types/tool/interfaces";
 import { sendStandardEmbed } from "../../../utils/discord/embedHelper";
+import { resolveToolPersonaDeliveryMode } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { sendPersonaPostViaWebhook } from "@/utils/discord/webhook/personaPost";
 import { ColorCode } from "../../../utils/misc/logger";
 import sharp from "sharp";
@@ -69,10 +70,12 @@ async function sendApiKeyErrorEmbed(context?: ToolContext, searchType = "search"
         footerKey: "general.errors.brave_api.missing_key.footer",
       },
       {
+        persona: context.tomoriState,
+        deliveryMode: resolveToolPersonaDeliveryMode(context),
         webhook: context.webhook,
-        personaUsername: context.personaUsername,
-        personaAvatarUrl: context.personaAvatarUrl,
-        personaId: context.tomoriState.persona_id,
+        deliveryReceipts: context.streamContext?.deliveryReceipts,
+        abortSignal: context.abortSignal,
+        isExecutionCancelled: context.isExecutionCancelled,
       },
     );
   } catch (embedError) {

@@ -17,7 +17,15 @@ import {
 } from "discord.js";
 import { ColorCode, log } from "../misc/logger";
 import { localizer } from "../text/localizer";
-import { sendPersonaPostViaWebhook } from "@/utils/discord/webhook/personaPost";
+import type { TomoriState } from "@/types/db/schema";
+import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
+import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
+import {
+  type PersonaDeliveryMode,
+  type PersonaDeliveryReceipt,
+  sendPersonaPost,
+  sendPersonaPostViaWebhook,
+} from "@/utils/discord/webhook/personaPost";
 import { resolveAuthoringWebhook } from "@/utils/discord/webhook/fallback";
 import { recordChannelDeliveredBotMessage } from "@/utils/discord/stream/channelDeliveryContinuity";
 import { attachTextDisplayModalCollector, buildTextDisplayModalRow } from "./textDisplayModal";
@@ -60,11 +68,21 @@ export function truncateForEmbedDescription(value: string, reservedChars = 0): s
   return available <= 3 ? value.substring(0, available) : `${value.substring(0, available - 3)}...`;
 }
 
+/**
+ * Delivery context for a notice. `persona` selects shared author and appearance resolution; the
+ * webhook fields remain for callers outside the tool and notice migration that still supply a
+ * resolved identity directly.
+ */
 export type WebhookEmbedContext = {
+  persona?: TomoriState;
+  deliveryMode?: PersonaDeliveryMode;
+  impersonatedIdentity?: ResolvedWebhookIdentity;
+  deliveryReceipts?: PersonaDeliveryReceipt[];
+  abortSignal?: AbortSignal;
+  isExecutionCancelled?: () => boolean;
   webhook?: Webhook;
   personaUsername?: string;
   personaAvatarUrl?: string;
-  /** Persona the notice speaks for, so it can continue that persona's adjacent line. */
   personaId?: number;
 };
 
@@ -250,12 +268,36 @@ export async function sendStandardEmbed(
   const embed = createStandardEmbed(locale, options);
   const modalButtons = prepareEmbedModalButtons(locale, options, "Error");
   const { disabledRow: disabledModalRow, components } = modalButtons;
-  let sentMessage: Message;
+  let sentMessage: Message | undefined;
   let sentViaWebhook = false;
   let threadId: string | undefined;
 
   const personaUsername = webhookContext?.personaUsername;
-  if (webhookContext?.webhook && personaUsername && canUseWebhookForChannel(channel, webhookContext.webhook)) {
+  if (webhookContext?.persona) {
+    threadId =
+      "isThread" in channel && typeof channel.isThread === "function" && channel.isThread() ? channel.id : undefined;
+    const outcome = await sendPersonaPost(
+      {
+        channel: channel as unknown as SendableChannel,
+        persona: webhookContext.persona,
+        deliveryMode: webhookContext.deliveryMode,
+        webhook: webhookContext.webhook,
+        impersonatedIdentity: webhookContext.impersonatedIdentity,
+        abortSignal: webhookContext.abortSignal,
+        isExecutionCancelled: webhookContext.isExecutionCancelled,
+        deliveryReceipts: webhookContext.deliveryReceipts,
+      },
+      { embeds: [embed], components },
+    );
+    if (outcome.status !== "sent") {
+      log.warn("Failed to send embed through persona delivery", outcome.error, {
+        metadata: { outcome: outcome.status, channelId: channel.id },
+      });
+      return;
+    }
+    sentMessage = outcome.message;
+    sentViaWebhook = outcome.receipt.route === "webhook";
+  } else if (webhookContext?.webhook && personaUsername && canUseWebhookForChannel(channel, webhookContext.webhook)) {
     threadId =
       "isThread" in channel && typeof channel.isThread === "function" && channel.isThread() ? channel.id : undefined;
     try {
@@ -271,32 +313,34 @@ export async function sendStandardEmbed(
       );
       sentViaWebhook = true;
     } catch (error) {
-      log.warn("Failed to send embed via webhook, falling back to bot message", error as Error);
-      sentMessage = await channel.send({ embeds: [embed], components });
+      log.warn("Failed to send embed via webhook", error as Error);
+      return;
     }
   } else {
     sentMessage = await channel.send({ embeds: [embed], components });
+    recordChannelDeliveredBotMessage(channel.id);
   }
 
-  if (!sentViaWebhook) recordChannelDeliveredBotMessage(channel.id);
+  if (!sentMessage) return;
+  const deliveredMessage = sentMessage;
 
   if (!disabledModalRow) return;
 
   const disableButtons = async (): Promise<void> => {
-    if (sentViaWebhook && webhookContext?.webhook) {
-      const author = await resolveAuthoringWebhook(channel, sentMessage.webhookId, webhookContext.webhook);
+    if (sentViaWebhook) {
+      const author = await resolveAuthoringWebhook(channel, deliveredMessage.webhookId, webhookContext?.webhook);
       if (!author) throw new Error("Authoring webhook unavailable for embed button edit");
-      await author.editMessage(sentMessage.id, {
+      await author.editMessage(deliveredMessage.id, {
         embeds: [embed],
         components: [disabledModalRow],
         ...(threadId ? { threadId } : {}),
       });
       return;
     }
-    await sentMessage.edit({ embeds: [embed], components: [disabledModalRow] });
+    await deliveredMessage.edit({ embeds: [embed], components: [disabledModalRow] });
   };
 
-  modalButtons.attach(sentMessage, disableButtons);
+  modalButtons.attach(deliveredMessage, disableButtons);
 }
 
 /**

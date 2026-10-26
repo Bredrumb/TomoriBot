@@ -3,6 +3,7 @@ import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult }
 import { suppressNextSelfReply } from "@/utils/chat/channelQueue";
 import { DICE_MODES, parseDiceRoll, rollDice } from "@/utils/dice/diceRoll";
 import { buildDiceRollEmbed } from "@/utils/dice/diceRollEmbed";
+import { sendToolPersonaPost } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -62,12 +63,21 @@ export class RollDiceTool extends BaseTool {
       if (context.abortSignal?.aborted)
         return { success: false, error: localizer(context.locale, "tools.roll_dice.cancelled") };
       suppressNextSelfReply(context.channel.id);
-      const message = await context.channel.send({
+      const outcome = await sendToolPersonaPost(context, context.tomoriState, {
         embeds: [embed],
         allowedMentions: { parse: [] },
         flags: MessageFlags.SuppressNotifications,
       });
-      return { success: true, data: { ...result, message_id: message.id } };
+      if (outcome.status !== "sent") {
+        if (context.abortSignal?.aborted || context.isExecutionCancelled?.())
+          return { success: false, error: localizer(context.locale, "tools.roll_dice.cancelled") };
+        log.error("Failed to post dice roll", outcome.error, {
+          errorType: "DiceRollDeliveryError",
+          metadata: { channelId: context.channel.id, outcome: outcome.status },
+        });
+        return { success: false, error: localizer(context.locale, "tools.roll_dice.delivery_failed") };
+      }
+      return { success: true, data: { ...result, message_id: outcome.message.id } };
     } catch (error) {
       log.error("Failed to post dice roll", error, {
         errorType: "DiceRollDeliveryError",

@@ -137,10 +137,19 @@ Resolution follows this sequence:
 2. **Copied identity**: Resolves `target` against known personas and conversation users, rendering `target (SourcePersona)` with the target's avatar. A nested `SourcePersona (Target (sprite)):` label copies one of another persona's sprites, rendering `Target (sprite) (SourcePersona)` with the sprite avatar; an unknown sprite falls back to the target's base look. The sprite stays in the username instead of `persona_sprite_messages`, so context rebuilding recovers the label from the name alone.
 3. **Plain output**: Unmatched modifiers are stripped before delivery.
 
-### Embeds and stickers
+### Tool posts and notices
 
-- **Tool embeds**: Tool results sent via `sendStandardEmbed` reuse the persona webhook identity when available.
-- **Stickers**: Webhooks cannot dispatch native Discord stickers. For alters, TomoriBot posts the sticker CDN preview URL via webhook; if delivery fails, it falls back to a standard bot message.
+Tool results, galleries, dice rolls, replies, and persona tool notices go through `sendPersonaPost`. It
+resolves the invoking persona's base or committed appearance, selects the bot or managed webhook route,
+and records one delivery receipt. A main persona keeps bot delivery unless it has a committed sprite or
+generic avatar; an alter always uses the managed pool. An uncertain POST is never reposted as the bot.
+Surfaces with no persona context, such as slash command replies and system error notices, keep their
+explicit author.
+
+### Stickers
+
+Webhooks cannot dispatch native Discord stickers. For alters, TomoriBot posts the sticker CDN preview URL
+via webhook; if delivery fails, it falls back to a standard bot message.
 
 ## Source pointers
 
@@ -149,5 +158,7 @@ Resolution follows this sequence:
 - `src/utils/chat/personaQueue.ts`: Front-of-queue serialization (`queueAdditionalPersonaTurns`).
 - `src/utils/text/participants/preparation.ts`: Turn-scoped participant discovery and public profile filtering.
 - `src/utils/discord/webhookManager.ts`: Shared channel webhook lifecycle and delivery.
+- `src/utils/discord/webhook/personaPost.ts`: Shared persona author, committed appearance, and delivery receipt.
+- `src/utils/discord/webhook/toolPersonaDelivery.ts`: Tool-context adapter for shared persona delivery.
 - `src/utils/discord/webhookReply.ts`: Historic author identity recovery (`getReplyContextAuthorName`).
 - `src/utils/discord/renderModifierParser.ts`: Sprite and copied-identity syntax parsing.

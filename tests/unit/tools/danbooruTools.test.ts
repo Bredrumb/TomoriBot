@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import {
   ApplicationCommandOptionType,
+  Collection,
   ComponentType,
   type MediaGalleryComponentData,
   SlashCommandSubcommandBuilder,
@@ -45,6 +46,11 @@ import {
 import type { ToolContext } from "@/types/tool/interfaces";
 import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 import { buildDanbooruGalleryPayload } from "@/utils/discord/danbooruGalleryMessage";
+import {
+  clearAllChannelDeliveryContinuity,
+  getChannelLastDelivery,
+} from "@/utils/discord/stream/channelDeliveryContinuity";
+import * as lifecycle from "@/utils/discord/webhook/lifecycle";
 import type { ComponentsV2MessagePayload } from "@/utils/discord/ui/componentsV2Limits";
 import { buildNoticeContainer } from "@/utils/discord/ui/statusComponents";
 import { ColorCode, log } from "@/utils/misc/logger";
@@ -382,12 +388,16 @@ const posts = () => fixture<DanbooruPost[]>("posts_reisalin_stout");
 
 const guildChannel = (nsfw: boolean, sent: unknown[] = []) => ({
   id: "channel",
+  guildId: "guild",
   nsfw,
+  lastMessageId: null as string | null,
   isDMBased: () => false,
   isThread: () => false,
+  fetchWebhooks: async () => new Collection(),
+  createWebhook: async () => ({ id: "created-webhook" }),
   send: async (payload: unknown) => {
     sent.push(payload);
-    return { id: "message" };
+    return { id: "message", channelId: "channel", webhookId: null };
   },
 });
 const threadUnder = (parentNsfw: boolean) => ({
@@ -398,9 +408,9 @@ const threadUnder = (parentNsfw: boolean) => ({
 });
 const dmChannel = { id: "dm", isDMBased: () => true, isThread: () => false };
 
-function contextIn(channel: unknown): ToolContext {
+function contextIn(channel: unknown, persona = createPersona()): ToolContext {
   return {
-    tomoriState: createPersona(),
+    tomoriState: persona,
     locale: "en-US",
     provider: "google",
     channel,
@@ -641,6 +651,42 @@ describe("danbooru_search_posts tool", () => {
     const shape = JSON.parse(result.message ?? "{}") as { status: string; posted: Array<{ characters: string[] }> };
     expect(shape.status).toBe("posted");
     expect(shape.posted.every((post) => post.characters.includes("reisalin stout"))).toBe(true);
+  });
+
+  it("posts an alter persona's gallery under that alter instead of the main bot", async () => {
+    const requests: RecordedRequest[] = [];
+    fetchSpy = stubGlobalFetch(async (input, init) => {
+      requests.push({ url: new URL(String(input)), init });
+      return Response.json(await posts());
+    });
+    const webhookMessages: Array<Record<string, unknown>> = [];
+    const webhook = {
+      id: "gallery-webhook",
+      channelId: "channel",
+      guildId: "guild",
+      token: "fixture",
+      send: async (payload: Record<string, unknown>) => {
+        webhookMessages.push(payload);
+        return { id: "gallery-message", channelId: "channel", webhookId: webhook.id };
+      },
+    };
+    spyOn(lifecycle, "getOrCreateWebhook").mockResolvedValue({ webhook: webhook as never });
+    const channel = guildChannel(false);
+    const persona = createPersona({ persona_id: 2, persona_nickname: "Juno", is_alter: true });
+
+    const result = await new DanbooruSearchPostsTool().execute(
+      { tags: ["reisalin stout"] },
+      contextIn(channel, persona),
+    );
+
+    expect(result.success).toBe(true);
+    expect(webhookMessages).toHaveLength(1);
+    expect(webhookMessages[0].username).toBe("Juno");
+    expect(getChannelLastDelivery("channel")).toMatchObject({
+      via: "webhook",
+      speaker: { personaId: 2 },
+    });
+    clearAllChannelDeliveryContinuity();
   });
 
   it("posts nothing when no post survives the filters", async () => {
