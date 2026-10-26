@@ -39,6 +39,7 @@ const DEFAULT_TOOL_CONTEXT_TURNS = 4;
 const MAX_TOOL_CONTEXT_TURNS = 10;
 
 const URL_PATTERN = /\bhttps?:\/\/\S+/i;
+const DICE_ROLL_REQUEST_PATTERN = /\b(?:roll(?:ing)?|dice|\d*d\d+)\b/i;
 /** The host must open the link or follow whitespace, so a lookalike subdomain does not match. */
 const DANBOORU_POST_LINK_PATTERN = /(?:https?:\/\/|^|\s)danbooru\.donmai\.us\/posts\/\d+/i;
 /** A request to see existing art "of" or "from" something, such as "show me art of Ryza" or "send pics from Atelier". */
@@ -81,6 +82,7 @@ function hasReminderUpdateIntent(text: string): boolean {
 }
 
 const TOOL_INTENT_PATTERNS: RegExp[] = [
+  DICE_ROLL_REQUEST_PATTERN,
   /\b(search|web\s*search|look\s+up|browse|google|fetch|read\s+this\s+(?:url|link|page)|open\s+this\s+(?:url|link|page))\b/i,
   /\b(latest|today|current|currently|up[- ]?to[- ]?date|news|recent)\b/i,
   /\b(remember|save\s+(?:this|that|it)|forget|(?:delete|update)\s+(?:(?:this|that|your|my|the)\s+)?memory|store\s+(?:this|that|it))\b/i,
@@ -218,6 +220,12 @@ export const MEDIA_GENERATION_TOOL_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 export const DELIBERATE_TOOL_TRIGGER_TARGETS = [
+  {
+    value: "dice",
+    labelKey: "commands.config.panel.tool_target_dice",
+    label: "Dice rolling",
+    toolNames: ["roll_dice"],
+  },
   {
     value: "image",
     labelKey: "commands.config.panel.tool_target_image",
@@ -543,6 +551,10 @@ export function getDeliberateToolIntentResult(
   const localePackResult = getCustomDeliberateToolIntentResult(text, getLocalePackTriggerMap(), "built-in");
   allowedToolNames.push(...localePackResult.allowedToolNames);
   matches.push(...localePackResult.matches);
+
+  if (DICE_ROLL_REQUEST_PATTERN.test(text)) {
+    addToolMatches(allowedToolNames, matches, ["roll_dice"], "dice roll request", "built-in");
+  }
 
   if (hasReminderCreationIntent(text)) {
     addToolMatches(allowedToolNames, matches, ["create_task"], "reminder/timer request", "built-in");
@@ -915,12 +927,11 @@ export function getAttachmentDeliberateToolIntentResult(
 /** Expression tools remain available without a task request; their feature toggles still apply. */
 export function getAutonomousDeliberateToolNames(state: TomoriState): string[] {
   const stickerTool = new StickerTool();
-  if (
-    !state.llm.has_tools ||
-    state.config.tool_use_enabled === false ||
-    !state.config.sticker_usage_enabled ||
-    !stickerTool.isAvailableFor(state.llm.llm_provider)
-  )
-    return [];
-  return [stickerTool.name];
+  if (!state.llm.has_tools || state.config.tool_use_enabled === false) return [];
+  return [
+    ...(state.config.sticker_usage_enabled && stickerTool.isAvailableFor(state.llm.llm_provider)
+      ? [stickerTool.name]
+      : []),
+    ...(state.config.conditioning_interactions_enabled ? ["interact_with_target"] : []),
+  ];
 }

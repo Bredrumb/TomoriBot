@@ -167,6 +167,7 @@ const CONDITIONING_GROUP: ConditioningGroup = {
   totalCount: 2,
   updatedAt: new Date("2026-01-01T00:00:00Z"),
   userDiscIds: ["user-1"],
+  personaActors: [],
   conditioningIds: [101],
 };
 

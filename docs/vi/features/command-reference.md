@@ -11,7 +11,7 @@ sidebar:
 
 Tất cả các lệnh slash hiện được TomoriBot đăng ký, được tạo từ cùng trình xây dựng lệnh và mô tả tiếng Việt dùng để đăng ký trên Discord (mô tả chưa được dịch sẽ hiển thị bằng tiếng Anh).
 
-Các nhóm lệnh cấp cao nhất: **43**. Các lệnh slash có thể thực thi: **90**.
+Các nhóm lệnh cấp cao nhất: **44**. Các lệnh slash có thể thực thi: **91**.
 
 ## `/booru`
 
@@ -331,6 +331,14 @@ Thưởng cho mình bằng các tương tác thú vị.
 | `/reward hug` | Ôm mình một cái nào! |
 | `/reward kiss` | Hôn mình một cái nào! |
 | `/reward tickle` | Cù lét mình nào! |
+
+## `/roll`
+
+Tung xúc xắc cho board game và nhập vai.
+
+| Lệnh | Tóm tắt |
+|---|---|
+| `/roll` | Tung xúc xắc cho board game và nhập vai. |
 
 ## `/scheduled-task`
 

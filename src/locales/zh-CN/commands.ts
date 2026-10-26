@@ -51,6 +51,7 @@ import capabilities from "./commands/capabilities";
 import provider from "./commands/provider";
 import update from "./commands/update";
 import ping from "./commands/ping";
+import roll from "./commands/roll";
 import comment from "./commands/comment";
 import kill from "./commands/kill";
 import refresh from "./commands/refresh";
@@ -111,6 +112,7 @@ export default {
     ...provider,
     ...update,
     ...ping,
+    ...roll,
     ...comment,
     ...kill,
     ...refresh,

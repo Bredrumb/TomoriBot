@@ -1,6 +1,10 @@
 export default {
   capabilities: {
     manage: {
+      dicerolling_option: "ダイスロール",
+      dicerolling_desc: "TRPGやロールプレイのために公開でサイコロを振ります",
+      conditioninginteractions_option: `遊びのインタラクション`,
+      conditioninginteractions_desc: `ハグ、甘噛み、ボンク、食べ物で強い気持ちを表現します`,
       description: `このサーバーでの私のコアな行動権限を設定します。`,
       selfteaching_option: `自己学習`,
       personalization_option: `パーソナライズ (記憶/ニックネーム)`,

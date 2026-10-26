@@ -49,6 +49,8 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
                     user_blocking_enabled: params.tomoriConfig.user_blocking_enabled,
                     user_info_updates_enabled: params.tomoriConfig.user_info_updates_enabled,
                     thread_creation_enabled: params.tomoriConfig.thread_creation_enabled,
+                    conditioning_interactions_enabled: params.tomoriConfig.conditioning_interactions_enabled,
+                    dice_rolling_enabled: params.tomoriConfig.dice_rolling_enabled,
                     danbooru_enabled: params.tomoriConfig.danbooru_enabled,
                   },
                 }

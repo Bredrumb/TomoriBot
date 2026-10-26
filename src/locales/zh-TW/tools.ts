@@ -1,5 +1,11 @@
 export default {
   tools: {
+    roll_dice: {
+      missing_permissions: "機器人需要檢視此頻道、傳送訊息與嵌入連結的權限才能傳送擲骰結果。",
+      disabled: "擲骰功能已停用。請透過 `/config` > 外掛程式 > 可用工具啟用它。",
+      cancelled: "擲骰已在傳送前取消。",
+      delivery_failed: "無法傳送擲骰結果。未能成功完成擲骰。",
+    },
     execution: {
       unavailable: `在目前的設定、模型功能或 bot 權限下，工具 \`{tool}\` 無法使用。`,
     },
@@ -198,6 +204,7 @@ export default {
       // 中文沒有空格，條目一律以子字串比對，所以每則都取足以鎖定意圖的詞組，
       // 不用「記」「存」「畫」這種單字動詞，否則會在無關的要求上誤開工具。
       deliberate: {
+        dice: ["骰子", "擲骰"],
         image: [
           "畫一張",
           "畫張",

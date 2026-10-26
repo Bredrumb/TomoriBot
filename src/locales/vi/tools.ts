@@ -1,5 +1,11 @@
 export default {
   tools: {
+    roll_dice: {
+      missing_permissions: "Bot cần quyền xem kênh này, gửi tin nhắn và chèn liên kết để đăng kết quả tung xúc xắc.",
+      disabled: "Tính năng tung xúc xắc đã bị tắt. Bật lại qua `/config` > Plugin > Công cụ khả dụng.",
+      cancelled: "Lượt tung xúc xắc đã bị hủy trước khi gửi.",
+      delivery_failed: "Không thể đăng kết quả xúc xắc. Không có lượt tung nào được gửi thành công.",
+    },
     execution: {
       unavailable: `Công cụ \`{tool}\` không khả dụng theo cài đặt hiện tại, khả năng của model hoặc quyền hạn của bot.`,
     },
@@ -194,6 +200,7 @@ export default {
     },
     intent_packs: {
       deliberate: {
+        dice: ["xúc xắc", "tung xúc xắc"],
         image: [
           "vẽ*",
           "ve giup*",

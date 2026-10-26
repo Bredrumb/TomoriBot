@@ -103,6 +103,8 @@ Chọn `user` hoặc `persona`, mỗi lần chỉ một đối tượng. Tương
 hay tạo phản hồi AI, kể cả khi có `reason`; dòng cuối "sẽ nhớ chuyện này" chỉ là lời đùa.
 Với cả người dùng và persona, lý do được in nghiêng ngay trong câu mô tả hành động.
 
+Bật `Tương tác vui` trong `/config` > `Plugin` > `Công cụ khả dụng` để persona thể hiện cảm xúc bằng hành động với người dùng hoặc persona khác. Tùy chọn mặc định bật và có thể tắt trong cùng menu này. Mỗi hành động cần đối tượng, hành động và lý do; cho ăn còn cần chỉ rõ món ăn. Người dùng chỉ nhận embed vui. Persona nhận bộ nhớ điều hòa và được xếp hàng phản ứng sau khi người đang nói kết thúc. Persona đang phản ứng không thể dùng công cụ này trong lượt trả lời đó. Cả công cụ lẫn lệnh gạch chéo đều chọn ngẫu nhiên các tiêu đề đã dịch.
+
 Mỗi lượt `/reward` hoặc `/punish` nhắm đến persona đều được kiểm đếm, nhưng chỉ trở thành bộ nhớ mà bot
 thực sự làm theo khi bạn cung cấp `reason`, hiển thị như sau trong prompt của bot:
 

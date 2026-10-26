@@ -69,6 +69,8 @@ const BASE_CONFIG: AssembledServerConfig = {
   web_search_enabled: true,
   manage_message_enabled: true,
   thread_creation_enabled: true,
+  conditioning_interactions_enabled: true,
+  dice_rolling_enabled: false,
   imagegen_enabled: true,
   danbooru_enabled: true,
   videogen_enabled: false,

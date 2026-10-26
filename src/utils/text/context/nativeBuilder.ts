@@ -159,6 +159,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
               user_blocking_enabled: tomoriConfig.user_blocking_enabled,
               user_info_updates_enabled: tomoriConfig.user_info_updates_enabled,
               thread_creation_enabled: tomoriConfig.thread_creation_enabled,
+              conditioning_interactions_enabled: tomoriConfig.conditioning_interactions_enabled,
+              dice_rolling_enabled: tomoriConfig.dice_rolling_enabled,
               danbooru_enabled: tomoriConfig.danbooru_enabled,
             },
           }

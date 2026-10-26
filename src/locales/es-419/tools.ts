@@ -1,5 +1,12 @@
 export default {
   tools: {
+    roll_dice: {
+      missing_permissions:
+        "El bot necesita permisos para ver este canal, enviar mensajes e insertar enlaces para publicar una tirada de dados.",
+      disabled: "La tirada de dados está desactivada. Actívala en `/config` > Plugins > Herramientas disponibles.",
+      cancelled: "La tirada de dados se canceló antes de enviarse.",
+      delivery_failed: "No se pudo publicar el resultado de los dados. No se entregó ninguna tirada con éxito.",
+    },
     execution: {
       unavailable: `La herramienta \`{tool}\` no está disponible con la configuración actual, las capacidades del modelo o los permisos del bot.`,
     },
@@ -194,6 +201,7 @@ export default {
     },
     intent_packs: {
       deliberate: {
+        dice: ["dados", "tirada"],
         image: [
           "genera un*",
           "genera una*",

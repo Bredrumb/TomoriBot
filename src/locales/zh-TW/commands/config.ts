@@ -479,6 +479,7 @@ export default {
       "tool_target_user-blocking": `人格使用者封鎖`,
       "tool_target_user-info": `使用者資訊更新`,
       tool_target_thread: `建立討論串`,
+      tool_target_dice: "擲骰",
       tool_target_capabilities: `功能檢視`,
       tool_trigger_literal_label: `字面觸發詞`,
       tool_trigger_literal_description: `要比對的詞句。字面與規則表達式只能填其中一種。`,

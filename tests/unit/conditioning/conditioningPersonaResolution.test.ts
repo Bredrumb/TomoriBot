@@ -5,7 +5,13 @@
  * actor may currently trigger is rejected before any repository write.
  */
 import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
-import { MessageFlags, type ChatInputCommandInteraction, type Client, type EmbedBuilder } from "discord.js";
+import {
+  escapeMarkdown,
+  MessageFlags,
+  type ChatInputCommandInteraction,
+  type Client,
+  type EmbedBuilder,
+} from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { personaRepository } from "@/utils/db/repositories";
 import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
@@ -18,7 +24,10 @@ import { execute as executeFeed } from "@/commands/reward/feed";
 import { createUserRow } from "../../helpers/fixtures";
 import { makeFakeInteraction } from "../../helpers/fakeInteraction";
 import { collectCaseFailures, localizedCopy, RUNTIME_LOCALES } from "../../helpers/localeCases";
-import { CONDITIONING_ACTION_LOCALE_KEYS } from "@/utils/conditioning/conditioning";
+import { CONDITIONING_ACTION_LOCALE_KEYS, type ConditioningActionKey } from "@/utils/conditioning/conditioning";
+import { CONDITIONING_ACTION_TYPES } from "@/utils/conditioning/conditioning";
+import { buildConditioningInteractionEmbed } from "@/utils/conditioning/conditioningEmbed";
+import { classifyProtocolTitle } from "@/utils/discord/embedProtocol";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -51,6 +60,34 @@ afterEach(() => {
 });
 
 describe("conditioning user targets", () => {
+  it("renders every random title variant in every locale without losing embed classification", () => {
+    const random = track(spyOn(Math, "random"));
+    const failures = collectCaseFailures();
+    for (const locale of RUNTIME_LOCALES) {
+      for (const [actionKey, type] of Object.entries(CONDITIONING_ACTION_TYPES)) {
+        const action = actionKey as keyof typeof CONDITIONING_ACTION_TYPES;
+        const keys = CONDITIONING_ACTION_LOCALE_KEYS[action];
+        const titleKeys = keys.embed_titles;
+        titleKeys.forEach((key, index) => {
+          random.mockReturnValue((index + 0.5) / titleKeys.length);
+          failures.check(`${locale}/${action}/${key}`, () => {
+            const embed = buildConditioningInteractionEmbed({
+              locale,
+              type,
+              actionKey: action,
+              actorLabel: "Juno",
+              targetName: "Mirri",
+              reasonText: "",
+              footerKey: null,
+            });
+            expect(embed.data.title).toBe(localizedCopy(locale, key));
+            expect(classifyProtocolTitle(embed.data.title)).toBe(type);
+          });
+        });
+      }
+    }
+    failures.expectNoFailures();
+  });
   it("posts user embeds with names, reasons, and food without loading personas, recording events, or triggering chat", async () => {
     const loadSpy = track(spyOn(personaRepository, "loadState").mockResolvedValue(null));
     const recordSpy = track(spyOn(conditioningMemoryRepository, "recordEvent").mockResolvedValue(null));
@@ -94,7 +131,10 @@ describe("conditioning user targets", () => {
       expect(calls.map((call) => call.method)).toEqual(["reply"]);
       const payload = calls[0].args[0] as { embeds: EmbedBuilder[]; flags: number };
       const embed = payload.embeds[0].toJSON();
-      expect(embed.title).toBe(localizedCopy("en-US", `${testCase.key}.embed_title`));
+      const actionKey = testCase.key.split(".").pop() as ConditioningActionKey;
+      expect(
+        CONDITIONING_ACTION_LOCALE_KEYS[actionKey].embed_titles.map((key) => localizedCopy("en-US", key)),
+      ).toContain(embed.title ?? "");
       const actionDescription = localizedCopy(
         "en-US",
         `${testCase.key}.${testCase.withReason ? "embed_description_with_reason" : "embed_description"}`,
@@ -119,16 +159,17 @@ describe("conditioning user targets", () => {
     expect(chatSpy).not.toHaveBeenCalled();
   });
 
-  it("renders an inline italic reason for every action and locale while escaping user Markdown", async () => {
+  it("separates an unchanged italic reason with a colon for every action and locale while escaping user Markdown", async () => {
     const failures = collectCaseFailures();
+    const reason = "because of *kindness*.";
+    const escapedReason = escapeMarkdown(reason);
     for (const locale of RUNTIME_LOCALES) {
       for (const [actionKey, keys] of Object.entries(CONDITIONING_ACTION_LOCALE_KEYS)) {
         const { interaction, calls } = makeFakeInteraction({ guild: { id: "guild-1" }, channel: { messages: {} } });
         Object.assign(interaction.options, {
           getUser: () => ({ id: "target-1", displayName: "Mirri" }),
           getMember: () => null,
-          getString: (name: string) =>
-            name === "reason" ? "  being   *helpful*  " : name === "food" ? "cookies" : null,
+          getString: (name: string) => (name === "reason" ? `  ${reason}  ` : name === "food" ? "cookies" : null),
         });
         const execute =
           actionKey === "feed"
@@ -147,10 +188,16 @@ describe("conditioning user targets", () => {
               user: `<@${interaction.user.id}>`,
               bot: "<@target-1>",
               food_text: " `cookies`",
-              reason: "being \\*helpful\\*",
+              reason: escapedReason,
             }),
           );
-          expect(embed.description).toContain("*being \\*helpful\\**");
+          const action = localizedCopy(locale, keys.embed_description, {
+            user: `<@${interaction.user.id}>`,
+            bot: "<@target-1>",
+            food_text: " `cookies`",
+          }).replace(/[.。]$/u, "");
+          const separator = ["ja", "zh-TW", "zh-CN"].includes(locale) ? "：" : ": ";
+          expect(embed.description).toBe(`${action}${separator}*${escapedReason}*`);
           expect(embed.description).not.toContain("\n");
           expect(embed.footer?.text).toBe(
             localizedCopy(locale, "commands.conditioning.shared.user_footer", { bot: "Mirri" }),

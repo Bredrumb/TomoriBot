@@ -1,5 +1,12 @@
 export default {
   tools: {
+    roll_dice: {
+      missing_permissions:
+        "ダイスロールを投稿するには、このチャンネルの閲覧、メッセージの送信、埋め込みリンクの権限が必要です。",
+      disabled: "ダイスロールは無効化されています。`/config` > プラグイン > 利用可能なツールから有効化してください。",
+      cancelled: "ダイスロールは送信前にキャンセルされました。",
+      delivery_failed: "ダイスの結果を投稿できませんでした。ロールは送信されませんでした。",
+    },
     execution: {
       unavailable: `ツール \`{tool}\` は、現在の設定、モデルの機能、またはBotの権限では利用できません。`,
     },
@@ -194,6 +201,7 @@ export default {
     },
     intent_packs: {
       deliberate: {
+        dice: ["サイコロ", "ダイス", "振って"],
         image: [
           "画像",
           "イラスト",

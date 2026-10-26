@@ -1,5 +1,12 @@
 export default {
   tools: {
+    roll_dice: {
+      missing_permissions:
+        "The bot needs permission to view this channel, send messages, and embed links to post a dice roll.",
+      disabled: "Dice Rolling is disabled. Enable it through `/config` > Plugins > Available Tools.",
+      cancelled: "The dice roll was cancelled before delivery.",
+      delivery_failed: "The dice result could not be posted. No successful roll was delivered.",
+    },
     execution: {
       unavailable: `The tool \`{tool}\` is unavailable under the current settings, model capabilities, or bot permissions.`,
     },
@@ -196,6 +203,7 @@ export default {
       // English stays empty because the built-in patterns in deliberateToolMode.ts already cover
       // English grammar; keywords here would widen English matching beyond those patterns.
       deliberate: {
+        dice: [],
         image: [],
         video: [],
         voice: [],

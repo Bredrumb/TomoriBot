@@ -1,6 +1,10 @@
 export default {
   capabilities: {
     manage: {
+      dicerolling_option: "Tirada de dados",
+      dicerolling_desc: "Tira dados públicamente para juegos de rol y partidas de mesa",
+      conditioninginteractions_option: `Interacciones juguetonas`,
+      conditioninginteractions_desc: `Expresa emociones intensas con abrazos, mordidas, golpecitos y comida`,
       description: `Configura qué herramientas específicas puedo usar en este servidor.`,
       selfteaching_option: `Autoaprendizaje`,
       personalization_option: `Personalización (memorias/apodos)`,

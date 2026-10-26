@@ -1,6 +1,10 @@
 export default {
   capabilities: {
     manage: {
+      dicerolling_option: "Dice Rolling",
+      dicerolling_desc: "Roll dice publicly for tabletop games and roleplay",
+      conditioninginteractions_option: `Playful Interactions`,
+      conditioninginteractions_desc: `Express strong feelings with hugs, bites, bonks, and food`,
       description: `Configure which specific tools I can use on this server.`,
       selfteaching_option: `Self-Teaching`,
       personalization_option: `Personalization (Memories/Nicknames)`,

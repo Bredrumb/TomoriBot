@@ -23,10 +23,9 @@ calls never delay reminders.
 | C, speak | `runIdleNudgeAttempt` (`runtime/runner.ts`) | Fresh re-checks, then a normal `tomoriChat` turn on the channel's latest message, run like reminders |
 
 Phase A runs every 60 seconds on the coordinator's reconcile tick, because no due-time column
-exists to wake on. Natural Nudges is on by default, so `listEnabledIdleNudgeServers` starts from guild
-servers with `message_sent` inside the heat window, not from config rows: a server that never opened
-the page runs on the column defaults, and a server with no recent activity is never read. A server
-that turned idle nudges off is skipped, as is any server with an attempt in flight.
+exists to wake on. Natural Nudges is on by default. `listEnabledIdleNudgeServers` selects guild
+servers with `message_sent` inside the heat window and uses column defaults for servers with no
+config row. It skips servers with no recent activity, idle nudges turned off, or an attempt in flight.
 
 Repository reads retry retired database connections through `withTransientDbRetry`. Exhausted metric
 reads fail the evaluation instead of supplying empty activity data that could be cached for later
@@ -47,7 +46,7 @@ reconcile tick
                                                        └─ fire row + one agenda row per speaker
 ```
 
-## State: events, not meters
+## State: fire history and derived meters
 
 Nothing decays on a job. Every meter is an elapsed-time read over the fire log
 (`natural_nudge_fires`): persona, category, and idle nudge rest; the level's daily cap; the pending
@@ -261,10 +260,11 @@ A Play Scene idle nudge reuses the `/generate scene` machinery: the runner passe
 <!-- anchor: active-nudges -->
 
 An Active Nudge has no planner. A message counter decides when to look, one matcher call decides whether
-the conversation matches a persona's interest, and the winner gets a plain turn.
+the conversation matches a persona's interest, and the winner gets a plain turn. The `messageCreate`
+handler starts the counter check in the background, so its settings read does not delay chat.
 
 ```
-messageCreate (activeNudge.ts, not awaited)
+messageCreate (activeNudge.ts)
   └─ observeActiveNudgeMessage
        ├─ persona message → counter starts over; an open check's watch notes it
        ├─ human message in an effective channel (a thread counts toward its parent)
