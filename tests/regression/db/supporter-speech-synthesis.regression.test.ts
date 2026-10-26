@@ -1,3 +1,16 @@
+import { createSpeechCallerFixture } from "../../helpers/speechCallers";
+import { makeFakeInteraction } from "../../helpers/fakeInteraction";
+import type { CustomEndpointRow } from "@/types/db/schema";
+import type { ChatInputCommandInteraction, Client } from "discord.js";
+import { execute as generateVoiceMessage } from "@/commands/generate/voice-message";
+import { GenerateVoiceMessageTool } from "@/tools/functionCalls/generateVoiceMessageTool";
+import { getAvailableToolsWithMCP } from "@/tools/availability";
+import type { ToolContext, ToolAssemblyState } from "@/types/tool/interfaces";
+import { storeVoiceSample, deleteStoredVoiceSample } from "@/utils/storage/voiceSampleStorage";
+import { activateProviderSpeechDefaults } from "@/utils/provider/providerActivation";
+import { buildProvidersPanelPayload } from "@/utils/discord/ui/providersPanel";
+import { setPersonalCapabilityEnabled } from "@/utils/provider/personalProviderHelpers";
+import { synthesizeVoiceMessage } from "@/utils/speech/voiceMessageSynthesis";
 import { createMemberKeyMetadata } from "../../helpers/memberKeyMetadata";
 import { useEnvSandbox } from "../../helpers/env";
 import {
@@ -7,12 +20,12 @@ import {
   SupporterSponsorshipRepository,
 } from "@/modules/supporter-billing/db";
 import { MemberKeyRepository } from "@/modules/supporter-billing/db/repositories/memberKeys";
-import { providerPanelOperations } from "@/utils/provider/providerPanelOperations";
-import { createPersona } from "../../helpers/fixtures";
+import { providerPanelOperations, saveProviderModel } from "@/utils/provider/providerPanelOperations";
+import { createPersona, createUserRow } from "../../helpers/fixtures";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { llmModelRepo, llmProviderRepo, personaRepository } from "@/utils/db/repositories";
-import { setHostedSpeechSelection } from "@/utils/db/repositories/SpeechRepository";
+import { setHostedSpeechSelection, setSpeechEndpointSelection } from "@/utils/db/repositories/SpeechRepository";
 import { resolveSpeechTargets } from "@/utils/provider/speechEndpointResolver";
 import { encryptApiKey } from "@/utils/security/crypto";
 import { createSpeechWav, createSpeechMp3 } from "../../helpers/speechAudio";
@@ -136,7 +149,277 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech synthesis lifecycle and fall
     await cleanupFixtures(testSql);
   });
 
-  requests.filter(({ url }) => url.endsWith("/interactions") || url.includes("/text-to-speech/"));
+  it("connects Subscription speech to both callers in server and personal scope", async () => {
+    const [sample] =
+      await testSql`INSERT INTO voice_samples (server_id, name, file_path, duration_ms) VALUES (${refs.serverId}, 'Synthetic sample', 'pending', 200) RETURNING sample_id`;
+    const storedPath = await storeVoiceSample({ serverId: refs.serverId, sampleId: sample.sample_id, buffer: wav });
+    if (!storedPath) throw new Error("Missing stored sample");
+    await testSql`UPDATE voice_samples SET file_path = ${storedPath} WHERE sample_id = ${sample.sample_id}`;
+    const key = await encryptApiKey("synthetic-openrouter");
+    await testSql`INSERT INTO saved_provider_configs (server_id, provider, api_key, key_version) VALUES (${refs.serverId}, 'openrouter', ${key.encrypted}, ${key.version}) ON CONFLICT (server_id, provider) DO UPDATE SET api_key = EXCLUDED.api_key, key_version = EXCLUDED.key_version`;
+    await testSql`INSERT INTO user_saved_provider_configs (user_id, provider, api_key, key_version) VALUES (${refs.userId}, 'openrouter', ${key.encrypted}, ${key.version}) ON CONFLICT (user_id, provider) DO UPDATE SET api_key = EXCLUDED.api_key, key_version = EXCLUDED.key_version`;
+    const endpoint = await llmProviderRepo.upsertCustomEndpoint({
+      serverId: refs.serverId,
+      label: "Synthetic Auto",
+      capability: "speech",
+      apiStyle: "tts-clone",
+      endpointUrl: "http://127.0.0.1:9000",
+      requiresAuth: false,
+      extraConfig: { voice_mode: "auto" },
+    });
+    if (!endpoint?.custom_endpoint_id) throw new Error("Missing custom target");
+    const preset = await llmProviderRepo.upsertCustomEndpoint({
+      serverId: refs.serverId,
+      label: "Synthetic ElevenLabs",
+      capability: "speech",
+      apiStyle: "elevenlabs",
+      endpointUrl: "https://api.elevenlabs.io",
+      requiresAuth: true,
+    });
+    if (!preset?.custom_endpoint_id || !preset.connection_id) throw new Error("Missing preset target");
+    const saved = await llmProviderRepo.loadSavedProviderConfig(refs.serverId, "google");
+    if (!saved) throw new Error("Missing credential fixture");
+    await llmProviderRepo.upsertSavedProviderConfig(refs.serverId, {
+      ...saved,
+      provider: `custom:${preset.connection_id}`,
+      api_key: key.encrypted,
+      key_version: key.version,
+    });
+    await initializeSupporterBillingSchema(testSql);
+    for (const personal of [false, true]) {
+      const identity = await new SupporterIdentityRepository(testSql).upsertIdentity({
+        discordUserId: personal ? FIXTURE_IDS.userDiscId : "synthetic-server-sponsor",
+        patreonUserId: `synthetic-voice-user-${personal}`,
+        patreonMemberId: `synthetic-voice-member-${personal}`,
+        patreonCampaignId: "synthetic-voice-campaign",
+      });
+      await new SupporterEntitlementRepository(testSql).upsertSnapshot({
+        supporterIdentityId: identity.supporter_identity_id,
+        tierKey: "test",
+        patreonTierId: "test",
+        patronStatus: "active_patron",
+        isActive: true,
+        source: "oauth",
+        lastVerifiedAt: new Date(),
+        periodStart: new Date(Date.now() - 60_000),
+        periodEnd: new Date(Date.now() + 3_600_000),
+      });
+      const memberKeys = new MemberKeyRepository(testSql);
+      const initial = await memberKeys.initialize(identity);
+      const created = await memberKeys.storeCreated(
+        initial,
+        `synthetic-voice-hash-${personal}`,
+        `synthetic-${personal ? "personal" : "server"}-member`,
+      );
+      await memberKeys.save({ ...created, applied_limit: 0.1, disabled: false, pending_action: null });
+      if (!personal)
+        await new SupporterSponsorshipRepository(testSql).startActiveSponsorship({
+          serverId: refs.serverId,
+          serverDiscId: FIXTURE_IDS.serverDiscId,
+          sponsorIdentityId: identity.supporter_identity_id,
+          createdByDiscId: "synthetic-server-sponsor",
+        });
+    }
+    await testSql`INSERT INTO saved_provider_configs (server_id, provider) VALUES (${refs.serverId}, 'supporter') ON CONFLICT DO NOTHING`;
+    await testSql`INSERT INTO user_saved_provider_configs (user_id, provider) VALUES (${refs.userId}, 'supporter') ON CONFLICT DO NOTHING`;
+    process.env.RUN_ENV = "production";
+    process.env.TOMORI_SUPPORTER_OPENROUTER_MANAGEMENT_KEY = "synthetic-management-key";
+    process.env.TOMORI_SUPPORTER_CONFIG_JSON = JSON.stringify({
+      patreon: {
+        campaignId: "synthetic-voice-campaign",
+        oauthClientIdEnv: "CLIENT_ID",
+        oauthClientSecretEnv: "CLIENT_SECRET",
+        webhookSecretEnv: "WEBHOOK_SECRET",
+        creatorRefreshTokenEnv: "REFRESH_TOKEN",
+        manageUrl: "https://www.patreon.com/example",
+      },
+      jobs: { reconcileIntervalSeconds: 300, manualRefreshCooldownSeconds: 30 },
+      tiers: {
+        test: {
+          displayNameKey: "supporter.tiers.test",
+          patreonTierIds: ["test"],
+          monthlyBudgetMicros: 100000,
+          defaultModelByCapability: { text: "example/text", voice: { clone: "fish-audio/s2.1-pro" } },
+        },
+      },
+    });
+    let persona = createPersona({
+      persona_id: refs.personaId,
+      server_id: refs.serverId,
+      speech_voice_design_prompt: "Warm narration",
+      speech_voice_sample_id: sample.sample_id,
+      speech_voice_id: "preset_synthetic",
+      config: { voice_message_enabled: true },
+    });
+    const callers = createSpeechCallerFixture(() => persona);
+    const { channel, modal } = callers;
+    try {
+      process.env.TOMORI_SUPPORTER_BILLING_ENABLED = "true";
+      const previousTargets: CustomEndpointRow[] = [endpoint, preset];
+      for (const previous of previousTargets) {
+        for (const personal of [false, true]) {
+          await testSql`UPDATE user_saved_provider_configs SET enabled_capabilities = '{}', assigned_capabilities = '{}' WHERE user_id = ${refs.userId}`;
+          expect(await setSpeechEndpointSelection(refs.serverId, endpoint.custom_endpoint_id)).toBe(true);
+          if (previous === preset)
+            expect(await setSpeechEndpointSelection(refs.serverId, preset.custom_endpoint_id)).toBe(true);
+          expect((await resolveSpeechTargets(refs.serverId, refs.userId)).clone?.endpoint?.custom_endpoint_id).toBe(
+            previous.custom_endpoint_id,
+          );
+          const scope = personal ? personalScope() : serverScope();
+          expect(await activateProviderSpeechDefaults(scope, "google")).toBe(true);
+          expect(
+            await saveProviderModel({
+              serverDiscId: FIXTURE_IDS.serverDiscId,
+              ownerId: scope.ownerId,
+              scopeKind: scope.kind,
+              state: persona,
+              entryId: "provider:supporter",
+              capability: "speech",
+              codeName: "fish-audio/s2.1-pro",
+            }),
+          ).toMatchObject({ status: "success" });
+          for (const mode of ["design", "clone"] as const) {
+            persona = { ...persona, voice_source_priority: mode };
+            await testSql`UPDATE persona_voice_configs SET speech_voice_sample_id = ${sample.sample_id}, voice_source_priority = ${mode} WHERE persona_id = ${refs.personaId}`;
+            const targets = await resolveSpeechTargets(refs.serverId, refs.userId);
+            expect(targets[mode]?.owner.kind).toBe(personal ? "personal" : "server");
+            expect(targets[mode]?.kind).toBe("hosted-model");
+            const command = makeFakeInteraction({ guildId: FIXTURE_IDS.serverDiscId, channel });
+            Object.assign(command.interaction.options, { getAttachment: () => null });
+            const before = requests.length;
+            await generateVoiceMessage(
+              {} as Client,
+              command.interaction as unknown as ChatInputCommandInteraction,
+              createUserRow({ user_id: refs.userId }),
+              "en-US",
+            );
+            expect(
+              requests
+                .slice(before)
+                .some(({ url }) => url.endsWith(mode === "design" ? "/interactions" : "/audio/speech")),
+            ).toBe(true);
+            const tool = new GenerateVoiceMessageTool();
+            const speechToolState: NonNullable<ToolAssemblyState["speechToolState"]> = { userId: refs.userId };
+            const available = await getAvailableToolsWithMCP([tool], "google", {
+              server_id: String(refs.serverId),
+              speechToolState,
+              activePersonaHasElevenlabsVoice: true,
+              activePersonaVoiceDesignPrompt: persona.speech_voice_design_prompt,
+              activePersonaVoiceSampleId: persona.speech_voice_sample_id,
+              activePersonaVoiceSourcePriority: mode,
+              llm: persona.llm,
+              config: persona.config,
+            });
+            expect(available.builtInTools.map((entry) => entry.name)).toContain("generate_voice_message");
+            const result = await tool.execute({ title: "test", script: "Hello" }, {
+              tomoriState: persona,
+              channel,
+              internalUserId: refs.userId,
+              streamContext: { speechToolState },
+              locale: "en-US",
+            } as unknown as ToolContext);
+            expect(result.success).toBe(true);
+            const speechRequests = requests.slice(before).filter(({ url }) => url.endsWith("/audio/speech"));
+            if (mode === "clone") {
+              expect(speechRequests).toHaveLength(2);
+              for (const { init } of speechRequests)
+                expect(new Headers(init.headers).get("Authorization")).toBe(
+                  `Bearer synthetic-${personal ? "personal" : "server"}-member`,
+                );
+            }
+            for (const secret of ["synthetic-personal-member", "synthetic-server-member"]) {
+              expect(JSON.stringify({ result, command: command.calls, modal: modal.calls })).not.toContain(secret);
+            }
+            expect(result.data).toMatchObject({
+              mode,
+              target: mode === "design" ? "gemini-3.8-flash-tts" : "fish-audio/s2.1-pro",
+            });
+          }
+        }
+      }
+      expect(callers.delivered).toBe(16);
+      for (const scope of [serverScope(), personalScope()]) {
+        const row =
+          scope.kind === "personal"
+            ? await llmProviderRepo.loadUserSavedProviderConfig(scope.ownerId, "supporter")
+            : await llmProviderRepo.loadSavedProviderConfig(scope.ownerId, "supporter");
+        expect(row?.api_key).toBeNull();
+      }
+      expect(await llmProviderRepo.deleteUserSavedProviderConfig(refs.userId, "openrouter")).toBe(true);
+      expect((await resolveSpeechTargets(refs.serverId, refs.userId)).clone?.apiKey).toBe("synthetic-personal-member");
+      expect(
+        await saveProviderModel({
+          serverDiscId: FIXTURE_IDS.serverDiscId,
+          ownerId: refs.serverId,
+          scopeKind: "server",
+          state: persona,
+          entryId: "provider:supporter",
+          capability: "speech",
+          codeName: "fish-audio/s2.1-pro",
+        }),
+      ).toMatchObject({ status: "success" });
+      process.env.TOMORI_SUPPORTER_BILLING_ENABLED = "false";
+      expect((await resolveSpeechTargets(refs.serverId, refs.userId)).clone).toBeNull();
+      process.env.TOMORI_SUPPORTER_BILLING_ENABLED = "true";
+      expect(await llmProviderRepo.deleteSavedProviderConfig(refs.serverId, "openrouter")).toBe(true);
+      expect((await resolveSpeechTargets(refs.serverId)).clone?.apiKey).toBe("synthetic-server-member");
+      await testSql`UPDATE server_byok_configs SET user_byok_mode = true WHERE server_id = ${refs.serverId}`;
+      expect(await setPersonalCapabilityEnabled(refs.userId, "speech_clone", false)).toBe(true);
+      expect((await resolveSpeechTargets(refs.serverId, refs.userId)).clone).toBeNull();
+      await testSql`UPDATE server_byok_configs SET user_byok_mode = false WHERE server_id = ${refs.serverId}`;
+      expect((await resolveSpeechTargets(refs.serverId, refs.userId)).clone?.apiKey).toBe("synthetic-server-member");
+      expect(await setPersonalCapabilityEnabled(refs.userId, "speech_clone", true)).toBe(true);
+      const target = (await resolveSpeechTargets(refs.serverId, refs.userId)).clone;
+      if (!target) throw new Error("Missing personal subscription speech target");
+      const memberKeys = new MemberKeyRepository(testSql);
+      const oldKey = await memberKeys.load("synthetic-voice-member-true");
+      if (!oldKey) throw new Error("Missing personal member key");
+      const changed = await memberKeys.storeCreated(oldKey, "synthetic-rotated-voice-hash", "synthetic-rotated-member");
+      await memberKeys.save({ ...changed, applied_limit: 0.1, disabled: false, pending_action: null });
+      const before = requests.length;
+      const stale = await synthesizeVoiceMessage({
+        target,
+        endpoint: null,
+        endpointApiKey: "",
+        elevenLabsApiKey: "",
+        script: "Hello",
+        source: { kind: "clone-buffer", refAudio: wav, refText: null },
+      });
+      expect(stale.success).toBe(false);
+      expect(stale.errorKind).toBe("invalid_request");
+      expect(requests).toHaveLength(before);
+      await testSql`UPDATE supporter_entitlements SET is_active = false WHERE supporter_identity_id = ${oldKey.supporter_identity_id}`;
+      const inactive = await resolveSpeechTargets(refs.serverId, refs.userId);
+      expect(inactive.clone?.apiKey).toBe("synthetic-server-member");
+      expect(inactive.clone?.owner).toEqual(serverScope());
+      expect(inactive.design?.apiKey).toBe("synthetic-personal-google");
+      const panels = await Promise.all([
+        providerPanelOperations.loadServerProviderPanelScope(FIXTURE_IDS.serverDiscId, true),
+        providerPanelOperations.loadPersonalProviderPanelScope(FIXTURE_IDS.userDiscId, FIXTURE_IDS.serverDiscId),
+      ]);
+      for (const panel of panels) {
+        if (!panel) throw new Error("Missing provider panel");
+        const payload = buildProvidersPanelPayload({
+          ...panel.data,
+          locale: "en-US",
+          page: { kind: "entry", entryId: "provider:supporter" },
+          routeNamespace: panel.routeNamespace,
+        });
+        const serialized = JSON.stringify(payload);
+        for (const secret of ["synthetic-server-member", "synthetic-personal-member", "synthetic-rotated-member"]) {
+          expect(serialized).not.toContain(secret);
+        }
+      }
+    } finally {
+      callers.restore();
+      await testSql`DELETE FROM supporter_identities WHERE patreon_campaign_id = 'synthetic-voice-campaign'`;
+      await llmProviderRepo.deleteUserSavedProviderConfig(refs.userId, "supporter");
+      await llmProviderRepo.deleteSavedProviderConfig(refs.serverId, "supporter");
+      await deleteStoredVoiceSample(storedPath);
+      await testSql`UPDATE persona_voice_configs SET speech_voice_sample_id = NULL WHERE persona_id = ${refs.personaId}`;
+      await testSql`DELETE FROM voice_samples WHERE sample_id = ${sample.sample_id}`;
+    }
+  });
 
   it("resolves refused server Subscription speech to no target when funding is unavailable or revoked", async () => {
     process.env.RUN_ENV = "production";

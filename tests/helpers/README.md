@@ -15,6 +15,7 @@ Shared fixtures and assertion helpers. Reach for these before writing a local `m
 | `transferPanelFixture.ts` | `findTransferAction`: locate one routed transfer action in a panel payload |
 | `mockSurface.ts` | `createScopedModuleMocker`, `overrideMembers`, `stubLogMembers` for the few suites that must mock a module |
 | `messageProxyInstance.ts` | Official PluralKit and PluralBuddy instance contexts for transport and router tests |
+| `speechCallers.ts` | `createSpeechCallerFixture`: command/tool delivery, modal, persona, and admission spies for shared and billing speech regressions |
 | `env.ts` | `useEnvSandbox`: restores named `process.env` variables after each test and after the enclosing scope; `useFullEnvSandbox` restores the whole environment |
 
 ## Rules the helpers depend on
