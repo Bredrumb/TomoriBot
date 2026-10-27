@@ -2212,6 +2212,70 @@ describe("runToolLoop — contract tests", () => {
     ],
   };
 
+  it("delivers an approved dice tool while narration remains held for response review", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { RollDiceTool } = await import("@/tools/functionCalls/rollDiceTool");
+    const { initializeLocalizer } = await import("@/utils/text/localizer");
+    const { clearPersonaAppearances } = await import("@/utils/cache/personaAppearanceCacheStore");
+    await initializeLocalizer();
+    clearPersonaAppearances();
+    const context = makeReviewContext();
+    context.currentPersona.config.dice_rolling_enabled = true;
+    context.streamingContext.deliveryReceipts = [];
+    const sent = mock(async (_payload: unknown) => ({
+      id: "900000000000000001",
+      channelId: "ch_test",
+      webhookId: null,
+      author: { username: "Bot" },
+    }));
+    context.channel = {
+      id: "ch_test",
+      lastMessageId: null,
+      send: sent,
+      client: { rest: new REST() },
+      isThread: () => false,
+    } as unknown as ChatTurnContext["channel"];
+    const delivered: string[] = [];
+    const tool = new RollDiceTool();
+    const first = held("I will roll.", delivered, "function_call");
+    first.data = { name: tool.name, args: { dice: "d20" } };
+    const { provider, capturedHistories } = makeProvider([first, held("A quiet nod.", delivered)]);
+    const requests: ProviderStructuredJsonRequest[] = [];
+    Object.assign(provider, {
+      getTools: async () => [{ functionDeclarations: [tool] }],
+      callStructuredJSON: async (request: ProviderStructuredJsonRequest) => {
+        requests.push(request);
+        expect(context.streamingContext.holdResponseText).toBe(true);
+        expect(delivered).toEqual([]);
+        expect(sent).toHaveBeenCalledTimes(request.schemaName === "tool_review" ? 0 : 1);
+        return { success: true, data: { status: "pass" } };
+      },
+    });
+    const execute = spyOn(realToolRegistry.ToolRegistry, "executeTool").mockImplementation(
+      (name, args, toolContext) => {
+        expect(name).toBe(tool.name);
+        expect(context.streamingContext.holdResponseText).toBe(true);
+        return tool.execute(args, toolContext);
+      },
+    );
+    try {
+      const result = await runToolLoop(makeParams(context, provider));
+      expect(result.status).toBe("completed");
+      expect(requests.map((request) => request.schemaName)).toEqual(["tool_review", "response_review"]);
+      expect(sent).toHaveBeenCalledTimes(1);
+      expect(context.streamingContext.deliveryReceipts).toMatchObject([
+        { messageId: "900000000000000001", route: "bot", speaker: { personaId: context.currentPersona.persona_id } },
+      ]);
+      expect(capturedHistories[1]).toMatchObject([
+        { functionResponse: { functionResponse: { response: { result: { message_id: "900000000000000001" } } } } },
+      ]);
+      expect(delivered).toEqual(["I will roll.", "A quiet nod."]);
+    } finally {
+      execute.mockRestore();
+      clearPersonaAppearances();
+    }
+  });
+
   for (const name of ["create_long_term_memory", "mirror_action"]) {
     it(`${name}: approves the exact snapshot once and preserves pending narration until text review`, async () => {
       const { runToolLoop } = await import("@/utils/chat/toolLoop");

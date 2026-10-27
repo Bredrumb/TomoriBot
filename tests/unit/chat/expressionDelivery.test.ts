@@ -228,6 +228,20 @@ describe("expression delivery at tool invocation", () => {
     expect(context.expressionDelivery).toEqual(createExpressionDeliveryState());
   });
 
+  it("delivers an admitted expression while ordinary prose remains held", async () => {
+    const context = makeContext();
+    context.streamingContext.holdResponseText = true;
+    context.streamingContext.deliveryReceipts = [];
+    const outcome = await deliverExpression(context, nativeSticker("111111111111111111", "Wave"), "Wave", notCancelled);
+
+    expect(outcome.status).toBe("delivered");
+    expect(sendCalls(context)).toBe(1);
+    expect(context.streamingContext.holdResponseText).toBe(true);
+    expect(context.streamingContext.deliveryReceipts).toMatchObject([
+      { route: "bot", speaker: { personaId: context.currentPersona.persona_id } },
+    ]);
+  });
+
   it("delivers custom links with suppressed mentions and counts stable IDs only", async () => {
     const row = createCustomExpression({ server_id: SERVER_ID });
     const load = spyOn(serverRepository, "loadCustomExpression").mockResolvedValue(row);

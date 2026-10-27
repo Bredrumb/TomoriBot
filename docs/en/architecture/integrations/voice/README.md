@@ -301,7 +301,8 @@ An unconfirmed result records no successful receipt or delivery metric. The comm
 a delivery failure, and the native helper never restarts synthesis. Callers keep provider usage
 separate from confirmed Discord delivery. Tool cancellation is checked
 after asynchronous author selection and immediately before every POST, including attachment and
-caption sends. Held presentation sends nothing. An uncertain tool delivery or caption also marks
+caption sends. Direct held presentation sends nothing; an admitted voice tool can deliver audio and
+captions while ordinary response prose remains held. An uncertain tool delivery or caption also marks
 the shared turn state, so response review and model fallback cannot generate another delivery.
 
 ## Related documentation
