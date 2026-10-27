@@ -19,6 +19,7 @@ import type {
   SceneTurnMetadata,
   SystemTriggerIdentity,
   TextQuotaSource,
+  TomoriChatInput,
 } from "@/utils/chat/types";
 import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 import { getMessageProxyMessageRecord } from "@/utils/messageProxy/proxyExpectation";
@@ -62,6 +63,7 @@ export type QueuedMessage = {
   >;
   sceneTurn?: SceneTurnMetadata;
   naturalNudge?: NaturalNudgeTurn;
+  conditioningInteraction?: TomoriChatInput["conditioningInteraction"];
   nudgeSceneCatcherPersonaId?: number;
   reminderRecipientID?: string;
   reminderData?: ChatReminderData;

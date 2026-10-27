@@ -46,6 +46,7 @@ export async function refreshToolExecutionContext(context: ToolContext): Promise
         ...context.tomoriState,
         config: {
           ...context.tomoriState.config,
+          emoji_usage_enabled: current.config.emoji_usage_enabled,
           sticker_usage_enabled: current.config.sticker_usage_enabled,
           web_search_enabled: current.config.web_search_enabled,
           self_teaching_enabled: current.config.self_teaching_enabled,

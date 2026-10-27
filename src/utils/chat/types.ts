@@ -2,7 +2,7 @@ import type { GenerationModelSelection } from "@/types/provider/generationModels
 import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 import type { BaseGuildTextChannel, Client, Guild, GuildMember, Message, Webhook } from "discord.js";
 import type { ForcedMention } from "@/types/discord/mentions";
-import type { ServerEmojiRow, ServerStickerRow, TomoriState, UserRow } from "@/types/db/schema";
+import type { ConditioningType, ServerEmojiRow, ServerStickerRow, TomoriState, UserRow } from "@/types/db/schema";
 import type { RequestSnapshot, StructuredContextItem } from "@/types/misc/context";
 import type {
   FunctionCall,
@@ -94,6 +94,7 @@ export interface TomoriChatInput {
   message: Message;
   isFromQueue: boolean;
   isManuallyTriggered?: boolean;
+  isDirectChat?: boolean;
   forceReason?: boolean;
   reasoningQuery?: string;
   llmOverrideCodename?: string;
@@ -123,6 +124,7 @@ export interface TomoriChatInput {
   sceneTurn?: SceneTurnMetadata;
   /** Unprompted Natural Nudges turn: never queues and never feeds engagement stats. */
   naturalNudge?: NaturalNudgeTurn;
+  conditioningInteraction?: { actorType: "user" | "persona"; type: ConditioningType };
   /** A member's message that interrupted a Natural Nudges scene, answered by the persona about to speak. */
   nudgeSceneCatcherPersonaId?: number;
   /**
@@ -140,6 +142,7 @@ export interface ChatIncoming {
   message: Message;
   isFromQueue: boolean;
   isManuallyTriggered?: boolean;
+  isDirectChat?: boolean;
   forceReason?: boolean;
   reasoningQuery?: string;
   llmOverrideCodename?: string;
@@ -169,6 +172,7 @@ export interface ChatIncoming {
   sceneTurn?: SceneTurnMetadata;
   /** Unprompted Natural Nudges turn: never queues and never feeds engagement stats. */
   naturalNudge?: NaturalNudgeTurn;
+  conditioningInteraction?: { actorType: "user" | "persona"; type: ConditioningType };
   /** A member's message that interrupted a Natural Nudges scene, answered by the persona about to speak. */
   nudgeSceneCatcherPersonaId?: number;
   /**

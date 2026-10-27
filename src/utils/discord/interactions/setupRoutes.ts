@@ -79,6 +79,7 @@ import {
 } from "@/utils/discord/ui/modals";
 import {
   setupCustomEndpointCapabilitySchema,
+  setupFeaturesSchema,
   type CustomEndpointApiStyle,
   type SetupConfig,
   type SetupCustomEndpointCapability,
@@ -99,6 +100,7 @@ import { configRepository, llmModelRepo, personaRepository, serverRepository } f
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { formatLlmDisplayLabel } from "@/utils/provider/modelDisplay";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { invalidateNaturalNudgeConfigCache } from "@/modules/natural-nudges/runtime/configCache";
 import { getCachedPresetAvatar, getPresetAvatarBuffer } from "@/utils/image/avatarHelper";
 import { lazySyncGuildEmojis } from "@/utils/cache/emojiLazySync";
 import { lazySyncGuildStickers } from "@/utils/cache/stickerLazySync";
@@ -161,6 +163,7 @@ export interface SetupWizardRoute {
   action: SetupWizardAction;
   locale: string;
   nonce: string;
+  modalNonce?: string;
 }
 
 function buildSetupRouteId(route: SetupWizardRoute): string {
@@ -182,6 +185,12 @@ export function parseSetupRoute(input: ParsedInteractionRoute | string): SetupWi
   const nonce = parseNonce(rawNonce);
   if (!nonce) return null;
 
+  if (action === "settings-submit") {
+    const modalNonce = parseNonce(parsed.segments[3]);
+    if (!modalNonce) return null;
+    return { action, locale, nonce, modalNonce };
+  }
+
   return { action: action as SetupWizardAction, locale, nonce };
 }
 
@@ -201,8 +210,15 @@ export function buildSetupSettingsRouteId(input: { locale: string; nonce: string
   return buildSetupRouteId({ action: "settings", locale: input.locale, nonce: input.nonce });
 }
 
-export function buildSetupSettingsSubmitRouteId(input: { locale: string; nonce: string }): string {
-  return buildSetupRouteId({ action: "settings-submit", locale: input.locale, nonce: input.nonce });
+export function buildSetupSettingsSubmitRouteId(input: { locale: string; nonce: string; modalNonce?: string }): string {
+  return buildInteractionRouteId(
+    SETUP_ROUTE_NAMESPACE,
+    SETUP_ROUTE_VERSION,
+    "settings-submit",
+    input.locale,
+    input.nonce,
+    input.modalNonce ?? createNonce(),
+  );
 }
 
 export function buildSetupProviderModeRouteId(input: { locale: string; nonce: string }): string {
@@ -776,13 +792,6 @@ function buildSetupReceiptNotes(
     });
   }
 
-  if (access.mode === "catalog" && access.provider === "novelai") {
-    notes.push({
-      label: localizer(locale, "commands.setup.novelai_expressions_warning_field"),
-      detail: localizer(locale, "commands.setup.novelai_expressions_warning_value"),
-    });
-  }
-
   if (access.mode === "catalog" && (access.provider === "zai" || access.provider === "zaicoding")) {
     notes.push({
       label: localizer(locale, "commands.setup.zai_tos_warning_field"),
@@ -889,24 +898,6 @@ async function runSetupPostCommitEffects(input: {
 }): Promise<boolean> {
   const { draft, locale, access } = input;
   const guild = "guild" in input.interaction ? (input.interaction.guild ?? null) : null;
-
-  if (access.mode === "catalog" && access.provider === "novelai") {
-    const tomoriState = await personaRepository.loadState(draft.workspaceKey);
-    if (tomoriState) {
-      try {
-        // NovelAI's token budget makes emoji and sticker injection counterproductive: they consume
-        // context without the model being able to use them. The receipt tells the actor they can
-        // re-enable both.
-        await configRepository.updateCapabilitiesConfig(tomoriState.server_id, {
-          emoji_usage_enabled: false,
-          sticker_usage_enabled: false,
-        });
-        log.info(`[Setup] Auto-disabled emoji/sticker usage for NovelAI server ${draft.workspaceKey}`);
-      } catch (disableError) {
-        log.warn(`[Setup] Failed to auto-disable emoji/sticker for NovelAI: ${disableError}`);
-      }
-    }
-  }
 
   if (draft.context === "guild") {
     await syncGuildExpressionsAfterSetup(guild, draft.workspaceKey);
@@ -1105,7 +1096,8 @@ async function finishSetupWizardDraft(
       };
     }
 
-    const presetId = claimedDraft.startingSettings?.presetId;
+    const startingSettings = claimedDraft.startingSettings;
+    const presetId = startingSettings?.presetId;
     const presetRow =
       typeof presetId === "number"
         ? await configRepository
@@ -1113,7 +1105,7 @@ async function finishSetupWizardDraft(
             .then((rows) => rows?.find((row) => row.persona_preset_id === presetId) ?? null)
         : null;
 
-    if (!presetRow) {
+    if (!presetRow || !startingSettings) {
       releaseSetupDraftClaim(nonce, actorDiscId, workspaceKey, context);
       const cleared = updateSetupDraft(nonce, actorDiscId, workspaceKey, context, { startingSettings: null });
       if (cleared.status === "ok") {
@@ -1153,9 +1145,10 @@ async function finishSetupWizardDraft(
     const setupConfig: SetupConfig = {
       serverId: workspaceKey,
       presetId: presetRow.persona_preset_id,
-      humanizer: claimedDraft.startingSettings?.humanizer ?? 1,
+      humanizer: startingSettings.humanizer,
       tomoriName: getDefaultBotName(locale),
-      timezoneOffset: claimedDraft.startingSettings?.timezoneOffset ?? 0,
+      timezoneOffset: startingSettings.timezoneOffset,
+      features: startingSettings.features,
       locale,
       registrationLocale: locale,
       providerAccess: toSetupProviderAccess(access),
@@ -1178,6 +1171,7 @@ async function finishSetupWizardDraft(
     committed = true;
     // Only now, with the rows committed: every reader below this line must see the new workspace.
     invalidateTomoriStateCache(workspaceKey);
+    if (setupResult.server.server_id) invalidateNaturalNudgeConfigCache(setupResult.server.server_id);
     if (access.mode === "option") {
       const option = findProviderOption(access.value);
       if (option?.setup?.committed) {
@@ -1499,7 +1493,7 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
       }
 
       case "settings-submit": {
-        if (!interaction.isModalSubmit()) {
+        if (!interaction.isModalSubmit() || !parsed.modalNonce) {
           return;
         }
         await acknowledgeModalSubmitForRefresh(interaction);
@@ -1534,6 +1528,20 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
           interaction.id,
           buildSetupSettingsModalFieldId("system-prompt", nonce),
         );
+        const features = setupFeaturesSchema.safeParse(
+          takeRawModalCheckboxGroupValues(
+            interaction.id,
+            buildSetupSettingsModalFieldId("features", parsed.modalNonce),
+          ),
+        );
+
+        if (!features.success) {
+          await repaintSetupWizard(interaction, draft, locale, nonce, {
+            method: "editReply",
+            receipt: setupFailureReceipt(locale, localizer(locale, "commands.setup.wizard.settings_features_invalid")),
+          });
+          return;
+        }
 
         const presetId = Number.parseInt(selectedPersonaId ?? "", 10);
         const humanizer = parseSetupHumanizerChoice(selectedHumanizer);
@@ -1548,7 +1556,7 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
           humanizer !== null &&
           timezoneOffset !== null &&
           systemPrompt !== null
-            ? { presetId, humanizer, timezoneOffset, systemPrompt }
+            ? { presetId, humanizer, timezoneOffset, systemPrompt, features: features.data }
             : null;
 
         if (!nextSettings || !isSetupStartingSettingsResolvable(nextSettings, catalogs)) {

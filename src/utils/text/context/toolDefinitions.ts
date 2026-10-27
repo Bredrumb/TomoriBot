@@ -57,6 +57,7 @@ async function buildVerbatimToolDefinitionsJson(
     nai_diffusion_model_id: tomoriState.config.nai_diffusion_model_id,
     video_model_id: tomoriState.config.video_model_id,
     config: {
+      emoji_usage_enabled: tomoriState.config.emoji_usage_enabled,
       sticker_usage_enabled: tomoriState.config.sticker_usage_enabled,
       web_search_enabled: tomoriState.config.web_search_enabled,
       self_teaching_enabled: tomoriState.config.self_teaching_enabled,

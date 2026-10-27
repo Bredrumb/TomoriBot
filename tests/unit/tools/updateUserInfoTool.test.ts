@@ -272,6 +272,7 @@ describe("update_user_info affix de-duplication", () => {
 
 describe("user info capability mapping", () => {
   const baseConfig = {
+    emoji_usage_enabled: true,
     sticker_usage_enabled: true,
     web_search_enabled: true,
     self_teaching_enabled: true,

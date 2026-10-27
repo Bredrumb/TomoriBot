@@ -1,5 +1,6 @@
 import { describe, expect, it, mock } from "bun:test";
 import { assembleToolsForContext } from "@/tools/assembly";
+import { InteractWithRecentMessageTool } from "@/tools/functionCalls/interactWithRecentMessageTool";
 import { getAvailableToolsForContext } from "@/tools/availability";
 import {
   DanbooruGetPostTool,
@@ -55,6 +56,7 @@ function createAssemblyState(overrides: Partial<ToolAssemblyState> = {}): ToolAs
       supports_structoutput: true,
     },
     config: {
+      emoji_usage_enabled: true,
       sticker_usage_enabled: true,
       web_search_enabled: true,
       self_teaching_enabled: true,
@@ -105,6 +107,21 @@ function getPropertyNames(tool: Tool): string[] {
 }
 
 describe("tool schema assembly", () => {
+  it("hides emoji reactions while keeping replies available without mutating the shared tool", async () => {
+    const tool = new InteractWithRecentMessageTool();
+    const state = createAssemblyState();
+    state.config.emoji_usage_enabled = false;
+    const [replyOnly] = await assembleToolsForContext([tool], createAssemblyContext(state));
+    expect(replyOnly).toBeDefined();
+    expect(getEnum(replyOnly, "action")).toEqual(["reply"]);
+    expect(JSON.stringify({ description: replyOnly.description, parameters: replyOnly.parameters })).not.toMatch(
+      /react|emoji|sticker/i,
+    );
+    const [full] = await assembleToolsForContext([tool], createAssemblyContext());
+    expect(getEnum(full, "action")).toEqual(["react", "reply"]);
+    expect(getEnum(tool, "action")).toEqual(["react", "reply"]);
+  });
+
   it("leaves tools without an assembly hook unchanged", async () => {
     const tool = createStaticTool();
 

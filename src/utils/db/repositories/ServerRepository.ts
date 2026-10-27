@@ -16,6 +16,7 @@
 import type { Guild, GuildEmoji, Sticker } from "discord.js";
 import type { ServerEmojiRow, ServerStickerRow, SetupConfig, SetupResult } from "@/types/db/schema";
 import { serverEmojiSchema, serverStickerSchema, setupConfigSchema, setupResultSchema } from "@/types/db/schema";
+import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { userRepository } from "@/utils/db/repositories/UserRepository";
 import { configRepository } from "./ConfigRepository";
@@ -1179,7 +1180,31 @@ class ServerRepository implements IRepository<ServerExportShape> {
         await tx`INSERT INTO server_welcome_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
         await tx`INSERT INTO server_trigger_behavior_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
         await tx`INSERT INTO server_auto_trigger_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
-        await tx`INSERT INTO server_capabilities_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
+        const features = new Set(validConfig.features);
+        await tx`
+          INSERT INTO server_capabilities_configs (
+            server_id, emoji_usage_enabled, sticker_usage_enabled, conditioning_interactions_enabled,
+            danbooru_enabled, dice_rolling_enabled, manage_message_enabled, thread_creation_enabled,
+            user_blocking_enabled, user_info_updates_enabled, short_term_memory_enabled
+          ) VALUES (
+            ${server.server_id}, ${features.has("expressions")}, ${features.has("expressions")},
+            ${features.has("playful_interactions")}, ${features.has("danbooru")}, ${features.has("dice_rolls")},
+            ${features.has("self_message_management")}, ${features.has("self_message_management")},
+            ${features.has("user_blocking")}, ${features.has("user_info_updates")}, ${features.has("short_term_memory")}
+          ) ON CONFLICT (server_id) DO NOTHING
+        `;
+        if (
+          !(await naturalNudgeRepository.saveServerConfig(
+            server.server_id,
+            {
+              idle_nudges_enabled: features.has("natural_nudges"),
+              active_nudges_enabled: features.has("natural_nudges"),
+            },
+            tx,
+          ))
+        ) {
+          throw new Error("Could not save setup Natural Nudges settings");
+        }
         if (finalNaiDiffusionId) {
           await tx`
             INSERT INTO server_novelai_imagegen_configs (server_id, nai_diffusion_model_id)

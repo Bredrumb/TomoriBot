@@ -44,7 +44,7 @@ optional API key.
 | Create / update task | `{task_tool}` / `{task_update_tool}` | - | Schedule or edit reminders and self-tasks (see [Scheduled Tasks](/features/capabilities/scheduled-tasks/)). |
 | Cross-channel message | `{cross_channel_tool}` | (not on NovelAI) | Act in another channel or thread, with an optional report-back. |
 | Create thread | `{create_thread_tool}` | `thread_creation_enabled` + thread perms | Open a public thread and post its starter message. |
-| Roll dice | - | `dice_rolling_enabled` (off by default) | Roll dice publicly and use the returned result in roleplay. |
+| Roll dice | - | `dice_rolling_enabled` | Roll dice publicly and use the returned result in roleplay. |
 | Select sticker | `{sticker_tool}` | `sticker_usage_enabled` | Add a matching server sticker or custom expression to a reply. |
 | Manage message | `{manage_message_tool}` | `manage_message_enabled` | Pin, edit, or delete recent messages (pin needs `Manage Messages`). |
 | Block / unblock user | `{block_user_tool}` / `{unblock_user_tool}` | `user_blocking_enabled` | Persona-scoped mute/block of a user (does not touch memories). |
@@ -128,9 +128,9 @@ The `visibility` option controls who receives the result:
 `Public + Bot` does not start an AI reply. People can still tell the bot the
 result of an unshared roll themselves.
 
-To let the bot roll dice herself, enable `Dice Rolling` through `/config` >
-Plugins > Available Tools. It starts off for existing and new servers and DM
-chats. This switch controls only the `roll_dice` tool; `/roll` stays available.
+To control whether the bot rolls dice herself, use `Dice Rolling` in `/config` >
+Plugins > Available Tools (or omit it during setup). It is on by default.
+This switch controls only the `roll_dice` tool; `/roll` stays available.
 Tool rolls use the same embed, name the active persona, and are always public
 and shared with the bot. The bot receives the generated dice and total so she
 can continue the scene using that result.
@@ -288,7 +288,7 @@ without a user request.
 - Sending a file, image, GIF, or YouTube link in the message that calls her also opens the
   tool that reads it, so `pdf見て` with a PDF attached works without any keyword. A reply counts
   too: replying to someone's GIF opens the GIF tool. Media further up the chat does not count.
-- Server managers can add literal custom trigger phrases with `/server trigger add`, for
+- Server managers can add literal custom trigger phrases in `/config` > `Behavior` > `Experimental Behavior` (`Custom Tool Triggers`), for
   example mapping `pic`, `img`, or `pfp` to image generation.
 - The built-in triggers read English phrasing. Other languages reach the same tools through
   each language's keyword list. Every shipped language's list is checked on every message,
@@ -299,20 +299,13 @@ without a user request.
 
 ### Controls
 
-- `/server dtm`: server managers toggle it.
+- `/config` > `Behavior` > `Experimental Behavior`: server managers toggle Deliberate Tool Mode.
 - `/personal config`: users override it for themselves.
-- With a thought-log channel configured (`/server thought-logs`), successful deliberate-mode
+- With a log channel configured (`/config` > `Channels` > `Logs & Welcome`), successful deliberate-mode
   tool calls are logged there along with the trigger that exposed the tool.
 
 Deliberate Tool Mode only decides which tools are *shown* to the model, but the model still has
 to choose to call one. In `/help`, choose `Behavior`, then `Deliberate Tool Mode`, for the Discord summary.
-
-:::note
-`Deliberate Tool Mode` (this section) is unrelated to `Deliberate Trigger Mode`, which
-controls how *she* is triggered; see
-[Chatting & Triggers](/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode). Both are
-abbreviated "DTM" in Discord.
-:::
 
 ## Structured User Info Updates
 

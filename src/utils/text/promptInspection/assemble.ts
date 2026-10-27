@@ -362,6 +362,7 @@ async function fetchProviderTools(
     nai_diffusion_model_id: persona.config.nai_diffusion_model_id,
     video_model_id: persona.config.video_model_id,
     config: {
+      emoji_usage_enabled: persona.config.emoji_usage_enabled,
       sticker_usage_enabled: persona.config.sticker_usage_enabled,
       web_search_enabled: persona.config.web_search_enabled,
       self_teaching_enabled: persona.config.self_teaching_enabled,

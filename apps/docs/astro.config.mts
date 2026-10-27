@@ -70,6 +70,69 @@ const segmentLabelOverrides = {
   tts: "TTS",
 };
 
+const groupDirectoryConfig = {
+  "features/chatting-personality": {
+    label: "Chatting & Personality",
+    order: 1,
+    translations: {
+      ja: "チャットと性格",
+      "zh-TW": "聊天與人格",
+      "zh-CN": "聊天与人格",
+      "es-419": "Chat y personalidad",
+      "pt-BR": "Bate-papo & Personalidade",
+      vi: "Trò chuyện & cá tính",
+    },
+  },
+  "features/knowledge": {
+    label: "Knowledge",
+    order: 2,
+    translations: {
+      ja: "知識",
+      "zh-TW": "知識",
+      "zh-CN": "知识",
+      "es-419": "Conocimiento",
+      "pt-BR": "Conhecimento",
+      vi: "Tri thức",
+    },
+  },
+  "features/capabilities": {
+    label: "Capabilities",
+    order: 3,
+    translations: {
+      ja: "機能",
+      "zh-TW": "功能",
+      "zh-CN": "功能",
+      "es-419": "Capacidades",
+      "pt-BR": "Capacidades",
+      vi: "Tính năng",
+    },
+  },
+  "features/setup-administration": {
+    label: "Setup & Administration",
+    order: 4,
+    translations: {
+      ja: "設定と管理",
+      "zh-TW": "設定與管理",
+      "zh-CN": "设置与管理",
+      "es-419": "Configuración y administración",
+      "pt-BR": "Configuração & Administração",
+      vi: "Thiết lập và quản trị",
+    },
+  },
+  "features/integrations": {
+    label: "Integrations",
+    order: 5,
+    translations: {
+      ja: "連携",
+      "zh-TW": "整合",
+      "zh-CN": "集成",
+      "es-419": "Integraciones",
+      "pt-BR": "Integrações",
+      vi: "Tích hợp",
+    },
+  },
+};
+
 function buildSidebarSection(directory) {
   const dirPath = resolve(defaultLocaleTarget, directory);
   const readmePath = getReadmePath(dirPath);
@@ -91,17 +154,24 @@ function buildSidebarSection(directory) {
  * the default locale's content at that URL, so an invented label would name a translation that does
  * not exist while the English wording stays honest about what the reader is looking at.
  */
-function buildSidebarTranslations(dirPath) {
+function buildSidebarTranslations(dirPath, slugPrefix) {
   const translations = {};
+  const configuredTranslations = slugPrefix ? groupDirectoryConfig[slugPrefix]?.translations : undefined;
 
   for (const locale of translatedLocales) {
     const localizedDir = join(docsTarget, locale.id, relative(defaultLocaleTarget, dirPath));
     const localizedReadme = getReadmePath(localizedDir);
-    if (!localizedReadme) continue;
+    if (localizedReadme) {
+      const data = readFrontmatter(localizedReadme);
+      const label = data.sidebar?.groupLabel ?? data.groupLabel ?? data.title;
+      if (label) {
+        translations[locale.lang] = label;
+        continue;
+      }
+    }
 
-    const data = readFrontmatter(localizedReadme);
-    const label = data.sidebar?.groupLabel ?? data.groupLabel ?? data.title;
-    if (label) translations[locale.lang] = label;
+    const fallbackLabel = configuredTranslations?.[locale.id];
+    if (fallbackLabel) translations[locale.lang] = fallbackLabel;
   }
 
   return Object.keys(translations).length > 0 ? { translations } : {};
@@ -146,17 +216,18 @@ function buildDirectoryItems(dirPath, slugPrefix) {
 function buildGroupNode(dirPath, dirName, slugPrefix) {
   const readmePath = getReadmePath(dirPath);
   const readmeData = readmePath ? readFrontmatter(readmePath) : {};
+  const groupConfig = groupDirectoryConfig[slugPrefix];
   const children = buildDirectoryItems(dirPath, slugPrefix);
   const childOrder = Math.min(...children.map((child) => child.order), maxOrder);
 
   return {
     item: {
-      label: getGroupLabel(readmeData, dirName),
+      label: getGroupLabel(readmeData, dirName, slugPrefix),
       collapsed: true,
       items: children.map((child) => child.item),
-      ...buildSidebarTranslations(dirPath),
+      ...buildSidebarTranslations(dirPath, slugPrefix),
     },
-    order: readmeData.sidebar?.order ?? childOrder,
+    order: readmeData.sidebar?.order ?? groupConfig?.order ?? childOrder,
     sortKey: slugPrefix,
     hidden: false,
   };
@@ -182,8 +253,14 @@ function compareNodes(a, b) {
   return collator.compare(a.sortKey, b.sortKey);
 }
 
-function getGroupLabel(data, dirName) {
-  return data.sidebar?.groupLabel ?? data.groupLabel ?? data.title ?? prettySegmentLabel(dirName);
+function getGroupLabel(data, dirName, slugPrefix) {
+  return (
+    data.sidebar?.groupLabel ??
+    data.groupLabel ??
+    data.title ??
+    (slugPrefix ? groupDirectoryConfig[slugPrefix]?.label : undefined) ??
+    prettySegmentLabel(dirName)
+  );
 }
 
 function getReadmePath(dirPath) {
@@ -602,6 +679,20 @@ export default defineConfig({
     "/features/stats-and-insights": "/en/features/setup-administration/stats-and-insights/",
     "/features/matrix-bridge": "/en/features/integrations/matrix-bridge/",
     "/features/sillytavern-support": "/en/features/integrations/sillytavern-support/",
+    "/features/chatting-personality/": "/en/features/",
+    "/features/knowledge/": "/en/features/",
+    "/features/capabilities/": "/en/features/",
+    "/features/setup-administration/": "/en/features/",
+    "/features/integrations/": "/en/features/",
+    "/en/features/chatting-personality/": "/en/features/",
+    "/en/features/knowledge/": "/en/features/",
+    "/en/features/capabilities/": "/en/features/",
+    "/en/features/setup-administration/": "/en/features/",
+    "/en/features/integrations/": "/en/features/",
+    "/features/integrations/pluralkit-support/": "/en/features/integrations/message-proxy-support/#pluralkit",
+    "/features/integrations/pluralbuddy-support/": "/en/features/integrations/message-proxy-support/#pluralbuddy",
+    "/en/features/integrations/pluralkit-support/": "/en/features/integrations/message-proxy-support/#pluralkit",
+    "/en/features/integrations/pluralbuddy-support/": "/en/features/integrations/message-proxy-support/#pluralbuddy",
   },
 
   // Docs content lives at repo-root `docs/`, surfaced via a junction at `src/content/docs`

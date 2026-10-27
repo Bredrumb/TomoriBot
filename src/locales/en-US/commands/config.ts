@@ -104,7 +104,7 @@ export default {
       frequency_1: `Gentle`,
       frequency_2: `Normal`,
       frequency_3: `Lively`,
-      frequency_effect: `This server sends me about {heat} messages a day, so expect about {per_week} idle nudges a week.`,
+      frequency_effect: `At this server's current heat of {heat}, expect about {per_week} idle nudges a week.`,
       frequency_effect_none: `I start an idle nudge in a quiet channel when one is due, but this server talks to me too rarely for one right now.`,
       saved_heading: `Natural Nudges updated`,
       saved_detail: `Your Natural Nudges settings have been saved.`,

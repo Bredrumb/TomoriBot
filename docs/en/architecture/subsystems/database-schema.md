@@ -102,7 +102,7 @@ deleting those messages restore that exact webhook independently of the primary 
   - `server_channel_scope_configs`: channel roleplay rules, blocklists, and thought-log routing.
   - `server_trigger_behavior_configs`: cooldown modes, durations, and trigger styles.
   - `server_auto_trigger_configs` and `server_auto_trigger_persona_overrides`: auto-trigger thresholds and per-channel persona routing.
-  - `server_capabilities_configs`: tool exposure switches (video generation, user blocking, time awareness, short-term memory, and dice rolling, which defaults to off).
+  - `server_capabilities_configs`: tool exposure switches (video generation, which defaults to off, user blocking, time awareness, short-term memory, and dice rolling).
   - `server_notice_embeds_configs`: notice verbosity modes (`minimal` or `verbose`) and hidden notice filters.
   - `server_welcome_configs`: welcome greeting channels, prompts, and persona assignments.
   - `server_speech_configs`: independent Design and Clone hosted-model or endpoint selections, transcript behavior, and synthesizer parameters.
@@ -215,7 +215,11 @@ Natural Nudges stores events and derives its meters on read
   personas leave stale IDs that readers filter. Excluded from export; reset deletes them.
 - **`persona_natural_nudge_configs`**: talkativeness and interests per persona. Pointer personas
   without a row read `persona_presets.natural_nudge_interests` and `natural_nudge_talkativeness`.
-- **`server_natural_nudge_runtime_state`**: idle nudge jitter and the failure stop. Excluded from export.
+- **`server_natural_nudge_runtime_state`**: idle nudge jitter, the failure stop, and the indexed
+  `last_direct_chat_at` timestamp that suspends both modes after 14 days without direct chat.
+  Excluded from export; a missing timestamp keeps the server dormant. The dormancy migration seeds
+  it once from recent channel activity only for existing servers that already pass the heat and
+  channel gates, preserving the original event time and any live direct-chat timestamp.
 - **`natural_nudge_fires`**: the fire log every meter reads, with `target_user_id` for a Ping User. Active Nudge
   rows (`mode = 'active'`) have no category or verdict and set `detour` when another persona took the
   turn. Pruned after 30 days.

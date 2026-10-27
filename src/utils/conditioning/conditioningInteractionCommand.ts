@@ -314,6 +314,7 @@ export function createConditioningInteractionCommand(
         isFromQueue: false,
         isManuallyTriggered: true,
         selectedPersonaId: selectedPersona.persona_id,
+        conditioningInteraction: { actorType: "user", type },
         textQuotaSource: "user",
         textQuotaTriggerKey: interaction.id,
         textQuotaUserDiscId: interaction.user.id,

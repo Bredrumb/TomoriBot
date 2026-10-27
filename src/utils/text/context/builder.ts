@@ -39,6 +39,7 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
                   nai_diffusion_model_id: tomoriStateForPreset.config.nai_diffusion_model_id,
                   video_model_id: tomoriStateForPreset.config.video_model_id,
                   config: {
+                    emoji_usage_enabled: params.tomoriConfig.emoji_usage_enabled,
                     sticker_usage_enabled: params.tomoriConfig.sticker_usage_enabled,
                     web_search_enabled: params.tomoriConfig.web_search_enabled,
                     self_teaching_enabled: params.tomoriConfig.self_teaching_enabled,

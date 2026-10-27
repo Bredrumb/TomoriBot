@@ -2,13 +2,13 @@
 title: "Behavior Tweaking"
 sidebar:
   order: 3
-aiGenerated: true
 ---
 
-TomoriBot's behavior (what she is allowed to do and how she generates) is controlled
-by `/config` > Permissions and `/config`, beyond personality
+What TomoriBot is allowed to do and how she generates replies is set in `/config` under
+Behavior, Plugins, Channels, and Models. Her personality
 ([Multiple Personas](/features/chatting-personality/multiple-personas/)) and knowledge
-([Memory](/features/knowledge/memory/)). This page covers the most common settings.
+([Memory](/features/knowledge/memory/)) are covered on their own pages. This page covers the most
+common behavior settings.
 
 ## Capabilities: What She's Allowed to Do
 <!-- anchor: capabilities-what-shes-allowed-to-do -->
@@ -109,8 +109,17 @@ Every persona can use a new custom expression. To keep one for specific personas
 
 With Sticker Usage on in `/config` > Plugins, she sends at most one expression per reply, as its own
 message before, between, or after her text. She doesn't use them in
-[roleplay channels](/features/chatting-personality/chatting-and-triggers/#roleplay-channels).
+[roleplay channels](#roleplay-channels).
 `/expressions manage` shows how many times personas have used each one.
+
+## Roleplay Channels
+<!-- anchor: roleplay-channels -->
+
+Roleplay channels suppress custom emoji and sticker messages in her responses. Members can
+also use `/tool delete turn` in roleplay channels to delete her latest turn without needing
+the `Manage Server` permission.
+
+Configure roleplay channels in `/config` > `Channels` > `Channel Rules`.
 
 ## Generation Tuning
 <!-- anchor: generation-tuning -->

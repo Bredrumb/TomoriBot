@@ -1,4 +1,5 @@
-import { beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { SETUP_FEATURES } from "@/types/db/schema";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import {
   ComponentType,
   PermissionsBitField,
@@ -345,6 +346,15 @@ describe("setupWizardRoutes", () => {
 
   beforeEach(() => {
     resetSetupDrafts();
+    featureSelections = spyOn(modalModule, "takeRawModalCheckboxGroupValues").mockImplementation((_id, fieldId) =>
+      fieldId.startsWith("features_") ? [...SETUP_FEATURES] : undefined,
+    );
+  });
+
+  let featureSelections: ReturnType<typeof spyOn<typeof modalModule, "takeRawModalCheckboxGroupValues">>;
+
+  afterEach(() => {
+    featureSelections.mockRestore();
   });
 
   it("dispatches through real InteractionRouteRegistry to registered setup route", async () => {
@@ -1965,6 +1975,7 @@ describe("setupWizardRoutes", () => {
           presetId: 1770,
           humanizer: 1,
           timezoneOffset: 9,
+          features: [...SETUP_FEATURES],
           systemPrompt: { kind: "built-in" },
         },
       }),
@@ -2200,7 +2211,7 @@ describe("setupWizardRoutes", () => {
     }
   });
 
-  it("opens one four-row settings modal with literals 18, 3 and 4 for its nested fields", async () => {
+  it("opens a settings modal within Discord's five-field limit", async () => {
     const nonce = "settings-open";
     storeSetupDraft(nonce, makeSettingsDraft());
     const catalogs = stubSettingsCatalogs();
@@ -2226,7 +2237,7 @@ describe("setupWizardRoutes", () => {
         | undefined;
 
       const rows = openedModal?.components ?? [];
-      expect(rows.length).toBe(4);
+      expect(rows.length).toBe(5);
       for (const row of rows) {
         // 18 is the Label wrapper, which is what the type-18 walk in interactionCore reads. A row
         // left at the modal root renders and then submits as no value at all.
@@ -2238,13 +2249,15 @@ describe("setupWizardRoutes", () => {
         localizer("en-US", "commands.setup.wizard.settings_humanizer_description"),
         localizer("en-US", "commands.setup.wizard.settings_timezone_description"),
         localizer("en-US", "commands.setup.wizard.settings_system_prompt_description"),
+        localizedCopy("en-US", "commands.setup.wizard.settings_features_description"),
       ]);
-      expect(rows.map((row) => row.component?.type)).toEqual([3, 3, 4, 3]);
+      expect(rows.map((row) => row.component?.type)).toEqual([3, 3, 4, 3, 22]);
       expect(rows.map((row) => row.component?.custom_id)).toEqual([
         buildSetupSettingsModalFieldId("persona", nonce),
         buildSetupSettingsModalFieldId("humanizer", nonce),
         buildSetupSettingsModalFieldId("timezone", nonce),
         buildSetupSettingsModalFieldId("system-prompt", nonce),
+        buildSetupSettingsModalFieldId("features", parseSetupRoute(openedModal?.custom_id ?? "")?.modalNonce ?? ""),
       ]);
       expect(rows[3]?.component?.options?.[0]?.description).toBe(
         localizer("en-US", "commands.setup.wizard.settings_built_in_prompt_description"),
@@ -2255,7 +2268,7 @@ describe("setupWizardRoutes", () => {
     }
   });
 
-  it("stores all four settings identities and repaints the completed step", async () => {
+  it("stores starting settings and repaints the completed step", async () => {
     const nonce = "settings-save";
     storeSetupDraft(nonce, makeSettingsDraft());
     const catalogs = stubSettingsCatalogs();
@@ -2284,6 +2297,7 @@ describe("setupWizardRoutes", () => {
           presetId: 1770,
           humanizer: 2,
           timezoneOffset: 8,
+          features: [...SETUP_FEATURES],
           systemPrompt: { kind: "preset", presetName: "Tomori Default" },
         });
       }
@@ -2294,6 +2308,52 @@ describe("setupWizardRoutes", () => {
       expect(repainted).toContain("Lighthouse");
       expect(repainted).toContain("Tomori Default");
       expect(repainted).not.toContain(localizer("en-US", "commands.setup.wizard.settings_pending"));
+    } finally {
+      selectSpy.mockRestore();
+      catalogs.restore();
+    }
+  });
+
+  it("validates feature selections and preserves empty or partial selections", async () => {
+    const catalogs = stubSettingsCatalogs();
+    const selectSpy = spyOn(modalModule, "takeRawModalSelectValue").mockImplementation((_id, fieldId) => {
+      if (fieldId.includes("persona")) return "1770";
+      if (fieldId.includes("humanizer")) return "1";
+      if (fieldId.includes("system-prompt")) return SETUP_SYSTEM_PROMPT_BUILT_IN;
+      return undefined;
+    });
+    try {
+      for (const [index, submitted] of [
+        [],
+        ["expressions", "short_term_memory"],
+        ["web_search"],
+        ["expressions", "expressions"],
+        undefined,
+      ].entries()) {
+        const nonce = `features-case-${index}`;
+        storeSetupDraft(nonce, makeSettingsDraft());
+        featureSelections.mockReturnValue(submitted);
+        const interaction = makeMockInteraction({
+          customId: buildSetupSettingsSubmitRouteId({ locale: "en-US", nonce, modalNonce: "features1234" }),
+          kind: "modal",
+        });
+        await dispatchGlobalInteraction({} as Client, interaction);
+        const stored = readSetupDraft(nonce, "actor-1", "guild-1", "guild");
+        expect(stored.status).toBe("ok");
+        if (stored.status !== "ok") throw new Error("Setup draft disappeared");
+        if (index < 2) {
+          expect<string[] | undefined>(stored.draft.startingSettings?.features).toEqual(submitted);
+          expect(featureSelections).toHaveBeenLastCalledWith(
+            interaction.id,
+            buildSetupSettingsModalFieldId("features", "features1234"),
+          );
+        } else {
+          expect(stored.draft.startingSettings).toBeNull();
+          expect(JSON.stringify(interaction.editReplyCalls)).toMatch(
+            localizedProse("en-US", "commands.setup.wizard.settings_features_invalid"),
+          );
+        }
+      }
     } finally {
       selectSpy.mockRestore();
       catalogs.restore();
@@ -2328,6 +2388,7 @@ describe("setupWizardRoutes", () => {
           presetId: 1770,
           humanizer: 1,
           timezoneOffset: 0,
+          features: [...SETUP_FEATURES],
           systemPrompt: { kind: "built-in" },
         });
       }
@@ -2371,6 +2432,7 @@ describe("setupWizardRoutes", () => {
           presetId: 3585,
           humanizer: 0,
           timezoneOffset: 0,
+          features: [...SETUP_FEATURES],
           systemPrompt: { kind: "built-in" },
         });
         // The draft carries the identity, never a copy of the preset text, so the read-time default
@@ -2544,6 +2606,7 @@ describe("setupWizardRoutes", () => {
       presetId: 1770,
       humanizer: 1,
       timezoneOffset: 9,
+      features: [...SETUP_FEATURES],
       systemPrompt: { kind: "preset" as const, presetName: "Tomori Default" },
     };
     resetSetupDrafts();
@@ -2586,6 +2649,7 @@ describe("setupWizardRoutes", () => {
       presetId: 1770,
       humanizer: 1,
       timezoneOffset: 9,
+      features: [...SETUP_FEATURES],
       systemPrompt: { kind: "preset" as const, presetName: "Tomori Default" },
     };
     resetSetupDrafts();
@@ -2684,6 +2748,7 @@ describe("setupWizardRoutes", () => {
           presetId: 1770,
           humanizer: 1,
           timezoneOffset: 9,
+          features: [...SETUP_FEATURES],
           systemPrompt: { kind: "preset", presetName: "Tomori Default" },
         },
       }),
@@ -2718,6 +2783,7 @@ describe("setupWizardRoutes", () => {
           presetId,
           humanizer: 1,
           timezoneOffset: 9,
+          features: [...SETUP_FEATURES],
           systemPrompt: { kind: "built-in" },
         },
       });
@@ -2859,6 +2925,7 @@ describe("setupWizardFinish", () => {
         presetId: COMMIT_CATALOGS.persona.persona_preset_id,
         humanizer: 2,
         timezoneOffset: 9,
+        features: [...SETUP_FEATURES],
         systemPrompt: { kind: "preset", presetName: COMMIT_CATALOGS.prompt.system_prompt_preset_name },
       },
       ...overrides,
@@ -2928,6 +2995,7 @@ describe("setupWizardFinish", () => {
       expect(writtenConfig.presetId).toBe(COMMIT_CATALOGS.persona.persona_preset_id);
       expect(writtenConfig.humanizer).toBe(2);
       expect(writtenConfig.timezoneOffset).toBe(9);
+      expect(writtenConfig.features).toEqual([...SETUP_FEATURES]);
       // The prompt is re-read from the live catalog at commit rather than copied into the draft.
       expect(writtenConfig.systemPrompt).toBe(COMMIT_CATALOGS.prompt.preset_prompt_text);
       expect(writtenConfig.providerAccess).toMatchObject({ mode: "catalog", provider: "anthropic" });

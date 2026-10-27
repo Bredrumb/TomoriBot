@@ -81,6 +81,11 @@ messages can be evaluated for follow-up interrupts.
   for each responding persona.
 - **Selective error visibility**: `shouldSurfaceUserErrors` suppresses error notices for passive autochat
   and random triggers while delivering error feedback for direct mentions, DMs, and slash commands.
+- **Nudge dormancy**: admitted direct guild chat renews the server's 14-day nudge activity window
+  before credentials resolve; passive and system turns do not renew it, and queued nudge turns
+  are discarded when the shared eligibility gate closes. Direct turns keep `isDirectChat` on an
+  empty-response retry, and their persisted stats refresh heat and channel eligibility (see
+  [Natural Nudges](/architecture/subsystems/natural-nudges/)).
 
 ## Source pointers
 

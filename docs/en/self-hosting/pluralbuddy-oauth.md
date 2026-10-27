@@ -110,6 +110,6 @@ bun scripts/db/register-message-proxy-instance.ts remove <instance-id>
 Removal deletes its PluralBuddy OAuth connection and keeps a hidden catalog row so identities,
 memories, and message attribution still resolve. That origin cannot be registered again after
 removal; use `disable` when you may need to resume the same instance. Catalog changes take effect on the next command
-or lookup without restarting TomoriBot. The [PluralBuddy support page](/features/integrations/pluralbuddy-support/)
+or lookup without restarting TomoriBot. The [Message-Proxy Support page](/features/integrations/message-proxy-support/#pluralbuddy)
 explains what users can expect. See the [message-proxy architecture](/architecture/integrations/message-proxy/)
 for token storage and refresh behavior.

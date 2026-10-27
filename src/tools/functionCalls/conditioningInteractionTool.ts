@@ -261,6 +261,7 @@ export class ConditioningInteractionTool extends BaseTool {
           isFromQueue: false,
           isManuallyTriggered: true,
           selectedPersonaId: resolution.persona.persona_id,
+          conditioningInteraction: { actorType: "persona", type },
           isPersonaJob: true,
           textQuotaSource: "system",
           manualTriggerInvoker:

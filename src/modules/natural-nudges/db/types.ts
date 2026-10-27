@@ -115,6 +115,25 @@ export const IDLE_NUDGE_FREQUENCY_LEVELS = [0, 1, 2, 3] as const;
 export type IdleNudgeFrequencyLevel = (typeof IDLE_NUDGE_FREQUENCY_LEVELS)[number];
 const frequencyLevelSchema = z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]);
 
+export const DEFAULT_IDLE_NUDGE_CATEGORY_WEIGHTS: Record<NaturalNudgeCategory, number> = {
+  ping_user: 30,
+  revive_topic: 25,
+  start_topic: 30,
+  play_scene: 15,
+};
+export const NUDGE_ADVANCED_STEP = 5;
+export const NUDGE_CATEGORY_WEIGHT_MAX = 100;
+export const NUDGE_HEAT_OFFSET_MAX = 1000;
+const categoryWeightSchema = z.number().int().min(0).max(NUDGE_CATEGORY_WEIGHT_MAX);
+const nudgeCategoryWeightsSchema = z
+  .object({
+    ping_user: categoryWeightSchema,
+    revive_topic: categoryWeightSchema,
+    start_topic: categoryWeightSchema,
+    play_scene: categoryWeightSchema,
+  })
+  .strict();
+
 export const serverNaturalNudgeConfigSchema = z.object({
   server_id: z.number().int(),
   idle_nudges_enabled: z.boolean(),
@@ -127,6 +146,10 @@ export const serverNaturalNudgeConfigSchema = z.object({
   idle_nudge_frequency: frequencyLevelSchema,
   active_nudge_frequency: frequencyLevelSchema,
   disabled_builtin_idle_nudges: z.array(z.string()),
+  category_weights: z
+    .preprocess(parseJsonbText, nudgeCategoryWeightsSchema)
+    .default(DEFAULT_IDLE_NUDGE_CATEGORY_WEIGHTS),
+  heat_offset: z.number().int().min(-NUDGE_HEAT_OFFSET_MAX).max(NUDGE_HEAT_OFFSET_MAX).default(0),
 });
 export type ServerNaturalNudgeConfig = z.infer<typeof serverNaturalNudgeConfigSchema>;
 
@@ -143,6 +166,8 @@ export function defaultServerNaturalNudgeConfig(serverId: number): ServerNatural
     idle_nudge_frequency: 1,
     active_nudge_frequency: 1,
     disabled_builtin_idle_nudges: [],
+    category_weights: { ...DEFAULT_IDLE_NUDGE_CATEGORY_WEIGHTS },
+    heat_offset: 0,
   };
 }
 

@@ -314,7 +314,7 @@ export const DOCS_ROUTES = {
   FEATURES: "/features/",
   COMMAND_REFERENCE: "/features/command-reference/",
   CHATTING_TRIGGERS: "/features/chatting-personality/chatting-and-triggers/",
-  ROLEPLAY_CHANNELS: "/features/chatting-personality/chatting-and-triggers/#roleplay-channels",
+  ROLEPLAY_CHANNELS: "/features/chatting-personality/behavior-tweaking/#roleplay-channels",
   MULTIPLE_PERSONAS: "/features/chatting-personality/multiple-personas/",
   BEHAVIOR_TWEAKING: "/features/chatting-personality/behavior-tweaking/",
   MEMORY: "/features/knowledge/memory/",

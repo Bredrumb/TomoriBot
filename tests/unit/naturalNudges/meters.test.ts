@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { IDLE_NUDGE_FREQUENCY_LEVELS } from "@/modules/natural-nudges/db/types";
+import { MAX_EFFECTIVE_HEAT } from "@/modules/natural-nudges/runtime/tuning";
 import type { NaturalNudgeFireRow } from "@/modules/natural-nudges/db/types";
 import {
   BUILTIN_IDLE_NUDGES,
@@ -8,6 +10,8 @@ import {
 import {
   computeIdleNudgeDueAt,
   computeHeat,
+  computeEffectiveHeat,
+  activeNudgeTripRange,
   countUnansweredStreak,
   drawRaffle,
   idleNudgesPerDay,
@@ -50,6 +54,30 @@ function fire(overrides: Partial<NaturalNudgeFireRow>): NaturalNudgeFireRow {
 }
 
 describe("heat", () => {
+  it("adds the saved heat adjustment without changing counts and floors effective heat at zero", () => {
+    const counts = dailyCounts(() => 10);
+    expect(computeEffectiveHeat(computeHeat(counts, NOW), 5)).toBeCloseTo(15);
+    expect(computeEffectiveHeat(computeHeat(counts, NOW), -20)).toBe(0);
+    expect(computeHeat(counts, NOW)).toBeCloseTo(10);
+    expect(computeEffectiveHeat(computeHeat(new Map(), NOW), 5)).toBe(5);
+  });
+
+  it("caps scheduling heat after adding the adjustment and preserves measured activity", () => {
+    const measured = computeHeat(
+      dailyCounts(() => 1000),
+      NOW,
+    );
+    expect(measured).toBeCloseTo(1000);
+    expect(computeEffectiveHeat(measured, 0)).toBe(MAX_EFFECTIVE_HEAT);
+    expect(computeEffectiveHeat(measured, -975)).toBeCloseTo(25);
+    expect(computeEffectiveHeat(0, 1000)).toBe(MAX_EFFECTIVE_HEAT);
+    expect(computeEffectiveHeat(0, -1000)).toBe(0);
+    for (const level of IDLE_NUDGE_FREQUENCY_LEVELS) {
+      expect(idleNudgesPerDay(MAX_EFFECTIVE_HEAT, level)).toBe(idleNudgesPerDay(measured, level));
+      expect(activeNudgeTripRange(MAX_EFFECTIVE_HEAT, level)).toEqual(activeNudgeTripRange(measured, level));
+    }
+  });
+
   it("reads as messages per day for a steady server", () => {
     expect(
       computeHeat(

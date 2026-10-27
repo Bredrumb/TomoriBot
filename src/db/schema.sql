@@ -2980,7 +2980,7 @@ CREATE TABLE IF NOT EXISTS server_capabilities_configs (
   manage_message_enabled BOOLEAN NOT NULL DEFAULT true,
   thread_creation_enabled BOOLEAN NOT NULL DEFAULT true,
   conditioning_interactions_enabled BOOLEAN NOT NULL DEFAULT true,
-  dice_rolling_enabled BOOLEAN NOT NULL DEFAULT false,
+  dice_rolling_enabled BOOLEAN NOT NULL DEFAULT true,
   imagegen_enabled       BOOLEAN NOT NULL DEFAULT true,
   danbooru_enabled       BOOLEAN NOT NULL DEFAULT true,
   videogen_enabled       BOOLEAN NOT NULL DEFAULT false,
@@ -2998,7 +2998,8 @@ SELECT add_column_if_not_exists('server_capabilities_configs', 'response_draftin
 SELECT add_column_if_not_exists('server_capabilities_configs', 'danbooru_enabled', 'BOOLEAN NOT NULL', 'true');
 SELECT add_column_if_not_exists('server_capabilities_configs', 'conditioning_interactions_enabled', 'BOOLEAN NOT NULL', 'true');
 ALTER TABLE server_capabilities_configs ALTER COLUMN conditioning_interactions_enabled SET DEFAULT true;
-SELECT add_column_if_not_exists('server_capabilities_configs', 'dice_rolling_enabled', 'BOOLEAN NOT NULL', 'false');
+SELECT add_column_if_not_exists('server_capabilities_configs', 'dice_rolling_enabled', 'BOOLEAN NOT NULL', 'true');
+ALTER TABLE server_capabilities_configs ALTER COLUMN dice_rolling_enabled SET DEFAULT true;
 
 DROP TRIGGER IF EXISTS update_server_capabilities_configs_timestamp ON server_capabilities_configs;
 CREATE TRIGGER update_server_capabilities_configs_timestamp
@@ -3444,12 +3445,16 @@ CREATE TABLE IF NOT EXISTS server_natural_nudge_configs (
   idle_nudge_frequency         SMALLINT NOT NULL DEFAULT 1 CHECK (idle_nudge_frequency BETWEEN 0 AND 3),
   active_nudge_frequency        SMALLINT NOT NULL DEFAULT 1 CHECK (active_nudge_frequency BETWEEN 0 AND 3),
   disabled_builtin_idle_nudges TEXT[]   NOT NULL DEFAULT '{}',
+  category_weights          JSONB NOT NULL DEFAULT '{"ping_user":30,"revive_topic":25,"start_topic":30,"play_scene":15}',
+  heat_offset               INT NOT NULL DEFAULT 0 CHECK (heat_offset BETWEEN -1000 AND 1000),
   created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT server_natural_nudge_configs_one_checker
     CHECK (num_nonnulls(checker_llm_id, checker_decision_model_id) <= 1)
 );
 
+SELECT add_column_if_not_exists('server_natural_nudge_configs', 'category_weights', 'JSONB NOT NULL', '''{"ping_user":30,"revive_topic":25,"start_topic":30,"play_scene":15}''');
+SELECT add_column_if_not_exists('server_natural_nudge_configs', 'heat_offset', 'INT NOT NULL CHECK (heat_offset BETWEEN -1000 AND 1000)', '0');
 SELECT add_column_if_not_exists('server_natural_nudge_configs', 'checker_llm_id', 'INT REFERENCES llms(llm_id) ON DELETE SET NULL');
 SELECT add_column_if_not_exists('server_natural_nudge_configs', 'checker_decision_model_id', 'INT REFERENCES decision_models(decision_model_id) ON DELETE SET NULL');
 DO $$
@@ -3542,8 +3547,13 @@ CREATE TABLE IF NOT EXISTS server_natural_nudge_runtime_state (
   idle_nudge_jitter       REAL     NOT NULL DEFAULT 1,
   consecutive_failures SMALLINT NOT NULL DEFAULT 0,
   stopped_at           TIMESTAMPTZ,
+  last_direct_chat_at  TIMESTAMPTZ,
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+SELECT add_column_if_not_exists('server_natural_nudge_runtime_state', 'last_direct_chat_at', 'TIMESTAMPTZ');
+CREATE INDEX IF NOT EXISTS idx_natural_nudge_runtime_direct_chat
+  ON server_natural_nudge_runtime_state(last_direct_chat_at) WHERE last_direct_chat_at IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS natural_nudge_fires (
   fire_id                BIGSERIAL PRIMARY KEY,

@@ -129,7 +129,8 @@ const MAX_NUDGE_SETTINGS: NaturalNudgesSettingsView = {
     models: [{ id: 9000 + index, name: `decision-${index}`.padEnd(90, "d"), description: null }],
   })),
   trackingEnabled: false,
-  heat: 1234.5,
+  baseHeat: 1234.5,
+  heat: 50,
   perDay: 3,
   activeNudgeRange: { min: 160, max: 320 },
   status: {

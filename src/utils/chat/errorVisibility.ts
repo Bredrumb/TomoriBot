@@ -61,7 +61,7 @@ function isReplyToKnownPersona(
   );
 }
 
-function hasDirectChatSignal(args: {
+export function hasDirectChatSignal(args: {
   client: Client;
   message: Message;
   allPersonas: readonly TomoriState[];

@@ -1,3 +1,4 @@
+import { SETUP_FEATURES } from "@/types/db/schema";
 import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import { ButtonStyle, ComponentType, type Client } from "discord.js";
 import {
@@ -732,6 +733,7 @@ describe("provider option registry", () => {
         presetId: 1,
         humanizer: 1,
         timezoneOffset: 0,
+        features: [...SETUP_FEATURES],
         systemPrompt: { kind: "built-in" },
       },
     });

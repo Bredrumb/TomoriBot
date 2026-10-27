@@ -6,6 +6,7 @@
  */
 import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import {
+  Collection,
   escapeMarkdown,
   MessageFlags,
   type ChatInputCommandInteraction,
@@ -247,6 +248,7 @@ function createInteraction(personaOption: string | null) {
 
   return {
     replies,
+    channel,
     interaction: {
       channel,
       guild: {
@@ -305,6 +307,27 @@ const userData = { user_id: 55 } as UserRow;
 const client = { user: { id: "bot" } } as unknown as Client;
 
 describe("conditioning persona resolution", () => {
+  it("identifies human reward and punish turns for heat accounting", async () => {
+    stubWorkspace([MAIN, ALTER]);
+    const chatSpy = track(spyOn(tomoriChatModule, "tomoriChat").mockResolvedValue("run"));
+    for (const type of ["reward", "punish"] as const) {
+      const { interaction, channel } = createInteraction("2");
+      const message = { id: "interaction-reply", channel };
+      Object.assign(channel.messages, {
+        fetch: async () => new Collection([[message.id, message]]),
+      });
+      await createConditioningInteractionCommand(type, type === "reward" ? "headpat" : "bonk").execute(
+        client,
+        interaction,
+        userData,
+        "en-US",
+      );
+      expect(chatSpy.mock.calls.at(-1)?.[0]).toMatchObject({
+        selectedPersonaId: 2,
+        conditioningInteraction: { actorType: "user", type },
+      });
+    }
+  });
   it("records against the named persona when the submitted id is eligible", async () => {
     const recordSpy = stubWorkspace([MAIN, ALTER]);
     const { execute } = createConditioningInteractionCommand("punish", "bite");

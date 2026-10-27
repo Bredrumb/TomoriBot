@@ -27,6 +27,7 @@ export async function loadAvailableToolNames(persona: TomoriState): Promise<Set<
       supports_structoutput: persona.llm.supports_structoutput,
     },
     config: {
+      emoji_usage_enabled: persona.config.emoji_usage_enabled,
       sticker_usage_enabled: persona.config.sticker_usage_enabled,
       web_search_enabled: persona.config.web_search_enabled,
       self_teaching_enabled: persona.config.self_teaching_enabled,

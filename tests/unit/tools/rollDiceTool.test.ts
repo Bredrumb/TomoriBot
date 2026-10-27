@@ -106,8 +106,8 @@ function spriteRow(isIdentity = false) {
   };
 }
 
-it("advertises and executes dice rolls only after opt-in", async () => {
-  const f = fixture({ enabled: false });
+it("advertises and executes dice rolls by default and respects disabled switch", async () => {
+  const f = fixture();
   const tool = new RollDiceTool();
   const state: ToolStateForContext = {
     server_id: "server",
@@ -115,18 +115,21 @@ it("advertises and executes dice rolls only after opt-in", async () => {
     llm: f.context.tomoriState.llm,
     config: f.context.tomoriState.config,
   };
-  expect(createPersona().config.dice_rolling_enabled).toBe(false);
+  expect(createPersona().config.dice_rolling_enabled).toBe(true);
+  expect(getAvailableToolsForContext([tool], "google", state).map((entry) => entry.name)).toContain("roll_dice");
+  expect(isBuiltInToolAvailable(tool, "google", f.context)).toBe(true);
+  expect(getDeliberateToolAllowedNames("Please roll dice for this check")).toContain("roll_dice");
+
+  f.context.tomoriState.config.dice_rolling_enabled = false;
+  state.config = f.context.tomoriState.config;
   expect(getAvailableToolsForContext([tool], "google", state)).toEqual([]);
   expect(isBuiltInToolAvailable(tool, "google", f.context)).toBe(false);
   expect((await tool.execute({ dice: "d20" }, f.context)).success).toBe(false);
   expect(f.send).not.toHaveBeenCalled();
-  f.context.tomoriState.config.dice_rolling_enabled = true;
-  expect(getAvailableToolsForContext([tool], "google", state).map((entry) => entry.name)).toContain("roll_dice");
-  expect(getDeliberateToolAllowedNames("Please roll dice for this check")).toContain("roll_dice");
 });
 
-it("saves the opt-in through the existing Available Tools write plan", () => {
-  const config = createPersona().config;
+it("saves changes through the existing Available Tools write plan", () => {
+  const config = { ...createPersona().config, dice_rolling_enabled: false };
   const selected = getCapabilitiesManagePermissionDefinitions({ page: "available-tools" })
     .filter((definition) => definition.getState(config))
     .map((definition) => definition.value);

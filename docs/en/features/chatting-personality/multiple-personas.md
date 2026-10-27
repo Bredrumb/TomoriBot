@@ -12,40 +12,34 @@ head:
 description: "Run multiple AI companions in one Discord server. Custom personas with their own avatars, triggers, and speaking styles."
 sidebar:
   order: 2
-aiGenerated: true
 ---
 
 
 TomoriBot's personality lives in a persona: her name, avatar, traits, speaking style,
 and behavior. You can run multiple personas at once, each as a distinct character with
-its own trigger words and webhook avatar. This page covers how personas behave. For
-facts and memories, see [Memory](/features/knowledge/memory/).
+its own trigger words and webhook avatar. For
+facts and memories that each persona can hold, see [Memory](/features/knowledge/memory/).
 
-## Creating a Persona
-
+## Persona Management
+- `/config` > Persona: configure existing personas
 - `/persona create`: build a custom persona from scratch.
 - `/persona generate`: have the AI generate a persona from a prompt and an image (requires
   a provider that supports structured output). You can also provide an existing TomoriBot
   preset or SillyTavern card (see [SillyTavern Support](/features/integrations/sillytavern-support/)).
 - `/persona default`: switch to one of the built-in default characters.
-- `/persona export` and `/persona import`: back up or share persona files. Import supports
-  adding a character as an alter persona with its own triggers and webhook avatar.
+- `/persona export`: back up or share persona files.
+- `/persona import`: import a shared character card (Sillytavern, etc.) or a TomoriBot card as a Main persona or an Alter persona.
 - `/persona remove`: delete an alter persona.
 
-## Alter Personas
+### Main and Alter Personas
 
-Alter personas let multiple characters coexist in one server:
+The **Main** persona is the bot's face in the server: the name and avatar in the member list, and the persona that answers when someone @mentions the bot directly. **Alter** personas let multiple characters coexist in one server:
 
 - Each alter has its own personality, trigger words, and webhook avatar, so different
   characters post under their own name and image in the same channel.
 - Multiple alters can reply to a single message, up to the limit set in
   `/config` > Behavior > Trigger Behavior.
 - Replying directly to a webhook message continues the conversation with that specific persona.
-- Add alters with `/persona import` (select the alter option), and manage them with
-  `/persona` and `/persona remove`.
-
-For runtime routing and webhook identity details, see the architecture guide on
-[multi-persona behavior](/architecture/subsystems/multi-persona/).
 
 ## Shaping Personality
 
@@ -82,16 +76,6 @@ Tips for effective sample dialogues:
 Open `/config` > Persona > Identity & Personality to set what she calls herself and upload
 her profile picture.
 
-For a customized built-in persona, server managers can choose `Resync with Preset` on this page.
-The confirmation shows which prompt, attributes, sample dialogues, avatar, and sprites will change.
-Resync follows future preset updates and discards those local edits. It keeps the persona's name,
-trigger words, naming habits, memories, history, and other settings. A persona already following its
-preset shows `Synced with Preset`; custom personas have no resync button.
-
-You can also set a custom system prompt in `/config` > Behavior > General Behavior;
-see [Behavior Tweaking](/features/chatting-personality/behavior-tweaking/).
-
-
 ### Naming Habits
 
 Server managers can open `/config` > Persona > Naming Habits to set how a persona addresses
@@ -123,10 +107,6 @@ Manage sprites in `/config` > Persona > Sprites (requires Manage Server):
 
 The `Save as Identity` toggle displays the message author as `Label (Persona)` in Discord,
 useful for characters with multiple forms.
-
-Replacing a default persona's avatar clears its built-in sprites, because they depict the
-original character. Sprites you added yourself remain intact. Running `/persona default`
-restores the built-in sprites.
 
 ## Per-Channel Persona Picks
 

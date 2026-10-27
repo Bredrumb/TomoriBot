@@ -25,6 +25,7 @@ import {
 } from "@/modules/natural-nudges/discord/operations";
 import {
   buildCheckerModelModal,
+  buildNudgeWeightsModal,
   buildInterestModal,
   buildInterestRemovalModal,
   buildPersonaNudgeAvailabilityModal,
@@ -62,6 +63,7 @@ export const NUDGE_STRING_SELECT_ACTIONS: ReadonlySet<ConfigAction> = new Set<Co
 export const NUDGE_CHANNEL_SELECT_ACTIONS: ReadonlySet<ConfigAction> = new Set<ConfigAction>(["nudge-channels-select"]);
 
 export const NUDGE_MODAL_SUBMIT_ACTIONS: ReadonlySet<ConfigAction> = new Set<ConfigAction>([
+  "nudge-weights-submit",
   "nudge-interest-add-submit",
   "nudge-interest-edit-submit",
   "nudge-interest-remove-submit",
@@ -94,6 +96,7 @@ export async function handleNudgeModalOpen(
 ): Promise<boolean> {
   const value = interaction.isStringSelectMenu() ? interaction.values[0] : undefined;
   const opensModal =
+    route.action === "nudge-weights-open" ||
     route.action === "nudge-interest-select" ||
     route.action === "nudge-interest-remove-open" ||
     route.action === "nudge-persona-select" ||
@@ -125,6 +128,12 @@ export async function handleNudgeModalOpen(
     await deny("commands.config.panel.stale_detail");
     return false;
   };
+
+  if (route.action === "nudge-weights-open") {
+    const config = await nudges.loadServerConfig(serverId);
+    await dependencies.showModal(interaction, buildNudgeWeightsModal(locale, nonce, config.category_weights));
+    return true;
+  }
 
   if (route.action === "nudge-persona-select") {
     if (!(await requirePersona(route.personaId))) return true;
@@ -454,6 +463,28 @@ export async function handleNudgeRoutes(context: NudgeRouteContext): Promise<boo
   };
 
   switch (route.action) {
+    case "nudge-heat-adjust": {
+      const result = await write(
+        () => ops.adjustHeat(serverId, route.direction),
+        "server-config.workspace.natural-nudge-heat.set",
+      );
+      await paintPlugins(writeReceipt(locale, result));
+      return true;
+    }
+    case "nudge-weights-submit": {
+      const inputs = Object.fromEntries(
+        NATURAL_NUDGE_CATEGORIES.map((category) => [category, field(category)]),
+      ) as Record<NaturalNudgeCategory, string>;
+      const result = await write(
+        () => ops.setCategoryWeights(serverId, inputs),
+        "server-config.workspace.natural-nudge-weights.set",
+      );
+      const receipt = writeReceipt(locale, result);
+      if (result === "invalid") receipt.detail = localizer(locale, "commands.nudge-studio.weights_invalid");
+      await paintPlugins(receipt);
+      return true;
+    }
+
     case "nudge-talk-select": {
       const level = parseIndex(values[0]);
       const result =

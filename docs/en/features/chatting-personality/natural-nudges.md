@@ -12,7 +12,17 @@ Natural Nudges lets your personas speak without being mentioned:
     talks to TomoriBot again.
 - **Active nudges** join conversations about a persona's interests.
 
-The pace follows how often members talk to TomoriBot. Servers that rarely talk to her get neither kind, DMs never get nudges (for now).
+The pace follows your server's [Heat](#heat), with an optional adjustment under
+[Advanced settings](#advanced-settings). Servers with low effective heat get neither kind.
+DMs never get nudges (for now).
+
+Both kinds pause after 14 days without someone directly chatting with TomoriBot. Mention her,
+use a persona's trigger word, or reply to her message to resume them. Ordinary channel chatter,
+commands, and scheduled bot messages do not restart that window. Changing the heat adjustment
+does not bypass the pause. Low activity or no eligible channel also pauses both kinds, and ordinary
+channel chatter does not lift that pause. Direct chat prompts a fresh check of activity and channels.
+During an upgrade, existing servers with enough recent activity and an eligible channel keep their
+remaining activity window; other servers stay paused until direct chat makes them eligible.
 
 ## Idle nudges
 <!-- anchor: idle-nudges -->
@@ -25,6 +35,10 @@ your own for the whole server in `/nudge-studio`, and each persona can have idle
 The bot first picks a category, then the planner chooses an idle nudge and channel together from
 a shortlist of available activities in that category.
 It considers channel names, descriptions, and recent messages, and can skip the attempt when none fits.
+It avoids the previous category when another is available. Within each category, it leaves the
+last activity found in recent history out of the shortlist when another eligible activity exists.
+These checks use your server's nudge history across personas and channels. A category or activity
+can repeat when it is the only available choice.
 
 | Category | What it does | Prerequisites | Notes |
 |---|---|---|---|
@@ -142,6 +156,118 @@ Natural Nudges is on by default. Open `/config` > `Plugins` > `Natural Nudges` t
     private goal for follow-up replies. Defaults to your chat model.
   - `Active Nudge Checker` checks whether a conversation matches a persona's interests. Selected
     automatically; a small, cheap model or a Decision model suits its frequent checks.
+
+### Advanced settings
+
+Open `/config` > `Plugins` > `Natural Nudges` with `Manage Server` to adjust heat and idle nudge
+category weights. Only adjust these settings if you know what you are doing. The frequency quote
+rows estimate idle nudges per week and messages between active checks, with each mode's daily limits.
+
+- **Heat adjustment:** the `-5` and `+5` buttons change the saved adjustment, from -1000 to 1000.
+  Heat used for nudges stays between 0 and 50. Activity and your adjustment appear separately.
+  Raising heat makes idle nudges more frequent and active checks sooner until each mode reaches
+  its maximum pace. Measured heat and activity history stay uncapped for decay.
+- **Type weights:** `Edit type weights` opens four fields prefilled with the saved values.
+  Defaults are 30 for Ping User, 25 for Revive Topic, 30 for Start Topic, and 15 for Play Scene.
+  Each field shows its default. Enter whole numbers from 1 to 100, totaling 100 across all four.
+  Higher weights make that category more likely relative to the others. Prerequisites and recent
+  use still affect the draw.
+
+These controls still follow channel rules, waking hours, cooldowns, daily limits, and
+unanswered-nudge stops. With no recent conversation channels, choose channels before adding heat.
+
+### Heat
+
+Heat sets the pace of both idle nudges and active checks for your whole server, across members and
+personas. The Natural Nudges settings show measured heat, your saved adjustment, and heat used for nudges out of
+50. Persona talkativeness and the rules for choosing a member to ping are separate settings.
+
+#### Activity and decay
+
+Measured heat is a weighted daily average of interactions over the last 30 days. Ordinary
+conversation turns and human `/punish` turns contribute once; human `/reward` turns contribute
+three times as much. Generated nudges and Playful Interactions between personas contribute nothing.
+
+An interaction's weight halves every three days:
+
+<math xmlns="http://www.w3.org/1998/Math/MathML" display="block" aria-label="The weight of activity d days ago is two to the power of negative d over three.">
+  <mi>w</mi><mo>(</mo><mi>d</mi><mo>)</mo><mo>=</mo>
+  <msup><mn>2</mn><mfrac><mrow><mo>−</mo><mi>d</mi></mrow><mn>3</mn></mfrac></msup>
+</math>
+
+Here, `d` is the number of days ago, using UTC days: today's activity has weight 1, three days ago
+has weight 0.5, and six days ago has weight 0.25. Activity leaves the calculation after 30 days.
+With `E_d` as each day's weighted interaction total, measured heat `A` is:
+
+<math xmlns="http://www.w3.org/1998/Math/MathML" display="block" aria-label="Measured heat A is the sum of each day's interaction total times its decay weight, divided by the sum of the decay weights, over days zero through twenty-nine.">
+  <mi>A</mi><mo>=</mo>
+  <mfrac>
+    <mrow><munderover><mo>∑</mo><mrow><mi>d</mi><mo>=</mo><mn>0</mn></mrow><mn>29</mn></munderover><msub><mi>E</mi><mi>d</mi></msub><mo>·</mo><mi>w</mi><mo>(</mo><mi>d</mi><mo>)</mo></mrow>
+    <mrow><munderover><mo>∑</mo><mrow><mi>d</mi><mo>=</mo><mn>0</mn></mrow><mn>29</mn></munderover><mi>w</mi><mo>(</mo><mi>d</mi><mo>)</mo></mrow>
+  </mfrac>
+</math>
+
+Steady activity of 10 weighted interactions every day gives about 10 measured heat. Your saved
+adjustment `Δ` is added after this average, then the result is limited to 0-50:
+
+<math xmlns="http://www.w3.org/1998/Math/MathML" display="block" aria-label="Effective heat H is the smaller of fifty and the larger of zero and measured heat A plus the saved adjustment delta.">
+  <mi>H</mi><mo>=</mo><mi mathvariant="normal">min</mi><mo>(</mo><mn>50</mn><mo>,</mo>
+  <mi mathvariant="normal">max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mi>A</mi><mo>+</mo><mi>Δ</mi><mo>)</mo><mo>)</mo>
+</math>
+
+Measured activity stays uncapped, so a busy server's heat decays from its full value. Both modes
+need measured heat and effective heat of at least 1. An adjustment changes the pace once measured
+activity reaches that minimum. The 14-day pause without direct chat still applies at any heat.
+
+#### Idle timing and active checks
+
+For effective heat `H` of at least 1, your frequency level supplies these values:
+
+| Frequency | Idle divisor D | Idle daily limit C | Active multiplier M |
+|---|---|---|---|
+| `Rare` | 30 | 1 | 2 |
+| `Gentle` | 15 | 3 | 1 |
+| `Normal` | 10 | 5 | 0.6 |
+| `Lively` | 6 | 8 | 0.35 |
+
+The estimated idle nudges per day `R` rise with heat until they reach the daily limit:
+
+<math xmlns="http://www.w3.org/1998/Math/MathML" display="block" aria-label="Estimated idle nudges per day R equal the smaller of effective heat H divided by the idle divisor D and the daily limit C.">
+  <mi>R</mi><mo>=</mo><mi mathvariant="normal">min</mi><mo>(</mo><mfrac><mi>H</mi><mi>D</mi></mfrac><mo>,</mo><mi>C</mi><mo>)</mo>
+</math>
+
+The base interval is `16 / R` hours. Each interval gets a random multiplier between 0.5 and 1.5,
+and each consecutive unanswered invitation triples the next interval. Three unanswered invitations
+pause idle nudges until someone talks to TomoriBot again. Quiet channels, waking hours, prerequisites,
+and the planner's decision still determine whether a due nudge actually starts.
+
+For active checks, heat changes the number of human messages needed in a channel. First calculate
+an interval scale `s`, with the heat contribution held between 0.5 and 4:
+
+<math xmlns="http://www.w3.org/1998/Math/MathML" display="block" aria-label="The active interval scale s equals the frequency multiplier M times the smaller of four and the larger of one half and fifteen divided by effective heat H.">
+  <mi>s</mi><mo>=</mo><mi>M</mi><mo>·</mo><mi mathvariant="normal">min</mi><mo>(</mo><mn>4</mn><mo>,</mo>
+  <mi mathvariant="normal">max</mi><mo>(</mo><mn>0.5</mn><mo>,</mo><mfrac><mn>15</mn><mi>H</mi></mfrac><mo>)</mo><mo>)</mo>
+</math>
+
+A check's message target is randomly drawn between `max(1, round(15 × s))` and
+`max(1, round(40 × s))`, inclusive. Rounding uses the nearest whole message, with halves rounded
+upward. Threads share their parent's counter. Cooldowns and daily limits still apply, and the
+checker only invites a persona to speak when the conversation matches an interest. These formulas
+control timing; a check can produce no reply.
+
+For example, with both frequencies set to `Gentle`:
+
+| Effective heat | Estimated idle nudges per week | Human messages between active checks |
+|---|---|---|
+| Below 1 | 0 | No checks |
+| 5 | About 2.3 | 45-120 |
+| 15 | About 7 | 15-40 |
+| 30 | About 14 | 8-20 |
+| 45-50 | Up to 21 | 8-20 |
+
+Active checks reach their fastest interval at heat 30. Idle nudges reach their maximum pace at
+heat 30 for `Rare`, 45 for `Gentle`, 50 for `Normal`, and 48 for `Lively`. Those are the reasons the
+effective heat ceiling is 50.
 
 ## Persona settings
 

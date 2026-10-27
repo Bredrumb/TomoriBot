@@ -257,6 +257,8 @@ export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassificatio
       "idle_nudge_frequency",
       "active_nudge_frequency",
       "disabled_builtin_idle_nudges",
+      "category_weights",
+      "heat_offset",
     ],
     preserved: [],
   },
@@ -579,6 +581,8 @@ class ResetRepository {
           idle_nudge_frequency = DEFAULT,
           active_nudge_frequency = DEFAULT,
           disabled_builtin_idle_nudges = DEFAULT,
+          category_weights = DEFAULT,
+          heat_offset = DEFAULT,
           updated_at = NOW()
       `;
 

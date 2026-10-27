@@ -70,7 +70,7 @@ boot.
   `preset_avatar_hash`. Pointer alters resolve that URL live. A pointer main persona uses the bot's
   guild avatar, which `reconcilePresetMainAvatars` re-uploads per guild when
   `applied_avatar_hash != preset_avatar_hash`.
-- The first local content edit, including `/server avatar`, turns the pointer into an independent
+- The first local content edit, including changing the main avatar in `/config`, turns the pointer into an independent
   copy that keeps `persona_id` and `persona_lineage_id`. Memory writes do not. `/persona default`
   restores the pointer and discards local changes.
 - `/persona export` writes a self-contained copy stamped with `preset_lineage_id`. Import re-links to

@@ -5,8 +5,8 @@ aiGenerated: true
 
 Natural Nudges lets personas speak without being triggered. The code lives in
 `src/modules/natural-nudges/`: SQL in `db/repositories.ts`, the runtime in `runtime/`, and the
-`/config` pages in `discord/`. This page covers both modes: idle nudges, which start something in a
-quiet channel, and [Active Nudges](#active-nudges), which join a live conversation. User-facing behavior is
+`/config` and `/nudge-studio` pages in `discord/`. This page covers both modes: idle nudges, which start
+something in a quiet channel, and [Active Nudges](#active-nudges), which join a live conversation. User-facing behavior is
 on the [feature page](/features/chatting-personality/natural-nudges/). The panel shows these as Idle
 Nudges and Active Nudges, and labels the `ping_user`, `revive_topic`, `start_topic`, and `play_scene`
 categories Ping User, Revive Topic, Start Topic, and Play Scene.
@@ -25,7 +25,33 @@ calls never delay reminders.
 Phase A runs every 60 seconds on the coordinator's reconcile tick, because no due-time column
 exists to wake on. Natural Nudges is on by default. `listEnabledIdleNudgeServers` selects guild
 servers with `message_sent` inside the heat window and uses column defaults for servers with no
-config row. It skips servers with no recent activity, idle nudges turned off, or an attempt in flight.
+config row. Both modes require a direct chat trigger within the last 14 days, stored as
+`server_natural_nudge_runtime_state.last_direct_chat_at`. The scheduler filters dormant servers in
+SQL using an index on that timestamp. Both modes also require measured heat of at least 1,
+effective heat of at least 1, and a non-empty configured or automatic channel set. Heat adjustments change the pace
+of an eligible server; they cannot supply the measured activity needed to leave dormancy. Idle
+nudges turned off or an attempt in flight also skip evaluation.
+
+Migration `121_natural_nudge_dormancy` preserves existing eligible guild servers once: it seeds a
+missing activity timestamp from the latest channel turn within 14 days only when measured and
+effective heat reach 1 and an eligible channel set exists. Historical channel turns can include
+passive autochat and reminders, so this is a rollout proxy rather than proof of direct chat. The
+original activity time is kept, and an existing timestamp is never overwritten. Unused, low-heat,
+and channel-less servers remain dormant. New installations require their first direct chat.
+
+`planChatTurns` records a direct mention, persona trigger word, or reply after trigger and access
+admission, before credential resolution. Passive autochat, commands, reminders, random triggers,
+persona jobs, impersonation, and nudges do not renew the timestamp. `runtime/configCache.ts` caches
+dormant activity until a successful direct-chat write replaces it and invalidates inactive or loading
+`readNaturalNudgeGate` snapshots. Low heat, missing channels, and both modes switched off also cache
+an inactive result until direct chat or a successful settings change invalidates it. Ordinary
+channel chatter and scheduler ticks then need no repeated per-server settings, history, or metric
+reads. Eligible snapshots expire after five minutes, and cached timestamps still close the window
+at the 14-day boundary. A direct turn carries `isDirectChat` through empty-response retries; after
+its usage stats persist, post-turn effects invalidate inactive or loading snapshots again so buffered
+activity cannot leave a newly eligible server stuck in the inactive cache.
+Both runners re-check dormancy before delivery; chat planning also drops queued nudge scene turns
+after the window closes. Nudge generation suppresses public error notices.
 
 Repository reads retry retired database connections through `withTransientDbRetry`. Exhausted metric
 reads fail the evaluation instead of supplying empty activity data that could be cached for later
@@ -55,8 +81,20 @@ invitations, so intervening scenes cannot hide the three-invitation unanswered s
 hours come from `stat_counters`:
 
 - **Heat** is the server's `message_sent` per day, each day halved every three days
-  (`computeHeat` in `runtime/meters.ts`).
+  (`computeHeat` in `runtime/meters.ts`); `computeEffectiveHeat` adds the server's saved
+  `heat_offset` and clamps the result to 0-50 for both modes.
+  The adjustment affects both modes without changing statistics; the shared eligibility snapshot
+  supplies heat to both modes, while the idle meter cache holds waking hours and last engagement.
+  Measured heat and stored activity stay uncapped, so activity above the scheduling ceiling still
+  decays from its full value.
 - **Waking hours** come from 30 days of `active_hour`, with a fixed local night below 50 turns.
+
+Human `/reward` turns contribute three times as much heat as an ordinary turn; `/punish` contributes
+once. Their `message_sent` rows use `reward` or `punish` as the metric key and still count as one
+message in statistics. `getServerDailyHeatCounts` applies the reward weight before time decay.
+Persona-to-persona Playful Interaction reactions skip `message_sent`, `active_hour`, `channel_turn`,
+and short-term memory writes, so generated exchanges cannot sustain nudges or establish human
+relationships. Their conditioning records and usage statistics still record.
 
 Nudge turns must never feed either input. `naturalNudge` on the chat input makes
 `postTurnEffects` skip `message_sent` and `active_hour`, and the empty-response retry carries the
@@ -78,10 +116,15 @@ times. Token and model stats still record.
   and recent messages. The planner must fit the opener and agenda to the channel's purpose, even
   when recent messages drift off topic, and decline if no offered nudge and channel fit.
 - **Nudge shortlist**: Phase A raffles one category using category weights and rest among categories
-  with a nudge that passes channel and tool checks. Only then does it load target context when a
+  with a nudge that passes channel and tool checks. It excludes the last idle category when another
+  category with positive weight passes those checks. Only then does it load target context when a
   candidate in that category needs it, check full eligibility, and sample up to six distinct nudges
-  using nudge rest and target-repeat penalties. If no option remains eligible, the attempt stops
-  without drawing another category. Phase B chooses the final nudge and channel within that
+  using nudge rest and target-repeat penalties. Before sampling, it excludes that category's most
+  recent nudge in the loaded history when another fully eligible option remains, so the planner
+  cannot choose it again. Both checks read the three-day server-wide history plus the latest idle
+  fires; Active Nudges do not reset them. A sole eligible category or nudge can repeat.
+  If no option remains eligible, the attempt stops without drawing another category.
+  Phase B chooses the final nudge and channel within that
   category together in one call. Each option carries its allowed channels and the shared cast for
   a Scene attempt. The response schema limits
   `nudge` to the offered IDs, and acceptance checks the channel pairing and selected scene's script.
@@ -94,7 +137,9 @@ times. Token and model stats still record.
 
 Phase A also keeps a few values in memory, by the "what breaks on restart?" test: the in-flight
 lock (`runtime/inFlight.ts`, one nudge per server across both modes), the rolled lull, the
-retry-after-abort time, and a 15-minute cache of heat and waking hours. A restart only re-rolls them.
+retry-after-abort time, a five-minute eligibility snapshot, and a 15-minute cache of waking hours and
+last engagement. A restart discards these caches and re-rolls the lull and retry time; persisted
+activity still controls dormancy.
 
 ## Constraints
 
@@ -102,7 +147,7 @@ retry-after-abort time, and a 15-minute cache of heat and waking hours. A restar
   that meets a busy channel is dropped in `admissionQueue.ts` rather than queued behind the turn.
   After an abort the idle nudge stays due and waits a fresh lull, so it cannot retry every cycle. The
   one exception is a Play Scene's later turns, which turn 0 queues itself (below).
-- **Re-check right before sending.** `recheckBeforeSend` reads settings, caps, the persona, the
+- **Re-check right before sending.** `recheckBeforeSend` reads settings, category weights, caps, the persona, the
   persona channel whitelist, and Ping User target eligibility fresh. It also re-resolves the planned
   idle nudge from fresh server and persona rows and re-admits its tools, hanging conversation,
   eligible partners, and target memories or activity when required. It aborts as
@@ -112,8 +157,12 @@ retry-after-abort time, and a 15-minute cache of heat and waking hours. A restar
   while the channel processing lock and admission gate still prevent overlapping turns.
 - **Caps follow the frequency level.** `IDLE_NUDGE_DAILY_CAPS` and `ACTIVE_NUDGE_DAILY_CAPS` in
   `runtime/tuning.ts` map each level to its daily ceiling, so the panel estimate, the idle nudge
-  re-check, and the Active Nudge check read one source. Idle nudge category tickets are fixed there too
-  (`IDLE_NUDGE_CATEGORY_WEIGHTS`), since the mix is operator tuning rather than a server setting.
+  re-check, and the Active Nudge check read one source. The server's `category_weights` set relative
+  idle category tickets, with zero excluding a category in stored or imported settings.
+  `/config` > `Plugins` > `Natural Nudges` edits these weights and `heat_offset` for members with
+  `Manage Server`. The weight modal accepts four positive whole numbers totaling 100 and saves
+  them together. Heat buttons use atomic database updates. Both writes invalidate the shared
+  nudge eligibility snapshot after success.
 - **Failure stop.** Planner failures after their one format retry, and generation errors, count
   toward `server_natural_nudge_runtime_state.consecutive_failures`; three stop the server until a
   normal turn succeeds there (`text_generated` newer than `stopped_at`). Aborts never count. Idle Nudges
@@ -175,9 +224,9 @@ require a target in any category. One query,
 The lottery decides who; shortlist sampling then reduces repeats. When an eligible option needs a
 target, `loadTargetIdleNudgeFires` reads this persona's idle nudges on that
 member over the last 14 days (`PING_USER_REPEAT_REST_MS`), and `idleNudgeTickets` multiplies each one's
-server-wide rest by its rest on that pair. A repeat is rare but never excluded, so a member with only
-one eligible idle nudge still gets it. The window is keyed on `persona_id`, so a re-created persona
-starts fresh.
+server-wide rest by its rest on that pair. Repeats admitted by the shortlist keep reduced weight,
+so a member with only one eligible idle nudge can still get it. The window is keyed on `persona_id`,
+so a re-created persona starts fresh.
 
 Prompt exposure follows a normal turn's privacy rules: the planner sees the target's recent memories
 only at `PrivacyLevel.MINIMAL` with `personal_memories_enabled`, and their activity only at minimal

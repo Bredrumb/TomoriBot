@@ -29,7 +29,8 @@ import {
   validateDirectChatTrigger,
 } from "@/utils/chat/admissionGuards";
 import { channelLocks, queueScenePersonaJobsAtFront, setActiveChannelTurnState } from "@/utils/chat/channelQueue";
-import { shouldSurfaceChatUserErrors } from "@/utils/chat/errorVisibility";
+import { hasDirectChatSignal, shouldSurfaceChatUserErrors } from "@/utils/chat/errorVisibility";
+import { readNaturalNudgeGate, recordNaturalNudgeDirectChat } from "@/modules/natural-nudges/runtime/configCache";
 import { queueAdditionalPersonaTurns } from "@/utils/chat/personaQueue";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
 import { buildSceneTextQuotaTriggerKey, buildSceneTurnDirective } from "@/utils/chat/sceneTurn";
@@ -103,6 +104,10 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
       });
     }
     log.info(`No persona state available for message ${message.id} in server ${serverDiscId}.`);
+    return { lockedTurn, turns: [] };
+  }
+
+  if (incoming.naturalNudge && !(await readNaturalNudgeGate(serverDiscId))) {
     return { lockedTurn, turns: [] };
   }
 
@@ -231,6 +236,26 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
   if (personasToRespond.length === 0) {
     log.info(`No personas matched trigger for message ${message.id} in server ${serverDiscId}`);
     return { lockedTurn, turns: [] };
+  }
+
+  if (
+    !isDMChannel &&
+    !isSystemInitiatedTurn &&
+    !incoming.isManuallyTriggered &&
+    !incoming.isPersonaJob &&
+    !incoming.isUserImpersonation &&
+    isRealUserMessage(message) &&
+    hasDirectChatSignal({
+      client,
+      message,
+      allPersonas,
+      referencedMessage: admission.referencedMessage,
+      isReplyToBotOrPersona: directTrigger.isReplyToBot || Boolean(directTrigger.replyPersona),
+      isBotMentioned: directTrigger.isBotMentioned,
+    })
+  ) {
+    incoming.isDirectChat = true;
+    await recordNaturalNudgeDirectChat(tomoriState.server_id);
   }
 
   const personaPolicies = new Map<TomoriState, NonNullable<Awaited<ReturnType<typeof resolveTextCredentialPolicy>>>>();

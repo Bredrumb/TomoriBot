@@ -59,7 +59,14 @@ aiGenerated: true
 
 ### 她如何使用它們
 
-只要在 `/config` > `外掛` 中開啟`貼圖使用`，她最多會在每則回覆中送出一個表情，作為她文字之前、之間或之後的一則獨立訊息。她不會在[角色扮演頻道](/zh-TW/features/chatting-personality/chatting-and-triggers/#roleplay-channels)中使用它們。`/expressions manage` 會顯示各個人格使用了每個表情多少次。
+只要在 `/config` > `外掛` 中開啟`貼圖使用`，她最多會在每則回覆中送出一個表情，作為她文字之前、之間或之後的一則獨立訊息。她不會在[角色扮演頻道](#roleplay-channels)中使用它們。`/expressions manage` 會顯示各個人格使用了每個表情多少次。
+
+## 角色扮演頻道
+<!-- anchor: roleplay-channels -->
+
+角色扮演頻道會抑制她的回覆中的自訂表情符號和貼圖訊息。成員還可以在角色扮演頻道中使用`/tool delete turn`刪除她的最新回合，而無需管理伺服器權限。
+
+在`/config` > `頻道` > 頻道規則中設定角色扮演頻道。
 
 ## 生成調整
 <!-- anchor: generation-tuning -->

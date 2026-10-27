@@ -42,7 +42,9 @@ After a successful post, persona targets enter the normal chat admission and cha
 selected target and the initiating member's access identity. The queued turn receives an injected
 context item that names the actor, the selected target, the action, the reason, and the delivered
 message reference. The target reacts to that event; a later message or embed cannot redirect it. The
-queued reply disables this interaction tool to stop reciprocal tool chains. User targets receive only
+queued reply disables this interaction tool to stop reciprocal tool chains. It also skips human
+engagement counters and short-term memory writes, so persona reactions cannot sustain Natural Nudges
+or establish a relationship with the initiating member. User targets receive only
 the embed. Cancellation is checked before writing, posting, and triggering a reply; a completed write
 is retained if delivery fails or is cancelled, no reaction is queued, and an uncertain send is never
 reposted as the bot.

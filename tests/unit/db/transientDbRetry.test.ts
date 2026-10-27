@@ -19,7 +19,7 @@ describe("natural nudge database reads", () => {
   const cases = [
     {
       name: "daily counts",
-      read: () => statRepository.getServerDailyMessageCounts({ serverId: 1, from: at }),
+      read: () => statRepository.getServerDailyHeatCounts({ serverId: 1, from: at }),
       rows: [{ bucket: "2026-01-01", total: "7" }],
       expected: new Map([["2026-01-01", 7]]),
     },

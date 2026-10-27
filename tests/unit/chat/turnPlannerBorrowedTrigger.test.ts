@@ -5,6 +5,8 @@ import * as tomoriStateCache from "@/utils/cache/tomoriStateCache";
 import * as userCache from "@/utils/cache/userCache";
 import * as admissionGuards from "@/utils/chat/admissionGuards";
 import * as errorVisibility from "@/utils/chat/errorVisibility";
+import * as nudgeCache from "@/modules/natural-nudges/runtime/configCache";
+import { defaultServerNaturalNudgeConfig } from "@/modules/natural-nudges/db/types";
 import { normalizeChatInvocation } from "@/utils/chat/admission";
 import { planChatTurns } from "@/utils/chat/turnPlanner";
 import type { LockedChatTurn } from "@/utils/chat/types";
@@ -85,6 +87,12 @@ async function planWithAnchorAuthor(options: {
 
   const credentialUsers: Array<number | null | undefined> = [];
   spies.push(
+    spyOn(nudgeCache, "readNaturalNudgeGate").mockResolvedValue({
+      serverId: persona.server_id,
+      config: defaultServerNaturalNudgeConfig(persona.server_id),
+      channelIds: new Set([channel.id]),
+      heat: 10,
+    }),
     spyOn(textModels, "resolveServerTextModel").mockImplementation(async (state) => state.persona_llm ?? state.llm),
     spyOn(credentialResolver, "resolvePersonalCapabilityCredentials").mockResolvedValue(null),
     spyOn(tomoriStateCache, "getCachedAllPersonas").mockResolvedValue([persona]),

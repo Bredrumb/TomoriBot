@@ -252,6 +252,7 @@ it("saves persona-attributed feedback and queues the target with the exact inter
       isManuallyTriggered: true,
       textQuotaSource: "system",
       manualStreamingContextOverrides: { disableConditioningInteraction: true },
+      conditioningInteraction: { actorType: "persona", type: "reward" },
     }),
   );
   const event = queuedEvent(f.queued, 0);

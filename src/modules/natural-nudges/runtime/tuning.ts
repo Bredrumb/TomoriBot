@@ -1,22 +1,19 @@
-import type { IdleNudgeFrequencyLevel, NaturalNudgeCategory } from "@/modules/natural-nudges/db/types";
+import type { IdleNudgeFrequencyLevel } from "@/modules/natural-nudges/db/types";
 
 export const HOUR_MS = 60 * 60 * 1000;
 export const DAY_MS = 24 * HOUR_MS;
+export const NUDGE_DORMANCY_MS = 14 * DAY_MS;
+
+export const REWARD_HEAT_MULTIPLIER = 3;
 
 /** Each day's messages count half as much every 3 days, so about two idle weeks leave no heat. */
 export const HEAT_HALF_LIFE_DAYS = 3;
 export const HEAT_WINDOW_DAYS = 30;
+/** Every frequency level reaches its idle cap by heat 50, and active checks reach their shortest interval by 30. */
+export const MAX_EFFECTIVE_HEAT = 50;
 
 /** Idle Nudges start only at heat 1 or more: about one message to Tomori a day. */
 export const MIN_IDLE_NUDGE_HEAT = 1;
-
-/** Tickets per idle nudge category, fixed for every server because the mix is operator tuning. */
-export const IDLE_NUDGE_CATEGORY_WEIGHTS: Record<NaturalNudgeCategory, number> = {
-  ping_user: 30,
-  revive_topic: 25,
-  start_topic: 30,
-  play_scene: 15,
-};
 
 /** Heat divided by this gives idle nudges per day, per frequency level. */
 export const IDLE_NUDGE_HEAT_DIVISORS: Record<IdleNudgeFrequencyLevel, number> = { 0: 30, 1: 15, 2: 10, 3: 6 };

@@ -272,6 +272,7 @@ function estimateToolSchemaTokens(): number {
       },
       config: {
         // Defaults match DB defaults in schema.sql (true)
+        emoji_usage_enabled: true,
         sticker_usage_enabled: true,
         web_search_enabled: true,
         self_teaching_enabled: true,
@@ -283,7 +284,7 @@ function estimateToolSchemaTokens(): number {
         user_info_updates_enabled: true,
         thread_creation_enabled: true,
         conditioning_interactions_enabled: false,
-        dice_rolling_enabled: false,
+        dice_rolling_enabled: true,
         danbooru_enabled: true,
       },
     };

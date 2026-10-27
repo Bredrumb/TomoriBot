@@ -280,6 +280,7 @@ export interface ToolAssemblyState {
   nai_diffusion_model_id?: number | null;
   video_model_id?: number | null;
   config: {
+    emoji_usage_enabled: boolean;
     sticker_usage_enabled: boolean;
     web_search_enabled: boolean;
     self_teaching_enabled: boolean;

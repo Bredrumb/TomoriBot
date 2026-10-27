@@ -87,4 +87,4 @@ is sent. Click `Clear Welcome` on that same page to disable greetings.
 
 Run `/expressions initialize` to index your server's custom emojis and stickers so personas can
 use them accurately in conversation. For how personas use emojis, stickers, and reactions, see
-[Expressions & Reactions](/features/chatting-personality/chatting-and-triggers/#expressions--reactions).
+[Expressions](/features/chatting-personality/behavior-tweaking/#expressions).

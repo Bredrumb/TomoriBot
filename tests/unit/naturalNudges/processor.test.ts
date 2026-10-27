@@ -5,9 +5,11 @@ import {
   defaultServerNaturalNudgeConfig,
   NATURAL_NUDGE_CATEGORIES,
   type NaturalNudgeCategory,
+  type NaturalNudgeFireRow,
   type PersonaNaturalNudgeConfig,
 } from "@/modules/natural-nudges/db/types";
 import * as channelsModule from "@/modules/natural-nudges/runtime/channels";
+import * as configCache from "@/modules/natural-nudges/runtime/configCache";
 import { BUILTIN_IDLE_NUDGES, idleNudgeNeedsTarget } from "@/modules/natural-nudges/runtime/idleNudges";
 import { releaseNudgeServer } from "@/modules/natural-nudges/runtime/inFlight";
 import * as metersModule from "@/modules/natural-nudges/runtime/meters";
@@ -17,7 +19,7 @@ import { NaturalNudgeProcessor } from "@/modules/natural-nudges/runtime/processo
 import * as runnerModule from "@/modules/natural-nudges/runtime/runner";
 import * as targetsModule from "@/modules/natural-nudges/runtime/targets";
 import * as toolsModule from "@/modules/natural-nudges/runtime/tools";
-import { MAX_PLANNER_NUDGES } from "@/modules/natural-nudges/runtime/tuning";
+import { DAY_MS, MAX_PLANNER_NUDGES } from "@/modules/natural-nudges/runtime/tuning";
 import * as personaCache from "@/utils/cache/tomoriStateCache";
 import { statRepository } from "@/utils/db/repositories";
 import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
@@ -101,6 +103,10 @@ function fixture(category: NaturalNudgeCategory = "start_topic") {
   const scopes = spyOn(naturalNudgeRepository, "loadPersonaScopes").mockResolvedValue(new Map());
   const run = spyOn(runnerModule, "runIdleNudgeAttempt").mockResolvedValue("aborted");
   const drawPartners = spyOn(partnersModule, "drawScenePartners");
+  const history: { recent: NaturalNudgeFireRow[]; latestIdleNudges: NaturalNudgeFireRow[] } = {
+    recent: [],
+    latestIdleNudges: [],
+  };
   const drawRaffle = metersModule.drawRaffle;
   const raffle = spyOn(metersModule, "drawRaffle").mockImplementation((entries, random) => {
     const wanted = entries.find(
@@ -122,11 +128,17 @@ function fixture(category: NaturalNudgeCategory = "start_topic") {
     scopes,
     run,
     spyOn(Math, "random").mockReturnValue(0),
+    spyOn(configCache, "readNaturalNudgeGate").mockResolvedValue({
+      serverId: SERVER_ID,
+      config,
+      channelIds: new Set(CHANNEL_IDS),
+      heat: 50,
+    }),
     spyOn(naturalNudgeRepository, "pruneBefore").mockResolvedValue({ fires: 0, agendas: 0 }),
     spyOn(naturalNudgeRepository, "listEnabledIdleNudgeServers").mockResolvedValue([
       { server_id: SERVER_ID, server_disc_id: "fixture-guild", timezone_offset: 0, config },
     ]),
-    spyOn(naturalNudgeRepository, "loadFireHistory").mockResolvedValue({ latestIdleNudges: [], recent: [] }),
+    spyOn(naturalNudgeRepository, "loadFireHistory").mockResolvedValue(history),
     spyOn(naturalNudgeRepository, "loadRuntimeState").mockResolvedValue({
       server_id: SERVER_ID,
       stopped_at: null,
@@ -135,9 +147,6 @@ function fixture(category: NaturalNudgeCategory = "start_topic") {
     }),
     spyOn(naturalNudgeRepository, "loadPersonaConfigs").mockResolvedValue(personaConfigs),
     spyOn(naturalNudgeRepository, "loadTargetIdleNudgeFires").mockResolvedValue(new Map()),
-    spyOn(statRepository, "getServerDailyMessageCounts").mockResolvedValue(
-      new Map([[new Date().toISOString().slice(0, 10), 1000]]),
-    ),
     spyOn(statRepository, "getServerActiveHourHistogram").mockResolvedValue([]),
     spyOn(statRepository, "getServerMetricLastAt").mockResolvedValue(null),
     spyOn(metersModule, "resolveWakingHours").mockReturnValue(Array.from({ length: 24 }, () => true)),
@@ -178,10 +187,112 @@ function fixture(category: NaturalNudgeCategory = "start_topic") {
     scopes,
     run,
     drawPartners,
+    history,
   };
 }
 
 describe("idle nudge shortlist", () => {
+  it("does no server evaluation or provider work while dormant, even with boosted heat", async () => {
+    const { processor, config, run, readMessages } = fixture();
+    config.heat_offset = 1000;
+    const active = spyOn(configCache, "readNaturalNudgeGate").mockResolvedValue(null);
+    const history = spyOn(naturalNudgeRepository, "loadFireHistory");
+    const model = spyOn(modelModule, "resolvePlannerModel");
+    await processor.processDueIdleNudges();
+    await processor.processDueIdleNudges();
+    expect(history).not.toHaveBeenCalled();
+    expect(model).not.toHaveBeenCalled();
+    expect(readMessages).not.toHaveBeenCalled();
+    expect(run).not.toHaveBeenCalled();
+    active.mockResolvedValue({ serverId: SERVER_ID, config, channelIds: new Set(CHANNEL_IDS), heat: 50 });
+    await processor.processDueIdleNudges();
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  const previousFire: NaturalNudgeFireRow = {
+    fire_id: 1,
+    server_id: SERVER_ID,
+    channel_disc_id: CHANNEL_IDS[0],
+    persona_id: PARTNER_ID,
+    mode: "idle",
+    category: "start_topic",
+    idle_nudge_key: "start_topic.show_and_tell",
+    target_user_id: null,
+    opener_message_disc_id: "1300000000000000030",
+    answered: true,
+    fired_at: new Date(0),
+  };
+
+  it.each([2, 4])("excludes the previous category after %s days despite a newer Active Nudge", async (days) => {
+    const { processor, history, run } = fixture("start_topic");
+    const previous = { ...previousFire, fired_at: new Date(Date.now() - days * DAY_MS) };
+    history.latestIdleNudges.push(previous);
+    if (days < 3) history.recent.push(previous);
+    history.recent.unshift({
+      ...previousFire,
+      fire_id: 2,
+      mode: "active",
+      category: null,
+      idle_nudge_key: null,
+      answered: null,
+      fired_at: new Date(Date.now() - DAY_MS),
+    });
+    await processor.processDueIdleNudges();
+    expect(run).toHaveBeenCalledTimes(1);
+    const [attempt] = run.mock.calls[0];
+    expect(attempt.persona.persona_id).toBe(PERSONA_ID);
+    expect(attempt.candidates.every((candidate) => candidate.idleNudge.category !== previous.category)).toBe(true);
+  });
+
+  it("rotates types within a sole enabled category before offering the shortlist to the planner", async () => {
+    const { processor, config, history, customs, run } = fixture("start_topic");
+    config.category_weights = { ping_user: 0, revive_topic: 0, start_topic: 30, play_scene: 0 };
+    history.latestIdleNudges.push({ ...previousFire, fired_at: new Date(Date.now() - 4 * DAY_MS) });
+    customs.mockResolvedValue([createCustomIdleNudge({ server_id: SERVER_ID })]);
+    await processor.processDueIdleNudges();
+    expect(run).toHaveBeenCalledTimes(1);
+    const [attempt] = run.mock.calls[0];
+    expect(attempt.candidates.map((candidate) => candidate.idleNudge.key)).toEqual(["custom:1"]);
+  });
+
+  it("remembers the last type in a category across an intervening idle category", async () => {
+    const { processor, history, customs, run } = fixture("start_topic");
+    history.recent.push({ ...previousFire, fired_at: new Date(Date.now() - 2 * DAY_MS) });
+    history.latestIdleNudges.push({
+      ...previousFire,
+      fire_id: 2,
+      category: "ping_user",
+      idle_nudge_key: "ping_user.check_in",
+      target_user_id: 9,
+      fired_at: new Date(Date.now() - DAY_MS),
+    });
+    customs.mockResolvedValue([createCustomIdleNudge({ server_id: SERVER_ID })]);
+    await processor.processDueIdleNudges();
+    expect(run).toHaveBeenCalledTimes(1);
+    const [attempt] = run.mock.calls[0];
+    expect(attempt.candidates.map((candidate) => candidate.idleNudge.key)).toEqual(["custom:1"]);
+  });
+
+  it("allows the sole fully eligible type to repeat when another type has no target", async () => {
+    const { processor, config, history, customs, tools, drawTarget, run } = fixture("start_topic");
+    config.category_weights = { ping_user: 0, revive_topic: 0, start_topic: 30, play_scene: 0 };
+    history.latestIdleNudges.push({
+      ...previousFire,
+      idle_nudge_key: "custom:1",
+      fired_at: new Date(Date.now() - DAY_MS),
+    });
+    tools.mockResolvedValue(new Set());
+    drawTarget.mockResolvedValue(null);
+    customs.mockResolvedValue([
+      createCustomIdleNudge({ server_id: SERVER_ID }),
+      createCustomIdleNudge({ custom_idle_nudge_id: 2, server_id: SERVER_ID, prerequisites: ["relationship_user"] }),
+    ]);
+    await processor.processDueIdleNudges();
+    expect(run).toHaveBeenCalledTimes(1);
+    const [attempt] = run.mock.calls[0];
+    expect(attempt.candidates.map((candidate) => candidate.idleNudge.key)).toEqual(["custom:1"]);
+  });
+
   it.each([
     ...NATURAL_NUDGE_CATEGORIES,
   ])("offers only %s nudges and loads only their supporting context", async (category) => {
@@ -330,5 +441,47 @@ describe("idle nudge shortlist", () => {
     expect(attempt.candidates.some((candidate) => idleNudgeNeedsTarget(candidate.idleNudge))).toBe(true);
     expect(attempt.plannerChannels.map((entry) => entry.channel.id)).toEqual(target.channelIds);
     for (const candidate of attempt.candidates) expect(candidate.channelIndices).toEqual([0]);
+  });
+});
+
+describe("server nudge tuning", () => {
+  it("draws only categories with positive server weights", async () => {
+    const { processor, config, run } = fixture("ping_user");
+    config.category_weights = { ping_user: 0, revive_topic: 0, start_topic: 100, play_scene: 0 };
+    await processor.processDueIdleNudges();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run.mock.calls[0][0].candidates.every((candidate) => candidate.idleNudge.category === "start_topic")).toBe(
+      true,
+    );
+  });
+
+  it("sends nothing when every category has zero weight", async () => {
+    const { processor, config, run } = fixture();
+    config.category_weights = { ping_user: 0, revive_topic: 0, start_topic: 0, play_scene: 0 };
+    await processor.processDueIdleNudges();
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("uses refreshed gate heat without reloading cached waking-hours meters", async () => {
+    const { processor, config, run } = fixture();
+    const gate = spyOn(configCache, "readNaturalNudgeGate").mockResolvedValue({
+      serverId: SERVER_ID,
+      config,
+      channelIds: new Set(CHANNEL_IDS),
+      heat: 2,
+    });
+    const jitter = spyOn(naturalNudgeRepository, "setIdleNudgeJitter").mockResolvedValue(undefined);
+    const hours = spyOn(statRepository, "getServerActiveHourHistogram");
+    spies.push(jitter);
+    run.mockResolvedValue("fired");
+    await processor.processDueIdleNudges();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run.mock.calls[0][0].heat).toBe(2);
+    await Bun.sleep(0);
+    gate.mockResolvedValue({ serverId: SERVER_ID, config, channelIds: new Set(CHANNEL_IDS), heat: 3 });
+    await processor.processDueIdleNudges();
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(run.mock.calls[1][0].heat).toBe(3);
+    expect(hours).toHaveBeenCalledTimes(1);
   });
 });

@@ -47,6 +47,7 @@ const TOOL_STATE = {
     supports_structoutput: false,
   },
   config: {
+    emoji_usage_enabled: true,
     sticker_usage_enabled: true,
     web_search_enabled: true,
     self_teaching_enabled: true,

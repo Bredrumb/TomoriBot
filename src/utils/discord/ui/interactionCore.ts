@@ -274,8 +274,8 @@ function setupWebSocketInterception(client: unknown) {
                 }
 
                 // Checkbox Group (type 22): store array of selected values
-                if (inner.type === 22 && Array.isArray(inner.values)) {
-                  checkboxGroupValues[customId] = inner.values;
+                if (inner.type === 22) {
+                  checkboxGroupValues[customId] = Array.isArray(inner.values) ? inner.values : [];
                 }
 
                 if (inner.type === 23) {

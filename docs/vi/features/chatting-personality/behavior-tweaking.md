@@ -59,7 +59,14 @@ Mọi persona đều có thể dùng biểu cảm tùy chỉnh mới. Để gi�
 
 ### Cách bot sử dụng
 
-Khi bật tính năng dùng sticker trong `/config` > `Plugin`, bot gửi tối đa một biểu cảm mỗi câu trả lời, thành tin nhắn riêng trước, giữa hoặc sau phần văn bản. Bot không dùng biểu cảm trong [kênh nhập vai](/vi/features/chatting-personality/chatting-and-triggers/#roleplay-channels). `/expressions manage` cho biết các persona đã dùng mỗi biểu cảm bao nhiêu lần.
+Khi bật tính năng dùng sticker trong `/config` > `Plugin`, bot gửi tối đa một biểu cảm mỗi câu trả lời, thành tin nhắn riêng trước, giữa hoặc sau phần văn bản. Bot không dùng biểu cảm trong [kênh nhập vai](#roleplay-channels). `/expressions manage` cho biết các persona đã dùng mỗi biểu cảm bao nhiêu lần.
+
+## Kênh nhập vai
+<!-- anchor: roleplay-channels -->
+
+Các kênh nhập vai sẽ loại bỏ các thông báo về biểu tượng cảm xúc và sticker tùy chỉnh trong phản hồi của cô ấy. Thành viên cũng có thể sử dụng `/tool delete turn` trong các kênh nhập vai để xóa lượt mới nhất của cô ấy mà không cần có quyền Quản lý Máy chủ.
+
+Định cấu hình các kênh nhập vai trong `/config` > `Kênh` > Quy tắc kênh.
 
 ## Tinh chỉnh quá trình tạo phản hồi
 <!-- anchor: generation-tuning -->

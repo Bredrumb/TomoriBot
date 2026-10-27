@@ -12,7 +12,7 @@ import {
   type PersonaAuthoredIdleNudge,
 } from "@/modules/natural-nudges/db/types";
 import { resolveEffectiveChannelIds } from "@/modules/natural-nudges/runtime/channels";
-import { countUnansweredStreak, idleNudgesPerDay, heatWindowStart } from "@/modules/natural-nudges/runtime/meters";
+import { countUnansweredStreak, idleNudgesPerDay } from "@/modules/natural-nudges/runtime/meters";
 import { UNANSWERED_STOP_STREAK } from "@/modules/natural-nudges/runtime/tuning";
 import { workspaceConfigExportSchema } from "@/types/db/dataExport";
 import { exportRepository } from "@/utils/db/repositories/ExportRepository";
@@ -25,7 +25,7 @@ import { cache } from "@/utils/cache/tomoriStateCacheStore";
 import { getShortTermMemoriesForUser } from "@/utils/cache/shortTermMemoryCache";
 import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import { cleanupFixtures, FIXTURE_IDS, insertFixtures, type FixtureRefs } from "./setup/fixtures";
-import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
+import { DB_TESTS_AVAILABLE, executeTestSqlFile, setupTestDb, testSql } from "./setup/testDb";
 
 const PRESET_LINEAGE = 77001;
 const PRESET_NAME = "_rt_nudge_preset";
@@ -511,6 +511,28 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
     });
   });
 
+  it("adjusts heat atomically within bounds without changing other settings", async () => {
+    await testSql`DELETE FROM server_natural_nudge_configs WHERE server_id = ${otherServerId}`;
+    expect(await naturalNudgeRepository.adjustHeat(otherServerId, "up")).toBe(true);
+    expect((await naturalNudgeRepository.loadServerConfig(otherServerId)).heat_offset).toBe(5);
+    await naturalNudgeRepository.saveServerConfig(otherServerId, { idle_nudge_frequency: 3 });
+    await Promise.all(Array.from({ length: 4 }, () => naturalNudgeRepository.adjustHeat(otherServerId, "up")));
+    expect(await naturalNudgeRepository.loadServerConfig(otherServerId)).toEqual({
+      ...defaultServerNaturalNudgeConfig(otherServerId),
+      idle_nudge_frequency: 3,
+      heat_offset: 25,
+    });
+    for (const [heat, direction] of [
+      [1000, "up"],
+      [-1000, "down"],
+    ] as const) {
+      await naturalNudgeRepository.saveServerConfig(otherServerId, { heat_offset: heat });
+      expect(await naturalNudgeRepository.adjustHeat(otherServerId, direction)).toBe(true);
+      expect((await naturalNudgeRepository.loadServerConfig(otherServerId)).heat_offset).toBe(heat);
+    }
+    await testSql`DELETE FROM server_natural_nudge_configs WHERE server_id = ${otherServerId}`;
+  });
+
   describe("on by default", () => {
     const now = new Date();
     const daysAgo = (days: number) =>
@@ -546,14 +568,102 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
       await recordStat(cold, "message_sent", "", daysAgo(45));
       await recordStat(dm, "message_sent", "", daysAgo(0));
       await recordStat(off, "message_sent", "", daysAgo(0));
+      for (const serverId of [heated, cold, dm, off]) await naturalNudgeRepository.recordDirectChat(serverId);
       expect(await naturalNudgeRepository.saveServerConfig(off, { idle_nudges_enabled: false })).toBe(true);
 
-      const listed = await naturalNudgeRepository.listEnabledIdleNudgeServers(heatWindowStart(now));
+      const listed = await naturalNudgeRepository.listEnabledIdleNudgeServers(new Date());
       const ours = listed.filter((server) => serverIds.includes(server.server_id));
       expect(ours.map((server) => server.server_id)).toEqual([heated]);
       expect(ours[0]?.config).toEqual(defaultServerNaturalNudgeConfig(heated));
       expect(ours[0]?.config.idle_nudges_enabled).toBe(true);
       expect(idleNudgesPerDay(1_000, ours[0]?.config.idle_nudge_frequency ?? 0)).toBe(3);
+    });
+
+    it("excludes unused and dormant servers despite recent stats and boosted heat, then admits a direct-chat wake", async () => {
+      const selectionTime = new Date();
+      for (const state of ["unused", "expired"] as const) {
+        const serverId = await insertServer(`_rt_dormancy_${state}`);
+        await recordStat(serverId, "message_sent", "", daysAgo(0));
+        expect(await naturalNudgeRepository.saveServerConfig(serverId, { heat_offset: 1000 })).toBe(true);
+        if (state === "expired") {
+          await testSql`
+            INSERT INTO server_natural_nudge_runtime_state (server_id, last_direct_chat_at)
+            VALUES (${serverId}, ${new Date(selectionTime.getTime() - 14 * 24 * 60 * 60 * 1000)})
+          `;
+        }
+        const before = await naturalNudgeRepository.listEnabledIdleNudgeServers(selectionTime);
+        expect(before.some((server) => server.server_id === serverId)).toBe(false);
+        await naturalNudgeRepository.recordDirectChat(serverId);
+        expect(await naturalNudgeRepository.loadLastDirectChatAt(serverId)).toBeInstanceOf(Date);
+        const after = await naturalNudgeRepository.listEnabledIdleNudgeServers(new Date());
+        expect(after.some((server) => server.server_id === serverId)).toBe(true);
+      }
+    });
+
+    it("requires measured activity even with recent direct chat and a positive heat adjustment", async () => {
+      const serverId = await insertServer("_rt_nudge_offset_only");
+      await naturalNudgeRepository.saveServerConfig(serverId, { heat_offset: 5 });
+      await naturalNudgeRepository.recordDirectChat(serverId);
+      const cold = await naturalNudgeRepository.listEnabledIdleNudgeServers(new Date());
+      expect(cold.some((server) => server.server_id === serverId)).toBe(false);
+      await recordStat(serverId, "message_sent", "", daysAgo(0));
+      const heated = await naturalNudgeRepository.listEnabledIdleNudgeServers(new Date());
+      expect(heated.find((server) => server.server_id === serverId)?.config.heat_offset).toBe(5);
+    });
+
+    it("backfills only existing warm servers with recent channel activity and preserves live timestamps on replay and rollback", async () => {
+      const cases = [
+        { key: "unused", count: 0, channelAge: null, explicit: true, expected: false },
+        { key: "sparse", count: 1, channelAge: 0, explicit: true, expected: false },
+        { key: "channel_less", count: 10, channelAge: null, explicit: false, expected: false },
+        { key: "warm_explicit", count: 10, channelAge: 2, explicit: true, expected: true },
+        { key: "warm_automatic", count: 10, channelAge: 2, explicit: false, expected: true },
+        { key: "stale_channel", count: 10, channelAge: 15, explicit: true, expected: false },
+        { key: "roleplay_only", count: 10, channelAge: 2, explicit: false, expected: false },
+      ];
+      const channelId = "1400000000000000001";
+      const testCases: Array<{ serverId: number; expected: Date | null }> = [];
+      for (const entry of cases) {
+        const serverId = await insertServer(`_rt_rollout_${entry.key}`);
+        await naturalNudgeRepository.saveServerConfig(serverId, {
+          channel_disc_ids: entry.explicit ? [channelId] : [],
+          heat_offset: 1000,
+        });
+        if (entry.count > 0) {
+          await testSql`
+            INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)
+            VALUES (${serverId}, ${refs.userId}, 0, 'message_sent', '', CURRENT_DATE, ${entry.count})
+          `;
+        }
+        const channelAt = entry.channelAge === null ? null : new Date(Date.now() - entry.channelAge * 86400000);
+        if (channelAt) {
+          await testSql`
+            INSERT INTO stat_counters (
+              server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count, first_at, last_at
+            ) VALUES (${serverId}, ${refs.userId}, 0, 'channel_turn', ${channelId},
+              ${channelAt.toISOString().slice(0, 10)}::date, 1, ${channelAt}, ${channelAt})
+          `;
+        }
+        if (entry.key === "roleplay_only") {
+          await testSql`
+            INSERT INTO server_channel_scope_configs (server_id, rp_channel_ids)
+            VALUES (${serverId}, ARRAY[${channelId}])
+          `;
+        }
+        testCases.push({ serverId, expected: entry.expected ? channelAt : null });
+      }
+      const migration = "src/db/migrations/121_natural_nudge_dormancy.sql";
+      await executeTestSqlFile(migration);
+      await executeTestSqlFile(migration);
+      for (const entry of testCases) {
+        expect(await naturalNudgeRepository.loadLastDirectChatAt(entry.serverId)).toEqual(entry.expected);
+      }
+      const live = testCases.find((entry) => entry.expected !== null);
+      if (!live) throw new Error("Warm rollout fixture missing");
+      const directAt = await naturalNudgeRepository.recordDirectChat(live.serverId);
+      await executeTestSqlFile("src/db/migrations/121_natural_nudge_dormancy.down.sql");
+      await executeTestSqlFile(migration);
+      expect(await naturalNudgeRepository.loadLastDirectChatAt(live.serverId)).toEqual(directAt);
     });
 
     it("picks automatic channels from 14 days of turns minus roleplay channels, unless a list overrides them", async () => {
@@ -911,6 +1021,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
       idle_nudge_frequency: 2,
       active_nudge_frequency: 3,
       disabled_builtin_idle_nudges: ["start_topic.voice_note"],
+      heat_offset: 25,
+      category_weights: { ping_user: 0, revive_topic: 10, start_topic: 90, play_scene: 0 },
     });
     const result = await exportRepository.exportWorkspaceConfig(FIXTURE_IDS.serverDiscId);
     expect(result.success).toBe(true);
@@ -920,6 +1032,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
       active_nudges_enabled: false,
       idle_nudge_frequency: 2,
       active_nudge_frequency: 3,
+    });
+    expect(exported.data.nudges).toMatchObject({
+      heat_offset: 25,
+      category_weights: { ping_user: 0, revive_topic: 10, start_topic: 90, play_scene: 0 },
     });
     expect(exported.data.nudges?.custom_idle_nudges).toHaveLength(1);
     expect(JSON.stringify(exported.data.nudges)).not.toContain("1200000000000000001");
@@ -933,6 +1049,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
       active_nudge_frequency: 3,
       channel_disc_ids: [],
       disabled_builtin_idle_nudges: ["start_topic.voice_note"],
+      heat_offset: 25,
+      category_weights: { ping_user: 0, revive_topic: 10, start_topic: 90, play_scene: 0 },
     });
     expect(await naturalNudgeRepository.listCustomIdleNudges(otherServerId)).toHaveLength(1);
 

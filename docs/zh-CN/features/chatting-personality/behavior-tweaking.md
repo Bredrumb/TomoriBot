@@ -59,8 +59,15 @@ aiGenerated: true
 
 ### 她如何使用它们
 
-在 `/config` > `插件`中开启`使用贴纸`时，她最多会在每次回复时发送一个表情，作为一条独立的消息放在她的文字之前、之间或之后。她不在[角色扮演频道](/zh-CN/features/chatting-personality/chatting-and-triggers/#roleplay-channels)里使用它们。
+在 `/config` > `插件`中开启`使用贴纸`时，她最多会在每次回复时发送一个表情，作为一条独立的消息放在她的文字之前、之间或之后。她不在[角色扮演频道](#roleplay-channels)里使用它们。
 `/expressions manage` 会显示人格使用每一个表情的次数。
+
+## 角色扮演频道
+<!-- anchor: roleplay-channels -->
+
+角色扮演频道会在她的回复中隐藏自定义表情符号和贴纸消息。成员还可以在角色扮演频道中使用`/tool delete turn`删除她的最新回合，而无需管理服务器权限。
+
+在`/config` > `频道` > 频道规则中配置角色扮演频道。
 
 ## 生成调校
 <!-- anchor: generation-tuning -->

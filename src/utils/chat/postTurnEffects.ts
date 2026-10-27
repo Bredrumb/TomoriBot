@@ -26,6 +26,7 @@ import { charsToTokensText, estimateContextItemsTokens, sumTurnUsage } from "@/u
 import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import type { TurnUsageEntry } from "@/utils/chat/responseReview";
 import { recordReunionPresence } from "@/utils/chat/reunionPresence";
+import { invalidateInactiveNaturalNudgeGates } from "@/modules/natural-nudges/runtime/configCache";
 import { discordPresenceRetention } from "@/utils/cache/discordPresenceRetention";
 
 /**
@@ -158,10 +159,10 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
       metric: "model_used",
       metricKey: modelCodename,
     });
-    // A nudge borrows the latest channel message as its trigger, so counting it would let each nudge
-    // raise heat and pull the learned waking hours toward its own fire times.
-    const isNaturalNudge = context.turn.lockedTurn.admission.incoming.naturalNudge !== undefined;
-    if (!isNaturalNudge) {
+    // Generated nudges and persona reactions must not sustain their own heat or learned waking hours.
+    const incoming = context.turn.lockedTurn.admission.incoming;
+    const recordsEngagement = !incoming.naturalNudge && incoming.conditioningInteraction?.actorType !== "persona";
+    if (recordsEngagement) {
       statRepository.recordStat({
         serverId,
         userId,
@@ -172,7 +173,7 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     }
     // Automatic Natural Nudges channels come from human-triggered turns, so a random trigger cannot
     // keep its own channel eligible.
-    if (!isNaturalNudge && !context.turn.lockedTurn.admission.incoming.borrowsTriggerMessage) {
+    if (recordsEngagement && !incoming.borrowsTriggerMessage) {
       statRepository.recordStat({
         serverId,
         userId,
@@ -193,9 +194,15 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
       //     only as the fallback when the provider reported no real usage (5).
       if (response.text) estimatedOutputTokens += charsToTokensText(response.text.length);
     }
-    if (!isNaturalNudge) {
+    if (recordsEngagement) {
       for (const lineageId of lineages) {
-        statRepository.recordStat({ serverId, userId, lineageId, metric: "message_sent" });
+        statRepository.recordStat({
+          serverId,
+          userId,
+          lineageId,
+          metric: "message_sent",
+          metricKey: incoming.conditioningInteraction?.type,
+        });
       }
     }
 
@@ -314,6 +321,10 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
         delta: count,
       });
     }
+    // An in-flight flush can predate this turn's stats, so the following snapshot must finish before eligibility refreshes.
+    if (incoming.isDirectChat && (await statRepository.flush()) && (await statRepository.flush())) {
+      invalidateInactiveNaturalNudgeGates(serverId);
+    }
   } catch (error) {
     log.warn("Failed to record usage stats for turn", error);
   }
@@ -417,6 +428,7 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     message: context.message,
     isFromQueue: context.isFromQueue,
     isManuallyTriggered: true,
+    isDirectChat: incoming.isDirectChat,
     forceReason: incoming.forceReason,
     reasoningQuery: incoming.reasoningQuery,
     llmOverrideCodename: incoming.llmOverrideCodename,
@@ -444,6 +456,7 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     manualStreamingContextOverrides: incoming.manualStreamingContextOverrides,
     sceneTurn: incoming.sceneTurn,
     naturalNudge: incoming.naturalNudge,
+    conditioningInteraction: incoming.conditioningInteraction,
     borrowsTriggerMessage: incoming.borrowsTriggerMessage,
     carriedExpressionDelivery: context.currentPersona.persona_id
       ? { personaId: context.currentPersona.persona_id, state: context.expressionDelivery }
@@ -501,10 +514,10 @@ function updateSelfReplyBookkeeping(context: ChatTurnContext, result: Generation
 }
 
 async function writeShortTermMemory(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
-  // A nudge answers nobody, so storing it would hand whoever spoke last a short-term memory, which
-  // Ping User counts as a relationship.
+  // Generated nudges and persona reactions cannot establish a human relationship for Ping User.
   if (
     context.turn.lockedTurn.admission.incoming.naturalNudge ||
+    context.turn.lockedTurn.admission.incoming.conditioningInteraction?.actorType === "persona" ||
     context.isStopResponse ||
     context.simplifiedMessages.length === 0 ||
     context.turn.requestSnapshot.triggererPrivacyLevel === PrivacyLevel.FULL ||

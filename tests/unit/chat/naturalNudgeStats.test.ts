@@ -5,6 +5,8 @@ import type { ChatIncoming, ChatTurnContext, GenerationTurnResult, TomoriChatInp
 import * as shortTermMemoryCache from "@/utils/cache/shortTermMemoryCache";
 import { statRepository } from "@/utils/db/repositories";
 import { runPostTurnEffects } from "@/utils/chat/postTurnEffects";
+import * as nudgeCache from "@/modules/natural-nudges/runtime/configCache";
+import { normalizeChatInvocation } from "@/utils/chat/admission";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createPersona } from "../../helpers/fixtures";
 
@@ -77,6 +79,40 @@ function metrics(): string[] {
 }
 
 describe("Natural Nudges turns stay out of engagement stats", () => {
+  it("refreshes dormant eligibility only after a direct chat's stats and any older flush have persisted", async () => {
+    let finishOlderFlush: (success: boolean) => void = () => undefined;
+    const olderFlush = new Promise<boolean>((resolve) => {
+      finishOlderFlush = resolve;
+    });
+    const flush = spyOn(statRepository, "flush").mockReturnValueOnce(olderFlush).mockResolvedValue(true);
+    const invalidate = spyOn(nudgeCache, "invalidateInactiveNaturalNudgeGates").mockImplementation(() => undefined);
+    const context = makeContext(false);
+    context.turn.lockedTurn.admission.incoming.isDirectChat = true;
+    try {
+      await runPostTurnEffects(context, completed);
+      await Bun.sleep(0);
+      expect(invalidate).not.toHaveBeenCalled();
+      finishOlderFlush(true);
+      await Bun.sleep(0);
+      expect(flush).toHaveBeenCalledTimes(2);
+      expect(invalidate).toHaveBeenCalledWith(context.tomoriState.server_id);
+      invalidate.mockClear();
+      flush.mockResolvedValue(false);
+      await runPostTurnEffects(context, completed);
+      await Bun.sleep(0);
+      expect(invalidate).not.toHaveBeenCalled();
+      context.turn.lockedTurn.admission.incoming.isDirectChat = false;
+      flush.mockClear();
+      await runPostTurnEffects(context, completed);
+      await Bun.sleep(0);
+      expect(flush).not.toHaveBeenCalled();
+    } finally {
+      finishOlderFlush(true);
+      flush.mockRestore();
+      invalidate.mockRestore();
+    }
+  });
+
   beforeAll(async () => {
     await initializeLocalizer();
   });
@@ -100,6 +136,44 @@ describe("Natural Nudges turns stay out of engagement stats", () => {
     expect(metrics()).toContain("text_generated");
   });
 
+  it("records human conditioning once and tags its heat source", async () => {
+    for (const type of ["reward", "punish"] as const) {
+      recorded.length = 0;
+      const context = makeContext(false);
+      context.turn.lockedTurn.admission.incoming = normalizeChatInvocation({
+        ...context.turn.lockedTurn.admission.incoming,
+        conditioningInteraction: { actorType: "user", type },
+      });
+      await runPostTurnEffects(context, completed);
+      await Bun.sleep(0);
+
+      expect(recorded.filter((entry) => entry.metric === "message_sent")).toEqual([
+        { serverId: 7, userId: 42, lineageId: LINEAGE_ID, metric: "message_sent", metricKey: type },
+      ]);
+      expect(metrics()).toContain("active_hour");
+      expect(metrics()).toContain("channel_turn");
+    }
+  });
+
+  it("excludes persona reactions from engagement while retaining usage", async () => {
+    for (const type of ["reward", "punish"] as const) {
+      recorded.length = 0;
+      const context = makeContext(false);
+      context.turn.lockedTurn.admission.incoming = normalizeChatInvocation({
+        ...context.turn.lockedTurn.admission.incoming,
+        conditioningInteraction: { actorType: "persona", type },
+      });
+      await runPostTurnEffects(context, completed);
+      await Bun.sleep(0);
+
+      expect(metrics()).not.toContain("message_sent");
+      expect(metrics()).not.toContain("active_hour");
+      expect(metrics()).not.toContain("channel_turn");
+      expect(metrics()).toContain("model_used");
+      expect(metrics()).toContain("text_generated");
+    }
+  });
+
   it("records all three for an ordinary turn", async () => {
     const context = makeContext(false);
     await runPostTurnEffects(context, completed);
@@ -121,7 +195,7 @@ describe("Natural Nudges turns stay out of engagement stats", () => {
     ]);
   });
 
-  it("stores short-term memory for an ordinary turn but never for a nudge's bystander", async () => {
+  it("stores short-term memory for human turns without treating generated exchanges as human relationships", async () => {
     const stored: string[] = [];
     const storeSpy = spyOn(shortTermMemoryCache, "storeShortTermMemory").mockImplementation(((userDiscId: string) => {
       stored.push(userDiscId);
@@ -138,6 +212,12 @@ describe("Natural Nudges turns stay out of engagement stats", () => {
     try {
       await runPostTurnEffects(withHistory(false), completed);
       await runPostTurnEffects(withHistory(true), completed);
+      const personaReaction = withHistory(false);
+      personaReaction.turn.lockedTurn.admission.incoming.conditioningInteraction = {
+        actorType: "persona",
+        type: "reward",
+      };
+      await runPostTurnEffects(personaReaction, completed);
       await Bun.sleep(0);
       expect(stored).toEqual(["fixture-juno"]);
     } finally {
@@ -145,7 +225,28 @@ describe("Natural Nudges turns stay out of engagement stats", () => {
     }
   });
 
-  it("keeps the nudge marker on the empty-response retry", async () => {
+  it("preserves conditioning heat sources on empty-response retries", async () => {
+    const calls: TomoriChatInput[] = [];
+    const chatSpy = spyOn(tomoriChatModule, "tomoriChat").mockImplementation(async (input) => {
+      calls.push(input);
+      return "run";
+    });
+    try {
+      for (const actorType of ["user", "persona"] as const) {
+        for (const type of ["reward", "punish"] as const) {
+          const context = makeContext(false);
+          context.turn.lockedTurn.admission.incoming.conditioningInteraction = { actorType, type };
+          await runPostTurnEffects(context, { status: "empty_response", streamResults: [], personaResponses: [] });
+          expect(calls.at(-1)?.conditioningInteraction).toEqual({ actorType, type });
+        }
+      }
+      expect(metrics()).not.toContain("message_sent");
+    } finally {
+      chatSpy.mockRestore();
+    }
+  });
+
+  it("keeps nudge and direct-chat activity semantics on empty-response retries", async () => {
     const calls: TomoriChatInput[] = [];
     const chatSpy = spyOn(tomoriChatModule, "tomoriChat").mockImplementation(async (input) => {
       calls.push(input);
@@ -161,6 +262,11 @@ describe("Natural Nudges turns stay out of engagement stats", () => {
       expect(calls[0]?.naturalNudge).toEqual(NUDGE);
       expect(calls[0]?.borrowsTriggerMessage).toBe(true);
       expect(calls[0]?.skipLock).toBe(true);
+      const direct = makeContext(false);
+      direct.turn.lockedTurn.admission.incoming.isDirectChat = true;
+      await runPostTurnEffects(direct, { status: "empty_response", streamResults: [], personaResponses: [] });
+      expect(calls[1]?.isDirectChat).toBe(true);
+      expect(calls[1]?.naturalNudge).toBeUndefined();
     } finally {
       chatSpy.mockRestore();
     }

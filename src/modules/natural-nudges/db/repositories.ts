@@ -4,9 +4,12 @@ import { z } from "zod";
 import { PrivacyLevel } from "@/types/db/schema";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
-import { NATURAL_NUDGE_FAILURE_STOP_THRESHOLD } from "@/modules/natural-nudges/runtime/tuning";
+import { NATURAL_NUDGE_FAILURE_STOP_THRESHOLD, NUDGE_DORMANCY_MS } from "@/modules/natural-nudges/runtime/tuning";
+import { heatWindowStart } from "@/modules/natural-nudges/runtime/meters";
 import {
   CUSTOM_IDLE_NUDGE_KEY_PREFIX,
+  NUDGE_ADVANCED_STEP,
+  NUDGE_HEAT_OFFSET_MAX,
   customIdleNudgeKey,
   customIdleNudgeRowSchema,
   computePersonaNudgeFingerprint,
@@ -78,7 +81,7 @@ class NaturalNudgeRepository {
     const loadRows = () => client`
       SELECT server_id, idle_nudges_enabled, active_nudges_enabled, channel_disc_ids, llm_id,
         checker_llm_id, checker_decision_model_id,
-        idle_nudge_frequency, active_nudge_frequency, disabled_builtin_idle_nudges
+        idle_nudge_frequency, active_nudge_frequency, disabled_builtin_idle_nudges, category_weights, heat_offset
       FROM server_natural_nudge_configs WHERE server_id = ${serverId}
     `;
     const rows = await (client === sql
@@ -103,17 +106,21 @@ class NaturalNudgeRepository {
     patch: ServerNaturalNudgeConfigPatch,
     client: SQL,
   ): Promise<void> {
-    const next = { ...(await this.loadServerConfig(serverId, client)), ...patch, server_id: serverId };
+    const next = serverNaturalNudgeConfigSchema.parse({
+      ...(await this.loadServerConfig(serverId, client)),
+      ...patch,
+      server_id: serverId,
+    });
     await client`
       INSERT INTO server_natural_nudge_configs (
         server_id, idle_nudges_enabled, active_nudges_enabled, channel_disc_ids, llm_id,
         checker_llm_id, checker_decision_model_id,
-        idle_nudge_frequency, active_nudge_frequency, disabled_builtin_idle_nudges
+        idle_nudge_frequency, active_nudge_frequency, disabled_builtin_idle_nudges, category_weights, heat_offset
       ) VALUES (
         ${serverId}, ${next.idle_nudges_enabled}, ${next.active_nudges_enabled}, ${sql.array(next.channel_disc_ids, "TEXT")},
         ${next.llm_id}, ${next.checker_llm_id}, ${next.checker_decision_model_id},
         ${next.idle_nudge_frequency}, ${next.active_nudge_frequency},
-        ${sql.array(next.disabled_builtin_idle_nudges, "TEXT")}
+        ${sql.array(next.disabled_builtin_idle_nudges, "TEXT")}, ${next.category_weights}::jsonb, ${next.heat_offset}
       )
       ON CONFLICT (server_id) DO UPDATE SET
         idle_nudges_enabled = EXCLUDED.idle_nudges_enabled,
@@ -124,16 +131,29 @@ class NaturalNudgeRepository {
         checker_decision_model_id = EXCLUDED.checker_decision_model_id,
         idle_nudge_frequency = EXCLUDED.idle_nudge_frequency,
         active_nudge_frequency = EXCLUDED.active_nudge_frequency,
-        disabled_builtin_idle_nudges = EXCLUDED.disabled_builtin_idle_nudges
+        disabled_builtin_idle_nudges = EXCLUDED.disabled_builtin_idle_nudges,
+        category_weights = CASE WHEN ${patch.category_weights !== undefined} THEN EXCLUDED.category_weights ELSE server_natural_nudge_configs.category_weights END,
+        heat_offset = CASE WHEN ${patch.heat_offset !== undefined} THEN EXCLUDED.heat_offset ELSE server_natural_nudge_configs.heat_offset END
     `;
   }
 
-  /**
-   * Guild servers with `message_sent` since `since` whose idle nudges are not turned off. Starting from
-   * heat rather than config rows is what makes the on-by-default rule reach servers that never saved
-   * settings; those get the column defaults.
-   */
-  async listEnabledIdleNudgeServers(since: Date): Promise<EnabledIdleNudgeServer[]> {
+  async adjustHeat(serverId: number, direction: "up" | "down"): Promise<boolean> {
+    const delta = direction === "up" ? NUDGE_ADVANCED_STEP : -NUDGE_ADVANCED_STEP;
+    try {
+      await sql`
+        INSERT INTO server_natural_nudge_configs (server_id, heat_offset)
+        VALUES (${serverId}, ${delta})
+        ON CONFLICT (server_id) DO UPDATE SET
+          heat_offset = GREATEST(${-NUDGE_HEAT_OFFSET_MAX}, LEAST(${NUDGE_HEAT_OFFSET_MAX}, server_natural_nudge_configs.heat_offset + ${delta}))
+      `;
+      return true;
+    } catch (error) {
+      await log.error("Natural Nudges: failed to adjust heat", error, { metadata: { serverId, direction } });
+      return false;
+    }
+  }
+
+  async listEnabledIdleNudgeServers(now: Date): Promise<EnabledIdleNudgeServer[]> {
     const rows = await withTransientDbRetry(
       () => sql`
       SELECT s.server_id, s.server_disc_id, scc.timezone_offset,
@@ -143,18 +163,21 @@ class NaturalNudgeRepository {
           'channel_disc_ids', c.channel_disc_ids, 'llm_id', c.llm_id,
           'checker_llm_id', c.checker_llm_id, 'checker_decision_model_id', c.checker_decision_model_id,
           'idle_nudge_frequency', c.idle_nudge_frequency, 'active_nudge_frequency', c.active_nudge_frequency,
-          'disabled_builtin_idle_nudges', c.disabled_builtin_idle_nudges
+          'disabled_builtin_idle_nudges', c.disabled_builtin_idle_nudges,
+          'category_weights', c.category_weights, 'heat_offset', c.heat_offset
         ) END AS config
       FROM servers s
+      JOIN server_natural_nudge_runtime_state runtime ON runtime.server_id = s.server_id
       LEFT JOIN server_natural_nudge_configs c ON c.server_id = s.server_id
       LEFT JOIN server_chat_configs scc ON scc.server_id = s.server_id
       WHERE COALESCE(s.is_dm_channel, false) = false
         AND COALESCE(c.idle_nudges_enabled, true)
+        AND runtime.last_direct_chat_at > ${new Date(now.getTime() - NUDGE_DORMANCY_MS)}
         AND EXISTS (
           SELECT 1 FROM stat_counters sc
           WHERE sc.server_id = s.server_id
             AND sc.metric = 'message_sent'
-            AND sc.bucket >= ${since.toISOString().slice(0, 10)}::date
+            AND sc.bucket >= ${heatWindowStart(now).toISOString().slice(0, 10)}::date
         )
     `,
       "list enabled idle nudge servers",
@@ -617,6 +640,26 @@ class NaturalNudgeRepository {
       await log.error("Natural Nudges: failed to clear persona config", error, { metadata: { personaId } });
       return false;
     }
+  }
+
+  async loadLastDirectChatAt(serverId: number): Promise<Date | null> {
+    const [row] = await withTransientDbRetry(
+      () => sql<{ last_direct_chat_at: Date | null }[]>`
+        SELECT last_direct_chat_at FROM server_natural_nudge_runtime_state WHERE server_id = ${serverId}
+      `,
+      "load natural nudge direct chat activity",
+    );
+    return row?.last_direct_chat_at ?? null;
+  }
+
+  async recordDirectChat(serverId: number): Promise<Date> {
+    const [row] = await sql<{ last_direct_chat_at: Date }[]>`
+      INSERT INTO server_natural_nudge_runtime_state (server_id, last_direct_chat_at)
+      VALUES (${serverId}, NOW())
+      ON CONFLICT (server_id) DO UPDATE SET last_direct_chat_at = NOW(), updated_at = NOW()
+      RETURNING last_direct_chat_at
+    `;
+    return row.last_direct_chat_at;
   }
 
   async loadRuntimeState(serverId: number): Promise<NaturalNudgeRuntimeState> {

@@ -149,6 +149,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
             nai_diffusion_model_id: tomoriState.config.nai_diffusion_model_id,
             video_model_id: tomoriState.config.video_model_id,
             config: {
+              emoji_usage_enabled: tomoriConfig.emoji_usage_enabled,
               sticker_usage_enabled: tomoriConfig.sticker_usage_enabled,
               web_search_enabled: tomoriConfig.web_search_enabled,
               self_teaching_enabled: tomoriConfig.self_teaching_enabled,
