@@ -1,5 +1,10 @@
 export default {
   tools: {
+    media: {
+      delivery_failed: "Discord did not deliver the media. No successful delivery was recorded.",
+      delivery_unconfirmed:
+        "Discord did not confirm whether the media was posted. Stop this turn and check the channel before generating or posting it again, since another attempt could create a duplicate.",
+    },
     roll_dice: {
       missing_permissions:
         "The bot needs permission to view this channel, send messages, and embed links to post a dice roll.",

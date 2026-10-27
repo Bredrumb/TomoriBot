@@ -1,4 +1,5 @@
 import type { TomoriState } from "@/types/db/schema";
+import { clearPersonaAppearances } from "@/utils/cache/personaAppearanceCacheStore";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
 import { personaRepository } from "@/utils/db/repositories";
@@ -202,6 +203,7 @@ export async function getCachedTomoriState(serverDiscId: string): Promise<Tomori
  * Useful for testing or manual refresh operations.
  */
 export function clearTomoriStateCache(): void {
+  clearPersonaAppearances();
   cache.clear();
   lastDbError.clear();
   cacheHits = 0;

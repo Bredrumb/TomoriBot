@@ -19,7 +19,8 @@ import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
 import { AttachmentBuilder } from "discord.js";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
-import { sendPersonaPostViaWebhook } from "@/utils/discord/webhook/personaPost";
+import { mediaDeliveryFailure, sendToolMediaPost } from "@/utils/discord/webhook/toolMediaDelivery";
+import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 import { buildGeneratedVideoComponentsV2Payload } from "@/utils/discord/generatedVideoMessage";
 import {
   buildReferencedMessageUrl,
@@ -187,17 +188,6 @@ export class GenerateVideoTool extends BaseTool {
     return model.codename;
   }
 
-  /**
-   * Send a generated video to the Discord channel via webhook or bot message.
-   *
-   * The video is sent inside a Components V2 Media Gallery so a "Generated in Xs"
-   * footer can sit BELOW the inline player (a plain `content` caption would render
-   * above the attachment). Each path falls back to a plain attachment-only message
-   * if Components V2 is rejected, so that fallback preserves Discord's native inline
-   * video player, just without the timing footer.
-   * @param videoData - Raw video bytes
-   * @param elapsedMs - Wall-clock generation time in milliseconds, used for the "Generated in Xs" footer
-   */
   private async sendGeneratedVideo(
     context: ToolContext,
     videoData: Buffer,
@@ -205,122 +195,13 @@ export class GenerateVideoTool extends BaseTool {
     elapsedMs: number,
     spoiler: boolean,
   ): Promise<import("discord.js").Message> {
-    const threadId =
-      "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
-        ? context.channel.id
-        : undefined;
     const componentsPayload = buildGeneratedVideoComponentsV2Payload(filename, elapsedMs, context.locale, spoiler);
-
-    // Try persona webhook first (Components V2, then plain attachment fallback)
-    if (context.webhook && context.personaUsername) {
-      try {
-        const webhookAttachment = new AttachmentBuilder(videoData, {
-          name: filename,
-        });
-        return await sendPersonaPostViaWebhook(
-          context.webhook,
-          {
-            files: [webhookAttachment],
-            ...componentsPayload,
-            withComponents: true,
-            ...(threadId ? { threadId } : {}),
-          },
-          {
-            username: context.personaUsername,
-            avatarUrl: context.personaAvatarUrl,
-            personaId: context.tomoriState.persona_id,
-          },
-          context.channel,
-        );
-      } catch (error) {
-        log.warn(
-          "Failed to send generated video via webhook with Components V2, retrying without components",
-          error as Error,
-        );
-        try {
-          const webhookAttachment = new AttachmentBuilder(videoData, {
-            name: filename,
-          });
-          return await sendPersonaPostViaWebhook(
-            context.webhook,
-            {
-              files: [webhookAttachment],
-              ...(threadId ? { threadId } : {}),
-            },
-            {
-              username: context.personaUsername,
-              avatarUrl: context.personaAvatarUrl,
-              personaId: context.tomoriState.persona_id,
-            },
-            context.channel,
-          );
-        } catch (fallbackError) {
-          const discordError = fallbackError as Error & {
-            code?: string | number;
-            status?: number;
-            method?: string;
-            url?: string;
-            rawError?: unknown;
-          };
-          log.warn(
-            `Failed to send generated video via webhook; falling back to bot message ${JSON.stringify({
-              filename,
-              bytes: videoData.length,
-              error: discordError.message,
-              code: discordError.code ?? null,
-              status: discordError.status ?? null,
-              method: discordError.method ?? null,
-              url: discordError.url ?? null,
-              rawError: discordError.rawError ?? null,
-            })}`,
-          );
-        }
-      }
-    }
-
-    // Bot message path (Components V2, then plain attachment fallback)
-    try {
-      const channelAttachment = new AttachmentBuilder(videoData, {
-        name: filename,
-      });
-      return await context.channel.send({
-        files: [channelAttachment],
-        ...componentsPayload,
-      });
-    } catch (error) {
-      log.warn(
-        "Failed to send generated video with Components V2, falling back to attachment-only message",
-        error as Error,
-      );
-      try {
-        const channelAttachment = new AttachmentBuilder(videoData, {
-          name: filename,
-        });
-        return await context.channel.send({ files: [channelAttachment] });
-      } catch (fallbackError) {
-        const discordError = fallbackError as Error & {
-          code?: string | number;
-          status?: number;
-          method?: string;
-          url?: string;
-          rawError?: unknown;
-        };
-        const logSendFailure = classifySendFailure(fallbackError) ? log.warn : log.error;
-        logSendFailure(
-          `Failed to send generated video via bot message ${JSON.stringify({
-            filename,
-            bytes: videoData.length,
-            error: discordError.message,
-            code: discordError.code ?? null,
-            status: discordError.status ?? null,
-            method: discordError.method ?? null,
-            url: discordError.url ?? null,
-            rawError: discordError.rawError ?? null,
-          })}`,
-        );
-        throw fallbackError;
-      }
-    }
+    const files = () => [new AttachmentBuilder(videoData, { name: filename })];
+    return sendToolMediaPost(
+      context,
+      () => ({ files: files(), ...componentsPayload, withComponents: true }),
+      () => ({ files: files() }),
+    );
   }
 
   /**
@@ -719,6 +600,7 @@ export class GenerateVideoTool extends BaseTool {
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };
     } catch (error) {
+      if (error instanceof DiscordDeliveryError) return mediaDeliveryFailure(context, error.outcome);
       if (context.abortSignal?.aborted) {
         return { success: false, error: "Video generation was cancelled." };
       }

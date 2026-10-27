@@ -1,17 +1,12 @@
-import type { Message, Webhook } from "discord.js";
+import type { Message } from "discord.js";
 import type { LlmRow } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { truncateForEmbedDescription } from "@/utils/discord/embedHelper";
 import { attachTextDisplayModalCollector, buildTextDisplayModalButton } from "@/utils/discord/textDisplayModal";
 import { NOTICE_CONFIG_HINT_KEY } from "@/constants/toolNotices";
 import { isNoticeEmbedVisible, routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
-import { sendWebhookMessageWithIdentityDelivery } from "@/utils/discord/webhook/personaDispatch";
+import { sendToolPersonaPost } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { resolveAuthoringWebhook } from "@/utils/discord/webhook/fallback";
-import { resolveManagedChannelWebhook } from "@/utils/discord/webhook/webhookCore";
-import {
-  getChannelLastDelivery,
-  recordChannelDeliveredWebhookIdentity,
-} from "@/utils/discord/stream/channelDeliveryContinuity";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -128,46 +123,9 @@ export async function sendFallbackModelUsageNotice({
         ? context.channel.id
         : undefined;
 
-    let noticeMessage: Message;
-
-    // Post as whoever actually delivered the last message so the button groups with it rather
-    // than splitting off under a different author. The recorded username is reused verbatim:
-    // it may be the decorated `Persona (sprite)` form chosen by the group-break alternation,
-    // and rebuilding the persona's default identity here would produce a different name and
-    // cause the split. A null identity means the last delivery was an ordinary bot message, so
-    // the notice goes out as the bot too.
-    // The main persona has no pre-resolved `context.webhook` (it normally replies as the bot),
-    // so when a sprite put it on the webhook path the webhook is resolved lazily here: the
-    // lookup is cached, so this costs nothing on the common path.
-    const lastDelivery = getChannelLastDelivery(context.channel.id);
-    const deliveredIdentity = lastDelivery?.via === "webhook" ? lastDelivery.identity : null;
-    const noticeWebhook: Webhook | undefined =
-      lastDelivery?.via === "webhook"
-        ? ((await resolveAuthoringWebhook(context.channel, lastDelivery.webhookId, context.webhook)) ??
-          (await resolveManagedChannelWebhook(context.channel)) ??
-          undefined)
-        : undefined;
-
-    if (deliveredIdentity && noticeWebhook) {
-      const delivery = await sendWebhookMessageWithIdentityDelivery(
-        noticeWebhook,
-        {
-          components: [buttonRow],
-          ...(threadId ? { threadId } : {}),
-        },
-        deliveredIdentity,
-      );
-      noticeMessage = delivery.result;
-      recordChannelDeliveredWebhookIdentity(
-        context.channel.id,
-        delivery.identity,
-        noticeMessage.id,
-        lastDelivery?.speaker ?? null,
-        delivery.webhookId,
-      );
-    } else {
-      noticeMessage = await context.channel.send({ components: [buttonRow] });
-    }
+    const outcome = await sendToolPersonaPost(context, context.tomoriState, { components: [buttonRow] });
+    if (outcome.status !== "sent") return;
+    const noticeMessage: Message = outcome.message;
 
     attachTextDisplayModalCollector({
       message: noticeMessage,
@@ -177,8 +135,8 @@ export async function sendFallbackModelUsageNotice({
       timeoutMs: FALLBACK_NOTICE_BUTTON_TIMEOUT_MS,
       logLabel: "Fallback model details",
       onExpire: async () => {
-        if (deliveredIdentity && noticeWebhook) {
-          const author = await resolveAuthoringWebhook(context.channel, noticeMessage.webhookId, noticeWebhook);
+        if (outcome.receipt.route === "webhook") {
+          const author = await resolveAuthoringWebhook(context.channel, outcome.receipt.webhookId, context.webhook);
           if (!author) throw new Error("Authoring webhook unavailable for fallback notice edit");
           await author.editMessage(noticeMessage.id, {
             components: [disabledButtonRow],

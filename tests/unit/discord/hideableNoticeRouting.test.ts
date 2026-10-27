@@ -1,7 +1,17 @@
+import { REST } from "discord.js";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
-import { ChannelType, PermissionFlagsBits, PermissionsBitField, type TextChannel, type Webhook } from "discord.js";
+import {
+  ChannelType,
+  Collection,
+  PermissionFlagsBits,
+  PermissionsBitField,
+  type TextChannel,
+  type Webhook,
+} from "discord.js";
 import { NOTICE_CONFIG_HINT_KEY, type NoticeVerbosity, type ToolNoticeKey } from "@/constants/toolNotices";
 import type { ToolContext } from "@/types/tool/interfaces";
+import { clearPersonaAppearances, commitPersonaAppearance } from "@/utils/cache/personaAppearanceCacheStore";
+import { clearPersonaSpriteCache, setPersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
 import { sendMemoryEmbedWithExpand, sendToolNoticeContainer } from "@/utils/discord/expandableEmbedNotice";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import {
@@ -10,6 +20,7 @@ import {
   recordChannelDeliveredWebhookIdentity,
 } from "@/utils/discord/stream/channelDeliveryContinuity";
 import { sendToolNotice } from "@/utils/discord/toolProgressNotice";
+import * as lifecycle from "@/utils/discord/webhook/lifecycle";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createPersona } from "../../helpers/fixtures";
 import { localizedCopy } from "../../helpers/localeCases";
@@ -21,25 +32,41 @@ const SOURCE_URL = "https://discord.com/channels/1/200/300";
 /** A guild channel every member can read unless `restricted` denies `@everyone` the channel. */
 function fakeChannel(id: string, options: { dm?: boolean; parentId?: string; restricted?: boolean } = {}) {
   const sent: string[] = [];
+  const delivered: string[] = [];
   const audience = (restricted: boolean) => ({
     permissionsFor: () => new PermissionsBitField(restricted ? 0n : PermissionFlagsBits.ViewChannel),
     permissionOverwrites: { cache: [] },
   });
   return {
     id,
-    lastMessageId: null,
+    client: { user: { id: "bot" }, rest: new REST() },
+    lastMessageId: null as string | null,
     sent,
+    delivered,
     guildId: "guild_1",
-    guild: { roles: { everyone: { id: "guild_1" } } },
+    guild: {
+      roles: { everyone: { id: "guild_1" } },
+      members: { me: { id: "bot", displayAvatarURL: () => undefined } },
+    },
     type: options.parentId === undefined ? ChannelType.GuildText : ChannelType.PublicThread,
     parentId: options.parentId ?? null,
     parent: options.parentId === undefined ? null : { id: options.parentId, ...audience(false) },
     ...audience(options.restricted ?? false),
     isThread: () => options.parentId !== undefined,
     isDMBased: () => options.dm ?? false,
+    fetchWebhooks: async () => new Collection(),
+    createWebhook: async () => ({ id: "created-webhook", channelId: id }),
     send: async (payload: unknown) => {
       sent.push(JSON.stringify(payload));
-      return null;
+      const messageId = `20000000000000000${delivered.length + 10}`;
+      delivered.push(messageId);
+      return {
+        id: messageId,
+        channelId: id,
+        webhookId: null,
+        author: { id: "bot" },
+        createMessageComponentCollector: () => ({ on: () => undefined }),
+      };
     },
   };
 }
@@ -55,17 +82,21 @@ function buildContext(input: {
     channel: input.conversation,
     locale: "en-US",
     message: { url: SOURCE_URL },
+    deliveryMode: "persona",
     client: {
+      user: { id: "bot" },
       channels: { fetch: async (id: string) => (input.thoughtLog?.id === id ? input.thoughtLog : null) },
     },
-    tomoriState: {
+    tomoriState: createPersona({
+      persona_id: 55,
+      persona_nickname: "Mirri",
       config: {
         tool_notice_hidden_keys: input.hidden,
         tool_notice_verbosity: input.verbosity ?? "minimal",
         thought_log_channel_disc_id: input.thoughtLog?.id ?? null,
         private_channel_ids: input.privateChannelIds ?? [],
       },
-    },
+    }),
   } as unknown as ToolContext;
 }
 
@@ -80,6 +111,13 @@ const memoryNotice = {
 // JSON-encoded payloads escape backticks and quotes the same way, so compare in that encoding.
 const encoded = (text: string) => JSON.stringify(text).slice(1, -1);
 const configHint = () => encoded(localizedCopy("en-US", NOTICE_CONFIG_HINT_KEY));
+
+afterEach(() => {
+  mock.restore();
+  clearAllChannelDeliveryContinuity();
+  clearPersonaAppearances();
+  clearPersonaSpriteCache();
+});
 
 describe("hideable tool notices", () => {
   it("posts a visible memory notice in the conversation with the shared /config line under its own footer", async () => {
@@ -302,23 +340,34 @@ describe("hideable tool notices", () => {
 for (const format of ["components", "embed"] as const) {
   describe(`${format} notice delivery continuity`, () => {
     beforeEach(clearAllChannelDeliveryContinuity);
-    afterEach(clearAllChannelDeliveryContinuity);
 
     const previousIdentity = { username: "Mirri (shy)", avatarUrl: "https://example.com/shy.png" };
     const previousSpeaker = { personaId: 55, kind: "appearance" as const };
 
-    async function deliver(channel: ReturnType<typeof fakeChannel>, webhook?: Webhook): Promise<void> {
+    function persona(isAlter: boolean) {
+      return createPersona({
+        persona_id: 55,
+        persona_nickname: "Mirri",
+        is_alter: isAlter,
+        config: { tool_notice_verbosity: "verbose" },
+      });
+    }
+
+    async function deliver(
+      channel: ReturnType<typeof fakeChannel>,
+      options: { webhook?: Webhook; isAlter?: boolean } = {},
+    ): Promise<void> {
+      if (options.webhook) {
+        spyOn(lifecycle, "getOrCreateWebhook").mockResolvedValue({ webhook: options.webhook });
+      }
       if (format === "embed") {
         await sendStandardEmbed(channel as unknown as TextChannel, "en-US", memoryNotice, {
-          webhook,
-          personaUsername: "Mirri",
-          personaId: 55,
+          persona: persona(options.isAlter ?? true),
+          deliveryMode: "persona",
         });
       } else {
         const context = buildContext({ hidden: [], conversation: channel });
-        context.tomoriState = createPersona({ persona_id: 55, config: { tool_notice_verbosity: "verbose" } });
-        context.webhook = webhook;
-        context.personaUsername = "Mirri";
+        context.tomoriState = persona(options.isAlter ?? true);
         await sendToolNoticeContainer(context, "memory_update", memoryNotice);
       }
     }
@@ -331,47 +380,56 @@ for (const format of ["components", "embed"] as const) {
       return {
         id: "400",
         channelId: channel.id,
+        guildId: "guild_1",
+        token: "fixture",
+        client: { rest: new REST() },
         send: mock(async () => {
           throw Object.assign(new Error("Webhook send refused"), { code: 50013 });
         }),
       };
     }
 
-    it("clears the previous webhook identity after a successful bot fallback", async () => {
+    it("keeps the previous identity and does not repost as the bot when the persona webhook is refused", async () => {
       const channel = fakeChannel("200");
       const webhook = failedWebhook(channel);
       seed(channel);
 
-      await deliver(channel, webhook as unknown as Webhook);
+      await deliver(channel, { webhook: webhook as unknown as Webhook });
 
       expect(webhook.send).toHaveBeenCalled();
-      expect(channel.sent).toHaveLength(1);
-      expect(getChannelLastDelivery(channel.id)).toEqual({ via: "bot", speaker: null });
+      expect(channel.sent).toHaveLength(0);
+      expect(getChannelLastDelivery(channel.id)).toEqual({
+        via: "webhook",
+        webhookId: "400",
+        identity: previousIdentity,
+        speaker: previousSpeaker,
+      });
     });
 
-    it("clears the previous webhook identity after a direct bot send", async () => {
+    it("records a direct bot send with the persona it presented", async () => {
       const channel = fakeChannel("200");
       seed(channel);
 
-      await deliver(channel);
+      await deliver(channel, { isAlter: false });
 
       expect(channel.sent).toHaveLength(1);
-      expect(getChannelLastDelivery(channel.id)).toEqual({ via: "bot", speaker: null });
+      expect(getChannelLastDelivery(channel.id)).toEqual({
+        via: "bot",
+        speaker: { personaId: 55, kind: "appearance" },
+      });
     });
 
-    it("retains the last successful identity when both sends fail", async () => {
+    it("retains the last successful identity when the persona webhook fails", async () => {
       const channel = fakeChannel("200");
       const webhook = failedWebhook(channel);
       const botSend = spyOn(channel, "send").mockRejectedValue(new Error("Bot send refused"));
       seed(channel);
 
       try {
-        const delivery = deliver(channel, webhook as unknown as Webhook);
-        if (format === "embed") await expect(delivery).rejects.toThrow();
-        else await delivery;
+        await deliver(channel, { webhook: webhook as unknown as Webhook });
 
         expect(webhook.send).toHaveBeenCalled();
-        expect(botSend).toHaveBeenCalled();
+        expect(botSend).not.toHaveBeenCalled();
         expect(getChannelLastDelivery(channel.id)).toEqual({
           via: "webhook",
           webhookId: "400",
@@ -385,7 +443,14 @@ for (const format of ["components", "embed"] as const) {
 
     it("records the successful webhook without replacing it with a bot delivery", async () => {
       const channel = fakeChannel("200");
-      const webhook = { id: "400", channelId: channel.id, send: mock(async () => ({ id: "301" })) };
+      const webhook = {
+        id: "400",
+        channelId: channel.id,
+        guildId: "guild_1",
+        token: "fixture",
+        client: { rest: new REST() },
+        send: mock(async (_payload: Record<string, unknown>) => ({ id: "301", channelId: channel.id })),
+      };
       recordChannelDeliveredWebhookIdentity(
         channel.id,
         { username: "Juno" },
@@ -397,7 +462,7 @@ for (const format of ["components", "embed"] as const) {
         "400",
       );
 
-      await deliver(channel, webhook as unknown as Webhook);
+      await deliver(channel, { webhook: webhook as unknown as Webhook });
 
       expect(webhook.send).toHaveBeenCalled();
       expect(channel.sent).toHaveLength(0);
@@ -406,6 +471,59 @@ for (const format of ["components", "embed"] as const) {
         webhookId: "400",
         identity: { username: "Mirri" },
         speaker: previousSpeaker,
+      });
+    });
+
+    it("posts a main persona's notice under its committed sprite", async () => {
+      const channel = fakeChannel("200");
+      setPersonaSpriteCache(55, [
+        {
+          sprite_id: 3,
+          persona_id: 55,
+          sprite_name: "joy",
+          sprite_key: "joy",
+          avatar_url: "https://example.com/joy.png",
+          usage_instructions: "",
+          is_identity: false,
+        },
+      ]);
+      commitPersonaAppearance({
+        channelId: channel.id,
+        personaId: 55,
+        sprite: { personaId: 55, spriteName: "joy", isIdentity: false },
+        genericAvatar: false,
+      });
+      channel.lastMessageId = "1500000000000000000";
+      const webhook = {
+        id: "400",
+        channelId: channel.id,
+        guildId: "guild_1",
+        token: "fixture",
+        client: { rest: new REST() },
+        send: mock(async (_payload: Record<string, unknown>) => ({ id: "301", channelId: channel.id })),
+      };
+      spyOn(lifecycle, "getOrCreateWebhook").mockResolvedValue({ webhook: webhook as unknown as Webhook });
+
+      if (format === "embed") {
+        await sendStandardEmbed(channel as unknown as TextChannel, "en-US", memoryNotice, {
+          persona: persona(false),
+          deliveryMode: "persona",
+        });
+      } else {
+        const context = buildContext({ hidden: [], conversation: channel });
+        context.tomoriState = persona(false);
+        await sendToolNoticeContainer(context, "memory_update", memoryNotice);
+      }
+
+      expect(channel.sent).toHaveLength(0);
+      expect(webhook.send).toHaveBeenCalledTimes(1);
+      const payload = (webhook.send.mock.calls[0][0] ?? {}) as { username?: string; avatarURL?: string };
+      expect(payload.username).toBe("Mirri");
+      expect(payload.avatarURL).toBe("https://example.com/joy.png");
+      expect(getChannelLastDelivery(channel.id)).toMatchObject({
+        via: "webhook",
+        webhookId: "400",
+        speaker: { personaId: 55, kind: "appearance" },
       });
     });
   });

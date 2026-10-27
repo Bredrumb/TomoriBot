@@ -67,6 +67,7 @@ export async function executeWebSearchWithFallback(
 
     try {
       const result = await engine.search(query, category, searchContext, count);
+      if (result.endTurn) return result;
       if (context.abortSignal?.aborted) break;
       if (result.success) {
         log.success(`web_search dispatch: engine "${engine.name}" succeeded`);

@@ -1,3 +1,4 @@
+import { REST } from "discord.js";
 import { beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client, TextChannel } from "discord.js";
 import { HumanizerDegree, type TomoriState } from "@/types/db/schema";
@@ -28,6 +29,7 @@ function makeContext(send: ReturnType<typeof mock>, suppressUserErrors: boolean)
   return {
     channel: {
       id: "channel_1",
+      client: { rest: new REST() },
       send,
     } as unknown as TextChannel,
     client: {} as Client,
@@ -93,7 +95,13 @@ describe("StreamOrchestrator model-error visibility", () => {
   });
 
   it("renders a dedicated model configuration error embed for terminal model errors", async () => {
-    const send = mock(async (_payload: unknown) => undefined);
+    const send = mock(async (_payload: unknown) => ({
+      id: "sent",
+      channelId: "channel_1",
+      webhookId: null,
+      author: { username: "Bot" },
+      createMessageComponentCollector: () => ({ on: () => undefined }),
+    }));
     const result = await new StreamOrchestrator().streamToDiscord(
       makeProvider(),
       makeConfig(),
@@ -108,7 +116,13 @@ describe("StreamOrchestrator model-error visibility", () => {
   });
 
   it("suppresses model errors during retry/fallback suppression", async () => {
-    const send = mock(async () => undefined);
+    const send = mock(async () => ({
+      id: "sent",
+      channelId: "channel_1",
+      webhookId: null,
+      author: { username: "Bot" },
+      createMessageComponentCollector: () => ({ on: () => undefined }),
+    }));
     const result = await new StreamOrchestrator().streamToDiscord(
       makeProvider(),
       makeConfig(),
@@ -139,7 +153,13 @@ describe("StreamOrchestrator model-error visibility", () => {
       const warn = spyOn(log, "warn").mockImplementation(() => undefined);
       const error = spyOn(log, "error").mockImplementation(async () => undefined);
       try {
-        const send = mock(async (_payload: unknown) => undefined);
+        const send = mock(async (_payload: unknown) => ({
+          id: "sent",
+          channelId: "channel_1",
+          webhookId: null,
+          author: { username: "Bot" },
+          createMessageComponentCollector: () => ({ on: () => undefined }),
+        }));
         const result = await new StreamOrchestrator().streamToDiscord(provider, makeConfig(), makeContext(send, false));
 
         expect(result.status).toBe("error");

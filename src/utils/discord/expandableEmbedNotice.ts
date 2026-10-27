@@ -1,3 +1,4 @@
+import { sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
 /**
  * Expandable Components V2 notification helper.
  *
@@ -29,7 +30,6 @@ import {
   type NewsChannel,
   type TextChannel,
   type TopLevelComponentData,
-  type Webhook,
 } from "discord.js";
 import type { ToolNoticeKey } from "@/constants/toolNotices";
 import type { MinimalNoticeRef } from "@/types/db/schema";
@@ -37,7 +37,7 @@ import type { StandardEmbedOptions } from "@/types/discord/embed";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { createStandardEmbed, type WebhookEmbedContext } from "@/utils/discord/embedHelper";
 import { recordMinimalNoticeRef } from "@/utils/discord/minimalNoticeBodies";
-import { recordChannelDeliveredBotMessage } from "@/utils/discord/stream/channelDeliveryContinuity";
+import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
 import {
   isMinimalNotice,
   isNoticeEmbedVisible,
@@ -48,7 +48,8 @@ import { buildNoticeContainer } from "@/utils/discord/ui/statusComponents";
 import { validateAndFallbackPanelPayload } from "@/utils/discord/ui/interactionCore";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { buildTextPreview } from "@/utils/text/textPreview";
-import { sendPersonaPostViaWebhook } from "@/utils/discord/webhook/personaPost";
+import { recordPersonaDelivery, sendPersonaPost } from "@/utils/discord/webhook/personaPost";
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { resolveAuthoringWebhook } from "@/utils/discord/webhook/fallback";
 
 type SupportedChannel =
@@ -89,16 +90,6 @@ interface ExpandableNoticeConfig {
   truncationThreshold?: number;
   /** Collector lifetime in ms before the button is disabled. */
   timeoutMs: number;
-}
-
-// Mirrors the private helper in embedHelper.ts: webhooks targeting threads
-// reference the parent channel, so a thread is only usable when its parent
-// matches the webhook channel.
-function canUseWebhookForChannel(channel: SupportedChannel, webhook: Webhook): boolean {
-  if ("isThread" in channel && typeof channel.isThread === "function" && channel.isThread()) {
-    return channel.parentId === webhook.channelId;
-  }
-  return webhook.channelId === channel.id;
 }
 
 /**
@@ -171,36 +162,44 @@ async function deliverNoticeComponents(
   const threadId =
     "isThread" in channel && typeof channel.isThread === "function" && channel.isThread() ? channel.id : undefined;
 
-  // Try webhook-persona delivery first so the notice appears under the same
-  // identity as the AI response, then fall back to a plain bot message.
-  const webhook = webhookContext?.webhook;
-  const personaUsername = webhookContext?.personaUsername;
-
-  if (webhook && personaUsername && canUseWebhookForChannel(channel, webhook)) {
-    try {
-      const message = await sendPersonaPostViaWebhook(
-        webhook,
-        {
-          ...payload,
-          withComponents: true,
-          ...(threadId ? { threadId } : {}),
-        },
-        {
-          username: personaUsername,
-          avatarUrl: webhookContext?.personaAvatarUrl,
-          personaId: webhookContext?.personaId,
-        },
-        channel,
-      );
-      return { message, sentViaWebhook: true, threadId };
-    } catch (error) {
-      log.warn("CV2 notice: webhook send failed, falling back to plain bot message", error as Error);
+  if (webhookContext?.persona) {
+    const outcome = await sendPersonaPost(
+      {
+        channel: channel as unknown as SendableChannel,
+        persona: webhookContext.persona,
+        deliveryMode: webhookContext.deliveryMode,
+        webhook: webhookContext.webhook,
+        impersonatedIdentity: webhookContext.impersonatedIdentity,
+        abortSignal: webhookContext.abortSignal,
+        isExecutionCancelled: webhookContext.isExecutionCancelled,
+        deliveryReceipts: webhookContext.deliveryReceipts,
+        deliveryState: webhookContext.deliveryState,
+        holdResponseText: webhookContext.holdResponseText,
+      },
+      { ...payload, withComponents: true },
+    );
+    if (outcome.status !== "sent") {
+      log.warn("CV2 notice: persona delivery failed", outcome.error, {
+        metadata: { outcome: outcome.status, channelId: channel.id },
+      });
+      return { message: null, sentViaWebhook: false, threadId };
     }
+    return { message: outcome.message, sentViaWebhook: outcome.receipt.route === "webhook", threadId };
   }
 
   try {
-    const message = await channel.send(payload);
-    recordChannelDeliveredBotMessage(channel.id);
+    const message = await sendChannelMessageOnce(channel, payload, () => undefined);
+    recordPersonaDelivery({
+      messageId: message.id,
+      channelId: message.channelId,
+      route: "bot",
+      webhookId: null,
+      identity: {
+        username: message.member?.displayName ?? message.author?.username,
+        avatarUrl: message.member?.displayAvatarURL?.() ?? message.author?.displayAvatarURL?.(),
+      },
+      speaker: null,
+    });
     return { message, sentViaWebhook: false, threadId };
   } catch (error) {
     log.warn("CV2 notice: channel send failed", error as Error);
@@ -307,7 +306,7 @@ async function sendEmbedWithExpand(
   collector.on("end", async () => {
     if (!noticeMessage) return;
     // Webhook-sent messages can only be edited through the webhook token.
-    if (sentViaWebhook && webhook) {
+    if (sentViaWebhook) {
       const author = await resolveAuthoringWebhook(channel, noticeMessage.webhookId, webhook);
       if (!author) return;
       await author
@@ -366,12 +365,11 @@ async function routeHideableNotice(
 
   if (isVisible) {
     const visibleOptions = isMinimal ? { ...embedOptions, minimal: true } : hintedOptions;
-    const message = await deliver(context.channel, visibleOptions, {
-      webhook: context.webhook,
-      personaUsername: context.personaUsername,
-      personaAvatarUrl: context.personaAvatarUrl,
-      personaId: context.tomoriState.persona_id,
-    });
+    const message = await deliver(
+      context.channel,
+      visibleOptions,
+      buildToolPersonaPostContext(context, context.tomoriState),
+    );
     if (!isMinimal) {
       return;
     }

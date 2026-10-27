@@ -57,7 +57,7 @@ Provider stream
 ## Iteration state
 <!-- anchor: iteration-state -->
 
-The loop retains tool call/response history and provider-native assistant parts for the next stream. Visible text before a tool call belongs to its history entry so replay does not ask the model to repeat it. Delivery state also records tools that already sent an expression or another channel response; an empty follow-up can then settle without treating that delivered output as a failure.
+The loop retains tool call/response history and provider-native assistant parts for the next stream. Visible text before a tool call belongs to its history entry so replay does not ask the model to repeat it. A successful entry keeps the tool's `message` beside its `data`, so a reused outcome after fallback and the next pass both see the continuation instruction as well as the payload. Delivery state also records tools that already sent an expression or another channel response; an empty follow-up can then settle without treating that delivered output as a failure.
 
 Provider results accumulate for final text, usage, and thought-log attribution. Error counters bound repeated failures, with separate recovery for NovelAI turns that have already delivered text. The exact state shape belongs to `runToolLoop` and `ToolHistoryEntry`.
 
@@ -119,8 +119,9 @@ Stream and tool deadlines bound each external operation. Stream inactivity deadl
 With Response Drafting On, `runToolLoop` shares function history and review state across attempts.
 Pre-tool narration stays pending and joins the final candidate. `completeResponse` reviews that
 candidate before replaying approved presentation or requesting the bounded revision. Revision clears
-pending presentation and model parts while keeping actual tool outcomes; successful tools are not
-replayed to reconstruct a reply. Tool-only turns do not invent prose.
+pending presentation and model parts while keeping actual tool outcomes, including each tool's
+message and data. Successful tools are not replayed to reconstruct a reply. Tool-only turns do not
+invent prose.
 
 Each pass receives the room left under the turn's
 [held-prose ceiling](/architecture/pipelines/provider/04-orchestrator-state-machine/#held-response-presentation).

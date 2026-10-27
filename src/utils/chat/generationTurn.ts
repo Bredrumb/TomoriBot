@@ -103,6 +103,8 @@ export async function runGenerationTurn(
     if (responseTarget) {
       context.responseTarget = responseTarget;
     }
+    context.streamingContext.deliveryMode = context.isUserImpersonation ? "user_impersonation" : "persona";
+    context.streamingContext.deliveryReceipts ??= [];
 
     return await runGenerationAttempts(context, responseSink);
   } finally {
@@ -118,6 +120,7 @@ async function runGenerationAttempts(
   responseSink: ChatResponseSink,
 ): Promise<GenerationTurnResult> {
   try {
+    context.streamingContext.deliveryState ??= { unconfirmed: false };
     context.responseReview = createResponseReviewState(context);
     context.streamingContext.holdResponseText = Boolean(context.responseReview);
     const plan = await buildGenerationPlan(context);
@@ -223,6 +226,8 @@ async function runGenerationAttempts(
           result = { ...result, status: "completed" };
         }
 
+        if (context.streamingContext.deliveryState.unconfirmed) break;
+
         if (result.status !== "error") {
           // Don't credit a timed-out key as successful : a timeout is not a clean completion.
           if (result.status !== "timeout" && rotationKeyId != null) await recordKeySuccess(rotationKeyId);
@@ -264,6 +269,12 @@ async function runGenerationAttempts(
       if (isUnreachableDestinationResult(result)) {
         log.warn(`Abandoning ${attempt.label}: the destination channel cannot receive messages.`);
         break;
+      }
+
+      if (context.streamingContext.deliveryState.unconfirmed) {
+        if (context.responseReview) context.responseReview.pending = [];
+        await responseSink.finalize(result);
+        return result;
       }
 
       const isRetryableStatus =
@@ -661,8 +672,11 @@ async function sendFallbackNoticeIfNeeded(
       channel: context.channel as ToolContext["channel"],
       client: context.client,
       message: context.message,
-      tomoriState: context.tomoriState,
+      tomoriState: context.currentPersona,
       locale: context.locale,
+      streamContext: context.streamingContext,
+      deliveryMode: context.streamingContext.deliveryMode,
+      isUserImpersonation: context.isUserImpersonation,
       provider: attempt.provider.getInfo().name,
       webhook: context.responseTarget?.webhook,
       personaUsername: context.responseTarget?.personaUsername,

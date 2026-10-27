@@ -7,7 +7,9 @@
 import { log } from "../../../utils/misc/logger";
 import type { ToolContext, ToolResult } from "../../../types/tool/interfaces";
 import { sendStandardEmbed } from "../../../utils/discord/embedHelper";
-import { sendPersonaPostViaWebhook } from "@/utils/discord/webhook/personaPost";
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
+import { mediaDeliveryFailure, sendToolMediaPost } from "@/utils/discord/webhook/toolMediaDelivery";
+import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 import { ColorCode } from "../../../utils/misc/logger";
 import sharp from "sharp";
 import {
@@ -68,12 +70,7 @@ async function sendApiKeyErrorEmbed(context?: ToolContext, searchType = "search"
         color: ColorCode.ERROR,
         footerKey: "general.errors.brave_api.missing_key.footer",
       },
-      {
-        webhook: context.webhook,
-        personaUsername: context.personaUsername,
-        personaAvatarUrl: context.personaAvatarUrl,
-        personaId: context.tomoriState.persona_id,
-      },
+      buildToolPersonaPostContext(context, context.tomoriState),
     );
   } catch (embedError) {
     log.warn(`Failed to send Brave API key error embed: ${embedError}`);
@@ -248,7 +245,7 @@ export async function brave_image_search(args: Record<string, unknown>, context?
 
     if (imageUrls.length > 0 && context?.channel) {
       // Pre-validate URLs and create Discord attachments only for accessible images
-      const attachments = [];
+      const attachments: import("discord.js").AttachmentBuilder[] = [];
       const failedUrls: string[] = [];
       const validatedUrls: string[] = [];
 
@@ -537,30 +534,7 @@ export async function brave_image_search(args: Record<string, unknown>, context?
       // Send attachments to Discord channel (prefer webhook if available)
       if (attachments.length > 0) {
         try {
-          const threadId =
-            "isThread" in context.channel &&
-            typeof context.channel.isThread === "function" &&
-            context.channel.isThread()
-              ? context.channel.id
-              : undefined;
-          const sentMessage =
-            context.webhook && context.personaUsername
-              ? await sendPersonaPostViaWebhook(
-                  context.webhook,
-                  {
-                    files: attachments,
-                    ...(threadId ? { threadId } : {}),
-                  },
-                  {
-                    username: context.personaUsername,
-                    avatarUrl: context.personaAvatarUrl,
-                    personaId: context.tomoriState.persona_id,
-                  },
-                  context.channel,
-                )
-              : await context.channel.send({
-                  files: attachments,
-                });
+          const sentMessage = await sendToolMediaPost(context, () => ({ files: attachments }));
           log.success(`Sent ${attachments.length} validated image attachments to Discord`);
           const sentAttachments = Array.from(sentMessage.attachments.values());
 
@@ -600,6 +574,7 @@ export async function brave_image_search(args: Record<string, unknown>, context?
             imageMetadata,
           };
         } catch (sendError) {
+          if (sendError instanceof DiscordDeliveryError) return mediaDeliveryFailure(context, sendError.outcome);
           log.error("Failed to send image attachments to Discord:", sendError as Error);
 
           // Fall back to formatted results if Discord sending fails

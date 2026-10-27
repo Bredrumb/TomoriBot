@@ -1,7 +1,7 @@
+import { sendChannelMessageOnce, sendSelectedWebhookMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
 import type { BaseGuildTextChannel, Message, ReplyOptions } from "discord.js";
 import type { StreamContext } from "@/types/stream/interfaces";
 import type { SpriteMessageRecordInfo, StreamState } from "@/types/stream/types";
-import { recordPersonaSpriteMessage } from "@/utils/cache/personaSpriteMessageCache";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import {
   isChannelGoneError,
@@ -14,20 +14,18 @@ import {
 } from "@/utils/discord/resolveSendableChannel";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { invalidateWebhookCache } from "@/utils/discord/webhook/cache";
-import {
-  dispatchWebhookWithIdentity,
-  sendSelectedWebhookMessage,
-  sendWebhookMessageWithIdentityDelivery,
-} from "@/utils/discord/webhook/personaDispatch";
+import { dispatchWebhookWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import { resolveAuthoringWebhook } from "@/utils/discord/webhook/fallback";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
+import { recordPersonaDelivery, type PersonaDeliveryReceipt } from "@/utils/discord/webhook/personaPost";
+import {
+  classifyDiscordDeliveryFailure,
+  DiscordDeliveryError,
+  isInvalidWebhookError,
+} from "@/utils/discord/webhook/deliveryOutcome";
 import { buildWebhookReplyNoticePayload } from "@/utils/discord/webhookReply";
 import { classifySendFailure, clearSendFailure, noteSendFailure } from "@/utils/discord/stream/sendFailureCache";
-import {
-  type DeliveredSpeaker,
-  recordChannelDeliveredBotMessage,
-  recordChannelDeliveredWebhookIdentity,
-} from "@/utils/discord/stream/channelDeliveryContinuity";
+import type { DeliveredSpeaker } from "@/utils/discord/stream/channelDeliveryContinuity";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { STREAMING_LIMITS } from "@/utils/security/rateLimiter";
 import { recordChatDiagnostic, recordChatMessageSent } from "@/utils/chat/diagnosticTimeline";
@@ -57,23 +55,6 @@ type StreamUiUpdaterDependencies = {
   requestStop: (channelId: string, requesterId?: string) => boolean;
   notifyStreamProgress: (context: StreamContext) => void;
 };
-
-function isInvalidWebhookError(error: unknown): boolean {
-  const code = (error as { code?: number | string })?.code;
-  return code === 10015 || code === "10015" || code === 50027 || code === "50027";
-}
-
-/**
- * Detects transient webhook send failures (network aborts/timeouts) where the
- * webhook itself is still valid, so the individual HTTP request just did not land.
- * Unlike {@link isInvalidWebhookError}, these are safe to retry with the same
- * persona identity so the persona avatar/username is preserved on the retry.
- *
- * @returns True when the failure is a transient abort worth a single retry
- */
-function isTransientWebhookError(error: unknown): boolean {
-  return error instanceof Error && error.name === "AbortError";
-}
 
 function resolveWebhookTargetChannel(channel: StreamContext["channel"]): BaseGuildTextChannel | null {
   const isThread = "isThread" in channel && typeof channel.isThread === "function" && channel.isThread();
@@ -201,7 +182,7 @@ function buildReplyReference(context: StreamContext, targetChannelId: string): R
 }
 
 export function isUserImpersonationStreamContext(context: StreamContext): boolean {
-  return Boolean(context.personaUsername && !context.tomoriState.is_alter);
+  return context.deliveryMode === "user_impersonation";
 }
 
 function classifyWebhookSpeaker(
@@ -271,7 +252,12 @@ export class StreamUiUpdater {
         repliedUser: false,
       };
 
-    if (context.abortSignal?.aborted || this.deps.hasStopRequest(context.channel.id)) {
+    if (
+      context.deliveryState?.unconfirmed ||
+      context.holdResponseText ||
+      context.abortSignal?.aborted ||
+      this.deps.hasStopRequest(context.channel.id)
+    ) {
       log.info("Stream Send: Stop request detected before Discord API call, skipping message send");
       return null;
     }
@@ -324,6 +310,7 @@ export class StreamUiUpdater {
       // Captured so recordSuccessfulSend can remember exactly which identity Discord saw:
       // including the decorated group-break username: for later sends to reuse.
       let deliveredWebhookIdentity: ResolvedWebhookIdentity | undefined;
+      let deliveredWebhookId: string | undefined;
       let deliveredSpeaker: DeliveredSpeaker | undefined;
       const webhookForIdentity = identityOverride
         ? await this.resolveWebhookForIdentityOverride(context)
@@ -407,21 +394,38 @@ export class StreamUiUpdater {
         }
 
         const webhookSend = await dispatchWebhookWithIdentity(webhookForIdentity, identity, async (selected) => {
+          this.assertCanDispatch(context);
           if (noticePayload) {
             try {
-              replyNoticeMessage = await sendSelectedWebhookMessage(selected, noticePayload);
+              replyNoticeMessage = await sendSelectedWebhookMessageOnce(selected, noticePayload, () =>
+                this.assertCanDispatch(context),
+              );
+              this.commitDelivery(
+                context,
+                replyNoticeMessage,
+                selected.identity,
+                speaker,
+                payload.spriteRecord,
+                selected.webhookId,
+              );
               if (context.replyNoticeState) context.replyNoticeState.sent = true;
             } catch (noticeError) {
+              if (classifyDiscordDeliveryFailure(noticeError) === "unconfirmed") throw noticeError;
               log.warn("Stream Send: Failed to send standalone alter reply notice", noticeError as Error);
             }
           }
-          return await sendSelectedWebhookMessage(selected, {
-            ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
-            ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
-            ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
-            allowedMentions: webhookAllowedMentions,
-            ...(threadId ? { threadId } : {}),
-          });
+          this.assertCanDispatch(context);
+          return await sendSelectedWebhookMessageOnce(
+            selected,
+            {
+              ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
+              ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
+              ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
+              allowedMentions: webhookAllowedMentions,
+              ...(threadId ? { threadId } : {}),
+            },
+            () => this.assertCanDispatch(context),
+          );
         });
 
         sentMessage = webhookSend.result;
@@ -429,6 +433,7 @@ export class StreamUiUpdater {
         // sprite record and the active render modifier keep the intended sprite, so the next line
         // retries the edit and the model's history still names the sprite it chose.
         deliveredWebhookIdentity = webhookSend.identity;
+        deliveredWebhookId = webhookSend.webhookId;
         deliveredSpeaker = speaker;
         state.hasRepliedToOriginalMessage = true;
       } else if (!state.hasRepliedToOriginalMessage && context.replyToMessage) {
@@ -437,21 +442,31 @@ export class StreamUiUpdater {
           throw unreachableChannelError(target.failed, context.replyToMessage.channelId);
         }
 
-        sentMessage = await target.channel.send({
-          ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
-          ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
-          ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
-          ...(target.reply ? { reply: target.reply } : {}),
-          allowedMentions: regularAllowedMentions,
-        });
+        this.assertCanDispatch(context);
+        sentMessage = await sendChannelMessageOnce(
+          target.channel,
+          {
+            ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
+            ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
+            ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
+            ...(target.reply ? { reply: target.reply } : {}),
+            allowedMentions: regularAllowedMentions,
+          },
+          () => this.assertCanDispatch(context),
+        );
         state.hasRepliedToOriginalMessage = true;
       } else {
-        sentMessage = await context.channel.send({
-          ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
-          ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
-          ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
-          allowedMentions: regularAllowedMentions,
-        });
+        this.assertCanDispatch(context);
+        sentMessage = await sendChannelMessageOnce(
+          context.channel,
+          {
+            ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
+            ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
+            ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
+            allowedMentions: regularAllowedMentions,
+          },
+          () => this.assertCanDispatch(context),
+        );
       }
 
       // Clears any cached refusal so a lifted timeout or a granted permission takes effect at
@@ -466,9 +481,13 @@ export class StreamUiUpdater {
         deliveredWebhookIdentity,
         "normal",
         deliveredSpeaker,
+        deliveredWebhookId,
       );
       return sentMessage;
     } catch (discordError) {
+      if (classifyDiscordDeliveryFailure(discordError) === "unconfirmed" && context.deliveryState)
+        context.deliveryState.unconfirmed = true;
+      if (context.abortSignal?.aborted || this.deps.hasStopRequest(context.channel.id)) return null;
       // An unreachable destination is final: nothing can be posted, and neither webhook recovery
       // nor the bot fallback can change that. Tearing the stream down quietly is the same treatment
       // the deterministic limits above get, and it keeps one deletion from producing a burst of
@@ -494,6 +513,7 @@ export class StreamUiUpdater {
       let terminalError: unknown = discordError;
       if (
         !strictUserImpersonation &&
+        classifyDiscordDeliveryFailure(discordError) !== "unconfirmed" &&
         ((context.webhook && context.personaUsername) || identityOverride) &&
         !state.hasRepliedToOriginalMessage
       ) {
@@ -538,7 +558,6 @@ export class StreamUiUpdater {
         metadata: {
           channelId: context.channel.id,
           contentLength: textForAccumulation.length,
-          contentPreview: textForAccumulation.substring(0, 200),
           usingWebhook: !!context.webhook || !!identityOverride,
           ...(sendFailureReason ? { sendFailureReason } : {}),
         },
@@ -560,10 +579,9 @@ export class StreamUiUpdater {
         log.error("Stream Send: Discord API error when sending message", terminalError, sendErrorMetadata);
       }
 
-      throw new Error(
-        `Discord send failed: ${terminalError instanceof Error ? terminalError.message : String(terminalError)}`,
-        { cause: terminalError },
-      );
+      if (classifyDiscordDeliveryFailure(terminalError) === "unconfirmed" && context.deliveryState)
+        context.deliveryState.unconfirmed = true;
+      throw new DiscordDeliveryError(classifyDiscordDeliveryFailure(terminalError), terminalError);
     }
   }
 
@@ -576,6 +594,7 @@ export class StreamUiUpdater {
     deliveredWebhookIdentity?: ResolvedWebhookIdentity,
     route: "normal" | "webhook_recovery" | "bot_fallback" = "normal",
     deliveredSpeaker?: DeliveredSpeaker,
+    deliveredWebhookId?: string,
   ): void {
     if (!state.firstReplyUrl && sentMessage?.url) {
       state.firstReplyUrl = sentMessage.url;
@@ -584,35 +603,17 @@ export class StreamUiUpdater {
       state.firstMessageId = sentMessage.id;
     }
 
-    // Remember what Discord will group against, so artifacts that follow (expressions, the
-    // "Fallback Used" notice) can reuse the same author instead of splitting off under a
-    // different name. A bot-message send clears it: reverting to the bot means artifacts must
-    // follow, or they would group with nothing.
     if (sentMessage) {
-      if (deliveredWebhookIdentity && sentMessage.webhookId) {
-        recordChannelDeliveredWebhookIdentity(
-          context.channel.id,
-          deliveredWebhookIdentity,
-          sentMessage.id,
-          deliveredSpeaker ?? null,
-          sentMessage.webhookId,
-        );
-      } else {
-        recordChannelDeliveredBotMessage(context.channel.id, classifyBotSpeaker(context));
-      }
+      this.commitDelivery(
+        context,
+        sentMessage,
+        deliveredWebhookIdentity,
+        deliveredSpeaker,
+        payload.spriteRecord,
+        deliveredWebhookId,
+      );
     }
-    // Persist the message → sprite mapping fire-and-forget; webhook sends only
-    // (bot-fallback messages can't carry persona identity in context anyway).
-    // A lost row degrades the future context label to the plain persona name.
     if (payload.spriteRecord && sentMessage?.webhookId) {
-      void recordPersonaSpriteMessage({
-        messageDiscId: sentMessage.id,
-        personaId: payload.spriteRecord.personaId,
-        spriteName: payload.spriteRecord.spriteName,
-        channelDiscId: sentMessage.channelId,
-      }).catch((recordError) => {
-        log.warn("Stream Send: Failed to record sprite message mapping", recordError as Error);
-      });
       // Track the delivered sprite label so the post-turn stat recorder can count
       // `sprite_shown` / `sprite_emotion` (the stream layer has no internal user id;
       // post-turn does). isIdentity rides along so identity sprites are kept out of
@@ -674,6 +675,46 @@ export class StreamUiUpdater {
     return webhookResult.webhook;
   }
 
+  private assertCanDispatch(context: StreamContext): void {
+    if (
+      context.deliveryState?.unconfirmed ||
+      context.holdResponseText ||
+      context.abortSignal?.aborted ||
+      this.deps.hasStopRequest(context.channel.id)
+    ) {
+      throw new DiscordDeliveryError("pre_dispatch", new Error("Stream delivery withheld or cancelled"));
+    }
+  }
+
+  private commitDelivery(
+    context: StreamContext,
+    message: Message,
+    identity?: ResolvedWebhookIdentity,
+    speaker?: DeliveredSpeaker,
+    sprite?: SpriteMessageRecordInfo,
+    webhookId?: string,
+  ): void {
+    const actualWebhookId = webhookId ?? message.webhookId;
+    const viaWebhook = Boolean(identity && actualWebhookId);
+    const receipt: PersonaDeliveryReceipt = {
+      messageId: message.id,
+      channelId: message.channelId,
+      route: viaWebhook ? "webhook" : "bot",
+      webhookId: viaWebhook ? (actualWebhookId ?? null) : null,
+      identity: viaWebhook
+        ? (identity ?? {})
+        : {
+            username: message.member?.displayName ?? message.author?.username ?? context.client.user?.username,
+            avatarUrl: message.member?.displayAvatarURL?.() ?? message.author?.displayAvatarURL?.(),
+          },
+      speaker: viaWebhook ? (speaker ?? null) : classifyBotSpeaker(context),
+      sprite: viaWebhook ? sprite : undefined,
+      serverDiscId: "guildId" in context.channel ? context.channel.guildId : undefined,
+    };
+    recordPersonaDelivery(receipt);
+    context.deliveryReceipts?.push(receipt);
+  }
+
   private async tryRecoverWebhookSend(
     discordError: unknown,
     payload: StreamSendPayload,
@@ -683,15 +724,8 @@ export class StreamUiUpdater {
     webhookAllowedMentions: NonNullable<StreamSendPayload["allowedMentions"]>,
     identityOverride?: ResolvedWebhookIdentity,
   ): Promise<Message | null> {
-    // Recover whenever a webhook-backed persona identity was in play: mirror
-    //    the send/fallback gate (context.webhook && personaUsername) rather than
-    //    limiting to alters, since non-alter sprite personas send via webhook too.
-    // Retry on invalid-webhook errors (stale webhook -> recreate) AND transient
-    //    aborts (webhook still valid -> recreate + resend preserves persona avatar).
     const shouldRecoverWebhook =
-      context.webhook &&
-      (context.personaUsername || identityOverride) &&
-      (isInvalidWebhookError(discordError) || isTransientWebhookError(discordError));
+      context.webhook && (context.personaUsername || identityOverride) && isInvalidWebhookError(discordError);
 
     if (!shouldRecoverWebhook) {
       return null;
@@ -719,17 +753,20 @@ export class StreamUiUpdater {
           avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
         } satisfies ResolvedWebhookIdentity);
 
-      const delivery = await sendWebhookMessageWithIdentityDelivery(
-        recreatedWebhook,
-        {
-          ...(payload.content !== undefined ? { content: payload.content } : {}),
-          ...(payload.files?.length ? { files: payload.files } : {}),
-          ...(payload.components?.length ? { components: payload.components } : {}),
-          allowedMentions: webhookAllowedMentions,
-          ...(recoveredThreadId ? { threadId: recoveredThreadId } : {}),
-        },
-        recoveredIdentity,
-      );
+      const delivery = await dispatchWebhookWithIdentity(recreatedWebhook, recoveredIdentity, (selected) => {
+        this.assertCanDispatch(context);
+        return sendSelectedWebhookMessageOnce(
+          selected,
+          {
+            ...(payload.content !== undefined ? { content: payload.content } : {}),
+            ...(payload.files?.length ? { files: payload.files } : {}),
+            ...(payload.components?.length ? { components: payload.components } : {}),
+            allowedMentions: webhookAllowedMentions,
+            ...(recoveredThreadId ? { threadId: recoveredThreadId } : {}),
+          },
+          () => this.assertCanDispatch(context),
+        );
+      });
       const recoveredReplyMessage = delivery.result;
 
       context.webhook = recreatedWebhook;
@@ -743,10 +780,15 @@ export class StreamUiUpdater {
         delivery.identity,
         "webhook_recovery",
         classifyWebhookSpeaker(payload, context, isUserImpersonationStreamContext(context)),
+        delivery.webhookId,
       );
       log.info("Stream Send: Recreated webhook after invalid webhook error and resumed persona sending");
       return recoveredReplyMessage;
     } catch (recoveryError) {
+      if (classifyDiscordDeliveryFailure(recoveryError) === "unconfirmed") {
+        if (context.deliveryState) context.deliveryState.unconfirmed = true;
+        throw recoveryError;
+      }
       log.warn(
         "Stream Send: Webhook recovery attempt failed, falling back to regular bot message",
         recoveryError as Error,
@@ -784,13 +826,18 @@ export class StreamUiUpdater {
         throw unreachableChannelError(target.failed, context.replyToMessage?.channelId ?? context.channel.id);
       }
 
-      const fallbackMessage = await target.channel.send({
-        ...(payload.content !== undefined ? { content: payload.content } : {}),
-        ...(payload.files?.length ? { files: payload.files } : {}),
-        ...(payload.components?.length ? { components: payload.components } : {}),
-        ...(target.reply ? { reply: target.reply } : {}),
-        allowedMentions: regularAllowedMentions,
-      });
+      this.assertCanDispatch(context);
+      const fallbackMessage = await sendChannelMessageOnce(
+        target.channel,
+        {
+          ...(payload.content !== undefined ? { content: payload.content } : {}),
+          ...(payload.files?.length ? { files: payload.files } : {}),
+          ...(payload.components?.length ? { components: payload.components } : {}),
+          ...(target.reply ? { reply: target.reply } : {}),
+          allowedMentions: regularAllowedMentions,
+        },
+        () => this.assertCanDispatch(context),
+      );
 
       state.hasRepliedToOriginalMessage = true;
       this.recordSuccessfulSend(payload, textForState, context, state, fallbackMessage, undefined, "bot_fallback");

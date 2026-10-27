@@ -54,7 +54,7 @@ voiceMessageSynthesis.ts (synthesizeVoiceMessage)
 voiceMessageDelivery.ts (deliverVoiceMessage)
   │  Multipart payload, waveform, duration, bare MIME type, flags: 8192
   ▼
-Discord Channel (Bot REST for main persona, Webhook for alter persona)
+Discord Channel (resolved persona author, native bot or webhook transport)
 ```
 
 ## Inbound transcription (STT)
@@ -276,19 +276,34 @@ Discord voice messages must comply with strict gateway and REST requirements han
 
 ### Identity resolution
 
-Voice messages preserve persona identity through the same transport split used by text chat:
+The voice tool supplies the invoking persona and explicit delivery mode to the shared persona-post
+resolver. Native audio, attachment-only audio, and captions inherit that persona's last successfully
+delivered own appearance in the destination channel. Main-persona sprites use webhooks, including
+identity sprites. Intervening messages do not replace remembered appearance. A confirmed base revert
+does replace it. Explicit user impersonation remains separate from persona appearance.
 
-- **Main persona:** Sent via Bot REST using the bot's native username and avatar.
-- **Alter persona:** Sent via persona webhook using `resolvePersonaWebhookIdentity`. Locally stored
-  avatars resolve to `avatarDataUri` rather than public HTTP URLs; reading `avatarUrl` alone would
-  cause webhooks to post with the bot's default avatar.
-- **Delivery fallback:** If native webhook delivery fails, the helper tries bot REST, then an ordinary
-  attachment. A fallback can change the displayed identity or lose native voice metadata. Tool cancellation
-  forwards an abort signal to synthesis and checks it before delivery; it cannot undo provider work
-  already accepted.
-- **Channel routing:** Deliveries address the destination channel directly by snowflake ID. When
-  posting into a thread, delivery targets the thread ID itself rather than the thread's parent
-  channel.
+The slash command has no active persona turn. It supplies a resolved base author deliberately:
+main-persona audio uses the bot, and alter audio uses the selected persona's base webhook identity.
+Local avatars keep their data URI through managed webhook selection. Avatar recovery finishes before
+the message POST, and receipts retain the actual selected webhook and delivered avatar, including a
+generic-avatar fallback.
+
+Both callers use the same native delivery helper. It records a successful receipt only after Discord
+returns a message ID. Bot delivery clears webhook continuity; an alter's bot fallback records unknown
+persona authorship and preserves that alter's remembered own appearance. Threads use their parent to
+select a webhook and their own ID for delivery, receipts, and remembered appearance.
+
+Native webhook delivery can recover through bot REST and then an ordinary attachment only after
+proven non-delivery or a definite Discord refusal. Every message POST uses a transport with automatic
+retries disabled. A lost response, abort during a request, uncertain server response, or success
+response missing its message ID ends delivery without a second POST, caption, or attachment fallback.
+An unconfirmed result records no successful receipt or delivery metric. The command and tool report
+a delivery failure, and the native helper never restarts synthesis. Callers keep provider usage
+separate from confirmed Discord delivery. Tool cancellation is checked
+after asynchronous author selection and immediately before every POST, including attachment and
+caption sends. Direct held presentation sends nothing; an admitted voice tool can deliver audio and
+captions while ordinary response prose remains held. An uncertain tool delivery or caption also marks
+the shared turn state, so response review and model fallback cannot generate another delivery.
 
 ## Related documentation
 

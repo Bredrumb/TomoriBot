@@ -7,7 +7,6 @@ import {
   type Webhook,
   type Message,
   type Guild,
-  type MessageCreateOptions,
   type WebhookMessageCreateOptions,
   type WebhookType,
   MessagePayload,
@@ -17,6 +16,7 @@ import {
   Routes,
 } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
+import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 import {
   MANAGED_WEBHOOK_KIND_SHARED_CHANNEL,
   MANAGED_WEBHOOK_KINDS,
@@ -561,37 +561,6 @@ async function resolvePersonaAvatarIdentity(persona: TomoriState, guild?: Guild)
   return identity;
 }
 
-async function resolvePersonaWebhookAvatar(persona: TomoriState, guild?: Guild): Promise<string | undefined> {
-  const identity = await resolvePersonaAvatarIdentity(persona, guild);
-  if (identity.avatarDataUri) {
-    return identity.avatarDataUri;
-  }
-
-  if (!identity.avatarUrl) {
-    return undefined;
-  }
-
-  const downloadResult = await safeDownload(identity.avatarUrl, {
-    maxSizeMB: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB,
-  });
-  if (!downloadResult.success || !downloadResult.buffer) {
-    log.warn(
-      `[Webhook Manager] Failed to download avatar for persona ${persona.persona_nickname}: ${downloadResult.error ?? "unknown error"}`,
-    );
-    return undefined;
-  }
-
-  const normalizedBuffer = await normalizeAvatarToPng(
-    downloadResult.buffer,
-    `avatar for persona ${persona.persona_nickname}`,
-  );
-  if (!normalizedBuffer) {
-    return undefined;
-  }
-
-  return `data:image/png;base64,${normalizedBuffer.toString("base64")}`;
-}
-
 function resolveWebhookParentChannel(channel: unknown): BaseGuildTextChannel | null {
   if (!channel || typeof channel !== "object") return null;
   const candidate = channel as {
@@ -1095,19 +1064,27 @@ export async function dispatchWebhookWithIdentity<T>(
   identity: ResolvedWebhookIdentity | undefined,
   operation: (selection: WebhookIdentitySelection) => Promise<T>,
 ): Promise<WebhookIdentityDelivery<T>> {
+  let operationStarted = false;
   if (!managedWebhookSlots.has(webhook.id)) {
     try {
       return await runWithWebhookIdentity(webhook, identity, async () => {
         const selection = { webhook, webhookId: webhook.id, identity: identity ?? {} };
+        operationStarted = true;
         return { ...selection, result: await operation(selection) };
       });
     } catch (error) {
       if (isInvalidWebhookError(error) && webhook.channelId) invalidateWebhookCache(webhook.channelId, webhook.id);
+      if (!operationStarted) throw new DiscordDeliveryError("pre_dispatch", error);
       throw error;
     }
   }
   const run = async () => {
-    const selection = await selectManagedWebhookIdentity(webhook, identity ?? {});
+    let selection: WebhookIdentitySelection;
+    try {
+      selection = await selectManagedWebhookIdentity(webhook, identity ?? {});
+    } catch (error) {
+      throw new DiscordDeliveryError("pre_dispatch", error);
+    }
     try {
       const result = await operation(selection);
       recordManagedWebhookUse(selection.webhook);
@@ -1169,9 +1146,9 @@ const EXPRESSION_RATE_LIMIT_BUDGET_MS = 30_000;
 const EXPRESSION_STOP_CHECK_INTERVAL_MS = 100;
 
 /** All POSTs were refused, so exhausting this budget is a definite non-delivery. */
-export class WebhookExpressionRateLimitTimeoutError extends Error {
+export class WebhookExpressionRateLimitTimeoutError extends DiscordDeliveryError {
   constructor() {
-    super("Webhook expression rate-limit budget exhausted");
+    super("definite_refusal", new Error("Webhook expression rate-limit budget exhausted"));
     this.name = "WebhookExpressionRateLimitTimeoutError";
   }
 }
@@ -1198,7 +1175,7 @@ export async function sendWebhookMessageOnce(
   payload: WebhookMessageCreateOptions,
   identity: ResolvedWebhookIdentity | undefined,
   beforePost: () => void,
-): Promise<{ id: string; webhookId: string; identity: ResolvedWebhookIdentity }> {
+): Promise<{ id: string; channelId?: string; webhookId: string; identity: ResolvedWebhookIdentity }> {
   const delivery = await dispatchWebhookWithIdentity(webhook, identity, async (selected) => {
     const token = selected.webhook.token;
     if (!token) throw new Error(`Webhook ${selected.webhookId} has no token.`);
@@ -1217,7 +1194,9 @@ export async function sendWebhookMessageOnce(
           query: makeURLSearchParams({ wait: true, thread_id: finalPayload.threadId }),
           auth: false,
         })) as APIMessage;
-        return created.id;
+        if (!created || typeof created.id !== "string" || !created.id)
+          throw new DiscordDeliveryError("unconfirmed", new Error("Discord expression response has no message ID"));
+        return { id: created.id, channelId: created.channel_id };
       } catch (error) {
         if (!(error instanceof RateLimitError)) throw error;
         // A 429 reports the bucket reset in `timeToReset` and Discord's Retry-After in `retryAfter`.
@@ -1234,7 +1213,7 @@ export async function sendWebhookMessageOnce(
       }
     }
   });
-  return { id: delivery.result, webhookId: delivery.webhookId, identity: delivery.identity };
+  return { ...delivery.result, webhookId: delivery.webhookId, identity: delivery.identity };
 }
 
 export async function sendWebhookMessagesWithIdentity(
@@ -1254,112 +1233,6 @@ export async function sendWebhookMessageWithIdentity(
   identity?: ResolvedWebhookIdentity,
 ): Promise<Message> {
   return (await sendWebhookMessageWithIdentityDelivery(webhook, payload, identity)).result;
-}
-
-/**
- * Gets or creates a webhook for a specific persona in a channel.
- * Legacy compatibility helper used for recovery-oriented persona webhook flows.
- */
-export async function getOrCreatePersonaWebhook(
-  channel: TextChannel | BaseGuildTextChannel,
-  persona: TomoriState,
-): Promise<WebhookCreateResult> {
-  try {
-    if (!persona.persona_id) {
-      log.warn(
-        `[Webhook Manager] Missing persona_id for persona ${persona.persona_nickname}, cannot create persona webhook.`,
-      );
-      return { webhook: null, errorReason: "unknown" };
-    }
-
-    const channelId = channel.id;
-    const cacheKey = getPersonaWebhookCacheKey(channelId, persona.persona_id);
-
-    const cachedWebhook = personaWebhookCache.get(cacheKey);
-    if (cachedWebhook) {
-      if (!cachedWebhook.token) {
-        log.warn(
-          `[Webhook Manager] Cached persona webhook for channel ${channelId} has no token (likely deleted), invalidating cache`,
-        );
-        personaWebhookCache.delete(cacheKey);
-      } else {
-        try {
-          // Verify webhook still exists remotely; cached objects may survive manual deletes.
-          const liveWebhooks = await channel.fetchWebhooks();
-          if (liveWebhooks.has(cachedWebhook.id)) {
-            log.info(`[Webhook Manager] Persona cache HIT for channel ${channelId} (persona ${persona.persona_id})`);
-            return { webhook: cachedWebhook };
-          }
-          log.warn(`[Webhook Manager] Cached persona webhook missing in channel ${channelId}, invalidating cache`);
-          personaWebhookCache.delete(cacheKey);
-        } catch (fetchError) {
-          log.warn(
-            `[Webhook Manager] Cached persona webhook fetch failed for channel ${channelId}, invalidating cache`,
-            fetchError,
-          );
-          personaWebhookCache.delete(cacheKey);
-        }
-      }
-    }
-
-    log.info(`[Webhook Manager] Persona cache MISS for channel ${channelId}, fetching webhooks`);
-    const webhooks = await channel.fetchWebhooks();
-    const personaWebhookName = getPersonaWebhookName(persona.persona_id);
-    let webhook = webhooks.find((wh) => wh.name === personaWebhookName);
-
-    if (webhook && !webhook.token) {
-      log.warn(
-        `[Webhook Manager] Found persona webhook for channel ${channelId} but it has no token (fetched webhook). Deleting and recreating.`,
-      );
-      await webhook.delete("Recreating webhook to get token");
-      webhook = undefined;
-    }
-
-    if (!webhook) {
-      const avatar = await resolvePersonaWebhookAvatar(persona, channel.guild);
-      log.info(`[Webhook Manager] No persona webhook found for channel ${channelId}, creating new one`);
-      webhook = await channel.createWebhook({
-        name: personaWebhookName,
-        avatar,
-        reason: "TomoriBot persona avatar support",
-      });
-      log.success(`[Webhook Manager] Created persona webhook for channel ${channelId} (${channel.name})`);
-
-      // Update stored URL to webhook's permanent avatar URL (replaces temporary Discord CDN attachment URLs)
-      // This ensures future webhook recreations use a permanent URL that doesn't expire
-      const webhookAvatarUrl = webhook.avatarURL({
-        extension: "png",
-        size: 256,
-      });
-      if (webhookAvatarUrl && webhookAvatarUrl !== persona.webhook_avatar_url) {
-        try {
-          const updated = await personaRepository.setAvatar(persona.persona_id, webhookAvatarUrl);
-          if (!updated) {
-            throw new Error(`Failed to update stored avatar URL for persona ${persona.persona_id}`);
-          }
-          // Invalidate cache so updated URL is used immediately
-          if (channel.guild) {
-            invalidateTomoriStateCache(channel.guild.id);
-          }
-          log.success(
-            `[Webhook Manager] Updated stored avatar URL to permanent webhook URL for persona ${persona.persona_id}`,
-          );
-        } catch (error) {
-          log.warn(`[Webhook Manager] Failed to update stored avatar URL for persona ${persona.persona_id}`, error);
-        }
-      }
-    }
-
-    personaWebhookCache.set(cacheKey, webhook);
-    return { webhook };
-  } catch (error) {
-    const errorReason = getWebhookErrorReason(error);
-    log.error(`[Webhook Manager] Failed to get/create persona webhook for channel ${channel.id}:`, {
-      errorType: "webhook_error",
-      metadata: { channelId: channel.id, channelName: channel.name, error },
-    });
-    return { webhook: null, errorReason };
-  }
 }
 
 /**
@@ -1457,79 +1330,6 @@ export async function resolvePersonaWebhookIdentity(
   }
 
   return identity;
-}
-
-/**
- * Sends a message via webhook with persona-specific avatar and username.
- * Used for multi-persona responses to show different avatars per persona.
- *
- * Avatar resolution priority:
- * 1. Alter personas: Use webhook_avatar_url from database
- * 2. Main persona: Use guild avatar or fallback to webhook_avatar_url
- * 3. Fallback: Use bot's global avatar (webhook default)
- *
- * @returns The sent message, or null if failed
- */
-export async function sendAsPersona(
-  webhook: Webhook,
-  persona: TomoriState,
-  content: string,
-  options?: {
-    replyToMessageId?: string;
-    avatarURL?: string;
-    guild?: Guild;
-    files?: MessageCreateOptions["files"];
-    embeds?: MessageCreateOptions["embeds"];
-    components?: MessageCreateOptions["components"];
-  },
-): Promise<Message | null> {
-  try {
-    const resolvedIdentity = options?.guild
-      ? await resolvePersonaWebhookIdentity(persona, options.guild)
-      : { username: persona.persona_nickname };
-    const avatarURL = sanitizeAvatarUrl(options?.avatarURL);
-    const identity: ResolvedWebhookIdentity = {
-      ...resolvedIdentity,
-      ...(avatarURL ? { avatarUrl: avatarURL } : {}),
-    };
-
-    const message = await sendWebhookMessageWithIdentity(
-      webhook,
-      {
-        content,
-        allowedMentions: {
-          parse: ["users", "roles"],
-          repliedUser: true,
-        },
-        ...(options?.replyToMessageId && {
-          reply: {
-            messageReference: options.replyToMessageId,
-            failIfNotExists: false,
-          },
-        }),
-        ...(options?.files && { files: options.files }),
-        ...(options?.embeds && { embeds: options.embeds }),
-        ...(options?.components && { components: options.components }),
-      },
-      identity,
-    );
-
-    log.info(
-      `[Webhook Manager] Sent message as persona ${persona.persona_nickname} (${persona.is_alter ? "alter" : "main"})`,
-    );
-    return message;
-  } catch (error) {
-    log.error(`[Webhook Manager] Failed to send message as persona ${persona.persona_nickname}:`, {
-      errorType: "webhook_send_error",
-      metadata: {
-        personaId: persona.persona_id,
-        personaName: persona.persona_nickname,
-        isAlter: persona.is_alter,
-        error,
-      },
-    });
-    return null;
-  }
 }
 
 /**

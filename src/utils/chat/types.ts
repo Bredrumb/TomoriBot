@@ -332,6 +332,7 @@ export interface ChatTurnContext {
 }
 
 export interface ChatResponseTarget {
+  deliveryMode?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryMode;
   webhook?: Webhook;
   temporaryWebhook?: Webhook;
   personaUsername?: string;

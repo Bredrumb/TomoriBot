@@ -57,6 +57,7 @@ Application caches are partitioned by domain ownership, lifetime, and storage ba
 - **Channel prompt override cache (`channelPromptCacheStore.ts`)**: keyed by `(server_id, channel_disc_id)`. Stores per-channel system prompt overrides. Uses a 10-minute TTL with negative caching (`null`) so unconfigured channels cost a single lookup.
 - **Channel model override cache (`channelLlmCacheStore.ts`)**: keyed by `(server_id, channel_disc_id)`. Stores per-channel LLM model selections. Uses a 10-minute TTL with negative caching.
 - **Persona sprite cache (`personaSpriteCacheStore.ts`)**: keyed by `persona_id`. Stores ordered sprite definitions for render modifiers. Uses a 10-minute TTL.
+- **Committed persona appearance (`personaAppearanceCacheStore.ts`)**: keyed by destination channel and persona. Keeps at most 2,000 entries for 120 minutes after delivery, evicting the oldest committed entry at capacity. Stores base or sprite references and generic-avatar fallback state without avatar blobs. Ordinary and identity sprites qualify; copied identities and user impersonation do not. Only successful delivery replaces an entry, including a delivered base revert. Resolution after intervening messages reloads the referenced sprite through the sprite cache. Missing or invalidated state resolves to the current base.
 - **Persona sprite message cache (`personaSpriteMessageCache.ts`)**: keyed by Discord `message_disc_id`. Maps webhook message IDs to displayed sprite labels for prompt reconstruction. Uses a 120-minute TTL with lazy write-path sweeps.
 
 ### User profile and admission rules
@@ -105,6 +106,10 @@ assignments. Reassigning a slot changes future sends; historic edits and deletes
 message's webhook ID even after the cache is cleared. Bot fallbacks clear the channel's webhook
 continuity, while failed sends leave the last successful delivery intact.
 
+Committed appearance has a separate lifetime from webhook adjacency. Intervening messages can
+break a Discord group without changing a persona's remembered sprite. `recordPersonaDelivery()`
+updates both stores after successful delivery. Held response drafts update neither store.
+
 ## Write invalidation contracts
 
 Caches derive their state from PostgreSQL. To prevent serving stale data, write operations must invalidate affected cache keys directly after a database transaction commits successfully.
@@ -121,6 +126,7 @@ records an existing notification-ordering limitation. Domain invalidators includ
 - Channel prompt overrides: `invalidateChannelPromptCache(serverId, channelDiscId)`.
 - Channel LLM overrides: `invalidateChannelLlmCache(serverId, channelDiscId)`.
 - Persona sprite updates: `invalidatePersonaSpriteCache(personaId)`.
+- Committed appearance: sprite invalidation also removes the persona's appearance entries; server state invalidation removes entries for that server. Persona update, removal, and preset replacement invalidate the affected persona after write success. Clearing the sprite or persona-state cache clears all committed appearance entries.
 - Personal spotlight updates: `invalidatePersonalSpotlightCache(serverId, userId?, channelDiscId?)` (drops the server gate alongside matching result entries).
 - Webhook deletion or recreation: webhook invalidation helpers in `src/utils/discord/webhook/cache.ts`.
 - MCP tool discovery updates: `invalidateGuildMcpConfigCache(serverId)`.
@@ -132,7 +138,7 @@ Invalidating before write success is forbidden: a rolled-back transaction would 
 
 When the memory monitor observes RSS approaching container limits (`MEMORY_CRITICAL_THRESHOLD` of `CONTAINER_MEMORY_LIMIT_MB`), it triggers `clearEmergencyCaches()` in `src/utils/cache/emergencyCacheClearer.ts`.
 
-- **Evicted data**: clears recoverable database-backed and API-derived caches: Tomori state, user profiles, whitelists, channel LLM overrides, emoji and stickers, guild MCP configs, personal spotlights, NovelAI subscriptions, preset avatars, voice transcripts, markdown tables, persona sprites, and volatile Discord.js client collections (messages, bot users, presences, and voice states).
+- **Evicted data**: clears recoverable database-backed and API-derived caches: Tomori state, user profiles, whitelists, channel LLM overrides, emoji and stickers, guild MCP configs, personal spotlights, NovelAI subscriptions, preset avatars, voice transcripts, markdown tables, persona sprites, committed persona appearances, and volatile Discord.js client collections (messages, bot users, presences, and voice states).
 - **Preserved data**: preserves active conversational state (non-expired short-term memories), static LLM model catalogs, provider capability maps, command registries, active channel locks, and background execution queues. Expired STM entries are swept.
 - **Forced collection**: `clearEmergencyCaches()` triggers a forced garbage collection pass before recording post-clear telemetry. Dropping references alone does not ensure immediate reclamation, so post-clear measurements need collection context. RSS and native allocations can still remain high.
 - **Configuration flags**:

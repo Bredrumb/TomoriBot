@@ -1,8 +1,10 @@
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { localizer } from "@/utils/text/localizer";
 import { HOSTED_SPEECH_LIMITS } from "@/utils/speech/hostedSpeech";
 import { loadSpeechRoutingPolicy } from "@/utils/db/repositories/SpeechRepository";
 import { personaRepository } from "@/utils/db/repositories";
-import type { BaseGuildTextChannel, TextChannel } from "discord.js";
+import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
+import { mediaDeliveryFailure } from "@/utils/discord/webhook/toolMediaDelivery";
 import {
   BaseTool,
   type Tool,
@@ -193,12 +195,6 @@ export class GenerateVoiceMessageTool extends BaseTool {
     });
   }
 
-  private resolveThreadId(context: ToolContext): string | undefined {
-    return "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
-      ? context.channel.id
-      : undefined;
-  }
-
   private buildAttachmentName(title: string, extension: string): string {
     const baseName = title
       .trim()
@@ -318,7 +314,6 @@ export class GenerateVoiceMessageTool extends BaseTool {
 
     const isElevenLabs = synthesisResult.backendKey === "elevenlabs";
     const attachmentName = this.buildAttachmentName(title, synthesisResult.extension ?? (isElevenLabs ? "mp3" : "wav"));
-    const threadId = this.resolveThreadId(context);
     const captionText = synthesisResult.cleanedCaptionText ?? "";
     // Strip MIME parameters, so Discord rejects waveform/duration_secs for non-bare types.
     const mimeType = (synthesisResult.contentType ?? (isElevenLabs ? "audio/mpeg" : "audio/wav")).split(";")[0].trim();
@@ -332,23 +327,24 @@ export class GenerateVoiceMessageTool extends BaseTool {
     }
 
     const target: VoiceDeliveryTarget = {
-      // The tool types its channel more broadly than the delivery module, which only
-      // ever reaches Discord's guild message endpoints.
-      channel: context.channel as TextChannel | BaseGuildTextChannel,
-      webhook: context.webhook ?? null,
-      threadId,
-      personaUsername: context.personaUsername,
-      personaAvatarUrl: context.personaAvatarUrl,
-      personaId: context.tomoriState.persona_id,
+      ownership: "persona",
+      channel: context.channel as VoiceDeliveryTarget["channel"],
+      personaPost: buildToolPersonaPostContext(context, context.tomoriState),
     };
 
-    const sentMessageId = await deliverVoiceMessage({
-      target,
-      audioBuffer: synthesisResult.audioBuffer,
-      mimeType,
-      filename: attachmentName,
-      voiceMeta,
-    });
+    let sentMessageId: string | undefined;
+    try {
+      sentMessageId = await deliverVoiceMessage({
+        target,
+        audioBuffer: synthesisResult.audioBuffer,
+        mimeType,
+        filename: attachmentName,
+        voiceMeta,
+      });
+    } catch (error) {
+      if (error instanceof DiscordDeliveryError) return mediaDeliveryFailure(context, error.outcome);
+      throw error;
+    }
 
     if (!sentMessageId) {
       return {

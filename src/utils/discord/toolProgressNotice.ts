@@ -4,7 +4,7 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import type { AssembledServerConfig } from "@/types/db/schema";
 import { type ToolNoticeKey, TOOL_NOTICE_DEFINITIONS, VERBOSITY_EXEMPT_NOTICE_KEYS } from "@/constants/toolNotices";
 import { sendStandardEmbed, type WebhookEmbedContext } from "@/utils/discord/embedHelper";
-import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { canMirrorToThoughtLog } from "@/utils/discord/thoughtLogAudience";
 import { localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
@@ -71,12 +71,7 @@ export function withThoughtLogSource(context: ToolContext, options: StandardEmbe
 }
 
 function getWebhookContext(context: ToolContext): WebhookEmbedContext {
-  return {
-    webhook: context.webhook,
-    personaUsername: context.personaUsername,
-    personaAvatarUrl: context.personaAvatarUrl,
-    personaId: context.tomoriState.persona_id,
-  };
+  return buildToolPersonaPostContext(context, context.tomoriState);
 }
 
 function getSourceLine(context: ToolContext): string {
@@ -233,10 +228,10 @@ export function isMinimalNotice(config: AssembledServerConfig, key: ToolNoticeKe
   return !VERBOSITY_EXEMPT_NOTICE_KEYS.has(key) && config.tool_notice_verbosity !== "verbose";
 }
 
-/** Where a hidden notice is rerouted, with the persona identity to post it under when available. */
+/** Where a hidden notice is rerouted, with the persona that posts it. */
 export interface ThoughtLogTarget {
   channel: BaseGuildTextChannel;
-  webhookContext: WebhookEmbedContext | undefined;
+  webhookContext: WebhookEmbedContext;
 }
 
 async function resolveThoughtLogTarget(context: ToolContext, logLabel: string): Promise<ThoughtLogTarget | null> {
@@ -267,24 +262,14 @@ async function resolveThoughtLogTarget(context: ToolContext, logLabel: string): 
     return null;
   }
 
-  let rerouteWebhookContext: WebhookEmbedContext | undefined;
-  if (context.personaUsername && "fetchWebhooks" in thoughtLogChannel && "createWebhook" in thoughtLogChannel) {
-    const webhookResult = await getOrCreateWebhook(thoughtLogChannel as BaseGuildTextChannel);
-    if (webhookResult.webhook) {
-      rerouteWebhookContext = {
-        webhook: webhookResult.webhook,
-        personaUsername: context.personaUsername,
-        personaAvatarUrl: context.personaAvatarUrl,
-        personaId: context.tomoriState.persona_id,
-      };
-    } else if (context.webhook) {
-      log.warn(
-        `${logLabel}: Failed to get webhook for thought log channel ${thoughtLogChannelId}. Falling back to bot send.`,
-      );
-    }
-  }
-
-  return { channel: thoughtLogChannel as BaseGuildTextChannel, webhookContext: rerouteWebhookContext };
+  return {
+    channel: thoughtLogChannel as BaseGuildTextChannel,
+    webhookContext: buildToolPersonaPostContext(
+      context,
+      context.tomoriState,
+      thoughtLogChannel as BaseGuildTextChannel,
+    ),
+  };
 }
 
 /**

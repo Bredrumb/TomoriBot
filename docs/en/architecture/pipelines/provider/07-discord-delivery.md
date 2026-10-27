@@ -53,7 +53,8 @@ or interrupt arrives.
   The initial message answering a source message sends a standalone reply notice built by
   `buildWebhookReplyNoticePayload()` under the same selected identity. Invalid webhook errors (Discord codes 10015 and 50027) trigger cache
   invalidation and retry with a recreated webhook.
-- **Bot messages:** Used for standard bot personas via `channel.send()` or `message.reply()`.
+- **Bot messages:** Used for the main persona's base appearance through single-attempt channel delivery,
+  with native reply references when applicable.
 
 `sendWebhookMessageWithIdentity()` and its batch variant use the managed pool dispatcher in
 `webhookCore.ts`. Local avatars reuse verified image assignments across threads; a deferred avatar
@@ -64,27 +65,47 @@ The dispatch result includes the actual webhook ID and delivered identity; conti
 identity, including a generic-avatar fallback. Avatar fallback is decided before
 the send operation; an uncertain POST failure propagates without another avatar-recovery send.
 
-After each successful webhook send, `recordChannelDeliveredWebhookIdentity()` records the author identity
-in `src/utils/discord/stream/channelDeliveryContinuity.ts`. Subsequent artifacts in the turn, such
-as sticker expressions and fallback notices, read this record so their messages group under the same
-author. Persona webhook posts outside the stream (tool notices, generated media, welcome and
-reminder posts) go through `src/utils/discord/webhook/personaPost.ts` and record themselves the same way. Directly
-after the same persona's line they reuse its identity; otherwise they show the base appearance and
-join the sprite alternation, so the next sprite cannot merge under the post's avatar. Lines where
-the persona speaks outside the stream (`/impersonate` and the reply tool) take the stream's own
-alternation for their sprite or base appearance and record themselves too. The payload's reference
-is recorded in `context.deliveredMessageRefs`, which spans every attempt of the turn because a
-fallback continues the text a failed attempt posted. Each reference carries the authoring webhook ID;
-button expiry and reply-notice cleanup resolve that ID instead of assuming the primary webhook sent
-the message. Successful ordinary bot sends, including notice fallbacks after a
-webhook failure, call `recordChannelDeliveredBotMessage()` to clear the previous webhook identity.
-Failed sends leave the last successful delivery intact.
+Streaming commits a `PersonaDeliveryReceipt` through `recordPersonaDelivery()` in
+`src/utils/discord/webhook/personaPost.ts`. The receipt contains the actual message and destination
+IDs, bot or webhook route, authoring webhook ID, delivered identity, speaker kind, and available
+sprite metadata. A generic-avatar fallback records the generic avatar. Bot delivery clears webhook
+adjacency; an alter's bot fallback has no visible persona attribution. Sprite mappings for history
+reconstruction are written after successful webhook delivery.
 
-Native voice uses the same persona-post identity resolution, then builds its multipart REST request
-from the pool's selected webhook. It records the delivered identity and webhook ID; a successful
-bot fallback clears webhook continuity. Expressions pass pool selection to their single-attempt
-REST transport and record the selected identity, including the generic avatar. Only a refused
-rate-limited POST can be retried; an uncertain outcome blocks another expression send that turn.
+`sendPersonaPost()` accepts the acting persona separately from a webhook hint. It resolves the
+current base and inherits that persona's last committed own appearance in the destination channel.
+Ordinary and identity sprites survive intervening user, bot, and other-persona messages. Copied
+identities and explicit user impersonation cannot replace that memory. A delivered base revert
+replaces the remembered sprite. With no memory, posts use the current base. The bounded appearance
+store and its invalidators are described in [Caching](/architecture/subsystems/caching/).
+
+Appearance memory is separate from the channel adjacency used to choose group-break usernames.
+Adjacent posts retain the exact delivered username; later posts resolve the remembered sprite
+against current sprite data. Webhook selection still uses the managed pool and the thread's parent,
+while receipts and appearance state use the actual destination thread. Expressions, fallback notices,
+media, and voice resolve the active persona through this same author contract, including tool-only turns.
+The channel's last speaker never selects a later artifact's author.
+
+The shared sender distinguishes `sent`, `pre_dispatch`, `definite_refusal`, and `unconfirmed`.
+Avatar preparation finishes before dispatch, and cancellation is checked immediately before each
+send. Held drafts publish no receipt or appearance until approved delivery. The stream may recreate
+a definitely invalid webhook; an uncertain POST cannot trigger its webhook retry or bot fallback.
+Raw voice and expression transports use the same author resolution and pool selection, then commit
+one receipt containing the selected identity and authoring webhook ID. Standard sends use isolated
+REST clients with transport retries disabled. A proven invalid-webhook refusal permits one recreation;
+a definite component refusal permits the media helper's one component-free downgrade. Avatar recovery
+finishes before POST. Lost responses, AbortError, and uncertain server failures end recovery.
+
+`deliveryState` is shared by reference across provider contexts, tool delivery, and approved draft
+presentation. Once a POST is unconfirmed, the turn clears held text and stops before response review,
+key rotation, model fallback, or another tool call. The orchestrator suppresses error notices before
+returning that failure. No successful receipt or appearance is inferred from that outcome. A
+successful earlier message keeps its own receipt.
+
+`context.deliveredMessageRefs` retains successful stream-body references across attempts. Button
+expiry and reply-notice cleanup resolve each message's authoring webhook ID. The shared
+`deliveryReceipts` array also receives successful reply notices, so each recorded delivery describes
+the message that actually landed.
 
 ## Rendered markdown tables
 

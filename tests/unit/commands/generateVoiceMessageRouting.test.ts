@@ -19,6 +19,7 @@ import { createScopedModuleMocker } from "../../helpers/mockSurface";
 import { hasLocaleKey, initializeLocalizer } from "@/utils/text/localizer";
 import { collectCaseFailures, localizedCopy, RUNTIME_LOCALES } from "../../helpers/localeCases";
 import * as realSamples from "@/utils/db/repositories/SpeechRepository";
+import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 
 const design: CustomEndpointRow = {
   connection_id: 1,
@@ -86,6 +87,7 @@ let selectedSource: string | null = null;
 let changeTarget = false;
 let failSynthesis = false;
 let failDelivery = false;
+let unconfirmedDelivery = false;
 let onSubmit: (() => void) | null = null;
 let modal: ReturnType<typeof makeFakeInteraction>;
 const requests: realSynthesis.VoiceMessageSynthesisRequest[] = [];
@@ -144,7 +146,10 @@ scoped.module("@/utils/speech/voiceMessageSynthesis", () => ({
 }));
 scoped.module("@/utils/discord/webhook/voiceMessageDelivery", () => ({
   ...realDelivery,
-  deliverVoiceMessage: async () => (failDelivery ? null : "message-id"),
+  deliverVoiceMessage: async () => {
+    if (unconfirmedDelivery) throw new DiscordDeliveryError("unconfirmed", new Error("Accepted POST response lost"));
+    return failDelivery ? null : "message-id";
+  },
 }));
 scoped.module("@/utils/audio/voiceMessageMetadata", () => ({
   ...realMetadata,
@@ -184,6 +189,7 @@ async function run(
     stale?: boolean;
     synthesisFailure?: boolean;
     deliveryFailure?: boolean;
+    unconfirmedDelivery?: boolean;
     elevenLabs?: boolean;
     replacementVoiceId?: string;
     targets?: NonNullable<typeof hostedTargets>;
@@ -203,6 +209,7 @@ async function run(
   changeTarget = false;
   failSynthesis = options.synthesisFailure ?? false;
   failDelivery = options.deliveryFailure ?? false;
+  unconfirmedDelivery = options.unconfirmedDelivery ?? false;
   cloneEndpoint = options.elevenLabs
     ? {
         ...clone,
@@ -498,5 +505,14 @@ describe("Voice message command routing", () => {
       expect(requests).toHaveLength(1);
       expect(requests[0]?.endpoint?.custom_endpoint_id).toBe(1);
     }
+  });
+
+  it("reports unconfirmed voice delivery without a success receipt or another synthesis", async () => {
+    const calls = await run({ unconfirmedDelivery: true });
+    expect(requests).toHaveLength(1);
+    expect(statRepository.recordStat).not.toHaveBeenCalled();
+    const copy = JSON.stringify(calls);
+    expect(copy).toContain(localizedCopy("en-US", "commands.generate.voice-message.delivery_failed_description"));
+    expect(copy).not.toContain(localizedCopy("en-US", "commands.generate.voice-message.success_title"));
   });
 });
