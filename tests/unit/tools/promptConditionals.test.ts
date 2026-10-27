@@ -7,6 +7,7 @@ import { join } from "node:path";
 import type { AssembledServerConfig } from "@/types/db/schema";
 import type { ToolStateForContext } from "@/tools/toolRegistry";
 import { DOCUMENT_HINT_TEMPLATE } from "@/utils/text/context/dialogueHistory";
+import { CONDITIONING_INTERACTION_RESPONSE_TEMPLATE } from "@/utils/conditioning/conditioningInteractionContext";
 import { systemPromptSections } from "@/db/seed/catalog/systemPrompts";
 import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/context/templates";
 import { SPACER_TEMPLATE } from "@/utils/text/context/timeAwareness";
@@ -237,6 +238,7 @@ describe("prompt macro resolver condition integration", () => {
     const hints = [
       { template: DOCUMENT_HINT_TEMPLATE, toolName: "read_file" },
       { template: SPACER_TEMPLATE, toolName: "reveal_message_metadata" },
+      { template: CONDITIONING_INTERACTION_RESPONSE_TEMPLATE, toolName: "interact_with_target" },
     ];
     const failures: string[] = [];
     for (const { template, toolName } of hints) {
@@ -249,7 +251,7 @@ describe("prompt macro resolver condition integration", () => {
           deliberateToolAllowedNames: allowed ? [toolName] : ["web_search"],
         });
         const expanded = await resolver.expand(template);
-        if (expanded.includes(toolName) !== allowed || expanded.includes("{{")) {
+        if (expanded.includes(toolName) !== allowed || /\{(?:\{|conditioning_interaction_tool)/u.test(expanded)) {
           failures.push(`${toolName} allowed=${allowed}: ${expanded}`);
         }
       }

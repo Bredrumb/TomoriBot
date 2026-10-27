@@ -2,11 +2,10 @@
 title: "Data Handling"
 sidebar:
   order: 4
-aiGenerated: true
 ---
 
 Export, back up, import, or delete your settings, memories, and personas using Discord slash
-commands. For service terms and privacy details, see `/legal terms-of-service` and
+commands. For service terms and privacy details for the [public deployed bot](https://discord.com/oauth2/authorize?client_id=841644102059556915), see `/legal terms-of-service` and
 `/legal privacy-policy`.
 
 :::note
@@ -39,38 +38,6 @@ Your chosen AI provider (Google, OpenRouter, NovelAI, …) processes messages un
 privacy policy. Avoid sharing sensitive personal credentials or confidential data.
 :::
 
-### Response Drafting selections
-
-`/config` > `Plugins` > `Response Drafting` stores reviewer, optional rule checker,
-prompt choices, and enabled review items for that server or DM. When On, replies are reviewed before
-they are sent. Tool requests are reviewed before execution only with `Tool Calls` enabled. An optional checker receives pending reply text and sends advisory findings
-only to the reviewer. Off keeps ordinary replies and tools without review requests.
-
-The selected reviewer always receives the pending response, triggering message, and reply target.
-`Content to Check` controls which additional context already admitted to the author it receives:
-persona instructions, example dialogues, recent conversation, memories and other context, and tool
-calls. Persona instructions, example dialogues, and recent conversation start enabled. Memories and
-other context includes visible participant relationships and documents. With `Tool Calls` enabled,
-the reviewer receives completed outcomes and available tool definitions; a proposed request includes
-its exact target and arguments, including any message text. Review adds no
-private profile lookup. Credentials and authentication arguments are redacted. Required evidence
-must fit; incomplete media coverage, hidden tool arguments or missing model limits makes review
-unavailable. An unavailable review keeps ordinary application checks; an earlier rejected action
-stays blocked.
-
-Inheritance uses the model and credentials actually answering, including personal routing, key
-rotation, overrides, and fallback. A pinned reviewer uses the registration and saved provider key
-for that server or DM. Its provider has its own privacy policy. Choosing it leaves the primary response
-provider unchanged. Pending replies and correction packets last only for the turn. Only dialogue
-accepted by Discord enters conversation memory; token accounting includes actual unsuccessful
-attempts when the provider reports usage. Diagnostics contain metadata and counts, without drafts,
-evidence, corrections, provider response bodies, or keys.
-
-Configuration exports include these settings without API keys or MCP authentication tokens. Imports
-preserve model and checker references only when they are available to the receiving server or DM.
-Register a local equivalent or clear unavailable selections before importing. Server configuration
-reset restores Off, reviewer inheritance, the default prompt, and no checker.
-
 ## Export Your Data
 
 Exportable data is delivered to your DMs as a JSON file:
@@ -84,6 +51,12 @@ Exportable data is delivered to your DMs as a JSON file:
 Uploaded expression media is stored on the server host and is outside these JSON exports.
 Self-hosters must back up database storage and media assets together; see
 [custom media backups](/self-hosting/safe-migration/#custom-expression-media-backups).
+
+:::tip
+`/export config` is not a complete backup. It leaves out channel overrides, per-channel auto-trigger
+rules, user blacklists, and channel whitelists, which `/reset config` and `/nuke` clear. Copy the
+settings you rely on before either command.
+:::
 
 ## Import Your Data
 

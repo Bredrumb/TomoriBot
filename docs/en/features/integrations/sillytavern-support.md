@@ -41,12 +41,20 @@ attributes, 100 sample dialogues per side, 100 trigger words). For field mapping
 conversion mechanics, see the
 [card-support architecture](/architecture/integrations/sillytavern/card-support/).
 
+:::tip
+Character book entries embedded in a card become persona attributes, and persona attributes are sent with every prompt. Entries disabled in SillyTavern are skipped, so disable anything you do not want in context before exporting.
+:::
+
 ## Prompt Presets
 <!-- anchor: prompt-presets -->
 
 A SillyTavern Prompt Manager preset controls the order and layout of the prompt sent to the
 model. Open `/config` > Plugins > SillyTavern Presets to import presets, toggle individual
 nodes, switch active presets, or restore default formatting.
+
+:::tip
+Importing a preset with a name that already exists replaces that preset, including the nodes you had toggled on or off, and activates the new one. Give each variant a different name if you want to keep both.
+:::
 
 ### What a Preset Controls
 

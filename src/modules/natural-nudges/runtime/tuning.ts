@@ -9,17 +9,22 @@ export const REWARD_HEAT_MULTIPLIER = 3;
 /** Each day's messages count half as much every 3 days, so about two idle weeks leave no heat. */
 export const HEAT_HALF_LIFE_DAYS = 3;
 export const HEAT_WINDOW_DAYS = 30;
-/** Every frequency level reaches its idle cap by heat 50, and active checks reach their shortest interval by 30. */
+/** Gentle reaches its daily idle cap at heat 50, and active checks reach their shortest interval by 30. */
 export const MAX_EFFECTIVE_HEAT = 50;
 
 /** Idle Nudges start only at heat 1 or more: about one message to Tomori a day. */
 export const MIN_IDLE_NUDGE_HEAT = 1;
 
 /** Heat divided by this gives idle nudges per day, per frequency level. */
-export const IDLE_NUDGE_HEAT_DIVISORS: Record<IdleNudgeFrequencyLevel, number> = { 0: 30, 1: 15, 2: 10, 3: 6 };
+export const IDLE_NUDGE_HEAT_DIVISORS: Record<IdleNudgeFrequencyLevel, number> = {
+  0: (MAX_EFFECTIVE_HEAT * 7) / 2,
+  1: 25,
+  2: 15,
+  3: 8,
+};
 
-/** Daily idle nudge ceiling per frequency level, so a livelier setting allows more; Gentle keeps the former default cap of 3. */
-export const IDLE_NUDGE_DAILY_CAPS: Record<IdleNudgeFrequencyLevel, number> = { 0: 1, 1: 3, 2: 5, 3: 8 };
+/** Daily idle nudge ceilings are shared across all personas and channels in a server. */
+export const IDLE_NUDGE_DAILY_CAPS: Record<IdleNudgeFrequencyLevel, number> = { 0: 1, 1: 2, 2: 3, 3: 6 };
 
 /**
  * Automatic channel eligibility follows heat's horizon: 14 quiet days decay a server's heat to about

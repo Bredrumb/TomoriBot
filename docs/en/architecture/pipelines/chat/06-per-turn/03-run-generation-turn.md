@@ -148,7 +148,7 @@ Review can pass, request one author revision, or become unavailable. Two respons
 bound the turn; another revision verdict delivers the latest candidate. Unavailability ends review
 for the turn and permits current prose, while prior tool rejections remain blocked. Revision preserves
 successful tool outcomes. `/kill`, follow-up interruption and abort discard held prose. Actual tools
-use the separate [pre-execution checkpoint](../../tool-loop/02-execute-tool-call.md#actual-request-review).
+use the separate [pre-execution checkpoint](/architecture/pipelines/tool-loop/02-execute-tool-call/#actual-request-review).
 
 An optional rule checker is a tool on an owned `prose_linter` MCP registration whose only required
 input is a `text` string. Its output (structured content, JSON text or plain text, at most 32 KB) goes

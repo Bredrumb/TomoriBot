@@ -63,7 +63,6 @@ export default {
       idle_nudges_title: "アイドルナッジ",
       idle_nudges_description: "チャンネルが静かになりすぎた場合、自分から会話を始めます。",
       idle_nudges_off: "誰かに話しかけられたときだけ返答します。",
-      idle_nudges_on: "タイミングが来たら、静かなチャンネルでアイドルナッジを開始します。",
       idle_nudges_on_no_channels:
         "アイドルナッジを開始できるチャンネルがまだありません。会話が行われると自動的に追加されます。",
       idle_nudges_on_no_model: "アイドルナッジを計画できる利用可能なモデルがないため、待機します。",
@@ -72,13 +71,11 @@ export default {
       active_nudges_description:
         "ペルソナの「ナッジ」ページに設定された興味・関心に基づいて、話題がそれに合致したときに会話に参加します。",
       active_nudges_off: "話しかけられたときだけ会話に参加します。",
-      active_nudges_on: "{matcher} を使い、メンバーのメッセージが{min}〜{max}件送信されるごとに話題を確認します。",
       active_nudges_on_no_channels:
         "会話に参加できるチャンネルがまだありません。会話が行われると自動的に追加されます。",
       active_nudges_on_no_matcher:
         "話題が興味・関心に合致するか確認できるモデルがないため、待機します。下でアクティブナッジチェッカーを選択してください。",
       active_nudges_on_cold: "このサーバーでの会話頻度が低いため、現時点では会話に参加しません。",
-      active_nudges_matcher_checker: "アクティブナッジチェッカー",
       active_nudge_frequency_option: "頻度：{level}",
       channels_title: "チャンネル",
       channels_description:
@@ -118,8 +115,6 @@ export default {
       frequency_1: "控えめ",
       frequency_2: "普通",
       frequency_3: "活発",
-      frequency_effect:
-        "このサーバーでは1日に約{heat}件のメッセージが送信されるため、週に約{per_week}回のアイドルナッジが期待されます。",
       frequency_effect_none:
         "予定どおり静かなチャンネルでアイドルナッジを開始しますが、現時点では会話が少なすぎるため開始されません。",
       saved_heading: "Natural Nudgesを更新しました",

@@ -20,6 +20,10 @@ Run `/personal message-proxy` and choose your service:
 
 Run this on the Discord account that sends your messages; it follows your account across servers, so system members do not need to opt in one by one. If you do not use a proxy bot, leave it set to `none` so your regular messages are not delayed.
 
+:::tip
+Setting the service to `none` does not delete the alters TomoriBot has already stored. Their profiles and memories stay available through `/personal config identity:` and `/personal memories identity:`, so you can turn the service back on later without losing them.
+:::
+
 Once TomoriBot has replied to an alter at least once, you can customize their profile and memories using the `identity` option:
 
 - `/personal config identity:` to set that alter's nickname, pronouns, or appearance
@@ -33,6 +37,10 @@ Account-wide settings such as privacy levels, API keys, quotas, and cooldowns st
 <!-- anchor: pluralkit -->
 
 Works out of the box. The first time TomoriBot meets a member, she automatically imports their public PluralKit bio as a starting memory and their public pronouns into their profile. Public system descriptions are also included in context.
+
+:::tip
+TomoriBot does not re-read a member's PluralKit bio after it first verifies that member. If the member edits their bio later, update the saved memory with `/personal memories identity:`.
+:::
 
 ### PluralBuddy
 <!-- anchor: pluralbuddy -->

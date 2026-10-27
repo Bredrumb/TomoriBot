@@ -264,6 +264,11 @@ function createInteraction(personaOption: string | null) {
       reply: async (payload: unknown) => {
         replies.push(payload);
       },
+      fetchReply: async () => ({
+        id: "interaction-reply",
+        url: "https://discord.com/channels/guild-1/channel-1/interaction-reply",
+        channel,
+      }),
       deferReply: async () => undefined,
       followUp: async (payload: unknown) => {
         replies.push(payload);
@@ -307,12 +312,12 @@ const userData = { user_id: 55 } as UserRow;
 const client = { user: { id: "bot" } } as unknown as Client;
 
 describe("conditioning persona resolution", () => {
-  it("identifies human reward and punish turns for heat accounting", async () => {
+  it("anchors human reward and punish turns to their interaction rather than later channel messages", async () => {
     stubWorkspace([MAIN, ALTER]);
     const chatSpy = track(spyOn(tomoriChatModule, "tomoriChat").mockResolvedValue("run"));
     for (const type of ["reward", "punish"] as const) {
       const { interaction, channel } = createInteraction("2");
-      const message = { id: "interaction-reply", channel };
+      const message = { id: "unrelated-later-message", channel };
       Object.assign(channel.messages, {
         fetch: async () => new Collection([[message.id, message]]),
       });
@@ -323,9 +328,17 @@ describe("conditioning persona resolution", () => {
         "en-US",
       );
       expect(chatSpy.mock.calls.at(-1)?.[0]).toMatchObject({
+        message: { id: "interaction-reply" },
         selectedPersonaId: 2,
         conditioningInteraction: { actorType: "user", type },
       });
+      const item = chatSpy.mock.calls.at(-1)?.[0].injectedContextItems?.[0];
+      const text = item?.parts.map((part) => (part.type === "text" ? part.text : "")).join("") ?? "";
+      expect(item?.role).toBe("system");
+      expect(text).toContain(interaction.user.id);
+      expect(text).toContain(ALTER.persona_nickname);
+      expect(item?.messageId).toBe((await interaction.fetchReply()).id);
+      expect(text).not.toContain(message.id);
     }
   });
   it("records against the named persona when the submitted id is eligible", async () => {

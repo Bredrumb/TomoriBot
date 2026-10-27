@@ -25,6 +25,7 @@ import { createPersona } from "../../helpers/fixtures";
 import { expectForEveryLocale, localizedCopy, localizedProse } from "../../helpers/localeCases";
 import { initializeLocalizer, localizer, hasLocaleKey } from "@/utils/text/localizer";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
+import { idleNudgesPerDay } from "@/modules/natural-nudges/runtime/meters";
 import { validateRawModalLimits } from "@/utils/discord/ui/componentsV2Limits";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
 import { createConfigInteractionRoute } from "@/utils/discord/interactions/configRoutes";
@@ -510,14 +511,15 @@ it("rejects invalid weights before writing and saves a valid total together", as
 it("shows one pace estimate per mode below the bold heat summary and puts heat buttons underneath", () => {
   expectForEveryLocale((locale) => {
     for (const sample of [
-      { heat: 15, idle: 1, active: 1, weekly: 7, idleCap: 3, min: 15, max: 40, checkCap: 20, activeCap: 3 },
-      { heat: 15, idle: 3, active: 0, weekly: 17.5, idleCap: 8, min: 30, max: 80, checkCap: 10, activeCap: 1 },
-      { heat: 50, idle: 1, active: 1, weekly: 21, idleCap: 3, min: 8, max: 20, checkCap: 20, activeCap: 3 },
+      { heat: 15, idle: 1, active: 1, weekly: 4.2, idleCap: 2, min: 15, max: 40, checkCap: 20, activeCap: 3 },
+      { heat: 15, idle: 3, active: 0, weekly: 13.1, idleCap: 6, min: 30, max: 80, checkCap: 10, activeCap: 1 },
+      { heat: 50, idle: 1, active: 1, weekly: 14, idleCap: 2, min: 8, max: 20, checkCap: 20, activeCap: 3 },
+      { heat: 50, idle: 0, active: 1, weekly: 2, idleCap: 1, min: 8, max: 20, checkCap: 20, activeCap: 3 },
     ] as const) {
       const view = makeView({
         baseHeat: sample.heat,
         heat: sample.heat,
-        perDay: sample.weekly / 7,
+        perDay: idleNudgesPerDay(sample.heat, sample.idle),
         activeNudgeRange: { min: sample.min, max: sample.max },
       });
       view.config.idle_nudge_frequency = sample.idle;

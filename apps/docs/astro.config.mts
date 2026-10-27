@@ -3,6 +3,8 @@ import { unified } from "@astrojs/markdown-remark";
 import starlight from "@astrojs/starlight";
 import sitemap from "@astrojs/sitemap";
 import starlightLlmsTxt from "starlight-llms-txt";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import { remarkHeadingIds } from "./src/remarkHeadingIds";
 import { remarkLocaleLinks } from "./src/remarkLocaleLinks";
 import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync } from "node:fs";
@@ -71,6 +73,14 @@ const segmentLabelOverrides = {
 };
 
 const groupDirectoryConfig = {
+  "features/capabilities/tools-and-extensions": {
+    label: "Tools & Extensions",
+    order: 1,
+  },
+  "features/capabilities/media-generation": {
+    label: "Media Generation",
+    order: 3,
+  },
   "features/chatting-personality": {
     label: "Chatting & Personality",
     order: 1,
@@ -485,7 +495,10 @@ export default defineConfig({
   // EACCES, which Astro does not treat as "port busy", so it never falls back to the next port.
   server: { port: 4600 },
   markdown: {
-    processor: unified({ remarkPlugins: [remarkHeadingIds, remarkLocaleLinks(docsTarget)] }),
+    processor: unified({
+      remarkPlugins: [remarkHeadingIds, remarkLocaleLinks(docsTarget), [remarkMath, { singleDollarTextMath: false }]],
+      rehypePlugins: [rehypeKatex],
+    }),
   },
   // Redirects for the /features/ restructure: the flat pages were bucketed into
   // task-based sub-category folders, changing their slugs. Keep the old URLs
@@ -616,6 +629,8 @@ export default defineConfig({
     "/contributing/testing-module-mocks/": "/en/contributing/testing/module-mocks/",
     "/features/command-reference/": "/en/features/command-reference/",
     "/features/capabilities/scheduled-tasks/": "/en/features/capabilities/scheduled-tasks/",
+    "/en/features/capabilities/tools-and-extensions/": "/en/features/capabilities/tools-and-extensions/built-in-tools/",
+    "/en/features/capabilities/media-generation/": "/en/features/capabilities/media-generation/image-generation/",
     "/features/capabilities/tools-and-extensions/": "/en/features/capabilities/tools-and-extensions/",
     "/features/capabilities/media-generation/image-generation/": "/en/features/capabilities/media-generation/image-generation/",
     "/features/capabilities/media-generation/tts-and-stt/": "/en/features/capabilities/media-generation/tts-and-stt/",
@@ -748,7 +763,7 @@ export default defineConfig({
           // The agent-facing sets stay English: `starlight-llms-txt` selects the default locale's
           // entries only, and `scripts/checkLlmsOutput.ts` fails the build if that ever changes.
           details:
-            "AI agents should begin with the [Introduction](https://docs.tomoribot.app/en/introduction/) and [Features](https://docs.tomoribot.app/en/features/) indexes. For a specific question, fetch the smallest relevant page instead of a combined documentation set; common starting points are [Tools & Extensions](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/), [Memory](https://docs.tomoribot.app/en/features/knowledge/memory/), [Inside the Prompt](https://docs.tomoribot.app/en/features/knowledge/inside-the-prompt/), and [Providers & Models](https://docs.tomoribot.app/en/features/setup-administration/providers-and-models/). Current runtime capability reports and assembled context override general documentation. Contributor, architecture, self-hosting, and other public pages remain available for deeper investigation. Internal wiki pages are intentionally omitted from every machine-readable documentation set.",
+            "AI agents should begin with the [Introduction](https://docs.tomoribot.app/en/introduction/) and [Features](https://docs.tomoribot.app/en/features/) indexes. For a specific question, fetch the smallest relevant page instead of a combined documentation set; common starting points are [Tools & Extensions](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/built-in-tools/), [Memory](https://docs.tomoribot.app/en/features/knowledge/memory/), [Inside the Prompt](https://docs.tomoribot.app/en/features/knowledge/inside-the-prompt/), and [Providers & Models](https://docs.tomoribot.app/en/features/setup-administration/providers-and-models/). Current runtime capability reports and assembled context override general documentation. Contributor, architecture, self-hosting, and other public pages remain available for deeper investigation. Internal wiki pages are intentionally omitted from every machine-readable documentation set.",
           exclude: [
             ...nonDefaultLocalePatterns("/**"),
             "en/wiki",

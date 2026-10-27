@@ -21,11 +21,19 @@ For appservice hosting and deployment architecture, see the
 After the bot joins, it posts a confirmation in Matrix, but you must complete the link
 from Discord using `/matrix link`. To disconnect a bridged channel later, run `/matrix unlink`.
 
+:::tip
+Each Matrix room can be linked to one Discord channel. To bridge several channels, create a separate room for each and run `/matrix link` once per channel.
+:::
+
 ## Using It From Matrix
 
 - Chat normally once the room is linked. Matrix messages relay into the Discord channel.
 - TomoriBot replies back into the Matrix room.
 - The supported Matrix text commands are `/kill` and `/refresh`.
+
+:::tip
+`/refresh` clears the channel's short-term memory, and `/kill` stops the current reply and clears queued messages. Run `/refresh` when you want a fresh conversation, or `/kill` when a reply gets stuck.
+:::
 
 ## Current Limitations
 

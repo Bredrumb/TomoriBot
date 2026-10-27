@@ -179,8 +179,8 @@ the whole selection, including an empty selection, and invalidates persona snaps
 The page shows availability, added time/cost and a shortened prompt preview. `Set Prompt` opens the
 complete instructions in a prefilled 4,000-character modal; `Use Default` clears the override.
 Persistence is described in
-[database settings](database-schema.md#response-drafting-workspace-settings); runtime ownership is in
-[generation review](../pipelines/chat/06-per-turn/03-run-generation-turn.md#response-text-review).
+[database settings](/architecture/subsystems/database-schema/#response-drafting-workspace-settings); runtime ownership is in
+[generation review](/architecture/pipelines/chat/06-per-turn/03-run-generation-turn/#response-text-review).
 
 ## Current Top-Level Categories
 

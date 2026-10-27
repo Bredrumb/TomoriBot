@@ -25,6 +25,12 @@ To make the main persona reply to every eligible message in the server without n
 
 Server managers use `/config` > `Persona` > `Triggers` to add or remove trigger words for a persona. Members without `Manage Server` can view existing triggers in read-only mode.
 
+:::tip
+Trigger words ignore case and allow repeated letters, so `Mirri` also catches `Mirrriii`. Short or
+common words can fire by accident; choose distinctive triggers, or use Deliberate Trigger Mode when
+a name comes up in normal chat.
+:::
+
 ## Hands-Free Chatting
 
 You can let TomoriBot join or start conversations without being directly mentioned:

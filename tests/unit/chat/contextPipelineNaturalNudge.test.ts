@@ -2,7 +2,7 @@ import { describe, expect, it, spyOn } from "bun:test";
 import type { Message } from "discord.js";
 import { buildChatTurnContext, resolveTurnDeliberateToolMode } from "@/utils/chat/contextPipeline";
 import { normalizeChatInvocation } from "@/utils/chat/admission";
-import type { ChatTurn, ChatTurnContext, NaturalNudgeTurn } from "@/utils/chat/types";
+import type { ChatTurn, ChatTurnContext, NaturalNudgeTurn, TomoriChatInput } from "@/utils/chat/types";
 import { PrivacyLevel } from "@/types/db/schema";
 import * as blockCache from "@/utils/cache/personaUserBlockCache";
 import * as userCache from "@/utils/cache/userCache";
@@ -11,22 +11,37 @@ import * as dbClient from "@/utils/db/client";
 import * as contextBuilder from "@/utils/text/contextBuilder";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
-import { createPersona, createUserRow } from "../../helpers/fixtures";
+import { createLlmRow, createPersona, createUserRow } from "../../helpers/fixtures";
+import { ToolRegistry } from "@/tools/toolRegistry";
+import { getAvailableToolsForContext } from "@/tools/availability";
+import { ConditioningInteractionTool } from "@/tools/functionCalls/conditioningInteractionTool";
+import { buildConditioningInteractionEvent } from "@/utils/conditioning/conditioningInteractionContext";
+import type { StructuredContextItem } from "@/types/misc/context";
 
 const BOT_ID = "fixture-bot";
 
-async function buildTurnContext(naturalNudge: NaturalNudgeTurn | undefined): Promise<{
+async function buildTurnContext(
+  naturalNudge: NaturalNudgeTurn | undefined,
+  options: {
+    conditioningInteraction?: TomoriChatInput["conditioningInteraction"];
+    interactionEnabled?: boolean;
+    hasTools?: boolean;
+  } = {},
+): Promise<{
   context: ChatTurnContext;
   reunionCalls: number;
+  interactionEvent?: StructuredContextItem;
 }> {
   const persona = createPersona({
     persona_nickname: "Tomori",
+    llm: createLlmRow({ has_tools: options.hasTools ?? true }),
     config: {
       deliberate_tool_mode: true,
       time_awareness_enabled: true,
       personal_memories_enabled: false,
       emoji_usage_enabled: false,
       sticker_usage_enabled: false,
+      conditioning_interactions_enabled: options.interactionEnabled ?? true,
     },
   });
   const channel = {
@@ -62,12 +77,23 @@ async function buildTurnContext(naturalNudge: NaturalNudgeTurn | undefined): Pro
     { ...base, id: "persona-last", author: { id: BOT_ID, username: "Tomori", bot: true }, content: "see you later" },
     { ...base, id: "human", author: { id: "fixture-juno", username: "Juno", bot: false }, content: "bye" },
   ] as unknown as Message[];
+  const interactionEvent = options.conditioningInteraction
+    ? buildConditioningInteractionEvent({
+        actorName: "Juno",
+        targetName: persona.persona_nickname,
+        action: "hug",
+        reason: "being kind",
+        messageId: messages[0].id,
+      })
+    : undefined;
   const incoming = normalizeChatInvocation({
     client: messages[0].client,
     message: messages[0],
     isFromQueue: false,
     isManuallyTriggered: true,
     naturalNudge,
+    conditioningInteraction: options.conditioningInteraction,
+    injectedContextItems: interactionEvent ? [interactionEvent] : undefined,
   });
   const turn = {
     persona,
@@ -87,6 +113,10 @@ async function buildTurnContext(naturalNudge: NaturalNudgeTurn | undefined): Pro
     },
   } as unknown as ChatTurn;
   const spies = [
+    spyOn(ToolRegistry, "getAvailableToolsWithMCP").mockImplementation(async (provider, state) => {
+      const tools = getAvailableToolsForContext([new ConditioningInteractionTool()], provider, state);
+      return { builtInTools: tools, mcpFunctionNames: [], totalCount: tools.length };
+    }),
     spyOn(dbClient, "sql").mockImplementation((async () => []) as unknown as typeof dbClient.sql),
     spyOn(userCache, "getCachedUserRow").mockResolvedValue(null),
     spyOn(userCache, "getCachedPrivacyLevel").mockResolvedValue(PrivacyLevel.MINIMAL),
@@ -103,7 +133,7 @@ async function buildTurnContext(naturalNudge: NaturalNudgeTurn | undefined): Pro
   ];
   const reunion = spyOn(reunionPresence, "resolveReunionNote").mockResolvedValue({ note: null, presence: null });
   try {
-    return { context: await buildChatTurnContext(turn), reunionCalls: reunion.mock.calls.length };
+    return { context: await buildChatTurnContext(turn), reunionCalls: reunion.mock.calls.length, interactionEvent };
   } finally {
     for (const spy of [...spies, reunion]) spy.mockRestore();
   }
@@ -137,6 +167,44 @@ describe("Natural Nudges turn context", () => {
 
     const plainNudge = await buildTurnContext({ toolNames: [] });
     expect(plainNudge.context.streamingContext.mentionableUserIds).toBeUndefined();
+  });
+});
+
+describe("conditioning turn context", () => {
+  it("appends the tool hint to the event only when the receiving turn can use it", async () => {
+    for (const actorType of ["user", "persona"] as const) {
+      for (const [interactionEnabled, hasTools] of [
+        [true, true],
+        [false, true],
+        [true, false],
+      ]) {
+        const { context, interactionEvent } = await buildTurnContext(undefined, {
+          conditioningInteraction: { actorType, type: "reward" },
+          interactionEnabled,
+          hasTools,
+        });
+        const events = context.contextItems.filter((item) => item.messageId === interactionEvent?.messageId);
+        expect(events).toHaveLength(1);
+        const text = events
+          .flatMap((item) => item.parts)
+          .map((part) => (part.type === "text" ? part.text : ""))
+          .join("\n");
+        expect(text.includes("`interact_with_target`")).toBe(interactionEnabled && hasTools);
+        expect(text).not.toContain("{conditioning_interaction_tool}");
+        expect(text).not.toContain("{{if");
+        const original = interactionEvent?.parts[0];
+        expect(original?.type).toBe("text");
+        if (original?.type === "text") {
+          if (interactionEnabled && hasTools) {
+            expect(text.startsWith(`${original.text} `)).toBe(true);
+            expect(text).not.toContain("\n");
+          } else {
+            expect(text).toBe(original.text);
+          }
+        }
+        expect(context.streamingContext.disableConditioningInteraction).not.toBe(true);
+      }
+    }
   });
 });
 

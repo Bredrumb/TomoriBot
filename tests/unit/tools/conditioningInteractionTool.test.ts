@@ -251,7 +251,6 @@ it("saves persona-attributed feedback and queues the target with the exact inter
       selectedPersonaId: 2,
       isManuallyTriggered: true,
       textQuotaSource: "system",
-      manualStreamingContextOverrides: { disableConditioningInteraction: true },
       conditioningInteraction: { actorType: "persona", type: "reward" },
     }),
   );
@@ -261,8 +260,16 @@ it("saves persona-attributed feedback and queues the target with the exact inter
   expect(event).toContain("fed");
   expect(event).toContain("sharing snacks");
   expect(event).toContain("a cookie");
-  expect(event).toContain(f.delivered[0].url);
+  expect(f.queued.mock.calls[0][0].injectedContextItems?.[0].messageId).toBe(f.delivered[0].id);
   expect(event).not.toMatch(/latest embed/i);
+  const receiver = f.queued.mock.calls[0][0];
+  expect(receiver.manualStreamingContextOverrides?.disableConditioningInteraction).not.toBe(true);
+  expect(
+    tool.isAvailableForContext("google", {
+      ...f.context,
+      streamContext: { disableYouTubeProcessing: false, ...receiver.manualStreamingContextOverrides },
+    }),
+  ).toBe(true);
   expect(tool.isAvailableForContext("google", f.context)).toBe(false);
   expect((await tool.execute({ target: "Mirri", action: "bonk", reason: "being silly" }, f.context)).success).toBe(
     false,
@@ -403,16 +410,15 @@ it("queues two interactions with their own actors, actions, reasons, and source 
   const second = queuedEvent(f.queued, 1);
   expect(first).toContain("hugged");
   expect(first).toContain("the first kind moment");
-  expect(first).toContain(f.delivered[0].url);
   expect(first).not.toContain("the second silly moment");
   expect(second).toContain("bonked");
   expect(second).toContain("the second silly moment");
-  expect(second).toContain(f.delivered[1].url);
   expect(second).not.toContain("the first kind moment");
   for (const call of [0, 1]) {
     const args = (f.queued.mock.calls[call][0] ?? {}) as unknown as Record<string, unknown>;
     expect(args.selectedPersonaId).toBe(2);
     expect(args.textQuotaSource).toBe("system");
+    expect(f.queued.mock.calls[call][0].injectedContextItems?.[0].messageId).toBe(f.delivered[call].id);
   }
 });
 
@@ -581,7 +587,7 @@ it("keeps the queued interaction source and its continuation together through su
   expect(deliveredOutcome?.success).toBe(true);
   const event = queuedEvent(f.queued, 0);
   const original = f.delivered[0];
-  expect(event).toContain(original.url);
+  expect(f.queued.mock.calls[0][0].injectedContextItems?.[0].messageId).toBe(original.id);
   expect(event).toContain(f.actor.persona_nickname);
   expect(event).toContain(f.target.persona_nickname);
   expect(event).toContain(args.reason);

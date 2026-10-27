@@ -2,83 +2,56 @@
 title: "Image Generation"
 sidebar:
   order: 1
-aiGenerated: true
 ---
 
-TomoriBot can generate images from a text prompt or by editing a reference image. Use
-`/generate image`, or describe what you want in chat ("draw a red panda drinking coffee").
+TomoriBot can generate images from a description or edit a reference image. Ask her in chat or use
+`/generate image`. For manual NovelAI generation, use `/novelai generate image`.
 
-## What She Can Do
+:::tip
+If a chat request does not produce an image, try `/generate image`. It calls the image model directly,
+even when the chat model cannot use tools.
+:::
 
-- **Text-to-image**: generate an image from a description.
-- **Image-to-image**: edit or restyle an existing image.
-- **Inpainting**: redraw a specific region while keeping the rest.
-- **Outpainting**: extend the canvas beyond the original frame.
-- **Customizable aspect ratios**.
-- **Reference images**: draw from message attachments, stickers, emojis, or user and
-  persona avatars. Mention a user or persona to pull their avatar in as a reference.
+## Editing and references
 
-The optional `model` parameter chooses a model for this image without changing your defaults.
-Autocomplete includes compatible models from your server's saved providers and your personal providers;
-personal entries show `(via Personal Provider)`. Leave it blank to use the usual model. In Auto mode,
-this selects the image model while the model that plans the prompt stays the same.
+TomoriBot can use attachments, stickers, emojis, and user or persona avatars as references. Mention a
+user or persona to use their avatar. Depending on your image provider, she can also restyle an image,
+redraw part of it (inpainting), or extend it beyond its edges (outpainting).
 
-Set `nsfw` to `true` to hide the generated image behind a Discord spoiler, in either mode. This only
-changes how Discord displays the image; it does not change generation or provider content filters.
+:::tip
+To edit an existing picture, reply to the message containing it and describe the change. This makes
+the picture available even if the original message is far up the channel.
+:::
 
-Manual NovelAI generation uses `/novelai generate image`, which has the same `model` and `nsfw` options.
-Its model picker includes your personal NovelAI providers and the server's saved or optional NovelAI key.
+Available editing modes depend on the provider. Inpainting and outpainting require a local
+[ComfyUI](/self-hosting/local-endpoints/setup-comfyui/) endpoint that supports them.
+The `nsfw` option hides the result behind a Discord spoiler; it does not change provider content
+filters.
 
-Which editing modes are available depends on the active backend. Text-to-image and
-image-to-image work on cloud providers (Google, Vertex, OpenRouter). Inpainting and
-outpainting are supported by local [ComfyUI](/self-hosting/local-endpoints/setup-comfyui/)
-custom endpoints and depend on that endpoint's declared capabilities. Modes your setup
-does not support are hidden from the model automatically.
-
-When she generates an image, she combines your persona's appearance tags with server-wide
-positive and negative tags (where supported). The result arrives as a Discord media gallery
-with generation details, including any referenced users or personas.
-
-## Tag Customization
+## Tag customization
 <!-- anchor: tag-customization -->
 
-Every tag source can be edited in place with a pre-filled modal:
+Appearance and default tags can guide image generation. For example, if you ask "Generate an image
+of me hugging you," TomoriBot can use your saved appearance and the persona's appearance to describe
+both of you in the image.
 
-- **`/config` > Persona > Image Generation Details**: the selected persona's
-  `Physical Appearance` tags (how she looks). Requires the Manage Server permission.
-- **`/personal config`**: your own appearance tags, applied whenever an image generation
-  references you. Follows you across every server (see
-  [Personalization](/features/knowledge/personalization/)).
-- **`/config` > Models > Image Generation Defaults**: use `Edit Positive` and `Edit Negative`
-  to set default tags added to, or steered away from, every generation. Negative tags only
-  apply when the backend supports negative prompts. Submitting an empty box resets to the
-  built-in defaults.
+- `/config` > `Persona` > `Image Generation Details`: the persona's appearance.
+- `/personal config`: your appearance when an image references you. See
+  [Personalization](/features/knowledge/personalization/).
+- `/config` > `Models` > `Image Generation Defaults`: server-wide positive and negative tags.
+  Negative tags depend on provider support.
 
-## Tag Lookup
+## Tag lookup
 <!-- anchor: tag-lookup -->
 
-With **Danbooru Search** on (`/config` > Plugins > Available Tools), she can look up a
-character's exact tag and outfit before drawing, so "my OC in Ryza's outfit" gets Ryza's
-clothes on your OC. See [Danbooru Tag Lookup](/features/capabilities/tools-and-extensions/#danbooru-tag-lookup).
+[Danbooru Search](/features/capabilities/tools-and-extensions/danbooru/) helps TomoriBot
+find a character's appearance or outfit tags before generating an image, including cosplay requests.
+The `Default + Image Generation Expert` system prompt preset encourages her to look up tags and choose
+the appropriate prompt style.
 
-She looks tags up more reliably with the `Default + Image Generation Expert` system prompt
-preset (`/config` > Behavior > General Behavior), which also tells her how to order anime tags
-and when to write prose instead. `/generate image` in Auto mode can look tags up too.
+## Setup and providers
 
-## Setup
-
-1. Configure an image model with `/config` > Models > Switch Models.
-2. Enable image generation in `/config` > Permissions (`imagegen_enabled`).
-3. Ask her in chat, or run `/generate image`.
-
-## Provider Support
-
-Native image generation is available on Google, Vertex AI, Vertex AI Express, OpenRouter,
-Z.ai, NVIDIA NIM, and NovelAI (anime-styled). For the full provider matrix, see
-[Providers & Models](/features/setup-administration/providers-and-models/#supported-providers).
-
-Nano Banana 2.1 is available through Google, Vertex AI, and OpenRouter. On Vertex AI,
-configure the location as `global` to use this model.
-
-For local generation on your own hardware via ComfyUI, see
-[Setup: ComfyUI](/self-hosting/local-endpoints/setup-comfyui/).
+Configure an image model under `/config` > `Models` > `Switch Models` and enable image generation
+under `/config` > `Permissions`. Available models depend on your provider. See
+[Providers & Models](/features/setup-administration/providers-and-models/#supported-providers) for the
+provider list, or [Setup: ComfyUI](/self-hosting/local-endpoints/setup-comfyui/) for local generation.

@@ -40,9 +40,15 @@ through the existing conditioning panel.
 
 After a successful post, persona targets enter the normal chat admission and channel queue with the
 selected target and the initiating member's access identity. The queued turn receives an injected
-context item that names the actor, the selected target, the action, the reason, and the delivered
-message reference. The target reacts to that event; a later message or embed cannot redirect it. The
-queued reply disables this interaction tool to stop reciprocal tool chains. It also skips human
+context item that names the actor, the selected target, the action, and the reason, with the delivered
+message ID in metadata. `/reward` and `/punish` use the same event builder and fetch their own reply as
+the trigger, so a later message or embed cannot redirect the reaction. The receiving turn appends
+a short tool hint to the event and resolves `{conditioning_interaction_tool}` inside
+`{{if tool:interact_with_target}}` against its own model capabilities and Deliberate Tool Mode
+allowlist. When unavailable, the event appears without the hint.
+
+The interaction tool remains available to the receiving persona and allows one call per turn.
+No runtime limit bounds the number of reciprocal turns. Persona-triggered replies also skip human
 engagement counters and short-term memory writes, so persona reactions cannot sustain Natural Nudges
 or establish a relationship with the initiating member. User targets receive only
 the embed. Cancellation is checked before writing, posting, and triggering a reply; a completed write

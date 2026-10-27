@@ -542,9 +542,9 @@ describe("idle nudge anchor", () => {
 describe("daily idle nudge cap", () => {
   const CAP_BY_LEVEL = [
     [0, 1],
-    [1, 3],
-    [2, 5],
-    [3, 8],
+    [1, 2],
+    [2, 3],
+    [3, 6],
   ] as const;
 
   it("counts the idle nudges already fired today against the level's cap", async () => {

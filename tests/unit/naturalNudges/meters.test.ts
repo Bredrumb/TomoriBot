@@ -73,7 +73,6 @@ describe("heat", () => {
     expect(computeEffectiveHeat(0, 1000)).toBe(MAX_EFFECTIVE_HEAT);
     expect(computeEffectiveHeat(0, -1000)).toBe(0);
     for (const level of IDLE_NUDGE_FREQUENCY_LEVELS) {
-      expect(idleNudgesPerDay(MAX_EFFECTIVE_HEAT, level)).toBe(idleNudgesPerDay(measured, level));
       expect(activeNudgeTripRange(MAX_EFFECTIVE_HEAT, level)).toEqual(activeNudgeTripRange(measured, level));
     }
   });
@@ -110,27 +109,28 @@ describe("heat", () => {
 });
 
 describe("idle nudges per day", () => {
-  it("matches the launch examples at the Gentle level", () => {
-    expect(idleNudgesPerDay(20, 1)).toBeCloseTo(1.33, 2);
-    expect(idleNudgesPerDay(6, 1) * 7).toBeCloseTo(2.8, 1);
+  it("lets Gentle reach one idle nudge a day at heat 25 and two at maximum heat", () => {
+    expect(idleNudgesPerDay(25, 1)).toBe(1);
+    expect(idleNudgesPerDay(6, 1) * 7).toBeCloseTo(1.68);
     expect(idleNudgesPerDay(0.5, 1)).toBe(0);
   });
 
   it("scales with the level and stops at the level's daily cap", () => {
-    expect(idleNudgesPerDay(20, 0)).toBeCloseTo(0.67, 2);
-    expect(idleNudgesPerDay(20, 2)).toBe(2);
-    expect(idleNudgesPerDay(20, 3)).toBeCloseTo(3.33, 2);
-    expect(idleNudgesPerDay(60, 1)).toBe(3);
+    expect(idleNudgesPerDay(20, 0) * 7).toBeCloseTo(0.8);
+    expect(idleNudgesPerDay(20, 2)).toBeCloseTo(1.33, 2);
+    expect(idleNudgesPerDay(20, 3)).toBe(2.5);
+    expect(idleNudgesPerDay(45, 2)).toBe(3);
+    expect(idleNudgesPerDay(48, 3)).toBe(6);
   });
 
-  it("caps each level at its own daily ceiling", () => {
-    const caps = [
-      [0, 1],
-      [1, 3],
-      [2, 5],
-      [3, 8],
+  it("limits maximum-heat estimates to each level's budget", () => {
+    const budgets = [
+      [0, 2 / 7],
+      [1, 2],
+      [2, 3],
+      [3, 6],
     ] as const;
-    for (const [level, cap] of caps) expect(idleNudgesPerDay(1_000, level)).toBe(cap);
+    for (const [level, budget] of budgets) expect(idleNudgesPerDay(MAX_EFFECTIVE_HEAT, level)).toBeCloseTo(budget);
   });
 });
 

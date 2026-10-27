@@ -77,7 +77,7 @@ TomoriBot is a free and open-source personal AI assistant and role-playing syste
 
 ![Screenshots 3](assets/img/scs/3-commands.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/en/features/command-reference/">Native Slash Commands for Config and Execution</a></h3>
-<p align="center">Everything can be managed and executed through Discord's native slash commands and interactive UI. Completely manage personas, prompts, model endpoints and parameters, set up MCP tool servers, adjust permissions, configure memory, set server member rate limits, and much more!</p>
+<p align="center">Set up and customize TomoriBot without leaving Discord. Use slash commands and interactive menus to create personas, fine-tune prompts and model settings, connect MCP servers, manage memories, and control permissions and usage limits. Run commands yourself to generate images and voice messages, roll dice, and try other fun features.</p>
 
 <br />
 
@@ -150,7 +150,7 @@ See the full [command reference](https://docs.tomoribot.app/en/features/command-
 
 ## Acknowledgements
 
-Huge thanks to everyone, *especially* to the following lovely people for their contributions and advice that helped shape TomoriBot!
+Huge thanks to everyone, *especially* to the following lovely people for their significant contributions and advices that greatly helped shape TomoriBot for the better!
 
 <table>
   <tr>

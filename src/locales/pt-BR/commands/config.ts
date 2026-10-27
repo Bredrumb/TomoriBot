@@ -65,7 +65,6 @@ export default {
       idle_nudges_title: "Toques Ociosos",
       idle_nudges_description: "Inicio algo em um canal por conta própria se ele ficar silencioso demais.",
       idle_nudges_off: "Só falo quando alguém falar comigo.",
-      idle_nudges_on: "Inicio um toque ocioso em um canal silencioso quando chegar o momento.",
       idle_nudges_on_no_channels:
         "Ainda não tenho canais para iniciar um toque ocioso. Os canais automáticos serão preenchidos conforme as pessoas falarem comigo.",
       idle_nudges_on_no_model: "Nenhum modelo utilizável pode planejar um toque ocioso ainda, então fico em silêncio.",
@@ -74,13 +73,11 @@ export default {
       active_nudges_description:
         "Entro em uma conversa quando ela é sobre algo que uma persona gosta, usando os interesses na página de Toques dessa persona.",
       active_nudges_off: "Só entro em uma conversa quando alguém falar comigo.",
-      active_nudges_on: "Verifico sobre o que é a conversa a cada {min}-{max} mensagens de membros, usando {matcher}.",
       active_nudges_on_no_channels:
         "Ainda não tenho canais para participar de conversas. Os canais automáticos serão preenchidos conforme as pessoas falarem comigo.",
       active_nudges_on_no_matcher:
         "Nada pode verificar os interesses nas conversas ainda, então fico em silêncio. Escolha um Verificador de Toques Ativos abaixo.",
       active_nudges_on_cold: "Este servidor fala comigo muito raramente para eu entrar em uma conversa agora.",
-      active_nudges_matcher_checker: "o Verificador de Toques Ativos",
       active_nudge_frequency_option: "Frequência: {level}",
       channels_title: "Canais",
       channels_description:
@@ -121,8 +118,6 @@ export default {
       frequency_1: "Suave",
       frequency_2: "Normal",
       frequency_3: "Animada",
-      frequency_effect:
-        "Este servidor me envia cerca de {heat} mensagens por dia, então espere cerca de {per_week} toques ociosos por semana.",
       frequency_effect_none:
         "Iniciarei um toque ocioso em um canal silencioso quando chegar o momento, mas este servidor fala comigo muito raramente agora.",
       saved_heading: "Natural Nudges atualizado",

@@ -65,7 +65,6 @@ export default {
       idle_nudges_title: "Intervenciones espontáneas",
       idle_nudges_description: "Inicio algo en un canal por mi cuenta si se vuelve demasiado silencioso.",
       idle_nudges_off: "Solo hablo cuando alguien me habla.",
-      idle_nudges_on: "Inicio una intervención espontánea en un canal tranquilo cuando corresponda.",
       idle_nudges_on_no_channels:
         "Aún no tengo canales donde iniciar una intervención espontánea. Los canales automáticos se irán añadiendo conforme la gente hable conmigo.",
       idle_nudges_on_no_model:
@@ -75,15 +74,12 @@ export default {
       active_nudges_description:
         "Me uno a una conversación cuando trata sobre algo que le gusta a una persona, usando los intereses de la página de Intervenciones de esa persona.",
       active_nudges_off: "Solo me uno a una conversación cuando alguien me habla.",
-      active_nudges_on:
-        "Compruebo de qué trata la conversación tras cada {min}-{max} mensajes de miembros, usando {matcher}.",
       active_nudges_on_no_channels:
         "Aún no tengo canales donde unirme a una conversación. Los canales automáticos se irán añadiendo conforme la gente hable conmigo.",
       active_nudges_on_no_matcher:
         "Aún no hay nada que pueda comprobar los intereses en las conversaciones, así que guardo silencio. Elige un verificador de intervenciones activas abajo.",
       active_nudges_on_cold:
         "En este servidor me hablan con muy poca frecuencia como para unirme a una conversación en este momento.",
-      active_nudges_matcher_checker: "el verificador de intervenciones activas",
       active_nudge_frequency_option: "Frecuencia: {level}",
       channels_title: "Canales",
       channels_description:
@@ -125,8 +121,6 @@ export default {
       frequency_1: "Suave",
       frequency_2: "Normal",
       frequency_3: "Animada",
-      frequency_effect:
-        "Este servidor me envía unos {heat} mensajes al día, así que espera unas {per_week} intervenciones espontáneas a la semana.",
       frequency_effect_none:
         "Iniciaré una intervención espontánea en un canal tranquilo cuando corresponda, pero este servidor me habla con muy poca frecuencia por ahora.",
       saved_heading: "Natural Nudges actualizado",

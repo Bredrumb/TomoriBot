@@ -35,9 +35,9 @@ Pages are bucketed into task-based sub-categories:
   - [`personalization.md`](./en/features/knowledge/personalization/)
   - [`data-handling.md`](./en/features/knowledge/data-handling/)
 - **Capabilities**:
-  - [`tools-and-extensions.md`](./en/features/capabilities/tools-and-extensions/)
+  - [`tools-and-extensions/`](./en/features/capabilities/tools-and-extensions/): built-in tools, web search, MCP servers, and tool settings
   - [`scheduled-tasks.md`](./en/features/capabilities/scheduled-tasks/)
-  - [`media-generation/`](./en/features/capabilities/media-generation/README.mdx): image, video, and voice generation
+  - [`media-generation/`](./en/features/capabilities/media-generation/): image, video, and voice generation
 - **Setup & Administration**:
   - [`providers-and-models.md`](./en/features/setup-administration/providers-and-models/)
   - [`server-moderation.md`](./en/features/setup-administration/server-moderation/)

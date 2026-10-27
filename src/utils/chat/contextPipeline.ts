@@ -111,6 +111,8 @@ import { userNamingRepository, userPersonaNamingPairKey } from "@/utils/db/repos
 import { userRepository } from "@/utils/db/repositories/UserRepository";
 import { resolveEffectiveUserNaming } from "@/utils/text/userNaming";
 import { createExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
+import { CONDITIONING_INTERACTION_RESPONSE_TEMPLATE } from "@/utils/conditioning/conditioningInteractionContext";
+import { createToolPromptMacroResolverForState } from "@/utils/tools/toolPromptMacros";
 
 const participantRequestScopes = new WeakMap<LockedChatTurn, ParticipantRequestScope>();
 
@@ -586,11 +588,32 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     typeof effectivePersona.persona_id === "number" &&
     (await getCachedPersonaSprites(effectivePersona.persona_id).catch(() => [])).length > 0;
 
+  let injectedContextItems = incoming.injectedContextItems;
+  if (incoming.conditioningInteraction && !incoming.isUserImpersonation) {
+    const resolver = createToolPromptMacroResolverForState(
+      effectivePersona,
+      streamingContext.deliberateToolAllowedNames,
+    );
+    const hint = await resolver.expand(CONDITIONING_INTERACTION_RESPONSE_TEMPLATE);
+    if (hint) {
+      injectedContextItems = injectedContextItems?.map((item) =>
+        item.role === "system" && item.messageId === message.id
+          ? {
+              ...item,
+              parts: item.parts.map((part) =>
+                part.type === "text" ? { ...part, text: `${part.text} ${hint}` } : part,
+              ),
+            }
+          : item,
+      );
+    }
+  }
+
   const contextItems = attachPersonaMentionMapToContextItems(
     appendTailDirectives({
       turn,
       simplifiedMessages: history.simplifiedMessages,
-      contextItems: appendInjectedContextItems(contextBuild.contextItems, incoming.injectedContextItems),
+      contextItems: appendInjectedContextItems(contextBuild.contextItems, injectedContextItems),
       lowerPriorityTailDirectives: contextBuild.lowerPriorityTailDirectives,
       tailDirectives: contextBuild.tailDirectives,
       uncensorDirective: contextBuild.uncensorDirective,

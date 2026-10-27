@@ -75,7 +75,7 @@ discovery, and before MCP transport. Already-started tools retain their own canc
 The normalized adapter interface dispatches one call at a time; approval covers only that actual call.
 
 Internal prose-checker ownership follows the
-[generation review lifecycle](../chat/06-per-turn/03-run-generation-turn.md#response-text-review).
+[generation review lifecycle](/architecture/pipelines/chat/06-per-turn/03-run-generation-turn/#response-text-review).
 
 ## Expression delivery and side effects
 <!-- anchor: expression-delivery-and-side-effects -->

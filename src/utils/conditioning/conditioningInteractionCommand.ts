@@ -20,6 +20,7 @@ import { handlePersonaAutocomplete } from "@/utils/discord/autocomplete/personaA
 import { resolveFallbackPersona } from "@/utils/discord/personaTurnDetectionResolver";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { buildConditioningInteractionEmbed } from "@/utils/conditioning/conditioningEmbed";
+import { buildConditioningInteractionEvent } from "@/utils/conditioning/conditioningInteractionContext";
 
 interface ConditioningCommandOptions {
   /** Returns extra interpolation context for the embed description localizer. */
@@ -296,25 +297,29 @@ export function createConditioningInteractionCommand(
         return;
       }
 
-      const messages = await interaction.channel.messages.fetch({ limit: 1 });
-      const latestMessage = messages.first();
-
-      if (!latestMessage) {
-        log.warn(`No messages found in channel ${interaction.channel.id} for ${type} ${actionKey} command.`);
-        return;
-      }
+      const interactionMessage = await interaction.fetchReply();
 
       log.info(
-        `${type} ${actionKey} triggered by ${interaction.user.id} in channel ${interaction.channel.id} for message ${latestMessage.id}`,
+        `${type} ${actionKey} triggered by ${interaction.user.id} in channel ${interaction.channel.id} for message ${interactionMessage.id}`,
       );
 
       await tomoriChat({
         client,
-        message: latestMessage as Message,
+        message: interactionMessage as Message,
         isFromQueue: false,
         isManuallyTriggered: true,
         selectedPersonaId: selectedPersona.persona_id,
         conditioningInteraction: { actorType: "user", type },
+        injectedContextItems: [
+          buildConditioningInteractionEvent({
+            actorName: `<@${interaction.user.id}>`,
+            targetName: botName,
+            action: actionKey,
+            reason: reasonText,
+            food: actionTextValue ?? undefined,
+            messageId: interactionMessage.id,
+          }),
+        ],
         textQuotaSource: "user",
         textQuotaTriggerKey: interaction.id,
         textQuotaUserDiscId: interaction.user.id,

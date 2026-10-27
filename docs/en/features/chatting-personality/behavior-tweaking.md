@@ -5,22 +5,60 @@ sidebar:
 ---
 
 What TomoriBot is allowed to do and how she generates replies is set in `/config` under
-Behavior, Plugins, Channels, and Models. Her personality
-([Multiple Personas](/features/chatting-personality/multiple-personas/)) and knowledge
-([Memory](/features/knowledge/memory/)) are covered on their own pages. This page covers the most
-common behavior settings.
+Behavior, Plugins, Channels, and Models. This page covers the most
+common behavior settings. 
 
-## Capabilities: What She's Allowed to Do
+Her personality
+([Multiple Personas](/features/chatting-personality/multiple-personas/)) and knowledge
+([Memory](/features/knowledge/memory/)) are covered on their own pages, and admin and cost controls (quotas, whitelists, BYOK)
+live under [Server Moderation](/features/setup-administration/server-moderation/). 
+
+## System Prompt
+<!-- anchor: system-prompt -->
+
+The system prompt sits above the persona and shapes overall behavior. Everything below is on
+`/config` > Behavior > General Behavior:
+
+- **System Prompt**: instructions every persona follows. Set a custom system instruction (up to
+  16,000 characters), choose from preset system prompts, or reset to the default. The reset
+  confirmation shows the previous prompt so you can restore it if cleared accidentally.
+- **Context Note**: a system nudge placed close to the last message, at a depth you choose. Use it
+  for reminders the model tends to forget in long chats.
+- **Response Prefill**: text she starts every reply with and continues from. It never shows in
+  Discord. Prefill only applies when the model can continue it: the panel shows whether it is
+  active, and tells you if the model, its Thinking level (use None or Minimal), or Tool Use stops
+  it from being used.
+
+:::tip
+A note on a persona (under `/config` > `Persona` > `Advanced`) or on a channel (under
+`/config` > `Channels` > `Channel Overrides`) replaces the global `Context Note`. If both a persona
+note and a channel note are set, both are sent.
+:::
+
+When a [SillyTavern preset](/features/integrations/sillytavern-support/) is active, the built-in
+fallback system prompt is replaced, but a custom one you set here is still sent.
+
+## Generation Tuning
+<!-- anchor: generation-tuning -->
+
+- `/config` > Models > Text Samplers & Parameters: sampling parameters such as temperature
+  and top-p. Higher temperature yields more variety.
+- `/config` > Behavior > General Behavior: response humanizer degree. Adjust how casually she
+  texts. The setting applies server-wide by default, or to an individual persona.
+- `/config` > Behavior > General Behavior: message history limit. Raise it for deeper
+  conversational context, or lower it to save tokens.
+
+## Capabilities
 <!-- anchor: capabilities-what-shes-allowed-to-do -->
 
-`/config` > Plugins controls tools, context additions, and optional response review:
+Two pages under `/config` > Plugins control what she can do:
 
-- **Available Tools**: image generation, sticker usage, thread creation, message management,
-  user blocking, self-teaching, voice messages, and more. Each toggle gates the matching tool
-  (see [Tools & Extensions](/features/capabilities/tools-and-extensions/)), so turning off
-  Tool Use disables all of them at once.
-- **Context Additions**: personalization, emojis in replies, and time awareness. These add
-  information to her prompt, so they continue working when Tool Use is disabled.
+- `/config` > Plugins > Available Tools: image generation, sticker usage, thread creation, message
+  management, user blocking, self-teaching, voice messages, and more. Each toggle gates the
+  matching tool (see [Tools & Extensions](/features/capabilities/tools-and-extensions/built-in-tools/)), so
+  turning off Tool Use disables all of them at once.
+- `/config` > Plugins > Context Additions: personalization, emojis in replies, and time awareness.
+  These add information to her prompt, so they continue working when Tool Use is disabled.
 
 Automatic short-term memory summarization is toggled in `/config` > Behavior > Advanced Memory.
 When a capability is turned off, she cannot perform that action regardless of user requests.
@@ -31,42 +69,10 @@ When a capability is turned off, she cannot perform that action regardless of us
 
 Open `/config` > `Plugins` > `Response Drafting` to turn review On. It starts Off and applies to
 every persona in that server, including queued replies and generated scenes. Server managers
-change server settings; your DMs have their own.
+change server settings; your DMs have their own. When On, Tomori holds her reply while a reviewer checks its character voice and scene fit. The
+reviewer can ask for one complete revision. 
 
-When On, Tomori holds her reply while a reviewer checks its character voice and scene fit. The
-reviewer can ask for one complete revision. `Content to Check` lists the review items with green
-circles for enabled items and red circles for disabled items. `Edit Review Items` opens a checkbox
-list: check an item to enable it or uncheck it to disable it.
-
-Persona instructions, example dialogues, and recent conversation start enabled. Memories and other
-context, and `Tool Calls`, start disabled. The draft, triggering message, and reply target are always
-included. Enabling memories and other context adds admitted memories, documents, participant details,
-and other context to the review. Enabling `Tool Calls` adds tool definitions and completed results,
-and checks requests before they run; rejected requests can receive a bounded correction. Successful
-actions are retained while the reply is revised. Review and revisions can increase response time
-and token cost, especially with more items enabled.
-
-The `Reviewer` dropdown selects an eligible registered text model. `Use current response model`
-uses the model and credentials actually answering, including your personal provider or a fallback.
-A pinned reviewer uses the registration and credentials saved for that server or DM. Text-only
-authors and authors with Tool Use disabled can still use an eligible reviewer. An unsupported
-inherited model shows `Unavailable`; choose a supported reviewer to enable detailed review.
-Clearing the reviewer restores `Use current response model`, and turning Off keeps your choices.
-
-`Set Prompt` edits the review instructions, up to 4,000 characters. `Use Default` restores the
-persona-aware default. The `Rule checker` dropdown selects an already registered compatible MCP checker,
-or `None`. Its findings go privately to the reviewer, which decides whether they matter for this
-character. The checker has no validated language/profile guarantee in this release. If you disable
-or remove the checker's MCP server, the dropdown shows `Unavailable` and drafting runs as if you chose
-`None`.
-
-Review is optional quality checking. A refusal, unavailable model, timeout, incomplete evidence, or
-exhausted review budget lets an otherwise valid reply or independent tool request continue under
-ordinary application rules. Previously rejected actions stay blocked. `/kill` and follow-up
-interruption discard held text. Files, voice, and remote posts receive review of their proposed tool
-arguments; their generated media is outside the held-text review. Hidden generation and user
-impersonation keep their existing paths. Provider judgment and checker usefulness still need human
-evaluation. See [review data handling](/features/knowledge/data-handling/#response-drafting-selections).
+Models used, prompts used, criteria, etc. can be completely customized in the same page.
 
 ## Expressions
 <!-- anchor: expressions -->
@@ -97,54 +103,8 @@ moment chat gets unhinged. Links must start with `https://`.
 
 Files can be PNG, JPEG, WebP, GIF, or MP4, up to 10 MB.
 
-Each server can have up to 20 custom expressions by default, shared across all personas. Files and
-links both count; native emojis and stickers do not. At the limit, delete an expression before
-adding another. Existing expressions can still be used and edited. Self-hosted bots can change
-this limit in their environment settings.
-
 Every persona can use a new custom expression. To keep one for specific personas, select it and use
 `Add Persona`. Removing the last persona from that list opens it to everyone again.
-
-### How She Uses Them
-
-With Sticker Usage on in `/config` > Plugins, she sends at most one expression per reply, as its own
-message before, between, or after her text. She doesn't use them in
-[roleplay channels](#roleplay-channels).
-`/expressions manage` shows how many times personas have used each one.
-
-## Roleplay Channels
-<!-- anchor: roleplay-channels -->
-
-Roleplay channels suppress custom emoji and sticker messages in her responses. Members can
-also use `/tool delete turn` in roleplay channels to delete her latest turn without needing
-the `Manage Server` permission.
-
-Configure roleplay channels in `/config` > `Channels` > `Channel Rules`.
-
-## Generation Tuning
-<!-- anchor: generation-tuning -->
-
-- `/config` > Models > Text Samplers & Parameters: sampling parameters such as temperature
-  and top-p. Higher temperature yields more variety.
-- `/config` > Behavior > General Behavior: response humanizer degree. Adjust how casually she
-  texts. The setting applies server-wide by default, or to an individual persona.
-- `/config` > Behavior > General Behavior: message history limit. Raise it for deeper
-  conversational context, or lower it to save tokens.
-
-## System Prompt
-<!-- anchor: system-prompt -->
-
-The system prompt sits above the persona and shapes overall behavior:
-
-- `/config` > Behavior > General Behavior: set a custom system instruction (up to 16,000 characters).
-- `/config` > Behavior > General Behavior: choose from preset system prompts. `Default + Image
-  Generation Expert` adds guidance for accurate anime tags and character outfits to the default
-  prompt (see [Tag Lookup](/features/capabilities/media-generation/image-generation/#tag-lookup)).
-- `/config` > Behavior > General Behavior: reset to default. The confirmation shows the previous
-  prompt so you can restore it if cleared accidentally.
-
-When a [SillyTavern preset](/features/integrations/sillytavern-support/) is active, the built-in
-fallback system prompt is replaced, but a custom one you set here is still sent.
 
 ## Uncensored Output
 <!-- anchor: uncensored-output -->
@@ -161,16 +121,6 @@ It toggles three independent techniques (all off by default):
   do not trigger on phrases, applied to both the prompt and her reply.
 - **Sanitize**: obfuscates sensitive words for the same reason, on both requests and replies.
 
-None of these change what the model can do; they only reduce how often a provider filter
-blocks otherwise normal output. Some of these options are age-restricted; see
-[Age-Restricted Commands](/features/setup-administration/age-restricted-commands/).
-
-## Appearance & Time
-
-- `/config` > Persona > Identity & Personality: what she calls herself.
-- `/config` > Behavior > General Behavior: the server timezone, used for time-aware replies and scheduled tasks.
-
 ---
 
-Looking for admin and cost controls (quotas, whitelists, BYOK) rather than behavior? Those
-live under [Server Moderation](/features/setup-administration/server-moderation/).
+

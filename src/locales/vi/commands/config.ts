@@ -65,7 +65,6 @@ export default {
       idle_nudges_title: "Gợi ý nhàn rỗi",
       idle_nudges_description: "Mình tự khởi xướng điều gì đó trong kênh nếu kênh trở nên quá yên ắng.",
       idle_nudges_off: "Mình chỉ lên tiếng khi có ai đó nói chuyện với mình.",
-      idle_nudges_on: "Mình sẽ bắt đầu gợi ý nhàn rỗi trong một kênh yên ắng khi đến thời điểm phù hợp.",
       idle_nudges_on_no_channels:
         "Mình chưa có kênh nào để bắt đầu gợi ý nhàn rỗi. Các kênh tự động sẽ được bổ sung khi mọi người nói chuyện với mình.",
       idle_nudges_on_no_model:
@@ -75,15 +74,12 @@ export default {
       active_nudges_description:
         "Mình tham gia cuộc trò chuyện khi chủ đề nói về điều một persona yêu thích, dựa trên sở thích trong trang Gợi ý của persona đó.",
       active_nudges_off: "Mình chỉ tham gia cuộc trò chuyện khi có ai đó nói chuyện với mình.",
-      active_nudges_on:
-        "Mình kiểm tra chủ đề cuộc trò chuyện sau mỗi {min}-{max} tin nhắn của thành viên, sử dụng {matcher}.",
       active_nudges_on_no_channels:
         "Mình chưa có kênh nào để tham gia trò chuyện. Các kênh tự động sẽ được bổ sung khi mọi người nói chuyện với mình.",
       active_nudges_on_no_matcher:
         "Chưa có công cụ nào có thể kiểm tra sở thích trong cuộc trò chuyện, vì vậy mình giữ im lặng. Hãy chọn Trình kiểm tra gợi ý chủ động bên dưới.",
       active_nudges_on_cold:
         "Máy chủ này quá hiếm khi nói chuyện với mình nên hiện tại mình sẽ không tham gia trò chuyện.",
-      active_nudges_matcher_checker: "Trình kiểm tra gợi ý chủ động",
       active_nudge_frequency_option: "Tần suất: {level}",
       channels_title: "Kênh",
       channels_description:
@@ -124,8 +120,6 @@ export default {
       frequency_1: "Nhẹ nhàng",
       frequency_2: "Bình thường",
       frequency_3: "Sôi nổi",
-      frequency_effect:
-        "Máy chủ này gửi cho mình khoảng {heat} tin nhắn mỗi ngày, vì vậy dự kiến có khoảng {per_week} gợi ý nhàn rỗi mỗi tuần.",
       frequency_effect_none:
         "Mình sẽ bắt đầu gợi ý nhàn rỗi trong kênh yên ắng khi đến lúc, nhưng hiện tại máy chủ này quá ít nói chuyện với mình.",
       saved_heading: "Đã cập nhật Natural Nudges",

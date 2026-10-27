@@ -576,7 +576,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Natural Nudges persistence: regression", (
       expect(ours.map((server) => server.server_id)).toEqual([heated]);
       expect(ours[0]?.config).toEqual(defaultServerNaturalNudgeConfig(heated));
       expect(ours[0]?.config.idle_nudges_enabled).toBe(true);
-      expect(idleNudgesPerDay(1_000, ours[0]?.config.idle_nudge_frequency ?? 0)).toBe(3);
+      expect(idleNudgesPerDay(50, ours[0]?.config.idle_nudge_frequency ?? 0)).toBe(2);
     });
 
     it("excludes unused and dormant servers despite recent stats and boosted heat, then admits a direct-chat wake", async () => {

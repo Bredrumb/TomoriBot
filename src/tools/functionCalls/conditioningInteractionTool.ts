@@ -1,7 +1,5 @@
 import { MessageFlags, PermissionFlagsBits, escapeMarkdown } from "discord.js";
 import { z } from "zod";
-import type { StructuredContextItem } from "@/types/misc/context";
-import type { TomoriState } from "@/types/db/schema";
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import { tomoriChat, suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
@@ -11,16 +9,14 @@ import {
   CONDITIONING_ACTION_TYPES,
   CONDITIONING_FOOTER_LOCALE_KEYS,
   CONDITIONING_REASON_MAX_LENGTH,
-  getConditioningContextPastParticiple,
   normalizeConditioningReason,
   type ConditioningActionKey,
 } from "@/utils/conditioning/conditioning";
 import { buildConditioningInteractionEmbed } from "@/utils/conditioning/conditioningEmbed";
 import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import { resolveIdentityTarget, resolveTriggererDiscordId } from "@/utils/discord/targetResolver";
-import { buildReferencedMessageUrl } from "@/utils/discord/toolProgressNotice";
 import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
-import { ContextItemTag } from "@/types/misc/context";
+import { buildConditioningInteractionEvent } from "@/utils/conditioning/conditioningInteractionContext";
 import { log } from "@/utils/misc/logger";
 import { sendToolPersonaPost } from "@/utils/discord/webhook/toolPersonaDelivery";
 
@@ -40,32 +36,6 @@ const interactionArgs = z
       ctx.addIssue({ code: "custom", path: ["food"], message: "food is required when action is feed" });
     }
   });
-
-function buildInteractionEvent(params: {
-  context: ToolContext;
-  actor: TomoriState;
-  targetName: string;
-  action: ConditioningActionKey;
-  reason: string;
-  food: string | undefined;
-  messageId: string;
-  messageUrl: string | undefined;
-}): StructuredContextItem {
-  const sourceReference =
-    params.messageUrl || buildReferencedMessageUrl(params.context, params.messageId) || params.messageId;
-  const action = getConditioningContextPastParticiple(CONDITIONING_ACTION_TYPES[params.action], params.action);
-  const food = params.action === "feed" && params.food ? ` with ${normalizeConditioningReason(params.food)}` : "";
-  return {
-    role: "system",
-    metadataTag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
-    parts: [
-      {
-        type: "text",
-        text: `${params.actor.persona_nickname} just ${action} ${params.targetName}${food}: ${params.reason}. That interaction is the message at ${sourceReference}. React to that interaction specifically; a later message or embed is not this event.`,
-      },
-    ],
-  };
-}
 
 export class ConditioningInteractionTool extends BaseTool {
   name = "interact_with_target";
@@ -269,17 +239,14 @@ export class ConditioningInteractionTool extends BaseTool {
               ? { userDiscId: invoker.id, username: invoker.user.username, locale: context.locale, member: invoker }
               : undefined,
           borrowsTriggerMessage: !invoker || invoker.user.bot,
-          manualStreamingContextOverrides: { disableConditioningInteraction: true },
           injectedContextItems: [
-            buildInteractionEvent({
-              context,
-              actor,
+            buildConditioningInteractionEvent({
+              actorName: actor.persona_nickname,
               targetName: resolution.displayLabel,
               action,
               reason,
               food,
               messageId: message.id,
-              messageUrl: message.url,
             }),
           ],
         });

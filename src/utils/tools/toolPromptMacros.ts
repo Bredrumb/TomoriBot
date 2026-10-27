@@ -56,6 +56,7 @@ const STATIC_TOOL_PROMPT_MACROS: Record<string, string> = {
   "{manage_message_tool}": "manage_message",
   "{pin_tool}": "manage_message",
   "{message_interaction_tool}": "interact_with_recent_message",
+  "{conditioning_interaction_tool}": "interact_with_target",
   "{profile_picture_tool}": "peek_profile_picture",
   "{document_tool}": "read_file",
   "{message_metadata_tool}": "reveal_message_metadata",

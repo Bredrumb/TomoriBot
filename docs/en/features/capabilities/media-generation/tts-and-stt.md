@@ -2,133 +2,54 @@
 title: "Voice: TTS & STT"
 sidebar:
   order: 3
-aiGenerated: true
 ---
 
-TomoriBot can speak and listen in Discord: send voice replies with text-to-speech (TTS),
-and transcribe audio messages into conversation context with speech-to-text (STT).
+TomoriBot can send voice replies with text-to-speech (TTS) and understand audio messages through
+speech-to-text (STT). Choose speech providers in `/providers` or configure your own Google or
+OpenRouter speech models in `/personal providers`.
 
-Choose speech providers in `/providers`, or use `/personal providers` for your own Google or
-OpenRouter speech models. You can also run local voice models on your own hardware.
-
-## Text-to-Speech
+## Text-to-speech
 <!-- anchor: text-to-speech -->
 
-### Google and OpenRouter voices
+Ask a persona to send a voice message or use `/generate voice-message`. Enable voice messages under
+`/config` > `Permissions` and configure the persona's voice under `/config` > `Persona` > `Voice`.
 
-Adding Google selects Gemini Flash TTS for `TTS (Voice Design)`. Adding OpenRouter selects paid
-Fish S2.1 Pro for `TTS (Voice Clone)`, and fills `TTS (Voice Design)` with Seed Audio 1.0 only when
-that slot is empty. OpenRouter never replaces a Gemini or Vertex design you already chose, so both
-providers can stay active together. If you added OpenRouter before Seed was available, your Design
-slot stays empty until you pick Seed. Adding the OpenRouter key again also fills an empty Design slot
-with Seed, including one you cleared on purpose. Flash-Lite and free Fish require explicit model selection;
-availability and provider quotas still apply. Use `/config` > Models > Switch Models to change or
-clear either slot.
-Personal selections and their on/off controls are in `/personal config` > Models > Switch Models.
-Turning off one personal mode lets that mode use the server selection while the other stays active.
+There are two TTS types:
 
-Use an API key for the provider in the same scope as the selection. A chat subscription alone does
-not establish API access. Gemini's [free API tier](https://ai.google.dev/gemini-api/docs/pricing)
-has project quotas and eligibility requirements; check access in AI Studio. Free Fish is a separate
-model code, `fish-audio/s2.1-pro-free:free`, and must be selected explicitly. A personal free-model
-failure can still fall back to the server's paid selection when Server Model Fallback is enabled.
+- **Voice design** creates a voice from a written description, such as "a warm, soft-spoken voice."
+- **Voice clone** uses a reference recording to create a voice that resembles the sample.
 
-In `/config` > Persona > Voice, choose `Describe Voice` to save a description of up to 1,000
-characters. You can write it before choosing a model. To use Fish or a local cloning model,
-add a reference in `/config` > Models > TTS Parameters & Voices and assign it on the persona's
-Voice page. Both inputs stay saved when you change providers. Choose `Voice Design` or `Voice
-Clone` to set priority; if the preferred input has no matching model or usable voice, the other
-saved input can be used. The page explains which source is effective for the server's selections.
+Each type needs a compatible model. Save a description or assign a reference on the persona's Voice
+page, where you can also choose which type to prefer. If the preferred option is unavailable,
+TomoriBot can use the other saved option. Descriptions are included in exported persona cards; voice
+reference assignments are not.
 
-Run `/generate voice-message` to enter a short script, or ask the persona to send a voice message.
-The command also accepts a one-off description or reference upload.
+:::tip
+Use `voice_design` or `voice_sample` on `/generate voice-message` to try a voice for one message
+without changing the persona's saved voice.
+:::
 
-The optional `model` parameter chooses a compatible speech model or server endpoint for this message.
-Personal entries show `(via Personal Provider)`. It keeps your saved defaults, and an explicit model
-selection does not fall back to another model if generation fails. Leave it blank for normal routing.
+### Providers and models
 
-Saved descriptions reuse a Gemini voice identity; edits retire it. One-off descriptions create a temporary identity that the
-bot deletes after generation. Failed cleanup is retried when those credentials are used again;
-operators may need to remove voices in the provider console after a crash or ambiguous timeout.
-Descriptions are included in exported PNG and JSON persona cards; remote voice identities and
-reference assignments are excluded. Google stores the designed identity in the API project.
-Gemini reference-audio cloning is deferred until the bot can collect consent recordings.
+Google supports voice design, while OpenRouter offers voice design and cloning models. Configure
+models under `/config` > `Models` > `Switch Models`, or choose personal models under
+`/personal config`. Personal model failures may use the server's model if server fallback is enabled.
+An explicitly selected one-off model does not fall back to another model.
 
-Seed Audio works differently from Gemini. It builds the voice from the description every time it
-speaks, so the same description can sound a little different from one message to the next. If you
-need a voice that stays the same, use Gemini or a reference sample. Seed works best in English and
-Chinese and makes at most two minutes of audio per message, so its scripts stop at 1,100
-characters. The description, any delivery direction, and the script also share 2,048 characters, so
-a long description leaves less room for the script. A script that does not fit is refused before
-anything is sent, and the bot asks you to shorten it.
-OpenRouter bills Seed per second of audio, which costs roughly ten times more per minute than Fish.
-To switch to Gemini or clear the slot, use `/config` > Models > Switch Models.
+ElevenLabs offers cloud voices and transcription. Add its key through `/providers` and assign a
+voice to each persona. Its free plan supports premade voices and has usage limits.
 
-Personal speech failures follow the Server Model Fallback setting and server permissions. A
-successful fallback appears in the command receipt. Providers may bill failed or cancelled work;
-script and audio limits do not set a spending cap.
+For local voice cloning and voice design, see the
+[Text-to-Speech guides](/self-hosting/local-endpoints/text-to-speech/). Local cloning requires a
+reference sample, which you can upload under `/config` > `Models` > `TTS Parameters & Voices`.
 
-### ElevenLabs (cloud)
-
-1. Get an API key from [ElevenLabs](https://elevenlabs.io/app/settings/api-keys).
-2. Run `/providers`, choose `Add New Provider`, select `ElevenLabs`, and paste the key. This flow:
-   - registers the ElevenLabs speech endpoint and transcription endpoint,
-   - activates both endpoints,
-   - optionally assigns a voice to one persona immediately.
-3. Assign voices to additional personas in `/config` > Persona > Voice. Browse voices in the
-   [ElevenLabs Voice Library](https://elevenlabs.io/app/voice-library), where you can also
-   clone your own.
-
-Select ElevenLabs in `/providers`, then choose `Edit Endpoint` whenever you need to update the key.
-
-Notes:
-
-- On the free plan, only premade voices work. Browse the
-  [premade voice list](https://elevenlabs-sdk.mintlify.app/voices/premade-voices).
-- Characters are counted when she generates voice messages. The free tier has monthly limits,
-  so monitor your ElevenLabs dashboard.
-- Voice replies require `voice_message_enabled` in `/config` > Permissions, and the active persona
-  must have a voice assigned.
-- Changing `/config` > Persona > Voice requires the Manage Server permission in a server, and
-  remains available to the owner in DMs.
-
-In `/help`, choose `Features`, then `Speech`, for the interactive walkthrough in Discord.
-
-### Local voice-cloning engines (self-hosted)
-
-On self-hosted instances, you can run a local voice-clone server. The workflow:
-start the server, register its connection and model in `/providers` (registration activates it,
-and `/config` > Models > Switch Models changes the selection later), upload a reference sample in `/config` > Models > TTS Parameters & Voices,
-then assign it in `/config` > Persona > Voice. Any audio format is accepted (automatically
-converted to mono WAV); 10 to 20 second clips without background music work best.
-
-Each engine has its own setup guide:
-
-- [Chatterbox-Turbo/Nano](/self-hosting/local-endpoints/text-to-speech/chatterbox/): fast English voice cloning with emotion tags such as `[laugh]`.
-- [Qwen3-TTS](/self-hosting/local-endpoints/text-to-speech/qwen3tts/): multilingual (10 languages) plus a natural-language VoiceDesign mode.
-- [MOSS-TTS](/self-hosting/local-endpoints/text-to-speech/moss/): multilingual cloning and English or Chinese voice design.
-- [IrodoriTTS](/self-hosting/local-endpoints/text-to-speech/irodoritts/): Japanese-specialized engine that reads emojis as emotion cues.
-
-See the [Text-to-Speech comparison table](/self-hosting/local-endpoints/text-to-speech/) for hardware guidance and the full engine list.
-
-## Speech-to-Text
+## Speech-to-text
 <!-- anchor: speech-to-text -->
 
-Transcription endpoints turn user audio attachments into text for conversation context. TTS model
-selection does not enable STT: choose a separate transcription endpoint in `/config` > Models >
-Switch Models. `/config` > Behavior > Notice Behavior > `Speech Transcripts` controls visible
-transcripts. Turning it off keeps incoming transcripts in conversation context. Notice visibility
-controls failure notices separately.
+A transcription model turns audio attachments into text TomoriBot can use in conversation. Choose it
+separately from TTS under `/config` > `Models` > `Switch Models`. Adding ElevenLabs also registers a
+transcription endpoint. For local options, see the
+[Speech-to-Text guides](/self-hosting/local-endpoints/speech-to-text/).
 
-### ElevenLabs (cloud)
-
-Adding ElevenLabs from `/providers` registers the transcription endpoint alongside speech.
-Use `/providers` to switch between active transcription endpoints.
-
-### Local engines (self-hosted)
-
-- [WhisperX](/self-hosting/local-endpoints/speech-to-text/whisperx/): recommended local path; around 100 languages, GPU-accelerated, multiple model sizes.
-- [KoboldCPP](/self-hosting/local-endpoints/speech-to-text/koboldcpp/): works when your build exposes an OpenAI-compatible transcription endpoint.
-- [whisper.cpp](/self-hosting/local-endpoints/speech-to-text/whispercpp/).
-
-See the [Speech-to-Text](/self-hosting/local-endpoints/speech-to-text/) hub for the full engine list. For the Discord summary, run `/help`, then choose `Features` and `Transcription`.
+You can hide visible transcripts under `/config` > `Behavior` > `Notice Behavior` >
+`Speech Transcripts`. The text still reaches the conversation context.

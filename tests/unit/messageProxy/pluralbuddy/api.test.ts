@@ -183,7 +183,9 @@ describe("PluralBuddy message lookup", () => {
       expect(await fetchPluralBuddyMessage(official, messageId)).toBeNull();
       clearPluralBuddyApiStateForTests();
     }
-    expect(warn).not.toHaveBeenCalled();
+    expect(warn.mock.calls.filter(([, , context]) => context?.metadata?.instanceId === official.instanceId)).toEqual(
+      [],
+    );
   });
 
   it("aborts a stalled attempt in time to recover on a second attempt", async () => {

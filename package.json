@@ -63,7 +63,7 @@
     "apps/*"
   ],
   "author": "Bredrumb",
-  "license": "ISC",
+  "license": "AGPL-3.0-only",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1011.0",
     "@aws-sdk/client-secrets-manager": "^3.1011.0",
@@ -104,6 +104,8 @@
     "typescript": "^5.9.3"
   },
   "overrides": {
+    "micromark-extension-math>katex": "^0.18.2",
+    "rehype-katex>katex": "^0.18.2",
     "@aws-sdk/xml-builder>fast-xml-parser": "5.7.0",
     "body-parser": ">=2.4.0",
     "body-parser>qs": "6.16.0",

@@ -51,6 +51,12 @@ Fine-tune how a persona looks, talks, and behaves:
 Open `/config` > Persona > Identity & Personality to define personality traits or physical
 details (such as `friendly`, `red hair`, or `ends sentences with *Nya~*`).
 
+:::tip
+When you add or edit an attribute, check `Public attribute` under `Visibility` so other personas can
+use that detail when they share a conversation. Keep secrets private, and mark details other
+characters would notice, such as appearance or mannerisms, as public.
+:::
+
 ### Sample Dialogues
 <!-- anchor: sample-dialogues -->
 
