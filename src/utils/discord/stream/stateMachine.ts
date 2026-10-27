@@ -246,7 +246,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
       ) {
         await this.errorUi.handleStreamError(lastError, context);
       } else {
-        log.warn("Stream: Suppressing stream error embed due to retryable failure", lastError);
+        log.warn("Stream: Suppressing stream error embed", lastError);
       }
 
       return { status: "error", data: lastError, ...this.collectDeliveredOutput(state) };
