@@ -54,6 +54,8 @@ export type LinkPreviewResult = {
  * snapshot output matches live-chat conversion.
  */
 export function processLinkEmbed(embed: Embed): LinkPreviewResult {
+  if (classifyProtocolEmbed(embed) === "unshared_dice_roll")
+    return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };
   // Skip entirely empty embeds
   const hasContent = embed.url || embed.title || embed.description || embed.author?.name || embed.fields.length > 0;
   if (!hasContent) {

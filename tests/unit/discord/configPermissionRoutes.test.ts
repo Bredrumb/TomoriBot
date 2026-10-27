@@ -51,6 +51,8 @@ function makeState(overrides: Record<string, unknown> = {}): TomoriState {
       web_search_enabled: true,
       manage_message_enabled: true,
       thread_creation_enabled: true,
+      dice_rolling_enabled: true,
+      conditioning_interactions_enabled: true,
       imagegen_enabled: true,
       danbooru_enabled: true,
       videogen_enabled: true,
@@ -248,7 +250,6 @@ function findComponentByCustomId(value: unknown, customId: string): Record<strin
 describe("permissions mapping and modal", () => {
   it("uses every presented definition and preserves the two-table partition", () => {
     const definitions = getCapabilitiesManagePermissionDefinitions();
-    expect(definitions).toHaveLength(14);
     expect(definitions.map((definition) => [definition.value, definition.table, definition.dbColumn])).toEqual([
       ["selfteaching", "memberPermissions", "self_teaching_enabled"],
       ["userinfo", "capabilities", "user_info_updates_enabled"],
@@ -261,6 +262,8 @@ describe("permissions mapping and modal", () => {
       ["videogen", "capabilities", "videogen_enabled"],
       ["voicemessage", "capabilities", "voice_message_enabled"],
       ["userblocking", "capabilities", "user_blocking_enabled"],
+      ["dicerolling", "capabilities", "dice_rolling_enabled"],
+      ["conditioninginteractions", "capabilities", "conditioning_interactions_enabled"],
       ["personalization", "memberPermissions", "personal_memories_enabled"],
       ["emojiusage", "capabilities", "emoji_usage_enabled"],
       ["timeawareness", "capabilities", "time_awareness_enabled"],
@@ -280,7 +283,7 @@ describe("permissions mapping and modal", () => {
     expect(noOp.patch).toEqual({ capabilities: {}, memberPermissions: {} });
 
     const withoutElevenLabs = getCapabilitiesManagePermissionDefinitions({ includeElevenLabs: false });
-    expect(withoutElevenLabs).toHaveLength(13);
+    expect(withoutElevenLabs).toHaveLength(definitions.length - 1);
     expect(withoutElevenLabs.some((definition) => definition.value === "voicemessage")).toBe(false);
   });
 
@@ -322,8 +325,8 @@ describe("permissions routes", () => {
       expect(interaction.deferred).toBe(false);
       expect(harness.modals).toHaveLength(1);
       const modal = harness.modals[0] as { components: Array<{ component: { type: number; options: unknown[] } }> };
-      expect(modal.components.map((component) => component.component.type)).toEqual([22]);
-      expect(modal.components.reduce((count, component) => count + component.component.options.length, 0)).toBe(10);
+      expect(modal.components.map((component) => component.component.type)).toEqual([22, 22]);
+      expect(modal.components.reduce((count, component) => count + component.component.options.length, 0)).toBe(12);
     } finally {
       key.mockRestore();
     }
@@ -700,7 +703,7 @@ describe("Plugins and Channel Rules panels", () => {
     });
     const serialized = JSON.stringify(payload);
     const capabilityDots = (serialized.match(/🟢/gu)?.length ?? 0) + (serialized.match(/🔴/gu)?.length ?? 0);
-    expect(capabilityDots).toBe(11);
+    expect(capabilityDots).toBe(13);
     expect(serialized).toContain("perm-tool-use-set");
     expect(serialized.indexOf("Controls whether I may call tools at all.")).toBeLessThan(
       serialized.indexOf("perm-tool-use-set"),
@@ -721,7 +724,7 @@ describe("Plugins and Channel Rules panels", () => {
         permissionsView: buildPermissionsView(toolOffState, true),
       }),
     );
-    expect(toolOffSerialized.match(/~~/gu)?.length).toBe(22);
+    expect(toolOffSerialized.match(/~~/gu)?.length).toBe(26);
     const contextSerialized = JSON.stringify(
       buildConfigPanelPayload({
         locale: "en-US",

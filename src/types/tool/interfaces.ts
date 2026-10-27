@@ -85,6 +85,9 @@ export interface DeliveredStreamMessage {
  * Streaming context for enhanced functionality during streaming
  */
 export interface StreamingContext {
+  deliveryMode?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryMode;
+  deliveryReceipts?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryReceipt[];
+  deliveryState?: { unconfirmed: boolean };
   imageModelSelection?: GenerationModelSelection;
   /** When set, delivered text may ping only these users: no roles, no everyone, nobody else. */
   mentionableUserIds?: readonly string[];
@@ -94,6 +97,7 @@ export interface StreamingContext {
   disableProfilePictureProcessing?: boolean; // Flag to temporarily disable profile picture processing during enhanced context restart
   disableGifProcessing?: boolean; // Flag to temporarily disable GIF processing during enhanced context restart
   disableShortTermMemoryUpdate?: boolean; // Flag to prevent update_short_term_memory from being called more than once per turn
+  disableConditioningInteraction?: boolean;
   disableCrossChannelMessage?: boolean; // Flag to prevent nested cross-channel dispatch during tool-driven cross-channel turns
   explicitLongTermMemoryIntent?: boolean; // Flag to suppress STM tool nudges when the current user message explicitly asks for persistent memory
   disableMessageMetadataContext?: boolean; // Flag to prevent reveal_message_metadata from being called more than once per turn
@@ -187,6 +191,7 @@ export interface StreamingContext {
  * Contains all necessary Discord and Tomori state information
  */
 export interface ToolContext {
+  deliveryMode?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryMode;
   usageContext?: ProviderUsageContext;
   channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | NewsChannel | TextChannel | AnyThreadChannel;
   client: Client;
@@ -288,6 +293,8 @@ export interface ToolAssemblyState {
     // the capability toggle with no effect and no compile error.
     user_info_updates_enabled: boolean;
     thread_creation_enabled: boolean;
+    conditioning_interactions_enabled: boolean;
+    dice_rolling_enabled: boolean;
     danbooru_enabled: boolean;
   };
 }

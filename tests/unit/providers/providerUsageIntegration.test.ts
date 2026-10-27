@@ -5,7 +5,7 @@ import { afterEach, beforeAll, describe, expect, mock, spyOn, test } from "bun:t
 import { llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import * as ragAvailability from "@/utils/db/ragAvailability";
 import { buildServerDocumentContextItem } from "@/utils/text/context/rag";
-import type { Client, EmbedBuilder, TextChannel } from "discord.js";
+import { REST, type Client, type EmbedBuilder, type TextChannel } from "discord.js";
 import { embeddingModelSchema, savedProviderConfigSchema } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
 import type { StreamProvider } from "@/types/stream/interfaces";
@@ -120,7 +120,7 @@ function denial(context: ProviderUsageContext | undefined, deferNotice = false) 
 function toolFixture() {
   const send = mock(async (_payload: { embeds?: EmbedBuilder[] }) => ({ id: "fixture-notice" }));
   const context: ToolContext = {
-    channel: { id: "usage-integration", send } as unknown as TextChannel,
+    channel: { id: "usage-integration", send, client: { rest: new REST() } } as unknown as TextChannel,
     client: {} as Client,
     tomoriState: createPersona({ vision_llm: model }),
     provider: "openrouter",

@@ -44,6 +44,7 @@ optional API key.
 | Create / update task | `{task_tool}` / `{task_update_tool}` | - | Schedule or edit reminders and self-tasks (see [Scheduled Tasks](/features/capabilities/scheduled-tasks/)). |
 | Cross-channel message | `{cross_channel_tool}` | (not on NovelAI) | Act in another channel or thread, with an optional report-back. |
 | Create thread | `{create_thread_tool}` | `thread_creation_enabled` + thread perms | Open a public thread and post its starter message. |
+| Roll dice | - | `dice_rolling_enabled` (off by default) | Roll dice publicly and use the returned result in roleplay. |
 | Select sticker | `{sticker_tool}` | `sticker_usage_enabled` | Add a matching server sticker or custom expression to a reply. |
 | Manage message | `{manage_message_tool}` | `manage_message_enabled` | Pin, edit, or delete recent messages (pin needs `Manage Messages`). |
 | Block / unblock user | `{block_user_tool}` / `{unblock_user_tool}` | `user_blocking_enabled` | Persona-scoped mute/block of a user (does not touch memories). |
@@ -99,6 +100,40 @@ MCP replacements, and the current Deliberate Tool Mode allowlist. They do not by
 predict Discord permission checks performed when a tool executes. Unknown capability names
 evaluate as false and are logged; malformed blocks are omitted. Raw chat messages, model
 output, and tool results are never treated as conditional templates.
+
+## Dice rolling
+
+Use `/roll` for tabletop games and roleplay. With no options, it rolls `1d20`.
+The `dice` option accepts one dice group and an optional modifier: `3d4`, `d20`,
+`2d6+3`, or `1d20-2`. It supports 1-100 dice, 2-1,000 sides, and modifiers from
+-10,000 to +10,000. The optional `reason` labels the roll in the same sentence.
+
+For `1d20` with an optional modifier, choose `Advantage` to roll twice and keep
+the higher die, or `Disadvantage` to keep the lower. The modifier is added once.
+The embed puts the total in an ANSI code block immediately after the roll
+sentence, followed by a small-text `Calculation:` line showing the dice breakdown.
+With one die and no modifier in `Normal` mode, it omits the calculation line.
+The number and embed border are green for a kept natural 20, red for a kept
+natural 1, and blue for other rolls. Multiple-d20 pools stay blue. ANSI color
+support varies by Discord client.
+
+The `visibility` option controls who receives the result:
+
+| Choice | Channel visibility | Bot chat context |
+|---|---|---|
+| `Public` (default) | Everyone | Excluded |
+| `Hidden` | Only the person rolling | Excluded |
+| `Public + Bot` | Everyone | Included in recent history |
+
+`Public + Bot` does not start an AI reply. People can still tell the bot the
+result of an unshared roll themselves.
+
+To let the bot roll dice herself, enable `Dice Rolling` through `/config` >
+Plugins > Available Tools. It starts off for existing and new servers and DM
+chats. This switch controls only the `roll_dice` tool; `/roll` stays available.
+Tool rolls use the same embed, name the active persona, and are always public
+and shared with the bot. The bot receives the generated dice and total so she
+can continue the scene using that result.
 
 ## Danbooru Tag Lookup
 <!-- anchor: danbooru-tag-lookup -->

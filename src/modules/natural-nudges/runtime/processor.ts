@@ -6,14 +6,14 @@ import type {
   NaturalNudgeFireRow,
   PersonaNaturalNudgeConfig,
 } from "@/modules/natural-nudges/db/types";
-import { drawPingUserTarget } from "@/modules/natural-nudges/runtime/targets";
+import { drawPingUserTarget, type PingUserTarget } from "@/modules/natural-nudges/runtime/targets";
 import { drawScenePartners, hasScenePartner, type PartnerCandidate } from "@/modules/natural-nudges/runtime/partners";
 import { NATURAL_NUDGE_CATEGORIES } from "@/modules/natural-nudges/db/types";
 import {
   idleNudgeNeedsTarget,
+  isIdleNudgeChannelEligible,
   isIdleNudgeEligible,
   listPersonaRunnableIdleNudges,
-  type IdleNudgeDefinition,
   type PrerequisiteFacts,
 } from "@/modules/natural-nudges/runtime/idleNudges";
 import {
@@ -50,6 +50,7 @@ import {
   FIRE_RETENTION_MS,
   HOUR_MS,
   MAX_PLANNER_CHANNELS,
+  MAX_PLANNER_NUDGES,
   MAX_SCANNED_CHANNELS,
   PENDING_WINDOW_MS,
   PERSONA_REST_MS,
@@ -63,6 +64,7 @@ import { isFailureStopped } from "@/modules/natural-nudges/runtime/failureStop";
 import { claimNudgeServer, isNudgeServerBusy, releaseNudgeServer } from "@/modules/natural-nudges/runtime/inFlight";
 import { type NudgeModelRef, resolvePlannerModel } from "@/modules/natural-nudges/runtime/model";
 import { runIdleNudgeAttempt, type IdleNudgeAttempt } from "@/modules/natural-nudges/runtime/runner";
+import type { PlannerCandidate, ScenePartner } from "@/modules/natural-nudges/runtime/planner";
 import { recordIdleNudgeSample } from "@/modules/natural-nudges/runtime/telemetry";
 import { loadAvailableToolNames } from "@/modules/natural-nudges/runtime/tools";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
@@ -77,8 +79,6 @@ const METER_CACHE_TTL_MS = 15 * 60 * 1000;
 /** A pending verdict needs a Discord read, so it is checked at most this often per server. */
 const VERDICT_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const PRUNE_INTERVAL_MS = HOUR_MS;
-/** Idle nudge rows kept in view beyond the rest window: enough for the unanswered streak and the pending row. */
-const LATEST_IDLE_NUDGE_ROWS = UNANSWERED_STOP_STREAK + 2;
 
 type NudgePersona = TomoriState & { persona_id: number };
 
@@ -109,11 +109,6 @@ function lastFireBy(fires: readonly NaturalNudgeFireRow[], key: (fire: NaturalNu
   return latest;
 }
 
-/**
- * Phase A of Natural Nudges idle nudges: plain code with no model call. It decides whether a server is
- * due, finds a quiet channel, and draws the persona, category, and idle nudge, then hands the attempt
- * to the detached runner.
- */
 export class NaturalNudgeProcessor {
   private readonly client: Client;
   /** After an abort the idle nudge waits a fresh lull before trying again, so it cannot loop every cycle. */
@@ -216,7 +211,7 @@ export class NaturalNudgeProcessor {
     const history = await naturalNudgeRepository.loadFireHistory(
       serverId,
       new Date(now.getTime() - IDLE_NUDGE_REST_MS),
-      LATEST_IDLE_NUDGE_ROWS,
+      UNANSWERED_STOP_STREAK,
     );
     const pending = history.latestIdleNudges.find((fire) => fire.answered === null);
     if (pending) {
@@ -291,7 +286,7 @@ export class NaturalNudgeProcessor {
       .finally(() => releaseNudgeServer(serverId));
   }
 
-  /** Persona first, then category and idle nudge for that persona, so identity never depends on opportunity. */
+  /** The persona raffle runs before the shortlist, so identity never depends on the planner's preferred activity. */
   private async drawAttempt(
     server: EnabledIdleNudgeServer,
     personas: NudgePersona[],
@@ -343,6 +338,14 @@ export class NaturalNudgeProcessor {
     const hanging = personaChannels.filter((channel) =>
       isHangingConversation(histories.get(channel.channel.id) ?? [], personas, this.client.user?.id, now),
     );
+    let plannerChannels = await this.choosePlannerChannels(
+      personaChannels,
+      persona,
+      histories,
+      server.server_disc_id,
+      now,
+    );
+    if (plannerChannels.length === 0) return "no_planner_channel";
     const [customs, scopes] = await Promise.all([
       naturalNudgeRepository.listCustomIdleNudges(server.server_id),
       naturalNudgeRepository.loadPersonaScopes(server.server_id),
@@ -354,45 +357,87 @@ export class NaturalNudgeProcessor {
       scopes,
       personaConfig,
     });
-    const guild = this.client.guilds.cache.get(server.server_disc_id);
-    if (!guild) return "guild_unavailable";
-    // The draw reads memories and fetches members, so it waits until some runnable idle nudge could ping.
-    const target = runnable.some(idleNudgeNeedsTarget)
-      ? await drawPingUserTarget({
-          client: this.client,
-          guild,
-          serverId: server.server_id,
-          persona,
-          channels: personaChannels,
-          recentFires,
-          now,
-        })
-      : null;
-    const facts: PrerequisiteFacts = {
-      hasHangingConversation: hanging.length > 0,
-      hasScenePartner: hasScenePartner(
-        partnerCandidates,
-        personaChannels.map((channel) => channel.channel.id),
-      ),
-      availableTools: await loadAvailableToolNames(persona),
-      target: target && { hasRecentMemories: target.recentMemories.length > 0, isActive: target.activity !== null },
-    };
-
-    const idleNudges = runnable.filter((idleNudge) => isIdleNudgeEligible(idleNudge, facts));
+    const availableTools = await loadAvailableToolNames(persona);
+    const channelFacts = (channelId: string): Omit<PrerequisiteFacts, "target"> => ({
+      hasHangingConversation: hanging.some((entry) => entry.channel.id === channelId),
+      hasScenePartner: hasScenePartner(partnerCandidates, [channelId]),
+      availableTools,
+    });
+    const channelEligible = runnable.filter((idleNudge) =>
+      plannerChannels.some((channel) => isIdleNudgeChannelEligible(idleNudge, channelFacts(channel.channel.id))),
+    );
     const categoryFiredAt = lastFireBy(recentFires, (fire) => fire.category);
     const category = drawRaffle(
-      NATURAL_NUDGE_CATEGORIES.map((candidate) => ({
-        item: candidate,
-        tickets: idleNudges.some((idleNudge) => idleNudge.category === candidate)
-          ? IDLE_NUDGE_CATEGORY_WEIGHTS[candidate] * restedShare(categoryFiredAt.get(candidate), now, CATEGORY_REST_MS)
+      NATURAL_NUDGE_CATEGORIES.map((category) => ({
+        item: category,
+        tickets: channelEligible.some((idleNudge) => idleNudge.category === category)
+          ? IDLE_NUDGE_CATEGORY_WEIGHTS[category] * restedShare(categoryFiredAt.get(category), now, CATEGORY_REST_MS)
           : 0,
       })),
     );
     if (!category) return "no_eligible_idle_nudge";
-    const categoryIdleNudges = idleNudges.filter((candidate) => candidate.category === category);
+    const categoryNudges = channelEligible.filter((idleNudge) => idleNudge.category === category);
+    let target: PingUserTarget | null = null;
+    if (categoryNudges.some(idleNudgeNeedsTarget)) {
+      const guild = this.client.guilds.cache.get(server.server_disc_id);
+      if (!guild) return "guild_unavailable";
+      target = await drawPingUserTarget({
+        client: this.client,
+        guild,
+        serverId: server.server_id,
+        persona,
+        channels: plannerChannels,
+        recentFires,
+        now,
+      });
+    }
+    if (target) {
+      // Target context can shape any chosen nudge, so every offered channel must be visible to that member.
+      const targetChannelIds = target.channelIds;
+      plannerChannels = plannerChannels.filter((channel) => targetChannelIds.includes(channel.channel.id));
+    }
+    let idleNudges = categoryNudges
+      .map((idleNudge) => ({
+        idleNudge,
+        channelIndices: plannerChannels.flatMap((channel, index) =>
+          isIdleNudgeEligible(idleNudge, {
+            ...channelFacts(channel.channel.id),
+            target: target && {
+              hasRecentMemories: target.recentMemories.length > 0,
+              isActive: target.activity !== null,
+            },
+          })
+            ? [index]
+            : [],
+        ),
+      }))
+      .filter((candidate) => candidate.channelIndices.length > 0);
+    if (idleNudges.length === 0) return "no_eligible_idle_nudge";
+    let partners: ScenePartner[] = [];
+    if (category === "play_scene") {
+      const scene = drawScenePartners(
+        partnerCandidates,
+        [...new Set(idleNudges.flatMap((candidate) => candidate.channelIndices))].map(
+          (index) => plannerChannels[index].channel.id,
+        ),
+      );
+      if (!scene) return "no_scene_partner";
+      partners = scene.partners.map((partner) => ({
+        persona: partner,
+        interests: personaConfigs.get(partner.persona_id)?.interests ?? [],
+      }));
+      idleNudges = idleNudges
+        .map((candidate) => ({
+          ...candidate,
+          channelIndices: candidate.channelIndices.filter((index) =>
+            scene.channelIds.includes(plannerChannels[index].channel.id),
+          ),
+        }))
+        .filter((candidate) => candidate.channelIndices.length > 0);
+    }
     const idleNudgeFiredAt = lastFireBy(recentFires, (fire) => fire.idle_nudge_key);
     const targetFiredAt =
-      target && categoryIdleNudges.some(idleNudgeNeedsTarget)
+      target && idleNudges.some((candidate) => idleNudgeNeedsTarget(candidate.idleNudge))
         ? await naturalNudgeRepository.loadTargetIdleNudgeFires(
             server.server_id,
             persona.persona_id,
@@ -400,37 +445,29 @@ export class NaturalNudgeProcessor {
             new Date(now.getTime() - PING_USER_REPEAT_REST_MS),
           )
         : new Map<string, Date>();
-    const idleNudge = drawRaffle<IdleNudgeDefinition>(
-      categoryIdleNudges.map((candidate) => ({
-        item: candidate,
-        tickets: idleNudgeTickets(
-          candidate,
-          idleNudgeFiredAt.get(candidate.key),
-          targetFiredAt.get(candidate.key),
-          now,
-        ),
-      })),
-    );
-    if (!idleNudge) return "no_eligible_idle_nudge";
-
-    const idleNudgeTarget = idleNudgeNeedsTarget(idleNudge) ? target : null;
-    let pool = idleNudgeTarget
-      ? personaChannels.filter((channel) => idleNudgeTarget.channelIds.includes(channel.channel.id))
-      : category === "revive_topic"
-        ? hanging
-        : personaChannels;
-    let partners: NudgePersona[] = [];
-    if (category === "play_scene") {
-      const scene = drawScenePartners(
-        partnerCandidates,
-        pool.map((channel) => channel.channel.id),
+    const remaining = [...idleNudges];
+    const candidates: PlannerCandidate[] = [];
+    while (candidates.length < MAX_PLANNER_NUDGES && remaining.length > 0) {
+      const picked = drawRaffle(
+        remaining.map((candidate) => ({
+          item: candidate,
+          tickets: idleNudgeTickets(
+            candidate.idleNudge,
+            idleNudgeFiredAt.get(candidate.idleNudge.key),
+            targetFiredAt.get(candidate.idleNudge.key),
+            now,
+          ),
+        })),
       );
-      if (!scene) return "no_scene_partner";
-      partners = scene.partners;
-      pool = pool.filter((channel) => scene.channelIds.includes(channel.channel.id));
+      if (!picked) break;
+      remaining.splice(remaining.indexOf(picked), 1);
+      candidates.push({
+        idleNudge: picked.idleNudge,
+        channelIndices: picked.channelIndices,
+        partners,
+      });
     }
-    const plannerChannels = await this.choosePlannerChannels(pool, persona, histories, server.server_disc_id, now);
-    if (plannerChannels.length === 0) return "no_planner_channel";
+    if (candidates.length === 0) return "no_eligible_idle_nudge";
 
     return {
       client: this.client,
@@ -441,15 +478,11 @@ export class NaturalNudgeProcessor {
       awake: meters.awake,
       persona,
       interests: personaConfig.interests,
-      idleNudge,
+      candidates,
       plannerModel,
-      availableTools: facts.availableTools,
+      availableTools,
       plannerChannels,
-      target: idleNudgeTarget,
-      partners: partners.map((partner) => ({
-        persona: partner,
-        interests: personaConfigs.get(partner.persona_id)?.interests ?? [],
-      })),
+      target: candidates.some((candidate) => idleNudgeNeedsTarget(candidate.idleNudge)) ? target : null,
     };
   }
 

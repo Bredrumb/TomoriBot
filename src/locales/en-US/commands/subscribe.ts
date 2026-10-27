@@ -36,6 +36,7 @@ export default {
       capacity: `{scope} is temporarily unavailable because TomoriBot's subscription service is at capacity. Your allowance is unaffected. {retry} {fallback}\n\nYou can also use another AI provider through {providers}.`,
       capacity_unavailable: `{scope} is unavailable because TomoriBot's subscription service is out of capacity, and retrying will not help until it is restored. Your allowance is unaffected. {fallback}\n\nYou can use another AI provider through {providers} in the meantime.`,
       unsupported: `{scope} cannot use this {capability} model. Choose a supported model or another AI provider through {providers}.`,
+      pricing_unavailable: `TomoriBot could not check the cost of this {capability} model, so the request was not sent. Try again later or choose another model in {config}.`,
     },
     tiers: {
       unknown: `Subscription`,

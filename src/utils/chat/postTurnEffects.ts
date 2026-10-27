@@ -1,3 +1,4 @@
+import { buildChatPersonaPostContext } from "@/utils/chat/responseEmitter";
 import { PrivacyLevel } from "@/types/db/schema";
 import { ContextItemTag } from "@/types/misc/context";
 import { recordLastReplyUsage } from "@/utils/cache/lastReplyUsageCache";
@@ -381,11 +382,7 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
           isDM: context.isDMChannel,
         }),
       },
-      {
-        webhook: context.responseTarget?.webhook,
-        personaUsername: context.responseTarget?.personaUsername,
-        personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
-      },
+      buildChatPersonaPostContext(context),
     ).catch((error) => log.warn("Failed to send empty response embed to channel", error));
     return;
   }

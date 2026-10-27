@@ -15,7 +15,7 @@ import { tomoriChat, suppressNextSelfReply } from "../events/messageCreate/tomor
 import { createStandardEmbed, truncateForEmbedDescription } from "../utils/discord/embedHelper";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
 import { getCachedUserRow } from "../utils/cache/userCache";
-import { ensureDiscordUserMention, sendAlterPersonaMention } from "../utils/discord/mentionHelper";
+import { ensureDiscordUserMention, sendPersonaMention } from "../utils/discord/mentionHelper";
 import { seedTurnAnchor } from "@/utils/discord/turnAnchor";
 import { isBridgeUserId } from "../utils/bridges";
 import { sendMatrixReminderMention } from "../utils/bridges/matrix";
@@ -426,7 +426,7 @@ export class ReminderProcessor {
   ): Promise<boolean> {
     if (!reminder.persona_id || !("guild" in channel) || !channel.guild) return false;
     const persona = (await getCachedAllPersonas(channel.guild.id)).find((p) => p.persona_id === reminder.persona_id);
-    return persona ? sendAlterPersonaMention(channel, persona, reminder.user_discord_id, content) : false;
+    return persona ? sendPersonaMention(channel, persona, reminder.user_discord_id, content) : false;
   }
 
   /**

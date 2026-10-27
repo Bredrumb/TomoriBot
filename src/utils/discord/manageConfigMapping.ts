@@ -18,6 +18,8 @@ type CapabilitiesManageCapabilityColumn = Extract<
   | "web_search_enabled"
   | "manage_message_enabled"
   | "thread_creation_enabled"
+  | "conditioning_interactions_enabled"
+  | "dice_rolling_enabled"
   | "imagegen_enabled"
   | "danbooru_enabled"
   | "videogen_enabled"
@@ -188,6 +190,24 @@ const CAPABILITIES_MANAGE_PERMISSION_DEFINITIONS: readonly CapabilitiesManagePer
     labelKey: "commands.capabilities.manage.userblocking_option",
     descKey: "commands.capabilities.manage.userblocking_desc",
     getState: (c) => c.user_blocking_enabled ?? true,
+  },
+  {
+    value: "dicerolling",
+    page: "available-tools",
+    table: "capabilities",
+    dbColumn: "dice_rolling_enabled",
+    labelKey: "commands.capabilities.manage.dicerolling_option",
+    descKey: "commands.capabilities.manage.dicerolling_desc",
+    getState: (c) => c.dice_rolling_enabled,
+  },
+  {
+    value: "conditioninginteractions",
+    page: "available-tools",
+    table: "capabilities",
+    dbColumn: "conditioning_interactions_enabled",
+    labelKey: "commands.capabilities.manage.conditioninginteractions_option",
+    descKey: "commands.capabilities.manage.conditioninginteractions_desc",
+    getState: (c) => c.conditioning_interactions_enabled,
   },
   {
     value: "personalization",

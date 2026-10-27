@@ -35,6 +35,7 @@ export default {
       capacity: `TomoriBotのサブスクリプションサービスが混み合っているため、{scope}は一時的に利用できません。利用枠は消費されていません。{retry}{fallback}\n\n{providers}から別のAIプロバイダーを利用することもできます。`,
       capacity_unavailable: `TomoriBotのサブスクリプションサービスの容量が不足しているため、{scope}は利用できません。容量が回復するまで再試行しても成功しません。利用枠は消費されていません。{fallback}\n\nその間は{providers}から別のAIプロバイダーを利用できます。`,
       unsupported: `{scope}では、この{capability}モデルを利用できません。{providers}から対応モデルまたは別のAIプロバイダーを選んでください。`,
+      pricing_unavailable: `この{capability}モデルの費用を確認できなかったため、リクエストは送信されませんでした。しばらくしてから再試行するか、{config}で別のモデルを選択してください。`,
     },
     tiers: {
       unknown: `サブスクリプション`,

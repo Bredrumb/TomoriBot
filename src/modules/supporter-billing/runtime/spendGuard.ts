@@ -15,6 +15,7 @@ import {
 import { currentProviderUsageContext } from "@/utils/provider/providerUsage";
 import { estimateSupporterRequestCost } from "@/modules/supporter-billing/runtime/spendEstimates";
 import { type ProviderRequestHold, registerProviderRequestHook } from "@/utils/provider/providerRequestHook";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 
 const USAGE_CACHE_MS = 5_000;
 
@@ -93,8 +94,31 @@ export class SupporterSpendGuard {
           state.baseline = Math.max(state.baseline, logged - state.completed, state.usage - state.completed);
           if (Math.max(logged, this.observedSpend(row.key_hash)) + this.pendingSpend(identityId) >= row.applied_limit)
             throw this.denied(funding, "allowance_exhausted");
-          const estimated = await estimate();
-          if (!Number.isFinite(estimated) || estimated < 0) throw this.denied(funding, "model_unavailable");
+          let estimated: number;
+          try {
+            estimated = await estimate();
+            if (!Number.isFinite(estimated) || estimated < 0) throw new Error("Invalid request cost estimate");
+          } catch (error) {
+            const failure = new Error(
+              error instanceof Error
+                ? error.message.replaceAll(apiKey, "[REDACTED]")
+                : "Request cost estimation failed",
+            );
+            if (error instanceof Error && error.stack) failure.stack = error.stack.replaceAll(apiKey, "[REDACTED]");
+            await reportProviderFailure({
+              summary: "Subscription request cost estimation failed",
+              errorType: "SupporterCostEstimateFailed",
+              error: failure,
+              expected: false,
+              dimensions: {
+                provider: "openrouter",
+                capability: funding.capability,
+                fundingScope: funding.fundingScope,
+              },
+              metadata: { model: funding.modelCodename, sponsorIdentityId: identityId },
+            });
+            throw this.denied(funding, "pricing_unavailable");
+          }
           const cost = Math.ceil(estimated * MICROS_PER_DOLLAR) / MICROS_PER_DOLLAR;
           const spent = Math.max(logged, this.observedSpend(row.key_hash));
           const pending = this.pendingSpend(identityId);
@@ -137,7 +161,7 @@ export class SupporterSpendGuard {
 
   private denied(
     funding: SupporterFundingContext,
-    reason: "billing_unavailable" | "model_unavailable" | "allowance_exhausted",
+    reason: "billing_unavailable" | "pricing_unavailable" | "allowance_exhausted",
   ) {
     return new SupporterRequestDeniedError(
       reason,

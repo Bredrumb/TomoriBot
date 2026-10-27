@@ -1,5 +1,17 @@
 export default {
   tools: {
+    media: {
+      delivery_failed:
+        "Discord không gửi được nội dung đa phương tiện. Không có lượt gửi thành công nào được ghi nhận.",
+      delivery_unconfirmed:
+        "Discord chưa xác nhận nội dung đa phương tiện đã được đăng hay chưa. Hãy kết thúc lượt này và kiểm tra kênh trước khi tạo hoặc đăng lại, vì thử lại có thể tạo bản trùng lặp.",
+    },
+    roll_dice: {
+      missing_permissions: "Bot cần quyền xem kênh này, gửi tin nhắn và chèn liên kết để đăng kết quả tung xúc xắc.",
+      disabled: "Tính năng tung xúc xắc đã bị tắt. Bật lại qua `/config` > Plugin > Công cụ khả dụng.",
+      cancelled: "Lượt tung xúc xắc đã bị hủy trước khi gửi.",
+      delivery_failed: "Không thể đăng kết quả xúc xắc. Không có lượt tung nào được gửi thành công.",
+    },
     execution: {
       unavailable: `Công cụ \`{tool}\` không khả dụng theo cài đặt hiện tại, khả năng của model hoặc quyền hạn của bot.`,
     },
@@ -194,6 +206,7 @@ export default {
     },
     intent_packs: {
       deliberate: {
+        dice: ["xúc xắc", "tung xúc xắc"],
         image: [
           "vẽ*",
           "ve giup*",

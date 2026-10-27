@@ -1,5 +1,17 @@
 export default {
   tools: {
+    media: {
+      delivery_failed: "O Discord não entregou a mídia. Nenhuma entrega bem-sucedida foi registrada.",
+      delivery_unconfirmed:
+        "O Discord não confirmou se a mídia foi publicada. Encerre este turno e verifique o canal antes de gerar ou publicar novamente, pois outra tentativa pode criar uma duplicata.",
+    },
+    roll_dice: {
+      missing_permissions:
+        "O bot precisa de permissão para ver este canal, enviar mensagens e anexar links para publicar uma rolagem de dados.",
+      disabled: "A rolagem de dados está desativada. Ative-a em `/config` > Plugins > Ferramentas disponíveis.",
+      cancelled: "A rolagem de dados foi cancelada antes do envio.",
+      delivery_failed: "Não foi possível postar o resultado dos dados. Nenhuma rolagem foi entregue.",
+    },
     execution: {
       unavailable: `A ferramenta \`{tool}\` não está disponível nas configurações atuais, nas capacidades do modelo ou nas permissões do bot.`,
     },
@@ -196,6 +208,7 @@ export default {
       // English stays empty because the built-in patterns in deliberateToolMode.ts already cover
       // English grammar; keywords here would widen English matching beyond those patterns.
       deliberate: {
+        dice: ["dados", "rolagem"],
         image: [
           "gerar imagem",
           "gerar uma imagem*",

@@ -1,6 +1,10 @@
 export default {
   capabilities: {
     manage: {
+      dicerolling_option: "Rolagem de dados",
+      dicerolling_desc: "Role dados publicamente para jogos de mesa e RPG",
+      conditioninginteractions_option: `Interações divertidas`,
+      conditioninginteractions_desc: `Expresse sentimentos fortes com abraços, mordidas, bonks e comida`,
       description: `Configure quais ferramentas específicas eu posso usar neste servidor.`,
       selfteaching_option: `Autoaprendizado`,
       personalization_option: `Personalização (Memórias/Apelidos)`,

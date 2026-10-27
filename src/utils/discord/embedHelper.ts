@@ -1,3 +1,4 @@
+import { sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -13,13 +14,12 @@ import {
   type BaseGuildTextChannel,
   type BaseGuildVoiceChannel,
   type AnyThreadChannel,
-  type Webhook,
 } from "discord.js";
 import { ColorCode, log } from "../misc/logger";
 import { localizer } from "../text/localizer";
-import { sendPersonaPostViaWebhook } from "@/utils/discord/webhook/personaPost";
+import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
+import { type PersonaPostContext, recordPersonaDelivery, sendPersonaPost } from "@/utils/discord/webhook/personaPost";
 import { resolveAuthoringWebhook } from "@/utils/discord/webhook/fallback";
-import { recordChannelDeliveredBotMessage } from "@/utils/discord/stream/channelDeliveryContinuity";
 import { attachTextDisplayModalCollector, buildTextDisplayModalRow } from "./textDisplayModal";
 import { withStatusCircle } from "./ui/statusTitle";
 import { resolveFooterLines } from "./ui/noticeFooter";
@@ -60,24 +60,9 @@ export function truncateForEmbedDescription(value: string, reservedChars = 0): s
   return available <= 3 ? value.substring(0, available) : `${value.substring(0, available - 3)}...`;
 }
 
-export type WebhookEmbedContext = {
-  webhook?: Webhook;
-  personaUsername?: string;
-  personaAvatarUrl?: string;
-  /** Persona the notice speaks for, so it can continue that persona's adjacent line. */
-  personaId?: number;
+export type WebhookEmbedContext = Omit<PersonaPostContext, "channel" | "persona"> & {
+  persona?: PersonaPostContext["persona"];
 };
-
-function canUseWebhookForChannel(
-  channel: TextChannel | NewsChannel | DMChannel | BaseGuildTextChannel | AnyThreadChannel | BaseGuildVoiceChannel,
-  webhook: Webhook,
-): boolean {
-  if ("isThread" in channel && typeof channel.isThread === "function" && channel.isThread()) {
-    return channel.parentId === webhook.channelId;
-  }
-
-  return webhook.channelId === channel.id;
-}
 
 /**
  * Truncates a field value to Discord's maximum allowed length.
@@ -250,53 +235,71 @@ export async function sendStandardEmbed(
   const embed = createStandardEmbed(locale, options);
   const modalButtons = prepareEmbedModalButtons(locale, options, "Error");
   const { disabledRow: disabledModalRow, components } = modalButtons;
-  let sentMessage: Message;
+  let sentMessage: Message | undefined;
   let sentViaWebhook = false;
   let threadId: string | undefined;
 
-  const personaUsername = webhookContext?.personaUsername;
-  if (webhookContext?.webhook && personaUsername && canUseWebhookForChannel(channel, webhookContext.webhook)) {
+  if (webhookContext?.persona) {
     threadId =
       "isThread" in channel && typeof channel.isThread === "function" && channel.isThread() ? channel.id : undefined;
-    try {
-      sentMessage = await sendPersonaPostViaWebhook(
-        webhookContext.webhook,
-        {
-          embeds: [embed],
-          components,
-          ...(threadId ? { threadId } : {}),
-        },
-        { username: personaUsername, avatarUrl: webhookContext.personaAvatarUrl, personaId: webhookContext.personaId },
-        channel,
-      );
-      sentViaWebhook = true;
-    } catch (error) {
-      log.warn("Failed to send embed via webhook, falling back to bot message", error as Error);
-      sentMessage = await channel.send({ embeds: [embed], components });
+    const outcome = await sendPersonaPost(
+      {
+        channel: channel as unknown as SendableChannel,
+        persona: webhookContext.persona,
+        deliveryMode: webhookContext.deliveryMode,
+        webhook: webhookContext.webhook,
+        impersonatedIdentity: webhookContext.impersonatedIdentity,
+        abortSignal: webhookContext.abortSignal,
+        isExecutionCancelled: webhookContext.isExecutionCancelled,
+        deliveryReceipts: webhookContext.deliveryReceipts,
+        deliveryState: webhookContext.deliveryState,
+        holdResponseText: webhookContext.holdResponseText,
+      },
+      { embeds: [embed], components },
+    );
+    if (outcome.status !== "sent") {
+      log.warn("Failed to send embed through persona delivery", outcome.error, {
+        metadata: { outcome: outcome.status, channelId: channel.id },
+      });
+      return;
     }
+    sentMessage = outcome.message;
+    sentViaWebhook = outcome.receipt.route === "webhook";
   } else {
-    sentMessage = await channel.send({ embeds: [embed], components });
+    sentMessage = await sendChannelMessageOnce(channel, { embeds: [embed], components }, () => undefined);
+    recordPersonaDelivery({
+      messageId: sentMessage.id,
+      channelId: sentMessage.channelId,
+      route: "bot",
+      webhookId: null,
+      identity: {
+        username: sentMessage.member?.displayName ?? sentMessage.author?.username,
+        avatarUrl: sentMessage.member?.displayAvatarURL?.() ?? sentMessage.author?.displayAvatarURL?.(),
+      },
+      speaker: null,
+    });
   }
 
-  if (!sentViaWebhook) recordChannelDeliveredBotMessage(channel.id);
+  if (!sentMessage) return;
+  const deliveredMessage = sentMessage;
 
   if (!disabledModalRow) return;
 
   const disableButtons = async (): Promise<void> => {
-    if (sentViaWebhook && webhookContext?.webhook) {
-      const author = await resolveAuthoringWebhook(channel, sentMessage.webhookId, webhookContext.webhook);
+    if (sentViaWebhook) {
+      const author = await resolveAuthoringWebhook(channel, deliveredMessage.webhookId, webhookContext?.webhook);
       if (!author) throw new Error("Authoring webhook unavailable for embed button edit");
-      await author.editMessage(sentMessage.id, {
+      await author.editMessage(deliveredMessage.id, {
         embeds: [embed],
         components: [disabledModalRow],
         ...(threadId ? { threadId } : {}),
       });
       return;
     }
-    await sentMessage.edit({ embeds: [embed], components: [disabledModalRow] });
+    await deliveredMessage.edit({ embeds: [embed], components: [disabledModalRow] });
   };
 
-  modalButtons.attach(sentMessage, disableButtons);
+  modalButtons.attach(deliveredMessage, disableButtons);
 }
 
 /**

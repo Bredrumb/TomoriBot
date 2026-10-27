@@ -372,6 +372,8 @@ async function fetchProviderTools(
       user_blocking_enabled: persona.config.user_blocking_enabled,
       user_info_updates_enabled: persona.config.user_info_updates_enabled,
       thread_creation_enabled: persona.config.thread_creation_enabled,
+      conditioning_interactions_enabled: persona.config.conditioning_interactions_enabled,
+      dice_rolling_enabled: persona.config.dice_rolling_enabled,
       danbooru_enabled: persona.config.danbooru_enabled,
     },
   };

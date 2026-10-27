@@ -504,6 +504,7 @@ export default {
       "tool_target_user-blocking": `Chặn người dùng persona`,
       "tool_target_user-info": `Cập nhật thông tin người dùng`,
       tool_target_thread: `Tạo luồng`,
+      tool_target_dice: "Tung xúc xắc",
       tool_target_capabilities: `Xem lại tính năng`,
       tool_trigger_literal_label: `Từ kích hoạt nguyên văn`,
       tool_trigger_literal_description: `Một cụm từ để khớp. Nhập mục này hoặc biểu thức chính quy.`,

@@ -1,6 +1,6 @@
 import { CONDITIONING_ACTION_LOCALE_KEYS, CONDITIONING_FOOTER_LOCALE_KEYS } from "@/utils/conditioning/conditioning";
 import type { ChatInputCommandInteraction, Client, Message, SlashCommandSubcommandBuilder } from "discord.js";
-import { EmbedBuilder, MessageFlags, PermissionFlagsBits } from "discord.js";
+import { MessageFlags, PermissionFlagsBits } from "discord.js";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
@@ -19,12 +19,7 @@ import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/pe
 import { handlePersonaAutocomplete } from "@/utils/discord/autocomplete/personaAutocomplete";
 import { resolveFallbackPersona } from "@/utils/discord/personaTurnDetectionResolver";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
-import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
-
-const EMBED_COLOR_BY_TYPE: Record<ConditioningType, ColorCode> = {
-  reward: ColorCode.AFFECTION,
-  punish: ColorCode.ERROR,
-};
+import { buildConditioningInteractionEmbed } from "@/utils/conditioning/conditioningEmbed";
 
 interface ConditioningCommandOptions {
   /** Returns extra interpolation context for the embed description localizer. */
@@ -49,6 +44,9 @@ export function createConditioningInteractionCommand(
           .setAutocomplete(true)
           .setRequired(false),
       )
+      .addUserOption((option) =>
+        option.setName("user").setDescription(localizer("en-US", commandKeys.user_description)).setRequired(false),
+      )
       .addStringOption((option) =>
         option
           .setName("reason")
@@ -68,6 +66,42 @@ export function createConditioningInteractionCommand(
         titleKey: "general.errors.guild_only_title",
         descriptionKey: "general.errors.guild_only_description",
         color: ColorCode.ERROR,
+      });
+      return;
+    }
+
+    const targetUser = interaction.options.getUser("user");
+    if (targetUser) {
+      if (interaction.options.getString("persona") !== null) {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "general.errors.invalid_option_title",
+          descriptionKey: "commands.conditioning.shared.target_conflict_description",
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      const targetMember = interaction.options.getMember("user");
+      const targetName =
+        targetMember && "displayName" in targetMember
+          ? targetMember.displayName
+          : (targetMember?.nick ?? targetUser.displayName);
+      await interaction.reply({
+        embeds: [
+          buildConditioningInteractionEmbed({
+            locale,
+            type,
+            actionKey,
+            actorLabel: `<@${interaction.user.id}>`,
+            targetName,
+            targetMention: `<@${targetUser.id}>`,
+            reasonText: normalizeConditioningReason(interaction.options.getString("reason")),
+            extraContext: cmdOptions?.getExtraContext?.(interaction) ?? {},
+            footerKey: "commands.conditioning.shared.user_footer",
+          }),
+        ],
+        flags: MessageFlags.SuppressNotifications,
       });
       return;
     }
@@ -232,30 +266,16 @@ export function createConditioningInteractionCommand(
         actionText: actionTextValue,
       });
 
-      let embedDescription = localizer(locale, commandKeys.embed_description, {
-        user: `<@${interaction.user.id}>`,
-        bot: botName,
-        ...extraContext,
+      const interactionEmbed = buildConditioningInteractionEmbed({
+        locale,
+        type,
+        actionKey,
+        actorLabel: `<@${interaction.user.id}>`,
+        targetName: botName,
+        reasonText,
+        extraContext,
+        footerKey: conditioningEvent ? CONDITIONING_FOOTER_LOCALE_KEYS[type] : null,
       });
-
-      const interactionEmbed = new EmbedBuilder()
-        .setTitle(localizedStatusTitle(locale, commandKeys.embed_title, EMBED_COLOR_BY_TYPE[type]))
-        .setColor(EMBED_COLOR_BY_TYPE[type]);
-
-      if (reasonText.length > 0) {
-        embedDescription = `${embedDescription}\n${localizer(locale, "commands.conditioning.shared.reason_line", {
-          reason: reasonText,
-        })}`;
-        if (conditioningEvent) {
-          interactionEmbed.setFooter({
-            text: localizer(locale, CONDITIONING_FOOTER_LOCALE_KEYS[type], {
-              bot: botName,
-            }),
-          });
-        }
-      }
-
-      interactionEmbed.setDescription(embedDescription);
 
       await interaction.reply({
         embeds: [interactionEmbed],

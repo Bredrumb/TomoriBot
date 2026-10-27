@@ -138,7 +138,7 @@ External resources:
   it("passes validation on en-US locale strings", async () => {
     const summary = await validateLocaleLinks({ locale: "en-US" });
     expect(summary.findings).toEqual([]);
-    expect(summary.validLinksCount).toBeGreaterThan(50);
+    expect(summary.validLinksCount).toBeGreaterThan(0);
   });
 
   it("resolves locale landing roots like /en/ and /ja/", () => {

@@ -50,7 +50,7 @@ Nunca compartilhe sua chave API com mais ninguém. Adicione ou substitua um toke
 
 Vertex AI autentica com Application Default Credentials (ADC) em vez de um segredo armazenado. Para hospedagem local, o ADC pode vir de `gcloud`; as implantações hospedadas devem usar uma identidade de carga de trabalho ou conta de serviço. Uma chave AI Studio API sozinha não autentica Vertex AI completo. O projeto Google Cloud selecionado deve ter faturamento e Vertex AI API ativados, e a identidade do host precisa de acesso Vertex. O guia de configuração está disponível em Google Vertex AI na página `API Keys` em `/help`.
 
-A configuração do provedor apoiado por Google valida credenciais por meio do endpoint de listagem de modelos autenticado. Ele não gera texto nem depende de qualquer modelo de chat atualmente marcado como padrão do catálogo, portanto, um modelo padrão retirado não pode impedir que uma credencial válida seja salva.
+A configuração do Google Gemini e do Vertex AI valida as credenciais por meio do endpoint autenticado de listagem de modelos, e o Vertex AI Express valida chaves de API com `countTokens`, portanto a configuração nunca gera texto.
 
 ### Opcional: Chave do Brave Search
 

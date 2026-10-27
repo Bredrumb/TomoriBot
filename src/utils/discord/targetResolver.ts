@@ -7,6 +7,7 @@ import { resolveEffectiveUserNaming } from "@/utils/text/userNaming";
 import { isBridgeUserId } from "@/utils/bridges";
 import { isMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserId";
 import { normalizeParticipantAlias } from "@/utils/text/participants/aliases";
+import type { TomoriState } from "@/types/db/schema";
 import {
   collectParticipantTargetIndex,
   projectConversationUserReferences,
@@ -44,6 +45,59 @@ type NotFoundUserTarget = {
 };
 
 export type UserTargetResolution = ResolvedUserTarget | AmbiguousUserTarget | NotFoundUserTarget;
+
+export type IdentityTargetResolution =
+  | (ResolvedUserTarget & { targetType: "user" })
+  | { status: "resolved"; targetType: "persona"; persona: TomoriState & { persona_id: number }; displayLabel: string }
+  | AmbiguousUserTarget
+  | NotFoundUserTarget;
+
+export async function resolveIdentityTarget(
+  input: string,
+  context: ToolContext,
+  personas: readonly TomoriState[],
+): Promise<IdentityTargetResolution> {
+  const qualifier = input.trim().match(/^(persona|user):\s*(.+)$/iu);
+  const name = qualifier?.[2] ?? input;
+  const normalized = normalizeUserTargetInput(name);
+  const matches = personas.filter(
+    (persona): persona is TomoriState & { persona_id: number } =>
+      qualifier?.[1].toLowerCase() !== "user" &&
+      typeof persona.persona_id === "number" &&
+      normalizeUserTargetInput(persona.persona_nickname) === normalized,
+  );
+  const user =
+    qualifier?.[1].toLowerCase() === "persona"
+      ? { status: "not_found" as const, input }
+      : await resolveUserTarget(name, context);
+  if (matches.length > 1 || (matches.length > 0 && user.status !== "not_found")) {
+    return {
+      status: "ambiguous",
+      input,
+      candidates: [
+        ...matches.map((persona) => ({
+          label: persona.persona_nickname,
+          targetId: `persona:${persona.persona_id}`,
+          isBridgeUser: false,
+        })),
+        ...(user.status === "resolved"
+          ? [{ label: user.displayLabel, targetId: user.targetId, isBridgeUser: user.isBridgeUser }]
+          : user.status === "ambiguous"
+            ? user.candidates
+            : []),
+      ],
+    };
+  }
+  if (matches.length === 1) {
+    return {
+      status: "resolved",
+      targetType: "persona",
+      persona: matches[0],
+      displayLabel: matches[0].persona_nickname,
+    };
+  }
+  return user.status === "resolved" ? { ...user, targetType: "user" } : user;
+}
 
 type ResolvedChannelTarget = {
   status: "resolved";

@@ -98,7 +98,15 @@ Dữ liệu lịch sử nhập vào được lưu dưới dạng tài liệu, v�
 
 Lệnh `/conditioning` là bộ nhớ theo từng persona, từng máy chủ giúp định hướng hành vi của persona theo thời gian. Đây là một gợi ý nhẹ nhàng hơn so với một thuộc tính hoàn chỉnh hay prompt hệ thống. Hãy sử dụng tính năng này để củng cố cách một nhân vật cụ thể nên hành xử trong một máy chủ cụ thể.
 
-Mỗi lượt `/reward` hoặc `/punish` đều được kiểm đếm, nhưng nó chỉ trở thành một bộ nhớ mà bot thực sự làm theo khi bạn cung cấp một `reason`, hiển thị như sau trong prompt của bot:
+Dùng tùy chọn `user` của `/reward` hoặc `/punish` để gửi embed vui nhắm đến người dùng đó.
+Chọn `user` hoặc `persona`, mỗi lần chỉ một đối tượng. Tương tác với người dùng không lưu bộ nhớ điều hòa
+hay tạo phản hồi AI, kể cả khi có `reason`; dòng cuối "sẽ nhớ chuyện này" chỉ là lời đùa.
+Với cả người dùng và persona, lý do được in nghiêng ngay trong câu mô tả hành động.
+
+Bật `Tương tác vui` trong `/config` > `Plugin` > `Công cụ khả dụng` để persona thể hiện cảm xúc bằng hành động với người dùng hoặc persona khác. Tùy chọn mặc định bật và có thể tắt trong cùng menu này. Mỗi hành động cần đối tượng, hành động và lý do; cho ăn còn cần chỉ rõ món ăn. Người dùng chỉ nhận embed vui. Persona nhận bộ nhớ điều hòa và được xếp hàng phản ứng sau khi người đang nói kết thúc. Persona đang phản ứng không thể dùng công cụ này trong lượt trả lời đó. Cả công cụ lẫn lệnh gạch chéo đều chọn ngẫu nhiên các tiêu đề đã dịch.
+
+Mỗi lượt `/reward` hoặc `/punish` nhắm đến persona đều được kiểm đếm, nhưng chỉ trở thành bộ nhớ mà bot
+thực sự làm theo khi bạn cung cấp `reason`, hiển thị như sau trong prompt của bot:
 
 ```text
 ## Rewarded Behaviors

@@ -8,6 +8,7 @@
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { sendToolNotice } from "@/utils/discord/toolProgressNotice";
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { log } from "@/utils/misc/logger";
 import { ResponseSizeError, readBoundedResponse } from "@/utils/security/boundedResponse";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
@@ -283,12 +284,7 @@ export class DuckDuckGoEngine implements WebSearchEngine {
           descriptionKey: "general.errors.duckduckgo_rate_limit.description",
           footerKey: "general.errors.duckduckgo_rate_limit.footer",
         },
-        {
-          webhook: context.webhook,
-          personaUsername: context.personaUsername,
-          personaAvatarUrl: context.personaAvatarUrl,
-          personaId: context.tomoriState.persona_id,
-        },
+        buildToolPersonaPostContext(context, context.tomoriState),
       ).catch((error) => log.warn("Failed to send DuckDuckGo rate-limit notice (non-fatal)", error as Error));
     }
 

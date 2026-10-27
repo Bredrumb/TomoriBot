@@ -1,0 +1,32 @@
+export default {
+  roll: {
+    description: "Roll dice for tabletop games and roleplay.",
+    dice_description: "Dice to roll, such as 3d4 or 1d20+5 (default: 1d20).",
+    mode_description: "Roll normally, or keep the higher or lower of two d20s.",
+    reason_description: "A short label for the roll, such as Stealth check.",
+    visibility_description: "Who can see the result, including whether the bot receives it in chat context.",
+    normal_option: "Normal",
+    advantage_option: "Advantage",
+    disadvantage_option: "Disadvantage",
+    public_option: "Public",
+    hidden_option: "Hidden",
+    shared_option: "Public + Bot",
+    title: "🎲 Dice Roll",
+    rolled: "**{actor}** rolled `{dice}`:",
+    rolled_with_reason: "**{actor}** rolled `{dice}` for *{reason}*:",
+    advantage_line: "Advantage: {rolls}{modifier}",
+    disadvantage_line: "Disadvantage: {rolls}{modifier}",
+    calculation_line: "Calculation: {calculation}",
+    footer_public: "Public • Not shared with the bot",
+    footer_hidden: "Hidden • Only you can see this",
+    footer_shared: "Public • Shared with the bot",
+    invalid_title: "Invalid Dice Roll",
+    invalid_input:
+      "Enter a dice expression of up to 64 characters, a valid mode, and a reason of up to 100 characters. Example: `1d20+5`.",
+    invalid_notation: "Use one dice group with an optional modifier, such as `d20`, `3d4`, `2d6+3`, or `1d20-2`.",
+    invalid_limits:
+      "Roll 1-100 dice with 2-1,000 sides each and a modifier between -10,000 and +10,000. Example: `2d6+3`.",
+    invalid_mode: "Advantage and disadvantage require `1d20` with an optional modifier, such as `1d20+5`.",
+    invalid_visibility: "Choose Public, Hidden, or Public + Bot.",
+  },
+};

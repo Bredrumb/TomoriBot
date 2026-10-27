@@ -9,7 +9,12 @@ import {
 } from "@/modules/natural-nudges/runtime/matcher";
 import { ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 import * as model from "@/modules/natural-nudges/runtime/model";
-import type { DecisionModelOption, DecisionResult, StructuredOutputResult } from "@/types/provider/featureInterfaces";
+import type {
+  DecisionModelOption,
+  DecisionResult,
+  ProviderStructuredJsonRequest,
+  StructuredOutputResult,
+} from "@/types/provider/featureInterfaces";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { savedProviderConfigSchema } from "@/types/db/schema";
 import * as serverStructuredOutput from "@/utils/provider/serverStructuredOutput";
@@ -37,12 +42,29 @@ const completed = (choice: string, probabilities: Record<string, number>): Decis
 });
 
 describe("Decision matcher", () => {
+  it("sends no request when admission denies a Decision check", async () => {
+    const call = spyOn(executors, "callDecisionsForProvider");
+    spies.push(call);
+    expect(
+      await matchActiveNudge({ state, backend: decision, options, evidence: "x", admitRequest: () => false }),
+    ).toMatchObject({
+      choice: null,
+      reason: "check_cap_reached",
+    });
+    expect(call).not.toHaveBeenCalled();
+  });
   it("asks one choice over the interests plus none, and reads the winner with its margin", async () => {
     const call = spyOn(executors, "callDecisionsForProvider").mockResolvedValue(
       completed("i01", { i01: 0.7, none: 0.3 }),
     );
     spies.push(call);
-    const result = await matchActiveNudge({ state, backend: decision, options, evidence: "Juno: Gundam!" });
+    const result = await matchActiveNudge({
+      admitRequest: () => true,
+      state,
+      backend: decision,
+      options,
+      evidence: "Juno: Gundam!",
+    });
     expect(result).toMatchObject({ choice: "i01", reason: "matched", kind: "decision" });
     expect(result.margin).toBeCloseTo(0.4);
     const [question] = call.mock.calls[0][0].questions;
@@ -70,7 +92,9 @@ describe("Decision matcher", () => {
     ];
     for (const [answer, reason] of cases) {
       spies.push(spyOn(executors, "callDecisionsForProvider").mockResolvedValue(answer));
-      expect(await matchActiveNudge({ state, backend: decision, options, evidence: "x" })).toMatchObject({
+      expect(
+        await matchActiveNudge({ admitRequest: () => true, state, backend: decision, options, evidence: "x" }),
+      ).toMatchObject({
         choice: null,
         reason,
       });
@@ -80,7 +104,10 @@ describe("Decision matcher", () => {
 
 describe("Natural Nudges model matcher", () => {
   function stubModel(results: Array<StructuredOutputResult<{ topic: string }>>) {
-    const callStructuredJSON = mock(async () => results.shift() as StructuredOutputResult<{ topic: string }>);
+    const callStructuredJSON = mock(async (request: ProviderStructuredJsonRequest) => {
+      request.onUsage?.({ inputTokens: 12, outputTokens: 3 });
+      return results.shift() as StructuredOutputResult<{ topic: string }>;
+    });
     spies.push(
       spyOn(serverStructuredOutput, "resolveServerStructuredModel").mockResolvedValue({
         capability: { callStructuredJSON } as never,
@@ -105,6 +132,7 @@ describe("Natural Nudges model matcher", () => {
   it("keeps member text inside the escaped evidence block and answers at temperature 0", async () => {
     const call = stubModel([{ success: true, data: { topic: "i01" } }]);
     const result = await matchActiveNudge({
+      admitRequest: () => true,
       state,
       backend: llm,
       options,
@@ -119,14 +147,18 @@ describe("Natural Nudges model matcher", () => {
 
   it("retries one malformed answer, then reads junk or a refusal as no fire", async () => {
     const twice = stubModel([malformed, malformed]);
-    expect(await matchActiveNudge({ state, backend: llm, options, evidence: "x" })).toMatchObject({
+    expect(
+      await matchActiveNudge({ admitRequest: () => true, state, backend: llm, options, evidence: "x" }),
+    ).toMatchObject({
       choice: null,
       reason: "malformed",
     });
     expect(twice).toHaveBeenCalledTimes(2);
 
     const refused = stubModel([{ success: false, error: "blocked", failure: "refusal" }]);
-    expect(await matchActiveNudge({ state, backend: llm, options, evidence: "x" })).toMatchObject({
+    expect(
+      await matchActiveNudge({ admitRequest: () => true, state, backend: llm, options, evidence: "x" }),
+    ).toMatchObject({
       choice: null,
       reason: "refused",
     });
@@ -136,9 +168,26 @@ describe("Natural Nudges model matcher", () => {
   it("reads a paying option's refusal as denied, which pauses further checks", async () => {
     const denial = new ProviderRequestDeniedError(undefined, () => ({ titleKey: "fixture", description: "fixture" }));
     stubModel([{ success: false, error: denial.message, failure: "transport", cause: denial }]);
-    const result = await matchActiveNudge({ state, backend: llm, options, evidence: "x" });
+    const result = await matchActiveNudge({ admitRequest: () => true, state, backend: llm, options, evidence: "x" });
     expect(result).toMatchObject({ choice: null, reason: "denied" });
     expect(pausesActiveNudgeChecks(result)).toBe(true);
+  });
+
+  it("admits each format retry and preserves usage when the budget denies the retry", async () => {
+    const call = stubModel([malformed]);
+    let remaining = 1;
+    const admitRequest = () => remaining-- > 0;
+    expect(await matchActiveNudge({ state, backend: llm, options, evidence: "x", admitRequest })).toMatchObject({
+      choice: null,
+      reason: "check_cap_reached",
+      usage: { inputTokens: 12, outputTokens: 3 },
+    });
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(await matchActiveNudge({ state, backend: llm, options, evidence: "x", admitRequest })).toMatchObject({
+      choice: null,
+      reason: "check_cap_reached",
+    });
+    expect(call).toHaveBeenCalledTimes(1);
   });
 });
 

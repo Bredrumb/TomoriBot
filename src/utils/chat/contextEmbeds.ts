@@ -38,6 +38,7 @@ export function processEmbedsFromMessage(args: {
   let processedSystemEmbed = false;
 
   for (const embed of args.embeds) {
+    if (classifyProtocolEmbed(embed) === "unshared_dice_roll") continue;
     const embedCheck = checkTargetEmbed(embed);
     if (embedCheck.isTarget && embed.description) {
       const embedContent = formatTargetEmbedForContext(
@@ -144,6 +145,7 @@ export function formatTargetEmbedForContext(
     "user_info_update",
     "user_moderation",
     "danbooru_tags",
+    "dice_roll",
   ];
   return inlineSystemTypes.includes(embedType ?? "")
     ? `[System: ${embedBody}]`

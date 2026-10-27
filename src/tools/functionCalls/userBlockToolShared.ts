@@ -3,6 +3,7 @@ import type { PersonaUserBlockRow, PersonaUserBlockType } from "@/types/db/schem
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { invalidatePersonaUserBlockCache } from "@/utils/cache/personaUserBlockCache";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { resolveUserTarget } from "@/utils/discord/targetResolver";
 import { personaUserBlockRepository } from "@/utils/db/repositories";
 import { ColorCode, log } from "@/utils/misc/logger";
@@ -283,11 +284,7 @@ export async function sendUserBlockedEmbed(params: {
       footerKey: "tools.user_block.block_footer",
       color: params.blockType === "mute" ? ColorCode.WARN : ColorCode.ERROR,
     },
-    {
-      webhook: params.context.webhook,
-      personaUsername: params.context.personaUsername,
-      personaAvatarUrl: params.context.personaAvatarUrl,
-    },
+    buildToolPersonaPostContext(params.context, params.context.tomoriState),
   );
 }
 
@@ -323,11 +320,7 @@ export async function sendUserUnblockedEmbed(params: {
       },
       color: ColorCode.SUCCESS,
     },
-    {
-      webhook: params.context.webhook,
-      personaUsername: params.context.personaUsername,
-      personaAvatarUrl: params.context.personaAvatarUrl,
-    },
+    buildToolPersonaPostContext(params.context, params.context.tomoriState),
   );
 }
 

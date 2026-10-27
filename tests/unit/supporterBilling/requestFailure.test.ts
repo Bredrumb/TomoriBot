@@ -12,6 +12,27 @@ import { commandRegistry } from "@/utils/discord/commandRegistry";
 
 describe("subscription request failures", () => {
   beforeAll(async () => initializeLocalizer());
+  it("explains an unavailable cost estimate in every locale", () => {
+    expectForEveryLocale((locale) => {
+      const copyLocale = hasLocaleKey(locale, "commands.subscribe.request.pricing_unavailable") ? locale : "en-US";
+      for (const scope of ["personal", "server"] as const) {
+        const copy = getSupporterRequestFailureCopy(
+          new SupporterRequestDeniedError("pricing_unavailable", undefined, "image", scope),
+          locale,
+        );
+        expect(copy.description).toBe(
+          localizedCopy(copyLocale, "commands.subscribe.request.pricing_unavailable", {
+            capability: localizedCopy(locale, "commands.subscribe.request.capabilities.image"),
+            config:
+              scope === "personal"
+                ? commandRegistry.getCommandMention("personal", "config", undefined, true)
+                : commandRegistry.getCommandMention("config", undefined, undefined, true),
+          }),
+        );
+        expect(copy.description).not.toMatch(/\{\w+\}/);
+      }
+    });
+  });
   it("explains provider media minimums without suggesting the allowance is exhausted", () => {
     const providerError = readOpenRouterLimitError(
       402,

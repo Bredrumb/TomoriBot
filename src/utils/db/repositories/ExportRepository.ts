@@ -62,6 +62,8 @@ interface WorkspaceConfigProjectionRow {
   sticker_usage_enabled: boolean;
   imagegen_enabled: boolean;
   danbooru_enabled: boolean;
+  conditioning_interactions_enabled: boolean;
+  dice_rolling_enabled: boolean;
   manage_message_enabled: boolean;
   videogen_enabled: boolean;
   voice_message_enabled: boolean;
@@ -346,6 +348,8 @@ export class ExportRepository {
           COALESCE(scac.sticker_usage_enabled, true)                AS sticker_usage_enabled,
           COALESCE(scac.imagegen_enabled, true)                     AS imagegen_enabled,
           COALESCE(scac.danbooru_enabled, true)                     AS danbooru_enabled,
+          COALESCE(scac.conditioning_interactions_enabled, true) AS conditioning_interactions_enabled,
+          COALESCE(scac.dice_rolling_enabled, false) AS dice_rolling_enabled,
           COALESCE(snec.tool_notice_hidden_keys, ARRAY[]::TEXT[])   AS tool_notice_hidden_keys,
           snec.tool_notice_verbosity                                AS tool_notice_verbosity,
           COALESCE(scc.self_debug_enabled, false)                   AS self_debug_enabled,
@@ -536,6 +540,8 @@ export class ExportRepository {
             sticker_usage_enabled: configData.sticker_usage_enabled,
             imagegen_enabled: configData.imagegen_enabled,
             danbooru_enabled: configData.danbooru_enabled,
+            conditioning_interactions_enabled: configData.conditioning_interactions_enabled,
+            dice_rolling_enabled: configData.dice_rolling_enabled,
             tool_notice_hidden_keys: configData.tool_notice_hidden_keys ?? [],
             tool_notice_verbosity: configData.tool_notice_verbosity ?? undefined,
             self_debug_enabled: configData.self_debug_enabled,
@@ -757,6 +763,8 @@ export class ExportRepository {
           COALESCE(scac.sticker_usage_enabled, true) AS sticker_usage_enabled,
           COALESCE(scac.imagegen_enabled, true) AS imagegen_enabled,
           COALESCE(scac.danbooru_enabled, true) AS danbooru_enabled,
+          COALESCE(scac.conditioning_interactions_enabled, true) AS conditioning_interactions_enabled,
+          COALESCE(scac.dice_rolling_enabled, false) AS dice_rolling_enabled,
           COALESCE(scac.manage_message_enabled, true) AS manage_message_enabled,
           COALESCE(scac.videogen_enabled, false) AS videogen_enabled,
           COALESCE(scac.voice_message_enabled, true) AS voice_message_enabled,
@@ -887,6 +895,8 @@ export class ExportRepository {
           sticker_usage_enabled: configData.sticker_usage_enabled,
           imagegen_enabled: configData.imagegen_enabled,
           danbooru_enabled: configData.danbooru_enabled,
+          conditioning_interactions_enabled: configData.conditioning_interactions_enabled,
+          dice_rolling_enabled: configData.dice_rolling_enabled,
           manage_message_enabled: configData.manage_message_enabled,
           videogen_enabled: configData.videogen_enabled,
           voice_message_enabled: configData.voice_message_enabled,

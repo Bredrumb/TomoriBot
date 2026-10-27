@@ -665,7 +665,7 @@ class NaturalNudgeRepository {
     `;
   }
 
-  /** Fires inside the lookback window plus the newest idle nudges beyond it, enough for every derived meter. */
+  /** Latest idle fires preserve cadence and pending verdicts, while latest invitations establish the streak across scenes. */
   async loadFireHistory(
     serverId: number,
     since: Date,
@@ -682,12 +682,26 @@ class NaturalNudgeRepository {
         ORDER BY fired_at DESC
       `,
           sql`
+        WITH latest_idle AS (
         SELECT fire_id, server_id, channel_disc_id, persona_id, mode, category, idle_nudge_key, target_user_id,
           opener_message_disc_id, answered, fired_at
         FROM natural_nudge_fires
         WHERE server_id = ${serverId} AND mode = 'idle'
         ORDER BY fired_at DESC
         LIMIT ${latestIdleNudgeCount}
+        ), latest_invitations AS (
+        SELECT fire_id, server_id, channel_disc_id, persona_id, mode, category, idle_nudge_key, target_user_id,
+          opener_message_disc_id, answered, fired_at
+        FROM natural_nudge_fires
+        WHERE server_id = ${serverId} AND mode = 'idle'
+          AND category IN ('ping_user', 'revive_topic', 'start_topic')
+        ORDER BY fired_at DESC
+        LIMIT ${latestIdleNudgeCount}
+        )
+        SELECT * FROM latest_idle
+        UNION
+        SELECT * FROM latest_invitations
+        ORDER BY fired_at DESC
       `,
         ]),
       "load idle nudge fire history",

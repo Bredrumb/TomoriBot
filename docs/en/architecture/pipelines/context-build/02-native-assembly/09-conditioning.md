@@ -16,13 +16,36 @@ The contributor `buildConditioningContextItem` in `src/utils/text/context/templa
    - Filters out entries with blank reason text.
    - Caps each category to `CONDITIONING_CONTEXT_MAX_GROUPS_PER_TYPE` groups.
 3. **Formatting and emission**:
-   - Groups format with action past participles (`getConditioningContextPastParticiple`), triggerer user mentions, reasons, and repetition counts:
+   - Groups format with action past participles (`getConditioningContextPastParticiple`), actor user mentions or persona names, reasons, and repetition counts:
      - `## Rewarded Behaviors`: "Here are past things {botName} did that got rewarded for. Strive to do them again:"
      - `## Punished Behaviors`: "Here are past things {botName} did that got punished for. Avoid doing them again:"
    - Passes assembled sections through `convertMentions`.
    - Emits a single `system`-role item tagged `KNOWLEDGE_SERVER_CONDITIONING`. If both sections produce zero groups, returns `null`.
 
 ## Constraints and rationale
+
+`interact_with_target` shares the localized embed renderer with `/reward` and `/punish`, including
+random title variants and italic reasons. Its workspace capability, `conditioning_interactions_enabled`,
+defaults to true and is managed under `/config` > Plugins > Available Tools. This tool remains
+available in Deliberate Tool Mode when enabled, independently of stickers.
+Tool embeds use the invoking persona's shared author resolution, including its committed appearance
+and sprite for main and alter personas. One persona delivery receipt records the delivered message and
+every artifact posted with it.
+
+The tool records the active persona as the actor when targeting another persona. Rows contain exactly
+one of `user_id` or `actor_persona_id`; repeats are counted separately for each actor. Actor names are
+resolved when the groups are read, and feedback is included without requiring that actor to be present.
+Deleting an actor's user or persona row cascades to their feedback. Managers remove mixed-actor groups
+through the existing conditioning panel.
+
+After a successful post, persona targets enter the normal chat admission and channel queue with the
+selected target and the initiating member's access identity. The queued turn receives an injected
+context item that names the actor, the selected target, the action, the reason, and the delivered
+message reference. The target reacts to that event; a later message or embed cannot redirect it. The
+queued reply disables this interaction tool to stop reciprocal tool chains. User targets receive only
+the embed. Cancellation is checked before writing, posting, and triggering a reply; a completed write
+is retained if delivery fails or is cancelled, no reaction is queued, and an uncertain send is never
+reposted as the bot.
 
 - **Feedback isolation**: Conditioning is persona-lineage scoped. It reinforces character consistency across server turns without bleeding feedback across distinct personas.
 - **Impersonation suppression**: User impersonation turns suppress conditioning so that past bot critiques do not bias the imitated user persona.

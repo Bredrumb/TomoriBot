@@ -31,6 +31,12 @@ export function configureSubcommand(subcommand: SlashCommandSubcommandBuilder) {
         .setAutocomplete(true)
         .setRequired(false),
     )
+    .addUserOption((option) =>
+      option
+        .setName("user")
+        .setDescription(localizer("en-US", "commands.reward.feed.user_description"))
+        .setRequired(false),
+    )
     .addStringOption((option) =>
       option
         .setName("reason")

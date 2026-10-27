@@ -6,14 +6,21 @@ const PUNISH_ACTION_KEYS = ["spank", "pinch", "bite", "squeeze", "bonk"] as cons
 type RewardActionKey = (typeof REWARD_ACTION_KEYS)[number];
 type PunishActionKey = (typeof PUNISH_ACTION_KEYS)[number];
 export type ConditioningActionKey = RewardActionKey | PunishActionKey;
+export const CONDITIONING_ACTION_TYPES = Object.fromEntries([
+  ...REWARD_ACTION_KEYS.map((action) => [action, "reward"]),
+  ...PUNISH_ACTION_KEYS.map((action) => [action, "punish"]),
+]) as Record<ConditioningActionKey, ConditioningType>;
 export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
   ConditioningActionKey,
   {
     description: string;
     persona_description: string;
+    user_description: string;
     reason_description: string;
     embed_title: string;
+    embed_titles: readonly string[];
     embed_description: string;
+    embed_description_with_reason: string;
     history_label: string;
     history_label_plural: string;
   }
@@ -21,90 +28,173 @@ export const CONDITIONING_ACTION_LOCALE_KEYS: Record<
   headpat: {
     description: "commands.reward.headpat.description",
     persona_description: "commands.reward.headpat.persona_description",
+    user_description: "commands.reward.headpat.user_description",
     reason_description: "commands.reward.headpat.reason_description",
     embed_title: "commands.reward.headpat.embed_title",
+    embed_titles: [
+      "commands.reward.headpat.embed_title",
+      "commands.reward.headpat.embed_title_playful",
+      "commands.reward.headpat.embed_title_extra",
+      "commands.reward.headpat.embed_title_4",
+      "commands.reward.headpat.embed_title_5",
+    ],
     embed_description: "commands.reward.headpat.embed_description",
+    embed_description_with_reason: "commands.reward.headpat.embed_description_with_reason",
     history_label: "commands.reward.headpat.history_label",
     history_label_plural: "commands.reward.headpat.history_label_plural",
   },
   hug: {
     description: "commands.reward.hug.description",
     persona_description: "commands.reward.hug.persona_description",
+    user_description: "commands.reward.hug.user_description",
     reason_description: "commands.reward.hug.reason_description",
     embed_title: "commands.reward.hug.embed_title",
+    embed_titles: [
+      "commands.reward.hug.embed_title",
+      "commands.reward.hug.embed_title_playful",
+      "commands.reward.hug.embed_title_extra",
+      "commands.reward.hug.embed_title_4",
+      "commands.reward.hug.embed_title_5",
+    ],
     embed_description: "commands.reward.hug.embed_description",
+    embed_description_with_reason: "commands.reward.hug.embed_description_with_reason",
     history_label: "commands.reward.hug.history_label",
     history_label_plural: "commands.reward.hug.history_label_plural",
   },
   kiss: {
     description: "commands.reward.kiss.description",
     persona_description: "commands.reward.kiss.persona_description",
+    user_description: "commands.reward.kiss.user_description",
     reason_description: "commands.reward.kiss.reason_description",
     embed_title: "commands.reward.kiss.embed_title",
+    embed_titles: [
+      "commands.reward.kiss.embed_title",
+      "commands.reward.kiss.embed_title_playful",
+      "commands.reward.kiss.embed_title_extra",
+      "commands.reward.kiss.embed_title_4",
+      "commands.reward.kiss.embed_title_5",
+    ],
     embed_description: "commands.reward.kiss.embed_description",
+    embed_description_with_reason: "commands.reward.kiss.embed_description_with_reason",
     history_label: "commands.reward.kiss.history_label",
     history_label_plural: "commands.reward.kiss.history_label_plural",
   },
   tickle: {
     description: "commands.reward.tickle.description",
     persona_description: "commands.reward.tickle.persona_description",
+    user_description: "commands.reward.tickle.user_description",
     reason_description: "commands.reward.tickle.reason_description",
     embed_title: "commands.reward.tickle.embed_title",
+    embed_titles: [
+      "commands.reward.tickle.embed_title",
+      "commands.reward.tickle.embed_title_playful",
+      "commands.reward.tickle.embed_title_extra",
+    ],
     embed_description: "commands.reward.tickle.embed_description",
+    embed_description_with_reason: "commands.reward.tickle.embed_description_with_reason",
     history_label: "commands.reward.tickle.history_label",
     history_label_plural: "commands.reward.tickle.history_label_plural",
   },
   feed: {
     description: "commands.reward.feed.description",
     persona_description: "commands.reward.feed.persona_description",
+    user_description: "commands.reward.feed.user_description",
     reason_description: "commands.reward.feed.reason_description",
     embed_title: "commands.reward.feed.embed_title",
+    embed_titles: [
+      "commands.reward.feed.embed_title",
+      "commands.reward.feed.embed_title_playful",
+      "commands.reward.feed.embed_title_extra",
+      "commands.reward.feed.embed_title_4",
+      "commands.reward.feed.embed_title_5",
+    ],
     embed_description: "commands.reward.feed.embed_description",
+    embed_description_with_reason: "commands.reward.feed.embed_description_with_reason",
     history_label: "commands.reward.feed.history_label",
     history_label_plural: "commands.reward.feed.history_label_plural",
   },
   spank: {
     description: "commands.punish.spank.description",
     persona_description: "commands.punish.spank.persona_description",
+    user_description: "commands.punish.spank.user_description",
     reason_description: "commands.punish.spank.reason_description",
     embed_title: "commands.punish.spank.embed_title",
+    embed_titles: [
+      "commands.punish.spank.embed_title",
+      "commands.punish.spank.embed_title_playful",
+      "commands.punish.spank.embed_title_extra",
+    ],
     embed_description: "commands.punish.spank.embed_description",
+    embed_description_with_reason: "commands.punish.spank.embed_description_with_reason",
     history_label: "commands.punish.spank.history_label",
     history_label_plural: "commands.punish.spank.history_label_plural",
   },
   pinch: {
     description: "commands.punish.pinch.description",
     persona_description: "commands.punish.pinch.persona_description",
+    user_description: "commands.punish.pinch.user_description",
     reason_description: "commands.punish.pinch.reason_description",
     embed_title: "commands.punish.pinch.embed_title",
+    embed_titles: [
+      "commands.punish.pinch.embed_title",
+      "commands.punish.pinch.embed_title_playful",
+      "commands.punish.pinch.embed_title_extra",
+    ],
     embed_description: "commands.punish.pinch.embed_description",
+    embed_description_with_reason: "commands.punish.pinch.embed_description_with_reason",
     history_label: "commands.punish.pinch.history_label",
     history_label_plural: "commands.punish.pinch.history_label_plural",
   },
   bite: {
     description: "commands.punish.bite.description",
     persona_description: "commands.punish.bite.persona_description",
+    user_description: "commands.punish.bite.user_description",
     reason_description: "commands.punish.bite.reason_description",
     embed_title: "commands.punish.bite.embed_title",
+    embed_titles: [
+      "commands.punish.bite.embed_title",
+      "commands.punish.bite.embed_title_playful",
+      "commands.punish.bite.embed_title_extra",
+      "commands.punish.bite.embed_title_4",
+      "commands.punish.bite.embed_title_5",
+    ],
     embed_description: "commands.punish.bite.embed_description",
+    embed_description_with_reason: "commands.punish.bite.embed_description_with_reason",
     history_label: "commands.punish.bite.history_label",
     history_label_plural: "commands.punish.bite.history_label_plural",
   },
   squeeze: {
     description: "commands.punish.squeeze.description",
     persona_description: "commands.punish.squeeze.persona_description",
+    user_description: "commands.punish.squeeze.user_description",
     reason_description: "commands.punish.squeeze.reason_description",
     embed_title: "commands.punish.squeeze.embed_title",
+    embed_titles: [
+      "commands.punish.squeeze.embed_title",
+      "commands.punish.squeeze.embed_title_playful",
+      "commands.punish.squeeze.embed_title_extra",
+      "commands.punish.squeeze.embed_title_4",
+    ],
     embed_description: "commands.punish.squeeze.embed_description",
+    embed_description_with_reason: "commands.punish.squeeze.embed_description_with_reason",
     history_label: "commands.punish.squeeze.history_label",
     history_label_plural: "commands.punish.squeeze.history_label_plural",
   },
   bonk: {
     description: "commands.punish.bonk.description",
     persona_description: "commands.punish.bonk.persona_description",
+    user_description: "commands.punish.bonk.user_description",
     reason_description: "commands.punish.bonk.reason_description",
     embed_title: "commands.punish.bonk.embed_title",
+    embed_titles: [
+      "commands.punish.bonk.embed_title",
+      "commands.punish.bonk.embed_title_playful",
+      "commands.punish.bonk.embed_title_extra",
+      "commands.punish.bonk.embed_title_4",
+      "commands.punish.bonk.embed_title_5",
+    ],
     embed_description: "commands.punish.bonk.embed_description",
+    embed_description_with_reason: "commands.punish.bonk.embed_description_with_reason",
     history_label: "commands.punish.bonk.history_label",
     history_label_plural: "commands.punish.bonk.history_label_plural",
   },

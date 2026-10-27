@@ -113,6 +113,15 @@ controls Discord spoilers only.
 Auto image generation passes it to image tool delivery; it does not change the planner's instructions,
 the generation request, or provider content filters.
 
+## Reward and punishment targets
+
+`/reward` and `/punish` accept an optional `user` target alongside the existing `persona` option.
+Supplying both is rejected. User targets return an embed before persona loading, persona access checks,
+conditioning writes, or manual chat dispatch. A reason adds a playful footer without saving anything.
+Reasons appear in italics within the localized action sentence for both user and persona targets.
+Persona targets retain conditioning and manual chat behavior, including fallback persona selection
+when neither target option is supplied.
+
 ## Interaction timing rules
 
 Discord requires interaction acknowledgement within approximately three seconds of generation (`interaction.createdTimestamp`). An acknowledgement taking longer than 1.5 seconds emits a rate-limited latency warning (`INTERACTION_ACK_WARN_MS`). After acknowledgement, the bot has up to 15 minutes to complete work.
@@ -210,6 +219,7 @@ Persistence is described in
 - `reset`
 - `respond`
 - `reward`
+- `roll`
 - `scheduled-task`
 - `setup`
 - `stats`

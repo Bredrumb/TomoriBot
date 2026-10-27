@@ -63,7 +63,15 @@ export interface ResolvedChecker {
  */
 const RECOMMENDED_CHECKER_LLMS = [{ provider: "google", codename: "gemma-4-31b-it" }] as const;
 
-type MatcherReason = "matched" | "none" | "refused" | "malformed" | "unavailable" | "denied" | "failed";
+type MatcherReason =
+  | "matched"
+  | "none"
+  | "refused"
+  | "malformed"
+  | "unavailable"
+  | "denied"
+  | "failed"
+  | "check_cap_reached";
 
 export interface MatcherResult {
   /** An option ID, or null for `none` and for every answer that cannot be trusted. */
@@ -237,6 +245,7 @@ async function matchWithLlm(
   ref: NudgeModelRef,
   options: readonly MatcherOption[],
   evidence: string,
+  admitRequest: () => boolean,
 ): Promise<MatcherResult> {
   const failureContext = { serverId: state.server_id };
   const resolution = await resolveNudgeModel(state, ref, failureContext);
@@ -253,8 +262,9 @@ async function matchWithLlm(
   const userPrompt = `Options:\n${optionLines.join("\n")}\n\nConversation evidence:\n<<<\n${escapeDataText(evidence)}\n>>>`;
   const abortSignal = AbortSignal.timeout(MATCHER_TIMEOUT_MS);
   let usage: TokenUsage | undefined;
-  const ask = (prompt: string) =>
-    withProviderUsageContext(resolved.usageContext, () =>
+  const ask = (prompt: string) => {
+    if (!admitRequest()) return null;
+    return withProviderUsageContext(resolved.usageContext, () =>
       resolved.capability.callStructuredJSON<z.infer<typeof answerSchema>>(
         {
           apiKey: resolved.apiKey,
@@ -276,12 +286,14 @@ async function matchWithLlm(
         answerSchema,
       ),
     );
+  };
 
   let result = await ask(userPrompt);
-  if (!result.success && result.failure === "malformed" && result.malformed && !abortSignal.aborted) {
+  if (result && !result.success && result.failure === "malformed" && result.malformed && !abortSignal.aborted) {
     result = await ask(`${userPrompt}\n\n${formatStructuredRetryNote(result.malformed)}`);
   }
   const base = { kind: "llm" as const, model, usage };
+  if (!result) return { ...base, choice: null, reason: "check_cap_reached" };
   if (result.success) {
     return result.data.topic === MATCHER_NONE_ID
       ? { ...base, choice: null, reason: "none" }
@@ -306,7 +318,12 @@ export async function matchActiveNudge(args: {
   backend: MatcherBackend;
   options: readonly MatcherOption[];
   evidence: string;
+  admitRequest: () => boolean;
 }): Promise<MatcherResult> {
-  if (args.backend.kind === "decision") return matchWithDecision(args.state, args.backend, args.options, args.evidence);
-  return matchWithLlm(args.state, args.backend, args.options, args.evidence);
+  if (args.backend.kind === "decision") {
+    if (!args.admitRequest())
+      return { kind: "decision", model: args.backend.model, choice: null, reason: "check_cap_reached" };
+    return matchWithDecision(args.state, args.backend, args.options, args.evidence);
+  }
+  return matchWithLlm(args.state, args.backend, args.options, args.evidence, args.admitRequest);
 }

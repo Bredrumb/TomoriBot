@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
-import { resolveUserTarget } from "@/utils/discord/targetResolver";
+import { resolveIdentityTarget, resolveUserTarget } from "@/utils/discord/targetResolver";
+import { createPersona } from "../../helpers/fixtures";
 import { ContextItemTag, type ConversationUserReference, type StructuredContextItem } from "@/types/misc/context";
 import { EMPTY_PERSONA_NAMING_CONFIG, type PersonaNamingConfig } from "@/types/personaNaming";
 import type { ToolContext } from "@/types/tool/interfaces";
@@ -58,6 +59,27 @@ function buildIndexedContext(conversationUsers: ConversationUserReference[]): To
     ],
   } as unknown as ToolContext;
 }
+
+it("distinguishes persona and user targets and requires clarification for a cross-kind collision", async () => {
+  const persona = createPersona({ persona_id: 7, persona_nickname: "Mirri" });
+  const context = buildContext([
+    { targetId: "223456789012345678", displayLabel: "Mirri", aliases: ["Mirri"], mentionable: true },
+  ]);
+  expect((await resolveIdentityTarget("Mirri", context, [persona])).status).toBe("ambiguous");
+  expect(await resolveIdentityTarget("persona:Mirri", context, [persona])).toMatchObject({
+    status: "resolved",
+    targetType: "persona",
+    persona: { persona_id: 7 },
+  });
+  expect(await resolveIdentityTarget("user:Mirri", context, [persona])).toMatchObject({
+    status: "resolved",
+    targetType: "user",
+    targetId: "223456789012345678",
+  });
+  expect(
+    await resolveIdentityTarget(" @mirri ", { contextItems: [] } as unknown as ToolContext, [persona]),
+  ).toMatchObject({ status: "resolved", targetType: "persona", persona: { persona_id: 7 } });
+});
 
 describe("resolveUserTarget — conversation stage primary-name precedence", () => {
   // Reproduces the real collision: the asking user is rendered as their DB

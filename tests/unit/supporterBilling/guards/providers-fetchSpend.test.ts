@@ -16,8 +16,10 @@ import type {
   ProviderStructuredJsonRequest,
 } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
+import { getOrFetchOpenRouterImageEndpoints } from "@/utils/cache/openrouterImageModelCache";
+import { resetOpenRouterCapabilityCache } from "@/utils/cache/openrouterCapabilityCache";
 import { stubGlobalFetch } from "../../../helpers/fetchStub";
-import { installSpendHarness, type SpendHarness, type SpendKey } from "./utils-fundingFixtures";
+import { createServerFunding, installSpendHarness, type SpendHarness, type SpendKey } from "./utils-fundingFixtures";
 
 const ESTIMATE_USD = 0.05;
 const USAGE_COST_USD = 0.02;
@@ -158,6 +160,113 @@ describe.each(IMAGE_VARIANTS)("openrouter image generation via $label", (variant
 
     expect(harness.observed(key.keyHash)).toBe(0);
     expect(harness.pending(key.identityId)).toBe(0);
+  });
+});
+
+describe("subscription image pricing", () => {
+  it("admits GPT Image 2 generation and editing with token prices and blocks an unaffordable quote", async () => {
+    restoreEstimate();
+    const modelCodename = "openai/gpt-5.4-image-2";
+    const key = harness.register({
+      funding: createServerFunding({ capability: "image", modelCodename }),
+      appliedLimit: 3,
+      loggedSpend: 0.2,
+    });
+    const prompt = "paint the moon";
+    let outputRate = 0.00003;
+    let outputUnit = "token";
+    let sent = 0;
+    let inputCost = 0;
+    fetchSpy = stubGlobalFetch((input, init) => {
+      const url = String(input);
+      if (url.endsWith("/endpoints"))
+        return Response.json({
+          id: modelCodename,
+          endpoints: [
+            {
+              pricing: [
+                { billable: "input_image", unit: "token", cost_usd: "0.000008" },
+                { billable: "output_image", unit: outputUnit, cost_usd: outputRate },
+              ],
+            },
+          ],
+        });
+      if (url.endsWith("/models"))
+        return Response.json({
+          data: [
+            {
+              id: modelCodename,
+              context_length: 272_000,
+              pricing: { prompt: "0.000008", completion: "0.000015" },
+            },
+          ],
+        });
+      expect(url).toBe("https://openrouter.ai/api/v1/images");
+      expect(JSON.parse(String(init?.body)).model).toBe(modelCodename);
+      expect(harness.pending(key.identityId)).toBeCloseTo(
+        15_813 * outputRate + inputCost + Buffer.byteLength(prompt) * 0.000008,
+        5,
+      );
+      sent++;
+      return Response.json({ data: [{ b64_json: "QUJD", media_type: "image/png" }], usage: usage(USAGE_COST_USD) });
+    });
+    resetOpenRouterCapabilityCache();
+    try {
+      await getOrFetchOpenRouterImageEndpoints(modelCodename, { fresh: true });
+      for (const referenceImages of [undefined, [{ mimeType: "image/png", data: "QUJD" }]]) {
+        inputCost = referenceImages ? 272_000 * 0.000008 : 0;
+        const result = await generateOpenRouterImage({
+          ...imageRequest(key.apiKey, modelCodename),
+          aspectRatio: "2:3",
+          referenceImages,
+        });
+        expect(result.imageData).toBe("QUJD");
+        expect(harness.pending(key.identityId)).toBe(0);
+      }
+      expect(sent).toBe(2);
+      expect(harness.observed(key.keyHash)).toBeCloseTo(0.2 + 2 * USAGE_COST_USD);
+      outputRate *= 10;
+      await getOrFetchOpenRouterImageEndpoints(modelCodename, { fresh: true });
+      await expect(generateOpenRouterImage(imageRequest(key.apiKey, modelCodename))).rejects.toMatchObject({
+        reason: "allowance_exhausted",
+      });
+      expect(sent).toBe(2);
+      expect(harness.pending(key.identityId)).toBe(0);
+      outputUnit = "unknown";
+      await getOrFetchOpenRouterImageEndpoints(modelCodename, { fresh: true });
+      await expect(generateOpenRouterImage(imageRequest(key.apiKey, modelCodename))).rejects.toMatchObject({
+        reason: "pricing_unavailable",
+      });
+      expect(sent).toBe(2);
+      expect(harness.pending(key.identityId)).toBe(0);
+    } finally {
+      resetOpenRouterCapabilityCache();
+    }
+  });
+
+  it("reports a sanitized pricing failure before refusing the request without dispatch", async () => {
+    const key = registerKey();
+    const errorLog = spyOn(log, "error");
+    const estimate = spyOn(spendEstimates, "estimateSupporterRequestCost").mockRejectedValue(new Error(key.apiKey));
+    fetchSpy = stubGlobalFetch(() => {
+      throw new Error("Unexpected inference request");
+    });
+    try {
+      await expect(generateOpenRouterImage(imageRequest(key.apiKey, "example/image-model"))).rejects.toMatchObject({
+        reason: "pricing_unavailable",
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(harness.pending(key.identityId)).toBe(0);
+      const failure = errorLog.mock.calls.find((call) => call[2]?.errorType === "SupporterCostEstimateFailed");
+      expect(failure).toBeDefined();
+      expect(failure?.[1]).toBeInstanceOf(Error);
+      const error = failure?.[1] as Error;
+      expect(error.message).not.toContain(key.apiKey);
+      expect(error.stack).not.toContain(key.apiKey);
+      expect(failure?.[2]?.metadata).toMatchObject({ model: key.funding.modelCodename });
+    } finally {
+      estimate.mockRestore();
+    }
   });
 });
 

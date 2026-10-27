@@ -310,6 +310,9 @@ async function evaluateLockedChannelAdmission(
               ? { disableRecentMessageReplyTool: true }
               : {}),
             ...(incoming.manualStreamingContextOverrides.disableReminderTool ? { disableReminderTool: true } : {}),
+            ...(incoming.manualStreamingContextOverrides.disableConditioningInteraction
+              ? { disableConditioningInteraction: true }
+              : {}),
           }
         : undefined,
     },

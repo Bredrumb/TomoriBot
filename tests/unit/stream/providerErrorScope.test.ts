@@ -1,3 +1,4 @@
+import { REST } from "discord.js";
 import { beforeAll, describe, expect, it, mock } from "bun:test";
 import type { Client, ModalBuilder, TextChannel } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
@@ -15,7 +16,12 @@ function makeContext(
   inGuild = true,
 ): StreamContext {
   return {
-    channel: { id: "channel_1", send, ...(inGuild ? { guild: { id: "guild_1" } } : {}) } as unknown as TextChannel,
+    channel: {
+      id: "channel_1",
+      client: { rest: new REST() },
+      send,
+      ...(inGuild ? { guild: { id: "guild_1" } } : {}),
+    } as unknown as TextChannel,
     client: {} as Client,
     tomoriState: {
       server_id: 1,
@@ -79,6 +85,10 @@ async function renderTips(
     return collector;
   };
   const send = mock(async (_payload: unknown) => ({
+    id: "sent",
+    channelId: "channel_1",
+    webhookId: null,
+    author: { username: "Bot" },
     createMessageComponentCollector: (options: { filter: (interaction: typeof tipClick) => boolean }) =>
       makeCollector(options.filter),
   }));
@@ -192,7 +202,13 @@ describe("error embeds name where the failure came from", () => {
     textCredentialSource: StreamContext["textCredentialSource"],
     inGuild: boolean,
   ): Promise<string | undefined> {
-    const channelSend = mock(async (_payload: unknown) => ({ createMessageComponentCollector: () => ({ on() {} }) }));
+    const channelSend = mock(async (_payload: unknown) => ({
+      id: "sent",
+      channelId: "channel_1",
+      webhookId: null,
+      author: { username: "Bot" },
+      createMessageComponentCollector: () => ({ on() {} }),
+    }));
     await send(new StreamErrorUi(), makeContext(channelSend, textCredentialSource, [], inGuild));
     const payload = channelSend.mock.calls[0]?.[0] as { embeds: Array<{ toJSON(): { footer?: { text: string } } }> };
     return payload.embeds[0]?.toJSON().footer?.text;

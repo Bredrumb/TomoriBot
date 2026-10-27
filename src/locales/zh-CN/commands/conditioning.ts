@@ -2,7 +2,8 @@ export default {
   conditioning: {
     description: `管理持久化的奖励与惩罚偏好记忆。`,
     shared: {
-      reason_line: `原因：\`\`{reason}\`\``,
+      target_conflict_description: `请选择用户或人格其中一个作为互动对象。`,
+      user_footer: `{bot}会记住这件事。`,
       reward_footer: `❤️ {bot} 会记住这件事。用 /conditioning 管理。`,
       punish_footer: `💀 {bot} 会记住这件事。用 /conditioning 管理。`,
       persona_access_blocked_title: `没有可用的人格`,

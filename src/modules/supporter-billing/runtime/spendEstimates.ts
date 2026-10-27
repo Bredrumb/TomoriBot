@@ -17,6 +17,9 @@ const ratesSchema = z.record(z.string(), priceSchema);
 const GEMINI_FLASH_IMAGE_TOKENS = 2_520;
 // Nano Banana 2.1 bills 1,120 image tokens at 1K; revise this bound before enabling larger output sizes.
 const NANO_BANANA_1K_IMAGE_TOKENS = 1_120;
+// GPT Image 2's high-quality 96x96 grid and 8,294,400-pixel ceiling bound output at 23,719 tokens; revisit when its size or quality limits change.
+const GPT_IMAGE_2_MAX_OUTPUT_TOKENS = 23_719;
+const GPT_IMAGE_2_MAX_GRID_SIDE = 96;
 // Exa auto includes 10 results for $0.007 plus $0.001 per extra result: https://openrouter.ai/docs/guides/features/plugins/web-search.
 const EXA_SEARCH_REQUEST_COST = 0.007;
 const EXA_SEARCH_EXTRA_RESULT_COST = 0.001;
@@ -128,24 +131,64 @@ export async function estimateSupporterRequestCost(path: string, body: Record<st
     const endpoints = await getOrFetchOpenRouterImageEndpoints(model);
     if (!endpoints) throw new Error("Image pricing unavailable");
     const references = Array.isArray(body.input_references) ? body.input_references.length : countImages(body.messages);
-    return Math.max(
-      ...endpoints.map((endpoint) =>
-        endpoint.pricing.reduce((sum, price) => {
-          if (price.cost_usd === 0) return sum;
-          const count =
-            price.billable === "output_image"
-              ? 1
-              : price.billable === "input_text"
-                ? Buffer.byteLength(JSON.stringify(body.messages ?? body.prompt))
-                : references;
-          if (price.unit === "request") return sum + price.cost_usd;
-          if (price.unit === "image") return sum + price.cost_usd * count;
-          if (price.unit === "token" && price.billable === "input_text") return sum + price.cost_usd * count;
-          if (price.unit === "token" && price.billable === "output_image" && model === "google/gemini-3.1-flash-image")
-            return sum + price.cost_usd * GEMINI_FLASH_IMAGE_TOKENS;
-          throw new Error("Unsupported image price");
-        }, 0),
-      ),
+    let imageOutputTokens: number | undefined;
+    let imageInputTokens: number | undefined;
+    let promptCost = 0;
+    if (model === "openai/gpt-5.4-image-2") {
+      if (
+        references > 0 &&
+        endpoints.some((endpoint) => !endpoint.pricing.some((price) => price.billable === "input_image"))
+      )
+        throw new Error("Image reference pricing unavailable");
+      await getOrFetchOpenRouterCapabilities(model);
+      const pricing = getOpenRouterPricing(model);
+      if (!pricing) throw new Error("Image input pricing unavailable");
+      const [width, height] = z
+        .string()
+        .regex(/^\d+:\d+$/)
+        .parse(body.aspect_ratio)
+        .split(":")
+        .map(Number);
+      const ratio = z
+        .number()
+        .finite()
+        .positive()
+        .parse(Math.max(width, height) / Math.min(width, height));
+      const shortSide = Math.ceil(GPT_IMAGE_2_MAX_GRID_SIDE / ratio);
+      imageOutputTokens = Math.ceil((GPT_IMAGE_2_MAX_OUTPUT_TOKENS * shortSide) / GPT_IMAGE_2_MAX_GRID_SIDE);
+      imageInputTokens =
+        references > 0 ? z.number().positive().parse(getOpenRouterTokenLimits(model)?.contextLength) : 0;
+      promptCost = (Buffer.byteLength(z.string().parse(body.prompt)) * pricing.promptPricePerMillion) / 1_000_000;
+    }
+    return (
+      promptCost +
+      Math.max(
+        ...endpoints.map((endpoint) =>
+          endpoint.pricing.reduce((sum, price) => {
+            if (price.cost_usd === 0) return sum;
+            const count =
+              price.billable === "output_image"
+                ? 1
+                : price.billable === "input_text"
+                  ? Buffer.byteLength(JSON.stringify(body.messages ?? body.prompt))
+                  : references;
+            if (price.unit === "request") return sum + price.cost_usd;
+            if (price.unit === "image") return sum + price.cost_usd * count;
+            if (price.unit === "token" && price.billable === "input_text") return sum + price.cost_usd * count;
+            if (price.unit === "token" && price.billable === "input_image" && imageInputTokens !== undefined)
+              return sum + price.cost_usd * imageInputTokens;
+            if (price.unit === "token" && price.billable === "output_image" && imageOutputTokens !== undefined)
+              return sum + price.cost_usd * imageOutputTokens;
+            if (
+              price.unit === "token" &&
+              price.billable === "output_image" &&
+              model === "google/gemini-3.1-flash-image"
+            )
+              return sum + price.cost_usd * GEMINI_FLASH_IMAGE_TOKENS;
+            throw new Error("Unsupported image price");
+          }, 0),
+        ),
+      )
     );
   }
   if (path.endsWith("/embeddings")) {

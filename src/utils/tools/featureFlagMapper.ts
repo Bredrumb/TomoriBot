@@ -12,6 +12,8 @@ export function configToFeatureFlags(config: {
   user_blocking_enabled: boolean;
   user_info_updates_enabled: boolean;
   thread_creation_enabled: boolean;
+  conditioning_interactions_enabled: boolean;
+  dice_rolling_enabled: boolean;
   danbooru_enabled: boolean;
 }): Record<string, boolean> {
   return {
@@ -25,6 +27,8 @@ export function configToFeatureFlags(config: {
     user_blocking: config.user_blocking_enabled,
     user_info_updates: config.user_info_updates_enabled,
     thread_creation: config.thread_creation_enabled,
+    conditioning_interactions: config.conditioning_interactions_enabled,
+    dice_rolling: config.dice_rolling_enabled,
     danbooru: config.danbooru_enabled,
   };
 }

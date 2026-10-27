@@ -7,9 +7,6 @@
      Planned: fr Français | ru Русский | ko 한국어
      See docs/en/contributing/localization/docs-site.md. -->
 
-> [!NOTE]
-> Este README é uma visão geral rápida. Para a documentação completa e atualizada (guias de configuração, detalhes de recursos, informações de provedores e mais), visite **[docs.tomoribot.app](https://docs.tomoribot.app/pt-BR/)**.
-
 <br />
 <div align="center">
 
@@ -19,12 +16,12 @@
 
 <h3 align="center">TomoriBot</h3>
 
-Um assistente de IA pessoal e sistema de RPG (role-playing) para Discord com hospedagem própria e personalizável. Possui memória, múltiplas personas, uso de ferramentas, multimodalidade e suporte a APIs/modelos locais.
+Um sistema de assistente pessoal de IA e RPG personalizável e com hospedagem própria para Discord, com memória, múltiplas personas, chamada de ferramentas, suporte a modelos locais/API *e* vários outros recursos divertidos!
 
 <p align="center">
-  <strong><a href="https://tomoribot.app/">Site Oficial</a></strong>
+  <strong><a href="https://docs.tomoribot.app/pt-BR/">Documentação Oficial</a></strong>
   &middot;
-  <strong><a href="https://discord.com/oauth2/authorize?client_id=841644102059556915">Convidar TomoriBot</a></strong>
+  <strong><a href="https://discord.com/oauth2/authorize?client_id=841644102059556915">Convidar a TomoriBot</a></strong>
   &middot;
   <strong><a href="https://discord.gg/bjCfHm9QsB">Servidor do Discord</a></strong>
   <br />
@@ -58,84 +55,65 @@ Um assistente de IA pessoal e sistema de RPG (role-playing) para Discord com hos
 </div>
 
 <!-- ABOUT THE PROJECT -->
-## Sobre o Projeto
+# Sobre o Projeto
 
-TomoriBot é um assistente de IA pessoal e sistema de RPG de código aberto e com hospedagem própria para Discord, inspirado no SillyTavern e no descontinuado Clyde do Discord. Ele pode ser usado como um assistente prático, companheiro personalizável e parceiro de role-play para você em DMs, ou para todos no seu servidor do Discord.
-
-TomoriBot suporta memória de longo prazo, comportamento de múltiplas personas, ferramentas web e MCP, geração de mídia no chat, comandos slash do Discord e múltiplos provedores, incluindo proxies personalizados e hospedagem própria de seus próprios modelos para tudo, desde geração de texto até geração de vídeo.
-
-### Como Começar
-
-Você pode [convidar a TomoriBot pública](https://discord.com/oauth2/authorize?client_id=841644102059556915) para o seu servidor do Discord, ou [hospedar sua própria instância](#hospedagem-própria) se preferir controle total sobre sua privacidade e chaves de API. A TomoriBot usa as melhores práticas de segurança e criptografia para manter os dados seguros, mas a hospedagem própria garante que todos os dados permaneçam inteiramente no seu dispositivo.
-
-Após adicioná-la ao seu servidor por qualquer um dos métodos acima, execute o comando `/setup` para obter instruções. Em seguida, você pode simplesmente dizer o nome dela (ou mencioná-la com @) para obter uma resposta.
+TomoriBot é um assistente pessoal de IA e sistema de RPG gratuito e de código aberto para Discord, inspirado no SillyTavern e no descontinuado Clyde do Discord. Ele pode ser usado como um assistente prático, companheiro personalizável, parceiro de role-play ou TUDO isso para você e para todos no seu servidor do Discord.
 
 ## Demonstração de Recursos
 
 
-![Screenshots 1](../assets/img/scs/1.png)
+![Screenshots 1](../assets/img/scs/1-agentic.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/pt-BR/features/capabilities/tools-and-extensions/">Conversação com Agente IA</a></h3>
-<p align="center">A TomoriBot possui VÁRIAS ferramentas que permitem que ela vá além do simples bate-papo, como pesquisar na web, definir tarefas/lembretes recorrentes, utilizar as figurinhas do seu servidor, e opções de memória como RAG e memória de curto prazo que permitem que ela lembre do contexto entre canais e servidores.</p>
+<p align="center">A TomoriBot possui várias ferramentas que permitem que ela vá além do simples bate-papo, como pesquisar na web, definir tarefas/lembretes recorrentes, utilizar as figurinhas do seu servidor, geração de mídia e memória persistente para lembrar o contexto entre canais e servidores.</p>
 
 <br />
 
 
-![Screenshots 3](../assets/img/scs/3.png)
+![Screenshots 2](../assets/img/scs/2-multipersona.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/pt-BR/features/chatting-personality/multiple-personas/">Suporte a Múltiplas Personas</a></h3>
 <p align="center">A personalidade, o comportamento e o avatar da TomoriBot no servidor podem ser facilmente alterados, criados e exportados para outras pessoas como Personas (semelhante aos AI Character Cards compartilháveis). Importe e até mesmo transforme seus cards favoritos do SillyTavern através do comando <code>/persona generate</code>. Você pode ter uma quantidade ilimitada de personas diferentes em um único servidor, cada uma com suas próprias memórias e objetivos. Você também pode orquestrá-las para trabalharem juntas no seu servidor (ou apenas brincarem umas com as outras).</p>
 
 <br />
 
-![Screenshots 2](../assets/img/scs/2.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/pt-BR/features/capabilities/media-generation/">Entrada/Saída Multimodal Completa</a></h3>
-<p align="center">A TomoriBot pode processar imagens, áudio e vídeo enviados diretamente no Discord e gerá-los em resposta usando seus próprios endpoints de modelo local ou chaves de API, tudo criptografado de forma segura dentro de um banco de dados persistente. Fluxos de trabalho do ComfyUI prontos para uso podem ser encontrados em <code>assets/comfyui-workflows/</code> e servidores locais de inferência de áudio em <code>servers/</code>!</p>
+![Screenshots 3](../assets/img/scs/3-commands.png)
+<h3 align="center"><a href="https://docs.tomoribot.app/pt-BR/features/command-reference/">Comandos Slash Nativos para Configuração e Execução</a></h3>
+<p align="center">Tudo pode ser gerenciado e executado através de comandos slash nativos do Discord e UI interativa. Gerencie completamente personas, prompts, endpoints e parâmetros de modelos, configure servidores de ferramentas MCP, ajuste permissões, configure memórias, defina limites de taxa para membros do servidor e muito mais!</p>
 
 <br />
 
-
-![Configuração totalmente local com ComfyUI](../assets/img/docs/intro/05-fully-local-setup.png)
+![Screenshots 4](../assets/img/scs/4-comfyui.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/pt-BR/self-hosting/local-endpoints/">Configuração Totalmente Local</a></h3>
-<p align="center">Você pode rodar a TomoriBot e seu banco de dados no seu próprio PC, com um LLM local para conversas, ComfyUI para geração de imagens e modelos de fala locais para geração e transcrição de voz. Todo esse processamento de IA pode acontecer no seu hardware, sem provedores de IA em nuvem. O Discord ainda precisa de uma conexão com a internet e transporta as mensagens e mídias que você troca com o bot.</p>
+<p align="center">A TomoriBot pode rodar a si mesma e seu banco de dados criptografado no seu próprio PC, com um LLM local para conversas, ComfyUI para geração de imagem/vídeo (<code>/assets/comfyui-workflows/</code>), mecanismos de busca locais e modelos de fala locais para geração e transcrição de voz (<code>/servers/</code>), tudo sem a necessidade de provedores em nuvem.</p>
 
 <br />
 
-![Screenshots 4](../assets/img/scs/4.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/pt-BR/features/command-reference/">Comandos Slash Nativos para Configuração</a></h3>
-<p align="center">Tudo pode ser gerenciado através de comandos slash nativos do Discord e UI interativa. Gerencie completamente personas, predefinições, ajuste parâmetros de modelos, configure servidores de ferramentas MCP, ajuste permissões, configure memórias, defina limites de taxa para membros do servidor e muito mais! Você também pode perguntar diretamente à TomoriBot sobre o que ela pode fazer e quais são os seus comandos slash. Atualmente, um Web Dashboard está em desenvolvimento para facilitar ainda mais o gerenciamento.</p>
-
-<br />
-
-![Screenshots 5](../assets/img/scs/5.png)
+![Screenshots 5](../assets/img/scs/5-features.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/pt-BR/features/">Muitos Outros Recursos, e Contando!</a></h3>
-<p align="center">Uma série de recursos divertidos que são fáceis de configurar, variando de saudações automáticas práticas para novos membros do servidor e movimento entre canais, a recursos engraçados como imitações de usuários para algumas trollagens. Novos recursos estão constantemente em desenvolvimento, então por favor reporte através das issues do GitHub ou no Discord oficial para relatar bugs (ou compartilhar sugestões divertidas).</p>
-
-## Recursos Úteis
-
-- [Lista Completa de Provedores Suportados](https://docs.tomoribot.app/pt-BR/features/setup-administration/providers-and-models/#provedores-suportados)
-- [Como Rodar Modelos Locais](https://docs.tomoribot.app/pt-BR/self-hosting/local-endpoints/)
-- [Segurança & Modelos de Ameaça](https://docs.tomoribot.app/en/wiki/threat-models/)
-- [Roteiro (Roadmap) Oficial da TomoriBot](https://github.com/users/Bredrumb/projects/1/views/1)
-- [Macros de Ferramenta para Personalização de Prompt](https://docs.tomoribot.app/pt-BR/features/capabilities/tools-and-extensions/)
+<p align="center">Uma série de recursos divertidos que vão desde saudações automáticas práticas para novos membros do servidor e chat de voz, até elementos de role-play como rolagem de dados e ações. Novos recursos estão constantemente em desenvolvimento, então por favor reporte através das issues do GitHub ou no Discord oficial para relatar bugs (ou compartilhar sugestões divertidas).</p>
 
 <!-- GETTING STARTED -->
+# Como Começar
+
+Você pode [convidar a TomoriBot pública](https://discord.com/oauth2/authorize?client_id=841644102059556915) para o seu servidor do Discord agora mesmo por conveniência, ou [hospedar sua própria instância](#hospedagem-própria) se preferir controle total sobre sua privacidade e chaves de API. A TomoriBot usa as melhores práticas de segurança e criptografia para manter os dados seguros, mas a hospedagem própria garante que todos os dados permaneçam inteiramente no seu dispositivo:
+
 ## Hospedagem Própria
 
-Consulte a [documentação de hospedagem própria](https://docs.tomoribot.app/pt-BR/self-hosting/) para instruções de instalação, Docker Compose e servidores locais opcionais.
+1. **Pré-requisitos:**
+   - [Bun](https://bun.sh/) v1.3.2+ (v1.4.0+ recomendado)
+   - [PostgreSQL](https://www.postgresql.org/) ou [Docker](https://www.docker.com/) (o assistente de configuração usa uma instalação existente do PostgreSQL ou inicia uma no Docker)`
+   - Um [token de bot do Discord](https://discord.com/developers/applications) com `Presence Intent`, `Server Members Intent` e `Message Content Intent` ativados
+2. **Execute o assistente de configuração:**
+   ```sh
+   git clone https://github.com/Bredrumb/TomoriBot.git
+   cd TomoriBot
+   bun run setup # instala dependências, configura o .env e prepara o PostgreSQL
+   bun run dev # inicia o bot e executa as migrações do banco de dados automaticamente
+   ```
+
+Para mais detalhes ou se tiver problemas com as etapas acima, consulte a [documentação de hospedagem própria](https://docs.tomoribot.app/pt-BR/self-hosting/) completa.
 
 <!-- AFTER SETUP -->
 ### Após Convidar / Configuração
-
-#### Comandos Básicos
-
-- `/setup` - Configuração inicial do bot para o seu servidor
-- `/config` - Várias maneiras de ajustar a TomoriBot
-- `/personal memories` - Gerencie suas memórias pessoais
-- `/memories` - Gerencie memórias do servidor, documentos e memória de curto prazo
-- `/moderation` - Gerencie o acesso dos membros, a lista de bloqueio de usuários, e as restrições de canais, personas e cargos
-
-Consulte a **[Referência de Comandos](https://docs.tomoribot.app/pt-BR/features/command-reference/)** completa para todos os comandos slash.
-
-#### Interação no Chat
 
 Simplesmente mencione o bot em um servidor ou use as palavras-gatilho configuradas para iniciar uma conversa:
 ```
@@ -144,9 +122,18 @@ Simplesmente mencione o bot em um servidor ou use as palavras-gatilho configurad
 
 Ou mande uma mensagem direta (DM) para a TomoriBot e diga oi!
 
+#### Comandos Básicos
+
+- `/setup` - Configuração inicial do bot para o seu servidor
+- `/config` e `/personal config` - Várias maneiras de ajustar a TomoriBot no servidor atual do Discord ou para você
+- `/providers` e `/personal providers` - Adicione mais endpoints de modelos ou provedores em nuvem
+
+Consulte a [referência de comandos](https://docs.tomoribot.app/pt-BR/features/command-reference/) completa para todos os comandos slash.
+
+
 ## Agradecimentos
 
-Muito obrigado a todos, especialmente às seguintes pessoas maravilhosas pelas suas contribuições de código e conselhos que moldaram a TomoriBot para o que ela é hoje!
+Um enorme agradecimento a todos, *especialmente* às seguintes pessoas queridas por suas contribuições de código e conselhos que ajudaram a moldar a TomoriBot!
 
 <table>
   <tr>
@@ -189,23 +176,12 @@ Muito obrigado a todos, especialmente às seguintes pessoas maravilhosas pelas s
   </tr>
 </table>
 
-<!-- CONTACT -->
-## Contato & Links
-
-**Site Oficial**: [https://tomoribot.app](https://tomoribot.app/)
-
-**Email**: bredrumb@gmail.com
-
-**Discord**: [Servidor Oficial de Suporte](https://discord.gg/bjCfHm9QsB)
-
-
 ## Licença
-Este projeto é licenciado sob a [AGPLv3](LICENSE).
+Este projeto está licenciado sob [AGPLv3](../LICENSE).
 
-<!-- SUPPORT -->
-## Apoie o Projeto
+---
 
-Se você achar a TomoriBot útil e quiser apoiar o seu desenvolvimento contínuo, considere deixar uma ⭐ no GitHub ou apoiar via Ko-fi!
+Se você achou a TomoriBot útil (e/ou divertida), considere deixar uma ⭐ no repositório ou apoiar o desenvolvimento pelo Ko-fi ou Patreon!
 
 <p align="left">
 
@@ -213,7 +189,12 @@ Se você achar a TomoriBot útil e quiser apoiar o seu desenvolvimento contínuo
   <a href="https://ko-fi.com/bredrumb">
     <img src="https://img.shields.io/badge/Support_on_Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Support on Ko-fi">
   </a>
+  &nbsp;
+  <a href="https://www.patreon.com/cw/tomoribot">
+    <img src="https://img.shields.io/badge/Support_on_Patreon-FF424D?style=for-the-badge&logo=patreon&logoColor=white" alt="Support on Patreon">
+  </a>
 </p>
+
 
 <!-- MARKDOWN LINKS & IMAGES -->
 [TypeScript.js]: https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white

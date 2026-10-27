@@ -1200,13 +1200,30 @@ CREATE TABLE IF NOT EXISTS conditioning_history (
   action_text TEXT,
   reason_text TEXT NOT NULL,
   reason_normalized TEXT NOT NULL,
-  user_id INT NOT NULL,
+  user_id INT,
+  actor_persona_id INT REFERENCES personas(persona_id) ON DELETE CASCADE,
   count INT NOT NULL DEFAULT 1 CHECK (count >= 1),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT conditioning_history_actor_check CHECK ((user_id IS NOT NULL) <> (actor_persona_id IS NOT NULL)),
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
+
+SELECT add_column_if_not_exists('conditioning_history', 'actor_persona_id', 'INT REFERENCES personas(persona_id) ON DELETE CASCADE');
+ALTER TABLE conditioning_history ALTER COLUMN user_id DROP NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'conditioning_history_actor_check'
+    AND conrelid = 'conditioning_history'::regclass) THEN
+    ALTER TABLE conditioning_history ADD CONSTRAINT conditioning_history_actor_check
+      CHECK ((user_id IS NOT NULL) <> (actor_persona_id IS NOT NULL));
+  END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conditioning_history_persona_actor_unique
+  ON conditioning_history(server_id, persona_lineage_id, conditioning_type, action_key, reason_normalized, actor_persona_id);
 
 DROP TRIGGER IF EXISTS update_conditioning_history_timestamp ON conditioning_history;
 CREATE TRIGGER update_conditioning_history_timestamp
@@ -2962,6 +2979,8 @@ CREATE TABLE IF NOT EXISTS server_capabilities_configs (
   web_search_enabled     BOOLEAN NOT NULL DEFAULT true,
   manage_message_enabled BOOLEAN NOT NULL DEFAULT true,
   thread_creation_enabled BOOLEAN NOT NULL DEFAULT true,
+  conditioning_interactions_enabled BOOLEAN NOT NULL DEFAULT true,
+  dice_rolling_enabled BOOLEAN NOT NULL DEFAULT false,
   imagegen_enabled       BOOLEAN NOT NULL DEFAULT true,
   danbooru_enabled       BOOLEAN NOT NULL DEFAULT true,
   videogen_enabled       BOOLEAN NOT NULL DEFAULT false,
@@ -2977,6 +2996,9 @@ CREATE TABLE IF NOT EXISTS server_capabilities_configs (
 
 SELECT add_column_if_not_exists('server_capabilities_configs', 'response_drafting_enabled', 'BOOLEAN NOT NULL', 'false');
 SELECT add_column_if_not_exists('server_capabilities_configs', 'danbooru_enabled', 'BOOLEAN NOT NULL', 'true');
+SELECT add_column_if_not_exists('server_capabilities_configs', 'conditioning_interactions_enabled', 'BOOLEAN NOT NULL', 'true');
+ALTER TABLE server_capabilities_configs ALTER COLUMN conditioning_interactions_enabled SET DEFAULT true;
+SELECT add_column_if_not_exists('server_capabilities_configs', 'dice_rolling_enabled', 'BOOLEAN NOT NULL', 'false');
 
 DROP TRIGGER IF EXISTS update_server_capabilities_configs_timestamp ON server_capabilities_configs;
 CREATE TRIGGER update_server_capabilities_configs_timestamp

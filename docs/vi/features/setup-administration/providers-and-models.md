@@ -50,7 +50,7 @@ Không bao giờ chia sẻ khóa API của bạn với bất kỳ ai khác. Thê
 
 Vertex AI xác thực bằng Thông tin xác thực mặc định của ứng dụng (ADC) thay vì bí mật được lưu trữ. Đối với lưu trữ cục bộ, ADC có thể đến từ `gcloud`; triển khai được lưu trữ trên máy chủ nên sử dụng danh tính khối lượng công việc hoặc tài khoản dịch vụ. Chỉ riêng khóa AI Studio API không thể xác thực toàn bộ Vertex AI. Dự án Google Cloud đã chọn phải có tính năng thanh toán và bật Vertex AI API, đồng thời danh tính máy chủ cần có quyền truy cập Vertex. Hướng dẫn thiết lập có sẵn từ Google Vertex AI trên trang `API Keys` trong `/help`.
 
-Thiết lập nhà cung cấp được Google hỗ trợ xác thực thông tin đăng nhập thông qua điểm cuối danh sách model được xác thực. Nó không tạo ra văn bản hoặc phụ thuộc vào bất kỳ model trò chuyện nào hiện được đánh dấu là mặc định của danh mục, do đó, model mặc định đã ngừng hoạt động không thể ngăn việc lưu thông tin xác thực hợp lệ.
+Quá trình thiết lập Google Gemini và Vertex AI xác thực thông tin đăng nhập qua endpoint liệt kê model đã được xác thực, còn Vertex AI Express xác thực khóa API bằng `countTokens`, vì vậy quá trình thiết lập không bao giờ tạo văn bản.
 
 ### Tùy chọn: Key Brave Search
 

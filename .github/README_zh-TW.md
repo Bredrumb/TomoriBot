@@ -7,9 +7,6 @@
      Planned: fr Français | ru Русский | ko 한국어
      See docs/en/contributing/localization/docs-site.md. -->
 
-> [!NOTE]
-> 這份 README 只是快速概覽。完整且最新的文件（設定指南、功能導覽、供應商資訊等）請見 **[docs.tomoribot.app](https://docs.tomoribot.app/zh-TW/)**。
-
 <br />
 <div align="center">
 
@@ -19,10 +16,10 @@
 
 <h3 align="center">TomoriBot</h3>
 
-可在自己的伺服器上自架、自由客製的 Discord 個人 AI 助理與角色扮演系統，具備記憶、多個人格、工具呼叫、多模態，並支援 API 與本機模型。
+一套可自架、可高度自訂的 Discord 個人 AI 助理與角色扮演系統，具備記憶、多個人格、工具呼叫、API 與本機模型支援，*以及*眾多其他有趣功能！
 
 <p align="center">
-  <strong><a href="https://tomoribot.app/">官方網站</a></strong>
+  <strong><a href="https://docs.tomoribot.app/zh-TW/">官方文件</a></strong>
   &middot;
   <strong><a href="https://discord.com/oauth2/authorize?client_id=841644102059556915">邀請 TomoriBot</a></strong>
   &middot;
@@ -30,9 +27,9 @@
   <br />
   <a href="https://github.com/Bredrumb/TomoriBot/releases">最新版本</a>
   &middot;
-  <a href="https://github.com/Bredrumb/TomoriBot/issues/new?template=bug-report.md">回報錯誤</a>
+  <a href="https://github.com/Bredrumb/TomoriBot/issues/new?template=bug-report.md">回報 Bug</a>
   &middot;
-  <a href="https://github.com/Bredrumb/TomoriBot/issues/new?template=feature-request.md">建議功能</a>
+  <a href="https://github.com/Bredrumb/TomoriBot/issues/new?template=feature-request.md">請求新功能</a>
   <br />
   <br />
 
@@ -58,95 +55,85 @@
 </div>
 
 <!-- ABOUT THE PROJECT -->
-## 關於專案
+# 關於專案
 
-TomoriBot 是一套免費且開源的 Discord 自架個人 AI 助理與角色扮演系統，靈感來自 SillyTavern 與 Discord 已停止服務的 Clyde。你可以把它當成實用的助理、可客製的夥伴或角色扮演對象，在私訊裡自己用，也能讓整個 Discord 伺服器一起用。
-
-TomoriBot 支援長期記憶、多個人格運作、網頁與 MCP 工具、聊天室內的媒體生成、Discord 斜線指令，以及多種供應商，包含自訂代理與自架自己的模型，從文字生成到影片生成都涵蓋在內。
-
-### 開始使用
-
-你可以[邀請公開版 TomoriBot](https://discord.com/oauth2/authorize?client_id=841644102059556915) 加入你的 Discord 伺服器，如果希望完全掌控自己的隱私與 API 金鑰，也可以[自架自己的執行個體](#自架)。TomoriBot 採用最佳安全實務與加密來保護資料，不過自架能確保所有資料都完全留在你的裝置上。
-
-用上述任一方式把她加入伺服器後，執行 `/setup` 指令取得說明。之後只要喊她的名字（或 @ 提及她）就能得到回應。
+TomoriBot 是一套免費且開源的 Discord 個人 AI 助理與角色扮演系統，靈感來自 SillyTavern 與 Discord 已停止服務的 Clyde。你可以把它當成實用的助理、可客製的夥伴、角色扮演對象，或是兼具以上所有角色，為你以及你的 Discord 伺服器中的所有人提供服務。
 
 ## 功能展示
 
 
-![Screenshots 1](../assets/img/scs/1.png)
+![Screenshots 1](../assets/img/scs/1-agentic.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/zh-TW/features/capabilities/tools-and-extensions/">AI 代理驅動的對話</a></h3>
-<p align="center">TomoriBot 內建非常多工具，讓她不只是聊天，還能搜尋網頁、設定重複任務與提醒、使用伺服器的表情符號與貼圖，並透過 RAG、STM 等記憶功能記住跨頻道、跨伺服器的脈絡。</p>
+<p align="center">TomoriBot 內建非常多工具，讓她不只是聊天：支援搜尋網頁、設定重複任務與提醒、使用伺服器的表情符號與貼圖、媒體生成，並透過持久化記憶記住跨頻道、跨伺服器的脈絡。</p>
 
 <br />
 
 
-![Screenshots 3](../assets/img/scs/3.png)
+![Screenshots 2](../assets/img/scs/2-multipersona.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/zh-TW/features/chatting-personality/multiple-personas/">多個人格支援</a></h3>
 <p align="center">TomoriBot 在伺服器裡的人格、行為與頭像都能輕鬆修改、建立，也能匯出成「人格」分享給其他人（類似可分享的 AI 角色卡）。你可以透過 <code>/persona generate</code> 匯入甚至轉換自己喜歡的 SillyTavern 角色卡。單一伺服器能擁有無限多個不同人格，每個都有自己的記憶與目標。你也可以安排它們互相合作，在伺服器裡一起做事（或只是互相打鬧）。</p>
 
 <br />
 
-![Screenshots 2](../assets/img/scs/2.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/zh-TW/features/capabilities/media-generation/">完整的多模態輸入輸出</a></h3>
-<p align="center">TomoriBot 能處理直接傳進 Discord 的圖片、音訊與影片，並用你自己的本機模型端點或 API 金鑰生成這些內容，全部都會加密存放在持久化資料庫中。現成可用的 ComfyUI 工作流程放在 <code>assets/comfyui-workflows/</code>，本機音訊推論伺服器則在 <code>servers/</code>！</p>
+![Screenshots 3](../assets/img/scs/3-commands.png)
+<h3 align="center"><a href="https://docs.tomoribot.app/zh-TW/features/command-reference/">原生設定斜線指令與執行</a></h3>
+<p align="center">所有設定與執行都能透過 Discord 原生的斜線指令與互動介面完成。完整管理人格、提示詞、模型端點與參數，設定 MCP 工具伺服器，調整權限，設定記憶，設定伺服器成員的速率限制，還有更多！</p>
 
 <br />
 
-
-![搭配 ComfyUI 的完全本機設定](../assets/img/docs/intro/05-fully-local-setup.png)
+![Screenshots 4](../assets/img/scs/4-comfyui.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/zh-TW/self-hosting/local-endpoints/">完全本機設定</a></h3>
-<p align="center">你可以在自己的電腦上執行 TomoriBot 及其資料庫，搭配用於對話的本機 LLM、用於圖片生成的 ComfyUI，以及用於語音生成與文字轉錄的本機語音模型。所有這些 AI 運算都能在你自己的硬體上進行，無需使用雲端 AI 供應商。Discord 仍需要網際網路連線，並負責傳輸你與 bot 之間交流的訊息與媒體。</p>
+<p align="center">你可以在自己的電腦上執行 TomoriBot 及其加密資料庫，完全不需要任何雲端供應商：搭配用於對話的本機 LLM、用於圖片/影片生成的 ComfyUI（<code>/assets/comfyui-workflows/</code>）、本機搜尋引擎，以及用於語音生成與轉錄的本機語音模型（<code>/servers/</code>）。</p>
 
 <br />
 
-![Screenshots 4](../assets/img/scs/4.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/zh-TW/features/command-reference/">原生設定斜線指令</a></h3>
-<p align="center">所有設定都能透過 Discord 原生的斜線指令與互動介面完成。完整管理人格與提示詞、調整模型參數、設定 MCP 工具伺服器、調整權限、設定記憶、設定伺服器成員的速率限制，還有更多！你也可以直接問 TomoriBot 她會做什麼、有哪些斜線指令。目前正在開發網頁儀表板，讓管理更方便。</p>
-
-<br />
-
-![Screenshots 5](../assets/img/scs/5.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/zh-TW/features/">還有更多功能，持續增加中！</a></h3>
-<p align="center">還有一堆容易設定的有趣功能，從實用的新成員自動問候、跨頻道移動，到使用者模仿這種純粹來亂的都有。新功能持續開發中，如果有任何錯誤（或想分享有趣的建議），請透過 GitHub issues 或官方 Discord 回報。</p>
-
-## 實用資源
-
-- [支援的供應商完整清單](https://docs.tomoribot.app/zh-TW/features/setup-administration/providers-and-models/#支援的供應商)
-- [如何執行本機模型](https://docs.tomoribot.app/zh-TW/self-hosting/local-endpoints/)
-- [安全性與威脅模型](https://docs.tomoribot.app/en/wiki/threat-models/)
-- [官方 TomoriBot 開發藍圖](https://github.com/users/Bredrumb/projects/1/views/1)
-- [自訂提示詞用的工具巨集](https://docs.tomoribot.app/zh-TW/features/capabilities/tools-and-extensions/)
+![Screenshots 5](../assets/img/scs/5-features.png)
+<h3 align="center"><a href="https://docs.tomoribot.app/zh-TW/features/">還有更多豐富功能，持續增加中！</a></h3>
+<p align="center">包含眾多有趣功能：從實用的新成員自動問候與語音通話，到擲骰子與互動動作等角色扮演玩法。新功能持續開發中，若遇到任何錯誤（或想分享有趣的建議），歡迎透過 GitHub issues 或官方 Discord 回報。</p>
 
 <!-- GETTING STARTED -->
+# 開始使用
+
+你可以[邀請公開版 TomoriBot](https://discord.com/oauth2/authorize?client_id=841644102059556915) 加入你的 Discord 伺服器，如果希望完全掌控自己的隱私與 API 金鑰，也可以[自架自己的執行個體](#自架)。TomoriBot 採用最佳安全實務與加密來保護資料，不過自架能確保所有資料都完全留在你的裝置上：
+
 ## 自架
 
-安裝步驟、Docker Compose 與選用的本機伺服器，請參閱[自架文件](https://docs.tomoribot.app/zh-TW/self-hosting/)。
+1. **事前準備：**
+   - [Bun](https://bun.sh/) v1.3.2+（建議 v1.4.0+）
+   - [PostgreSQL](https://www.postgresql.org/) 或 [Docker](https://www.docker.com/)（安裝精靈會使用既有的 PostgreSQL 或在 Docker 中啟動）
+   - 已啟用 `Presence Intent`、`Server Members Intent` 與 `Message Content Intent` 的 [Discord Bot Token](https://discord.com/developers/applications)
+2. **執行安裝精靈：**
+   ```sh
+   git clone https://github.com/Bredrumb/TomoriBot.git
+   cd TomoriBot
+   bun run setup # 安裝依賴套件、設定 .env 並配置 PostgreSQL
+   bun run dev # 啟動 bot 並自動執行資料庫遷移
+   ```
+
+有關更多詳細資訊或在上述步驟中遇到問題，請參閱完整的[自架文件](https://docs.tomoribot.app/zh-TW/self-hosting/)。
 
 <!-- AFTER SETUP -->
 ### 邀請或設定完成後
-
-#### 基本指令
-
-- `/setup` - 伺服器的 bot 初始設定
-- `/config` - 多種調整 TomoriBot 的方式
-- `/personal memories` - 管理你的個人記憶
-- `/memories` - 管理伺服器記憶、文件與短期記憶
-- `/moderation` - 管理成員存取、使用者黑名單，以及頻道、人格與身分組限制
-
-所有斜線指令請見完整的**[指令參考](https://docs.tomoribot.app/zh-TW/features/command-reference/)**。
-
-#### 聊天互動
 
 只要在伺服器裡提及 bot，或使用設定好的觸發詞，就能開始對話：
 ```
 @TomoriBot yo wassup
 ```
 
-或者直接私訊 TomoriBot 跟她打招呼！
+或者直接私訊 TomoriBot 打個招呼！
 
-## 致謝
+#### 基本指令
 
-衷心感謝所有人，特別是以下這些優秀的朋友，他們提供的程式碼貢獻與建議塑造了 TomoriBot 的今日樣貌！
+- `/setup` - 伺服器的 bot 初始設定
+- `/config` 與 `/personal config` - 在目前 Discord 伺服器或個人調整 TomoriBot 的多種方式
+- `/providers` 與 `/personal providers` - 新增更多模型端點或雲端供應商
+
+所有斜線指令請參閱完整的[指令參考](https://docs.tomoribot.app/zh-TW/features/command-reference/)。
+
+
+## 謝辭
+
+衷心感謝所有人，*特別*感謝以下各位好友的程式碼貢獻與寶貴建議，幫助打造出今天的 TomoriBot！
 
 <table>
   <tr>
@@ -189,23 +176,12 @@ TomoriBot 支援長期記憶、多個人格運作、網頁與 MCP 工具、聊�
   </tr>
 </table>
 
-<!-- CONTACT -->
-## 聯絡與連結
-
-**官方網站**：[https://tomoribot.app](https://tomoribot.app/)
-
-**電子郵件**：bredrumb@gmail.com
-
-**Discord**：[官方支援伺服器](https://discord.gg/bjCfHm9QsB)
-
-
 ## 授權條款
-本專案採用 [AGPLv3](LICENSE) 授權。
+本專案採用 [AGPLv3](../LICENSE) 授權。
 
-<!-- SUPPORT -->
-## 支持專案
+---
 
-如果你覺得 TomoriBot 有幫助，也想支持她持續開發，歡迎在 GitHub 留下一顆 ⭐，或透過 Ko-fi 贊助！
+如果你覺得 TomoriBot 很有用（或很有趣），歡迎在 GitHub 上給個 ⭐，或透過 Ko-fi 或 Patreon 贊助後續開發！
 
 <p align="left">
 
@@ -213,7 +189,12 @@ TomoriBot 支援長期記憶、多個人格運作、網頁與 MCP 工具、聊�
   <a href="https://ko-fi.com/bredrumb">
     <img src="https://img.shields.io/badge/Support_on_Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Support on Ko-fi">
   </a>
+  &nbsp;
+  <a href="https://www.patreon.com/cw/tomoribot">
+    <img src="https://img.shields.io/badge/Support_on_Patreon-FF424D?style=for-the-badge&logo=patreon&logoColor=white" alt="Support on Patreon">
+  </a>
 </p>
+
 
 <!-- MARKDOWN LINKS & IMAGES -->
 [TypeScript.js]: https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white

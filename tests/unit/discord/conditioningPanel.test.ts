@@ -33,6 +33,7 @@ function createMockEntry(id: number, overrides: Partial<ConditioningAggregateEnt
     totalCount: id + 1,
     updatedAt: new Date(1700000000000 + id * 1000),
     userDiscIds: ["123456789012345678"],
+    personaActors: [],
     conditioningIds: [id],
     ...overrides,
   };

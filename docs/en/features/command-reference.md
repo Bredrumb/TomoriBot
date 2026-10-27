@@ -11,7 +11,7 @@ sidebar:
 
 Every slash command currently registered by TomoriBot, generated from the same command builders and English locale descriptions used for Discord registration.
 
-Top-level command groups: **43**. Runnable slash commands: **90**.
+Top-level command groups: **44**. Runnable slash commands: **91**.
 
 ## `/booru`
 
@@ -331,6 +331,14 @@ Reward me with fun interactions.
 | `/reward hug` | Give me a hug! |
 | `/reward kiss` | Give me a kiss! |
 | `/reward tickle` | Tickle me! |
+
+## `/roll`
+
+Roll dice for tabletop games and roleplay.
+
+| Command | Summary |
+|---|---|
+| `/roll` | Roll dice for tabletop games and roleplay. |
 
 ## `/scheduled-task`
 

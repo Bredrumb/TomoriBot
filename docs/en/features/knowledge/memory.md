@@ -106,9 +106,9 @@ By default she holds up to 100 personal memories and 100 server memories. Self-h
 `MAX_MEMORY_LENGTH`. Raising the *length* costs far more context than raising the *count*, so
 prefer more short memories over fewer long ones.
 
-These counts are per persona, not per user or per server. Each persona keeps her own set,
-so a server running four personas has four separate allowances. Your own global personal
-memories count against every persona's personal allowance.
+Each persona has a separate personal-memory limit and server-memory limit. A server with four
+personas has four of each. Your global personal memories count against every persona's personal
+allowance.
 
 
 ### Document Knowledge Base (RAG)
@@ -152,7 +152,18 @@ History imports are stored as documents, so `/memories` works on them too.
 time. A lighter-weight nudge than a full attribute or system prompt. Use it to reinforce
 how a specific character should act in a specific server.
 
-Every `/reward` or `/punish` is tallied regardless, but it only
+Use the optional `user` option on `/reward` or `/punish` for a playful embed named after that user.
+Choose either `user` or `persona`, not both. User targets never save conditioning or trigger an AI
+reply, even with a `reason`; the "will remember this" footer is just for fun.
+For both users and personas, the reason appears in italics within the action sentence.
+
+`Playful Interactions` lets personas make deliberate gestures toward users or other personas. It is on
+by default; disable it under `/config` > `Plugins` > `Available Tools`. Each gesture needs a target, an
+action, and a reason; feeding also needs food. User targets get a playful embed. Persona targets
+receive conditioning and are queued to react after the current speaker finishes. The reacting persona
+cannot use this tool during that reply. Both the tool and slash commands vary their localized titles.
+
+Every `/reward` or `/punish` targeting a persona is tallied, but it only
 becomes a memory she actually acts on when you give it a `reason`, which appears like this in her prompt:
 
 ```text
@@ -218,7 +229,7 @@ STM of each channel expires after 24 hours by default and if you've opted out wi
 
 | Where | What that means |
 |---|---|
-| In a server | One shared memory per channel, not one per person. She isn't keeping notes on you individually. |
+| In a server | The server uses one shared memory per channel. It does not keep separate server memories for each member. |
 | In DMs | Yours alone. |
 | Other channels | She can recall her recent conversations from a few other channels in the same server. |
 | Private channels | Anything set with `/config` > Channels > Channel Rules stays there and won't surface elsewhere. |

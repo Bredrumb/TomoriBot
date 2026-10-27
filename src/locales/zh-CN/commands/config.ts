@@ -478,6 +478,7 @@ export default {
       "tool_target_user-blocking": `人格用户屏蔽`,
       "tool_target_user-info": `用户信息更新`,
       tool_target_thread: `子区创建`,
+      tool_target_dice: "掷骰",
       tool_target_capabilities: `功能查看`,
       tool_trigger_literal_label: `字面触发`,
       tool_trigger_literal_description: `要匹配的短语。它与正则表达式只能填一个。`,

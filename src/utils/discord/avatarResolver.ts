@@ -7,7 +7,7 @@ import {
   loadStoredPersonaAvatarDataUri,
   resolvePersonaAvatarPublicUrl,
 } from "@/utils/storage/avatarStorage";
-import { normalizeUserTargetInput, resolveUserTarget } from "@/utils/discord/targetResolver";
+import { normalizeUserTargetInput, resolveIdentityTarget } from "@/utils/discord/targetResolver";
 
 export type ResolvedAvatarData = {
   sourceType: "user" | "webhook" | "persona";
@@ -377,75 +377,28 @@ export async function resolveAvatarByIdentity(
 
   const normalizedIdentity = normalizeUserTargetInput(trimmedIdentity);
   const guildId = context.guildId;
-  const personaMatches: Array<{ personaId: number; nickname: string }> = [];
-
-  if (guildId) {
-    const allPersonas = await getCachedAllPersonas(guildId).catch((error) => {
-      log.warn(
-        `[Avatar Resolver] Failed to load personas for guild ${guildId} while resolving "${trimmedIdentity}"`,
-        error,
-      );
-      return [];
-    });
-
-    for (const persona of allPersonas) {
-      if (persona.persona_id == null) {
-        continue;
-      }
-
-      if (normalizeUserTargetInput(persona.persona_nickname) === normalizedIdentity) {
-        personaMatches.push({
-          personaId: persona.persona_id,
-          nickname: persona.persona_nickname,
-        });
-      }
-    }
-  }
-
-  const uniquePersonaMatches = personaMatches.filter(
-    (candidate, index, array) => array.findIndex((entry) => entry.personaId === candidate.personaId) === index,
-  );
-
-  const userResolution = await resolveUserTarget(trimmedIdentity, context);
-
-  if (uniquePersonaMatches.length > 1) {
+  const personas = guildId
+    ? await getCachedAllPersonas(guildId).catch((error) => {
+        log.warn(`[Avatar Resolver] Failed to load personas for guild ${guildId}`, error);
+        return [];
+      })
+    : [];
+  const resolution = await resolveIdentityTarget(trimmedIdentity, context, personas);
+  if (resolution.status === "ambiguous") {
     throw new Error(
-      `Ambiguous avatar target "${trimmedIdentity}". It matches multiple personas: ${formatAmbiguousLabels(uniquePersonaMatches.map((candidate) => candidate.nickname))}.`,
+      `Ambiguous avatar target "${trimmedIdentity}". Candidates: ${formatAmbiguousLabels(resolution.candidates.map((candidate) => candidate.label))}.`,
     );
   }
-
-  if (uniquePersonaMatches.length === 1 && userResolution.status === "resolved") {
-    const [matchedPersona] = uniquePersonaMatches;
-    throw new Error(
-      `Ambiguous avatar target "${trimmedIdentity}". It matches both persona "${matchedPersona?.nickname}" and user "${userResolution.displayLabel}".`,
-    );
-  }
-
-  if (uniquePersonaMatches.length === 1) {
-    const [matchedPersona] = uniquePersonaMatches;
-    if (!matchedPersona) {
-      throw new Error(`No persona found with the name "${trimmedIdentity}"`);
+  if (resolution.status === "resolved") {
+    if (resolution.targetType === "persona") {
+      const avatar = await resolvePersonaAvatar(resolution.persona.persona_id, context, resolvedOptions);
+      if (avatar) return avatar;
+      throw new Error(`No persona found with the name "${resolution.displayLabel}"`);
     }
-
-    const personaAvatar = await resolvePersonaAvatar(matchedPersona.personaId, context, resolvedOptions);
-    if (personaAvatar) {
-      return personaAvatar;
+    if (resolution.isBridgeUser) {
+      throw new Error(`Cannot fetch an avatar for bridge user "${resolution.displayLabel}".`);
     }
-    throw new Error(`No persona found with the name "${matchedPersona.nickname}"`);
-  }
-
-  if (userResolution.status === "ambiguous") {
-    throw new Error(
-      `Ambiguous avatar target "${trimmedIdentity}". Candidates: ${formatAmbiguousLabels(userResolution.candidates.map((candidate) => candidate.label))}.`,
-    );
-  }
-
-  if (userResolution.status === "resolved") {
-    if (userResolution.isBridgeUser) {
-      throw new Error(`Cannot fetch an avatar for bridge user "${userResolution.displayLabel}".`);
-    }
-
-    return await resolveUserAvatar(userResolution.targetId, context, resolvedOptions);
+    return await resolveUserAvatar(resolution.targetId, context, resolvedOptions);
   }
 
   const personaNameHint =

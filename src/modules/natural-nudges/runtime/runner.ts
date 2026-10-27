@@ -11,6 +11,7 @@ import {
   availableIdleNudgeTools,
   findMissingIdleNudgeTool,
   findPersonaRunnableIdleNudge,
+  idleNudgeNeedsTarget,
   isIdleNudgeEligible,
   sameIdleNudgeDefinition,
   type IdleNudgeDefinition,
@@ -24,7 +25,7 @@ import {
 import { type NudgeModelRef, resolvePlannerModel } from "@/modules/natural-nudges/runtime/model";
 import { isWithinWakingHours, serverDayStart } from "@/modules/natural-nudges/runtime/meters";
 import { IDLE_NUDGE_DAILY_CAPS, PLANNER_HISTORY_MESSAGES } from "@/modules/natural-nudges/runtime/tuning";
-import { planIdleNudge, type IdleNudgePlan, type ScenePartner } from "@/modules/natural-nudges/runtime/planner";
+import { planIdleNudge, type IdleNudgePlan, type PlannerCandidate } from "@/modules/natural-nudges/runtime/planner";
 import { refreshPingUserTarget, type PingUserTarget } from "@/modules/natural-nudges/runtime/targets";
 import { loadAvailableToolNames } from "@/modules/natural-nudges/runtime/tools";
 import { recordIdleNudgeSample, type IdleNudgeSample } from "@/modules/natural-nudges/runtime/telemetry";
@@ -35,7 +36,7 @@ import type { ChatAdmissionDisposition, GenerationTurnResult, SceneTurnMetadata 
 import { verifyMessageWebhook, isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
 import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
 import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
-import { ensureDiscordUserMention, sendAlterPersonaMention } from "@/utils/discord/mentionHelper";
+import { ensureDiscordUserMention, sendPersonaMention } from "@/utils/discord/mentionHelper";
 import { seedTurnAnchor } from "@/utils/discord/turnAnchor";
 import { log } from "@/utils/misc/logger";
 
@@ -52,24 +53,26 @@ export interface IdleNudgeAttempt {
   awake: readonly boolean[];
   persona: TomoriState;
   interests: readonly NaturalNudgeInterest[];
-  idleNudge: IdleNudgeDefinition;
+  candidates: readonly PlannerCandidate[];
   plannerModel: NudgeModelRef;
   availableTools: ReadonlySet<string>;
   plannerChannels: Array<NudgeChannel & { transcript: string }>;
-  /** The member the idle nudge is about. Outside a scene, the opener pings them. */
   target: PingUserTarget | null;
-  /** Play Scene partners; empty for every other category. */
-  partners: ScenePartner[];
 }
+
+type SelectedIdleNudgeAttempt = IdleNudgeAttempt & PlannerCandidate;
 
 export type AttemptResult = "fired" | "aborted" | "failed";
 
-function sample(attempt: IdleNudgeAttempt, extra: Omit<IdleNudgeSample, "serverId">): void {
+function sample(
+  attempt: IdleNudgeAttempt & { idleNudge?: IdleNudgeDefinition },
+  extra: Omit<IdleNudgeSample, "serverId">,
+): void {
   recordIdleNudgeSample({
     serverId: attempt.serverId,
     heat: attempt.heat,
-    category: attempt.idleNudge.category,
-    idleNudgeKey: attempt.idleNudge.key,
+    category: attempt.candidates[0].idleNudge.category,
+    idleNudgeKey: attempt.idleNudge?.key,
     ...extra,
   });
 }
@@ -78,7 +81,11 @@ function sample(attempt: IdleNudgeAttempt, extra: Omit<IdleNudgeSample, "serverI
  * The cheap checks again, read fresh, right before sending. Any doubt resolves to saying nothing,
  * so each failing check names the reason and the caller aborts.
  */
-async function recheckBeforeSend(attempt: IdleNudgeAttempt, target: NudgeChannel, now: Date): Promise<string | null> {
+async function recheckBeforeSend(
+  attempt: SelectedIdleNudgeAttempt,
+  target: NudgeChannel,
+  now: Date,
+): Promise<string | null> {
   const config = await naturalNudgeRepository.loadServerConfig(attempt.serverId);
   if (!config.idle_nudges_enabled) return "disabled";
   const channelIds = await resolveEffectiveChannelIds(attempt.serverId, config, now);
@@ -207,7 +214,7 @@ function toolSentence(name: string, tools: readonly string[]): string {
 }
 
 function buildOpenerContextItem(
-  attempt: IdleNudgeAttempt,
+  attempt: SelectedIdleNudgeAttempt,
   plan: IdleNudgePlan,
   tools: readonly string[],
 ): StructuredContextItem {
@@ -224,7 +231,7 @@ function buildOpenerContextItem(
 }
 
 function buildPartnerContextItem(
-  attempt: IdleNudgeAttempt,
+  attempt: SelectedIdleNudgeAttempt,
   partner: TomoriState,
   agenda: string,
   tools: readonly string[],
@@ -243,7 +250,7 @@ function buildPartnerContextItem(
  * partner still has it when the opener's agenda rows could not be written or anchored.
  */
 function buildNudgeScene(
-  attempt: IdleNudgeAttempt,
+  attempt: SelectedIdleNudgeAttempt,
   plan: IdleNudgePlan,
   anchorId: string,
   tools: readonly string[],
@@ -270,7 +277,7 @@ function buildNudgeScene(
 
 /** One agenda row per speaker, all anchored to the opener. */
 function idleNudgeAgendas(
-  attempt: IdleNudgeAttempt,
+  attempt: SelectedIdleNudgeAttempt,
   plan: IdleNudgePlan,
 ): Array<{ personaId: number; agenda: string }> {
   const partnerAgendas = plan.scene?.partnerAgendas ?? [];
@@ -323,18 +330,18 @@ export function isGenerationFailure(result: GenerationTurnResult): boolean {
  * Phases B and C for one attempt. Runs detached from the coordinator cycle so model calls never
  * delay reminders; a restart mid-flight loses only this attempt, and the idle nudge stays due.
  */
-export async function runIdleNudgeAttempt(attempt: IdleNudgeAttempt): Promise<AttemptResult> {
+export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<AttemptResult> {
   const planned = await planIdleNudge({
-    persona: attempt.persona,
-    interests: attempt.interests,
-    idleNudge: attempt.idleNudge,
-    channels: attempt.plannerChannels.map((channel) => ({
+    persona: input.persona,
+    interests: input.interests,
+    candidates: input.candidates,
+    channels: input.plannerChannels.map((channel) => ({
       name: channel.channel.name,
+      description: "topic" in channel.channel ? channel.channel.topic : null,
       transcript: channel.transcript,
     })),
-    plannerModel: attempt.plannerModel,
-    target: attempt.target,
-    partners: attempt.partners,
+    plannerModel: input.plannerModel,
+    target: input.target,
   });
   const usage =
     "usage" in planned && planned.usage
@@ -343,25 +350,31 @@ export async function runIdleNudgeAttempt(attempt: IdleNudgeAttempt): Promise<At
   const plannerModel = "model" in planned ? planned.model : undefined;
 
   if (planned.status === "unavailable") {
-    sample(attempt, { outcome: "aborted", phase: "b", reason: planned.reason });
+    sample(input, { outcome: "aborted", phase: "b", reason: planned.reason });
     return "aborted";
   }
   if (planned.status === "failed") {
-    await naturalNudgeRepository.recordFailure(attempt.serverId);
-    sample(attempt, { outcome: "failed", phase: "b", reason: `planner_${planned.reason}`, plannerModel, ...usage });
+    await naturalNudgeRepository.recordFailure(input.serverId);
+    sample(input, { outcome: "failed", phase: "b", reason: `planner_${planned.reason}`, plannerModel, ...usage });
     return "failed";
   }
   if (planned.status === "declined") {
-    sample(attempt, { outcome: "aborted", phase: "b", reason: "planner_declined", plannerModel, ...usage });
+    sample(input, { outcome: "aborted", phase: "b", reason: "planner_declined", plannerModel, ...usage });
     return "aborted";
   }
 
+  const candidate = input.candidates[planned.plan.nudgeIndex];
+  const attempt: SelectedIdleNudgeAttempt = {
+    ...input,
+    ...candidate,
+  };
   const target = attempt.plannerChannels[planned.plan.channelIndex];
   const blocked = await recheckBeforeSend(attempt, target, new Date());
   if (blocked) {
     sample(attempt, { outcome: "aborted", phase: "c", reason: blocked, plannerModel, ...usage });
     return "aborted";
   }
+  if (!idleNudgeNeedsTarget(candidate.idleNudge)) attempt.target = null;
 
   const anchor = await resolveAnchorMessage(target.channel);
   if (!anchor) {
@@ -441,7 +454,7 @@ export async function runIdleNudgeAttempt(attempt: IdleNudgeAttempt): Promise<At
       triggerStartTime,
       contextLabel: `Ping User nudge in server ${attempt.serverId}`,
       fallbackSender: (content) =>
-        sendAlterPersonaMention(target.channel, attempt.persona, pingUserTarget.userDiscId, content),
+        sendPersonaMention(target.channel, attempt.persona, pingUserTarget.userDiscId, content),
     });
   }
   if (outcome) return outcome;

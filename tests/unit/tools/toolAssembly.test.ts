@@ -65,6 +65,8 @@ function createAssemblyState(overrides: Partial<ToolAssemblyState> = {}): ToolAs
       user_blocking_enabled: true,
       user_info_updates_enabled: true,
       thread_creation_enabled: true,
+      conditioning_interactions_enabled: false,
+      dice_rolling_enabled: false,
       danbooru_enabled: true,
     },
     ...overrides,

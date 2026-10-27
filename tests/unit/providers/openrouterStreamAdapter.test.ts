@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import { OpenrouterStreamAdapter, type OpenrouterStreamConfig } from "@/providers/openrouter/openrouterStreamAdapter";
 import { HumanizerDegree } from "@/types/db/schema";
 import type { RawStreamChunk, StreamContext } from "@/types/stream/interfaces";
@@ -65,6 +65,50 @@ async function collectRawChunks(adapter: OpenrouterStreamAdapter): Promise<RawSt
   }
   return chunks;
 }
+
+it("serializes each sent body once for OpenRouter and NVIDIA, including failures and retries", async () => {
+  const { NvidiaStreamAdapter } = await import("@/providers/nvidia/nvidiaStreamAdapter");
+  for (const Adapter of [OpenrouterStreamAdapter, NvidiaStreamAdapter]) {
+    for (const outcome of ["success", "size_rejection", "parameter_retry"]) {
+      let fetchCalls = 0;
+      const fetchStub = stubGlobalFetch(() => {
+        fetchCalls++;
+        if (outcome === "size_rejection" || (outcome === "parameter_retry" && fetchCalls === 1)) {
+          return Response.json(
+            {
+              error: {
+                message:
+                  outcome === "size_rejection"
+                    ? "Please make sure your payload is below 26214400 bytes in size."
+                    : "Unsupported parameter: min_p",
+              },
+            },
+            { status: 400 },
+          );
+        }
+        return makeSseResponse(["[DONE]"]);
+      });
+      const stringify = spyOn(JSON, "stringify");
+      let serializations: number;
+      try {
+        const context = makeStreamContext();
+        context.tomoriState = createPersona({ config: { thinking_level: "none" } });
+        context.holdResponseText = true;
+        const config = { ...makeStreamConfig(), endpointUrl: "https://example.test/v1/chat/completions" };
+        for await (const _chunk of new Adapter().startStream(config, context)) {
+        }
+        serializations = stringify.mock.calls.filter(
+          ([value]) => typeof value === "object" && value !== null && "model" in value && "messages" in value,
+        ).length;
+      } finally {
+        stringify.mockRestore();
+        fetchStub.mockRestore();
+      }
+      expect(fetchCalls).toBe(outcome === "parameter_retry" ? 2 : 1);
+      expect(serializations).toBe(fetchCalls);
+    }
+  }
+});
 
 /**
  * Consumes a stream to completion and discards the chunks.

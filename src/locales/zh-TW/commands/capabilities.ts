@@ -1,6 +1,10 @@
 export default {
   capabilities: {
     manage: {
+      dicerolling_option: "擲骰",
+      dicerolling_desc: "公開擲骰，用於桌遊與跑團角色扮演",
+      conditioninginteractions_option: `趣味互動`,
+      conditioninginteractions_desc: `透過擁抱、咬咬、敲頭或餵食來表達強烈的情緒`,
       description: `設定我可以在這個伺服器使用哪些工具。`,
       selfteaching_option: `自我教導`,
       personalization_option: `個人化（記憶／稱呼）`,

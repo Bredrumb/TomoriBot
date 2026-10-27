@@ -187,11 +187,10 @@ describe("Subscription structured-call payer ownership", () => {
       await planIdleNudge({
         persona: state,
         interests: [],
-        idleNudge: BUILTIN_IDLE_NUDGES[0],
-        channels: [],
+        candidates: [{ idleNudge: BUILTIN_IDLE_NUDGES[0], channelIndices: [0], partners: [] }],
+        channels: [{ name: "studio", description: null, transcript: "" }],
         plannerModel: { llmId: 51, slot: "nudge-planner" },
         target: null,
-        partners: [],
       }),
     ).toMatchObject({ status: "declined" });
     reply = { topic: "none" };
@@ -202,6 +201,7 @@ describe("Subscription structured-call payer ownership", () => {
         backend: { kind: "llm", llmId: 51, slot: "nudge-checker", model: model.llm_codename },
         options: [{ id: "i01", text: "tea" }],
         evidence: "fixture",
+        admitRequest: () => true,
       }),
     ).toMatchObject({ reason: "none" });
     reply = { interests: [{ label: "tea", description: "Brewing tea." }] };

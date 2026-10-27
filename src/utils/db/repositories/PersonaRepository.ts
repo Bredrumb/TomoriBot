@@ -35,6 +35,7 @@ import type { SqlParameterArray } from "@/types/db/sqlOperations";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { getCachedLLM } from "@/utils/cache/llmCache";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
+import { invalidatePersonaAppearance } from "@/utils/cache/personaAppearanceCacheStore";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { validateTomoriFields } from "@/utils/db/sqlSecurity";
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
@@ -951,6 +952,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         return deleted;
       });
       for (const row of result) invalidateEmojiStickerCache(Number(row.server_id));
+      if (result.length > 0) invalidatePersonaAppearance(personaId);
       if (result.length > 0) {
         for (const owner of speechOwners) {
           try {
@@ -1249,6 +1251,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         return updatedRow;
       });
 
+      if (row) invalidatePersonaAppearance(params.personaId);
       return row ? (row as unknown as TomoriRow) : null;
     } catch (error) {
       log.error(`Error applying preset pointer to persona ${params.personaId}:`, error);
@@ -1948,7 +1951,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         smpc.prompt_snapshot_enabled,
         -- 4. server_capabilities_configs
         scaps.emoji_usage_enabled, scaps.sticker_usage_enabled, scaps.web_search_enabled,
-        scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.imagegen_enabled,
+        scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.conditioning_interactions_enabled, scaps.dice_rolling_enabled, scaps.imagegen_enabled,
         scaps.danbooru_enabled, scaps.videogen_enabled, scaps.voice_message_enabled, scaps.user_blocking_enabled,
         scaps.time_awareness_enabled,
         scaps.tool_use_enabled,
@@ -2060,7 +2063,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         smpc.prompt_snapshot_enabled,
         -- 4. server_capabilities_configs
         scaps.emoji_usage_enabled, scaps.sticker_usage_enabled, scaps.web_search_enabled,
-        scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.imagegen_enabled,
+        scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.conditioning_interactions_enabled, scaps.dice_rolling_enabled, scaps.imagegen_enabled,
         scaps.danbooru_enabled, scaps.videogen_enabled, scaps.voice_message_enabled, scaps.user_blocking_enabled,
         scaps.time_awareness_enabled,
         scaps.tool_use_enabled,
@@ -3361,6 +3364,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         return null;
       }
 
+      invalidatePersonaAppearance(personaId);
       return updatedTomori.data;
     } catch (error) {
       const context: ErrorContext = {

@@ -1,12 +1,6 @@
-import { EmbedBuilder, type Message, type Webhook, type WebhookMessageCreateOptions } from "discord.js";
+import { EmbedBuilder, type Message, type WebhookMessageCreateOptions } from "discord.js";
 import { stripBridgePrefix } from "@/utils/bridges";
 import { localizer } from "@/utils/text/localizer";
-import {
-  dispatchWebhookWithIdentity,
-  sendSelectedWebhookMessage,
-  type WebhookIdentityDelivery,
-} from "@/utils/discord/webhook/personaDispatch";
-import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { verifyMessageWebhook, isManagedWebhookMessage } from "@/utils/chat/webhookIdentity";
 
 /**
@@ -59,35 +53,6 @@ function buildReplyContextEmbed(
     }),
     url: targetMessage.url,
     iconURL: authorIconUrl,
-  });
-}
-
-export async function sendWebhookReplyWithContext(
-  webhook: Webhook,
-  targetMessage: Message,
-  locale: string,
-  content: string,
-  identity: ResolvedWebhookIdentity,
-  options?: {
-    threadId?: string;
-    mentionableUserIds?: readonly string[];
-  },
-): Promise<WebhookIdentityDelivery<Message>> {
-  const noticePayload = await buildWebhookReplyNoticePayload(targetMessage, locale, options);
-  return await dispatchWebhookWithIdentity(webhook, identity, async (selected) => {
-    const replyNoticeMessage = await sendSelectedWebhookMessage(selected, noticePayload);
-    try {
-      return await sendSelectedWebhookMessage(selected, {
-        content,
-        allowedMentions: options?.mentionableUserIds
-          ? { users: [...options.mentionableUserIds], parse: [], repliedUser: false }
-          : { parse: ["users", "roles"], repliedUser: false },
-        ...(options?.threadId ? { threadId: options.threadId } : {}),
-      });
-    } catch (error) {
-      await selected.webhook.deleteMessage(replyNoticeMessage.id, options?.threadId).catch(() => undefined);
-      throw error;
-    }
   });
 }
 

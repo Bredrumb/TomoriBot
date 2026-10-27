@@ -288,6 +288,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     Object.assign(streamingContext, incoming.manualStreamingContextOverrides);
   }
   streamingContext.suppressUserErrors = !turn.shouldSurfaceUserErrors || streamingContext.suppressUserErrors === true;
+  streamingContext.deliveryMode = incoming.isUserImpersonation ? "user_impersonation" : "persona";
+  streamingContext.deliveryReceipts = [];
 
   // Initialize reply notice state for any queued turn so the "Replying to..." embed can fire
   // before the first webhook chunk is sent. Deliberately NOT gated on `is_alter`: the main
@@ -1113,6 +1115,19 @@ async function simplifyMessage(
     const preRefVideoCount = videoAttachments.length;
     appendSupportedMediaFromMessage(replyContext.referencedMessage, imageAttachments, videoAttachments);
     appendComponentMediaFromMessage(replyContext.referencedMessage, imageAttachments, videoAttachments);
+    const referencedForwardContext = await buildForwardContext({
+      message: replyContext.referencedMessage,
+      content,
+      imageAttachments,
+      videoAttachments,
+      messageIdMap,
+      forwarderName:
+        replyContext.referencedMessage.member?.displayName ?? replyContext.referencedMessage.author.username,
+      clientUserId: turn.lockedTurn.admission.client.user?.id,
+      tomoriNickname: turn.persona.persona_nickname,
+      selfDebugEnabled: turn.persona.config.self_debug_enabled ?? false,
+    });
+    content = referencedForwardContext.content;
     imageAttachments.push(...extractEmojiImageAttachments(replyContext.referencedMessage.content));
     appendDocumentAttachmentsFromMessage(
       replyContext.referencedMessage,
@@ -1120,14 +1135,18 @@ async function simplifyMessage(
       replyContext.referencedMessage.id,
     );
     if (imageAttachments.length > preRefImageCount || videoAttachments.length > preRefVideoCount) {
+      const mediaSourceMessageId =
+        msg.reference?.channelId && msg.reference.channelId !== msg.channelId
+          ? msg.id
+          : replyContext.referencedMessage.id;
       tagNewMediaWithSource(
         imageAttachments,
         preRefImageCount,
         videoAttachments,
         preRefVideoCount,
-        replyContext.referencedMessage.id,
+        mediaSourceMessageId,
       );
-      mediaSourceMessageIds.push(replyContext.referencedMessage.id);
+      mediaSourceMessageIds.push(mediaSourceMessageId);
       remoteMediaSourceKind = "reply";
     }
   }
@@ -1223,7 +1242,7 @@ async function simplifyMessage(
     tagNewMediaWithSource(imageAttachments, preForwardImageCount, videoAttachments, preForwardVideoCount, msg.id);
   }
   mediaSourceMessageIds.push(...forwardContext.mediaSourceMessageIds);
-  remoteMediaSourceKind = forwardContext.remoteMediaSourceKind;
+  remoteMediaSourceKind = forwardContext.remoteMediaSourceKind ?? remoteMediaSourceKind;
 
   const preLocalImageCount = imageAttachments.length;
   const preLocalVideoCount = videoAttachments.length;
@@ -1352,7 +1371,9 @@ async function withReplyContext(
     const referenced =
       fetchedMessagesById.get(referenceMessageId) ??
       msg.channel.messages.cache.get(referenceMessageId) ??
-      (await msg.channel.messages.fetch(referenceMessageId));
+      (await (msg.reference?.channelId && msg.reference.channelId !== msg.channel.id
+        ? msg.fetchReference()
+        : msg.channel.messages.fetch(referenceMessageId)));
     // A reference can sit outside the fetched history window, so resolve its verified proxy
     // attribution through the same bounded index read the history loop used. This is what lets
     // the annotation name a proxied member instead of the webhook veneer, and it also brings an

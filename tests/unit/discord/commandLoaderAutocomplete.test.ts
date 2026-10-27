@@ -7,6 +7,7 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { loadCommandData } from "@/utils/discord/commandLoader";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { ApplicationCommandOptionType } from "discord.js";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -65,10 +66,10 @@ describe("commandLoader autocomplete registration", () => {
 });
 
 describe("conditioning persona option registration", () => {
-  it("declares an optional autocomplete persona option on every conditioning leaf", async () => {
+  it("declares optional persona autocomplete and user selection on every conditioning leaf", async () => {
     const { registrationData } = await getLoadedCommandData();
 
-    type OptionPayload = { name?: string; required?: boolean; autocomplete?: boolean };
+    type OptionPayload = { name?: string; type?: number; required?: boolean; autocomplete?: boolean };
     type SubcommandPayload = { name?: string; options?: OptionPayload[] };
 
     for (const [root, actions] of [
@@ -89,6 +90,9 @@ describe("conditioning persona option registration", () => {
         expect(personaOption).toBeDefined();
         expect(personaOption?.required ?? false).toBe(false);
         expect(personaOption?.autocomplete).toBe(true);
+        const userOption = subcommand?.options?.find((option) => option.name === "user");
+        expect(userOption?.type).toBe(ApplicationCommandOptionType.User);
+        expect(userOption?.required ?? false).toBe(false);
       }
     }
   });

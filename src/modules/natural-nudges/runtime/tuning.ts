@@ -80,6 +80,8 @@ export const PLANNER_HISTORY_MESSAGES = 15;
 /** Lull channels read for hanging detection; the planner then sees at most three of them. */
 export const MAX_SCANNED_CHANNELS = 6;
 export const MAX_PLANNER_CHANNELS = 3;
+/** Six options bound planner input while leaving room for alternatives within the drawn category. */
+export const MAX_PLANNER_NUDGES = 6;
 /** A conversation older than this is history, not something to pick back up. */
 export const HANGING_MAX_AGE_MS = 48 * HOUR_MS;
 /** Fewer human messages than this is not a conversation that could be left hanging. */

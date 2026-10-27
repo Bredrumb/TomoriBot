@@ -83,7 +83,12 @@ export type SupporterFundingResult =
     };
 
 export interface SupporterRequestDenialFacts {
-  reason: SupporterFundingFailureReason | "unsupported_capability" | "model_unavailable" | "capacity_unavailable";
+  reason:
+    | SupporterFundingFailureReason
+    | "unsupported_capability"
+    | "model_unavailable"
+    | "capacity_unavailable"
+    | "pricing_unavailable";
   details?: SupporterFundingFailureDetails;
   capability: SupporterCapability;
   fundingScope: "personal" | "server";

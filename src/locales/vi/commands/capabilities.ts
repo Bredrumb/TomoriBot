@@ -1,6 +1,10 @@
 export default {
   capabilities: {
     manage: {
+      dicerolling_option: "Tung xúc xắc",
+      dicerolling_desc: "Tung xúc xắc công khai cho board game và nhập vai",
+      conditioninginteractions_option: `Tương tác vui`,
+      conditioninginteractions_desc: `Thể hiện cảm xúc mạnh bằng ôm, cắn, gõ đầu hoặc cho ăn`,
       description: `Cấu hình các công cụ cụ thể mà mình có thể dùng trên máy chủ này.`,
       selfteaching_option: `Tự học`,
       personalization_option: `Cá nhân hóa (Bộ nhớ/Biệt danh)`,

@@ -3,19 +3,13 @@
  * Allows the active persona to create a public thread and send the first message into it.
  */
 
-import {
-  ChannelType,
-  PermissionFlagsBits,
-  type Guild,
-  type NewsChannel,
-  type TextChannel,
-  type Webhook,
-} from "discord.js";
+import { ChannelType, PermissionFlagsBits, type Guild, type NewsChannel, type TextChannel } from "discord.js";
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import { resolveChannelTarget } from "@/utils/discord/targetResolver";
 import { getKnownPersonaSpeakerNames, stripLeadingKnownSpeakerPrefixes } from "@/utils/discord/modelAuthoredText";
+import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
-import { sendPersonaPostViaWebhook } from "@/utils/discord/webhook/personaPost";
+import { sendToolPersonaPost } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { log } from "@/utils/misc/logger";
 import { storePendingBoomerang, type PendingBoomerang } from "@/tools/functionCalls/crossChannelMessageTool";
 import { resolveContextAuthorLabel } from "@/utils/discord/contextAuthorLabel";
@@ -158,18 +152,6 @@ async function resolveTargetChannel(
   }
 
   return { ok: true, channel: channelResolution.channel };
-}
-
-async function resolvePersonaWebhook(
-  context: ToolContext,
-  targetChannel: ThreadParentChannel,
-): Promise<Webhook | null> {
-  if (!context.personaUsername) {
-    return null;
-  }
-
-  const webhookResult = await getOrCreateWebhook(targetChannel);
-  return webhookResult.webhook;
 }
 
 export class CreateThreadTool extends BaseTool {
@@ -406,10 +388,9 @@ export class CreateThreadTool extends BaseTool {
       };
     }
 
-    let personaWebhook: Webhook | null = null;
-    if (context.personaUsername) {
-      personaWebhook = await resolvePersonaWebhook(context, targetChannel);
-      if (!personaWebhook) {
+    if (context.tomoriState.is_alter) {
+      const personaWebhook = await getOrCreateWebhook(targetChannel);
+      if (!personaWebhook.webhook) {
         return {
           success: false,
           error: `I could not get a webhook for channel \`${targetChannel.name}\` to send as the active persona.`,
@@ -427,27 +408,16 @@ export class CreateThreadTool extends BaseTool {
         reason: "TomoriBot create_thread tool",
       });
 
-      if (personaWebhook && context.personaUsername) {
-        await sendPersonaPostViaWebhook(
-          personaWebhook,
-          {
-            content: firstMessage,
-            allowedMentions: { parse: [] },
-            threadId: thread.id,
-          },
-          {
-            username: context.personaUsername,
-            avatarUrl: context.personaAvatarUrl,
-            personaId: context.tomoriState.persona_id,
-          },
-          thread,
-        );
-      } else {
-        await thread.send({
+      const outcome = await sendToolPersonaPost(
+        context,
+        context.tomoriState,
+        {
           content: firstMessage,
           allowedMentions: { parse: [] },
-        });
-      }
+        },
+        thread,
+      );
+      if (outcome.status !== "sent") throw new DiscordDeliveryError(outcome.status, outcome.error);
 
       let threadMessages: PendingBoomerang["targetChannelMessages"] = [];
       try {
@@ -512,7 +482,7 @@ export class CreateThreadTool extends BaseTool {
           thread_name: thread.name,
           parent_channel_id: targetChannel.id,
           parent_channel_name: targetChannel.name,
-          used_webhook_context: Boolean(personaWebhook && context.personaUsername),
+          used_webhook_context: outcome.receipt.route === "webhook",
           boomerang: true,
         },
       };

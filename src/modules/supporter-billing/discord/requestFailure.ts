@@ -99,11 +99,13 @@ export function getSupporterRequestFailureMessage(
         ? error.details?.retryable === false
           ? "commands.subscribe.request.capacity_unavailable"
           : "commands.subscribe.request.capacity"
-        : error.reason === "model_not_allowed" ||
-            error.reason === "model_unavailable" ||
-            error.reason === "unsupported_capability"
-          ? "commands.subscribe.request.unsupported"
-          : getFailureDescriptionKey(error.reason, error.details);
+        : error.reason === "pricing_unavailable"
+          ? "commands.subscribe.request.pricing_unavailable"
+          : error.reason === "model_not_allowed" ||
+              error.reason === "model_unavailable" ||
+              error.reason === "unsupported_capability"
+            ? "commands.subscribe.request.unsupported"
+            : getFailureDescriptionKey(error.reason, error.details);
   if (forFallback && error.reason === "allowance_exhausted") {
     descriptionKey = "commands.subscribe.request.allowance_reason";
   } else if (forFallback && error.reason === "capacity_unavailable") {

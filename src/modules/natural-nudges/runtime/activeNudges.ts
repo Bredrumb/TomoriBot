@@ -473,19 +473,25 @@ export async function runActiveNudgeCheck(
     const settings = await checkSettingsAndCaps(check, personas, budget, now);
     if (typeof settings === "string") return finish("aborted", "a", settings);
     const { speakers, configs } = await loadSpeakers(check, personas);
-    const { options: matcherOptions, owners } = buildMatcherOptions(speakers, configs, random);
-    if (matcherOptions.length === 0) return finish("aborted", "a", "no_interests");
     const window = await fetchRecentMessages(check.channel, ACTIVE_NUDGE_WINDOW_MESSAGES);
+    const spoke = spokeInWindow(window, personas, check.client.user?.id);
+    const { options: matcherOptions, owners } = buildMatcherOptions(
+      speakers.filter((persona) => !spoke.has(persona.persona_id)),
+      configs,
+      random,
+    );
+    if (matcherOptions.length === 0) return finish("aborted", "a", "no_interests");
     const evidence = await buildMatcherEvidence(window, check.guildId);
     if (!evidence) return finish("aborted", "a", "no_evidence");
-    if (!budget.take(check.serverId, settings.dayStart, settings.checkCap))
-      return finish("aborted", "a", "check_cap_reached");
+    if (watch.personaSpoke) return finish("aborted", "a", "persona_spoke");
+    if (isChannelProcessingLocked(check.channel.id)) return finish("aborted", "a", "channel_busy");
 
     const matched: MatcherResult = await matchActiveNudge({
       state: personas[0],
       backend: settings.backend,
       options: matcherOptions,
       evidence,
+      admitRequest: () => budget.take(check.serverId, settings.dayStart, settings.checkCap),
     });
     Object.assign(telemetry, {
       matcherKind: matched.kind,
@@ -498,10 +504,10 @@ export async function runActiveNudgeCheck(
     if (pausesActiveNudgeChecks(matched)) budget.pause(check.serverId, Date.now());
     // Not counted toward the failure stop, so a broken matcher cannot also stop the server's idle nudges.
     if (matched.reason === "failed") return finish("failed", "a", "matcher_failed");
+    if (matched.reason === "check_cap_reached") return finish("aborted", "a", matched.reason);
     if (!matched.choice) return finish("aborted", "a", `matcher_${matched.reason}`);
-    const spoke = spokeInWindow(window, personas, check.client.user?.id);
-    const winners = (owners.get(matched.choice) ?? []).filter((owner) => !spoke.has(owner.persona_id));
-    if (winners.length === 0) return finish("aborted", "a", "winner_spoke");
+    const winners = owners.get(matched.choice) ?? [];
+    if (winners.length === 0) return finish("aborted", "a", "no_interests");
     const winner =
       drawRaffle(
         winners.map((persona) => ({
@@ -591,16 +597,23 @@ async function recheckBeforeSend(
   if (!evidence) return { reason: "window_gone" };
   if (spokeInWindow(window, personas, check.client.user?.id).has(speaker.persona_id))
     return { reason: "persona_spoke" };
-  if (!budget.take(check.serverId, settings.dayStart, settings.checkCap)) return { reason: "check_cap_reached" };
+  let requested = false;
   const rematched = await matchActiveNudge({
     state: personas[0],
     backend: settings.backend,
     options: plan.options,
     evidence,
+    admitRequest: () => {
+      const admitted = budget.take(check.serverId, settings.dayStart, settings.checkCap);
+      requested ||= admitted;
+      return admitted;
+    },
   });
+  if (!requested && rematched.reason === "check_cap_reached") return { reason: rematched.reason };
   if (pausesActiveNudgeChecks(rematched)) budget.pause(check.serverId, Date.now());
   // Like the first call, a failure here must not count toward the failure stop.
   if (rematched.reason === "failed") return { reason: "matcher_failed", rematch: rematched };
+  if (rematched.reason === "check_cap_reached") return { reason: rematched.reason, rematch: rematched };
   if (rematched.choice !== plan.choice) return { reason: "window_gone", rematch: rematched };
   // The second call takes seconds, so the moment must still hold on return, not only before it starts.
   if (watch.personaSpoke) return { reason: "persona_spoke", rematch: rematched };
