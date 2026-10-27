@@ -34,7 +34,6 @@ export function buildToolPersonaPostContext(
           avatarDataUri: context.personaAvatarUrl?.startsWith("data:image/") ? context.personaAvatarUrl : undefined,
         }
       : undefined,
-    holdResponseText: context.streamContext?.holdResponseText,
     locale: context.locale,
     deliveryState: context.streamContext?.deliveryState,
     abortSignal: context.abortSignal ?? context.streamContext?.abortSignal,

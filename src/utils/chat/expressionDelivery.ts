@@ -78,8 +78,7 @@ export function createExpressionDeliveryState(): ExpressionDeliveryState {
 /**
  * Sends the resolved expression as its own message and records the turn's receipt.
  *
- * Text emitted before the tool call is already committed by the stream's function-call flush, so
- * the expression lands after it. Eligibility, whitelist, and stored media are rechecked here because
+ * Eligibility, whitelist, and stored media are rechecked here because
  * resolution happened earlier and an edit can land in between.
  *
  * @param isCancelled - Checked immediately before each outbound POST, after webhook resolution and any
@@ -108,7 +107,6 @@ export async function deliverExpression(
     if (
       isCancelled() ||
       context.streamingContext.abortSignal?.aborted ||
-      context.streamingContext.holdResponseText ||
       context.streamingContext.deliveryState?.unconfirmed
     )
       throw new ExpressionSendCancelled();

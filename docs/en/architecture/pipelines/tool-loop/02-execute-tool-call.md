@@ -51,7 +51,9 @@ disabled, so successful identities are reused below. Off computes the identity o
 call as written; it reuses just the calls an earlier invocation of the turn completed (fallback or key
 rotation), not repeats within one invocation.
 
-Pass dispatches that request once. Rejection returns `review_rejected` history with
+Pass dispatches that request once, including its public tool output while ordinary response prose
+remains held. The tool delivery adapter forwards cancellation and terminal delivery state without
+copying the prose hold. Expressions follow the same checkpoint before sending. Rejection returns `review_rejected` history with
 `actionExecuted: false`, correction eligibility and concise findings. It adds no failed-tool notice
 or execution statistic. The author proposes one call per pass, so a request with several parts
 reaches the reviewer as several calls. The reviewer judges each as one part of the request and sees

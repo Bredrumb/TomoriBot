@@ -448,10 +448,26 @@ describe("persona media delivery", () => {
     await expect(generatedSenders[0].send(f.context)).rejects.toMatchObject({ outcome: "pre_dispatch" });
     expect(f.requests).toHaveLength(1);
     expect(f.receipts).toHaveLength(0);
-    const held = fixture();
-    if (held.context.streamContext) held.context.streamContext.holdResponseText = true;
-    await expect(generatedSenders[2].send(held.context)).rejects.toMatchObject({ outcome: "pre_dispatch" });
-    expect(held.requests).toHaveLength(0);
+  });
+
+  it("delivers admitted generated media, voice, and captions while ordinary prose remains held", async () => {
+    const f = fixture();
+    if (f.context.streamContext) f.context.streamContext.holdResponseText = true;
+    f.target.personaPost = buildToolPersonaPostContext(f.context, f.persona);
+    f.voiceFetch();
+    for (const sender of generatedSenders) await sender.send(f.context);
+    await deliverVoiceMessage({
+      target: f.target,
+      audioBuffer: Buffer.from("voice"),
+      mimeType: "audio/ogg",
+      filename: "voice.ogg",
+      voiceMeta: { waveform: "AA==", durationSecs: 1 },
+    });
+    await postVoiceTranscriptCaption(f.target, "caption");
+
+    expect(f.requests).toHaveLength(generatedSenders.length + 2);
+    expect(f.receipts).toHaveLength(f.requests.length);
+    expect(f.context.streamContext?.holdResponseText).toBe(true);
   });
 
   it("uncertain native voice POSTs never try bot REST or attachment fallback", async () => {
