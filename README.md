@@ -98,9 +98,13 @@ You can [invite the public TomoriBot](https://discord.com/oauth2/authorize?clien
 
 ## Self-Hosting
 
+There are two easy ways to get TomoriBot running on your PC:
+
+### Option 1: Setup Wizard (Recommended)
+
 1. **Prerequisites:**
    - [Bun](https://bun.sh/) v1.3.2+ (v1.4.0+ recommended)
-   - [PostgreSQL](https://www.postgresql.org/) or [Docker](https://www.docker.com/) (the setup wizard uses an existing PostgreSQL install or starts one in Docker)
+   - [PostgreSQL](https://www.postgresql.org/) or [Docker](https://www.docker.com/) (the setup wizard uses an existing PostgreSQL install or starts one in Docker for the database)
    - A [Discord bot token](https://discord.com/developers/applications) with `Presence Intent`, `Server Members Intent`, and `Message Content Intent` enabled
 2. **Run the setup wizard:**
    ```sh
@@ -110,7 +114,18 @@ You can [invite the public TomoriBot](https://discord.com/oauth2/authorize?clien
    bun run dev # starts the bot and runs DB migrations automatically
    ```
 
-For more details or if you're having issues with the steps above, see the full [self-hosting documentation](https://docs.tomoribot.app/en/self-hosting/).
+### Option 2: Docker Compose
+
+1. **Prerequisites:**
+   - [Docker](https://www.docker.com/) and Docker Compose v2+
+   - A [Discord bot token](https://discord.com/developers/applications) with `Presence Intent`, `Server Members Intent`, and `Message Content Intent` enabled
+2. **Run with Docker Compose:**
+   ```sh
+   git clone https://github.com/Bredrumb/TomoriBot.git
+   cd TomoriBot
+   cp .env.example .env # set DISCORD_TOKEN, CRYPTO_SECRET, and POSTGRES_PASSWORD
+   docker compose up
+   ```
 
 <!-- AFTER SETUP -->
 ### After Inviting / Setup
