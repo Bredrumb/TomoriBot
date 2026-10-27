@@ -238,7 +238,12 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 
       const deferredDenialNotice =
         findProviderRequestDeniedError(lastError, context.usageContext)?.deferNotice ?? false;
-      if (!context.suppressUserErrors && !deferredDenialNotice && !isUserImpersonationStreamContext(context)) {
+      if (
+        !context.deliveryState?.unconfirmed &&
+        !context.suppressUserErrors &&
+        !deferredDenialNotice &&
+        !isUserImpersonationStreamContext(context)
+      ) {
         await this.errorUi.handleStreamError(lastError, context);
       } else {
         log.warn("Stream: Suppressing stream error embed due to retryable failure", lastError);

@@ -98,8 +98,9 @@ finishes before POST. Lost responses, AbortError, and uncertain server failures 
 
 `deliveryState` is shared by reference across provider contexts, tool delivery, and approved draft
 presentation. Once a POST is unconfirmed, the turn clears held text and stops before response review,
-key rotation, model fallback, or another tool call. No successful receipt or appearance is inferred
-from that outcome. A successful earlier message keeps its own receipt.
+key rotation, model fallback, or another tool call. The orchestrator suppresses error notices before
+returning that failure. No successful receipt or appearance is inferred from that outcome. A
+successful earlier message keeps its own receipt.
 
 `context.deliveredMessageRefs` retains successful stream-body references across attempts. Button
 expiry and reply-notice cleanup resolve each message's authoring webhook ID. The shared
