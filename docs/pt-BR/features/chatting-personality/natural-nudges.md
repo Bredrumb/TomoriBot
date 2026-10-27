@@ -146,6 +146,79 @@ Cada persona tem sua própria página de **Toques** em `/config` > Persona:
 
 Predefinições oficiais incluem essas configurações. O comando `/persona generate` sugere interesses para novas personas; `Gerar Interesses` adiciona novos por meio de seu modelo de texto atual. Exportações de personas incluem os três.
 
+## Quando os toques disparam
+
+### Heat
+<!-- anchor: heat -->
+
+O Heat define o ritmo tanto dos toques ociosos quanto das verificações ativas para todo o seu servidor, entre membros e personas. As configurações do Natural Nudges mostram o Heat medido, seu ajuste salvo e o Heat usado para toques de um total de 50.
+
+#### TLDR: Mais mensagens para o TomoriBot = Mais Heat = Mais toques automáticos
+
+#### Atividade e decaimento
+
+O Heat medido é uma média diária ponderada de interações nos últimos 30 dias. Turnos de conversa comuns e turnos de `/punish` humanos contribuem uma vez; turnos de `/reward` humanos contribuem três vezes mais. Toques gerados e Interações Divertidas entre personas não contribuem em nada.
+
+O peso de uma interação cai pela metade a cada três dias:
+
+$$
+w(d) = 2^{-d/3}
+$$
+
+Aqui, `d` é o número de dias atrás, usando dias UTC: a atividade de hoje tem peso 1, de três dias atrás tem peso 0.5 e de seis dias atrás tem peso 0.25. A atividade sai do cálculo após 30 dias. Com `E_d` como o total ponderado de interações de cada dia, o Heat medido `A` é:
+
+$$
+A = \frac{\sum_{d=0}^{29} E_d \cdot w(d)}{\sum_{d=0}^{29} w(d)}
+$$
+
+Uma atividade estável de 10 interações ponderadas todos os dias gera cerca de 10 de Heat medido. Seu ajuste salvo `Δ` é somado após essa média, e o resultado é limitado entre 0 e 50:
+
+$$
+H = \min(50, \max(0, A + \Delta))
+$$
+
+A atividade medida não tem teto, portanto o Heat de um servidor movimentado decai a partir de seu valor total. Ambos os modos precisam de Heat medido e Heat efetivo de pelo menos 1. Um ajuste altera o ritmo assim que a atividade medida atinge esse mínimo. A pausa de 14 dias sem chat direto continua valendo para qualquer valor de Heat.
+
+#### Intervalos ociosos e verificações ativas
+
+Para um Heat efetivo `H` de pelo menos 1, seu nível de frequência fornece estes valores:
+
+| Frequência | Divisor ocioso D | Limite diário ocioso C | Multiplicador ativo M |
+|---|---|---|---|
+| `Rare` | 175 | 1 | 2 |
+| `Gentle` | 25 | 2 | 1 |
+| `Normal` | 15 | 3 | 0.6 |
+| `Lively` | 8 | 6 | 0.35 |
+
+Os toques ociosos estimados por dia `R` aumentam com o Heat até atingirem o limite diário:
+
+$$
+R = \min\left(\frac{H}{D}, C\right)
+$$
+
+O intervalo base é de `16 / R` horas. Cada intervalo recebe um multiplicador aleatório entre 0.5 e 1.5, e cada convite consecutivo sem resposta triplica o próximo intervalo. Três convites sem resposta pausam os toques ociosos até que alguém volte a falar com o TomoriBot. Canais silenciosos, horário de atividade, pré-requisitos e a decisão do planejador ainda determinam se um toque programado de fato começará.
+
+Para verificações ativas, o Heat altera o número de mensagens humanas necessárias em um canal. Primeiro calcule uma escala de intervalo `s`, com a contribuição do Heat mantida entre 0.5 e 4:
+
+$$
+s = M \cdot \min\left(4, \max\left(0.5, \frac{15}{H}\right)\right)
+$$
+
+A meta de mensagens de uma verificação é sorteada aleatoriamente entre `max(1, round(15 × s))` e `max(1, round(40 × s))`, inclusive. O arredondamento usa a mensagem inteira mais próxima, arredondando metades para cima. Tópicos compartilham o contador do canal pai. Os tempos de recarga e limites diários continuam em vigor, e o verificador só convida uma persona a falar quando a conversa coincide com um interesse. Essas fórmulas controlam o momento; uma verificação pode não produzir resposta.
+
+Por exemplo, com ambas as frequências definidas como `Gentle`:
+
+| Heat efetivo | Toques ociosos estimados por semana | Mensagens humanas entre verificações ativas |
+|---|---|---|
+| Abaixo de 1 | 0 | Sem verificações |
+| 5 | Cerca de 1.4 | 45-120 |
+| 15 | Cerca de 4.2 | 15-40 |
+| 30 | Cerca de 8.4 | 8-20 |
+| 45 | Cerca de 12.6 | 8-20 |
+| 50 | Até 14 | 8-20 |
+
+As verificações ativas atingem seu intervalo mais rápido no Heat 30. Os toques ociosos atingem seus limites diários no Heat 50 para `Gentle`, 45 para `Normal` e 48 para `Lively`. `Rare` atinge cerca de dois toques ociosos estimados por semana no Heat 50, com no máximo um por dia. Sua estimativa semanal é um guia de ritmo; momentos aleatórios e verificações de elegibilidade afetam o envio real. Heat acima de 50 não aumenta a velocidade de agendamento.
+
 ## O Que É Armazenado
 
 Configurações, toques personalizados, interesses e toques ociosos de persona são salvos com a configuração do seu servidor. O histórico de toques, incluindo se alguém respondeu e quem foi mencionado, é mantido por 30 dias. Objetivos são mantidos por até 90 dias.

@@ -48,7 +48,7 @@ Las herramientas dependen del proveedor activo y del modelo que respalda la llam
 | Revelar metadatos del mensaje | `{message_metadata_tool}` | - | Anota giros recientes con identificadores y marcas de tiempo para apuntar con precisión. |
 | Procesar vídeo de YouTube | `{youtube_tool}` | modelo con soporte de video | Analiza un enlace específico de YouTube bajo demanda. |
 | Analizar imagen | `{image_analysis_tool}` | configurado `vision_llm` | Delegar la comprensión de la imagen a un modelo de visión independiente. |
-| Generar imagen/imagen anime | `{image_generation_tool}` / `{anime_image_generation_tool}` | Proveedor compatible con `imagegen_enabled` + | Genere o edite imágenes (consulte [Generación de medios](/es-419/features/capabilities/media-generation/)). |
+| Generar imagen/imagen anime | `{image_generation_tool}` / `{anime_image_generation_tool}` | Proveedor compatible con `imagegen_enabled` + | Genere o edite imágenes (consulte [Generación de medios](/es-419/features/capabilities/media-generation/image-generation/)). |
 | Búsqueda de etiquetas en Danbooru | `{tag_search_tool}` | `danbooru_enabled` | Convierte nombres de personajes, apodos y conjeturas en etiquetas exactas de Danbooru (consulta [Búsqueda de etiquetas de Danbooru](#danbooru-tag-lookup)). |
 | Búsqueda de arte en Danbooru | `{booru_post_search_tool}` | `danbooru_enabled` | Publica hasta 4 imágenes existentes de Danbooru para 1 o 2 etiquetas (consulta [Búsqueda de arte y lectura de publicaciones](#art-search-and-post-reading)). |
 | Lectura de publicaciones en Danbooru | - | `danbooru_enabled` | Lee las etiquetas agrupadas de una publicación de Danbooru a partir de su ID o enlace. |

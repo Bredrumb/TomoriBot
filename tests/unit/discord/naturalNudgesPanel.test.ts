@@ -482,7 +482,7 @@ it("prefills four weight inputs with saved values and describes their own defaul
     for (const [index, category] of NATURAL_NUDGE_CATEGORIES.entries()) {
       expect(modal.components[index]?.component?.value).toBe(String(weights[category]));
       expect(modal.components[index]?.description).toBe(
-        localizedCopy("en-US", "commands.nudge-studio.weights_default", {
+        localizedCopy(locale, "commands.nudge-studio.weights_default", {
           default: DEFAULT_IDLE_NUDGE_CATEGORY_WEIGHTS[category],
         }),
       );
@@ -542,21 +542,21 @@ it("shows one pace estimate per mode below the bold heat summary and puts heat b
       expectSafePanelPayload(payload, `${locale}:${sample.heat}:${sample.idle}:${sample.active}`);
       const texts = collectTextDisplays(payload).join("\n");
       const format = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
-      const summary = localizedCopy("en-US", "commands.nudge-studio.heat_values", {
+      const summary = localizedCopy(locale, "commands.nudge-studio.heat_values", {
         effective: format.format(sample.heat),
         max: 50,
       });
       expect(texts).toMatch(
-        localizedProse("en-US", "commands.nudge-studio.heat_values", {
+        localizedProse(locale, "commands.nudge-studio.heat_values", {
           effective: format.format(sample.heat),
           max: 50,
         }),
       );
-      const idleEffect = localizedCopy("en-US", "commands.nudge-studio.idle_pace_estimate", {
+      const idleEffect = localizedCopy(locale, "commands.nudge-studio.idle_pace_estimate", {
         per_week: format.format(sample.weekly),
         daily_cap: sample.idleCap,
       });
-      const activeEffect = localizedCopy("en-US", "commands.nudge-studio.active_pace_estimate", {
+      const activeEffect = localizedCopy(locale, "commands.nudge-studio.active_pace_estimate", {
         min: sample.min,
         max: sample.max,
         check_cap: sample.checkCap,
@@ -565,13 +565,13 @@ it("shows one pace estimate per mode below the bold heat summary and puts heat b
       const rows = texts.split("\n").filter((line) => line.startsWith("> - **"));
       expect(rows).toHaveLength(2);
       expect(texts).toMatch(
-        localizedProse("en-US", "commands.nudge-studio.idle_pace", {
+        localizedProse(locale, "commands.nudge-studio.idle_pace", {
           frequency: localizedCopy(locale, FREQUENCY_KEYS[sample.idle]),
           effect: idleEffect,
         }),
       );
       expect(texts).toMatch(
-        localizedProse("en-US", "commands.nudge-studio.active_pace", {
+        localizedProse(locale, "commands.nudge-studio.active_pace", {
           frequency: localizedCopy(locale, FREQUENCY_KEYS[sample.active]),
           effect: activeEffect,
         }),

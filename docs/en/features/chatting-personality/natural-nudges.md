@@ -121,6 +121,7 @@ Official presets include these settings. `/persona generate` suggests interests 
 ## When Nudges Fire
 
 ### Heat
+<!-- anchor: heat -->
 
 Heat sets the pace of both idle nudges and active checks for your whole server, across members and
 personas. The Natural Nudges settings show measured heat, your saved adjustment, and heat used for nudges out of 50. 

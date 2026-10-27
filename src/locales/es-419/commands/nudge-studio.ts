@@ -2,6 +2,32 @@ export default {
   "nudge-studio": {
     description: "Elige qué intervenciones espontáneas uso en este servidor y escribe las tuyas.",
     unavailable: "No pude cargar el Nudge Studio en este momento. Inténtalo de nuevo en un momento.",
+    title_advanced: "Ajustes avanzados de intervenciones",
+    advanced_description: "Solo modifica estos ajustes si sabes lo que estás haciendo.",
+    heat_heading:
+      "[Ajuste de Heat](https://docs.tomoribot.app/es-419/features/chatting-personality/natural-nudges/#heat)",
+    heat_description:
+      "Heat mide las interacciones recientes de este servidor entre miembros y personas. Aumenta el Heat para que las intervenciones sean más frecuentes usando los botones de abajo o simplemente hablando conmigo de forma natural.",
+    heat_values: "Heat: {effective}/{max}",
+    heat_increased: "Heat original: {base}, aumentado manualmente en {offset}.",
+    heat_decreased: "Heat original: {base}, reducido manualmente en {offset}.",
+    heat_unadjusted: "Heat original: {base}, sin ajuste manual.",
+    idle_pace: "- **Intervenciones espontáneas** (`{frequency}`): {effect}",
+    active_pace: "- **Intervenciones activas** (`{frequency}`): {effect}",
+    idle_pace_estimate:
+      "Espera hasta unas {per_week} intervenciones espontáneas a la semana, con un límite diario de {daily_cap}.",
+    active_pace_estimate:
+      "Compruebo aproximadamente cada `{min}-{max}` mensajes de miembros en un canal, con límites diarios de {check_cap} comprobaciones y {daily_cap} respuestas. Una comprobación solo genera una respuesta cuando coincide un interés.",
+    idle_pace_no_types: "El peso de todos los tipos es 0, por lo que no iniciaré ninguna intervención espontánea.",
+    weights_heading: "Pesos de tipos de intervenciones espontáneas",
+    weights_description:
+      "A mayor peso, mayores son las probabilidades de que ocurra esa categoría de intervención en comparación con las demás.",
+    weights_button: "Editar pesos de tipos",
+    weights_default: "El valor predeterminado es {default}.",
+    weights_invalid:
+      "Introduce un número entero del 1 al 100 para cada categoría. Los cuatro pesos deben sumar 100 en total.",
+    increase_button: "+{amount}",
+    decrease_button: "-{amount}",
     tab_ping_user: "Menciones",
     tab_revive_topic: "Reanudaciones",
     tab_start_topic: "Nuevos temas",

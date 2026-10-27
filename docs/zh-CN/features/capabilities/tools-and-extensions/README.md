@@ -48,7 +48,7 @@ aiGenerated: true
 | 显示消息元数据 | `{message_metadata_tool}` | - | 使用句柄和时间戳注释最近的转弯，以实现精确定位。|
 | 处理YouTube视频 | `{youtube_tool}` | 具有视频支持的模型 | 按需分析特定的YouTube链接。|
 | 分析图像 | `{image_analysis_tool}` | 配置为`vision_llm` | 将图像理解委托给单独的视觉模型。|
-| 生成图像/动漫图像 | `{image_generation_tool}` / `{anime_image_generation_tool}` | `imagegen_enabled` + 有能力的提供商 | 生成或编辑图像（请参阅[媒体生成](/zh-CN/features/capabilities/media-generation/)）。|
+| 生成图像/动漫图像 | `{image_generation_tool}` / `{anime_image_generation_tool}` | `imagegen_enabled` + 有能力的提供商 | 生成或编辑图像（请参阅[媒体生成](/zh-CN/features/capabilities/media-generation/image-generation/)）。|
 | Danbooru 标签查询 | `{tag_search_tool}` | `danbooru_enabled` | 将角色名称、昵称和猜测的标签转换为准确的 Danbooru 标签（参见 [Danbooru 标签查询](#danbooru-tag-lookup)）。|
 | Danbooru 插画搜索 | `{booru_post_search_tool}` | `danbooru_enabled` | 发送最多 4 张符合 1 到 2 个标签的现有 Danbooru 图像（参见 [插画搜索与投稿读取](#art-search-and-post-reading)）。|
 | Danbooru 投稿读取 | - | `danbooru_enabled` | 通过 ID 或链接读取单个 Danbooru 投稿的分组标签。|

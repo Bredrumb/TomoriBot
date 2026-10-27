@@ -76,7 +76,7 @@ export default {
       provider_option_byok: `使用者 BYOK`,
       provider_option_byok_description: `每位成員透過 /personal providers 自行提供 API 金鑰或端點。`,
       settings_name: `起始設定`,
-      settings_description: `選擇起始人格與回覆行為。`,
+      settings_description: `選擇起始人格、回覆行為以及選填功能。`,
       settings_pending: `尚未設定。`,
       settings_button_start: `設定起始設定`,
       settings_button_edit: `編輯起始設定`,
@@ -93,6 +93,47 @@ export default {
       settings_system_prompt_label: `預設系統提示詞`,
       settings_system_prompt_description: `選擇回覆的基礎指示。`,
       settings_system_prompt_placeholder: `選擇一個預設系統提示詞...`,
+      settings_features_label: `選填功能`,
+      settings_features_description: `取消勾選你不需要的功能。你之後隨時可以在 /config 中變更。`,
+      settings_features_invalid: `功能選取無效。請重新開啟起始設定並重試。`,
+      settings_features: {
+        expressions: {
+          label: `使用豐富表達`,
+          description: `在回覆中使用表情符號，為訊息加上表情符號回應，並發送伺服器貼圖。`,
+        },
+        playful_interactions: {
+          label: `趣味互動`,
+          description: `讓人格透過可見的擁抱、輕咬、敲頭和分享食物來表達情感。`,
+        },
+        danbooru: {
+          label: `Danbooru 工具`,
+          description: `查詢動漫角色標籤並分享來自 Danbooru 的插圖。`,
+        },
+        natural_nudges: {
+          label: `Natural Nudges`,
+          description: `讓人格無需被提及即可主動發起對話或加入進行中的聊天。`,
+        },
+        dice_rolls: {
+          label: `擲骰子`,
+          description: `讓人格在聊天中擲骰子，用於遊戲、判定和隨機決定。`,
+        },
+        self_message_management: {
+          label: `管理自身訊息與討論串`,
+          description: `編輯/刪除 bot 或人格的訊息，釘選近期訊息，以及建立公開討論串。`,
+        },
+        user_blocking: {
+          label: `人格封鎖使用者`,
+          description: `讓人格暫時略過特定使用者或從其自身脈絡中隱藏對方的訊息。`,
+        },
+        user_info_updates: {
+          label: `自動更新使用者資訊`,
+          description: `根據對話內容自動更新已儲存的暱稱、代名詞和時區。`,
+        },
+        short_term_memory: {
+          label: `自動總結短期記憶`,
+          description: `自動總結近期對話以保持短期記憶最新。`,
+        },
+      },
       settings_built_in_prompt: `內建預設（推薦）`,
       settings_built_in_prompt_description: `簡潔的回覆、主動運用記憶與工具。`,
       settings_built_in_prompt_summary: `內建預設`,
@@ -107,6 +148,7 @@ export default {
       settings_summary_reply_style: `回覆風格：{style}`,
       settings_summary_timezone: `時區：{tz}`,
       settings_summary_system_prompt: `系統提示詞：{prompt}`,
+      settings_summary_features: `選填功能：已啟用 {enabled}/{total} 項`,
       finish_label: `完成設定`,
       cancel_label: `取消`,
       cancelled_title: `設定已取消`,
@@ -142,7 +184,7 @@ export default {
 - 用 \`/config\` 調整我的行為與我能做的事。
 - 用 \`/memories\` 教我有關你的事。`,
       receipt_learn_more:
-        "閱讀[官方 Wiki](https://docs.tomoribot.app/zh-TW/features/)，或開啟 {help} （然後選功能），了解我還能做什麼。\n- [多個人格](https://docs.tomoribot.app/zh-TW/features/chatting-personality/multiple-personas/) = 外觀、聲音與觸發詞\n- [聊天與觸發](https://docs.tomoribot.app/zh-TW/features/chatting-personality/chatting-and-triggers/) = 我何時、如何加入對話\n- [記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/) = 人物、事實與脈絡\n- [個人化](https://docs.tomoribot.app/zh-TW/features/knowledge/personalization/) = 你希望被怎麼對待\n- [媒體生成](https://docs.tomoribot.app/zh-TW/features/capabilities/media-generation/) = 圖片、影片與語音\n- [工具與擴充](https://docs.tomoribot.app/zh-TW/features/capabilities/tools-and-extensions/) = 網頁搜尋與自訂工具",
+        "閱讀[官方 Wiki](https://docs.tomoribot.app/zh-TW/features/)，或開啟 {help} （然後選功能），了解我還能做什麼。\n- [多個人格](https://docs.tomoribot.app/zh-TW/features/chatting-personality/multiple-personas/) = 外觀、聲音與觸發詞\n- [聊天與觸發](https://docs.tomoribot.app/zh-TW/features/chatting-personality/chatting-and-triggers/) = 我何時、如何加入對話\n- [記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/) = 人物、事實與脈絡\n- [個人化](https://docs.tomoribot.app/zh-TW/features/knowledge/personalization/) = 你希望被怎麼對待\n- [媒體生成](https://docs.tomoribot.app/zh-TW/features/capabilities/media-generation/image-generation/) = 圖片、影片與語音\n- [工具與擴充](https://docs.tomoribot.app/zh-TW/features/capabilities/tools-and-extensions/built-in-tools/) = 網頁搜尋與自訂工具",
       permission_denied: `你需要「管理伺服器」權限才能進行設定。`,
       env_mismatch: `環境設定已變更。請重新開始設定。`,
       forbidden: `這個設定工作階段屬於其他使用者或頻道。`,

@@ -48,7 +48,7 @@ aiGenerated: true
 | 顯示訊息元數據 | `{message_metadata_tool}` | - | 使用句柄和時間戳註釋最近的轉彎，以實現精確定位。|
 | 處理YouTube影片 | `{youtube_tool}` | 具有視訊支援的模型 | 按需分析特定的YouTube連結。|
 | 分析影像 | `{image_analysis_tool}` | 配置為`vision_llm` | 將圖像理解委託給單獨的視覺模型。|
-| 生成影像/動漫影像 | `{image_generation_tool}` / `{anime_image_generation_tool}` | `imagegen_enabled` + 有能力的供應商 | 產生或編輯圖像（請參閱[媒體生成](/zh-TW/features/capabilities/media-generation/)）。|
+| 生成影像/動漫影像 | `{image_generation_tool}` / `{anime_image_generation_tool}` | `imagegen_enabled` + 有能力的供應商 | 產生或編輯圖像（請參閱[媒體生成](/zh-TW/features/capabilities/media-generation/image-generation/)）。|
 | Danbooru 標籤查詢 | `{tag_search_tool}` | `danbooru_enabled` | 將角色名稱、暱稱和猜測的標籤轉換為準確的 Danbooru 標籤（請參閱 [Danbooru 標籤查詢](#danbooru-tag-lookup)）。|
 | Danbooru 插圖搜尋 | `{booru_post_search_tool}` | `danbooru_enabled` | 發送最多 4 張符合 1 到 2 個標籤的現有 Danbooru 圖片（請參閱 [插圖搜尋與貼文讀取](#art-search-and-post-reading)）。|
 | Danbooru 貼文讀取 | - | `danbooru_enabled` | 透過 ID 或連結讀取單則 Danbooru 貼文的分組標籤。|

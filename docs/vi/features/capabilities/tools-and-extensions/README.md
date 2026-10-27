@@ -48,7 +48,7 @@ Các công cụ phụ thuộc vào nhà cung cấp đang hoạt động và vi�
 | Tiết lộ siêu dữ liệu tin nhắn | `{message_metadata_tool}` | - | Chú thích các lượt gần đây bằng tay cầm và dấu thời gian để nhắm mục tiêu chính xác. |
 | Xử lý video YouTube | `{youtube_tool}` | model có hỗ trợ video | Phân tích một liên kết YouTube cụ thể theo yêu cầu. |
 | Phân tích hình ảnh | `{image_analysis_tool}` | được cấu hình `vision_llm` | Ủy thác sự hiểu biết về hình ảnh cho một model tầm nhìn riêng biệt. |
-| Tạo hình ảnh / hình ảnh anime | `{image_generation_tool}` / `{anime_image_generation_tool}` | `imagegen_enabled` + nhà cung cấp có năng lực | Tạo hoặc chỉnh sửa hình ảnh (xem [Tạo phương tiện](/vi/features/capabilities/media-generation/)). |
+| Tạo hình ảnh / hình ảnh anime | `{image_generation_tool}` / `{anime_image_generation_tool}` | `imagegen_enabled` + nhà cung cấp có năng lực | Tạo hoặc chỉnh sửa hình ảnh (xem [Tạo phương tiện](/vi/features/capabilities/media-generation/image-generation/)). |
 | Tra cứu thẻ Danbooru | `{tag_search_tool}` | `danbooru_enabled` | Chuyển tên nhân vật, biệt danh và thẻ đoán thành thẻ Danbooru chính xác (xem [Tra cứu thẻ Danbooru](#danbooru-tag-lookup)). |
 | Tìm kiếm tranh ảnh Danbooru | `{booru_post_search_tool}` | `danbooru_enabled` | Gửi tối đa 4 ảnh Danbooru có sẵn cho 1 hoặc 2 thẻ (xem [Tìm kiếm tranh ảnh và đọc bài đăng](#art-search-and-post-reading)). |
 | Đọc bài đăng Danbooru | - | `danbooru_enabled` | Đọc các thẻ được nhóm của một bài đăng Danbooru từ ID hoặc liên kết. |

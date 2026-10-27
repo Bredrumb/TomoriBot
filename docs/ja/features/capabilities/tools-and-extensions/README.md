@@ -48,7 +48,7 @@ aiGenerated: true
 | メッセージのメタデータを明らかにする | `{message_metadata_tool}` | - | 最近のターンにハンドルとタイムスタンプを付けて注釈を付け、正確なターゲットを設定します。|
 | YouTubeビデオを処理する | `{youtube_tool}` | ビデオサポート付きモデル | 特定のYouTubeリンクをオンデマンドで分析します。|
 | 画像を解析する | `{image_analysis_tool}` | `vision_llm`を構成しました | 画像の理解を別の視覚モデルに委任します。|
-| 画像・アニメ画像の生成 | `{image_generation_tool}` / `{anime_image_generation_tool}` | `imagegen_enabled` + 対応プロバイダー | 画像を生成または編集します ([メディア生成](/ja/features/capabilities/media-generation/) を参照)。|
+| 画像・アニメ画像の生成 | `{image_generation_tool}` / `{anime_image_generation_tool}` | `imagegen_enabled` + 対応プロバイダー | 画像を生成または編集します ([メディア生成](/ja/features/capabilities/media-generation/image-generation/) を参照)。|
 | Danbooruタグ検索 | `{tag_search_tool}` | `danbooru_enabled` | キャラクター名、ニックネーム、タグの推測を正確なDanbooruタグに変換します（[Danbooruタグ検索](#danbooru-tag-lookup) を参照）。|
 | Danbooruイラスト検索 | `{booru_post_search_tool}` | `danbooru_enabled` | 1つまたは2つのタグで既存のDanbooru画像を最大4枚投稿します（[イラスト検索と投稿の読み込み](#art-search-and-post-reading) を参照）。|
 | Danbooru投稿の読み込み | - | `danbooru_enabled` | IDまたはリンクから1つのDanbooru投稿のグループ化されたタグを読み込みます。|
