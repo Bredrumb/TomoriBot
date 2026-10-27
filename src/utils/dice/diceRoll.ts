@@ -1,9 +1,9 @@
 import { randomInt } from "node:crypto";
 import { z } from "zod";
 
-export const MAX_DICE_COUNT = 100;
-export const MAX_DICE_SIDES = 1000;
-export const MAX_DICE_MODIFIER = 10000;
+const MAX_DICE_COUNT = 100;
+const MAX_DICE_SIDES = 1000;
+const MAX_DICE_MODIFIER = 10000;
 export const MAX_DICE_EXPRESSION_LENGTH = 64;
 export const MAX_ROLL_REASON_LENGTH = 100;
 export const DICE_MODES = ["normal", "advantage", "disadvantage"] as const;

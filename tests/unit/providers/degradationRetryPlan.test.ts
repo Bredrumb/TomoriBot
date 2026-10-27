@@ -12,6 +12,7 @@ describe("shared degradation retry planning", () => {
     const attempts = [...makeAttempts(), { label: "no_stream_options", body: { model: "example/model" } }];
     const plan = planDegradationRetry({
       attempts,
+      prepareAttempts: () => {},
       attemptIndex: 0,
       body: attempts[0].body,
       statusCode: 400,
@@ -27,6 +28,7 @@ describe("shared degradation retry planning", () => {
     const attempts = makeAttempts();
     const plan = planDegradationRetry({
       attempts,
+      prepareAttempts: () => {},
       attemptIndex: 0,
       body: attempts[0].body,
       statusCode: null,
@@ -48,6 +50,7 @@ describe("shared degradation retry planning", () => {
     const attempts = makeAttempts();
     const plan = planDegradationRetry({
       attempts,
+      prepareAttempts: () => {},
       attemptIndex: 0,
       body: attempts[0].body,
       statusCode: 500,
@@ -71,6 +74,7 @@ describe("shared degradation retry planning", () => {
     const attempts = makeAttempts();
     const plan = planDegradationRetry({
       attempts,
+      prepareAttempts: () => {},
       attemptIndex: 0,
       body: attempts[0].body,
       statusCode: null,
@@ -90,6 +94,7 @@ describe("shared degradation retry planning", () => {
     const attempts = makeAttempts();
     const plan = planDegradationRetry({
       attempts,
+      prepareAttempts: () => {},
       attemptIndex: 0,
       body: attempts[0].body,
       statusCode: 429,
@@ -105,6 +110,7 @@ describe("shared degradation retry planning", () => {
     const attempts = makeAttempts();
     const plan = planDegradationRetry({
       attempts,
+      prepareAttempts: () => {},
       attemptIndex: 0,
       body: attempts[0].body,
       statusCode: 400,

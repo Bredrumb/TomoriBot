@@ -68,7 +68,8 @@ import {
   type ProviderRequestHold,
 } from "@/utils/provider/providerRequestHook";
 import {
-  buildDegradationAttempts,
+  areDegradationBodiesEqual,
+  createDegradationQueue,
   buildImageStripAttempt,
   buildTargetedAttempt,
   classifyDegradableError,
@@ -679,21 +680,14 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       // first token at 120s regardless of the tool loop's longer first-token budget.
       const firstTokenTimeoutMs = Math.max(inactivityTimeoutMs, DISCORD_STREAMING_CONSTANTS.FIRST_TOKEN_TIMEOUT_MS);
       const mandatoryKeys = new Set(["model", "messages", "stream"]);
-      const attempts = buildDegradationAttempts(requestBody, {
+      const { attempts, prepareAttempts } = createDegradationQueue(requestBody, {
         mandatoryKeys,
         stripImages: (attemptMessages) =>
           Array.isArray(attemptMessages)
             ? this.stripImagesFromMessages(attemptMessages as Array<Record<string, unknown>>)
             : attemptMessages,
       });
-      const probeCandidates = attempts
-        .filter((attempt) => attempt.label.startsWith("probe_drop_"))
-        .map((attempt) => attempt.label.replace("probe_drop_", ""));
-      if (probeCandidates.length > 0) {
-        log.info(`OpenRouter probe candidates (${config.model}): ${probeCandidates.join(", ")}`);
-      }
-
-      const attemptedSerializedBodies = new Set<string>();
+      const attemptedBodies: Record<string, unknown>[] = [];
       let targetedAttemptCount = 0;
       const queueTargetedAttempt = (
         currentIndex: number,
@@ -708,11 +702,11 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         if (rejectedParams.length === 0) return false;
 
         const targetedAttempt = buildTargetedAttempt(currentBody, rejectedParams);
-        const serialized = JSON.stringify(targetedAttempt.body);
-        if (attemptedSerializedBodies.has(serialized)) return false;
+        if (attemptedBodies.some((body) => areDegradationBodiesEqual(body, targetedAttempt.body))) return false;
 
         const duplicateIndex = attempts.findIndex(
-          (queuedAttempt, index) => index > currentIndex && JSON.stringify(queuedAttempt.body) === serialized,
+          (queuedAttempt, index) =>
+            index > currentIndex && areDegradationBodiesEqual(queuedAttempt.body, targetedAttempt.body),
         );
         if (duplicateIndex !== -1) {
           attempts.splice(duplicateIndex, 1);
@@ -738,11 +732,11 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         const imageStripAttempt = buildImageStripAttempt(currentBody);
         if (!imageStripAttempt) return false;
 
-        const serialized = JSON.stringify(imageStripAttempt.body);
-        if (attemptedSerializedBodies.has(serialized)) return false;
+        if (attemptedBodies.some((body) => areDegradationBodiesEqual(body, imageStripAttempt.body))) return false;
 
         const duplicateIndex = attempts.findIndex(
-          (queuedAttempt, index) => index > currentIndex && JSON.stringify(queuedAttempt.body) === serialized,
+          (queuedAttempt, index) =>
+            index > currentIndex && areDegradationBodiesEqual(queuedAttempt.body, imageStripAttempt.body),
         );
         if (duplicateIndex !== -1) {
           attempts.splice(duplicateIndex, 1);
@@ -756,7 +750,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       attemptLoop: for (let i = 0; i < attempts.length; i++) {
         const attempt = attempts[i];
         const isRetry = i > 0;
-        attemptedSerializedBodies.add(JSON.stringify(attempt.body));
+        attemptedBodies.push(attempt.body);
 
         if (isRetry) {
           log.warn(`OpenRouter request retry with degraded payload: ${attempt.label} (${config.model})`);
@@ -812,6 +806,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
             );
 
             const retryPlan = planDegradationRetry({
+              prepareAttempts,
               attempts,
               attemptIndex: i,
               body: attempt.body,
@@ -927,6 +922,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                   attemptFailed = true;
                 if (midStreamError && !committedToAttempt) {
                   const retryPlan = planDegradationRetry({
+                    prepareAttempts,
                     attempts,
                     attemptIndex: i,
                     body: attempt.body,

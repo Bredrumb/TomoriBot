@@ -1,5 +1,7 @@
+import { isDeepStrictEqual } from "node:util";
+
 /**
- * Pure request-degradation helpers shared by streaming provider adapters.
+ * Request-degradation helpers shared by streaming provider adapters.
  *
  * Adapters use the same attempts at two failure points: an unsuccessful fetch
  * and a provider error event received before the stream is committed. A stream
@@ -42,6 +44,16 @@ function errorNamesParam(errorMessage: string, param: string): boolean {
 export interface DegradationAttempt {
   label: string;
   body: Record<string, unknown>;
+}
+
+export function areDegradationBodiesEqual(left: Record<string, unknown>, right: Record<string, unknown>): boolean {
+  // Compare bodies without serialization because retry deduplication must not allocate copies of inline media.
+  const leftKeys = Object.keys(left).filter((key) => left[key] !== undefined);
+  const rightKeys = Object.keys(right).filter((key) => right[key] !== undefined);
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every((key) => Object.hasOwn(right, key) && isDeepStrictEqual(left[key], right[key]))
+  );
 }
 
 /** The built-in reason that made an HTTP or SSE error eligible for degradation. */
@@ -228,6 +240,7 @@ export interface DegradationRetryPlanInput extends DegradableErrorInput {
   body: Record<string, unknown>;
   /** Provider policy for the shared classifier, minus the status and message it already receives. */
   classifyOptions?: Omit<ClassifyDegradableErrorOptions, "statusCode" | "message">;
+  prepareAttempts: () => void;
   queueTargetedAttempt: (attemptIndex: number, body: Record<string, unknown>, errorMessage: string) => boolean;
   queueImageStripAttempt: (attemptIndex: number, body: Record<string, unknown>, errorMessage: string) => boolean;
 }
@@ -261,24 +274,22 @@ export function planDegradationRetry(input: DegradationRetryPlanInput): Degradat
   });
 
   if (!kind && !queuedTargeted && !queuedImageStrip) return null;
+  input.prepareAttempts();
   if (input.attemptIndex >= input.attempts.length - 1) return null;
   return { trigger: describeDegradationTrigger(kind, queuedImageStrip) };
 }
 
 /**
  * Build the bounded static degradation ladder for a request body.
- * Duplicate serialized bodies are removed while preserving attempt order.
+ * Duplicate bodies are removed while preserving attempt order.
  */
 export function buildDegradationAttempts(
   baseBody: Record<string, unknown>,
   { mandatoryKeys, stripImages, priorityKeys = [] }: BuildDegradationAttemptsOptions,
 ): DegradationAttempt[] {
   const attempts: DegradationAttempt[] = [];
-  const seenSerializedBodies = new Set<string>();
   const addAttempt = (label: string, body: Record<string, unknown>) => {
-    const serialized = JSON.stringify(body);
-    if (seenSerializedBodies.has(serialized)) return;
-    seenSerializedBodies.add(serialized);
+    if (attempts.some((attempt) => areDegradationBodiesEqual(attempt.body, body))) return;
     attempts.push({ label, body });
   };
 
@@ -327,6 +338,21 @@ export function buildDegradationAttempts(
   addAttempt("minimal_payload", minimalBody);
 
   return attempts;
+}
+
+export function createDegradationQueue(baseBody: Record<string, unknown>, options: BuildDegradationAttemptsOptions) {
+  const attempts: DegradationAttempt[] = [{ label: "default", body: baseBody }];
+  let prepared = false;
+  const prepareAttempts = () => {
+    if (prepared) return;
+    prepared = true;
+    for (const attempt of buildDegradationAttempts(baseBody, options).slice(1)) {
+      if (!attempts.some((queued) => areDegradationBodiesEqual(queued.body, attempt.body))) {
+        attempts.push(attempt);
+      }
+    }
+  };
+  return { attempts, prepareAttempts };
 }
 
 /**

@@ -1,5 +1,10 @@
 export default {
   tools: {
+    media: {
+      delivery_failed: "Discord 未能傳送媒體，沒有記錄成功的傳送。",
+      delivery_unconfirmed:
+        "Discord 未確認媒體是否已發布。請結束這一輪，並在重新產生或發布前檢查頻道，因為再次嘗試可能造成重複。",
+    },
     roll_dice: {
       missing_permissions: "機器人需要檢視此頻道、傳送訊息與嵌入連結的權限才能傳送擲骰結果。",
       disabled: "擲骰功能已停用。請透過 `/config` > 外掛程式 > 可用工具啟用它。",

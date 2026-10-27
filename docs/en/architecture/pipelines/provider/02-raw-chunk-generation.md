@@ -40,9 +40,12 @@ build retry bodies and decide whether rejection justifies another attempt; each 
 response cleanup, and its per-attempt state.
 
 Retries can use the error message to remove named parameters together or remove rejected image input
-before trying other payloads. Equivalent bodies are deduplicated, and additional targeted parameter
-retries are capped. Recovery applies only to the current stream: the next request starts with its
-normal payload because backend capabilities can change between requests.
+before trying other payloads. The static retry list is prepared only after a failure qualifies for
+recovery. Duplicate detection compares bodies directly and retains references to attempted bodies;
+each sent attempt is JSON-encoded once. This avoids allocating copies of inline media for unused
+retries. Additional targeted parameter retries are capped. Recovery applies only to the current
+stream: the next request starts with its normal payload because backend capabilities can change
+between requests.
 
 Fields needed to preserve the reply contract must remain mandatory. Dropping a field that changes
 tool-call or reasoning replay requirements can produce a successful response that breaks the next

@@ -80,6 +80,7 @@ async function dirtyEverySingleton(serverId: number): Promise<void> {
     ON CONFLICT (server_id) DO UPDATE SET
       emoji_usage_enabled = false, sticker_usage_enabled = false, web_search_enabled = false,
       manage_message_enabled = false, thread_creation_enabled = false, imagegen_enabled = false,
+      dice_rolling_enabled = true, conditioning_interactions_enabled = false,
       videogen_enabled = true, voice_message_enabled = false, user_blocking_enabled = false,
       time_awareness_enabled = false, tool_use_enabled = false, short_term_memory_enabled = false,
       user_info_updates_enabled = false

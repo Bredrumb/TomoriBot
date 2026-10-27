@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, it } from "bun:test";
+import { resetDatabaseConnection } from "@/utils/db/client";
 import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import { configRepository, personaRepository, exportRepository, importRepository } from "@/utils/db/repositories";
 import { buildConditioningContextItem } from "@/utils/text/context/templates";
@@ -93,6 +94,8 @@ it.skipIf(!DB_TESTS_AVAILABLE)(
     VALUES (${refs.serverId}, ${refs.personaLineageId}, 'reward', 'hug', 'sharing', 'sharing', ${refs.userId})
   `;
     await executeTestSqlFile("src/db/migrations/120_conditioning_interactions.sql");
+    // Clear prepared queries because replaying the migration changes the table shape.
+    resetDatabaseConnection();
     const [upgraded] = await testSql`
       SELECT conditioning_interactions_enabled FROM server_capabilities_configs WHERE server_id = ${refs.serverId}
     `;

@@ -1,5 +1,11 @@
 export default {
   tools: {
+    media: {
+      delivery_failed:
+        "Discord không gửi được nội dung đa phương tiện. Không có lượt gửi thành công nào được ghi nhận.",
+      delivery_unconfirmed:
+        "Discord chưa xác nhận nội dung đa phương tiện đã được đăng hay chưa. Hãy kết thúc lượt này và kiểm tra kênh trước khi tạo hoặc đăng lại, vì thử lại có thể tạo bản trùng lặp.",
+    },
     roll_dice: {
       missing_permissions: "Bot cần quyền xem kênh này, gửi tin nhắn và chèn liên kết để đăng kết quả tung xúc xắc.",
       disabled: "Tính năng tung xúc xắc đã bị tắt. Bật lại qua `/config` > Plugin > Công cụ khả dụng.",

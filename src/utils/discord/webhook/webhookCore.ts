@@ -1145,7 +1145,7 @@ let singleAttemptRest: REST | null = null;
 const EXPRESSION_RATE_LIMIT_BUDGET_MS = 30_000;
 const EXPRESSION_STOP_CHECK_INTERVAL_MS = 100;
 
-/** All POSTs were refused, so exhausting this budget is a definite non-delivery. */
+/** @public Release-only `src/utils/chat/expressionDelivery.ts` imports this error, which marks exhausted rate-limited POSTs as definite non-delivery. */
 export class WebhookExpressionRateLimitTimeoutError extends DiscordDeliveryError {
   constructor() {
     super("definite_refusal", new Error("Webhook expression rate-limit budget exhausted"));

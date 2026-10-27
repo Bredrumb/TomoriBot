@@ -1,5 +1,10 @@
 export default {
   tools: {
+    media: {
+      delivery_failed: "Discordはメディアを送信できませんでした。送信成功は記録されていません。",
+      delivery_unconfirmed:
+        "Discordはメディアが投稿されたか確認できませんでした。このターンを終了し、再生成や再投稿の前にチャンネルを確認してください。再試行すると重複する可能性があります。",
+    },
     roll_dice: {
       missing_permissions:
         "ダイスロールを投稿するには、このチャンネルの閲覧、メッセージの送信、埋め込みリンクの権限が必要です。",

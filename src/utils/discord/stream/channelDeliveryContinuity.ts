@@ -37,7 +37,7 @@ const NEUTRAL_APPEARANCE_GROUP_KEY = "(neutral)";
 // once the map grows past this size rather than wiring up a timer.
 const SWEEP_SIZE_THRESHOLD = 2000;
 
-export type DeliveredSpeakerKind = "appearance" | "identity_sprite" | "copied";
+type DeliveredSpeakerKind = "appearance" | "identity_sprite" | "copied";
 
 export interface DeliveredSpeaker {
   /** Null when the speaker cannot be tied to one persona, which never matches another speaker. */

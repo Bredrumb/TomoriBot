@@ -1,13 +1,16 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, spyOn } from "bun:test";
 import {
+  areDegradationBodiesEqual,
   buildDegradationAttempts,
   buildImageStripAttempt,
   buildTargetedAttempt,
   classifyDegradableError,
+  createDegradationQueue,
   errorMessageNamesRejectableParam,
   extractRejectedParams,
   isMultimodalRejectionError,
   messagesContainImageBlocks,
+  planDegradationRetry,
   stripImageBlocksWithNotice,
 } from "@/providers/utils/paramDegradation";
 
@@ -84,6 +87,33 @@ describe("extractRejectedParams", () => {
 });
 
 describe("buildDegradationAttempts", () => {
+  it("does not serialize inline media while preparing retries", () => {
+    const messages = [
+      {
+        role: "user",
+        content: [{ type: "image_url", image_url: { url: `data:image/jpeg;base64,${"A".repeat(1048576)}` } }],
+      },
+    ];
+    const stringify = spyOn(JSON, "stringify");
+    let serializationCount: number;
+    let attempts: ReturnType<typeof buildDegradationAttempts>;
+    try {
+      attempts = buildDegradationAttempts(
+        { model: "example/model", messages, stream: true, temperature: 0.8, top_p: 0.9 },
+        {
+          mandatoryKeys: new Set(["model", "messages", "stream"]),
+          stripImages: (value) => stripImageBlocksWithNotice(value as Array<Record<string, unknown>>),
+        },
+      );
+      serializationCount = stringify.mock.calls.length;
+    } finally {
+      stringify.mockRestore();
+    }
+    expect(serializationCount).toBe(0);
+    expect(attempts[0].body.messages).toBe(messages);
+    expect(attempts.some((attempt) => attempt.label === "strip_images")).toBe(true);
+  });
+
   it("builds the degradation ladder in priority order and preserves mandatory keys", () => {
     const attempts = buildDegradationAttempts(
       {
@@ -197,6 +227,74 @@ describe("buildDegradationAttempts", () => {
 
     expect(attempts).toHaveLength(1);
     expect(attempts[0]?.label).toBe("default");
+  });
+});
+
+describe("degradation body equality", () => {
+  it("omits undefined options and distinguishes null and changed values", () => {
+    const body = { model: "example/model", messages: [], stream: true };
+    expect(areDegradationBodiesEqual(body, { ...body, temperature: undefined })).toBe(true);
+    expect(areDegradationBodiesEqual(body, { ...body, temperature: null })).toBe(false);
+    expect(areDegradationBodiesEqual({ ...body, temperature: 0.8 }, { ...body, temperature: 0.9 })).toBe(false);
+  });
+
+  it("deduplicates separately created image-strip bodies", () => {
+    const body = {
+      model: "example/model",
+      messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "data:image/png;base64,AAAA" } }] }],
+    };
+    const first = buildImageStripAttempt(body);
+    const second = buildImageStripAttempt(body);
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    if (!first || !second) throw new Error("Missing image-strip attempt");
+    expect(areDegradationBodiesEqual(first.body, second.body)).toBe(true);
+    expect(areDegradationBodiesEqual(body, first.body)).toBe(false);
+  });
+});
+
+describe("lazy degradation queue", () => {
+  it("skips retry preparation for a size rejection and prepares once for a recoverable failure", () => {
+    const body = { model: "example/model", messages: [], stream: true, temperature: 0.8 };
+    let stripCalls = 0;
+    const queue = createDegradationQueue(body, {
+      mandatoryKeys: new Set(["model", "messages", "stream"]),
+      stripImages: (messages) => {
+        stripCalls++;
+        return messages;
+      },
+    });
+    const input = {
+      ...queue,
+      attemptIndex: 0,
+      body,
+      statusCode: 400,
+      queueTargetedAttempt: () => false,
+      queueImageStripAttempt: () => false,
+    };
+    expect(stripCalls).toBe(0);
+    expect(
+      planDegradationRetry({
+        ...input,
+        message: "Please make sure your payload is below 26214400 bytes in size.",
+      }),
+    ).toBeNull();
+    expect(stripCalls).toBe(0);
+    expect(planDegradationRetry({ ...input, message: "Bad request" })).not.toBeNull();
+    queue.prepareAttempts();
+    expect(stripCalls).toBe(1);
+    expect(queue.attempts.some((attempt) => attempt.label === "probe_drop_temperature")).toBe(true);
+  });
+
+  it("keeps a targeted retry ahead of static candidates without duplicating its body", () => {
+    const body = { model: "example/model", messages: [], stream: true, temperature: 0.8, top_p: 0.9 };
+    const queue = createDegradationQueue(body, { mandatoryKeys: new Set(["model", "messages", "stream"]) });
+    const targeted = buildTargetedAttempt(body, ["temperature"]);
+    queue.attempts.push(targeted);
+    queue.prepareAttempts();
+    expect(queue.attempts[1]).toBe(targeted);
+    expect(queue.attempts.filter((attempt) => areDegradationBodiesEqual(attempt.body, targeted.body))).toHaveLength(1);
+    expect(queue.attempts.some((attempt) => attempt.label === "probe_drop_top_p")).toBe(true);
   });
 });
 

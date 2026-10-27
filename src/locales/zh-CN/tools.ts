@@ -1,5 +1,10 @@
 export default {
   tools: {
+    media: {
+      delivery_failed: "Discord 未能发送媒体，未记录成功的发送。",
+      delivery_unconfirmed:
+        "Discord 未确认媒体是否已发布。请结束本轮，并在重新生成或发布前检查频道，因为再次尝试可能造成重复。",
+    },
     roll_dice: {
       missing_permissions: "机器人需要查看此频道、发送消息和嵌入链接的权限才能发送掷骰结果。",
       disabled: "掷骰功能已禁用。请通过 `/config` > 插件 > 可用工具启用它。",

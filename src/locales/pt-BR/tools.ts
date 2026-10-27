@@ -1,5 +1,10 @@
 export default {
   tools: {
+    media: {
+      delivery_failed: "O Discord não entregou a mídia. Nenhuma entrega bem-sucedida foi registrada.",
+      delivery_unconfirmed:
+        "O Discord não confirmou se a mídia foi publicada. Encerre este turno e verifique o canal antes de gerar ou publicar novamente, pois outra tentativa pode criar uma duplicata.",
+    },
     roll_dice: {
       missing_permissions:
         "O bot precisa de permissão para ver este canal, enviar mensagens e anexar links para publicar uma rolagem de dados.",
