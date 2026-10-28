@@ -31,7 +31,7 @@ buildContextNative (context/nativeBuilder.ts)
   │  Produces tagged blocks for reassembleWithPreset (presetContextBuilder.ts)
   │
   ├─► stPresetEngine.ts ───────────► Two-pass macro evaluation on custom preset nodes
-  │                                  (Pass 1: variables; Pass 2: content expansion)
+  │                                  (Pass 1: branch selection and variables; Pass 2: value expansion)
   │
   ├─► Node Ordering Walk ──────────► Pulls tagged blocks at marker nodes (main, charDescription...)
   │                                  Inserts custom nodes at declared sequence positions
@@ -116,26 +116,52 @@ ordered by `injection_order`. This avoids redundant wrapper prefixes and conserv
 The template engine in `src/utils/text/stPresetEngine.ts` processes custom preset nodes in two
 sequential passes:
 
-### Pass 1: Variable collection
+### Pass 1: Branch selection and variables
 
-The engine scans all enabled non-marker nodes in `node_order`, populating a session variable map:
+The engine strips comments, then walks enabled non-marker nodes in `node_order`. The shared tree in
+`promptConditionals.ts` pairs both dialects' openers, `else`, and closers, so they can nest in either
+direction. `renderStConditionals` selects Handlebars branches and collects `setvar` and `addvar`
+declarations from their kept text in source order. Conditions see only declarations already visited,
+including earlier declarations in the same node. The selected text is saved: evaluating it again
+against the final variable map could select a different branch from the one whose declarations ran.
 
-- `{{setvar::key::value}}`: stores or overwrites the variable key.
-- `{{addvar::key::value}}`: appends value content to an existing key.
+TomoriBot capability and tool blocks are re-emitted for the later async pass. Their branches keep
+the existing variable-collection behavior because tool availability is not evaluated in this pass.
 
-### Pass 2: Expansion and evaluation
+### Pass 2: Value expansion
 
-The second pass removes declarations and comments, resolves variable lookups and content macros,
-and evaluates random choices, dice rolls, and trimming. Missing variables and the scenario macro
-resolve to empty text. Expanding persona description or personality suppresses the corresponding
-native marker so the prompt does not repeat those instructions.
+The engine resolves `getvar` against the final variable map, then content and runtime macros,
+random choices, dice rolls, compatibility placeholders, and trimming. Expanding a nonempty persona
+description or personality in body text suppresses its native marker. Testing one in a condition
+does not suppress that marker.
 
-Reassembly then evaluates `{{if capability:...}}` and `{{if tool:...}}` conditionals through the
-shared tool macro resolver using current capabilities and tool availability. This keeps native and
-preset instructions consistent with the same turn policy.
+Reassembly then calls `toolPromptMacroResolver.expand` to select capability and tool branches and
+expand tool names. `convertMentions` runs last for identity placeholders (`user`, `char`, and `bot`).
+These passes operate on custom preset nodes; lorebook entries keep their identity-only conversion.
 
-Identity placeholders (`{{user}}`, `{{char}}`, `{{bot}}`) are preserved through template engine
-passes. They are resolved downstream by `convertMentions` in context assembly.
+### Conditional contract
+
+Conditions accept nested value macros or bare names such as `description` and `getvar::compact`.
+Trimmed, case-insensitive empty text, `false`, and `0` are falsy; unknown macros in conditions resolve
+empty. `#unless` inverts the result and requires `/unless`; `#if` requires `/if`.
+
+Malformed blocks are omitted with warnings, and stray `else` or closers are dropped. An unclosed
+Handlebars block ends at the node boundary; an unclosed TomoriBot block is omitted. Nesting beyond
+32 levels leaves conditional syntax unrendered. Import auditing uses the same tree to report
+malformed blocks and inspect macros in both branches and conditions.
+
+### Runtime values and ceilings
+
+`context/builder.ts` captures one clock reading per preset build and passes it with the configured
+model, provider, and server UTC offset. All five temporal macros use that reading and offset, and
+resolve empty when time awareness is off. They use English display formats; ISO forms use
+`YYYY-MM-DD` and `HH:mm`. The [macro catalog](/features/integrations/sillytavern-support/#preset-macros)
+lists the author-facing values and prompt-cache placement advice.
+
+`model` reports the configured codename, so randomizer picks and provider fallback models are not
+reflected. Supporting an effective model requires threading the resolved request model through
+`BuildContextParams`. `char_version` is recognized but empty until a second card metadata field
+warrants shared storage. `scenario` is empty because import folds it into personality attributes.
 
 ## Caching and database persistence
 
@@ -177,8 +203,9 @@ TomoriBot adapts SillyTavern presets to its architecture:
 - `src/utils/text/presetContextBuilder.ts`: Build-then-rearrange orchestration, tag bucket
   consumption, and depth injection merging.
 - `src/modules/lorebooks/runtime/contextItems.ts`: Activated lore blocks and identity conversion.
-- `src/utils/text/stPresetEngine.ts`: `resolvePresetMacros` for variables and content expansion.
-- `src/utils/tools/toolPromptMacros.ts`: capability and tool conditionals.
+- `src/utils/text/stPresetEngine.ts`: `resolvePresetMacros` for branch selection, variables, and value expansion.
+- `src/utils/tools/promptConditionals.ts`: the shared tree and `renderStConditionals`.
+- `src/utils/tools/toolPromptMacros.ts`: capability and tool evaluation.
 - `src/utils/db/repositories/PresetRepository.ts`: preset persistence and post-write invalidation.
 - `src/utils/stPreset/stPresetOperations.ts`: Domain operations and database mutations.
 - `src/utils/stPreset/stPresetImportParser.ts`: SillyTavern JSON validation and node extraction.

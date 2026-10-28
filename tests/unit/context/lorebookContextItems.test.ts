@@ -254,6 +254,10 @@ describe("lorebook context items", () => {
         sampleDialoguesIn: [],
         sampleDialoguesOut: [],
         lastUserMessage: "I found the vault.",
+        model: "configured-model",
+        provider: "google",
+        utcOffsetHours: 8,
+        nowMs: Date.UTC(2026, 0, 1),
       },
       {
         client: {} as Client,

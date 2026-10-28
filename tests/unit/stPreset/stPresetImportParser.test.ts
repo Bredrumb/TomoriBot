@@ -243,6 +243,38 @@ describe("stPresetImportParser", () => {
   });
 
   describe("macro helpers", () => {
+    it("recognizes runtime macros and conditionals while auditing every branch and condition", () => {
+      const normalized = normalizePresetShape({
+        prompts: [
+          {
+            identifier: "supported",
+            name: "Supported",
+            content:
+              "{{#if {{input}}}}{{time}}{{date}}{{weekday}}{{isotime}}{{isodate}}{{model}}{{provider}}{{char_version}}{{else}}{{#unless scenario}}{{input}}{{/unless}}{{/if}}",
+          },
+          {
+            identifier: "unsupported",
+            name: "Unsupported",
+            content: "{{#if {{unknown_condition}}}}{{unknown_then}}{{else}}{{unknown_else}}{{/if}}",
+          },
+          { identifier: "malformed", name: "Malformed", content: "{{#unless input}}bad{{/if}}" },
+          { identifier: "commented", name: "Commented", content: "{{// {{#if missing}} is only a comment}}kept" },
+        ],
+      });
+      expect(normalized).not.toBeNull();
+      if (!normalized) return;
+      const parsed = parsePresetNodes(normalized);
+      expect(parsed).not.toBeNull();
+      if (!parsed) return;
+      expect(collectUnsupportedEnabledMacros(parsed.nodes.slice(0, 1))).toEqual([]);
+      expect(collectUnsupportedEnabledMacros(parsed.nodes.slice(3))).toEqual([]);
+      expect(collectUnsupportedEnabledMacros(parsed.nodes.slice(2, 3))).toHaveLength(1);
+      const labels = collectUnsupportedEnabledMacros(parsed.nodes.slice(1, 2));
+      expect(labels).toContain("{{unknown_condition}}");
+      expect(labels).toContain("{{unknown_then}}");
+      expect(labels).toContain("{{unknown_else}}");
+    });
+
     it("collects unsupported macros from enabled non-comment content only", () => {
       const nodes = [
         {

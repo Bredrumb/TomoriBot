@@ -155,6 +155,10 @@ describe("participant context Phase 0 baseline", () => {
           sampleDialoguesIn: [],
           sampleDialoguesOut: [],
           lastUserMessage: "Please ask Bob and Ren about maps.",
+          model: "configured-model",
+          provider: "google",
+          utcOffsetHours: 8,
+          nowMs: Date.UTC(2026, 0, 1),
         },
         {
           client: fixture.client,

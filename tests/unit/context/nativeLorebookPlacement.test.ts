@@ -8,7 +8,10 @@ import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context
 import type { PreparedParticipantContext } from "@/utils/text/participants/preparation";
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { createScopedModuleMocker } from "../../helpers/mockSurface";
-import { createPersona } from "../../helpers/fixtures";
+import { presetRepository } from "@/utils/db/repositories/PresetRepository";
+import { invalidateStPresetCache } from "@/utils/cache/stPresetCache";
+import { buildContext } from "@/utils/text/context/builder";
+import { createPersona, createLlmRow } from "../../helpers/fixtures";
 
 const SERVER_ID = 1;
 const LINEAGE_ID = 100;
@@ -179,5 +182,89 @@ describe("native lorebook placement", () => {
     expect(afterIndex).toBe(beforeIndex + 1);
     expect(historyIndex).toBeGreaterThan(afterIndex);
     expect(documentsIndex).toBeGreaterThan(tags.indexOf(ContextItemTag.SYSTEM_PERSONA_PROMPT));
+  });
+});
+
+describe("preset runtime context mapping", () => {
+  it("uses configured model state, the last user input, and the server clock without evaluating lore", async () => {
+    const presetSpy = spyOn(presetRepository, "loadActivePreset").mockResolvedValue({
+      preset_id: 1,
+      server_id: SERVER_ID,
+      preset_name: "Runtime macros",
+      raw_json: {},
+      is_active: true,
+    });
+    const nodeSpy = spyOn(presetRepository, "loadAllNodes").mockResolvedValue(
+      [0, 1].map((order) => ({
+        preset_id: 1,
+        identifier: `runtime_${order}`,
+        name: "Runtime",
+        role: "system",
+        content: "{{model}}|{{provider}}|{{input}}|{{char_version}}|{{scenario}}|{{time}}|{{isodate}}|{{isotime}}",
+        is_marker: false,
+        is_enabled: true,
+        is_comment: false,
+        node_order: order,
+        injection_position: 0,
+        injection_depth: 0,
+        injection_order: 100,
+      })),
+    );
+    const clockSpy = spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 9, 28, 23, 30));
+    invalidateStPresetCache(SERVER_ID);
+    loadSpy?.mockResolvedValue([
+      toRow(
+        input({
+          constant: true,
+          keys: [],
+          content: "{{time}} {{input}} {{#if description}}literal{{/if}}",
+        }),
+      ),
+    ]);
+    const persona = createPersona({
+      server_id: SERVER_ID,
+      persona_lineage_id: LINEAGE_ID,
+      llm: createLlmRow({ llm_codename: "configured-model", llm_provider: "custom" }),
+      reward_conditioning_enabled: false,
+      punish_conditioning_enabled: false,
+      config: { timezone_offset: 5.75, time_awareness_enabled: true, channel_memory_enabled: true },
+    });
+    try {
+      const result = await buildContext({
+        guildId: SERVER_DISC_ID,
+        serverName: "Test Server",
+        serverDescription: null,
+        simplifiedMessageHistory: [
+          ...messageHistory,
+          { ...messageHistory[0], authorType: "persona", content: "Later persona turn." },
+        ],
+        preparedParticipantContext,
+        channelDesc: null,
+        channelName: "general",
+        channelId: CHANNEL_ID,
+        client: fakeClient,
+        triggererName: "Juno",
+        triggererFormattedName: "Juno",
+        triggererAddressTerm: "",
+        tomoriNickname: "Mirri",
+        tomoriAttributes: [],
+        tomoriConfig: persona.config,
+        personaLineageId: LINEAGE_ID,
+        snapshot: { tomoriState: persona },
+      });
+      const texts = result.contextItems.flatMap((item) =>
+        item.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])),
+      );
+      const runtime = texts.filter((text) => text.startsWith("configured-model|"));
+      expect(runtime).toEqual(
+        Array(2).fill("configured-model|custom|We light the lantern.|||5:15 AM|2026-10-29|05:15"),
+      );
+      expect(texts.some((text) => text.includes("{{time}} {{input}} {{#if description}}literal{{/if}}"))).toBe(true);
+    } finally {
+      presetSpy.mockRestore();
+      nodeSpy.mockRestore();
+      clockSpy.mockRestore();
+      invalidateStPresetCache(SERVER_ID);
+    }
   });
 });

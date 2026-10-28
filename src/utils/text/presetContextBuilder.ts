@@ -41,6 +41,10 @@ interface PresetMacroParams {
   sampleDialoguesOut: string[];
   /** Most recent user message for {{lastChatMessage}} */
   lastUserMessage: string;
+  model: string;
+  provider: string;
+  utcOffsetHours: number | null;
+  nowMs: number;
 }
 
 /**
@@ -134,9 +138,15 @@ function buildMacroContext(params: PresetMacroParams): MacroContext {
     charName: params.tomoriNickname,
     personality: params.tomoriAttributes.join("\n"),
     description: params.personaPrompt ?? "",
-    scenario: "", // No TomoriBot equivalent
+    scenario: "", // Card import folds scenario into attributes until a separate scenario field exists.
     mesExamples: mesExamples.join("\n"),
     lastChatMessage: params.lastUserMessage,
+    model: params.model,
+    provider: params.provider,
+    // Card version stays empty until a second card metadata field warrants shared storage.
+    charVersion: "",
+    utcOffsetHours: params.utcOffsetHours,
+    nowMs: params.nowMs,
   };
 }
 
