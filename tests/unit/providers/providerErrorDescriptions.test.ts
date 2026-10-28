@@ -13,7 +13,8 @@ import type { ProviderError } from "@/types/stream/interfaces";
 import { formatProviderErrorCodeForDisplay } from "@/utils/provider/providerErrorClassification";
 import { hasLocaleKey, initializeLocalizer, localizer } from "@/utils/text/localizer";
 import providerLocale from "@/locales/en-US/providers";
-import { RUNTIME_LOCALES, collectCaseFailures } from "../../helpers/localeCases";
+import { RUNTIME_LOCALES, collectCaseFailures, localizedCopy } from "../../helpers/localeCases";
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 
 // A synthetic credential an endpoint reflects back, in the encodings a pattern redactor misses.
 const CANARY = "sk-live-CANARY0001";
@@ -131,6 +132,61 @@ describe("public provider error descriptions", () => {
       }
     }
     expect(leaks).toEqual([]);
+  });
+
+  it("classifies tool failures across locales and keeps provider text out of reasons and guidance", () => {
+    const failures = collectCaseFailures();
+    const cases = [
+      { error: { code: "PROHIBITED_CONTENT" }, code: "PROHIBITED_CONTENT", key: "content_blocked" },
+      {
+        error: { code: "PROHIBITED_CONTENT", message: "Unsupported model" },
+        code: "PROHIBITED_CONTENT",
+        key: "content_blocked",
+      },
+      {
+        error: { message: "Provider stopped with PROHIBITED_CONTENT" },
+        code: "PROHIBITED_CONTENT",
+        key: "content_blocked",
+      },
+      { error: { message: 'Request rejected: {"error":{"code":403}}' }, code: "403", key: "authentication" },
+      { error: { status: 429 }, code: "429", key: "rate_limit" },
+      { error: { status: 402 }, code: "402", key: "quota" },
+      { error: { status: 503 }, code: "503", key: "provider_overloaded" },
+      { error: { error: { code: "invalid_api_key", status: 401 } }, code: "invalid_api_key", key: "authentication" },
+      { error: { message: "Request timed out" }, code: "timeout", key: "timeout" },
+      { error: { code: CANARY }, code: "provider_error", key: "provider_error" },
+    ];
+    for (const locale of RUNTIME_LOCALES) {
+      for (const testCase of cases) {
+        for (const echo of ECHOES) {
+          failures.check(`${locale}/${testCase.key}/${testCase.code}/${echo}`, () => {
+            const result = createProviderToolFailure(
+              { message: `Unexpected failure ${echo} ${INJECTED}`, ...testCase.error },
+              {
+                locale,
+                provider: "google",
+                credentialScope: "personal",
+              },
+            );
+            expect(result.success).toBe(false);
+            expect(result.failure?.code).toBe(testCase.code);
+            const copyLocale = hasLocaleKey(locale, `genai.tool_failure.${testCase.key}`) ? locale : "en-US";
+            expect(result.failure?.reason).toBe(localizedCopy(copyLocale, `genai.tool_failure.${testCase.key}`));
+            expect(result.error).toBe(result.failure?.reason);
+            const serialized = JSON.stringify(result);
+            for (const fragment of FORBIDDEN) expect(serialized).not.toContain(fragment);
+            expect(serialized).not.toMatch(/genai\.[a-zA-Z0-9_.-]+/);
+          });
+        }
+      }
+    }
+    failures.expectNoFailures();
+    const auth = createProviderToolFailure(
+      { status: 401 },
+      { locale: "en-US", provider: "google", credentialScope: "personal" },
+    );
+    expect(auth.failure?.suggestedActions).toContain(localizedCopy("en-US", "genai.tips.verify_api_key_personal"));
+    expect(auth.failure?.suggestedActions).not.toContain(localizedCopy("en-US", "genai.tips.verify_api_key"));
   });
 
   it("shows only status and enum-shaped codes", () => {

@@ -18,7 +18,6 @@ export default {
     generate_voice_message: {
       persona_missing: `Persona này không còn khả dụng.`,
       stale: `Model giọng nói, thông tin xác thực hoặc giọng của persona đã thay đổi trong lượt này. Hãy bắt đầu lượt mới trước khi tạo tin nhắn thoại.`,
-      script_too_long: `Kịch bản quá dài đối với model thiết kế giọng đọc này. Hãy rút ngắn kịch bản và thử lại.`,
     },
     generate_image: {
       quota_exceeded_generic: `Đã vượt quá hạn mức tạo ảnh.`,
@@ -43,7 +42,6 @@ export default {
     generate_image_nai: {
       no_google_api_key: `Inpainting yêu cầu thông tin xác thực nhà cung cấp Google đã lưu để phân đoạn hình ảnh. Thêm thông tin bằng \`/providers\`, hoặc chuyển sang nhà cung cấp Google.`,
       model_not_configured: `Tính năng tạo ảnh NovelAI hiện đang tắt. Hãy chọn một model ảnh NovelAI bằng \`/config\` > Models > Switch Models trước.`,
-      provider_quota_exceeded: `Hạn mức tạo ảnh NovelAI đã hết cho tài khoản này. Nạp thêm Anlas hoặc chờ hạn mức làm mới rồi thử lại.`,
       characters_require_v4: `Định vị nhân vật yêu cầu model diffusion NovelAI V4 trở lên.`,
       character_requires_id_or_tags: `Mục nhân vật #{index} phải bao gồm id hoặc thẻ tag.`,
       invalid_character_identity: `Danh tính nhân vật không hợp lệ: {id}. Hãy dùng persona:<id>, ID persona dạng số ngắn, hoặc snowflake người dùng Discord.`,

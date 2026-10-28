@@ -17,7 +17,6 @@ export default {
     generate_voice_message: {
       persona_missing: `这个人格已不可用。`,
       stale: `本轮期间，语音模型、凭据或人格声音发生了变化。请先开始新的一轮，再生成语音消息。`,
-      script_too_long: `这段台词超出了该语音设计模型的长度上限。请缩短台词后再试。`,
     },
     generate_image: {
       quota_exceeded_generic: `图像生成配额已经用完。`,
@@ -42,7 +41,6 @@ export default {
     generate_image_nai: {
       no_google_api_key: `局部重绘需要已保存的 Google 提供方凭据来做图像分割。请用 \`/providers\` 添加，或者换成 Google 提供方。`,
       model_not_configured: `NovelAI 图像生成目前是关闭的。请先用 \`/config\` > 模型 > 切换模型 选择一个 NovelAI 图像模型。`,
-      provider_quota_exceeded: `这个账号的 NovelAI 图像生成配额已经用尽。请充值 Anlas，或者等配额刷新后再试。`,
       characters_require_v4: `角色定位需要 NovelAI V4 或更新的扩散模型。`,
       character_requires_id_or_tags: `第 {index} 个角色条目必须包含 id 或 tags。`,
       invalid_character_identity: `角色标识无效：{id}。请用 persona:<id>、简短的数字人格 ID，或者 Discord 用户 snowflake。`,

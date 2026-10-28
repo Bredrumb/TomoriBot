@@ -1,3 +1,4 @@
+import { getProviderContentRejectionCode } from "@/utils/provider/providerErrorClassification";
 /**
  * Vertex AI provider implementation
  *
@@ -316,6 +317,8 @@ export class VertexProvider
         },
       },
     });
+    const rejection = getProviderContentRejectionCode(response);
+    if (rejection) throw Object.assign(new Error("Image request blocked by the provider"), { code: rejection });
     if (response?.candidates && response.candidates.length > 0 && response.candidates[0]?.content?.parts) {
       for (const part of response.candidates[0].content.parts) {
         if (part.inlineData?.data) {

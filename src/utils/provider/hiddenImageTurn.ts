@@ -1,3 +1,4 @@
+import { buildFailedToolResponse } from "@/utils/tools/toolResult";
 import type { GenerationModelSelection } from "@/types/provider/generationModels";
 import { reportProviderUsage, withProviderUsageContext } from "@/utils/provider/providerUsage";
 /**
@@ -490,11 +491,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
         ? ((toolResult.data as Record<string, unknown>) ?? {
             status: "completed",
           })
-        : {
-            status: "tool_execution_failed",
-            reason: toolResult.message || toolResult.error || "Tool execution failed",
-            tool_name: funcName,
-          };
+        : buildFailedToolResponse(toolResult, funcName);
 
       const preToolCallText = (streamResult.accumulatedText ?? "").trim();
       functionInteractionHistory.push({

@@ -1,3 +1,4 @@
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { localizer } from "@/utils/text/localizer";
 import { HOSTED_SPEECH_LIMITS } from "@/utils/speech/hostedSpeech";
@@ -300,14 +301,19 @@ export class GenerateVoiceMessageTool extends BaseTool {
     }
 
     if (!synthesisResult.success || !synthesisResult.audioBuffer) {
+      if (synthesisResult.requestDenied) return notifyProviderToolFailure(context, synthesisResult.requestDenied);
+      const attempt = synthesisResult.attempts?.at(-1);
       return {
-        success: false,
-        error: synthesisResult.requestDenied
-          ? await notifyProviderToolFailure(context, synthesisResult.requestDenied)
-          : synthesisResult.errorKind === "script_too_long"
-            ? localizer(context.locale, "tools.generate_voice_message.script_too_long")
-            : synthesisResult.details || "Failed to generate the voice message.",
-
+        ...createProviderToolFailure(
+          { message: synthesisResult.details },
+          {
+            locale: context.locale,
+            provider: attempt?.provider ?? synthesisResult.backendKey,
+            credentialScope: attempt?.owner.kind ?? speechEndpoint?.owner.kind,
+            kind: synthesisResult.errorKind,
+            code: synthesisResult.providerCode,
+          },
+        ),
         data: { attempts: synthesisResult.attempts, cleanupPending: synthesisResult.cleanupPending },
       };
     }

@@ -256,7 +256,10 @@ creation is not automatically repeated because a failed request may have created
 without returning its ID. A provider `invalid_request` is told apart from a local one by the status
 it carries. The command's failure notice offers that same detail behind **Show Full Error**, gated
 like the chat error modal: Manage Server for a server credential, and only the requester for a personal
-one. The voice tool keeps the detail out of its result because the model reads tool results.
+one. The voice tool returns a classified reason, a safe provider code when available, and recovery
+guidance to the model. Recognized content rejections, including `PROHIBITED_CONTENT`, are preserved
+before audio validation and do not trigger server fallback. Raw provider detail stays out of tool
+results because the model reads them.
 
 ## Native Discord delivery constraints
 

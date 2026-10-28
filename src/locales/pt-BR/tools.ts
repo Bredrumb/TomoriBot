@@ -18,7 +18,6 @@ export default {
     generate_voice_message: {
       persona_missing: `A persona não está mais disponível.`,
       stale: `O modelo de fala, as credenciais ou a voz da persona mudaram durante este turno. Inicie um novo turno antes de gerar uma mensagem de voz.`,
-      script_too_long: `O roteiro é longo demais para este modelo de design de voz. Encurte o roteiro e tente novamente.`,
     },
     generate_image: {
       quota_exceeded_generic: `A cota de geração de imagens foi excedida.`,
@@ -43,7 +42,6 @@ export default {
     generate_image_nai: {
       no_google_api_key: `O inpainting requer credenciais do provedor do Google salvas para segmentação de imagens. Adicione-as com \`/providers\`, ou mude para o provedor do Google.`,
       model_not_configured: `A geração de imagens da NovelAI está desativada no momento. Selecione um modelo de imagem da NovelAI primeiro em \`/config\` > Modelos > Mudar Modelos.`,
-      provider_quota_exceeded: `A cota de geração de imagens da NovelAI está esgotada para esta conta. Recarregue Anlas ou aguarde a cota ser renovada, e tente novamente.`,
       characters_require_v4: `O posicionamento de personagens requer um modelo de difusão NovelAI V4 ou mais recente.`,
       character_requires_id_or_tags: `A entrada de personagem #{index} deve incluir um id ou tags.`,
       invalid_character_identity: `Identidade de personagem inválida: {id}. Use persona:<id>, um ID numérico curto de persona ou um snowflake de usuário do Discord.`,

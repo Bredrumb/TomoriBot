@@ -2,7 +2,12 @@ import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { createGoogleSpeechTransport } from "@/providers/google/googleSpeech";
 import { buildSeedDesignPrompt, synthesizeOpenRouterSpeech } from "@/providers/openrouter/openrouterSpeech";
 import { createVertexClient } from "@/providers/vertex/vertexClient";
-import { HOSTED_SPEECH_LIMITS, validateSpeechAudio, type SpeechOperation } from "@/utils/speech/hostedSpeech";
+import {
+  HOSTED_SPEECH_LIMITS,
+  HostedSpeechError,
+  validateSpeechAudio,
+  type SpeechOperation,
+} from "@/utils/speech/hostedSpeech";
 import { normalizeVoiceSampleToWav } from "@/utils/speech/voiceSampleAddOperation";
 import { synthesizeVoiceMessage } from "@/utils/speech/voiceMessageSynthesis";
 import { speechModelSchema } from "@/types/db/schema";
@@ -281,6 +286,36 @@ describe("hosted speech transports", () => {
       expect(new Headers(calls[0].init.headers).has("x-goog-api-key")).toBe(false);
       expect(new Headers(calls[0].init.headers).get("Authorization")).toBe("Bearer synthetic-adc");
       expect(operations[1].usage?.totalTokenCount).toBe(8);
+    } finally {
+      authSpy.mockRestore();
+    }
+  });
+
+  it("preserves Vertex rejection codes before validating audio and retains usage without exposing provider text", async () => {
+    const client = createVertexClient({ projectId: "sample-project", location: "global" });
+    const authSpy = spyOn(
+      Object.getPrototypeOf(client) as { getAuthHeaders(): Promise<Headers> },
+      "getAuthHeaders",
+    ).mockResolvedValue(new Headers({ Authorization: "Bearer synthetic-adc" }));
+    try {
+      for (const rejection of ["PROHIBITED_CONTENT", "SAFETY", "RECITATION", "SPII"]) {
+        for (const blocked of [
+          { candidates: [{ finishReason: rejection }] },
+          { promptFeedback: { blockReason: rejection } },
+        ]) {
+          stubFetch(async () => Response.json({ ...blocked, usageMetadata: { totalTokenCount: 7 } }));
+          const operations: SpeechOperation[] = [];
+          const error = await createGoogleSpeechTransport("vertex", "sample-project::global")
+            .synthesize("voice_test", "Hello", undefined, "gemini-3.8-flash-tts", signal(), wav.length, operations)
+            .catch((failure: unknown) => failure);
+          expect(error).toBeInstanceOf(HostedSpeechError);
+          if (!(error instanceof HostedSpeechError)) throw new Error("Expected a speech rejection");
+          expect(error.kind).toBe("content_blocked");
+          expect(error.providerCode).toBe(rejection);
+          expect(operations[0]).toMatchObject({ success: false, status: 200, usage: { totalTokenCount: 7 } });
+          fetchSpy?.mockRestore();
+        }
+      }
     } finally {
       authSpy.mockRestore();
     }

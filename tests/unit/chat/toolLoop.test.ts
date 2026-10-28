@@ -49,6 +49,9 @@ import type { TomoriState } from "@/types/db/schema";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import type { ToolLoopParams } from "@/utils/chat/toolLoop";
 import { createExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
+import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy } from "../../helpers/localeCases";
 
 let toolExecuteCalls: Array<{
   name: string;
@@ -619,6 +622,40 @@ describe("runToolLoop — contract tests", () => {
 
     // The raw internal error string is not surfaced as the final response text.
     expect(result.personaResponses[0]?.text).not.toContain("something broke");
+  });
+
+  it("returns provider codes and recovery guidance to the next model pass without private failure data", async () => {
+    await initializeLocalizer();
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { provider, capturedHistories } = makeProvider([
+      makeFunctionCallResult("generate_voice_message", {}),
+      { status: "completed", accumulatedText: "Failure explained" },
+    ]);
+    toolExecuteQueue.push({
+      ...createProviderToolFailure(
+        { code: "PROHIBITED_CONTENT", message: "PRIVATE_PROVIDER_BODY" },
+        {
+          locale: "en-US",
+          provider: "google",
+        },
+      ),
+      message: "Generic notice",
+      data: { private: "PRIVATE_FAILURE_DATA" },
+    });
+    const result = await runToolLoop(makeParams(makeContext(), provider));
+    expect(result.status).toBe("completed");
+    const history = capturedHistories[1] as Array<{
+      functionResponse: { functionResponse: { response: { result: Record<string, unknown> } } };
+    }>;
+    expect(history[0]?.functionResponse.functionResponse.response.result).toMatchObject({
+      status: "tool_execution_failed",
+      tool_name: "generate_voice_message",
+      code: "PROHIBITED_CONTENT",
+      reason: localizedCopy("en-US", "genai.tool_failure.content_blocked"),
+    });
+    expect(history[0]?.functionResponse.functionResponse.response.result.suggested_actions).not.toEqual([]);
+    expect(JSON.stringify(history)).not.toContain("PRIVATE_PROVIDER_BODY");
+    expect(JSON.stringify(history)).not.toContain("PRIVATE_FAILURE_DATA");
   });
 
   it("consecutive tool errors: loop exits with 'error' after MAX_CONSECUTIVE_TOOL_ERRORS failures", async () => {

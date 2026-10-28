@@ -18,7 +18,6 @@ export default {
     generate_voice_message: {
       persona_missing: `The persona is no longer available.`,
       stale: `The speech model, credentials, or persona voice changed during this turn. Start a new turn before generating a voice message.`,
-      script_too_long: `The script is too long for this voice design model. Shorten the script and try again.`,
     },
     generate_image: {
       quota_exceeded_generic: `Image generation quota has been exceeded.`,
@@ -43,7 +42,6 @@ export default {
     generate_image_nai: {
       no_google_api_key: `Inpainting requires saved Google provider credentials for image segmentation. Add them with \`/providers\`, or switch to the Google provider.`,
       model_not_configured: `NovelAI image generation is disabled right now. Select a NovelAI image model with \`/config\` > Models > Switch Models first.`,
-      provider_quota_exceeded: `NovelAI image generation quota is exhausted for this account. Recharge Anlas or wait for the quota to refresh, then try again.`,
       characters_require_v4: `Character positioning requires a NovelAI V4 diffusion model or newer.`,
       character_requires_id_or_tags: `Character entry #{index} must include either an id or tags.`,
       invalid_character_identity: `Invalid character identity: {id}. Use persona:<id>, a short numeric persona ID, or a Discord user snowflake.`,
