@@ -10,6 +10,7 @@ import { resolveContextReferences } from "@/utils/text/contextReferences";
 import { buildParticipantDiscoveryPlan } from "@/utils/text/participants/discoveryPlan";
 import { createPersonaKey } from "@/utils/text/participants/identity";
 import { composeParticipantDiscoveryPlan } from "@/utils/text/participants/sources";
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
 import {
   createParticipantContextFixture,
   PARTICIPANT_FIXTURE_IDS,
@@ -173,7 +174,10 @@ describe("participant context compatibility matrix", () => {
       for (const model of ["glm-4-6", "xialong-v1", "kayra-v1", "llama-3-erato-v1"]) {
         const fitted = fitNovelAIPrompt({
           contextItems: [item],
-          tomoriState: fixture.activePersona,
+          tomoriState: createPersona({
+            ...fixture.activePersona,
+            llm: createLlmRow({ llm_codename: model, llm_provider: "novelai" }),
+          }),
           profile: getNovelAIProfile(model),
           window: 4096,
           maxOutputTokens: 96,

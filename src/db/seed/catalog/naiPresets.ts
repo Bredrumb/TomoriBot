@@ -11,6 +11,9 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         modelTarget: "xialong",
         isDefault: true,
         desc: "NovelAI's published default sampling preset for Xialong.",
+        i18n: {
+          ja: "NovelAIが公開しているXialongの標準サンプリングプリセット。",
+        },
         parameters: {
           temperature: 0.85,
           max_length: 60,
