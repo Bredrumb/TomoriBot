@@ -84,6 +84,7 @@ export interface VoiceMessageSynthesisResult {
   /** Script text with markup stripped, suitable for transcript display. */
   cleanedCaptionText?: string;
   errorKind?: VoiceSynthesisErrorKind;
+  providerCode?: string;
   details?: string;
   /**
    * The provider's status and response body exactly as logged. It stays off `attempts` because the
@@ -143,6 +144,7 @@ export interface VoiceMessageSynthesisRequest {
 }
 
 const EXPECTED_HOSTED_SPEECH_KINDS: ReadonlySet<HostedSpeechErrorKind> = new Set([
+  "content_blocked",
   "cancelled",
   "timeout",
   "script_too_long",
@@ -520,6 +522,8 @@ async function synthesizeHostedVoiceMessage(
       backendKey,
       errorKind,
       details: `Hosted speech failed: ${errorKind}.`,
+      providerCode:
+        error instanceof HostedSpeechError ? (error.providerCode ?? error.providerStatus?.toString()) : undefined,
       providerDetail,
       cleanupPending:
         cleanupPending ||

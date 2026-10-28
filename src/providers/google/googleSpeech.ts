@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createVertexClient, parseVertexCompositeKey } from "@/providers/vertex/vertexClient";
 import {
   checkSpeechStatus,
+  checkSpeechRejection,
   decodeSpeechAudio,
   HostedSpeechError,
   readSpeechJson,
@@ -112,6 +113,7 @@ export function createGoogleSpeechTransport(provider: "google" | "vertex", apiKe
       .safeParse(json);
     if (usage.success) record.usage = usage.data.usage ?? usage.data.usageMetadata;
     if (!response.ok) checkSpeechStatus(response, speechErrorBody(json, apiKey));
+    checkSpeechRejection(json, apiKey);
     if (operation === "lookup") record.success = true;
     return json;
   }

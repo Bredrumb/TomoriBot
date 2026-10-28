@@ -125,7 +125,10 @@ async function synthesizeSpeech(request: OpenRouterSpeechRequest, hold?: Provide
       checkSpeechStatus(response, body);
     } catch (error) {
       if (limit && error instanceof HostedSpeechError)
-        throw new HostedSpeechError(error.kind, error.providerStatus, error.providerBody, { cause: limit });
+        throw new HostedSpeechError(error.kind, error.providerStatus, error.providerBody, {
+          cause: limit,
+          code: error.providerCode,
+        });
       throw error;
     }
   }

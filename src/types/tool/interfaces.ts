@@ -231,8 +231,15 @@ export interface ToolContext {
   isExecutionCancelled?: () => boolean;
 }
 
+export interface ToolFailure {
+  code: string;
+  reason: string;
+  suggestedActions: string[];
+}
+
 export interface ToolResult {
   success: boolean;
+  failure?: ToolFailure;
   /** A resolved expression the tool loop sends before building history. Never shown to the model. */
   stickerSelection?: StickerSelection;
   data?: unknown;

@@ -1,3 +1,8 @@
+import {
+  getProviderContentRejectionCode,
+  providerContentRejectionSchema,
+} from "@/utils/provider/providerErrorClassification";
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import {
   findProviderRequestDeniedError,
@@ -892,7 +897,9 @@ export class GenerateImageTool extends BaseTool {
     // Default to allowed; overwritten below for server-credential users
     let quotaCheck: QuotaCheckResult = { allowed: true };
     let usageContext: ProviderUsageContext | undefined;
-    let generationRoute: { provider: string; modelId: number; model: string; credentialSource: string } | undefined;
+    let generationRoute:
+      | { provider: string; modelId: number; model: string; credentialSource: "server" | "personal" }
+      | undefined;
 
     try {
       const { credentials: creds, quotaCheck: serverQuotaCheck } = await resolveCredentialsWithMediaQuota(
@@ -1320,6 +1327,8 @@ export class GenerateImageTool extends BaseTool {
           },
         });
 
+        const rejection = getProviderContentRejectionCode(response);
+        if (rejection) throw Object.assign(new Error("Image request blocked by the provider"), { code: rejection });
         if (response?.candidates && response.candidates.length > 0 && response.candidates[0]?.content?.parts) {
           for (const part of response.candidates[0].content.parts) {
             if (part.inlineData) {
@@ -1448,24 +1457,25 @@ export class GenerateImageTool extends BaseTool {
     } catch (error) {
       if (error instanceof DiscordDeliveryError) return mediaDeliveryFailure(context, error.outcome);
       const denied = findProviderRequestDeniedError(error, usageContext);
-      if (denied) return { success: false, error: await notifyProviderToolFailure(context, denied) };
+      if (denied) return notifyProviderToolFailure(context, denied);
       if (context.abortSignal?.aborted) {
         return { success: false, error: "Image generation was cancelled." };
       }
+      const toolFailure = createProviderToolFailure(error, {
+        locale: context.locale,
+        provider: generationRoute?.provider ?? "unknown",
+        credentialScope: generationRoute?.credentialSource,
+      });
       const errorMessage = error instanceof Error ? error.message : String(error);
-
-      // Localize errors, but fall back to readable defaults if the localizer
-      // isn't initialized or a key is missing (to avoid leaking locale keys)
-      const getReadableError = (key: string, fallback: string): string => {
-        const localized = localizer(context.locale, key);
-        return localized === key ? fallback : localized;
-      };
 
       const isBillingRefusal = /\b(?:billing|payment|quota|balance|credits?|402|PERMISSION_DENIED)\b/i.test(
         errorMessage,
       );
       const isSafetyRefusal =
-        errorMessage.includes("safety") || errorMessage.includes("blocked") || errorMessage.includes("RECITATION");
+        providerContentRejectionSchema.safeParse(toolFailure.failure?.code).success ||
+        errorMessage.includes("safety") ||
+        errorMessage.includes("blocked") ||
+        errorMessage.includes("RECITATION");
 
       await reportProviderFailure({
         summary: "Image generation failed",
@@ -1482,27 +1492,7 @@ export class GenerateImageTool extends BaseTool {
         metadata: generationRoute,
       });
 
-      if (isBillingRefusal) {
-        return {
-          success: false,
-          error: getReadableError("genai.google.400_billing_default_message", "Billing is required for this service"),
-        };
-      }
-
-      if (isSafetyRefusal) {
-        return {
-          success: false,
-          error: getReadableError(
-            "genai.google.content_blocked_default_message",
-            "Your content was blocked by safety filters",
-          ),
-        };
-      }
-
-      return {
-        success: false,
-        error: "Failed to generate the image because the provider returned an error.",
-      };
+      return toolFailure;
     }
   }
   /**

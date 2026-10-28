@@ -292,7 +292,7 @@ export class PeekProfilePictureTool extends BaseTool {
       };
     } catch (error) {
       const denied = findProviderRequestDeniedError(error, ...requestScope);
-      if (denied) return { success: false, error: await notifyProviderToolFailure(context, denied) };
+      if (denied) return notifyProviderToolFailure(context, denied);
       log.error(`Profile picture processing failed for identity: ${targetIdentity}`, error as Error);
 
       let errorMessage = "Failed to process the user's profile picture.";

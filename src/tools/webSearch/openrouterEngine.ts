@@ -122,7 +122,7 @@ export class OpenRouterEngine implements WebSearchEngine {
       if (!response.ok) {
         const limit = await readOpenRouterLimitResponse(response);
         const denied = findProviderRequestDeniedError(limit, context.usageContext);
-        if (denied) return { success: false, error: await notifyProviderToolFailure(context, denied) };
+        if (denied) return notifyProviderToolFailure(context, denied);
         return this.fail("http_error", response.status);
       }
 
@@ -174,7 +174,7 @@ export class OpenRouterEngine implements WebSearchEngine {
       };
     } catch (error) {
       const denied = findProviderRequestDeniedError(error, context.usageContext);
-      if (denied) return { success: false, error: await notifyProviderToolFailure(context, denied) };
+      if (denied) return notifyProviderToolFailure(context, denied);
       return this.fail(signal.aborted ? "aborted" : "request_failed", undefined, error);
     }
   }

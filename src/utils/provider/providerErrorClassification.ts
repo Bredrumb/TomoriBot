@@ -1,4 +1,40 @@
+import { z } from "zod";
 import type { ProviderError } from "@/types/stream/interfaces";
+
+export const providerContentRejectionSchema = z.enum([
+  "SAFETY",
+  "PROHIBITED_CONTENT",
+  "RECITATION",
+  "BLOCKLIST",
+  "SPII",
+  "IMAGE_SAFETY",
+  "IMAGE_PROHIBITED_CONTENT",
+  "content_filter",
+  "content_policy_violation",
+]);
+
+const contentRejectionFields = z.object({
+  promptFeedback: z.object({ blockReason: z.string().optional() }).optional(),
+  candidates: z.array(z.object({ finishReason: z.string().optional() })).optional(),
+  choices: z.array(z.object({ finish_reason: z.string().nullish() })).optional(),
+  error: z.object({ code: z.union([z.string(), z.number()]).optional() }).optional(),
+});
+
+export function getProviderContentRejectionCode(value: unknown): string | undefined {
+  const response = contentRejectionFields.safeParse(value);
+  if (!response.success) return undefined;
+  const codes = [
+    response.data.promptFeedback?.blockReason,
+    response.data.error?.code,
+    ...(response.data.candidates?.map((candidate) => candidate.finishReason) ?? []),
+    ...(response.data.choices?.map((choice) => choice.finish_reason) ?? []),
+  ];
+  for (const value of codes) {
+    const code = providerContentRejectionSchema.safeParse(value);
+    if (code.success) return code.data;
+  }
+  return undefined;
+}
 
 const MODEL_ERROR_PATTERNS: RegExp[] = [
   /\bunsupported\s+model\b/i,

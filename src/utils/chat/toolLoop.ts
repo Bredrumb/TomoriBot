@@ -1,3 +1,4 @@
+import { buildFailedToolResponse } from "@/utils/tools/toolResult";
 import { buildChatPersonaPostContext } from "@/utils/chat/responseEmitter";
 import { expandDeliberateToolAllowedNames } from "@/utils/tools/deliberateToolMode";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
@@ -1172,11 +1173,7 @@ async function executeToolCall(
         functionResponse: {
           name: functionCall.name,
           response: {
-            result: {
-              status: "tool_execution_failed",
-              reason: toolResult.message || toolResult.error || "Tool execution failed without specific error",
-              tool_name: functionName,
-            },
+            result: buildFailedToolResponse(toolResult, functionName),
           },
         },
       };

@@ -1,3 +1,4 @@
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 /**
  * NovelAI Image Generation Tool
  * Generates images using NovelAI's diffusion models with imageboard-style tag prompts.
@@ -871,6 +872,7 @@ export class GenerateImageNaiTool extends BaseTool {
 
     // Default to allowed; overwritten below for server-credential users
     let quotaCheck: QuotaCheckResult = { allowed: true };
+    let failureScope: "server" | "personal" | undefined;
 
     try {
       const { credentials: creds, quotaCheck: serverQuotaCheck } = await resolveCredentialsWithMediaQuota(
@@ -884,6 +886,7 @@ export class GenerateImageNaiTool extends BaseTool {
         context.streamContext?.imageModelSelection,
       );
       quotaCheck = serverQuotaCheck;
+      failureScope = creds.source;
 
       if (!quotaCheck.allowed) {
         let errorMessage = "";
@@ -1268,7 +1271,6 @@ export class GenerateImageNaiTool extends BaseTool {
       if (context.abortSignal?.aborted) {
         return { success: false, error: "NAI image generation was cancelled." };
       }
-      const errorMessage = error instanceof Error ? error.message : String(error);
       const errorKind = classifyNaiImageError(error);
 
       await reportProviderFailure({
@@ -1281,45 +1283,25 @@ export class GenerateImageNaiTool extends BaseTool {
         dimensions: { operation: isInpaintMode ? "image-inpaint" : "image-generation", provider: "novelai", errorKind },
       });
 
-      if (errorKind === "quota") {
-        return {
-          success: false,
-          error: localizer(context.locale, "tools.generate_image_nai.provider_quota_exceeded"),
-        };
-      }
-
       if (error instanceof CredentialUnavailableError && error.reason === "missing_model_id") {
         return {
           success: false,
           error: localizer(context.locale, "tools.generate_image_nai.model_not_configured"),
         };
       }
-
-      if (errorKind === "auth") {
-        return {
-          success: false,
-          error: "NovelAI API authentication failed. Please check your API key and subscription status.",
-        };
-      }
-
-      if (errorKind === "rate_limit") {
-        return {
-          success: false,
-          error: "NovelAI API rate limit reached. Please try again in a moment.",
-        };
-      }
-
-      if (errorMessage.includes("segmentation") || errorMessage.includes("segment")) {
-        return {
-          success: false,
-          error: "Segmentation failed because NovelAI returned an error.",
-        };
-      }
-
-      return {
-        success: false,
-        error: `Failed to ${isInpaintMode ? "inpaint" : "generate"} the NAI image because NovelAI returned an error.`,
-      };
+      return createProviderToolFailure(error, {
+        locale: context.locale,
+        provider: "novelai",
+        credentialScope: failureScope,
+        kind:
+          errorKind === "auth"
+            ? "authentication"
+            : errorKind === "quota"
+              ? "quota"
+              : errorKind === "rate_limit"
+                ? "rate_limit"
+                : undefined,
+      });
     }
   }
 }

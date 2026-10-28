@@ -21,7 +21,7 @@ import { createPersona } from "../../helpers/fixtures";
  */
 import { beforeAll, describe, expect, it, mock } from "bun:test";
 import { speechModelSchema, type CustomEndpointRow } from "@/types/db/schema";
-import type { ToolContext, ToolAssemblyState } from "@/types/tool/interfaces";
+import type { ToolContext, ToolAssemblyState, ToolResult } from "@/types/tool/interfaces";
 import type { ResolvedVoiceSource } from "@/utils/speech/voiceMessageSynthesis";
 import * as realSpeechEndpointResolver from "@/utils/provider/speechEndpointResolver";
 import * as realVoiceMessageSynthesis from "@/utils/speech/voiceMessageSynthesis";
@@ -64,8 +64,16 @@ let deliveryCount = 0;
 let deliveryError: DiscordDeliveryError | undefined;
 let captionCount = 0;
 
-const endpointResolverMock = mock(async () =>
-  activeEndpoint ? { endpoint: activeEndpoint, apiKey: "endpoint-key" } : null,
+const endpointResolverMock = mock(
+  async (serverId: number): Promise<realSpeechEndpointResolver.SpeechTargetResult | null> =>
+    activeEndpoint
+      ? {
+          kind: "custom-endpoint",
+          endpoint: activeEndpoint,
+          apiKey: "endpoint-key",
+          owner: { kind: "server", ownerId: serverId },
+        }
+      : null,
 );
 
 const synthesizeMock = mock(async (request: realVoiceMessageSynthesis.VoiceMessageSynthesisRequest) => {
@@ -93,10 +101,10 @@ const scopedMock = createScopedModuleMocker(mock, {
 
 scopedMock.module("@/utils/provider/speechEndpointResolver", () => ({
   ...realSpeechEndpointResolver,
-  resolveSpeechTargets: async (_serverId: number, userId?: number) => {
+  resolveSpeechTargets: async (serverId: number, userId?: number) => {
     resolvedOwners.push(userId);
     if (hostedTargets) return hostedTargets;
-    const target = await endpointResolverMock();
+    const target = await endpointResolverMock(serverId);
     return { design: target, clone: target };
   },
 }));
@@ -155,6 +163,7 @@ interface PersonaVoiceFields {
 function makeContext(fields: PersonaVoiceFields): ToolContext {
   return {
     channel: {},
+    locale: "en-US",
     tomoriState: createPersona(fields),
   } as unknown as ToolContext;
 }
@@ -163,7 +172,7 @@ function makeContext(fields: PersonaVoiceFields): ToolContext {
 async function runTool(
   fields: PersonaVoiceFields,
   endpoint: CustomEndpointRow | null,
-): Promise<{ source: ResolvedVoiceSource | null; error: string | null }> {
+): Promise<{ source: ResolvedVoiceSource | null; error: string | null; failure: ToolResult["failure"] }> {
   activeEndpoint = endpoint;
   hostedTargets = null;
   dispatchedSources.length = 0;
@@ -176,6 +185,7 @@ async function runTool(
   return {
     source: dispatchedSources[0] ?? null,
     error: result.success ? null : (result.error ?? null),
+    failure: result.failure,
   };
 }
 
@@ -416,8 +426,11 @@ describe("GenerateVoiceMessageTool refusals", () => {
         cleanedCaptionText: "",
       };
     });
-    const { error } = await runTool({ ...SAMPLE, ...DESIGN_PROMPT }, makeEndpoint("auto"));
-    expect(Boolean(error)).toBe(true);
+    const { error, failure } = await runTool({ ...SAMPLE, ...DESIGN_PROMPT }, makeEndpoint("auto"));
+    const expectedReason = localizedCopy("en-US", "genai.tool_failure.provider_error");
+    expect(failure?.code).toBe("provider_error");
+    expect(error).toBe(expectedReason);
+    expect(failure?.reason).toBe(expectedReason);
     expect(dispatchedSources).toEqual([
       { kind: "design", designPrompt: DESIGN_PROMPT.speech_voice_design_prompt, personaId: 1 },
     ]);

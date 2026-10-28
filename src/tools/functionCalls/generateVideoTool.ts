@@ -1,3 +1,5 @@
+import { providerContentRejectionSchema } from "@/utils/provider/providerErrorClassification";
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import {
   findProviderRequestDeniedError,
@@ -42,11 +44,7 @@ import {
   getDefaultOpenRouterVideoResolution,
   isOpenRouterVideoCapabilityError,
 } from "@/providers/openrouter/openrouterVideoRequest";
-import {
-  isExpectedVideoFailure,
-  isVideoContentRefusal,
-  ProviderVideoFilteredError,
-} from "@/providers/utils/providerVideoErrors";
+import { isExpectedVideoFailure, ProviderVideoFilteredError } from "@/providers/utils/providerVideoErrors";
 import { resolveMessageImageUrls } from "@/utils/image/imageExtractor";
 import { beginTextModelHandoffBeforeComfyUi } from "@/utils/provider/textModelComfyUiHandoff";
 
@@ -308,6 +306,7 @@ export class GenerateVideoTool extends BaseTool {
     let quotaCheck: VideoQuotaCheckResult = { allowed: true };
     let usageContext: ProviderUsageContext | undefined;
     let failureProvider: string | undefined;
+    let failureScope: "server" | "personal" | undefined;
 
     try {
       const { credentials: creds, quotaCheck: serverQuotaCheck } = await resolveCredentialsWithMediaQuota(
@@ -376,6 +375,7 @@ export class GenerateVideoTool extends BaseTool {
 
       const apiKey = creds.apiKey;
       usageContext = creds.usageContext;
+      failureScope = creds.source;
       const executionProvider = creds.provider;
       failureProvider = executionProvider;
 
@@ -605,14 +605,23 @@ export class GenerateVideoTool extends BaseTool {
         return { success: false, error: "Video generation was cancelled." };
       }
       const denied = findProviderRequestDeniedError(error, usageContext);
-      if (denied) return { success: false, error: await notifyProviderToolFailure(context, denied) };
+      if (denied) return notifyProviderToolFailure(context, denied);
+      const toolFailure = createProviderToolFailure(error, {
+        locale: context.locale,
+        provider: failureProvider ?? "unknown",
+        credentialScope: failureScope,
+        kind: error instanceof ProviderVideoFilteredError ? "content_blocked" : undefined,
+      });
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (!(error instanceof ProviderVideoFilteredError)) {
         await reportProviderFailure({
           summary: "Video generation failed",
           errorType: "VideoGenerationFailed",
           error,
-          expected: isExpectedVideoFailure(errorMessage) || classifySendFailure(error) !== null,
+          expected:
+            providerContentRejectionSchema.safeParse(toolFailure.failure?.code).success ||
+            isExpectedVideoFailure(errorMessage) ||
+            classifySendFailure(error) !== null,
           serverId: context.tomoriState.server_id,
           userId: context.internalUserId ?? null,
           dimensions: { operation: "video-generation", provider: failureProvider ?? "unknown" },
@@ -631,27 +640,11 @@ export class GenerateVideoTool extends BaseTool {
           success: false,
           error: localizedMessage,
           message: localizedMessage,
+          failure: { code: error.code, reason: localizedMessage, suggestedActions: [] },
         };
       }
 
-      if (errorMessage.includes("timed out")) {
-        return {
-          success: false,
-          error: "Video generation timed out. The provider may be experiencing high load. Please try again later.",
-        };
-      }
-
-      if (isVideoContentRefusal(errorMessage)) {
-        return {
-          success: false,
-          error: "Video generation was blocked by the provider's content safety filter. Please try a different prompt.",
-        };
-      }
-
-      return {
-        success: false,
-        error: "Video generation failed because the provider returned an error.",
-      };
+      return toolFailure;
     }
   }
 }

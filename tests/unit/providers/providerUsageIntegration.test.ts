@@ -246,9 +246,10 @@ describe("provider usage and denial request integration", () => {
     for (const suppressFailureNotices of [false, true]) {
       context.suppressFailureNotices = suppressFailureNotices;
       send.mockClear();
-      expect(await notifyProviderToolFailure(context, denial(firstContext))).toBe(
-        localizedCopy(context.locale, "general.errors.api_key_error_description"),
-      );
+      const result = await notifyProviderToolFailure(context, denial(firstContext));
+      expect(result.error).toBe(localizedCopy(context.locale, "general.errors.api_key_error_description"));
+      expect(result.failure?.reason).toBe(result.error);
+      expect(result.failure?.code).toBe("provider_request_denied");
       expect(send).toHaveBeenCalledTimes(suppressFailureNotices ? 0 : 1);
     }
   });

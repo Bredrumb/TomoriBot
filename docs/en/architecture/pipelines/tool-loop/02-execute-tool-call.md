@@ -133,8 +133,12 @@ message. The loop still passes the raw tool data to `handleEnhancedContextRestar
 such as `type` and `enhanced_context_item` retain their meaning. Off omits the restart call from
 history because the injected context replaces it.
 
-A failed call stores `{ status: "tool_execution_failed", reason, tool_name }`, built from the tool's
-message or error. Its data is not copied into model history.
+A failed call stores `{ status: "tool_execution_failed", reason, tool_name, code, suggested_actions }`.
+Provider-backed media tools supply a classified reason, a safe provider code, and localized recovery
+guidance selected from the same tips as the error UI. Other failures retain the tool's message or
+error, with `tool_error` when no code is available and an empty guidance list when none is supplied.
+The normal tool loop and hidden image agent use the same failure builder. Internal data and raw
+provider responses are not copied into model history.
 
 ## Source pointers
 <!-- anchor: source-pointers -->
