@@ -493,6 +493,7 @@ export async function execute(
             model: effectiveModelName,
             batchNumber,
             imageCount: images.length,
+            diagnostics: result.diagnostics,
           },
         });
         continue;

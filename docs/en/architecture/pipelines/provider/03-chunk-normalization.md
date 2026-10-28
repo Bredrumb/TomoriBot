@@ -83,6 +83,17 @@ attached errors and metadata also remove that key before credential-pattern reda
 truncation. This is best-effort redaction; encoded or transformed secrets can survive. Attached errors
 and stack traces can be longer; log string truncation is opt-in. Expected provider failures retain warning diagnostics in JSON logs at every log level,
 without creating an `error_logs` row.
+
+Google streaming failures attach a bounded `requestDiagnostics` summary: the actual request model,
+last five dialogue roles, final-turn part counts, prefill and tool-history presence, received chunk
+count, and elapsed time. The summary contains no prompt text, tool arguments, media URLs, or media
+bytes. Suppressed error notices retain the summary in warning logs too.
+
+Empty non-private DeepSeek structured replies retain the finish reason, validated token counts,
+reasoning presence, output limit, and provider request ID. Missing or invalid token counts stay
+unknown. Expression initialization copies these diagnostics into its existing error record.
+Include `error_metadata` in error exports; expected failures remain in host JSON logs.
+
 Logs remain private operator diagnostics. See
 [Production tuning](/wiki/production-tuning/) for log controls. `/persona generate` and speech
 synthesis also keep upstream text out of public replies: preset generators reply with a classified

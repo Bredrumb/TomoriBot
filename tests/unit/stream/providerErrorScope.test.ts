@@ -1,13 +1,75 @@
 import { REST } from "discord.js";
-import { beforeAll, describe, expect, it, mock } from "bun:test";
+import { beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client, ModalBuilder, TextChannel } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type { ProviderError, StreamContext, StreamProvider } from "@/types/stream/interfaces";
 import { StreamErrorUi } from "@/utils/discord/stream/errorUi";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy } from "../../helpers/localeCases";
+import { log } from "@/utils/misc/logger";
 
 type SendMock = ReturnType<typeof mock>;
+
+it("keeps request diagnostics on both error and retained warning records", async () => {
+  await initializeLocalizer();
+  const errors = spyOn(log, "error").mockImplementation(async () => {});
+  const warnings = spyOn(log, "warn").mockImplementation(() => {});
+  try {
+    for (const retryable of [false, true]) {
+      errors.mockClear();
+      warnings.mockClear();
+      const context = makeContext(
+        mock(async () => ({})),
+        "server",
+      );
+      context.requestDiagnostics = {
+        model: "gemini-3.5-flash-lite",
+        contextItemCount: 2,
+        contentsCount: 2,
+        tailRoles: ["user", "model"],
+        lastTurn: {
+          textParts: 1,
+          inlineDataParts: 0,
+          fileDataParts: 0,
+          functionCallParts: 0,
+          functionResponseParts: 0,
+        },
+        functionHistoryCount: 0,
+        currentTurnModelPartCount: 0,
+        prefillPresent: false,
+        manuallyTriggered: false,
+        toolCount: 0,
+        chunksReceived: 0,
+        elapsedMs: 10,
+      };
+      await new StreamErrorUi().handleProviderError(
+        {
+          type: "api_error",
+          message: "Rejected",
+          code: retryable ? "503" : "400",
+          retryable,
+        },
+        makeProvider("google"),
+        context,
+        "PRIVATE_KEY",
+      );
+      const call = (retryable ? warnings.mock.calls : errors.mock.calls).find(
+        (entry) => entry[2]?.errorType === "ProviderStreamError",
+      );
+      expect(call?.[2]?.metadata).toMatchObject({
+        model: "gemini-3.5-flash-lite",
+        requestDiagnostics: context.requestDiagnostics,
+      });
+      if (retryable)
+        expect(warnings.mock.calls.find((entry) => entry[2]?.errorType === "ProviderStreamError")?.[3]?.retain).toBe(
+          true,
+        );
+    }
+  } finally {
+    errors.mockRestore();
+    warnings.mockRestore();
+  }
+});
 
 function makeContext(
   send: SendMock,

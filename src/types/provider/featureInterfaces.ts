@@ -43,6 +43,18 @@ export type StructuredOutputResult<T> =
       failure?: "transport" | "malformed" | "refusal" | "cancelled";
       httpStatus?: number;
       cause?: Error;
+      diagnostics?: {
+        finishReason: "stop" | "length" | "content_filter" | "tool_calls" | "insufficient_system_resource" | "unknown";
+        inputTokens?: number;
+        outputTokens?: number;
+        reasoningTokens?: number;
+        reasoningPresent: boolean;
+        maxOutputTokens: number;
+        thinkingMode: "enabled" | "disabled" | "provider-default";
+        imageCount: number;
+        elapsedMs: number;
+        providerRequestId?: string;
+      };
       /** Why a private reply was malformed, so the caller can ask once more with the exact format problem. */
       malformed?: { reason: "empty" | "unparsable" | "schema"; issues?: string[] };
     };
