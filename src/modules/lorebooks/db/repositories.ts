@@ -2,6 +2,7 @@ import type { SQL, TransactionSQL } from "bun";
 import {
   LOREBOOK_ENTRIES_PER_SCOPE_MAX,
   lorebookEntryFlagsSchema,
+  lorebookEntryIdentity,
   lorebookEntryInputSchema,
   lorebookEntryToInput,
   lorebookEntryRowSchema,
@@ -20,6 +21,9 @@ export type LorebookInsertResult = number | "limit" | "invalid" | "failed";
 export type LorebookUpdateResult = "updated" | "missing" | "invalid" | "failed";
 export type LorebookDeleteResult = "deleted" | "missing" | "invalid" | "failed";
 export type LorebookReplaceResult = "replaced" | "limit" | "invalid" | "failed";
+export type LorebookAppendResult =
+  | { status: "appended"; added: number; skipped: number }
+  | { status: "limit" | "invalid" | "failed" };
 
 function validScope(serverId: number, lineageId: number | null): boolean {
   return lorebookScopeSchema.safeParse({ serverId, lineageId }).success;
@@ -244,24 +248,53 @@ export class LorebookRepository {
     if (payload !== undefined)
       return this.replaceScopeEntries(serverId, lineageId, [...payload, ...converted], transaction);
     if (converted.length === 0) return "replaced";
-    const existing = await this.listScope(serverId, lineageId, transaction);
-    if (existing.status !== "fresh") return "failed";
-    const key = (entry: LorebookEntryInput) =>
-      JSON.stringify(
-        lorebookEntryInputSchema.parse({
-          ...entry,
-          legacy_channel_tags: entry.legacy_channel_tags ?? [],
-        }),
+    const appended = await this.appendScopeEntries(serverId, lineageId, converted, transaction);
+    return appended.status === "appended" ? "replaced" : appended.status;
+  }
+
+  /**
+   * Adds entries to an existing scope, skipping ones it already holds.
+   *
+   * The whole batch is refused when it would cross the scope limit, so an oversized book never
+   * lands half imported.
+   */
+  async appendScopeEntries(
+    serverId: number,
+    lineageId: number | null,
+    entries: readonly LorebookEntryInput[],
+    transaction?: TransactionSQL,
+  ): Promise<LorebookAppendResult> {
+    if (!validScope(serverId, lineageId)) return { status: "invalid" };
+    const parsed = lorebookEntryInputSchema.array().safeParse(entries);
+    if (!parsed.success) return { status: "invalid" };
+    try {
+      const write = async (tx: TransactionSQL): Promise<LorebookAppendResult> => {
+        const servers = await tx`SELECT server_id FROM servers WHERE server_id = ${serverId} FOR UPDATE`;
+        if (servers.length === 0) return { status: "invalid" };
+        const existing = await this.listScope(serverId, lineageId, tx);
+        if (existing.status !== "fresh") return { status: "failed" };
+        const seen = new Set(existing.entries.map((entry) => lorebookEntryIdentity(lorebookEntryToInput(entry))));
+        const unique: LorebookEntryInput[] = [];
+        for (const entry of parsed.data) {
+          const identity = lorebookEntryIdentity(entry);
+          if (seen.has(identity)) continue;
+          seen.add(identity);
+          unique.push(entry);
+        }
+        if (existing.entries.length + unique.length > LOREBOOK_ENTRIES_PER_SCOPE_MAX) return { status: "limit" };
+        for (const entry of unique) await insertEntry(tx, serverId, lineageId, entry);
+        return { status: "appended", added: unique.length, skipped: parsed.data.length - unique.length };
+      };
+      return transaction ? await write(transaction) : await this.db.begin(write);
+    } catch (error) {
+      await log.error(
+        "Lorebooks: failed to append entries",
+        error,
+        { metadata: { serverId, lineageId } },
+        { persist: false },
       );
-    const seen = new Set(existing.entries.map((entry) => key(lorebookEntryToInput(entry))));
-    for (const entry of converted) {
-      const entryKey = key(entry);
-      if (seen.has(entryKey)) continue;
-      const result = await this.insert(serverId, lineageId, entry, transaction);
-      if (typeof result !== "number") return result === "limit" || result === "invalid" ? result : "failed";
-      seen.add(entryKey);
+      return { status: "failed" };
     }
-    return "replaced";
   }
 
   async update(

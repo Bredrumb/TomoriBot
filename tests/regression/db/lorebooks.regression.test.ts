@@ -187,6 +187,37 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("lorebook storage contracts", () => {
     ).toEqual([global, other]);
   });
 
+  it("appends only unseen entries and refuses a batch that would cross the scope limit", async () => {
+    const existing = await add(null);
+    expect(
+      await lorebookRepository.appendScopeEntries(refs.serverId, null, [
+        input(),
+        input({ title: "Harbor", keys: ["harbor"] }),
+        input({ title: "Harbor", keys: ["harbor"] }),
+      ]),
+    ).toEqual({ status: "appended", added: 1, skipped: 2 });
+    const listed = (await lorebookRepository.listScope(refs.serverId, null)).entries;
+    expect(listed.map((row) => row.title)).toEqual(["Manor", "Harbor"]);
+    expect(listed[0].entry_id).toBe(existing);
+
+    await testSql`
+      INSERT INTO persona_lorebook_entries (server_id, persona_lineage_id, title, content, keys)
+      SELECT ${refs.serverId}, ${lineage}, 'filler', 'lore', ARRAY['key'] FROM generate_series(1, ${LOREBOOK_ENTRIES_PER_SCOPE_MAX - 1})
+    `;
+    expect(
+      await lorebookRepository.appendScopeEntries(refs.serverId, lineage, [
+        input({ title: "First", keys: ["first"] }),
+        input({ title: "Second", keys: ["second"] }),
+      ]),
+    ).toEqual({ status: "limit" });
+    expect((await lorebookRepository.listScope(refs.serverId, lineage)).entries).toHaveLength(
+      LOREBOOK_ENTRIES_PER_SCOPE_MAX - 1,
+    );
+    expect(await lorebookRepository.appendScopeEntries(refs.serverId, null, [input({ keys: [] })])).toEqual({
+      status: "invalid",
+    });
+  });
+
   it("serializes replacement with insertion at the scope limit", async () => {
     const batch = Array.from({ length: LOREBOOK_ENTRIES_PER_SCOPE_MAX }, () => input());
     const [replace, insert] = await Promise.all([
@@ -230,6 +261,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("lorebook storage contracts", () => {
     expect(await repo.setFlags(refs.serverId, lineage, 1, { enabled: false })).toBe("failed");
     expect(await repo.delete(refs.serverId, lineage, 1)).toBe("failed");
     expect(await repo.replaceLineageEntries(refs.serverId, lineage, [])).toBe("failed");
+    expect(await repo.appendScopeEntries(refs.serverId, lineage, [input()])).toEqual({ status: "failed" });
   });
 
   it("fails a scope read as a whole when stored data is unreadable", async () => {

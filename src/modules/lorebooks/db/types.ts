@@ -85,3 +85,10 @@ export function lorebookEntryToInput(row: LorebookEntryRow): LorebookEntryInput 
   const { entry_id, server_id, persona_lineage_id, ...input } = row;
   return lorebookEntryInputSchema.parse(input);
 }
+
+/** Comparable identity for duplicate detection across imports and stored rows. */
+export function lorebookEntryIdentity(entry: LorebookEntryInput): string {
+  return JSON.stringify(
+    lorebookEntryInputSchema.parse({ ...entry, legacy_channel_tags: entry.legacy_channel_tags ?? [] }),
+  );
+}
