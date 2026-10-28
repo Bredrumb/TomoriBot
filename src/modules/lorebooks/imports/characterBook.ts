@@ -49,7 +49,7 @@ export function mergeConversionReports(
 }
 
 /** Splits content at the edit limit without bisecting a surrogate pair. */
-export function splitLorebookContent(content: string): string[] {
+function splitLorebookContent(content: string): string[] {
   const chunks: string[] = [];
   for (let offset = 0; offset < content.length; ) {
     let end = Math.min(offset + LOREBOOK_CONTENT_MAX, content.length);
@@ -63,7 +63,7 @@ export function splitLorebookContent(content: string): string[] {
   return chunks;
 }
 
-export function truncateLorebookTitle(title: string, suffix = ""): string {
+function truncateLorebookTitle(title: string, suffix = ""): string {
   return `${title.slice(0, LOREBOOK_TITLE_MAX - suffix.length).trim()}${suffix}`;
 }
 

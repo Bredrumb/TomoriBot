@@ -9,19 +9,19 @@ import {
 } from "@/modules/lorebooks/db/types";
 import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
 
-export type LorebookEntryWriteResult =
+type LorebookEntryWriteResult =
   | { status: "success"; title: string }
   | { status: "forbidden" | "missing" | "invalid" | "failed" };
 
-export type LorebookEntryEditResult =
+type LorebookEntryEditResult =
   | { status: "success"; title: string }
   | {
       status: "forbidden" | "missing" | "invalid" | "failed" | "title-required" | "content-required" | "keys-required";
     };
 
-export type LorebookFlagsResult = { status: "success" } | { status: "forbidden" | "missing" | "invalid" | "failed" };
+type LorebookFlagsResult = { status: "success" } | { status: "forbidden" | "missing" | "invalid" | "failed" };
 
-export type LorebookAddResult =
+type LorebookAddResult =
   | { status: "success"; entryId: number; title: string }
   | { status: "forbidden" | "limit" | "invalid" | "failed" | "title-required" | "content-required" | "keys-required" };
 
@@ -31,7 +31,7 @@ interface LorebookWriteScope {
   canManage: boolean;
 }
 
-export interface LorebookAddInput extends LorebookWriteScope {
+interface LorebookAddInput extends LorebookWriteScope {
   title: string;
   content: string;
   keys: string[];
@@ -39,7 +39,7 @@ export interface LorebookAddInput extends LorebookWriteScope {
   channelDiscIds: string[];
 }
 
-export interface LorebookEntryEditInput extends LorebookWriteScope {
+interface LorebookEntryEditInput extends LorebookWriteScope {
   entryId: number;
   title: string;
   content: string;
@@ -48,7 +48,7 @@ export interface LorebookEntryEditInput extends LorebookWriteScope {
   channelDiscIds: string[];
 }
 
-export interface LorebookActivationEditInput extends LorebookWriteScope {
+interface LorebookActivationEditInput extends LorebookWriteScope {
   entryId: number;
   secondaryKeys: string[];
   selectiveLogic: 0 | 1 | 2 | 3;
@@ -57,12 +57,12 @@ export interface LorebookActivationEditInput extends LorebookWriteScope {
   insertionOrder: number;
 }
 
-export interface LorebookFlagsInput extends LorebookWriteScope {
+interface LorebookFlagsInput extends LorebookWriteScope {
   entryId: number;
   flags: LorebookEntryFlags;
 }
 
-export interface LorebookRemoveInput extends LorebookWriteScope {
+interface LorebookRemoveInput extends LorebookWriteScope {
   entryId: number;
 }
 
