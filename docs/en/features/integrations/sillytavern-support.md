@@ -105,7 +105,7 @@ inside a condition, as in `{{#if {{input}}}}`. Empty text, `false`, and `0` are 
 are trimmed and case is ignored. Unknown macros in conditions count as empty.
 
 Blocks can nest, including TomoriBot's `{{if capability:web_search}}` and `{{if tool:web_search}}`
-blocks. Close `#if` with `/if` and `#unless` with `/unless`. A malformed block (such as a second
+blocks. Close `#if` with `{{/if}}` and `#unless` with `{{/unless}}`. A malformed block (such as a second
 `else` or the wrong closer) is omitted. A Handlebars block without a closer ends at the end of its
 node. Stray `else` and closers are dropped. More than 32 nested blocks leave the conditional syntax
 unrendered. Import notes report these problems.

@@ -97,9 +97,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("lorebook migration and transfer", () => {
           VALUES (${refs.serverId}, ${refs.personaLineageId}, 'Channel only', ARRAY['#hall'], ARRAY[${CHANNEL}]) RETURNING *`;
         const [blank] = await tx`INSERT INTO server_memories (server_id, persona_lineage_id, content, tags)
           VALUES (${refs.serverId}, ${refs.personaLineageId}, 'Blank tags', ${tx.array(["  ", '""', "\t\n", "\u00A0"], "TEXT")}) RETURNING *`;
-        await tx`CREATE TABLE IF NOT EXISTS documents (document_id SERIAL PRIMARY KEY, server_id INT, channel_disc_ids TEXT[])`;
-        const [document] = await tx`INSERT INTO documents (server_id, channel_disc_ids)
-          VALUES (${refs.serverId}, ARRAY[${CHANNEL}]) RETURNING document_id`;
+        await tx`CREATE TABLE IF NOT EXISTS documents (document_id SERIAL PRIMARY KEY, server_id INT, document_name TEXT NOT NULL, text_content TEXT NOT NULL, channel_disc_ids TEXT[])`;
+        const [document] = await tx`INSERT INTO documents (server_id, document_name, text_content, channel_disc_ids)
+          VALUES (${refs.serverId}, 'Reference', 'Reference text', ARRAY[${CHANNEL}]) RETURNING document_id`;
         await tx`INSERT INTO legacy_channel_scope_tags (source_table, row_id, server_id, channel_tags)
           VALUES ('documents', ${document.document_id}, ${refs.serverId}, ARRAY['#hall'])`;
 

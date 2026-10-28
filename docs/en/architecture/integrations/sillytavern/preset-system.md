@@ -143,7 +143,7 @@ These passes operate on custom preset nodes; lorebook entries keep their identit
 
 Conditions accept nested value macros or bare names such as `description` and `getvar::compact`.
 Trimmed, case-insensitive empty text, `false`, and `0` are falsy; unknown macros in conditions resolve
-empty. `#unless` inverts the result and requires `/unless`; `#if` requires `/if`.
+empty. `#unless` inverts the result and requires `{{/unless}}`; `#if` requires `{{/if}}`.
 
 Malformed blocks are omitted with warnings, and stray `else` or closers are dropped. An unclosed
 Handlebars block ends at the node boundary; an unclosed TomoriBot block is omitted. Nesting beyond

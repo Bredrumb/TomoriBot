@@ -589,9 +589,6 @@ describe("transfer panel Components V2 limits", () => {
   });
 
   it("renders the memory surfaces as compact single-spaced blocks, not blank-line paragraphs", () => {
-    // The config preview's shape, applied to memory: a bold lead line, then each heading immediately above its own
-    // quoted rows. Both are pinned literally, because the compactness is the point and a reinstated blank line is
-    // exactly what this test exists to catch.
     const buckets = makeMemoryBuckets(2);
     const destinations = makeMemoryDestinations(2);
     const firstDestination = destinations[0];
@@ -607,10 +604,10 @@ describe("transfer panel Components V2 limits", () => {
     ).join("\n");
     expect(previewBlock).toBe(
       [
-        "### Review Memory Import",
-        "**This server memories import contains memories only.**",
-        "Documents and personas are excluded.",
-        "Detected memory groups",
+        `### ${localizedCopy("en-US", "commands.transfer.memory_preview_title")}`,
+        `**${localizedCopy("en-US", "commands.transfer.workspace_memory_preview_description")}**`,
+        localizedCopy("en-US", "commands.transfer.memory_preview_exclusions"),
+        localizedCopy("en-US", "commands.transfer.memory_preview_groups_heading"),
         "> • Bucket 0: 1 memory",
         "> • Bucket 1: 1 memory",
       ].join("\n"),
