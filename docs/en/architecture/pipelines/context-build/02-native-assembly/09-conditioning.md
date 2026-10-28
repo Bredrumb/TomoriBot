@@ -32,7 +32,9 @@ Tool embeds use the invoking persona's shared author resolution, including its c
 and sprite for main and alter personas. One persona delivery receipt records the delivered message and
 every artifact posted with it.
 
-The tool records the active persona as the actor when targeting another persona. Rows contain exactly
+The tool's reason is optional. When provided for a persona target, it saves conditioning with the
+active persona as the actor. Without a reason, the gesture is posted and the target can react, but no
+conditioning is saved. Rows contain exactly
 one of `user_id` or `actor_persona_id`; repeats are counted separately for each actor. Actor names are
 resolved when the groups are read, and feedback is included without requiring that actor to be present.
 Deleting an actor's user or persona row cascades to their feedback. Managers remove mixed-actor groups

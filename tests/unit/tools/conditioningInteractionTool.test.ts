@@ -277,6 +277,31 @@ it("saves persona-attributed feedback and queues the target with the exact inter
   expect(f.channel.send).toHaveBeenCalledTimes(1);
 });
 
+it.each([
+  undefined,
+  "",
+  "   ",
+])("delivers a persona gesture with reason %j without saving conditioning", async (reason) => {
+  const f = fixture();
+  const result = await new ConditioningInteractionTool().execute(
+    { target: "Mirri", action: "hug", ...(reason === undefined ? {} : { reason }) },
+    f.context,
+  );
+  expect(result.success).toBe(true);
+  expect(result.responseDelivered).toBe(true);
+  expect(f.record).not.toHaveBeenCalled();
+  const payload = f.channel.send.mock.calls[0][0] as { embeds: EmbedBuilder[] };
+  expect(payload.embeds[0].data.description).toBe(
+    localizedCopy("en-US", "commands.reward.hug.embed_description", { user: "Juno", bot: "Mirri" }),
+  );
+  expect(payload.embeds[0].data.footer).toBeUndefined();
+  expect(f.queued).toHaveBeenCalledWith(expect.objectContaining({ selectedPersonaId: 2, message: f.delivered[0] }));
+  const event = queuedEvent(f.queued, 0);
+  expect(event).toContain("Juno");
+  expect(event).toContain("Mirri");
+  expect(event).not.toContain("undefined");
+});
+
 it("posts user interactions without writing conditioning or queueing a response", async () => {
   const f = fixture("user");
   const result = await new ConditioningInteractionTool().execute(
@@ -478,12 +503,11 @@ it("keeps a completed conditioning write when delivery is cancelled afterwards",
   expect(f.queued).not.toHaveBeenCalled();
 });
 
-it("rejects missing feed food, blank reasons, and oversized input before any side effects", async () => {
+it("rejects missing feed food and oversized input before any side effects", async () => {
   const f = fixture();
   const tool = new ConditioningInteractionTool();
   for (const args of [
     { target: "Mirri", action: "feed", reason: "sharing" },
-    { target: "Mirri", action: "hug", reason: "  " },
     { target: "Mirri", action: "hug", reason: "x".repeat(251) },
     { target: "Mirri", action: "feed", reason: "sharing", food: "x".repeat(251) },
   ])

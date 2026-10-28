@@ -137,6 +137,7 @@ The `update_user_info` tool (`src/tools/functionCalls/updateUserInfoTool.ts`) up
 - **Clearing values:** Fields listed in the `clear` array are removed. Submitting empty string values folds into clearing. Cleared prefixes or suffixes persist as explicit suppressions (`none`), preventing lower-precedence defaults from resurfacing.
 - **Affix deduplication:** When a submitted nickname contains an already-resolved prefix or suffix, redundant affixes are stripped by comparing against resolved values.
 - **Privacy and permissions:** Mutations require `user_info_updates_enabled`. Restrictive privacy levels block updates but permit clearing existing values.
+- **Confirmation notices:** Successful updates use the shared notice router even on turns that suppress progress notices, matching memory and task updates. Notice visibility, verbosity, and thought-log privacy checks still apply.
 
 ## Capability self-diagnosis
 

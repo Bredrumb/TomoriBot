@@ -379,7 +379,7 @@ async function sendSuccessNotice(
   targetLabel: string,
   body: string,
 ): Promise<void> {
-  if (context.suppressProgressNotices || !context.channel) return;
+  if (!context.channel) return;
   try {
     await sendToolNoticeContainer(context, "user_info_update", {
       ...buildSuccessHeading(context.locale, plans, targetLabel),

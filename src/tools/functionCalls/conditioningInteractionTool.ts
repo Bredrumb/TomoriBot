@@ -28,7 +28,9 @@ const interactionArgs = z
     reason: z
       .string()
       .transform(normalizeConditioningReason)
-      .pipe(z.string().min(1).max(CONDITIONING_REASON_MAX_LENGTH)),
+      .pipe(z.string().max(CONDITIONING_REASON_MAX_LENGTH))
+      .optional()
+      .default(""),
     food: z.string().trim().min(1).max(CONDITIONING_REASON_MAX_LENGTH).optional(),
   })
   .superRefine((value, ctx) => {
@@ -40,7 +42,7 @@ const interactionArgs = z
 export class ConditioningInteractionTool extends BaseTool {
   name = "interact_with_target";
   description =
-    "Express a strong feeling toward a user or persona through a playful physical interaction, such as a hug, bite, bonk, or offering food. Use this for a deliberate gesture that deserves its own visible moment, especially when reacting to something specific they did. Keep incidental gestures in ordinary roleplay text. The reason should explain what prompted the action. Use at most once per turn.";
+    "Express a strong feeling toward a user or persona through a playful physical interaction, such as a hug, bite, bonk, or offering food. Use this for a deliberate gesture that deserves its own visible moment, especially when reacting to something specific they did. Keep incidental gestures in ordinary roleplay text. An optional reason explains what prompted the action and saves conditioning when targeting a persona. Omit it for a gesture without lasting conditioning. Use at most once per turn.";
   category = "discord" as const;
   requiresFeatureFlag = "conditioning_interactions";
   parameters: ToolParameterSchema = {
@@ -54,14 +56,14 @@ export class ConditioningInteractionTool extends BaseTool {
       action: { type: "string", enum: actionKeys, description: "The physical gesture to perform." },
       reason: {
         type: "string",
-        description: `What prompted this gesture, phrased to fit after 'because'. Maximum ${CONDITIONING_REASON_MAX_LENGTH} characters.`,
+        description: `Optional: what prompted this gesture, phrased to fit after 'because'. Saves conditioning for persona targets; omit to avoid saving conditioning. Maximum ${CONDITIONING_REASON_MAX_LENGTH} characters.`,
       },
       food: {
         type: "string",
         description: `What you are offering. Required when action is feed. Maximum ${CONDITIONING_REASON_MAX_LENGTH} characters.`,
       },
     },
-    required: ["target", "action", "reason"],
+    required: ["target", "action"],
   };
 
   isAvailableFor(_provider: string): boolean {
@@ -149,7 +151,7 @@ export class ConditioningInteractionTool extends BaseTool {
       context.streamContext ??= { disableYouTubeProcessing: false };
       context.streamContext.disableConditioningInteraction = true;
       const type = CONDITIONING_ACTION_TYPES[action];
-      if (resolution.targetType === "persona") {
+      if (resolution.targetType === "persona" && reason) {
         const recorded = await conditioningMemoryRepository.recordEvent({
           serverId: actor.server_id,
           personaLineageId: resolution.persona.persona_lineage_id,
