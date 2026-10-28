@@ -69,7 +69,7 @@ A preset structures prompt layout; it does not replace the text sources that fil
 
 - System instructions and persona fields: `/config` > Behavior > General Behavior,
   `/config` > Persona > Advanced, and `/config` > Persona > Identity & Personality.
-- Live chat history and retrieved document context.
+- Live chat history, retrieved document context, and activated lorebook entries.
 - Automatic context: server memories, emoji and sticker data, participant lists, and
   short-term memories.
 
@@ -82,7 +82,7 @@ Native blocks map directly to TomoriBot prompt components:
 - `charPersonality`: `/config` > Persona > Identity & Personality
 - `dialogueExamples`: `/config` > Persona > Identity & Personality
 - `chatHistory`: live channel message history
-- `worldInfoBefore` and `worldInfoAfter`: retrieved document context (not SillyTavern lorebooks)
+- `worldInfoBefore` and `worldInfoAfter`: lorebook entries for that placement, then retrieved document context
 
 ### System Prompt Rule
 

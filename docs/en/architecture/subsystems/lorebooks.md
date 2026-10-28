@@ -4,8 +4,8 @@ aiGenerated: true
 ---
 
 `src/modules/lorebooks/` owns authored lore storage, import mapping, the `/memories` Lorebooks panel,
-and a pure activation function. Persona cards and workspace memory backups carry lore separately from
-episodic memories. Prompt integration belongs to the context pipeline.
+a pure activation function, and the two prompt blocks that native assembly and preset routing place.
+Persona cards and workspace memory backups carry lore separately from episodic memories.
 
 ## Storage and ownership
 
@@ -133,9 +133,35 @@ matching. Combining marks and supplementary-plane letters count as word characte
 remain inert because card keys are untrusted; supporting them requires a ReDoS-safe engine.
 
 The default content budget is 8,000 JavaScript string characters across both placements. Titles and
-future rendered headings are outside this budget. An entry that does not fit is skipped, allowing a
-later smaller entry to fit. `charBudget` and `random` can be injected; random draws follow the
-`Math.random` contract of values in [0, 1). Placement and identity conversion belong to the consumer.
+rendered headings are outside this budget. An entry that does not fit is skipped, allowing a later
+smaller entry to fit. `charBudget` and `random` can be injected; random draws follow the `Math.random`
+contract of values in [0, 1). The caller groups the returned rows by `placement` and converts identity
+macros.
+
+## Prompt integration
+
+`runtime/contextItems.ts` performs one `loadEnabledForScope` read per turn and passes the rows to the
+same activation function. It emits at most two `system` blocks, tagged `KNOWLEDGE_LOREBOOK_BEFORE` and
+`KNOWLEDGE_LOREBOOK_AFTER`, in that order. Each block opens with `## World Info` and gives every entry
+a `###` heading. The shared budget covers both blocks. No cache sits between the query and the blocks.
+
+Content passes through `convertMentions`, so `{{user}}`, `{{char}}`, and `{{bot}}` resolve to the
+current names the same way stored memories do. Other macros and conditional blocks stay literal, and
+random-choice resolution skips these blocks for the same reason.
+
+Native assembly appends the blocks after server documents and before conditioning, sample dialogues,
+and dialogue history. They sit outside the stable persona prefix because their content changes
+whenever an entry activates. Channel scope follows `channel_memory_enabled`; while that switch is on,
+an Always On entry still needs an admitted channel or parent channel.
+
+Preset reassembly maps `worldInfoBefore` to the before block followed by documents, and
+`worldInfoAfter` to the after block followed by documents. Documents are consumed at the first
+world-info marker whatever its order, as before. With neither marker, the before block, documents, and
+the after block flush before the first dialogue anchor, so lore still precedes chat history. A preset
+with only one marker flushes the unclaimed block the same way.
+
+Prompt inspection counts both blocks in the `memory` segment and labels them `Lorebook (Before)` and
+`Lorebook (After)` with the `/memories` hint.
 
 ## Source pointers
 
@@ -143,6 +169,8 @@ later smaller entry to fit. `charBudget` and `random` can be injected; random dr
 - `src/modules/lorebooks/db/repositories.ts`: repository signatures, append and replace writes, and
   failure result unions.
 - `src/modules/lorebooks/runtime/activation.ts`: matching, selection, and budget.
+- `src/modules/lorebooks/runtime/contextItems.ts`: runtime read, the two prompt blocks, and identity
+  conversion.
 - `src/modules/lorebooks/imports/`: card, world info, and upload conversion plus legacy tag mapping.
 - `src/modules/lorebooks/discord/panelSection.ts`: the Lorebooks tab and its four modals.
 - `src/modules/lorebooks/discord/operations.ts`: write authorization, validation, and pending scope
@@ -152,6 +180,11 @@ later smaller entry to fit. `charBudget` and `random` can be injected; random dr
 - `tests/regression/db/lorebooks.regression.test.ts`: ownership, concurrent limits, append, and
   rollback.
 - `tests/unit/modules/lorebooks.test.ts`: activation and input validation.
+- `tests/unit/context/lorebookContextItems.test.ts`: activation through import conversion to the final
+  preset context, prompt accounting, and identity and macro boundaries.
+- `tests/unit/context/nativeLorebookPlacement.test.ts`: native order of documents, lore, and history.
+- `tests/unit/context/presetContextBuilder.test.ts`: marker routing, marker order, and missing-marker
+  flushes.
 - `tests/unit/modules/lorebookUploads.test.ts`: world info and Character Book conversion.
 
 Related: [Database schema](/architecture/subsystems/database-schema/).

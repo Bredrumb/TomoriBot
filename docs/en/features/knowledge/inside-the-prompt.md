@@ -23,6 +23,7 @@ model as the main prompt/context, in this order top-to-bottom:
 | [Conversation Participants](/features/knowledge/memory/#personal-vs-server-memories) | *(Optional)* | `/personal memories` (gated by `/config` > Permissions (Personalization)) | The people in the conversation, their nicknames and mention handles, and the personal memories saved about each of them. Loaded when the person owns a message in context, or if their name/alias get mentioned. Also carries the current channel and local time as a footer, using `/config` > Engine > General. |
 | [Short-term memory](/features/knowledge/memory/#short-term-memory-stm) | | `/config` > Persona > Memories; `/memories` to clear entries; gated by `/config` > Permissions (Short-Term Memory) | Contains summaries and recent messages of different channels |
 | [Documents](/features/knowledge/memory/#document-knowledge-base-rag) | *(Optional)* | `/memories` | Relevant chunks pulled from the knowledge base using RAG. |
+| [Lorebooks](/features/knowledge/lorebooks/) | *(Optional)* | `/memories` > Lorebooks | World canon whose keywords appear in recent messages, plus Always On entries. Sent after documents. |
 | [Conditioning](/features/knowledge/memory/#conditioning) | *(Optional)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`, managed via `/conditioning remove` | Accumulated behavioral nudges for this persona in this server. |
 | [Sample dialogues](/features/chatting-personality/multiple-personas/#sample-dialogues) | *(Optional)* | `/config` > Persona > Identity & Personality | Examples of how this persona talks, if any are configured. |
 | [Recent messages](/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > Engine > General | The actual conversation, up to this many messages (default 80). |
@@ -41,7 +42,7 @@ and [Lost in the Haystack](https://arxiv.org/abs/2505.18148).
 
 ### Inspecting the prompt
 
-- `/tool prompt snapshot` saves the assembled prompt to a file, including active memories and documents.
+- `/tool prompt snapshot` saves the assembled prompt to a file, including active memories, documents, and lorebooks.
 - `/context` shows a visual breakdown of context usage and estimated input cost.
 - `/tool estimate cost` breaks down the prompt by size and cost.
 

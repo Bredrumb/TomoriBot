@@ -33,7 +33,8 @@ An entry has a title, keywords, content, and a placement.
 - **Keywords** are comma-separated words or phrases. Matching ignores case and full-width/half-width
   differences. A phrase matches as written.
 - **Content** is what TomoriBot reads when the entry activates, up to 4,000 characters.
-- **Placement** puts the entry before or after the persona description.
+- **Placement** chooses the before or after group. The default prompt sends both groups after
+  retrieved documents, and a SillyTavern preset with world info slots places each group at its slot.
 
 Add an entry with `+ Add Lorebook Entry`, then select it to edit, change its activation, enable it,
 make it Always On, or delete it.
@@ -59,6 +60,15 @@ keyword matching.
 
 Keyword matching is literal. Regex-shaped keys such as `/a+/` are kept as written and do not act as
 regular expressions.
+
+## What reaches the prompt
+
+Activated entries are sent in one `World Info` block per placement, in insertion order. Both blocks
+share a limit of 8,000 characters; an entry that would exceed it is skipped so later entries can still
+fit.
+
+Content may use `{{user}}`, `{{char}}`, and `{{bot}}`. TomoriBot replaces them with the current names.
+Other `{{...}}` macros and conditional blocks stay as written.
 
 ## Channel limits
 

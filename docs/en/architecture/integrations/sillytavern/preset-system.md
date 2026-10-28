@@ -63,7 +63,8 @@ Preset marker nodes pull items from specific native context buckets:
 | `charPersonality` | `SYSTEM_PERSONALITY` | Personality attributes |
 | `dialogueExamples` | `DIALOGUE_SAMPLE` | Sample dialogue turns |
 | `chatHistory` | `DIALOGUE_HISTORY` | Live conversation history |
-| `worldInfoBefore`, `worldInfoAfter` | `KNOWLEDGE_SERVER_DOCUMENTS` | RAG document chunks |
+| `worldInfoBefore` | `KNOWLEDGE_LOREBOOK_BEFORE`, `KNOWLEDGE_SERVER_DOCUMENTS` | Lore entries placed before, then RAG document chunks |
+| `worldInfoAfter` | `KNOWLEDGE_LOREBOOK_AFTER`, `KNOWLEDGE_SERVER_DOCUMENTS` | Lore entries placed after, then any documents not yet consumed |
 
 Marker blocks move according to the preset layout. Specific native blocks are suppressed only when
 explicitly replaced:
@@ -84,6 +85,8 @@ automatically at anchor markers:
 - Server information, memories, emojis, and stickers flush after `charPersonality`,
   `charDescription`, or `main`.
 - Active users, short-term memory, and conditioning flush before `dialogueExamples` or `chatHistory`.
+- The first world info marker consumes the document block. When a marker is missing, its lore
+  placement block flushes with the dialogue group in before lore, documents, after lore order.
 - After the node walk, reassembly flushes any unconsumed knowledge and participant groups, then
   appends remaining buckets. Omitting markers does not guarantee that these groups precede history.
 
@@ -158,8 +161,9 @@ TomoriBot adapts SillyTavern presets to its architecture:
 
 - **Single-character focus:** Contexts model one active persona per turn. Multi-character group RP
   macros (`{{group}}`) are unsupported.
-- **Dynamic knowledge retrieval:** Markers `worldInfoBefore` and `worldInfoAfter` pull dynamic RAG
-  document chunks. Static lorebook keyword activations are not evaluated.
+- **Dynamic knowledge retrieval:** `worldInfoBefore` and `worldInfoAfter` carry activated lorebook
+  entries and retrieved document chunks. Keyword activation runs in native assembly, so the buckets
+  hold only the entries that activated this turn.
 - **Regex post-processing:** SillyTavern output regex scripts are unsupported; provider responses
   stream directly to Discord without regex transforms.
 - **HTML tags:** Discord does not render HTML markup. Preset nodes containing HTML tags raise a
@@ -172,6 +176,7 @@ TomoriBot adapts SillyTavern presets to its architecture:
 
 - `src/utils/text/presetContextBuilder.ts`: Build-then-rearrange orchestration, tag bucket
   consumption, and depth injection merging.
+- `src/modules/lorebooks/runtime/contextItems.ts`: Activated lore blocks and identity conversion.
 - `src/utils/text/stPresetEngine.ts`: `resolvePresetMacros` for variables and content expansion.
 - `src/utils/tools/toolPromptMacros.ts`: capability and tool conditionals.
 - `src/utils/db/repositories/PresetRepository.ts`: preset persistence and post-write invalidation.

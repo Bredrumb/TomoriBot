@@ -1,6 +1,7 @@
 import { personaRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
+import { buildLorebookContextItems } from "@/modules/lorebooks/runtime/contextItems";
 import { buildUncensorInjectionText } from "@/utils/text/uncensor";
 import { createToolPromptMacroResolver, resolvePromptCapabilityValues } from "@/utils/tools/toolPromptMacros";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -236,7 +237,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       isDMChannel,
       botName,
       personalMemoriesEnabled: tomoriConfig.personal_memories_enabled,
-      conversationCorpus,
       channelId,
       parentChannelId,
       channelMemoryEnabled: tomoriConfig.channel_memory_enabled,
@@ -388,6 +388,21 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       channelId,
       parentChannelId,
     }),
+  );
+  // Activated lore changes from turn to turn, so it stays after documents and outside the cache-stable prefix.
+  contextItems.push(
+    ...(await buildLorebookContextItems({
+      tomoriState,
+      recentMessages: simplifiedMessageHistory.map((message) => message.content ?? ""),
+      channelId,
+      parentChannelId,
+      channelScopeEnabled: tomoriConfig.channel_memory_enabled,
+      client,
+      guildId,
+      botName,
+      personalMemoriesEnabled: tomoriConfig.personal_memories_enabled,
+      convertMentions,
+    })),
   );
   await appendConditioningContext({
     contextItems,

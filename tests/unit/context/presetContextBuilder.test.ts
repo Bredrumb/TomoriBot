@@ -38,7 +38,145 @@ function depthNode(content: string, nodeOrder: number): CachedPresetData["nodes"
   };
 }
 
+function taggedItem(tag: ContextItemTag, text: string, role: "system" | "user" = "system"): StructuredContextItem {
+  return { role, parts: [{ type: "text", text }], metadataTag: tag };
+}
+
+function nativeWorldInfoItems(): StructuredContextItem[] {
+  return [
+    taggedItem(ContextItemTag.SYSTEM_HUMANIZER_RULES, "System prompt"),
+    taggedItem(ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS, "Documents", "user"),
+    taggedItem(ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE, "Lore before"),
+    taggedItem(ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER, "Lore after"),
+    taggedItem(ContextItemTag.DIALOGUE_HISTORY, "Alice: hello", "user"),
+  ];
+}
+
+async function reassemble(
+  nodes: CachedPresetData["nodes"],
+  contextItems: StructuredContextItem[],
+): Promise<StructuredContextItem[]> {
+  const result = await reassembleWithPreset(
+    { contextItems, tailDirectives: [], lowerPriorityTailDirectives: [] },
+    {
+      preset: { preset_id: 1, server_id: 1, preset_name: "Test Preset", raw_json: {}, is_active: true },
+      nodes,
+    },
+    {
+      triggererName: "Alice",
+      tomoriNickname: "Tomori",
+      tomoriAttributes: [],
+      personaPrompt: null,
+      sampleDialoguesIn: [],
+      sampleDialoguesOut: [],
+      lastUserMessage: "look",
+    },
+    {
+      client: {} as Client,
+      guildId: "111111111111111111",
+      triggererName: "Alice",
+      triggererFormattedName: "Alice",
+      triggererAddressTerm: "",
+      botName: "Tomori",
+      personalMemoriesEnabled: true,
+    },
+  );
+  return result.contextItems;
+}
+
 describe("reassembleWithPreset", () => {
+  test("routes before and after lore around documents at their world info markers", async () => {
+    const items = await reassemble(
+      [
+        markerNode("main", 0),
+        markerNode("worldInfoBefore", 1),
+        markerNode("worldInfoAfter", 2),
+        markerNode("chatHistory", 3),
+      ],
+      nativeWorldInfoItems(),
+    );
+
+    expect(items.map((item) => item.metadataTag)).toEqual([
+      ContextItemTag.SYSTEM_HUMANIZER_RULES,
+      ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
+      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
+      ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
+      ContextItemTag.DIALOGUE_HISTORY,
+    ]);
+  });
+
+  test("keeps documents at the first world info marker when the after marker comes first", async () => {
+    const items = await reassemble(
+      [
+        markerNode("main", 0),
+        markerNode("worldInfoAfter", 1),
+        markerNode("worldInfoBefore", 2),
+        markerNode("chatHistory", 3),
+      ],
+      nativeWorldInfoItems(),
+    );
+
+    expect(items.map((item) => item.metadataTag)).toEqual([
+      ContextItemTag.SYSTEM_HUMANIZER_RULES,
+      ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
+      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
+      ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
+      ContextItemTag.DIALOGUE_HISTORY,
+    ]);
+  });
+
+  test("flushes lore before chat history when the preset has neither world info marker", async () => {
+    const items = await reassemble([markerNode("main", 0), markerNode("chatHistory", 1)], nativeWorldInfoItems());
+
+    expect(items.map((item) => item.metadataTag)).toEqual([
+      ContextItemTag.SYSTEM_HUMANIZER_RULES,
+      ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
+      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
+      ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
+      ContextItemTag.DIALOGUE_HISTORY,
+    ]);
+  });
+
+  test("flushes the after bucket before chat history when only the before marker exists", async () => {
+    const items = await reassemble(
+      [markerNode("main", 0), markerNode("worldInfoBefore", 1), markerNode("chatHistory", 2)],
+      nativeWorldInfoItems(),
+    );
+
+    expect(items.map((item) => item.metadataTag)).toEqual([
+      ContextItemTag.SYSTEM_HUMANIZER_RULES,
+      ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
+      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
+      ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
+      ContextItemTag.DIALOGUE_HISTORY,
+    ]);
+  });
+
+  test("keeps depth insertion merged into history with world info routing enabled", async () => {
+    const items = await reassemble(
+      [
+        markerNode("main", 0),
+        markerNode("worldInfoBefore", 1),
+        markerNode("worldInfoAfter", 2),
+        markerNode("chatHistory", 3),
+        depthNode("Depth note", 4),
+      ],
+      nativeWorldInfoItems(),
+    );
+
+    expect(items.map((item) => item.metadataTag)).toEqual([
+      ContextItemTag.SYSTEM_HUMANIZER_RULES,
+      ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE,
+      ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS,
+      ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER,
+      ContextItemTag.DIALOGUE_HISTORY,
+    ]);
+    expect(items[4].parts).toEqual([
+      { type: "text", text: "Alice: hello" },
+      { type: "text", text: "\n[System: Depth note]" },
+    ]);
+  });
+
   test("preserves mediaDescriptors on reordered dialogue history items", async () => {
     const dialogueItem: StructuredContextItem = {
       role: "user",

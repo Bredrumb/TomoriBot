@@ -72,8 +72,8 @@ const MARKER_TO_TAGS: Record<string, ContextItemTag[]> = {
   dialogueExamples: [ContextItemTag.DIALOGUE_SAMPLE],
   chatHistory: [ContextItemTag.DIALOGUE_HISTORY],
 
-  worldInfoBefore: [ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS],
-  worldInfoAfter: [ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS],
+  worldInfoBefore: [ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE, ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS],
+  worldInfoAfter: [ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER, ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS],
 };
 
 /**
@@ -376,7 +376,7 @@ export async function reassembleWithPreset(
   };
 
   /**
-   * Flush TomoriBot-only dialogue-adjacent blocks (users in conversation, STM).
+   * Flush TomoriBot-only dialogue-adjacent blocks (users in conversation, STM) plus lore and documents.
    * Called once before the first dialogue anchor marker.
    */
   const flushDialogueBlocks = () => {
@@ -387,10 +387,11 @@ export async function reassembleWithPreset(
       contextItems.push(...pullBucket(buckets, tag));
     }
 
+    // Documents stay at the first world-info marker; lore flushes in the before, documents, after order the markers produce.
+    const loreBeforeItems = pullBucket(buckets, ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE);
     const ragItems = pullBucket(buckets, ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS);
-    if (ragItems.length > 0) {
-      contextItems.push(...ragItems);
-    }
+    const loreAfterItems = pullBucket(buckets, ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER);
+    contextItems.push(...loreBeforeItems, ...ragItems, ...loreAfterItems);
   };
 
   for (const node of systemNodes) {
