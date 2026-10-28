@@ -122,7 +122,14 @@ export async function callGoogleStructuredJSON<T>(
     return { success: true, data: validationResult.data };
   } catch (error) {
     if (request.privateOutput)
-      return privateStructuredFailure(request, "transport", error instanceof ApiError ? error.status : undefined);
+      return privateStructuredFailure(
+        request,
+        "transport",
+        error instanceof ApiError ? error.status : undefined,
+        undefined,
+        undefined,
+        error instanceof ApiError ? error.message : undefined,
+      );
     log.error("Error calling Google structured JSON", error as Error, {
       errorType: "GoogleStructuredJSONError",
       metadata: { model: request.model },

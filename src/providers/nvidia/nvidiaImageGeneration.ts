@@ -6,6 +6,7 @@ import { log } from "@/utils/misc/logger";
 import { NVIDIA_IMAGE_GENERATION_BASE_URL } from "@/providers/nvidia/nvidiaConstants";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { readProviderErrorBody } from "@/utils/provider/providerErrorMetrics";
 
 const FLUX_STEPS = 30;
 
@@ -57,7 +58,7 @@ const NVIDIA_IMAGE_MODEL_SPECS: Record<string, NvidiaImageModelSpec> = {
       const dimensions = FLUX_DIMENSIONS[request.aspectRatio] ?? FLUX_DIMENSIONS["1:1"];
       return {
         prompt: request.prompt,
-        mode: "text-to-image",
+        mode: "base",
         cfg_scale: request.cfg ?? FLUX_CFG_SCALE,
         width: dimensions.width,
         height: dimensions.height,
@@ -279,18 +280,15 @@ export async function generateNvidiaNativeImage(
   });
 
   if (!response.ok) {
-    const errorBody = await response.text();
-    log.error("NVIDIA image generation request failed", new Error(errorBody), {
-      errorType: "NvidiaImageGenerationHttpError",
-      metadata: {
-        model: request.model,
-        status: response.status,
-        aspectRatio: request.aspectRatio,
-      },
-    });
+    const errorBody = await readProviderErrorBody(response, request.apiKey);
     // NVIDIA puts the only actionable detail (retired function, missing account entitlement,
     // rejected dimensions) in the body, so a bare status line strands the user with no next step.
-    throw new Error(`NVIDIA image generation failed: ${response.status} ${response.statusText}. ${errorBody}`);
+    throw Object.assign(
+      new Error(`NVIDIA image generation failed: ${response.status} ${response.statusText}. ${errorBody}`),
+      {
+        status: response.status,
+      },
+    );
   }
 
   const contentType = response.headers.get("Content-Type") ?? "";

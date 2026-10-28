@@ -161,9 +161,11 @@ Review existing snapshots under the old log mount, log-shipping destinations, an
 
 - `LOG_LEVEL` (default: `error` in production, `info` otherwise): The lowest level written to
   stdout and the JSONL file. Raise it to `warn` while diagnosing a user's report, then unset it.
-  Metrics are written at every level. `info` and lower also write each provider request in full,
+  Metrics and retained provider warning diagnostics are written to JSON logs at every level.
+  Provider diagnostics can contain rejected output or error bodies that echo conversation text, so
+  treat these logs as private data. `info` and lower also write each provider request in full,
   including system prompts, memories, and conversation text, so treat those logs as private data.
-- `TOMORI_LOG_FILE`: Mirrors every emitted record (error, rateLimit, fatal, and metric samples at
+- `TOMORI_LOG_FILE`: Mirrors every emitted record (error, rateLimit, fatal, retained warnings, and metric samples at
   the default level) to an append-only JSONL file for consumption by host agents (e.g. Azure
   Monitor Agent).
 - `LOG_MAX_STRING_LENGTH` (default: unset): Optional cap for oversized string fields. Unset by

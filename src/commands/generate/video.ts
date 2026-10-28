@@ -12,6 +12,7 @@ import {
   getProviderRequestFailureCopy,
 } from "@/utils/provider/providerUsage";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 /**
  * Video Generation Command (/generate video)
  * Allows users to generate AI videos using Google Veo, OpenRouter, or Z.ai.
@@ -695,7 +696,10 @@ export async function execute(
         summary: "Video generation command failed",
         errorType: "VideoGenerationFailed",
         error,
-        expected: isExpectedVideoFailure(error instanceof Error ? error.message : String(error)),
+        expected: isExpectedVideoFailure(
+          error instanceof Error ? error.message : String(error),
+          createProviderToolFailure(error, { locale, provider: executionProvider }).failure?.code,
+        ),
         serverId: tomoriState.server_id,
         userId: userData.user_id ?? null,
         dimensions: { operation: "video-generation", provider: executionProvider },

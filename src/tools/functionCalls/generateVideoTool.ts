@@ -620,7 +620,7 @@ export class GenerateVideoTool extends BaseTool {
           error,
           expected:
             providerContentRejectionSchema.safeParse(toolFailure.failure?.code).success ||
-            isExpectedVideoFailure(errorMessage) ||
+            isExpectedVideoFailure(errorMessage, toolFailure.failure?.code) ||
             classifySendFailure(error) !== null,
           serverId: context.tomoriState.server_id,
           userId: context.internalUserId ?? null,

@@ -13,7 +13,7 @@
  * (cadence, render mode, prompt overrides, category definitions). Per-channel
  * durable state is volatile and excluded from exports per design decision 8.
  */
-import { sql } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import type { ServerStmConfigRow, ShortTermMemoryRow, StmCategoryRow } from "@/types/db/schema";
 import { serverStmConfigSchema, stmCategorySchema } from "@/types/db/schema";
 import {
@@ -199,7 +199,10 @@ class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShap
    */
   async getStmConfig(serverId: number): Promise<ServerStmConfigRow | null> {
     try {
-      const [row] = await sql`SELECT * FROM server_stm_configs WHERE server_id = ${serverId}`;
+      const [row] = await withTransientDbRetry(
+        async () => await sql`SELECT * FROM server_stm_configs WHERE server_id = ${serverId}`,
+        "load short-term memory configuration",
+      );
       if (!row) return null;
       const parsed = serverStmConfigSchema.safeParse(row);
       return parsed.success ? parsed.data : null;

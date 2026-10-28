@@ -158,8 +158,11 @@ registrations, so the author never sees or dispatches their tools. Checker failu
 an empty report cannot approve prose. A binding whose registration is disabled or removed acts as no
 checker: it logs no error and does not force review.
 
-INFO traces describe outcomes and budgets without private packets; operational failures have one
-sanitized ERROR owner.
+INFO traces describe outcomes and budgets without private packets. Reviewer transports retain
+scrubbed failure bodies and malformed output in private warning diagnostics, correlated with the
+review attempt. Unexpected exceptions retain safe metadata only because their messages can contain
+private draft or evidence text. Returned failures contain only safe metadata. Expected provider
+refusals, timeouts and upstream outages produce a metric plus a retained warning; unexpected failures remain errors.
 
 ## Source pointers
 

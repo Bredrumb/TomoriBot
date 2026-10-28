@@ -11,8 +11,84 @@ import {
 } from "@/utils/misc/logger";
 import pino from "pino";
 import { useEnvSandbox } from "../../helpers/env";
+import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { unlink } from "node:fs/promises";
 
 useEnvSandbox(["LOG_MAX_STRING_LENGTH"]);
+
+test("retains redacted provider warning diagnostics in production stdout and JSONL without an error row", async () => {
+  const path = join(tmpdir(), `tomori-diagnostic-${randomUUID()}.jsonl`);
+  const script = `
+    import {log} from "./src/utils/misc/logger";
+    import {readProviderErrorBody,reportProviderFailure} from "./src/utils/provider/providerErrorMetrics";
+    import {runWithErrorContext} from "./src/utils/misc/errorContextStore";
+    import {StreamOrchestrator} from "./src/utils/discord/streamOrchestrator";
+    import {createPersona} from "./tests/helpers/fixtures";
+    log.warn("FILTERED_DEVELOPER_WARNING");
+    const detail = await readProviderErrorBody(new Response("UPSTREAM_BODY fixture-credential"), "fixture-credential");
+    await runWithErrorContext({serverId:42,userId:9}, () => reportProviderFailure({summary:"fixture diagnostic",errorType:"FixtureFailure",expected:true,
+      error:new Error(detail),detail,dimensions:{operation:"image-generation",provider:"fixture"},metadata:{status:401,model:"fixture/model"}}));
+    const requestKey = "unlabelled-personal-credential";
+    const provider = {
+      async *startStream() { yield {data:{},provider:"custom"}; },
+      processChunk() { return {type:"error",error:{type:"api_error",code:"401",retryable:false,
+        message:"STREAM_DETAIL " + requestKey,originalError:{nested:["ATTACHED_DETAIL " + requestKey]}}}; },
+      getProviderInfo() { return {name:"custom",version:"fixture",supportsStreaming:true,supportsFunctionCalling:false}; },
+      createErrorDescription() { return "SAFE_FAILURE"; }
+    };
+    const result = await new StreamOrchestrator().streamToDiscord(provider, {
+      apiKey:requestKey,model:"fixture/model",temperature:1,maxMessageLength:1950,flushBufferSize:1000,flushBufferSizeCodeBlock:15000,
+      inactivityTimeoutMs:10000,baseTypeSpeedMsPerChar:0,maxTypingTimeMs:0,minVisibleTypingDurationMs:0,humanizerDegree:0,emojiUsageEnabled:false
+    }, {channel:{id:"fixture-channel"},client:{},tomoriState:createPersona(),contextItems:[],currentTurnModelParts:[],provider:"custom",
+      locale:"en-US",textCredentialSource:"personal",initialInteraction:{reply:async(payload)=>{if(payload.content.includes(requestKey)) process.exit(2);}}});
+    if(result.status !== "error") process.exit(3);
+  `;
+  try {
+    const child = Bun.spawn([process.execPath, "--eval", script], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        RUN_ENV: "production",
+        TEST_PRODUCTION: "false",
+        LOG_LEVEL: "error",
+        TOMORI_LOG_FILE: path,
+        ERROR_DB_LOGGING_ENABLED: "true",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, exit] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    expect(exit).toBe(0);
+    expect(stderr).toBe("");
+    expect(await Bun.file(path).text()).toBe(stdout);
+    expect(stdout).not.toContain("FILTERED_DEVELOPER_WARNING");
+    expect(stdout).not.toContain("fixture-credential");
+    expect(stdout).not.toContain("unlabelled-personal-credential");
+    expect(stdout).toContain("STREAM_DETAIL");
+    expect(stdout).toContain("ATTACHED_DETAIL");
+    const records = stdout
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(records.some((record) => record.level >= 50)).toBe(false);
+    const warning = records.find((record) => record.level === 40);
+    expect(warning?.context).toMatchObject({ serverId: 42, userId: 9 });
+    expect(warning?.context?.metadata).toMatchObject({ status: 401, model: "fixture/model" });
+    expect(warning?.err).toMatchObject({
+      message: expect.stringContaining("UPSTREAM_BODY"),
+      stack: expect.any(String),
+    });
+    expect(records.some((record) => record.metric === "provider_failure")).toBe(true);
+  } finally {
+    await unlink(path).catch(() => {});
+  }
+});
 
 /**
  * Minimal in-memory sink implementing pino's DestinationStream contract.
@@ -162,6 +238,14 @@ describe("buildLogStreams", () => {
     expect(sanitizeLogPayload(value)).toBe(value);
   });
 
+  test("removes literal request keys before a string cap can leave a credential fragment", () => {
+    process.env.LOG_MAX_STRING_LENGTH = "64";
+    const key = "arbitrary-request-credential";
+    const result = sanitizeLogPayload({ message: `${"x".repeat(60)}${key}`, nested: [key] }, 0, true, [key]);
+    expect(JSON.stringify(result)).not.toContain("arbi");
+    expect(result).toMatchObject({ nested: ["[REDACTED]"] });
+  });
+
   test("provider API keys and key-value assignments are redacted in strings", () => {
     const rawKeys = [
       "sk-proj-1234567890abcdef1234567890",
@@ -280,6 +364,24 @@ describe("resolveMetricLevel", () => {
 });
 
 describe("log.error persistence", () => {
+  test("removes the request key from error fields and metadata before database persistence", async () => {
+    const key = "unlabelled-request-credential";
+    const insert = spyOn(errorLogRepository, "insertErrorLog").mockResolvedValue("written");
+    try {
+      await log.error(
+        `UPSTREAM_DETAIL ${key}`,
+        Object.assign(new Error(`UPSTREAM_BODY ${key}`), { detail: [key] }),
+        { metadata: { upstream: key, preserved: "UPSTREAM_METADATA" } },
+        { redactValues: [key] },
+      );
+      expect(insert).toHaveBeenCalledTimes(1);
+      const payload = JSON.stringify(insert.mock.calls[0]);
+      expect(payload).not.toContain(key);
+      for (const field of ["UPSTREAM_DETAIL", "UPSTREAM_BODY", "UPSTREAM_METADATA"]) expect(payload).toContain(field);
+    } finally {
+      insert.mockRestore();
+    }
+  });
   test("persist: false skips the error_logs insert", async () => {
     const insertSpy = spyOn(errorLogRepository, "insertErrorLog");
     try {

@@ -7,6 +7,7 @@ import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
 import { log } from "@/utils/misc/logger";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { tryRepairIncompleteJson } from "@/utils/text/jsonRepair";
+import { readProviderErrorBody, redactProviderDetail } from "@/utils/provider/providerErrorMetrics";
 
 type CustomContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
 
@@ -132,13 +133,14 @@ export async function callCustomChatCompletions(params: {
     });
 
     if (!response.ok) {
-      if (params.privateOutput) await response.body?.cancel();
       return {
         success: false,
         error: {
           status: response.status,
           statusText: response.statusText,
-          errorBody: params.privateOutput ? "HTTP failure" : await response.text(),
+          errorBody: params.privateOutput
+            ? await readProviderErrorBody(response, params.apiKey)
+            : await response.text(),
         },
       };
     }
@@ -156,7 +158,9 @@ export async function callCustomChatCompletions(params: {
       error: {
         status: 0,
         statusText: "Request failed",
-        errorBody: params.privateOutput ? "Request failed" : error instanceof Error ? error.message : String(error),
+        errorBody: params.privateOutput
+          ? "Request failed"
+          : redactProviderDetail(error instanceof Error ? error.message : String(error), params.apiKey),
       },
     };
   }

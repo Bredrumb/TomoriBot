@@ -13,6 +13,7 @@ import {
 } from "@/utils/provider/providerErrorClassification";
 import { localizer } from "@/utils/text/localizer";
 import { withProviderOptionCopy, type ProviderOptionCopyContext } from "@/utils/provider/providerOptionRegistry";
+import { redactProviderDetail } from "@/utils/provider/providerErrorMetrics";
 
 /** Attributes an internal failure to TomoriBot so users do not debug their provider for it. */
 export const TOMORIBOT_ERROR_FOOTER_KEY = "genai.stream.error_footer_tomoribot";
@@ -62,7 +63,12 @@ function providerCopyContext(context: StreamContext): ProviderOptionCopyContext 
  * Owns provider and generic stream error reporting to Discord.
  */
 export class StreamErrorUi {
-  public async handleProviderError(error: unknown, provider: StreamProvider, context: StreamContext): Promise<void> {
+  public async handleProviderError(
+    error: unknown,
+    provider: StreamProvider,
+    context: StreamContext,
+    requestApiKey: string,
+  ): Promise<void> {
     const providerError = error as ProviderError;
     const locale = context.locale;
     const denied = findProviderRequestDeniedError(error, context.usageContext);
@@ -76,7 +82,8 @@ export class StreamErrorUi {
         reason: providerError.type || "unknown",
       });
 
-    const providerDetail = denied ? null : getProviderErrorDetail(providerError);
+    const rawDetail = denied ? null : getProviderErrorDetail(providerError);
+    const providerDetail = rawDetail ? redactProviderDetail(rawDetail, requestApiKey) : null;
     const operatorDetail = boundOperatorDetail(providerDetail);
     if (!denied && isOperatorActionableProviderError(providerError)) {
       const providerName = provider.getProviderInfo().name;
@@ -98,9 +105,15 @@ export class StreamErrorUi {
             channelId: context.channel.id,
           },
         },
+        { redactValues: [requestApiKey] },
       );
     } else {
-      log.warn(`Stream error (${providerError.type}/${providerError.code ?? "unknown"}): ${operatorDetail}`, error);
+      log.warn(
+        `Stream error (${providerError.type}/${providerError.code ?? "unknown"}): ${operatorDetail}`,
+        error,
+        undefined,
+        { retain: true, redactValues: [requestApiKey] },
+      );
     }
 
     if (context.initialInteraction) {

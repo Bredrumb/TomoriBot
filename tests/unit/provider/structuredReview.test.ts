@@ -26,16 +26,19 @@ const request: ProviderStructuredJsonRequest = {
 describe("private structured review transports", () => {
   const errors = spyOn(log, "error").mockImplementation(async () => {});
   const info = spyOn(log, "info").mockImplementation(() => {});
+  const warnings = spyOn(log, "warn").mockImplementation(() => {});
   afterEach(() => {
     errors.mockClear();
     info.mockClear();
+    warnings.mockClear();
   });
   afterAll(() => {
     errors.mockRestore();
     info.mockRestore();
+    warnings.mockRestore();
   });
 
-  it("validates output and reports usage for refusals and malformed reviews, showing only a malformed body at info", async () => {
+  it("validates output and reports usage while retaining malformed output only in diagnostic warnings", async () => {
     let respond: Parameters<typeof stubGlobalFetch>[0] = () => Response.json({});
     const fetchSpy = stubGlobalFetch((url, init) => respond(url, init));
     try {
@@ -63,9 +66,9 @@ describe("private structured review transports", () => {
         expect(usage).toEqual([{ inputTokens: 12, outputTokens: 3 }]);
         if (refusal) expect(result).toMatchObject({ failure: "refusal" });
         expect(errors).not.toHaveBeenCalled();
-        expect(JSON.stringify(info.mock.calls).includes("PRIVATE_RESPONSE")).toBe(content === "PRIVATE_RESPONSE");
-        expect(JSON.stringify(info.mock.calls)).not.toContain("PRIVATE_REFUSAL");
-        info.mockClear();
+        expect(JSON.stringify(warnings.mock.calls).includes("PRIVATE_RESPONSE")).toBe(content === "PRIVATE_RESPONSE");
+        expect(JSON.stringify(warnings.mock.calls)).not.toContain("PRIVATE_REFUSAL");
+        warnings.mockClear();
         expect(JSON.stringify(result)).not.toContain("PRIVATE_");
       }
     } finally {
@@ -182,6 +185,78 @@ describe("private structured review transports", () => {
       const oversized = await callOpenrouterStructuredJSON(request, {}, draftReviewResultSchema, "response_review");
       expect(oversized.success).toBe(false);
       expect(errors).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("retains bounded HTTP diagnostics with the request key removed while returning only safe failures", async () => {
+    const fetchSpy = stubGlobalFetch(
+      async () => new Response(`UPSTREAM_DIAGNOSTIC ${request.apiKey}`, { status: 503 }),
+    );
+    try {
+      for (const call of [
+        callOpenrouterStructuredJSON,
+        callDeepseekStructuredJSON,
+        callZaiStructuredJSON,
+        callNvidiaStructuredJSON,
+        callAnthropicStructuredJSON,
+        callCustomStructuredJSON,
+      ]) {
+        warnings.mockClear();
+        const result = await call(
+          {
+            ...request,
+            model: [...NVIDIA_STRUCTURED_OUTPUT_MODELS][0],
+            endpointUrl: `https://${STUB_PUBLIC_HOST}/v1`,
+            correlationId: "fixture-correlation",
+          },
+          {},
+          draftReviewResultSchema,
+          "response_review",
+        );
+        expect(result).toMatchObject({ success: false, failure: "transport", httpStatus: 503 });
+        expect(JSON.stringify(result)).not.toContain("UPSTREAM_DIAGNOSTIC");
+        expect(warnings).toHaveBeenCalledTimes(1);
+        expect(warnings.mock.calls[0]?.[2]?.metadata).toMatchObject({
+          httpStatus: 503,
+          correlation: "fixture-correlation",
+          providerDetail: expect.stringContaining("UPSTREAM_DIAGNOSTIC"),
+        });
+        expect(warnings.mock.calls[0]?.[3]).toEqual({ retain: true });
+        expect(JSON.stringify(warnings.mock.calls)).not.toContain(request.apiKey);
+        expect(errors).not.toHaveBeenCalled();
+      }
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("keeps arbitrary transport exception text out of private review diagnostics", async () => {
+    const fetchSpy = stubGlobalFetch(async () => {
+      throw new Error("PRIVATE_DRAFT PRIVATE_EVIDENCE PRIVATE_KEY");
+    });
+    try {
+      for (const call of [
+        callOpenrouterStructuredJSON,
+        callDeepseekStructuredJSON,
+        callZaiStructuredJSON,
+        callNvidiaStructuredJSON,
+        callAnthropicStructuredJSON,
+        callCustomStructuredJSON,
+      ]) {
+        warnings.mockClear();
+        const result = await call(
+          { ...request, model: [...NVIDIA_STRUCTURED_OUTPUT_MODELS][0], endpointUrl: `https://${STUB_PUBLIC_HOST}/v1` },
+          {},
+          draftReviewResultSchema,
+          "response_review",
+        );
+        expect(result).toMatchObject({ success: false, failure: "transport" });
+        expect(JSON.stringify(result)).not.toContain("PRIVATE_");
+        expect(JSON.stringify(warnings.mock.calls)).not.toContain("PRIVATE_");
+        expect(errors).not.toHaveBeenCalled();
+      }
     } finally {
       fetchSpy.mockRestore();
     }
@@ -328,6 +403,13 @@ describe("private structured review transports", () => {
       const config = generate.mock.calls[0]?.[0].config;
       expect(config?.responseJsonSchema).toBe(schema);
       expect(config).not.toHaveProperty("responseSchema");
+      warnings.mockClear();
+      generate.mockRejectedValue(new Error("PRIVATE_INTERNAL_CONTEXT"));
+      expect(await callGoogleStructuredJSON(request, schema, draftReviewResultSchema, client)).toMatchObject({
+        success: false,
+        failure: "transport",
+      });
+      expect(JSON.stringify(warnings.mock.calls)).not.toContain("PRIVATE_INTERNAL_CONTEXT");
     } finally {
       generate.mockRestore();
     }
@@ -384,7 +466,8 @@ describe("private structured review transports", () => {
       for (const secret of ["PRIVATE_BODY", "PRIVATE_KEY", "PRIVATE_RULE_BODY"])
         expect(stdout + stderr).not.toContain(secret);
       if (testProduction === "false") {
-        expect(stdout + stderr).not.toContain("PRIVATE_");
+        for (const secret of ["PRIVATE_PERSONA", "PRIVATE_DRAFT", "PRIVATE_TRIGGER", "PRIVATE_RUBRIC"])
+          expect(stdout + stderr).not.toContain(secret);
         const records = stdout
           .trim()
           .split("\n")

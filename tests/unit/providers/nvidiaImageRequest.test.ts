@@ -1,6 +1,12 @@
-import { describe, expect, it } from "bun:test";
-import { NvidiaImageModelUnavailableError, resolveNvidiaImageRequest } from "@/providers/nvidia/nvidiaImageGeneration";
+import { describe, expect, it, spyOn } from "bun:test";
+import {
+  generateNvidiaNativeImage,
+  NvidiaImageModelUnavailableError,
+  resolveNvidiaImageRequest,
+} from "@/providers/nvidia/nvidiaImageGeneration";
 import type { ProviderNativeImageGenerationRequest } from "@/types/provider/featureInterfaces";
+import { stubGlobalFetch } from "../../helpers/fetchStub";
+import { log } from "@/utils/misc/logger";
 
 const FLUX_MODEL = "black-forest-labs/flux.1-dev";
 
@@ -17,6 +23,19 @@ function createRequest(
 }
 
 describe("NVIDIA image request resolution", () => {
+  it("passes scrubbed HTTP diagnostics to the caller without logging a duplicate incident", async () => {
+    const fetch = stubGlobalFetch(async () => new Response("UPSTREAM_DIAGNOSTIC test-key", { status: 422 }));
+    const errors = spyOn(log, "error").mockResolvedValue(undefined);
+    try {
+      const error = await generateNvidiaNativeImage(createRequest()).catch((failure: unknown) => failure);
+      expect(error).toMatchObject({ status: 422, message: expect.stringContaining("UPSTREAM_DIAGNOSTIC") });
+      expect(String(error)).not.toContain("test-key");
+      expect(errors).not.toHaveBeenCalled();
+    } finally {
+      fetch.mockRestore();
+      errors.mockRestore();
+    }
+  });
   it("targets the per-function genai gateway rather than the OpenAI-compatible surface", () => {
     const { url } = resolveNvidiaImageRequest(createRequest());
     expect(url).toBe("https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-dev");
@@ -29,7 +48,7 @@ describe("NVIDIA image request resolution", () => {
 
   it("sends FLUX width/height instead of the retired SD3 aspect_ratio field", () => {
     const { body } = resolveNvidiaImageRequest(createRequest({ aspectRatio: "16:9" }));
-    expect(body).toMatchObject({ mode: "text-to-image", width: 1344, height: 768 });
+    expect(body).toMatchObject({ mode: "base", width: 1344, height: 768 });
     expect(body).not.toHaveProperty("aspect_ratio");
   });
 

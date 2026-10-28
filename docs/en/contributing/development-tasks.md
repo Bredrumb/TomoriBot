@@ -47,7 +47,8 @@ bun run vl > /tmp/vl.log 2>&1; echo "VL_EXIT=$?" >> /tmp/vl.log
   - `log.error`: a failure the hoster must act on. It reaches production and `error_logs`, so keep
     it deliberate. Pass `{ persist: false }` when the failure is the database path itself.
   - `log.warn`: developer trace (causes, free text, stack details). Hidden in production unless the
-    hoster sets `LOG_LEVEL=warn`.
+    hoster sets `LOG_LEVEL=warn`, except provider diagnostics passed with `{ retain: true }`, which
+    reach JSON sinks at every level without creating an `error_logs` row.
   - `log.metric`: a sample to count or graph. Numbers and string fields from a fixed set (codes,
     reason keys) only; free text cannot be grouped, so it goes to `log.warn`. An expected refusal is
     a metric plus a warn, never an error. The development console hides metric lines unless
@@ -56,7 +57,10 @@ bun run vl > /tmp/vl.log 2>&1; echo "VL_EXIT=$?" >> /tmp/vl.log
   - Where a provider failure becomes a result object, a reply, or a tool error, call
     `reportProviderFailure` (`src/utils/provider/providerErrorMetrics.ts`). It picks the error or the
     metric plus warn from `expected`, and writes the provider detail into the message unchanged so the
-    record matches what **Show Full Error** displays.
+    record matches what **Show Full Error** displays. Expected failures retain their warning details
+    in JSON logs even at the default production level.
+  - Streaming error owners pass the resolved request key through the logger's `redactValues` option
+    so messages, attached errors and metadata remove that exact value before truncation.
 - Slash commands only. Every user-facing string goes through `localizer()`. Follow the interaction
   timing rules in [Command System](/architecture/subsystems/command-system/).
 - Query with Bun SQL template literals, and write idempotent migrations (`IF NOT EXISTS`, guarded

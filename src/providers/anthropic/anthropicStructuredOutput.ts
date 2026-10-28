@@ -11,6 +11,7 @@ import type {
 } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
 import { buildAnthropicThinkingRequest } from "@/utils/provider/thinkingControl";
+import { readProviderErrorBody } from "@/utils/provider/providerErrorMetrics";
 
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_API_VERSION = "2023-06-01";
@@ -95,10 +96,12 @@ function toAnthropicOutputSchema(schema: unknown): unknown {
   return result;
 }
 
-/** Carries only the status out of a private call, because the body may echo reviewed content. */
 class PrivateStructuredHttpError extends Error {
-  constructor(readonly status: number) {
-    super("Structured HTTP failure");
+  constructor(
+    readonly status: number,
+    detail: string,
+  ) {
+    super(detail);
   }
 }
 
@@ -119,8 +122,7 @@ async function callAnthropicApi(
 
   if (!response.ok) {
     if (request.privateOutput) {
-      await response.body?.cancel();
-      throw new PrivateStructuredHttpError(response.status);
+      throw new PrivateStructuredHttpError(response.status, await readProviderErrorBody(response, request.apiKey));
     }
     const errorText = await response.text();
     throw new Error(`Anthropic API error (${response.status}): ${errorText}`);
@@ -217,6 +219,9 @@ export async function callAnthropicStructuredJSON<T>(
         request,
         "transport",
         error instanceof PrivateStructuredHttpError ? error.status : undefined,
+        undefined,
+        undefined,
+        error instanceof PrivateStructuredHttpError ? error.message : undefined,
       );
     log.error("Error calling Anthropic structured JSON", error as Error, {
       errorType: "AnthropicStructuredJSONError",
