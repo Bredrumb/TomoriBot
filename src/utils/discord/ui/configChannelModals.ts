@@ -566,6 +566,7 @@ export function buildConfigChannelPromptModal(
           type: TEXT_INPUT,
           custom_id: buildConfigModalFieldId(field, nonce),
           style: TextInputStyle.Paragraph,
+          placeholder: index > 0 ? localizer(locale, "commands.config.panel.continuation_placeholder") : undefined,
           max_length: 4000,
           required: false,
           value: parts[index] || undefined,

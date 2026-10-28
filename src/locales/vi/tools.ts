@@ -15,6 +15,11 @@ export default {
     execution: {
       unavailable: `Công cụ \`{tool}\` không khả dụng theo cài đặt hiện tại, khả năng của model hoặc quyền hạn của bot.`,
     },
+    sprite_selection: {
+      unavailable: "Không thể chọn sprite cho persona hoặc lượt này. Hãy bỏ qua tham số sprite.",
+      invalid:
+        "Hãy chọn một nhãn sprite từ các sprite khả dụng hiện tại của bạn, hoặc dùng chuỗi trống cho diện mạo cơ bản.",
+    },
     generate_voice_message: {
       persona_missing: `Persona này không còn khả dụng.`,
       stale: `Model giọng nói, thông tin xác thực hoặc giọng của persona đã thay đổi trong lượt này. Hãy bắt đầu lượt mới trước khi tạo tin nhắn thoại.`,
