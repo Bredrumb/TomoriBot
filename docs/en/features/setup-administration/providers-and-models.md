@@ -25,7 +25,7 @@ Each provider has its own key-generation steps. In `/help`, choose `Setup`, then
 | Provider | Notes | Get a key |
 |---|---|---|
 | Google Gemini | Free tier, runs every feature. Recommended first setup. | [AI Studio](https://aistudio.google.com/apikey) |
-| OpenRouter | One key, many models (some free). | [OpenRouter keys](https://openrouter.ai/settings/keys) |
+| OpenRouter | Paid models through one key. | [OpenRouter keys](https://openrouter.ai/settings/keys) |
 | NovelAI | Subscription; uncensored storytelling and roleplay (text only). | [NovelAI](https://novelai.net/) |
 | DeepSeek | Pay-as-you-go reasoning models. | [DeepSeek](https://platform.deepseek.com/api_keys) |
 | NVIDIA NIM | Hosted text, embeddings, and image. | [NVIDIA Build](https://build.nvidia.com/) |
@@ -58,6 +58,10 @@ member of the server uses. Both commands require server management permissions.
 Members can set up their own providers and models with `/personal providers` and `/personal config`.
 Personal settings follow them across servers; see
 [Personalization](/features/knowledge/personalization/#your-own-providers).
+
+New OpenRouter configurations use DeepSeek Flash Latest for chat and Gemini 3.1 Flash Lite for
+the vision fallback. Both use OpenRouter credits. Replacing a key preserves your vision selection,
+including `- No Model`.
 
 In `/config` > Models > Switch Models, you can assign models and endpoints across these capability slots:
 
@@ -125,7 +129,7 @@ cloud services. Not every feature is available on every provider.
 | Provider | Streaming | Tool Calling | Image Input | Embeddings | Notes |
 |---|---|---|---|---|---|
 | Google Gemini | ✅ | ✅ | ✅ | ✅ | Free models available |
-| OpenRouter | ✅ | ✅ | ✅ | ✅ | Free models available |
+| OpenRouter | ✅ | ✅ | ✅ | ✅ | Uses OpenRouter credits |
 | Anthropic (API) | ✅ | ✅ | ✅ | - | Not Claude Code |
 | NovelAI | ✅ | ✅ | - | - | Only GLM 4.6 can use tools |
 | NVIDIA NIM | ✅ | ✅ | ✅ | ✅ | Free models available |

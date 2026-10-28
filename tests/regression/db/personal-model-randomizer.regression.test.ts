@@ -122,6 +122,51 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Personal fallback chain and randomizer dat
     await testSql`DELETE FROM user_personalization_configs WHERE user_id = ANY(${testSql.array(userIds, "INT")})`;
   }
 
+  it("initializes OpenRouter vision and preserves explicit vision choices when rebuilding snapshots", async () => {
+    const baseConfig = makeBaseConfig();
+    const expectedText = await llmModelRepo.loadByProviderAndCodename("openrouter", "~deepseek/deepseek-flash-latest");
+    const expectedVision = await llmModelRepo.loadByProviderAndCodename("openrouter", "google/gemini-3.1-flash-lite");
+    if (!expectedText?.llm_id || !expectedVision?.llm_id) throw new Error("Missing OpenRouter default models");
+    const server = await buildSavedProviderConfigFromExistingOrDefaults({
+      serverId,
+      provider: "openrouter",
+      apiKey: null,
+      keyVersion: 1,
+      baseConfig,
+    });
+    const personal = await buildUserSavedProviderConfigFromExistingOrDefaults({
+      userId: userAId,
+      provider: "openrouter",
+      apiKey: null,
+      keyVersion: 1,
+    });
+    for (const selection of [server, personal]) {
+      expect(selection.llm_id).toBe(expectedText.llm_id);
+      expect(selection.vision_llm_id).toBe(expectedVision.llm_id);
+    }
+    for (const visionId of [null, expectedVision.llm_id]) {
+      await llmProviderRepo.upsertSavedProviderConfig(serverId, { ...server, vision_llm_id: visionId });
+      await llmProviderRepo.upsertUserSavedProviderConfig(userAId, { ...personal, vision_llm_id: visionId });
+      const rebuiltServer = await buildSavedProviderConfigFromExistingOrDefaults({
+        serverId,
+        provider: "openrouter",
+        apiKey: null,
+        keyVersion: 1,
+        baseConfig,
+        existingConfig: await llmProviderRepo.loadSavedProviderConfig(serverId, "openrouter"),
+      });
+      const rebuiltPersonal = await buildUserSavedProviderConfigFromExistingOrDefaults({
+        userId: userAId,
+        provider: "openrouter",
+        apiKey: null,
+        keyVersion: 1,
+        existingConfig: await llmProviderRepo.loadUserSavedProviderConfig(userAId, "openrouter"),
+      });
+      expect(rebuiltServer.vision_llm_id).toBe(visionId);
+      expect(rebuiltPersonal.vision_llm_id).toBe(visionId);
+    }
+  });
+
   it("preserves saved sampler settings when rebuilding personal and server provider snapshots", async () => {
     const savedParameters = {
       llm_temperature: 0.5,
