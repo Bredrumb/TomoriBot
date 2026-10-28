@@ -15,6 +15,11 @@ export default {
     execution: {
       unavailable: `La herramienta \`{tool}\` no está disponible con la configuración actual, las capacidades del modelo o los permisos del bot.`,
     },
+    sprite_selection: {
+      unavailable: "La selección de sprite no está disponible para esta persona o turno. Omite el parámetro sprite.",
+      invalid:
+        "Elige una etiqueta de sprite de tus sprites disponibles actuales o usa una cadena vacía para tu apariencia base.",
+    },
     generate_voice_message: {
       persona_missing: `La persona ya no está disponible.`,
       stale: `El modelo de voz, las credenciales o la voz de la persona cambiaron durante este turno. Inicia un nuevo turno antes de generar un mensaje de voz.`,

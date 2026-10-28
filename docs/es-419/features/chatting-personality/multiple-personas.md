@@ -45,6 +45,12 @@ Afina cómo se ve, habla y se comporta una persona:
 
 Abre `/config` > `Persona` > `Identidad y personalidad` para definir rasgos de personalidad o detalles físicos (como `friendly`, `red hair` o `ends sentences with *Nya~*`).
 
+:::tip
+Cuando agregues o edites un atributo, marca `Atributo público` en `Visibilidad` para que otras personas
+puedan ver ese detalle cuando compartan una conversación. Mantén los secretos en privado y marca los detalles
+que otros personajes notarían, como la apariencia o los gestos, como públicos.
+:::
+
 ### Diálogos de ejemplo
 <!-- anchor: sample-dialogues -->
 

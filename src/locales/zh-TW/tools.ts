@@ -14,6 +14,10 @@ export default {
     execution: {
       unavailable: `在目前的設定、模型功能或 bot 權限下，工具 \`{tool}\` 無法使用。`,
     },
+    sprite_selection: {
+      unavailable: "目前人格或此輪無法選擇立繪。請省略 sprite 參數。",
+      invalid: "從目前可用的立繪中選擇立繪標籤，或使用空字串表示基礎外觀。",
+    },
     generate_voice_message: {
       persona_missing: `這個人格已無法使用。`,
       stale: `這一輪期間，語音模型、憑證或人格語音已變更。請先開始新的一輪，再生成語音訊息。`,

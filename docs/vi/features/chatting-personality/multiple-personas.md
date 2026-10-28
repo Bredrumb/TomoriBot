@@ -39,6 +39,12 @@ Tinh chỉnh cách một persona trông, nói chuyện và cư xử:
 
 Mở `/config` > `Persona` > `Danh tính & Tính cách` để xác định các đặc điểm tính cách hoặc chi tiết hình thể (chẳng hạn như `friendly`, `red hair` hoặc `ends sentences with *Nya~*`).
 
+:::tip
+Khi thêm hoặc chỉnh sửa một thuộc tính, hãy chọn `Thuộc tính công khai` trong `Khả năng hiển thị` để các persona
+khác có thể thấy chi tiết đó khi cùng tham gia cuộc trò chuyện. Hãy giữ bí mật ở chế độ riêng tư và đánh dấu các chi tiết
+mà những nhân vật khác sẽ nhận ra, chẳng hạn như ngoại hình hoặc cử chỉ, là công khai.
+:::
+
 ### Mẫu hội thoại
 <!-- anchor: sample-dialogues -->
 
