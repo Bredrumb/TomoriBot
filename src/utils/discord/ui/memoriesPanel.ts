@@ -1,6 +1,5 @@
 import {
   ButtonStyle,
-  ChannelType,
   ComponentType,
   MessageFlags,
   TextInputStyle,
@@ -27,6 +26,7 @@ import {
 import type { DocumentChunkRow, DocumentListRow } from "@/utils/discord/interactions/memoriesDocumentOperations";
 import {
   buildCategoryButtonRow,
+  buildChannelScopeLine,
   buildOptionalThumbnailSection,
   buildPanelContainer,
   buildPanelReceiptContainer,
@@ -34,18 +34,17 @@ import {
   buildStateControlRow,
   withLinePrefix,
 } from "@/utils/discord/ui/panel";
+import { buildChannelScopeField } from "@/utils/discord/ui/channelScopeField";
 import {
   DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX,
-  DISCORD_SELECT_VALUES_MAX,
   DISCORD_TEXT_INPUT_MAX,
 } from "@/utils/discord/ui/componentsV2Limits";
-import { measureFormattedPanelTextLength } from "@/utils/discord/ui/panelProse";
+import { measureFormattedPanelTextLength, renderPanelContentBlock } from "@/utils/discord/ui/panelProse";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
-import { getDiscordTextLength, neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
+import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 import { localizer } from "@/utils/text/localizer";
-import { buildTextPreview, textPreviewFooterKey, textPreviewFooterVars } from "@/utils/text/textPreview";
-import { personaRepresentativeForLineage } from "@/utils/persona/lineage";
+import { groupPersonasByLineage, personaRepresentativeForLineage } from "@/utils/persona/lineage";
 
 export const MAX_SERVER_MEMORY_PAGE_SIZE = 24;
 export const MAX_DOCUMENT_PAGE_SIZE = 24;
@@ -60,21 +59,13 @@ const MAX_STM_GROUPS = 5;
  */
 export const MAX_STM_MANAGEABLE_ENTRIES = MAX_STM_OPTIONS_PER_GROUP * MAX_STM_GROUPS;
 const PERSONA_SELECT_MAX_OPTIONS = 25;
-const MAX_SERVER_MEMORY_TAGS = 5;
-const MAX_SERVER_MEMORY_TAG_LENGTH = 32;
 
 const memoryLimits = getMemoryLimits();
 
-export function parseServerMemoryTags(rawTags: string): string[] {
-  if (!rawTags?.trim()) return [];
-  const parts = rawTags
-    .split(",")
-    .map((t) => t.trim().replace(/^["']+|["']+$/g, ""))
-    .filter((t) => t.length > 0 && t.length <= MAX_SERVER_MEMORY_TAG_LENGTH);
-  return [...new Set(parts)].slice(0, MAX_SERVER_MEMORY_TAGS);
-}
-
-export function buildServerMemoryModalFieldId(field: "content" | "tags" | "file" | "channels", nonce: string): string {
+export function buildServerMemoryModalFieldId(
+  field: "content" | "file" | "channels",
+  nonce: string,
+): string {
   return `${field}_${nonce}`;
 }
 
@@ -84,42 +75,6 @@ export function buildDocumentModalFieldId(field: "name" | "file" | "channels" | 
 
 export function buildStmCheckboxFieldId(groupIndex: number, nonce: string): string {
   return `stm_${groupIndex}_${nonce}`;
-}
-
-/**
- * Optional Channel Select that limits a memory or document to the chosen channels.
- *
- * @param channelScope - Stored scope to preselect, or null outside a server, where the field is omitted
- */
-function buildChannelScopeField(
-  locale: string,
-  customId: string,
-  labelKey: string,
-  descriptionKey: string,
-  channelScope: readonly string[] | null,
-): RawDiscordComponent[] {
-  if (!channelScope) return [];
-  const component: RawDiscordComponent = {
-    type: ComponentType.ChannelSelect,
-    custom_id: customId,
-    channel_types: [ChannelType.GuildText, ChannelType.GuildAnnouncement],
-    min_values: 0,
-    max_values: DISCORD_SELECT_VALUES_MAX,
-    required: false,
-  };
-  if (channelScope.length > 0) {
-    component.default_values = channelScope
-      .slice(0, DISCORD_SELECT_VALUES_MAX)
-      .map((id) => ({ id, type: "channel" as const }));
-  }
-  return [
-    {
-      type: ComponentType.Label,
-      label: safeSelectOptionText(localizer(locale, labelKey), 45),
-      description: safeSelectOptionText(localizer(locale, descriptionKey), 100),
-      component,
-    },
-  ];
 }
 
 function buildDocumentChannelScopeField(
@@ -373,19 +328,6 @@ export function buildAddServerMemoryModal(
           required: false,
         },
       },
-      {
-        type: 18,
-        label: safeSelectOptionText(localizer(locale, "commands.memories.modal_tags_label"), 45),
-        description: safeSelectOptionText(localizer(locale, "commands.memories.modal_tags_description"), 100),
-        component: {
-          type: 4,
-          custom_id: buildServerMemoryModalFieldId("tags", nonce),
-          style: TextInputStyle.Short,
-          placeholder: safeSelectOptionText(localizer(locale, "commands.memories.modal_tags_placeholder"), 100),
-          max_length: MAX_SERVER_MEMORY_TAGS * (MAX_SERVER_MEMORY_TAG_LENGTH + 2),
-          required: false,
-        },
-      },
       ...buildServerMemoryChannelScopeField(locale, nonce, channelScope),
     ],
   };
@@ -396,7 +338,6 @@ export function buildEditServerMemoryModal(
   lineageId: number,
   memoryId: number,
   content: string,
-  tags: string[],
   channelScope: readonly string[] | null,
   nonce: string,
 ): { custom_id: string; title: string; components: RawDiscordComponent[] } {
@@ -418,52 +359,9 @@ export function buildEditServerMemoryModal(
           required: true,
         },
       },
-      {
-        type: 18,
-        label: safeSelectOptionText(localizer(locale, "commands.memories.modal_tags_label"), 45),
-        description: safeSelectOptionText(localizer(locale, "commands.memories.modal_tags_description"), 100),
-        component: {
-          type: 4,
-          custom_id: buildServerMemoryModalFieldId("tags", nonce),
-          style: TextInputStyle.Short,
-          placeholder: safeSelectOptionText(localizer(locale, "commands.memories.modal_tags_placeholder"), 100),
-          value: tags.join(", "),
-          max_length: MAX_SERVER_MEMORY_TAGS * (MAX_SERVER_MEMORY_TAG_LENGTH + 2),
-          required: false,
-        },
-      },
       ...buildServerMemoryChannelScopeField(locale, nonce, channelScope),
     ],
   };
-}
-
-/**
- * Renders one memory as a fenced block so it reads as content rather than panel prose.
- *
- * Stored content is guarded via {@link neutralizeFenceRuns} so runs of backticks cannot close the
- * markdown fence early. Rendered text is bounded to `availableBudget` (including fence syntax overhead
- * and the footer line) using {@link buildTextPreview}, appending an honest hidden-character notice
- * when truncation occurs. The footer reserve is measured dynamically from the preview.
- */
-function renderMemoryBlock(locale: string, content: string, availableBudget: number): string {
-  const fenceOverhead = getDiscordTextLength("```markdown\n\n```");
-  const rawBudget = Math.max(0, availableBudget - fenceOverhead);
-  const initialPreview = buildTextPreview(content, rawBudget);
-  if (!initialPreview.truncated) {
-    return ["```markdown", initialPreview.text, "```"].join("\n");
-  }
-  const footerKey = textPreviewFooterKey(initialPreview);
-  const footerVars = textPreviewFooterVars(initialPreview, locale);
-  const initialFooter = footerKey ? `\n-# ${localizer(locale, footerKey, footerVars)}` : "";
-  // The panel boundary wraps prose after this block is built, and each wrapped `-# ` line gains its own
-  // prefix, so reserving the unwrapped length overflows the text-display cap whenever the footer wraps.
-  const footerReserve = measureFormattedPanelTextLength({ type: ComponentType.TextDisplay, content: initialFooter });
-  const refinedBudget = Math.max(0, availableBudget - fenceOverhead - footerReserve);
-  const preview = buildTextPreview(content, refinedBudget);
-  const finalFooterKey = textPreviewFooterKey(preview);
-  const finalFooterVars = textPreviewFooterVars(preview, locale);
-  const finalFooter = finalFooterKey ? `\n-# ${localizer(locale, finalFooterKey, finalFooterVars)}` : "";
-  return ["```markdown", preview.text, "```"].join("\n") + finalFooter;
 }
 
 function describeServerLineageMemories(locale: string, count: number | undefined, personaCount: number): string {
@@ -541,17 +439,6 @@ function buildPayload(components: ComponentInContainerData[], receipt?: PanelRec
 function measureReceiptTextLength(receipt?: PanelReceipt): number {
   if (!receipt) return 0;
   return measureFormattedPanelTextLength(buildPanelReceiptContainer(receipt));
-}
-
-/** Subtext naming the channels a memory or document is limited to, or null when it applies everywhere. */
-function renderChannelScopeLine(
-  locale: string,
-  scope: { channel_disc_ids: readonly string[]; channel_scope_pending: boolean },
-): string | null {
-  if (scope.channel_scope_pending) return `-# ${localizer(locale, "commands.memories.channel_scope_unresolved_line")}`;
-  if (scope.channel_disc_ids.length === 0) return null;
-  const channels = scope.channel_disc_ids.map((id) => `<#${id}>`).join(", ");
-  return `-# ${localizer(locale, "commands.memories.channel_scope_line", { channels })}`;
 }
 
 function measurePanelTextLength(content: string): number {
@@ -668,7 +555,7 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
             locale,
             "commands.memories.remove_confirm_description",
             {
-              memory: renderMemoryBlock(locale, targetMemory.content, availableBudget),
+              memory: renderPanelContentBlock(locale, targetMemory.content, availableBudget),
             },
           )}`,
         },
@@ -722,7 +609,7 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
           content: `### ${localizer(locale, "commands.memories.vectorize_title")}\n${localizer(
             locale,
             "commands.memories.vectorize_impact",
-            { memory: renderMemoryBlock(locale, targetMemory.content, availableBudget) },
+            { memory: renderPanelContentBlock(locale, targetMemory.content, availableBudget) },
           )}`,
         },
         {
@@ -773,16 +660,7 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
         content: localizer(locale, "commands.memories.no_personas"),
       });
     } else {
-      const personasByLineage = new Map<number, TomoriState[]>();
-      for (const p of personas) {
-        const lineage = p.persona_lineage_id;
-        if (lineage === undefined || lineage === null || lineage === 0) continue;
-        const bucket = personasByLineage.get(lineage);
-        if (bucket) bucket.push(p);
-        else personasByLineage.set(lineage, [p]);
-      }
-
-      const lineageEntries = [...personasByLineage.entries()];
+      const lineageEntries = [...groupPersonasByLineage(personas).entries()];
       const selectedLineagePosition = lineageEntries.findIndex(([lineage]) => lineage === selectedLineageId);
       const requestedPersonaRangeIndex = page.kind === "main" ? page.personaRangeIndex : undefined;
       const personaRangeIndex =
@@ -882,11 +760,9 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
 
       const memoryOptions: SelectMenuComponentOptionData[] = rangeSelection.visibleItems.map((memory) => {
         const label = safeSelectOptionText(memory.content.replace(/\s+/g, " ").trim(), 100);
-        const tagsText = memory.tags && memory.tags.length > 0 ? memory.tags.join(", ") : undefined;
         return {
           label: label || localizer(locale, "commands.memories.empty_memory_label"),
           value: String(memory.server_memory_id),
-          description: tagsText ? safeSelectOptionText(tagsText, 100) : undefined,
           default: selectedMemory?.server_memory_id === memory.server_memory_id,
         };
       });
@@ -927,7 +803,7 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
       }
 
       if (selectedMemory) {
-        const scopeLine = renderChannelScopeLine(locale, selectedMemory);
+        const scopeLine = buildChannelScopeLine(locale, selectedMemory);
         const fixedTextLength =
           measureReceiptTextLength(receipt) +
           measureFormattedPanelTextLength(components) +
@@ -936,7 +812,7 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
 
         components.push({
           type: ComponentType.TextDisplay,
-          content: renderMemoryBlock(locale, selectedMemory.content, availableBudget),
+          content: renderPanelContentBlock(locale, selectedMemory.content, availableBudget),
         });
         if (scopeLine) components.push({ type: ComponentType.TextDisplay, content: scopeLine });
       } else {
@@ -1256,7 +1132,7 @@ ${localizer(locale, "commands.memories.documents_description")}`,
       const requestedPosition = chunks.findIndex((candidate) => candidate.chunk_index === documentPage.chunkIdx);
       const chunkIndex = requestedPosition >= 0 ? requestedPosition : 0;
       const chunk = chunks[chunkIndex];
-      const scopeLine = renderChannelScopeLine(locale, selectedDocument);
+      const scopeLine = buildChannelScopeLine(locale, selectedDocument);
       const titleContent = `**${safeSelectOptionText(selectedDocument.document_name, 250)}**${scopeLine ? `\n${scopeLine}` : ""}`;
       const removePromptComponent =
         page.kind === "document-chunk-remove" && chunk
@@ -1286,7 +1162,7 @@ ${localizer(locale, "commands.memories.documents_description")}`,
       components.push({
         type: ComponentType.TextDisplay,
         content: chunk
-          ? renderMemoryBlock(locale, chunk.content, availableBudget)
+          ? renderPanelContentBlock(locale, chunk.content, availableBudget)
           : `> ${localizer(locale, "commands.memories.document_no_chunks")}`,
       });
       if (chunks.length > 1) {

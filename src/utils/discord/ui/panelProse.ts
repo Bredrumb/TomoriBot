@@ -1,5 +1,7 @@
 import { ComponentType, type ComponentInContainerData } from "discord.js";
-import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
+import { getDiscordTextLength, neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
+import { localizer } from "@/utils/text/localizer";
+import { buildTextPreview, textPreviewFooterKey, textPreviewFooterVars } from "@/utils/text/textPreview";
 
 const PANEL_PROSE_LAYOUT_POLICY = {
   default: {
@@ -290,7 +292,35 @@ export function measurePanelProseWidth(markdown: string): number {
 }
 
 /**
- * Width for one line. Kana renders at roughly twice the advance of a Latin glyph, so a line
+ * Renders stored content as a fenced block so it reads as content rather than panel prose.
+ *
+ * Stored content is guarded via {@link neutralizeFenceRuns} so runs of backticks cannot close the
+ * markdown fence early. Rendered text is bounded to `availableBudget` (including fence syntax overhead
+ * and the footer line) using {@link buildTextPreview}, appending an honest hidden-character notice
+ * when truncation occurs. The footer reserve is measured dynamically from the preview.
+ */
+export function renderPanelContentBlock(locale: string, content: string, availableBudget: number): string {
+  const fenceOverhead = getDiscordTextLength("```markdown\n\n```");
+  const rawBudget = Math.max(0, availableBudget - fenceOverhead);
+  const initialPreview = buildTextPreview(content, rawBudget);
+  if (!initialPreview.truncated) {
+    return ["```markdown", initialPreview.text, "```"].join("\n");
+  }
+  const footerKey = textPreviewFooterKey(initialPreview);
+  const footerVars = textPreviewFooterVars(initialPreview, locale);
+  const initialFooter = footerKey ? `\n-# ${localizer(locale, footerKey, footerVars)}` : "";
+  // The panel boundary wraps prose after this block is built, and each wrapped `-# ` line gains its own
+  // prefix, so reserving the unwrapped length overflows the text-display cap whenever the footer wraps.
+  const footerReserve = measureFormattedPanelTextLength({ type: ComponentType.TextDisplay, content: initialFooter });
+  const refinedBudget = Math.max(0, availableBudget - fenceOverhead - footerReserve);
+  const preview = buildTextPreview(content, refinedBudget);
+  const finalFooterKey = textPreviewFooterKey(preview);
+  const finalFooterVars = textPreviewFooterVars(preview, locale);
+  const finalFooter = finalFooterKey ? `\n-# ${localizer(locale, finalFooterKey, finalFooterVars)}` : "";
+  return ["```markdown", preview.text, "```"].join("\n") + finalFooter;
+}
+
+/** Width for one line. Kana renders at roughly twice the advance of a Latin glyph, so a line
  * carrying it wraps against the Japanese profile. Choosing per line rather than per TextDisplay
  * keeps a stored Japanese name from narrowing the English prose that shares its component.
  */
