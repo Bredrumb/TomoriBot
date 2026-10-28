@@ -5,10 +5,10 @@ sidebar:
 aiGenerated: true
 ---
 
-Run a small Decision model on your own machine and register it in TomoriBot. A Decision model answers yes/no questions about a text with a probability. [Kev](https://github.com/jaredpalmer/kev) is an open one that speaks the System One protocol, the same one TypeSafe's hosted Jev uses.
+Run a small Decision model on your own machine and register it in TomoriBot. A Decision model answers questions about a text, such as yes or no or which of several topics fits, with probabilities. [Kev](https://github.com/jaredpalmer/kev) is an open one that speaks the System One protocol, the same one TypeSafe's hosted Jev uses.
 
-:::note[Registration only for now]
-In this release you can register a Decision model and select it under [Response Drafting](/features/chatting-personality/behavior-tweaking/#response-drafting), but TomoriBot sends it no requests and review skipping stays off. See [Decision Models](/features/setup-administration/providers-and-models/#decision-models) for the details. Registering now confirms that your server works with TomoriBot.
+:::note[What uses it]
+Once selected in `/config` > Models, or as the Active Nudge Checker in `/config` > Plugins > Natural Nudges, the Decision model decides when [Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) joins a conversation, asking it to pick one topic out of several. See [Decision Models](/features/setup-administration/providers-and-models/#decision-models) for the details.
 :::
 
 ## 1. Run Kev
@@ -70,14 +70,14 @@ Run `/providers` (server-wide) or `/personal providers` (just you), choose `Add 
 
 TomoriBot checks `GET /v1/models` when you save. A server that answers `404` or `405` there is still accepted.
 
-Open the saved `kev` endpoint, choose `+ Add a Decisions Model` from its model dropdown, and enter:
+Open the saved `kev` endpoint, choose `+ Add new Decision Model` from its model dropdown, and enter:
 
 - `Code Name`: `kev-latest`, the model name Kev's examples use.
 - `Context Window`: `8192`, the longest text Kev-0.8B and Kev-4B are validated for. Kev refuses anything over 65,536 tokens.
 
 ## 3. Select it
 
-Open `/config` > `Plugins` > `Response Drafting` > `Decisions` dropdown and pick `kev-latest`. Reopen the page to confirm it stays selected. `None` clears it without deleting the registration.
+Open `/config` > `Models` > `Switch Models` and pick `kev-latest` in the `Decision` slot. `- No Model` clears it without deleting the registration.
 
 ## Notes and gotchas
 

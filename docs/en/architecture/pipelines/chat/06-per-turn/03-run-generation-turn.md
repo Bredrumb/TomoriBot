@@ -5,7 +5,7 @@ aiGenerated: true
 
 The generation stage executes the model request for a persona turn. It manages primary and fallback
 models, rotates API keys upon failures, resolves server-route failovers for personal accounts, and
-deletes superseded partial messages committed by failed attempts.
+continues the reply a failed attempt already posted instead of regenerating it.
 
 ## Flow and ownership
 
@@ -16,7 +16,7 @@ deletes superseded partial messages committed by failed attempts.
 Prepare sink and generation plan
   -> Prepare model context and prefill
   -> Run tool loop with key rotation
-       -> Failure: clean partial messages, advance model or deferred server route
+       -> Failure: carry posted text, advance key, model, or deferred server route
        -> Success: finalize sink, report fallback when applicable
   -> Always clean up sink
 ```
@@ -25,6 +25,16 @@ Prepare sink and generation plan
 
 `buildGenerationPlan()` orders the primary and configured fallback models. An enabled randomizer can
 promote a pool member to lead; key rotation tries available credentials before advancing models.
+Cross-provider fallbacks use saved credentials from the turn's scope. A personal turn runs the user's
+single fallback chain and randomizer (`user_personalization_configs`), whichever saved provider owns
+personal Text, so the chain can mix providers the way the server chain does. Personal turns look up
+only the user's saved providers and omit entries without a key; server credentials become available
+only through the deferred server route.
+
+Custom endpoint fallbacks must belong to the route's user or server before generation loads a saved
+key. Server persona loaders resolve stored endpoint IDs without enforcing ownership, so generation
+checks both owner fields: personal endpoints have that user and no server; server endpoints have
+that server and no user. Credential lookup uses the route owner after this check.
 
 ### Deferred server route fallback
 
@@ -34,26 +44,48 @@ Running such an attempt switches credential attribution to the server. Tools ret
 
 ### Context preparation and prefill
 
-Each attempt prepares media for its capabilities, trims history to known context limits with an
-output reserve, and formats prefill as a model continuation or tail directive.
+Each attempt prepares media for its capabilities, formats prefill as a model continuation or tail
+directive, and trims history to known context limits with an output reserve. The prefill's tokens
+are reserved against the same budget but kept out of the truncated list, because a tail directive
+is a dialogue user turn the truncator would otherwise protect in place of the real trigger.
+
+Personal Text attempts apply the active provider's saved sampler settings before request construction
+and history truncation. An explicit personal output-token limit overrides the server limit for both;
+an unset personal limit inherits the server setting. Both paths clamp the limit to the model's ceiling.
 
 NovelAI budgeting uses the actual key in the attempt's provider config after key selection.
 When rotation changes that key, context preparation starts again from the original turn context
 and reapplies the assistant prefill. A larger allowance can restore history dropped for the previous
 key; a smaller allowance trims it further. Subscription-cache reads in the adapter use the same key.
 
-### Superseded message cleanup
+### Fallback text continuation
 
-After a partially delivered failure, `deleteSupersededStreamMessages()` removes tracked messages
-before the next attempt:
+Messages a failed attempt already posted stay in the channel. The next key-rotation or fallback
+attempt continues the reply from where the failed one stopped:
 
-- Committed message references are tracked in `streamingContext.deliveredMessageRefs`.
-- Deletion targets persona webhooks directly, falling back to channel-level message deletion if needed.
-- Deleting partial messages prevents truncated fragments from lingering above the fallback model's
-  complete response.
-- Before cleanup after an SDK timeout, the tool loop awaits the abandoned stream for up to
-  `STREAM_ABANDONED_SETTLE_TIMEOUT_MS` (5000ms) to let in-flight sends register before deletion.
-  Sends that outlive this window and failed deletions can leave partial output visible.
+- Each failed attempt's stream results carry the text it posted. `carryDeliveredOutput()` joins
+  that text across attempts, together with its `<details>` metadata and the stream results post-turn
+  stats count emoji and sprites from. Their usage is dropped, because post-turn stats attribute all
+  usage to the model that finished the turn.
+- Once any text is carried, it replaces the turn's `/respond` or server prefill. Each key attempt
+  applies it as a `continuation` prefill and trims history to make room for it. The prefill is a
+  native trailing assistant turn when the model can continue one, otherwise a `[System:]` tail
+  directive. Either way the stream strips an echo of the
+  carried text, so only the continuation is posted. Tool macros are not expanded in carried text.
+- A provider error with a suppressed embed does not flush the stream buffer, so an unfinished clause
+  is never posted as a fragment for the continuation to repeat. An error the user sees still flushes
+  it first. Unhumanized replies aggregate into one final send, so their failed attempts post nothing
+  and the next attempt starts fresh.
+- An empty continuation completes the turn with the carried text, unless the emptiness is a failure
+  the empty-response retry handles specifically: an output-token cap, a speaker-guard discard, or a
+  held NovelAI fragment.
+- `prependDeliveredOutput()` adds the carried text to the final result, including a terminal failure,
+  so short-term memory records everything posted.
+- After an SDK timeout, the tool loop awaits the abandoned stream for up to
+  `STREAM_ABANDONED_SETTLE_TIMEOUT_MS` (5000ms) so an in-flight send is part of the carried text.
+  A send that outlives this window is visible but missing from the continuation prefill.
+- Response Drafting holds text until review, so a failed drafting attempt has nothing posted to
+  continue and discards its pending text instead.
 
 ### Error suppression and notices
 
@@ -67,9 +99,16 @@ before the next attempt:
 
 ## Constraints and rationale
 
-- **Failover effects**: cleanup does not roll back tool writes, external requests, or independent tool
-  messages. Off starts a new tool history on replacement attempts. With Response Drafting On, shared
-  history and successful-request identities survive fallback, preventing identical effects from replaying.
+Each generation attempt owns its credential source. Personal attempts use the user's saved key and
+bypass server rotation queries and retries. Deferred server attempts use server credentials and
+rotation only after server admission succeeds.
+
+- **Failover effects**: failover does not roll back tool writes, external requests, or independent tool
+  messages. Off starts a new tool history on replacement attempts, but successful calls are recorded
+  by request identity in `ChatTurnContext.completedToolCalls`: a replacement attempt that repeats an
+  identical call gets the recorded result instead of running it again, and is told which tools already
+  ran. A call with different arguments still executes. With Response Drafting On, shared history also
+  survives fallback.
 - **Deferred server admission**: resolving server fallback routes only on personal failure prevents
   unnecessary database writes and server quota checks on successful member turns.
 - **Per-turn cleanup**: a `finally` block invokes sink cleanup after exceptions. Temporary webhook
@@ -86,18 +125,25 @@ preserving successful tools, rejections, correction budgets and reported usage.
 context and actual tool history, and renders it as a tagged transcript. Evidence fixed for the turn
 precedes the candidate, findings and tool outcomes, so a second review reuses the provider's prompt
 prefix cache. Pending prose is labeled separately from history. The reviewer reads as a blind model:
-admitted media and tool images become placeholders, and that coverage keeps Decision routing from
-skipping review. Available tools are a compact catalog of names, descriptions and parameter names.
+admitted media and tool images become placeholders. Available tools are a compact catalog of names,
+descriptions and parameter names.
 The workspace's `Content to Check` selection filters persona instructions, example dialogues, recent
 conversation, memories and other context, and tools before packet budgeting. The draft, triggering
 message and reply target remain required. Disabled persona instructions do not cause a missing-persona
 failure. With `Tool Calls` unchecked, response review omits tool definitions, completed tool outcomes,
 the correction count and the `tool_use` finding category, and skips proposed-call reviews. Coverage
-records the selection; intentionally omitted context cannot qualify for calibrated Decision skipping.
+records the selection.
 Incomplete required evidence, a candidate containing a credential-shaped string (`containsCredential`,
-not the log redactor's `key: value` heuristic, which matches ordinary prose), or tool arguments that
-redaction would alter make review unavailable, and the trace category names the gap. Inherited reviewers use the
-actual author attempt's model and key; pinned reviewers revalidate their owned registration and credentials.
+not the log redactor's `key: value` heuristic, which matches ordinary prose), or tool arguments requiring
+credential or user-info redaction make review unavailable, and the trace category names the gap.
+The packet applies the same credential-shape patterns to admitted prose, tool descriptions and rule
+reports. Structured tool arguments, outcomes and rule reports also mask values under credential keys;
+the proposed-call gate refuses arguments changed by either check. Log-only heuristics do not alter
+reviewer evidence.
+Proposed voice-message arguments retain the script and delivery instructions for review, while
+diagnostic storage and completed-call evidence retain only their character counts; submitted user-info
+values remain excluded from review. Inherited reviewers use the actual author attempt's model and key;
+pinned reviewers revalidate their owned registration and credentials.
 Either way the request follows the reviewer provider's saved `thinking_level` and asks for the chat
 reply budget, because a reasoning model spends its thinking from the output allowance before the JSON
 verdict. Anthropic ignores the level: its structured call forces a tool, which the API refuses
@@ -107,27 +153,24 @@ Review can pass, request one author revision, or become unavailable. Two respons
 bound the turn; another revision verdict delivers the latest candidate. Unavailability ends review
 for the turn and permits current prose, while prior tool rejections remain blocked. Revision preserves
 successful tool outcomes. `/kill`, follow-up interruption and abort discard held prose. Actual tools
-use the separate [pre-execution checkpoint](../../tool-loop/02-execute-tool-call.md#actual-request-review).
+use the separate [pre-execution checkpoint](/architecture/pipelines/tool-loop/02-execute-tool-call/#actual-request-review).
 
 An optional rule checker is a tool on an owned `prose_linter` MCP registration whose only required
 input is a `text` string. Its output (structured content, JSON text or plain text, at most 32 KB) goes
 to the reviewer as `<prose_linter_report advisory="true">` and forces a detailed review. Raw output
 cannot reach author feedback, memory or logs. `getGuildMCPRouting` excludes `prose_linter`
 registrations, so the author never sees or dispatches their tools. Checker failure proceeds to review;
-an empty report cannot approve prose.
+an empty report cannot approve prose. A binding whose registration is disabled or removed acts as no
+checker: it logs no error and does not force review.
 
-Decision routing can skip detailed review only with validated calibration for the exact model and
-response or tool rubric. The registry is empty, so selections remain visibly inactive and make no
-paid routing calls. Custom reviewer prompts disable skipping. Activation requires labeled hold-out
-evidence for character fit, false skips, coverage, latency and cost. INFO traces describe outcomes
-and budgets without private packets; operational failures have one sanitized ERROR owner.
+INFO traces describe outcomes and budgets without private packets; operational failures have one
+sanitized ERROR owner.
 
 ## Source pointers
 
 - `src/utils/chat/generationTurn.ts`: `runGenerationTurn()` and generation plan execution.
 - `src/utils/chat/toolLoop.ts`: `runToolLoop()` function-calling loop.
-- `src/utils/discord/stream/supersededMessageCleanup.ts`: deletion of abandoned partial message sends.
+- `src/utils/chat/assistantPrefill.ts`: `applyAssistantPrefill()` for manual, server, and continuation prefills.
 - `src/utils/security/keyRotation.ts`: API key selection and rotation tracking.
 - `src/utils/chat/responseReview.ts`: shared state, admitted evidence and reviewer lifecycle.
 - `src/utils/chat/responseRuleCheck.ts`: internal checker validation and bounded evidence.
-- `src/utils/chat/responseDecisionRouting.ts`: independent rubrics and calibration eligibility.

@@ -28,20 +28,28 @@ const features = [
     href: `https://docs.tomoribot.app/${locale.id}/features/chatting-personality/multiple-personas/`,
   },
   {
+    image: "/img/features/09-natural-nudges.png",
+    href: `https://docs.tomoribot.app/${locale.id}/features/chatting-personality/natural-nudges/`,
+  },
+  {
     image: "/img/features/02-memory.png",
     href: `https://docs.tomoribot.app/${locale.id}/features/knowledge/memory/`,
   },
   {
-    image: "/img/features/03-media-generation.png",
-    href: `https://docs.tomoribot.app/${locale.id}/features/capabilities/media-generation/`,
+    image: "/img/features/04-agentic-tools.png",
+    href: `https://docs.tomoribot.app/${locale.id}/features/capabilities/tools-and-extensions/built-in-tools/`,
   },
   {
-    image: "/img/features/04-agentic-tools.png",
-    href: `https://docs.tomoribot.app/${locale.id}/features/capabilities/tools-and-extensions/`,
+    image: "/img/features/03-media-generation.png",
+    href: `https://docs.tomoribot.app/${locale.id}/features/capabilities/media-generation/image-generation/`,
   },
   {
     image: "/img/features/05-fully-local-setup.png",
     href: `https://docs.tomoribot.app/${locale.id}/self-hosting/local-endpoints/`,
+  },
+  {
+    image: "/img/features/08-sillytavern-support.png",
+    href: `https://docs.tomoribot.app/${locale.id}/features/integrations/sillytavern-support/`,
   },
   {
     image: "/img/features/06-server-moderation.png",
@@ -50,10 +58,6 @@ const features = [
   {
     image: "/img/features/07-command-reference.png",
     href: `https://docs.tomoribot.app/${locale.id}/features/command-reference/`,
-  },
-  {
-    image: "/img/features/08-sillytavern-support.png",
-    href: `https://docs.tomoribot.app/${locale.id}/features/integrations/sillytavern-support/`,
   },
 ] as const;
 const structuredData = JSON.stringify({
@@ -270,9 +274,25 @@ const structuredData = JSON.stringify({
         }
       };
 
+      // Smooth scrolling is slow, so the observer would report stale slides mid-flight and
+      // rapid clicks or keys would compute their target from the wrong index.
+      let navigating = false;
+      let navigationTimer: ReturnType<typeof setTimeout> | undefined;
+      const NAVIGATION_SETTLE_MS = 700;
+
+      const finishNavigation = () => {
+        clearTimeout(navigationTimer);
+        navigating = false;
+      };
+
       const showSlide = (index: number) => {
-        const slide = slides[Math.max(0, Math.min(index, slides.length - 1))];
+        const targetIndex = Math.max(0, Math.min(index, slides.length - 1));
+        const slide = slides[targetIndex];
         if (!viewport || !slide) return;
+        navigating = true;
+        clearTimeout(navigationTimer);
+        navigationTimer = setTimeout(finishNavigation, NAVIGATION_SETTLE_MS);
+        updateControls(targetIndex);
         const centeredOffset = slide.offsetLeft - (viewport.clientWidth - slide.clientWidth) / 2;
         viewport.scrollTo({ left: centeredOffset, behavior: "smooth" });
       };
@@ -297,14 +317,19 @@ const structuredData = JSON.stringify({
       }
 
       if (viewport) {
-        viewport.addEventListener("keydown", (event) => {
-          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        // Listening on the whole section keeps arrows working after focus lands on a dot or slide button.
+        viewport.closest(".showcase")?.addEventListener("keydown", (event) => {
+          const { key } = event as KeyboardEvent;
+          if (key !== "ArrowLeft" && key !== "ArrowRight") return;
           event.preventDefault();
-          showSlide(activeIndex + (event.key === "ArrowLeft" ? -1 : 1));
+          showSlide(activeIndex + (key === "ArrowLeft" ? -1 : 1));
         });
+
+        viewport.addEventListener("scrollend", finishNavigation);
 
         const observer = new IntersectionObserver(
           (entries) => {
+            if (navigating) return;
             const visible = entries.find((entry) => entry.isIntersecting);
             if (!visible) return;
             const index = slides.indexOf(visible.target as HTMLElement);
@@ -666,7 +691,8 @@ const structuredData = JSON.stringify({
 
   .gallery-track {
     display: flex;
-    width: 100%;
+    width: max-content;
+    min-width: 100%;
     gap: 1.5rem;
     margin: 0;
     padding: 0 max(1rem, calc((100vw - var(--slide-width)) / 2));

@@ -1,11 +1,15 @@
-import { beforeAll, describe, expect, it } from "bun:test";
+import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { ChatInputCommandInteraction, Client } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type { ProviderPanelEntry } from "@/types/discord/providerPanel";
 import { providerPanelOperations, type LoadedProviderPanelScope } from "@/utils/provider/providerPanelOperations";
 import { executeProvidersCommand } from "@/commands/providers";
-import { createProvidersInteractionRoute } from "@/utils/discord/interactions/providersRoutes";
+import {
+  buildInitialPersonalProvidersPanel,
+  buildInitialProvidersPanel,
+  createProvidersInteractionRoute,
+} from "@/utils/discord/interactions/providersRoutes";
 import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import {
   buildProvidersRouteId,
@@ -24,14 +28,33 @@ import {
   buildProviderModelModal,
   buildProviderModelModalFieldId,
   buildProvidersPanelPayload,
+  PROVIDERS_ENTRIES_PER_SELECTOR_PAGE,
   type ProvidersPanelRenderInput,
 } from "@/utils/discord/ui/providersPanel";
 import { createPersona } from "../../helpers/fixtures";
 import { createRouteInteraction } from "../../helpers/routeInteraction";
+import * as providerOptionRegistry from "@/utils/provider/providerOptionRegistry";
 import { localizedCopy } from "../../helpers/localeCases";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 
 beforeAll(async () => initializeLocalizer());
+
+it("returns a provider panel with a receipt from an already acknowledged component", async () => {
+  for (const build of [buildInitialProvidersPanel, buildInitialPersonalProvidersPanel]) {
+    const interaction = createRouteInteraction();
+    await interaction.deferUpdate();
+    const payload = await build(interaction as never, "en-US", {
+      resolveScope: async () => scope,
+      receipt: {
+        tone: "info",
+        heading: localizedCopy("en-US", "commands.providers.entry_kind_provider"),
+        detail: "fixture completion",
+      },
+    });
+    expect(JSON.stringify(payload)).toContain("fixture completion");
+    expect(interaction.calls.map(({ method }) => method)).toEqual(["deferUpdate"]);
+  }
+});
 
 const WIRE_CONTRACT_V1: ReadonlyArray<readonly [string, ProvidersPanelRoute]> = [
   ["providers:v1:select:en-US", { action: "select", locale: "en-US" }],
@@ -1037,8 +1060,10 @@ describe("providers routes", () => {
 
     expect(calls).toEqual(["show:image:42"]);
     expect(openedWith).toEqual({
+      apiStyle: "comfyui",
       codeName: "anima-v1",
       text: undefined,
+      decision: undefined,
       image: {
         supports: { txt2img: true, img2img: false, inpaint: true, negative_prompt: false },
         allowInpaint: true,
@@ -1710,6 +1735,54 @@ describe("providers routes", () => {
     expect(JSON.stringify(personalPayloads[0])).not.toContain("Select Page");
   });
 
+  it("repaints an entry action on the selector page that lists the entry", async () => {
+    const entries = Array.from({ length: PROVIDERS_ENTRIES_PER_SELECTOR_PAGE + 1 }, (_, index) => ({
+      id: `provider:p${index}`,
+      kind: "provider" as const,
+      provider: `p${index}`,
+      displayName: `Provider ${index}`,
+      savedAt: null,
+      rotationKeyCount: 0,
+      capabilities: [],
+    }));
+    const scope: LoadedProviderPanelScope = {
+      state: {} as TomoriState,
+      data: { readStatus: "fresh", entries, initialEntryId: entries[0]?.id ?? null },
+    };
+    const route = createProvidersInteractionRoute({ resolveScope: async () => scope });
+    const render = async (entryIndex: number): Promise<string> => {
+      const payloads: unknown[] = [];
+      const customId = buildProvidersRouteId(PROVIDERS_ROUTE_NAMESPACE, {
+        action: "remove-cancel",
+        locale: "en-US",
+        entryKind: "provider",
+        entryKey: `p${entryIndex}`,
+      });
+      const interaction = {
+        customId,
+        guildId: "123",
+        user: { id: "456" },
+        memberPermissions: { has: () => true },
+        isStringSelectMenu: () => false,
+        isModalSubmit: () => false,
+        isButton: () => true,
+        deferUpdate: async () => undefined,
+        editReply: async (payload: unknown) => payloads.push(payload),
+      };
+      await route.execute({} as Client, interaction as never, parsed(customId));
+      return JSON.stringify(payloads[0]);
+    };
+
+    const lastOnFirstPage = await render(PROVIDERS_ENTRIES_PER_SELECTOR_PAGE - 1);
+    const firstOnSecondPage = await render(PROVIDERS_ENTRIES_PER_SELECTOR_PAGE);
+
+    const pageLabel = (current: number) => localizer("en-US", "general.pagination.page_info", { current, total: 2 });
+    expect(lastOnFirstPage).toContain(`"label":"${pageLabel(1)}"`);
+    expect(lastOnFirstPage).toContain(`"value":"provider:p${PROVIDERS_ENTRIES_PER_SELECTOR_PAGE - 1}"`);
+    expect(firstOnSecondPage).toContain(`"label":"${pageLabel(2)}"`);
+    expect(firstOnSecondPage).toContain(`"value":"provider:p${PROVIDERS_ENTRIES_PER_SELECTOR_PAGE}"`);
+  });
+
   it("rechecks guild permission before loading current scope", async () => {
     const calls: string[] = [];
     const customId = buildProvidersRouteId(PROVIDERS_ROUTE_NAMESPACE, { action: "retry", locale: "en-US" });
@@ -1746,6 +1819,95 @@ describe("providers routes", () => {
       return { components: [], flags: 32768 };
     });
     expect(calls).toEqual(["deferReply", "load", "editReply"]);
+  });
+
+  it("offers registration-failed copy only when the provider rejects the key", async () => {
+    const key = "genai.tips.wait_and_retry";
+    const surfaces: string[] = [];
+    const copy = spyOn(providerOptionRegistry, "withProviderOptionCopy").mockImplementation(async (keys, context) => {
+      surfaces.push(context.surface);
+      return [...keys, key];
+    });
+    try {
+      for (const status of ["validation-failed", "no-balance", "invalid-key", "write-failed"] as const) {
+        const customId = buildProvidersRouteId(PROVIDERS_ROUTE_NAMESPACE, {
+          action: "add-submit",
+          locale: "en-US",
+          nonce: "nonce-12345678",
+        });
+        const replies: unknown[] = [];
+        const interaction = {
+          id: "interaction-add",
+          customId,
+          guildId: "123",
+          user: { id: "user-456" },
+          memberPermissions: { has: () => true },
+          fields: { getTextInputValue: () => "api-key" },
+          isStringSelectMenu: () => false,
+          isModalSubmit: () => true,
+          isButton: () => false,
+          deferUpdate: async () => {},
+          editReply: async (payload: unknown) => replies.push(payload),
+        };
+        const route = createProvidersInteractionRoute({
+          resolveScope: async () => scope,
+          operations: { addServerProvider: async () => ({ status }) } as never,
+        });
+        surfaces.length = 0;
+        await route.execute({} as Client, interaction as never, parsed(customId));
+        const rejected = status === "validation-failed" || status === "no-balance";
+        expect(surfaces).toEqual(rejected ? ["registration_failed"] : []);
+        expect(JSON.stringify(replies.at(-1)).includes(`-# ${localizedCopy("en-US", key)}`)).toBe(rejected);
+      }
+    } finally {
+      copy.mockRestore();
+    }
+  });
+
+  it("offers registration-failed copy only when a new endpoint is unreachable", async () => {
+    const key = "genai.tips.wait_and_retry";
+    const surfaces: string[] = [];
+    const copy = spyOn(providerOptionRegistry, "withProviderOptionCopy").mockImplementation(async (keys, context) => {
+      surfaces.push(context.surface);
+      return [...keys, key];
+    });
+    try {
+      for (const result of [
+        { status: "unreachable", reason: "timeout", credentialsWithheld: false },
+        { status: "write-failed" },
+      ] as const) {
+        const customId = buildProvidersRouteId(PROVIDERS_ROUTE_NAMESPACE, {
+          action: "endpoint-submit",
+          locale: "en-US",
+          nonce: "nonce-12345678",
+        });
+        const replies: unknown[] = [];
+        const interaction = {
+          id: "interaction-endpoint",
+          customId,
+          guildId: "123",
+          user: { id: "user-456" },
+          memberPermissions: { has: () => true },
+          fields: { getTextInputValue: () => "value" },
+          isStringSelectMenu: () => false,
+          isModalSubmit: () => true,
+          isButton: () => false,
+          deferUpdate: async () => {},
+          editReply: async (payload: unknown) => replies.push(payload),
+        };
+        const route = createProvidersInteractionRoute({
+          resolveScope: async () => scope,
+          operations: { addCustomEndpointConnection: async () => result } as never,
+        });
+        surfaces.length = 0;
+        await route.execute({} as Client, interaction as never, parsed(customId));
+        const unreachable = result.status === "unreachable";
+        expect(surfaces).toEqual(unreachable ? ["registration_failed"] : []);
+        expect(JSON.stringify(replies.at(-1)).includes(`-# ${localizedCopy("en-US", key)}`)).toBe(unreachable);
+      }
+    } finally {
+      copy.mockRestore();
+    }
   });
 
   it("records panel_action telemetry on provider operations across scopes", async () => {
@@ -2012,5 +2174,86 @@ describe("Decision registration routes", () => {
     await route.execute({} as Client, interaction as never, parsed(customId));
     expect(wrote).toBe(true);
     expect(JSON.stringify(interaction.edits)).toContain(localizedCopy("en-US", "commands.providers.decision_removed"));
+  });
+
+  it("delivers server or DM copy when initial providers panel resolution has no scope", async () => {
+    const serverInteraction = {
+      guildId: "123",
+      user: { id: "456" },
+      memberPermissions: { has: () => true },
+    } as unknown as ChatInputCommandInteraction;
+
+    const dmInteraction = {
+      guildId: null,
+      user: { id: "456" },
+      memberPermissions: { has: () => true },
+    } as unknown as ChatInputCommandInteraction;
+
+    const serverPayload = await buildInitialProvidersPanel(serverInteraction, "en-US", {
+      resolveScope: async () => null,
+    });
+    expect(JSON.stringify(serverPayload)).toContain(localizedCopy("en-US", "commands.providers.not_setup"));
+
+    const dmPayload = await buildInitialProvidersPanel(dmInteraction, "en-US", { resolveScope: async () => null });
+    expect(JSON.stringify(dmPayload)).toContain(localizedCopy("en-US", "commands.providers.not_setup_dm"));
+
+    const serverPersonalPayload = await buildInitialPersonalProvidersPanel(serverInteraction, "en-US", {
+      resolveScope: async () => null,
+    });
+    expect(JSON.stringify(serverPersonalPayload)).toContain(localizedCopy("en-US", "commands.providers.not_setup"));
+
+    const dmPersonalPayload = await buildInitialPersonalProvidersPanel(dmInteraction, "en-US", {
+      resolveScope: async () => null,
+    });
+    expect(JSON.stringify(dmPersonalPayload)).toContain(localizedCopy("en-US", "commands.providers.not_setup_dm"));
+  });
+
+  it("routes missing scope in component interactions to server or DM copy", async () => {
+    const customId = buildProvidersRouteId(PROVIDERS_ROUTE_NAMESPACE, {
+      action: "retry",
+      locale: "en-US",
+    });
+
+    const serverEdits: unknown[] = [];
+    const serverInteraction = {
+      customId,
+      guildId: "123",
+      user: { id: "456" },
+      memberPermissions: { has: () => true },
+      isStringSelectMenu: () => false,
+      isModalSubmit: () => false,
+      isButton: () => true,
+      deferUpdate: async () => {},
+      editReply: async (payload: unknown) => {
+        serverEdits.push(payload);
+      },
+    };
+
+    const serverRoute = createProvidersInteractionRoute({
+      resolveScope: async () => null,
+    });
+    await serverRoute.execute({} as Client, serverInteraction as never, parsed(customId));
+    expect(JSON.stringify(serverEdits)).toContain(localizedCopy("en-US", "commands.providers.not_setup"));
+
+    const dmEdits: unknown[] = [];
+    const dmInteraction = {
+      customId,
+      guildId: null,
+      user: { id: "456" },
+      memberPermissions: { has: () => true },
+      isStringSelectMenu: () => false,
+      isModalSubmit: () => false,
+      isButton: () => true,
+      deferUpdate: async () => {},
+      editReply: async (payload: unknown) => {
+        dmEdits.push(payload);
+      },
+    };
+
+    const dmRoute = createProvidersInteractionRoute({
+      resolveScope: async () => null,
+    });
+    await dmRoute.execute({} as Client, dmInteraction as never, parsed(customId));
+    expect(JSON.stringify(dmEdits)).toContain(localizedCopy("en-US", "commands.providers.not_setup_dm"));
   });
 });

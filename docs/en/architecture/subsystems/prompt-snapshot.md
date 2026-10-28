@@ -25,6 +25,7 @@ Prompt assembly mirrors the production `messageCreate → tomoriChat` pipeline t
 - **Message boundary processing**: Respects conversation resets (`sliceMessagesAtResetMarker()`), link previews, stickers, and system-produced notice blocks (`extractNoticeTextFromComponents`).
 - **History truncation**: Truncates conversation history against `resolveContextBudget()`, reproducing the drop policy applied during generation turns.
 - **UI exclusion**: Diagnostic embeds and internal debug notices are omitted because they represent interface elements rather than model prompt input.
+- **Hidden agendas**: A Natural Nudges agenda renders above its opener only when the answering persona owns it, as in live context building, so the snapshot shows what that persona sees.
 
 NovelAI inspection budgets against its resolved personal or server credential without selecting a
 rotation key. A snapshot reconstructs that credential's current allowance; it cannot reproduce a
@@ -51,13 +52,13 @@ Generates human-readable plain text annotated with configuration locator headers
 
 Header markers indicate governing configuration commands and are annotations added for human readers; they are not sent to the LLM.
 
-### JSON format (`format: json`)
+### JSON format (`format: json` or `json_tools`)
 
 Serializes the reconstructed context into provider-native request shapes:
 
 - Google-family, Anthropic, and OpenAI-compatible serializers use request-building adapters. Providers without a probe builder, including NovelAI, use a generic OpenAI-style representation. Transport-time retries and degradation are outside the snapshot.
 - Large media payloads are replaced with placeholders (`[BASE64_HIDDEN]`) to limit export file sizes.
-- The optional `fetch_tools: true` flag appends provider-formatted tool definitions generated via `adapter.getAllToolsInProviderFormat()`.
+- `format: json_tools` also appends provider-formatted tool definitions generated via `adapter.getAllToolsInProviderFormat()`.
 
 ### Request configuration block
 

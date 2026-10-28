@@ -9,7 +9,6 @@
 
 import { beforeAll, describe, expect, it } from "bun:test";
 import type { TomoriState } from "@/types/db/schema";
-import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
 import type { RawModalPayload } from "@/utils/discord/ui/configModals";
 import {
   SELECT_OPTION_LIMIT as AUTO_TRIGGER_PERSONA_PAGE_SIZE,
@@ -24,30 +23,18 @@ import {
   RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE,
 } from "@/utils/discord/ui/configBehaviorModals";
 import {
-  DISCORD_CHECKBOX_GROUP_OPTIONS_MAX,
-  DISCORD_CHECKBOX_GROUP_OPTIONS_MIN,
-  DISCORD_CUSTOM_ID_MAX,
-  DISCORD_CUSTOM_ID_MIN,
-  DISCORD_MODAL_COMPONENTS_MAX,
-  DISCORD_MODAL_COMPONENTS_MIN,
+  clampRawModalText,
   DISCORD_MODAL_FIELD_DESCRIPTION_MAX,
-  DISCORD_MODAL_FIELD_LABEL_MAX,
-  DISCORD_MODAL_TITLE_MAX,
-  DISCORD_RADIO_GROUP_OPTIONS_MAX,
-  DISCORD_RADIO_GROUP_OPTIONS_MIN,
-  DISCORD_SELECT_OPTION_DESCRIPTION_MAX,
-  DISCORD_SELECT_OPTION_LABEL_MAX,
-  DISCORD_SELECT_OPTION_VALUE_MAX,
-  DISCORD_SELECT_OPTIONS_MAX,
-  DISCORD_SELECT_OPTIONS_MIN,
   getDiscordTextLength,
   validateRawModalLimits,
 } from "@/utils/discord/ui/componentsV2Limits";
-import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
+import { buildConfigModalFieldId, buildPersonaRenameModal } from "@/utils/discord/ui/configModals";
+import { PERSONA_NICKNAME_MAX_LENGTH } from "@/types/personaNaming";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import type { ToolNoticeDefinition, ToolNoticeKey } from "@/constants/toolNotices";
 import { RUNTIME_LOCALES } from "../../helpers/localeCases";
 import { createPersona } from "../../helpers/fixtures";
+import { assertWithinDiscordLimits, eachComponent } from "../../helpers/rawModalLimits";
 
 const STRING_SELECT = 3;
 const LABEL = 18;
@@ -74,104 +61,6 @@ function makeNoticeDefinitions(count: number): ToolNoticeDefinition[] {
     labelKey: "commands.config.notice-embeds.visibility.notice_web_search_label",
     descriptionKey: "commands.config.notice-embeds.visibility.notice_web_search_description",
   }));
-}
-
-/** Walks a payload's component tree, since selects sit inside Label wrappers. */
-function eachComponent(components: readonly RawDiscordComponent[], visit: (c: RawDiscordComponent) => void): void {
-  for (const component of components) {
-    visit(component);
-    if (component.component) eachComponent([component.component], visit);
-    if (component.components) eachComponent(component.components, visit);
-  }
-}
-
-function assertWithinDiscordLimits(payload: RawModalPayload, label: string): void {
-  expect(validateRawModalLimits(payload).violations, `${label}: validator violations`).toEqual([]);
-
-  expect(getDiscordTextLength(payload.title), `${label}: title length`).toBeLessThanOrEqual(DISCORD_MODAL_TITLE_MAX);
-  expect(payload.components.length, `${label}: component count`).toBeGreaterThanOrEqual(DISCORD_MODAL_COMPONENTS_MIN);
-  expect(payload.components.length, `${label}: component count`).toBeLessThanOrEqual(DISCORD_MODAL_COMPONENTS_MAX);
-
-  const customIds = new Set<string>();
-  eachComponent(payload.components, (component) => {
-    if (component.custom_id !== undefined) {
-      const cidLen = getDiscordTextLength(component.custom_id);
-      expect(cidLen, `${label}: custom_id min length`).toBeGreaterThanOrEqual(DISCORD_CUSTOM_ID_MIN);
-      expect(cidLen, `${label}: custom_id max length`).toBeLessThanOrEqual(DISCORD_CUSTOM_ID_MAX);
-      expect(customIds.has(component.custom_id), `${label}: duplicate custom_id ${component.custom_id}`).toBe(false);
-      customIds.add(component.custom_id);
-    }
-
-    if (component.type === LABEL) {
-      if (component.label !== undefined) {
-        expect(getDiscordTextLength(component.label), `${label}: label length`).toBeLessThanOrEqual(
-          DISCORD_MODAL_FIELD_LABEL_MAX,
-        );
-      }
-      if (component.description !== undefined) {
-        expect(getDiscordTextLength(component.description), `${label}: description length`).toBeLessThanOrEqual(
-          DISCORD_MODAL_FIELD_DESCRIPTION_MAX,
-        );
-      }
-    }
-
-    if (component.type === STRING_SELECT) {
-      const options = component.options ?? [];
-      expect(options.length, `${label}: ${component.custom_id} option count`).toBeGreaterThanOrEqual(
-        DISCORD_SELECT_OPTIONS_MIN,
-      );
-      expect(options.length, `${label}: ${component.custom_id} option count`).toBeLessThanOrEqual(
-        DISCORD_SELECT_OPTIONS_MAX,
-      );
-      for (const option of options) {
-        expect(getDiscordTextLength(option.label), `${label}: option label`).toBeLessThanOrEqual(
-          DISCORD_SELECT_OPTION_LABEL_MAX,
-        );
-        expect(getDiscordTextLength(option.value), `${label}: option value`).toBeLessThanOrEqual(
-          DISCORD_SELECT_OPTION_VALUE_MAX,
-        );
-        expect(getDiscordTextLength(option.description ?? ""), `${label}: option description`).toBeLessThanOrEqual(
-          DISCORD_SELECT_OPTION_DESCRIPTION_MAX,
-        );
-      }
-    }
-
-    if (component.type === CHECKBOX_GROUP) {
-      const options = component.options ?? [];
-      expect(options.length, `${label}: ${component.custom_id} checkbox count`).toBeGreaterThanOrEqual(
-        DISCORD_CHECKBOX_GROUP_OPTIONS_MIN,
-      );
-      expect(options.length, `${label}: ${component.custom_id} checkbox count`).toBeLessThanOrEqual(
-        DISCORD_CHECKBOX_GROUP_OPTIONS_MAX,
-      );
-      for (const option of options) {
-        expect(getDiscordTextLength(option.label), `${label}: checkbox label`).toBeLessThanOrEqual(
-          DISCORD_SELECT_OPTION_LABEL_MAX,
-        );
-        expect(getDiscordTextLength(option.value), `${label}: checkbox value`).toBeLessThanOrEqual(
-          DISCORD_SELECT_OPTION_VALUE_MAX,
-        );
-      }
-    }
-
-    if (component.type === RADIO_GROUP) {
-      const options = component.options ?? [];
-      expect(options.length, `${label}: ${component.custom_id} radio count`).toBeGreaterThanOrEqual(
-        DISCORD_RADIO_GROUP_OPTIONS_MIN,
-      );
-      expect(options.length, `${label}: ${component.custom_id} radio count`).toBeLessThanOrEqual(
-        DISCORD_RADIO_GROUP_OPTIONS_MAX,
-      );
-      for (const option of options) {
-        expect(getDiscordTextLength(option.label), `${label}: radio label`).toBeLessThanOrEqual(
-          DISCORD_SELECT_OPTION_LABEL_MAX,
-        );
-        expect(getDiscordTextLength(option.value), `${label}: radio value`).toBeLessThanOrEqual(
-          DISCORD_SELECT_OPTION_VALUE_MAX,
-        );
-      }
-    }
-  });
 }
 
 /** Roster sizes spanning both sides of the 25-option ceiling, including its exact boundary. */
@@ -646,5 +535,65 @@ describe("raw config modal limits", () => {
 
     expect(randomDefaulted(null)).toBe(true);
     expect(randomDefaulted(3)).toBe(false);
+  });
+});
+
+describe("clampRawModalText", () => {
+  it("brings every capped display string within Discord limits without touching values or custom IDs", () => {
+    const payload: RawModalPayload = {
+      title: "T".repeat(80),
+      custom_id: "modal_clamp",
+      components: [
+        {
+          type: LABEL,
+          label: "L".repeat(80),
+          description: "D".repeat(200),
+          component: {
+            type: RADIO_GROUP,
+            custom_id: "radio_clamp",
+            options: [
+              { label: "a".repeat(150), value: "first", description: "b".repeat(150) },
+              { label: "short", value: "second" },
+            ],
+          },
+        },
+        {
+          type: LABEL,
+          label: "Text",
+          component: { type: 4, custom_id: "text_clamp", placeholder: "p".repeat(200) },
+        },
+      ],
+    };
+
+    const { payload: clamped, truncatedPaths } = clampRawModalText(payload);
+
+    expect(validateRawModalLimits(payload).valid).toBe(false);
+    assertWithinDiscordLimits(clamped, "clamped");
+    expect(getDiscordTextLength(clamped.components[1]?.component?.placeholder ?? "")).toBe(100);
+    expect(clamped.components[0]?.component?.options?.map((option) => option.value)).toEqual(["first", "second"]);
+    expect(clamped.components[0]?.component?.options?.[1]).toEqual({ label: "short", value: "second" });
+    expect(clamped.components[1]?.component?.custom_id).toBe("text_clamp");
+    expect(truncatedPaths).toHaveLength(6);
+  });
+
+  it("returns an in-limit payload unchanged and reports nothing", () => {
+    const payload = buildBehaviorRandomAddModal("en-US", "nonce", makePersonas(3));
+    const { payload: clamped, truncatedPaths } = clampRawModalText(payload);
+    expect(clamped).toEqual(payload);
+    expect(truncatedPaths).toEqual([]);
+  });
+});
+
+describe("buildPersonaRenameModal", () => {
+  it("lets a legacy 1-character name open the modal instead of failing its own floor", () => {
+    const field = buildPersonaRenameModal("en-US", 55, "nonce1234567", "\u611B").components[0]?.component;
+    expect(field?.value).toBe("\u611B");
+    expect(field?.min_length).toBeLessThanOrEqual(1);
+  });
+
+  it("opens within Discord limits when the stored nickname exceeds the cap", () => {
+    const modal = buildPersonaRenameModal("en-US", 55, "nonce1234567", "n".repeat(PERSONA_NICKNAME_MAX_LENGTH + 2));
+    assertWithinDiscordLimits(modal, "rename");
+    expect(modal.components[0]?.component?.value).toBe("n".repeat(PERSONA_NICKNAME_MAX_LENGTH));
   });
 });

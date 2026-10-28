@@ -2,76 +2,54 @@
 title: "Voice: TTS & STT"
 sidebar:
   order: 3
-aiGenerated: true
 ---
 
-TomoriBot can speak and listen in Discord: send voice replies with text-to-speech (TTS),
-and transcribe audio messages into conversation context with speech-to-text (STT).
+TomoriBot can send voice replies with text-to-speech (TTS) and understand audio messages through
+speech-to-text (STT). Choose speech providers in `/providers` or configure your own Google or
+OpenRouter speech models in `/personal providers`.
 
-Both use the provider endpoint system. ElevenLabs is the quickest cloud option. You can
-also run local voice models on your own hardware using self-hosted engines.
-
-## Text-to-Speech
+## Text-to-speech
 <!-- anchor: text-to-speech -->
 
-### ElevenLabs (cloud, easiest)
+Ask a persona to send a voice message or use `/generate voice-message`. Enable voice messages under
+`/config` > `Permissions` and configure the persona's voice under `/config` > `Persona` > `Voice`.
 
-1. Get an API key from [ElevenLabs](https://elevenlabs.io/app/settings/api-keys).
-2. Run `/providers`, choose `Add New Provider`, select `ElevenLabs`, and paste the key. This flow:
-   - registers the ElevenLabs speech endpoint and transcription endpoint,
-   - activates both endpoints,
-   - optionally assigns a voice to one persona immediately.
-3. Assign voices to additional personas in `/config` > Persona > Voice. Browse voices in the
-   [ElevenLabs Voice Library](https://elevenlabs.io/app/voice-library), where you can also
-   clone your own.
+There are two TTS types:
 
-Select ElevenLabs in `/providers`, then choose `Edit Endpoint` whenever you need to update the key.
+- **Voice design** creates a voice from a written description, such as "a warm, soft-spoken voice."
+- **Voice clone** uses a reference recording to create a voice that resembles the sample.
 
-Notes:
+Each type needs a compatible model. Save a description or assign a reference on the persona's Voice
+page, where you can also choose which type to prefer. If the preferred option is unavailable,
+TomoriBot can use the other saved option. Descriptions are included in exported persona cards; voice
+reference assignments are not.
 
-- On the free plan, only premade voices work. Browse the
-  [premade voice list](https://elevenlabs-sdk.mintlify.app/voices/premade-voices).
-- Characters are counted when she generates voice messages. The free tier has monthly limits,
-  so monitor your ElevenLabs dashboard.
-- Voice replies require `voice_message_enabled` in `/config` > Permissions, and the active persona
-  must have a voice assigned.
-- Changing `/config` > Persona > Voice requires the Manage Server permission in a server, and
-  remains available to the owner in DMs.
+:::tip
+Use `voice_design` or `voice_sample` on `/generate voice-message` to try a voice for one message
+without changing the persona's saved voice.
+:::
 
-In `/help`, choose `Features`, then `Speech`, for the interactive walkthrough in Discord.
+### Providers and models
 
-### Local voice-cloning engines (self-hosted)
+Google supports voice design, while OpenRouter offers voice design and cloning models. Configure
+models under `/config` > `Models` > `Switch Models`, or choose personal models under
+`/personal config`. Personal model failures may use the server's model if server fallback is enabled.
+An explicitly selected one-off model does not fall back to another model.
 
-On self-hosted instances, you can run a local voice-clone server. The workflow:
-start the server, register its connection and model in `/providers`, select it in
-`/providers`, upload a reference sample in `/config` > Models > TTS Parameters & Voices,
-then assign it in `/config` > Persona > Voice. Any audio format is accepted (automatically
-converted to mono WAV); 10 to 20 second clips without background music work best.
+ElevenLabs offers cloud voices and transcription. Add its key through `/providers` and assign a
+voice to each persona. Its free plan supports premade voices and has usage limits.
 
-Each engine has its own setup guide:
+For local voice cloning and voice design, see the
+[Text-to-Speech guides](/self-hosting/local-endpoints/text-to-speech/). Local cloning requires a
+reference sample, which you can upload under `/config` > `Models` > `TTS Parameters & Voices`.
 
-- [Chatterbox-Turbo/Nano](/self-hosting/local-endpoints/text-to-speech/chatterbox/): fast English voice cloning with emotion tags such as `[laugh]`.
-- [Qwen3-TTS](/self-hosting/local-endpoints/text-to-speech/qwen3tts/): multilingual (10 languages) plus a natural-language VoiceDesign mode.
-- [MOSS-TTS](/self-hosting/local-endpoints/text-to-speech/moss/): multilingual cloning and English or Chinese voice design.
-- [IrodoriTTS](/self-hosting/local-endpoints/text-to-speech/irodoritts/): Japanese-specialized engine that reads emojis as emotion cues.
-
-See the [Text-to-Speech comparison table](/self-hosting/local-endpoints/text-to-speech/) for hardware guidance and the full engine list.
-
-## Speech-to-Text
+## Speech-to-text
 <!-- anchor: speech-to-text -->
 
-Transcription endpoints turn user audio attachments into text for conversation context.
-Whether transcripts are posted publicly in chat is controlled in `/config` > Behavior > Notice Behavior.
+A transcription model turns audio attachments into text TomoriBot can use in conversation. Choose it
+separately from TTS under `/config` > `Models` > `Switch Models`. Adding ElevenLabs also registers a
+transcription endpoint. For local options, see the
+[Speech-to-Text guides](/self-hosting/local-endpoints/speech-to-text/).
 
-### ElevenLabs (cloud)
-
-Adding ElevenLabs from `/providers` registers the transcription endpoint alongside speech.
-Use `/providers` to switch between active transcription endpoints.
-
-### Local engines (self-hosted)
-
-- [WhisperX](/self-hosting/local-endpoints/speech-to-text/whisperx/): recommended local path; around 100 languages, GPU-accelerated, multiple model sizes.
-- [KoboldCPP](/self-hosting/local-endpoints/speech-to-text/koboldcpp/): works when your build exposes an OpenAI-compatible transcription endpoint.
-- [whisper.cpp](/self-hosting/local-endpoints/speech-to-text/whispercpp/).
-
-See the [Speech-to-Text](/self-hosting/local-endpoints/speech-to-text/) hub for the full engine list. For the Discord summary, run `/help`, then choose `Features` and `Transcription`.
+You can hide visible transcripts under `/config` > `Behavior` > `Notice Behavior` >
+`Speech Transcripts`. The text still reaches the conversation context.

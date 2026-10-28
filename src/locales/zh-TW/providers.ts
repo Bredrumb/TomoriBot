@@ -12,7 +12,6 @@ export default {
     tool_error_loop_title: `工具錯誤迴圈`,
     tool_error_loop_description: `我一直遇到工具錯誤，無法完成要求。請換個說法，如果問題持續發生請使用 \`/refresh\`。`,
     fallback_used_title: `已使用備援模型`,
-    fallback_used_description: `已改用 \`{success_model}\`，而不是 {chain}`,
     fallback_used_details_description: `備援順位 {slot} 由 \`{success_model}\` 回應，先前的失敗如下：
 {failure_list}`,
     fallback_used_failure_line: `{index}. {model} 發生錯誤：{error_detail}`,
@@ -24,7 +23,6 @@ export default {
       source_attached: `這張表格太長，無法直接顯示，所以改用檔案附上：`,
     },
     no_response_title: `沒有回覆`,
-    no_response_description: `我沒有回覆，可能是 AI 回傳空白或逾時。`,
     log_channel_chat_notice_title: `紀錄頻道不開放聊天`,
     log_channel_chat_notice_description: `這個頻道被設為紀錄頻道，所以我不會在這裡回覆訊息。若要在這裡聊天，請到 \`/config\` > 頻道 > 紀錄 清除或更改設定。`,
     thought_log: {
@@ -55,6 +53,10 @@ export default {
       response_stopped_title: `回覆中斷`,
       response_stopped_description: `回覆因下列原因中斷：{reason}。請確認送出的內容沒有超過 AI 供應商能處理的大小。執行 \`/refresh\` 可清除對話內容。`,
       streaming_failed_description: `嘗試串流回覆時發生問題。`,
+      error_footer_server_provider: `來源：{provider} • 這個錯誤來自伺服器的 AI 供應商，而非 TomoriBot。`,
+      error_footer_dm_provider: `來源：{provider} • 這個錯誤來自 AI 供應商，而非 TomoriBot。`,
+      error_footer_personal_provider: `來源：{provider}（個人） • 這個錯誤來自你的個人 AI 供應商，而非 TomoriBot。`,
+      error_footer_tomoribot: `來源：TomoriBot • 這是 TomoriBot 的內部錯誤，而非你的 AI 供應商。`,
       provider_error_interaction: `串流回覆被封鎖或中止。原因：{reason}。`,
       api_error_title: `🔴 供應商 API 錯誤`,
       privacy_error_title: `🔴 供應商隱私設定`,
@@ -66,6 +68,7 @@ export default {
       timeout_title: `🟡️ 供應商要求逾時`,
       provider_overloaded_title: `🔴 供應商超載`,
       provider_overloaded_description: `供應商目前超載或暫時無法使用`,
+      connection_refused_description: `與供應商的連線被拒絕。請檢查其端點是否正在運作，且位址是否正確。`,
       context_length_title: `🔴 訊息對這個模型來說太長`,
       credit_limit_title: `🔴 供應商額度不足`,
       balance_exhausted_title: `🔴 供應商帳號餘額不足`,
@@ -105,7 +108,6 @@ export default {
       google_credential_type: `這看起來像 OAuth 或服務帳號權杖。\`google\` 供應商需要來自 [Google AI Studio](https://aistudio.google.com/apikey) 的一般 API 金鑰；Google Cloud 憑證請改用 \`vertex\` 供應商。`,
       openrouter_privacy_settings: `請到 [OpenRouter 隱私設定](https://openrouter.ai/settings/privacy)調整你的「資料政策」設定以允許這個模型，或改選其他模型。`,
       openrouter_fund_account: `在你的 OpenRouter 帳號儲值至少 10 點，就能解鎖每天 1000 次免費模型要求。`,
-      reduce_context_length: `試著縮短訊息長度，或用 \`/refresh\` 清除脈絡。`,
       reduce_output_tokens: `用 \`/config\` > 模型 > 取樣器與參數（輸出 token）調降回覆長度上限，以空出更多空間給對話紀錄。`,
       reduce_output_tokens_personal: `用 \`/personal config\`（輸出 token）調降回覆長度上限，以空出更多空間給對話紀錄。`,
       openrouter_add_credits: `到 [OpenRouter 儲值頁面](https://openrouter.ai/settings/credits)加值，或用 \`/config\` > 模型 > 取樣器與參數（輸出 token）縮短回覆長度。`,
@@ -145,7 +147,6 @@ export default {
     },
     vertexexpress: {
       "403_predict_permission_message": `這組金鑰無法呼叫 Vertex AI Express 模型。請使用 Express 模式的金鑰，或改用獨立的 \`vertex\` 供應商來連接完整的 Google Cloud 專案。`,
-      unknown_default_message: `發生未預期的錯誤`,
     },
     novelai: {
       "400_default_message": `要求格式或參數無效。請確認你輸入的 API 金鑰正確。`,

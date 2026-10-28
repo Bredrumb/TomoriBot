@@ -298,7 +298,9 @@ async function runLane(
     const code = (await proc.exited) ?? 1;
     liveProcesses.delete(proc);
 
-    chunks.push(stdout + stderr);
+    if (process.env.TOMORI_TEST_QUIET !== "true" || code !== 0) {
+      chunks.push(stdout + stderr);
+    }
 
     // Remember the first failure but keep going so every batch reports.
     if (code !== 0 && exitCode === 0) exitCode = code;
@@ -321,17 +323,17 @@ async function runTestFiles(
   const requestedOutfile = process.env.BUN_TEST_JUNIT_OUTFILE;
   const lanes = await planLanes(files);
 
-  const results = await Promise.all(lanes.map((lane) => runLane(lane, extraEnv, requestedOutfile, omitDatabaseEnv)));
+  const results = await Promise.all(
+    lanes.map((lane) => runLane(lane, extraEnv, requestedOutfile, omitDatabaseEnv || lane.id !== "db")),
+  );
 
   // Replay buffered output in fixed lane order so concurrent runs stay readable.
-  // TOMORI_TEST_QUIET is set by `vl` on the full-suite run, where it re-reports each
-  // failing file through the JUnit results instead of replaying every lane's output.
-  if (process.env.TOMORI_TEST_QUIET !== "true") {
-    for (const result of results) {
-      const fileCount = result.lane.batches.reduce((total, batch) => total + batch.files.length, 0);
-      process.stdout.write(`\n──── lane: ${result.lane.id} (${fileCount} files) ────\n`);
-      process.stdout.write(result.output);
-    }
+  // TOMORI_TEST_QUIET is set by `vl` in quiet mode to mute passing lanes while keeping failing ones.
+  for (const result of results) {
+    if (process.env.TOMORI_TEST_QUIET === "true" && result.exitCode === 0) continue;
+    const fileCount = result.lane.batches.reduce((total, batch) => total + batch.files.length, 0);
+    process.stdout.write(`\n──── lane: ${result.lane.id} (${fileCount} files) ────\n`);
+    process.stdout.write(result.output);
   }
 
   const allOutfiles = results.flatMap((result) => result.junitOutfiles);

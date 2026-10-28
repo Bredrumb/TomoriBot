@@ -114,7 +114,7 @@ const contributor = readRequired(join("_llms-txt", "contributor-and-architecture
 if (!entrypoint.includes(`/${defaultLocale}/introduction/`) || !entrypoint.includes(`/${defaultLocale}/features/`)) {
   throw new Error("llms.txt must emphasize the English introduction and feature indexes");
 }
-if (!emphasized.includes("# What is TomoriBot?") || !emphasized.includes("# Tools & Extensions")) {
+if (!emphasized.includes("# What is TomoriBot?") || !emphasized.includes("# Built-in tools")) {
   throw new Error("The emphasized documentation set is empty or missing its expected sections");
 }
 if (!contributor.includes("# Architecture")) {

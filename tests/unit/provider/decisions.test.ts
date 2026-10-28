@@ -6,6 +6,12 @@ import type { ProviderDecisionRequest } from "@/types/provider/featureInterfaces
 import { parseOpenRouterDecisionModelList } from "@/utils/cache/openrouterDecisionModelCache";
 import { log } from "@/utils/misc/logger";
 import { llmModelRepo } from "@/utils/db/repositories";
+import { OpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
+import {
+  ProviderRequestDeniedError,
+  registerProviderRequestDenialTranslator,
+  withProviderUsageContext,
+} from "@/utils/provider/providerUsage";
 
 const customReference = { provider: "custom:3", modelId: 8, registrationId: null, customEndpointId: 2 };
 
@@ -30,6 +36,78 @@ describe("Decision transports", () => {
   afterAll(() => {
     info.mockRestore();
     error.mockRestore();
+  });
+
+  it("preserves validated limit causes without retaining provider prose", async () => {
+    for (const status of [402, 403]) {
+      const result = await callOpenRouterDecisions(request, async () =>
+        Response.json(
+          { error: { message: "PRIVATE_PROVIDER_DETAIL", metadata: { limit_source: "openrouter_key_limit" } } },
+          { status },
+        ),
+      );
+      expect(result.status).toBe("failed");
+      if (result.status !== "failed") throw new Error("Expected failed Decision");
+      expect(result.category).toBe("http");
+      expect(result.cause).toBeInstanceOf(OpenRouterLimitError);
+      expect(result.cause).toMatchObject({ status, limitSource: "openrouter_key_limit" });
+      expect(JSON.stringify(result)).not.toContain("PRIVATE_PROVIDER_DETAIL");
+    }
+  });
+
+  it("preserves a request denial as an expected outcome without logging an operational error", async () => {
+    const denied = new ProviderRequestDeniedError(undefined, () => ({
+      titleKey: "general.errors.api_key_error_title",
+      description: "fixture refusal",
+    }));
+    const result = await callOpenRouterDecisions(request, async () => {
+      throw new Error("wrapped refusal", { cause: denied });
+    });
+    expect(result).toMatchObject({ status: "denied", errorLogged: false, error: denied });
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it("translates an owned provider limit before logging an operational failure", async () => {
+    const context = {};
+    const denied = new ProviderRequestDeniedError(context, () => ({
+      titleKey: "general.errors.api_key_error_title",
+      description: "fixture",
+    }));
+    const dispose = registerProviderRequestDenialTranslator((cause, owner) =>
+      owner === context && cause instanceof OpenRouterLimitError ? denied : null,
+    );
+    try {
+      const result = await withProviderUsageContext(context, () =>
+        callOpenRouterDecisions(request, async () =>
+          Response.json({ error: { metadata: { limit_source: "openrouter_key_limit" } } }, { status: 402 }),
+        ),
+      );
+      expect(result).toMatchObject({ status: "denied", error: denied, errorLogged: false });
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it("keeps interleaved Decision denials with their request owner", async () => {
+    const first = {};
+    const second = {};
+    const denied = new ProviderRequestDeniedError(first, () => ({
+      titleKey: "general.errors.api_key_error_title",
+      description: "fixture",
+    }));
+    const execute = async () =>
+      callOpenRouterDecisions(request, async () => {
+        await Promise.resolve();
+        throw new Error("wrapped", { cause: denied });
+      });
+    const [owned, foreign] = await Promise.all([
+      withProviderUsageContext(first, execute),
+      withProviderUsageContext(second, execute),
+    ]);
+    expect(owned).toMatchObject({ status: "denied", error: denied, errorLogged: false });
+    expect(foreign).toMatchObject({ status: "failed", category: "network", errorLogged: true });
+    expect(error).toHaveBeenCalledTimes(1);
   });
 
   it("translates native and System One requests without chat routes", async () => {
@@ -104,6 +182,102 @@ describe("Decision transports", () => {
     });
     expect(result).toMatchObject({ status: "refused", answers: [{ type: "refusal", id: "criterion" }] });
     expect(error).not.toHaveBeenCalled();
+  });
+
+  describe("choice questions", () => {
+    const choiceRequest: ProviderDecisionRequest = {
+      ...request,
+      questions: [
+        {
+          type: "choice",
+          id: "topic",
+          instructions: "PRIVATE_QUESTION",
+          options: [
+            { id: "i01", description: "mecha anime: Giant robots." },
+            { id: "none", description: "None of the listed topics." },
+          ],
+        },
+      ],
+    };
+    const named = (answer: unknown) => async () => Response.json({ model: "fixture", answers: { topic: answer } });
+
+    it("encodes options as named criteria and ordered choices, and reads both answer shapes", async () => {
+      const bodies: unknown[] = [];
+      const native = await callOpenRouterDecisions(choiceRequest, async (_url, init) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return Response.json({
+          model: "fixture",
+          answers: {
+            topic: { type: "choice", choice: "i01", probabilities: { i01: 0.8, none: 0.2 }, confidence: 0.6 },
+          },
+        });
+      });
+      const ordered = await callCustomDecisions(
+        {
+          ...choiceRequest,
+          reference: customReference,
+          apiStyle: "openai-decisions",
+          endpointUrl: "https://example.invalid",
+        },
+        async (_url, init) => {
+          bodies.push(JSON.parse(String(init?.body)));
+          return Response.json({
+            model: "fixture",
+            answers: [
+              {
+                type: "choice",
+                name: "topic",
+                choice: "i01",
+                probabilities: [
+                  { value: "i01", probability: 0.8 },
+                  { value: "none", probability: 0.2 },
+                ],
+              },
+            ],
+          });
+        },
+      );
+      expect(bodies.map((body) => (body as { questions: unknown }).questions)).toEqual([
+        {
+          topic: {
+            type: "choice",
+            instructions: "PRIVATE_QUESTION",
+            criteria: { i01: "mecha anime: Giant robots.", none: "None of the listed topics." },
+          },
+        },
+        [
+          {
+            type: "choice",
+            name: "topic",
+            instructions: "PRIVATE_QUESTION",
+            choices: [
+              { value: "i01", description: "mecha anime: Giant robots." },
+              { value: "none", description: "None of the listed topics." },
+            ],
+          },
+        ],
+      ]);
+      const expected = { type: "choice", id: "topic", choice: "i01", probabilities: { i01: 0.8, none: 0.2 } };
+      expect(native).toMatchObject({ status: "completed", answers: [expected] });
+      expect(ordered).toMatchObject({ status: "completed", answers: [expected] });
+    });
+
+    it("rejects a choice outside the options, missing probabilities, or a predicate answer", async () => {
+      for (const answer of [
+        { type: "choice", choice: "i99", probabilities: { i01: 0.5, none: 0.5 } },
+        { type: "choice", choice: "i01", probabilities: { i01: 1 } },
+        { type: "choice", choice: "i01", probabilities: { i01: 0.1, none: 0.9 } },
+        { type: "choice", choice: "i01", probabilities: { i01: 0.5, none: 0.5, extra: 0 } },
+        { type: "noul", noul: 0.9 },
+      ]) {
+        error.mockClear();
+        expect(await callOpenRouterDecisions(choiceRequest, named(answer))).toMatchObject({
+          status: "failed",
+          category: "malformed",
+        });
+        expect(error).toHaveBeenCalledTimes(1);
+      }
+    });
   });
 
   it("reports malformed membership, duplicates, types, probabilities and truncation once", async () => {

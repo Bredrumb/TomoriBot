@@ -19,6 +19,7 @@ import {
 import { safeModalLocalizer, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { formatStoredParameterValue } from "@/utils/discord/ui/personalConfigParameterControls";
 import { formatImageTagsForModalValue, TAGS_MODAL_MAX_LENGTH } from "@/utils/image/tagHelpers";
+import { DISCORD_SELECT_OPTION_LABEL_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import {
   getLocaleEndonym,
   getRegisterableLocales,
@@ -27,12 +28,14 @@ import {
   resolveSupportedLocale,
 } from "@/utils/text/localizer";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import { providerOptionModelDescription } from "@/utils/provider/providerOptionRegistry";
 import {
   getActivePersonalProviderForCapability,
   getStoredPersonalProviderForCapability,
 } from "@/utils/provider/personalProviderHelpers";
 import { getFallbackModelRefKey } from "@/utils/provider/fallbackModelIdentity";
 import { THINKING_LEVEL_LOCALIZER_KEYS, THINKING_LEVEL_VALUES } from "@/constants/thinkingLevels";
+import { formatUtcOffsetInput } from "@/utils/text/timezoneHelper";
 
 export function buildPersonalConfigModalFieldId(field: string, nonce: string): string {
   return `${field}_${nonce}`;
@@ -104,7 +107,7 @@ export function buildTimezoneModal(
           ),
           max_length: 10,
           required: true,
-          value: currentOffset !== null ? String(currentOffset) : "",
+          value: currentOffset !== null ? formatUtcOffsetInput(currentOffset) : "",
         },
       },
     ],
@@ -462,7 +465,7 @@ export function buildQuickToggleModal(
           type: 22,
           custom_id: buildPersonalConfigModalFieldId("capabilities", nonce),
           min_values: 0,
-          max_values: 6,
+          max_values: 8,
           required: false,
           options: [
             {
@@ -501,6 +504,15 @@ export function buildQuickToggleModal(
               description: safeSelectOptionText(getDesc(videoStored), 100),
               default: videoActive,
             },
+            ...(["speech_design", "speech_clone"] as const).map((capability) => ({
+              value: capability,
+              label: safeSelectOptionText(localizer(locale, ROUTING_CAPABILITY_LOCALE_KEYS[capability]), 100),
+              description: safeSelectOptionText(
+                getDesc(getStoredPersonalProviderForCapability(savedProviders, capability)),
+                100,
+              ),
+              default: Boolean(getActivePersonalProviderForCapability(savedProviders, capability)),
+            })),
           ],
         },
       },
@@ -520,7 +532,9 @@ export function buildModelSelectModal(
   const options = availableModels.slice(0, PERSONAL_MODEL_PAGE_SIZE).map((m) => ({
     value: String(m.id),
     label: safeSelectOptionText(m.name, 100),
-    description: m.description ? safeSelectOptionText(m.description, 100) : undefined,
+    description: m.description
+      ? safeSelectOptionText(m.description, 100)
+      : providerOptionModelDescription(locale, provider),
     default: m.id === currentModelId,
   }));
 
@@ -542,7 +556,7 @@ export function buildModelSelectModal(
         label: safeSelectOptionText(localizer(locale, "commands.personal.config.model_modal_select_label"), 45),
         description: safeSelectOptionText(
           localizer(locale, "commands.personal.config.model_modal_select_description", {
-            provider: getProviderDisplayName(provider),
+            provider: getProviderDisplayName(provider, locale),
           }),
           100,
         ),
@@ -756,7 +770,10 @@ export function buildParameters2Modal(
           required: true,
           options: THINKING_LEVEL_VALUES.map((val) => ({
             value: val,
-            label: localizer(locale, THINKING_LEVEL_LOCALIZER_KEYS[val]),
+            label: safeSelectOptionText(
+              localizer(locale, THINKING_LEVEL_LOCALIZER_KEYS[val]),
+              DISCORD_SELECT_OPTION_LABEL_MAX,
+            ),
             default: currentThinking === val,
           })),
         },
@@ -781,8 +798,11 @@ export function buildFallbacksModal(
     const options = [
       {
         value: "__none__",
-        label: safeSelectOptionText(localizer(locale, "commands.personal.config.fallback_none_option"), 100),
-        description: safeSelectOptionText(localizer(locale, "commands.personal.config.fallback_none_desc"), 100),
+        label: safeSelectOptionText(localizer(locale, "commands.config.panel.fallback_clear_option"), 100),
+        description: safeSelectOptionText(
+          localizer(locale, "commands.config.panel.fallback_clear_option_description"),
+          100,
+        ),
         default: currentRefKey === null,
       },
       ...availableOptions.slice(0, PERSONAL_FALLBACK_PAGE_SIZE).map((opt) => ({

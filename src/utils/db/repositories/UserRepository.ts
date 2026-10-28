@@ -29,6 +29,7 @@ const USER_PERSONALIZATION_FIELD_NAMES = [
   "personal_dtm",
   "personal_deliberate_tool_mode",
   "personal_server_fallback_enabled",
+  "natural_nudge_opt_out",
   "timezone_offset",
   "prefix_override",
   "suffix_override",
@@ -64,6 +65,12 @@ export interface PersonalSpotlightStatus {
   updatedAt: Date | null;
 }
 
+/**
+ * Every flag is scoped to the server being built for. An unscoped flag would admit
+ * a silent lurker who personalized the bot elsewhere, and each extra owner of a
+ * common name makes that name permanently unresolvable: the alias resolver drops
+ * a name outright once two participants answer to it.
+ */
 export type ContextReferenceEligibilityEvidence = {
   hasServerActivity: boolean;
   hasPersonalMemories: boolean;
@@ -111,6 +118,8 @@ class UserRepository implements IRepository<UserExportShape> {
             u.language_pref,
             u.registration_locale,
             u.privacy_level,
+            u.message_proxy_service,
+            u.message_proxy_instance_id,
             COALESCE(upc.personal_deliberate_tool_mode, 'follow') AS personal_deliberate_tool_mode,
             upc.timezone_offset,
             upc.prefix_override,
@@ -125,7 +134,8 @@ class UserRepository implements IRepository<UserExportShape> {
             upc.nai_char_ref_url,
             upc.impersonation_prompt,
             COALESCE(upc.personal_dtm, 'follow') AS personal_dtm,
-            COALESCE(upc.personal_server_fallback_enabled, true) AS personal_server_fallback_enabled
+            COALESCE(upc.personal_server_fallback_enabled, true) AS personal_server_fallback_enabled,
+            COALESCE(upc.natural_nudge_opt_out, false) AS natural_nudge_opt_out
           FROM users u
           LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
           WHERE u.user_disc_id = ${userDiscId}
@@ -166,6 +176,8 @@ class UserRepository implements IRepository<UserExportShape> {
               u.language_pref,
               u.registration_locale,
               u.privacy_level,
+              u.message_proxy_service,
+              u.message_proxy_instance_id,
               COALESCE(upc.personal_deliberate_tool_mode, 'follow') AS personal_deliberate_tool_mode,
               upc.timezone_offset,
               upc.prefix_override,
@@ -180,7 +192,8 @@ class UserRepository implements IRepository<UserExportShape> {
               upc.nai_char_ref_url,
               upc.impersonation_prompt,
               COALESCE(upc.personal_dtm, 'follow') AS personal_dtm,
-              COALESCE(upc.personal_server_fallback_enabled, true) AS personal_server_fallback_enabled
+              COALESCE(upc.personal_server_fallback_enabled, true) AS personal_server_fallback_enabled,
+              COALESCE(upc.natural_nudge_opt_out, false) AS natural_nudge_opt_out
             FROM users u
             LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
             WHERE regexp_replace(lower(trim(upc.user_nickname)), '[[:space:]]+', ' ', 'g') = ${nickname}
@@ -238,6 +251,7 @@ class UserRepository implements IRepository<UserExportShape> {
                 upc.impersonation_prompt,
                 COALESCE(upc.personal_dtm, 'follow') AS personal_dtm,
                 COALESCE(upc.personal_server_fallback_enabled, true) AS personal_server_fallback_enabled,
+                COALESCE(upc.natural_nudge_opt_out, false) AS natural_nudge_opt_out,
                 EXISTS (
                   SELECT 1
                   FROM stat_counters sc
@@ -247,16 +261,35 @@ class UserRepository implements IRepository<UserExportShape> {
                     AND sc.metric IN ('message_sent', 'command_used')
                     AND sc.count > 0
                 ) AS has_server_activity,
+                -- Reached through persona_lineage_id rather than a server column because
+                -- personal_memories has none: the lineage is the cross-server pooling
+                -- namespace, so joining it back to the personas of this server keeps a
+                -- re-imported persona's memories counting while excluding a user whose
+                -- memories all belong to lineages this server never ran. Lineage 0 is the
+                -- global branch that loadForUserLineage ORs into every persona's read, so
+                -- it renders here regardless of which lineages this server owns.
                 EXISTS (
                   SELECT 1
                   FROM personal_memories pm
                   WHERE pm.user_id = u.user_id
+                    AND (
+                      pm.persona_lineage_id = 0
+                      OR EXISTS (
+                        SELECT 1
+                        FROM personas p
+                        JOIN servers s ON s.server_id = p.server_id
+                        WHERE p.persona_lineage_id = pm.persona_lineage_id
+                          AND s.server_disc_id = ${params.serverDiscId}
+                      )
+                    )
                 ) AS has_personal_memories,
                 EXISTS (
                   SELECT 1
                   FROM reminders r
+                  JOIN servers s ON s.server_id = r.server_id
                   WHERE (r.user_discord_id = u.user_disc_id OR r.created_by_user_id = u.user_id)
                     AND r.reminder_time > CURRENT_TIMESTAMP
+                    AND s.server_disc_id = ${params.serverDiscId}
                 ) AS has_pending_tasks
               FROM users u
               LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
@@ -545,6 +578,20 @@ class UserRepository implements IRepository<UserExportShape> {
 
   async setTimezoneOffset(userId: number, offset: number | null): Promise<boolean> {
     const updated = await this.update(userId, { timezone_offset: offset });
+    return updated !== null;
+  }
+
+  async setMessageProxyService(
+    userId: number,
+    serviceId: string | null,
+    selectedInstanceId?: string,
+  ): Promise<boolean> {
+    const instanceId =
+      serviceId === "pluralkit" || serviceId === "pluralbuddy" ? (selectedInstanceId ?? `${serviceId}:official`) : null;
+    const updated = await this.update(userId, {
+      message_proxy_service: serviceId,
+      message_proxy_instance_id: instanceId,
+    });
     return updated !== null;
   }
 
@@ -1373,6 +1420,9 @@ class UserRepository implements IRepository<UserExportShape> {
         break;
       case "personal_server_fallback_enabled":
         patch.personal_server_fallback_enabled = rawValue as boolean;
+        break;
+      case "natural_nudge_opt_out":
+        patch.natural_nudge_opt_out = rawValue as boolean;
         break;
       case "timezone_offset":
         patch.timezone_offset = rawValue as number | null;

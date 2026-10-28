@@ -72,16 +72,12 @@ export default {
     },
     name_conflict_title: `🔴 ペルソナ名の競合`,
     name_conflict_description: `**{name}** という名前のペルソナは既にこのサーバーに存在します。ペルソナ名はサーバー内で一意である必要があります。`,
+    name_too_long_title: `ペルソナ名が長すぎます`,
+    name_too_long_description: `先頭の名前は私の表示名として使用され、最大{max}文字まで設定できます。短くしてもう一度お試しください。`,
     export: {
+      persona_description: "エクスポートするペルソナ",
+      export_json_description: "PNGの代わりにインポート可能なJSONファイルとしてエクスポートします（アバター画像なし）",
       description: `現在の人格を共有可能なPNGファイルとしてエクスポートする`,
-      export_json_select_label: `JSONをエクスポート`,
-      export_json_select_description: `任意：インポート可能なJSONファイルとしてエクスポート（アバター画像なし）`,
-      persona_modal_title: `ペルソナを選択`,
-      persona_select_label: `ペルソナ`,
-      persona_select_description: `エクスポートするペルソナを選択してください。`,
-      persona_select_placeholder: `ペルソナを選択...`,
-      main_persona_description: `メインペルソナ`,
-      alter_persona_description: `オルタペルソナ`,
       success_title: `🟢 ペルソナのエクスポートに成功しました`,
       success_description: `ペルソナ **{nickname}** がエクスポートされました！このPNGファイルを他の人と共有して、人格設定を広めましょう。`,
       success_description_json: `ペルソナ **{nickname}** がJSONファイルとしてエクスポートされました。
@@ -176,6 +172,7 @@ export default {
       error_invalid_config: `ペルソナデータに無効な設定フィールドがあります`,
       error_no_server_data: `データベースにサーバーが見つかりません。まず \`/setup\` を実行してください。`,
       error_name_conflict: `**{name}** という名前のペルソナは既にこのサーバーに存在します。別の名前を使用してください。`,
+      error_nickname_too_long: `このペルソナの名前はサーバーニックネームの上限である{max}文字を超えています。ファイル内の名前を短くして、再度インポートしてください。`,
       error_nsfw_persona: `このペルソナはNSFWに指定されているため、\`/persona import\`では読み込めません。代わりに\`/nsfw persona import\`を使ってください。`,
       error_import_failed: `ペルソナデータのインポートに失敗しました`,
       error_not_json: `インポートしたファイルには有効なJSONデータが含まれている必要があります`,
@@ -186,12 +183,10 @@ export default {
       refresh_reminder: `この会話で人格の更新を適用するには\`/refresh\`を実行してください`,
     },
     remove: {
+      persona_description: "削除するオルタペルソナ",
       description: `サーバーからオルタペルソナを削除する`,
       no_permission_title: `🔴 権限がありません`,
       no_permission_description: `オルタペルソナを削除するには**サーバー管理**権限が必要です。`,
-      modal_title: `オルタペルソナの削除`,
-      select_label: `オルタペルソナ`,
-      select_placeholder: `削除するオルタペルソナを選択...`,
       no_alters_error_title: `🟡 オルタペルソナがありません`,
       no_alters_error_description: `削除するオルタペルソナがありません。\`/persona import type:alter\`を使用してオルタペルソナをインポートしてください。`,
       success_title: `🟢 オルタペルソナを削除しました`,
@@ -231,7 +226,7 @@ export default {
       modal: {
         title: `AI人格生成`,
         character_name_label: `キャラクター名`,
-        character_name_description: `名前をカンマ（"," または "、"）区切りで入力してください。すべてトリガーワードとして追加され、先頭の名前が表示名になります。`,
+        character_name_description: `名前をカンマ（"," または "、"）区切りで入力：すべてトリガーワードになり、先頭が表示名（最大32文字）になります。`,
         character_name_placeholder: `例: 初音ミク, ミク, Hatsune Miku`,
         character_info_label: `キャラクター情報と話し方の例`,
         character_info_description: `キャラクターとその話し方を説明してください`,
@@ -252,8 +247,6 @@ export default {
       field_additional_inst: `追加の指示`,
       wrong_provider_title: `🔴 互換性のないプロバイダー`,
       wrong_provider_description: `ペルソナ生成には対応プロバイダーが必要です。現在のプロバイダーは **{current_provider}** です。\`/config\` > モデル > モデルの切り替えで対応プロバイダーに切り替えてください。`,
-      no_api_key_title: `🔴 APIキーがありません`,
-      no_api_key_description: `有効なプロバイダーが設定されていません。\`/setup\`（初回）または\`/providers\`で登録してください。`,
       model_incompatible_title: `互換性のないモデル`,
       model_incompatible_description: `現在のモデル（**{model_name}**）は、ペルソナ生成に必要な**構造化出力**をサポートしていません。
 
@@ -272,8 +265,11 @@ export default {
 **次のステップ:**
 1. \`/config\` > モデル > モデルの切り替えを使用してツール対応モデルに切り替える、または
 2. ウェブ検索なしで再生成する（質問されたら「いいえ」を選択）`,
-      api_key_decrypt_failed_title: `🔴 APIキーエラー`,
-      api_key_decrypt_failed_description: `有効なプロバイダー認証情報の復号化に失敗しました。\`/providers\`で再設定してください。`,
+      web_search_failed_title: `ペルソナの生成を中止しました`,
+      web_search_failed_description: `要求されたウェブ検索に失敗したため、ペルソナの生成を中止しました。
+
+**対応方法**
+しばらく待ってから再試行するか、「ウェブを検索しますか？」で「いいえ」を選択して説明文から生成してください。検索が失敗し続ける場合は、サーバー管理者に \`/config\` のウェブ検索設定と \`/providers\` のプロバイダー接続を確認してもらってください。`,
       vision_credentials_unavailable_title: `🔴 ビジョンモデルの認証情報を利用できません`,
       vision_credentials_unavailable_description: `ビジョンモデル（**{vision_model_name}**）はプロバイダー **{vision_provider}** で動作していますが、保存されたAPIキーを画像の説明に使用できませんでした。\`/providers\`でそのプロバイダーの認証情報を再設定するか、\`/config\` > モデルを確認してください。`,
       invalid_image_title: `🔴 無効な画像`,
@@ -282,11 +278,8 @@ export default {
       error_download_timeout: `アバターのダウンロードがタイムアウトしました。もう一度お試しください。`,
       error_download_failed: `アバター画像のダウンロードに失敗しました。`,
       processing_title: `人格を生成しています...`,
-      processing_description: `これには1～2分かかる場合があります。キャラクターを生成していますので、お待ちください...
-
-これは予期しない結果が生成される場合があります。必要に応じて再生成できます。`,
-      captioning_title: `画像を確認しています...`,
-      captioning_description: `プライマリモデルは画像を認識できないため、まずビジョンモデル（**{model_name}**）にアップロードされた画像を説明してもらいます。その説明をもとにプライマリモデルが人格を生成します。1〜2分ほどかかる場合があります。`,
+      processing_description: `これには1～2分かかる場合があります。キャラクターを生成していますので、お待ちください...`,
+      processing_footer: `予期しない結果になる場合があります。必要に応じて再生成できます。`,
       generation_failed_title: `🔴 生成に失敗しました`,
       generation_failed_description: `人格の生成に失敗しました：{error}
 
@@ -328,7 +321,7 @@ export default {
       modal: {
         title: `ペルソナ作成`,
         character_name_label: `キャラクター名`,
-        character_name_description: `名前をカンマ（"," または "、"）区切りで入力してください。すべてトリガーワードとして追加され、先頭の名前が表示名になります。`,
+        character_name_description: `名前をカンマ（"," または "、"）区切りで入力：すべてトリガーワードになり、先頭が表示名（最大32文字）になります。`,
         character_name_placeholder: `例: 初音ミク, ミク, Hatsune Miku`,
         character_desc_label: `キャラクター説明`,
         character_desc_placeholder: `キャラクターを説明してください（性格、外見、背景など）`,

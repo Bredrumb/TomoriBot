@@ -79,6 +79,8 @@ export default {
         video_generation_description: `短片，可指定第一幀`,
         speech_generation: `語音生成`,
         speech_generation_description: `把文字變成語音訊息`,
+        art_search: `插圖搜尋`,
+        art_search_description: `從 Danbooru 發送現有的動漫插圖`,
         behavior_tuning: `行為調整`,
         behavior_tuning_description: `模型、擬人化、指令與工具`,
         server_wide_settings: `伺服器層級設定`,
@@ -154,8 +156,6 @@ export default {
       bot_user_fallback: `已設定的 Matrix bot 帳號`,
     },
     "api-key": {
-      description: `了解如何為 AI 供應商設定 API 金鑰`,
-      provider_description: `選擇你的 AI 供應商`,
       provider_choice_brave: `Brave Search`,
       provider_choice_google: `Google Gemini（推薦，免費）`,
       provider_choice_deepseek: `DeepSeek`,
@@ -356,8 +356,7 @@ export default {
         title: `取得 API 金鑰`,
         description:
           "API 金鑰讓我能使用 AI 供應商的模型。 我生成的所有內容都會記在那組金鑰上，所以請把它 當成密碼一樣保管。 完成設定需要一組金鑰：\n> **1.** 從下方挑一個供應商，開啟它的說明。\n> **2.** 複製它給你的金鑰。**絕對不要分享**給任何人，也不要貼到頻道裡：只能貼進 {setup} 為你開啟的欄位。\n> **3.** 執行 {setup}，並在我要求時貼上金鑰。",
-        picker_footer:
-          "-# 第二份清單是選用的：Brave Search 增加網頁 結果，ElevenLabs 增加託管語音。兩者各自開啟 自己的說明，而且都不是完成設定所必需。 如果你的端點不在清單上，先略過金鑰，改讀 同一頁的 **自訂端點（進階）**。",
+        picker_footer: "-# 如果你的端點不在清單上，先略過金鑰，改讀同一頁的 **自訂端點（進階）**。",
       },
       change_trigger_behavior: {
         title: `調整觸發行為`,
@@ -459,6 +458,11 @@ export default {
         description:
           "{generateVoice} 會用目前人格的聲音把文字變成 語音訊息。\n\n必須先註冊語音端點，託管或自架皆可：請看 設定底下的 **自訂端點（進階）**。\n> 每個人格都可以有不同聲音。聲音來自 {configPersonaVoice}。",
       },
+      art_search: {
+        title: `插圖搜尋`,
+        description:
+          "{booruSearch} 會根據一個或兩個標籤隨機發送 4 張評價良好的 Danbooru 圖片。輸入時會顯示建議，暱稱或錯字也會轉換成真實標籤。\n> 存疑與限制級內容僅在年齡限制頻道中顯示。\n\n你也可以直接請我展示一些插圖；{configTools} 中的 **Danbooru 搜尋** 開關用於控制該功能。如需限制誰能執行此指令，請使用伺服器設定 > 整合。",
+      },
     },
     tons_of_tweakability: {
       title: `大量可調設定`,
@@ -505,8 +509,8 @@ export default {
       memory_tagging: {
         title: `記憶標籤（進階）`,
         description:
-          "預設情況下，範圍內的每則記憶都會隨每則訊息送出。 標籤可以把範圍縮小。\n> **關鍵字標籤**：有標籤的記憶只在它的關鍵字 出現在對話中時才會醒來。沒有標籤的記憶 則永遠有效。\n> **頻道標籤**：`#channel` 標籤會把記憶限制在該 頻道，並可與關鍵字標籤合併使用。\n\n在 {configAdvancedMemory} 同時開啟兩者，再用 {toolPromptSnapshot} 查看目前實際有哪些記憶 生效。",
-        footer: "上傳的文件與擷取的歷史紀錄也可以帶有 頻道標籤。",
+          "預設情況下，範圍內的每則記憶都會隨每則訊息送出。標籤可以把範圍縮小。\n> **關鍵字標籤**：有標籤的記憶只在它的關鍵字出現在對話中時才會醒來。沒有標籤的記憶則永遠有效。\n> **頻道**：伺服器記憶可限制在你在表單中挑選的頻道（包含其討論串），個人記憶則可使用 `#channel` 標籤限制。兩者皆可與關鍵字標籤合併使用。\n\n在 {configAdvancedMemory} 同時開啟兩者，再用 {toolPromptSnapshot} 查看目前實際有哪些記憶生效。",
+        footer: "上傳的文件與擷取的歷史紀錄也可以限定頻道。",
       },
     },
     scheduled_tasks: {

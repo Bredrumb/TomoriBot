@@ -36,11 +36,13 @@ import {
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
 import { buildContext, convertMentions, type SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import { selectTurnPrefillText, type TurnPrefill } from "@/utils/chat/assistantPrefill";
+import type { MessageProxyConversationUser } from "@/utils/text/context/types";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getCachedChannelContextNote } from "@/utils/cache/channelContextNoteCache";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { stripBridgePrefix, extractBridgeUserId, isMatrixBridgeWebhookUsername, isBridgeUserId } from "@/utils/bridges";
 import { checkTargetEmbed } from "@/utils/discord/embedClassifier";
+import { extractTextDisplayContent } from "@/utils/discord/componentNoticeReader";
 import { getCachedVoiceTranscript, setCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { isAudioAttachment, transcribeMessageAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import { resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
@@ -51,6 +53,13 @@ import {
 } from "@/utils/chat/contextDirectives";
 import { excludeMessagesAwaitingOwnTurn } from "@/utils/chat/channelQueue";
 import { recordChatContextHistory } from "@/utils/chat/diagnosticTimeline";
+import { getSupersededMessageProxyOriginalMessageIds } from "@/utils/messageProxy/proxyExpectation";
+import {
+  ensureMessageProxyMessageIdentity,
+  resolveCachedMessageProxyIdentity,
+  resolveMessageProxyMessageIdentitiesForHistory,
+  type MessageProxyHistoryIdentity,
+} from "@/utils/messageProxy/historyAttribution";
 import {
   buildCombinedTailDirectiveMessage,
   buildReactionContextAnnotation,
@@ -79,6 +88,13 @@ import { getCachedImpersonatedUserIdForWebhook } from "@/utils/chat/webhookIdent
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { primePersonaSpriteMessageRecords } from "@/utils/cache/personaSpriteMessageCache";
 import { resolveMinimalNoticeBodies } from "@/utils/discord/minimalNoticeBodies";
+import { isSeededTurnAnchor } from "@/utils/discord/turnAnchor";
+import {
+  AGENDA_NOTICE_AUTHOR_ID,
+  agendaNoticeId,
+  formatAgendaNotice,
+  loadPersonaAgendas,
+} from "@/modules/natural-nudges/runtime/agendas";
 import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import type { StreamingContext } from "@/types/tool/interfaces";
@@ -95,6 +111,8 @@ import { userNamingRepository, userPersonaNamingPairKey } from "@/utils/db/repos
 import { userRepository } from "@/utils/db/repositories/UserRepository";
 import { resolveEffectiveUserNaming } from "@/utils/text/userNaming";
 import { createExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
+import { CONDITIONING_INTERACTION_RESPONSE_TEMPLATE } from "@/utils/conditioning/conditioningInteractionContext";
+import { createToolPromptMacroResolverForState } from "@/utils/tools/toolPromptMacros";
 
 const participantRequestScopes = new WeakMap<LockedChatTurn, ParticipantRequestScope>();
 
@@ -219,6 +237,26 @@ function isQueuedReplyTurn(incoming: LockedChatTurn["admission"]["incoming"]): b
 /**
  * Builds the LLM-visible context and per-turn streaming metadata for one persona turn.
  */
+/**
+ * The stable proxied identity speaking this turn, or null for an ordinary message.
+ * Admission resolves a proxied turn to its host account for settings and
+ * quotas, while speaker-facing context recovers the service identity. The synthetic id is
+ * what `resolveReunionNote` clocks against, so a member meets and revisits Tomori on its
+ * own timeline rather than on its host account's.
+ */
+function resolveProxiedIdentity(message: Message): { name: string | null; userDiscId: string | null } {
+  const identity = resolveCachedMessageProxyIdentity(message);
+  return { name: identity?.displayName ?? null, userDiscId: identity?.userDiscId ?? null };
+}
+
+/** A borrowed trigger's author is a bystander, so their personal override does not steer the turn. */
+export function resolveTurnDeliberateToolMode(turn: ChatTurn): boolean {
+  const personalMode = turn.lockedTurn.admission.incoming.borrowsTriggerMessage
+    ? "follow"
+    : (turn.userRow.personal_deliberate_tool_mode ?? "follow");
+  return resolveDeliberateToolMode(turn.persona.config.deliberate_tool_mode, personalMode);
+}
+
 export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnContext> {
   const incoming = turn.lockedTurn.admission.incoming;
   const { client, message } = incoming;
@@ -243,12 +281,17 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     triggererUserId: turn.userRow.user_id,
     triggererDiscId: turn.userRow.user_disc_id,
     forcedMentions: await resolveForcedMentions(turn),
+    ...(incoming.naturalNudge?.targetUserDiscId && {
+      mentionableUserIds: [incoming.naturalNudge.targetUserDiscId],
+    }),
   };
 
   if (incoming.manualStreamingContextOverrides) {
     Object.assign(streamingContext, incoming.manualStreamingContextOverrides);
   }
   streamingContext.suppressUserErrors = !turn.shouldSurfaceUserErrors || streamingContext.suppressUserErrors === true;
+  streamingContext.deliveryMode = incoming.isUserImpersonation ? "user_impersonation" : "persona";
+  streamingContext.deliveryReceipts = [];
 
   // Initialize reply notice state for any queued turn so the "Replying to..." embed can fire
   // before the first webhook chunk is sent. Deliberately NOT gated on `is_alter`: the main
@@ -288,10 +331,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   // Resolve deliberate tool mode + intent allowlist for this turn. MUST run before
   // buildContext() so any has_tools override flows into context synthesis
   // (has_tools gates the STM tool affordance text there).
-  const deliberateToolModeActive = resolveDeliberateToolMode(
-    turn.persona.config.deliberate_tool_mode,
-    turn.userRow.personal_deliberate_tool_mode ?? "follow",
-  );
+  const deliberateToolModeActive = resolveTurnDeliberateToolMode(turn);
   const reminderData = incoming.reminderData;
   const reminderRecipientID = incoming.reminderRecipientID;
   const deliberateToolIntentText =
@@ -384,6 +424,13 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     }
   }
 
+  if (deliberateToolModeActive && incoming.naturalNudge) {
+    for (const toolName of incoming.naturalNudge.toolNames) {
+      deliberateToolAllowedNames.push(toolName);
+      deliberateToolTriggerMatches.push({ toolName, trigger: "natural idle nudge", source: "built-in" });
+    }
+  }
+
   const deliberateToolTriggerMatchByToolName = new Map<string, DeliberateToolIntentMatch>();
   for (const match of deliberateToolTriggerMatches) {
     if (
@@ -442,6 +489,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     visibleUserIds: [...history.userIds],
     syntheticUsers: history.syntheticUsers,
     matrixUsers: history.matrixUsers,
+    messageProxyUsers: history.messageProxyUsers,
     responderPersonaIds: new Set(turn.triggeredPersonaIds),
     requestScope: participantRequestScope,
   });
@@ -473,11 +521,21 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   // Reunion state is deliberately cross-server: the lineage is the persona's
   // cross-server identity anchor, so a successful delivery in one channel or
   // server consumes the same one-shot return everywhere that lineage appears.
-  const { note: reunionNote, presence: reunionPresence } = await resolveReunionNote({
-    turn,
-    effectivePersona,
-    isUserImpersonation: incoming.isUserImpersonation,
-  });
+  // A verified proxied speaker carries its own clock, so scope it to that identity.
+  const proxiedIdentity = resolveProxiedIdentity(message);
+  const proxiedSpeakerName = proxiedIdentity.userDiscId
+    ? (await getCachedUserRow(proxiedIdentity.userDiscId))?.user_nickname?.trim() || proxiedIdentity.name
+    : null;
+  // A nudge borrows an absent author's message as its trigger, so it must neither greet nor clock them.
+  const { note: reunionNote, presence: reunionPresence } = incoming.naturalNudge
+    ? { note: null, presence: null }
+    : await resolveReunionNote({
+        turn,
+        effectivePersona,
+        isUserImpersonation: incoming.isUserImpersonation,
+        proxiedIdentityName: proxiedIdentity.name,
+        proxiedIdentityUserDiscId: proxiedIdentity.userDiscId,
+      });
 
   const contextBuild = await buildContext({
     guildId: turn.serverDiscId,
@@ -513,6 +571,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     preloadedCustomExpressions: assets.loadedCustomExpressions,
     isUserImpersonation: incoming.isUserImpersonation,
     impersonatedUserId: incoming.impersonatedUserId,
+    shortTermMemoryUserId: incoming.naturalNudge?.targetUserDiscId,
     impersonatedUserNickname,
     impersonatedUserPrompt,
     explicitLongTermMemoryIntent: streamingContext.explicitLongTermMemoryIntent,
@@ -529,11 +588,32 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     typeof effectivePersona.persona_id === "number" &&
     (await getCachedPersonaSprites(effectivePersona.persona_id).catch(() => [])).length > 0;
 
+  let injectedContextItems = incoming.injectedContextItems;
+  if (incoming.conditioningInteraction && !incoming.isUserImpersonation) {
+    const resolver = createToolPromptMacroResolverForState(
+      effectivePersona,
+      streamingContext.deliberateToolAllowedNames,
+    );
+    const hint = await resolver.expand(CONDITIONING_INTERACTION_RESPONSE_TEMPLATE);
+    if (hint) {
+      injectedContextItems = injectedContextItems?.map((item) =>
+        item.role === "system" && item.messageId === message.id
+          ? {
+              ...item,
+              parts: item.parts.map((part) =>
+                part.type === "text" ? { ...part, text: `${part.text} ${hint}` } : part,
+              ),
+            }
+          : item,
+      );
+    }
+  }
+
   const contextItems = attachPersonaMentionMapToContextItems(
     appendTailDirectives({
       turn,
       simplifiedMessages: history.simplifiedMessages,
-      contextItems: appendInjectedContextItems(contextBuild.contextItems, incoming.injectedContextItems),
+      contextItems: appendInjectedContextItems(contextBuild.contextItems, injectedContextItems),
       lowerPriorityTailDirectives: contextBuild.lowerPriorityTailDirectives,
       tailDirectives: contextBuild.tailDirectives,
       uncensorDirective: contextBuild.uncensorDirective,
@@ -543,6 +623,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
       memoryInjectionDepth: contextBuild.memoryInjectionDepth,
       messageIdMap,
       allowSpriteLabel,
+      proxiedSpeakerName,
     }),
     buildPersonaMentionCatalog(turn.allPersonas),
   );
@@ -609,8 +690,12 @@ async function resolveForcedMentions(turn: ChatTurn): Promise<ForcedMention[] | 
   if (incoming.reminderRecipientID && !incoming.reminderData?.self_reminder) {
     reminderMentions = await buildForcedMentionsForUser(incoming.reminderRecipientID, incoming.client, turn.guild);
   }
+  const nudgeTargetId = incoming.naturalNudge?.targetUserDiscId;
+  const nudgeTargetMentions = nudgeTargetId
+    ? await buildForcedMentionsForUser(nudgeTargetId, incoming.client, turn.guild)
+    : undefined;
 
-  const mentions = mergeForcedMentions(turn.forcedMentions, reminderMentions);
+  const mentions = mergeForcedMentions(mergeForcedMentions(turn.forcedMentions, reminderMentions), nudgeTargetMentions);
   if (mentions.length === 0) return undefined;
   return mentions;
 }
@@ -661,6 +746,7 @@ async function buildSimplifiedHistory(
   userIds: Set<string>;
   matrixUsers: Map<string, string>;
   syntheticUsers: Map<string, { displayName: string; type: "persona" | "webhook" }>;
+  messageProxyUsers: Map<string, MessageProxyConversationUser>;
   rawMessages: Message[];
   activeUserBlocks: PersonaUserBlockRow[];
 }> {
@@ -670,13 +756,18 @@ async function buildSimplifiedHistory(
     "messages" in channel
       ? Array.from((await channel.messages.fetch({ limit: fetchLimit })).values()).reverse()
       : [turn.lockedTurn.admission.message];
+  // A borrowed trigger is only an anchor and a seeded placeholder is never history, so only a queued
+  // turn's own real message is added back when the fetch missed it.
   if (
     turn.lockedTurn.admission.incoming.isFromQueue &&
+    !turn.lockedTurn.admission.incoming.borrowsTriggerMessage &&
+    !isSeededTurnAnchor(turn.lockedTurn.admission.message) &&
     !messages.some((message) => message.id === turn.lockedTurn.admission.message.id)
   ) {
     messages.push(turn.lockedTurn.admission.message);
   }
   const fetchedMessages = messages;
+  const fetchedMessagesById = new Map(fetchedMessages.map((message) => [message.id, message]));
   await Promise.all(messages.map(verifyMessageWebhook));
   messages = excludeMessagesAwaitingOwnTurn(
     messages,
@@ -684,6 +775,13 @@ async function buildSimplifiedHistory(
     turn.lockedTurn.admission.message.id,
     turn.allPersonas,
   );
+
+  // A proxy may be confirmed before the original deletion lands, so a history
+  // fetch can contain both. Keeping both would duplicate one authored message.
+  const supersededOriginalIds = getSupersededMessageProxyOriginalMessageIds(channel.id);
+  if (supersededOriginalIds.size > 0) {
+    messages = messages.filter((message) => !supersededOriginalIds.has(message.id));
+  }
 
   // Find the most recent reset or compact_refresh embed and slice history at that point.
   // "reset" starts after the marker; "compact_refresh" starts at the marker (it's included).
@@ -706,6 +804,7 @@ async function buildSimplifiedHistory(
     messages = messages.slice(startIndex);
   }
 
+  const messageProxyIdentitiesByMessageId = await resolveMessageProxyMessageIdentitiesForHistory(messages);
   const activeUserBlocks = await loadActivePersonaUserBlocks(turn);
   // Map each 'block'-type target to its row so the simplify loop can render a
   // notice that includes the remaining block duration (from expires_at). 'mute'
@@ -757,11 +856,16 @@ async function buildSimplifiedHistory(
   // "Name (sprite):" label lookups inside simplifyMessage() are cache hits.
   await primePersonaSpriteMessageRecords(visibleRawMessages.filter((msg) => msg.webhookId).map((msg) => msg.id));
   const minimalNoticeBodies = await resolveMinimalNoticeBodies(visibleRawMessages);
+  const agendasByMessageId = await loadPersonaAgendas(
+    turn.persona.persona_id,
+    visibleRawMessages.map((msg) => msg.id),
+  );
 
   const simplifiedMessages: SimplifiedMessageForContext[] = [];
   const userIds = new Set<string>();
   const matrixUsers = new Map<string, string>();
   const syntheticUsers = new Map<string, { displayName: string; type: "persona" | "webhook" }>();
+  const messageProxyUsers = new Map<string, MessageProxyConversationUser>();
   const personaByName = new Map(
     turn.allPersonas.map((persona) => [normalizeRenderModifierName(persona.persona_nickname), persona]),
   );
@@ -779,7 +883,8 @@ async function buildSimplifiedHistory(
   // Iterate the full message list (not visibleRawMessages): blocked authors are
   // rendered as notices here rather than dropped.
   for (const msg of messages) {
-    if ((await getCachedPrivacyLevel(msg.author.id)) === PrivacyLevel.FULL) {
+    const messageProxyIdentity = messageProxyIdentitiesByMessageId.get(msg.id);
+    if ((await getCachedPrivacyLevel(messageProxyIdentity?.senderDiscId ?? msg.author.id)) === PrivacyLevel.FULL) {
       continue;
     }
 
@@ -822,14 +927,33 @@ async function buildSimplifiedHistory(
       messageIdMap,
       syntheticUsers,
       matrixUsers,
+      messageProxyIdentitiesByMessageId,
+      messageProxyUsers,
       reactionBudgetState,
       hiddenAuthorIds,
       minimalNoticeBodies,
+      fetchedMessagesById,
     );
     if (!result) continue;
     const { message: simplified, isDebug } = result;
     previousBlockNoticeAuthorId = null;
     userIds.add(simplified.authorId);
+
+    const agenda = agendasByMessageId.get(msg.id);
+    if (agenda) {
+      simplifiedMessages.push({
+        id: agendaNoticeId(msg.id),
+        authorId: AGENDA_NOTICE_AUTHOR_ID,
+        authorName: "System",
+        authorType: "user",
+        personaName: null,
+        content: formatAgendaNotice(turn.persona.persona_nickname, agenda),
+        createdAt: msg.createdTimestamp,
+        imageAttachments: [],
+        videoAttachments: [],
+      });
+      previousEntryWasDebug = false;
+    }
 
     // Decide whether this message collapses into the previous turn.
     //    Consecutive messages from the same effective author merge into one turn,
@@ -956,6 +1080,7 @@ async function buildSimplifiedHistory(
     userIds,
     matrixUsers,
     syntheticUsers,
+    messageProxyUsers,
     rawMessages: visibleRawMessages,
     activeUserBlocks,
   };
@@ -968,9 +1093,12 @@ async function simplifyMessage(
   messageIdMap: MessageIdMap,
   syntheticUsers: Map<string, { displayName: string; type: "persona" | "webhook" }>,
   matrixUsers: Map<string, string>,
+  messageProxyIdentitiesByMessageId: Map<string, MessageProxyHistoryIdentity>,
+  messageProxyUsers: Map<string, MessageProxyConversationUser>,
   reactionBudgetState: ReactionContextBudgetState,
   blockedContextUserIds: Set<string>,
   minimalNoticeBodies: ReadonlyMap<string, string>,
+  fetchedMessagesById: ReadonlyMap<string, Message>,
 ): Promise<{ message: SimplifiedMessageForContext; isDebug: boolean } | null> {
   const isJoin = msg.type === MessageType.UserJoin;
   const isWebhook = Boolean(msg.webhookId);
@@ -981,7 +1109,19 @@ async function simplifyMessage(
     : isDebug
       ? msg.content.slice(2)
       : msg.content;
-  const replyContext = await withReplyContext(turn, msg, content, messageIdMap, personaByName, blockedContextUserIds);
+  if (!content && messageProxyIdentitiesByMessageId.get(msg.id)?.serviceId === "pluralbuddy") {
+    content = extractTextDisplayContent(msg.components);
+  }
+  const replyContext = await withReplyContext(
+    turn,
+    msg,
+    content,
+    messageIdMap,
+    personaByName,
+    blockedContextUserIds,
+    messageProxyIdentitiesByMessageId,
+    fetchedMessagesById,
+  );
   content = replyContext.content;
   content = await withReactionContext(turn, msg, content, reactionBudgetState);
 
@@ -997,6 +1137,19 @@ async function simplifyMessage(
     const preRefVideoCount = videoAttachments.length;
     appendSupportedMediaFromMessage(replyContext.referencedMessage, imageAttachments, videoAttachments);
     appendComponentMediaFromMessage(replyContext.referencedMessage, imageAttachments, videoAttachments);
+    const referencedForwardContext = await buildForwardContext({
+      message: replyContext.referencedMessage,
+      content,
+      imageAttachments,
+      videoAttachments,
+      messageIdMap,
+      forwarderName:
+        replyContext.referencedMessage.member?.displayName ?? replyContext.referencedMessage.author.username,
+      clientUserId: turn.lockedTurn.admission.client.user?.id,
+      tomoriNickname: turn.persona.persona_nickname,
+      selfDebugEnabled: turn.persona.config.self_debug_enabled ?? false,
+    });
+    content = referencedForwardContext.content;
     imageAttachments.push(...extractEmojiImageAttachments(replyContext.referencedMessage.content));
     appendDocumentAttachmentsFromMessage(
       replyContext.referencedMessage,
@@ -1004,14 +1157,18 @@ async function simplifyMessage(
       replyContext.referencedMessage.id,
     );
     if (imageAttachments.length > preRefImageCount || videoAttachments.length > preRefVideoCount) {
+      const mediaSourceMessageId =
+        msg.reference?.channelId && msg.reference.channelId !== msg.channelId
+          ? msg.id
+          : replyContext.referencedMessage.id;
       tagNewMediaWithSource(
         imageAttachments,
         preRefImageCount,
         videoAttachments,
         preRefVideoCount,
-        replyContext.referencedMessage.id,
+        mediaSourceMessageId,
       );
-      mediaSourceMessageIds.push(replyContext.referencedMessage.id);
+      mediaSourceMessageIds.push(mediaSourceMessageId);
       remoteMediaSourceKind = "reply";
     }
   }
@@ -1050,18 +1207,32 @@ async function simplifyMessage(
       authorPersonaLineageId = matchedPersona.persona_lineage_id;
       syntheticUsers.set(authorId, { displayName: authorName, type: "persona" });
     } else {
-      authorId = msg.webhookId ?? msg.author.id;
-      authorName = webhookName || msg.author.username;
-      const cachedImpersonatedUserId = isManagedWebhookMessage(msg)
-        ? getCachedImpersonatedUserIdForWebhook(msg.webhookId)
-        : null;
-      if (cachedImpersonatedUserId) {
-        authorId = cachedImpersonatedUserId;
-      }
-      const matrixId = isManagedWebhook ? extractBridgeUserId(msg.author.username) : undefined;
-      if (matrixId) matrixUsers.set(matrixId, authorName);
-      if (!(isManagedWebhook && isMatrixBridgeWebhookUsername(msg.author.username)) && !cachedImpersonatedUserId) {
-        syntheticUsers.set(authorId, { displayName: authorName, type: "webhook" });
+      const messageProxyIdentity = messageProxyIdentitiesByMessageId.get(msg.id);
+      if (messageProxyIdentity) {
+        authorId = messageProxyIdentity.userDiscId;
+        const identityUser = await getCachedUserRow(authorId);
+        authorName = identityUser?.user_nickname?.trim() || messageProxyIdentity.displayName;
+        // Deliberately not registered in syntheticUsers: a stable proxy identity
+        // owns a real users row, and participant discovery keys any synthetic
+        // entry as a webhook, which would strip its memories, aliases, and
+        // system/host identity lines.
+        messageProxyUsers.set(authorId, {
+          serviceId: messageProxyIdentity.serviceId,
+          displayName: authorName,
+          senderDiscId: messageProxyIdentity.senderDiscId,
+        });
+      } else {
+        authorId = msg.webhookId ?? msg.author.id;
+        authorName = webhookName || msg.author.username;
+        const cachedImpersonatedUserId = isManagedWebhook ? getCachedImpersonatedUserIdForWebhook(msg.webhookId) : null;
+        if (cachedImpersonatedUserId) {
+          authorId = cachedImpersonatedUserId;
+        }
+        const matrixId = isManagedWebhook ? extractBridgeUserId(msg.author.username) : undefined;
+        if (matrixId) matrixUsers.set(matrixId, authorName);
+        if (!(isManagedWebhook && isMatrixBridgeWebhookUsername(msg.author.username)) && !cachedImpersonatedUserId) {
+          syntheticUsers.set(authorId, { displayName: authorName, type: "webhook" });
+        }
       }
     }
   } else {
@@ -1093,7 +1264,7 @@ async function simplifyMessage(
     tagNewMediaWithSource(imageAttachments, preForwardImageCount, videoAttachments, preForwardVideoCount, msg.id);
   }
   mediaSourceMessageIds.push(...forwardContext.mediaSourceMessageIds);
-  remoteMediaSourceKind = forwardContext.remoteMediaSourceKind;
+  remoteMediaSourceKind = forwardContext.remoteMediaSourceKind ?? remoteMediaSourceKind;
 
   const preLocalImageCount = imageAttachments.length;
   const preLocalVideoCount = videoAttachments.length;
@@ -1203,8 +1374,10 @@ async function withReplyContext(
   messageIdMap: MessageIdMap,
   personaByNickname: Map<string, ChatTurn["persona"]>,
   blockedContextUserIds: Set<string>,
+  messageProxyIdentitiesByMessageId: Map<string, MessageProxyHistoryIdentity>,
+  fetchedMessagesById: ReadonlyMap<string, Message>,
 ): Promise<{ content: string; referencedMessage?: Message }> {
-  if (msg.reference?.type === MessageReferenceType.Forward || !("messages" in msg.channel)) {
+  if (msg.reference?.type === MessageReferenceType.Forward || !msg.channel || !("messages" in msg.channel)) {
     return { content };
   }
 
@@ -1216,10 +1389,20 @@ async function withReplyContext(
     if (!referenceMessageId || (replyContextEmbedTarget && replyContextEmbedTarget.channelId !== msg.channel.id)) {
       return { content };
     }
+    // The fetched window comes first because the capped message cache evicts the newest messages of a large history fetch.
     const referenced =
-      msg.channel.messages.cache.get(referenceMessageId) ?? (await msg.channel.messages.fetch(referenceMessageId));
+      fetchedMessagesById.get(referenceMessageId) ??
+      msg.channel.messages.cache.get(referenceMessageId) ??
+      (await (msg.reference?.channelId && msg.reference.channelId !== msg.channel.id
+        ? msg.fetchReference()
+        : msg.channel.messages.fetch(referenceMessageId)));
+    // A reference can sit outside the fetched history window, so resolve its verified proxy
+    // attribution through the same bounded index read the history loop used. This is what lets
+    // the annotation name a proxied member instead of the webhook veneer, and it also brings an
+    // out-of-window sender under the persona's active block below.
     await verifyMessageWebhook(referenced);
-    if (blockedContextUserIds.has(getBlockComparableAuthorId(referenced))) {
+    await ensureMessageProxyMessageIdentity(referenced, messageProxyIdentitiesByMessageId);
+    if (blockedContextUserIds.has(getBlockComparableAuthorId(referenced, messageProxyIdentitiesByMessageId))) {
       return { content };
     }
     const annotation = await buildReplyReferenceContextAnnotation({
@@ -1231,6 +1414,7 @@ async function withReplyContext(
       serverDiscId: turn.serverDiscId,
       serverPersonalizationDisabled: turn.persona.config.personal_memories_enabled === false,
       messageIdMap,
+      messageProxyIdentitiesByMessageId,
     });
     return { content: content ? `${annotation}\n${content}` : annotation, referencedMessage: referenced };
   } catch (error) {
@@ -1247,7 +1431,14 @@ async function loadActivePersonaUserBlocks(turn: ChatTurn): Promise<PersonaUserB
   return getCachedActiveBlocksForPersona(turn.persona.server_id, turn.persona.persona_id);
 }
 
-function getBlockComparableAuthorId(msg: Message): string {
+function getBlockComparableAuthorId(
+  msg: Message,
+  messageProxyIdentitiesByMessageId?: Map<string, MessageProxyHistoryIdentity>,
+): string {
+  const messageProxyIdentity = messageProxyIdentitiesByMessageId?.get(msg.id);
+  if (messageProxyIdentity) {
+    return messageProxyIdentity.senderDiscId;
+  }
   if (msg.webhookId) {
     return (
       (isManagedWebhookMessage(msg) ? getCachedImpersonatedUserIdForWebhook(msg.webhookId) : null) ?? msg.author.id
@@ -1334,6 +1525,7 @@ function appendTailDirectives(args: {
   messageIdMap?: MessageIdMap;
   /** True when this turn also carries the persona-sprite prompt (see buildPersonaSpriteContextItem). */
   allowSpriteLabel?: boolean;
+  proxiedSpeakerName?: string | null;
 }): ChatTurnContext["contextItems"] {
   const incoming = args.turn.lockedTurn.admission.incoming;
   const contextItems = [...args.contextItems];
@@ -1358,6 +1550,7 @@ function appendTailDirectives(args: {
     !incoming.reasoningQuery &&
     !incoming.reminderRecipientID &&
     !incoming.reminderData?.self_reminder &&
+    !incoming.naturalNudge &&
     args.simplifiedMessages.length > 0
   ) {
     const lastMsg = args.simplifiedMessages[args.simplifiedMessages.length - 1];
@@ -1379,14 +1572,14 @@ function appendTailDirectives(args: {
   // Resolve the queued reply target name. When the triggering message was sent
   // by the bot itself or one of its webhook personas, use the configured persona
   // nickname instead of the raw Discord username (e.g. "Tomori(α)").
-  let queuedReplyTargetName = args.turn.triggererName;
+  let queuedReplyTargetName = args.proxiedSpeakerName ?? args.turn.triggererName;
   if (incoming.isFromQueue) {
     const queuedMessage = args.turn.lockedTurn.admission.message;
     const queuedClient = args.turn.lockedTurn.admission.client;
     if (queuedMessage.author.id === queuedClient.user?.id) {
       queuedReplyTargetName =
         args.turn.mainPersona?.persona_nickname ?? args.turn.tomoriState.persona_nickname ?? queuedReplyTargetName;
-    } else if (isManagedWebhookMessage(queuedMessage)) {
+    } else if (isManagedWebhookMessage(queuedMessage) && !args.proxiedSpeakerName) {
       const webhookName = stripBridgePrefix(queuedMessage.author.username);
       const personaByNicknameMap = new Map<string, (typeof args.turn.allPersonas)[number]>();
       for (const p of args.turn.allPersonas) {

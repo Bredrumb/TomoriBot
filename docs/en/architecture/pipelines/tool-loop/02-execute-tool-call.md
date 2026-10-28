@@ -47,22 +47,35 @@ aliases, message identities and MCP defaults before the private reviewer sees th
 that execution will receive. Built-in availability and permission checks precede paid review;
 dispatch retains its own checks. Review itself runs only with `Tool Calls` checked in `Content to Check`
 (`ResponseReviewState.reviewItems` contains `tools`). Requests are prepared even when review is
-disabled, so successful identities are reused below.
+disabled, so successful identities are reused below. Off computes the identity only and executes the
+call as written; it reuses just the calls an earlier invocation of the turn completed (fallback or key
+rotation), not repeats within one invocation.
 
-Pass dispatches that request once. Rejection returns `review_rejected` history with
+Pass dispatches that request once, including its public tool output while ordinary response prose
+remains held. The tool delivery adapter forwards cancellation and terminal delivery state without
+copying the prose hold. Expressions follow the same checkpoint before sending. Rejection returns `review_rejected` history with
 `actionExecuted: false`, correction eligibility and concise findings. It adds no failed-tool notice
-or execution statistic. Exact rejected identities remain blocked; each normalized name permits one
-changed correction, with two corrections and eight detailed tool reviews across the logical turn.
+or execution statistic. The author proposes one call per pass, so a request with several parts
+reaches the reviewer as several calls. The reviewer judges each as one part of the request and sees
+earlier calls of the turn with their actual outcomes, rejections included.
+
+Exact rejected identities remain blocked. A rejection opens one correction for its normalized name,
+spent by the next proposal of that name. A later, different proposal of the same tool is reviewed on
+its own, because one request often needs several calls of one tool; a changed retry that ignores the
+findings is the reviewer's to reject. Two corrections and eight detailed tool reviews bound the
+logical turn. A request blocked after the author was already told no correction remains ends the
+turn through the held-response path rather than spending author passes up to the iteration cap.
 These limits remain separate from response review and survive fallback.
 
 Successful identical requests reuse recorded outcomes, including after a response revision.
-Unavailability ends review for the turn but preserves prior rejections. New independent requests
+Unavailability ends review for the turn but preserves prior rejections, and changed forms of a
+rejected tool stay blocked because nothing can approve them. New independent requests
 after exhaustion use ordinary tool rules. Cancellation is checked after review and asynchronous
 discovery, and before MCP transport. Already-started tools retain their own cancellation support.
 The normalized adapter interface dispatches one call at a time; approval covers only that actual call.
 
-Optional Decision routing and internal prose-checker ownership follow the
-[generation review lifecycle](../chat/06-per-turn/03-run-generation-turn.md#response-text-review).
+Internal prose-checker ownership follows the
+[generation review lifecycle](/architecture/pipelines/chat/06-per-turn/03-run-generation-turn/#response-text-review).
 
 ## Expression delivery and side effects
 <!-- anchor: expression-delivery-and-side-effects -->
@@ -73,13 +86,14 @@ Tool execution coordinates several turn-level side effects:
   the stage calls `deliverExpression` immediately. Expression delivery enforces a strict single-expression
   allowance per persona turn via `ChatTurnContext.expressionDelivery`. A repeated call returns
   `sticker_already_sent` without posting to Discord. If an earlier send timed out or was unconfirmed,
-  subsequent expression attempts in that turn are refused to avoid duplicate visible messages.
+  delivery stops for the whole turn before further tool calls, response review, key rotation, or model
+  fallback. The shared terminal state survives provider-context rebuilding.
   Successful delivery marks `responseDelivered = true`, which allows a sticker-only turn to settle
   as `completed` rather than failing as an empty response.
 - **Usage tracking:** Successful non-blocked tool calls record a `tool_used` metric in `statRepository`
   for non-DM channels.
 - **Diagnostic notices:** Failed tool calls emit a hidden thought-log notice containing redacted
-  arguments. When deliberate tool mode admitted a tool via a trigger match, the stage emits a hidden
+  arguments unless their Discord delivery is unconfirmed. When deliberate tool mode admitted a tool via a trigger match, the stage emits a hidden
   notice recording the matched trigger pattern.
 - **One-shot memory guard:** A successful `update_short_term_memory` call sets
   `streamingContext.disableShortTermMemoryUpdate = true`, blocking subsequent memory updates within the
@@ -102,10 +116,30 @@ The stage returns one of three outcome kinds:
    entry, and the outer loop clears `accumulatedModelParts` so trailing prefill does not duplicate
    already-delivered text.
 
+## Successful and failed result payloads
+<!-- anchor: successful-and-failed-result-payloads -->
+
+A successful history response carries `result` and, when the tool returned one, `message`. `result`
+is the tool's `data`; a tool that returns no data stores `{ "status": "completed" }`. `message` sits
+beside `result`, so a payload object with its own `message` field keeps that field. The normal history
+entry, the reusable outcome recorded for later attempts, and a context-restart entry retained for
+review all use the same builder. The next provider call, a replacement attempt that reuses the
+outcome, and a revised reply therefore see both fields. Internal delivery fields (`responseDelivered`,
+`endTurn`, `stickerSelection`) stay out of the response.
+
+With Response Drafting On, an enhanced-context restart is also appended to review function history
+with this payload, so a later revision and the next provider call see the restart data and its
+message. The loop still passes the raw tool data to `handleEnhancedContextRestart`, so control fields
+such as `type` and `enhanced_context_item` retain their meaning. Off omits the restart call from
+history because the injected context replaces it.
+
+A failed call stores `{ status: "tool_execution_failed", reason, tool_name }`, built from the tool's
+message or error. Its data is not copied into model history.
+
 ## Source pointers
 <!-- anchor: source-pointers -->
 
-- `src/utils/chat/toolLoop.ts`: `executeToolCall`, `buildPreToolCallTextParts`, `emitFailedToolCallThoughtLog`.
+- `src/utils/chat/toolLoop.ts`: `executeToolCall`, `buildPreToolCallTextParts`, `buildSuccessfulFunctionResponse`, `emitFailedToolCallThoughtLog`.
 - `src/tools/toolRegistry.ts`: `ToolRegistry.executeTool`.
 - `src/utils/chat/expressionDelivery.ts`: `deliverExpression`, `buildExpressionToolResult`.
 - `src/types/tool/interfaces.ts`: `ToolContext`, `ToolResult`.

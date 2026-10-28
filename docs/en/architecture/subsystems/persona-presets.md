@@ -22,6 +22,7 @@ When a server adopts an official preset via `/setup` or `/persona default`, the 
 
 - **Live content resolution**: Runtime state loading resolves prompt text, attributes, public attribute flags, and sample dialogues directly from `persona_presets`.
 - **Trigger deduplication**: Trigger words normally resolve live from `persona_presets` and pass through `applyTriggerWordOwnership()` to prevent collisions on shared keywords (see [Multi-Persona System](/architecture/subsystems/multi-persona/)). Resynced pointers keep their local trigger words and naming habits through `persona_configs.preserve_preset_identity`.
+- **Natural Nudges defaults**: Talkativeness, interests, and authored idle nudges resolve live from `persona_presets` until the persona has its own `persona_natural_nudge_configs` row. Editing them on the Nudges page writes that row without forking the pointer, which makes `Resync with Preset` available to delete just that row. The first idle nudge content edit copies the whole preset list into the row; switching an entry on or off only records local availability and copies nothing. `Restore Preset Nudges` returns just the list to live resolution. Materializing copies the preset values into the row, and re-pointing deletes it. See [Natural Nudges](/architecture/subsystems/natural-nudges/#pointer-personas).
 - **Lineage separation**: `preset_lineage_id` identifies the official preset row, while `persona_lineage_id` scopes server memories, personal memories, and conditioning history. Applying a preset stamps `persona_lineage_id` with the preset lineage, but memory updates never fork the pointer.
 
 ## Shared assets and reconciliation
@@ -72,13 +73,31 @@ The first local edit to prompt text, attributes, sprites, or naming forks the po
 
 ## Cards, imports, and vision generation
 
-- **Export**: Exports materialize pointer state into self-contained cards, tagging `preset_lineage_id` for character provenance.
-- **Import**: Re-establishes a live preset pointer only when attributes, public flags, dialogues, triggers, and prompt text exactly match the seeded preset. Deviations produce independent materialized copies.
+- **Export**: Exports materialize pointer state into self-contained cards, tagging `preset_lineage_id` for character provenance. PNG and JSON exports carry the optional voice description (up to 1,000 characters) and Design/Clone priority. They also carry the effective authored idle nudges. Local nudge availability, server custom nudges, local sample IDs, sample bytes, provider voice IDs, credentials, and Gemini bindings are excluded.
+- **Import**: Re-establishes a live preset pointer only when attributes, public flags, dialogues, triggers, and prompt text exactly match the seeded preset and the card's idle nudge list, when it has one, equals the preset's. Deviations produce independent materialized copies. Importing an authored voice description also
+  materializes the persona; older cards without it keep their pointer behavior. Main and alter
+  imports restore the description and priority, defaulting missing priority to Design, and need a
+  new reference assignment for Clone. Main imports retire previous Gemini bindings even when the
+  imported description matches, so the imported persona creates its own identity lazily. Retired
+  IDs stay pending for cleanup with the original credentials. Importing a card does not activate a
+  speech provider or change the workspace's Design and Clone targets.
 - **Image captioning**: During `/persona generate`, an uploaded image is paired with the primary model. If the primary model cannot accept images, `analyzeImageWithVisionModel()` requests a description from the configured vision model and passes that text via `appearanceDescription`, keeping raw images out of text-only model requests.
+
+OpenRouter persona generation requests strict JSON output with six attributes and five dialogue
+pairs, including after successful search tool calls. A failed search tool result aborts persona
+generation before another model request. Google likewise aborts when its search stage fails.
+The command owns the failure reply and preserves the inputs with a retry hint; background tools
+suppress their public denial notices. Search engines can still fall back within one tool call.
+OpenRouter's initial model request chooses the search tool, so it can incur usage before search fails.
+Anthropic requests omit unsupported array constraints.
+The shared schema used by other providers stays unchanged. Local validation still rejects
+noncompliant output without exporting a card; validation receipts preserve the inputs and show the
+failed requirement without suggesting an API-key problem.
 
 ## Source pointers
 
 - `src/db/seed/catalog/personas/` & `src/db/seed/catalog/personaSeed.ts`: Canonical preset catalog and startup seed logic.
+- `src/db/seed/catalog/personas/naturalNudges.ts`: Per-lineage Natural Nudges defaults, including authored idle nudges.
 - `src/utils/persona/presetAvatarReconciler.ts`: Background fan-out reconciler for main persona guild avatars.
 - `src/utils/db/repositories/PersonaRepository.ts`: Live pointer state assembly and alter avatar resolution.
 - `src/utils/db/repositories/PersonaSpriteRepository.ts`: Unified sprite resolution across pointer and materialized personas.

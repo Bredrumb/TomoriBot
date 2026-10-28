@@ -65,6 +65,12 @@ memorias compartidas del servidor está desactivado por defecto. Los miembros co
 `Administrar servidor` mantienen acceso en todo momento, y los administradores pueden habilitar a otros
 miembros mediante Acceso de miembros en `/moderation`.
 
+### Identidades de proxy de mensajes
+
+Cuando activas un servicio de proxy de mensajes compatible, TomoriBot puede mantener memorias personales para cada identidad de proxy verificada de forma independiente de la cuenta de Discord que envió el mensaje. La cuenta anfitriona sigue controlando la privacidad, los bloqueos, los enfriamientos y la autorización. TomoriBot nunca deduce una identidad a partir del nombre o avatar de un webhook, y un webhook no verificado no recibe un perfil de memoria independiente.
+
+Actualmente, PluralKit es el único servicio seleccionable. Consulta [Compatibilidad con proxy de mensajes](/es-419/features/integrations/message-proxy-support/) para conocer la configuración y las limitaciones.
+
 ### Cómo se guardan las memorias
 
 Hay exactamente dos formas en que se crea una memoria a largo plazo:
@@ -123,9 +129,11 @@ de documentos y fragmentos, subidas, exploración de documentos y eliminación:
 - Sube archivos de texto, PDF o Markdown como conocimiento del servidor. El alcance elige si
   está vinculado solo a esta persona (el predeterminado) o a todo el servidor para que lo
   consulten todas las personas.
-- `/learn history`: extrae el historial de un canal en conocimiento consultable.
+- `/learn history`: extrae el historial de un canal en conocimiento consultable. La opción `learner`
+  elige quién lo aprende: una persona (déjala vacía para la persona principal), **Automático** (cada
+  persona que habló recibe su propia copia) o **Todo el servidor** (todas las personas lo comparten).
 - Explora los documentos guardados fragmento por fragmento. Los administradores del servidor
-  pueden editar fragmentos individuales, actualizar las etiquetas de canal de un documento, o
+  pueden editar fragmentos individuales, cambiar a qué canales está limitado un documento, o
   eliminar un solo fragmento sin quitar el documento completo.
 - Elimina documentos guardados o fragmentos individuales directamente desde el panel.
 
@@ -138,7 +146,8 @@ TomoriBot extrae las memorias:
   marcas de tiempo absolutas cuando se mencionan fechas u horas o se pueden inferir.
 - Rol busca escenas, lore, relaciones y eventos memorables sin intentar preservar cada
   detalle pequeño.
-- En personaje extrae memorias desde el punto de vista de la persona seleccionada, usando el
+- En personaje necesita una persona en `learner`. Extrae memorias desde el punto de vista de esa
+  persona, usando el
   prompt, los atributos, las memorias existentes y los documentos relevantes de esa persona como
   contexto.
 
@@ -154,7 +163,14 @@ funciona con ellas.
 persona con el tiempo. Un empujón más liviano que un atributo completo o un prompt del sistema.
 Úsalo para reforzar cómo debería actuar un personaje específico en un servidor específico.
 
-Cada `/reward` o `/punish` se contabiliza de todos modos, pero solo se convierte en una memoria
+Usa la opción `user` de `/reward` o `/punish` para enviar un embed de broma dirigido a ese usuario.
+Elige `user` o `persona`, solo uno a la vez. Las interacciones con usuarios no guardan condicionamiento ni generan
+respuestas de IA, incluso con una `reason`; el pie de página "recordará esto" es solo una broma.
+Tanto para usuarios como para personas, el motivo aparece en cursiva dentro de la frase de la acción.
+
+Activa `Interacciones juguetonas` en `/config` > `Plugins` > `Herramientas disponibles` para que las personas hagan gestos deliberados hacia usuarios u otras personas. La opción viene activada de forma predeterminada y puedes desactivarla en ese mismo menú. Cada gesto necesita un objetivo, una acción y un motivo; alimentar también requiere indicar la comida. Los usuarios reciben un embed de broma. Las personas reciben condicionamiento y entran en la fila para reaccionar cuando termine quien está hablando. La persona que reacciona no puede usar esta herramienta durante esa respuesta. Tanto la herramienta como los comandos de barra alternan entre títulos traducidos.
+
+Cada `/reward` o `/punish` dirigido a una persona se contabiliza, pero solo se convierte en una memoria
 sobre la que realmente actúa cuando le das una `reason`, que aparece así en su prompt:
 
 ```text
@@ -188,12 +204,21 @@ STM.
   aparece en el contexto visible.
 - Usa `/tool prompt snapshot` para ver qué memorias están activas en ese momento.
 
-### Etiquetas de canal
+### Canales
 
-- Las memorias con una etiqueta `#channel` se activan solo en ese canal.
-- Las etiquetas de canal se combinan con las etiquetas de palabra clave.
-- Si usas la base de conocimiento de documentos (RAG), las etiquetas de canal también se aplican
-  a documentos e historiales extraídos.
+- Una memoria del servidor puede limitarse a los canales que elijas en su formulario de adición
+  o edición. Luego se activa solo en esos canales y en sus hilos. Deja el selector vacío para
+  todos los canales.
+- Una memoria personal usa en su lugar una etiqueta `#channel`, que la activa solo en ese canal.
+- Los límites de canales se combinan con las etiquetas de palabras clave. En las memorias del
+  servidor, una etiqueta que comience con `#` es una palabra clave normal.
+- Las memorias del servidor y los documentos que usaban etiquetas `#channel` anteriores se
+  convirtieron automáticamente a canales. Si una etiqueta antigua nombraba un canal que ya no
+  existe, el elemento permanece activo en todos los canales y `/memories` lo indicará; edítalo
+  y elige canales para limitarlo de nuevo.
+- Si usas la base de conocimiento de documentos (RAG), los documentos y los historiales extraídos
+  pueden limitarse a canales de la misma manera. Con `/learn history`, elige los canales en la
+  ventana que se abre antes de que empiece la extracción.
 
 En `/help`, elige `Memoria` y luego `Etiquetado de memoria`, para ver el mismo resumen en
 Discord.
@@ -248,9 +273,9 @@ Cualquiera puede ejecutar `/config` > Persona > Memorias, `/personal config` y
 
 ### Configuración de la STM
 
-Los administradores del espacio de trabajo pueden ajustar la memoria a corto plazo desde
+Los administradores del servidor pueden ajustar la memoria a corto plazo desde
 `/config` → `Comportamiento` → Memoria y STM. Estos ajustes se aplican a los registros
-activos de STM del espacio de trabajo:
+activos de STM del servidor:
 
 - Cadencia de actualización controla cuántos turnos del bot pasan entre empujones de
   actualización. El rango permitido es de 1 a 100.

@@ -2,8 +2,14 @@ import {
   responseReviewItemsSchema,
   responseRuleCheckerRefSchema,
   responseReviewerPromptSchema,
+  utcOffsetSchema,
 } from "@/types/db/schema";
 import { z } from "zod";
+import {
+  CUSTOM_IDLE_NUDGE_LIMIT,
+  customIdleNudgeInputSchema,
+  serverNaturalNudgeConfigSchema,
+} from "@/modules/natural-nudges/db/types";
 import { SUPPORTED_PARAM_VALUES } from "@/constants/supportedParams";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_VALUES } from "@/constants/thinkingLevels";
 import { NOTICE_VERBOSITY_LEVELS } from "@/constants/toolNotices";
@@ -97,7 +103,9 @@ export const personalSettingsExportDataSchema = z.object({
   personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).optional(),
   personal_server_fallback_enabled: z.boolean().optional(),
   shortterm_cache_crossserver_opt_in: z.boolean().optional(),
-  timezone_offset: z.number().int().min(-12).max(14).nullable().optional(),
+  natural_nudge_opt_out: z.boolean().optional(),
+  timezone_offset: utcOffsetSchema.nullable().optional(),
+  message_proxy_service: z.string().nullable().optional(),
   prefix_override: z.string().max(100).nullable().optional(),
   suffix_override: z.string().max(100).nullable().optional(),
   gender_identity: z.string().max(200).nullable().optional(),
@@ -175,7 +183,6 @@ const serverModelConfigExportSchema = z.object({
  */
 const serverChatConfigExportSchema = z.object({
   response_reviewer_llm_id: z.number().int().positive().nullable().optional(),
-  response_decision_model_id: z.number().int().positive().nullable().optional(),
   response_reviewer_prompt: responseReviewerPromptSchema.nullable().optional(),
   response_rule_checker_ref: z.preprocess(normalizeJsonColumn, responseRuleCheckerRefSchema.nullable()).optional(),
   response_review_items: responseReviewItemsSchema.optional(),
@@ -189,7 +196,7 @@ const serverChatConfigExportSchema = z.object({
   llm_stop_strings: z.array(z.string()).default([]),
   llm_stop_speaker_pattern_enabled: z.boolean().default(false),
   humanizer_degree: z.number().int().min(0).max(3),
-  timezone_offset: z.number().int().min(-12).max(14),
+  timezone_offset: utcOffsetSchema,
   message_fetch_limit: z.number().int().min(20).max(100).default(80),
   system_prompt: z.string().nullable().default(null),
   cascade_limit: z.number().int().min(0).max(10).optional(),
@@ -219,6 +226,9 @@ const serverCapabilitiesConfigExportSchema = z.object({
   emoji_usage_enabled: z.boolean().default(true),
   sticker_usage_enabled: z.boolean().default(true),
   imagegen_enabled: z.boolean().default(true),
+  danbooru_enabled: z.boolean().optional(),
+  conditioning_interactions_enabled: z.boolean().optional(),
+  dice_rolling_enabled: z.boolean().optional(),
   manage_message_enabled: z.boolean().optional(),
   videogen_enabled: z.boolean().optional(),
   voice_message_enabled: z.boolean().optional(),
@@ -245,8 +255,11 @@ const serverNsfwConfigExportSchema = z.object({
   uncensor_sanitize_enabled: z.boolean().optional(),
 });
 
-/** Portable server_speech_configs export fields. */
 const serverSpeechConfigExportSchema = z.object({
+  speech_design_endpoint_id: z.number().int().positive().nullable().optional(),
+  speech_clone_endpoint_id: z.number().int().positive().nullable().optional(),
+  speech_design_model_id: z.number().int().positive().nullable().optional(),
+  speech_clone_model_id: z.number().int().positive().nullable().optional(),
   voice_transcript_chat_mode: z.boolean().optional(),
   chatterbox_turbo_enabled: z.boolean().optional(),
   chatterbox_cfg_weight: z.number().min(0.0).optional(),
@@ -400,6 +413,21 @@ const workspaceSpeechConfigSectionSchema = serverSpeechConfigExportSchema.strict
 
 const workspaceAccessConfigSectionSchema = serverByokConfigExportSchema.strict();
 
+/**
+ * Natural Nudges settings and custom idle nudges. Allowed channels are server-specific and stay
+ * behind; the planner and checker models travel by ID and are checked against the target workspace on import.
+ */
+const workspaceNudgesConfigSectionSchema = serverNaturalNudgeConfigSchema
+  .omit({ server_id: true, channel_disc_ids: true })
+  .partial()
+  .extend({
+    llm_id: z.number().int().positive().nullable().optional(),
+    checker_llm_id: z.number().int().positive().nullable().optional(),
+    checker_decision_model_id: z.number().int().positive().nullable().optional(),
+    custom_idle_nudges: z.array(customIdleNudgeInputSchema.strict()).max(CUSTOM_IDLE_NUDGE_LIMIT).optional(),
+  })
+  .strict();
+
 const personalProfileConfigSectionSchema = personalSettingsExportDataSchema
   .pick({
     user_nickname: true,
@@ -414,7 +442,12 @@ const personalProfileConfigSectionSchema = personalSettingsExportDataSchema
   .strict();
 
 const personalPrivacyConfigSectionSchema = personalSettingsExportDataSchema
-  .pick({ privacy_level: true, shortterm_cache_crossserver_opt_in: true })
+  .pick({
+    privacy_level: true,
+    shortterm_cache_crossserver_opt_in: true,
+    natural_nudge_opt_out: true,
+    message_proxy_service: true,
+  })
   .strict();
 
 const personalAppearanceConfigSectionSchema = personalSettingsExportDataSchema
@@ -435,6 +468,7 @@ export const workspaceConfigExportDataSchema = z
     media: workspaceMediaConfigSectionSchema.optional(),
     speech: workspaceSpeechConfigSectionSchema.optional(),
     access: workspaceAccessConfigSectionSchema.optional(),
+    nudges: workspaceNudgesConfigSectionSchema.optional(),
   })
   .strict();
 
@@ -521,6 +555,8 @@ export const V1_CONFIG_FIELD_SECTION_OVERRIDES = {
     personal_deliberate_tool_mode: "response_modes",
     personal_server_fallback_enabled: null,
     shortterm_cache_crossserver_opt_in: "privacy",
+    natural_nudge_opt_out: "privacy",
+    message_proxy_service: "privacy",
     timezone_offset: "profile",
     prefix_override: "profile",
     suffix_override: "profile",
@@ -569,6 +605,7 @@ export const V2_CONFIG_SECTION_SCHEMAS = {
   media: workspaceMediaConfigSectionSchema,
   speech: workspaceSpeechConfigSectionSchema,
   access: workspaceAccessConfigSectionSchema,
+  nudges: workspaceNudgesConfigSectionSchema,
   profile: personalProfileConfigSectionSchema,
   privacy: personalPrivacyConfigSectionSchema,
   appearance: personalAppearanceConfigSectionSchema,
@@ -881,7 +918,33 @@ function addEnvelopeMetadata<TPayload extends ParsedExportPayload>(
   };
 }
 
-function parseV2Export(input: unknown): ExportParseResult {
+/** Sections are strict, so fields removed from the schema are stripped from older v2 files before validation. */
+const RETIRED_WORKSPACE_CONFIG_FIELDS = { chat: ["response_decision_model_id"] } as const;
+
+function stripRetiredWorkspaceConfigFields(input: Record<string, unknown>): {
+  input: Record<string, unknown>;
+  droppedFields: string[];
+} {
+  const data = getEnvelopeData(input);
+  if (input.type !== "workspace_config" || !data) return { input, droppedFields: [] };
+  const stripped: Record<string, unknown> = { ...data };
+  const droppedFields: string[] = [];
+  for (const [section, fields] of Object.entries(RETIRED_WORKSPACE_CONFIG_FIELDS)) {
+    const values = stripped[section];
+    if (!isRecord(values)) continue;
+    const kept = { ...values };
+    for (const field of fields) {
+      if (!Object.hasOwn(kept, field)) continue;
+      delete kept[field];
+      droppedFields.push(field);
+    }
+    stripped[section] = kept;
+  }
+  return { input: { ...input, data: stripped }, droppedFields };
+}
+
+function parseV2Export(source: Record<string, unknown>): ExportParseResult {
+  const { input, droppedFields } = stripRetiredWorkspaceConfigFields(source);
   const validated = getV2ExportSchema().safeParse(input);
   if (!validated.success) return { success: false, error: `Invalid v2 export: ${formatSchemaError(validated.error)}` };
 
@@ -893,7 +956,7 @@ function parseV2Export(input: unknown): ExportParseResult {
       sourceType: envelope.type,
       detectedSections: Object.keys(envelope.data),
       payload: envelope.data,
-      droppedFields: [],
+      droppedFields,
     };
   }
 

@@ -1,3 +1,12 @@
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
+import {
+  findProviderRequestDeniedError,
+  notifyProviderToolFailure,
+  reportProviderUsage,
+  type ProviderUsageContext,
+} from "@/utils/provider/providerUsage";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
+import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
 /**
  * Image Generation Tool
  * Allows TomoriBot to generate images using the active provider's native image API
@@ -13,7 +22,8 @@ import { localizer } from "../../utils/text/localizer";
 import { resolveAvatarByIdentity, type ResolvedAvatarData } from "@/utils/discord/avatarResolver";
 import { buildGeneratedImageComponentsV2Payload } from "@/utils/discord/generatedImageMessage";
 import { prepareGeneratedImage } from "@/utils/image/generatedImageMetadata";
-import { sendPersonaPostViaWebhook } from "@/utils/discord/webhook/personaPost";
+import { mediaDeliveryFailure, sendToolMediaPost } from "@/utils/discord/webhook/toolMediaDelivery";
+import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 import {
   buildImageToolNoticeDescription,
   buildReferencedMessageUrl,
@@ -198,7 +208,7 @@ function resolveImageParameterDescription(parameterName: string, capabilities: I
 }
 
 function includeImageParameter(parameterName: string, capabilities: ImageToolCapabilities): boolean {
-  if (parameterName === "prompt" || parameterName === "aspect_ratio") {
+  if (parameterName === "prompt" || parameterName === "aspect_ratio" || parameterName === "nsfw") {
     return true;
   }
 
@@ -269,6 +279,10 @@ export class GenerateImageTool extends BaseTool {
   parameters: ToolParameterSchema = {
     type: "object",
     properties: {
+      nsfw: {
+        type: "boolean",
+        description: "Set true when the image requires a Discord spoiler, useful for NSFW images.",
+      },
       prompt: {
         type: "string",
         description:
@@ -744,67 +758,27 @@ export class GenerateImageTool extends BaseTool {
     referencedIdentities: string[] = [],
     promptAttachment?: AttachmentBuilder,
   ): Promise<import("discord.js").Message> {
-    const threadId =
-      "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
-        ? context.channel.id
-        : undefined;
     const componentsPayload = buildGeneratedImageComponentsV2Payload(
       attachmentFilename,
       elapsedMs,
       context.locale,
       referencedIdentities,
       Boolean(promptAttachment),
+      attachment.spoiler,
     );
-    const files = promptAttachment ? [attachment, promptAttachment] : [attachment];
-
-    if (context.webhook && context.personaUsername) {
-      try {
-        return await sendPersonaPostViaWebhook(
-          context.webhook,
-          {
-            files,
-            ...componentsPayload,
-            withComponents: true,
-            ...(threadId ? { threadId } : {}),
-          },
-          {
-            username: context.personaUsername,
-            avatarUrl: context.personaAvatarUrl,
-            personaId: context.tomoriState.persona_id,
-          },
-          context.channel,
-        );
-      } catch (error) {
-        log.warn("Failed to send generated image via webhook with Components V2, retrying without components", error);
-        try {
-          return await sendPersonaPostViaWebhook(
-            context.webhook,
-            {
-              files,
-              ...(threadId ? { threadId } : {}),
-            },
-            {
-              username: context.personaUsername,
-              avatarUrl: context.personaAvatarUrl,
-              personaId: context.tomoriState.persona_id,
-            },
-            context.channel,
-          );
-        } catch (fallbackError) {
-          log.warn("Failed to send generated image via webhook, falling back to bot message", fallbackError as Error);
-        }
-      }
-    }
-
-    try {
-      return await context.channel.send({
-        files,
-        ...componentsPayload,
-      });
-    } catch (error) {
-      log.warn("Failed to send generated image with Components V2, falling back to attachment-only message", error);
-      return await context.channel.send({ files });
-    }
+    const files = () =>
+      [attachment, ...(promptAttachment ? [promptAttachment] : [])].map(
+        (file) =>
+          new AttachmentBuilder(file.attachment, {
+            name: file.name ?? undefined,
+            description: file.description ?? undefined,
+          }),
+      );
+    return sendToolMediaPost(
+      context,
+      () => ({ files: files(), ...componentsPayload, withComponents: true }),
+      () => ({ files: files() }),
+    );
   }
 
   /**
@@ -917,6 +891,8 @@ export class GenerateImageTool extends BaseTool {
 
     // Default to allowed; overwritten below for server-credential users
     let quotaCheck: QuotaCheckResult = { allowed: true };
+    let usageContext: ProviderUsageContext | undefined;
+    let generationRoute: { provider: string; modelId: number; model: string; credentialSource: string } | undefined;
 
     try {
       const { credentials: creds, quotaCheck: serverQuotaCheck } = await resolveCredentialsWithMediaQuota(
@@ -926,6 +902,8 @@ export class GenerateImageTool extends BaseTool {
         checkImageQuota,
         userDiscId,
         quotaCheck,
+        undefined,
+        context.streamContext?.imageModelSelection,
       );
       quotaCheck = serverQuotaCheck;
 
@@ -981,11 +959,18 @@ export class GenerateImageTool extends BaseTool {
       }
 
       const modelCodename = await this.getDiffusionModelCodename(diffusionModelId);
+      generationRoute = {
+        provider: creds.provider,
+        modelId: diffusionModelId,
+        model: modelCodename,
+        credentialSource: creds.source,
+      };
       const displayModelName = creds.customEndpoint ? formatCustomModelDisplay(creds.customEndpoint) : modelCodename;
 
       log.info(`Using diffusion model: ${modelCodename} for image generation`);
 
       const apiKey = creds.apiKey;
+      usageContext = creds.usageContext;
       const executionProvider = creds.provider;
       const appliedNegativePrompt = this.customEndpointSupportsNegativePrompt(creds.customEndpoint)
         ? effectiveNegativePrompt
@@ -1305,14 +1290,17 @@ export class GenerateImageTool extends BaseTool {
         generatedImageData = result.imageData;
       } else if (imageGenerationImplementation === "openrouter") {
         // Use OpenRouter API
-        const result = await generateOpenRouterImage({
-          apiKey,
-          modelCodename,
-          prompt: effectivePrompt,
-          aspectRatio,
-          ...(providerReferenceImages.length > 0 ? { referenceImages: providerReferenceImages } : {}),
-          ...(context.abortSignal ? { abortSignal: context.abortSignal } : {}),
-        });
+        const result = await withProviderUsageContext(usageContext, async () =>
+          generateOpenRouterImage({
+            apiKey,
+            modelCodename,
+            prompt: effectivePrompt,
+            aspectRatio,
+            ...(providerReferenceImages.length > 0 ? { referenceImages: providerReferenceImages } : {}),
+            ...(context.abortSignal ? { abortSignal: context.abortSignal } : {}),
+          }),
+        );
+        reportProviderUsage(usageContext, { modelCodename, costUsd: result.costUsd });
         generatedImageData = result.imageData;
       } else if (imageGenerationImplementation === "google") {
         // Use Google Gemini API
@@ -1401,7 +1389,7 @@ export class GenerateImageTool extends BaseTool {
         context.locale,
         effectiveNegativePrompt,
       );
-      const attachmentFilename = `generated_${Date.now()}.${preparedImage.extension}`;
+      const attachmentFilename = `${args.nsfw === true ? "SPOILER_" : ""}generated_${Date.now()}.${preparedImage.extension}`;
       const attachment = new AttachmentBuilder(preparedImage.buffer, {
         name: attachmentFilename,
       });
@@ -1458,6 +1446,9 @@ export class GenerateImageTool extends BaseTool {
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };
     } catch (error) {
+      if (error instanceof DiscordDeliveryError) return mediaDeliveryFailure(context, error.outcome);
+      const denied = findProviderRequestDeniedError(error, usageContext);
+      if (denied) return { success: false, error: await notifyProviderToolFailure(context, denied) };
       if (context.abortSignal?.aborted) {
         return { success: false, error: "Image generation was cancelled." };
       }
@@ -1470,21 +1461,35 @@ export class GenerateImageTool extends BaseTool {
         return localized === key ? fallback : localized;
       };
 
-      log.error("Image generation failed:", error as Error);
+      const isBillingRefusal = /\b(?:billing|payment|quota|balance|credits?|402|PERMISSION_DENIED)\b/i.test(
+        errorMessage,
+      );
+      const isSafetyRefusal =
+        errorMessage.includes("safety") || errorMessage.includes("blocked") || errorMessage.includes("RECITATION");
 
-      if (
-        errorMessage.includes("billing") ||
-        errorMessage.includes("payment") ||
-        errorMessage.includes("quota") ||
-        errorMessage.includes("PERMISSION_DENIED")
-      ) {
+      await reportProviderFailure({
+        summary: "Image generation failed",
+        errorType: "ImageGenerationFailed",
+        error,
+        expected: isBillingRefusal || isSafetyRefusal || classifySendFailure(error) !== null,
+        serverId: context.tomoriState.server_id,
+        userId: context.internalUserId ?? null,
+        dimensions: {
+          operation: "image-generation",
+          provider: generationRoute?.provider ?? "unknown",
+          refusal: isBillingRefusal ? "billing" : isSafetyRefusal ? "safety" : "none",
+        },
+        metadata: generationRoute,
+      });
+
+      if (isBillingRefusal) {
         return {
           success: false,
-          error: getReadableError("errors.google.400_billing_default_message", "Billing is required for this service"),
+          error: getReadableError("genai.google.400_billing_default_message", "Billing is required for this service"),
         };
       }
 
-      if (errorMessage.includes("safety") || errorMessage.includes("blocked") || errorMessage.includes("RECITATION")) {
+      if (isSafetyRefusal) {
         return {
           success: false,
           error: getReadableError(

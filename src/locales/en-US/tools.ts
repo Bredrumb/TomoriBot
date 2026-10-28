@@ -1,7 +1,24 @@
 export default {
   tools: {
+    media: {
+      delivery_failed: "Discord did not deliver the media. No successful delivery was recorded.",
+      delivery_unconfirmed:
+        "Discord did not confirm whether the media was posted. Stop this turn and check the channel before generating or posting it again, since another attempt could create a duplicate.",
+    },
+    roll_dice: {
+      missing_permissions:
+        "The bot needs permission to view this channel, send messages, and embed links to post a dice roll.",
+      disabled: "Dice Rolling is disabled. Enable it through `/config` > Plugins > Available Tools.",
+      cancelled: "The dice roll was cancelled before delivery.",
+      delivery_failed: "The dice result could not be posted. No successful roll was delivered.",
+    },
     execution: {
       unavailable: `The tool \`{tool}\` is unavailable under the current settings, model capabilities, or bot permissions.`,
+    },
+    generate_voice_message: {
+      persona_missing: `The persona is no longer available.`,
+      stale: `The speech model, credentials, or persona voice changed during this turn. Start a new turn before generating a voice message.`,
+      script_too_long: `The script is too long for this voice design model. Shorten the script and try again.`,
     },
     generate_image: {
       quota_exceeded_generic: `Image generation quota has been exceeded.`,
@@ -70,6 +87,25 @@ export default {
       unmute_success_title: `🔊 {persona_name} unmuted {user_name}`,
       unblock_success_title: `✅ {persona_name} unblocked {user_name}`,
       unblock_success_description: `Removed the active {block_type} for {user_name} from {persona_name}.`,
+    },
+    danbooru: {
+      tags_title: `🏷️  Danbooru Tag Lookup`,
+      tag_line_resolved: `\`{query}\` → \`{tag}\` ({category}, {post_count} posts)`,
+      tag_line_exact: `\`{tag}\` ({category}, {post_count} posts)`,
+      tag_line_not_found: `\`{query}\`: not found`,
+      signature_heading: `**{tag}** signature tags`,
+      outfits_line: `Outfits: {outfits}`,
+      cosplay_line: `Cosplay: \`{tag}\` ({post_count} posts)`,
+      category_general: `general`,
+      category_character: `character`,
+      category_copyright: `series`,
+      category_artist: `artist`,
+      category_meta: `meta`,
+      post_title: `🖼️  Reading Danbooru post #{id}`,
+      post_description: `{url}`,
+      gallery_footer: `Danbooru: {query}`,
+      gallery_resolved_tag: `\`{typed}\` → \`{tag}\``,
+      gallery_post_link: `[#{id}]({url})`,
     },
     user_info_update: {
       success_title: `✅ Updated {target_user}'s profile`,
@@ -172,6 +208,7 @@ export default {
       // English stays empty because the built-in patterns in deliberateToolMode.ts already cover
       // English grammar; keywords here would widen English matching beyond those patterns.
       deliberate: {
+        dice: [],
         image: [],
         video: [],
         voice: [],

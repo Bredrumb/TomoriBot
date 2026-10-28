@@ -87,12 +87,10 @@ function createDatabaseClient(): SQL {
     });
   }
 
+  const poolOptions = resolveProductionPoolOptions();
+
   // Production: verified TLS for TCP connections; no TLS for unix sockets (Cloud SQL Auth Proxy)
   if (isProduction) {
-    // Connection-pool hygiene applied to every production connection so a stale
-    // pooled socket can't black-hole a subsequent query (see helper docs).
-    const poolOptions = resolveProductionPoolOptions();
-
     // Unix socket path (e.g. /cloudsql/<connection-name>): Cloud SQL Auth Proxy handles TLS
     // internally; the client connects via a local socket and must not add a second TLS layer.
     if (host.startsWith("/")) {
@@ -128,6 +126,7 @@ function createDatabaseClient(): SQL {
     username: user,
     password: password,
     database: database,
+    ...poolOptions,
   });
 }
 
@@ -267,7 +266,8 @@ const RETIRED_CONNECTION_ERROR_CODES = new Set([
   "ERR_POSTGRES_UNSUPPORTED_INTEGER_SIZE",
 ]);
 
-function isRetiredConnectionError(error: unknown): boolean {
+/** @public Release-only `src/modules/supporter-billing/db/repositories/memberKeys.ts` imports this. */
+export function isRetiredConnectionError(error: unknown): boolean {
   if (typeof error !== "object" || error === null || !("code" in error)) {
     return false;
   }

@@ -72,7 +72,10 @@ export type ServerCapabilitiesConfigsRow = {
   web_search_enabled: boolean;
   manage_message_enabled: boolean;
   thread_creation_enabled: boolean;
+  conditioning_interactions_enabled: boolean;
+  dice_rolling_enabled: boolean;
   imagegen_enabled: boolean;
+  danbooru_enabled: boolean;
   videogen_enabled: boolean;
   voice_message_enabled: boolean;
   user_blocking_enabled: boolean;
@@ -102,6 +105,10 @@ export type ServerNsfwConfigsRow = {
 
 /** Row shape for server_speech_configs (Phase 6). */
 export type ServerSpeechConfigsRow = {
+  speech_design_endpoint_id: number | null;
+  speech_clone_endpoint_id: number | null;
+  speech_design_model_id: number | null;
+  speech_clone_model_id: number | null;
   voice_transcript_chat_mode: boolean;
   chatterbox_turbo_enabled: boolean;
   chatterbox_cfg_weight: number;
@@ -191,76 +198,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
       return presetOptions;
     } catch (error) {
       log.error("Error loading preset options from database:", error);
-      return null;
-    }
-  }
-
-  /**
-   * @param locale - Locale code (e.g. "en-US")
-   * @param maxDescriptionLength - Truncate descriptions to this length (default 100)
-   */
-  async loadPresetOptionsByLocale(
-    locale: string,
-    maxDescriptionLength?: number,
-  ): Promise<Array<{ name: string; description: string }> | null> {
-    try {
-      const descriptionLength = maxDescriptionLength ?? 100;
-      let presetRows = await sql`
-        SELECT persona_preset_name, persona_preset_desc
-        FROM persona_presets
-        WHERE preset_language = ${locale}
-        ORDER BY persona_preset_name ASC
-      `;
-
-      if (presetRows.length === 0) {
-        const baseLanguage = locale.split("-")[0];
-        presetRows = await sql`
-          SELECT persona_preset_name, persona_preset_desc
-          FROM persona_presets
-          WHERE preset_language = ${baseLanguage}
-          ORDER BY persona_preset_name ASC
-        `;
-
-        if (presetRows.length > 0) {
-          log.info(`No presets found for locale '${locale}', using base language '${baseLanguage}' instead.`);
-        }
-      }
-
-      if (presetRows.length === 0 && locale !== "en-US") {
-        presetRows = await sql`
-          SELECT persona_preset_name, persona_preset_desc
-          FROM persona_presets
-          WHERE preset_language = 'en-US'
-          ORDER BY persona_preset_name ASC
-        `;
-
-        if (presetRows.length > 0) {
-          log.info(`No presets found for locale '${locale}', falling back to English presets.`);
-        }
-      }
-
-      if (!presetRows || presetRows.length === 0) {
-        log.warn(`No personality presets found for locale '${locale}' or any fallback language.`);
-        return null;
-      }
-
-      const presetOptions = presetRows.map((row: Record<string, unknown>) => {
-        const description = row.persona_preset_desc as string;
-        const truncatedDescription =
-          description.length > descriptionLength
-            ? `${description.substring(0, descriptionLength - 3)}...`
-            : description;
-
-        return {
-          name: row.persona_preset_name as string,
-          description: truncatedDescription,
-        };
-      });
-
-      log.info(`Found ${presetOptions.length} personality presets for locale '${locale}' (selection menu).`);
-      return presetOptions;
-    } catch (error) {
-      log.error(`Error loading preset options for locale '${locale}' from database:`, error);
       return null;
     }
   }
@@ -1086,7 +1023,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         SELECT emoji_usage_enabled, sticker_usage_enabled, web_search_enabled,
                manage_message_enabled, thread_creation_enabled, imagegen_enabled,
                videogen_enabled, voice_message_enabled, user_blocking_enabled, time_awareness_enabled,
-               tool_use_enabled, response_drafting_enabled
+               tool_use_enabled, response_drafting_enabled, danbooru_enabled, conditioning_interactions_enabled, dice_rolling_enabled
         FROM server_capabilities_configs
         WHERE server_id = ${serverId}
       `;
@@ -1129,7 +1066,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   private async sqlLoadSpeechConfigs(serverId: number): Promise<ServerSpeechConfigsRow | null> {
     try {
       const [row] = await sql`
-        SELECT voice_transcript_chat_mode, chatterbox_turbo_enabled,
+        SELECT speech_design_endpoint_id, speech_clone_endpoint_id, speech_design_model_id, speech_clone_model_id, voice_transcript_chat_mode, chatterbox_turbo_enabled,
                chatterbox_cfg_weight, chatterbox_exaggeration
         FROM server_speech_configs
         WHERE server_id = ${serverId}
@@ -1161,12 +1098,13 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         server_id, emoji_usage_enabled, sticker_usage_enabled, web_search_enabled,
         manage_message_enabled, thread_creation_enabled, imagegen_enabled,
         videogen_enabled, voice_message_enabled, user_blocking_enabled, time_awareness_enabled,
-        tool_use_enabled, response_drafting_enabled
+        tool_use_enabled, response_drafting_enabled, danbooru_enabled, conditioning_interactions_enabled, dice_rolling_enabled
       ) VALUES (
         ${serverId}, ${row.emoji_usage_enabled}, ${row.sticker_usage_enabled},
         ${row.web_search_enabled}, ${row.manage_message_enabled}, ${row.thread_creation_enabled},
         ${row.imagegen_enabled}, ${row.videogen_enabled}, ${row.voice_message_enabled},
-        ${row.user_blocking_enabled}, ${row.time_awareness_enabled}, ${row.tool_use_enabled}, ${row.response_drafting_enabled}
+        ${row.user_blocking_enabled}, ${row.time_awareness_enabled}, ${row.tool_use_enabled}, ${row.response_drafting_enabled},
+        ${row.danbooru_enabled}, ${row.conditioning_interactions_enabled ?? true}, ${row.dice_rolling_enabled}
       )
       ON CONFLICT (server_id) DO UPDATE SET
         emoji_usage_enabled    = EXCLUDED.emoji_usage_enabled,
@@ -1181,6 +1119,9 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         time_awareness_enabled = EXCLUDED.time_awareness_enabled,
         tool_use_enabled       = EXCLUDED.tool_use_enabled,
         response_drafting_enabled = EXCLUDED.response_drafting_enabled,
+        danbooru_enabled       = EXCLUDED.danbooru_enabled,
+        conditioning_interactions_enabled = EXCLUDED.conditioning_interactions_enabled,
+        dice_rolling_enabled = EXCLUDED.dice_rolling_enabled,
         updated_at             = NOW()
     `;
   }
@@ -1230,13 +1171,17 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
   private async sqlUpsertSpeechConfigs(serverId: number, row: ServerSpeechConfigsRow): Promise<void> {
     await sql`
       INSERT INTO server_speech_configs (
-        server_id, voice_transcript_chat_mode, chatterbox_turbo_enabled,
+        server_id, speech_design_endpoint_id, speech_clone_endpoint_id, speech_design_model_id, speech_clone_model_id, voice_transcript_chat_mode, chatterbox_turbo_enabled,
         chatterbox_cfg_weight, chatterbox_exaggeration
       ) VALUES (
-        ${serverId}, ${row.voice_transcript_chat_mode}, ${row.chatterbox_turbo_enabled},
+        ${serverId}, ${row.speech_design_endpoint_id}, ${row.speech_clone_endpoint_id}, ${row.speech_design_model_id}, ${row.speech_clone_model_id}, ${row.voice_transcript_chat_mode}, ${row.chatterbox_turbo_enabled},
         ${row.chatterbox_cfg_weight}, ${row.chatterbox_exaggeration}
       )
       ON CONFLICT (server_id) DO UPDATE SET
+        speech_design_endpoint_id = EXCLUDED.speech_design_endpoint_id,
+        speech_clone_endpoint_id = EXCLUDED.speech_clone_endpoint_id,
+        speech_design_model_id = EXCLUDED.speech_design_model_id,
+        speech_clone_model_id = EXCLUDED.speech_clone_model_id,
         voice_transcript_chat_mode = EXCLUDED.voice_transcript_chat_mode,
         chatterbox_turbo_enabled   = EXCLUDED.chatterbox_turbo_enabled,
         chatterbox_cfg_weight      = EXCLUDED.chatterbox_cfg_weight,

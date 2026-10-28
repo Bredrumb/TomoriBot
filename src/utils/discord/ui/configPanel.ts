@@ -1,3 +1,9 @@
+import {
+  CONDITIONING_ACTION_LOCALE_KEYS,
+  CONDITIONING_MARKER_LOCALE_KEYS,
+  type ConditioningActionKey,
+} from "@/utils/conditioning/conditioning";
+import type { ChannelPromptMode } from "@/types/db/schema";
 import { buildResponseDraftingBody, type DraftPicker } from "@/utils/discord/ui/responseDraftingPanel";
 import type { ResponseDraftingView } from "@/utils/discord/interactions/responseDraftingOperations";
 import {
@@ -62,12 +68,7 @@ import {
   type ConfigActor,
 } from "@/utils/discord/interactions/configPermissionPolicy";
 import { CHECKLIST_CHANNELS_PER_PAGE } from "@/utils/discord/channelChecklistManager";
-import {
-  createHumanizerOptions,
-  getHumanizerLabel,
-  HUMANIZER_DEFAULT,
-  HUMANIZER_INHERIT_VALUE,
-} from "@/utils/discord/humanizerOptions";
+import { getHumanizerLabel, HUMANIZER_DEFAULT } from "@/utils/discord/humanizerOptions";
 import type {
   ConfigChannelsView,
   ConfigChannelsOverridesView,
@@ -106,11 +107,17 @@ import { NOTICE_VERBOSITY_LEVELS, TOOL_NOTICE_DEFINITIONS, type NoticeVerbosity 
 import { DEFAULT_STM_TOOL_DESCRIPTION } from "@/tools/functionCalls/updateShortTermMemoryTool";
 import { SEED_CATEGORY_UPDATE_HINT, SEED_SUMMARY_UPDATE_HINT } from "@/utils/text/context/memories";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { formatModelSelectionLabel } from "@/utils/discord/ui/modelRoutingControls";
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
 import { localizer, resolveDescription } from "@/utils/text/localizer";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 import { buildSlugMap } from "@/utils/text/slugifyLabel";
-import { DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX, getDiscordTextLength } from "@/utils/discord/ui/componentsV2Limits";
+import {
+  DISCORD_BUTTON_LABEL_MAX,
+  DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX,
+  DISCORD_SELECT_PLACEHOLDER_MAX,
+  getDiscordTextLength,
+} from "@/utils/discord/ui/componentsV2Limits";
 import { measureFormattedPanelTextLength } from "@/utils/discord/ui/panelProse";
 import { neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
 import { renderFencedPreview } from "@/utils/text/textPreview";
@@ -127,8 +134,15 @@ import {
 } from "@/utils/discord/ui/configVoicePanel";
 import { buildMcpsPanelComponents, type McpsPanelPage } from "@/utils/discord/ui/mcpsPanel";
 import { buildStPresetsPanelComponents, type StPresetsPanelRenderInput } from "@/utils/discord/ui/stPresetsPanel";
+import type { NaturalNudgesPanelState } from "@/modules/natural-nudges/discord/operations";
+import { buildNaturalNudgesSettingsBody, buildPersonaNudgesBody } from "@/modules/natural-nudges/discord/panel";
 
 const RANDOM_TRIGGER_PAGE_SIZE = CONFIG_RANDOM_TRIGGER_CHECKBOX_CAPACITY;
+
+const CHANNEL_PROMPT_MODE_KEYS: Record<ChannelPromptMode, string> = {
+  append: "commands.config.panel.channels_overrides_prompt_mode_append",
+  replace: "commands.config.panel.channels_overrides_prompt_mode_replace",
+};
 
 export interface ConfigPanelPayload {
   components: TopLevelComponentData[];
@@ -140,10 +154,10 @@ export type ConfigPanelView =
   | { kind: "main" }
   | { kind: "promote-confirm"; personaId: number; nonce: string }
   | { kind: "resync-confirm"; personaId: number; nonce: string; presetName: string; diff: PersonaResyncDiff }
+  | { kind: "nudge-restore-confirm"; personaId: number; nonce: string }
   | { kind: "character-reference-clear-confirm"; personaId: number; nonce: string }
   | { kind: "sprite-remove-confirm"; personaId: number; index: number; fp: string; nonce: string }
   | { kind: "voice-sample-remove-confirm"; index: number; fp: string; nonce: string }
-  | { kind: "humanizer-editor"; personaId: number }
   | { kind: "text-override-provider"; personaId: number; providers: string[] }
   | {
       kind: "text-override-model";
@@ -185,6 +199,7 @@ export const PAGE_LOCALE_KEYS: Record<ConfigCategory, Record<string, string>> = 
     naming: "commands.config.panel.page_persona_naming",
     sprites: "commands.config.panel.page_persona_sprites",
     voice: "commands.config.panel.page_persona_voice",
+    nudges: "commands.config.panel.page_persona_nudges",
   },
   behavior: {
     general: "commands.config.panel.page_behavior_general",
@@ -201,6 +216,7 @@ export const PAGE_LOCALE_KEYS: Record<ConfigCategory, Record<string, string>> = 
   },
   plugins: {
     "response-drafting": "commands.config.panel.page_plugins_response_drafting",
+    "natural-nudges": "commands.config.panel.page_plugins_natural_nudges",
     "available-tools": "commands.config.panel.page_plugins_available_tools",
     "context-additions": "commands.config.panel.page_plugins_context_additions",
     "mcp-servers": "commands.mcps.title",
@@ -267,6 +283,7 @@ export interface ConfigPanelRenderInput {
   personaVoicePageStart?: number;
   responseDraftingView?: ResponseDraftingView;
   draftPicker?: DraftPicker;
+  naturalNudges?: NaturalNudgesPanelState;
   switchModelsView?: ConfigSwitchModelsView;
   modelParametersView?: ConfigParametersView;
   modelFallbacksView?: ConfigFallbacksView;
@@ -445,6 +462,7 @@ function buildPersonaSelectorRows(input: ConfigPanelRenderInput): ComponentInCon
             action: "persona-select",
             locale,
             personaId: selectedPersonaId ?? (personas[0]?.persona_id as number),
+            page: input.page,
           }),
           // The selected persona can sit on another page, where no option carries `default`, so the
           // placeholder is what keeps the current selection visible while paging.
@@ -474,6 +492,7 @@ function buildPersonaSelectorRows(input: ConfigPanelRenderInput): ComponentInCon
           locale,
           personaId: selectedPersonaId ?? (personas[0]?.persona_id as number),
           start: targetRangeIndex * CONFIG_PERSONA_SELECT_PAGE_SIZE,
+          page: input.page,
         }),
     },
     disabled: writesDisabled,
@@ -907,6 +926,7 @@ interface PersonaResyncDiff {
   promptChanged: boolean;
   customAvatar: boolean;
   addedSprites: number;
+  nudgesChanged: boolean;
 }
 
 function buildPersonaGeneralBody(input: ConfigPanelRenderInput): ComponentInContainerData[] {
@@ -973,15 +993,16 @@ ${localizer(locale, "commands.config.panel.general_description")}`,
   }
 
   if (persona.preset_lineage_id && resyncState !== "omitted") {
+    const isSynced = persona.is_pointer === true && input.naturalNudges?.personaConfig?.has_override !== true;
     identityButtons.push({
       type: ComponentType.Button,
       style: ButtonStyle.Secondary,
       customId: buildConfigRouteId({ action: "resync-view", locale, personaId: persona.persona_id as number }),
       label: localizer(
         locale,
-        persona.is_pointer ? "commands.config.panel.resync_synced_button" : "commands.config.panel.resync_button",
+        isSynced ? "commands.config.panel.resync_synced_button" : "commands.config.panel.resync_button",
       ),
-      disabled: writesDisabled || resyncState === "disabled" || persona.is_pointer === true,
+      disabled: writesDisabled || resyncState === "disabled" || isSynced,
     });
   }
 
@@ -1543,12 +1564,8 @@ ${localizer(locale, "commands.config.panel.response_style_description")}
       : undefined;
 
   const textState = actionState("text-override");
-  const textOverride = persona.persona_llm
-    ? `${getProviderDisplayName(persona.persona_llm.llm_provider)} / ${persona.persona_llm.llm_codename}`
-    : localizer(locale, "commands.config.panel.none_label");
-  const serverModel = persona.llm
-    ? `${getProviderDisplayName(persona.llm.llm_provider)} / ${persona.llm.llm_codename}`
-    : localizer(locale, "commands.config.panel.none_label");
+  const textOverride = modelLabel(locale, persona.persona_llm);
+  const serverModel = modelLabel(locale, persona.llm);
   const textOverrideTextDisplay: ComponentInContainerData | undefined =
     textState !== "omitted"
       ? {
@@ -1562,43 +1579,18 @@ ${localizer(locale, "commands.config.panel.text_override_description")}
 
   if (humanizerTextDisplay) {
     components.push(humanizerTextDisplay);
-    if (input.view?.kind === "humanizer-editor" && input.view.personaId === personaId) {
-      const options = createHumanizerOptions(
-        locale,
-        humanizerValue === null ? HUMANIZER_INHERIT_VALUE : String(humanizerValue),
-        true,
-      ).map((option) => ({
-        label: safeSelectOptionText(option.label, 100),
-        value: option.value,
-        description: safeSelectOptionText(option.description ?? "", 100),
-        default: option.default,
-      }));
-      components.push({
-        type: ComponentType.ActionRow,
-        components: [
-          {
-            type: ComponentType.StringSelect,
-            customId: buildConfigRouteId({ action: "humanizer-select", locale, personaId }),
-            placeholder: localizer(locale, "commands.config.panel.response_style_placeholder"),
-            options,
-            disabled: writesDisabled || humanizerState === "disabled",
-          },
-        ],
-      });
-    } else {
-      components.push({
-        type: ComponentType.ActionRow,
-        components: [
-          {
-            type: ComponentType.Button,
-            style: ButtonStyle.Secondary,
-            customId: buildConfigRouteId({ action: "humanizer-open", locale, personaId }),
-            label: localizer(locale, "commands.config.panel.edit_humanizer_button"),
-            disabled: writesDisabled || humanizerState === "disabled",
-          },
-        ],
-      });
-    }
+    components.push({
+      type: ComponentType.ActionRow,
+      components: [
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: buildConfigRouteId({ action: "humanizer-open", locale, personaId }),
+          label: localizer(locale, "commands.config.panel.edit_humanizer_button"),
+          disabled: writesDisabled || humanizerState === "disabled",
+        },
+      ],
+    });
   }
 
   if (textOverrideTextDisplay) {
@@ -1613,7 +1605,7 @@ ${localizer(locale, "commands.config.panel.text_override_description")}
             customId: buildConfigRouteId({ action: "text-override-provider-select", locale, personaId }),
             placeholder: localizer(locale, "commands.config.panel.text_override_provider_placeholder"),
             options: input.view.providers.map((provider) => ({
-              label: safeSelectOptionText(getProviderDisplayName(provider), 100),
+              label: safeSelectOptionText(getProviderDisplayName(provider, locale), 100),
               value: provider,
             })),
             disabled: writesDisabled || textState === "disabled",
@@ -1647,38 +1639,27 @@ ${localizer(locale, "commands.config.panel.text_override_description")}
           },
         ],
       });
-      if (pageCount > 1) {
-        components.push({
-          type: ComponentType.ActionRow,
-          components: [
-            {
-              type: ComponentType.Button,
-              style: ButtonStyle.Secondary,
-              customId: buildConfigRouteId({
-                action: "text-override-model-page",
-                locale,
-                personaId,
-                provider: input.view.provider,
-                start: Math.max(0, start - pageSize),
-              }),
-              label: localizer(locale, "commands.config.panel.previous_page"),
-              disabled: writesDisabled || textState === "disabled" || pageIndex === 0,
-            },
-            {
-              type: ComponentType.Button,
-              style: ButtonStyle.Secondary,
-              customId: buildConfigRouteId({
-                action: "text-override-model-page",
-                locale,
-                personaId,
-                provider: input.view.provider,
-                start: Math.min((pageCount - 1) * pageSize, start + pageSize),
-              }),
-              label: localizer(locale, "commands.config.panel.next_page"),
-              disabled: writesDisabled || textState === "disabled" || pageIndex >= pageCount - 1,
-            },
-          ],
-        });
+      const modelProvider = input.view.provider;
+      const modelPaginationRow = buildPaginationRow({
+        locale,
+        rangeIndex: pageIndex,
+        rangeCount: pageCount,
+        namespace: CONFIG_ROUTE_NAMESPACE,
+        version: CONFIG_ROUTE_VERSION,
+        disabled: writesDisabled || textState === "disabled",
+        buildSegments: {
+          page: (targetPageIndex) =>
+            buildConfigRouteSegments({
+              action: "text-override-model-page",
+              locale,
+              personaId,
+              provider: modelProvider,
+              start: targetPageIndex * pageSize,
+            }),
+        },
+      });
+      if (modelPaginationRow) {
+        components.push(modelPaginationRow);
       }
     } else {
       components.push({
@@ -2065,7 +2046,9 @@ ${withLinePrefix("> ", channelText)}
       );
       for (const [actionKey, count] of ranked) {
         const labelKey = count === 1 ? "history_label" : "history_label_plural";
-        summaryLines.push(`> ${count} ${localizer(locale, `commands.${conditioningType}.${actionKey}.${labelKey}`)}`);
+        summaryLines.push(
+          `> ${count} ${localizer(locale, CONDITIONING_ACTION_LOCALE_KEYS[actionKey as ConditioningActionKey][labelKey])}`,
+        );
       }
       return summaryLines;
     });
@@ -2132,15 +2115,6 @@ ${conditioningLines.join("\n")}`,
 /** Reward before punish, matching the order the two conditioning command families are listed in. */
 const CONDITIONING_TYPE_ORDER = ["reward", "punish"] as const;
 
-/**
- * Literal locale keys per conditioning type. `check-locales` only sees literal strings, so a key
- * assembled from the type at the call site would drop out of its parity check.
- */
-const CONDITIONING_MARKER_LOCALE_KEYS: Record<(typeof CONDITIONING_TYPE_ORDER)[number], string> = {
-  reward: "commands.conditioning.shared.marker_reward",
-  punish: "commands.conditioning.shared.marker_punish",
-};
-
 const CONDITIONING_SUMMARY_LOCALE_KEYS: Record<
   (typeof CONDITIONING_TYPE_ORDER)[number],
   { none: string; one: string; many: string }
@@ -2172,13 +2146,15 @@ function buildResyncConfirmBody(
   if (diff.dialogues.changed || diff.dialogues.added || diff.dialogues.removed) {
     lines.push(localizer(locale, "commands.config.panel.resync_dialogues_diff", diff.dialogues));
   }
-  if (persona && !persona.is_alter) {
+  // A pointer resync only clears its Nudges override, so no avatar is reapplied.
+  if (persona && !persona.is_alter && !persona.is_pointer) {
     lines.push(localizer(locale, "commands.config.panel.resync_main_avatar_detail"));
   } else if (diff.customAvatar) {
     lines.push(localizer(locale, "commands.config.panel.resync_avatar_diff"));
   }
   if (diff.addedSprites)
     lines.push(localizer(locale, "commands.config.panel.resync_sprites_diff", { count: diff.addedSprites }));
+  if (diff.nudgesChanged) lines.push(localizer(locale, "commands.config.panel.resync_nudges_diff"));
   lines.push(localizer(locale, "commands.config.panel.resync_kept_detail"));
   lines.push(localizer(locale, "commands.config.panel.resync_irreversible_detail"));
   return [
@@ -2208,6 +2184,52 @@ function buildResyncConfirmBody(
           type: ComponentType.Button,
           style: ButtonStyle.Secondary,
           customId: buildConfigRouteId({ action: "resync-cancel", locale, personaId: view.personaId }),
+          label: localizer(locale, "commands.config.panel.cancel_button"),
+        },
+      ],
+    },
+  ];
+}
+
+function buildNudgeRestoreConfirmBody(
+  input: ConfigPanelRenderInput,
+  view: Extract<ConfigPanelView, { kind: "nudge-restore-confirm" }>,
+): ComponentInContainerData[] {
+  const { locale } = input;
+  const persona = input.personas.find((candidate) => candidate.persona_id === view.personaId);
+  return [
+    {
+      type: ComponentType.TextDisplay,
+      content: `### ${localizer(locale, "commands.config.natural_nudges.idle_restore_confirm_title", {
+        persona: escapeDiscordMarkdown(persona?.persona_nickname ?? ""),
+      })}\n${localizer(locale, "commands.config.natural_nudges.idle_restore_confirm_description")}\n\n${localizer(
+        locale,
+        "commands.config.natural_nudges.idle_restore_kept_detail",
+      )}`,
+    },
+    {
+      type: ComponentType.ActionRow,
+      components: [
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Danger,
+          customId: buildConfigRouteId({
+            action: "nudge-persona-restore-confirm",
+            locale,
+            personaId: view.personaId,
+            nonce: view.nonce,
+          }),
+          label: localizer(locale, "commands.config.natural_nudges.idle_restore_button"),
+          disabled: input.readStatus !== "fresh",
+        },
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: buildConfigRouteId({
+            action: "nudge-persona-restore-cancel",
+            locale,
+            personaId: view.personaId,
+          }),
           label: localizer(locale, "commands.config.panel.cancel_button"),
         },
       ],
@@ -2285,7 +2307,14 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
   }
   if (!view) return components;
 
+  const stPresetName = view.activeStPresetName;
+  const promptLocked = Boolean(stPresetName);
   const prompt = view.systemPrompt?.trim() || DEFAULT_SYSTEM_PROMPT.trim();
+  const promptLockNotice = stPresetName
+    ? `> ${localizer(locale, "commands.config.panel.system_prompt_st_preset_active", {
+        preset: escapeDiscordMarkdown(stPresetName),
+      })}`
+    : "";
   const contextNote = view.contextNote?.trim() ?? "";
   const responsePrefill = view.responsePrefill?.trim() ?? "";
   const prefillHeader = `**${localizer(locale, "commands.config.panel.response_prefill_title")}**\n${localizer(
@@ -2328,6 +2357,7 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
   let fixedTextLength =
     measureFormattedPanelTextLength(components[0]) +
     measurePanelTextLength(promptHeader) +
+    measurePanelTextLength(promptLockNotice) +
     measurePanelTextLength(contextHeader) +
     (contextNote ? 0 : getDiscordTextLength(noneContent)) +
     measurePanelTextLength(prefillHeader) +
@@ -2338,13 +2368,16 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
     fixedTextLength += measureFormattedPanelTextLength(timezoneTextDisplay);
   }
   const generalDynamicAllowance = Math.max(0, baseAllowance - fixedTextLength);
-  const boundedValueCount = 1 + (contextNote ? 1 : 0) + (responsePrefill ? 1 : 0);
+  const boundedValueCount = Math.max(1, (promptLocked ? 0 : 1) + (contextNote ? 1 : 0) + (responsePrefill ? 1 : 0));
   const generalPerValueBudget = Math.floor(generalDynamicAllowance / boundedValueCount);
 
-  const renderedPrompt = renderFencedPreview(locale, prompt, {
-    budget: generalPerValueBudget,
-    actionLabel: localizer(locale, "commands.config.panel.set_prompt_button"),
-  });
+  // A preset-controlled prompt is never sent, so previewing the stored or default text would misreport it.
+  const renderedPrompt = promptLocked
+    ? promptLockNotice
+    : renderFencedPreview(locale, prompt, {
+        budget: generalPerValueBudget,
+        actionLabel: localizer(locale, "commands.config.panel.set_prompt_button"),
+      });
   const renderedContextNote = contextNote
     ? renderFencedPreview(locale, contextNote, {
         budget: generalPerValueBudget,
@@ -2378,14 +2411,14 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
           style: ButtonStyle.Secondary,
           customId: buildConfigRouteId({ action: "behavior-prompt-open", locale }),
           label: localizer(locale, "commands.config.panel.set_prompt_button"),
-          disabled: writesDisabled,
+          disabled: writesDisabled || promptLocked,
         },
         {
           type: ComponentType.Button,
           style: ButtonStyle.Secondary,
           customId: buildConfigRouteId({ action: "behavior-preset-open", locale }),
           label: localizer(locale, "commands.config.panel.apply_preset_button"),
-          disabled: writesDisabled,
+          disabled: writesDisabled || promptLocked,
         },
         {
           type: ComponentType.Button,
@@ -2399,8 +2432,23 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
           style: ButtonStyle.Danger,
           customId: buildConfigRouteId({ action: "behavior-prompt-remove", locale }),
           label: localizer(locale, "commands.config.panel.use_default_prompt_button"),
-          disabled: writesDisabled || !view.systemPrompt,
+          disabled: writesDisabled || promptLocked || !view.systemPrompt,
         },
+        ...(promptLocked
+          ? [
+              {
+                type: ComponentType.Button as const,
+                style: ButtonStyle.Secondary as const,
+                customId: buildConfigRouteId({
+                  action: "category",
+                  locale,
+                  category: "plugins",
+                  page: "sillytavern-presets",
+                }),
+                label: localizer(locale, "commands.config.panel.open_st_presets_button"),
+              },
+            ]
+          : []),
       ],
     },
     {
@@ -3376,7 +3424,7 @@ function buildPersonaRangeEntry(input: PersonaRangeEntryInput): ComponentInConta
       type: ComponentType.Button,
       style: ButtonStyle.Secondary,
       customId: input.buttonCustomId,
-      label: localizer(input.locale, input.buttonLabelKey),
+      label: safeSelectOptionText(localizer(input.locale, input.buttonLabelKey), DISCORD_BUTTON_LABEL_MAX),
       disabled: input.disabled,
     };
     return [
@@ -3395,7 +3443,10 @@ function buildPersonaRangeEntry(input: PersonaRangeEntryInput): ComponentInConta
         {
           type: ComponentType.StringSelect,
           customId: input.selectCustomId,
-          placeholder: localizer(input.locale, input.selectPlaceholderKey),
+          placeholder: safeSelectOptionText(
+            localizer(input.locale, input.selectPlaceholderKey),
+            DISCORD_SELECT_PLACEHOLDER_MAX,
+          ),
           options: buildRangeSelectOptions({
             totalCount: roster.length,
             pageSize: input.pageSize,
@@ -3744,7 +3795,7 @@ ${localizer(locale, "commands.config.panel.channels_rules_description")}`,
 
   const privateTitle = localizer(locale, "commands.config.panel.channels_rules_private_title");
   const privateDesc = localizer(locale, "commands.config.panel.channels_rules_private_description");
-  const roleplayTitle = `[${localizer(locale, "commands.config.panel.channels_rules_roleplay_title")}](${buildDocsUrl(locale, DOCS_PATHS.ROLEPLAY_CHANNELS)})`;
+  const roleplayTitle = localizer(locale, "commands.config.panel.channels_rules_roleplay_title");
   const roleplayDesc = localizer(locale, "commands.config.panel.channels_rules_roleplay_description");
   const blocklistTitle = localizer(locale, "commands.config.panel.channels_rules_blocklist_title");
   const blocklistDesc = localizer(locale, "commands.config.panel.channels_rules_blocklist_description");
@@ -3844,7 +3895,7 @@ ${localizer(locale, "commands.config.panel.channels_rules_description")}`,
       : []),
     ...buildChannelRulesCollectionSection({
       locale,
-      title: `[${localizer(locale, "commands.config.panel.channels_rules_roleplay_title")}](${buildDocsUrl(locale, DOCS_PATHS.ROLEPLAY_CHANNELS)})`,
+      title: roleplayTitle,
       description: localizer(locale, "commands.config.panel.channels_rules_roleplay_description"),
       members: view.roleplayChannels.map((channel) => `<#${channel.id}>`),
       budget: rulesPerSectionBudget,
@@ -3899,10 +3950,12 @@ ${localizer(locale, "commands.config.panel.channels_rules_description")}`,
   return components;
 }
 
-function channelOverrideModelLabel(locale: string, model: LlmRow | null): string {
-  return model
-    ? `${getProviderDisplayName(model.llm_provider)} / ${model.llm_codename}`
-    : localizer(locale, "commands.config.panel.none_label");
+function modelLabel(locale: string, model: Pick<LlmRow, "llm_provider" | "llm_codename"> | null | undefined): string {
+  return formatModelSelectionLabel(
+    model?.llm_codename ?? null,
+    model ? getProviderDisplayName(model.llm_provider, locale) : null,
+    localizer(locale, "commands.config.panel.none_label"),
+  );
 }
 
 function buildChannelsOverridesBody(input: ConfigPanelRenderInput): ComponentInContainerData[] {
@@ -3974,9 +4027,7 @@ ${localizer(locale, "commands.config.panel.channels_overrides_context_note_descr
   const textModelTitleDesc = `**${localizer(locale, "commands.config.panel.channels_overrides_text_model_title")}**
 ${localizer(locale, "commands.config.panel.channels_overrides_text_model_description")}`;
 
-  const promptMode = prompt
-    ? localizer(locale, `commands.config.panel.channels_overrides_prompt_mode_${prompt.mode}`)
-    : none;
+  const promptMode = prompt ? localizer(locale, CHANNEL_PROMPT_MODE_KEYS[prompt.mode]) : none;
   const promptModeLine = selectedChannel
     ? `> ${localizer(locale, "commands.config.panel.channels_overrides_prompt_mode_label")}: ${promptMode}\n`
     : "";
@@ -3984,8 +4035,8 @@ ${localizer(locale, "commands.config.panel.channels_overrides_text_model_descrip
     ? `> ${localizer(locale, "commands.config.panel.channels_overrides_context_note_depth_label")}: ${contextNote?.depth ?? none}\n`
     : "";
   const textModelValues = selectedChannel
-    ? `> ${localizer(locale, "commands.config.panel.channels_overrides_channel_override_label")}: ${channelOverrideModelLabel(locale, textOverride)}
-> ${localizer(locale, "commands.config.panel.channels_overrides_server_default_label")}: ${channelOverrideModelLabel(locale, serverTextModel)}`
+    ? `> ${localizer(locale, "commands.config.panel.channels_overrides_channel_override_label")}: ${modelLabel(locale, textOverride)}
+> ${localizer(locale, "commands.config.panel.channels_overrides_server_default_label")}: ${modelLabel(locale, serverTextModel)}`
     : "";
   const noneContent = renderFencedCollectionContent(none);
 
@@ -4102,8 +4153,8 @@ ${localizer(locale, "commands.config.panel.channels_overrides_text_model_descrip
   if (selectedChannel) {
     components.push({
       type: ComponentType.TextDisplay,
-      content: `> ${localizer(locale, "commands.config.panel.channels_overrides_channel_override_label")}: ${channelOverrideModelLabel(locale, textOverride)}
-> ${localizer(locale, "commands.config.panel.channels_overrides_server_default_label")}: ${channelOverrideModelLabel(locale, serverTextModel)}`,
+      content: `> ${localizer(locale, "commands.config.panel.channels_overrides_channel_override_label")}: ${modelLabel(locale, textOverride)}
+> ${localizer(locale, "commands.config.panel.channels_overrides_server_default_label")}: ${modelLabel(locale, serverTextModel)}`,
     });
 
     const textView = input.view;
@@ -4121,7 +4172,7 @@ ${localizer(locale, "commands.config.panel.channels_overrides_text_model_descrip
             }),
             placeholder: localizer(locale, "commands.config.panel.text_override_provider_placeholder"),
             options: textView.providers.map((provider) => ({
-              label: safeSelectOptionText(getProviderDisplayName(provider), 100),
+              label: safeSelectOptionText(getProviderDisplayName(provider, locale), 100),
               value: provider,
             })),
             disabled: actionDisabled,
@@ -4138,7 +4189,7 @@ ${localizer(locale, "commands.config.panel.channels_overrides_text_model_descrip
         return {
           label: safeSelectOptionText(
             localizer(locale, "commands.config.panel.provider_page_label", {
-              provider: getProviderDisplayName(textView.provider),
+              provider: getProviderDisplayName(textView.provider, locale),
               page: pageIndex + 1,
             }),
             100,
@@ -4321,6 +4372,11 @@ export function buildConfigPanelPayload(input: ConfigPanelRenderInput): ConfigPa
     return buildPayload(components, receipt);
   }
 
+  if (input.view && input.view.kind === "nudge-restore-confirm") {
+    components.push(...buildNudgeRestoreConfirmBody(input, input.view));
+    return buildPayload(components, receipt);
+  }
+
   if (input.view && input.view.kind === "character-reference-clear-confirm") {
     components.push(...buildPersonaCharacterReferenceClearBody(input, input.view));
     return buildPayload(components, receipt);
@@ -4380,6 +4436,27 @@ export function buildConfigPanelPayload(input: ConfigPanelRenderInput): ConfigPa
   if (category === "persona" && page === "overrides") {
     if (resolveConfigPageState(category, page, actor) !== "omitted") {
       components.push(...buildPersonaOverridesBody(input));
+    }
+    appendPersonaCreateHint(components, locale);
+    return buildPayload(components, receipt);
+  }
+
+  if (category === "persona" && page === "nudges") {
+    const pageState = resolveConfigPageState(category, page, actor);
+    if (pageState !== "omitted") {
+      const persona = input.personas.find((candidate) => candidate.persona_id === input.selectedPersonaId) ?? null;
+      components.push(
+        ...(persona
+          ? buildPersonaNudgesBody({
+              locale,
+              persona,
+              config: input.naturalNudges?.personaConfig ?? undefined,
+              writesDisabled: writesDisabled || pageState !== "enabled",
+              personaNudges: input.naturalNudges?.personaNudges,
+              textBudget: getBasePageTextAllowance(input, true),
+            })
+          : [{ type: ComponentType.TextDisplay, content: localizer(locale, "commands.config.panel.no_personas") }]),
+      );
     }
     appendPersonaCreateHint(components, locale);
     return buildPayload(components, receipt);
@@ -4454,6 +4531,17 @@ export function buildConfigPanelPayload(input: ConfigPanelRenderInput): ConfigPa
     if (state && resolveConfigPageState(category, page, actor) === "enabled") {
       components.push(
         ...buildResponseDraftingBody(state, locale, input.responseDraftingView, input.draftPicker, writesDisabled),
+      );
+    }
+    return buildPayload(components, receipt);
+  }
+
+  if (category === "plugins" && page === "natural-nudges") {
+    const state = input.personas[0];
+    const settings = input.naturalNudges?.settings;
+    if (state && resolveConfigPageState(category, page, actor) === "enabled" && settings) {
+      components.push(
+        ...buildNaturalNudgesSettingsBody(locale, settings, state.config.user_byok_mode === true, writesDisabled),
       );
     }
     return buildPayload(components, receipt);

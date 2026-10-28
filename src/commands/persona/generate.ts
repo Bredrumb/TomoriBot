@@ -1,3 +1,12 @@
+import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
+import { PERSONA_NICKNAME_MAX_LENGTH } from "@/types/personaNaming";
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
+import {
+  findProviderRequestDeniedError,
+  createProviderUsageRecorder,
+  type ProviderUsageContext,
+  getProviderRequestFailureCopy,
+} from "@/utils/provider/providerUsage";
 /**
  * Preset Generate Command
  * AI-powered personality generation using supported structured output providers
@@ -23,7 +32,13 @@ import { attachImportNowCollector, importNowButton } from "@/utils/persona/impor
 import { validateAndFallbackPanelPayload } from "@/utils/discord/ui/interactionCore";
 import type { UserRow } from "../../types/db/schema";
 import { personaRepository } from "@/utils/db/repositories";
-import { decryptApiKey } from "../../utils/security/crypto";
+import { getCapabilityCredentialFailureCopy, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
+import {
+  findProviderOption,
+  findProviderOptionByActiveProvider,
+  withProviderOptionCopy,
+} from "@/utils/provider/providerOptionRegistry";
 import { memoryGuard, PERSONA_LIMITS, reservePersonaQuota } from "../../utils/security/rateLimiter";
 import { safeDownload } from "../../utils/security/safeDownload";
 import type { GeneratePresetParams } from "../../providers/google/presetGenerator";
@@ -143,10 +158,13 @@ function resolveComponentsV2AccentColor(color: string | number): number {
 function buildGenerateStatusComponents(options: {
   locale: string;
   titleKey: string;
-  descriptionKey: string;
+  descriptionKey?: string;
+  description?: string;
   color: string | number;
   descriptionVars?: Record<string, string | number | boolean>;
   details?: string;
+  footerKey?: string;
+  footerVars?: Record<string, string | number | boolean>;
   showInputAttachment?: boolean;
 }): TopLevelComponentData[] {
   const components: ComponentInContainerData[] = [
@@ -156,7 +174,7 @@ function buildGenerateStatusComponents(options: {
     },
     {
       type: ComponentType.TextDisplay,
-      content: localizer(options.locale, options.descriptionKey, options.descriptionVars),
+      content: options.description ?? localizer(options.locale, options.descriptionKey ?? "", options.descriptionVars),
     },
   ];
 
@@ -164,6 +182,13 @@ function buildGenerateStatusComponents(options: {
     components.push({
       type: ComponentType.TextDisplay,
       content: options.details,
+    });
+  }
+
+  if (options.footerKey) {
+    components.push({
+      type: ComponentType.TextDisplay,
+      content: `-# ${localizer(options.locale, options.footerKey, options.footerVars)}`,
     });
   }
 
@@ -199,10 +224,13 @@ async function editGenerateStatusReply(
   options: {
     locale: string;
     titleKey: string;
-    descriptionKey: string;
+    descriptionKey?: string;
+    description?: string;
     color: string | number;
     descriptionVars?: Record<string, string | number | boolean>;
     details?: string;
+    footerKey?: string;
+    footerVars?: Record<string, string | number | boolean>;
     inputAttachment?: AttachmentBuilder;
   },
 ): Promise<void> {
@@ -213,9 +241,12 @@ async function editGenerateStatusReply(
           locale: options.locale,
           titleKey: options.titleKey,
           descriptionKey: options.descriptionKey,
+          description: options.description,
           color: options.color,
           descriptionVars: options.descriptionVars,
           details: options.details,
+          footerKey: options.footerKey,
+          footerVars: options.footerVars,
           showInputAttachment: Boolean(options.inputAttachment),
         }),
         ...(options.inputAttachment ? { files: [options.inputAttachment] } : {}),
@@ -331,13 +362,28 @@ export async function execute(
     //    /generate image, /memories) and ensures generation uses the
     //    user's personal text provider when configured, instead of always falling
     //    back to the server's configured model.
-    const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(
+    let { tomoriState, activeConfigs } = await applyPersonalProviderSelectionsToTomoriState(
       baseTomoriState,
       userData.user_id ?? null,
     );
+    let credentialSource: "server" | "personal" = activeConfigs.text ? "personal" : "server";
+    const recoveryTips = () =>
+      withProviderOptionCopy([], {
+        surface: "recovery",
+        managedProvider: activeConfigs?.text
+          ? (findProviderOption(activeConfigs.text.provider)?.value ?? null)
+          : (findProviderOptionByActiveProvider(
+              tomoriState.llm.llm_provider,
+              { kind: "server", ownerId: tomoriState.server_id, state: tomoriState },
+              "text",
+            )?.value ?? null),
+        userDiscId: interaction.user.id,
+        serverId: tomoriState.server_id,
+        credentialScope: credentialSource,
+      });
 
-    const providerName = tomoriState.llm.llm_provider.toLowerCase();
-    const effectiveModelName = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
+    let providerName = tomoriState.llm.llm_provider.toLowerCase();
+    let effectiveModelName = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
 
     if (!providerSupportsFeature(providerName, "presetGeneration")) {
       log.warn(
@@ -385,50 +431,6 @@ export async function execute(
         descriptionVars: {
           model_name: effectiveModelName,
         },
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    if (!tomoriState.config.api_key) {
-      log.warn(`[Generate Persona] API key missing for provider "${tomoriState.llm.llm_provider}"`, undefined, {
-        userId: userData.user_id,
-        serverId: tomoriState.server_id,
-        personaId: tomoriState.persona_id,
-        metadata: {
-          command: "persona generate",
-          provider: tomoriState.llm.llm_provider,
-        },
-      });
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.persona.generate.no_api_key_title",
-        descriptionKey: "commands.persona.generate.no_api_key_description",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    const keyVersion = tomoriState.config.key_version || 1; // Default to V1 for backward compatibility
-    const decryptedApiKey = await decryptApiKey(tomoriState.config.api_key, keyVersion);
-    if (!decryptedApiKey) {
-      log.warn(
-        `[Generate Persona] Failed to decrypt API key for provider "${tomoriState.llm.llm_provider}"`,
-        undefined,
-        {
-          userId: userData.user_id,
-          serverId: tomoriState.server_id,
-          personaId: tomoriState.persona_id,
-          metadata: {
-            command: "persona generate",
-            provider: tomoriState.llm.llm_provider,
-          },
-        },
-      );
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.persona.generate.api_key_decrypt_failed_title",
-        descriptionKey: "commands.persona.generate.api_key_decrypt_failed_description",
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
       });
@@ -527,6 +529,15 @@ export async function execute(
       return;
     }
     const characterName = parsedNames[0];
+    if (getDiscordTextLength(characterName) > PERSONA_NICKNAME_MAX_LENGTH) {
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "commands.persona.name_too_long_title",
+        descriptionKey: "commands.persona.name_too_long_description",
+        descriptionVars: { max: PERSONA_NICKNAME_MAX_LENGTH },
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
 
     const imageAttachment = modalResult.attachments?.[FILE_UPLOAD_ID];
     let imageBase64: string | undefined;
@@ -544,22 +555,50 @@ export async function execute(
         imageMimeType: imageMimeType ?? imageAttachment?.content_type,
       });
 
+    let decryptedApiKey: string;
+    let usageContext: ProviderUsageContext | undefined;
+    try {
+      const credentials = await resolveCapabilityCredentials(baseTomoriState.server_id, "text", {
+        userId: userData.user_id,
+        textModel: baseTomoriState.llm,
+      });
+      ({ apiKey: decryptedApiKey, usageContext } = credentials);
+      credentialSource = credentials.source;
+      tomoriState = await resolveTextCredentialState(baseTomoriState, credentials);
+      providerName = credentials.provider;
+      effectiveModelName = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
+    } catch (error) {
+      const failure = getCapabilityCredentialFailureCopy(error, locale);
+      if (!failure) throw error;
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        ...failure,
+        color: ColorCode.ERROR,
+        tipKeys: findProviderRequestDeniedError(error) ? [] : await recoveryTips(),
+        files: [getInputAttachment()],
+      });
+      return;
+    }
+    if (!providerSupportsFeature(providerName, "presetGeneration") || !tomoriState.llm.supports_structoutput) {
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "commands.persona.generate.model_incompatible_title",
+        descriptionKey: "commands.persona.generate.model_incompatible_description",
+        descriptionVars: { model_name: effectiveModelName },
+        color: ColorCode.ERROR,
+        files: [getInputAttachment()],
+      });
+      return;
+    }
+
     // Reserve persona operation quota (atomic check+increment for DDoS protection)
     const quotaReserve = reservePersonaQuota(interaction.user.id);
     if (!quotaReserve.allowed) {
       const resetTime = quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown";
 
-      await modalSubmitInteraction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(localizedStatusTitle(locale, "rate_limit.error_quota_exceeded_title", ColorCode.ERROR))
-            .setDescription(
-              localizer(locale, "rate_limit.error_quota_exceeded_description", {
-                reset_time: resetTime,
-              }),
-            )
-            .setColor(ColorCode.ERROR),
-        ],
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "rate_limit.error_quota_exceeded_title",
+        descriptionKey: "rate_limit.error_quota_exceeded_description",
+        descriptionVars: { reset_time: resetTime },
+        color: ColorCode.ERROR,
         files: [getInputAttachment()],
       });
       return;
@@ -620,13 +659,10 @@ export async function execute(
       }
 
       if (!imageAttachment.content_type?.startsWith("image/")) {
-        await modalSubmitInteraction.editReply({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(localizedStatusTitle(locale, "commands.persona.generate.invalid_image_title", ColorCode.ERROR))
-              .setDescription(localizer(locale, "commands.persona.generate.invalid_image_description"))
-              .setColor(ColorCode.ERROR),
-          ],
+        await replyInfoEmbed(modalSubmitInteraction, locale, {
+          titleKey: "commands.persona.generate.invalid_image_title",
+          descriptionKey: "commands.persona.generate.invalid_image_description",
+          color: ColorCode.ERROR,
           files: [getInputAttachment()],
         });
         return;
@@ -649,16 +685,10 @@ export async function execute(
           errorKey = "commands.persona.generate.error_download_failed";
         }
 
-        await modalSubmitInteraction.editReply({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(
-                localizedStatusTitle(locale, errorKey, ColorCode.ERROR, {
-                  max_size: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB.toString(),
-                }),
-              )
-              .setColor(ColorCode.ERROR),
-          ],
+        await replyInfoEmbed(modalSubmitInteraction, locale, {
+          titleKey: errorKey,
+          titleVars: { max_size: PERSONA_LIMITS.MAX_AVATAR_SIZE_MB },
+          color: ColorCode.ERROR,
           files: [getInputAttachment()],
         });
         return;
@@ -667,14 +697,9 @@ export async function execute(
       // Store buffer for later reuse (image processing) and convert to base64 (AI generation)
       // Buffer is guaranteed to exist when success is true
       if (!downloadResult.buffer) {
-        await modalSubmitInteraction.editReply({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(
-                localizedStatusTitle(locale, "commands.persona.generate.error_download_failed", ColorCode.ERROR),
-              )
-              .setColor(ColorCode.ERROR),
-          ],
+        await replyInfoEmbed(modalSubmitInteraction, locale, {
+          titleKey: "commands.persona.generate.error_download_failed",
+          color: ColorCode.ERROR,
           files: [getInputAttachment()],
         });
         return;
@@ -729,19 +754,11 @@ export async function execute(
             },
           },
         );
-        await modalSubmitInteraction.editReply({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(
-                localizedStatusTitle(locale, "commands.persona.generate.image_vision_required_title", ColorCode.ERROR),
-              )
-              .setDescription(
-                localizer(locale, "commands.persona.generate.image_vision_required_description", {
-                  model_name: effectiveModelName,
-                }),
-              )
-              .setColor(ColorCode.ERROR),
-          ],
+        await replyInfoEmbed(modalSubmitInteraction, locale, {
+          titleKey: "commands.persona.generate.image_vision_required_title",
+          descriptionKey: "commands.persona.generate.image_vision_required_description",
+          descriptionVars: { model_name: effectiveModelName },
+          color: ColorCode.ERROR,
           files: [getInputAttachment()],
         });
         return;
@@ -778,23 +795,11 @@ export async function execute(
           },
         },
       );
-      await modalSubmitInteraction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(
-              localizedStatusTitle(
-                locale,
-                "commands.persona.generate.web_search_tools_required_title",
-                ColorCode.ERROR,
-              ),
-            )
-            .setDescription(
-              localizer(locale, "commands.persona.generate.web_search_tools_required_description", {
-                model_name: effectiveModelName,
-              }),
-            )
-            .setColor(ColorCode.ERROR),
-        ],
+      await replyInfoEmbed(modalSubmitInteraction, locale, {
+        titleKey: "commands.persona.generate.web_search_tools_required_title",
+        descriptionKey: "commands.persona.generate.web_search_tools_required_description",
+        descriptionVars: { model_name: effectiveModelName },
+        color: ColorCode.ERROR,
         files: [getInputAttachment()],
       });
       return;
@@ -802,15 +807,9 @@ export async function execute(
 
     await editGenerateStatusReply(modalSubmitInteraction, {
       locale,
-      // The caption is a second model call the user is waiting on, so the status names it
-      // rather than reporting generation while a different model is still reading the image.
-      titleKey: visionCaptionPending
-        ? "commands.persona.generate.captioning_title"
-        : "commands.persona.generate.processing_title",
-      descriptionKey: visionCaptionPending
-        ? "commands.persona.generate.captioning_description"
-        : "commands.persona.generate.processing_description",
-      descriptionVars: visionCaptionPending ? { model_name: tomoriState.vision_llm?.llm_codename ?? "" } : undefined,
+      titleKey: "commands.persona.generate.processing_title",
+      descriptionKey: "commands.persona.generate.processing_description",
+      footerKey: "commands.persona.generate.processing_footer",
       color: ColorCode.INFO,
     });
     replyUsesComponentsV2 = true;
@@ -840,6 +839,15 @@ export async function execute(
         userId: userData.user_id ?? null,
       });
 
+      if (captionResult.requestDenied) {
+        await editGenerateStatusReply(modalSubmitInteraction, {
+          locale,
+          ...getProviderRequestFailureCopy(captionResult.requestDenied, locale),
+          color: ColorCode.ERROR,
+          inputAttachment: getInputAttachment(),
+        });
+        return;
+      }
       if (!captionResult.ok) {
         const reason = captionResult.failure?.reason ?? "request_failed";
         log.warn(
@@ -906,9 +914,11 @@ export async function execute(
         tomoriState: generationTomoriState,
         locale,
         provider: generationProviderName,
+        usageContext,
         userId: interaction.user.id,
         guildId: interaction.guild?.id,
         suppressProgressNotices: true, // Search runs in background during generation; don't leak tool embeds into chat
+        suppressFailureNotices: true,
       };
     } else if (useWebSearch) {
       log.warn("Preset generation web search skipped: no channel context available.");
@@ -916,23 +926,54 @@ export async function execute(
 
     log.info(`Generating preset data with ${generationTomoriState.llm.llm_provider}...`);
 
-    const genResult = await generatePresetForProvider({
-      providerName: generationProviderName,
-      apiKey: generationApiKey,
-      tomoriState: generationTomoriState,
-      params: genParams,
-      locale,
-      toolContext: presetToolContext,
-    });
+    const genResult = await withProviderUsageContext(usageContext, async () =>
+      generatePresetForProvider({
+        providerName: generationProviderName,
+        apiKey: generationApiKey,
+        tomoriState: generationTomoriState,
+        params: genParams,
+        locale,
+        toolContext: presetToolContext,
+        onUsage: createProviderUsageRecorder(usageContext, generationTomoriState.llm.llm_codename),
+      }),
+    );
 
-    if (genResult.error || !genResult.preset) {
+    if (genResult.failureStage === "web_search") {
       await editGenerateStatusReply(modalSubmitInteraction, {
         locale,
-        titleKey: "commands.persona.generate.generation_failed_title",
-        descriptionKey: "commands.persona.generate.generation_failed_description",
+        titleKey: "commands.persona.generate.web_search_failed_title",
+        descriptionKey: "commands.persona.generate.web_search_failed_description",
+        color: ColorCode.ERROR,
+        inputAttachment: getInputAttachment(),
+      });
+      return;
+    }
+
+    const deniedGeneration = findProviderRequestDeniedError(genResult.cause, usageContext);
+    if (deniedGeneration) {
+      await editGenerateStatusReply(modalSubmitInteraction, {
+        locale,
+        ...getProviderRequestFailureCopy(deniedGeneration, locale),
+        color: ColorCode.ERROR,
+        inputAttachment: getInputAttachment(),
+      });
+      return;
+    }
+
+    if (genResult.error || !genResult.preset) {
+      const invalidGeneratedData = genResult.errorType === "VALIDATION_ERROR";
+      await editGenerateStatusReply(modalSubmitInteraction, {
+        locale,
+        titleKey: invalidGeneratedData
+          ? "commands.persona.generate.validation_failed_title"
+          : "commands.persona.generate.generation_failed_title",
+        descriptionKey: invalidGeneratedData
+          ? "commands.persona.generate.validation_failed_description"
+          : "commands.persona.generate.generation_failed_description",
         descriptionVars: {
           error: genResult.error || "Unknown error",
         },
+        details: invalidGeneratedData ? genResult.error : undefined,
         color: ColorCode.ERROR,
         inputAttachment: getInputAttachment(),
       });
@@ -1128,36 +1169,28 @@ export async function execute(
     // Quota already reserved at step 8 - no increment needed
     log.success(`Preset generated successfully for: ${characterName}`);
   } catch (error) {
+    const denied = findProviderRequestDeniedError(error);
+    if (denied) {
+      const copy = getProviderRequestFailureCopy(denied, locale);
+      if (replyUsesComponentsV2) {
+        await editGenerateStatusReply(replyInteraction, { locale, ...copy, color: ColorCode.ERROR });
+      } else {
+        await replyInfoEmbed(replyInteraction, locale, { ...copy, color: ColorCode.ERROR });
+      }
+      return;
+    }
     log.error("Error in preset generate command:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const unknownErrorCopy = {
+      titleKey: "general.errors.unknown_error_title",
+      descriptionKey: "general.errors.unknown_error_description",
+      color: ColorCode.ERROR,
+    };
 
     try {
-      const errorEmbed = new EmbedBuilder()
-        .setTitle(localizedStatusTitle(locale, "general.errors.unexpected_title", ColorCode.ERROR))
-        .setDescription(
-          localizer(locale, "general.errors.unexpected_description", {
-            error: errorMessage,
-          }),
-        )
-        .setColor(ColorCode.ERROR);
-
       if (replyUsesComponentsV2 && (replyInteraction.deferred || replyInteraction.replied)) {
-        await editGenerateStatusReply(replyInteraction, {
-          locale,
-          titleKey: "general.errors.unexpected_title",
-          descriptionKey: "general.errors.unexpected_description",
-          descriptionVars: {
-            error: errorMessage,
-          },
-          color: ColorCode.ERROR,
-        });
-      } else if (replyInteraction.deferred || replyInteraction.replied) {
-        await replyInteraction.editReply({ embeds: [errorEmbed] });
+        await editGenerateStatusReply(replyInteraction, { locale, ...unknownErrorCopy });
       } else {
-        await replyInteraction.reply({
-          embeds: [errorEmbed],
-          flags: MessageFlags.Ephemeral,
-        });
+        await replyInfoEmbed(replyInteraction, locale, unknownErrorCopy);
       }
     } catch {
       log.error("Failed to send error embed");

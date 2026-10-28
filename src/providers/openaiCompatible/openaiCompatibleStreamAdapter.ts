@@ -17,7 +17,8 @@ import type {
   OpenAICompatibleToolCallDelta,
 } from "@/providers/openaiCompatible/openaiCompatibleTypes";
 import {
-  buildDegradationAttempts,
+  areDegradationBodiesEqual,
+  createDegradationQueue,
   buildImageStripAttempt,
   buildTargetedAttempt,
   extractRejectedParams,
@@ -280,7 +281,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       );
 
       const fetchImpl = this.options.providerName === "custom" ? fetchUserRemoteUrl : fetch;
-      const attempts = buildDegradationAttempts(requestBody, {
+      const { attempts, prepareAttempts } = createDegradationQueue(requestBody, {
         mandatoryKeys: new Set(["model", "messages", "stream", ...(this.options.mandatoryBodyKeys ?? [])]),
         stripImages: (attemptMessages) =>
           Array.isArray(attemptMessages)
@@ -288,7 +289,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
             : attemptMessages,
         priorityKeys: this.options.degradationPriorityKeys,
       });
-      const attemptedSerializedBodies = new Set<string>();
+      const attemptedBodies: Record<string, unknown>[] = [];
       let targetedAttemptCount = 0;
       const queueTargetedAttempt = (
         currentIndex: number,
@@ -303,11 +304,11 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         if (rejectedParams.length === 0) return false;
 
         const targetedAttempt = buildTargetedAttempt(currentBody, rejectedParams);
-        const serialized = JSON.stringify(targetedAttempt.body);
-        if (attemptedSerializedBodies.has(serialized)) return false;
+        if (attemptedBodies.some((body) => areDegradationBodiesEqual(body, targetedAttempt.body))) return false;
 
         const duplicateIndex = attempts.findIndex(
-          (queuedAttempt, index) => index > currentIndex && JSON.stringify(queuedAttempt.body) === serialized,
+          (queuedAttempt, index) =>
+            index > currentIndex && areDegradationBodiesEqual(queuedAttempt.body, targetedAttempt.body),
         );
         if (duplicateIndex !== -1) {
           attempts.splice(duplicateIndex, 1);
@@ -334,11 +335,11 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         const imageStripAttempt = buildImageStripAttempt(currentBody);
         if (!imageStripAttempt) return false;
 
-        const serialized = JSON.stringify(imageStripAttempt.body);
-        if (attemptedSerializedBodies.has(serialized)) return false;
+        if (attemptedBodies.some((body) => areDegradationBodiesEqual(body, imageStripAttempt.body))) return false;
 
         const duplicateIndex = attempts.findIndex(
-          (queuedAttempt, index) => index > currentIndex && JSON.stringify(queuedAttempt.body) === serialized,
+          (queuedAttempt, index) =>
+            index > currentIndex && areDegradationBodiesEqual(queuedAttempt.body, imageStripAttempt.body),
         );
         if (duplicateIndex !== -1) {
           attempts.splice(duplicateIndex, 1);
@@ -351,7 +352,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       attemptLoop: for (let i = 0; i < attempts.length; i++) {
         const attempt = attempts[i];
         const isRetry = i > 0;
-        attemptedSerializedBodies.add(JSON.stringify(attempt.body));
+        attemptedBodies.push(attempt.body);
 
         if (isRetry) {
           log.warn(
@@ -399,6 +400,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
             // `degradeOn502` stays off: a direct provider's 502 is an outage, not a parameter
             // incompatibility, and should fail fast into key/model fallback.
             const retryPlan = planDegradationRetry({
+              prepareAttempts,
               attempts,
               attemptIndex: i,
               body: attempt.body,
@@ -452,6 +454,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
                 rawError: chunk.error,
               });
               const retryPlan = planDegradationRetry({
+                prepareAttempts,
                 attempts,
                 attemptIndex: i,
                 body: attempt.body,
@@ -782,7 +785,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     return createOpenAICompatibleErrorDescription(error, locale, {
       localeNamespace: this.options.localeNamespace,
       fallbackMessage: localizer(locale, `${this.options.localeNamespace}.unknown_default_message`),
-      connectionRefusedMessage: localizer(locale, `${this.options.localeNamespace}.connection_refused`),
+      connectionRefusedMessage: localizer(locale, "genai.stream.connection_refused_description"),
     });
   }
 

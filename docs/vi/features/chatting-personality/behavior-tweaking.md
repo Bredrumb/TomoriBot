@@ -20,13 +20,13 @@ Tính năng tóm tắt bộ nhớ ngắn hạn tự động được bật trong
 ## Duyệt bản nháp phản hồi
 <!-- anchor: response-drafting -->
 
-Mở `/config` > `Plugin` > `Duyệt phản hồi` để bật tính năng duyệt. Tính năng này bắt đầu ở trạng thái Tắt và áp dụng cho mọi persona trong không gian làm việc đó, bao gồm cả câu trả lời trong hàng đợi và phân cảnh được tạo. Người quản lý máy chủ có thể thay đổi cài đặt máy chủ; không gian làm việc DM của bạn có cài đặt riêng.
+Mở `/config` > `Plugin` > `Duyệt phản hồi` để bật tính năng duyệt. Tính năng này bắt đầu ở trạng thái Tắt và áp dụng cho mọi persona trong máy chủ đó, bao gồm cả câu trả lời trong hàng đợi và phân cảnh được tạo. Người quản lý máy chủ có thể thay đổi cài đặt máy chủ; DM của bạn có cài đặt riêng.
 
 Khi Bật, Tomori giữ lại câu trả lời trong khi người duyệt kiểm tra giọng điệu nhân vật và sự phù hợp với phân cảnh. Người duyệt có thể yêu cầu một lần sửa đổi hoàn chỉnh. `Mục cần kiểm tra` liệt kê các mục duyệt với vòng tròn màu xanh lá cho các mục được bật và vòng tròn màu đỏ cho các mục bị tắt. `Sửa mục duyệt` mở danh sách hộp kiểm: đánh dấu một mục để bật hoặc bỏ đánh dấu để tắt.
 
 Chỉ dẫn nhân cách, hội thoại mẫu và hội thoại gần đây bắt đầu ở trạng thái bật. Ký ức và ngữ cảnh khác, cùng `Lệnh gọi công cụ`, bắt đầu ở trạng thái tắt. Bản nháp, tin nhắn kích hoạt và đích phản hồi luôn được bao gồm. Việc bật ký ức và ngữ cảnh khác sẽ thêm các ký ức được chấp nhận, tài liệu, chi tiết về người tham gia và ngữ cảnh khác vào quá trình duyệt. Việc bật `Lệnh gọi công cụ` sẽ thêm định nghĩa công cụ và kết quả đã hoàn thành, đồng thời kiểm tra các yêu cầu trước khi thực thi; các yêu cầu bị từ chối có thể nhận được sửa đổi trong giới hạn. Các hành động thành công được giữ lại trong khi câu trả lời được sửa đổi. Việc duyệt và sửa đổi có thể làm tăng thời gian phản hồi và chi phí token, đặc biệt khi bật nhiều mục hơn.
 
-`Chọn model duyệt` chọn một model văn bản đã đăng ký đủ điều kiện. `Dùng model phản hồi hiện tại` sử dụng model và thông tin xác thực thực sự trả lời, bao gồm cả nhà cung cấp cá nhân của bạn hoặc model dự phòng. Người duyệt được ghim sử dụng thông tin đăng ký và xác thực riêng của không gian làm việc. Tác giả chỉ dùng văn bản và tác giả đã tắt Sử dụng công cụ vẫn có thể sử dụng người duyệt đủ điều kiện. Model kế thừa không được hỗ trợ sẽ hiển thị `Không khả dụng`; hãy chọn người duyệt được hỗ trợ để bật duyệt chi tiết.
+`Chọn model duyệt` chọn một model văn bản đã đăng ký đủ điều kiện. `Dùng model phản hồi hiện tại` sử dụng model và thông tin xác thực thực sự trả lời, bao gồm cả nhà cung cấp cá nhân của bạn hoặc model dự phòng. Người duyệt được ghim sử dụng thông tin đăng ký và xác thực được lưu cho máy chủ hoặc DM đó. Tác giả chỉ dùng văn bản và tác giả đã tắt Sử dụng công cụ vẫn có thể sử dụng người duyệt đủ điều kiện. Model kế thừa không được hỗ trợ sẽ hiển thị `Không khả dụng`; hãy chọn người duyệt được hỗ trợ để bật duyệt chi tiết.
 
 `Đặt prompt` chỉnh sửa hướng dẫn duyệt, tối đa 4.000 ký tự. `Dùng mặc định` khôi phục mặc định nhận biết persona. `Chọn công cụ kiểm tra quy tắc` chọn một công cụ kiểm tra MCP tương thích đã đăng ký, hoặc `Không có`. Kết quả của nó được gửi riêng cho người duyệt, người duyệt sẽ quyết định xem chúng có quan trọng đối với nhân vật này hay không. Công cụ kiểm tra không có bảo đảm ngôn ngữ/hồ sơ đã được xác thực trong bản phát hành này.
 
@@ -59,7 +59,14 @@ Mọi persona đều có thể dùng biểu cảm tùy chỉnh mới. Để gi�
 
 ### Cách bot sử dụng
 
-Khi bật tính năng dùng sticker trong `/config` > `Plugin`, bot gửi tối đa một biểu cảm mỗi câu trả lời, thành tin nhắn riêng trước, giữa hoặc sau phần văn bản. Bot không dùng biểu cảm trong [kênh nhập vai](/vi/features/chatting-personality/chatting-and-triggers/#roleplay-channels). `/expressions manage` cho biết các persona đã dùng mỗi biểu cảm bao nhiêu lần.
+Khi bật tính năng dùng sticker trong `/config` > `Plugin`, bot gửi tối đa một biểu cảm mỗi câu trả lời, thành tin nhắn riêng trước, giữa hoặc sau phần văn bản. Bot không dùng biểu cảm trong [kênh nhập vai](#roleplay-channels). `/expressions manage` cho biết các persona đã dùng mỗi biểu cảm bao nhiêu lần.
+
+## Kênh nhập vai
+<!-- anchor: roleplay-channels -->
+
+Các kênh nhập vai sẽ loại bỏ các thông báo về biểu tượng cảm xúc và sticker tùy chỉnh trong phản hồi của cô ấy. Thành viên cũng có thể sử dụng `/tool delete turn` trong các kênh nhập vai để xóa lượt mới nhất của cô ấy mà không cần có quyền Quản lý Máy chủ.
+
+Định cấu hình các kênh nhập vai trong `/config` > `Kênh` > Quy tắc kênh.
 
 ## Tinh chỉnh quá trình tạo phản hồi
 <!-- anchor: generation-tuning -->
@@ -74,7 +81,7 @@ Khi bật tính năng dùng sticker trong `/config` > `Plugin`, bot gửi tối 
 Lời nhắc hệ thống nằm phía trên cá tính và định hình hành vi tổng thể:
 
 - `/config` > `Hành vi` > `Hành vi chung`: đặt hướng dẫn hệ thống tùy chỉnh (tối đa 16.000 ký tự).
-- `/config` > `Hành vi` > `Hành vi chung`: chọn từ các lời nhắc hệ thống cài sẵn.
+- `/config` > `Hành vi` > `Hành vi chung`: chọn từ các preset chỉ dẫn hệ thống. `Default + Image Generation Expert` bổ sung hướng dẫn về thẻ anime và trang phục nhân vật chính xác vào prompt mặc định (xem [Tra cứu thẻ](/features/capabilities/media-generation/image-generation/#tag-lookup)).
 - `/config` > `Hành vi` > `Hành vi chung`: đặt lại về mặc định. Xác nhận hiển thị lời nhắc trước đó để bạn có thể khôi phục nó nếu vô tình xóa.
 
 Khi [SillyTavern cài sẵn](/vi/features/integrations/sillytavern-support/) hoạt động, lời nhắc hệ thống dự phòng tích hợp sẽ được thay thế, nhưng lời nhắc tùy chỉnh bạn đặt ở đây vẫn được gửi.

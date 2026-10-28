@@ -3,8 +3,29 @@ import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import { buildFallbackModelPersistence } from "@/utils/provider/fallbackModelIdentity";
-import { assignPersonalCapabilityToProvider, withPersonalTextPrimary } from "@/utils/provider/personalProviderHelpers";
+import { setPersonalTextPrimary } from "@/utils/provider/personalProviderHelpers";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
+import type { OpenRouterModelScope } from "@/utils/db/repositories/LlmModelRepository";
+import { hasSpeechDesignSelection, setHostedSpeechSelection } from "@/utils/db/repositories/SpeechRepository";
+import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
+
+/**
+ * Selects the provider's default model for each voice mode it seeds.
+ *
+ * OpenRouter's Design default only fills an empty Design slot, so adding or re-keying OpenRouter
+ * never replaces a Gemini or Vertex design the owner already chose.
+ */
+export async function activateProviderSpeechDefaults(scope: OpenRouterModelScope, provider: string): Promise<boolean> {
+  const models = await llmModelRepo.loadAvailableSpeechModels(provider, scope);
+  for (const mode of ["clone", "design"] as const) {
+    const model = models.find((entry) => entry.is_default && entry.voice_mode === mode);
+    if (!model) continue;
+    if (provider === "openrouter" && mode === "design" && (await hasSpeechDesignSelection(scope))) continue;
+    if (provider === "openrouter" && !(await validateOpenRouterSpeechModel(model.codename, mode))) return false;
+    if (!(await setHostedSpeechSelection(scope, model.speech_model_id, mode))) return false;
+  }
+  return true;
+}
 
 type ActivationStatus = "activated" | "missing_model" | "missing_provider" | "update_failed";
 
@@ -74,11 +95,10 @@ export async function activateServerTextModelFromSavedConfig(params: {
     }),
   ]);
 
+  if (updatedModel || updatedChat) invalidateTomoriStateCache(params.serverDiscId);
   if (!updatedModel || !updatedChat) {
     return { status: "update_failed" };
   }
-
-  invalidateTomoriStateCache(params.serverDiscId);
   return { status: "activated", modelName: selectedModel.llm_codename };
 }
 
@@ -99,9 +119,7 @@ export async function activatePersonalProviderTextModel(params: {
   const customEndpoints = isCustomProvider(params.provider)
     ? await llmProviderRepo.loadCustomEndpointsForUser(params.userId)
     : [];
-  const updated = await assignPersonalCapabilityToProvider(params.userId, params.provider, "text", (row) =>
-    withPersonalTextPrimary(row, selectedModel.llm_id ?? null, customEndpoints),
-  );
+  const updated = await setPersonalTextPrimary(params.userId, params.provider, selectedModel.llm_id, customEndpoints);
 
   return updated ? { status: "activated", modelName: selectedModel.llm_codename } : { status: "update_failed" };
 }

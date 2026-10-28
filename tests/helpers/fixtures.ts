@@ -12,6 +12,7 @@ import type { AssembledServerConfig, LlmRow, TomoriState, UserRow } from "@/type
 import { PrivacyLevel } from "@/types/db/schema";
 import { customExpressionSchema, type CustomExpressionRow } from "@/types/db/schema";
 import { EmotionKey } from "@/types/misc/emotions";
+import { customIdleNudgeRowSchema, type CustomIdleNudgeRow } from "@/modules/natural-nudges/db/types";
 import { EMPTY_PERSONA_NAMING_CONFIG } from "@/types/personaNaming";
 import { DEFAULT_IMAGE_NEGATIVE_TAGS, DEFAULT_IMAGE_POSITIVE_TAGS } from "@/utils/image/tagDefaults";
 
@@ -24,12 +25,12 @@ import { DEFAULT_IMAGE_NEGATIVE_TAGS, DEFAULT_IMAGE_POSITIVE_TAGS } from "@/util
  */
 const BASE_CONFIG: AssembledServerConfig = {
   response_reviewer_llm_id: null,
-  response_decision_model_id: null,
   response_reviewer_prompt: null,
   response_rule_checker_ref: null,
   response_review_items: ["persona", "examples", "history"],
   response_drafting_enabled: false,
   llm_id: 1,
+  decision_model_id: null,
   api_key: null,
   key_version: 1,
   llm_temperature: 1,
@@ -68,7 +69,10 @@ const BASE_CONFIG: AssembledServerConfig = {
   web_search_enabled: true,
   manage_message_enabled: true,
   thread_creation_enabled: true,
+  conditioning_interactions_enabled: true,
+  dice_rolling_enabled: true,
   imagegen_enabled: true,
+  danbooru_enabled: true,
   videogen_enabled: false,
   voice_message_enabled: true,
   user_blocking_enabled: true,
@@ -81,6 +85,10 @@ const BASE_CONFIG: AssembledServerConfig = {
   uncensor_injection_enabled: false,
   uncensor_unicode_space_enabled: false,
   uncensor_sanitize_enabled: false,
+  speech_design_endpoint_id: null,
+  speech_clone_endpoint_id: null,
+  speech_design_model_id: null,
+  speech_clone_model_id: null,
   voice_transcript_chat_mode: true,
   chatterbox_turbo_enabled: true,
   chatterbox_cfg_weight: 0.5,
@@ -173,6 +181,7 @@ export function createPersona(overrides: PersonaFixtureOverrides = {}): TomoriSt
     sample_dialogues_in: [],
     sample_dialogues_out: [],
     physical_appearance_tags: [],
+    voice_source_priority: "design",
     context_note_depth: 0,
     trigger_words: [],
     persona_prompt: null,
@@ -212,7 +221,10 @@ export function createUserRow(overrides: UserFixtureOverrides = {}): UserRow {
     personal_dtm: "follow",
     personal_deliberate_tool_mode: "follow",
     personal_server_fallback_enabled: true,
+    natural_nudge_opt_out: false,
     shortterm_cache_crossserver_opt_in: false,
+    message_proxy_service: null,
+    message_proxy_instance_id: null,
     prefix_override: null,
     suffix_override: null,
     ...overrides,
@@ -238,6 +250,21 @@ export function createCustomExpression(overrides: Partial<CustomExpressionRow> =
     created_at: new Date(0),
     updated_at: new Date(0),
     persona_ids: [],
+    ...overrides,
+  });
+}
+
+export function createCustomIdleNudge(overrides: Partial<CustomIdleNudgeRow> = {}): CustomIdleNudgeRow {
+  return customIdleNudgeRowSchema.strict().parse({
+    custom_idle_nudge_id: 1,
+    server_id: 1,
+    category: "start_topic",
+    title: "Mirri's riddle",
+    brief: "Have {persona} pose a riddle.",
+    agenda_hint: null,
+    prerequisites: [],
+    recommended_tools: [],
+    enabled: true,
     ...overrides,
   });
 }

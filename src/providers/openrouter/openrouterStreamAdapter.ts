@@ -60,9 +60,16 @@ import {
   relocateAssistantMediaContextItems,
 } from "@/providers/utils/strictChatCompat";
 import { ThinkBlockContentStripper } from "@/providers/utils/thinkBlockContentStripper";
+import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
 import { parseAccumulatedToolArguments } from "@/providers/utils/toolCallArguments";
 import {
-  buildDegradationAttempts,
+  beginProviderRequest,
+  hasProviderRequestHook,
+  type ProviderRequestHold,
+} from "@/utils/provider/providerRequestHook";
+import {
+  areDegradationBodiesEqual,
+  createDegradationQueue,
   buildImageStripAttempt,
   buildTargetedAttempt,
   classifyDegradableError,
@@ -155,6 +162,7 @@ interface OpenrouterStreamChunk {
     total_tokens?: number;
     completionTokensDetails?: unknown;
     completion_tokens_details?: unknown;
+    cost?: number;
   };
   error?:
     | {
@@ -178,7 +186,8 @@ interface AccumulatedToolCall {
 // Defaults off because Bun's `verbose` prints every request header, including the
 // `Authorization: Bearer` line, and it prints below application code so nothing here can
 // redact it. Enabling this writes the OpenRouter API key in clear text to container logs
-// and to anything shipping them onward.
+// and to anything shipping them onward. It also stays off whenever a request hook is
+// registered, because the hook may account for the request body this output would expose.
 const OPENROUTER_VERBOSE_FETCH = (process.env.OPENROUTER_VERBOSE_FETCH ?? "false").trim().toLowerCase() === "true";
 
 /**
@@ -352,6 +361,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
   private parseHttpErrorFromResponse(
     responseStatus: number,
     responseStatusText: string,
+    responseHeaders: Headers,
     errorText: string,
     requestBody: Record<string, unknown>,
     model: string | undefined,
@@ -396,6 +406,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     return {
       error: new Error(
         `${statusLabel}: ${errorMessage}${shouldAppendRawBody ? ` | raw_response: ${rawErrorBodySnippet}` : ""} | model: ${model ?? "other-model"} | request_params: ${requestParamKeys} | request_attempt: ${attemptLabel}`,
+        { cause: readOpenRouterLimitError(responseStatus, responseHeaders, errorText) ?? undefined },
       ),
       errorMessage,
       statusCode: responseStatus,
@@ -669,21 +680,14 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       // first token at 120s regardless of the tool loop's longer first-token budget.
       const firstTokenTimeoutMs = Math.max(inactivityTimeoutMs, DISCORD_STREAMING_CONSTANTS.FIRST_TOKEN_TIMEOUT_MS);
       const mandatoryKeys = new Set(["model", "messages", "stream"]);
-      const attempts = buildDegradationAttempts(requestBody, {
+      const { attempts, prepareAttempts } = createDegradationQueue(requestBody, {
         mandatoryKeys,
         stripImages: (attemptMessages) =>
           Array.isArray(attemptMessages)
             ? this.stripImagesFromMessages(attemptMessages as Array<Record<string, unknown>>)
             : attemptMessages,
       });
-      const probeCandidates = attempts
-        .filter((attempt) => attempt.label.startsWith("probe_drop_"))
-        .map((attempt) => attempt.label.replace("probe_drop_", ""));
-      if (probeCandidates.length > 0) {
-        log.info(`OpenRouter probe candidates (${config.model}): ${probeCandidates.join(", ")}`);
-      }
-
-      const attemptedSerializedBodies = new Set<string>();
+      const attemptedBodies: Record<string, unknown>[] = [];
       let targetedAttemptCount = 0;
       const queueTargetedAttempt = (
         currentIndex: number,
@@ -698,11 +702,11 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         if (rejectedParams.length === 0) return false;
 
         const targetedAttempt = buildTargetedAttempt(currentBody, rejectedParams);
-        const serialized = JSON.stringify(targetedAttempt.body);
-        if (attemptedSerializedBodies.has(serialized)) return false;
+        if (attemptedBodies.some((body) => areDegradationBodiesEqual(body, targetedAttempt.body))) return false;
 
         const duplicateIndex = attempts.findIndex(
-          (queuedAttempt, index) => index > currentIndex && JSON.stringify(queuedAttempt.body) === serialized,
+          (queuedAttempt, index) =>
+            index > currentIndex && areDegradationBodiesEqual(queuedAttempt.body, targetedAttempt.body),
         );
         if (duplicateIndex !== -1) {
           attempts.splice(duplicateIndex, 1);
@@ -728,11 +732,11 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         const imageStripAttempt = buildImageStripAttempt(currentBody);
         if (!imageStripAttempt) return false;
 
-        const serialized = JSON.stringify(imageStripAttempt.body);
-        if (attemptedSerializedBodies.has(serialized)) return false;
+        if (attemptedBodies.some((body) => areDegradationBodiesEqual(body, imageStripAttempt.body))) return false;
 
         const duplicateIndex = attempts.findIndex(
-          (queuedAttempt, index) => index > currentIndex && JSON.stringify(queuedAttempt.body) === serialized,
+          (queuedAttempt, index) =>
+            index > currentIndex && areDegradationBodiesEqual(queuedAttempt.body, imageStripAttempt.body),
         );
         if (duplicateIndex !== -1) {
           attempts.splice(duplicateIndex, 1);
@@ -746,7 +750,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       attemptLoop: for (let i = 0; i < attempts.length; i++) {
         const attempt = attempts[i];
         const isRetry = i > 0;
-        attemptedSerializedBodies.add(JSON.stringify(attempt.body));
+        attemptedBodies.push(attempt.body);
 
         if (isRetry) {
           log.warn(`OpenRouter request retry with degraded payload: ${attempt.label} (${config.model})`);
@@ -768,18 +772,33 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           signal: currentController.signal,
         };
 
-        if (OPENROUTER_VERBOSE_FETCH) {
+        if (OPENROUTER_VERBOSE_FETCH && !hasProviderRequestHook()) {
           requestInit.verbose = true;
         }
 
+        let spendHold: ProviderRequestHold | undefined;
+        let attemptCompleted = false;
+        let attemptFailed = false;
         try {
+          currentController.signal.throwIfAborted();
+          spendHold = await beginProviderRequest({
+            apiKey: config.apiKey ?? "",
+            path: "/chat/completions",
+            body: attempt.body,
+          });
+          if (currentController.signal.aborted) {
+            spendHold?.reportCost(0);
+            currentController.signal.throwIfAborted();
+          }
           const response = await fetch("https://openrouter.ai/api/v1/chat/completions", requestInit);
 
           if (!response.ok) {
+            spendHold?.reportCost(0);
             const errorText = await response.text();
             const parsedError = this.parseHttpErrorFromResponse(
               response.status,
               response.statusText,
+              response.headers,
               errorText,
               attempt.body,
               config.model,
@@ -787,6 +806,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
             );
 
             const retryPlan = planDegradationRetry({
+              prepareAttempts,
               attempts,
               attemptIndex: i,
               body: attempt.body,
@@ -819,6 +839,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           const currentIdleBudgetMs = () => (sawMeaningfulChunk ? inactivityTimeoutMs : firstTokenTimeoutMs);
           let committedToAttempt = false;
           let recoveryLogged = false;
+          let pendingToolCallChunk: OpenrouterStreamChunk | undefined;
           // True once the body no longer needs cancelling: either the stream ended on its own,
           // or a retry path already cancelled it.
           let readerSettled = false;
@@ -851,7 +872,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           };
 
           try {
-            while (true) {
+            responseLoop: while (true) {
               const readResult = (await readWithTimeout()) as {
                 done: boolean;
                 value?: Uint8Array;
@@ -875,6 +896,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                 if (!data) continue;
                 if (data === "[DONE]") {
                   log.info("OpenrouterStreamAdapter: Stream completed [DONE]");
+                  if (pendingToolCallChunk) break responseLoop;
                   continue;
                 }
 
@@ -890,10 +912,17 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
                 const normalizedChunk = this.normalizeOpenrouterChunk(parsed);
                 if (!normalizedChunk) continue;
+                spendHold?.reportCost(normalizedChunk.usage?.cost);
 
                 const midStreamError = this.getMidStreamError(normalizedChunk);
+                if (
+                  midStreamError ||
+                  normalizedChunk.choices?.some((choice) => (choice.finishReason ?? choice.finish_reason) === "error")
+                )
+                  attemptFailed = true;
                 if (midStreamError && !committedToAttempt) {
                   const retryPlan = planDegradationRetry({
+                    prepareAttempts,
                     attempts,
                     attemptIndex: i,
                     body: attempt.body,
@@ -960,8 +989,21 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
                   lastMeaningfulAt = Date.now();
                   sawMeaningfulChunk = true;
+                  const finishChoice = guardResult.chunk.choices?.[0];
+                  if (
+                    (finishChoice?.finishReason ?? finishChoice?.finish_reason) === "tool_calls" &&
+                    !guardResult.chunk.usage
+                  ) {
+                    pendingToolCallChunk = guardResult.chunk;
+                    continue;
+                  }
+                  const emittedChunk =
+                    pendingToolCallChunk && guardResult.chunk.usage
+                      ? { ...pendingToolCallChunk, usage: guardResult.chunk.usage }
+                      : guardResult.chunk;
+                  if (guardResult.chunk.usage) pendingToolCallChunk = undefined;
                   yield {
-                    data: guardResult.chunk,
+                    data: emittedChunk,
                     provider: "openrouter",
                     metadata: { timestamp: Date.now(), model: config.model },
                   };
@@ -980,6 +1022,13 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                 throw new Error("OpenRouter stream timed out due to inactivity");
               }
             }
+            if (pendingToolCallChunk) {
+              yield {
+                data: pendingToolCallChunk,
+                provider: "openrouter",
+                metadata: { timestamp: Date.now(), model: config.model },
+              };
+            }
           } finally {
             // Every exit other than a completed stream (retry, early return, inactivity
             // timeout, or a consumer abandoning this generator) leaves the response body open,
@@ -990,9 +1039,11 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           }
 
           logRecovery();
+          attemptCompleted = !attemptFailed;
           completedAttempt = true;
           break;
         } finally {
+          spendHold?.release(attemptCompleted);
           context.abortSignal?.removeEventListener("abort", externalAbortListener);
         }
       }
@@ -1437,12 +1488,45 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       }
     }
 
+    const rawUsage =
+      rawObj.usage && typeof rawObj.usage === "object" ? (rawObj.usage as Record<string, unknown>) : undefined;
+
+    const normalizedUsage = rawUsage
+      ? {
+          promptTokens:
+            typeof rawUsage.promptTokens === "number"
+              ? rawUsage.promptTokens
+              : typeof rawUsage.prompt_tokens === "number"
+                ? rawUsage.prompt_tokens
+                : undefined,
+          completionTokens:
+            typeof rawUsage.completionTokens === "number"
+              ? rawUsage.completionTokens
+              : typeof rawUsage.completion_tokens === "number"
+                ? rawUsage.completion_tokens
+                : undefined,
+          totalTokens:
+            typeof rawUsage.totalTokens === "number"
+              ? rawUsage.totalTokens
+              : typeof rawUsage.total_tokens === "number"
+                ? rawUsage.total_tokens
+                : undefined,
+          completionTokensDetails: rawUsage.completionTokensDetails ?? rawUsage.completion_tokens_details,
+          cost:
+            typeof rawUsage.cost === "number" && Number.isFinite(rawUsage.cost) && rawUsage.cost >= 0
+              ? rawUsage.cost
+              : undefined,
+        }
+      : undefined;
+
+    const hasUsage = normalizedUsage && Object.values(normalizedUsage).some((value) => value !== undefined);
+
     if (rawObj.error && typeof rawObj.error === "object") {
       const errorObj = rawObj.error as Record<string, unknown>;
 
       // If it's already a ProviderError, pass through
       if (this.isProviderError(rawObj.error)) {
-        return { error: rawObj.error };
+        return { error: rawObj.error, usage: normalizedUsage };
       }
 
       const metadata =
@@ -1455,6 +1539,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         "OpenRouter API error";
       const codeValue = errorObj.code;
       return {
+        usage: normalizedUsage,
         error: {
           code: typeof codeValue === "string" || typeof codeValue === "number" ? codeValue : "unknown",
           message,
@@ -1465,6 +1550,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     if (typeof rawObj.message === "string" && ("code" in rawObj || "type" in rawObj)) {
       const codeValue = rawObj.code as string | number | undefined;
       return {
+        usage: normalizedUsage,
         error: {
           code: typeof codeValue === "string" || typeof codeValue === "number" ? codeValue : "unknown",
           message: rawObj.message,
@@ -1540,35 +1626,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         logprobs: (choiceObj.logprobs ?? null) as unknown,
       };
     });
-
-    const rawUsage =
-      rawObj.usage && typeof rawObj.usage === "object" ? (rawObj.usage as Record<string, unknown>) : undefined;
-
-    const normalizedUsage = rawUsage
-      ? {
-          promptTokens:
-            typeof rawUsage.promptTokens === "number"
-              ? rawUsage.promptTokens
-              : typeof rawUsage.prompt_tokens === "number"
-                ? rawUsage.prompt_tokens
-                : undefined,
-          completionTokens:
-            typeof rawUsage.completionTokens === "number"
-              ? rawUsage.completionTokens
-              : typeof rawUsage.completion_tokens === "number"
-                ? rawUsage.completion_tokens
-                : undefined,
-          totalTokens:
-            typeof rawUsage.totalTokens === "number"
-              ? rawUsage.totalTokens
-              : typeof rawUsage.total_tokens === "number"
-                ? rawUsage.total_tokens
-                : undefined,
-          completionTokensDetails: rawUsage.completionTokensDetails ?? rawUsage.completion_tokens_details,
-        }
-      : undefined;
-
-    const hasUsage = normalizedUsage && Object.values(normalizedUsage).some((value) => value !== undefined);
 
     if (!normalizedChoices && !hasUsage) return null;
 
@@ -1664,11 +1721,27 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       };
     }
 
+    const metadata: Record<string, unknown> = {};
+    if (openrouterChunk.usage) {
+      const usage = openrouterChunk.usage;
+      const normalizedUsage = {
+        promptTokens: usage.promptTokens ?? usage.prompt_tokens,
+        completionTokens: usage.completionTokens ?? usage.completion_tokens,
+        totalTokens: usage.totalTokens ?? usage.total_tokens,
+        completionTokensDetails: usage.completionTokensDetails ?? usage.completion_tokens_details,
+        cost: usage.cost,
+      };
+
+      metadata.usage = normalizedUsage;
+      log.info(`OpenRouter usage: ${normalizedUsage.totalTokens ?? "unknown"} total tokens`);
+    }
+
     const choice = openrouterChunk.choices?.[0];
     if (!choice) {
       return {
         type: "text",
         content: "",
+        metadata: openrouterChunk.usage ? metadata : undefined,
       };
     }
 
@@ -1703,20 +1776,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           originalError: openrouterChunk,
         } as ProviderError,
       };
-    }
-
-    const metadata: Record<string, unknown> = {};
-    if (openrouterChunk.usage) {
-      const usage = openrouterChunk.usage;
-      const normalizedUsage = {
-        promptTokens: usage.promptTokens ?? usage.prompt_tokens,
-        completionTokens: usage.completionTokens ?? usage.completion_tokens,
-        totalTokens: usage.totalTokens ?? usage.total_tokens,
-        completionTokensDetails: usage.completionTokensDetails ?? usage.completion_tokens_details,
-      };
-
-      metadata.usage = normalizedUsage;
-      log.info(`OpenRouter usage: ${normalizedUsage.totalTokens ?? "unknown"} total tokens`);
     }
 
     // Finish reasons are handled before delta processing. OpenRouter commonly sends both

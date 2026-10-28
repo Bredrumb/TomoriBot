@@ -69,9 +69,7 @@ docker run -d --name tomori-db \
 bun run dev
 ```
 
-當你看到`TomoriBot up and running!`，就到Discord並在你的伺服器執行`/setup`，連接一個AI供應商並初始化bot。這個指令會開啟一個引導式檢查清單面板，而且在你按下`完成設定`之前不會寫入任何東西；步驟請看
-[`/setup`指令](/zh-TW/self-hosting/setup-wizard/#setup-指令)，Discord那一側請看
-[快速開始](/zh-TW/introduction/quickstart/)。
+當你看到`TomoriBot up and running!`，就到Discord並在你的伺服器執行`/setup`，連接一個AI供應商並初始化bot。這個指令會開啟一個引導式檢查清單面板，而且在你按下`完成設定`之前不會寫入任何東西；步驟請看[快速開始](/introduction/quickstart/)。
 
 如果你想讓選用的本機伺服器（SearXNG、Crawl4AI、本機TTS/STT）跟著bot一起啟動，請用`bun run launch`取代`bun run dev`：
 

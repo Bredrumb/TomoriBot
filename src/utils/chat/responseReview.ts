@@ -1,30 +1,39 @@
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
+import {
+  findProviderRequestDeniedError,
+  reportProviderUsage,
+  type ProviderUsageContext,
+  getProviderRequestFailureCopy,
+} from "@/utils/provider/providerUsage";
 import type { ResponseReviewItem } from "@/constants/responseReview";
 import { observeStopRequest } from "@/utils/discord/stream/stopRequests";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
-import type { ErrorContext, TomoriState } from "@/types/db/schema";
+import type { ErrorContext } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
-import type { StructuredOutputResult, SupportsStructuredOutput } from "@/types/provider/featureInterfaces";
+import type { SupportsStructuredOutput } from "@/types/provider/featureInterfaces";
 import type { LLMProvider, ProviderConfig } from "@/types/provider/interfaces";
 import type { PendingResponseLimit, PendingStreamResponse } from "@/types/stream/pendingResponse";
 import type { ChatTurnContext, ToolHistoryEntry } from "@/utils/chat/types";
 import { getChannelTurnAbortSignal, runUnderWatchdog, touchChannelLock } from "@/utils/chat/channelQueue";
-import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { MAX_PENDING_RESPONSE_BYTES, MAX_PENDING_RESPONSE_SEGMENTS } from "@/utils/discord/stream/constants";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
-import { containsCredential, log, sanitizeLogPayload } from "@/utils/misc/logger";
+import { containsCredential, log, sanitizeCredentialPayload } from "@/utils/misc/logger";
 import { resolveCustomTextEndpointTarget } from "@/utils/provider/customEndpointService";
 import { resolveChatMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 import { resolveModelLimits } from "@/utils/provider/modelLimits";
 import { normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
-import { resolveStructuredOutputCapability } from "@/utils/provider/providerCapabilityResolver";
-import { withSavedProviderConfig } from "@/utils/provider/savedProviderConfig";
-import { decryptApiKey } from "@/utils/security/crypto";
+import {
+  formatStructuredRetryNote,
+  resolveServerStructuredModel,
+  type ResolvedServerStructuredModel,
+} from "@/utils/provider/serverStructuredOutput";
 import { localizer } from "@/utils/text/localizer";
 import { charsToTokensText, type TokenUsage } from "@/utils/text/tokenEstimate";
 import { redactToolParametersForStorage } from "@/utils/tools/toolParameterRedaction";
 import { checkResponseRules, type RuleCheckState } from "@/utils/chat/responseRuleCheck";
-import { routeResponseDecision, getDecisionCalibration } from "@/utils/chat/responseDecisionRouting";
+import { sendStandardEmbed } from "@/utils/discord/embedHelper";
+import { ColorCode } from "@/utils/misc/logger";
 
 export const MAX_RESPONSE_REVISIONS = 1;
 // Every revision is reviewed again, after the original candidate's review.
@@ -78,39 +87,25 @@ function acceptReviewResult<T extends z.ZodType>(schema: T) {
   }, schema);
 }
 
-type MalformedReply = NonNullable<Extract<StructuredOutputResult<unknown>, { success: false }>["malformed"]>;
-
-function formatRetryNote(malformed: MalformedReply): string {
-  const ask = "Answer again with only the JSON object, without code fences or other text.";
-  if (malformed.reason === "empty")
-    return `Your previous answer was empty, most likely because reasoning used up the output limit. ${ask}`;
-  if (malformed.reason === "unparsable") return `Your previous answer was not one valid JSON object. ${ask}`;
-  const issues = (malformed.issues ?? []).map((issue) => `- ${issue}`).join("\n");
-  return `Your previous answer did not match the schema:\n${issues}\n${ask}`;
-}
-
-export type TurnUsageEntry = {
+export interface TurnUsageEntry {
+  kind: "author" | "reviewer";
   model: string;
   usage: TokenUsage;
-} & ({ kind: "author" | "reviewer" } | { kind: "decision"; decisionModelId: number });
+}
 
 /** Shared by stream passes, key rotation and model fallback for one admitted persona turn. */
 export interface ResponseReviewState {
   reviewerId: number | null;
   prompt: string;
   customPrompt: boolean;
-  decisionModelId: number | null;
   reviewItems: ResponseReviewItem[];
-  decisionRequests: number;
-  decisionVerdict?: { identity: string; skip: boolean };
   rules: RuleCheckState;
   responseReviews: number;
   revisions: number;
   toolReviews: number;
   toolCorrections: number;
   toolRejections: Map<string, Extract<DraftReviewResult, { status: "revise" }>>;
-  rejectedChains: Map<string, { retried: boolean; verdict: Extract<DraftReviewResult, { status: "revise" }> }>;
-  successfulTools: Map<string, ToolHistoryEntry>;
+  rejectedChains: Map<string, { correctionOpen: boolean; verdict: Extract<DraftReviewResult, { status: "revise" }> }>;
   unavailable: boolean;
   feedback?: Extract<DraftReviewResult, { status: "revise" }>;
   revisionDraft?: string;
@@ -154,9 +149,7 @@ export function createResponseReviewState(context: ChatTurnContext): ResponseRev
   return {
     reviewerId: context.currentPersona.config.response_reviewer_llm_id,
     customPrompt: context.currentPersona.config.response_reviewer_prompt !== null,
-    decisionModelId: context.currentPersona.config.response_decision_model_id,
     reviewItems: [...context.currentPersona.config.response_review_items],
-    decisionRequests: 0,
     rules: { calls: 0 },
     prompt:
       context.currentPersona.config.response_reviewer_prompt ??
@@ -167,7 +160,6 @@ export function createResponseReviewState(context: ChatTurnContext): ResponseRev
     toolCorrections: 0,
     toolRejections: new Map(),
     rejectedChains: new Map(),
-    successfulTools: new Map(),
     unavailable: false,
     functionHistory: [],
     pending: [],
@@ -213,13 +205,7 @@ function projectItem(item: StructuredContextItem) {
     role: item.role,
     sender: item.sender,
     messageId: item.messageId,
-    participants: item.participantReviewEvidence
-      ? (sanitizeLogPayload(
-          item.participantReviewEvidence,
-          0,
-          false,
-        ) as StructuredContextItem["participantReviewEvidence"])
-      : undefined,
+    participants: item.participantReviewEvidence,
     text: item.participantReviewEvidence
       ? undefined
       : item.parts.map((part) => (part.type === "text" ? part.text : MEDIA_PLACEHOLDERS[part.type])).join("\n"),
@@ -290,10 +276,16 @@ export function buildReviewerPacket(
   if (!state || (proposedCall && !state.reviewItems.includes("tools")))
     return "review_inactive" satisfies ReviewerPacketGap;
   if (containsCredential(candidate)) return "candidate_credential" satisfies ReviewerPacketGap;
+  // Proposed speech stays in transient reviewer evidence because storage redaction would hide the prose being judged.
   if (
     proposedCall &&
     JSON.stringify(
-      sanitizeLogPayload(redactToolParametersForStorage(proposedCall.name, proposedCall.args), 0, false),
+      sanitizeCredentialPayload(
+        proposedCall.name === "generate_voice_message"
+          ? proposedCall.args
+          : redactToolParametersForStorage(proposedCall.name, proposedCall.args),
+        true,
+      ),
     ) !== JSON.stringify(proposedCall.args)
   )
     return "tool_arguments_redacted" satisfies ReviewerPacketGap;
@@ -340,22 +332,21 @@ export function buildReviewerPacket(
       status: state.pending.some((part) => part.truncation) ? "pending_cut_at_length_limit" : "pending",
       text: candidate,
     },
-    trigger: sanitizeLogPayload(projectItem(trigger), 0, false) as ProjectedItem,
-    replyTarget: replyTarget ? (sanitizeLogPayload(projectItem(replyTarget), 0, false) as ProjectedItem) : null,
-    requirementsAndEvidence: required.map((item) => sanitizeLogPayload(projectItem(item), 0, false) as ProjectedItem),
+    trigger: sanitizeCredentialPayload(projectItem(trigger)) as ProjectedItem,
+    replyTarget: replyTarget ? (sanitizeCredentialPayload(projectItem(replyTarget)) as ProjectedItem) : null,
+    requirementsAndEvidence: required.map((item) => sanitizeCredentialPayload(projectItem(item)) as ProjectedItem),
     historicalDialogue: history
       .slice(-2)
-      .map((item) => sanitizeLogPayload(projectItem(item), 0, false) as ReturnType<typeof projectItem>),
+      .map((item) => sanitizeCredentialPayload(projectItem(item)) as ReturnType<typeof projectItem>),
     representativeDialogues: [] as ReturnType<typeof projectItem>[],
-    availableTools: sanitizeLogPayload(catalog, 0, false) as ReviewerToolEntry[],
+    availableTools: sanitizeCredentialPayload(catalog) as ReviewerToolEntry[],
     tools: functionHistory.map((entry) => ({
       name: entry.functionCall.name,
-      arguments: sanitizeLogPayload(
+      arguments: sanitizeCredentialPayload(
         redactToolParametersForStorage(entry.functionCall.name, entry.functionCall.args ?? {}),
-        0,
-        false,
+        true,
       ),
-      outcome: sanitizeLogPayload(entry.functionResponse, 0, false),
+      outcome: sanitizeCredentialPayload(entry.functionResponse, true),
       status: "actual_outcome",
       imageOmitted: entry.imageMetadata ? true : undefined,
     })),
@@ -373,7 +364,6 @@ export function buildReviewerPacket(
       samplesIncluded: 0,
       // Samples are user/model pairs and are admitted whole, so coverage counts pairs.
       samplesTotal: Math.ceil(items.filter((item) => item.metadataTag === ContextItemTag.DIALOGUE_SAMPLE).length / 2),
-      // Decision routing treats anything but "text_only" as insufficient evidence for skipping review.
       media:
         [trigger, ...(replyTarget ? [replyTarget] : []), ...selectedItems].some((item) =>
           item.parts.some((part) => part.type !== "text"),
@@ -391,7 +381,7 @@ export function buildReviewerPacket(
   for (let index = 0; index < samples.length; index += 2) {
     const pair = samples
       .slice(index, index + 2)
-      .map((item) => sanitizeLogPayload(projectItem(item), 0, false) as ReturnType<typeof projectItem>);
+      .map((item) => sanitizeCredentialPayload(projectItem(item)) as ReturnType<typeof projectItem>);
     packet.representativeDialogues.push(...pair);
     packet.coverage.samplesIncluded++;
     if (!fits()) {
@@ -400,9 +390,7 @@ export function buildReviewerPacket(
     }
   }
   for (const item of history.slice(-24, -2).reverse()) {
-    packet.historicalDialogue.unshift(
-      sanitizeLogPayload(projectItem(item), 0, false) as ReturnType<typeof projectItem>,
-    );
+    packet.historicalDialogue.unshift(sanitizeCredentialPayload(projectItem(item)) as ReturnType<typeof projectItem>);
     packet.coverage.historyIncluded++;
     if (!fits()) {
       packet.historicalDialogue.shift();
@@ -418,9 +406,9 @@ const section = (name: string, body: string, attributes = "") => `<${name}${attr
 
 function renderEvidenceItem(item: ProjectedItem): string {
   if (!item.participants) return item.text ?? "";
-  const { channel, currentTime, participants } = item.participants;
+  const { channel, currentTime, timezone, participants } = item.participants;
   return [
-    `Channel: ${channel}. Current time: ${currentTime}.`,
+    `Channel: ${channel}. Current time: ${currentTime} (${timezone}).`,
     ...participants.map((participant) => [`${participant.name}:`, ...participant.fields].join("\n")),
   ].join("\n");
 }
@@ -455,7 +443,7 @@ export function renderReviewerPrompt(packet: ReviewerPacket, ruleEvidence?: unkn
     ),
     packet.tools.length
       ? section(
-          "completed_tools",
+          "earlier_tool_calls",
           packet.tools
             .map(
               (tool) =>
@@ -498,9 +486,7 @@ async function resolveReviewer(
   author: LLMProvider,
   config: ProviderConfig,
   failureContext: ErrorContext,
-): Promise<
-  { capability: SupportsStructuredOutput; state: TomoriState; apiKey: string } | { errorLogged: true } | null
-> {
+): Promise<ResolvedServerStructuredModel | { errorLogged: true } | null> {
   const review = context.responseReview;
   if (!review) return null;
   if (review.reviewerId === null) {
@@ -513,27 +499,10 @@ async function resolveReviewer(
       capability: author as LLMProvider & SupportsStructuredOutput,
       state: context.tomoriState,
       apiKey: config.apiKey,
+      usageContext: context.usageContext,
     };
   }
-  const model = await llmModelRepo.loadById(review.reviewerId);
-  if (!model || model.is_deprecated || !model.supports_structoutput) return null;
-  const available = await llmModelRepo.loadAvailableModelsForProvider(model.llm_provider, false, {
-    kind: "server",
-    ownerId: context.currentPersona.server_id,
-  });
-  if (!available?.some((entry) => entry.llm_id === model.llm_id)) return null;
-  const saved = await llmProviderRepo.loadSavedProviderConfig(context.currentPersona.server_id, model.llm_provider);
-  if (!saved?.api_key) return null;
-  const capability = await resolveStructuredOutputCapability(model.llm_provider);
-  if (!capability) return null;
-  const state = withSavedProviderConfig({ ...context.currentPersona, llm: model }, saved);
-  // A pinned model must resolve its own endpoint rather than the author's mirrored endpoint.
-  state.config = { ...state.config, custom_endpoint_url: null, custom_num_ctx: null };
-  try {
-    return { capability, state, apiKey: await decryptApiKey(saved.api_key, saved.key_version ?? 1, failureContext) };
-  } catch {
-    return { errorLogged: true };
-  }
+  return resolveServerStructuredModel(context.currentPersona, review.reviewerId, failureContext, "reviewer");
 }
 
 export function responseReviewCancelled(context: ChatTurnContext): boolean {
@@ -631,6 +600,7 @@ async function reviewCandidate(
         .finally(() => signal.removeEventListener("abort", abort))
         .catch(() => undefined);
     });
+  let requestScope: [context?: ProviderUsageContext] = [];
   try {
     const resolved = await runUnderWatchdog(context.channel.id, () =>
       wait(
@@ -647,6 +617,7 @@ async function reviewCandidate(
     if (timeout.aborted) return unavailable("timeout", true);
     if (!resolved) return unavailable("registration_or_capability", true);
     if ("errorLogged" in resolved) return unavailable("credentials");
+    requestScope = [resolved.usageContext];
     modelId = resolved.state.llm.llm_id;
     model = resolved.state.llm.llm_codename;
     provider = resolved.state.llm.llm_provider;
@@ -675,7 +646,7 @@ async function reviewCandidate(
       contextWindow: window,
     });
     const toolTask = proposedCall
-      ? "Evaluate this exact normalized tool name, full arguments and target, including user-visible argument prose and pending narration. Compare available definitions/alternatives and completed actions. Identify a wrong target, invented argument, redundant completed action or distracting choice with a concrete correction grounded in the admitted task and persona. Revise rejects execution; never provide replacement arguments for automatic execution."
+      ? "Evaluate this exact normalized tool name, full arguments and target, including user-visible argument prose and pending narration. The author proposes one call at a time and sees each outcome before choosing the next, so a request with several parts arrives as several calls. Judge whether this call is a correct part of the admitted request, not whether it completes the request alone; a part no call has covered yet is not a defect of this call. Compare available definitions/alternatives and earlier tool calls; a review_rejected outcome did not execute. Identify a wrong target, invented argument, redundant completed action, changed retry of a rejected action that ignores its findings, or distracting choice with a concrete correction grounded in the admitted task and persona. A plausible reading of ambiguous user wording, such as a relative date or time, is correct unless admitted evidence contradicts it. Revise rejects execution; never provide replacement arguments for automatic execution."
       : "";
     const cutTask =
       !proposedCall && state.pending.some((part) => part.truncation)
@@ -721,35 +692,10 @@ async function reviewCandidate(
         );
     if (cancelled() || rules?.status === "cancelled") return { status: "cancelled" };
     if (timeout.aborted || !rules) return unavailable("timeout", true);
-    const forceReview = rules.status === "report" || rules.status === "failed";
-    const routing = forceReview
-      ? "review"
-      : await runUnderWatchdog(context.channel.id, () =>
-          wait(
-            routeResponseDecision(
-              context.currentPersona.server_id,
-              state,
-              packet,
-              signal,
-              state.decisionModelId === null ? undefined : getDecisionCalibration(state.decisionModelId, kind),
-            ),
-          ),
-        );
-    if (cancelled() || routing === "cancelled") return { status: "cancelled" };
-    if (timeout.aborted || !routing) return unavailable("timeout", true);
-    trace("routing", {
-      reason: forceReview ? `rule_${rules.status}` : "decision_policy",
-      route: routing,
-      ruleStatus: rules.status,
-    });
-    if (routing === "skip") {
-      trace("skipped");
-      return { status: "pass" };
-    }
     const ruleEvidence = "evidence" in rules ? rules.evidence : undefined;
     const userPrompt = renderReviewerPrompt(
       packet,
-      ruleEvidence === undefined ? undefined : sanitizeLogPayload(ruleEvidence, 0, false),
+      ruleEvidence === undefined ? undefined : sanitizeCredentialPayload(ruleEvidence, true),
     );
     if (charsToTokensText(userPrompt.length) > inputTokens) return unavailable("rule_evidence_budget");
     const identity = createHash("sha256")
@@ -762,6 +708,7 @@ async function reviewCandidate(
       estimatedInputTokens: charsToTokensText(userPrompt.length),
       outputTokens,
       coverage: packet.coverage,
+      ruleStatus: rules.status,
     });
     // Info is hidden at the production default level, the same exposure as the author's request dump.
     log.info(
@@ -773,26 +720,34 @@ async function reviewCandidate(
     const ask = (prompt: string, thinking: string | undefined) =>
       runUnderWatchdog(context.channel.id, () =>
         wait(
-          resolved.capability.callStructuredJSON(
-            {
-              apiKey: resolved.apiKey,
-              model: resolved.state.llm.llm_codename,
-              endpointUrl: target?.endpointUrl ?? undefined,
-              systemPrompt,
-              userPrompt: prompt,
-              temperature: resolved.state.config.llm_temperature,
-              maxOutputTokens: outputTokens,
-              thinkingLevel: thinking,
-              schemaName: proposedCall ? "tool_review" : "response_review",
-              privateOutput: true,
-              abortSignal: signal,
-              onUsage: (reported) => {
-                usage = reported;
-                recordResponseReviewUsage(state, { kind: "reviewer", model: model ?? "", usage: reported });
+          withProviderUsageContext(resolved.usageContext, async () =>
+            resolved.capability.callStructuredJSON(
+              {
+                apiKey: resolved.apiKey,
+                model: resolved.state.llm.llm_codename,
+                endpointUrl: target?.endpointUrl ?? undefined,
+                systemPrompt,
+                userPrompt: prompt,
+                temperature: resolved.state.config.llm_temperature,
+                maxOutputTokens: outputTokens,
+                thinkingLevel: thinking,
+                schemaName: proposedCall ? "tool_review" : "response_review",
+                privateOutput: true,
+                abortSignal: signal,
+                onUsage: (reported) => {
+                  usage = reported;
+                  recordResponseReviewUsage(state, { kind: "reviewer", model: model ?? "", usage: reported });
+                  reportProviderUsage(resolved.usageContext, {
+                    modelCodename: model ?? "",
+                    costUsd: reported.costUsd,
+                    inputTokens: reported.inputTokens,
+                    outputTokens: reported.outputTokens,
+                  });
+                },
               },
-            },
-            jsonSchema,
-            acceptReviewResult(resultSchema),
+              jsonSchema,
+              acceptReviewResult(resultSchema),
+            ),
           ),
         ),
       );
@@ -810,7 +765,7 @@ async function reviewCandidate(
       result = await ask(
         `${userPrompt}
 
-${section("format_retry", formatRetryNote(result.malformed))}`,
+${section("format_retry", formatStructuredRetryNote(result.malformed))}`,
         "none",
       );
       touchChannelLock(context.channel.id);
@@ -819,6 +774,10 @@ ${section("format_retry", formatRetryNote(result.malformed))}`,
         return { status: "cancelled" };
       }
       if (!result || timeout.aborted) return unavailable("timeout", true);
+    }
+    if (!result.success) {
+      const denied = findProviderRequestDeniedError(result.cause, resolved.usageContext);
+      if (denied) throw denied;
     }
     if (!result.success)
       return unavailable(
@@ -833,10 +792,20 @@ ${section("format_retry", formatRetryNote(result.malformed))}`,
     trace(validated.data.status, { usage });
     if (validated.data.status === "unavailable") state.unavailable = true;
     return validated.data;
-  } catch {
+  } catch (error) {
     if (cancelled()) {
       trace("cancelled");
       return { status: "cancelled" };
+    }
+    const denied = findProviderRequestDeniedError(error, ...requestScope);
+    if (denied) {
+      if (context.shouldSurfaceUserErrors && context.channel.isSendable() && !context.channel.partial) {
+        await sendStandardEmbed(context.channel, context.locale, {
+          ...getProviderRequestFailureCopy(denied, context.locale),
+          color: ColorCode.ERROR,
+        }).catch((sendError) => log.warn("Failed to send reviewer provider denial notice", sendError));
+      }
+      return unavailable("provider-denied");
     }
     return unavailable("operation", true);
   } finally {
@@ -865,46 +834,67 @@ export function toolRequestIdentity(request: ProposedToolRequest): string {
     .digest("hex");
 }
 
+export type ToolReviewOutcome =
+  | Exclude<DraftReviewResult, { status: "revise" }>
+  | { status: "cancelled" }
+  | (Extract<DraftReviewResult, { status: "revise" }> & {
+      correctionAllowed: boolean;
+      /** Blocked without review after the author was already told no correction remains. */
+      futile: boolean;
+    });
+
+/**
+ * A rejection opens a chain for its tool name, and the next proposal of that name is its one correction.
+ * Only exact rejected requests stay blocked; a later, different proposal of the same tool is reviewed on
+ * its own, because one tool often serves several parts of one request.
+ */
 export async function reviewToolCandidate(
   context: ChatTurnContext,
   author: LLMProvider,
   config: ProviderConfig,
   request: ProposedToolRequest,
-) {
+): Promise<ToolReviewOutcome> {
   const state = context.responseReview;
-  if (!state) return { status: "unavailable" } as const;
-  if (responseReviewCancelled(context)) return { status: "cancelled" } as const;
+  if (!state) return { status: "unavailable" };
+  if (responseReviewCancelled(context)) return { status: "cancelled" };
   const identity = toolRequestIdentity(request);
-  const previous = state.toolRejections.get(identity);
-  if (previous) return previous;
-  // A rejected normalized name owns one correction chain. A passed correction closes it;
-  // a second rejection blocks further changed arguments for this name during the turn.
   const chain = state.rejectedChains.get(request.name);
-  if (chain) {
-    if (
-      chain.retried ||
-      state.toolCorrections >= MAX_TOOL_CORRECTIONS ||
-      state.unavailable ||
-      state.toolReviews >= MAX_TOOL_REVIEWS
-    ) {
-      state.toolRejections.set(identity, chain.verdict);
-      log.info(
-        `Tool correction exhausted ${JSON.stringify({ toolReviews: state.toolReviews, toolCorrections: state.toolCorrections })}`,
-      );
-      return chain.verdict;
+  const blocked = (verdict: Extract<DraftReviewResult, { status: "revise" }>): ToolReviewOutcome => {
+    const futile = !chain?.correctionOpen;
+    // A blocked repeat spends the open correction, so a model that ignores the rejection reaches a futile repeat.
+    if (chain?.correctionOpen) {
+      chain.correctionOpen = false;
+      state.toolCorrections = Math.min(MAX_TOOL_CORRECTIONS, state.toolCorrections + 1);
     }
-    chain.retried = true;
-    state.toolCorrections++;
-  }
+    state.toolRejections.set(identity, verdict);
+    log.info(
+      `Tool request blocked ${JSON.stringify({ futile, toolReviews: state.toolReviews, toolCorrections: state.toolCorrections })}`,
+    );
+    return { ...verdict, correctionAllowed: false, futile };
+  };
+  const previous = state.toolRejections.get(identity);
+  if (previous) return blocked(previous);
+  // Unavailable review cannot approve a changed form of a rejected action.
+  if (chain && (state.unavailable || state.toolReviews >= MAX_TOOL_REVIEWS)) return blocked(chain.verdict);
+  const correcting = chain?.correctionOpen === true && state.toolCorrections < MAX_TOOL_CORRECTIONS;
+  if (chain) chain.correctionOpen = false;
+  if (correcting) state.toolCorrections++;
   const verdict = await reviewCandidate(context, author, config, request);
   if (verdict.status === "revise") {
+    const correctionAllowed =
+      !correcting &&
+      !state.unavailable &&
+      state.toolReviews < MAX_TOOL_REVIEWS &&
+      state.toolCorrections < MAX_TOOL_CORRECTIONS;
     state.toolRejections.set(identity, verdict);
-    state.rejectedChains.set(request.name, { retried: chain?.retried ?? false, verdict });
-  } else if (chain && verdict.status === "unavailable") {
-    // Unavailable cannot approve a correction to a rejected action.
+    state.rejectedChains.set(request.name, { correctionOpen: correctionAllowed, verdict });
+    return { ...verdict, correctionAllowed, futile: false };
+  }
+  if (chain && verdict.status === "unavailable") {
     state.toolRejections.set(identity, chain.verdict);
-    return chain.verdict;
-  } else if (verdict.status === "pass") state.rejectedChains.delete(request.name);
+    return { ...chain.verdict, correctionAllowed: false, futile: false };
+  }
+  if (verdict.status === "pass") state.rejectedChains.delete(request.name);
   return verdict;
 }
 

@@ -13,11 +13,7 @@ Start TomoriBot and Grafana together:
 docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up -d
 ```
 
-This command:
-- Launches TomoriBot and PostgreSQL (with the database exposed on port 15432)
-- Launches Grafana on port 3000 with a preconfigured PostgreSQL datasource
-- Provisions the TomoriBot Overview dashboard
-- Connects all services on an internal Docker network
+This starts TomoriBot, PostgreSQL, and Grafana with the TomoriBot Overview dashboard.
 
 Open Grafana at [http://localhost:3000](http://localhost:3000):
 - **Username**: `admin`
@@ -26,8 +22,6 @@ Open Grafana at [http://localhost:3000](http://localhost:3000):
 ## The provisioned dashboard
 
 The TomoriBot Overview dashboard loads automatically without manual configuration. Its panels display process memory, cache entry counts, errors per hour, token usage by model, hourly activity, top commands, user locales, an emotion cloud, and active presets and models.
-
-Every panel queries standard tables present in all installations, allowing the same dashboard layout to work locally and in cloud environments.
 
 Certain panels require specific runtime settings or host support:
 
@@ -41,4 +35,4 @@ Certain panels require specific runtime settings or host support:
 
 Dashboards remain editable in the Grafana interface for live debugging. Because container restarts reset dashboard edits back to disk files, export your modified dashboard JSON and save it into `docker/grafana/dashboards/` to keep your changes.
 
-To add a new dashboard, place its JSON definition in `docker/grafana/dashboards/`. Target the PostgreSQL datasource with the fixed uid `tomoribot-postgres`: datasources without an explicit uid receive randomly generated identifiers, which causes dashboards using mismatched uids to render blank panels.
+To add a dashboard, place its JSON in `docker/grafana/dashboards/` and use the PostgreSQL datasource UID `tomoribot-postgres`.

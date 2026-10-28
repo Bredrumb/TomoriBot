@@ -20,13 +20,13 @@ El resumen automático de memoria a corto plazo se activa en `/config` > `Compor
 ## Revisión de respuestas
 <!-- anchor: response-drafting -->
 
-Abre `/config` > `Plugins` > `Revisión de respuestas` para activar la revisión. Comienza desactivada y se aplica a cada persona en ese espacio de trabajo, incluidas las respuestas en cola y las escenas generadas. Los administradores del servidor modifican los ajustes del servidor; tu espacio de trabajo de DM tiene sus propios ajustes.
+Abre `/config` > `Plugins` > `Revisión de respuestas` para activar la revisión. Comienza desactivada y se aplica a cada persona en ese servidor, incluidas las respuestas en cola y las escenas generadas. Los administradores del servidor modifican los ajustes del servidor; tu DM tiene sus propios ajustes.
 
 Cuando está activada, Tomori retiene su respuesta mientras un revisor comprueba la voz de su personaje y el encaje con la escena. El revisor puede solicitar una revisión completa. `Elementos a verificar` muestra los elementos de revisión con círculos verdes para los elementos habilitados y círculos rojos para los deshabilitados. `Editar elementos de revisión` abre una lista de casillas: marca un elemento para habilitarlo o desmárcalo para deshabilitarlo.
 
 Las instrucciones de la persona, los diálogos de ejemplo y la conversación reciente comienzan habilitados. Las memorias y otro contexto, así como `Llamadas a herramientas`, comienzan deshabilitados. El borrador, el mensaje que lo activó y el destino de la respuesta siempre se incluyen. Habilitar memorias y otro contexto agrega memorias admitidas, documentos, detalles de los participantes y otro contexto a la revisión. Habilitar `Llamadas a herramientas` agrega las definiciones de herramientas y los resultados completados, y comprueba las solicitudes antes de que se ejecuten; las solicitudes rechazadas pueden recibir una corrección acotada. Las acciones exitosas se conservan mientras se revisa la respuesta. La revisión y las correcciones pueden aumentar el tiempo de respuesta y el costo de tokens, especialmente con más elementos habilitados.
 
-`Elegir modelo revisor` selecciona un modelo de texto registrado elegible. `Usar el modelo de respuesta actual` utiliza el modelo y las credenciales que realmente responden, incluido tu proveedor personal o un modelo de respaldo. Un revisor fijado utiliza el registro y las credenciales propios del espacio de trabajo. Los creadores de solo texto y los creadores con el uso de herramientas desactivado aún pueden utilizar un revisor elegible. Un modelo heredado no admitido muestra `No disponible`; elige un revisor admitido para habilitar la revisión detallada.
+`Elegir modelo revisor` selecciona un modelo de texto registrado elegible. `Usar el modelo de respuesta actual` utiliza el modelo y las credenciales que realmente responden, incluido tu proveedor personal o un modelo de respaldo. Un revisor fijado utiliza el registro y las credenciales guardados para ese servidor o DM. Los creadores de solo texto y los creadores con el uso de herramientas desactivado aún pueden utilizar un revisor elegible. Un modelo heredado no admitido muestra `No disponible`; elige un revisor admitido para habilitar la revisión detallada.
 
 `Establecer prompt` edita las instrucciones de revisión, hasta 4,000 caracteres. `Usar predeterminado` restaura el valor predeterminado adaptado a la persona. `Elegir verificador de reglas` selecciona un verificador MCP compatible ya registrado, o `Ninguno`. Sus observaciones se envían de forma privada al revisor, que decide si son relevantes para este personaje. El verificador no ofrece garantías validadas de idioma o perfil en esta versión.
 
@@ -59,8 +59,15 @@ Cada persona puede usar una nueva expresión personalizada. Para guardarla para 
 
 ### Cómo las usa
 
-Con `Uso de stickers` activado en `/config` > `Plugins`, envía como máximo una expresión por respuesta, como su propio mensaje antes, entre o después de su texto. No las usa en [canales de rol](/es-419/features/chatting-personality/chatting-and-triggers/#roleplay-channels).
+Con `Uso de stickers` activado en `/config` > `Plugins`, envía como máximo una expresión por respuesta, como su propio mensaje antes, entre o después de su texto. No las usa en [canales de rol](#roleplay-channels).
 `/expressions manage` muestra cuántas veces las personas han usado cada una.
+
+## Canales de roleplay
+<!-- anchor: roleplay-channels -->
+
+Los canales de juegos de rol suprimen los mensajes de stickers y emojis personalizados en sus respuestas. Los miembros también pueden usar `/tool delete turn` en canales de juegos de rol para eliminar su último turno sin necesidad del permiso Administrar servidor.
+
+Configura canales de juego de rol en `/config` > `Canales` > Reglas del canal.
 
 ## Ajuste de generación
 <!-- anchor: generation-tuning -->
@@ -75,7 +82,7 @@ Con `Uso de stickers` activado en `/config` > `Plugins`, envía como máximo una
 El mensaje del sistema se encuentra encima de la persona y da forma al `Comportamiento general`:
 
 - `/config` > `Comportamiento` > `Comportamiento general`: establece una instrucción personalizada del sistema (hasta 16.000 caracteres).
-- `/config` > `Comportamiento` > `Comportamiento general`: elija entre los mensajes preestablecidos del sistema.
+- `/config` > `Comportamiento` > `Comportamiento general`: elige entre los preajustes de instrucción del sistema. `Default + Image Generation Expert` agrega pautas para etiquetas de anime y atuendos de personajes precisos a la instrucción predeterminada (consulta [Búsqueda de etiquetas](/features/capabilities/media-generation/image-generation/#tag-lookup)).
 - `/config` > `Comportamiento` > `Comportamiento general`: restablecer los valores predeterminados. La confirmación muestra el mensaje anterior para que pueda restaurarlo si se borra accidentalmente.
 
 Cuando un [preajuste SillyTavern](/es-419/features/integrations/sillytavern-support/) está activo, se reemplaza el mensaje del sistema de respaldo incorporado, pero aún se envía uno personalizado que configuró aquí.

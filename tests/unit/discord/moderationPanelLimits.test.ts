@@ -3,7 +3,7 @@ import type { ChannelPersonaWhitelistRow, ChannelWhitelistRow, RoleWhitelistRow 
 import { CooldownType } from "@/types/db/schema";
 import type { PanelReadStatus, PanelReceipt } from "@/types/discord/panel";
 import { MODERATION_PANEL_RANGE_SIZE } from "@/utils/discord/interactions/panelController";
-import { PERSONA_NICKNAME_MAX_LENGTH } from "@/utils/discord/interactions/configPersonaOperations";
+import { PERSONA_NICKNAME_MAX_LENGTH } from "@/types/personaNaming";
 import { MODERATION_REMOVAL_MODAL_CAPACITY } from "@/utils/discord/moderationPanelCatalog";
 import {
   buildModerationPanelPayload,

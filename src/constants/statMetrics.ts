@@ -31,7 +31,14 @@
  *   - emoji_used        → emoji name
  *   - sticker_used      → sticker name/id
  *   - custom_expression_used → stable custom UUID (one per accepted delivery)
+ *   - message_sent      → "reward" or "punish" for human conditioning commands, otherwise "".
  *   - active_hour       → hour-of-day "0".."23"
+ *   Natural Nudges turns record neither message_sent nor active_hour: both drive nudge heat and
+ *   learned waking hours, so a nudge counting itself would feed its own frequency.
+ *   - channel_turn      → channel ID, the parent channel's ID for a thread turn (one per completed
+ *                         turn). It is the automatic Natural Nudges channel set, so turns that
+ *                         borrow a trigger (nudges, random triggers) skip it. Persona-agnostic.
+ *                         Operational only: no stats surface lists its keys.
  *   - text_generated    → "" (one per completed chat turn)
  *   - user_impersonation_triggered → impersonated Discord user id (one per
  *                                    completed user-impersonation chat turn)
@@ -47,7 +54,8 @@
  *                         for a bug report. OPERATIONAL TELEMETRY ONLY: nothing behavioral may
  *                         read it, so no persona or routing decision ever takes it as input.
  *   - audio_generated   → TTS backend label ("elevenlabs" | "tts-clone" |
- *                         "tts-voice-design"); one per successful voice message.
+ *                         "tts-voice-design" | "openrouter-speech" | "google-speech" |
+ *                         "vertex-speech"); one per successful voice message.
  *                         Backend (not raw voice id) is used: low-cardinality,
  *                         privacy-safe, and answers "paid API vs local TTS" for cost.
  *   - (all others)      → "" (scalar event counter)
@@ -73,6 +81,7 @@ const STAT_METRICS = [
   "sticker_used",
   "custom_expression_used",
   "active_hour",
+  "channel_turn",
   "text_generated",
   "user_impersonation_triggered",
   "image_generated",
@@ -90,4 +99,9 @@ export type StatMetric = (typeof STAT_METRICS)[number];
  * are always written with the lineage-0 sentinel (see plan §5). All other
  * metrics carry the active persona's lineage id.
  */
-export const PERSONA_AGNOSTIC_METRICS = new Set<StatMetric>(["command_used", "provider_error", "panel_action"]);
+export const PERSONA_AGNOSTIC_METRICS = new Set<StatMetric>([
+  "command_used",
+  "provider_error",
+  "panel_action",
+  "channel_turn",
+]);

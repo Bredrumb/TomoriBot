@@ -33,7 +33,7 @@ export interface SingletonResetClassification {
 }
 
 /**
- * The 18 singleton configuration rows a server reset restores.
+ * The 19 singleton configuration rows a server reset restores.
  *
  * Enumerated rather than derived. The natural derivation ("the in-scope `server_*` tables, less the
  * junction, plus the quota configuration tables") is arithmetic, and arithmetic that drops a table
@@ -57,7 +57,6 @@ export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassificatio
       "context_note_depth",
       "response_prefill",
       "response_reviewer_llm_id",
-      "response_decision_model_id",
       "response_reviewer_prompt",
       "response_rule_checker_ref",
       "response_review_items",
@@ -87,6 +86,7 @@ export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassificatio
       "diffusion_model_id",
       "video_model_id",
       "vision_llm_id",
+      "decision_model_id",
       "api_key",
       "key_version",
       "custom_endpoint_url",
@@ -118,7 +118,10 @@ export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassificatio
       "web_search_enabled",
       "manage_message_enabled",
       "thread_creation_enabled",
+      "dice_rolling_enabled",
+      "conditioning_interactions_enabled",
       "imagegen_enabled",
+      "danbooru_enabled",
       "videogen_enabled",
       "voice_message_enabled",
       "user_blocking_enabled",
@@ -148,7 +151,12 @@ export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassificatio
       "chatterbox_cfg_weight",
       "chatterbox_exaggeration",
     ],
-    preserved: [],
+    preserved: [
+      "speech_design_endpoint_id",
+      "speech_clone_endpoint_id",
+      "speech_design_model_id",
+      "speech_clone_model_id",
+    ],
   },
   {
     table: "server_auto_trigger_configs",
@@ -237,10 +245,27 @@ export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassificatio
     reset: ["daily_user_quota", "serverwide_quota", "serverwide_quota_resets_in", "enabled"],
     preserved: [],
   },
+  {
+    table: "server_natural_nudge_configs",
+    reset: [
+      "idle_nudges_enabled",
+      "active_nudges_enabled",
+      "channel_disc_ids",
+      "llm_id",
+      "checker_llm_id",
+      "checker_decision_model_id",
+      "idle_nudge_frequency",
+      "active_nudge_frequency",
+      "disabled_builtin_idle_nudges",
+      "category_weights",
+      "heat_offset",
+    ],
+    preserved: [],
+  },
 ];
 
 /**
- * The 11 collection tables a server reset empties for the server.
+ * The 13 collection tables a server reset empties for the server.
  *
  * `server_auto_trigger_persona_overrides` belongs here rather than among the singletons: it is the
  * junction the auto-trigger row's channel ids point through, so it is cleared by delete.
@@ -257,18 +282,21 @@ export const SERVER_COLLECTION_RESET_TABLES = [
   "channel_whitelist",
   "role_whitelist",
   "channel_persona_whitelist",
+  "server_natural_nudge_custom_idle_nudges",
+  "server_natural_nudge_persona_scopes",
 ] as const;
 
 /**
  * The two singleton rows a personal reset restores.
  *
  * `registration_locale` is preserved because it records the locale the account was created under
- * and is account history rather than a setting the owner edits.
+ * and is account history rather than a setting the owner edits. `natural_nudge_opt_out` is preserved
+ * because a reset must never silently make someone pingable again.
  */
 export const PERSONAL_SINGLETON_RESET_TABLES: readonly SingletonResetClassification[] = [
   {
     table: "users",
-    reset: ["language_pref", "privacy_level"],
+    reset: ["language_pref", "privacy_level", "message_proxy_service", "message_proxy_instance_id"],
     preserved: ["registration_locale"],
   },
   {
@@ -289,7 +317,8 @@ export const PERSONAL_SINGLETON_RESET_TABLES: readonly SingletonResetClassificat
       "pronouns",
       "addressing_style",
     ],
-    preserved: [],
+    // The fallback chain and randomizer survive with the saved personal providers they reference.
+    preserved: ["natural_nudge_opt_out", "fallback_model_refs", "model_randomizer_enabled"],
   },
 ];
 
@@ -328,7 +357,6 @@ class ResetRepository {
           self_debug_enabled = DEFAULT,
           model_randomizer_enabled = DEFAULT,
           response_reviewer_llm_id = DEFAULT,
-          response_decision_model_id = DEFAULT,
           response_reviewer_prompt = DEFAULT,
           response_rule_checker_ref = DEFAULT,
           response_review_items = DEFAULT,
@@ -383,7 +411,10 @@ class ResetRepository {
           web_search_enabled = DEFAULT,
           manage_message_enabled = DEFAULT,
           thread_creation_enabled = DEFAULT,
+          dice_rolling_enabled = DEFAULT,
+          conditioning_interactions_enabled = DEFAULT,
           imagegen_enabled = DEFAULT,
+          danbooru_enabled = DEFAULT,
           videogen_enabled = DEFAULT,
           voice_message_enabled = DEFAULT,
           user_blocking_enabled = DEFAULT,
@@ -538,6 +569,23 @@ class ResetRepository {
           updated_at = NOW()
       `;
 
+      await tx`
+        INSERT INTO server_natural_nudge_configs (server_id) VALUES (${serverId})
+        ON CONFLICT (server_id) DO UPDATE SET
+          idle_nudges_enabled = DEFAULT,
+          active_nudges_enabled = DEFAULT,
+          channel_disc_ids = DEFAULT,
+          llm_id = DEFAULT,
+          checker_llm_id = DEFAULT,
+          checker_decision_model_id = DEFAULT,
+          idle_nudge_frequency = DEFAULT,
+          active_nudge_frequency = DEFAULT,
+          disabled_builtin_idle_nudges = DEFAULT,
+          category_weights = DEFAULT,
+          heat_offset = DEFAULT,
+          updated_at = NOW()
+      `;
+
       await tx`DELETE FROM server_auto_trigger_persona_overrides WHERE server_id = ${serverId}`;
       // Deletes the category definitions only. Persisted short_term_memories carry their own
       // categories payload and render from it, so STM data survives a configuration reset.
@@ -551,13 +599,15 @@ class ResetRepository {
       await tx`DELETE FROM channel_whitelist WHERE server_id = ${serverId}`;
       await tx`DELETE FROM role_whitelist WHERE server_id = ${serverId}`;
       await tx`DELETE FROM channel_persona_whitelist WHERE server_id = ${serverId}`;
+      await tx`DELETE FROM server_natural_nudge_custom_idle_nudges WHERE server_id = ${serverId}`;
+      await tx`DELETE FROM server_natural_nudge_persona_scopes WHERE server_id = ${serverId}`;
     });
   }
 
   /**
    * Restores one user's personal configuration to its database defaults in a single transaction.
    *
-   * Resets language preference and privacy level in users, resets all portable personalization
+   * Resets language, privacy, and message-proxy selection in users, resets all portable personalization
    * settings in user_personalization_configs via upsert (repairing missing rows), removes persona
    * naming preferences, and deletes personal spotlights owned by the user across all servers.
    * Returns the user's Discord ID and distinct server IDs whose spotlights were deleted so the
@@ -570,6 +620,8 @@ class ResetRepository {
         SET
           language_pref = DEFAULT,
           privacy_level = DEFAULT,
+          message_proxy_service = DEFAULT,
+          message_proxy_instance_id = DEFAULT,
           updated_at = NOW()
         WHERE user_id = ${userId}
         RETURNING user_disc_id

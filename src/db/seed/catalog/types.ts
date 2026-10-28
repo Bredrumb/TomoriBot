@@ -152,6 +152,8 @@ export interface SystemPromptInput {
   name: string;
   desc: string;
   i18n?: Partial<Record<Exclude<LocaleCode, "en-US">, string>>;
+  /** Picker labels per locale; `name` stays the stored identity and the en-US label. */
+  names?: Partial<Record<Exclude<LocaleCode, "en-US">, string>>;
   promptText: string;
 }
 
@@ -189,4 +191,8 @@ export interface NaiPresetInput {
   desc: string;
   i18n?: Partial<Record<Exclude<LocaleCode, "en-US">, string>>;
   parameters: NaiSamplingParameters;
+}
+
+export interface SpeechInput extends CommonInput {
+  voiceMode: "design" | "clone";
 }

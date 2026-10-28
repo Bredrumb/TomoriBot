@@ -143,6 +143,43 @@ describe("providers panel rendering", () => {
     expect(validateRawModalLimits(modal).violations).toEqual([]);
   });
 
+  it("omits a speech mode heading when the provider offers no model for that mode", () => {
+    const entry = providerEntry("provider:elevenlabs", "ElevenLabs");
+    if (!("capabilities" in entry)) throw new Error("Expected a model provider entry");
+    entry.capabilities = entry.capabilities.map((section) =>
+      section.capability === "speech"
+        ? {
+            ...section,
+            availability: "available",
+            models: [
+              {
+                id: 7,
+                codeName: "eleven_multilingual_v2",
+                isWorkspaceActive: false,
+                isWorkspaceFallback: false,
+                isProviderFallback: false,
+                isCustomRegistration: false,
+                speechActiveModes: [],
+                speechSettings: { voiceMode: "clone", scriptMarkup: "plain", supportsInstruct: true },
+              },
+            ],
+          }
+        : section,
+    );
+    const serialized = JSON.stringify(
+      buildProvidersPanelPayload({
+        locale: "en-US",
+        entries: [entry],
+        initialEntryId: entry.id,
+        readStatus: "fresh",
+        page: { kind: "entry" },
+      }),
+    );
+
+    expect(serialized).toContain(localizedCopy("en-US", "commands.config.panel.capability_tts_clone"));
+    expect(serialized).not.toContain(localizedCopy("en-US", "commands.config.panel.capability_tts_design"));
+  });
+
   it("renders an empty selector with both add destinations and a routing hint", () => {
     const payload = buildProvidersPanelPayload({
       locale: "en-US",
@@ -551,10 +588,21 @@ describe("providers panel rendering", () => {
     expect(panelOptions.find((option) => option.default)?.value).toBe(entry.id);
   });
 
+  it("omits ComfyUI workflows from curated image and video registration", () => {
+    for (const provider of ["openrouter", "google"]) {
+      for (const capability of ["image", "video"] as const) {
+        const modal = buildProviderModelModal("en-US", "provider", provider, capability, null, "abcdefgh");
+        expect(collectComponents(modal).some((component) => component.custom_id === "workflow_abcdefgh")).toBe(false);
+      }
+    }
+  });
+
   it("uses placeholders for create codenames and capability-specific modal fields", () => {
     const textModal = buildProviderModelModal("en-US", "provider", "google", "text", null, "abcdefgh");
     const endpointTextModal = buildProviderModelModal("en-US", "endpoint", "73", "text", null, "abcdefgh");
-    const imageModal = buildProviderModelModal("en-US", "endpoint", "73", "image", null, "abcdefgh");
+    const imageModal = buildProviderModelModal("en-US", "endpoint", "73", "image", null, "abcdefgh", {
+      apiStyle: "comfyui",
+    });
     const codeInput = textModal.components[0]?.component;
 
     expect(codeInput?.placeholder).toBe("anthropic/claude-4-sonnet");
@@ -565,6 +613,17 @@ describe("providers panel rendering", () => {
     expect(JSON.stringify(endpointTextModal)).toContain("num-ctx_abcdefgh");
     expect(JSON.stringify(imageModal)).toContain("workflow_abcdefgh");
     expect(imageModal.custom_id).toBe("providers:v1:model-submit:en-US:endpoint:73:image:0:abcdefgh");
+  });
+
+  it("offers workflows only for ComfyUI image and video endpoints", () => {
+    for (const capability of ["image", "video"] as const) {
+      for (const apiStyle of ["comfyui", "openai-compatible"] as const) {
+        const modal = buildProviderModelModal("en-US", "endpoint", "73", capability, null, "abcdefgh", { apiStyle });
+        expect(collectComponents(modal).some((component) => component.custom_id === "workflow_abcdefgh")).toBe(
+          apiStyle === "comfyui",
+        );
+      }
+    }
   });
 
   it("offers image capability checkboxes and gates inpainting on ComfyUI", () => {

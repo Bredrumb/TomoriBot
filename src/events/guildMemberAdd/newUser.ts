@@ -8,19 +8,22 @@ import { ContextItemTag } from "@/types/misc/context";
 import { tomoriChat, suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { userRepository } from "@/utils/db/repositories";
-import { buildForcedMentionsForUser, ensureDiscordUserMention } from "@/utils/discord/mentionHelper";
-import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
-import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
-import { sendPersonaPostViaWebhook } from "@/utils/discord/webhook/personaPost";
+import {
+  buildForcedMentionsForUser,
+  ensureDiscordUserMention,
+  sendPersonaMention,
+} from "@/utils/discord/mentionHelper";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { downloadImage } from "@/utils/image/avatarHelper";
 import { log } from "@/utils/misc/logger";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { resolveVisionApiModelName } from "@/utils/provider/visionCaption";
+import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 import { ZAI_CODING_CHAT_COMPLETIONS_URL, ZAI_GENERAL_CHAT_COMPLETIONS_URL } from "@/providers/zai/zaiShared";
 import { waitForWelcomeGate } from "@/events/guildMemberAdd/helpers/welcomeGate";
 import { type WelcomeMembershipCheck, checkWelcomeMembership } from "@/events/guildMemberAdd/helpers/welcomeMembership";
+import { type WelcomeHandoff, openWelcomeHandoff } from "@/utils/chat/welcomeHandoff";
 
 /**
  * Provider-to-chat-completions-URL mapping for vision model routing.
@@ -92,6 +95,7 @@ async function callOpenAICompatibleVisionForAvatar(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
+      ...(endpointUrl === VISION_PROVIDER_URLS.openrouter && buildOpenRouterAttributionHeaders()),
     },
     body: JSON.stringify(requestBody),
   });
@@ -267,6 +271,40 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
   }
 
   const welcomeChannel = rawChannel as TextChannel;
+  const handoff = openWelcomeHandoff(
+    welcomeChannel.id,
+    member.id,
+    await buildWelcomeContextItem({
+      member: greetedMember,
+      additionalPrompt: currentAdditionalPrompt,
+      includeAvatarContext: false,
+    }),
+  );
+  try {
+    await sendWelcome({
+      client,
+      member,
+      greetedMember,
+      welcomeChannel,
+      tomoriState,
+      additionalPrompt: currentAdditionalPrompt,
+      handoff,
+    });
+  } finally {
+    handoff.release();
+  }
+}
+
+async function sendWelcome(params: {
+  client: Client;
+  member: GuildMember;
+  greetedMember: GuildMember;
+  welcomeChannel: TextChannel;
+  tomoriState: TomoriState;
+  additionalPrompt: string;
+  handoff: WelcomeHandoff;
+}): Promise<void> {
+  const { client, member, greetedMember, welcomeChannel, tomoriState, additionalPrompt, handoff } = params;
   const allPersonas = await getCachedAllPersonas(member.guild.id);
   const availablePersonas = allPersonas.length > 0 ? allPersonas : [tomoriState];
   const selectedWelcomePersonaId = tomoriState.config.welcome_persona_id;
@@ -299,7 +337,7 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
     }
   }
 
-  if (!lastMessage) return;
+  if (!lastMessage || handoff.isTakenByMember()) return;
 
   const includeAvatarContext = chosenPersona.llm.sees_images;
   let avatarDescription: string | undefined;
@@ -315,7 +353,7 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
 
   const welcomeContextItem = await buildWelcomeContextItem({
     member: greetedMember,
-    additionalPrompt: currentAdditionalPrompt,
+    additionalPrompt,
     includeAvatarContext,
     avatarDescription,
   });
@@ -324,6 +362,11 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
   const generationMembership = await checkWelcomeMembership(member);
   if (generationMembership.status !== "active") {
     logSkippedWelcome(member, generationMembership, "before welcome generation");
+    return;
+  }
+
+  if (!handoff.claimForWelcome(lastMessage.id)) {
+    log.info(`Skipping welcome for ${member.user.tag}: their own message turn is carrying the greeting`);
     return;
   }
 
@@ -357,41 +400,7 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
     afterMessageId: lastMessage.id,
     triggerStartTime: welcomeStartTime,
     contextLabel: `welcome for member ${member.id} in server ${member.guild.id}`,
-    fallbackSender: async (content) => {
-      if (!chosenPersona.is_alter) return false;
-
-      const supportsWebhooks =
-        welcomeChannel.type === ChannelType.GuildText ||
-        welcomeChannel.type === ChannelType.PublicThread ||
-        welcomeChannel.type === ChannelType.PrivateThread ||
-        welcomeChannel.type === ChannelType.AnnouncementThread;
-      if (!supportsWebhooks) return false;
-
-      try {
-        const webhookResult = await getOrCreateWebhook(welcomeChannel);
-        const webhook = webhookResult.webhook;
-        if (!webhook) return false;
-
-        const identity = await resolvePersonaWebhookIdentity(chosenPersona, member.guild);
-        await sendPersonaPostViaWebhook(
-          webhook,
-          {
-            content,
-            allowedMentions: { users: [member.id], roles: [], parse: [] },
-          },
-          {
-            username: identity.username ?? chosenPersona.persona_nickname,
-            avatarUrl: identity.avatarDataUri ?? identity.avatarUrl,
-            personaId: chosenPersona.persona_id,
-          },
-          welcomeChannel,
-        );
-        return true;
-      } catch (error) {
-        log.warn(`Failed to send Alter persona fallback welcome mention for member ${member.id}:`, error);
-        return false;
-      }
-    },
+    fallbackSender: (content) => sendPersonaMention(welcomeChannel, chosenPersona, member.id, content),
   });
 }
 

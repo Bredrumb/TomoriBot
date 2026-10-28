@@ -1,14 +1,12 @@
-import type { Client, Guild, TextBasedChannel } from "discord.js";
+import { sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
+import { ChannelType, type Client, type Guild, type TextBasedChannel } from "discord.js";
+import type { TomoriState } from "@/types/db/schema";
 import type { ForcedMention } from "@/types/discord/mentions";
 import { getCachedUserRow } from "@/utils/cache/userCache";
+import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
+import { recordPersonaDelivery, sendPersonaPost } from "@/utils/discord/webhook/personaPost";
+import { isExternalUserId } from "@/utils/externalIdentityUserId";
 import { log } from "@/utils/misc/logger";
-
-type SendableChannel = TextBasedChannel & {
-  send: (options: {
-    content: string;
-    allowedMentions: { users: string[]; roles: string[]; parse: string[] };
-  }) => Promise<unknown>;
-};
 
 function normalizeMentionHandle(value?: string | null): string | null {
   if (!value) return null;
@@ -26,6 +24,10 @@ export async function buildForcedMentionsForUser(
   client: Client,
   guild?: Guild | null,
 ): Promise<ForcedMention[]> {
+  if (isExternalUserId(userId)) {
+    return [];
+  }
+
   const handles = new Set<string>();
   const addHandle = (value?: string | null) => {
     const normalized = normalizeMentionHandle(value);
@@ -52,6 +54,61 @@ export async function buildForcedMentionsForUser(
   }));
 }
 
+export async function sendPersonaMention(
+  channel: TextBasedChannel,
+  persona: TomoriState,
+  targetUserId: string,
+  content: string,
+): Promise<boolean> {
+  if (!("guild" in channel) || !channel.guild) return false;
+  const supportsWebhooks =
+    channel.type === ChannelType.GuildText ||
+    channel.type === ChannelType.PublicThread ||
+    channel.type === ChannelType.PrivateThread ||
+    channel.type === ChannelType.AnnouncementThread;
+  if (!supportsWebhooks) return false;
+
+  const isThread = channel.isThread();
+  if (isThread && !channel.parent) return false;
+  try {
+    const outcome = await sendPersonaPost(
+      {
+        channel: channel as SendableChannel,
+        persona,
+        deliveryMode: "persona",
+      },
+      {
+        content,
+        allowedMentions: { users: [targetUserId], parse: [] },
+      },
+    );
+    // An unconfirmed POST may already have delivered the mention, so the caller must not send its own.
+    return outcome.status === "sent" || outcome.status === "unconfirmed";
+  } catch (error) {
+    log.warn(`Failed to send persona fallback mention for ${targetUserId}:`, error);
+    return false;
+  }
+}
+
+async function sendBotMention(channel: SendableChannel, content: string, targetUserId: string): Promise<void> {
+  const message = await sendChannelMessageOnce(
+    channel,
+    { content, allowedMentions: { users: [targetUserId], roles: [], parse: [] } },
+    () => undefined,
+  );
+  recordPersonaDelivery({
+    messageId: message.id,
+    channelId: message.channelId,
+    route: "bot",
+    webhookId: null,
+    identity: {
+      username: message.member?.displayName ?? message.author.username,
+      avatarUrl: message.member?.displayAvatarURL() ?? message.author.displayAvatarURL(),
+    },
+    speaker: null,
+  });
+}
+
 export async function ensureDiscordUserMention(params: {
   client: Client;
   channel: TextBasedChannel;
@@ -62,6 +119,10 @@ export async function ensureDiscordUserMention(params: {
   fallbackSender?: (content: string) => Promise<boolean>;
 }): Promise<void> {
   const { client, channel, targetUserId, afterMessageId, triggerStartTime, contextLabel, fallbackSender } = params;
+  if (isExternalUserId(targetUserId)) {
+    log.warn(`Skipping fallback mention for ${contextLabel}: ${targetUserId} is not a Discord user snowflake`);
+    return;
+  }
 
   const botUserId = client.user?.id;
   if (!botUserId) {
@@ -97,14 +158,7 @@ export async function ensureDiscordUserMention(params: {
       const sentViaFallback = fallbackSender ? await fallbackSender(mentionToken) : false;
 
       if (!sentViaFallback) {
-        await (channel as SendableChannel).send({
-          content: mentionToken,
-          allowedMentions: {
-            users: [targetUserId],
-            roles: [],
-            parse: [],
-          },
-        });
+        await sendBotMention(channel as SendableChannel, mentionToken, targetUserId);
       }
 
       log.info(`Added fallback mention for ${contextLabel}`);
@@ -130,14 +184,7 @@ export async function ensureDiscordUserMention(params: {
     const sentViaFallback = fallbackSender ? await fallbackSender(mentionToken) : false;
 
     if (!sentViaFallback) {
-      await (channel as SendableChannel).send({
-        content: mentionToken,
-        allowedMentions: {
-          users: [targetUserId],
-          roles: [],
-          parse: [],
-        },
-      });
+      await sendBotMention(channel as SendableChannel, mentionToken, targetUserId);
     }
 
     log.info(`Added fallback mention for ${contextLabel}`);

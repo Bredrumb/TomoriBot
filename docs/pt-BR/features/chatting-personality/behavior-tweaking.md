@@ -20,13 +20,13 @@ O resumo automático da memória de curto prazo é alternado em `/config` > `Com
 ## Revisão de respostas
 <!-- anchor: response-drafting -->
 
-Abra `/config` > `Plugins` > `Revisão de respostas` para ativar a revisão. Ela inicia desativada e se aplica a todas as personas naquele espaço de trabalho, incluindo respostas na fila e cenas geradas. Administradores do servidor alteram as configurações do servidor; seu espaço de trabalho de DM tem suas próprias configurações.
+Abra `/config` > `Plugins` > `Revisão de respostas` para ativar a revisão. Ela inicia desativada e se aplica a todas as personas naquele servidor, incluindo respostas na fila e cenas geradas. Administradores do servidor alteram as configurações do servidor; suas DMs têm configurações próprias.
 
 Quando ativada, Tomori segura sua resposta enquanto um revisor verifica a voz do personagem e a coerência com a cena. O revisor pode solicitar uma revisão completa. `Itens a verificar` lista os itens de revisão com círculos verdes para itens ativados e círculos vermelhos para itens desativados. `Editar itens de revisão` abre uma lista de seleção: marque um item para ativá-lo ou desmarque-o para desativá-lo.
 
 Instruções da persona, diálogos de exemplo e conversa recente começam ativados. Memórias e outro contexto, e `Chamadas de ferramentas`, começam desativados. O rascunho, a mensagem disparadora e o destino da resposta são sempre incluídos. Ativar memórias e outro contexto adiciona memórias admitidas, documentos, detalhes dos participantes e outro contexto à revisão. Ativar `Chamadas de ferramentas` adiciona definições de ferramentas e resultados concluídos, e verifica solicitações antes de serem executadas; solicitações rejeitadas podem receber uma correção limitada. Ações bem-sucedidas são retidas enquanto a resposta é revisada. A revisão e as correções podem aumentar o tempo de resposta e o custo de tokens, especialmente com mais itens ativados.
 
-`Escolher Modelo Revisor` seleciona um modelo de texto registrado elegível. `Usar modelo de resposta atual` usa o modelo e as credenciais que realmente respondem, incluindo seu provedor pessoal ou um modelo de fallback. Um revisor fixado usa o registro e as credenciais próprios do espaço de trabalho. Autores de apenas texto e autores com o Uso de Ferramentas desativado ainda podem usar um revisor elegível. Um modelo herdado sem suporte exibe `Indisponível`; escolha um revisor com suporte para habilitar a revisão detalhada.
+`Escolher Modelo Revisor` seleciona um modelo de texto registrado elegível. `Usar modelo de resposta atual` usa o modelo e as credenciais que realmente respondem, incluindo seu provedor pessoal ou um modelo de fallback. Um revisor fixado usa o registro e as credenciais salvos para aquele servidor ou DM. Autores de apenas texto e autores com o Uso de Ferramentas desativado ainda podem usar um revisor elegível. Um modelo herdado sem suporte exibe `Indisponível`; escolha um revisor com suporte para habilitar a revisão detalhada.
 
 `Definir Prompt` edita as instruções de revisão, até 4.000 caracteres. `Usar Padrão` restaura o padrão ciente da persona. `Escolher Verificador de Regras` seleciona um verificador MCP compatível já registrado, ou `Nenhum`. Suas conclusões vão de forma privada para o revisor, que decide se são relevantes para este personagem. O verificador não tem garantia de perfil ou idioma validada nesta versão.
 
@@ -59,7 +59,14 @@ Todas as personas podem usar uma nova expressão personalizada. Para limitar o a
 
 ### Como ela usa as expressões
 
-Com o uso de figurinhas ativado em `/config` > `Plugins`, ela envia no máximo uma expressão por resposta, em uma mensagem própria antes, durante ou depois do texto. Ela não as usa em [canais de roleplay](/pt-BR/features/chatting-personality/chatting-and-triggers/#roleplay-channels). `/expressions manage` mostra quantas vezes as personas usaram cada expressão.
+Com o uso de figurinhas ativado em `/config` > `Plugins`, ela envia no máximo uma expressão por resposta, em uma mensagem própria antes, durante ou depois do texto. Ela não as usa em [canais de roleplay](#roleplay-channels). `/expressions manage` mostra quantas vezes as personas usaram cada expressão.
+
+## Canais de Roleplay
+<!-- anchor: roleplay-channels -->
+
+Os canais de roleplay suprimem emojis personalizados e mensagens de figurinhas em suas respostas. Os membros também podem usar `/tool delete turn` em canais de RPG para excluir seu último turno sem precisar da permissão Gerenciar Servidor.
+
+Configure canais de roleplay em `/config` > `Canais` > Regras de Canal.
 
 ## Ajuste de Geração
 <!-- anchor: generation-tuning -->
@@ -74,7 +81,7 @@ Com o uso de figurinhas ativado em `/config` > `Plugins`, ela envia no máximo u
 O prompt do sistema fica acima da persona e molda o `Comportamento Geral`:
 
 - `/config` > `Comportamento` > `Comportamento Geral`: defina uma instrução de sistema personalizada (até 16.000 caracteres).
-- `/config` > `Comportamento` > `Comportamento Geral`: escolha entre os prompts predefinidos do sistema.
+- `/config` > `Comportamento` > `Comportamento Geral`: escolha entre as predefinições de prompt do sistema. `Default + Image Generation Expert` adiciona orientações para tags de anime e trajes de personagens precisos ao prompt padrão (consulte [Busca de Tags](/features/capabilities/media-generation/image-generation/#tag-lookup)).
 - `/config` > `Comportamento` > `Comportamento Geral`: redefinir para o padrão. A confirmação mostra o prompt anterior para que você possa restaurá-lo se for apagado acidentalmente.
 
 Quando uma [predefinição SillyTavern](/pt-BR/features/integrations/sillytavern-support/) está ativa, o prompt do sistema substituto integrado é substituído, mas um prompt personalizado definido aqui ainda é enviado.

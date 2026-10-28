@@ -40,6 +40,12 @@ Sử dụng `/memories` để duyệt, thêm, chỉnh sửa, xóa hoặc chuyể
 
 Trong các máy chủ mới, quyền truy cập của thành viên không phải quản lý để tạo, chỉnh sửa hoặc xóa bộ nhớ máy chủ dùng chung bị tắt theo mặc định. Thành viên có quyền `Quản lý máy chủ` luôn giữ quyền truy cập, và người quản lý có thể cấp quyền cho các thành viên khác thông qua `/moderation` Quyền thành viên.
 
+### Danh tính proxy tin nhắn
+
+Khi bạn bật dịch vụ proxy tin nhắn được hỗ trợ, TomoriBot có thể lưu giữ bộ nhớ cá nhân cho từng danh tính proxy đã xác minh riêng biệt với tài khoản Discord đã gửi tin nhắn. Tài khoản chủ vẫn kiểm soát quyền riêng tư, chặn, cooldown và phân quyền. TomoriBot không bao giờ đoán danh tính từ tên hoặc avatar webhook, và một webhook chưa được xác minh sẽ không nhận được hồ sơ bộ nhớ riêng.
+
+PluralKit hiện là dịch vụ duy nhất có thể chọn. Xem [Hỗ trợ proxy tin nhắn](/vi/features/integrations/message-proxy-support/) để biết cách thiết lập và các hạn chế.
+
 ### Cách lưu bộ nhớ
 
 Chính xác có hai cách để tạo một bộ nhớ dài hạn:
@@ -71,8 +77,8 @@ Quản trị viên máy chủ có thể cung cấp tài liệu để bot tham kh
 Yêu cầu model embedding, được cấu hình bằng `/config` > Models > Switch Models. Xem [Nhà cung cấp và model](/vi/features/setup-administration/providers-and-models/). Trang Tài liệu trong `/memories` cung cấp phạm vi theo persona và toàn máy chủ, số lượng tài liệu và đoạn dữ liệu trực tiếp, tải lên, duyệt tài liệu và xóa:
 
 - Tải lên tệp văn bản, PDF hoặc Markdown làm tri thức máy chủ. Phạm vi cho phép chọn gắn liền với chỉ persona này (mặc định) hay toàn máy chủ để mọi persona tham khảo.
-- `/learn history`: trích xuất lịch sử kênh thành tri thức có thể tìm kiếm.
-- Duyệt qua các tài liệu đã lưu theo từng đoạn. Quản trị viên máy chủ có thể chỉnh sửa từng đoạn riêng lẻ, cập nhật thẻ kênh của tài liệu, hoặc xóa một đoạn duy nhất mà không cần xóa toàn bộ tài liệu.
+- `/learn history`: trích xuất lịch sử kênh thành tri thức có thể tìm kiếm. Tùy chọn `learner` chọn ai sẽ học: một persona (để trống để dùng persona chính), **Tự động** (mỗi persona đã nói nhận một bản riêng) hoặc **Toàn máy chủ** (mọi persona dùng chung).
+- Duyệt qua các tài liệu đã lưu theo từng đoạn. Quản trị viên máy chủ có thể chỉnh sửa từng đoạn riêng lẻ, thay đổi các kênh mà tài liệu bị giới hạn, hoặc xóa một đoạn duy nhất mà không cần xóa toàn bộ tài liệu.
 - Xóa các tài liệu đã lưu hoặc từng đoạn riêng lẻ trực tiếp từ bảng điều khiển.
 
 #### Prompt nhập lịch sử
@@ -81,7 +87,7 @@ Khi nhập lịch sử kênh bằng `/learn history`, tùy chọn `prompt` sẽ 
 
 - Hội thoại trích xuất các dữ kiện độc lập từ cuộc trò chuyện thông thường. Chế độ này phân giải các đại từ và sử dụng mốc thời gian tuyệt đối khi ngày tháng hoặc thời gian được đề cập hoặc có thể suy luận được.
 - Nhập vai tìm kiếm các phân cảnh, bối cảnh cốt truyện, mối quan hệ và sự kiện đáng nhớ mà không cố gắng lưu giữ từng chi tiết nhỏ.
-- Đúng vai nhân vật trích xuất bộ nhớ từ góc nhìn của persona đã chọn, sử dụng prompt, thuộc tính, bộ nhớ hiện có và tài liệu liên quan của persona đó làm ngữ cảnh.
+- Đúng vai nhân vật cần một persona trong `learner`. Chế độ này trích xuất bộ nhớ từ góc nhìn của persona đó, sử dụng prompt, thuộc tính, bộ nhớ hiện có và tài liệu liên quan của persona đó làm ngữ cảnh.
 
 Prompt sẽ được hiển thị trước khi nhập để bạn có thể điều chỉnh cho phù hợp với kênh hoặc phân cảnh.
 
@@ -92,7 +98,15 @@ Dữ liệu lịch sử nhập vào được lưu dưới dạng tài liệu, v�
 
 Lệnh `/conditioning` là bộ nhớ theo từng persona, từng máy chủ giúp định hướng hành vi của persona theo thời gian. Đây là một gợi ý nhẹ nhàng hơn so với một thuộc tính hoàn chỉnh hay prompt hệ thống. Hãy sử dụng tính năng này để củng cố cách một nhân vật cụ thể nên hành xử trong một máy chủ cụ thể.
 
-Mỗi lượt `/reward` hoặc `/punish` đều được kiểm đếm, nhưng nó chỉ trở thành một bộ nhớ mà bot thực sự làm theo khi bạn cung cấp một `reason`, hiển thị như sau trong prompt của bot:
+Dùng tùy chọn `user` của `/reward` hoặc `/punish` để gửi embed vui nhắm đến người dùng đó.
+Chọn `user` hoặc `persona`, mỗi lần chỉ một đối tượng. Tương tác với người dùng không lưu bộ nhớ điều hòa
+hay tạo phản hồi AI, kể cả khi có `reason`; dòng cuối "sẽ nhớ chuyện này" chỉ là lời đùa.
+Với cả người dùng và persona, lý do được in nghiêng ngay trong câu mô tả hành động.
+
+Bật `Tương tác vui` trong `/config` > `Plugin` > `Công cụ khả dụng` để persona thể hiện cảm xúc bằng hành động với người dùng hoặc persona khác. Tùy chọn mặc định bật và có thể tắt trong cùng menu này. Mỗi hành động cần đối tượng, hành động và lý do; cho ăn còn cần chỉ rõ món ăn. Người dùng chỉ nhận embed vui. Persona nhận bộ nhớ điều hòa và được xếp hàng phản ứng sau khi người đang nói kết thúc. Persona đang phản ứng không thể dùng công cụ này trong lượt trả lời đó. Cả công cụ lẫn lệnh gạch chéo đều chọn ngẫu nhiên các tiêu đề đã dịch.
+
+Mỗi lượt `/reward` hoặc `/punish` nhắm đến persona đều được kiểm đếm, nhưng chỉ trở thành bộ nhớ mà bot
+thực sự làm theo khi bạn cung cấp `reason`, hiển thị như sau trong prompt của bot:
 
 ```text
 ## Rewarded Behaviors
@@ -117,11 +131,13 @@ Phạm vi sẽ thu hẹp thông tin trước tiên: bộ nhớ máy chủ chỉ 
 - Bộ nhớ có thẻ từ khóa chỉ kích hoạt khi từ khóa xuất hiện trong ngữ cảnh hiển thị.
 - Sử dụng `/tool prompt snapshot` để xem những bộ nhớ nào hiện đang kích hoạt.
 
-### Thẻ kênh
+### Kênh
 
-- Bộ nhớ có thẻ `#channel` chỉ kích hoạt trong kênh đó.
-- Thẻ kênh có thể kết hợp với thẻ từ khóa.
-- Nếu bạn sử dụng cơ sở tri thức tài liệu (RAG), thẻ kênh cũng áp dụng cho tài liệu và lịch sử đã trích xuất.
+- Bộ nhớ máy chủ có thể được giới hạn trong các kênh bạn chọn ở biểu mẫu thêm hoặc sửa. Khi đó, nó chỉ kích hoạt trong các kênh đó và luồng của chúng. Để trống bộ chọn cho mọi kênh.
+- Bộ nhớ cá nhân sử dụng thẻ `#channel` thay thế, chỉ kích hoạt bộ nhớ trong kênh đó.
+- Giới hạn kênh có thể kết hợp với thẻ từ khóa. Đối với bộ nhớ máy chủ, thẻ bắt đầu bằng `#` là một từ khóa thông thường.
+- Các bộ nhớ máy chủ và tài liệu từng dùng thẻ `#channel` cũ đã được tự động chuyển đổi sang giới hạn kênh. Nếu một thẻ cũ chỉ đến kênh không còn tồn tại, mục đó sẽ vẫn hoạt động trong mọi kênh và `/memories` sẽ thông báo điều này; hãy chỉnh sửa và chọn lại kênh để giới hạn lại.
+- Nếu bạn sử dụng cơ sở tri thức tài liệu (RAG), tài liệu và lịch sử đã trích xuất cũng có thể được giới hạn vào các kênh theo cách tương tự. Với `/learn history`, hãy chọn kênh trong cửa sổ mở ra trước khi bắt đầu trích xuất.
 
 Trong `/help`, chọn `Bộ nhớ`, rồi chọn `Gắn thẻ bộ nhớ`, để xem bản tóm tắt tương tự trong Discord.
 
@@ -168,7 +184,7 @@ Bất kỳ ai cũng có thể chạy `/config` > Persona > Memories, `/personal 
 
 ### Cấu hình STM
 
-Người quản lý không gian làm việc có thể tinh chỉnh bộ nhớ ngắn hạn từ `/config` → `Hành vi` → Memory & STM. Các cài đặt này áp dụng cho các bản ghi STM đang hoạt động của không gian làm việc:
+Người quản lý máy chủ có thể tinh chỉnh bộ nhớ ngắn hạn từ `/config` → `Hành vi` → Memory & STM. Các cài đặt này áp dụng cho các bản ghi STM đang hoạt động của máy chủ:
 
 - Nhịp làm mới kiểm soát số lượt tương tác của bot trôi qua giữa các lần nhắc làm mới. Phạm vi cho phép là 1-100.
 - Chế độ hiển thị chọn xem các giá trị danh mục có thay thế các lượt gần đây hay xuất hiện dưới dạng tóm tắt thô.

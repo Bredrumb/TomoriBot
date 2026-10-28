@@ -35,11 +35,19 @@ import type { SqlParameterArray } from "@/types/db/sqlOperations";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { getCachedLLM } from "@/utils/cache/llmCache";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
+import { invalidatePersonaAppearance } from "@/utils/cache/personaAppearanceCacheStore";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { validateTomoriFields } from "@/utils/db/sqlSecurity";
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
+import {
+  loadPersonaSpeechCredentialOwners,
+  loadSpeechCredentialForCleanup,
+} from "@/utils/db/repositories/SpeechRepository";
+import { cleanupPendingGoogleVoices } from "@/utils/speech/googleVoiceLifecycle";
+import { decryptApiKey } from "@/utils/security/crypto";
 import { llmProviderRepo } from "@/utils/db/repositories/LlmProviderRepository";
 import { userNamingRepository } from "@/utils/db/repositories/UserNamingRepository";
+import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import { type MemoryValidationResult, getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { getUnconfiguredLlm } from "@/utils/provider/unconfiguredLlm";
 import { log } from "@/utils/misc/logger";
@@ -61,6 +69,7 @@ type PersonaVoiceConfigsRow = {
   speech_voice_id: string | null;
   speech_voice_name: string | null;
   speech_voice_design_prompt: string | null;
+  voice_source_priority: "design" | "clone";
 };
 
 /** Row shape for persona_imagegen_configs (Phase 6). */
@@ -152,11 +161,11 @@ const TOMORI_POINTER_CONTENT_FIELDS = new Set<string>([
 /** Fields where SQL NULL carries semantic meaning ("not configured") and must not be coerced to undefined. */
 const MEANINGFULLY_NULLABLE_CONFIG_FIELDS = new Set([
   "response_reviewer_llm_id",
-  "response_decision_model_id",
   "response_reviewer_prompt",
   "response_rule_checker_ref",
   "llm_id",
   "embedding_model_id",
+  "decision_model_id",
   "diffusion_model_id",
   "video_model_id",
   "vision_llm_id",
@@ -734,9 +743,13 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
    * @param personaId - Internal persona DB ID
    * @param voice - Complete voice config row excluding persona_id
    */
-  async setVoiceConfig(personaId: number, voice: Omit<PersonaVoiceConfigsRow, "persona_id">): Promise<boolean> {
+  async setVoiceConfig(
+    personaId: number,
+    voice: Omit<PersonaVoiceConfigsRow, "persona_id">,
+    options: { materialize?: boolean } = {},
+  ): Promise<boolean> {
     try {
-      const materialized = await this.materializeIfPointer(personaId);
+      const materialized = options.materialize === false || (await this.materializeIfPointer(personaId));
       if (!materialized) {
         return false;
       }
@@ -922,6 +935,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
 
   async removePersona(personaId: number): Promise<boolean> {
     try {
+      const speechOwners = await loadPersonaSpeechCredentialOwners(personaId);
       const result = await sql.transaction(async (tx) => {
         const affected = await tx`
           SELECT c.custom_expression_id FROM custom_expressions c
@@ -938,6 +952,26 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         return deleted;
       });
       for (const row of result) invalidateEmojiStickerCache(Number(row.server_id));
+      if (result.length > 0) invalidatePersonaAppearance(personaId);
+      if (result.length > 0) {
+        for (const owner of speechOwners) {
+          try {
+            const credential = await loadSpeechCredentialForCleanup(owner, owner.provider);
+            if (credential)
+              await cleanupPendingGoogleVoices(
+                owner,
+                credential.credentialId,
+                credential.credentialRevision,
+                await decryptApiKey(credential.apiKey, credential.keyVersion),
+                [],
+              );
+          } catch {
+            log.error("Persona speech cleanup failed; remove unused voices in the provider console.", undefined, {
+              personaId,
+            });
+          }
+        }
+      }
       return result.length > 0;
     } catch (e) {
       log.error(`Error removing persona ${personaId}:`, e);
@@ -1212,10 +1246,12 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         // the official preset sprite set live again. Server-owned sprite IMAGES
         // are cleaned up by the caller (the shared preset images are immutable).
         await tx`DELETE FROM persona_sprites WHERE persona_id = ${params.personaId}`;
+        await naturalNudgeRepository.clearPersonaConfig(tx, params.personaId);
 
         return updatedRow;
       });
 
+      if (row) invalidatePersonaAppearance(params.personaId);
       return row ? (row as unknown as TomoriRow) : null;
     } catch (error) {
       log.error(`Error applying preset pointer to persona ${params.personaId}:`, error);
@@ -1692,7 +1728,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
     try {
       const [row] = await sql`
         SELECT persona_id, speech_voice_sample_id, speech_voice_id, speech_voice_name,
-               speech_voice_design_prompt
+               speech_voice_design_prompt, voice_source_priority
         FROM persona_voice_configs WHERE persona_id = ${personaId}
       `;
       return row ? (row as unknown as PersonaVoiceConfigsRow) : null;
@@ -1743,16 +1779,17 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
     await sql`
       INSERT INTO persona_voice_configs (
         persona_id, speech_voice_sample_id, speech_voice_id, speech_voice_name,
-        speech_voice_design_prompt
+        speech_voice_design_prompt, voice_source_priority
       ) VALUES (
         ${row.persona_id}, ${row.speech_voice_sample_id}, ${row.speech_voice_id},
-        ${row.speech_voice_name}, ${row.speech_voice_design_prompt}
+        ${row.speech_voice_name}, ${row.speech_voice_design_prompt}, ${row.voice_source_priority}
       )
       ON CONFLICT (persona_id) DO UPDATE SET
         speech_voice_sample_id    = EXCLUDED.speech_voice_sample_id,
         speech_voice_id           = EXCLUDED.speech_voice_id,
         speech_voice_name         = EXCLUDED.speech_voice_name,
         speech_voice_design_prompt = EXCLUDED.speech_voice_design_prompt,
+        voice_source_priority = EXCLUDED.voice_source_priority,
         updated_at                = NOW()
     `;
   }
@@ -1887,7 +1924,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         s.server_id,
         smc.created_at, smc.updated_at,
         -- 1. server_model_configs
-        smc.llm_id, smc.embedding_model_id, smc.diffusion_model_id, smc.video_model_id,
+        smc.llm_id, smc.embedding_model_id, smc.diffusion_model_id, smc.video_model_id, smc.decision_model_id,
         smc.vision_llm_id, smc.api_key, smc.key_version, smc.llm_temperature,
         smc.thinking_level, smc.llm_disabled_params, smc.custom_endpoint_url,
         smc.custom_model_name, smc.custom_num_ctx, smc.fallback_llm_ids,
@@ -1898,7 +1935,6 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         scc.match_limit, scc.cascade_limit, scc.timezone_offset, scc.self_debug_enabled,
         scc.model_randomizer_enabled,
         scc.response_reviewer_llm_id,
-        scc.response_decision_model_id,
         scc.response_reviewer_prompt,
         scc.response_rule_checker_ref,
         scc.response_review_items,
@@ -1915,8 +1951,8 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         smpc.prompt_snapshot_enabled,
         -- 4. server_capabilities_configs
         scaps.emoji_usage_enabled, scaps.sticker_usage_enabled, scaps.web_search_enabled,
-        scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.imagegen_enabled,
-        scaps.videogen_enabled, scaps.voice_message_enabled, scaps.user_blocking_enabled,
+        scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.conditioning_interactions_enabled, scaps.dice_rolling_enabled, scaps.imagegen_enabled,
+        scaps.danbooru_enabled, scaps.videogen_enabled, scaps.voice_message_enabled, scaps.user_blocking_enabled,
         scaps.time_awareness_enabled,
         scaps.tool_use_enabled,
         scaps.short_term_memory_enabled, scaps.user_info_updates_enabled,
@@ -1926,6 +1962,8 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         snsfw.uncensor_injection_enabled, snsfw.uncensor_unicode_space_enabled,
         snsfw.uncensor_sanitize_enabled,
         -- 7. server_speech_configs
+        sspeech.speech_design_endpoint_id, sspeech.speech_clone_endpoint_id,
+        sspeech.speech_design_model_id, sspeech.speech_clone_model_id,
         sspeech.voice_transcript_chat_mode, sspeech.chatterbox_turbo_enabled,
         sspeech.chatterbox_cfg_weight, sspeech.chatterbox_exaggeration,
         -- 8. server_auto_trigger_configs (persona overrides aggregated from junction table)
@@ -1998,7 +2036,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         s.server_id,
         smc.created_at, smc.updated_at,
         -- 1. server_model_configs
-        smc.llm_id, smc.embedding_model_id, smc.diffusion_model_id, smc.video_model_id,
+        smc.llm_id, smc.embedding_model_id, smc.diffusion_model_id, smc.video_model_id, smc.decision_model_id,
         smc.vision_llm_id, smc.api_key, smc.key_version, smc.llm_temperature,
         smc.thinking_level, smc.llm_disabled_params, smc.custom_endpoint_url,
         smc.custom_model_name, smc.custom_num_ctx, smc.fallback_llm_ids,
@@ -2009,7 +2047,6 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         scc.match_limit, scc.cascade_limit, scc.timezone_offset, scc.self_debug_enabled,
         scc.model_randomizer_enabled,
         scc.response_reviewer_llm_id,
-        scc.response_decision_model_id,
         scc.response_reviewer_prompt,
         scc.response_rule_checker_ref,
         scc.response_review_items,
@@ -2026,8 +2063,8 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         smpc.prompt_snapshot_enabled,
         -- 4. server_capabilities_configs
         scaps.emoji_usage_enabled, scaps.sticker_usage_enabled, scaps.web_search_enabled,
-        scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.imagegen_enabled,
-        scaps.videogen_enabled, scaps.voice_message_enabled, scaps.user_blocking_enabled,
+        scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.conditioning_interactions_enabled, scaps.dice_rolling_enabled, scaps.imagegen_enabled,
+        scaps.danbooru_enabled, scaps.videogen_enabled, scaps.voice_message_enabled, scaps.user_blocking_enabled,
         scaps.time_awareness_enabled,
         scaps.tool_use_enabled,
         scaps.short_term_memory_enabled, scaps.user_info_updates_enabled,
@@ -2037,6 +2074,8 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         snsfw.uncensor_injection_enabled, snsfw.uncensor_unicode_space_enabled,
         snsfw.uncensor_sanitize_enabled,
         -- 7. server_speech_configs
+        sspeech.speech_design_endpoint_id, sspeech.speech_clone_endpoint_id,
+        sspeech.speech_design_model_id, sspeech.speech_clone_model_id,
         sspeech.voice_transcript_chat_mode, sspeech.chatterbox_turbo_enabled,
         sspeech.chatterbox_cfg_weight, sspeech.chatterbox_exaggeration,
         -- 8. server_auto_trigger_configs (persona overrides aggregated from junction table)
@@ -2191,6 +2230,11 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
     // shared image URL (no byte duplication). The persona stops resolving sprites
     // live once materialized, so this freezes its current default sprite set.
     await this.copyPresetSpritesWithClient(client, personaId, pointerLineageId, pointerLanguage);
+    await naturalNudgeRepository.copyPresetDefaults(client, personaId, {
+      talkativeness: preset.natural_nudge_talkativeness,
+      interests: preset.natural_nudge_interests,
+      idleNudges: preset.natural_nudge_idle_nudges,
+    });
     // Freeze the alter avatar by reference too: a pointer alter live-resolves the
     // shared preset avatar, so once it materializes it must keep that exact
     // reference (still the immutable presets/ URL: no byte duplication, and the
@@ -2417,6 +2461,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
       speech_voice_id: (row.split_speech_voice_id as string | null | undefined) ?? null,
       speech_voice_name: (row.split_speech_voice_name as string | null | undefined) ?? null,
       speech_voice_design_prompt: (row.split_speech_voice_design_prompt as string | null | undefined) ?? null,
+      voice_source_priority: (row.split_voice_source_priority as "design" | "clone" | undefined) ?? "design",
       physical_appearance_tags: Array.isArray(row.split_physical_appearance_tags)
         ? (row.split_physical_appearance_tags as string[])
         : [],
@@ -2441,6 +2486,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
           pvc.speech_voice_id AS split_speech_voice_id,
           pvc.speech_voice_name AS split_speech_voice_name,
           pvc.speech_voice_design_prompt AS split_speech_voice_design_prompt,
+          pvc.voice_source_priority AS split_voice_source_priority,
           pic.physical_appearance_tags AS split_physical_appearance_tags,
           pic.nai_char_ref_url AS split_nai_char_ref_url,
           ptc.nai_attg_author AS split_nai_attg_author,
@@ -2757,6 +2803,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
               pvc.speech_voice_id AS split_speech_voice_id,
               pvc.speech_voice_name AS split_speech_voice_name,
               pvc.speech_voice_design_prompt AS split_speech_voice_design_prompt,
+          pvc.voice_source_priority AS split_voice_source_priority,
               pic.physical_appearance_tags AS split_physical_appearance_tags,
               pic.nai_char_ref_url AS split_nai_char_ref_url,
               ptc.nai_attg_author AS split_nai_attg_author,
@@ -3305,6 +3352,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         return null;
       }
 
+      invalidatePersonaAppearance(personaId);
       return updatedTomori.data;
     } catch (error) {
       const context: ErrorContext = {

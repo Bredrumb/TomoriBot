@@ -1,5 +1,10 @@
+import { setPersonaSpriteCache, clearPersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
+import { recordPersonaDelivery } from "@/utils/discord/webhook/personaPost";
+import * as lifecycle from "@/utils/discord/webhook/lifecycle";
+import * as fallback from "@/utils/discord/webhook/fallback";
+import { clearPersonaAppearances } from "@/utils/cache/personaAppearanceCacheStore";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
-import { DiscordAPIError, RateLimitError, type Sticker, Webhook } from "discord.js";
+import { DiscordAPIError, RateLimitError, REST, type Sticker, Webhook } from "discord.js";
 import type { RecordStatInput } from "@/utils/db/repositories/StatRepository";
 import type { ChatIncoming, ChatTurnContext } from "@/utils/chat/types";
 import type { StickerSelection } from "@/types/discord/stickerSelection";
@@ -41,7 +46,12 @@ function makeSend(behavior: () => SendBehavior, webhookId: string | null = null)
     if (outcome === "rejected") throw discordRejection();
     if (outcome === "unconfirmed") throw new Error("socket hang up");
     sequence += 1;
-    return { id: `9000000000000000${sequence}`, webhookId };
+    return {
+      id: `9000000000000000${sequence}`,
+      webhookId,
+      channelId: "fixture-channel",
+      author: { username: "Bot", displayAvatarURL: () => "https://example.com/bot.png" },
+    };
   });
 }
 
@@ -51,18 +61,29 @@ function makeContext(options: { behavior?: () => SendBehavior; queued?: boolean 
     // Unique per context so channel continuity never carries state between cases.
     id: `channel_${Math.random().toString(36).slice(2)}`,
     send: makeSend(behavior),
+    client: {
+      user: { id: "bot", username: "Bot", displayAvatarURL: () => "https://example.com/bot.png" },
+      rest: new REST(),
+    },
+    fetchWebhooks: mock(),
+    createWebhook: mock(),
     isThread: () => false,
   };
   const message = { id: "message_1", channel, reply: makeSend(behavior) };
   const incoming = { isFromQueue: options.queued === true } as unknown as ChatIncoming;
   const tomoriState = createPersona({ server_id: SERVER_ID, persona_lineage_id: 5 });
-  return {
+  const context = {
     client: { user: null },
     message,
     channel,
     guild: { id: GUILD_ID },
     turn: { lockedTurn: { admission: { incoming } } },
-    currentPersona: { ...tomoriState, persona_id: 3 },
+    currentPersona: {
+      ...tomoriState,
+      persona_id: 3,
+      persona_nickname: "Juno",
+      webhook_avatar_url: "https://example.com/juno.png",
+    },
     tomoriState,
     triggererUserId: 42,
     isDMChannel: false,
@@ -70,6 +91,14 @@ function makeContext(options: { behavior?: () => SendBehavior; queued?: boolean 
     streamingContext: { disableYouTubeProcessing: false, deliveredMessageRefs: [] },
     expressionDelivery: createExpressionDeliveryState(),
   } as unknown as ChatTurnContext;
+  Object.assign(channel, { parent: channel, parentId: channel.id });
+  spyOn(lifecycle, "getOrCreateWebhook").mockImplementation(async () => ({
+    webhook: context.responseTarget?.webhook ?? null,
+  }));
+  spyOn(fallback, "resolveManagedWebhookForChannel").mockImplementation(
+    async () => context.responseTarget?.webhook ?? null,
+  );
+  return context;
 }
 
 interface WebhookPost {
@@ -104,19 +133,23 @@ function rateLimited(retryAfter = 0.01): Response {
 }
 
 function created(): Response {
-  return Response.json({ id: "900000000000000099", webhook_id: "123456789012345679", channel_id: "1" });
+  return Response.json({ id: "900000000000000099", webhook_id: "123456789012345679" });
 }
 
 /** A real `Webhook` instance, since discord.js only sends identity fields for one. */
 function makeWebhook(edit: () => void = () => undefined): Webhook {
-  return Object.assign(Object.create(Webhook.prototype), {
+  const webhook = Object.assign(Object.create(Webhook.prototype), {
     id: "123456789012345679",
     token: "webhook-token",
     avatar: null,
     channelId: null,
     client: { options: {} },
-    edit: async () => edit(),
+    edit: async () => {
+      edit();
+      return webhook;
+    },
   }) as Webhook;
+  return webhook;
 }
 
 function nativeSticker(id: string, name: string): StickerSelection {
@@ -147,10 +180,13 @@ describe("expression delivery at tool invocation", () => {
 
   afterAll(() => {
     recordStatSpy.mockRestore();
+    spyOn(lifecycle, "getOrCreateWebhook").mockRestore();
+    spyOn(fallback, "resolveManagedWebhookForChannel").mockRestore();
   });
 
   beforeEach(() => {
     recorded.length = 0;
+    clearPersonaAppearances();
   });
 
   it("sends and counts once, then answers repeats without sending or replacing", async () => {
@@ -192,6 +228,20 @@ describe("expression delivery at tool invocation", () => {
     expect(context.expressionDelivery).toEqual(createExpressionDeliveryState());
   });
 
+  it("delivers an admitted expression while ordinary prose remains held", async () => {
+    const context = makeContext();
+    context.streamingContext.holdResponseText = true;
+    context.streamingContext.deliveryReceipts = [];
+    const outcome = await deliverExpression(context, nativeSticker("111111111111111111", "Wave"), "Wave", notCancelled);
+
+    expect(outcome.status).toBe("delivered");
+    expect(sendCalls(context)).toBe(1);
+    expect(context.streamingContext.holdResponseText).toBe(true);
+    expect(context.streamingContext.deliveryReceipts).toMatchObject([
+      { route: "bot", speaker: { personaId: context.currentPersona.persona_id } },
+    ]);
+  });
+
   it("delivers custom links with suppressed mentions and counts stable IDs only", async () => {
     const row = createCustomExpression({ server_id: SERVER_ID });
     const load = spyOn(serverRepository, "loadCustomExpression").mockResolvedValue(row);
@@ -208,7 +258,6 @@ describe("expression delivery at tool invocation", () => {
       expect(channel.send.mock.calls[0]?.[0]).toMatchObject({
         content: row.original_link,
         allowedMentions: { parse: [] },
-        enforceNonce: true,
       });
       expect(metricKeys("custom_expression_used")).toEqual([row.custom_expression_id]);
       expect(metricKeys("sticker_used")).toEqual([]);
@@ -268,7 +317,7 @@ describe("expression delivery at tool invocation", () => {
     try {
       const context = makeContext({ queued: true });
       expect((await deliverExpression(context, customSelection(id), row.name, notCancelled)).status).toBe("delivered");
-      const reply = (context.message as unknown as { reply: ReturnType<typeof mock> }).reply;
+      const reply = (context.channel as unknown as { send: ReturnType<typeof mock> }).send;
       const payload = reply.mock.calls[0]?.[0] as { files: Array<{ attachment: Buffer }> };
       expect(payload.files[0].attachment).toEqual(bytes);
       expect(metricKeys("custom_expression_used")).toEqual([id]);
@@ -278,7 +327,7 @@ describe("expression delivery at tool invocation", () => {
     }
   });
 
-  it("reuses this turn's delivered identity, and otherwise the active persona over an earlier speaker", async () => {
+  it("uses the active persona after another speaker, including a tool-only turn", async () => {
     const row = createCustomExpression({ server_id: SERVER_ID });
     const load = spyOn(serverRepository, "loadCustomExpression").mockResolvedValue(row);
     const webhookPosts = interceptWebhookPosts(created);
@@ -286,21 +335,28 @@ describe("expression delivery at tool invocation", () => {
       for (const turnHasText of [true, false]) {
         const context = makeContext();
         Object.assign(context.channel, { isThread: () => true });
+        context.currentPersona.is_alter = true;
         context.responseTarget = { webhook: makeWebhook(), personaUsername: "Juno" };
         // The channel's last delivery: this turn's sprite line, or an earlier turn's other speaker.
-        recordChannelDeliveredWebhookIdentity(context.channel.id, { username: "Mirri (joy)" });
+        recordChannelDeliveredWebhookIdentity(
+          context.channel.id,
+          { username: "Mirri (joy)" },
+          "1400000000000000001",
+          null,
+          "123456789012345679",
+        );
         if (turnHasText) {
           context.streamingContext.deliveredMessageRefs?.push({
             messageId: "1",
             channelId: context.channel.id,
-            isWebhook: true,
+            webhookId: "webhook_1",
           });
         }
         webhookPosts.posts.length = 0;
 
         await deliverExpression(context, customSelection(row.custom_expression_id), row.name, notCancelled);
 
-        const username = turnHasText ? "Mirri (joy)" : "Juno";
+        const username = "Juno";
         expect(webhookPosts.posts[0]?.body).toMatchObject({ username, content: row.original_link });
         expect(webhookPosts.posts[0]?.url).toContain(`thread_id=${context.channel.id}`);
         const last = getChannelLastDelivery(context.channel.id);
@@ -312,9 +368,87 @@ describe("expression delivery at tool invocation", () => {
     }
   });
 
+  it("uses explicit impersonation mode to refuse bot fallback even without the legacy boolean", async () => {
+    const context = makeContext();
+    context.streamingContext.deliveryMode = "user_impersonation";
+    context.responseTarget = {
+      webhook: Object.assign(makeWebhook(), { channelId: context.channel.id }),
+      personaUsername: "Mirri",
+    };
+    const posts = interceptWebhookPosts(() => Response.json({ code: 50013, message: "refused" }, { status: 403 }));
+    try {
+      expect(
+        (await deliverExpression(context, nativeSticker("111111111111111111", "Wave"), "Wave", notCancelled)).status,
+      ).toBe("rejected");
+      expect(posts.posts).toHaveLength(1);
+      expect(sendCalls(context)).toBe(0);
+    } finally {
+      posts.restore();
+    }
+  });
+
+  it("inherits ordinary and identity sprites through a tool-only turn without borrowing another speaker", async () => {
+    for (const isIdentity of [false, true]) {
+      const context = makeContext();
+      context.streamingContext.deliveryReceipts = [];
+      context.streamingContext.deliveryState = { unconfirmed: false };
+      context.responseTarget = { webhook: makeWebhook(), personaUsername: "Juno" };
+      setPersonaSpriteCache(3, [
+        {
+          sprite_id: 1,
+          persona_id: 3,
+          sprite_name: "joy",
+          sprite_key: "joy",
+          avatar_url: "https://example.com/joy.png",
+          usage_instructions: "",
+          is_identity: isIdentity,
+        },
+      ]);
+      recordPersonaDelivery({
+        channelId: context.channel.id,
+        messageId: "1",
+        route: "webhook",
+        webhookId: "123456789012345679",
+        identity: { username: isIdentity ? "joy (Juno)" : "Juno", avatarUrl: "https://example.com/joy.png" },
+        speaker: { personaId: 3, kind: isIdentity ? "identity_sprite" : "appearance" },
+        sprite: { personaId: 3, spriteName: "joy", isIdentity },
+      });
+      recordChannelDeliveredWebhookIdentity(
+        context.channel.id,
+        { username: "Mirri" },
+        "2",
+        { personaId: 8, kind: "appearance" },
+        "other",
+      );
+      const posts = interceptWebhookPosts(created);
+      try {
+        const outcome = await deliverExpression(
+          context,
+          nativeSticker("111111111111111111", "Wave"),
+          "Wave",
+          notCancelled,
+        );
+        expect(outcome.status).toBe("delivered");
+        expect(posts.posts[0]?.body).toMatchObject({
+          username: isIdentity ? "joy (Juno)" : "Juno",
+          avatar_url: "https://example.com/joy.png",
+        });
+        expect(context.streamingContext.deliveryReceipts[0]).toMatchObject({
+          route: "webhook",
+          speaker: { personaId: 3 },
+          sprite: { spriteName: "joy", isIdentity },
+        });
+      } finally {
+        posts.restore();
+        clearPersonaSpriteCache();
+      }
+    }
+  });
+
   it("does not post when a stop arrives while the webhook avatar is being updated", async () => {
     const context = makeContext();
     let stopped = false;
+    context.currentPersona.is_alter = true;
     context.responseTarget = {
       webhook: makeWebhook(() => {
         stopped = true;
@@ -322,6 +456,14 @@ describe("expression delivery at tool invocation", () => {
       personaUsername: "Juno",
       personaAvatarUrl: "data:image/png;base64,AAAA",
     };
+    recordPersonaDelivery({
+      messageId: "1",
+      channelId: context.channel.id,
+      route: "webhook",
+      webhookId: "123456789012345679",
+      identity: { username: "Juno", avatarDataUri: "data:image/png;base64,AAAA" },
+      speaker: { personaId: 3, kind: "appearance" },
+    });
     const webhookPosts = interceptWebhookPosts(created);
     try {
       const outcome = await deliverExpression(
@@ -344,6 +486,7 @@ describe("expression delivery at tool invocation", () => {
     const failures: string[] = [];
     for (const stopDuringWait of [false, true]) {
       const context = makeContext();
+      context.currentPersona.is_alter = true;
       context.responseTarget = { webhook: makeWebhook(), personaUsername: "Juno" };
       let stopped = false;
       const webhookPosts = interceptWebhookPosts(() => {
@@ -373,6 +516,7 @@ describe("expression delivery at tool invocation", () => {
 
   it("makes one webhook attempt when Discord's answer is lost, and reports it unconfirmed", async () => {
     const context = makeContext();
+    context.currentPersona.is_alter = true;
     context.responseTarget = { webhook: makeWebhook(), personaUsername: "Juno" };
     const webhookPosts = interceptWebhookPosts(() => new Response("upstream reset", { status: 502 }));
     try {
@@ -392,6 +536,7 @@ describe("expression delivery at tool invocation", () => {
 
   it("rejects a rate-limit delay beyond the budget without reserving the expression slot", async () => {
     const context = makeContext();
+    context.currentPersona.is_alter = true;
     context.responseTarget = {
       webhook: Object.assign(makeWebhook(), { id: "123456789012345681" }),
       personaUsername: "Juno",
@@ -416,6 +561,7 @@ describe("expression delivery at tool invocation", () => {
 
   it("shares the deadline across repeated refusals instead of restarting the budget", async () => {
     const context = makeContext();
+    context.currentPersona.is_alter = true;
     context.responseTarget = { webhook: makeWebhook(), personaUsername: "Juno" };
     const now = Date.now;
     let elapsed = 0;
@@ -456,6 +602,7 @@ describe("expression delivery at tool invocation", () => {
 
   it("observes a stop during a rate-limit wait without waiting for the reset", async () => {
     const context = makeContext();
+    context.currentPersona.is_alter = true;
     context.responseTarget = {
       webhook: Object.assign(makeWebhook(), { id: "123456789012345682" }),
       personaUsername: "Juno",

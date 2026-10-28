@@ -16,6 +16,17 @@ TomoriBot puede generar imágenes a partir de un mensaje de texto o editando una
 - **Relaciones de aspecto personalizables**.
 - **Imágenes de referencia**: extraídas de archivos adjuntos de mensajes, stickers, emojis o avatares de usuarios y personas. Mencione a un usuario o persona para utilizar su avatar como referencia.
 
+El parámetro opcional `model` elige un modelo para esta imagen sin cambiar tus valores predeterminados.
+El autocompletado incluye modelos compatibles de los proveedores guardados de tu servidor y de tus proveedores personales;
+las entradas personales muestran `(vía proveedor personal)`. Déjalo en blanco para usar el modelo habitual. En el modo Auto,
+esto selecciona el modelo de imagen mientras que el modelo que planifica el prompt se mantiene igual.
+
+Establece `nsfw` en `true` para ocultar la imagen generada detrás de un spoiler de Discord, en cualquiera de los modos. Esto solo
+cambia la forma en que Discord muestra la imagen; no cambia la generación ni los filtros de contenido del proveedor.
+
+La generación manual con NovelAI usa `/novelai generate image`, que cuenta con las mismas opciones `model` y `nsfw`.
+Su selector de modelos incluye tus proveedores personales de NovelAI y la clave de NovelAI guardada u opcional del servidor.
+
 Los modos de edición disponibles dependen del backend activo. Trabajo de texto a imagen e imagen a imagen en proveedores de nube (Google, Vertex, OpenRouter). La pintura interna y externa son compatibles con los puntos finales personalizados locales [ComfyUI](/es-419/self-hosting/local-endpoints/setup-comfyui/) y dependen de las capacidades declaradas de ese punto final. Los modos que su configuración no admite se ocultan automáticamente del modelo.
 
 Cuando genera una imagen, combina las etiquetas de apariencia de su persona con etiquetas positivas y negativas en todo el servidor (cuando sea compatible). El resultado llega como una galería multimedia Discord con detalles de generación, incluidos los usuarios o personas a los que se hace referencia.
@@ -28,6 +39,13 @@ Cada fuente de etiqueta se puede editar en su lugar con un modal precargado:
 - **`/config` > `Persona` > `Detalles de generación de imágenes`**: las etiquetas `Apariencia Física` de la persona seleccionada (cómo se ve). Requiere el permiso Administrar servidor.
 - **`/personal config`**: tus propias etiquetas de apariencia, que se aplican cada vez que una generación de imágenes hace referencia a ti. Te sigue en todos los servidores (consulte [Personalización](/es-419/features/knowledge/personalization/)).
 - **`/config` > `Modelos` > `Valores de imagen`**: use `Editar positivo` y `Editar negativo` para configurar etiquetas predeterminadas agregadas o alejadas de cada generación. Las etiquetas negativas solo se aplican cuando el backend admite mensajes negativos. Al enviar un cuadro vacío se restablecen los valores predeterminados integrados.
+
+## Búsqueda de etiquetas
+<!-- anchor: tag-lookup -->
+
+Con **Búsqueda en Danbooru** activada (`/config` > Plugins > Herramientas disponibles), ella puede buscar la etiqueta exacta y el atuendo de un personaje antes de dibujar, para que "mi OC con el atuendo de Ryza" vista a tu OC con la ropa de Ryza. Consulta [Búsqueda de etiquetas de Danbooru](/features/capabilities/tools-and-extensions/#danbooru-tag-lookup).
+
+Ella busca etiquetas con mayor precisión con el preajuste de instrucción del sistema `Default + Image Generation Expert` (`/config` > Comportamiento > Comportamiento general), que también le indica cómo ordenar las etiquetas de anime y cuándo redactar en prosa. `/generate image` en modo Auto también puede buscar etiquetas.
 
 ## Configuración
 

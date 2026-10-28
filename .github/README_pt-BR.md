@@ -7,9 +7,6 @@
      Planned: fr Français | ru Русский | ko 한국어
      See docs/en/contributing/localization/docs-site.md. -->
 
-> [!NOTE]
-> Este README é uma visão geral rápida. Para a documentação completa e atualizada (guias de configuração, detalhes de recursos, informações de provedores e mais), visite **[docs.tomoribot.app](https://docs.tomoribot.app/pt-BR/)**.
-
 <br />
 <div align="center">
 
@@ -19,12 +16,12 @@
 
 <h3 align="center">TomoriBot</h3>
 
-Um assistente de IA pessoal e sistema de RPG (role-playing) para Discord com hospedagem própria e personalizável. Possui memória, múltiplas personas, uso de ferramentas, multimodalidade e suporte a APIs/modelos locais.
+Um sistema de assistente pessoal de IA e RPG personalizável e com hospedagem própria para Discord, com memória, múltiplas personas, chamada de ferramentas, suporte a modelos locais/API *e* vários outros recursos divertidos!
 
 <p align="center">
-  <strong><a href="https://tomoribot.app/">Site Oficial</a></strong>
+  <strong><a href="https://docs.tomoribot.app/pt-BR/">Documentação Oficial</a></strong>
   &middot;
-  <strong><a href="https://discord.com/oauth2/authorize?client_id=841644102059556915">Convidar TomoriBot</a></strong>
+  <strong><a href="https://discord.com/oauth2/authorize?client_id=841644102059556915">Convidar a TomoriBot</a></strong>
   &middot;
   <strong><a href="https://discord.gg/bjCfHm9QsB">Servidor do Discord</a></strong>
   <br />
@@ -58,196 +55,65 @@ Um assistente de IA pessoal e sistema de RPG (role-playing) para Discord com hos
 </div>
 
 <!-- ABOUT THE PROJECT -->
-## Sobre o Projeto
+# Sobre o Projeto
 
-TomoriBot é um assistente de IA pessoal e sistema de RPG de código aberto e com hospedagem própria para Discord, inspirado no SillyTavern e no descontinuado Clyde do Discord. Ele pode ser usado como um assistente prático, companheiro personalizável e parceiro de role-play para você em DMs, ou para todos no seu servidor do Discord.
-
-TomoriBot suporta memória de longo prazo, comportamento de múltiplas personas, ferramentas web e MCP, geração de mídia no chat, mais de 200 comandos slash do Discord e múltiplos provedores, incluindo proxies personalizados e hospedagem própria de seus próprios modelos para tudo, desde geração de texto até geração de vídeo.
-
-### Como Começar
-
-Você pode [convidar a TomoriBot pública](https://discord.com/oauth2/authorize?client_id=841644102059556915) para o seu servidor do Discord, ou [hospedar sua própria instância](#hospedagem-própria) se preferir controle total sobre sua privacidade e chaves de API. A TomoriBot usa as melhores práticas de segurança e criptografia para manter os dados seguros, mas a hospedagem própria garante que todos os dados permaneçam inteiramente no seu dispositivo.
-
-Após adicioná-la ao seu servidor por qualquer um dos métodos acima, execute o comando `/setup` para obter instruções. Em seguida, você pode simplesmente dizer o nome dela (ou mencioná-la com @) para obter uma resposta.
+TomoriBot é um assistente pessoal de IA e sistema de RPG gratuito e de código aberto para Discord, inspirado no SillyTavern e no descontinuado Clyde do Discord. Ele pode ser usado como um assistente prático, companheiro personalizável, parceiro de role-play ou TUDO isso para você e para todos no seu servidor do Discord.
 
 ## Demonstração de Recursos
 
 
-![Screenshots 1](../assets/img/scs/1.png)
+![Screenshots 1](../assets/img/scs/1-agentic.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/pt-BR/features/capabilities/tools-and-extensions/">Conversação com Agente IA</a></h3>
-<p align="center">A TomoriBot possui VÁRIAS ferramentas que permitem que ela vá além do simples bate-papo, como pesquisar na web, definir tarefas/lembretes recorrentes, utilizar as figurinhas do seu servidor, e opções de memória como RAG e memória de curto prazo que permitem que ela lembre do contexto entre canais e servidores.</p>
+<p align="center">A TomoriBot possui várias ferramentas que permitem que ela vá além do simples bate-papo, como pesquisar na web, definir tarefas/lembretes recorrentes, utilizar as figurinhas do seu servidor, geração de mídia e memória persistente para lembrar o contexto entre canais e servidores.</p>
 
 <br />
 
 
-![Screenshots 2](../assets/img/scs/2.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/pt-BR/features/capabilities/media-generation/">Entrada/Saída Multimodal Completa</a></h3>
-<p align="center">A TomoriBot pode processar imagens, áudio e vídeo enviados diretamente no Discord e gerá-los em resposta usando seus próprios endpoints de modelo local ou chaves de API, tudo criptografado de forma segura dentro de um banco de dados persistente. Fluxos de trabalho do ComfyUI prontos para uso podem ser encontrados em <code>assets/comfyui-workflows/</code> e servidores locais de inferência de áudio em <code>servers/</code>!</p>
-
-<br />
-
-![Screenshots 3](../assets/img/scs/3.png)
+![Screenshots 2](../assets/img/scs/2-multipersona.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/pt-BR/features/chatting-personality/multiple-personas/">Suporte a Múltiplas Personas</a></h3>
 <p align="center">A personalidade, o comportamento e o avatar da TomoriBot no servidor podem ser facilmente alterados, criados e exportados para outras pessoas como Personas (semelhante aos AI Character Cards compartilháveis). Importe e até mesmo transforme seus cards favoritos do SillyTavern através do comando <code>/persona generate</code>. Você pode ter uma quantidade ilimitada de personas diferentes em um único servidor, cada uma com suas próprias memórias e objetivos. Você também pode orquestrá-las para trabalharem juntas no seu servidor (ou apenas brincarem umas com as outras).</p>
 
 <br />
 
-
-![Screenshots 4](../assets/img/scs/4.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/pt-BR/features/command-reference/">Mais de 200 Comandos Nativos para Configuração</a></h3>
-<p align="center">Tudo pode ser gerenciado através de comandos slash nativos do Discord e UI interativa. Gerencie completamente personas, predefinições, ajuste parâmetros de modelos, configure servidores de ferramentas MCP, ajuste permissões, configure memórias, defina limites de taxa para membros do servidor e muito mais! Você também pode perguntar diretamente à TomoriBot sobre o que ela pode fazer e quais são os seus comandos slash. Atualmente, um Web Dashboard está em desenvolvimento para facilitar ainda mais o gerenciamento.</p>
+![Screenshots 3](../assets/img/scs/3-commands.png)
+<h3 align="center"><a href="https://docs.tomoribot.app/pt-BR/features/command-reference/">Comandos Slash Nativos para Configuração e Execução</a></h3>
+<p align="center">Configure e personalize a TomoriBot sem sair do Discord. Use comandos slash e menus interativos para criar personas, ajustar prompts e configurações de modelos, conectar servidores MCP, gerenciar memórias e controlar permissões e limites de uso. Execute comandos você mesmo para gerar imagens e mensagens de voz, rolar dados e experimentar outros recursos divertidos.</p>
 
 <br />
 
+![Screenshots 4](../assets/img/scs/4-comfyui.png)
+<h3 align="center"><a href="https://docs.tomoribot.app/pt-BR/self-hosting/local-endpoints/">Configuração Totalmente Local</a></h3>
+<p align="center">A TomoriBot pode rodar a si mesma e seu banco de dados criptografado no seu próprio PC, com um LLM local para conversas, ComfyUI para geração de imagem/vídeo (<code>/assets/comfyui-workflows/</code>), mecanismos de busca locais e modelos de fala locais para geração e transcrição de voz (<code>/servers/</code>), tudo sem a necessidade de provedores em nuvem.</p>
 
-![Screenshots 6](../assets/img/scs/6.png)
+<br />
 
-<h3 align="center"><a href="https://docs.tomoribot.app/pt-BR/features/integrations/sillytavern-support/">Integração com SillyTavern (Beta)</a></h3>
-<p align="center">Use suas predefinições favoritas do SillyTavern diretamente no Discord através da TomoriBot, que ajusta totalmente seu prompt, basta jogar o .json no <code>st-preset</code>. Os novos grupos de caixas de seleção nativos do Discord para modais facilitam a ativação e desativação de nós, como no SillyTavern. Você também pode importar cards de personagem do SillyTavern diretamente através do <code>/persona import</code> ou pode modificá-los antes com o <code>/persona generate</code>.</p>
-
-![Screenshots 5](../assets/img/scs/5.png)
+![Screenshots 5](../assets/img/scs/5-features.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/pt-BR/features/">Muitos Outros Recursos, e Contando!</a></h3>
-<p align="center">Uma série de recursos divertidos que são fáceis de configurar, variando de saudações automáticas práticas para novos membros do servidor e movimento entre canais, a recursos engraçados como imitações de usuários para algumas trollagens. Novos recursos estão constantemente em desenvolvimento, então por favor reporte através das issues do GitHub ou no Discord oficial para relatar bugs (ou compartilhar sugestões divertidas).</p>
-
-## Recursos Úteis
-
-- [Lista Completa de Provedores Suportados](https://docs.tomoribot.app/pt-BR/features/setup-administration/providers-and-models/#provedores-suportados)
-- [Como Rodar Modelos Locais](https://docs.tomoribot.app/pt-BR/self-hosting/local-endpoints/)
-- [Segurança & Modelos de Ameaça](https://docs.tomoribot.app/en/wiki/threat-models/)
-- [Roteiro (Roadmap) Oficial da TomoriBot](https://github.com/users/Bredrumb/projects/1/views/1)
-- [Macros de Ferramenta para Personalização de Prompt](https://docs.tomoribot.app/pt-BR/features/capabilities/tools-and-extensions/)
+<p align="center">Uma série de recursos divertidos que vão desde saudações automáticas práticas para novos membros do servidor e chat de voz, até elementos de role-play como rolagem de dados e ações. Novos recursos estão constantemente em desenvolvimento, então por favor reporte através das issues do GitHub ou no Discord oficial para relatar bugs (ou compartilhar sugestões divertidas).</p>
 
 <!-- GETTING STARTED -->
+# Como Começar
+
+Você pode [convidar a TomoriBot pública](https://discord.com/oauth2/authorize?client_id=841644102059556915) para o seu servidor do Discord agora mesmo por conveniência, ou [hospedar sua própria instância](#hospedagem-própria) se preferir controle total sobre sua privacidade e chaves de API. A TomoriBot usa as melhores práticas de segurança e criptografia para manter os dados seguros, mas a hospedagem própria garante que todos os dados permaneçam inteiramente no seu dispositivo:
+
 ## Hospedagem Própria
 
-Escolha um caminho de instalação:
-
-- **A. Configuração Local com Bun (Recomendado):** requer Bun e PostgreSQL ou Docker para o banco de dados.
-- **B. Configuração com Docker Compose:** requer apenas o Docker para rodar o bot/banco de dados, mas scripts de manutenção do lado do host ainda precisam de ferramentas no host.
-
-O caminho recomendado para a maioria dos auto-hospedeiros é o assistente de configuração local com Bun. O caminho padrão de **Full Install** cria `.env`, gera um `CRYPTO_SECRET` seguro, pede o token do seu bot do Discord, configura o PostgreSQL, roda `bun install --frozen-lockfile` e, em seguida, tenta instalar o banco de dados leve e extras de auxiliares de IA.
-
-### A. Configuração Local com Bun
-
-1. **Clone o repositório**
+1. **Pré-requisitos:**
+   - [Bun](https://bun.sh/) v1.3.2+ (v1.4.0+ recomendado)
+   - [PostgreSQL](https://www.postgresql.org/) ou [Docker](https://www.docker.com/) (o assistente de configuração usa uma instalação existente do PostgreSQL ou inicia uma no Docker)`
+   - Um [token de bot do Discord](https://discord.com/developers/applications) com `Presence Intent`, `Server Members Intent` e `Message Content Intent` ativados
+2. **Execute o assistente de configuração:**
    ```sh
    git clone https://github.com/Bredrumb/TomoriBot.git
    cd TomoriBot
+   bun run setup # instala dependências, configura o .env e prepara o PostgreSQL
+   bun run dev # inicia o bot e executa as migrações do banco de dados automaticamente
    ```
 
-2. **Rode o assistente de configuração** (mais informações no **[Guia do Assistente de Configuração](https://docs.tomoribot.app/pt-BR/self-hosting/setup-wizard/)**)
-   ```sh
-   bun run setup
-   ```
-
-3. **Inicie a TomoriBot**
-    ```sh
-    bun run dev
-    ```
-
-Assim que você vir `TomoriBot up and running!`, execute `/setup` no Discord.
-
-### B. Configuração com Docker Compose
-
-O Docker Compose compila e executa a TomoriBot junto com o PostgreSQL. Ele não usa o assistente de configuração.
-
-**Variáveis `.env` obrigatórias para Docker Compose:**
-- `DISCORD_TOKEN` - Token do seu bot do Discord
-- `CRYPTO_SECRET` - Chave de criptografia de 32 caracteres
-- `POSTGRES_PASSWORD` - Senha do banco de dados (outras configurações do DB são autoconfiguradas)
-
-Para o Docker Compose, inicie a partir do `.env.example`, depois adicione a `POSTGRES_PASSWORD` se você ainda não a configurou. Valores opcionais para ajustes do Docker ou do runtime ainda podem ser copiados de `.env.optional.example`.
-
-```sh
-# Compilar e iniciar a TomoriBot e o seu banco de dados
-docker compose up --build
-```
-
-Para inicializações posteriores, `docker compose up` é o suficiente a menos que você tenha alterado código ou dependências.
-
-### C. Servidores Locais Opcionais
-
-A TomoriBot suporta servidores locais opcionais (opt-in) juntamente com qualquer um dos caminhos de instalação para aprimorar suas ferramentas e adicionar monitoramento local: SearXNG para busca web, Crawl4AI para busca em páginas renderizadas via navegador, e servidores locais de voz TTS/STT.
-
-**Com a configuração local com Bun (A)**, use `bun run launch` em vez de `bun run dev`, exemplos de execução:
-
-```sh
-# Com os contêineres Docker do SearXNG e Crawl4AI
-bun run launch --searxng --crawl4ai
-
-# Com um servidor local TTS após seguir a documentação de configuração de voz
-bun run launch --qwen3tts
-bun run launch --voxcpm2
-bun run launch --cosyvoice3
-
-# Ver todas as flags disponíveis
-bun run launch --help
-```
-
-Flags disponíveis: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--voxcpm2`, `--fishs2`, `--cosyvoice3`, `--moss`, `--whisperx`, `--help`
-
-**Ctrl+C** interrompe o bot e quaisquer processos de servidor em Python. Os contêineres Docker (`--searxng`, `--crawl4ai`) são deixados intencionalmente em execução; pare-os manualmente com `docker stop searxng` / `docker stop crawl4ai` quando terminar.
-
-**Com Docker Compose (B)**, os servidores locais são habilitados via perfis no Compose:
-
-```sh
-# + SearXNG busca web (metabusca de hospedagem própria)
-docker compose --profile searxng up
-
-# + Crawl4AI busca de página renderizada em navegador
-docker compose --profile fetch-crawl4ai up
-
-# + Ambos de uma vez
-docker compose --profile searxng --profile fetch-crawl4ai up
-```
-
-Consulte os guias abaixo para detalhes completos de configuração:
-
-- **[Busca Web SearXNG](https://docs.tomoribot.app/pt-BR/self-hosting/local-endpoints/setup-searxng/)** - Uma instância de metabusca de hospedagem própria para contornar limites de API de mecanismo único para a ferramenta `web_search`.
-- **[Crawl4AI](https://docs.tomoribot.app/pt-BR/self-hosting/local-endpoints/setup-crawl4ai/)** - Um servidor de renderização de navegador para buscar e processar páginas da web com muito JavaScript para a ferramenta `fetch_url`.
-- **[Text-to-Speech](https://docs.tomoribot.app/pt-BR/self-hosting/local-endpoints/text-to-speech/)** / **[Speech-to-Text](https://docs.tomoribot.app/pt-BR/self-hosting/local-endpoints/speech-to-text/)** - Servidores de voz Python para as mensagens de voz da TomoriBot; o venv deles deve ser configurado uma vez com antecedência.
-
-### Atualizando a TomoriBot
-
-Para atualizar sua instância de hospedagem própria para a versão mais recente, pare o bot primeiro (para que o backup e quaisquer migrações rodem contra um banco de dados inativo), depois rode o atualizador com prioridade de backup:
-
-```sh
-bun run update
-```
-
-O comando roda esta sequência, parando imediatamente se qualquer etapa falhar:
-
-1. **`bun run backup`** - tira um backup completo do banco de dados na pasta `/backups/` *antes* de mexer em qualquer código. Se o backup falhar, a atualização é abortada deixando sua implantação completamente inalterada.
-2. **`git pull --rebase --autostash`**
-3. **`bun install --frozen-lockfile`**
-
-Em seguida, reinicie a TomoriBot com `bun run dev` ou `bun run launch`
-
-Flags úteis:
-
-| Flag | Efeito |
-|---|---|
-| `--build` | Também roda `bun run build` após a instalação de dependências |
-| `--docker` | Caminho Docker Compose: substitui a etapa 3 por `docker compose build` + `docker compose up -d` |
-| `--skip-backup` | Ignora o backup pré-atualização (não recomendado) |
-| `--yes` | Pula o prompt de confirmação antes de iniciar |
-
-Veja a **[Documentação de Manutenção](https://docs.tomoribot.app/pt-BR/features/command-reference/)** completa para mais detalhes sobre todos os scripts do lado do host.
+Para mais detalhes ou se tiver problemas com as etapas acima, consulte a [documentação de hospedagem própria](https://docs.tomoribot.app/pt-BR/self-hosting/) completa.
 
 <!-- AFTER SETUP -->
 ### Após Convidar / Configuração
-
-#### Comandos Básicos
-
-- `/setup` - Configuração inicial do bot para o seu servidor
-- `/config` - Várias maneiras de ajustar a TomoriBot
-- `/personal memories` - Gerencie suas memórias pessoais
-- `/memories` - Gerencie memórias do servidor, documentos e memória de curto prazo
-- `/moderation` - Gerencie o acesso dos membros, a lista de bloqueio de usuários, e as restrições de canais, personas e cargos
-
-Consulte a **[Referência de Comandos](https://docs.tomoribot.app/pt-BR/features/command-reference/)** completa para todos os comandos slash.
-
-#### Interação no Chat
 
 Simplesmente mencione o bot em um servidor ou use as palavras-gatilho configuradas para iniciar uma conversa:
 ```
@@ -256,41 +122,68 @@ Simplesmente mencione o bot em um servidor ou use as palavras-gatilho configurad
 
 Ou mande uma mensagem direta (DM) para a TomoriBot e diga oi!
 
-<!-- CONTRIBUTING -->
-## Contribuindo
+#### Comandos Básicos
 
-Contribuições para a TomoriBot são muito apreciadas! Revise os recursos a seguir antes de abrir um pull request:
+- `/setup` - Configuração inicial do bot para o seu servidor
+- `/config` e `/personal config` - Várias maneiras de ajustar a TomoriBot no servidor atual do Discord ou para você
+- `/providers` e `/personal providers` - Adicione mais endpoints de modelos ou provedores em nuvem
+- `/persona` - Dê a ela uma personalidade ou adicione novos personagens (veja [Múltiplas Personas](https://docs.tomoribot.app/pt-BR/features/chatting-personality/multiple-personas/))
+- `/memories` - Ensine fatos a ela através de conversas (veja [Memória](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/))
 
-- **[Documentação de Contribuição](https://docs.tomoribot.app/en/contributing/)**: Guias passo a passo completos para adicionar comandos slash, ferramentas, manipuladores de eventos, novos provedores de IA e idiomas.
-- **[Diretrizes de Contribuição](CONTRIBUTING.md)**: Regras do repositório cobrindo a criação de ramificações (branching), verificações de qualidade e o escopo das contribuições bem-vindas sem discussão prévia.
+Consulte a [referência de comandos](https://docs.tomoribot.app/pt-BR/features/command-reference/) completa para todos os comandos slash.
 
-<!-- LEGAL -->
-## Legal & Licença
 
-### Para usuários da instância oficial hospedada da TomoriBot
-- **[Termos de Serviço](https://docs.tomoribot.app/pt-BR/legal/terms-of-service/)** - Regras e diretrizes para o uso do bot
-- **[Política de Privacidade](https://docs.tomoribot.app/pt-BR/legal/privacy-policy/)** - Como lidamos com seus dados
+## Agradecimentos
 
-Esses documentos também estão acessíveis dentro do Discord usando os comandos `/legal terms-of-service` e `/legal privacy-policy`.
+Um enorme agradecimento a todos, *especialmente* às seguintes pessoas queridas por suas contribuições significativas e conselhos que ajudaram muito a aprimorar a TomoriBot!
 
-### Para usuários de hospedagem própria ou que usam forks
-Você controla seus próprios dados e é responsável pela conformidade da sua implantação sob a [**GNU Affero General Public License v3.0**](https://github.com/Bredrumb/TomoriBot/blob/main/LICENSE).
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/Bredrumb" title="Bredrumb: Creator, maintainer, and code contributions">
+        <img src="https://avatars.githubusercontent.com/u/65227425?s=128" width="64" height="64" alt="Bredrumb: Creator, maintainer, and code contributions"><br>
+        Bredrumb
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/palinalif" title="palinalif: Code contributions">
+        <img src="https://avatars.githubusercontent.com/u/31247276?s=128" width="64" height="64" alt="palinalif: Code contributions"><br>
+        palinalif
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/baetican" title="baetican: Code contributions">
+        <img src="https://avatars.githubusercontent.com/u/280696164?s=128" width="64" height="64" alt="baetican: Code contributions"><br>
+        baetican
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/struffl" title="struffl: Software design and technical guidance">
+        <img src="https://avatars.githubusercontent.com/u/1026348?s=128" width="64" height="64" alt="struffl: Software design and technical guidance"><br>
+        struffl
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/Rhapsody-Sky" title="Rhapsody-Sky: Software design and technical guidance">
+        <img src="https://avatars.githubusercontent.com/u/8095300?s=128" width="64" height="64" alt="Rhapsody-Sky: Software design and technical guidance"><br>
+        Rhapsody-Sky
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/aph31" title="aph31: Code contributions">
+        <img src="https://avatars.githubusercontent.com/u/251111747?s=128" width="64" height="64" alt="aph31: Code contributions"><br>
+        aph31
+      </a>
+    </td>
+  </tr>
+</table>
 
-<!-- CONTACT -->
-## Contato & Links
+## Licença
+Este projeto está licenciado sob [AGPLv3](../LICENSE).
 
-**Site Oficial**: [https://tomoribot.app](https://tomoribot.app/)
+---
 
-**Link do Projeto**: [https://github.com/Bredrumb/TomoriBot](https://github.com/Bredrumb/TomoriBot)
-
-**Email**: bredrumb@gmail.com
-
-**Discord**: [Servidor Oficial de Suporte](https://discord.gg/bjCfHm9QsB)
-
-<!-- SUPPORT -->
-## Apoie o Projeto
-
-Se você achar a TomoriBot útil e quiser apoiar o seu desenvolvimento contínuo, considere deixar uma ⭐ no GitHub ou apoiar via Ko-fi!
+Se você achou a TomoriBot útil (e/ou divertida), considere deixar uma ⭐ no repositório ou apoiar o desenvolvimento pelo Ko-fi ou Patreon!
 
 <p align="left">
 
@@ -298,7 +191,12 @@ Se você achar a TomoriBot útil e quiser apoiar o seu desenvolvimento contínuo
   <a href="https://ko-fi.com/bredrumb">
     <img src="https://img.shields.io/badge/Support_on_Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Support on Ko-fi">
   </a>
+  &nbsp;
+  <a href="https://www.patreon.com/cw/tomoribot">
+    <img src="https://img.shields.io/badge/Support_on_Patreon-FF424D?style=for-the-badge&logo=patreon&logoColor=white" alt="Support on Patreon">
+  </a>
 </p>
+
 
 <!-- MARKDOWN LINKS & IMAGES -->
 [TypeScript.js]: https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white

@@ -3,13 +3,25 @@ import type { PersonaUserBlockRow, PersonaUserBlockType } from "@/types/db/schem
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { invalidatePersonaUserBlockCache } from "@/utils/cache/personaUserBlockCache";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { resolveUserTarget } from "@/utils/discord/targetResolver";
 import { personaUserBlockRepository } from "@/utils/db/repositories";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
+import { isMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserId";
 
 /** One week, the ceiling a persona may block a user for in a single tool call. */
+const BLOCK_TYPE_KEYS: Record<PersonaUserBlockType, string> = {
+  mute: "tools.user_block.type_mute",
+  block: "tools.user_block.type_block",
+};
+
+const BLOCK_EFFECT_KEYS: Record<PersonaUserBlockType, string> = {
+  mute: "tools.user_block.effect_mute",
+  block: "tools.user_block.effect_block",
+};
+
 export const DEFAULT_BLOCK_USER_MAX_DURATION_HOURS = 168;
 
 export type ParsedBlockUserArgs =
@@ -148,7 +160,7 @@ export async function resolveDiscordBlockTarget(input: string, context: ToolCont
     };
   }
 
-  if (resolution.isBridgeUser) {
+  if (resolution.isBridgeUser || isMessageProxyIdentityUserId(resolution.targetId)) {
     return {
       ok: false,
       status: "user_block_failed_bridge_user",
@@ -223,11 +235,11 @@ function formatExpiry(expiresAt: Date, timezoneOffset: number, locale: string): 
 }
 
 export function getBlockTypeLabel(locale: string, blockType: PersonaUserBlockType): string {
-  return localizer(locale, `tools.user_block.type_${blockType}`);
+  return localizer(locale, BLOCK_TYPE_KEYS[blockType]);
 }
 
 export function getBlockEffectText(locale: string, blockType: PersonaUserBlockType): string {
-  return localizer(locale, `tools.user_block.effect_${blockType}`);
+  return localizer(locale, BLOCK_EFFECT_KEYS[blockType]);
 }
 
 export async function sendUserBlockedEmbed(params: {
@@ -272,11 +284,7 @@ export async function sendUserBlockedEmbed(params: {
       footerKey: "tools.user_block.block_footer",
       color: params.blockType === "mute" ? ColorCode.WARN : ColorCode.ERROR,
     },
-    {
-      webhook: params.context.webhook,
-      personaUsername: params.context.personaUsername,
-      personaAvatarUrl: params.context.personaAvatarUrl,
-    },
+    buildToolPersonaPostContext(params.context, params.context.tomoriState),
   );
 }
 
@@ -312,11 +320,7 @@ export async function sendUserUnblockedEmbed(params: {
       },
       color: ColorCode.SUCCESS,
     },
-    {
-      webhook: params.context.webhook,
-      personaUsername: params.context.personaUsername,
-      personaAvatarUrl: params.context.personaAvatarUrl,
-    },
+    buildToolPersonaPostContext(params.context, params.context.tomoriState),
   );
 }
 

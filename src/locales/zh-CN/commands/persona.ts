@@ -72,16 +72,12 @@ export default {
     },
     name_conflict_title: `🔴 人格名称冲突`,
     name_conflict_description: `这个服务器上已经有一个叫 **{name}** 的人格了。同一个服务器内人格名称不能重复。`,
+    name_too_long_title: `人格名称过长`,
+    name_too_long_description: `第一个名称会用作我的显示名称，最多 {max} 个字符。请缩短后重试。`,
     export: {
+      persona_description: "要导出的人格",
+      export_json_description: "导出可导入的JSON文件，代替PNG（不含头像）",
       description: `把当前人格导出成可分享的 PNG 文件`,
-      export_json_select_label: `导出 JSON`,
-      export_json_select_description: `可选：改而导出可导入的 JSON 文件（不含头像图片）`,
-      persona_modal_title: `选择人格`,
-      persona_select_label: `人格`,
-      persona_select_description: `选择要导出哪个人格。`,
-      persona_select_placeholder: `选择人格…`,
-      main_persona_description: `主人格`,
-      alter_persona_description: `副人格`,
       success_title: `🟢 人格导出成功`,
       success_description: `当前人格 **{nickname}** 已导出！把这张 PNG 文件分享给别人，就能传播这份人格配置。`,
       success_description_json: `当前人格 **{nickname}** 已导出为 JSON 文件。
@@ -176,6 +172,7 @@ export default {
       error_invalid_config: `人格数据里的配置字段无效`,
       error_no_server_data: `数据库里找不到这个服务器。请先运行 \`/setup\`。`,
       error_name_conflict: `这个服务器上已经有一个叫 **{name}** 的人格了。请换一个名称。`,
+      error_nickname_too_long: `这个人格的名称超过了服务器昵称上限 {max} 个字符。请在文件里缩短名称后重新导入。`,
       error_nsfw_persona: `这个人格被标记为 NSFW，所以 \`/persona import\` 无法加载它。请改用 \`/nsfw persona import\`。`,
       error_import_failed: `人格数据导入失败`,
       error_not_json: `导入的文件必须包含有效的 JSON 数据`,
@@ -186,12 +183,10 @@ export default {
       refresh_reminder: `运行 \`/refresh\` 让这次人格更新在这个聊天里生效`,
     },
     remove: {
+      persona_description: "要移除的副人格",
       description: `从服务器移除一个副人格`,
       no_permission_title: `🔴 权限不足`,
       no_permission_description: `移除副人格需要**管理服务器**权限。`,
-      modal_title: `移除副人格`,
-      select_label: `副人格`,
-      select_placeholder: `选择要移除的副人格…`,
       no_alters_error_title: `🟡 没有副人格`,
       no_alters_error_description: `没有可移除的副人格。请用 \`/persona import type:alter\` 导入副人格。`,
       success_title: `🟢 副人格已移除`,
@@ -231,7 +226,7 @@ export default {
       modal: {
         title: `生成 AI 人格`,
         character_name_label: `角色名称`,
-        character_name_description: `名称用逗号分隔（"," 或 "、"）：全部都会成为触发词，第一个作为显示名称。`,
+        character_name_description: `名称用逗号分隔（"," 或 "、"）：全部都会成为触发词，第一个是显示名称（最多 32 个字符）。`,
         character_name_placeholder: `例如：初音未来, Miku, 初音ミク`,
         character_info_label: `角色信息与说话示例`,
         character_info_description: `描述这个角色以及她说话的方式`,
@@ -252,8 +247,6 @@ export default {
       field_additional_inst: `附加指令`,
       wrong_provider_title: `🔴 提供方不兼容`,
       wrong_provider_description: `生成预设集需要兼容的提供方。你当前的提供方是 **{current_provider}**。请到 \`/config\` > 模型 > 切换模型 换成受支持的提供方。`,
-      no_api_key_title: `🔴 没有 API 密钥`,
-      no_api_key_description: `还没有配置可用的提供方。请用 \`/setup\`（首次）或 \`/providers\` 注册一个。`,
       model_incompatible_title: `模型不兼容`,
       model_incompatible_description: `你当前的模型（**{model_name}**）不支持 **STRUCTURED OUTPUT**，而生成人格需要这项能力。
 
@@ -272,8 +265,11 @@ export default {
 **接下来可以这样做：**
 1. 到 \`/config\` > 模型 > 切换模型，换成支持工具的模型，或者
 2. 去掉网络搜索重新生成（被问到时选「否」）`,
-      api_key_decrypt_failed_title: `🔴 API 密钥错误`,
-      api_key_decrypt_failed_description: `无法解密当前提供方的凭据。请用 \`/providers\` 重新配置。`,
+      web_search_failed_title: `已中止人格生成`,
+      web_search_failed_description: `因请求的网络搜索失败，人格生成已中止。
+
+**你可以做的事情**
+稍后重试，或在「是否搜索网络？」中选择「否」直接根据你的描述生成。如果搜索持续失败，请让服务器管理员在 \`/config\` 中检查网络搜索设置，并在 \`/providers\` 中检查提供方访问权限。`,
       vision_credentials_unavailable_title: `🔴 视觉模型的凭据不可用`,
       vision_credentials_unavailable_description: `你的视觉模型（**{vision_model_name}**）运行在提供方 **{vision_provider}** 上，但无法用它的 API 密钥描述图片。请用 \`/providers\` 重新配置那个提供方的凭据，或到 \`/config\` > 模型 检查一下。`,
       invalid_image_title: `🔴 图像无效`,
@@ -282,11 +278,8 @@ export default {
       error_download_timeout: `头像下载超时，请重试。`,
       error_download_failed: `头像图片下载失败。`,
       processing_title: `正在生成人格……`,
-      processing_description: `这可能需要 1-2 分钟。请稍等，我正在生成角色……
-
-结果可能不符合预期，需要的话可以重新生成。`,
-      captioning_title: `正在描述你的头像...`,
-      captioning_description: `你的主模型无法识别图片，所以我会先请视觉模型（**{model_name}**）描述你上传的头像。然后主模型会根据这段描述来生成人格。这可能需要 1-2 分钟。`,
+      processing_description: `这可能需要 1-2 分钟。请稍等，我正在生成角色……`,
+      processing_footer: `这可能会产生意料之外的结果。如有需要，你可以重新生成。`,
       generation_failed_title: `🔴 生成失败`,
       generation_failed_description: `人格生成失败：{error}
 
@@ -327,7 +320,7 @@ export default {
       modal: {
         title: `创建新人格`,
         character_name_label: `角色名称`,
-        character_name_description: `名称用逗号分隔（"," 或 "、"）：全部都会成为触发词，第一个作为显示名称。`,
+        character_name_description: `名称用逗号分隔（"," 或 "、"）：全部都会成为触发词，第一个是显示名称（最多 32 个字符）。`,
         character_name_placeholder: `例如：初音未来, Miku, 初音ミク`,
         character_desc_label: `角色描述`,
         character_desc_placeholder: `描述你的角色（性格、外貌、背景故事等）`,

@@ -1,7 +1,24 @@
 export default {
   tools: {
+    media: {
+      delivery_failed: "Discordはメディアを送信できませんでした。送信成功は記録されていません。",
+      delivery_unconfirmed:
+        "Discordはメディアが投稿されたか確認できませんでした。このターンを終了し、再生成や再投稿の前にチャンネルを確認してください。再試行すると重複する可能性があります。",
+    },
+    roll_dice: {
+      missing_permissions:
+        "ダイスロールを投稿するには、このチャンネルの閲覧、メッセージの送信、埋め込みリンクの権限が必要です。",
+      disabled: "ダイスロールは無効化されています。`/config` > プラグイン > 利用可能なツールから有効化してください。",
+      cancelled: "ダイスロールは送信前にキャンセルされました。",
+      delivery_failed: "ダイスの結果を投稿できませんでした。ロールは送信されませんでした。",
+    },
     execution: {
       unavailable: `ツール \`{tool}\` は、現在の設定、モデルの機能、またはBotの権限では利用できません。`,
+    },
+    generate_voice_message: {
+      persona_missing: `このペルソナはもう利用できません。`,
+      stale: `このターンの間に音声モデル、認証情報、またはペルソナの声が変更されました。ボイスメッセージを生成する前に新しいターンを始めてください。`,
+      script_too_long: `このボイスデザインモデルに対してセリフが長すぎます。セリフを短くして、もう一度お試しください。`,
     },
     generate_image: {
       quota_exceeded_generic: `画像生成クォータを超過しました。`,
@@ -70,6 +87,25 @@ export default {
       unmute_success_title: `🔊 {persona_name} が {user_name} のミュートを解除しました`,
       unblock_success_title: `✅ {persona_name} が {user_name} のブロックを解除しました`,
       unblock_success_description: `{user_name} に対する {persona_name} の有効な {block_type} を解除しました。`,
+    },
+    danbooru: {
+      tags_title: `🏷️  Danbooruタグ検索`,
+      tag_line_resolved: `\`{query}\` → \`{tag}\` ({category}、{post_count}件の投稿)`,
+      tag_line_exact: `\`{tag}\` ({category}、{post_count}件の投稿)`,
+      tag_line_not_found: `\`{query}\`：見つかりませんでした`,
+      signature_heading: `**{tag}** の代表的なタグ`,
+      outfits_line: `衣装：{outfits}`,
+      cosplay_line: `コスプレ：\`{tag}\` ({post_count}件の投稿)`,
+      category_general: `一般`,
+      category_character: `キャラクター`,
+      category_copyright: `作品名`,
+      category_artist: `絵師`,
+      category_meta: `メタ`,
+      post_title: `🖼️  Danbooru投稿 #{id} を読み込み中`,
+      post_description: `{url}`,
+      gallery_footer: `Danbooru：{query}`,
+      gallery_resolved_tag: `\`{typed}\` → \`{tag}\``,
+      gallery_post_link: `[#{id}]({url})`,
     },
     user_info_update: {
       success_title: `✅ {target_user} のプロフィールを更新しました`,
@@ -170,6 +206,7 @@ export default {
     },
     intent_packs: {
       deliberate: {
+        dice: ["サイコロ", "ダイス", "振って"],
         image: [
           "画像",
           "イラスト",

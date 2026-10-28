@@ -58,6 +58,11 @@ As memórias persistem até que você as remova.
 
 Em servidores novos, o acesso de membros não gerentes para criar, editar ou remover memórias compartilhadas do servidor está desabilitado por padrão. Membros com permissão `Gerenciar Servidor` mantêm acesso o tempo todo, e gerentes podem habilitar o acesso para outros membros através de `/moderation` Acesso de Membros.
 
+### Identidades de Proxy de Mensagens
+
+Ao ativar um serviço de proxy de mensagens compatível, a TomoriBot pode manter memórias pessoais para cada identidade de proxy verificada de forma independente da conta do Discord que enviou a mensagem. A conta hospedeira continua controlando privacidade, bloqueios, tempos de recarga e autorização. A TomoriBot nunca adivinha uma identidade a partir do nome ou avatar de um webhook, e um webhook não verificado não recebe um perfil de memória separado.
+
+Atualmente, o PluralKit é o único serviço selecionável. Consulte [Suporte a Proxy de Mensagens](/pt-BR/features/integrations/message-proxy-support/) para ver detalhes de configuração e limitações.
 
 ### Como as Memórias São Salvas
 
@@ -113,9 +118,11 @@ e fragmentos ao vivo, uploads, navegação de documentos e remoção:
 
 - Envie arquivos de texto, PDF ou Markdown como conhecimento do servidor. O escopo define se ele é
   vinculado apenas a esta persona (o padrão) ou ao servidor inteiro para que todas as personas possam referenciá-lo.
-- `/learn history`: extrai o histórico do canal em conhecimento pesquisável.
-- Navegue pelos documentos armazenados fragmento por fragmento. Administradores do servidor podem editar fragmentos individuais, atualizar
-  tags de canal dos documentos ou excluir um único fragmento sem remover o documento inteiro.
+- `/learn history`: extrai o histórico do canal em conhecimento pesquisável. A opção `learner` escolhe quem
+  aprende: uma persona (deixe em branco para a persona principal), **Automático** (cada persona que falou
+  recebe sua própria cópia) ou **Global** (todas as personas compartilham).
+- Navegue pelos documentos armazenados fragmento por fragmento. Administradores do servidor podem editar fragmentos individuais, alterar
+  a quais canais um documento é limitado ou excluir um único fragmento sem remover o documento inteiro.
 - Remova documentos armazenados ou fragmentos individuais diretamente do painel.
 
 #### Prompts de Importação de Histórico
@@ -125,7 +132,7 @@ memórias:
 
 - Conversa extrai fatos isolados de chats normais. Ele resolve pronomes e usa timestamps absolutos quando datas ou horários são mencionados ou podem ser inferidos.
 - Roleplay procura cenas, lore, relacionamentos e eventos memoráveis sem tentar preservar cada pequeno detalhe.
-- In-Character extrai memórias do ponto de vista da persona selecionada, usando o prompt, atributos, memórias existentes e documentos relevantes dessa persona como contexto.
+- In-Character precisa de uma persona em `learner`. Extrai memórias do ponto de vista dessa persona, usando o prompt, atributos, memórias existentes e documentos relevantes dessa persona como contexto.
 
 O prompt é exibido antes da importação para que você possa ajustá-lo para o canal ou cena.
 
@@ -138,8 +145,15 @@ Importações de histórico são armazenadas como documentos, então `/memories`
 longo do tempo. Um empurrãozinho mais leve do que um atributo completo ou prompt de sistema. Use para reforçar
 como um personagem específico deve agir em um servidor específico.
 
-Cada `/reward` ou `/punish` é contabilizado independentemente, mas só
-se torna uma memória sobre a qual ela realmente age quando você fornece uma `reason`, que aparece assim no prompt dela:
+Use a opção `user` de `/reward` ou `/punish` para enviar um embed de brincadeira com esse usuário como alvo.
+Escolha `user` ou `persona`, apenas um por vez. Interações com usuários não salvam condicionamento nem geram
+respostas da IA, mesmo com uma `reason`; o rodapé "vai se lembrar disso" é só uma brincadeira.
+Tanto para usuários quanto para personas, o motivo aparece em itálico na frase da ação.
+
+Ative `Interações divertidas` em `/config` > `Plugins` > `Ferramentas Disponíveis` para permitir que personas façam gestos deliberados para usuários ou outras personas. A opção vem ativada por padrão e pode ser desativada nesse mesmo menu. Cada gesto precisa de alvo, ação e motivo; alimentar também exige informar a comida. Usuários recebem um embed de brincadeira. Personas recebem condicionamento e entram na fila para reagir quando a persona atual terminar de falar. A persona que reage não pode usar essa ferramenta durante a resposta. Tanto a ferramenta quanto os comandos de barra variam os títulos traduzidos.
+
+Cada `/reward` ou `/punish` direcionado a uma persona é contabilizado, mas só se torna uma memória
+sobre a qual ela realmente age quando você fornece uma `reason`, que aparece assim no prompt dela:
 
 ```text
 ## Rewarded Behaviors
@@ -170,12 +184,19 @@ uma palavra-chave ou apenas em um canal. Ative com `/config` > Engine > Memory &
   contexto visível.
 - Use `/tool prompt snapshot` para ver quais memórias estão ativando no momento.
 
-### Tags de Canal
+### Canais
 
-- Memórias com uma tag `#canal` são ativadas apenas naquele canal.
-- Tags de canal se combinam com tags de palavra-chave.
-- Se você usa a base de conhecimento de documentos (RAG), tags de canal também se aplicam a documentos e
-  históricos extraídos.
+- Uma memória do servidor pode ser limitada aos canais que você escolher em seu formulário de adição ou edição. Ela é
+  ativada apenas nesses canais e em suas threads. Deixe a seleção vazia para todos os canais.
+- Uma memória pessoal usa uma tag `#canal` em vez disso, ativando-a apenas naquele canal.
+- Limites de canais combinam com tags de palavra-chave. Em memórias do servidor, uma tag iniciada com `#` é uma
+  palavra-chave comum.
+- Memórias do servidor e documentos que usavam tags `#canal` antigas foram convertidos em canais
+  automaticamente. Se uma tag antiga indicava um canal que não existe mais, o item permanece ativo em
+  todos os canais e `/memories` informa isso; edite-o e escolha os canais para limitá-lo novamente.
+- Se você usa a base de conhecimento de documentos (RAG), documentos e históricos extraídos podem ser
+  limitados a canais da mesma forma. Com `/learn history`, escolha os canais na janela que abre
+  antes de a extração começar.
 
 Em `/help`, escolha `Memória`, depois `Marcação de Memória`, para o mesmo resumo no Discord.
 
@@ -225,8 +246,8 @@ Qualquer pessoa pode executar `/config` > Persona > Memories, `/personal config`
 
 ### Configuração da STM
 
-Gerentes do workspace podem ajustar a memória de curto prazo em `/config` → `Comportamento` → Memory & STM.
-Essas configurações se aplicam aos registros de STM ativos do workspace:
+Administradores do servidor podem ajustar a memória de curto prazo em `/config` → `Comportamento` → Memory & STM.
+Essas configurações se aplicam aos registros de STM ativos do servidor:
 
 - Frequência de atualização controla quantos turnos do bot passam entre os empurrões de atualização. O intervalo permitido é 1-100.
 - Modo de renderização escolhe se os valores das categorias substituem os turnos recentes ou aparecem como um resumo bruto.

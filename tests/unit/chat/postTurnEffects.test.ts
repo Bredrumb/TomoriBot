@@ -1,12 +1,15 @@
 import { beforeAll, describe, expect, it, mock } from "bun:test";
+import { REST } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type { ChatIncoming, ChatTurn, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import { runPostTurnEffects, shouldRetryEmptyResponse } from "@/utils/chat/postTurnEffects";
 import { recordReunionPresence, resolveReunionNote, type ReunionPresenceStore } from "@/utils/chat/reunionPresence";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
 import { localizedCopy } from "../../helpers/localeCases";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 import { ColorCode } from "@/utils/misc/logger";
+import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 
 const emptyResponseResult: GenerationTurnResult = {
   status: "empty_response",
@@ -32,6 +35,7 @@ function makeContext(options: {
   const channel = {
     id: `channel_${options.shouldSurfaceUserErrors ? "deliberate" : "passive"}`,
     send,
+    client: { rest: new REST() },
     isThread: () => false,
   };
   const message = {
@@ -53,12 +57,10 @@ function makeContext(options: {
     isUserImpersonation: options.isUserImpersonation ?? false,
     textQuotaSource: "user",
   } as unknown as ChatIncoming;
-  const tomoriState = {
-    config: {
-      thought_log_channel_disc_id: null,
-      private_channel_ids: [],
-    },
-  };
+  const tomoriState = createPersona({
+    llm: createLlmRow(),
+    config: { thought_log_channel_disc_id: null, private_channel_ids: [] },
+  });
 
   return {
     context: {
@@ -83,6 +85,7 @@ function makeContext(options: {
       isStopResponse: false,
       isDMChannel: false,
       reunionPresence: null,
+      streamingContext: {},
     } as unknown as ChatTurnContext,
     send,
   };
@@ -118,7 +121,11 @@ describe("empty-response post-turn handling", () => {
     expect(payload?.embeds?.[0]?.toJSON().title).toBe(
       localizedStatusTitle("en-US", "genai.empty_response_title", ColorCode.WARN),
     );
-    expect(payload?.embeds?.[0]?.toJSON().footer).toBeUndefined();
+    expect(payload?.embeds?.[0]?.toJSON().footer?.text).toBe(
+      localizedCopy("en-US", "genai.stream.error_footer_server_provider", {
+        provider: getProviderDisplayName(context.tomoriState.llm.llm_provider),
+      }),
+    );
     expect(payload?.components?.length).toBeGreaterThan(0);
     expect(payload?.components?.[0]?.components?.[0]?.data?.label).toBe(localizedCopy("en-US", "genai.tips.button"));
   });

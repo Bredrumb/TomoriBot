@@ -72,16 +72,12 @@ export default {
     },
     name_conflict_title: `🔴 Conflicto de nombre de persona`,
     name_conflict_description: `Ya existe una persona llamada **{name}** en este servidor. Los nombres deben ser únicos en el servidor.`,
+    name_too_long_title: `Nombre de persona demasiado largo`,
+    name_too_long_description: `El primer nombre se usa como mi nombre para mostrar, que puede tener como máximo {max} caracteres. Acórtalo y vuelve a intentarlo.`,
     export: {
+      persona_description: "Persona que quieres exportar",
+      export_json_description: "Exporta un archivo JSON importable en lugar de un PNG (sin imagen de avatar)",
       description: `Exporta la personalidad actual como un archivo PNG para compartir`,
-      export_json_select_label: `Exportar JSON`,
-      export_json_select_description: `Opcional: exportar un archivo JSON importable (sin imagen de avatar)`,
-      persona_modal_title: `Seleccionar persona`,
-      persona_select_label: `Persona`,
-      persona_select_description: `Elige qué persona deseas exportar.`,
-      persona_select_placeholder: `Selecciona una persona...`,
-      main_persona_description: `Persona principal`,
-      alter_persona_description: `Alter`,
       success_title: `🟢 Persona exportada con éxito`,
       success_description: `¡La persona actual **{nickname}** ha sido exportada! Comparte este archivo PNG con otros para difundir esta configuración de personalidad.`,
       success_description_json: `La persona actual **{nickname}** ha sido exportada como un archivo JSON.
@@ -176,6 +172,7 @@ Por favor, edita el archivo de importación para usar un nombre diferente o elim
       error_invalid_config: `Campos de configuración inválidos en los datos de la persona`,
       error_no_server_data: `Servidor no encontrado en la base de datos. Por favor, ejecuta \`/setup\` primero.`,
       error_name_conflict: `Ya existe una persona con el nombre **{name}** en este servidor. Por favor, usa un nombre diferente.`,
+      error_nickname_too_long: `El nombre de esta persona tiene más de {max} caracteres, el límite para un apodo del servidor. Acorta el nombre en el archivo e impórtala de nuevo.`,
       error_nsfw_persona: `Esta persona está marcada como NSFW, así que \`/persona import\` no puede cargarla. Usa \`/nsfw persona import\`.`,
       error_import_failed: `Falló la importación de los datos de la persona`,
       error_not_json: `El archivo importado debe contener datos JSON válidos`,
@@ -186,12 +183,10 @@ Por favor, edita el archivo de importación para usar un nombre diferente o elim
       refresh_reminder: `Ejecuta \`/refresh\` para aplicar la actualización de la persona en este chat`,
     },
     remove: {
+      persona_description: "Alter que quieres eliminar",
       description: `Elimina un alter del servidor`,
       no_permission_title: `🔴 Permiso denegado`,
       no_permission_description: `Necesitas el permiso de **Gestionar servidor** para eliminar alters.`,
-      modal_title: `Eliminar alter`,
-      select_label: `Alter`,
-      select_placeholder: `Elige un alter para eliminar...`,
       no_alters_error_title: `🟡 No hay alters`,
       no_alters_error_description: `No hay alters para eliminar. Importa alters usando \`/persona import type:alter\`.`,
       success_title: `🟢 Alter eliminado`,
@@ -231,7 +226,7 @@ Palabras de activación ({trigger_word_count}): {triggers}`,
       modal: {
         title: `Generar personalidad con IA`,
         character_name_label: `Nombre del personaje`,
-        character_name_description: `Nombres separados por comas: todos serán palabras de activación; el primero será el nombre.`,
+        character_name_description: `Nombres separados por comas: todos serán palabras de activación; el primero es el nombre (máx. 32).`,
         character_name_placeholder: `ej. Hatsune Miku, Miku, 初音ミク`,
         character_info_label: `Información y ejemplos de diálogo`,
         character_info_description: `Describe el personaje y cómo habla`,
@@ -252,8 +247,6 @@ Palabras de activación ({trigger_word_count}): {triggers}`,
       field_additional_inst: `Instrucciones adicionales`,
       wrong_provider_title: `🔴 Proveedor incompatible`,
       wrong_provider_description: `La generación de preajustes requiere un proveedor compatible. Tu actual es **{current_provider}**. Usa \`/config\` > Modelos > Cambiar modelos para usar uno compatible.`,
-      no_api_key_title: `🔴 Sin clave de API`,
-      no_api_key_description: `No hay un proveedor activo configurado. Usa \`/setup\` (primera vez) o \`/providers\` para registrar uno.`,
       model_incompatible_title: `Modelo incompatible`,
       model_incompatible_description: `Tu modelo actual (**{model_name}**) no admite **SALIDA ESTRUCTURADA**, lo cual es necesario para generar personas.
 
@@ -272,8 +265,11 @@ Usa \`/config\` > Modelos > Cambiar modelos para cambiar a un modelo que admita 
 **Próximos pasos:**
 1. Usa \`/config\` > Modelos > Cambiar modelos para cambiar a un modelo con herramientas, O
 2. Vuelve a generar sin búsqueda web (elige "No" cuando se te pregunte)`,
-      api_key_decrypt_failed_title: `🔴 Error de clave de API`,
-      api_key_decrypt_failed_description: `Falló la desencriptación de las credenciales del proveedor activo. Por favor, reconfigúralas usando \`/providers\`.`,
+      web_search_failed_title: `Generación de persona cancelada`,
+      web_search_failed_description: `Se canceló la generación de persona porque falló la búsqueda web solicitada.
+
+**Qué puedes hacer**
+Inténtalo de nuevo en un momento o elige \`No\` en \`¿Buscar en la web?\` para generar a partir de tu descripción. Si la búsqueda sigue fallando, pide a quien administre el servidor que revise la búsqueda web en \`/config\` y el acceso al proveedor en \`/providers\`.`,
       vision_credentials_unavailable_title: `🔴 Credenciales del modelo de visión no disponibles`,
       vision_credentials_unavailable_description: `Tu modelo de visión (**{vision_model_name}**) funciona en el proveedor **{vision_provider}**, pero no se pudo usar su clave de API guardada para describir la imagen. Reconfigura las credenciales de ese proveedor con \`/providers\`, o revisa \`/config\` > Modelos.`,
       invalid_image_title: `🔴 Imagen inválida`,
@@ -282,11 +278,8 @@ Usa \`/config\` > Modelos > Cambiar modelos para cambiar a un modelo que admita 
       error_download_timeout: `La descarga del avatar agotó el tiempo de espera. Por favor, inténtalo de nuevo.`,
       error_download_failed: `Falló la descarga de la imagen del avatar.`,
       processing_title: `Generando personalidad...`,
-      processing_description: `Esto puede tardar de 1 a 2 minutos. Por favor, espera mientras genero el personaje...
-
-Esto puede producir resultados inesperados. Puedes volver a generarlo si es necesario.`,
-      captioning_title: `Describiendo tu avatar...`,
-      captioning_description: `Tu modelo principal no puede ver imágenes, así que primero le pido a tu modelo de visión (**{model_name}**) que describa el avatar subido. Después, tu modelo principal escribe la personalidad a partir de esa descripción. Esto puede tardar 1-2 minutos.`,
+      processing_description: `Esto puede tardar de 1 a 2 minutos. Por favor, espera mientras genero el personaje...`,
+      processing_footer: `Esto puede producir resultados inesperados. Puedes volver a generarlo si es necesario.`,
       generation_failed_title: `🔴 Generación fallida`,
       generation_failed_description: `Falló la generación de personalidad: {error}
 
@@ -327,7 +320,7 @@ O presiona el botón Importar`,
       modal: {
         title: `Crear persona`,
         character_name_label: `Nombre del personaje`,
-        character_name_description: `Nombres separados por comas: todos serán palabras de activación; el primero será el nombre.`,
+        character_name_description: `Nombres separados por comas: todos serán palabras de activación; el primero es el nombre (máx. 32).`,
         character_name_placeholder: `ej. Hatsune Miku, Miku, 初音ミク`,
         character_desc_label: `Descripción del personaje`,
         character_desc_placeholder: `Describe a tu personaje (personalidad, apariencia, historia, etc.)`,

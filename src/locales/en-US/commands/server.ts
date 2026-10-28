@@ -1,7 +1,7 @@
 export default {
   server: {
     timezone: {
-      value_description: `UTC offset hours (default: 0). Examples: 8, -5, 0, 9.`,
+      value_description: `UTC offset hours (default: 0). Examples: 8, -5, 0, 5:30.`,
     },
     stm: {
       parameters: {
@@ -21,7 +21,6 @@ export default {
         slot_4_label: `Category 4`,
         slot_5_label: `Category 5`,
         slot_instructions: `Box = "Label: Description" (e.g. "Goals: party objectives"). Empty skipped; clear all resets.`,
-        slot_placeholder: `Label: Description`,
       },
     },
     "crosschannel-blocklist": {

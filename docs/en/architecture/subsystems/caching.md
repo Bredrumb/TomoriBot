@@ -24,11 +24,28 @@ The codebase bounds memory consumption through three coordinated mechanisms:
 Discord gateway collections retain messages, guild members, users, and presences independently of
 application caches. Their memory footprint must be measured alongside application state.
 
-Scheduled sweepers in `src/init/discord.ts` prune client collections periodically:
+`src/init/discord.ts` caps each channel's message cache at 50 entries (the discord.js default is 200),
+evicting the oldest-inserted message first. A history fetch inserts newest first, so a fetch larger
+than the cap evicts its own newest messages. No chat path depends on an older message staying cached:
+admission resolves a reply target once through `resolveReferencedMessage()` (cache, then REST) and
+hands that instance to every later reader, history reads use `fetch`, and history reply annotations
+look up their target in the fetched window before the cache.
+
+Presence caching admits only guild-user pairs with a successful chat turn in that guild. Startup
+loads these pairs from persisted `message_sent` and `presence_seen` counters before gateway login;
+successful text or tool-only turns admit new pairs immediately. The index is process-local and
+survives cache clearing, while PostgreSQL restores its history after a restart. Presence events
+still arrive for every member allowed by the intent, so this limits retained objects rather than
+gateway traffic. A first-time participant has unknown status until their next presence update;
+Discord has no REST endpoint for fetching that status. The existing offline presence sweeper stays
+in place. Command-only activity does not admit a participant. With stat tracking disabled, new
+pairs are remembered only until the process restarts.
+
+Scheduled sweepers in the same file prune client collections periodically:
 
 - **Messages**: hourly sweep with a 30-minute lifetime.
 - **Guild members**: hourly sweep. Excludes the client's own member (required for synchronous permission checks) and any user currently in a voice channel (read synchronously by audio handlers).
-- **Users**: hourly sweep restricted to bot accounts. Human users remain reachable so synchronous mention resolution in `historyFormatter` resolves member names without falling back to placeholder strings.
+- **Users**: hourly sweep of every user with no cached member in any guild, except the client user. A cached member holds its own user reference, so only these orphans free memory; most arrive through presence updates. `historyFormatter` resolves mentions from each message's own mention list, so a swept user still renders by name.
 
 ## Active cache layers
 
@@ -40,6 +57,7 @@ Application caches are partitioned by domain ownership, lifetime, and storage ba
 - **Channel prompt override cache (`channelPromptCacheStore.ts`)**: keyed by `(server_id, channel_disc_id)`. Stores per-channel system prompt overrides. Uses a 10-minute TTL with negative caching (`null`) so unconfigured channels cost a single lookup.
 - **Channel model override cache (`channelLlmCacheStore.ts`)**: keyed by `(server_id, channel_disc_id)`. Stores per-channel LLM model selections. Uses a 10-minute TTL with negative caching.
 - **Persona sprite cache (`personaSpriteCacheStore.ts`)**: keyed by `persona_id`. Stores ordered sprite definitions for render modifiers. Uses a 10-minute TTL.
+- **Committed persona appearance (`personaAppearanceCacheStore.ts`)**: keyed by destination channel and persona. Keeps at most 2,000 entries for 120 minutes after delivery, evicting the oldest committed entry at capacity. Stores base or sprite references and generic-avatar fallback state without avatar blobs. Ordinary and identity sprites qualify; copied identities and user impersonation do not. Only successful delivery replaces an entry, including a delivered base revert. Resolution after intervening messages reloads the referenced sprite through the sprite cache. Missing or invalidated state resolves to the current base.
 - **Persona sprite message cache (`personaSpriteMessageCache.ts`)**: keyed by Discord `message_disc_id`. Maps webhook message IDs to displayed sprite labels for prompt reconstruction. Uses a 120-minute TTL with lazy write-path sweeps.
 
 ### User profile and admission rules
@@ -59,15 +77,38 @@ Application caches are partitioned by domain ownership, lifetime, and storage ba
 ### Provider and integration metadata
 
 - **LLM model cache (`llmCacheStore.ts`)**: static model catalog warmed from the `llms` table at startup. Remains immutable during normal runtime.
-- **OpenRouter catalogs (`openrouterCatalog.ts`)**: separates models into text, embedding, image, and video catalogs (`openrouterCapabilityCache.ts`, `openrouterEmbeddingModelCache.ts`, `openrouterImageModelCache.ts`, `openrouterVideoModelCache.ts`). Keyed by lowercase model codename. Refreshed on misses and in the background via a 6-hour TTL. Collapses concurrent lookups into single network requests and enforces a 60-second minimum refresh interval. Excluded from emergency clearing to prevent chat traffic from blocking on provider discovery.
+- **OpenRouter catalogs (`openrouterCatalog.ts`)**: separates models into text, embedding, image, and video catalogs (`openrouterCapabilityCache.ts`, `openrouterEmbeddingModelCache.ts`, `openrouterImageModelCache.ts`, `openrouterVideoModelCache.ts`). Keyed by lowercase model codename. Refreshed on misses and in the background via a 6-hour TTL. Collapses concurrent lookups into single network requests and enforces a 60-second minimum refresh interval. Excluded from emergency clearing to prevent chat traffic from blocking on provider discovery. Speech registration uses the same catalogue machinery in `openrouterSpeechModelCache.ts`, requires a successful fresh snapshot, and checks endpoint cloning flags separately. Speech targets and voice bindings are read from the database.
 - **Live model limits cache (`liveModelLimitsCache.ts`)**: keyed by `provider:codename` for Anthropic and Google models APIs. Successful lookups persist for 24 hours. Failed attempts cache a 10-minute retry interval while serving catalog defaults.
 - **NovelAI caches (`novelaiCapabilityCache.ts`, `novelaiSubscriptionCache.ts`)**: static model allowances and subscription facts cached for 24 hours by SHA-256 of the actual credential. Personal, DM, and rotation requests use their selected key. Failed or malformed subscription lookups leave the cache cold and retain the existing default allowance. Credential identities stay inside the cache and are omitted from logs and prompt exports.
 - **Guild MCP configuration cache (`guildMcpConfigCache.ts`)**: caches active MCP server registrations and discovered tool name snapshots.
 
 ### Ephemeral workflow sessions
 
-- **Webhook cache (`src/utils/discord/webhook/cache.ts`)**: caches active Discord webhook clients by channel and persona. Webhook tokens are persisted encrypted in PostgreSQL, enabling cache rehydration after process restarts without recreating webhooks.
+- **Webhook cache (`src/utils/discord/webhook/webhookCore.ts`)**: caches the primary Discord webhook by parent channel, managed slots by webhook ID, and legacy persona webhooks by channel and persona. Encrypted tokens restore managed slots after a restart. Primary lookup restores only the primary; local-avatar dispatch restores the other persisted slots for selection. Historic operations restore slots by exact webhook ID and leave the primary entry intact. A failed slot-list query allows the next lookup to retry immediately. Verified SHA-256 assignments hydrate the data-URI cache on an exact match, avoiding a redundant PATCH after restart. An uncertain PATCH clears the cached assignment. Successful sends update in-memory use order; persisted row order supplies the restart order. Parent-channel locks cover local-avatar selection and sending. Lifecycle lookup uses separate coordination, and restoration shares a per-webhook lock with avatar PATCHes. HTTPS overrides bypass avatar locks. Invalidation can remove one failed webhook or every webhook in a channel.
 - **Persona workflow avatar cache (`src/utils/discord/ui/personaWorkflow.ts`)**: transient `Map<number, AvatarCacheEntry>` scoped to an active persona picker interaction. Reuses resolved avatar buffers across pagination, validation failures, and retries. Discarded when the interaction workflow terminates.
+
+- **Natural Nudges meters (`src/modules/natural-nudges/runtime/processor.ts`)**: per-server heat, waking
+  hours, and last `message_sent` time, kept for 15 minutes because they move over days. The same
+  processor holds the rolled lull in memory, and `runtime/inFlight.ts` holds the one-nudge-per-server
+  lock that idle nudges and Active Nudges share.
+- **Active Nudge gate (`src/modules/natural-nudges/runtime/configCache.ts`)**: per guild, the server ID,
+  settings, effective channels, and heat the Active Nudge counter checks on every message, kept for 5
+  minutes. A miss is shared by every message that arrives while it loads, and a failed read is not
+  cached. `invalidateNaturalNudgeConfigCache` runs after a successful settings write on the plugin
+  page, a workspace import with a `nudges` section, and a server reset. Phase A and the re-check
+  before sending still read settings and persona interests fresh. The Active Nudge counters, rests, and
+  per-channel watches live in `runtime/activeNudges.ts` and start over after a restart.
+
+Managed webhook caches hold at most four slots per parent channel. Cache counts include pool slots,
+and clearing the cache leaves their database rows and Discord webhooks intact for restoration.
+Delivery continuity stores the actual webhook ID and delivered identity separately from avatar
+assignments. Reassigning a slot changes future sends; historic edits and deletes resolve the
+message's webhook ID even after the cache is cleared. Bot fallbacks clear the channel's webhook
+continuity, while failed sends leave the last successful delivery intact.
+
+Committed appearance has a separate lifetime from webhook adjacency. Intervening messages can
+break a Discord group without changing a persona's remembered sprite. `recordPersonaDelivery()`
+updates both stores after successful delivery. Held response drafts update neither store.
 
 ## Write invalidation contracts
 
@@ -85,6 +126,7 @@ records an existing notification-ordering limitation. Domain invalidators includ
 - Channel prompt overrides: `invalidateChannelPromptCache(serverId, channelDiscId)`.
 - Channel LLM overrides: `invalidateChannelLlmCache(serverId, channelDiscId)`.
 - Persona sprite updates: `invalidatePersonaSpriteCache(personaId)`.
+- Committed appearance: sprite invalidation also removes the persona's appearance entries; server state invalidation removes entries for that server. Persona update, removal, and preset replacement invalidate the affected persona after write success. Clearing the sprite or persona-state cache clears all committed appearance entries.
 - Personal spotlight updates: `invalidatePersonalSpotlightCache(serverId, userId?, channelDiscId?)` (drops the server gate alongside matching result entries).
 - Webhook deletion or recreation: webhook invalidation helpers in `src/utils/discord/webhook/cache.ts`.
 - MCP tool discovery updates: `invalidateGuildMcpConfigCache(serverId)`.
@@ -97,7 +139,7 @@ Invalidating before write success is forbidden: a rolled-back transaction would 
 
 When the memory monitor observes RSS approaching container limits (`MEMORY_CRITICAL_THRESHOLD` of `CONTAINER_MEMORY_LIMIT_MB`), it triggers `clearEmergencyCaches()` in `src/utils/cache/emergencyCacheClearer.ts`.
 
-- **Evicted data**: clears recoverable database-backed and API-derived caches: Tomori state, user profiles, whitelists, channel LLM overrides, emoji and stickers, guild MCP configs, personal spotlights, NovelAI subscriptions, preset avatars, voice transcripts, markdown tables, persona sprites, and volatile Discord.js client collections (messages, bot users, presences, and voice states).
+- **Evicted data**: clears recoverable database-backed and API-derived caches: Tomori state, user profiles, whitelists, channel LLM overrides, emoji and stickers, guild MCP configs, personal spotlights, NovelAI subscriptions, preset avatars, voice transcripts, markdown tables, persona sprites, committed persona appearances, and volatile Discord.js client collections (messages, bot users, presences, and voice states).
 - **Preserved data**: preserves active conversational state (non-expired short-term memories), static LLM model catalogs, provider capability maps, command registries, active channel locks, and background execution queues. Expired STM entries are swept.
 - **Forced collection**: `clearEmergencyCaches()` triggers a forced garbage collection pass before recording post-clear telemetry. Dropping references alone does not ensure immediate reclamation, so post-clear measurements need collection context. RSS and native allocations can still remain high.
 - **Configuration flags**:

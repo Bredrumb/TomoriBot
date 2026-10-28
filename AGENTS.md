@@ -50,8 +50,13 @@ proposed follow-up's premise in source before suggesting it.
    - Use path alias imports (`@/*`) for `src/*`.
    - Avoid `any`; use typed interfaces/schemas.
    - Full conventions: `docs/en/contributing/development-tasks.md` (Coding Conventions section).
-2. Comment to explain rationale.
-   - Explain why a constraint, quirk, or invariant exists; never restate the line below it.
+2. Default to zero new comments.
+   - Write one only for what the code cannot say: an external quirk (Discord, a provider, a
+     library), a security or redaction reason, an ordering, cache, or acknowledgement invariant, why
+     a constant has its value, what a sentinel or dense regex means, a measured performance
+     tradeoff, why a suppression stays, or a constraint someone could break while simplifying.
+     Otherwise write none.
+   - Each comment is one sentence. List each added comment and its reason in your final report.
    - No step numbering or `Rule N:` scaffolding in comments and JSDoc.
    - No prose em/en dashes or spaced double hyphens in comments, JSDoc, `docs/`, or locale strings.
      Use the punctuation that names the relationship: colon when the second half explains the first,
@@ -106,6 +111,11 @@ proposed follow-up's premise in source before suggesting it.
 9. Use safe DB and error patterns.
    - Use Bun SQL template literals for queries.
    - Use structured logging via `log` with metadata.
+   - A catch that turns a failure into a result object, a reply, or a tool error reports it first
+     (`reportProviderFailure`), with the provider status and its body minus the request's key.
+     Expected refusals (bad input, cancellation, auth or quota on a user's own key) are a metric plus a
+     warn, never an error. Provider text stays out of public replies and tool results; offer it only
+     behind the gated **Show Full Error** modal.
 10. Test in proportion, and pass the quality gates before finishing.
     - Test behavior, regression risk, or an interface other code depends on (an exported API, a
       stored data shape, a Discord limit). A bug fix gets the regression test that would have caught
@@ -153,6 +163,7 @@ accepted findings. Full rubric: `docs/en/contributing/development-tasks.md` (Pro
 - `src/events/` - event handlers
 - `src/providers/` - LLM providers/adapters
 - `src/tools/` - built-in tools, REST API tools, MCP integration
+- `src/modules/` - self-contained features that own their SQL, runtime, and panels (`natural-nudges/`)
 - `src/utils/` - cache, Discord, DB, provider, security, text helpers
 - `src/types/` - shared type definitions
 - `scripts/` - local tooling and database scripts
@@ -216,12 +227,11 @@ text over appending; do not narrate implementation branches.
    `meet-tomori/`) use everyday words. Self-hosting guides use plain words but keep every step,
    command, and setting. Contributor guides are recipes: files to touch, types and limits to satisfy,
    commands to run.
-4. A page centered on a cloud provider service goes under `docs/en/wiki/cloud/<provider>/` on
-   `release`. `docs/en/self-hosting/` is for provider-agnostic hosting on the user's own machines.
-5. This repo is public and every page outside `docs/en/wiki/` is indexed. Guides use placeholders
-   (`<gcp-project-id>`, `<resource-group>`); a literal value a reader would copy is a bug. Runbooks act
-   on our production, so they go in `docs/en/wiki/` (hidden + `noindex`) and keep real names. Never
-   write credentials, tenant IDs, or the production public IP into any page. Full rules:
+4. Cloud architecture and runbooks go under `docs/en/wiki/cloud/<provider>/` on `release`.
+   `docs/en/self-hosting/` is for provider-agnostic hosting on the user's own machines.
+5. All tracked docs are public, including `wiki/` and `release`; `hidden` and `noindex` do not restrict
+   access. Use placeholders for production names, IDs (including workspace IDs), and IPs. Never copy
+   credentials into docs or agent memory. Full rules:
    `docs/en/contributing/localization/docs-authoring.md` ("Audience").
 
 ## Maintaining This File

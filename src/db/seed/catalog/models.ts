@@ -4,7 +4,15 @@
 // is no generated SQL file. Edit and commit; the change seeds on the next boot.
 // Run `bun run check-seed-catalogs` to validate the per-provider invariants offline.
 
-import type { DecisionInput, EmbeddingInput, ImageInput, LlmInput, ModelSection, VideoInput } from "./types";
+import type {
+  DecisionInput,
+  EmbeddingInput,
+  ImageInput,
+  LlmInput,
+  ModelSection,
+  SpeechInput,
+  VideoInput,
+} from "./types";
 
 // inputPricePerMillion / outputPricePerMillion are official standard USD rates per million tokens
 // (uncached base input and output). Vertex and Vertex Express reuse the Gemini SKU prices, and a
@@ -513,6 +521,21 @@ export const llmSections: ModelSection<LlmInput>[] = [
         outputPricePerMillion: 3.75,
         desc: "Fast multimodal Gemini 3.8 model for reasoning and general-purpose tasks",
       },
+      {
+        provider: "google",
+        codename: "gemini-4-argon",
+        contextWindow: 1_048_576,
+        maxOutputTokens: 65_536,
+        hasTools: true,
+        seesImages: true,
+        seesVideos: true,
+        seesYoutube: true,
+        isReasoning: true,
+        supportsStructoutput: true,
+        inputPricePerMillion: 2,
+        outputPricePerMillion: 10,
+        desc: "Gemini 4 Argon frontier reasoning model for complex engineering and agentic workflows",
+      },
     ],
   },
   // Limits: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/<slug>, which
@@ -898,6 +921,21 @@ export const llmSections: ModelSection<LlmInput>[] = [
         inputPricePerMillion: 0.75,
         outputPricePerMillion: 3.75,
         desc: "Fast multimodal Gemini 3.8 model for reasoning and general-purpose tasks via Vertex AI",
+      },
+      {
+        provider: "vertex",
+        codename: "gemini-4-argon",
+        contextWindow: 1_048_576,
+        maxOutputTokens: 65_536,
+        hasTools: true,
+        seesImages: true,
+        seesVideos: true,
+        seesYoutube: true,
+        isReasoning: true,
+        supportsStructoutput: true,
+        inputPricePerMillion: 2,
+        outputPricePerMillion: 10,
+        desc: "Gemini 4 Argon frontier reasoning model for complex engineering and agentic workflows via Vertex AI",
       },
     ],
   },
@@ -2915,6 +2953,19 @@ export const llmSections: ModelSection<LlmInput>[] = [
         outputPricePerMillion: 0,
         desc: "High-speed multimodal DiffusionGemma model with reasoning, tool use, and image understanding via NVIDIA NIM",
       },
+      {
+        provider: "nvidia",
+        codename: "nvidia/nemotron-3.5-super-vl-120b-a12b",
+        contextWindow: 262_144,
+        isFree: true,
+        hasTools: true,
+        seesImages: true,
+        seesVideos: true,
+        isReasoning: true,
+        inputPricePerMillion: 0,
+        outputPricePerMillion: 0,
+        desc: "Free NVIDIA NIM Nemotron 3.5 Super VL for reasoning, tool use, and image/video understanding (262K hosted context)",
+      },
     ],
   },
   // Pricing for both Z.ai sections: https://docs.z.ai/guides/overview/pricing (direct-API rates;
@@ -3629,6 +3680,11 @@ export const imageSections: ModelSection<ImageInput>[] = [
     rows: [
       {
         provider: "google",
+        codename: "gemini-nano-banana-2.1",
+        desc: "Nano Banana 2.1 image generation and editing with improved text rendering and character consistency",
+      },
+      {
+        provider: "google",
         codename: "gemini-2.5-flash-image",
         isDefault: true,
         desc: "Fast and efficient image generation model with balanced quality and speed",
@@ -3644,7 +3700,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
       {
         provider: "google",
         codename: "gemini-3.1-flash-image",
-        desc: "Latest fast image generation model with Gemini 3.1 Flash",
+        desc: "Fast image generation with Gemini 3.1 Flash, superseded by Nano Banana 2.1",
         i18n: {
           ja: "Gemini 3.1 Flashによる最新の高速画像生成モデル",
           "pt-BR": "Geração de imagem rápida mais recente com Gemini 3.1 Flash",
@@ -3701,6 +3757,11 @@ export const imageSections: ModelSection<ImageInput>[] = [
   {
     comment: "OpenRouter Image Generation Models (via OpenRouter API)",
     rows: [
+      {
+        provider: "openrouter",
+        codename: "google/gemini-nano-banana-2.1",
+        desc: "Nano Banana 2.1 image generation and editing via OpenRouter",
+      },
       {
         provider: "openrouter",
         codename: "google/gemini-2.5-flash-image",
@@ -3791,6 +3852,11 @@ export const imageSections: ModelSection<ImageInput>[] = [
     rows: [
       {
         provider: "vertex",
+        codename: "gemini-nano-banana-2.1",
+        desc: "Nano Banana 2.1 image generation and editing via Vertex AI (requires global location)",
+      },
+      {
+        provider: "vertex",
         codename: "gemini-2.5-flash-image",
         isDefault: true,
         desc: "Fast and efficient Gemini image generation via Vertex AI with balanced quality and speed",
@@ -3806,7 +3872,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
       {
         provider: "vertex",
         codename: "gemini-3.1-flash-image",
-        desc: "Latest fast image generation via Vertex AI with Gemini 3.1 Flash Image",
+        desc: "Fast image generation via Vertex AI with Gemini 3.1 Flash Image, superseded by Nano Banana 2.1",
         i18n: {
           ja: "Gemini 3.1 Flash ImageによるVertex AI経由の最新高速画像生成",
           "pt-BR": "Geração de imagem mais recente via Vertex AI (Gemini 3.1 Flash)",
@@ -3854,6 +3920,11 @@ export const imageSections: ModelSection<ImageInput>[] = [
           vi: "Tạo ảnh nâng cao qua Vertex AI (đã lỗi thời, hãy dùng gemini-3-pro-image)",
           "zh-CN": "经由 Vertex AI、具备强化画质与分辨率选项的进阶图像生成（已淘汰，请改用 gemini-3-pro-image）",
         },
+      },
+      {
+        provider: "vertex",
+        codename: "gemini-3.1-flash-lite-image",
+        desc: "Cost-efficient Gemini 3.1 Flash Lite image generation and editing via Vertex AI",
       },
     ],
   },
@@ -4139,8 +4210,22 @@ export const videoSections: ModelSection<VideoInput>[] = [
     rows: [
       {
         provider: "openrouter",
-        codename: "bytedance/seedance-1-5-pro",
+        codename: "minimax/hailuo-3-max",
         isDefault: true,
+        desc: "MiniMax H3 Max: 5-15 second videos at 480p or 768p with first and last frame control",
+        i18n: {
+          ja: "MiniMax H3 Max：480pまたは768pの5-15秒動画、開始・終了フレームを指定可能",
+          "pt-BR": "MiniMax H3 Max: vídeos de 5 a 15 segundos em 480p ou 768p com controle dos quadros inicial e final",
+          "es-419":
+            "MiniMax H3 Max: videos de 5 a 15 segundos en 480p o 768p con control del primer y último fotograma",
+          "zh-TW": "MiniMax H3 Max：480p 或 768p 的 5-15 秒影片，可指定首尾影格",
+          vi: "MiniMax H3 Max: video 5-15 giây ở 480p hoặc 768p với điều khiển khung hình đầu và cuối",
+          "zh-CN": "MiniMax H3 Max：480p 或 768p 的 5-15 秒视频，可指定首尾帧",
+        },
+      },
+      {
+        provider: "openrouter",
+        codename: "bytedance/seedance-1-5-pro",
         desc: "ByteDance Seedance 1.5 Pro — high-quality video generation with 4-12s duration",
         i18n: {
           ja: "ByteDance Seedance 1.5 Pro — 4〜12秒の高品質動画生成",
@@ -4298,29 +4383,29 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         provider: "openrouter",
         codename: "google/gemini-embedding-2",
         family: "gemini-embedding-2",
-        desc: "Gemini embedding model via OpenRouter (same family as Google)",
+        isDefault: true,
+        desc: "Default Gemini embedding model via OpenRouter (same family as Google)",
         i18n: {
-          ja: "OpenRouter経由のGemini埋め込みモデル（Googleと同一ファミリー）",
-          "pt-BR": "Embedding Gemini via OpenRouter (mesma família do Google)",
-          "es-419": "Modelo de embeddings Gemini vía OpenRouter (misma familia que Google)",
-          "zh-TW": "經由 OpenRouter 的 Gemini 嵌入模型（與 Google 同一系列）",
-          vi: "Model embedding Gemini qua OpenRouter (cùng dòng với Google)",
-          "zh-CN": "经由 OpenRouter 的 Gemini 嵌入模型（与 Google 同一系列）",
+          ja: "OpenRouter経由のデフォルトGemini埋め込みモデル（Googleと同一ファミリー）",
+          "pt-BR": "Embedding Gemini padrão via OpenRouter (mesma família do Google)",
+          "es-419": "Modelo de embeddings Gemini predeterminado vía OpenRouter (misma familia que Google)",
+          "zh-TW": "經由 OpenRouter 的預設 Gemini 嵌入模型（與 Google 同一系列）",
+          vi: "Model embedding Gemini mặc định qua OpenRouter (cùng dòng với Google)",
+          "zh-CN": "经由 OpenRouter 的默认 Gemini 嵌入模型（与 Google 同一系列）",
         },
       },
       {
         provider: "openrouter",
         codename: "intfloat/multilingual-e5-large",
         family: "multilingual-e5-large",
-        isDefault: true,
-        desc: "Default multilingual embedding model via OpenRouter",
+        desc: "Multilingual embedding model via OpenRouter",
         i18n: {
-          ja: "OpenRouter経由のデフォルト多言語埋め込みモデル",
-          "pt-BR": "Modelo de embedding multilíngue padrão via OpenRouter",
-          "es-419": "Modelo de embeddings multilingüe predeterminado vía OpenRouter",
-          "zh-TW": "經由 OpenRouter 的預設多語言嵌入模型",
-          vi: "Model embedding đa ngôn ngữ mặc định qua OpenRouter",
-          "zh-CN": "经由 OpenRouter 的默认多语言嵌入模型",
+          ja: "OpenRouter経由の多言語埋め込みモデル",
+          "pt-BR": "Modelo de embedding multilíngue via OpenRouter",
+          "es-419": "Modelo de embeddings multilingüe vía OpenRouter",
+          "zh-TW": "經由 OpenRouter 的多語言嵌入模型",
+          vi: "Model embedding đa ngôn ngữ qua OpenRouter",
+          "zh-CN": "经由 OpenRouter 的多语言嵌入模型",
         },
       },
       {
@@ -4386,7 +4471,7 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
   },
 ];
 
-// https://openrouter.ai/typesafe/jev-1.13 and the catalog's explicit decisions output modality.
+// Active rows cover the default, low-cost bulk checks, Korean/long documents, largest inputs, and free trials.
 export const decisionSections: ModelSection<DecisionInput>[] = [
   {
     comment: "OpenRouter Decisions",
@@ -4394,21 +4479,170 @@ export const decisionSections: ModelSection<DecisionInput>[] = [
       {
         provider: "openrouter",
         codename: "typesafe/jev-1.13",
-        isDefault: true,
-        inputTokenLimit: 32000,
+        isDeprecated: true,
+        inputTokenLimit: 64000,
         inputPricePerMillion: 0.042,
         outputPricePerMillion: 0,
-        desc: "Text predicates through the Decisions API. Registration does not activate response-review skipping.",
+        desc: "Text predicates through the Decisions API.",
         i18n: {
-          ja: "Decisions APIでテキストの条件を判定します。登録だけでは応答レビューのスキップは有効になりません。",
-          "pt-BR":
-            "Avalia condições de texto pela API Decisions. O registro não ativa o salto da revisão de respostas.",
-          "es-419":
-            "Evalúa condiciones de texto mediante la API Decisions. El registro no activa la omisión de la revisión de respuestas.",
-          "zh-TW": "透過Decisions API判斷文字條件。註冊不會啟用略過回覆審查。",
-          "zh-CN": "通过Decisions API判断文本条件。注册不会启用跳过回复审查。",
-          vi: "Đánh giá điều kiện văn bản qua API Decisions. Việc đăng ký không bật tính năng bỏ qua bước kiểm tra phản hồi.",
+          ja: "Decisions APIでテキストの条件を判定します。",
+          "pt-BR": "Avalia condições de texto pela API Decisions.",
+          "es-419": "Evalúa condiciones de texto mediante la API Decisions.",
+          "zh-TW": "透過Decisions API判斷文字條件。",
+          "zh-CN": "通过Decisions API判断文本条件。",
+          vi: "Đánh giá điều kiện văn bản qua API Decisions.",
         },
+      },
+      {
+        provider: "openrouter",
+        codename: "upstage/solar-decide-flash",
+        isDeprecated: true,
+        inputTokenLimit: 524288,
+        inputPricePerMillion: 0.05,
+        outputPricePerMillion: 0,
+        desc: "Low-latency checks over long documents, with Korean-language support.",
+      },
+      {
+        provider: "openrouter",
+        codename: "perplexity/pplx-decider-v1.1-27b",
+        isDeprecated: true,
+        inputTokenLimit: 262144,
+        seesImages: true,
+        inputPricePerMillion: 0.02,
+        outputPricePerMillion: 0,
+        desc: "Low-cost bulk classification, moderation, and rubric checks.",
+      },
+      {
+        provider: "openrouter",
+        codename: "openai/gpt-6-luna-decisions",
+        inputTokenLimit: 1050000,
+        seesImages: true,
+        inputPricePerMillion: 0.1,
+        outputPricePerMillion: 0,
+        desc: "Classification and verification over inputs up to 1,050,000 tokens.",
+      },
+      {
+        provider: "openrouter",
+        codename: "inception/mercury-decide:free",
+        inputTokenLimit: 65536,
+        inputPricePerMillion: 0,
+        outputPricePerMillion: 0,
+        desc: "Free text predicate checks for experimentation with the Decisions API.",
+      },
+      {
+        provider: "openrouter",
+        codename: "perplexity/pplx-decider-flash-v1.2",
+        isDefault: true,
+        seesImages: true,
+        inputTokenLimit: 262144,
+        inputPricePerMillion: 0.01,
+        outputPricePerMillion: 0,
+        desc: "Default fast, low-cost 4B Decision model for text/image classification, routing, and moderation",
+      },
+      {
+        provider: "openrouter",
+        codename: "perplexity/pplx-decider-v1.2",
+        isDeprecated: true,
+        seesImages: true,
+        inputTokenLimit: 262144,
+        inputPricePerMillion: 0.02,
+        outputPricePerMillion: 0,
+        desc: "Perplexity 27B Decision model for text/image classification, moderation, and rubric scoring",
+      },
+      {
+        provider: "openrouter",
+        codename: "respan/span-02",
+        isDeprecated: true,
+        seesImages: true,
+        inputTokenLimit: 131072,
+        inputPricePerMillion: 0.01,
+        outputPricePerMillion: 0,
+        desc: "Open-weight Decision model for evaluating text/images, behavior scoring, and agent-output routing",
+      },
+      {
+        provider: "openrouter",
+        codename: "typesafe/jev-1.14",
+        seesImages: true,
+        inputTokenLimit: 262144,
+        inputPricePerMillion: 0.042,
+        outputPricePerMillion: 0,
+        desc: "Higher-accuracy Jev Decision model for structured text/image classification, routing, and tool-call checks",
+      },
+      {
+        provider: "openrouter",
+        codename: "scaledown/classify-1",
+        isDeprecated: true,
+        seesImages: true,
+        inputTokenLimit: 1000000,
+        inputPricePerMillion: 0.04,
+        outputPricePerMillion: 0,
+        desc: "Long-context Decision model for classifying text, images, and documents with probabilistic answers",
+      },
+    ],
+  },
+];
+
+export const speechSections: ModelSection<SpeechInput>[] = [
+  {
+    comment: "Voice Design",
+    rows: [
+      {
+        provider: "google",
+        codename: "gemini-3.8-flash-tts",
+        voiceMode: "design",
+        isDefault: true,
+        desc: "Voice Design with Gemini Flash TTS.",
+        i18n: { ja: "Gemini Flash TTS による音声デザイン。" },
+      },
+      {
+        provider: "google",
+        codename: "gemini-3.8-flash-lite-tts",
+        voiceMode: "design",
+        desc: "Voice Design with Gemini Flash-Lite TTS.",
+        i18n: { ja: "Gemini Flash-Lite TTS による音声デザイン。" },
+      },
+      {
+        provider: "vertex",
+        codename: "gemini-3.8-flash-tts",
+        voiceMode: "design",
+        isDefault: true,
+        desc: "Voice Design with Vertex Gemini Flash TTS.",
+        i18n: { ja: "Vertex Gemini Flash TTS による音声デザイン。" },
+      },
+      {
+        provider: "vertex",
+        codename: "gemini-3.8-flash-lite-tts",
+        voiceMode: "design",
+        desc: "Voice Design with Vertex Gemini Flash-Lite TTS.",
+        i18n: { ja: "Vertex Gemini Flash-Lite TTS による音声デザイン。" },
+      },
+      {
+        provider: "openrouter",
+        codename: "bytedance-seed/seed-audio-1-0",
+        voiceMode: "design",
+        isDefault: true,
+        desc: "Voice Design with Seed Audio 1.0. Best in English and Chinese. Two-minute limit.",
+        i18n: { ja: "Seed Audio 1.0 による音声デザイン。英語と中国語が最適。出力は2分まで。" },
+      },
+    ],
+  },
+  {
+    comment: "Voice Clone",
+    rows: [
+      {
+        provider: "openrouter",
+        codename: "fish-audio/s2.1-pro",
+        voiceMode: "clone",
+        isDefault: true,
+        desc: "Voice cloning with Fish S2.1 Pro.",
+        i18n: { ja: "Fish S2.1 Pro による音声クローン。" },
+      },
+      {
+        provider: "openrouter",
+        codename: "fish-audio/s2.1-pro-free:free",
+        voiceMode: "clone",
+        desc: "Free Fish S2.1 Pro voice cloning when available.",
+        i18n: { ja: "利用可能な場合に使える無料版 Fish S2.1 Pro の音声クローン。" },
       },
     ],
   },

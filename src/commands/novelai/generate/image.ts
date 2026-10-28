@@ -1,4 +1,12 @@
 import {
+  addGenerationModelOption,
+  createGenerationModelAutocomplete,
+  resolveGenerationModelOption,
+  replyGenerationModelUnavailable,
+} from "@/utils/discord/autocomplete/generationModelAutocomplete";
+import { GenerationModelUnavailableError, validateGenerationModelSelection } from "@/utils/provider/generationModels";
+import type { GenerationModelSelection } from "@/types/provider/generationModels";
+import {
   AttachmentBuilder,
   EmbedBuilder,
   MessageFlags,
@@ -23,6 +31,7 @@ import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { checkImageQuota, incrementImageQuota } from "@/utils/quota/imageQuotaManager";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { statRepository } from "@/utils/db/repositories";
 import { resolveNaiImageParams } from "@/utils/image/naiImageParams";
 import { resolveNaiDiffusionModel } from "@/utils/image/naiDiffusionModels";
@@ -32,6 +41,7 @@ import { buildImageGenerationInputAttachment } from "@/utils/image/imageGenerati
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
+import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 import {
   NAI_CHAR_REF_INFO_EXTRACTED,
   NAI_CHAR_REF_STRENGTH,
@@ -64,6 +74,20 @@ async function resolveServerNovelAiApiKey(tomoriState: TomoriState): Promise<str
   return await decryptApiKey(encryptedApiKey, tomoriState.config.key_version || 1);
 }
 
+async function resolveSelectedNaiCredentials(
+  serverId: number,
+  userId: number | null,
+  modelSelection: GenerationModelSelection,
+) {
+  await validateGenerationModelSelection(serverId, userId, modelSelection);
+  if (modelSelection.source === "server") {
+    const apiKey = await getOptApiKey(serverId, "novelai");
+    if (apiKey) return { apiKey, source: "server" as const, modelId: modelSelection.modelId };
+  }
+  const resolved = await resolveCapabilityCredentials(serverId, "image-nai", { userId, modelSelection });
+  return { apiKey: resolved.apiKey, source: resolved.source, modelId: modelSelection.modelId };
+}
+
 async function prepareCharacterReferencePayload(attachment: APIAttachment): Promise<NaiGenerationCharacterPayload> {
   if (!attachment.content_type?.startsWith("image/")) {
     throw new Error("Invalid character reference image type");
@@ -91,7 +115,20 @@ async function prepareCharacterReferencePayload(attachment: APIAttachment): Prom
 }
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
-  subcommand.setName("image").setDescription(localizer("en-US", "commands.novelai.generate.image.description"));
+  addGenerationModelOption(
+    subcommand
+      .setName("image")
+      .setDescription(localizer("en-US", "commands.novelai.generate.image.description"))
+      .addBooleanOption((option) =>
+        option
+          .setName("nsfw")
+          .setDescription(localizer("en-US", "commands.novelai.generate.image.nsfw_description"))
+          .setRequired(false),
+      ),
+    "commands.novelai.generate.image.model_description",
+  );
+
+export const autocomplete = createGenerationModelAutocomplete("image-nai");
 
 export async function execute(
   _client: Client,
@@ -124,6 +161,15 @@ export async function execute(
           files: [buildImageGenerationInputAttachment(locale, { kind: "novelai", ...submittedInput })],
         }
       : {};
+  const recoveryTips = async (tipKeys: string[], credentialSource: "server" | "personal") => {
+    return withProviderOptionCopy(tipKeys, {
+      surface: "recovery",
+      managedProvider: null,
+      userDiscId: interaction.user.id,
+      serverId: tomoriState?.server_id,
+      credentialScope: credentialSource,
+    });
+  };
 
   try {
     tomoriState = await getCachedTomoriState(serverId);
@@ -136,6 +182,16 @@ export async function execute(
       });
       return;
     }
+
+    const modelSelection = await resolveGenerationModelOption(
+      interaction,
+      tomoriState.server_id,
+      userData.user_id ?? null,
+      locale,
+      "image-nai",
+    );
+    if (modelSelection === false) return;
+    const spoiler = interaction.options.getBoolean("nsfw") ?? false;
 
     // Overlay the invoking user's personal (BYOK) provider selections so their
     // personal NovelAI model/key is used when configured, mirroring /generate image.
@@ -153,7 +209,9 @@ export async function execute(
       return;
     }
 
-    if (overlay.activeConfigs.image_nai) {
+    if (modelSelection) {
+      imageCreds = await resolveSelectedNaiCredentials(tomoriState.server_id, userData.user_id ?? null, modelSelection);
+    } else if (overlay.activeConfigs.image_nai) {
       try {
         const resolved = await resolveCapabilityCredentials(tomoriState.server_id, "image-nai", {
           userId: userData.user_id ?? null,
@@ -165,9 +223,12 @@ export async function execute(
         };
       } catch (error) {
         if (error instanceof CredentialUnavailableError) {
+          if (!interaction.replied && !interaction.deferred)
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
           await replyInfoEmbed(interaction, locale, {
             titleKey: "general.errors.personal_provider_credentials_error_title",
             descriptionKey: "general.errors.personal_provider_credentials_error_description",
+            tipKeys: await recoveryTips([], "personal"),
             color: ColorCode.ERROR,
             flags: MessageFlags.Ephemeral,
           });
@@ -181,9 +242,12 @@ export async function execute(
     }
 
     if (!imageCreds) {
+      if (!interaction.replied && !interaction.deferred)
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.novelai.generate.image.no_api_key_title",
         descriptionKey: "commands.novelai.generate.image.no_api_key_description",
+        tipKeys: await recoveryTips([], "server"),
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
       });
@@ -194,6 +258,8 @@ export async function execute(
       ...tomoriState.config,
       nai_diffusion_model_id: imageCreds.modelId ?? tomoriState.config.nai_diffusion_model_id,
     });
+    if (modelSelection && resolvedModel?.diffusionModelId !== modelSelection.modelId)
+      throw new GenerationModelUnavailableError();
     if (!resolvedModel) {
       log.warn(
         `[NovelAI Generate Image] No NovelAI diffusion model resolved for server ${tomoriState.server_id}`,
@@ -207,16 +273,19 @@ export async function execute(
           },
         },
       );
+      if (!interaction.replied && !interaction.deferred)
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.novelai.generate.image.no_model_title",
         descriptionKey: "commands.novelai.generate.image.no_model_description",
+        tipKeys: await recoveryTips([], imageCreds.source),
         color: ColorCode.ERROR,
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
-    const apiKey = imageCreds.apiKey;
+    let apiKey = imageCreds.apiKey;
 
     const effectiveImageParams = resolveNaiImageParams(tomoriState.config);
 
@@ -248,11 +317,14 @@ export async function execute(
           errorDescriptionKey = "commands.generate.image.serverwide_quota_exceeded_description";
         }
 
+        if (!interaction.replied && !interaction.deferred)
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await replyInfoEmbed(interaction, locale, {
           titleKey: errorTitleKey,
           descriptionKey: errorDescriptionKey,
           descriptionVars,
           footerKey: "commands.generate.image.quota_exceeded_footer",
+          tipKeys: await recoveryTips([], imageCreds.source),
           color: ColorCode.ERROR,
           flags: MessageFlags.Ephemeral,
         });
@@ -332,6 +404,15 @@ export async function execute(
     if (!modalSubmitInteraction || !prompt || !orientation) {
       log.error("NovelAI generate image modal missing required values");
       return;
+    }
+    if (modelSelection) {
+      imageCreds = await resolveSelectedNaiCredentials(tomoriState.server_id, userData.user_id ?? null, modelSelection);
+      apiKey = imageCreds.apiKey;
+      resolvedModel = await resolveNaiDiffusionModel({
+        ...tomoriState.config,
+        nai_diffusion_model_id: modelSelection.modelId,
+      });
+      if (resolvedModel?.diffusionModelId !== modelSelection.modelId) throw new GenerationModelUnavailableError();
     }
     submittedInput = {
       prompt,
@@ -420,12 +501,11 @@ export async function execute(
     const filename = `nai_generated_${Date.now()}.${preparedImage.extension}`;
     const attachment = new AttachmentBuilder(preparedImage.buffer, {
       name: filename,
-    });
+    }).setSpoiler(spoiler);
 
     const successEmbed = new EmbedBuilder()
       .setTitle(localizedStatusTitle(locale, "commands.novelai.generate.image.success_title", ColorCode.SUCCESS))
       .setColor(ColorCode.SUCCESS)
-      .setImage(`attachment://${filename}`)
       .setFooter({
         text: localizer(
           locale,
@@ -452,7 +532,9 @@ export async function execute(
         },
       ]);
 
-    if (characterReference?.url) {
+    if (!spoiler) successEmbed.setImage(`attachment://${filename}`);
+
+    if (characterReference?.url && !spoiler) {
       successEmbed.setThumbnail(characterReference.url);
     }
 
@@ -461,10 +543,20 @@ export async function execute(
       files: preparedImage.promptAttachment ? [attachment, preparedImage.promptAttachment] : [attachment],
     });
   } catch (error) {
+    if (error instanceof GenerationModelUnavailableError) {
+      await replyGenerationModelUnavailable(modalSubmitInteraction ?? interaction, locale);
+      return;
+    }
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorKind = classifyNaiImageError(error);
-    await log.error("Error in /novelai generate image command", error, {
+    await reportProviderFailure({
+      summary: "Error in /novelai generate image command",
       errorType: "CommandExecutionError",
+      error,
+      expected: errorKind !== "other",
+      serverId: tomoriState?.server_id ?? null,
+      userId: userData.user_id ?? null,
+      dimensions: { operation: "image-generation", provider: "novelai", errorKind },
       metadata: {
         command: "novelai generate image",
         guildId: interaction.guild?.id ?? null,
@@ -475,11 +567,15 @@ export async function execute(
 
     const replyTarget = modalSubmitInteraction ?? interaction;
     const isPersonalNai = imageCreds?.source === "personal";
+    const credentialSource = imageCreds?.source ?? "server";
 
     if (errorKind === "quota") {
-      const tipKeys = isPersonalNai
-        ? ["genai.tips.top_up_provider_balance", "genai.tips.disable_personal_text_override"]
-        : ["genai.tips.wait_and_retry"];
+      const tipKeys = await recoveryTips(
+        isPersonalNai
+          ? ["genai.tips.top_up_provider_balance", "genai.tips.disable_personal_text_override"]
+          : ["genai.tips.wait_and_retry"],
+        credentialSource,
+      );
       await replyInfoEmbed(replyTarget, locale, {
         titleKey: "commands.novelai.generate.image.quota_error_title",
         descriptionKey: "commands.novelai.generate.image.quota_error_description",
@@ -491,7 +587,10 @@ export async function execute(
     }
 
     if (errorKind === "auth") {
-      const tipKeys = isPersonalNai ? ["genai.tips.verify_api_key_personal"] : ["genai.tips.verify_api_key"];
+      const tipKeys = await recoveryTips(
+        isPersonalNai ? ["genai.tips.verify_api_key_personal"] : ["genai.tips.verify_api_key"],
+        credentialSource,
+      );
       await replyInfoEmbed(replyTarget, locale, {
         titleKey: "commands.novelai.generate.image.auth_error_title",
         descriptionKey: "commands.novelai.generate.image.auth_error_description",
@@ -507,13 +606,16 @@ export async function execute(
         titleKey: "commands.novelai.generate.image.rate_limit_error_title",
         descriptionKey: "commands.novelai.generate.image.rate_limit_error_description",
         color: ColorCode.ERROR,
-        tipKeys: ["genai.tips.wait_and_retry"],
+        tipKeys: await recoveryTips(["genai.tips.wait_and_retry"], credentialSource),
         ...recoveryOptions(),
       });
       return;
     }
 
-    const tipKeys = isPersonalNai ? ["genai.tips.disable_personal_text_override"] : ["genai.tips.wait_and_retry"];
+    const tipKeys = await recoveryTips(
+      isPersonalNai ? ["genai.tips.disable_personal_text_override"] : ["genai.tips.wait_and_retry"],
+      credentialSource,
+    );
     await replyInfoEmbed(replyTarget, locale, {
       titleKey: "commands.novelai.generate.image.error_title",
       descriptionKey: "commands.novelai.generate.image.error_description",

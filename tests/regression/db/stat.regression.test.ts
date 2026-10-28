@@ -9,6 +9,19 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { statRepository, userRepository } from "@/utils/db/repositories";
+import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
+import { buildStatsDashboardButtonId, parseStatsDashboardRoute } from "@/utils/discord/statsDashboardCatalog";
+import {
+  buildPersonalTabs,
+  buildPersonaTabs,
+  buildServerTabs,
+  buildStatsDashboardPayload,
+  resolveWindowFrom,
+  type StatsDashboardViewContext,
+  TIMEFRAME_VALUES,
+} from "@/utils/stats/statsDashboard";
+import { initializeLocalizer } from "@/utils/text/localizer";
+import { collectCaseFailures } from "../../helpers/localeCases";
 import { FIXTURE_IDS, cleanupFixtures, insertFixtures, type FixtureRefs } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
@@ -71,6 +84,32 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     return row ? Number(row.count) : 0;
   }
 
+  it("weights human rewards at three and punishments at one without inflating message totals", async () => {
+    for (const [age, metricKey, count] of [
+      [0, "", 2],
+      [1, "reward", 2],
+      [2, "punish", 2],
+      [5, "reward", 100],
+    ] as const) {
+      await testSql`
+        INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)
+        VALUES (${refs.serverId}, ${refs.userId}, ${lineageA}, 'message_sent', ${metricKey}, ${dayOffset(age)}::date, ${count})
+      `;
+    }
+    const from = new Date(`${dayOffset(2)}T00:00:00Z`);
+    const heat = await statRepository.getServerDailyHeatCounts({ serverId: refs.serverId, from });
+    expect(heat).toEqual(
+      new Map([
+        [dayOffset(0), 2],
+        [dayOffset(1), 6],
+        [dayOffset(2), 2],
+      ]),
+    );
+    expect((await statRepository.getServerPersonaMessageCounts({ serverId: refs.serverId, from })).get(lineageA)).toBe(
+      6,
+    );
+  });
+
   it("recordStat then flush produces one row with the delta", async () => {
     statRepository.recordStat({
       serverId: refs.serverId,
@@ -80,6 +119,85 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     });
     await statRepository.flush();
     expect(await readCount("message_sent", "", lineageA, refs.userId)).toBe(1);
+  });
+
+  it("renders actual dashboard tabs with round-trippable routes for every view and timeframe", async () => {
+    await initializeLocalizer();
+    const cases = collectCaseFailures();
+    for (const timeframe of TIMEFRAME_VALUES) {
+      const common = {
+        locale: "en-US",
+        ownerId: "123456789012345678",
+        serverId: refs.serverId,
+        guildId: FIXTURE_IDS.serverDiscId,
+        timeframe,
+      };
+      const contexts: StatsDashboardViewContext[] = [
+        { ...common, view: "personal", scope: "this_server" },
+        { ...common, view: "personal", scope: "global" },
+        { ...common, view: "persona", personaId: refs.personaId },
+        { ...common, view: "server" },
+      ];
+      const args = { ...common, from: resolveWindowFrom(timeframe), subtitle: "Stats" };
+      for (const context of contexts) {
+        const tabs =
+          context.view === "personal"
+            ? await buildPersonalTabs({
+                ...args,
+                userId: refs.userId,
+                userDiscId: FIXTURE_IDS.userDiscId,
+                scopeServerId: context.scope === "this_server" ? refs.serverId : undefined,
+              })
+            : context.view === "persona"
+              ? await buildPersonaTabs({ ...args, lineageId: lineageA, personaName: "Mirri" })
+              : await buildServerTabs(args);
+        expect(tabs.length).toBeGreaterThan(0);
+        for (const [activeIndex, tab] of tabs.entries()) {
+          const scope = context.view === "personal" ? context.scope : context.view;
+          cases.check(`${context.view}/${scope}/${timeframe}/${tab.id}`, () => {
+            const payload = buildStatsDashboardPayload(context, tabs, activeIndex, true);
+            const customId = buildStatsDashboardButtonId(context, tab.id);
+            const parsed = parseInteractionRoute(customId);
+            expect(parsed ? parseStatsDashboardRoute(parsed) : null).toMatchObject({
+              view: context.view,
+              tab: tab.id,
+            });
+            expect(JSON.stringify(payload)).toContain(customId);
+          });
+        }
+      }
+    }
+    cases.expectNoFailures();
+  });
+
+  it("restores unique guild participants from successful turns while excluding command-only activity and DMs", async () => {
+    for (const lineageId of [lineageA, lineageB]) {
+      statRepository.recordStat({ serverId: refs.serverId, userId: refs.userId, lineageId, metric: "message_sent" });
+    }
+    statRepository.recordStat({ serverId: refs.serverId, userId: altUserId, metric: "command_used" });
+    await statRepository.flush();
+
+    const participants = (await statRepository.getPresenceRetentionPairs()).filter(
+      (pair) => pair.server_disc_id === FIXTURE_IDS.serverDiscId,
+    );
+    expect(participants).toEqual([{ server_disc_id: FIXTURE_IDS.serverDiscId, user_disc_id: FIXTURE_IDS.userDiscId }]);
+
+    await statRepository.recordPresenceSeen({ serverId: refs.serverId, userId: altUserId, lineageId: lineageA });
+    expect(await statRepository.getPresenceRetentionPairs()).toContainEqual({
+      server_disc_id: FIXTURE_IDS.serverDiscId,
+      user_disc_id: FIXTURE_IDS.altUserDiscId,
+    });
+
+    await testSql`UPDATE servers SET is_dm_channel = TRUE WHERE server_id = ${refs.serverId}`;
+    try {
+      expect(
+        (await statRepository.getPresenceRetentionPairs()).some(
+          (pair) => pair.server_disc_id === FIXTURE_IDS.serverDiscId,
+        ),
+      ).toBe(false);
+    } finally {
+      await testSql`UPDATE servers SET is_dm_channel = FALSE WHERE server_id = ${refs.serverId}`;
+    }
   });
 
   it("prices decision tokens separately from author tokens without double-counting subset metrics", async () => {

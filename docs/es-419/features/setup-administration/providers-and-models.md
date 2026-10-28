@@ -17,10 +17,12 @@ Agrega una clave de proveedor durante la configuración inicial con `/setup`, o 
 | Modo | lo que recoge |
 |---|---|
 | Proveedor de IA (recomendado) | Un proveedor del catálogo más su clave API, validada y cifrada como borrador. |
-| Punto final personalizado (avanzado) | La conexión del punto final y un modelo de texto, registrados dentro del asistente. Consulta [Puntos finales personalizados](#custom-endpoints). |
-| Usuario BYOK (solo gremios) | Nada: el espacio de trabajo no cuenta con ningún proveedor propio, por lo que los miembros deberán suministrar uno personal. |
+| Punto de conexión personalizado | La conexión del punto final y un modelo de texto, registrados dentro del asistente. Consulta [Puntos finales personalizados](#custom-endpoints). |
+| Usuario BYOK (solo gremios) | Nada: el servidor no cuenta con ningún proveedor propio, por lo que los miembros deberán suministrar uno personal. |
 
-No se escribe nada en la base de datos hasta que presione `Finalizar configuración`. Un asistente abandonado o caducado deja intactas las filas de proveedores existentes del espacio de trabajo. Para reemplazar una clave existente, use `/providers`, porque `/setup` no se ejecutará en un espacio de trabajo ya configurado.
+No se escribe nada en la base de datos hasta que presione `Finalizar configuración`. Un asistente abandonado o caducado deja intactas las filas de proveedores existentes del servidor. Para reemplazar una clave existente, use `/providers`, porque `/setup` no se ejecutará en un servidor ya configurado.
+
+Reemplazar la clave de un proveedor conserva sus configuraciones de muestreo guardadas, incluido el límite de tokens de salida.
 
 Cada proveedor tiene sus propios pasos de generación de claves. En `/help`, elija `Configuración`, luego `Obtener una clave de API` y elija su proveedor para un tutorial paso a paso, o utilice estos puntos de partida:
 
@@ -43,7 +45,7 @@ Nunca compartas tu clave API con nadie más. Agrega o reemplace el token de aute
 
 Vertex AI se autentica con credenciales predeterminadas de aplicación (ADC) en lugar de un secreto almacenado. Para alojamiento local, ADC puede provenir de `gcloud`; Las implementaciones alojadas deben utilizar una identidad de carga de trabajo o una cuenta de servicio. Una clave AI Studio API por sí sola no autentica el Vertex AI completo. El proyecto de nube Google seleccionado debe tener habilitada la facturación y el Vertex AI API, y la identidad del host necesita acceso a Vertex. La guía de configuración está disponible en Google Vertex AI en la página `API Keys` en `/help`.
 
-La configuración del proveedor respaldada por Google valida las credenciales a través del punto final de listado de modelos autenticado. No genera texto ni depende del modelo de chat que esté actualmente marcado como predeterminado del catálogo, por lo que un modelo predeterminado retirado no puede impedir que se guarde una credencial válida.
+La configuración de Google Gemini y Vertex AI valida las credenciales mediante el endpoint autenticado de listado de modelos, y Vertex AI Express valida las claves de API con `countTokens`, por lo que la configuración nunca genera texto.
 
 ### Opcional: clave de Brave Search
 
@@ -62,22 +64,23 @@ En `/config` > `Modelos` > Modelos de conmutador, puede asignar modelos y puntos
 - **Texto**: el modelo de chat principal.
 - **Visión**: lee imágenes cuando el modelo de chat no puede.
 - **Incrustaciones**: potencia la [base de conocimiento de documentos](/es-419/features/knowledge/memory/#document-knowledge-base-rag).
+- **Decisión**: un [modelo de decisión](#decision-models) registrado. [Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) lo utiliza para decidir cuándo unirse a una conversación.
 - **Imagen estándar**: generación de imágenes estándar (consulte [Generación de imágenes](/es-419/features/capabilities/media-generation/image-generation/)).
 - **Imagen NovelAI**: Generación de imágenes NovelAI.
 - **Video**: generación de video.
 - **Punto final TTS**: punto final de voz de texto a voz.
 - **Punto final STT**: punto final de transcripción de audio de voz a texto.
 
-Los primeros seis espacios eligen registros del catálogo de modelos. En su lugar, las ranuras TTS y STT eligen puntos finales con ámbito de espacio de trabajo, activando el punto final seleccionado en lugar de escribir una columna de modelo. Registre y edite esos puntos finales en `/providers`. `/personal config` conserva seis ranuras de enrutamiento de modelos personales y no incluye selectores de puntos finales personales TTS/STT.
+Los primeros seis espacios eligen registros del catálogo de modelos. En su lugar, las ranuras TTS y STT eligen puntos finales con ámbito de servidor, activando el punto final seleccionado en lugar de escribir una columna de modelo. Registre y edite esos puntos finales en `/providers`. `/personal config` conserva seis ranuras de enrutamiento de modelos personales y no incluye selectores de puntos finales personales TTS/STT.
 
 También puede administrar claves de respaldo para conmutación por error automática y equilibrio de carga en `/providers`.
 
 ## Modelos de decisiones
 <!-- anchor: decision-models -->
 
-Los modelos de decisiones son una categoría independiente en `/providers` y `/personal providers`. Responden a predicados tipados con probabilidades. El registro no cambia el modelo de chat activo, no establece calibración ni habilita la omisión de la revisión de respuestas. Estos paneles aún no seleccionan un modelo de decisiones.
+Los modelos de decisiones son una categoría independiente en `/providers` y `/personal providers`. Responden preguntas tipadas (sí o no, o una opción entre varias) con probabilidades. El registro no cambia el modelo de chat activo. Elige el modelo de decisión del servidor en `/config` > `Modelos` > `Cambiar modelos`. [Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) lo utiliza como su verificador de intervenciones activas para saber cuándo una conversación coincide con los intereses de una persona, a menos que se elija otro verificador en `/config` > `Plugins` > `Natural Nudges`.
 
-OpenRouter es el proveedor nativo admitido. Guarda su clave, abre el menú desplegable de modelos y elige `+ Agregar un modelo de decisiones`. Ingresa un ID de su catálogo de decisiones verificado. El catálogo global incluye `typesafe/jev-1.13`; los registros adicionales pertenecen a su servidor o propietario personal. El descubrimiento nativo proporciona el límite de entrada documentado y los precios. Los catálogos de chat no pueden establecer compatibilidad con decisiones.
+OpenRouter es el proveedor nativo admitido. Guarda su clave, abre el menú desplegable de modelos y elige `+ Agregar un modelo de decisiones`. Ingresa un ID de su catálogo de decisiones verificado. El catálogo global mantiene una lista reducida para distintas necesidades: Decider Flash V1.2 (predeterminado, rápido y de bajo costo), Jev 1.14 (mayor precisión), GPT-6 Luna Decisions (entradas más grandes) y Mercury Decide Free (experimentación). Estas funciones siguen las capacidades documentadas; la precisión y los umbrales requieren pruebas con tus propias preguntas. La comprobación semanal del catálogo ofrece nuevas entradas para su revisión. Los registros adicionales pertenecen a su servidor o propietario personal. El descubrimiento nativo proporciona el límite de entrada documentado y los precios. Los catálogos de chat no pueden establecer compatibilidad con decisiones.
 
 Para un servicio personalizado, elige `Agregar nuevo punto de conexión`, luego `Compatible con System One` o `Compatible con OpenAI Decisions` en `Compatibilidad de API`. Guarda la URL base de la API y la credencial Bearer opcional. Su menú desplegable de modelos ofrece `+ Agregar un modelo de decisiones` y hereda ese protocolo. Ingresa el ID de modelo documentado y el límite de tokens de entrada (al menos 512). Jev, Laya y Kev usan compatibilidad con System One. Los puntos de conexión existentes compatibles con chat y nativos de Ollama no ofrecen esta acción.
 
@@ -92,7 +95,7 @@ Los registros y credenciales del proveedor permanecen fuera de las exportaciones
 
 Los puntos finales personalizados le permiten registrar servicios autohospedados o respaldados por proxy (Ollama, LM Studio, LiteLLM, vLLM, ComfyUI, TTS/STT local) como paquetes de proveedores etiquetados.
 
-- **Alcance del servidor**: abra `/providers` para registrar y editar el punto final del espacio de trabajo.
+- **Alcance del servidor**: abra `/providers` para registrar y editar los puntos finales del servidor.
 - **Ámbito personal**: abra `/personal providers` para catálogos de modelos personales (consulte [Personalización](/es-419/features/knowledge/personalization/#your-own-providers)). Los puntos finales de voz personal no se seleccionan de `/personal config`.
 
 Una etiqueta es el nombre del menú de cara al usuario y las capacidades de los grupos en un paquete cuando comparten una URL de punto final. Nunca se envía al servicio remoto. Las capacidades ofrecidas desde diferentes URL necesitan etiquetas distintas.
@@ -108,7 +111,7 @@ Para TTS y STT, registre el terminal y sus modelos en `/providers`, luego elija 
 
 La compatibilidad API determina las rutas de solicitud y las cargas útiles que implementa el servicio, por lo que también determina qué ranuras de capacidad prepara la conexión. Registrar modelos exactos para esas ranuras es un paso aparte, porque el protocolo no se puede inferir de manera confiable únicamente a partir de la URL del punto final.
 
-El modo `Punto de conexión personalizado (avanzado)` de `/setup` realiza los mismos dos pasos dentro del asistente: `Configurar conexión` guarda la compatibilidad, la etiqueta, la URL y el token de autenticación opcional de API detrás de una verificación de accesibilidad, y `Configurar modelo de texto` registra el modelo de texto exacto y sus declaraciones de capacidad. El botón de modelo permanece deshabilitado hasta que se valida la conexión y al volver a guardar la conexión se borra la declaración del modelo porque las declaraciones dependen de la compatibilidad de API. El asistente crea las filas de conexión, proveedor guardado, modelo y modelo activo juntas cuando presiona `Finalizar configuración`. El asistente registra únicamente modelos de texto; Las capacidades de imagen, video, TTS y STT están registradas en `/providers`.
+El modo `Punto de conexión personalizado` de `/setup` realiza los mismos dos pasos dentro del asistente: `Configurar conexión` guarda la compatibilidad, la etiqueta, la URL y el token de autenticación opcional de API detrás de una verificación de accesibilidad, y `Configurar modelo de texto` registra el modelo de texto exacto y sus declaraciones de capacidad. El botón de modelo permanece deshabilitado hasta que se valida la conexión y al volver a guardar la conexión se borra la declaración del modelo porque las declaraciones dependen de la compatibilidad de API. El asistente crea las filas de conexión, proveedor guardado, modelo y modelo activo juntas cuando presiona `Finalizar configuración`. El asistente registra únicamente modelos de texto; Las capacidades de imagen, video, TTS y STT están registradas en `/providers`.
 
 OpenCode Go (`https://opencode.ai/zen/go/v1`) y OpenCode Zen (`https://opencode.ai/zen/v1`) funcionan como puntos finales personalizados compatibles con OpenAI. TomoriBot les envía el ID de sesión por conversación que necesitan, derivado de un hash del canal y la persona, por lo que ningún ID de Discord sale del bot.
 
@@ -160,8 +163,12 @@ Estos son los valores predeterminados desde los que parten los modelos de imáge
 
 ### Voz y audio
 
-| Proveedora | Texto a voz | Voz a texto |
+| Proveedor | Texto a voz | Voz a texto |
 |---|---|---|
 | ElevenLabs | ✅ | ✅ |
+| Google Gemini | Diseño de voz | No |
+| Vertex AI (estándar, global) | Diseño de voz | No |
+| OpenRouter Fish | Clon de voz | No |
+| OpenRouter Seed Audio | Diseño de voz | No |
 
 Los motores de voz locales están cubiertos en [Autoalojamiento](/es-419/self-hosting/). Para búsqueda web integrada y lectura de URL, consulte [Herramientas y extensiones](/es-419/features/capabilities/tools-and-extensions/#web-search--url-reading).

@@ -11,6 +11,12 @@ import type {
 import type { StructuredContextItem } from "@/types/misc/context";
 import type { PreparedParticipantContext } from "@/utils/text/participants/preparation";
 
+export type MessageProxyConversationUser = {
+  serviceId: string;
+  displayName: string;
+  senderDiscId: string;
+};
+
 /**
  * Simplified message structure received from tomoriChat.ts.
  * This is an internal representation before converting to StructuredContextItem.
@@ -118,6 +124,8 @@ export interface BuildContextParams {
   preloadedCustomExpressions?: CustomExpressionRow[] | null;
   isUserImpersonation?: boolean;
   impersonatedUserId?: string;
+  /** Whose short-term memory to read when it is not the trigger message's author, such as a Ping User target. */
+  shortTermMemoryUserId?: string;
   impersonatedUserNickname?: string;
   impersonatedUserPrompt?: string | null;
   /** Active persona-scoped user mutes/blocks for the responding persona. */
@@ -127,11 +135,11 @@ export interface BuildContextParams {
   /** Per-turn tool names retained by Deliberate Tool Mode; undefined means no scoped filtering. */
   deliberateToolAllowedNames?: readonly string[] | null;
   /**
-   * When `true`, skips the `DEFAULT_SYSTEM_PROMPT` fallback in the humanizer block.
-   * Set by the routing wrapper when a SillyTavern preset is active and no custom
-   * `/sysprompt` has been configured, so the preset fully controls the system prompt.
+   * Set by the routing wrapper while a SillyTavern preset is active: the stored server
+   * `system_prompt` and the `DEFAULT_SYSTEM_PROMPT` fallback are both skipped, so the preset
+   * fully controls the system prompt. A replace-mode channel prompt still fills the slot.
    */
-  suppressDefaultSystemPrompt?: boolean;
+  presetOwnsSystemPrompt?: boolean;
   /** Opaque message ID map: caller creates, context builder populates. */
   messageIdMap?: MessageIdMap;
 }

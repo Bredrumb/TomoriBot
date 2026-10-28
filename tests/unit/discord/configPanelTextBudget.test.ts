@@ -14,7 +14,7 @@
  * matching English marker text, so it only runs in `en-US`, and the sweep is cheap.
  */
 import { beforeAll, describe, expect, it } from "bun:test";
-import { ChannelType, ComponentType } from "discord.js";
+import { ChannelType, ComponentType, type ActionRowData, type ButtonComponentData } from "discord.js";
 import type { LlmRow, NaiPresetRow, SavedProviderConfigRow, TomoriState, VoiceSampleRow } from "@/types/db/schema";
 import type { PanelReadStatus } from "@/types/discord/panel";
 import type { BlocklistChannelTarget, ChecklistChannelTarget } from "@/utils/discord/channelChecklistManager";
@@ -28,17 +28,23 @@ import type {
 } from "@/utils/discord/interactions/configRouteContext";
 import type { ConfigPersonaVoiceView } from "@/utils/discord/interactions/configPersonaVoiceLoader";
 import {
+  CONFIG_FALLBACK_SLOT_COUNT,
   CONFIG_MODEL_CAPABILITY_ORDER,
   CONFIG_NAI_PRESET_PAGE_SIZE,
+  CONFIG_PAGES_BY_CATEGORY,
   isConfigCatalogModelCapability,
   type ConfigCatalogModelCapability,
+  type ConfigCategory,
 } from "@/utils/discord/configPanelCatalog";
+import type { ResponseDraftingView } from "@/utils/discord/interactions/responseDraftingOperations";
 import {
   computeVoiceSampleFingerprint,
+  CONFIG_VOICE_SAMPLE_PAGE_SIZE,
+  CONFIG_VOICE_SAMPLE_ADD_VALUE,
   voiceSampleAttachmentName,
   type ConfigVoicesView,
 } from "@/utils/discord/ui/configVoicesPanel";
-import type { ConfigPersonaVoiceRemoteView } from "@/utils/discord/ui/configVoicePanel";
+import { buildConfigVoiceBody, type ConfigPersonaVoiceRemoteView } from "@/utils/discord/ui/configVoicePanel";
 import type { ConfigCapabilityEndpoint } from "@/utils/discord/interactions/configModelLoaders";
 import type { ConfigParametersView, ConfigSwitchModelsView } from "@/utils/discord/ui/configModelsPanel";
 import {
@@ -48,6 +54,13 @@ import {
   validateComponentsV2MessageLimits,
 } from "@/utils/discord/ui/componentsV2Limits";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
+import {
+  defaultServerNaturalNudgeConfig,
+  NATURAL_NUDGE_INTEREST_DESCRIPTION_MAX,
+  NATURAL_NUDGE_INTEREST_LABEL_MAX,
+  NATURAL_NUDGE_INTEREST_LIMIT,
+} from "@/modules/natural-nudges/db/types";
+import type { NaturalNudgesSettingsView } from "@/modules/natural-nudges/discord/operations";
 import { FENCED_PREVIEW_MAX_CHARS } from "@/utils/text/textPreview";
 import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import { getCapabilitiesManagePermissionDefinitions } from "@/utils/discord/manageConfigMapping";
@@ -55,8 +68,8 @@ import { HUMANIZER_DEFAULT } from "@/utils/discord/humanizerOptions";
 import { DEFAULT_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
 import { withLinePrefix } from "@/utils/discord/ui/panel";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
-import { initializeLocalizer, localizer } from "@/utils/text/localizer";
-import { collectCaseFailures, RUNTIME_LOCALES, localizedCopy } from "../../helpers/localeCases";
+import { initializeLocalizer, localizer, hasLocaleKey } from "@/utils/text/localizer";
+import { collectCaseFailures, RUNTIME_LOCALES, localizedCopy, localizedProse } from "../../helpers/localeCases";
 import { BACKTICK_RUNS } from "../../helpers/panelLimits";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
@@ -73,6 +86,60 @@ const RENDERING_READ_STATUSES: readonly PanelReadStatus[] = ["fresh", "unavailab
 beforeAll(async () => initializeLocalizer());
 
 const GUILD_MANAGER: ConfigActor = { workspaceKind: "guild", isManager: true };
+
+const MAX_NUDGE_INTERESTS = Array.from({ length: NATURAL_NUDGE_INTEREST_LIMIT }, (_, index) => ({
+  label: `${index}`.padEnd(NATURAL_NUDGE_INTEREST_LABEL_MAX, "L"),
+  description: "`D*"
+    .repeat(Math.ceil(NATURAL_NUDGE_INTEREST_DESCRIPTION_MAX / 3))
+    .slice(0, NATURAL_NUDGE_INTEREST_DESCRIPTION_MAX),
+}));
+
+const MAX_NUDGE_CHANNELS = Array.from({ length: 25 }, (_, index) => `1${String(index).padStart(17, "0")}`);
+
+const MAX_PERSONA_NUDGE_IDS = Array.from({ length: 20 }, (_, index) => `n${index}`.padEnd(24, "i"));
+
+const MAX_PERSONA_NUDGES = MAX_PERSONA_NUDGE_IDS.map((id, index) => ({
+  id,
+  category: (["ping_user", "revive_topic", "start_topic", "play_scene"] as const)[index % 4],
+  title: `${index}`.padEnd(80, "T"),
+  brief: "B".repeat(1000),
+  agenda_hint: "A".repeat(500),
+  prerequisites: ["tool:web_search", "tool:fetch_url"],
+  recommended_tools: [],
+}));
+
+const MAX_NUDGE_SETTINGS: NaturalNudgesSettingsView = {
+  config: {
+    ...defaultServerNaturalNudgeConfig(1),
+    idle_nudges_enabled: true,
+    channel_disc_ids: MAX_NUDGE_CHANNELS,
+    llm_id: null,
+  },
+  runtime: { server_id: 1, idle_nudge_jitter: 1, consecutive_failures: 3, stopped_at: new Date(0) },
+  plannerModels: Array.from({ length: 30 }, (_, index) => ({
+    provider: `custom:provider-${index}`,
+    models: Array.from({ length: index === 0 ? 60 : 1 }, (_, model) => ({
+      id: index * 100 + model + 1,
+      name: `model-${index}-${model}`.padEnd(90, "m"),
+      description: null,
+    })),
+  })),
+  checkerDecisionModels: Array.from({ length: 30 }, (_, index) => ({
+    provider: `custom:decision-${index}`,
+    models: [{ id: 9000 + index, name: `decision-${index}`.padEnd(90, "d"), description: null }],
+  })),
+  trackingEnabled: false,
+  baseHeat: 1234.5,
+  heat: 50,
+  perDay: 3,
+  activeNudgeRange: { min: 160, max: 320 },
+  status: {
+    effectiveChannelIds: MAX_NUDGE_CHANNELS,
+    plannerModel: { kind: "unusable", llmId: 7, source: "chat", reason: "unavailable" },
+    chatModel: { codename: "chat-model".padEnd(90, "c"), provider: "custom:provider-chat" },
+    checker: { source: "recommended", model: "decision-model".padEnd(200, "d") },
+  },
+};
 
 /** Server 9 and the id-derived nickname are this suite's defaults, so both stay off the factory. */
 function makePersona(overrides: Partial<TomoriState> & { persona_id: number }): TomoriState {
@@ -298,6 +365,8 @@ function makeSwitchModelsView(
     personaOverrides: [],
     imageGenerationEnabled,
     videoGenerationEnabled,
+    speechCapabilityEnabled: true,
+    endpointSlots: [{ capability: "stt", endpoints: [], pageStart: 0 }],
   };
 }
 
@@ -318,7 +387,7 @@ function makeExplicitCatalogSlot(
   };
 }
 
-function makeExplicitEightSlotView(
+function makeExplicitSlotView(
   imageGenerationEnabled: boolean,
   videoGenerationEnabled: boolean,
   slotState: (capability: ConfigCatalogModelCapability) => boolean,
@@ -326,34 +395,29 @@ function makeExplicitEightSlotView(
   speechCapabilityEnabled: boolean,
   speechActiveIndex: number,
 ): ConfigSwitchModelsView {
-  const makeEndpoints = (capability: "tts" | "stt"): ConfigCapabilityEndpoint[] =>
-    Array.from({ length: endpointCount }, (_unused, index) => ({
-      id: index + 1,
-      capability: capability === "tts" ? "speech" : "transcription",
-      label: `${capability}-endpoint-${index + 1}`,
-      modelLabel: `${capability}-model-${index + 1}`,
-      apiStyle: capability === "tts" ? "tts-clone" : "openai-compatible-transcription",
-      isActive: index === speechActiveIndex,
-    }));
+  const sttEndpoints: ConfigCapabilityEndpoint[] = Array.from({ length: endpointCount }, (_unused, index) => ({
+    id: index + 1,
+    capability: "transcription",
+    label: `stt-endpoint-${index + 1}`,
+    modelLabel: `stt-model-${index + 1}`,
+    apiStyle: "openai-compatible-transcription",
+    isActive: index === speechActiveIndex,
+  }));
+  const speechSlotState = () => speechActiveIndex >= 0;
 
   return {
-    slots: [
-      makeExplicitCatalogSlot("text", slotState),
-      makeExplicitCatalogSlot("vision", slotState),
-      makeExplicitCatalogSlot("embedding", slotState),
-      makeExplicitCatalogSlot("image", slotState),
-      makeExplicitCatalogSlot("nai-image", slotState),
-      makeExplicitCatalogSlot("video", slotState),
-    ],
+    slots: CONFIG_MODEL_CAPABILITY_ORDER.filter(isConfigCatalogModelCapability).map((capability) =>
+      makeExplicitCatalogSlot(
+        capability,
+        capability === "tts-design" || capability === "tts-clone" ? speechSlotState : slotState,
+      ),
+    ),
     channelOverrides: [],
     personaOverrides: [],
     imageGenerationEnabled,
     videoGenerationEnabled,
     speechCapabilityEnabled,
-    endpointSlots: [
-      { capability: "tts", endpoints: makeEndpoints("tts"), pageStart: 0 },
-      { capability: "stt", endpoints: makeEndpoints("stt"), pageStart: 0 },
-    ],
+    endpointSlots: [{ capability: "stt", endpoints: sttEndpoints, pageStart: 0 }],
   };
 }
 
@@ -706,6 +770,59 @@ describe("config page text budgeting at stored maxima", () => {
           receipt: receipt ? { tone: "success", heading: "Saved", detail: "Configuration was saved." } : undefined,
         });
       },
+    },
+    {
+      name: "Persona Nudges",
+      maxTolerance: PREVIEW_TIGHTNESS_TOLERANCE,
+      buildPayload: (locale: string, receipt: boolean) =>
+        buildConfigPanelPayload({
+          locale,
+          actor: GUILD_MANAGER,
+          category: "persona",
+          page: "nudges",
+          personas: [makePersona({ persona_id: 55, is_pointer: true })],
+          selectedPersonaId: 55,
+          readStatus: "fresh",
+          naturalNudges: {
+            personaConfig: {
+              persona_id: 55,
+              talkativeness: 4,
+              interests: MAX_NUDGE_INTERESTS,
+              has_override: true,
+              idle_nudges: MAX_PERSONA_NUDGES,
+              disabled_idle_nudge_ids: [MAX_PERSONA_NUDGE_IDS[0] as string],
+              idle_nudges_override: true,
+              idle_nudges_inherited: false,
+            },
+            personaNudges: {
+              blockers: new Map([
+                [`persona:55:${MAX_PERSONA_NUDGE_IDS[1]}`, { kind: "tool" as const, tool: "web_search" as const }],
+              ]),
+            },
+          },
+          receipt: receipt ? { tone: "success", heading: "Saved", detail: "Configuration was saved." } : undefined,
+        }),
+    },
+    {
+      name: "Plugins Natural Nudges",
+      maxTolerance: PREVIEW_TIGHTNESS_TOLERANCE,
+      buildPayload: (locale: string, receipt: boolean) =>
+        buildConfigPanelPayload({
+          locale,
+          actor: GUILD_MANAGER,
+          category: "plugins",
+          page: "natural-nudges",
+          personas: [
+            makePersona({
+              persona_id: 55,
+              config: { ...makePersona({ persona_id: 55 }).config, user_byok_mode: true },
+            }),
+          ],
+          selectedPersonaId: null,
+          readStatus: "fresh",
+          naturalNudges: { settings: MAX_NUDGE_SETTINGS },
+          receipt: receipt ? { tone: "success", heading: "Saved", detail: "Configuration was saved." } : undefined,
+        }),
     },
     {
       name: "Channels Overrides",
@@ -1128,11 +1245,11 @@ describe("Persona Advanced and Overrides component budgeting", () => {
     }
   });
 
-  it("keeps Overrides at 29 components with a receipt and rejects an extra row", () => {
+  it("keeps Overrides at 30 components with a receipt and rejects an extra row", () => {
     const payload = buildSplitPayload("overrides", true);
     const validation = validateComponentsV2MessageLimits(payload);
     expect(validation.valid, JSON.stringify(validation.violations)).toBe(true);
-    expect(countRenderedComponents(payload)).toBe(29);
+    expect(countRenderedComponents(payload)).toBe(30);
     const payloadWithExtraRow = {
       ...payload,
       components: [
@@ -1150,7 +1267,7 @@ describe("Persona Advanced and Overrides component budgeting", () => {
         },
       ],
     };
-    expect(countRenderedComponents(payloadWithExtraRow)).toBeGreaterThan(29);
+    expect(countRenderedComponents(payloadWithExtraRow)).toBeGreaterThan(30);
   });
 
   for (const page of ["advanced", "overrides"] as const) {
@@ -1214,7 +1331,8 @@ describe("Switch Models capability notice budgeting", () => {
                 const videoHasUsableModel = slotState.isUsable("video");
                 const imageHealthy = flags.imageGenerationEnabled && imageHasUsableModel;
                 const videoHealthy = flags.videoGenerationEnabled && videoHasUsableModel;
-                const expectedComponentCount = (receipt ? 27 : 25) + (imageHealthy && videoHealthy ? 0 : 1);
+                const noticeShown = !imageHealthy || !videoHealthy;
+                const expectedComponentCount = (receipt ? 36 : 34) - (noticeShown ? 0 : 1);
                 expect(countRenderedComponents(payload)).toBe(expectedComponentCount);
 
                 const renderedText = getTextDisplays(payload).join("\n");
@@ -1255,13 +1373,10 @@ describe("Switch Models capability notice budgeting", () => {
                     ),
                   );
                   expect(capabilityNotice).toBeUndefined();
-                } else {
-                  // The rows read as one titled list rather than as loose footnotes, so the heading
-                  // ships with the notice and disappears with it.
-                  expect(renderedText).toContain(
-                    `**${localizer(locale, "commands.config.panel.capability_notice_title")}**`,
-                  );
                 }
+                expect(
+                  renderedText.includes(`**${localizer(locale, "commands.config.panel.capability_notice_title")}**`),
+                ).toBe(noticeShown);
               },
             );
           }
@@ -1271,20 +1386,20 @@ describe("Switch Models capability notice budgeting", () => {
     cases.expectNoFailures();
   });
 
-  it("keeps the worst unhealthy receipt payload at the 28-component ceiling", () => {
+  it("keeps the worst unhealthy receipt payload at the 36-component ceiling", () => {
     const payload = buildSwitchModelsPayload("en-US", true, true, true, () => false);
-    expect(countRenderedComponents(payload)).toBe(28);
+    expect(countRenderedComponents(payload)).toBe(36);
 
     const payloadWithExtraTextDisplay = {
       ...payload,
       components: [...payload.components, { type: ComponentType.TextDisplay, content: "Reserve" }],
     };
-    expect(countRenderedComponents(payloadWithExtraTextDisplay)).toBeGreaterThan(28);
+    expect(countRenderedComponents(payloadWithExtraTextDisplay)).toBeGreaterThan(36);
   });
 
-  it("budgets an explicit eight-slot matrix across flags, reads, and endpoint boundaries", () => {
-    const componentBudget = 32;
-    const componentReserve = 8;
+  it("budgets the explicit slot matrix across flags, reads, and endpoint boundaries", () => {
+    const componentBudget = 36;
+    const componentReserve = 4;
     const discordComponentLimit = 40;
     const endpointCounts = [0, 1, 24, 25, 26, 60];
     let maximumReceiptComponentCount = 0;
@@ -1302,7 +1417,7 @@ describe("Switch Models capability notice budgeting", () => {
                 personas: [makePersona({ persona_id: 55 })],
                 selectedPersonaId: 55,
                 readStatus,
-                switchModelsView: makeExplicitEightSlotView(
+                switchModelsView: makeExplicitSlotView(
                   flags.imageGenerationEnabled,
                   flags.videoGenerationEnabled,
                   slotState.isUsable,
@@ -1345,24 +1460,20 @@ describe("Switch Models capability notice budgeting", () => {
       personas: [makePersona({ persona_id: 55 })],
       selectedPersonaId: 55,
       readStatus: "fresh",
-      switchModelsView: makeExplicitEightSlotView(true, true, () => false, 1, true, 0),
+      switchModelsView: makeExplicitSlotView(true, true, () => false, 1, true, 0),
     });
     expect(getTextDisplays(endpointPayload)).toContain("-# Use `/providers` to add more model choices.");
     const endpointMenus = getStringSelectMenus(endpointPayload).filter((menu) => {
       const customId = menu.customId;
       return typeof customId === "string" && customId.includes("ep-select");
     });
-    expect(endpointMenus).toHaveLength(2);
-    for (const capability of ["tts", "stt"] as const) {
-      const menu = endpointMenus.find((candidate) => {
-        const customId = candidate.customId;
-        return typeof customId === "string" && customId.includes(capability);
-      });
-      expect(menu).toBeDefined();
+    expect(endpointMenus).toHaveLength(1);
+    {
+      const menu = endpointMenus[0];
       const placeholder = menu?.placeholder;
       expect(typeof placeholder).toBe("string");
-      expect(placeholder).toContain(localizer("en-US", `commands.config.panel.capability_${capability}`));
-      expect(placeholder).toContain(`${capability}-endpoint-1: ${capability}-model-1`);
+      expect(placeholder).toContain(localizer("en-US", "commands.config.panel.capability_stt"));
+      expect(placeholder).toContain("stt-model-1 (stt-endpoint-1)");
       const options = menu?.options;
       expect(Array.isArray(options)).toBe(true);
       for (const option of (options ?? []) as Array<Record<string, unknown>>) {
@@ -1402,7 +1513,7 @@ describe("Switch Models capability notice budgeting", () => {
           personas: [makePersona({ persona_id: 55 })],
           selectedPersonaId: 55,
           readStatus: "fresh",
-          switchModelsView: makeExplicitEightSlotView(
+          switchModelsView: makeExplicitSlotView(
             true,
             true,
             () => false,
@@ -1431,10 +1542,10 @@ describe("Switch Models capability notice budgeting", () => {
       personas: [makePersona({ persona_id: 55 })],
       selectedPersonaId: 55,
       readStatus: "fresh",
-      switchModelsView: makeExplicitEightSlotView(true, true, () => false, 60, true, -1),
+      switchModelsView: makeExplicitSlotView(true, true, () => false, 60, true, -1),
       receipt: { tone: "success", heading: "Saved", detail: "Configuration was saved." },
     });
-    const ninthSlot = {
+    const extraSelectRow = {
       ...payload,
       components: [
         ...payload.components,
@@ -1443,15 +1554,15 @@ describe("Switch Models capability notice budgeting", () => {
           components: [
             {
               type: ComponentType.StringSelect,
-              customId: "ninth-slot",
-              placeholder: "Ninth slot",
+              customId: "extra-slot",
+              placeholder: "Extra slot",
               options: [{ value: "one", label: "One" }],
             },
           ],
         },
       ],
     };
-    expect(countRenderedComponents(ninthSlot)).toBeGreaterThan(componentBudget);
+    expect(countRenderedComponents(extraSelectRow)).toBeGreaterThan(componentBudget);
   }, 15_000);
 });
 
@@ -1492,7 +1603,7 @@ describe("voices page text and component budgeting", () => {
     cases.expectNoFailures();
   };
 
-  it("renders an empty library with one placeholder option", () =>
+  it("keeps Add Sample available in an empty library", () =>
     expectForEveryLocaleAndReceipt((locale, receipt) => {
       const payload = buildVoicePayload(locale, receipt, [], 0, 0);
       expectValidVoicePayload(payload);
@@ -1502,12 +1613,12 @@ describe("voices page text and component budgeting", () => {
       expect(Array.isArray(options)).toBe(true);
       expect(options).toHaveLength(1);
       const [option] = (options ?? []) as Array<Record<string, unknown>>;
-      expect(option.value).toBe("none");
+      expect(option.value).toBe(CONFIG_VOICE_SAMPLE_ADD_VALUE);
     }));
 
-  it("renders a one-page library with 25 sample options", () =>
+  it("renders a full page of references alongside Add Sample", () =>
     expectForEveryLocaleAndReceipt((locale, receipt) => {
-      const pageSamples = VOICE_SAMPLES.slice(0, 25);
+      const pageSamples = VOICE_SAMPLES.slice(0, CONFIG_VOICE_SAMPLE_PAGE_SIZE);
       const payload = buildVoicePayload(locale, receipt, pageSamples, pageSamples.length, 0);
       expectValidVoicePayload(payload);
 
@@ -1517,8 +1628,9 @@ describe("voices page text and component budgeting", () => {
       expect(options).toHaveLength(25);
       if (!Array.isArray(options)) return;
 
-      const firstOption = options[0] as Record<string, unknown>;
-      const secondOption = options[1] as Record<string, unknown>;
+      expect((options[0] as Record<string, unknown>).value).toBe(CONFIG_VOICE_SAMPLE_ADD_VALUE);
+      const firstOption = options[1] as Record<string, unknown>;
+      const secondOption = options[2] as Record<string, unknown>;
       expect(firstOption.label).toBe("A".repeat(80));
       expect(secondOption.label).toBe("B".repeat(81));
       expect(typeof firstOption.description).toBe("string");
@@ -1537,22 +1649,22 @@ describe("voices page text and component budgeting", () => {
 
   it("covers every sample across deep library page slices", () =>
     expectForEveryLocaleAndReceipt((locale, receipt) => {
-      const starts = [0, 25, 50];
+      const starts = [0, 24, 48];
       const coveredIndices = new Set<number>();
 
       for (const start of starts) {
-        const pageSamples = VOICE_SAMPLES.slice(start, start + 25);
+        const pageSamples = VOICE_SAMPLES.slice(start, start + CONFIG_VOICE_SAMPLE_PAGE_SIZE);
         const payload = buildVoicePayload(locale, receipt, pageSamples, VOICE_SAMPLES.length, start);
         expectValidVoicePayload(payload);
 
         const menu = getVoiceSelectMenu(payload);
         const options = menu.options;
         expect(Array.isArray(options)).toBe(true);
-        expect(options).toHaveLength(pageSamples.length);
+        expect(options).toHaveLength(pageSamples.length + 1);
         if (!Array.isArray(options)) continue;
 
         const pageIndices: number[] = [];
-        for (const option of options) {
+        for (const option of options.slice(1)) {
           const value = (option as Record<string, unknown>).value;
           expect(typeof value).toBe("string");
           if (typeof value !== "string") continue;
@@ -1567,9 +1679,9 @@ describe("voices page text and component budgeting", () => {
       expect(coveredIndices).toEqual(new Set(VOICE_SAMPLES.map((_sample, index) => index)));
     }));
 
-  it("reports 26 unsliced samples as an oversized select", () =>
+  it("reports references overflowing the space reserved for Add Sample", () =>
     expectForEveryLocaleAndReceipt((locale, receipt) => {
-      const payload = buildVoicePayload(locale, receipt, VOICE_SAMPLES.slice(0, 26), VOICE_SAMPLES.length, 0);
+      const payload = buildVoicePayload(locale, receipt, VOICE_SAMPLES.slice(0, 25), VOICE_SAMPLES.length, 0);
       const validation = validateComponentsV2MessageLimits(payload);
       expect(validation.valid).toBe(false);
       expect(validation.violations).toContainEqual(
@@ -1580,18 +1692,18 @@ describe("voices page text and component budgeting", () => {
       );
     }));
 
-  it("observes the 28-component receipt and deep-page ceiling from the rendered payload", () => {
-    const payload = buildVoicePayload("en-US", true, VOICE_SAMPLES.slice(25, 50), VOICE_SAMPLES.length, 25);
+  it("observes the 27-component receipt and deep-page ceiling from the rendered payload", () => {
+    const payload = buildVoicePayload("en-US", true, VOICE_SAMPLES.slice(24, 48), VOICE_SAMPLES.length, 24);
     expectValidVoicePayload(payload);
 
     const observedCount = countRenderedComponents(payload);
-    expect(observedCount).toBe(28);
+    expect(observedCount).toBe(27);
 
     const payloadWithOverGenerousReserve = {
       ...payload,
       components: [...payload.components, { type: ComponentType.TextDisplay, content: "Reserve" }],
     };
-    expect(countRenderedComponents(payloadWithOverGenerousReserve)).toBeGreaterThan(28);
+    expect(countRenderedComponents(payloadWithOverGenerousReserve)).toBeGreaterThan(27);
   });
 });
 
@@ -1632,7 +1744,7 @@ describe("Persona Voice page text and component budgeting", () => {
     const validation = validateComponentsV2MessageLimits(payload);
     expect(validation.valid, `Violations: ${JSON.stringify(validation.violations)}`).toBe(true);
     const componentCount = countRenderedComponents(payload);
-    expect(componentCount).toBeLessThanOrEqual(30);
+    expect(componentCount).toBeLessThanOrEqual(40);
     if (expectedComponents !== undefined) expect(componentCount).toBe(expectedComponents);
     expect(getPayloadTextTotal(payload)).toBeLessThanOrEqual(DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX);
   };
@@ -1648,7 +1760,7 @@ describe("Persona Voice page text and component budgeting", () => {
   ];
 
   const expectedLocalMaximum = (receipt: boolean, avatarPresent: boolean): number =>
-    26 + (receipt ? 2 : 0) + (avatarPresent ? 2 : 0);
+    34 + (receipt ? 2 : 0) + (avatarPresent ? 2 : 0);
 
   const makePrompt = (length: number, runLength: number): string => {
     const seed = `${"`".repeat(runLength)} 🌸✨ warm, unhurried voice. `;
@@ -1657,28 +1769,45 @@ describe("Persona Voice page text and component budgeting", () => {
     return Array.from(prompt).slice(0, length).join("");
   };
 
-  it("pins the clone Voice maximum across locales, receipts, and avatars", () => {
+  it("pins the clone Voice maximum across locales, receipts, avatars, sources, and leftover provider voices", () => {
     const cases = collectCaseFailures();
     for (const locale of RUNTIME_LOCALES) {
       for (const receipt of [false, true]) {
         for (const avatarPresent of [false, true]) {
-          cases.check(`locale=${locale}, receipt=${receipt}, avatar=${avatarPresent}`, () => {
-            const payload = buildVoicePayload(locale, receipt, {
-              personas: maximumPersonaSet(makePrompt(DISCORD_TEXT_INPUT_MAX, 3)),
-              selectedPersonaId: 55,
-              selectedPersonaAvatarUrl: avatarPresent ? "https://cdn.example/avatar.png" : null,
-              receipt: receipt ? { tone: "success", heading: "Saved", detail: "Voice saved." } : undefined,
-            });
-            assertValid(payload, expectedLocalMaximum(receipt, avatarPresent));
+          for (const leftoverProviderVoice of [false, true]) {
+            for (const effectiveSource of [undefined, "clone"] as const) {
+              cases.check(
+                `locale=${locale}, receipt=${receipt}, avatar=${avatarPresent}, provider=${leftoverProviderVoice}, source=${effectiveSource}`,
+                () => {
+                  const payload = buildVoicePayload(locale, receipt, {
+                    personas: maximumPersonaSet(makePrompt(DISCORD_TEXT_INPUT_MAX, 3)).map((persona) =>
+                      persona.persona_id === 55 && leftoverProviderVoice
+                        ? { ...persona, speech_voice_id: "legacy-provider-voice" }
+                        : persona,
+                    ),
+                    selectedPersonaId: 55,
+                    selectedPersonaAvatarUrl: avatarPresent ? "https://cdn.example/avatar.png" : null,
+                    personaVoiceView: {
+                      ...makePersonaVoiceView("tts-clone", VOICE_SAMPLES, true),
+                      effectiveSource,
+                      effectiveTarget: "Fish",
+                    },
+                    receipt: receipt ? { tone: "success", heading: "Saved", detail: "Voice saved." } : undefined,
+                  });
+                  assertValid(payload, expectedLocalMaximum(receipt, avatarPresent) + (leftoverProviderVoice ? 1 : 0));
 
-            const voiceSelector = getStringSelectMenus(payload).find((menu) =>
-              String(menu.customId).includes("voice-select"),
-            );
-            expect(voiceSelector).toBeDefined();
-            const options = voiceSelector?.options as unknown[];
-            expect(options).toHaveLength(25);
-            expect((options.at(-1) as Record<string, unknown>).value).toBe("page:24");
-          });
+                  const voiceSelector = getStringSelectMenus(payload).find((menu) =>
+                    String(menu.customId).includes("voice-select"),
+                  );
+                  expect(voiceSelector).toBeDefined();
+                  const options = voiceSelector?.options as unknown[];
+                  expect(options).toHaveLength(25);
+                  expect((options[0] as Record<string, unknown>).value).toBe("none:reference");
+                  expect((options.at(-1) as Record<string, unknown>).value).toBe("23");
+                },
+              );
+            }
+          }
         }
       }
     }
@@ -1696,8 +1825,10 @@ describe("Persona Voice page text and component budgeting", () => {
           personas: maximumPersonaSet(prompt),
           selectedPersonaAvatarUrl: "https://cdn.example/avatar.png",
         });
-        assertValid(payload, 30);
-        const promptDisplay = getTextDisplays(payload).find((text) => text.includes("Stored VoiceDesign prompt"));
+        assertValid(payload, 38);
+        const promptDisplay = getTextDisplays(payload).find((text) =>
+          text.includes(localizedCopy("en-US", "commands.config.panel.voice_page_design_preview_title")),
+        );
         expect(promptDisplay).toBeDefined();
         const inner = promptDisplay?.replace(/^[\s\S]*```markdown\n/, "").replace(/\n```[\s\S]*$/, "") ?? "";
         expect(inner).not.toContain("``");
@@ -1711,10 +1842,10 @@ describe("Persona Voice page text and component budgeting", () => {
     });
     const unsupportedText = getTextDisplays(unsupported).join("\n");
     expect(unsupportedText).not.toContain(unsupportedPrompt);
-    expect(JSON.stringify(unsupported)).not.toContain("voice-design-open");
+    expect(JSON.stringify(unsupported)).toContain("voice-design-open");
   });
 
-  it("keeps the local library's advance entry within one select and fails its boundary if reserve is weakened", () => {
+  it("pages local references with buttons and preserves every selectable item", () => {
     const payload = buildVoicePayload("en-US", false, {
       personaVoiceView: makePersonaVoiceView("tts-clone", VOICE_SAMPLES.slice(0, 26), true),
     });
@@ -1726,7 +1857,7 @@ describe("Persona Voice page text and component budgeting", () => {
     );
 
     const coveredPositions = new Set<number>();
-    for (const pageStart of [0, 24, 48]) {
+    for (const pageStart of [0, 25, 50]) {
       const pagePayload = buildVoicePayload("en-US", false, {
         personaVoicePageStart: pageStart,
         personaVoiceView: makePersonaVoiceView("tts-clone", VOICE_SAMPLES, true),
@@ -1747,10 +1878,57 @@ describe("Persona Voice page text and component budgeting", () => {
       personaVoiceView: makePersonaVoiceView(null),
     });
     assertValid(missing);
-    expect(JSON.stringify(missing)).toContain(
-      localizedCopy("en-US", "commands.config.panel.voice_page_no_endpoint_title"),
+    expect(JSON.stringify(missing)).toMatch(
+      localizedProse("en-US", "commands.config.panel.voice_page_no_model_notice", {
+        models: `\`/config\` > ${localizedCopy("en-US", "commands.config.panel.category_models")}`,
+      }),
     );
-    expect(JSON.stringify(missing)).toContain('"disabled":true');
+    expect(JSON.stringify(missing)).toContain("voice-design-open");
+  });
+
+  it("keeps legacy provider IDs clearable beside the sample library with normal write restrictions", () => {
+    const cases = collectCaseFailures();
+    for (const locale of RUNTIME_LOCALES) {
+      cases.check(locale, () => {
+        for (const apiStyle of [null, "tts-clone"] as const) {
+          for (const readStatus of ["fresh", "stale"] as const) {
+            for (const isManager of [true, false]) {
+              const persona = makePersona({
+                persona_id: 55,
+                speech_voice_id: "legacy-private-id",
+                speech_voice_sample_id: VOICE_SAMPLES[0]?.sample_id,
+              });
+              const view = makePersonaVoiceView(apiStyle, VOICE_SAMPLES, true);
+              const actor = { ...GUILD_MANAGER, isManager };
+              const body = buildConfigVoiceBody({ locale, actor, readStatus, selectedPersona: persona, view });
+              const clearRow = body.find((component) => JSON.stringify(component).includes(":voice-provider-clear:"));
+              const labelKey = "commands.config.panel.voice_page_clear_provider_button";
+              expect(clearRow).toMatchObject({
+                type: ComponentType.ActionRow,
+                components: expect.arrayContaining([
+                  expect.objectContaining({
+                    label: localizedCopy(hasLocaleKey(locale, labelKey) ? locale : "en-US", labelKey),
+                    disabled: !isManager || readStatus !== "fresh",
+                  }),
+                ]),
+              });
+              const payload = buildVoicePayload(locale, true, {
+                personas: [persona],
+                personaVoiceView: view,
+                actor,
+                readStatus,
+              });
+              assertValid(payload);
+              expect(
+                getStringSelectMenus(body).find((menu) => String(menu.customId).includes("voice-select"))?.options,
+              ).toEqual(expect.arrayContaining([expect.objectContaining({ value: "0" })]));
+              expect(JSON.stringify(payload)).not.toContain(persona.speech_voice_id);
+            }
+          }
+        }
+      });
+    }
+    cases.expectNoFailures();
   });
 
   it("ends unsupported capability views with their notice so the persona hint remains absorbed", () => {
@@ -1766,6 +1944,60 @@ describe("Persona Voice page text and component budgeting", () => {
     }
   });
 
+  it("keeps localized description and priority controls usable without a model only for managers", () => {
+    const cases = collectCaseFailures();
+    for (const locale of RUNTIME_LOCALES) {
+      cases.check(locale, () => {
+        const copy = (key: string) => localizedCopy(hasLocaleKey(locale, key) ? locale : "en-US", key);
+        for (const isManager of [true, false]) {
+          const persona = makePersona({ persona_id: 55, speech_voice_design_prompt: "Saved description" });
+          const view = { ...makePersonaVoiceView(null, VOICE_SAMPLES, true), hasTargets: false };
+          const payload = buildVoicePayload(locale, false, {
+            personas: [persona],
+            actor: { ...GUILD_MANAGER, isManager },
+            personaVoiceView: view,
+          });
+          assertValid(payload);
+          const body = buildConfigVoiceBody({
+            locale,
+            actor: { ...GUILD_MANAGER, isManager },
+            readStatus: "fresh",
+            selectedPersona: persona,
+            view,
+          });
+          const text = getTextDisplays(body).join("\n");
+          expect(text).toContain(persona.speech_voice_design_prompt ?? "");
+          for (const key of ["voice_page_design_preview_title", "voice_priority_title"])
+            expect(text).toContain(copy(`commands.config.panel.${key}`));
+          const noticeKey = "commands.config.panel.voice_page_no_model_notice";
+          expect(text).toMatch(localizedProse(hasLocaleKey(locale, noticeKey) ? locale : "en-US", noticeKey));
+          if (isManager)
+            expect(getTextDisplays(payload).join("\n")).toContain(persona.speech_voice_design_prompt ?? "");
+          else expect(JSON.stringify(payload)).not.toContain(":voice-design-open:");
+          const controls = body
+            .filter(
+              (component): component is ActionRowData<ButtonComponentData> =>
+                component.type === ComponentType.ActionRow,
+            )
+            .flatMap((component) => component.components);
+          for (const [action, key] of [
+            ["voice-design-open", "voice_page_edit_design_button"],
+            ["voice-priority-design", "voice_priority_design"],
+            ["voice-priority-clone", "voice_priority_clone"],
+          ]) {
+            expect(
+              controls.find((control) => "customId" in control && control.customId?.includes(`:${action}:`)),
+            ).toMatchObject({
+              label: copy(`commands.config.panel.${key}`),
+              disabled: !isManager || action === "voice-priority-design",
+            });
+          }
+        }
+      });
+    }
+    cases.expectNoFailures();
+  });
+
   it("measures a deep remote chooser separately and keeps position plus fingerprint values bounded", () => {
     const remoteView: ConfigPersonaVoiceRemoteView = {
       voices: Array.from({ length: 73 }, (_, index) => ({
@@ -1775,38 +2007,65 @@ describe("Persona Voice page text and component budgeting", () => {
       catalogFingerprint: "catalog-fingerprint",
       pageStart: 48,
     };
+    const cases = collectCaseFailures();
     for (const locale of RUNTIME_LOCALES) {
       for (const receipt of [false, true]) {
         for (const avatarPresent of [false, true]) {
-          const payload = buildVoicePayload(locale, receipt, {
-            personas: maximumPersonaSet("stored but hidden by provider mode").map((persona, index) =>
-              index === 0
-                ? {
-                    ...persona,
-                    speech_voice_sample_id: null,
-                    speech_voice_id: "external-voice-id-48",
-                    speech_voice_name: "Remote stored voice",
-                  }
-                : persona,
-            ),
-            selectedPersonaAvatarUrl: avatarPresent ? "https://cdn.example/avatar.png" : null,
-            personaVoiceView: makePersonaVoiceView("elevenlabs"),
-            personaVoiceRemoteView: remoteView,
-            receipt: receipt ? { tone: "success", heading: "Saved", detail: "Voice saved." } : undefined,
-          });
-          assertValid(payload, 24 + (receipt ? 2 : 0) + (avatarPresent ? 2 : 0));
-          const selector = getStringSelectMenus(payload).find((menu) => String(menu.customId).includes("voice-select"));
-          const options = (selector?.options ?? []) as Array<Record<string, unknown>>;
-          expect(options).toHaveLength(25);
-          expect(options.slice(0, 24).every((option) => /^voice:\d+:[A-Za-z0-9_-]+$/.test(String(option.value)))).toBe(
-            true,
-          );
-          expect(String(options.at(-1)?.value)).toMatch(/^page:\d+:[A-Za-z0-9_-]+$/);
-          expect(JSON.stringify(payload)).not.toContain("external-voice-id-48");
-          expect(JSON.stringify(payload)).not.toContain("stored but hidden by provider mode");
+          for (const effectiveSource of [undefined, "clone"] as const) {
+            cases.check(
+              `locale=${locale}, receipt=${receipt}, avatar=${avatarPresent}, source=${effectiveSource}`,
+              () => {
+                const payload = buildVoicePayload(locale, receipt, {
+                  personas: maximumPersonaSet("stored but hidden by provider mode").map((persona, index) =>
+                    index === 0
+                      ? {
+                          ...persona,
+                          speech_voice_sample_id: null,
+                          speech_voice_id: "external-voice-id-48",
+                          speech_voice_name: "Remote stored voice",
+                        }
+                      : persona,
+                  ),
+                  selectedPersonaAvatarUrl: avatarPresent ? "https://cdn.example/avatar.png" : null,
+                  personaVoiceView: {
+                    ...makePersonaVoiceView("elevenlabs"),
+                    effectiveSource,
+                    effectiveTarget: "ElevenLabs",
+                  },
+                  personaVoiceRemoteView: remoteView,
+                  receipt: receipt ? { tone: "success", heading: "Saved", detail: "Voice saved." } : undefined,
+                });
+                assertValid(payload, 35 + (receipt ? 2 : 0) + (avatarPresent ? 2 : 0));
+                const pageRow = (payload.components as unknown[])
+                  .flatMap((container) => ((container as { components?: unknown[] }).components ?? []) as unknown[])
+                  .find((component) => JSON.stringify(component).includes(":voice-page:")) as
+                  | ActionRowData<ButtonComponentData>
+                  | undefined;
+                expect(pageRow?.components.at(-1)).toMatchObject({
+                  label: localizedCopy(
+                    hasLocaleKey(locale, "commands.config.panel.voice_page_cancel_button") ? locale : "en-US",
+                    "commands.config.panel.voice_page_cancel_button",
+                  ),
+                });
+                const selector = getStringSelectMenus(payload).find((menu) =>
+                  String(menu.customId).includes("voice-select"),
+                );
+                const options = (selector?.options ?? []) as Array<Record<string, unknown>>;
+                expect(options).toHaveLength(25);
+                expect(options[0]?.value).toBe("none:provider");
+                expect(
+                  options.slice(1).every((option) => /^voice:\d+:[A-Za-z0-9_-]+$/.test(String(option.value))),
+                ).toBe(true);
+                expect(JSON.stringify(payload)).toContain(":voice-page:");
+                expect(JSON.stringify(payload)).not.toContain("external-voice-id-48");
+                expect(JSON.stringify(payload)).toContain("stored but hidden by provider mode");
+              },
+            );
+          }
         }
       }
     }
+    cases.expectNoFailures();
 
     const onePage = buildVoicePayload("en-US", false, {
       personaVoiceView: makePersonaVoiceView("elevenlabs"),
@@ -1817,7 +2076,7 @@ describe("Persona Voice page text and component budgeting", () => {
     ).toHaveLength(25);
 
     const coveredPositions = new Set<number>();
-    for (const pageStart of [0, 24, 48, 72]) {
+    for (const pageStart of [0, 25, 50]) {
       const pagePayload = buildVoicePayload("en-US", false, {
         personaVoiceView: makePersonaVoiceView("elevenlabs"),
         personaVoiceRemoteView: { ...remoteView, pageStart: undefined },
@@ -2417,5 +2676,142 @@ describe("channels collection bounds and truncation notices", () => {
     expect(promptDisplay).toMatch(/\n<!-- [^\n]+ -->\n```/);
     expect(noteDisplay).toBeDefined();
     expect(noteDisplay).toMatch(/\n<!-- [^\n]+ -->\n```/);
+  });
+});
+
+describe("config pages for a workspace with nothing configured", () => {
+  const actors: readonly ConfigActor[] = [
+    GUILD_MANAGER,
+    { workspaceKind: "guild", isManager: false },
+    { workspaceKind: "dm", isManager: true },
+  ];
+
+  /**
+   * Every page view as its loader returns it for a workspace with no catalogs, collections, or
+   * selections, which is the state a page-specific fixture tends to skip by supplying one entry.
+   */
+  function buildEmptyViews(actor: ConfigActor) {
+    const behaviorView: ConfigBehaviorView = {
+      general: {
+        systemPrompt: null,
+        responsePrefill: null,
+        prefillBlocker: null,
+        prefillModelName: "gemini-2.5-flash",
+        contextNote: null,
+        contextNoteDepth: 0,
+        humanizerDegree: HUMANIZER_DEFAULT,
+        messageFetchLimit: DEFAULT_MESSAGE_FETCH_LIMIT,
+        timezoneOffset: 0,
+      },
+      trigger: BEHAVIOR_TRIGGER_VIEW,
+      experimental: {
+        deliberateToolMode: false,
+        deliberateToolContextTurns: 0,
+        deliberateToolTriggers: {},
+        sendLimit: 0,
+        selfDebugEnabled: false,
+      },
+      notices: { hiddenNoticeKeys: [], verbosity: "minimal", speechTranscriptsEnabled: false },
+      memory: {
+        memoryTaggingEnabled: false,
+        channelMemoryEnabled: false,
+        stmEnabled: false,
+        toolUseEnabled: false,
+        stmConfig: null,
+        stmCategories: [],
+      },
+    };
+    const personaMemoryView: ConfigPersonaMemoryView = {
+      serverMemoryCount: 0,
+      personalMemoryCount: 0,
+      channelId: null,
+      stmCategories: [],
+      conditioningGroups: [],
+    };
+    const personaVoiceView: ConfigPersonaVoiceView = {
+      capability: { apiStyle: null, assignable: false, supportsVoiceDesign: false },
+      samples: [],
+    };
+    const responseDraftingView: ResponseDraftingView = {
+      reviewers: [],
+      checkers: [],
+      inheritedReviewerAvailable: false,
+    };
+    return {
+      behaviorView,
+      personaMemoryView,
+      personaVoiceView,
+      personaSprites: [],
+      responseDraftingView,
+      switchModelsView: makeExplicitSlotView(false, false, () => false, 0, false, -1),
+      modelParametersView: {
+        textProviders: [],
+        selectedProvider: null,
+        selectedConfig: null,
+        stopStrings: [],
+        speakerPatternEnabled: false,
+        logitBiasEntries: [],
+        logitBiasPageStart: 0,
+      },
+      modelFallbacksView: {
+        slots: Array.from({ length: CONFIG_FALLBACK_SLOT_COUNT }, () => ({ label: null })),
+        providerEntries: [],
+        expandedProvider: null,
+        entryStart: 0,
+        randomizerEnabled: false,
+        hasFallbacks: false,
+      },
+      imageGenerationView: {
+        positiveTags: [],
+        negativeTags: [],
+        sampler: "",
+        steps: "",
+        scale: "",
+        noiseSchedule: "",
+        cfgRescale: "",
+      },
+      voicesView: makeVoicesView([], 0, 0),
+      permissionsView: {
+        capabilities: { toolUseEnabled: false, includeElevenLabs: false, definitionStates: {} },
+        privacy: { stmPrivacyBypass: false },
+      },
+      channelsView: EMPTY_CHANNELS_VIEW,
+      mcpRead: { status: "fresh" as const, configs: [] },
+      stPresetsView: {
+        scope: actor.workspaceKind,
+        presets: [],
+        activePresetId: null,
+        readStatus: "fresh" as const,
+        page: { kind: "none" as const },
+      },
+    };
+  }
+
+  // One locale suffices: option counts do not vary by locale, and BUDGET_LOCALE renders the longest text.
+  it("renders every page within Discord limits for every actor and read status", () => {
+    const cases = collectCaseFailures();
+    for (const actor of actors) {
+      for (const readStatus of RENDERING_READ_STATUSES) {
+        for (const [category, pages] of Object.entries(CONFIG_PAGES_BY_CATEGORY)) {
+          for (const page of pages) {
+            cases.check(`${category}/${page} ${JSON.stringify(actor)} ${readStatus}`, () => {
+              const payload = buildConfigPanelPayload({
+                locale: BUDGET_LOCALE,
+                actor,
+                category: category as ConfigCategory,
+                page,
+                personas: [makePersona({ persona_id: 55 })],
+                selectedPersonaId: 55,
+                readStatus,
+                ...buildEmptyViews(actor),
+              });
+              const validation = validateComponentsV2MessageLimits(payload);
+              expect(validation.valid, JSON.stringify(validation.violations)).toBe(true);
+            });
+          }
+        }
+      }
+    }
+    cases.expectNoFailures();
   });
 });

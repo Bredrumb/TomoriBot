@@ -12,6 +12,7 @@ import {
   CONFIG_FALLBACK_SLOT_COUNT,
   computeLogitBiasFingerprint,
   computeStopStringFingerprint,
+  configEndpointWindowSize,
   type ConfigModelCapability,
   CONFIG_MODEL_PAGE_SIZE,
   CONFIG_NAI_PRESET_PAGE_SIZE,
@@ -19,7 +20,6 @@ import {
   CONFIG_NAI_PRESET_PREVIOUS_VALUE,
   computeNaiPresetFingerprint,
   isConfigCatalogModelCapability,
-  type ConfigCatalogModelCapability,
   type ConfigPage,
   type ConfigPanelRoute,
 } from "@/utils/discord/configPanelCatalog";
@@ -27,11 +27,9 @@ import {
   computeConfigEndpointFingerprint,
   decodeConfigEndpointPageValue,
   decodeConfigEndpointSelection,
-  endpointServiceCapability,
   normalizeConfigCapabilityEndpoints,
   decodeConfigProviderPageValue,
   decodeConfigProviderRangeValue,
-  type ConfigEndpointModelCapability,
 } from "@/utils/discord/interactions/configModelLoaders";
 import {
   currentModelIdForCapability,
@@ -86,7 +84,9 @@ import { NAI_IMAGE_NOISE_SCHEDULES, NAI_IMAGE_SAMPLERS } from "@/utils/image/nai
 import { safeDownload } from "@/utils/security/safeDownload";
 import { log } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import { getProviderOptionFallbackRefOwner } from "@/utils/provider/providerOptionRegistry";
 import { localizer } from "@/utils/text/localizer";
+import { getProviderRequestFailureCopy, type ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 
 /** Routes that answer with a modal, which is its own acknowledgement and must not be deferred. */
 export const CONFIG_MODEL_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"]>([
@@ -141,6 +141,11 @@ function receipt(
   return { tone, heading: localizer(locale, headingKey), detail: localizer(locale, detailKey, vars) };
 }
 
+function providerDeniedReceipt(locale: string, denied: ProviderRequestDeniedError): PanelReceipt {
+  const copy = getProviderRequestFailureCopy(denied, locale);
+  return { tone: "error", heading: localizer(locale, copy.titleKey), detail: copy.description };
+}
+
 function writeFailedReceipt(locale: string): PanelReceipt {
   return receipt(
     locale,
@@ -171,12 +176,6 @@ function readOptionalNumber(modal: ModalSubmitInteraction, fieldId: string): num
   if (!modal.fields.fields.has(fieldId)) return undefined;
   const raw = modal.fields.getTextInputValue(fieldId).trim();
   return raw ? Number(raw) : null;
-}
-
-function isConfigEndpointModelCapability(
-  capability: ConfigModelCapability,
-): capability is ConfigEndpointModelCapability {
-  return capability === "tts" || capability === "stt";
 }
 
 export interface ConfigModelRouteContext {
@@ -395,7 +394,7 @@ export async function handleConfigModelModalOpen(
     const capability = route.capability;
     const selected = interaction.isStringSelectMenu() ? (interaction.values[0] ?? null) : null;
 
-    // The advance entry rides the select too, because six selectors cannot each afford a
+    // The advance entry rides the select too, because the provider selectors cannot each afford a
     // prev/next row under the forty-component budget.
     const range = selected ? decodeConfigProviderRangeValue(selected) : null;
     if (range) {
@@ -494,14 +493,14 @@ export async function handleConfigModelModalOpen(
         provider,
         nonce,
         models.slice(sliceStart, sliceStart + CONFIG_MODEL_PAGE_SIZE),
-        currentModelIdForCapability(state, capability),
+        currentModelIdForCapability(state, capability, provider),
       ),
     );
     return true;
   }
 
   if (route.action === "endpoint-select") {
-    if (!isConfigEndpointModelCapability(route.capability)) {
+    if (route.capability !== "stt") {
       await interaction.reply({
         content: localizer(locale, "commands.config.panel.stale_detail"),
         flags: MessageFlags.Ephemeral,
@@ -518,7 +517,7 @@ export async function handleConfigModelModalOpen(
         category: "models",
         page: "switch",
         selectedPersonaId: null,
-        endpointPage: { capability: route.capability, start },
+        endpointPage: { capability: "stt", start },
         dependencies,
       });
       return true;
@@ -556,7 +555,7 @@ export async function handleConfigModelModalOpen(
     const entry = chain[index];
     if (entry) {
       return entry.kind === "llm"
-        ? `${entry.model.llm_codename} (${getProviderDisplayName(entry.model.llm_provider)})`
+        ? `${entry.model.llm_codename} (${getProviderDisplayName((refs[index] && getProviderOptionFallbackRefOwner(refs[index])) ?? entry.model.llm_provider, locale)})`
         : `${entry.endpoint.label}:${entry.endpoint.model_name ?? entry.endpoint.label}`;
     }
     return refs[index] ? `${localizer(locale, "general.unknown")} (#${refs[index].id})` : noneLabel;
@@ -585,10 +584,7 @@ function recordModelAction(context: ConfigModelRouteContext, action: PanelAction
   });
 }
 
-async function clearSwitchModel(
-  context: ConfigModelRouteContext,
-  capability: ConfigCatalogModelCapability,
-): Promise<boolean> {
+async function clearSwitchModel(context: ConfigModelRouteContext, capability: ConfigModelCapability): Promise<boolean> {
   const { dependencies, route } = context;
   const locale = route.locale;
   const state = serverStateFromScope(context.scope);
@@ -635,41 +631,27 @@ async function handleSwitchModels(context: ConfigModelRouteContext): Promise<boo
     return false;
   }
   if (route.action === "endpoint-select") {
-    if (!isConfigEndpointModelCapability(route.capability)) {
+    if (route.capability !== "stt") {
       await baseRepaint(context, "switch", { receipt: staleReceipt(locale) });
       return true;
     }
-    const endpointCapability = route.capability;
     const selected = context.selectedValue ? decodeConfigEndpointSelection(context.selectedValue) : null;
-    const endpoints = normalizeConfigCapabilityEndpoints(
-      await dependencies.loadCapabilityEndpoints(state, endpointCapability),
-      endpointCapability,
-    );
-    const fingerprint = computeConfigEndpointFingerprint(endpointCapability, endpoints);
+    const endpoints = normalizeConfigCapabilityEndpoints(await dependencies.loadCapabilityEndpoints(state));
+    const fingerprint = computeConfigEndpointFingerprint(endpoints);
     const endpoint =
       selected && selected.fingerprint === fingerprint && selected.position < endpoints.length
         ? endpoints[selected.position]
         : undefined;
-    if (
-      !selected ||
-      !endpoint ||
-      endpoint.capability !== endpointServiceCapability(endpointCapability) ||
-      !Number.isSafeInteger(endpoint.id) ||
-      endpoint.id <= 0
-    ) {
+    if (!selected || !endpoint || !Number.isSafeInteger(endpoint.id) || endpoint.id <= 0) {
       await baseRepaint(context, "switch", { receipt: staleReceipt(locale) });
       return true;
     }
 
     const action = await performPanelAction(
       () =>
-        dependencies.modelOperations.activateWorkspaceEndpoint({
+        dependencies.modelOperations.activateTranscriptionEndpoint({
           tomoriState: state,
           serverDiscId: context.scope.serverDiscId,
-          ownerId: context.scope.userId,
-          // A DM still resolves `/config` to its recipient-backed server row, unlike `/personal config`.
-          scopeKind: "server",
-          capability: endpointCapability,
           customEndpointId: endpoint.id,
         }),
       () => dependencies.resolveScope(context.interaction, true),
@@ -678,22 +660,16 @@ async function handleSwitchModels(context: ConfigModelRouteContext): Promise<boo
     const result = action.result;
     if (result.status === "success") recordModelAction(context, "server-config.workspace.model.endpoint-select");
 
-    const endpointPage = {
-      capability: endpointCapability,
-      start: Math.floor(selected.position / 24) * 24,
-    } as const;
-    const speechSourceChanged = endpointCapability === "tts" && result.status === "success" && result.sourceChanged;
+    const windowSize = configEndpointWindowSize(endpoints.length);
     await baseRepaint(context, "switch", {
-      endpointPage,
+      endpointPage: { capability: "stt", start: Math.floor(selected.position / windowSize) * windowSize },
       receipt:
         result.status === "success"
           ? receipt(
               locale,
-              speechSourceChanged ? "warning" : "success",
+              "success",
               "commands.config.panel.endpoint_activated_heading",
-              speechSourceChanged
-                ? "commands.config.panel.endpoint_source_changed_direction"
-                : "commands.config.panel.endpoint_activated_detail",
+              "commands.config.panel.endpoint_activated_detail",
               { endpoint: result.identity },
             )
           : result.status === "already-active"
@@ -750,40 +726,50 @@ async function handleSwitchModels(context: ConfigModelRouteContext): Promise<boo
   if (result.status === "success") {
     recordModelAction(context, "server-config.workspace.model.set");
     await baseRepaint(context, "switch", {
-      receipt: receipt(
-        locale,
-        "success",
-        "commands.config.panel.model_updated_heading",
-        result.reembedded
-          ? "commands.config.panel.model_updated_reembedded_detail"
-          : "commands.config.panel.model_updated_detail",
-        { model: result.modelName, provider: getProviderDisplayName(route.provider) },
-      ),
+      receipt: result.sourceChanged
+        ? receipt(
+            locale,
+            "warning",
+            "commands.config.panel.model_updated_heading",
+            "commands.config.panel.endpoint_source_changed_direction",
+            { endpoint: result.modelName },
+          )
+        : receipt(
+            locale,
+            "success",
+            "commands.config.panel.model_updated_heading",
+            result.reembedded
+              ? "commands.config.panel.model_updated_reembedded_detail"
+              : "commands.config.panel.model_updated_detail",
+            { model: result.modelName, provider: getProviderDisplayName(route.provider) },
+          ),
     });
     return true;
   }
 
   await baseRepaint(context, "switch", {
     receipt:
-      result.status === "already-selected"
-        ? noChangesReceipt(locale, "commands.config.panel.model_already_selected_detail")
-        : result.status === "openrouter-moved"
-          ? receipt(
-              locale,
-              "warning",
-              "commands.config.panel.model_moved_heading",
-              "commands.config.panel.model_moved_detail",
-            )
-          : result.status === "no-models"
+      result.status === "provider-denied"
+        ? providerDeniedReceipt(locale, result.denied)
+        : result.status === "already-selected"
+          ? noChangesReceipt(locale, "commands.config.panel.model_already_selected_detail")
+          : result.status === "openrouter-moved"
             ? receipt(
                 locale,
-                "error",
-                "commands.model.text.no_models_title",
-                "commands.model.text.no_models_description",
+                "warning",
+                "commands.config.panel.model_moved_heading",
+                "commands.config.panel.model_moved_detail",
               )
-            : result.status === "not-found"
-              ? staleReceipt(locale)
-              : writeFailedReceipt(locale),
+            : result.status === "no-models"
+              ? receipt(
+                  locale,
+                  "error",
+                  "commands.model.text.no_models_title",
+                  "commands.model.text.no_models_description",
+                )
+              : result.status === "not-found"
+                ? staleReceipt(locale)
+                : writeFailedReceipt(locale),
   });
   return true;
 }

@@ -1,16 +1,16 @@
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import { createResponseReviewState } from "@/utils/chat/responseReview";
 import type { FallbackEntry, LlmRow, TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ProviderError } from "@/types/stream/interfaces";
-import type { DeliveredStreamMessage, ToolContext } from "@/types/tool/interfaces";
-import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
-import { llmProviderRepo } from "@/utils/db/repositories";
+import type { ToolContext } from "@/types/tool/interfaces";
+import { resolveServerTextModel } from "@/utils/provider/textModelSelection";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { type FallbackNoticeAttempt, sendFallbackModelUsageNotice } from "@/utils/discord/fallbackModelNotice";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import type { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
-import { deleteSupersededStreamMessages } from "@/utils/discord/stream/supersededMessageCleanup";
 import { log } from "@/utils/misc/logger";
 import { buildCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
@@ -42,7 +42,14 @@ import {
 } from "@/utils/chat/diagnosticTimeline";
 import { applyAssistantPrefill } from "@/utils/chat/assistantPrefill";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
-import { providerIsApiFamily, runToolLoop, sendStreamTimeoutNotice } from "@/utils/chat/toolLoop";
+import {
+  carryDeliveredOutput,
+  type DeliveredTurnOutput,
+  prependDeliveredOutput,
+  providerIsApiFamily,
+  runToolLoop,
+  sendStreamTimeoutNotice,
+} from "@/utils/chat/toolLoop";
 import {
   VERBATIM_TOOL_CALLING_CONTEXT_DEPTH,
   VERBATIM_TOOL_CALLING_NUDGE,
@@ -52,7 +59,10 @@ import {
 /** The channel shape quota notices are sent through, matching the admission path's own alias. */
 type SendableChannel = Parameters<typeof sendStandardEmbed>[0];
 
+type TextCredentialSource = ChatTurnContext["textCredentialSource"];
+
 interface GenerationAttempt {
+  credentialSource: TextCredentialSource;
   label: string;
   tomoriState: TomoriState;
   provider: LLMProvider;
@@ -93,6 +103,8 @@ export async function runGenerationTurn(
     if (responseTarget) {
       context.responseTarget = responseTarget;
     }
+    context.streamingContext.deliveryMode = context.isUserImpersonation ? "user_impersonation" : "persona";
+    context.streamingContext.deliveryReceipts ??= [];
 
     return await runGenerationAttempts(context, responseSink);
   } finally {
@@ -108,6 +120,7 @@ async function runGenerationAttempts(
   responseSink: ChatResponseSink,
 ): Promise<GenerationTurnResult> {
   try {
+    context.streamingContext.deliveryState ??= { unconfirmed: false };
     context.responseReview = createResponseReviewState(context);
     context.streamingContext.holdResponseText = Boolean(context.responseReview);
     const plan = await buildGenerationPlan(context);
@@ -115,10 +128,10 @@ async function runGenerationAttempts(
     const failures: FallbackNoticeAttempt[] = [];
     const baseContextItems = context.contextItems;
 
-    // Sink the streaming layer appends every committed message to. Initialized here (once per turn)
-    // so a superseded attempt's partial output can be deleted when a later attempt supersedes it.
+    // Initialized once per turn so expression delivery sees text any attempt of this turn posted.
     context.streamingContext.deliveredMessageRefs ??= [];
-    const deliveredMessageRefs = context.streamingContext.deliveredMessageRefs;
+    const carried: DeliveredTurnOutput = { text: "", details: "", streamResults: [] };
+    let supersededResult: GenerationTurnResult | undefined;
     // Index the server route's attempts start at, null until that route contributes any. Only the
     // receipt needs it: a success on the server route of a personal turn has an opt-out to name.
     let serverRouteStartIndex: number | null = null;
@@ -126,6 +139,8 @@ async function runGenerationAttempts(
     for (let index = 0; index < attempts.length; index++) {
       const attempt = attempts[index];
       if (!attempt) continue;
+      context.textCredentialSource = attempt.credentialSource;
+      context.streamingContext.textCredentialSource = attempt.credentialSource;
       recordChatAttemptStarted(
         index + 1,
         context.textCredentialSource,
@@ -135,31 +150,12 @@ async function runGenerationAttempts(
       // planned attempt keeps its errors suppressed while a later model may yet answer.
       const hasPendingModelFallback = index < attempts.length - 1 || plan.extendWithServerRoute !== null;
       context.tomoriState = attempt.tomoriState;
-      const prepareAttemptContext = async () => {
-        context.contextItems = await prepareProviderContextItems({
-          contextItems: baseContextItems,
-          tomoriState: attempt.tomoriState,
-          deliberateToolAllowedNames: context.streamingContext.deliberateToolAllowedNames,
-          apiKey: attempt.providerConfig.apiKey,
-          emptyResponseFinishReason: context.turn.lockedTurn.admission.incoming.emptyResponseFinishReason,
-          retryCount: context.turn.lockedTurn.admission.incoming.retryCount,
-        });
-        const prefilled = await applyAssistantPrefill({
-          contextItems: context.contextItems,
-          prefill: context.assistantPrefill,
-          tomoriState: attempt.tomoriState,
-          forceReason: context.streamingContext.forceReason,
-        });
-        context.contextItems = prefilled.contextItems;
-        context.streamingContext.outputPrefill = prefilled.outputPrefill;
-        recordChatProviderContext(
-          index + 1,
-          context.contextItems.flatMap((item) =>
-            item.metadataTag === ContextItemTag.DIALOGUE_HISTORY && item.messageId ? [item.messageId] : [],
-          ),
-        );
-      };
-      await prepareAttemptContext();
+      const attemptContextItems = await prepareProviderContextItems({
+        contextItems: baseContextItems,
+        userId: context.streamingContext.triggererUserId,
+        tomoriState: attempt.tomoriState,
+        deliberateToolAllowedNames: context.streamingContext.deliberateToolAllowedNames,
+      });
 
       // Key rotation inner loop: try multiple keys for this attempt before giving up.
       let rotationKeyId = attempt.rotationKeyId;
@@ -167,9 +163,6 @@ async function runGenerationAttempts(
       let result!: GenerationTurnResult;
       let keyAttemptCount = 0;
       context.streamingContext.rotationKeyRetriesUsed = false;
-      // Index into deliveredMessageRefs marking where the current runToolLoop invocation's
-      // committed messages begin, so a superseded invocation's partials can be sliced out.
-      let invocationStart = deliveredMessageRefs.length;
 
       while (true) {
         keyAttemptCount++;
@@ -179,20 +172,61 @@ async function runGenerationAttempts(
         }
 
         const retryExcludedKeyIds = getRetryExcludedKeyIds(excludedKeyIds, rotationKeyId);
-        const hasFallbackKey = await hasAvailableRotationKey(attempt.tomoriState, retryExcludedKeyIds);
+        const hasFallbackKey =
+          attempt.credentialSource === "server" &&
+          (await hasAvailableRotationKey(attempt.tomoriState, retryExcludedKeyIds));
         setStreamUserErrorSuppression(context, hasFallbackKey || hasPendingModelFallback);
         context.streamingContext.forceModelFallback = hasPendingModelFallback;
 
-        if (context.responseReview) context.responseReview.pending = [];
-        invocationStart = deliveredMessageRefs.length;
-        result = await runWithChatDiagnosticStage({ attempt: index + 1, keyAttempt: keyAttemptCount }, () =>
-          runToolLoop({
-            context,
-            provider: attempt.provider,
-            providerConfig: attempt.providerConfig,
+        if (context.responseReview) {
+          context.responseReview.pending = [];
+        } else if (supersededResult) {
+          carryDeliveredOutput(carried, supersededResult);
+        }
+        supersededResult = undefined;
+        // Rebuilt per key attempt because a key-rotation retry continues what the failed key posted.
+        const prefilled = await applyAssistantPrefill({
+          contextItems: attemptContextItems,
+          prefill: carried.text ? { text: carried.text, source: "continuation" } : context.assistantPrefill,
+          tomoriState: attempt.tomoriState,
+          forceReason: context.streamingContext.forceReason,
+        });
+        // applyAssistantPrefill only appends, so this is exactly the prefill turn or directive.
+        const prefillItems = prefilled.contextItems.slice(attemptContextItems.length);
+        context.contextItems = [
+          ...(await fitProviderContextBudget({
+            contextItems: attemptContextItems,
+            reservedTailItems: prefillItems,
             tomoriState: attempt.tomoriState,
-          }),
+            apiKey: attempt.providerConfig.apiKey,
+            emptyResponseFinishReason: context.turn.lockedTurn.admission.incoming.emptyResponseFinishReason,
+            retryCount: context.turn.lockedTurn.admission.incoming.retryCount,
+          })),
+          ...prefillItems,
+        ];
+        context.streamingContext.outputPrefill = prefilled.outputPrefill;
+        recordChatProviderContext(
+          index + 1,
+          context.contextItems.flatMap((item) =>
+            item.metadataTag === ContextItemTag.DIALOGUE_HISTORY && item.messageId ? [item.messageId] : [],
+          ),
         );
+        result = await runWithChatDiagnosticStage({ attempt: index + 1, keyAttempt: keyAttemptCount }, () =>
+          withProviderUsageContext(context.usageContext, async () =>
+            runToolLoop({
+              context,
+              provider: attempt.provider,
+              providerConfig: attempt.providerConfig,
+              tomoriState: attempt.tomoriState,
+            }),
+          ),
+        );
+        supersededResult = result;
+        if (carried.text && result.status === "empty_response" && !isRetryableEmptyResponse(result)) {
+          result = { ...result, status: "completed" };
+        }
+
+        if (context.streamingContext.deliveryState.unconfirmed) break;
 
         if (result.status !== "error") {
           // Don't credit a timed-out key as successful : a timeout is not a clean completion.
@@ -213,14 +247,7 @@ async function runGenerationAttempts(
         const nextKey = await selectApiKey(attempt.tomoriState, [...Array.from(excludedKeyIds)]);
         if (!nextKey) break;
 
-        // A key-rotation retry supersedes this invocation: delete its partial output before the
-        // retry so the eventual response is not stacked on top of a truncated first attempt.
-        await purgeSupersededDeliveries(context, deliveredMessageRefs, invocationStart);
         attempt.providerConfig.apiKey = nextKey.apiKey;
-        if (providerIsApiFamily(attempt.tomoriState.llm.llm_provider, "novelai")) {
-          // A larger rotated allowance must restore history from before the first truncation.
-          await prepareAttemptContext();
-        }
         rotationKeyId = nextKey.rotationKeyId;
         log.warn(
           `Key rotation: retrying ${attempt.label} with key ${rotationKeyId ?? "main"} (attempt ${keyAttemptCount + 1}).`,
@@ -244,6 +271,12 @@ async function runGenerationAttempts(
         break;
       }
 
+      if (context.streamingContext.deliveryState.unconfirmed) {
+        if (context.responseReview) context.responseReview.pending = [];
+        await responseSink.finalize(result);
+        return result;
+      }
+
       const isRetryableStatus =
         (result.status === "error" || result.status === "timeout") && !isUnreachableDestinationResult(result);
 
@@ -263,11 +296,6 @@ async function runGenerationAttempts(
         if (serverAttempts.length > 0) {
           serverRouteStartIndex = attempts.length;
           attempts.push(...serverAttempts);
-          // The server is paying from here on, and everything downstream reads the credential source
-          // as "who is answering": the thought-log attribution and the error tips would otherwise
-          // keep naming the user's own provider for a reply the server produced.
-          context.textCredentialSource = "server";
-          context.streamingContext.textCredentialSource = "server";
         }
       }
 
@@ -292,14 +320,13 @@ async function runGenerationAttempts(
         if (result.status === "error") {
           await emitStreamErrors(responseSink, result.streamResults);
         }
-        if (context.responseReview) result.usageEntries = context.responseReview.usage;
-        await responseSink.finalize(result);
-        return result;
+        // After the errors are emitted, because a carried attempt's error was suppressed for the
+        // retry and must not surface as a second embed.
+        const finalResult = prependDeliveredOutput(result, context, carried);
+        if (context.responseReview) finalResult.usageEntries = context.responseReview.usage;
+        await responseSink.finalize(finalResult);
+        return finalResult;
       }
-
-      // A model fallback supersedes this attempt: delete the partial output it committed (e.g. text
-      // flushed before an SDK-call timeout) so only the fallback model's response remains visible.
-      await purgeSupersededDeliveries(context, deliveredMessageRefs, invocationStart);
 
       failures.push({
         modelCodename: attempt.tomoriState.llm.llm_codename,
@@ -336,36 +363,6 @@ function setStreamUserErrorSuppression(context: ChatTurnContext, temporarySuppre
   context.streamingContext.suppressUserErrors = temporarySuppressed || !context.shouldSurfaceUserErrors;
 }
 
-/**
- * Deletes and forgets the messages a superseded generation invocation committed to Discord.
- *
- * Slices off every delivered-message ref from `fromIndex` onward (this invocation's output plus any
- * stragglers an abandoned timeout stream flushed after it), removing them from the shared sink so
- * later attempts start clean, then best-effort deletes them from the channel. Called at each point
- * `runGenerationTurn` decides not to keep an invocation's result (key-rotation retry, model
- * fallback), so only the surviving attempt's messages remain visible.
- *
- * @param context - Active chat turn context (supplies the channel and persona webhook).
- * @param deliveredMessageRefs - The shared delivered-message sink for this turn.
- * @param fromIndex - First index belonging to the superseded invocation.
- */
-async function purgeSupersededDeliveries(
-  context: ChatTurnContext,
-  deliveredMessageRefs: DeliveredStreamMessage[],
-  fromIndex: number,
-): Promise<void> {
-  if (deliveredMessageRefs.length <= fromIndex) {
-    return;
-  }
-  const superseded = deliveredMessageRefs.splice(fromIndex);
-  recordChatDiagnostic({ kind: "messages_purge_requested", count: superseded.length });
-  log.info(`Deleting ${superseded.length} superseded partial message(s) from a failed generation attempt.`);
-  await deleteSupersededStreamMessages(superseded, {
-    channel: context.channel,
-    webhook: context.responseTarget?.webhook,
-  });
-}
-
 async function buildGenerationPlan(context: ChatTurnContext): Promise<GenerationPlan> {
   return {
     attempts: await buildPlannedRouteAttempts(context),
@@ -384,7 +381,11 @@ async function buildGenerationPlan(context: ChatTurnContext): Promise<Generation
 function resolveServerRouteExtension(
   context: ChatTurnContext,
 ): ((startIndex: number) => Promise<GenerationAttempt[]>) | null {
-  if (context.textCredentialSource !== "personal" || context.isUserImpersonation) {
+  if (
+    context.turn.lockedTurn.admission.incoming.sceneTurn?.modelSelection ||
+    context.textCredentialSource !== "personal" ||
+    context.isUserImpersonation
+  ) {
     return null;
   }
   if (context.currentPersona.config.user_byok_mode) {
@@ -406,6 +407,7 @@ function resolveServerRouteExtension(
 async function buildPlannedRouteAttempts(context: ChatTurnContext): Promise<GenerationAttempt[]> {
   const disableAllTools = !!context.streamingContext.disableAllTools;
   const primaryState = await resolveTomoriStateForRoute(context, "planned");
+  const personalUserId = context.textCredentialSource === "personal" ? (context.personalRoutingUserId ?? null) : null;
   const fallbackEntries = resolveFallbackEntries(primaryState);
 
   const pool: FallbackEntry[] = [{ kind: "llm", model: primaryState.llm }, ...fallbackEntries];
@@ -420,10 +422,20 @@ async function buildPlannedRouteAttempts(context: ChatTurnContext): Promise<Gene
   const attempts: GenerationAttempt[] = [];
   for (const [index, entry] of pool.entries()) {
     try {
-      const attempt = await createFallbackAttempt(primaryState, entry, index, disableAllTools);
+      const attempt = await createFallbackAttempt(
+        primaryState,
+        entry,
+        index,
+        disableAllTools,
+        personalUserId,
+        context.textCredentialSource,
+      );
       if (!attempt) {
-        // Only an unusable custom-endpoint lead resolves to null; the primary llm entry never does,
-        // so at least one valid attempt always remains in the chain.
+        // An unusable custom endpoint, or an llm whose provider has no key in the
+        // applicable scope, resolves to null. The primary's own llm entry shares
+        // the primary's provider and so never re-credentials, which is what
+        // guarantees at least one valid attempt survives however the pool is
+        // ordered.
         continue;
       }
       // Keep logs readable: the lead is always labelled "primary" regardless of the random draw.
@@ -462,7 +474,7 @@ async function buildServerRouteAttempts(context: ChatTurnContext, startIndex: nu
   for (const entry of serverPool) {
     const fallbackIndex = startIndex + attempts.length;
     try {
-      const attempt = await createFallbackAttempt(serverState, entry, fallbackIndex, disableAllTools);
+      const attempt = await createFallbackAttempt(serverState, entry, fallbackIndex, disableAllTools, null, "server");
       if (attempt) {
         attempts.push(attempt);
       }
@@ -623,6 +635,20 @@ function isUnreachableDestinationResult(result: GenerationTurnResult): boolean {
   });
 }
 
+/**
+ * Whether an empty continuation is a failure the turn-level retry repairs (output-token cap,
+ * speaker-guard discard, held NovelAI fragment) rather than the model having nothing to add.
+ */
+function isRetryableEmptyResponse(result: GenerationTurnResult): boolean {
+  const streamResult = result.streamResults.at(-1);
+  const data = streamResult?.data as { finishReason?: unknown; emptyResponseReason?: unknown } | undefined;
+  return (
+    Boolean(streamResult?.naiContinuationPrefill) ||
+    data?.finishReason === "length" ||
+    data?.emptyResponseReason === "speaker_guard"
+  );
+}
+
 async function emitStreamErrors(responseSink: ChatResponseSink, streamResults: StreamResult[]): Promise<void> {
   for (const streamResult of streamResults) {
     if (streamResult.status === "error") {
@@ -646,8 +672,11 @@ async function sendFallbackNoticeIfNeeded(
       channel: context.channel as ToolContext["channel"],
       client: context.client,
       message: context.message,
-      tomoriState: context.tomoriState,
+      tomoriState: context.currentPersona,
       locale: context.locale,
+      streamContext: context.streamingContext,
+      deliveryMode: context.streamingContext.deliveryMode,
+      isUserImpersonation: context.isUserImpersonation,
       provider: attempt.provider.getInfo().name,
       webhook: context.responseTarget?.webhook,
       personaUsername: context.responseTarget?.personaUsername,
@@ -684,6 +713,16 @@ async function sendDeferredTimeoutNoticeIfPending(context: ChatTurnContext): Pro
     providerName: notice.providerName,
     textCredentialSource: context.streamingContext.textCredentialSource,
     sawStreamProgress: notice.sawStreamProgress,
+    managedProvider: context.usageContext?.credentialProvider ?? null,
+    credentialScope:
+      context.usageContext?.credentialScope ??
+      (context.textCredentialSource === "personal"
+        ? "personal"
+        : context.textCredentialSource === "server"
+          ? "server"
+          : undefined),
+    userDiscId: context.userDiscId,
+    serverId: context.tomoriState.server_id,
   });
 }
 
@@ -715,24 +754,20 @@ type TextRoute = "planned" | "server";
 
 async function resolveTomoriStateForRoute(context: ChatTurnContext, route: TextRoute): Promise<TomoriState> {
   const incoming = context.turn.lockedTurn.admission.incoming;
+  if (incoming.sceneTurn?.modelSelection) return context.currentPersona;
   const usePersonalRoute = route === "planned" && context.textCredentialSource === "personal";
   const base = usePersonalRoute
     ? (await applyPersonalProviderSelectionsToTomoriState(context.currentPersona, context.personalRoutingUserId))
         .tomoriState
     : context.currentPersona;
-  const channelLlmOverride =
-    context.isUserImpersonation || usePersonalRoute
-      ? null
-      : await getCachedChannelLlm(
-          context.currentPersona.server_id,
-          context.channel.id,
-          context.channel.isThread() ? context.channel.parentId : null,
-        );
-  const effectiveLlm =
-    usePersonalRoute || context.isUserImpersonation ? base.llm : (base.persona_llm ?? channelLlmOverride ?? base.llm);
-  const overriddenLlm = incoming.llmOverrideCodename
-    ? { ...effectiveLlm, llm_codename: incoming.llmOverrideCodename }
-    : effectiveLlm;
+  const overriddenLlm = usePersonalRoute
+    ? incoming.llmOverrideCodename
+      ? ((await llmModelRepo.loadByProviderAndCodename(base.llm.llm_provider, incoming.llmOverrideCodename)) ?? {
+          ...base.llm,
+          llm_codename: incoming.llmOverrideCodename,
+        })
+      : base.llm
+    : await resolveServerTextModel(base, context.channel, context.isUserImpersonation, incoming.llmOverrideCodename);
   let state: TomoriState = { ...base, llm: overriddenLlm };
 
   if (overriddenLlm.llm_provider.toLowerCase() !== base.llm.llm_provider.toLowerCase()) {
@@ -747,17 +782,26 @@ async function createFallbackAttempt(
   entry: FallbackEntry,
   fallbackIndex: number,
   disableAllTools: boolean,
+  personalUserId: number | null,
+  credentialSource: TextCredentialSource,
 ): Promise<GenerationAttempt | null> {
   if (entry.kind === "custom_endpoint") {
+    const endpointServerId = personalUserId === null ? primaryState.server_id : null;
+    if (
+      (entry.endpoint.user_id ?? null) !== personalUserId ||
+      (entry.endpoint.server_id ?? null) !== endpointServerId
+    ) {
+      return null;
+    }
     if (!entry.endpoint.connection_id) {
       log.warn(`Skipping custom endpoint fallback ${entry.endpoint.label}: missing connection_id.`);
       return null;
     }
     const customProviderName = buildCustomProviderName(entry.endpoint.connection_id);
-    const endpointUserId = entry.endpoint.user_id ?? null;
-    const savedConfig = endpointUserId
-      ? await llmProviderRepo.loadUserSavedProviderConfig(endpointUserId, customProviderName)
-      : await llmProviderRepo.loadSavedProviderConfig(primaryState.server_id, customProviderName);
+    const savedConfig =
+      personalUserId !== null
+        ? await llmProviderRepo.loadUserSavedProviderConfig(personalUserId, customProviderName)
+        : await llmProviderRepo.loadSavedProviderConfig(primaryState.server_id, customProviderName);
     if (!savedConfig?.api_key) {
       log.warn(`Skipping custom endpoint fallback ${entry.endpoint.label}: no saved key.`);
       return null;
@@ -788,16 +832,30 @@ async function createFallbackAttempt(
         verbatim_tool_calling: entry.endpoint.verbatim_tool_calling,
       },
     };
-    return await createAttempt(`fallback ${fallbackIndex}: ${entry.endpoint.label}`, state, "custom", disableAllTools);
+    return await createAttempt(
+      `fallback ${fallbackIndex}: ${entry.endpoint.label}`,
+      state,
+      credentialSource,
+      "custom",
+      disableAllTools,
+    );
   }
 
   let state: TomoriState = { ...primaryState, llm: entry.model };
   if (entry.model.llm_provider.toLowerCase() !== primaryState.llm.llm_provider.toLowerCase()) {
-    state = await applySavedProviderConfig(state, entry.model.llm_provider);
+    const recredentialed = await applyCrossProviderConfig(state, entry.model.llm_provider, personalUserId);
+    if (!recredentialed) {
+      log.warn(
+        `Skipping fallback ${entry.model.llm_codename}: no ${personalUserId ? "personal" : "server"} key saved for provider ${entry.model.llm_provider}.`,
+      );
+      return null;
+    }
+    state = recredentialed;
   }
   return await createAttempt(
     `fallback ${fallbackIndex}: ${entry.model.llm_codename}`,
     state,
+    credentialSource,
     undefined,
     disableAllTools,
   );
@@ -806,6 +864,7 @@ async function createFallbackAttempt(
 async function createAttempt(
   label: string,
   tomoriState: TomoriState,
+  credentialSource: TextCredentialSource,
   forcedProviderName?: string,
   disableAllTools = false,
 ): Promise<GenerationAttempt> {
@@ -815,13 +874,14 @@ async function createAttempt(
     ? await ProviderFactory.getProviderByName(forcedProviderName)
     : await getProviderForTomori(effectiveState);
 
-  const rotationSelection = await selectApiKey(effectiveState);
+  const rotationSelection = credentialSource === "server" ? await selectApiKey(effectiveState) : null;
   const apiKey = rotationSelection ? rotationSelection.apiKey : await resolveApiKey(effectiveState);
   const rotationKeyId = rotationSelection?.rotationKeyId ?? null;
 
   const providerConfig = await provider.createConfig(effectiveState, apiKey);
 
   return {
+    credentialSource,
     label,
     tomoriState: effectiveState,
     provider,
@@ -840,12 +900,39 @@ async function resolveApiKey(tomoriState: TomoriState): Promise<string> {
   return await decryptApiKey(encryptedKey, tomoriState.config.key_version || 1);
 }
 
+/**
+ * Re-credentials a fallback attempt whose model belongs to a different provider
+ * than the primary's.
+ *
+ * A personal-routed turn resolves against the user's own saved providers and
+ * never falls through to the server's, so a chain the user configured cannot
+ * silently spend the server owner's key. Returns null when no key exists in the
+ * applicable scope, which drops the entry from the pool.
+ */
+async function applyCrossProviderConfig(
+  tomoriState: TomoriState,
+  providerName: string,
+  personalUserId: number | null,
+): Promise<TomoriState | null> {
+  const provider = providerName.toLowerCase();
+  const savedConfig = personalUserId
+    ? await llmProviderRepo.loadUserSavedProviderConfig(personalUserId, provider)
+    : await llmProviderRepo.loadSavedProviderConfig(tomoriState.server_id, provider);
+
+  return savedConfig?.api_key ? withSavedProviderConfig(tomoriState, savedConfig) : null;
+}
+
+/**
+ * Server-scoped variant for the primary attempt, which cannot be skipped the way a
+ * fallback entry can and so raises instead of returning null.
+ */
 async function applySavedProviderConfig(tomoriState: TomoriState, providerName: string): Promise<TomoriState> {
-  const savedConfig = await llmProviderRepo.loadSavedProviderConfig(tomoriState.server_id, providerName.toLowerCase());
-  if (!savedConfig?.api_key) {
+  const state = await applyCrossProviderConfig(tomoriState, providerName, null);
+  if (!state) {
     throw new Error(`No saved credentials found for provider ${providerName}.`);
   }
-  return withSavedProviderConfig(tomoriState, savedConfig);
+
+  return state;
 }
 
 function extractErrorCode(streamResult: StreamResult | undefined): string {
@@ -876,12 +963,10 @@ function extractErrorDetail(streamResult: StreamResult | undefined): string {
 }
 
 async function prepareProviderContextItems(args: {
+  userId?: number;
   contextItems: StructuredContextItem[];
   tomoriState: TomoriState;
   deliberateToolAllowedNames: string[] | undefined;
-  apiKey: string;
-  emptyResponseFinishReason: string | null | undefined;
-  retryCount: number;
 }): Promise<StructuredContextItem[]> {
   let contextItems = await resolveMediaForModel(args.contextItems, args.tomoriState, args.deliberateToolAllowedNames);
 
@@ -899,7 +984,10 @@ async function prepareProviderContextItems(args: {
     // with neither: without them the custom model receives no tool schemas and no calling-format
     // instructions, so every tool (voice messages included) fails.
     if (!contextItems.some((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS)) {
-      const toolItem = await buildVerbatimToolDefinitionsContextItem({ tomoriState: args.tomoriState });
+      const toolItem = await buildVerbatimToolDefinitionsContextItem({
+        tomoriState: args.tomoriState,
+        userId: args.userId,
+      });
       if (toolItem) {
         contextItems = injectVerbatimToolDefinitionsItem(contextItems, toolItem);
       }
@@ -913,8 +1001,28 @@ async function prepareProviderContextItems(args: {
     // verbatim parser to execute whatever the model then writes into chat.
     contextItems = stripAllVerbatimItems(contextItems);
   }
+  return contextItems;
+}
 
-  contextItems = await applyProviderContextTruncation(contextItems, args.tomoriState, args.apiKey);
+/**
+ * Trims history to the attempt's budget with the prefill's tokens reserved. The prefill is left out
+ * of the list itself because an instruction-mode directive is a dialogue user turn, which the
+ * truncator would protect as the newest request in place of the real trigger.
+ */
+async function fitProviderContextBudget(args: {
+  contextItems: StructuredContextItem[];
+  reservedTailItems: StructuredContextItem[];
+  tomoriState: TomoriState;
+  apiKey: string;
+  emptyResponseFinishReason: string | null | undefined;
+  retryCount: number;
+}): Promise<StructuredContextItem[]> {
+  let contextItems = await applyProviderContextTruncation(
+    args.contextItems,
+    args.tomoriState,
+    args.apiKey,
+    args.reservedTailItems,
+  );
   if (
     shouldApplyLengthEmptyRetryTrim(args.tomoriState.llm.llm_provider, args.emptyResponseFinishReason, args.retryCount)
   ) {

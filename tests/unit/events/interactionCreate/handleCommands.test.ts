@@ -1,9 +1,14 @@
 import { describe, expect, it, spyOn } from "bun:test";
-import type { Client, AutocompleteInteraction } from "discord.js";
-import type { TomoriState } from "@/types/db/schema";
+import type { Client, AutocompleteInteraction, ChatInputCommandInteraction } from "discord.js";
+import { PrivacyLevel, type TomoriState } from "@/types/db/schema";
 import { cooldownRepository, personaRepository, statRepository, userRepository } from "@/utils/db/repositories";
 import { clearTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import * as whitelistCache from "@/utils/cache/channelWhitelistCache";
+import { DatabaseUnavailableError } from "@/types/errors";
+import { invalidateUserCache } from "@/utils/cache/userCache";
+import * as interactionHelper from "@/utils/discord/interactionHelper";
+import { log } from "@/utils/misc/logger";
+import { makeFakeInteraction } from "../../../helpers/fakeInteraction";
 import handler, { resolveCommandCooldown } from "@/events/interactionCreate/handleCommands";
 
 describe("handleCommands", () => {
@@ -163,5 +168,60 @@ describe("autocomplete dispatch reaches its handler with the interaction", () =>
     personaSpy.mockRestore();
     userSpy.mockRestore();
     whitelistSpy.mockRestore();
+  });
+});
+
+describe("slash command blacklist read failures", () => {
+  it("distinguishes an unreadable blacklist from a confirmed block on repeated /refresh calls", async () => {
+    const { interaction } = makeFakeInteraction({ guildId: "guild-refresh" });
+    const commandInteraction = Object.assign(interaction, {
+      commandName: "refresh",
+      locale: "en-US",
+      isAutocomplete: () => false,
+      isChatInputCommand: () => true,
+      options: {
+        ...interaction.options,
+        getSubcommandGroup: () => null,
+        getSubcommand: () => null,
+      },
+    }) as unknown as ChatInputCommandInteraction;
+    invalidateUserCache(interaction.user.id);
+    const rowSpy = spyOn(userRepository, "loadByDiscordId").mockResolvedValue(null);
+    const privacySpy = spyOn(userRepository, "getPrivacyLevel").mockResolvedValue(PrivacyLevel.MINIMAL);
+    const blacklistSpy = spyOn(userRepository, "isBlacklisted").mockRejectedValue(
+      new DatabaseUnavailableError("Blacklist read unavailable"),
+    );
+    const replySpy = spyOn(interactionHelper, "replyInfoEmbed").mockResolvedValue(undefined);
+    const errorSpy = spyOn(log, "error").mockResolvedValue(undefined);
+    const cooldownSpy = spyOn(cooldownRepository, "hasCommandCategoryCooldown").mockResolvedValue(true);
+    const remainingSpy = spyOn(cooldownRepository, "getRemainingCommandCategoryCooldownSeconds").mockResolvedValue(1);
+    try {
+      await handler({} as Client, commandInteraction);
+      expect(replySpy.mock.calls.at(-1)?.[2]).toMatchObject({
+        titleKey: "general.errors.database_unavailable_title",
+        descriptionKey: "general.errors.database_unavailable_description",
+      });
+      expect(cooldownSpy).not.toHaveBeenCalled();
+
+      blacklistSpy.mockResolvedValue(false);
+      await handler({} as Client, commandInteraction);
+      expect(replySpy.mock.calls.at(-1)?.[2]).toMatchObject({
+        titleKey: "general.cooldown_title",
+        descriptionKey: "general.cooldown",
+      });
+
+      invalidateUserCache(interaction.user.id);
+      blacklistSpy.mockResolvedValue(true);
+      await handler({} as Client, commandInteraction);
+      expect(replySpy.mock.calls.at(-1)?.[2]).toMatchObject({
+        titleKey: "general.errors.blacklisted_title",
+        descriptionKey: "general.errors.blacklisted_description",
+      });
+    } finally {
+      for (const spy of [rowSpy, privacySpy, blacklistSpy, replySpy, errorSpy, cooldownSpy, remainingSpy]) {
+        spy.mockRestore();
+      }
+      invalidateUserCache(interaction.user.id);
+    }
   });
 });

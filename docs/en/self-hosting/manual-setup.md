@@ -69,19 +69,9 @@ still runs on host Bun. For a fully containerized bot and database, use
 Optional tuning lives in `.env.optional.example`. Copy over any values you want to
 customize (limits, timeouts, feature toggles, local server URLs, etc.).
 
-Custom expression uploads default to local files under `data/custom-expressions/`.
-Keep that directory on persistent storage. `EXPRESSION_STORAGE_BACKEND` accepts `local`,
-`gcs`, or `s3`. Cloud backends require `EXPRESSION_STORAGE_BUCKET` and the corresponding
-SDK credentials. S3 also uses `AWS_REGION` (default `us-east-1`) and optional `S3_ENDPOINT`.
-GCS uses application default credentials. Expressions use their own bucket setting;
-avatar storage settings do not select an expression bucket. Objects remain readable through
-the SDK and are attached as bytes, so a publicly served media URL is unnecessary.
-Preserve backend, bucket, and object keys when restoring existing references.
-
-`MAX_CUSTOM_EXPRESSIONS_PER_SERVER` caps custom expressions per server (default `20`, minimum `1`).
-Links and uploaded files share the limit across all personas; native emojis and stickers are excluded.
-Restart the bot after changing it. Lowering the limit preserves existing expressions and allows edits
-and deletions, but blocks additions until the count falls below the limit.
+Keep the `data/` directory on persistent storage. Local files can include persona avatars and sprites
+in `data/avatars/`, voice samples in `data/voice-samples/`, and custom expressions in
+`data/custom-expressions/`. The database is stored separately, so back it up alongside these files.
 
 ## 3. Run
 
@@ -91,9 +81,8 @@ bun run dev
 
 When you see `TomoriBot up and running!`, go to Discord and run `/setup` in your
 server to connect an AI provider and initialize the bot. The command opens a guided
-checklist panel, and nothing is written until you press `Finish Setup`; see
-[The `/setup` command](/self-hosting/setup-wizard/#the-setup-command) for the steps and the
-[Quickstart](/introduction/quickstart/) for the in-Discord side.
+checklist panel, and nothing is written until you press `Finish Setup`; see the
+[Quickstart](/introduction/quickstart/) for the steps.
 
 Use `bun run launch` instead of `bun run dev` if you want optional local servers (SearXNG, Crawl4AI, local TTS/STT) launched alongside the bot:
 

@@ -1,9 +1,12 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { type BaseMessageOptions, ButtonStyle, MessageFlags } from "discord.js";
+import { type BaseMessageOptions, ButtonStyle, ComponentType, MessageFlags } from "discord.js";
 import { terminalPayload as buildConfigTerminalPayload } from "@/utils/discord/interactions/configRouteContext";
 import { terminalPayload as buildPersonalConfigTerminalPayload } from "@/utils/discord/interactions/personalConfigRouteContext";
+import { buildDanbooruGalleryPayload } from "@/utils/discord/danbooruGalleryMessage";
 import { buildGeneratedImageComponentsV2Payload } from "@/utils/discord/generatedImageMessage";
 import { buildGeneratedVideoComponentsV2Payload } from "@/utils/discord/generatedVideoMessage";
+import { danbooruPostSchema } from "@/tools/restAPIs/danbooru/danbooruService";
+import { MAX_POSTED_IMAGES } from "@/tools/restAPIs/danbooru/posts";
 import { ContextItemTag } from "@/types/misc/context";
 import { buildContextUsagePayload } from "@/utils/discord/ui/contextUsagePanel";
 import { buildRangeSelectorPayload } from "@/utils/discord/ui/interactionCore";
@@ -58,6 +61,34 @@ describe("Declared Components V2 producer smoke fixtures", () => {
     assertValidPayload(
       buildGeneratedVideoComponentsV2Payload("generated.mp4", 2_500, "en-US"),
       "generatedVideoMessage.buildGeneratedVideoComponentsV2Payload",
+    );
+  });
+
+  it("hides generated video galleries only when requested", () => {
+    for (const spoiler of [false, true]) {
+      const filename = `${spoiler ? "SPOILER_" : ""}generated.mp4`;
+      const payload = buildGeneratedVideoComponentsV2Payload(filename, 2_500, "en-US", spoiler);
+
+      assertValidPayload(payload, "generatedVideoMessage.buildGeneratedVideoComponentsV2Payload");
+      expect(payload.components[0]).toEqual({
+        type: ComponentType.MediaGallery,
+        items: [{ ...(spoiler ? { spoiler: true } : {}), media: { url: `attachment://${filename}` } }],
+      });
+    }
+  });
+
+  it("validates the Danbooru gallery payload at the 4-image maximum", async () => {
+    const post = danbooruPostSchema.parse(
+      await Bun.file(new URL("../../fixtures/danbooru/post_11218685.json", import.meta.url)).json(),
+    );
+    const images = Array.from({ length: MAX_POSTED_IMAGES }, (_, index) => ({
+      post: { ...post, id: post.id + index },
+      imageUrl: post.large_file_url ?? "",
+    }));
+
+    assertValidPayload(
+      buildDanbooruGalleryPayload("en-US", ["reisalin stout", "beach"], images),
+      "danbooruGalleryMessage.buildDanbooruGalleryPayload",
     );
   });
 

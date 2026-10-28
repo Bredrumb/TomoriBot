@@ -7,6 +7,13 @@ aiGenerated: true
 
 TomoriBot có thể tạo các video ngắn từ lời nhắc văn bản hoặc bằng cách tạo hoạt ảnh cho hình ảnh hiện có. Sử dụng `/generate video` hoặc hỏi trực tiếp cô ấy trong cuộc trò chuyện.
 
+Sử dụng tham số tùy chọn `model` để chọn model video cho lần tạo này mà không làm thay đổi
+các giá trị mặc định của bạn. Gợi ý tự động bao gồm các nhà cung cấp máy chủ và cá nhân tương thích,
+với các mục cá nhân được đánh dấu `(qua nhà cung cấp cá nhân)`. Để trống sẽ dùng model thông thường.
+
+Đặt `nsfw` thành `true` để ẩn video đã tạo sau spoiler Discord. Điều này chỉ thay đổi cách
+Discord hiển thị video; nó không thay đổi việc tạo video hay bộ lọc nội dung của nhà cung cấp.
+
 ## Những việc bot có thể làm
 
 - **Chuyển văn bản thành video**: tạo một đoạn clip ngắn từ phần mô tả.

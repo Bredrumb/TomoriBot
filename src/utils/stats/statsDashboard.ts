@@ -22,6 +22,7 @@
  * when usage is unavailable (see tokenEstimate / postTurnEffects). They remain estimates
  * because catalog prices can be incomplete or provider-dependent.
  */
+import { TIMEFRAME_LABEL_KEYS } from "@/utils/discord/statsDashboardCatalog";
 import {
   type AttachmentBuilder,
   ButtonStyle,
@@ -42,6 +43,8 @@ import type {
   TopUserEntry,
 } from "@/utils/db/repositories/StatRepository";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
+import { truncateDiscordText } from "@/utils/text/discordTextLimits";
+import { DISCORD_BUTTON_LABEL_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import { formatLocaleInteger, localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { buildDashboardPagePayload, type DashboardPage } from "@/utils/metrics/status/statusPageRenderer";
@@ -176,9 +179,13 @@ async function resolvePersonaNames(guildId: string): Promise<Map<number, string>
 /** Shifted by a personal UTC offset when provided. */
 function formatPeakHour(locale: string, hour: number | null, offsetHours?: number | null): string {
   if (hour === null) return localizer(locale, "commands.stats.empty");
-  const shifted = offsetHours ? (((hour + offsetHours) % 24) + 24) % 24 : hour;
+  const minutesPerDay = 24 * 60;
+  const shiftedMinutes =
+    ((Math.round((hour + (offsetHours ?? 0)) * 60) % minutesPerDay) + minutesPerDay) % minutesPerDay;
   const suffix = offsetHours ? localizer(locale, "commands.stats.local_suffix") : "UTC";
-  return `${String(shifted).padStart(2, "0")}:00 ${suffix}`;
+  const hh = String(Math.floor(shiftedMinutes / 60)).padStart(2, "0");
+  const mm = String(shiftedMinutes % 60).padStart(2, "0");
+  return `${hh}:${mm} ${suffix}`;
 }
 
 /** Formats the peak weekday from the histogram using localized short day names. */
@@ -251,7 +258,7 @@ function buildTabButtonRows(
           type: ComponentType.Button,
           style: index === activeIndex ? ButtonStyle.Primary : ButtonStyle.Secondary,
           customId: buildStatsDashboardButtonId(context, tab.id),
-          label: localizer(locale, tab.labelKey),
+          label: truncateDiscordText(localizer(locale, tab.labelKey), DISCORD_BUTTON_LABEL_MAX),
           disabled: index === activeIndex,
         } satisfies ButtonComponentData;
       }),
@@ -1064,7 +1071,7 @@ export async function buildServerTabs(args: {
 
 /** Builds the localized "{timeframe} • {scope}" subtitle shown under each tab title. */
 export function buildSubtitle(locale: string, timeframe: Timeframe, scopeLabelKey?: string): string {
-  const timeframeLabel = localizer(locale, `commands.choices.${timeframe}`);
+  const timeframeLabel = localizer(locale, TIMEFRAME_LABEL_KEYS[timeframe]);
   if (!scopeLabelKey) return `**${timeframeLabel}**`;
   return `**${timeframeLabel}** • ${localizer(locale, scopeLabelKey)}`;
 }

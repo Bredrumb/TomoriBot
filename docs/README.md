@@ -21,28 +21,30 @@ The marketing front door: what TomoriBot is and how to start using it.
 Capability-oriented pages for people *using* TomoriBot. Category pages with sections;
 a section graduates to its own file when it outgrows ~2-3 screens or gains its own setup flow.
 
-Pages are bucketed into task-based sub-categories, each with a landing card-grid README.
+Pages are bucketed into task-based sub-categories:
 
 - [`features/README.mdx`](./en/features/README.mdx): capability tour card grid
-- **Chatting & Personality**: [`chatting-personality/`](./en/features/chatting-personality/README.mdx)
+- **Chatting & Personality**:
   - [`chatting-and-triggers.md`](./en/features/chatting-personality/chatting-and-triggers/)
   - [`multiple-personas.md`](./en/features/chatting-personality/multiple-personas/)
   - [`behavior-tweaking.md`](./en/features/chatting-personality/behavior-tweaking/)
-- **Knowledge**: [`knowledge/`](./en/features/knowledge/README.mdx)
+  - [`natural-nudges.md`](./en/features/chatting-personality/natural-nudges/)
+- **Knowledge**:
   - [`memory.md`](./en/features/knowledge/memory/)
   - [`inside-the-prompt.md`](./en/features/knowledge/inside-the-prompt/)
   - [`personalization.md`](./en/features/knowledge/personalization/)
   - [`data-handling.md`](./en/features/knowledge/data-handling/)
-- **Capabilities**: [`capabilities/`](./en/features/capabilities/README.mdx)
-  - [`tools-and-extensions.md`](./en/features/capabilities/tools-and-extensions/)
+- **Capabilities**:
+  - [`tools-and-extensions/`](./en/features/capabilities/tools-and-extensions/): built-in tools, web search, MCP servers, and tool settings
   - [`scheduled-tasks.md`](./en/features/capabilities/scheduled-tasks/)
-  - [`media-generation/`](./en/features/capabilities/media-generation/README.mdx): image, video, and voice generation
-- **Setup & Administration**: [`setup-administration/`](./en/features/setup-administration/README.mdx)
+  - [`media-generation/`](./en/features/capabilities/media-generation/): image, video, and voice generation
+- **Setup & Administration**:
   - [`providers-and-models.md`](./en/features/setup-administration/providers-and-models/)
   - [`server-moderation.md`](./en/features/setup-administration/server-moderation/)
   - [`age-restricted-commands.md`](./en/features/setup-administration/age-restricted-commands/)
   - [`stats-and-insights.md`](./en/features/setup-administration/stats-and-insights/)
-- **Integrations**: [`integrations/`](./en/features/integrations/README.mdx)
+- **Integrations**:
+  - [`message-proxy-support.md`](./en/features/integrations/message-proxy-support/)
   - [`matrix-bridge.md`](./en/features/integrations/matrix-bridge/)
   - [`sillytavern-support.md`](./en/features/integrations/sillytavern-support/)
 - [`features/command-reference.md`](./en/features/command-reference/): generated from command locales (Phase 3)
@@ -70,6 +72,7 @@ source open to follow these.
     - [`MOSS-TTS`](./en/self-hosting/local-endpoints/text-to-speech/moss.md): experimental clone and voice-design auto endpoint
   - [`local-endpoints/speech-to-text/`](./en/self-hosting/local-endpoints/speech-to-text/README.mdx): local STT engines
 - [`self-hosting/maintenance.md`](./en/self-hosting/maintenance.md): maintenance scripts, updating, backups/restore
+- [`self-hosting/pluralbuddy-oauth.md`](./en/self-hosting/pluralbuddy-oauth.md): authorize the official PluralBuddy message lookup
 - [`self-hosting/safe-migration.md`](./en/self-hosting/safe-migration.md)
 - [`self-hosting/local-monitoring.md`](./en/self-hosting/local-monitoring.md)
 
@@ -131,12 +134,14 @@ Per-stage reference. Each folder has a `README.md` (overview + ASCII flow) and n
 Supporting services that pipelines depend on.
 
 - [`architecture/subsystems/`](./en/architecture/subsystems/README.md): database schema, events, commands, tools,
-  caching, cooldowns, security, localization, multi-persona, persona-presets, and more
+  caching, cooldowns, security, localization, multi-persona, persona-presets, natural-nudges, and more
 
 ### Integrations
 
 - [`architecture/integrations/`](./en/architecture/integrations/README.md): Discord platform, Matrix bridge,
   NovelAI text limitations and inpainting, SillyTavern, and voice pipeline internals
+- [`architecture/integrations/message-proxy.md`](./en/architecture/integrations/message-proxy/): proxy routing and identity contract
+- [`architecture/integrations/pluralkit.md`](./en/architecture/integrations/pluralkit/): PluralKit adapter behavior
 
 ### Cloud
 
@@ -168,5 +173,5 @@ personas TomoriBot ships with). Card sources: `src/db/seed/catalog/personas/*`.
 Reachable only via in-page links: not shown in the sidebar.
 
 - [`wiki/production-tuning.md`](./en/wiki/production-tuning.md): deep operational tuning, container sizing, and incident recovery
-- [`wiki/refactor-record.md`](./en/wiki/refactor-record.md): historical plugin-architecture-prerequisite refactor record
+- [`wiki/refactor-record.md`](./en/wiki/refactor-record.md): module ownership and links to current architecture
 - [`wiki/threat-models.md`](./en/wiki/threat-models.md): security threat models

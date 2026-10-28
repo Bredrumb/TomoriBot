@@ -16,7 +16,7 @@ one of eight archetypes, and each has a reference command to copy. Wiring is in
 |---|---|---|
 | Categorized Control Panel | A root owns several related settings areas that users revisit and compare | `/moderation`; also `/config`, `/personal config`, `/memories`, `/personal memories` |
 | Collection Panel | The pages are saved entities the user created, plus a way to add one | `/providers`, `/personal providers`; inside `/config`, the MCP servers and SillyTavern presets pages |
-| Entity Workspace | The user needs two axes at once: which entity, and which aspect of it | `/config` Persona category (persona selector plus nine pages) |
+| Entity Pages | The user needs two axes at once: which entity, and which aspect of it | `/config` Persona category (persona selector plus ten pages) |
 | Paginated Reference | Read-only information users browse repeatedly, rebuilt from definitions or stored data | `/help`, `/status`, `/stats` |
 | Guided Wizard | Ordered choices, later steps depend on earlier ones, nothing is saved until the end | `/setup` |
 | Direct Command Family | The user knows the operation, and slash options can name the target safely | `/impersonate`; also `/persona`, `/generate`, `/export`, `/import`, `/tool` |
@@ -41,8 +41,9 @@ Do not add a panel only to remove one slash path.
 These apply to all three panel archetypes.
 
 - **Navigation never writes.** Category buttons, page selects, and entity selects only change what is
-  shown. A select's default marks the current page. Writes happen through an explicit button or a modal
-  submission, and end with a receipt and refreshed state.
+  shown. A select's default marks the current page. Writes happen through an explicit button, a modal
+  submission, or one of the [selects that write](#selects-that-write), and end with a receipt and
+  refreshed state.
 - **Categories:** at most five top-row buttons, the active one `Primary`. More areas than that belong
   in a page select within a category.
 - **Rebuild state on every click.** Reload from the database and resolve stable IDs within the current
@@ -65,17 +66,28 @@ These apply to all three panel archetypes.
 - A panel that serves two ownership scopes with one builder names the scope in its title, as
   `/providers` (`Server Providers`) and `/personal providers` (`Personal Providers`) do.
 
-### Entity Workspaces
+### Entity Pages
 
 - Switching page keeps the entity; switching entity keeps the page.
 - The main persona is the first selection and is labelled as the main persona.
 
-### Recorded exception
+### Selects that write
 
-The SillyTavern presets select activates the chosen preset directly, and `None` disables presets. Only
-one preset can be active and another selection reverses it, so a preview step would add a click to the
-select's only purpose. The select is disabled on a stale read, re-authorizes before writing, and still
-repaints with a receipt; deleting a preset keeps the normal button and confirmation.
+A select may save on pick, without a button or modal, when the pick is the whole change: no free text,
+no other field submitted with it, and another pick undoes it. Opening a modal that holds only that
+select would cost a click and hide the saved value. The select is disabled on a stale read,
+re-authorizes before writing, and repaints with a receipt. Two shapes qualify:
+
+- **Single choice:** one active value that another pick replaces. The SillyTavern presets select
+  activates the chosen preset and `None` disables presets; deleting a preset keeps the normal button
+  and confirmation.
+- **Whole list:** the select's defaults show the saved list and each pick saves the new list, as the
+  Natural Nudges channels select does. The list must fit one select (25 values). The save is
+  last-write-wins, so two admins editing at once keep the later pick.
+
+Keep the modal when the select is submitted with other fields. A list that can outgrow 25 entries keeps
+its add and remove buttons. Budget the row: an action row holding one select counts as 2 of a message's
+40 components.
 
 Other departures need a verified Discord limit, a different archetype, or a recorded product decision,
 added here.

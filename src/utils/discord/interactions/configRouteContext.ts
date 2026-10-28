@@ -1,9 +1,7 @@
 import type { DraftPicker } from "@/utils/discord/ui/responseDraftingPanel";
-import type { DraftModelSlot } from "@/utils/discord/configPanelCatalog";
 import type {
   ResponseDraftingView,
   ResponseDraftingOperations,
-  DraftModelGroup,
   DraftCheckerChoice,
 } from "@/utils/discord/interactions/responseDraftingOperations";
 import {
@@ -56,7 +54,10 @@ import {
 } from "@/utils/discord/interactions/configPermissionPolicy";
 import type { ConfigPersonaOperations, GuildIdentityPort } from "@/utils/discord/interactions/configPersonaOperations";
 import type { ConfigSpriteOperations } from "@/utils/discord/interactions/configSpriteOperations";
-import type { ConfigModelOperations } from "@/utils/discord/interactions/configModelOperations";
+import type {
+  ConfigModelOperations,
+  StructuredOutputModelGroup,
+} from "@/utils/discord/interactions/configModelOperations";
 import type {
   VoiceSampleAddDependencies,
   VoiceSampleAddInput,
@@ -78,7 +79,7 @@ import type { ConfigVoicesLoaderDependencies } from "@/utils/discord/interaction
 import type { ConfigPersonaVoiceView } from "@/utils/discord/interactions/configPersonaVoiceLoader";
 import type { ConfigPersonaVoiceRemoteView } from "@/utils/discord/ui/configVoicePanel";
 import type { ElevenLabsVoiceCatalogResult } from "@/utils/audio/elevenLabsVoiceCatalog";
-import type { SpeechEndpointResult } from "@/utils/provider/speechEndpointResolver";
+import type { SpeechTargetResult } from "@/utils/provider/speechEndpointResolver";
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import { type PersonaPanelAvatarData, withPersonaPanelAvatar } from "@/utils/discord/personaPanelAvatar";
 import type { PersonaPanelCharacterReferenceData } from "@/utils/discord/personaPanelCharacterReference";
@@ -93,6 +94,10 @@ import type { StPresetsPanelRenderInput } from "@/utils/discord/ui/stPresetsPane
 import { HUMANIZER_DEFAULT } from "@/utils/discord/humanizerOptions";
 import { DEFAULT_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
 import type { McpConfigOperations } from "@/utils/mcp/mcpConfigOperations";
+import type {
+  NaturalNudgePanelDependencies,
+  NaturalNudgesPanelState,
+} from "@/modules/natural-nudges/discord/operations";
 
 export interface ConfigScope {
   /** Guild snowflake in a guild, DM recipient snowflake otherwise: the workspace key every absorbed command already uses. */
@@ -127,6 +132,8 @@ export interface ConfigBehaviorGeneralView {
   humanizerDegree: number;
   messageFetchLimit: number;
   timezoneOffset: number;
+  /** Name of the active SillyTavern preset, which takes over the system prompt; absent when none. */
+  activeStPresetName?: string | null;
 }
 
 export interface ConfigBehaviorTriggerView {
@@ -250,8 +257,8 @@ export interface ConfigRouteDependencies {
     scope: ConfigScope,
     persona: TomoriState,
   ): Promise<ConfigPersonaMemoryView>;
-  loadPersonaVoiceView(state: TomoriState): Promise<ConfigPersonaVoiceView>;
-  resolveActiveSpeechEndpoint(serverId: number): Promise<SpeechEndpointResult | null>;
+  loadPersonaVoiceView(state: TomoriState, locale: string): Promise<ConfigPersonaVoiceView>;
+  resolveActiveSpeechEndpoint(serverId: number, mode: "design" | "clone"): Promise<SpeechTargetResult | null>;
   fetchElevenLabsVoiceCatalog(apiKey: string): Promise<ElevenLabsVoiceCatalogResult>;
   setPersonaVoiceConfig(
     personaId: number,
@@ -260,6 +267,7 @@ export interface ConfigRouteDependencies {
       speech_voice_id: string | null;
       speech_voice_name: string | null;
       speech_voice_design_prompt: string | null;
+      voice_source_priority: "design" | "clone";
     },
   ): Promise<boolean>;
   invalidatePersonaVoiceCache(serverDiscId: string): void;
@@ -339,9 +347,10 @@ export interface ConfigRouteDependencies {
   loadModelProviders(state: TomoriState, capability: ConfigModelCapability): Promise<string[]>;
   createGuildIdentity(guildId: string, interaction: GlobalRoutableInteraction): GuildIdentityPort;
   loadResponseDraftingView(state: TomoriState, locale: string): Promise<ResponseDraftingView>;
-  loadDraftModels(serverId: number, slot: DraftModelSlot, locale: string): Promise<DraftModelGroup[]>;
+  loadDraftModels(serverId: number, locale: string): Promise<StructuredOutputModelGroup[]>;
   loadDraftCheckers(serverId: number): Promise<DraftCheckerChoice[]>;
   draftingOperations: ResponseDraftingOperations;
+  naturalNudges: NaturalNudgePanelDependencies;
   recordAction(input: RecordPanelActionInput): void;
   createNonce(): string;
   showModal(interaction: GlobalRoutableInteraction, payload: RawModalPayload): Promise<void>;
@@ -349,7 +358,10 @@ export interface ConfigRouteDependencies {
   takeAvatarUpload(interactionId: string, nonce: string): APIAttachment | undefined;
   takeCheckboxValues(interactionId: string, fieldId: string): string[] | undefined;
   takeSelectValue(interactionId: string, fieldId: string): string | undefined;
-  takeChannelSelectValue(interactionId: string, fieldId: string): string | undefined;
+  takeSelectValues(interactionId: string, fieldId: string): string[] | undefined;
+  takeChannelSelectValues(interactionId: string, fieldId: string): string[] | undefined;
+  storeSnapshot(nonce: string, values: readonly string[]): void;
+  takeSnapshot(nonce: string): string[] | undefined;
 }
 
 export function asEphemeralComponentsV2FollowUp(
@@ -383,7 +395,10 @@ export function terminalPayload(
   );
 }
 
-export type ConfigMissingScopeKey = "commands.config.panel.not_setup" | "commands.config.panel.unavailable";
+export type ConfigMissingScopeKey =
+  | "commands.config.panel.not_setup"
+  | "commands.config.panel.not_setup_dm"
+  | "commands.config.panel.unavailable";
 
 /** The command a panel that has fallen behind the workspace is re-run with. */
 const CONFIG_PANEL_COMMAND = "/config";
@@ -406,9 +421,10 @@ export function missingScopeMessageKey(
   dependencies: Pick<ConfigRouteDependencies, "getLastDbError"> = {},
 ): ConfigMissingScopeKey {
   const lookup = dependencies.getLastDbError ?? getLastDbError;
-  return lookup(interaction.guildId ?? interaction.user.id)
-    ? "commands.config.panel.unavailable"
-    : "commands.config.panel.not_setup";
+  if (lookup(interaction.guildId ?? interaction.user.id)) {
+    return "commands.config.panel.unavailable";
+  }
+  return interaction.guildId ? "commands.config.panel.not_setup" : "commands.config.panel.not_setup_dm";
 }
 
 /**
@@ -456,6 +472,7 @@ export function resolveSelectedPersona(
 }
 
 export interface ConfigRepaintOptions {
+  naturalNudges?: NaturalNudgesPanelState;
   draftPicker?: DraftPicker;
   responseDraftingView?: ResponseDraftingView;
   locale: string;
@@ -556,7 +573,7 @@ export async function repaint(
         );
       }
       if (page === "voice" && !personaVoiceView) {
-        personaVoiceView = await dependencies.loadPersonaVoiceView(persona);
+        personaVoiceView = await dependencies.loadPersonaVoiceView(persona, options.locale);
       }
     }
   }
@@ -606,6 +623,45 @@ export async function repaint(
         }
       }
     }
+  }
+
+  let naturalNudges = options.naturalNudges;
+  const nudgeServerId = scope.personas[0]?.server_id;
+  const nudgePersona = scope.personas.find((candidate) => candidate.persona_id === selectedPersonaId);
+  // On General only an unforked pointer needs the override, because it is what makes Resync available there.
+  const needsNudgeConfig = page === "nudges" || (page === "general" && nudgePersona?.is_pointer === true);
+  if (
+    category === "persona" &&
+    needsNudgeConfig &&
+    naturalNudges?.personaConfig === undefined &&
+    nudgePersona?.persona_id !== undefined
+  ) {
+    const loading = dependencies.naturalNudges.loadPersonaConfig(nudgePersona.persona_id);
+    naturalNudges = {
+      ...naturalNudges,
+      // A failed read on the landing page only leaves Resync off instead of failing the whole panel.
+      personaConfig: page === "general" ? await loading.catch(() => null) : await loading,
+    };
+  }
+  if (
+    category === "persona" &&
+    page === "nudges" &&
+    naturalNudges?.personaNudges === undefined &&
+    nudgePersona?.persona_id !== undefined &&
+    naturalNudges?.personaConfig
+  ) {
+    naturalNudges = {
+      ...naturalNudges,
+      personaNudges: await dependencies.naturalNudges
+        .loadPersonaNudges(nudgePersona, scope.personas, naturalNudges.personaConfig)
+        .catch(() => undefined),
+    };
+  }
+  if (category === "plugins" && page === "natural-nudges" && !naturalNudges?.settings && nudgeServerId) {
+    naturalNudges = {
+      ...naturalNudges,
+      settings: await dependencies.naturalNudges.loadSettings(nudgeServerId, locale, scope.personas[0] ?? null),
+    };
   }
 
   let responseDraftingView = options.responseDraftingView;
@@ -728,6 +784,7 @@ export async function repaint(
         view: options.view,
         responseDraftingView,
         draftPicker: options.draftPicker,
+        naturalNudges,
         switchModelsView,
         modelParametersView,
         modelFallbacksView,
@@ -749,6 +806,6 @@ export async function repaint(
       }),
       [avatar, spriteAvatar, characterReference].filter((item): item is PersonaPanelAvatarData => item !== undefined),
     ),
-    { locale, receipt: options.receipt },
+    { locale, receipt: options.receipt, panel: `config:${category}:${page}` },
   );
 }

@@ -20,6 +20,7 @@ import {
   type MemoryItem,
 } from "@/types/db/dataExport";
 import { shortTermMemoryRepository } from "./ShortTermMemoryRepository";
+import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 
 interface WorkspaceConfigProjectionRow {
   server_id: number;
@@ -45,7 +46,6 @@ interface WorkspaceConfigProjectionRow {
   context_note: string | null;
   context_note_depth: number;
   response_reviewer_llm_id: number | null;
-  response_decision_model_id: number | null;
   response_reviewer_prompt: string | null;
   response_rule_checker_ref: import("@/types/db/schema").ResponseRuleCheckerRef | null;
   response_review_items: import("@/constants/responseReview").ResponseReviewItem[];
@@ -61,6 +61,9 @@ interface WorkspaceConfigProjectionRow {
   emoji_usage_enabled: boolean;
   sticker_usage_enabled: boolean;
   imagegen_enabled: boolean;
+  danbooru_enabled: boolean;
+  conditioning_interactions_enabled: boolean;
+  dice_rolling_enabled: boolean;
   manage_message_enabled: boolean;
   videogen_enabled: boolean;
   voice_message_enabled: boolean;
@@ -76,6 +79,10 @@ interface WorkspaceConfigProjectionRow {
   uncensor_unicode_space_enabled: boolean;
   uncensor_sanitize_enabled: boolean;
   self_debug_enabled: boolean;
+  speech_design_endpoint_id: number | null;
+  speech_clone_endpoint_id: number | null;
+  speech_design_model_id: number | null;
+  speech_clone_model_id: number | null;
   voice_transcript_chat_mode: boolean;
   chatterbox_turbo_enabled: boolean;
   chatterbox_cfg_weight: number;
@@ -119,7 +126,9 @@ interface PersonalConfigProjectionRow {
   user_nickname: string | null;
   language_pref: string | null;
   privacy_level: number | null;
+  message_proxy_service: string | null;
   shortterm_cache_crossserver_opt_in: boolean;
+  natural_nudge_opt_out: boolean;
   physical_appearance_tags: string[];
   impersonation_prompt: string | null;
   personal_dtm: "off" | "follow" | "on";
@@ -338,11 +347,13 @@ export class ExportRepository {
           COALESCE(scac.emoji_usage_enabled, true)                  AS emoji_usage_enabled,
           COALESCE(scac.sticker_usage_enabled, true)                AS sticker_usage_enabled,
           COALESCE(scac.imagegen_enabled, true)                     AS imagegen_enabled,
+          COALESCE(scac.danbooru_enabled, true)                     AS danbooru_enabled,
+          COALESCE(scac.conditioning_interactions_enabled, true) AS conditioning_interactions_enabled,
+          COALESCE(scac.dice_rolling_enabled, true) AS dice_rolling_enabled,
           COALESCE(snec.tool_notice_hidden_keys, ARRAY[]::TEXT[])   AS tool_notice_hidden_keys,
           snec.tool_notice_verbosity                                AS tool_notice_verbosity,
           COALESCE(scc.self_debug_enabled, false)                   AS self_debug_enabled,
           scc.response_reviewer_llm_id AS response_reviewer_llm_id,
-          scc.response_decision_model_id AS response_decision_model_id,
           scc.response_reviewer_prompt AS response_reviewer_prompt,
           scc.response_rule_checker_ref AS response_rule_checker_ref,
           scc.response_review_items AS response_review_items,
@@ -377,6 +388,10 @@ export class ExportRepository {
           COALESCE(scac.thread_creation_enabled, true)              AS thread_creation_enabled,
           COALESCE(scac.user_blocking_enabled, true)                AS user_blocking_enabled,
           COALESCE(scac.time_awareness_enabled, true)               AS time_awareness_enabled,
+          ssc.speech_design_endpoint_id AS speech_design_endpoint_id,
+          ssc.speech_clone_endpoint_id AS speech_clone_endpoint_id,
+          ssc.speech_design_model_id AS speech_design_model_id,
+          ssc.speech_clone_model_id AS speech_clone_model_id,
           COALESCE(ssc.voice_transcript_chat_mode, true)            AS voice_transcript_chat_mode,
           COALESCE(ssc.chatterbox_turbo_enabled, true)              AS chatterbox_turbo_enabled,
           COALESCE(ssc.chatterbox_cfg_weight, 0.5)                  AS chatterbox_cfg_weight,
@@ -524,12 +539,14 @@ export class ExportRepository {
             emoji_usage_enabled: configData.emoji_usage_enabled,
             sticker_usage_enabled: configData.sticker_usage_enabled,
             imagegen_enabled: configData.imagegen_enabled,
+            danbooru_enabled: configData.danbooru_enabled,
+            conditioning_interactions_enabled: configData.conditioning_interactions_enabled,
+            dice_rolling_enabled: configData.dice_rolling_enabled,
             tool_notice_hidden_keys: configData.tool_notice_hidden_keys ?? [],
             tool_notice_verbosity: configData.tool_notice_verbosity ?? undefined,
             self_debug_enabled: configData.self_debug_enabled,
             model_randomizer_enabled: configData.model_randomizer_enabled,
             response_reviewer_llm_id: configData.response_reviewer_llm_id,
-            response_decision_model_id: configData.response_decision_model_id,
             response_reviewer_prompt: configData.response_reviewer_prompt,
             response_rule_checker_ref: configData.response_rule_checker_ref,
             response_review_items: configData.response_review_items,
@@ -563,6 +580,10 @@ export class ExportRepository {
             thread_creation_enabled: configData.thread_creation_enabled,
             user_blocking_enabled: configData.user_blocking_enabled,
             time_awareness_enabled: configData.time_awareness_enabled,
+            speech_design_endpoint_id: configData.speech_design_endpoint_id,
+            speech_clone_endpoint_id: configData.speech_clone_endpoint_id,
+            speech_design_model_id: configData.speech_design_model_id,
+            speech_clone_model_id: configData.speech_clone_model_id,
             voice_transcript_chat_mode: configData.voice_transcript_chat_mode,
             chatterbox_turbo_enabled: configData.chatterbox_turbo_enabled,
             chatterbox_cfg_weight: configData.chatterbox_cfg_weight,
@@ -615,6 +636,8 @@ export class ExportRepository {
           COALESCE(upc.personal_dtm, 'follow') AS personal_dtm,
           COALESCE(upc.personal_deliberate_tool_mode, 'follow') AS personal_deliberate_tool_mode,
           COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in,
+          COALESCE(upc.natural_nudge_opt_out, false) AS natural_nudge_opt_out,
+          u.message_proxy_service,
           upc.timezone_offset,
           upc.prefix_override,
           upc.suffix_override,
@@ -665,7 +688,9 @@ export class ExportRepository {
           personal_dtm: userData.personal_dtm ?? undefined,
           personal_deliberate_tool_mode: userData.personal_deliberate_tool_mode ?? undefined,
           shortterm_cache_crossserver_opt_in: userData.shortterm_cache_crossserver_opt_in ?? undefined,
+          natural_nudge_opt_out: userData.natural_nudge_opt_out ?? undefined,
           timezone_offset: userData.timezone_offset ?? undefined,
+          message_proxy_service: userData.message_proxy_service,
           prefix_override: userData.prefix_override ?? null,
           suffix_override: userData.suffix_override ?? null,
           gender_identity: userData.gender_identity ?? null,
@@ -723,7 +748,6 @@ export class ExportRepository {
           COALESCE(scc.context_note_depth, 0) AS context_note_depth,
           scc.response_prefill AS response_prefill,
           scc.response_reviewer_llm_id AS response_reviewer_llm_id,
-          scc.response_decision_model_id AS response_decision_model_id,
           scc.response_reviewer_prompt AS response_reviewer_prompt,
           scc.response_rule_checker_ref AS response_rule_checker_ref,
           scc.response_review_items AS response_review_items,
@@ -738,6 +762,9 @@ export class ExportRepository {
           COALESCE(scac.emoji_usage_enabled, true) AS emoji_usage_enabled,
           COALESCE(scac.sticker_usage_enabled, true) AS sticker_usage_enabled,
           COALESCE(scac.imagegen_enabled, true) AS imagegen_enabled,
+          COALESCE(scac.danbooru_enabled, true) AS danbooru_enabled,
+          COALESCE(scac.conditioning_interactions_enabled, true) AS conditioning_interactions_enabled,
+          COALESCE(scac.dice_rolling_enabled, true) AS dice_rolling_enabled,
           COALESCE(scac.manage_message_enabled, true) AS manage_message_enabled,
           COALESCE(scac.videogen_enabled, false) AS videogen_enabled,
           COALESCE(scac.voice_message_enabled, true) AS voice_message_enabled,
@@ -753,6 +780,10 @@ export class ExportRepository {
           COALESCE(snc.uncensor_unicode_space_enabled, false) AS uncensor_unicode_space_enabled,
           COALESCE(snc.uncensor_sanitize_enabled, false) AS uncensor_sanitize_enabled,
           COALESCE(scc.self_debug_enabled, false) AS self_debug_enabled,
+          ssc.speech_design_endpoint_id AS speech_design_endpoint_id,
+          ssc.speech_clone_endpoint_id AS speech_clone_endpoint_id,
+          ssc.speech_design_model_id AS speech_design_model_id,
+          ssc.speech_clone_model_id AS speech_clone_model_id,
           COALESCE(ssc.voice_transcript_chat_mode, true) AS voice_transcript_chat_mode,
           COALESCE(ssc.chatterbox_turbo_enabled, true) AS chatterbox_turbo_enabled,
           COALESCE(ssc.chatterbox_cfg_weight, 0.5) AS chatterbox_cfg_weight,
@@ -843,7 +874,6 @@ export class ExportRepository {
           context_note_depth: configData.context_note_depth,
           response_prefill: configData.response_prefill ?? null,
           response_reviewer_llm_id: configData.response_reviewer_llm_id,
-          response_decision_model_id: configData.response_decision_model_id,
           response_reviewer_prompt: configData.response_reviewer_prompt,
           response_rule_checker_ref: configData.response_rule_checker_ref,
           response_review_items: configData.response_review_items,
@@ -864,6 +894,9 @@ export class ExportRepository {
           emoji_usage_enabled: configData.emoji_usage_enabled,
           sticker_usage_enabled: configData.sticker_usage_enabled,
           imagegen_enabled: configData.imagegen_enabled,
+          danbooru_enabled: configData.danbooru_enabled,
+          conditioning_interactions_enabled: configData.conditioning_interactions_enabled,
+          dice_rolling_enabled: configData.dice_rolling_enabled,
           manage_message_enabled: configData.manage_message_enabled,
           videogen_enabled: configData.videogen_enabled,
           voice_message_enabled: configData.voice_message_enabled,
@@ -918,6 +951,10 @@ export class ExportRepository {
           nai_cfg_rescale: configData.nai_cfg_rescale,
         },
         speech: {
+          speech_design_endpoint_id: configData.speech_design_endpoint_id,
+          speech_clone_endpoint_id: configData.speech_clone_endpoint_id,
+          speech_design_model_id: configData.speech_design_model_id,
+          speech_clone_model_id: configData.speech_clone_model_id,
           voice_transcript_chat_mode: configData.voice_transcript_chat_mode,
           chatterbox_turbo_enabled: configData.chatterbox_turbo_enabled,
           chatterbox_cfg_weight: configData.chatterbox_cfg_weight,
@@ -926,6 +963,7 @@ export class ExportRepository {
         access: {
           user_byok_mode: configData.user_byok_mode,
         },
+        nudges: await this.loadNudgesSection(configData.server_id),
       };
 
       const exportCandidate = {
@@ -947,6 +985,20 @@ export class ExportRepository {
     }
   }
 
+  private async loadNudgesSection(serverId: number) {
+    const [config, customIdleNudges] = await Promise.all([
+      naturalNudgeRepository.loadServerConfig(serverId, this.database),
+      naturalNudgeRepository.listCustomIdleNudges(serverId, this.database),
+    ]);
+    const { server_id: _serverId, channel_disc_ids: _channels, ...portable } = config;
+    return {
+      ...portable,
+      custom_idle_nudges: customIdleNudges.map(
+        ({ custom_idle_nudge_id: _idleNudgeId, server_id: _owner, ...idleNudge }) => idleNudge,
+      ),
+    };
+  }
+
   /**
    * Exports the portable personal configuration in the v2 sectioned format.
    * The query omits naming lineage data because it cannot be rebound safely.
@@ -958,7 +1010,9 @@ export class ExportRepository {
           upc.user_nickname AS user_nickname,
           COALESCE(u.language_pref, 'en-US') AS language_pref,
           COALESCE(u.privacy_level, 0) AS privacy_level,
+          u.message_proxy_service AS message_proxy_service,
           COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in,
+          COALESCE(upc.natural_nudge_opt_out, false) AS natural_nudge_opt_out,
           COALESCE(upc.physical_appearance_tags, ARRAY[]::TEXT[]) AS physical_appearance_tags,
           upc.impersonation_prompt AS impersonation_prompt,
           COALESCE(upc.personal_dtm, 'follow') AS personal_dtm,
@@ -994,6 +1048,8 @@ export class ExportRepository {
         privacy: {
           privacy_level: configData.privacy_level,
           shortterm_cache_crossserver_opt_in: configData.shortterm_cache_crossserver_opt_in,
+          natural_nudge_opt_out: configData.natural_nudge_opt_out,
+          message_proxy_service: configData.message_proxy_service,
         },
         appearance: {
           physical_appearance_tags: configData.physical_appearance_tags,

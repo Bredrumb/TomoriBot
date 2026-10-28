@@ -1,3 +1,10 @@
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
+import {
+  findProviderRequestDeniedError,
+  createProviderUsageRecorder,
+  type ProviderUsageContext,
+  getProviderRequestFailureCopy,
+} from "@/utils/provider/providerUsage";
 import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 import { GoogleGenAI, type CountTokensParameters } from "@google/genai";
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
@@ -10,8 +17,12 @@ import { replyInfoEmbed, replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { getAvailableToolsForContext } from "@/tools/toolRegistry";
 import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
-import { decryptApiKey } from "@/utils/security/crypto";
+import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
+import {
+  CredentialUnavailableError,
+  getCapabilityCredentialFailureCopy,
+  resolveCapabilityCredentials,
+} from "@/utils/provider/credentialResolver";
 import { buildContext } from "@/utils/text/contextBuilder";
 import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/context/templates";
 import { prepareParticipantContext } from "@/utils/text/participants/preparation";
@@ -23,7 +34,13 @@ import { resolveModelPricing } from "@/utils/provider/modelPricing";
 import { applyProviderContextTruncation } from "@/utils/provider/contextBudget";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
-import { charsToTokensJson, charsToTokensText, estimateContextItemsTokens } from "@/utils/text/tokenEstimate";
+import {
+  charsToTokensJson,
+  charsToTokensText,
+  estimateContextItemsTokens,
+  normalizeProviderUsage,
+  type TokenUsage,
+} from "@/utils/text/tokenEstimate";
 import { getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { GoogleProvider, type GoogleProviderConfig } from "@/providers/google/googleProvider";
 import { GoogleStreamAdapter } from "@/providers/google/googleStreamAdapter";
@@ -51,6 +68,9 @@ import {
 import { normalizeRenderModifierName } from "@/utils/discord/renderModifierParser";
 import { resolveWebhookPersonaAuthor } from "@/utils/discord/webhookPersonaAuthor";
 import { llmSections } from "@/db/seed/catalog/models";
+import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
+import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
+import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
 
 // Char-per-token ratios and the primitive estimators live in @/utils/text/tokenEstimate
 // so this command and the post-turn stat recorder share one source of truth. The
@@ -252,6 +272,7 @@ function estimateToolSchemaTokens(): number {
       },
       config: {
         // Defaults match DB defaults in schema.sql (true)
+        emoji_usage_enabled: true,
         sticker_usage_enabled: true,
         web_search_enabled: true,
         self_teaching_enabled: true,
@@ -262,6 +283,9 @@ function estimateToolSchemaTokens(): number {
         user_blocking_enabled: true,
         user_info_updates_enabled: true,
         thread_creation_enabled: true,
+        conditioning_interactions_enabled: false,
+        dice_rolling_enabled: true,
+        danbooru_enabled: true,
       },
     };
 
@@ -1023,6 +1047,7 @@ async function fetchOpenRouterNativePromptTokens(
       headers: {
         Authorization: `Bearer ${apiKey}`,
         Accept: "application/json",
+        ...buildOpenRouterAttributionHeaders(),
       },
     });
 
@@ -1059,10 +1084,11 @@ function buildOpenRouterProbeRequest(
   return requestBody;
 }
 
-async function measureOpenRouterInputTokens(
+export async function measureOpenRouterInputTokens(
   tomoriState: TomoriState,
   apiKey: string,
   contextItems: StructuredContextItem[],
+  onUsage?: (usage: TokenUsage) => void,
 ): Promise<LiveCostMeasurement> {
   const provider = new OpenrouterProvider();
   const providerConfig = (await provider.createConfig(tomoriState, apiKey)) as OpenrouterProviderConfig;
@@ -1074,22 +1100,27 @@ async function measureOpenRouterInputTokens(
   );
   const requestBody = buildOpenRouterProbeRequest(providerConfig, messages);
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await fetchWithProviderRequest("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
       Accept: "application/json",
+      ...buildOpenRouterAttributionHeaders(),
     },
     body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`OpenRouter probe failed (${response.status}): ${errorText.slice(0, 400)}`);
+    throw new Error(`OpenRouter probe failed (${response.status}): ${errorText.slice(0, 400)}`, {
+      cause: readOpenRouterLimitError(response.status, response.headers, errorText) ?? undefined,
+    });
   }
 
   const data = (await response.json()) as OpenRouterProbeResponse;
+  const reportedUsage = normalizeProviderUsage(data.usage);
+  if (reportedUsage) onUsage?.(reportedUsage);
   const usagePromptTokens = parseOpenRouterPromptTokens(data.usage);
   const nativePromptTokens = await fetchOpenRouterNativePromptTokens(data.id, apiKey);
   const measuredPromptTokens = nativePromptTokens ?? usagePromptTokens;
@@ -1324,7 +1355,12 @@ async function measureAnthropicInputTokens(
 
 const liveTokenCounters: Record<
   LiveProvider,
-  (tomoriState: TomoriState, apiKey: string, contextItems: StructuredContextItem[]) => Promise<LiveCostMeasurement>
+  (
+    tomoriState: TomoriState,
+    apiKey: string,
+    contextItems: StructuredContextItem[],
+    onUsage?: (usage: TokenUsage) => void,
+  ) => Promise<LiveCostMeasurement>
 > = {
   google: measureGoogleInputTokens,
   vertex: measureVertexInputTokens,
@@ -1671,15 +1707,36 @@ export async function execute(
       return;
     }
 
-    // Overlay the invoking user's personal (BYOK) provider so the live estimate
-    // reflects the model/key that would actually run for them, keeping cost
-    // estimates in parity with runtime (see buildRuntimeParityContext).
-    const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(
-      baseTomoriState,
-      userData.user_id ?? null,
-    );
-    if (!tomoriState.config.api_key) {
-      await sendLegacyEstimateEmbed(interaction, locale, true);
+    let tomoriState = baseTomoriState;
+    let decryptedApiKey = "";
+    let usageContext: ProviderUsageContext | undefined;
+    try {
+      const credentials = await resolveCapabilityCredentials(baseTomoriState.server_id, "text", {
+        userId: userData.user_id,
+        textModel: baseTomoriState.llm,
+      });
+      ({ apiKey: decryptedApiKey, usageContext } = credentials);
+      tomoriState = await resolveTextCredentialState(baseTomoriState, credentials);
+    } catch (decryptError) {
+      if (
+        decryptError instanceof CredentialUnavailableError &&
+        decryptError.source === "server" &&
+        (decryptError.reason === "no_saved_config" || decryptError.reason === "placeholder_key")
+      ) {
+        await sendLegacyEstimateEmbed(interaction, locale, true);
+        return;
+      }
+      const failure = getCapabilityCredentialFailureCopy(decryptError, locale);
+      if (failure) {
+        await replyInfoEmbed(interaction, locale, { ...failure, color: ColorCode.ERROR });
+        return;
+      }
+      await log.error(
+        "/tool estimate cost failed to resolve credentials for live counting",
+        decryptError as Error,
+        errorContext,
+      );
+      await sendLiveEstimateUnavailableEmbed(interaction, locale, tomoriState.llm.llm_provider);
       return;
     }
 
@@ -1687,26 +1744,9 @@ export async function execute(
       await sendNoCostProviderEmbed(interaction, locale);
       return;
     }
-
     const provider = resolveProvider(tomoriState.llm.llm_provider);
     if (!provider) {
-      // Track A: the provider has no live token-counting API. Instead of reporting
-      // "unavailable", fall back to a character-based estimate over the real channel context.
       await sendCharacterEstimateFallbackEmbed(client, interaction, tomoriState, locale, errorContext);
-      return;
-    }
-
-    let decryptedApiKey = "";
-    try {
-      const keyVersion = tomoriState.config.key_version || 1;
-      decryptedApiKey = await decryptApiKey(tomoriState.config.api_key, keyVersion);
-    } catch (decryptError) {
-      await log.error(
-        "/tool estimate cost failed to decrypt API key for live counting",
-        decryptError as Error,
-        errorContext,
-      );
-      await sendLiveEstimateUnavailableEmbed(interaction, locale, tomoriState.llm.llm_provider);
       return;
     }
 
@@ -1734,9 +1774,24 @@ export async function execute(
     const sampleOutputTokens = resolveSampleOutputTokens(tomoriState, personaReplyCharLengths);
 
     try {
-      const measurement = await liveTokenCounters[provider](tomoriState, decryptedApiKey, contextItems);
+      const measurement = await withProviderUsageContext(usageContext, async () =>
+        liveTokenCounters[provider](
+          tomoriState,
+          decryptedApiKey,
+          contextItems,
+          createProviderUsageRecorder(usageContext, tomoriState.llm.llm_codename),
+        ),
+      );
       await sendLiveEstimateEmbed(interaction, locale, measurement, sampleOutputTokens);
     } catch (countError) {
+      const denied = findProviderRequestDeniedError(countError, usageContext);
+      if (denied) {
+        await replyInfoEmbed(interaction, locale, {
+          ...getProviderRequestFailureCopy(denied, locale),
+          color: ColorCode.ERROR,
+        });
+        return;
+      }
       await log.error(
         "/tool estimate cost live provider token counting failed; reporting live-count unavailability",
         countError as Error,

@@ -19,6 +19,8 @@ import * as realImageQuotaManager from "@/utils/quota/imageQuotaManager";
 import * as realTextQuotaManager from "@/utils/quota/textQuotaManager";
 import * as realVideoQuotaManager from "@/utils/quota/videoQuotaManager";
 import * as realSpeechEndpointResolver from "@/utils/provider/speechEndpointResolver";
+import { speechModelSchema } from "@/types/db/schema";
+import { ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 import * as realCustomEndpointService from "@/utils/provider/customEndpointService";
 import * as realDbStats from "@/utils/metrics/dbStats";
 import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
@@ -108,9 +110,13 @@ scopedMock.module("@/utils/quota/videoQuotaManager", () => ({
   ...realVideoQuotaManager,
   getVideoQuotaConfig: async () => quotaConfig,
 }));
+let speechTargets: Awaited<ReturnType<typeof realSpeechEndpointResolver.resolveSpeechTargets>> = {
+  design: null,
+  clone: null,
+};
 scopedMock.module("@/utils/provider/speechEndpointResolver", () => ({
   ...realSpeechEndpointResolver,
-  resolveActiveSpeechEndpoint: async () => null,
+  resolveSpeechTargets: async () => speechTargets,
   resolveActiveTranscriptionEndpoint: async () => null,
 }));
 scopedMock.module("@/utils/provider/customEndpointService", () => ({
@@ -167,6 +173,44 @@ beforeAll(async () => {
 });
 
 describe("actual status page builders", () => {
+  it("keeps status and the usable speech mode visible when the other mode is denied", async () => {
+    const { buildServerModelPages } = await import("@/utils/metrics/status/serverModelPages");
+    const denied = new ProviderRequestDeniedError(undefined, () => ({
+      titleKey: "general.errors.api_key_error_title",
+      description: "fixture",
+    }));
+    try {
+      for (const mode of ["design", "clone"] as const) {
+        const other = mode === "design" ? "clone" : "design";
+        speechTargets = {
+          design: null,
+          clone: null,
+          denials: { [other]: denied },
+          [mode]: {
+            kind: "hosted-model",
+            endpoint: null,
+            model: speechModelSchema.parse({
+              speech_model_id: 1,
+              provider: "google",
+              codename: "fixture-speech",
+              voice_mode: mode,
+            }),
+            owner: { kind: "server", ownerId: state.server_id },
+            apiKey: "fixture",
+            credentialId: 1,
+            credentialRevision: 1,
+            credentialProvider: "google",
+          },
+        };
+        const pages = await buildServerModelPages(client, "fixture-server", state, "en-US");
+        expect(pages.length).toBeGreaterThan(0);
+        expect(JSON.stringify(pages)).toContain("fixture-speech");
+      }
+    } finally {
+      speechTargets = { design: null, clone: null };
+    }
+  });
+
   it("omits protected text before reading it and permits authorized previews", async () => {
     const { buildServerConfigPages } = await import("@/utils/metrics/status/serverConfigPages");
     const { buildPersonaStatusPages } = await import("@/utils/metrics/status/personaPages");

@@ -3,7 +3,7 @@ export default {
     title: `MCP server`,
     count: `MCP đã đăng ký \`({count}/{max})\``,
     empty_guild: `Máy chủ này chưa có MCP nào.`,
-    empty_dm: `Không gian DM này chưa có MCP nào.`,
+    empty_dm: `DM này chưa có MCP nào.`,
     unavailable: `Không thể tải các đăng ký MCP. Hãy thử lại.`,
     stale_warning: "Dữ liệu lưu có thể đã cũ vì đọc thất bại. Không thể ghi cho đến khi đọc lại thành công.",
     read_unavailable: `Không thể tải an toàn các đăng ký MCP hiện tại.`,
@@ -25,6 +25,13 @@ export default {
     tools_known: `Công cụ: {tools}`,
     tools_empty: `Công cụ: Không tìm thấy`,
     tools_unknown: `Công cụ: Chưa xác định`,
+    connection_failing_unauthorized:
+      "Lỗi từ {since}: máy chủ đã từ chối token xác thực đã lưu. TomoriBot sẽ tắt MCP này nếu lỗi kéo dài trong 24 giờ.",
+    connection_failing_unreachable:
+      "Lỗi từ {since}: không thể kết nối tới máy chủ. TomoriBot sẽ tắt MCP này nếu lỗi kéo dài trong 24 giờ.",
+    auto_disabled_unauthorized:
+      "Đã tự động tắt vì máy chủ từ chối token xác thực đã lưu suốt 24 giờ. Hãy xóa và thêm lại với token mới.",
+    auto_disabled_unreachable: "Đã tự động tắt vì không thể kết nối tới máy chủ suốt 24 giờ. Hãy bật lại để thử lại.",
     endpoint_unavailable: `Không khả dụng`,
     enable: `Bật`,
     disable: `Tắt`,
@@ -50,7 +57,7 @@ export default {
     invalid_type: `Hãy chọn một loại MCP server được hỗ trợ.`,
     family_in_use: `Một MCP khác đang bật đã thay thế nhóm này. Hãy tắt nó trước khi chọn máy chủ này.`,
     invalid_url: `URL MCP server không vượt qua kiểm tra bảo mật URL từ xa.`,
-    limit_reached: `Không gian này đã đạt giới hạn MCP server được cấu hình.`,
+    limit_reached: `Đã đạt giới hạn MCP server được cấu hình.`,
     connection_failed: `TomoriBot không thể kết nối với MCP server.`,
     write_failed: `Đăng ký đã đổi hoặc ghi CSDL thất bại. Hãy làm mới và thử lại.`,
     added: `Đã thêm MCP server`,

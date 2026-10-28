@@ -14,7 +14,8 @@
 import { AttachmentBuilder } from "discord.js";
 import { log } from "../../../utils/misc/logger";
 import type { ToolContext, ToolResult } from "../../../types/tool/interfaces";
-import { sendPersonaPostViaWebhook } from "@/utils/discord/webhook/personaPost";
+import { mediaDeliveryFailure, sendToolMediaPost } from "@/utils/discord/webhook/toolMediaDelivery";
+import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 import { addFetchCapabilityReminder } from "../brave/braveSearchService";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
@@ -305,23 +306,7 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
       compressionFlags.push(Boolean(buf));
     }
 
-    const threadId =
-      "isThread" in context.channel && typeof context.channel.isThread === "function" && context.channel.isThread()
-        ? context.channel.id
-        : undefined;
-    const sentMessage =
-      context.webhook && context.personaUsername
-        ? await sendPersonaPostViaWebhook(
-            context.webhook,
-            { files: attachments, ...(threadId ? { threadId } : {}) },
-            {
-              username: context.personaUsername,
-              avatarUrl: context.personaAvatarUrl,
-              personaId: context.tomoriState.persona_id,
-            },
-            context.channel,
-          )
-        : await context.channel.send({ files: attachments });
+    const sentMessage = await sendToolMediaPost(context, () => ({ files: attachments }));
 
     const sentAttachments = Array.from(sentMessage.attachments.values());
     const completionMessage = buildImageSearchDeliveryMessage({
@@ -355,6 +340,7 @@ export async function searxng_image_search(args: Record<string, unknown>, contex
       },
     };
   } catch (error) {
+    if (error instanceof DiscordDeliveryError && context) return mediaDeliveryFailure(context, error.outcome);
     log.error("Error in searxng_image_search:", error as Error);
     return createToolResult(false, "Unexpected error during SearXNG image search", (error as Error).message);
   }

@@ -41,12 +41,20 @@ attributes, 100 sample dialogues per side, 100 trigger words). For field mapping
 conversion mechanics, see the
 [card-support architecture](/architecture/integrations/sillytavern/card-support/).
 
+:::tip
+Character book entries embedded in a card become persona attributes, and persona attributes are sent with every prompt. Entries disabled in SillyTavern are skipped, so disable anything you do not want in context before exporting.
+:::
+
 ## Prompt Presets
 <!-- anchor: prompt-presets -->
 
 A SillyTavern Prompt Manager preset controls the order and layout of the prompt sent to the
 model. Open `/config` > Plugins > SillyTavern Presets to import presets, toggle individual
 nodes, switch active presets, or restore default formatting.
+
+:::tip
+Importing a preset with a name that already exists replaces that preset, including the nodes you had toggled on or off, and activates the new one. Give each variant a different name if you want to keep both.
+:::
 
 ### What a Preset Controls
 
@@ -78,9 +86,10 @@ Native blocks map directly to TomoriBot prompt components:
 
 ### System Prompt Rule
 
-When an imported preset is active, the built-in fallback system prompt is removed. However,
-if you configure a custom system prompt in `/config` > Behavior > General Behavior, that prompt
-is always included.
+When an imported preset is active, it fully controls the system prompt. TomoriBot's built-in
+prompt and any custom prompt from `/config` > Behavior > General Behavior are not sent, and the
+system prompt buttons there are locked. Your custom prompt is kept, and it comes back when you turn
+the preset off in `/config` > Plugins > SillyTavern Presets.
 
 ### Compatibility Notes
 

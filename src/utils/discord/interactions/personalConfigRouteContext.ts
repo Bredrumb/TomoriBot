@@ -6,7 +6,13 @@ import {
   type InteractionEditReplyOptions,
   type StringSelectMenuInteraction,
 } from "discord.js";
-import type { FallbackModelRef, PrivacyLevel, TomoriState, UserSavedProviderConfigRow } from "@/types/db/schema";
+import type {
+  FallbackModelRef,
+  PersonalFallbackSettings,
+  PrivacyLevel,
+  TomoriState,
+  UserSavedProviderConfigRow,
+} from "@/types/db/schema";
 import type { PanelReceipt } from "@/types/discord/panel";
 import type { UserPersonaNamingPreference } from "@/types/personaNaming";
 import type { PersonalSpotlightStatus } from "@/utils/db/repositories/UserRepository";
@@ -39,6 +45,14 @@ import {
 } from "@/utils/discord/personaPanelAvatar";
 import type { RecordPanelActionInput } from "@/utils/stats/panelActionMetrics";
 import { localizer } from "@/utils/text/localizer";
+import {
+  rewriteManagedIdentityRouteIds,
+  IDENTITY_CONFIG_VERSION,
+} from "@/utils/discord/interactions/managedIdentityPanelRoutes";
+import {
+  PERSONAL_CONFIG_ROUTE_NAMESPACE,
+  PERSONAL_CONFIG_ROUTE_VERSION,
+} from "@/utils/discord/personalConfigPanelCatalog";
 import { personaRepresentativeForLineage } from "@/utils/persona/lineage";
 
 export interface PersonalConfigRouteDependencies {
@@ -54,12 +68,14 @@ export interface PersonalConfigRouteDependencies {
   getMemoryCount(userId: number): Promise<number>;
   getStmCount(userDiscId: string): Promise<number>;
   loadUserSavedProviders(userId: number): Promise<UserSavedProviderConfigRow[]>;
+  loadPersonalFallbackSettings(userId: number): Promise<PersonalFallbackSettings>;
   loadPersonalModelDisplayInfo(
     userId: number,
     savedProviders: UserSavedProviderConfigRow[],
     selectedCap: PersonalConfigManagedCapability,
     selectedParamsProvider?: string,
     selectedFallbacksProvider?: string,
+    locale?: string,
   ): Promise<PersonalConfigModelDisplayInfo>;
   loadAvailableModelsForCapability(
     userId: number,
@@ -233,6 +249,7 @@ export interface PersonalConfigRepaintOptions {
   category: PersonalConfigCategory;
   page: PersonalConfigPage;
   selectedLineageId?: number;
+  personaRangeIndex?: number;
   panelReceipt?: PanelReceipt;
   dependencies: PersonalConfigRouteDependencies;
   selectedCapability?: PersonalConfigManagedCapability;
@@ -256,6 +273,7 @@ export async function repaint(
     category,
     page,
     selectedLineageId,
+    personaRangeIndex,
     panelReceipt,
     dependencies,
     selectedCapability,
@@ -279,7 +297,12 @@ export async function repaint(
     }
   }
 
-  const userAvatarUrl = category === "profile" && page === "general" ? resolveInvokerAvatarUrl(interaction) : undefined;
+  const userAvatarUrl =
+    category === "profile" && page === "general"
+      ? scope.identityId
+        ? scope.identityAvatarUrl
+        : resolveInvokerAvatarUrl(interaction)
+      : undefined;
 
   const memoryCount = category === "privacy" ? await dependencies.getMemoryCount(scope.userId) : 0;
   const stmCount = category === "privacy" ? await dependencies.getStmCount(scope.userDiscId) : 0;
@@ -294,12 +317,13 @@ export async function repaint(
       selectedCapability ?? "text",
       selectedParametersProvider,
       selectedFallbacksProvider,
+      locale,
     );
   }
 
   let fallbackOptionCount = options.fallbackOptionCount;
   if (category === "models" && page === "fallbacks" && fallbackOptionCount === undefined) {
-    const activeFallbacksProvider = selectedFallbacksProvider ?? modelDisplayInfo?.fallbacksProviders[0];
+    const activeFallbacksProvider = modelDisplayInfo?.fallbacksProvider;
     if (activeFallbacksProvider) {
       try {
         const fallbackOptions = await loadFallbackSelectionOptions(scope.userId, activeFallbacksProvider);
@@ -362,41 +386,63 @@ export async function repaint(
   await deliverGuardedPanel(
     interaction,
     withPersonaPanelAvatar(
-      buildPersonalConfigPanelPayload({
-        locale,
-        category,
-        page,
-        user: scope.user,
-        resolvedNickname: scope.resolvedNickname,
-        personas: scope.personas,
-        guildId: scope.guildId,
-        selectedLineageId,
-        selectedPersonaAvatarUrl: selectedPersonaAvatar?.url,
-        userAvatarUrl,
-        personaNamingPreference: personaPref,
-        memoryCount,
-        stmCount,
-        readStatus: scope.readStatus,
-        receipt: panelReceipt,
-        savedProviders,
-        selectedCapability,
-        selectedParametersProvider,
-        selectedFallbacksProvider,
-        selectedModelProvider,
-        providerStart,
-        modelTotalCount,
-        fallbackEntryStart,
-        fallbackOptionCount,
-        modelDisplayInfo,
-        spotlightDisplayInfo,
-        serverTriggerBehavior,
-        serverModelAccess,
-        view,
-      }),
+      buildScopedPersonalConfigPanelPayload(
+        {
+          locale,
+          identityMode: Boolean(scope.identityId),
+          identityLabel: scope.identityLabel,
+          category,
+          page,
+          user: scope.user,
+          resolvedNickname: scope.resolvedNickname,
+          personas: scope.personas,
+          guildId: scope.guildId,
+          selectedLineageId,
+          personaRangeIndex,
+          selectedPersonaAvatarUrl: selectedPersonaAvatar?.url,
+          userAvatarUrl,
+          personaNamingPreference: personaPref,
+          memoryCount,
+          stmCount,
+          readStatus: scope.readStatus,
+          receipt: panelReceipt,
+          savedProviders,
+          selectedCapability,
+          selectedParametersProvider,
+          selectedModelProvider,
+          providerStart,
+          modelTotalCount,
+          fallbackEntryStart,
+          fallbackOptionCount,
+          modelDisplayInfo,
+          spotlightDisplayInfo,
+          serverTriggerBehavior,
+          serverModelAccess,
+          view,
+        },
+        scope,
+      ),
       selectedPersonaAvatar,
     ),
     { locale, receipt: panelReceipt },
   );
+}
+
+export function buildScopedPersonalConfigPanelPayload(
+  input: Parameters<typeof buildPersonalConfigPanelPayload>[0],
+  scope: PersonalConfigScope,
+): ReturnType<typeof buildPersonalConfigPanelPayload> {
+  const payload = buildPersonalConfigPanelPayload(input);
+  if (scope.identityId) {
+    rewriteManagedIdentityRouteIds(
+      payload,
+      PERSONAL_CONFIG_ROUTE_NAMESPACE,
+      PERSONAL_CONFIG_ROUTE_VERSION,
+      IDENTITY_CONFIG_VERSION,
+      scope.identityId,
+    );
+  }
+  return payload;
 }
 
 export type SpotlightPersona = { id: number; name: string; isAlter: boolean };

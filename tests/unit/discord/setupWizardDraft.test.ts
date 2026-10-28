@@ -1,3 +1,4 @@
+import { SETUP_FEATURES } from "@/types/db/schema";
 import { describe, expect, it } from "bun:test";
 import {
   SETUP_DRAFT_SCHEMA_VERSION,
@@ -24,6 +25,7 @@ function makeStartingSettings(overrides: Partial<SetupDraftStartingSettings> = {
     presetId: 1,
     humanizer: 1,
     timezoneOffset: 9,
+    features: [...SETUP_FEATURES],
     systemPrompt: { kind: "built-in" },
     ...overrides,
   };
@@ -131,15 +133,18 @@ describe("setup wizard draft schemas and invariants", () => {
     expect(setupDraftStartingSettingsSchema.safeParse(makeStartingSettings({ humanizer: 4 })).success).toBe(false);
     expect(setupDraftStartingSettingsSchema.safeParse(makeStartingSettings({ humanizer: 1.5 })).success).toBe(false);
 
-    // Timezone offset must be an integer in -12..14.
+    // Timezone offset must be a quarter hour in -12..14.
     expect(setupDraftStartingSettingsSchema.safeParse(makeStartingSettings({ timezoneOffset: -13 })).success).toBe(
       false,
     );
     expect(setupDraftStartingSettingsSchema.safeParse(makeStartingSettings({ timezoneOffset: 15 })).success).toBe(
       false,
     );
-    expect(setupDraftStartingSettingsSchema.safeParse(makeStartingSettings({ timezoneOffset: 9.5 })).success).toBe(
+    expect(setupDraftStartingSettingsSchema.safeParse(makeStartingSettings({ timezoneOffset: 9.3 })).success).toBe(
       false,
+    );
+    expect(setupDraftStartingSettingsSchema.safeParse(makeStartingSettings({ timezoneOffset: 5.75 })).success).toBe(
+      true,
     );
   });
 

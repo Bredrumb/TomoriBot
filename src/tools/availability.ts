@@ -1,3 +1,5 @@
+import { loadSpeechRoutingPolicy } from "@/utils/db/repositories/SpeechRepository";
+import { resolveVoiceSourceCandidates } from "@/utils/speech/voiceSourceResolution";
 import { type BaseGuildTextChannel, ChannelType, type Client } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type {
@@ -12,7 +14,7 @@ import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
 import { sql } from "@/utils/db/client";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { log } from "@/utils/misc/logger";
-import { resolveActiveSpeechEndpoint } from "@/utils/provider/speechEndpointResolver";
+import { resolveSpeechTargets, speechTargetSource } from "@/utils/provider/speechEndpointResolver";
 import { hasOptApiKey } from "@/utils/security/crypto";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { configToFeatureFlags } from "@/utils/tools/featureFlagMapper";
@@ -44,6 +46,7 @@ export async function refreshToolExecutionContext(context: ToolContext): Promise
         ...context.tomoriState,
         config: {
           ...context.tomoriState.config,
+          emoji_usage_enabled: current.config.emoji_usage_enabled,
           sticker_usage_enabled: current.config.sticker_usage_enabled,
           web_search_enabled: current.config.web_search_enabled,
           self_teaching_enabled: current.config.self_teaching_enabled,
@@ -54,6 +57,9 @@ export async function refreshToolExecutionContext(context: ToolContext): Promise
           user_blocking_enabled: current.config.user_blocking_enabled,
           user_info_updates_enabled: current.config.user_info_updates_enabled,
           thread_creation_enabled: current.config.thread_creation_enabled,
+          conditioning_interactions_enabled: current.config.conditioning_interactions_enabled,
+          dice_rolling_enabled: current.config.dice_rolling_enabled,
+          danbooru_enabled: current.config.danbooru_enabled,
         },
       },
     };
@@ -204,9 +210,23 @@ export async function getAvailableToolsWithMCP(
 
     const serverIdNumber = stateForContext.server_id ? Number.parseInt(stateForContext.server_id, 10) : undefined;
     if (serverIdNumber) {
-      const activeSpeechEndpoint = await resolveActiveSpeechEndpoint(serverIdNumber);
-      const hasElevenLabsOptKey = await hasOptApiKey(serverIdNumber, ELEVENLABS_SERVICE_NAME);
-      const hasSpeechProvider = Boolean(activeSpeechEndpoint) || hasElevenLabsOptKey;
+      const targets = await resolveSpeechTargets(serverIdNumber, stateForContext.speechToolState?.userId);
+      const hasElevenLabsOptKey =
+        !targets.clone &&
+        (!stateForContext.speechToolState?.userId ||
+          (await loadSpeechRoutingPolicy(serverIdNumber, stateForContext.speechToolState.userId)).serverAllowed) &&
+        (await hasOptApiKey(serverIdNumber, ELEVENLABS_SERVICE_NAME));
+      const hasSpeechProvider =
+        resolveVoiceSourceCandidates({
+          targets: { design: speechTargetSource(targets.design), clone: speechTargetSource(targets.clone) },
+          legacyElevenLabsAvailable: !targets.clone && hasElevenLabsOptKey,
+          persona: {
+            speech_voice_sample_id: stateForContext.activePersonaVoiceSampleId,
+            speech_voice_id: stateForContext.activePersonaVoiceId,
+            speech_voice_design_prompt: stateForContext.activePersonaVoiceDesignPrompt,
+            voice_source_priority: stateForContext.activePersonaVoiceSourcePriority,
+          },
+        }).length > 0;
       // Read split-table model slots: diffusion_model_id/video_model_id live in
       //    server_model_configs; nai_diffusion_model_id lives in server_novelai_imagegen_configs.
       const [toolConfigRow] = await sql<

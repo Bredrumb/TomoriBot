@@ -115,28 +115,33 @@ export function isCreditAffordabilityError(error: ProviderError): boolean {
 }
 
 // Adapters write `code` in their own vocabulary: HTTP statuses, Google status names, Anthropic error
-// types, Vertex's own config codes, and the OpenAI-compatible composites. Each entry names a
-// failure the server's own key, account, or endpoint causes, or one that clears on its own.
-const NON_INCIDENT_PROVIDER_CODES = new Set([
+// types, Vertex's own config codes, and the OpenAI-compatible composites.
+const CREDENTIAL_REJECTION_CODES = new Set([
   "401",
-  "402",
   "403",
+  "PERMISSION_DENIED",
+  "UNAUTHENTICATED",
+  "authentication_error",
+  "permission_error",
+  "vertex_auth_error",
+]);
+
+// Each entry names a failure the server's own key, account, or endpoint causes, or one that clears
+// on its own.
+const NON_INCIDENT_PROVIDER_CODES = new Set([
+  ...CREDENTIAL_REJECTION_CODES,
+  "402",
   "404",
   "429_balance",
   "429_plan_access",
   "ECONNREFUSED",
-  "PERMISSION_DENIED",
-  "UNAUTHENTICATED",
-  "authentication_error",
   "billing_error",
-  "permission_error",
   "not_found_error",
   // Anthropic's mid-stream SSE error event arrives as a non-retryable api_error whatever its cause.
   "rate_limit_error",
   // NovelAI's adapter already records this at error level with the raw tool-call block, which
   // cannot ride on the ProviderError because the embed would show it to the user as "Details".
   "tool_call_parse_error",
-  "vertex_auth_error",
   "vertex_config_error",
 ]);
 
@@ -156,6 +161,8 @@ const NON_INCIDENT_MESSAGE_PATTERNS: RegExp[] = [
   /\bUNAUTHENTICATED\b/,
   /\bbilling\b/i,
   /\bfree\s+tier\b/i,
+  /\brecaptcha\b/i,
+  /\btrial\s+generations?\b/i,
   /\bcontent[\s_-]?(?:filter|policy|management)\b/i,
   /\bmoderation\b/i,
   /\bflagged\b/i,
@@ -188,6 +195,16 @@ export function isOperatorActionableProviderError(error: ProviderError): boolean
   return !collectProviderErrorMessages(error).some((message) =>
     matchesAnyPattern(message, NON_INCIDENT_MESSAGE_PATTERNS),
   );
+}
+
+/**
+ * Detects a provider refusing the key itself, which no retry fixes until the key's owner acts.
+ * Accepts `unknown` because a stream result carries its failure untyped.
+ */
+export function isCredentialRejection(error: unknown): boolean {
+  if (!error || typeof error !== "object" || !("code" in error)) return false;
+  if ("retryable" in error && error.retryable === true) return false;
+  return CREDENTIAL_REJECTION_CODES.has(String(error.code));
 }
 
 /**

@@ -5,7 +5,7 @@ Shared fixtures and assertion helpers. Reach for these before writing a local `m
 
 | Helper | Use it for |
 |---|---|
-| `fixtures.ts` | `createPersona` (a complete `TomoriState`), `createUserRow`, `createLlmRow`, `createServerConfig`, `createCustomExpression` (a validated registry row) |
+| `fixtures.ts` | `createPersona` (a complete `TomoriState`), `createUserRow`, `createLlmRow`, `createServerConfig`, `createCustomExpression` (a validated registry row), `createCustomIdleNudge` (a validated custom idle nudge row) |
 | `routeInteraction.ts` | `createRouteInteraction`: a button, select, or modal interaction for one route dispatch, recording acknowledgements, edits, and replies |
 | `fakeInteraction.ts` | `makeFakeInteraction`: a slash-command interaction for acknowledgement-timing tests |
 | `localeCases.ts` | `localizedCopy` and `localizedProse` for copy assertions; `RUNTIME_LOCALES` and `expectForEveryLocale` for locale sweeps |
@@ -13,6 +13,8 @@ Shared fixtures and assertion helpers. Reach for these before writing a local `m
 | `configMcpPage.ts` | the real `/config` > Plugins > MCP Servers payload, the only surface that renders MCP components |
 | `transferPanelFixture.ts` | `findTransferAction`: locate one routed transfer action in a panel payload |
 | `mockSurface.ts` | `createScopedModuleMocker`, `overrideMembers`, `stubLogMembers` for the few suites that must mock a module |
+| `messageProxyInstance.ts` | Official PluralKit and PluralBuddy instance contexts for transport and router tests |
+| `speechCallers.ts` | `createSpeechCallerFixture`: command/tool delivery, modal, persona, and admission spies for shared and billing speech regressions |
 | `env.ts` | `useEnvSandbox`: restores named `process.env` variables after each test and after the enclosing scope; `useFullEnvSandbox` restores the whole environment |
 
 ## Rules the helpers depend on

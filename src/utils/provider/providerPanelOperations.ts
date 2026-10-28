@@ -1,3 +1,5 @@
+import { registerHostedSpeechModelForScope } from "@/utils/provider/openrouterModelRegistry";
+import { supportsSpeechMode } from "@/utils/speech/voiceSourceCapabilities";
 import type {
   CustomEndpointConnectionRow,
   CustomEndpointApiStyle,
@@ -23,6 +25,7 @@ import type {
   ProviderPanelCapabilitySection,
   ProviderPanelEntry,
   ProviderPanelModel,
+  ProviderPanelOptionAction,
   ProviderPanelScopeData,
 } from "@/types/discord/providerPanel";
 import { getCachedTomoriState, getRecordedDbError, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
@@ -53,6 +56,8 @@ import {
   curatedImageSupportsFromSubmittedValues,
   resolveCuratedImageSupports,
 } from "@/utils/provider/providerImageCapabilities";
+import type { ApiKeyValidationResult } from "@/types/provider/interfaces";
+import { isAccountBalanceExhaustedError } from "@/utils/provider/providerErrorClassification";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 import { ProviderFactory } from "@/utils/provider/providerFactory";
@@ -62,6 +67,7 @@ import {
   buildUserSavedProviderConfigFromExistingOrDefaults,
 } from "@/utils/provider/savedProviderConfig";
 import {
+  activateProviderSpeechDefaults,
   activatePersonalProviderTextModel,
   activateServerTextModelFromSavedConfig,
 } from "@/utils/provider/providerActivation";
@@ -87,6 +93,20 @@ import {
   assignPersonalCapabilityToProvider,
   getActivePersonalProviderForCapability,
 } from "@/utils/provider/personalProviderHelpers";
+import {
+  findProviderOption,
+  claimProviderModelSelection,
+  findProviderOptionByActiveProvider,
+  getProviderOptions,
+  providerOptionActionValue,
+  providerOptionCapabilityForPanel,
+  providerOptionCapabilityForPersonal,
+  providerOptionFallbackRefServes,
+  providerOptionOffersPanelCapability,
+  type ProviderOptionCapability,
+  type ProviderOptionDefinition,
+  type ProviderOptionScope,
+} from "@/utils/provider/providerOptionRegistry";
 
 const CAPABILITIES: readonly ProviderPanelCapability[] = [
   "text",
@@ -98,14 +118,15 @@ const CAPABILITIES: readonly ProviderPanelCapability[] = [
   "decision",
 ];
 
-export interface LoadedProviderPanelScope {
-  state: TomoriState;
-  scopeKind?: "server" | "personal";
-  ownerId?: number;
+type ProviderPanelOwner =
+  | { scopeKind: "personal"; ownerId: number; state: TomoriState | null }
+  | { scopeKind?: "server"; ownerId?: number; state: TomoriState };
+
+export type LoadedProviderPanelScope = ProviderPanelOwner & {
   routeNamespace?: ProvidersRouteNamespace;
   footerCommand?: { root: string; subcommandGroup?: string; subcommand?: string };
   data: ProviderPanelScopeData;
-}
+};
 
 export interface ProviderPanelOperationsDependencies {
   getState(discordId: string): Promise<TomoriState | null>;
@@ -119,17 +140,20 @@ export interface ProviderPanelOperationsDependencies {
 export type AddServerProviderResult =
   | { status: "success"; entryId: string; displayName: string; modelName?: string; updated: boolean }
   | {
-      status: "invalid-key" | "unsupported-provider" | "validation-failed" | "missing-model" | "write-failed";
+      status:
+        | "invalid-key"
+        | "unsupported-provider"
+        | "validation-failed"
+        | "no-balance"
+        | "missing-model"
+        | "write-failed";
     };
 
-export interface AddServerProviderInput {
+export type AddServerProviderInput = ProviderPanelOwner & {
   serverDiscId: string;
-  ownerId?: number;
-  scopeKind?: "server" | "personal";
-  state: TomoriState;
   provider: string;
   apiKey: string;
-}
+};
 
 export interface AddServerProviderDependencies {
   validateElevenLabs(key: string): ReturnType<typeof validateElevenLabsApiKey>;
@@ -144,6 +168,7 @@ export interface AddServerProviderDependencies {
   loadSavedConfig(serverId: number, provider: string): Promise<SavedProviderConfigRow | null>;
   upsertSavedConfig: typeof llmProviderRepo.upsertSavedProviderConfig;
   activateText: typeof activateServerTextModelFromSavedConfig;
+  activateSpeechDefaults: typeof activateProviderSpeechDefaults;
   refresh(discordId: string): void | Promise<void>;
 }
 
@@ -154,16 +179,13 @@ export type AddCustomEndpointConnectionResult =
       status: "invalid-label" | "invalid-style" | "already-exists" | "label-url-conflict" | "write-failed";
     };
 
-export interface AddCustomEndpointConnectionInput {
+export type AddCustomEndpointConnectionInput = ProviderPanelOwner & {
   serverDiscId: string;
-  ownerId?: number;
-  scopeKind?: "server" | "personal";
-  state: TomoriState;
   label: string;
   endpointUrl: string;
   apiStyle: CustomEndpointApiStyle;
   authToken: string;
-}
+};
 
 export interface AddCustomEndpointConnectionDependencies {
   validateReachability: typeof validateCustomEndpointReachability;
@@ -186,11 +208,8 @@ export type SaveProviderModelResult =
   | { status: "success"; entryId: string; codeName: string; removed?: boolean }
   | { status: "invalid-model" | "unsupported-capability" | "not-found" | "already-available" | "write-failed" };
 
-export interface SaveProviderModelInput {
+export type SaveProviderModelInput = ProviderPanelOwner & {
   serverDiscId: string;
-  ownerId?: number;
-  scopeKind?: "server" | "personal";
-  state: TomoriState;
   entryId: string;
   capability: CustomEndpointCapability;
   codeName: string;
@@ -213,23 +232,20 @@ export interface SaveProviderModelInput {
   speechScriptMarkup?: string;
   speechInstructValues?: string[];
   workflow?: Record<string, unknown>;
-}
+};
 
 export type EditProviderResult =
   | { status: "success"; entryId: string; changed: string[] }
   | { status: "unchanged"; entryId: string }
   | { status: "invalid-key" | "invalid-combination" | "not-found" | "validation-failed" | "write-failed" };
 
-interface EditProviderInput {
+type EditProviderInput = ProviderPanelOwner & {
   serverDiscId: string;
-  ownerId?: number;
-  scopeKind?: "server" | "personal";
-  state: TomoriState;
   provider: string;
   apiKey: string;
   rotationKey: string;
   deleteRotationKeys: boolean;
-}
+};
 
 export type EditEndpointResult =
   | { status: "success"; entryId: string; label: string }
@@ -237,30 +253,24 @@ export type EditEndpointResult =
   | { status: "unreachable"; reason: string; credentialsWithheld: boolean }
   | { status: "invalid-label" | "not-found" | "write-failed" | "handoff-unsupported" };
 
-interface EditEndpointInput {
+type EditEndpointInput = ProviderPanelOwner & {
   serverDiscId: string;
-  ownerId?: number;
-  scopeKind?: "server" | "personal";
-  state: TomoriState;
   entryId: string;
   label: string;
   endpointUrl: string;
   authToken: string;
   /** Undefined when the modal did not offer the option, which leaves the stored value untouched. */
   unloadDuringComfyUi?: boolean;
-}
+};
 
 export type RemoveProviderEntryResult =
   | { status: "success"; entryId: string; displayName: string }
   | { status: "active" | "not-found" | "write-failed" };
 
-interface RemoveProviderEntryInput {
+type RemoveProviderEntryInput = ProviderPanelOwner & {
   serverDiscId: string;
-  ownerId?: number;
-  scopeKind?: "server" | "personal";
-  state: TomoriState;
   entry: ProviderPanelEntry;
-}
+};
 
 const defaultDependencies: ProviderPanelOperationsDependencies = {
   getState: (discordId) => getCachedTomoriState(discordId),
@@ -288,6 +298,7 @@ const defaultAddDependencies: AddServerProviderDependencies = {
   loadSavedConfig: (serverId, provider) => llmProviderRepo.loadSavedProviderConfig(serverId, provider),
   upsertSavedConfig: (serverId, config) => llmProviderRepo.upsertSavedProviderConfig(serverId, config),
   activateText: activateServerTextModelFromSavedConfig,
+  activateSpeechDefaults: activateProviderSpeechDefaults,
   refresh: (discordId) => invalidateTomoriStateCache(discordId),
 };
 
@@ -355,31 +366,47 @@ type PanelSavedConfig = SavedProviderConfigRow | UserSavedProviderConfigRow;
 
 interface PanelModelContext {
   scope: { kind: "server" | "personal"; ownerId: number };
+  state: TomoriState | null;
   activeTextId: number | null;
   activeImageId: number | null;
   /** NovelAI image models live in their own slot, so NovelAI rows are marked against this instead. */
   activeNaiImageId: number | null;
   activeEmbeddingId: number | null;
   activeVideoId: number | null;
+  activeSpeechDesignId: number | null;
+  activeSpeechCloneId: number | null;
+  activeSpeechDesignModelId: number | null;
+  activeSpeechCloneModelId: number | null;
   scopeFallbacks: readonly FallbackModelRef[];
 }
 
 function serverModelContext(state: TomoriState): PanelModelContext {
   return {
     scope: { kind: "server", ownerId: state.server_id },
+    state,
     activeTextId: state.config.llm_id,
     activeImageId: state.config.diffusion_model_id ?? null,
     activeNaiImageId: state.config.nai_diffusion_model_id ?? null,
     activeEmbeddingId: state.config.embedding_model_id ?? null,
     activeVideoId: state.config.video_model_id ?? null,
+    activeSpeechDesignId: state.config.speech_design_endpoint_id,
+    activeSpeechCloneId: state.config.speech_clone_endpoint_id,
+    activeSpeechDesignModelId: state.config.speech_design_model_id,
+    activeSpeechCloneModelId: state.config.speech_clone_model_id,
     scopeFallbacks: state.config.fallback_model_refs ?? [],
   };
 }
 
-function personalModelContext(userId: number, configs: UserSavedProviderConfigRow[]): PanelModelContext {
+function personalModelContext(
+  userId: number,
+  configs: UserSavedProviderConfigRow[],
+  fallbacks: readonly FallbackModelRef[],
+  state: TomoriState | null,
+): PanelModelContext {
   const text = getActivePersonalProviderForCapability(configs, "text");
   return {
     scope: { kind: "personal", ownerId: userId },
+    state,
     activeTextId: text?.llm_id ?? null,
     activeImageId:
       getActivePersonalProviderForCapability(configs, "image")?.diffusion_model_id ??
@@ -388,26 +415,93 @@ function personalModelContext(userId: number, configs: UserSavedProviderConfigRo
     activeNaiImageId: getActivePersonalProviderForCapability(configs, "image")?.nai_diffusion_model_id ?? null,
     activeEmbeddingId: getActivePersonalProviderForCapability(configs, "embedding")?.embedding_model_id ?? null,
     activeVideoId: getActivePersonalProviderForCapability(configs, "video")?.video_model_id ?? null,
-    scopeFallbacks: text?.fallback_model_refs ?? [],
+    activeSpeechDesignId: null,
+    activeSpeechCloneId: null,
+    activeSpeechDesignModelId:
+      getActivePersonalProviderForCapability(configs, "speech_design")?.speech_design_model_id ?? null,
+    activeSpeechCloneModelId:
+      getActivePersonalProviderForCapability(configs, "speech_clone")?.speech_clone_model_id ?? null,
+    scopeFallbacks: text ? fallbacks : [],
   };
+}
+
+function personalOptionCapabilities(savedConfig: PanelSavedConfig | null): ProviderOptionCapability[] {
+  if (!savedConfig || !("enabled_capabilities" in savedConfig)) return [];
+  return savedConfig.enabled_capabilities.flatMap((capability) => {
+    const canonical = providerOptionCapabilityForPersonal(capability);
+    return canonical ? [canonical] : [];
+  });
+}
+
+function optionContextScope(context: PanelModelContext): ProviderOptionScope {
+  return { kind: context.scope.kind, ownerId: context.scope.ownerId, state: context.state };
+}
+
+function optionOwnsCapability(
+  option: ProviderOptionDefinition,
+  savedConfig: PanelSavedConfig | null,
+  context: PanelModelContext,
+  capability: ProviderOptionCapability,
+): boolean {
+  if (context.scope.kind === "personal") {
+    return personalOptionCapabilities(savedConfig).includes(capability);
+  }
+  return option.selection.owns?.(optionContextScope(context), capability) ?? false;
 }
 
 async function buildCuratedCapabilities(
   provider: string,
-  savedConfig: PanelSavedConfig,
+  savedConfig: PanelSavedConfig | null,
   context: PanelModelContext,
 ): Promise<ProviderPanelCapabilitySection[]> {
-  const [textRows, imageRows, embeddingRows, videoRows, decisionRows] = await Promise.all([
-    llmModelRepo.loadAvailableModelsForProvider(provider, false, context.scope),
-    llmModelRepo.loadAvailableDiffusionModels(provider, false, context.scope),
-    llmModelRepo.loadAvailableEmbeddingModels(provider, false, context.scope),
-    llmModelRepo.loadAvailableVideoGenerationModels(provider, false, context.scope),
-    llmModelRepo.loadAvailableDecisionModels(provider, false, context.scope),
+  const option = findProviderOption(provider);
+  const catalogProvider = option?.catalogProvider ?? provider;
+  const owns = (capability: ProviderOptionCapability) => {
+    if (context.scope.kind === "personal") return personalOptionCapabilities(savedConfig).includes(capability);
+    if (option) return optionOwnsCapability(option, savedConfig, context, capability);
+    return !findProviderOptionByActiveProvider(provider, optionContextScope(context), capability);
+  };
+  const [textRows, imageRows, embeddingRows, videoRows, decisionRows, speechRows] = await Promise.all([
+    llmModelRepo.loadAvailableModelsForProvider(catalogProvider, false, context.scope),
+    llmModelRepo.loadAvailableDiffusionModels(catalogProvider, false, context.scope),
+    llmModelRepo.loadAvailableEmbeddingModels(catalogProvider, false, context.scope),
+    llmModelRepo.loadAvailableVideoGenerationModels(catalogProvider, false, context.scope),
+    llmModelRepo.loadAvailableDecisionModels(catalogProvider, false, context.scope),
+    llmModelRepo.loadAvailableSpeechModels(catalogProvider, context.scope),
   ]);
-  const workspaceFallbacks = context.scopeFallbacks;
-  const providerFallbacks = savedConfig.fallback_model_refs ?? [];
+  const workspaceFallbacks = context.scopeFallbacks.filter((ref) => providerOptionFallbackRefServes(ref, provider));
+  const providerFallbacks = (
+    savedConfig && "fallback_model_refs" in savedConfig ? (savedConfig.fallback_model_refs ?? []) : []
+  ).filter((ref) => providerOptionFallbackRefServes(ref, provider));
+  const activeTextId = owns("text") ? context.activeTextId : null;
+  const activeImageId = owns("image") ? context.activeImageId : null;
+  const activeEmbeddingId = owns("embedding") ? context.activeEmbeddingId : null;
+  const activeVideoId = owns("video") ? context.activeVideoId : null;
+  const activeSpeechDesignModelId = owns("speech-design") ? context.activeSpeechDesignModelId : null;
+  const activeSpeechCloneModelId = owns("speech-clone") ? context.activeSpeechCloneModelId : null;
 
-  const modelsByCapability: Record<"text" | "image" | "embedding" | "video" | "decision", ProviderPanelModel[]> = {
+  const modelsByCapability: Record<
+    "text" | "image" | "embedding" | "video" | "decision" | "speech",
+    ProviderPanelModel[]
+  > = {
+    speech: speechRows.map((row) => ({
+      id: row.speech_model_id,
+      codeName: row.codename,
+      isWorkspaceActive:
+        row.speech_model_id === activeSpeechDesignModelId || row.speech_model_id === activeSpeechCloneModelId,
+      isWorkspaceFallback: false,
+      isProviderFallback: false,
+      isCustomRegistration: row.is_scoped_registration,
+      speechActiveModes: [
+        ...(row.speech_model_id === activeSpeechDesignModelId ? ["design" as const] : []),
+        ...(row.speech_model_id === activeSpeechCloneModelId ? ["clone" as const] : []),
+      ],
+      speechSettings: {
+        voiceMode: row.voice_mode === "design" ? "voice-design" : row.voice_mode,
+        scriptMarkup: "plain",
+        supportsInstruct: true,
+      },
+    })),
     decision: decisionRows.map((row) => ({
       id: row.decision_model_id,
       codeName: row.codename,
@@ -421,7 +515,7 @@ async function buildCuratedCapabilities(
       const model = createModel(
         row.llm_id,
         row.llm_codename,
-        context.activeTextId,
+        activeTextId,
         workspaceFallbacks,
         providerFallbacks,
         "llm",
@@ -444,14 +538,14 @@ async function buildCuratedCapabilities(
       const model = createModel(
         row.diffusion_model_id,
         row.codename,
-        provider === "novelai" ? context.activeNaiImageId : context.activeImageId,
+        catalogProvider === "novelai" ? context.activeNaiImageId : activeImageId,
         [],
         [],
         "llm",
         row.is_scoped_registration,
         row.diffusion_model_id,
         undefined,
-        resolveCuratedImageSupports(provider, row) ?? undefined,
+        resolveCuratedImageSupports(catalogProvider, row) ?? undefined,
       );
       return model ? [model] : [];
     }),
@@ -459,7 +553,7 @@ async function buildCuratedCapabilities(
       const model = createModel(
         row.embedding_model_id,
         row.codename,
-        context.activeEmbeddingId,
+        activeEmbeddingId,
         [],
         [],
         "llm",
@@ -471,7 +565,7 @@ async function buildCuratedCapabilities(
       const model = createModel(
         row.video_model_id,
         row.codename,
-        context.activeVideoId,
+        activeVideoId,
         [],
         [],
         "llm",
@@ -483,9 +577,10 @@ async function buildCuratedCapabilities(
 
   return CAPABILITIES.map((capability) => {
     if (
-      capability === "speech" ||
+      (capability === "speech" && speechRows.length === 0) ||
       capability === "transcription" ||
-      (capability === "decision" && !getStaticProviderInfo(provider)?.featureSupport.decisions)
+      (capability === "decision" && !getStaticProviderInfo(catalogProvider)?.featureSupport.decisions) ||
+      (option && !providerOptionOffersPanelCapability(option, capability))
     ) {
       return { capability, availability: "unavailable", models: [] };
     }
@@ -516,7 +611,9 @@ function buildEndpointCapabilities(
       .filter((endpoint) => connectionIds.has(endpoint.connection_id) && endpoint.capability === capability)
       .flatMap((endpoint) => {
         if (endpoint.custom_endpoint_id === undefined) return [];
-        const providerFallbacks = savedConfigs.get(`custom:${endpoint.connection_id}`)?.fallback_model_refs ?? [];
+        const savedConfig = savedConfigs.get(`custom:${endpoint.connection_id}`);
+        const providerFallbacks =
+          savedConfig && "fallback_model_refs" in savedConfig ? (savedConfig.fallback_model_refs ?? []) : [];
         const activeId =
           capability === "text"
             ? context.activeTextId
@@ -526,9 +623,14 @@ function buildEndpointCapabilities(
                 ? context.activeEmbeddingId
                 : capability === "video"
                   ? context.activeVideoId
-                  : endpoint.is_default
-                    ? endpoint.custom_endpoint_id
-                    : null;
+                  : capability === "speech"
+                    ? endpoint.custom_endpoint_id === context.activeSpeechDesignId ||
+                      endpoint.custom_endpoint_id === context.activeSpeechCloneId
+                      ? endpoint.custom_endpoint_id
+                      : null
+                    : endpoint.is_default
+                      ? endpoint.custom_endpoint_id
+                      : null;
         const identityId =
           capability === "speech" || capability === "transcription"
             ? endpoint.custom_endpoint_id
@@ -557,8 +659,13 @@ function buildEndpointCapabilities(
           capability === "image" ? readImageEndpointSupports(endpoint) : undefined,
         );
         if (!model) return [];
-        if (capability === "speech" || capability === "transcription") {
-          model.isWorkspaceActive = endpoint.is_default;
+        if (capability === "transcription") model.isWorkspaceActive = endpoint.is_default;
+        if (capability === "speech") {
+          model.speechActiveModes = [
+            ...(endpoint.custom_endpoint_id === context.activeSpeechDesignId ? ["design" as const] : []),
+            ...(endpoint.custom_endpoint_id === context.activeSpeechCloneId ? ["clone" as const] : []),
+          ];
+          model.isWorkspaceActive = model.speechActiveModes.length > 0;
         }
         if (capability === "decision") {
           model.isWorkspaceActive = false;
@@ -619,8 +726,12 @@ function buildEndpointEntries(
   });
 }
 
-function resolveInitialEntryId(entries: readonly ProviderPanelEntry[], state: TomoriState): string | null {
-  const activeProvider = state.llm.llm_provider.toLowerCase();
+function resolveInitialEntryId(
+  entries: readonly ProviderPanelEntry[],
+  state: TomoriState,
+  optionTextOwner?: string,
+): string | null {
+  const activeProvider = optionTextOwner ?? state.llm.llm_provider.toLowerCase();
   const customProvider = parseCustomProvider(activeProvider);
   const activeEntry = customProvider
     ? entries.find((entry) => entry.kind === "endpoint" && entry.connectionIds.includes(customProvider.connectionId))
@@ -631,6 +742,49 @@ function resolveInitialEntryId(entries: readonly ProviderPanelEntry[], state: To
     (left, right) => (right.savedAt?.getTime() ?? 0) - (left.savedAt?.getTime() ?? 0),
   )[0];
   return newest?.id ?? null;
+}
+
+interface ProviderOptionPanelEntries {
+  entries: ProviderPanelEntry[];
+  optionActions: ProviderPanelOptionAction[];
+  textOwner?: string;
+}
+
+async function loadProviderOptionPanelEntries(
+  scope: ProviderOptionScope,
+  context: PanelModelContext,
+  configs: readonly PanelSavedConfig[],
+): Promise<ProviderOptionPanelEntries> {
+  const entries: ProviderPanelEntry[] = [];
+  const optionActions: ProviderPanelOptionAction[] = [];
+  let textOwner: string | undefined;
+  for (const option of getProviderOptions()) {
+    const availability = await option.availability(scope);
+    if (!availability.eligible) continue;
+    const selection = await option.selection.load(scope);
+    if (!selection) {
+      optionActions.push({
+        value: providerOptionActionValue(option),
+        labelKey: option.copy.addActionLabelKey,
+        descriptionKey: option.copy.addActionDescriptionKeys[scope.kind],
+      });
+      continue;
+    }
+    if (option.selection.owns?.(scope, "text")) textOwner = option.value;
+    const saved = configs.find((config) => config.provider.toLowerCase() === option.value) ?? null;
+    entries.push({
+      id: `provider:${option.value}`,
+      kind: "provider",
+      provider: option.value,
+      rotationKeyCount: 0,
+      displayName: option.value,
+      copyKey: option.copy.labelKey,
+      savedAt: selection.savedAt,
+      capabilities: await buildCuratedCapabilities(option.value, saved, context),
+      optionData: selection.data,
+    });
+  }
+  return { entries, optionActions, textOwner };
 }
 
 export async function loadServerProviderPanelScope(
@@ -658,9 +812,14 @@ export async function loadServerProviderPanelScope(
 
   const savedConfigMap = new Map(savedResult.configs.map((config) => [config.provider.toLowerCase(), config]));
   const modelContext = serverModelContext(state);
+  const optionEntries = await loadProviderOptionPanelEntries(
+    { kind: "server", ownerId: state.server_id, discordId, state },
+    modelContext,
+    savedResult.configs,
+  );
   const curatedEntries = await Promise.all(
     savedResult.configs
-      .filter((config) => !parseCustomProvider(config.provider))
+      .filter((config) => !parseCustomProvider(config.provider) && !findProviderOption(config.provider))
       .map(async (config): Promise<ProviderPanelEntry> => {
         const provider = config.provider.toLowerCase();
         const [capabilities, rotationKeyCount] = await Promise.all([
@@ -687,7 +846,7 @@ export async function loadServerProviderPanelScope(
   const braveEntry: ProviderPanelEntry[] = braveResult.configured
     ? [{ id: "brave", kind: "brave", displayName: "Brave Search", savedAt: null }]
     : [];
-  const entries = [...curatedEntries, ...endpointEntries, ...braveEntry].sort((left, right) =>
+  const entries = [...optionEntries.entries, ...curatedEntries, ...endpointEntries, ...braveEntry].sort((left, right) =>
     left.displayName.localeCompare(right.displayName),
   );
 
@@ -698,7 +857,8 @@ export async function loadServerProviderPanelScope(
     data: {
       readStatus: dependencies.getRecordedDbError(discordId) ? "stale" : "fresh",
       entries,
-      initialEntryId: resolveInitialEntryId(entries, state),
+      initialEntryId: resolveInitialEntryId(entries, state, optionEntries.textOwner),
+      optionActions: optionEntries.optionActions,
     },
   };
 }
@@ -724,13 +884,14 @@ async function loadPersonalProviderPanelScope(
 ): Promise<LoadedProviderPanelScope | null> {
   const [state, user] = await Promise.all([getCachedTomoriState(contextDiscordId), getCachedUserRow(userDiscId)]);
   const userId = user?.user_id;
-  if (!state || !userId) return null;
+  if (!userId) return null;
 
-  const [savedResult, endpointResult] = await Promise.all([
+  const [savedResult, endpointResult, fallbackSettings] = await Promise.all([
     llmProviderRepo.loadUserSavedProviderConfigsResult(userId),
     llmProviderRepo.loadCustomEndpointConnectionsForUserResult(userId),
+    llmProviderRepo.loadPersonalFallbackSettings(userId).catch(() => null),
   ]);
-  if (savedResult.status === "unavailable" || endpointResult.status === "unavailable") {
+  if (savedResult.status === "unavailable" || endpointResult.status === "unavailable" || !fallbackSettings) {
     return {
       state,
       scopeKind: "personal",
@@ -741,11 +902,16 @@ async function loadPersonalProviderPanelScope(
     };
   }
 
-  const modelContext = personalModelContext(userId, savedResult.configs);
+  const modelContext = personalModelContext(userId, savedResult.configs, fallbackSettings.fallback_model_refs, state);
   const savedConfigMap = new Map(savedResult.configs.map((config) => [config.provider.toLowerCase(), config]));
+  const optionEntries = await loadProviderOptionPanelEntries(
+    { kind: "personal", ownerId: userId, discordId: userDiscId, state },
+    modelContext,
+    savedResult.configs,
+  );
   const curatedEntries = await Promise.all(
     savedResult.configs
-      .filter((config) => !parseCustomProvider(config.provider))
+      .filter((config) => !parseCustomProvider(config.provider) && !findProviderOption(config.provider))
       .map(async (config): Promise<ProviderPanelEntry> => {
         const provider = config.provider.toLowerCase();
         return {
@@ -765,7 +931,7 @@ async function loadPersonalProviderPanelScope(
     savedConfigMap,
     modelContext,
   );
-  const entries = [...curatedEntries, ...endpointEntries].sort((left, right) =>
+  const entries = [...optionEntries.entries, ...curatedEntries, ...endpointEntries].sort((left, right) =>
     left.displayName.localeCompare(right.displayName),
   );
   return {
@@ -778,12 +944,17 @@ async function loadPersonalProviderPanelScope(
       readStatus: "fresh",
       entries,
       initialEntryId: resolvePersonalInitialEntryId(entries, savedResult.configs),
+      optionActions: optionEntries.optionActions,
     },
   };
 }
 
+function rejectedKeyStatus(validation: ApiKeyValidationResult): "validation-failed" | "no-balance" {
+  return validation.error && isAccountBalanceExhaustedError(validation.error) ? "no-balance" : "validation-failed";
+}
+
 async function addElevenLabsProvider(
-  input: AddServerProviderInput,
+  input: Extract<AddServerProviderInput, { scopeKind?: "server" }>,
   dependencies: AddServerProviderDependencies,
 ): Promise<AddServerProviderResult> {
   if (!(await dependencies.validateElevenLabs(input.apiKey)).success) {
@@ -793,7 +964,7 @@ async function addElevenLabsProvider(
   const scope = {
     kind: "server" as const,
     ownerId: input.state.server_id,
-    baseConfig: input.state.config,
+    baseConfig: input.state?.config,
     serverDiscId: input.serverDiscId,
   };
   const [speech, transcription] = await Promise.all([
@@ -833,7 +1004,7 @@ async function addElevenLabsProvider(
 }
 
 async function addBraveProvider(
-  input: AddServerProviderInput,
+  input: Extract<AddServerProviderInput, { scopeKind?: "server" }>,
   dependencies: AddServerProviderDependencies,
 ): Promise<AddServerProviderResult> {
   if (!(await dependencies.validateBrave(input.apiKey))) return { status: "validation-failed" };
@@ -845,7 +1016,7 @@ async function addBraveProvider(
 }
 
 async function addCuratedProvider(
-  input: AddServerProviderInput,
+  input: Extract<AddServerProviderInput, { scopeKind?: "server" }>,
   provider: string,
   dependencies: AddServerProviderDependencies,
 ): Promise<AddServerProviderResult> {
@@ -864,7 +1035,7 @@ async function addCuratedProvider(
     return { status: "unsupported-provider" };
   }
   const validation = await providerInstance.validateApiKey(input.apiKey);
-  if (!validation.valid) return { status: "validation-failed" };
+  if (!validation.valid) return { status: rejectedKeyStatus(validation) };
 
   const existingConfig = await dependencies.loadSavedConfig(input.state.server_id, provider);
   const encryption = await dependencies.encrypt(input.apiKey);
@@ -873,7 +1044,7 @@ async function addCuratedProvider(
     provider,
     apiKey: encryption.encrypted,
     keyVersion: encryption.version,
-    baseConfig: input.state.config,
+    baseConfig: input.state?.config,
     existingConfig,
   });
   if (!(await dependencies.upsertSavedConfig(input.state.server_id, savedConfig))) {
@@ -887,6 +1058,9 @@ async function addCuratedProvider(
   });
   if (activation.status === "missing_model") return { status: "missing-model" };
   if (activation.status !== "activated") return { status: "write-failed" };
+  if (!(await dependencies.activateSpeechDefaults({ kind: "server", ownerId: input.state.server_id }, provider))) {
+    return { status: "write-failed" };
+  }
 
   return {
     status: "success",
@@ -897,20 +1071,17 @@ async function addCuratedProvider(
   };
 }
 
-function personalOwnerId(input: { ownerId?: number; scopeKind?: "server" | "personal" }): number | null {
-  return input.scopeKind === "personal" && input.ownerId ? input.ownerId : null;
-}
-
-async function addPersonalProvider(input: AddServerProviderInput): Promise<AddServerProviderResult> {
-  const userId = personalOwnerId(input);
-  if (!userId) return { status: "write-failed" };
+async function addPersonalProvider(
+  input: Extract<AddServerProviderInput, { scopeKind: "personal" }>,
+): Promise<AddServerProviderResult> {
+  const userId = input.ownerId;
   const provider = input.provider.trim().toLowerCase();
   const apiKey = input.apiKey.trim();
   if (apiKey.length < 10) return { status: "invalid-key" };
   if (provider === "brave") return { status: "unsupported-provider" };
   if (provider === "elevenlabs") {
     if (!(await validateElevenLabsApiKey(apiKey)).success) return { status: "validation-failed" };
-    const scope = { kind: "personal" as const, ownerId: userId, baseConfig: input.state.config };
+    const scope = { kind: "personal" as const, ownerId: userId, baseConfig: input.state?.config };
     const [speech, transcription] = await Promise.all([
       registerCustomEndpoint({
         scope,
@@ -958,7 +1129,8 @@ async function addPersonalProvider(input: AddServerProviderInput): Promise<AddSe
     });
     return { status: "unsupported-provider" };
   }
-  if (!(await instance.validateApiKey(apiKey)).valid) return { status: "validation-failed" };
+  const validation = await instance.validateApiKey(apiKey);
+  if (!validation.valid) return { status: rejectedKeyStatus(validation) };
   const existingConfig = await llmProviderRepo.loadUserSavedProviderConfig(userId, provider);
   const encryption = await encryptApiKey(apiKey);
   const savedConfig = await buildUserSavedProviderConfigFromExistingOrDefaults({
@@ -966,7 +1138,7 @@ async function addPersonalProvider(input: AddServerProviderInput): Promise<AddSe
     provider,
     apiKey: encryption.encrypted,
     keyVersion: encryption.version,
-    baseConfig: input.state.config,
+    baseConfig: input.state?.config,
     existingConfig,
   });
   if (!(await llmProviderRepo.upsertUserSavedProviderConfig(userId, savedConfig))) {
@@ -975,6 +1147,10 @@ async function addPersonalProvider(input: AddServerProviderInput): Promise<AddSe
   const activation = await activatePersonalProviderTextModel({ userId, provider, llmId: savedConfig.llm_id });
   if (activation.status === "missing_model") return { status: "missing-model" };
   if (activation.status !== "activated") return { status: "write-failed" };
+  if (!(await activateProviderSpeechDefaults({ kind: "personal", ownerId: userId }, provider))) {
+    return { status: "write-failed" };
+  }
+
   return {
     status: "success",
     entryId: `provider:${provider}`,
@@ -1010,9 +1186,9 @@ export async function addCustomEndpointConnection(
   ] as readonly CustomEndpointCapability[] | undefined;
   if (!capabilities) return { status: "invalid-style" };
 
-  const userId = personalOwnerId(input);
-  const ownerId = userId ?? input.state.server_id;
-  const scopeKind = userId ? "personal" : "server";
+  const personal = input.scopeKind === "personal";
+  const ownerId = personal ? input.ownerId : input.state.server_id;
+  const scopeKind = personal ? "personal" : "server";
   const existingConnections = await dependencies.loadConnections(ownerId, scopeKind, label);
   if (existingConnections.some((row) => row.endpoint_url.replace(/\/+$/, "") !== endpointUrl)) {
     return { status: "label-url-conflict" };
@@ -1040,7 +1216,7 @@ export async function addCustomEndpointConnection(
     const encryption = authToken ? await dependencies.encrypt(authToken) : { encrypted: null, version: 1 };
     for (const capability of capabilities) {
       const connectionId = await dependencies.upsertConnection({
-        ...(userId ? { userId } : { serverId: input.state.server_id }),
+        ...(personal ? { userId: ownerId } : { serverId: input.state.server_id }),
         label,
         capability,
         apiStyle: input.apiStyle,
@@ -1051,23 +1227,23 @@ export async function addCustomEndpointConnection(
       createdConnectionIds.push(connectionId);
 
       const provider = buildCustomProviderName(connectionId);
-      const savedConfig = userId
+      const savedConfig = personal
         ? await buildUserSavedProviderConfigFromExistingOrDefaults({
-            userId,
+            userId: ownerId,
             provider,
             apiKey: encryption.encrypted,
             keyVersion: encryption.version,
-            baseConfig: input.state.config,
+            baseConfig: input.state?.config,
           })
         : await dependencies.buildSavedConfig({
             serverId: input.state.server_id,
             provider,
             apiKey: encryption.encrypted,
             keyVersion: encryption.version,
-            baseConfig: input.state.config,
+            baseConfig: input.state?.config,
           });
-      const upserted = userId
-        ? await llmProviderRepo.upsertUserSavedProviderConfig(userId, savedConfig as UserSavedProviderConfigUpsert)
+      const upserted = personal
+        ? await llmProviderRepo.upsertUserSavedProviderConfig(ownerId, savedConfig as UserSavedProviderConfigUpsert)
         : await dependencies.upsertSavedConfig(input.state.server_id, savedConfig as SavedProviderConfigUpsert);
       if (!upserted) throw new Error("Custom endpoint credential snapshot could not be saved");
     }
@@ -1090,7 +1266,7 @@ export async function addCustomEndpointConnection(
     }
     return { status: "write-failed" };
   }
-  if (!userId) await dependencies.refresh(input.serverDiscId);
+  if (!personal) await dependencies.refresh(input.serverDiscId);
   const representativeId = createdConnectionIds[0];
   return representativeId
     ? { status: "success", entryId: `endpoint:${representativeId}`, label }
@@ -1102,10 +1278,15 @@ async function activateSavedProviderModel(
   provider: string,
   modelId: number,
 ): Promise<boolean> {
-  if (input.capability === "decision") return true;
-  const userId = personalOwnerId(input);
-  const existing = userId
-    ? await llmProviderRepo.loadUserSavedProviderConfig(userId, provider)
+  const personal = input.scopeKind === "personal";
+  if (input.capability === "decision") {
+    // Removing the edited registration clears any slot still pointing at it, so the replacement takes the slot first.
+    if (personal || !input.editingModelId || input.state.config.decision_model_id !== input.editingModelId) return true;
+    return await configRepository.updateModelConfig(input.state.server_id, { decision_model_id: modelId });
+  }
+  const ownerId = personal ? input.ownerId : input.state.server_id;
+  const existing = personal
+    ? await llmProviderRepo.loadUserSavedProviderConfig(ownerId, provider)
     : await llmProviderRepo.loadSavedProviderConfig(input.state.server_id, provider);
   if (!existing) return false;
   const next = {
@@ -1117,99 +1298,155 @@ async function activateSavedProviderModel(
       input.capability === "image" && provider === "novelai" ? modelId : existing.nai_diffusion_model_id,
     video_model_id: input.capability === "video" ? modelId : existing.video_model_id,
   };
-  const saved = userId
-    ? await llmProviderRepo.upsertUserSavedProviderConfig(userId, next as UserSavedProviderConfigUpsert)
+  const saved = personal
+    ? await llmProviderRepo.upsertUserSavedProviderConfig(ownerId, next as UserSavedProviderConfigUpsert)
     : await llmProviderRepo.upsertSavedProviderConfig(input.state.server_id, next as SavedProviderConfigUpsert);
   if (!saved) return false;
-  if (userId) {
-    if (input.capability === "text") {
-      return (await activatePersonalProviderTextModel({ userId, provider, llmId: modelId })).status === "activated";
+  const activate = async (): Promise<boolean> => {
+    if (personal) {
+      if (input.capability === "text") {
+        return (
+          (await activatePersonalProviderTextModel({ userId: ownerId, provider, llmId: modelId })).status ===
+          "activated"
+        );
+      }
+      return await assignPersonalCapabilityToProvider(
+        ownerId,
+        provider,
+        input.capability as PersonalProviderCapability,
+        (row) => ({
+          ...row,
+          embedding_model_id: input.capability === "embedding" ? modelId : row.embedding_model_id,
+          diffusion_model_id: input.capability === "image" && provider !== "novelai" ? modelId : row.diffusion_model_id,
+          nai_diffusion_model_id:
+            input.capability === "image" && provider === "novelai" ? modelId : row.nai_diffusion_model_id,
+          video_model_id: input.capability === "video" ? modelId : row.video_model_id,
+        }),
+      );
     }
-    return await assignPersonalCapabilityToProvider(
-      userId,
+    if (input.capability === "text") {
+      return (
+        (
+          await activateServerTextModelFromSavedConfig({
+            serverDiscId: input.serverDiscId,
+            tomoriState: input.state,
+            savedConfig: next as SavedProviderConfigUpsert,
+            llmId: modelId,
+          })
+        ).status === "activated"
+      );
+    }
+    const updated =
+      input.capability === "image" && provider === "novelai"
+        ? await configRepository.updateNovelaiImagegenConfig(input.state.server_id, {
+            nai_diffusion_model_id: modelId,
+          })
+        : await configRepository.updateModelConfig(input.state.server_id, {
+            ...(input.capability === "embedding" ? { embedding_model_id: modelId } : {}),
+            ...(input.capability === "image" ? { diffusion_model_id: modelId } : {}),
+            ...(input.capability === "video" ? { video_model_id: modelId } : {}),
+          });
+    if (updated) invalidateTomoriStateCache(input.serverDiscId);
+    return updated;
+  };
+  if (!(await activate())) return false;
+  const claimCapability = providerOptionCapabilityForPanel(input.capability);
+  if (claimCapability) {
+    return claimProviderModelSelection({
+      scope: {
+        kind: input.scopeKind === "personal" ? "personal" : "server",
+        ownerId,
+        discordId: input.serverDiscId,
+        state: input.state ?? null,
+      },
       provider,
-      input.capability as PersonalProviderCapability,
-      (row) => ({
-        ...row,
-        embedding_model_id: input.capability === "embedding" ? modelId : row.embedding_model_id,
-        diffusion_model_id: input.capability === "image" && provider !== "novelai" ? modelId : row.diffusion_model_id,
-        nai_diffusion_model_id:
-          input.capability === "image" && provider === "novelai" ? modelId : row.nai_diffusion_model_id,
-        video_model_id: input.capability === "video" ? modelId : row.video_model_id,
-      }),
-    );
+      capability: claimCapability,
+    });
   }
-  if (input.capability === "text") {
-    return (
-      (
-        await activateServerTextModelFromSavedConfig({
-          serverDiscId: input.serverDiscId,
-          tomoriState: input.state,
-          savedConfig: next as SavedProviderConfigUpsert,
-          llmId: modelId,
-        })
-      ).status === "activated"
-    );
-  }
-  const updated =
-    input.capability === "image" && provider === "novelai"
-      ? await configRepository.updateNovelaiImagegenConfig(input.state.server_id, {
-          nai_diffusion_model_id: modelId,
-        })
-      : await configRepository.updateModelConfig(input.state.server_id, {
-          ...(input.capability === "embedding" ? { embedding_model_id: modelId } : {}),
-          ...(input.capability === "image" ? { diffusion_model_id: modelId } : {}),
-          ...(input.capability === "video" ? { video_model_id: modelId } : {}),
-        });
-  if (updated) invalidateTomoriStateCache(input.serverDiscId);
-  return updated;
+  return true;
 }
 
 async function registerSharedProviderModel(
   input: SaveProviderModelInput,
   provider: string,
 ): Promise<SaveProviderModelResult> {
-  if (input.capability === "speech" || input.capability === "transcription") {
-    return { status: "unsupported-capability" };
+  const option = findProviderOption(provider);
+  if (option) {
+    if (!providerOptionOffersPanelCapability(option, input.capability)) return { status: "unsupported-capability" };
+    const scope: ProviderOptionScope = {
+      kind: input.scopeKind === "personal" ? "personal" : "server",
+      ownerId: input.scopeKind === "personal" ? input.ownerId : input.state.server_id,
+      discordId: input.serverDiscId,
+      state: input.state ?? null,
+    };
+    if (!(await option.selection.ensure(scope))) return { status: "write-failed" };
+    if (
+      option.selection.validateModel &&
+      !(await option.selection.validateModel({
+        scope,
+        capability: input.capability,
+        modelCodename: input.codeName.trim(),
+      }))
+    ) {
+      return { status: "invalid-model" };
+    }
   }
-  if (input.capability === "decision" && provider !== "openrouter") return { status: "unsupported-capability" };
-  if (provider === "openrouter") {
-    const userId = personalOwnerId(input);
-    const saved = userId
-      ? await llmProviderRepo.loadUserSavedProviderConfig(userId, provider)
+  if (input.capability === "speech") {
+    const personal = input.scopeKind === "personal";
+    const ownerId = personal ? input.ownerId : input.state.server_id;
+    const result = await registerHostedSpeechModelForScope(
+      personal ? { kind: "personal", ownerId: ownerId } : { kind: "server", ownerId: input.state.server_id },
+      provider,
+      input.codeName,
+      input.editingModelId,
+    );
+    if (result.status === "invalid_model") return { status: "invalid-model" };
+    if (result.status === "write_failed") return { status: "write-failed" };
+    return { status: "success", entryId: input.entryId, codeName: result.model.codename };
+  }
+  if (input.capability === "transcription") return { status: "unsupported-capability" };
+  if (input.capability === "decision" && provider !== "openrouter" && !option)
+    return { status: "unsupported-capability" };
+  if (provider === "openrouter" || option) {
+    const personal = input.scopeKind === "personal";
+    const ownerId = personal ? input.ownerId : input.state.server_id;
+    const saved = personal
+      ? await llmProviderRepo.loadUserSavedProviderConfig(ownerId, provider)
       : await llmProviderRepo.loadSavedProviderConfig(input.state.server_id, provider);
     if (!saved) return { status: "not-found" };
     if (input.capability === "decision" && input.editingModelId) {
       const owned = await llmModelRepo.loadAvailableDecisionModels(
-        provider,
+        option?.catalogProvider ?? provider,
         true,
-        userId ? { kind: "personal", ownerId: userId } : { kind: "server", ownerId: input.state.server_id },
+        personal ? { kind: "personal", ownerId: ownerId } : { kind: "server", ownerId: input.state.server_id },
       );
       if (!owned.some((model) => model.decision_model_id === input.editingModelId && model.is_scoped_registration)) {
         return { status: "not-found" };
       }
     }
     const result = await registerOpenRouterModelForScope(
-      userId ? { kind: "personal", ownerId: userId } : { kind: "server", ownerId: input.state.server_id },
+      personal ? { kind: "personal", ownerId: ownerId } : { kind: "server", ownerId: input.state.server_id },
       input.capability,
       input.codeName,
       input.imageSupportValues
-        ? (curatedImageSupportsFromSubmittedValues(input.imageSupportValues, provider) ?? undefined)
+        ? (curatedImageSupportsFromSubmittedValues(input.imageSupportValues, option?.catalogProvider ?? provider) ??
+            undefined)
         : undefined,
     );
     if (result.status === "invalid_model") return { status: "invalid-model" };
-    if (result.status === "already_available") {
+    if (result.status === "write_failed") return { status: "write-failed" };
+    if (result.status === "already_available" && !option) {
       return { status: "already-available" };
     }
     const activated = await activateSavedProviderModel(input, provider, result.model.modelId);
     if (activated && input.editingModelId && input.editingModelId !== result.model.modelId) {
       await removeScopedRegistration(
-        userId ? { userId } : { serverId: input.state.server_id },
+        personal ? { userId: ownerId } : { serverId: input.state.server_id },
         input.capability,
         input.editingModelId,
       );
     }
-    if (activated && input.capability === "decision" && !userId) invalidateTomoriStateCache(input.serverDiscId);
+    if (activated && input.capability === "decision" && !personal) invalidateTomoriStateCache(input.serverDiscId);
     return activated
       ? {
           status: "success",
@@ -1261,8 +1498,9 @@ async function registerSharedProviderModel(
           : await llmModelRepo.upsertScopedVideoModel(codeName, provider);
   if (!modelId) return { status: "write-failed" };
 
-  const userId = personalOwnerId(input);
-  const owner = userId ? { userId } : { serverId: input.state.server_id };
+  const personal = input.scopeKind === "personal";
+  const ownerId = personal ? input.ownerId : input.state.server_id;
+  const owner = personal ? { userId: ownerId } : { serverId: input.state.server_id };
   const registration =
     input.capability === "text"
       ? await llmProviderRepo.upsertOpenRouterModelRegistration({ ...owner, llmId: modelId })
@@ -1337,20 +1575,21 @@ async function removeScopedRegistration(
 }
 
 async function registerEndpointModel(input: SaveProviderModelInput): Promise<SaveProviderModelResult> {
-  const userId = personalOwnerId(input);
+  const personal = input.scopeKind === "personal";
+  const ownerId = personal ? input.ownerId : input.state.server_id;
   const representativeId = Number(input.entryId.slice("endpoint:".length));
   if (!Number.isSafeInteger(representativeId) || representativeId <= 0) return { status: "not-found" };
   const representative = await llmProviderRepo.loadCustomEndpointConnectionById(representativeId);
   if (
     !representative ||
-    (userId
-      ? representative.user_id !== userId || representative.server_id !== null
+    (personal
+      ? representative.user_id !== ownerId || representative.server_id !== null
       : representative.server_id !== input.state.server_id)
   ) {
     return { status: "not-found" };
   }
-  const read = userId
-    ? await llmProviderRepo.loadCustomEndpointConnectionsForUserResult(userId)
+  const read = personal
+    ? await llmProviderRepo.loadCustomEndpointConnectionsForUserResult(ownerId)
     : await llmProviderRepo.loadCustomEndpointConnectionsForServerResult(input.state.server_id);
   const connection = read.connections.find(
     (candidate) => candidate.label === representative.label && candidate.capability === input.capability,
@@ -1404,12 +1643,9 @@ async function registerEndpointModel(input: SaveProviderModelInput): Promise<Sav
         : workflowConfig;
 
   const registered = await registerCustomEndpoint({
-    scope: {
-      kind: userId ? "personal" : "server",
-      ownerId: userId ?? input.state.server_id,
-      baseConfig: input.state.config,
-      ...(userId ? {} : { serverDiscId: input.serverDiscId }),
-    },
+    scope: personal
+      ? { kind: "personal", ownerId: ownerId, baseConfig: input.state?.config }
+      : { kind: "server", ownerId: ownerId, baseConfig: input.state.config, serverDiscId: input.serverDiscId },
     label: connection.label,
     capability: input.capability,
     apiStyle: connection.api_style,
@@ -1438,17 +1674,24 @@ async function registerEndpointModel(input: SaveProviderModelInput): Promise<Sav
 export async function saveProviderModel(input: SaveProviderModelInput): Promise<SaveProviderModelResult> {
   if (input.capability === "decision" && input.removeDecisionModel) {
     if (!input.editingModelId) return { status: "not-found" };
-    const userId = personalOwnerId(input);
-    const scope = userId
-      ? { kind: "personal" as const, ownerId: userId }
+    const personal = input.scopeKind === "personal";
+    const ownerId = personal ? input.ownerId : input.state.server_id;
+    const scope = personal
+      ? { kind: "personal" as const, ownerId: ownerId }
       : { kind: "server" as const, ownerId: input.state.server_id };
-    let provider = input.entryId === "provider:openrouter" ? "openrouter" : null;
+    let provider =
+      input.entryId === "provider:openrouter"
+        ? "openrouter"
+        : (findProviderOption(input.entryId.slice("provider:".length))?.catalogProvider ?? null);
     if (input.entryId.startsWith("endpoint:")) {
       const representative = await llmProviderRepo.loadCustomEndpointConnectionById(Number(input.entryId.slice(9)));
-      if (!representative || (userId ? representative.user_id !== userId : representative.server_id !== scope.ownerId))
+      if (
+        !representative ||
+        (personal ? representative.user_id !== ownerId : representative.server_id !== scope.ownerId)
+      )
         return { status: "not-found" };
-      const read = userId
-        ? await llmProviderRepo.loadCustomEndpointConnectionsForUserResult(userId)
+      const read = personal
+        ? await llmProviderRepo.loadCustomEndpointConnectionsForUserResult(ownerId)
         : await llmProviderRepo.loadCustomEndpointConnectionsForServerResult(scope.ownerId);
       const connection = read.connections.find(
         (row) => row.label === representative.label && row.capability === "decision",
@@ -1458,7 +1701,7 @@ export async function saveProviderModel(input: SaveProviderModelInput): Promise<
     if (!provider) return { status: "not-found" };
     const deleted = await llmProviderRepo.deleteOwnedDecisionRegistration(scope, provider, input.editingModelId);
     if (!deleted) return { status: "not-found" };
-    if (!userId) invalidateTomoriStateCache(input.serverDiscId);
+    if (!personal) invalidateTomoriStateCache(input.serverDiscId);
     log.info(
       `Decision registration ${JSON.stringify({
         provider: provider === "openrouter" ? "openrouter" : "custom",
@@ -1500,28 +1743,34 @@ async function validateProviderCredential(provider: string, apiKey: string): Pro
 
 async function editServerProvider(input: EditProviderInput): Promise<EditProviderResult> {
   const provider = input.provider.trim().toLowerCase();
+  if (findProviderOption(provider)) return { status: "not-found" };
   const apiKey = input.apiKey.trim();
   const rotationKey = input.rotationKey.trim();
   const entryId = `provider:${provider}`;
-  const userId = personalOwnerId(input);
-  if (userId) {
+  const personal = input.scopeKind === "personal";
+  const ownerId = personal ? input.ownerId : input.state.server_id;
+  if (personal) {
     if (provider === "brave" || rotationKey || input.deleteRotationKeys) return { status: "invalid-combination" };
-    const existing = provider ? await llmProviderRepo.loadUserSavedProviderConfig(userId, provider) : null;
+    const existing = provider ? await llmProviderRepo.loadUserSavedProviderConfig(ownerId, provider) : null;
     if (!existing || parseCustomProvider(provider)) return { status: "not-found" };
     if (!apiKey) return { status: "unchanged", entryId };
     if (apiKey.length < 10) return { status: "invalid-key" };
     if (!(await validateProviderCredential(provider, apiKey))) return { status: "validation-failed" };
     const encryption = await encryptApiKey(apiKey);
     const nextConfig = { ...existing, api_key: encryption.encrypted, key_version: encryption.version };
-    if (!(await llmProviderRepo.upsertUserSavedProviderConfig(userId, nextConfig))) {
+    if (!(await llmProviderRepo.upsertUserSavedProviderConfig(ownerId, nextConfig))) {
       return { status: "write-failed" };
     }
     const active = getActivePersonalProviderForCapability(
-      await llmProviderRepo.loadUserSavedProviderConfigs(userId),
+      await llmProviderRepo.loadUserSavedProviderConfigs(ownerId),
       "text",
     );
     if (active?.provider.toLowerCase() === provider) {
-      const activated = await activatePersonalProviderTextModel({ userId, provider, llmId: nextConfig.llm_id });
+      const activated = await activatePersonalProviderTextModel({
+        userId: ownerId,
+        provider,
+        llmId: nextConfig.llm_id,
+      });
       if (activated.status !== "activated") return { status: "write-failed" };
     }
     return { status: "success", entryId, changed: ["api-key"] };
@@ -1582,11 +1831,12 @@ async function editServerProvider(input: EditProviderInput): Promise<EditProvide
 }
 
 async function editServerEndpoint(input: EditEndpointInput): Promise<EditEndpointResult> {
-  const userId = personalOwnerId(input);
+  const personal = input.scopeKind === "personal";
+  const ownerId = personal ? input.ownerId : input.state.server_id;
   const representativeId = Number(input.entryId.slice("endpoint:".length));
   if (!Number.isSafeInteger(representativeId) || representativeId <= 0) return { status: "not-found" };
-  const read = userId
-    ? await llmProviderRepo.loadCustomEndpointConnectionsForUserResult(userId)
+  const read = personal
+    ? await llmProviderRepo.loadCustomEndpointConnectionsForUserResult(ownerId)
     : await llmProviderRepo.loadCustomEndpointConnectionsForServerResult(input.state.server_id);
   if (read.status === "unavailable") return { status: "write-failed" };
   const representative = read.connections.find((connection) => connection.connection_id === representativeId);
@@ -1664,11 +1914,11 @@ async function editServerEndpoint(input: EditEndpointInput): Promise<EditEndpoin
     keyVersion: encryption?.version,
     vramHandoff,
   };
-  const updated = userId
-    ? await llmProviderRepo.updateUserCustomEndpointConnectionGroup({ userId, ...update })
+  const updated = personal
+    ? await llmProviderRepo.updateUserCustomEndpointConnectionGroup({ userId: ownerId, ...update })
     : await llmProviderRepo.updateServerCustomEndpointConnectionGroup({ serverId: input.state.server_id, ...update });
   if (!updated) return { status: "write-failed" };
-  if (!userId) invalidateTomoriStateCache(input.serverDiscId);
+  if (!personal) invalidateTomoriStateCache(input.serverDiscId);
   return { status: "success", entryId: input.entryId, label: nextLabel };
 }
 
@@ -1679,11 +1929,12 @@ export type ActivateWorkspaceEndpointResult =
   | { status: "write-failed" };
 
 interface ActivateWorkspaceEndpointInput {
-  serverDiscId: string;
   ownerId?: number;
   scopeKind?: "server" | "personal";
   state: TomoriState;
+  serverDiscId: string;
   capability: "speech" | "transcription";
+  mode?: "design" | "clone";
   customEndpointId: number;
 }
 
@@ -1711,21 +1962,37 @@ async function activateWorkspaceEndpoint(
   input: ActivateWorkspaceEndpointInput,
   dependencies: ActivateWorkspaceEndpointDependencies = defaultActivateEndpointDependencies,
 ): Promise<ActivateWorkspaceEndpointResult> {
-  if (personalOwnerId(input)) return { status: "not-found" };
+  if (input.scopeKind === "personal") return { status: "not-found" };
 
   const endpoints = (await dependencies.loadEndpoints(input.state.server_id)).filter(
     (endpoint) => endpoint.capability === input.capability && endpoint.custom_endpoint_id !== undefined,
   );
   const target = endpoints.find((endpoint) => endpoint.custom_endpoint_id === input.customEndpointId);
-  if (!target?.custom_endpoint_id) return { status: "not-found" };
+  if (!target?.custom_endpoint_id || (input.mode && !supportsSpeechMode(target, input.mode)))
+    return { status: "not-found" };
 
   const identity = `${target.label} (${target.capability})`;
-  const previous = endpoints.find((endpoint) => endpoint.is_default) ?? null;
-  if (previous?.custom_endpoint_id === target.custom_endpoint_id) return { status: "already-active", identity };
+  const previousId =
+    input.mode === "design"
+      ? input.state.config.speech_design_endpoint_id
+      : input.state.config.speech_clone_endpoint_id;
+  const previous =
+    endpoints.find((endpoint) =>
+      input.capability === "speech" ? endpoint.custom_endpoint_id === previousId : endpoint.is_default,
+    ) ?? null;
+  const selectedInEveryMode =
+    input.capability === "speech"
+      ? (!supportsSpeechMode(target, "design") ||
+          input.state.config.speech_design_endpoint_id === target.custom_endpoint_id) &&
+        (!supportsSpeechMode(target, "clone") ||
+          input.state.config.speech_clone_endpoint_id === target.custom_endpoint_id)
+      : previous?.custom_endpoint_id === target.custom_endpoint_id;
+  if (selectedInEveryMode) return { status: "already-active", identity };
 
   const updated = await dependencies.setActive({
     serverId: input.state.server_id,
     capability: input.capability,
+    mode: input.mode,
     customEndpointId: target.custom_endpoint_id,
   });
   if (!updated) return { status: "write-failed" };
@@ -1735,28 +2002,47 @@ async function activateWorkspaceEndpoint(
 }
 
 async function removeServerProviderEntry(input: RemoveProviderEntryInput): Promise<RemoveProviderEntryResult> {
-  const userId = personalOwnerId(input);
-  if (userId) {
+  const personal = input.scopeKind === "personal";
+  const ownerId = personal ? input.ownerId : input.state.server_id;
+  const option = input.entry.kind === "provider" ? findProviderOption(input.entry.provider) : undefined;
+  if (option) {
+    const status = await option.selection.remove({
+      kind: personal ? "personal" : "server",
+      ownerId,
+      discordId: input.serverDiscId,
+      state: input.state ?? null,
+    });
+    if (status === "active" || status === "not-found" || status === "write-failed") return { status };
+    if (!personal) invalidateTomoriStateCache(input.serverDiscId);
+    return { status: "success", entryId: input.entry.id, displayName: input.entry.displayName };
+  }
+  if (personal) {
     const activeProvider = getActivePersonalProviderForCapability(
-      await llmProviderRepo.loadUserSavedProviderConfigs(userId),
+      await llmProviderRepo.loadUserSavedProviderConfigs(ownerId),
       "text",
     )?.provider.toLowerCase();
     if (input.entry.kind === "brave") return { status: "not-found" };
     if (input.entry.kind === "provider") {
       if (activeProvider === input.entry.provider.toLowerCase()) return { status: "active" };
-      if (!(await llmProviderRepo.deleteUserProviderRegistration(userId, input.entry.provider))) {
+      if (!(await llmProviderRepo.deleteUserProviderRegistration(ownerId, input.entry.provider))) {
         return { status: "not-found" };
       }
     } else {
       const providerKeys = input.entry.connectionIds.map((connectionId) => buildCustomProviderName(connectionId));
       if (activeProvider && providerKeys.includes(activeProvider)) return { status: "active" };
-      if (!(await llmProviderRepo.deleteUserCustomEndpointConnectionGroup(userId, input.entry.connectionIds))) {
+      if (!(await llmProviderRepo.deleteUserCustomEndpointConnectionGroup(ownerId, input.entry.connectionIds))) {
         return { status: "not-found" };
       }
     }
     return { status: "success", entryId: input.entry.id, displayName: input.entry.displayName };
   }
-  const activeProvider = input.state.llm.llm_provider.toLowerCase();
+  const textProvider = input.state.llm.llm_provider.toLowerCase();
+  const activeProvider =
+    findProviderOptionByActiveProvider(
+      textProvider,
+      { kind: "server", ownerId: input.state.server_id, state: input.state },
+      "text",
+    )?.value ?? textProvider;
   if (input.entry.kind === "brave") {
     if (!(await deleteOptApiKey(input.state.server_id, "brave-search"))) return { status: "write-failed" };
   } else if (input.entry.kind === "provider") {

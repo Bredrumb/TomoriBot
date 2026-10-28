@@ -4,6 +4,14 @@
  */
 
 import { z } from "zod";
+import { MAX_VOICE_DESIGN_PROMPT_LENGTH } from "@/constants/speech";
+import {
+  naturalNudgeInterestsSchema,
+  naturalNudgeTalkativenessSchema,
+  personaAuthoredIdleNudgesSchema,
+  type NaturalNudgeInterest,
+  type PersonaAuthoredIdleNudge,
+} from "@/modules/natural-nudges/db/types";
 import {
   EMPTY_PERSONA_NAMING_CONFIG,
   personaNamingConfigSchema,
@@ -60,6 +68,8 @@ export interface PresetExportData {
   sample_dialogues_out: string[];
   trigger_words: string[];
   persona_prompt?: string | null;
+  speech_voice_design_prompt?: string | null;
+  voice_source_priority?: "design" | "clone";
   naming_config?: PersonaNamingConfig;
   persona_lineage_id?: number;
   /** Official preset lineage, when this export was materialized from a preset pointer */
@@ -80,6 +90,11 @@ export interface PresetExportData {
   nai_attg_stars?: number | null;
   /** Absent in exports that predate the flag, which were all SFW. */
   is_nsfw?: boolean;
+  /** Natural Nudges topics; absent in exports that predate Natural Nudges. */
+  natural_nudge_interests?: NaturalNudgeInterest[];
+  natural_nudge_talkativeness?: number;
+  /** Persona-authored idle nudge definitions; absent in exports that predate them. */
+  natural_nudge_idle_nudges?: PersonaAuthoredIdleNudge[];
 }
 
 /**
@@ -137,6 +152,8 @@ export const presetExportDataSchema = z.object({
   sample_dialogues_out: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_SAMPLE_DIALOGUES),
   trigger_words: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_TRIGGER_WORDS),
   persona_prompt: z.string().max(PRESET_MAX_PERSONA_PROMPT_LENGTH).nullable().optional(),
+  speech_voice_design_prompt: z.string().max(MAX_VOICE_DESIGN_PROMPT_LENGTH).nullable().optional(),
+  voice_source_priority: z.enum(["design", "clone"]).default("design"),
   naming_config: personaNamingConfigSchema.default(EMPTY_PERSONA_NAMING_CONFIG),
   persona_lineage_id: z
     .preprocess((value) => {
@@ -168,6 +185,9 @@ export const presetExportDataSchema = z.object({
   nai_attg_genre: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
   nai_attg_stars: z.number().int().min(1).max(5).nullable().optional(),
   is_nsfw: z.boolean().optional(),
+  natural_nudge_interests: naturalNudgeInterestsSchema.optional(),
+  natural_nudge_talkativeness: naturalNudgeTalkativenessSchema.optional(),
+  natural_nudge_idle_nudges: personaAuthoredIdleNudgesSchema.optional(),
 });
 
 /**

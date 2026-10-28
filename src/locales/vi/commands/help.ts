@@ -79,6 +79,8 @@ export default {
         video_generation_description: `Clip ngắn, có thể kèm khung hình đầu tùy chọn`,
         speech_generation: `Tạo giọng nói`,
         speech_generation_description: `Chuyển văn bản thành tin nhắn thoại`,
+        art_search: `Tìm kiếm tranh ảnh`,
+        art_search_description: `Gửi tranh anime có sẵn từ Danbooru`,
         behavior_tuning: `Tinh chỉnh hành vi`,
         behavior_tuning_description: `Model, humanizer, hướng dẫn và công cụ`,
         server_wide_settings: `Cài đặt toàn máy chủ`,
@@ -154,8 +156,6 @@ export default {
       bot_user_fallback: `tài khoản bot Matrix đã cấu hình`,
     },
     "api-key": {
-      description: `Tìm hiểu cách thiết lập API key cho các nhà cung cấp AI`,
-      provider_description: `Chọn nhà cung cấp AI của bạn`,
       provider_choice_brave: `Brave Search`,
       provider_choice_google: `Google Gemini (Khuyên dùng, Miễn phí)`,
       provider_choice_deepseek: `DeepSeek`,
@@ -357,7 +357,7 @@ Nhập \`{project_id}::{location}\` bằng {configSetup} hoặc {configApikeySet
         description:
           "API key cấp quyền cho mình dùng model của nhà cung cấp. Mọi nội dung mình tạo đều tính vào key đó, hãy giữ nó như bất kỳ mật khẩu nào khác. Để hoàn tất thiết lập, mình cần một key:\n> **1.** Chọn nhà cung cấp bên dưới để mở hướng dẫn.\n> **2.** Sao chép key được cấp. **KHÔNG chia sẻ** với ai, và không dán vào kênh: chỉ dán vào ô mà {setup} mở cho bạn.\n> **3.** Chạy {setup} và dán key khi mình yêu cầu.",
         picker_footer:
-          "-# Danh sách thứ hai là tùy chọn: Brave Search thêm kết quả web, ElevenLabs thêm giọng nói trực tuyến. Cả hai có hướng dẫn riêng và không cần để thiết lập. Nếu endpoint không có ở đây, hãy bỏ qua key và đọc mục **Endpoint tùy chỉnh (nâng cao)** trên trang này.",
+          "-# Nếu endpoint không có ở đây, hãy bỏ qua key và đọc mục **Endpoint tùy chỉnh (nâng cao)** trên trang này.",
       },
       change_trigger_behavior: {
         title: `Đổi hành vi kích hoạt`,
@@ -461,6 +461,11 @@ Nhập \`{project_id}::{location}\` bằng {configSetup} hoặc {configApikeySet
         description:
           "{generateVoice} chuyển văn bản thành tin nhắn thoại bằng giọng của persona hiện tại.\n\nCần đăng ký endpoint giọng nói trước, trực tuyến hoặc tự host: xem **Endpoint tùy chỉnh (nâng cao)** ở mục Thiết lập.\n> Mỗi persona có thể có giọng khác nhau. Giọng nói được đặt trong {configPersonaVoice}.",
       },
+      art_search: {
+        title: `Tìm kiếm tranh ảnh`,
+        description:
+          "{booruSearch} gửi 4 ảnh Danbooru ngẫu nhiên được đánh giá cao cho một hoặc hai thẻ. Gợi ý sẽ xuất hiện khi bạn nhập, và biệt danh hoặc lỗi chính tả sẽ chuyển thành thẻ thực tế.\n> Kết quả nghi vấn và 18+ chỉ hiển thị trong các kênh giới hạn độ tuổi.\n\nBạn cũng có thể chỉ cần yêu cầu mình hiển thị tranh ảnh: công tắc **Tìm kiếm Danbooru** trong {configTools} sẽ kiểm soát điều đó. Để giới hạn người có thể chạy lệnh, hãy dùng Cài đặt máy chủ > Tích hợp.",
+      },
     },
     tons_of_tweakability: {
       title: `Vô số tùy chỉnh`,
@@ -507,8 +512,8 @@ Nhập \`{project_id}::{location}\` bằng {configSetup} hoặc {configApikeySet
       memory_tagging: {
         title: `Gắn thẻ bộ nhớ (nâng cao)`,
         description:
-          "Mặc định mọi bộ nhớ trong phạm vi đều được gửi kèm tin nhắn. Việc gắn thẻ giúp thu hẹp lại.\n> **Thẻ từ khóa**: bộ nhớ có thẻ chỉ thức dậy khi từ khóa xuất hiện trong hội thoại. Bộ nhớ không gắn thẻ sẽ luôn hoạt động.\n> **Thẻ kênh**: thẻ `#channel` giới hạn bộ nhớ trong kênh đó, và kết hợp được với thẻ từ khóa.\n\nBật cả hai trong {configAdvancedMemory}, rồi dùng {toolPromptSnapshot} để xem chính xác các bộ nhớ đang hoạt động lúc này.",
-        footer: "Tài liệu tải lên và lịch sử trích xuất cũng có thể gắn thẻ kênh.",
+          "Mặc định mọi bộ nhớ trong phạm vi đều được gửi kèm tin nhắn. Việc gắn thẻ giúp thu hẹp lại.\n> **Thẻ từ khóa**: bộ nhớ có thẻ chỉ thức dậy khi từ khóa xuất hiện trong hội thoại. Bộ nhớ không gắn thẻ sẽ luôn hoạt động.\n> **Kênh**: bộ nhớ máy chủ có thể giới hạn ở các kênh bạn chọn trong biểu mẫu (bao gồm các luồng trong đó), và bộ nhớ cá nhân qua thẻ `#channel`. Cả hai đều kết hợp được với thẻ từ khóa.\n\nBật cả hai trong {configAdvancedMemory}, rồi dùng {toolPromptSnapshot} để xem chính xác các bộ nhớ đang hoạt động lúc này.",
+        footer: "Tài liệu tải lên và lịch sử trích xuất cũng có thể được giới hạn theo kênh.",
       },
     },
     scheduled_tasks: {

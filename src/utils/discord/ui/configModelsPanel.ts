@@ -17,7 +17,7 @@ import {
   CONFIG_MODEL_CLEAR_VALUE,
   CONFIG_MODEL_PAGE_SIZE,
   CONFIG_MODEL_PROVIDER_DIRECT_LIMIT,
-  CONFIG_ENDPOINT_PAGE_SIZE,
+  configEndpointWindowSize,
   CONFIG_NAI_PRESET_NEXT_VALUE,
   CONFIG_NAI_PRESET_PAGE_SIZE,
   CONFIG_NAI_PRESET_PREVIOUS_VALUE,
@@ -44,6 +44,7 @@ import type {
 import {
   buildModelRoutingControl,
   buildProviderPageEntries,
+  formatModelSelectionLabel,
   type ProviderSelectEntry,
 } from "@/utils/discord/ui/modelRoutingControls";
 import { buildProviderSelectWindow, resolveProviderEntryStart } from "@/utils/discord/ui/providerSelectWindow";
@@ -78,10 +79,12 @@ export const CONFIG_MODEL_CAPABILITY_LOCALE_KEYS: Record<ConfigModelCapability, 
   text: "commands.config.panel.capability_text",
   vision: "commands.config.panel.capability_vision",
   embedding: "commands.config.panel.capability_embedding",
+  decision: "commands.config.panel.capability_decision",
   image: "commands.config.panel.capability_image",
   "nai-image": "commands.config.panel.capability_nai_image",
   video: "commands.config.panel.capability_video",
-  tts: "commands.config.panel.capability_tts",
+  "tts-design": "commands.config.panel.capability_tts_design",
+  "tts-clone": "commands.config.panel.capability_tts_clone",
   stt: "commands.config.panel.capability_stt",
 };
 
@@ -234,12 +237,10 @@ function buildCapabilityNoticeLine(locale: string, view: ConfigSwitchModelsView)
   if (view.speechCapabilityEnabled === false) {
     warnings.push(localizer(locale, "commands.config.panel.speech_capability_disabled_direction"));
   } else if (view.speechCapabilityEnabled !== undefined) {
-    // Speech owns two endpoint slots above this notice, so announcing the enabled state would only
-    // restate a working setup on every repaint. Only the missing endpoint needs an action, and that
-    // sentence already names the enabled state, which keeps the healthy case as silent as the Image
-    // and Video notices.
-    const speechSlot = view.endpointSlots?.find((slot) => slot.capability === "tts");
-    const hasActiveSpeechEndpoint = speechSlot?.endpoints.some((endpoint) => endpoint.isActive && endpoint.id > 0);
+    // A working speech setup stays silent, so only a missing target earns a notice.
+    const hasActiveSpeechEndpoint = view.slots.some(
+      (slot) => (slot.capability === "tts-design" || slot.capability === "tts-clone") && slot.currentModelName !== null,
+    );
     if (!hasActiveSpeechEndpoint) {
       warnings.push(localizer(locale, "commands.config.panel.speech_capability_missing_endpoint"));
     }
@@ -276,7 +277,7 @@ const CONFIG_TEXT_OVERRIDE_ROW_LIMIT = 8;
  * server default and which model it uses rather than only how many targets do.
  *
  * The row limit exists because one scope can hold a full modal page of overrides, and every row
- * spends the same message-wide text budget the eight capability selectors already draw on. The
+ * spends the same message-wide text budget the capability selectors already draw on. The
  * label keeps the true total, so a collapsed list still reports how many are hidden.
  */
 function buildTextOverrideScopeLines(
@@ -351,6 +352,7 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
 
     components.push(
       buildModelRoutingControl({
+        locale,
         capabilityLabel,
         activeModelName: slot.currentModelName,
         activeProvider: slot.currentProvider,
@@ -376,20 +378,20 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
     );
   }
 
-  for (const capability of ["tts", "stt"] as const) {
-    const slot = view.endpointSlots?.find((candidate) => candidate.capability === capability);
-    if (!slot) continue;
-    const capabilityLabel = localizer(locale, CONFIG_MODEL_CAPABILITY_LOCALE_KEYS[capability]);
-    const overflows = slot.endpoints.length > CONFIG_ENDPOINT_PAGE_SIZE;
-    const windowSize = overflows ? CONFIG_ENDPOINT_PAGE_SIZE - 1 : CONFIG_ENDPOINT_PAGE_SIZE;
-    const rangeCount = Math.max(1, Math.ceil(slot.endpoints.length / windowSize));
-    const rangeIndex = Math.min(Math.max(0, Math.floor(slot.pageStart / windowSize)), rangeCount - 1);
+  const sttSlot = view.endpointSlots?.find((candidate) => candidate.capability === "stt");
+  if (sttSlot) {
+    const capabilityLabel = localizer(locale, CONFIG_MODEL_CAPABILITY_LOCALE_KEYS.stt);
+    const activeEndpoint = sttSlot.endpoints.find((endpoint) => endpoint.isActive);
+    const windowSize = configEndpointWindowSize(sttSlot.endpoints.length);
+    const overflows = sttSlot.endpoints.length > windowSize;
+    const rangeCount = Math.max(1, Math.ceil(sttSlot.endpoints.length / windowSize));
+    const rangeIndex = Math.min(Math.max(0, Math.floor(sttSlot.pageStart / windowSize)), rangeCount - 1);
     const visibleStart = rangeIndex * windowSize;
-    const fingerprint = computeConfigEndpointFingerprint(capability, slot.endpoints);
-    const options: SelectMenuComponentOptionData[] = slot.endpoints
+    const fingerprint = computeConfigEndpointFingerprint(sttSlot.endpoints);
+    const options: SelectMenuComponentOptionData[] = sttSlot.endpoints
       .slice(visibleStart, visibleStart + windowSize)
       .map((endpoint, offset) => {
-        const displayName = `${endpoint.label}: ${endpoint.modelLabel}`;
+        const displayName = formatModelSelectionLabel(endpoint.modelLabel, endpoint.label, "");
         return {
           value: encodeConfigEndpointSelection(visibleStart + offset, fingerprint),
           label: safeSelectOptionText(displayName, 100),
@@ -411,7 +413,7 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
       options.push({
         value: encodeConfigEndpointPageValue(nextRangeIndex * windowSize),
         label: safeSelectOptionText(
-          localizer(locale, "commands.config.panel.model_provider_more_option", {
+          localizer(locale, "commands.config.panel.model_endpoint_more_option", {
             capability: capabilityLabel,
             page: nextRangeIndex + 1,
             total: rangeCount,
@@ -433,19 +435,16 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
         default: false,
       });
     }
-    const activeEndpoint = slot.endpoints.find((endpoint) => endpoint.isActive);
-    const placeholder = activeEndpoint
-      ? `${capabilityLabel}: ${activeEndpoint.label}: ${activeEndpoint.modelLabel}`
-      : `${capabilityLabel}: ${localizer(locale, "commands.providers.activate_placeholder")}`;
+    const placeholder = `${capabilityLabel}: ${formatModelSelectionLabel(activeEndpoint?.modelLabel ?? null, activeEndpoint?.label ?? null, localizer(locale, "commands.config.panel.none_label"))}`;
     components.push({
       type: ComponentType.ActionRow,
       components: [
         {
           type: ComponentType.StringSelect,
-          customId: buildConfigRouteId({ action: "endpoint-select", locale, capability }),
+          customId: buildConfigRouteId({ action: "endpoint-select", locale, capability: "stt" }),
           placeholder: safeSelectOptionText(placeholder, 150),
           options,
-          disabled: writesDisabled || slot.endpoints.length === 0,
+          disabled: writesDisabled || sttSlot.endpoints.length === 0,
         },
       ],
     });
@@ -460,7 +459,7 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
   if (capabilityNotice) components.push(capabilityNotice);
 
   // Only Text carries narrower scopes, so the summary names those two editors rather than implying
-  // that the six other slots support overrides at all.
+  // that the other slots support overrides at all.
   components.push({
     type: ComponentType.TextDisplay,
     content: [
@@ -508,17 +507,20 @@ function buildNaiPresetBlock(
   writesDisabled: boolean,
   displayBudget: number,
 ): ComponentInContainerData[] {
-  const explanationKey =
+  const explanation =
     view.compatibility === "not-novelai"
-      ? "not_novelai"
+      ? {
+          title: "commands.config.panel.nai_preset.not_novelai_title",
+          description: "commands.config.panel.nai_preset.not_novelai_description",
+        }
       : view.compatibility === "unsupported"
-        ? "not_kayra_erato"
+        ? {
+            title: "commands.config.panel.nai_preset.not_kayra_erato_title",
+            description: "commands.config.panel.nai_preset.not_kayra_erato_description",
+          }
         : null;
-  const display = explanationKey
-    ? `**${localizer(locale, `commands.config.panel.nai_preset.${explanationKey}_title`)}**\n${localizer(
-        locale,
-        `commands.config.panel.nai_preset.${explanationKey}_description`,
-      )}`
+  const display = explanation
+    ? `**${localizer(locale, explanation.title)}**\n${localizer(locale, explanation.description)}`
     : (() => {
         const prefix = `**${localizer(locale, "commands.config.panel.nai_preset.select_label")}**\n${localizer(
           locale,
@@ -554,9 +556,7 @@ function buildNaiPresetBlock(
             description: safeSelectOptionText(
               localizer(
                 locale,
-                explanationKey
-                  ? `commands.config.panel.nai_preset.${explanationKey}_description`
-                  : "commands.config.panel.nai_preset.select_description",
+                explanation ? explanation.description : "commands.config.panel.nai_preset.select_description",
               ),
               100,
             ),
@@ -564,30 +564,18 @@ function buildNaiPresetBlock(
           },
         ];
   if (view.compatibility === "eligible" && pageCount > 1) {
+    const pageInfo = (targetIndex: number) =>
+      localizer(locale, "general.pagination.page_info", { current: targetIndex + 1, total: pageCount });
     options.unshift({
-      label: safeSelectOptionText(
-        localizer(locale, "commands.config.panel.model_provider_more_option", {
-          capability: localizer(locale, "commands.config.panel.nai_preset.select_label"),
-          page: pageIndex === 0 ? pageCount : pageIndex,
-          total: pageCount,
-        }),
-        100,
-      ),
+      label: localizer(locale, "general.pagination.previous"),
       value: CONFIG_NAI_PRESET_PREVIOUS_VALUE,
-      description: undefined,
+      description: pageInfo((pageIndex - 1 + pageCount) % pageCount),
       default: false,
     });
     options.push({
-      label: safeSelectOptionText(
-        localizer(locale, "commands.config.panel.model_provider_more_option", {
-          capability: localizer(locale, "commands.config.panel.nai_preset.select_label"),
-          page: ((pageIndex + 1) % pageCount) + 1,
-          total: pageCount,
-        }),
-        100,
-      ),
+      label: localizer(locale, "general.pagination.next"),
       value: CONFIG_NAI_PRESET_NEXT_VALUE,
-      description: undefined,
+      description: pageInfo((pageIndex + 1) % pageCount),
       default: false,
     });
   }
@@ -640,7 +628,7 @@ function buildParametersBody(input: ConfigModelsPageInput): ComponentInContainer
       ...buildProviderParameterBlock({
         providerOptions: view.textProviders.map((provider) => ({
           value: provider,
-          label: getProviderDisplayName(provider),
+          label: getProviderDisplayName(provider, locale),
           default: provider === view.selectedProvider,
         })),
         copy: {
@@ -660,7 +648,7 @@ function buildParametersBody(input: ConfigModelsPageInput): ComponentInContainer
           editGenerationLabel: localizer(locale, "commands.config.panel.edit_generation_button"),
         },
         values: {
-          providerDisplayName: getProviderDisplayName(view.selectedProvider),
+          providerDisplayName: getProviderDisplayName(view.selectedProvider, locale),
           temperature: formatValue(config?.llm_temperature),
           minP: formatValue(config?.llm_min_p),
           topP: formatValue(config?.llm_top_p),
@@ -819,7 +807,7 @@ function buildFallbacksBody(input: ConfigModelsPageInput): ComponentInContainerD
         placeholder: safeSelectOptionText(
           view.expandedProvider
             ? localizer(locale, "commands.config.panel.fallback_provider_page_placeholder", {
-                provider: getProviderDisplayName(view.expandedProvider),
+                provider: getProviderDisplayName(view.expandedProvider, locale),
               })
             : localizer(locale, "commands.config.panel.fallback_provider_placeholder"),
           150,

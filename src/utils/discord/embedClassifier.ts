@@ -6,6 +6,8 @@
  */
 
 import type { Embed } from "discord.js";
+import { isMessageProxyReplyEmbed } from "@/utils/messageProxy/registry";
+
 import {
   classifyProtocolEmbed,
   classifyProtocolTitle,
@@ -52,6 +54,8 @@ export type LinkPreviewResult = {
  * snapshot output matches live-chat conversion.
  */
 export function processLinkEmbed(embed: Embed): LinkPreviewResult {
+  if (classifyProtocolEmbed(embed) === "unshared_dice_roll")
+    return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };
   // Skip entirely empty embeds
   const hasContent = embed.url || embed.title || embed.description || embed.author?.name || embed.fields.length > 0;
   if (!hasContent) {
@@ -61,6 +65,12 @@ export function processLinkEmbed(embed: Embed): LinkPreviewResult {
   // Skip bot-produced system embeds because those are handled separately
   const embedCheck = checkTargetEmbed(embed);
   if (embedCheck.isTarget) {
+    return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };
+  }
+
+  // A message-proxy reply embed restates a reference the pipeline already annotates
+  // from the pre-proxy original, so rendering it would duplicate the notice.
+  if (isMessageProxyReplyEmbed(embed)) {
     return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };
   }
 

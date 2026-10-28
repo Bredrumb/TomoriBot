@@ -17,7 +17,22 @@ import { resolveRangeSelection } from "@/utils/discord/interactions/panelControl
 import { MAX_MCP_SERVERS_PER_WORKSPACE, safeMcpEndpoint } from "@/utils/mcp/mcpConfigOperations";
 import { formatMcpToolNamesForDiscord } from "@/utils/mcp/mcpToolSnapshot";
 import { buildTextPreview, textPreviewFooterKey, textPreviewFooterVars } from "@/utils/text/textPreview";
+import { DISCORD_BUTTON_LABEL_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import { localizer } from "@/utils/text/localizer";
+
+const FAILURE_REASON_KEYS: Record<
+  NonNullable<GuildMcpServerRow["failure_reason"]>,
+  { disabled: string; failing: string }
+> = {
+  unauthorized: {
+    disabled: "commands.mcps.auto_disabled_unauthorized",
+    failing: "commands.mcps.connection_failing_unauthorized",
+  },
+  unreachable: {
+    disabled: "commands.mcps.auto_disabled_unreachable",
+    failing: "commands.mcps.connection_failing_unreachable",
+  },
+};
 
 export const MAX_MCP_PANEL_PAGE_SIZE = 4;
 const MCP_ROW_TEXT_PREVIEW_BUDGET = 300;
@@ -60,6 +75,16 @@ function typeLabelKey(serverType: string | null | undefined): string {
   if (serverType === "url_fetcher") return "commands.mcps.type_url_fetcher";
   if (serverType === "prose_linter") return "commands.mcps.type_prose_linter";
   return "commands.mcps.type_general";
+}
+
+/** A manual enable or disable clears `failure_reason`, so a disabled row that keeps one was disabled automatically. */
+function connectionHealthLine(locale: string, row: GuildMcpServerRow): string | null {
+  if (!row.failure_reason) return null;
+  if (!row.is_enabled) return localizer(locale, FAILURE_REASON_KEYS[row.failure_reason].disabled);
+  if (!row.failing_since) return null;
+  return localizer(locale, FAILURE_REASON_KEYS[row.failure_reason].failing, {
+    since: `<t:${Math.floor(row.failing_since.getTime() / 1000)}:R>`,
+  });
 }
 
 function buildRetryRow(
@@ -235,6 +260,7 @@ export function buildMcpsPanelComponents(input: McpsPanelRenderInput): Component
         : formattedToolNames
           ? localizer(input.locale, "commands.mcps.tools_known", { tools: formattedToolNames })
           : localizer(input.locale, "commands.mcps.tools_empty");
+    const healthLine = connectionHealthLine(input.locale, row);
     components.push(
       {
         type: ComponentType.TextDisplay,
@@ -245,7 +271,7 @@ export function buildMcpsPanelComponents(input: McpsPanelRenderInput): Component
             status: localizer(input.locale, row.is_enabled ? "commands.mcps.enabled" : "commands.mcps.disabled"),
             type: localizer(input.locale, typeLabelKey(row.server_type)),
           },
-        )}\n> ${toolSnapshot}${
+        )}\n> ${toolSnapshot}${healthLine ? `\n> ${healthLine}` : ""}${
           namePreview.truncated || endpointPreview.truncated
             ? `\n-# ${localizer(
                 input.locale,
@@ -269,7 +295,10 @@ export function buildMcpsPanelComponents(input: McpsPanelRenderInput): Component
               entityId: rowId(row),
               enabled: !row.is_enabled,
             }),
-            label: localizer(input.locale, row.is_enabled ? "commands.mcps.disable" : "commands.mcps.enable"),
+            label: safeSelectOptionText(
+              localizer(input.locale, row.is_enabled ? "commands.mcps.disable" : "commands.mcps.enable"),
+              DISCORD_BUTTON_LABEL_MAX,
+            ),
             disabled: writesDisabled,
           },
           {

@@ -15,11 +15,6 @@ import { toGroupBreakName } from "@/utils/text/groupBreakName";
  *    username, or the second renders under the first one's avatar. Held per channel because
  *    grouping spans turns, and reset whenever a foreign message lands between our own
  *    deliveries, since Discord only ever groups a message with the one directly above it.
- * - **Last delivered webhook identity**: artifacts that follow text (expressions, the
- *    "Fallback Used" notice) should be posted as the identity that delivered that text, so
- *    they group with it instead of splitting off under a different name.
- * - **Last speaker**: the rate-limited avatar fallback may reuse the avatar last displayed only
- *    when the same persona, in an ordinary appearance, delivered it.
  *
  * Every webhook send that can sit next to a sprite must take part, including tool notices and media
  * sent outside the stream (`utils/discord/webhook/personaPost.ts`): an unrecorded send looks like a
@@ -42,12 +37,6 @@ const NEUTRAL_APPEARANCE_GROUP_KEY = "(neutral)";
 // once the map grows past this size rather than wiring up a timer.
 const SWEEP_SIZE_THRESHOLD = 2000;
 
-/**
- * How a delivered message presented its speaker. `appearance` is an ordinary sprite or the base
- * appearance: the persona as itself, so a stale expression still names the right speaker. An
- * identity sprite or a copied identity is a different speaker on screen even when the same
- * persona produced it.
- */
 type DeliveredSpeakerKind = "appearance" | "identity_sprite" | "copied";
 
 export interface DeliveredSpeaker {
@@ -57,7 +46,7 @@ export interface DeliveredSpeaker {
 }
 
 export type ChannelLastDelivery =
-  | { via: "webhook"; identity: ResolvedWebhookIdentity; speaker: DeliveredSpeaker | null }
+  | { via: "webhook"; identity: ResolvedWebhookIdentity; speaker: DeliveredSpeaker | null; webhookId: string }
   | { via: "bot"; speaker: DeliveredSpeaker | null };
 
 interface ChannelDeliveryState {
@@ -66,11 +55,10 @@ interface ChannelDeliveryState {
   /** Current half of the clean/group-break username alternation. */
   groupParity: boolean;
   /**
-   * Identity of the most recent WEBHOOK delivery, or null when the last delivery was an
-   * ordinary bot message. Null is meaningful: it means following artifacts must also go out
-   * as the bot, since that is what they would group with.
+   * The actual adjacent webhook identity, cleared by a bot delivery.
    */
   lastWebhookIdentity: ResolvedWebhookIdentity | null;
+  lastWebhookId: string | null;
   /**
    * Message id of the most recent WEBHOOK delivery, or null when the last delivery was an
    * ordinary bot message. Null blocks adjacency outright: a bot-user message is a different
@@ -112,6 +100,7 @@ function getLiveEntry(channelId: string, now: number): ChannelDeliveryState {
     lastSpriteKey: null,
     groupParity: false,
     lastWebhookIdentity: null,
+    lastWebhookId: null,
     lastDeliveredMessageId: null,
     lastDeliveryVia: null,
     lastSpeaker: null,
@@ -232,36 +221,25 @@ export function resolveChannelBaseAppearanceIdentity(
   );
 }
 
-/**
- * Picks the identity a persona post outside the response stream (tool notice, generated media) is
- * sent under.
- *
- * Directly after the same persona's own line, the post reuses that line's identity verbatim so it
- * stays inside the speaker's block instead of splitting it. Anywhere else it shows the base
- * appearance, which joins the sprite alternation so a following sprite cannot merge under the
- * post's avatar.
- *
- * @param personaId - Persona the post speaks for; null never matches a previous speaker
- * @param channelLastMessageId - The channel's current `lastMessageId`, used for the adjacency test
- */
-export function resolveChannelPersonaPostIdentity(
+export function getAdjacentPersonaIdentity(
   channelId: string,
-  baseIdentity: ResolvedWebhookIdentity & { username: string },
   personaId: number | null,
   channelLastMessageId: string | null,
-): ResolvedWebhookIdentity {
+): ResolvedWebhookIdentity | null {
   const entry = getLiveEntry(channelId, Date.now());
-  const previousIdentity = entry.lastDeliveryVia === "webhook" ? entry.lastWebhookIdentity : null;
+  const last = getChannelLastDelivery(channelId);
+  const previousIdentity = last?.via === "webhook" ? last.identity : null;
   const continuesOwnLine =
     previousIdentity !== null &&
     personaId !== null &&
-    entry.lastSpeaker?.kind === "appearance" &&
+    entry.lastSpeaker !== null &&
+    entry.lastSpeaker.kind !== "copied" &&
     entry.lastSpeaker.personaId === personaId &&
     !hasForeignMessageSinceDelivery(entry.lastDeliveredMessageId, channelLastMessageId);
   if (previousIdentity && continuesOwnLine) {
     return { ...previousIdentity };
   }
-  return resolveChannelBaseAppearanceIdentity(channelId, baseIdentity, baseIdentity.username, channelLastMessageId);
+  return null;
 }
 
 /**
@@ -280,12 +258,14 @@ export function resolveChannelPersonaPostIdentity(
 export function recordChannelDeliveredWebhookIdentity(
   channelId: string,
   identity: ResolvedWebhookIdentity,
-  messageId: string | null = null,
-  speaker: DeliveredSpeaker | null = null,
+  messageId: string,
+  speaker: DeliveredSpeaker | null,
+  webhookId: string,
 ): void {
   const now = Date.now();
   const entry = getLiveEntry(channelId, now);
   entry.lastWebhookIdentity = { ...identity };
+  entry.lastWebhookId = webhookId;
   entry.lastDeliveredMessageId = messageId;
   entry.lastDeliveryVia = "webhook";
   entry.lastSpeaker = speaker ? { ...speaker } : null;
@@ -303,24 +283,11 @@ export function recordChannelDeliveredBotMessage(channelId: string, speaker: Del
   const now = Date.now();
   const entry = getLiveEntry(channelId, now);
   entry.lastWebhookIdentity = null;
+  entry.lastWebhookId = null;
   entry.lastDeliveredMessageId = null;
   entry.lastDeliveryVia = "bot";
   entry.lastSpeaker = speaker ? { ...speaker } : null;
   entry.updatedAt = now;
-}
-
-/**
- * Returns the identity of the channel's most recent webhook delivery, or null when the last
- * delivery was an ordinary bot message, nothing has been delivered, or the window has expired.
- * Callers should send as the bot when this is null.
- *
- */
-export function getChannelDeliveredWebhookIdentity(channelId: string): ResolvedWebhookIdentity | null {
-  const entry = channelDeliveryStates.get(channelId);
-  if (!entry || Date.now() - entry.updatedAt >= CONTINUITY_TTL_MS) {
-    return null;
-  }
-  return entry.lastWebhookIdentity;
 }
 
 /**
@@ -335,8 +302,13 @@ export function getChannelLastDelivery(channelId: string): ChannelLastDelivery |
   if (entry.lastDeliveryVia === "bot") {
     return { via: "bot", speaker: entry.lastSpeaker };
   }
-  if (entry.lastDeliveryVia === "webhook" && entry.lastWebhookIdentity) {
-    return { via: "webhook", identity: entry.lastWebhookIdentity, speaker: entry.lastSpeaker };
+  if (entry.lastDeliveryVia === "webhook" && entry.lastWebhookIdentity && entry.lastWebhookId) {
+    return {
+      via: "webhook",
+      identity: entry.lastWebhookIdentity,
+      speaker: entry.lastSpeaker,
+      webhookId: entry.lastWebhookId,
+    };
   }
   return null;
 }

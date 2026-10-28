@@ -7,9 +7,9 @@ import { personaRepository } from "@/utils/db/repositories";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
-import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
+import { dispatchWebhookWithIdentity } from "@/utils/discord/webhook/personaDispatch";
+import { sendSelectedWebhookMessageOnce, sendChannelMessageOnce } from "@/utils/discord/webhook/singleAttemptMessage";
 import {
-  recordChannelDeliveredWebhookIdentity,
   resolveChannelBaseAppearanceIdentity,
   resolveChannelGroupBreakIdentity,
 } from "@/utils/discord/stream/channelDeliveryContinuity";
@@ -19,7 +19,7 @@ import {
 } from "@/utils/discord/renderModifierParser";
 import { resolveSpriteIdentity } from "@/utils/discord/renderModifierResolver";
 import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
-import { recordPersonaSpriteMessage } from "@/utils/cache/personaSpriteMessageCache";
+import { recordPersonaDelivery } from "@/utils/discord/webhook/personaPost";
 import { normalizePersonaSpriteKey } from "@/utils/persona/sprites";
 import type { SpriteMessageRecordInfo } from "@/types/stream/types";
 import {
@@ -200,9 +200,22 @@ export async function executePersonaImpersonation(
 
     let sentMessage: import("discord.js").Message | null = null;
     if (!selectedPersona.is_alter && !spriteRenderTarget) {
-      sentMessage = await channel.send({
-        content: effectiveMessageContent,
-        embeds,
+      sentMessage = await sendChannelMessageOnce(
+        channel,
+        { content: effectiveMessageContent, embeds },
+        () => undefined,
+      );
+      recordPersonaDelivery({
+        messageId: sentMessage.id,
+        channelId: sentMessage.channelId,
+        route: "bot",
+        webhookId: null,
+        identity: {
+          username: sentMessage.member?.displayName ?? sentMessage.author.username,
+          avatarUrl: sentMessage.member?.displayAvatarURL() ?? sentMessage.author.displayAvatarURL(),
+        },
+        speaker: { personaId: selectedPersona.persona_id, kind: "appearance" },
+        serverDiscId: serverId,
       });
     } else {
       const webhookTargetChannel = resolveGuildWebhookTargetChannel(channel);
@@ -246,30 +259,31 @@ export async function executePersonaImpersonation(
               spriteRenderTarget.record.spriteName,
               channel.lastMessageId,
             );
-      sentMessage = await sendWebhookMessageWithIdentity(
-        webhook,
-        {
-          content: effectiveMessageContent,
-          embeds,
-          ...(webhookThreadId ? { threadId: webhookThreadId } : {}),
-        },
-        identity,
+      const delivery = await dispatchWebhookWithIdentity(webhook, identity, (selected) =>
+        sendSelectedWebhookMessageOnce(
+          selected,
+          {
+            content: effectiveMessageContent,
+            embeds,
+            ...(webhookThreadId ? { threadId: webhookThreadId } : {}),
+          },
+          () => undefined,
+        ),
       );
-      recordChannelDeliveredWebhookIdentity(channel.id, identity, sentMessage.id, {
-        personaId: selectedPersona.persona_id,
-        kind: spriteRenderTarget?.record.isIdentity ? "identity_sprite" : "appearance",
+      sentMessage = delivery.result;
+      recordPersonaDelivery({
+        messageId: sentMessage.id,
+        channelId: sentMessage.channelId,
+        route: "webhook",
+        webhookId: delivery.webhookId,
+        identity: delivery.identity,
+        speaker: {
+          personaId: selectedPersona.persona_id,
+          kind: spriteRenderTarget?.record.isIdentity ? "identity_sprite" : "appearance",
+        },
+        sprite: spriteRenderTarget?.record,
+        serverDiscId: serverId,
       });
-
-      if (spriteRenderTarget && sentMessage?.webhookId) {
-        void recordPersonaSpriteMessage({
-          messageDiscId: sentMessage.id,
-          personaId: spriteRenderTarget.record.personaId,
-          spriteName: spriteRenderTarget.record.spriteName,
-          channelDiscId: sentMessage.channelId,
-        }).catch((recordError) => {
-          log.warn("Failed to record sprite message mapping for /impersonate persona", recordError as Error);
-        });
-      }
     }
 
     if (sentMessage) {
@@ -472,8 +486,17 @@ export async function executeUserImpersonation(
           })
           .setColor(ColorCode.INFO);
 
-        await channel.send({
-          embeds: [noticeEmbed],
+        const notice = await sendChannelMessageOnce(channel, { embeds: [noticeEmbed] }, () => undefined);
+        recordPersonaDelivery({
+          messageId: notice.id,
+          channelId: notice.channelId,
+          route: "bot",
+          webhookId: null,
+          identity: {
+            username: notice.member?.displayName ?? notice.author.username,
+            avatarUrl: notice.member?.displayAvatarURL() ?? notice.author.displayAvatarURL(),
+          },
+          speaker: null,
         });
       } catch (noticeError) {
         log.warn("Failed to send user impersonation notice embed", {
@@ -610,8 +633,17 @@ export async function executeSystemImpersonation(
     iconURL: invokerAvatarUrl,
   });
 
-  await channel.send({
-    embeds: [embed],
+  const notice = await sendChannelMessageOnce(channel, { embeds: [embed] }, () => undefined);
+  recordPersonaDelivery({
+    messageId: notice.id,
+    channelId: notice.channelId,
+    route: "bot",
+    webhookId: null,
+    identity: {
+      username: notice.member?.displayName ?? notice.author.username,
+      avatarUrl: notice.member?.displayAvatarURL() ?? notice.author.displayAvatarURL(),
+    },
+    speaker: null,
   });
 
   await replyInfoEmbed(interaction, locale, {

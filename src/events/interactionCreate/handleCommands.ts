@@ -20,7 +20,7 @@ import {
 } from "../../utils/discord/commandLoader";
 import { resolvePreferredDiscordDisplayName } from "../../utils/discord/displayName";
 import { dispatchGlobalInteraction, isGlobalRoutableInteraction } from "@/utils/discord/interactions/router";
-import { getCachedBlacklistStatus } from "@/utils/cache/userCache";
+import { getCachedBlacklistStatusOrThrow } from "@/utils/cache/userCache";
 import { isBlacklistGatedCommand } from "@/utils/moderation/serverBlacklist";
 
 // Cooldown for any command whose category is listed below, in milliseconds.
@@ -257,7 +257,7 @@ const runChatInputCommand = async (client: Client, interaction: ChatInputCommand
       if (
         interaction.guildId &&
         isBlacklistGatedCommand(commandName, groupName, subcommandName) &&
-        (await getCachedBlacklistStatus(interaction.guildId, interaction.user.id))
+        (await getCachedBlacklistStatusOrThrow(interaction.guildId, interaction.user.id))
       ) {
         await replyInfoEmbed(
           interaction,

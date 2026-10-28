@@ -1,3 +1,4 @@
+import { SETUP_FEATURES, type SetupFeature } from "@/types/db/schema";
 /**
  * Regression harness: atomic server setup transactions across provider modes.
  *
@@ -26,6 +27,7 @@ const PROMPT_SERVER_ID = "_rt_setup_prompt_001";
 const ORPHAN_SERVER_ID = "_rt_setup_orphan_001";
 const ROLLBACK_SERVER_ID = "_rt_setup_rollback_001";
 const CACHE_SERVER_ID = "_rt_setup_cache_001";
+const FEATURE_SERVER_IDS = ["_rt_setup_features_all", "_rt_setup_features_none", "_rt_setup_features_bundles"];
 
 describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () => {
   let presetId = 1;
@@ -61,9 +63,66 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
         ${ORPHAN_SERVER_ID},
         ${ROLLBACK_SERVER_ID},
         ${CACHE_SERVER_ID}
+        , ${FEATURE_SERVER_IDS[0]}, ${FEATURE_SERVER_IDS[1]}, ${FEATURE_SERVER_IDS[2]}
       )
     `;
     await cleanupFixtures(testSql);
+  });
+
+  it("persists selected setup features and both bundles without changing web search", async () => {
+    const disabled = {
+      emoji_usage_enabled: false,
+      sticker_usage_enabled: false,
+      conditioning_interactions_enabled: false,
+      danbooru_enabled: false,
+      dice_rolling_enabled: false,
+      manage_message_enabled: false,
+      thread_creation_enabled: false,
+      user_blocking_enabled: false,
+      user_info_updates_enabled: false,
+      short_term_memory_enabled: false,
+      idle_nudges_enabled: false,
+      active_nudges_enabled: false,
+    };
+    const cases: Array<{ features: SetupFeature[]; expected: Record<string, boolean> }> = [
+      { features: [...SETUP_FEATURES], expected: Object.fromEntries(Object.keys(disabled).map((key) => [key, true])) },
+      { features: [], expected: disabled },
+      {
+        features: ["expressions", "self_message_management"],
+        expected: {
+          ...disabled,
+          emoji_usage_enabled: true,
+          sticker_usage_enabled: true,
+          manage_message_enabled: true,
+          thread_creation_enabled: true,
+        },
+      },
+    ];
+    for (const [index, { features, expected }] of cases.entries()) {
+      const serverId = FEATURE_SERVER_IDS[index];
+      await serverRepository.setup(null, {
+        serverId,
+        presetId,
+        humanizer: 1,
+        tomoriName: "FeaturePersona",
+        timezoneOffset: 0,
+        features,
+        locale: "en-US",
+        registrationLocale: "en-US",
+        providerAccess: { mode: "user-byok" },
+      });
+      const [saved] = await testSql<Array<Record<string, boolean>>>`
+        SELECT c.emoji_usage_enabled, c.sticker_usage_enabled, c.conditioning_interactions_enabled,
+          c.danbooru_enabled, c.dice_rolling_enabled, c.manage_message_enabled, c.thread_creation_enabled,
+          c.user_blocking_enabled, c.user_info_updates_enabled, c.short_term_memory_enabled,
+          c.web_search_enabled, n.idle_nudges_enabled, n.active_nudges_enabled
+        FROM server_capabilities_configs c
+        JOIN servers s USING (server_id)
+        JOIN server_natural_nudge_configs n USING (server_id)
+        WHERE s.server_disc_id = ${serverId}
+      `;
+      expect(saved).toEqual({ ...expected, web_search_enabled: true });
+    }
   });
 
   it("sets up a workspace in catalog mode with default models and saved provider config", async () => {
@@ -75,6 +134,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       humanizer: 1,
       tomoriName: "TomoriCatalog",
       timezoneOffset: 0,
+      features: [...SETUP_FEATURES],
       locale: "en-US",
       registrationLocale: "en-US",
       providerAccess: {
@@ -104,6 +164,14 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
     `;
     expect(byokConfig.user_byok_mode).toBe(false);
 
+    const [noticeConfig] = await testSql<Array<{ tool_notice_hidden_keys: string[] }>>`
+      SELECT nec.tool_notice_hidden_keys
+      FROM server_notice_embeds_configs nec
+      JOIN servers s ON s.server_id = nec.server_id
+      WHERE s.server_disc_id = ${CATALOG_SERVER_ID}
+    `;
+    expect(noticeConfig.tool_notice_hidden_keys).toEqual(["image_analysis"]);
+
     const [savedConfig] = await testSql<Array<{ provider: string; llm_id: number | null }>>`
       SELECT spc.provider, spc.llm_id
       FROM saved_provider_configs spc
@@ -114,13 +182,14 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
     expect(savedConfig.llm_id).toBe(modelConfig.llm_id);
   });
 
-  it("sets up a workspace in user-byok mode without creating server provider rows", async () => {
+  it("sets up a user-byok workspace with a quarter-hour timezone and no server provider rows", async () => {
     await serverRepository.setup(null, {
       serverId: BYOK_SERVER_ID,
       presetId,
       humanizer: 1,
       tomoriName: "TomoriByok",
-      timezoneOffset: 0,
+      timezoneOffset: 5.75,
+      features: [...SETUP_FEATURES],
       locale: "en-US",
       registrationLocale: "en-US",
       providerAccess: {
@@ -129,13 +198,15 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       systemPrompt: null,
     });
 
-    const [byokConfig] = await testSql<Array<{ user_byok_mode: boolean }>>`
-      SELECT bc.user_byok_mode
+    const [byokConfig] = await testSql<Array<{ user_byok_mode: boolean; timezone_offset: number }>>`
+      SELECT bc.user_byok_mode, cc.timezone_offset
       FROM server_byok_configs bc
       JOIN servers s ON s.server_id = bc.server_id
+      JOIN server_chat_configs cc ON cc.server_id = s.server_id
       WHERE s.server_disc_id = ${BYOK_SERVER_ID}
     `;
     expect(byokConfig.user_byok_mode).toBe(true);
+    expect(byokConfig.timezone_offset).toBe(5.75);
 
     const [modelConfig] = await testSql<Array<{ llm_id: number | null; api_key: Buffer | null }>>`
       SELECT mc.llm_id, mc.api_key
@@ -162,6 +233,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       humanizer: 2,
       tomoriName: "TomoriCustom",
       timezoneOffset: 1,
+      features: [...SETUP_FEATURES],
       locale: "en-US",
       registrationLocale: "en-US",
       providerAccess: {
@@ -254,6 +326,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       humanizer: 1,
       tomoriName: "TomoriInvalid",
       timezoneOffset: 0,
+      features: [...SETUP_FEATURES],
       locale: "en-US",
       registrationLocale: "en-US",
       providerAccess: {
@@ -282,6 +355,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       humanizer: 1,
       tomoriName: "TomoriPrompt",
       timezoneOffset: 0,
+      features: [...SETUP_FEATURES],
       locale: "en-US",
       registrationLocale: "en-US",
       providerAccess: {
@@ -326,6 +400,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       humanizer: 1,
       tomoriName: "TomoriDuplicate",
       timezoneOffset: 0,
+      features: [...SETUP_FEATURES],
       locale: "en-US",
       registrationLocale: "en-US",
       providerAccess: {
@@ -383,6 +458,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       humanizer: 1,
       tomoriName: "TomoriFails",
       timezoneOffset: 0,
+      features: [...SETUP_FEATURES],
       locale: "en-US",
       registrationLocale: "en-US",
       providerAccess: {
@@ -416,6 +492,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       humanizer: 1,
       tomoriName: "TomoriCacheCheck",
       timezoneOffset: 0,
+      features: [...SETUP_FEATURES],
       locale: "en-US",
       registrationLocale: "en-US",
       providerAccess: {

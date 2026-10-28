@@ -3,7 +3,7 @@ export default {
     title: `Servidores MCP`,
     count: `MCPs Registrados \`({count}/{max})\``,
     empty_guild: `Este servidor ainda não tem MCPs.`,
-    empty_dm: `Este espaço de trabalho de DM ainda não tem MCPs.`,
+    empty_dm: `Esta DM ainda não tem MCPs.`,
     unavailable: `Os registros de MCP não puderam ser carregados. Tente novamente.`,
     stale_warning:
       "Os dados salvos podem estar desatualizados: a leitura falhou. As ações de gravação ficam indisponíveis até uma nova leitura.",
@@ -26,6 +26,14 @@ export default {
     tools_known: `Ferramentas: {tools}`,
     tools_empty: `Ferramentas: Nenhuma descoberta`,
     tools_unknown: `Ferramentas: Descoberta desconhecida`,
+    connection_failing_unauthorized:
+      "Falhando desde {since}: o servidor rejeitou o token de autenticação salvo. O TomoriBot desativará este MCP se ele continuar falhando por 24 horas.",
+    connection_failing_unreachable:
+      "Falhando desde {since}: não foi possível alcançar o servidor. O TomoriBot desativará este MCP se ele continuar falhando por 24 horas.",
+    auto_disabled_unauthorized:
+      "Desativado automaticamente porque o servidor rejeitou o token de autenticação salvo por 24 horas. Remova-o e adicione-o novamente com um novo token.",
+    auto_disabled_unreachable:
+      "Desativado automaticamente porque o servidor não pôde ser alcançado por 24 horas. Ative-o para tentar novamente.",
     endpoint_unavailable: `Indisponível`,
     enable: `Ativar`,
     disable: `Desativar`,
@@ -51,7 +59,7 @@ export default {
     invalid_type: `Escolha um tipo de servidor MCP suportado.`,
     family_in_use: `Outro MCP ativado já substitui esta família. Desative-o antes de selecionar este servidor.`,
     invalid_url: `A URL do servidor MCP não passou nas verificações de segurança de URL remota.`,
-    limit_reached: `Este espaço de trabalho atingiu o limite de servidores MCP configurado.`,
+    limit_reached: `O limite de servidores MCP configurado foi atingido.`,
     connection_failed: `O TomoriBot não conseguiu se conectar ao servidor MCP.`,
     write_failed: `O registro mudou ou a gravação no banco de dados falhou. Recarregue o estado do painel e tente novamente.`,
     added: `Servidor MCP adicionado`,

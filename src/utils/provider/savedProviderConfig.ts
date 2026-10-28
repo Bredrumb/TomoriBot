@@ -10,7 +10,10 @@ import type {
   UserSavedProviderConfigRow,
   UserSavedProviderConfigUpsert,
 } from "@/types/db/schema";
+import { DEFAULT_THINKING_LEVEL } from "@/constants/thinkingLevels";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import type { OpenRouterModelScope } from "@/utils/db/repositories/LlmModelRepository";
+import { supportsSpeechMode } from "@/utils/speech/voiceSourceCapabilities";
 import {
   isCustomProvider,
   parseCustomProvider,
@@ -23,8 +26,16 @@ import {
   supportsVideoCapability,
   supportsVisionCapability,
 } from "@/utils/provider/providerInfoRegistry";
+import { findProviderOption, providerOptionOffersPersonalCapability } from "@/utils/provider/providerOptionRegistry";
 
-export type SavedProviderCapability = "text" | "embedding" | "image" | "video" | "vision";
+export type SavedProviderCapability =
+  | "text"
+  | "embedding"
+  | "image"
+  | "video"
+  | "vision"
+  | "speech_design"
+  | "speech_clone";
 
 interface ProviderDefaultSelectionIds {
   llm_id: number | null;
@@ -192,6 +203,7 @@ export async function buildSavedProviderConfigFromExistingOrDefaults(params: {
     llm_frequency_penalty: existingConfig?.llm_frequency_penalty ?? params.baseConfig.llm_frequency_penalty,
     llm_presence_penalty: existingConfig?.llm_presence_penalty ?? params.baseConfig.llm_presence_penalty,
     llm_min_p: existingConfig?.llm_min_p ?? params.baseConfig.llm_min_p,
+    llm_max_output_tokens: existingConfig?.llm_max_output_tokens ?? params.baseConfig.llm_max_output_tokens,
     llm_disabled_params: existingConfig?.llm_disabled_params ?? params.baseConfig.llm_disabled_params ?? [],
     llm_logit_biases: existingConfig?.llm_logit_biases ?? params.baseConfig.llm_logit_biases ?? [],
     thinking_level: existingConfig?.thinking_level ?? params.baseConfig.thinking_level,
@@ -204,7 +216,7 @@ export async function buildUserSavedProviderConfigFromExistingOrDefaults(params:
   provider: string;
   apiKey: Buffer | null;
   keyVersion: number;
-  baseConfig: AssembledServerConfig;
+  baseConfig?: AssembledServerConfig;
   existingConfig?: UserSavedProviderConfigRow | null;
   llmId?: number | null;
   enabledCapabilities?: PersonalProviderCapability[];
@@ -246,25 +258,26 @@ export async function buildUserSavedProviderConfigFromExistingOrDefaults(params:
           : (existingConfig?.nai_diffusion_model_id ?? null)
         : null,
     video_model_id: existingConfig?.video_model_id ?? defaults?.video_model_id ?? null,
+    speech_design_model_id: existingConfig?.speech_design_model_id ?? null,
+    speech_clone_model_id: existingConfig?.speech_clone_model_id ?? null,
     vision_llm_id: existingConfig?.vision_llm_id ?? null,
     nai_preset_name: existingConfig?.nai_preset_name ?? null,
-    llm_temperature: existingConfig?.llm_temperature ?? params.baseConfig.llm_temperature,
-    llm_top_p: existingConfig?.llm_top_p ?? params.baseConfig.llm_top_p,
-    llm_top_k: existingConfig?.llm_top_k ?? params.baseConfig.llm_top_k,
-    llm_frequency_penalty: existingConfig?.llm_frequency_penalty ?? params.baseConfig.llm_frequency_penalty,
-    llm_presence_penalty: existingConfig?.llm_presence_penalty ?? params.baseConfig.llm_presence_penalty,
-    llm_min_p: existingConfig?.llm_min_p ?? params.baseConfig.llm_min_p,
-    llm_disabled_params: existingConfig?.llm_disabled_params ?? params.baseConfig.llm_disabled_params ?? [],
-    llm_logit_biases: existingConfig?.llm_logit_biases ?? params.baseConfig.llm_logit_biases ?? [],
-    thinking_level: existingConfig?.thinking_level ?? params.baseConfig.thinking_level,
-    model_randomizer_enabled: existingConfig?.model_randomizer_enabled ?? false,
+    llm_temperature: existingConfig?.llm_temperature ?? params.baseConfig?.llm_temperature ?? null,
+    llm_top_p: existingConfig?.llm_top_p ?? params.baseConfig?.llm_top_p ?? null,
+    llm_top_k: existingConfig?.llm_top_k ?? params.baseConfig?.llm_top_k ?? null,
+    llm_frequency_penalty: existingConfig?.llm_frequency_penalty ?? params.baseConfig?.llm_frequency_penalty ?? null,
+    llm_presence_penalty: existingConfig?.llm_presence_penalty ?? params.baseConfig?.llm_presence_penalty ?? null,
+    llm_min_p: existingConfig?.llm_min_p ?? params.baseConfig?.llm_min_p ?? null,
+    llm_max_output_tokens: existingConfig?.llm_max_output_tokens ?? params.baseConfig?.llm_max_output_tokens ?? null,
+    llm_disabled_params: existingConfig?.llm_disabled_params ?? params.baseConfig?.llm_disabled_params ?? [],
+    llm_logit_biases: existingConfig?.llm_logit_biases ?? params.baseConfig?.llm_logit_biases ?? [],
+    thinking_level: existingConfig?.thinking_level ?? params.baseConfig?.thinking_level ?? DEFAULT_THINKING_LEVEL,
     enabled_capabilities: enabledCapabilities,
     // Anything switched on here is owned here. Previously assigned capabilities are
     // kept even when currently off, so a re-enable still resolves to this provider.
     assigned_capabilities: Array.from(
       new Set([...(existingConfig?.assigned_capabilities ?? []), ...enabledCapabilities]),
     ),
-    fallback_model_refs: existingConfig?.fallback_model_refs ?? [],
   };
 }
 
@@ -287,7 +300,7 @@ function mapSavedCapabilityToCustomEndpointCapability(
 async function hasRegisteredCustomEndpointCapability(
   provider: string,
   capability: SavedProviderCapability,
-  owner: { serverId?: number; userId?: number },
+  owner: OpenRouterModelScope,
 ): Promise<boolean> {
   const parsed = parseCustomProvider(provider);
   const endpointCapability = mapSavedCapabilityToCustomEndpointCapability(capability);
@@ -300,10 +313,7 @@ async function hasRegisteredCustomEndpointCapability(
   if (!connection || connection.capability !== endpointCapability) {
     return false;
   }
-  if (
-    (owner.serverId !== undefined && connection.server_id !== owner.serverId) ||
-    (owner.userId !== undefined && connection.user_id !== owner.userId)
-  ) {
+  if ((owner.kind === "server" ? connection.server_id : connection.user_id) !== owner.ownerId) {
     return false;
   }
   rememberCustomProviderLabel(provider, connection.label);
@@ -328,6 +338,8 @@ function savedProviderSelectionServesCapability(
   capability: SavedProviderCapability,
   config: SavedProviderModelSelection,
 ): boolean {
+  const option = findProviderOption(provider);
+  if (option) return providerOptionOffersPersonalCapability(option, capability);
   if (!isCustomProvider(provider)) {
     switch (capability) {
       case "text":
@@ -373,13 +385,38 @@ function savedProviderSelectionServesCapability(
  * @param savedConfigs - Rows loaded for the scope
  * @param owner - Scope a custom endpoint connection must belong to
  */
-async function filterSavedProvidersByCapability<T extends SavedProviderModelSelection & { provider: string }>(
-  savedConfigs: readonly T[],
-  capability: SavedProviderCapability,
-  owner: { serverId?: number; userId?: number },
-): Promise<T[]> {
-  const registeredVisibility = await Promise.all(
+async function filterSavedProvidersByCapability<
+  T extends SavedProviderModelSelection & Pick<SavedProviderConfigRow, "provider" | "api_key">,
+>(savedConfigs: readonly T[], capability: SavedProviderCapability, owner: OpenRouterModelScope): Promise<T[]> {
+  const available = await Promise.all(
     savedConfigs.map(async (config) => {
+      const option = findProviderOption(config.provider);
+      return !option || (await option.availability({ kind: owner.kind, ownerId: owner.ownerId })).eligible;
+    }),
+  );
+  const availableConfigs = savedConfigs.filter((_config, index) => available[index]);
+  if (capability === "speech_design" || capability === "speech_clone") {
+    // Speech is a hosted-model capability only: custom speech endpoints are activated per server,
+    // and a provider qualifies only while its key can reach a usable model for the mode.
+    const mode = capability === "speech_design" ? "design" : "clone";
+    const servesMode = await Promise.all(
+      availableConfigs.map(
+        async (config) =>
+          !isCustomProvider(config.provider) &&
+          (findProviderOption(config.provider) !== undefined || config.api_key !== null) &&
+          (
+            await llmModelRepo.loadAvailableSpeechModels(
+              findProviderOption(config.provider)?.catalogProvider ?? config.provider,
+              owner,
+            )
+          ).some((model) => supportsSpeechMode(model, mode)),
+      ),
+    );
+    return availableConfigs.filter((_config, index) => servesMode[index]);
+  }
+
+  const registeredVisibility = await Promise.all(
+    availableConfigs.map(async (config) => {
       if (!isCustomProvider(config.provider)) {
         return true;
       }
@@ -388,7 +425,7 @@ async function filterSavedProvidersByCapability<T extends SavedProviderModelSele
     }),
   );
 
-  return savedConfigs.filter(
+  return availableConfigs.filter(
     (config, index) =>
       registeredVisibility[index] && savedProviderSelectionServesCapability(config.provider, capability, config),
   );
@@ -399,7 +436,7 @@ export async function loadSavedProvidersForCapability(
   capability: SavedProviderCapability,
 ): Promise<SavedProviderConfigRow[]> {
   const savedConfigs = await llmProviderRepo.loadSavedProviderConfigs(serverId);
-  return await filterSavedProvidersByCapability(savedConfigs, capability, { serverId });
+  return await filterSavedProvidersByCapability(savedConfigs, capability, { kind: "server", ownerId: serverId });
 }
 
 export async function loadUserSavedProvidersForCapability(
@@ -407,7 +444,7 @@ export async function loadUserSavedProvidersForCapability(
   capability: SavedProviderCapability,
 ): Promise<UserSavedProviderConfigRow[]> {
   const savedConfigs = await llmProviderRepo.loadUserSavedProviderConfigs(userId);
-  return await filterSavedProvidersByCapability(savedConfigs, capability, { userId });
+  return await filterSavedProvidersByCapability(savedConfigs, capability, { kind: "personal", ownerId: userId });
 }
 
 /**
@@ -418,7 +455,24 @@ export async function loadUserSavedProvidersForCapability(
  */
 export function withSavedProviderConfig(
   tomoriState: TomoriState,
-  savedConfig: SavedProviderConfigRow | null,
+  savedConfig:
+    | (Pick<SavedProviderConfigRow, "api_key"> &
+        Partial<
+          Pick<
+            SavedProviderConfigRow,
+            | "key_version"
+            | "llm_temperature"
+            | "llm_top_p"
+            | "llm_top_k"
+            | "llm_frequency_penalty"
+            | "llm_presence_penalty"
+            | "llm_min_p"
+            | "thinking_level"
+            | "llm_disabled_params"
+            | "llm_logit_biases"
+          >
+        >)
+    | null,
 ): TomoriState {
   const { config } = tomoriState;
   return {

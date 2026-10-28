@@ -128,7 +128,6 @@ scopedMock.module("@/utils/discord/ui/interactionCore", () => ({
   promptWithUnacknowledgedConfirmation: async () => ({ confirmed: false }),
   replyPaginatedChoices: async () => ({ outcome: "timeout" }),
   replyPaginatedPersonaChoicesV2: async () => ({ outcome: "timeout", reason: "timeout" }),
-  replyPaginatedStatusPages: async () => undefined,
 }));
 
 /** Fake Tomori state returned by cache lookups: has the fields /nsfw jailbreaks reads. */
@@ -431,5 +430,31 @@ describe("Contract 3: /comment acknowledgement ordering", () => {
     // reply() and deferReply() must never both appear on the same interaction
     expect(methods.filter((m) => m === "reply").length).toBe(0);
     expect(methods.filter((m) => m === "deferReply").length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("/booru search rating denial acknowledges before any deferral", () => {
+  function makeBooruInteraction(options: { rating: string | null }) {
+    return makeFakeInteraction({
+      guild: { id: "guild_1" },
+      guildId: "guild_1",
+      channel: { isDMBased: () => false, isThread: () => false, nsfw: false },
+      options: {
+        getString: (name: string) => (name === "tag" ? "ryza" : name === "rating" ? options.rating : null),
+        getBoolean: () => null,
+      },
+    });
+  }
+
+  it.each([
+    "questionable",
+    "explicit",
+  ])("replies once without deferring for %s outside an age-restricted channel", async (rating) => {
+    const { interaction, calls } = makeBooruInteraction({ rating });
+
+    const { execute } = await import("@/commands/booru/search");
+    await execute(makeClient(), interaction as never, makeUserData(), "en-US");
+
+    expect(callMethods(calls)).toEqual(["reply"]);
   });
 });

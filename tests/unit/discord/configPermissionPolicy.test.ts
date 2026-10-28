@@ -158,6 +158,7 @@ describe("config page filtering", () => {
       "memories",
       "naming",
       "sprites",
+      "nudges",
     ]);
     expect(visibleConfigPages("persona", GUILD_MANAGER)).toContain("voice");
     expect(visibleConfigPages("persona", GUILD_MANAGER).at(-1)).toBe("advanced");
@@ -612,7 +613,6 @@ describe("isConfigRouteAuthorized", () => {
   ];
 
   const spriteMutationRoutes: ConfigPanelRoute[] = [
-    { action: "sprite-add-open", locale: "en-US", personaId: 5 },
     { action: "sprite-add-submit", locale: "en-US", personaId: 5, nonce: "nonce1234567" },
     { action: "sprite-edit-open", locale: "en-US", personaId: 5, index: 0, fp: "abcd1234" },
     { action: "sprite-edit-submit", locale: "en-US", personaId: 5, index: 0, fp: "abcd1234", nonce: "nonce1234567" },
@@ -656,7 +656,6 @@ describe("isConfigRouteAuthorized", () => {
 
   const personaOverridesRoutes: ConfigPanelRoute[] = [
     { action: "humanizer-open", locale: "en-US", personaId: 5 },
-    { action: "humanizer-select", locale: "en-US", personaId: 5 },
     { action: "humanizer-submit", locale: "en-US", personaId: 5, nonce: "nonce1234567" },
     { action: "text-override-open", locale: "en-US", personaId: 5 },
     { action: "text-override-provider-select", locale: "en-US", personaId: 5 },
@@ -709,12 +708,9 @@ describe("isConfigRouteAuthorized", () => {
 
   it("keeps every MCP route for DM owners and guild managers only", () => {
     const routes: ConfigPanelRoute[] = [
-      { action: "mcp-select", locale: "en-US", rangeIndex: 0 },
       { action: "mcp-range", locale: "en-US", rangeIndex: 1 },
       { action: "mcp-retry", locale: "en-US", selectedId: "none" },
-      { action: "mcp-refresh", locale: "en-US", selectedId: 1 },
       { action: "mcp-add-open", locale: "en-US" },
-      { action: "mcp-add-type", locale: "en-US" },
       { action: "mcp-add-submit", locale: "en-US", nonce: "nonce1234567" },
       { action: "mcp-set-enabled", locale: "en-US", entityId: 1, enabled: true },
       { action: "mcp-remove-prompt", locale: "en-US", entityId: 1 },
@@ -809,6 +805,12 @@ describe("isConfigRouteAuthorized", () => {
         GUILD_MEMBER,
       ),
     ).toBe(false);
+    expect(
+      isConfigRouteAuthorized(
+        { action: "persona-select", locale: "en-US", personaId: 5, page: "advanced" },
+        GUILD_MEMBER,
+      ),
+    ).toBe(false);
   });
 
   it("keeps Persona Voice routes manager-only in guilds while allowing the DM owner", () => {
@@ -816,7 +818,7 @@ describe("isConfigRouteAuthorized", () => {
       { action: "voice-select", locale: "en-US", personaId: 5 },
       { action: "voice-page", locale: "en-US", personaId: 5, start: 0 },
       { action: "voice-chooser-cancel", locale: "en-US", personaId: 5 },
-      { action: "voice-clear", locale: "en-US", personaId: 5 },
+      { action: "voice-provider-clear", locale: "en-US", personaId: 5 },
       { action: "voice-design-open", locale: "en-US", personaId: 5 },
       { action: "voice-design-submit", locale: "en-US", personaId: 5, nonce: "nonce1234567" },
       { action: "voice-design-remove", locale: "en-US", personaId: 5 },
@@ -841,7 +843,7 @@ describe("isConfigRouteAuthorized", () => {
   });
 
   it("authorizes endpoint activation through the Models switch page", () => {
-    for (const capability of ["tts", "stt"] as const) {
+    for (const capability of ["tts-clone", "stt"] as const) {
       const route: ConfigPanelRoute = { action: "endpoint-select", locale: "en-US", capability };
       expect(isConfigRouteAuthorized(route, GUILD_MANAGER)).toBe(true);
       expect(isConfigRouteAuthorized(route, GUILD_MEMBER)).toBe(false);
@@ -864,7 +866,6 @@ describe("isConfigRouteAuthorized", () => {
     const routes: ConfigPanelRoute[] = [
       { action: "tts-parameters-open", locale: "en-US" },
       { action: "tts-parameters-submit", locale: "en-US", nonce: "nonce1234567" },
-      { action: "tts-turbo-set", locale: "en-US", enabled: true },
       { action: "voice-sample-select", locale: "en-US", start: 0 },
       { action: "voice-sample-page", locale: "en-US", start: 0 },
       { action: "voice-sample-add-open", locale: "en-US" },
@@ -888,10 +889,70 @@ describe("isConfigRouteAuthorized", () => {
     { action: "draft-prompt-open", locale: "en-US" },
     { action: "draft-prompt-submit", locale: "en-US", nonce: "nonce123" },
     { action: "draft-default", locale: "en-US" },
-    { action: "draft-provider", locale: "en-US", slot: "reviewer" },
-    { action: "draft-model-submit", locale: "en-US", slot: "decision", provider: "openrouter", nonce: "nonce123" },
+    { action: "draft-provider", locale: "en-US" },
+    { action: "draft-model-submit", locale: "en-US", provider: "openrouter", nonce: "nonce123" },
     { action: "draft-checker-select", locale: "en-US", start: 0, fp: "abcdefgh" },
   ];
+  const nudgeRoutes: ConfigPanelRoute[] = [
+    { action: "nudge-talk-select", locale: "en-US", personaId: 1 },
+    { action: "nudge-interest-select", locale: "en-US", personaId: 1 },
+    { action: "nudge-interest-add-submit", locale: "en-US", personaId: 1, nonce: "nonce123" },
+    {
+      action: "nudge-interest-edit-submit",
+      locale: "en-US",
+      personaId: 1,
+      index: 0,
+      fp: "abcdefgh",
+      nonce: "nonce123",
+    },
+    { action: "nudge-interest-remove-open", locale: "en-US", personaId: 1 },
+    { action: "nudge-interest-generate", locale: "en-US", personaId: 1 },
+    { action: "nudge-interest-remove-submit", locale: "en-US", personaId: 1, fp: "abcdefgh", nonce: "nonce123" },
+    { action: "nudge-persona-select", locale: "en-US", personaId: 1 },
+    { action: "nudge-persona-add-submit", locale: "en-US", personaId: 1, category: "start_topic", nonce: "nonce123" },
+    {
+      action: "nudge-persona-edit-submit",
+      locale: "en-US",
+      personaId: 1,
+      id: "quiet-hour",
+      fp: "abcdefgh",
+      nonce: "nonce123",
+    },
+    { action: "nudge-persona-availability-select", locale: "en-US", personaId: 1 },
+    { action: "nudge-persona-availability-submit", locale: "en-US", personaId: 1, id: "quiet-hour", nonce: "nonce123" },
+    { action: "nudge-persona-remove-open", locale: "en-US", personaId: 1 },
+    {
+      action: "nudge-persona-remove-submit",
+      locale: "en-US",
+      personaId: 1,
+      fp: "abcdefgh",
+      nonce: "nonce123",
+    },
+    { action: "nudge-persona-restore-view", locale: "en-US", personaId: 1 },
+    { action: "nudge-persona-restore-confirm", locale: "en-US", personaId: 1, nonce: "nonce123" },
+    { action: "nudge-persona-restore-cancel", locale: "en-US", personaId: 1 },
+    { action: "nudge-idle-nudges-set", locale: "en-US", enabled: true },
+    { action: "nudge-heat-adjust", locale: "en-US", direction: "up" },
+    { action: "nudge-weights-open", locale: "en-US" },
+    { action: "nudge-weights-submit", locale: "en-US", nonce: "nonce123" },
+    { action: "nudge-channels-select", locale: "en-US" },
+    { action: "nudge-provider", locale: "en-US" },
+    { action: "nudge-model-submit", locale: "en-US", provider: "openrouter", nonce: "nonce123" },
+    { action: "nudge-checker-provider", locale: "en-US" },
+    { action: "nudge-checker-model-submit", locale: "en-US", provider: "google", nonce: "nonce123" },
+    { action: "nudge-checker-decision-submit", locale: "en-US", provider: "openrouter", nonce: "nonce123" },
+    { action: "nudge-idle-nudges-frequency-select", locale: "en-US" },
+    { action: "nudge-active-nudges-set", locale: "en-US", enabled: true },
+    { action: "nudge-active-nudges-frequency-select", locale: "en-US" },
+  ];
+  it("keeps Natural Nudges routes for guild managers only, since nudges never run in DMs", () => {
+    for (const route of nudgeRoutes) {
+      expect(isConfigRouteAuthorized(route, GUILD_MANAGER)).toBe(true);
+      expect(isConfigRouteAuthorized(route, GUILD_MEMBER)).toBe(false);
+      expect(isConfigRouteAuthorized(route, DM_OWNER)).toBe(false);
+    }
+  });
+
   it("keeps all Response Drafting routes for managers and DM owners", () => {
     for (const route of draftRoutes) {
       expect(isConfigRouteAuthorized(route, GUILD_MANAGER)).toBe(true);
@@ -905,18 +966,17 @@ describe("isConfigRouteAuthorized", () => {
     // above actually names each action rather than leaving new ones silently denied and untested.
     const covered = new Set<string>([
       ...draftRoutes.map((route) => route.action),
+      ...nudgeRoutes.map((route) => route.action),
       ...personaWriteRoutes.map((route) => route.action),
       ...triggerRoutes.map((route) => route.action),
       "attribute-select",
       "attribute-page",
-      "attribute-add-open",
       "attribute-add-submit",
       "attribute-edit-open",
       "attribute-edit-submit",
       "attribute-remove",
       "dialogue-select",
       "dialogue-page",
-      "dialogue-add-open",
       "dialogue-add-submit",
       "dialogue-edit-open",
       "dialogue-edit-submit",
@@ -928,7 +988,6 @@ describe("isConfigRouteAuthorized", () => {
       "persona-page",
       "promote-cancel",
       "retry",
-      "refresh",
       "server-memory-open",
       "personal-memory-open",
       "stm-edit-open",
@@ -951,7 +1010,6 @@ describe("isConfigRouteAuthorized", () => {
       "context-note-open",
       "context-note-submit",
       "humanizer-open",
-      "humanizer-select",
       "humanizer-submit",
       "text-override-open",
       "text-override-provider-select",

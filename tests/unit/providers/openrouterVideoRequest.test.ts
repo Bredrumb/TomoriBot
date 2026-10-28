@@ -1,4 +1,13 @@
-import { describe, expect, it } from "bun:test";
+import { fetchOpenRouterVideoApi } from "@/providers/openrouter/openrouterVideoGeneration";
+import { describe, expect, it, spyOn } from "bun:test";
+import { GenerateVideoTool } from "@/tools/functionCalls/generateVideoTool";
+import type { ToolContext } from "@/types/tool/interfaces";
+import * as credentialResolver from "@/utils/provider/credentialResolver";
+import * as videoGeneration from "@/providers/openrouter/openrouterVideoGeneration";
+import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
+import { savedProviderConfigSchema, videoGenerationModelSchema } from "@/types/db/schema";
+import { createPersona } from "../../helpers/fixtures";
+import { createRouteInteraction } from "../../helpers/routeInteraction";
 import {
   buildOpenRouterVideoRequestBody,
   normalizeOpenRouterVideoOptions,
@@ -38,6 +47,69 @@ function createRequest(
 }
 
 describe("OpenRouter stable video request", () => {
+  it("passes the selected model's default resolution through the video tool", async () => {
+    let model = "x-ai/grok-imagine-video-1.5-lite";
+    const credentials = spyOn(credentialResolver, "resolveCapabilityCredentials").mockResolvedValue({
+      provider: "openrouter",
+      apiKey: "fixture-key",
+      keyVersion: 1,
+      source: "personal",
+      savedConfig: savedProviderConfigSchema.parse({
+        server_id: 1,
+        provider: "openrouter",
+        video_model_id: 2,
+        api_key: null,
+        llm_id: null,
+        diffusion_model_id: null,
+        embedding_model_id: null,
+        nai_diffusion_model_id: null,
+        nai_preset_name: null,
+      }),
+    });
+    const loadModel = spyOn(llmModelRepo, "loadVideoGenerationModelById").mockImplementation(async () =>
+      videoGenerationModelSchema.parse({ video_model_id: 2, provider: "openrouter", codename: model }),
+    );
+    const generate = spyOn(videoGeneration, "generateOpenRouterNativeVideo").mockResolvedValue({
+      videoData: null,
+      mimeType: null,
+    });
+    try {
+      const tool = new GenerateVideoTool();
+      const interaction = createRouteInteraction();
+      const context: ToolContext = {
+        channel: interaction.channel as unknown as ToolContext["channel"],
+        client: interaction.client as ToolContext["client"],
+        tomoriState: createPersona({ config: { videogen_enabled: true, video_model_id: 2 } }),
+        locale: "en-US",
+        provider: "openrouter",
+        userId: "12345678901234567",
+        suppressProgressNotices: true,
+      };
+      for (model of ["x-ai/grok-imagine-video-1.5-lite", "example/video-model"]) {
+        for (const resolution of [undefined, "720p", "1080p"]) {
+          generate.mockClear();
+          await tool.execute({ prompt: "A moon rising", ...(resolution ? { resolution } : {}) }, context);
+          expect(generate.mock.lastCall?.[0]).toMatchObject({
+            model,
+            resolution: resolution ?? (model === "x-ai/grok-imagine-video-1.5-lite" ? "480p" : "720p"),
+          });
+        }
+      }
+    } finally {
+      generate.mockRestore();
+      loadModel.mockRestore();
+      credentials.mockRestore();
+    }
+  });
+  it("defaults Grok Lite to 480p while preserving explicit resolution choices", () => {
+    const model = "x-ai/grok-imagine-video-1.5-lite";
+    const capabilities = createCapabilities({ id: model, supportedResolutions: ["480p", "720p", "1080p"] });
+    for (const resolution of [undefined, "720p", "1080p"] as const) {
+      const request = createRequest({ model, resolution });
+      for (const catalog of [capabilities, undefined])
+        expect(normalizeOpenRouterVideoOptions(request, catalog).resolution).toBe(resolution ?? "480p");
+    }
+  });
   it("normalizes options from the dedicated video model metadata", () => {
     const normalized = normalizeOpenRouterVideoOptions(createRequest(), createCapabilities());
 
@@ -131,4 +203,27 @@ describe("OpenRouter stable video request", () => {
       aspectRatio: "16:9",
     });
   });
+});
+
+it("redacts the video credential from external transport failures", async () => {
+  const apiKey = "fixture-private-video-credential";
+  const spawn = spyOn(Bun, "spawn").mockImplementation(() => {
+    throw new Error(`Transport failed with ${apiKey}`);
+  });
+  try {
+    let failure: unknown;
+    try {
+      await fetchOpenRouterVideoApi("https://openrouter.ai/api/v1/videos", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: "{}",
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).not.toContain(apiKey);
+  } finally {
+    spawn.mockRestore();
+  }
 });

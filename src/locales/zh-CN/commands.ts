@@ -20,6 +20,7 @@ import config from "./commands/config";
 import server from "./commands/server";
 import personal from "./commands/personal";
 import generate from "./commands/generate";
+import booru from "./commands/booru";
 import stats from "./commands/stats";
 import setup from "./commands/setup";
 import compact from "./commands/compact";
@@ -40,6 +41,7 @@ import donate from "./commands/donate";
 import nsfw from "./commands/nsfw";
 import optionalKey from "./commands/optional-key";
 import scheduledTask from "./commands/scheduled-task";
+import nudgeStudio from "./commands/nudge-studio";
 import memory from "./commands/memory";
 import teach from "./commands/teach";
 import forget from "./commands/forget";
@@ -49,6 +51,7 @@ import capabilities from "./commands/capabilities";
 import provider from "./commands/provider";
 import update from "./commands/update";
 import ping from "./commands/ping";
+import roll from "./commands/roll";
 import comment from "./commands/comment";
 import kill from "./commands/kill";
 import refresh from "./commands/refresh";
@@ -78,6 +81,7 @@ export default {
     ...server,
     ...personal,
     ...generate,
+    ...booru,
     ...stats,
     ...setup,
     ...compact,
@@ -98,6 +102,7 @@ export default {
     ...nsfw,
     ...optionalKey,
     ...scheduledTask,
+    ...nudgeStudio,
     ...memory,
     ...teach,
     ...forget,
@@ -107,6 +112,7 @@ export default {
     ...provider,
     ...update,
     ...ping,
+    ...roll,
     ...comment,
     ...kill,
     ...refresh,

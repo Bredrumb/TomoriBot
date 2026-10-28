@@ -58,4 +58,17 @@ describe("buildGeneratedImageComponentsV2Payload", () => {
     });
     expect(textComponent.content).toContain(localizedCopy("en-US", "commands.generate.image.prompt_attached_footer"));
   });
+
+  test("marks the gallery image as a spoiler without hiding the prompt file", () => {
+    const payload = buildGeneratedImageComponentsV2Payload("SPOILER_generated.png", 4242, "en-US", [], true, true);
+
+    expect(payload.components[0]).toEqual({
+      type: ComponentType.MediaGallery,
+      items: [{ spoiler: true, media: { url: "attachment://SPOILER_generated.png" } }],
+    });
+    expect(payload.components[1]).toEqual({
+      type: ComponentType.File,
+      file: { url: "attachment://image_prompt.txt" },
+    });
+  });
 });

@@ -9,6 +9,9 @@ import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import type { ImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
 import { isOpenRouterGeminiModelCodename } from "@/utils/provider/openrouterModelCapabilities";
 import { resolveDescription } from "@/utils/text/localizer";
+import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
+import { findProviderOption, writeProviderSpeechSelection } from "@/utils/provider/providerOptionRegistry";
+import { setHostedSpeechSelection } from "@/utils/db/repositories/SpeechRepository";
 
 export type OpenRouterModelRegistryScope =
   | {
@@ -23,7 +26,7 @@ export type OpenRouterModelRegistryScope =
 export type OpenRouterModelCapability = "text" | "embedding" | "image" | "video" | "decision";
 
 interface RegisteredOpenRouterModelEntry {
-  capability: OpenRouterModelCapability;
+  capability: OpenRouterModelCapability | "speech";
   codename: string;
   description: string | null;
   modelId: number;
@@ -44,6 +47,9 @@ export type RegisterOpenRouterModelResult =
     }
   | {
       status: "invalid_model";
+    }
+  | {
+      status: "write_failed";
     };
 
 function normalizeModelCodename(modelName: string): string {
@@ -271,10 +277,11 @@ async function loadOpenRouterBuiltInEntry(
 
 export async function registerOpenRouterModelForScope(
   scope: OpenRouterModelRegistryScope,
-  capability: OpenRouterModelCapability,
+  capability: OpenRouterModelCapability | "speech",
   modelName: string,
   imageSupports?: ImageEndpointSupports,
 ): Promise<RegisterOpenRouterModelResult> {
+  if (capability === "speech") return registerHostedSpeechModelForScope(scope, "openrouter", modelName);
   const normalizedModelName = normalizeModelCodename(modelName);
   if (!normalizedModelName) {
     return { status: "invalid_model" };
@@ -440,4 +447,36 @@ export async function registerOpenRouterModelForScope(
       };
     }
   }
+}
+
+export async function registerHostedSpeechModelForScope(
+  scope: OpenRouterModelRegistryScope,
+  provider: string,
+  modelName: string,
+  replacedModelId?: number,
+): Promise<RegisterOpenRouterModelResult> {
+  const catalogProvider = findProviderOption(provider)?.catalogProvider ?? provider;
+  const codename = normalizeModelCodename(modelName);
+  if (catalogProvider === "openrouter" && !(await validateOpenRouterSpeechModel(codename)))
+    return { status: "invalid_model" };
+  const models = await llmModelRepo.loadAvailableSpeechModels(catalogProvider, scope);
+  const model = models.find((entry) => entry.codename === codename);
+  if (!model) return { status: "invalid_model" };
+  if (
+    !(await writeProviderSpeechSelection(
+      { scope, provider, modelId: model.speech_model_id, register: true, replacedModelId },
+      () => setHostedSpeechSelection(scope, model.speech_model_id, undefined, true, replacedModelId),
+    ))
+  ) {
+    return { status: "write_failed" };
+  }
+  return {
+    status: "registered",
+    model: {
+      capability: "speech",
+      codename,
+      modelId: model.speech_model_id,
+      description: resolveDescription(model.descriptions, "en-US"),
+    },
+  };
 }

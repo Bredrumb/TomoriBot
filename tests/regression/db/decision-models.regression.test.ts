@@ -1,8 +1,21 @@
-import { beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
+import * as capabilities from "@/utils/provider/providerCapabilityResolver";
+import { OpenrouterProvider } from "@/providers/openrouter/openrouterProvider";
+import { callOpenRouterDecisions } from "@/providers/openrouter/openrouterDecisions";
+import {
+  currentProviderUsageContext,
+  ProviderRequestDeniedError,
+  registerProviderUsageReporter,
+  type ProviderUsageReport,
+} from "@/utils/provider/providerUsage";
+import { decisionSections } from "@/db/seed/catalog/models";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
-import { callDecisionsForProvider } from "@/providers/utils/providerFeatureExecutors";
+import { callDecisionsForProvider, loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
+import { loadProviderModelChoices } from "@/utils/provider/modelCatalog";
+import { findProviderOption, registerProviderOption } from "@/utils/provider/providerOptionRegistry";
+import { resolveMatcherBackend } from "@/modules/natural-nudges/runtime/matcher";
 import { registerCustomEndpoint } from "@/utils/provider/customEndpointService";
-import { createServerConfig } from "../../helpers/fixtures";
+import { createPersona, createServerConfig } from "../../helpers/fixtures";
 import { resetRepository } from "@/utils/db/repositories/ResetRepository";
 import { initializeDatabase } from "@/utils/db/initializeDatabase";
 import { splitSqlStatements } from "@/utils/db/sqlSplitter";
@@ -18,6 +31,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
     ({ serverId, userId } = await insertFixtures(testSql));
   });
 
+  afterAll(async () => {
+    await executeTestSqlFile("src/db/migrations/102_hosted_speech_models.sql");
+  });
+
   async function runDecisionRollback(): Promise<void> {
     const statements = splitSqlStatements(await Bun.file("src/db/migrations/098_decision_models.down.sql").text());
     // The production rollback runner does not wrap these statements in a transaction.
@@ -25,33 +42,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
     await testSql`DELETE FROM schema_migrations WHERE name = '098_decision_models'`;
   }
 
-  it("refuses to discard a selected catalog model before changing the schema", async () => {
-    const [model] = await testSql<Array<{ decision_model_id: number }>>`
-      SELECT decision_model_id FROM decision_models WHERE provider = 'openrouter' AND is_default = true
-    `;
-    if (!model) throw new Error("Missing catalog fixture");
-    await testSql`UPDATE server_chat_configs SET response_decision_model_id = ${model.decision_model_id} WHERE server_id = ${serverId}`;
-    try {
-      await expect(runDecisionRollback()).rejects.toThrow();
-      const [saved] = await testSql<Array<{ response_decision_model_id: number }>>`
-        SELECT response_decision_model_id FROM server_chat_configs WHERE server_id = ${serverId}
-      `;
-      expect(saved?.response_decision_model_id).toBe(model.decision_model_id);
-      const [constraint] = await testSql<Array<{ definition: string }>>`
-        SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint
-        WHERE conrelid = 'scoped_model_registrations'::regclass AND conname = 'scoped_model_registrations_one_model'
-      `;
-      expect(constraint?.definition).toContain("decision_model_id");
-    } finally {
-      await testSql`UPDATE server_chat_configs SET response_decision_model_id = NULL WHERE server_id = ${serverId}`;
-      await initializeDatabase({ client: testSql, includeRag: false });
-    }
-  });
-
-  it.each([
-    "startup schema",
-    "manual migration",
-  ])("downgrades unused Decision models from %s and restores on startup", async (source) => {
+  it("downgrades unused Decision models and restores them on startup", async () => {
     const [before] = await testSql<Array<{ response_reviewer_prompt: string | null; llm_id: number | null }>>`
       SELECT scc.response_reviewer_prompt, smc.llm_id FROM server_chat_configs scc
       JOIN server_model_configs smc USING (server_id) WHERE scc.server_id = ${serverId}
@@ -59,8 +50,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
     const fixturePrompt = "Keep the fictional persona's quiet voice.";
     try {
       await testSql`UPDATE server_chat_configs SET response_reviewer_prompt = ${fixturePrompt} WHERE server_id = ${serverId}`;
-      if (source === "manual migration")
-        await testSql`ALTER TABLE server_chat_configs DROP COLUMN response_decision_model_id`;
       await runDecisionRollback();
       const [tables] = await testSql<Array<{ decision_models: string | null }>>`
         SELECT to_regclass('decision_models')::text AS decision_models
@@ -68,8 +57,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
       expect(tables?.decision_models).toBeNull();
       const columns = await testSql`
         SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema()
-          AND ((table_name = 'scoped_model_registrations' AND column_name = 'decision_model_id')
-            OR (table_name = 'server_chat_configs' AND column_name = 'response_decision_model_id'))
+          AND table_name = 'scoped_model_registrations' AND column_name = 'decision_model_id'
       `;
       expect(columns).toHaveLength(0);
       const [constraint] = await testSql<Array<{ definition: string }>>`
@@ -88,12 +76,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
       await initializeDatabase({ client: testSql, includeRag: false });
       await testSql`UPDATE server_chat_configs SET response_reviewer_prompt = ${before.response_reviewer_prompt} WHERE server_id = ${serverId}`;
     }
-    const [restored] = await testSql<Array<{ definition: string }>>`
-      SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint
-      WHERE conrelid = 'server_chat_configs'::regclass AND conname = 'server_chat_configs_response_decision_model_id_fkey'
+    const [restored] = await testSql<Array<{ decision_models: string | null }>>`
+      SELECT to_regclass('decision_models')::text AS decision_models
     `;
-    expect(restored?.definition).toContain("REFERENCES decision_models(decision_model_id)");
-    expect(restored?.definition).toContain("ON DELETE SET NULL");
+    expect(restored?.decision_models).toBe("decision_models");
   });
 
   it("replays the migration without losing registrations and isolates owners and text catalogs", async () => {
@@ -127,13 +113,25 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
     expect(
       await llmProviderRepo.deleteOwnedDecisionRegistration({ kind: "personal", ownerId: userId }, "openrouter", id),
     ).toBe(false);
+    // A second owner keeps the shared row alive, so only the explicit clear can unset the server's slot.
+    await llmProviderRepo.upsertDecisionModelRegistration({ userId, decisionModelId: id });
+    await testSql`UPDATE server_model_configs SET decision_model_id = ${id} WHERE server_id = ${serverId}`;
     expect(
       await llmProviderRepo.deleteOwnedDecisionRegistration({ kind: "server", ownerId: serverId }, "openrouter", id),
     ).toBe(true);
+    const [slot] = await testSql<Array<{ decision_model_id: number | null }>>`
+      SELECT decision_model_id FROM server_model_configs WHERE server_id = ${serverId}
+    `;
+    expect(slot?.decision_model_id).toBeNull();
+    expect(
+      await llmProviderRepo.deleteOwnedDecisionRegistration({ kind: "personal", ownerId: userId }, "openrouter", id),
+    ).toBe(true);
     expect(await llmModelRepo.loadDecisionModelByProviderAndCodename("openrouter", "fixture-decision")).toBeNull();
     const seeds = personal.filter((model) => !model.is_scoped_registration);
-    expect(seeds.some((model) => model.codename === "typesafe/jev-1.13" && model.input_token_limit === 32000)).toBe(
-      true,
+    const catalogDefault = decisionSections.flatMap((section) => section.rows).find((row) => row.isDefault);
+    if (!catalogDefault) throw new Error("Missing default Decision model in the catalog");
+    expect(seeds.find((model) => model.codename === catalogDefault.codename)?.input_token_limit).toBe(
+      catalogDefault.inputTokenLimit,
     );
     expect(seeds.every((model) => model.provider === "openrouter")).toBe(true);
   });
@@ -206,7 +204,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
     expect(await llmProviderRepo.loadUserSavedProviderConfig(userId, saved.provider)).toBeNull();
   });
 
-  it("preserves Decision registrations during reset and removes only the deleted native provider owner's references", async () => {
+  it("preserves Decision registrations and the server slot during reset and clears them with the owner's provider", async () => {
     const id = await llmModelRepo.upsertDecisionModel({
       provider: "openrouter",
       codename: "fixture-shared-owner",
@@ -215,13 +213,26 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
     await llmProviderRepo.upsertDecisionModelRegistration({ serverId, decisionModelId: id });
     await llmProviderRepo.upsertDecisionModelRegistration({ userId, decisionModelId: id });
     await testSql`INSERT INTO saved_provider_configs (server_id, provider, api_key, key_version) VALUES (${serverId}, 'openrouter', ${Buffer.from("fixture")}, 1) ON CONFLICT (server_id, provider) DO NOTHING`;
+    const selectedDecision = async () =>
+      (
+        await testSql<Array<{ decision_model_id: number | null }>>`
+          SELECT decision_model_id FROM server_model_configs WHERE server_id = ${serverId}
+        `
+      )[0]?.decision_model_id;
+    await testSql`UPDATE server_model_configs SET decision_model_id = ${id} WHERE server_id = ${serverId}`;
     await resetRepository.resetServerConfiguration(serverId);
+    expect(await selectedDecision()).toBe(id);
     expect(
       (await llmModelRepo.loadDecisionModelOptions({ kind: "server", ownerId: serverId })).some(
         (option) => option.reference.modelId === id,
       ),
     ).toBe(true);
+    expect(await llmProviderRepo.deleteDecisionModelRegistration({ serverId, decisionModelId: id })).toBe(true);
+    expect(await selectedDecision()).toBeNull();
+    await llmProviderRepo.upsertDecisionModelRegistration({ serverId, decisionModelId: id });
+    await testSql`UPDATE server_model_configs SET decision_model_id = ${id} WHERE server_id = ${serverId}`;
     expect(await llmProviderRepo.deleteServerProviderRegistration(serverId, "openrouter")).toBe(true);
+    expect(await selectedDecision()).toBeNull();
     expect(
       (await llmModelRepo.loadAvailableDecisionModels("openrouter", false, { kind: "server", ownerId: serverId })).some(
         (model) => model.decision_model_id === id,
@@ -256,6 +267,151 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Decision model persistence", () => {
         .catch(() => null),
     ).toBeNull();
     expect(await llmModelRepo.loadDecisionModelByProviderAndCodename("openrouter", "fixture-invalid")).toBeNull();
+  });
+
+  it("admits managed Decisions through option validation without admitting another scope's registrations", async () => {
+    const modelId = await llmModelRepo.upsertDecisionModel({
+      provider: "openrouter",
+      codename: "fixture-managed-decision",
+      inputTokenLimit: 8192,
+    });
+    await llmProviderRepo.upsertDecisionModelRegistration({ serverId, decisionModelId: modelId });
+    await testSql`UPDATE decision_models SET supported_primitives = '["predicate", "choice"]'::jsonb WHERE decision_model_id = ${modelId}`;
+    let entitled = true;
+    const contexts = {
+      server: { credentialProvider: "test-decision" },
+      personal: { credentialProvider: "test-decision" },
+    };
+    const reports: ProviderUsageReport[] = [];
+    const calls: Array<{ key: string | null; context: unknown }> = [];
+    const stopReporting = registerProviderUsageReporter((context, report) => {
+      expect(context === contexts.server || context === contexts.personal).toBe(true);
+      reports.push(report);
+    });
+    const transport = spyOn(capabilities, "resolveDecisionsCapability").mockResolvedValue(
+      Object.assign(new OpenrouterProvider(), {
+        callDecisions: async (request: import("@/types/provider/featureInterfaces").ProviderDecisionRequest) => {
+          calls.push({ key: request.apiKey, context: currentProviderUsageContext() });
+          return callOpenRouterDecisions(request, async () =>
+            Response.json({
+              model: "fixture-managed-decision",
+              answers: { q: { type: "noul", noul: 0.8 } },
+              usage: { input_tokens: 10, cost: 0.001 },
+            }),
+          );
+        },
+      }),
+    );
+    const dispose = registerProviderOption({
+      value: "test-decision",
+      catalogProvider: "openrouter",
+      capabilities: ["decision", "nudge-checker"],
+      copy: {
+        labelKey: "commands.providers.entry_kind_provider",
+        entryDescriptionKeys: {
+          server: "commands.providers.entry_kind_provider",
+          personal: "commands.providers.entry_kind_provider",
+        },
+        addActionLabelKey: "commands.providers.select_add_provider",
+        addActionDescriptionKeys: {
+          server: "commands.providers.select_add_provider_description",
+          personal: "commands.providers.select_add_provider_description",
+        },
+        removeImpactKey: "commands.providers.remove_impact_provider",
+      },
+      availability: () => ({ eligible: true }),
+      selection: {
+        load: async () => null,
+        ensure: async () => true,
+        claim: async () => true,
+        remove: async () => "removed",
+        owns: (scope, slot) => scope.state !== undefined && slot === "nudge-checker",
+        validateModel: async ({ capability, modelCodename }) =>
+          entitled && capability === "decision" && modelCodename === "fixture-managed-decision",
+        resolveCredentials: async (input) => {
+          if ("usageContext" in input) return null;
+          if (!entitled)
+            throw new ProviderRequestDeniedError(contexts[input.scope.kind], () => ({
+              titleKey: "general.errors.api_key_error_title",
+              description: "fixture",
+            }));
+          expect(input.capability).toBe("decision");
+          expect(input.modelId).toBe(modelId);
+          return { apiKey: `managed-${input.scope.kind}`, usageContext: contexts[input.scope.kind] };
+        },
+      },
+    });
+    try {
+      const server = { kind: "server", ownerId: serverId } as const;
+      const personal = { kind: "personal", ownerId: userId } as const;
+      expect((await loadProviderModelChoices(server, "decision", "test-decision")).map((model) => model.id)).toEqual([
+        modelId,
+      ]);
+      expect(await loadProviderModelChoices(personal, "decision", "test-decision")).toEqual([]);
+      await llmProviderRepo.upsertDecisionModelRegistration({ userId, decisionModelId: modelId });
+      for (const scope of [server, personal]) {
+        const request = {
+          scope,
+          reference: (await loadDecisionModelsForScope(scope, "test-decision"))[0].reference,
+          credentials:
+            (await findProviderOption("test-decision")?.selection.resolveCredentials?.({
+              scope,
+              capability: "decision",
+              modelId,
+            })) ?? undefined,
+          evidence: "fixture",
+          questions: [{ type: "predicate" as const, id: "q", instructions: "fixture" }],
+        };
+        expect(
+          (await loadDecisionModelsForScope(scope, "test-decision")).map((entry) => entry.model.decision_model_id),
+        ).toEqual([modelId]);
+        expect((await callDecisionsForProvider(request)).status).toBe("completed");
+        expect(calls.at(-1)).toEqual({ key: `managed-${scope.kind}`, context: contexts[scope.kind] });
+        entitled = false;
+        expect(await loadDecisionModelsForScope(scope, "test-decision")).toEqual([]);
+        expect(await loadProviderModelChoices(scope, "decision", "test-decision")).toEqual([]);
+        expect((await callDecisionsForProvider(request)).status).toBe("denied");
+        entitled = true;
+      }
+      const state = createPersona({ server_id: serverId });
+      const checker = await resolveMatcherBackend(state, {
+        llm_id: null,
+        checker_llm_id: null,
+        checker_decision_model_id: modelId,
+      });
+      expect(checker.backend).toMatchObject({ kind: "decision", slot: "nudge-checker" });
+      if (checker.backend?.kind !== "decision") throw new Error("Missing pinned checker");
+      expect(
+        (
+          await callDecisionsForProvider({
+            scope: { ...server, state },
+            slot: checker.backend.slot,
+            credentials: checker.backend.credentials,
+            reference: checker.backend.reference,
+            evidence: "fixture",
+            questions: [{ type: "predicate", id: "q", instructions: "fixture" }],
+          })
+        ).status,
+      ).toBe("completed");
+      expect(calls.at(-1)).toEqual({ key: "managed-server", context: contexts.server });
+      expect(calls).toHaveLength(3);
+      expect(reports).toHaveLength(3);
+      expect(
+        reports.every(
+          (report) =>
+            report.costUsd === 0.001 &&
+            report.inputTokens === 10 &&
+            report.modelCodename === "fixture-managed-decision",
+        ),
+      ).toBe(true);
+    } finally {
+      transport.mockRestore();
+      stopReporting();
+      dispose();
+      await llmProviderRepo.deleteDecisionModelRegistration({ serverId, decisionModelId: modelId });
+      await llmProviderRepo.deleteDecisionModelRegistration({ userId, decisionModelId: modelId });
+      await llmModelRepo.deleteOrphanedDecisionModel(modelId);
+    }
   });
 
   it("executes through exact server and personal credentials using a local fake transport", async () => {

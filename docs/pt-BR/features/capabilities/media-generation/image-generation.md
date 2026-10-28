@@ -16,6 +16,17 @@ TomoriBot pode gerar imagens a partir de um prompt de texto ou editando uma imag
 - **Proporções personalizáveis**.
 - **Imagens de referência**: utilize anexos de mensagens, figurinhas, emojis ou avatares de usuários e personas. Mencione um usuário ou persona para obter seu avatar como referência.
 
+O parâmetro opcional `model` escolhe um modelo para esta imagem sem alterar seus padrões.
+O preenchimento automático inclui modelos compatíveis dos provedores salvos do seu servidor e dos seus provedores pessoais;
+entradas pessoais mostram `(via provedor pessoal)`. Deixe em branco para usar o modelo habitual. No modo Auto,
+isso seleciona o modelo de imagem enquanto o modelo que planeja o prompt permanece o mesmo.
+
+Defina `nsfw` como `true` para ocultar a imagem gerada atrás de um spoiler do Discord, em qualquer um dos modos. Isso apenas
+altera como o Discord exibe a imagem; não altera a geração nem os filtros de conteúdo do provedor.
+
+A geração manual com o NovelAI usa `/novelai generate image`, que possui as mesmas opções `model` e `nsfw`.
+Seu seletor de modelos inclui seus provedores pessoais do NovelAI e a chave do NovelAI salva ou opcional do servidor.
+
 Os modos de edição disponíveis dependem do back-end ativo. Trabalho de texto para imagem e imagem para imagem em provedores de nuvem (Google, Vertex, OpenRouter). Inpainting e outpainting são suportados por endpoints personalizados locais [ComfyUI](/pt-BR/self-hosting/local-endpoints/setup-comfyui/) e dependem dos recursos declarados desse endpoint. Os modos que sua configuração não suporta são ocultados automaticamente do modelo.
 
 Quando ela gera uma imagem, ela combina as tags de aparência da sua persona com tags positivas e negativas de todo o servidor (quando houver suporte). O resultado chega como uma galeria de mídia Discord com detalhes de geração, incluindo quaisquer usuários ou personas referenciados.
@@ -28,6 +39,13 @@ Cada fonte de tag pode ser editada no local com um modal pré-preenchido:
 - **`/config` > `Persona` > `Detalhes de Geração de Imagem`**: tags `Aparência Física` da persona selecionada (sua aparência). Requer a permissão Gerenciar Servidor.
 - **`/personal config`**: suas próprias tags de aparência, aplicadas sempre que uma geração de imagem fizer referência a você. Acompanha você em todos os servidores (consulte [Personalização](/pt-BR/features/knowledge/personalization/)).
 - **`/config` > `Modelos` > `Padrões de Geração de Imagem`**: use `Editar Positivas` e `Editar Negativas` para definir tags padrão adicionadas ou excluídas de cada geração. Tags negativas só se aplicam quando o back-end oferece suporte a prompts negativos. O envio de uma caixa vazia redefine os padrões integrados.
+
+## Busca de Tags
+<!-- anchor: tag-lookup -->
+
+Com a **Busca no Danbooru** ativada (`/config` > Plugins > Ferramentas Disponíveis), ela pode consultar a tag exata e o traje de um personagem antes de desenhar, para que "minha OC com o traje da Ryza" vista a roupa da Ryza na sua OC. Consulte [Busca de Tags no Danbooru](/features/capabilities/tools-and-extensions/#danbooru-tag-lookup).
+
+Ela busca tags de forma mais confiável com a predefinição de prompt do sistema `Default + Image Generation Expert` (`/config` > Comportamento > Comportamento Geral), que também a orienta sobre como ordenar as tags de anime e quando escrever em prosa. O `/generate image` no modo Auto também pode buscar tags.
 
 ## Configuração
 

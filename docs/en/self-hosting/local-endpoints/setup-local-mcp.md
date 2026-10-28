@@ -7,7 +7,7 @@ aiGenerated: true
 
 Connect TomoriBot to Model Context Protocol ([MCP](https://modelcontextprotocol.io/)) servers running on your local machine or private network to provide custom local tools.
 
-For remote HTTPS servers, see [Tools & Extensions](/features/capabilities/tools-and-extensions/#mcp-servers). Local MCP endpoints require a self-hosted instance:
+For remote HTTPS servers, see [Tools & Extensions](/features/capabilities/tools-and-extensions/mcp-servers/). Local MCP endpoints require a self-hosted instance:
 
 :::caution[Self-hosting only]
 Local MCP servers are supported on self-hosted instances only. The public hosted bot requires HTTPS and blocks local/private addresses for security, so it cannot reach a server on `localhost` or your LAN.
@@ -43,4 +43,4 @@ Open the Config page and choose `Remove` on the server's row. Confirming unregis
 Even a local server you run yourself can misbehave if its code is untrusted. A malicious MCP server can prompt-inject the model, exfiltrate data passed to its tools, or return harmful results TomoriBot will relay. Review what an MCP server does before wiring it up.
 :::
 
-For the online-MCP flow and full security details, see [Tools & Extensions](/features/capabilities/tools-and-extensions/#mcp-servers).
+For the online-MCP flow and full security details, see [Tools & Extensions](/features/capabilities/tools-and-extensions/mcp-servers/).

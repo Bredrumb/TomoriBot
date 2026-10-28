@@ -15,7 +15,7 @@ import { ZaicodingStreamAdapter, type ZaicodingStreamConfig } from "@/providers/
 import { getZaicodingToolAdapter } from "@/providers/zaicoding/zaicodingToolAdapter";
 import {
   createOpenAICompatibleHttpError,
-  normalizeOpenAICompatibleProviderError,
+  reportOpenAICompatibleKeyValidationFailure,
 } from "@/providers/openaiCompatible/openaiCompatibleErrorFormatter";
 import { callZaiStructuredJSON } from "@/providers/zai/zaiStructuredOutput";
 import { generateZaiNativeImage } from "@/providers/zai/zaiImageGeneration";
@@ -109,12 +109,16 @@ export class ZaicodingProvider
 
       return { valid: true };
     } catch (error) {
-      log.error("Z.ai Coding API key validation failed", error as Error);
       return {
         valid: false,
-        error: normalizeOpenAICompatibleProviderError(error, {
-          errorMessagePrefix: "Z.ai API error",
-        }),
+        error: await reportOpenAICompatibleKeyValidationFailure(
+          error,
+          "zaicoding",
+          "Z.ai Coding API key validation failed",
+          {
+            errorMessagePrefix: "Z.ai API error",
+          },
+        ),
       };
     }
   }
@@ -160,6 +164,9 @@ export class ZaicodingProvider
     }
 
     try {
+      if (streamingContext) {
+        streamingContext.speechToolState ??= { userId: streamingContext.triggererUserId };
+      }
       const toolStateForContext: ToolStateForContext = {
         server_id: tomoriState.server_id.toString(),
         activePersonaHasElevenlabsVoice: Boolean(
@@ -168,7 +175,11 @@ export class ZaicodingProvider
             tomoriState.speech_voice_id?.trim(),
         ),
         activePersonaVoiceDesignPrompt: tomoriState.speech_voice_design_prompt?.trim() || null,
-        activePersonaVoiceName: tomoriState.speech_voice_name,
+        activePersonaVoiceSampleId: tomoriState.speech_voice_sample_id,
+        activePersonaVoiceId: tomoriState.speech_voice_id,
+        activePersonaVoiceSourcePriority: tomoriState.voice_source_priority,
+        speechToolState: streamingContext?.speechToolState,
+
         diffusion_model_id: tomoriState.config.diffusion_model_id,
         nai_diffusion_model_id: tomoriState.config.nai_diffusion_model_id,
         video_model_id: tomoriState.config.video_model_id,
@@ -181,6 +192,7 @@ export class ZaicodingProvider
           supports_structoutput: tomoriState.llm.supports_structoutput,
         },
         config: {
+          emoji_usage_enabled: tomoriState.config.emoji_usage_enabled,
           sticker_usage_enabled: tomoriState.config.sticker_usage_enabled,
           web_search_enabled: tomoriState.config.web_search_enabled,
           self_teaching_enabled: tomoriState.config.self_teaching_enabled,
@@ -191,6 +203,9 @@ export class ZaicodingProvider
           user_blocking_enabled: tomoriState.config.user_blocking_enabled,
           user_info_updates_enabled: tomoriState.config.user_info_updates_enabled,
           thread_creation_enabled: tomoriState.config.thread_creation_enabled,
+          conditioning_interactions_enabled: tomoriState.config.conditioning_interactions_enabled,
+          dice_rolling_enabled: tomoriState.config.dice_rolling_enabled,
+          danbooru_enabled: tomoriState.config.danbooru_enabled,
         },
       };
 
@@ -373,7 +388,10 @@ export class ZaicodingProvider
           request.tomoriState.speech_voice_id?.trim(),
       ),
       activePersonaVoiceDesignPrompt: request.tomoriState.speech_voice_design_prompt?.trim() || null,
-      activePersonaVoiceName: request.tomoriState.speech_voice_name,
+      activePersonaVoiceSampleId: request.tomoriState.speech_voice_sample_id,
+      activePersonaVoiceId: request.tomoriState.speech_voice_id,
+      activePersonaVoiceSourcePriority: request.tomoriState.voice_source_priority,
+
       diffusion_model_id: request.tomoriState.config.diffusion_model_id,
       nai_diffusion_model_id: request.tomoriState.config.nai_diffusion_model_id,
       video_model_id: request.tomoriState.config.video_model_id,
@@ -386,6 +404,7 @@ export class ZaicodingProvider
         supports_structoutput: request.tomoriState.llm.supports_structoutput,
       },
       config: {
+        emoji_usage_enabled: false,
         sticker_usage_enabled: false,
         web_search_enabled: true,
         self_teaching_enabled: false,
@@ -396,6 +415,9 @@ export class ZaicodingProvider
         user_blocking_enabled: false,
         user_info_updates_enabled: false,
         thread_creation_enabled: false,
+        conditioning_interactions_enabled: false,
+        dice_rolling_enabled: false,
+        danbooru_enabled: false,
       },
     };
 

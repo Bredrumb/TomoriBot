@@ -21,6 +21,7 @@ import { formatMemoryWithId } from "@/utils/memory/memoryId";
 import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
 import { buildSlugMap } from "@/utils/text/slugifyLabel";
+import { channelScopeAdmits, channelScopeCandidates } from "@/utils/discord/channelScope";
 
 // Default render depth for crude messages (Mode B additive blocks + no-summary
 // fallback listing). Also the fallback when a server has no crude_message_count set.
@@ -150,7 +151,8 @@ export async function buildServerMemoryContextItem(params: {
   botName: string;
   personalMemoriesEnabled: boolean;
   conversationCorpus: string | null;
-  channelName: string;
+  channelId: string;
+  parentChannelId?: string | null;
   channelMemoryEnabled: boolean;
   client: Client;
   convertMentions: MentionConverter;
@@ -179,17 +181,14 @@ export async function buildServerMemoryContextItem(params: {
         ? []
         : await serverMemoryRepository.loadServerMemoriesScoped(serverId, personaLineageId);
 
+    const channelCandidates = channelScopeCandidates(params.channelId, params.parentChannelId);
     const filteredServerRows = serverMemoryRows.filter((row) => {
-      const normalized = (row.tags ?? []).map((t) => t.replace(/^["']+|["']+$/g, ""));
-      const channelTags = normalized.filter((t) => t.startsWith("#"));
-      const contentTags = normalized.filter((t) => !t.startsWith("#"));
+      const contentTags = (row.tags ?? []).map((t) => t.replace(/^["']+|["']+$/g, ""));
 
-      // Channel tags gate: if present and channel_memory_enabled, channel must match.
-      // Channel and content filters are independent; channel match does not exempt a memory
-      // from the content/corpus check below (per baetican's intended design).
-      if (params.channelMemoryEnabled && channelTags.length > 0) {
-        const channelAllowed = channelTags.some((t) => t.slice(1).toLowerCase() === params.channelName.toLowerCase());
-        if (!channelAllowed) return false;
+      // The channel scope and the content tags filter independently: a channel match does not
+      // exempt a memory from the corpus check below.
+      if (params.channelMemoryEnabled && !channelScopeAdmits(row.channel_disc_ids, channelCandidates)) {
+        return false;
       }
 
       // Content tags: if corpus filtering is active and the memory has content tags,
@@ -345,6 +344,13 @@ export async function buildShortTermMemoryContext(params: {
       );
     }
 
+    // Entries warmed from the DB carry no messages, so a row with a cleared summary has nothing to recall.
+    otherChannelMemories = otherChannelMemories.filter(
+      (memory) =>
+        Boolean(memory.summary) ||
+        memory.messages.length > 0 ||
+        (memory.categories !== undefined && formatCategoryLines(memory.categories) !== ""),
+    );
     otherChannelMemories.sort((a, b) => b.lastUpdated - a.lastUpdated);
 
     const limitedMemories = otherChannelMemories.slice(0, MAX_OTHER_CHANNEL_MEMORIES);

@@ -1,4 +1,4 @@
-﻿export default {
+export default {
   help: {
     description: `Browse setup, features, providers, memory, behavior, tools, media, and integration guides.`,
     dashboard: {
@@ -79,6 +79,8 @@
         video_generation_description: `Short clips, with an optional first frame`,
         speech_generation: `Speech Generation`,
         speech_generation_description: `Turn text into a voice message`,
+        art_search: `Art Search`,
+        art_search_description: `Post existing anime art from Danbooru`,
         behavior_tuning: `Behavior Tuning`,
         behavior_tuning_description: `Model, humanizer, instructions, and tools`,
         server_wide_settings: `Server-wide Settings`,
@@ -154,8 +156,6 @@
       bot_user_fallback: `the configured Matrix bot account`,
     },
     "api-key": {
-      description: `Learn how to set up API keys for AI providers`,
-      provider_description: `Choose your AI provider`,
       provider_choice_brave: `Brave Search`,
       provider_choice_google: `Google Gemini (Recommended, Free)`,
       provider_choice_deepseek: `DeepSeek`,
@@ -357,7 +357,7 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
         description:
           "An API key grants me access to an AI provider's model. Whatever I generate is billed to that key, so treat it like any other password. To finish setup I need one:\n> **1.** Pick a provider below to open its guide.\n> **2.** Copy the key it gives you. **Do NOT share it** with anyone, and never paste it into a channel: only into the box {setup} opens for you.\n> **3.** Run {setup} and paste the key when I ask for it.",
         picker_footer:
-          "-# The second list is optional: Brave Search adds web results, and ElevenLabs adds hosted speech. Each opens its own guide, and neither is needed to finish setup. If your endpoint isn't listed, skip the key and read **Custom Endpoints (Advanced)** in this same page.",
+          "-# If your endpoint isn't listed, skip the key and read **Custom Endpoints (Advanced)** in this same page.",
       },
       change_trigger_behavior: {
         title: `Change Trigger Behavior`,
@@ -461,6 +461,11 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
         description:
           "{generateVoice} turns text into a voice message in the current persona's voice.\n\nA speech endpoint has to be registered first, hosted or self-hosted: see **Custom Endpoints (Advanced)** under Setup.\n> Each persona can sound different. The voice comes from {configPersonaVoice}.",
       },
+      art_search: {
+        title: `Art Search`,
+        description:
+          "{booruSearch} posts 4 random well-rated Danbooru images for one or two tags. Suggestions appear as you type, and a nickname or typo turns into the real tag.\n> Questionable and explicit results only show in age-restricted channels.\n\nYou can also just ask me to show you some art; the **Danbooru Search** switch in {configTools} controls that. To limit who can run the command, use Server Settings > Integrations.",
+      },
     },
     tons_of_tweakability: {
       title: `Tons of Tweakability`,
@@ -509,8 +514,8 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
       memory_tagging: {
         title: `Memory Tagging (Advanced)`,
         description:
-          "By default every memory in scope is sent with every message. Tagging narrows that down.\n> **Keyword tags**: a tagged memory wakes up only when its keyword appears in the conversation. An untagged memory is always active.\n> **Channel tags**: a `#channel` tag limits a memory to that channel, and combines with keyword tags.\n\nTurn both on in {configAdvancedMemory}, then use {toolPromptSnapshot} to see exactly which memories are active right now.",
-        footer: "Uploaded documents and extracted history can carry channel tags too.",
+          "By default every memory in scope is sent with every message. Tagging narrows that down.\n> **Keyword tags**: a tagged memory wakes up only when its keyword appears in the conversation. An untagged memory is always active.\n> **Channels**: a server memory can be limited to channels you pick in its form (their threads included), and a personal memory to a `#channel` tag. Both combine with keyword tags.\n\nTurn both on in {configAdvancedMemory}, then use {toolPromptSnapshot} to see exactly which memories are active right now.",
+        footer: "Uploaded documents and extracted history can be limited to channels too.",
       },
     },
     scheduled_tasks: {

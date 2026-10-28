@@ -1,7 +1,7 @@
 export default {
   server: {
     timezone: {
-      value_description: `UTC 位移時數（預設：0）。範例：8、-5、0、9。`,
+      value_description: `UTC 位移時數（預設：0）。範例：8、-5、0、5:30。`,
     },
     stm: {
       parameters: {
@@ -21,7 +21,6 @@ export default {
         slot_4_label: `分類 4`,
         slot_5_label: `分類 5`,
         slot_instructions: `欄位格式為「標籤：說明」（例如「目標：隊伍任務」）。留空會略過；全部清除則重設。`,
-        slot_placeholder: `標籤：說明`,
       },
     },
     "crosschannel-blocklist": {

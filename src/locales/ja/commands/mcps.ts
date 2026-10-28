@@ -3,7 +3,7 @@ export default {
     title: `MCPサーバー`,
     count: `登録済みMCP \`({count}/{max})\``,
     empty_guild: `このサーバーにはまだMCPが登録されていません。`,
-    empty_dm: `このDMワークスペースにはまだMCPが登録されていません。`,
+    empty_dm: `このDMにはまだMCPが登録されていません。`,
     unavailable: `MCP登録を読み込めませんでした。「再試行」で読み込み直してください。`,
     stale_warning: `読み込みに失敗したため、表示中のデータは古い可能性があります。最新データを取得できるまで書き込み操作は利用できません。`,
     read_unavailable: `現在のMCP登録を安全に読み込めませんでした。`,
@@ -25,6 +25,14 @@ export default {
     tools_known: `ツール: {tools}`,
     tools_empty: `ツール: 検出なし`,
     tools_unknown: `ツール: 検出状況不明`,
+    connection_failing_unauthorized:
+      "{since}から失敗中：サーバーが保存済みの認証トークンを拒否しました。失敗が24時間続くと、TomoriBotはこのMCPを無効化します。",
+    connection_failing_unreachable:
+      "{since}から失敗中：サーバーに接続できませんでした。失敗が24時間続くと、TomoriBotはこのMCPを無効化します。",
+    auto_disabled_unauthorized:
+      "サーバーが保存済みの認証トークンを24時間拒否したため、自動的に無効化されました。一度削除し、新しいトークンで再追加してください。",
+    auto_disabled_unreachable:
+      "サーバーに24時間接続できなかったため、自動的に無効化されました。再試行するには有効化してください。",
     endpoint_unavailable: `利用不可`,
     enable: `有効にする`,
     disable: `無効にする`,
@@ -49,7 +57,7 @@ export default {
     invalid_type: `対応しているMCPサーバータイプを選択してください。`,
     family_in_use: `有効化されている別のMCPが既にこの系統を置き換えています。このサーバーを選択する前にそちらを無効化してください。`,
     invalid_url: `MCPサーバーURLがリモートURLのセキュリティ検証に合格しませんでした。`,
-    limit_reached: `このワークスペースは設定済みMCPサーバー上限に達しています。`,
+    limit_reached: `設定済みMCPサーバー上限に達しています。`,
     connection_failed: `MCPサーバーへ接続できませんでした。`,
     write_failed: `登録状態が変わったか、データベース書き込みに失敗しました。パネルを再試行してからもう一度お試しください。`,
     added: `MCPサーバーを追加しました`,

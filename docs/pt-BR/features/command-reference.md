@@ -11,7 +11,15 @@ sidebar:
 
 Todos os comandos de barra (slash commands) atualmente registrados pela TomoriBot, gerados a partir dos mesmos construtores de comando e descrições em português usados para o registro no Discord (descrições ainda não traduzidas aparecem em inglês).
 
-Grupos de comandos de nível superior: **41**. Comandos de barra executáveis: **85**.
+Grupos de comandos de nível superior: **44**. Comandos de barra executáveis: **91**.
+
+## `/booru`
+
+Encontrar arte de anime existente
+
+| Comando | Resumo |
+|---|---|
+| `/booru search` | Enviar imagens aleatórias bem avaliadas do Danbooru para uma ou duas tags |
 
 ## `/comment`
 
@@ -208,6 +216,14 @@ Configurações e comandos com restrição de idade.
 | `/nsfw persona default` | Aplicar uma predefinição de personalidade NSFW |
 | `/nsfw persona import` | Importar uma persona a partir de um arquivo PNG, JSON ou CHARX, incluindo personas NSFW |
 
+## `/nudge-studio`
+
+Escolha quais toques ociosos eu uso neste servidor e escreva os seus.
+
+| Comando | Resumo |
+|---|---|
+| `/nudge-studio` | Escolha quais toques ociosos eu uso neste servidor e escreva os seus. |
+
 ## `/nuke`
 
 Apagar totalmente os dados do servidor. Requer executar /setup novamente depois.
@@ -238,6 +254,7 @@ Gerencie suas configurações pessoais
 | `/personal config` | Gerencie suas preferências pessoais, privacidade, modelos e perfil. |
 | `/personal language` | Escolha o idioma em que a TomoriBot fala com você. |
 | `/personal memories` | Gerencie suas memórias pessoais de longo prazo e contexto conversacional de curto prazo. |
+| `/personal message-proxy` | Escolha um serviço de proxy de mensagens compatível para sua conta. |
 | `/personal nuke` | Apague tudo que o TomoriBot armazena sobre você, em todos os servidores. |
 | `/personal providers` | Gerencie suas credenciais de provedor pessoais, endpoints e catálogos de modelos. |
 
@@ -315,6 +332,14 @@ Recompense-me com interações divertidas.
 | `/reward kiss` | Dê-me um beijo! |
 | `/reward tickle` | Faça cócegas em mim! |
 
+## `/roll`
+
+Role dados para jogos de mesa e RPG.
+
+| Comando | Resumo |
+|---|---|
+| `/roll` | Role dados para jogos de mesa e RPG. |
+
 ## `/scheduled-task`
 
 Gerenciar tarefas agendadas e lembretes.
@@ -338,7 +363,9 @@ Ver estatísticas de uso
 
 | Comando | Resumo |
 |---|---|
-| `/stats generate` | Gere um cartão de imagem de estatísticas compartilhável. |
+| `/stats generate persona` | Gere seu cartão de Afinidade da Persona com uma persona. |
+| `/stats generate personal` | Gere seu cartão de Retrospectiva Pessoal. |
+| `/stats generate server` | Gere o cartão de Tabela de Classificação deste servidor. |
 | `/stats persona` | Veja as estatísticas de uso de uma persona neste servidor. |
 | `/stats personal` | Veja suas próprias estatísticas de uso. |
 | `/stats server` | Veja as estatísticas de uso de todo o servidor. |

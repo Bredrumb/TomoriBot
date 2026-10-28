@@ -8,11 +8,12 @@
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { sendToolNotice } from "@/utils/discord/toolProgressNotice";
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { log } from "@/utils/misc/logger";
 import { ResponseSizeError, readBoundedResponse } from "@/utils/security/boundedResponse";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { getSearchNoticeTitleVars } from "./categoryMetadata";
-import type { SearchCategory, WebSearchEngine } from "./types";
+import type { SearchCategory, WebSearchEngine, WebSearchEngineFailure } from "./types";
 
 const DDG_HTML_ENDPOINT = "https://html.duckduckgo.com/html/";
 const REQUEST_TIMEOUT_MS = Math.max(1000, Number.parseInt(process.env.WEB_SEARCH_TIMEOUT_MS ?? "5000", 10) || 5000);
@@ -283,18 +284,14 @@ export class DuckDuckGoEngine implements WebSearchEngine {
           descriptionKey: "general.errors.duckduckgo_rate_limit.description",
           footerKey: "general.errors.duckduckgo_rate_limit.footer",
         },
-        {
-          webhook: context.webhook,
-          personaUsername: context.personaUsername,
-          personaAvatarUrl: context.personaAvatarUrl,
-          personaId: context.tomoriState.persona_id,
-        },
+        buildToolPersonaPostContext(context, context.tomoriState),
       ).catch((error) => log.warn("Failed to send DuckDuckGo rate-limit notice (non-fatal)", error as Error));
     }
 
     return {
       success: false,
       error: `DuckDuckGo search failed: ${failure} (HTTP ${status})`,
+      data: { failure, status } satisfies WebSearchEngineFailure,
     };
   }
 }

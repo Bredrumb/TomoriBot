@@ -10,13 +10,11 @@ import { UNPAIRED_SAMPLE_DIALOGUE_SENTINEL } from "@/types/preset/presetExport";
 import { humanizeString } from "@/utils/text/processors/formatters";
 import { applyUncensorInputTransforms } from "@/utils/text/uncensor";
 import { buildBotSpeakerLabelPattern } from "@/utils/text/processors/regexUtils";
+import { isExternalUserId } from "@/utils/externalIdentityUserId";
 import type { TomoriState, AssembledServerConfig } from "@/types/db/schema";
+import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/context/defaultSystemPrompt";
 
-// Resolved at read time, never copied into server_chat_configs.system_prompt: a
-// stored copy freezes each server on whatever this said the day it ran setup, and
-// migration 061 exists only to undo the era when setup did materialize it.
-export const DEFAULT_SYSTEM_PROMPT =
-  "\nYou are {bot}. {bot} makes sure to respond short and concisely by default. {bot} only makes lengthy responses if the situation warrants it.\n\n{{if tool:create_long_term_memory}}{bot} proactively uses the available {memory_tool} whenever someone shares a detail or {bot} notices one in the conversation that is actually worth remembering, such as a preference, an interest, or an important fact, preferring to remember things even if it is minor as long as it's not a duplicate of what {bot} already knows. {{/if}}{{if tool:update_long_term_memory}}{bot} uses {memory_update_tool} instead when new information changes or adds onto something {bot} already remembers, rather than saving a duplicate.{{/if}}\n\n{{if tool:update_user_info}}{bot} uses {user_info_tool} for changing a nickname, pronouns, addressing style, or timezone. When wording clearly separates a title from a name, {bot} submits the title as a prefix or suffix rather than embedding it in the nickname.{{/if}}\n\n{{if tool:review_capabilities}}When someone asks what {bot} can do or why something is unavailable, {bot} checks {capabilities_tool} before answering. {{/if}}{{if tool_family:url_fetch}}When more detail is needed, {bot} uses {url_fetch_tool} on `https://docs.tomoribot.app/llms.txt` for information.{{/if}}";
+export { DEFAULT_SYSTEM_PROMPT };
 
 const RANDOM_CHOICE_MACRO_REGEX =
   /\{\{\s*random(?:::\s*([^{}]+)|:\s*([^{}]+))\s*\}\}|\{\s*random(?:::\s*([^{}]+)|:\s*([^{}]+))\s*\}/gi;
@@ -122,7 +120,7 @@ export async function buildPromptContextItems(params: {
   isUserImpersonation: boolean;
   impersonatedIdentityName: string | null;
   impersonatedUserPrompt?: string | null;
-  suppressDefaultSystemPrompt: boolean;
+  presetOwnsSystemPrompt: boolean;
   snapshot?: import("@/types/misc/context").RequestSnapshot;
   toolPromptMacroResolver: { expand(text: string): Promise<string> };
   convertMentions: MentionConverter;
@@ -133,8 +131,9 @@ export async function buildPromptContextItems(params: {
     const channelOverride = params.channelPromptOverride;
 
     // Resolve the server-level system prompt (or default fallback).
-    const baseSystemPrompt =
-      params.tomoriConfig.system_prompt?.trim() || (params.suppressDefaultSystemPrompt ? null : DEFAULT_SYSTEM_PROMPT);
+    const baseSystemPrompt = params.presetOwnsSystemPrompt
+      ? null
+      : params.tomoriConfig.system_prompt?.trim() || DEFAULT_SYSTEM_PROMPT;
 
     // Replace mode: the channel prompt fully takes over the system-prompt slot's
     //    content (persona prompt + attributes below are untouched). Otherwise keep
@@ -383,7 +382,10 @@ export async function buildConditioningContextItem(params: {
         : `## Punished Behaviors\nHere are past things ${params.botName} did that got punished for. Avoid doing them again:`;
 
     const lines = visibleGroups.map((group) => {
-      const users = group.userDiscIds.map((userDiscId) => `<@${userDiscId}>`).join(", ");
+      const users = [
+        ...group.userDiscIds.map((userDiscId) => (isExternalUserId(userDiscId) ? userDiscId : `<@${userDiscId}>`)),
+        ...group.personaActors.map((actor) => actor.name),
+      ].join(", ");
       const action = getConditioningContextPastParticiple(conditioningType, group.actionKey);
       const countSuffix = group.totalCount > 1 ? ` (${group.totalCount} times)` : "";
       const actionTextSuffix = group.actionText ? ` with \`${group.actionText}\`` : "";

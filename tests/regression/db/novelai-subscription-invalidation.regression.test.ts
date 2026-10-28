@@ -41,39 +41,22 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("NovelAI subscription invalidation after cr
       const oldEncryption = await encryptApiKey(oldKey);
       const newEncryption = await encryptApiKey(newKey);
       const baseConfig = createPersona().config;
-      const original =
-        scope === "server"
-          ? await buildSavedProviderConfigFromExistingOrDefaults({
-              serverId: refs.serverId,
-              provider: "novelai",
-              apiKey: oldEncryption.encrypted,
-              keyVersion: oldEncryption.version,
-              baseConfig,
-            })
-          : await buildUserSavedProviderConfigFromExistingOrDefaults({
-              userId: refs.userId,
-              provider: "novelai",
-              apiKey: oldEncryption.encrypted,
-              keyVersion: oldEncryption.version,
-              baseConfig,
-            });
-      const write = async (api_key: Buffer, llm_id = original.llm_id) =>
-        scope === "server"
-          ? llmProviderRepo.upsertSavedProviderConfig(refs.serverId, {
-              ...original,
-              server_id: refs.serverId,
-              api_key,
-              llm_id,
-            })
-          : llmProviderRepo.upsertUserSavedProviderConfig(refs.userId, {
-              ...original,
-              user_id: refs.userId,
-              api_key,
-              llm_id,
-              enabled_capabilities: [],
-              assigned_capabilities: [],
-              model_randomizer_enabled: false,
-            });
+      const options = {
+        provider: "novelai",
+        apiKey: oldEncryption.encrypted,
+        keyVersion: oldEncryption.version,
+        baseConfig,
+      };
+      let write: (apiKey: Buffer, llmId?: number | null) => Promise<boolean>;
+      if (scope === "server") {
+        const original = await buildSavedProviderConfigFromExistingOrDefaults({ serverId: refs.serverId, ...options });
+        write = (api_key, llm_id = original.llm_id) =>
+          llmProviderRepo.upsertSavedProviderConfig(refs.serverId, { ...original, api_key, llm_id });
+      } else {
+        const original = await buildUserSavedProviderConfigFromExistingOrDefaults({ userId: refs.userId, ...options });
+        write = (api_key, llm_id = original.llm_id) =>
+          llmProviderRepo.upsertUserSavedProviderConfig(refs.userId, { ...original, api_key, llm_id });
+      }
       await warm(oldKey, "unrelated-key");
       expect(await write(oldEncryption.encrypted)).toBe(true);
       expect(getCachedContextTokens(oldKey)).toBeUndefined();

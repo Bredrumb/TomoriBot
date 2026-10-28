@@ -35,6 +35,12 @@ import { checkTargetEmbed, checkTargetEmbedTitle, processLinkEmbed } from "@/uti
 import { sliceMessagesAtResetMarker } from "@/utils/discord/embedDetection";
 import { isMinimalTitleKind } from "@/utils/discord/embedProtocol";
 import { resolveMinimalNoticeBodies } from "@/utils/discord/minimalNoticeBodies";
+import {
+  AGENDA_NOTICE_AUTHOR_ID,
+  agendaNoticeId,
+  formatAgendaNotice,
+  loadPersonaAgendas,
+} from "@/modules/natural-nudges/runtime/agendas";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { normalizeRenderModifierName } from "@/utils/discord/renderModifierParser";
 import { resolveWebhookPersonaAuthor } from "@/utils/discord/webhookPersonaAuthor";
@@ -328,6 +334,7 @@ async function fetchProviderTools(
   persona: TomoriState,
   providerName: string,
   toolFilter?: SnapshotToolFilter | null,
+  userId?: number,
 ): Promise<Array<Record<string, unknown>>> {
   const activeLlm = persona.persona_llm ?? persona.llm;
 
@@ -341,11 +348,15 @@ async function fetchProviderTools(
 
   const toolStateForContext: ToolStateForContext = {
     server_id: persona.server_id.toString(),
+    speechToolState: { userId },
     activePersonaHasElevenlabsVoice: Boolean(
       persona.speech_voice_sample_id || persona.speech_voice_design_prompt?.trim() || persona.speech_voice_id?.trim(),
     ),
     activePersonaVoiceDesignPrompt: persona.speech_voice_design_prompt?.trim() || null,
-    activePersonaVoiceName: persona.speech_voice_name,
+    activePersonaVoiceSampleId: persona.speech_voice_sample_id,
+    activePersonaVoiceId: persona.speech_voice_id,
+    activePersonaVoiceSourcePriority: persona.voice_source_priority,
+
     llm: {
       llm_codename: activeLlm.llm_codename,
       has_tools: activeLlm.has_tools,
@@ -358,6 +369,7 @@ async function fetchProviderTools(
     nai_diffusion_model_id: persona.config.nai_diffusion_model_id,
     video_model_id: persona.config.video_model_id,
     config: {
+      emoji_usage_enabled: persona.config.emoji_usage_enabled,
       sticker_usage_enabled: persona.config.sticker_usage_enabled,
       web_search_enabled: persona.config.web_search_enabled,
       self_teaching_enabled: persona.config.self_teaching_enabled,
@@ -368,6 +380,9 @@ async function fetchProviderTools(
       user_blocking_enabled: persona.config.user_blocking_enabled,
       user_info_updates_enabled: persona.config.user_info_updates_enabled,
       thread_creation_enabled: persona.config.thread_creation_enabled,
+      conditioning_interactions_enabled: persona.config.conditioning_interactions_enabled,
+      dice_rolling_enabled: persona.config.dice_rolling_enabled,
+      danbooru_enabled: persona.config.danbooru_enabled,
     },
   };
 
@@ -517,6 +532,10 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
   const userListSet = new Set<string>();
   const syntheticUsers = new Map<string, { displayName: string; type: "persona" | "webhook" }>();
   const minimalNoticeBodies = await resolveMinimalNoticeBodies(messagesArray);
+  const agendasByMessageId = await loadPersonaAgendas(
+    answeringState.persona_id,
+    messagesArray.map((message) => message.id),
+  );
 
   for (const message of messagesArray) {
     // Skip fully-private and server-blacklisted users (same gates as real context building)
@@ -664,6 +683,20 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
     const combinedContent = [baseContent, ...embedTextSegments].filter((s) => s.length > 0).join("\n");
     const messageContent = combinedContent.length > 0 ? combinedContent : null;
     const mediaSourceMessageIds = hasLocalMedia ? [message.id] : undefined;
+
+    const agenda = agendasByMessageId.get(message.id);
+    if (agenda) {
+      simplifiedMessages.push({
+        id: agendaNoticeId(message.id),
+        authorId: AGENDA_NOTICE_AUTHOR_ID,
+        authorName: "System",
+        authorType: "user",
+        personaName: null,
+        content: formatAgendaNotice(answeringState.persona_nickname, agenda),
+        imageAttachments: [],
+        videoAttachments: [],
+      });
+    }
 
     // Merge consecutive same-author messages, mirroring the real context path
     // (buildSimplifiedHistory): collapse only when both sides are pure text if
@@ -869,7 +902,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
   let toolsData: Array<Record<string, unknown>> | null = null;
   if (request.includeTools) {
     try {
-      toolsData = await fetchProviderTools(answeringState, providerName, snapshotToolFilter);
+      toolsData = await fetchProviderTools(answeringState, providerName, snapshotToolFilter, userData.user_id);
     } catch (toolError) {
       log.warn(
         `Failed to fetch tools for prompt inspection (provider=${providerName}): ${(toolError as Error).message}`,

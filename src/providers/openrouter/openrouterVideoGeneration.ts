@@ -3,13 +3,16 @@ import type {
   ProviderNativeVideoGenerationResult,
 } from "@/types/provider/featureInterfaces";
 import type { Subprocess } from "bun";
-import { log } from "@/utils/misc/logger";
+import { log, redactLogString } from "@/utils/misc/logger";
+import { z } from "zod";
 import { readBoundedResponse } from "@/utils/security/boundedResponse";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { PROVIDER_VIDEO_DOWNLOAD_MAX_MB } from "@/providers/utils/providerVideoDownload";
 import { pollForCompletion } from "@/utils/async/pollForCompletion";
 import { getOrFetchOpenRouterVideoModelCapabilities } from "@/utils/cache/openrouterVideoModelCache";
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
+import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
+import { beginProviderRequest, type ProviderRequestHold } from "@/utils/provider/providerRequestHook";
 import {
   buildOpenRouterVideoRequestBody,
   normalizeOpenRouterVideoOptions,
@@ -67,6 +70,7 @@ export async function readBoundedProcessOutput(
   const stop = () => proc.kill();
   limits.abortSignal?.addEventListener("abort", stop, { once: true });
   try {
+    if (limits.abortSignal?.aborted) stop();
     const [stdout, stderr] = await Promise.all([
       readBoundedResponse(new Response(proc.stdout), maxStdoutBytes),
       readBoundedResponse(new Response(proc.stderr), MAX_HELPER_STDERR_BYTES),
@@ -314,15 +318,81 @@ async function externalHttpRequest(
     sanitizedHeaders[key] = value.replace(/[\r\n]/g, "");
   }
 
-  return IS_WINDOWS
-    ? pwshHttpRequest(url, method, sanitizedHeaders, limits, body)
-    : curlHttpRequest(url, method, sanitizedHeaders, limits, body);
+  try {
+    limits.abortSignal?.throwIfAborted();
+    return await (IS_WINDOWS
+      ? pwshHttpRequest(url, method, sanitizedHeaders, limits, body)
+      : curlHttpRequest(url, method, sanitizedHeaders, limits, body));
+  } catch (error) {
+    throw new Error(
+      safeVideoErrorText(
+        error instanceof Error ? error.message : "Video API transport failed",
+        new Headers(sanitizedHeaders).get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "",
+      ),
+    );
+  }
 }
 
 const OPENROUTER_ORIGIN = "https://openrouter.ai";
 
 /** OpenRouter stable video generation endpoint */
 const OPENROUTER_VIDEO_URL = `${OPENROUTER_ORIGIN}/api/v1/videos`;
+
+function safeVideoErrorText(value: string, apiKey: string): string {
+  return redactLogString(apiKey ? value.replaceAll(apiKey, "[REDACTED]") : value);
+}
+
+function videoApiErrorSummary(body: string, apiKey: string): string {
+  try {
+    const parsed = z
+      .object({
+        error: z.union([z.string(), z.object({ message: z.string() })]).optional(),
+        message: z.string().optional(),
+      })
+      .parse(JSON.parse(body));
+    return safeVideoErrorText(
+      typeof parsed.error === "string"
+        ? parsed.error
+        : (parsed.error?.message ?? parsed.message ?? "Provider request failed"),
+      apiKey,
+    );
+  } catch {
+    return "Provider request failed";
+  }
+}
+
+export async function fetchOpenRouterVideoApi(url: string, init: RequestInit): Promise<Response> {
+  const target = new URL(url);
+  if (
+    target.origin !== OPENROUTER_ORIGIN ||
+    target.username ||
+    target.password ||
+    (init.method !== "GET" && init.method !== "POST") ||
+    (init.body != null && typeof init.body !== "string")
+  )
+    throw new Error("Invalid OpenRouter video API request");
+  const headers = Object.fromEntries(new Headers(init.headers).entries());
+  try {
+    const raw = await externalHttpRequest(
+      url,
+      init.method,
+      headers,
+      { maxBodyBytes: MAX_API_RESPONSE_BYTES, abortSignal: init.signal ?? undefined },
+      init.body ?? undefined,
+    );
+    return new Response([204, 205, 304].includes(raw.status) ? null : new Uint8Array(raw.bodyBuffer), {
+      status: raw.status,
+      headers: raw.headers,
+    });
+  } catch (error) {
+    throw new Error(
+      safeVideoErrorText(
+        error instanceof Error ? error.message : "Video API transport failed",
+        new Headers(init.headers).get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "",
+      ),
+    );
+  }
+}
 
 /** Polling interval for OpenRouter video jobs (30 seconds, per OpenRouter docs) */
 const POLL_INTERVAL_MS = 30_000;
@@ -331,26 +401,19 @@ const POLL_INTERVAL_MS = 30_000;
 const MAX_POLL_ATTEMPTS = 20;
 
 /** Shape of the OpenRouter video job creation response */
-interface OpenRouterVideoSubmitResponse {
-  id?: string;
-  polling_url?: string;
-  status?: string;
-  error?: string;
-}
+export const openRouterVideoJobSchema = z.object({
+  id: z.string().regex(/^[a-zA-Z0-9_-]{1,200}$/),
+  polling_url: z.string().optional(),
+  status: z.enum(["pending", "in_progress", "completed", "failed", "cancelled", "expired"]),
+  generation_id: z.string().nullish(),
+  unsigned_urls: z.array(z.string()).optional(),
+  error: z.string().nullish(),
+  usage: z.object({ cost: z.number().finite().nonnegative().nullish(), is_byok: z.boolean().optional() }).nullish(),
+});
+type OpenRouterVideoSubmitResponse = z.infer<typeof openRouterVideoJobSchema>;
 
 /** Shape of the OpenRouter video job poll response (confirmed via live API) */
-interface OpenRouterVideoPollResponse {
-  id?: string;
-  generation_id?: string;
-  polling_url?: string;
-  status?: "pending" | "in_progress" | "completed" | "failed" | "cancelled" | "expired";
-  unsigned_urls?: string[];
-  error?: string;
-  usage?: {
-    cost?: number;
-    is_byok?: boolean;
-  };
-}
+type OpenRouterVideoPollResponse = z.infer<typeof openRouterVideoJobSchema>;
 
 /**
  * Generate a video using OpenRouter's stable video generation API.
@@ -369,8 +432,35 @@ interface OpenRouterVideoPollResponse {
 export async function generateOpenRouterNativeVideo(
   request: ProviderNativeVideoGenerationRequest,
 ): Promise<ProviderNativeVideoGenerationResult> {
+  const capabilities = await getOrFetchOpenRouterVideoModelCapabilities(request.model);
+  const options = normalizeOpenRouterVideoOptions(request, capabilities);
+  request.abortSignal?.throwIfAborted();
+  const hold = await beginProviderRequest({
+    apiKey: request.apiKey,
+    path: "/videos",
+    body: buildOpenRouterVideoRequestBody(request, options, capabilities),
+  });
+  let completed = false;
+  try {
+    if (request.abortSignal?.aborted) {
+      hold?.reportCost(0);
+      request.abortSignal.throwIfAborted();
+    }
+    const result = await generateVideo(request, hold);
+    completed = true;
+    return result;
+  } finally {
+    hold?.release(completed);
+  }
+}
+
+async function generateVideo(
+  request: ProviderNativeVideoGenerationRequest,
+  hold?: ProviderRequestHold,
+): Promise<ProviderNativeVideoGenerationResult> {
   const modelCapabilities = await getOrFetchOpenRouterVideoModelCapabilities(request.model);
   const normalizedOptions = normalizeOpenRouterVideoOptions(request, modelCapabilities);
+  request.abortSignal?.throwIfAborted();
   // `frame_images` preserves TomoriBot's image-to-video contract: the referenced image is
   // the exact first frame. `input_references` is intentionally not used because the stable
   // API defines it as loose subject/style guidance rather than frame control.
@@ -389,37 +479,47 @@ export async function generateOpenRouterNativeVideo(
   const submitBodyJson = JSON.stringify(body);
 
   // Submit the generation request via external HTTP helper (bypasses Bun's TLS fingerprint issue)
-  const apiLimits = { maxBodyBytes: MAX_API_RESPONSE_BYTES, abortSignal: request.abortSignal };
-  const submitRaw = await externalHttpRequest(OPENROUTER_VIDEO_URL, "POST", apiHeaders, apiLimits, submitBodyJson);
+  const send = fetchOpenRouterVideoApi;
+  const submitResponse = await send(OPENROUTER_VIDEO_URL, {
+    method: "POST",
+    headers: apiHeaders,
+    body: submitBodyJson,
+    signal: request.abortSignal,
+  });
+  const submitRaw = {
+    status: submitResponse.status,
+    bodyBuffer: await readBoundedResponse(submitResponse, MAX_API_RESPONSE_BYTES),
+  };
 
   const submitBodyText = submitRaw.bodyBuffer.toString("utf8");
 
   if (submitRaw.status < 200 || submitRaw.status >= 300) {
-    log.error(
-      `OpenRouter video generation request failed (model: ${request.model}, status: ${submitRaw.status})`,
-      new Error(submitBodyText),
+    hold?.reportCost(0);
+    throw new Error(
+      `OpenRouter video generation failed: ${submitRaw.status}: ${videoApiErrorSummary(submitBodyText, request.apiKey)}`,
+      { cause: readOpenRouterLimitError(submitRaw.status, submitResponse.headers, submitBodyText) ?? undefined },
     );
-    throw new Error(`OpenRouter video generation failed: ${submitRaw.status} — ${submitBodyText.slice(0, 200)}`);
   }
 
   let submitResult: OpenRouterVideoSubmitResponse;
   try {
-    submitResult = JSON.parse(submitBodyText) as OpenRouterVideoSubmitResponse;
+    submitResult = openRouterVideoJobSchema.parse(JSON.parse(submitBodyText));
   } catch {
     log.error(
       `OpenRouter video generation: submit response is not JSON (status ${submitRaw.status})`,
-      new Error(submitBodyText.slice(0, 500)),
+      new Error("Invalid video submit response"),
     );
-    throw new Error(`OpenRouter video generation failed: non-JSON response — ${submitBodyText.slice(0, 200)}`);
+    throw new Error("OpenRouter video generation failed: invalid submit response");
   }
 
   const jobId = submitResult.id;
+  hold?.reportCost(submitResult.usage?.cost);
   const rawPollingUrl = submitResult.polling_url;
 
   if (!jobId || !rawPollingUrl) {
     log.error(
       "OpenRouter video generation returned incomplete response",
-      new Error(`Missing ${!jobId ? "job ID" : "polling_url"}: ${submitBodyText.slice(0, 300)}`),
+      new Error("Missing video job ID or polling URL"),
     );
     throw new Error("OpenRouter video generation returned incomplete response (missing job ID or polling_url)");
   }
@@ -440,7 +540,11 @@ export async function generateOpenRouterNativeVideo(
 
   const completedJob = await pollForCompletion<OpenRouterVideoPollResponse>({
     pollFn: async () => {
-      const pollRaw = await externalHttpRequest(pollingUrl, "GET", pollHeaders, apiLimits);
+      const pollResponse = await send(pollingUrl, { method: "GET", headers: pollHeaders, signal: request.abortSignal });
+      const pollRaw = {
+        status: pollResponse.status,
+        bodyBuffer: await readBoundedResponse(pollResponse, MAX_API_RESPONSE_BYTES),
+      };
       const pollBodyText = pollRaw.bodyBuffer.toString("utf8");
 
       if (pollRaw.status < 200 || pollRaw.status >= 300) {
@@ -450,32 +554,31 @@ export async function generateOpenRouterNativeVideo(
         if (pollRaw.status === 401 || pollRaw.status === 403) {
           return {
             done: true,
-            error: `OpenRouter video poll: terminal HTTP error (jobId: ${jobId}, status: ${pollRaw.status}): ${pollBodyText.slice(0, 200)}`,
+            error: `OpenRouter video poll: terminal HTTP error (jobId: ${jobId}, status: ${pollRaw.status}): ${videoApiErrorSummary(pollBodyText, request.apiKey)}`,
           };
         }
         log.warn(
-          `OpenRouter video poll request failed (jobId: ${jobId}, status: ${pollRaw.status}): ${pollBodyText.slice(0, 200)}`,
+          `OpenRouter video poll request failed (jobId: ${jobId}, status: ${pollRaw.status}): ${videoApiErrorSummary(pollBodyText, request.apiKey)}`,
         );
         return { done: false };
       }
 
       let pollResult: OpenRouterVideoPollResponse;
       try {
-        pollResult = JSON.parse(pollBodyText) as OpenRouterVideoPollResponse;
+        pollResult = openRouterVideoJobSchema.extend({ id: z.literal(jobId) }).parse(JSON.parse(pollBodyText));
       } catch {
-        log.warn(
-          `OpenRouter video poll: response is not JSON (jobId: ${jobId}, status: ${pollRaw.status}): ${pollBodyText.slice(0, 200)}`,
-        );
+        log.warn(`OpenRouter video poll: response is invalid (jobId: ${jobId}, status: ${pollRaw.status})`);
         return { done: false };
       }
 
+      hold?.reportCost(pollResult.usage?.cost);
       switch (pollResult.status) {
         case "completed":
           return { done: true, result: pollResult };
         case "failed":
           return {
             done: true,
-            error: `OpenRouter video generation failed: ${pollResult.error ?? "unknown error"}`,
+            error: `OpenRouter video generation failed: ${safeVideoErrorText(pollResult.error ?? "unknown error", request.apiKey)}`,
           };
         case "cancelled":
           return { done: true, error: "OpenRouter video generation was cancelled" };
@@ -495,6 +598,8 @@ export async function generateOpenRouterNativeVideo(
   //    Use unsigned_urls if available, otherwise use the content endpoint.
   //    The video file may not be immediately available after the poll returns "completed"
   //    due to eventual consistency in OpenRouter's storage, so retry a few times on 404.
+  const usageReport = { costUsd: completedJob.usage?.cost ?? undefined, providerRequestId: jobId };
+  hold?.reportCost(usageReport.costUsd);
   const rawVideoUrl = completedJob.unsigned_urls?.[0] ?? `${OPENROUTER_VIDEO_URL}/${jobId}/content?index=0`;
   const videoUrl = new URL(rawVideoUrl, OPENROUTER_ORIGIN).href;
 
@@ -514,7 +619,7 @@ export async function generateOpenRouterNativeVideo(
 
   if (!download.videoData) {
     log.error(`Failed to download OpenRouter video (jobId: ${jobId})`, new Error(download.reason));
-    return { videoData: null, mimeType: null };
+    return { videoData: null, mimeType: null, ...usageReport };
   }
 
   const videoData = download.videoData;
@@ -525,6 +630,7 @@ export async function generateOpenRouterNativeVideo(
     videoData,
     mimeType: "video/mp4",
     durationSeconds: normalizedOptions.duration,
+    ...usageReport,
   };
 }
 

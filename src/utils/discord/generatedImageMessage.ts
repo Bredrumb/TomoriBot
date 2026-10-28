@@ -10,6 +10,7 @@ export function buildGeneratedImageComponentsV2Payload(
   locale: string,
   referencedIdentities: string[] = [],
   promptAttached = false,
+  spoiler = false,
 ): GeneratedImageComponentsV2Payload {
   const seconds = Math.max(0, elapsedMs / 1000).toFixed(1);
   const timingLine = localizer(locale, "tools.image.generated_after_seconds_line", {
@@ -33,6 +34,7 @@ export function buildGeneratedImageComponentsV2Payload(
       type: ComponentType.MediaGallery,
       items: [
         {
+          ...(spoiler ? { spoiler: true } : {}),
           media: {
             url: `attachment://${attachmentFilename}`,
           },

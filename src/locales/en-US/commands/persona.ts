@@ -72,16 +72,12 @@ export default {
     },
     name_conflict_title: `Persona Name Conflict`,
     name_conflict_description: `A persona named **{name}** already exists on this server. Persona names must be unique within a server.`,
+    name_too_long_title: `Persona Name Too Long`,
+    name_too_long_description: `The first name is used as my display name, which can be at most {max} characters. Shorten it and try again.`,
     export: {
       description: `Export current personality as a shareable PNG file`,
-      export_json_select_label: `Export JSON`,
-      export_json_select_description: `Optional: export an importable JSON file instead (no avatar image)`,
-      persona_modal_title: `Select Persona`,
-      persona_select_label: `Persona`,
-      persona_select_description: `Choose which persona to export.`,
-      persona_select_placeholder: `Select a persona...`,
-      main_persona_description: `Main Persona`,
-      alter_persona_description: `Alter Persona`,
+      persona_description: `Persona to export`,
+      export_json_description: `Export an importable JSON file instead of a PNG (no avatar image)`,
       success_title: `Persona Exported Successfully`,
       success_description: `Current persona **{nickname}** has been exported! Share this PNG file with others to spread this personality configuration.`,
       success_description_json: `Current persona **{nickname}** has been exported as a JSON file.
@@ -176,6 +172,7 @@ Please edit the import file to use a different name, or remove the existing pers
       error_invalid_config: `Invalid configuration fields in persona data`,
       error_no_server_data: `Server not found in database. Please run \`/setup\` first.`,
       error_name_conflict: `A persona with the name **{name}** already exists on this server. Please use a different name.`,
+      error_nickname_too_long: `This persona's name is longer than {max} characters, the limit for a server nickname. Shorten the name in the file and import it again.`,
       error_nsfw_persona: `This persona is marked as NSFW, so \`/persona import\` can't load it. Use \`/nsfw persona import\` instead.`,
       error_import_failed: `Failed to import persona data`,
       error_not_json: `The imported file must contain valid JSON data`,
@@ -189,9 +186,7 @@ Please edit the import file to use a different name, or remove the existing pers
       description: `Remove an alter persona from the server`,
       no_permission_title: `Permission Denied`,
       no_permission_description: `You need the **Manage Server** permission to remove alter personas.`,
-      modal_title: `Remove Alter Persona`,
-      select_label: `Alter Persona`,
-      select_placeholder: `Choose an alter persona to remove...`,
+      persona_description: `Alter persona to remove`,
       no_alters_error_title: `No Alter Personas`,
       no_alters_error_description: `There are no alter personas to remove. Import alter personas using \`/persona import type:alter\`.`,
       success_title: `Alter Persona Removed`,
@@ -231,7 +226,7 @@ Trigger Words ({trigger_word_count}): {triggers}`,
       modal: {
         title: `Generate AI Personality`,
         character_name_label: `Character Name`,
-        character_name_description: `Comma-separated names ("," or "、"): all become trigger words; first becomes display name.`,
+        character_name_description: `Comma-separated names ("," or "、"): all become trigger words; first is display name (max 32).`,
         character_name_placeholder: `e.g. Hatsune Miku, Miku, 初音ミク`,
         character_info_label: `Character Info & Speech Examples`,
         character_info_description: `Describe the character and how they speak`,
@@ -252,8 +247,6 @@ Trigger Words ({trigger_word_count}): {triggers}`,
       field_additional_inst: `Additional Instructions`,
       wrong_provider_title: `Incompatible Provider`,
       wrong_provider_description: `Preset generation requires a compatible provider. Your current provider is **{current_provider}**. Use \`/config\` > Models > Switch Models to switch to a supported provider.`,
-      no_api_key_title: `No API Key`,
-      no_api_key_description: `No active provider is configured. Use \`/setup\` (first time) or \`/providers\` to register one.`,
       model_incompatible_title: `Incompatible Model`,
       model_incompatible_description: `Your current model (**{model_name}**) does not support **STRUCTURED OUTPUT**, which is required for persona generation.
 
@@ -272,8 +265,11 @@ Use \`/config\` > Models > Switch Models to switch to a model that supports stru
 **Next steps:**
 1. Use \`/config\` > Models > Switch Models to switch to a tool-enabled model, OR
 2. Regenerate without web search (choose "No" when asked)`,
-      api_key_decrypt_failed_title: `API Key Error`,
-      api_key_decrypt_failed_description: `Failed to decrypt the active provider credentials. Please reconfigure them using \`/providers\`.`,
+      web_search_failed_title: `Persona Generation Aborted`,
+      web_search_failed_description: `Persona generation was aborted because the requested web search failed.
+
+**What you can do**
+Try again in a moment, or choose \`No\` for \`Search the Web?\` to generate from your description. If search keeps failing, ask a server manager to check web search in \`/config\` and provider access in \`/providers\`.`,
       vision_credentials_unavailable_title: `Vision Model Credentials Unavailable`,
       vision_credentials_unavailable_description: `Your vision model (**{vision_model_name}**) runs on provider **{vision_provider}**, but its saved API key could not be used to describe the image. Reconfigure that provider's credentials with \`/providers\`, or check \`/config\` > Models.`,
       invalid_image_title: `Invalid Image`,
@@ -282,11 +278,8 @@ Use \`/config\` > Models > Switch Models to switch to a model that supports stru
       error_download_timeout: `Avatar download timed out. Please try again.`,
       error_download_failed: `Failed to download avatar image.`,
       processing_title: `Generating Personality...`,
-      processing_description: `This may take 1-2 minutes. Please wait while I generate the character...
-
-This may produce unexpected results. You can regenerate if needed.`,
-      captioning_title: `Describing Your Avatar...`,
-      captioning_description: `Your primary model cannot see images, so I am asking your vision model (**{model_name}**) to describe the uploaded avatar first. Your primary model then writes the personality from that description. This may take 1-2 minutes.`,
+      processing_description: `This may take 1-2 minutes. Please wait while I generate the character...`,
+      processing_footer: `This may produce unexpected results. You can regenerate if needed.`,
       generation_failed_title: `Generation Failed`,
       generation_failed_description: `Failed to generate personality: {error}
 
@@ -327,7 +320,7 @@ Or press the Import button`,
       modal: {
         title: `Create Persona`,
         character_name_label: `Character Name`,
-        character_name_description: `Comma-separated names ("," or "、"): all become trigger words; first becomes display name.`,
+        character_name_description: `Comma-separated names ("," or "、"): all become trigger words; first is display name (max 32).`,
         character_name_placeholder: `e.g. Hatsune Miku, Miku, 初音ミク`,
         character_desc_label: `Character Description`,
         character_desc_placeholder: `Describe your character (personality, appearance, backstory, etc.)`,

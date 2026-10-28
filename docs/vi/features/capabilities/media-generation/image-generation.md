@@ -16,6 +16,17 @@ TomoriBot có thể tạo hình ảnh từ lời nhắc văn bản hoặc bằng
 - **Tỷ lệ khung hình có thể tùy chỉnh**.
 - **Hình ảnh tham khảo**: lấy từ tệp đính kèm tin nhắn, sticker, biểu tượng cảm xúc hoặc hình đại diện của người dùng và cá nhân. Đề cập đến người dùng hoặc cá nhân để lấy hình đại diện của họ làm tài liệu tham khảo.
 
+Tham số tùy chọn `model` chọn model cho hình ảnh này mà không làm thay đổi các giá trị mặc định của bạn.
+Gợi ý tự động bao gồm các model tương thích từ nhà cung cấp đã lưu của máy chủ và nhà cung cấp cá nhân của bạn;
+các mục cá nhân hiển thị `(qua nhà cung cấp cá nhân)`. Hãy để trống để dùng model thông thường. Trong chế độ Tự động,
+tùy chọn này chọn model tạo ảnh trong khi model lập kế hoạch prompt vẫn giữ nguyên.
+
+Đặt `nsfw` thành `true` để ẩn hình ảnh đã tạo sau spoiler Discord, trong cả hai chế độ. Điều này chỉ
+thay đổi cách Discord hiển thị ảnh; nó không thay đổi việc tạo ảnh hay bộ lọc nội dung của nhà cung cấp.
+
+Tạo ảnh thủ công bằng NovelAI sử dụng `/novelai generate image`, có cùng các tùy chọn `model` và `nsfw`.
+Trình chọn model của lệnh này bao gồm các nhà cung cấp NovelAI cá nhân của bạn và API key NovelAI đã lưu hoặc tùy chọn của máy chủ.
+
 Chế độ chỉnh sửa nào khả dụng tùy thuộc vào chương trình phụ trợ đang hoạt động. Tính năng chuyển văn bản thành hình ảnh và hình ảnh thành hình ảnh hoạt động trên các nhà cung cấp đám mây (Google, Vertex, OpenRouter). Inpainting và outpainting được hỗ trợ bởi các điểm cuối tùy chỉnh [ComfyUI](/vi/self-hosting/local-endpoints/setup-comfyui/) cục bộ và phụ thuộc vào khả năng được khai báo của điểm cuối đó. Các chế độ mà thiết lập của bạn không hỗ trợ sẽ tự động bị ẩn khỏi model.
 
 Khi cô ấy tạo một hình ảnh, cô ấy kết hợp các thẻ xuất hiện của cá nhân bạn với các thẻ tích cực và tiêu cực trên toàn máy chủ (nếu được hỗ trợ). Kết quả xuất hiện dưới dạng thư viện phương tiện Discord với các chi tiết về thế hệ, bao gồm mọi người dùng hoặc cá tính được tham chiếu.
@@ -28,6 +39,13 @@ Mọi nguồn thẻ đều có thể được chỉnh sửa tại chỗ bằng m
 - **`/config` > `Persona` > `Chi tiết tạo hình ảnh`**: thẻ `Ngoại hình` của người được chọn (trông cô ấy như thế nào). Yêu cầu quyền Quản lý máy chủ.
 - **`/personal config`**: thẻ xuất hiện của riêng bạn, được áp dụng bất cứ khi nào thế hệ hình ảnh tham chiếu đến bạn. Theo dõi bạn trên mọi máy chủ (xem [Cá nhân hóa](/vi/features/knowledge/personalization/)).
 - **`/config` > `Model` > `Mặc định tạo hình ảnh`**: sử dụng `Sửa tích cực` và `Sửa tiêu cực` để đặt các thẻ mặc định được thêm vào hoặc loại bỏ khỏi mọi thế hệ. Thẻ phủ định chỉ áp dụng khi phần phụ trợ hỗ trợ lời nhắc phủ định. Việc gửi một ô trống sẽ đặt lại các giá trị mặc định tích hợp sẵn.
+
+## Tra cứu thẻ
+<!-- anchor: tag-lookup -->
+
+Khi bật **Tìm kiếm Danbooru** (`/config` > Plugin > Công cụ khả dụng), mình có thể tra cứu chính xác thẻ và trang phục của nhân vật trước khi vẽ, để yêu cầu như "OC của tôi mặc trang phục của Ryza" sẽ vẽ trang phục của Ryza cho OC của bạn. Xem [Tra cứu thẻ Danbooru](/features/capabilities/tools-and-extensions/#danbooru-tag-lookup).
+
+Mình sẽ tra cứu thẻ đáng tin cậy hơn với preset chỉ dẫn hệ thống `Default + Image Generation Expert` (`/config` > Hành vi > Hành vi chung), preset này cũng hướng dẫn mình cách sắp xếp các thẻ anime và khi nào nên viết bằng văn xuôi. `/generate image` ở chế độ Auto cũng có thể tra cứu thẻ.
 
 ## Thiết lập
 

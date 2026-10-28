@@ -12,7 +12,6 @@ export default {
     tool_error_loop_title: `ツールエラーループ`,
     tool_error_loop_description: `ツールエラーが続いたため、リクエストを完了できませんでした。言い回しを変えるか、問題が解決しない場合は \`/refresh\` を使用してください。`,
     fallback_used_title: `フォールバックモデルを使用しました`,
-    fallback_used_description: `{chain} の代わりに \`{success_model}\` が使用されました`,
     fallback_used_details_description: `次のモデルが先に失敗したため、フォールバック枠 {slot} の \`{success_model}\` で応答しました:
 {failure_list}`,
     fallback_used_failure_line: `{index}. {model} は {error_detail} で失敗しました`,
@@ -24,7 +23,6 @@ export default {
       source_attached: `この表は長すぎてそのまま表示できないため、ファイルとして添付します:`,
     },
     no_response_title: `応答なし`,
-    no_response_description: `応答がありませんでした - これはAIからの空の応答またはタイムアウトが原因である可能性があります。`,
     log_channel_chat_notice_title: `ログチャンネルでは会話できません`,
     log_channel_chat_notice_description: `このチャンネルはログチャンネルに設定されているため、ここでのメッセージには返信しません。ここで会話するには、\`/config\` > チャンネル > ログ で解除または変更してください。`,
     thought_log: {
@@ -55,6 +53,10 @@ export default {
       response_stopped_title: `応答が中断されました`,
       response_stopped_description: `次の理由で応答が中断されました: {reason}。送信されたコンテンツがAIプロバイダーにとって大きすぎないか確認してください。\`/refresh\`で会話コンテンツをクリアしてください。`,
       streaming_failed_description: `応答をストリーミング中に問題が発生しました。`,
+      error_footer_server_provider: `発生元: {provider} • このエラーはサーバーのAIプロバイダーによるもので、TomoriBotのエラーではありません。`,
+      error_footer_dm_provider: `発生元: {provider} • このエラーはAIプロバイダーによるもので、TomoriBotのエラーではありません。`,
+      error_footer_personal_provider: `発生元: {provider}（個人） • このエラーは個人AIプロバイダーによるもので、TomoriBotのエラーではありません。`,
+      error_footer_tomoribot: `発生元: TomoriBot • これはTomoriBot内部のエラーであり、AIプロバイダーによるものではありません。`,
       provider_error_interaction: `ストリーム応答がブロック/停止されました。理由: {reason}。`,
       api_error_title: `🔴 プロバイダーAPIエラー`,
       privacy_error_title: `🔴 プロバイダーのプライバシー設定`,
@@ -66,6 +68,7 @@ export default {
       timeout_title: `🟡️ プロバイダーリクエストタイムアウト`,
       provider_overloaded_title: `🔴 プロバイダーの過負荷`,
       provider_overloaded_description: `プロバイダーが現在過負荷状態、または一時的に利用できません`,
+      connection_refused_description: `プロバイダーへの接続が拒否されました。エンドポイントが起動しており、アドレスが正しいことを確認してください。`,
       context_length_title: `🔴 このモデルにはメッセージが長すぎます`,
       credit_limit_title: `🔴 プロバイダーのクレジットが不足しています`,
       balance_exhausted_title: `🔴 プロバイダーアカウントの残高がありません`,
@@ -105,7 +108,6 @@ export default {
       google_credential_type: `OAuthトークンまたはサービスアカウントの認証情報が使われているようです。\`google\` プロバイダーには [Google AI Studio](https://aistudio.google.com/apikey) の通常のAPIキーが必要です。Google Cloudの認証情報を使う場合は \`vertex\` プロバイダーを選んでください。`,
       openrouter_privacy_settings: `[OpenRouter プライバシー設定](https://openrouter.ai/settings/privacy)で「Data Policy」を調整してこのモデルを許可するか、別のモデルを選択してください。`,
       openrouter_fund_account: `1日1000回までの無料モデルリクエストのロックを解除するには、OpenRouterアカウントに少なくとも10クレジットを追加してください。`,
-      reduce_context_length: `メッセージを短くするか、\`/refresh\` でコンテキストをクリアしてみてください。`,
       reduce_output_tokens: `\`/config\` > モデル > テキストサンプラーとパラメーター（出力トークン）で応答の長さの上限を下げると、会話履歴のための余裕を増やせます。`,
       reduce_output_tokens_personal: `\`/personal config\`（出力トークン）で応答の長さの上限を下げると、会話履歴のための余裕を増やせます。`,
       openrouter_add_credits: `[OpenRouterクレジット](https://openrouter.ai/settings/credits)でクレジットを追加するか、\`/config\` > モデル > テキストサンプラーとパラメーター（出力トークン）で応答の長さを下げてください。`,
@@ -144,7 +146,6 @@ export default {
     },
     vertexexpress: {
       "403_predict_permission_message": `このキーでは Vertex AI Express モデルを呼び出せません。Express Mode のキーを使うか、フル Google Cloud プロジェクトなら別プロバイダーの \`vertex\` を使ってください。`,
-      unknown_default_message: `予期しないエラーが発生しました`,
     },
     novelai: {
       "400_default_message": `無効なリクエスト形式またはパラメータです。正しいAPIキーを入力したか確認してください。`,

@@ -3,9 +3,8 @@
  *
  * Once a message carries `IsComponentsV2`, Discord permanently forbids editing it with
  * legacy `embeds`/`content`. `interactionCore` tracks such interactions in a WeakSet and
- * teaches the shared legacy sinks (`replyInfoEmbed`, `replySummaryEmbed`,
- * `replyPaginatedStatusPages`) to emit a V2 notice container instead of embeds when the
- * target is marked.
+ * teaches the shared legacy sinks (`replyInfoEmbed`, `replySummaryEmbed`) to emit a V2
+ * notice container instead of embeds when the target is marked.
  *
  * These tests import the REAL `interactionCore` and use no `mock.module`, so the official
  * runner batches this file into the shared unit lane where `interactionCore` is never
@@ -438,6 +437,7 @@ describe("deliverGuardedPanel budget enforcement and redaction", () => {
       const result = await deliverGuardedPanel(interaction, overBudgetPayload, {
         method: "editReply",
         locale: "en-US",
+        panel: "config:plugins:response-drafting",
       });
 
       // Does not throw in production mode
@@ -459,8 +459,9 @@ describe("deliverGuardedPanel budget enforcement and redaction", () => {
 
       // Log MUST contain structured violation metadata
       const context = loggedEntry.context as {
-        metadata?: { violations?: Array<{ code: string; limit: number; observed: number }> };
+        metadata?: { panel?: string; violations?: Array<{ code: string; limit: number; observed: number }> };
       };
+      expect(context?.metadata?.panel).toBe("config:plugins:response-drafting");
       const violations = context?.metadata?.violations;
       expect(Array.isArray(violations)).toBe(true);
       expect(violations?.[0].code).toBe("TEXT_DISPLAY_TOTAL_EXCEEDED");

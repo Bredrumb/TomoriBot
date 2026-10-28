@@ -2,6 +2,7 @@ import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import { generateEmbeddingsBatched, providerSupportsEmbeddingTaskType } from "@/utils/embeddings/embeddingProvider";
 import type { EmbeddingModelRow } from "@/types/db/schema";
+import type { EmbeddingRequest } from "@/types/provider/featureInterfaces";
 
 export interface RetrievedDocumentChunk {
   document_id: number;
@@ -66,16 +67,16 @@ export async function createDocumentRecord(params: {
   uploaderUserId: number | null;
   documentName: string;
   sourceType?: string;
-  channelTags?: string[];
+  channelDiscIds?: string[];
 }): Promise<number> {
-  const { serverId, personaId, uploaderUserId, documentName, sourceType = "upload", channelTags = [] } = params;
+  const { serverId, personaId, uploaderUserId, documentName, sourceType = "upload", channelDiscIds = [] } = params;
   const [row] = await sql`
     INSERT INTO documents (
       server_id, persona_id, uploader_user_id, document_name,
-      file_name, mime_type, file_size_bytes, text_content, source_type, channel_tags
+      file_name, mime_type, file_size_bytes, text_content, source_type, channel_disc_ids
     ) VALUES (
       ${serverId}, ${personaId}, ${uploaderUserId}, ${documentName},
-      NULL, NULL, NULL, '', ${sourceType}, ${toPgTextArray(channelTags)}::text[]
+      NULL, NULL, NULL, '', ${sourceType}, ${toPgTextArray(channelDiscIds)}::text[]
     )
     RETURNING document_id
   `;
@@ -156,8 +157,8 @@ export async function insertDocumentWithChunks(params: {
   embeddingFamily: string;
   /** Document origin: 'upload' (default) or 'history' */
   sourceType?: string;
-  /** Channel tags restricting retrieval to specific channels, e.g. ['#general', '#bot-chat'] */
-  channelTags?: string[];
+  /** Discord channel IDs restricting retrieval; empty means every channel. */
+  channelDiscIds?: string[];
 }): Promise<number> {
   const {
     serverId,
@@ -173,7 +174,7 @@ export async function insertDocumentWithChunks(params: {
     embeddingModelId,
     embeddingFamily,
     sourceType = "upload",
-    channelTags = [],
+    channelDiscIds = [],
   } = params;
 
   if (chunks.length !== embeddings.length) {
@@ -192,7 +193,7 @@ export async function insertDocumentWithChunks(params: {
 				file_size_bytes,
 				text_content,
 				source_type,
-				channel_tags
+				channel_disc_ids
 			) VALUES (
 				${serverId},
 				${personaId},
@@ -203,7 +204,7 @@ export async function insertDocumentWithChunks(params: {
 				${fileSizeBytes},
 				${textContent},
 				${sourceType},
-				${toPgTextArray(channelTags)}::text[]
+				${toPgTextArray(channelDiscIds)}::text[]
 			)
 			RETURNING document_id
 		`;
@@ -247,14 +248,28 @@ export async function retrieveRelevantDocumentChunks(params: {
   query: string;
   embeddingModel: EmbeddingModelRow;
   apiKey: string;
+  onUsage?: EmbeddingRequest["onUsage"];
   maxResults: number;
   minSimilarity: number;
   batchSize?: number;
-  /** When set, excludes chunks whose document has channel_tags that don't include this channel */
-  channelName?: string | null;
+  /**
+   * When set, excludes chunks whose document is scoped to channels outside this list. Pass the current
+   * channel and, inside a thread, its parent so a thread inherits its channel's scope.
+   */
+  channelIds?: readonly string[] | null;
 }): Promise<RetrievedDocumentChunk[]> {
-  const { serverId, personaId, query, embeddingModel, apiKey, maxResults, minSimilarity, batchSize, channelName } =
-    params;
+  const {
+    serverId,
+    personaId,
+    query,
+    embeddingModel,
+    apiKey,
+    onUsage,
+    maxResults,
+    minSimilarity,
+    batchSize,
+    channelIds,
+  } = params;
 
   if (!query.trim()) {
     return [];
@@ -268,6 +283,7 @@ export async function retrieveRelevantDocumentChunks(params: {
     inputs: [query],
     taskType: (await providerSupportsEmbeddingTaskType(embeddingModel.provider)) ? "RETRIEVAL_QUERY" : undefined,
     batchSize,
+    onUsage,
   });
 
   if (queryEmbeddings.length === 0) {
@@ -279,8 +295,8 @@ export async function retrieveRelevantDocumentChunks(params: {
   const candidateLimit = maxResults * 4;
 
   const channelFilter =
-    channelName != null
-      ? sql`AND (array_length(d.channel_tags, 1) IS NULL OR ${`#${channelName.toLowerCase()}`} = ANY(d.channel_tags))`
+    channelIds != null
+      ? sql`AND (cardinality(d.channel_disc_ids) = 0 OR d.channel_disc_ids && ${toPgTextArray([...channelIds])}::text[])`
       : sql``;
 
   const personaFilter =
@@ -405,10 +421,11 @@ export async function reembedServerDocuments(params: {
   serverId: number;
   embeddingModel: EmbeddingModelRow;
   apiKey: string;
+  onUsage?: EmbeddingRequest["onUsage"];
   chunkSize: number;
   chunkOverlap: number;
 }): Promise<void> {
-  const { serverId, embeddingModel, apiKey, chunkSize, chunkOverlap } = params;
+  const { serverId, embeddingModel, apiKey, onUsage, chunkSize, chunkOverlap } = params;
 
   if (!embeddingModel.embedding_model_id) {
     throw new Error("Embedding model ID is missing for re-embedding");
@@ -443,6 +460,7 @@ export async function reembedServerDocuments(params: {
       inputs: chunks,
       taskType: (await providerSupportsEmbeddingTaskType(embeddingModel.provider)) ? "RETRIEVAL_DOCUMENT" : undefined,
       batchSize: 16,
+      onUsage,
     });
 
     await sql.transaction(async (tx) => {

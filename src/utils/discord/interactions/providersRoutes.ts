@@ -1,6 +1,8 @@
+import { withProviderOptionCopy, type ProviderOptionCopyContext } from "@/utils/provider/providerOptionRegistry";
 import {
   ComponentType,
   MessageFlags,
+  PermissionsBitField,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
   type InteractionEditReplyOptions,
@@ -46,12 +48,17 @@ import {
   buildEditEndpointModalFieldId,
   offeredChatCompatFlags,
   parseModelSelectionValue,
-  PROVIDERS_ENTRIES_PER_SELECTOR_PAGE,
+  providersEntriesPerPage,
   type EditEndpointModalContext,
   type ProviderModelModalDefaults,
   type ProvidersPanelPage,
   UNLOAD_DURING_COMFYUI_BEHAVIOR,
 } from "@/utils/discord/ui/providersPanel";
+import {
+  findProviderOption,
+  providerOptionActionOption,
+  type ProviderOptionScope,
+} from "@/utils/provider/providerOptionRegistry";
 import { buildPanelContainer } from "@/utils/discord/ui/panel";
 import { getDefaultImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
 import { getDefaultSpeechEndpointSettings } from "@/utils/provider/customSpeechEndpointSettings";
@@ -162,6 +169,12 @@ function terminalPayload(locale: string, key: string): InteractionEditReplyOptio
   );
 }
 
+function providersNotSetupKey(interaction: {
+  guildId: string | null;
+}): "commands.providers.not_setup" | "commands.providers.not_setup_dm" {
+  return interaction.guildId ? "commands.providers.not_setup" : "commands.providers.not_setup_dm";
+}
+
 async function defaultResolveScope(
   interaction: GlobalRoutableInteraction | ChatInputCommandInteraction,
   forceRefresh = false,
@@ -232,6 +245,7 @@ function addReceipt(locale: string, result: AddServerProviderResult, scopeKind: 
     "invalid-key": "commands.providers.invalid_key",
     "unsupported-provider": "commands.providers.unsupported_provider",
     "validation-failed": "commands.providers.validation_failed",
+    "no-balance": "commands.providers.validation_no_balance",
     "missing-model": "commands.providers.missing_default_model",
     "write-failed": "commands.providers.write_failed",
   };
@@ -441,7 +455,7 @@ function speechModalDefaults(
   section: ProviderPanelCapabilitySection,
   editing: ProviderPanelModel | undefined,
 ): Pick<ProviderModelModalDefaults, "speech"> {
-  if (capability !== "speech") return {};
+  if (capability !== "speech" || !section.apiStyle) return {};
 
   // Only a `tts-clone` server implements the clone/VoiceDesign/Auto split; `isVoiceDesignEndpoint`
   // requires that api style, so offering it for the ElevenLabs preset would store a dead value.
@@ -504,7 +518,49 @@ function readUnavailableReceipt(locale: string): PanelReceipt {
 
 function rangeForEntry(scope: LoadedProviderPanelScope, entryId: string | undefined): number {
   const index = entryId ? scope.data.entries.findIndex((entry) => entry.id === entryId) : -1;
-  return index < 0 ? 0 : Math.floor(index / 23);
+  return index < 0 ? 0 : Math.floor(index / providersEntriesPerPage(scope.data.optionActions?.length ?? 0));
+}
+
+function canManageServer(interaction: GlobalRoutableInteraction | ChatInputCommandInteraction): boolean {
+  return interaction.memberPermissions?.has(PermissionsBitField.Flags.ManageGuild) ?? false;
+}
+
+function providerOptionScope(
+  scope: LoadedProviderPanelScope,
+  interaction: GlobalRoutableInteraction,
+): ProviderOptionScope {
+  const personal = scope.scopeKind === "personal";
+  return {
+    kind: personal ? "personal" : "server",
+    ownerId: scope.ownerId ?? scope.state?.server_id ?? 0,
+    discordId: personal ? interaction.user.id : (interaction.guildId ?? interaction.user.id),
+    state: scope.state ?? null,
+  };
+}
+
+const REGISTRATION_FAILURE_STATUSES: ReadonlySet<string> = new Set(["validation-failed", "no-balance", "unreachable"]);
+
+async function addCompletionCopy(
+  receipt: PanelReceipt,
+  interaction: GlobalRoutableInteraction,
+  locale: string,
+  scope: LoadedProviderPanelScope,
+  eligible: boolean,
+  surface: ProviderOptionCopyContext["surface"] = "completion",
+): Promise<PanelReceipt> {
+  if (!eligible) return receipt;
+  const keys = await withProviderOptionCopy([], {
+    surface,
+    managedProvider: null,
+    userDiscId: interaction.user.id,
+    serverId: scope.state?.server_id,
+    credentialScope: scope.scopeKind === "personal" ? "personal" : "server",
+  });
+  if (!keys.length) return receipt;
+  const copy = keys.map((key) => localizer(locale, key));
+  return surface === "registration_failed"
+    ? { ...receipt, metadata: [receipt.metadata, ...copy].filter(Boolean).join(" ") }
+    : { ...receipt, detail: [receipt.detail, ...copy].join("\n") };
 }
 
 function repaint(
@@ -528,6 +584,10 @@ function repaint(
       enabledActions: actionsForNamespace(scope.routeNamespace),
       routeNamespace: scope.routeNamespace,
       footerCommand: scope.footerCommand,
+      optionActions: scope.data.optionActions,
+      optionOwnerId: scope.ownerId ?? scope.state?.server_id,
+      viewerId: interaction.user.id,
+      canManageServer: canManageServer(interaction),
     }),
     { locale, receipt },
   );
@@ -671,6 +731,30 @@ export function createProvidersInteractionRoute(
           await dependencies.showAddEndpointModal(interaction as StringSelectMenuInteraction, route.locale, nonce);
           return;
         }
+        const optionAction = providerOptionActionOption(selectedValue);
+        if (optionAction) {
+          if (!configuration.authorize(interaction)) {
+            await interaction.reply({
+              content: localizer(route.locale, "general.errors.permission_denied_description"),
+              flags: MessageFlags.Ephemeral,
+            });
+            return;
+          }
+          const handled = await optionAction.panel?.handleAction?.("select", {
+            locale: route.locale,
+            interaction,
+            loadSelection: async () => {
+              const loaded = await dependencies.resolveScope(interaction, false);
+              return loaded ? { scope: providerOptionScope(loaded, interaction) } : null;
+            },
+            canManageServer: canManageServer(interaction),
+          });
+          if (handled) return;
+          const content = localizer(route.locale, "commands.providers.unavailable");
+          if (interaction.deferred || interaction.replied) await interaction.editReply({ content });
+          else await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+          return;
+        }
       }
 
       if (route.action === "edit-provider-open") {
@@ -679,6 +763,26 @@ export function createProvidersInteractionRoute(
             content: localizer(route.locale, "general.errors.permission_denied_description"),
             flags: MessageFlags.Ephemeral,
           });
+          return;
+        }
+        const option = findProviderOption(route.provider);
+        if (option) {
+          const entryId = `provider:${option.value}`;
+          const handled = await option.panel?.handleAction?.("edit", {
+            locale: route.locale,
+            interaction,
+            entryId,
+            loadSelection: async () => {
+              const loaded = await dependencies.resolveScope(interaction, false);
+              const entry = loaded?.data.entries.find((candidate) => candidate.id === entryId);
+              return loaded && entry ? { scope: providerOptionScope(loaded, interaction), entry } : null;
+            },
+            canManageServer: canManageServer(interaction),
+          });
+          if (handled) return;
+          const content = localizer(route.locale, "commands.providers.unavailable");
+          if (interaction.deferred || interaction.replied) await interaction.editReply({ content });
+          else await interaction.reply({ content, flags: MessageFlags.Ephemeral });
           return;
         }
         const nonce = dependencies.createNonce();
@@ -764,6 +868,9 @@ export function createProvidersInteractionRoute(
           selection.editingModelId,
           nonce,
           {
+            ...(route.entryKind === "endpoint" && (selection.capability === "image" || selection.capability === "video")
+              ? { apiStyle: section.apiStyle }
+              : {}),
             codeName: editing?.codeName,
             text: editing?.textSettings,
             decision: editing?.decisionSettings,
@@ -819,7 +926,7 @@ export function createProvidersInteractionRoute(
               route.action === "edit-endpoint-submit" ||
               route.action === "remove-confirm",
           ),
-        onMissing: () => interaction.editReply(terminalPayload(route.locale, "commands.providers.not_setup")),
+        onMissing: () => interaction.editReply(terminalPayload(route.locale, providersNotSetupKey(interaction))),
       });
       if (!scope) return;
 
@@ -851,29 +958,35 @@ export function createProvidersInteractionRoute(
           () =>
             dependencies.operations.addServerProvider({
               serverDiscId: interaction.guildId ?? interaction.user.id,
-              ownerId: scope.ownerId,
-              scopeKind: scope.scopeKind,
-              state: scope.state,
+              ...scope,
               provider: selectedProvider ?? "",
               apiKey: modal.fields.getTextInputValue(buildAddProviderModalFieldId("api-key", route.nonce)),
             }),
           () => dependencies.resolveScope(interaction, true),
         );
         const nextScope = action.state ?? unavailableScope(scope);
-        if (action.result.status === "success") {
+        if (action.result.status === "success" && scope.state) {
           dependencies.recordAction({
             action: resolveProviderPanelAction(scope.scopeKind, "provider.add"),
             serverId: scope.state.server_id,
             userDiscId: interaction.user?.id ?? "",
           });
         }
+        const keyRejected = REGISTRATION_FAILURE_STATUSES.has(action.result.status);
         await repaint(
           interaction,
           route.locale,
           nextScope,
           action.result.status === "success" ? { kind: "entry", entryId: action.result.entryId } : { kind: "entry" },
           action.result.status === "success" ? rangeForEntry(nextScope, action.result.entryId) : 0,
-          addReceipt(route.locale, action.result, scope.scopeKind),
+          await addCompletionCopy(
+            addReceipt(route.locale, action.result, scope.scopeKind),
+            interaction,
+            route.locale,
+            scope,
+            (action.result.status === "success" || keyRejected) && selectedProvider !== "brave",
+            keyRejected ? "registration_failed" : "completion",
+          ),
         );
         return;
       }
@@ -908,15 +1021,13 @@ export function createProvidersInteractionRoute(
           () =>
             dependencies.operations.removeServerProviderEntry({
               serverDiscId: interaction.guildId ?? interaction.user.id,
-              ownerId: scope.ownerId,
-              scopeKind: scope.scopeKind,
-              state: scope.state,
+              ...scope,
               entry,
             }),
           () => dependencies.resolveScope(interaction, true),
         );
         const nextScope = action.state ?? unavailableScope(scope);
-        if (action.result.status === "success") {
+        if (action.result.status === "success" && scope.state) {
           dependencies.recordAction({
             action: resolveProviderPanelAction(scope.scopeKind, "entry.remove"),
             serverId: scope.state.server_id,
@@ -942,9 +1053,7 @@ export function createProvidersInteractionRoute(
           () =>
             dependencies.operations.addCustomEndpointConnection({
               serverDiscId: interaction.guildId ?? interaction.user.id,
-              ownerId: scope.ownerId,
-              scopeKind: scope.scopeKind,
-              state: scope.state,
+              ...scope,
               label: field("label"),
               endpointUrl: field("url"),
               apiStyle: selectedApiStyle as never,
@@ -953,7 +1062,7 @@ export function createProvidersInteractionRoute(
           () => dependencies.resolveScope(interaction, true),
         );
         const nextScope = action.state ?? unavailableScope(scope);
-        if (action.result.status === "success") {
+        if (action.result.status === "success" && scope.state) {
           dependencies.recordAction({
             action: resolveProviderPanelAction(scope.scopeKind, "endpoint.add"),
             serverId: scope.state.server_id,
@@ -966,7 +1075,14 @@ export function createProvidersInteractionRoute(
           nextScope,
           action.result.status === "success" ? { kind: "entry", entryId: action.result.entryId } : { kind: "entry" },
           action.result.status === "success" ? rangeForEntry(nextScope, action.result.entryId) : 0,
-          addEndpointReceipt(route.locale, action.result, scope.scopeKind),
+          await addCompletionCopy(
+            addEndpointReceipt(route.locale, action.result, scope.scopeKind),
+            interaction,
+            route.locale,
+            scope,
+            REGISTRATION_FAILURE_STATUSES.has(action.result.status),
+            "registration_failed",
+          ),
         );
         return;
       }
@@ -981,9 +1097,7 @@ export function createProvidersInteractionRoute(
           () =>
             dependencies.operations.editServerProvider({
               serverDiscId: interaction.guildId ?? interaction.user.id,
-              ownerId: scope.ownerId,
-              scopeKind: scope.scopeKind,
-              state: scope.state,
+              ...scope,
               provider: route.provider,
               apiKey: modal.fields.getTextInputValue(buildEditProviderModalFieldId("api-key", route.nonce)),
               rotationKey:
@@ -995,7 +1109,7 @@ export function createProvidersInteractionRoute(
           () => dependencies.resolveScope(interaction, true),
         );
         const nextScope = action.state ?? unavailableScope(scope);
-        if (action.result.status === "success") {
+        if (action.result.status === "success" && scope.state) {
           dependencies.recordAction({
             action: resolveProviderPanelAction(scope.scopeKind, "provider.edit"),
             serverId: scope.state.server_id,
@@ -1008,7 +1122,14 @@ export function createProvidersInteractionRoute(
           nextScope,
           { kind: "entry", entryId },
           rangeForEntry(nextScope, entryId),
-          providerEditReceipt(route.locale, action.result, scope.scopeKind),
+          await addCompletionCopy(
+            providerEditReceipt(route.locale, action.result, scope.scopeKind),
+            interaction,
+            route.locale,
+            scope,
+            REGISTRATION_FAILURE_STATUSES.has(action.result.status) && route.provider !== "brave",
+            "registration_failed",
+          ),
         );
         return;
       }
@@ -1024,9 +1145,7 @@ export function createProvidersInteractionRoute(
           () =>
             dependencies.operations.editServerEndpoint({
               serverDiscId: interaction.guildId ?? interaction.user.id,
-              ownerId: scope.ownerId,
-              scopeKind: scope.scopeKind,
-              state: scope.state,
+              ...scope,
               entryId,
               label: entry.isPreset
                 ? entry.displayName
@@ -1045,7 +1164,7 @@ export function createProvidersInteractionRoute(
           () => dependencies.resolveScope(interaction, true),
         );
         const nextScope = action.state ?? unavailableScope(scope);
-        if (action.result.status === "success") {
+        if (action.result.status === "success" && scope.state) {
           dependencies.recordAction({
             action: resolveProviderPanelAction(scope.scopeKind, "endpoint.edit"),
             serverId: scope.state.server_id,
@@ -1058,7 +1177,14 @@ export function createProvidersInteractionRoute(
           nextScope,
           { kind: "entry", entryId },
           rangeForEntry(nextScope, entryId),
-          endpointEditReceipt(route.locale, action.result, scope.scopeKind),
+          await addCompletionCopy(
+            endpointEditReceipt(route.locale, action.result, scope.scopeKind),
+            interaction,
+            route.locale,
+            scope,
+            REGISTRATION_FAILURE_STATUSES.has(action.result.status),
+            "registration_failed",
+          ),
         );
         return;
       }
@@ -1102,9 +1228,7 @@ export function createProvidersInteractionRoute(
           () =>
             dependencies.operations.saveProviderModel({
               serverDiscId: interaction.guildId ?? interaction.user.id,
-              ownerId: scope.ownerId,
-              scopeKind: scope.scopeKind,
-              state: scope.state,
+              ...scope,
               entryId,
               capability: route.capability,
               codeName: modal.fields.getTextInputValue(buildProviderModelModalFieldId("code-name", route.nonce)).trim(),
@@ -1127,7 +1251,7 @@ export function createProvidersInteractionRoute(
           () => dependencies.resolveScope(interaction, true),
         );
         const nextScope = action.state ?? unavailableScope(scope);
-        if (action.result.status === "success") {
+        if (action.result.status === "success" && scope.state) {
           dependencies.recordAction({
             action: resolveProviderPanelAction(scope.scopeKind, "model.save"),
             serverId: scope.state.server_id,
@@ -1140,7 +1264,13 @@ export function createProvidersInteractionRoute(
           nextScope,
           { kind: "entry", entryId },
           rangeForEntry(nextScope, entryId),
-          modelReceipt(route.locale, action.result, scope.scopeKind),
+          await addCompletionCopy(
+            modelReceipt(route.locale, action.result, scope.scopeKind),
+            interaction,
+            route.locale,
+            scope,
+            action.result.status === "success" && !action.result.removed && !findProviderOption(route.entryKey),
+          ),
         );
         return;
       }
@@ -1151,7 +1281,7 @@ export function createProvidersInteractionRoute(
       }
       if (route.action === "range-open" || route.action === "range-page") {
         const rangeIndex = route.action === "range-page" ? route.rangeIndex : 0;
-        const entry = scope.data.entries[rangeIndex * PROVIDERS_ENTRIES_PER_SELECTOR_PAGE];
+        const entry = scope.data.entries[rangeIndex * providersEntriesPerPage(scope.data.optionActions?.length ?? 0)];
         await repaint(
           interaction,
           route.locale,
@@ -1169,7 +1299,8 @@ export function createProvidersInteractionRoute(
         return;
       }
       if (route.action === "range") {
-        const entry = scope.data.entries[route.rangeIndex * PROVIDERS_ENTRIES_PER_SELECTOR_PAGE];
+        const entry =
+          scope.data.entries[route.rangeIndex * providersEntriesPerPage(scope.data.optionActions?.length ?? 0)];
         await repaint(interaction, route.locale, scope, { kind: "entry", entryId: entry?.id }, route.rangeIndex);
         return;
       }
@@ -1222,43 +1353,58 @@ export const personalProvidersInteractionRoute = createProvidersInteractionRoute
   },
 );
 
+export interface InitialProvidersPanelOptions {
+  resolveScope?: ProvidersRouteDependencies["resolveScope"];
+  receipt?: PanelReceipt;
+}
+
 export async function buildInitialProvidersPanel(
-  interaction: ChatInputCommandInteraction,
+  interaction: ChatInputCommandInteraction | GlobalRoutableInteraction,
   locale: string,
-  resolveScope: ProvidersRouteDependencies["resolveScope"] = defaultResolveScope,
+  { resolveScope = defaultResolveScope, receipt }: InitialProvidersPanelOptions = {},
 ): Promise<InteractionEditReplyOptions> {
   if (!isAuthorized(interaction)) {
     return terminalPayload(locale, "general.errors.permission_denied_description");
   }
   const scope = await resolveScope(interaction, false);
-  if (!scope) return terminalPayload(locale, "commands.providers.not_setup");
+  if (!scope) return terminalPayload(locale, providersNotSetupKey(interaction));
   return buildProvidersPanelPayload({
     locale,
     entries: scope.data.entries,
     initialEntryId: scope.data.initialEntryId,
     readStatus: scope.data.readStatus,
     page: { kind: "entry" },
+    receipt,
     enabledActions: actionsForNamespace(scope.routeNamespace),
     routeNamespace: scope.routeNamespace,
     footerCommand: scope.footerCommand,
+    optionActions: scope.data.optionActions,
+    optionOwnerId: scope.ownerId ?? scope.state?.server_id,
+    viewerId: interaction.user.id,
+    canManageServer: canManageServer(interaction),
   });
 }
 
 export async function buildInitialPersonalProvidersPanel(
-  interaction: ChatInputCommandInteraction,
+  interaction: ChatInputCommandInteraction | GlobalRoutableInteraction,
   locale: string,
-  resolveScope: ProvidersRouteDependencies["resolveScope"] = defaultResolvePersonalScope,
+  { resolveScope = defaultResolvePersonalScope, receipt }: InitialProvidersPanelOptions = {},
 ): Promise<InteractionEditReplyOptions> {
   const scope = await resolveScope(interaction, false);
-  if (!scope) return terminalPayload(locale, "commands.providers.not_setup");
+  if (!scope) return terminalPayload(locale, providersNotSetupKey(interaction));
   return buildProvidersPanelPayload({
     locale,
     entries: scope.data.entries,
     initialEntryId: scope.data.initialEntryId,
     readStatus: scope.data.readStatus,
     page: { kind: "entry" },
+    receipt,
     enabledActions: enabledPersonalProviderActions,
     routeNamespace: PERSONAL_PROVIDERS_ROUTE_NAMESPACE,
     footerCommand: scope.footerCommand,
+    optionActions: scope.data.optionActions,
+    optionOwnerId: scope.ownerId ?? scope.state?.server_id,
+    viewerId: interaction.user.id,
+    canManageServer: canManageServer(interaction),
   });
 }

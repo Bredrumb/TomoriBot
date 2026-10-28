@@ -1,3 +1,5 @@
+import type { GenerationModelSelection } from "@/types/provider/generationModels";
+import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
 /**
  * Generic tool interface for provider-agnostic function calling
  * This abstracts tools away from specific LLM provider formats
@@ -69,26 +71,33 @@ export interface ToolParameterSchema extends ToolObjectParameterSchema {
 
 /**
  * A single Discord message the streaming layer has already committed to the channel.
- * Collected into {@link StreamingContext.deliveredMessageRefs} so the fallback orchestrator
- * can delete the partial output of a superseded (timed-out / errored) generation attempt.
+ * Collected into {@link StreamingContext.deliveredMessageRefs}.
  */
 export interface DeliveredStreamMessage {
   /** Discord snowflake ID of the delivered message. */
   messageId: string;
   /** Channel (or thread) ID the message was delivered to. */
   channelId: string;
-  /** True when delivered through a persona/alter webhook (deleted via `webhook.deleteMessage`). */
-  isWebhook: boolean;
+  webhookId: string | null;
 }
 
 /**
  * Streaming context for enhanced functionality during streaming
  */
 export interface StreamingContext {
+  deliveryMode?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryMode;
+  deliveryReceipts?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryReceipt[];
+  deliveryState?: { unconfirmed: boolean };
+  imageModelSelection?: GenerationModelSelection;
+  /** When set, delivered text may ping only these users: no roles, no everyone, nobody else. */
+  mentionableUserIds?: readonly string[];
+  usageContext?: ProviderUsageContext;
+  speechToolState?: { userId?: number; selection?: string };
   disableYouTubeProcessing: boolean; // Flag to temporarily disable YouTube function during enhanced context restart
   disableProfilePictureProcessing?: boolean; // Flag to temporarily disable profile picture processing during enhanced context restart
   disableGifProcessing?: boolean; // Flag to temporarily disable GIF processing during enhanced context restart
   disableShortTermMemoryUpdate?: boolean; // Flag to prevent update_short_term_memory from being called more than once per turn
+  disableConditioningInteraction?: boolean;
   disableCrossChannelMessage?: boolean; // Flag to prevent nested cross-channel dispatch during tool-driven cross-channel turns
   explicitLongTermMemoryIntent?: boolean; // Flag to suppress STM tool nudges when the current user message explicitly asks for persistent memory
   disableMessageMetadataContext?: boolean; // Flag to prevent reveal_message_metadata from being called more than once per turn
@@ -171,8 +180,8 @@ export interface StreamingContext {
    * The orchestrator pushes one entry per successful send (see uiUpdater's `recordSuccessfulSend`);
    * because it is a reference threaded through {@link buildStreamContext} onto the per-attempt
    * StreamContext, entries survive even when a timed-out `streamToDiscord` promise is abandoned by
-   * the SDK-call-timeout race. `runGenerationTurn` reads it to delete the partial output of a
-   * superseded generation attempt so only the surviving (fallback) response remains visible.
+   * the SDK-call-timeout race. Failed attempts keep their messages, so it spans every attempt, and
+   * expression delivery reads it to tell whether this turn has already posted text.
    */
   deliveredMessageRefs?: DeliveredStreamMessage[];
 }
@@ -182,6 +191,8 @@ export interface StreamingContext {
  * Contains all necessary Discord and Tomori state information
  */
 export interface ToolContext {
+  deliveryMode?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryMode;
+  usageContext?: ProviderUsageContext;
   channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | NewsChannel | TextChannel | AnyThreadChannel;
   client: Client;
   message?: Message;
@@ -204,6 +215,9 @@ export interface ToolContext {
   isUserImpersonation?: boolean; // True when the active turn is a user impersonation session
   impersonatedUserId?: string; // Discord user ID currently being impersonated, if any
   suppressProgressNotices?: boolean; // Skip public "working..." embeds for fire-and-forget flows
+  suppressFailureNotices?: boolean;
+  /** Shared across search-engine attempts, so fallback notices are deduplicated without hiding error embeds. */
+  progressNoticeState?: { attempted: boolean };
   showKillHint?: boolean; // When true, tool notice footers include the /kill hint (set after SOFT_WARN_ITERATION_THRESHOLD)
   contextItems?: StructuredContextItem[]; // Current LLM context for tools that need hidden resolution metadata
 
@@ -252,18 +266,21 @@ export type ToolAvailabilityLlmState = Pick<LlmRow, "llm_codename" | ToolModelCa
  * provider-specific adapters serialize it.
  */
 export interface ToolAssemblyState {
+  speechToolState?: { userId?: number; selection?: string };
   server_id: string;
   /** True when the active persona has either a local voice sample or provider-hosted voice assigned. */
   activePersonaHasElevenlabsVoice: boolean;
   /** Present when the active persona should use instruct-based VoiceDesign synthesis. */
   activePersonaVoiceDesignPrompt?: string | null;
-  /** Display/name marker for the active speech voice selection. */
-  activePersonaVoiceName?: string | null;
+  activePersonaVoiceSampleId?: number | null;
+  activePersonaVoiceId?: string | null;
+  activePersonaVoiceSourcePriority?: "design" | "clone";
   llm: ToolAvailabilityLlmState;
   diffusion_model_id?: number | null;
   nai_diffusion_model_id?: number | null;
   video_model_id?: number | null;
   config: {
+    emoji_usage_enabled: boolean;
     sticker_usage_enabled: boolean;
     web_search_enabled: boolean;
     self_teaching_enabled: boolean;
@@ -277,6 +294,9 @@ export interface ToolAssemblyState {
     // the capability toggle with no effect and no compile error.
     user_info_updates_enabled: boolean;
     thread_creation_enabled: boolean;
+    conditioning_interactions_enabled: boolean;
+    dice_rolling_enabled: boolean;
+    danbooru_enabled: boolean;
   };
 }
 

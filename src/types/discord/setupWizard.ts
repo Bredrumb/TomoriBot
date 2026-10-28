@@ -1,7 +1,12 @@
 import { z } from "zod";
-import { customEndpointApiStyleSchema, setupCustomEndpointCapabilitySchema } from "@/types/db/schema";
+import {
+  customEndpointApiStyleSchema,
+  setupCustomEndpointCapabilitySchema,
+  setupFeaturesSchema,
+  utcOffsetSchema,
+} from "@/types/db/schema";
 
-export const SETUP_DRAFT_SCHEMA_VERSION = 1;
+export const SETUP_DRAFT_SCHEMA_VERSION = 2;
 
 const setupDraftContextSchema = z.enum(["guild", "dm"]);
 export type SetupDraftContext = z.infer<typeof setupDraftContextSchema>;
@@ -52,10 +57,18 @@ export const setupDraftUserByokAccessSchema = z
   .strict();
 export type SetupDraftUserByokAccess = z.infer<typeof setupDraftUserByokAccessSchema>;
 
+const setupDraftOptionAccessSchema = z
+  .object({
+    mode: z.literal("option"),
+    value: z.string().min(1).max(40),
+  })
+  .strict();
+
 export const setupDraftProviderAccessSchema = z.discriminatedUnion("mode", [
   setupDraftCatalogAccessSchema,
   setupDraftCustomEndpointAccessSchema,
   setupDraftUserByokAccessSchema,
+  setupDraftOptionAccessSchema,
 ]);
 export type SetupDraftProviderAccess = z.infer<typeof setupDraftProviderAccessSchema>;
 
@@ -82,8 +95,9 @@ export const setupDraftStartingSettingsSchema = z
   .object({
     presetId: z.number().int(),
     humanizer: z.number().int().min(0).max(3),
-    timezoneOffset: z.number().int().min(-12).max(14),
+    timezoneOffset: utcOffsetSchema,
     systemPrompt: setupDraftSystemPromptSchema,
+    features: setupFeaturesSchema,
   })
   .strict();
 export type SetupDraftStartingSettings = z.infer<typeof setupDraftStartingSettingsSchema>;
@@ -108,7 +122,7 @@ export type SetupDraftRecord = z.infer<typeof setupDraftRecordSchema>;
 
 export function isSetupDraftProviderAccessComplete(access: SetupDraftProviderAccess | null | undefined): boolean {
   if (!access) return false;
-  if (access.mode === "catalog" || access.mode === "user-byok") {
+  if (access.mode === "catalog" || access.mode === "user-byok" || access.mode === "option") {
     return true;
   }
   // A connection-only custom endpoint must never count as complete, because committing it would produce a

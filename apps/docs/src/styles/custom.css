@@ -97,6 +97,12 @@
   background-color: var(--tb-color-red);
 }
 
+.starlight-aside--tip {
+  --sl-color-asides-text-accent: var(--sl-color-blue-high);
+  --sl-color-asides-border: var(--sl-color-blue);
+  background-color: var(--sl-color-blue-low);
+}
+
 /*
   Landing-page layout helpers.
   Global (not component-scoped) so Markdown/MDX content pages can use them:

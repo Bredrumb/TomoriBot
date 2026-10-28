@@ -72,6 +72,8 @@ import { callGoogleStructuredJSON } from "../google/googleStructuredOutput";
 import { generateConversationSummaryGoogle, generateRoleplaySummaryGoogle } from "../google/compactGenerator";
 import { generatePresetFromPrompt } from "../google/presetGenerator";
 import { validateGoogleModelsEndpoint } from "../google/googleCredentialValidation";
+import { isOperatorActionableProviderError } from "@/utils/provider/providerErrorClassification";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { getActiveTemperature, isParamDisabled, omitGeminiSampling } from "@/utils/provider/samplingControl";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
@@ -193,10 +195,17 @@ export class VertexProvider
       const adapter = new VertexStreamAdapter();
       const providerError = adapter.handleProviderError(error);
 
-      await log.error("Vertex AI configuration validation failed", error, {
+      await reportProviderFailure({
+        summary: "Vertex AI configuration validation failed",
         errorType: "APIKeyValidationError",
-        metadata: {
+        error,
+        expected: !isOperatorActionableProviderError(providerError),
+        dimensions: {
+          operation: "key-validation",
           provider: "vertex",
+          providerErrorCode: providerError.code ?? "unknown",
+        },
+        metadata: {
           errorCode: providerError.code,
           errorType: providerError.type,
         },
@@ -326,6 +335,9 @@ export class VertexProvider
     streamingContext?: StreamingContext,
   ): Promise<Array<Record<string, unknown>>> {
     try {
+      if (streamingContext) {
+        streamingContext.speechToolState ??= { userId: streamingContext.triggererUserId };
+      }
       const toolStateForContext: ToolStateForContext = {
         server_id: tomoriState.server_id.toString(),
         activePersonaHasElevenlabsVoice: Boolean(
@@ -334,7 +346,11 @@ export class VertexProvider
             tomoriState.speech_voice_id?.trim(),
         ),
         activePersonaVoiceDesignPrompt: tomoriState.speech_voice_design_prompt?.trim() || null,
-        activePersonaVoiceName: tomoriState.speech_voice_name,
+        activePersonaVoiceSampleId: tomoriState.speech_voice_sample_id,
+        activePersonaVoiceId: tomoriState.speech_voice_id,
+        activePersonaVoiceSourcePriority: tomoriState.voice_source_priority,
+        speechToolState: streamingContext?.speechToolState,
+
         diffusion_model_id: tomoriState.config.diffusion_model_id,
         nai_diffusion_model_id: tomoriState.config.nai_diffusion_model_id,
         video_model_id: tomoriState.config.video_model_id,
@@ -347,6 +363,7 @@ export class VertexProvider
           supports_structoutput: tomoriState.llm.supports_structoutput,
         },
         config: {
+          emoji_usage_enabled: tomoriState.config.emoji_usage_enabled,
           sticker_usage_enabled: tomoriState.config.sticker_usage_enabled,
           web_search_enabled: tomoriState.config.web_search_enabled,
           self_teaching_enabled: tomoriState.config.self_teaching_enabled,
@@ -357,6 +374,9 @@ export class VertexProvider
           user_blocking_enabled: tomoriState.config.user_blocking_enabled,
           user_info_updates_enabled: tomoriState.config.user_info_updates_enabled,
           thread_creation_enabled: tomoriState.config.thread_creation_enabled,
+          conditioning_interactions_enabled: tomoriState.config.conditioning_interactions_enabled,
+          dice_rolling_enabled: tomoriState.config.dice_rolling_enabled,
+          danbooru_enabled: tomoriState.config.danbooru_enabled,
         },
       };
 

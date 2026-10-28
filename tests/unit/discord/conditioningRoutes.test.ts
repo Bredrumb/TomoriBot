@@ -30,6 +30,7 @@ function makeEntry(overrides: Partial<ConditioningAggregateEntry> = {}): Conditi
     totalCount: 1,
     updatedAt: new Date(1_000_000),
     userDiscIds: ["u1"],
+    personaActors: [],
     conditioningIds: [1],
     ...overrides,
   };

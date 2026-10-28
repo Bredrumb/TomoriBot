@@ -48,7 +48,7 @@ Only `card.json` is decompressed and converted. The `assets/` directory is exclu
    contextual trigger metadata.
 
 When an imported archive carries bundled assets, the import succeeds for text data and surfaces a
-notice pointing the user to `/server avatar` and `/config` > Persona > Sprites to configure visuals
+notice pointing the user to `/config` > `Persona` > `Identity & Personality` and `/config` > `Persona` > `Sprites` to configure visuals
 manually.
 
 ## Field mapping and schema validation

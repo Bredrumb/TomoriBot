@@ -1,13 +1,41 @@
+import type { SendableChannel } from "@/utils/discord/resolveSendableChannel";
+import type { PersonaPostContext } from "@/utils/discord/webhook/personaPost";
 import type { AnyThreadChannel, BaseGuildTextChannel, Client, Message, TextChannel } from "discord.js";
 import { ChannelType } from "discord.js";
 import type { WebhookCreateErrorReason } from "@/utils/discord/webhook/fallback";
 import { getOrCreateWebhook, resolvePersonaWebhookIdentity } from "@/utils/discord/webhookManager";
+import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
+import { TOMORIBOT_ERROR_FOOTER_KEY } from "@/utils/discord/stream/errorUi";
+import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { channelLocks, setActiveChannelTurnState, setChannelToolCallChainActive } from "@/utils/chat/channelQueue";
 import { cacheUserImpersonationWebhook, resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
 import type { ChatResponseSink, ChatResponseTarget, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import type { ProviderError } from "@/types/stream/interfaces";
+
+export function buildChatPersonaPostContext(context: ChatTurnContext): PersonaPostContext {
+  const target = context.responseTarget;
+  return {
+    channel: context.channel as SendableChannel,
+    persona: context.currentPersona,
+    deliveryMode:
+      context.streamingContext.deliveryMode ?? (context.isUserImpersonation ? "user_impersonation" : "persona"),
+    webhook: target?.webhook,
+    impersonatedIdentity: target
+      ? {
+          username: target.personaUsername,
+          avatarUrl: target.personaAvatarUrl,
+          avatarDataUri: target.personaAvatarUrl?.startsWith("data:image/") ? target.personaAvatarUrl : undefined,
+        }
+      : undefined,
+    abortSignal: context.streamingContext.abortSignal,
+    holdResponseText: context.streamingContext.holdResponseText,
+    deliveryReceipts: context.streamingContext.deliveryReceipts,
+    deliveryState: context.streamingContext.deliveryState,
+    locale: context.locale,
+  };
+}
 
 const WEBHOOK_ERROR_COOLDOWN_MS = 10 * 60_000;
 const webhookErrorCooldowns = new Map<string, number>();
@@ -141,6 +169,7 @@ async function resolveResponseTarget(context: ChatTurnContext): Promise<ChatResp
   const identity = await resolvePersonaWebhookIdentity(currentPersona, guild);
   return {
     webhook: webhookResult.webhook,
+    deliveryMode: "persona",
     personaUsername: identity.username ?? currentPersona.persona_nickname,
     personaAvatarUrl: identity.avatarDataUri ?? identity.avatarUrl,
     webhookTargetChannel: webhookTargetChannel as BaseGuildTextChannel,
@@ -176,6 +205,7 @@ async function createUserImpersonationTarget(
   return {
     webhook,
     temporaryWebhook: webhook,
+    deliveryMode: "user_impersonation",
     personaUsername: displayName,
     personaAvatarUrl: identity.avatarUrl,
     prefixStrippingName: displayName,
@@ -214,7 +244,11 @@ async function emitGenerationError(context: ChatTurnContext, error: unknown): Pr
     context.streamingContext.generationErrorReported = true;
   }
 
-  log.error(`Generation failed for message ${context.message.id}`, error);
+  if (classifySendFailure(error)) {
+    log.warn(`Generation failed for message ${context.message.id}`, error);
+  } else {
+    log.error(`Generation failed for message ${context.message.id}`, error);
+  }
   if (context.isUserImpersonation) {
     throw error instanceof Error ? error : new Error("User impersonation failed before a reply could be sent.");
   }
@@ -230,13 +264,22 @@ async function emitGenerationError(context: ChatTurnContext, error: unknown): Pr
       color: ColorCode.ERROR,
       titleKey: "genai.generic_error_title",
       descriptionKey: "genai.stream.streaming_failed_description",
-      tipKeys: ["genai.tips.refresh_context"],
+      tipKeys: await withProviderOptionCopy(["genai.tips.refresh_context"], {
+        surface: "recovery",
+        managedProvider: context.usageContext?.credentialProvider ?? null,
+        userDiscId: context.userDiscId,
+        serverId: context.tomoriState.server_id,
+        credentialScope:
+          context.usageContext?.credentialScope ??
+          (context.textCredentialSource === "personal"
+            ? "personal"
+            : context.textCredentialSource === "server"
+              ? "server"
+              : undefined),
+      }),
+      footerKey: TOMORIBOT_ERROR_FOOTER_KEY,
     },
-    {
-      webhook: context.responseTarget?.webhook,
-      personaUsername: context.responseTarget?.personaUsername,
-      personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
-    },
+    buildChatPersonaPostContext(context),
   ).catch((embedError: unknown) => {
     // Reporting a failure must not itself fail. The two causes worth naming are a channel the
     // send cannot reach (deleted, or the bot lost access), where the retry this would trigger

@@ -72,16 +72,12 @@ export default {
     },
     name_conflict_title: `🔴 Conflito de Nome de Persona`,
     name_conflict_description: `Uma persona chamada **{name}** já existe neste servidor. Nomes de persona devem ser únicos dentro de um servidor.`,
+    name_too_long_title: `Nome de Persona Muito Longo`,
+    name_too_long_description: `O primeiro nome é usado como meu nome de exibição, que pode ter no máximo {max} caracteres. Encurte-o e tente novamente.`,
     export: {
+      persona_description: "Persona que você quer exportar",
+      export_json_description: "Exportar um arquivo JSON importável em vez de PNG (sem imagem de avatar)",
       description: `Exportar a personalidade atual como um arquivo PNG compartilhável`,
-      export_json_select_label: `Exportar JSON`,
-      export_json_select_description: `Opcional: exportar um arquivo JSON importável em vez disso (sem imagem de avatar)`,
-      persona_modal_title: `Selecionar Persona`,
-      persona_select_label: `Persona`,
-      persona_select_description: `Escolha qual persona exportar.`,
-      persona_select_placeholder: `Selecione uma persona...`,
-      main_persona_description: `Persona Principal`,
-      alter_persona_description: `Alter`,
       success_title: `🟢 Persona Exportada com Sucesso`,
       success_description: `A persona atual **{nickname}** foi exportada! Compartilhe este arquivo PNG com outros para espalhar esta configuração de personalidade.`,
       success_description_json: `A persona atual **{nickname}** foi exportada como um arquivo JSON.
@@ -176,6 +172,7 @@ Por favor, edite o arquivo de importação para usar um nome diferente, ou remov
       error_invalid_config: `Campos de configuração inválidos nos dados da persona`,
       error_no_server_data: `Servidor não encontrado no banco de dados. Por favor, execute \`/setup\` primeiro.`,
       error_name_conflict: `Uma persona com o nome **{name}** já existe neste servidor. Por favor, use um nome diferente.`,
+      error_nickname_too_long: `O nome desta persona tem mais de {max} caracteres, o limite para um apelido no servidor. Encurte o nome no arquivo e importe-o novamente.`,
       error_nsfw_persona: `Esta persona está marcada como NSFW, então \`/persona import\` não pode carregá-la. Use \`/nsfw persona import\`.`,
       error_import_failed: `Falha ao importar os dados da persona`,
       error_not_json: `O arquivo importado deve conter dados JSON válidos`,
@@ -186,12 +183,10 @@ Por favor, edite o arquivo de importação para usar um nome diferente, ou remov
       refresh_reminder: `Execute \`/refresh\` para aplicar a atualização da persona neste chat`,
     },
     remove: {
+      persona_description: "Alter que você quer remover",
       description: `Remover um alter do servidor`,
       no_permission_title: `🔴 Permissão Negada`,
       no_permission_description: `Você precisa da permissão **Gerenciar Servidor** para remover alters.`,
-      modal_title: `Remover Alter`,
-      select_label: `Alter`,
-      select_placeholder: `Escolha um alter para remover...`,
       no_alters_error_title: `🟡 Nenhum Alter`,
       no_alters_error_description: `Não há alters para remover. Importe alters usando \`/persona import type:alter\`.`,
       success_title: `🟢 Alter Removido`,
@@ -231,7 +226,7 @@ Palavras-gatilho ({trigger_word_count}): {triggers}`,
       modal: {
         title: `Gerar Personalidade com IA`,
         character_name_label: `Nome do Personagem`,
-        character_name_description: `Nomes separados por vírgula ("," ou "、"): todos viram gatilhos; o 1º vira o nome de exibição.`,
+        character_name_description: `Nomes separados por vírgula: todos viram gatilhos; o primeiro é o nome de exibição (máx. 32).`,
         character_name_placeholder: `ex: Hatsune Miku, Miku, 初音ミク`,
         character_info_label: `Info do Personagem & Exemplos de Fala`,
         character_info_description: `Descreva o personagem e como ele fala`,
@@ -252,8 +247,6 @@ Palavras-gatilho ({trigger_word_count}): {triggers}`,
       field_additional_inst: `Instruções Adicionais`,
       wrong_provider_title: `🔴 Provedor Incompatível`,
       wrong_provider_description: `A geração de predefinição requer um provedor compatível. Seu provedor atual é **{current_provider}**. Use \`/config\` > Modelos > Mudar Modelos para mudar para um provedor suportado.`,
-      no_api_key_title: `🔴 Nenhuma Chave de API`,
-      no_api_key_description: `Nenhum provedor ativo está configurado. Use \`/setup\` (primeira vez) ou \`/providers\` para registrar um.`,
       model_incompatible_title: `Modelo Incompatível`,
       model_incompatible_description: `Seu modelo atual (**{model_name}**) não suporta **SAÍDA ESTRUTURADA**, que é necessária para a geração de persona.
 
@@ -272,8 +265,11 @@ Use \`/config\` > Modelos > Mudar Modelos para mudar para um modelo que suporte 
 **Próximos passos:**
 1. Use \`/config\` > Modelos > Mudar Modelos para mudar para um modelo com ferramentas habilitadas, OU
 2. Gere novamente sem a pesquisa na web (escolha "Não" quando perguntado)`,
-      api_key_decrypt_failed_title: `🔴 Erro na Chave de API`,
-      api_key_decrypt_failed_description: `Falha ao descriptografar as credenciais do provedor ativo. Por favor, reconfigure-as usando \`/providers\`.`,
+      web_search_failed_title: `Geração da persona cancelada`,
+      web_search_failed_description: `A geração da persona foi cancelada porque a busca na web solicitada falhou.
+
+**O que você pode fazer**
+Tente novamente em instantes ou escolha \`Não\` em \`Pesquisar na web?\` para gerar a partir da sua descrição. Se a busca continuar falhando, peça a quem gerencia o servidor para verificar a busca na web em \`/config\` e o acesso ao provedor em \`/providers\`.`,
       vision_credentials_unavailable_title: `🔴 Credenciais do Modelo de Visão Indisponíveis`,
       vision_credentials_unavailable_description: `Seu modelo de visão (**{vision_model_name}**) roda no provedor **{vision_provider}**, mas sua chave de API salva não pôde ser usada para descrever a imagem. Reconfigure as credenciais desse provedor com \`/providers\`, ou verifique \`/config\` > Modelos.`,
       invalid_image_title: `🔴 Imagem Inválida`,
@@ -282,11 +278,8 @@ Use \`/config\` > Modelos > Mudar Modelos para mudar para um modelo que suporte 
       error_download_timeout: `O download do avatar atingiu o tempo limite. Por favor, tente novamente.`,
       error_download_failed: `Falha ao baixar a imagem do avatar.`,
       processing_title: `Gerando Personalidade...`,
-      processing_description: `Isso pode levar de 1 a 2 minutos. Por favor, aguarde enquanto o personagem é gerado...
-
-Isso pode produzir resultados inesperados. Você pode gerar novamente se necessário.`,
-      captioning_title: `Descrevendo seu avatar...`,
-      captioning_description: `Seu modelo principal não consegue ver imagens, então primeiro peço ao seu modelo de visão (**{model_name}**) que descreva o avatar enviado. Depois, seu modelo principal escreve a personalidade a partir dessa descrição. Isso pode levar 1-2 minutos.`,
+      processing_description: `Isso pode levar de 1 a 2 minutos. Por favor, aguarde enquanto o personagem é gerado...`,
+      processing_footer: `Isso pode produzir resultados inesperados. Você pode gerar novamente se necessário.`,
       generation_failed_title: `🔴 Falha na Geração`,
       generation_failed_description: `Falha ao gerar personalidade: {error}
 
@@ -327,7 +320,7 @@ Ou pressione o botão Importar`,
       modal: {
         title: `Criar Persona`,
         character_name_label: `Nome do Personagem`,
-        character_name_description: `Nomes separados por vírgula ("," ou "、"): todos viram gatilhos; o 1º vira o nome de exibição.`,
+        character_name_description: `Nomes separados por vírgula: todos viram gatilhos; o primeiro é o nome de exibição (máx. 32).`,
         character_name_placeholder: `ex: Hatsune Miku, Miku, 初音ミク`,
         character_desc_label: `Descrição do Personagem`,
         character_desc_placeholder: `Descreva seu personagem (personalidade, aparência, história, etc.)`,

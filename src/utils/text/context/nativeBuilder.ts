@@ -77,13 +77,14 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     preloadedCustomExpressions,
     isUserImpersonation = false,
     impersonatedUserId,
+    shortTermMemoryUserId,
     impersonatedUserNickname,
     impersonatedUserPrompt,
     personaUserBlocks,
     includeTimestamps = false,
     explicitLongTermMemoryIntent: explicitLongTermMemoryIntentOverride,
     deliberateToolAllowedNames,
-    suppressDefaultSystemPrompt = false,
+    presetOwnsSystemPrompt = false,
     messageIdMap,
   } = params;
 
@@ -148,6 +149,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
             nai_diffusion_model_id: tomoriState.config.nai_diffusion_model_id,
             video_model_id: tomoriState.config.video_model_id,
             config: {
+              emoji_usage_enabled: tomoriConfig.emoji_usage_enabled,
               sticker_usage_enabled: tomoriConfig.sticker_usage_enabled,
               web_search_enabled: tomoriConfig.web_search_enabled,
               self_teaching_enabled: tomoriConfig.self_teaching_enabled,
@@ -158,6 +160,9 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
               user_blocking_enabled: tomoriConfig.user_blocking_enabled,
               user_info_updates_enabled: tomoriConfig.user_info_updates_enabled,
               thread_creation_enabled: tomoriConfig.thread_creation_enabled,
+              conditioning_interactions_enabled: tomoriConfig.conditioning_interactions_enabled,
+              dice_rolling_enabled: tomoriConfig.dice_rolling_enabled,
+              danbooru_enabled: tomoriConfig.danbooru_enabled,
             },
           }
         : undefined,
@@ -183,7 +188,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       isUserImpersonation,
       impersonatedIdentityName,
       impersonatedUserPrompt,
-      suppressDefaultSystemPrompt,
+      presetOwnsSystemPrompt,
       snapshot,
       toolPromptMacroResolver,
       convertMentions,
@@ -232,7 +237,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       botName,
       personalMemoriesEnabled: tomoriConfig.personal_memories_enabled,
       conversationCorpus,
-      channelName,
+      channelId,
+      parentChannelId,
       channelMemoryEnabled: tomoriConfig.channel_memory_enabled,
       client,
       convertMentions,
@@ -305,6 +311,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       impersonatedIdentityName,
       matrixUsers: preparedParticipantContext.matrixUsers,
       syntheticUsers: preparedParticipantContext.syntheticUsers,
+      messageProxyUsers: preparedParticipantContext.messageProxyUsers,
       publicPersonaProfiles: preparedParticipantContext.publicPersonaProfiles,
       preloadedReferencedUserRows: preparedParticipantContext.referencedUserRows,
       referencedUserIds: preparedParticipantContext.referencedUserIds,
@@ -317,7 +324,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   );
 
   try {
-    const actualTriggeringUserId = impersonatedUserId ?? snapshot?.triggererUserRow?.user_disc_id;
+    const actualTriggeringUserId =
+      impersonatedUserId ?? shortTermMemoryUserId ?? snapshot?.triggererUserRow?.user_disc_id;
     // Per-server master switch (migration 054): when STM is disabled we no longer skip the
     // whole build. "Off" means the bot stops AUTO-managing STM (the write tool and the
     // cadence nudge are suppressed): but existing STM content STILL surfaces so admins can
@@ -362,10 +370,19 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   // schemas as JSON in-band so endpoints that ignore the native `tools` field
   // still expose them to the model. Placed in the stable reference zone (right
   // before server documents) to stay inside the prompt-cache-friendly prefix.
-  await appendOptionalItem(contextItems, buildVerbatimToolDefinitionsContextItem({ tomoriState }));
   await appendOptionalItem(
     contextItems,
-    buildServerDocumentContextItem({ tomoriState, simplifiedMessageHistory, triggererUserId, channelName }),
+    buildVerbatimToolDefinitionsContextItem({ tomoriState, userId: triggererUserId }),
+  );
+  await appendOptionalItem(
+    contextItems,
+    buildServerDocumentContextItem({
+      tomoriState,
+      simplifiedMessageHistory,
+      triggererUserId,
+      channelId,
+      parentChannelId,
+    }),
   );
   await appendConditioningContext({
     contextItems,

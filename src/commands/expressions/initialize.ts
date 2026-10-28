@@ -1,3 +1,9 @@
+import { withProviderUsageContext } from "@/utils/provider/providerUsage";
+import {
+  findProviderRequestDeniedError,
+  createProviderUsageRecorder,
+  getProviderRequestFailureCopy,
+} from "@/utils/provider/providerUsage";
 /**
  * /expressions initialize command
  *
@@ -18,7 +24,8 @@ import type { UserRow, ErrorContext } from "@/types/db/schema";
 import { getAllEmotionKeys } from "@/types/misc/emotions";
 import { type ExpressionBatchResult, ExpressionBatchResultSchema } from "@/providers/utils/structuredOutput";
 import type { StructuredOutputResult } from "@/types/provider/featureInterfaces";
-import { decryptApiKey } from "@/utils/security/crypto";
+import { getCapabilityCredentialFailureCopy, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
 import { invalidateEmojiStickerCache } from "@/utils/cache/emojiStickerCache";
 import { lazySyncGuildEmojis } from "@/utils/cache/emojiLazySync";
 import { lazySyncGuildStickers } from "@/utils/cache/stickerLazySync";
@@ -154,11 +161,24 @@ export async function execute(
   // Overlay the invoking user's personal (BYOK) provider so the expression
   //     generation runs on their personal model/key when configured. Done after
   //     deferReply since it performs DB reads (keeps the 3s ack window safe).
-  const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
+  let { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
 
   const overwrite = interaction.options.getBoolean("overwrite") ?? false;
 
   try {
+    let credentials: Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
+    try {
+      credentials = await resolveCapabilityCredentials(baseTomoriState.server_id, "text", {
+        userId: userData.user_id,
+        textModel: baseTomoriState.llm,
+      });
+      tomoriState = await resolveTextCredentialState(tomoriState, credentials);
+    } catch (error) {
+      const failure = getCapabilityCredentialFailureCopy(error, locale);
+      if (!failure) throw error;
+      await replyInfoEmbed(interaction, locale, { ...failure, color: ColorCode.ERROR });
+      return;
+    }
     log.info(`[Initialize Expressions] Force syncing emojis/stickers for guild ${interaction.guild.name}`);
 
     await lazySyncGuildEmojis(interaction.guild, tomoriState.server_id, true);
@@ -172,7 +192,25 @@ export async function execute(
     let effectiveLlm = llm;
 
     if (!llm.sees_images || !llm.supports_structoutput) {
-      const visionLlm = tomoriState.vision_llm;
+      let visionLlm = tomoriState.vision_llm;
+      if (visionLlm) {
+        try {
+          const visionCredentials = await resolveCapabilityCredentials(tomoriState.server_id, "vision", {
+            userId: userData.user_id,
+          });
+          const visionState = await resolveTextCredentialState(tomoriState, visionCredentials, "vision");
+          visionLlm = visionState.llm;
+          if (visionLlm.sees_images && visionLlm.supports_structoutput) {
+            tomoriState = visionState;
+            credentials = visionCredentials;
+          }
+        } catch (error) {
+          const failure = getCapabilityCredentialFailureCopy(error, locale);
+          if (!failure) throw error;
+          await replyInfoEmbed(interaction, locale, { ...failure, color: ColorCode.ERROR });
+          return;
+        }
+      }
 
       if (visionLlm?.sees_images && visionLlm.supports_structoutput) {
         log.info(
@@ -284,33 +322,7 @@ export async function execute(
     const structuredOutputCapability = await resolveStructuredOutputCapability(provider);
     const expressionBatchSize = structuredOutputCapability?.getExpressionInitializationBatchSize?.() ?? null;
 
-    // Verify an API key exists, then decrypt it once for reuse across all batches
-    if (!tomoriState.config.api_key) {
-      log.warn(`[Initialize Expressions] API key missing for provider "${effectiveLlm.llm_provider}"`, undefined, {
-        userId: userData.user_id,
-        serverId: tomoriState.server_id,
-        personaId: tomoriState.persona_id,
-        metadata: {
-          command: "server expressions initialize",
-          guildId: interaction.guild.id,
-          provider: effectiveLlm.llm_provider,
-        },
-      });
-
-      await interaction.editReply({
-        embeds: [
-          {
-            title: localizer(locale, "general.errors.api_key_missing_title"),
-            description: localizer(locale, "general.errors.api_key_missing_description"),
-            color: hexToNumber(ColorCode.ERROR),
-          },
-        ],
-      });
-      return;
-    }
-
-    const keyVersion = tomoriState.config.key_version || 1;
-    const decryptedApiKey = await decryptApiKey(tomoriState.config.api_key, keyVersion);
+    const { apiKey: decryptedApiKey, usageContext } = credentials;
 
     // Overwrite never clears up front: a provider outage mid-run must leave the old
     // classifications intact, so rows are replaced only as each batch succeeds.
@@ -440,18 +452,38 @@ export async function execute(
         )}`,
       );
 
-      const result: StructuredOutputResult<ExpressionBatchResult> = await callExpressionInitializationForProvider({
-        providerName: provider,
-        apiKey: decryptedApiKey,
-        model: effectiveModelName,
-        endpointUrl: tomoriState.config.custom_endpoint_url ?? undefined,
-        systemPrompt,
-        userPrompt,
-        images,
-        temperature,
-      });
+      const result: StructuredOutputResult<ExpressionBatchResult> = await withProviderUsageContext(
+        usageContext,
+        async () =>
+          callExpressionInitializationForProvider({
+            providerName: provider,
+            apiKey: decryptedApiKey,
+            model: effectiveModelName,
+            endpointUrl: tomoriState.config.custom_endpoint_url ?? undefined,
+            systemPrompt,
+            userPrompt,
+            images,
+            temperature,
+            onUsage: createProviderUsageRecorder(usageContext, effectiveModelName),
+          }),
+      );
 
       log.info(`LLM structured output response (batch ${batchNumber}): ${JSON.stringify(result, null, 2)}`);
+
+      const denied = result.success ? null : findProviderRequestDeniedError(result.cause, usageContext);
+      if (denied) {
+        const copy = getProviderRequestFailureCopy(denied, locale);
+        await interaction.editReply({
+          embeds: [
+            {
+              title: localizer(locale, copy.titleKey),
+              description: copy.description,
+              color: hexToNumber(ColorCode.ERROR),
+            },
+          ],
+        });
+        return;
+      }
 
       // On a provider error, log and let the loop retry this chunk (capped by maxChunkRetries)
       if (!result.success) {
@@ -543,6 +575,14 @@ export async function execute(
       });
     }
   } catch (error) {
+    const denied = findProviderRequestDeniedError(error);
+    if (denied) {
+      await replyInfoEmbed(interaction, locale, {
+        ...getProviderRequestFailureCopy(denied, locale),
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id ?? null,

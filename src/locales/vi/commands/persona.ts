@@ -72,16 +72,12 @@ export default {
     },
     name_conflict_title: `🔴 Trùng tên persona`,
     name_conflict_description: `Persona có tên **{name}** đã tồn tại trên máy chủ này. Tên persona phải là duy nhất trong một máy chủ.`,
+    name_too_long_title: `Tên persona quá dài`,
+    name_too_long_description: `Tên đầu tiên được dùng làm tên hiển thị của mình, tối đa {max} ký tự. Hãy rút ngắn tên và thử lại.`,
     export: {
+      persona_description: "Persona bạn muốn xuất",
+      export_json_description: "Xuất tệp JSON có thể nhập thay cho PNG (không có ảnh đại diện)",
       description: `Xuất persona hiện tại thành tệp PNG có thể chia sẻ`,
-      export_json_select_label: `Xuất JSON`,
-      export_json_select_description: `Tùy chọn: xuất tệp JSON có thể nhập thay thế (không kèm avatar)`,
-      persona_modal_title: `Chọn persona`,
-      persona_select_label: `Persona`,
-      persona_select_description: `Chọn persona muốn xuất.`,
-      persona_select_placeholder: `Chọn một persona...`,
-      main_persona_description: `Persona chính`,
-      alter_persona_description: `Persona alter`,
       success_title: `🟢 Xuất persona thành công`,
       success_description: `Persona hiện tại **{nickname}** đã được xuất! Hãy chia sẻ tệp PNG này với người khác để lan tỏa cấu hình persona này.`,
       success_description_json: `Persona hiện tại **{nickname}** đã được xuất thành tệp JSON.
@@ -176,6 +172,7 @@ Vui lòng chỉnh sửa tệp nhập để dùng tên khác, hoặc xóa persona
       error_invalid_config: `Các trường cấu hình trong dữ liệu persona không hợp lệ`,
       error_no_server_data: `Không tìm thấy máy chủ trong cơ sở dữ liệu. Vui lòng chạy \`/setup\` trước.`,
       error_name_conflict: `Một persona có tên **{name}** đã tồn tại trên máy chủ này. Vui lòng dùng tên khác.`,
+      error_nickname_too_long: `Tên của persona này dài hơn {max} ký tự, giới hạn cho biệt danh trong máy chủ. Hãy rút ngắn tên trong tệp và nhập lại.`,
       error_nsfw_persona: `Persona này được đánh dấu NSFW, nên \`/persona import\` không thể tải nó. Hãy dùng \`/nsfw persona import\`.`,
       error_import_failed: `Không thể nhập dữ liệu persona`,
       error_not_json: `Tệp được nhập phải chứa dữ liệu JSON hợp lệ`,
@@ -186,12 +183,10 @@ Vui lòng chỉnh sửa tệp nhập để dùng tên khác, hoặc xóa persona
       refresh_reminder: `Chạy \`/refresh\` để áp dụng cập nhật persona trong đoạn chat này`,
     },
     remove: {
+      persona_description: "Persona alter bạn muốn xóa",
       description: `Xóa một persona alter khỏi máy chủ`,
       no_permission_title: `🔴 Không có quyền`,
       no_permission_description: `Bạn cần có quyền **Quản lý máy chủ** để xóa persona alter.`,
-      modal_title: `Xóa persona alter`,
-      select_label: `Persona alter`,
-      select_placeholder: `Chọn một persona alter để xóa...`,
       no_alters_error_title: `🟡 Không có persona alter`,
       no_alters_error_description: `Không có persona alter nào để xóa. Nhập persona alter bằng cách dùng \`/persona import type:alter\`.`,
       success_title: `🟢 Đã xóa persona alter`,
@@ -231,7 +226,7 @@ Từ kích hoạt ({trigger_word_count}): {triggers}`,
       modal: {
         title: `Tạo persona bằng AI`,
         character_name_label: `Tên nhân vật`,
-        character_name_description: `Các tên cách nhau bằng dấu phẩy ("," hoặc "、"): đều thành từ kích hoạt; tên đầu là tên hiển thị.`,
+        character_name_description: `Tên cách nhau bằng dấu phẩy: đều thành từ kích hoạt; tên đầu là tên hiển thị (tối đa 32).`,
         character_name_placeholder: `vd: Hatsune Miku, Miku, 初音ミク`,
         character_info_label: `Thông tin nhân vật & mẫu lời thoại`,
         character_info_description: `Mô tả nhân vật và cách họ trò chuyện`,
@@ -252,8 +247,6 @@ Từ kích hoạt ({trigger_word_count}): {triggers}`,
       field_additional_inst: `Hướng dẫn bổ sung`,
       wrong_provider_title: `🔴 Nhà cung cấp không tương thích`,
       wrong_provider_description: `Tạo preset yêu cầu nhà cung cấp tương thích. Nhà cung cấp hiện tại của bạn là **{current_provider}**. Dùng \`/config\` > Models > Switch Models để chuyển sang nhà cung cấp được hỗ trợ.`,
-      no_api_key_title: `🔴 Không có khóa API`,
-      no_api_key_description: `Chưa cấu hình nhà cung cấp nào. Dùng \`/setup\` (lần đầu) hoặc \`/providers\` để đăng ký.`,
       model_incompatible_title: `Model không tương thích`,
       model_incompatible_description: `Model hiện tại (**{model_name}**) không hỗ trợ **STRUCTURED OUTPUT**, vốn là tính năng bắt buộc để tạo persona.
 
@@ -272,8 +265,11 @@ Dùng \`/config\` > Models > Switch Models để chuyển sang model hỗ trợ 
 **Các bước tiếp theo:**
 1. Dùng \`/config\` > Models > Switch Models để đổi sang model hỗ trợ công cụ, HOẶC
 2. Tạo lại mà không dùng tìm kiếm web (chọn "Không" khi được hỏi)`,
-      api_key_decrypt_failed_title: `🔴 Lỗi khóa API`,
-      api_key_decrypt_failed_description: `Không thể giải mã thông tin nhà cung cấp đang hoạt động. Hãy cấu hình lại bằng \`/providers\`.`,
+      web_search_failed_title: `Đã hủy tạo persona`,
+      web_search_failed_description: `Quá trình tạo persona đã bị hủy vì tìm kiếm web theo yêu cầu thất bại.
+
+**Những gì bạn có thể làm**
+Hãy thử lại sau giây lát, hoặc chọn \`Không\` ở mục \`Tìm kiếm trên web?\` để tạo từ mô tả của bạn. Nếu tìm kiếm tiếp tục thất bại, hãy nhờ người quản lý máy chủ kiểm tra tìm kiếm web trong \`/config\` và quyền truy cập nhà cung cấp trong \`/providers\`.`,
       vision_credentials_unavailable_title: `🔴 Không dùng được thông tin xác thực của model thị giác`,
       vision_credentials_unavailable_description: `Model thị giác của bạn (**{vision_model_name}**) chạy trên nhà cung cấp **{vision_provider}**, nhưng không thể dùng khóa API đã lưu của nó để mô tả hình ảnh. Hãy cấu hình lại thông tin xác thực của nhà cung cấp đó bằng \`/providers\`, hoặc kiểm tra \`/config\` > Models.`,
       invalid_image_title: `🔴 Ảnh không hợp lệ`,
@@ -282,11 +278,8 @@ Dùng \`/config\` > Models > Switch Models để chuyển sang model hỗ trợ 
       error_download_timeout: `Tải ảnh avatar xuống đã hết thời gian chờ. Vui lòng thử lại.`,
       error_download_failed: `Không thể tải ảnh avatar xuống.`,
       processing_title: `Đang tạo persona...`,
-      processing_description: `Có thể mất 1-2 phút. Vui lòng chờ mình tạo nhân vật...
-
-Kết quả đôi khi bất ngờ. Bạn có thể tạo lại nếu cần.`,
-      captioning_title: `Đang mô tả ảnh đại diện...`,
-      captioning_description: `Model chính của bạn không xem được hình ảnh, nên tôi nhờ model thị giác (**{model_name}**) mô tả ảnh đại diện bạn đã tải lên trước. Sau đó model chính sẽ viết tính cách dựa trên mô tả đó. Quá trình này có thể mất 1-2 phút.`,
+      processing_description: `Có thể mất 1-2 phút. Vui lòng chờ mình tạo nhân vật...`,
+      processing_footer: `Quá trình này có thể tạo ra kết quả không mong muốn. Bạn có thể tạo lại nếu cần.`,
       generation_failed_title: `🔴 Tạo thất bại`,
       generation_failed_description: `Không thể tạo persona: {error}
 
@@ -327,7 +320,7 @@ Hoặc nhấn nút Nhập`,
       modal: {
         title: `Tạo persona`,
         character_name_label: `Tên nhân vật`,
-        character_name_description: `Các tên cách nhau bằng dấu phẩy ("," hoặc "、"): đều thành từ kích hoạt; tên đầu là tên hiển thị.`,
+        character_name_description: `Tên cách nhau bằng dấu phẩy: đều thành từ kích hoạt; tên đầu là tên hiển thị (tối đa 32).`,
         character_name_placeholder: `vd: Hatsune Miku, Miku, 初音ミク`,
         character_desc_label: `Mô tả nhân vật`,
         character_desc_placeholder: `Mô tả nhân vật của bạn (tính cách, ngoại hình, tiểu sử, v.v.)`,

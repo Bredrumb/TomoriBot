@@ -2,12 +2,15 @@ import type { APIAttachment, Attachment } from "discord.js";
 import type { PersonaSpriteRow, TomoriPresetRow, TomoriState } from "@/types/db/schema";
 import type { ConditioningGroup } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import {
+  PERSONA_NICKNAME_MAX_LENGTH,
+  PERSONA_NICKNAME_MIN_LENGTH,
   personaNamingConfigSchema,
   validatePersonaNamingAuthoring,
   type AddressingStyle,
   type PersonaNamingConfig,
 } from "@/types/personaNaming";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import { personaRepository, personaSpriteRepository } from "@/utils/db/repositories";
 import { invalidatePersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
@@ -47,9 +50,6 @@ import {
   parseSampleDialogueBatch,
   readTxtUpload,
 } from "@/utils/teach/batchUploadUtils";
-
-export const PERSONA_NICKNAME_MIN_LENGTH = 2;
-export const PERSONA_NICKNAME_MAX_LENGTH = 32;
 
 const AVATAR_DOWNLOAD_TIMEOUT_MS = 15000;
 
@@ -530,7 +530,8 @@ export const configPersonaOperations: ConfigPersonaOperations = {
     if (!personaId) return { status: "write-failed" };
 
     const trimmed = newNickname.trim();
-    if (trimmed.length < PERSONA_NICKNAME_MIN_LENGTH || trimmed.length > PERSONA_NICKNAME_MAX_LENGTH) {
+    const nicknameLength = getDiscordTextLength(trimmed);
+    if (nicknameLength < PERSONA_NICKNAME_MIN_LENGTH || nicknameLength > PERSONA_NICKNAME_MAX_LENGTH) {
       return { status: "invalid-length" };
     }
 

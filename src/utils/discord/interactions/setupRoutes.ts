@@ -1,8 +1,11 @@
+import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 import {
   MessageFlags,
   PermissionsBitField,
   type ChatInputCommandInteraction,
+  type ButtonInteraction,
   type Client,
+  type ComponentInContainerData,
   type Guild,
 } from "discord.js";
 import {
@@ -23,6 +26,11 @@ import {
   updateSetupDraft,
   type SetupDraftReadResult,
 } from "@/utils/discord/interactions/setupDraftStore";
+import {
+  findProviderOption,
+  getProviderOptions,
+  providerOptionActionOption,
+} from "@/utils/provider/providerOptionRegistry";
 import {
   buildInteractionRouteId,
   parseInteractionRoute,
@@ -59,6 +67,7 @@ import {
   parseSetupTimezoneOffset,
   setupNoticeReceipt,
   toSetupSettingsCatalogs,
+  type SetupProviderOptionSummary,
   type SetupSettingsCatalogs,
 } from "@/utils/discord/ui/setupPanel";
 import { deliverGuardedPanel } from "@/utils/discord/interactions/panelController";
@@ -70,6 +79,7 @@ import {
 } from "@/utils/discord/ui/modals";
 import {
   setupCustomEndpointCapabilitySchema,
+  setupFeaturesSchema,
   type CustomEndpointApiStyle,
   type SetupConfig,
   type SetupCustomEndpointCapability,
@@ -81,6 +91,7 @@ import {
   validateCustomEndpointReachability,
 } from "@/utils/provider/customEndpointService";
 import { ProviderFactory } from "@/utils/provider/providerFactory";
+import { isAccountBalanceExhaustedError } from "@/utils/provider/providerErrorClassification";
 import { encryptApiKey } from "@/utils/security/crypto";
 import { parseNonce } from "@/utils/discord/panelRouteCodec";
 import { createNonce, parseLocale } from "@/utils/discord/panelRouteTokens";
@@ -89,11 +100,13 @@ import { configRepository, llmModelRepo, personaRepository, serverRepository } f
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { formatLlmDisplayLabel } from "@/utils/provider/modelDisplay";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { invalidateNaturalNudgeConfigCache } from "@/modules/natural-nudges/runtime/configCache";
 import { getCachedPresetAvatar, getPresetAvatarBuffer } from "@/utils/image/avatarHelper";
 import { lazySyncGuildEmojis } from "@/utils/cache/emojiLazySync";
 import { lazySyncGuildStickers } from "@/utils/cache/stickerLazySync";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { localizer, getDefaultBotName } from "@/utils/text/localizer";
+import { UTC_OFFSET_MAX, UTC_OFFSET_MIN } from "@/constants/utcOffset";
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
 import { recordPanelActionStat } from "@/utils/stats/panelActionMetrics";
 import { log, ColorCode } from "@/utils/misc/logger";
@@ -126,6 +139,7 @@ export type SetupWizardAction =
   | "endpoint-connection-submit"
   | "endpoint-model"
   | "endpoint-model-submit"
+  | "option-action"
   | "finish";
 
 const SETUP_WIZARD_ACTIONS = new Set<SetupWizardAction>([
@@ -141,6 +155,7 @@ const SETUP_WIZARD_ACTIONS = new Set<SetupWizardAction>([
   "endpoint-connection-submit",
   "endpoint-model",
   "endpoint-model-submit",
+  "option-action",
   "finish",
 ]);
 
@@ -148,6 +163,7 @@ export interface SetupWizardRoute {
   action: SetupWizardAction;
   locale: string;
   nonce: string;
+  modalNonce?: string;
 }
 
 function buildSetupRouteId(route: SetupWizardRoute): string {
@@ -169,6 +185,12 @@ export function parseSetupRoute(input: ParsedInteractionRoute | string): SetupWi
   const nonce = parseNonce(rawNonce);
   if (!nonce) return null;
 
+  if (action === "settings-submit") {
+    const modalNonce = parseNonce(parsed.segments[3]);
+    if (!modalNonce) return null;
+    return { action, locale, nonce, modalNonce };
+  }
+
   return { action: action as SetupWizardAction, locale, nonce };
 }
 
@@ -188,8 +210,15 @@ export function buildSetupSettingsRouteId(input: { locale: string; nonce: string
   return buildSetupRouteId({ action: "settings", locale: input.locale, nonce: input.nonce });
 }
 
-export function buildSetupSettingsSubmitRouteId(input: { locale: string; nonce: string }): string {
-  return buildSetupRouteId({ action: "settings-submit", locale: input.locale, nonce: input.nonce });
+export function buildSetupSettingsSubmitRouteId(input: { locale: string; nonce: string; modalNonce?: string }): string {
+  return buildInteractionRouteId(
+    SETUP_ROUTE_NAMESPACE,
+    SETUP_ROUTE_VERSION,
+    "settings-submit",
+    input.locale,
+    input.nonce,
+    input.modalNonce ?? createNonce(),
+  );
 }
 
 export function buildSetupProviderModeRouteId(input: { locale: string; nonce: string }): string {
@@ -220,6 +249,10 @@ export function buildSetupEndpointModelSubmitRouteId(input: { locale: string; no
   return buildSetupRouteId({ action: "endpoint-model-submit", locale: input.locale, nonce: input.nonce });
 }
 
+export function buildSetupOptionActionRouteId(input: { locale: string; nonce: string }): string {
+  return buildSetupRouteId({ action: "option-action", locale: input.locale, nonce: input.nonce });
+}
+
 export function buildSetupFinishRouteId(input: { locale: string; nonce: string }): string {
   return buildSetupRouteId({ action: "finish", locale: input.locale, nonce: input.nonce });
 }
@@ -229,14 +262,14 @@ export function buildSetupFinishRouteId(input: { locale: string; nonce: string }
  * rather than being described as a non-number.
  */
 function describeSetupSettingsRejection(rawTimezone: string | undefined, timezoneOffset: number | null): string {
-  const prefix = "commands.setup.wizard.";
   if (timezoneOffset === null) {
-    const typed = rawTimezone?.trim() ?? "";
-    // Blank is UTC rather than an error, so a rejection here is either unparseable or out of range.
-    const isOutOfRange = typed !== "" && !Number.isNaN(Number.parseFloat(typed));
-    return `${prefix}${isOutOfRange ? "settings_timezone_out_of_range" : "settings_timezone_invalid"}`;
+    const typedHours = Number.parseFloat(rawTimezone?.trim() ?? "");
+    const isOutOfRange = typedHours < UTC_OFFSET_MIN || typedHours > UTC_OFFSET_MAX;
+    return isOutOfRange
+      ? "commands.setup.wizard.settings_timezone_out_of_range"
+      : "commands.setup.wizard.settings_timezone_invalid";
   }
-  return `${prefix}settings_persona_stale`;
+  return "commands.setup.wizard.settings_persona_stale";
 }
 
 /**
@@ -266,7 +299,7 @@ async function readSetupHealth(workspaceKey: string): Promise<SetupHealthStatus>
  * commands that change it than by a sentence saying no.
  */
 async function replyWorkspaceAlreadySetup(
-  interaction: ChatInputCommandInteraction,
+  interaction: ChatInputCommandInteraction | ButtonInteraction,
   locale: string,
   workspaceKey: string,
 ): Promise<void> {
@@ -325,7 +358,10 @@ async function replyWorkspaceAlreadySetup(
  * Setup deliberately does not clear this state, because the alters on the workspace may be healthy
  * and only the config row or the model it points at is gone.
  */
-async function replyWorkspaceBroken(interaction: ChatInputCommandInteraction, locale: string): Promise<void> {
+async function replyWorkspaceBroken(
+  interaction: ChatInputCommandInteraction | ButtonInteraction,
+  locale: string,
+): Promise<void> {
   log.warn("[Setup] Workspace has a main persona row but state validation failed, surfacing repair guidance");
   await replyInfoEmbed(interaction, locale, {
     titleKey: "commands.setup.broken_state_title",
@@ -381,6 +417,7 @@ async function deliverSetupWizard(
     settingsCatalogs: SetupSettingsCatalogs | null | undefined;
   },
 ): Promise<void> {
+  const optionRender = await resolveSetupProviderOptionRender(interaction, draft, locale, nonce);
   const payload = buildSetupWizardPayload({
     draft,
     locale,
@@ -389,8 +426,42 @@ async function deliverSetupWizard(
     notice: options.notice,
     receipt: options.receipt,
     settingsCatalogs: options.settingsCatalogs,
+    providerOptions: optionRender.options,
+    optionComponents: optionRender.components,
+    optionReady: optionRender.ready,
   });
   await deliverGuardedPanel(interaction, payload, { locale, method: options.method, receipt: options.receipt });
+}
+
+interface SetupProviderOptionRender {
+  options: SetupProviderOptionSummary[];
+  components: readonly ComponentInContainerData[];
+  ready: boolean;
+}
+
+async function resolveSetupProviderOptionRender(
+  interaction: ChatInputCommandInteraction | GlobalRoutableInteraction,
+  draft: SetupDraftRecord,
+  locale: string,
+  nonce: string,
+): Promise<SetupProviderOptionRender> {
+  const render: SetupProviderOptionRender = { options: [], components: [], ready: false };
+  const selected = draft.providerAccess?.mode === "option" ? findProviderOption(draft.providerAccess.value) : undefined;
+  for (const option of getProviderOptions()) {
+    const setup = option.setup;
+    if (!setup || (setup.available && !setup.available({ context: draft.context }))) continue;
+    render.options.push({
+      value: option.value,
+      labelKey: setup.optionLabelKey,
+      descriptionKey: setup.optionDescriptionKey,
+      summaryKey: setup.summaryKey,
+    });
+    if (option !== selected) continue;
+    const context = { locale, draft, interaction, actionRouteId: buildSetupOptionActionRouteId({ locale, nonce }) };
+    render.ready = setup.ready ? (await setup.ready(context)).ready : true;
+    render.components = (await setup.components?.(context)) ?? [];
+  }
+  return render;
 }
 
 /**
@@ -420,6 +491,35 @@ function providerValidationFailureReceipt(locale: string): PanelReceipt {
     detail: localizer(locale, "commands.setup.wizard.provider_validation_failed"),
     reason: "setup_provider_validation_failed",
   };
+}
+
+function providerNoBalanceReceipt(locale: string): PanelReceipt {
+  return {
+    tone: "error",
+    heading: localizer(locale, "commands.setup.wizard.provider_validation_failed_title"),
+    detail: localizer(locale, "commands.setup.wizard.provider_validation_no_balance"),
+    reason: "setup_provider_validation_no_balance",
+  };
+}
+
+async function withRegistrationFailureCopy(
+  receipt: PanelReceipt,
+  locale: string,
+  actorDiscId: string,
+): Promise<PanelReceipt> {
+  const keys = await withProviderOptionCopy([], {
+    surface: "registration_failed",
+    managedProvider: null,
+    userDiscId: actorDiscId,
+    serverId: undefined,
+    credentialScope: "server",
+  });
+  return keys.length
+    ? {
+        ...receipt,
+        metadata: [receipt.metadata, ...keys.map((key) => localizer(locale, key))].filter(Boolean).join(" "),
+      }
+    : receipt;
 }
 
 function setupFailureReceipt(locale: string, detail: string): PanelReceipt {
@@ -572,6 +672,21 @@ async function revalidateSetupCommit(draft: SetupDraftRecord, locale: string): P
   if (access.mode === "user-byok" && draft.context === "dm") {
     return { notice: localizer(locale, "commands.setup.wizard.provider_byok_guild_only"), scope: "provider" };
   }
+  if (access.mode === "option") {
+    const setup = findProviderOption(access.value)?.setup;
+    if (!setup || (setup.available && !setup.available({ context: draft.context }))) {
+      return { notice: localizer(locale, "commands.setup.wizard.provider_invalid"), scope: "provider" };
+    }
+    if (setup.ready) {
+      const readiness = await setup.ready({ locale, draft });
+      if (!readiness.ready) {
+        return {
+          notice: localizer(locale, readiness.reasonKey ?? "commands.setup.wizard.provider_invalid"),
+          scope: "provider",
+        };
+      }
+    }
+  }
   if (access.mode === "catalog") {
     if (!isCatalogProviderCurrent(access)) {
       return { notice: localizer(locale, "commands.setup.wizard.provider_invalid"), scope: "provider" };
@@ -611,6 +726,9 @@ function toSetupProviderAccess(access: SetupDraftProviderAccess): SetupProviderA
   if (access.mode === "user-byok") {
     return { mode: "user-byok" };
   }
+  if (access.mode === "option") {
+    return { mode: "option", value: access.value };
+  }
   // A complete custom-endpoint draft always carries both halves: a connection-only draft never
   // passes the completeness gate that guards this path.
   return {
@@ -643,14 +761,34 @@ function resolveSystemPromptText(draft: SetupDraftRecord, catalogs: SetupSetting
   return catalogs.promptTexts.get(prompt.presetName) ?? null;
 }
 
-/** The `A Few Things to Note` entries that apply to a committed provider mode. */
-function buildSetupReceiptNotes(locale: string, access: SetupDraftProviderAccess, context: SetupDraftContext) {
+/**
+ * Whether the bot can chat in the setup channel, which setup cannot prove by succeeding because
+ * Discord serves interaction-token replies regardless of channel permissions.
+ */
+function canChatInSetupChannel(interaction: ChatInputCommandInteraction | GlobalRoutableInteraction): boolean {
+  const sendFlag = interaction.channel?.isThread()
+    ? PermissionsBitField.Flags.SendMessagesInThreads
+    : PermissionsBitField.Flags.SendMessages;
+  return interaction.appPermissions.has([
+    PermissionsBitField.Flags.ViewChannel,
+    PermissionsBitField.Flags.ReadMessageHistory,
+    sendFlag,
+  ]);
+}
+
+/** The `A Few Things to Note` entries that apply to a committed setup. */
+function buildSetupReceiptNotes(
+  locale: string,
+  access: SetupDraftProviderAccess,
+  context: SetupDraftContext,
+  canChatHere: boolean,
+) {
   const notes: Array<{ label: string; detail: string }> = [];
 
-  if (access.mode === "catalog" && access.provider === "novelai") {
+  if (context === "guild" && !canChatHere) {
     notes.push({
-      label: localizer(locale, "commands.setup.novelai_expressions_warning_field"),
-      detail: localizer(locale, "commands.setup.novelai_expressions_warning_value"),
+      label: localizer(locale, "commands.setup.channel_access_warning_field"),
+      detail: localizer(locale, "commands.setup.channel_access_warning_value"),
     });
   }
 
@@ -761,24 +899,6 @@ async function runSetupPostCommitEffects(input: {
   const { draft, locale, access } = input;
   const guild = "guild" in input.interaction ? (input.interaction.guild ?? null) : null;
 
-  if (access.mode === "catalog" && access.provider === "novelai") {
-    const tomoriState = await personaRepository.loadState(draft.workspaceKey);
-    if (tomoriState) {
-      try {
-        // NovelAI's token budget makes emoji and sticker injection counterproductive: they consume
-        // context without the model being able to use them. The receipt tells the actor they can
-        // re-enable both.
-        await configRepository.updateCapabilitiesConfig(tomoriState.server_id, {
-          emoji_usage_enabled: false,
-          sticker_usage_enabled: false,
-        });
-        log.info(`[Setup] Auto-disabled emoji/sticker usage for NovelAI server ${draft.workspaceKey}`);
-      } catch (disableError) {
-        log.warn(`[Setup] Failed to auto-disable emoji/sticker for NovelAI: ${disableError}`);
-      }
-    }
-  }
-
   if (draft.context === "guild") {
     await syncGuildExpressionsAfterSetup(guild, draft.workspaceKey);
   }
@@ -793,6 +913,18 @@ async function runSetupPostCommitEffects(input: {
         ? "commands.setup.wizard.receipt_footer_avatar_failed"
         : undefined;
 
+  const footerKeys =
+    access.mode === "catalog" || access.mode === "custom-endpoint"
+      ? await withProviderOptionCopy(footerKey ? [footerKey] : [], {
+          surface: "completion",
+          managedProvider: null,
+          userDiscId: input.interaction.user.id,
+          serverId: input.serverInternalId,
+          credentialScope: "server",
+        })
+      : footerKey
+        ? [footerKey]
+        : [];
   const payload = buildSetupSuccessPayload({
     locale,
     context: draft.context,
@@ -800,11 +932,13 @@ async function runSetupPostCommitEffects(input: {
     modelName: input.modelName,
     providerLabel: input.providerLabel,
     personaName: input.presetName,
-    notes: buildSetupReceiptNotes(locale, access, draft.context),
+    notes: buildSetupReceiptNotes(locale, access, draft.context, canChatInSetupChannel(input.interaction)),
     learnMore: localizer(locale, "commands.setup.wizard.receipt_learn_more", {
       help: commandRegistry.getCommandMention("help"),
     }),
-    footerKey,
+    footerKeys,
+    optionReceiptDescriptionKey:
+      access.mode === "option" ? findProviderOption(access.value)?.setup?.receiptDescriptionKey : undefined,
   });
 
   try {
@@ -962,7 +1096,8 @@ async function finishSetupWizardDraft(
       };
     }
 
-    const presetId = claimedDraft.startingSettings?.presetId;
+    const startingSettings = claimedDraft.startingSettings;
+    const presetId = startingSettings?.presetId;
     const presetRow =
       typeof presetId === "number"
         ? await configRepository
@@ -970,7 +1105,7 @@ async function finishSetupWizardDraft(
             .then((rows) => rows?.find((row) => row.persona_preset_id === presetId) ?? null)
         : null;
 
-    if (!presetRow) {
+    if (!presetRow || !startingSettings) {
       releaseSetupDraftClaim(nonce, actorDiscId, workspaceKey, context);
       const cleared = updateSetupDraft(nonce, actorDiscId, workspaceKey, context, { startingSettings: null });
       if (cleared.status === "ok") {
@@ -1010,9 +1145,10 @@ async function finishSetupWizardDraft(
     const setupConfig: SetupConfig = {
       serverId: workspaceKey,
       presetId: presetRow.persona_preset_id,
-      humanizer: claimedDraft.startingSettings?.humanizer ?? 1,
+      humanizer: startingSettings.humanizer,
       tomoriName: getDefaultBotName(locale),
-      timezoneOffset: claimedDraft.startingSettings?.timezoneOffset ?? 0,
+      timezoneOffset: startingSettings.timezoneOffset,
+      features: startingSettings.features,
       locale,
       registrationLocale: locale,
       providerAccess: toSetupProviderAccess(access),
@@ -1035,6 +1171,21 @@ async function finishSetupWizardDraft(
     committed = true;
     // Only now, with the rows committed: every reader below this line must see the new workspace.
     invalidateTomoriStateCache(workspaceKey);
+    if (setupResult.server.server_id) invalidateNaturalNudgeConfigCache(setupResult.server.server_id);
+    if (access.mode === "option") {
+      const option = findProviderOption(access.value);
+      if (option?.setup?.committed) {
+        const serverId = setupResult.server.server_id;
+        if (!serverId) throw new Error("Setup did not return a server ID for a registered provider option");
+        await option.setup.committed({
+          locale,
+          draft: claimedDraft,
+          interaction,
+          serverId,
+          workspaceKey,
+        });
+      }
+    }
 
     let receiptDelivered: boolean;
     try {
@@ -1108,7 +1259,7 @@ async function finishSetupWizardDraft(
 }
 
 export interface SetupWizardDependencies {
-  isSetupAuthorized: (interaction: ChatInputCommandInteraction) => boolean;
+  isSetupAuthorized: (interaction: ChatInputCommandInteraction | ButtonInteraction) => boolean;
   checkExistingSetup: (workspaceKey: string) => Promise<SetupHealthStatus>;
   createNonce: () => string;
   isHostedPolicyEnvironment: () => boolean;
@@ -1118,7 +1269,7 @@ export interface SetupWizardDependencies {
 }
 
 export async function startSetupWizard(
-  interaction: ChatInputCommandInteraction,
+  interaction: ChatInputCommandInteraction | ButtonInteraction,
   dependencies: Partial<SetupWizardDependencies> = {},
 ): Promise<void> {
   const locale = dependencies.locale ?? interaction.locale ?? interaction.guildLocale ?? "en-US";
@@ -1127,7 +1278,7 @@ export async function startSetupWizard(
 
   // Acknowledged before the existing-setup lookup, not after it: Discord drops an interaction that is not
   // acknowledged within three seconds, and that lookup can miss its cache and reach the database.
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  if (!interaction.replied && !interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const isAuthorized = dependencies.isSetupAuthorized
     ? dependencies.isSetupAuthorized(interaction)
@@ -1342,7 +1493,7 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
       }
 
       case "settings-submit": {
-        if (!interaction.isModalSubmit()) {
+        if (!interaction.isModalSubmit() || !parsed.modalNonce) {
           return;
         }
         await acknowledgeModalSubmitForRefresh(interaction);
@@ -1377,6 +1528,20 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
           interaction.id,
           buildSetupSettingsModalFieldId("system-prompt", nonce),
         );
+        const features = setupFeaturesSchema.safeParse(
+          takeRawModalCheckboxGroupValues(
+            interaction.id,
+            buildSetupSettingsModalFieldId("features", parsed.modalNonce),
+          ),
+        );
+
+        if (!features.success) {
+          await repaintSetupWizard(interaction, draft, locale, nonce, {
+            method: "editReply",
+            receipt: setupFailureReceipt(locale, localizer(locale, "commands.setup.wizard.settings_features_invalid")),
+          });
+          return;
+        }
 
         const presetId = Number.parseInt(selectedPersonaId ?? "", 10);
         const humanizer = parseSetupHumanizerChoice(selectedHumanizer);
@@ -1391,7 +1556,7 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
           humanizer !== null &&
           timezoneOffset !== null &&
           systemPrompt !== null
-            ? { presetId, humanizer, timezoneOffset, systemPrompt }
+            ? { presetId, humanizer, timezoneOffset, systemPrompt, features: features.data }
             : null;
 
         if (!nextSettings || !isSetupStartingSettingsResolvable(nextSettings, catalogs)) {
@@ -1429,6 +1594,30 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
           return;
         }
         const selectedMode = interaction.values[0];
+        const selectedOption = providerOptionActionOption(selectedMode);
+        if (selectedOption) {
+          const setup = selectedOption.setup;
+          if (!setup || (setup.available && !setup.available({ context }))) {
+            if (!interaction.replied && !interaction.deferred) {
+              await interaction.reply({
+                content: localizer(locale, "commands.setup.wizard.provider_invalid"),
+                flags: MessageFlags.Ephemeral,
+              });
+            }
+            return;
+          }
+          await interaction.deferUpdate();
+          await applySetupDraftWrite(
+            interaction,
+            updateSetupDraft(nonce, actorDiscId, workspaceKey, context, {
+              providerAccess: { mode: "option", value: selectedOption.value },
+            }),
+            locale,
+            nonce,
+            "editReply",
+          );
+          return;
+        }
         if (selectedMode === "catalog") {
           const cleared = updateSetupDraft(nonce, actorDiscId, workspaceKey, context, { providerAccess: null });
           if (cleared.status !== "ok") {
@@ -1474,6 +1663,17 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
         break;
       }
 
+      case "option-action": {
+        if (!interaction.isButton()) return;
+        await interaction.deferUpdate();
+        const access = draft.providerAccess;
+        const setup = access?.mode === "option" ? findProviderOption(access.value)?.setup : undefined;
+        if (!setup?.handleAction || (setup.available && !setup.available({ context }))) return;
+        const receipt = await setup.handleAction({ locale, draft, interaction });
+        await repaintSetupWizard(interaction, draft, locale, nonce, { method: "editReply", receipt });
+        return;
+      }
+
       case "provider-catalog-submit": {
         if (!interaction.isModalSubmit()) {
           return;
@@ -1511,7 +1711,13 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
         if (!validation.valid) {
           await repaintSetupWizard(interaction, draft, locale, nonce, {
             method: "editReply",
-            receipt: providerValidationFailureReceipt(locale),
+            receipt: await withRegistrationFailureCopy(
+              validation.error && isAccountBalanceExhaustedError(validation.error)
+                ? providerNoBalanceReceipt(locale)
+                : providerValidationFailureReceipt(locale),
+              locale,
+              actorDiscId,
+            ),
           });
           return;
         }
@@ -1640,7 +1846,11 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
         if (!probe.ok) {
           await repaintSetupWizard(interaction, draft, locale, nonce, {
             method: "editReply",
-            receipt: customEndpointProbeFailureReceipt(locale, probe, normalizedUrl, rawToken),
+            receipt: await withRegistrationFailureCopy(
+              customEndpointProbeFailureReceipt(locale, probe, normalizedUrl, rawToken),
+              locale,
+              actorDiscId,
+            ),
           });
           return;
         }

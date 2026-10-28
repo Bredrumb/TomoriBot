@@ -21,6 +21,7 @@ export function buildGeneratedVideoComponentsV2Payload(
   attachmentFilename: string,
   elapsedMs: number,
   locale: string,
+  spoiler = false,
 ): GeneratedVideoComponentsV2Payload {
   const seconds = Math.max(0, elapsedMs / 1000).toFixed(1);
   const timingLine = localizer(locale, "tools.video.generated_after_seconds_line", {
@@ -32,6 +33,7 @@ export function buildGeneratedVideoComponentsV2Payload(
       type: ComponentType.MediaGallery,
       items: [
         {
+          ...(spoiler ? { spoiler: true } : {}),
           media: {
             url: `attachment://${attachmentFilename}`,
           },

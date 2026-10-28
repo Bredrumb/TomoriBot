@@ -2,7 +2,6 @@
 title: "Stats & Insights"
 sidebar:
   order: 4
-aiGenerated: true
 ---
 
 TomoriBot tracks interaction metrics so you can inspect activity trends, model token usage,
@@ -35,12 +34,20 @@ discounts, or free-tier quotas.
 
 ## Shareable Infographic Cards
 
-Run `/stats generate` to render a polished summary image card you can share directly in chat:
+Run one of the `/stats generate` commands to render a polished summary image card you can share
+directly in chat:
 
-- **Personal Wrapped**: summarizes your personal activity and favorite personas.
-- **Persona Affinity**: highlights a specific persona's stats and top conversational partners on
-  this server.
-- **Server Leaderboard**: displays server-wide activity and member standings.
+- **`/stats generate personal`** (Personal Wrapped): summarizes your personal activity and favorite
+  personas.
+- **`/stats generate persona`** (Persona Affinity): pick a persona from the list to highlight its
+  stats and top conversational partners on this server.
+- **`/stats generate server`** (Server Leaderboard): displays server-wide activity and member
+  standings.
+
+:::tip
+Cards use `All-Time` data unless you choose a timeframe. Pick `Last Year` for an annual recap, or
+set a personal card's scope to `All Servers` to include every server where you use TomoriBot.
+:::
 
 Users with their privacy level set to `Full` in `/personal config` cannot generate personal stats
 cards.

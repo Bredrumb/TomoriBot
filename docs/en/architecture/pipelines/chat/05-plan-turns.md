@@ -54,6 +54,18 @@ determineMatchingPersonas()
 - **Zero matches or failed gates**: returns `turns: []`. The coordinator treats an empty list as a skip,
   immediately releasing the channel lock and triggering queue replay.
 
+### Credential admission
+
+Each matched persona resolves credentials and checks text quota separately. A persona without usable
+credentials is skipped while other admitted personas can continue. A refused trigger shows at most
+one credential notice and one quota notice across persona jobs and retries. Personal text routes
+stay outside server quota, and any admitted server route requires the server trigger cooldown.
+
+Server admission and generation use `src/utils/provider/textModelSelection.ts` for the same model
+choice: persona override, channel override (including a thread's parent), then workspace default.
+Impersonation uses the workspace model. An invocation codename override loads that provider's model
+metadata when registered. Personal credentials keep their own model routing ahead of server selection.
+
 ### Channel lock state arming
 
 When `turns.length > 0`, `planChatTurns()` updates the channel lock entry via `setActiveChannelTurnState()`.
@@ -69,6 +81,11 @@ messages can be evaluated for follow-up interrupts.
   for each responding persona.
 - **Selective error visibility**: `shouldSurfaceUserErrors` suppresses error notices for passive autochat
   and random triggers while delivering error feedback for direct mentions, DMs, and slash commands.
+- **Nudge dormancy**: admitted direct guild chat renews the server's 14-day nudge activity window
+  before credentials resolve; passive and system turns do not renew it, and queued nudge turns
+  are discarded when the shared eligibility gate closes. Direct turns keep `isDirectChat` on an
+  empty-response retry, and their persisted stats refresh heat and channel eligibility (see
+  [Natural Nudges](/architecture/subsystems/natural-nudges/)).
 
 ## Source pointers
 

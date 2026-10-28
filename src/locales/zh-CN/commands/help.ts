@@ -79,6 +79,8 @@ export default {
         video_generation_description: `短视频，可选首帧`,
         speech_generation: `语音生成`,
         speech_generation_description: `把文字变成语音消息`,
+        art_search: `插画搜索`,
+        art_search_description: `从 Danbooru 发送现有的动漫插画`,
         behavior_tuning: `行为调校`,
         behavior_tuning_description: `模型、回复自然度、指令与工具`,
         server_wide_settings: `服务器级设置`,
@@ -154,8 +156,6 @@ export default {
       bot_user_fallback: `已配置的 Matrix bot 账号`,
     },
     "api-key": {
-      description: `了解如何为 AI 提供方设置 API 密钥`,
-      provider_description: `选择你的 AI 提供方`,
       provider_choice_brave: `Brave Search`,
       provider_choice_google: `Google Gemini（推荐，免费）`,
       provider_choice_deepseek: `DeepSeek`,
@@ -258,8 +258,7 @@ export default {
         title: `获取 API 密钥`,
         description:
           "API 密钥让我能访问某个 AI 提供方的模型。 我生成的所有内容都记在这把密钥上，所以请像 对待其他密码一样对待它。 要完成设置，我需要一把：\n> **1.** 在下面选一个提供方，打开它的指南。\n> **2.** 复制它给你的密钥。**不要把它分享**给 任何人，也不要粘贴到频道里，只填进 {setup} 为你打开的输入框。\n> **3.** 运行 {setup}，等我询问时粘贴密钥。",
-        picker_footer:
-          "-# 第二个列表是可选项：Brave Search 增加网页 结果，ElevenLabs 增加托管语音。两者各有 独立指南，完成设置都不需要它们。 如果你的端点不在列表里，可以跳过密钥， 看本页的 **自定义端点（高级）**。",
+        picker_footer: "-# 如果你的端点不在列表里，可以跳过密钥，看本页的 **自定义端点（高级）**。",
       },
       change_trigger_behavior: {
         title: `调整触发行为`,
@@ -361,6 +360,11 @@ export default {
         description:
           "{generateVoice} 把文字变成当前人格声音的 语音消息。\n\n必须先注册语音端点，托管或自部署都可以： 见「设置」里的 **自定义端点（高级）**。\n> 每个人格的声音可以不同。声音来自 {configPersonaVoice}。",
       },
+      art_search: {
+        title: `插画搜索`,
+        description:
+          "{booruSearch} 会根据一个或两个标签随机发送 4 张评价良好的 Danbooru 图像。输入时会显示建议，昵称或拼写错误也会转换成真实标签。\n> 存疑和明确成人内容仅在年龄限制频道中显示。\n\n你也可以直接让我展示一些插画；{configTools} 中的 **Danbooru 搜索** 开关用于控制该功能。如需限制谁能运行该指令，请使用服务器设置 > 整合。",
+      },
     },
     tons_of_tweakability: {
       title: `大量可调设置`,
@@ -407,8 +411,8 @@ export default {
       memory_tagging: {
         title: `记忆标签（高级）`,
         description:
-          "默认情况下，范围内的每条记忆都会随每条消息一起发送。 标签可以缩小这个范围。\n> **关键词标签**：带标签的记忆只在其关键词出现在 对话里时才会唤醒。没有标签的记忆 始终有效。\n> **频道标签**：`#channel` 标签把记忆限制在那个 频道，并与关键词标签叠加。\n\n在 {configAdvancedMemory} 里把两者打开，然后用 {toolPromptSnapshot} 查看当前究竟有哪些记忆 处于有效状态。",
-        footer: "上传的文档和提取出的历史记录也可以带 频道标签。",
+          "默认情况下，范围内的每条记忆都会随每条消息一起发送。标签可以缩小这个范围。\n> **关键词标签**：带标签的记忆只在其关键词出现在对话里时才会唤醒。没有标签的记忆始终有效。\n> **频道**：服务器记忆可以限制在表单中选取的频道（包含其子区），个人记忆则可通过 `#channel` 标签限制。两者均可与关键词标签叠加。\n\n在 {configAdvancedMemory} 里把两者打开，然后用 {toolPromptSnapshot} 查看当前究竟有哪些记忆处于有效状态。",
+        footer: "上传的文档和提取出的历史记录也可以限制频道。",
       },
     },
     scheduled_tasks: {

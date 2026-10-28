@@ -1,3 +1,5 @@
+import type { GenerationModelSelection } from "@/types/provider/generationModels";
+import { reportProviderUsage, withProviderUsageContext } from "@/utils/provider/providerUsage";
 /**
  * Hidden Image Agent Turn
  *
@@ -26,7 +28,8 @@ import type { TomoriState } from "@/types/db/schema";
 import type { ToolContext } from "@/types/tool/interfaces";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { FunctionCall } from "@/types/provider/interfaces";
-import { decryptApiKey } from "@/utils/security/crypto";
+import { getCapabilityCredentialFailureCopy, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
 import { stripBridgePrefix } from "@/utils/bridges";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
@@ -59,6 +62,8 @@ const SKIPPED_MESSAGE_TYPES = new Set<number>([
 
 /** Configuration for the hidden image agent. Caller (image.ts) owns preset/backend logic. */
 export interface HiddenImageTurnParams {
+  spoiler?: boolean;
+  imageModelSelection?: GenerationModelSelection;
   /** Discord text channel to read history from and post the image to. */
   channel: ToolContext["channel"];
   client: Client;
@@ -101,6 +106,48 @@ export interface HiddenImageTurnParams {
 }
 
 /**
+ * Builds the hidden turn's `[System: ...]` directive. With Danbooru Search off it keeps the original
+ * wording; with it on, the model may look tags up before the image call.
+ */
+export function buildHiddenImageDirective(
+  params: Pick<
+    HiddenImageTurnParams,
+    "backend" | "presetLabel" | "presetInstruction" | "aspectRatio" | "naiOrientation" | "extraDirection"
+  > & { lookupEnabled: boolean },
+): string {
+  const { backend, presetLabel, presetInstruction, aspectRatio, naiOrientation, extraDirection, lookupEnabled } =
+    params;
+  const toolInstruction = lookupEnabled
+    ? backend === "current_provider"
+      ? "Call the generate_image tool to draw the scene. Use the conversation context above, including any Physical Appearance lines for users/personas, to write a detailed prompt describing the scene."
+      : "Call the generate_image_nai tool to draw the scene. Use the conversation context above, including any Physical Appearance lines for users/personas, to construct danbooru-style tags describing the scene."
+    : backend === "current_provider"
+      ? `You MUST call the generate_image tool immediately. Use the conversation context above, including any Physical Appearance lines for users/personas, to construct a detailed prompt describing the scene.`
+      : `You MUST call the generate_image_nai tool immediately. Use the conversation context above, including any Physical Appearance lines for users/personas, to construct danbooru-style tags describing the scene.`;
+
+  const dirLines: string[] = [
+    toolInstruction,
+    `Framing: ${presetLabel} — ${presetInstruction}`,
+    backend === "current_provider" ? `Aspect ratio: ${aspectRatio}` : `Orientation: ${naiOrientation}`,
+  ];
+  if (extraDirection?.trim()) {
+    dirLines.push(`Extra direction from user: ${extraDirection.trim()}`);
+  }
+  if (lookupEnabled) {
+    dirLines.push(
+      "If the scene includes an existing character, outfit, or series whose exact tags or look you are unsure of, first call danbooru_search_tags once with every such name, then call the image tool.",
+      "IMPORTANT: Do not ask for clarification or ask if the user wants you to proceed. Your turn must end with a call to the image tool (generate_image or generate_image_nai).",
+    );
+  } else {
+    dirLines.push(
+      "IMPORTANT: You MUST call the image tool (generate_image or generate_image_nai) immediately. Do not ask for clarification or ask if the user wants you to proceed. Just call the tool now with the scene information from above.",
+    );
+  }
+
+  return `[System: ${dirLines.join(" ")}]`;
+}
+
+/**
  * Runs a hidden bot turn that generates an image of the current channel scene.
  *
  * The turn uses the full `buildContext()` pipeline so the model sees the same
@@ -117,7 +164,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     channel,
     client,
     guild,
-    tomoriState,
+    tomoriState: baseState,
     locale,
     interactingUserId,
     backend,
@@ -133,7 +180,20 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     internalUserId,
   } = params;
 
-  // Verify the active model supports function calling: required for tool-based generation.
+  let tomoriState: TomoriState;
+  let credentials: Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
+  try {
+    credentials = await resolveCapabilityCredentials(baseState.server_id, "text", {
+      userId: internalUserId,
+      textModel: baseState.llm,
+    });
+    tomoriState = await resolveTextCredentialState(baseState, credentials);
+  } catch (error) {
+    const failure = getCapabilityCredentialFailureCopy(error, locale);
+    if (!failure) throw error;
+    return { success: false, error: failure.description };
+  }
+
   if (!tomoriState.llm.has_tools) {
     return {
       success: false,
@@ -142,16 +202,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     };
   }
 
-  // Decrypt the API key.
-  const decryptedApiKey = await decryptApiKey(
-    // biome-ignore lint/style/noNonNullAssertion: api_key presence was validated by the command before invoking this helper
-    tomoriState.config.api_key!,
-    tomoriState.config.key_version || 1,
-  );
-  if (!decryptedApiKey) {
-    return { success: false, error: "Failed to decrypt API key." };
-  }
-
+  const usageContext = credentials.usageContext;
   const rawMessages = await channel.messages.fetch({
     limit: BOT_GENERATE_IMAGE_HISTORY_LIMIT,
   });
@@ -265,26 +316,22 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     };
   }
 
-  const toolInstruction =
-    backend === "current_provider"
-      ? `You MUST call the generate_image tool immediately. Use the conversation context above, including any Physical Appearance lines for users/personas, to construct a detailed prompt describing the scene.`
-      : `You MUST call the generate_image_nai tool immediately. Use the conversation context above, including any Physical Appearance lines for users/personas, to construct danbooru-style tags describing the scene.`;
-
-  const dirLines: string[] = [
-    toolInstruction,
-    `Framing: ${presetLabel} — ${presetInstruction}`,
-    backend === "current_provider" ? `Aspect ratio: ${aspectRatio}` : `Orientation: ${naiOrientation}`,
-  ];
-  if (extraDirection?.trim()) {
-    dirLines.push(`Extra direction from user: ${extraDirection.trim()}`);
-  }
-  dirLines.push(
-    "IMPORTANT: You MUST call the image tool (generate_image or generate_image_nai) immediately. Do not ask for clarification or ask if the user wants you to proceed. Just call the tool now with the scene information from above.",
-  );
-
   const agentDirective: StructuredContextItem = {
     role: "user",
-    parts: [{ type: "text", text: `[System: ${dirLines.join(" ")}]` }],
+    parts: [
+      {
+        type: "text",
+        text: buildHiddenImageDirective({
+          backend,
+          presetLabel,
+          presetInstruction,
+          aspectRatio,
+          naiOrientation,
+          extraDirection,
+          lookupEnabled: tomoriState.config.danbooru_enabled === true,
+        }),
+      },
+    ],
     metadataTag: ContextItemTag.DIALOGUE_HISTORY,
   };
   contextItems = [...contextItems, agentDirective];
@@ -303,6 +350,10 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   const targetToolName = backend === "current_provider" ? "generate_image" : "generate_image_nai";
 
   const streamingContext: StreamingContext = {
+    deliveryMode: "persona",
+    imageModelSelection: params.imageModelSelection,
+    usageContext,
+    textCredentialSource: credentials.source,
     disableYouTubeProcessing: true,
     disableProfilePictureProcessing: true,
     disableGifProcessing: true,
@@ -331,7 +382,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
 
   let providerConfig: Awaited<ReturnType<typeof provider.createConfig>>;
   try {
-    providerConfig = await provider.createConfig(tomoriState, decryptedApiKey);
+    providerConfig = await provider.createConfig(tomoriState, credentials.apiKey);
   } catch (error) {
     log.error("Hidden image agent: failed to create provider config", error as Error, {
       errorType: "HiddenImageAgentConfigError",
@@ -352,6 +403,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
   }> = [];
 
   const toolContext: ToolContext = {
+    deliveryMode: "persona",
     channel,
     client,
     userId: interactingUserId,
@@ -361,6 +413,7 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     locale,
     provider: provider.getInfo().name,
     streamContext: streamingContext,
+    usageContext,
     suppressProgressNotices: true, // Keep the hidden turn quiet
     // Persona identity for webhook-based image posting (set by /generate image Auto mode).
     // When absent, the image tool falls back to a direct bot message.
@@ -383,19 +436,21 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
     // Protection against infinite loops comes from BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS.
     let streamResult: Awaited<ReturnType<typeof provider.streamToDiscord>>;
     try {
-      streamResult = await provider.streamToDiscord(
-        channel,
-        client,
-        tomoriState,
-        providerConfig,
-        contextItems,
-        [], // currentTurnModelParts: empty for first iteration, accumulate on retries
-        undefined, // emojiStrings
-        functionInteractionHistory.length > 0 ? functionInteractionHistory : undefined,
-        undefined, // initialInteraction
-        undefined, // replyToMessage
-        streamingContext,
-        locale,
+      streamResult = await withProviderUsageContext(usageContext, async () =>
+        provider.streamToDiscord(
+          channel,
+          client,
+          tomoriState,
+          providerConfig,
+          contextItems,
+          [], // currentTurnModelParts: empty for first iteration, accumulate on retries
+          undefined, // emojiStrings
+          functionInteractionHistory.length > 0 ? functionInteractionHistory : undefined,
+          undefined, // initialInteraction
+          undefined, // replyToMessage
+          streamingContext,
+          locale,
+        ),
       );
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -405,6 +460,13 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       });
       return { success: false, error: `Streaming error: ${msg}` };
     }
+
+    reportProviderUsage(usageContext, {
+      modelCodename: tomoriState.llm.llm_codename,
+      costUsd: streamResult.usage?.costUsd,
+      inputTokens: streamResult.usage?.inputTokens,
+      outputTokens: streamResult.usage?.outputTokens,
+    });
 
     if (streamResult.status === "function_call") {
       if (!streamResult.data) {
@@ -416,7 +478,10 @@ export async function runHiddenImageTurn(params: HiddenImageTurnParams): Promise
       const funcName = funcCall.name?.trim() ?? "";
       log.info(`[Hidden Image Agent] Model called tool: ${funcName}`);
 
-      const toolResult = await ToolRegistry.executeTool(funcName, funcCall.args || {}, toolContext);
+      const args = { ...(funcCall.args || {}) };
+      if (params.spoiler !== undefined && (funcName === "generate_image" || funcName === "generate_image_nai"))
+        args.nsfw = params.spoiler;
+      const toolResult = await ToolRegistry.executeTool(funcName, args, toolContext);
       log.info(
         `[Hidden Image Agent] Tool "${funcName}" ${toolResult.success ? "succeeded" : "failed"}: ${toolResult.message ?? toolResult.error ?? ""}`,
       );

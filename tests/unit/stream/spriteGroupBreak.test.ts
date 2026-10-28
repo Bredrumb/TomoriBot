@@ -6,7 +6,6 @@ import {
   recordChannelDeliveredBotMessage,
   recordChannelDeliveredWebhookIdentity,
   resolveChannelGroupBreakIdentity,
-  resolveChannelPersonaPostIdentity,
 } from "@/utils/discord/stream/channelDeliveryContinuity";
 
 type SpriteGroupBreakFn = (
@@ -56,7 +55,7 @@ function makeChannel(channelId: string = CHANNEL) {
     deliverWebhook(identity: ResolvedWebhookIdentity, speaker: DeliveredSpeaker | null = null): void {
       const id = nextId();
       lastMessageId = id;
-      recordChannelDeliveredWebhookIdentity(channelId, identity, id, speaker);
+      recordChannelDeliveredWebhookIdentity(channelId, identity, id, speaker, "1400000000000000002");
     },
     /** A bot-user fallback send, which is a different Discord author than the webhook. */
     deliverBotMessage(): void {
@@ -258,62 +257,5 @@ describe("sprite group-break naming", () => {
     channel.deliverWebhook(resolve(kanaIdentity, "ともり (shy)", "shy", CHANNEL, channel.lastMessageId));
 
     expect(resolve(kanaIdentity, kanaDecorated, "mad", CHANNEL, channel.lastMessageId).username).toBe(kanaDecorated);
-  });
-});
-
-describe("persona notice group-break naming", () => {
-  const PERSONA_ID = 7;
-  const persona: DeliveredSpeaker = { personaId: PERSONA_ID, kind: "appearance" };
-  const baseIdentity = { username: CLEAN, avatarUrl: "https://example.com/sprites/base.png" };
-
-  beforeEach(() => {
-    clearAllChannelDeliveryContinuity();
-  });
-
-  /**
-   * Regression: tool notices were sent under the base appearance without touching the channel's
-   * continuity, so the sprite line after one read it as a foreign message, restarted on the clean
-   * name, and merged under the notice's avatar.
-   */
-  it("gives a sprite following a turn-leading notice a different username", () => {
-    const resolve = makeResolver();
-    const channel = makeChannel();
-    channel.deliverWebhook(
-      resolve(cleanIdentity, decoratedFor("smile"), "smile", CHANNEL, channel.lastMessageId),
-      persona,
-    );
-    channel.foreignMessage();
-
-    const notice = resolveChannelPersonaPostIdentity(CHANNEL, baseIdentity, PERSONA_ID, channel.lastMessageId);
-    channel.deliverWebhook(notice, persona);
-    const sprite = resolve(cleanIdentity, decoratedFor("smile"), "smile", CHANNEL, channel.lastMessageId);
-
-    expect(notice.username).toBe(CLEAN);
-    expect(sprite.username).not.toBe(notice.username);
-  });
-
-  it("reuses the identity of the same persona's adjacent line so the notice stays in its block", () => {
-    const resolve = makeResolver();
-    const channel = makeChannel();
-    channel.deliverWebhook(
-      resolve(cleanIdentity, decoratedFor("calm"), "calm", CHANNEL, channel.lastMessageId),
-      persona,
-    );
-    const sprite = resolve(cleanIdentity, decoratedFor("smile"), "smile", CHANNEL, channel.lastMessageId);
-    channel.deliverWebhook(sprite, persona);
-
-    expect(resolveChannelPersonaPostIdentity(CHANNEL, baseIdentity, PERSONA_ID, channel.lastMessageId)).toEqual(sprite);
-  });
-
-  it("shows the base appearance on a group-break name after another persona's adjacent sprite", () => {
-    const resolve = makeResolver();
-    const channel = makeChannel();
-    const otherSprite = resolve(cleanIdentity, decoratedFor("smile"), "smile", CHANNEL, channel.lastMessageId);
-    channel.deliverWebhook(otherSprite, { personaId: PERSONA_ID + 1, kind: "appearance" });
-
-    const notice = resolveChannelPersonaPostIdentity(CHANNEL, baseIdentity, PERSONA_ID, channel.lastMessageId);
-
-    expect(notice.avatarUrl).toBe(baseIdentity.avatarUrl);
-    expect(notice.username).not.toBe(otherSprite.username);
   });
 });

@@ -6,6 +6,8 @@ import type {
 } from "@/types/db/schema";
 import { llmProviderRepo } from "@/utils/db/repositories";
 import { prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
+import { writeProviderSpeechSelection } from "@/utils/provider/providerOptionRegistry";
+import { setHostedSpeechSelection } from "@/utils/db/repositories/SpeechRepository";
 
 function sortProviderRows(rows: UserSavedProviderConfigRow[]): UserSavedProviderConfigRow[] {
   return [...rows].sort((left, right) => left.provider.localeCompare(right.provider));
@@ -28,6 +30,10 @@ export function hasConfiguredPersonalModel(
       return row.video_model_id !== null;
     case "vision":
       return row.vision_llm_id !== null;
+    case "speech_design":
+      return row.speech_design_model_id != null;
+    case "speech_clone":
+      return row.speech_clone_model_id != null;
   }
 }
 
@@ -75,23 +81,37 @@ export function getStoredPersonalProviderForCapability(
   );
 }
 
+type FallbackIdentityEndpoint = Pick<CustomEndpointRow, "custom_endpoint_id" | "model_ref_id">;
+
 /**
- * Builds the upsert payload that promotes a text model to personal primary.
+ * Removes every entry that resolves to `primaryLlmId` from the user's personal fallback chain.
  *
- * The promoted model is pruned from the saved fallback chain: a fallback identical to the primary
- * can never run, and leaving it there makes personal fallback configuration reject every later edit,
- * since untouched slots resubmit the stale ref.
+ * A fallback identical to the primary can never run, and leaving it there makes personal fallback
+ * configuration reject every later edit, since untouched slots resubmit the stale ref.
  */
-export function withPersonalTextPrimary(
-  row: UserSavedProviderConfigRow,
-  llmId: number | null,
-  endpoints: Iterable<Pick<CustomEndpointRow, "custom_endpoint_id" | "model_ref_id">> = [],
-): UserSavedProviderConfigUpsert {
-  return {
+export async function prunePersonalFallbackChain(
+  userId: number,
+  primaryLlmId: number | null,
+  endpoints: Iterable<FallbackIdentityEndpoint> = [],
+): Promise<boolean> {
+  const { fallback_model_refs: refs } = await llmProviderRepo.loadPersonalFallbackSettings(userId);
+  const pruned = prunePrimaryFallbackRefs(refs, primaryLlmId, endpoints);
+  if (pruned.length === refs.length) return true;
+  return await llmProviderRepo.updatePersonalFallbackModelRefs(userId, pruned);
+}
+
+/** Makes `llmId` the personal text primary on `provider`, then prunes it from the fallback chain. */
+export async function setPersonalTextPrimary(
+  userId: number,
+  provider: string,
+  llmId: number,
+  endpoints: Iterable<FallbackIdentityEndpoint> = [],
+): Promise<boolean> {
+  const assigned = await assignPersonalCapabilityToProvider(userId, provider, "text", (row) => ({
     ...row,
     llm_id: llmId,
-    fallback_model_refs: prunePrimaryFallbackRefs(row.fallback_model_refs, llmId, endpoints),
-  };
+  }));
+  return assigned && (await prunePersonalFallbackChain(userId, llmId, endpoints));
 }
 
 /**
@@ -168,6 +188,20 @@ export async function assignPersonalCapabilityToProvider(
   const rows = await llmProviderRepo.loadUserSavedProviderConfigs(userId);
   if (rows.length === 0) {
     return false;
+  }
+
+  if (capability === "speech_design" || capability === "speech_clone") {
+    const row = rows.find((entry) => entry.provider === provider.toLowerCase());
+    if (!row) return false;
+    const next = updater(row);
+    const mode = capability === "speech_design" ? "design" : "clone";
+    const modelId = mode === "design" ? next.speech_design_model_id : next.speech_clone_model_id;
+    return (
+      modelId != null &&
+      writeProviderSpeechSelection({ scope: { kind: "personal", ownerId: userId }, provider, modelId, mode }, () =>
+        setHostedSpeechSelection({ kind: "personal", ownerId: userId }, modelId, mode),
+      )
+    );
   }
 
   let updated = false;

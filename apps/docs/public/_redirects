@@ -110,6 +110,34 @@
 /features/matrix-bridge/ /en/features/integrations/matrix-bridge/ 301
 /features/sillytavern-support /en/features/integrations/sillytavern-support/ 301
 /features/sillytavern-support/ /en/features/integrations/sillytavern-support/ 301
+/features/chatting-personality /en/features/ 301
+/features/chatting-personality/ /en/features/ 301
+/features/knowledge /en/features/ 301
+/features/knowledge/ /en/features/ 301
+/features/capabilities /en/features/ 301
+/features/capabilities/ /en/features/ 301
+/features/setup-administration /en/features/ 301
+/features/setup-administration/ /en/features/ 301
+/features/integrations /en/features/ 301
+/features/integrations/ /en/features/ 301
+/en/features/chatting-personality /en/features/ 301
+/en/features/chatting-personality/ /en/features/ 301
+/en/features/knowledge /en/features/ 301
+/en/features/knowledge/ /en/features/ 301
+/en/features/capabilities /en/features/ 301
+/en/features/capabilities/ /en/features/ 301
+/en/features/setup-administration /en/features/ 301
+/en/features/setup-administration/ /en/features/ 301
+/en/features/integrations /en/features/ 301
+/en/features/integrations/ /en/features/ 301
+/features/integrations/pluralkit-support /en/features/integrations/message-proxy-support/#pluralkit 301
+/features/integrations/pluralkit-support/ /en/features/integrations/message-proxy-support/#pluralkit 301
+/features/integrations/pluralbuddy-support /en/features/integrations/message-proxy-support/#pluralbuddy 301
+/features/integrations/pluralbuddy-support/ /en/features/integrations/message-proxy-support/#pluralbuddy 301
+/en/features/integrations/pluralkit-support /en/features/integrations/message-proxy-support/#pluralkit 301
+/en/features/integrations/pluralkit-support/ /en/features/integrations/message-proxy-support/#pluralkit 301
+/en/features/integrations/pluralbuddy-support /en/features/integrations/message-proxy-support/#pluralbuddy 301
+/en/features/integrations/pluralbuddy-support/ /en/features/integrations/message-proxy-support/#pluralbuddy 301
 # Cloud deployment pages moved to the release branch (docs/en/wiki/cloud/azure/), so the whole
 # subtree is absent from the built site. A splat rather than paired entries because this removes a
 # subtree rather than moving pages one-to-one, and it also covers the old

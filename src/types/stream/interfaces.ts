@@ -1,3 +1,5 @@
+import type { ProviderUsageContext } from "@/utils/provider/providerUsage";
+import type { PersonaDeliveryMode, PersonaDeliveryReceipt } from "@/utils/discord/webhook/personaPost";
 /**
  * Streaming interfaces for modular LLM provider architecture
  *
@@ -82,6 +84,10 @@ export interface StreamConfig extends ProviderConfig {
  * Contains all the Discord and application context needed for streaming
  */
 export interface StreamContext {
+  deliveryMode?: PersonaDeliveryMode;
+  deliveryReceipts?: PersonaDeliveryReceipt[];
+  deliveryState?: { unconfirmed: boolean };
+  usageContext?: ProviderUsageContext;
   channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | NewsChannel | TextChannel | AnyThreadChannel;
   client: Client;
   initialInteraction?: CommandInteraction;
@@ -119,6 +125,8 @@ export interface StreamContext {
     handle: string;
     userId: string;
   }>;
+  /** When set, delivered text may ping only these users: no roles, no everyone, nobody else. */
+  mentionableUserIds?: readonly string[];
 
   /** The attempt's `{bot}: {text}` prefill: stripped when the model echoes it, never shown. */
   outputPrefill?: string;
@@ -146,7 +154,7 @@ export interface StreamContext {
   triggererDiscId?: string;
 
   // Shared sink (reference threaded from StreamingContext) that the orchestrator appends to on
-  // every successful send, so runGenerationTurn can delete a superseded attempt's partial output.
+  // every successful send, so sends from an abandoned timed-out stream still reach the turn.
   deliveredMessageRefs?: DeliveredStreamMessage[];
 }
 

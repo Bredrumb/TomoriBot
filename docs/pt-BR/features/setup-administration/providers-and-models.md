@@ -17,10 +17,12 @@ Adicione uma chave de provedor durante a configuração inicial com `/setup` ou 
 | Modo | O que coleta |
 |---|---|
 | Provedor de IA (recomendado) | Um provedor do catálogo mais sua chave API, validada e criptografada como rascunho. |
-| Endpoint personalizado (avançado) | A conexão do endpoint e um modelo de texto, registrado dentro do assistente. Consulte [Endpoints personalizados](#custom-endpoints). |
-| Usuário BYOK (somente guildas) | Nada: o espaço de trabalho não mantém provedor próprio, portanto os membros devem fornecer provedores pessoais. |
+| Endpoint Personalizado | A conexão do endpoint e um modelo de texto, registrado dentro do assistente. Consulte [Endpoints personalizados](#custom-endpoints). |
+| Usuário BYOK (somente guildas) | Nada: o servidor não mantém provedor próprio, portanto os membros devem fornecer provedores pessoais. |
 
-Nada é gravado no banco de dados até que você pressione `Concluir Configuração`. Um assistente abandonado ou expirado deixa as linhas de provedor existentes do espaço de trabalho intactas. Para substituir uma chave existente, use `/providers`, porque `/setup` não será executado em um espaço de trabalho já configurado.
+Nada é gravado no banco de dados até que você pressione `Concluir Configuração`. Um assistente abandonado ou expirado deixa as linhas de provedor existentes do servidor intactas. Para substituir uma chave existente, use `/providers`, porque `/setup` não será executado em um servidor já configurado.
+
+Substituir uma chave de provedor preserva suas configurações de amostragem salvas, incluindo o limite de tokens de saída.
 
 Cada provedor tem suas próprias etapas de geração de chaves. Em `/help`, escolha `Configuração`, depois `Obter uma Chave de API` e escolha seu provedor para obter uma explicação passo a passo ou use estes pontos de partida:
 
@@ -43,7 +45,7 @@ Nunca compartilhe sua chave API com mais ninguém. Adicione ou substitua um toke
 
 Vertex AI autentica com Application Default Credentials (ADC) em vez de um segredo armazenado. Para hospedagem local, o ADC pode vir de `gcloud`; as implantações hospedadas devem usar uma identidade de carga de trabalho ou conta de serviço. Uma chave AI Studio API sozinha não autentica Vertex AI completo. O projeto Google Cloud selecionado deve ter faturamento e Vertex AI API ativados, e a identidade do host precisa de acesso Vertex. O guia de configuração está disponível em Google Vertex AI na página `API Keys` em `/help`.
 
-A configuração do provedor apoiado por Google valida credenciais por meio do endpoint de listagem de modelos autenticado. Ele não gera texto nem depende de qualquer modelo de chat atualmente marcado como padrão do catálogo, portanto, um modelo padrão retirado não pode impedir que uma credencial válida seja salva.
+A configuração do Google Gemini e do Vertex AI valida as credenciais por meio do endpoint autenticado de listagem de modelos, e o Vertex AI Express valida chaves de API com `countTokens`, portanto a configuração nunca gera texto.
 
 ### Opcional: Chave do Brave Search
 
@@ -62,22 +64,23 @@ Em `/config` > `Modelos` > Switch Models, você pode atribuir modelos e endpoint
 - **Texto**: o modelo de chat principal.
 - **Visão**: lê imagens quando o modelo de chat não consegue.
 - **Incorporações**: alimenta a [base de conhecimento de documentos](/pt-BR/features/knowledge/memory/#document-knowledge-base-rag).
+- **Decisão**: um [modelo de Decisão](#decision-models) registrado. O [Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) o utiliza para decidir quando entrar em uma conversa.
 - **Imagem padrão**: geração de imagem padrão (consulte [Geração de imagem](/pt-BR/features/capabilities/media-generation/image-generation/)).
 - **Imagem NovelAI**: geração de imagem NovelAI.
 - **Vídeo**: geração de vídeo.
 - **Ponto final TTS**: ponto final de voz de conversão de texto em fala.
 - **Ponto final STT**: ponto final de transcrição de áudio de fala para texto.
 
-Os primeiros seis slots escolhem registros de catálogo de modelos. Os slots TTS e STT escolhem terminais com escopo de espaço de trabalho, ativando o terminal selecionado em vez de gravar uma coluna de modelo. Registre e edite esses endpoints em `/providers`. `/personal config` mantém seis slots de roteamento de modelo pessoal e não inclui seletores de endpoint TTS/STT pessoais.
+Os primeiros seis slots escolhem registros de catálogo de modelos. Os slots TTS e STT escolhem terminais com escopo de servidor, ativando o terminal selecionado em vez de gravar uma coluna de modelo. Registre e edite esses endpoints em `/providers`. `/personal config` mantém seis slots de roteamento de modelo pessoal e não inclui seletores de endpoint TTS/STT pessoais.
 
 Você também pode gerenciar chaves de backup para failover automático e balanceamento de carga em `/providers`.
 
 ## Modelos de Decisões
 <!-- anchor: decision-models -->
 
-Os modelos de decisões são uma categoria separada em `/providers` e `/personal providers`. Eles respondem a predicados tipados com probabilidades. O registro não altera o modelo de chat ativo, não estabelece calibração nem ativa a dispensa da revisão de respostas. Esses painéis ainda não selecionam um modelo de decisões.
+Os modelos de decisões são uma categoria separada em `/providers` e `/personal providers`. Eles respondem a perguntas tipadas (sim ou não, ou uma escolha entre várias) com probabilidades. O registro não altera o modelo de chat ativo. Escolha o modelo de Decisão do servidor em `/config` > `Modelos` > `Trocar Modelos`. O [Natural Nudges](/features/chatting-personality/natural-nudges/#active-nudges) o utiliza como seu Verificador de Toques Ativos para saber quando uma conversa combina com os interesses de uma persona, a menos que um verificador diferente seja escolhido em `/config` > `Plugins` > `Natural Nudges`.
 
-OpenRouter é o provedor nativo com suporte. Salve sua chave, abra o menu suspenso de modelos e escolha `+ Adicionar um modelo de decisões`. Insira um ID do catálogo de decisões verificado dele. O catálogo global inclui `typesafe/jev-1.13`; registros adicionais pertencem ao seu servidor ou proprietário pessoal. A descoberta nativa fornece o limite de entrada documentado e os preços. Catálogos de chat não podem estabelecer suporte a decisões.
+OpenRouter é o provedor nativo com suporte. Salve sua chave, abra o menu suspenso de modelos e escolha `+ Adicionar um modelo de decisões`. Insira um ID do catálogo de decisões verificado dele. O catálogo global mantém uma lista reduzida para diferentes necessidades: Decider Flash V1.2 (padrão, rápido e de baixo custo), Jev 1.14 (maior precisão), GPT-6 Luna Decisions (maiores entradas) e Mercury Decide Free (experimentação). Essas funções seguem as capacidades documentadas; a precisão e os limites exigem testes com suas próprias perguntas. A verificação semanal do catálogo oferece novas entradas para revisão. Registros adicionais pertencem ao seu servidor ou proprietário pessoal. A descoberta nativa fornece o limite de entrada documentado e os preços. Catálogos de chat não podem estabelecer suporte a decisões.
 
 Para um serviço personalizado, escolha `Adicionar Novo Endpoint Personalizado` e, em seguida, `Compatível com System One` ou `Compatível com OpenAI Decisions` em `Compatibilidade de API`. Salve a URL base da API e a credencial Bearer opcional. O menu suspenso de modelos oferecerá `+ Adicionar um modelo de decisões` e herdará esse protocolo. Insira o ID do modelo documentado e o limite de tokens de entrada (no mínimo 512). Jev, Laya e Kev usam compatibilidade com System One. Endpoints existentes compatíveis com chat e nativos do Ollama não oferecem essa ação.
 
@@ -92,7 +95,7 @@ Registros e credenciais de provedores permanecem fora das exportações e import
 
 Endpoints personalizados permitem registrar serviços auto-hospedados ou apoiados por proxy (Ollama, LM Studio, LiteLLM, vLLM, ComfyUI, TTS/STT local) como pacotes de provedores rotulados.
 
-- **Escopo do servidor**: abra `/providers` para registro e edição do endpoint do espaço de trabalho.
+- **Escopo do servidor**: abra `/providers` para registrar e editar os endpoints do servidor.
 - **Escopo pessoal**: abra `/personal providers` para catálogos de modelos pessoais (consulte [Personalização](/pt-BR/features/knowledge/personalization/#your-own-providers)). Os pontos finais de fala pessoal não são selecionados em `/personal config`.
 
 Um rótulo é o nome do menu voltado para o usuário e agrupa recursos em um pacote quando eles compartilham um URL de terminal. Nunca é enviado para o serviço remoto. Os recursos atendidos por URLs diferentes precisam de rótulos distintos.
@@ -108,7 +111,7 @@ Para TTS e STT, registre o endpoint e seus modelos em `/providers` e, em seguida
 
 A compatibilidade API determina os caminhos de solicitação e as cargas que o serviço implementa, portanto, também determina quais slots de capacidade a conexão prepara. O registro de modelos exatos para esses slots é uma etapa separada, porque o protocolo não pode ser inferido de forma confiável apenas a partir do URL do terminal.
 
-O modo `Endpoint Personalizado (Avançado)` do `/setup` executa as mesmas duas etapas dentro do assistente: `Configurar Conexão` salva a compatibilidade, rótulo, URL e token de autenticação opcional do API atrás de uma verificação de acessibilidade, e `Configurar Modelo de Texto` registra o modelo de texto exato e suas declarações de capacidade. O botão do modelo permanece desativado até que a conexão seja validada e salvar novamente a conexão limpa a declaração do modelo porque as declarações dependem da compatibilidade do API. O assistente cria as linhas de conexão, provedor salvo, modelo e modelo ativo juntos quando você pressiona `Concluir Configuração`. O assistente registra apenas modelos de texto; Os recursos de imagem, vídeo, TTS e STT são registrados em `/providers`.
+O modo `Endpoint Personalizado` do `/setup` executa as mesmas duas etapas dentro do assistente: `Configurar Conexão` salva a compatibilidade, rótulo, URL e token de autenticação opcional do API atrás de uma verificação de acessibilidade, e `Configurar Modelo de Texto` registra o modelo de texto exato e suas declarações de capacidade. O botão do modelo permanece desativado até que a conexão seja validada e salvar novamente a conexão limpa a declaração do modelo porque as declarações dependem da compatibilidade do API. O assistente cria as linhas de conexão, provedor salvo, modelo e modelo ativo juntos quando você pressiona `Concluir Configuração`. O assistente registra apenas modelos de texto; Os recursos de imagem, vídeo, TTS e STT são registrados em `/providers`.
 
 OpenCode Go (`https://opencode.ai/zen/go/v1`) e OpenCode Zen (`https://opencode.ai/zen/v1`) funcionam como endpoints personalizados compatíveis com OpenAI. TomoriBot envia a eles o ID de sessão por conversa necessário, derivado de um hash do canal e da persona, para que nenhum ID Discord saia do bot.
 
@@ -163,5 +166,9 @@ Esses são os padrões a partir dos quais os modelos de imagem de um provedor co
 | Provedor | Conversão de texto para fala | Fala para texto |
 |---|---|---|
 | ElevenLabs | ✅ | ✅ |
+| Google Gemini | Design de voz | Não |
+| Vertex AI (padrão, global) | Design de voz | Não |
+| OpenRouter Fish | Clone de voz | Não |
+| OpenRouter Seed Audio | Design de voz | Não |
 
 Os mecanismos de voz locais são cobertos por [Auto-hospedagem](/pt-BR/self-hosting/). Para pesquisa na web integrada e leitura de URL, consulte [Ferramentas e extensões](/pt-BR/features/capabilities/tools-and-extensions/#web-search--url-reading).

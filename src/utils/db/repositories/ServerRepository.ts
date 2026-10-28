@@ -16,6 +16,7 @@
 import type { Guild, GuildEmoji, Sticker } from "discord.js";
 import type { ServerEmojiRow, ServerStickerRow, SetupConfig, SetupResult } from "@/types/db/schema";
 import { serverEmojiSchema, serverStickerSchema, setupConfigSchema, setupResultSchema } from "@/types/db/schema";
+import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { userRepository } from "@/utils/db/repositories/UserRepository";
 import { configRepository } from "./ConfigRepository";
@@ -58,16 +59,24 @@ export class ExpressionWriteError extends Error {
 }
 
 export const MANAGED_WEBHOOK_KIND_SHARED_CHANNEL = "shared_channel" as const;
-type ManagedWebhookKind = typeof MANAGED_WEBHOOK_KIND_SHARED_CHANNEL;
+export const MANAGED_WEBHOOK_KINDS = [
+  MANAGED_WEBHOOK_KIND_SHARED_CHANNEL,
+  "avatar_pool_1",
+  "avatar_pool_2",
+  "avatar_pool_3",
+] as const;
+export type ManagedWebhookKind = (typeof MANAGED_WEBHOOK_KINDS)[number];
 
 export type BlacklistReadResult = { status: "fresh"; memberIds: string[] } | { status: "unavailable"; memberIds: [] };
 
-type ManagedDiscordWebhookRow = {
+export type ManagedDiscordWebhookRow = {
   managed_webhook_id: number;
   guild_disc_id: string;
   kind: ManagedWebhookKind;
   channel_disc_id: string;
   webhook_disc_id: string;
+  avatar_fingerprint: string | null;
+  discord_avatar_hash: string | null;
   webhook_token: Buffer;
   key_version: number | null;
   created_at?: Date;
@@ -604,6 +613,8 @@ class ServerRepository implements IRepository<ServerExportShape> {
     channelDiscId: string;
     webhookDiscId: string;
     rawToken: string;
+    avatarFingerprint?: string | null;
+    discordAvatarHash?: string | null;
   }): Promise<boolean> {
     return this.sqlUpsertManagedWebhook(params);
   }
@@ -620,17 +631,28 @@ class ServerRepository implements IRepository<ServerExportShape> {
     return this.sqlLoadManagedWebhookByChannel(channelDiscId, kind);
   }
 
-  /**
-   * Loads a managed Discord webhook row by channel and webhook Discord ID.
-   *
-   * @param kind - Webhook kind (defaults to shared_channel)
-   */
   async loadManagedWebhookByChannelAndWebhookId(
     channelDiscId: string,
     webhookDiscId: string,
-    kind: ManagedWebhookKind = MANAGED_WEBHOOK_KIND_SHARED_CHANNEL,
+    kind?: ManagedWebhookKind,
   ): Promise<ManagedDiscordWebhookRow | null> {
     return this.sqlLoadManagedWebhookByChannelAndWebhookId(channelDiscId, webhookDiscId, kind);
+  }
+
+  async listManagedWebhooksByChannel(channelDiscId: string): Promise<ManagedDiscordWebhookRow[]> {
+    try {
+      return await sql<ManagedDiscordWebhookRow[]>`
+        SELECT * FROM discord_managed_webhooks
+        WHERE channel_disc_id = ${channelDiscId} AND kind IN ${sql([...MANAGED_WEBHOOK_KINDS])}
+        ORDER BY managed_webhook_id
+      `;
+    } catch (error) {
+      log.error("[ManagedWebhookDb] Failed to list stored webhooks", {
+        errorType: "managed_webhook_read_error",
+        metadata: { channelId: channelDiscId, error },
+      });
+      throw error;
+    }
   }
 
   /**
@@ -1158,7 +1180,31 @@ class ServerRepository implements IRepository<ServerExportShape> {
         await tx`INSERT INTO server_welcome_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
         await tx`INSERT INTO server_trigger_behavior_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
         await tx`INSERT INTO server_auto_trigger_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
-        await tx`INSERT INTO server_capabilities_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
+        const features = new Set(validConfig.features);
+        await tx`
+          INSERT INTO server_capabilities_configs (
+            server_id, emoji_usage_enabled, sticker_usage_enabled, conditioning_interactions_enabled,
+            danbooru_enabled, dice_rolling_enabled, manage_message_enabled, thread_creation_enabled,
+            user_blocking_enabled, user_info_updates_enabled, short_term_memory_enabled
+          ) VALUES (
+            ${server.server_id}, ${features.has("expressions")}, ${features.has("expressions")},
+            ${features.has("playful_interactions")}, ${features.has("danbooru")}, ${features.has("dice_rolls")},
+            ${features.has("self_message_management")}, ${features.has("self_message_management")},
+            ${features.has("user_blocking")}, ${features.has("user_info_updates")}, ${features.has("short_term_memory")}
+          ) ON CONFLICT (server_id) DO NOTHING
+        `;
+        if (
+          !(await naturalNudgeRepository.saveServerConfig(
+            server.server_id,
+            {
+              idle_nudges_enabled: features.has("natural_nudges"),
+              active_nudges_enabled: features.has("natural_nudges"),
+            },
+            tx,
+          ))
+        ) {
+          throw new Error("Could not save setup Natural Nudges settings");
+        }
         if (finalNaiDiffusionId) {
           await tx`
             INSERT INTO server_novelai_imagegen_configs (server_id, nai_diffusion_model_id)
@@ -1447,10 +1493,27 @@ class ServerRepository implements IRepository<ServerExportShape> {
     channelDiscId: string;
     webhookDiscId: string;
     rawToken: string;
+    avatarFingerprint?: string | null;
+    discordAvatarHash?: string | null;
   }): Promise<boolean> {
-    const { guildDiscId, kind = MANAGED_WEBHOOK_KIND_SHARED_CHANNEL, channelDiscId, webhookDiscId, rawToken } = params;
+    const {
+      guildDiscId,
+      kind = MANAGED_WEBHOOK_KIND_SHARED_CHANNEL,
+      channelDiscId,
+      webhookDiscId,
+      rawToken,
+      avatarFingerprint = null,
+      discordAvatarHash = null,
+    } = params;
 
-    if (!guildDiscId || !channelDiscId || !webhookDiscId || !rawToken.trim()) {
+    if (
+      !guildDiscId ||
+      !channelDiscId ||
+      !webhookDiscId ||
+      !rawToken.trim() ||
+      !MANAGED_WEBHOOK_KINDS.includes(kind) ||
+      (avatarFingerprint !== null && !/^[a-f0-9]{64}$/.test(avatarFingerprint))
+    ) {
       log.warn("[ManagedWebhookDb] Missing required parameters for webhook upsert");
       return false;
     }
@@ -1461,18 +1524,20 @@ class ServerRepository implements IRepository<ServerExportShape> {
 
       await sql`
         INSERT INTO discord_managed_webhooks (
-          guild_disc_id, kind, channel_disc_id, webhook_disc_id, webhook_token, key_version
+          guild_disc_id, kind, channel_disc_id, webhook_disc_id, webhook_token, key_version, avatar_fingerprint, discord_avatar_hash
         )
         VALUES (
           ${guildDiscId}, ${kind}, ${channelDiscId}, ${webhookDiscId},
           pgp_sym_encrypt(${rawToken.trim()}, ${currentKey}, 'compress-algo=1, cipher-algo=aes256'),
-          ${currentVersion}
+          ${currentVersion}, ${avatarFingerprint}, ${discordAvatarHash}
         )
         ON CONFLICT (kind, channel_disc_id) DO UPDATE SET
           guild_disc_id = EXCLUDED.guild_disc_id,
           webhook_disc_id = EXCLUDED.webhook_disc_id,
           webhook_token = EXCLUDED.webhook_token,
           key_version = EXCLUDED.key_version,
+          avatar_fingerprint = EXCLUDED.avatar_fingerprint,
+          discord_avatar_hash = EXCLUDED.discord_avatar_hash,
           updated_at = CURRENT_TIMESTAMP
       `;
 
@@ -1495,7 +1560,7 @@ class ServerRepository implements IRepository<ServerExportShape> {
     try {
       const [row] = await sql`
         SELECT managed_webhook_id, guild_disc_id, kind, channel_disc_id, webhook_disc_id,
-               webhook_token, key_version, created_at, updated_at
+               webhook_token, key_version, avatar_fingerprint, discord_avatar_hash, created_at, updated_at
         FROM discord_managed_webhooks
         WHERE channel_disc_id = ${channelDiscId} AND kind = ${kind}
         LIMIT 1
@@ -1511,18 +1576,18 @@ class ServerRepository implements IRepository<ServerExportShape> {
   private async sqlLoadManagedWebhookByChannelAndWebhookId(
     channelDiscId: string,
     webhookDiscId: string,
-    kind: ManagedWebhookKind,
+    kind: ManagedWebhookKind | undefined,
   ): Promise<ManagedDiscordWebhookRow | null> {
     if (!channelDiscId || !webhookDiscId) return null;
 
     try {
       const [row] = await sql`
         SELECT managed_webhook_id, guild_disc_id, kind, channel_disc_id, webhook_disc_id,
-               webhook_token, key_version, created_at, updated_at
+               webhook_token, key_version, avatar_fingerprint, discord_avatar_hash, created_at, updated_at
         FROM discord_managed_webhooks
         WHERE channel_disc_id = ${channelDiscId}
           AND webhook_disc_id = ${webhookDiscId}
-          AND kind = ${kind}
+          AND kind IN ${sql(kind ? [kind] : [...MANAGED_WEBHOOK_KINDS])}
         LIMIT 1
       `;
 
@@ -2286,7 +2351,7 @@ class ServerRepository implements IRepository<ServerExportShape> {
     try {
       const rows = (await sql`
         SELECT managed_webhook_id, guild_disc_id, kind, channel_disc_id, webhook_disc_id,
-               webhook_token, key_version, created_at, updated_at
+               webhook_token, key_version, avatar_fingerprint, discord_avatar_hash, created_at, updated_at
         FROM discord_managed_webhooks
         WHERE guild_disc_id = ${guildDiscId}
       `) as ManagedDiscordWebhookRow[];

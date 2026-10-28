@@ -79,6 +79,8 @@ export default {
         video_generation_description: `Clipes curtos, com um quadro inicial opcional`,
         speech_generation: `Geração de Voz`,
         speech_generation_description: `Transforme texto em uma mensagem de voz`,
+        art_search: `Busca de Arte`,
+        art_search_description: `Envie arte de anime existente do Danbooru`,
         behavior_tuning: `Ajuste de Comportamento`,
         behavior_tuning_description: `Modelo, humanizador, instruções e ferramentas`,
         server_wide_settings: `Configurações do Servidor`,
@@ -154,8 +156,6 @@ export default {
       bot_user_fallback: `a conta configurada do bot Matrix`,
     },
     "api-key": {
-      description: `Aprenda a configurar chaves de API para provedores de IA`,
-      provider_description: `Escolha seu provedor de IA`,
       provider_choice_brave: `Brave Search`,
       provider_choice_google: `Google Gemini (Recomendado, Grátis)`,
       provider_choice_deepseek: `DeepSeek`,
@@ -357,7 +357,7 @@ Digite \`{project_id}::{location}\` usando {configSetup} ou {configApikeySet}
         description:
           "Uma chave de API me concede acesso ao modelo de um provedor de IA. Tudo que eu gerar será cobrado nessa chave, então trate como qualquer outra senha. Para terminar a configuração eu preciso de uma:\n> **1.** Escolha um provedor abaixo para abrir seu guia.\n> **2.** Copie a chave que ele fornece. **NÃO compartilhe-a** com ninguém, e nunca a cole em um canal: apenas na caixa que {setup} abre para você.\n> **3.** Execute {setup} e cole a chave quando eu pedir.",
         picker_footer:
-          "-# A segunda lista é opcional: Brave Search adiciona resultados da web, e ElevenLabs adiciona fala hospedada. Cada um abre seu próprio guia, e nenhum é necessário para terminar a configuração. Se o seu endpoint não estiver listado, pule a chave e leia **Endpoints Personalizados (Avançado)** nesta mesma página.",
+          "-# Se o seu endpoint não estiver listado, pule a chave e leia **Endpoints Personalizados (Avançado)** nesta mesma página.",
       },
       change_trigger_behavior: {
         title: `Mudar Comportamento de Gatilho`,
@@ -464,6 +464,11 @@ Digite \`{project_id}::{location}\` usando {configSetup} ou {configApikeySet}
         description:
           "{generateVoice} transforma texto em uma mensagem de voz com a voz da persona atual.\n\nUm endpoint de fala precisa ser registrado primeiro, hospedado ou com hospedagem própria: veja **Endpoints Personalizados (Avançado)** em Configuração.\n> Cada persona pode soar diferente. A voz vem de {configPersonaVoice}.",
       },
+      art_search: {
+        title: `Busca de Arte`,
+        description:
+          "{booruSearch} envia 4 imagens aleatórias bem avaliadas do Danbooru para uma ou duas tags. Sugestões aparecem enquanto você digita, e um apelido ou erro de digitação é convertido na tag real.\n> Resultados questionáveis e explícitos só aparecem em canais com restrição de idade.\n\nVocê também pode apenas me pedir para mostrar alguma arte; a opção **Busca no Danbooru** em {configTools} controla isso. Para limitar quem pode usar o comando, acesse Configurações do Servidor > Integrações.",
+      },
     },
     tons_of_tweakability: {
       title: `Muitos Ajustes`,
@@ -514,8 +519,8 @@ Digite \`{project_id}::{location}\` usando {configSetup} ou {configApikeySet}
       memory_tagging: {
         title: `Marcação de Memória (Avançado)`,
         description:
-          "Por padrão, toda memória no escopo é enviada com toda mensagem. A marcação restringe isso.\n> **Tags de palavras-chave**: uma memória marcada só desperta quando a palavra-chave aparece. Uma memória sem tag está sempre ativa.\n> **Tags de canal**: uma tag `#canal` limita a memória àquele canal, e pode ser combinada com tags de palavra-chave.\n\nAtive ambas em {configAdvancedMemory}, depois use {toolPromptSnapshot} para ver exatamente quais memórias estão ativas no momento.",
-        footer: "Documentos recebidos e histórico extraído também podem carregar tags de canal.",
+          "Por padrão, toda memória no escopo é enviada com toda mensagem. A marcação restringe isso.\n> **Tags de palavras-chave**: uma memória marcada só desperta quando a palavra-chave aparece na conversa. Uma memória sem tag está sempre ativa.\n> **Canais**: uma memória do servidor pode ser limitada aos canais escolhidos no formulário (suas threads incluídas), e uma memória pessoal a uma tag `#canal`. Ambas combinam com tags de palavras-chave.\n\nAtive ambas em {configAdvancedMemory}, depois use {toolPromptSnapshot} para ver exatamente quais memórias estão ativas no momento.",
+        footer: "Documentos enviados e histórico extraído também podem ser limitados a canais.",
       },
     },
     scheduled_tasks: {

@@ -1,10 +1,20 @@
+import {
+  CONDITIONING_ACTION_LOCALE_KEYS,
+  CONDITIONING_MARKER_LOCALE_KEYS,
+  type ConditioningActionKey,
+} from "@/utils/conditioning/conditioning";
 import { TextInputStyle } from "discord.js";
 import type { LlmRow, PersonaSpriteRow, StmCategoryRow, TomoriState } from "@/types/db/schema";
 import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
 import type { CheckboxGroupOption } from "@/types/discord/modal";
 import type { ConditioningGroup } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import type { ShortTermMemoryEntry } from "@/utils/cache/shortTermMemoryCache";
-import { PERSONA_NAMING_VALUE_MAX_LENGTH, type AddressingStyle } from "@/types/personaNaming";
+import {
+  PERSONA_NAMING_VALUE_MAX_LENGTH,
+  PERSONA_NICKNAME_MAX_LENGTH,
+  PERSONA_NICKNAME_MIN_LENGTH,
+  type AddressingStyle,
+} from "@/types/personaNaming";
 import {
   CONFIG_CONDITIONING_CHECKBOX_CAPACITY,
   CONFIG_CONDITIONING_CHECKBOX_GROUP_SIZE,
@@ -12,11 +22,8 @@ import {
   CONFIG_TRIGGER_CHECKBOX_GROUP_SIZE,
   buildConfigRouteId,
 } from "@/utils/discord/configPanelCatalog";
-import {
-  PERSONA_NICKNAME_MAX_LENGTH,
-  PERSONA_NICKNAME_MIN_LENGTH,
-} from "@/utils/discord/interactions/configPersonaOperations";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { getDiscordTextLength, truncateDiscordText } from "@/utils/text/discordTextLimits";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { formatImageTagsForModalValue, TAGS_MODAL_MAX_LENGTH } from "@/utils/image/tagHelpers";
 import { CONTEXT_NOTE_MAX_LENGTH } from "@/utils/discord/contextNoteOptions";
@@ -677,6 +684,7 @@ export function buildPersonaRenameModal(
   nonce: string,
   currentNickname: string,
 ): RawModalPayload {
+  const prefilledNickname = truncateDiscordText(currentNickname, PERSONA_NICKNAME_MAX_LENGTH, "");
   return {
     custom_id: buildConfigRouteId({ action: "rename-submit", locale, personaId, nonce }),
     title: modalTitle(locale, "commands.config.panel.rename_modal_title"),
@@ -689,10 +697,12 @@ export function buildPersonaRenameModal(
           type: 4,
           custom_id: buildConfigModalFieldId("nickname", nonce),
           style: TextInputStyle.Short,
-          min_length: PERSONA_NICKNAME_MIN_LENGTH,
+          // A legacy 1-character name prefilled below the floor makes Discord reject the whole modal, so the floor yields to it.
+          min_length: Math.min(PERSONA_NICKNAME_MIN_LENGTH, getDiscordTextLength(prefilledNickname)),
           max_length: PERSONA_NICKNAME_MAX_LENGTH,
           required: true,
-          value: currentNickname,
+          // Discord rejects the whole modal when a prefilled value exceeds max_length, and nicknames stored before the cap existed can be longer.
+          value: prefilledNickname,
         },
       },
     ],
@@ -1134,7 +1144,10 @@ export function buildPersonaConditioningRemoveModal(
         buildConditioningCheckboxGroupId(groupIndex, nonce),
         presented.slice(offset, offset + CONFIG_CONDITIONING_CHECKBOX_GROUP_SIZE),
         (group, indexInGroup) => {
-          const action = localizer(locale, `commands.${group.conditioningType}.${group.actionKey}.history_label`);
+          const action = localizer(
+            locale,
+            CONDITIONING_ACTION_LOCALE_KEYS[group.actionKey as ConditioningActionKey].history_label,
+          );
           const descriptionKey =
             group.totalCount > 1
               ? "commands.conditioning.shared.option_reason_description"
@@ -1148,7 +1161,7 @@ export function buildPersonaConditioningRemoveModal(
             label: safeSelectOptionText(
               localizer(locale, "commands.conditioning.shared.option_label", {
                 persona_name: personaName,
-                type_marker: localizer(locale, `commands.conditioning.shared.marker_${group.conditioningType}`),
+                type_marker: localizer(locale, CONDITIONING_MARKER_LOCALE_KEYS[group.conditioningType]),
                 action,
               }),
               100,

@@ -1,3 +1,4 @@
+import { REST } from "discord.js";
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import type { Client, TextChannel } from "discord.js";
 import { HumanizerDegree } from "@/types/db/schema";
@@ -21,9 +22,20 @@ const config: StreamConfig = {
 };
 
 function fixture(chunks: ProcessedChunk[], holdResponseText = true) {
-  const send = mock(async (_payload: unknown) => ({ id: "sent_1", url: "", author: { id: "bot_1" } }));
+  const send = mock(async (_payload: unknown) => ({
+    id: "sent_1",
+    channelId: "pending_fixture",
+    webhookId: null,
+    url: "",
+    author: { id: "bot_1" },
+  }));
   const context: StreamContext = {
-    channel: { id: "pending_fixture", send, isThread: () => false } as unknown as TextChannel,
+    channel: {
+      id: "pending_fixture",
+      send,
+      client: { rest: new REST() },
+      isThread: () => false,
+    } as unknown as TextChannel,
     client: {} as Client,
     tomoriState: createPersona({ persona_nickname: "Mirri", config: { humanizer_degree: HumanizerDegree.NONE } }),
     contextItems: [],
@@ -276,7 +288,7 @@ describe("pending stream presentation", () => {
     ]);
     send.mockImplementation(async () => {
       StreamOrchestrator.requestStop(context.channel.id, "fixture_user");
-      return { id: "sent_1", url: "", author: { id: "bot_1" } };
+      return { id: "sent_1", channelId: "pending_fixture", webhookId: null, url: "", author: { id: "bot_1" } };
     });
     const result = await new StreamOrchestrator().streamToDiscord(provider, config, context);
     const delivered = await result.pendingResponse?.deliver();

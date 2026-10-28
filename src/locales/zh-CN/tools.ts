@@ -1,7 +1,23 @@
 export default {
   tools: {
+    media: {
+      delivery_failed: "Discord 未能发送媒体，未记录成功的发送。",
+      delivery_unconfirmed:
+        "Discord 未确认媒体是否已发布。请结束本轮，并在重新生成或发布前检查频道，因为再次尝试可能造成重复。",
+    },
+    roll_dice: {
+      missing_permissions: "机器人需要查看此频道、发送消息和嵌入链接的权限才能发送掷骰结果。",
+      disabled: "掷骰功能已禁用。请通过 `/config` > 插件 > 可用工具启用它。",
+      cancelled: "掷骰已在发送前取消。",
+      delivery_failed: "无法发送掷骰结果。未能成功完成掷骰。",
+    },
     execution: {
       unavailable: `在当前设置、模型能力或 bot 权限下，工具 \`{tool}\` 不可用。`,
+    },
+    generate_voice_message: {
+      persona_missing: `这个人格已不可用。`,
+      stale: `本轮期间，语音模型、凭据或人格声音发生了变化。请先开始新的一轮，再生成语音消息。`,
+      script_too_long: `这段台词超出了该语音设计模型的长度上限。请缩短台词后再试。`,
     },
     generate_image: {
       quota_exceeded_generic: `图像生成配额已经用完。`,
@@ -70,6 +86,25 @@ export default {
       unmute_success_title: `🔊 {persona_name} 解除了 {user_name} 的禁言`,
       unblock_success_title: `✅ {persona_name} 解除了对 {user_name} 的屏蔽`,
       unblock_success_description: `已移除 {persona_name} 对 {user_name} 生效的{block_type}。`,
+    },
+    danbooru: {
+      tags_title: `🏷️  Danbooru 标签查询`,
+      tag_line_resolved: `\`{query}\` → \`{tag}\`（{category}，{post_count} 条投稿）`,
+      tag_line_exact: `\`{tag}\`（{category}，{post_count} 条投稿）`,
+      tag_line_not_found: `\`{query}\`：未找到`,
+      signature_heading: `**{tag}** 代表标签`,
+      outfits_line: `服装：{outfits}`,
+      cosplay_line: `Cosplay：\`{tag}\`（{post_count} 条投稿）`,
+      category_general: `通用`,
+      category_character: `角色`,
+      category_copyright: `作品`,
+      category_artist: `画师`,
+      category_meta: `元数据`,
+      post_title: `🖼️  正在读取 Danbooru 投稿 #{id}`,
+      post_description: `{url}`,
+      gallery_footer: `Danbooru：{query}`,
+      gallery_resolved_tag: `\`{typed}\` → \`{tag}\``,
+      gallery_post_link: `[#{id}]({url})`,
     },
     user_info_update: {
       success_title: `✅ 已更新 {target_user} 的资料`,
@@ -172,6 +207,7 @@ export default {
       // English stays empty because the built-in patterns in deliberateToolMode.ts already cover
       // English grammar; keywords here would widen English matching beyond those patterns.
       deliberate: {
+        dice: ["骰子", "掷骰"],
         image: ["画一", "画一张", "画个", "生成图", "做图", "来张图", "生成一张", "改图", "修图", "重绘", "图片"],
         video: ["视频", "生成视频", "做个视频", "来段视频", "动图", "短视频", "视频生成", "剪辑"],
         voice: ["语音", "朗读", "念出来", "念一下", "配音", "语音合成", "转写", "语音识别", "说出", "读出来"],

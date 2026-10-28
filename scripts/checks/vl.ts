@@ -94,6 +94,7 @@ interface WarningCheckOptions {
    * failure mode that hides bugs.
    */
   failureNeedsDetail?: boolean;
+  blocksOnFailure?: boolean;
 }
 
 async function runWarningCheck(
@@ -105,6 +106,7 @@ async function runWarningCheck(
     summarizeFailure,
     acceptsDetailFlag = false,
     failureNeedsDetail = true,
+    blocksOnFailure = false,
   }: WarningCheckOptions = {},
 ): Promise<ResultItem> {
   console.log(`> Running ${name}...`);
@@ -112,7 +114,7 @@ async function runWarningCheck(
   const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
   const exitCode = await proc.exited;
   const output = stdout + stderr;
-  const isWarning = exitCode !== 0 || outputHasWarnings(output);
+  const isWarning = (exitCode !== 0 && !blocksOnFailure) || (exitCode === 0 && outputHasWarnings(output));
   const summary = isWarning ? summarizeWarnings?.(output) || undefined : undefined;
   const subItems = exitCode !== 0 ? summarizeFailure?.(output) : undefined;
 
@@ -127,7 +129,7 @@ async function runWarningCheck(
   return {
     name,
     exitCode,
-    fatal: false,
+    fatal: blocksOnFailure,
     isWarning,
     summary,
     subItems: subItems ? [subItems] : undefined,
@@ -730,6 +732,7 @@ async function main() {
       summarizeFailure: (output) => output.match(/\d+ error\(s\), \d+ warning\(s\), \d+ file\(s\) checked/)?.[0],
       // A failing audit is entirely file-and-line findings, so the listing is the report.
       failureNeedsDetail: true,
+      blocksOnFailure: true,
       // No detail flag is forwarded: `audit-comments` already asks for its own listing, and a
       // `--no-verbose` here would arrive after it and mute the warning lines this row counts.
       // Under `vl --verbose` the listing prints, because the aggregator echoes a warned check's
@@ -761,15 +764,20 @@ async function main() {
           skippedReason: "No local DB configured",
         }),
     runLocalesCheck("Localization Keys (bun run check-locales)", ["bun", "run", "check-locales"]),
-    // Discord length limits are a hard blocker: modal placeholders/descriptions and command
-    // descriptions get silently truncated by Discord beyond their max length, so any
-    // violation here must block the PR gate (fatal: true); unlike the broader locale
-    // parity check above, which tolerates missing Japanese translations.
-    runCheck(
+    // An untruncated string over its Discord cap rejects the whole payload, so that blocks. A
+    // string the code already truncates only reads clipped, so it surfaces as a warning.
+    runWarningCheck(
       "Localization Discord Limits (bun run check-locale-lengths)",
       ["bun", "run", "check-locale-lengths"],
-      true,
-      true,
+      {
+        acceptsDetailFlag: true,
+        blocksOnFailure: true,
+        outputHasWarnings: (output) => /Truncation advisory: \d+/.test(output),
+        summarizeWarnings: (output) => {
+          const count = output.match(/Truncation advisory: (\d+)/)?.[1];
+          return count ? `(${count} locale strings truncated, re-run with --verbose to list)` : "";
+        },
+      },
     ),
     runCheck(
       "Config Breadcrumbs (bun run check-config-breadcrumbs)",
@@ -862,7 +870,7 @@ async function main() {
     "Localization Keys":
       "Missing keys (red/blocking) mean a source file references a key that exists in no locale; this must be fixed. Missing Japanese equivalents (orange/advisory) are safe to push — run `bun run prune-locales` to clean up orphaned keys, or add the missing `ja` entries.",
     "Localization Discord Limits":
-      "Discord truncates modal placeholders/descriptions and select-option labels/descriptions (>100 chars), modal titles/labels (>45), and command descriptions (>100). Shorten the listed locale strings — both `en-US` and `ja` sides must fit.",
+      "A failure is a traced locale string over its Discord cap with no truncation, which rejects the whole payload: shorten it or wrap the call in `safeSelectOptionText`. A warning is a traced string the code already truncates, so it ships clipped; shorten it in the listed locale. Dynamic keys and separately declared builder arguments can be missed, so zero warnings does not prove every label fits.",
     "Command Reference":
       "Run `bun run generate-command-reference` and commit the regenerated docs/*/features/command-reference.md files.",
     "Command Roots":

@@ -2,7 +2,6 @@
 title: "Scheduled Tasks"
 sidebar:
   order: 2
-aiGenerated: true
 ---
 
 Set reminders for yourself or schedule recurring announcements without leaving chat.
@@ -47,6 +46,11 @@ Two slash commands let you review and adjust existing schedules:
 Both commands open a picker listing your existing schedules by persona, time, channel,
 and recurrence.
 
+:::tip
+Members with `Manage Server` see every schedule in the server, with other members' entries
+naming their creator. Everyone else sees only their own.
+:::
+
 A server can hold up to 100 pending reminders and tasks at once. When it is full, TomoriBot
 tells you instead of adding another; remove old ones with `/scheduled-task remove` to make room.
 
@@ -55,12 +59,10 @@ tells you instead of adding another; remove old ones with `/scheduled-task remov
 Reminders are only marked complete after delivery succeeds. If delivery is interrupted,
 TomoriBot automatically retries without altering the recurring schedule.
 
-If delivery fails repeatedly and hits the retry limit, TomoriBot posts one warning with
-the scheduled content and task ID. Failed user reminders ping the target so the reminder
-is not missed, while failed self-tasks send no ping. One-time schedules are then removed,
-while recurring schedules remain active for the next occurrence and can be managed with
-`/scheduled-task edit` or `/scheduled-task remove`.
+After three failed occurrences in a row, a recurring schedule stops retrying and goes
+straight to the warning, so a broken AI provider is not called again and again. One
+delivered occurrence returns it to normal.
 
 ---
 
-For more capabilities, see [Tools & Extensions](/features/capabilities/tools-and-extensions/).
+For more capabilities, see [Tools & Extensions](/features/capabilities/tools-and-extensions/built-in-tools/).

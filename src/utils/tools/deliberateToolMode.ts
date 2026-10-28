@@ -39,6 +39,13 @@ const DEFAULT_TOOL_CONTEXT_TURNS = 4;
 const MAX_TOOL_CONTEXT_TURNS = 10;
 
 const URL_PATTERN = /\bhttps?:\/\/\S+/i;
+const DICE_ROLL_REQUEST_PATTERN = /\b(?:roll(?:ing)?|dice|\d*d\d+)\b/i;
+/** The host must open the link or follow whitespace, so a lookalike subdomain does not match. */
+const DANBOORU_POST_LINK_PATTERN = /(?:https?:\/\/|^|\s)danbooru\.donmai\.us\/posts\/\d+/i;
+/** A request to see existing art "of" or "from" something, such as "show me art of Ryza" or "send pics from Atelier". */
+const EXISTING_ART_REQUEST_PATTERN =
+  /\b(?:show|send|post|find|share|get)\b.{0,40}\b(?:art|arts|fanarts?|pics?|pictures?|images?|illustrations?)\s+(?:of|from)\b/i;
+const DANBOORU_NAME_PATTERN = /\b(?:danbooru|booru)\b/i;
 
 const RELATIVE_TIME_PATTERN =
   /\b(?:in|for|after)\s+(?:about\s+|around\s+|like\s+|another\s+|a\s+)?\d+\s*(?:seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|months?)\b/i;
@@ -75,6 +82,7 @@ function hasReminderUpdateIntent(text: string): boolean {
 }
 
 const TOOL_INTENT_PATTERNS: RegExp[] = [
+  DICE_ROLL_REQUEST_PATTERN,
   /\b(search|web\s*search|look\s+up|browse|google|fetch|read\s+this\s+(?:url|link|page)|open\s+this\s+(?:url|link|page))\b/i,
   /\b(latest|today|current|currently|up[- ]?to[- ]?date|news|recent)\b/i,
   /\b(remember|save\s+(?:this|that|it)|forget|(?:delete|update)\s+(?:(?:this|that|your|my|the)\s+)?memory|store\s+(?:this|that|it))\b/i,
@@ -186,6 +194,9 @@ const URL_READING_TOOL_NAMES = ["fetch_url", "fetch", "fetch-url", "url-metadata
 const REMINDER_TOOL_NAMES = ["create_task", "update_task"];
 const MEMORY_TOOL_NAMES = ["create_long_term_memory", "update_long_term_memory"];
 const IMAGE_GENERATION_TOOL_NAMES = ["generate_image", "generate_image_nai"];
+/** The image tools plus the tag lookup, so a drawing of an existing character can check its tags first. */
+const IMAGE_REQUEST_TOOL_NAMES = [...IMAGE_GENERATION_TOOL_NAMES, "danbooru_search_tags"];
+const DANBOORU_ART_TOOL_NAMES = ["danbooru_search_tags", "danbooru_search_posts"];
 const VIDEO_GENERATION_TOOL_NAMES = ["generate_video"];
 const VOICE_GENERATION_TOOL_NAMES = ["generate_voice_message"];
 const SHORT_TERM_MEMORY_TOOL_NAMES = ["update_short_term_memory"];
@@ -209,19 +220,90 @@ export const MEDIA_GENERATION_TOOL_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 export const DELIBERATE_TOOL_TRIGGER_TARGETS = [
-  { value: "image", label: "Image generation", toolNames: IMAGE_GENERATION_TOOL_NAMES },
-  { value: "video", label: "Video generation", toolNames: VIDEO_GENERATION_TOOL_NAMES },
-  { value: "voice", label: "Voice message", toolNames: VOICE_GENERATION_TOOL_NAMES },
-  { value: "reminder", label: "Reminder/task", toolNames: REMINDER_TOOL_NAMES },
-  { value: "cross-channel", label: "Cross-channel message", toolNames: ["cross_channel_message"] },
-  { value: "search", label: "Web search/fetch", toolNames: WEB_TOOL_NAMES },
-  { value: "memory", label: "Memory", toolNames: [...MEMORY_TOOL_NAMES, ...SHORT_TERM_MEMORY_TOOL_NAMES] },
-  { value: "media-analysis", label: "Media analysis", toolNames: MEDIA_ANALYSIS_TOOL_NAMES },
-  { value: "message-action", label: "Message actions", toolNames: MESSAGE_ACTION_TOOL_NAMES },
-  { value: "user-blocking", label: "Persona user blocking", toolNames: USER_BLOCKING_TOOL_NAMES },
-  { value: "user-info", label: "User info updates", toolNames: USER_INFO_TOOL_NAMES },
-  { value: "thread", label: "Thread creation", toolNames: ["create_thread"] },
-  { value: "capabilities", label: "Capability review", toolNames: CAPABILITY_TOOL_NAMES },
+  {
+    value: "dice",
+    labelKey: "commands.config.panel.tool_target_dice",
+    label: "Dice rolling",
+    toolNames: ["roll_dice"],
+  },
+  {
+    value: "image",
+    labelKey: "commands.config.panel.tool_target_image",
+    label: "Image generation",
+    toolNames: IMAGE_REQUEST_TOOL_NAMES,
+  },
+  {
+    value: "video",
+    labelKey: "commands.config.panel.tool_target_video",
+    label: "Video generation",
+    toolNames: VIDEO_GENERATION_TOOL_NAMES,
+  },
+  {
+    value: "voice",
+    labelKey: "commands.config.panel.tool_target_voice",
+    label: "Voice message",
+    toolNames: VOICE_GENERATION_TOOL_NAMES,
+  },
+  {
+    value: "reminder",
+    labelKey: "commands.config.panel.tool_target_reminder",
+    label: "Reminder/task",
+    toolNames: REMINDER_TOOL_NAMES,
+  },
+  {
+    value: "cross-channel",
+    labelKey: "commands.config.panel.tool_target_cross-channel",
+    label: "Cross-channel message",
+    toolNames: ["cross_channel_message"],
+  },
+  {
+    value: "search",
+    labelKey: "commands.config.panel.tool_target_search",
+    label: "Web search/fetch",
+    toolNames: WEB_TOOL_NAMES,
+  },
+  {
+    value: "memory",
+    labelKey: "commands.config.panel.tool_target_memory",
+    label: "Memory",
+    toolNames: [...MEMORY_TOOL_NAMES, ...SHORT_TERM_MEMORY_TOOL_NAMES],
+  },
+  {
+    value: "media-analysis",
+    labelKey: "commands.config.panel.tool_target_media-analysis",
+    label: "Media analysis",
+    toolNames: MEDIA_ANALYSIS_TOOL_NAMES,
+  },
+  {
+    value: "message-action",
+    labelKey: "commands.config.panel.tool_target_message-action",
+    label: "Message actions",
+    toolNames: MESSAGE_ACTION_TOOL_NAMES,
+  },
+  {
+    value: "user-blocking",
+    labelKey: "commands.config.panel.tool_target_user-blocking",
+    label: "Persona user blocking",
+    toolNames: USER_BLOCKING_TOOL_NAMES,
+  },
+  {
+    value: "user-info",
+    labelKey: "commands.config.panel.tool_target_user-info",
+    label: "User info updates",
+    toolNames: USER_INFO_TOOL_NAMES,
+  },
+  {
+    value: "thread",
+    labelKey: "commands.config.panel.tool_target_thread",
+    label: "Thread creation",
+    toolNames: ["create_thread"],
+  },
+  {
+    value: "capabilities",
+    labelKey: "commands.config.panel.tool_target_capabilities",
+    label: "Capability review",
+    toolNames: CAPABILITY_TOOL_NAMES,
+  },
 ] as const;
 
 export type DeliberateToolTriggerTarget = (typeof DELIBERATE_TOOL_TRIGGER_TARGETS)[number]["value"];
@@ -470,6 +552,10 @@ export function getDeliberateToolIntentResult(
   allowedToolNames.push(...localePackResult.allowedToolNames);
   matches.push(...localePackResult.matches);
 
+  if (DICE_ROLL_REQUEST_PATTERN.test(text)) {
+    addToolMatches(allowedToolNames, matches, ["roll_dice"], "dice roll request", "built-in");
+  }
+
   if (hasReminderCreationIntent(text)) {
     addToolMatches(allowedToolNames, matches, ["create_task"], "reminder/timer request", "built-in");
   }
@@ -496,6 +582,14 @@ export function getDeliberateToolIntentResult(
       ),
       "built-in",
     );
+  }
+
+  if (DANBOORU_POST_LINK_PATTERN.test(text)) {
+    addToolMatches(allowedToolNames, matches, ["danbooru_get_post"], "Danbooru post link", "built-in");
+  }
+
+  if (EXISTING_ART_REQUEST_PATTERN.test(text) || DANBOORU_NAME_PATTERN.test(text)) {
+    addToolMatches(allowedToolNames, matches, DANBOORU_ART_TOOL_NAMES, "existing art request", "built-in");
   }
 
   if (
@@ -535,7 +629,7 @@ export function getDeliberateToolIntentResult(
     addToolMatches(
       allowedToolNames,
       matches,
-      IMAGE_GENERATION_TOOL_NAMES,
+      IMAGE_REQUEST_TOOL_NAMES,
       getRegexTrigger(text, /\b(image|picture|photo|pic|img)\b/i, "image request"),
       "built-in",
     );
@@ -561,7 +655,7 @@ export function getDeliberateToolIntentResult(
         ? VIDEO_GENERATION_TOOL_NAMES
         : target === "voice" || target === "audio" || target === "speech"
           ? VOICE_GENERATION_TOOL_NAMES
-          : IMAGE_GENERATION_TOOL_NAMES;
+          : IMAGE_REQUEST_TOOL_NAMES;
     addToolMatches(allowedToolNames, matches, generationToolNames, target || "generation request", "built-in");
   }
 
@@ -833,12 +927,11 @@ export function getAttachmentDeliberateToolIntentResult(
 /** Expression tools remain available without a task request; their feature toggles still apply. */
 export function getAutonomousDeliberateToolNames(state: TomoriState): string[] {
   const stickerTool = new StickerTool();
-  if (
-    !state.llm.has_tools ||
-    state.config.tool_use_enabled === false ||
-    !state.config.sticker_usage_enabled ||
-    !stickerTool.isAvailableFor(state.llm.llm_provider)
-  )
-    return [];
-  return [stickerTool.name];
+  if (!state.llm.has_tools || state.config.tool_use_enabled === false) return [];
+  return [
+    ...(state.config.sticker_usage_enabled && stickerTool.isAvailableFor(state.llm.llm_provider)
+      ? [stickerTool.name]
+      : []),
+    ...(state.config.conditioning_interactions_enabled ? ["interact_with_target"] : []),
+  ];
 }

@@ -1,0 +1,923 @@
+import { randomUUID } from "node:crypto";
+import type { SQL } from "bun";
+import { z } from "zod";
+import { PrivacyLevel } from "@/types/db/schema";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
+import { log } from "@/utils/misc/logger";
+import { NATURAL_NUDGE_FAILURE_STOP_THRESHOLD, NUDGE_DORMANCY_MS } from "@/modules/natural-nudges/runtime/tuning";
+import { heatWindowStart } from "@/modules/natural-nudges/runtime/meters";
+import {
+  CUSTOM_IDLE_NUDGE_KEY_PREFIX,
+  NUDGE_ADVANCED_STEP,
+  NUDGE_HEAT_OFFSET_MAX,
+  customIdleNudgeKey,
+  customIdleNudgeRowSchema,
+  computePersonaNudgeFingerprint,
+  computePersonaNudgeListFingerprint,
+  defaultServerNaturalNudgeConfig,
+  DEFAULT_NATURAL_NUDGE_TALKATIVENESS,
+  enabledIdleNudgeServerSchema,
+  fireRowSchema,
+  PERSONA_AUTHORED_IDLE_NUDGE_LIMIT,
+  personaAuthoredIdleNudgeDraftSchema,
+  personaAuthoredIdleNudgeIdSchema,
+  personaAuthoredIdleNudgesSchema,
+  personaNaturalNudgeConfigSchema,
+  personaScopeRowSchema,
+  pingUserCandidateSchema,
+  runtimeStateSchema,
+  serverNaturalNudgeConfigSchema,
+  type CustomIdleNudgeInput,
+  type CustomIdleNudgeRow,
+  type EnabledIdleNudgeServer,
+  type IdleNudgeAvailability,
+  type IdleNudgePersonaScopes,
+  type NaturalNudgeFireRow,
+  type NaturalNudgeInterest,
+  type NaturalNudgeRuntimeState,
+  type NewActiveNudgeFireRow,
+  type NewFireRow,
+  type PersonaAuthoredIdleNudge,
+  type PersonaAuthoredIdleNudgeDraft,
+  type PersonaNaturalNudgeConfig,
+  type PingUserCandidate,
+  type ServerNaturalNudgeConfig,
+  type ServerNaturalNudgeConfigPatch,
+} from "@/modules/natural-nudges/db/types";
+
+function parseRows<T>(schema: z.ZodType<T>, rows: unknown[], label: string): T[] {
+  const parsed: T[] = [];
+  for (const row of rows) {
+    const result = schema.safeParse(row);
+    if (result.success) parsed.push(result.data);
+    else
+      log.warn(`Natural Nudges: dropped an unreadable ${label} row`, undefined, {
+        metadata: { issues: result.error.issues.length },
+      });
+  }
+  return parsed;
+}
+
+const idleNudgeServerRowSchema = enabledIdleNudgeServerSchema.extend({
+  config: serverNaturalNudgeConfigSchema.nullable(),
+});
+
+const presetIdleNudgesRowSchema = z.object({
+  preset_idle_nudges: personaAuthoredIdleNudgesSchema,
+});
+
+export type PersonaIdleNudgeWriteResult = "success" | "unchanged" | "stale" | "invalid" | "limit" | "write-failed";
+
+function generatePersonaIdleNudgeId(usedIds: ReadonlySet<string>): string | null {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const id = randomUUID().replace(/-/g, "").slice(0, 10);
+    if (!usedIds.has(id)) return id;
+  }
+  return null;
+}
+
+class NaturalNudgeRepository {
+  async loadServerConfig(serverId: number, client: SQL = sql): Promise<ServerNaturalNudgeConfig> {
+    const loadRows = () => client`
+      SELECT server_id, idle_nudges_enabled, active_nudges_enabled, channel_disc_ids, llm_id,
+        checker_llm_id, checker_decision_model_id,
+        idle_nudge_frequency, active_nudge_frequency, disabled_builtin_idle_nudges, category_weights, heat_offset
+      FROM server_natural_nudge_configs WHERE server_id = ${serverId}
+    `;
+    const rows = await (client === sql
+      ? withTransientDbRetry(loadRows, "load natural nudge server config")
+      : loadRows());
+    const [row] = parseRows(serverNaturalNudgeConfigSchema, rows, "server config");
+    return row ?? defaultServerNaturalNudgeConfig(serverId);
+  }
+
+  async saveServerConfig(serverId: number, patch: ServerNaturalNudgeConfigPatch, client: SQL = sql): Promise<boolean> {
+    try {
+      await this.saveServerConfigOrThrow(serverId, patch, client);
+      return true;
+    } catch (error) {
+      await log.error("Natural Nudges: failed to save server config", error, { metadata: { serverId } });
+      return false;
+    }
+  }
+
+  private async saveServerConfigOrThrow(
+    serverId: number,
+    patch: ServerNaturalNudgeConfigPatch,
+    client: SQL,
+  ): Promise<void> {
+    const next = serverNaturalNudgeConfigSchema.parse({
+      ...(await this.loadServerConfig(serverId, client)),
+      ...patch,
+      server_id: serverId,
+    });
+    await client`
+      INSERT INTO server_natural_nudge_configs (
+        server_id, idle_nudges_enabled, active_nudges_enabled, channel_disc_ids, llm_id,
+        checker_llm_id, checker_decision_model_id,
+        idle_nudge_frequency, active_nudge_frequency, disabled_builtin_idle_nudges, category_weights, heat_offset
+      ) VALUES (
+        ${serverId}, ${next.idle_nudges_enabled}, ${next.active_nudges_enabled}, ${sql.array(next.channel_disc_ids, "TEXT")},
+        ${next.llm_id}, ${next.checker_llm_id}, ${next.checker_decision_model_id},
+        ${next.idle_nudge_frequency}, ${next.active_nudge_frequency},
+        ${sql.array(next.disabled_builtin_idle_nudges, "TEXT")}, ${next.category_weights}::jsonb, ${next.heat_offset}
+      )
+      ON CONFLICT (server_id) DO UPDATE SET
+        idle_nudges_enabled = EXCLUDED.idle_nudges_enabled,
+        active_nudges_enabled = EXCLUDED.active_nudges_enabled,
+        channel_disc_ids = EXCLUDED.channel_disc_ids,
+        llm_id = EXCLUDED.llm_id,
+        checker_llm_id = EXCLUDED.checker_llm_id,
+        checker_decision_model_id = EXCLUDED.checker_decision_model_id,
+        idle_nudge_frequency = EXCLUDED.idle_nudge_frequency,
+        active_nudge_frequency = EXCLUDED.active_nudge_frequency,
+        disabled_builtin_idle_nudges = EXCLUDED.disabled_builtin_idle_nudges,
+        category_weights = CASE WHEN ${patch.category_weights !== undefined} THEN EXCLUDED.category_weights ELSE server_natural_nudge_configs.category_weights END,
+        heat_offset = CASE WHEN ${patch.heat_offset !== undefined} THEN EXCLUDED.heat_offset ELSE server_natural_nudge_configs.heat_offset END
+    `;
+  }
+
+  async adjustHeat(serverId: number, direction: "up" | "down"): Promise<boolean> {
+    const delta = direction === "up" ? NUDGE_ADVANCED_STEP : -NUDGE_ADVANCED_STEP;
+    try {
+      await sql`
+        INSERT INTO server_natural_nudge_configs (server_id, heat_offset)
+        VALUES (${serverId}, ${delta})
+        ON CONFLICT (server_id) DO UPDATE SET
+          heat_offset = GREATEST(${-NUDGE_HEAT_OFFSET_MAX}, LEAST(${NUDGE_HEAT_OFFSET_MAX}, server_natural_nudge_configs.heat_offset + ${delta}))
+      `;
+      return true;
+    } catch (error) {
+      await log.error("Natural Nudges: failed to adjust heat", error, { metadata: { serverId, direction } });
+      return false;
+    }
+  }
+
+  async listEnabledIdleNudgeServers(now: Date): Promise<EnabledIdleNudgeServer[]> {
+    const rows = await withTransientDbRetry(
+      () => sql`
+      SELECT s.server_id, s.server_disc_id, scc.timezone_offset,
+        CASE WHEN c.server_id IS NULL THEN NULL ELSE json_build_object(
+          'server_id', c.server_id, 'idle_nudges_enabled', c.idle_nudges_enabled,
+          'active_nudges_enabled', c.active_nudges_enabled,
+          'channel_disc_ids', c.channel_disc_ids, 'llm_id', c.llm_id,
+          'checker_llm_id', c.checker_llm_id, 'checker_decision_model_id', c.checker_decision_model_id,
+          'idle_nudge_frequency', c.idle_nudge_frequency, 'active_nudge_frequency', c.active_nudge_frequency,
+          'disabled_builtin_idle_nudges', c.disabled_builtin_idle_nudges,
+          'category_weights', c.category_weights, 'heat_offset', c.heat_offset
+        ) END AS config
+      FROM servers s
+      JOIN server_natural_nudge_runtime_state runtime ON runtime.server_id = s.server_id
+      LEFT JOIN server_natural_nudge_configs c ON c.server_id = s.server_id
+      LEFT JOIN server_chat_configs scc ON scc.server_id = s.server_id
+      WHERE COALESCE(s.is_dm_channel, false) = false
+        AND COALESCE(c.idle_nudges_enabled, true)
+        AND runtime.last_direct_chat_at > ${new Date(now.getTime() - NUDGE_DORMANCY_MS)}
+        AND EXISTS (
+          SELECT 1 FROM stat_counters sc
+          WHERE sc.server_id = s.server_id
+            AND sc.metric = 'message_sent'
+            AND sc.bucket >= ${heatWindowStart(now).toISOString().slice(0, 10)}::date
+        )
+    `,
+      "list enabled idle nudge servers",
+    );
+    return parseRows(idleNudgeServerRowSchema, rows, "enabled server").map((row) => ({
+      ...row,
+      config: row.config ?? defaultServerNaturalNudgeConfig(row.server_id),
+    }));
+  }
+
+  /** Channels with a turn since `since`, minus roleplay channels, where in-character talk is not a lull to fill. */
+  async loadAutomaticChannelIds(serverId: number, since: Date): Promise<string[]> {
+    const rows = await withTransientDbRetry(
+      () => sql<{ metric_key: string }[]>`
+      SELECT DISTINCT sc.metric_key
+      FROM stat_counters sc
+      LEFT JOIN server_channel_scope_configs scope ON scope.server_id = sc.server_id
+      WHERE sc.server_id = ${serverId}
+        AND sc.metric = 'channel_turn'
+        AND sc.bucket >= ${since.toISOString().slice(0, 10)}::date
+        AND NOT (sc.metric_key = ANY(COALESCE(scope.rp_channel_ids, '{}')))
+      ORDER BY sc.metric_key
+    `,
+      "load natural nudge automatic channels",
+    );
+    return rows.map((row) => row.metric_key);
+  }
+
+  async listCustomIdleNudges(serverId: number, client: SQL = sql): Promise<CustomIdleNudgeRow[]> {
+    const loadRows = () => client`
+      SELECT custom_idle_nudge_id, server_id, category, title, brief, agenda_hint, prerequisites, recommended_tools, enabled
+      FROM server_natural_nudge_custom_idle_nudges
+      WHERE server_id = ${serverId}
+      ORDER BY custom_idle_nudge_id
+    `;
+    const rows = await (client === sql ? withTransientDbRetry(loadRows, "load custom idle nudges") : loadRows());
+    return parseRows(customIdleNudgeRowSchema, rows, "custom idle nudge");
+  }
+
+  /** Returns the new row's ID, `"limit"` when the server already holds `limit` rows, or `"failed"` on a database error. */
+  async insertCustomIdleNudge(
+    serverId: number,
+    input: CustomIdleNudgeInput,
+    limit: number,
+  ): Promise<number | "limit" | "failed"> {
+    try {
+      const [row] = await sql<Array<{ custom_idle_nudge_id: number }>>`
+        INSERT INTO server_natural_nudge_custom_idle_nudges
+          (server_id, category, title, brief, agenda_hint, prerequisites, recommended_tools, enabled)
+        SELECT ${serverId}, ${input.category}, ${input.title}, ${input.brief}, ${input.agenda_hint},
+          ${sql.array(input.prerequisites, "TEXT")}, ${sql.array(input.recommended_tools, "TEXT")}, ${input.enabled}
+        WHERE (SELECT COUNT(*) FROM server_natural_nudge_custom_idle_nudges WHERE server_id = ${serverId}) < ${limit}
+        RETURNING custom_idle_nudge_id
+      `;
+      return row?.custom_idle_nudge_id ?? "limit";
+    } catch (error) {
+      await log.error("Natural Nudges: failed to add a custom idle nudge", error, { metadata: { serverId } });
+      return "failed";
+    }
+  }
+
+  async updateCustomIdleNudge(serverId: number, idleNudgeId: number, input: CustomIdleNudgeInput): Promise<boolean> {
+    try {
+      const rows = await sql`
+        UPDATE server_natural_nudge_custom_idle_nudges SET
+          category = ${input.category}, title = ${input.title}, brief = ${input.brief},
+          agenda_hint = ${input.agenda_hint}, prerequisites = ${sql.array(input.prerequisites, "TEXT")},
+          recommended_tools = ${sql.array(input.recommended_tools, "TEXT")}, enabled = ${input.enabled}
+        WHERE server_id = ${serverId} AND custom_idle_nudge_id = ${idleNudgeId}
+        RETURNING custom_idle_nudge_id
+      `;
+      return rows.length > 0;
+    } catch (error) {
+      await log.error("Natural Nudges: failed to update a custom idle nudge", error, {
+        metadata: { serverId, idleNudgeId },
+      });
+      return false;
+    }
+  }
+
+  /** Returns how many rows were removed, or null when the delete failed. */
+  async deleteCustomIdleNudges(serverId: number, idleNudgeIds: readonly number[]): Promise<number | null> {
+    try {
+      return await sql.transaction(async (tx) => {
+        const rows = await tx`
+          DELETE FROM server_natural_nudge_custom_idle_nudges
+          WHERE server_id = ${serverId} AND custom_idle_nudge_id = ANY(${sql.array([...idleNudgeIds], "INT")})
+          RETURNING custom_idle_nudge_id
+        `;
+        await tx`
+          DELETE FROM server_natural_nudge_persona_scopes
+          WHERE server_id = ${serverId} AND idle_nudge_key = ANY(${sql.array(idleNudgeIds.map(customIdleNudgeKey), "TEXT")})
+        `;
+        return rows.length;
+      });
+    } catch (error) {
+      await log.error("Natural Nudges: failed to remove custom idle nudges", error, {
+        metadata: { serverId, idleNudgeIds },
+      });
+      return null;
+    }
+  }
+
+  /**
+   * The on/off switch and the persona scope change together, so one modal submit cannot half-apply.
+   * Turning an idle nudge off also drops its scope, so turning it back on starts from the personas checked then.
+   */
+  async saveIdleNudgeAvailability(
+    serverId: number,
+    idleNudgeKey: string,
+    customIdleNudgeId: number | null,
+    availability: IdleNudgeAvailability,
+  ): Promise<boolean> {
+    try {
+      await sql.transaction(async (tx) => {
+        if (customIdleNudgeId === null) {
+          const disabled = new Set((await this.loadServerConfig(serverId, tx)).disabled_builtin_idle_nudges);
+          if (availability.enabled) disabled.delete(idleNudgeKey);
+          else disabled.add(idleNudgeKey);
+          await this.saveServerConfigOrThrow(serverId, { disabled_builtin_idle_nudges: [...disabled] }, tx);
+        } else {
+          await tx`
+            UPDATE server_natural_nudge_custom_idle_nudges SET enabled = ${availability.enabled}
+            WHERE server_id = ${serverId} AND custom_idle_nudge_id = ${customIdleNudgeId}
+          `;
+        }
+        if (availability.enabled && availability.scope) {
+          await tx`
+            INSERT INTO server_natural_nudge_persona_scopes (server_id, idle_nudge_key, persona_ids)
+            VALUES (${serverId}, ${idleNudgeKey}, ${[...availability.scope]}::jsonb)
+            ON CONFLICT (server_id, idle_nudge_key) DO UPDATE SET persona_ids = EXCLUDED.persona_ids
+          `;
+        } else {
+          await tx`
+            DELETE FROM server_natural_nudge_persona_scopes
+            WHERE server_id = ${serverId} AND idle_nudge_key = ${idleNudgeKey}
+          `;
+        }
+      });
+      return true;
+    } catch (error) {
+      await log.error("Natural Nudges: failed to save idle nudge availability", error, {
+        metadata: { serverId, idleNudgeKey },
+      });
+      return false;
+    }
+  }
+
+  async loadPersonaScopes(serverId: number): Promise<IdleNudgePersonaScopes> {
+    const rows = await withTransientDbRetry(
+      () => sql`
+      SELECT idle_nudge_key, persona_ids FROM server_natural_nudge_persona_scopes WHERE server_id = ${serverId}
+    `,
+      "load natural nudge persona scopes",
+    );
+    return new Map(
+      parseRows(personaScopeRowSchema, rows, "persona scope").map((row) => [row.idle_nudge_key, row.persona_ids]),
+    );
+  }
+
+  /**
+   * Workspace import replaces the whole collection inside the caller's transaction. The new rows get new
+   * IDs, so every custom scope is dropped rather than left pointing at a different idle nudge later.
+   */
+  async replaceCustomIdleNudges(serverId: number, idleNudges: CustomIdleNudgeInput[], client: SQL): Promise<void> {
+    await client`DELETE FROM server_natural_nudge_custom_idle_nudges WHERE server_id = ${serverId}`;
+    await client`
+      DELETE FROM server_natural_nudge_persona_scopes
+      WHERE server_id = ${serverId} AND starts_with(idle_nudge_key, ${CUSTOM_IDLE_NUDGE_KEY_PREFIX})
+    `;
+    for (const idleNudge of idleNudges) {
+      await client`
+        INSERT INTO server_natural_nudge_custom_idle_nudges
+          (server_id, category, title, brief, agenda_hint, prerequisites, recommended_tools, enabled)
+        VALUES (${serverId}, ${idleNudge.category}, ${idleNudge.title}, ${idleNudge.brief}, ${idleNudge.agenda_hint},
+          ${sql.array(idleNudge.prerequisites, "TEXT")}, ${sql.array(idleNudge.recommended_tools, "TEXT")},
+          ${idleNudge.enabled})
+      `;
+    }
+  }
+
+  /** Effective persona settings: a stored row wins, then the live preset for a pointer, then the defaults. */
+  async loadPersonaConfigs(
+    personaIds: readonly number[],
+    client: SQL = sql,
+  ): Promise<Map<number, PersonaNaturalNudgeConfig>> {
+    const configs = new Map<number, PersonaNaturalNudgeConfig>();
+    if (personaIds.length === 0) return configs;
+    const loadRows = () => client`
+      SELECT p.persona_id,
+        COALESCE(c.talkativeness, CASE WHEN p.is_pointer THEN pp.natural_nudge_talkativeness END,
+          ${DEFAULT_NATURAL_NUDGE_TALKATIVENESS}) AS talkativeness,
+        COALESCE(c.interests, CASE WHEN p.is_pointer THEN pp.natural_nudge_interests END, '[]'::jsonb) AS interests,
+        COALESCE(c.authored_idle_nudges, CASE WHEN p.is_pointer THEN pp.natural_nudge_idle_nudges END,
+          '[]'::jsonb) AS idle_nudges,
+        COALESCE(c.disabled_idle_nudge_ids, '[]'::jsonb) AS disabled_idle_nudge_ids,
+        c.persona_id IS NOT NULL AS has_override,
+        c.authored_idle_nudges IS NOT NULL AS idle_nudges_override,
+        c.authored_idle_nudges IS NULL AND p.is_pointer AND pp.persona_preset_id IS NOT NULL AS idle_nudges_inherited
+      FROM personas p
+      LEFT JOIN persona_natural_nudge_configs c ON c.persona_id = p.persona_id
+      LEFT JOIN persona_presets pp ON p.is_pointer = true
+        AND pp.preset_lineage_id = p.preset_lineage_id
+        AND pp.preset_language = p.preset_language
+      WHERE p.persona_id = ANY(${sql.array([...personaIds], "INT")})
+    `;
+    const rows = await (client === sql
+      ? withTransientDbRetry(loadRows, "load natural nudge persona configs")
+      : loadRows());
+    for (const config of parseRows(personaNaturalNudgeConfigSchema, rows, "persona config")) {
+      configs.set(config.persona_id, config);
+    }
+    return configs;
+  }
+
+  async savePersonaConfig(
+    personaId: number,
+    config: { talkativeness: number; interests: NaturalNudgeInterest[] },
+    client: SQL = sql,
+  ): Promise<boolean> {
+    try {
+      await client`
+        INSERT INTO persona_natural_nudge_configs (persona_id, talkativeness, interests)
+        VALUES (${personaId}, ${config.talkativeness}, ${config.interests}::jsonb)
+        ON CONFLICT (persona_id) DO UPDATE SET
+          talkativeness = EXCLUDED.talkativeness,
+          interests = EXCLUDED.interests
+      `;
+      return true;
+    } catch (error) {
+      await log.error("Natural Nudges: failed to save persona config", error, { metadata: { personaId } });
+      return false;
+    }
+  }
+
+  /** Freezes the preset's current defaults, including its authored list, into a materializing pointer's row. */
+  async copyPresetDefaults(
+    client: SQL,
+    personaId: number,
+    defaults: {
+      talkativeness: number;
+      interests: NaturalNudgeInterest[];
+      idleNudges: readonly PersonaAuthoredIdleNudge[];
+    },
+  ): Promise<void> {
+    const idleNudges = personaAuthoredIdleNudgesSchema.safeParse(defaults.idleNudges);
+    if (!idleNudges.success) {
+      throw new Error(`Natural Nudges: invalid preset authored idle nudges for persona ${personaId}`);
+    }
+    await client`
+      INSERT INTO persona_natural_nudge_configs (persona_id, talkativeness, interests, authored_idle_nudges)
+      VALUES (${personaId}, ${defaults.talkativeness}, ${defaults.interests}::jsonb,
+        ${idleNudges.data}::jsonb)
+      ON CONFLICT (persona_id) DO UPDATE SET
+        authored_idle_nudges = EXCLUDED.authored_idle_nudges
+      WHERE persona_natural_nudge_configs.authored_idle_nudges IS NULL
+    `;
+  }
+
+  async replacePersonaIdleNudges(
+    personaId: number,
+    idleNudges: readonly PersonaAuthoredIdleNudge[],
+  ): Promise<PersonaIdleNudgeWriteResult> {
+    const parsed = personaAuthoredIdleNudgesSchema.safeParse(idleNudges);
+    if (!parsed.success) return "invalid";
+    return this.withPersonaIdleNudgeWrite(personaId, async (client, config) => {
+      await this.writePersonaIdleNudgeState(client, personaId, config, {
+        idleNudges: parsed.data,
+        disabledIdleNudgeIds: [],
+      });
+      return "success";
+    });
+  }
+
+  async addPersonaIdleNudge(
+    personaId: number,
+    draft: PersonaAuthoredIdleNudgeDraft,
+    idleNudgeId?: string,
+  ): Promise<PersonaIdleNudgeWriteResult> {
+    const parsedDraft = personaAuthoredIdleNudgeDraftSchema.safeParse(draft);
+    if (!parsedDraft.success) return "invalid";
+    if (idleNudgeId !== undefined && !personaAuthoredIdleNudgeIdSchema.safeParse(idleNudgeId).success) return "invalid";
+    return this.withPersonaIdleNudgeWrite(personaId, async (client, config) => {
+      if (config.idle_nudges.length >= PERSONA_AUTHORED_IDLE_NUDGE_LIMIT) return "limit";
+      const usedIds = new Set(config.idle_nudges.map((nudge) => nudge.id));
+      const nextId = idleNudgeId ?? generatePersonaIdleNudgeId(usedIds);
+      if (nextId === null) return "write-failed";
+      if (usedIds.has(nextId)) return "invalid";
+      const parsed = personaAuthoredIdleNudgesSchema.safeParse([
+        ...config.idle_nudges,
+        { ...parsedDraft.data, id: nextId },
+      ]);
+      if (!parsed.success) return "invalid";
+      await this.writePersonaIdleNudgeState(client, personaId, config, {
+        idleNudges: parsed.data,
+        disabledIdleNudgeIds: config.disabled_idle_nudge_ids,
+      });
+      return "success";
+    });
+  }
+
+  async updatePersonaIdleNudge(
+    personaId: number,
+    idleNudgeId: string,
+    draft: PersonaAuthoredIdleNudgeDraft,
+  ): Promise<PersonaIdleNudgeWriteResult> {
+    const parsedDraft = personaAuthoredIdleNudgeDraftSchema.safeParse(draft);
+    if (!parsedDraft.success) return "invalid";
+    if (!personaAuthoredIdleNudgeIdSchema.safeParse(idleNudgeId).success) return "invalid";
+    return this.withPersonaIdleNudgeWrite(personaId, async (client, config) => {
+      const index = config.idle_nudges.findIndex((nudge) => nudge.id === idleNudgeId);
+      if (index < 0) return "stale";
+      const next = config.idle_nudges.map((nudge, position) =>
+        position === index ? { ...parsedDraft.data, id: idleNudgeId } : nudge,
+      );
+      const parsed = personaAuthoredIdleNudgesSchema.safeParse(next);
+      if (!parsed.success) return "invalid";
+      await this.writePersonaIdleNudgeState(client, personaId, config, {
+        idleNudges: parsed.data,
+        disabledIdleNudgeIds: config.disabled_idle_nudge_ids,
+      });
+      return "success";
+    });
+  }
+
+  async removePersonaIdleNudge(
+    personaId: number,
+    idleNudgeId: string,
+    expectedFingerprint: string,
+  ): Promise<PersonaIdleNudgeWriteResult> {
+    if (!personaAuthoredIdleNudgeIdSchema.safeParse(idleNudgeId).success) return "invalid";
+    return this.withPersonaIdleNudgeWrite(personaId, async (client, config) => {
+      const nudge = config.idle_nudges.find((nudge) => nudge.id === idleNudgeId);
+      if (!nudge || computePersonaNudgeFingerprint(personaId, nudge) !== expectedFingerprint) return "stale";
+      await this.writePersonaIdleNudgeState(client, personaId, config, {
+        idleNudges: config.idle_nudges.filter((nudge) => nudge.id !== idleNudgeId),
+        disabledIdleNudgeIds: config.disabled_idle_nudge_ids.filter((id) => id !== idleNudgeId),
+      });
+      return "success";
+    });
+  }
+
+  /** Local availability stays out of the authored list, so a toggle never snapshots an inherited preset list. */
+  async setPersonaIdleNudgeAvailability(
+    personaId: number,
+    idleNudgeId: string,
+    enabled: boolean,
+  ): Promise<PersonaIdleNudgeWriteResult> {
+    if (!personaAuthoredIdleNudgeIdSchema.safeParse(idleNudgeId).success) return "invalid";
+    return this.withPersonaIdleNudgeWrite(personaId, async (client, config) => {
+      if (!config.idle_nudges.some((nudge) => nudge.id === idleNudgeId)) return "stale";
+      const disabled = new Set(config.disabled_idle_nudge_ids);
+      const wasDisabled = disabled.has(idleNudgeId);
+      if (enabled) disabled.delete(idleNudgeId);
+      else disabled.add(idleNudgeId);
+      if (enabled === !wasDisabled) return "unchanged";
+      await this.writePersonaIdleNudgeState(client, personaId, config, {
+        idleNudges: config.idle_nudges_override ? config.idle_nudges : null,
+        disabledIdleNudgeIds: [...disabled],
+      });
+      return "success";
+    });
+  }
+
+  /** Clears only the list override, keeping interests, talkativeness, and availability that still names a preset entry. */
+  async restorePersonaIdleNudgeList(
+    personaId: number,
+    expectedFingerprint: string,
+  ): Promise<PersonaIdleNudgeWriteResult> {
+    return this.withPersonaIdleNudgeWrite(personaId, async (client, config, presetIdleNudges, isPointer) => {
+      if (!isPointer) return "stale";
+      if (computePersonaNudgeListFingerprint(personaId, config.idle_nudges) !== expectedFingerprint) return "stale";
+      if (!config.idle_nudges_override) return "unchanged";
+      const restoredIds = new Set(presetIdleNudges.map((nudge) => nudge.id));
+      await this.writePersonaIdleNudgeState(client, personaId, config, {
+        idleNudges: null,
+        disabledIdleNudgeIds: config.disabled_idle_nudge_ids.filter((id) => restoredIds.has(id)),
+      });
+      return "success";
+    });
+  }
+
+  private async withPersonaIdleNudgeWrite(
+    personaId: number,
+    operation: (
+      client: SQL,
+      config: PersonaNaturalNudgeConfig,
+      presetIdleNudges: readonly PersonaAuthoredIdleNudge[],
+      isPointer: boolean,
+    ) => Promise<PersonaIdleNudgeWriteResult>,
+  ): Promise<PersonaIdleNudgeWriteResult> {
+    try {
+      return await sql.transaction(async (tx) => {
+        const [persona] = await tx<Array<{ persona_id: number; is_pointer: boolean }>>`
+          SELECT persona_id, is_pointer FROM personas WHERE persona_id = ${personaId} FOR UPDATE
+        `;
+        if (!persona) return "stale";
+        const config = (await this.loadPersonaConfigs([personaId], tx)).get(personaId);
+        const presetIdleNudges = await this.loadPresetIdleNudges(tx, personaId);
+        if (!config || !presetIdleNudges) {
+          await log.error("Natural Nudges: persona nudge state is unreadable", undefined, {
+            metadata: { personaId },
+          });
+          return "write-failed";
+        }
+        return await operation(tx, config, presetIdleNudges, persona.is_pointer);
+      });
+    } catch (error) {
+      await log.error("Natural Nudges: failed to write persona idle nudges", error, { metadata: { personaId } });
+      return "write-failed";
+    }
+  }
+
+  private async loadPresetIdleNudges(client: SQL, personaId: number): Promise<PersonaAuthoredIdleNudge[] | null> {
+    const rows = await client`
+      SELECT COALESCE(pp.natural_nudge_idle_nudges, '[]'::jsonb) AS preset_idle_nudges
+      FROM personas p
+      LEFT JOIN persona_presets pp ON p.is_pointer = true
+        AND pp.preset_lineage_id = p.preset_lineage_id
+        AND pp.preset_language = p.preset_language
+      WHERE p.persona_id = ${personaId}
+    `;
+    const [row] = parseRows(presetIdleNudgesRowSchema, rows, "persona preset idle nudges");
+    return row?.preset_idle_nudges ?? null;
+  }
+
+  private async writePersonaIdleNudgeState(
+    client: SQL,
+    personaId: number,
+    config: PersonaNaturalNudgeConfig,
+    next: { idleNudges: readonly PersonaAuthoredIdleNudge[] | null; disabledIdleNudgeIds: readonly string[] },
+  ): Promise<void> {
+    if (config.has_override) {
+      await client`
+        UPDATE persona_natural_nudge_configs
+        SET authored_idle_nudges = ${next.idleNudges}::jsonb,
+          disabled_idle_nudge_ids = ${next.disabledIdleNudgeIds}::jsonb
+        WHERE persona_id = ${personaId}
+      `;
+      return;
+    }
+    await client`
+      INSERT INTO persona_natural_nudge_configs
+        (persona_id, talkativeness, interests, authored_idle_nudges, disabled_idle_nudge_ids)
+      VALUES (${personaId}, ${config.talkativeness}, ${config.interests}::jsonb,
+        ${next.idleNudges}::jsonb, ${next.disabledIdleNudgeIds}::jsonb)
+    `;
+  }
+
+  /** Re-pointing a persona at a preset drops its own row so it reads the preset's defaults live again. */
+  async clearPersonaConfig(client: SQL, personaId: number): Promise<void> {
+    await client`DELETE FROM persona_natural_nudge_configs WHERE persona_id = ${personaId}`;
+  }
+
+  async deletePersonaConfig(personaId: number): Promise<boolean> {
+    try {
+      await this.clearPersonaConfig(sql, personaId);
+      return true;
+    } catch (error) {
+      await log.error("Natural Nudges: failed to clear persona config", error, { metadata: { personaId } });
+      return false;
+    }
+  }
+
+  async loadLastDirectChatAt(serverId: number): Promise<Date | null> {
+    const [row] = await withTransientDbRetry(
+      () => sql<{ last_direct_chat_at: Date | null }[]>`
+        SELECT last_direct_chat_at FROM server_natural_nudge_runtime_state WHERE server_id = ${serverId}
+      `,
+      "load natural nudge direct chat activity",
+    );
+    return row?.last_direct_chat_at ?? null;
+  }
+
+  async recordDirectChat(serverId: number): Promise<Date> {
+    const [row] = await sql<{ last_direct_chat_at: Date }[]>`
+      INSERT INTO server_natural_nudge_runtime_state (server_id, last_direct_chat_at)
+      VALUES (${serverId}, NOW())
+      ON CONFLICT (server_id) DO UPDATE SET last_direct_chat_at = NOW(), updated_at = NOW()
+      RETURNING last_direct_chat_at
+    `;
+    return row.last_direct_chat_at;
+  }
+
+  async loadRuntimeState(serverId: number): Promise<NaturalNudgeRuntimeState> {
+    const rows = await withTransientDbRetry(
+      () => sql`
+      SELECT server_id, idle_nudge_jitter, consecutive_failures, stopped_at
+      FROM server_natural_nudge_runtime_state WHERE server_id = ${serverId}
+    `,
+      "load natural nudge runtime state",
+    );
+    const [row] = parseRows(runtimeStateSchema, rows, "runtime state");
+    return row ?? { server_id: serverId, idle_nudge_jitter: 1, consecutive_failures: 0, stopped_at: null };
+  }
+
+  async setIdleNudgeJitter(serverId: number, jitter: number): Promise<void> {
+    await sql`
+      INSERT INTO server_natural_nudge_runtime_state (server_id, idle_nudge_jitter)
+      VALUES (${serverId}, ${jitter})
+      ON CONFLICT (server_id) DO UPDATE SET idle_nudge_jitter = EXCLUDED.idle_nudge_jitter, updated_at = NOW()
+    `;
+  }
+
+  /** Counts one failure and stamps `stopped_at` when the run reaches the stop threshold. */
+  async recordFailure(serverId: number): Promise<NaturalNudgeRuntimeState | null> {
+    const rows = await sql`
+      INSERT INTO server_natural_nudge_runtime_state (server_id, consecutive_failures, stopped_at)
+      VALUES (${serverId}, 1, NULL)
+      ON CONFLICT (server_id) DO UPDATE SET
+        consecutive_failures = server_natural_nudge_runtime_state.consecutive_failures + 1,
+        stopped_at = CASE
+          WHEN server_natural_nudge_runtime_state.consecutive_failures + 1 >= ${NATURAL_NUDGE_FAILURE_STOP_THRESHOLD}
+            THEN COALESCE(server_natural_nudge_runtime_state.stopped_at, NOW())
+          ELSE server_natural_nudge_runtime_state.stopped_at
+        END,
+        updated_at = NOW()
+      RETURNING server_id, idle_nudge_jitter, consecutive_failures, stopped_at
+    `;
+    return parseRows(runtimeStateSchema, rows, "runtime state")[0] ?? null;
+  }
+
+  async clearFailures(serverId: number): Promise<void> {
+    await sql`
+      UPDATE server_natural_nudge_runtime_state
+      SET consecutive_failures = 0, stopped_at = NULL, updated_at = NOW()
+      WHERE server_id = ${serverId} AND (consecutive_failures <> 0 OR stopped_at IS NOT NULL)
+    `;
+  }
+
+  /** Latest idle fires preserve cadence and pending verdicts, while latest invitations establish the streak across scenes. */
+  async loadFireHistory(
+    serverId: number,
+    since: Date,
+    latestIdleNudgeCount: number,
+  ): Promise<{ recent: NaturalNudgeFireRow[]; latestIdleNudges: NaturalNudgeFireRow[] }> {
+    const [recentRows, latestRows] = await withTransientDbRetry(
+      () =>
+        Promise.all([
+          sql`
+        SELECT fire_id, server_id, channel_disc_id, persona_id, mode, category, idle_nudge_key, target_user_id,
+          opener_message_disc_id, answered, fired_at
+        FROM natural_nudge_fires
+        WHERE server_id = ${serverId} AND fired_at >= ${since}
+        ORDER BY fired_at DESC
+      `,
+          sql`
+        WITH latest_idle AS (
+        SELECT fire_id, server_id, channel_disc_id, persona_id, mode, category, idle_nudge_key, target_user_id,
+          opener_message_disc_id, answered, fired_at
+        FROM natural_nudge_fires
+        WHERE server_id = ${serverId} AND mode = 'idle'
+        ORDER BY fired_at DESC
+        LIMIT ${latestIdleNudgeCount}
+        ), latest_invitations AS (
+        SELECT fire_id, server_id, channel_disc_id, persona_id, mode, category, idle_nudge_key, target_user_id,
+          opener_message_disc_id, answered, fired_at
+        FROM natural_nudge_fires
+        WHERE server_id = ${serverId} AND mode = 'idle'
+          AND category IN ('ping_user', 'revive_topic', 'start_topic')
+        ORDER BY fired_at DESC
+        LIMIT ${latestIdleNudgeCount}
+        )
+        SELECT * FROM latest_idle
+        UNION
+        SELECT * FROM latest_invitations
+        ORDER BY fired_at DESC
+      `,
+        ]),
+      "load idle nudge fire history",
+    );
+    return {
+      recent: parseRows(fireRowSchema, recentRows, "fire"),
+      latestIdleNudges: parseRows(fireRowSchema, latestRows, "fire"),
+    };
+  }
+
+  /**
+   * Latest fire of each idle nudge this persona ran on one target since `since`. Kept apart from
+   * `loadFireHistory` so its longer window loads one target's rows rather than the whole server's.
+   */
+  async loadTargetIdleNudgeFires(
+    serverId: number,
+    personaId: number,
+    targetUserId: number,
+    since: Date,
+  ): Promise<Map<string, Date>> {
+    const rows = await withTransientDbRetry(
+      () => sql<Array<{ idle_nudge_key: string; fired_at: Date }>>`
+      SELECT idle_nudge_key, MAX(fired_at) AS fired_at
+      FROM natural_nudge_fires
+      WHERE server_id = ${serverId} AND persona_id = ${personaId} AND target_user_id = ${targetUserId}
+        AND mode = 'idle' AND fired_at >= ${since}
+      GROUP BY idle_nudge_key
+    `,
+      "load targeted idle nudge history",
+    );
+    return new Map(rows.map((row) => [row.idle_nudge_key, row.fired_at]));
+  }
+
+  async setFireAnswered(fireId: number, answered: boolean): Promise<void> {
+    await sql`UPDATE natural_nudge_fires SET answered = ${answered} WHERE fire_id = ${fireId} AND answered IS NULL`;
+  }
+
+  /**
+   * The fire row and its agendas land together, so a persona never pursues an agenda that has no fire.
+   * A Play Scene passes one agenda per speaker, all anchored to the opener.
+   */
+  async recordIdleNudgeFire(
+    fire: NewFireRow,
+    agendas: ReadonlyArray<{ personaId: number; agenda: string }>,
+  ): Promise<boolean> {
+    try {
+      await sql.transaction(async (tx) => {
+        await tx`
+          INSERT INTO natural_nudge_fires
+            (server_id, channel_disc_id, persona_id, mode, category, idle_nudge_key, target_user_id,
+              opener_message_disc_id)
+          VALUES (${fire.serverId}, ${fire.channelDiscId}, ${fire.personaId}, 'idle', ${fire.category},
+            ${fire.idleNudgeKey}, ${fire.targetUserId}, ${fire.openerMessageDiscId})
+        `;
+        for (const { personaId, agenda } of agendas) {
+          await tx`
+            INSERT INTO natural_nudge_agendas (message_disc_id, persona_id, agenda, target_user_id)
+            VALUES (${fire.openerMessageDiscId}, ${personaId}, ${agenda}, ${fire.targetUserId})
+            ON CONFLICT (message_disc_id, persona_id) DO UPDATE
+            SET agenda = EXCLUDED.agenda, target_user_id = EXCLUDED.target_user_id
+          `;
+        }
+        await tx`
+          UPDATE server_natural_nudge_runtime_state
+          SET consecutive_failures = 0, updated_at = NOW()
+          WHERE server_id = ${fire.serverId} AND consecutive_failures <> 0
+        `;
+      });
+      return true;
+    } catch (error) {
+      await log.error("Natural Nudges: failed to record an idle nudge fire", error, {
+        metadata: { serverId: fire.serverId, personaId: fire.personaId },
+      });
+      return false;
+    }
+  }
+
+  async recordActiveNudgeFire(fire: NewActiveNudgeFireRow): Promise<boolean> {
+    try {
+      await sql.transaction(async (tx) => {
+        await tx`
+          INSERT INTO natural_nudge_fires
+            (server_id, channel_disc_id, persona_id, mode, opener_message_disc_id, detour)
+          VALUES (${fire.serverId}, ${fire.channelDiscId}, ${fire.personaId}, 'active',
+            ${fire.openerMessageDiscId}, ${fire.detour})
+        `;
+        await tx`
+          UPDATE server_natural_nudge_runtime_state
+          SET consecutive_failures = 0, updated_at = NOW()
+          WHERE server_id = ${fire.serverId} AND consecutive_failures <> 0
+        `;
+      });
+      return true;
+    } catch (error) {
+      await log.error("Natural Nudges: failed to record an Active Nudge fire", error, {
+        metadata: { serverId: fire.serverId, personaId: fire.personaId },
+      });
+      return false;
+    }
+  }
+
+  /** Read fresh, never through `userCache`, so an opt-out made a moment ago already excludes the user. */
+  async listPingUserCandidates(args: {
+    serverId: number;
+    personaId: number;
+    personaLineageId: number;
+    interactedSince: Date;
+    memorySince: Date;
+    onlyUserId?: number;
+  }): Promise<PingUserCandidate[]> {
+    const rows = await withTransientDbRetry(
+      () => sql`
+      WITH turns_here AS (
+        SELECT sc.user_id, SUM(sc.count) AS turns
+        FROM stat_counters sc
+        WHERE sc.server_id = ${args.serverId}
+          AND sc.metric = 'message_sent'
+          AND sc.persona_lineage_id = ${args.personaLineageId}
+          AND sc.bucket >= ${args.interactedSince.toISOString().slice(0, 10)}::date
+        GROUP BY sc.user_id
+      )
+      SELECT u.user_id, u.user_disc_id, COALESCE(u.privacy_level, 0) AS privacy_level,
+        turns_here.turns AS local_turns, COALESCE(memory.recent, 0) AS ltm_recent
+      FROM turns_here
+      JOIN users u ON u.user_id = turns_here.user_id
+      LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*) AS recent
+        FROM personal_memories pm
+        WHERE pm.user_id = u.user_id AND pm.persona_lineage_id IN (${args.personaLineageId}, 0)
+          AND GREATEST(pm.created_at, pm.updated_at) >= ${args.memorySince}
+      ) memory ON true
+      WHERE turns_here.turns > 0
+        ${args.onlyUserId === undefined ? sql`` : sql`AND u.user_id = ${args.onlyUserId}`}
+        AND NOT COALESCE(upc.natural_nudge_opt_out, false)
+        AND COALESCE(u.privacy_level, 0) <> ${PrivacyLevel.FULL}
+        AND NOT EXISTS (
+          SELECT 1 FROM personalization_blacklist pb
+          WHERE pb.server_id = ${args.serverId} AND pb.user_disc_id = u.user_disc_id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM persona_user_blocks pub
+          WHERE pub.server_id = ${args.serverId} AND pub.persona_id = ${args.personaId}
+            AND pub.user_disc_id = u.user_disc_id AND pub.expires_at > NOW()
+        )
+    `,
+      "load natural nudge ping candidates",
+    );
+    return parseRows(pingUserCandidateSchema, rows, "Ping User nudge candidate");
+  }
+
+  /** Agendas owned by one persona among the given messages, keyed by message ID. */
+  async loadAgendas(personaId: number, messageDiscIds: readonly string[]): Promise<Map<string, string>> {
+    const agendas = new Map<string, string>();
+    if (messageDiscIds.length === 0) return agendas;
+    const rows = await withTransientDbRetry(
+      () => sql<Array<{ message_disc_id: string; agenda: string }>>`
+      SELECT message_disc_id, agenda FROM natural_nudge_agendas
+      WHERE persona_id = ${personaId} AND message_disc_id = ANY(${sql.array([...messageDiscIds], "TEXT")})
+    `,
+      "load natural nudge agendas",
+    );
+    for (const row of rows) agendas.set(row.message_disc_id, row.agenda);
+    return agendas;
+  }
+
+  async pruneBefore(firesBefore: Date, agendasBefore: Date): Promise<{ fires: number; agendas: number }> {
+    const [fires, agendas] = await Promise.all([
+      sql`DELETE FROM natural_nudge_fires WHERE fired_at < ${firesBefore} RETURNING fire_id`,
+      sql`DELETE FROM natural_nudge_agendas WHERE created_at < ${agendasBefore} RETURNING message_disc_id`,
+    ]);
+    return { fires: fires.length, agendas: agendas.length };
+  }
+}
+
+export const naturalNudgeRepository = new NaturalNudgeRepository();

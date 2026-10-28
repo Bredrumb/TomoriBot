@@ -1,5 +1,12 @@
 import { describe, expect, it, mock } from "bun:test";
 import { assembleToolsForContext } from "@/tools/assembly";
+import { InteractWithRecentMessageTool } from "@/tools/functionCalls/interactWithRecentMessageTool";
+import { getAvailableToolsForContext } from "@/tools/availability";
+import {
+  DanbooruGetPostTool,
+  DanbooruSearchPostsTool,
+  DanbooruSearchTagsTool,
+} from "@/tools/functionCalls/danbooruTools";
 import { buildGenerateImageToolVariant, GenerateImageTool } from "@/tools/functionCalls/generateImageTool";
 import type { ImageToolCapabilities } from "@/tools/functionCalls/generateImageToolCapabilities";
 import { buildVoiceMessageToolVariant, GenerateVoiceMessageTool } from "@/tools/functionCalls/generateVoiceMessageTool";
@@ -16,13 +23,16 @@ const scopedMock = createScopedModuleMocker(mock, {
 
 scopedMock.module("@/utils/provider/speechEndpointResolver", () => ({
   ...realSpeechEndpointResolver,
-  resolveActiveSpeechEndpoint: async () => ({
-    endpoint: {
-      api_style: "tts-clone",
-      endpoint_url: "http://127.0.0.1:8016",
-      extra_config: { voice_mode: "clone", script_markup: "plain", supports_instruct: true },
-    } as unknown as CustomEndpointRow,
-    apiKey: "",
+  resolveSpeechTargets: async () => ({
+    design: null,
+    clone: {
+      endpoint: {
+        api_style: "tts-clone",
+        endpoint_url: "http://127.0.0.1:8016",
+        extra_config: { voice_mode: "clone", script_markup: "plain", supports_instruct: true },
+      } as unknown as CustomEndpointRow,
+      apiKey: "",
+    },
   }),
 }));
 
@@ -31,7 +41,9 @@ function createAssemblyState(overrides: Partial<ToolAssemblyState> = {}): ToolAs
     server_id: "1",
     activePersonaHasElevenlabsVoice: true,
     activePersonaVoiceDesignPrompt: null,
-    activePersonaVoiceName: null,
+
+    activePersonaVoiceSampleId: 12,
+    activePersonaVoiceSourcePriority: "design",
     diffusion_model_id: 1,
     nai_diffusion_model_id: null,
     video_model_id: null,
@@ -44,6 +56,7 @@ function createAssemblyState(overrides: Partial<ToolAssemblyState> = {}): ToolAs
       supports_structoutput: true,
     },
     config: {
+      emoji_usage_enabled: true,
       sticker_usage_enabled: true,
       web_search_enabled: true,
       self_teaching_enabled: true,
@@ -54,6 +67,9 @@ function createAssemblyState(overrides: Partial<ToolAssemblyState> = {}): ToolAs
       user_blocking_enabled: true,
       user_info_updates_enabled: true,
       thread_creation_enabled: true,
+      conditioning_interactions_enabled: false,
+      dice_rolling_enabled: false,
+      danbooru_enabled: true,
     },
     ...overrides,
   };
@@ -91,6 +107,21 @@ function getPropertyNames(tool: Tool): string[] {
 }
 
 describe("tool schema assembly", () => {
+  it("hides emoji reactions while keeping replies available without mutating the shared tool", async () => {
+    const tool = new InteractWithRecentMessageTool();
+    const state = createAssemblyState();
+    state.config.emoji_usage_enabled = false;
+    const [replyOnly] = await assembleToolsForContext([tool], createAssemblyContext(state));
+    expect(replyOnly).toBeDefined();
+    expect(getEnum(replyOnly, "action")).toEqual(["reply"]);
+    expect(JSON.stringify({ description: replyOnly.description, parameters: replyOnly.parameters })).not.toMatch(
+      /react|emoji|sticker/i,
+    );
+    const [full] = await assembleToolsForContext([tool], createAssemblyContext());
+    expect(getEnum(full, "action")).toEqual(["react", "reply"]);
+    expect(getEnum(tool, "action")).toEqual(["react", "reply"]);
+  });
+
   it("leaves tools without an assembly hook unchanged", async () => {
     const tool = createStaticTool();
 
@@ -152,7 +183,7 @@ describe("tool schema assembly", () => {
 
     const tool = buildGenerateImageToolVariant(new GenerateImageTool(), capabilities);
 
-    expect(getPropertyNames(tool as Tool)).toEqual(["aspect_ratio", "prompt"]);
+    expect(getPropertyNames(tool as Tool)).toEqual(["aspect_ratio", "nsfw", "prompt"]);
     expect((tool as Tool).description).toContain("text-to-image");
     // Prompt guidance must not reference modes the backend cannot perform
     const promptDescription = (tool as Tool).parameters.properties.prompt.description;
@@ -253,5 +284,26 @@ describe("tool schema assembly", () => {
 
     expect(tool).toBeDefined();
     expect(getPropertyNames(tool as Tool)).toContain("voice_instructions");
+  });
+});
+
+describe("Danbooru Search toggle", () => {
+  const danbooruTools = (): Tool[] => [
+    new DanbooruSearchTagsTool(),
+    new DanbooruGetPostTool(),
+    new DanbooruSearchPostsTool(),
+  ];
+
+  it("withholds every Danbooru tool from the assembled list when the toggle is off", () => {
+    const names = (enabled: boolean) => {
+      const state = createAssemblyState();
+      return getAvailableToolsForContext(danbooruTools(), "google", {
+        ...state,
+        config: { ...state.config, danbooru_enabled: enabled },
+      }).map((tool) => tool.name);
+    };
+
+    expect(names(true)).toEqual(danbooruTools().map((tool) => tool.name));
+    expect(names(false)).toEqual([]);
   });
 });

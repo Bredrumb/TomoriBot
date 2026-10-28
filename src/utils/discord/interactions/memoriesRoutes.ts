@@ -1,3 +1,4 @@
+import { type ProviderRequestDeniedError, getProviderRequestFailureCopy } from "@/utils/provider/providerUsage";
 import {
   type APIAttachment,
   type ButtonInteraction,
@@ -59,7 +60,12 @@ import {
   withPersonaPanelAvatar,
 } from "@/utils/discord/personaPanelAvatar";
 import { buildPanelContainer } from "@/utils/discord/ui/panel";
-import { showRoutedRawModal, takeRawModalCheckboxGroupValues, takeRawModalFileUpload } from "@/utils/discord/ui/modals";
+import {
+  showRoutedRawModal,
+  takeRawModalChannelSelectValues,
+  takeRawModalCheckboxGroupValues,
+  takeRawModalFileUpload,
+} from "@/utils/discord/ui/modals";
 import { createNonce } from "@/utils/discord/panelRouteTokens";
 import {
   dedupeCaseInsensitive,
@@ -77,6 +83,8 @@ import {
   type DocumentListRow,
 } from "@/utils/discord/interactions/memoriesDocumentOperations";
 import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
+
+const DISCORD_SNOWFLAKE_PATTERN = /^\d{17,20}$/;
 
 function rangeIndexAfterRemoval<T>(
   records: readonly T[],
@@ -115,6 +123,7 @@ interface ServerMemoryAddInput {
   memteachingEnabled: boolean;
   content: string;
   tags: string[];
+  channelDiscIds: string[];
 }
 
 interface ServerMemoryAddBatchInput {
@@ -128,6 +137,7 @@ interface ServerMemoryAddBatchInput {
   memteachingEnabled: boolean;
   contents: string[];
   tags: string[];
+  channelDiscIds: string[];
 }
 
 interface ServerMemoryEditInput {
@@ -141,6 +151,7 @@ interface ServerMemoryEditInput {
   memteachingEnabled: boolean;
   content: string;
   tags: string[];
+  channelDiscIds: string[];
 }
 
 interface ServerMemoryRemoveInput {
@@ -209,6 +220,7 @@ export const serverMemoriesOperations: ServerMemoriesOperations = {
     memteachingEnabled,
     content,
     tags,
+    channelDiscIds,
   }) {
     if (isBlacklisted && !canManage) {
       return { status: "blacklisted" };
@@ -236,6 +248,7 @@ export const serverMemoriesOperations: ServerMemoriesOperations = {
       trimmed,
       tags,
       workspaceId,
+      channelDiscIds,
     );
     if (!inserted) {
       return { status: "write-failed" };
@@ -254,6 +267,7 @@ export const serverMemoriesOperations: ServerMemoriesOperations = {
     memteachingEnabled,
     contents,
     tags,
+    channelDiscIds,
   }) {
     if (isBlacklisted && !canManage) {
       return { status: "blacklisted" };
@@ -292,6 +306,7 @@ export const serverMemoriesOperations: ServerMemoriesOperations = {
       taughtByUserId,
       toInsert,
       tags,
+      channelDiscIds,
     );
     if (!ok) {
       return { status: "write-failed" };
@@ -311,6 +326,7 @@ export const serverMemoriesOperations: ServerMemoriesOperations = {
     memteachingEnabled,
     content,
     tags,
+    channelDiscIds,
   }) {
     if (isBlacklisted && !canManage) {
       return { status: "blacklisted" };
@@ -338,15 +354,21 @@ export const serverMemoriesOperations: ServerMemoriesOperations = {
     }
     const existingTags = target.tags ?? [];
     const tagsUnchanged = tags.length === existingTags.length && tags.every((t, i) => t === existingTags[i]);
-    if (trimmed === target.content.trim() && tagsUnchanged) {
+    const existingScope = new Set(target.channel_disc_ids);
+    const scopeUnchanged =
+      channelDiscIds.length === existingScope.size && channelDiscIds.every((id) => existingScope.has(id));
+    if (trimmed === target.content.trim() && tagsUnchanged && scopeUnchanged && !target.channel_scope_pending) {
       return { status: "unchanged", row: target };
     }
-    const ok = await serverMemoryRepository.edit(memoryId, trimmed, tags);
+    const ok = await serverMemoryRepository.edit(memoryId, trimmed, tags, channelDiscIds);
     if (!ok) {
       return { status: "write-failed" };
     }
     invalidateTomoriStateCache(workspaceId);
-    return { status: "success", row: { ...target, content: trimmed, tags } };
+    return {
+      status: "success",
+      row: { ...target, content: trimmed, tags, channel_disc_ids: channelDiscIds, channel_scope_pending: false },
+    };
   },
 
   async remove({
@@ -400,7 +422,7 @@ export interface MemoriesRouteDependencies {
     serverId: number,
     personaId: number | null,
     documentId: number,
-  ): Promise<{ document_name: string; channel_tags: string[] } | null>;
+  ): Promise<{ document_name: string; channel_disc_ids: string[]; channel_scope_pending: boolean } | null>;
   loadDocumentChunks(serverId: number, personaId: number | null, documentId: number): Promise<DocumentChunkRow[]>;
   getDocumentCounts(serverId: number, personaId: number | null): Promise<{ documents: number; chunks: number }>;
   getDocumentCountsByPersona(serverId: number): Promise<{ byPersona: Map<number, number>; serverwide: number }>;
@@ -439,7 +461,7 @@ export interface MemoriesRouteDependencies {
     personaId: number,
     documentId: number,
     chunk: DocumentChunkRow,
-    channelTags: string[],
+    channelDiscIds: string[],
     nonce: string,
   ): Promise<void>;
   showVectorizeModal(
@@ -457,52 +479,180 @@ export interface MemoriesRouteDependencies {
     fingerprint: string,
   ): Promise<void>;
   takeCheckboxValues(interactionId: string, fieldId: string): string[] | undefined;
+  takeChannelSelectValues(interactionId: string, fieldId: string): string[] | undefined;
   clearStm(workspaceId: string, channelId: string, personaId: number | null): void;
 }
 
-export const MEMORIES_RECEIPT_KEYS = [
-  "added",
-  "edited",
-  "removed",
-  "no_changes",
-  "changed_state",
-  "write_failed",
-  "content_too_long",
-  "limit_reached",
-  "empty_content",
-  "batch_added",
-  "batch_file_invalid",
-  "batch_file_too_large",
-  "batch_all_duplicates",
-  "batch_limit_reached",
-  "blacklisted_error",
-  "teaching_disabled_error",
-  "manager_only",
-  "document_added",
-  "document_removed",
-  "document_chunk_edited",
-  "document_chunk_removed",
-  "document_removed_with_last_chunk",
-  "vectorized",
-  "vectorize_partial_failure",
-  "document_rag_disabled",
-  "document_memory_critical",
-  "document_invalid_name",
-  "document_invalid_file",
-  "document_file_too_large",
-  "document_download_failed",
-  "document_empty_content",
-  "document_content_too_long",
-  "document_too_many_chunks",
-  "document_limit",
-  "document_chunk_limit",
-  "document_duplicate",
-  "document_quota",
-  "embedding_credentials_missing",
-  "embedding_model_missing",
-  "stm_changed_state",
-  "stm_cleared",
-] as const;
+const RECEIPT_LOCALE_KEYS = {
+  added: {
+    heading: "commands.memories.added_heading",
+    detail: "commands.memories.added_detail",
+  },
+  edited: {
+    heading: "commands.memories.edited_heading",
+    detail: "commands.memories.edited_detail",
+  },
+  removed: {
+    heading: "commands.memories.removed_heading",
+    detail: "commands.memories.removed_detail",
+  },
+  no_changes: {
+    heading: "commands.memories.no_changes_heading",
+    detail: "commands.memories.no_changes_detail",
+  },
+  changed_state: {
+    heading: "commands.memories.changed_state_heading",
+    detail: "commands.memories.changed_state_detail",
+  },
+  write_failed: {
+    heading: "commands.memories.write_failed_heading",
+    detail: "commands.memories.write_failed_detail",
+  },
+  content_too_long: {
+    heading: "commands.memories.content_too_long_heading",
+    detail: "commands.memories.content_too_long_detail",
+  },
+  limit_reached: {
+    heading: "commands.memories.limit_reached_heading",
+    detail: "commands.memories.limit_reached_detail",
+  },
+  empty_content: {
+    heading: "commands.memories.empty_content_heading",
+    detail: "commands.memories.empty_content_detail",
+  },
+  batch_added: {
+    heading: "commands.memories.batch_added_heading",
+    detail: "commands.memories.batch_added_detail",
+  },
+  batch_file_invalid: {
+    heading: "commands.memories.batch_file_invalid_heading",
+    detail: "commands.memories.batch_file_invalid_detail",
+  },
+  batch_file_too_large: {
+    heading: "commands.memories.batch_file_too_large_heading",
+    detail: "commands.memories.batch_file_too_large_detail",
+  },
+  batch_all_duplicates: {
+    heading: "commands.memories.batch_all_duplicates_heading",
+    detail: "commands.memories.batch_all_duplicates_detail",
+  },
+  batch_limit_reached: {
+    heading: "commands.memories.batch_limit_reached_heading",
+    detail: "commands.memories.batch_limit_reached_detail",
+  },
+  blacklisted_error: {
+    heading: "commands.memories.blacklisted_error_heading",
+    detail: "commands.memories.blacklisted_error_detail",
+  },
+  teaching_disabled_error: {
+    heading: "commands.memories.teaching_disabled_error_heading",
+    detail: "commands.memories.teaching_disabled_error_detail",
+  },
+  manager_only: {
+    heading: "commands.memories.manager_only_heading",
+    detail: "commands.memories.manager_only_detail",
+  },
+  document_added: {
+    heading: "commands.memories.document_added_heading",
+    detail: "commands.memories.document_added_detail",
+  },
+  document_removed: {
+    heading: "commands.memories.document_removed_heading",
+    detail: "commands.memories.document_removed_detail",
+  },
+  document_chunk_edited: {
+    heading: "commands.memories.document_chunk_edited_heading",
+    detail: "commands.memories.document_chunk_edited_detail",
+  },
+  document_chunk_removed: {
+    heading: "commands.memories.document_chunk_removed_heading",
+    detail: "commands.memories.document_chunk_removed_detail",
+  },
+  document_removed_with_last_chunk: {
+    heading: "commands.memories.document_removed_with_last_chunk_heading",
+    detail: "commands.memories.document_removed_with_last_chunk_detail",
+  },
+  vectorized: {
+    heading: "commands.memories.vectorized_heading",
+    detail: "commands.memories.vectorized_detail",
+  },
+  vectorize_partial_failure: {
+    heading: "commands.memories.vectorize_partial_failure_heading",
+    detail: "commands.memories.vectorize_partial_failure_detail",
+  },
+  document_rag_disabled: {
+    heading: "commands.memories.document_rag_disabled_heading",
+    detail: "commands.memories.document_rag_disabled_detail",
+  },
+  document_memory_critical: {
+    heading: "commands.memories.document_memory_critical_heading",
+    detail: "commands.memories.document_memory_critical_detail",
+  },
+  document_invalid_name: {
+    heading: "commands.memories.document_invalid_name_heading",
+    detail: "commands.memories.document_invalid_name_detail",
+  },
+  document_invalid_file: {
+    heading: "commands.memories.document_invalid_file_heading",
+    detail: "commands.memories.document_invalid_file_detail",
+  },
+  document_file_too_large: {
+    heading: "commands.memories.document_file_too_large_heading",
+    detail: "commands.memories.document_file_too_large_detail",
+  },
+  document_download_failed: {
+    heading: "commands.memories.document_download_failed_heading",
+    detail: "commands.memories.document_download_failed_detail",
+  },
+  document_empty_content: {
+    heading: "commands.memories.document_empty_content_heading",
+    detail: "commands.memories.document_empty_content_detail",
+  },
+  document_content_too_long: {
+    heading: "commands.memories.document_content_too_long_heading",
+    detail: "commands.memories.document_content_too_long_detail",
+  },
+  document_too_many_chunks: {
+    heading: "commands.memories.document_too_many_chunks_heading",
+    detail: "commands.memories.document_too_many_chunks_detail",
+  },
+  document_limit: {
+    heading: "commands.memories.document_limit_heading",
+    detail: "commands.memories.document_limit_detail",
+  },
+  document_chunk_limit: {
+    heading: "commands.memories.document_chunk_limit_heading",
+    detail: "commands.memories.document_chunk_limit_detail",
+  },
+  document_duplicate: {
+    heading: "commands.memories.document_duplicate_heading",
+    detail: "commands.memories.document_duplicate_detail",
+  },
+  document_quota: {
+    heading: "commands.memories.document_quota_heading",
+    detail: "commands.memories.document_quota_detail",
+  },
+  embedding_credentials_missing: {
+    heading: "commands.memories.embedding_credentials_missing_heading",
+    detail: "commands.memories.embedding_credentials_missing_detail",
+  },
+  embedding_model_missing: {
+    heading: "commands.memories.embedding_model_missing_heading",
+    detail: "commands.memories.embedding_model_missing_detail",
+  },
+  stm_changed_state: {
+    heading: "commands.memories.stm_changed_state_heading",
+    detail: "commands.memories.stm_changed_state_detail",
+  },
+  stm_cleared: {
+    heading: "commands.memories.stm_cleared_heading",
+    detail: "commands.memories.stm_cleared_detail",
+  },
+};
+
+type MemoryReceiptKey = keyof typeof RECEIPT_LOCALE_KEYS;
+
+export const MEMORIES_RECEIPT_KEYS = Object.keys(RECEIPT_LOCALE_KEYS) as MemoryReceiptKey[];
 
 const ERROR_RECEIPT_KEYS = new Set<string>([
   "blacklisted_error",
@@ -535,11 +685,11 @@ const ERROR_RECEIPT_KEYS = new Set<string>([
   "stm_changed_state",
 ]);
 
-function receipt(locale: string, key: string, variables?: Record<string, string | number>): PanelReceipt {
+function receipt(locale: string, key: MemoryReceiptKey, variables?: Record<string, string | number>): PanelReceipt {
   return {
     tone: ERROR_RECEIPT_KEYS.has(key) ? "error" : "success",
-    heading: localizer(locale, `commands.memories.${key}_heading`),
-    detail: localizer(locale, `commands.memories.${key}_detail`, variables),
+    heading: localizer(locale, RECEIPT_LOCALE_KEYS[key].heading),
+    detail: localizer(locale, RECEIPT_LOCALE_KEYS[key].detail, variables),
   };
 }
 
@@ -550,11 +700,22 @@ function receipt(locale: string, key: string, variables?: Record<string, string 
  * deferred by then, so without this the message sits unchanged for several seconds with nothing to
  * say the work started. This paint is overwritten by the real receipt when the operation returns.
  */
-function workingReceipt(locale: string, key: string): PanelReceipt {
+const WORKING_RECEIPT_KEYS: Record<"document_working" | "vectorize_working", { heading: string; detail: string }> = {
+  document_working: {
+    heading: "commands.memories.document_working_heading",
+    detail: "commands.memories.document_working_detail",
+  },
+  vectorize_working: {
+    heading: "commands.memories.vectorize_working_heading",
+    detail: "commands.memories.vectorize_working_detail",
+  },
+};
+
+function workingReceipt(locale: string, key: keyof typeof WORKING_RECEIPT_KEYS): PanelReceipt {
   return {
     tone: "warning",
-    heading: localizer(locale, `commands.memories.${key}_heading`),
-    detail: localizer(locale, `commands.memories.${key}_detail`),
+    heading: localizer(locale, WORKING_RECEIPT_KEYS[key].heading),
+    detail: localizer(locale, WORKING_RECEIPT_KEYS[key].detail),
   };
 }
 
@@ -592,25 +753,21 @@ function terminalPayload(locale: string, key: string): InteractionEditReplyOptio
   );
 }
 
-function parseDocumentChannelTags(raw: string, interaction: GlobalRoutableInteraction): string[] {
-  if (!raw.trim()) return [];
-  return [
-    ...new Set(
-      raw
-        .split(",")
-        .map((part) => {
-          const value = part.trim();
-          const mention = value.match(/^<#(\d+)>$/);
-          if (mention) {
-            const channel = interaction.client.channels.cache.get(mention[1]);
-            return channel && "name" in channel && channel.name ? channel.name.toLowerCase() : "";
-          }
-          return value.toLowerCase().replace(/^#+/, "");
-        })
-        .filter((value) => value.length > 0 && /^[\w-]+$/.test(value))
-        .map((value) => `#${value}`),
-    ),
-  ];
+/**
+ * Reads a submitted channel scope. Outside a server the modal has no channel field, so the scope is empty.
+ *
+ * @returns `undefined` when the submission is missing or malformed, so the caller repaints instead of
+ * clearing the stored scope; `[]` when the select was submitted empty
+ */
+function takeChannelScope(
+  dependencies: Pick<MemoriesRouteDependencies, "takeChannelSelectValues">,
+  interaction: Pick<ModalSubmitInteraction, "id" | "guildId">,
+  fieldId: string,
+): string[] | undefined {
+  if (!interaction.guildId) return [];
+  const channelIds = dependencies.takeChannelSelectValues(interaction.id, fieldId);
+  if (!channelIds?.every((id) => DISCORD_SNOWFLAKE_PATTERN.test(id))) return undefined;
+  return [...new Set(channelIds)];
 }
 
 /**
@@ -620,7 +777,7 @@ function parseDocumentChannelTags(raw: string, interaction: GlobalRoutableIntera
  * mapped to a key nobody registered renders the raw key to the user, and `check-locales` cannot
  * see it because the heading and detail suffixes are composed at call time.
  */
-export const DOCUMENT_RESULT_RECEIPT_KEYS: Record<string, string> = {
+export const DOCUMENT_RESULT_RECEIPT_KEYS: Record<string, MemoryReceiptKey> = {
   blacklisted: "blacklisted_error",
   "teaching-disabled": "teaching_disabled_error",
   "rag-disabled": "document_rag_disabled",
@@ -642,7 +799,16 @@ export const DOCUMENT_RESULT_RECEIPT_KEYS: Record<string, string> = {
   forbidden: "manager_only",
 };
 
-function documentResultReceipt(locale: string, status: string, variables?: Record<string, string | number>) {
+function documentResultReceipt(
+  locale: string,
+  result: { status: string; denied?: ProviderRequestDeniedError },
+  variables?: Record<string, string | number>,
+) {
+  const status = result.status;
+  if (result.denied) {
+    const copy = getProviderRequestFailureCopy(result.denied, locale);
+    return { tone: "error" as const, heading: localizer(locale, copy.titleKey), detail: copy.description };
+  }
   if (status === "not-found") return changedStateReceipt(locale);
   if (status === "unchanged") return noChangesReceipt(locale);
   return receipt(locale, DOCUMENT_RESULT_RECEIPT_KEYS[status] ?? "write_failed", variables);
@@ -782,7 +948,7 @@ async function refuseInPlace(
   scope: MemoriesScope | null,
   category: MemoriesCategory,
   selectedId: number,
-  receiptKey: string,
+  receiptKey: MemoryReceiptKey,
   dependencies: MemoriesRouteDependencies,
 ): Promise<void> {
   await interaction.deferUpdate();
@@ -924,7 +1090,10 @@ const defaultDependencies: MemoriesRouteDependencies = {
   },
   createNonce,
   showAddModal: (interaction, locale, lineageId, nonce) =>
-    showRoutedRawModal(interaction, buildAddServerMemoryModal(locale, lineageId, nonce)),
+    showRoutedRawModal(
+      interaction,
+      buildAddServerMemoryModal(locale, lineageId, nonce, interaction.guildId ? [] : null),
+    ),
   takeFileUpload: (interactionId, nonce) =>
     takeRawModalFileUpload(interactionId, buildServerMemoryModalFieldId("file", nonce)),
   takeDocumentFileUpload: (interactionId, nonce) =>
@@ -939,15 +1108,24 @@ const defaultDependencies: MemoriesRouteDependencies = {
         memory.server_memory_id ?? 0,
         memory.content,
         memory.tags ?? [],
+        interaction.guildId ? memory.channel_disc_ids : null,
         nonce,
       ),
     ),
   showAddDocumentModal: (interaction, locale, personaId, nonce) =>
-    showRoutedRawModal(interaction, buildAddDocumentModal(locale, personaId, nonce)),
-  showEditChunkModal: (interaction, locale, personaId, documentId, chunk, channelTags, nonce) =>
+    showRoutedRawModal(interaction, buildAddDocumentModal(locale, personaId, nonce, interaction.guildId ? [] : null)),
+  showEditChunkModal: (interaction, locale, personaId, documentId, chunk, channelDiscIds, nonce) =>
     showRoutedRawModal(
       interaction,
-      buildEditDocumentChunkModal(locale, personaId, documentId, chunk.chunk_index, chunk.content, channelTags, nonce),
+      buildEditDocumentChunkModal(
+        locale,
+        personaId,
+        documentId,
+        chunk.chunk_index,
+        chunk.content,
+        interaction.guildId ? channelDiscIds : null,
+        nonce,
+      ),
     ),
   showVectorizeModal: (interaction, locale, lineageId, personaId, memory, nonce) =>
     showRoutedRawModal(
@@ -958,13 +1136,14 @@ const defaultDependencies: MemoriesRouteDependencies = {
         personaId,
         memory.server_memory_id ?? 0,
         memory.content,
-        memory.tags ?? [],
+        interaction.guildId ? memory.channel_disc_ids : null,
         nonce,
       ),
     ),
   showStmModal: (interaction, locale, entries, fingerprint) =>
     showRoutedRawModal(interaction, buildServerStmModal(locale, entries, fingerprint)),
   takeCheckboxValues: takeRawModalCheckboxGroupValues,
+  takeChannelSelectValues: takeRawModalChannelSelectValues,
   clearStm: clearShortTermMemoryForServerChannel,
 };
 
@@ -1241,7 +1420,7 @@ export function createMemoriesInteractionRoute(
           route.personaId,
           route.documentId,
           chunk,
-          meta.channel_tags,
+          meta.channel_disc_ids,
           dependencies.createNonce(),
         );
         return;
@@ -1351,7 +1530,7 @@ export function createMemoriesInteractionRoute(
       const initialScope = await beginPanelInteraction(interaction, {
         authorize: () => true,
         onDenied: () => Promise.resolve(),
-        load: () => dependencies.resolveScope(interaction, route.action === "retry" || route.action === "refresh"),
+        load: () => dependencies.resolveScope(interaction, route.action === "retry"),
         onMissing: () => interaction.editReply(terminalPayload(route.locale, "commands.memories.unavailable")),
       });
       if (!initialScope) return;
@@ -1438,54 +1617,6 @@ export function createMemoriesInteractionRoute(
         return;
       }
 
-      if (route.action === "range-open") {
-        const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
-        await repaint(
-          interaction,
-          route.locale,
-          scope,
-          "memories",
-          route.lineageId,
-          memories,
-          { kind: "main", rangeIndex: 0 },
-          undefined,
-          dependencies,
-        );
-        return;
-      }
-
-      if (route.action === "range-page") {
-        const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
-        await repaint(
-          interaction,
-          route.locale,
-          scope,
-          "memories",
-          route.lineageId,
-          memories,
-          { kind: "main", rangeIndex: route.chooserPage },
-          undefined,
-          dependencies,
-        );
-        return;
-      }
-
-      if (route.action === "range-cancel") {
-        const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
-        await repaint(
-          interaction,
-          route.locale,
-          scope,
-          "memories",
-          route.lineageId,
-          memories,
-          { kind: "main" },
-          undefined,
-          dependencies,
-        );
-        return;
-      }
-
       if (route.action === "range") {
         const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
         await repaint(
@@ -1559,51 +1690,6 @@ export function createMemoriesInteractionRoute(
           personaId,
           [],
           { kind: "documents", personaRangeIndex: route.rangeIndex },
-          undefined,
-          dependencies,
-        );
-        return;
-      }
-
-      if (route.action === "document-range-open") {
-        await repaint(
-          interaction,
-          route.locale,
-          scope,
-          "documents",
-          route.personaId,
-          [],
-          { kind: "documents", rangeIndex: 0 },
-          undefined,
-          dependencies,
-        );
-        return;
-      }
-
-      if (route.action === "document-range-page") {
-        await repaint(
-          interaction,
-          route.locale,
-          scope,
-          "documents",
-          route.personaId,
-          [],
-          { kind: "documents", rangeIndex: route.chooserPage },
-          undefined,
-          dependencies,
-        );
-        return;
-      }
-
-      if (route.action === "document-range-cancel") {
-        await repaint(
-          interaction,
-          route.locale,
-          scope,
-          "documents",
-          route.personaId,
-          [],
-          { kind: "documents" },
           undefined,
           dependencies,
         );
@@ -1759,15 +1845,14 @@ export function createMemoriesInteractionRoute(
       if (route.action === "document-add-submit") {
         const modal = interaction as ModalSubmitInteraction;
         const documentName = modal.fields.getTextInputValue(buildDocumentModalFieldId("name", route.nonce));
-        let channels = "";
-        try {
-          channels = modal.fields.getTextInputValue(buildDocumentModalFieldId("channels", route.nonce));
-        } catch {
-          // Optional field
-        }
+        const channelDiscIds = takeChannelScope(
+          dependencies,
+          modal,
+          buildDocumentModalFieldId("channels", route.nonce),
+        );
         const personaId = route.personaId === 0 ? null : route.personaId;
         const personaMatches = personaId === null || scope.personas.some((persona) => persona.persona_id === personaId);
-        if (!personaMatches) {
+        if (!personaMatches || !channelDiscIds) {
           await repaint(
             interaction,
             route.locale,
@@ -1806,7 +1891,7 @@ export function createMemoriesInteractionRoute(
               memteachingEnabled: scope.memteachingEnabled,
               documentName,
               attachment: dependencies.takeDocumentFileUpload(interaction.id, route.nonce),
-              channelTags: parseDocumentChannelTags(channels, interaction),
+              channelDiscIds,
             }),
           () => dependencies.resolveScope(interaction, true),
         );
@@ -1835,7 +1920,7 @@ export function createMemoriesInteractionRoute(
                 name: result.documentName,
                 chunks: result.chunkCount,
               })
-            : documentResultReceipt(route.locale, result.status, {
+            : documentResultReceipt(route.locale, result, {
                 maxSize: getMemoryLimits().maxDocumentSizeMB,
                 maxText: getMemoryLimits().maxDocumentTextLength,
                 maxChunks: getMemoryLimits().maxDocumentChunks,
@@ -1896,7 +1981,7 @@ export function createMemoriesInteractionRoute(
           rangeIndex === undefined ? { kind: "documents" } : { kind: "documents", rangeIndex },
           result.status === "success"
             ? receipt(route.locale, "document_removed", { name: result.documentName })
-            : documentResultReceipt(route.locale, result.status),
+            : documentResultReceipt(route.locale, result),
           dependencies,
         );
         return;
@@ -1905,11 +1990,24 @@ export function createMemoriesInteractionRoute(
       if (route.action === "document-chunk-edit-submit") {
         const modal = interaction as ModalSubmitInteraction;
         const content = modal.fields.getTextInputValue(buildDocumentModalFieldId("content", route.nonce));
-        let channels = "";
-        try {
-          channels = modal.fields.getTextInputValue(buildDocumentModalFieldId("channels", route.nonce));
-        } catch {
-          // Optional field
+        const channelDiscIds = takeChannelScope(
+          dependencies,
+          modal,
+          buildDocumentModalFieldId("channels", route.nonce),
+        );
+        if (!channelDiscIds) {
+          await repaint(
+            interaction,
+            route.locale,
+            scope,
+            "documents",
+            route.personaId,
+            [],
+            { kind: "documents", selectedDocumentId: route.documentId, chunkIdx: route.chunkIdx },
+            changedStateReceipt(route.locale),
+            dependencies,
+          );
+          return;
         }
         const action = await performPanelAction(
           () =>
@@ -1923,7 +2021,7 @@ export function createMemoriesInteractionRoute(
               configuredEmbeddingModelId: scope.configuredEmbeddingModelId,
               canManage: scope.canManage,
               content,
-              channelTags: parseDocumentChannelTags(channels, interaction),
+              channelDiscIds,
             }),
           () => dependencies.resolveScope(interaction, true),
         );
@@ -1946,7 +2044,7 @@ export function createMemoriesInteractionRoute(
           { kind: "documents", selectedDocumentId: route.documentId, chunkIdx: route.chunkIdx },
           result.status === "success"
             ? receipt(route.locale, "document_chunk_edited")
-            : documentResultReceipt(route.locale, result.status),
+            : documentResultReceipt(route.locale, result),
           dependencies,
         );
         return;
@@ -2005,7 +2103,7 @@ export function createMemoriesInteractionRoute(
                 route.locale,
                 result.removedDocument ? "document_removed_with_last_chunk" : "document_chunk_removed",
               )
-            : documentResultReceipt(route.locale, result.status),
+            : documentResultReceipt(route.locale, result),
           dependencies,
         );
         return;
@@ -2015,16 +2113,15 @@ export function createMemoriesInteractionRoute(
         const modal = interaction as ModalSubmitInteraction;
         const content = modal.fields.getTextInputValue(buildDocumentModalFieldId("content", route.nonce));
         const documentName = modal.fields.getTextInputValue(buildDocumentModalFieldId("name", route.nonce));
-        let channels = "";
-        try {
-          channels = modal.fields.getTextInputValue(buildDocumentModalFieldId("channels", route.nonce));
-        } catch {
-          // Optional field
-        }
+        const channelDiscIds = takeChannelScope(
+          dependencies,
+          modal,
+          buildDocumentModalFieldId("channels", route.nonce),
+        );
         const personaMatches = scope.personas.some(
           (persona) => persona.persona_id === route.personaId && persona.persona_lineage_id === route.lineageId,
         );
-        if (!personaMatches) {
+        if (!personaMatches || !channelDiscIds) {
           const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
           await repaint(
             interaction,
@@ -2066,7 +2163,7 @@ export function createMemoriesInteractionRoute(
               memteachingEnabled: scope.memteachingEnabled,
               content,
               documentName,
-              channelTags: parseDocumentChannelTags(channels, interaction),
+              channelDiscIds,
             }),
           () => dependencies.resolveScope(interaction, true),
         );
@@ -2096,7 +2193,7 @@ export function createMemoriesInteractionRoute(
               })
             : result.status === "partial-failure"
               ? receipt(route.locale, "vectorize_partial_failure", { name: result.documentName })
-              : documentResultReceipt(route.locale, result.status),
+              : documentResultReceipt(route.locale, result),
           dependencies,
         );
         return;
@@ -2191,9 +2288,30 @@ export function createMemoriesInteractionRoute(
         }
         const tags = parseServerMemoryTags(tagsRaw);
         const uploadedFile = dependencies.takeFileUpload(interaction.id, route.nonce);
+        const channelDiscIds = takeChannelScope(
+          dependencies,
+          modal,
+          buildServerMemoryModalFieldId("channels", route.nonce),
+        );
 
         const representative = personaRepresentativeForLineage(scope.personas, route.lineageId);
         const personaId = representative?.persona_id;
+
+        if (!channelDiscIds) {
+          const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
+          await repaint(
+            interaction,
+            route.locale,
+            scope,
+            "memories",
+            route.lineageId,
+            memories,
+            { kind: "main" },
+            changedStateReceipt(route.locale),
+            dependencies,
+          );
+          return;
+        }
 
         if (!personaId) {
           const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
@@ -2244,6 +2362,7 @@ export function createMemoriesInteractionRoute(
                 memteachingEnabled: scope.memteachingEnabled,
                 contents: typed ? [typed, ...uploaded] : uploaded,
                 tags,
+                channelDiscIds,
               }),
             () => dependencies.resolveScope(interaction, true),
           );
@@ -2275,7 +2394,7 @@ export function createMemoriesInteractionRoute(
             return;
           }
 
-          const batchReceiptByStatus: Record<string, string> = {
+          const batchReceiptByStatus: Record<string, MemoryReceiptKey> = {
             blacklisted: "blacklisted_error",
             "teaching-disabled": "teaching_disabled_error",
             "empty-content": "empty_content",
@@ -2315,6 +2434,7 @@ export function createMemoriesInteractionRoute(
               memteachingEnabled: scope.memteachingEnabled,
               content,
               tags,
+              channelDiscIds,
             }),
           () => dependencies.resolveScope(interaction, true),
         );
@@ -2343,7 +2463,7 @@ export function createMemoriesInteractionRoute(
           return;
         }
 
-        const receiptByStatus: Record<string, string> = {
+        const receiptByStatus: Record<string, MemoryReceiptKey> = {
           blacklisted: "blacklisted_error",
           "teaching-disabled": "teaching_disabled_error",
           "empty-content": "empty_content",
@@ -2377,6 +2497,26 @@ export function createMemoriesInteractionRoute(
           // Field optional
         }
         const tags = parseServerMemoryTags(tagsRaw);
+        const channelDiscIds = takeChannelScope(
+          dependencies,
+          modal,
+          buildServerMemoryModalFieldId("channels", route.nonce),
+        );
+        if (!channelDiscIds) {
+          const memories = await dependencies.loadMemories(scope.serverId, route.lineageId, ownerFilter);
+          await repaint(
+            interaction,
+            route.locale,
+            scope,
+            "memories",
+            route.lineageId,
+            memories,
+            { kind: "main", selectedMemoryId: route.memoryId },
+            changedStateReceipt(route.locale),
+            dependencies,
+          );
+          return;
+        }
 
         const action = await performPanelAction(
           () =>
@@ -2391,6 +2531,7 @@ export function createMemoriesInteractionRoute(
               memteachingEnabled: scope.memteachingEnabled,
               content,
               tags,
+              channelDiscIds,
             }),
           () => dependencies.resolveScope(interaction, true),
         );
@@ -2449,7 +2590,7 @@ export function createMemoriesInteractionRoute(
           return;
         }
 
-        const receiptByStatus: Record<string, string> = {
+        const receiptByStatus: Record<string, MemoryReceiptKey> = {
           blacklisted: "blacklisted_error",
           "teaching-disabled": "teaching_disabled_error",
           "empty-content": "empty_content",
@@ -2579,7 +2720,7 @@ export function createMemoriesInteractionRoute(
         return;
       }
 
-      if (route.action === "retry" || route.action === "refresh") {
+      if (route.action === "retry") {
         const lineageId =
           route.category === "documents" ? 0 : (route.lineageId ?? scope.personas[0]?.persona_lineage_id ?? 0);
         const memories =

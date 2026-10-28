@@ -22,6 +22,9 @@ function preset(overrides: Partial<TomoriPresetRow> = {}): TomoriPresetRow {
     preset_trigger_words: [],
     preset_naming_config: structuredClone(EMPTY_PERSONA_NAMING_CONFIG),
     is_nsfw: false,
+    natural_nudge_interests: [],
+    natural_nudge_talkativeness: 2,
+    natural_nudge_idle_nudges: [],
     ...overrides,
   };
 }

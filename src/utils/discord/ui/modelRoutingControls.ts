@@ -57,7 +57,7 @@ export function buildProviderPageEntries(input: ProviderPageEntriesInput): Provi
           value: input.encodePageValue(provider, page * input.pageSize),
           label: safeSelectOptionText(
             localizer(input.locale, input.pageLabelKey, {
-              provider: getProviderDisplayName(provider),
+              provider: getProviderDisplayName(provider, input.locale),
               page: page + 1,
             }),
             100,
@@ -68,7 +68,7 @@ export function buildProviderPageEntries(input: ProviderPageEntriesInput): Provi
     }
     entries.push({
       value: input.encodeProviderValue(provider),
-      label: safeSelectOptionText(getProviderDisplayName(provider), 100),
+      label: safeSelectOptionText(getProviderDisplayName(provider, input.locale), 100),
     });
   }
 
@@ -76,6 +76,7 @@ export function buildProviderPageEntries(input: ProviderPageEntriesInput): Provi
 }
 
 export interface ModelRoutingControlInput {
+  locale: string;
   capabilityLabel: string;
   activeModelName: string | null;
   activeProvider: string | null;
@@ -99,12 +100,22 @@ export interface ModelRoutingControlInput {
   disabled: boolean;
 }
 
+export function formatModelSelectionLabel(
+  model: string | null,
+  providerLabel: string | null,
+  emptyLabel: string,
+): string {
+  return model ? `${model}${providerLabel ? ` (${providerLabel})` : ""}` : emptyLabel;
+}
+
 export function buildModelRoutingControl(
   input: ModelRoutingControlInput,
 ): ActionRowData<StringSelectMenuComponentData> {
-  const activeModel = input.activeModelName
-    ? `${input.activeModelName}${input.activeProvider ? ` (${getProviderDisplayName(input.activeProvider)})` : ""}`
-    : input.serverDefaultDisplay;
+  const activeModel = formatModelSelectionLabel(
+    input.activeModelName,
+    input.activeProvider ? getProviderDisplayName(input.activeProvider, input.locale) : null,
+    input.serverDefaultDisplay,
+  );
   const options: SelectMenuComponentOptionData[] = [];
   if (input.serverDefaultValue !== undefined && input.serverDefaultLabel !== undefined) {
     options.push({
@@ -136,7 +147,7 @@ export function buildModelRoutingControl(
     options.push(
       ...(input.eligibleProviders ?? []).map((provider) => ({
         value: input.encodeProviderValue?.(provider) ?? provider,
-        label: safeSelectOptionText(getProviderDisplayName(provider), 100),
+        label: safeSelectOptionText(getProviderDisplayName(provider, input.locale), 100),
       })),
     );
   }

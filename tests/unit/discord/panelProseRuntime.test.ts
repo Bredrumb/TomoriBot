@@ -1,3 +1,4 @@
+import { SETUP_FEATURES } from "@/types/db/schema";
 import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -431,12 +432,12 @@ describe("panel prose runtime formatting", () => {
           personaName: "Lighthouse",
           notes: [
             {
-              label: localizer("en-US", "commands.setup.novelai_expressions_warning_field"),
-              detail: localizer("en-US", "commands.setup.novelai_expressions_warning_value"),
+              label: localizer("en-US", "commands.setup.zai_tos_warning_field"),
+              detail: localizer("en-US", "commands.setup.zai_tos_warning_value"),
             },
           ],
           learnMore: localizer("en-US", "commands.setup.wizard.receipt_learn_more", { help: "</help:123456>" }),
-          footerKey: context === "dm" ? "commands.setup.wizard.receipt_footer_avatar_skipped_dm" : undefined,
+          footerKeys: context === "dm" ? ["commands.setup.wizard.receipt_footer_avatar_skipped_dm"] : [],
         });
 
       const catalogAccess = {
@@ -491,7 +492,7 @@ describe("panel prose runtime formatting", () => {
 
       const catalogs: SetupSettingsCatalogs = {
         personas: [{ id: 7, name: maxPersonaName, description: "A steady, watchful companion." }],
-        prompts: [{ name: maxPromptName, description: "The standard reply style." }],
+        prompts: [{ name: maxPromptName, displayName: maxPromptName, description: "The standard reply style." }],
         promptTexts: new Map([[maxPromptName, "You are Tomori."]]),
       };
 
@@ -499,6 +500,7 @@ describe("panel prose runtime formatting", () => {
         presetId: 7,
         humanizer: 3,
         timezoneOffset: -12,
+        features: [...SETUP_FEATURES],
         systemPrompt: { kind: "preset" as const, presetName: maxPromptName },
       };
 

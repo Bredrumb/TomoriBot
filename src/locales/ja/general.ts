@@ -97,8 +97,6 @@ export default {
       update_failed_description: `データベースの設定の更新に失敗しました。もう一度お試しください。`,
       unknown_error_title: `不明なエラー`,
       unknown_error_description: `予期しないエラーが発生しました。問題が解決しない場合は、\`/support discord\`で報告してください。`,
-      unexpected_title: `予期しないエラー`,
-      unexpected_description: `予期しないエラーが発生しました：{error}`,
       invalid_option_title: `無効なオプション`,
       invalid_option_description: `選択されたオプションは無効です。有効なオプションを選択してください。`,
       permission_denied_title: `権限がありません`,
@@ -183,5 +181,7 @@ export default {
     triggered_footer_one_time: `生成が繰り返し失敗したため、スケジュールされた内容をそのまま表示しています。この1回限りのスケジュールは完了済みとして削除されました。`,
     triggered_footer_recurring_retained: `生成が繰り返し失敗したため、スケジュールされた内容をそのまま表示しています。次回は元の周期を維持して実行されます。管理するには \`/scheduled-task edit\` または \`/scheduled-task remove\` を使用してください。`,
     triggered_footer_recurring_removed: `生成が繰り返し失敗し、次回の実行も維持できませんでした。この繰り返しスケジュールは削除されました。問題の解決後に作成し直してください。`,
+    removed_after_failures_title: `スケジュール項目を削除しました`,
+    removed_after_failures_description: `スケジュール項目 \`{reminder_id}\` の実行が{failed_occurrences}回連続で失敗し、チャンネルに投稿できなかったため削除されました。チャンネルの権限またはAIプロバイダーの問題を解決した後に、再度作成してください。\n**元の内容：**`,
   },
 };

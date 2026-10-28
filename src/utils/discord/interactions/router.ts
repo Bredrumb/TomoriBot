@@ -6,8 +6,15 @@ import { contextInteractionRoute } from "@/utils/discord/interactions/contextRou
 import { helpInteractionRoute } from "@/utils/discord/interactions/helpRoutes";
 import { memoriesInteractionRoute } from "@/utils/discord/interactions/memoriesRoutes";
 import { moderationInteractionRoute } from "@/utils/discord/interactions/moderationRoutes";
-import { personalConfigInteractionRoute } from "@/utils/discord/interactions/personalConfigRoutes";
-import { personalMemoriesInteractionRoute } from "@/utils/discord/interactions/personalMemoriesRoutes";
+import { nudgeStudioInteractionRoute } from "@/modules/natural-nudges/discord/studioRoutes";
+import {
+  identityConfigInteractionRoute,
+  personalConfigInteractionRoute,
+} from "@/utils/discord/interactions/personalConfigRoutes";
+import {
+  identityMemoriesInteractionRoute,
+  personalMemoriesInteractionRoute,
+} from "@/utils/discord/interactions/personalMemoriesRoutes";
 import {
   personalProvidersInteractionRoute,
   providersInteractionRoute,
@@ -30,8 +37,11 @@ const registry = new InteractionRouteRegistry([
   memoriesInteractionRoute,
   modelOverrideInteractionRoute,
   moderationInteractionRoute,
+  nudgeStudioInteractionRoute,
   personalConfigInteractionRoute,
+  identityConfigInteractionRoute,
   personalMemoriesInteractionRoute,
+  identityMemoriesInteractionRoute,
   personalProvidersInteractionRoute,
   providersInteractionRoute,
   setupInteractionRoute,

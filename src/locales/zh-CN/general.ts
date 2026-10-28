@@ -96,8 +96,6 @@ export default {
       update_failed_description: `没能把配置更新到数据库。请再试一次。`,
       unknown_error_title: `未知错误`,
       unknown_error_description: `发生了意料之外的错误。如果一直这样，请通过 \`/support discord\` 反馈。`,
-      unexpected_title: `意外错误`,
-      unexpected_description: `发生了意料之外的错误：{error}`,
       invalid_option_title: `选项无效`,
       invalid_option_description: `所选选项无效。请选一个有效的选项。`,
       permission_denied_title: `权限不足`,
@@ -182,5 +180,7 @@ export default {
     triggered_footer_one_time: `生成一直失败，所以这里原样显示提醒内容。这个一次性提醒已经完成并被删除。`,
     triggered_footer_recurring_retained: `生成一直失败，所以这里原样显示提醒内容。下一次仍按原来的周期执行。用 \`/scheduled-task edit\` 或 \`/scheduled-task remove\` 管理它。`,
     triggered_footer_recurring_removed: `生成一直失败，下一次也没能保留。这个重复提醒已经被删除；等问题解决后再重新创建。`,
+    removed_after_failures_title: `已移除定时项目`,
+    removed_after_failures_description: `定时项目 \`{reminder_id}\` 连续失败 {failed_occurrences} 次且无法在其频道中发送，因此已被移除。请在修复频道权限或 AI 提供方后重新创建。\n**原始内容：**`,
   },
 };

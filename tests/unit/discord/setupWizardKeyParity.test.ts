@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { SETUP_ENDPOINT_API_STYLES, SETUP_ENDPOINT_TEXT_CAPABILITIES } from "@/utils/discord/ui/setupPanel";
 import { hasLocaleKey, initializeLocalizer } from "@/utils/text/localizer";
 import wizardLocale from "@/locales/en-US/commands/setup";
+import { SETUP_FEATURES } from "@/types/db/schema";
 
 await initializeLocalizer();
 
@@ -26,6 +27,10 @@ function composedWizardKeys(): string[] {
     "settings_catalog_unavailable",
     "settings_timezone_invalid",
     "settings_timezone_out_of_range",
+    ...SETUP_FEATURES.flatMap((feature) => [
+      `settings_features.${feature}.label`,
+      `settings_features.${feature}.description`,
+    ]),
     ...SETUP_ENDPOINT_API_STYLES.flatMap((style) => {
       const suffix = style === "openai-compatible" ? "openai" : "ollama";
       return [`custom_endpoint_style_${suffix}`, `custom_endpoint_style_${suffix}_desc`];
@@ -52,7 +57,13 @@ function literalWizardKeys(): string[] {
 /** Every leaf key the `en-US` wizard block defines, which is what `localizer` reads as `commands.*`. */
 function definedWizardKeys(): string[] {
   const wizard = (wizardLocale as { setup?: { wizard?: Record<string, unknown> } }).setup?.wizard;
-  return wizard ? Object.keys(wizard).sort() : [];
+  function leafKeys(value: Record<string, unknown>, prefix = ""): string[] {
+    return Object.entries(value).flatMap(([key, child]) => {
+      const path = `${prefix}${key}`;
+      return typeof child === "string" ? [path] : leafKeys(child as Record<string, unknown>, `${path}.`);
+    });
+  }
+  return wizard ? leafKeys(wizard).sort() : [];
 }
 
 describe("setup wizard locale parity", () => {

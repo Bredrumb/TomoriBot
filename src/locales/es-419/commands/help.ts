@@ -79,6 +79,8 @@ export default {
         video_generation_description: `Clips cortos con un marco inicial opcional`,
         speech_generation: `Generación de voz`,
         speech_generation_description: `Convierte texto en un mensaje de voz`,
+        art_search: `Búsqueda de arte`,
+        art_search_description: `Publica arte anime existente de Danbooru`,
         behavior_tuning: `Ajuste de comportamiento`,
         behavior_tuning_description: `Modelo, humanizador, instrucciones y herramientas`,
         server_wide_settings: `Ajustes del servidor`,
@@ -154,8 +156,6 @@ export default {
       bot_user_fallback: `la cuenta de bot de Matrix configurada`,
     },
     "api-key": {
-      description: `Aprende a configurar claves de API para proveedores de IA`,
-      provider_description: `Elige tu proveedor de IA`,
       provider_choice_brave: `Brave Search`,
       provider_choice_google: `Google Gemini (Recomendado, Gratis)`,
       provider_choice_deepseek: `DeepSeek`,
@@ -356,7 +356,7 @@ Ingresa \`{project_id}::{location}\` con {configSetup} o {configApikeySet}
         description:
           "Una clave de API me da acceso al modelo de un proveedor de IA. Todo lo que genero se factura a esa clave, así que trátala como cualquier otra contraseña. Para terminar necesito una:\n> **1.** Elige un proveedor para abrir su guía.\n> **2.** Copia la clave. **NO la compartas** con nadie, y nunca la pegues en un canal: solo en la caja que te abrirá {setup}.\n> **3.** Ejecuta {setup} y pega la clave cuando te la pida.",
         picker_footer:
-          "-# La segunda lista es opcional: Brave Search agrega resultados web, y ElevenLabs agrega voz. Cada uno abre su guía, y no son necesarios para terminar. Si tu endpoint no está listado, omite la clave y lee **Endpoints personalizados (Avanzado)** aquí.",
+          "-# Si tu endpoint no está listado, omite la clave y lee **Endpoints personalizados (Avanzado)** aquí.",
       },
       change_trigger_behavior: {
         title: `Cambiar comportamiento de activación`,
@@ -462,6 +462,11 @@ Ingresa \`{project_id}::{location}\` con {configSetup} o {configApikeySet}
         description:
           "{generateVoice} convierte texto en un mensaje de voz en la voz de la persona actual.\n\nUn endpoint de voz debe estar registrado primero, alojado o autoalojado: ve **Endpoints personalizados (Avanzado)**.\n> Cada persona puede sonar diferente. La voz viene de {configPersonaVoice}.",
       },
+      art_search: {
+        title: `Búsqueda de arte`,
+        description:
+          "{booruSearch} publica 4 imágenes aleatorias bien valoradas de Danbooru para una o dos etiquetas. Las sugerencias aparecen mientras escribes, y los apodos o errores tipográficos se convierten en la etiqueta real.\n> Los resultados cuestionables y explícitos solo se muestran en canales para mayores de edad.\n\nTambién puedes pedirme que te muestre arte; el interruptor de **Búsqueda en Danbooru** en {configTools} controla eso. Para limitar quién puede usar el comando, usa Ajustes del servidor > Integraciones.",
+      },
     },
     tons_of_tweakability: {
       title: `Mucha personalización`,
@@ -510,8 +515,8 @@ Ingresa \`{project_id}::{location}\` con {configSetup} o {configApikeySet}
       memory_tagging: {
         title: `Etiquetado de memoria (Avanzado)`,
         description:
-          "Por defecto toda memoria se envía con cada mensaje. El etiquetado limita eso.\n> **Etiquetas clave**: una memoria etiquetada despierta solo cuando su palabra clave aparece en la charla.\n> **Etiquetas de canal**: una etiqueta `#canal` limita una memoria a ese canal, y se combina con otras etiquetas.\n\nEnciende ambas en {configAdvancedMemory}, luego usa {toolPromptSnapshot} para ver qué memorias están activas.",
-        footer: "Los documentos subidos y el historial extraído pueden llevar etiquetas de canal también.",
+          "Por defecto toda memoria dentro del alcance se envía con cada mensaje. El etiquetado limita eso.\n> **Etiquetas clave**: una memoria etiquetada despierta solo cuando su palabra clave aparece en la conversación. Una memoria sin etiquetar siempre está activa.\n> **Canales**: una memoria del servidor puede limitarse a los canales que elijas en su formulario (sus hilos incluidos), y una memoria personal a una etiqueta `#canal`. Ambas se combinan con las etiquetas clave.\n\nEnciende ambas en {configAdvancedMemory}, luego usa {toolPromptSnapshot} para ver con exactitud qué memorias están activas ahora mismo.",
+        footer: "Los documentos subidos y el historial extraído también pueden limitarse a canales.",
       },
     },
     scheduled_tasks: {

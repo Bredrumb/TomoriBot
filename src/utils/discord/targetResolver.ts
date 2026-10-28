@@ -5,7 +5,9 @@ import type { ToolContext } from "@/types/tool/interfaces";
 import { userNamingRepository, userRepository } from "@/utils/db/repositories";
 import { resolveEffectiveUserNaming } from "@/utils/text/userNaming";
 import { isBridgeUserId } from "@/utils/bridges";
+import { isMessageProxyIdentityUserId } from "@/utils/messageProxy/identityUserId";
 import { normalizeParticipantAlias } from "@/utils/text/participants/aliases";
+import type { TomoriState } from "@/types/db/schema";
 import {
   collectParticipantTargetIndex,
   projectConversationUserReferences,
@@ -43,6 +45,59 @@ type NotFoundUserTarget = {
 };
 
 export type UserTargetResolution = ResolvedUserTarget | AmbiguousUserTarget | NotFoundUserTarget;
+
+export type IdentityTargetResolution =
+  | (ResolvedUserTarget & { targetType: "user" })
+  | { status: "resolved"; targetType: "persona"; persona: TomoriState & { persona_id: number }; displayLabel: string }
+  | AmbiguousUserTarget
+  | NotFoundUserTarget;
+
+export async function resolveIdentityTarget(
+  input: string,
+  context: ToolContext,
+  personas: readonly TomoriState[],
+): Promise<IdentityTargetResolution> {
+  const qualifier = input.trim().match(/^(persona|user):\s*(.+)$/iu);
+  const name = qualifier?.[2] ?? input;
+  const normalized = normalizeUserTargetInput(name);
+  const matches = personas.filter(
+    (persona): persona is TomoriState & { persona_id: number } =>
+      qualifier?.[1].toLowerCase() !== "user" &&
+      typeof persona.persona_id === "number" &&
+      normalizeUserTargetInput(persona.persona_nickname) === normalized,
+  );
+  const user =
+    qualifier?.[1].toLowerCase() === "persona"
+      ? { status: "not_found" as const, input }
+      : await resolveUserTarget(name, context);
+  if (matches.length > 1 || (matches.length > 0 && user.status !== "not_found")) {
+    return {
+      status: "ambiguous",
+      input,
+      candidates: [
+        ...matches.map((persona) => ({
+          label: persona.persona_nickname,
+          targetId: `persona:${persona.persona_id}`,
+          isBridgeUser: false,
+        })),
+        ...(user.status === "resolved"
+          ? [{ label: user.displayLabel, targetId: user.targetId, isBridgeUser: user.isBridgeUser }]
+          : user.status === "ambiguous"
+            ? user.candidates
+            : []),
+      ],
+    };
+  }
+  if (matches.length === 1) {
+    return {
+      status: "resolved",
+      targetType: "persona",
+      persona: matches[0],
+      displayLabel: matches[0].persona_nickname,
+    };
+  }
+  return user.status === "resolved" ? { ...user, targetType: "user" } : user;
+}
 
 type ResolvedChannelTarget = {
   status: "resolved";
@@ -326,7 +381,7 @@ function resolveConversationUserMatch(
   }
 
   // Identify targets the input matched on their PRIMARY/display name (e.g. the
-  //    rendered "Misuzu"/"Obonya" label) rather than only on a secondary alias
+  //    rendered "Misuzu"/"Zallya" label) rather than only on a secondary alias
   //    (server nickname, global name, username). The conversation stage flattens
   //    all alias types into one set, so without this distinction a user's
   //    secondary alias can collide with another user's actual name and force a
@@ -404,6 +459,21 @@ function resolveGuildMemberStage(
     input: normalizedInput,
     candidates: dedupedMatches.slice(0, 3),
   };
+}
+
+/**
+ * The Discord id of whoever caused this turn, for tools keying a write or a
+ * permission check on the triggerer rather than on a named target.
+ *
+ * `context.userId` is the identity admission already resolved through the
+ * Message-proxy, Matrix relay, manual-trigger, and self-reply-chain paths, so
+ * it outranks the message author. The author is a fallback for tool contexts
+ * built outside a chat turn, and never used for a webhook message: a proxied
+ * turn authors as the webhook, whose snowflake matches no user row.
+ */
+export function resolveTriggererDiscordId(context: ToolContext): string | undefined {
+  if (context.userId) return context.userId;
+  return context.message?.webhookId ? undefined : context.message?.author?.id;
 }
 
 async function resolveMembersById(
@@ -592,6 +662,19 @@ export async function resolveUserTarget(input: string, context: ToolContext): Pr
         targetId: bridgeReference.targetId,
         displayLabel: formatBridgeUserLabel(bridgeReference),
         isBridgeUser: true,
+        source: "legacy_id",
+      };
+    }
+  }
+
+  if (isMessageProxyIdentityUserId(rawInput)) {
+    const messageProxyReference = conversationReferences.find((reference) => reference.targetId === rawInput);
+    if (messageProxyReference) {
+      return {
+        status: "resolved",
+        targetId: messageProxyReference.targetId,
+        displayLabel: messageProxyReference.displayLabel,
+        isBridgeUser: false,
         source: "legacy_id",
       };
     }

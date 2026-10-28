@@ -18,16 +18,37 @@ Filtering evaluates multiple layers:
 2. **Model capabilities:** The tool's `requiredModelCapabilities` must match active model flags in `ToolAvailabilityLlmState`.
 3. **Feature flags:** Tools requiring feature flags (`requiresFeatureFlag`) are evaluated against guild configuration via `configToFeatureFlags`.
 4. **Channel permissions:** Tools with `requiresPermissions` verify that the bot holds necessary Discord channel permissions (such as `SendMessages` or `UseExternalStickers`).
-5. **Backend slot availability:** Feature tools verify configured backend slots before admission. `generate_image` requires a standard diffusion model; `generate_image_nai` requires a NovelAI image slot; `generate_video` requires a video model slot; and `generate_voice_message` requires a speech provider and an assigned persona voice.
+5. **Backend slot availability:** Feature tools verify configured backend slots before admission. `generate_image` requires a standard diffusion model; `generate_image_nai` requires a NovelAI image slot; `generate_video` requires a video model slot; and `generate_voice_message` requires a saved persona source with a usable matching Design or Clone target for the triggering user.
 6. **Streaming context filtering:** `applyStreamContextAvailability()` evaluates live-turn constraints (`isAvailableForContext`) before schema declaration. This removes tools whose turn eligibility has lapsed (such as per-turn deduplication flags) so unavailable tools are not advertised to the model.
+
+## Dice rolling
+
+`roll_dice` requires `dice_rolling_enabled`, which defaults to true and is
+managed through `/config` > Plugins > Available Tools. The switch controls tool
+advertisement and execution independently of the `/roll` command. Both callers
+use `src/utils/dice/diceRoll.ts` for validated dice notation and OS-backed random
+integers, and `diceRollEmbed.ts` for their result embeds.
+
+Migration `122_enable_dice_rolling_by_default` enables the tool once for existing
+servers. The migration ledger prevents later startups from overwriting saved choices.
+New setups default to enabled and can turn it off in the `/setup` feature checklist.
+
+Dice result embeds have no title. The embed protocol reads their localized
+visibility footers and admits only shared results into model history, including
+prompt inspection. These footer strings must remain recognizable in stored
+Discord messages after copy changes. Unshared dice embeds are excluded from Self Debug and link
+preview extraction too, so a red natural 1 does not disclose an unshared roll.
+Shared results become available in subsequent chat context without triggering
+a reply. Tool rolls also return their structured result to the current model turn.
 
 ## Dynamic tool assembly
 
 Before provider serialization, tools pass through `assembleToolsForContext()` in `src/tools/assembly.ts`. Most tools return their static definition unchanged. Capability-sensitive tools implement `assembleForContext(context)` and return tailored variants via `createToolVariant()`:
 
-- `web_search`: Narrows category enums to the active search backend. SearXNG exposes all categories; Brave exposes text, image, video, and news; and the built-in DuckDuckGo fallback exposes text search only.
+- `web_search`: Narrows category enums to the active search backend. SearXNG exposes all categories; Brave exposes text, image, video, and news. With neither available, the schema advertises text search only, including on OpenRouter turns.
+- `interact_with_recent_message`: Offers only `reply` when `emoji_usage_enabled` is off, removing reaction instructions from its schema while retaining text replies; execution rejects reaction calls using the refreshed setting too.
 - `generate_image`: Prunes parameters to match active backend capabilities (text-to-image, reference image fields, and ComfyUI inpaint or outpaint controls). Parameter descriptions omit instructions for unconfigured modes, preventing the model from receiving unsupported guidance.
-- `generate_voice_message`: Prunes script markup and voice instruction schemas based on the active speech endpoint and persona voice design. Delivery logic is shared with `/generate voice-message`; see [Voice System](/architecture/integrations/voice/).
+- `generate_voice_message`: Resolves persona priority against independently inherited personal/server Design and Clone targets, then prunes markup and delivery controls for the selected target. Execution revalidates that source, target, and credential revision. Speech synthesis and delivery are shared with `/generate voice-message`; see [Voice System](/architecture/integrations/voice/).
 
 Assembly guards prevent the model from seeing unsupported parameters, while execution-time checks guard against stale configurations and crafted tool calls.
 
@@ -51,6 +72,10 @@ Redact parameters & record ToolExecutionEvent
 Return ToolResult (success / error)
 ```
 
+Capability credential resolution captures the active model ID with its provider from one server
+settings read. Media, vision, and embedding callers use `getResolvedCapabilityModelId()` to keep that
+model paired with its credentials when their turn's cached settings predate a model change.
+
 Execution dispatch enforces the following rules:
 
 1. **Alias and opaque ID resolution:** Built-in aliases (`BUILTIN_TOOL_ALIASES`) resolve to canonical names. Opaque identifiers (`media_id`, `message_id`, `end_message_id`) resolve to Discord snowflakes via `MessageIdMap` before reaching tool code.
@@ -65,7 +90,8 @@ Guilds manage remote MCP servers through `/config` > Plugins > MCP Servers (`src
 
 - **Connection pooling and lifecycle:** `GuildMcpManager` (`src/utils/mcp/guildMcpManager.ts`) connects servers lazily during tool gathering. Streamable HTTP and SSE use fresh clients bounded by `GUILD_MCP_CONNECT_TIMEOUT_MS`. Both use `guildMcpFetch.ts` for the shared URL gate, pinned DNS, same-origin requests without URL credentials, and redirect refusal. A response stops at 8 MiB before SDK JSON or SSE parsing, including discovery and internal rule checks. The cap applies cumulatively to each SSE response stream. Result envelopes must pass the SDK's schema before storage. A `*.run.tools` registration with a key connects through `smitheryConnection.ts` instead: the Smithery SDK is pinned to `api.smithery.ai` for both Connect setup and the MCP endpoint it returns, every request uses the same guarded fetch, and setup plus discovery share one `GUILD_MCP_CONNECT_TIMEOUT_MS` deadline because the stateless transport sends nothing before `tools/list`. A connection ID derived from the upstream URL makes reconnects reuse one remote connection, which also lets an administrator finish Smithery authorization for it. The key never reaches the upstream URL, even after a Smithery failure, and setup failures surface only fixed messages.
 - **Expired sessions:** A Streamable HTTP 404 on a connection with a session ID removes the client from the pool and closes it. The next operation reconnects; stateful endpoints receive a fresh handshake without the expired session ID. Failed tool calls are never replayed automatically because they may have side effects, such as sending a message.
-- **Circuit breaker quarantine:** Servers that fail to connect enter quarantine for `GUILD_MCP_FAILURE_COOLDOWN_MS` (default 5 minutes). This prevents unreachable endpoints from exhausting connection timeouts on every generation turn.
+- **Circuit breaker quarantine:** A server that fails to connect is skipped until its quarantine ends, so an unreachable endpoint cannot spend the connect timeout on every generation turn. The quarantine starts at `GUILD_MCP_FAILURE_COOLDOWN_MS` (default 5 minutes) and grows with consecutive failures, capping at 36 times the base (3 hours by default). A transport answering 401 or 403 records the failure as `unauthorized`; anything else is `unreachable`.
+- **Auto-disable:** Each failure extends a streak persisted in `failing_since` and `failure_reason`, so restarts do not reset it. Once a streak is 24 hours old, the next failure sets `is_enabled = false` and the MCP panel explains why. A successful connect, or an administrator enabling or disabling the server, clears the streak.
 - **Tool name snapshots:** Discovered tool names persist in `last_discovered_tool_names` as a bounded display cache, capped at 100 names and 128 Unicode characters per name (`mcpToolSnapshot.ts`). Live `listTools()` output remains authoritative for invocation.
 - **Collision and replacement policy:** All built-in names and aliases remain reserved even when disabled. A selected `url_fetcher` may supply `fetch_url`; a selected `web_search` may supply `web_search`. Other collisions are hidden and cannot intercept dispatch. Unfamiliar discovered names retain their schemas. Prompt macros, deliberate tool filtering, follow-up handling, and execution use the same family selection. Each family permits one enabled registration. Disable the old selection before enabling its replacement. Existing duplicate family selections or duplicate tool names across servers are refused until the administrator resolves the ambiguity. An unavailable selected service never silently switches to the native tool. With no selection, native search and fetch remain the defaults.
 
@@ -75,7 +101,8 @@ Selected remote fetch/search servers are administrator-trusted network runtimes.
 
 Web access tools enforce security boundaries before network dispatch:
 
-- `web_search`: Tries the Brave, SearXNG, and DuckDuckGo engines in that order and returns the first success. Engine-specific names stay hidden from the model. DuckDuckGo reads its fixed HTML results endpoint through the strict pinned fetcher, with a deadline and a 1 MiB cap, and sends no credentials. It unwraps result links without following them. A challenge, rate limit, or changed markup returns a failure, so the model cannot mistake a blocked search for zero results. Search results are untrusted model input.
+- `web_search`: Tries Brave, SearXNG, OpenRouter Search, and DuckDuckGo in that order and returns the first success. Engine-specific tool names stay hidden from the model. On OpenRouter turns with an active credential, `openrouterEngine.ts` makes a separate search request using the active model and the Exa web plugin. It returns citation excerpts and URLs for `fetch_url`, without fetching the result pages. OpenRouter also handles `news`, `papers`, and `code` calls after an earlier engine fails, with category-specific query hints and progress notices. It skips `image`, `video`, `files`, and `music`; if their configured engines fail, the model receives the localized category-unavailable result. The request shares `WEB_SEARCH_TIMEOUT_MS` and turn cancellation; credentials go only to OpenRouter's fixed endpoint, with redirects refused. Search uses OpenRouter credits even for free chat models. Failed text searches or unusable text citations fall through to DuckDuckGo without a Discord error embed. DuckDuckGo reads its fixed HTML results endpoint through the strict pinned fetcher, with a deadline and a 1 MiB cap, and sends no credentials. It unwraps result links without following them. A challenge, rate limit, or changed markup returns a failure, so the model cannot mistake a blocked search for zero results. Search results are untrusted model input.
+  Search dispatch shares one progress-notice state across engine attempts, so the conversation and thought log each receive at most one progress notice per call. Error embeds remain separate. Turn cancellation ends the chain before another engine starts; an engine's own timeout can still fall through.
 - `fetch_url`: The primary URL-reading tool. In production (`RUN_ENV === "production"`), requests to private, localhost, or reserved IP ranges are blocked unless `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` is set. A hostname that does not resolve is refused in every environment.
 - **Crawl4AI engine:** Optional. Setting `CRAWL4AI_BASE_URL` puts it ahead of `safe_http`, but only where private-network fetching is permitted. Its external browser resolves DNS, follows redirects, and loads subresources itself, so the bot's preflight and metadata denylist do not cover those requests. Responses are read under a byte limit and checked for the expected shape before use. See [Setup: Crawl4AI](/self-hosting/local-endpoints/setup-crawl4ai/).
 - **Cloud metadata protection:** Cloud instance metadata and link-local ranges (`169.254.0.0/16`, IPv6 link-local, AWS IMDS) are blocked unconditionally by `src/utils/security/cloudMetadata.ts`. This check cannot be bypassed by configuration.
@@ -87,6 +114,8 @@ Web access tools enforce security boundaries before network dispatch:
 Participant-aware tools resolve user and persona targets through `ParticipantTargetIndex` attached to the prepared participant context; see [Participants](/architecture/pipelines/context-build/02-native-assembly/06-participants/). The index is constructed from typed identities and purpose-filtered aliases, avoiding ambiguous display-name searches.
 
 For image analysis, `analyze_image` resolves attachments from the target Discord message. When that message is a text-only reply, it checks the directly referenced message. The tool enforces the `VISION_ANALYSIS_TIMEOUT_MS` deadline (default 60 seconds) across media downloads and vision provider inference.
+
+`cross_channel_message` excludes full-privacy authors from peek results and boomerang history before formatting their messages. Verified proxy messages use the sender account's privacy setting, matching ordinary conversation history. Both paths stop at the most recent refresh marker.
 
 ## Persona user blocking
 
@@ -108,6 +137,7 @@ The `update_user_info` tool (`src/tools/functionCalls/updateUserInfoTool.ts`) up
 - **Clearing values:** Fields listed in the `clear` array are removed. Submitting empty string values folds into clearing. Cleared prefixes or suffixes persist as explicit suppressions (`none`), preventing lower-precedence defaults from resurfacing.
 - **Affix deduplication:** When a submitted nickname contains an already-resolved prefix or suffix, redundant affixes are stripped by comparing against resolved values.
 - **Privacy and permissions:** Mutations require `user_info_updates_enabled`. Restrictive privacy levels block updates but permit clearing existing values.
+- **Confirmation notices:** Successful updates use the shared notice router even on turns that suppress progress notices, matching memory and task updates. Notice visibility, verbosity, and thought-log privacy checks still apply.
 
 ## Capability self-diagnosis
 

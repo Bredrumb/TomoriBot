@@ -11,7 +11,15 @@ sidebar:
 
 Todos los comandos de barra que TomoriBot tiene registrados actualmente, generados a partir de los mismos constructores de comandos y descripciones en español que se usan para el registro en Discord (las descripciones sin traducir aparecen en inglés).
 
-Grupos de comandos de nivel superior: **41**. Comandos de barra ejecutables: **85**.
+Grupos de comandos de nivel superior: **44**. Comandos de barra ejecutables: **91**.
+
+## `/booru`
+
+Encuentra arte anime existente
+
+| Comando | Resumen |
+|---|---|
+| `/booru search` | Publica imágenes aleatorias bien valoradas de Danbooru para una o dos etiquetas |
 
 ## `/comment`
 
@@ -208,6 +216,14 @@ Comandos y ajustes con restricción de edad.
 | `/nsfw persona default` | Aplica una configuración de personalidad preajustada NSFW |
 | `/nsfw persona import` | Importa una persona desde un archivo PNG, JSON o CHARX, incluidas las personas NSFW |
 
+## `/nudge-studio`
+
+Elige qué intervenciones espontáneas uso en este servidor y escribe las tuyas.
+
+| Comando | Resumen |
+|---|---|
+| `/nudge-studio` | Elige qué intervenciones espontáneas uso en este servidor y escribe las tuyas. |
+
 ## `/nuke`
 
 Borra completamente todos los datos del servidor. Requiere ejecutar /setup después.
@@ -238,6 +254,7 @@ Administra tus configuraciones personales
 | `/personal config` | Administra tus preferencias personales, privacidad, modelos y perfil. |
 | `/personal language` | Elige el idioma en el que TomoriBot te habla. |
 | `/personal memories` | Administra tus memorias personales a largo plazo y contexto corto de conversación. |
+| `/personal message-proxy` | Elige un servicio de proxy de mensajes compatible para tu cuenta. |
 | `/personal nuke` | Borra todo lo que TomoriBot guarda sobre ti en cada servidor. |
 | `/personal providers` | Administra tus credenciales de proveedor, endpoints y catálogos de modelos personales. |
 
@@ -315,6 +332,14 @@ Recompénsame con interacciones divertidas.
 | `/reward kiss` | ¡Dame un beso! |
 | `/reward tickle` | ¡Hazme cosquillas! |
 
+## `/roll`
+
+Tira dados para juegos de rol y partidas de mesa.
+
+| Comando | Resumen |
+|---|---|
+| `/roll` | Tira dados para juegos de rol y partidas de mesa. |
+
 ## `/scheduled-task`
 
 Administra tareas programadas y recordatorios.
@@ -338,7 +363,9 @@ Ve las estadísticas de uso
 
 | Comando | Resumen |
 |---|---|
-| `/stats generate` | Genera una tarjeta de estadísticas compartible. |
+| `/stats generate persona` | Genera tu tarjeta de Afinidad de Persona con una persona. |
+| `/stats generate personal` | Genera tu tarjeta de Resumen Personal. |
+| `/stats generate server` | Genera la tarjeta de Clasificación del Servidor de este servidor. |
 | `/stats persona` | Ve las estadísticas de uso de una persona en este servidor. |
 | `/stats personal` | Ve tus propias estadísticas de uso. |
 | `/stats server` | Ve las estadísticas de uso de todo el servidor. |

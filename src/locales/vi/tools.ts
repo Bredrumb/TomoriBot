@@ -1,7 +1,24 @@
 export default {
   tools: {
+    media: {
+      delivery_failed:
+        "Discord không gửi được nội dung đa phương tiện. Không có lượt gửi thành công nào được ghi nhận.",
+      delivery_unconfirmed:
+        "Discord chưa xác nhận nội dung đa phương tiện đã được đăng hay chưa. Hãy kết thúc lượt này và kiểm tra kênh trước khi tạo hoặc đăng lại, vì thử lại có thể tạo bản trùng lặp.",
+    },
+    roll_dice: {
+      missing_permissions: "Bot cần quyền xem kênh này, gửi tin nhắn và chèn liên kết để đăng kết quả tung xúc xắc.",
+      disabled: "Tính năng tung xúc xắc đã bị tắt. Bật lại qua `/config` > Plugin > Công cụ khả dụng.",
+      cancelled: "Lượt tung xúc xắc đã bị hủy trước khi gửi.",
+      delivery_failed: "Không thể đăng kết quả xúc xắc. Không có lượt tung nào được gửi thành công.",
+    },
     execution: {
       unavailable: `Công cụ \`{tool}\` không khả dụng theo cài đặt hiện tại, khả năng của model hoặc quyền hạn của bot.`,
+    },
+    generate_voice_message: {
+      persona_missing: `Persona này không còn khả dụng.`,
+      stale: `Model giọng nói, thông tin xác thực hoặc giọng của persona đã thay đổi trong lượt này. Hãy bắt đầu lượt mới trước khi tạo tin nhắn thoại.`,
+      script_too_long: `Kịch bản quá dài đối với model thiết kế giọng đọc này. Hãy rút ngắn kịch bản và thử lại.`,
     },
     generate_image: {
       quota_exceeded_generic: `Đã vượt quá hạn mức tạo ảnh.`,
@@ -70,6 +87,25 @@ export default {
       unmute_success_title: `🔊 {persona_name} đã bật tiếng {user_name}`,
       unblock_success_title: `✅ {persona_name} đã bỏ chặn {user_name}`,
       unblock_success_description: `Đã gỡ bỏ {block_type} đang hoạt động cho {user_name} khỏi {persona_name}.`,
+    },
+    danbooru: {
+      tags_title: `🏷️  Tra cứu thẻ Danbooru`,
+      tag_line_resolved: `\`{query}\` → \`{tag}\` ({category}, {post_count} bài đăng)`,
+      tag_line_exact: `\`{tag}\` ({category}, {post_count} bài đăng)`,
+      tag_line_not_found: `\`{query}\`: không tìm thấy`,
+      signature_heading: `Thẻ đặc trưng của **{tag}**`,
+      outfits_line: `Trang phục: {outfits}`,
+      cosplay_line: `Cosplay: \`{tag}\` ({post_count} bài đăng)`,
+      category_general: `chung`,
+      category_character: `nhân vật`,
+      category_copyright: `tác phẩm`,
+      category_artist: `họa sĩ`,
+      category_meta: `siêu dữ liệu`,
+      post_title: `🖼️  Đang đọc bài đăng Danbooru #{id}`,
+      post_description: `{url}`,
+      gallery_footer: `Danbooru: {query}`,
+      gallery_resolved_tag: `\`{typed}\` → \`{tag}\``,
+      gallery_post_link: `[#{id}]({url})`,
     },
     user_info_update: {
       success_title: `✅ Đã cập nhật hồ sơ của {target_user}`,
@@ -170,6 +206,7 @@ export default {
     },
     intent_packs: {
       deliberate: {
+        dice: ["xúc xắc", "tung xúc xắc"],
         image: [
           "vẽ*",
           "ve giup*",

@@ -86,7 +86,6 @@ interface CacheStats {
 }
 
 const CRUDE_CONVERSATION_TTL_HOURS = 12;
-export const STM_MAX_CATEGORIES = 5;
 const SUMMARY_TTL_HOURS = 24;
 const MAX_SUMMARY_LENGTH = 1500;
 export const MAX_MESSAGES_PER_CHANNEL = 10;
@@ -646,6 +645,21 @@ export async function preWarmUserStmEntries(userDiscId: string): Promise<void> {
 
   pendingHydrations.set(inflightKey, promise);
   await promise;
+}
+
+/** Users whose user-scoped rows have not been bulk-warmed into the cache yet. */
+export function filterUnwarmedStmUsers(userDiscIds: readonly string[]): string[] {
+  return [...new Set(userDiscIds)].filter((id) => id && !bulkWarmedUsers.has(id));
+}
+
+/** Warms every row read for `userDiscIds` and marks those users warm, including ones with no rows. */
+export function warmUserStmRows(userDiscIds: readonly string[], rows: readonly ShortTermMemoryRow[]): void {
+  for (const row of rows) {
+    if (row.user_disc_id) {
+      warmRowIntoCache(getUserCacheKey(row.user_disc_id, row.channel_disc_id, row.persona_id), row);
+    }
+  }
+  for (const id of userDiscIds) bulkWarmedUsers.add(id);
 }
 
 function updateSummaryForKey(

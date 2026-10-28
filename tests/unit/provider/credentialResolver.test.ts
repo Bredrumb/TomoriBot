@@ -3,7 +3,9 @@ import type { UserSavedProviderConfigRow } from "@/types/db/schema";
 import * as realRepositories from "@/utils/db/repositories";
 import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 import * as realCrypto from "@/utils/security/crypto";
-import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { savedProviderConfigSchema } from "@/types/db/schema";
+import { createLlmRow, createServerConfig } from "../../helpers/fixtures";
 
 let rows: UserSavedProviderConfigRow[] = [];
 
@@ -15,6 +17,7 @@ function makeSavedProviderConfigRow(
     user_id: overrides.user_id ?? 1,
     api_key: overrides.api_key ?? null,
     key_version: overrides.key_version ?? 1,
+    credential_revision: overrides.credential_revision ?? 1,
     llm_id: overrides.llm_id ?? null,
     diffusion_model_id: overrides.diffusion_model_id ?? null,
     embedding_model_id: overrides.embedding_model_id ?? null,
@@ -32,10 +35,8 @@ function makeSavedProviderConfigRow(
     llm_disabled_params: overrides.llm_disabled_params ?? [],
     llm_logit_biases: overrides.llm_logit_biases ?? [],
     thinking_level: overrides.thinking_level ?? "auto",
-    model_randomizer_enabled: overrides.model_randomizer_enabled ?? false,
     enabled_capabilities: overrides.enabled_capabilities ?? [],
     assigned_capabilities: overrides.assigned_capabilities ?? [],
-    fallback_model_refs: overrides.fallback_model_refs ?? [],
     saved_at: overrides.saved_at ?? new Date(),
     updated_at: overrides.updated_at ?? new Date(),
     ...overrides,
@@ -90,6 +91,7 @@ describe("personal credential resolution for capability split", () => {
         provider: "openrouter",
         api_key: Buffer.from("openrouter-personal-key", "utf8"),
         key_version: 1,
+        credential_revision: 1,
         enabled_capabilities: ["image"],
         assigned_capabilities: ["image"],
         diffusion_model_id: 10,
@@ -100,6 +102,7 @@ describe("personal credential resolution for capability split", () => {
         provider: "novelai",
         api_key: Buffer.from("novelai-personal-key", "utf8"),
         key_version: 1,
+        credential_revision: 1,
         enabled_capabilities: ["image_nai"],
         assigned_capabilities: ["image_nai"],
         diffusion_model_id: null,
@@ -127,6 +130,7 @@ describe("personal credential resolution for capability split", () => {
         provider: "openrouter",
         api_key: Buffer.from("openrouter-personal-key", "utf8"),
         key_version: 1,
+        credential_revision: 1,
         enabled_capabilities: ["image"],
         assigned_capabilities: ["image"],
         diffusion_model_id: 10,
@@ -137,6 +141,7 @@ describe("personal credential resolution for capability split", () => {
         provider: "novelai",
         api_key: Buffer.from("novelai-personal-key", "utf8"),
         key_version: 1,
+        credential_revision: 1,
         enabled_capabilities: [],
         assigned_capabilities: ["image_nai"],
         diffusion_model_id: null,
@@ -160,6 +165,7 @@ describe("personal credential resolution for capability split", () => {
         provider: "novelai",
         api_key: Buffer.from("novelai-personal-key", "utf8"),
         key_version: 1,
+        credential_revision: 1,
         enabled_capabilities: ["image"],
         assigned_capabilities: ["image"],
         diffusion_model_id: 10,
@@ -170,6 +176,88 @@ describe("personal credential resolution for capability split", () => {
     await expect(resolveCapabilityCredentials(1, "image-standard", { userId: 1 })).rejects.toThrow(
       "No usable credentials for server-img-provider (image-standard, server): no_saved_config",
     );
+  });
+
+  it("pins server image credentials and their model to one config read", async () => {
+    let configReads = 0;
+    const savedConfig = savedProviderConfigSchema.parse({
+      server_id: 1,
+      provider: "google",
+      api_key: Buffer.from("fixture-google-key"),
+      key_version: 1,
+      credential_revision: 1,
+      llm_id: null,
+      diffusion_model_id: 3,
+      embedding_model_id: null,
+      nai_diffusion_model_id: null,
+      nai_preset_name: null,
+    });
+    scopedMock.module("@/utils/db/repositories", () => ({
+      ...realRepositories,
+      configRepository: overrideMembers(realRepositories.configRepository, {
+        loadModelCapabilityIds: async () => ({
+          user_byok_mode: false,
+          llm_id: 1,
+          embedding_model_id: 2,
+          diffusion_model_id: ++configReads === 1 ? 3 : 99,
+          nai_diffusion_model_id: 4,
+          video_model_id: 5,
+          vision_llm_id: 6,
+        }),
+      }),
+      llmModelRepo: overrideMembers(realRepositories.llmModelRepo, {
+        loadDiffusionModelById: async (id: number) => ({
+          diffusion_model_id: id,
+          codename: id === 3 ? "gemini-2.5-flash-image" : "google/gemini-2.5-flash-image",
+          provider: id === 3 ? "google" : "openrouter",
+        }),
+      }),
+      llmProviderRepo: overrideMembers(realRepositories.llmProviderRepo, {
+        loadSavedProviderConfig: async (_serverId: number, provider: string) => ({
+          ...savedConfig,
+          provider,
+          diffusion_model_id: provider === "google" ? 3 : 99,
+          api_key: Buffer.from(`fixture-${provider}-key`),
+        }),
+      }),
+    }));
+    const credentials = await resolveCapabilityCredentials(1, "image-standard");
+    expect(configReads).toBe(1);
+    expect(credentials.provider).toBe("google");
+    expect(getResolvedCapabilityModelId(credentials, "image-standard")).toBe(3);
+  });
+
+  it("uses an effective text model's provider and ID instead of the workspace default", async () => {
+    const selected = createLlmRow({ llm_id: 19, llm_provider: "openrouter" });
+    const providerLoads: string[] = [];
+    scopedMock.module("@/utils/db/repositories", () => ({
+      ...realRepositories,
+      configRepository: overrideMembers(realRepositories.configRepository, {
+        loadModelCapabilityIds: async () => createServerConfig({ llm_id: 1 }),
+      }),
+      llmProviderRepo: overrideMembers(realRepositories.llmProviderRepo, {
+        loadSavedProviderConfig: async (serverId: number, provider: string) => {
+          providerLoads.push(provider);
+          return savedProviderConfigSchema.parse({
+            server_id: serverId,
+            provider,
+            api_key: Buffer.from("fixture-selected-provider-key"),
+            llm_id: 1,
+            diffusion_model_id: null,
+            embedding_model_id: null,
+            nai_diffusion_model_id: null,
+            nai_preset_name: null,
+          });
+        },
+      }),
+    }));
+    expect(await resolveCapabilityCredentials(1, "text", { textModel: selected })).toMatchObject({
+      provider: "openrouter",
+      modelId: 19,
+      apiKey: "fixture-selected-provider-key",
+      source: "server",
+    });
+    expect(providerLoads).toEqual(["openrouter"]);
   });
 
   it("rejects server image-standard resolution when server diffusion model belongs to novelai", async () => {

@@ -1,7 +1,24 @@
 export default {
   tools: {
+    media: {
+      delivery_failed: "Discord no entregó el contenido multimedia. No se registró una entrega exitosa.",
+      delivery_unconfirmed:
+        "Discord no confirmó si se publicó el contenido multimedia. Termina este turno y revisa el canal antes de generarlo o publicarlo de nuevo, ya que otro intento podría duplicarlo.",
+    },
+    roll_dice: {
+      missing_permissions:
+        "El bot necesita permisos para ver este canal, enviar mensajes e insertar enlaces para publicar una tirada de dados.",
+      disabled: "La tirada de dados está desactivada. Actívala en `/config` > Plugins > Herramientas disponibles.",
+      cancelled: "La tirada de dados se canceló antes de enviarse.",
+      delivery_failed: "No se pudo publicar el resultado de los dados. No se entregó ninguna tirada con éxito.",
+    },
     execution: {
       unavailable: `La herramienta \`{tool}\` no está disponible con la configuración actual, las capacidades del modelo o los permisos del bot.`,
+    },
+    generate_voice_message: {
+      persona_missing: `La persona ya no está disponible.`,
+      stale: `El modelo de voz, las credenciales o la voz de la persona cambiaron durante este turno. Inicia un nuevo turno antes de generar un mensaje de voz.`,
+      script_too_long: `El guion es demasiado largo para este modelo de diseño de voz. Acorta el guion e inténtalo de nuevo.`,
     },
     generate_image: {
       quota_exceeded_generic: `Se agotó la cuota de generación de imágenes.`,
@@ -70,6 +87,25 @@ export default {
       unmute_success_title: `🔊 {persona_name} quitó el silencio de {user_name}`,
       unblock_success_title: `✅ {persona_name} desbloqueó a {user_name}`,
       unblock_success_description: `Se quitó el {block_type} activo de {user_name} en {persona_name}.`,
+    },
+    danbooru: {
+      tags_title: `🏷️  Búsqueda de etiquetas de Danbooru`,
+      tag_line_resolved: `\`{query}\` → \`{tag}\` ({category}, {post_count} publicaciones)`,
+      tag_line_exact: `\`{tag}\` ({category}, {post_count} publicaciones)`,
+      tag_line_not_found: `\`{query}\`: no encontrado`,
+      signature_heading: `Etiquetas distintivas de **{tag}**`,
+      outfits_line: `Atuendos: {outfits}`,
+      cosplay_line: `Cosplay: \`{tag}\` ({post_count} publicaciones)`,
+      category_general: `general`,
+      category_character: `personaje`,
+      category_copyright: `serie`,
+      category_artist: `artista`,
+      category_meta: `meta`,
+      post_title: `🖼️  Leyendo publicación de Danbooru #{id}`,
+      post_description: `{url}`,
+      gallery_footer: `Danbooru: {query}`,
+      gallery_resolved_tag: `\`{typed}\` → \`{tag}\``,
+      gallery_post_link: `[#{id}]({url})`,
     },
     user_info_update: {
       success_title: `✅ Se actualizó el perfil de {target_user}`,
@@ -170,6 +206,7 @@ export default {
     },
     intent_packs: {
       deliberate: {
+        dice: ["dados", "tirada"],
         image: [
           "genera un*",
           "genera una*",

@@ -1,3 +1,4 @@
+import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 /**
  * PresetRepository: manages SillyTavern preset data, persona preset import/export,
  * and SillyTavern card conversion.
@@ -24,6 +25,8 @@ import {
   type ValidationResult,
   type PresetExportData,
 } from "@/types/preset/presetExport";
+import { PERSONA_NICKNAME_MAX_LENGTH } from "@/types/personaNaming";
+import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 import { log } from "@/utils/misc/logger";
 import { invalidateStPresetCache } from "@/utils/cache/stPresetCache";
 import { validatePersonaConfigFields } from "@/utils/db/sqlSecurity";
@@ -34,6 +37,13 @@ import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
 import { getBaseTriggerWords } from "@/utils/text/localizer";
 import { EMPTY_PERSONA_NAMING_CONFIG } from "@/types/personaNaming";
 import { userNamingRepository } from "@/utils/db/repositories/UserNamingRepository";
+import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
+import {
+  DEFAULT_NATURAL_NUDGE_TALKATIVENESS,
+  personaAuthoredIdleNudgesSchema,
+  sameNaturalNudgeInterests,
+  type PersonaAuthoredIdleNudge,
+} from "@/modules/natural-nudges/db/types";
 
 export type StPresetsReadResult = { status: "fresh"; presets: StPresetRow[] } | { status: "unavailable"; presets: [] };
 
@@ -90,6 +100,29 @@ function normalizeLineageId(value: unknown): number | null {
 
 function arraysEqual<T>(left: readonly T[], right: readonly T[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+/**
+ * Compares authored definitions field by field, because JSONB reorders object keys and a raw
+ * serialization would misread an unchanged list as a customization.
+ */
+function samePersonaAuthoredIdleNudges(cardList: readonly PersonaAuthoredIdleNudge[], stored: unknown): boolean {
+  const card = personaAuthoredIdleNudgesSchema.safeParse(cardList);
+  const preset = personaAuthoredIdleNudgesSchema.safeParse(stored);
+  if (!card.success || !preset.success) return false;
+  const key = (list: readonly PersonaAuthoredIdleNudge[]) =>
+    JSON.stringify(
+      list.map((nudge) => [
+        nudge.id,
+        nudge.category,
+        nudge.title,
+        nudge.brief,
+        nudge.agenda_hint,
+        nudge.prerequisites,
+        nudge.recommended_tools,
+      ]),
+    );
+  return key(card.data) === key(preset.data);
 }
 
 function normalizePresetPublicFlags(preset: TomoriPresetRow): boolean[] {
@@ -470,7 +503,14 @@ class PresetRepository {
           arraysEqual(preset.preset_sample_dialogues_out, data.sample_dialogues_out) &&
           arraysEqual(resolveOfficialPresetTriggerWords(preset), expectedTriggers) &&
           resolveOfficialPresetPrompt(preset) === expectedPrompt &&
-          JSON.stringify(preset.preset_naming_config) === JSON.stringify(expectedNamingConfig)
+          JSON.stringify(preset.preset_naming_config) === JSON.stringify(expectedNamingConfig) &&
+          // Cards from before Natural Nudges carry none of these fields, so their absence still matches.
+          (data.natural_nudge_talkativeness === undefined ||
+            data.natural_nudge_talkativeness === preset.natural_nudge_talkativeness) &&
+          (data.natural_nudge_interests === undefined ||
+            sameNaturalNudgeInterests(data.natural_nudge_interests, preset.natural_nudge_interests)) &&
+          (data.natural_nudge_idle_nudges === undefined ||
+            samePersonaAuthoredIdleNudges(data.natural_nudge_idle_nudges, preset.natural_nudge_idle_nudges))
         );
       }) ?? null
     );
@@ -879,9 +919,11 @@ class PresetRepository {
                 p.persona_id, p.persona_nickname, p.persona_lineage_id,
                 p.attribute_list, p.sample_dialogues_in, p.sample_dialogues_out,
                 p.is_alter, p.is_pointer, p.preset_lineage_id, p.preset_language, p.is_nsfw,
+                pvc.speech_voice_design_prompt, pvc.voice_source_priority,
                 pic.physical_appearance_tags, pic.nai_char_ref_url,
                 ptc.nai_attg_author, ptc.nai_attg_title, ptc.nai_attg_tags, ptc.nai_attg_genre, ptc.nai_attg_stars
               FROM personas p
+              LEFT JOIN persona_voice_configs pvc ON pvc.persona_id = p.persona_id
               LEFT JOIN persona_imagegen_configs pic ON pic.persona_id = p.persona_id
               LEFT JOIN persona_textgen_configs ptc ON ptc.persona_id = p.persona_id
               WHERE p.server_id = ${serverId}
@@ -893,9 +935,11 @@ class PresetRepository {
                 p.persona_id, p.persona_nickname, p.persona_lineage_id,
                 p.attribute_list, p.sample_dialogues_in, p.sample_dialogues_out,
                 p.is_alter, p.is_pointer, p.preset_lineage_id, p.preset_language, p.is_nsfw,
+                pvc.speech_voice_design_prompt, pvc.voice_source_priority,
                 pic.physical_appearance_tags, pic.nai_char_ref_url,
                 ptc.nai_attg_author, ptc.nai_attg_title, ptc.nai_attg_tags, ptc.nai_attg_genre, ptc.nai_attg_stars
               FROM personas p
+              LEFT JOIN persona_voice_configs pvc ON pvc.persona_id = p.persona_id
               LEFT JOIN persona_imagegen_configs pic ON pic.persona_id = p.persona_id
               LEFT JOIN persona_textgen_configs ptc ON ptc.persona_id = p.persona_id
               WHERE p.server_id = ${serverId}
@@ -910,6 +954,9 @@ class PresetRepository {
 
       const presetData = personaRows[0];
       const pointerPreset = await this.loadPointerPresetForPersonaRow(presetData as Record<string, unknown>);
+      const nudgeConfig = (await naturalNudgeRepository.loadPersonaConfigs([presetData.persona_id as number])).get(
+        presetData.persona_id as number,
+      );
       if (typeof targetPersonaId !== "number") {
         const mainCountRows = await sql`
           SELECT COUNT(*)::int AS count
@@ -999,6 +1046,8 @@ class PresetRepository {
           sample_dialogues_out: exportedSampleDialoguesOut,
           trigger_words: triggerWords || [],
           persona_prompt: personaPrompt,
+          speech_voice_design_prompt: presetData.speech_voice_design_prompt ?? null,
+          voice_source_priority: presetData.voice_source_priority ?? "design",
           naming_config: exportedNamingConfig,
           persona_lineage_id: lineageId,
           ...(exportedPresetLineageId !== null ? { preset_lineage_id: exportedPresetLineageId } : {}),
@@ -1010,6 +1059,13 @@ class PresetRepository {
           nai_attg_genre: presetData.nai_attg_genre ?? null,
           nai_attg_stars: presetData.nai_attg_stars ?? null,
           is_nsfw: pointerPreset ? pointerPreset.is_nsfw : presetData.is_nsfw === true,
+          ...(nudgeConfig
+            ? {
+                natural_nudge_interests: nudgeConfig.interests,
+                natural_nudge_talkativeness: nudgeConfig.talkativeness,
+                natural_nudge_idle_nudges: nudgeConfig.idle_nudges,
+              }
+            : {}),
         },
       };
 
@@ -1116,6 +1172,22 @@ class PresetRepository {
           return { success: false, error: "commands.persona.import.error_import_failed" };
         }
 
+        if (
+          !(await personaRepository.setVoiceConfig(
+            mainTomoriId,
+            {
+              speech_voice_design_prompt: validatedImportData.speech_voice_design_prompt ?? null,
+              voice_source_priority: validatedImportData.voice_source_priority ?? "design",
+              speech_voice_sample_id: null,
+              speech_voice_id: null,
+              speech_voice_name: null,
+            },
+            { materialize: Boolean(validatedImportData.speech_voice_design_prompt) },
+          ))
+        )
+          return { success: false, error: "commands.persona.import.error_import_failed" };
+        invalidateTomoriStateCache(serverDiscId);
+        await sql`UPDATE speech_voice_bindings SET pending_delete = true WHERE persona_id = ${mainTomoriId}`;
         log.success(
           `Successfully imported preset pointer for server ${serverDiscId}: ${validatedImportData.tomori_nickname}`,
         );
@@ -1128,7 +1200,7 @@ class PresetRepository {
             dialogueCount: validatedImportData.sample_dialogues_in.length,
             triggerWordCount: validatedImportData.trigger_words.length,
           },
-          mainPersonaIsPointer: true,
+          mainPersonaIsPointer: !validatedImportData.speech_voice_design_prompt,
         };
       }
 
@@ -1227,7 +1299,34 @@ class PresetRepository {
         mainTomoriId,
         validatedImportData.naming_config ?? EMPTY_PERSONA_NAMING_CONFIG,
       );
+      if (
+        !(await naturalNudgeRepository.savePersonaConfig(mainTomoriId, {
+          talkativeness: validatedImportData.natural_nudge_talkativeness ?? DEFAULT_NATURAL_NUDGE_TALKATIVENESS,
+          interests: validatedImportData.natural_nudge_interests ?? [],
+        }))
+      )
+        return { success: false, error: "commands.persona.import.error_import_failed" };
 
+      if (
+        (await naturalNudgeRepository.replacePersonaIdleNudges(
+          mainTomoriId,
+          validatedImportData.natural_nudge_idle_nudges ?? [],
+        )) !== "success"
+      )
+        return { success: false, error: "commands.persona.import.error_import_failed" };
+
+      if (
+        !(await personaRepository.setVoiceConfig(mainTomoriId, {
+          speech_voice_design_prompt: validatedImportData.speech_voice_design_prompt ?? null,
+          voice_source_priority: validatedImportData.voice_source_priority ?? "design",
+          speech_voice_sample_id: null,
+          speech_voice_id: null,
+          speech_voice_name: null,
+        }))
+      )
+        return { success: false, error: "commands.persona.import.error_import_failed" };
+      invalidateTomoriStateCache(serverDiscId);
+      await sql`UPDATE speech_voice_bindings SET pending_delete = true WHERE persona_id = ${mainTomoriId}`;
       log.success(`Successfully imported preset for server ${serverDiscId}: ${validatedImportData.tomori_nickname}`);
 
       return {
@@ -1270,6 +1369,13 @@ class PresetRepository {
 
     if (normalizedData.sample_dialogues_in.length !== normalizedData.sample_dialogues_out.length) {
       return { valid: false, error: "commands.persona.import.error_dialogue_mismatch" };
+    }
+
+    if (getDiscordTextLength(normalizedData.tomori_nickname) > PERSONA_NICKNAME_MAX_LENGTH) {
+      return {
+        valid: false,
+        error: `commands.persona.import.error_nickname_too_long|${PERSONA_NICKNAME_MAX_LENGTH}`,
+      };
     }
 
     return { valid: true, data: normalizedData };

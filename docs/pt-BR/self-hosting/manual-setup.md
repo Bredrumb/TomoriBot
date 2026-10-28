@@ -71,9 +71,8 @@ bun run dev
 
 Quando você ver `TomoriBot up and running!`, vá para o Discord e execute `/setup` no seu
 servidor para conectar um provedor de IA e inicializar o bot. O comando abre um painel de lista de verificação
-guiado, e nada é escrito até que você pressione `Concluir Configuração`; veja
-[O comando `/setup`](/pt-BR/self-hosting/setup-wizard/#the-setup-command) para os passos e o
-[Início Rápido](/pt-BR/introduction/quickstart/) para a parte dentro do Discord.
+guiado, e nada é escrito até que você pressione `Concluir Configuração`; veja o
+[Início Rápido](/introduction/quickstart/) para os passos.
 
 Use `bun run launch` em vez de `bun run dev` se você quiser que servidores locais opcionais (SearXNG, Crawl4AI, TTS/STT local) sejam iniciados junto com o bot:
 

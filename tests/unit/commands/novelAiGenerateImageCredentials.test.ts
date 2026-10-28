@@ -6,6 +6,7 @@ import { createScopedModuleMocker } from "../../helpers/mockSurface";
 import * as realCache from "@/utils/cache/tomoriStateCache";
 import * as realPersonalRuntime from "@/utils/provider/personalProviderRuntime";
 import * as realCredentials from "@/utils/provider/credentialResolver";
+import * as realGenerationModels from "@/utils/provider/generationModels";
 import * as realCrypto from "@/utils/security/crypto";
 import * as realNaiModels from "@/utils/image/naiDiffusionModels";
 import * as realNaiGeneration from "@/utils/image/naiImageGeneration";
@@ -13,12 +14,24 @@ import * as realQuota from "@/utils/quota/imageQuotaManager";
 import * as realInteractionCore from "@/utils/discord/ui/interactionCore";
 import { initializeLocalizer } from "@/utils/text/localizer";
 
+const selectedNaiModel: realGenerationModels.GenerationModelChoice = {
+  source: "personal",
+  kind: "image-nai",
+  provider: "novelai",
+  modelId: 20,
+  name: "selected-nai",
+};
+let modelOption: string | null = null;
+let selectionAvailable = true;
+let revokeOnSubmit = false;
+
 const personalNaiConfig: UserSavedProviderConfigRow = {
   user_saved_config_id: 1,
   user_id: 1,
   provider: "novelai",
   api_key: Buffer.from("encrypted-personal-key"),
   key_version: 1,
+  credential_revision: 1,
   llm_id: null,
   diffusion_model_id: null,
   embedding_model_id: null,
@@ -36,10 +49,8 @@ const personalNaiConfig: UserSavedProviderConfigRow = {
   llm_disabled_params: [],
   llm_logit_biases: [],
   thinking_level: "auto",
-  model_randomizer_enabled: false,
   enabled_capabilities: ["image_nai"],
   assigned_capabilities: ["image_nai"],
-  fallback_model_refs: [],
   saved_at: new Date(),
   updated_at: new Date(),
 };
@@ -76,19 +87,31 @@ let modalResult:
       values: Record<string, string>;
       attachments: Record<string, APIAttachment>;
     } = { outcome: "timeout" };
-const modal = mock(async () => modalResult);
+const modal = mock(async () => {
+  if (revokeOnSubmit) selectionAvailable = false;
+  return modalResult;
+});
 
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/cache/tomoriStateCache": realCache,
   "@/utils/provider/personalProviderRuntime": realPersonalRuntime,
   "@/utils/provider/credentialResolver": realCredentials,
   "@/utils/security/crypto": realCrypto,
+  "@/utils/provider/generationModels": realGenerationModels,
   "@/utils/image/naiDiffusionModels": realNaiModels,
   "@/utils/image/naiImageGeneration": realNaiGeneration,
   "@/utils/quota/imageQuotaManager": realQuota,
   "@/utils/discord/ui/interactionCore": realInteractionCore,
 });
 
+scopedMock.module("@/utils/provider/generationModels", () => ({
+  ...realGenerationModels,
+  loadGenerationModelChoices: async () => [selectedNaiModel],
+  validateGenerationModelSelection: async () => {
+    if (!selectionAvailable) throw new realGenerationModels.GenerationModelUnavailableError();
+    return selectedNaiModel;
+  },
+}));
 scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
   ...realCache,
   getCachedTomoriState: async () => serverState,
@@ -128,6 +151,12 @@ scopedMock.module("@/utils/discord/ui/interactionCore", () => ({
 }));
 
 const interaction = {
+  commandName: "novelai",
+  options: {
+    getString: (name: string) => (name === "model" ? modelOption : null),
+    getSubcommand: () => "image",
+    getBoolean: () => null,
+  },
   channel: { id: "channel-1" },
   guild: { id: "guild-1" },
   user: { id: "user-1" },
@@ -139,6 +168,9 @@ describe("/novelai generate image credential selection", () => {
   });
 
   beforeEach(() => {
+    modelOption = null;
+    selectionAvailable = true;
+    revokeOnSubmit = false;
     activeConfigs = {};
     resolvedModelCodename = "nai-diffusion-model";
     resolveCredentials.mockClear();
@@ -174,6 +206,44 @@ describe("/novelai generate image credential selection", () => {
     expect(getOptionalKey).toHaveBeenCalledWith(serverState.server_id, "novelai");
     expect(checkQuota).toHaveBeenCalledWith(serverState.server_id, interaction.user.id);
     expect(modal).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses an explicitly selected personal model even while a different personal image capability is active", async () => {
+    modelOption = realGenerationModels.generationModelValue(selectedNaiModel);
+    activeConfigs = { image: personalStandardConfig };
+    resolvedModelCodename = "nai-diffusion-5-full";
+    modalResult = {
+      outcome: "submit",
+      interaction,
+      values: { nai_image_prompt: "fixture prompt", nai_image_orientation: "portrait" },
+      attachments: {},
+    };
+    const { execute } = await import("@/commands/novelai/generate/image");
+    await execute({} as Client, interaction, createUserRow(), "en-US");
+    expect(resolveCredentials).toHaveBeenCalledWith(serverState.server_id, "image-nai", {
+      userId: 1,
+      modelSelection: selectedNaiModel,
+    });
+    expect(generateImage).toHaveBeenCalledWith(
+      expect.objectContaining({ model: resolvedModelCodename, apiKey: "personal-nai-key" }),
+    );
+    expect(getOptionalKey).not.toHaveBeenCalled();
+    expect(checkQuota).not.toHaveBeenCalled();
+  });
+
+  it("refuses a selected model removed while the modal was open", async () => {
+    modelOption = realGenerationModels.generationModelValue(selectedNaiModel);
+    revokeOnSubmit = true;
+    modalResult = {
+      outcome: "submit",
+      interaction,
+      values: { nai_image_prompt: "fixture prompt", nai_image_orientation: "portrait" },
+      attachments: {},
+    };
+    const { execute } = await import("@/commands/novelai/generate/image");
+    await execute({} as Client, interaction, createUserRow(), "en-US");
+    expect(generateImage).not.toHaveBeenCalled();
+    expect(replyInfo.mock.calls.at(-1)?.[2]).toMatchObject({ titleKey: "commands.generate.model_unavailable_title" });
   });
 
   it("uses the failing NovelAI credential source for authentication tips", async () => {

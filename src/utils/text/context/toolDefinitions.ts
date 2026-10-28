@@ -26,18 +26,25 @@ const VERBATIM_TOOL_DEFINITIONS_HEADER =
  * @param tomoriState - Active persona/server state used for tool availability gating.
  * @returns Provider-native tool JSON array, or an empty array when none apply.
  */
-async function buildVerbatimToolDefinitionsJson(tomoriState: TomoriState): Promise<Array<Record<string, unknown>>> {
+async function buildVerbatimToolDefinitionsJson(
+  tomoriState: TomoriState,
+  userId?: number,
+): Promise<Array<Record<string, unknown>>> {
   // Build the minimal availability state (mirrors every <Provider>.getTools block).
   const provider = tomoriState.llm.llm_provider;
   const toolStateForContext: ToolStateForContext = {
     server_id: tomoriState.server_id.toString(),
+    speechToolState: { userId },
     activePersonaHasElevenlabsVoice: Boolean(
       tomoriState.speech_voice_sample_id ||
         tomoriState.speech_voice_design_prompt?.trim() ||
         tomoriState.speech_voice_id?.trim(),
     ),
     activePersonaVoiceDesignPrompt: tomoriState.speech_voice_design_prompt?.trim() || null,
-    activePersonaVoiceName: tomoriState.speech_voice_name,
+    activePersonaVoiceSampleId: tomoriState.speech_voice_sample_id,
+    activePersonaVoiceId: tomoriState.speech_voice_id,
+    activePersonaVoiceSourcePriority: tomoriState.voice_source_priority,
+
     llm: {
       llm_codename: tomoriState.llm.llm_codename,
       has_tools: tomoriState.llm.has_tools,
@@ -50,6 +57,7 @@ async function buildVerbatimToolDefinitionsJson(tomoriState: TomoriState): Promi
     nai_diffusion_model_id: tomoriState.config.nai_diffusion_model_id,
     video_model_id: tomoriState.config.video_model_id,
     config: {
+      emoji_usage_enabled: tomoriState.config.emoji_usage_enabled,
       sticker_usage_enabled: tomoriState.config.sticker_usage_enabled,
       web_search_enabled: tomoriState.config.web_search_enabled,
       self_teaching_enabled: tomoriState.config.self_teaching_enabled,
@@ -60,6 +68,9 @@ async function buildVerbatimToolDefinitionsJson(tomoriState: TomoriState): Promi
       user_blocking_enabled: tomoriState.config.user_blocking_enabled,
       user_info_updates_enabled: tomoriState.config.user_info_updates_enabled,
       thread_creation_enabled: tomoriState.config.thread_creation_enabled,
+      conditioning_interactions_enabled: tomoriState.config.conditioning_interactions_enabled,
+      dice_rolling_enabled: tomoriState.config.dice_rolling_enabled,
+      danbooru_enabled: tomoriState.config.danbooru_enabled,
     },
   };
 
@@ -84,6 +95,7 @@ async function buildVerbatimToolDefinitionsJson(tomoriState: TomoriState): Promi
  */
 export async function buildVerbatimToolDefinitionsContextItem(params: {
   tomoriState: TomoriState | null | undefined;
+  userId?: number;
 }): Promise<StructuredContextItem | null> {
   try {
     const { tomoriState } = params;
@@ -91,7 +103,7 @@ export async function buildVerbatimToolDefinitionsContextItem(params: {
       return null;
     }
 
-    const tools = await buildVerbatimToolDefinitionsJson(tomoriState);
+    const tools = await buildVerbatimToolDefinitionsJson(tomoriState, params.userId);
     if (tools.length === 0) {
       return null;
     }

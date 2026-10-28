@@ -45,6 +45,7 @@ import {
   buildStateControlRow,
   withLinePrefix,
 } from "@/utils/discord/ui/panel";
+import { resolveRangeSelection } from "@/utils/discord/interactions/panelController";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { buildModelRoutingControl, buildProviderPageEntries } from "@/utils/discord/ui/modelRoutingControls";
 import { buildProviderSelectWindow } from "@/utils/discord/ui/providerSelectWindow";
@@ -125,8 +126,8 @@ export interface PersonalConfigModelDisplayInfo {
   parametersProviders: string[];
   selectedParametersConfig?: UserSavedProviderConfigRow | null;
   fallbacksProviders: string[];
-  selectedFallbacksConfig?: UserSavedProviderConfigRow | null;
-  primaryModelName?: string | null;
+  /** The provider whose models the Fallbacks select expands; the slots themselves span providers. */
+  fallbacksProvider: string | null;
   fallbackSlots: PersonalConfigFallbackDisplaySlot[];
   randomizerEnabled: boolean;
   canEnableRandomizer: boolean;
@@ -138,6 +139,8 @@ export interface PersonalConfigSpotlightDisplayInfo {
 }
 
 export interface PersonalConfigPanelRenderInput {
+  identityMode?: boolean;
+  identityLabel?: string;
   locale: string;
   category: PersonalConfigCategory;
   page: PersonalConfigPage;
@@ -146,6 +149,7 @@ export interface PersonalConfigPanelRenderInput {
   personas: TomoriState[];
   guildId: string | null;
   selectedLineageId?: number;
+  personaRangeIndex?: number;
   selectedPersonaAvatarUrl?: string | null;
   userAvatarUrl?: string | null;
   personaNamingPreference?: UserPersonaNamingPreference | null;
@@ -156,7 +160,6 @@ export interface PersonalConfigPanelRenderInput {
   savedProviders?: UserSavedProviderConfigRow[];
   selectedCapability?: PersonalConfigManagedCapability;
   selectedParametersProvider?: string;
-  selectedFallbacksProvider?: string;
   selectedModelProvider?: string;
   providerStart?: number;
   modelTotalCount?: number;
@@ -799,11 +802,15 @@ export function buildPersonalConfigPanelPayload(input: PersonalConfigPanelRender
     ],
   };
 
-  const components: ComponentInContainerData[] = [
-    categoryButtons,
-    { type: ComponentType.Separator, divider: true, spacing: 1 },
-    pageSelectorRow,
-  ];
+  const components: ComponentInContainerData[] = input.identityMode
+    ? [
+        {
+          type: ComponentType.TextDisplay,
+          content: `### ${escapeDiscordMarkdown(input.identityLabel ?? resolvedNickname)}`,
+        },
+        pageSelectorRow,
+      ]
+    : [categoryButtons, { type: ComponentType.Separator, divider: true, spacing: 1 }, pageSelectorRow];
 
   if (readStatus === "unavailable") {
     components.push(
@@ -856,39 +863,44 @@ ${localizer(locale, "commands.personal.config.preferences_description")}`,
           },
           input.userAvatarUrl,
         ),
-        {
-          type: ComponentType.TextDisplay,
-          content: `**${localizer(locale, "commands.personal.config.interface_section")}**
+      );
+      if (!input.identityMode)
+        components.push(
+          {
+            type: ComponentType.TextDisplay,
+            content: `**${localizer(locale, "commands.personal.config.interface_section")}**
 ${localizer(locale, "commands.personal.config.interface_description")}
 > ${localizer(locale, "commands.personal.config.language_label")}: ${languageLabel}
 > ${localizer(locale, "commands.personal.config.timezone_label")}: ${timezoneLabel}`,
-        },
-        {
-          type: ComponentType.ActionRow,
-          components: [
-            {
-              type: ComponentType.Button,
-              style: ButtonStyle.Secondary,
-              customId: buildPersonalConfigRouteId({ action: "language-open", locale }),
-              label: localizer(locale, "commands.personal.config.change_language_button"),
-              disabled: writesDisabled,
-            },
-            {
-              type: ComponentType.Button,
-              style: ButtonStyle.Secondary,
-              customId: buildPersonalConfigRouteId({ action: "timezone-open", locale }),
-              label: localizer(locale, "commands.personal.config.set_timezone_button"),
-              disabled: writesDisabled,
-            },
-            {
-              type: ComponentType.Button,
-              style: ButtonStyle.Secondary,
-              customId: buildPersonalConfigRouteId({ action: "timezone-server", locale }),
-              label: localizer(locale, "commands.personal.config.use_server_timezone_button"),
-              disabled: writesDisabled || user.timezone_offset === null,
-            },
-          ],
-        },
+          },
+          {
+            type: ComponentType.ActionRow,
+            components: [
+              {
+                type: ComponentType.Button,
+                style: ButtonStyle.Secondary,
+                customId: buildPersonalConfigRouteId({ action: "language-open", locale }),
+                label: localizer(locale, "commands.personal.config.change_language_button"),
+                disabled: writesDisabled,
+              },
+              {
+                type: ComponentType.Button,
+                style: ButtonStyle.Secondary,
+                customId: buildPersonalConfigRouteId({ action: "timezone-open", locale }),
+                label: localizer(locale, "commands.personal.config.set_timezone_button"),
+                disabled: writesDisabled,
+              },
+              {
+                type: ComponentType.Button,
+                style: ButtonStyle.Secondary,
+                customId: buildPersonalConfigRouteId({ action: "timezone-server", locale }),
+                label: localizer(locale, "commands.personal.config.use_server_timezone_button"),
+                disabled: writesDisabled || user.timezone_offset === null,
+              },
+            ],
+          },
+        );
+      components.push(
         {
           type: ComponentType.TextDisplay,
           content: `**${localizer(locale, "commands.personal.config.naming_section")}**
@@ -959,8 +971,14 @@ ${localizer(locale, "commands.personal.config.persona_naming_description")}`,
         }
 
         const lineageEntries = [...personasByLineage.entries()];
-        const visibleLineages = lineageEntries.slice(0, PERSONA_SELECT_MAX_OPTIONS);
-        const hiddenLineageCount = lineageEntries.length - visibleLineages.length;
+        const currentLineagePosition = lineageEntries.findIndex(([lineage]) => lineage === currentLineage);
+        const personaRangeSelection = resolveRangeSelection(
+          lineageEntries,
+          input.personaRangeIndex ??
+            (currentLineagePosition >= 0 ? Math.floor(currentLineagePosition / PERSONA_SELECT_MAX_OPTIONS) : 0),
+          PERSONA_SELECT_MAX_OPTIONS,
+        );
+        const visibleLineages = personaRangeSelection.visibleItems;
 
         const personaOptions: SelectMenuComponentOptionData[] = visibleLineages.map(([lineage, sharing]) => {
           const first = sharing[0];
@@ -1004,13 +1022,25 @@ ${localizer(locale, "commands.personal.config.persona_naming_description")}`,
           ],
         });
 
-        if (hiddenLineageCount > 0) {
-          components.push({
-            type: ComponentType.TextDisplay,
-            content: `-# ${localizer(locale, "commands.personal.config.persona_select_truncated", {
-              count: hiddenLineageCount,
-            })}`,
-          });
+        const personaPaginationRow = buildPaginationRow({
+          locale,
+          rangeIndex: personaRangeSelection.rangeIndex,
+          rangeCount: personaRangeSelection.rangeCount,
+          namespace: PERSONAL_CONFIG_ROUTE_NAMESPACE,
+          version: PERSONAL_CONFIG_ROUTE_VERSION,
+          disabled: writesDisabled,
+          buildSegments: {
+            page: (targetPage) =>
+              buildPersonalConfigRouteSegments({
+                action: "persona-page",
+                locale,
+                lineageId: currentLineage,
+                chooserPage: targetPage,
+              }),
+          },
+        });
+        if (personaPaginationRow) {
+          components.push(personaPaginationRow);
         }
 
         components.push(personaHeadingSection);
@@ -1191,6 +1221,38 @@ ${localizer(locale, "commands.personal.config.stm_count_label", { count: stmCoun
             : localizer(locale, "commands.personal.config.crossserver_stm_off"),
         ),
       },
+      {
+        type: ComponentType.TextDisplay,
+        content: `**${localizer(locale, "commands.personal.config.ping_user_section_title")}**`,
+      },
+      buildStateControlRow(
+        [
+          {
+            value: false,
+            label: localizer(locale, "commands.personal.config.mode_off"),
+            customId: buildPersonalConfigRouteId({ action: "ping-user-set", locale, enabled: false }),
+          },
+          {
+            value: true,
+            label: localizer(locale, "commands.personal.config.mode_on"),
+            customId: buildPersonalConfigRouteId({ action: "ping-user-set", locale, enabled: true }),
+          },
+        ],
+        !user.natural_nudge_opt_out,
+        writesDisabled,
+      ),
+      {
+        type: ComponentType.TextDisplay,
+        content: withLinePrefix(
+          "> ",
+          localizer(
+            locale,
+            user.natural_nudge_opt_out
+              ? "commands.personal.config.ping_user_off"
+              : "commands.personal.config.ping_user_on",
+          ),
+        ),
+      },
     );
   } else if (category === "models") {
     if (page === "switch") {
@@ -1239,6 +1301,7 @@ ${localizer(locale, "commands.personal.config.models_description")}`,
 
         components.push(
           buildModelRoutingControl({
+            locale,
             capabilityLabel,
             activeModelName: row?.activeModelName ?? null,
             activeProvider: row?.storedProvider ?? null,
@@ -1328,7 +1391,7 @@ ${localizer(locale, "commands.personal.config.parameters_description")}`,
           ...buildProviderParameterBlock({
             providerOptions: parameterProviders.map((provider) => ({
               value: encodeProviderParam(provider),
-              label: getProviderDisplayName(provider),
+              label: getProviderDisplayName(provider, locale),
               default: provider.toLowerCase() === selectedProvider.toLowerCase(),
             })),
             copy: {
@@ -1348,7 +1411,7 @@ ${localizer(locale, "commands.personal.config.parameters_description")}`,
               editGenerationLabel: localizer(locale, "commands.personal.config.edit_params_2_button"),
             },
             values: {
-              providerDisplayName: getProviderDisplayName(selectedProvider),
+              providerDisplayName: getProviderDisplayName(selectedProvider, locale),
               temperature: tempStr,
               minP: minPStr,
               topP: topPStr,
@@ -1376,10 +1439,9 @@ ${localizer(locale, "commands.personal.config.parameters_description")}`,
         );
       }
     } else if (page === "fallbacks") {
-      const selectedProvider = input.selectedFallbacksProvider ?? input.modelDisplayInfo?.fallbacksProviders[0] ?? "";
-      const config = input.modelDisplayInfo?.selectedFallbacksConfig;
+      const selectedProvider = input.modelDisplayInfo?.fallbacksProvider ?? "";
 
-      if (!selectedProvider || !config) {
+      if (!selectedProvider || (input.modelDisplayInfo?.fallbacksProviders.length ?? 0) === 0) {
         components.push({
           type: ComponentType.TextDisplay,
           content: `### ${localizer(locale, "commands.personal.config.fallbacks_title")}
@@ -1450,7 +1512,7 @@ ${localizer(locale, "commands.personal.config.fallbacks_description")}`,
                 placeholder: safeSelectOptionText(
                   fallbackPageCount > 0
                     ? localizer(locale, "commands.personal.config.fallbacks_page_placeholder", {
-                        provider: getProviderDisplayName(selectedProvider),
+                        provider: getProviderDisplayName(selectedProvider, locale),
                       })
                     : localizer(locale, "commands.personal.config.fallbacks_provider_select_placeholder"),
                   100,

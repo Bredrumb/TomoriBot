@@ -20,11 +20,13 @@ function isEventFunction(value: unknown): value is EventFunction {
 
 const eventFolderMap: Record<string, string> = {
   guildCreate: "guildCreate",
+  guildAvailable: "guildAvailable",
   guildMemberAdd: "guildMemberAdd",
   guildMemberUpdate: "guildMemberUpdate",
   guildMemberRemove: "guildMemberRemove",
   interactionCreate: "interactionCreate",
   messageCreate: "messageCreate",
+  messageDelete: "messageDelete",
   clientReady: "clientReady",
   emojiCreate: "guildEmojisUpdate",
   emojiDelete: "guildEmojisUpdate",

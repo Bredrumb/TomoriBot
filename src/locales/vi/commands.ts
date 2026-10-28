@@ -26,10 +26,12 @@ import optionalKey from "./commands/optional-key";
 import server from "./commands/server";
 import personal from "./commands/personal";
 import scheduledTask from "./commands/scheduled-task";
+import nudgeStudio from "./commands/nudge-studio";
 import memory from "./commands/memory";
 import teach from "./commands/teach";
 import forget from "./commands/forget";
 import generate from "./commands/generate";
+import booru from "./commands/booru";
 import model from "./commands/model";
 import mcps from "./commands/mcps";
 import capabilities from "./commands/capabilities";
@@ -37,6 +39,7 @@ import provider from "./commands/provider";
 import update from "./commands/update";
 import stats from "./commands/stats";
 import ping from "./commands/ping";
+import roll from "./commands/roll";
 import comment from "./commands/comment";
 import kill from "./commands/kill";
 import refresh from "./commands/refresh";
@@ -92,10 +95,12 @@ export default {
     ...server,
     ...personal,
     ...scheduledTask,
+    ...nudgeStudio,
     ...memory,
     ...teach,
     ...forget,
     ...generate,
+    ...booru,
     ...model,
     ...mcps,
     ...capabilities,
@@ -103,6 +108,7 @@ export default {
     ...update,
     ...stats,
     ...ping,
+    ...roll,
     ...comment,
     ...kill,
     ...refresh,

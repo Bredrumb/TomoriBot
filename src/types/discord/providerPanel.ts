@@ -25,6 +25,7 @@ export interface ProviderPanelModel {
   decisionSettings?: { inputTokenLimit: number };
   imageSettings?: ImageEndpointSupports;
   speechSettings?: SpeechEndpointSettings;
+  speechActiveModes?: ("design" | "clone")[];
 }
 
 export interface ProviderPanelCapabilitySection {
@@ -40,6 +41,8 @@ interface ProviderPanelEntryBase {
   id: string;
   displayName: string;
   savedAt: Date | null;
+  copyKey?: string;
+  optionData?: unknown;
 }
 
 interface CuratedProviderPanelEntry extends ProviderPanelEntryBase {
@@ -69,8 +72,15 @@ interface BraveProviderPanelEntry extends ProviderPanelEntryBase {
 
 export type ProviderPanelEntry = CuratedProviderPanelEntry | EndpointProviderPanelEntry | BraveProviderPanelEntry;
 
+export interface ProviderPanelOptionAction {
+  value: string;
+  labelKey: string;
+  descriptionKey: string;
+}
+
 export interface ProviderPanelScopeData {
   readStatus: PanelReadStatus;
   entries: ProviderPanelEntry[];
   initialEntryId: string | null;
+  optionActions?: ProviderPanelOptionAction[];
 }

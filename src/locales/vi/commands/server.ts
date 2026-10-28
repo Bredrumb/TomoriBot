@@ -1,7 +1,7 @@
 export default {
   server: {
     timezone: {
-      value_description: `Chênh lệch múi giờ UTC theo giờ (mặc định: 0). Ví dụ: 8, -5, 0, 9.`,
+      value_description: `Chênh lệch múi giờ UTC theo giờ (mặc định: 0). Ví dụ: 8, -5, 0, 5:30.`,
     },
     stm: {
       parameters: {
@@ -21,7 +21,6 @@ export default {
         slot_4_label: `Danh mục 4`,
         slot_5_label: `Danh mục 5`,
         slot_instructions: `Ô = "Nhãn: Mô tả" (vd: "Mục tiêu: nhiệm vụ nhóm"). Bỏ trống để bỏ qua; xóa hết để đặt lại.`,
-        slot_placeholder: `Nhãn: Mô tả`,
       },
     },
     "crosschannel-blocklist": {
@@ -50,7 +49,7 @@ export default {
       attributelist_desc: `Thêm/xóa thuộc tính tính cách`,
       sampledialogues_desc: `Thêm/xóa các cặp hội thoại mẫu`,
       promptsnapshot_desc: `Xem toàn bộ prompt từ /context và /tool prompt snapshot`,
-      select_placeholder: `Chọn những việc thành viên có thể làm với mình`,
+      select_placeholder: `Chọn việc thành viên có thể làm với mình`,
       select_embed_title: `Quyền thành viên máy chủ`,
       select_embed_description: `Chọn các quyền cho thành viên không phải quản trị viên. Đã chọn = cho phép.`,
     },

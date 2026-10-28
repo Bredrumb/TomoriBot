@@ -31,6 +31,11 @@ export const COMPONENTS_V2_PRODUCER_MANIFEST: readonly ProducerManifestEntry[] =
     coverage: { kind: "suite", suites: ["tests/unit/discord/expressionsPanel.test.ts"] },
   },
   {
+    modulePath: "src/modules/natural-nudges/discord/studioPanel.ts",
+    builderName: "buildNudgeStudioPayload",
+    coverage: { kind: "suite", suites: ["tests/unit/discord/nudgeStudioPanel.test.ts"] },
+  },
+  {
     modulePath: "src/utils/discord/ui/configPanel.ts",
     builderName: "buildConfigPanelPayload",
     coverage: {
@@ -121,6 +126,11 @@ export const COMPONENTS_V2_PRODUCER_MANIFEST: readonly ProducerManifestEntry[] =
       kind: "delivery",
       note: "Payloads are validated at construction by validateAndFallbackPanelPayload; the notice builders and delivery payloads are private, so no exported payload builder is available to fixture.",
     },
+  },
+  {
+    modulePath: "src/utils/discord/danbooruGalleryMessage.ts",
+    reason: "One-shot Danbooru image gallery message",
+    coverage: { kind: "suite", suites: ["tests/unit/discord/componentsV2DeclaredProducerSmoke.test.ts"] },
   },
   {
     modulePath: "src/utils/discord/generatedImageMessage.ts",

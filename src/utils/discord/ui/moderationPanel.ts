@@ -1,3 +1,4 @@
+import { getBlockTypeLabel } from "@/tools/functionCalls/userBlockToolShared";
 import {
   ButtonStyle,
   ChannelType,
@@ -53,6 +54,7 @@ import type {
 } from "@/utils/moderation/moderationOperations";
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
 import { buildTextPreview, textPreviewFooterKey, textPreviewFooterVars } from "@/utils/text/textPreview";
+import { DISCORD_BUTTON_LABEL_MAX, DISCORD_SELECT_VALUES_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import { localizer } from "@/utils/text/localizer";
 
 export interface ModerationPanelRenderInput {
@@ -72,22 +74,14 @@ export interface ModerationPanelPayload {
   flags: MessageFlags.IsComponentsV2;
 }
 
-function getCooldownTypeSuffix(cooldownType: CooldownType): string {
-  switch (cooldownType) {
-    case CooldownType.OFF:
-      return "off";
-    case CooldownType.PER_USER:
-      return "per_user";
-    case CooldownType.PER_CHANNEL:
-      return "per_channel";
-    case CooldownType.SERVER_WIDE:
-      return "server_wide";
-    case CooldownType.STRICT_SERVER_WIDE:
-      return "strict_server_wide";
-    default:
-      return "off";
-  }
-}
+const COOLDOWN_TYPE_KEYS: Record<CooldownType, string> = {
+  [CooldownType.COMMAND_CATEGORY]: "commands.config.cooldown.type.choice_off",
+  [CooldownType.OFF]: "commands.config.cooldown.type.choice_off",
+  [CooldownType.PER_USER]: "commands.config.cooldown.type.choice_per_user",
+  [CooldownType.PER_CHANNEL]: "commands.config.cooldown.type.choice_per_channel",
+  [CooldownType.SERVER_WIDE]: "commands.config.cooldown.type.choice_server_wide",
+  [CooldownType.STRICT_SERVER_WIDE]: "commands.config.cooldown.type.choice_strict_server_wide",
+};
 
 function formatChannelCooldown(
   locale: string,
@@ -97,7 +91,7 @@ function formatChannelCooldown(
   if (cooldownType === null || cooldownLength === null) {
     return localizer(locale, "commands.moderation.cooldown_inherited");
   }
-  const typeKey = `commands.config.cooldown.type.choice_${getCooldownTypeSuffix(cooldownType)}`;
+  const typeKey = COOLDOWN_TYPE_KEYS[cooldownType];
   const typeName = localizer(locale, typeKey);
   if (cooldownLength === 0) {
     return localizer(locale, "commands.moderation.cooldown_instant", { type: typeName });
@@ -247,7 +241,7 @@ function buildRemoveButton(
     type: ComponentType.Button,
     style: ButtonStyle.Danger,
     customId: buildModerationRouteId({ action: REMOVAL_OPEN_ACTIONS[list], locale, rangeIndex }),
-    label: localizer(locale, labelKey),
+    label: safeSelectOptionText(localizer(locale, labelKey), DISCORD_BUTTON_LABEL_MAX),
     disabled: data.readStatus !== "fresh" || listModerationRemovalValues(data, list).length === 0,
   };
 }
@@ -438,7 +432,7 @@ export function buildModerationPanelPayload(input: ModerationPanelRenderInput): 
           (b) => b.persona_id === target.personaId && b.user_disc_id === target.userId,
         );
         if (block) {
-          const blockTypeLabel = localizer(locale, `tools.user_block.type_${block.block_type}`);
+          const blockTypeLabel = getBlockTypeLabel(locale, block.block_type);
           components.push(
             {
               type: ComponentType.TextDisplay,
@@ -559,8 +553,7 @@ export function buildModerationPanelPayload(input: ModerationPanelRenderInput): 
       });
       if (visiblePersonaBlocks.length > 0) {
         const lines = visiblePersonaBlocks.map((block) => {
-          const blockTypeKey = `tools.user_block.type_${block.block_type}`;
-          const typeLabel = localizer(locale, blockTypeKey);
+          const typeLabel = getBlockTypeLabel(locale, block.block_type);
           return `> <@${block.user_disc_id}> for **${renderModerationName(locale, block.persona_name)}** (${typeLabel})`;
         });
         components.push({
@@ -960,7 +953,7 @@ export function buildModerationPanelPayload(input: ModerationPanelRenderInput): 
           type: ComponentType.Button,
           style: ButtonStyle.Secondary,
           customId: buildModerationRouteId({ action: "quota-edit-open", locale, quotaType: section.type }),
-          label: localizer(locale, section.buttonKey),
+          label: safeSelectOptionText(localizer(locale, section.buttonKey), DISCORD_BUTTON_LABEL_MAX),
           disabled: data.readStatus !== "fresh",
         }),
       ),
@@ -1081,7 +1074,7 @@ export function buildWhitelistChannelAddModal(
           custom_id: buildWhitelistChannelAddModalFieldId(nonce, "channel"),
           channel_types: [ChannelType.GuildText],
           min_values: 1,
-          max_values: 1,
+          max_values: DISCORD_SELECT_VALUES_MAX,
           required: true,
         },
       },
@@ -1266,7 +1259,7 @@ export function buildPersonaChannelAddModal(
           custom_id: buildPersonaChannelAddModalFieldId(nonce, "channel"),
           channel_types: [ChannelType.GuildText],
           min_values: 1,
-          max_values: 1,
+          max_values: DISCORD_SELECT_VALUES_MAX,
           required: true,
         },
       },

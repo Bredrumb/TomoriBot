@@ -1,14 +1,22 @@
+import {
+  createProviderUsageRecorder,
+  findProviderRequestDeniedError,
+  withProviderUsageContext,
+  type ProviderRequestDeniedError,
+} from "@/utils/provider/providerUsage";
+import { loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
+import { loadProviderModelChoices } from "@/utils/provider/modelCatalog";
+import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
+import { setHostedSpeechSelection, setSpeechEndpointSelection } from "@/utils/db/repositories/SpeechRepository";
+import { supportsSpeechMode, type VoiceSourceMode } from "@/utils/speech/voiceSourceCapabilities";
 import type {
   CustomEndpointRow,
-  EmbeddingModelRow,
   FallbackModelRef,
-  DiffusionModelRow,
   LlmRow,
   NaiPresetRow,
   SavedProviderConfigRow,
   SavedProviderConfigUpsert,
   TomoriState,
-  VideoGenerationModelRow,
 } from "@/types/db/schema";
 import { DEFAULT_THINKING_LEVEL, isThinkingLevelValue, type ThinkingLevelValue } from "@/constants/thinkingLevels";
 import {
@@ -44,14 +52,26 @@ import { NAI_IMAGE_NOISE_SCHEDULES, NAI_IMAGE_SAMPLERS } from "@/utils/image/nai
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { log } from "@/utils/misc/logger";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
-import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
-import { resolveDescription } from "@/utils/text/localizer";
+import { buildCustomProviderName, isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import {
   buildFallbackModelPersistence,
   getFallbackModelRefKey,
   getPrimaryFallbackRefKeys,
 } from "@/utils/provider/fallbackModelIdentity";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
+import {
+  applyProviderModelSelection,
+  writeProviderSpeechSelection,
+  claimProviderModelSelection,
+  clearProviderModelSelection,
+  findProviderOption,
+  findProviderOptionByActiveProvider,
+  providerOptionCapabilityForModelView,
+  providerOptionOffersModelViewCapability,
+  type ProviderOptionCapability,
+  type ProviderOptionModelViewCapability,
+  type ProviderOptionScope,
+} from "@/utils/provider/providerOptionRegistry";
 import { getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 import { loadSavedProvidersForCapability, type SavedProviderCapability } from "@/utils/provider/savedProviderConfig";
 import {
@@ -82,14 +102,35 @@ export function resolveNaiPresetTarget(state: TomoriState): "kayra" | "erato" | 
 }
 
 /** Capability slot to the saved-provider capability whose eligibility list backs it. */
-const SAVED_PROVIDER_CAPABILITY: Record<ConfigCatalogModelCapability, SavedProviderCapability> = {
+const SAVED_PROVIDER_CAPABILITY: Record<Exclude<ConfigCatalogModelCapability, "decision">, SavedProviderCapability> = {
   text: "text",
   vision: "vision",
   embedding: "embedding",
   image: "image",
   "nai-image": "image",
   video: "video",
+  "tts-design": "speech_design",
+  "tts-clone": "speech_clone",
 };
+
+type ConfigSpeechCapability = Extract<ConfigCatalogModelCapability, "tts-design" | "tts-clone">;
+
+function isConfigSpeechCapability(capability: ConfigModelCapability): capability is ConfigSpeechCapability {
+  return capability === "tts-design" || capability === "tts-clone";
+}
+
+function speechModeForCapability(capability: ConfigSpeechCapability): VoiceSourceMode {
+  return capability === "tts-design" ? "design" : "clone";
+}
+
+async function loadServerSpeechEndpoints(serverId: number, mode: VoiceSourceMode): Promise<CustomEndpointRow[]> {
+  return (await llmProviderRepo.loadCustomEndpointsForServer(serverId)).filter(
+    (endpoint) =>
+      endpoint.capability === "speech" &&
+      endpoint.custom_endpoint_id !== undefined &&
+      supportsSpeechMode(endpoint, mode),
+  );
+}
 
 /**
  * Splits the single `image` eligibility list across the panel's two image slots.
@@ -104,25 +145,89 @@ export function isNaiPipelineProvider(provider: string): boolean {
   return getStaticProviderInfo(provider)?.featureSupport.imageGeneration === "nai-pipeline";
 }
 
+function serverOptionScope(state: TomoriState): ProviderOptionScope {
+  return { kind: "server", ownerId: state.server_id, state };
+}
+
+function optionCapabilityFor(capability: ConfigCatalogModelCapability): ProviderOptionCapability | null {
+  return providerOptionCapabilityForModelView(capability as ProviderOptionModelViewCapability);
+}
+
+async function filterEligibleProviderOptions(
+  serverId: number,
+  rows: readonly SavedProviderConfigRow[],
+): Promise<SavedProviderConfigRow[]> {
+  const eligible: SavedProviderConfigRow[] = [];
+  for (const row of rows) {
+    const option = findProviderOption(row.provider);
+    if (option && !(await option.availability({ kind: "server", ownerId: serverId })).eligible) continue;
+    eligible.push(row);
+  }
+  return eligible;
+}
+
+function savedProviderOwnsSlot(
+  state: TomoriState,
+  provider: string,
+  capability: ConfigCatalogModelCapability,
+): boolean {
+  const canonical = optionCapabilityFor(capability);
+  if (!canonical) return true;
+  const scope = serverOptionScope(state);
+  const option = findProviderOption(provider);
+  if (option) return option.selection.owns?.(scope, canonical) ?? false;
+  return findProviderOptionByActiveProvider(provider, scope, canonical) === undefined;
+}
+
 export function filterProvidersForCapability(
   capability: ConfigCatalogModelCapability,
   providers: readonly SavedProviderConfigRow[],
 ): SavedProviderConfigRow[] {
-  if (capability === "image") return providers.filter((row) => !isNaiPipelineProvider(row.provider));
-  if (capability === "nai-image") return providers.filter((row) => isNaiPipelineProvider(row.provider));
-  return [...providers];
+  const offered = providers.filter((row) => {
+    const option = findProviderOption(row.provider);
+    return !option || providerOptionOffersModelViewCapability(option, capability as ProviderOptionModelViewCapability);
+  });
+  if (capability === "image") return offered.filter((row) => !isNaiPipelineProvider(row.provider));
+  if (capability === "nai-image") return offered.filter((row) => isNaiPipelineProvider(row.provider));
+  return offered;
 }
 
-export async function loadConfigModelProviders(
+async function loadEligibleSavedProviders(
   serverId: number,
-  capability: ConfigModelCapability,
+  capability: Exclude<ConfigCatalogModelCapability, ConfigSpeechCapability>,
 ): Promise<SavedProviderConfigRow[]> {
-  if (!isConfigCatalogModelCapability(capability)) {
-    // Speech and transcription are custom endpoint activations, not saved model providers.
-    return [];
-  }
+  if (capability === "decision") return loadDecisionModelProviders(serverId);
   const providers = await loadSavedProvidersForCapability(serverId, SAVED_PROVIDER_CAPABILITY[capability]);
-  return filterProvidersForCapability(capability, providers);
+  return filterProvidersForCapability(capability, await filterEligibleProviderOptions(serverId, providers));
+}
+
+export async function loadConfigModelProviders(serverId: number, capability: ConfigModelCapability): Promise<string[]> {
+  if (!isConfigCatalogModelCapability(capability)) return [];
+  if (!isConfigSpeechCapability(capability)) {
+    return (await loadEligibleSavedProviders(serverId, capability)).map((row) => row.provider);
+  }
+  // Speech connections are read from their endpoints because only an endpoint records which voice
+  // modes its connection serves.
+  const [hosted, endpoints] = await Promise.all([
+    loadSavedProvidersForCapability(serverId, SAVED_PROVIDER_CAPABILITY[capability]),
+    loadServerSpeechEndpoints(serverId, speechModeForCapability(capability)),
+  ]);
+  return [
+    ...(await filterEligibleProviderOptions(serverId, hosted)).map((row) => row.provider),
+    ...new Set(endpoints.map((endpoint) => buildCustomProviderName(endpoint.connection_id))),
+  ];
+}
+
+/** Decision models are not a saved-provider capability, so their providers come from owned registrations. */
+async function loadDecisionModelProviders(serverId: number): Promise<SavedProviderConfigRow[]> {
+  const options = await loadDecisionModelsForScope({ kind: "server", ownerId: serverId });
+  const owned = new Set(
+    options.map(({ model }) => findProviderOption(model.provider)?.catalogProvider ?? model.provider),
+  );
+  const rows = await llmProviderRepo.loadSavedProviderConfigs(serverId);
+  return (await filterEligibleProviderOptions(serverId, rows)).filter((row) =>
+    owned.has(findProviderOption(row.provider)?.catalogProvider ?? row.provider),
+  );
 }
 
 /** One selectable model in a capability slot, flattened so the renderer needs no per-slot branch. */
@@ -133,6 +238,39 @@ export interface ConfigModelChoice {
   description: string | null;
 }
 
+/** Text models one provider offers that can answer with structured output, grouped by provider. */
+export interface StructuredOutputModelGroup {
+  provider: string;
+  models: ConfigModelChoice[];
+}
+
+/**
+ * Server text models able to return structured output: the provider must support it (every
+ * provider but NovelAI) and so must the model. Out-of-turn structured calls choose from these.
+ */
+export async function loadStructuredOutputModelGroups(
+  serverId: number,
+  locale: string,
+): Promise<StructuredOutputModelGroup[]> {
+  const providers = await loadConfigModelProviders(serverId, "text");
+  const groups = await Promise.all(
+    providers.map(async (provider) => {
+      const catalogProvider = findProviderOption(provider)?.catalogProvider ?? provider;
+      if (!isCustomProvider(provider) && !getStaticProviderInfo(catalogProvider)?.featureSupport.structuredOutput)
+        return { provider, models: [] };
+      const models = await loadConfigModelChoices(
+        serverId,
+        "text",
+        provider,
+        locale,
+        (model) => model.supports_structoutput,
+      );
+      return { provider, models };
+    }),
+  );
+  return groups.filter((group) => group.models.length > 0);
+}
+
 export async function loadConfigModelChoices(
   serverId: number,
   capability: ConfigCatalogModelCapability,
@@ -140,68 +278,14 @@ export async function loadConfigModelChoices(
   locale = "en-US",
   textModelFilter?: (model: LlmRow) => boolean,
 ): Promise<ConfigModelChoice[]> {
-  const owner = { kind: "server", ownerId: serverId } as const;
-  switch (capability) {
-    case "text":
-    case "vision": {
-      const models = (await llmModelRepo.loadAvailableModelsForProvider(provider, false, owner)) ?? [];
-      const eligible = capability === "vision" ? models.filter((model) => model.sees_images) : models;
-      return eligible
-        .filter((model) => !textModelFilter || textModelFilter(model))
-        .filter((model): model is LlmRow & { llm_id: number } => model.llm_id !== undefined)
-        .map((model) => ({
-          id: model.llm_id,
-          name: model.llm_codename,
-          description: resolveDescription(model.descriptions, locale),
-        }));
-    }
-    case "embedding": {
-      const models = (await llmModelRepo.loadAvailableEmbeddingModels(provider, false, owner)) ?? [];
-      return models
-        .filter(
-          (model): model is EmbeddingModelRow & { embedding_model_id: number } =>
-            model.embedding_model_id !== undefined && model.embedding_model_id !== null,
-        )
-        .map((model) => ({
-          id: model.embedding_model_id,
-          name: model.codename,
-          description: resolveDescription(model.descriptions, locale),
-        }));
-    }
-    case "image":
-    case "nai-image": {
-      const models = (await llmModelRepo.loadAvailableDiffusionModels(provider, false, owner)) ?? [];
-      return models
-        .filter(
-          (model): model is DiffusionModelRow & { diffusion_model_id: number } =>
-            model.diffusion_model_id !== undefined && model.diffusion_model_id !== null,
-        )
-        .map((model) => ({
-          id: model.diffusion_model_id,
-          name: model.codename,
-          description: resolveDescription(model.descriptions, locale),
-        }));
-    }
-    case "video": {
-      const models = (await llmModelRepo.loadAvailableVideoGenerationModels(provider, false, owner)) ?? [];
-      return models
-        .filter(
-          (model): model is VideoGenerationModelRow & { video_model_id: number } =>
-            model.video_model_id !== undefined && model.video_model_id !== null,
-        )
-        .map((model) => ({
-          id: model.video_model_id,
-          name: model.codename,
-          description: resolveDescription(model.descriptions, locale),
-        }));
-    }
-  }
+  return loadProviderModelChoices({ kind: "server", ownerId: serverId }, capability, provider, locale, textModelFilter);
 }
 
 type ConfigModelSetResult =
-  | { status: "success"; modelName: string; reembedded: boolean }
+  | { status: "success"; modelName: string; reembedded: boolean; sourceChanged?: boolean }
   | { status: "already-selected"; modelName: string }
   | { status: "openrouter-moved" }
+  | { status: "provider-denied"; denied: ProviderRequestDeniedError }
   | { status: "not-found" | "no-models" | "write-failed" };
 
 type ConfigModelClearResult =
@@ -294,12 +378,9 @@ export interface ConfigModelOperations {
     serverDiscId: string;
     capability: ConfigModelCapability;
   }): Promise<ConfigModelClearResult>;
-  activateWorkspaceEndpoint(input: {
+  activateTranscriptionEndpoint(input: {
     tomoriState: TomoriState;
     serverDiscId: string;
-    ownerId?: number;
-    scopeKind?: "server" | "personal";
-    capability: "tts" | "stt";
     customEndpointId: number;
   }): Promise<ActivateWorkspaceEndpointResult>;
   setProviderParameters(input: {
@@ -366,7 +447,12 @@ export interface ConfigModelOperations {
   }): Promise<ConfigNaiParametersResult>;
 }
 
-export function currentModelIdForCapability(state: TomoriState, capability: ConfigModelCapability): number | null {
+/** Speech slots hold either a hosted model or a custom endpoint, so `provider` picks which id is meant. */
+export function currentModelIdForCapability(
+  state: TomoriState,
+  capability: ConfigModelCapability,
+  provider?: string,
+): number | null {
   switch (capability) {
     case "text":
       return state.config.llm_id ?? null;
@@ -374,17 +460,86 @@ export function currentModelIdForCapability(state: TomoriState, capability: Conf
       return state.config.vision_llm_id ?? null;
     case "embedding":
       return state.config.embedding_model_id ?? null;
+    case "decision":
+      return state.config.decision_model_id;
     case "image":
       return state.config.diffusion_model_id ?? null;
     case "nai-image":
       return state.config.nai_diffusion_model_id ?? null;
     case "video":
       return state.config.video_model_id ?? null;
-    case "tts":
+    case "tts-design":
+      return provider && isCustomProvider(provider)
+        ? state.config.speech_design_endpoint_id
+        : state.config.speech_design_model_id;
+    case "tts-clone":
+      return provider && isCustomProvider(provider)
+        ? state.config.speech_clone_endpoint_id
+        : state.config.speech_clone_model_id;
     case "stt":
       // Endpoint activation identity lives in custom_endpoints, not in a model id column.
       return null;
   }
+}
+
+async function setServerSpeechTarget(
+  state: TomoriState,
+  serverDiscId: string,
+  capability: ConfigSpeechCapability,
+  provider: string,
+  targetId: number,
+): Promise<ConfigModelSetResult> {
+  const eligible = (await loadConfigModelProviders(state.server_id, capability)).find(
+    (candidate) => candidate.toLowerCase() === provider.toLowerCase(),
+  );
+  if (!eligible) return { status: "not-found" };
+  const choices = await loadConfigModelChoices(state.server_id, capability, eligible);
+  if (choices.length === 0) return { status: "no-models" };
+  const choice = choices.find((candidate) => candidate.id === targetId);
+  if (!choice) return { status: "not-found" };
+  const mode = speechModeForCapability(capability);
+
+  if (isCustomProvider(eligible)) {
+    const result = await providerPanelOperations.activateWorkspaceEndpoint({
+      serverDiscId,
+      state,
+      capability: "speech",
+      mode,
+      customEndpointId: choice.id,
+    });
+    if (result.status === "success") {
+      return { status: "success", modelName: choice.name, reembedded: false, sourceChanged: result.sourceChanged };
+    }
+    return result.status === "already-active" ? { status: "already-selected", modelName: choice.name } : result;
+  }
+
+  if (choice.id === currentModelIdForCapability(state, capability, eligible)) {
+    if (savedProviderOwnsSlot(state, eligible, capability)) {
+      return { status: "already-selected", modelName: choice.name };
+    }
+  }
+  // The OpenRouter catalog can drop a seeded model, so the live listing is rechecked before the write.
+  if (
+    (eligible === "openrouter" || findProviderOption(eligible)) &&
+    !(await validateOpenRouterSpeechModel(choice.name, mode))
+  )
+    return { status: "not-found" };
+  const scope = serverOptionScope(state);
+  const claimCapability = optionCapabilityFor(capability);
+  const write = () =>
+    writeProviderSpeechSelection({ scope, provider: eligible, modelId: choice.id, mode }, () =>
+      setHostedSpeechSelection({ kind: "server", ownerId: state.server_id }, choice.id, mode),
+    );
+  const written = claimCapability
+    ? await applyProviderModelSelection({
+        scope,
+        provider: eligible,
+        capability: claimCapability,
+        write,
+        onWritten: () => invalidateTomoriStateCache(serverDiscId),
+      })
+    : await write();
+  return written ? { status: "success", modelName: choice.name, reembedded: false } : { status: "write-failed" };
 }
 
 /**
@@ -442,6 +597,9 @@ async function promoteTextModel(
   // readers would assemble a state that never existed.
   if (updatedModel || updatedChat) invalidateTomoriStateCache(serverDiscId);
   if (!updatedModel || !updatedChat) return false;
+  if (!(await claimProviderModelSelection({ scope: serverOptionScope(tomoriState), provider, capability: "text" }))) {
+    return false;
+  }
 
   const naiDefaultPresets: Record<string, { name: string; target: "kayra" | "erato" }> = {
     "kayra-v1": { name: "Carefree-Kayra", target: "kayra" },
@@ -492,17 +650,18 @@ function parseBoundedFloat(raw: string, min: number, max: number): number | null
 
 export const configModelOperations: ConfigModelOperations = {
   async setCapabilityModel({ tomoriState, serverDiscId, capability, provider, modelId }) {
-    if (capability === "tts" || capability === "stt") {
-      // Endpoint activations are not model-column writes and have no model catalog to query.
-      return { status: "not-found" };
+    if (capability === "stt") return { status: "not-found" };
+    if (isConfigSpeechCapability(capability)) {
+      return setServerSpeechTarget(tomoriState, serverDiscId, capability, provider, modelId);
     }
-    const eligible = await loadConfigModelProviders(tomoriState.server_id, capability);
+    const eligible = await loadEligibleSavedProviders(tomoriState.server_id, capability);
     const savedConfig = eligible.find((row) => row.provider.toLowerCase() === provider.toLowerCase()) ?? null;
     if (!savedConfig) return { status: "not-found" };
 
     if (capability === "text" || capability === "vision") {
+      const catalogProvider = findProviderOption(savedConfig.provider)?.catalogProvider ?? savedConfig.provider;
       const models =
-        (await llmModelRepo.loadAvailableModelsForProvider(savedConfig.provider, false, {
+        (await llmModelRepo.loadAvailableModelsForProvider(catalogProvider, false, {
           kind: "server",
           ownerId: tomoriState.server_id,
         })) ?? [];
@@ -511,7 +670,10 @@ export const configModelOperations: ConfigModelOperations = {
       const model = eligibleModels.find((candidate) => candidate.llm_id === modelId);
       if (model?.llm_id === undefined) return { status: "not-found" };
       if (model.llm_codename === "other-model") return { status: "openrouter-moved" };
-      if (model.llm_id === currentModelIdForCapability(tomoriState, capability)) {
+      if (
+        model.llm_id === currentModelIdForCapability(tomoriState, capability) &&
+        savedProviderOwnsSlot(tomoriState, savedConfig.provider, capability)
+      ) {
         return { status: "already-selected", modelName: model.llm_codename };
       }
 
@@ -528,9 +690,16 @@ export const configModelOperations: ConfigModelOperations = {
           : { status: "write-failed" };
       }
 
-      const updated = await configRepository.updateModelConfig(tomoriState.server_id, { vision_llm_id: model.llm_id });
+      const scope = serverOptionScope(tomoriState);
+      const updated = await applyProviderModelSelection({
+        scope,
+        provider: savedConfig.provider,
+        capability: "vision",
+        onWritten: () => invalidateTomoriStateCache(serverDiscId),
+        write: () =>
+          configRepository.updateModelConfig(tomoriState.server_id, { vision_llm_id: model.llm_id as number }),
+      });
       if (!updated) return { status: "write-failed" };
-      invalidateTomoriStateCache(serverDiscId);
       return { status: "success", modelName: model.llm_codename, reembedded: false };
     }
 
@@ -538,7 +707,10 @@ export const configModelOperations: ConfigModelOperations = {
     if (choices.length === 0) return { status: "no-models" };
     const choice = choices.find((candidate) => candidate.id === modelId);
     if (!choice) return { status: "not-found" };
-    if (choice.id === currentModelIdForCapability(tomoriState, capability)) {
+    if (
+      choice.id === currentModelIdForCapability(tomoriState, capability) &&
+      savedProviderOwnsSlot(tomoriState, savedConfig.provider, capability)
+    ) {
       return { status: "already-selected", modelName: choice.name };
     }
 
@@ -553,74 +725,139 @@ export const configModelOperations: ConfigModelOperations = {
       const shouldReembed =
         !!currentEmbeddingModel?.model_family && currentEmbeddingModel.model_family !== chosenModel.model_family;
 
-      const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
-        embedding_model_id: choice.id,
+      const updated = await applyProviderModelSelection({
+        scope: serverOptionScope(tomoriState),
+        provider: savedConfig.provider,
+        capability: "embedding",
+        onWritten: () => invalidateTomoriStateCache(serverDiscId),
+        write: () =>
+          configRepository.updateModelConfig(tomoriState.server_id, {
+            embedding_model_id: choice.id,
+          }),
       });
       if (!updated) return { status: "write-failed" };
-      invalidateTomoriStateCache(serverDiscId);
 
       let reembedded = false;
       if (shouldReembed && isRagAvailable()) {
         const documentCount = await serverMemoryRepository.countDocuments(tomoriState.server_id);
         if (documentCount > 0) {
-          const credentials = await resolveCapabilityCredentials(tomoriState.server_id, "embedding");
+          let credentials: Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
+          try {
+            credentials = await resolveCapabilityCredentials(tomoriState.server_id, "embedding");
+          } catch (error) {
+            const denied = findProviderRequestDeniedError(error);
+            if (denied) return { status: "provider-denied", denied };
+            throw error;
+          }
           const limits = getMemoryLimits();
-          await ragRepository.reembedServerDocuments({
-            serverId: tomoriState.server_id,
-            embeddingModel: chosenModel,
-            apiKey: credentials.apiKey,
-            chunkSize: limits.documentChunkSize,
-            chunkOverlap: limits.documentChunkOverlap,
-          });
+          try {
+            await withProviderUsageContext(credentials.usageContext, async () =>
+              ragRepository.reembedServerDocuments({
+                serverId: tomoriState.server_id,
+                embeddingModel: chosenModel,
+                apiKey: credentials.apiKey,
+                onUsage: createProviderUsageRecorder(credentials.usageContext, chosenModel.codename),
+                chunkSize: limits.documentChunkSize,
+                chunkOverlap: limits.documentChunkOverlap,
+              }),
+            );
+          } catch (error) {
+            const denied = findProviderRequestDeniedError(error, credentials.usageContext);
+            if (denied) return { status: "provider-denied", denied };
+            throw error;
+          }
           reembedded = true;
         }
       }
       return { status: "success", modelName: choice.name, reembedded };
     }
 
-    const updated =
+    const write =
       capability === "nai-image"
-        ? await configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, {
-            nai_diffusion_model_id: choice.id,
-          })
-        : capability === "image"
-          ? await configRepository.updateModelConfig(tomoriState.server_id, { diffusion_model_id: choice.id })
-          : await configRepository.updateModelConfig(tomoriState.server_id, { video_model_id: choice.id });
+        ? () =>
+            configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, {
+              nai_diffusion_model_id: choice.id,
+            })
+        : () =>
+            configRepository.updateModelConfig(
+              tomoriState.server_id,
+              capability === "image"
+                ? { diffusion_model_id: choice.id }
+                : capability === "decision"
+                  ? { decision_model_id: choice.id }
+                  : { video_model_id: choice.id },
+            );
+    const claimCapability = optionCapabilityFor(capability);
+    const updated = claimCapability
+      ? await applyProviderModelSelection({
+          scope: serverOptionScope(tomoriState),
+          provider: savedConfig.provider,
+          capability: claimCapability,
+          onWritten: () => invalidateTomoriStateCache(serverDiscId),
+          write,
+        })
+      : await write();
     if (!updated) return { status: "write-failed" };
-    invalidateTomoriStateCache(serverDiscId);
+    if (!claimCapability) invalidateTomoriStateCache(serverDiscId);
     return { status: "success", modelName: choice.name, reembedded: false };
   },
 
   async clearCapabilityModel({ tomoriState, serverDiscId, capability }) {
-    if (capability === "tts" || capability === "stt") {
-      // Endpoint activation identity lives in custom_endpoints, so model clearing cannot handle it.
-      return { status: "not-clearable" };
+    if (capability === "tts-design" || capability === "tts-clone") {
+      const mode = capability === "tts-design" ? "design" : "clone";
+      const selectedId =
+        mode === "design" ? tomoriState.config.speech_design_endpoint_id : tomoriState.config.speech_clone_endpoint_id;
+      const hostedId =
+        mode === "design" ? tomoriState.config.speech_design_model_id : tomoriState.config.speech_clone_model_id;
+      if (selectedId === null && hostedId === null) return { status: "already-clear" };
+      if (!(await setSpeechEndpointSelection(tomoriState.server_id, null, mode))) return { status: "write-failed" };
+      invalidateTomoriStateCache(serverDiscId);
+      const claimCapability = optionCapabilityFor(capability);
+      if (
+        claimCapability &&
+        !(await clearProviderModelSelection({
+          scope: serverOptionScope(tomoriState),
+          capability: claimCapability,
+        }))
+      ) {
+        return { status: "write-failed" };
+      }
+      return { status: "success" };
     }
+    if (capability === "stt") return { status: "not-clearable" };
     if (capability === "text" || capability === "embedding" || capability === "video") {
       return { status: "not-clearable" };
     }
     if (currentModelIdForCapability(tomoriState, capability) === null) return { status: "already-clear" };
 
     const updated =
-      capability === "vision"
-        ? await configRepository.updateModelConfig(tomoriState.server_id, { vision_llm_id: null })
-        : capability === "image"
-          ? await configRepository.updateModelConfig(tomoriState.server_id, { diffusion_model_id: null })
-          : await configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, {
-              nai_diffusion_model_id: null,
-            });
+      capability === "nai-image"
+        ? await configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, { nai_diffusion_model_id: null })
+        : await configRepository.updateModelConfig(
+            tomoriState.server_id,
+            capability === "vision"
+              ? { vision_llm_id: null }
+              : capability === "image"
+                ? { diffusion_model_id: null }
+                : { decision_model_id: null },
+          );
     if (!updated) return { status: "write-failed" };
     invalidateTomoriStateCache(serverDiscId);
+    const claimCapability = optionCapabilityFor(capability);
+    if (
+      claimCapability &&
+      !(await clearProviderModelSelection({ scope: serverOptionScope(tomoriState), capability: claimCapability }))
+    ) {
+      return { status: "write-failed" };
+    }
     return { status: "success" };
   },
 
-  async activateWorkspaceEndpoint({ tomoriState, serverDiscId, ownerId, scopeKind, capability, customEndpointId }) {
+  activateTranscriptionEndpoint({ tomoriState, serverDiscId, customEndpointId }) {
     return providerPanelOperations.activateWorkspaceEndpoint({
       serverDiscId,
-      ownerId,
-      scopeKind,
       state: tomoriState,
-      capability: capability === "tts" ? "speech" : "transcription",
+      capability: "transcription",
       customEndpointId,
     });
   },

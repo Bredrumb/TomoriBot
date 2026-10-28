@@ -11,7 +11,15 @@ sidebar:
 
 Tất cả các lệnh slash hiện được TomoriBot đăng ký, được tạo từ cùng trình xây dựng lệnh và mô tả tiếng Việt dùng để đăng ký trên Discord (mô tả chưa được dịch sẽ hiển thị bằng tiếng Anh).
 
-Các nhóm lệnh cấp cao nhất: **41**. Các lệnh slash có thể thực thi: **85**.
+Các nhóm lệnh cấp cao nhất: **44**. Các lệnh slash có thể thực thi: **91**.
+
+## `/booru`
+
+Tìm tranh anime có sẵn
+
+| Lệnh | Tóm tắt |
+|---|---|
+| `/booru search` | Gửi ảnh Danbooru ngẫu nhiên được đánh giá cao cho một hoặc hai thẻ |
 
 ## `/comment`
 
@@ -208,6 +216,14 @@ Các lệnh và cài đặt giới hạn độ tuổi.
 | `/nsfw persona default` | Áp dụng cấu hình preset persona NSFW |
 | `/nsfw persona import` | Nhập persona từ tệp PNG, JSON hoặc CHARX, bao gồm cả persona NSFW |
 
+## `/nudge-studio`
+
+Chọn gợi ý nhàn rỗi mình sẽ dùng trong máy chủ này và tự viết gợi ý của bạn.
+
+| Lệnh | Tóm tắt |
+|---|---|
+| `/nudge-studio` | Chọn gợi ý nhàn rỗi mình sẽ dùng trong máy chủ này và tự viết gợi ý của bạn. |
+
 ## `/nuke`
 
 Xóa sạch toàn bộ dữ liệu máy chủ. Yêu cầu chạy lại /setup sau đó.
@@ -238,6 +254,7 @@ Quản lý cài đặt cá nhân của bạn
 | `/personal config` | Quản lý tùy chọn cá nhân, quyền riêng tư, model và hồ sơ. |
 | `/personal language` | Chọn ngôn ngữ TomoriBot dùng để nói chuyện với bạn. |
 | `/personal memories` | Quản lý bộ nhớ dài hạn cá nhân và ngữ cảnh hội thoại ngắn hạn. |
+| `/personal message-proxy` | Chọn dịch vụ proxy tin nhắn được hỗ trợ cho tài khoản của bạn. |
 | `/personal nuke` | Xóa mọi thứ TomoriBot lưu trữ về bạn trên mọi máy chủ. |
 | `/personal providers` | Quản lý thông tin xác thực, endpoint và danh mục model cá nhân. |
 
@@ -315,6 +332,14 @@ Thưởng cho mình bằng các tương tác thú vị.
 | `/reward kiss` | Hôn mình một cái nào! |
 | `/reward tickle` | Cù lét mình nào! |
 
+## `/roll`
+
+Tung xúc xắc cho board game và nhập vai.
+
+| Lệnh | Tóm tắt |
+|---|---|
+| `/roll` | Tung xúc xắc cho board game và nhập vai. |
+
 ## `/scheduled-task`
 
 Quản lý tác vụ đã lên lịch và lời nhắc.
@@ -338,7 +363,9 @@ Xem thống kê sử dụng
 
 | Lệnh | Tóm tắt |
 |---|---|
-| `/stats generate` | Tạo thẻ ảnh thống kê có thể chia sẻ. |
+| `/stats generate persona` | Tạo thẻ Độ thân thiết persona với một persona. |
+| `/stats generate personal` | Tạo thẻ Tổng kết cá nhân của bạn. |
+| `/stats generate server` | Tạo thẻ Bảng xếp hạng máy chủ của máy chủ này. |
 | `/stats persona` | Xem thống kê sử dụng của persona trên máy chủ này. |
 | `/stats personal` | Xem thống kê sử dụng của bạn. |
 | `/stats server` | Xem thống kê sử dụng trên toàn máy chủ. |

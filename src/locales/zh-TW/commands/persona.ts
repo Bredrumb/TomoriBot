@@ -72,16 +72,12 @@ export default {
     },
     name_conflict_title: `🔴 人格名稱衝突`,
     name_conflict_description: `這個伺服器已經有人格叫 **{name}**。同一個伺服器內的人格名稱必須唯一。`,
+    name_too_long_title: `人格名稱過長`,
+    name_too_long_description: `第一個名稱會用作我的顯示名稱，最多 {max} 個字元。請縮短後再試一次。`,
     export: {
+      persona_description: "要匯出的人格",
+      export_json_description: "匯出可匯入的JSON檔案，取代PNG（不含頭像）",
       description: `將目前的人格匯出成可分享的 PNG 檔`,
-      export_json_select_label: `匯出 JSON`,
-      export_json_select_description: `選填：改為匯出可匯入的 JSON 檔（不含頭像圖片）`,
-      persona_modal_title: `選擇要匯出的人格`,
-      persona_select_label: `人格`,
-      persona_select_description: `選擇要匯出的人格。`,
-      persona_select_placeholder: `選擇一個人格...`,
-      main_persona_description: `主要人格`,
-      alter_persona_description: `alter 人格`,
       success_title: `🟢 人格匯出成功`,
       success_description: `目前的人格 **{nickname}** 已經匯出！把這個 PNG 檔分享給別人，就能傳播這套人格設定。`,
       success_description_json: `目前的人格 **{nickname}** 已經匯出成 JSON 檔。
@@ -176,6 +172,7 @@ export default {
       error_invalid_config: `人格資料中的設定欄位無效`,
       error_no_server_data: `資料庫找不到這個伺服器。請先執行 \`/setup\`。`,
       error_name_conflict: `這個伺服器已經有人格叫 **{name}**。請改用其他名稱。`,
+      error_nickname_too_long: `這個人格的名稱超過伺服器暱稱上限 {max} 個字元。請在檔案中縮短名稱後重新匯入。`,
       error_nsfw_persona: `這個人格被標記為 NSFW，所以 \`/persona import\` 無法載入。請改用 \`/nsfw persona import\`。`,
       error_import_failed: `人格資料匯入失敗`,
       error_not_json: `匯入的檔案必須包含有效的 JSON 資料`,
@@ -186,12 +183,10 @@ export default {
       refresh_reminder: `執行 \`/refresh\` 即可在這個對話套用新的人格`,
     },
     remove: {
+      persona_description: "要移除的alter人格",
       description: `從伺服器移除 alter 人格`,
       no_permission_title: `🔴 權限不足`,
       no_permission_description: `移除 alter 人格需要 **管理伺服器** 權限。`,
-      modal_title: `移除 alter 人格`,
-      select_label: `alter 人格`,
-      select_placeholder: `選擇要移除的 alter 人格...`,
       no_alters_error_title: `🟡 沒有 alter 人格`,
       no_alters_error_description: `沒有可以移除的 alter 人格。請用 \`/persona import type:alter\` 匯入 alter 人格。`,
       success_title: `🟢 已移除 alter 人格`,
@@ -231,7 +226,7 @@ export default {
       modal: {
         title: `生成 AI 人格`,
         character_name_label: `角色名稱`,
-        character_name_description: `以逗號分隔的名稱（「,」或「、」）：全部都會成為觸發詞，第一個會成為顯示名稱。`,
+        character_name_description: `以逗號分隔的名稱（「,」或「、」）：全部都會成為觸發詞，第一個是顯示名稱（最多 32 字）。`,
         character_name_placeholder: `例如 Hatsune Miku、Miku、初音ミク`,
         character_info_label: `角色資訊與說話範例`,
         character_info_description: `描述這個角色以及說話方式`,
@@ -252,8 +247,6 @@ export default {
       field_additional_inst: `補充指示`,
       wrong_provider_title: `🔴 供應商不相容`,
       wrong_provider_description: `生成預設集需要相容的供應商。你目前的供應商是 **{current_provider}**。請用 \`/config\` > 模型 > 切換模型切換到支援的供應商。`,
-      no_api_key_title: `🔴 沒有 API 金鑰`,
-      no_api_key_description: `沒有設定使用中的供應商。請用 \`/setup\`（第一次）或 \`/providers\` 註冊一個。`,
       model_incompatible_title: `模型不相容`,
       model_incompatible_description: `你目前的模型（**{model_name}**）不支援 **STRUCTURED OUTPUT**，而這是生成人格的必要條件。
 
@@ -272,8 +265,11 @@ export default {
 **接下來可以這樣做：**
 1. 用 \`/config\` > 模型 > 切換模型切換到支援工具的模型，或
 2. 不要網路搜尋，重新生成一次（被問到時選「否」）`,
-      api_key_decrypt_failed_title: `🔴 API 金鑰錯誤`,
-      api_key_decrypt_failed_description: `無法解密使用中供應商的憑證。請用 \`/providers\` 重新設定。`,
+      web_search_failed_title: `已中止人格生成`,
+      web_search_failed_description: `因請求的網路搜尋失敗，人格生成已中止。
+
+**你可以做的事**
+請稍後重試，或在「是否搜尋網路？」中選擇「否」直接根據你的描述生成。若搜尋持續失敗，請聯絡伺服器管理員在 \`/config\` 中檢查網路搜尋設定，並在 \`/providers\` 中檢查供應商存取權限。`,
       vision_credentials_unavailable_title: `🔴 視覺模型的憑證不可用`,
       vision_credentials_unavailable_description: `你的視覺模型（**{vision_model_name}**）在供應商 **{vision_provider}** 上執行，但無法用它的 API 金鑰描述圖片。請用 \`/providers\` 重新設定該供應商的憑證，或到 \`/config\` > 模型 檢查一下。`,
       invalid_image_title: `🔴 圖片無效`,
@@ -282,11 +278,8 @@ export default {
       error_download_timeout: `頭像下載逾時。請再試一次。`,
       error_download_failed: `頭像圖片下載失敗。`,
       processing_title: `正在生成人格...`,
-      processing_description: `這可能需要 1 到 2 分鐘。請稍等，我正在生成這個角色...
-
-結果可能不如預期。需要的話可以重新生成。`,
-      captioning_title: `正在描述你的頭像...`,
-      captioning_description: `你的主要模型無法辨識圖片，所以我會先請視覺模型（**{model_name}**）描述你上傳的頭像。接著主要模型會根據這段描述來生成人格。這可能需要 1-2 分鐘。`,
+      processing_description: `這可能需要 1 到 2 分鐘。請稍等，我正在生成這個角色...`,
+      processing_footer: `這可能會產生非預期的結果。如有需要，你可以重新生成。`,
       generation_failed_title: `🔴 生成失敗`,
       generation_failed_description: `人格生成失敗：{error}
 
@@ -327,7 +320,7 @@ export default {
       modal: {
         title: `建立新的人格`,
         character_name_label: `角色名稱`,
-        character_name_description: `以逗號分隔的名稱（「,」或「、」）：全部都會成為觸發詞，第一個會成為顯示名稱。`,
+        character_name_description: `以逗號分隔的名稱（「,」或「、」）：全部都會成為觸發詞，第一個是顯示名稱（最多 32 字）。`,
         character_name_placeholder: `例如 Hatsune Miku、Miku、初音ミク`,
         character_desc_label: `角色描述`,
         character_desc_placeholder: `描述你的角色（性格、外觀、背景故事等）`,

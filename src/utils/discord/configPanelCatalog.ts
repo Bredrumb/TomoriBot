@@ -22,11 +22,14 @@ import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 import type { RandomTriggerRow } from "@/types/db/schema";
 import type { AddressingStyle } from "@/types/personaNaming";
 import { NOTICE_VERBOSITY_LEVELS, type NoticeVerbosity } from "@/constants/toolNotices";
+import {
+  NATURAL_NUDGE_CATEGORIES,
+  PERSONA_AUTHORED_IDLE_NUDGE_ID_PATTERN,
+  type NaturalNudgeCategory,
+} from "@/modules/natural-nudges/db/types";
 
 export const CONFIG_ROUTE_NAMESPACE = "config";
 export const CONFIG_ROUTE_VERSION = "v2";
-
-export type DraftModelSlot = "reviewer" | "decision";
 
 export type ConfigCategory = "persona" | "behavior" | "plugins" | "channels" | "models";
 
@@ -39,10 +42,12 @@ type PersonaPage =
   | "advanced"
   | "overrides"
   | "voice"
-  | "naming";
+  | "naming"
+  | "nudges";
 type BehaviorPage = "general" | "trigger" | "experimental" | "notices" | "memory";
 type PluginsPage =
   | "response-drafting"
+  | "natural-nudges"
   | "available-tools"
   | "context-additions"
   | "mcp-servers"
@@ -59,12 +64,24 @@ export type ConfigPage = PersonaPage | BehaviorPage | PluginsPage | ChannelsPage
  * custom ID, which is why the category field must stay ahead of the page field in every codec.
  */
 export const CONFIG_PAGES_BY_CATEGORY: Record<ConfigCategory, readonly ConfigPage[]> = {
-  persona: ["general", "triggers", "memories", "naming", "sprites", "appearance", "voice", "overrides", "advanced"],
+  persona: [
+    "general",
+    "triggers",
+    "memories",
+    "naming",
+    "sprites",
+    "appearance",
+    "voice",
+    "nudges",
+    "overrides",
+    "advanced",
+  ],
   behavior: ["general", "trigger", "notices", "experimental", "memory"],
   plugins: [
     "available-tools",
     "context-additions",
     "response-drafting",
+    "natural-nudges",
     "mcp-servers",
     "sillytavern-presets",
     "nsfw-jailbreaks",
@@ -276,46 +293,62 @@ export function computeConditioningRemoveFingerprint(
 }
 
 /**
- * The eight wire-facing model capabilities on Models > Switch Models.
+ * The wire-facing model capabilities on Models > Switch Models.
  *
  * `image` and `nai-image` are two slots over one absorbed command: `/model image` picks its target
  * column from the chosen provider's `featureSupport.imageGeneration`, so the panel has to carry the
  * slot on the wire instead of re-deriving it, or a custom provider picked in the NovelAI slot would
  * write the standard column.
  *
- * `tts` and `stt` are endpoint activations, not model-column assignments, so they are recognized by
- * the route codec without becoming model picker slots.
+ * TTS Design and Clone each list hosted models and registered speech connections as providers.
+ * `stt` is an endpoint activation rather than a model assignment, so it keeps its own endpoint select.
  */
-export type ConfigModelCapability = "text" | "vision" | "embedding" | "image" | "nai-image" | "video" | "tts" | "stt";
+export type ConfigModelCapability =
+  | "text"
+  | "vision"
+  | "embedding"
+  | "decision"
+  | "image"
+  | "nai-image"
+  | "video"
+  | "tts-design"
+  | "tts-clone"
+  | "stt";
 
-export type ConfigCatalogModelCapability = Exclude<ConfigModelCapability, "tts" | "stt">;
+export type ConfigCatalogModelCapability = Exclude<ConfigModelCapability, "stt">;
 
 export function isConfigCatalogModelCapability(
   capability: ConfigModelCapability,
 ): capability is ConfigCatalogModelCapability {
-  return capability !== "tts" && capability !== "stt";
+  return capability !== "stt";
 }
 
 export const CONFIG_MODEL_CAPABILITY_ORDER: readonly ConfigModelCapability[] = [
   "text",
   "vision",
   "embedding",
+  "decision",
   "image",
   "nai-image",
   "video",
-  "tts",
+  "tts-design",
+  "tts-clone",
   "stt",
 ];
 
 /**
  * Slots whose absorbed command offers a clear path. `/model vision` carries a clear sentinel and
  * `/model image` a clear option per column; `/model embedding`, `/model video`, and the Text
- * primary have none, so offering one there would broaden the command surface.
+ * primary have none, so offering one there would broaden the command surface. Decision has no
+ * command, and no Decision model is its default state. A server may run without either speech mode.
  */
 export const CONFIG_CLEARABLE_MODEL_CAPABILITIES: ReadonlySet<ConfigModelCapability> = new Set([
   "vision",
+  "decision",
   "image",
   "nai-image",
+  "tts-design",
+  "tts-clone",
 ]);
 
 /** Sentinel the model select carries for the clear path of a nullable slot. */
@@ -345,7 +378,11 @@ export function computeNaiPresetFingerprint(target: "kayra" | "erato", presetNam
 export const CONFIG_MODEL_PROVIDER_DIRECT_LIMIT = 25;
 
 /** Endpoint entries share Discord's 25-option ceiling with one navigation entry when paged. */
-export const CONFIG_ENDPOINT_PAGE_SIZE = 25;
+const CONFIG_ENDPOINT_PAGE_SIZE = 25;
+
+export function configEndpointWindowSize(count: number): number {
+  return count > CONFIG_ENDPOINT_PAGE_SIZE ? CONFIG_ENDPOINT_PAGE_SIZE - 1 : CONFIG_ENDPOINT_PAGE_SIZE;
+}
 
 /**
  * The fallback modal reserves one option for its clear entry, so a provider page holds 24 models.
@@ -389,24 +426,81 @@ export function computeLogitBiasFingerprint(serverId: number, entryIds: readonly
 }
 
 export type ConfigPanelRoute =
+  | { action: "nudge-talk-select"; locale: string; personaId: number }
+  | { action: "nudge-interest-select"; locale: string; personaId: number }
+  | { action: "nudge-interest-add-submit"; locale: string; personaId: number; nonce: string }
+  | {
+      action: "nudge-interest-edit-submit";
+      locale: string;
+      personaId: number;
+      index: number;
+      fp: string;
+      nonce: string;
+    }
+  | { action: "nudge-interest-remove-open"; locale: string; personaId: number }
+  | { action: "nudge-interest-generate"; locale: string; personaId: number }
+  | { action: "nudge-interest-remove-submit"; locale: string; personaId: number; fp: string; nonce: string }
+  | { action: "nudge-persona-select"; locale: string; personaId: number }
+  | {
+      action: "nudge-persona-add-submit";
+      locale: string;
+      personaId: number;
+      category: NaturalNudgeCategory;
+      nonce: string;
+    }
+  | {
+      action: "nudge-persona-edit-submit";
+      locale: string;
+      personaId: number;
+      id: string;
+      fp: string;
+      nonce: string;
+    }
+  | { action: "nudge-persona-availability-select"; locale: string; personaId: number }
+  | {
+      action: "nudge-persona-availability-submit";
+      locale: string;
+      personaId: number;
+      id: string;
+      nonce: string;
+    }
+  | { action: "nudge-persona-remove-open"; locale: string; personaId: number }
+  | { action: "nudge-persona-remove-submit"; locale: string; personaId: number; fp: string; nonce: string }
+  | { action: "nudge-persona-restore-view"; locale: string; personaId: number }
+  | { action: "nudge-persona-restore-confirm"; locale: string; personaId: number; nonce: string }
+  | { action: "nudge-persona-restore-cancel"; locale: string; personaId: number }
+  | { action: "nudge-idle-nudges-set"; locale: string; enabled: boolean }
+  | { action: "nudge-heat-adjust"; locale: string; direction: "up" | "down" }
+  | { action: "nudge-weights-open"; locale: string }
+  | { action: "nudge-weights-submit"; locale: string; nonce: string }
+  | { action: "nudge-channels-select"; locale: string }
+  | { action: "nudge-provider"; locale: string }
+  | { action: "nudge-model-submit"; locale: string; provider: string; nonce: string }
+  | { action: "nudge-checker-provider"; locale: string }
+  | { action: "nudge-checker-model-submit"; locale: string; provider: string; nonce: string }
+  | { action: "nudge-checker-decision-submit"; locale: string; provider: string; nonce: string }
+  | { action: "nudge-idle-nudges-frequency-select"; locale: string }
+  | { action: "nudge-active-nudges-set"; locale: string; enabled: boolean }
+  | { action: "nudge-active-nudges-frequency-select"; locale: string }
   | { action: "draft-set"; locale: string; enabled: boolean }
   | { action: "draft-items-open"; locale: string }
   | { action: "draft-items-submit"; locale: string; nonce: string }
   | { action: "draft-prompt-open"; locale: string }
   | { action: "draft-default"; locale: string }
   | { action: "draft-prompt-submit"; locale: string; nonce: string }
-  | { action: "draft-provider"; locale: string; slot: DraftModelSlot }
-  | { action: "draft-model-submit"; locale: string; slot: DraftModelSlot; provider: string; nonce: string }
+  | { action: "draft-provider"; locale: string }
+  | { action: "draft-model-submit"; locale: string; provider: string; nonce: string }
   | { action: "draft-checker-select"; locale: string; start: number; fp: string }
   | { action: "category"; locale: string; category: ConfigCategory; page: ConfigPage }
   | { action: "page"; locale: string; category: ConfigCategory; page: ConfigPage }
   | { action: "persona-page-select"; locale: string; category: "persona"; page: ConfigPage; personaId: number }
-  | { action: "persona-select"; locale: string; personaId: number }
-  | { action: "persona-page"; locale: string; personaId: number; start: number }
+  | { action: "persona-select"; locale: string; personaId: number; page?: ConfigPage }
+  | { action: "persona-page"; locale: string; personaId: number; start: number; page?: ConfigPage }
   | { action: "voice-select"; locale: string; personaId: number }
   | { action: "voice-page"; locale: string; personaId: number; start: number }
   | { action: "voice-chooser-cancel"; locale: string; personaId: number }
-  | { action: "voice-clear"; locale: string; personaId: number }
+  | { action: "voice-priority-design" | "voice-priority-clone"; locale: string; personaId: number }
+  | { action: "voice-provider-clear"; locale: string; personaId: number }
   | { action: "voice-design-open"; locale: string; personaId: number }
   | { action: "voice-design-submit"; locale: string; personaId: number; nonce: string }
   | { action: "voice-design-remove"; locale: string; personaId: number }
@@ -422,14 +516,12 @@ export type ConfigPanelRoute =
   | { action: "trigger-remove-submit"; locale: string; personaId: number; fp: string; nonce: string }
   | { action: "attribute-select"; locale: string; personaId: number }
   | { action: "attribute-page"; locale: string; personaId: number; start: number }
-  | { action: "attribute-add-open"; locale: string; personaId: number }
   | { action: "attribute-add-submit"; locale: string; personaId: number; nonce: string }
   | { action: "attribute-edit-open"; locale: string; personaId: number; index: number; fp: string }
   | { action: "attribute-edit-submit"; locale: string; personaId: number; index: number; fp: string; nonce: string }
   | { action: "attribute-remove"; locale: string; personaId: number; index: number; fp: string }
   | { action: "dialogue-select"; locale: string; personaId: number }
   | { action: "dialogue-page"; locale: string; personaId: number; start: number }
-  | { action: "dialogue-add-open"; locale: string; personaId: number }
   | { action: "dialogue-add-submit"; locale: string; personaId: number; nonce: string }
   | { action: "dialogue-edit-open"; locale: string; personaId: number; index: number; fp: string }
   | { action: "dialogue-edit-submit"; locale: string; personaId: number; index: number; fp: string; nonce: string }
@@ -462,7 +554,6 @@ export type ConfigPanelRoute =
   | { action: "context-note-open"; locale: string; personaId: number }
   | { action: "context-note-submit"; locale: string; personaId: number; nonce: string }
   | { action: "humanizer-open"; locale: string; personaId: number }
-  | { action: "humanizer-select"; locale: string; personaId: number }
   | { action: "humanizer-submit"; locale: string; personaId: number; nonce: string }
   | { action: "text-override-open"; locale: string; personaId: number }
   | { action: "text-override-provider-select"; locale: string; personaId: number }
@@ -472,7 +563,6 @@ export type ConfigPanelRoute =
   | { action: "text-override-clear"; locale: string; personaId: number }
   | { action: "sprite-select"; locale: string; personaId: number }
   | { action: "sprite-page"; locale: string; personaId: number; start: number }
-  | { action: "sprite-add-open"; locale: string; personaId: number }
   | { action: "sprite-add-submit"; locale: string; personaId: number; nonce: string }
   | { action: "sprite-edit-open"; locale: string; personaId: number; index: number; fp: string }
   | { action: "sprite-edit-submit"; locale: string; personaId: number; index: number; fp: string; nonce: string }
@@ -526,7 +616,6 @@ export type ConfigPanelRoute =
   | { action: "nai-parameters-submit"; locale: string; nonce: string }
   | { action: "tts-parameters-open"; locale: string }
   | { action: "tts-parameters-submit"; locale: string; nonce: string }
-  | { action: "tts-turbo-set"; locale: string; enabled: boolean }
   | { action: "voice-sample-select"; locale: string; start: number }
   | { action: "voice-sample-page"; locale: string; start: number }
   | { action: "voice-sample-add-open"; locale: string }
@@ -596,10 +685,9 @@ export type ConfigPanelRoute =
       nonce: string;
     }
   | { action: "permissions-privacy-bypass-set"; locale: string; enabled: boolean }
-  | { action: "mcp-select"; locale: string; rangeIndex: number }
   | { action: "mcp-range"; locale: string; rangeIndex: number }
-  | { action: "mcp-retry" | "mcp-refresh"; locale: string; selectedId: number | "none" }
-  | { action: "mcp-add-open" | "mcp-add-type"; locale: string }
+  | { action: "mcp-retry"; locale: string; selectedId: number | "none" }
+  | { action: "mcp-add-open"; locale: string }
   | { action: "mcp-add-submit"; locale: string; nonce: string }
   | { action: "mcp-set-enabled"; locale: string; entityId: number; enabled: boolean }
   | { action: "mcp-remove-prompt" | "mcp-remove-cancel" | "mcp-remove-confirm"; locale: string; entityId: number }
@@ -682,7 +770,7 @@ export type ConfigPanelRoute =
     }
   | { action: "channels-overrides-text-clear"; locale: string; channelId: string; fp: string }
   | {
-      action: "retry" | "refresh";
+      action: "retry";
       locale: string;
       category: ConfigCategory;
       page: ConfigPage;
@@ -733,10 +821,31 @@ const personaCategoryField: RouteFieldCodec<"category", "persona"> = {
   decode: (v) => (v === "persona" ? v : null),
 };
 
+const naturalNudgeCategoryField: RouteFieldCodec<"category", NaturalNudgeCategory> = {
+  key: "category",
+  encode: (v) => String(v),
+  decode: (v) =>
+    (NATURAL_NUDGE_CATEGORIES as readonly string[]).includes(v ?? "") ? (v as NaturalNudgeCategory) : null,
+};
+
+const personaIdleNudgeIdField: RouteFieldCodec<"id", string> = {
+  key: "id",
+  encode: (v) => String(v),
+  decode: (v) => (v && PERSONA_AUTHORED_IDLE_NUDGE_ID_PATTERN.test(v) ? v : null),
+};
+
 const pageField: RouteFieldCodec<"page", ConfigPage> = {
   key: "page",
   encode: (v) => String(v),
   decode: (v, r) => (r.category ? parseConfigPage(r.category as ConfigCategory, v) : null),
+};
+
+/** Optional because selectors rendered before it existed are still open in clients and mean the first page. */
+const optionalPersonaPageField: RouteFieldCodec<"page", ConfigPage> = {
+  key: "page",
+  optional: true,
+  encode: (v) => String(v),
+  decode: (v) => parseConfigPage("persona", v),
 };
 
 const pluginsPageField: RouteFieldCodec<"page", "available-tools" | "context-additions"> = {
@@ -890,21 +999,69 @@ const requiredChannelIdField: RouteFieldCodec<"channelId", string> = {
  * Authoritative codec table for every `/config` panel route, keyed by semantic action so a new
  * action is a compile error until it has a wire token.
  */
-const draftSlotField: RouteFieldCodec<"slot", DraftModelSlot> = {
-  key: "slot",
-  encode: (value) => String(value),
-  decode: (value) => (value === "reviewer" || value === "decision" ? value : null),
-};
-
 export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
+  "nudge-talk-select": { wireToken: "nn-talk", fields: [personaIdField] },
+  "nudge-interest-select": { wireToken: "nn-int-select", fields: [personaIdField] },
+  "nudge-interest-add-submit": { wireToken: "nn-int-add", fields: [personaIdField, nonceField] },
+  "nudge-interest-edit-submit": {
+    wireToken: "nn-int-edit",
+    fields: [personaIdField, indexField, fpField, nonceField],
+  },
+  "nudge-interest-remove-open": { wireToken: "nn-int-rem-open", fields: [personaIdField] },
+  "nudge-interest-generate": { wireToken: "nn-int-gen", fields: [personaIdField] },
+  "nudge-interest-remove-submit": { wireToken: "nn-int-rem", fields: [personaIdField, fpField, nonceField] },
+  "nudge-persona-select": { wireToken: "nnp-sel", fields: [personaIdField] },
+  "nudge-persona-add-submit": {
+    wireToken: "nnp-add",
+    fields: [personaIdField, naturalNudgeCategoryField, nonceField],
+  },
+  "nudge-persona-edit-submit": {
+    wireToken: "nnpe",
+    fields: [personaIdField, personaIdleNudgeIdField, fpField, nonceField],
+  },
+  "nudge-persona-availability-select": { wireToken: "nnp-av-sel", fields: [personaIdField] },
+  "nudge-persona-availability-submit": {
+    wireToken: "nnp-av",
+    fields: [personaIdField, personaIdleNudgeIdField, nonceField],
+  },
+  "nudge-persona-remove-open": { wireToken: "nnp-rm-open", fields: [personaIdField] },
+  "nudge-persona-remove-submit": {
+    wireToken: "nnp-rm",
+    fields: [personaIdField, fpField, nonceField],
+  },
+  "nudge-persona-restore-view": { wireToken: "nnp-rv", fields: [personaIdField] },
+  "nudge-persona-restore-confirm": { wireToken: "nnp-r", fields: [personaIdField, nonceField] },
+  "nudge-persona-restore-cancel": { wireToken: "nnp-rc", fields: [personaIdField] },
+  "nudge-idle-nudges-set": { wireToken: "nn-idle-set", fields: [enabledField] },
+  "nudge-heat-adjust": {
+    wireToken: "nn-heat",
+    fields: [
+      {
+        key: "direction",
+        encode: (value) => String(value),
+        decode: (value) => (value === "up" || value === "down" ? value : null),
+      },
+    ],
+  },
+  "nudge-weights-open": { wireToken: "nn-weights-open", fields: [] },
+  "nudge-weights-submit": { wireToken: "nn-weights", fields: [nonceField] },
+  "nudge-channels-select": { wireToken: "nn-channels", fields: [] },
+  "nudge-provider": { wireToken: "nn-provider", fields: [] },
+  "nudge-model-submit": { wireToken: "nn-model", fields: [providerField, nonceField] },
+  "nudge-checker-provider": { wireToken: "nn-checker", fields: [] },
+  "nudge-checker-model-submit": { wireToken: "nn-checker-model", fields: [providerField, nonceField] },
+  "nudge-checker-decision-submit": { wireToken: "nn-checker-decision", fields: [providerField, nonceField] },
+  "nudge-idle-nudges-frequency-select": { wireToken: "nn-idle-frequency", fields: [] },
+  "nudge-active-nudges-set": { wireToken: "nn-active-set", fields: [enabledField] },
+  "nudge-active-nudges-frequency-select": { wireToken: "nn-active-frequency", fields: [] },
   "draft-set": { wireToken: "draft-set", fields: [enabledField] },
   "draft-items-open": { wireToken: "draft-items-open", fields: [] },
   "draft-items-submit": { wireToken: "draft-items-submit", fields: [nonceField] },
   "draft-prompt-open": { wireToken: "draft-prompt-open", fields: [] },
   "draft-default": { wireToken: "draft-default", fields: [] },
   "draft-prompt-submit": { wireToken: "draft-prompt-submit", fields: [nonceField] },
-  "draft-provider": { wireToken: "draft-provider", fields: [draftSlotField] },
-  "draft-model-submit": { wireToken: "draft-model-submit", fields: [draftSlotField, providerField, nonceField] },
+  "draft-provider": { wireToken: "draft-provider", fields: [] },
+  "draft-model-submit": { wireToken: "draft-model-submit", fields: [providerField, nonceField] },
   "draft-checker-select": { wireToken: "draft-checker-select", fields: [startField, fpField] },
   category: { wireToken: "category", fields: [categoryField, pageField] },
   page: { wireToken: "page", fields: [categoryField, pageField] },
@@ -912,12 +1069,14 @@ export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
     wireToken: "persona-page-select",
     fields: [personaCategoryField, pageField, personaIdField],
   },
-  "persona-select": { wireToken: "persona-select", fields: [personaIdField] },
-  "persona-page": { wireToken: "persona-page", fields: [personaIdField, startField] },
+  "persona-select": { wireToken: "persona-select", fields: [personaIdField, optionalPersonaPageField] },
+  "persona-page": { wireToken: "persona-page", fields: [personaIdField, startField, optionalPersonaPageField] },
   "voice-select": { wireToken: "voice-select", fields: [personaIdField] },
   "voice-page": { wireToken: "voice-page", fields: [personaIdField, startField] },
   "voice-chooser-cancel": { wireToken: "voice-choose-cancel", fields: [personaIdField] },
-  "voice-clear": { wireToken: "voice-clear", fields: [personaIdField] },
+  "voice-priority-design": { wireToken: "voice-priority-design", fields: [personaIdField] },
+  "voice-priority-clone": { wireToken: "voice-priority-clone", fields: [personaIdField] },
+  "voice-provider-clear": { wireToken: "voice-provider-clear", fields: [personaIdField] },
   "voice-design-open": { wireToken: "voice-design-open", fields: [personaIdField] },
   "voice-design-submit": { wireToken: "voice-design-sub", fields: [personaIdField, nonceField] },
   "voice-design-remove": { wireToken: "voice-design-rem", fields: [personaIdField] },
@@ -933,7 +1092,6 @@ export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
   "trigger-remove-submit": { wireToken: "trig-rem-sub", fields: [personaIdField, fpField, nonceField] },
   "attribute-select": { wireToken: "attr-select", fields: [personaIdField] },
   "attribute-page": { wireToken: "attr-page", fields: [personaIdField, startField] },
-  "attribute-add-open": { wireToken: "attr-add-open", fields: [personaIdField] },
   "attribute-add-submit": { wireToken: "attr-add-sub", fields: [personaIdField, nonceField] },
   "attribute-edit-open": { wireToken: "attr-edit-open", fields: [personaIdField, indexField, fpField] },
   "attribute-edit-submit": {
@@ -943,7 +1101,6 @@ export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
   "attribute-remove": { wireToken: "attr-remove", fields: [personaIdField, indexField, fpField] },
   "dialogue-select": { wireToken: "dlg-select", fields: [personaIdField] },
   "dialogue-page": { wireToken: "dlg-page", fields: [personaIdField, startField] },
-  "dialogue-add-open": { wireToken: "dlg-add-open", fields: [personaIdField] },
   "dialogue-add-submit": { wireToken: "dlg-add-sub", fields: [personaIdField, nonceField] },
   "dialogue-edit-open": { wireToken: "dlg-edit-open", fields: [personaIdField, indexField, fpField] },
   "dialogue-edit-submit": {
@@ -982,7 +1139,6 @@ export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
   "context-note-open": { wireToken: "context-open", fields: [personaIdField] },
   "context-note-submit": { wireToken: "context-submit", fields: [personaIdField, nonceField] },
   "humanizer-open": { wireToken: "humanizer-open", fields: [personaIdField] },
-  "humanizer-select": { wireToken: "humanizer-select", fields: [personaIdField] },
   "humanizer-submit": { wireToken: "humanizer-submit", fields: [personaIdField, nonceField] },
   "text-override-open": { wireToken: "text-override-open", fields: [personaIdField] },
   "text-override-provider-select": { wireToken: "text-override-provider-select", fields: [personaIdField] },
@@ -1001,7 +1157,6 @@ export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
   "text-override-clear": { wireToken: "text-override-clear", fields: [personaIdField] },
   "sprite-select": { wireToken: "sprite-select", fields: [personaIdField] },
   "sprite-page": { wireToken: "sprite-page", fields: [personaIdField, startField] },
-  "sprite-add-open": { wireToken: "sprite-add-open", fields: [personaIdField] },
   "sprite-add-submit": { wireToken: "sprite-add-sub", fields: [personaIdField, nonceField] },
   "sprite-edit-open": { wireToken: "sprite-edit-open", fields: [personaIdField, indexField, fpField] },
   "sprite-edit-submit": {
@@ -1048,7 +1203,6 @@ export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
   "nai-parameters-submit": { wireToken: "nai-params-sub", fields: [nonceField] },
   "tts-parameters-open": { wireToken: "tts-params-open", fields: [] },
   "tts-parameters-submit": { wireToken: "tts-params-sub", fields: [nonceField] },
-  "tts-turbo-set": { wireToken: "tts-turbo-set", fields: [enabledField] },
   "voice-sample-select": { wireToken: "vsample-select", fields: [startField] },
   "voice-sample-page": { wireToken: "vsample-page", fields: [startField] },
   "voice-sample-add-open": { wireToken: "vsample-add-open", fields: [] },
@@ -1115,12 +1269,9 @@ export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
     fields: [pluginsPageField, includeElevenLabsField, nonceField],
   },
   "permissions-privacy-bypass-set": { wireToken: "perm-privacy-set", fields: [enabledField] },
-  "mcp-select": { wireToken: "mcp-select", fields: [mcpRangeIndexField] },
   "mcp-range": { wireToken: "mcp-range", fields: [mcpRangeIndexField] },
   "mcp-retry": { wireToken: "mcp-retry", fields: [mcpSelectedIdField] },
-  "mcp-refresh": { wireToken: "mcp-refresh", fields: [mcpSelectedIdField] },
   "mcp-add-open": { wireToken: "mcp-add-open", fields: [] },
-  "mcp-add-type": { wireToken: "mcp-add-type", fields: [] },
   "mcp-add-submit": { wireToken: "mcp-add-submit", fields: [nonceField] },
   "mcp-set-enabled": { wireToken: "mcp-set-enabled", fields: [mcpEntityIdField, enabledField] },
   "mcp-remove-prompt": { wireToken: "mcp-remove-prompt", fields: [mcpEntityIdField] },
@@ -1207,7 +1358,6 @@ export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
     fields: [requiredChannelIdField, fpField],
   },
   retry: { wireToken: "retry", fields: [categoryField, pageField, optionalPersonaIdField] },
-  refresh: { wireToken: "refresh", fields: [categoryField, pageField, optionalPersonaIdField] },
 };
 
 const CODECS_BY_WIRE_TOKEN = indexCodecsByWireToken<ConfigAction, ConfigPanelRoute>(CONFIG_ROUTE_CODECS);
@@ -1229,12 +1379,8 @@ export const CONFIG_MCP_PANEL_ROUTE_ADAPTER: McpsPanelRouteAdapter = {
         return buildConfigRouteId({ action: "mcp-range", locale: route.locale, rangeIndex: route.rangeIndex });
       case "retry":
         return buildConfigRouteId({ action: "mcp-retry", locale: route.locale, selectedId: route.selectedId });
-      case "refresh":
-        return buildConfigRouteId({ action: "mcp-refresh", locale: route.locale, selectedId: route.selectedId });
       case "add-open":
         return buildConfigRouteId({ action: "mcp-add-open", locale: route.locale });
-      case "add-type":
-        return buildConfigRouteId({ action: "mcp-add-type", locale: route.locale });
       case "add-submit":
         return buildConfigRouteId({ action: "mcp-add-submit", locale: route.locale, nonce: route.nonce });
       case "set-enabled":

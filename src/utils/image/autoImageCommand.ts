@@ -1,4 +1,9 @@
 import {
+  resolveGenerationModelOption,
+  replyGenerationModelUnavailable,
+} from "@/utils/discord/autocomplete/generationModelAutocomplete";
+import { GenerationModelUnavailableError, validateGenerationModelSelection } from "@/utils/provider/generationModels";
+import {
   MessageFlags,
   PermissionFlagsBits,
   TextInputStyle,
@@ -24,6 +29,11 @@ import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/p
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
 import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
+import {
+  findProviderOption,
+  findProviderOptionByActiveProvider,
+  withProviderOptionCopy,
+} from "@/utils/provider/providerOptionRegistry";
 
 const MODAL_CUSTOM_ID = "generate_image_auto_modal";
 const PROMPT_INPUT_ID = "generate_image_auto_prompt";
@@ -193,6 +203,7 @@ async function replyQuotaExceeded(
   replyTarget: ChatInputCommandInteraction | import("discord.js").ModalSubmitInteraction,
   locale: string,
   quotaCheck: ImageQuotaCheckResult,
+  tipKeys: string[],
 ): Promise<void> {
   const errorTitleKey = "commands.generate.image.quota_exceeded_title";
   let errorDescriptionKey = "commands.generate.image.quota_exceeded_description";
@@ -224,6 +235,7 @@ async function replyQuotaExceeded(
     descriptionKey: errorDescriptionKey,
     descriptionVars,
     footerKey: "commands.generate.image.quota_exceeded_footer",
+    tipKeys,
     color: ColorCode.ERROR,
     flags: MessageFlags.Ephemeral,
   });
@@ -305,12 +317,45 @@ export async function executeAutoImageCommand(
     });
     return;
   }
+  const modelSelection = await resolveGenerationModelOption(
+    interaction,
+    baseTomoriState.server_id,
+    userData.user_id ?? null,
+    locale,
+    "image",
+  );
+  if (modelSelection === false) return;
+
   let activeConfigs:
     | Awaited<ReturnType<typeof applyPersonalProviderSelectionsToTomoriState>>["activeConfigs"]
     | undefined;
   const overlay = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
-  const { tomoriState } = overlay;
+  const tomoriState = modelSelection
+    ? {
+        ...overlay.tomoriState,
+        config: {
+          ...overlay.tomoriState.config,
+          diffusion_model_id: modelSelection.kind === "image" ? modelSelection.modelId : null,
+          nai_diffusion_model_id: modelSelection.kind === "image-nai" ? modelSelection.modelId : null,
+        },
+      }
+    : overlay.tomoriState;
   activeConfigs = overlay.activeConfigs;
+  const recoveryTips = async (tipKeys: string[]) => {
+    return withProviderOptionCopy(tipKeys, {
+      surface: "recovery",
+      managedProvider: activeConfigs?.text
+        ? (findProviderOption(activeConfigs.text.provider)?.value ?? null)
+        : (findProviderOptionByActiveProvider(
+            tomoriState.llm.llm_provider,
+            { kind: "server", ownerId: tomoriState.server_id, state: tomoriState },
+            "text",
+          )?.value ?? null),
+      userDiscId: interaction.user.id,
+      serverId: tomoriState.server_id,
+      credentialScope: activeConfigs?.text ? "personal" : "server",
+    });
+  };
 
   const personaSummaries = await loadServerPersonaSummaries(tomoriState.server_id);
   const invokingMember = interaction.member as import("discord.js").GuildMember | null;
@@ -404,19 +449,11 @@ export async function executeAutoImageCommand(
   // The hidden image agent requires function-calling support on the active model.
   //    Without tool support the model cannot call generate_image / generate_image_nai.
   if (!tomoriState.llm.has_tools) {
+    if (!interaction.replied && !interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.tool.visualize.planner_unavailable_title",
       descriptionKey: "commands.tool.visualize.planner_unavailable_description",
-      color: ColorCode.ERROR,
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
-
-  if (!tomoriState.config.api_key) {
-    await replyInfoEmbed(interaction, locale, {
-      titleKey: "commands.generate.image.no_api_key_title",
-      descriptionKey: "commands.generate.image.no_api_key_description",
+      tipKeys: await recoveryTips([]),
       color: ColorCode.ERROR,
       flags: MessageFlags.Ephemeral,
     });
@@ -424,18 +461,27 @@ export async function executeAutoImageCommand(
   }
 
   const provider = tomoriState.llm.llm_provider.toLowerCase();
-  const backendAvailability = await resolveSceneImageBackendAvailability({
-    provider,
-    tomoriState,
-    serverId: serverDiscId,
-  });
+  const backendAvailability: SceneImageBackendAvailability = modelSelection
+    ? {
+        currentProvider: modelSelection.kind === "image",
+        novelAi: modelSelection.kind === "image-nai",
+        showBackendSelector: false,
+        defaultBackend: modelSelection.kind === "image-nai" ? "novelai" : "current_provider",
+      }
+    : await resolveSceneImageBackendAvailability({
+        provider,
+        tomoriState,
+        serverId: serverDiscId,
+      });
   if (!backendAvailability.defaultBackend) {
+    if (!interaction.replied && !interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.tool.visualize.no_backend_title",
       descriptionKey: "commands.tool.visualize.no_backend_description",
       descriptionVars: {
         current_provider: tomoriState.llm.llm_provider,
       },
+      tipKeys: await recoveryTips([]),
       color: ColorCode.ERROR,
       flags: MessageFlags.Ephemeral,
     });
@@ -443,9 +489,13 @@ export async function executeAutoImageCommand(
   }
 
   // Quota check before showing the modal (avoids wasting user interaction).
-  const quotaCheck = await checkImageQuota(tomoriState.server_id, interaction.user.id);
+  const quotaCheck: ImageQuotaCheckResult =
+    modelSelection?.source === "personal"
+      ? { allowed: true }
+      : await checkImageQuota(tomoriState.server_id, interaction.user.id);
   if (!quotaCheck.allowed) {
-    await replyQuotaExceeded(interaction, locale, quotaCheck);
+    if (!interaction.replied && !interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await replyQuotaExceeded(interaction, locale, quotaCheck, await recoveryTips([]));
     return;
   }
 
@@ -508,6 +558,8 @@ export async function executeAutoImageCommand(
   const modalSubmitInteraction = modalResult.interaction;
 
   try {
+    if (modelSelection)
+      await validateGenerationModelSelection(tomoriState.server_id, userData.user_id ?? null, modelSelection);
     const selectedSetting = (modalResult.values?.[SETTING_INPUT_ID] as SceneSettingId | undefined) ?? "storybeat";
     const settingPreset = SCENE_SETTING_PRESETS[selectedSetting] ?? SCENE_SETTING_PRESETS.storybeat;
 
@@ -527,6 +579,7 @@ export async function executeAutoImageCommand(
         descriptionVars: {
           current_provider: tomoriState.llm.llm_provider,
         },
+        tipKeys: await recoveryTips([]),
         color: ColorCode.ERROR,
       });
       return;
@@ -602,6 +655,8 @@ export async function executeAutoImageCommand(
         : undefined;
 
     const agentResult = await runHiddenImageTurn({
+      spoiler: interaction.options.getBoolean("nsfw") ?? false,
+      imageModelSelection: modelSelection ?? undefined,
       channel: interaction.channel as Parameters<typeof runHiddenImageTurn>[0]["channel"],
       client,
       guild: interaction.guild ?? null,
@@ -623,12 +678,12 @@ export async function executeAutoImageCommand(
 
     if (!agentResult.success) {
       const isPersonalText = Boolean(activeConfigs?.text);
-      const tipKeys = [
+      const tipKeys = await recoveryTips([
         "genai.tips.refresh_context",
         ...(isPersonalText
           ? ["genai.tips.disable_personal_text_override", "genai.tips.switch_model_provider_personal"]
           : ["genai.tips.switch_model_provider"]),
-      ];
+      ]);
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.tool.visualize.planner_failed_title",
         descriptionKey: "commands.tool.visualize.planner_failed_description",
@@ -662,6 +717,10 @@ export async function executeAutoImageCommand(
       invokingMember,
     );
   } catch (error) {
+    if (error instanceof GenerationModelUnavailableError) {
+      await replyGenerationModelUnavailable(modalSubmitInteraction, locale);
+      return;
+    }
     log.error("Error in /generate image:auto", error as Error, {
       errorType: "GenerateImageAutoCommandError",
       metadata: {
@@ -673,12 +732,12 @@ export async function executeAutoImageCommand(
 
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     const isPersonalText = Boolean(activeConfigs?.text);
-    const tipKeys = [
+    const tipKeys = await recoveryTips([
       "genai.tips.refresh_context",
       ...(isPersonalText
         ? ["genai.tips.disable_personal_text_override", "genai.tips.switch_model_provider_personal"]
         : ["genai.tips.switch_model_provider"]),
-    ];
+    ]);
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.generate.image.error_generation_failed_title",
       descriptionKey: "commands.generate.image.error_generation_failed_description",

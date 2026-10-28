@@ -1,8 +1,15 @@
+import { REST } from "discord.js";
 import { describe, expect, it } from "bun:test";
 import type { Message } from "discord.js";
 import type { StreamContext } from "@/types/stream/interfaces";
 import { createDefaultStreamState } from "@/types/stream/types";
+import {
+  classifySendFailure,
+  getBlockedSendReason,
+  resetSendFailureCacheForTesting,
+} from "@/utils/discord/stream/sendFailureCache";
 import { StreamUiUpdater } from "@/utils/discord/stream/uiUpdater";
+import { DiscordDeliveryError } from "@/utils/discord/webhook/deliveryOutcome";
 
 const CHANNEL_ID = "1382235263668846612";
 const SOURCE_MESSAGE_ID = "1382235263668846613";
@@ -67,9 +74,10 @@ describe("a reply whose source channel left the cache", () => {
     const context = {
       channel: {
         id: CHANNEL_ID,
+        client: { rest: new REST() },
         send: async (payload: unknown) => {
           replySends.push(payload);
-          return {};
+          return { id: "1400000000000000001", channelId: CHANNEL_ID, webhookId: null, author: { username: "Bot" } };
         },
       },
       client: {
@@ -79,9 +87,15 @@ describe("a reply whose source channel left the cache", () => {
             fetchedChannels.push(id);
             return {
               id,
+              client: { rest: new REST() },
               send: async (payload: unknown) => {
                 replySends.push(payload);
-                return {};
+                return {
+                  id: "1400000000000000001",
+                  channelId: CHANNEL_ID,
+                  webhookId: null,
+                  author: { username: "Bot" },
+                };
               },
             };
           },
@@ -133,9 +147,15 @@ describe("a reply whose source channel left the cache", () => {
             fetchedChannels.push(id);
             return {
               id,
+              client: { rest: new REST() },
               send: async (payload: unknown) => {
                 replySends.push(payload);
-                return {};
+                return {
+                  id: "1400000000000000001",
+                  channelId: CHANNEL_ID,
+                  webhookId: null,
+                  author: { username: "Bot" },
+                };
               },
             };
           },
@@ -174,9 +194,15 @@ describe("a reply whose source channel left the cache", () => {
             fetchedChannels.push(id);
             return {
               id,
+              client: { rest: new REST() },
               send: async (payload: unknown) => {
                 replySends.push(payload);
-                return {};
+                return {
+                  id: "1400000000000000001",
+                  channelId: CHANNEL_ID,
+                  webhookId: null,
+                  author: { username: "Bot" },
+                };
               },
             };
           },
@@ -249,11 +275,12 @@ describe("a deleted destination channel", () => {
         id: CHANNEL_ID,
         fetchWebhooks: async () => new Map(),
         createWebhook: async () => ({ id: "webhook-1" }),
+        client: { rest: new REST() },
         send: async () => {
           throw goneError();
         },
       },
-      webhook: { id: "webhook-1", send: async () => Promise.reject(goneError()) },
+      webhook: { id: "webhook-1", client: { rest: new REST() }, send: async () => Promise.reject(goneError()) },
       personaUsername: "Tomori",
       client: { channels: { cache: new Map(), fetch: async () => null } },
       locale: "en-US",
@@ -265,6 +292,43 @@ describe("a deleted destination channel", () => {
 
     expect(sent).toBeNull();
     expect(stopCalls).toEqual([{ channelId: CHANNEL_ID, requesterId: "channel_deleted" }]);
+  });
+
+  it("caches and propagates a 50013 refusal from the bot fallback when the webhook fails first", async () => {
+    resetSendFailureCacheForTesting();
+    try {
+      const { updater } = makeUpdater();
+      const webhookError = Object.assign(new Error("Unknown Webhook"), { code: 10015 });
+      const fallbackError = Object.assign(new Error("Missing Permissions"), { code: 50013 });
+
+      const context = {
+        channel: {
+          id: CHANNEL_ID,
+          client: { rest: new REST() },
+          send: async () => {
+            throw fallbackError;
+          },
+        },
+        webhook: { id: "webhook-1", client: { rest: new REST() }, send: async () => Promise.reject(webhookError) },
+        personaUsername: "Tomori",
+        client: { channels: { cache: new Map(), fetch: async () => null } },
+        locale: "en-US",
+        suppressUserErrors: false,
+        tomoriState: { is_alter: true, config: {} },
+      } as unknown as StreamContext;
+
+      let thrown: unknown;
+      try {
+        await updater.sendSinglePayload({ content: "hello" }, "hello", context, createDefaultStreamState());
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(getBlockedSendReason(CHANNEL_ID)).toBe("missing_permissions");
+      expect(classifySendFailure(thrown)).toBe("missing_permissions");
+    } finally {
+      resetSendFailureCacheForTesting();
+    }
   });
 });
 
@@ -298,7 +362,7 @@ describe("a transient failure while resolving the destination", () => {
     // left alone and no log claims the channel is gone.
     await expect(
       updater.sendSinglePayload({ content: "hello" }, "hello", context, createDefaultStreamState()),
-    ).rejects.toThrow(/Discord send failed/);
+    ).rejects.toBeInstanceOf(DiscordDeliveryError);
     expect(stopCalls).toEqual([]);
   });
 
@@ -343,6 +407,7 @@ describe("a send refused by Discord for missing access", () => {
     const context = {
       channel: {
         id: CHANNEL_ID,
+        client: { rest: new REST() },
         send: async () => {
           // Shaped like DiscordAPIError, which is not the resolver's own class.
           throw Object.assign(new Error("Missing Access"), { code: 50001, status: 403 });
@@ -376,9 +441,15 @@ describe("a webhook-delivered send into a channel that cannot be resolved", () =
       channel: { id: CHANNEL_ID },
       webhook: {
         id: "webhook-1",
+        client: { rest: new REST() },
         send: async (payload: unknown) => {
           webhookSends.push(payload);
-          return {};
+          return {
+            id: "1400000000000000001",
+            channelId: CHANNEL_ID,
+            webhookId: "webhook-1",
+            author: { username: "Bot" },
+          };
         },
       },
       personaUsername: "Tomori",
@@ -415,9 +486,15 @@ describe("a webhook-delivered send into a channel that cannot be resolved", () =
       channel: { id: CHANNEL_ID },
       webhook: {
         id: "webhook-1",
+        client: { rest: new REST() },
         send: async (payload: unknown) => {
           webhookSends.push(payload);
-          return {};
+          return {
+            id: "1400000000000000001",
+            channelId: CHANNEL_ID,
+            webhookId: "webhook-1",
+            author: { username: "Bot" },
+          };
         },
       },
       personaUsername: "Tomori",
@@ -459,9 +536,10 @@ describe("a reply whose source channel is unreachable", () => {
       // The reachable destination the turn falls back to, which is not the source's channel.
       channel: {
         id: CHANNEL_ID,
+        client: { rest: new REST() },
         send: async (payload: unknown) => {
           sends.push(payload);
-          return {};
+          return { id: "1400000000000000001", channelId: CHANNEL_ID, webhookId: null, author: { username: "Bot" } };
         },
       },
       client: {

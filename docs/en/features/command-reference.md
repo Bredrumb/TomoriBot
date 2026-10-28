@@ -11,7 +11,15 @@ sidebar:
 
 Every slash command currently registered by TomoriBot, generated from the same command builders and English locale descriptions used for Discord registration.
 
-Top-level command groups: **41**. Runnable slash commands: **85**.
+Top-level command groups: **44**. Runnable slash commands: **91**.
+
+## `/booru`
+
+Find existing anime art
+
+| Command | Summary |
+|---|---|
+| `/booru search` | Post random well-rated Danbooru images for one or two tags |
 
 ## `/comment`
 
@@ -208,6 +216,14 @@ Age-restricted commands and settings.
 | `/nsfw persona default` | Apply an NSFW preset personality configuration |
 | `/nsfw persona import` | Import a persona from a PNG, JSON, or CHARX file, including NSFW personas |
 
+## `/nudge-studio`
+
+Choose which idle nudges I use in this server, and write your own.
+
+| Command | Summary |
+|---|---|
+| `/nudge-studio` | Choose which idle nudges I use in this server, and write your own. |
+
 ## `/nuke`
 
 Completely wipe all server data. Requires re-running /setup afterwards.
@@ -238,6 +254,7 @@ Manage your personal settings
 | `/personal config` | Manage your personal preferences, privacy, models, and profile. |
 | `/personal language` | Choose the language TomoriBot speaks to you in. |
 | `/personal memories` | Manage your personal long-term memories and short-term conversational context. |
+| `/personal message-proxy` | Choose a supported message proxy service for your account. |
 | `/personal nuke` | Erase everything TomoriBot stores about you, in every server. |
 | `/personal providers` | Manage your personal provider credentials, endpoints, and model catalogs. |
 
@@ -315,6 +332,14 @@ Reward me with fun interactions.
 | `/reward kiss` | Give me a kiss! |
 | `/reward tickle` | Tickle me! |
 
+## `/roll`
+
+Roll dice for tabletop games and roleplay.
+
+| Command | Summary |
+|---|---|
+| `/roll` | Roll dice for tabletop games and roleplay. |
+
 ## `/scheduled-task`
 
 Manage scheduled tasks and reminders.
@@ -338,7 +363,9 @@ View usage statistics
 
 | Command | Summary |
 |---|---|
-| `/stats generate` | Generate a shareable stats image card. |
+| `/stats generate persona` | Generate your Persona Affinity card with one persona. |
+| `/stats generate personal` | Generate your Personal Wrapped card. |
+| `/stats generate server` | Generate this server's Server Leaderboard card. |
 | `/stats persona` | View a persona's usage statistics on this server. |
 | `/stats personal` | View your own usage statistics. |
 | `/stats server` | View server-wide usage statistics. |

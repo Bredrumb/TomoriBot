@@ -1,7 +1,7 @@
 export default {
   server: {
     timezone: {
-      value_description: `Horas de desfase UTC (predeterminado: 0). Ejemplos: 8, -5, 0, 9.`,
+      value_description: `Horas de desfase UTC (predeterminado: 0). Ejemplos: 8, -5, 0, 5:30.`,
     },
     stm: {
       parameters: {
@@ -21,7 +21,6 @@ export default {
         slot_4_label: `Categoría 4`,
         slot_5_label: `Categoría 5`,
         slot_instructions: `Caja = "Etiqueta: Descripción" (ej. "Metas: objetivos de equipo"). Vacío se omite; borrar todos reinicia.`,
-        slot_placeholder: `Etiqueta: Descripción`,
       },
     },
     "crosschannel-blocklist": {
@@ -50,7 +49,7 @@ export default {
       attributelist_desc: `Añadir/quitar atributos de personalidad`,
       sampledialogues_desc: `Añadir/quitar pares de diálogo de muestra`,
       promptsnapshot_desc: `Ver prompts completos desde /context y /tool prompt snapshot`,
-      select_placeholder: `Selecciona qué pueden hacer los miembros conmigo`,
+      select_placeholder: `Elige qué pueden hacer los miembros conmigo`,
       select_embed_title: `Permisos de miembros del servidor`,
       select_embed_description: `Selecciona qué cosas pueden hacer los miembros que no son administradores. Marcado = permitido.`,
     },

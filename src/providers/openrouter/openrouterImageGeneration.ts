@@ -1,12 +1,18 @@
 import { isOpenRouterGeminiModelCodename } from "@/utils/provider/openrouterModelCapabilities";
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
-import { log } from "@/utils/misc/logger";
+import { log, redactLogString } from "@/utils/misc/logger";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { z } from "zod";
+import { readBoundedResponse } from "@/utils/security/boundedResponse";
+import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
+import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
 
 const OPENROUTER_ORIGIN = "https://openrouter.ai";
 const OPENROUTER_CHAT_URL = `${OPENROUTER_ORIGIN}/api/v1/chat/completions`;
 const OPENROUTER_IMAGES_URL = `${OPENROUTER_ORIGIN}/api/v1/images`;
+export const OPENROUTER_IMAGE_RESPONSE_MAX_BYTES = 64 * 1024 * 1024;
+const IMAGE_ERROR_RESPONSE_MAX_BYTES = 1024 * 1024;
 
 interface OpenRouterImageReference {
   mimeType: string;
@@ -25,35 +31,46 @@ export interface OpenRouterImageGenerationRequest {
 export interface OpenRouterImageGenerationResult {
   imageData: string | null;
   mimeType: string | null;
+  costUsd?: number;
 }
 
-/**
- * Whether a model generates images as a chat completion rather than through the image endpoint.
- *
- * Gemini models are chat models that happen to emit images, so they answer on `/chat/completions` with
- * `modalities`. Every dedicated image model moved to OpenRouter's unified `/api/v1/images` endpoint and
- * now rejects `/chat/completions` outright: some report the legible 404 "is an image generation model and
- * cannot be used with the chat/completions endpoint", while others surface it as an opaque 500.
- */
+const usageCostSchema = z.object({ cost: z.number().finite().nonnegative().nullish() }).nullish().catch(undefined);
+
 export function usesChatCompletionsImageGeneration(modelCodename: string): boolean {
   return isOpenRouterGeminiModelCodename(modelCodename);
 }
 
-function buildRequestFailure(modelCodename: string, status: number, statusText: string, body: string): Error {
-  const bodySnippet = body.slice(0, 500);
+function buildRequestFailure(
+  modelCodename: string,
+  status: number,
+  statusText: string,
+  headers: Headers,
+  body: string,
+  apiKey: string,
+): Error {
+  const safeBody = redactLogString(apiKey ? body.replaceAll(apiKey, "[REDACTED]") : body);
 
   let parsedMessage = "";
   try {
-    const parsed = JSON.parse(body);
-    parsedMessage = (parsed?.error?.message as string | undefined) || (parsed?.message as string | undefined) || "";
-  } catch {
-    // A non-JSON body is reported verbatim below; OpenRouter's own errors are always JSON.
-  }
+    const parsed = z
+      .object({
+        error: z.union([z.string(), z.object({ message: z.string().optional() })]).optional(),
+        message: z.string().optional(),
+      })
+      .safeParse(JSON.parse(safeBody));
+    if (parsed.success) {
+      const providerError = parsed.data.error;
+      parsedMessage =
+        (typeof providerError === "string" ? providerError : providerError?.message) || parsed.data.message || "";
+    }
+  } catch {}
 
-  const friendlyMessage = parsedMessage || bodySnippet || `${status} ${statusText}`.trim();
-  return new Error(
-    `OpenRouter API request failed (${status} ${statusText}) for model "${modelCodename}": ${friendlyMessage}`,
-  );
+  const statusLabel = `${status} ${statusText}`.trim();
+  const friendlyMessage = parsedMessage || statusLabel;
+  const message = `OpenRouter API request failed (${statusLabel}) for model "${modelCodename}": ${friendlyMessage}`;
+  return new Error(redactLogString(apiKey ? message.replaceAll(apiKey, "[REDACTED]") : message), {
+    cause: readOpenRouterLimitError(status, headers, body) ?? undefined,
+  });
 }
 
 async function resolveImageUrl(imageUrl: string, abortSignal?: AbortSignal): Promise<OpenRouterImageGenerationResult> {
@@ -91,28 +108,63 @@ async function generateViaChatCompletions(
     contentParts.push({ type: "image_url", image_url: { url: `data:${image.mimeType};base64,${image.data}` } });
   }
 
-  const response = await fetch(OPENROUTER_CHAT_URL, {
+  const response = await fetchWithProviderRequest(OPENROUTER_CHAT_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: modelCodename,
       messages: [{ role: "user", content: contentParts }],
       modalities: ["image", "text"],
-      image_config: { aspect_ratio: aspectRatio },
+      image_config: {
+        aspect_ratio: aspectRatio,
+        ...(modelCodename === "google/gemini-nano-banana-2.1" ? { image_size: "1K" } : {}),
+      },
     }),
     ...(abortSignal ? { signal: abortSignal } : {}),
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    log.warn(
-      `[OpenRouter] Chat image request failed (${response.status} ${response.statusText}) for model "${modelCodename}". Body: ${errorText.slice(0, 500)}`,
+    const errorText = (await readBoundedResponse(response, IMAGE_ERROR_RESPONSE_MAX_BYTES)).toString("utf8");
+    const failure = buildRequestFailure(
+      modelCodename,
+      response.status,
+      response.statusText,
+      response.headers,
+      errorText,
+      apiKey,
     );
-    throw buildRequestFailure(modelCodename, response.status, response.statusText, errorText);
+    log.warn("OpenRouter chat image request failed", failure, {
+      metadata: { model: modelCodename, status: response.status },
+    });
+    throw failure;
   }
 
-  const result = await response.json();
+  const result = z
+    .object({
+      choices: z
+        .array(
+          z.object({
+            message: z
+              .object({
+                images: z
+                  .array(
+                    z.object({
+                      image_url: z.object({ url: z.string() }).optional(),
+                      imageUrl: z.object({ url: z.string() }).optional(),
+                    }),
+                  )
+                  .optional(),
+                content: z.union([z.string(), z.array(z.unknown())]).nullish(),
+              })
+              .optional(),
+          }),
+        )
+        .optional(),
+      usage: usageCostSchema,
+    })
+    .parse(JSON.parse((await readBoundedResponse(response, OPENROUTER_IMAGE_RESPONSE_MAX_BYTES)).toString("utf8")));
   const message = result.choices?.[0]?.message;
+  const costUsd = result.usage?.cost ?? undefined;
 
   let imageUrl: string | null = null;
   if (message?.images?.[0]) {
@@ -127,7 +179,9 @@ async function generateViaChatCompletions(
     imageUrl = firstImagePart?.image_url?.url || null;
   }
 
-  return imageUrl ? await resolveImageUrl(imageUrl, abortSignal) : { imageData: null, mimeType: null };
+  return imageUrl
+    ? { ...(await resolveImageUrl(imageUrl, abortSignal)), costUsd }
+    : { imageData: null, mimeType: null, costUsd };
 }
 
 async function generateViaImagesEndpoint(
@@ -147,7 +201,7 @@ async function generateViaImagesEndpoint(
     }));
   }
 
-  const response = await fetch(OPENROUTER_IMAGES_URL, {
+  const response = await fetchWithProviderRequest(OPENROUTER_IMAGES_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -159,22 +213,36 @@ async function generateViaImagesEndpoint(
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    log.warn(
-      `[OpenRouter] Image request failed (${response.status} ${response.statusText}) for model "${modelCodename}". Body: ${errorText.slice(0, 500)}`,
+    const errorText = (await readBoundedResponse(response, IMAGE_ERROR_RESPONSE_MAX_BYTES)).toString("utf8");
+    const failure = buildRequestFailure(
+      modelCodename,
+      response.status,
+      response.statusText,
+      response.headers,
+      errorText,
+      apiKey,
     );
-    throw buildRequestFailure(modelCodename, response.status, response.statusText, errorText);
+    log.warn("OpenRouter image request failed", failure, {
+      metadata: { model: modelCodename, status: response.status },
+    });
+    throw failure;
   }
 
-  const result = await response.json();
+  const result = z
+    .object({
+      data: z.array(z.object({ b64_json: z.string().optional(), media_type: z.string().nullish() })).optional(),
+      usage: usageCostSchema,
+    })
+    .parse(JSON.parse((await readBoundedResponse(response, OPENROUTER_IMAGE_RESPONSE_MAX_BYTES)).toString("utf8")));
   const first = result?.data?.[0];
   const base64 = typeof first?.b64_json === "string" ? first.b64_json : null;
+  const costUsd = result.usage?.cost ?? undefined;
   if (!base64) {
-    return { imageData: null, mimeType: null };
+    return { imageData: null, mimeType: null, costUsd };
   }
 
   // media_type is omitted only when the format cannot be determined; callers default to PNG.
-  return { imageData: base64, mimeType: typeof first?.media_type === "string" ? first.media_type : null };
+  return { imageData: base64, mimeType: typeof first?.media_type === "string" ? first.media_type : null, costUsd };
 }
 
 export async function generateOpenRouterImage(

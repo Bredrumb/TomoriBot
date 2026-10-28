@@ -5,7 +5,7 @@ import {
   USER_IDENTITY_FIELD_MAX_LENGTH,
   USER_NICKNAME_MAX_LENGTH,
 } from "@/types/personaNaming";
-import { PrivacyLevel, type UserRow } from "@/types/db/schema";
+import { PrivacyLevel, type UserRow, utcOffsetSchema } from "@/types/db/schema";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { resolveUserTarget } from "@/utils/discord/targetResolver";
 import { sendToolNoticeContainer } from "@/utils/discord/expandableEmbedNotice";
@@ -28,6 +28,30 @@ const ALL_FIELDS = [...NAMING_FIELDS, ...GLOBAL_FIELDS] as const;
 
 type UserInfoField = (typeof ALL_FIELDS)[number];
 
+const STYLE_LABEL_KEYS: Record<NonNullable<UserRow["addressing_style"]>, string> = {
+  masculine: "commands.personal.profile.about.style_masculine",
+  feminine: "commands.personal.profile.about.style_feminine",
+  neutral: "commands.personal.profile.about.style_neutral",
+};
+
+const FIELD_LABEL_KEYS: Record<UserInfoField, string> = {
+  nickname: "tools.user_info_update.field_nickname",
+  prefix: "tools.user_info_update.field_prefix",
+  suffix: "tools.user_info_update.field_suffix",
+  gender_identity: "tools.user_info_update.field_gender_identity",
+  pronouns: "tools.user_info_update.field_pronouns",
+  addressing_style: "tools.user_info_update.field_addressing_style",
+  timezone_offset: "tools.user_info_update.field_timezone_offset",
+};
+
+const SUBJECT_LABEL_KEYS: Record<"nickname" | (typeof GLOBAL_FIELDS)[number], string> = {
+  nickname: "tools.user_info_update.subject_nickname",
+  gender_identity: "tools.user_info_update.subject_gender_identity",
+  pronouns: "tools.user_info_update.subject_pronouns",
+  addressing_style: "tools.user_info_update.subject_addressing_style",
+  timezone_offset: "tools.user_info_update.subject_timezone_offset",
+};
+
 const updateUserInfoInputSchema = z
   .object({
     target_user: z.string().min(1).optional(),
@@ -37,7 +61,7 @@ const updateUserInfoInputSchema = z
     gender_identity: z.string().max(USER_IDENTITY_FIELD_MAX_LENGTH).optional(),
     pronouns: z.string().max(USER_IDENTITY_FIELD_MAX_LENGTH).optional(),
     addressing_style: z.enum(["masculine", "feminine", "neutral"]).optional(),
-    timezone_offset: z.number().int().min(-12).max(14).optional(),
+    timezone_offset: utcOffsetSchema.optional(),
     clear: z.array(z.enum(ALL_FIELDS)).max(ALL_FIELDS.length).optional(),
   })
   .strict();
@@ -128,7 +152,9 @@ async function resolveLiveDisplayName(context: ToolContext, targetDiscordId: str
       guild?.members.cache.get(targetDiscordId) ?? (await guild?.members.fetch(targetDiscordId).catch(() => null));
     if (member) return member.displayName;
   }
-  const user = context.client?.users.cache.get(targetDiscordId);
+  const user =
+    context.client?.users.cache.get(targetDiscordId) ??
+    (await context.client?.users.fetch(targetDiscordId).catch(() => null));
   return user?.globalName ?? user?.username ?? targetDiscordId;
 }
 
@@ -205,8 +231,8 @@ function buildBatch(plans: FieldPlan[], lineageId: number | null): UserInfoWrite
   return batch;
 }
 
-function styleLabel(locale: string, style: string | null | undefined): string | null {
-  return style ? localizer(locale, `commands.personal.profile.about.style_${style}`) : null;
+function styleLabel(locale: string, style: UserRow["addressing_style"]): string | null {
+  return style ? localizer(locale, STYLE_LABEL_KEYS[style]) : null;
 }
 
 function previousValueLabel(
@@ -241,7 +267,8 @@ function previousValueLabel(
 function nextValueLabel(locale: string, plan: FieldPlan): string {
   if (plan.cleared) return localizer(locale, "tools.user_info_update.value_cleared");
   if (plan.field === "timezone_offset") return formatUTCOffset(Number(plan.value));
-  if (plan.field === "addressing_style") return styleLabel(locale, String(plan.value)) ?? String(plan.value);
+  if (plan.field === "addressing_style")
+    return styleLabel(locale, plan.value as NonNullable<UserRow["addressing_style"]>) ?? String(plan.value);
   return String(plan.value);
 }
 
@@ -265,7 +292,7 @@ function buildSuccessBody(
   const personaName = context.personaUsername ?? context.tomoriState.persona_nickname;
   const lines = plans.map((plan, index) => {
     const isNaming = personaScoped && (NAMING_FIELDS as readonly string[]).includes(plan.field);
-    const fieldLabel = localizer(locale, `tools.user_info_update.field_${plan.field}`);
+    const fieldLabel = localizer(locale, FIELD_LABEL_KEYS[plan.field]);
     return localizer(locale, "tools.user_info_update.change_line", {
       index: index + 1,
       field: isNaming
@@ -327,10 +354,8 @@ export function buildSuccessHeading(
   plans: FieldPlan[],
   targetLabel: string,
 ): { titleKey: string; titleVars: Record<string, string>; color: ColorCode } {
-  const subjects = [
-    ...new Set(
-      plans.map((plan) => ((NAMING_FIELDS as readonly string[]).includes(plan.field) ? "nickname" : plan.field)),
-    ),
+  const subjects: (keyof typeof SUBJECT_LABEL_KEYS)[] = [
+    ...new Set(plans.map((plan) => (plan.field === "prefix" || plan.field === "suffix" ? "nickname" : plan.field))),
   ];
   if (subjects.length > MAX_TITLE_SUBJECTS) {
     return {
@@ -340,7 +365,7 @@ export function buildSuccessHeading(
     };
   }
   const fields = new Intl.ListFormat(locale, { type: "conjunction", style: "long" }).format(
-    subjects.map((subject) => localizer(locale, `tools.user_info_update.subject_${subject}`)),
+    subjects.map((subject) => localizer(locale, SUBJECT_LABEL_KEYS[subject])),
   );
   const titleVars = { target_user: targetLabel, fields };
   return isPureClear(plans)
@@ -354,7 +379,7 @@ async function sendSuccessNotice(
   targetLabel: string,
   body: string,
 ): Promise<void> {
-  if (context.suppressProgressNotices || !context.channel) return;
+  if (!context.channel) return;
   try {
     await sendToolNoticeContainer(context, "user_info_update", {
       ...buildSuccessHeading(context.locale, plans, targetLabel),
@@ -410,7 +435,8 @@ export class UpdateUserInfoTool extends BaseTool {
       },
       timezone_offset: {
         type: "number",
-        description: "Their UTC offset in whole hours, from -12 through +14.",
+        description:
+          "Their UTC offset in hours, from -12 through +14, in quarter-hour steps (5.5 for UTC+5:30, 5.75 for UTC+5:45).",
       },
       clear: {
         type: "array",

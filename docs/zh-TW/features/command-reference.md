@@ -11,7 +11,15 @@ sidebar:
 
 TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使用的同一批指令建構器與繁體中文說明產生的（尚未翻譯的說明會以英文顯示）。
 
-頂層指令群組：**41**。可執行的斜線指令：**85**。
+頂層指令群組：**44**。可執行的斜線指令：**91**。
+
+## `/booru`
+
+尋找現有的動漫插圖
+
+| 指令 | 摘要 |
+|---|---|
+| `/booru search` | 根據一個或兩個標籤隨機發送評價良好的 Danbooru 圖片 |
 
 ## `/comment`
 
@@ -208,6 +216,14 @@ TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使�
 | `/nsfw persona default` | 套用 NSFW 的預設人格設定 |
 | `/nsfw persona import` | 從 PNG、JSON 或 CHARX 檔匯入人格，包含 NSFW 人格 |
 
+## `/nudge-studio`
+
+選擇我在此伺服器中使用的閒置搭話，或自行撰寫。
+
+| 指令 | 摘要 |
+|---|---|
+| `/nudge-studio` | 選擇我在此伺服器中使用的閒置搭話，或自行撰寫。 |
+
 ## `/nuke`
 
 完全清空所有伺服器資料。之後需要重新執行 /setup。
@@ -238,6 +254,7 @@ TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使�
 | `/personal config` | 管理你的個人偏好、隱私、模型與個人檔案。 |
 | `/personal language` | 選擇 TomoriBot 對你說話時使用的語言。 |
 | `/personal memories` | 管理你的個人長期記憶與短期對話脈絡。 |
+| `/personal message-proxy` | 為你的帳號選擇支援的訊息代理服務。 |
 | `/personal nuke` | 清除 TomoriBot 在每個伺服器儲存的、關於你的一切。 |
 | `/personal providers` | 管理你的個人供應商憑證、端點與模型目錄。 |
 
@@ -315,6 +332,14 @@ TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使�
 | `/reward kiss` | 親我一下！ |
 | `/reward tickle` | 搔我癢！ |
 
+## `/roll`
+
+為桌遊與跑團角色扮演擲骰。
+
+| 指令 | 摘要 |
+|---|---|
+| `/roll` | 為桌遊與跑團角色扮演擲骰。 |
+
 ## `/scheduled-task`
 
 管理排程任務與提醒。
@@ -338,7 +363,9 @@ TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使�
 
 | 指令 | 摘要 |
 |---|---|
-| `/stats generate` | 生成可分享的統計圖片卡。 |
+| `/stats generate persona` | 生成你與單一人格的人格契合度卡。 |
+| `/stats generate personal` | 生成你的個人回顧卡。 |
+| `/stats generate server` | 生成這個伺服器的伺服器排行榜卡。 |
 | `/stats persona` | 查看某個人格在這個伺服器的使用統計。 |
 | `/stats personal` | 查看你自己的使用統計。 |
 | `/stats server` | 查看整個伺服器的使用統計。 |

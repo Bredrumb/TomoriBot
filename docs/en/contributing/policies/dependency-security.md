@@ -46,6 +46,16 @@ GHSA ID is the one to use: `bun audit --json` shows the `url`, and a missing CVE
 
 ## Active exceptions
 
+### Docs math dependencies
+
+The docs build uses KaTeX 0.18.2 or newer in the 0.18 release line to address
+[GHSA-238p-pmpm-9mq7](https://github.com/advisories/GHSA-238p-pmpm-9mq7).
+Scoped overrides for `rehype-katex` and `micromark-extension-math` replace their older KaTeX
+requirements. Both use its `renderToString` interface. Remove each override when its parent accepts
+a patched KaTeX version, and verify the docs build before removing it.
+
+### Advisory exceptions
+
 - **`CVE-2026-25128`, fast-xml-parser (Trivy only)**: reached through the AWS SDK v3, whose input comes
 only from AWS endpoints. The global `"fast-xml-parser": ">=5.7.0"` override in `package.json` raises
 every copy, including the one nested under `@aws-sdk/xml-builder` (5.7.0 in `bun.lock`). Recheck with
@@ -61,6 +71,37 @@ override floor) or `starlight-llms-txt` drops `micromatch`.
 breaks the `@google-cloud/storage` import (`bun run check-runtime-imports` guards this). The flaw needs
 `v3`, `v5`, or `v6` called with a caller-supplied `buf`; those libraries only call `v4` without one.
 Remove the entry when `gaxios` and `@google-cloud/storage` declare `uuid` 11 or newer.
+
+### Optional Irodori server
+
+`servers/tts/irodoritts/pyproject.toml` owns the Python dependency policy; `uv.lock` records
+the resolved versions for every backend. These packages are installed by the Irodori setup scripts
+and are outside the main bot Docker image and Bun audit gates.
+
+Use `tool.uv.constraint-dependencies` for security floors that fit upstream ranges. The protobuf
+and sentencepiece fixes require `tool.uv.override-dependencies`: `descript-audiotools` 0.7.2 caps
+protobuf below 3.20, and the pinned Irodori revision caps sentencepiece below 0.2. Remove each
+override when its parent admits the patched version. Validate overrides with runtime imports,
+TensorBoard event writing, tokenizer encode/decode, and actual cloning and VoiceDesign synthesis.
+
+The following individual Dependabot alerts accept risk within the current server interface:
+
+- **`GHSA-rrmf-rvhw-rf47` / `CVE-2025-3000`, torch**: retain the coordinated Torch/Torchaudio 2.10
+  backend pins. The [reported crash](https://github.com/pytorch/pytorch/issues/149623) requires
+  compiling a scripted class with a bare list or tuple annotation. The pinned codec's
+  `dacvae/nn/layers.py` scripts a fixed tensor function, `snake`; synthesis requests supply text,
+  captions, and audio, never Python source. Revisit if the server admits user-supplied scripted
+  code or when a coordinated backend upgrade can move Torch to 2.13 or newer.
+- **`GHSA-4j2p-28q2-5m79` / `CVE-2026-69112`, accelerate**: the advisory has no listed patched
+  version. Malicious sharded checkpoint indexes can escape the checkpoint directory or hang a
+  loader. Model and checkpoint selection belongs to the operator through environment variables;
+  synthesis requests cannot select checkpoints. Use only trusted model repositories and local
+  checkpoints. Revisit when upstream publishes a verified fix, checkpoint loading changes, or
+  callers gain control over model assets. See the
+  [upstream report](https://github.com/huggingface/accelerate/issues/4067).
+
+Record these dismissals on the individual GitHub alerts with the reasons above. Bun audit ignore
+lists and Trivy exceptions do not suppress Python Dependabot alerts.
 
 ## Adding an exception
 

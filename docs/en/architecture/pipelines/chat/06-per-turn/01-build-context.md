@@ -51,6 +51,9 @@ buildContext() (context-build pipeline)        ──► assembles StructuredCon
   hint text in `content`. A reply carries its target's files the same way it carries the target's
   images. The `read_file` hint is rendered later, once the turn's tool list is known (see
   [Dialogue history](/architecture/pipelines/context-build/02-native-assembly/11-dialogue-history/)).
+- **Thread starter media**: references to parent-channel messages are fetched from the referenced
+  channel, including forwarded snapshots; image references use the starter's ID so tools can retrieve
+  them from inside the thread.
 - **Privacy and blocks**: messages from full-privacy users and blocked authors are excluded.
 - **System notice hydration**: extracts system notices from Discord embeds and Components V2 containers,
   restoring the full text of minimal-verbosity cards via `resolveMinimalNoticeBodies()`.

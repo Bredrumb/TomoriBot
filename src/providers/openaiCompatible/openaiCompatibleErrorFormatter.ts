@@ -2,9 +2,11 @@ import { errorMessageNamesRejectableParam } from "@/providers/utils/paramDegrada
 import type { ProviderError } from "@/types/stream/interfaces";
 import {
   formatProviderErrorCodeForDisplay,
+  isOperatorActionableProviderError,
   isProviderModelErrorMessage,
   isProviderTimeoutMessage,
 } from "@/utils/provider/providerErrorClassification";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
 import { localizer } from "@/utils/text/localizer";
 
@@ -51,7 +53,9 @@ export function classifyOpenAICompatibleStatus(
   message: string,
 ): OpenAICompatibleErrorClassification {
   if (statusCode === null) {
-    return { type: "unknown", code: "unknown", retryable: false };
+    return isProviderTimeoutMessage(message)
+      ? { type: "timeout", code: "unknown", retryable: true }
+      : { type: "unknown", code: "unknown", retryable: false };
   }
 
   const code = String(statusCode);
@@ -147,6 +151,29 @@ export function normalizeOpenAICompatibleProviderError(
     retryable,
     originalError: error,
   };
+}
+
+/**
+ * Normalizes a failed API key check and reports it, so a rejected or unfunded key that a user typed
+ * stays out of `error_logs`.
+ *
+ * @param summary - Stable log prefix, such as "DeepSeek API key validation failed".
+ */
+export async function reportOpenAICompatibleKeyValidationFailure(
+  error: unknown,
+  provider: string,
+  summary: string,
+  options: NormalizeProviderErrorOptions,
+): Promise<ProviderError> {
+  const providerError = normalizeOpenAICompatibleProviderError(error, options);
+  await reportProviderFailure({
+    summary,
+    errorType: "APIKeyValidationError",
+    error,
+    expected: !isOperatorActionableProviderError(providerError),
+    dimensions: { operation: "key-validation", provider, providerErrorCode: providerError.code ?? "unknown" },
+  });
+  return providerError;
 }
 
 export function createOpenAICompatibleErrorDescription(

@@ -5,6 +5,7 @@ import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult }
 import { loadCommandData } from "@/utils/discord/commandLoader";
 import { log } from "@/utils/misc/logger";
 import { getLlmDisplayName } from "@/utils/provider/modelDisplay";
+import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 
 interface ToolSnapshot {
   builtInTools: Tool[];
@@ -28,7 +29,11 @@ function buildToolAssemblyState(context: ToolContext): ToolStateForContext {
         context.tomoriState.speech_voice_id?.trim(),
     ),
     activePersonaVoiceDesignPrompt: context.tomoriState.speech_voice_design_prompt?.trim() || null,
-    activePersonaVoiceName: context.tomoriState.speech_voice_name,
+    activePersonaVoiceSampleId: context.tomoriState.speech_voice_sample_id,
+    activePersonaVoiceId: context.tomoriState.speech_voice_id,
+    activePersonaVoiceSourcePriority: context.tomoriState.voice_source_priority,
+    speechToolState: context.streamContext?.speechToolState ?? { userId: context.internalUserId },
+
     diffusion_model_id: config.diffusion_model_id,
     nai_diffusion_model_id: config.nai_diffusion_model_id,
     video_model_id: config.video_model_id,
@@ -41,6 +46,7 @@ function buildToolAssemblyState(context: ToolContext): ToolStateForContext {
       supports_structoutput: llm.supports_structoutput,
     },
     config: {
+      emoji_usage_enabled: config.emoji_usage_enabled,
       sticker_usage_enabled: config.sticker_usage_enabled,
       web_search_enabled: config.web_search_enabled,
       self_teaching_enabled: config.self_teaching_enabled,
@@ -51,6 +57,9 @@ function buildToolAssemblyState(context: ToolContext): ToolStateForContext {
       user_blocking_enabled: config.user_blocking_enabled ?? true,
       user_info_updates_enabled: config.user_info_updates_enabled ?? true,
       thread_creation_enabled: config.thread_creation_enabled,
+      conditioning_interactions_enabled: config.conditioning_interactions_enabled,
+      dice_rolling_enabled: config.dice_rolling_enabled,
+      danbooru_enabled: config.danbooru_enabled,
     },
   };
 }
@@ -222,7 +231,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       "# Your Current Chat Capabilities",
       "",
       `- **Model**: ${displayModelName}`,
-      `- **Provider**: ${llm.llm_provider}`,
+      `- **Provider**: ${getProviderDisplayName(llm.llm_provider)}`,
       `- **Function calling**: ${llm.has_tools ? "supported" : "not supported"}`,
       `- **Image input**: ${llm.sees_images ? "supported" : "not supported"}`,
       `- **Video input**: ${llm.sees_videos ? "supported" : "not supported"}`,
@@ -271,6 +280,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
       `- **Voice messages**: ${builtInNames.has("generate_voice_message") ? "available" : "unavailable"}`,
       `- **Message management**: ${builtInNames.has("manage_message") ? "available" : "unavailable"}`,
       `- **Thread creation**: ${builtInNames.has("create_thread") ? "available" : "unavailable"}`,
+      `- **Danbooru tag lookup**: ${builtInNames.has("danbooru_search_tags") ? "available" : "unavailable"}`,
       "",
       "Current runtime state and assembled conversation context take precedence over general documentation.",
       "",
@@ -284,7 +294,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
         status: "capabilities_retrieved",
         capability_type: "chat",
         model: displayModelName,
-        provider: llm.llm_provider,
+        provider: getProviderDisplayName(llm.llm_provider),
         built_in_tools: snapshot.builtInTools.map((tool) => tool.name),
         mcp_tools: snapshot.mcpFunctionNames,
         summary: message,
@@ -308,13 +318,16 @@ export class ReviewCapabilitiesTool extends BaseTool {
       ["self teaching", config.self_teaching_enabled],
       ["message management", config.manage_message_enabled],
       ["thread creation", config.thread_creation_enabled],
+      ["playful interactions", config.conditioning_interactions_enabled],
+      ["dice rolling", config.dice_rolling_enabled],
+      ["Danbooru search", config.danbooru_enabled],
     ].filter((entry): entry is [string, false] => entry[1] === false);
 
     const content = [
       "# Current Runtime Settings",
       "",
       `- **Model**: ${displayModelName}`,
-      `- **Provider**: ${llm.llm_provider}`,
+      `- **Provider**: ${getProviderDisplayName(llm.llm_provider)}`,
       `- **Tool calling**: ${llm.has_tools ? "supported" : "not supported by this model"}`,
       `- **Available tools**: ${snapshot.builtInTools.length + snapshot.mcpFunctionNames.length} (${snapshot.builtInTools.length} built-in, ${snapshot.mcpFunctionNames.length} MCP)`,
       "",
@@ -330,6 +343,9 @@ export class ReviewCapabilitiesTool extends BaseTool {
       `- Self teaching: ${config.self_teaching_enabled ? "enabled" : "disabled"}`,
       `- Message management: ${config.manage_message_enabled ? "enabled" : "disabled"}`,
       `- Thread creation: ${config.thread_creation_enabled ? "enabled" : "disabled"}`,
+      `- Playful interactions: ${config.conditioning_interactions_enabled ? "enabled" : "disabled"}`,
+      `- Dice rolling: ${config.dice_rolling_enabled ? "enabled" : "disabled"}`,
+      `- Danbooru search: ${config.danbooru_enabled ? "enabled" : "disabled"}`,
       "",
       "## Disabled Reasons",
       "",

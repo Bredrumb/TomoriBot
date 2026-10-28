@@ -1,7 +1,24 @@
 export default {
   tools: {
+    media: {
+      delivery_failed: "O Discord não entregou a mídia. Nenhuma entrega bem-sucedida foi registrada.",
+      delivery_unconfirmed:
+        "O Discord não confirmou se a mídia foi publicada. Encerre este turno e verifique o canal antes de gerar ou publicar novamente, pois outra tentativa pode criar uma duplicata.",
+    },
+    roll_dice: {
+      missing_permissions:
+        "O bot precisa de permissão para ver este canal, enviar mensagens e anexar links para publicar uma rolagem de dados.",
+      disabled: "A rolagem de dados está desativada. Ative-a em `/config` > Plugins > Ferramentas disponíveis.",
+      cancelled: "A rolagem de dados foi cancelada antes do envio.",
+      delivery_failed: "Não foi possível postar o resultado dos dados. Nenhuma rolagem foi entregue.",
+    },
     execution: {
       unavailable: `A ferramenta \`{tool}\` não está disponível nas configurações atuais, nas capacidades do modelo ou nas permissões do bot.`,
+    },
+    generate_voice_message: {
+      persona_missing: `A persona não está mais disponível.`,
+      stale: `O modelo de fala, as credenciais ou a voz da persona mudaram durante este turno. Inicie um novo turno antes de gerar uma mensagem de voz.`,
+      script_too_long: `O roteiro é longo demais para este modelo de design de voz. Encurte o roteiro e tente novamente.`,
     },
     generate_image: {
       quota_exceeded_generic: `A cota de geração de imagens foi excedida.`,
@@ -70,6 +87,25 @@ export default {
       unmute_success_title: `🔊 {persona_name} removeu o silenciamento de {user_name}`,
       unblock_success_title: `✅ {persona_name} desbloqueou {user_name}`,
       unblock_success_description: `Removeu o {block_type} ativo para {user_name} de {persona_name}.`,
+    },
+    danbooru: {
+      tags_title: `🏷️  Busca de tags no Danbooru`,
+      tag_line_resolved: `\`{query}\` → \`{tag}\` ({category}, {post_count} postagens)`,
+      tag_line_exact: `\`{tag}\` ({category}, {post_count} postagens)`,
+      tag_line_not_found: `\`{query}\`: não encontrado`,
+      signature_heading: `Tags características de **{tag}**`,
+      outfits_line: `Trajes: {outfits}`,
+      cosplay_line: `Cosplay: \`{tag}\` ({post_count} postagens)`,
+      category_general: `geral`,
+      category_character: `personagem`,
+      category_copyright: `série`,
+      category_artist: `artista`,
+      category_meta: `meta`,
+      post_title: `🖼️  Lendo postagem do Danbooru #{id}`,
+      post_description: `{url}`,
+      gallery_footer: `Danbooru: {query}`,
+      gallery_resolved_tag: `\`{typed}\` → \`{tag}\``,
+      gallery_post_link: `[#{id}]({url})`,
     },
     user_info_update: {
       success_title: `✅ Perfil de {target_user} atualizado`,
@@ -172,6 +208,7 @@ export default {
       // English stays empty because the built-in patterns in deliberateToolMode.ts already cover
       // English grammar; keywords here would widen English matching beyond those patterns.
       deliberate: {
+        dice: ["dados", "rolagem"],
         image: [
           "gerar imagem",
           "gerar uma imagem*",

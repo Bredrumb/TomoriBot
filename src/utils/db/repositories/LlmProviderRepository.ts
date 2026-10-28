@@ -1,3 +1,5 @@
+import { setSpeechEndpointSelection } from "@/utils/db/repositories/SpeechRepository";
+import { cleanupSpeechCredentialBeforeChange } from "@/utils/speech/googleVoiceLifecycle";
 import {
   decisionModelRegistrationSchema,
   type DecisionModelRegistrationRow,
@@ -10,6 +12,7 @@ import {
   openRouterImageModelRegistrationSchema,
   openRouterModelRegistrationSchema,
   openRouterVideoModelRegistrationSchema,
+  personalFallbackSettingsSchema,
   savedProviderConfigSchema,
   userSavedProviderConfigSchema,
   videoGenerationModelSchema,
@@ -19,11 +22,13 @@ import {
   type CustomEndpointRow,
   type DiffusionModelRow,
   type EmbeddingModelRow,
+  type FallbackModelRef,
   type LlmRow,
   type OpenRouterEmbeddingModelRegistrationRow,
   type OpenRouterImageModelRegistrationRow,
   type OpenRouterModelRegistrationRow,
   type OpenRouterVideoModelRegistrationRow,
+  type PersonalFallbackSettings,
   type SavedProviderConfigRow,
   type SavedProviderConfigUpsert,
   type UserSavedProviderConfigRow,
@@ -159,7 +164,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       `;
       if (endpoints.count === 0 && registrations.count === 0) return false;
       if (serverId !== null)
-        await tx`UPDATE server_chat_configs SET response_decision_model_id = NULL WHERE server_id = ${serverId} AND response_decision_model_id = ${modelId}`;
+        await tx`UPDATE server_model_configs SET decision_model_id = NULL WHERE server_id = ${serverId} AND decision_model_id = ${modelId}`;
       await tx`
         DELETE FROM decision_models model WHERE decision_model_id = ${modelId}
           AND NOT EXISTS (SELECT 1 FROM scoped_model_registrations WHERE decision_model_id = ${modelId})
@@ -239,7 +244,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
             `;
         if (result.count === 0) return false;
         if (serverId !== null)
-          await tx`UPDATE server_chat_configs SET response_decision_model_id = NULL WHERE server_id = ${serverId} AND response_decision_model_id = ${decisionModelId}`;
+          await tx`UPDATE server_model_configs SET decision_model_id = NULL WHERE server_id = ${serverId} AND decision_model_id = ${decisionModelId}`;
         return true;
       });
       if (deleted && serverId !== null) this.invalidateWorkspace(serverId);
@@ -1584,6 +1589,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   async deleteServerProviderRegistration(serverId: number, provider: string): Promise<boolean> {
     const normalizedProvider = provider.toLowerCase();
     try {
+      await cleanupSpeechCredentialBeforeChange({ kind: "server", ownerId: serverId }, normalizedProvider);
       const deleted = await sql.begin(async (tx) => {
         const deleted = await tx`
           DELETE FROM saved_provider_configs
@@ -1614,6 +1620,10 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                   AND model.provider = ${normalizedProvider}
               )
               OR EXISTS (
+                SELECT 1 FROM speech_models model
+                WHERE model.speech_model_id = registration.speech_model_id AND model.provider = ${normalizedProvider}
+              )
+              OR EXISTS (
                 SELECT 1 FROM decision_models model
                 WHERE model.decision_model_id = registration.decision_model_id
                   AND model.provider = ${normalizedProvider}
@@ -1626,9 +1636,14 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
             )
         `;
         await tx`UPDATE server_chat_configs SET
-          response_reviewer_llm_id = CASE WHEN response_reviewer_llm_id IN (SELECT llm_id FROM llms WHERE llm_provider = ${normalizedProvider}) THEN NULL ELSE response_reviewer_llm_id END,
-          response_decision_model_id = CASE WHEN response_decision_model_id IN (SELECT decision_model_id FROM decision_models WHERE provider = ${normalizedProvider}) THEN NULL ELSE response_decision_model_id END
+          response_reviewer_llm_id = CASE WHEN response_reviewer_llm_id IN (SELECT llm_id FROM llms WHERE llm_provider = ${normalizedProvider}) THEN NULL ELSE response_reviewer_llm_id END
           WHERE server_id = ${serverId}`;
+        await tx`UPDATE server_natural_nudge_configs SET llm_id = NULL
+          WHERE server_id = ${serverId}
+            AND llm_id IN (SELECT llm_id FROM llms WHERE llm_provider = ${normalizedProvider})`;
+        await tx`UPDATE server_model_configs SET decision_model_id = NULL
+          WHERE server_id = ${serverId}
+            AND decision_model_id IN (SELECT decision_model_id FROM decision_models WHERE provider = ${normalizedProvider})`;
         return true;
       });
       if (deleted) this.invalidateWorkspace(serverId);
@@ -1643,6 +1658,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   async deleteUserProviderRegistration(userId: number, provider: string): Promise<boolean> {
     const normalizedProvider = provider.toLowerCase();
     try {
+      await cleanupSpeechCredentialBeforeChange({ kind: "personal", ownerId: userId }, normalizedProvider);
       return await sql.begin(async (tx) => {
         const deleted = await tx`
           DELETE FROM user_saved_provider_configs
@@ -1667,6 +1683,10 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                 SELECT 1 FROM image_diffusion_models model
                 WHERE model.diffusion_model_id = registration.diffusion_model_id
                   AND model.provider = ${normalizedProvider}
+              )
+              OR EXISTS (
+                SELECT 1 FROM speech_models model
+                WHERE model.speech_model_id = registration.speech_model_id AND model.provider = ${normalizedProvider}
               )
               OR EXISTS (
                 SELECT 1 FROM decision_models model
@@ -2038,6 +2058,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     try {
       const provider = config.provider.toLowerCase();
       const previous = provider === "novelai" ? await this.loadSavedProviderConfig(serverId, provider) : null;
+      await cleanupSpeechCredentialBeforeChange({ kind: "server", ownerId: serverId }, provider, config.api_key);
       const fallbackModelRefsJson = JSON.stringify(config.fallback_model_refs ?? []);
       const logitBiasesJson = JSON.stringify(config.llm_logit_biases ?? []);
       const disabledParamsLiteral = this.toPostgresTextArrayLiteral(config.llm_disabled_params);
@@ -2101,6 +2122,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       if (provider === "novelai") await this.invalidateNovelaiCredentials(previous, config);
       log.info(`Upserted saved provider config for server ${serverId}, provider ${provider}`);
       if (options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+      else this.invalidateWorkspace(serverId);
       return true;
     } catch (error) {
       log.error(`Error upserting saved provider config for server ${serverId}, provider ${config.provider}:`, error);
@@ -2114,6 +2136,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     options: LlmProviderCacheOptions = {},
   ): Promise<boolean> {
     try {
+      await cleanupSpeechCredentialBeforeChange({ kind: "server", ownerId: serverId }, provider.toLowerCase());
       const result = await sql`
         DELETE FROM saved_provider_configs
         WHERE server_id = ${serverId}
@@ -2124,6 +2147,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       if (deleted) {
         log.info(`Deleted saved provider config for server ${serverId}, provider ${provider}`);
         if (options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
+        else this.invalidateWorkspace(serverId);
       }
       return deleted;
     } catch (error) {
@@ -2141,9 +2165,9 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     try {
       const provider = config.provider.toLowerCase();
       const previous = provider === "novelai" ? await this.loadUserSavedProviderConfig(userId, provider) : null;
+      await cleanupSpeechCredentialBeforeChange({ kind: "personal", ownerId: userId }, provider, config.api_key);
       const enabledCapabilitiesLiteral = this.toPostgresTextArrayLiteral(config.enabled_capabilities);
       const assignedCapabilitiesLiteral = this.toPostgresTextArrayLiteral(config.assigned_capabilities);
-      const fallbackModelRefsJson = JSON.stringify(config.fallback_model_refs ?? []);
       const logitBiasesJson = JSON.stringify(config.llm_logit_biases ?? []);
       const disabledParamsLiteral = this.toPostgresTextArrayLiteral(config.llm_disabled_params);
 
@@ -2151,9 +2175,9 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         INSERT INTO user_saved_provider_configs (
           user_id, provider, api_key, key_version,
           llm_id, diffusion_model_id, embedding_model_id,
-          video_model_id,
+          video_model_id, speech_design_model_id, speech_clone_model_id,
           nai_diffusion_model_id, vision_llm_id, nai_preset_name,
-          thinking_level, model_randomizer_enabled, enabled_capabilities, assigned_capabilities, fallback_model_refs,
+          thinking_level, enabled_capabilities, assigned_capabilities,
           llm_temperature, llm_top_p, llm_top_k,
           llm_frequency_penalty, llm_presence_penalty, llm_min_p,
           llm_max_output_tokens,
@@ -2161,10 +2185,9 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         ) VALUES (
           ${userId}, ${provider}, ${config.api_key}, ${config.key_version},
           ${config.llm_id}, ${config.diffusion_model_id}, ${config.embedding_model_id},
-          ${config.video_model_id ?? null},
+          ${config.video_model_id ?? null}, ${config.speech_design_model_id ?? null}, ${config.speech_clone_model_id ?? null},
           ${config.nai_diffusion_model_id}, ${config.vision_llm_id ?? null}, ${config.nai_preset_name},
-          ${config.thinking_level}, ${config.model_randomizer_enabled ?? false}, ${enabledCapabilitiesLiteral}::text[], ${assignedCapabilitiesLiteral}::text[],
-          ${fallbackModelRefsJson}::jsonb,
+          ${config.thinking_level}, ${enabledCapabilitiesLiteral}::text[], ${assignedCapabilitiesLiteral}::text[],
           ${config.llm_temperature ?? null}, ${config.llm_top_p ?? null}, ${config.llm_top_k ?? null},
           ${config.llm_frequency_penalty ?? null}, ${config.llm_presence_penalty ?? null}, ${config.llm_min_p ?? null},
           ${config.llm_max_output_tokens ?? null},
@@ -2177,13 +2200,14 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           diffusion_model_id = EXCLUDED.diffusion_model_id,
           embedding_model_id = EXCLUDED.embedding_model_id,
           video_model_id = EXCLUDED.video_model_id,
+          speech_design_model_id = EXCLUDED.speech_design_model_id,
+          speech_clone_model_id = EXCLUDED.speech_clone_model_id,
           nai_diffusion_model_id = EXCLUDED.nai_diffusion_model_id,
           vision_llm_id = EXCLUDED.vision_llm_id,
           nai_preset_name = EXCLUDED.nai_preset_name,
           thinking_level = EXCLUDED.thinking_level,
           enabled_capabilities = EXCLUDED.enabled_capabilities,
           assigned_capabilities = EXCLUDED.assigned_capabilities,
-          fallback_model_refs = EXCLUDED.fallback_model_refs,
           llm_temperature = EXCLUDED.llm_temperature,
           llm_top_p = EXCLUDED.llm_top_p,
           llm_top_k = EXCLUDED.llm_top_k,
@@ -2216,27 +2240,65 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   }
 
   /**
-   * Updates the personal text model randomizer preference for a user and provider pair.
-   * Scoped on both user ID and provider to isolate writes across users and sibling providers.
+   * Returns the user's personal text fallback chain and randomizer, or their defaults when the user
+   * has no personalization row yet.
    */
-  async updatePersonalModelRandomizer(userId: number, provider: string, enabled: boolean): Promise<boolean> {
+  async loadPersonalFallbackSettings(userId: number): Promise<PersonalFallbackSettings> {
     try {
-      const result = await sql`
-        UPDATE user_saved_provider_configs
-        SET model_randomizer_enabled = ${enabled}, updated_at = CURRENT_TIMESTAMP
-        WHERE user_id = ${userId}
-          AND provider = ${provider.toLowerCase()}
-      `;
-
-      return result.count > 0;
+      const rows = await withTransientDbRetry(
+        async () =>
+          await sql`
+          SELECT fallback_model_refs, model_randomizer_enabled
+          FROM user_personalization_configs
+          WHERE user_id = ${userId}
+          LIMIT 1
+        `,
+        "load personal fallback settings",
+      );
+      return personalFallbackSettingsSchema.parse(
+        rows[0] ?? { fallback_model_refs: [], model_randomizer_enabled: false },
+      );
     } catch (error) {
-      log.error(`Error updating personal model randomizer for user ${userId}, provider ${provider}:`, error);
+      log.error(`Error loading personal fallback settings for user ${userId}:`, error);
+      throw new DatabaseUnavailableError(`Failed to read the personal fallback settings for user ${userId}`);
+    }
+  }
+
+  async updatePersonalFallbackModelRefs(userId: number, refs: FallbackModelRef[]): Promise<boolean> {
+    try {
+      await sql`
+        INSERT INTO user_personalization_configs (user_id, fallback_model_refs)
+        VALUES (${userId}, ${refs})
+        ON CONFLICT (user_id) DO UPDATE SET
+          fallback_model_refs = EXCLUDED.fallback_model_refs,
+          updated_at = NOW()
+      `;
+      return true;
+    } catch (error) {
+      log.error(`Error updating personal fallback chain for user ${userId}:`, error);
+      return false;
+    }
+  }
+
+  async updatePersonalModelRandomizer(userId: number, enabled: boolean): Promise<boolean> {
+    try {
+      await sql`
+        INSERT INTO user_personalization_configs (user_id, model_randomizer_enabled)
+        VALUES (${userId}, ${enabled})
+        ON CONFLICT (user_id) DO UPDATE SET
+          model_randomizer_enabled = EXCLUDED.model_randomizer_enabled,
+          updated_at = NOW()
+      `;
+      return true;
+    } catch (error) {
+      log.error(`Error updating personal model randomizer for user ${userId}:`, error);
       return false;
     }
   }
 
   async deleteUserSavedProviderConfig(userId: number, provider: string): Promise<boolean> {
     try {
+      await cleanupSpeechCredentialBeforeChange({ kind: "personal", ownerId: userId }, provider.toLowerCase());
       const result = await sql`
         DELETE FROM user_saved_provider_configs
         WHERE user_id = ${userId}
@@ -2579,6 +2641,11 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     options: LlmProviderCacheOptions = {},
   ): Promise<boolean> {
     const { serverId = null, userId = null, clearScope = "label" } = params;
+    if (params.capability === "speech") {
+      return serverId !== null && userId === null
+        ? setSpeechEndpointSelection(serverId, params.customEndpointId)
+        : false;
+    }
 
     try {
       const selectedRows =
@@ -2709,7 +2776,10 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     serverId: number;
     capability: "speech" | "transcription";
     customEndpointId: number;
+    mode?: "design" | "clone";
   }): Promise<boolean> {
+    if (params.capability === "speech")
+      return setSpeechEndpointSelection(params.serverId, params.customEndpointId, params.mode);
     return await this.setDefaultCustomEndpoint({
       serverId: params.serverId,
       capability: params.capability,
@@ -2736,22 +2806,25 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     // 42P10, "no unique or exclusion constraint matching the ON CONFLICT specification". The same
     // applies to the embedding, diffusion, and video registrations below.
     try {
-      const rows =
-        serverId !== null
-          ? await sql`
-              INSERT INTO scoped_model_registrations (server_id, user_id, llm_id)
-              VALUES (${serverId}, NULL, ${llmId})
-              ON CONFLICT (server_id, llm_id) WHERE user_id IS NULL AND llm_id IS NOT NULL
-              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
-              RETURNING *
-            `
-          : await sql`
-              INSERT INTO scoped_model_registrations (server_id, user_id, llm_id)
-              VALUES (NULL, ${userId}, ${llmId})
-              ON CONFLICT (user_id, llm_id) WHERE server_id IS NULL AND llm_id IS NOT NULL
-              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
-              RETURNING *
-            `;
+      const rows = await withTransientDbRetry(
+        () =>
+          serverId !== null
+            ? sql`
+                INSERT INTO scoped_model_registrations (server_id, user_id, llm_id)
+                VALUES (${serverId}, NULL, ${llmId})
+                ON CONFLICT (server_id, llm_id) WHERE user_id IS NULL AND llm_id IS NOT NULL
+                DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+                RETURNING *
+              `
+            : sql`
+                INSERT INTO scoped_model_registrations (server_id, user_id, llm_id)
+                VALUES (NULL, ${userId}, ${llmId})
+                ON CONFLICT (user_id, llm_id) WHERE server_id IS NULL AND llm_id IS NOT NULL
+                DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+                RETURNING *
+              `,
+        "upsert OpenRouter model registration",
+      );
 
       if (!rows.length) return null;
 
@@ -2793,8 +2866,10 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
               WHERE user_id = ${userId} AND server_id IS NULL AND llm_id = ${llmId}
             `;
         if (result.count === 0) return false;
-        if (serverId !== null)
+        if (serverId !== null) {
           await tx`UPDATE server_chat_configs SET response_reviewer_llm_id = NULL WHERE server_id = ${serverId} AND response_reviewer_llm_id = ${llmId}`;
+          await tx`UPDATE server_natural_nudge_configs SET llm_id = NULL WHERE server_id = ${serverId} AND llm_id = ${llmId}`;
+        }
         return true;
       });
       if (deleted && serverId !== null) this.invalidateWorkspace(serverId);
@@ -2819,22 +2894,25 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     const { serverId = null, userId = null, embeddingModelId } = params;
 
     try {
-      const rows =
-        serverId !== null
-          ? await sql`
-              INSERT INTO scoped_model_registrations (server_id, user_id, embedding_model_id)
-              VALUES (${serverId}, NULL, ${embeddingModelId})
-              ON CONFLICT (server_id, embedding_model_id) WHERE user_id IS NULL AND embedding_model_id IS NOT NULL
-              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
-              RETURNING *
-            `
-          : await sql`
-              INSERT INTO scoped_model_registrations (server_id, user_id, embedding_model_id)
-              VALUES (NULL, ${userId}, ${embeddingModelId})
-              ON CONFLICT (user_id, embedding_model_id) WHERE server_id IS NULL AND embedding_model_id IS NOT NULL
-              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
-              RETURNING *
-            `;
+      const rows = await withTransientDbRetry(
+        () =>
+          serverId !== null
+            ? sql`
+                INSERT INTO scoped_model_registrations (server_id, user_id, embedding_model_id)
+                VALUES (${serverId}, NULL, ${embeddingModelId})
+                ON CONFLICT (server_id, embedding_model_id) WHERE user_id IS NULL AND embedding_model_id IS NOT NULL
+                DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+                RETURNING *
+              `
+            : sql`
+                INSERT INTO scoped_model_registrations (server_id, user_id, embedding_model_id)
+                VALUES (NULL, ${userId}, ${embeddingModelId})
+                ON CONFLICT (user_id, embedding_model_id) WHERE server_id IS NULL AND embedding_model_id IS NOT NULL
+                DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+                RETURNING *
+              `,
+        "upsert OpenRouter embedding model registration",
+      );
 
       if (!rows.length) return null;
 
@@ -2903,22 +2981,25 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     const { serverId = null, userId = null, diffusionModelId } = params;
 
     try {
-      const rows =
-        serverId !== null
-          ? await sql`
-              INSERT INTO scoped_model_registrations (server_id, user_id, diffusion_model_id)
-              VALUES (${serverId}, NULL, ${diffusionModelId})
-              ON CONFLICT (server_id, diffusion_model_id) WHERE user_id IS NULL AND diffusion_model_id IS NOT NULL
-              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
-              RETURNING *
-            `
-          : await sql`
-              INSERT INTO scoped_model_registrations (server_id, user_id, diffusion_model_id)
-              VALUES (NULL, ${userId}, ${diffusionModelId})
-              ON CONFLICT (user_id, diffusion_model_id) WHERE server_id IS NULL AND diffusion_model_id IS NOT NULL
-              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
-              RETURNING *
-            `;
+      const rows = await withTransientDbRetry(
+        () =>
+          serverId !== null
+            ? sql`
+                INSERT INTO scoped_model_registrations (server_id, user_id, diffusion_model_id)
+                VALUES (${serverId}, NULL, ${diffusionModelId})
+                ON CONFLICT (server_id, diffusion_model_id) WHERE user_id IS NULL AND diffusion_model_id IS NOT NULL
+                DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+                RETURNING *
+              `
+            : sql`
+                INSERT INTO scoped_model_registrations (server_id, user_id, diffusion_model_id)
+                VALUES (NULL, ${userId}, ${diffusionModelId})
+                ON CONFLICT (user_id, diffusion_model_id) WHERE server_id IS NULL AND diffusion_model_id IS NOT NULL
+                DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+                RETURNING *
+              `,
+        "upsert OpenRouter image model registration",
+      );
 
       if (!rows.length) return null;
 
@@ -2987,22 +3068,25 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     const { serverId = null, userId = null, videoModelId } = params;
 
     try {
-      const rows =
-        serverId !== null
-          ? await sql`
-              INSERT INTO scoped_model_registrations (server_id, user_id, video_model_id)
-              VALUES (${serverId}, NULL, ${videoModelId})
-              ON CONFLICT (server_id, video_model_id) WHERE user_id IS NULL AND video_model_id IS NOT NULL
-              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
-              RETURNING *
-            `
-          : await sql`
-              INSERT INTO scoped_model_registrations (server_id, user_id, video_model_id)
-              VALUES (NULL, ${userId}, ${videoModelId})
-              ON CONFLICT (user_id, video_model_id) WHERE server_id IS NULL AND video_model_id IS NOT NULL
-              DO UPDATE SET updated_at = CURRENT_TIMESTAMP
-              RETURNING *
-            `;
+      const rows = await withTransientDbRetry(
+        () =>
+          serverId !== null
+            ? sql`
+                INSERT INTO scoped_model_registrations (server_id, user_id, video_model_id)
+                VALUES (${serverId}, NULL, ${videoModelId})
+                ON CONFLICT (server_id, video_model_id) WHERE user_id IS NULL AND video_model_id IS NOT NULL
+                DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+                RETURNING *
+              `
+            : sql`
+                INSERT INTO scoped_model_registrations (server_id, user_id, video_model_id)
+                VALUES (NULL, ${userId}, ${videoModelId})
+                ON CONFLICT (user_id, video_model_id) WHERE server_id IS NULL AND video_model_id IS NOT NULL
+                DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+                RETURNING *
+              `,
+        "upsert OpenRouter video model registration",
+      );
 
       if (!rows.length) return null;
 

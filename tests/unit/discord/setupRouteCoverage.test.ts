@@ -1,7 +1,9 @@
+import { SETUP_FEATURES } from "@/types/db/schema";
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import {
+  buildSetupOptionActionRouteId,
   parseSetupRoute,
   SETUP_ROUTE_NAMESPACE,
   SETUP_ROUTE_VERSION,
@@ -52,6 +54,7 @@ const EMITTED_ACTIONS: SetupWizardAction[] = [
   "provider-mode",
   "settings",
   "settings-submit",
+  "option-action",
 ];
 
 /** Members of the `SetupWizardAction` union, read from the declaration that defines the codec. */
@@ -105,7 +108,7 @@ function createDraft(overrides: Partial<SetupDraftRecord> = {}): SetupDraftRecor
 
 const CATALOGS: SetupSettingsCatalogs = {
   personas: [{ id: 7, name: "Lighthouse", description: "A steady, watchful companion." }],
-  prompts: [{ name: "Tomori Default", description: "The standard reply style." }],
+  prompts: [{ name: "Tomori Default", displayName: "Tomori Default", description: "The standard reply style." }],
   promptTexts: new Map([["Tomori Default", "You are Tomori."]]),
 };
 
@@ -115,6 +118,29 @@ function renderedPayloads(): Array<[string, unknown]> {
     buildSetupWizardPayload({ draft, locale: LOCALE, isHosted, nonce: NONCE, settingsCatalogs: CATALOGS });
 
   return [
+    [
+      "provider option action",
+      buildSetupWizardPayload({
+        draft: createDraft({ providerAccess: { mode: "option", value: "fixture-option" } }),
+        locale: LOCALE,
+        isHosted: false,
+        nonce: NONCE,
+        settingsCatalogs: CATALOGS,
+        optionComponents: [
+          {
+            type: 1,
+            components: [
+              {
+                type: 2,
+                style: 1,
+                label: "fixture action",
+                customId: buildSetupOptionActionRouteId({ locale: LOCALE, nonce: NONCE }),
+              },
+            ],
+          },
+        ],
+      }),
+    ],
     ["pending hosted", wizard(createDraft({ requiresPolicies: true }), true)],
     ["pending non-hosted", wizard(createDraft(), false)],
     ["pending dm", wizard(createDraft({ context: "dm" }), false)],
@@ -134,7 +160,13 @@ function renderedPayloads(): Array<[string, unknown]> {
           requiresPolicies: true,
           policiesAccepted: true,
           providerAccess: { mode: "user-byok" },
-          startingSettings: { presetId: 7, humanizer: 1, timezoneOffset: 0, systemPrompt: { kind: "built-in" } },
+          startingSettings: {
+            presetId: 7,
+            humanizer: 1,
+            timezoneOffset: 0,
+            features: [...SETUP_FEATURES],
+            systemPrompt: { kind: "built-in" },
+          },
         }),
         true,
       ),
@@ -188,7 +220,8 @@ describe("setup wizard route coverage", () => {
     expect(declared.length).toBeGreaterThan(0);
 
     const routeIds = declared.map((action) => {
-      return `${SETUP_ROUTE_NAMESPACE}:${SETUP_ROUTE_VERSION}:${action}:${LOCALE}:${NONCE}`;
+      const modalNonce = action === "settings-submit" ? ":modal1234" : "";
+      return `${SETUP_ROUTE_NAMESPACE}:${SETUP_ROUTE_VERSION}:${action}:${LOCALE}:${NONCE}${modalNonce}`;
     });
 
     expect(routeIds.map((routeId) => actionOf(routeId))).toEqual(declared);

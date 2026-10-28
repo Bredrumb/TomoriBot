@@ -52,7 +52,7 @@ All Discord interactions arrive at `src/events/interactionCreate/handleCommands.
 1. **Autocomplete:** If `interaction.isAutocomplete()` is true, routes to `runAutocompleteCommand()`.
 2. **Chat-input slash commands:** If `interaction.isChatInputCommand()` is true, routes to `runChatInputCommand()`:
    - Resolves category, group, and subcommand names into an execution key.
-   - Evaluates server blacklist status.
+   - Evaluates server blacklist status; an unreadable status blocks execution with the temporary database error, while a confirmed blacklist entry receives the blacklist warning.
    - Checks category cooldown in `cooldownRepository`, scaling duration with `COMMAND_COOLDOWN_SCALE`.
    - Opens an ambient error context scope with `source: "command"`, enriching it with user and guild database IDs.
    - Calls the registered `execute(client, interaction, userData, locale)` function.
@@ -74,6 +74,13 @@ Global dispatch mechanics:
 - Outdated route versions receive a localized stale-panel notice with instructions to re-invoke the command.
 - Deferred panel branches call `beginPanelInteraction()` in `src/utils/discord/interactions/panelController.ts`. This helper calls `deferUpdate()` before authorization or state loading, preventing asynchronous database reads from exceeding Discord's acknowledgement deadline. Branches that open modals remain outside `beginPanelInteraction()` because `showModal()` must serve as the primary acknowledgement.
 
+### Personal settings
+
+Personal provider panels load credentials and model registrations by user ID. The invoking
+workspace's persona state is optional for personal operations; server provider operations require
+it. Without a workspace, new personal snapshots keep sampler overrides unset and use the normal
+runtime defaults. Personal configuration keeps server-specific controls scoped to existing personas.
+
 ## Panel failure observability
 <!-- anchor: panel-failure-observability -->
 
@@ -85,6 +92,35 @@ Panel failure metrics maintain visibility:
 - When delivery includes a receipt with `error` or `warning` tone, it emits a `panel_failure` metric containing the namespace, locale, tone, and machine `reason` key (`PanelReceipt.reason`).
 - Failure metrics emit to two destinations: structured host logs via `log.metric`, and the database via `metricSampleRepository.recordSample("panel_failure", fields)`. The database write is non-blocking.
 - Metric aggregation groups on the machine `reason` key rather than localized heading text, so failures across different languages aggregate into uniform defect categories.
+
+## Generation model overrides
+
+Each `/generate` subcommand and `/novelai generate image` accepts an optional `model` autocomplete. The choices combine compatible
+models from saved server providers and the invoking user's personal providers, including providers
+that are not the current default. Personal choices show `(via Personal Provider)`. The value identifies
+the model, provider, and credential source; execution checks scope access again. Server BYOK rules and
+media quotas still apply to the selected credential source. Omitting the option preserves normal routing.
+
+The override stays in the invocation and never updates saved selections. Auto image generation keeps
+its text planner and passes the image selection to its tool calls. A scene carries its text selection
+through every queued speaker turn, without model randomization or model fallback. Voice generation
+checks Design and Clone compatibility and keeps an explicit model from falling back to server speech.
+`src/utils/provider/modelCatalog.ts` supplies the same scoped catalogs to configuration panels and
+`src/utils/provider/generationModels.ts`.
+
+The optional `nsfw` boolean on `/generate image`, `/generate video`, and `/novelai generate image`
+controls Discord spoilers only.
+Auto image generation passes it to image tool delivery; it does not change the planner's instructions,
+the generation request, or provider content filters.
+
+## Reward and punishment targets
+
+`/reward` and `/punish` accept an optional `user` target alongside the existing `persona` option.
+Supplying both is rejected. User targets return an embed before persona loading, persona access checks,
+conditioning writes, or manual chat dispatch. A reason adds a playful footer without saving anything.
+Reasons appear in italics within the localized action sentence for both user and persona targets.
+Persona targets retain conditioning and manual chat behavior, including fallback persona selection
+when neither target option is supplied.
 
 ## Interaction timing rules
 
@@ -132,23 +168,23 @@ The anchor message workflow in `src/utils/discord/ui/personaWorkflow.ts` powers 
 ## Response Drafting panel
 
 `/config` > Plugins > Response Drafting stores workspace settings for guild managers and DM owners.
-Reviewer, Decision and checker dropdowns render directly, like `/config` > Models; picking a provider
+Reviewer and checker dropdowns render directly, like `/config` > Models; picking a provider
 opens its model modal without changing the primary text model. Clearing the reviewer restores inheritance from the actual response model;
-clearing Decisions or the checker stores None. A removed checker binding stays saved and unavailable.
+clearing the checker stores None. A removed checker binding stays saved and unavailable.
 
 `Content to Check` shows enabled review items with green circles and disabled items with red circles.
 `Edit Review Items` opens a checkbox group prefilled from the saved selection. Submitting replaces
 the whole selection, including an empty selection, and invalidates persona snapshots after the write.
 
 The page shows availability, added time/cost and a shortened prompt preview. `Set Prompt` opens the
-complete instructions in a prefilled 4,000-character modal; `Use Default` clears the override. Custom
-prompts retain the Decision selection but disable skipping, and Decisions stay inactive while
-calibration is absent; the page labels Decision models experimental. Persistence is described in
-[database settings](database-schema.md#response-drafting-workspace-settings); runtime ownership is in
-[generation review](../pipelines/chat/06-per-turn/03-run-generation-turn.md#response-text-review).
+complete instructions in a prefilled 4,000-character modal; `Use Default` clears the override.
+Persistence is described in
+[database settings](/architecture/subsystems/database-schema/#response-drafting-workspace-settings); runtime ownership is in
+[generation review](/architecture/pipelines/chat/06-per-turn/03-run-generation-turn/#response-text-review).
 
 ## Current Top-Level Categories
 
+- `booru`
 - `comment`
 - `compact`
 - `conditioning`
@@ -171,6 +207,7 @@ calibration is absent; the page labels Decision models experimental. Persistence
 - `moderation`
 - `novelai`
 - `nsfw`
+- `nudge-studio`
 - `nuke`
 - `persona`
 - `personal`
@@ -182,6 +219,7 @@ calibration is absent; the page labels Decision models experimental. Persistence
 - `reset`
 - `respond`
 - `reward`
+- `roll`
 - `scheduled-task`
 - `setup`
 - `stats`

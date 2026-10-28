@@ -7,6 +7,8 @@ import { join } from "node:path";
 import type { AssembledServerConfig } from "@/types/db/schema";
 import type { ToolStateForContext } from "@/tools/toolRegistry";
 import { DOCUMENT_HINT_TEMPLATE } from "@/utils/text/context/dialogueHistory";
+import { CONDITIONING_INTERACTION_RESPONSE_TEMPLATE } from "@/utils/conditioning/conditioningInteractionContext";
+import { systemPromptSections } from "@/db/seed/catalog/systemPrompts";
 import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/context/templates";
 import { SPACER_TEMPLATE } from "@/utils/text/context/timeAwareness";
 import { findUnsupportedPresetMacros } from "@/utils/text/stPresetEngine";
@@ -46,6 +48,7 @@ const TOOL_STATE = {
     supports_structoutput: false,
   },
   config: {
+    emoji_usage_enabled: true,
     sticker_usage_enabled: true,
     web_search_enabled: true,
     self_teaching_enabled: true,
@@ -56,6 +59,9 @@ const TOOL_STATE = {
     user_blocking_enabled: true,
     user_info_updates_enabled: true,
     thread_creation_enabled: true,
+    conditioning_interactions_enabled: false,
+    dice_rolling_enabled: false,
+    danbooru_enabled: true,
   },
 } satisfies ToolStateForContext;
 
@@ -232,6 +238,7 @@ describe("prompt macro resolver condition integration", () => {
     const hints = [
       { template: DOCUMENT_HINT_TEMPLATE, toolName: "read_file" },
       { template: SPACER_TEMPLATE, toolName: "reveal_message_metadata" },
+      { template: CONDITIONING_INTERACTION_RESPONSE_TEMPLATE, toolName: "interact_with_target" },
     ];
     const failures: string[] = [];
     for (const { template, toolName } of hints) {
@@ -244,7 +251,7 @@ describe("prompt macro resolver condition integration", () => {
           deliberateToolAllowedNames: allowed ? [toolName] : ["web_search"],
         });
         const expanded = await resolver.expand(template);
-        if (expanded.includes(toolName) !== allowed || expanded.includes("{{")) {
+        if (expanded.includes(toolName) !== allowed || /\{(?:\{|conditioning_interaction_tool)/u.test(expanded)) {
           failures.push(`${toolName} allowed=${allowed}: ${expanded}`);
         }
       }
@@ -322,6 +329,26 @@ describe("prompt macro resolver condition integration", () => {
     expect(guild).not.toContain("currently available URL fetch tool");
   });
 
+  it("renders the image generation preset without the tag-based blocks when only generate_image is available", async () => {
+    const preset = systemPromptSections
+      .flatMap((section) => section.rows)
+      .find((row) => row.name === "Default + Image Generation Expert");
+    const resolver = createToolPromptMacroResolver({
+      provider: "google",
+      stateForContext: TOOL_STATE,
+      capabilities: ENABLED_CAPABILITIES,
+      availableToolNames: new Set(["generate_image"]),
+    });
+
+    const expanded = await resolver.expand(preset?.promptText ?? "");
+
+    expect(expanded).toContain("`generate_image`");
+    expect(expanded).not.toContain("generate_image_nai");
+    expect(expanded).not.toContain("danbooru_search");
+    expect(expanded).not.toContain("{{");
+    expect(expanded).not.toMatch(/\n[^\S\n]*\n[^\S\n]*\n/);
+  });
+
   it("does not infer URL-fetch availability from unrelated read tools", async () => {
     const resolver = createToolPromptMacroResolver({
       provider: "google",
@@ -346,6 +373,9 @@ describe("prompt macro resolver condition integration", () => {
       web_search_enabled: true,
       manage_message_enabled: false,
       thread_creation_enabled: true,
+      conditioning_interactions_enabled: false,
+      dice_rolling_enabled: false,
+      danbooru_enabled: true,
       imagegen_enabled: false,
       videogen_enabled: true,
       voice_message_enabled: false,

@@ -15,6 +15,7 @@ const issueList: Issue[] = [];
 const RUNTIME_STATE_EXPORT_EXCLUDED_TABLES = new Set([
   "api_key_rotation_runtime_state",
   "persona_autoch_runtime_state",
+  "server_natural_nudge_runtime_state",
   "stat_counters",
 ]);
 
@@ -591,6 +592,7 @@ const SERVER_CONFIG_EXPORT_COVERAGE_TARGETS: ServerConfigExportCoverageTarget[] 
       "diffusion_model_id",
       "video_model_id",
       "vision_llm_id",
+      "decision_model_id",
       // Security-sensitive encrypted credential mirrors are never exported.
       "api_key",
       "key_version",
@@ -804,6 +806,7 @@ const CONFIG_PROJECTION_TARGETS: ConfigProjectionCoverageTarget[] = [
     rowSchemaName: "userPersonalizationConfigsSchema",
     exportSchemaName: "personalSettingsExportDataSchema",
     supplementalSourceKeys: ["language_pref", "privacy_level"],
+    excludedKeys: ["fallback_model_refs"],
   },
 ];
 
@@ -814,6 +817,7 @@ const CONFIG_COLUMN_EXCLUSION_REASONS: Record<string, string> = {
   "server_model_configs.diffusion_model_id": "The selected diffusion model is deployment-specific.",
   "server_model_configs.video_model_id": "The selected video model is deployment-specific.",
   "server_model_configs.vision_llm_id": "The selected vision model is deployment-specific.",
+  "server_model_configs.decision_model_id": "The selected Decision model is deployment-specific.",
   "server_model_configs.api_key": "Encrypted credentials are never portable.",
   "server_model_configs.key_version": "Credential metadata has no portable meaning.",
   "server_model_configs.custom_endpoint_url": "Custom endpoints are deployment-specific.",
@@ -890,6 +894,7 @@ const CONFIG_COLUMN_EXCLUSION_REASONS: Record<string, string> = {
   "stm_categories.server_id": "The database key identifies the source workspace.",
   "user_personalization_configs.user_id": "The database key identifies the source user.",
   "user_personalization_configs.nai_char_ref_url": "The reference URL depends on the source deployment.",
+  "user_personalization_configs.fallback_model_refs": "Fallback model references are deployment-specific.",
   "user_personalization_configs.created_at": "Creation timestamps are runtime metadata.",
   "user_personalization_configs.updated_at": "Update timestamps are runtime metadata.",
 };
