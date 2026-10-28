@@ -46,10 +46,11 @@ export const VOICE_TOOL_VARIANTS = {
   "bracket-tags": {
     toolDescription:
       "Generate a spoken Discord audio message using the active persona's configured voice. " +
-      "Use this only when voice delivery materially improves the reply. " +
+      "Use this when voice delivery is requested or required by the conversation instructions. " +
+      "Otherwise, use it when spoken delivery improves the reply. " +
       "You may include bracketed expression tags anywhere in the script to shape delivery " +
       "(e.g. [happy], [sad], [whispers], [laughs]). " +
-      "The tool sends the audio directly to the channel with no text caption.",
+      "The tool sends the audio directly to the channel and adds a text transcript when the transcript setting is enabled.",
     scriptDescription:
       "The exact spoken script for the voice message. Keep it concise and natural for speech. " +
       "Bracketed expression tags (emotional states like [happy], [sad], [tired] or actions like " +
@@ -58,9 +59,10 @@ export const VOICE_TOOL_VARIANTS = {
   plain: {
     toolDescription:
       "Generate a spoken Discord audio message using the active persona's configured voice. " +
-      "Use this only when voice delivery materially improves the reply. " +
+      "Use this when voice delivery is requested or required by the conversation instructions. " +
+      "Otherwise, use it when spoken delivery improves the reply. " +
       "Write the script as natural plain speech text only; do not include any bracketed tags or special markup. " +
-      "The tool sends the audio directly to the channel with no text caption.",
+      "The tool sends the audio directly to the channel and adds a text transcript when the transcript setting is enabled.",
     scriptDescription:
       "The exact spoken script for the voice message. Keep it concise and natural for speech. " +
       "Plain text only: do not write bracketed tags or any special markup.",
@@ -68,10 +70,11 @@ export const VOICE_TOOL_VARIANTS = {
   emoji: {
     toolDescription:
       "Generate a spoken Discord audio message using the active persona's configured voice. " +
-      "Use this only when voice delivery materially improves the reply. " +
+      "Use this when voice delivery is requested or required by the conversation instructions. " +
+      "Otherwise, use it when spoken delivery improves the reply. " +
       "You may embed emoji characters inline in the script to convey emotion " +
       "(e.g. 😊 for happy, 😢 for sad, 😮 for surprised). Do not use bracketed tags. " +
-      "The tool sends the audio directly to the channel with no text caption.",
+      "The tool sends the audio directly to the channel and adds a text transcript when the transcript setting is enabled.",
     scriptDescription:
       "The exact spoken script for the voice message. Keep it concise and natural for speech. " +
       "Embed emoji characters inline to convey emotion (e.g. 😊, 😢, 😮). No bracketed tags.",
@@ -79,10 +82,11 @@ export const VOICE_TOOL_VARIANTS = {
   "voice-design": {
     toolDescription:
       "Generate a spoken Discord audio message using the active persona's configured voice design prompt. " +
-      "Use this only when voice delivery materially improves the reply. " +
+      "Use this when voice delivery is requested or required by the conversation instructions. " +
+      "Otherwise, use it when spoken delivery improves the reply. " +
       "Write the script as natural plain speech text. You may optionally provide extra one-off delivery instructions " +
       'such as "sound mad", "near tears", or "sleepy and quiet"; those instructions shape this message only and are not spoken aloud. ' +
-      "The tool sends the audio directly to the channel with no text caption.",
+      "The tool sends the audio directly to the channel and adds a text transcript when the transcript setting is enabled.",
     scriptDescription:
       "The exact spoken script for the voice message. Keep it concise and natural for speech. " +
       "Plain text only: put delivery direction in voice_instructions instead of in the spoken script.",
