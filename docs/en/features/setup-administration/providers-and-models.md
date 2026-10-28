@@ -92,7 +92,7 @@ NovelAI uses its own prompt templates. Saved system prompts, context notes, huma
 conditioning, and SillyTavern preset instructions are inactive. Persona attributes, sample dialogue,
 and eligible memories still apply. The `General Behavior` panel shows a notice, and the settings
 stay saved for switching providers. See
-[NovelAI special handling](/features/knowledge/inside-the-prompt/#novelai-special-handling) for
+[NovelAI special handling](/features/integrations/novelai-text/#context-and-settings) for
 content selection, model exceptions, and memory trimming.
 
 NovelAI text models cannot call tools or read images and videos. You can still manage memories

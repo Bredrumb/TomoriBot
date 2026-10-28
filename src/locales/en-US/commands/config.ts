@@ -1045,6 +1045,7 @@ export default {
       capability_tts_clone: `TTS (Voice Clone)`,
       capability_stt: `Speech to Text`,
       capability_notice_title: `Notes:`,
+      novelai_context_note: `NovelAI text models handle context differently. See the [NovelAI guide](https://docs.tomoribot.app/en/features/integrations/novelai-text/).`,
       image_generation_disabled_direction: "Image generation is disabled. Enable it under Plugins > Available Tools.",
       image_generation_missing_model: `No usable model is configured for Image generation.`,
       video_generation_disabled_direction: "Video generation is disabled. Enable it under Plugins > Available Tools.",

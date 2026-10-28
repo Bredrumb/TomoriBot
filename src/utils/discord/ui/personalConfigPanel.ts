@@ -1342,6 +1342,12 @@ ${localizer(locale, "commands.personal.config.models_description")}`,
           ],
         },
       );
+      if (routing?.text.storedProvider === "novelai") {
+        components.push({
+          type: ComponentType.TextDisplay,
+          content: `**${localizer(locale, "commands.config.panel.capability_notice_title")}**\n> - ${localizer(locale, "commands.config.panel.novelai_context_note")}`,
+        });
+      }
     } else if (page === "parameters") {
       const selectedProvider = input.selectedParametersProvider ?? input.modelDisplayInfo?.parametersProviders[0] ?? "";
       const config = input.modelDisplayInfo?.selectedParametersConfig;

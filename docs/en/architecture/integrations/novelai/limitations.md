@@ -58,7 +58,7 @@ never stripped by matching a system-looking prefix. Inspection uses the same not
 The `General Behavior` panel displays a localized notice while the workspace's text model is
 NovelAI. Saved system, persona, and channel prompts, context notes, humanizer rules, conditioning,
 and SillyTavern instructions remain stored but inactive. Personality and sample dialogue remain
-active. The user-facing [content table](/features/knowledge/inside-the-prompt/#novelai-special-handling)
+active. The user-facing [content table](/features/integrations/novelai-text/#context-and-settings)
 owns the complete list of settings and memory-trimming behavior. Thinking directives follow the
 active model profile; see [Thinking Level](/architecture/subsystems/thinking-level/#novelai).
 
@@ -66,7 +66,7 @@ Each profile enables text polishing before rendering and counting. The NovelAI f
 to user and persona history, both sides of sample dialogue, and admitted memories. Known persona
 names come from the active persona, history senders, and existing participant target metadata.
 Explicit prefills and continuation fragments remain exact. The user-facing
-[polishing rules](/features/knowledge/inside-the-prompt/#text-polishing-and-discord-delivery) own
+[polishing rules](/features/integrations/novelai-text/#text-polishing-and-discord-delivery) own
 the formatting details and protected content.
 
 Polishing is independent of the humanizer degree. The shared Discord delivery pipeline still

@@ -42,7 +42,7 @@ With a NovelAI text model, saved system prompts, persona and channel prompts, co
 humanizer prompt instructions, conditioning, and SillyTavern preset instructions are inactive. The `General Behavior`
 panel shows this notice; your settings stay saved for other providers. Response prefills
 still apply. Xialong uses NovelAI's own system prompt, while GLM 4.6, Kayra, and Erato have no system
-block. See [NovelAI special handling](/features/knowledge/inside-the-prompt/#novelai-special-handling).
+block. See [NovelAI special handling](/features/integrations/novelai-text/#context-and-settings).
 
 ## Generation Tuning
 <!-- anchor: generation-tuning -->
@@ -63,7 +63,7 @@ The configured output-token limit takes priority over a NovelAI sampling preset'
 may be reduced to leave room for protected context. It also polishes history, sample dialogue, and
 memories in the model-facing copy. The humanizer
 still formats Discord replies according to its setting. See the
-[polishing rules](/features/knowledge/inside-the-prompt/#text-polishing-and-discord-delivery).
+[polishing rules](/features/integrations/novelai-text/#text-polishing-and-discord-delivery).
 
 ## Capabilities
 <!-- anchor: capabilities-what-shes-allowed-to-do -->

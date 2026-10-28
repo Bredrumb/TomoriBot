@@ -1282,6 +1282,40 @@ describe("Persona Advanced and Overrides component budgeting", () => {
 });
 
 describe("Switch Models capability notice budgeting", () => {
+  it("links the NovelAI guide only for text models and keeps capability notes within Discord limits", () => {
+    const cases = collectCaseFailures();
+    for (const locale of RUNTIME_LOCALES) {
+      for (const textProvider of ["novelai", "openrouter"]) {
+        for (const enabled of [false, true]) {
+          cases.check(`${locale} text=${textProvider} capabilities=${enabled}`, () => {
+            const view = makeSwitchModelsView(enabled, enabled, () => true);
+            for (const slot of view.slots) {
+              if (slot.capability !== "text" && slot.capability !== "nai-image") continue;
+              slot.currentProvider = slot.capability === "text" ? textProvider : "novelai";
+              slot.eligibleProviders = [slot.currentProvider];
+            }
+            const payload = buildConfigPanelPayload({
+              locale,
+              actor: GUILD_MANAGER,
+              category: "models",
+              page: "switch",
+              personas: [makePersona({ persona_id: 55 })],
+              selectedPersonaId: 55,
+              readStatus: "fresh",
+              switchModelsView: view,
+            });
+            expect(validateComponentsV2MessageLimits(payload).valid).toBe(true);
+            const text = getTextDisplays(payload).join("\n");
+            const note = localizedProse("en-US", "commands.config.panel.novelai_context_note");
+            if (textProvider === "novelai") expect(text).toMatch(note);
+            else expect(text).not.toMatch(note);
+          });
+        }
+      }
+    }
+    cases.expectNoFailures();
+  });
+
   const flagCombinations = [
     { imageGenerationEnabled: false, videoGenerationEnabled: false },
     { imageGenerationEnabled: false, videoGenerationEnabled: true },

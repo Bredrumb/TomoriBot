@@ -222,6 +222,10 @@ function buildCapabilityNoticeLine(locale: string, view: ConfigSwitchModelsView)
   const hasUsableVideoModel = view.slots.some((slot) => slot.capability === "video" && hasUsableModel(slot));
   const warnings: string[] = [];
 
+  if (view.slots.some((slot) => slot.capability === "text" && slot.currentProvider === "novelai")) {
+    warnings.push(localizer(locale, "commands.config.panel.novelai_context_note"));
+  }
+
   if (!view.imageGenerationEnabled) {
     warnings.push(localizer(locale, "commands.config.panel.image_generation_disabled_direction"));
   } else if (!hasUsableImageModel) {
