@@ -13,16 +13,17 @@ export const LOREBOOK_DEFAULT_SCAN_DEPTH = 5;
 export const LOREBOOK_DEFAULT_INSERTION_ORDER = 100;
 export const LOREBOOK_CONTEXT_CHAR_BUDGET = 8000;
 
+export function trimLorebookKey(key: string): string {
+  return key.replace(/^[\s"']+|[\s"']+$/g, "");
+}
+
 export function normalizeLorebookKeys(rawKeys: readonly string[]): string[] {
-  const keys = rawKeys
-    .map((key) =>
-      key
-        .trim()
-        .replace(/^["']+|["']+$/g, "")
-        .trim(),
-    )
-    .filter((key) => key.length > 0 && key.length <= LOREBOOK_KEY_LENGTH_MAX);
+  const keys = rawKeys.map(trimLorebookKey).filter((key) => key.length > 0 && key.length <= LOREBOOK_KEY_LENGTH_MAX);
   return [...new Set(keys)].slice(0, LOREBOOK_KEYS_MAX);
+}
+
+export function isLorebookRegexKey(key: string): boolean {
+  return /^\/[\s\S]+\/[a-z]*$/i.test(key.trim());
 }
 
 const postgresInt = z.number().int().min(-2147483648).max(2147483647);
@@ -49,6 +50,7 @@ const entryFields = {
   constant: z.boolean(),
   enabled: z.boolean(),
   channel_disc_ids: z.array(z.string().regex(/^\d{17,20}$/)),
+  legacy_channel_tags: z.array(z.string().min(1)).optional(),
 };
 
 export const lorebookEntryInputSchema = z
@@ -78,3 +80,8 @@ export const lorebookEntryFlagsSchema = z
 export type LorebookEntryRow = z.infer<typeof lorebookEntryRowSchema>;
 export type LorebookEntryInput = z.infer<typeof lorebookEntryInputSchema>;
 export type LorebookEntryFlags = z.infer<typeof lorebookEntryFlagsSchema>;
+
+export function lorebookEntryToInput(row: LorebookEntryRow): LorebookEntryInput {
+  const { entry_id, server_id, persona_lineage_id, ...input } = row;
+  return lorebookEntryInputSchema.parse(input);
+}

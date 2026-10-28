@@ -544,6 +544,7 @@ export async function execute(
     let imageMimeType: string | undefined;
     let imageBuffer: Buffer | undefined;
     let extractedPresetContext: string | undefined;
+    let extractedLorebookEntries: unknown;
 
     const getInputAttachment = () =>
       buildGenerationInputAttachment({
@@ -717,6 +718,7 @@ export async function execute(
       const tomoriPreset = extractMetadataFromPNG(imageBuffer);
       if (tomoriPreset?.data) {
         extractedPresetContext = JSON.stringify(tomoriPreset.data);
+        extractedLorebookEntries = tomoriPreset.data.lorebook_entries;
         log.info("Extracted Tomori preset data from uploaded image");
       }
 
@@ -726,6 +728,7 @@ export async function execute(
           const conversionResult = presetRepository.convertSillyTavernMetadataToPresetData(stMetadata);
           if (conversionResult.success) {
             extractedPresetContext = JSON.stringify(conversionResult.data);
+            extractedLorebookEntries = conversionResult.data.lorebook_entries;
             log.info("Extracted SillyTavern card data from uploaded image");
           }
         }
@@ -988,7 +991,10 @@ export async function execute(
       );
     }
 
-    const validationResult = presetExportDataSchema.safeParse(genResult.preset);
+    const validationResult = presetExportDataSchema.safeParse({
+      ...genResult.preset,
+      ...(extractedLorebookEntries !== undefined ? { lorebook_entries: extractedLorebookEntries } : {}),
+    });
     if (!validationResult.success) {
       log.error("Generated preset failed validation:");
       log.error("Validation errors:", JSON.stringify(validationResult.error.format(), null, 2));
@@ -1053,7 +1059,7 @@ export async function execute(
       version: PRESET_EXPORT_VERSION,
       type: "preset",
       exported_at: new Date().toISOString(),
-      data: genResult.preset,
+      data: validationResult.data,
     };
 
     let finalPngBuffer: Buffer;

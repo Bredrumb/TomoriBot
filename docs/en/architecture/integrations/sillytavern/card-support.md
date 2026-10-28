@@ -66,7 +66,7 @@ Card attributes map into TomoriBot's persona schema:
 | `description` | `attribute_list` (injected without prefix) |
 | `personality`, `scenario`, `system_prompt` | `attribute_list` (prefixed with section headers) |
 | `post_history_instructions`, depth prompts | `attribute_list` (prefixed with section headers) |
-| `character_book.entries[].content` | `attribute_list` (enabled entries only) |
+| `character_book.entries` | Persona lorebook entries, including disabled entries |
 | `mes_example`, `first_mes`, `alternate_greetings` | `sample_dialogues_in` and `sample_dialogues_out` |
 | Character name derivations | `trigger_words` |
 
@@ -84,6 +84,26 @@ Converted data validates against TomoriBot's preset Zod schema before database i
   100 trigger words.
 - The SillyTavern converter also uses current runtime limits to split attribute text and cap
   sample dialogue lengths, pair counts, and trigger counts before Zod validation.
+
+### Character Books
+
+Character Book entries become the imported persona's lorebook. Their keys, optional selective
+secondary keys, constant flag, enabled flag, insertion order, and before/after position are retained.
+The supported extension fields are `selectiveLogic`, `probability`, `useProbability`, `scan_depth`,
+and numeric `position`. Entry scan depth overrides the book default. Unsupported numeric ranges are
+clamped to the lorebook limits. Entries longer than 4,000 characters split into consecutive entries
+with shared activation settings, preserving Unicode characters. A book exceeding 250 stored entries
+after splitting is rejected as a whole.
+
+Regex keys remain inert and are counted in the import report. Keys declared with `use_regex` stay
+regex-shaped rather than becoming literal keyword matches. Evaluating untrusted regex requires a
+ReDoS-safe engine; real import reports of lost activations are the trigger for adding one. Empty,
+keyless non-constant entries are skipped and logged. Disabled entries remain editable data.
+
+A present `lorebook_entries` array replaces the persona's complete book, including hand-authored
+entries. An empty book clears it; cards without a Character Book preserve existing lore. Persona
+exports include lore inputs so JSON and PNG re-imports retain them. Persona generation from an
+uploaded card preserves its source book in the generated PNG and the `Import Now` payload.
 
 ## Conversation and template adaptations
 

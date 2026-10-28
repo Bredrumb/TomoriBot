@@ -73,7 +73,7 @@ The first local edit to prompt text, attributes, sprites, or naming forks the po
 
 ## Cards, imports, and vision generation
 
-- **Export**: Exports materialize pointer state into self-contained cards, tagging `preset_lineage_id` for character provenance. PNG and JSON exports carry the optional voice description (up to 1,000 characters) and Design/Clone priority. They also carry the effective authored idle nudges. Local nudge availability, server custom nudges, local sample IDs, sample bytes, provider voice IDs, credentials, and Gemini bindings are excluded.
+- **Export**: Exports materialize pointer state into self-contained cards, tagging `preset_lineage_id` for character provenance. PNG and JSON exports carry the optional voice description (up to 1,000 characters) and Design/Clone priority. They also carry the effective authored idle nudges and the lineage's lorebook entries, including disabled entries. Local nudge availability, server custom nudges, local sample IDs, sample bytes, provider voice IDs, credentials, and Gemini bindings are excluded.
 - **Import**: Re-establishes a live preset pointer only when attributes, public flags, dialogues, triggers, and prompt text exactly match the seeded preset and the card's idle nudge list, when it has one, equals the preset's. Deviations produce independent materialized copies. Importing an authored voice description also
   materializes the persona; older cards without it keep their pointer behavior. Main and alter
   imports restore the description and priority, defaulting missing priority to Design, and need a
@@ -81,6 +81,9 @@ The first local edit to prompt text, attributes, sprites, or naming forks the po
   imported description matches, so the imported persona creates its own identity lazily. Retired
   IDs stay pending for cleanup with the original credentials. Importing a card does not activate a
   speech provider or change the workspace's Design and Clone targets.
+- **Lorebook replacement**: A present lorebook payload replaces the destination lineage's complete
+  book; an absent payload preserves it. Nonempty lore prevents official-preset matching. See
+  [Lorebooks](/architecture/subsystems/lorebooks/#import-and-export).
 - **Image captioning**: During `/persona generate`, an uploaded image is paired with the primary model. If the primary model cannot accept images, `analyzeImageWithVisionModel()` requests a description from the configured vision model and passes that text via `appearanceDescription`, keeping raw images out of text-only model requests.
 
 OpenRouter persona generation requests strict JSON output with six attributes and five dialogue

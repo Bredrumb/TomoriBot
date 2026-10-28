@@ -1,3 +1,4 @@
+import type { LorebookEntryInput } from "@/modules/lorebooks/db/types";
 import {
   MessageFlags,
   type ButtonInteraction,
@@ -57,7 +58,12 @@ import { showRoutedRawModal, takeRawModalCheckboxGroupValues } from "@/utils/dis
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
-type WorkspaceMemoryImportMapping = { bucketName: string; personaId: number; memories: MemoryItem[] };
+type WorkspaceMemoryImportMapping = {
+  bucketName: string;
+  personaId: number;
+  memories: MemoryItem[];
+  lorebook_entries?: LorebookEntryInput[];
+};
 type PersonalMemoryImportMapping = {
   bucketName: string;
   personaLineageId: number;
@@ -69,6 +75,7 @@ export interface WorkspaceMemoryImportInput {
   actorDiscId: string;
   strategy: "merge" | "replace";
   mappings: ReadonlyArray<WorkspaceMemoryImportMapping>;
+  serverwideLorebookEntries?: LorebookEntryInput[];
 }
 
 export interface PersonalMemoryImportInput {
@@ -268,7 +275,12 @@ export function buildMemoryImportMappings(
 
     const destination = destinationsByLineage.get(entry.destinationLineageId);
     if (!destination || destination.ownership !== "workspace") return { status: "refused" };
-    workspaceMappings.push({ bucketName: bucket.name, personaId: destination.personaId, memories: bucket.memories });
+    workspaceMappings.push({
+      bucketName: bucket.name,
+      personaId: destination.personaId,
+      memories: bucket.memories,
+      ...(bucket.lorebook_entries !== undefined ? { lorebook_entries: bucket.lorebook_entries } : {}),
+    });
   }
 
   return kind === "personal_memories"
@@ -562,6 +574,7 @@ export function createTransferInteractionRoute(
         input.actorDiscId,
         input.mappings,
         input.strategy,
+        input.serverwideLorebookEntries,
       ),
     applyPersonalMemoryImport: (input) =>
       importRepository.importPersonalMemoryBundle(input.destinationKey, input.mappings, input.strategy),
@@ -1042,6 +1055,10 @@ export function createTransferInteractionRoute(
                   actorDiscId: interaction.user.id,
                   strategy: memorySnapshot.strategy,
                   mappings: built.mappings,
+                  serverwideLorebookEntries:
+                    "serverwide_lorebook_entries" in snapshot.exportResult.payload
+                      ? snapshot.exportResult.payload.serverwide_lorebook_entries
+                      : undefined,
                 })
               : await dependencies.applyPersonalMemoryImport({
                   destinationKey: candidate.destinationKey,

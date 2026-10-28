@@ -1,3 +1,4 @@
+import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
 /**
  * ServerMemoryRepository: manages the `server_memories` table.
  *
@@ -32,7 +33,7 @@ type ServerMemoryExportShape = {
   memories: Array<{ content: string; tags: string[] }>;
 };
 
-type LegacyChannelScopeSource = "documents" | "server_memories";
+type LegacyChannelScopeSource = "documents" | "server_memories" | "persona_lorebook_entries";
 
 export type PendingLegacyChannelScope = {
   source_table: LegacyChannelScopeSource;
@@ -361,13 +362,12 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
   }
 
   /** Saving the form is the admin's channel choice, so it also settles a pending legacy scope. */
-  async edit(serverMemoryId: number, content: string, tags: string[], channelDiscIds: string[]): Promise<boolean> {
+  async edit(serverMemoryId: number, content: string, _tags: string[], channelDiscIds: string[]): Promise<boolean> {
     try {
       return await sql.transaction(async (tx) => {
         const [updated] = await tx`
           UPDATE server_memories
           SET content = ${content},
-              tags = ${sql.array(tags, "TEXT")},
               channel_disc_ids = ${sql.array(channelDiscIds, "TEXT")},
               updated_at = NOW()
           WHERE server_memory_id = ${serverMemoryId}
@@ -400,24 +400,14 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /**
-   * Batch-inserts multiple server memories in a single transaction.
-   * All rows share the same serverId, personaId, personaLineageId, userId, tags, and channel scope.
-   * Rolls back all inserts if any row fails (atomicity guarantee).
-   * Cache invalidation is the caller's responsibility after a successful return.
-   *
-   * @param personaLineageId - Persona lineage scope for all memories
-   * @param tags             - Optional classification tags applied to all memories
-   * @param channelDiscIds   - Channels the memories are limited to; empty means every channel
-   * @returns true on full success, false if the transaction was rolled back
-   */
+  /** Callers invalidate the Tomori cache after the batch transaction commits. */
   async addBatch(
     serverId: number,
     personaId: number,
     personaLineageId: number,
     taughtByUserId: number,
     memories: string[],
-    tags: string[] = [],
+    _tags: string[] = [],
     channelDiscIds: string[] = [],
   ): Promise<boolean> {
     if (memories.length === 0) return true;
@@ -426,10 +416,10 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
       await sql.transaction(async (tx) => {
         for (const memory of memories) {
           await tx`
-            INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, tags, channel_disc_ids)
+            INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, channel_disc_ids)
             VALUES (
               ${serverId}, ${personaId}, ${personaLineageId}, ${taughtByUserId}, ${memory},
-              ${sql.array(tags, "TEXT")}, ${sql.array(channelDiscIds, "TEXT")}
+              ${sql.array(channelDiscIds, "TEXT")}
             )
           `;
         }
@@ -470,7 +460,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     personaLineageId: number,
     taughtByUserId: number,
     content: string,
-    tags: string[] = [],
+    _tags: string[] = [],
     serverDiscId?: string,
     channelDiscIds: string[] = [],
   ): Promise<ServerMemoryRow | null> {
@@ -498,7 +488,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
       personaLineageId,
       taughtByUserId,
       content,
-      tags,
       channelDiscIds,
     );
     if (row && serverDiscId) invalidateTomoriStateCache(serverDiscId);
@@ -844,11 +833,9 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     `;
   }
 
-  /**
-   * Drops holding rows whose memory or document no longer exists, so a deleted item cannot stay in
-   * the backfill's pending set. Runs once per boot.
-   */
+  /** Drops legacy scopes after their memory, document, or lorebook entry is deleted. */
   async pruneOrphanedLegacyChannelScopes(): Promise<void> {
+    await lorebookRepository.pruneLegacyChannelScopes();
     await sql`
       DELETE FROM legacy_channel_scope_tags l
       WHERE l.source_table = 'server_memories'
@@ -886,6 +873,8 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
             UPDATE documents SET channel_disc_ids = ${sql.array(channelDiscIds, "TEXT")}
             WHERE document_id = ${rowId} AND server_id = ${serverId}
           `;
+        } else if (sourceTable === "persona_lorebook_entries") {
+          await lorebookRepository.resolveLegacyChannelScope(tx, serverId, rowId, channelDiscIds);
         } else {
           await tx`
             UPDATE server_memories SET channel_disc_ids = ${sql.array(channelDiscIds, "TEXT")}
@@ -1063,15 +1052,14 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     personaLineageId: number,
     taughtByUserId: number,
     content: string,
-    tags: string[],
     channelDiscIds: string[],
   ): Promise<ServerMemoryRow | null> {
     try {
       const [newMemory] = await sql`
-        INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, tags, channel_disc_ids)
+        INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, channel_disc_ids)
         VALUES (
           ${serverId}, ${personaId}, ${personaLineageId}, ${taughtByUserId}, ${content},
-          ${sql.array(tags, "TEXT")}, ${sql.array(channelDiscIds, "TEXT")}
+          ${sql.array(channelDiscIds, "TEXT")}
         )
         RETURNING *
       `;

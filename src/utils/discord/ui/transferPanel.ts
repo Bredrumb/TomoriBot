@@ -394,9 +394,15 @@ export function buildMemoryTransferPreviewPayload(input: {
       ? "commands.transfer.server_memories_label"
       : "commands.transfer.personal_memories_label";
   const description = safeUserText(
-    localizer(input.locale, "commands.transfer.memory_preview_description", {
-      ownership: localizer(input.locale, ownershipLabelKey),
-    }),
+    localizer(
+      input.locale,
+      input.kind === "workspace_memories"
+        ? "commands.transfer.workspace_memory_preview_description"
+        : "commands.transfer.memory_preview_description",
+      {
+        ownership: localizer(input.locale, ownershipLabelKey),
+      },
+    ),
     500,
   );
   const crossOwnershipRows = input.crossOwnership

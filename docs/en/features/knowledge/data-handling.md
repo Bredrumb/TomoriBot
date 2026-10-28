@@ -17,7 +17,7 @@ and restores are host-side operations; see [Maintenance & Backups](/self-hosting
 
 ### Stored data
 
-- Server and personal memories
+- Server and personal memories, and authored lorebooks
 - Persona profiles, traits, and dialogue examples
 - Server configuration settings
 - Encrypted provider API keys
@@ -44,9 +44,10 @@ Exportable data is delivered to your DMs as a JSON file:
 
 - `/export config`: server configuration values (excludes API keys and credentials).
 - `/export personal config`: personal profile settings (privacy, appearance tags, naming).
-- `/export memories`: server memories, scoped to the main persona, one persona, or all personas. Channel limits are not exported, so imported memories apply in every channel until you pick channels again.
+- `/export memories`: server memories and persona lorebooks, scoped to the main persona, one persona,
+  or all personas, plus Serverwide lore. Channel limits are included.
 - `/export personal memories`: personal memories, scoped globally or per persona.
-- `/persona export`: full persona definitions.
+- `/persona export`: full persona definitions, including the persona's lorebook.
 
 Uploaded expression media is stored on the server host and is outside these JSON exports.
 Self-hosters must back up database storage and media assets together; see
@@ -68,6 +69,12 @@ Attach an exported file to restore it:
 - `/import personal memories`: personal memories. Merge or replace, and map personas.
 - `/persona import`: restore a persona. Also imports SillyTavern PNG cards, JSON cards, and `.charx`
   archives (see [SillyTavern Support](/features/integrations/sillytavern-support/)).
+
+An included lorebook replaces that scope's complete book, including entries added locally. This
+also applies when merging memories. An empty book clears it; a file without a lorebook keeps existing
+lore. Older server backups with keyword-tagged memories convert those memories into persona lore.
+Channel-only memories stay memories, and personal memory tags are unchanged. Channel ids belong to
+their original Discord server, so review channel limits when moving a backup to another server.
 
 ## Delete Your Data
 

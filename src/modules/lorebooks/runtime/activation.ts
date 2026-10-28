@@ -1,6 +1,7 @@
 import {
   LOREBOOK_CONTEXT_CHAR_BUDGET,
   LOREBOOK_SELECTIVE_LOGIC,
+  isLorebookRegexKey,
   type LorebookEntryRow,
 } from "@/modules/lorebooks/db/types";
 import { channelScopeAdmits, channelScopeCandidates } from "@/utils/discord/channelScope";
@@ -15,8 +16,6 @@ export interface LorebookActivationOptions {
   random?: () => number;
 }
 
-// Untrusted regex keys stay inert until import evidence justifies a ReDoS-safe engine.
-const REGEX_KEY = /^\/.+\/[a-z]*$/i;
 const WORD_BOUNDARY_KEY = /^[\p{Script=Latin}\p{Script=Cyrillic}\p{Script=Greek}\p{N}\p{M}\s'_-]+$/u;
 const WORD_CHARACTER = /[\p{L}\p{N}\p{M}_]/u;
 
@@ -35,7 +34,8 @@ function containsWholeWord(haystack: string, key: string): boolean {
 
 function keyMatches(haystack: string, rawKey: string): boolean {
   const key = normalize(rawKey.trim());
-  if (!key || REGEX_KEY.test(key)) return false;
+  // Untrusted regex keys stay inert until import evidence justifies a ReDoS-safe engine.
+  if (!key || isLorebookRegexKey(key)) return false;
   return WORD_BOUNDARY_KEY.test(key) ? containsWholeWord(haystack, key) : haystack.includes(key);
 }
 

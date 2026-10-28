@@ -66,7 +66,7 @@ describe("import dropped-field reporting", () => {
     ).toBeNull();
   });
 
-  it("counts disabled character book entries, which are skipped rather than mapped", () => {
+  it("does not report disabled character book entries, which are preserved", () => {
     const report = describeUnmappedCardFields({
       spec: "chara_card_v3",
       data: {
@@ -80,7 +80,7 @@ describe("import dropped-field reporting", () => {
         },
       },
     });
-    expect(report).toBe("2 disabled character_book entr(ies)");
+    expect(report).toBeNull();
   });
 
   it("does not report a depth prompt that carries settings but no text", () => {
@@ -113,12 +113,12 @@ describe("import dropped-field reporting", () => {
         name: "Mirri",
         nickname: "The Archivist",
         group_only_greetings: ["A group hello."],
-        character_book: { entries: [{ keys: ["b"], content: "skipped", enabled: false, insertion_order: 1 }] },
+        character_book: { entries: [{ keys: ["/b/"], content: "regex", enabled: false, insertion_order: 1 }] },
       },
     });
     expect(report).toContain("nickname");
     expect(report).toContain("group_only_greetings");
-    expect(report).toContain("disabled character_book");
+    expect(report?.split(", ")).toHaveLength(3);
   });
 
   it("reads a root-level v2 card as well as a nested v3 one", () => {

@@ -66,7 +66,7 @@ function recordMemoryWrite(query: string, values: unknown[]): void {
   if (query.startsWith("INSERT INTO server_memories")) {
     insertCalls += 1;
     if (failAtInsert === insertCalls) throw new Error("simulated insert failure");
-    const [serverId, personaId, personaLineageId, userId, content, tags] = values;
+    const [serverId, personaId, personaLineageId, userId, content] = values;
     if (serverId !== 7) throw new Error("unexpected server id");
     const insert: MemoryInsert = {
       table: "server_memories",
@@ -75,7 +75,7 @@ function recordMemoryWrite(query: string, values: unknown[]): void {
       personaId: Number(personaId),
       personaLineageId: Number(personaLineageId),
       content: String(content),
-      tags: tags as string[],
+      tags: [],
     };
     if (transactionOpen) pendingInserts.push(insert);
     else committedInserts.push(insert);
@@ -123,7 +123,7 @@ const fakeSqlTag = (async (strings: TemplateStringsArray, ...values: unknown[]):
   if (query.startsWith("INSERT INTO users")) return [{ user_id: importerUserId }];
   if (query.startsWith("INSERT INTO server_memories") || query.startsWith("INSERT INTO personal_memories")) {
     recordMemoryWrite(query, values);
-    return [];
+    return [{ server_memory_id: insertCalls }];
   }
   return [];
 }) as SqlCall;
@@ -234,7 +234,7 @@ function expectMemoryWritesInOneTransaction(): void {
 
 describe("memory bundle imports", () => {
   it("merges normalized existing and incoming duplicates", async () => {
-    serverRows.set(10, [memory(" existing memory ", ["tag-b", "tag-a"])]);
+    serverRows.set(10, [memory(" existing memory ", [])]);
     const result = await importRepository.importWorkspaceMemoryBundle(
       "server-7",
       "importer-22",
@@ -242,11 +242,7 @@ describe("memory bundle imports", () => {
         {
           bucketName: "bucket-10",
           personaId: 1,
-          memories: [
-            memory("existing   memory", ["tag-a", "tag-b"]),
-            memory("new memory", ["new"]),
-            memory(" new   memory ", ["new"]),
-          ],
+          memories: [memory("existing   memory", []), memory("new memory", []), memory(" new   memory ", [])],
         },
       ],
       "merge",
@@ -261,8 +257,8 @@ describe("memory bundle imports", () => {
     expect(committedInserts[0]?.content).toBe("new memory");
   });
 
-  it("strips legacy channel tags from workspace memories before deduping", async () => {
-    serverRows.set(10, [memory("existing memory", ["lore"])]);
+  it("retains channel-only legacy memories in the memory store", async () => {
+    serverRows.set(10, [memory("existing memory", [])]);
     const result = await importRepository.importWorkspaceMemoryBundle(
       "server-7",
       "importer-22",
@@ -270,15 +266,16 @@ describe("memory bundle imports", () => {
         {
           bucketName: "bucket-10",
           personaId: 1,
-          memories: [memory("existing memory", ['"#general"', "lore"]), memory("new memory", ["#bot-chat", "cats"])],
+          memories: [memory("existing memory", ['"#general"']), memory("new memory", ["#bot-chat"])],
         },
       ],
       "merge",
     );
 
-    expect(result.itemsImported).toMatchObject({ memoriesInserted: 1, memoriesSkipped: 1 });
+    expect(result.itemsImported).toMatchObject({ memoriesInserted: 2, memoriesSkipped: 0 });
     expect(committedInserts.map(({ content, tags }) => ({ content, tags }))).toEqual([
-      { content: "new memory", tags: ["cats"] },
+      { content: "existing memory", tags: [] },
+      { content: "new memory", tags: [] },
     ]);
   });
 

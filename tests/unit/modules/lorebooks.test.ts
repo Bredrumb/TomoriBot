@@ -99,6 +99,7 @@ describe("lorebook activation", () => {
     ["東京", "東京都", true],
     ["ｶﾅ", "カナです", true],
     ["/manor/i", "manor /manor/i", false],
+    ["/manor\nnight/i", "/manor\nnight/i", false],
     ["/城/", "城", false],
   ])("matches key %s in %s: %s", (key, message, expected) => {
     expect(active(entry({ keys: [key] }), [message])).toBe(expected);
@@ -168,6 +169,9 @@ describe("lorebook activation", () => {
 describe("lorebook input normalization", () => {
   it("trims quotes, drops blank or oversized keys, deduplicates and caps the import helper", () => {
     expect(normalizeLorebookKeys([" 'manor' ", '"sea"', "manor", "", "   ", "x".repeat(65)])).toEqual(["manor", "sea"]);
+    const nested = normalizeLorebookKeys(["' \"manor\" '"]);
+    expect(nested).toEqual(["manor"]);
+    expect(normalizeLorebookKeys(nested)).toEqual(nested);
     expect(normalizeLorebookKeys(Array.from({ length: 25 }, (_, i) => `key${i}`))).toHaveLength(LOREBOOK_KEYS_MAX);
   });
 

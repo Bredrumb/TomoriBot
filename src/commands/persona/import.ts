@@ -1,3 +1,4 @@
+import { isLorebookRegexKey } from "@/modules/lorebooks/db/types";
 /**
  * Preset Import Command
  * Imports TomoriBot's personality from a PNG or JSON file
@@ -285,10 +286,18 @@ export function describeUnmappedCardFields(card: unknown): string | null {
   const characterBook = scopes.map((scope) => asPlainObject(scope.character_book)).find(Boolean);
   const entries = characterBook?.entries;
   if (Array.isArray(entries)) {
-    const disabledCount = entries.filter((entry) => asPlainObject(entry)?.enabled === false).length;
-    if (disabledCount > 0) {
-      dropped.push(`${disabledCount} disabled character_book entr(ies)`);
-    }
+    const regexCount = entries.reduce((count, raw) => {
+      const entry = asPlainObject(raw);
+      const keys = [
+        ...(Array.isArray(entry?.keys) ? entry.keys : []),
+        ...(Array.isArray(entry?.secondary_keys) ? entry.secondary_keys : []),
+      ];
+      return (
+        count +
+        keys.filter((key) => typeof key === "string" && (entry?.use_regex === true || isLorebookRegexKey(key))).length
+      );
+    }, 0);
+    if (regexCount > 0) dropped.push(`${regexCount} unsupported character_book regex key(s)`);
   }
 
   return dropped.length > 0 ? dropped.join(", ") : null;
