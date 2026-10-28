@@ -13,13 +13,19 @@ import { incrementTextQuota } from "@/utils/quota/textQuotaManager";
 import { localizer } from "@/utils/text/localizer";
 import { normalizeCustomEmojisForLlm } from "@/utils/text/processors/mentionProcessor";
 import { MAX_EMPTY_RESPONSE_RETRIES } from "@/utils/discord/stream/constants";
-import { suppressNextSelfReply } from "@/utils/chat/channelQueue";
+import { channelLocks, queuePersonaJobsAtFront, suppressNextSelfReply } from "@/utils/chat/channelQueue";
+import { getMatchLimit } from "@/utils/chat/personaQueue";
+import { getTriggerFirstMatchIndexInContent } from "@/utils/chat/triggerProcessor";
 import {
   buildSpeakerGuardRetryDirective,
   mergeInjectedContextItems,
   stripInjectedContextAnnotations,
 } from "@/utils/chat/contextAnnotations";
-import { getSelfReplyChainState, setLastRespondedPersona } from "@/utils/chat/selfReplyState";
+import {
+  getSelfReplyChainState,
+  setLastRespondedPersona,
+  updateSelfReplyChainState,
+} from "@/utils/chat/selfReplyState";
 import { textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { statRepository } from "@/utils/db/repositories";
 import { charsToTokensText, estimateContextItemsTokens, sumTurnUsage } from "@/utils/text/tokenEstimate";
@@ -52,6 +58,7 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
   await maybeScheduleEmptyResponseRetry(context, result);
   await consumeTextQuota(context, result);
   updateSelfReplyBookkeeping(context, result);
+  queueNaturalNudgeReplies(context, result);
   await writeShortTermMemory(context, result);
   await emitThoughtLog(context, result);
   scheduleBoomerangFollowUp(context);
@@ -491,11 +498,14 @@ async function consumeTextQuota(context: ChatTurnContext, result: GenerationTurn
 }
 
 function updateSelfReplyBookkeeping(context: ChatTurnContext, result: GenerationTurnResult): void {
+  const incoming = context.turn.lockedTurn.admission.incoming;
+  if (isDeliveredTurnResult(result) && incoming.naturalNudge && !incoming.isPersonaJob && !incoming.sceneTurn) {
+    updateSelfReplyChainState(context.channel.id, false).triggerCount = 1;
+  }
   if (result.personaResponses.length > 0 && context.currentPersona.persona_id) {
     setLastRespondedPersona(context.channel.id, context.currentPersona.persona_id);
   }
 
-  const incoming = context.turn.lockedTurn.admission.incoming;
   if (
     result.personaResponses.length > 0 &&
     (!incoming.isManuallyTriggered || incoming.isPersonaJob) &&
@@ -511,6 +521,58 @@ function updateSelfReplyBookkeeping(context: ChatTurnContext, result: Generation
       triggerState.lastWasSelf = true;
     }
   }
+}
+
+function queueNaturalNudgeReplies(context: ChatTurnContext, result: GenerationTurnResult): void {
+  const incoming = context.turn.lockedTurn.admission.incoming;
+  if (!incoming.naturalNudge || incoming.sceneTurn || !isDeliveredTurnResult(result)) return;
+  const lockEntry = channelLocks.get(context.channel.id);
+  if (!lockEntry?.isLocked || lockEntry.nudgeInterrupted) return;
+
+  const content = result.streamResults.map((stream) => stream.accumulatedText ?? "").join("\n");
+  const personaJobs = context.allPersonas
+    .flatMap((persona) =>
+      persona.persona_id === undefined ||
+      persona.persona_id === context.currentPersona.persona_id ||
+      lockEntry.messageQueue.some(
+        (job) =>
+          job.naturalNudge &&
+          job.textQuotaTriggerKey === context.textQuotaTriggerKey &&
+          job.selectedPersonaId === persona.persona_id,
+      )
+        ? []
+        : [
+            {
+              personaName: persona.persona_nickname,
+              selectedPersonaId: persona.persona_id,
+              index: Math.min(
+                ...(persona.trigger_words ?? []).map((trigger) =>
+                  getTriggerFirstMatchIndexInContent(content, trigger, true),
+                ),
+              ),
+            },
+          ],
+    )
+    .filter((match) => Number.isFinite(match.index))
+    .sort((a, b) => a.index - b.index)
+    .slice(0, getMatchLimit(context.tomoriState))
+    .map(({ personaName, selectedPersonaId }) => ({ personaName, selectedPersonaId }));
+  if (personaJobs.length === 0) return;
+
+  queuePersonaJobsAtFront({
+    lockEntry,
+    message: context.message,
+    personaJobs,
+    triggeredPersonaIds: personaJobs.map((job) => job.selectedPersonaId),
+    textQuotaSource: "system",
+    textQuotaTriggerKey: context.textQuotaTriggerKey,
+    textQuotaUserDiscId: incoming.textQuotaUserDiscId ?? context.userDiscId,
+    shouldSurfaceUserErrors: false,
+    naturalNudge: { toolNames: [], targetUserDiscId: incoming.naturalNudge.targetUserDiscId },
+    borrowsTriggerMessage: true,
+    manualSystemPrompt:
+      "Answer the persona who addressed you in the latest conversation; the borrowed channel message is only an anchor, not a new request.",
+  });
 }
 
 async function writeShortTermMemory(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {

@@ -143,10 +143,21 @@ activity still controls dormancy.
 
 ## Constraints
 
+- **Explicit persona mentions can continue an ordinary nudge.** After a completed non-scene turn,
+  `postTurnEffects.ts` matches `@`-prefixed trigger words in delivered dialogue and queues the named
+  personas in mention order through `queuePersonaJobsAtFront`, up to the server's match limit.
+  A persona already queued in the same nudge chain is excluded before that limit applies.
+  These jobs retain `naturalNudge`, system quota routing, and the borrowed anchor, so they cannot
+  add human engagement, renew dormancy, or write short-term memory. They receive reply guidance
+  without the opener's private goal or tool grants. The opener starts a fresh cascade budget;
+  each reply consumes it through the ordinary cascade guard. Gateway echoes cannot reset it.
+  A member's message cancels queued nudge replies and prevents the current turn from adding more.
+  Admission rejection or a turn that finishes without delivery discards the remaining queued nudge
+  turns; a pending empty-response retry decides whether the chain can continue.
 - **Abort on any doubt; never queue.** An abort posts nothing and writes no fire row. A nudge
   that meets a busy channel is dropped in `admissionQueue.ts` rather than queued behind the turn.
   After an abort the idle nudge stays due and waits a fresh lull, so it cannot retry every cycle. The
-  one exception is a Play Scene's later turns, which turn 0 queues itself (below).
+  exceptions are a Play Scene's later turns and explicit persona replies, which the running nudge queues itself.
 - **Re-check right before sending.** `recheckBeforeSend` reads settings, category weights, caps, the persona, the
   persona channel whitelist, and Ping User target eligibility fresh. It also re-resolves the planned
   idle nudge from fresh server and persona rows and re-admits its tools, hanging conversation,
@@ -293,8 +304,9 @@ A Play Scene idle nudge reuses the `/generate scene` machinery: the runner passe
   the member's own whitelist, spotlight, and access gates. It is a normal member turn.
 - **The scene's own lines start nothing.** While a nudge turn holds the channel lock, while nudge turns
   wait in its queue, and for five seconds after the last one releases, admission ignores persona
-  messages there (`nudge_output`). Otherwise a line naming another persona would queue an ordinary
-  persona reply after the scene, credited to the last member as engagement.
+  gateway messages there (`nudge_output`). Ordinary nudges route explicit mentions after generation;
+  scripted scenes keep their planned sequence. Ignoring gateway echoes prevents duplicate replies
+  and replies that lose the nudge marker.
 - **A failed turn ends the scene.** The channel queue only advances when a lock is released, so
   `tomoriChat` itself drops the remaining turns whenever a nudge scene turn (the opener included) is
   rejected at admission or delivers nothing. An empty reply that is being retried does not count,

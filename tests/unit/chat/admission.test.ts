@@ -26,6 +26,7 @@ import { personaRepository } from "@/utils/db/repositories";
 import { messageProxyRepository } from "@/utils/db/repositories/MessageProxyRepository";
 import { messageProxyInstanceRepository } from "@/utils/db/repositories/MessageProxyInstanceRepository";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { getSelfReplyChainState } from "@/utils/chat/selfReplyState";
 import { clearPluralKitApiStateForTests } from "@/utils/messageProxy/services/pluralkit/api";
 import { clearMessageProxyGuildPresenceStateForTests } from "@/utils/messageProxy/guildPresence";
 import { userRepository } from "@/utils/db/repositories/UserRepository";
@@ -423,7 +424,7 @@ describe("evaluateChatAdmission Natural Nudges scene interrupt", () => {
     }
   });
 
-  it("ignores a persona's own message while nudge work holds the channel and just after, so it starts no replies", async () => {
+  it("ignores nudge gateway echoes without resetting the cascade budget during and after generation", async () => {
     const channelId = "scene-output-channel";
     const admitPersonaMessage = async () =>
       evaluateChatAdmission({
@@ -455,7 +456,9 @@ describe("evaluateChatAdmission Natural Nudges scene interrupt", () => {
         isCommandTriggered: true,
         naturalNudge: "scene",
       });
+      getSelfReplyChainState(channelId).triggerCount = 2;
       expect(await admitPersonaMessage()).toMatchObject({ disposition: "ignore", reason: "nudge_output" });
+      expect(getSelfReplyChainState(channelId).triggerCount).toBe(2);
 
       releaseChannelLockAndReplayQueue({
         channelId,
@@ -465,6 +468,7 @@ describe("evaluateChatAdmission Natural Nudges scene interrupt", () => {
         processQueuedMessage: async () => undefined,
       });
       expect(await admitPersonaMessage()).toMatchObject({ disposition: "ignore", reason: "nudge_output" });
+      expect(getSelfReplyChainState(channelId).triggerCount).toBe(2);
 
       const activeDuringNormalTurn = await runWithChannelLock(
         {

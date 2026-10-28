@@ -82,8 +82,9 @@ export interface ChannelLockEntry {
   currentIsPersonaJob?: boolean;
   activePersonaId?: number;
   activeTriggeredPersonaIds?: number[];
-  /** Set while the turn holding the lock is a Natural Nudges turn, so its own output is not answered. */
+  /** Set during a Natural Nudges turn so gateway echoes cannot schedule duplicate persona replies. */
   activeNaturalNudge?: "single" | "scene";
+  nudgeInterrupted?: boolean;
   activeIsUserImpersonation?: boolean;
   activeImpersonatedUserId?: string;
   followUpEligible?: boolean;
@@ -310,6 +311,7 @@ export function acquireChannelLockForTurn(
   lockEntry.activePersonaId = args.selectedPersonaId;
   lockEntry.activeTriggeredPersonaIds = args.triggeredPersonaIds;
   lockEntry.activeNaturalNudge = args.naturalNudge;
+  lockEntry.nudgeInterrupted = false;
   lockEntry.activeIsUserImpersonation = undefined;
   lockEntry.activeImpersonatedUserId = undefined;
   lockEntry.followUpEligible = false;
@@ -382,6 +384,9 @@ export function queuePersonaJobsAtFront(args: {
   shouldSurfaceUserErrors?: boolean;
   injectedContextItems?: StructuredContextItem[];
   forcedMentions?: ForcedMention[];
+  naturalNudge?: NaturalNudgeTurn;
+  borrowsTriggerMessage?: boolean;
+  manualSystemPrompt?: string;
 }): void {
   for (let i = args.personaJobs.length - 1; i >= 0; i--) {
     const queuedPersona = args.personaJobs[i];
@@ -400,6 +405,9 @@ export function queuePersonaJobsAtFront(args: {
       shouldSurfaceUserErrors: args.shouldSurfaceUserErrors,
       injectedContextItems: args.injectedContextItems,
       forcedMentions: args.forcedMentions,
+      naturalNudge: args.naturalNudge,
+      borrowsTriggerMessage: args.borrowsTriggerMessage,
+      manualSystemPrompt: args.manualSystemPrompt,
     });
   }
 
@@ -911,10 +919,9 @@ export function clearQueuedSelfReplyWork(
 }
 
 /**
- * Drops the queued turns of a Natural Nudges scene, so a member who speaks up mid-scene is answered
- * next instead of waiting out the script. `/generate scene` turns carry no nudge marker and stay.
+ * Drops queued Natural Nudges turns so a member who speaks up is answered next; `/generate scene` turns stay.
  */
-export function clearQueuedNudgeSceneWork(channelId: string): QueuedMessage[] {
+export function clearQueuedNudgeWork(channelId: string): QueuedMessage[] {
   const lockEntry = channelLocks.get(channelId);
   if (!lockEntry || lockEntry.messageQueue.length === 0) {
     return [];
@@ -922,7 +929,7 @@ export function clearQueuedNudgeSceneWork(channelId: string): QueuedMessage[] {
 
   const removedMessages: QueuedMessage[] = [];
   lockEntry.messageQueue = lockEntry.messageQueue.filter((queuedMsg) => {
-    if (!queuedMsg.sceneTurn || !queuedMsg.naturalNudge) {
+    if (!queuedMsg.naturalNudge) {
       return true;
     }
     removedMessages.push(queuedMsg);
@@ -930,24 +937,22 @@ export function clearQueuedNudgeSceneWork(channelId: string): QueuedMessage[] {
   });
 
   if (removedMessages.length > 0) {
-    log.info(`Dropped ${removedMessages.length} queued Natural Nudges scene turn(s) in channel ${channelId}.`);
+    log.info(`Dropped ${removedMessages.length} queued Natural Nudges turn(s) in channel ${channelId}.`);
     discardQueuedMessages(removedMessages, "scene_interrupted");
   }
   return removedMessages;
 }
 
-/**
- * Ends a Natural Nudges scene for a member who spoke up, and returns the persona who catches their
- * message: the next scripted speaker, else the one speaking now, as in a conversation someone joins.
- */
+/** Stops pending nudge turns when a member speaks and returns the next queued speaker, or the active scene speaker. */
 export function interruptNudgeScene(channelId: string): number | undefined {
-  const [nextSpeaker] = clearQueuedNudgeSceneWork(channelId);
-  if (nextSpeaker) return nextSpeaker.selectedPersonaId;
   const lockEntry = channelLocks.get(channelId);
+  if (lockEntry?.isLocked && lockEntry.activeNaturalNudge) lockEntry.nudgeInterrupted = true;
+  const [nextSpeaker] = clearQueuedNudgeWork(channelId);
+  if (nextSpeaker) return nextSpeaker.selectedPersonaId;
   return lockEntry?.isLocked && lockEntry.activeNaturalNudge === "scene" ? lockEntry.activePersonaId : undefined;
 }
 
-/** Whether a persona message here is a nudge's own output, which must never start persona-to-persona replies. */
+/** Whether gateway persona output must be ignored because nudge handoffs are queued after generation. */
 export function isNudgeOutputActive(channelId: string): boolean {
   const lockEntry = channelLocks.get(channelId);
   if (lockEntry?.isLocked && lockEntry.activeNaturalNudge) return true;

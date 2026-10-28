@@ -31,7 +31,7 @@ import {
 import { channelLocks, queueScenePersonaJobsAtFront, setActiveChannelTurnState } from "@/utils/chat/channelQueue";
 import { hasDirectChatSignal, shouldSurfaceChatUserErrors } from "@/utils/chat/errorVisibility";
 import { readNaturalNudgeGate, recordNaturalNudgeDirectChat } from "@/modules/natural-nudges/runtime/configCache";
-import { queueAdditionalPersonaTurns } from "@/utils/chat/personaQueue";
+import { getMatchLimit, queueAdditionalPersonaTurns } from "@/utils/chat/personaQueue";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
 import { buildSceneTextQuotaTriggerKey, buildSceneTurnDirective } from "@/utils/chat/sceneTurn";
 import {
@@ -60,9 +60,6 @@ import { userNamingRepository, userPersonaNamingPairKey } from "@/utils/db/repos
 import { resolveEffectiveUserNaming } from "@/utils/text/userNaming";
 const DEFAULT_CASCADE_LIMIT = 3;
 const MAX_CASCADE_LIMIT = 10;
-const DEFAULT_MATCH_LIMIT = 3;
-const MIN_MATCH_LIMIT = 1;
-const MAX_MATCH_LIMIT = 10;
 type SendableChannel = Parameters<typeof sendStandardEmbed>[0];
 export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTurnPlan> {
   const admission = lockedTurn.admission;
@@ -618,11 +615,6 @@ function isSystemInitiatedIncoming(incoming: ChatIncoming): boolean {
 
 function isRealUserMessage(message: Message): boolean {
   return (!message.author.bot && !message.webhookId) || isMatrixRelayMessage(message) || isMessageProxyMessage(message);
-}
-
-function getMatchLimit(tomoriState: TomoriState): number {
-  const rawMatchLimit = tomoriState.config.match_limit ?? DEFAULT_MATCH_LIMIT;
-  return Math.min(Math.max(rawMatchLimit, MIN_MATCH_LIMIT), MAX_MATCH_LIMIT);
 }
 
 export async function resolveTextCredentialPolicy(params: {

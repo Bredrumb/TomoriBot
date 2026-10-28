@@ -44,10 +44,14 @@ After a successful post, persona targets enter the normal chat admission and cha
 selected target and the initiating member's access identity. The queued turn receives an injected
 context item that names the actor, the selected target, the action, and the reason, with the delivered
 message ID in metadata. `/reward` and `/punish` use the same event builder and fetch their own reply as
-the trigger, so a later message or embed cannot redirect the reaction. The receiving turn appends
-a short tool hint to the event and resolves `{conditioning_interaction_tool}` inside
+the trigger, so a later message or embed cannot redirect the reaction. The receiving turn uses the
+delivered embed's history text when present and replaces that history entry with one recent `user`
+item formatted as `[System: <gesture> <tool hint>]`. The trigger stays separate from adjacent notices
+during history merging. If the message is outside the fetched history, the injected event supplies
+the gesture. The receiving turn resolves `{conditioning_interaction_tool}` inside
 `{{if tool:interact_with_target}}` against its own model capabilities and Deliberate Tool Mode
-allowlist. When unavailable, the event appears without the hint.
+allowlist. When unavailable, the event appears without the hint. The hint exists only for this
+reaction turn; later history contains the posted gesture without it.
 
 The interaction tool remains available to the receiving persona and allows one call per turn.
 No runtime limit bounds the number of reciprocal turns. Persona-triggered replies also skip human

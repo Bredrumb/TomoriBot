@@ -21,13 +21,13 @@ export function buildConditioningInteractionEvent(params: {
   const food = params.action === "feed" && params.food ? ` with ${normalizeConditioningReason(params.food)}` : "";
   const reason = params.reason ? `: ${params.reason}` : "";
   return {
-    role: "system",
-    metadataTag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
+    role: "user",
+    metadataTag: ContextItemTag.DIALOGUE_HISTORY,
     messageId: params.messageId,
     parts: [
       {
         type: "text",
-        text: `${params.actorName} just ${action} ${params.targetName}${food}${reason}.`,
+        text: `[System: ${params.actorName} just ${action} ${params.targetName}${food}${reason}.]`,
       },
     ],
   };

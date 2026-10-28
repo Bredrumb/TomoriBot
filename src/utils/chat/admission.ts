@@ -202,7 +202,6 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   }
 
   if (!incoming.isManuallyTriggered && isLikelySelfMessage && isNudgeOutputActive(channel.id)) {
-    updateSelfReplyChainState(channel.id, false);
     return ignored("nudge_output");
   }
 
