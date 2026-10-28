@@ -11,7 +11,7 @@ const NAI_ON_CONFLICT = `ON CONFLICT (preset_name, model_target) DO UPDATE
         preset_desc    = EXCLUDED.preset_desc,
         descriptions = EXCLUDED.descriptions`;
 
-const NAI_MODEL_TARGETS: NaiModelTarget[] = ["kayra", "erato"];
+const NAI_MODEL_TARGETS: NaiModelTarget[] = ["kayra", "erato", "xialong"];
 
 function rowsOf(): NaiPresetInput[] {
   return naiPresetSections.flatMap((section) => section.rows);

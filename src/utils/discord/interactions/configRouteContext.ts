@@ -303,7 +303,7 @@ export interface ConfigRouteDependencies {
     naiPresetPageStart?: number,
     workspaceKind?: "guild" | "dm",
   ): Promise<ConfigParametersView>;
-  loadNaiPresets(target: "kayra" | "erato"): Promise<NaiPresetRow[]>;
+  loadNaiPresets(target: "kayra" | "erato" | "xialong"): Promise<NaiPresetRow[]>;
   loadFallbacksView(
     state: TomoriState,
     locale: string,

@@ -363,7 +363,10 @@ export const CONFIG_NAI_PRESET_PREVIOUS_VALUE = "__nai-preset-prev__";
 export const CONFIG_NAI_PRESET_NEXT_VALUE = "__nai-preset-next__";
 
 /** Binds a preset selection to its target and ordered catalog names as rendered. */
-export function computeNaiPresetFingerprint(target: "kayra" | "erato", presetNames: readonly string[]): string {
+export function computeNaiPresetFingerprint(
+  target: "kayra" | "erato" | "xialong",
+  presetNames: readonly string[],
+): string {
   return createHash("sha256")
     .update(`config-nai-preset:${target}:${JSON.stringify([...presetNames])}`)
     .digest("base64url")

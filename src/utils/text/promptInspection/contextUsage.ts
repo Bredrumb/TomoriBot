@@ -147,7 +147,12 @@ export function layoutContextGrid(usage: ContextUsage, budget: ContextBudget | n
   const parts: Array<{ id: ContextCellId; tokens: number }> = usage.segments.map(({ id, tokens }) => ({ id, tokens }));
 
   if (budget) {
-    const safeInputBudget = Math.max(0, computeSafeInputBudget(budget.contextLength, budget.outputReserve));
+    const safeInputBudget = Math.max(
+      0,
+      budget.exact
+        ? budget.contextLength - budget.outputReserve
+        : computeSafeInputBudget(budget.contextLength, budget.outputReserve),
+    );
     parts.push({ id: "free", tokens: Math.max(0, safeInputBudget - usage.inputTokens) });
     parts.push({ id: "reserved", tokens: Math.max(0, budget.contextLength - safeInputBudget) });
   }

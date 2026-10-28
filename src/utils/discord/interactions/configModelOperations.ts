@@ -50,7 +50,6 @@ import { DEFAULT_IMAGE_NEGATIVE_TAGS, DEFAULT_IMAGE_POSITIVE_TAGS } from "@/util
 import { parseAndValidateImageTags } from "@/utils/image/tagHelpers";
 import { NAI_IMAGE_NOISE_SCHEDULES, NAI_IMAGE_SAMPLERS } from "@/utils/image/naiImageParams";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
-import { log } from "@/utils/misc/logger";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { buildCustomProviderName, isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import {
@@ -73,6 +72,9 @@ import {
   type ProviderOptionScope,
 } from "@/utils/provider/providerOptionRegistry";
 import { getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
+import { getNovelAIModelAccessError } from "@/providers/novelai/modelAccess";
+import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
+import { decryptApiKey } from "@/utils/security/crypto";
 import { loadSavedProvidersForCapability, type SavedProviderCapability } from "@/utils/provider/savedProviderConfig";
 import {
   providerPanelOperations,
@@ -91,14 +93,9 @@ export const CONFIG_FALLBACK_CLEAR_VALUE = "__none__";
 /** Distinguishes a custom-endpoint fallback pick from an LLM codename in a slot select value. */
 export const CONFIG_FALLBACK_ENDPOINT_PREFIX = "ce:";
 
-const NAI_PRESET_MODEL_TARGETS: Record<string, "kayra" | "erato"> = {
-  "kayra-v1": "kayra",
-  "llama-3-erato-v1": "erato",
-};
-
-export function resolveNaiPresetTarget(state: TomoriState): "kayra" | "erato" | null {
+export function resolveNaiPresetTarget(state: TomoriState): "kayra" | "erato" | "xialong" | null {
   if (state.llm.llm_provider.toLowerCase() !== "novelai") return null;
-  return NAI_PRESET_MODEL_TARGETS[state.llm.llm_codename] ?? null;
+  return getNovelAIProfile(state.llm.llm_codename).samplingPresetTarget;
 }
 
 /** Capability slot to the saved-provider capability whose eligibility list backs it. */
@@ -286,6 +283,7 @@ type ConfigModelSetResult =
   | { status: "already-selected"; modelName: string }
   | { status: "openrouter-moved" }
   | { status: "provider-denied"; denied: ProviderRequestDeniedError }
+  | { status: "novelai-unavailable"; descriptionKey: string }
   | { status: "not-found" | "no-models" | "write-failed" };
 
 type ConfigModelClearResult =
@@ -557,6 +555,9 @@ async function promoteTextModel(
   model: LlmRow & { llm_id: number },
   savedConfig: SavedProviderConfigRow | null,
 ): Promise<boolean> {
+  const resetNovelAI = provider === "novelai" && tomoriState.llm.llm_id !== model.llm_id;
+  const preset = resetNovelAI ? await configRepository.resolveNaiPreset(model.llm_codename) : undefined;
+  if (resetNovelAI && getNovelAIProfile(model.llm_codename).samplingPresetTarget && !preset) return false;
   const resolvedLogitBiases = resolveLogitBiasEntriesForLlm(
     savedConfig?.llm_logit_biases ?? tomoriState.config.llm_logit_biases ?? [],
     model,
@@ -601,35 +602,8 @@ async function promoteTextModel(
     return false;
   }
 
-  const naiDefaultPresets: Record<string, { name: string; target: "kayra" | "erato" }> = {
-    "kayra-v1": { name: "Carefree-Kayra", target: "kayra" },
-    "llama-3-erato-v1": { name: "Erato-Shosetsu", target: "erato" },
-  };
-  const defaultPresetEntry = naiDefaultPresets[model.llm_codename];
-  if (!defaultPresetEntry) return true;
-
-  const naiPresets = await configRepository.loadNaiPresets(defaultPresetEntry.target);
-  const defaultPreset = naiPresets.find((preset) => preset.preset_name === defaultPresetEntry.name);
-  if (!defaultPreset) {
-    log.warn(
-      `Default NAI preset "${defaultPresetEntry.name}" not found in DB. Was the seed catalog loaded? Skipping auto-apply.`,
-    );
-    return true;
-  }
-
-  const applied = await configRepository.applyNaiPreset(
-    tomoriState.server_id,
-    defaultPreset,
-    model.llm_codename,
-    serverDiscId,
-  );
-  if (!applied) {
-    // The preset spans three non-transactional writes, so any sub-write that committed must not
-    // stay hidden behind the cache.
-    invalidateTomoriStateCache(serverDiscId);
-    return false;
-  }
-  return true;
+  if (!resetNovelAI) return true;
+  return await configRepository.applyNaiPreset(tomoriState.server_id, preset ?? null, model, serverDiscId);
 }
 
 function parseBoundedInteger(raw: string, min: number, max: number): number | null | "invalid" {
@@ -678,6 +652,13 @@ export const configModelOperations: ConfigModelOperations = {
       }
 
       if (capability === "text") {
+        if (model.llm_provider === "novelai" && model.llm_codename === "xialong-v1") {
+          const descriptionKey = await getNovelAIModelAccessError(
+            model.llm_codename,
+            savedConfig.api_key ? await decryptApiKey(savedConfig.api_key, savedConfig.key_version) : null,
+          );
+          if (descriptionKey) return { status: "novelai-unavailable", descriptionKey };
+        }
         const promoted = await promoteTextModel(
           tomoriState,
           serverDiscId,
@@ -946,12 +927,7 @@ export const configModelOperations: ConfigModelOperations = {
     const target = resolveNaiPresetTarget(tomoriState);
     if (!target || preset.model_target !== target) return { status: "not-found" };
 
-    const applied = await configRepository.applyNaiPreset(
-      tomoriState.server_id,
-      preset,
-      tomoriState.llm.llm_codename,
-      serverDiscId,
-    );
+    const applied = await configRepository.applyNaiPreset(tomoriState.server_id, preset, tomoriState.llm, serverDiscId);
     return applied ? { status: "success" } : { status: "write-failed" };
   },
 

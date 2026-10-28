@@ -8,6 +8,7 @@ import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolve
 import type { OpenRouterModelScope } from "@/utils/db/repositories/LlmModelRepository";
 import { hasSpeechDesignSelection, setHostedSpeechSelection } from "@/utils/db/repositories/SpeechRepository";
 import { validateOpenRouterSpeechModel } from "@/utils/cache/openrouterSpeechModelCache";
+import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 
 /**
  * Selects the provider's default model for each voice mode it seeds.
@@ -54,6 +55,11 @@ export async function activateServerTextModelFromSavedConfig(params: {
 
   const promotedLlmId = selectedModel.llm_id;
   const normalizedProvider = params.savedConfig.provider.toLowerCase();
+  const resetNovelAI = normalizedProvider === "novelai" && params.tomoriState.llm.llm_id !== selectedModel.llm_id;
+  const preset = resetNovelAI ? await configRepository.resolveNaiPreset(selectedModel.llm_codename) : undefined;
+  if (resetNovelAI && getNovelAIProfile(selectedModel.llm_codename).samplingPresetTarget && !preset) {
+    return { status: "update_failed" };
+  }
   const customEndpoints = isCustomProvider(normalizedProvider)
     ? await llmProviderRepo.loadCustomEndpointsForServer(params.tomoriState.server_id)
     : [];
@@ -97,6 +103,17 @@ export async function activateServerTextModelFromSavedConfig(params: {
 
   if (updatedModel || updatedChat) invalidateTomoriStateCache(params.serverDiscId);
   if (!updatedModel || !updatedChat) {
+    return { status: "update_failed" };
+  }
+  if (
+    resetNovelAI &&
+    !(await configRepository.applyNaiPreset(
+      params.tomoriState.server_id,
+      preset ?? null,
+      selectedModel,
+      params.serverDiscId,
+    ))
+  ) {
     return { status: "update_failed" };
   }
   return { status: "activated", modelName: selectedModel.llm_codename };

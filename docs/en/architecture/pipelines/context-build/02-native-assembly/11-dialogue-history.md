@@ -36,6 +36,13 @@ simplifiedMessageHistory
   filename is never parsed as a macro.
 - **Deterministic humanization**: At `humanizer_degree >= HumanizerDegree.HEAVY`, model-role historical turns pass through `humanizeString` with `suppressPunctuationNoise: true`. This applies casing normalization and semicolon stripping without randomized comma noise, preserving prefix stability for provider prompt caching.
 
+NovelAI reads the item's `completionText` projection. History simplification preserves original
+message prose in `completionContent` before adding reply references, reactions, and media hints.
+Generated notices supply semantic prose or an empty string; `completionSpeaker: false` keeps
+narration free of a speaker label. Merging carries this projection alongside ordinary `content`.
+Other providers continue to use the annotated parts. NovelAI's fitter polishes and counts the
+projection separately; see [NovelAI limitations](/architecture/integrations/novelai/limitations/).
+
 ### Media descriptor emission
 
 Instead of adapting media to a specific model's vision capabilities during context build, this stage records capability-neutral `MediaDescriptor` objects:

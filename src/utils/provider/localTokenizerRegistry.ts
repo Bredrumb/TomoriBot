@@ -1,4 +1,9 @@
 import fs from "node:fs";
+import { createHash } from "node:crypto";
+import { Encoder } from "nai-js-tokenizer";
+import { z } from "zod";
+import tokenizerManifest from "../../../tokenizers/manifest.json";
+import { NovelAIPreparationError } from "@/providers/novelai/preparationError";
 import path from "node:path";
 import { BytePairEncodingCore, type RawBytePairRanks } from "gpt-tokenizer/BytePairEncodingCore";
 import { log } from "@/utils/misc/logger";
@@ -445,4 +450,45 @@ function buildByteLevelCharToByteMap(): Map<string, number> {
   }
 
   return new Map(bytes.map((value, index) => [String.fromCodePoint(codePoints[index]), value]));
+}
+
+export type NovelAITokenizerFamily = "novelai_nerdstash_v2" | "novelai_llama3" | "novelai_glm";
+
+const novelaiDefinitionSchema = z.object({
+  vocab: z.record(z.string(), z.number().int().nonnegative()),
+  merges: z.array(z.array(z.string()).length(2)),
+  specialTokens: z.array(z.string()),
+  config: z.object({
+    splitRegex: z.string(),
+    maxEncodeChars: z.number().default(0),
+    ignoreMerges: z.boolean().default(false),
+  }),
+});
+const NOVELAI_MAX_INPUT_CHARACTERS = 1_000_000;
+const NOVELAI_MAX_FRAGMENT_CODE_POINTS = 1024;
+const oversizedNovelaiFragment = new RegExp(`\\S{${NOVELAI_MAX_FRAGMENT_CODE_POINTS + 1}}`, "u");
+const novelaiDefinitions = new Map<NovelAITokenizerFamily, z.infer<typeof novelaiDefinitionSchema> | null>();
+
+export function createNovelAITokenizerEncoder(family: NovelAITokenizerFamily): LocalTokenizerEncoder {
+  if (!novelaiDefinitions.has(family)) {
+    try {
+      const bytes = fs.readFileSync(path.join(getTokenizerAssetDir(), family, "tokenizer.json"));
+      const expected = tokenizerManifest.families[family].sha256["tokenizer.json"];
+      if (createHash("sha256").update(bytes).digest("hex") !== expected) throw new Error("Tokenizer hash mismatch");
+      novelaiDefinitions.set(family, novelaiDefinitionSchema.parse(JSON.parse(bytes.toString("utf8"))));
+    } catch (error) {
+      novelaiDefinitions.set(family, null);
+      log.warn("Failed to load required NovelAI tokenizer", { family, error });
+    }
+  }
+  const definition = novelaiDefinitions.get(family);
+  if (!definition) throw new NovelAIPreparationError("tokenizer_setup");
+  // Upstream caches fragments without eviction, so each fitting session owns its encoder.
+  const encoder = new Encoder(definition.vocab, definition.merges, definition.specialTokens, definition.config);
+  return (text) => {
+    // Bound upstream's quadratic cost to one million characters and 1,024-code-point fragments until it provides a bounded encoder.
+    if (text.length > NOVELAI_MAX_INPUT_CHARACTERS || oversizedNovelaiFragment.test(text))
+      throw new NovelAIPreparationError("input_complexity");
+    return encoder.encode(text);
+  };
 }

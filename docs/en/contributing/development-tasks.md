@@ -23,6 +23,9 @@ bun run db:lifecycle    # when schema.sql changed
 - `bun run db:lifecycle` needs a local PostgreSQL user that can create and drop databases. It tests
   fresh initialization, backup and restore, and the maintenance scripts in a temporary database.
 - `bun run test <path>` runs selected files through the same disposable-database setup.
+- NovelAI fitting and streaming tests require the pinned local tokenizer definitions. Provision
+  `novelai_nerdstash_v2`, `novelai_llama3`, and `novelai_glm` with
+  `bun run setup:tokenizers --family <family>` before running them; the existing CI test job does this.
 
 `bun run vl` runs every gate and prints one verdict per gate. Its last line is for scripts:
 `vl-status: PASS exit=0 pass=<n> warn=<n> fail=<n> skip=<n>`. Passing gates are silent and failing

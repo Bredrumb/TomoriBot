@@ -175,8 +175,28 @@ export function buildContextUsagePayload(
   inspection: PromptInspection,
   canViewText: boolean,
 ): ContextUsagePanelPayload {
-  const usage = measureContextUsage(inspection.contextItems, inspection.toolsData);
-  const grid = layoutContextGrid(usage, inspection.budget);
+  const naiReport = inspection.novelaiRequest?.report;
+  const measured = measureContextUsage(inspection.contextItems, inspection.toolsData);
+  const usage = naiReport
+    ? {
+        ...measured,
+        inputTokens: naiReport.inputTokens,
+        segments: measured.segments.map((segment) => ({
+          ...segment,
+          tokens: (segment.tokens * naiReport.inputTokens) / Math.max(1, measured.inputTokens),
+        })),
+      }
+    : measured;
+  const grid = layoutContextGrid(
+    usage,
+    naiReport
+      ? {
+          contextLength: naiReport.window,
+          outputReserve: naiReport.outputCap + naiReport.framingReserve + naiReport.sentenceReserve,
+          exact: true,
+        }
+      : inspection.budget,
+  );
   const providerLabel = getProviderDisplayName(inspection.answeringState.llm.llm_provider);
 
   const headerLines = [
@@ -191,7 +211,7 @@ export function buildContextUsagePayload(
   ];
 
   const footnotes = [
-    localizer(locale, "commands.context.estimate_note"),
+    localizer(locale, naiReport ? "commands.context.novelai_measurement_note" : "commands.context.estimate_note"),
     localizer(locale, "commands.context.not_counted_note"),
   ];
   if (inspection.historyPairsDropped > 0) {

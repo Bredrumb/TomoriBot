@@ -103,7 +103,6 @@ export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
     textQuotaUserDiscId: input.textQuotaUserDiscId,
     manualSystemPrompt: input.manualSystemPrompt,
     manualPrefill: input.manualPrefill,
-    naiContinuationPrefill: input.naiContinuationPrefill,
     emptyResponseFinishReason: input.emptyResponseFinishReason,
     shouldSurfaceUserErrors: input.shouldSurfaceUserErrors,
     injectedContextItems: input.injectedContextItems,

@@ -58,6 +58,10 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
               : undefined,
         });
 
+        const nativeContextItems = resolveRandomChoiceMacrosInBuildOutput({
+          ...nativeOutput,
+          contextItems: nativeOutput.contextItems.map((item) => ({ ...item, parts: [...item.parts] })),
+        }).contextItems;
         const presetResult = await reassembleWithPreset(
           nativeOutput,
           presetData,
@@ -81,7 +85,7 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
             toolPromptMacroResolver: presetToolPromptMacroResolver,
           },
         );
-        return { ...resolveRandomChoiceMacrosInBuildOutput(presetResult), messageIdMap };
+        return { ...resolveRandomChoiceMacrosInBuildOutput(presetResult), nativeContextItems, messageIdMap };
       }
     }
   }

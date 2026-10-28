@@ -20,6 +20,7 @@ export default {
     segment_tools: `Tools`,
     segment_free: `Free space`,
     segment_reserved: `Reserved for the reply`,
+    novelai_measurement_note: `Total input tokens are counted locally from the rendered NovelAI prompt. Segment shares are approximate.`,
     estimate_note: `Estimated at about 4 characters per token.`,
     not_counted_note: `Images, videos, and provider message formatting are not counted.`,
     truncated_note: `Chat history is over the budget, so the oldest {count} exchange(s) are already left out.`,

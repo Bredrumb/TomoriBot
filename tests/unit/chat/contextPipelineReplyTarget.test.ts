@@ -13,7 +13,13 @@ import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 
 describe("history reply context", () => {
-  it.each(["cached", "evicted", "forwarded-thread"])("resolves history references: %s", async (scenario) => {
+  it.each([
+    "cached",
+    "evicted",
+    "forwarded-thread",
+    "literal-system",
+    "merged",
+  ])("resolves history references: %s", async (scenario) => {
     const channelEvicted = scenario === "evicted";
     const forwardedThread = scenario === "forwarded-thread";
     const persona = createPersona({
@@ -77,6 +83,11 @@ describe("history reply context", () => {
         reference: null,
       },
     ] as unknown as Message[];
+    const replyBody = scenario === "literal-system" ? "[System: a literal quotation]" : messages[0].content;
+    messages[0].content = replyBody;
+    if (scenario === "merged") {
+      messages.unshift({ ...messages[0], id: "followup", content: "and another thing", reference: null } as Message);
+    }
     const fetchReference = mock(async () => messages[1]);
     if (forwardedThread) {
       Object.assign(messages[0], {
@@ -160,9 +171,10 @@ describe("history reply context", () => {
         expect(reply?.remoteMediaSourceKind).toBe("reply");
         return;
       }
-      expect(target?.content).toContain(messages[1].content);
-      expect(reply?.content).toContain(messages[0].content);
-      if (!channelEvicted) expect(reply?.content).toContain(messages[1].content);
+      expect(target?.content).toContain(messages.find((message) => message.id === "target")?.content ?? "");
+      expect(reply?.content).toContain(replyBody);
+      expect(reply?.completionContent).toBe(scenario === "merged" ? `${replyBody}\nand another thing` : replyBody);
+      if (!channelEvicted && scenario !== "merged") expect(reply?.content).toContain(messages[1].content);
     } finally {
       for (const spy of [sql, read, privacy, blacklist, blocks, builder]) spy.mockRestore();
     }

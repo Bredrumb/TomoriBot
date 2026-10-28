@@ -8,7 +8,7 @@ import {
 } from "@/utils/provider/savedProviderConfig";
 import {
   clearNovelaiSubscriptionCache,
-  getCachedContextTokens,
+  getCachedNovelAISubscription,
   refreshNovelAISubscription,
 } from "@/utils/cache/novelaiSubscriptionCache";
 import { createPersona } from "../../helpers/fixtures";
@@ -59,19 +59,19 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("NovelAI subscription invalidation after cr
       }
       await warm(oldKey, "unrelated-key");
       expect(await write(oldEncryption.encrypted)).toBe(true);
-      expect(getCachedContextTokens(oldKey)).toBeUndefined();
-      expect(getCachedContextTokens("unrelated-key")).toBe(4096);
+      expect(getCachedNovelAISubscription(oldKey)).toBeUndefined();
+      expect(getCachedNovelAISubscription("unrelated-key")).toEqual({ tier: 1, active: true });
       await warm(oldKey, newKey);
       expect(await write(newEncryption.encrypted, -1)).toBe(false);
-      expect(getCachedContextTokens(oldKey)).toBe(4096);
-      expect(getCachedContextTokens(newKey)).toBe(4096);
+      expect(getCachedNovelAISubscription(oldKey)).toEqual({ tier: 1, active: true });
+      expect(getCachedNovelAISubscription(newKey)).toEqual({ tier: 1, active: true });
       expect(await write(newEncryption.encrypted)).toBe(true);
-      expect(getCachedContextTokens(oldKey)).toBeUndefined();
-      expect(getCachedContextTokens(newKey)).toBeUndefined();
-      expect(getCachedContextTokens("unrelated-key")).toBe(4096);
+      expect(getCachedNovelAISubscription(oldKey)).toBeUndefined();
+      expect(getCachedNovelAISubscription(newKey)).toBeUndefined();
+      expect(getCachedNovelAISubscription("unrelated-key")).toEqual({ tier: 1, active: true });
       await warm(newKey);
       expect(await write(newEncryption.encrypted)).toBe(true);
-      expect(getCachedContextTokens(newKey)).toBe(4096);
+      expect(getCachedNovelAISubscription(newKey)).toEqual({ tier: 1, active: true });
     }
   });
 
@@ -79,8 +79,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("NovelAI subscription invalidation after cr
     const key = "rotation-synthetic-key";
     await warm(key);
     expect(await addRotationKey(-1, "novelai", key)).toBe(false);
-    expect(getCachedContextTokens(key)).toBe(4096);
+    expect(getCachedNovelAISubscription(key)).toEqual({ tier: 1, active: true });
     expect(await addRotationKey(refs.serverId, "novelai", key)).toBe(true);
-    expect(getCachedContextTokens(key)).toBeUndefined();
+    expect(getCachedNovelAISubscription(key)).toBeUndefined();
   });
 });

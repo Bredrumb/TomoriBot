@@ -11,7 +11,7 @@ import * as realRepositories from "@/utils/db/repositories";
 import { resolveContextBudget } from "@/utils/provider/contextBudget";
 import { resolveRequestMaxOutputTokens } from "@/utils/provider/modelLimits";
 import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
-import { createLlmRow, createPersona } from "../../helpers/fixtures";
+import { createLlmRow, createNaiPreset, createPersona } from "../../helpers/fixtures";
 
 const primary = { llm_id: 11, llm_provider: "custom:u4:local", llm_codename: "primary" } as LlmRow;
 const fallback = { llm_id: 12, llm_provider: "google", llm_codename: "fallback" } as LlmRow;
@@ -23,6 +23,7 @@ const personalText = createLlmRow({
   context_window: 128_000,
   max_output_tokens: 16_000,
 });
+const personalNai = createLlmRow({ llm_id: 15, llm_provider: "novelai", llm_codename: "kayra-v1" });
 const endpoint = {
   custom_endpoint_id: 5,
   connection_id: 1,
@@ -43,7 +44,8 @@ const scopedMock = createScopedModuleMocker(mock, {
 scopedMock.module("@/utils/db/repositories", () => ({
   ...realRepositories,
   llmModelRepo: overrideMembers(realRepositories.llmModelRepo, {
-    loadById: async (id: number) => [primary, fallback, personalText].find((model) => model.llm_id === id) ?? null,
+    loadById: async (id: number) =>
+      [primary, fallback, personalText, personalNai].find((model) => model.llm_id === id) ?? null,
     getLlmsByIds: async (ids: number[]) => (ids.includes(fallback.llm_id as number) ? [fallback] : []),
   }),
   llmProviderRepo: overrideMembers(realRepositories.llmProviderRepo, {
@@ -88,6 +90,30 @@ function makeMixedProviderChain(modelRandomizerEnabled = false): PersonalFallbac
 }
 
 describe("personal provider fallback overlay", () => {
+  it("carries the personal NovelAI preset selection without inheriting the server's preset", async () => {
+    rows = [
+      userSavedProviderConfigSchema.parse({
+        user_id: 4,
+        provider: "novelai",
+        api_key: null,
+        llm_id: 15,
+        diffusion_model_id: null,
+        embedding_model_id: null,
+        nai_diffusion_model_id: null,
+        nai_preset_name: "Asper-Kayra",
+        llm_temperature: 1.22,
+        enabled_capabilities: ["text"],
+        assigned_capabilities: ["text"],
+      }),
+    ];
+    const state = { ...makeState(), nai_preset: createNaiPreset({ model_target: "erato" }) };
+    const { applyPersonalProviderSelectionsToTomoriState } = await import("@/utils/provider/personalProviderRuntime");
+    const result = await applyPersonalProviderSelectionsToTomoriState(state, 4);
+    expect(result.tomoriState.config.nai_preset_name).toBe("Asper-Kayra");
+    expect(result.tomoriState.config.llm_temperature).toBe(1.22);
+    expect(result.tomoriState.nai_preset).toBeUndefined();
+    expect(state.nai_preset.model_target).toBe("erato");
+  });
   beforeEach(() => {
     rows = [];
     fallbackSettings = { fallback_model_refs: [], model_randomizer_enabled: false };
@@ -179,7 +205,7 @@ describe("personal provider fallback overlay", () => {
     const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(state, 4);
 
     expect(await resolveRequestMaxOutputTokens(tomoriState)).toBe(expected);
-    expect((await resolveContextBudget(tomoriState, state.server_id.toString()))?.outputReserve).toBe(expected);
+    expect((await resolveContextBudget(tomoriState))?.outputReserve).toBe(expected);
     expect(state.config.llm_max_output_tokens).toBe(2_048);
   });
 

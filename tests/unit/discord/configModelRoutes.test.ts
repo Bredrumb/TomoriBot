@@ -1316,6 +1316,33 @@ describe("config models switch page", () => {
 });
 
 describe("config models capability writes", () => {
+  it("renders a rejected Xialong selection by locale key", async () => {
+    const harness = makeHarness({
+      modelOperationsOverrides: {
+        setCapabilityModel: async () => ({
+          status: "novelai-unavailable",
+          descriptionKey: "genai.novelai.xialong_opus",
+        }),
+      },
+    });
+    harness.selectValues[buildConfigModalFieldId("model_choice", "nonce1234567")] = "7";
+    await dispatch(
+      harness,
+      makeInteraction({
+        customId: buildConfigRouteId({
+          action: "model-modal-submit",
+          locale: "en-US",
+          capability: "text",
+          provider: "novelai",
+          nonce: "nonce1234567",
+        }),
+        kind: "modal",
+        harness,
+      }),
+    );
+    expect(renderedText(harness.edits.at(-1))).toMatch(localizedProse("en-US", "genai.novelai.xialong_opus"));
+  });
+
   it("renders provider-owned denial copy on the acknowledged model route in every locale", async () => {
     const denied = new ProviderRequestDeniedError(undefined, (locale) => ({
       titleKey: "general.errors.api_key_error_title",

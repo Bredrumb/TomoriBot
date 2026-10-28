@@ -1,3 +1,6 @@
+import { applyAssistantPrefill } from "@/utils/chat/assistantPrefill";
+import { NovelAIPreparationError } from "@/providers/novelai/preparationError";
+import { prepareNovelAIRequest, type PreparedNovelAIRequest } from "@/providers/novelai/promptFitting";
 import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 import type { Client, Guild, Message, TextBasedChannel, User } from "discord.js";
 import { PrivacyLevel, type TomoriState, type UserRow } from "@/types/db/schema";
@@ -21,7 +24,7 @@ import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
 import { getCachedBlacklistStatus, getCachedPrivacyLevel, getCachedUserRow } from "@/utils/cache/userCache";
-import { formatTargetEmbedForContext } from "@/utils/chat/contextEmbeds";
+import { formatTargetEmbedForCompletion, formatTargetEmbedForContext } from "@/utils/chat/contextEmbeds";
 import {
   appendComponentMediaFromMessage,
   appendDocumentAttachmentsFromMessage,
@@ -452,6 +455,7 @@ export interface PromptInspection {
   contextItems: StructuredContextItem[];
   toolsData: Array<Record<string, unknown>> | null;
   budget: ContextBudget | null;
+  novelaiRequest?: PreparedNovelAIRequest;
   historyPairsDropped: number;
 }
 
@@ -516,32 +520,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
   }
   const mainPersona = personas.find((p) => !p.is_alter) ?? tomoriState;
 
-  type SimpleMsg = {
-    id: string;
-    authorId: string;
-    authorName: string;
-    authorType: "user" | "persona";
-    personaName?: string | null;
-    content: string | null;
-    mediaSourceMessageIds?: string[];
-    imageAttachments: Array<{
-      url: string;
-      proxyUrl: string;
-      mimeType: string | null;
-      filename: string;
-      isEmoji?: boolean;
-    }>;
-    videoAttachments: Array<{
-      url: string;
-      proxyUrl: string;
-      mimeType: string | null;
-      filename: string;
-      isYouTubeLink: boolean;
-    }>;
-    documentAttachments?: Array<{ filename: string }>;
-  };
-
-  const simplifiedMessages: SimpleMsg[] = [];
+  const simplifiedMessages: SimplifiedMessageForContext[] = [];
   const userListSet = new Set<string>();
   const syntheticUsers = new Map<string, { displayName: string; type: "persona" | "webhook" }>();
   const minimalNoticeBodies = await resolveMinimalNoticeBodies(messagesArray);
@@ -584,9 +563,9 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
       }
     }
 
-    const imageAttachments: SimpleMsg["imageAttachments"] = [];
-    const videoAttachments: SimpleMsg["videoAttachments"] = [];
-    const documentAttachments: NonNullable<SimpleMsg["documentAttachments"]> = [];
+    const imageAttachments: SimplifiedMessageForContext["imageAttachments"] = [];
+    const videoAttachments: SimplifiedMessageForContext["videoAttachments"] = [];
+    const documentAttachments: NonNullable<SimplifiedMessageForContext["documentAttachments"]> = [];
     appendDocumentAttachmentsFromMessage(message, documentAttachments);
     let hasLocalMedia = false;
 
@@ -635,10 +614,14 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
     const botNickname = mainPersona.persona_nickname ?? tomoriState.persona_nickname ?? null;
     const isTomoriAuthored = message.author.id === client.user?.id;
     const embedTextSegments: string[] = [];
+    const completionSegments: string[] = [];
+    let completionSpeaker: false | undefined;
     if (message.embeds.length > 0) {
       for (const embed of message.embeds) {
         const embedCheck = checkTargetEmbed(embed);
         if (embedCheck.isTarget && embed.description) {
+          completionSegments.push(formatTargetEmbedForCompletion(embed.description, embedCheck.type));
+          completionSpeaker = false;
           embedTextSegments.push(
             formatTargetEmbedForContext(
               { title: embed.title, description: embed.description },
@@ -679,6 +662,8 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
     if (cv2Notice?.title) {
       const noticeCheck = checkTargetEmbedTitle(cv2Notice.title);
       if (noticeCheck.isTarget && (cv2Notice.description || isMinimalTitleKind(noticeCheck.type))) {
+        completionSegments.push(formatTargetEmbedForCompletion(cv2Notice.description ?? "", noticeCheck.type));
+        completionSpeaker = false;
         embedTextSegments.push(
           formatTargetEmbedForContext(
             {
@@ -695,6 +680,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
     const baseContent = message.content?.trim() ? message.content : "";
     const combinedContent = [baseContent, ...embedTextSegments].filter((s) => s.length > 0).join("\n");
     const messageContent = combinedContent.length > 0 ? combinedContent : null;
+    const completionContent = [baseContent, ...completionSegments].filter(Boolean).join("\n");
     const mediaSourceMessageIds = hasLocalMedia ? [message.id] : undefined;
 
     const agenda = agendasByMessageId.get(message.id);
@@ -706,6 +692,7 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
         authorType: "user",
         personaName: null,
         content: formatAgendaNotice(answeringState.persona_nickname, agenda),
+        completionContent: "",
         imageAttachments: [],
         videoAttachments: [],
       });
@@ -735,6 +722,9 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
       messageContent &&
       !shouldKeepSeparateMediaTurn
     ) {
+      prevMsg.completionContent = [prevMsg.completionContent ?? prevMsg.content, completionContent]
+        .filter(Boolean)
+        .join("\n");
       prevMsg.content += `\n${messageContent}`;
     } else if (
       messageContent ||
@@ -749,6 +739,8 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
         authorType,
         personaName,
         content: messageContent,
+        completionContent,
+        completionSpeaker,
         mediaSourceMessageIds,
         imageAttachments,
         videoAttachments,
@@ -845,7 +837,11 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
     isDMChannel: false,
   });
 
-  const contextItems = [...contextBuild.contextItems];
+  const contextItems = [
+    ...(providerUsesApiFamily(answeringState.llm.llm_provider, "novelai")
+      ? (contextBuild.nativeContextItems ?? contextBuild.contextItems)
+      : contextBuild.contextItems),
+  ];
 
   // Apply tail directives in the same order as the live chat pipeline so the
   //      snapshot reflects the full prompt the LLM would actually see:
@@ -901,14 +897,36 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
     try {
       inspectionApiKey = await decryptApiKey(answeringState.config.api_key, answeringState.config.key_version || 1);
     } catch {
-      log.warn("Prompt inspection could not resolve the NovelAI credential; using default token limits.");
+      log.warn("Prompt inspection could not resolve the NovelAI credential; fitted inspection is unavailable.");
     }
   }
-  const budget = await resolveContextBudget(answeringState, inspectionApiKey);
+  const budget = await resolveContextBudget(answeringState);
   const truncation = budget
     ? truncateDialogueHistory(resolvedContextItems, budget.contextLength, budget.outputReserve)
     : null;
 
+  if (providerUsesApiFamily(answeringState.llm.llm_provider, "novelai") && !inspectionApiKey) {
+    throw new NovelAIPreparationError("subscription_unavailable");
+  }
+  const novelaiPrefill = providerUsesApiFamily(answeringState.llm.llm_provider, "novelai")
+    ? await applyAssistantPrefill({
+        contextItems: resolvedContextItems,
+        tomoriState: answeringState,
+        prefill: answeringState.config.response_prefill?.trim()
+          ? { text: answeringState.config.response_prefill, source: "server" }
+          : null,
+      })
+    : undefined;
+  const novelaiRequest =
+    providerUsesApiFamily(answeringState.llm.llm_provider, "novelai") && inspectionApiKey
+      ? await prepareNovelAIRequest({
+          contextItems: novelaiPrefill?.contextItems ?? resolvedContextItems,
+          outputPrefill: novelaiPrefill?.outputPrefill,
+          tomoriState: answeringState,
+          model: answeringState.llm.llm_codename,
+          apiKey: inspectionApiKey,
+        })
+      : undefined;
   const presetData = await getCachedActivePreset(selectedPersona.server_id);
   const providerName = normalizeProviderName(answeringState.llm.llm_provider);
 
@@ -938,9 +956,19 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
     channelName,
     presetName: presetData?.preset.preset_name ?? null,
     capturedAt: new Date().toISOString(),
-    contextItems: truncation?.truncated ?? resolvedContextItems,
+    contextItems: novelaiRequest?.contextItems ?? truncation?.truncated ?? resolvedContextItems,
+    novelaiRequest,
     toolsData,
-    budget,
+    budget: novelaiRequest
+      ? {
+          contextLength: novelaiRequest.report.window,
+          outputReserve:
+            novelaiRequest.report.outputCap +
+            novelaiRequest.report.framingReserve +
+            novelaiRequest.report.sentenceReserve,
+          exact: true,
+        }
+      : budget,
     historyPairsDropped: truncation?.historyPairsDropped ?? 0,
   };
 }

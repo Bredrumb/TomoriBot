@@ -113,6 +113,35 @@ export async function buildParticipantContextItem(params: {
       },
     ],
     metadataTag: ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION,
+    personalMemoryItems: await Promise.all(
+      hydrated.profiles.flatMap((profile) => {
+        const entries = profile.fields
+          .filter((field) => field.kind === "personal_memories" && field.visibility.visible)
+          .flatMap((field) => field.memoryEntries ?? []);
+        return entries.length === 0
+          ? []
+          : [
+              Promise.all(
+                entries.map(async (entry) => ({
+                  ...entry,
+                  text: await params.convertMentions(
+                    entry.text,
+                    params.client,
+                    params.guildId,
+                    params.triggererName,
+                    params.botName,
+                    params.tomoriConfig.personal_memories_enabled,
+                  ),
+                })),
+              ).then((memoryEntries) => ({
+                role: "system" as const,
+                metadataTag: ContextItemTag.KNOWLEDGE_USER_MEMORIES,
+                parts: [{ type: "text" as const, text: memoryEntries.map((entry) => entry.text).join("\n") }],
+                memoryEntries,
+              })),
+            ];
+      }),
+    ),
     participantReviewEvidence: {
       participants: hydrated.profiles.map((profile) => ({
         name: profile.displayName,

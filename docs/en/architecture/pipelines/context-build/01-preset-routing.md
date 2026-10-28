@@ -21,6 +21,11 @@ The public `buildContext` wrapper in `src/utils/text/context/builder.ts` coordin
 - **Preserved out-of-band items**: Tail directives, uncensor directives, the unified short-term memory nudge (`nudgeItem`), and deferred memory blocks (`memoryInjectionItems`) pass through preset reassembly unchanged. Downstream chat pipeline stages own their dialogue-depth insertion, preventing preset anchors from misplacing recency-sensitive context.
 - **Unmapped item preservation**: Preset reassembly flushes TomoriBot-specific knowledge items (server info, server memories, emojis, stickers, sprites) and dialogue-adjacent items (participants, short-term memory, conditioning, RAG documents) at configured anchor markers (`main`, `charDescription`, `charPersonality`, `dialogueExamples`, `chatHistory`). Any remaining unpulled items append at the end of the system block list so no native context is dropped.
 
+NovelAI attempts receive a separate native context captured before preset reassembly. This preserves
+personality and real dialogue even when preset macros consume their buckets or inject text into
+history parts. The shared pipeline retains the ordinary preset result for other providers, including
+fallbacks, while each NovelAI attempt applies its own content allowlist and fitter.
+
 ## Source pointers
 
 - `src/utils/text/context/builder.ts`: `buildContext` routing wrapper.

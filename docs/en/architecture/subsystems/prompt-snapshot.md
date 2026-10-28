@@ -23,13 +23,25 @@ Prompt assembly mirrors the production `messageCreate → tomoriChat` pipeline t
 - **Context construction**: Invokes `buildContext()` to assemble instructions, server memories, conditioning logs, SillyTavern preset reordering, and depth-injected `/context-note` content.
 - **Participant discovery**: Calls `prepareParticipantContext()`, matching live chat profiles, synthetic identity mappings, and attribution logic.
 - **Message boundary processing**: Respects conversation resets (`sliceMessagesAtResetMarker()`), link previews, stickers, and system-produced notice blocks (`extractNoticeTextFromComponents`).
-- **History truncation**: Truncates conversation history against `resolveContextBudget()`, reproducing the drop policy applied during generation turns.
+- **History truncation**: Uses `resolveContextBudget()` for ordinary providers. NovelAI selects, renders, and fits its native context through the same preparation function as generation.
 - **UI exclusion**: Diagnostic embeds and internal debug notices are omitted because they represent interface elements rather than model prompt input.
 - **Hidden agendas**: A Natural Nudges agenda renders above its opener only when the answering persona owns it, as in live context building, so the snapshot shows what that persona sees.
 
-NovelAI inspection budgets against its resolved personal or server credential without selecting a
-rotation key. A snapshot reconstructs that credential's current allowance; it cannot reproduce a
-previous rotated request. Credential identities are omitted from both export formats.
+NovelAI inspection uses native context captured before preset reassembly, the resolved personal or
+server credential, and the saved response prefill. It runs the provider's allowlist, renderer, and
+exact fitter without selecting a rotation key. Both formats include the final flat prompt and a
+report of included, excluded, and trimmed identities, input tokens, window, and effective output cap.
+A snapshot reconstructs that credential's current request; it cannot reproduce a previous rotated
+request. Credential identities are omitted from both formats. Missing credentials or required
+tokenizer assets fail inspection instead of producing an approximate request.
+
+GLM and Xialong JSON exports use `prompt` with completion parameters; Kayra and Erato use `input`
+with native `parameters`. The `fitting` report accompanies each request. Its section identities
+refer to source context items, so omitted instructions and trimmed memories can be distinguished
+from included content. `inputTokens` is the exact local count of the final prompt; `window` is the
+credential's model allowance, and `outputCap` is the fitted request limit. Native framing and
+sentence-completion reserves are reported separately. These reserves consume context space but
+are not added to the request's output cap.
 
 ## Output formats
 
@@ -50,19 +62,21 @@ Generates human-readable plain text annotated with configuration locator headers
 ...dialogue turns...
 ```
 
-Header markers indicate governing configuration commands and are annotations added for human readers; they are not sent to the LLM.
+Header markers identify configuration commands and are annotations for readers. NovelAI text exports instead begin with the actual rendered prompt, followed by the fitting report.
 
 ### JSON format (`format: json` or `json_tools`)
 
 Serializes the reconstructed context into provider-native request shapes:
 
-- Google-family, Anthropic, and OpenAI-compatible serializers use request-building adapters. Providers without a probe builder, including NovelAI, use a generic OpenAI-style representation. Transport-time retries and degradation are outside the snapshot.
+- Google-family, Anthropic, and OpenAI-compatible serializers use request-building adapters. NovelAI exports its fitted completion or native request parameters and fitting report. Other providers without a probe builder use a generic OpenAI-style representation. Transport retries and continuation requests are outside the snapshot.
 - Large media payloads are replaced with placeholders (`[BASE64_HIDDEN]`) to limit export file sizes.
 - `format: json_tools` also appends provider-formatted tool definitions generated via `adapter.getAllToolsInProviderFormat()`.
 
 ### Request configuration block
 
-Exports include provider sampling parameters constructed by `buildRequestConfig()`:
+The DM configuration summary uses `buildRequestConfig()`. For NovelAI it uses the prepared request's
+actual parameters, including preset defaults, the fitted output cap, and foreign-speaker stops.
+The JSON attachment carries the same parameters and fitting report.
 
 - Lists active parameters (such as `temperature`, `top_p`, `max_output_tokens`, and stop sequences).
 - Includes provider-specific thinking configurations (such as Anthropic adaptive thinking or Gemini thinking budgets).
@@ -72,9 +86,9 @@ Exports include provider sampling parameters constructed by `buildRequestConfig(
 
 The `/context` command renders a 10x20 emoji grid where each cell represents 0.5% of the model's context window:
 
-- **Token estimation**: Estimates character-to-token ratios (~4 characters per token for prose, ~3.5 for tool schemas via `tokenEstimate.ts`), matching history truncation heuristics.
+- **Token measurement**: NovelAI uses the exact rendered input count from its fitter, with approximate segment shares. Other providers use character estimates through `tokenEstimate.ts`.
 - **Segment categorization**: Maps `ContextItemTag` values into seven visual categories (instructions, memories, notes, participants, tools, dialogue history, and media).
-- **Window budgeting**: Free space terminates at the truncation ceiling (`floor((contextLength - outputReserve) * 0.9)`), with remaining space reserved for output generation and safety margins.
+- **Window budgeting**: Ordinary providers reserve output and the generic truncation margin. NovelAI reserves its fitted output cap, native framing, and sentence-completion headroom against the actual subscription window.
 - **Dynamic interaction**: Snapshot buttons route through global interaction handlers (`context:v1:snapshot:<personaId>:<format>`), re-evaluating member permissions on each click.
 
 ## Source pointers
@@ -85,4 +99,5 @@ The `/context` command renders a 10x20 emoji grid where each cell represents 0.5
 - `src/utils/text/promptInspection/delivery.ts`: Permission validation (`canViewPromptText`) and file delivery.
 - `src/utils/text/promptInspection/serialize.ts`: Plain text and native JSON formatting.
 - `src/utils/discord/ui/contextUsagePanel.ts`: Grid layout and legend rendering.
-- `src/utils/provider/contextBudget.ts`: Truncation budget calculations shared with live chat.
+- `src/utils/provider/contextBudget.ts`: Generic truncation budgets.
+- `src/providers/novelai/promptFitting.ts`: Shared NovelAI preparation and fitting.

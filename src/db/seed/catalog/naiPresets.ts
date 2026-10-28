@@ -4,6 +4,34 @@ import type { CatalogSection, NaiPresetInput } from "./types";
 
 export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
   {
+    comment: "Xialong published default",
+    rows: [
+      {
+        name: "Default-Xialong",
+        modelTarget: "xialong",
+        isDefault: true,
+        desc: "NovelAI's published default sampling preset for Xialong.",
+        parameters: {
+          temperature: 0.85,
+          max_length: 60,
+          min_length: 1,
+          top_k: 250,
+          top_p: 0.95,
+          top_a: 1,
+          typical_p: 1,
+          tail_free_sampling: 1,
+          repetition_penalty: 0,
+          repetition_penalty_range: 0,
+          repetition_penalty_slope: 0,
+          repetition_penalty_frequency: 0,
+          repetition_penalty_presence: 0,
+          phrase_rep_pen: "medium",
+          min_p: 0,
+        },
+      },
+    ],
+  },
+  {
     comment: ["============ KAYRA PRESETS ============", "Carefree-Kayra (DEFAULT for kayra-v1)"],
     rows: [
       {

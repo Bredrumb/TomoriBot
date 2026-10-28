@@ -35,8 +35,14 @@ A note on a persona (under `/config` > `Persona` > `Advanced`) or on a channel (
 note and a channel note are set, both are sent.
 :::
 
-When a [SillyTavern preset](/features/integrations/sillytavern-support/) is active, the built-in
-fallback system prompt is replaced, but a custom one you set here is still sent.
+When a [SillyTavern preset](/features/integrations/sillytavern-support/) is active, it controls the
+system prompt. Turn the preset off to edit the saved server prompt again.
+
+With a NovelAI text model, saved system prompts, persona and channel prompts, context notes,
+humanizer prompt instructions, conditioning, and SillyTavern preset instructions are inactive. The `General Behavior`
+panel shows this notice; your settings stay saved for other providers. Response prefills
+still apply. Xialong uses NovelAI's own system prompt, while GLM 4.6, Kayra, and Erato have no system
+block. See [NovelAI special handling](/features/knowledge/inside-the-prompt/#novelai-special-handling).
 
 ## Generation Tuning
 <!-- anchor: generation-tuning -->
@@ -47,6 +53,17 @@ fallback system prompt is replaced, but a custom one you set here is still sent.
   texts. The setting applies server-wide by default, or to an individual persona.
 - `/config` > Behavior > General Behavior: message history limit. Raise it for deeper
   conversational context, or lower it to save tokens.
+
+NovelAI counts and fits its formatted prompt within the serving key's subscription allowance.
+Switching NovelAI text models loads `Carefree-Kayra`, `Erato-Shosetsu`, or `Default-Xialong` for
+the selected model. GLM uses its own defaults. This resets temperature, top-k, top-p, and min-p
+and enables those samplers for both server and personal model switches. You can edit them again
+after switching. Replacing a key on the same model preserves your sampler settings.
+The configured output-token limit takes priority over a NovelAI sampling preset's length, and
+may be reduced to leave room for protected context. It also polishes history, sample dialogue, and
+memories in the model-facing copy. The humanizer
+still formats Discord replies according to its setting. See the
+[polishing rules](/features/knowledge/inside-the-prompt/#text-polishing-and-discord-delivery).
 
 ## Capabilities
 <!-- anchor: capabilities-what-shes-allowed-to-do -->
@@ -59,6 +76,9 @@ Two pages under `/config` > Plugins control what she can do:
   turning off Tool Use disables all of them at once.
 - `/config` > Plugins > Context Additions: personalization, emojis in replies, and time awareness.
   These add information to her prompt, so they continue working when Tool Use is disabled.
+
+NovelAI text models cannot call tools. They receive eligible personal memories, but omit emoji
+inventories and time information even when those context additions are enabled.
 
 Automatic short-term memory summarization is toggled in `/config` > Behavior > Advanced Memory.
 When a capability is turned off, she cannot perform that action regardless of user requests.

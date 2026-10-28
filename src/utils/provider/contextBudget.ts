@@ -1,19 +1,16 @@
 import type { TomoriState } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
-import { getNovelAITokenLimits } from "@/utils/cache/novelaiCapabilityCache";
-import { getCachedContextTokens, refreshNovelAISubscription } from "@/utils/cache/novelaiSubscriptionCache";
 import { log } from "@/utils/misc/logger";
-import { resolveChatMaxOutputTokens, resolveMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
+import { resolveChatMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 import { resolveModelLimits } from "@/utils/provider/modelLimits";
 import { normalizeProviderName, providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
 import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
 
 /**
  * The context window history truncation works against, and the reply budget it reserves first.
- * NovelAI's `contextLength` is virtual (pre-scaled for the 4 chars/token estimator), so it is
- * comparable to estimated input tokens rather than to the model's published window.
  */
 export interface ContextBudget {
+  exact?: boolean;
   contextLength: number;
   outputReserve: number;
 }
@@ -22,25 +19,9 @@ export interface ContextBudget {
  * Resolves the budget the live pipeline truncates against, or null for a provider whose window
  * TomoriBot does not know (truncation is then skipped).
  */
-export async function resolveContextBudget(tomoriState: TomoriState, apiKey?: string): Promise<ContextBudget | null> {
+export async function resolveContextBudget(tomoriState: TomoriState): Promise<ContextBudget | null> {
   if (providerUsesApiFamily(tomoriState.llm.llm_provider, "novelai")) {
-    let naiSubscriptionTokens = apiKey ? getCachedContextTokens(apiKey) : undefined;
-    if (naiSubscriptionTokens === undefined && apiKey) {
-      naiSubscriptionTokens = await refreshNovelAISubscription(apiKey);
-    }
-    const tokenLimits = getNovelAITokenLimits(tomoriState.llm.llm_codename, naiSubscriptionTokens);
-    if (!tokenLimits || tokenLimits.contextLength <= 0 || !tokenLimits.maxCompletionTokens) return null;
-    // NovelAI has no dedicated output-token env cap, so the reserve falls back to the
-    // subscription-tier ceiling unless the server set a `/model parameters` override.
-    return {
-      contextLength: tokenLimits.contextLength,
-      outputReserve: resolveMaxOutputTokens({
-        configured: tomoriState.config.llm_max_output_tokens,
-        envRaw: undefined,
-        fallback: tokenLimits.maxCompletionTokens,
-        providerReportedMax: tokenLimits.maxCompletionTokens,
-      }),
-    };
+    return null;
   }
 
   const limits = await resolveModelLimits(tomoriState);
@@ -65,10 +46,9 @@ export async function resolveContextBudget(tomoriState: TomoriState, apiKey?: st
 export async function applyProviderContextTruncation(
   contextItems: StructuredContextItem[],
   tomoriState: TomoriState,
-  apiKey?: string,
   reservedTailItems: StructuredContextItem[] = [],
 ): Promise<StructuredContextItem[]> {
-  const budget = await resolveContextBudget(tomoriState, apiKey);
+  const budget = await resolveContextBudget(tomoriState);
   if (!budget) return contextItems;
 
   const { truncated, historyPairsDropped, sampleItemsDropped, totalDropped } = truncateDialogueHistory(

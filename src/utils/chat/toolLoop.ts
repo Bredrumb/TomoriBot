@@ -1358,7 +1358,7 @@ async function isSettledAfterTool(
   emptyResult: StreamResult,
   lastToolName: string | undefined,
 ): Promise<boolean> {
-  if (!lastToolName || emptyResult.naiContinuationPrefill) return false;
+  if (!lastToolName) return false;
   const data = emptyResult.data as { finishReason?: unknown; emptyResponseReason?: unknown } | undefined;
   if (data?.finishReason === "length" || data?.emptyResponseReason) return false;
   return !(await ToolRegistry.requiresFollowUp(lastToolName, params.tomoriState.server_id));

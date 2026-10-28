@@ -58,8 +58,17 @@ export enum ContextItemTag {
   CONTEXT_NOTE_INJECTION = "context_note_injection", // Author's note injected into dialogue at configurable depth
 }
 
+export interface ContextMemoryEntry {
+  id: string;
+  text: string;
+  createdAt?: number;
+}
+
 export type StructuredContextItem = {
   personaSprites?: { personaId: number; spriteKeys: string[] };
+  completionText?: string;
+  memoryEntries?: ContextMemoryEntry[];
+  personalMemoryItems?: StructuredContextItem[];
   role: "system" | "user" | "model"; // 'system' for initial instructions, 'user' for user/tool inputs, 'model' for LLM responses
   parts: ContextPart[];
   mediaDescriptors?: MediaDescriptor[];

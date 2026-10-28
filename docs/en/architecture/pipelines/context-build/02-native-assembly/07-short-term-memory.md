@@ -24,6 +24,7 @@ The contributor `buildShortTermMemoryContext` in `src/utils/text/context/memorie
    - Emits a prompt hint instructing the model to invoke `{short_term_memory_tool}` after responding.
    - Gated by `turnsSinceRefresh >= refreshCadence` (default 5). The same counter and condition govern both initial creation and ongoing refresh.
    - Suppressed when the model lacks tools (`has_tools === false`), the provider is NovelAI, or an explicit long-term memory command is detected (`explicitLongTermMemoryIntent === true`).
+   - Carries an empty `completionText` projection, so NovelAI request fitting also excludes a nudge built for another model before a personal override or fallback; actual memory contents remain eligible.
    - Returned out-of-band alongside `nudgeInjectionDepth` (default 2, placing it before the latest user/bot turn pair).
 5. **Content block injection depth (`memoryInjectionDepth`)**:
    - When configured to `-1` (default), `memoryItems` are pushed inline into `contextItems` near the top of the prompt.

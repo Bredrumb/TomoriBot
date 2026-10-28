@@ -1027,9 +1027,9 @@ describe("runToolLoop — contract tests", () => {
     expect(failures).toEqual([]);
   });
 
-  it("an empty NovelAI stream preserves its fragment for the chat retry", async () => {
+  it("an exhausted NovelAI continuation surfaces a provider error without tool execution", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
-    const { provider } = makeProvider([{ status: "empty_response", naiContinuationPrefill: "unfinished" }], "novelai");
+    const { provider } = makeProvider([{ status: "error", data: { code: "continuation_exhausted" } }], "novelai");
     const context = makeContext();
     context.tomoriState.llm = {
       ...context.tomoriState.llm,
@@ -1039,8 +1039,8 @@ describe("runToolLoop — contract tests", () => {
     };
     const result = await runToolLoop(makeParams(context, provider));
 
-    expect(result.status).toBe("empty_response");
-    expect(result.streamResults.at(-1)?.naiContinuationPrefill).toBe("unfinished");
+    expect(result.status).toBe("error");
+    expect(result.streamResults.at(-1)?.data).toMatchObject({ code: "continuation_exhausted" });
     expect(toolExecuteCalls).toHaveLength(0);
   });
 

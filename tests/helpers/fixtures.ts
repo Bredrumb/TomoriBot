@@ -8,7 +8,8 @@
  * overrides them, as in `createPersona({ persona_id: 2, persona_lineage_id: 101 })`.
  */
 
-import type { AssembledServerConfig, LlmRow, TomoriState, UserRow } from "@/types/db/schema";
+import type { AssembledServerConfig, LlmRow, NaiPresetRow, TomoriState, UserRow } from "@/types/db/schema";
+import { naiPresetSections } from "@/db/seed/catalog/naiPresets";
 import { PrivacyLevel } from "@/types/db/schema";
 import { customExpressionSchema, type CustomExpressionRow } from "@/types/db/schema";
 import { EmotionKey } from "@/types/misc/emotions";
@@ -121,6 +122,24 @@ const BASE_CONFIG: AssembledServerConfig = {
  */
 export function createServerConfig(overrides: Partial<AssembledServerConfig> = {}): AssembledServerConfig {
   return { ...structuredClone(BASE_CONFIG), ...overrides };
+}
+
+export function createNaiPreset(overrides: Partial<NaiPresetRow> = {}): NaiPresetRow {
+  const target = overrides.model_target ?? "kayra";
+  const definition = naiPresetSections
+    .flatMap((section) => section.rows)
+    .find((row) => row.modelTarget === target && row.isDefault);
+  if (!definition) throw new Error(`Unknown NovelAI preset target: ${target}`);
+  return {
+    nai_preset_id: 1,
+    preset_name: definition.name,
+    model_target: target,
+    is_default: true,
+    preset_desc: definition.desc,
+    descriptions: { "en-US": definition.desc },
+    parameters: structuredClone({ ...definition.parameters }),
+    ...overrides,
+  };
 }
 
 /**

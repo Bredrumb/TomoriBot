@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import { createHash } from "node:crypto";
-import { resolveKayraContextLimit, NovelaiStreamAdapter } from "@/providers/novelai/novelaiStreamAdapter";
+import { NovelaiStreamAdapter } from "@/providers/novelai/novelaiStreamAdapter";
 import { fetchNovelAISubscription } from "@/providers/novelai/novelaiService";
-import { NAI_KAYRA_CONTEXT_LIMIT, getKayraVirtualContextLength } from "@/utils/cache/novelaiCapabilityCache";
+import { prepareNovelAIRequest } from "@/providers/novelai/promptFitting";
+import { ContextItemTag } from "@/types/misc/context";
 import {
   clearNovelaiSubscriptionCache,
-  getCachedContextTokens,
+  getCachedNovelAISubscription,
   getNovelaiSubscriptionCacheSize,
   refreshNovelAISubscription,
 } from "@/utils/cache/novelaiSubscriptionCache";
@@ -36,22 +37,20 @@ describe("NovelAI credential allowances", () => {
   it("isolates two keys in one guild and reuses the same key across owners", async () => {
     const fetch = subscriptionFetch({ tablet: 1, opus: 3 });
     const state = naiPersona();
-    expect((await resolveContextBudget(state, "tablet"))?.contextLength).toBe(getKayraVirtualContextLength(4096));
-    expect((await resolveContextBudget(state, "opus"))?.contextLength).toBe(getKayraVirtualContextLength(8192));
-    expect((await resolveContextBudget({ ...state, server_id: state.server_id + 1 }, "tablet"))?.contextLength).toBe(
-      getKayraVirtualContextLength(4096),
-    );
+    const prepare = (apiKey: string) =>
+      prepareNovelAIRequest({ contextItems: [], tomoriState: state, model: "kayra-v1", apiKey });
+    expect((await prepare("tablet")).report.window).toBe(4096);
+    expect((await prepare("opus")).report.window).toBe(8192);
+    expect((await prepare("tablet")).report.window).toBe(4096);
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(getNovelaiSubscriptionCacheSize()).toBe(2);
-    expect(resolveKayraContextLimit("tablet")).toBe(4096);
-    expect(resolveKayraContextLimit("opus")).toBe(8192);
-    expect(resolveKayraContextLimit("cold-key")).toBe(NAI_KAYRA_CONTEXT_LIMIT);
+    expect(await resolveContextBudget(state)).toBeNull();
   });
 
   it("uses the request key for adapter clamping in guild and DM routes", async () => {
     const fetch = subscriptionFetch({ tablet: 1, opus: 3 });
-    await resolveContextBudget(naiPersona(), "tablet");
-    await resolveContextBudget(naiPersona(), "opus");
+    await refreshNovelAISubscription("tablet");
+    await refreshNovelAISubscription("opus");
     fetch.mockRestore();
     const requests: Array<{ parameters: { max_length: number } }> = [];
     const generationFetch = stubGlobalFetch((_input, init) => {
@@ -64,13 +63,20 @@ describe("NovelAI credential allowances", () => {
         const context = {
           channel: { id: "channel-1", guildId: "guild-1", recipientId: "recipient-1", isDMBased: () => isDM },
           tomoriState: naiPersona(),
-          contextItems: [{ role: "user", parts: [{ type: "text", text: "x".repeat(14000) }] }],
+          contextItems: [
+            {
+              role: "user",
+              metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+              completionText: `Mirri: ${" river".repeat(3500)}`,
+              parts: [],
+            },
+          ],
           client: {},
           locale: "en-US",
         } as unknown as StreamContext;
         const adapter = new NovelaiStreamAdapter();
         for await (const chunk of adapter.startStream(
-          { model: "kayra-v1", apiKey, temperature: 0.7 } as StreamConfig,
+          { model: "kayra-v1", apiKey, maxOutputTokens: 1024, temperature: 0.7 } as StreamConfig,
           context,
         ))
           adapter.processChunk(chunk);
@@ -85,18 +91,18 @@ describe("NovelAI credential allowances", () => {
     const clock = spyOn(Date, "now").mockReturnValue(1000);
     restores.push(() => clock.mockRestore());
     const fetch = subscriptionFetch({ key: 1 });
-    await resolveContextBudget(naiPersona(), "key");
+    await refreshNovelAISubscription("key");
     clock.mockReturnValue(1000 + 24 * 60 * 60 * 1000 + 1);
-    expect(getCachedContextTokens("key")).toBeUndefined();
+    expect(getCachedNovelAISubscription("key")).toBeUndefined();
     expect(getNovelaiSubscriptionCacheSize()).toBe(0);
-    await resolveContextBudget(naiPersona(), "key");
+    await refreshNovelAISubscription("key");
     expect(fetch).toHaveBeenCalledTimes(2);
     clearNovelaiSubscriptionCache();
     expect(getNovelaiSubscriptionCacheSize()).toBe(0);
   });
 
-  it("retains the inherited tier allowances and unknown/inactive policy", async () => {
-    for (const [tier, limit] of [
+  it("caches validated facts without converting unknown or inactive tiers into allowances", async () => {
+    for (const [tier] of [
       [0, 1024],
       [1, 4096],
       [2, 8192],
@@ -105,7 +111,7 @@ describe("NovelAI credential allowances", () => {
     ]) {
       const fetch = stubGlobalFetch(() => Response.json({ tier, active: false }));
       try {
-        expect(await refreshNovelAISubscription(`tier-${tier}`)).toBe(limit);
+        expect(await refreshNovelAISubscription(`tier-${tier}`)).toEqual({ tier, active: false });
       } finally {
         fetch.mockRestore();
       }
@@ -141,8 +147,8 @@ describe("NovelAI credential allowances", () => {
     ]) {
       const fetch = stubGlobalFetch(handler);
       try {
-        expect(await resolveContextBudget(naiPersona(), "bad-key")).toEqual(await resolveContextBudget(naiPersona()));
-        expect(getCachedContextTokens("bad-key")).toBeUndefined();
+        await expect(refreshNovelAISubscription("bad-key")).rejects.toBeInstanceOf(Error);
+        expect(getCachedNovelAISubscription("bad-key")).toBeUndefined();
       } finally {
         fetch.mockRestore();
       }
@@ -167,7 +173,7 @@ describe("NovelAI credential allowances", () => {
       throw new Error(key);
     });
     restores.push(() => failingFetch.mockRestore());
-    await refreshNovelAISubscription(key);
+    await expect(refreshNovelAISubscription(key)).rejects.toBeInstanceOf(Error);
     const output = JSON.stringify([info.mock.calls, warn.mock.calls]);
     expect(output).not.toContain(key);
     expect(output).not.toContain(createHash("sha256").update(key).digest("hex"));

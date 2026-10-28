@@ -67,7 +67,7 @@ export type { ConfigVoicesView };
 const CONFIG_NAI_PRESET_DISPLAY_HEADROOM = 256;
 
 interface ConfigNaiPresetView {
-  target: "kayra" | "erato" | null;
+  target: "kayra" | "erato" | "xialong" | null;
   compatibility: "eligible" | "not-novelai" | "unsupported";
   presets: NaiPresetRow[];
   activePresetName: string | null;

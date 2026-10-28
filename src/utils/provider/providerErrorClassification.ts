@@ -179,6 +179,13 @@ const NON_INCIDENT_PROVIDER_CODES = new Set([
   // cannot ride on the ProviderError because the embed would show it to the user as "Details".
   "tool_call_parse_error",
   "vertex_config_error",
+  "input_complexity",
+  "context_overflow",
+  "subscription_unavailable",
+  "subscription_inactive",
+  "model_tier",
+  "xialong_opus",
+  "continuation_exhausted",
 ]);
 
 // Google answers a bad key and a billing problem with a plain 400, and some providers report a

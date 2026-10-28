@@ -377,6 +377,7 @@ type ForwardedMessageSnapshot = {
 export async function buildForwardContext(args: {
   message: Message;
   content: string;
+  completionContent?: string;
   imageAttachments: SimplifiedMessageForContext["imageAttachments"];
   videoAttachments: SimplifiedMessageForContext["videoAttachments"];
   messageIdMap: MessageIdMap;
@@ -386,11 +387,16 @@ export async function buildForwardContext(args: {
   selfDebugEnabled: boolean;
 }): Promise<{
   content: string;
+  completionContent: string;
   mediaSourceMessageIds: string[];
   remoteMediaSourceKind?: SimplifiedMessageForContext["remoteMediaSourceKind"];
 }> {
   if (args.message.reference?.type !== MessageReferenceType.Forward || args.message.messageSnapshots.size === 0) {
-    return { content: args.content, mediaSourceMessageIds: [] };
+    return {
+      content: args.content,
+      completionContent: args.completionContent ?? args.content,
+      mediaSourceMessageIds: [],
+    };
   }
 
   // Chase forwards-of-forwards: Discord flattens nested snapshots to nothing, so an
@@ -400,11 +406,13 @@ export async function buildForwardContext(args: {
   if (chain.unresolved) {
     return {
       content: `[System: ${args.forwarderName} forwarded a message that was itself a forward. Discord does not include the original message's contents in a nested forward, so its text and any attached media cannot be seen.]${args.content ? `\n${args.content}` : ""}`,
+      completionContent: args.completionContent ?? args.content,
       mediaSourceMessageIds: [],
     };
   }
 
   const blocks: string[] = [];
+  const completionBlocks: string[] = [];
   const mediaSourceMessageIds: string[] = [];
   let remoteMediaSourceKind: SimplifiedMessageForContext["remoteMediaSourceKind"];
   for (const rawSnapshot of chain.snapshots) {
@@ -442,6 +450,7 @@ export async function buildForwardContext(args: {
     if (embedResult.content) {
       forwardedTextSegments.splice(0, forwardedTextSegments.length, embedResult.content);
     }
+    completionBlocks.push(embedResult.completionContent);
 
     const imageCount = args.imageAttachments.length - preForwardImageCount;
     const videoCount = args.videoAttachments.length - preForwardVideoCount;
@@ -475,6 +484,7 @@ export async function buildForwardContext(args: {
 
   return {
     content: blocks.length > 0 ? `${blocks.join("\n")}${args.content ? `\n${args.content}` : ""}` : args.content,
+    completionContent: [...completionBlocks, args.completionContent ?? args.content].filter(Boolean).join("\n"),
     mediaSourceMessageIds,
     remoteMediaSourceKind,
   };
@@ -487,10 +497,12 @@ export function appendDirectMediaFromMessage(args: {
   documentAttachments: NonNullable<SimplifiedMessageForContext["documentAttachments"]>;
   voiceTranscriptChatMode: boolean;
   appendTextHint: (hint: string) => void;
+  appendCompletionText?: (text: string) => void;
 }): void {
   const cachedRenderedTable = getCachedRenderedMarkdownTable(args.message.id);
   if (cachedRenderedTable) {
     args.appendTextHint(`[System: This was sent as a rendered markdown table image.]\n${cachedRenderedTable}`);
+    args.appendCompletionText?.(cachedRenderedTable);
     return;
   }
 
@@ -501,6 +513,7 @@ export function appendDirectMediaFromMessage(args: {
   for (const attachment of args.message.attachments.values()) {
     if (!isAudioAttachment(attachment)) continue;
     const cached = getCachedVoiceTranscript(args.message.id);
+    if (cached?.source === "user_stt") args.appendCompletionText?.(cached.transcript);
     args.appendTextHint(
       cached?.source === "user_stt"
         ? `[System: This was sent as a voice message.]\n${cached.transcript}`

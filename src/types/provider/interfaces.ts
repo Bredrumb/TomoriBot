@@ -108,8 +108,6 @@ export interface StreamResult {
   detailsContent?: string;
   stopReason?: StreamStopReason; // Specific stop source for debugging/logging
   thoughtLog?: ThoughtLogPayload; // Reasoning/thought text captured separately from visible output
-  /** NAI GLM-4.6: incomplete trailing sentence dropped by sentenceTrailingBuffer, available for prompt continuation on retry */
-  naiContinuationPrefill?: string;
   /**
    * Sprite labels delivered during this stream segment, in render order (one entry
    * per delivered sprite message, so repeats are kept). Surfaced from StreamState so

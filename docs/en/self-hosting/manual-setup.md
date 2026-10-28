@@ -168,9 +168,9 @@ Restart PostgreSQL, then:
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 ```
 
-### Tokenizer assets : model-aware logit bias
+### Tokenizer assets
 
-Logit bias (emoji/word repetition penalties) needs local tokenizer assets:
+NovelAI text generation and model-aware logit bias need local tokenizer assets:
 
 ```sh
 bun run setup:tokenizers
@@ -187,7 +187,19 @@ $env:HF_TOKEN="hf_xxx"; bun run setup:tokenizers
 HF_TOKEN=hf_xxx bun run setup:tokenizers
 ```
 
-Without this step logit bias is silently disabled and everything else works normally.
+Missing assets disable optional logit bias. NovelAI text generation requires its three tokenizer
+families and returns a setup error if they are missing or invalid. These families use pinned public
+MIT definitions and need no Hugging Face token. To install only those families:
+
+```sh
+bun run setup:tokenizers --family novelai_nerdstash_v2
+bun run setup:tokenizers --family novelai_llama3
+bun run setup:tokenizers --family novelai_glm
+```
+
+The downloader writes to the repository's `tokenizers/` directory. If `TOKENIZER_ASSET_DIR` points
+elsewhere, copy the downloaded family directories there. Restart TomoriBot after installing or
+repairing assets, because the runtime caches load failures.
 
 The secure `fetch_url` fallback and the DuckDuckGo `web_search` fallback both run in process, so
 neither needs an extra installation.

@@ -32,9 +32,9 @@ Generation control is split into two distinct tiers:
    The loop continues until the provider emits a final response, hits a fatal error, or terminates through
    tool policy.
 
-NovelAI text models use the stream and result stages without tool dispatch. An empty response
-retains `naiContinuationPrefill` when sentence buffering withheld an incomplete GLM fragment, so
-the chat retry can continue it.
+NovelAI text models use the stream and result stages without tool dispatch. Their provider-owned
+streaming session handles bounded fragment continuation with one total output budget. The tool
+loop carries no NovelAI continuation state.
 
 ## Stage flow
 <!-- anchor: stage-flow -->

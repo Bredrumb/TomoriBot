@@ -63,7 +63,6 @@ describe("buildStreamContext", () => {
       replyNoticeState,
       deliveryState,
       forcedMentions,
-      naiContinuationPrefill: "…mid-sentence",
       abortSignal,
       messageIdMap,
     };
@@ -80,7 +79,6 @@ describe("buildStreamContext", () => {
     ctx.deliveryState.unconfirmed = true;
     expect(streamingContext.deliveryState?.unconfirmed).toBe(true);
     expect(ctx.forcedMentions).toBe(forcedMentions);
-    expect(ctx.naiContinuationPrefill).toBe("…mid-sentence");
     expect(ctx.abortSignal).toBe(abortSignal);
     expect(ctx.messageIdMap).toBe(messageIdMap);
   });
@@ -117,7 +115,6 @@ describe("buildStreamContext", () => {
     expect(ctx.outputPrefill).toBeUndefined();
     expect(ctx.replyNoticeState).toBeUndefined();
     expect(ctx.forcedMentions).toBeUndefined();
-    expect(ctx.naiContinuationPrefill).toBeUndefined();
     expect(ctx.abortSignal).toBeUndefined();
     expect(ctx.messageIdMap).toBeUndefined();
     expect(ctx.webhook).toBeUndefined();

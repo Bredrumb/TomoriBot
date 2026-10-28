@@ -98,7 +98,7 @@ describe("truncation reserve parity", () => {
     for (const provider of CATALOG_PROVIDERS) {
       for (const configured of [null, 1_000, 50_000]) {
         const persona = catalogPersona(provider, configured);
-        const budget = await resolveContextBudget(persona, "1");
+        const budget = await resolveContextBudget(persona);
         const requested = await resolveRequestMaxOutputTokens(persona);
         if (budget?.outputReserve !== requested) {
           mismatches.push(`${provider}/${configured}: reserve ${budget?.outputReserve}, request ${requested}`);
@@ -106,7 +106,7 @@ describe("truncation reserve parity", () => {
       }
     }
     const custom = customPersona(8_192);
-    const customBudget = await resolveContextBudget(custom, "1");
+    const customBudget = await resolveContextBudget(custom);
     if (customBudget?.outputReserve !== (await resolveRequestMaxOutputTokens(custom))) mismatches.push("custom");
     expect(mismatches).toEqual([]);
   });
@@ -116,7 +116,7 @@ describe("truncation reserve parity", () => {
       llm: createLlmRow({ llm_provider: "openrouter", llm_codename: "uncapped-model", context_window: 32_000 }),
     });
     expect(await resolveRequestMaxOutputTokens(persona)).toBeUndefined();
-    expect((await resolveContextBudget(persona, "1"))?.outputReserve).toBe(
+    expect((await resolveContextBudget(persona))?.outputReserve).toBe(
       resolveChatMaxOutputTokens({
         provider: "openrouter",
         configured: null,
@@ -133,7 +133,7 @@ describe("truncation reserve parity", () => {
   // Regression: the default 4096 reply budget on the 4096 num_ctx the setup wizard suggests left a
   // safe input budget of zero, so every turn dropped the whole channel history.
   test("a default reply budget leaves room for history in a small custom window", async () => {
-    const budget = await resolveContextBudget(customPersona(4_096), "1");
+    const budget = await resolveContextBudget(customPersona(4_096));
     if (!budget) throw new Error("expected a budget for a known num_ctx");
     expect(computeSafeInputBudget(budget.contextLength, budget.outputReserve)).toBeGreaterThan(0);
   });
@@ -143,6 +143,6 @@ describe("truncation reserve parity", () => {
   });
 
   test("skips truncation when the window is unknown", async () => {
-    expect(await resolveContextBudget(customPersona(null), "1")).toBeNull();
+    expect(await resolveContextBudget(customPersona(null))).toBeNull();
   });
 });

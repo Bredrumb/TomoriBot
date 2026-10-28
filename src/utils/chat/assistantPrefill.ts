@@ -163,7 +163,12 @@ export async function applyAssistantPrefill(args: {
     return {
       contextItems: [
         ...args.contextItems,
-        { role: "model", parts: [{ type: "text", text: outputPrefill }], metadataTag: ContextItemTag.DIALOGUE_HISTORY },
+        {
+          role: "model",
+          completionText: outputPrefill,
+          parts: [{ type: "text", text: outputPrefill }],
+          metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+        },
       ],
       outputPrefill,
     };

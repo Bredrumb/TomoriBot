@@ -19,10 +19,15 @@
 
 import * as path from "node:path";
 import * as fs from "node:fs";
+import { createHash } from "node:crypto";
 
 interface TokenizerFamily {
   repo: string;
   files: string[];
+  source?: "github";
+  revision?: string;
+  paths?: Record<string, string>;
+  sha256?: Record<string, string>;
 }
 
 interface Manifest {
@@ -44,20 +49,26 @@ const targetFamily = familyFlagIndex !== -1 ? args[familyFlagIndex + 1] : null;
 /**
  * Builds the HuggingFace resolve URL for a specific file in a repo.
  */
-function buildHfUrl(repo: string, file: string): string {
-  return `${HF_BASE_URL}/${repo}/resolve/main/${file}`;
+function buildAssetUrl(family: TokenizerFamily, file: string): string {
+  const remotePath = family.paths?.[file] ?? file;
+  return family.source === "github"
+    ? `https://raw.githubusercontent.com/${family.repo}/${family.revision}/${remotePath}`
+    : `${HF_BASE_URL}/${family.repo}/resolve/${family.revision ?? "main"}/${remotePath}`;
+}
+
+function isAssetComplete(filePath: string, expectedHash?: string): boolean {
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).size === 0) return false;
+  return !expectedHash || createHash("sha256").update(fs.readFileSync(filePath)).digest("hex") === expectedHash;
 }
 
 /**
  * Checks whether all required files for a family already exist on disk and
  * are non-empty. Returns true only if every file passes.
  */
-function isFamilyComplete(familyName: string, files: string[]): boolean {
-  for (const file of files) {
+function isFamilyComplete(familyName: string, family: TokenizerFamily): boolean {
+  for (const file of family.files) {
     const filePath = path.join(TOKENIZER_BASE_DIR, familyName, file);
-    if (!fs.existsSync(filePath)) return false;
-    const stat = fs.statSync(filePath);
-    if (stat.size === 0) return false;
+    if (!isAssetComplete(filePath, family.sha256?.[file])) return false;
   }
   return true;
 }
@@ -77,7 +88,7 @@ async function downloadFile(
   hfToken: string | undefined,
 ): Promise<"ok" | "access-denied" | "error"> {
   const headers: Record<string, string> = {};
-  if (hfToken) {
+  if (hfToken && new URL(url).hostname === "huggingface.co") {
     headers.Authorization = `Bearer ${hfToken}`;
   }
 
@@ -149,7 +160,7 @@ async function downloadFamily(
   family: TokenizerFamily,
   hfToken: string | undefined,
 ): Promise<FamilyResult> {
-  if (!force && isFamilyComplete(familyName, family.files)) {
+  if (!force && isFamilyComplete(familyName, family)) {
     console.log(`  ✓ ${familyName}: already complete, skipping`);
     return "skipped";
   }
@@ -157,10 +168,10 @@ async function downloadFamily(
   console.log(`  ↓ ${familyName} (${family.repo})`);
 
   for (const file of family.files) {
-    const url = buildHfUrl(family.repo, file);
+    const url = buildAssetUrl(family, file);
     const destPath = path.join(TOKENIZER_BASE_DIR, familyName, file);
 
-    if (!force && fs.existsSync(destPath) && fs.statSync(destPath).size > 0) {
+    if (!force && isAssetComplete(destPath, family.sha256?.[file])) {
       console.log(`    ✓ ${file}: already exists`);
       continue;
     }
@@ -178,6 +189,11 @@ async function downloadFamily(
       return "error";
     }
 
+    if (!isAssetComplete(destPath, family.sha256?.[file])) {
+      console.error(`    Hash mismatch for ${familyName}/${file}`);
+      fs.unlinkSync(destPath);
+      return "error";
+    }
     const stat = fs.statSync(destPath);
     console.log(`    ✓ ${file} (${(stat.size / 1024 / 1024).toFixed(2)} MB)`);
   }

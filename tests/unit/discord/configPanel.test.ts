@@ -29,6 +29,7 @@ import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
 import { initializeLocalizer, hasLocaleKey } from "@/utils/text/localizer";
 import { localizedCopy, localizedProse, expectForEveryLocale } from "../../helpers/localeCases";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
+import { expectSafePanelPayload } from "../../helpers/panelLimits";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -1725,6 +1726,49 @@ describe("config Behavior pages", () => {
     expect(seen.some((component) => component.content?.includes("```markdown\nStay on topic."))).toBe(true);
     expect(buttonFor(payload, { action: "behavior-context-open", locale: "en-US" })).toBeDefined();
     expect(buttonFor(payload, { action: "behavior-timezone-open", locale: "en-US" })).toBeUndefined();
+  });
+
+  it("explains inactive NovelAI settings across locales while preserving saved values and panel limits", () => {
+    expectForEveryLocale((locale) => {
+      const noticeKey = "commands.config.panel.behavior_novelai_notice";
+      const notice = localizedProse(hasLocaleKey(locale, noticeKey) ? locale : "en-US", noticeKey);
+      const presetKey = "commands.config.panel.system_prompt_st_preset_novelai";
+      const presetNotice = localizedProse(hasLocaleKey(locale, presetKey) ? locale : "en-US", presetKey);
+      for (const actor of [GUILD_MANAGER, DM_OWNER]) {
+        for (const model of ["glm-4-6", "xialong-v1", "kayra-v1", "llama-3-erato-v1"]) {
+          const persona = createPersona({ llm: createLlmRow({ llm_provider: "novelai", llm_codename: model }) });
+          for (const activeStPresetName of [null, "Juno RP"]) {
+            const general = {
+              ...behaviorView.general,
+              systemPrompt: "P".repeat(16_000),
+              contextNote: "N".repeat(2_000),
+              responsePrefill: "R".repeat(2_000),
+              activeStPresetName,
+            };
+            const payload = build(actor, {
+              locale,
+              category: "behavior",
+              page: "general",
+              personas: [persona],
+              behaviorView: { ...behaviorView, general },
+              receipt: { tone: "success", heading: "Saved", detail: "Configuration saved." },
+            });
+            const text = walk(payload)
+              .flatMap((component) => component.content ?? [])
+              .join("\n");
+            expect(text).toMatch(notice);
+            expect(presetNotice.test(text)).toBe(Boolean(activeStPresetName));
+            expectSafePanelPayload(payload, `${locale}/${model}/${activeStPresetName}`);
+            if (!activeStPresetName) expect(text).toContain(general.systemPrompt.slice(0, 10));
+            expect(text).toContain(general.contextNote.slice(0, 10));
+            expect(text).toContain(general.responsePrefill.slice(0, 10));
+            expect(buttonFor(payload, { action: "behavior-prefill-open", locale })?.disabled).toBe(false);
+          }
+        }
+      }
+      const ordinary = build(GUILD_MANAGER, { locale, category: "behavior", page: "general", behaviorView });
+      expect(JSON.stringify(ordinary)).not.toMatch(notice);
+    });
   });
 
   it("replaces the system prompt preview and locks its controls while a SillyTavern preset is active", () => {

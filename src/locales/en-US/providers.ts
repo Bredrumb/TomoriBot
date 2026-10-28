@@ -172,6 +172,19 @@ export default {
       "403_predict_permission_message": `This key can't call Vertex AI Express models. Use an Express-mode key, or use the separate \`vertex\` provider for full Google Cloud projects.`,
     },
     novelai: {
+      tokenizer_setup:
+        "NovelAI tokenizers are missing or invalid. Ask the bot host to run `bun run setup:tokenizers` and restart TomoriBot.",
+      input_complexity:
+        "This prompt contains too much text or an unusually long unbroken word. Shorten it and try again.",
+      context_overflow:
+        "The persona, minimum examples, and recent conversation exceed this model's context window. Shorten them or choose a model with a larger window.",
+      subscription_unavailable: "NovelAI subscription information could not be loaded. Try again shortly.",
+      subscription_inactive: "This NovelAI key has no active subscription.",
+      model_tier: "This NovelAI subscription does not include the selected text model.",
+      xialong_opus:
+        "Xialong requires an active NovelAI Opus subscription. Use an Opus key or select another text model.",
+      continuation_exhausted:
+        "NovelAI ended before producing a complete reply within the output budget. Try again or increase the configured output length.",
       "400_default_message": `Invalid request format or parameters. Please ensure you inputted the correct API key.`,
       "400_trial_message": `Your trial account requires recaptcha verification for generations. API access requires a paid NovelAI subscription. Please upgrade your account at https://novelai.net/`,
       "401_default_message": `Your NovelAI API key is invalid or expired`,

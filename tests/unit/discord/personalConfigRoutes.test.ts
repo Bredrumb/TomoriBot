@@ -2612,6 +2612,35 @@ describe("Models panel rendering", () => {
 });
 
 describe("Model assignment writes on modal submit", () => {
+  it("renders a rejected personal Xialong selection by locale key", async () => {
+    const { dependencies } = makeDependencies([]);
+    const loadProviders = dependencies.loadUserSavedProviders;
+    dependencies.loadUserSavedProviders = async (userId) =>
+      (await loadProviders(userId)).map((row) => ({ ...row, provider: "novelai" }));
+    dependencies.loadAvailableModelsForCapability = async () => [{ id: 102, name: "xialong-v1" }];
+    dependencies.operations.setCapabilityModel = async () => ({
+      status: "novelai-unavailable",
+      descriptionKey: "genai.novelai.xialong_opus",
+    });
+    const route = createPersonalConfigInteractionRoute(dependencies);
+    const customId = buildPersonalConfigRouteId({
+      action: "model-modal-submit",
+      locale: "en-US",
+      capability: "text",
+      provider: "novelai",
+      nonce: "nonce123456",
+    });
+    const interaction = makePersonalInteraction({ kind: "modal", customId });
+    const modalsModule = await import("@/utils/discord/ui/modals");
+    const take = spyOn(modalsModule, "takeRawModalSelectValue").mockReturnValue("102");
+    try {
+      await route.execute({} as Client, interaction, requireRoute(customId));
+      expect(JSON.stringify(interaction.edits.at(-1))).toMatch(localizedProse("en-US", "genai.novelai.xialong_opus"));
+    } finally {
+      take.mockRestore();
+    }
+  });
+
   it("writes on submit even when the assignment newly activates a cross-server override", async () => {
     const calls: string[] = [];
 

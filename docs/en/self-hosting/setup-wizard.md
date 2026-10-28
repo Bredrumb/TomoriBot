@@ -71,7 +71,7 @@ prints the command or guide to finish manually and keeps going:
 |---|---|
 | `pgvector` | Vector search for document/RAG memory. |
 | `pg_cron` | Optional scheduled cooldown/reminder-row cleanup. |
-| Tokenizer assets | Local tokenizer assets for model-aware logit bias. |
+| Tokenizer assets | Local tokenizer assets for NovelAI text generation and model-aware logit bias. |
 
 To install any of these by hand, see the
 [Manual Setup extras](/self-hosting/manual-setup/#optional-extras-the-manual-full-install).

@@ -90,6 +90,7 @@ export function buildStreamContext(params: BuildStreamContextParams): StreamCont
     pendingResponseLimit: streamingContext?.pendingResponseLimit,
     rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
     outputPrefill: streamingContext?.outputPrefill,
+    triggerMessageId: streamingContext?.triggerMessageId,
     replyNoticeState: streamingContext?.replyNoticeState,
 
     webhook: params.webhook,
@@ -103,7 +104,6 @@ export function buildStreamContext(params: BuildStreamContextParams): StreamCont
 
     // NAI GLM-4.6 prompt continuation: trailing fragment from a previous truncated stream.
     //    Only ever populated for NovelAI streams; a no-op copy-through for other providers.
-    naiContinuationPrefill: streamingContext?.naiContinuationPrefill,
 
     abortSignal: streamingContext?.abortSignal,
 

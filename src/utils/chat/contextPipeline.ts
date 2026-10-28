@@ -275,11 +275,11 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     suppressUserErrors: !turn.shouldSurfaceUserErrors,
     textCredentialSource: turn.textCredentialSource,
     disableAllTools: incoming.isUserImpersonation,
-    naiContinuationPrefill: incoming.naiContinuationPrefill,
     emptyResponseRetryCount: incoming.retryCount,
     messageIdMap,
     triggererUserId: turn.userRow.user_id,
     triggererDiscId: turn.userRow.user_disc_id,
+    triggerMessageId: message.id,
     forcedMentions: await resolveForcedMentions(turn),
     ...(incoming.naturalNudge?.targetUserDiscId && {
       mentionableUserIds: [incoming.naturalNudge.targetUserDiscId],
@@ -616,7 +616,20 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
             return { ...part, text: `[System: ${text}${hint ? ` ${hint}` : ""}]` };
           }),
         );
-        return { ...item, parts };
+        const completionText =
+          item.completionText === undefined
+            ? undefined
+            : await convertMentions(
+                item.completionText,
+                client,
+                turn.serverDiscId,
+                turn.triggererName,
+                effectivePersona.persona_nickname,
+                effectivePersona.config.personal_memories_enabled,
+                turn.requestSnapshot,
+                "preserve",
+              );
+        return { ...item, parts, completionText };
       }),
     );
     builtContextItems = builtContextItems.filter((item) => item.messageId !== message.id);
@@ -641,6 +654,18 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     buildPersonaMentionCatalog(turn.allPersonas),
   );
 
+  let nativeContextItems = contextBuild.nativeContextItems ? [...contextBuild.nativeContextItems] : undefined;
+  if (nativeContextItems && incoming.conditioningInteraction && !incoming.isUserImpersonation) {
+    nativeContextItems = appendInjectedContextItems(
+      nativeContextItems.filter((item) => item.messageId !== message.id),
+      injectedContextItems?.filter((item) => item.messageId === message.id),
+    );
+  }
+  if (nativeContextItems) {
+    for (const item of contextBuild.memoryInjectionItems ?? []) {
+      insertAtDialogueDepth(nativeContextItems, item, contextBuild.memoryInjectionDepth ?? 0);
+    }
+  }
   const assistantPrefill = await resolveTurnAssistantPrefill(turn, effectivePersona);
   const carried = incoming.carriedExpressionDelivery;
   const expressionDelivery =
@@ -669,6 +694,9 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     tomoriState: effectivePersona,
     requestSnapshot: { ...turn.requestSnapshot, tomoriState: effectivePersona },
     contextItems,
+    nativeContextItems: nativeContextItems
+      ? attachPersonaMentionMapToContextItems(nativeContextItems, buildPersonaMentionCatalog(turn.allPersonas))
+      : undefined,
     assistantPrefill,
     expressionDelivery,
     simplifiedMessages: history.simplifiedMessages,
@@ -924,6 +952,7 @@ async function buildSimplifiedHistory(
         authorType: "user",
         personaName: null,
         content: formatBlockedUserNoticeContent(blockedLabel, activeContextBlock.expires_at),
+        completionContent: "",
         createdAt: msg.createdTimestamp,
         imageAttachments: [],
         videoAttachments: [],
@@ -961,6 +990,7 @@ async function buildSimplifiedHistory(
         authorType: "user",
         personaName: null,
         content: formatAgendaNotice(turn.persona.persona_nickname, agenda),
+        completionContent: "",
         createdAt: msg.createdTimestamp,
         imageAttachments: [],
         videoAttachments: [],
@@ -1028,6 +1058,12 @@ async function buildSimplifiedHistory(
       previousEntry.combinedMessageIds.push(simplified.id);
       previousEntry.individualContents?.push(simplified.content);
       previousEntry.combinedCreatedAts?.push(simplified.createdAt ?? 0);
+      previousEntry.completionContent = [
+        previousEntry.completionContent ?? previousEntry.content,
+        simplified.completionContent ?? simplified.content,
+      ]
+        .filter(Boolean)
+        .join("\n");
       previousEntry.content = `${previousEntry.content}\n${simplified.content}`;
       continue;
     }
@@ -1072,6 +1108,8 @@ async function buildSimplifiedHistory(
       authorType: "user",
       personaName: null,
       content: reminderContent,
+      completionContent: `*${isSelfReminder ? "A task reminder" : `A reminder for ${incoming.reminderRecipientID?.startsWith("@") ? incoming.reminderRecipientID : `<@${incoming.reminderRecipientID}>`}`}: ${incoming.reminderData.reminder_purpose}*`,
+      completionSpeaker: false,
       imageAttachments: [],
       videoAttachments: [],
     });
@@ -1130,6 +1168,7 @@ async function simplifyMessage(
   if (!content && messageProxyIdentitiesByMessageId.get(msg.id)?.serviceId === "pluralbuddy") {
     content = extractTextDisplayContent(msg.components);
   }
+  let completionContent = isJoin ? `*<@${msg.author.id}> joined ${turn.serverName}.*` : content;
   const replyContext = await withReplyContext(
     turn,
     msg,
@@ -1262,6 +1301,7 @@ async function simplifyMessage(
     msg.author.id === turn.lockedTurn.admission.client.user?.id || authorType === "persona";
   if (content && !isTomoriAuthoredMessage) {
     content = stripAtPersonaTriggers(content, turn.allPersonas);
+    completionContent = stripAtPersonaTriggers(completionContent, turn.allPersonas);
   }
 
   const preForwardImageCount = imageAttachments.length;
@@ -1269,6 +1309,7 @@ async function simplifyMessage(
   const forwardContext = await buildForwardContext({
     message: msg,
     content,
+    completionContent,
     imageAttachments,
     videoAttachments,
     messageIdMap,
@@ -1278,6 +1319,7 @@ async function simplifyMessage(
     selfDebugEnabled: turn.persona.config.self_debug_enabled ?? false,
   });
   content = forwardContext.content;
+  completionContent = forwardContext.completionContent;
   if (imageAttachments.length > preForwardImageCount || videoAttachments.length > preForwardVideoCount) {
     tagNewMediaWithSource(imageAttachments, preForwardImageCount, videoAttachments, preForwardVideoCount, msg.id);
   }
@@ -1292,12 +1334,14 @@ async function simplifyMessage(
     components: msg.components,
     minimalNoticeBody: minimalNoticeBodies.get(msg.id),
     content,
+    completionContent,
     imageAttachments,
     isTomoriAuthoredMessage,
     selfDebugEnabled: turn.persona.config.self_debug_enabled ?? false,
     tomoriNickname: turn.persona.persona_nickname,
   });
   content = embedResult.content;
+  completionContent = embedResult.completionContent;
   hasProcessedEmbed = embedResult.processedSystemEmbed;
 
   appendDirectMediaFromMessage({
@@ -1308,6 +1352,9 @@ async function simplifyMessage(
     voiceTranscriptChatMode: turn.persona.config.voice_transcript_chat_mode ?? true,
     appendTextHint: (hint) => {
       content = content ? `${content} ${hint}` : hint;
+    },
+    appendCompletionText: (text) => {
+      completionContent = [completionContent, text].filter(Boolean).join("\n");
     },
   });
 
@@ -1349,6 +1396,8 @@ async function simplifyMessage(
       authorPersonaId,
       authorPersonaLineageId,
       content,
+      completionContent,
+      ...(hasProcessedEmbed || isJoin ? { completionSpeaker: false as const } : {}),
       createdAt: msg.createdTimestamp,
       mediaSourceMessageIds:
         imageAttachments.length > 0 || videoAttachments.length > 0

@@ -470,15 +470,22 @@ export function withSavedProviderConfig(
             | "thinking_level"
             | "llm_disabled_params"
             | "llm_logit_biases"
+            | "provider"
+            | "llm_id"
+            | "nai_preset_name"
           >
         >)
     | null,
 ): TomoriState {
   const { config } = tomoriState;
+  const isNovelAI = (savedConfig?.provider ?? tomoriState.llm.llm_provider).toLowerCase() === "novelai";
+  const presetName = savedConfig?.nai_preset_name ?? null;
   return {
     ...tomoriState,
+    ...(isNovelAI && tomoriState.nai_preset?.preset_name !== presetName ? { nai_preset: undefined } : {}),
     config: {
       ...config,
+      ...(isNovelAI ? { nai_preset_name: presetName, llm_id: savedConfig?.llm_id ?? config.llm_id } : {}),
       api_key: savedConfig?.api_key ?? null,
       key_version: savedConfig?.key_version ?? 1,
       llm_temperature: savedConfig?.llm_temperature ?? config.llm_temperature,

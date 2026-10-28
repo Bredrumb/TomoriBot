@@ -1319,6 +1319,20 @@ export const llmSections: ModelSection<LlmInput>[] = [
       },
       {
         provider: "novelai",
+        codename: "xialong-v1",
+        hasTools: false,
+        desc: "Xialong creative writing and roleplay model, requires an active NovelAI Opus subscription",
+        i18n: {
+          ja: "創作とロールプレイ向けのXialongモデル。有効なNovelAI Opusサブスクリプションが必要です",
+          "pt-BR": "Modelo Xialong para escrita criativa e roleplay, exige uma assinatura NovelAI Opus ativa",
+          "es-419": "Modelo Xialong para escritura creativa y rol, requiere una suscripción activa a NovelAI Opus",
+          "zh-TW": "Xialong 創作與角色扮演模型，需要有效的 NovelAI Opus 訂閱",
+          vi: "Model Xialong cho sáng tác và nhập vai, yêu cầu gói NovelAI Opus đang hoạt động",
+          "zh-CN": "Xialong 创作与角色扮演模型，需要有效的 NovelAI Opus 订阅",
+        },
+      },
+      {
+        provider: "novelai",
         codename: "kayra-v1",
         desc: "Legacy Kayra model for storytelling and roleplay",
         i18n: {

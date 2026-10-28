@@ -1,3 +1,4 @@
+import type { ContextMemoryEntry } from "@/types/misc/context";
 import { GatewayIntentBits, type Client, type Guild, type GuildMember, type User } from "discord.js";
 import {
   PrivacyLevel,
@@ -88,6 +89,7 @@ export interface ParticipantProfileField {
     reason: ParticipantFieldVisibilityReason;
   };
   lines: readonly string[];
+  memoryEntries?: ContextMemoryEntry[];
 }
 
 export interface HydratedParticipantProfile {
@@ -687,20 +689,26 @@ async function enrichPersonalMemoriesField(
   params: ParticipantHydrationParams,
   dependencies: ParticipantHydrationDependencies,
 ): Promise<ParticipantProfileField> {
-  const lines = base.policy.exposePersonalMemories
-    ? await hydratePersonalMemoryLines(base.userRow, base.profile.displayName, params, dependencies)
+  const memories = base.policy.exposePersonalMemories
+    ? await hydratePersonalMemoryEntries(base.userRow, base.profile.displayName, params, dependencies)
     : [];
-  return field(
-    base.profile.key,
-    "personal_memories",
-    50,
-    lines,
-    hiddenReasonForPolicy(base.policy, "personal_memories", {
-      blacklisted: base.blacklisted,
-      personalizationEnabled: base.personalizationEnabled,
-      isUserImpersonation: params.activePersonaScope.isUserImpersonation,
-    }),
-  );
+  const lines = memories.length
+    ? [`- Memories about ${base.profile.displayName}: ${memories.map((entry) => entry.formattedText).join("; ")}`]
+    : [];
+  return {
+    ...field(
+      base.profile.key,
+      "personal_memories",
+      50,
+      lines,
+      hiddenReasonForPolicy(base.policy, "personal_memories", {
+        blacklisted: base.blacklisted,
+        personalizationEnabled: base.personalizationEnabled,
+        isUserImpersonation: params.activePersonaScope.isUserImpersonation,
+      }),
+    ),
+    memoryEntries: memories.map(({ formattedText: _formattedText, ...entry }) => entry),
+  };
 }
 
 async function enrichHumanRemindersField(
@@ -807,12 +815,12 @@ function buildRoleLines(member: GuildMember, guild: Guild | undefined): string[]
   return roles.length > 0 ? [`- Server Roles: ${roles.join(", ")}`] : [];
 }
 
-async function hydratePersonalMemoryLines(
+async function hydratePersonalMemoryEntries(
   userRow: UserRow,
   displayName: string,
   params: ParticipantHydrationParams,
   dependencies: ParticipantHydrationDependencies,
-): Promise<string[]> {
+): Promise<Array<ContextMemoryEntry & { formattedText: string }>> {
   if (!userRow.user_id) return [];
   const memories = await dependencies.loadPersonalMemories(
     userRow.user_id,
@@ -830,10 +838,15 @@ async function hydratePersonalMemoryLines(
         params.botName,
         params.tomoriConfig.personal_memories_enabled,
       );
-      return formatMemoryWithId(memory.personal_memory_id ?? index + 1, processed, memory.tags ?? []);
+      return {
+        id: `personal:${memory.personal_memory_id ?? index + 1}`,
+        text: processed,
+        formattedText: formatMemoryWithId(memory.personal_memory_id ?? index + 1, processed, memory.tags ?? []),
+        createdAt: memory.created_at?.getTime(),
+      };
     }),
   );
-  return [`- Memories about ${displayName}: ${processedMemories.join("; ")}`];
+  return processedMemories;
 }
 
 function memoryMatchesContext(memory: PersonalMemoryRow, params: ParticipantHydrationParams): boolean {

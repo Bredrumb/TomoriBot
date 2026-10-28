@@ -44,7 +44,8 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
     inspection.answeringState,
     providerName,
     modelName,
-    await resolveRequestMaxOutputTokens(inspection.answeringState),
+    inspection.novelaiRequest?.report.outputCap ?? (await resolveRequestMaxOutputTokens(inspection.answeringState)),
+    inspection.novelaiRequest,
   );
 
   let fileContent: string;
@@ -59,11 +60,12 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
       modelName,
       toolsData,
       requestConfig,
+      inspection.novelaiRequest,
     );
     fileContent = JSON.stringify(snapshotData, null, 2);
     fileName = `${fileStem}.json`;
   } else {
-    fileContent = buildTextSnapshot(inspection.contextItems);
+    fileContent = buildTextSnapshot(inspection.contextItems, inspection.novelaiRequest);
     fileName = `${fileStem}.txt`;
   }
 

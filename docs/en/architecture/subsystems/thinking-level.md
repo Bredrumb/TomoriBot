@@ -88,7 +88,14 @@ NIM serves diverse model families behind one interface. Because different archit
 
 ### NovelAI
 
-Maps to GLM prompt directives: `none` emits `/nothink`, while active levels emit `<think></think>`.
+The active profile sets the default: GLM 4.6 enables thinking for `auto`, while Xialong disables it.
+`none` disables thinking on both; `low`, `medium`, and `high` enable it without distinct effort
+budgets. The per-request `forceReason` override also applies.
+
+GLM represents disabled thinking with `/nothink` and enabled thinking with `<think></think>` in its
+chat template. Xialong appends `/nothink` to user turns and closes its assistant thinking block when
+thinking is disabled; when enabled, it opens `<think>` for generation. Kayra and Erato use story
+templates and ignore the saved thinking level. No NovelAI text model calls tools.
 
 ## Response parsing and privacy
 

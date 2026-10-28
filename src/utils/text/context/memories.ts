@@ -12,7 +12,7 @@ import {
   type ShortTermMemoryEntry,
 } from "@/utils/cache/shortTermMemoryCache";
 import { log } from "@/utils/misc/logger";
-import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
+import { ContextItemTag, type ContextMemoryEntry, type StructuredContextItem } from "@/types/misc/context";
 import type { TomoriState } from "@/types/db/schema";
 import type { ToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
 import type { MentionConverter } from "./templates";
@@ -170,6 +170,7 @@ export async function buildServerMemoryContextItem(params: {
     : `\n## ${params.botName}'s Memories about ${params.serverName}\n`;
 
   let serverMemoryLines: string[] = [];
+  let memoryEntries: ContextMemoryEntry[] = [];
   try {
     // Without a resolved server id + persona lineage there is nothing to scope
     // to treat it as "no memories" (the previous raw query interpolated NULL,
@@ -201,6 +202,11 @@ export async function buildServerMemoryContextItem(params: {
       return true;
     });
 
+    memoryEntries = filteredServerRows.map((row) => ({
+      id: `server:${row.server_memory_id}`,
+      text: row.content,
+      createdAt: row.created_at?.getTime(),
+    }));
     serverMemoryLines = filteredServerRows.map((row) =>
       // biome-ignore lint/style/noNonNullAssertion: a loaded server-memory row always carries its PK.
       formatMemoryWithId(row.server_memory_id!, row.content, row.tags ?? []),
@@ -208,6 +214,7 @@ export async function buildServerMemoryContextItem(params: {
   } catch (error) {
     log.warn("Failed to load server memories with IDs for context", error);
     serverMemoryLines = params.tomoriState.server_memories;
+    memoryEntries = serverMemoryLines.map((text, index) => ({ id: `server:${index}`, text }));
   }
 
   if (serverMemoryLines.length === 0) {
@@ -230,6 +237,19 @@ export async function buildServerMemoryContextItem(params: {
       },
     ],
     metadataTag: ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
+    memoryEntries: await Promise.all(
+      memoryEntries.map(async (entry) => ({
+        ...entry,
+        text: await params.convertMentions(
+          entry.text,
+          params.client,
+          params.guildId,
+          "User",
+          params.botName,
+          params.personalMemoriesEnabled,
+        ),
+      })),
+    ),
   };
 }
 
@@ -562,6 +582,7 @@ export async function buildShortTermMemoryContext(params: {
 
         nudgeItem = {
           role: "user",
+          completionText: "",
           parts: [
             {
               type: "text",

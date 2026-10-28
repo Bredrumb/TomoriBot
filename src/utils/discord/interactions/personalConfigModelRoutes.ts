@@ -328,7 +328,12 @@ export async function handlePersonalConfigModelRoutes(context: PersonalConfigPos
       panelReceipt: {
         tone: "error",
         heading: localizer(route.locale, "commands.personal.config.write_failed_heading"),
-        detail: localizer(route.locale, "commands.personal.config.write_failed_detail"),
+        detail: localizer(
+          route.locale,
+          result.status === "novelai-unavailable"
+            ? result.descriptionKey
+            : "commands.personal.config.write_failed_detail",
+        ),
       },
       dependencies,
       selectedCapability: route.capability,

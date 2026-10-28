@@ -454,7 +454,6 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     textQuotaUserDiscId: incoming.textQuotaUserDiscId,
     manualSystemPrompt: incoming.manualSystemPrompt,
     manualPrefill: incoming.manualPrefill,
-    naiContinuationPrefill: lastStreamResult?.naiContinuationPrefill,
     emptyResponseFinishReason: streamResultData?.finishReason === "length" ? "length" : undefined,
     shouldSurfaceUserErrors: context.shouldSurfaceUserErrors,
     injectedContextItems: retryInjectedContextItems,

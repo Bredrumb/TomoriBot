@@ -408,13 +408,14 @@ export function buildNvidiaThinkingRequest(
 export function getNovelAiThinkingDirective(
   configuredLevel: string | null | undefined,
   forceReason?: boolean,
+  thinkingByDefault = true,
 ): "<think></think>" | "/nothink" {
   const effectiveLevel = resolveEffectiveThinkingLevel(configuredLevel, forceReason);
   if (effectiveLevel === "none") {
     return "/nothink";
   }
   if (effectiveLevel === "auto") {
-    return (process.env.NAI_GLM_THINKING_ENABLED ?? "true").toLowerCase() === "true" ? "<think></think>" : "/nothink";
+    return thinkingByDefault ? "<think></think>" : "/nothink";
   }
   return "<think></think>";
 }

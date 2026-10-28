@@ -130,14 +130,11 @@ export interface StreamContext {
 
   /** The attempt's `{bot}: {text}` prefill: stripped when the model echoes it, never shown. */
   outputPrefill?: string;
+  triggerMessageId?: string;
 
   holdResponseText?: boolean;
   pendingResponseLimit?: import("@/types/stream/pendingResponse").PendingResponseLimit;
   suppressTextOutput?: boolean;
-
-  // NAI GLM-4.6 prompt continuation: incomplete trailing fragment from previous stream, appended to the
-  // assembled prompt so the model continues mid-sentence rather than starting a new response
-  naiContinuationPrefill?: string;
 
   abortSignal?: AbortSignal;
 

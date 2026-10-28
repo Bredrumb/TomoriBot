@@ -13,11 +13,15 @@ The contributor `buildServerMemoryContextItem` in `src/utils/text/context/memori
 2. **Database retrieval**: Queries `serverMemoryRepository.loadServerMemoriesScoped(serverId, personaLineageId)` for all active memories scoped to the server and persona lineage. If loading fails or scoping IDs are missing, it falls back to the in-memory `tomoriState.server_memories` array.
 3. **Channel scope filtering**: When `channelMemoryEnabled` is enabled, a memory with a non-empty `channel_disc_ids` is filtered out unless it contains the current channel ID or, inside a thread, the parent channel ID (`channelScopeAdmits` in `src/utils/discord/channelScope.ts`). An empty scope applies in every channel. A memory whose legacy `#name` scope from migration 111 is still unresolved (`channel_scope_pending`, read from `legacy_channel_scope_tags`) has an empty scope, so it applies in every channel until the backfill or an admin narrows it.
 4. **Corpus tag filtering**: When `memory_tagging_enabled` is enabled and `conversationCorpus` is provided, memories with tags are excluded unless at least one tag appears in the lowercased history text. A tag starting with `#` is an ordinary keyword.
-5. **Formatting and emission**: Survived rows are formatted as `[id:${id}] ${content} (tags: ${tags})` using `formatMemoryWithId` and wrapped in a section header:
+5. **Formatting and emission**: Surviving rows use `formatMemoryWithId` to add tool-targeting IDs and tags, then receive a section header:
    - Guild channels: `## {botName}'s Memories about {serverName}`
    - Direct messages: `## {botName}'s Memories about this conversation with User`
 
 The block is emitted as one `system`-role item tagged `KNOWLEDGE_SERVER_MEMORIES` after passing through `convertMentions`.
+
+The item also carries individual plain-text memory entries with internal identities and recency.
+NovelAI fits and renders those entries without tool IDs or tag prefixes; ordinary providers retain
+the formatted block. Placeholder and mention resolution applies to both projections.
 
 ## Constraints and rationale
 

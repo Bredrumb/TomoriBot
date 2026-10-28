@@ -5,8 +5,10 @@
  */
 
 import { z } from "zod";
+import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 import { mergeStopStrings } from "@/providers/utils/stopStrings";
-import { log } from "@/utils/misc/logger";
+import { log, redactLogString } from "@/utils/misc/logger";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 
 const NOVELAI_API_BASE_URL = "https://text.novelai.net";
 /** Default timeout for NovelAI API requests in milliseconds */
@@ -29,6 +31,45 @@ async function cancelUnfinishedReader(
 ): Promise<void> {
   if (completed) return;
   await reader.cancel().catch(() => undefined);
+}
+
+async function* readNovelAISseLines(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let completed = false;
+  try {
+    while (true) {
+      let readTimer: ReturnType<typeof setTimeout> | undefined;
+      let result: Awaited<ReturnType<typeof reader.read>>;
+      try {
+        result = await Promise.race([
+          reader.read(),
+          new Promise<never>((_, reject) => {
+            readTimer = setTimeout(
+              () => reject(new Error(`NovelAI stream read timed out after ${STREAM_READ_TIMEOUT_MS}ms of inactivity`)),
+              STREAM_READ_TIMEOUT_MS,
+            );
+          }),
+        ]);
+      } finally {
+        if (readTimer) clearTimeout(readTimer);
+      }
+      if (result.done) {
+        completed = true;
+        buffer += decoder.decode();
+        if (buffer.trim()) yield buffer.replace(/\r$/, "");
+        return;
+      }
+      buffer += decoder.decode(result.value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) yield line.replace(/\r$/, "");
+    }
+  } finally {
+    await cancelUnfinishedReader(reader, completed);
+    reader.releaseLock();
+  }
 }
 
 /**
@@ -94,6 +135,7 @@ export interface NovelAIStreamChunk {
   error?: string;
   /** Populated from OpenAI-compatible endpoint: "stop", "length", or null */
   finishReason?: string;
+  termination?: "stop" | "length" | "eof" | "inactivity";
 }
 
 /**
@@ -118,77 +160,22 @@ interface OpenAICompletionRequest {
 /**
  * OpenAI-compatible SSE chunk
  */
-interface OpenAIStreamChunk {
-  id: string;
-  object: "text_completion";
-  created: number;
-  model: string;
-  choices: Array<{
-    text: string;
-    index: number;
-    logprobs: null;
-    finish_reason: string | null;
-  }>;
-}
+const openAIStreamChunkSchema = z.object({
+  choices: z
+    .array(z.object({ text: z.string().optional(), finish_reason: z.string().nullable().optional() }))
+    .optional(),
+});
 
 export interface ApiRequestConfig {
   apiKey: string;
   timeout?: number;
+  signal?: AbortSignal;
 }
 
 /**
  * Based on reference implementation with sensible defaults for roleplay
  */
 // Use https://novelai.net/tokenizer to find stop sequences
-function getKayraParameters(): NovelAIParameters {
-  return {
-    max_length: 150, // Increased from reference for longer responses
-    min_length: 10,
-    temperature: 1.35,
-    top_k: 15,
-    top_p: 0.85,
-    top_a: 0.1,
-    tail_free_sampling: 0.915,
-    repetition_penalty: 2.8,
-    repetition_penalty_frequency: 0.02,
-    repetition_penalty_presence: 0,
-    repetition_penalty_range: 2048,
-    repetition_penalty_slope: 0.02,
-    cfg_scale: 1,
-    phrase_rep_pen: "aggressive",
-    generate_until_sentence: true,
-    use_string: true,
-    bracket_ban: true,
-    order: [2, 3, 0, 4, 1],
-    stop_sequences: [],
-  };
-}
-
-/**
- * Based on reference implementation optimized for latest model
- */
-function getGlmParameters(): NovelAIParameters {
-  return {
-    max_length: 4096, // Request full token budget; API may cap lower but let's test the actual limit
-    min_length: 1,
-    temperature: 1.0, // GLM 4.6 default: balanced between natural output and tool call precision
-    top_k: 40,
-    top_p: 0.95,
-    top_a: 1,
-    tail_free_sampling: 1,
-    typical_p: 1,
-    repetition_penalty: 0, // GLM-4-6 doesn't need heavy rep penalty
-    repetition_penalty_range: 0,
-    repetition_penalty_slope: 0,
-    repetition_penalty_frequency: 0,
-    repetition_penalty_presence: 0.5, // Mild presence penalty to discourage repetitive phrasing
-    cfg_scale: 1,
-    phrase_rep_pen: "medium",
-    use_string: true,
-    stop_sequences: [],
-  };
-}
-
 /**
  * Previously converted temperature from a Gemini-centric scale to NovelAI model scale.
  * Now a direct passthrough: temperature is used as-is across all providers.
@@ -222,7 +209,7 @@ export function getParametersForModel(
   minP?: number,
   presetOverrides?: Partial<NovelAIParameters>,
 ): NovelAIParameters {
-  const params = model === "kayra-v1" || model === "llama-3-erato-v1" ? getKayraParameters() : getGlmParameters();
+  const params = getNovelAIProfile(model).parameters();
 
   // Merge NAI-specific preset fields (order, TFS, phrase_rep_pen, mirostat, etc.)
   //    These override the hardcoded defaults but are themselves overridden by DB schema values.
@@ -254,15 +241,13 @@ export function getParametersForModel(
  * @returns True if model uses OpenAI endpoint, false for native NovelAI endpoint
  */
 export function usesOpenAIEndpoint(model: string): boolean {
-  // glm-4-6 and newer models require OpenAI-compatible API
-  // kayra-v1 uses the native NovelAI API
-  return model === "glm-4-6";
+  return getNovelAIProfile(model).endpoint === "/oa/v1/completions";
 }
 
 /**
  * Convert NovelAI parameters to OpenAI-compatible format
  */
-function convertToOpenAIParams(
+export function convertToOpenAIParams(
   naiParams: NovelAIParameters,
   additionalStopStrings?: string[],
 ): Partial<OpenAICompletionRequest> {
@@ -319,13 +304,15 @@ async function* novelaiGenerateStreamOpenAI(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(requestBody),
-      signal: controller.signal,
+      signal: config.signal ? AbortSignal.any([controller.signal, config.signal]) : controller.signal,
     });
 
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => "Unknown error");
+      const errorText = redactLogString(
+        (await response.text().catch(() => "Unknown error")).replaceAll(apiKey, "[REDACTED]"),
+      );
       log.warn(`NovelAI OpenAI streaming request failed: ${response.status} ${errorText}`);
 
       const error: Error & { statusCode?: number } = new Error(
@@ -341,98 +328,57 @@ async function* novelaiGenerateStreamOpenAI(
       throw error;
     }
 
-    // Read SSE stream with per-read inactivity timeout.
-    // NAI's server sometimes stops sending chunks mid-stream without closing
-    // the connection. Without this timeout, reader.read() blocks indefinitely.
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let completed = false;
+    for await (const line of readNovelAISseLines(response.body)) {
+      if (!line.trim() || line.startsWith(":")) {
+        continue; // Skip empty lines and comments
+      }
 
-    try {
-      while (true) {
-        // Race the read against an inactivity timeout to prevent indefinite hangs.
-        // The timer is cleared after each successful read to avoid leaking timers.
-        let readTimer: ReturnType<typeof setTimeout> | undefined;
-        const readResult = await Promise.race([
-          reader.read(),
-          new Promise<never>((_, reject) => {
-            readTimer = setTimeout(
-              () => reject(new Error(`NovelAI stream read timed out after ${STREAM_READ_TIMEOUT_MS}ms of inactivity`)),
-              STREAM_READ_TIMEOUT_MS,
-            );
-          }),
-        ]);
-        if (readTimer) clearTimeout(readTimer);
+      if (line.startsWith("data: ")) {
+        const data = line.slice(6); // Remove 'data: ' prefix
 
-        const { done, value } = readResult;
-
-        if (done) {
-          log.info("NovelAI OpenAI stream complete");
-          completed = true;
-          break;
+        if (data === "[DONE]") {
+          yield { final: true, termination: "stop" };
+          return;
         }
 
-        buffer += decoder.decode(value, { stream: true });
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(data);
+        } catch {
+          throw new Error(`Malformed NovelAI stream event: ${redactLogString(data.replaceAll(apiKey, "[REDACTED]"))}`);
+        }
 
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || ""; // Keep incomplete line in buffer
-
-        for (const line of lines) {
-          if (!line.trim() || line.startsWith(":")) {
-            continue; // Skip empty lines and comments
+        if (parsed && typeof parsed === "object") {
+          const record = parsed as Record<string, unknown>;
+          if (record.error) {
+            const errorPayload = record.error;
+            const rawMessage =
+              typeof errorPayload === "object" && errorPayload !== null && "message" in errorPayload
+                ? String((errorPayload as { message: unknown }).message)
+                : String(errorPayload);
+            const message = redactLogString(rawMessage.replaceAll(apiKey, "[REDACTED]"));
+            log.warn(`NovelAI OpenAI stream returned error: ${message}`);
+            throw new Error(message);
           }
 
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6); // Remove 'data: ' prefix
+          const chunk = openAIStreamChunkSchema.parse(parsed);
+          const finishReason = chunk.choices?.[0]?.finish_reason ?? undefined;
 
-            if (data === "[DONE]") {
-              yield { final: true };
-              return;
-            }
+          if (chunk.choices?.[0]?.text) {
+            yield {
+              token: chunk.choices[0].text,
+              final: false,
+            };
+          }
 
-            let parsed: unknown;
-            try {
-              parsed = JSON.parse(data);
-            } catch (parseError) {
-              log.warn("NovelAI OpenAI: Failed to parse SSE chunk:", parseError);
-              continue;
-            }
-
-            if (parsed && typeof parsed === "object") {
-              const record = parsed as Record<string, unknown>;
-              if (record.error) {
-                const errorPayload = record.error;
-                const message =
-                  typeof errorPayload === "object" && errorPayload !== null && "message" in errorPayload
-                    ? String((errorPayload as { message: unknown }).message)
-                    : String(errorPayload);
-                log.warn(`NovelAI OpenAI stream returned error: ${message}`);
-                throw new Error(message);
-              }
-
-              const chunk = parsed as OpenAIStreamChunk;
-              const finishReason = chunk.choices?.[0]?.finish_reason ?? undefined;
-
-              if (chunk.choices?.[0]?.text) {
-                yield {
-                  token: chunk.choices[0].text,
-                  final: finishReason !== null && finishReason !== undefined,
-                  finishReason,
-                };
-              }
-
-              if (finishReason) {
-                yield { final: true, finishReason };
-                return;
-              }
-            }
+          if (finishReason) {
+            yield { final: true, finishReason, termination: finishReason === "length" ? "length" : "stop" };
+            return;
           }
         }
       }
-    } finally {
-      await cancelUnfinishedReader(reader, completed);
     }
+    yield { final: true, termination: "eof" };
   } catch (error) {
     if (error instanceof Error) {
       if (error.name === "AbortError") {
@@ -445,7 +391,7 @@ async function* novelaiGenerateStreamOpenAI(
         // Yield a final chunk so the stream adapter can flush any buffered text
         // (e.g., incomplete sentence trailing buffer) and terminate cleanly.
         log.warn(`NovelAI OpenAI: ${error.message}; yielding final chunk to flush buffers`);
-        yield { final: true };
+        yield { final: true, termination: "inactivity" };
       } else {
         log.warn("NovelAI OpenAI streaming error:", error);
         throw error;
@@ -481,13 +427,15 @@ async function* novelaiGenerateStreamNative(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(request),
-      signal: controller.signal,
+      signal: config.signal ? AbortSignal.any([controller.signal, config.signal]) : controller.signal,
     });
 
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => "Unknown error");
+      const errorText = redactLogString(
+        (await response.text().catch(() => "Unknown error")).replaceAll(apiKey, "[REDACTED]"),
+      );
       log.warn(`NovelAI streaming request failed: ${response.status} ${errorText}`);
 
       const error: Error & { statusCode?: number } = new Error(
@@ -503,75 +451,45 @@ async function* novelaiGenerateStreamNative(
       throw error;
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let completed = false;
+    for await (const line of readNovelAISseLines(response.body)) {
+      if (!line.trim() || line.startsWith(":")) {
+        continue;
+      }
 
-    try {
-      while (true) {
-        let readTimer: ReturnType<typeof setTimeout> | undefined;
-        const readResult = await Promise.race([
-          reader.read(),
-          new Promise<never>((_, reject) => {
-            readTimer = setTimeout(
-              () => reject(new Error(`NovelAI stream read timed out after ${STREAM_READ_TIMEOUT_MS}ms of inactivity`)),
-              STREAM_READ_TIMEOUT_MS,
-            );
-          }),
-        ]);
-        if (readTimer) clearTimeout(readTimer);
-
-        const { done, value } = readResult;
-
-        if (done) {
-          log.info("NovelAI stream completed");
-          completed = true;
-          yield { final: true };
-          break;
+      if (line.startsWith("data: ")) {
+        const data = line.slice(6); // Remove "data: " prefix
+        if (data === "[DONE]") {
+          yield { final: true, termination: "stop" };
+          return;
         }
 
-        buffer += decoder.decode(value, { stream: true });
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(data);
+        } catch (_parseError) {
+          throw new Error("Malformed NovelAI stream event");
+        }
 
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || ""; // Keep incomplete line in buffer
-
-        for (const line of lines) {
-          if (!line.trim() || line.startsWith(":")) {
-            continue;
-          }
-
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6); // Remove "data: " prefix
-
-            let parsed: unknown;
-            try {
-              parsed = JSON.parse(data);
-            } catch (_parseError) {
-              log.warn(`Failed to parse NovelAI SSE data: ${data}`);
-              yield { token: data };
-              continue;
-            }
-
-            // NovelAI sends tokens as strings in the response
-            if (typeof parsed === "string") {
-              yield { token: parsed };
-            } else if (parsed && typeof parsed === "object") {
-              const record = parsed as Record<string, unknown>;
-              if (typeof record.token === "string") {
-                yield { token: record.token };
-              } else if (record.error) {
-                const errorMsg = typeof record.error === "string" ? record.error : JSON.stringify(record.error);
-                log.warn(`NovelAI stream returned error: ${errorMsg}`);
-                throw new Error(errorMsg);
-              }
-            }
+        if (typeof parsed === "string") {
+          yield { token: parsed };
+        } else if (parsed && typeof parsed === "object") {
+          const record = parsed as Record<string, unknown>;
+          if (typeof record.token === "string") {
+            yield { token: record.token };
+          } else if (record.error) {
+            const errorMsg = redactLogString(
+              (typeof record.error === "string" ? record.error : JSON.stringify(record.error)).replaceAll(
+                apiKey,
+                "[REDACTED]",
+              ),
+            );
+            log.warn(`NovelAI stream returned error: ${errorMsg}`);
+            throw new Error(errorMsg);
           }
         }
       }
-    } finally {
-      await cancelUnfinishedReader(reader, completed);
     }
+    yield { final: true, termination: "eof" };
   } catch (error) {
     if (error instanceof Error) {
       if (error.name === "AbortError") {
@@ -582,7 +500,7 @@ async function* novelaiGenerateStreamNative(
       } else if (error.message.includes("stream read timed out")) {
         // Per-read inactivity timeout because NAI stopped sending data mid-stream
         log.warn(`NovelAI Native: ${error.message}; yielding final chunk to flush buffers`);
-        yield { final: true };
+        yield { final: true, termination: "inactivity" };
       } else {
         log.warn("NovelAI streaming failed:", error);
         throw error;
@@ -648,7 +566,9 @@ export async function validateNovelAIApiKey(apiKey: string): Promise<boolean> {
     // classifies some failures by matching the body text (e.g. trial-account
     // recaptcha 400s), and it is what makes host/endpoint migrations
     // self-diagnosing rather than surfacing as a bare "Bad Request".
-    const errorText = await response.text().catch(() => "Unknown error");
+    const errorText = redactLogString(
+      (await response.text().catch(() => "Unknown error")).replaceAll(apiKey, "[REDACTED]"),
+    );
     const error: Error & { statusCode?: number } = new Error(
       `API request failed: ${response.statusText}${errorText ? ` - ${errorText}` : ""}`,
     );
@@ -733,7 +653,7 @@ export type NovelAISubscription = z.infer<typeof novelAISubscriptionSchema>;
  *
  * Returns only validated subscription facts consumed by caching and the usage command.
  */
-export async function fetchNovelAISubscription(apiKey: string): Promise<NovelAISubscription | null> {
+export async function requestNovelAISubscription(apiKey: string): Promise<NovelAISubscription | null> {
   const url = `${NOVELAI_ACCOUNT_API_BASE_URL}/user/subscription`;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10_000);
@@ -748,22 +668,47 @@ export async function fetchNovelAISubscription(apiKey: string): Promise<NovelAIS
       signal: controller.signal,
     });
 
-    clearTimeout(timeoutId);
-
     if (!response.ok) {
-      log.warn(`NovelAI subscription fetch failed with status ${response.status}; using default token limits.`);
-      return null;
+      const body = redactLogString((await response.text()).replaceAll(apiKey, "[REDACTED]"));
+      throw Object.assign(new Error(`NovelAI subscription HTTP ${response.status}: ${body}`), {
+        statusCode: response.status,
+      });
     }
 
     const parsed = novelAISubscriptionSchema.safeParse(await response.json());
     if (!parsed.success) {
-      log.warn("NovelAI subscription response failed validation; using default token limits.");
+      log.warn("NovelAI subscription response failed validation; subscription information unavailable.");
       return null;
     }
     return parsed.data;
-  } catch {
+  } catch (error) {
+    const message = redactLogString(
+      (error instanceof Error ? error.message : String(error)).replaceAll(apiKey, "[REDACTED]"),
+    );
+    const statusCode =
+      error instanceof Error && error.name === "AbortError"
+        ? 504
+        : error && typeof error === "object" && "statusCode" in error
+          ? error.statusCode
+          : undefined;
+    throw Object.assign(new Error(message), { statusCode });
+  } finally {
     clearTimeout(timeoutId);
-    log.warn("NovelAI subscription fetch failed; using default token limits.");
+  }
+}
+
+export async function fetchNovelAISubscription(apiKey: string): Promise<NovelAISubscription | null> {
+  try {
+    return await requestNovelAISubscription(apiKey);
+  } catch (error) {
+    await reportProviderFailure({
+      summary: "NovelAI subscription lookup failed",
+      errorType: "ProviderSubscriptionLookup",
+      error,
+      expected: true,
+      detail: error instanceof Error ? error.message : undefined,
+      dimensions: { provider: "novelai", operation: "subscription" },
+    });
     return null;
   }
 }

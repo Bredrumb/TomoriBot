@@ -241,7 +241,7 @@ function addReceipt(locale: string, result: AddServerProviderResult, scopeKind: 
       }),
     };
   }
-  const detailKey: Record<Exclude<AddServerProviderResult["status"], "success">, string> = {
+  const detailKey: Record<Exclude<AddServerProviderResult["status"], "success" | "novelai-unavailable">, string> = {
     "invalid-key": "commands.providers.invalid_key",
     "unsupported-provider": "commands.providers.unsupported_provider",
     "validation-failed": "commands.providers.validation_failed",
@@ -252,7 +252,10 @@ function addReceipt(locale: string, result: AddServerProviderResult, scopeKind: 
   return {
     tone: "error",
     heading: localizer(locale, "commands.providers.add_provider_failed"),
-    detail: localizer(locale, detailKey[result.status]),
+    detail: localizer(
+      locale,
+      result.status === "novelai-unavailable" ? result.descriptionKey : detailKey[result.status],
+    ),
     // The operation status is already the machine-readable cause, so the metric key can name it
     // exactly instead of falling back to the route namespace.
     reason: `provider_add_${result.status}`,
@@ -362,7 +365,7 @@ function providerEditReceipt(
       detail: localizer(locale, "commands.providers.provider_edit_unchanged_detail"),
     };
   }
-  const keys: Record<Exclude<EditProviderResult["status"], "success" | "unchanged">, string> = {
+  const keys: Record<Exclude<EditProviderResult["status"], "success" | "unchanged" | "novelai-unavailable">, string> = {
     "invalid-key": "commands.providers.invalid_key",
     "invalid-combination": "commands.providers.provider_edit_invalid_combination",
     "not-found": "commands.providers.model_not_found",
@@ -372,7 +375,7 @@ function providerEditReceipt(
   return {
     tone: "error",
     heading: localizer(locale, "commands.providers.change_failed"),
-    detail: localizer(locale, keys[result.status]),
+    detail: localizer(locale, result.status === "novelai-unavailable" ? result.descriptionKey : keys[result.status]),
     reason: `provider_edit_${result.status}`,
     action: resolveProviderPanelAction(scopeKind, "provider.edit"),
   };

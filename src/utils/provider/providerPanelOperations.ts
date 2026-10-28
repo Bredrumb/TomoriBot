@@ -1,4 +1,5 @@
 import { registerHostedSpeechModelForScope } from "@/utils/provider/openrouterModelRegistry";
+import { getNovelAIModelAccessError } from "@/providers/novelai/modelAccess";
 import { supportsSpeechMode } from "@/utils/speech/voiceSourceCapabilities";
 import type {
   CustomEndpointConnectionRow,
@@ -139,6 +140,7 @@ export interface ProviderPanelOperationsDependencies {
 
 export type AddServerProviderResult =
   | { status: "success"; entryId: string; displayName: string; modelName?: string; updated: boolean }
+  | { status: "novelai-unavailable"; descriptionKey: string }
   | {
       status:
         | "invalid-key"
@@ -237,6 +239,7 @@ export type SaveProviderModelInput = ProviderPanelOwner & {
 export type EditProviderResult =
   | { status: "success"; entryId: string; changed: string[] }
   | { status: "unchanged"; entryId: string }
+  | { status: "novelai-unavailable"; descriptionKey: string }
   | { status: "invalid-key" | "invalid-combination" | "not-found" | "validation-failed" | "write-failed" };
 
 type EditProviderInput = ProviderPanelOwner & {
@@ -1047,6 +1050,12 @@ async function addCuratedProvider(
     baseConfig: input.state?.config,
     existingConfig,
   });
+  const accessError = await novelAISavedModelAccessError(
+    provider,
+    [savedConfig.llm_id, input.state.llm.llm_provider === provider ? input.state.llm.llm_id : null],
+    input.apiKey,
+  );
+  if (accessError) return { status: "novelai-unavailable", descriptionKey: accessError };
   if (!(await dependencies.upsertSavedConfig(input.state.server_id, savedConfig))) {
     return { status: "write-failed" };
   }
@@ -1141,6 +1150,8 @@ async function addPersonalProvider(
     baseConfig: input.state?.config,
     existingConfig,
   });
+  const accessError = await novelAISavedModelAccessError(provider, [savedConfig.llm_id], apiKey);
+  if (accessError) return { status: "novelai-unavailable", descriptionKey: accessError };
   if (!(await llmProviderRepo.upsertUserSavedProviderConfig(userId, savedConfig))) {
     return { status: "write-failed" };
   }
@@ -1732,6 +1743,22 @@ export async function saveProviderModel(input: SaveProviderModelInput): Promise<
   return { status: "not-found" };
 }
 
+async function novelAISavedModelAccessError(
+  provider: string,
+  modelIds: readonly (number | null | undefined)[],
+  apiKey: string,
+): Promise<string | null> {
+  if (provider !== "novelai") return null;
+  for (const modelId of new Set(modelIds)) {
+    if (!modelId) continue;
+    const model = await llmModelRepo.loadLlmById(modelId);
+    if (!model) return "commands.providers.model_not_found";
+    const error = await getNovelAIModelAccessError(model.llm_codename, apiKey, true);
+    if (error) return error;
+  }
+  return null;
+}
+
 async function validateProviderCredential(provider: string, apiKey: string): Promise<boolean> {
   try {
     const instance = await ProviderFactory.getProviderByName(provider);
@@ -1756,6 +1783,8 @@ async function editServerProvider(input: EditProviderInput): Promise<EditProvide
     if (!apiKey) return { status: "unchanged", entryId };
     if (apiKey.length < 10) return { status: "invalid-key" };
     if (!(await validateProviderCredential(provider, apiKey))) return { status: "validation-failed" };
+    const accessError = await novelAISavedModelAccessError(provider, [existing.llm_id], apiKey);
+    if (accessError) return { status: "novelai-unavailable", descriptionKey: accessError };
     const encryption = await encryptApiKey(apiKey);
     const nextConfig = { ...existing, api_key: encryption.encrypted, key_version: encryption.version };
     if (!(await llmProviderRepo.upsertUserSavedProviderConfig(ownerId, nextConfig))) {
@@ -1795,6 +1824,12 @@ async function editServerProvider(input: EditProviderInput): Promise<EditProvide
   const credentials = [apiKey, rotationKey].filter(Boolean);
   for (const credential of credentials) {
     if (!(await validateProviderCredential(provider, credential))) return { status: "validation-failed" };
+    const accessError = await novelAISavedModelAccessError(
+      provider,
+      [existing.llm_id, input.state.llm.llm_provider === provider ? input.state.llm.llm_id : null],
+      credential,
+    );
+    if (accessError) return { status: "novelai-unavailable", descriptionKey: accessError };
   }
 
   const changed: string[] = [];

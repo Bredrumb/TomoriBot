@@ -125,6 +125,7 @@ export interface StreamingContext {
   disableReminderTool?: boolean; // Flag to prevent create_task from being called during a reminder-triggered turn
   /** Set per attempt by `applyAssistantPrefill`; the stream strips an echo of it and never displays it. */
   outputPrefill?: string;
+  triggerMessageId?: string;
   replyNoticeState?: { attempted: boolean; sent: boolean }; // Tracks the standalone alter reply notice across tool-call stream retries
   /**
    * True once the turn has logged its generation failure. One failed turn reaches the emitter
@@ -144,8 +145,6 @@ export interface StreamingContext {
   holdResponseText?: boolean;
   pendingResponseLimit?: import("@/types/stream/pendingResponse").PendingResponseLimit;
   suppressTextOutput?: boolean; // Suppress text output to Discord (NAI tool retry mode : keeps model state coherent but hides repeated text)
-  /** NAI GLM-4.6: incomplete trailing fragment from previous stream, to append as prompt continuation on retry */
-  naiContinuationPrefill?: string;
   /** AbortSignal to cancel the underlying HTTP request when the SDK call timeout fires */
   abortSignal?: AbortSignal;
   /**

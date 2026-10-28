@@ -8,7 +8,7 @@
  * - Specializes in creative storytelling and roleplay
  */
 
-import { resolveRequestMaxOutputTokens } from "@/utils/provider/modelLimits";
+import { getNovelAIProfile } from "@/providers/novelai/modelProfiles";
 import type {
   BaseGuildTextChannel,
   BaseGuildVoiceChannel,
@@ -173,7 +173,8 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
       apiKey: apiKey,
       temperature: getActiveTemperature(tomoriState.config) ?? tomoriState.config.llm_temperature,
       disabledParams: tomoriState.config.llm_disabled_params ?? [],
-      maxOutputTokens: await resolveRequestMaxOutputTokens(tomoriState),
+      maxOutputTokens:
+        tomoriState.config.llm_max_output_tokens ?? getNovelAIProfile(tomoriState.llm.llm_codename).defaultOutputTokens,
       tools: tools,
     };
   }
@@ -247,14 +248,6 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
 
       log.info(`NovelAIProvider: Streaming completed with status: ${result.status}`);
 
-      // For GLM-4.6 empty responses: attach the incomplete trailing sentence so
-      // tomoriChat can use it as a prompt continuation on the retry, instead of
-      // starting a fresh generation that produces the same truncated output.
-      const pendingPrefill = novelaiAdapter.getPendingContinuationPrefill();
-      if (result.status === "empty_response" && pendingPrefill) {
-        log.info(`NovelAIProvider: Attaching continuation prefill to StreamResult (${pendingPrefill.length} chars)`);
-        return { ...result, naiContinuationPrefill: pendingPrefill };
-      }
       return result;
     } catch (error) {
       log.error(

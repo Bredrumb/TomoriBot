@@ -28,7 +28,6 @@ import * as realRepositories from "@/utils/db/repositories";
 // loaded later. Spreading the real namespace keeps each mock full-surface.
 import * as realChannelLlmCache from "@/utils/cache/channelLlmCache";
 import * as realAdmissionGuards from "@/utils/chat/admissionGuards";
-import * as realNovelaiCapabilityCache from "@/utils/cache/novelaiCapabilityCache";
 import * as realNovelaiSubscriptionCache from "@/utils/cache/novelaiSubscriptionCache";
 import * as realOpenrouterCapabilityCache from "@/utils/cache/openrouterCapabilityCache";
 import * as realToolLoop from "@/utils/chat/toolLoop";
@@ -110,7 +109,6 @@ type TestStopContext = {
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/cache/channelLlmCache": realChannelLlmCache,
   "@/utils/chat/admissionGuards": realAdmissionGuards,
-  "@/utils/cache/novelaiCapabilityCache": realNovelaiCapabilityCache,
   "@/utils/cache/novelaiSubscriptionCache": realNovelaiSubscriptionCache,
   "@/utils/cache/openrouterCapabilityCache": realOpenrouterCapabilityCache,
   "@/utils/db/repositories": realRepositories,
@@ -137,16 +135,11 @@ scopedMock.module("@/utils/cache/channelLlmCache", () => ({
   getCachedChannelLlm: async () => null,
 }));
 
-scopedMock.module("@/utils/cache/novelaiCapabilityCache", () => ({
-  ...realNovelaiCapabilityCache,
-  getNovelAITokenLimits: realNovelaiCapabilityCache.getNovelAITokenLimits,
-}));
-
 scopedMock.module("@/utils/cache/novelaiSubscriptionCache", () => ({
   ...realNovelaiSubscriptionCache,
-  getCachedContextTokens: (apiKey: string) => {
+  getCachedNovelAISubscription: (apiKey: string) => {
     subscriptionReads.push(apiKey);
-    return subscriptionLimits.get(apiKey);
+    return { tier: subscriptionLimits.get(apiKey) === 4096 ? 1 : 3, active: true };
   },
   refreshNovelAISubscription: async () => undefined,
 }));
@@ -837,7 +830,7 @@ describe("runGenerationTurn fallback behavior", () => {
   it.each([
     [4096, 8192],
     [8192, 4096],
-  ])("rebudgets a NovelAI rotation retry from the original history (%i to %i)", async (firstLimit, nextLimit) => {
+  ])("passes original NovelAI history and one prefill to each rotated credential (%i to %i)", async (firstLimit, nextLimit) => {
     const model = { ...makeLlm(1, "kayra-v1"), llm_provider: "novelai" };
     const context = makeContext(model, makeLlm(2, "unused"));
     context.tomoriState.fallback_chain = [];
@@ -867,12 +860,8 @@ describe("runGenerationTurn fallback behavior", () => {
     const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
     await runGenerationTurn(context, collectingSink());
     expect(toolLoopCalls.map((call) => call.apiKey)).toEqual(["first-key", "next-key"]);
-    expect(subscriptionReads).toEqual(["first-key", "next-key"]);
-    const [first, next] = toolLoopCalls;
-    if (firstLimit < nextLimit) expect(next.contextItems.length).toBeGreaterThan(first.contextItems.length);
-    else expect(next.contextItems.length).toBeLessThan(first.contextItems.length);
-    const larger = firstLimit > nextLimit ? first : next;
-    expect(larger.contextItems.filter((item) => item.messageId)).toEqual(originalItems);
+    expect(subscriptionReads).toEqual([]);
+    for (const call of toolLoopCalls) expect(call.contextItems.filter((item) => item.messageId)).toEqual(originalItems);
     for (const call of toolLoopCalls) {
       expect(call.outputPrefill).toBe("Tomori: continue this fragment");
       expect(
@@ -895,9 +884,44 @@ describe("runGenerationTurn fallback behavior", () => {
       const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
       await runGenerationTurn(context, collectingSink());
       expect(toolLoopCalls.at(-1)?.apiKey).toBe("personal-key");
-      expect(subscriptionReads.at(-1)).toBe("personal-key");
+      expect(subscriptionReads).toEqual([]);
     }
     expect(subscriptionReads).not.toContain("server-key");
+  });
+
+  it("selects native context for NovelAI primary, personal, and fallback attempts while preserving preset context for other providers", async () => {
+    const nai = { ...makeLlm(3, "kayra-v1"), llm_provider: "novelai" };
+    const ordinary = makeLlm(1, "ordinary-model");
+    const contexts = [
+      makeContext(nai, ordinary),
+      makeContext(ordinary, nai),
+      makePersonalContext(ordinary, ordinary, nai),
+    ];
+    const presetItem = {
+      role: "user" as const,
+      metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+      parts: [{ type: "text" as const, text: "preset-marker" }],
+    };
+    const nativeItem = {
+      role: "user" as const,
+      metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+      messageId: "trigger",
+      completionText: "Mirri: native-marker",
+      parts: [{ type: "text" as const, text: "Mirri: native-marker" }],
+    };
+    for (const [index, context] of contexts.entries()) {
+      const firstCall = toolLoopCalls.length;
+      context.contextItems = [presetItem];
+      context.nativeContextItems = [nativeItem];
+      if (index === 2) context.personalTextProvider = "novelai";
+      queuedResults.push(personalRouteFailure(), successfulReply());
+      const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+      await runGenerationTurn(context, collectingSink());
+      for (const call of toolLoopCalls.slice(firstCall)) {
+        expect(call.contextItems).toContainEqual(call.model === "kayra-v1" ? nativeItem : presetItem);
+        expect(call.contextItems).not.toContainEqual(call.model === "kayra-v1" ? presetItem : nativeItem);
+      }
+    }
   });
 
   it("suppresses primary errors and posts compact fallback notice when a fallback succeeds", async () => {

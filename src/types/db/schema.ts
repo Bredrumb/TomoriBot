@@ -1163,7 +1163,7 @@ export type AssembledServerConfig = z.infer<typeof assembledServerConfigSchema>;
 export const naiPresetSchema = z.object({
   nai_preset_id: z.number(),
   preset_name: z.string(),
-  model_target: z.string(), // "kayra" or "erato"
+  model_target: z.string(),
   is_default: z.boolean(),
   preset_desc: z.string(), // EN human-readable description
   descriptions: z.record(z.string(), z.string()).nullable().optional(),
