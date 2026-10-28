@@ -27,7 +27,9 @@ import {
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { sql } from "../../utils/db/client";
 import { decryptApiKey } from "../../utils/security/crypto";
-import { checkImageQuota, incrementImageQuota, type QuotaCheckResult } from "../../utils/quota/imageQuotaManager";
+import { releaseImageQuota, reserveImageQuota, type ImageQuotaClaim } from "../../utils/quota/imageQuotaManager";
+import { QuotaUnavailableError } from "@/utils/quota/quotaErrors";
+import type { QuotaReservation } from "@/utils/db/repositories/QuotaRepository";
 import { llmProviderRepo, statRepository, userRepository } from "@/utils/db/repositories";
 import { extractImagesFromMessage } from "../../utils/image/imageExtractor";
 import { segmentImage } from "../../utils/image/segmentationService";
@@ -871,21 +873,24 @@ export class GenerateImageNaiTool extends BaseTool {
     }
 
     // Default to allowed; overwritten below for server-credential users
-    let quotaCheck: QuotaCheckResult = { allowed: true };
+    let quotaCheck: ImageQuotaClaim = { allowed: true, reservation: null };
     let failureScope: "server" | "personal" | undefined;
+    let quotaReservation: QuotaReservation | null = null;
+    let quotaDelivered = false;
 
     try {
       const { credentials: creds, quotaCheck: serverQuotaCheck } = await resolveCredentialsWithMediaQuota(
         context.tomoriState.server_id,
         "image-nai",
         context.internalUserId ?? null,
-        checkImageQuota,
+        reserveImageQuota,
         userDiscId,
         quotaCheck,
         undefined,
         context.streamContext?.imageModelSelection,
       );
       quotaCheck = serverQuotaCheck;
+      quotaReservation = serverQuotaCheck.reservation;
       failureScope = creds.source;
 
       if (!quotaCheck.allowed) {
@@ -1227,10 +1232,7 @@ export class GenerateImageNaiTool extends BaseTool {
 
       log.success(`Successfully ${isInpaintMode ? "inpainted" : "generated"} and sent NAI image to Discord`);
 
-      // Increment quota after successful generation (server providers only)
-      if (creds.source === "server") {
-        await incrementImageQuota(context.tomoriState.server_id, userDiscId);
-      }
+      quotaDelivered = true;
       // Record canonical generation telemetry for all providers; quotas enforce limits only.
       if (context.internalUserId) {
         statRepository.recordStat({
@@ -1267,6 +1269,13 @@ export class GenerateImageNaiTool extends BaseTool {
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };
     } catch (error) {
+      if (error instanceof QuotaUnavailableError) {
+        return {
+          success: false,
+          error: "Quota check unavailable",
+          message: localizer(context.locale, "tools.generate_image.quota_unavailable"),
+        };
+      }
       if (error instanceof DiscordDeliveryError) return mediaDeliveryFailure(context, error.outcome);
       if (context.abortSignal?.aborted) {
         return { success: false, error: "NAI image generation was cancelled." };
@@ -1302,6 +1311,10 @@ export class GenerateImageNaiTool extends BaseTool {
                 ? "rate_limit"
                 : undefined,
       });
+    } finally {
+      if (quotaReservation && !quotaDelivered) {
+        await releaseImageQuota(context.tomoriState.server_id, userDiscId, quotaReservation);
+      }
     }
   }
 }

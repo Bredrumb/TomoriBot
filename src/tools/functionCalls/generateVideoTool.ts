@@ -30,7 +30,9 @@ import {
   sendToolProgressNotice,
 } from "@/utils/discord/toolProgressNotice";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
-import { checkVideoQuota, incrementVideoQuota, type VideoQuotaCheckResult } from "../../utils/quota/videoQuotaManager";
+import { releaseVideoQuota, reserveVideoQuota, type VideoQuotaClaim } from "../../utils/quota/videoQuotaManager";
+import { QuotaUnavailableError } from "@/utils/quota/quotaErrors";
+import type { QuotaReservation } from "@/utils/db/repositories/QuotaRepository";
 import { statRepository } from "@/utils/db/repositories";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { generateCustomVideoViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
@@ -244,7 +246,7 @@ export class GenerateVideoTool extends BaseTool {
    *   5. Route to appropriate provider implementation
    *   6. Check Discord file size limit
    *   7. Send video attachment to Discord
-   *   8. Increment quota and return success
+   *   8. Settle the quota reservation and return success
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     // Capture generation start time for the "Generated in Xs" caption (mirrors image tool)
@@ -303,21 +305,24 @@ export class GenerateVideoTool extends BaseTool {
     }
 
     // Default to allowed; overwritten below for server-credential users
-    let quotaCheck: VideoQuotaCheckResult = { allowed: true };
+    let quotaCheck: VideoQuotaClaim = { allowed: true, reservation: null };
     let usageContext: ProviderUsageContext | undefined;
     let failureProvider: string | undefined;
     let failureScope: "server" | "personal" | undefined;
+    let quotaReservation: QuotaReservation | null = null;
+    let quotaDelivered = false;
 
     try {
       const { credentials: creds, quotaCheck: serverQuotaCheck } = await resolveCredentialsWithMediaQuota(
         context.tomoriState.server_id,
         "video",
         context.internalUserId ?? null,
-        checkVideoQuota,
+        reserveVideoQuota,
         userDiscId,
         quotaCheck,
       );
       quotaCheck = serverQuotaCheck;
+      quotaReservation = serverQuotaCheck.reservation;
 
       if (!quotaCheck.allowed) {
         let errorMessage = "";
@@ -568,10 +573,7 @@ export class GenerateVideoTool extends BaseTool {
 
       log.success("Successfully generated and sent video to Discord");
 
-      // Increment quota after successful generation (server providers only)
-      if (creds.source === "server") {
-        await incrementVideoQuota(context.tomoriState.server_id, userDiscId);
-      }
+      quotaDelivered = true;
       // Record canonical generation telemetry for all providers; quotas enforce limits only.
       if (context.internalUserId) {
         statRepository.recordStat({
@@ -600,6 +602,13 @@ export class GenerateVideoTool extends BaseTool {
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };
     } catch (error) {
+      if (error instanceof QuotaUnavailableError) {
+        return {
+          success: false,
+          error: "Quota check unavailable",
+          message: localizer(context.locale, "tools.generate_video.quota_unavailable"),
+        };
+      }
       if (error instanceof DiscordDeliveryError) return mediaDeliveryFailure(context, error.outcome);
       if (context.abortSignal?.aborted) {
         return { success: false, error: "Video generation was cancelled." };
@@ -645,6 +654,10 @@ export class GenerateVideoTool extends BaseTool {
       }
 
       return toolFailure;
+    } finally {
+      if (quotaReservation && !quotaDelivered) {
+        await releaseVideoQuota(context.tomoriState.server_id, userDiscId, quotaReservation);
+      }
     }
   }
 }

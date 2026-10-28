@@ -67,11 +67,14 @@ Video generation persists configuration in server-scoped tables:
 Video quotas use `video_quota_configs`, `video_quotas`, and `video_serverwide_quotas`. Both user and
 server limits default to unlimited (`0`); a configured server limit uses a 365-day default reset period.
 
-Server-funded generation checks quota before submission and increments usage after successful Discord
-delivery. Personal-provider selections bypass server quota accounting. The check and increment are
-separate operations, so concurrent requests can pass the same preflight; the increment transaction
-does not reserve capacity. Failed delivery consumes no local quota, but a submitted provider job may
-still run or incur charges. Tool cancellation checks the turn signal before delivery.
+Server-funded generation reserves quota after the modal is validated and before submission. Personal-provider
+selections bypass server quota accounting. The reservation is a conditional increment on both counters in one
+transaction, so concurrent requests cannot all pass the same preflight. A failed, cancelled, or undelivered
+generation releases the unit it reserved; a delivered video keeps it. Tool cancellation checks the turn
+signal before delivery, but a submitted provider job may still run or incur charges. When the counters
+cannot be read or claimed, the command and tool refuse with a localized quota-unavailable notice instead
+of generating uncounted. The quota reset boundary belongs to the reservation: a release matches the
+reserved day and serverwide period, so a job that finishes after a reset leaves the new window untouched.
 
 ## Discord delivery constraints
 
@@ -87,5 +90,5 @@ Generated videos must satisfy Discord attachment limits:
 - `src/tools/functionCalls/generateVideoTool.ts`: Built-in tool execution and progress notice dispatch.
 - `src/providers/openrouter/openrouterVideoGeneration.ts`: OpenRouter async polling and external HTTP process dispatcher.
 - `src/providers/google/googleVideoGeneration.ts`, `src/providers/zai/zaiVideoGeneration.ts`: Native provider video adapters.
-- `src/utils/quota/videoQuotaManager.ts`: Quota validation and post-delivery increment logic.
+- `src/utils/quota/videoQuotaManager.ts`: quota validation, reservation, and release logic.
 - `src/utils/discord/generatedVideoMessage.ts`: Components V2 media gallery message formatting.

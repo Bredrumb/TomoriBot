@@ -75,6 +75,7 @@ const resolveCredentials = mock(async () => ({
 }));
 const getOptionalKey = mock(async () => "server-nai-key");
 const checkQuota = mock(async () => ({ allowed: true }));
+const reserveQuota = mock(async () => ({ allowed: true, reservation: null }));
 const generateImage = mock(async () => {
   throw new Error("401 Unauthorized");
 });
@@ -143,6 +144,7 @@ scopedMock.module("@/utils/image/naiImageGeneration", () => ({
 scopedMock.module("@/utils/quota/imageQuotaManager", () => ({
   ...realQuota,
   checkImageQuota: checkQuota,
+  reserveImageQuota: reserveQuota,
 }));
 scopedMock.module("@/utils/discord/ui/interactionCore", () => ({
   ...realInteractionCore,
@@ -176,6 +178,7 @@ describe("/novelai generate image credential selection", () => {
     resolveCredentials.mockClear();
     getOptionalKey.mockClear();
     checkQuota.mockClear();
+    reserveQuota.mockClear();
     generateImage.mockClear();
     replyInfo.mockClear();
     modalResult = { outcome: "timeout" };
@@ -193,6 +196,7 @@ describe("/novelai generate image credential selection", () => {
     });
     expect(getOptionalKey).not.toHaveBeenCalled();
     expect(checkQuota).not.toHaveBeenCalled();
+    expect(reserveQuota).not.toHaveBeenCalled();
     expect(modal).toHaveBeenCalledTimes(1);
   });
 

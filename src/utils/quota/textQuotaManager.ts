@@ -1,12 +1,15 @@
 import { log } from "@/utils/misc/logger";
 import type { TextQuotaConfigRow } from "@/types/db/schema";
+import { QuotaUnavailableError } from "@/utils/quota/quotaErrors";
 import {
   getOrCreateTextConfig,
-  incrementTextQuota as repositoryIncrementTextQuota,
-  resetServerwideTextPeriod,
-  touchServerwideTextQuota,
-  touchUserTextQuota,
+  getTextConfigResult,
+  reserveTextQuotaUnits,
+  type QuotaReservation,
+  type QuotaReservationOutcome,
 } from "@/utils/db/repositories/QuotaRepository";
+
+export { releaseTextQuotaUnits as releaseTextQuota } from "@/utils/db/repositories/QuotaRepository";
 
 export interface TextQuotaCheckResult {
   allowed: boolean; // Whether user can trigger text generation
@@ -14,6 +17,10 @@ export interface TextQuotaCheckResult {
   userRemaining?: number; // User's remaining quota for the day
   serverwideRemaining?: number; // Server's remaining quota for the period
   resetTime?: Date; // When the quota resets (for error messages)
+}
+
+export interface TextQuotaClaim extends TextQuotaCheckResult {
+  reservation: QuotaReservation | null;
 }
 
 /**
@@ -25,139 +32,43 @@ export async function getTextQuotaConfig(serverId: number): Promise<TextQuotaCon
 }
 
 /**
- * Check if user can trigger text generation based on daily quota
- * Returns remaining quota and whether trigger is allowed
+ * Claim one text generation on both counters or neither.
+ * A database failure throws, so the caller refuses instead of spending an uncounted generation.
  */
-async function checkUserDailyTextQuota(
-  serverId: number,
-  userDiscId: string,
-  config: TextQuotaConfigRow,
-): Promise<TextQuotaCheckResult> {
-  // If daily user quota is 0 (unlimited), allow
-  if (config.daily_user_quota === 0) {
-    return { allowed: true };
+export async function reserveTextQuota(serverId: number, userDiscId: string): Promise<TextQuotaClaim> {
+  const read = await getTextConfigResult(serverId);
+  if (read.status === "unavailable") throw new QuotaUnavailableError();
+  if (!read.config) return { allowed: true, reservation: null };
+
+  let outcome: QuotaReservationOutcome;
+  try {
+    outcome = await reserveTextQuotaUnits(serverId, userDiscId, read.config);
+  } catch (error) {
+    log.error("Failed to reserve text quota", error);
+    throw new QuotaUnavailableError();
   }
 
-  try {
-    const today = new Date().toISOString().split("T")[0];
-
-    const userQuota = await touchUserTextQuota(serverId, userDiscId, today);
-
-    const remaining = config.daily_user_quota - userQuota.usage_count;
-
-    if (remaining <= 0) {
-      const resetTime = new Date();
-      resetTime.setHours(24, 0, 0, 0); // Next midnight
-
-      return {
-        allowed: false,
-        reason: "user_quota_exceeded",
-        userRemaining: 0,
-        resetTime,
-      };
-    }
-
+  if (outcome.status === "reserved") {
     return {
       allowed: true,
-      userRemaining: remaining,
+      reservation: outcome.reservation,
+      ...(outcome.userRemaining !== undefined ? { userRemaining: outcome.userRemaining } : {}),
+      ...(outcome.serverwideRemaining !== undefined ? { serverwideRemaining: outcome.serverwideRemaining } : {}),
+      ...(outcome.serverwidePeriodEnd ? { resetTime: outcome.serverwidePeriodEnd } : {}),
     };
-  } catch (error) {
-    log.error("Failed to check user daily text quota", error);
-    return { allowed: true };
-  }
-}
-
-/**
- * Check if server has remaining server-wide text quota
- * Returns remaining quota and whether trigger is allowed
- */
-async function checkServerwideTextQuota(serverId: number, config: TextQuotaConfigRow): Promise<TextQuotaCheckResult> {
-  // If serverwide quota is 0 (unlimited), allow
-  if (config.serverwide_quota === 0) {
-    return { allowed: true };
   }
 
-  try {
-    const serverwideQuota = await touchServerwideTextQuota(serverId, config.serverwide_quota_resets_in);
-
-    const now = new Date();
-    const periodEnd = new Date(serverwideQuota.quota_period_end);
-
-    if (now >= periodEnd) {
-      const resetQuota = await resetServerwideTextPeriod(serverId, config.serverwide_quota_resets_in);
-
-      return {
-        allowed: true,
-        serverwideRemaining: config.serverwide_quota,
-        resetTime: new Date(resetQuota.quota_period_end),
-      };
-    }
-
-    const remaining = config.serverwide_quota - serverwideQuota.usage_count;
-
-    if (remaining <= 0) {
-      return {
-        allowed: false,
-        reason: "serverwide_quota_exceeded",
-        serverwideRemaining: 0,
-        resetTime: periodEnd,
-      };
-    }
-
-    return {
-      allowed: true,
-      serverwideRemaining: remaining,
-      resetTime: periodEnd,
-    };
-  } catch (error) {
-    log.error("Failed to check serverwide text quota", error);
-    return { allowed: true };
+  if (outcome.status === "user_quota_exceeded") {
+    const resetTime = new Date();
+    resetTime.setHours(24, 0, 0, 0); // Next midnight
+    return { allowed: false, reason: "user_quota_exceeded", userRemaining: 0, resetTime, reservation: null };
   }
-}
 
-/**
- * Check all text quotas (user daily + server-wide)
- * Returns combined result indicating if trigger is allowed
- */
-export async function checkTextQuota(serverId: number, userDiscId: string): Promise<TextQuotaCheckResult> {
-  try {
-    const config = await getTextQuotaConfig(serverId);
-
-    // Check user daily quota first (most common limit)
-    // Note: daily_user_quota === 0 means unlimited (handled inside checkUserDailyTextQuota)
-    const userCheck = await checkUserDailyTextQuota(serverId, userDiscId, config);
-    if (!userCheck.allowed) {
-      return userCheck;
-    }
-
-    const serverwideCheck = await checkServerwideTextQuota(serverId, config);
-    if (!serverwideCheck.allowed) {
-      return serverwideCheck;
-    }
-
-    return {
-      allowed: true,
-      userRemaining: userCheck.userRemaining,
-      serverwideRemaining: serverwideCheck.serverwideRemaining,
-      resetTime: serverwideCheck.resetTime,
-    };
-  } catch (error) {
-    log.error("Failed to check text quota", error);
-    return { allowed: true };
-  }
-}
-
-/**
- * Increment both user daily and server-wide text quotas after successful generation.
- * Should only be called AFTER a text response succeeds.
- * Only increments counters that have an active limit, so skips writes when quota is unlimited (0)
- * so usage does not accumulate retroactively before limits are first configured.
- */
-export async function incrementTextQuota(serverId: number, userDiscId: string): Promise<void> {
-  try {
-    await repositoryIncrementTextQuota(serverId, userDiscId);
-    log.info("Incremented text quotas");
-  } catch (error) {
-    log.error("Failed to increment text quota", error);
-  }
+  return {
+    allowed: false,
+    reason: "serverwide_quota_exceeded",
+    serverwideRemaining: 0,
+    resetTime: outcome.periodEnd,
+    reservation: null,
+  };
 }

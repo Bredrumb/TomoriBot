@@ -59,7 +59,7 @@ function makeContext(): ChatTurnContext {
     channel,
     guild: { id: "123456789012345678" },
     locale: "en-US",
-    turn: { lockedTurn: { admission: { incoming } } },
+    turn: { lockedTurn: { admission: { incoming } }, personaIndex: 0, totalPersonas: 1 },
     currentPersona: { ...tomoriState, persona_id: 3, persona_nickname: "Tomori" },
     tomoriState,
     triggererUserId: USER_ID,
@@ -238,13 +238,15 @@ describe("emoji stats count only what Discord accepted", () => {
       serverId: SERVER_ID,
       userDiscId: "fixture_user",
       consumed: false,
-    } as ChatTurnContext["textQuotaState"];
+      reservation: null,
+      reservationReleased: false,
+      createdAt: Date.now(),
+    };
     context.simplifiedMessages = [
       { authorType: "user", authorName: "Juno", content: "Stay here." },
     ] as ChatTurnContext["simplifiedMessages"];
     const memory = spyOn(stm, "storeShortTermMemory").mockImplementation(() => {});
     const cadence = spyOn(stm, "incrementStmTurnCounter").mockImplementation(async () => {});
-    const quota = spyOn(quotas, "incrementTextQuota").mockImplementation(async () => {});
     try {
       const result = makeResult({
         streamResults: [
@@ -272,7 +274,6 @@ describe("emoji stats count only what Discord accepted", () => {
       expect(stored.filter((entry) => entry.role === "model").map((entry) => entry.content)).toEqual([
         "delivered reply",
       ]);
-      expect(quota).toHaveBeenCalledTimes(1);
       expect(context.textQuotaState?.consumed).toBe(true);
       expect(metricKeys("message_sent")).toHaveLength(1);
       expect(
@@ -283,7 +284,6 @@ describe("emoji stats count only what Discord accepted", () => {
     } finally {
       memory.mockRestore();
       cadence.mockRestore();
-      quota.mockRestore();
     }
   });
 
@@ -293,7 +293,14 @@ describe("emoji stats count only what Discord accepted", () => {
     first.turn.requestSnapshot = {} as ChatTurnContext["turn"]["requestSnapshot"];
     first.shouldApplyTextQuota = true;
     first.textQuotaTriggerKey = `fixture_${first.channel.id}`;
-    first.textQuotaState = { serverId: SERVER_ID, userDiscId: "fixture_user", consumed: false, createdAt: Date.now() };
+    first.textQuotaState = {
+      serverId: SERVER_ID,
+      userDiscId: "fixture_user",
+      consumed: false,
+      reservation: null,
+      reservationReleased: false,
+      createdAt: Date.now(),
+    };
     first.userDiscId = "fixture_user";
     first.serverDiscId = "fixture_server";
     first.isFromQueue = true;
@@ -302,14 +309,12 @@ describe("emoji stats count only what Discord accepted", () => {
     ] as ChatTurnContext["simplifiedMessages"];
     const memory = spyOn(stm, "storeShortTermMemory").mockImplementation(() => {});
     const cadence = spyOn(stm, "incrementStmTurnCounter").mockImplementation(async () => {});
-    const quota = spyOn(quotas, "incrementTextQuota").mockImplementation(async () => {});
     try {
       await runPostTurnEffects(
         first,
         makeResult({ status: "stopped_by_user", personaResponses: [], usageEntries: [] }),
       );
       expect(memory).not.toHaveBeenCalled();
-      expect(quota).not.toHaveBeenCalled();
       for (const personaId of [3, 4]) {
         const context = { ...first, currentPersona: createPersona({ persona_id: personaId, server_id: SERVER_ID }) };
         await runPostTurnEffects(
@@ -322,7 +327,7 @@ describe("emoji stats count only what Discord accepted", () => {
           }),
         );
       }
-      expect(quota).toHaveBeenCalledTimes(1);
+      expect(first.textQuotaState?.consumed).toBe(true);
       expect(memory).toHaveBeenCalledTimes(2);
       expect(memory.mock.calls.map((call) => call[6])).toEqual([3, 4]);
       const dm = { ...first, isDMChannel: true };
@@ -339,7 +344,6 @@ describe("emoji stats count only what Discord accepted", () => {
     } finally {
       memory.mockRestore();
       cadence.mockRestore();
-      quota.mockRestore();
     }
   });
 
@@ -358,7 +362,7 @@ describe("emoji stats count only what Discord accepted", () => {
       turnIndex: 0,
       totalTurns: 2,
     };
-    const quota = spyOn(quotas, "incrementTextQuota").mockImplementation(async () => {});
+    const quota = spyOn(quotas, "releaseTextQuota").mockImplementation(async () => {});
     try {
       const reviews = [];
       for (const [turnIndex, speaker] of scene.sequence.entries()) {
@@ -379,7 +383,14 @@ describe("emoji stats count only what Discord accepted", () => {
             },
           },
           textQuotaTriggerKey: buildSceneTextQuotaTriggerKey(incoming.sceneTurn),
-          textQuotaState: { serverId: SERVER_ID, userDiscId: "fixture_user", consumed: false, createdAt: Date.now() },
+          textQuotaState: {
+            serverId: SERVER_ID,
+            userDiscId: "fixture_user",
+            consumed: false,
+            reservation: null,
+            reservationReleased: false,
+            createdAt: Date.now(),
+          },
         };
         const review = createResponseReviewState(context);
         if (!review) throw new Error("Missing review fixture");
@@ -399,8 +410,9 @@ describe("emoji stats count only what Discord accepted", () => {
             usageEntries: review.usage,
           }),
         );
+        expect(context.textQuotaState.consumed).toBe(true);
       }
-      expect(quota).toHaveBeenCalledTimes(scene.sequence.length);
+      expect(quota).not.toHaveBeenCalled();
       expect(metricKeys("message_sent")).toHaveLength(scene.sequence.length);
       expect(recorded.filter((entry) => entry.metric === "reviewer_tokens_in").map((entry) => entry.delta)).toEqual([
         13, 13,

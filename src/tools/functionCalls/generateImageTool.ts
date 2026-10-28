@@ -47,7 +47,9 @@ import {
   resolveImageToolCapabilities,
   type ImageToolCapabilities,
 } from "@/tools/functionCalls/generateImageToolCapabilities";
-import { checkImageQuota, incrementImageQuota, type QuotaCheckResult } from "../../utils/quota/imageQuotaManager";
+import { releaseImageQuota, reserveImageQuota, type ImageQuotaClaim } from "../../utils/quota/imageQuotaManager";
+import { QuotaUnavailableError } from "@/utils/quota/quotaErrors";
+import type { QuotaReservation } from "@/utils/db/repositories/QuotaRepository";
 import { statRepository } from "@/utils/db/repositories";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { resolveNativeImageGenerationCapability } from "@/utils/provider/providerCapabilityResolver";
@@ -895,8 +897,10 @@ export class GenerateImageTool extends BaseTool {
     }
 
     // Default to allowed; overwritten below for server-credential users
-    let quotaCheck: QuotaCheckResult = { allowed: true };
+    let quotaCheck: ImageQuotaClaim = { allowed: true, reservation: null };
     let usageContext: ProviderUsageContext | undefined;
+    let quotaReservation: QuotaReservation | null = null;
+    let quotaDelivered = false;
     let generationRoute:
       | { provider: string; modelId: number; model: string; credentialSource: "server" | "personal" }
       | undefined;
@@ -906,13 +910,14 @@ export class GenerateImageTool extends BaseTool {
         context.tomoriState.server_id,
         "image-standard",
         context.internalUserId ?? null,
-        checkImageQuota,
+        reserveImageQuota,
         userDiscId,
         quotaCheck,
         undefined,
         context.streamContext?.imageModelSelection,
       );
       quotaCheck = serverQuotaCheck;
+      quotaReservation = serverQuotaCheck.reservation;
 
       if (!quotaCheck.allowed) {
         let errorMessage = "";
@@ -1414,10 +1419,7 @@ export class GenerateImageTool extends BaseTool {
 
       log.success("Successfully generated and sent image to Discord");
 
-      // Increment quota after successful generation (server providers only)
-      if (creds.source === "server") {
-        await incrementImageQuota(context.tomoriState.server_id, userDiscId);
-      }
+      quotaDelivered = true;
       // Record canonical generation telemetry for all providers; quotas enforce limits only.
       if (context.internalUserId) {
         statRepository.recordStat({
@@ -1455,6 +1457,13 @@ export class GenerateImageTool extends BaseTool {
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };
     } catch (error) {
+      if (error instanceof QuotaUnavailableError) {
+        return {
+          success: false,
+          error: "Quota check unavailable",
+          message: localizer(context.locale, "tools.generate_image.quota_unavailable"),
+        };
+      }
       if (error instanceof DiscordDeliveryError) return mediaDeliveryFailure(context, error.outcome);
       const denied = findProviderRequestDeniedError(error, usageContext);
       if (denied) return notifyProviderToolFailure(context, denied);
@@ -1500,6 +1509,10 @@ export class GenerateImageTool extends BaseTool {
       });
 
       return toolFailure;
+    } finally {
+      if (quotaReservation && !quotaDelivered) {
+        await releaseImageQuota(context.tomoriState.server_id, userDiscId, quotaReservation);
+      }
     }
   }
   /**

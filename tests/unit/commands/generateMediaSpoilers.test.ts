@@ -130,9 +130,11 @@ beforeEach(() => {
     filename: "generated.mp4",
   }));
   spyOn(imageQuota, "checkImageQuota").mockResolvedValue({ allowed: true });
-  spyOn(imageQuota, "incrementImageQuota").mockResolvedValue(undefined);
+  spyOn(imageQuota, "reserveImageQuota").mockResolvedValue({ allowed: true, reservation: null });
+  spyOn(imageQuota, "releaseImageQuota").mockResolvedValue(undefined);
   spyOn(videoQuota, "checkVideoQuota").mockResolvedValue({ allowed: true });
-  spyOn(videoQuota, "incrementVideoQuota").mockResolvedValue(undefined);
+  spyOn(videoQuota, "reserveVideoQuota").mockResolvedValue({ allowed: true, reservation: null });
+  spyOn(videoQuota, "releaseVideoQuota").mockResolvedValue(undefined);
   spyOn(statRepository, "recordStat").mockImplementation(() => undefined);
 });
 afterEach(() => mock.restore());

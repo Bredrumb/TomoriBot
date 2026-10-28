@@ -31,6 +31,7 @@ export default {
       quota_resets_in_hours: `Quota resets in {hours} hour(s).`,
       quota_resets_in_days: `Quota resets in {days} day(s).`,
       quota_remaining: `You have {remaining} image(s) remaining for today.`,
+      quota_unavailable: `I could not check this server's image generation quota right now. Please try again in a moment.`,
     },
     generate_video: {
       disabled: `Video generation is disabled for this server.`,
@@ -40,6 +41,7 @@ export default {
       quota_resets_in_hours: `Quota resets in {hours} hour(s).`,
       quota_resets_in_days: `Quota resets in {days} day(s).`,
       quota_remaining: `You have {remaining} video(s) remaining for today.`,
+      quota_unavailable: `I could not check this server's video generation quota right now. Please try again in a moment.`,
       file_too_large: `The generated video ({size_mb} MB) exceeds Discord's 25 MB file size limit.`,
       reference_unsupported: `The selected OpenRouter model \`{model}\` cannot use an image as the exact first frame. Remove the reference image or choose a compatible video model.`,
       loop_unsupported: `The selected OpenRouter model \`{model}\` cannot use a last frame for looping video. Disable looping or choose a compatible video model.`,

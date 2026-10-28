@@ -1,4 +1,6 @@
+import type { QuotaReservation } from "@/utils/db/repositories/QuotaRepository";
 import type { TextQuotaCheckResult } from "@/utils/quota/textQuotaManager";
+import { releaseTextQuota } from "@/utils/quota/textQuotaManager";
 import { localizer } from "@/utils/text/localizer";
 
 const TEXT_QUOTA_TRIGGER_TTL_MS = 10 * 60 * 1000;
@@ -6,6 +8,8 @@ export interface TextQuotaTriggerState {
   serverId: number;
   userDiscId: string;
   consumed: boolean;
+  reservation: QuotaReservation | null;
+  reservationReleased: boolean;
   createdAt: number;
 }
 
@@ -37,6 +41,19 @@ export function claimCredentialRefusalNotice(triggerKey: string): boolean {
   if (reportedCredentialRefusals.has(triggerKey)) return false;
   reportedCredentialRefusals.set(triggerKey, Date.now());
   return true;
+}
+
+/** Gives back the unit a trigger reserved when no turn in that trigger produced a reply. */
+export async function releaseTextQuotaForTrigger(triggerKey: string): Promise<void> {
+  const state = textQuotaTriggerStates.get(triggerKey);
+  if (!state || state.consumed || !state.reservation) return;
+
+  const reservation = state.reservation;
+  // Cleared before the write so a second release for the same trigger cannot double-decrement.
+  state.reservation = null;
+  state.reservationReleased = true;
+  textQuotaTriggerStates.set(triggerKey, state);
+  await releaseTextQuota(state.serverId, state.userDiscId, reservation);
 }
 
 export function cleanupTextQuotaTriggerStates(): void {

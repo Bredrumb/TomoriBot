@@ -51,6 +51,30 @@ export type VideoQuotaConfigReadResult =
   | { status: "fresh"; config: VideoQuotaConfigRow | null }
   | { status: "unavailable"; config: null };
 
+export type QuotaReservation = {
+  quotaDate: string;
+  userCounted: boolean;
+  /** Exact text because a JS Date drops the microseconds the release must match. */
+  serverwidePeriodStart: string | null;
+};
+
+export type QuotaReservationOutcome =
+  | {
+      status: "reserved";
+      reservation: QuotaReservation;
+      userRemaining?: number;
+      serverwideRemaining?: number;
+      serverwidePeriodEnd?: Date;
+    }
+  | { status: "user_quota_exceeded" }
+  | { status: "serverwide_quota_exceeded"; periodEnd: Date };
+
+class QuotaCapReached extends Error {
+  constructor(readonly outcome: Exclude<QuotaReservationOutcome, { status: "reserved" }>) {
+    super(outcome.status);
+  }
+}
+
 /**
  * Read-only text quota config query with read provenance.
  * Does not insert default rows and does not fallback to synthetic rows on error.
@@ -205,39 +229,105 @@ export async function resetServerwideTextPeriod(serverId: number, resetDays: num
   return textServerwideQuotaSchema.parse(row);
 }
 
-/**
- * Increment the text quota counters after a successful generation.
- * Reads config first; skips writes for counters that are unlimited (0) so
- * usage does not accumulate retroactively before limits are configured.
- *
- * @param serverId   - Internal server DB ID
- * @param userDiscId - Discord user snowflake
- */
-export async function incrementTextQuota(serverId: number, userDiscId: string): Promise<void> {
+/** Claim one text generation on both counters or neither; database errors propagate so callers refuse. */
+export async function reserveTextQuotaUnits(
+  serverId: number,
+  userDiscId: string,
+  config: TextQuotaConfigRow,
+): Promise<QuotaReservationOutcome> {
+  const quotaDate = new Date().toISOString().split("T")[0];
   try {
-    const config = await getOrCreateTextConfig(serverId);
-    const shouldIncrementUser = config.daily_user_quota > 0;
-    const shouldIncrementServerwide = config.serverwide_quota > 0;
-    if (!shouldIncrementUser && !shouldIncrementServerwide) return;
-
-    const today = new Date().toISOString().split("T")[0];
-    await sql.begin(async (tx: SQL) => {
-      if (shouldIncrementUser) {
-        await tx`
+    return await sql.begin(async (tx: SQL): Promise<QuotaReservationOutcome> => {
+      let userCounted = false;
+      let userRemaining: number | undefined;
+      if (config.daily_user_quota > 0) {
+        const [user] = await tx<{ usage_count: number }[]>`
           INSERT INTO text_quotas (server_id, user_disc_id, usage_count, quota_date)
-          VALUES (${serverId}, ${userDiscId}, 1, ${today}::date)
+          VALUES (${serverId}, ${userDiscId}, 1, ${quotaDate}::date)
           ON CONFLICT (server_id, user_disc_id, quota_date)
           DO UPDATE SET usage_count = text_quotas.usage_count + 1
+          WHERE text_quotas.usage_count < ${config.daily_user_quota}
+          RETURNING usage_count
+        `;
+        if (!user) throw new QuotaCapReached({ status: "user_quota_exceeded" });
+        userCounted = true;
+        userRemaining = config.daily_user_quota - user.usage_count;
+      }
+
+      let serverwidePeriodStart: string | null = null;
+      let serverwideRemaining: number | undefined;
+      let serverwidePeriodEnd: Date | undefined;
+      if (config.serverwide_quota > 0) {
+        const [pool] = await tx<{ period_start: string; quota_period_end: Date; usage_count: number }[]>`
+          INSERT INTO text_serverwide_quotas (server_id, usage_count, quota_period_start, quota_period_end)
+          VALUES (
+            ${serverId},
+            1,
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
+          )
+          ON CONFLICT (server_id) DO UPDATE SET
+            usage_count = CASE WHEN text_serverwide_quotas.quota_period_end <= CURRENT_TIMESTAMP
+              THEN 1 ELSE text_serverwide_quotas.usage_count + 1 END,
+            quota_period_start = CASE WHEN text_serverwide_quotas.quota_period_end <= CURRENT_TIMESTAMP
+              THEN CURRENT_TIMESTAMP ELSE text_serverwide_quotas.quota_period_start END,
+            quota_period_end = CASE WHEN text_serverwide_quotas.quota_period_end <= CURRENT_TIMESTAMP
+              THEN CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
+              ELSE text_serverwide_quotas.quota_period_end END
+          WHERE text_serverwide_quotas.quota_period_end <= CURRENT_TIMESTAMP
+            OR text_serverwide_quotas.usage_count < ${config.serverwide_quota}
+          RETURNING quota_period_start::text AS period_start, quota_period_end, usage_count
+        `;
+        if (!pool) {
+          const [current] = await tx<{ quota_period_end: Date }[]>`
+            SELECT quota_period_end FROM text_serverwide_quotas WHERE server_id = ${serverId}
+          `;
+          throw new QuotaCapReached({ status: "serverwide_quota_exceeded", periodEnd: current.quota_period_end });
+        }
+        serverwidePeriodStart = pool.period_start;
+        serverwideRemaining = config.serverwide_quota - pool.usage_count;
+        serverwidePeriodEnd = pool.quota_period_end;
+      }
+
+      return {
+        status: "reserved",
+        reservation: { quotaDate, userCounted, serverwidePeriodStart },
+        ...(userRemaining !== undefined ? { userRemaining } : {}),
+        ...(serverwideRemaining !== undefined ? { serverwideRemaining } : {}),
+        ...(serverwidePeriodEnd ? { serverwidePeriodEnd } : {}),
+      };
+    });
+  } catch (error) {
+    if (error instanceof QuotaCapReached) return error.outcome;
+    throw error;
+  }
+}
+
+/** A failed release leaves the unit counted, which over-counts rather than under-counts. */
+export async function releaseTextQuotaUnits(
+  serverId: number,
+  userDiscId: string,
+  reservation: QuotaReservation,
+): Promise<void> {
+  try {
+    await sql.begin(async (tx: SQL) => {
+      if (reservation.userCounted) {
+        await tx`
+          UPDATE text_quotas SET usage_count = GREATEST(usage_count - 1, 0)
+          WHERE server_id = ${serverId} AND user_disc_id = ${userDiscId}
+            AND quota_date = ${reservation.quotaDate}::date
         `;
       }
-      if (shouldIncrementServerwide) {
+      if (reservation.serverwidePeriodStart) {
         await tx`
-          UPDATE text_serverwide_quotas SET usage_count = usage_count + 1 WHERE server_id = ${serverId}
+          UPDATE text_serverwide_quotas SET usage_count = GREATEST(usage_count - 1, 0)
+          WHERE server_id = ${serverId}
+            AND quota_period_start = ${reservation.serverwidePeriodStart}::timestamp
         `;
       }
     });
   } catch (error) {
-    log.error(`QuotaRepository.incrementTextQuota: failed for server ${serverId}`, error);
+    log.error(`QuotaRepository.releaseTextQuotaUnits: failed for server ${serverId}`, error);
   }
 }
 
@@ -441,29 +531,105 @@ export async function resetServerwideImagePeriod(serverId: number, resetDays: nu
   return serverwideQuotaSchema.parse(row);
 }
 
-/**
- * Increment both user and server-wide image quota counters after a successful generation.
- * Always increments both (image manager does not guard on config.enabled; callers gate this).
- *
- * @param serverId   - Internal server DB ID
- * @param userDiscId - Discord user snowflake
- */
-export async function incrementImageQuota(serverId: number, userDiscId: string): Promise<void> {
+/** Claim one image generation on both counters or neither; database errors propagate so callers refuse. */
+export async function reserveImageQuotaUnits(
+  serverId: number,
+  userDiscId: string,
+  config: ImageQuotaConfigRow,
+): Promise<QuotaReservationOutcome> {
+  const quotaDate = new Date().toISOString().split("T")[0];
   try {
-    const today = new Date().toISOString().split("T")[0];
-    await sql.begin(async (tx: SQL) => {
-      await tx`
-        INSERT INTO image_quotas (server_id, user_disc_id, usage_count, quota_date)
-        VALUES (${serverId}, ${userDiscId}, 1, ${today}::date)
-        ON CONFLICT (server_id, user_disc_id, quota_date)
-        DO UPDATE SET usage_count = image_quotas.usage_count + 1
-      `;
-      await tx`
-        UPDATE image_serverwide_quotas SET usage_count = usage_count + 1 WHERE server_id = ${serverId}
-      `;
+    return await sql.begin(async (tx: SQL): Promise<QuotaReservationOutcome> => {
+      let userCounted = false;
+      let userRemaining: number | undefined;
+      if (config.daily_user_quota > 0) {
+        const [user] = await tx<{ usage_count: number }[]>`
+          INSERT INTO image_quotas (server_id, user_disc_id, usage_count, quota_date)
+          VALUES (${serverId}, ${userDiscId}, 1, ${quotaDate}::date)
+          ON CONFLICT (server_id, user_disc_id, quota_date)
+          DO UPDATE SET usage_count = image_quotas.usage_count + 1
+          WHERE image_quotas.usage_count < ${config.daily_user_quota}
+          RETURNING usage_count
+        `;
+        if (!user) throw new QuotaCapReached({ status: "user_quota_exceeded" });
+        userCounted = true;
+        userRemaining = config.daily_user_quota - user.usage_count;
+      }
+
+      let serverwidePeriodStart: string | null = null;
+      let serverwideRemaining: number | undefined;
+      let serverwidePeriodEnd: Date | undefined;
+      if (config.serverwide_quota > 0) {
+        const [pool] = await tx<{ period_start: string; quota_period_end: Date; usage_count: number }[]>`
+          INSERT INTO image_serverwide_quotas (server_id, usage_count, quota_period_start, quota_period_end)
+          VALUES (
+            ${serverId},
+            1,
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
+          )
+          ON CONFLICT (server_id) DO UPDATE SET
+            usage_count = CASE WHEN image_serverwide_quotas.quota_period_end <= CURRENT_TIMESTAMP
+              THEN 1 ELSE image_serverwide_quotas.usage_count + 1 END,
+            quota_period_start = CASE WHEN image_serverwide_quotas.quota_period_end <= CURRENT_TIMESTAMP
+              THEN CURRENT_TIMESTAMP ELSE image_serverwide_quotas.quota_period_start END,
+            quota_period_end = CASE WHEN image_serverwide_quotas.quota_period_end <= CURRENT_TIMESTAMP
+              THEN CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
+              ELSE image_serverwide_quotas.quota_period_end END
+          WHERE image_serverwide_quotas.quota_period_end <= CURRENT_TIMESTAMP
+            OR image_serverwide_quotas.usage_count < ${config.serverwide_quota}
+          RETURNING quota_period_start::text AS period_start, quota_period_end, usage_count
+        `;
+        if (!pool) {
+          const [current] = await tx<{ quota_period_end: Date }[]>`
+            SELECT quota_period_end FROM image_serverwide_quotas WHERE server_id = ${serverId}
+          `;
+          throw new QuotaCapReached({ status: "serverwide_quota_exceeded", periodEnd: current.quota_period_end });
+        }
+        serverwidePeriodStart = pool.period_start;
+        serverwideRemaining = config.serverwide_quota - pool.usage_count;
+        serverwidePeriodEnd = pool.quota_period_end;
+      }
+
+      return {
+        status: "reserved",
+        reservation: { quotaDate, userCounted, serverwidePeriodStart },
+        ...(userRemaining !== undefined ? { userRemaining } : {}),
+        ...(serverwideRemaining !== undefined ? { serverwideRemaining } : {}),
+        ...(serverwidePeriodEnd ? { serverwidePeriodEnd } : {}),
+      };
     });
   } catch (error) {
-    log.error(`QuotaRepository.incrementImageQuota: failed for server ${serverId}`, error);
+    if (error instanceof QuotaCapReached) return error.outcome;
+    throw error;
+  }
+}
+
+/** A failed release leaves the unit counted, which over-counts rather than under-counts. */
+export async function releaseImageQuotaUnits(
+  serverId: number,
+  userDiscId: string,
+  reservation: QuotaReservation,
+): Promise<void> {
+  try {
+    await sql.begin(async (tx: SQL) => {
+      if (reservation.userCounted) {
+        await tx`
+          UPDATE image_quotas SET usage_count = GREATEST(usage_count - 1, 0)
+          WHERE server_id = ${serverId} AND user_disc_id = ${userDiscId}
+            AND quota_date = ${reservation.quotaDate}::date
+        `;
+      }
+      if (reservation.serverwidePeriodStart) {
+        await tx`
+          UPDATE image_serverwide_quotas SET usage_count = GREATEST(usage_count - 1, 0)
+          WHERE server_id = ${serverId}
+            AND quota_period_start = ${reservation.serverwidePeriodStart}::timestamp
+        `;
+      }
+    });
+  } catch (error) {
+    log.error(`QuotaRepository.releaseImageQuotaUnits: failed for server ${serverId}`, error);
   }
 }
 
@@ -666,28 +832,105 @@ export async function resetServerwideVideoPeriod(
   return videoServerwideQuotaSchema.parse(row);
 }
 
-/**
- * Increment both user and server-wide video quota counters after a successful generation.
- *
- * @param serverId   - Internal server DB ID
- * @param userDiscId - Discord user snowflake
- */
-export async function incrementVideoQuota(serverId: number, userDiscId: string): Promise<void> {
+/** Claim one video generation on both counters or neither; database errors propagate so callers refuse. */
+export async function reserveVideoQuotaUnits(
+  serverId: number,
+  userDiscId: string,
+  config: VideoQuotaConfigRow,
+): Promise<QuotaReservationOutcome> {
+  const quotaDate = new Date().toISOString().split("T")[0];
   try {
-    const today = new Date().toISOString().split("T")[0];
-    await sql.begin(async (tx: SQL) => {
-      await tx`
-        INSERT INTO video_quotas (server_id, user_disc_id, usage_count, quota_date)
-        VALUES (${serverId}, ${userDiscId}, 1, ${today}::date)
-        ON CONFLICT (server_id, user_disc_id, quota_date)
-        DO UPDATE SET usage_count = video_quotas.usage_count + 1
-      `;
-      await tx`
-        UPDATE video_serverwide_quotas SET usage_count = usage_count + 1 WHERE server_id = ${serverId}
-      `;
+    return await sql.begin(async (tx: SQL): Promise<QuotaReservationOutcome> => {
+      let userCounted = false;
+      let userRemaining: number | undefined;
+      if (config.daily_user_quota > 0) {
+        const [user] = await tx<{ usage_count: number }[]>`
+          INSERT INTO video_quotas (server_id, user_disc_id, usage_count, quota_date)
+          VALUES (${serverId}, ${userDiscId}, 1, ${quotaDate}::date)
+          ON CONFLICT (server_id, user_disc_id, quota_date)
+          DO UPDATE SET usage_count = video_quotas.usage_count + 1
+          WHERE video_quotas.usage_count < ${config.daily_user_quota}
+          RETURNING usage_count
+        `;
+        if (!user) throw new QuotaCapReached({ status: "user_quota_exceeded" });
+        userCounted = true;
+        userRemaining = config.daily_user_quota - user.usage_count;
+      }
+
+      let serverwidePeriodStart: string | null = null;
+      let serverwideRemaining: number | undefined;
+      let serverwidePeriodEnd: Date | undefined;
+      if (config.serverwide_quota > 0) {
+        const [pool] = await tx<{ period_start: string; quota_period_end: Date; usage_count: number }[]>`
+          INSERT INTO video_serverwide_quotas (server_id, usage_count, quota_period_start, quota_period_end)
+          VALUES (
+            ${serverId},
+            1,
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
+          )
+          ON CONFLICT (server_id) DO UPDATE SET
+            usage_count = CASE WHEN video_serverwide_quotas.quota_period_end <= CURRENT_TIMESTAMP
+              THEN 1 ELSE video_serverwide_quotas.usage_count + 1 END,
+            quota_period_start = CASE WHEN video_serverwide_quotas.quota_period_end <= CURRENT_TIMESTAMP
+              THEN CURRENT_TIMESTAMP ELSE video_serverwide_quotas.quota_period_start END,
+            quota_period_end = CASE WHEN video_serverwide_quotas.quota_period_end <= CURRENT_TIMESTAMP
+              THEN CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
+              ELSE video_serverwide_quotas.quota_period_end END
+          WHERE video_serverwide_quotas.quota_period_end <= CURRENT_TIMESTAMP
+            OR video_serverwide_quotas.usage_count < ${config.serverwide_quota}
+          RETURNING quota_period_start::text AS period_start, quota_period_end, usage_count
+        `;
+        if (!pool) {
+          const [current] = await tx<{ quota_period_end: Date }[]>`
+            SELECT quota_period_end FROM video_serverwide_quotas WHERE server_id = ${serverId}
+          `;
+          throw new QuotaCapReached({ status: "serverwide_quota_exceeded", periodEnd: current.quota_period_end });
+        }
+        serverwidePeriodStart = pool.period_start;
+        serverwideRemaining = config.serverwide_quota - pool.usage_count;
+        serverwidePeriodEnd = pool.quota_period_end;
+      }
+
+      return {
+        status: "reserved",
+        reservation: { quotaDate, userCounted, serverwidePeriodStart },
+        ...(userRemaining !== undefined ? { userRemaining } : {}),
+        ...(serverwideRemaining !== undefined ? { serverwideRemaining } : {}),
+        ...(serverwidePeriodEnd ? { serverwidePeriodEnd } : {}),
+      };
     });
   } catch (error) {
-    log.error(`QuotaRepository.incrementVideoQuota: failed for server ${serverId}`, error);
+    if (error instanceof QuotaCapReached) return error.outcome;
+    throw error;
+  }
+}
+
+/** A failed release leaves the unit counted, which over-counts rather than under-counts. */
+export async function releaseVideoQuotaUnits(
+  serverId: number,
+  userDiscId: string,
+  reservation: QuotaReservation,
+): Promise<void> {
+  try {
+    await sql.begin(async (tx: SQL) => {
+      if (reservation.userCounted) {
+        await tx`
+          UPDATE video_quotas SET usage_count = GREATEST(usage_count - 1, 0)
+          WHERE server_id = ${serverId} AND user_disc_id = ${userDiscId}
+            AND quota_date = ${reservation.quotaDate}::date
+        `;
+      }
+      if (reservation.serverwidePeriodStart) {
+        await tx`
+          UPDATE video_serverwide_quotas SET usage_count = GREATEST(usage_count - 1, 0)
+          WHERE server_id = ${serverId}
+            AND quota_period_start = ${reservation.serverwidePeriodStart}::timestamp
+        `;
+      }
+    });
+  } catch (error) {
+    log.error(`QuotaRepository.releaseVideoQuotaUnits: failed for server ${serverId}`, error);
   }
 }
 
