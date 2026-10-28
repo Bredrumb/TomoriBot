@@ -19,6 +19,9 @@ TomoriBot remembers conversations in several ways. For personality and behavior,
 For what TomoriBot receives on each turn, see
 [Inside The Prompt](/features/knowledge/inside-the-prompt/).
 
+In `/memories`, Memories holds saved facts, Documents holds references searched by meaning, Lorebooks
+contains authored canon, and Short-Term holds conversation summaries.
+
 ## Long-term memory
 <!-- anchor: long-term-memory -->
 

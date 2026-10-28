@@ -73,8 +73,7 @@ Other `{{...}}` macros and conditional blocks stay as written.
 ## Channel limits
 
 An entry can be limited to selected channels and their threads. Leave the channel selection empty to
-apply it in every channel. The page shows the saved limit below the entry content. Limits move with
-the entry when its scope changes.
+apply it in every channel. The page shows the saved limit below the entry content.
 
 Older keyword-tagged server memories that were converted to lore may still carry an unresolved
 `#channel` name. Until a manager saves a channel selection, TomoriBot treats that entry as active in
