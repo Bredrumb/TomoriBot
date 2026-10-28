@@ -4,6 +4,7 @@ import {
   MessageFlags,
   type ChatInputCommandInteraction,
   type Client,
+  type ModalSubmitInteraction,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { configRepository, personaRepository, personaSpriteRepository } from "@/utils/db/repositories";
@@ -221,6 +222,7 @@ export async function applyPresetDefault(
     }
   }
 
+  let modalSubmitInteraction: ModalSubmitInteraction | undefined;
   try {
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     const tomoriState = await getCachedTomoriState(serverDiscId);
@@ -279,7 +281,7 @@ export async function applyPresetDefault(
     }
 
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
-    const modalSubmitInteraction = modalResult.interaction!;
+    modalSubmitInteraction = modalResult.interaction!;
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
     const selectedPresetName = modalResult.values![PRESET_SELECT_ID];
 
@@ -686,7 +688,7 @@ export async function applyPresetDefault(
     });
   } catch (error) {
     if (isUniqueViolation(error)) {
-      await replyInfoEmbed(interaction, locale, {
+      await replyInfoEmbed(modalSubmitInteraction ?? interaction, locale, {
         titleKey: "commands.persona.name_conflict_title",
         descriptionKey: "commands.persona.name_conflict_description",
         descriptionVars: { name: getDefaultBotName(locale) },
@@ -718,16 +720,11 @@ export async function applyPresetDefault(
     };
     await log.error(`Error executing /${commandLabel} for user ${userData.user_disc_id}`, error as Error, context);
 
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({
-        content: localizer(locale, "general.errors.unknown_error_description"),
-        flags: MessageFlags.Ephemeral,
-      });
-    } else {
-      await interaction.followUp({
-        content: localizer(locale, "general.errors.unknown_error_description"),
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+    await replyInfoEmbed(modalSubmitInteraction ?? interaction, locale, {
+      titleKey: "general.errors.unknown_error_title",
+      descriptionKey: "general.errors.unknown_error_description",
+      color: ColorCode.ERROR,
+      flags: MessageFlags.Ephemeral,
+    });
   }
 }

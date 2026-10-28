@@ -630,7 +630,7 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
         type: ComponentType.TextDisplay,
         content: withLinePrefix("-# ", localizer(locale, "commands.memories.stale_warning")),
       },
-      buildRetryRow(locale, category, selectedLineageId),
+      buildRetryRow(locale, category, selectedLineageId || undefined),
     );
     return buildPayload(components, receipt);
   }
