@@ -77,7 +77,7 @@ A preset structures prompt layout; it does not replace the text sources that fil
 
 Native blocks map directly to TomoriBot prompt components:
 
-- `main`: the active system prompt (`/config` > Behavior > General Behavior, or the default fallback)
+- `main`: the channel prompt override, when configured
 - `charDescription`: `/config` > Persona > Advanced
 - `charPersonality`: `/config` > Persona > Identity & Personality
 - `dialogueExamples`: `/config` > Persona > Identity & Personality
