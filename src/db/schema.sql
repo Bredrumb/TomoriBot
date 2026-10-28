@@ -1033,6 +1033,36 @@ BEGIN
     END IF;
 END $$;
 
+CREATE TABLE IF NOT EXISTS persona_lorebook_entries (
+  entry_id SERIAL PRIMARY KEY,
+  server_id INT NOT NULL REFERENCES servers(server_id) ON DELETE CASCADE,
+  persona_lineage_id BIGINT,
+  title VARCHAR(128) NOT NULL,
+  content TEXT NOT NULL,
+  keys TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  secondary_keys TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  selective_logic INT NOT NULL DEFAULT 0 CHECK (selective_logic BETWEEN 0 AND 3),
+  scan_depth INT NOT NULL DEFAULT 5 CHECK (scan_depth BETWEEN 1 AND 100),
+  trigger_chance INT NOT NULL DEFAULT 100 CHECK (trigger_chance BETWEEN 1 AND 100),
+  insertion_order INT NOT NULL DEFAULT 100,
+  placement SMALLINT NOT NULL DEFAULT 0 CHECK (placement IN (0, 1)),
+  constant BOOLEAN NOT NULL DEFAULT false,
+  enabled BOOLEAN NOT NULL DEFAULT true,
+  channel_disc_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT persona_lorebook_entries_activatable CHECK (constant OR cardinality(keys) > 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_persona_lorebook_entries_scope
+  ON persona_lorebook_entries (server_id, persona_lineage_id, enabled);
+
+DROP TRIGGER IF EXISTS update_persona_lorebook_entries_timestamp ON persona_lorebook_entries;
+CREATE TRIGGER update_persona_lorebook_entries_timestamp
+BEFORE UPDATE ON persona_lorebook_entries
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
 CREATE TABLE IF NOT EXISTS server_memories (
   server_memory_id SERIAL PRIMARY KEY,
   server_id INT NOT NULL,

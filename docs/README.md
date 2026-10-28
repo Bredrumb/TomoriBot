@@ -133,6 +133,7 @@ Per-stage reference. Each folder has a `README.md` (overview + ASCII flow) and n
 
 Supporting services that pipelines depend on.
 
+- [`architecture/subsystems/lorebooks.md`](./en/architecture/subsystems/lorebooks.md): lorebook storage, scope ownership, and pure activation contracts
 - [`architecture/subsystems/`](./en/architecture/subsystems/README.md): database schema, events, commands, tools,
   caching, cooldowns, security, localization, multi-persona, persona-presets, natural-nudges, and more
 
