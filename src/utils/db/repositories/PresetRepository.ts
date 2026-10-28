@@ -1,16 +1,7 @@
 import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
-import {
-  LOREBOOK_CONTENT_MAX,
-  LOREBOOK_TITLE_MAX,
-  LOREBOOK_ENTRIES_PER_SCOPE_MAX,
-  LOREBOOK_DEFAULT_SCAN_DEPTH,
-  LOREBOOK_DEFAULT_INSERTION_ORDER,
-  LOREBOOK_SCAN_DEPTH_MAX,
-  normalizeLorebookKeys,
-  isLorebookRegexKey,
-  lorebookEntryToInput,
-  type LorebookEntryInput,
-} from "@/modules/lorebooks/db/types";
+import { convertCharacterBook } from "@/modules/lorebooks/imports";
+import { LOREBOOK_ENTRIES_PER_SCOPE_MAX, lorebookEntryToInput } from "@/modules/lorebooks/db/types";
+import { sanitizeSillyTavernText } from "@/utils/text/sillyTavernText";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 /**
  * PresetRepository: manages SillyTavern preset data, persona preset import/export,
@@ -195,13 +186,6 @@ class PresetRepository {
       .filter((item) => item.length > 0);
   }
 
-  private sanitizeSillyTavernText(input: string): string {
-    return input
-      .replace(/\r\n/g, "\n")
-      .replace(/<!--[\s\S]*?--!?>/g, "")
-      .trim();
-  }
-
   private capitalizeFirstLetter(input: string): string {
     const trimmed = input.trim();
     if (!trimmed) return "Imported Persona";
@@ -264,7 +248,7 @@ class PresetRepository {
     content: string,
     maxAttributeLength: number,
   ): string[] {
-    const sanitized = this.sanitizeSillyTavernText(content);
+    const sanitized = sanitizeSillyTavernText(content);
     if (!sanitized) return [];
     const prefix = heading ? `${heading}\n` : "";
     const maxContentLength = Math.max(maxAttributeLength - prefix.length, 200);
@@ -328,7 +312,7 @@ class PresetRepository {
       if (!rawContent) continue;
       turns.push({
         speaker: current.speaker,
-        content: this.sanitizeSillyTavernText(rawContent),
+        content: sanitizeSillyTavernText(rawContent),
       });
     }
 
@@ -363,7 +347,7 @@ class PresetRepository {
 
   private parseMesExamplePairs(mesExample: string | null, maxDialogueLength: number): DialoguePair[] {
     if (!mesExample) return [];
-    const cleaned = this.sanitizeSillyTavernText(mesExample);
+    const cleaned = sanitizeSillyTavernText(mesExample);
     if (!cleaned) return [];
 
     const segments = cleaned
@@ -399,7 +383,7 @@ class PresetRepository {
     rawOutputs.push(...alternateGreetings);
 
     return rawOutputs
-      .map((text) => this.sanitizeSillyTavernText(text))
+      .map((text) => sanitizeSillyTavernText(text))
       .filter((text) => text.length > 0)
       .map((text) => ({
         input: UNPAIRED_SAMPLE_DIALOGUE_SENTINEL,
@@ -439,81 +423,6 @@ class PresetRepository {
 
   private pickObjectFromCard(cardData: JsonObject | null, rootData: JsonObject, key: string): JsonObject | null {
     return this.asObject(cardData?.[key]) ?? this.asObject(rootData[key]);
-  }
-
-  private collectCharacterBookEntries(characterBook: JsonObject | null): LorebookEntryInput[] {
-    if (!Array.isArray(characterBook?.entries)) return [];
-    const clamp = (value: unknown, min: number, max: number, fallback: number): number =>
-      typeof value === "number" && Number.isFinite(value) ? Math.max(min, Math.min(max, Math.trunc(value))) : fallback;
-    const entries: LorebookEntryInput[] = [];
-    let unsupportedKeys = 0;
-    let skippedEntries = 0;
-    for (const raw of characterBook.entries) {
-      const entry = this.asObject(raw);
-      const content = this.sanitizeSillyTavernText(this.getStringField(entry, "content") ?? "");
-      if (!entry || !content) {
-        skippedEntries++;
-        continue;
-      }
-      const extensions = this.asObject(entry.extensions);
-      const mapKeys = (field: string): string[] => {
-        const rawKeys = this.getStringArrayField(entry, field);
-        const keys = normalizeLorebookKeys(
-          rawKeys.map((key) => {
-            if (entry.use_regex === true && !isLorebookRegexKey(key)) return `/${key}/`;
-            return key;
-          }),
-        );
-        unsupportedKeys += rawKeys.length - keys.length + keys.filter(isLorebookRegexKey).length;
-        return keys;
-      };
-      const keys = mapKeys("keys");
-      const constant = entry.constant === true;
-      if (!constant && keys.length === 0) {
-        skippedEntries++;
-        continue;
-      }
-      const secondaryKeys = entry.selective === true ? mapKeys("secondary_keys") : [];
-      const title =
-        this.getStringField(entry, "name") ?? this.getStringField(entry, "comment") ?? keys.slice(0, 3).join(", ");
-      const baseTitle = title || "Character Book Entry";
-      const chunks: string[] = [];
-      for (let offset = 0; offset < content.length; ) {
-        let end = Math.min(offset + LOREBOOK_CONTENT_MAX, content.length);
-        if (end < content.length && /[\uD800-\uDBFF]/u.test(content[end - 1]) && /[\uDC00-\uDFFF]/u.test(content[end]))
-          end--;
-        const chunk = content.slice(offset, end);
-        if (chunk.trim()) chunks.push(chunk);
-        offset = end;
-      }
-      for (const [part, chunk] of chunks.entries()) {
-        const suffix = part === 0 ? "" : ` (${part + 1})`;
-        entries.push({
-          title: `${baseTitle.slice(0, LOREBOOK_TITLE_MAX - suffix.length).trim()}${suffix}`,
-          content: chunk,
-          keys,
-          secondary_keys: secondaryKeys,
-          selective_logic: clamp(extensions?.selectiveLogic, 0, 3, 0) as 0 | 1 | 2 | 3,
-          scan_depth: clamp(
-            extensions?.scan_depth ?? characterBook.scan_depth,
-            1,
-            LOREBOOK_SCAN_DEPTH_MAX,
-            LOREBOOK_DEFAULT_SCAN_DEPTH,
-          ),
-          trigger_chance: extensions?.useProbability === false ? 100 : clamp(extensions?.probability, 1, 100, 100),
-          insertion_order: clamp(entry.insertion_order, -2147483648, 2147483647, LOREBOOK_DEFAULT_INSERTION_ORDER),
-          placement: entry.position === "after_char" || extensions?.position === 1 ? 1 : 0,
-          constant,
-          enabled: entry.enabled !== false,
-          channel_disc_ids: [],
-        });
-      }
-    }
-    if (unsupportedKeys || skippedEntries)
-      log.warn("Character Book import has unsupported activations", undefined, {
-        metadata: { unsupportedKeys, skippedEntries },
-      });
-    return entries;
   }
 
   /** Returns true if the given unknown value looks like a SillyTavern character card JSON. */
@@ -1587,7 +1496,17 @@ class PresetRepository {
     if (depthPrompt) sections.push({ heading: "Depth Prompt", content: depthPrompt });
 
     const characterBook = this.pickObjectFromCard(cardData, rootData, "character_book");
-    const lorebookEntries = characterBook ? this.collectCharacterBookEntries(characterBook) : undefined;
+    const lorebookConversion = characterBook ? convertCharacterBook(characterBook) : null;
+    const lorebookReport = lorebookConversion?.report;
+    if (lorebookReport && (lorebookReport.unsupportedKeys || lorebookReport.skippedEntries)) {
+      log.warn("Character Book import has unsupported activations", undefined, {
+        metadata: {
+          unsupportedKeys: lorebookReport.unsupportedKeys,
+          skippedEntries: lorebookReport.skippedEntries,
+        },
+      });
+    }
+    const lorebookEntries = lorebookConversion?.entries;
     if (lorebookEntries && lorebookEntries.length > LOREBOOK_ENTRIES_PER_SCOPE_MAX) {
       return { success: false, error: "commands.persona.import.error_invalid_format" };
     }
