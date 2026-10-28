@@ -362,7 +362,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
   }
 
   /** Saving the form is the admin's channel choice, so it also settles a pending legacy scope. */
-  async edit(serverMemoryId: number, content: string, _tags: string[], channelDiscIds: string[]): Promise<boolean> {
+  async edit(serverMemoryId: number, content: string, channelDiscIds: string[]): Promise<boolean> {
     try {
       return await sql.transaction(async (tx) => {
         const [updated] = await tx`
@@ -407,7 +407,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     personaLineageId: number,
     taughtByUserId: number,
     memories: string[],
-    _tags: string[] = [],
     channelDiscIds: string[] = [],
   ): Promise<boolean> {
     if (memories.length === 0) return true;
@@ -460,7 +459,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     personaLineageId: number,
     taughtByUserId: number,
     content: string,
-    _tags: string[] = [],
     serverDiscId?: string,
     channelDiscIds: string[] = [],
   ): Promise<ServerMemoryRow | null> {

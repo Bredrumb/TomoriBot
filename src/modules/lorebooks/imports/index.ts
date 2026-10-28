@@ -8,5 +8,10 @@ export {
   type LorebookConversionReport,
 } from "./characterBook";
 export { splitLegacyMemoryTags, taggedMemoryToLorebook } from "./legacyMemories";
-export { convertLorebookUpload } from "./upload";
+export {
+  LOREBOOK_IMPORT_MAX_FILE_MB,
+  convertLorebookUpload,
+  parseLorebookUpload,
+  type LorebookUploadParseResult,
+} from "./upload";
 export { convertWorldInfoFile } from "./worldInfo";

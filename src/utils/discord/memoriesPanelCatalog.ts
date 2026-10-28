@@ -14,7 +14,7 @@ import { parseLocale } from "@/utils/discord/panelRouteTokens";
 export const MEMORIES_ROUTE_NAMESPACE = "memories";
 export const MEMORIES_ROUTE_VERSION = "v1";
 
-export type MemoriesCategory = "memories" | "documents" | "stm";
+export type MemoriesCategory = "memories" | "documents" | "lorebooks" | "stm";
 
 export function computeServerStmFingerprint(
   workspaceId: string,
@@ -63,6 +63,22 @@ type MemoriesAction =
   | "document-chunk-remove-prompt"
   | "document-chunk-remove-confirm"
   | "document-chunk-remove-cancel"
+  | "lore-scope"
+  | "lore-persona-select"
+  | "lore-persona-page"
+  | "lore-select"
+  | "lore-range"
+  | "lore-add-submit"
+  | "lore-import-submit"
+  | "lore-edit-open"
+  | "lore-edit-submit"
+  | "lore-activation-open"
+  | "lore-activation-submit"
+  | "lore-toggle-enabled"
+  | "lore-toggle-constant"
+  | "lore-remove-prompt"
+  | "lore-remove-confirm"
+  | "lore-remove-cancel"
   | "stm-open"
   | "stm-submit"
   | "stm-entry"
@@ -135,6 +151,31 @@ export type MemoriesPanelRoute =
       chunkIdx: number;
       nonce: string;
     }
+  | { action: "lore-scope" | "lore-persona-select"; locale: string; scopeLineageId: number }
+  | { action: "lore-persona-page" | "lore-range"; locale: string; scopeLineageId: number; rangeIndex: number }
+  | { action: "lore-select"; locale: string; scopeLineageId: number; rangeIndex?: number }
+  | { action: "lore-add-submit"; locale: string; scopeLineageId: number; nonce: string }
+  | { action: "lore-import-submit"; locale: string; scopeLineageId: number; nonce: string }
+  | {
+      action:
+        | "lore-edit-open"
+        | "lore-activation-open"
+        | "lore-toggle-enabled"
+        | "lore-toggle-constant"
+        | "lore-remove-prompt"
+        | "lore-remove-confirm"
+        | "lore-remove-cancel";
+      locale: string;
+      scopeLineageId: number;
+      entryId: number;
+    }
+  | {
+      action: "lore-edit-submit" | "lore-activation-submit";
+      locale: string;
+      scopeLineageId: number;
+      entryId: number;
+      nonce: string;
+    }
   | { action: "stm-open"; locale: string }
   | { action: "stm-submit"; locale: string; nonce: string }
   | { action: "stm-entry"; locale: string; channelId: string; personaId: number }
@@ -143,7 +184,7 @@ export type MemoriesPanelRoute =
 const categoryField: RouteFieldCodec<"category", MemoriesCategory> = {
   key: "category",
   encode: (val) => String(val),
-  decode: (raw) => (raw === "memories" || raw === "documents" || raw === "stm" ? raw : null),
+  decode: (raw) => (raw === "memories" || raw === "documents" || raw === "lorebooks" || raw === "stm" ? raw : null),
 };
 
 const lineageIdField: RouteFieldCodec<"lineageId", number> = {
@@ -199,6 +240,18 @@ const rangeIndexField: RouteFieldCodec<"rangeIndex", number> = {
   key: "rangeIndex",
   encode: (val) => String(val),
   decode: (raw) => parseNonNegativeInt(raw),
+};
+
+const scopeLineageIdField: RouteFieldCodec<"scopeLineageId", number> = {
+  key: "scopeLineageId",
+  encode: (val) => String(val),
+  decode: (raw) => parseNonNegativeInt(raw),
+};
+
+const entryIdField: RouteFieldCodec<"entryId", number> = {
+  key: "entryId",
+  encode: (val) => String(val),
+  decode: (raw) => parsePositiveId(raw),
 };
 
 const optionalRangeIndexField: RouteFieldCodec<"rangeIndex", number> = {
@@ -347,6 +400,70 @@ export const MEMORIES_ROUTE_CODECS: Record<
   "document-chunk-remove-cancel": {
     wireToken: "document-chunk-remove-cancel",
     fields: [personaIdField, documentIdField, chunkIdxField],
+  },
+  "lore-scope": {
+    wireToken: "lore-scope",
+    fields: [scopeLineageIdField],
+  },
+  "lore-persona-select": {
+    wireToken: "lore-persona-select",
+    fields: [scopeLineageIdField],
+  },
+  "lore-persona-page": {
+    wireToken: "lore-persona-page",
+    fields: [scopeLineageIdField, rangeIndexField],
+  },
+  "lore-select": {
+    wireToken: "lore-select",
+    fields: [scopeLineageIdField, optionalRangeIndexField],
+  },
+  "lore-range": {
+    wireToken: "lore-range",
+    fields: [scopeLineageIdField, rangeIndexField],
+  },
+  "lore-add-submit": {
+    wireToken: "lore-add-submit",
+    fields: [scopeLineageIdField, nonceField],
+  },
+  "lore-import-submit": {
+    wireToken: "lore-import-submit",
+    fields: [scopeLineageIdField, nonceField],
+  },
+  "lore-edit-open": {
+    wireToken: "lore-edit-open",
+    fields: [scopeLineageIdField, entryIdField],
+  },
+  "lore-edit-submit": {
+    wireToken: "lore-edit-submit",
+    fields: [scopeLineageIdField, entryIdField, nonceField],
+  },
+  "lore-activation-open": {
+    wireToken: "lore-activation-open",
+    fields: [scopeLineageIdField, entryIdField],
+  },
+  "lore-activation-submit": {
+    wireToken: "lore-activation-submit",
+    fields: [scopeLineageIdField, entryIdField, nonceField],
+  },
+  "lore-toggle-enabled": {
+    wireToken: "lore-toggle-enabled",
+    fields: [scopeLineageIdField, entryIdField],
+  },
+  "lore-toggle-constant": {
+    wireToken: "lore-toggle-constant",
+    fields: [scopeLineageIdField, entryIdField],
+  },
+  "lore-remove-prompt": {
+    wireToken: "lore-remove-prompt",
+    fields: [scopeLineageIdField, entryIdField],
+  },
+  "lore-remove-confirm": {
+    wireToken: "lore-remove-confirm",
+    fields: [scopeLineageIdField, entryIdField],
+  },
+  "lore-remove-cancel": {
+    wireToken: "lore-remove-cancel",
+    fields: [scopeLineageIdField, entryIdField],
   },
   "stm-open": {
     wireToken: "stm-open",

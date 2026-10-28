@@ -81,7 +81,7 @@ their original Discord server, so review channel limits when moving a backup to 
 These actions permanently remove or reset stored data:
 
 - `/personal memories`: manage or remove personal memories.
-- `/memories`: manage or remove server memories (requires Manage Server).
+- `/memories`: manage or remove server memories, documents, and lorebooks (requires Manage Server).
 - `/personal nuke`: permanently deletes all personal data across servers.
 - `/nuke`: wipes server data, including custom expressions and persona access rules. Set
   `preserve_personas: true` to keep personas while removing custom expressions and media.

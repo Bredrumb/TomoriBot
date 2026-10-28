@@ -31,6 +31,7 @@ Pages are bucketed into task-based sub-categories:
   - [`natural-nudges.md`](./en/features/chatting-personality/natural-nudges/)
 - **Knowledge**:
   - [`memory.md`](./en/features/knowledge/memory/)
+  - [`lorebooks.md`](./en/features/knowledge/lorebooks/)
   - [`inside-the-prompt.md`](./en/features/knowledge/inside-the-prompt/)
   - [`personalization.md`](./en/features/knowledge/personalization/)
   - [`data-handling.md`](./en/features/knowledge/data-handling/)

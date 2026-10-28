@@ -105,6 +105,22 @@ entries. An empty book clears it; cards without a Character Book preserve existi
 exports include lore inputs so JSON and PNG re-imports retain them. Persona generation from an
 uploaded card preserves its source book in the generated PNG and the `Import Now` payload.
 
+### World info files
+
+`+ Import Lorebook` in `/memories` > `Lorebooks` accepts a standalone SillyTavern world info file as
+well as a Character Book. A file whose `entries` is an array is converted as a Character Book; a file
+whose `entries` is a keyed object is converted as a world info file. Anything else is rejected.
+
+World info entries map their `key` and `keysecondary` arrays to primary and secondary keywords,
+`comment` to the title, `content` to the entry body, `disable` to the stored enabled flag, `order` to
+insertion order, and `position` to before or after the persona. `scanDepth`, `probability`,
+`useProbability`, and `selectiveLogic` map to the same activation fields as Character Book extensions.
+Content over 4,000 characters splits into numbered entries with shared settings.
+
+The supported ceiling is explicit: world info positions 2 through 7 become before persona, and
+groups, recursion flags, sticky timers, cooldowns, delays, and triggers have no destination. They are
+counted in the import report and dropped without reinterpretation. Regex keys stay inert.
+
 ## Conversation and template adaptations
 
 ### Unpaired sample dialogues
@@ -136,5 +152,7 @@ preserved.
 - `src/utils/image/pngMetadata.ts`: PNG chunk parsing (`tEXt`, `zTXt`, `iTXt`).
 - `src/utils/db/repositories/PresetRepository.ts`: `convertSillyTavernJsonToPresetData` mapping and
   transformation logic.
+- `src/modules/lorebooks/imports/`: Character Book conversion shared by card import, plus the world
+  info and upload carriers used by `/memories` > `Lorebooks`.
 - `src/utils/text/context/templates.ts`: `buildSampleDialogueContextItems` and unpaired dialogue handling.
 - `src/types/preset/presetExport.ts`: Preset schema interfaces and Zod validation.

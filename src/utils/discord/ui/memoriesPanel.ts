@@ -24,6 +24,8 @@ import {
   type MemoriesCategory,
 } from "@/utils/discord/memoriesPanelCatalog";
 import type { DocumentChunkRow, DocumentListRow } from "@/utils/discord/interactions/memoriesDocumentOperations";
+import type { LorebookEntryRow } from "@/modules/lorebooks/db/types";
+import { buildLorebookPanelSection, type LorebookPanelPage } from "@/modules/lorebooks/discord/panelSection";
 import {
   buildCategoryButtonRow,
   buildChannelScopeLine,
@@ -35,10 +37,7 @@ import {
   withLinePrefix,
 } from "@/utils/discord/ui/panel";
 import { buildChannelScopeField } from "@/utils/discord/ui/channelScopeField";
-import {
-  DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX,
-  DISCORD_TEXT_INPUT_MAX,
-} from "@/utils/discord/ui/componentsV2Limits";
+import { DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX, DISCORD_TEXT_INPUT_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import { measureFormattedPanelTextLength, renderPanelContentBlock } from "@/utils/discord/ui/panelProse";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
@@ -62,10 +61,7 @@ const PERSONA_SELECT_MAX_OPTIONS = 25;
 
 const memoryLimits = getMemoryLimits();
 
-export function buildServerMemoryModalFieldId(
-  field: "content" | "file" | "channels",
-  nonce: string,
-): string {
+export function buildServerMemoryModalFieldId(field: "content" | "file" | "channels", nonce: string): string {
   return `${field}_${nonce}`;
 }
 
@@ -393,7 +389,8 @@ type MemoriesPanelPage =
       personaRangeIndex?: number;
     }
   | { kind: "document-remove"; documentId: number; historyOnly: boolean }
-  | { kind: "document-chunk-remove"; documentId: number; chunkIdx: number };
+  | { kind: "document-chunk-remove"; documentId: number; chunkIdx: number }
+  | LorebookPanelPage;
 
 export interface MemoriesPanelPayload {
   components: TopLevelComponentData[];
@@ -415,6 +412,8 @@ export interface MemoriesPanelRenderInput {
   documentChunks?: DocumentChunkRow[];
   documentCountsByPersona?: ReadonlyMap<number, number>;
   eligibleHistoryPersonaIds?: ReadonlySet<number>;
+  lorebookEntries?: readonly LorebookEntryRow[];
+  lorebookCounts?: ReadonlyMap<number | null, number> | null;
   stmEntries?: StmPanelEntry[];
   stmCount?: number;
   memteachingEnabled?: boolean;
@@ -491,6 +490,11 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
         id: "documents",
         label: localizer(locale, "commands.memories.category_documents"),
         customId: buildMemoriesRouteId({ action: "category", locale, category: "documents" }),
+      },
+      {
+        id: "lorebooks",
+        label: localizer(locale, "commands.memories.category_lorebooks"),
+        customId: buildMemoriesRouteId({ action: "category", locale, category: "lorebooks" }),
       },
       {
         id: "stm",
@@ -1289,6 +1293,29 @@ ${localizer(locale, "commands.memories.documents_description")}`,
         );
       }
     }
+  } else if (category === "lorebooks") {
+    const availableTextLength = Math.max(
+      0,
+      DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX -
+        measureReceiptTextLength(receipt) -
+        measureFormattedPanelTextLength(components),
+    );
+    const lorebookPage: LorebookPanelPage =
+      page.kind === "lorebooks" || page.kind === "lore-remove" ? page : { kind: "lorebooks" };
+    components.push(
+      ...buildLorebookPanelSection({
+        locale,
+        scopeLineageId: selectedLineageId,
+        personas,
+        entries: input.lorebookEntries ?? [],
+        countsByLineage: input.lorebookCounts ?? null,
+        canManage,
+        readStatus,
+        page: lorebookPage,
+        availableTextLength,
+        selectedPersonaAvatarUrl: input.selectedPersonaAvatarUrl,
+      }),
+    );
   } else if (category === "stm") {
     components.push({
       type: ComponentType.TextDisplay,

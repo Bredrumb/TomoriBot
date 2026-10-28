@@ -3,9 +3,9 @@ title: "Lorebooks"
 aiGenerated: true
 ---
 
-`src/modules/lorebooks/` owns authored lore storage, import mapping, and a pure activation function.
-Persona cards and workspace memory backups carry lore separately from episodic memories. The module
-has no panel or prompt integration yet.
+`src/modules/lorebooks/` owns authored lore storage, import mapping, the `/memories` Lorebooks panel,
+and a pure activation function. Persona cards and workspace memory backups carry lore separately from
+episodic memories. Prompt integration belongs to the context pipeline.
 
 ## Storage and ownership
 
@@ -36,6 +36,37 @@ Callers must inspect the result before showing success or replacing displayed st
 
 There is no cache: runtime retrieval uses one indexed query per turn. Add caching only if profiling
 shows this query contributes to turn latency, with invalidation inside every successful repository write.
+
+## Panel and permissions
+
+`/memories` > `Lorebooks` uses the `memories` route namespace and `v1` wire version. The fourth
+category shares the Documents scope switcher and the Memories lineage picker; because persona lore is
+lineage-owned, its picker groups personas that share a lineage. Scope lineage `0` is the Serverwide
+sentinel and every routed operation maps it back to a NULL lineage before calling the repository.
+
+Every member can read either scope. Only `canManage` writes, and every routed write re-resolves the
+scope, rejects a lineage that is not present on the server, and checks the permission again. A stale
+route for a removed persona or deleted entry repaints a safe scope with a changed-state receipt
+instead of writing. Modal opens are acknowledged by the modal itself; button and modal-submit writes
+are deferred before the read, then repaint after the write or failure.
+
+`discord/panelSection.ts` owns the tab body and its add, edit, activation, and import modals.
+`discord/operations.ts` owns write authorization, field validation, and the preservation rule below.
+Each entry select page holds 23 entries so the Add and Import options fit Discord's 25-option cap.
+
+Edits keep activation fields and stored channel ids the member did not change. Unresolved legacy
+channel names survive a content or activation edit when the submitted channel set matches the stored
+one; changing the channel selection clears them deliberately. Before opening an edit modal, stored
+channel ids are filtered to channels that still exist in the guild, so a deleted channel cannot make
+Discord reject the modal. Channel submissions are filtered against the guild again: a syntactically
+valid snowflake from another server is refused with a receipt and no write.
+
+`imports/` accepts a SillyTavern world info file or a Character Book through one JSON carrier.
+An import appends entries that are not already present, or replaces the scope when the member checks
+the replace box. The append is one locked transaction, so a batch that would exceed 250 entries is
+refused whole. Parsing is limited to 2 MB. Conversion reports skipped entries, unsupported keys,
+ignored settings, and collapsed placement; the route logs the four counts and adds skipped entries to
+the receipt's skipped total. No file content enters logs.
 
 ## Migration and rollback
 
@@ -109,11 +140,18 @@ later smaller entry to fit. `charBudget` and `random` can be injected; random dr
 ## Source pointers
 
 - `src/modules/lorebooks/db/types.ts`: row and input schemas, normalization, constants, and limits.
-- `src/modules/lorebooks/db/repositories.ts`: repository signatures and failure result unions.
+- `src/modules/lorebooks/db/repositories.ts`: repository signatures, append and replace writes, and
+  failure result unions.
 - `src/modules/lorebooks/runtime/activation.ts`: matching, selection, and budget.
-- `src/modules/lorebooks/imports.ts`: legacy tag separation and memory mapping.
+- `src/modules/lorebooks/imports/`: card, world info, and upload conversion plus legacy tag mapping.
+- `src/modules/lorebooks/discord/panelSection.ts`: the Lorebooks tab and its four modals.
+- `src/modules/lorebooks/discord/operations.ts`: write authorization, validation, and pending scope
+  preservation.
+- `src/utils/discord/memoriesPanelCatalog.ts`: the `lore-*` route actions and field encoding.
 - `src/db/schema.sql`: table, scope index, and timestamp trigger.
-- `tests/regression/db/lorebooks.regression.test.ts`: ownership, concurrent limits, and rollback.
+- `tests/regression/db/lorebooks.regression.test.ts`: ownership, concurrent limits, append, and
+  rollback.
 - `tests/unit/modules/lorebooks.test.ts`: activation and input validation.
+- `tests/unit/modules/lorebookUploads.test.ts`: world info and Character Book conversion.
 
 Related: [Database schema](/architecture/subsystems/database-schema/).

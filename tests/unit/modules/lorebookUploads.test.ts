@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { LOREBOOK_CONTENT_MAX } from "@/modules/lorebooks/db/types";
-import { convertCharacterBook, convertLorebookUpload, convertWorldInfoFile } from "@/modules/lorebooks/imports";
+import {
+  convertCharacterBook,
+  convertLorebookUpload,
+  convertWorldInfoFile,
+  parseLorebookUpload,
+} from "@/modules/lorebooks/imports";
 
 const worldInfoFile = {
   name: "Ravensmoor",
@@ -130,5 +135,22 @@ describe("lorebook uploads", () => {
     });
     expect(conversion?.entries.map((entry) => entry.content)).toEqual(["B"]);
     expect(conversion?.report.skippedEntries).toBe(1);
+  });
+
+  it("parses uploaded bytes through the shared BOM-stripping helper", () => {
+    const buffer = Buffer.from(`\uFEFF${JSON.stringify(worldInfoFile)}`);
+    const parsed = parseLorebookUpload(buffer);
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect(parsed.conversion.entries).toHaveLength(2);
+
+    expect(parseLorebookUpload(Buffer.from("{ not json"))).toEqual({ ok: false, reason: "invalid_json" });
+    expect(parseLorebookUpload(Buffer.from(JSON.stringify({ name: "not a lorebook" })))).toEqual({
+      ok: false,
+      reason: "unsupported",
+    });
+    expect(parseLorebookUpload(Buffer.from(JSON.stringify({ entries: [] })))).toMatchObject({
+      ok: true,
+      conversion: { entries: [] },
+    });
   });
 });
