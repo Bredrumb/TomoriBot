@@ -96,6 +96,7 @@ async function renderTips(
     error,
     makeProvider(options.providerName),
     makeContext(send, textCredentialSource, options.fallbackChain ?? []),
+    "fixture-key",
   );
   await Promise.resolve();
   const payload = send.mock.calls[0]?.[0] as {
@@ -215,7 +216,7 @@ describe("error embeds name where the failure came from", () => {
   }
 
   const providerFailure = (ui: StreamErrorUi, context: StreamContext) =>
-    ui.handleProviderError(API_ERROR, makeProvider(), context);
+    ui.handleProviderError(API_ERROR, makeProvider(), context, "fixture-key");
 
   it("attributes provider failures to the provider and the credential that failed", async () => {
     const vars = { provider: "OpenRouter" };

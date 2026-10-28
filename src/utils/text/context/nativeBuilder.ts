@@ -372,7 +372,12 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   // before server documents) to stay inside the prompt-cache-friendly prefix.
   await appendOptionalItem(
     contextItems,
-    buildVerbatimToolDefinitionsContextItem({ tomoriState, userId: triggererUserId }),
+    buildVerbatimToolDefinitionsContextItem({
+      tomoriState,
+      userId: triggererUserId,
+      contextItems,
+      isUserImpersonation,
+    }),
   );
   await appendOptionalItem(
     contextItems,

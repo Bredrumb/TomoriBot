@@ -9,7 +9,7 @@ import type {
   ToolAvailabilityLlmState,
   ToolContext,
 } from "@/types/tool/interfaces";
-import { assembleToolsForContext } from "@/tools/assembly";
+import { assembleToolsForContext, createToolVariant } from "@/tools/assembly";
 import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
 import { sql } from "@/utils/db/client";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
@@ -141,7 +141,28 @@ export function applyStreamContextAvailability(params: {
     );
   }
 
-  return filteredTools;
+  const roster =
+    streamContext.deliveryMode !== "user_impersonation" &&
+    !streamContext.disableAllTools &&
+    streamContext.personaSprites?.personaId === tomoriState.persona_id
+      ? streamContext.personaSprites
+      : undefined;
+  return filteredTools.map((tool) => {
+    if (!tool.supportsSpriteSelection || !roster?.spriteKeys.length) return tool;
+    return createToolVariant(tool, {
+      parameters: {
+        ...tool.parameters,
+        properties: {
+          ...tool.parameters.properties,
+          sprite: {
+            type: "string",
+            description:
+              "Optional appearance for this message. Use an exact sprite label from your available sprites. Use an empty string to return to your base appearance; omit to keep your current appearance.",
+          },
+        },
+      },
+    });
+  });
 }
 
 export function getAvailableToolsForContext(

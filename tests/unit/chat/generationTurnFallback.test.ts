@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
-import { customEndpointSchema } from "@/types/db/schema";
+import { customEndpointSchema, personaSpriteSchema } from "@/types/db/schema";
+import { GenerateVoiceMessageTool } from "@/tools/functionCalls/generateVoiceMessageTool";
+import { ConditioningInteractionTool } from "@/tools/functionCalls/conditioningInteractionTool";
+import { buildPersonaSpriteContextItem } from "@/utils/text/context/personaSprites";
+import { clearPersonaSpriteCache, setPersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
+import type { ToolParameterSchema } from "@/types/tool/interfaces";
 import { stubGlobalFetch } from "../../helpers/fetchStub";
 import type { Client, Message } from "discord.js";
 import type { LlmRow, TomoriState } from "@/types/db/schema";
@@ -343,22 +348,12 @@ scopedMock.module("@/utils/chat/toolLoop", () => ({
   },
 }));
 
-// The verbatim schema dump resolves the offering tool set through the registry, which starts empty
-// in a unit-test process. One declared tool is enough to prove the dump is built and injected.
 scopedMock.module("@/tools/toolRegistry", () => ({
   ...realToolRegistry,
   getAvailableToolsWithMCP: async () => ({
-    builtInTools: [
-      {
-        name: "generate_voice_message",
-        description: "Speak a line out loud.",
-        parameters: { type: "object", properties: { text: { type: "string", description: "Line to speak." } } },
-        category: "speech",
-        handler: async () => ({ success: true }),
-      },
-    ],
+    builtInTools: [new GenerateVoiceMessageTool(), new ConditioningInteractionTool()],
     mcpFunctionNames: [],
-    totalCount: 1,
+    totalCount: 2,
   }),
 }));
 
@@ -2051,7 +2046,7 @@ describe("runGenerationTurn fallback behavior", () => {
       });
     }
 
-    it("injects the in-band schemas and the nudge when falling back from a native primary", async () => {
+    it.each([false, true])("injects fallback schemas matching the advertised sprite roster: %j", async (hasSprites) => {
       const context = makeContext(makeLlm(1, "primary-model"), makeLlm(2, "unused-fallback"));
       // A registered custom endpoint whose model opted into verbatim tool calling.
       context.currentPersona.fallback_chain = [
@@ -2069,6 +2064,34 @@ describe("runGenerationTurn fallback behavior", () => {
         { role: "user", parts: [{ type: "text", text: "hello" }], metadataTag: ContextItemTag.DIALOGUE_HISTORY },
         { role: "model", parts: [{ type: "text", text: "hi" }], metadataTag: ContextItemTag.DIALOGUE_HISTORY },
       ] as never;
+      const personaId = context.currentPersona.persona_id ?? 10;
+      setPersonaSpriteCache(
+        personaId,
+        hasSprites
+          ? [
+              personaSpriteSchema.parse({
+                persona_id: personaId,
+                sprite_name: "happy",
+                sprite_key: "happy",
+                avatar_url: "https://example.com/happy.png",
+              }),
+            ]
+          : [],
+      );
+      try {
+        const spriteItem = await buildPersonaSpriteContextItem({
+          client: context.client,
+          guildId: "guild",
+          tomoriState: context.currentPersona,
+          tomoriConfig: context.currentPersona.config,
+          botName: context.currentPersona.persona_nickname,
+          isUserImpersonation: false,
+          convertMentions: async (text) => text,
+        });
+        if (spriteItem) context.contextItems.unshift(spriteItem);
+      } finally {
+        clearPersonaSpriteCache();
+      }
       enqueuePrimaryFailure();
       queuedResults.push(fallbackSuccess);
 
@@ -2081,6 +2104,20 @@ describe("runGenerationTurn fallback behavior", () => {
         fallbackItems.some((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS),
       ).toBe(true);
       expect(fallbackItems.some((item) => contextItemText(item).includes(NUDGE_PROBE))).toBe(true);
+      const schemaItem = fallbackItems.find(
+        (item) => item.metadataTag === ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS,
+      );
+      const json = schemaItem ? contextItemText(schemaItem).match(/```json\n([\s\S]*?)\n```/)?.[1] : undefined;
+      expect(json).toBeDefined();
+      const schemas = JSON.parse(json ?? "[]") as Array<{
+        function: { name: string; parameters: ToolParameterSchema };
+      }>;
+      for (const name of ["generate_voice_message", "interact_with_target"]) {
+        const schema = schemas.find((tool) => tool.function.name === name);
+        expect(schema).toBeDefined();
+        expect(Boolean(schema?.function.parameters.properties.sprite)).toBe(hasSprites);
+        expect(schema?.function.parameters.required).not.toContain("sprite");
+      }
       // The native primary's own context stays free of verbatim scaffolding.
       const primaryItems = toolLoopCalls[0]?.contextItems ?? [];
       expect(primaryItems.some((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS)).toBe(

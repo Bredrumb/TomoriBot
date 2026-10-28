@@ -15,6 +15,11 @@ export default {
     execution: {
       unavailable: `The tool \`{tool}\` is unavailable under the current settings, model capabilities, or bot permissions.`,
     },
+    sprite_selection: {
+      unavailable: "Sprite selection is unavailable for this persona or turn. Omit the sprite parameter.",
+      invalid:
+        "Choose a sprite label from your current available sprites, or use an empty string for your base appearance.",
+    },
     generate_voice_message: {
       persona_missing: `The persona is no longer available.`,
       stale: `The speech model, credentials, or persona voice changed during this turn. Start a new turn before generating a voice message.`,

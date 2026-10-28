@@ -152,6 +152,7 @@ async function runGenerationAttempts(
       context.tomoriState = attempt.tomoriState;
       const attemptContextItems = await prepareProviderContextItems({
         contextItems: baseContextItems,
+        isUserImpersonation: context.isUserImpersonation,
         userId: context.streamingContext.triggererUserId,
         tomoriState: attempt.tomoriState,
         deliberateToolAllowedNames: context.streamingContext.deliberateToolAllowedNames,
@@ -965,6 +966,7 @@ function extractErrorDetail(streamResult: StreamResult | undefined): string {
 async function prepareProviderContextItems(args: {
   userId?: number;
   contextItems: StructuredContextItem[];
+  isUserImpersonation: boolean;
   tomoriState: TomoriState;
   deliberateToolAllowedNames: string[] | undefined;
 }): Promise<StructuredContextItem[]> {
@@ -987,6 +989,8 @@ async function prepareProviderContextItems(args: {
       const toolItem = await buildVerbatimToolDefinitionsContextItem({
         tomoriState: args.tomoriState,
         userId: args.userId,
+        contextItems,
+        isUserImpersonation: args.isUserImpersonation,
       });
       if (toolItem) {
         contextItems = injectVerbatimToolDefinitionsItem(contextItems, toolItem);

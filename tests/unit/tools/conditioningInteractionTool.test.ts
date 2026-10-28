@@ -25,7 +25,8 @@ import { createPersona } from "../../helpers/fixtures";
 import { localizedCopy } from "../../helpers/localeCases";
 import * as lifecycle from "@/utils/discord/webhook/lifecycle";
 import * as identity from "@/utils/discord/webhook/identity";
-import { clearPersonaAppearances } from "@/utils/cache/personaAppearanceCacheStore";
+import { clearPersonaAppearances, getPersonaAppearance } from "@/utils/cache/personaAppearanceCacheStore";
+import { buildPersonaSpriteContextItem } from "@/utils/text/context/personaSprites";
 import { clearPersonaSpriteCache, setPersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
 import {
   clearAllChannelDeliveryContinuity,
@@ -219,6 +220,45 @@ function queuedEvent(queued: ReturnType<typeof spyOn>, call: number): string {
   const item = (args.injectedContextItems as Array<{ parts: Array<{ text?: string }> }>)[0];
   return item.parts[0].text ?? "";
 }
+
+it("selects a sprite for a playful interaction without a preceding text reply", async () => {
+  const f = fixture("user");
+  const { messages } = webhookFixture();
+  setPersonaSpriteCache(ACTOR_ID, [spriteRow(true)]);
+  const item = await buildPersonaSpriteContextItem({
+    client: f.context.client,
+    guildId: "guild",
+    tomoriState: f.actor,
+    tomoriConfig: f.actor.config,
+    botName: "Juno",
+    isUserImpersonation: false,
+    convertMentions: async (text) => text,
+  });
+  f.context.contextItems = item ? [item] : [];
+  const result = await new ConditioningInteractionTool().execute(
+    { target: "Mirri", action: "hug", sprite: "shy" },
+    f.context,
+  );
+  expect(result.success).toBe(true);
+  expect(messages[0]).toMatchObject({ username: "shy (Juno)", avatarURL: spriteRow().avatar_url });
+  expect(getPersonaAppearance(CHANNEL, ACTOR_ID)?.sprite).toMatchObject({ spriteName: "shy", isIdentity: true });
+  expect(f.channel.send).not.toHaveBeenCalled();
+});
+
+it("rejects an invalid interaction sprite before saving conditioning or posting", async () => {
+  const f = fixture();
+  const { messages } = webhookFixture();
+  const result = await new ConditioningInteractionTool().execute(
+    { target: "Mirri", action: "hug", reason: "sharing snacks", sprite: "shy" },
+    f.context,
+  );
+  expect(result.success).toBe(false);
+  expect(result.error).toBe(localizedCopy("en-US", "tools.sprite_selection.unavailable"));
+  expect(f.record).not.toHaveBeenCalled();
+  expect(f.channel.send).not.toHaveBeenCalled();
+  expect(messages).toHaveLength(0);
+  expect(f.context.streamContext?.disableConditioningInteraction).not.toBe(true);
+});
 
 it("saves persona-attributed feedback and queues the target with the exact interaction event", async () => {
   const f = fixture();

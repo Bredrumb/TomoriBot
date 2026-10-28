@@ -6,12 +6,26 @@ import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories
 import { fireRowSchema } from "@/modules/natural-nudges/db/types";
 import { log } from "@/utils/misc/logger";
 import { useEnvSandbox } from "../../helpers/env";
+import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
+import { serverStmConfigSchema } from "@/types/db/schema";
 
 useEnvSandbox(["POSTGRES_TRANSIENT_RETRY_DELAY_MS", "POSTGRES_TRANSIENT_RETRY_ATTEMPTS"]);
 
 beforeAll(() => {
   process.env.POSTGRES_TRANSIENT_RETRY_DELAY_MS = "0";
   process.env.POSTGRES_TRANSIENT_RETRY_ATTEMPTS = "3";
+});
+
+it("recovers saved short-term memory settings after a connection lifetime timeout", async () => {
+  const row = serverStmConfigSchema.parse({ server_id: 1, refresh_cadence: 9, render_mode: "supersede" });
+  const thunk = failOnceThen("ERR_POSTGRES_LIFETIME_TIMEOUT", [row]);
+  const query = spyOn(dbClient, "sql").mockImplementation(thunk.run as unknown as typeof dbClient.sql);
+  try {
+    expect(await shortTermMemoryRepository.getStmConfig(1)).toEqual(row);
+    expect(thunk.calls()).toBe(2);
+  } finally {
+    query.mockRestore();
+  }
 });
 
 describe("natural nudge database reads", () => {

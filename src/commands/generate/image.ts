@@ -12,6 +12,8 @@ import {
   getProviderRequestFailureCopy,
 } from "@/utils/provider/providerUsage";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
+import { providerContentRejectionSchema } from "@/utils/provider/providerErrorClassification";
 /**
  * Image Generation Command
  * Allows users to generate AI images using the configured provider
@@ -644,7 +646,7 @@ export async function execute(
       }
     } else if (imageRoute.kind === "zai") {
       if (referenceImages.length > 0) {
-        await interaction.followUp({
+        await modalSubmitInteraction.followUp({
           content: localizer(locale, "commands.generate.image.zai_no_img2img_warning"),
         });
       }
@@ -660,7 +662,7 @@ export async function execute(
       generatedImageData = result.imageData;
     } else {
       if (referenceImages.length > 0) {
-        await interaction.followUp({
+        await modalSubmitInteraction.followUp({
           content: localizer(locale, "commands.generate.image.nvidia_no_img2img_warning"),
         });
       }
@@ -774,22 +776,31 @@ export async function execute(
       return;
     }
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const failureCode = createProviderToolFailure(error, { locale, provider: executionProvider }).failure?.code;
 
     const isBillingRefusal = /\b(?:billing|payment|quota|balance|credits?|402|PERMISSION_DENIED)\b/i.test(errorMessage);
     const isSafetyRefusal =
-      errorMessage.includes("safety") || errorMessage.includes("blocked") || errorMessage.includes("RECITATION");
+      providerContentRejectionSchema.safeParse(failureCode).success ||
+      /\b(?:safety|blocked|RECITATION)\b/i.test(errorMessage);
+    const isAuthenticationRefusal = ["401", "403", "authentication"].includes(failureCode ?? "");
 
     await reportProviderFailure({
       summary: "Image generation failed",
       errorType: "ImageGenerationFailed",
       error,
-      expected: isBillingRefusal || isSafetyRefusal,
+      expected: isBillingRefusal || isSafetyRefusal || isAuthenticationRefusal,
       serverId: tomoriState.server_id,
       userId: userData.user_id ?? null,
       dimensions: {
         operation: "image-generation",
         provider: executionProvider,
-        refusal: isBillingRefusal ? "billing" : isSafetyRefusal ? "safety" : "none",
+        refusal: isBillingRefusal
+          ? "billing"
+          : isSafetyRefusal
+            ? "safety"
+            : isAuthenticationRefusal
+              ? "authentication"
+              : "none",
       },
       metadata: { credentialSource: imageCreds.source },
     });

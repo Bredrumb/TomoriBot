@@ -42,6 +42,8 @@ import { recordPersonaDelivery, type PersonaDeliveryReceipt } from "@/utils/disc
 import { getSingleAttemptWebhookRest } from "@/utils/discord/webhook/webhookCore";
 import { deliverVoiceMessage, postVoiceTranscriptCaption } from "@/utils/discord/webhook/voiceMessageDelivery";
 import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
+import { resolveToolSpriteSelection } from "@/tools/spriteSelection";
+import { buildPersonaSpriteContextItem } from "@/utils/text/context/personaSprites";
 import * as remoteFetch from "@/utils/security/userRemoteFetch";
 import * as download from "@/utils/security/safeDownload";
 import { initializeLocalizer } from "@/utils/text/localizer";
@@ -300,6 +302,72 @@ async function searchSetup() {
 }
 
 describe("persona media delivery", () => {
+  it("selects a voice sprite for audio and caption, then explicitly returns to base", async () => {
+    for (const isAlter of [false, true]) {
+      const f = fixture(isAlter, true, true, false);
+      f.voiceFetch();
+      const item = await buildPersonaSpriteContextItem({
+        client: f.context.client,
+        guildId: f.channel.guildId,
+        tomoriState: f.persona,
+        tomoriConfig: f.persona.config,
+        botName: "Juno",
+        isUserImpersonation: false,
+        convertMentions: async (text) => text,
+      });
+      f.context.contextItems = item ? [item] : [];
+      const selected = await resolveToolSpriteSelection({ sprite: "joy" }, f.context, 7);
+      if (!selected.success) throw new Error(selected.error);
+      f.target.personaPost.appearance = selected.appearance;
+      expect(getPersonaAppearance(f.channel.id, 7)).toBeUndefined();
+      await deliverVoiceMessage({
+        target: f.target,
+        audioBuffer: Buffer.from("voice"),
+        mimeType: "audio/ogg",
+        filename: "voice.ogg",
+        voiceMeta: { waveform: "AA==", durationSecs: 1.25 },
+      });
+      await postVoiceTranscriptCaption(f.target, "hello");
+      expect(f.requests).toHaveLength(2);
+      for (const request of f.requests)
+        expect(request.payload).toMatchObject({ username: "joy (Juno)", avatar_url: SPRITE });
+      expect(getPersonaAppearance(f.channel.id, 7)?.sprite?.spriteName).toBe("joy");
+      const base = await resolveToolSpriteSelection({ sprite: "" }, f.context, 7);
+      if (!base.success) throw new Error(base.error);
+      f.target.personaPost.appearance = base.appearance;
+      expect(getPersonaAppearance(f.channel.id, 7)?.sprite?.spriteName).toBe("joy");
+      await deliverVoiceMessage({
+        target: f.target,
+        audioBuffer: Buffer.from("voice"),
+        mimeType: "audio/ogg",
+        filename: "voice.ogg",
+        voiceMeta: { waveform: "AA==", durationSecs: 1.25 },
+      });
+      expect(getPersonaAppearance(f.channel.id, 7)?.sprite).toBeUndefined();
+      expect(f.receipts.at(-1)?.route).toBe(isAlter ? "webhook" : "bot");
+      if (isAlter) expect(f.requests.at(-1)?.payload.avatar_url).toBe(BASE);
+    }
+  });
+
+  it("preserves remembered appearance when an explicitly selected voice delivery is unconfirmed", async () => {
+    const f = fixture(false, true);
+    f.voiceFetch();
+    f.target.personaPost.appearance = { kind: "base" };
+    f.outcomes.push("lost");
+    await expect(
+      deliverVoiceMessage({
+        target: f.target,
+        audioBuffer: Buffer.from("voice"),
+        mimeType: "audio/ogg",
+        filename: "voice.ogg",
+        voiceMeta: { waveform: "AA==", durationSecs: 1.25 },
+      }),
+    ).rejects.toMatchObject({ outcome: "unconfirmed" });
+    expect(f.requests).toHaveLength(1);
+    expect(f.receipts).toHaveLength(0);
+    expect(getPersonaAppearance(f.channel.id, 7)?.sprite?.spriteName).toBe("joy");
+  });
+
   it("delivers images, video, both search engines, native voice, and captions as main and alter sprites in threads", async () => {
     await searchSetup();
     for (const isAlter of [false, true])

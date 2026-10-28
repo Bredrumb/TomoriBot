@@ -12,6 +12,7 @@ import type {
 } from "@/types/provider/featureInterfaces";
 import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
 import { log } from "@/utils/misc/logger";
+import { readProviderErrorBody } from "@/utils/provider/providerErrorMetrics";
 import { buildNvidiaThinkingRequest } from "@/utils/provider/thinkingControl";
 import {
   NVIDIA_CHAT_COMPLETIONS_URL,
@@ -231,8 +232,14 @@ async function executeStructuredJsonRequest<T>(params: {
 
     if (!response.ok) {
       if (params.request.privateOutput) {
-        await response.body?.cancel();
-        return privateStructuredFailure(params.request, "transport", response.status);
+        return privateStructuredFailure(
+          params.request,
+          "transport",
+          response.status,
+          undefined,
+          undefined,
+          await readProviderErrorBody(response, params.request.apiKey),
+        );
       }
       const errorBody = await response.text();
       log.error(`${params.logLabel} request failed`, new Error(errorBody), {

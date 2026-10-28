@@ -1,5 +1,5 @@
 import { MessageIdMap } from "@/utils/text/messageIdMap";
-import { describe, expect, it, spyOn } from "bun:test";
+import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import type { Client } from "discord.js";
 import { runHiddenImageTurn, type HiddenImageTurnParams } from "@/utils/provider/hiddenImageTurn";
 import * as credentials from "@/utils/provider/credentialResolver";
@@ -14,6 +14,12 @@ import { createLlmRow, createPersona } from "../../helpers/fixtures";
 import { userSavedProviderConfigSchema } from "@/types/db/schema";
 import { llmModelRepo } from "@/utils/db/repositories";
 import { currentProviderUsageContext } from "@/utils/provider/providerUsage";
+import { log } from "@/utils/misc/logger";
+import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy } from "../../helpers/localeCases";
+import type { ProviderError } from "@/types/stream/interfaces";
+
+beforeAll(initializeLocalizer);
 
 describe("hidden image planning credentials", () => {
   it("uses the resolved planning model, settings and key and passes its usage owner to image tools", async () => {
@@ -62,7 +68,7 @@ describe("hidden image planning credentials", () => {
       };
     });
     const execute = spyOn(ToolRegistry, "executeTool").mockResolvedValue({ success: true, endTurn: true });
-    const spies = [
+    const spies: Array<{ mockRestore(): void }> = [
       resolve,
       config,
       stream,
@@ -120,7 +126,7 @@ describe("hidden image planning credentials", () => {
       }),
     ];
     try {
-      const result = await runHiddenImageTurn({
+      const params: HiddenImageTurnParams = {
         channel: {
           id: "synthetic-channel",
           messages: { fetch: async () => new Map() },
@@ -136,12 +142,65 @@ describe("hidden image planning credentials", () => {
         presetInstruction: "Portrait",
         aspectRatio: "1:1",
         naiOrientation: "square",
-      });
+      };
+      const result = await runHiddenImageTurn(params);
       expect(result.success).toBe(true);
       expect(resolve).toHaveBeenCalledWith(state.server_id, "text", { userId: 1, textModel: state.llm });
       expect(config.mock.calls[0]?.[1]).toBe("synthetic-member");
       expect(execute.mock.calls[0]?.[2]?.usageContext).toBe(usageContext);
       expect(stream.mock.calls[0]?.[10]?.textCredentialSource).toBe("personal");
+      expect(stream.mock.calls[0]?.[10]?.suppressUserErrors).toBe(true);
+
+      const errors = spyOn(log, "error").mockResolvedValue(undefined);
+      const warnings = spyOn(log, "warn").mockImplementation(() => {});
+      const metrics = spyOn(log, "metric").mockImplementation(() => {});
+      spies.push(errors, warnings, metrics);
+      for (const [type, code, expected] of [
+        ["content_blocked", "PROHIBITED_CONTENT", true],
+        ["api_error", "401", true],
+        ["api_error", "400", false],
+      ] as const) {
+        errors.mockClear();
+        warnings.mockClear();
+        metrics.mockClear();
+        execute.mockClear();
+        const error: ProviderError = {
+          type,
+          code,
+          retryable: false,
+          message: "UPSTREAM_BODY synthetic-member",
+          originalError: { providerResponse: "UPSTREAM_DETAIL synthetic-member" },
+        };
+        stream.mockResolvedValue({ status: "error", data: error });
+        const failed = await runHiddenImageTurn(params);
+        expect(failed.success).toBe(false);
+        expect(failed.error).not.toContain("UPSTREAM_BODY");
+        expect(failed.error).not.toContain("synthetic-member");
+        if (type === "content_blocked")
+          expect(failed.error).toBe(localizedCopy("en-US", "genai.tool_failure.content_blocked"));
+        expect(execute).not.toHaveBeenCalled();
+        expect(errors.mock.calls.length).toBe(expected ? 0 : 1);
+        expect(warnings.mock.calls.length).toBe(expected ? 1 : 0);
+        const recorded = expected ? warnings.mock.calls[0] : errors.mock.calls[0];
+        expect(recorded?.[2]?.metadata).toMatchObject({
+          provider: "openrouter",
+          code,
+          model: model.llm_codename,
+          credentialSource: "personal",
+        });
+        expect(JSON.stringify(recorded)).toContain("UPSTREAM_BODY");
+        expect(JSON.stringify(recorded)).toContain("UPSTREAM_DETAIL");
+        expect(JSON.stringify(recorded)).not.toContain("synthetic-member");
+        if (expected) expect(metrics).toHaveBeenCalledWith("provider_failure", expect.objectContaining({ code }));
+      }
+      errors.mockClear();
+      stream.mockRejectedValue(new Error("UPSTREAM_THROW synthetic-member"));
+      expect((await runHiddenImageTurn(params)).error).not.toContain("UPSTREAM_THROW");
+      expect(errors.mock.calls[0]?.[1]).toMatchObject({
+        message: expect.stringContaining("UPSTREAM_THROW"),
+        stack: expect.stringContaining("hiddenImageTurn.test.ts"),
+      });
+      expect(JSON.stringify(errors.mock.calls)).not.toContain("synthetic-member");
     } finally {
       for (const spy of spies) spy.mockRestore();
     }

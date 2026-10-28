@@ -18,7 +18,9 @@ import { resolveIdentityTarget, resolveTriggererDiscordId } from "@/utils/discor
 import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { buildConditioningInteractionEvent } from "@/utils/conditioning/conditioningInteractionContext";
 import { log } from "@/utils/misc/logger";
-import { sendToolPersonaPost } from "@/utils/discord/webhook/toolPersonaDelivery";
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
+import { sendPersonaPost } from "@/utils/discord/webhook/personaPost";
+import { resolveToolSpriteSelection } from "@/tools/spriteSelection";
 
 const actionKeys = Object.keys(CONDITIONING_ACTION_TYPES) as [ConditioningActionKey, ...ConditioningActionKey[]];
 const interactionArgs = z
@@ -44,6 +46,7 @@ export class ConditioningInteractionTool extends BaseTool {
   description =
     "Express a strong feeling toward a user or persona through a playful physical interaction, such as a hug, bite, bonk, or offering food. Use this for a deliberate gesture that deserves its own visible moment, especially when reacting to something specific they did. Keep incidental gestures in ordinary roleplay text. An optional reason explains what prompted the action and saves conditioning when targeting a persona. Omit it for a gesture without lasting conditioning. Use at most once per turn.";
   category = "discord" as const;
+  supportsSpriteSelection = true;
   requiresFeatureFlag = "conditioning_interactions";
   parameters: ToolParameterSchema = {
     type: "object",
@@ -98,6 +101,8 @@ export class ConditioningInteractionTool extends BaseTool {
       if (!actor?.persona_id || actor.server_id !== context.tomoriState.server_id) {
         return { success: false, error: "The active persona is unavailable." };
       }
+      const spriteSelection = await resolveToolSpriteSelection(args, context, actor.persona_id);
+      if (!spriteSelection.success) return spriteSelection;
       const resolution = await resolveIdentityTarget(target, context, personas);
       if (resolution.status !== "resolved") {
         return {
@@ -195,10 +200,10 @@ export class ConditioningInteractionTool extends BaseTool {
           data: { conditioningSaved },
         };
       suppressNextSelfReply(context.channel.id);
-      const outcome = await sendToolPersonaPost(context, actor, {
-        embeds: [embed],
-        flags: MessageFlags.SuppressNotifications,
-      });
+      const outcome = await sendPersonaPost(
+        { ...buildToolPersonaPostContext(context, actor), appearance: spriteSelection.appearance },
+        { embeds: [embed], flags: MessageFlags.SuppressNotifications },
+      );
       if (outcome.status !== "sent") {
         log.warn("Conditioning interaction was not delivered", outcome.error, {
           errorType: "conditioning_interaction_delivery_failed",

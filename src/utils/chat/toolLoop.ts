@@ -16,6 +16,7 @@ import { charsToTokensText, estimateContextItemsTokens } from "@/utils/text/toke
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { ToolRegistry } from "@/tools/toolRegistry";
+import { getToolSpriteRoster } from "@/tools/spriteSelection";
 import { statRepository } from "@/utils/db/repositories";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
@@ -639,6 +640,10 @@ async function streamOnce(
     if (item) requestItems = insertBeforeNativePrefill(requestItems, outputPrefill, item);
   }
   const request = foldPrefillIntoToolHistory(requestItems, outputPrefill, functionHistory);
+  params.context.streamingContext.personaSprites = getToolSpriteRoster(
+    request.contextItems,
+    params.tomoriState.persona_id,
+  );
   const streamPromise = params.provider.streamToDiscord(
     params.context.channel as Parameters<LLMProvider["streamToDiscord"]>[0],
     params.context.client,

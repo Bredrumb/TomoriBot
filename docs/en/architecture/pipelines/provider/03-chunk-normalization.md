@@ -78,9 +78,11 @@ the failing key may open it: a `Manage Server` member (or the DM's user) for ser
 only the triggering user for a personal key. Error
 codes appear only when `formatProviderErrorCodeForDisplay()` recognizes an HTTP status or single-case
 enum word; anything else shows as `unknown`. The chat logger caps the diagnostic snippet from
-`getProviderErrorDetail()` at 2,000 characters, then passes it and the attached error through
-credential-pattern redaction. Attached errors and stack traces can be longer; log string truncation
-is opt-in. Routine provider failures use warning-level logs, which normal production logging hides.
+`getProviderErrorDetail()` at 2,000 characters after removing the exact request key. Log messages,
+attached errors and metadata also remove that key before credential-pattern redaction and optional
+truncation. This is best-effort redaction; encoded or transformed secrets can survive. Attached errors
+and stack traces can be longer; log string truncation is opt-in. Expected provider failures retain warning diagnostics in JSON logs at every log level,
+without creating an `error_logs` row.
 Logs remain private operator diagnostics. See
 [Production tuning](/wiki/production-tuning/) for log controls. `/persona generate` and speech
 synthesis also keep upstream text out of public replies: preset generators reply with a classified

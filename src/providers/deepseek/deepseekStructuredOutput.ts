@@ -8,6 +8,7 @@ import type { z } from "zod";
 import { toDeepseekApiModelName } from "@/providers/deepseek/deepseekShared";
 import type { ProviderStructuredJsonRequest, StructuredOutputResult } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
+import { readProviderErrorBody } from "@/utils/provider/providerErrorMetrics";
 import { buildDeepSeekThinkingRequest } from "@/utils/provider/thinkingControl";
 import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
 
@@ -172,8 +173,14 @@ export async function callDeepseekStructuredJSON<T>(
 
     if (!response.ok) {
       if (request.privateOutput) {
-        await response.body?.cancel();
-        return privateStructuredFailure(request, "transport", response.status);
+        return privateStructuredFailure(
+          request,
+          "transport",
+          response.status,
+          undefined,
+          undefined,
+          await readProviderErrorBody(response, request.apiKey),
+        );
       }
       const errorBody = await response.text();
       log.error("DeepSeek structured JSON request failed", new Error(errorBody), {

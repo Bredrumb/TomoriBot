@@ -33,6 +33,7 @@ import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
 import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
 import { normalizeProviderUsage, type TokenUsage } from "@/utils/text/tokenEstimate";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 
 /**
  * Provider-to-chat-completions-URL mapping for OpenAI-compatible providers.
@@ -293,7 +294,6 @@ export class PeekProfilePictureTool extends BaseTool {
     } catch (error) {
       const denied = findProviderRequestDeniedError(error, ...requestScope);
       if (denied) return notifyProviderToolFailure(context, denied);
-      log.error(`Profile picture processing failed for identity: ${targetIdentity}`, error as Error);
 
       let errorMessage = "Failed to process the user's profile picture.";
       let errorStatus = "profile_processing_failed";
@@ -320,6 +320,19 @@ export class PeekProfilePictureTool extends BaseTool {
           errorStatus = "unsupported_target_identity";
         }
       }
+
+      await reportProviderFailure({
+        summary: "Profile picture processing failed",
+        errorType: "ProfilePictureProcessingFailed",
+        error,
+        expected: ["avatar_target_not_found", "ambiguous_target_identity", "unsupported_target_identity"].includes(
+          errorStatus,
+        ),
+        serverId: context.tomoriState.server_id,
+        userId: context.internalUserId,
+        dimensions: { operation: "profile-picture", reason: errorStatus },
+        metadata: { targetIdentity },
+      });
 
       return {
         success: false,

@@ -19,6 +19,11 @@ DMs never get nudges (for now).
 Both kinds pause after 14 days without someone directly chatting with TomoriBot. Mention her,
 use a persona's trigger word, or reply to her message to resume them.
 
+Outside Play Scenes, a nudge can invite another persona to answer by using `@` before their trigger
+word, including in Deliberate Trigger Mode. Replies follow your server's match and cascade limits
+and persona channel restrictions. They do not count as human activity or create short-term memories.
+A member's message stops pending nudge replies. Play Scenes follow their planned sequence.
+
 ## Idle nudges
 <!-- anchor: idle-nudges -->
 

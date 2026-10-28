@@ -85,6 +85,7 @@ export interface DeliveredStreamMessage {
  * Streaming context for enhanced functionality during streaming
  */
 export interface StreamingContext {
+  personaSprites?: StructuredContextItem["personaSprites"];
   deliveryMode?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryMode;
   deliveryReceipts?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryReceipt[];
   deliveryState?: { unconfirmed: boolean };
@@ -322,6 +323,7 @@ export interface Tool {
   name: string;
   description: string;
   category: ToolCategory;
+  supportsSpriteSelection?: boolean;
 
   parameters: ToolParameterSchema;
 

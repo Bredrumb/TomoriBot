@@ -1,5 +1,5 @@
-import { describe, expect, it, spyOn } from "bun:test";
-import type { Message } from "discord.js";
+import { beforeAll, describe, expect, it, spyOn } from "bun:test";
+import type { Embed, Message } from "discord.js";
 import { buildChatTurnContext, resolveTurnDeliberateToolMode } from "@/utils/chat/contextPipeline";
 import { normalizeChatInvocation } from "@/utils/chat/admission";
 import type { ChatTurn, ChatTurnContext, NaturalNudgeTurn, TomoriChatInput } from "@/utils/chat/types";
@@ -16,9 +16,13 @@ import { ToolRegistry } from "@/tools/toolRegistry";
 import { getAvailableToolsForContext } from "@/tools/availability";
 import { ConditioningInteractionTool } from "@/tools/functionCalls/conditioningInteractionTool";
 import { buildConditioningInteractionEvent } from "@/utils/conditioning/conditioningInteractionContext";
-import type { StructuredContextItem } from "@/types/misc/context";
+import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
+import { buildConditioningInteractionEmbed } from "@/utils/conditioning/conditioningEmbed";
+import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy } from "../../helpers/localeCases";
 
 const BOT_ID = "fixture-bot";
+beforeAll(initializeLocalizer);
 
 async function buildTurnContext(
   naturalNudge: NaturalNudgeTurn | undefined,
@@ -26,6 +30,8 @@ async function buildTurnContext(
     conditioningInteraction?: TomoriChatInput["conditioningInteraction"];
     interactionEnabled?: boolean;
     hasTools?: boolean;
+    includeInteractionHistory?: boolean;
+    gestureHistory?: boolean;
   } = {},
 ): Promise<{
   context: ChatTurnContext;
@@ -77,18 +83,35 @@ async function buildTurnContext(
     { ...base, id: "persona-last", author: { id: BOT_ID, username: "Tomori", bot: true }, content: "see you later" },
     { ...base, id: "human", author: { id: "fixture-juno", username: "Juno", bot: false }, content: "bye" },
   ] as unknown as Message[];
+  const trigger = messages[0];
+  if (options.conditioningInteraction || options.gestureHistory) {
+    const notice = (actorLabel: string) =>
+      buildConditioningInteractionEmbed({
+        locale: "en-US",
+        type: "reward",
+        actionKey: "hug",
+        actorLabel,
+        targetName: persona.persona_nickname,
+        reasonText: "being kind",
+        footerKey: null,
+      }).toJSON() as Embed;
+    trigger.content = "";
+    trigger.embeds = [notice("Juno")];
+    messages.unshift({ ...trigger, id: "later-notice", embeds: [notice("Bau")] } as Message);
+    messages.splice(2, 0, { ...trigger, id: "earlier-notice", embeds: [notice("Mirri")] } as Message);
+  }
   const interactionEvent = options.conditioningInteraction
     ? buildConditioningInteractionEvent({
         actorName: "Juno",
         targetName: persona.persona_nickname,
         action: "hug",
         reason: "being kind",
-        messageId: messages[0].id,
+        messageId: trigger.id,
       })
     : undefined;
   const incoming = normalizeChatInvocation({
-    client: messages[0].client,
-    message: messages[0],
+    client: trigger.client,
+    message: trigger,
     isFromQueue: false,
     isManuallyTriggered: true,
     naturalNudge,
@@ -109,7 +132,7 @@ async function buildTurnContext(
     requestSnapshot: { tomoriState: persona },
     lockedTurn: {
       channelId: channel.id,
-      admission: { incoming, client, message: messages[0], channel, locale: "en-US" },
+      admission: { incoming, client, message: trigger, channel, locale: "en-US" },
     },
   } as unknown as ChatTurn;
   const spies = [
@@ -123,13 +146,25 @@ async function buildTurnContext(
     spyOn(userCache, "getCachedBlacklistStatus").mockResolvedValue(false),
     spyOn(blockCache, "getCachedActiveBlocksForPersona").mockResolvedValue([]),
     spyOn(naturalNudgeRepository, "loadAgendas").mockResolvedValue(new Map()),
-    spyOn(contextBuilder, "buildContext").mockResolvedValue({
-      contextItems: [],
+    spyOn(contextBuilder, "buildContext").mockImplementation(async (params) => ({
+      contextItems:
+        options.conditioningInteraction || options.gestureHistory
+          ? params.simplifiedMessageHistory
+              .filter((item) => options.includeInteractionHistory !== false || item.id !== trigger.id)
+              .map(
+                (item): StructuredContextItem => ({
+                  role: "user",
+                  metadataTag: ContextItemTag.DIALOGUE_HISTORY,
+                  messageId: item.id,
+                  parts: [{ type: "text", text: item.content ?? "" }],
+                }),
+              )
+          : [],
       tailDirectives: [],
       lowerPriorityTailDirectives: [],
       nudgeInjectionDepth: 0,
       messageIdMap: new MessageIdMap(),
-    }),
+    })),
   ];
   const reunion = spyOn(reunionPresence, "resolveReunionNote").mockResolvedValue({ note: null, presence: null });
   try {
@@ -171,7 +206,7 @@ describe("Natural Nudges turn context", () => {
 });
 
 describe("conditioning turn context", () => {
-  it("appends the tool hint to the event only when the receiving turn can use it", async () => {
+  it("keeps one recent user event with the available tool hint inside its system notice", async () => {
     for (const actorType of ["user", "persona"] as const) {
       for (const [interactionEnabled, hasTools] of [
         [true, true],
@@ -185,6 +220,9 @@ describe("conditioning turn context", () => {
         });
         const events = context.contextItems.filter((item) => item.messageId === interactionEvent?.messageId);
         expect(events).toHaveLength(1);
+        expect(events[0].role).toBe("user");
+        expect(events[0].metadataTag).toBe(ContextItemTag.DIALOGUE_HISTORY);
+        expect(context.contextItems.at(-1)?.messageId).toBe(interactionEvent?.messageId);
         const text = events
           .flatMap((item) => item.parts)
           .map((part) => (part.type === "text" ? part.text : ""))
@@ -192,19 +230,53 @@ describe("conditioning turn context", () => {
         expect(text.includes("`interact_with_target`")).toBe(interactionEnabled && hasTools);
         expect(text).not.toContain("{conditioning_interaction_tool}");
         expect(text).not.toContain("{{if");
-        const original = interactionEvent?.parts[0];
-        expect(original?.type).toBe("text");
-        if (original?.type === "text") {
-          if (interactionEnabled && hasTools) {
-            expect(text.startsWith(`${original.text} `)).toBe(true);
-            expect(text).not.toContain("\n");
-          } else {
-            expect(text).toBe(original.text);
-          }
-        }
+        const body = localizedCopy("en-US", "commands.reward.hug.embed_description_with_reason", {
+          user: "Juno",
+          bot: "Tomori",
+          reason: "being kind",
+        });
+        expect(text.startsWith(`[System: ${body}`)).toBe(true);
+        expect(text.endsWith("]")).toBe(true);
+        expect(text).not.toContain("\n");
+        expect(text.slice(text.indexOf("]") + 1)).toBe("");
+        expect(context.contextItems.some((item) => item.messageId === "earlier-notice")).toBe(true);
+        expect(context.contextItems.some((item) => item.messageId === "later-notice")).toBe(true);
+        expect(JSON.stringify(context.contextItems.filter((item) => item.role === "system"))).not.toContain(
+          "interact_with_target",
+        );
+        expect(JSON.stringify(interactionEvent)).not.toContain("interact_with_target");
         expect(context.streamingContext.disableConditioningInteraction).not.toBe(true);
       }
     }
+  });
+
+  it("keeps the reaction event when the delivered message is outside the fetched history", async () => {
+    const { context, interactionEvent } = await buildTurnContext(undefined, {
+      conditioningInteraction: { actorType: "persona", type: "reward" },
+      includeInteractionHistory: false,
+    });
+    const event = context.contextItems.find((item) => item.messageId === interactionEvent?.messageId);
+    expect(event?.role).toBe("user");
+    const part = event?.parts[0];
+    expect(part?.type).toBe("text");
+    if (part?.type === "text") {
+      expect(part.text.startsWith("[System: ")).toBe(true);
+      expect(part.text.endsWith("]")).toBe(true);
+      expect(part.text).toContain("`interact_with_target`");
+    }
+  });
+
+  it("leaves later gesture history without the reaction turn's tool hint", async () => {
+    const { context } = await buildTurnContext(undefined, { gestureHistory: true });
+    const text = JSON.stringify(context.contextItems);
+    expect(text).toContain(
+      localizedCopy("en-US", "commands.reward.hug.embed_description_with_reason", {
+        user: "Juno",
+        bot: "Tomori",
+        reason: "being kind",
+      }),
+    );
+    expect(text).not.toContain("`interact_with_target`");
   });
 });
 

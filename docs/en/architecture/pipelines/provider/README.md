@@ -48,7 +48,8 @@ thresholds, calibration, and response routing belong to consumers.
 
 Results distinguish `completed`, `refused`, `denied`, `cancelled`, `invalid-input`, `unavailable`, and `failed`.
 Request admission denials retain their error without logging an operational failure. Failed HTTP
-responses preserve validated OpenRouter limit metadata as a cause; provider prose is discarded.
+responses preserve validated OpenRouter limit metadata as a cause; scrubbed HTTP status and body
+details stay in retained warning or error logs and never enter the returned result.
 Completed/refused results carry ordered typed answers, optional actual usage/cost, local correlation,
 bounded provider request identity, and returned model ID. Probabilities must be finite in [0, 1].
 Missing/extra/duplicate answers, wrong types/order, invalid usage, and explicit evidence truncation
@@ -57,7 +58,7 @@ fail validation. Partial OpenAI refusals return `refused`. No chat or prose inte
 `onUsage` receives validated usage before answer validation. A malformed verdict or cancellation
 after response decoding retains reported spend. Routing records this callback once, including
 responses settling after its deadline, without accepting their late verdict. Missing or invalid
-usage stays unknown; HTTP failures retain only validated limit metadata and the numeric media minimum.
+usage stays unknown; HTTP failure results retain only validated limit metadata and the numeric media minimum.
 
 Requests compose caller cancellation with the existing `STREAM_SDK_CALL_TIMEOUT_MS` policy. Responses
 are bounded to 1 MiB. Until callers need a model-specific tokenizer, the serialized request's UTF-8
@@ -68,12 +69,14 @@ Only OpenRouter receives global seeds; seeding does not select a model or activa
 
 INFO traces contain protocol, numeric model/registration identities, correlation, counts, elapsed
 time, outcome, and actual usage/cost when supplied. They omit evidence, question text, caller labels,
-raw bodies, credentials, and endpoint URLs. Operational failures emit one sanitized ERROR where their
-cause is known, with stage/category and optional HTTP status in existing `ErrorContext` metadata.
+raw bodies, credentials, and endpoint URLs. Failure reporting retains scrubbed provider diagnostics
+with stage/category and optional HTTP status in existing `ErrorContext` metadata. Authentication,
+model availability, throttling, network failures, timeouts and upstream outages produce a metric plus
+a retained warning. Malformed requests and responses remain errors.
 `failed.errorLogged` is true, so recovery must not log the failure again. Cancellation, valid refusal,
 missing selection, and rejected input are expected outcomes. The existing logger hides INFO under
-`RUN_ENV=production` unless `TEST_PRODUCTION=true`; ERROR retains production visibility, persistence,
-and ambient workspace/turn context.
+`RUN_ENV=production` unless `TEST_PRODUCTION=true`; retained warnings reach JSON logs at every level,
+and errors also persist in `error_logs`. Both carry ambient workspace/turn context.
 
 Protocol references: [OpenRouter Decisions](https://openrouter.ai/docs/api/api-reference/alphadecisions/submit-a-decisions-request),
 [System One](https://docs.typesafe.ai/api), and

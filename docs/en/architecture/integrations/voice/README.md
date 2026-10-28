@@ -285,6 +285,11 @@ delivered own appearance in the destination channel. Main-persona sprites use we
 identity sprites. Intervening messages do not replace remembered appearance. A confirmed base revert
 does replace it. Explicit user impersonation remains separate from persona appearance.
 
+When the turn includes the persona's sprite list, the voice tool can select a sprite explicitly
+through its optional `sprite` parameter. The audio and transcript use that appearance; an empty
+string selects the base appearance. Omitting the parameter keeps the inherited appearance. Sprite
+selection affects appearance only; supported speech delivery directions use `voice_instructions`.
+
 The slash command has no active persona turn. It supplies a resolved base author deliberately:
 main-persona audio uses the bot, and alter audio uses the selected persona's base webhook identity.
 Local avatars keep their data URI through managed webhook selection. Avatar recovery finishes before

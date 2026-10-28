@@ -7,6 +7,15 @@ import { recordChatDiagnostic } from "@/utils/chat/diagnosticTimeline";
 import { queuePersonaJobsAtFront, type ChannelLockEntry } from "@/utils/chat/channelQueue";
 import type { TextQuotaSource } from "@/utils/chat/types";
 
+const DEFAULT_MATCH_LIMIT = 3;
+const MIN_MATCH_LIMIT = 1;
+const MAX_MATCH_LIMIT = 10;
+
+export function getMatchLimit(tomoriState: TomoriState): number {
+  const rawMatchLimit = tomoriState.config.match_limit ?? DEFAULT_MATCH_LIMIT;
+  return Math.min(Math.max(rawMatchLimit, MIN_MATCH_LIMIT), MAX_MATCH_LIMIT);
+}
+
 export function queueAdditionalPersonaTurns(args: {
   lockEntry: ChannelLockEntry;
   message: Message;

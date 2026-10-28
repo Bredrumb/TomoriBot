@@ -35,7 +35,9 @@ export async function generateCustomImageViaEndpoint(
   });
 
   if (!response.ok) {
-    throw new Error(`Custom image generation failed: ${response.status} ${response.statusText}`);
+    throw Object.assign(new Error(`Custom image generation failed: ${response.status} ${response.statusText}`), {
+      status: response.status,
+    });
   }
 
   const payload = (await response.json()) as {
@@ -90,7 +92,9 @@ export async function generateCustomVideoViaEndpoint(
   });
 
   if (!response.ok) {
-    throw new Error(`Custom video generation failed: ${response.status} ${response.statusText}`);
+    throw Object.assign(new Error(`Custom video generation failed: ${response.status} ${response.statusText}`), {
+      status: response.status,
+    });
   }
 
   const payload = (await response.json()) as {

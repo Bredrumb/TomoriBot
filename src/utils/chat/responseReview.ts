@@ -34,6 +34,8 @@ import { redactToolParametersForStorage } from "@/utils/tools/toolParameterRedac
 import { checkResponseRules, type RuleCheckState } from "@/utils/chat/responseRuleCheck";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { ColorCode } from "@/utils/misc/logger";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
+import { isOperatorActionableProviderError } from "@/utils/provider/providerErrorClassification";
 
 export const MAX_RESPONSE_REVISIONS = 1;
 // Every revision is reviewed again, after the original candidate's review.
@@ -564,9 +566,22 @@ async function reviewCandidate(
     httpStatus?: number,
   ): Promise<DraftReviewResult> => {
     state.unavailable = true;
-    if (operational)
-      await log.error("Response review unavailable", new Error("Reviewer operation failed"), {
+    if (operational || category === "refusal")
+      await reportProviderFailure({
+        summary: "Response review unavailable",
+        error: new Error("Reviewer operation failed"),
         errorType: "ResponseReviewError",
+        expected:
+          !operational ||
+          !isOperatorActionableProviderError({
+            type: "api_error",
+            message: category,
+            code: httpStatus?.toString(),
+            retryable: category === "timeout" || httpStatus === 429 || (httpStatus !== undefined && httpStatus >= 500),
+          }),
+        serverId: context.tomoriState.server_id,
+        userId: context.triggererUserId,
+        dimensions: { operation: kind, provider: provider ?? "unknown", category },
         metadata: {
           correlation,
           operation: kind,
@@ -733,6 +748,7 @@ async function reviewCandidate(
                 thinkingLevel: thinking,
                 schemaName: proposedCall ? "tool_review" : "response_review",
                 privateOutput: true,
+                correlationId: correlation,
                 abortSignal: signal,
                 onUsage: (reported) => {
                   usage = reported;

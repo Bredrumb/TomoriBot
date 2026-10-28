@@ -399,7 +399,7 @@ describe("provider usage and denial request integration", () => {
       retryable: false,
       originalError: new Error("wrapped", { cause: denial(firstContext) }),
     };
-    await new StreamErrorUi().handleProviderError(error, provider, streamContext);
+    await new StreamErrorUi().handleProviderError(error, provider, streamContext, "fixture-key");
     expect(streamContext.usageContext).toBe(firstContext);
     expect(genericDescription).not.toHaveBeenCalled();
     expect(send).toHaveBeenCalledTimes(1);

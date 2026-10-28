@@ -48,6 +48,7 @@ export type StructuredOutputResult<T> =
     };
 
 export interface ProviderStructuredJsonRequest {
+  correlationId?: string;
   abortSignal?: AbortSignal;
   onUsage?: (usage: import("@/utils/text/tokenEstimate").TokenUsage) => void;
   /** Private output uses one attempt and returns safe failure metadata to its caller for logging. */

@@ -1476,18 +1476,25 @@ export class GenerateImageTool extends BaseTool {
         errorMessage.includes("safety") ||
         errorMessage.includes("blocked") ||
         errorMessage.includes("RECITATION");
+      const isAuthenticationRefusal = ["401", "403", "authentication"].includes(toolFailure.failure?.code ?? "");
 
       await reportProviderFailure({
         summary: "Image generation failed",
         errorType: "ImageGenerationFailed",
         error,
-        expected: isBillingRefusal || isSafetyRefusal || classifySendFailure(error) !== null,
+        expected: isBillingRefusal || isSafetyRefusal || isAuthenticationRefusal || classifySendFailure(error) !== null,
         serverId: context.tomoriState.server_id,
         userId: context.internalUserId ?? null,
         dimensions: {
           operation: "image-generation",
           provider: generationRoute?.provider ?? "unknown",
-          refusal: isBillingRefusal ? "billing" : isSafetyRefusal ? "safety" : "none",
+          refusal: isBillingRefusal
+            ? "billing"
+            : isSafetyRefusal
+              ? "safety"
+              : isAuthenticationRefusal
+                ? "authentication"
+                : "none",
         },
         metadata: generationRoute,
       });

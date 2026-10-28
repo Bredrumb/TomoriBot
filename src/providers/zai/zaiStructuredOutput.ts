@@ -7,6 +7,7 @@ import {
 import type { z } from "zod";
 import type { ProviderStructuredJsonRequest, StructuredOutputResult } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
+import { readProviderErrorBody } from "@/utils/provider/providerErrorMetrics";
 import { buildZaiThinkingRequest } from "@/utils/provider/thinkingControl";
 import {
   toZaiApiModelName,
@@ -119,8 +120,14 @@ export async function callZaiStructuredJSON<T>(
 
     if (!response.ok) {
       if (request.privateOutput) {
-        await response.body?.cancel();
-        return privateStructuredFailure(request, "transport", response.status);
+        return privateStructuredFailure(
+          request,
+          "transport",
+          response.status,
+          undefined,
+          undefined,
+          await readProviderErrorBody(response, request.apiKey),
+        );
       }
       const errorBody = await response.text();
       log.error("Z.ai structured JSON request failed", new Error(errorBody), {

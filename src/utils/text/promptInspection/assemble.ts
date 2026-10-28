@@ -14,6 +14,8 @@ import { getVertexexpressToolAdapter } from "@/providers/vertexexpress/vertexexp
 import { getZaiToolAdapter } from "@/providers/zai/zaiToolAdapter";
 import { getZaicodingToolAdapter } from "@/providers/zaicoding/zaicodingToolAdapter";
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
+import { applyStreamContextAvailability } from "@/tools/availability";
+import { getToolSpriteRoster } from "@/tools/spriteSelection";
 import { getCachedChannelContextNote } from "@/utils/cache/channelContextNoteCache";
 import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
@@ -335,6 +337,7 @@ async function fetchProviderTools(
   providerName: string,
   toolFilter?: SnapshotToolFilter | null,
   userId?: number,
+  contextItems?: StructuredContextItem[],
 ): Promise<Array<Record<string, unknown>>> {
   const activeLlm = persona.persona_llm ?? persona.llm;
 
@@ -387,6 +390,16 @@ async function fetchProviderTools(
   };
 
   let { builtInTools, mcpFunctionNames } = await getAvailableToolsWithMCP(providerName, toolStateForContext);
+  builtInTools = applyStreamContextAvailability({
+    providerLabel: providerName,
+    provider: providerName,
+    builtInTools,
+    tomoriState: persona,
+    streamContext: {
+      disableYouTubeProcessing: false,
+      personaSprites: getToolSpriteRoster(contextItems, persona.persona_id),
+    },
+  });
 
   if (toolFilter?.allowedToolNames.length) {
     const allowedSet = new Set(toolFilter.allowedToolNames);
@@ -902,7 +915,13 @@ export async function assemblePromptInspection(request: PromptInspectionRequest)
   let toolsData: Array<Record<string, unknown>> | null = null;
   if (request.includeTools) {
     try {
-      toolsData = await fetchProviderTools(answeringState, providerName, snapshotToolFilter, userData.user_id);
+      toolsData = await fetchProviderTools(
+        answeringState,
+        providerName,
+        snapshotToolFilter,
+        userData.user_id,
+        truncation?.truncated ?? resolvedContextItems,
+      );
     } catch (toolError) {
       log.warn(
         `Failed to fetch tools for prompt inspection (provider=${providerName}): ${(toolError as Error).message}`,

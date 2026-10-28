@@ -225,7 +225,14 @@ async function executeStructuredJsonRequest<T>(params: {
 
   if (!response.success) {
     if (params.request.privateOutput)
-      return privateStructuredFailure(params.request, "transport", response.error.status);
+      return privateStructuredFailure(
+        params.request,
+        "transport",
+        response.error.status,
+        undefined,
+        undefined,
+        response.error.errorBody,
+      );
     log.error(`${params.logLabel} request failed`, new Error(response.error.errorBody), {
       errorType: "CustomStructuredJSONHttpError",
       metadata: {

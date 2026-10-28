@@ -52,6 +52,14 @@ Before provider serialization, tools pass through `assembleToolsForContext()` in
 
 Assembly guards prevent the model from seeing unsupported parameters, while execution-time checks guard against stale configurations and crafted tool calls.
 
+`generate_voice_message` and `interact_with_target` also offer an optional `sprite` parameter when
+the turn includes the active persona's sprite list. The parameter refers to that list without
+repeating it in either schema. Execution checks the selection against both the advertised list and
+the current persona sprites before synthesis or interaction writes. Omission preserves appearance
+inheritance; an empty string selects the base appearance. Both tools use the shared persona delivery
+resolver, which remembers the selected appearance only after successful delivery. Sprite selection
+does not add speech delivery instructions.
+
 ## Execution dispatch and failure boundaries
 
 Tool execution coordinates through a single entry point: `ToolRegistry.executeTool()`.

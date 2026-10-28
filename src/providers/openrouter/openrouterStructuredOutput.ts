@@ -12,7 +12,8 @@ import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 import { buildOpenRouterReasoningRequest } from "@/utils/provider/thinkingControl";
 import { buildOpenrouterProviderRouting } from "@/providers/openrouter/providerRouting";
-import { readOpenRouterLimitError, readOpenRouterLimitResponse } from "@/providers/openrouter/openrouterLimit";
+import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
+import { readProviderErrorBody } from "@/utils/provider/providerErrorMetrics";
 import { getOpenRouterSupportedParameters } from "@/utils/cache/openrouterCapabilityCache";
 import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
 type GenericStructuredOutputRequest = ProviderStructuredJsonRequest;
@@ -106,8 +107,9 @@ export async function callOpenrouterStructuredJSON<T>(
 
     if (!response.ok) {
       if (request.privateOutput) {
-        const limit = await readOpenRouterLimitResponse(response);
-        return privateStructuredFailure(request, "transport", response.status, undefined, limit ?? undefined);
+        const detail = await readProviderErrorBody(response, request.apiKey);
+        const limit = readOpenRouterLimitError(response.status, response.headers, detail);
+        return privateStructuredFailure(request, "transport", response.status, undefined, limit ?? undefined, detail);
       }
       const errorBody = await response.text();
       const limit = readOpenRouterLimitError(response.status, response.headers, errorBody);
