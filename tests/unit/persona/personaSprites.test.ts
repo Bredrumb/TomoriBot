@@ -6,6 +6,7 @@ import { convertMentions } from "@/utils/text/context/mentionNormalizer";
 import { buildPersonaSpriteContextItem, buildPersonaSpritePromptText } from "@/utils/text/context/personaSprites";
 import { createPersona, createServerConfig } from "../../helpers/fixtures";
 import { normalizePersonaSpriteKey, validatePersonaSpriteName } from "@/utils/persona/sprites";
+import { PERSONA_SPRITE_LIMITS } from "@/utils/persona/sprites";
 
 function sprite(name: string, instructions = ""): PersonaSpriteRow {
   return {
@@ -55,6 +56,29 @@ describe("persona sprites", () => {
   describe("context item", () => {
     afterEach(() => invalidatePersonaSpriteCache(10));
 
+    it("limits tool selection to the same sprite roster as the prompt and omits empty rosters", async () => {
+      const sprites = Array.from({ length: PERSONA_SPRITE_LIMITS.PROMPT_MAX_COUNT + 1 }, (_, i) => sprite(`pose ${i}`));
+      setPersonaSpriteCache(10, sprites);
+      const params = {
+        client: {} as Client,
+        guildId: "1",
+        tomoriState: createPersona({ persona_id: 10 }),
+        tomoriConfig: createServerConfig(),
+        botName: "Juno",
+        isUserImpersonation: false,
+        convertMentions,
+      };
+      const item = await buildPersonaSpriteContextItem(params);
+      expect(item?.personaSprites?.spriteKeys).toEqual(
+        sprites.slice(0, PERSONA_SPRITE_LIMITS.PROMPT_MAX_COUNT).map((entry) => entry.sprite_key),
+      );
+      const text = item?.parts[0]?.type === "text" ? item.parts[0].text : "";
+      expect(text).not.toContain(sprites.at(-1)?.sprite_name ?? "");
+      expect(await buildPersonaSpriteContextItem({ ...params, isUserImpersonation: true })).toBeNull();
+      setPersonaSpriteCache(10, []);
+      expect(await buildPersonaSpriteContextItem(params)).toBeNull();
+    });
+
     it("resolves identity macros in usage instructions", async () => {
       setPersonaSpriteCache(10, [sprite("drunk", "Use when {user} hands {bot} a drink.")]);
 
@@ -72,6 +96,7 @@ describe("persona sprites", () => {
       const text = part?.type === "text" ? part.text : "";
       expect(text).toContain("`Mirri (drunk):` Use when User hands Mirri a drink.");
       expect(text).not.toMatch(/\{(user|bot)\}/);
+      expect(item?.personaSprites).toEqual({ personaId: 10, spriteKeys: ["drunk"] });
     });
   });
 });

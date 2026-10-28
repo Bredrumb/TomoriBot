@@ -15,6 +15,7 @@ import {
   type ToolResult,
 } from "@/types/tool/interfaces";
 import { createToolVariant } from "@/tools/assembly";
+import { resolveToolSpriteSelection } from "@/tools/spriteSelection";
 import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
 import { setCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { generateVoiceMessageMetadata } from "@/utils/audio/voiceMessageMetadata";
@@ -137,6 +138,7 @@ export class GenerateVoiceMessageTool extends BaseTool {
   name = "generate_voice_message";
   description = VOICE_TOOL_VARIANTS["bracket-tags"].toolDescription;
   category = "discord" as const;
+  supportsSpriteSelection = true;
 
   parameters: ToolParameterSchema = {
     type: "object",
@@ -231,6 +233,8 @@ export class GenerateVoiceMessageTool extends BaseTool {
     }
 
     const userId = context.internalUserId ?? context.streamContext?.triggererUserId;
+    const spriteSelection = await resolveToolSpriteSelection(args, context, context.tomoriState.persona_id);
+    if (!spriteSelection.success) return spriteSelection;
     const targets = await resolveSpeechTargets(context.tomoriState.server_id, userId);
     const scopeId = context.guildId ?? ("recipientId" in context.channel ? context.channel.recipientId : undefined);
     const persona = scopeId
@@ -339,7 +343,10 @@ export class GenerateVoiceMessageTool extends BaseTool {
     const target: VoiceDeliveryTarget = {
       ownership: "persona",
       channel: context.channel as VoiceDeliveryTarget["channel"],
-      personaPost: buildToolPersonaPostContext(context, context.tomoriState),
+      personaPost: {
+        ...buildToolPersonaPostContext(context, context.tomoriState),
+        appearance: spriteSelection.appearance,
+      },
     };
 
     let sentMessageId: string | undefined;

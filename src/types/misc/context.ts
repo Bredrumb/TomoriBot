@@ -59,6 +59,7 @@ export enum ContextItemTag {
 }
 
 export type StructuredContextItem = {
+  personaSprites?: { personaId: number; spriteKeys: string[] };
   role: "system" | "user" | "model"; // 'system' for initial instructions, 'user' for user/tool inputs, 'model' for LLM responses
   parts: ContextPart[];
   mediaDescriptors?: MediaDescriptor[];

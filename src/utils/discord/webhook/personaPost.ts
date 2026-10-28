@@ -6,7 +6,7 @@ import type {
   Webhook,
   WebhookMessageCreateOptions,
 } from "discord.js";
-import type { TomoriState } from "@/types/db/schema";
+import type { PersonaSpriteRow, TomoriState } from "@/types/db/schema";
 import type { SpriteMessageRecordInfo } from "@/types/stream/types";
 import {
   commitPersonaAppearance,
@@ -45,6 +45,7 @@ import {
 import { log } from "@/utils/misc/logger";
 
 export type PersonaDeliveryMode = "persona" | "user_impersonation";
+export type PersonaPostAppearance = { kind: "base" } | { kind: "sprite"; sprite: PersonaSpriteRow };
 
 export interface PersonaDeliveryReceipt {
   messageId: string;
@@ -58,6 +59,7 @@ export interface PersonaDeliveryReceipt {
 }
 
 export interface PersonaPostContext {
+  appearance?: PersonaPostAppearance;
   channel: SendableChannel;
   persona: TomoriState;
   deliveryMode?: PersonaDeliveryMode;
@@ -130,11 +132,12 @@ async function resolveOwnAppearance(
   channel: PersonaPostChannel,
   baseIdentity: ResolvedWebhookIdentity & { username: string },
   personaId?: number,
+  appearance?: PersonaPostAppearance,
 ): Promise<{ identity: ResolvedWebhookIdentity; sprite?: SpriteMessageRecordInfo }> {
-  const remembered = personaId == null ? undefined : getPersonaAppearance(channel.id, personaId);
+  const remembered = appearance || personaId == null ? undefined : getPersonaAppearance(channel.id, personaId);
   const adjacent = getAdjacentPersonaIdentity(channel.id, personaId ?? null, channel.lastMessageId);
   if (remembered && adjacent) return { identity: adjacent, sprite: remembered.sprite };
-  if (!remembered?.sprite) {
+  if (appearance?.kind !== "sprite" && !remembered?.sprite) {
     const identity = remembered?.genericAvatar
       ? { username: baseIdentity.username, avatarUrl: GENERIC_WEBHOOK_AVATAR_URL }
       : baseIdentity;
@@ -147,10 +150,14 @@ async function resolveOwnAppearance(
       ),
     };
   }
-  const sprites = await getCachedPersonaSprites(remembered.personaId);
-  const sprite = sprites.find((candidate) => candidate.sprite_name === remembered.sprite?.spriteName);
+  let sprite = appearance?.kind === "sprite" ? appearance.sprite : undefined;
+  if (remembered?.sprite) {
+    sprite = (await getCachedPersonaSprites(remembered.personaId)).find(
+      (candidate) => candidate.sprite_name === remembered.sprite?.spriteName,
+    );
+    if (!sprite) invalidatePersonaAppearance(remembered.personaId);
+  }
   if (!sprite) {
-    invalidatePersonaAppearance(remembered.personaId);
     return {
       identity: resolveChannelBaseAppearanceIdentity(
         channel.id,
@@ -164,6 +171,8 @@ async function resolveOwnAppearance(
     ? formatRenderModifierWebhookName(sprite.sprite_name, baseIdentity.username)
     : baseIdentity.username;
   let identity = await resolveSpriteIdentity(sprite, username);
+  if (!identity && appearance?.kind === "sprite")
+    throw new DiscordDeliveryError("pre_dispatch", new Error("Selected sprite avatar is unavailable"));
   if (!identity)
     return {
       identity: resolveChannelBaseAppearanceIdentity(
@@ -173,7 +182,7 @@ async function resolveOwnAppearance(
         channel.lastMessageId,
       ),
     };
-  if (remembered.genericAvatar) identity = { username, avatarUrl: GENERIC_WEBHOOK_AVATAR_URL };
+  if (remembered?.genericAvatar) identity = { username, avatarUrl: GENERIC_WEBHOOK_AVATAR_URL };
   if (!sprite.is_identity) {
     identity = resolveChannelGroupBreakIdentity(
       channel.id,
@@ -185,7 +194,7 @@ async function resolveOwnAppearance(
   }
   return {
     identity,
-    sprite: { personaId: remembered.personaId, spriteName: sprite.sprite_name, isIdentity: sprite.is_identity },
+    sprite: { personaId: sprite.persona_id, spriteName: sprite.sprite_name, isIdentity: sprite.is_identity },
   };
 }
 
@@ -213,6 +222,7 @@ export async function resolvePersonaPostAuthor(context: PersonaPostContext): Pro
     context.channel,
     { ...base, username: base.username ?? context.persona.persona_nickname },
     personaId ?? undefined,
+    context.appearance,
   );
   const speaker: DeliveredSpeaker = { personaId, kind: own.sprite?.isIdentity ? "identity_sprite" : "appearance" };
   if (!context.persona.is_alter && !own.sprite && own.identity.avatarUrl !== GENERIC_WEBHOOK_AVATAR_URL)

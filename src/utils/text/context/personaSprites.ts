@@ -77,5 +77,9 @@ export async function buildPersonaSpriteContextItem(params: {
       },
     ],
     metadataTag: ContextItemTag.KNOWLEDGE_PERSONA_SPRITES,
+    personaSprites: {
+      personaId,
+      spriteKeys: sprites.slice(0, PERSONA_SPRITE_LIMITS.PROMPT_MAX_COUNT).map((sprite) => sprite.sprite_key),
+    },
   };
 }
