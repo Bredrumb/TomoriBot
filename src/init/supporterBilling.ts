@@ -1,3 +1,4 @@
+import type { Client } from "discord.js";
 import {
   initializeSupporterBilling,
   isSupporterBillingEnabled,
@@ -6,7 +7,7 @@ import {
 import type { AppEnvironment } from "@/types/config";
 import { log } from "@/utils/misc/logger";
 
-export async function initSupporterBilling(environment: AppEnvironment): Promise<void> {
+export async function initSupporterBilling(environment: AppEnvironment, client?: Client): Promise<void> {
   registerSupporterProviderExtensions();
   if (!isSupporterBillingEnabled(environment)) {
     return;
@@ -15,7 +16,7 @@ export async function initSupporterBilling(environment: AppEnvironment): Promise
   log.section("Initializing Supporter Billing...");
 
   try {
-    const result = await initializeSupporterBilling({ environment });
+    const result = await initializeSupporterBilling({ environment, client });
     if (result.enabled) {
       log.success("Supporter billing config validated and billing schema initialized");
     }

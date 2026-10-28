@@ -1,4 +1,5 @@
 import type { SQL } from "bun";
+import type { Client } from "discord.js";
 import type { AppEnvironment } from "@/types/config";
 import { isDatabaseSchemaManagementEnabled } from "@/init/database";
 import { sql as defaultSql } from "@/utils/db/client";
@@ -30,6 +31,7 @@ export interface InitializeSupporterBillingOptions {
   environment: AppEnvironment;
   env?: EnvRecord;
   billingClient?: SQL;
+  client?: Client;
   initializeBillingSchema?: SupporterBillingSchemaInitializer;
   initializePatreonRoutes?: PatreonRouteInitializer;
   startPatreonReconcileJob?: SupporterBillingReconcileJobStarter;
@@ -69,7 +71,7 @@ export async function initializeSupporterBilling(
   const startPatreonReconcileJobHook = options.startPatreonReconcileJob ?? startPatreonReconcileJob;
 
   const schema = await initializeBillingSchema(billingClient);
-  await initializePatreonRouteHook({ config: billingConfig, env });
+  await initializePatreonRouteHook({ config: billingConfig, env, client: options.client });
   const reconcileJob = startPatreonReconcileJobHook({ config: billingConfig, env });
 
   return {

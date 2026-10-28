@@ -58,6 +58,11 @@ allowance and paid-period dates across unlinking, Discord-account transfers, and
 A paid upgrade adds only the difference above that period's highest funded tier. Only a confirmed
 paid charge in a new period refills the allowance; a renewal date passing does not grant funds.
 
+Linking through Patreon OAuth binds the membership to the Discord user that started the link. When
+Patreon reports a connected Discord account, the callback refuses to link a membership whose connected
+Discord account differs from that user, because the authorize URL is a transferable capability. The
+success page names the Discord account it linked.
+
 Before unlinking removes an identity and its usage rows, lifecycle work disables its provider key
 and persists the remaining balance from the highest observed usage and reserved spend.
 Outstanding spend holds prevent identity deletion until they settle. Deletion retries preserve the

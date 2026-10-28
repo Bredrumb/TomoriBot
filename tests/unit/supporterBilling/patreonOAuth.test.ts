@@ -8,10 +8,14 @@ import {
   type SupporterIdentityRow,
 } from "@/modules/supporter-billing";
 import { handlePatreonOAuthCallbackUrl } from "@/modules/supporter-billing/patreon/callback";
-import { mapPatreonIdentityToEligibleSupporter } from "@/modules/supporter-billing/patreon/mapping";
+import {
+  mapPatreonIdentityToEligibleSupporter,
+  patreonConnectedDiscordUserId,
+} from "@/modules/supporter-billing/patreon/mapping";
 import {
   buildPatreonOAuthAuthorizationUrl,
   createPatreonOAuthUrlForDiscordUser,
+  fetchPatreonIdentity,
 } from "@/modules/supporter-billing/patreon/oauth";
 import {
   createAndPersistOAuthState,
@@ -27,6 +31,7 @@ import { PATREON_OAUTH_CALLBACK_PATH, PATREON_WEBHOOK_PATH } from "@/modules/sup
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { patreonTokenTransport } from "@/modules/supporter-billing/patreon/tokenTransport";
 import { OAuthTokenError, requestOAuthToken } from "@/utils/oauth/tokenEndpoint";
+import { localizedCopy } from "../../helpers/localeCases";
 
 const now = new Date("2026-01-15T00:00:00.000Z");
 const signerSecret = "test_signer_secret";
@@ -155,6 +160,7 @@ function makePatreonIdentityResponse(
     lastChargeStatus?: string | null;
     nextChargeDate?: string | null;
     includeMembership?: boolean;
+    socialConnections?: unknown;
   } = {},
 ): unknown {
   const tierIds = overrides.tierIds ?? ["tier_test"];
@@ -169,6 +175,7 @@ function makePatreonIdentityResponse(
     data: {
       id: "patreon_user_test",
       type: "user",
+      attributes: overrides.socialConnections === undefined ? {} : { social_connections: overrides.socialConnections },
       relationships: {
         memberships:
           overrides.includeMembership === false ? { data: [] } : { data: [{ id: "member_test", type: "member" }] },
@@ -209,6 +216,44 @@ function makePatreonIdentityResponse(
               },
             })),
           ],
+  };
+}
+
+async function createCallbackState(
+  repository: MemoryOAuthStateRepository,
+  nonce: string,
+  locale?: string,
+): Promise<string> {
+  const created = await createAndPersistOAuthState({
+    flow: "patreon",
+    subject: "discord_user_1",
+    signerSecret,
+    ttlSeconds: 60,
+    locale,
+    now,
+    nonce,
+    stateRepository: repository,
+  });
+  return created.state;
+}
+
+function callbackUrl(state: string): URL {
+  return new URL(`https://bot.example.test/oauth/callback?code=oauth_code&state=${state}`);
+}
+
+function patreonOAuthToken() {
+  return {
+    accessToken: "patreon_access_token",
+    tokenType: "Bearer",
+    expiresIn: 3600,
+    scope: "identity identity.memberships",
+  };
+}
+
+function linkedSupporterResult() {
+  return {
+    identity: { supporter_identity_id: 1 } as SupporterIdentityRow,
+    entitlement: { supporter_entitlement_id: 2 } as SupporterEntitlementRow,
   };
 }
 
@@ -302,6 +347,21 @@ describe("Patreon OAuth URL generation", () => {
 
     expect(new URL(oauthUrl).searchParams.get("client_id")).toBe("client_from_config_env");
     expect(new URL(oauthUrl).searchParams.get("state")).toBe("state_123");
+  });
+
+  it("requests the connected Discord account with the identity", async () => {
+    const requestedUrls: string[] = [];
+    const identity = await fetchPatreonIdentity("patreon_access_token", {
+      env: createEnabledEnv(),
+      fetchImpl: (async (input: string | URL | Request) => {
+        requestedUrls.push(String(input));
+        return Response.json({ data: { id: "patreon_user_test", type: "user", attributes: {} } });
+      }) as unknown as typeof fetch,
+    });
+
+    const requestedUrl = new URL(requestedUrls[0] ?? "https://invalid.test");
+    expect(requestedUrl.searchParams.get("fields[user]")).toBe("social_connections");
+    expect(identity).toMatchObject({ data: { id: "patreon_user_test" } });
   });
 });
 
@@ -425,6 +485,28 @@ describe("Patreon membership mapping", () => {
   });
 });
 
+describe("Patreon connected Discord parsing", () => {
+  it("returns a connected Discord user ID only when Patreon reports a valid one", () => {
+    const cases = [
+      {
+        response: makePatreonIdentityResponse({ socialConnections: { discord: { user_id: "123456789012345678" } } }),
+        expected: "123456789012345678",
+      },
+      { response: makePatreonIdentityResponse({ socialConnections: { discord: null } }), expected: null },
+      { response: makePatreonIdentityResponse(), expected: null },
+      {
+        response: makePatreonIdentityResponse({ socialConnections: { discord: { user_id: 123 } } }),
+        expected: null,
+      },
+      { response: { data: { type: "user" } }, expected: null },
+    ];
+
+    expect(cases.map(({ response }) => patreonConnectedDiscordUserId(response))).toEqual(
+      cases.map(({ expected }) => expected),
+    );
+  });
+});
+
 describe("Patreon OAuth callback", () => {
   it("validates state, fetches Patreon identity, persists entitlement", async () => {
     const repository = new MemoryOAuthStateRepository();
@@ -478,7 +560,7 @@ describe("Patreon OAuth callback", () => {
     );
 
     expect(response.status).toBe("success");
-    expect(response.body).toContain("Patreonリンクが完了しました");
+    expect(response.body).toContain(localizedCopy("ja", "commands.subscribe.callback.success.title"));
     expect(captured.exchangedCode).toBe("oauth_code");
     expect(captured.fetchedToken).toBe("patreon_access_token");
     expect(captured.persistedOptions?.snapshot.tierKey).toBe("test_tier");
@@ -551,6 +633,112 @@ describe("Patreon OAuth callback", () => {
 
     expect(wrongCampaignResponse.status).toBe("wrong_campaign");
     expect(persistCount).toBe(0);
+  });
+
+  it("refuses a Patreon account connected to a different Discord account", async () => {
+    const repository = new MemoryOAuthStateRepository();
+    const state = await createCallbackState(repository, "nonce_for_discord_mismatch_123456");
+    let persistCount = 0;
+
+    const response = await handlePatreonOAuthCallbackUrl(callbackUrl(state), {
+      config: validSupporterConfig,
+      env: createEnabledEnv(),
+      stateRepository: repository,
+      now,
+      exchangeCodeForToken: async () => patreonOAuthToken(),
+      fetchIdentity: async () =>
+        makePatreonIdentityResponse({ socialConnections: { discord: { user_id: "discord_user_2" } } }),
+      persistSupporter: async () => {
+        persistCount += 1;
+        throw new Error("should not persist");
+      },
+    });
+
+    expect(response.status).toBe("discord_mismatch");
+    expect(response.statusCode).toBe(403);
+    expect(response.body).toContain(localizedCopy("en-US", "commands.subscribe.callback.discord_mismatch.message"));
+    expect(persistCount).toBe(0);
+  });
+
+  it("links when the connected Discord account matches, is absent, or cannot be parsed", async () => {
+    const cases = [
+      { label: "matching", socialConnections: { discord: { user_id: "discord_user_1" } } },
+      { label: "absent", socialConnections: undefined },
+      { label: "null connection", socialConnections: { discord: null } },
+      { label: "unparsable id", socialConnections: { discord: { user_id: 123 } } },
+    ] as const;
+    const outcomes: Record<string, string> = {};
+
+    for (const [index, testCase] of cases.entries()) {
+      const repository = new MemoryOAuthStateRepository();
+      const state = await createCallbackState(repository, `nonce_for_connected_discord_case_${index}`);
+      const response = await handlePatreonOAuthCallbackUrl(callbackUrl(state), {
+        config: validSupporterConfig,
+        env: createEnabledEnv(),
+        stateRepository: repository,
+        now,
+        exchangeCodeForToken: async () => patreonOAuthToken(),
+        fetchIdentity: async () => makePatreonIdentityResponse({ socialConnections: testCase.socialConnections }),
+        persistSupporter: async () => linkedSupporterResult(),
+      });
+      outcomes[testCase.label] = response.status;
+    }
+
+    expect(outcomes).toEqual({
+      matching: "success",
+      absent: "success",
+      "null connection": "success",
+      "unparsable id": "success",
+    });
+  });
+
+  it("names the linked Discord account on the success page", async () => {
+    const repository = new MemoryOAuthStateRepository();
+    const state = await createCallbackState(repository, "nonce_for_linked_account_name_123456", "ja");
+    const described: string[] = [];
+
+    const response = await handlePatreonOAuthCallbackUrl(callbackUrl(state), {
+      config: validSupporterConfig,
+      env: createEnabledEnv(),
+      stateRepository: repository,
+      now,
+      exchangeCodeForToken: async () => patreonOAuthToken(),
+      fetchIdentity: async () => makePatreonIdentityResponse(),
+      persistSupporter: async () => linkedSupporterResult(),
+      describeDiscordAccount: async (discordUserId) => {
+        described.push(discordUserId);
+        return "@mirri";
+      },
+    });
+
+    expect(response.status).toBe("success");
+    expect(described).toEqual(["discord_user_1"]);
+    expect(response.body).toContain(
+      localizedCopy("ja", "commands.subscribe.callback.success.linked_account", { account: "@mirri" }),
+    );
+  });
+
+  it("keeps the link successful when the Discord account name is unavailable", async () => {
+    const repository = new MemoryOAuthStateRepository();
+    const state = await createCallbackState(repository, "nonce_for_missing_account_name_123456");
+
+    const response = await handlePatreonOAuthCallbackUrl(callbackUrl(state), {
+      config: validSupporterConfig,
+      env: createEnabledEnv(),
+      stateRepository: repository,
+      now,
+      exchangeCodeForToken: async () => patreonOAuthToken(),
+      fetchIdentity: async () => makePatreonIdentityResponse(),
+      persistSupporter: async () => linkedSupporterResult(),
+      describeDiscordAccount: async () => {
+        throw new Error("discord unavailable");
+      },
+    });
+
+    expect(response.status).toBe("success");
+    expect(response.body).not.toContain(
+      localizedCopy("en-US", "commands.subscribe.callback.success.linked_account", { account: "" }).trim(),
+    );
   });
 });
 

@@ -3,6 +3,7 @@ import { parseOAuthAuthorizationResponse, OAuthAuthorizationError } from "@/util
 import { oauthStateRepository } from "@/utils/db/repositories/OAuthStateRepository";
 import {
   mapPatreonIdentityToEligibleSupporter,
+  patreonConnectedDiscordUserId,
   type PatreonMembershipRejectionReason,
 } from "@/modules/supporter-billing/patreon/mapping";
 import {
@@ -22,6 +23,7 @@ import {
 } from "@/modules/supporter-billing/patreon/settings";
 import { validateAndConsumeOAuthState, type OAuthStateNonceRepository } from "@/utils/oauth/state";
 import { localizer } from "@/utils/text/localizer";
+import { log } from "@/utils/misc/logger";
 
 type EnvRecord = Readonly<Record<string, string | undefined>>;
 
@@ -33,6 +35,7 @@ type PatreonOAuthCallbackStatus =
   | "expired_state"
   | "state_replay"
   | PatreonMembershipRejectionReason
+  | "discord_mismatch"
   | "patreon_unavailable"
   | "server_error";
 
@@ -69,6 +72,10 @@ const CALLBACK_KEYS = {
     "commands.subscribe.callback.unconfigured_tier.title",
     "commands.subscribe.callback.unconfigured_tier.message",
   ],
+  discord_mismatch: [
+    "commands.subscribe.callback.discord_mismatch.title",
+    "commands.subscribe.callback.discord_mismatch.message",
+  ],
   patreon_unavailable: [
     "commands.subscribe.callback.patreon_unavailable.title",
     "commands.subscribe.callback.patreon_unavailable.message",
@@ -94,6 +101,7 @@ export interface HandlePatreonOAuthCallbackOptions {
   persistSupporter?: (
     options: PersistEligiblePatreonSupporterOptions,
   ) => Promise<PersistEligiblePatreonSupporterResult>;
+  describeDiscordAccount?: (discordUserId: string) => Promise<string | null>;
 }
 
 function escapeHtml(value: string): string {
@@ -105,10 +113,20 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function renderCallbackHtml(status: PatreonOAuthCallbackStatus, locale: string): string {
+function renderCallbackHtml(
+  status: PatreonOAuthCallbackStatus,
+  locale: string,
+  linkedAccount: string | null = null,
+): string {
   const [titleKey, messageKey] = CALLBACK_KEYS[status];
   const title = escapeHtml(localizer(locale, titleKey));
   const message = escapeHtml(localizer(locale, messageKey));
+  const linkedAccountLine =
+    status === "success" && linkedAccount
+      ? `<p>${escapeHtml(
+          localizer(locale, "commands.subscribe.callback.success.linked_account", { account: linkedAccount }),
+        )}</p>`
+      : "";
   const htmlLang = escapeHtml(locale.replaceAll("_", "-"));
 
   return `<!doctype html>
@@ -122,6 +140,7 @@ function renderCallbackHtml(status: PatreonOAuthCallbackStatus, locale: string):
   <main>
     <h1>${title}</h1>
     <p>${message}</p>
+    ${linkedAccountLine}
   </main>
 </body>
 </html>`;
@@ -131,12 +150,13 @@ function makeCallbackResponse(
   status: PatreonOAuthCallbackStatus,
   statusCode: number,
   locale = "en-US",
+  linkedAccount: string | null = null,
 ): PatreonOAuthCallbackResponse {
   return {
     status,
     statusCode,
     contentType: "text/html; charset=utf-8",
-    body: renderCallbackHtml(status, locale),
+    body: renderCallbackHtml(status, locale, linkedAccount),
   };
 }
 
@@ -202,6 +222,10 @@ export async function handlePatreonOAuthCallbackUrl(
     const identityResponse = await (
       options.fetchIdentity ?? ((accessToken) => fetchPatreonIdentity(accessToken, { env }))
     )(tokenResponse.accessToken);
+    const connectedDiscordUserId = patreonConnectedDiscordUserId(identityResponse);
+    if (connectedDiscordUserId && connectedDiscordUserId !== stateResult.payload.subject) {
+      return makeCallbackResponse("discord_mismatch", 403, locale);
+    }
     const membershipMapping = mapPatreonIdentityToEligibleSupporter({
       discordUserId: stateResult.payload.subject,
       config: options.config,
@@ -221,7 +245,18 @@ export async function handlePatreonOAuthCallbackUrl(
       env,
     });
 
-    return makeCallbackResponse("success", 200, locale);
+    let linkedAccount: string | null = null;
+    if (options.describeDiscordAccount) {
+      try {
+        linkedAccount = await options.describeDiscordAccount(stateResult.payload.subject);
+      } catch (error) {
+        log.warn("Patreon callback could not describe the linked Discord account", error, {
+          metadata: { discordUserId: stateResult.payload.subject },
+        });
+      }
+    }
+
+    return makeCallbackResponse("success", 200, locale, linkedAccount);
   } catch (error) {
     if (error instanceof PatreonApiError) {
       return makeCallbackResponse("patreon_unavailable", 502, locale);

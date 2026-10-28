@@ -4,6 +4,8 @@ export default {
   subscribe: {
     conversion_nudge:
       "より安定したサービスを利用するには、`/subscribe`でTomoriBotのサブスクリプションを契約してください（月額わずか$7から）。",
+    conversion_nudge_registration_failed:
+      "セットアップを省略するには、`/subscribe`でTomoriBotのサブスクリプションを契約してください。自分のAPIキーやエンドポイントなしでAIを利用でき、月額わずか$7からです。",
     request: {
       title: `サブスクリプションの利用`,
       allowance_title: `利用枠が不足しています`,
@@ -62,6 +64,7 @@ export default {
       success: {
         title: `Patreonリンクが完了しました`,
         message: `Patreonメンバーシップを連携しました。Discordに戻り、セットアップまたはサブスクリプションパネルで「メンバーシップを確認」を選択してください。`,
+        linked_account: `連携したDiscordアカウント：{account}`,
       },
       authorization_denied: {
         title: `Patreonリンクをキャンセルしました`,
@@ -102,6 +105,10 @@ export default {
       unconfigured_tier: {
         title: `Patreonティアが未設定です`,
         message: `このPatreonティアはサポーターアクセス用に設定されていません。サポーターアクセスは付与されませんでした。`,
+      },
+      discord_mismatch: {
+        title: `Patreonアカウントが一致しません`,
+        message: `このPatreonアカウントは別のDiscordアカウントに接続されています。そのアカウントから /subscribe を実行するか、Patreonで接続を変更してください。`,
       },
       patreon_unavailable: {
         title: `Patreonリンクを利用できません`,

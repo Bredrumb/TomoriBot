@@ -101,6 +101,28 @@ const identityResponseSchema = z
   })
   .passthrough();
 
+const connectedDiscordSchema = z
+  .object({
+    data: z.object({
+      attributes: z
+        .object({
+          social_connections: z
+            .object({ discord: z.object({ user_id: z.string().trim().min(1) }).nullish() })
+            .passthrough()
+            .nullish(),
+        })
+        .passthrough()
+        .optional(),
+    }),
+  })
+  .passthrough();
+
+/** Patreon reports a connected Discord account only when the patron connected one on Patreon. */
+export function patreonConnectedDiscordUserId(identityResponse: unknown): string | null {
+  const parsed = connectedDiscordSchema.safeParse(identityResponse);
+  return parsed.success ? (parsed.data.data.attributes?.social_connections?.discord?.user_id ?? null) : null;
+}
+
 const memberResponseSchema = z
   .object({
     data: resourceSchema,
