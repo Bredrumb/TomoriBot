@@ -28,6 +28,7 @@ import {
   updateSelfReplyChainState,
 } from "@/utils/chat/selfReplyState";
 import { statRepository } from "@/utils/db/repositories";
+import { metricSampleRepository, type MetricFields } from "@/utils/db/repositories/MetricSampleRepository";
 import { charsToTokensText, estimateContextItemsTokens, sumTurnUsage } from "@/utils/text/tokenEstimate";
 import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import type { TurnUsageEntry } from "@/utils/chat/responseReview";
@@ -82,33 +83,30 @@ function rememberLastReplyUsage(context: ChatTurnContext, result: GenerationTurn
   });
 }
 
-/**
- * Records per-turn usage stats at the single post-turn chokepoint:
- * message_sent, active_hour, model_used, tokens_in/tokens_out (estimated),
- * user_impersonation_triggered, emoji_used, sprite_shown, and sprite_emotion
- * (non-identity sprites only). Only counts turns that actually produced a persona
- * response. DMs are skipped (stat_counters.server_id is a NOT NULL FK).
- *
- * Expression metrics (emoji_used, sprite_shown, sprite_emotion) are delivery-gated:
- * they count only what Discord accepted, never what the model merely produced. Text
- * the output cleaner stripped, `<details>` scene metadata, and an abandoned attempt's
- * purged messages therefore score nothing. `sticker_used` and `custom_expression_used`
- * follow the same rule from their own delivery site in `expressionDelivery.ts`.
- *
- * Tokens prefer REAL provider usage when available: the orchestrator normalizes
- * each provider's reported usage onto `StreamResult.usage`, and these are summed
- * across the turn's stream segments (one per tool-loop request, each billed
- * separately). When no segment reports usage (e.g. NovelAI, or a provider that
- * omits it), tokens fall back to the CHARACTER-ESTIMATE ("Track A", shared with
- * `/tool estimate cost`): input from the built context, output from the response
- * text. The estimate over-counts dense languages (e.g. Japanese) and is rough;
- * real usage is billing-accurate. Either way the metric shape is identical
- * (`tokens_in`/`tokens_out` keyed by model id), so getEstimatedCost is unchanged.
- *
- * @param context - The completed turn's context (model + persona + server scope).
- * @param result  - The turn result; personaResponses carry the responding lineages.
- */
+/** Records turn usage in both metric sinks and guild counters, with dialogue counters gated on delivery. */
 async function recordUsageStats(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
+  const accountedUsage = sumTurnUsage(result.usageEntries ?? result.streamResults);
+  const turnUsage = accountedUsage ?? {
+    inputTokens: estimateContextItemsTokens(context.contextItems),
+    outputTokens: result.personaResponses.reduce(
+      (total, response) => total + charsToTokensText(response.text.length),
+      0,
+    ),
+  };
+  const fields: MetricFields = {
+    provider: context.tomoriState.llm.llm_provider,
+    model: context.tomoriState.llm.llm_codename,
+    source:
+      accountedUsage && !result.usageEntries?.some((entry) => entry.source === "estimated") ? "measured" : "estimated",
+    input_tokens: turnUsage.inputTokens,
+    cache_read_tokens: accountedUsage?.cacheReadTokens ?? "unknown",
+    cache_write_tokens: accountedUsage?.cacheWriteTokens ?? "unknown",
+    output_tokens: turnUsage.outputTokens,
+  };
+  if (accountedUsage?.costUsd !== undefined) fields.cost_usd = accountedUsage.costUsd;
+  log.metric("turn_usage", fields);
+  void metricSampleRepository.recordSample("turn_usage", fields);
+
   // Actual spend survives cancellation and discarded drafts; dialogue metrics require delivery.
   if (!context.isDMChannel && context.tomoriState.server_id && context.triggererUserId && result.usageEntries) {
     const lineageId = context.currentPersona.persona_lineage_id ?? 0;
@@ -137,6 +135,13 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
             metricKey: entry.model,
             delta,
           });
+      }
+      for (const [metric, delta] of [
+        ["cache_read_tokens", entry.usage.cacheReadTokens],
+        ["cache_write_tokens", entry.usage.cacheWriteTokens],
+      ] as const) {
+        if (delta === undefined || delta <= 0) continue;
+        statRepository.recordStat({ serverId, userId, lineageId, metric, metricKey: entry.model, delta });
       }
     };
     for (const entry of result.usageEntries) recordEntry(entry);
@@ -289,6 +294,22 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
         metricKey: modelCodename,
         delta: outputTokens,
       });
+    }
+    if (!result.usageEntries && realUsage) {
+      for (const [metric, delta] of [
+        ["cache_read_tokens", realUsage.cacheReadTokens],
+        ["cache_write_tokens", realUsage.cacheWriteTokens],
+      ] as const) {
+        if (delta === undefined || delta <= 0) continue;
+        statRepository.recordStat({
+          serverId,
+          userId,
+          lineageId: primaryLineage,
+          metric,
+          metricKey: modelCodename,
+          delta,
+        });
+      }
     }
 
     // Sprite deliveries surfaced from the stream (one entry per delivered sprite

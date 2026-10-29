@@ -1402,7 +1402,7 @@ describe("runToolLoop — contract tests", () => {
     expect(result.status).toBe("stopped_by_user");
     expect(result.personaResponses).toEqual([]);
     expect(result.usageEntries).toEqual([
-      { kind: "author", model: "test-model", usage: { inputTokens: 25, outputTokens: 3 } },
+      { kind: "author", model: "test-model", source: "measured", usage: { inputTokens: 25, outputTokens: 3 } },
     ]);
     expect(review).not.toHaveBeenCalled();
   });
@@ -1571,6 +1571,7 @@ describe("runToolLoop — contract tests", () => {
     expect(delivered).toEqual(["Mirri keeps talking"]);
     expect(result.status).toBe("completed");
     const author = result.usageEntries?.find((entry) => entry.kind === "author");
+    expect(author?.source).toBe("estimated");
     expect(author?.usage.inputTokens).toBeGreaterThan(0);
     expect(author?.usage.outputTokens).toBeGreaterThan(0);
     expect(standardEmbedCalls.map((call) => call.titleKey)).toEqual(["genai.stream.flush_limit_title"]);

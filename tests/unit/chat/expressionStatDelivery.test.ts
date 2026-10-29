@@ -8,10 +8,15 @@ import { runPostTurnEffects } from "@/utils/chat/postTurnEffects";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createPersona } from "../../helpers/fixtures";
 import { createResponseReviewState, recordResponseReviewUsage } from "@/utils/chat/responseReview";
+import type { TurnUsageEntry } from "@/utils/chat/responseReview";
 import { buildSceneTextQuotaTriggerKey } from "@/utils/chat/sceneTurn";
 import { discordPresenceRetention } from "@/utils/cache/discordPresenceRetention";
+import { log } from "@/utils/misc/logger";
+import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
 
 const recorded: RecordStatInput[] = [];
+const metricSpy = spyOn(log, "metric").mockImplementation(() => {});
+const sampleSpy = spyOn(metricSampleRepository, "recordSample").mockResolvedValue(undefined);
 
 // A `mock.module` over the repositories barrel would be process-global for the whole run and is not
 // undone by `mock.restore()`, which left `spyOn` against `statRepository` silently installing
@@ -117,10 +122,150 @@ describe("emoji stats count only what Discord accepted", () => {
 
   afterAll(() => {
     recordStatSpy.mockRestore();
+    metricSpy.mockRestore();
+    sampleSpy.mockRestore();
   });
 
   beforeEach(() => {
     recorded.length = 0;
+    metricSpy.mockClear();
+    sampleSpy.mockClear();
+  });
+
+  it("emits one private-safe turn sample and persists per-model cache stats", async () => {
+    const context = makeContext();
+    const usage = { inputTokens: 1200, outputTokens: 30, cacheReadTokens: 800, cacheWriteTokens: 200, costUsd: 0.02 };
+    await runPostTurnEffects(
+      context,
+      makeResult({
+        streamResults: [
+          { status: "completed", usage },
+          { status: "completed", usage },
+        ],
+      }),
+    );
+    const fields = {
+      provider: context.tomoriState.llm.llm_provider,
+      model: context.tomoriState.llm.llm_codename,
+      source: "measured",
+      input_tokens: 2400,
+      output_tokens: 60,
+      cache_read_tokens: 1600,
+      cache_write_tokens: 400,
+      cost_usd: 0.04,
+    };
+    expect(metricSpy.mock.calls.filter(([name]) => name === "turn_usage")).toEqual([["turn_usage", fields]]);
+    expect(sampleSpy).toHaveBeenCalledWith("turn_usage", fields);
+    expect(
+      recorded.filter(
+        ({ metric }) => metric === "tokens_in" || metric === "cache_read_tokens" || metric === "cache_write_tokens",
+      ),
+    ).toEqual([
+      expect.objectContaining({ metric: "tokens_in", delta: 2400, metricKey: fields.model }),
+      expect.objectContaining({ metric: "cache_read_tokens", delta: 1600, metricKey: fields.model }),
+      expect.objectContaining({ metric: "cache_write_tokens", delta: 400, metricKey: fields.model }),
+    ]);
+  });
+
+  it("uses the review ledger once for turn totals and each entry's model for cache stats", async () => {
+    const context = makeContext();
+    await runPostTurnEffects(
+      context,
+      makeResult({
+        streamResults: [{ status: "completed", usage: { inputTokens: 9999, outputTokens: 999 } }],
+        usageEntries: [
+          {
+            kind: "author",
+            source: "measured",
+            model: "author",
+            usage: { inputTokens: 100, outputTokens: 10, cacheReadTokens: 50, cacheWriteTokens: 0, costUsd: 0.01 },
+          },
+          {
+            kind: "reviewer",
+            source: "measured",
+            model: "reviewer",
+            usage: { inputTokens: 200, outputTokens: 20, cacheReadTokens: 80, cacheWriteTokens: 0, costUsd: 0.02 },
+          },
+        ],
+      }),
+    );
+    expect(metricSpy.mock.calls.filter(([name]) => name === "turn_usage")).toEqual([
+      [
+        "turn_usage",
+        {
+          provider: context.tomoriState.llm.llm_provider,
+          model: context.tomoriState.llm.llm_codename,
+          source: "measured",
+          input_tokens: 300,
+          output_tokens: 30,
+          cache_read_tokens: 130,
+          cache_write_tokens: 0,
+          cost_usd: 0.03,
+        },
+      ],
+    ]);
+    expect(recorded.filter(({ metric }) => metric === "cache_read_tokens")).toEqual([
+      expect.objectContaining({ metricKey: "author", delta: 50 }),
+      expect.objectContaining({ metricKey: "reviewer", delta: 80 }),
+    ]);
+  });
+
+  it("labels estimated review usage and mixed ledgers as estimated without losing measured cache stats", async () => {
+    const estimated: TurnUsageEntry = {
+      kind: "author",
+      model: "author",
+      source: "estimated",
+      usage: { inputTokens: 30, outputTokens: 4 },
+    };
+    const measured: TurnUsageEntry = {
+      kind: "reviewer",
+      model: "reviewer",
+      source: "measured",
+      usage: { inputTokens: 200, outputTokens: 20, cacheReadTokens: 80, cacheWriteTokens: 0, costUsd: 0.02 },
+    };
+    for (const entries of [[estimated], [measured, estimated]]) {
+      metricSpy.mockClear();
+      sampleSpy.mockClear();
+      recorded.length = 0;
+      const mixed = entries.length > 1;
+      await runPostTurnEffects(makeContext(), makeResult({ usageEntries: entries }));
+      const calls = metricSpy.mock.calls.filter(([name]) => name === "turn_usage");
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.[1]).toMatchObject({
+        source: "estimated",
+        input_tokens: mixed ? 230 : 30,
+        output_tokens: mixed ? 24 : 4,
+        cache_read_tokens: "unknown",
+        cache_write_tokens: "unknown",
+      });
+      expect(calls[0]?.[1]).not.toHaveProperty("cost_usd");
+      expect(sampleSpy).toHaveBeenCalledWith("turn_usage", calls[0]?.[1]);
+      expect(recorded.filter((entry) => entry.metric === "cache_read_tokens")).toEqual(
+        mixed ? [expect.objectContaining({ metricKey: "reviewer", delta: 80 })] : [],
+      );
+    }
+  });
+
+  it("emits unknown cache counts for unreported usage, including estimated DM turns", async () => {
+    for (const measured of [true, false]) {
+      metricSpy.mockClear();
+      const context = makeContext();
+      context.isDMChannel = !measured;
+      await runPostTurnEffects(
+        context,
+        makeResult({
+          streamResults: measured ? [{ status: "completed", usage: { inputTokens: 100, outputTokens: 10 } }] : [],
+        }),
+      );
+      const calls = metricSpy.mock.calls.filter(([name]) => name === "turn_usage");
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.[1]).toMatchObject({
+        source: measured ? "measured" : "estimated",
+        cache_read_tokens: "unknown",
+        cache_write_tokens: "unknown",
+      });
+      expect(calls[0]?.[1]).not.toHaveProperty("cost_usd");
+    }
   });
 
   it("ignores emoji that only exist in the [Scene Metadata] block", async () => {
@@ -180,9 +325,9 @@ describe("emoji stats count only what Discord accepted", () => {
         status: "stopped_by_user",
         personaResponses: [],
         usageEntries: [
-          { kind: "author", model: "first-author", usage: { inputTokens: 11, outputTokens: 7 } },
-          { kind: "reviewer", model: "review-model", usage: { inputTokens: 20, outputTokens: 3 } },
-          { kind: "author", model: "fallback-author", usage: { inputTokens: 6, outputTokens: 2 } },
+          { kind: "author", source: "measured", model: "first-author", usage: { inputTokens: 11, outputTokens: 7 } },
+          { kind: "reviewer", source: "measured", model: "review-model", usage: { inputTokens: 20, outputTokens: 3 } },
+          { kind: "author", source: "measured", model: "fallback-author", usage: { inputTokens: 6, outputTokens: 2 } },
         ],
       }),
     );
@@ -205,13 +350,19 @@ describe("emoji stats count only what Discord accepted", () => {
     const review = createResponseReviewState(context);
     if (!review) throw new Error("Missing review fixture");
     context.responseReview = review;
-    recordResponseReviewUsage(review, { kind: "author", model: "author", usage: { inputTokens: 11, outputTokens: 2 } });
+    recordResponseReviewUsage(review, {
+      kind: "author",
+      source: "measured",
+      model: "author",
+      usage: { inputTokens: 11, outputTokens: 2 },
+    });
     await runPostTurnEffects(
       context,
       makeResult({ status: "stopped_by_user", personaResponses: [], usageEntries: review.usage }),
     );
     recordResponseReviewUsage(review, {
       kind: "reviewer",
+      source: "measured",
       model: "reviewer",
       usage: { inputTokens: 13, outputTokens: 3 },
     });
@@ -264,8 +415,8 @@ describe("emoji stats count only what Discord accepted", () => {
         ],
         personaResponses: [{ text: "delivered reply", personaName: "Mirri", personaId: 3 }],
         usageEntries: [
-          { kind: "author", model: "author", usage: { inputTokens: 10, outputTokens: 6 } },
-          { kind: "reviewer", model: "reviewer", usage: { inputTokens: 12, outputTokens: 2 } },
+          { kind: "author", source: "measured", model: "author", usage: { inputTokens: 10, outputTokens: 6 } },
+          { kind: "reviewer", source: "measured", model: "reviewer", usage: { inputTokens: 12, outputTokens: 2 } },
         ],
       });
       await runPostTurnEffects(context, result);
@@ -337,7 +488,9 @@ describe("emoji stats count only what Discord accepted", () => {
         makeResult({
           status: "stopped_by_user",
           personaResponses: [],
-          usageEntries: [{ kind: "reviewer", model: "reviewer", usage: { inputTokens: 9, outputTokens: 1 } }],
+          usageEntries: [
+            { kind: "reviewer", source: "measured", model: "reviewer", usage: { inputTokens: 9, outputTokens: 1 } },
+          ],
         }),
       );
       expect(recorded).toHaveLength(before);
@@ -398,6 +551,7 @@ describe("emoji stats count only what Discord accepted", () => {
         context.responseReview = review;
         recordResponseReviewUsage(review, {
           kind: "reviewer",
+          source: "measured",
           model: "fixture_reviewer",
           usage: { inputTokens: 13, outputTokens: 3 },
         });

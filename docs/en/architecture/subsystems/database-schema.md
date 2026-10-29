@@ -34,6 +34,39 @@ Startup schema execution is coordinated by `src/utils/db/initializeDatabase.ts`:
 - Deterministic apply ordering uses integer versions first, with file stem code-point comparison breaking ties. Sibling migrations sharing a number must be mutually order-independent.
 - Versions 900 and above are reserved for deployment-specific migrations. A clean installation executes that band after the base schema instead of recording it as applied, so `schema.sql` stays free of deployment-specific DDL.
 
+## Document heading paths
+
+`document_chunks.heading_path` is nullable JSONB shaped as
+`{ "sections": [{ "depth": 1, "title": "Harbor" }, { "depth": 4, "title": "Lamp" }] }`.
+The ordered entries retain actual heading depths. The object binds directly through Bun SQL and
+decodes as an object, avoiding PostgreSQL array decoding. Readers validate the stored JSON before
+formatting it. Null means the chunk has no heading metadata.
+
+Migration 127 guards the optional RAG table and adds the column without rewriting existing rows.
+Its rollback drops only heading metadata; it does not change content or boundaries. The idempotent
+`schema_rag.sql` column addition also covers installations that enable pgvector later.
+
+New document writers derive lexical text from the complete path and use bounded heading context
+for embeddings. Edits preserve the stored path, and in-place re-embedding compares it with the
+locked snapshot before updating vectors. Lexical backfill also validates the path against its
+snapshot before writing. Existing documents and imported history facts keep null paths.
+
+## Document lexical index
+
+`document_chunks.lex_text` is nullable derived text containing the document name and chunk
+content and any heading path, tokenized by `src/utils/documents/lexicalText.ts`. Authored `content` stays unchanged.
+The `document_chunks_tsv_update` trigger builds `tsv` with the shared `russian` text-search
+configuration from `COALESCE(lex_text, content)`. A content change that retains the previous
+`lex_text` clears it, so the index cannot keep stale terms.
+
+Migration 126 and `schema_rag.sql` install the same column and trigger; the migration skips
+databases without the optional RAG tables. Pending rows have null `lex_text` and remain
+searchable through raw content. After login, `06_backfillDocumentLexicalText.ts` schedules
+50-row batches without blocking startup. It tokenizes before opening write transactions,
+locks each document name for validation, and writes only still-pending chunks whose content
+and document name match the snapshot. Skipped edits retry on the next batch; failures retry
+on a timer. Chunk reads bypass caches, so these writes require no cache invalidation.
+
 ## Data access boundary
 
 Domain query owners live under `src/utils/db/repositories/`. Some modules, including working-memory
