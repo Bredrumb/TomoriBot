@@ -1,6 +1,7 @@
 ---
 title: "セットアップ: ChatMock経由のCodex CLI"
 sidebar:
+  label: "ChatMock経由のCodex CLI"
   order: 5
 aiGenerated: true
 ---

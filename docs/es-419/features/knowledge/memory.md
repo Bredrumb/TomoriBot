@@ -192,8 +192,7 @@ El alcance limita las cosas antes que nada más: una memoria del servidor solo l
 prompts de su propio servidor, una memoria personal solo cuando ese usuario es visible en la
 conversación, y ambas solo para la persona que las posee. Dentro de ese alcance, **cada memoria
 se envía con cada prompt** por defecto. El etiquetado lo limita aún más, así que una memoria se
-activa solo con una palabra clave o solo en un canal. Actívalo con `/config` > Motor > Memoria y
-STM.
+activa solo con una palabra clave o solo en un canal. Actívalo con `/config` > Comportamiento > Memoria avanzada.
 
 ### Etiquetas de palabra clave
 <!-- anchor: keyword-tags -->
@@ -223,90 +222,31 @@ STM.
 En `/help`, elige `Memoria` y luego `Etiquetado de memoria`, para ver el mismo resumen en
 Discord.
 
-## Memoria a corto plazo (STM)
+## Memoria a corto plazo
 <!-- anchor: short-term-memory-stm -->
 
-TomoriBot puede leer fácilmente los mensajes del canal actual en el que está hablando, pero la
-STM le permite hacer lo siguiente sin guardar una memoria a largo plazo real:
-1. Reforzar temporalmente el escenario/situación actual del canal en el contexto
-2. Recordar temporalmente conversaciones de otros canales/servidores
+TomoriBot lee los mensajes recientes en el canal activo. La memoria a corto plazo (STM) amplía esto manteniendo un contexto de trabajo temporal:
 
-Solo recuerda conversaciones en las que participó. Actualiza la memoria de un canal cuando
-responde, y en ningún otro momento, así que un canal ocupado donde nadie le habla no deja
-rastro.
+- **Contexto del canal:** Refuerza el tema o la situación en curso en el canal actual.
+- **Contexto entre canales:** Recuerda conversaciones recientes de otros canales, y entre servidores cuando el recuerdo entre servidores está habilitado.
 
-La STM de cada canal expira después de 24 horas por defecto, y si decidiste no participar con
-`/personal config`, tus mensajes tampoco entran nunca en ella.
+Ella solo recuerda las conversaciones en las que participó. Solo actualiza el resumen de un canal cuando responde, y en ningún otro momento, por lo que un canal concurrido donde nadie habla con ella no deja ningún recuerdo. La memoria a corto plazo de cada canal caduca después de 24 horas de forma predeterminada. Si optas por no participar en `/personal config`, tus mensajes quedan excluidos de la memoria a corto plazo.
 
-### Qué puede y qué no puede ver
+### Ejemplo entre canales
 
-| Dónde | Qué significa eso |
-|---|---|
-| En un servidor | Una memoria compartida por canal, no una por persona. No lleva notas sobre ti individualmente. |
-| En mensajes directos | Solo tuya. |
-| Otros canales | Puede recordar sus conversaciones recientes de algunos otros canales en el mismo servidor. |
-| Canales privados | Cualquier cosa configurada con `/config` > Canales > Reglas de canal se queda ahí y no aparecerá en otro lugar. |
-| Otros servidores | Nunca, a menos que actives `/personal config` → `crossserver`. Aun así, solo *tus propias* conversaciones te siguen. |
-| Cada persona | Mantiene su propia memoria separada, así que cambiar de persona cambia de memoria. |
+- **Canales públicos:** Hablas sobre una recomendación de álbum con TomoriBot en `#music`. Unos minutos más tarde en `#general`, le preguntas qué álbum sugirió. Debido a que respondió en `#music`, recuerda ese contexto en `#general`.
+- **Canales privados:** Si esa conversación ocurrió en un canal privado, no la recordará en `#general`. Los resúmenes de canales privados permanecen aislados a menos que un administrador habilite la Omisión de privacidad de STM en `/config` > `Permissions`.
 
-La memoria de cada canal contiene los últimos mensajes más un resumen breve que ella misma
-escribe y actualiza a medida que avanza la conversación. Se desvanece sola después de algunas
-horas sin actividad.
+### Administrar la memoria a corto plazo
 
-### Comandos
+Puedes ver o corregir el resumen del canal actual en `/config` > `Persona` > `Recuerdos`.
+Los administradores del servidor pueden ajustar los parámetros o deshabilitar la memoria a corto plazo en `/config` > `Comportamiento` > `Memoria avanzada`, y revisar o borrar los resúmenes de canales activos en `/memories` > `Corto plazo`.
+`/refresh` borra la memoria del canal actual.
 
-| Comando | Qué hace |
-|---|---|
-| `/config` > Persona > Memorias | Ver el resumen que mantiene para este canal |
-| `/config` > Persona > Memorias | Corregirlo o escribirlo tú mismo |
-| `/personal config` / `/personal memories` | Activar el recuerdo entre servidores, o borrar el tuyo |
-| `/refresh` | Hacer que olvide este canal de inmediato |
-| `/config` > Motor > Memoria y STM | Con qué frecuencia lo actualiza, y cuánto detalle conserva |
-| `/config` > Motor > Memoria y STM | Cambiar el resumen por hasta 5 campos etiquetados (*Escena actual*, *Ánimo*, …) |
-| `/config` > Motor > Memoria y STM | Reformular cómo se le pide que lo conserve |
-| `/memories` | Revisar y borrar selectivamente entradas activas del servidor desde un panel de administrador |
-| `/config` > Permisos | Permitir que las memorias de canal privado aparezcan en otro lugar |
-| `/config` > Permisos | Activar o desactivar la función (las memorias guardadas se conservan de todos modos) |
+## Identidades de proxy de mensajes
 
-Cualquiera puede ejecutar `/config` > Persona > Memorias, `/personal config` y
-`/personal memories`. El resto necesita Administrar servidor.
-
-### Configuración de la STM
-
-Los administradores del servidor pueden ajustar la memoria a corto plazo desde
-`/config` → `Comportamiento` → Memoria y STM. Estos ajustes se aplican a los registros
-activos de STM del servidor:
-
-- Cadencia de actualización controla cuántos turnos del bot pasan entre empujones de
-  actualización. El rango permitido es de 1 a 100.
-- Modo de renderizado elige si los valores de categoría sustituyen a los turnos recientes o
-  aparecen como un resumen simple.
-- Mensajes sin procesar controla cuántos mensajes recientes se conservan, de 1 hasta el máximo
-  del canal.
-- Profundidad de aviso ubica el empujón de actualización desde el final del contexto
-  ensamblado, de 0 a 20.
-- Profundidad de contenido ubica el contenido de STM desde el final del contexto ensamblado,
-  de -1 a 20.
-
-Categorías de STM reemplaza el campo de Resumen predeterminado por hasta cinco campos
-etiquetados. Ingresa cada campo como `Label: Description`; dejar todos los campos en blanco
-restaura la categoría de Resumen predeterminada. Guardar categorías limpia la STM activa
-incompatible de canal-servidor, y el panel muestra los canales afectados antes de guardar.
-
-Prompt de STM permite a los administradores anular la descripción de la herramienta y el
-empujón de actualización. Las anulaciones en blanco restauran los valores predeterminados
-efectivos, incluido el empujón consciente de categoría cuando las categorías están activadas.
-
-:::tip
-Estos comandos de STM son solo para usuarios avanzados; se recomienda mantener los ajustes
-predeterminados, a menos que quieras permitir que te recuerde entre servidores con
-`/personal config`
-:::
-
----
+Los servicios de proxy de mensajes compatibles permiten a TomoriBot mantener memorias personales separadas para identidades de proxy verificadas. La cuenta principal de Discord controla la privacidad y la autorización. Consulta el [Soporte de proxy de mensajes](/features/integrations/message-proxy-support/) para conocer la configuración y las limitaciones.
 
 ## Privacidad
 
-Para saber exactamente qué almacena y cómo exportarlo o eliminarlo, consulta
-[Manejo de datos](/es-419/features/knowledge/data-handling/) y `/legal privacy-policy`. Puedes
-optar por no participar de la memoria por completo con `/personal config`.
+Para saber qué almacena TomoriBot y cómo exportarlo o eliminarlo, consulta [Manejo de datos](/features/knowledge/data-handling/) y `/legal privacy-policy`. Puedes optar por no participar en la memoria con `/personal config`.

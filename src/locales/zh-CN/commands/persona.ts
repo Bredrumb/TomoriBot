@@ -118,6 +118,7 @@ export default {
       avatar_update_rate_limited: `🟡 服务器头像因为 Discord 速率限制没有更新。请手动修改。`,
       avatar_update_failed: `🟡 服务器头像没能更新，多半是碰到了 Discord 速率限制。请手动修改。`,
       alter_success_title: `🟢 副人格导入成功`,
+      lorebook_count: "导入的世界书条目数：{count}",
       alter_success_description: `已成功导入副人格 **{nickname}**！
 专属触发词：{trigger_count}
 触发词：{triggers}
@@ -125,10 +126,9 @@ export default {
 消息里出现这些触发词时，这个人格会回复。`,
       alter_success_confirmation: `已成功导入副人格 **{nickname}**，共有 {trigger_count} 个专属触发词！详细的导入信息已发到频道里。`,
       alter_avatar_fallback_main: `🟡 这次导入没有头像图片，所以这个副人格暂时使用 **{nickname}** 当前主人格的头像。你可以到 \`/config\` > 人格 > 常规 里更换。`,
-      alter_avatar_warning: `⚠️ 请不要删除上面的头像图片嵌入，否则副人格头像会丢失。`,
       alter_dm_not_allowed_title: `🔴 私信里不能用副人格`,
       alter_dm_not_allowed_description: `副人格只能在服务器里导入，不能私信（DM）里导入。请在服务器里运行这条指令。`,
-      alter_no_triggers_warning: `⚠️ 这个人格没有触发词。在你用 \`/config\` > 人格 > 常规 添加触发词之前，它不会回复任何消息。`,
+      alter_no_triggers_warning: `这个人格没有触发词。在你用 \`/config\` > 人格 > 常规 添加触发词之前，它不会回复任何消息。`,
       alter_name_conflict_title: `🔴 人格名称已存在`,
       alter_name_conflict_description: `这个服务器上已经有一个叫 **{name}** 的人格了。每个人格的名称都必须是唯一的。
 
@@ -325,7 +325,7 @@ export default {
         character_desc_label: `角色描述`,
         character_desc_placeholder: `描述你的角色（性格、外貌、背景故事等）`,
         example_user_label: `示例用户消息`,
-        example_user_description: `提示：之后可以用 /persona sample-dialogue add 添加更多`,
+        example_user_description: `提示：之后可以在 /config > 人格 > 身份与性格 添加更多`,
         example_user_placeholder: `你好，{bot}！`,
         example_bot_label: `示例人格回复`,
         example_bot_placeholder: `你好，{user}！最近过得怎么样？`,

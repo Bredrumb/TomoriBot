@@ -1,13 +1,74 @@
 import { REST } from "discord.js";
-import { beforeAll, describe, expect, it, mock } from "bun:test";
+import { beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Client, ModalBuilder, TextChannel } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type { ProviderError, StreamContext, StreamProvider } from "@/types/stream/interfaces";
+import * as userCache from "@/utils/cache/userCache";
 import { StreamErrorUi } from "@/utils/discord/stream/errorUi";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy } from "../../helpers/localeCases";
+import { log } from "@/utils/misc/logger";
+import { reportStreamProviderFailure } from "@/utils/provider/providerErrorMetrics";
 
 type SendMock = ReturnType<typeof mock>;
+
+it("keeps request diagnostics on both error and retained warning records", async () => {
+  await initializeLocalizer();
+  const errors = spyOn(log, "error").mockImplementation(async () => {});
+  const warnings = spyOn(log, "warn").mockImplementation(() => {});
+  try {
+    for (const retryable of [false, true]) {
+      errors.mockClear();
+      warnings.mockClear();
+      const context = makeContext(
+        mock(async () => ({})),
+        "server",
+      );
+      context.requestDiagnostics = {
+        model: "gemini-3.5-flash-lite",
+        contextItemCount: 2,
+        contentsCount: 2,
+        tailRoles: ["user", "model"],
+        lastTurn: {
+          textParts: 1,
+          inlineDataParts: 0,
+          fileDataParts: 0,
+          functionCallParts: 0,
+          functionResponseParts: 0,
+        },
+        functionHistoryCount: 0,
+        currentTurnModelPartCount: 0,
+        prefillPresent: false,
+        manuallyTriggered: false,
+        toolCount: 0,
+        chunksReceived: 0,
+        elapsedMs: 10,
+      };
+      await reportStreamProviderFailure({
+        providerError: { type: "api_error", message: "Rejected", code: retryable ? "503" : "400", retryable },
+        providerName: "google",
+        context,
+        requestApiKey: "PRIVATE_KEY",
+        denied: false,
+        surfaced: true,
+      });
+      const call = (retryable ? warnings.mock.calls : errors.mock.calls).find(
+        (entry) => entry[2]?.errorType === "ProviderStreamError",
+      );
+      expect(call?.[2]?.metadata).toMatchObject({
+        model: "gemini-3.5-flash-lite",
+        requestDiagnostics: context.requestDiagnostics,
+      });
+      if (retryable)
+        expect(warnings.mock.calls.find((entry) => entry[2]?.errorType === "ProviderStreamError")?.[3]?.retain).toBe(
+          true,
+        );
+    }
+  } finally {
+    errors.mockRestore();
+    warnings.mockRestore();
+  }
+});
 
 function makeContext(
   send: SendMock,
@@ -68,9 +129,11 @@ async function renderTips(
   options: { providerName?: string; fallbackChain?: unknown[] } = {},
 ): Promise<string> {
   let modal: ReturnType<ModalBuilder["toJSON"]> | undefined;
+  const pendingClicks: Promise<void>[] = [];
   const tipClick = {
     customId: "error_tip_details",
-    user: { bot: false },
+    locale: "en-US",
+    user: { id: "viewer-1", bot: false },
     showModal: async (builtModal: ModalBuilder) => {
       modal = builtModal.toJSON();
     },
@@ -78,7 +141,7 @@ async function renderTips(
   const makeCollector = (filter: (interaction: typeof tipClick) => boolean) => {
     const collector = {
       on(event: string, listener: (interaction: unknown) => Promise<void>) {
-        if (event === "collect" && filter(tipClick)) void listener(tipClick);
+        if (event === "collect" && filter(tipClick)) pendingClicks.push(listener(tipClick));
         return collector;
       },
     };
@@ -92,13 +155,18 @@ async function renderTips(
     createMessageComponentCollector: (options: { filter: (interaction: typeof tipClick) => boolean }) =>
       makeCollector(options.filter),
   }));
-  await new StreamErrorUi().handleProviderError(
-    error,
-    makeProvider(options.providerName),
-    makeContext(send, textCredentialSource, options.fallbackChain ?? []),
-    "fixture-key",
-  );
-  await Promise.resolve();
+  const userRow = spyOn(userCache, "getCachedUserRow").mockResolvedValue(null);
+  try {
+    await new StreamErrorUi().handleProviderError(
+      error,
+      makeProvider(options.providerName),
+      makeContext(send, textCredentialSource, options.fallbackChain ?? []),
+      "fixture-key",
+    );
+    await Promise.all(pendingClicks);
+  } finally {
+    userRow.mockRestore();
+  }
   const payload = send.mock.calls[0]?.[0] as {
     embeds?: unknown[];
     components?: Array<{ toJSON(): { components: Array<{ label?: string }> } }>;

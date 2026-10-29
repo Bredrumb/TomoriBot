@@ -56,7 +56,10 @@ import {
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
 import { truncateDiscordText } from "@/utils/text/discordTextLimits";
 import { formatUTCOffset } from "@/utils/text/timezoneHelper";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { getLocaleEndonym, localizer } from "@/utils/text/localizer";
+import { resolvePersonaSnippet } from "@/utils/text/personaPrompt";
+import { DISCORD_SELECT_OPTION_DESCRIPTION_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 
 /** Discord rejects a String Select carrying more than 25 options. */
@@ -135,7 +138,7 @@ export interface PersonalConfigModelDisplayInfo {
 
 export interface PersonalConfigSpotlightDisplayInfo {
   activeSpotlights: PersonalSpotlightStatus[];
-  personas: Array<{ id: number; name: string; isAlter: boolean }>;
+  personas: Array<{ id: number; name: string; isAlter: boolean; snippet?: string | null }>;
 }
 
 export interface PersonalConfigPanelRenderInput {
@@ -993,12 +996,13 @@ ${localizer(locale, "commands.personal.config.persona_naming_description")}`,
                 ? localizer(locale, "commands.personal.config.persona_shared_lineage_description", {
                     count: sharing.length,
                   })
-                : localizer(
-                    locale,
-                    first?.is_alter
-                      ? "commands.personal.config.persona_alter_description"
-                      : "commands.personal.config.persona_main_description",
-                  ),
+                : ((first ? resolvePersonaSnippet(first, DISCORD_SELECT_OPTION_DESCRIPTION_MAX) : null) ??
+                    localizer(
+                      locale,
+                      first?.is_alter
+                        ? "commands.personal.config.persona_alter_description"
+                        : "commands.personal.config.persona_main_description",
+                    )),
               100,
             ),
             default: lineage === currentLineage,
@@ -1110,7 +1114,7 @@ ${localizer(locale, "commands.personal.config.appearance_description")}
         {
           type: ComponentType.TextDisplay,
           content: `**${localizer(locale, "commands.personal.config.character_reference_label")}**
-> ${localizer(locale, "commands.personal.config.character_reference_image_label")}: ${user.nai_char_ref_url ? localizer(locale, "commands.personal.config.character_reference_uploaded") : localizer(locale, "commands.personal.config.not_set_label")}`,
+> ${localizer(locale, "commands.personal.config.character_reference_image_label")}: ${user.char_ref_url ? localizer(locale, "commands.personal.config.character_reference_uploaded") : localizer(locale, "commands.personal.config.not_set_label")}`,
         },
         {
           type: ComponentType.ActionRow,
@@ -1127,7 +1131,7 @@ ${localizer(locale, "commands.personal.config.appearance_description")}
               style: ButtonStyle.Secondary,
               customId: buildPersonalConfigRouteId({ action: "character-reference-clear", locale }),
               label: localizer(locale, "commands.personal.config.clear_character_reference_button"),
-              disabled: writesDisabled || !user.nai_char_ref_url,
+              disabled: writesDisabled || !user.char_ref_url,
             },
           ],
         },
@@ -1657,7 +1661,7 @@ ${localizer(locale, "commands.personal.config.fallbacks_description")}`,
               : "commands.personal.config.server_fallback_effect_off",
           )}${
             input.serverModelAccess?.userByokMode
-              ? `\n-# ${localizer(locale, "commands.personal.config.server_fallback_byok_notice")}`
+              ? `\n-# ${statusNote("warning", localizer(locale, "commands.personal.config.server_fallback_byok_notice"))}`
               : ""
           }`,
         },

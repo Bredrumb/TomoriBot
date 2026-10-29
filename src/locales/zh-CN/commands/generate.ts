@@ -61,6 +61,7 @@ export default {
       quota_resets_in_hours: `配额将在 {hours} 小时后重置。`,
       quota_resets_in_days: `配额将在 {days} 天后重置。`,
       quota_exceeded_footer: `这个配额由本服务器的管理员通过 \`/moderation\` 设置。`,
+      quota_unavailable_description: `我现在查不到这个服务器的图像生成配额，请稍后再试。`,
     },
     video: {
       nsfw_description: `仅给视频添加 Discord 防剧透遮罩；不会改变生成内容或内容过滤器`,
@@ -116,6 +117,7 @@ export default {
       quota_resets_in_hours: `配额将在 {hours} 小时后重置。`,
       quota_resets_in_days: `配额将在 {days} 天后重置。`,
       quota_exceeded_footer: `这个配额由本服务器的管理员通过 \`/moderation\` 设置。`,
+      quota_unavailable_description: `我现在查不到这个服务器的视频生成配额，请稍后再试。`,
     },
 
     scene: {

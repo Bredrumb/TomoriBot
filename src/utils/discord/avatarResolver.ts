@@ -15,6 +15,8 @@ export type ResolvedAvatarData = {
   avatarUrl: string;
   bannerUrl?: string | null;
   serverNickname?: string;
+  personaId?: number;
+  userDiscId?: string;
 };
 
 type AvatarResolverOptions = {
@@ -172,6 +174,7 @@ async function resolveUserAvatar(
     avatarUrl,
     bannerUrl,
     serverNickname,
+    userDiscId: user.id,
   };
 }
 
@@ -349,6 +352,7 @@ async function resolvePersonaAvatar(
     sourceType: "persona",
     username: persona.persona_nickname,
     avatarUrl,
+    personaId,
   };
 }
 

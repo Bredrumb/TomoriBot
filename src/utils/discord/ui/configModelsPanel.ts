@@ -56,6 +56,7 @@ import {
 } from "@/utils/discord/ui/personalConfigParameterControls";
 import { DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import { measureFormattedPanelTextLength } from "@/utils/discord/ui/panelProse";
+import { statusNote, type StatusTone } from "@/utils/discord/ui/statusTitle";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { formatStopStringForDisplay } from "@/utils/provider/stopStringConfig";
 import { getDiscordTextLength, neutralizeFenceRuns, truncateDiscordText } from "@/utils/text/discordTextLimits";
@@ -195,6 +196,8 @@ export interface ConfigModelsPageInput {
   fallbacksView?: ConfigFallbacksView;
   imageView?: ConfigImageGenerationView;
   voicesView?: ConfigVoicesView;
+  /** True when the server requires members to bring their own provider, which bypasses every server default on these pages. */
+  userByokMode?: boolean;
 }
 
 function heading(locale: string, titleKey: string, descriptionKey: string): ComponentInContainerData {
@@ -214,50 +217,73 @@ function hasUsableModel(slot: ConfigModelSlotView): boolean {
   );
 }
 
-function buildCapabilityNoticeLine(locale: string, view: ConfigSwitchModelsView): ComponentInContainerData | null {
+/**
+ * Red means something the server expects to work is broken or ignored; yellow means an optional
+ * capability is simply switched off.
+ */
+interface ConfigNote {
+  tone: Extract<StatusTone, "error" | "warning">;
+  text: string;
+}
+
+function buildNotesBlock(locale: string, notes: readonly ConfigNote[]): ComponentInContainerData | null {
+  if (notes.length === 0) return null;
+  // Several independent capabilities can each need attention at once, so the list is titled and
+  // marked with one bullet per item: a bare run of `-#` lines reads as unrelated footnotes.
+  const rows = notes.map((note) => withLinePrefix("> ", `- ${statusNote(note.tone, note.text)}`)).join("\n");
+  return {
+    type: ComponentType.TextDisplay,
+    content: `**${localizer(locale, "commands.config.panel.capability_notice_title")}**\n${rows}`,
+  };
+}
+
+function buildByokNote(locale: string): ConfigNote {
+  return { tone: "error", text: localizer(locale, "commands.config.panel.byok_models_notice") };
+}
+
+function buildCapabilityNoticeLine(
+  locale: string,
+  view: ConfigSwitchModelsView,
+  userByokMode: boolean,
+): ComponentInContainerData | null {
   // One Image flag enables either provider-specific image path, so one usable image slot is enough.
   const hasUsableImageModel = view.slots.some(
     (slot) => (slot.capability === "image" || slot.capability === "nai-image") && hasUsableModel(slot),
   );
   const hasUsableVideoModel = view.slots.some((slot) => slot.capability === "video" && hasUsableModel(slot));
-  const warnings: string[] = [];
+  const warnings: ConfigNote[] = userByokMode ? [buildByokNote(locale)] : [];
+  const off = (key: string): ConfigNote => ({ tone: "warning", text: localizer(locale, key) });
+  const broken = (key: string): ConfigNote => ({ tone: "error", text: localizer(locale, key) });
 
   if (view.slots.some((slot) => slot.capability === "text" && slot.currentProvider === "novelai")) {
-    warnings.push(localizer(locale, "commands.config.panel.novelai_context_note"));
+    warnings.push({ tone: "warning", text: localizer(locale, "commands.config.panel.novelai_context_note") });
   }
 
   if (!view.imageGenerationEnabled) {
-    warnings.push(localizer(locale, "commands.config.panel.image_generation_disabled_direction"));
+    warnings.push(off("commands.config.panel.image_generation_disabled_direction"));
   } else if (!hasUsableImageModel) {
-    warnings.push(localizer(locale, "commands.config.panel.image_generation_missing_model"));
+    warnings.push(broken("commands.config.panel.image_generation_missing_model"));
   }
 
   if (!view.videoGenerationEnabled) {
-    warnings.push(localizer(locale, "commands.config.panel.video_generation_disabled_direction"));
+    warnings.push(off("commands.config.panel.video_generation_disabled_direction"));
   } else if (!hasUsableVideoModel) {
-    warnings.push(localizer(locale, "commands.config.panel.video_generation_missing_model"));
+    warnings.push(broken("commands.config.panel.video_generation_missing_model"));
   }
 
   if (view.speechCapabilityEnabled === false) {
-    warnings.push(localizer(locale, "commands.config.panel.speech_capability_disabled_direction"));
+    warnings.push(off("commands.config.panel.speech_capability_disabled_direction"));
   } else if (view.speechCapabilityEnabled !== undefined) {
     // A working speech setup stays silent, so only a missing target earns a notice.
     const hasActiveSpeechEndpoint = view.slots.some(
       (slot) => (slot.capability === "tts-design" || slot.capability === "tts-clone") && slot.currentModelName !== null,
     );
     if (!hasActiveSpeechEndpoint) {
-      warnings.push(localizer(locale, "commands.config.panel.speech_capability_missing_endpoint"));
+      warnings.push(broken("commands.config.panel.speech_capability_missing_endpoint"));
     }
   }
 
-  if (warnings.length === 0) return null;
-  // Several independent capabilities can each need attention at once, so the list is titled and
-  // marked with one bullet per item: a bare run of `-#` lines reads as unrelated footnotes.
-  const rows = warnings.map((warning) => withLinePrefix("> ", `- ${warning}`)).join("\n");
-  return {
-    type: ComponentType.TextDisplay,
-    content: `**${localizer(locale, "commands.config.panel.capability_notice_title")}**\n${rows}`,
-  };
+  return buildNotesBlock(locale, warnings);
 }
 
 interface SwitchProviderOptionsInput {
@@ -459,7 +485,7 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
     content: `-# ${localizer(locale, "commands.config.panel.manage_providers_hint")}`,
   });
 
-  const capabilityNotice = buildCapabilityNoticeLine(locale, view);
+  const capabilityNotice = buildCapabilityNoticeLine(locale, view, input.userByokMode === true);
   if (capabilityNotice) components.push(capabilityNotice);
 
   // Only Text carries narrower scopes, so the summary names those two editors rather than implying
@@ -978,7 +1004,7 @@ ${localizer(locale, "commands.config.panel.nai_parameters_description")}
   return components;
 }
 
-export function buildConfigModelsBody(input: ConfigModelsPageInput): ComponentInContainerData[] {
+function buildPageBody(input: ConfigModelsPageInput): ComponentInContainerData[] {
   switch (input.page) {
     case "switch":
       return buildSwitchModelsBody(input);
@@ -997,4 +1023,12 @@ export function buildConfigModelsBody(input: ConfigModelsPageInput): ComponentIn
     default:
       return [];
   }
+}
+
+export function buildConfigModelsBody(input: ConfigModelsPageInput): ComponentInContainerData[] {
+  const body = buildPageBody(input);
+  // The Switch page folds the BYOK notice into its own Notes list, so only the other pages append one.
+  if (!input.userByokMode || input.page === "switch" || body.length === 0) return body;
+  const notice = buildNotesBlock(input.locale, [buildByokNote(input.locale)]);
+  return notice ? [...body, notice] : body;
 }

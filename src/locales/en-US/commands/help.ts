@@ -93,8 +93,8 @@ export default {
         short_term_memory_description: `My working note of this conversation`,
         rewards_punishments: `Rewards and Punishments`,
         rewards_punishments_description: `Gestures I notice and remember`,
-        memory_tagging: `Memory Tagging (Advanced)`,
-        memory_tagging_description: `Wake a memory only when it is relevant`,
+        memory_tagging: `Personal Memory Tagging (Advanced)`,
+        memory_tagging_description: `Wake a personal memory only when it is relevant`,
         blacklisting: `Blacklisting`,
         blacklisting_description: "Make me ignore one member completely",
       },
@@ -235,7 +235,7 @@ Use {helpCustomModels} for the full command guide, supported endpoint types, and
       zai_title: `Setting Up Z.ai API Key`,
       zai_description: `Z.ai provides access to the GLM family through a general API and a separate coding endpoint.
 
-⚠️ **Terms of Service Update:** Z.ai's ToS have been updated to only permit coding/agent use cases. Using the general endpoint for non-coding chat is at your own risk and may violate their terms.`,
+🟡 **Terms of Service Update:** Z.ai's ToS have been updated to only permit coding/agent use cases. Using the general endpoint for non-coding chat is at your own risk and may violate their terms.`,
       zai_getting_key_title: `Getting Your API Key:`,
       zai_getting_key_description: `1. Visit the [Z.ai Platform](https://z.ai)
 2. Sign in or create an account
@@ -245,7 +245,7 @@ Use {helpCustomModels} for the full command guide, supported endpoint types, and
       zai_important_title: `Important Notes:`,
       zai_important_description: `- Use the general endpoint for normal chat, reasoning, and native image generation
   - The dedicated Coding endpoint is separate and intended for coding-specific workflows
-  - ⚠️ Z.ai's ToS restricts usage to coding/agent scenarios only, general chat/roleplay use is at your own risk`,
+  - 🟡 Z.ai's ToS restricts usage to coding/agent scenarios only, general chat/roleplay use is at your own risk`,
       zai_footer: `After setting up this provider, you may change its default model with {configModel}`,
       novelai_title: `Setting Up NovelAI API Key`,
       novelai_description: `NovelAI is a subscription-based service focused on creative storytelling and roleplay.
@@ -512,9 +512,9 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
         footer: `Pick which persona you meant when several are active.`,
       },
       memory_tagging: {
-        title: `Memory Tagging (Advanced)`,
+        title: `Personal Memory Tagging (Advanced)`,
         description:
-          "By default every memory in scope is sent with every message. Tagging narrows that down.\n> **Keyword tags**: a tagged memory wakes up only when its keyword appears in the conversation. An untagged memory is always active.\n> **Channels**: a server memory can be limited to channels you pick in its form (their threads included), and a personal memory to a `#channel` tag. Both combine with keyword tags.\n\nTurn both on in {configAdvancedMemory}, then use {toolPromptSnapshot} to see exactly which memories are active right now.",
+          "Personal memories can carry keyword or `#channel` tags, and tagging decides whether those tags narrow when they appear.\n> **Keyword tags**: a tagged personal memory wakes up only when its keyword appears in the conversation. An untagged personal memory is always active.\n> **Channels**: a personal memory can be limited to a channel with a `#channel` tag. Server memories and documents use channel selections in `/memories` instead.\n\nTurn tagging on in {configAdvancedMemory}, then use {toolPromptSnapshot} to see exactly which memories are active right now.\n> World canon is separate: lorebook entries in `/memories` use their own keywords and Always On setting.",
         footer: "Uploaded documents and extracted history can be limited to channels too.",
       },
     },

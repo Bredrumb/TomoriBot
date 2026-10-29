@@ -176,7 +176,7 @@ async function resolveReplyTarget(
  */
 function buildReplyReference(context: StreamContext, targetChannelId: string): ReplyOptions | undefined {
   const source = context.replyToMessage;
-  if (!source || source.channelId !== targetChannelId) return undefined;
+  if (!source || source.system || source.channelId !== targetChannelId) return undefined;
 
   return { messageReference: source.id, failIfNotExists: false };
 }

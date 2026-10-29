@@ -5,6 +5,7 @@ export const openrouterProviderInfo: ProviderInfo = {
   displayName: "OpenRouter",
   aliases: ["or"],
   supportedModels: [],
+  defaultVisionModel: "google/gemini-3.1-flash-lite",
   requiresApiKey: true,
   supportsStreaming: true,
   supportsFunctionCalling: true,

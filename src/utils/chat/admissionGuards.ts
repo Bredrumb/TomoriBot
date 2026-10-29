@@ -12,7 +12,8 @@ import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { createStandardEmbed, sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { ColorCode, log } from "@/utils/misc/logger";
-import { checkTextQuota } from "@/utils/quota/textQuotaManager";
+import { QuotaUnavailableError } from "@/utils/quota/quotaErrors";
+import { reserveTextQuota, type TextQuotaClaim } from "@/utils/quota/textQuotaManager";
 import { checkServerRateLimit, checkUserRateLimit } from "@/utils/security/rateLimiter";
 import { isBaseTriggerWordMatch } from "@/utils/chat/errorVisibility";
 import { isMessageProxyMessage } from "@/utils/chat/triggerProcessor";
@@ -268,21 +269,34 @@ export async function checkTextQuotaForAdmission(params: {
 
   const existingTextQuotaState = textQuotaTriggerStates.get(params.triggerKey);
 
-  if (params.isPersonaJob) {
-    return {
-      allowed: true,
-      state: existingTextQuotaState ?? null,
-    };
+  if (existingTextQuotaState?.consumed) {
+    return { allowed: true, state: existingTextQuotaState };
   }
 
-  if (existingTextQuotaState) {
-    return {
-      allowed: true,
-      state: existingTextQuotaState,
-    };
+  if (existingTextQuotaState?.reservation) {
+    return { allowed: true, state: existingTextQuotaState };
   }
 
-  const quotaCheck = await checkTextQuota(params.serverId, params.userDiscId);
+  // A persona job normally reuses its group's admission, but one whose earlier turn released the
+  // reservation still has to claim a unit before it can spend the server's model.
+  if (params.isPersonaJob && !existingTextQuotaState?.reservationReleased) {
+    return { allowed: true, state: existingTextQuotaState ?? null };
+  }
+
+  let quotaCheck: TextQuotaClaim;
+  try {
+    quotaCheck = await reserveTextQuota(params.serverId, params.userDiscId);
+  } catch (error) {
+    if (!(error instanceof QuotaUnavailableError)) throw error;
+    if (params.notifyUser !== false) {
+      await sendStandardEmbed(params.channel, params.locale, {
+        color: ColorCode.ERROR,
+        titleKey: "genai.text_quota_unavailable_title",
+        descriptionKey: "genai.text_quota_unavailable_description",
+      });
+    }
+    return { allowed: false, state: null };
+  }
 
   if (!quotaCheck.allowed) {
     const resetInfo = buildTextQuotaResetInfo(params.locale, quotaCheck);
@@ -308,12 +322,18 @@ export async function checkTextQuotaForAdmission(params: {
     return { allowed: false, state: null };
   }
 
-  const textQuotaStateForTrigger: TextQuotaTriggerState = {
+  const textQuotaStateForTrigger: TextQuotaTriggerState = existingTextQuotaState ?? {
     serverId: params.serverId,
     userDiscId: params.userDiscId,
     consumed: false,
+    reservation: null,
+    reservationReleased: false,
     createdAt: Date.now(),
   };
+  textQuotaStateForTrigger.serverId = params.serverId;
+  textQuotaStateForTrigger.userDiscId = params.userDiscId;
+  textQuotaStateForTrigger.reservation = quotaCheck.reservation;
+  textQuotaStateForTrigger.reservationReleased = false;
   textQuotaTriggerStates.set(params.triggerKey, textQuotaStateForTrigger);
 
   return {

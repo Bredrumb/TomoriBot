@@ -218,6 +218,7 @@ function makeContext(): ChatTurnContext {
     message: { id: "msg_1", channel },
     contextItems: [],
     simplifiedMessages: [],
+    reactedMessages: [],
     messageIdMap: new Map(),
     emojiStrings: [],
     loadedEmojis: null,
@@ -254,6 +255,8 @@ function makeContext(): ChatTurnContext {
     expressionDelivery: createExpressionDeliveryState(),
     responseTarget: undefined,
     turn: {
+      mainPersona: null,
+      persona: tomoriState,
       lockedTurn: {
         channelId: "ch_test",
         admission: { incoming: { retryCount: 0 } },
@@ -520,6 +523,45 @@ describe("runToolLoop — contract tests", () => {
     expect(response).not.toHaveProperty("endTurn");
 
     expect(result.streamResults).toHaveLength(2);
+  });
+
+  it("keeps an earlier request's reasoning when the tool follow-up reports none", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+
+    const { provider } = makeProvider([
+      { ...makeFunctionCallResult("echo_tool"), thoughtLog: { raw: "checked the shelf first" } },
+      { status: "completed", accumulatedText: "done", thoughtLog: { generationDurationMs: 900 } },
+    ]);
+    toolExecuteQueue.push({ success: true, data: { ok: true } });
+
+    const result = await runToolLoop(makeParams(makeContext(), provider));
+
+    expect(result.status).toBe("completed");
+    expect(result.thoughtLog?.raw).toBe("checked the shelf first");
+  });
+
+  it("preserves each request's reasoning and the first reply link across tool calls", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { provider } = makeProvider([
+      {
+        ...makeFunctionCallResult("echo_tool"),
+        thoughtLog: { summary: "first summary", raw: "first thought", firstReplyUrl: "https://example.com/first" },
+      },
+      {
+        status: "completed",
+        accumulatedText: "done",
+        thoughtLog: { raw: "second thought", firstReplyUrl: "https://example.com/second" },
+      },
+    ]);
+    toolExecuteQueue.push({ success: true, data: { ok: true } });
+
+    const result = await runToolLoop(makeParams(makeContext(), provider));
+
+    expect(result.thoughtLog?.iterations).toEqual([
+      { summary: "first summary", raw: "first thought" },
+      { summary: undefined, raw: "second thought" },
+    ]);
+    expect(result.thoughtLog?.firstReplyUrl).toBe("https://example.com/first");
   });
 
   it("preserves message-only, empty, array, scalar and message-bearing payload successes", async () => {
@@ -1281,7 +1323,7 @@ describe("runToolLoop — contract tests", () => {
     expect(result.status).toBe("stopped_by_user");
     expect(result.personaResponses).toEqual([]);
     expect(result.usageEntries).toEqual([
-      { kind: "author", model: "test-model", usage: { inputTokens: 25, outputTokens: 3 } },
+      { kind: "author", model: "test-model", source: "measured", usage: { inputTokens: 25, outputTokens: 3 } },
     ]);
     expect(review).not.toHaveBeenCalled();
   });
@@ -1450,6 +1492,7 @@ describe("runToolLoop — contract tests", () => {
     expect(delivered).toEqual(["Mirri keeps talking"]);
     expect(result.status).toBe("completed");
     const author = result.usageEntries?.find((entry) => entry.kind === "author");
+    expect(author?.source).toBe("estimated");
     expect(author?.usage.inputTokens).toBeGreaterThan(0);
     expect(author?.usage.outputTokens).toBeGreaterThan(0);
     expect(standardEmbedCalls.map((call) => call.titleKey)).toEqual(["genai.stream.flush_limit_title"]);

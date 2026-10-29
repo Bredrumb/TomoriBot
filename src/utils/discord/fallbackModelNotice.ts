@@ -86,14 +86,15 @@ export async function sendFallbackModelUsageNotice({
   offerPersonalFallbackOptOut = false,
 }: SendFallbackModelUsageNoticeOptions): Promise<void> {
   const slot = resolveFallbackSlot(context, successModel);
+  const descriptionVars = (locale: string) => ({
+    slot,
+    success_model: successModel.llm_codename,
+    failure_list: buildFailureList(locale, failures),
+  });
   const detailsOptions = {
     titleKey: "genai.fallback_used_title",
     descriptionKey: "genai.fallback_used_details_description",
-    descriptionVars: {
-      slot,
-      success_model: successModel.llm_codename,
-      failure_list: buildFailureList(context.locale, failures),
-    },
+    descriptionVars: descriptionVars(context.locale),
     color: ColorCode.INFO,
   } as const;
 
@@ -102,15 +103,18 @@ export async function sendFallbackModelUsageNotice({
     return;
   }
 
-  const modalTitle = localizer(context.locale, detailsOptions.titleKey);
-  const optOutFooter = offerPersonalFallbackOptOut
-    ? `\n-# ${localizer(context.locale, "genai.fallback_used_personal_opt_out_footer")}`
-    : "";
-  const modalContent = `${localizer(
-    context.locale,
-    detailsOptions.descriptionKey,
-    detailsOptions.descriptionVars,
-  )}\n\n-# ${localizer(context.locale, NOTICE_CONFIG_HINT_KEY)}${optOutFooter}`;
+  const renderDetails = (locale: string) => {
+    const optOutFooter = offerPersonalFallbackOptOut
+      ? `\n-# ${localizer(locale, "genai.fallback_used_personal_opt_out_footer")}`
+      : "";
+    return {
+      title: localizer(locale, detailsOptions.titleKey),
+      content: `${localizer(locale, detailsOptions.descriptionKey, descriptionVars(locale))}\n\n-# ${localizer(
+        locale,
+        NOTICE_CONFIG_HINT_KEY,
+      )}${optOutFooter}`,
+    };
+  };
 
   try {
     const buttonLabel = localizer(context.locale, "genai.fallback_used_details_button");
@@ -130,8 +134,7 @@ export async function sendFallbackModelUsageNotice({
     attachTextDisplayModalCollector({
       message: noticeMessage,
       customId: FALLBACK_DETAILS_BUTTON_ID,
-      title: modalTitle,
-      content: modalContent,
+      render: renderDetails,
       timeoutMs: FALLBACK_NOTICE_BUTTON_TIMEOUT_MS,
       logLabel: "Fallback model details",
       onExpire: async () => {

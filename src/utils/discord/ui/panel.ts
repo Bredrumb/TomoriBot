@@ -72,6 +72,17 @@ export function withLinePrefix(prefix: string, text: string): string {
     .join("\n");
 }
 
+/** Subtext naming the channels an item is limited to, or null when it applies everywhere. */
+export function buildChannelScopeLine(
+  locale: string,
+  scope: { channel_disc_ids: readonly string[]; channel_scope_pending: boolean },
+): string | null {
+  if (scope.channel_scope_pending) return `-# ${localizer(locale, "commands.memories.channel_scope_unresolved_line")}`;
+  if (scope.channel_disc_ids.length === 0) return null;
+  const channels = scope.channel_disc_ids.map((id) => `<#${id}>`).join(", ");
+  return `-# ${localizer(locale, "commands.memories.channel_scope_line", { channels })}`;
+}
+
 export interface BuildPanelContainerOptions {
   /**
    * Whether to apply panel layout wrapping across TextDisplay components.

@@ -57,6 +57,8 @@ import type {
 import { extractGifKeyframes } from "../../utils/media/gifProcessor";
 import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
 
+const REQUEST_DIAGNOSTIC_TAIL_TURNS = 5;
+
 const VIDEO_CONTEXT_MAX_INLINE_MB = Math.max(
   1,
   Number.parseInt(process.env.VIDEO_CONTEXT_MAX_INLINE_MB ?? "20", 10) || 20,
@@ -324,6 +326,30 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
 
     if (!context.holdResponseText) this.logSanitizedRequest(requestConfig, finalContents);
 
+    const startedAt = Date.now();
+    const lastParts = finalContents.at(-1)?.parts ?? [];
+    context.requestDiagnostics = {
+      model: config.model,
+      contextItemCount: context.contextItems.length,
+      contentsCount: finalContents.length,
+      tailRoles: finalContents
+        .slice(-REQUEST_DIAGNOSTIC_TAIL_TURNS)
+        .map((content) => (content.role === "user" ? "user" : content.role === "model" ? "model" : "unknown")),
+      lastTurn: {
+        textParts: lastParts.filter((part) => part.text !== undefined).length,
+        inlineDataParts: lastParts.filter((part) => part.inlineData !== undefined).length,
+        fileDataParts: lastParts.filter((part) => part.fileData !== undefined).length,
+        functionCallParts: lastParts.filter((part) => part.functionCall !== undefined).length,
+        functionResponseParts: lastParts.filter((part) => part.functionResponse !== undefined).length,
+      },
+      functionHistoryCount: context.functionInteractionHistory?.length ?? 0,
+      currentTurnModelPartCount: context.currentTurnModelParts.length,
+      prefillPresent: Boolean(context.outputPrefill),
+      manuallyTriggered: config.isManuallyTriggered ?? false,
+      toolCount: config.tools?.length ?? 0,
+      chunksReceived: 0,
+      elapsedMs: 0,
+    };
     try {
       const stream = await genAI.models.generateContentStream({
         model: config.model,
@@ -333,6 +359,8 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
 
       // Yield each chunk; bail out immediately if the external abort signal fired.
       for await (const chunkResponse of stream) {
+        context.requestDiagnostics.chunksReceived++;
+        context.requestDiagnostics.elapsedMs = Date.now() - startedAt;
         if (context.abortSignal?.aborted) {
           log.warn(`Google stream aborting for channel ${context.channel.id}: external abort signal received.`);
           return;
@@ -398,6 +426,7 @@ export class GoogleStreamAdapter extends BaseStreamAdapter {
         }
       }
     } catch (error) {
+      context.requestDiagnostics.elapsedMs = Date.now() - startedAt;
       if (this.speakerGuardEnabled && this.speakerGuardPendingTail.length > 0) {
         const tailText = this.consumeSpeakerGuardPendingTail();
         if (tailText) {

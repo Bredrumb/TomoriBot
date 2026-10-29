@@ -1,3 +1,12 @@
+import { formatDocumentEmbeddingInput } from "@/utils/documents/documentChunker";
+import { handleSummarySaveClick } from "@/utils/compaction/compact/summaryControls";
+import * as modalUi from "@/utils/discord/ui/modals";
+import * as embedUi from "@/utils/discord/ui/embeds";
+import * as interactionLocale from "@/utils/discord/interactionLocale";
+import { personaRepository } from "@/utils/db/repositories";
+import { createRouteInteraction } from "../../helpers/routeInteraction";
+import { useEnvSandbox } from "../../helpers/env";
+import type { ButtonInteraction, ModalSubmitInteraction as ModalSubmission } from "discord.js";
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import {
   ButtonStyle,
@@ -19,6 +28,7 @@ import {
   buildInitialMemoriesPanel,
   createMemoriesInteractionRoute,
   DOCUMENT_RESULT_RECEIPT_KEYS,
+  LOREBOOK_RESULT_RECEIPT_KEYS,
   MEMORIES_RECEIPT_KEYS,
   serverMemoriesOperations,
   type MemoriesRouteDependencies,
@@ -32,11 +42,11 @@ import {
   buildMemoriesPanelPayload,
   buildServerStmModal,
   buildServerMemoryModalFieldId,
-  parseServerMemoryTags,
 } from "@/utils/discord/ui/memoriesPanel";
 import * as tomoriStateCache from "@/utils/cache/tomoriStateCache";
 import { llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import { serverDocumentsOperations } from "@/utils/discord/interactions/memoriesDocumentOperations";
+import { lorebookOperations } from "@/modules/lorebooks/discord/operations";
 import * as ragAvailability from "@/utils/db/ragAvailability";
 import * as documentService from "@/utils/documents/documentService";
 import * as textExtractor from "@/utils/documents/textExtractor";
@@ -295,6 +305,104 @@ describe("memories panel route catalog", () => {
         nonce: "nonce123",
       },
     ],
+    ["memories:v1:category:en-US:lorebooks", { action: "category", locale: "en-US", category: "lorebooks" }],
+    [
+      "memories:v1:lore-book-toggle-enabled:en-US:42",
+      { action: "lore-book-toggle-enabled", locale: "en-US", bookId: 42 },
+    ],
+    [
+      "memories:v1:lore-book-channels-open:en-US:42",
+      { action: "lore-book-channels-open", locale: "en-US", bookId: 42 },
+    ],
+    [
+      "memories:v1:lore-book-channels-submit:en-US:42:nonce123",
+      { action: "lore-book-channels-submit", locale: "en-US", bookId: 42, nonce: "nonce123" },
+    ],
+    ["memories:v1:lore-book-rename-open:en-US:42", { action: "lore-book-rename-open", locale: "en-US", bookId: 42 }],
+    [
+      "memories:v1:lore-book-remove-prompt:en-US:42",
+      { action: "lore-book-remove-prompt", locale: "en-US", bookId: 42 },
+    ],
+    [
+      "memories:v1:lore-book-remove-confirm:en-US:42",
+      { action: "lore-book-remove-confirm", locale: "en-US", bookId: 42 },
+    ],
+    [
+      "memories:v1:lore-book-remove-cancel:en-US:42",
+      { action: "lore-book-remove-cancel", locale: "en-US", bookId: 42 },
+    ],
+    [
+      "memories:v1:lore-book-rename-submit:en-US:42:nonce123",
+      { action: "lore-book-rename-submit", locale: "en-US", bookId: 42, nonce: "nonce123" },
+    ],
+    [
+      "memories:v1:lore-book-create-submit:en-US:nonce123",
+      { action: "lore-book-create-submit", locale: "en-US", nonce: "nonce123" },
+    ],
+    [
+      "memories:v1:lore-book-import-submit:en-US:nonce123",
+      { action: "lore-book-import-submit", locale: "en-US", nonce: "nonce123" },
+    ],
+    ["memories:v1:lore-book-select:en-US", { action: "lore-book-select", locale: "en-US" }],
+    [
+      "memories:v1:lore-select:en-US:0:0:42",
+      { action: "lore-select", locale: "en-US", scopeLineageId: 0, rangeIndex: 0, bookId: 42 },
+    ],
+    ["memories:v1:lore-scope:en-US:0", { action: "lore-scope", locale: "en-US", scopeLineageId: 0 }],
+    [
+      "memories:v1:lore-persona-select:en-US:1770",
+      { action: "lore-persona-select", locale: "en-US", scopeLineageId: 1770 },
+    ],
+    [
+      "memories:v1:lore-persona-page:en-US:1770:1",
+      { action: "lore-persona-page", locale: "en-US", scopeLineageId: 1770, rangeIndex: 1 },
+    ],
+    ["memories:v1:lore-select:en-US:0:2", { action: "lore-select", locale: "en-US", scopeLineageId: 0, rangeIndex: 2 }],
+    ["memories:v1:lore-select:en-US:0", { action: "lore-select", locale: "en-US", scopeLineageId: 0 }],
+    [
+      "memories:v1:lore-range:en-US:1770:2",
+      { action: "lore-range", locale: "en-US", scopeLineageId: 1770, rangeIndex: 2 },
+    ],
+    [
+      "memories:v1:lore-add-submit:en-US:0:nonce123",
+      { action: "lore-add-submit", locale: "en-US", scopeLineageId: 0, nonce: "nonce123" },
+    ],
+    [
+      "memories:v1:lore-import-submit:en-US:0:nonce123",
+      { action: "lore-import-submit", locale: "en-US", scopeLineageId: 0, nonce: "nonce123" },
+    ],
+    [
+      "memories:v1:lore-edit-open:en-US:1770:42",
+      { action: "lore-edit-open", locale: "en-US", scopeLineageId: 1770, entryId: 42 },
+    ],
+    [
+      "memories:v1:lore-edit-submit:en-US:1770:42:nonce123",
+      { action: "lore-edit-submit", locale: "en-US", scopeLineageId: 1770, entryId: 42, nonce: "nonce123" },
+    ],
+    [
+      "memories:v1:lore-activation-open:en-US:1770:42",
+      { action: "lore-activation-open", locale: "en-US", scopeLineageId: 1770, entryId: 42 },
+    ],
+    [
+      "memories:v1:lore-activation-submit:en-US:1770:42:nonce123",
+      { action: "lore-activation-submit", locale: "en-US", scopeLineageId: 1770, entryId: 42, nonce: "nonce123" },
+    ],
+    [
+      "memories:v1:lore-toggle-enabled:en-US:0:42",
+      { action: "lore-toggle-enabled", locale: "en-US", scopeLineageId: 0, entryId: 42 },
+    ],
+    [
+      "memories:v1:lore-remove-prompt:en-US:0:42",
+      { action: "lore-remove-prompt", locale: "en-US", scopeLineageId: 0, entryId: 42 },
+    ],
+    [
+      "memories:v1:lore-remove-confirm:en-US:0:42",
+      { action: "lore-remove-confirm", locale: "en-US", scopeLineageId: 0, entryId: 42 },
+    ],
+    [
+      "memories:v1:lore-remove-cancel:en-US:0:42",
+      { action: "lore-remove-cancel", locale: "en-US", scopeLineageId: 0, entryId: 42 },
+    ],
     ["memories:v1:stm-open:en-US", { action: "stm-open", locale: "en-US" }],
     ["memories:v1:stm-submit:en-US:nonce123", { action: "stm-submit", locale: "en-US", nonce: "nonce123" }],
     [
@@ -306,6 +414,10 @@ describe("memories panel route catalog", () => {
       { action: "retry", locale: "en-US", category: "memories", lineageId: 1770 },
     ],
     ["memories:v1:retry:en-US:documents", { action: "retry", locale: "en-US", category: "documents" }],
+    [
+      "memories:v1:retry:en-US:lorebooks:1770",
+      { action: "retry", locale: "en-US", category: "lorebooks", lineageId: 1770 },
+    ],
   ];
 
   it.each(WIRE_CONTRACT_V1)("decodes the pinned wire string %s to its exact route", (customId, expectedRoute) => {
@@ -368,6 +480,7 @@ describe("memories modals and tag parser", () => {
     const fileContainer = modal.components.find((c) => c.component?.custom_id?.startsWith("file_"));
     expect(fileContainer).toBeDefined();
     expect(fileContainer?.component?.type).toBe(19);
+    expect(modal.components.some((c) => c.component?.custom_id?.startsWith("tags_"))).toBe(false);
   });
 
   it("offers the channel scope select only inside a server", () => {
@@ -416,37 +529,15 @@ describe("memories modals and tag parser", () => {
 
   it("builds field IDs with nonce suffix", () => {
     expect(buildServerMemoryModalFieldId("content", "abc")).toBe("content_abc");
-    expect(buildServerMemoryModalFieldId("tags", "abc")).toBe("tags_abc");
     expect(buildServerMemoryModalFieldId("file", "abc")).toBe("file_abc");
   });
 
-  it("parses and deduplicates tags up to 5 items", () => {
-    expect(parseServerMemoryTags("lore, rules, #general, lore, event, extra, ignored")).toEqual([
-      "lore",
-      "rules",
-      "#general",
-      "event",
-      "extra",
-    ]);
-    expect(parseServerMemoryTags("")).toEqual([]);
-    expect(parseServerMemoryTags(" \"quoted\" , 'single' ")).toEqual(["quoted", "single"]);
-  });
-
   it("builds edit modal with prefilled values", () => {
-    const modal = buildEditServerMemoryModal(
-      "en-US",
-      1770,
-      42,
-      "Existing content",
-      ["tag1", "tag2"],
-      ["111111111111111111"],
-      "nonce123",
-    );
+    const modal = buildEditServerMemoryModal("en-US", 1770, 42, "Existing content", ["111111111111111111"], "nonce123");
     expect(modal.title).toBe(localizer("en-US", "commands.memories.edit_modal_title"));
     const contentField = modal.components.find((c) => c.component?.custom_id?.startsWith("content_"));
     expect(contentField?.component?.value).toBe("Existing content");
-    const tagsField = modal.components.find((c) => c.component?.custom_id?.startsWith("tags_"));
-    expect(tagsField?.component?.value).toBe("tag1, tag2");
+    expect(modal.components.some((c) => c.component?.custom_id?.startsWith("tags_"))).toBe(false);
     const channelsField = modal.components.find((c) => c.component?.custom_id?.startsWith("channels_"));
     expect(channelsField?.component?.default_values).toEqual([{ id: "111111111111111111", type: "channel" }]);
   });
@@ -514,6 +605,10 @@ describe("memories permissions and scoping", () => {
       },
       getDocumentCountsByPersona: async () => ({ byPersona: new Map([[10, 3]]), serverwide: 1 }),
       getEligibleHistoryPersonaIds: async () => new Set(),
+      loadLorebooks: async () => ({ status: "fresh" as const, entries: [] }),
+      getLorebookCounts: async () => new Map(),
+      getLorebookCollections: async () => [],
+      lorebookOperations,
       getStmEntries: async (workspaceId) => {
         calls.push(`getStmEntries:${workspaceId}`);
         return [
@@ -552,7 +647,23 @@ describe("memories permissions and scoping", () => {
       showStmModal: async () => {
         calls.push("showStmModal");
       },
+      showAddLorebookModal: async () => {
+        calls.push("showAddLorebookModal");
+      },
+      showImportLorebookModal: async () => {
+        calls.push("showImportLorebookModal");
+      },
+      showEditLorebookModal: async () => {
+        calls.push("showEditLorebookModal");
+      },
+      showLorebookActivationModal: async () => {
+        calls.push("showLorebookActivationModal");
+      },
+      takeLorebookFileUpload: () => undefined,
+      parseLorebookUpload: () => ({ ok: false, reason: "unsupported" as const }),
+      filterChannelScope: async (_interaction, channelIds) => channelIds,
       takeCheckboxValues: () => [],
+      takeStringSelectValues: () => undefined,
       takeChannelSelectValues: () => [],
       clearStm: () => {
         calls.push("clearStm");
@@ -562,6 +673,44 @@ describe("memories permissions and scoping", () => {
 
     return { dependencies, calls, memories };
   }
+
+  it("retries an unavailable initial panel after scope recovery", async () => {
+    const { dependencies, calls } = createTestDependencies();
+    const resolveScope = dependencies.resolveScope;
+    let unavailable = true;
+    dependencies.resolveScope = async (...args) => (unavailable ? null : resolveScope(...args));
+    const interaction = {
+      user: { id: "user-42", username: "user42" },
+      guildId: "guild-123",
+      memberPermissions: { has: () => true },
+    } as unknown as ChatInputCommandInteraction;
+    const panel = await buildInitialMemoriesPanel(interaction, "en-US", dependencies);
+    const retryId = collectButtons(panel.components).find((button) => button.customId?.includes(":retry:"))?.customId;
+    expect(retryId).toBeDefined();
+    if (!retryId) throw new Error("Missing retry button");
+    const parsed = requireRoute(retryId);
+    expect(parseMemoriesPanelRoute(parsed)).toMatchObject({ action: "retry", category: "memories" });
+    unavailable = false;
+    let edited: unknown;
+    const button = {
+      ...interaction,
+      customId: retryId,
+      deferred: false,
+      replied: false,
+      isStringSelectMenu: () => false,
+      isModalSubmit: () => false,
+      isButton: () => true,
+      deferUpdate: async function (this: { deferred: boolean }) {
+        this.deferred = true;
+      },
+      editReply: async (payload: unknown) => {
+        edited = payload;
+      },
+    };
+    await createMemoriesInteractionRoute(dependencies).execute({} as Client, button as never, parsed);
+    expect(calls).toContain("loadMemories:1:1770:undefined");
+    expect(edited).toBeDefined();
+  });
 
   it("passes actor userId as owner filter for non-managers and undefined for managers", async () => {
     // Non-manager interaction
@@ -2177,7 +2326,6 @@ describe("memories permissions and scoping", () => {
         canManage: true,
         memteachingEnabled: false,
         content: "New edited content",
-        tags: ["updated"],
         channelDiscIds: [],
       });
       expect(editResult.status).toBe("success");
@@ -2210,7 +2358,6 @@ describe("memories permissions and scoping", () => {
         canManage: true,
         memteachingEnabled: true,
         contents: ["Batch memory 1", "Batch memory 2"],
-        tags: [],
         channelDiscIds: [],
       });
       expect(batchResult.status).toBe("success");
@@ -2237,9 +2384,27 @@ describe("memories permissions and scoping", () => {
       "modal_content_placeholder",
       "modal_file_label",
       "modal_file_description",
-      "modal_tags_label",
-      "modal_tags_placeholder",
-      "modal_tags_description",
+      "category_lorebooks",
+      "lorebooks_title",
+      "lorebooks_description",
+      "lorebook_scope_serverwide",
+      "lorebook_scope_persona",
+      "lorebook_persona_placeholder",
+      "lorebook_select_placeholder",
+      "lorebook_add_option",
+      "lorebook_add_option_description",
+      "lorebook_import_option",
+      "lorebook_import_option_description",
+      "lorebook_empty",
+      "lorebook_read_only_notice",
+      "lorebook_add_modal_title",
+      "lorebook_edit_modal_title",
+      "lorebook_activation_modal_title",
+      "lorebook_import_modal_title",
+      "lorebook_import_file_label",
+      "lorebook_import_file_description",
+      "lorebook_import_replace_label",
+      "lorebook_import_replace_description",
       "edit_button",
       "remove_button",
       "remove_title",
@@ -2250,6 +2415,10 @@ describe("memories permissions and scoping", () => {
     ];
 
     for (const receiptKey of Object.values(DOCUMENT_RESULT_RECEIPT_KEYS)) {
+      expect(MEMORIES_RECEIPT_KEYS as readonly string[]).toContain(receiptKey);
+    }
+
+    for (const receiptKey of Object.values(LOREBOOK_RESULT_RECEIPT_KEYS)) {
       expect(MEMORIES_RECEIPT_KEYS as readonly string[]).toContain(receiptKey);
     }
 
@@ -2297,7 +2466,6 @@ describe("memories teaching gate on edit and remove", () => {
       const editResult = await serverMemoriesOperations.edit({
         ...denied,
         content: "new",
-        tags: [],
         channelDiscIds: [],
       });
       const removeResult = await serverMemoriesOperations.remove({ ...denied });
@@ -2349,7 +2517,7 @@ describe("memories teaching gate on edit and remove", () => {
 });
 
 describe("saving an item with an unresolved legacy channel scope", () => {
-  it("writes a memory whose content, tags, and channels are unchanged so the pending scope settles", async () => {
+  it("writes a memory whose content and channels are unchanged so the pending scope settles", async () => {
     const loadSpy = spyOn(serverMemoryRepository, "loadServerMemoriesScoped").mockResolvedValue([
       makeMemory(7, { content: "Same", tags: [], channel_scope_pending: true }),
     ]);
@@ -2366,11 +2534,10 @@ describe("saving an item with an unresolved legacy channel scope", () => {
         canManage: true,
         memteachingEnabled: true,
         content: "Same",
-        tags: [],
         channelDiscIds: [],
       });
       expect(result.status).toBe("success");
-      expect(editSpy).toHaveBeenCalledWith(7, "Same", [], []);
+      expect(editSpy).toHaveBeenCalledWith(7, "Same", []);
     } finally {
       loadSpy.mockRestore();
       editSpy.mockRestore();
@@ -2385,7 +2552,7 @@ describe("saving an item with an unresolved legacy channel scope", () => {
       channel_scope_pending: true,
     });
     const chunksSpy = spyOn(serverMemoryRepository, "loadDocumentChunks").mockResolvedValue([
-      { document_chunk_id: 8, chunk_index: 0, content: "Stored chunk" },
+      { document_chunk_id: 8, chunk_index: 0, content: "Stored chunk", heading_path: null },
     ]);
     const scopeSpy = spyOn(serverMemoryRepository, "updateDocumentChannelScope").mockResolvedValue(true);
     const invalidateSpy = spyOn(tomoriStateCache, "invalidateTomoriStateCache").mockImplementation(() => {});
@@ -2414,6 +2581,7 @@ describe("saving an item with an unresolved legacy channel scope", () => {
 });
 
 describe("memories document operation ordering", () => {
+  useEnvSandbox(["MAX_DOCUMENT_CHUNKS", "MAX_DOCUMENT_CHUNKS_PER_SERVER"]);
   it("updates document channel filters without regenerating an unchanged chunk embedding", async () => {
     const metaSpy = spyOn(serverMemoryRepository, "loadDocumentMeta").mockResolvedValue({
       document_name: "Guide",
@@ -2421,7 +2589,7 @@ describe("memories document operation ordering", () => {
       channel_scope_pending: false,
     });
     const chunksSpy = spyOn(serverMemoryRepository, "loadDocumentChunks").mockResolvedValue([
-      { document_chunk_id: 8, chunk_index: 0, content: "Stored chunk" },
+      { document_chunk_id: 8, chunk_index: 0, content: "Stored chunk", heading_path: null },
     ]);
     const tagsSpy = spyOn(serverMemoryRepository, "updateDocumentChannelScope").mockResolvedValue(true);
     const embeddingSpy = spyOn(embeddingProvider, "generateEmbeddingsBatched");
@@ -2497,7 +2665,7 @@ describe("memories document operation ordering", () => {
       }),
       extract: spyOn(textExtractor, "extractTextFromBuffer").mockResolvedValue("Document content"),
       normalize: spyOn(ragRepository, "normalizeText").mockImplementation((content) => content),
-      chunk: spyOn(ragRepository, "chunkText").mockReturnValue(["Document content"]),
+      chunk: spyOn(ragRepository, "chunkText").mockReturnValue([{ content: "Document content", headingPath: null }]),
       insert: spyOn(ragRepository, "insertWithChunks").mockResolvedValue(91),
       duplicate: spyOn(serverMemoryRepository, "documentExistsByName").mockResolvedValue(false),
       documentCount: spyOn(serverMemoryRepository, "countDocumentsScoped").mockResolvedValue(0),
@@ -2517,7 +2685,12 @@ describe("memories document operation ordering", () => {
         channel_scope_pending: false,
       }),
       loadChunks: spyOn(serverMemoryRepository, "loadDocumentChunks").mockResolvedValue([
-        { document_chunk_id: 8, chunk_index: 0, content: "Document content" },
+        {
+          document_chunk_id: 8,
+          chunk_index: 0,
+          content: "Document content",
+          heading_path: { sections: [{ depth: 4, title: "Lamp" }] },
+        },
       ]),
       updateChunk: spyOn(serverMemoryRepository, "updateChunk").mockResolvedValue(true),
       deleteChunk: spyOn(serverMemoryRepository, "deleteChunk").mockResolvedValue(true),
@@ -2527,6 +2700,7 @@ describe("memories document operation ordering", () => {
     };
 
     return {
+      spies,
       updateChunkSpy: spies.updateChunk,
       deleteChunkSpy: spies.deleteChunk,
       rebuildSpy: spies.rebuild,
@@ -2536,6 +2710,102 @@ describe("memories document operation ordering", () => {
       },
     };
   }
+
+  it("rejects document and scope chunk caps before embedding or writes on all new-document paths", async () => {
+    for (const cap of ["document", "scope"]) {
+      process.env.MAX_DOCUMENT_CHUNKS = cap === "document" ? "1" : "150";
+      process.env.MAX_DOCUMENT_CHUNKS_PER_SERVER = "1000";
+      const stubs = stubDocumentWriteDependencies();
+      stubs.spies.chunk.mockRestore();
+      if (cap === "scope") stubs.spies.chunkCount.mockResolvedValue(1000);
+      const source = "# One\n\nfirst\n\n# Two\n\nsecond";
+      stubs.spies.extract.mockResolvedValue(source);
+      const memory = spyOn(serverMemoryRepository, "loadServerMemoriesScoped").mockResolvedValue([makeMemory(7)]);
+      const state = createPersona({
+        server_id: 1,
+        persona_id: 10,
+        config: { server_memteaching_enabled: true, embedding_model_id: 5 },
+      });
+      const button = createRouteInteraction();
+      const submit = createRouteInteraction({ kind: "modal" });
+      const message = {
+        id: "summary-cap",
+        embeds: [{ description: source }],
+        components: [{ components: [{ customId: "compact:v1:save:en-US" }] }],
+        edit: async () => {},
+      };
+      const interaction = {
+        ...button,
+        message: { ...message, fetch: async () => message },
+      } as unknown as ButtonInteraction;
+      const extras = [
+        spyOn(interactionLocale, "resolveUserLocale").mockResolvedValue("en-US"),
+        spyOn(personaRepository, "loadAllForServer").mockResolvedValue([state]),
+        spyOn(personaRepository, "loadState").mockResolvedValue(state),
+        spyOn(modalUi, "promptWithPaginatedModal").mockResolvedValue({
+          outcome: "submit",
+          interaction: submit as unknown as ModalSubmission,
+          values: { compact_doc_name: "Guide" },
+        }),
+        spyOn(embedUi, "replyInfoEmbed").mockResolvedValue(undefined),
+      ];
+      try {
+        const common = {
+          serverId: 1,
+          personaId: 10,
+          userId: 42,
+          userDiscId: "user-42",
+          workspaceId: "guild-123",
+          configuredEmbeddingModelId: 5,
+          isBlacklisted: false,
+          canManage: true,
+          memteachingEnabled: true,
+          documentName: "Guide",
+          channelDiscIds: [],
+        };
+        const expected = cap === "document" ? "too-many-chunks" : "chunk-limit";
+        expect(
+          (
+            await serverDocumentsOperations.add({
+              ...common,
+              attachment: {
+                id: "attachment-1",
+                filename: "guide.md",
+                size: source.length,
+                url: "https://cdn.example.invalid/guide.md",
+                proxy_url: "https://proxy.example.invalid/guide.md",
+                content_type: "text/markdown",
+              },
+            })
+          ).status,
+        ).toBe(expected);
+        expect(
+          (
+            await serverDocumentsOperations.vectorize({
+              ...common,
+              personaLineageId: 1770,
+              memoryId: 7,
+              content: source,
+            })
+          ).status,
+        ).toBe(expected);
+        await handleSummarySaveClick(interaction, { locale: "en-US", refresh: false, editDeadline: 0 });
+        expect(extras.at(-1)).toHaveBeenCalledWith(
+          expect.anything(),
+          "en-US",
+          expect.objectContaining({ descriptionKey: "commands.compact.add_to_docs_error_description" }),
+        );
+        expect(stubs.spies.chunkCount).toHaveBeenCalledWith(1, null);
+        expect(stubs.spies.embedding).not.toHaveBeenCalled();
+        expect(stubs.spies.insert).not.toHaveBeenCalled();
+        expect(stubs.spies.quota).not.toHaveBeenCalled();
+      } finally {
+        memory.mockRestore();
+        for (const spy of extras) spy.mockRestore();
+        stubs.restore();
+      }
+    }
+  });
 
   it("invalidates authoritative state after a successful document add", async () => {
     const stubs = stubDocumentWriteDependencies();
@@ -2592,6 +2862,9 @@ describe("memories document operation ordering", () => {
           })
         ).status,
       ).toBe("success");
+      expect(stubs.spies.embedding.mock.calls[0][0].inputs).toEqual([
+        formatDocumentEmbeddingInput("Updated content", { sections: [{ depth: 4, title: "Lamp" }] }),
+      ]);
       expect(stubs.updateChunkSpy).toHaveBeenCalled();
       expect(stubs.rebuildSpy).toHaveBeenCalledWith(91);
       expect(stubs.invalidateSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
@@ -2678,7 +2951,9 @@ describe("memories document operation ordering", () => {
     const taskSpy = spyOn(embeddingProvider, "providerSupportsEmbeddingTaskType").mockResolvedValue(false);
     const embeddingSpy = spyOn(embeddingProvider, "generateEmbeddingsBatched").mockResolvedValue([[0.1, 0.2]]);
     const normalizeSpy = spyOn(ragRepository, "normalizeText").mockImplementation((content) => content);
-    const chunkSpy = spyOn(ragRepository, "chunkText").mockReturnValue(["Vectorized content"]);
+    const chunkSpy = spyOn(ragRepository, "chunkText").mockReturnValue([
+      { content: "Vectorized content", headingPath: null },
+    ]);
     const insertSpy = spyOn(ragRepository, "insertWithChunks").mockImplementation(async () => {
       order.push("insert");
       return 91;

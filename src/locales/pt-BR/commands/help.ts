@@ -93,8 +93,8 @@ export default {
         short_term_memory_description: `Minha nota de trabalho desta conversa`,
         rewards_punishments: `Recompensas e Punições`,
         rewards_punishments_description: `Gestos que percebo e lembro`,
-        memory_tagging: `Marcação de Memória (Avançado)`,
-        memory_tagging_description: `Desperte uma memória apenas quando for relevante`,
+        memory_tagging: `Marcação de Memória Pessoal (Avançado)`,
+        memory_tagging_description: `Desperte uma memória pessoal apenas quando for relevante`,
         blacklisting: `Lista Negra`,
         blacklisting_description: "Faça-me ignorar um membro completamente",
       },
@@ -235,7 +235,7 @@ Use {helpCustomModels} para o guia completo de comandos, tipos de endpoints e ca
       zai_title: `Configurando a Chave de API do Z.ai`,
       zai_description: `A Z.ai fornece acesso à família GLM através de uma API geral e um endpoint separado para código.
 
-⚠️ **Atualização dos Termos de Serviço:** Os Termos da Z.ai foram atualizados para permitir apenas casos de uso de código/agente. Usar o endpoint geral para chat sem ser código é por sua conta e risco.`,
+🟡 **Atualização dos Termos de Serviço:** Os Termos da Z.ai foram atualizados para permitir apenas casos de uso de código/agente. Usar o endpoint geral para chat sem ser código é por sua conta e risco.`,
       zai_getting_key_title: `Obtendo sua Chave de API:`,
       zai_getting_key_description: `1. Acesse a [Plataforma Z.ai](https://z.ai)
 2. Faça login ou crie uma conta
@@ -245,7 +245,7 @@ Use {helpCustomModels} para o guia completo de comandos, tipos de endpoints e ca
       zai_important_title: `Notas Importantes:`,
       zai_important_description: `- Use o endpoint geral para chat normal, raciocínio e geração nativa de imagens
   - O endpoint de Código dedicado é separado e planejado para fluxos focados em programação
-  - ⚠️ Os Termos restringem o uso para cenários de código/agentes; uso para chat/roleplay geral é por sua conta e risco`,
+  - 🟡 Os Termos restringem o uso para cenários de código/agentes; uso para chat/roleplay geral é por sua conta e risco`,
       zai_footer: `Após configurar este provedor, você pode alterar seu modelo padrão com {configModel}`,
       novelai_title: `Configurando a Chave de API do NovelAI`,
       novelai_description: `O NovelAI é um serviço de assinatura focado em narrativas criativas e roleplay.
@@ -517,9 +517,9 @@ Digite \`{project_id}::{location}\` usando {configSetup} ou {configApikeySet}
         footer: `Escolha qual persona você quis dizer se houver várias ativas.`,
       },
       memory_tagging: {
-        title: `Marcação de Memória (Avançado)`,
+        title: `Marcação de Memória Pessoal (Avançado)`,
         description:
-          "Por padrão, toda memória no escopo é enviada com toda mensagem. A marcação restringe isso.\n> **Tags de palavras-chave**: uma memória marcada só desperta quando a palavra-chave aparece na conversa. Uma memória sem tag está sempre ativa.\n> **Canais**: uma memória do servidor pode ser limitada aos canais escolhidos no formulário (suas threads incluídas), e uma memória pessoal a uma tag `#canal`. Ambas combinam com tags de palavras-chave.\n\nAtive ambas em {configAdvancedMemory}, depois use {toolPromptSnapshot} para ver exatamente quais memórias estão ativas no momento.",
+          "Memórias pessoais podem ter tags de palavras-chave ou `#canal`, e a marcação decide se essas tags restringem quando elas aparecem.\n> **Tags de palavras-chave**: uma memória pessoal marcada só desperta quando sua palavra-chave aparece na conversa. Uma memória pessoal sem tag está sempre ativa.\n> **Canais**: uma memória pessoal pode ser limitada a um canal com uma tag `#canal`. As memórias do servidor e documentos usam seleções de canais em `/memories` em vez disso.\n\nAtive a marcação em {configAdvancedMemory}, depois use {toolPromptSnapshot} para ver exatamente quais memórias estão ativas no momento.\n> O cânone do mundo é separado: as entradas do lorebook em `/memories` usam suas próprias palavras-chave e a configuração Sempre ativa.",
         footer: "Documentos enviados e histórico extraído também podem ser limitados a canais.",
       },
     },

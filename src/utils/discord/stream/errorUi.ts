@@ -6,11 +6,7 @@ import type { ProviderError, StreamProvider, StreamContext } from "@/types/strea
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { ColorCode, log, redactLogString } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
-import {
-  getProviderErrorDetail,
-  isOperatorActionableProviderError,
-  isProviderModelError,
-} from "@/utils/provider/providerErrorClassification";
+import { getProviderErrorDetail, isProviderModelError } from "@/utils/provider/providerErrorClassification";
 import { localizer } from "@/utils/text/localizer";
 import { withProviderOptionCopy, type ProviderOptionCopyContext } from "@/utils/provider/providerOptionRegistry";
 import { redactProviderDetail } from "@/utils/provider/providerErrorMetrics";
@@ -60,7 +56,7 @@ function providerCopyContext(context: StreamContext): ProviderOptionCopyContext 
 }
 
 /**
- * Owns provider and generic stream error reporting to Discord.
+ * Presents provider and generic stream errors in Discord; the orchestrator owns their operator reports.
  */
 export class StreamErrorUi {
   public async handleProviderError(
@@ -84,37 +80,6 @@ export class StreamErrorUi {
 
     const rawDetail = denied ? null : getProviderErrorDetail(providerError);
     const providerDetail = rawDetail ? redactProviderDetail(rawDetail, requestApiKey) : null;
-    const operatorDetail = boundOperatorDetail(providerDetail);
-    if (!denied && isOperatorActionableProviderError(providerError)) {
-      const providerName = provider.getProviderInfo().name;
-      // Not awaited: an unacknowledged initialInteraction is replied to below. The raw provider
-      // error is the payload because errorMessage is localized for the guild, not the operator.
-      void log.error(
-        `Provider stream error (${providerName} ${providerError.type}/${providerError.code ?? "unknown"}): ${operatorDetail}`,
-        providerError.originalError ?? providerError,
-        {
-          serverId: context.tomoriState.server_id,
-          userId: context.triggererUserId ?? null,
-          errorType: "ProviderStreamError",
-          metadata: {
-            // A personal route ran on the user's own key and endpoint, not the server's provider.
-            textCredentialSource: context.textCredentialSource ?? "server",
-            provider: providerName,
-            providerErrorType: providerError.type,
-            providerErrorCode: providerError.code ?? "unknown",
-            channelId: context.channel.id,
-          },
-        },
-        { redactValues: [requestApiKey] },
-      );
-    } else {
-      log.warn(
-        `Stream error (${providerError.type}/${providerError.code ?? "unknown"}): ${operatorDetail}`,
-        error,
-        undefined,
-        { retain: true, redactValues: [requestApiKey] },
-      );
-    }
 
     if (context.initialInteraction) {
       if (!context.initialInteraction.replied && !context.initialInteraction.deferred) {
@@ -233,14 +198,6 @@ export class StreamErrorUi {
     const providerHeadline = provider.createErrorDescription(providerError, locale);
     return providerHeadline || (isModelError ? localizer(locale, "genai.stream.model_error_description") : null);
   }
-}
-
-const OPERATOR_ERROR_DETAIL_CHARS = 2000;
-
-/** Response bodies are unbounded, and logger truncation is opt-in per deployment. */
-function boundOperatorDetail(detail: string | null): string {
-  if (!detail) return "no provider detail";
-  return detail.length > OPERATOR_ERROR_DETAIL_CHARS ? `${detail.slice(0, OPERATOR_ERROR_DETAIL_CHARS)}...` : detail;
 }
 
 /** One 4000-char text display minus the code fence, so the fence never splits across displays. */

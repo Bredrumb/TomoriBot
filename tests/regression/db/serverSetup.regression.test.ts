@@ -21,6 +21,7 @@ import { cleanupFixtures, insertFixtures } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
 const CATALOG_SERVER_ID = "_rt_setup_catalog_001";
+const OPENROUTER_SERVER_ID = "_rt_setup_openrouter_001";
 const BYOK_SERVER_ID = "_rt_setup_byok_001";
 const CUSTOM_SERVER_ID = "_rt_setup_custom_001";
 const PROMPT_SERVER_ID = "_rt_setup_prompt_001";
@@ -57,6 +58,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       DELETE FROM servers
       WHERE server_disc_id IN (
         ${CATALOG_SERVER_ID},
+        ${OPENROUTER_SERVER_ID},
         ${BYOK_SERVER_ID},
         ${CUSTOM_SERVER_ID},
         ${PROMPT_SERVER_ID},
@@ -180,6 +182,41 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
     `;
     expect(savedConfig).toBeDefined();
     expect(savedConfig.llm_id).toBe(modelConfig.llm_id);
+  });
+
+  it("initializes OpenRouter text and vision selections in active and saved configuration", async () => {
+    const { encrypted, version } = await encryptApiKey("test-openrouter-key");
+    await serverRepository.setup(null, {
+      serverId: OPENROUTER_SERVER_ID,
+      presetId,
+      humanizer: 1,
+      tomoriName: "Mirri",
+      timezoneOffset: 0,
+      features: [...SETUP_FEATURES],
+      locale: "en-US",
+      registrationLocale: "en-US",
+      providerAccess: {
+        mode: "catalog",
+        provider: "openrouter",
+        encryptedApiKey: encrypted,
+        keyVersion: version,
+      },
+    });
+    const [selection] = await testSql`
+      SELECT text_model.llm_codename AS text_model, vision_model.llm_codename AS vision_model,
+        mc.llm_id = spc.llm_id AS same_text, mc.vision_llm_id = spc.vision_llm_id AS same_vision
+      FROM servers s JOIN server_model_configs mc USING (server_id)
+      JOIN saved_provider_configs spc ON spc.server_id = s.server_id AND spc.provider = 'openrouter'
+      JOIN llms text_model ON text_model.llm_id = mc.llm_id
+      JOIN llms vision_model ON vision_model.llm_id = mc.vision_llm_id
+      WHERE s.server_disc_id = ${OPENROUTER_SERVER_ID}
+    `;
+    expect(selection).toEqual({
+      text_model: "~deepseek/deepseek-flash-latest",
+      vision_model: "google/gemini-3.1-flash-lite",
+      same_text: true,
+      same_vision: true,
+    });
   });
 
   it("sets up a user-byok workspace with a quarter-hour timezone and no server provider rows", async () => {

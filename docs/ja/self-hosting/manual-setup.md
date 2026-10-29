@@ -42,10 +42,7 @@ cp .env.example .env
 - `CRYPTO_SECRET`: 32文字の暗号化キー (保存されているAPIキーの暗号化に使用されます)。
 - PostgreSQL接続: `POSTGRES_HOST`、`POSTGRES_PORT`、`POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_DB`。
 
-データベースのバックアップとは別に、暗号化シークレットの保護されたコピーを保管してください。新しいバックアップには `.env` が含まれません。ローテーションには、`CRYPTO_SECRET_V1`、`CRYPTO_SECRET_V2`、またはそれ以降の正の整数バージョンを使用し、オプションで `CRYPTO_SECRET_CURRENT` を選択できます。`CRYPTO_SECRET` は V1 のままです。起動コマンドとメンテナンスコマンドは同じソースを読み込みます：開発環境ではローカルの環境変数の値、本番環境ではマウントされたJSONまたはAWS Secrets Managerです。シークレットを置き換える前に、[暗号化キーのローテーション](/ja/self-hosting/maintenance/#rotating-encryption-keys) を参照してください。
-
-JSONシークレットソースでは、マスターキーは文字列である必要があります。`CRYPTO_SECRET_CURRENT` は、利用可能なバージョンを指定する `"2"` などの文字列、または `2` などの正の安全な整数値を受け入れます。
-
+データベースのバックアップとは別に、暗号化シークレットの保護されたコピーを保管してください。新しいバックアップには `.env` が含まれません。ローテーションには、`CRYPTO_SECRET_V1`、`CRYPTO_SECRET_V2`、またはそれ以降の正の整数バージョンを使用し、オプションで `CRYPTO_SECRET_CURRENT` を選択できます。
 :::note[No native PostgreSQL?]
 コンテナー内でデータベースのみを実行し、そのデータベースに`POSTGRES_*`値を指定します。
 
@@ -83,7 +80,7 @@ bun run launch --help        # see all flags
 ## オプションの追加機能（手動での「フルインストール」）
 <!-- anchor: optional-extras-the-manual-full-install -->
 
-[セットアップウィザード](/ja/self-hosting/setup-wizard/)のフルインストールパスでは、基本インストールの上に4つの軽量な追加機能がレイヤー化されます。
+[セットアップウィザード](/ja/self-hosting/setup-wizard/)のフルインストールパスでは、基本インストールの上に軽量な追加機能がレイヤー化されます。
 ボットの実行に必須のものはありませんが、それぞれが特定の機能をアンロックします。
 手動でインストールする場合は、必要なものを追加してください。
 
@@ -122,7 +119,7 @@ CREATE EXTENSION vector;
 
 pgvectorがなくてもボットは動作しますが、RAG機能は完全に利用できなくなります。
 この拡張機能は、バックアップを復元する前にターゲットデータベースにも必要です。
-詳細については[安全な移行](/ja/self-hosting/safe-migration/)を参照してください。
+詳細については[メンテナンスとバックアップ](/self-hosting/maintenance/)を参照してください。
 
 ### `pg_cron`：スケジュールされたクリーンアップジョブ
 
@@ -176,4 +173,4 @@ HF_TOKEN=hf_xxx bun run setup:tokenizers
 ## メンテナンス、更新とバックアップ
 
 インストールが完了したら、ホスト側のスクリプト（`bun run update`、`bun run backup`、`bun run restore-backup`、`bun run nuke-db`、`bun run rotate-keys`など）、および更新とバックアップの手順はすべて[メンテナンスとバックアップ](/ja/self-hosting/maintenance/)ページにあります。
-新しいバージョンをプルする前に、まずは[安全な移行](/ja/self-hosting/safe-migration/)から始めてください。
+新しいバージョンをプルする前に、まずは[メンテナンスとバックアップ](/self-hosting/maintenance/)から始めてください。

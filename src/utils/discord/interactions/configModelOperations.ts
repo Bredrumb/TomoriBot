@@ -49,7 +49,6 @@ import {
 import { DEFAULT_IMAGE_NEGATIVE_TAGS, DEFAULT_IMAGE_POSITIVE_TAGS } from "@/utils/image/tagDefaults";
 import { parseAndValidateImageTags } from "@/utils/image/tagHelpers";
 import { NAI_IMAGE_NOISE_SCHEDULES, NAI_IMAGE_SAMPLERS } from "@/utils/image/naiImageParams";
-import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { buildCustomProviderName, isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import {
@@ -730,7 +729,6 @@ export const configModelOperations: ConfigModelOperations = {
             if (denied) return { status: "provider-denied", denied };
             throw error;
           }
-          const limits = getMemoryLimits();
           try {
             await withProviderUsageContext(credentials.usageContext, async () =>
               ragRepository.reembedServerDocuments({
@@ -738,8 +736,6 @@ export const configModelOperations: ConfigModelOperations = {
                 embeddingModel: chosenModel,
                 apiKey: credentials.apiKey,
                 onUsage: createProviderUsageRecorder(credentials.usageContext, chosenModel.codename),
-                chunkSize: limits.documentChunkSize,
-                chunkOverlap: limits.documentChunkOverlap,
               }),
             );
           } catch (error) {

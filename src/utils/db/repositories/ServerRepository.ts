@@ -1,3 +1,4 @@
+import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
 /**
  * ServerRepository: manages server identity, emojis/stickers, managed webhooks,
  * and the personalization blacklist.
@@ -761,9 +762,22 @@ class ServerRepository implements IRepository<ServerExportShape> {
         let selectedLlm: { llm_id: number; llm_codename: string } | null = null;
         let selectedDiffusionModel: { diffusion_model_id: number; codename: string } | null = null;
         let selectedEmbeddingModel: { embedding_model_id: number; codename: string } | null = null;
+        let selectedVisionModel: { llm_id: number } | null = null;
 
         if (resolvedAccess?.mode === "catalog") {
           const catalogProvider = resolvedAccess.provider;
+          const defaultVisionModel = getStaticProviderInfo(catalogProvider)?.defaultVisionModel;
+          if (defaultVisionModel) {
+            selectedVisionModel =
+              (
+                await tx`
+                SELECT llm_id FROM llms
+                WHERE llm_provider = ${catalogProvider} AND llm_codename = ${defaultVisionModel}
+                  AND sees_images = true AND is_deprecated = false
+                LIMIT 1
+              `
+              )[0] ?? null;
+          }
           // Find the default model for the selected provider within the transaction
           // First try to get the default model (is_default = true), excluding deprecated
           selectedLlm = (
@@ -1121,6 +1135,7 @@ class ServerRepository implements IRepository<ServerExportShape> {
         let finalDiffusionId: number | null = null;
         let finalNaiDiffusionId: number | null = null;
         let finalEmbeddingId: number | null = null;
+        let finalVisionId: number | null = null;
         let finalApiKey: Buffer | null = null;
         let finalKeyVersion = 1;
 
@@ -1133,6 +1148,7 @@ class ServerRepository implements IRepository<ServerExportShape> {
           finalNaiDiffusionId =
             imageGenerationStyle === "nai-pipeline" ? (selectedDiffusionModel?.diffusion_model_id ?? null) : null;
           finalEmbeddingId = selectedEmbeddingModel?.embedding_model_id ?? null;
+          finalVisionId = selectedVisionModel?.llm_id ?? null;
           finalApiKey = resolvedAccess.encryptedApiKey;
           finalKeyVersion = resolvedAccess.keyVersion ?? 1;
         } else if (resolvedAccess?.mode === "custom-endpoint") {
@@ -1147,9 +1163,9 @@ class ServerRepository implements IRepository<ServerExportShape> {
         // Seed the split config tables
         await tx`
           INSERT INTO server_model_configs (
-            server_id, llm_id, embedding_model_id, diffusion_model_id, api_key, key_version
+            server_id, llm_id, embedding_model_id, diffusion_model_id, vision_llm_id, api_key, key_version
           ) VALUES (
-            ${server.server_id}, ${finalLlmId}, ${finalEmbeddingId}, ${finalDiffusionId}, ${finalApiKey}, ${finalKeyVersion}
+            ${server.server_id}, ${finalLlmId}, ${finalEmbeddingId}, ${finalDiffusionId}, ${finalVisionId}, ${finalApiKey}, ${finalKeyVersion}
           ) ON CONFLICT (server_id) DO NOTHING
         `;
         // system_prompt is written as NULL for built-in default so DEFAULT_SYSTEM_PROMPT
@@ -1239,7 +1255,7 @@ class ServerRepository implements IRepository<ServerExportShape> {
             ) VALUES (
               ${server.server_id}, ${resolvedAccess.provider}, ${finalApiKey}, ${finalKeyVersion},
               ${finalLlmId}, ${finalDiffusionId}, ${finalEmbeddingId},
-              NULL, NULL, NULL,
+              NULL, NULL, ${finalVisionId},
               NULL, 'auto', '[]'::jsonb,
               NULL, NULL, NULL,
               NULL, NULL, NULL,
@@ -2427,6 +2443,7 @@ class ServerRepository implements IRepository<ServerExportShape> {
           `;
           totalDeleted += docResult.count ?? 0;
         }
+        totalDeleted += await lorebookRepository.deleteServerwide(serverId, tx);
         return { deleted: totalDeleted > 0, media };
       });
       if (result.deleted) {

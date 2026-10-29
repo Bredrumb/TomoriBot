@@ -34,6 +34,39 @@ Startup schema execution is coordinated by `src/utils/db/initializeDatabase.ts`:
 - Deterministic apply ordering uses integer versions first, with file stem code-point comparison breaking ties. Sibling migrations sharing a number must be mutually order-independent.
 - Versions 900 and above are reserved for deployment-specific migrations. A clean installation executes that band after the base schema instead of recording it as applied, so `schema.sql` stays free of deployment-specific DDL.
 
+## Document heading paths
+
+`document_chunks.heading_path` is nullable JSONB shaped as
+`{ "sections": [{ "depth": 1, "title": "Harbor" }, { "depth": 4, "title": "Lamp" }] }`.
+The ordered entries retain actual heading depths. The object binds directly through Bun SQL and
+decodes as an object, avoiding PostgreSQL array decoding. Readers validate the stored JSON before
+formatting it. Null means the chunk has no heading metadata.
+
+Migration 127 guards the optional RAG table and adds the column without rewriting existing rows.
+Its rollback drops only heading metadata; it does not change content or boundaries. The idempotent
+`schema_rag.sql` column addition also covers installations that enable pgvector later.
+
+New document writers derive lexical text from the complete path and use bounded heading context
+for embeddings. Edits preserve the stored path, and in-place re-embedding compares it with the
+locked snapshot before updating vectors. Lexical backfill also validates the path against its
+snapshot before writing. Existing documents and imported history facts keep null paths.
+
+## Document lexical index
+
+`document_chunks.lex_text` is nullable derived text containing the document name and chunk
+content and any heading path, tokenized by `src/utils/documents/lexicalText.ts`. Authored `content` stays unchanged.
+The `document_chunks_tsv_update` trigger builds `tsv` with the shared `russian` text-search
+configuration from `COALESCE(lex_text, content)`. A content change that retains the previous
+`lex_text` clears it, so the index cannot keep stale terms.
+
+Migration 126 and `schema_rag.sql` install the same column and trigger; the migration skips
+databases without the optional RAG tables. Pending rows have null `lex_text` and remain
+searchable through raw content. After login, `06_backfillDocumentLexicalText.ts` schedules
+50-row batches without blocking startup. It tokenizes before opening write transactions,
+locks each document name for validation, and writes only still-pending chunks whose content
+and document name match the snapshot. Skipped edits retry on the next batch; failures retry
+on a timer. Chunk reads bypass caches, so these writes require no cache invalidation.
+
 ## Data access boundary
 
 Domain query owners live under `src/utils/db/repositories/`. Some modules, including working-memory
@@ -139,7 +172,7 @@ matching credential revision, including after the persona is removed.
 ### User identity, privacy, and personalization
 
 - **`users`**: stores account snowflakes (`user_disc_id`), language preferences, registration locales, and `privacy_level` (0 = minimal, 1 = partial, 2 = full).
-- **`user_personalization_configs`**: stores personal nicknames, numeric timezone offsets, deliberate tool modes, cross-server short-term memory opt-ins, physical appearance tags, NovelAI character reference URLs, impersonation prompts, personal fallback routing toggles, the Pings from Personas opt-out (`natural_nudge_opt_out`), and the personal text fallback chain (`fallback_model_refs`) with its `model_randomizer_enabled` flag. The chain is one per user and may mix providers; sampler parameters stay per provider on `user_saved_provider_configs`.
+- **`user_personalization_configs`**: stores personal nicknames, numeric timezone offsets, deliberate tool modes, cross-server short-term memory opt-ins, physical appearance tags, character reference URLs, impersonation prompts, personal fallback routing toggles, the Pings from Personas opt-out (`natural_nudge_opt_out`), and the personal text fallback chain (`fallback_model_refs`) with its `model_randomizer_enabled` flag. The chain is one per user and may mix providers; sampler parameters stay per provider on `user_saved_provider_configs`.
 - **`user_persona_naming_preferences`**: stores nullable nickname, prefix, and suffix overrides per `(user_id, persona_lineage_id)`. Survives persona deletion and re-import because it has no foreign key to local persona IDs.
 - **`personalization_blacklist`**: server-scoped table keyed by `(server_id, user_disc_id)`. Excludes the user from personalization enrichments in that guild without deleting their account.
 - **`persona_user_blocks`**: stores persona-scoped moderation records keyed by `(server_id, persona_id, user_disc_id)`. Supports `mute` (stops triggering persona) and `block` (also hides user messages from dialogue history).
@@ -147,6 +180,12 @@ matching credential revision, including after the persona is removed.
 
 ### Memory, dialogue, and expression data
 
+- **`server_lorebooks`**: named Serverwide collections with an enabled flag and channel scope; renaming or deleting a book cascades to its entries.
+- **`persona_lorebook_entries`**: authored lore scoped by server and nullable persona lineage; NULL
+  means Serverwide. The `(server_id, persona_lineage_id, enabled)` index serves scope reads. Server
+  deletion cascades entries; persona deletion preserves them. A timestamp trigger updates
+  `updated_at` on edits. The module repository owns validation and transactional replacement.
+  See [Lorebooks](/architecture/subsystems/lorebooks/) for retrieval and activation contracts.
 - **`server_memories`**: shared server-wide long-term memories.
 - **`personal_memories`**: personal memories scoped by user ID and cross-server `persona_lineage_id`.
 - **`conditioning_history`**: behavioral reinforcement records from `/reward`, `/punish`, and `interact_with_target`, grouped by server, target persona lineage, conditioning type, action, and normalized reason. Each row has exactly one actor: `user_id` or `actor_persona_id`, with separate repeat counts per actor and cascading deletion when that actor is deleted. The tool's workspace capability, `conditioning_interactions_enabled`, defaults to true.

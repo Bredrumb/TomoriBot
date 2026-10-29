@@ -118,6 +118,7 @@ Palavras-gatilho: {trigger_word_count}`,
       avatar_update_rate_limited: `🟡 O avatar do servidor não foi atualizado devido aos limites de taxa do Discord. Por favor, altere-o manualmente.`,
       avatar_update_failed: `🟡 O avatar do servidor não pôde ser atualizado, provavelmente devido aos limites de taxa do Discord. Por favor, altere-o manualmente.`,
       alter_success_title: `🟢 Alter Importado com Sucesso`,
+      lorebook_count: `Entradas do lorebook importadas: {count}`,
       alter_success_description: `Alter **{nickname}** importado com sucesso!
 Palavras-gatilho Únicas: {trigger_count}
 Gatilhos: {triggers}
@@ -125,10 +126,9 @@ Gatilhos: {triggers}
 Esta persona responderá quando esses gatilhos aparecerem nas mensagens.`,
       alter_success_confirmation: `Alter **{nickname}** importado com sucesso com {trigger_count} palavras-gatilho únicas! As informações detalhadas da importação foram postadas no canal.`,
       alter_avatar_fallback_main: `🟡 Esta importação não incluiu uma imagem de avatar, então este alter está usando o avatar atual da persona principal de **{nickname}** como substituto. Você pode alterá-lo usando \`/config\` > Persona > Geral.`,
-      alter_avatar_warning: `⚠️ Não exclua o embed da imagem do avatar acima, ou o avatar do alter será perdido.`,
       alter_dm_not_allowed_title: `🔴 Alters Não Permitidos em DMs`,
       alter_dm_not_allowed_description: `Alters só podem ser importados em servidores, não em Mensagens Diretas. Por favor, execute este comando em um servidor.`,
-      alter_no_triggers_warning: `⚠️ Esta persona não tem palavras-gatilho. Ela não responderá a nenhuma mensagem até que você adicione gatilhos usando \`/config\` > Persona > Geral.`,
+      alter_no_triggers_warning: `Esta persona não tem palavras-gatilho. Ela não responderá a nenhuma mensagem até que você adicione gatilhos usando \`/config\` > Persona > Geral.`,
       alter_name_conflict_title: `🔴 Nome de Persona Já Existe`,
       alter_name_conflict_description: `Uma persona com o nome **{name}** já existe neste servidor. Cada persona deve ter um nome único.
 
@@ -325,7 +325,7 @@ Ou pressione o botão Importar`,
         character_desc_label: `Descrição do Personagem`,
         character_desc_placeholder: `Descreva seu personagem (personalidade, aparência, história, etc.)`,
         example_user_label: `Mensagem de Exemplo do Usuário`,
-        example_user_description: `Dica: Adicione mais usando /persona sample-dialogue add depois`,
+        example_user_description: `Dica: Adicione mais em /config > Persona > Identidade e Personalidade depois`,
         example_user_placeholder: `Oi {bot}!`,
         example_bot_label: `Resposta de Exemplo do Bot`,
         example_bot_placeholder: `Olá {user}! Tudo bem com você?`,

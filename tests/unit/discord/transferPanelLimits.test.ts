@@ -298,12 +298,12 @@ describe("transfer panel Components V2 limits", () => {
           locale: "en-US",
           kind,
           detectedSections: SECTION_NAMES[kind],
-          droppedFields: ["nai_preset_name", "nai_char_ref_url"],
+          droppedFields: ["nai_preset_name", "char_ref_url"],
           nonce: `nonce-format-dropped-${kind}`,
         }),
       )[0];
       if (droppedContent === undefined) throw new Error(`Preview payload for ${kind} carries no TextDisplay`);
-      for (const field of ["nai_preset_name", "nai_char_ref_url"] as const) {
+      for (const field of ["nai_preset_name", "char_ref_url"] as const) {
         expect({
           kind,
           field,
@@ -589,9 +589,6 @@ describe("transfer panel Components V2 limits", () => {
   });
 
   it("renders the memory surfaces as compact single-spaced blocks, not blank-line paragraphs", () => {
-    // The config preview's shape, applied to memory: a bold lead line, then each heading immediately above its own
-    // quoted rows. Both are pinned literally, because the compactness is the point and a reinstated blank line is
-    // exactly what this test exists to catch.
     const buckets = makeMemoryBuckets(2);
     const destinations = makeMemoryDestinations(2);
     const firstDestination = destinations[0];
@@ -607,10 +604,10 @@ describe("transfer panel Components V2 limits", () => {
     ).join("\n");
     expect(previewBlock).toBe(
       [
-        "### Review Memory Import",
-        "**This server memories import contains memories only.**",
-        "Documents and personas are excluded.",
-        "Detected memory groups",
+        `### ${localizedCopy("en-US", "commands.transfer.memory_preview_title")}`,
+        `**${localizedCopy("en-US", "commands.transfer.memory_preview_description", { ownership: localizedCopy("en-US", "commands.transfer.server_memories_label") })}**`,
+        localizedCopy("en-US", "commands.transfer.memory_preview_exclusions"),
+        localizedCopy("en-US", "commands.transfer.memory_preview_groups_heading"),
         "> • Bucket 0: 1 memory",
         "> • Bucket 1: 1 memory",
       ].join("\n"),
@@ -672,6 +669,31 @@ describe("transfer panel Components V2 limits", () => {
     ).join("\n");
     expect(emptySkippedBlock).toContain(
       `Buckets that will be skipped\n> ${localizer("en-US", "commands.transfer.memory_skipped_buckets_none")}`,
+    );
+  });
+
+  it("shows per-scope lore replacement counts only for fields present in the bundle", () => {
+    const buckets = makeMemoryBuckets(1).map((bucket) => ({ ...bucket, lorebook_entries: [] }));
+    const preview = buildMemoryTransferPreviewPayload({
+      locale: "en-US",
+      kind: "workspace_memories",
+      buckets,
+      serverwideLoreCount: 0,
+      nonce: "lore-preview",
+    });
+    const text = collectTextDisplays(preview).join("\n");
+    expect(text).toContain(localizedCopy("en-US", "commands.transfer.memory_preview_lore_count", { count: 0 }));
+    expect(text).toContain(localizedCopy("en-US", "commands.transfer.memory_preview_serverwide_lore", { count: 0 }));
+    const scoped = collectTextDisplays(
+      buildMemoryTransferPreviewPayload({
+        locale: "en-US",
+        kind: "workspace_memories",
+        buckets: makeMemoryBuckets(1),
+        nonce: "persona-preview",
+      }),
+    ).join("\n");
+    expect(scoped).not.toContain(
+      localizedCopy("en-US", "commands.transfer.memory_preview_serverwide_lore", { count: 0 }),
     );
   });
 

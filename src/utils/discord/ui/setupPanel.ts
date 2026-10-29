@@ -46,6 +46,7 @@ import type { PanelReceipt } from "@/types/discord/panel";
 import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
 import { ColorCode } from "@/utils/misc/logger";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer, resolveDescription, resolvePresetDisplayName } from "@/utils/text/localizer";
 import { formatUTCOffset, formatUtcOffsetInput, parseUtcOffsetInput } from "@/utils/text/timezoneHelper";
 import { buildLegalDocUrl } from "@/utils/misc/docsUrl";
@@ -1119,9 +1120,12 @@ export function buildSetupByokModal(
     components: [
       {
         type: 10,
-        content: localizer(locale, "commands.setup.wizard.byok_modal_notice", {
-          command: commandRegistry.getCommandMention("personal", "providers"),
-        }),
+        content: statusNote(
+          "warning",
+          localizer(locale, "commands.setup.wizard.byok_modal_notice", {
+            command: commandRegistry.getCommandMention("personal", "providers"),
+          }),
+        ),
       },
       {
         // 18 is Label, and it is the only path by which a routed modal value is recorded: the

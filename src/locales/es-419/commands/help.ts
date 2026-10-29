@@ -93,8 +93,8 @@ export default {
         short_term_memory_description: `Mis notas de trabajo de esta conversación`,
         rewards_punishments: `Recompensas y castigos`,
         rewards_punishments_description: `Gestos que noto y recuerdo`,
-        memory_tagging: `Etiquetado de memoria (Avanzado)`,
-        memory_tagging_description: `Despierta una memoria solo cuando es relevante`,
+        memory_tagging: `Etiquetado de memoria personal (Avanzado)`,
+        memory_tagging_description: `Despierta una memoria personal solo cuando es relevante`,
         blacklisting: `Listas negras`,
         blacklisting_description: "Haz que ignore por completo a un miembro",
       },
@@ -235,7 +235,7 @@ Usa {helpCustomModels} para ver la guía completa, tipos compatibles y notas de 
       zai_title: `Configurar clave de API de Z.ai`,
       zai_description: `Z.ai da acceso a los modelos GLM a través de una API general y un endpoint de código separado.
 
-⚠️ **Actualización de Términos:** Los Términos de Z.ai ahora solo permiten código/agentes. Usar el endpoint general para chat normal es bajo tu propio riesgo.`,
+🟡 **Actualización de Términos:** Los Términos de Z.ai ahora solo permiten código/agentes. Usar el endpoint general para chat normal es bajo tu propio riesgo.`,
       zai_getting_key_title: `Obtener tu clave de API:`,
       zai_getting_key_description: `1. Visita la [Plataforma Z.ai](https://z.ai)
 2. Inicia sesión o crea una cuenta
@@ -245,7 +245,7 @@ Usa {helpCustomModels} para ver la guía completa, tipos compatibles y notas de 
       zai_important_title: `Notas importantes:`,
       zai_important_description: `- Usa el endpoint general para chat, razonamiento e imágenes
   - El endpoint de codificación es para flujos de código
-  - ⚠️ Los Términos de Z.ai limitan el uso a codificación, el chat/rol general es bajo tu riesgo`,
+  - 🟡 Los Términos de Z.ai limitan el uso a codificación, el chat/rol general es bajo tu riesgo`,
       zai_footer: `Después de configurar este proveedor, puedes cambiar su modelo predeterminado con {configModel}`,
       novelai_title: `Configurar clave de API de NovelAI`,
       novelai_description: `NovelAI es un servicio de suscripción enfocado en historias creativas y juegos de rol.
@@ -513,9 +513,9 @@ Ingresa \`{project_id}::{location}\` con {configSetup} o {configApikeySet}
         footer: `Elige a qué persona te refieres si hay varias activas.`,
       },
       memory_tagging: {
-        title: `Etiquetado de memoria (Avanzado)`,
+        title: `Etiquetado de memoria personal (Avanzado)`,
         description:
-          "Por defecto toda memoria dentro del alcance se envía con cada mensaje. El etiquetado limita eso.\n> **Etiquetas clave**: una memoria etiquetada despierta solo cuando su palabra clave aparece en la conversación. Una memoria sin etiquetar siempre está activa.\n> **Canales**: una memoria del servidor puede limitarse a los canales que elijas en su formulario (sus hilos incluidos), y una memoria personal a una etiqueta `#canal`. Ambas se combinan con las etiquetas clave.\n\nEnciende ambas en {configAdvancedMemory}, luego usa {toolPromptSnapshot} para ver con exactitud qué memorias están activas ahora mismo.",
+          "Las memorias personales pueden llevar etiquetas de palabras clave o `#canal`, y el etiquetado decide si esas etiquetas restringen cuándo aparecen.\n> **Etiquetas de palabras clave**: una memoria personal etiquetada despierta solo cuando su palabra clave aparece en la conversación. Una memoria personal sin etiquetar siempre está activa.\n> **Canales**: una memoria personal puede limitarse a un canal con una etiqueta `#canal`. Las memorias del servidor y los documentos usan en su lugar selecciones de canales en `/memories`.\n\nActiva el etiquetado en {configAdvancedMemory}, luego usa {toolPromptSnapshot} para ver con exactitud qué memorias están activas ahora mismo.\n> El canon del mundo es independiente: las entradas de lorebook en `/memories` usan sus propias palabras clave y el ajuste Siempre activa.",
         footer: "Los documentos subidos y el historial extraído también pueden limitarse a canales.",
       },
     },

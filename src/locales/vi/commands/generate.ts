@@ -61,6 +61,7 @@ export default {
       quota_resets_in_hours: `Hạn ngạch sẽ làm mới sau {hours} giờ.`,
       quota_resets_in_days: `Hạn ngạch sẽ làm mới sau {days} ngày.`,
       quota_exceeded_footer: `Hạn ngạch này do người quản lý máy chủ cấu hình qua \`/moderation\`.`,
+      quota_unavailable_description: `Mình không thể kiểm tra hạn ngạch tạo hình ảnh của máy chủ này lúc này. Vui lòng thử lại sau giây lát.`,
     },
     video: {
       nsfw_description: `Chỉ thêm spoiler Discord vào video; không thay đổi nội dung tạo hay bộ lọc`,
@@ -116,6 +117,7 @@ export default {
       quota_resets_in_hours: `Hạn ngạch sẽ làm mới sau {hours} giờ.`,
       quota_resets_in_days: `Hạn ngạch sẽ làm mới sau {days} ngày.`,
       quota_exceeded_footer: `Hạn ngạch này do người quản lý máy chủ cấu hình qua \`/moderation\`.`,
+      quota_unavailable_description: `Mình không thể kiểm tra hạn ngạch tạo video của máy chủ này lúc này. Vui lòng thử lại sau giây lát.`,
     },
 
     scene: {

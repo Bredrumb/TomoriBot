@@ -165,7 +165,7 @@ const populatedUser = {
   ...user,
   impersonation_prompt: "personal prompt ".repeat(800),
   physical_appearance_tags: ["kind", "curious"],
-  nai_char_ref_url: "https://example.invalid/reference.png",
+  char_ref_url: "https://example.invalid/reference.png",
 } as UserRow;
 
 beforeAll(async () => {

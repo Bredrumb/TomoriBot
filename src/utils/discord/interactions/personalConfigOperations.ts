@@ -309,7 +309,7 @@ export const personalConfigOperations: PersonalConfigOperations = {
       entityId: userDiscId,
       previousRef,
       nextBuffer,
-      persistNextRef: async (nextRef) => (await userRepository.update(userId, { nai_char_ref_url: nextRef })) !== null,
+      persistNextRef: async (nextRef) => (await userRepository.update(userId, { char_ref_url: nextRef })) !== null,
       onPersistSuccess: () => undefined,
     });
     return ok ? { status: "success", cleared: !attachment } : { status: "write-failed" };

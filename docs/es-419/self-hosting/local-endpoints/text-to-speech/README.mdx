@@ -1,78 +1,62 @@
 ---
-title: "De texto a voz (Motores locales)"
+title: "Texto a voz (motores locales)"
 sidebar:
   label: "Resumen"
-  groupLabel: "De texto a voz"
+  groupLabel: "Texto a voz"
   order: 7
-aiGenerated: true
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-Genere mensajes de voz naturales y discursos de caracteres directamente en su máquina sin pagar tarifas por carácter ni transmitir audio a API de voz de terceros.
+Genera mensajes de voz naturales y expresiones habladas de personajes directamente en tu máquina sin pagar tarifas por carácter ni transmitir audio a APIs de voz de terceros.
 
-TomoriBot trata la voz como una capacidad de punto final personalizada. Los motores locales se ejecutan fuera del bot como servidores HTTP e implementan `POST /synthesize`; Los motores clonados reciben texto más la muestra de audio de referencia configurada, mientras que los motores compatibles con VoiceDesign también pueden recibir instrucciones en lenguaje natural.
+TomoriBot trata la voz como una capacidad de punto de conexión personalizado. Los motores locales se ejecutan fuera del bot como servidores HTTP e implementan `POST /synthesize`; los motores de clonación reciben texto junto con la muestra de audio de referencia configurada, mientras que los motores con soporte para VoiceDesign también pueden recibir instrucciones en lenguaje natural.
 
 ## Motores disponibles
 
 <CardGrid>
-  <LinkCard title="Chatterbox TTS" href="/es-419/self-hosting/local-endpoints/text-to-speech/chatterbox/"
+  <LinkCard title="Chatterbox TTS" href="/self-hosting/local-endpoints/text-to-speech/chatterbox/"
     description="Clonación de voz en inglés con etiquetas de eventos. Turbo es el valor predeterminado; Nano y Standard son variantes opcionales." />
-  <LinkCard title="Qwen3-TTS" href="/es-419/self-hosting/local-endpoints/text-to-speech/qwen3tts/"
-    description="TTS local multilingüe con modos clon y VoiceDesign." />
-  <LinkCard title="MOSS-TTS" href="/es-419/self-hosting/local-endpoints/text-to-speech/moss/"
-    description="Punto final automático de prueba: clonación de voz multilingüe 4B o diseño de voz en inglés/chino descrito por texto." />
-  <LinkCard title="IrodoriTTS" href="/es-419/self-hosting/local-endpoints/text-to-speech/irodoritts/"
-    description="Clonación de voz centrada en japonés y VoiceDesign con marcado emoji Unicode para control de emociones." />
-  <LinkCard title="Pescado Audio S2 Pro" href="/es-419/self-hosting/local-endpoints/text-to-speech/fishs2/"
-    description="Clonación de voz multilingüe de alta calidad con controles detallados de expresión entre corchetes. El valor predeterminado es el peso oficial BF16, con un punto de control INT8 opcional para GPU más pequeñas." />
-  <LinkCard title="VoxCPM2" href="/es-419/self-hosting/local-endpoints/text-to-speech/voxcpm2/"
-    description="TTS en 30 idiomas con diseño de voz, clonación de audio de referencia, Ultimate Cloning asistida por transcripción y control de entrega de lenguaje natural." />
-  <LinkCard title="CosyVoice 3" href="/es-419/self-hosting/local-endpoints/text-to-speech/cosyvoice3/"
-    description="0.5B clonación multilingüe zero-shot y multilingüe con instrucciones de entrega en lenguaje natural." />
-  <LinkCard title="Comparación de motores TTS" href="/es-419/self-hosting/local-endpoints/text-to-speech/comparison/"
-    description="Tiempos de síntesis empíricos, reproductores de muestras de audio y comparaciones de velocidad en los 7 motores." />
+  <LinkCard title="Qwen3-TTS" href="/self-hosting/local-endpoints/text-to-speech/qwen3tts/"
+    description="TTS local multilingüe con modos de clonación y VoiceDesign." />
+  <LinkCard title="MOSS-TTS" href="/self-hosting/local-endpoints/text-to-speech/moss/"
+    description="Punto de conexión automático de prueba: clonación de voz multilingüe de 4B o diseño de voz en inglés y chino descrito por texto." />
+  <LinkCard title="IrodoriTTS" href="/self-hosting/local-endpoints/text-to-speech/irodoritts/"
+    description="Clonación de voz y VoiceDesign enfocados en japonés con marcado de emojis Unicode para control emocional." />
+  <LinkCard title="Fish Audio S2 Pro" href="/self-hosting/local-endpoints/text-to-speech/fishs2/"
+    description="Clonación de voz multilingüe de alta calidad con control detallado mediante etiquetas entre corchetes. Usa por defecto los pesos oficiales en BF16, con un checkpoint opcional en INT8 para GPUs más pequeñas." />
+  <LinkCard title="VoxCPM2" href="/self-hosting/local-endpoints/text-to-speech/voxcpm2/"
+    description="TTS en 30 idiomas con diseño de voz, clonación por audio de referencia, Ultimate Cloning asistido por transcripción y control de entonación en lenguaje natural." />
+  <LinkCard title="CosyVoice 3" href="/self-hosting/local-endpoints/text-to-speech/cosyvoice3/"
+    description="Clonación multilingüe y cross-lingual de disparo cero (zero-shot) de 0.5B con instrucciones de entonación en lenguaje natural." />
+  <LinkCard title="Comparación de motores TTS" href="/self-hosting/local-endpoints/text-to-speech/comparison/"
+    description="Tiempos empíricos de síntesis, reproductores de muestras de audio y comparaciones de velocidad entre los 7 motores." />
 </CardGrid>
 
 ## Flujo de configuración
 
-1. Elige un motor de las tarjetas de arriba y configure su contenedor desde `servers/tts/`.
-2. En `/providers`, elija `Add New Custom Endpoint` y use API Compatibilidad `tts-clone`.
-3. Selecciona el punto final guardado y use su menú desplegable de modelo para agregar su modelo de voz, modo de fuente de voz y marcado de script.
-4. Abre `/config` > `Modelos` > `Cambiar modelos` y seleccione el modelo de voz registrado.
+1. Elige un motor de las tarjetas anteriores y configura su contenedor desde `servers/tts/`.
+2. En `/providers`, elige `+ Agregar nuevo punto de conexión personalizado` y usa la Compatibilidad de API `tts-clone`.
+3. Selecciona el punto de conexión guardado y usa su menú desplegable de modelos para agregar su modelo de voz, modo de fuente de voz y marcado de script.
+4. Abre `/config` > Modelos > Cambiar modelos y selecciona el punto de conexión bajo `TTS (diseño de voz)` o `TTS (clonación de voz)`. Los puntos de conexión automáticos activan ambas selecciones; desactivar una conserva la otra.
 
-## Acceso de red
+Para proveedores de voz alojados y selecciones personales, consulta [Voz: TTS y STT](/features/capabilities/media-generation/tts-and-stt/).
+
+## Acceso a la red
 {/* anchor: network-access */}
 
-Todos los servidores locales de TTS se enlazan a `127.0.0.1` de forma predeterminada, así que solo un bot en la misma máquina puede alcanzarlos. Cuando TomoriBot se ejecuta en Docker o en otra máquina, configura `TOMORI_TTS_HOST=0.0.0.0` para el servidor y registra el punto de conexión con la dirección del host, por ejemplo `http://host.docker.internal:8015`.
+Cada servidor local de TTS se vincula a `127.0.0.1` por defecto, por lo que únicamente un bot en la misma máquina puede comunicarse con él. Cuando TomoriBot se ejecuta en Docker o en otra máquina, establece `TOMORI_TTS_HOST=0.0.0.0` para el servidor y registra el punto de conexión con la dirección del host, por ejemplo `http://host.docker.internal:8015`.
 
-Los servidores no tienen autenticación: cualquiera que alcance el puerto puede ejecutar síntesis en tu GPU. Enlaza fuera de loopback solo en una red de confianza y coloca un proxy inverso con autenticación delante de cualquier servidor que expongas más allá de ella.
+Cada servidor lee su propia variable de puerto (`CHATTERBOX_PORT`, `QWEN3TTS_PORT`, `IRODORI_TTS_PORT`, `FISH_S2_PORT`, `VOXCPM2_PORT`, `COSYVOICE3_PORT`, `MOSS_TTS_PORT`), por lo que varios pueden ejecutarse simultáneamente desde un mismo archivo `.env`. `bun run launch` pasa `.env` a los servidores que inicia; un servidor iniciado manualmente solo lee las variables de su propio shell.
 
-Cada servidor lee su propia variable de puerto (`CHATTERBOX_PORT`, `QWEN3TTS_PORT`, `IRODORI_TTS_PORT`, `FISH_S2_PORT`, `VOXCPM2_PORT`, `COSYVOICE3_PORT`, `MOSS_TTS_PORT`), así que varios pueden ejecutarse a la vez desde un mismo `.env`. `bun run launch` pasa el `.env` a los servidores que inicia; un servidor iniciado a mano solo lee el entorno de su shell.
+Los servidores no disponen de autenticación: cualquier usuario que alcance el puerto puede ejecutar síntesis en tu GPU. Vincula fuera del bucle invertido solo en una red de confianza, y coloca un proxy inverso con autenticación delante de cualquier servidor que expongas más allá de ella.
 
-## Flujo de voz de persona
+## Voces de persona
 
-Para motores de clonación, agregue y asigne una muestra de voz por persona:
+Para la clonación de voz, sube una muestra limpia de un solo hablante en `/config` > Modelos > Parámetros y voces TTS, y luego asígnala en Persona > Voz. Consulta la guía del motor para conocer la duración de clip recomendada y los requisitos de transcripción.
 
-1. Prepare un clip limpio con un altavoz y sin música de fondo. Cada motor registra su mejor duración, de 3 a 30 segundos según el modelo; las guías por motor a continuación llevan los números.
-2. Abre `/config` en Modelos > `Parámetros y voces TTS` y cargue la muestra. Se acepta cualquier formato de audio; TomoriBot lo convierte a mono WAV, hasta 130 segundos.
-3. Proporcione una transcripción coincidente cuando el motor se beneficie de ella. Fish S2 Pro reenvía la transcripción de referencia almacenada a la solicitud de clonación y VoxCPM2 la utiliza para Ultimate Cloning de mayor fidelidad.
-4. Abre `/config` en Persona > `Voz`, luego elija la persona y la muestra de voz.
+TomoriBot admite muestras de hasta 130 segundos y las convierte a WAV mono. El límite de tamaño de subida es de 10 MB por defecto; `SPEECH_SAMPLE_MAX_MB` permite modificarlo. Un formato comprimido como FLAC puede facilitar que un clip largo se ajuste al límite.
 
-TomoriBot impone el límite máximo de carga de 130 segundos. Cada motor aplica su propio límite de audio de referencia cuando se envía el clip, y esos límites difieren lo suficiente como para que un clip que se adapte a un motor pueda ser rechazado o ignorado parcialmente por otro. Consulta la guía del motor antes de subir un clip largo.
+Para los motores compatibles con diseño de voz, guarda una descripción de voz en Persona > Voz. Una persona puede tener tanto una descripción como una muestra; la prioridad de fuente de voz determina qué fuente utilizable se prueba primero. Consulta las guías de cada motor para conocer los modos compatibles y el marcado de script.
 
-El límite de tamaño de carga y el límite de duración son independientes y la verificación de tamaño se ejecuta primero. WAV sin comprimir cuesta aproximadamente 10 MB por minuto como estéreo de 44,1 kHz, por lo que una exportación DAW de 130 segundos puede tener alrededor de 22 MB y ser rechazada por ser demasiado grande, mientras que una exportación comprimida del mismo clip cabe fácilmente. `SPEECH_SAMPLE_MAX_MB` aumenta ese límite de tamaño (10 MB por defecto). Para un clip de referencia largo, expórtelo como FLAC, MP3 u OGG en lugar de WAV: TomoriBot convierte cualquier formato aceptado a WAV mono a 22,05 kHz antes de almacenarlo, por lo que la carga comprimida no cuesta nada en calidad.
-
-Para Qwen3-TTS, MOSS-VoiceGenerator, IrodoriTTS o VoxCPM2 VoiceDesign, omita la muestra de audio y use Persona > `Voz` en `/config` para guardar una descripción de voz en lenguaje natural para la persona. CosyVoice 3 utiliza el modo Clonar con una muestra de referencia y acepta una dirección de entrega única a través de `voice_instructions`.
-
-Los usuarios de ElevenLabs deben elegir `Agregar nuevo proveedor` y `ElevenLabs` en `/providers`; registra los puntos finales de voz y transcripción juntos.
-
-TomoriBot elimina la sintaxis de emoji personalizada de Discord, como `:pepega:` o `<:pepega:123456789012345678>`, de los guiones de voz generados antes de la síntesis. Los emojis Unicode también se eliminan a menos que el punto final de voz utilice el marcado emoji, que está destinado a IrodoriTTS. Las etiquetas de corchetes se conservan para puntos finales como Chatterbox Turbo y Fish S2 Pro cuando su marcado de script está configurado en `Etiquetas entre corchetes`.
-
-VoxCPM2 utiliza el marcado de script `Plano`. Su diseño de voz y controles de estilo de habla viajan a través del campo `instruct` de TomoriBot, y el contenedor VoxCPM2 los convierte a la sintaxis de control de lenguaje natural entre paréntesis nativa del modelo.
-
-CosyVoice 3 también utiliza el marcado de script `Plano`. Asigna referencias respaldadas por transcripciones a la clonación de disparo cero, referencias sin transcripciones a la clonación multilingüe y `voice_instructions` a su ruta condicionada por instrucciones. Las etiquetas de corchetes en línea se eliminan porque las instrucciones CosyVoice se aplican a toda la expresión.
-
-## Comparación de motores
-
-Para obtener comparativas de latencia empíricas en paralelo, reproducción de muestras de audio y una matriz de funciones detallada que compara todos los motores compatibles, consulte [Comparación de motores TTS](/es-419/self-hosting/local-endpoints/text-to-speech/comparison/).
+Habilita los mensajes de voz en `/config` > Permisos, y luego pídele a una persona que envíe uno o usa `/generate voice-message` para probarlo.

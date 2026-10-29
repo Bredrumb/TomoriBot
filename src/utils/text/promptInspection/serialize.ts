@@ -32,23 +32,28 @@ import {
  */
 type TagLabel = {
   title: string;
-  hint: string; // Slash-command reference like `/config system-prompt`, or the literal "system-managed"
+  hint: string; // Slash-command reference like `/memories`, or the literal "system-managed"
   subsections?: Array<{ title: string; hint: string }>;
 };
 
 const TAG_LABELS: Readonly<Record<ContextItemTag, TagLabel>> = {
   [ContextItemTag.SYSTEM_INSTRUCTION_BLOCK]: { title: "System Instruction Block", hint: "system-managed" },
-  [ContextItemTag.SYSTEM_PERSONALITY]: { title: "Persona Attributes", hint: "/persona attribute" },
-  [ContextItemTag.SYSTEM_HUMANIZER_RULES]: { title: "System Prompt", hint: "/config system-prompt" },
-  [ContextItemTag.SYSTEM_CHANNEL_PROMPT]: { title: "Channel Prompt", hint: "/server channel-prompt" },
-  [ContextItemTag.SYSTEM_PERSONA_PROMPT]: { title: "Persona Prompt", hint: "/persona prompt" },
+  [ContextItemTag.SYSTEM_PERSONALITY]: {
+    title: "Persona Attributes",
+    hint: "/config > Persona > Identity & Personality",
+  },
+  [ContextItemTag.SYSTEM_HUMANIZER_RULES]: { title: "System Prompt", hint: "/config > Behavior > General Behavior" },
+  [ContextItemTag.SYSTEM_CHANNEL_PROMPT]: { title: "Channel Prompt", hint: "/config > Channels > Channel Overrides" },
+  [ContextItemTag.SYSTEM_PERSONA_PROMPT]: { title: "Persona Prompt", hint: "/config > Persona > Advanced" },
   [ContextItemTag.SYSTEM_FUNCTION_GUIDE]: { title: "Function Guide", hint: "system-managed" },
   [ContextItemTag.KNOWLEDGE_SERVER_INFO]: { title: "Discord Server Info", hint: "system-managed" },
   [ContextItemTag.KNOWLEDGE_SERVER_EMOJIS]: { title: "Server Emojis", hint: "system-managed" },
   [ContextItemTag.KNOWLEDGE_SERVER_STICKERS]: { title: "Server Stickers", hint: "system-managed" },
-  [ContextItemTag.KNOWLEDGE_PERSONA_SPRITES]: { title: "Persona Sprites", hint: "/persona sprites" },
+  [ContextItemTag.KNOWLEDGE_PERSONA_SPRITES]: { title: "Persona Sprites", hint: "/config > Persona > Sprites" },
   [ContextItemTag.KNOWLEDGE_SERVER_MEMORIES]: { title: "Server Memories", hint: "/memories" },
   [ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS]: { title: "Server Documents", hint: "/memories" },
+  [ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE]: { title: "Lorebook (Before)", hint: "/memories" },
+  [ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER]: { title: "Lorebook (After)", hint: "/memories" },
   [ContextItemTag.KNOWLEDGE_SERVER_CONDITIONING]: { title: "Conditioning Log", hint: "/conditioning" },
   [ContextItemTag.KNOWLEDGE_PERSONA_USER_BLOCKS]: { title: "Persona-User Blocks", hint: "/moderation" },
   [ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS]: { title: "Tool Definitions", hint: "system-managed" },
@@ -61,13 +66,16 @@ const TAG_LABELS: Readonly<Record<ContextItemTag, TagLabel>> = {
     subsections: [
       { title: "Personal/Server Memories", hint: "/memories, /personal memories" },
       { title: "Discord Presence/Role/Channel", hint: "system-managed" },
-      { title: "Other Personas' Public Attributes", hint: "/persona attribute" },
+      { title: "Other Personas' Public Attributes", hint: "/config > Persona > Identity & Personality" },
     ],
   },
   [ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY]: { title: "Short-Term Memory", hint: "/memories" },
-  [ContextItemTag.DIALOGUE_SAMPLE]: { title: "Sample Dialogue", hint: "/persona sample-dialogue" },
+  [ContextItemTag.DIALOGUE_SAMPLE]: { title: "Sample Dialogue", hint: "/config > Persona > Identity & Personality" },
   [ContextItemTag.DIALOGUE_HISTORY]: { title: "Conversation History", hint: "system-managed" },
-  [ContextItemTag.CONTEXT_NOTE_INJECTION]: { title: "Context Note", hint: "/config context-note" },
+  [ContextItemTag.CONTEXT_NOTE_INJECTION]: {
+    title: "Context Note",
+    hint: "/config > Behavior > General Behavior, /config > Channels > Channel Overrides",
+  },
 };
 
 function renderTagHeader(tag: ContextItemTag | undefined): string {
@@ -101,13 +109,34 @@ function renderTagHeader(tag: ContextItemTag | undefined): string {
  * Each context item gets a `=== Title (/command) ===` header derived from its
  * `metadataTag`. These headers are annotations: they are NOT part of the prompt
  * actually sent to the LLM. The DM body that ships with the file explains this.
+ *
+ * The snapshot info and request config lead the file under their own annotation headers,
+ * so they read as request metadata rather than prompt text.
  */
 export function buildTextSnapshot(
   contextItems: StructuredContextItem[],
+  requestConfig: Record<string, unknown>,
+  snapshotInfo: string[],
   novelaiRequest?: PreparedNovelAIRequest,
 ): string {
-  if (novelaiRequest) return `${novelaiRequest.prompt}\n\n${JSON.stringify(novelaiRequest.report, null, 2)}`;
-  const lines: string[] = [];
+  const lines: string[] = [
+    "=== Snapshot Info (annotation, NOT part of the prompt) ===",
+    ...snapshotInfo,
+    "",
+    "=== Request Config (annotation, NOT part of the prompt) ===",
+    JSON.stringify(requestConfig, null, 2),
+    "",
+  ];
+
+  if (novelaiRequest) {
+    lines.push(
+      novelaiRequest.prompt,
+      "",
+      "=== Fitting Report (annotation, NOT part of the prompt) ===",
+      JSON.stringify(novelaiRequest.report, null, 2),
+    );
+    return lines.join("\n");
+  }
 
   for (const item of contextItems) {
     lines.push(renderTagHeader(item.metadataTag));
@@ -147,10 +176,10 @@ export function buildTextSnapshot(
  *   - anthropic         → AnthropicStreamAdapter.buildProbeMessages
  *
  * Metadata (server/channel/persona/provider/preset) is NOT embedded in the file:
- * it is rendered in the DM body instead, to keep the file focused on payload.
+ * the payload must stay shaped like the provider request.
  *
  * When `toolsData` is provided, a top-level `tools` key is appended in the same
- * shape the adapter would send to the provider.
+ * shape the adapter would send to the provider. The request config keys follow `model`.
  */
 export async function buildJsonSnapshot(
   contextItems: StructuredContextItem[],
@@ -322,18 +351,15 @@ export async function buildJsonSnapshot(
   // requestConfig is already provider-shaped: Google/Vertex nest samplers under
   //    `generation_config`, `safety_settings`, and friends, while Anthropic and
   //    OpenAI-compatible providers use root-level keys. Copying at the top level keeps
-  //    that shape and cannot overwrite a key the adapter already set.
-  for (const [key, value] of Object.entries(requestConfig)) {
-    if (!(key in requestData)) requestData[key] = value;
-  }
+  //    that shape and cannot overwrite a key the adapter already set. It is placed right
+  //    after `model` so the short config is the first thing a reader sees, ahead of the
+  //    long message list.
+  const { model, ...payload } = requestData;
+  const config = Object.fromEntries(Object.entries(requestConfig).filter(([key]) => !(key in requestData)));
 
-  // Append provider-formatted tools when requested, including an empty list
-  //    when per-turn filtering deliberately suppresses every tool.
-  if (toolsData) {
-    requestData.tools = toolsData;
-  }
-
-  return requestData;
+  // Provider-formatted tools are included even as an empty list, because per-turn
+  //    filtering can deliberately suppress every tool.
+  return { model, ...config, ...payload, ...(toolsData ? { tools: toolsData } : {}) };
 }
 
 /**
@@ -348,8 +374,8 @@ export async function buildJsonSnapshot(
  *   - openai-compat    : `{temperature?, top_p?, top_k?, frequency_penalty?, presence_penalty?, min_p?, max_tokens?, stop}`
  *
  * Used in two places:
- *   - Baked into the JSON snapshot file at the top level (alongside `messages`/`contents`)
- *   - Rendered as a second ```json code block in the DM body (shown for BOTH text and JSON formats)
+ *   - Baked into the JSON snapshot file at the top level, right after `model`
+ *   - Written at the top of the text snapshot file under an annotation header
  *
  * @param maxOutputTokens - From `resolveRequestMaxOutputTokens()`; undefined omits the key, as the request does.
  */

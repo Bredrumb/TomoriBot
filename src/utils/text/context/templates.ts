@@ -19,6 +19,8 @@ export { DEFAULT_SYSTEM_PROMPT };
 const RANDOM_CHOICE_MACRO_REGEX =
   /\{\{\s*random(?:::\s*([^{}]+)|:\s*([^{}]+))\s*\}\}|\{\s*random(?:::\s*([^{}]+)|:\s*([^{}]+))\s*\}/gi;
 
+const LOREBOOK_TAGS = new Set([ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE, ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER]);
+
 export type MentionConverter = (
   text: string,
   client: Client,
@@ -61,6 +63,9 @@ function resolveRandomChoiceMacros(text: string): string {
 }
 
 function resolveRandomChoiceMacrosInContextItem(item: StructuredContextItem): StructuredContextItem {
+  // Lorebook content resolves identity macros only, so runtime macros in an entry stay literal.
+  if (item.metadataTag && LOREBOOK_TAGS.has(item.metadataTag)) return item;
+
   let changed = false;
   const parts = item.parts.map((part): ContextPart => {
     if (part.type !== "text") return part;

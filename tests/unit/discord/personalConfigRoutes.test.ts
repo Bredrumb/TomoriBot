@@ -355,7 +355,7 @@ function makeDependencies(
     },
     replaceCharacterReference: async (input) => {
       calls.push(`replaceCharacterReference:${input.attachment ? "set" : "clear"}`);
-      user.nai_char_ref_url = input.attachment ? "data:image/png;base64,stored" : null;
+      user.char_ref_url = input.attachment ? "data:image/png;base64,stored" : null;
       return { status: "success", cleared: !input.attachment };
     },
     setPrivacyLevel: async (input) => {
@@ -2122,7 +2122,7 @@ describe("personal config Appearance character reference", () => {
       locale: "en-US",
       category: "profile",
       page: "appearance",
-      user: makeUser({ nai_char_ref_url: "https://cdn.example.invalid/me.png" }),
+      user: makeUser({ char_ref_url: "https://cdn.example.invalid/me.png" }),
       resolvedNickname: "Tester",
       personas: [],
       guildId: "guild-123",
@@ -2168,12 +2168,12 @@ describe("personal config Appearance character reference", () => {
         replaceCharacterReference: async (input) => {
           acknowledgedInsideWrite = interaction.deferred;
           calls.push(`replaceCharacterReference:${input.attachment ? "set" : "clear"}`);
-          user.nai_char_ref_url = null;
+          user.char_ref_url = null;
           return { status: "success", cleared: true };
         },
       },
     });
-    user.nai_char_ref_url = "https://cdn.example.invalid/old.png";
+    user.char_ref_url = "https://cdn.example.invalid/old.png";
     const route = createPersonalConfigInteractionRoute(dependencies);
     const customId = buildPersonalConfigRouteId({ action: "character-reference-clear", locale: "en-US" });
     interaction = makePersonalInteraction({
@@ -2184,7 +2184,7 @@ describe("personal config Appearance character reference", () => {
 
     expect(acknowledgedInsideWrite).toBe(true);
     expect(calls).toContain("replaceCharacterReference:clear");
-    expect(user.nai_char_ref_url).toBeNull();
+    expect(user.char_ref_url).toBeNull();
   });
 });
 
@@ -6922,7 +6922,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
 
         // The runtime wrapper re-marks prose continuation lines, so the notice is matched as rendered.
         const notice = JSON.stringify(
-          formatPanelProse(`-# ${localizedCopy("en-US", "commands.personal.config.server_fallback_byok_notice")}`),
+          formatPanelProse(`-# 🟡 ${localizedCopy("en-US", "commands.personal.config.server_fallback_byok_notice")}`),
         ).slice(1, -1);
 
         expect(JSON.stringify(buildPayload(true))).toContain(notice);

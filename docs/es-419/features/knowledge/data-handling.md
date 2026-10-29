@@ -54,7 +54,7 @@ Los datos exportables se envían a sus mensajes directos como un archivo JSON:
 - `/export personal memories`: recuerdos personales, de alcance global o por persona.
 - `/persona export`: definiciones completas de personas.
 
-Los medios de expresión cargados se almacenan en el host del servidor y están fuera de estas exportaciones JSON. Los autohospedadores deben realizar copias de seguridad del almacenamiento de la base de datos y de los activos multimedia juntos; consulte [copias de seguridad de medios personalizados](/es-419/self-hosting/safe-migration/#custom-expression-media-backups).
+Los medios de expresión cargados se almacenan en el host del servidor y están fuera de estas exportaciones JSON. Los autohospedadores deben realizar copias de seguridad del almacenamiento de la base de datos y de los activos multimedia juntos; consulte [copias de seguridad de medios personalizados](/self-hosting/maintenance/#database-backups-and-recovery-keys).
 
 ## Importa tus datos
 

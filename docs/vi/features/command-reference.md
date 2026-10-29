@@ -175,11 +175,11 @@ Liên kết kênh Discord với phòng Matrix để chuyển tiếp hai chiều.
 
 ## `/memories`
 
-Kiểm tra và quản lý bộ nhớ máy chủ, tài liệu và bộ nhớ ngắn hạn.
+Kiểm tra và quản lý bộ nhớ máy chủ, tài liệu, lorebook và bộ nhớ ngắn hạn.
 
 | Lệnh | Tóm tắt |
 |---|---|
-| `/memories` | Kiểm tra và quản lý bộ nhớ máy chủ, tài liệu và bộ nhớ ngắn hạn. |
+| `/memories` | Kiểm tra và quản lý bộ nhớ máy chủ, tài liệu, lorebook và bộ nhớ ngắn hạn. |
 
 ## `/model`
 

@@ -13,7 +13,12 @@ const SCOPED_CHANNEL = "111111111111111111";
 const THREAD_IN_SCOPED_CHANNEL = "222222222222222222";
 const OTHER_CHANNEL = "333333333333333333";
 
-function memoryRow(id: number, content: string, channelDiscIds: string[], pending = false): ServerMemoryRow {
+function memoryRow(
+  id: number,
+  content: string,
+  channelDiscIds: string[],
+  options: { pending?: boolean; tags?: string[] } = {},
+): ServerMemoryRow {
   return {
     server_memory_id: id,
     server_id: 1,
@@ -21,9 +26,9 @@ function memoryRow(id: number, content: string, channelDiscIds: string[], pendin
     persona_lineage_id: 100,
     user_id: 1,
     content,
-    tags: [],
+    tags: options.tags ?? [],
     channel_disc_ids: channelDiscIds,
-    channel_scope_pending: pending,
+    channel_scope_pending: options.pending ?? false,
   };
 }
 
@@ -35,7 +40,6 @@ async function memoryItemIn(channelId: string, parentChannelId: string | null, c
     isDMChannel: false,
     botName: "Mirri",
     personalMemoriesEnabled: true,
-    conversationCorpus: null,
     channelId,
     parentChannelId,
     channelMemoryEnabled,
@@ -61,7 +65,7 @@ describe("server memory channel scope", () => {
     loadSpy = spyOn(serverMemoryRepository, "loadServerMemoriesScoped").mockResolvedValue([
       memoryRow(1, "everywhere fact", []),
       memoryRow(2, "channel-only fact", [SCOPED_CHANNEL]),
-      memoryRow(3, "unresolved fact", [], true),
+      memoryRow(3, "unresolved fact", [], { pending: true }),
     ]);
   }
 
@@ -70,13 +74,12 @@ describe("server memory channel scope", () => {
       memoryRow(97, "Juno keeps reference ID:505 in a notebook.", []),
       memoryRow(98, "Mirri collects maps.", []),
     ];
-    rows[0].tags = ["maps"];
     loadSpy = spyOn(serverMemoryRepository, "loadServerMemoriesScoped").mockResolvedValue(rows);
     const item = await memoryItemIn(SCOPED_CHANNEL, null);
     if (!item) throw new Error("Server memory context is missing");
     const part = item.parts[0];
     if (part?.type !== "text") throw new Error("Server memory context contains no text");
-    expect(part.text).toContain(formatMemoryWithId(97, rows[0].content, rows[0].tags));
+    expect(part.text).toContain(formatMemoryWithId(97, rows[0].content));
     expect(item.memoryEntries?.map((entry) => entry.text)).toEqual(rows.map((row) => row.content));
     for (const model of ["glm-4-6", "xialong-v1", "kayra-v1", "llama-3-erato-v1"]) {
       for (const withHistory of [false, true]) {
@@ -130,5 +133,18 @@ describe("server memory channel scope", () => {
   it("ignores scopes when channel memory is disabled", async () => {
     loadRows();
     expect(await memoryTextIn(OTHER_CHANNEL, null, false)).toContain("channel-only fact");
+  });
+
+  it("ignores legacy keyword and channel tags and omits them from the rendered block", async () => {
+    loadSpy = spyOn(serverMemoryRepository, "loadServerMemoriesScoped").mockResolvedValue([
+      memoryRow(1, "keyword tagged fact", [], { tags: ['"winter"'] }),
+      memoryRow(2, "hash tagged fact", [], { tags: ["#elsewhere"] }),
+    ]);
+    const text = await memoryTextIn(OTHER_CHANNEL, null);
+    expect(text).toContain("keyword tagged fact");
+    expect(text).toContain("hash tagged fact");
+    expect(text).not.toContain("[tags:");
+    expect(text).not.toContain("winter");
+    expect(text).not.toContain("elsewhere");
   });
 });

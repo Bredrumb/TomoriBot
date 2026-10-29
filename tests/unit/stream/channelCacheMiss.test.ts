@@ -131,6 +131,31 @@ describe("a reply whose source channel left the cache", () => {
     expect(source.replyCalls).toBe(0);
   });
 
+  it("sends without a reply reference when the source is a system message", async () => {
+    const { updater } = makeUpdater();
+    const sends: unknown[] = [];
+    const source = makeUncachedSourceMessage();
+    Object.assign(source.message, { system: true });
+    const context = {
+      channel: {
+        id: CHANNEL_ID,
+        client: { rest: new REST() },
+        send: async (payload: unknown) => {
+          sends.push(payload);
+          return { id: "1400000000000000001", channelId: CHANNEL_ID, webhookId: null, author: { username: "Bot" } };
+        },
+      },
+      replyToMessage: source.message,
+      locale: "en-US",
+      suppressUserErrors: false,
+      tomoriState: { is_alter: false, config: {} },
+    } as unknown as StreamContext;
+    const sent = await updater.sendSinglePayload({ content: "hello" }, "hello", context, createDefaultStreamState());
+    expect(sent).not.toBeNull();
+    expect(sends).toHaveLength(1);
+    expect((sends[0] as { reply?: unknown }).reply).toBeUndefined();
+  });
+
   it("falls back to a REST lookup when the captured channel cannot send", async () => {
     const { updater } = makeUpdater();
     const replySends: unknown[] = [];

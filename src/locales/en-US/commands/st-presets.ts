@@ -49,7 +49,7 @@ export default {
     added_receipt_detail: `Imported and activated **{name}** with {nodes} nodes ({enabled} enabled).`,
     import_note_comment_only: `{count} comment-only node(s) are listed but never sent to the model.`,
     import_note_disabled_by_preset: `{count} node(s) start disabled in this preset. Use **Toggle Nodes** to enable them.`,
-    import_note_unsupported_macros: `Enabled node(s) still use preset macros TomoriBot does not support: {macros}. Those parts may be sent literally or behave differently than in SillyTavern.`,
+    import_note_unsupported_macros: `Enabled nodes contain unsupported macros or malformed conditionals: {macros}. Unsupported macros may appear literally; malformed blocks may be omitted. Review these nodes before using the preset.`,
     import_note_more_macros: `+{count} more`,
     import_note_legacy_text_completion: `This older text-completions preset was converted best-effort from its legacy \`story_string\` fields. SillyTavern-only blocks such as \`persona\`, \`scenario\`, anchors, stop strings, and backend settings are ignored.`,
     deleted_receipt: `Preset deleted`,

@@ -31,6 +31,7 @@ export default {
       quota_resets_in_hours: `Quota resets in {hours} hour(s).`,
       quota_resets_in_days: `Quota resets in {days} day(s).`,
       quota_remaining: `You have {remaining} image(s) remaining for today.`,
+      quota_unavailable: `I could not check this server's image generation quota right now. Please try again in a moment.`,
     },
     generate_video: {
       disabled: `Video generation is disabled for this server.`,
@@ -40,6 +41,7 @@ export default {
       quota_resets_in_hours: `Quota resets in {hours} hour(s).`,
       quota_resets_in_days: `Quota resets in {days} day(s).`,
       quota_remaining: `You have {remaining} video(s) remaining for today.`,
+      quota_unavailable: `I could not check this server's video generation quota right now. Please try again in a moment.`,
       file_too_large: `The generated video ({size_mb} MB) exceeds Discord's 25 MB file size limit.`,
       reference_unsupported: `The selected OpenRouter model \`{model}\` cannot use an image as the exact first frame. Remove the reference image or choose a compatible video model.`,
       loop_unsupported: `The selected OpenRouter model \`{model}\` cannot use a last frame for looping video. Disable looping or choose a compatible video model.`,
@@ -162,7 +164,7 @@ export default {
     document: {
       reading_title: `📄 Reading file contents...`,
       reading_description: `Reading the text inside \`{filename}\``,
-      truncated_title: `⚠️ File truncated`,
+      truncated_title: `File truncated`,
       truncated_description: `\`{filename}\` was too long and has been truncated to {limit} characters (original: {original} characters). The response may be incomplete so consider splitting the file into smaller parts and sharing them one at a time.`,
     },
     image: {
@@ -179,6 +181,7 @@ export default {
       notice_character_prompt_line: `**Character {index}:** {prompt}`,
       notice_image_tags_tip_line: `Tip: Use the \`image-tags\` commands for more consistent characters.`,
       notice_avatar_reference_line: `Avatar reference: {name}.`,
+      notice_character_reference_line: `Character reference: {name}.`,
       notice_reference_count_line: `Using {count} reference image(s).`,
       generated_after_seconds_line: `Generated after {seconds} seconds`,
       referenced_identities_line: `Referenced: {names}`,

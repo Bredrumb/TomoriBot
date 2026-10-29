@@ -80,8 +80,12 @@ The orchestrator routes normalized chunks based on `ProcessedChunk.type`:
   (`StreamBufferFlusher.processTextChunk()`) for semantic buffering and boundary detection.
 - **Tool calls:** Triggers a pending buffer flush before returning `{ status: "function_call" }`.
   The tool loop executes the tool and starts a subsequent generation turn with the tool result.
-- **Errors:** Flushes pending buffer text and displays a Discord error embed via `StreamErrorUi`
-  (unless suppressed by retries or user impersonation), returning `{ status: "error" }`.
+- **Errors:** Reports the failure through `reportStreamProviderFailure()` with the attempt's own
+  request key, then flushes pending buffer text and displays a Discord error embed via
+  `StreamErrorUi` (unless suppressed by retries, a hidden turn, or user impersonation), returning
+  `{ status: "error" }`. The report runs for every attempt, shown or not, so callers that retry,
+  surface, or adapt the returned failure (the chat response sink, hidden image planning) never
+  report it again. Thrown stream exceptions are reported once by the orchestrator's own catch.
 - **Done metadata:** Captures terminal completion data such as `finishReason`.
 - **Token usage:** Captured from `metadata.usage` on any chunk (latest non-null wins). This handles
   providers that report usage on trailing empty chunks or override terminal metadata. Terminal results
@@ -120,6 +124,7 @@ result never becomes `empty_response`, because rescheduling would regenerate the
 ## Source pointers
 
 - `src/utils/discord/stream/stateMachine.ts`: `StreamOrchestrator.executeStream` and loop routing.
+- `src/utils/provider/providerErrorMetrics.ts`: `reportStreamProviderFailure` severity and diagnostic fields.
 - `src/types/provider/interfaces.ts`: `StreamResult` definition.
 - `src/utils/discord/stream/stopRequests.ts`: channel stop registry.
 - `src/utils/discord/stream/thoughtLog.ts`: `wasEmptyStreamResponse` evaluation.

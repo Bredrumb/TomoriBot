@@ -29,6 +29,7 @@ export default {
       quota_resets_in_hours: `額度將在 {hours} 小時後重置。`,
       quota_resets_in_days: `額度將在 {days} 天後重置。`,
       quota_remaining: `你今天還可以生成 {remaining} 張圖片。`,
+      quota_unavailable: `我目前無法檢查這個伺服器的圖片額度，請稍後再試。`,
     },
     generate_video: {
       disabled: `這個伺服器已停用影片生成。`,
@@ -38,6 +39,7 @@ export default {
       quota_resets_in_hours: `額度將在 {hours} 小時後重置。`,
       quota_resets_in_days: `額度將在 {days} 天後重置。`,
       quota_remaining: `你今天還可以生成 {remaining} 支影片。`,
+      quota_unavailable: `我目前無法檢查這個伺服器的影片額度，請稍後再試。`,
       file_too_large: `生成的影片（{size_mb} MB）超過 Discord 的 25 MB 檔案大小上限。`,
       reference_unsupported: `選擇的 OpenRouter 模型 \`{model}\` 無法把圖片當作精確的第一格畫面。請移除參考圖片，或改用支援的影片模型。`,
       loop_unsupported: `選擇的 OpenRouter 模型 \`{model}\` 無法使用最後一格畫面製作循環影片。請關閉循環，或改用支援的影片模型。`,
@@ -160,7 +162,7 @@ export default {
     document: {
       reading_title: `📄 正在讀取檔案內容...`,
       reading_description: `正在讀取 \`{filename}\` 裡面的文字`,
-      truncated_title: `⚠️ 檔案已截斷`,
+      truncated_title: `檔案已截斷`,
       truncated_description: `\`{filename}\` 太長，已截斷為 {limit} 個字元（原始為 {original} 個字元）。回覆內容可能不完整，建議把檔案拆成幾個小部分，再分批分享。`,
     },
     image: {

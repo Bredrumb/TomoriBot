@@ -111,7 +111,7 @@ rotation only after server admission succeeds.
   ran. A call with different arguments still executes. With Response Drafting On, shared history also
   survives fallback.
 - **Deferred server admission**: resolving server fallback routes only on personal failure prevents
-  unnecessary database writes and server quota checks on successful member turns.
+  unnecessary database writes and server quota reservations on successful member turns.
 - **Per-turn cleanup**: a `finally` block invokes sink cleanup after exceptions. Temporary webhook
   deletion is best-effort, as described by [Response Sink](/architecture/pipelines/chat/06-per-turn/02-create-response-sink/).
 

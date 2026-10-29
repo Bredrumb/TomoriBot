@@ -1,3 +1,5 @@
+import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
+import { lorebookEntryInputSchema, LOREBOOK_ENTRIES_PER_SCOPE_MAX } from "@/modules/lorebooks/db/types";
 /**
  * Shared alter-persona import core.
  *
@@ -103,6 +105,13 @@ function isUniqueViolation(error: unknown): boolean {
 export async function importAlterPreset(params: ImportAlterPresetParams): Promise<ImportAlterPresetResult> {
   const { client, guild, serverDiscId, presetData, identityMode, avatarImageBuffer } = params;
 
+  if (
+    presetData.lorebook_entries !== undefined &&
+    !lorebookEntryInputSchema.array().max(LOREBOOK_ENTRIES_PER_SCOPE_MAX).safeParse(presetData.lorebook_entries).success
+  ) {
+    return { ok: false, reason: "config_failed" };
+  }
+
   let importedIdleNudges: PersonaAuthoredIdleNudge[] | undefined;
   if (presetData.natural_nudge_idle_nudges !== undefined) {
     const parsedIdleNudges = personaAuthoredIdleNudgesSchema.safeParse(presetData.natural_nudge_idle_nudges);
@@ -169,7 +178,7 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
     null;
 
   const importedLineageId = presetData.persona_lineage_id ?? null;
-  let newAlterRow: { persona_id?: number } | undefined;
+  let newAlterRow: { persona_id?: number; persona_lineage_id?: number | string | bigint } | undefined;
   try {
     newAlterRow = matchingOfficialPreset
       ? ((await personaRepository.createPresetPointerAlterPersona({
@@ -190,7 +199,7 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
           sampleDialoguesOut: presetData.sample_dialogues_out,
           personaLineageId: identityMode === "preserve" ? importedLineageId : null,
           physicalAppearanceTags: presetData.physical_appearance_tags ?? [],
-          naiCharRefUrl: presetData.nai_char_ref_url ?? null,
+          charRefUrl: presetData.char_ref_url ?? null,
           naiAttgAuthor: presetData.nai_attg_author ?? null,
           naiAttgTitle: presetData.nai_attg_title ?? null,
           naiAttgTags: presetData.nai_attg_tags ?? null,
@@ -255,6 +264,22 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
   )
     return { ok: false, reason: "config_failed" };
   invalidateTomoriStateCache(serverDiscId);
+
+  if (presetData.lorebook_entries !== undefined) {
+    const lineageId = Number(newAlterRow.persona_lineage_id);
+    if (
+      !Number.isSafeInteger(lineageId) ||
+      (await lorebookRepository.replaceLineageEntries(
+        mainPersona.server_id,
+        lineageId,
+        presetData.lorebook_entries,
+      )) !== "replaced"
+    ) {
+      await personaRepository.removePersona(newTomoriId);
+      invalidateTomoriStateCache(serverDiscId);
+      return { ok: false, reason: "config_failed" };
+    }
+  }
 
   const usedMainAvatarFallback = !avatarImageBuffer && Boolean(fallbackAvatarReference);
   let avatarUrl: string | null;

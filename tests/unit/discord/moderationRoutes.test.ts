@@ -1029,6 +1029,7 @@ describe("moderation interaction routes", () => {
       isModalSubmit: () => false,
       customId: "moderation:v1:user-blacklist-remove-open:en-US",
       locale: "en-US",
+      user: { id: "user-1" },
       reply: async (payload: unknown) => {
         replyPayload = payload;
       },

@@ -150,7 +150,6 @@ export async function buildServerMemoryContextItem(params: {
   isDMChannel: boolean;
   botName: string;
   personalMemoriesEnabled: boolean;
-  conversationCorpus: string | null;
   channelId: string;
   parentChannelId?: string | null;
   channelMemoryEnabled: boolean;
@@ -183,24 +182,9 @@ export async function buildServerMemoryContextItem(params: {
         : await serverMemoryRepository.loadServerMemoriesScoped(serverId, personaLineageId);
 
     const channelCandidates = channelScopeCandidates(params.channelId, params.parentChannelId);
-    const filteredServerRows = serverMemoryRows.filter((row) => {
-      const contentTags = (row.tags ?? []).map((t) => t.replace(/^["']+|["']+$/g, ""));
-
-      // The channel scope and the content tags filter independently: a channel match does not
-      // exempt a memory from the corpus check below.
-      if (params.channelMemoryEnabled && !channelScopeAdmits(row.channel_disc_ids, channelCandidates)) {
-        return false;
-      }
-
-      // Content tags: if corpus filtering is active and the memory has content tags,
-      // at least one must appear in the corpus. A memory with no content tags is
-      // unfiltered by keyword, so it always stays active.
-      if (params.conversationCorpus != null && contentTags.length > 0) {
-        return contentTags.some((tag) => params.conversationCorpus?.includes(tag.toLowerCase()));
-      }
-
-      return true;
-    });
+    const filteredServerRows = serverMemoryRows.filter(
+      (row) => !params.channelMemoryEnabled || channelScopeAdmits(row.channel_disc_ids, channelCandidates),
+    );
 
     memoryEntries = filteredServerRows.map((row) => ({
       id: `server:${row.server_memory_id}`,
@@ -209,7 +193,7 @@ export async function buildServerMemoryContextItem(params: {
     }));
     serverMemoryLines = filteredServerRows.map((row) =>
       // biome-ignore lint/style/noNonNullAssertion: a loaded server-memory row always carries its PK.
-      formatMemoryWithId(row.server_memory_id!, row.content, row.tags ?? []),
+      formatMemoryWithId(row.server_memory_id!, row.content),
     );
   } catch (error) {
     log.warn("Failed to load server memories with IDs for context", error);

@@ -3,15 +3,13 @@ title: "MOSS-TTS"
 aiGenerated: true
 ---
 
-使用 [MOSS-TTS](https://github.com/OpenMOSS/MOSS-TTS) 透過統一語音端點在本地評估語音克隆和自然語言語音設計。
+使用 [MOSS-TTS](https://github.com/OpenMOSS/MOSS-TTS)，透過統一的語音端點在本機評估聲音複製與自然語言語音設計。
 
-使用`servers/tts/moss/server.py`，TomoriBot動態路由合成請求：當人格提供`ref_audio`時，它會載入複製模型，並在給出自然語言`instruct`指導時切換到MOSS-VoiceGenerator。GPU記憶體中一次僅儲存一個模型，以便在16 GB VRAM預算內運作。
-
-預設克隆模型是 [MOSS-TTS-Local-Transformer-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5) (4B)，選擇作為16 GB GPU的實用基準。[MOSS-TTS-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-v1.5) 是8B旗艦替代品，在BF16時需要更多VRAM。語音設計使用[MOSS-VoiceGenerator](https://huggingface.co/OpenMOSS-Team/MOSS-VoiceGenerator)（約1.7B）。克隆和語音設計之間的交換會導致模型載入延遲。
+預設的 4B 複製模型與 1.7B VoiceGenerator 會在語音模式變更時於 GPU 記憶體中切換，因此切換後的第一次請求需要較長時間。8B 複製模型則需要更多 VRAM。
 
 ## 設定
 
-使用Python 3.12和與CUDA 12.8相容的驅動程式從TomoriBot儲存庫根執行命令：
+在 TomoriBot 存放庫根目錄使用 Python 3.12 與相容於 CUDA 12.8 的驅動程式執行指令：
 
 ### Windows PowerShell
 
@@ -25,7 +23,7 @@ python servers\tts\moss\prefetch_models.py
 python servers\tts\moss\server.py
 ```
 
-### Linux或WSL Bash
+### Linux 或 WSL Bash
 
 ```bash
 python3.12 -m venv servers/tts/moss/.venv
@@ -37,18 +35,18 @@ python servers/tts/moss/prefetch_models.py
 python servers/tts/moss/server.py
 ```
 
-在啟動伺服器之前，預取指令會將複製模型、VoiceGenerator和音訊標記器下載到Hugging Face快取中。如果磁碟空間有限，請將`HF_HOME`設定為更大的分割區。若要僅下載一種模型，請傳遞`--mode clone`或`--mode voice-design`。
+預先擷取（prefetch）指令會在啟動伺服器之前，將複製模型、VoiceGenerator 與音訊 tokenizer 下載至你的 Hugging Face 快取中。若磁碟空間有限，請將 `HF_HOME` 設定至較大的分割區。若只需下載單一模型，請傳入 `--mode clone` 或 `--mode voice-design`。
 
-預設端點是`http://127.0.0.1:8018`。運行`bun run launch --moss`以與TomoriBot一起啟動伺服器。自動模式從本機快取預熱克隆模型。將`MOSS_TTS_WARM_MODE=voice-design`設定為預熱VoiceGenerator，或將`MOSS_TTS_WARM_MODE=none`設定為延遲初始化。檢查`GET /health`是否有活動的`warm_mode`、`active_mode`和`model_id`。包裝器使用Hugging Face `trust_remote_code=True`，因此在更新之前請檢查上游代碼。
+預設端點為 `http://127.0.0.1:8018`。執行 `bun run launch --moss` 可在啟動 TomoriBot 的同時啟動伺服器。自動模式會從本機快取預熱複製模型。設定 `MOSS_TTS_WARM_MODE=voice-design` 可改為預熱 VoiceGenerator，或設定 `MOSS_TTS_WARM_MODE=none` 進行延遲初始化。可查看 `GET /health` 確認目前的 `warm_mode`、`active_mode` 與 `model_id`。包裝器使用 Hugging Face 的 `trust_remote_code=True`，因此更新前請檢視上游程式碼。
 
-## 在TomoriBot中註冊
+## 在 TomoriBot 中註冊
 
-在`/providers`中，選擇`Add New Custom Endpoint`，將API相容性設定為`tts-clone`，並使用端點URL `http://127.0.0.1:8018`。新增一個語音模型，其中`語音來源模式`設定為`自動`，`Script Markup`設定為`純文字`。在`/config` > `模型` > `切換模型`下啟動它。
+在 `/providers` 中，選擇 `+ 新增自訂端點`，將 API 相容性設定為 `tts-clone`，並使用端點 URL `http://127.0.0.1:8018`。新增一個 Speech 模型，將 `語音來源模式` 設定為 `自動`，`腳本標記風格` 設定為 `純文字`。在 `/config` > 模型 > 切換模型 底下啟用它。
 
-對於語音克隆，請在`/config` > `模型` > `TTS參數與語音`下上傳乾淨的參考剪輯，並將其指派到人格 > `語音`下。較短、乾淨的音訊剪輯可產生最一致的結果。對於語音設計，請在人格 > `語音`下儲存自然語言描述。請注意，MOSS-VoiceGenerator是為英文和中文設計的。雖然4B克隆模型支援日語，但顯式語言標籤提高了合成清晰度。
+對於聲音複製，請在 `/config` > 模型 > TTS 參數與語音 底下上傳乾淨的參考音訊，並在 人格 > 語音 底下進行指派。較短且乾淨的音訊片段可產生最一致的結果。對於語音設計，請在 人格 > 語音 底下儲存自然語言描述。請注意 MOSS-VoiceGenerator 是專為英語與中文設計的。雖然 4B 複製模型支援日語，但明確指定語言標籤可提升合成清晰度。
 
-TomoriBot的克隆適配器不會自動發送語言標籤。對於單一語言使用，請在啟動伺服器之前設定`MOSS_TTS_DEFAULT_LANGUAGE=Japanese`（或`繁體中文`、`Chinese`等）。手動`/synthesize`呼叫可以直接通過`language`。
+TomoriBot 的複製轉接器不會自動發送語言標籤。對於單一語言使用情境，請在啟動伺服器前設定 `MOSS_TTS_DEFAULT_LANGUAGE=Japanese`（或 `English`、`Chinese` 等）。手動 `/synthesize` 呼叫可以直接傳遞 `language`。
 
-伺服器讀取自己的shell環境；機器人`.env`中的設定不適用於獨立啟動的Python終端。
+伺服器會讀取自己的 shell 環境；bot 的 `.env` 中的設定不適用於獨立啟動的 Python 終端機。
 
-若要在高記憶體硬體上執行8B模型，請在預取之前設定`MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5`。`MOSS_TTS_PORT`、`MOSS_TTS_DEVICE`、`MOSS_TTS_DTYPE`和`MOSS_TTS_MAX_NEW_TOKENS`可在`.env.optional.example`中設定。如果模型交換或CPU執行導致逾時，請增加TomoriBot中的`TTS_SYNTHESIZE_TIMEOUT_MS`。
+若要在高記憶體硬體上執行 8B 模型，請在預先擷取前設定 `MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5`。`MOSS_TTS_PORT`、`MOSS_TTS_DEVICE`、`MOSS_TTS_DTYPE` 與 `MOSS_TTS_MAX_NEW_TOKENS` 可在 `.env.optional.example` 中設定。若模型切換或 CPU 執行導致逾時，請調高 TomoriBot 中的 `TTS_SYNTHESIZE_TIMEOUT_MS`。

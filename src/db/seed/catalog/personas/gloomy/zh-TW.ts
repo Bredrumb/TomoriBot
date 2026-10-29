@@ -71,6 +71,7 @@ export const persona: PersonaInput = {
   ],
   language: "zh-TW",
   avatarPath: "src/db/seed/catalog/personas/gloomy",
+  characterReference: "character-reference/front.png",
   triggerWords: ["tomori", "aphel"],
   lineageId: 1770,
   namingConfig: { prefixes: {}, suffixes: {}, addressTerms: {} },

@@ -3,8 +3,7 @@
  *
  * Resolves ST-specific macros in preset node content at context build time.
  * Uses a two-pass architecture:
- *   Pass 1: Apply all {{setvar::key::value}} / {{addvar::key::value}} declarations
- *           from enabled nodes in order
+ *   Pass 1: Select Handlebars branches and apply their variable declarations in source order
  *   Pass 2: Resolve {{getvar::key}}, content macros, randomization, dice rolls, trim, etc.
  *
  * Identity macros ({{user}}, {{char}}) are intentionally left unresolved here, so
@@ -14,6 +13,8 @@
 
 import type { StPresetNodeRow } from "@/types/db/schema";
 import { log } from "@/utils/misc/logger";
+import { formatDateWithOffset, formatTimeWithOffset } from "@/utils/text/timezoneHelper";
+import { flattenConditionals, renderStConditionals } from "@/utils/tools/promptConditionals";
 
 /**
  * Runtime context data provided to the macro engine for content macro expansion.
@@ -34,6 +35,11 @@ export interface MacroContext {
   mesExamples: string;
   /** {{lastChatMessage}} the most recent user message content */
   lastChatMessage: string;
+  model: string;
+  provider: string;
+  charVersion: string;
+  utcOffsetHours: number | null;
+  nowMs: number;
 }
 
 /**
@@ -78,13 +84,10 @@ const TRIM_REGEX = /\{\{trim\}\}/g;
 
 /** Matches simple supported content / identity macros */
 const SIMPLE_SUPPORTED_MACRO_REGEX =
-  /\{\{(?:user|char|bot|personality|description|scenario|mesExamples|lastChatMessage)\}\}/gi;
+  /\{\{(?:user|char|bot|personality|description|scenario|mesExamples|lastChatMessage|time|date|weekday|isotime|isodate|model|provider|char_version|input)\}\}/gi;
 
 /** Matches any remaining {{...}} macro for compatibility warnings */
 const GENERIC_MACRO_REGEX = /\{\{([^{}]+)\}\}/g;
-
-const TOMORI_CONDITIONAL_DIRECTIVE_REGEX =
-  /\{\{\s*(?:if\s+!?(?:capability|tool):[a-z0-9][a-z0-9_.-]*|else|\/if)\s*\}\}/gi;
 
 /** Detects HTML tags that Discord cannot render */
 const HTML_TAG_REGEX =
@@ -172,33 +175,26 @@ function processVarDeclarations(
  * @returns Deduplicated user-facing macro labels
  */
 export function findUnsupportedPresetMacros(text: string): string[] {
-  const stripped = text
-    .replace(COMMENT_REGEX, "")
+  let malformedConditional = false;
+  const flattened = flattenConditionals(stripComments(text), () => {
+    malformedConditional = true;
+  });
+  const stripped = flattened
     .replace(VAR_DECLARATION_REGEX, "")
     .replace(GETVAR_REGEX, "")
     .replace(RANDOM_COMMA_REGEX, "")
     .replace(RANDOM_DOUBLE_COLON_REGEX, "")
     .replace(ROLL_REGEX, "")
     .replace(TRIM_REGEX, "")
-    .replace(TOMORI_CONDITIONAL_DIRECTIVE_REGEX, "")
     .replace(SIMPLE_SUPPORTED_MACRO_REGEX, "");
 
   GENERIC_MACRO_REGEX.lastIndex = 0;
 
   const labels = new Set<string>();
+  if (malformedConditional) labels.add("{{#if ...}} (malformed)");
   for (const match of stripped.matchAll(GENERIC_MACRO_REGEX)) {
     const body = match[1]?.trim();
     if (!body) continue;
-
-    if (body.startsWith("#if")) {
-      labels.add("{{#if ...}}");
-      continue;
-    }
-
-    if (body === "/if") {
-      labels.add("{{/if}}");
-      continue;
-    }
 
     if (body.startsWith("roll:")) {
       labels.add("{{roll:...}}");
@@ -285,6 +281,66 @@ function processContentMacros(text: string, ctx: MacroContext, expanded: Set<str
   }
 
   return result;
+}
+
+const MILLISECONDS_PER_HOUR = 3_600_000;
+
+const RUNTIME_MACRO_REGEX = /\{\{(time|date|weekday|isotime|isodate|model|provider|char_version|input)\}\}/gi;
+
+const CLOCK_ONLY: Intl.DateTimeFormatOptions = { year: undefined, month: undefined, day: undefined };
+
+function formatTemporalMacro(name: string, nowMs: number, offsetHours: number): string {
+  const shiftedIso = new Date(nowMs + offsetHours * MILLISECONDS_PER_HOUR).toISOString();
+  switch (name) {
+    case "isodate":
+      return shiftedIso.slice(0, 10);
+    case "isotime":
+      return shiftedIso.slice(11, 16);
+    case "date":
+      return formatDateWithOffset(nowMs, offsetHours);
+    case "weekday":
+      return formatTimeWithOffset(new Date(nowMs), offsetHours, {
+        ...CLOCK_ONLY,
+        hour: undefined,
+        minute: undefined,
+        weekday: "long",
+      });
+    default:
+      return formatTimeWithOffset(new Date(nowMs), offsetHours, { ...CLOCK_ONLY, hour: "numeric", minute: "2-digit" });
+  }
+}
+
+function processRuntimeMacros(text: string, ctx: MacroContext): string {
+  return text.replace(RUNTIME_MACRO_REGEX, (_match, rawName: string) => {
+    const name = rawName.toLowerCase();
+    switch (name) {
+      case "model":
+        return ctx.model;
+      case "provider":
+        return ctx.provider;
+      case "char_version":
+        return ctx.charVersion;
+      case "input":
+        return ctx.lastChatMessage;
+      default:
+        return ctx.utcOffsetHours === null ? "" : formatTemporalMacro(name, ctx.nowMs, ctx.utcOffsetHours);
+    }
+  });
+}
+
+function resolveValueMacros(text: string, vars: Map<string, string>, ctx: MacroContext, expanded: Set<string>): string {
+  return processRuntimeMacros(processContentMacros(processGetVars(text, vars), ctx, expanded), ctx);
+}
+
+const BARE_CONDITION_REGEX = /^[a-z_][\w-]*(?:::[^{}]*)?$/i;
+
+function resolveConditionExpression(expression: string, vars: Map<string, string>, ctx: MacroContext): string {
+  const source = BARE_CONDITION_REGEX.test(expression) ? `{{${expression}}}` : expression;
+  // A condition only tests a value, so it must not count as the expansion that suppresses a native marker.
+  const resolved = resolveValueMacros(source, vars, ctx, new Set<string>())
+    .replace(/\{\{user\}\}/gi, ctx.userName)
+    .replace(/\{\{(?:char|bot)\}\}/gi, ctx.charName);
+  return resolved.replace(GENERIC_MACRO_REGEX, "");
 }
 
 /**
@@ -384,45 +440,26 @@ function mapStRole(stRole: string): "system" | "user" | "model" {
   }
 }
 
-/**
- * Resolve all ST macros in a set of preset nodes using two-pass variable resolution.
- *
- * **Pass 1**: Walk all enabled non-marker nodes in node_order, applying
- * `{{setvar::key::value}}` / `{{addvar::key::value}}` declarations into a shared
- * variable map. `setvar` replaces, `addvar` appends.
- *
- * **Pass 2**: Walk all nodes (including markers), resolving:
- *   - {{getvar::key}} from the variable map
- *   - Content macros ({{personality}}, {{description}}, etc.)
- *   - {{random: A, B, C}} random selection
- *   - {{roll: XdY}} dice rolls
- *   - {{// comments}} stripping
- *   - {{trim}} whitespace trimming
- *   - HTML detection flagging
- *
- * Identity macros ({{user}}, {{char}}, {{bot}}) are left intact for downstream
- * resolution by convertMentions() / replaceTemplateVariables().
- *
- * @param macroContext - Runtime context data for content macro expansion
- * @returns Resolved nodes and set of content macros that were expanded with real data
- */
 export function resolvePresetMacros(
   nodes: StPresetNodeRow[],
   macroContext: MacroContext,
 ): { resolved: ResolvedNode[]; expandedContentMacros: Set<string> } {
   const expandedContentMacros = new Set<string>();
   const globalVars = new Map<string, string>();
+  const selectedText = new Map<StPresetNodeRow, string>();
+  const warn = (message: string) => log.warn(`[ST Preset Engine] ${message}`);
 
-  // ── Pass 1: Collect setvars/addvars from all enabled non-marker nodes ──
-  // Walk in node_order (already sorted from DB query).
-  // If the same key is set by multiple nodes, later declarations win.
+  // Conditions run once against declarations seen so far, while text lookups retain final-value semantics.
   for (const node of nodes) {
     if (!node.is_enabled || node.is_marker || node.is_comment) continue;
-
-    const commentStripped = stripComments(node.content);
-
-    // Extract variable declarations into the shared global map
-    processVarDeclarations(commentStripped, globalVars);
+    selectedText.set(
+      node,
+      renderStConditionals(stripComments(node.content), {
+        resolveCondition: (expression) => resolveConditionExpression(expression, globalVars, macroContext),
+        transformText: (text) => processVarDeclarations(text, globalVars).cleaned,
+        warn,
+      }),
+    );
   }
 
   if (globalVars.size > 0) {
@@ -472,14 +509,7 @@ export function resolvePresetMacros(
       continue;
     }
 
-    content = stripComments(content);
-
-    const { cleaned } = processVarDeclarations(content);
-    content = cleaned;
-
-    content = processGetVars(content, globalVars);
-
-    content = processContentMacros(content, macroContext, expandedContentMacros);
+    content = resolveValueMacros(selectedText.get(node) ?? "", globalVars, macroContext, expandedContentMacros);
 
     content = processRandom(content);
 

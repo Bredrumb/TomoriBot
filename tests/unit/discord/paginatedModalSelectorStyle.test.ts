@@ -143,6 +143,31 @@ describe("promptWithPaginatedModal selectorStyle", () => {
     expect(hasComponentsV2Reply(interaction)).toBe(true);
   });
 
+  it("pages a select that follows a radio group instead of sending all of its options", async () => {
+    const { interaction, calls } = makeInteraction();
+    const select = makeOptions(26, "componentsV2");
+    const options: ModalOptions = {
+      ...select,
+      components: [
+        {
+          kind: "radioGroup",
+          customId: "scope",
+          labelKey: "commands.providers.provider_label",
+          options: [
+            { value: "serverwide", label: "Server-wide" },
+            { value: "persona", label: "Persona" },
+          ],
+        },
+        ...select.components,
+      ],
+    };
+
+    const result = await promptWithPaginatedModal(interaction, "en-US", options);
+
+    expect(result.outcome).toBe("timeout");
+    expect(collectCustomIds(calls[0]?.payload.components).some((id) => id.endsWith("_range_1"))).toBe(true);
+  });
+
   it("titles the selector with the generic page title when no key is passed", async () => {
     const title = localizedCopy("en-US", "general.pagination.select_page_title");
     const label = localizedCopy("en-US", "commands.providers.provider_label");

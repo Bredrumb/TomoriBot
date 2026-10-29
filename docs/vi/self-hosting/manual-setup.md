@@ -41,10 +41,7 @@ Yêu cầu:
 - `CRYPTO_SECRET`: khóa mã hóa 32 ký tự (được sử dụng để mã hóa các khóa API được lưu trữ).
 - Kết nối PostgreSQL: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`.
 
-Giữ một bản sao được bảo vệ của bí mật mã hóa riêng biệt với các bản sao lưu cơ sở dữ liệu. Các bản sao lưu mới không chứa `.env`. Để xoay vòng, hãy sử dụng `CRYPTO_SECRET_V1`, `CRYPTO_SECRET_V2` hoặc bất kỳ phiên bản số nguyên dương nào sau đó, với tùy chọn chọn `CRYPTO_SECRET_CURRENT`. `CRYPTO_SECRET` vẫn là V1. Các lệnh khởi động và bảo trì sẽ tải cùng một nguồn: các giá trị môi trường cục bộ trong quá trình phát triển hoặc JSON được gắn / AWS Secrets Manager trong production. Xem [Xoay vòng khóa mã hóa](/vi/self-hosting/maintenance/#rotating-encryption-keys) trước khi thay thế một bí mật.
-
-Trong các nguồn bí mật JSON, khóa chính phải là chuỗi. `CRYPTO_SECRET_CURRENT` chấp nhận một chuỗi chẳng hạn như `"2"` hoặc một số nguyên an toàn dương như `2` để đặt tên cho một phiên bản khả dụng.
-
+Giữ một bản sao được bảo vệ của bí mật mã hóa riêng biệt với các bản sao lưu cơ sở dữ liệu. Các bản sao lưu mới không chứa `.env`. Để xoay vòng, hãy sử dụng `CRYPTO_SECRET_V1`, `CRYPTO_SECRET_V2` hoặc bất kỳ phiên bản số nguyên dương nào sau đó, với tùy chọn chọn `CRYPTO_SECRET_CURRENT`.
 :::note[No native PostgreSQL?]
 Chỉ chạy cơ sở dữ liệu trong một vùng chứa, sau đó trỏ các giá trị `POSTGRES_*` vào đó:
 
@@ -112,7 +109,7 @@ Sau khi kết nối, hãy chạy:
 CREATE EXTENSION vector;
 ```
 
-Nếu không có pgvector, bot vẫn chạy bình thường nhưng các tính năng RAG sẽ hoàn toàn không khả dụng. Tiện ích mở rộng này cũng bắt buộc phải có trên cơ sở dữ liệu đích trước khi khôi phục bản sao lưu; xem chi tiết tại [Di chuyển an toàn](/vi/self-hosting/safe-migration/).
+Nếu không có pgvector, bot vẫn chạy bình thường nhưng các tính năng RAG sẽ hoàn toàn không khả dụng. Tiện ích mở rộng này cũng bắt buộc phải có trên cơ sở dữ liệu đích trước khi khôi phục bản sao lưu; xem chi tiết tại [Bảo trì và sao lưu](/self-hosting/maintenance/).
 
 ### `pg_cron`: các tác vụ dọn dẹp theo lịch trình
 
@@ -165,4 +162,4 @@ Phương án dự phòng `fetch_url` an toàn và phương án dự phòng `web_
 
 ## Bảo trì, cập nhật và sao lưu
 
-Sau khi cài đặt, các script phía máy chủ lưu trữ (`bun run update`, `bun run backup`, `bun run restore-backup`, `bun run nuke-db`, `bun run rotate-keys`, …) cùng các quy trình cập nhật và sao lưu đều có trên trang [Bảo trì và sao lưu](/vi/self-hosting/maintenance/). Nếu bạn chuẩn bị kéo phiên bản mới về, hãy bắt đầu với [Di chuyển an toàn](/vi/self-hosting/safe-migration/).
+Sau khi cài đặt, các script phía máy chủ lưu trữ (`bun run update`, `bun run backup`, `bun run restore-backup`, `bun run nuke-db`, `bun run rotate-keys`, …) cùng các quy trình cập nhật và sao lưu đều có trên trang [Bảo trì và sao lưu](/vi/self-hosting/maintenance/). Nếu bạn chuẩn bị kéo phiên bản mới về, hãy bắt đầu với [Bảo trì và sao lưu](/self-hosting/maintenance/).

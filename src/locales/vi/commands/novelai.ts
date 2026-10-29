@@ -1,20 +1,6 @@
 export default {
   novelai: {
     description: `Cấu hình tạo văn bản và hình ảnh NovelAI cho máy chủ này.`,
-    "character-reference": {
-      invalid_image_title: `Hình ảnh không hợp lệ`,
-      invalid_image_description: `Vui lòng tải lên tệp ảnh đính kèm để làm tham chiếu nhân vật.`,
-      download_failed_title: `Tải xuống thất bại`,
-      download_failed_description: `Không thể tải xuống tệp ảnh đính kèm đã chọn. Vui lòng thử lại.`,
-      conversion_failed_title: `Chuyển đổi ảnh thất bại`,
-      conversion_failed_description: `Mình không thể chuyển đổi ảnh đó sang định dạng PNG để lưu trữ. Vui lòng thử ảnh khác.`,
-      success_title: `Đã cập nhật tham chiếu nhân vật`,
-      success_me_description: `Đã cập nhật ảnh tham chiếu nhân vật NovelAI của bạn.`,
-      success_persona_description: `Đã cập nhật ảnh tham chiếu nhân vật NovelAI cho **{persona_name}**.`,
-      cleared_title: `Đã xóa tham chiếu nhân vật`,
-      cleared_me_description: `Đã xóa ảnh tham chiếu nhân vật NovelAI của bạn.`,
-      cleared_persona_description: `Đã xóa ảnh tham chiếu nhân vật NovelAI cho **{persona_name}**.`,
-    },
     usage: {
       description: `Xem mức sử dụng lượt tạo NovelAI Opus của máy chủ (cần quyền Quản lý máy chủ).`,
       title: `Mức sử dụng lượt tạo NovelAI Opus`,

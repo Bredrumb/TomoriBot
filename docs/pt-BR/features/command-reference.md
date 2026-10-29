@@ -175,11 +175,11 @@ Vincule canais do Discord a salas do Matrix para retransmissão bidirecional.
 
 ## `/memories`
 
-Inspecione e gerencie memórias do servidor, documentos e memória de curto prazo.
+Inspecione e gerencie memórias do servidor, documentos, lorebooks e memória de curto prazo.
 
 | Comando | Resumo |
 |---|---|
-| `/memories` | Inspecione e gerencie memórias do servidor, documentos e memória de curto prazo. |
+| `/memories` | Inspecione e gerencie memórias do servidor, documentos, lorebooks e memória de curto prazo. |
 
 ## `/model`
 

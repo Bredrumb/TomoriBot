@@ -3,15 +3,13 @@ title: "MOSS-TTS"
 aiGenerated: true
 ---
 
-Avalie localmente a clonagem de voz e o design de voz em linguagem natural por meio de um endpoint de fala unificado usando [MOSS-TTS](https://github.com/OpenMOSS/MOSS-TTS).
+Avalie a clonagem de voz e o design de voz em linguagem natural localmente por meio de um endpoint de fala unificado usando o [MOSS-TTS](https://github.com/OpenMOSS/MOSS-TTS).
 
-Usando `servers/tts/moss/server.py`, TomoriBot roteia solicitações de síntese dinamicamente: ele carrega o modelo clone quando uma persona fornece `ref_audio` e muda para MOSS-VoiceGenerator quando recebe orientação `instruct` em linguagem natural. Apenas um modelo é mantido na memória da GPU por vez para funcionar dentro de orçamentos de VRAM de 16 GB.
-
-O modelo de clone padrão é [MOSS-TTS-Local-Transformer-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5) (4B), selecionado como linha de base prática para GPUs de 16 GB. [MOSS-TTS-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-v1.5) é uma alternativa carro-chefe de 8B que requer mais VRAM no BF16. O design de voz usa [MOSS-VoiceGenerator](https://huggingface.co/OpenMOSS-Team/MOSS-VoiceGenerator) (aproximadamente 1,7B). A troca entre clonagem e design de voz incorre em um atraso no carregamento do modelo.
+O modelo padrão de clonagem de 4B e o VoiceGenerator de 1,7B alternam na memória da GPU quando o modo de voz muda, de modo que a primeira solicitação após uma troca leva mais tempo. O modelo de clonagem de 8B requer mais VRAM.
 
 ## Configuração
 
-Execute comandos da raiz do repositório TomoriBot usando Python 3.12 e um driver compatível com CUDA 12.8:
+Execute os comandos a partir da raiz do repositório do TomoriBot usando Python 3.12 e um driver compatível com CUDA 12.8:
 
 ### Windows PowerShell
 
@@ -37,18 +35,18 @@ python servers/tts/moss/prefetch_models.py
 python servers/tts/moss/server.py
 ```
 
-O comando de pré-busca baixa o modelo clone, VoiceGenerator e tokenizers de áudio em seu cache Hugging Face antes de iniciar o servidor. Se o espaço em disco for limitado, configure `HF_HOME` para uma partição maior. Para baixar apenas um modelo, passe `--mode clone` ou `--mode voice-design`.
+O comando de pré-download baixa o modelo de clonagem, o VoiceGenerator e os tokenizadores de áudio para o cache do Hugging Face antes de iniciar o servidor. Se o espaço em disco for limitado, configure `HF_HOME` para uma partição com mais capacidade. Para baixar apenas um modelo, passe `--mode clone` ou `--mode voice-design`.
 
-O terminal padrão é `http://127.0.0.1:8018`. Execute `bun run launch --moss` para iniciar o servidor junto com TomoriBot. O modo automático pré-aquece o modelo clone do cache local. Em vez disso, defina `MOSS_TTS_WARM_MODE=voice-design` para pré-aquecer o VoiceGenerator ou `MOSS_TTS_WARM_MODE=none` para inicialização lenta. Verifique `GET /health` para `warm_mode`, `active_mode` e `model_id` ativos. O wrapper usa Hugging Face `trust_remote_code=True`, portanto revise o código upstream antes das atualizações.
+O endpoint padrão é `http://127.0.0.1:8018`. Execute `bun run launch --moss` para iniciar o servidor juntamente com o TomoriBot. O modo Auto pré-aquece o modelo de clonagem a partir do cache local. Defina `MOSS_TTS_WARM_MODE=voice-design` para pré-aquecer o VoiceGenerator em vez disso, ou `MOSS_TTS_WARM_MODE=none` para inicialização sob demanda (lazy). Verifique em `GET /health` os valores de `warm_mode`, `active_mode` e `model_id` ativos. O wrapper utiliza `trust_remote_code=True` do Hugging Face, portanto revise o código upstream antes de realizar atualizações.
 
 ## Registrar no TomoriBot
 
-Em `/providers`, escolha `Add New Custom Endpoint`, defina Compatibilidade API como `tts-clone` e use o URL do terminal `http://127.0.0.1:8018`. Adicione um modelo de fala com `Modo de Fonte de Voz` definido como `Automático` e `Script Markup` definido como `Simples`. Ative-o em `/config` > `Modelos` > Switch Models.
+Em `/providers`, selecione `Adicionar Novo Endpoint Personalizado`, defina a Compatibilidade de API como `tts-clone` e utilize a URL de endpoint `http://127.0.0.1:8018`. Adicione um modelo de Fala com `Modo de Origem de Voz` configurado como `Auto` e `Marcação de Script` configurada como `Plain`. Ative-o em `/config` > Modelos > Alternar Modelos.
 
-Para clonagem de voz, carregue um clipe de referência limpo em `/config` > `Modelos` > TTS Parâmetros e vozes e atribua-o em Persona > `Voz`. Clipes de áudio mais curtos e limpos produzem resultados mais consistentes. Para design de voz, salve uma descrição em linguagem natural em Persona > `Voz`. Observe que o MOSS-VoiceGenerator foi projetado para inglês e chinês. Embora o modelo clone 4B suporte o japonês, as tags de idioma explícitas melhoram a clareza da síntese.
+Para clonagem de voz, envie um clipe de referência limpo em `/config` > Modelos > Parâmetros de TTS e Vozes e atribua-o em Persona > Voz. Clipes de áudio mais curtos e limpos proporcionam resultados mais consistentes. Para design de voz, salve uma descrição em linguagem natural em Persona > Voz. Observe que o MOSS-VoiceGenerator foi projetado para inglês e chinês. Embora o modelo de clonagem de 4B suporte japonês, tags explícitas de idioma aumentam a clareza da síntese.
 
-O adaptador clone do TomoriBot não envia tags de idioma automaticamente. Para uso em um único idioma, defina `MOSS_TTS_DEFAULT_LANGUAGE=Japanese` (ou `Português (Brasil)`, `Chinese`, etc.) antes de iniciar o servidor. Chamadas `/synthesize` manuais podem passar `language` diretamente.
+O adaptador de clonagem do TomoriBot não envia tags de idioma automaticamente. Para uso com um único idioma, defina `MOSS_TTS_DEFAULT_LANGUAGE=Japanese` (ou `English`, `Chinese`, etc.) antes de iniciar o servidor. Chamadas manuais para `/synthesize` podem passar `language` diretamente.
 
-O servidor lê seu próprio ambiente shell; as configurações no `.env` do bot não se aplicam a um terminal Python iniciado de forma independente.
+O servidor lê seu próprio ambiente de shell; configurações no `.env` do bot não se aplicam a um terminal Python iniciado de forma independente.
 
-Para executar o modelo 8B em hardware com muita memória, defina `MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5` antes da pré-busca. `MOSS_TTS_PORT`, `MOSS_TTS_DEVICE`, `MOSS_TTS_DTYPE` e `MOSS_TTS_MAX_NEW_TOKENS` são configuráveis em `.env.optional.example`. Aumente `TTS_SYNTHESIZE_TIMEOUT_MS` em TomoriBot se trocas de modelo ou execução de CPU causarem tempos limite.
+Para executar o modelo de 8B em hardware com grande quantidade de memória, defina `MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5` antes de realizar o pré-download. `MOSS_TTS_PORT`, `MOSS_TTS_DEVICE`, `MOSS_TTS_DTYPE` e `MOSS_TTS_MAX_NEW_TOKENS` são configuráveis no arquivo `.env.optional.example`. Aumente o valor de `TTS_SYNTHESIZE_TIMEOUT_MS` no TomoriBot se a alternância de modelos ou a execução em CPU causar estouro do tempo limite.

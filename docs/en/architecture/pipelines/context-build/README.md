@@ -32,7 +32,7 @@ buildContext(BuildContextParams)
 
 Native assembly always runs first. If a SillyTavern preset is active for the server and the current turn is not a user impersonation, the pipeline passes the native items into `reassembleWithPreset` in `src/utils/text/presetContextBuilder.ts` to arrange them into preset sections. Otherwise, the native build is returned directly.
 
-Both paths finish by passing the assembled output through `resolveRandomChoiceMacrosInBuildOutput`, which resolves `{{random:a::b}}` and `{random::a::b}` choices across all emitted text.
+Both paths finish by passing the assembled output through `resolveRandomChoiceMacrosInBuildOutput`, which resolves `{{random:a::b}}` and `{random::a::b}` choices across emitted text. Lorebook blocks are exempt because their content resolves identity macros only.
 
 ## Stages
 

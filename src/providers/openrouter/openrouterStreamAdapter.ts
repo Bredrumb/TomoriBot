@@ -162,6 +162,8 @@ interface OpenrouterStreamChunk {
     total_tokens?: number;
     completionTokensDetails?: unknown;
     completion_tokens_details?: unknown;
+    promptTokensDetails?: unknown;
+    prompt_tokens_details?: unknown;
     cost?: number;
   };
   error?:
@@ -1512,6 +1514,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                 ? rawUsage.total_tokens
                 : undefined,
           completionTokensDetails: rawUsage.completionTokensDetails ?? rawUsage.completion_tokens_details,
+          promptTokensDetails: rawUsage.promptTokensDetails ?? rawUsage.prompt_tokens_details,
           cost:
             typeof rawUsage.cost === "number" && Number.isFinite(rawUsage.cost) && rawUsage.cost >= 0
               ? rawUsage.cost
@@ -1729,6 +1732,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         completionTokens: usage.completionTokens ?? usage.completion_tokens,
         totalTokens: usage.totalTokens ?? usage.total_tokens,
         completionTokensDetails: usage.completionTokensDetails ?? usage.completion_tokens_details,
+        promptTokensDetails: usage.promptTokensDetails ?? usage.prompt_tokens_details,
         cost: usage.cost,
       };
 

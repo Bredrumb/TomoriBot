@@ -1,3 +1,10 @@
+import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
+import { taggedMemoryToLorebook, splitLegacyMemoryTags } from "@/modules/lorebooks/imports";
+import {
+  lorebookEntryInputSchema,
+  LOREBOOK_ENTRIES_PER_SCOPE_MAX,
+  type LorebookEntryInput,
+} from "@/modules/lorebooks/db/types";
 import { validateDraftingImportReferences } from "@/utils/discord/interactions/responseDraftingOperations";
 import { loadStructuredOutputModelGroups } from "@/utils/discord/interactions/configModelOperations";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
@@ -6,7 +13,7 @@ import { invalidateNaturalNudgeConfigCache } from "@/modules/natural-nudges/runt
 import { isKnownPrerequisite, isNudgeToolName } from "@/modules/natural-nudges/runtime/idleNudges";
 import { sql } from "@/utils/db/client";
 import { loadDecisionModelsForScope } from "@/providers/utils/providerFeatureExecutors";
-import type { SQL } from "bun";
+import type { SQL, TransactionSQL } from "bun";
 import { log } from "@/utils/misc/logger";
 import {
   EXPORT_VERSION,
@@ -68,19 +75,51 @@ interface ImportValidationResult {
   error?: string;
 }
 
-type MemoryRow = { content: string; tags: string[] | null };
+type MemoryRow = {
+  content: string;
+  tags: string[] | null;
+  channel_disc_ids?: string[];
+  legacy_channel_tags?: string[];
+};
 
-/**
- * Drops `#channel` tags from an incoming server memory: older exports carry them as channel filters,
- * and with scopes stored as channel IDs they would otherwise read as keyword tags.
- */
 function withoutLegacyChannelTags(memory: MemoryItem): MemoryItem {
-  return { ...memory, tags: memory.tags.filter((tag) => !tag.replace(/^["']+|["']+$/g, "").startsWith("#")) };
+  const { keys, channelTags } = splitLegacyMemoryTags(memory.tags);
+  return {
+    ...memory,
+    tags: keys,
+    legacy_channel_tags: [...new Set([...(memory.legacy_channel_tags ?? []), ...channelTags])],
+  };
+}
+
+async function insertImportedServerMemory(
+  tx: TransactionSQL,
+  serverId: number,
+  personaId: number | null,
+  lineageId: number,
+  userId: number | null,
+  memory: MemoryItem,
+): Promise<void> {
+  const [row] =
+    await tx`INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, channel_disc_ids)
+    VALUES (${serverId}, ${personaId}, ${lineageId}, ${userId}, ${memory.content}, ${tx.array(memory.channel_disc_ids ?? [], "TEXT")})
+    RETURNING server_memory_id`;
+  if (memory.legacy_channel_tags?.length) {
+    await tx`INSERT INTO legacy_channel_scope_tags (source_table, row_id, server_id, channel_tags)
+      VALUES ('server_memories', ${row.server_memory_id}, ${serverId}, ${tx.array(memory.legacy_channel_tags, "TEXT")})`;
+  }
 }
 
 function memoryKey(memory: MemoryItem): string {
   const normalized = normalizeMemoryItem(memory);
   return `${normalized.content}\u0000${normalized.tags.join("\u0000")}`;
+}
+
+function serverMemoryKey(memory: MemoryItem): string {
+  return JSON.stringify([
+    normalizeMemoryItem({ content: memory.content, tags: [] }).content,
+    [...(memory.channel_disc_ids ?? [])].sort(),
+    [...(memory.legacy_channel_tags ?? [])].sort(),
+  ]);
 }
 
 export type WorkspaceConfigSection = keyof WorkspaceConfigExportData;
@@ -797,7 +836,7 @@ class ImportRepository {
   ): Promise<ImportResult> {
     try {
       const physicalAppearanceTags = importData.physical_appearance_tags ?? [];
-      const naiCharRefUrl = importData.nai_char_ref_url ?? null;
+      const charRefUrl = importData.char_ref_url ?? null;
       const impersonationPrompt = importData.impersonation_prompt ?? null;
 
       const updateResult = await sql.begin(async (tx) => {
@@ -843,7 +882,7 @@ class ImportRepository {
             shortterm_cache_crossserver_opt_in,
             natural_nudge_opt_out,
             physical_appearance_tags,
-            nai_char_ref_url,
+            char_ref_url,
             impersonation_prompt,
             personal_dtm,
             personal_deliberate_tool_mode,
@@ -859,7 +898,7 @@ class ImportRepository {
             ${importData.shortterm_cache_crossserver_opt_in ?? false},
             ${importData.natural_nudge_opt_out ?? false},
             ${sql.array(physicalAppearanceTags, "TEXT")},
-            ${naiCharRefUrl},
+            ${charRefUrl},
             ${impersonationPrompt},
             ${importData.personal_dtm ?? "follow"},
             ${importData.personal_deliberate_tool_mode ?? "follow"},
@@ -875,7 +914,7 @@ class ImportRepository {
             shortterm_cache_crossserver_opt_in = COALESCE(${importData.shortterm_cache_crossserver_opt_in ?? null}, user_personalization_configs.shortterm_cache_crossserver_opt_in),
             natural_nudge_opt_out = COALESCE(${importData.natural_nudge_opt_out ?? null}, user_personalization_configs.natural_nudge_opt_out),
             physical_appearance_tags = EXCLUDED.physical_appearance_tags,
-            nai_char_ref_url = EXCLUDED.nai_char_ref_url,
+            char_ref_url = EXCLUDED.char_ref_url,
             impersonation_prompt = EXCLUDED.impersonation_prompt,
             personal_dtm = COALESCE(${importData.personal_dtm ?? null}, user_personalization_configs.personal_dtm),
             personal_deliberate_tool_mode = COALESCE(${importData.personal_deliberate_tool_mode ?? null}, user_personalization_configs.personal_deliberate_tool_mode),
@@ -922,7 +961,7 @@ class ImportRepository {
       let fieldsCount = 2;
       if (impersonationPrompt) fieldsCount++;
       if (physicalAppearanceTags.length > 0) fieldsCount++;
-      if (naiCharRefUrl) fieldsCount++;
+      if (charRefUrl) fieldsCount++;
       if (importData.privacy_level !== undefined) fieldsCount++;
       if (importData.personal_dtm !== undefined) fieldsCount++;
       if (importData.personal_deliberate_tool_mode !== undefined) fieldsCount++;
@@ -1219,6 +1258,8 @@ class ImportRepository {
     serverDiscId: string,
     incomingMemories: MemoryItem[],
     target: { mode: "persona"; personaId?: number } | { mode: "global" },
+    lorebookEntries?: LorebookEntryInput[],
+    serverwideEntries?: LorebookEntryInput[],
   ): Promise<ImportResult> {
     const memories = incomingMemories.map(withoutLegacyChannelTags);
     try {
@@ -1272,35 +1313,36 @@ class ImportRepository {
         return { success: false, error: "commands.data.import.error_no_server_data" };
       }
 
-      await sql`
-        DELETE FROM server_memories
-        WHERE server_id = ${serverId}
-          AND persona_lineage_id = ${targetPersonaLineageId}
-      `;
-
-      if (memories.length === 0) {
-        return { success: true, itemsImported: { memoriesCount: 0 } };
-      }
-
-      const userRows = await sql<Array<{ user_id: number }>>`
-        SELECT u.user_id
-        FROM users u
-        LIMIT 1
-      `;
-
-      if (!userRows.length) {
-        return { success: false, error: "commands.data.import.error_no_users" };
-      }
-
-      const userId = userRows[0].user_id;
-
-      for (const memory of memories) {
-        await sql`
-          INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, tags)
-          VALUES (${serverId}, ${insertTomoriId}, ${targetPersonaLineageId}, ${userId}, ${memory.content}, ${sql.array(memory.tags, "TEXT")})
-        `;
-      }
-
+      const [config] =
+        await sql`SELECT memory_tagging_enabled FROM server_memory_configs WHERE server_id = ${serverId}`;
+      const converted = memories.flatMap((memory) => {
+        const entry = taggedMemoryToLorebook(memory, config?.memory_tagging_enabled === true);
+        return entry ? [entry] : [];
+      });
+      const plain = memories.filter((memory) => memory.tags.length === 0);
+      await sql.begin(async (tx) => {
+        await tx`SELECT server_id FROM servers WHERE server_id = ${serverId} FOR UPDATE`;
+        const result = await lorebookRepository.importEntries(
+          serverId,
+          targetPersonaLineageId,
+          lorebookEntries,
+          converted,
+          tx,
+        );
+        if (result !== "replaced") throw new Error(`Server lorebook import failed: ${result}`);
+        if (
+          serverwideEntries !== undefined &&
+          (await lorebookRepository.replaceScopeEntries(serverId, null, serverwideEntries, tx)) !== "replaced"
+        ) {
+          throw new Error("Serverwide lorebook import failed");
+        }
+        await tx`DELETE FROM legacy_channel_scope_tags l USING server_memories sm
+          WHERE l.source_table = 'server_memories' AND l.row_id = sm.server_memory_id
+            AND sm.server_id = ${serverId} AND sm.persona_lineage_id = ${targetPersonaLineageId}`;
+        await tx`DELETE FROM server_memories WHERE server_id = ${serverId} AND persona_lineage_id = ${targetPersonaLineageId}`;
+        for (const memory of plain)
+          await insertImportedServerMemory(tx, serverId, insertTomoriId, targetPersonaLineageId, null, memory);
+      });
       return { success: true, itemsImported: { memoriesCount: memories.length } };
     } catch (error) {
       log.error(`Error importing server memories for server ${serverDiscId}:`, error);
@@ -1323,7 +1365,7 @@ class ImportRepository {
       language_pref: importData.language_pref,
       impersonation_prompt: importData.impersonation_prompt ?? null,
       physical_appearance_tags: [],
-      nai_char_ref_url: null,
+      char_ref_url: null,
       persona_naming_preferences: [],
     });
     if (!settingsResult.success) return settingsResult;
@@ -1356,10 +1398,16 @@ class ImportRepository {
     const configResult = await this.sqlImportServerConfig(serverDiscId, importData.config);
     if (!configResult.success) return configResult;
 
-    const memoriesResult = await this.sqlImportServerMemories(serverDiscId, importData.server_memories, {
-      mode: "persona",
-      personaId,
-    });
+    const memoriesResult = await this.sqlImportServerMemories(
+      serverDiscId,
+      importData.server_memories,
+      {
+        mode: "persona",
+        personaId,
+      },
+      importData.lorebook_entries,
+      importData.serverwide_lorebook_entries,
+    );
     if (!memoriesResult.success) return memoriesResult;
 
     return {
@@ -1374,8 +1422,14 @@ class ImportRepository {
   async importWorkspaceMemoryBundle(
     serverDiscId: string,
     importerUserDiscId: string,
-    mappings: ReadonlyArray<{ bucketName: string; personaId: number; memories: MemoryItem[] }>,
+    mappings: ReadonlyArray<{
+      bucketName: string;
+      personaId: number;
+      memories: MemoryItem[];
+      lorebook_entries?: LorebookEntryInput[];
+    }>,
     strategy: "merge" | "replace",
+    serverwideEntries?: LorebookEntryInput[],
   ): Promise<ImportResult> {
     try {
       if (mappings.length === 0) return { success: false, error: "commands.data.import.error_update_failed" };
@@ -1392,9 +1446,17 @@ class ImportRepository {
         personaId: number;
         personaLineageId: number;
         memories: MemoryItem[];
+        lorebookEntries?: LorebookEntryInput[];
+        convertedEntries: LorebookEntryInput[];
       }> = [];
       let memoriesInserted = 0;
       let memoriesSkipped = 0;
+      const [config] =
+        await sql`SELECT memory_tagging_enabled FROM server_memory_configs WHERE server_id = ${serverId}`;
+      const loreSchema = lorebookEntryInputSchema.array().max(LOREBOOK_ENTRIES_PER_SCOPE_MAX);
+      if (serverwideEntries !== undefined && !loreSchema.safeParse(serverwideEntries).success) {
+        return { success: false, error: "commands.data.import.error_update_failed" };
+      }
 
       for (const mapping of mappings) {
         const [persona] = await sql<Array<{ persona_id: number; persona_lineage_id: number | string | bigint }>>`
@@ -1425,8 +1487,16 @@ class ImportRepository {
         }
         destinations.add(personaLineageId);
 
-        const mappingMemories = mapping.memories.map(withoutLegacyChannelTags);
-        for (const memory of mappingMemories) {
+        if (mapping.lorebook_entries !== undefined && !loreSchema.safeParse(mapping.lorebook_entries).success) {
+          return { success: false, error: "commands.data.import.error_update_failed" };
+        }
+        const incoming = mapping.memories.map(withoutLegacyChannelTags);
+        const convertedEntries = incoming.flatMap((memory) => {
+          const entry = taggedMemoryToLorebook(memory, config?.memory_tagging_enabled === true);
+          return entry ? [entry] : [];
+        });
+        const mappingMemories = incoming.filter((memory) => memory.tags.length === 0);
+        for (const memory of incoming) {
           const validation = validateMemoryContent(memory.content);
           if (!validation.isValid) {
             return {
@@ -1440,17 +1510,17 @@ class ImportRepository {
         let existingRows: MemoryRow[] = [];
         if (strategy === "merge") {
           existingRows = await sql<MemoryRow[]>`
-            SELECT content, tags
+            SELECT content, tags, channel_disc_ids,
+              (SELECT channel_tags FROM legacy_channel_scope_tags l WHERE l.source_table = 'server_memories'
+                AND l.row_id = server_memories.server_memory_id AND l.resolved_at IS NULL) AS legacy_channel_tags
             FROM server_memories
             WHERE server_id = ${serverId}
               AND persona_lineage_id = ${personaLineageId}
           `;
-          const existingMemories = new Set(
-            existingRows.map((row) => memoryKey({ content: row.content, tags: row.tags ?? [] })),
-          );
+          const existingMemories = new Set(existingRows.map((row) => serverMemoryKey({ ...row, tags: [] })));
           const incomingMemories = new Set<string>();
           memoriesToInsert = mappingMemories.filter((memory) => {
-            const key = memoryKey(memory);
+            const key = serverMemoryKey(memory);
             if (existingMemories.has(key) || incomingMemories.has(key)) return false;
             incomingMemories.add(key);
             return true;
@@ -1476,13 +1546,33 @@ class ImportRepository {
           personaId: persona.persona_id,
           personaLineageId,
           memories: memoriesToInsert,
+          lorebookEntries: mapping.lorebook_entries,
+          convertedEntries,
         });
       }
 
       let memoriesDeleted = 0;
-      await sql.begin(async (tx: SQL) => {
+      await sql.begin(async (tx) => {
+        await tx`SELECT server_id FROM servers WHERE server_id = ${serverId} FOR UPDATE`;
+        if (
+          serverwideEntries !== undefined &&
+          (await lorebookRepository.replaceScopeEntries(serverId, null, serverwideEntries, tx)) !== "replaced"
+        ) {
+          throw new Error("Serverwide lorebook import failed");
+        }
         for (const mapping of preparedMappings) {
+          const result = await lorebookRepository.importEntries(
+            serverId,
+            mapping.personaLineageId,
+            mapping.lorebookEntries,
+            mapping.convertedEntries,
+            tx,
+          );
+          if (result !== "replaced") throw new Error(`Persona lorebook import failed: ${result}`);
           if (strategy === "replace") {
+            await tx`DELETE FROM legacy_channel_scope_tags l USING server_memories sm
+              WHERE l.source_table = 'server_memories' AND l.row_id = sm.server_memory_id
+                AND sm.server_id = ${serverId} AND sm.persona_lineage_id = ${mapping.personaLineageId}`;
             const deletedRows = await tx<Array<{ server_memory_id: number }>>`
               DELETE FROM server_memories
               WHERE server_id = ${serverId}
@@ -1492,10 +1582,14 @@ class ImportRepository {
             memoriesDeleted += deletedRows.length;
           }
           for (const memory of mapping.memories) {
-            await tx`
-              INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, tags)
-              VALUES (${serverId}, ${mapping.personaId}, ${mapping.personaLineageId}, ${importerUserId}, ${memory.content}, ${sql.array(memory.tags, "TEXT")})
-            `;
+            await insertImportedServerMemory(
+              tx,
+              serverId,
+              mapping.personaId,
+              mapping.personaLineageId,
+              importerUserId,
+              memory,
+            );
           }
         }
       });

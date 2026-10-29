@@ -118,6 +118,7 @@ Từ kích hoạt: {trigger_word_count}`,
       avatar_update_rate_limited: `🟡 Avatar máy chủ không được cập nhật do giới hạn tốc độ của Discord. Vui lòng đổi thủ công.`,
       avatar_update_failed: `🟡 Không thể cập nhật avatar máy chủ, có thể do giới hạn tốc độ của Discord. Vui lòng đổi thủ công.`,
       alter_success_title: `🟢 Nhập persona alter thành công`,
+      lorebook_count: `Số mục lorebook đã nhập: {count}`,
       alter_success_description: `Đã nhập thành công persona alter **{nickname}**!
 Từ kích hoạt duy nhất: {trigger_count}
 Từ kích hoạt: {triggers}
@@ -125,10 +126,9 @@ Từ kích hoạt: {triggers}
 Persona này sẽ phản hồi khi các từ kích hoạt xuất hiện.`,
       alter_success_confirmation: `Đã nhập thành công persona alter **{nickname}** với {trigger_count} từ kích hoạt duy nhất! Thông tin nhập chi tiết đã được gửi trong kênh.`,
       alter_avatar_fallback_main: `🟡 Bản nhập này không có ảnh avatar, nên alter này sẽ dùng tạm avatar persona chính của **{nickname}**. Bạn có thể dùng \`/config\` > Persona > General để thay đổi.`,
-      alter_avatar_warning: `⚠️ Đừng xóa khung nhúng ảnh avatar ở trên, nếu không avatar của persona alter sẽ bị mất.`,
       alter_dm_not_allowed_title: `🔴 Không cho phép persona alter trong DM`,
       alter_dm_not_allowed_description: `Persona alter chỉ có thể được nhập trong máy chủ, không hỗ trợ trong tin nhắn trực tiếp. Vui lòng chạy lệnh này trong một máy chủ.`,
-      alter_no_triggers_warning: `⚠️ Persona này không có từ kích hoạt nào. Persona sẽ không phản hồi tin nhắn nào cho đến khi bạn thêm từ kích hoạt bằng \`/config\` > Persona > General.`,
+      alter_no_triggers_warning: `Persona này không có từ kích hoạt nào. Persona sẽ không phản hồi tin nhắn nào cho đến khi bạn thêm từ kích hoạt bằng \`/config\` > Persona > General.`,
       alter_name_conflict_title: `🔴 Tên persona đã tồn tại`,
       alter_name_conflict_description: `Một persona có tên **{name}** đã tồn tại trên máy chủ này. Mỗi persona phải có một tên riêng biệt.
 
@@ -325,7 +325,7 @@ Hoặc nhấn nút Nhập`,
         character_desc_label: `Mô tả nhân vật`,
         character_desc_placeholder: `Mô tả nhân vật của bạn (tính cách, ngoại hình, tiểu sử, v.v.)`,
         example_user_label: `Tin nhắn mẫu của người dùng`,
-        example_user_description: `Mẹo: Thêm nhiều hơn bằng cách dùng /persona sample-dialogue add sau`,
+        example_user_description: `Mẹo: Thêm nhiều hơn tại /config > Persona > Danh tính & Tính cách sau`,
         example_user_placeholder: `Chào {bot}!`,
         example_bot_label: `Phản hồi mẫu của bot`,
         example_bot_placeholder: `Xin chào {user}! Bạn khỏe không?`,

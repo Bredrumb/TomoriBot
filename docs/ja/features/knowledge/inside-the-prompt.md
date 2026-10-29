@@ -9,7 +9,7 @@ TomoriBotをトリガーするたびに、以下が組み立てられ、メイ�
 
 | ブロック | オプションですか？ | コマンド | それは何ですか |
 |---|---|---|---|
-| [システムプロンプト](/ja/features/chatting-personality/behavior-tweaking/#system-prompt) |  | `/config` > エンジン > 一般 | コンテキストの最上部にある基本的な指示。|
+| [システムプロンプト](/ja/features/chatting-personality/behavior-tweaking/#system-prompt) |  | `/config` > 動作 > 一般的な動作 | コンテキストの最上部にある基本的な指示。|
 
 > **デフォルトのシステムプロンプトテキスト**: サーバー システムプロンプトが設定されていない場合にのみ使用されます。>
 > *「あなたは {bot} です。{bot} はデフォルトで短く簡潔に応答します。{bot} は状況に応じてのみ長い応答をします。>
@@ -27,12 +27,13 @@ TomoriBotをトリガーするたびに、以下が組み立てられ、メイ�
 | [サーバー絵文字](/ja/features/chatting-personality/behavior-tweaking/#capabilities-what-shes-allowed-to-do) | *(オプション)* | `/config` > `プラグイン` > `コンテキストの追加` (`返答での絵文字`) (切り替えのみ)、`/expressions initialize`で初期化 | サーバーに存在するカスタム絵文字。|
 | [サーバースタンプ](/ja/features/chatting-personality/behavior-tweaking/#expressions) | *(オプション)* | `/config` > `プラグイン` > `利用可能なツール` (`スタンプ使用`法)、`/expressions initialize`でネイティブアセットを分類、`/expressions manage`で管理 | 送信可能なネイティブスタンプと、名前、説明、感情を含む、応答するペルソナに適したすべてのカスタム表現。メディアソースと個人のアクセスルールはプロンプトの範囲外にあります。|
 | [ペルソナスプライト](/ja/features/chatting-personality/multiple-personas/#sprites-emotion-avatars) | *(オプション)* | `/config` > `ペルソナ` > スプライト | ペルソナ用に構成された名前付き式スプライト (存在する場合)。|
-| [会話の参加者](/ja/features/knowledge/memory/#personal-vs-server-memories) | *(オプション)* | `/personal memories` (`/config` > `権限` (パーソナライゼーション) によってゲートされます) | 会話に参加している人々、ニックネームとメンションハンドル、および各メンバーについて保存された個人的な思い出。その人がコンテキスト内でメッセージを所有している場合、またはその人の名前/エイリアスが言及された場合にロードされます。また、`/config` > エンジン > 一般を使用すると、現在のチャンネルと現地時刻がフッターとして表示されます。|
+| [会話の参加者](/ja/features/knowledge/memory/#personal-vs-server-memories) | *(オプション)* | `/personal memories` (`/config` > `権限` (パーソナライゼーション) によってゲートされます) | 会話に参加している人々、ニックネームとメンションハンドル、および各メンバーについて保存された個人的な思い出。その人がコンテキスト内でメッセージを所有している場合、またはその人の名前/エイリアスが言及された場合にロードされます。また、`/config` > 動作 > 一般的な動作を使用すると、現在のチャンネルと現地時刻がフッターとして表示されます。|
 | [短期記憶](/ja/features/knowledge/memory/#short-term-memory-stm) |  | `/config` > `ペルソナ` > 思い出; `/memories`エントリをクリアします。`/config` > `権限` (短期記憶) によってゲートされる | さまざまなチャネルの概要と最近のメッセージが含まれています |
 | [`ドキュメント`](/ja/features/knowledge/memory/#document-knowledge-base-rag) | *(オプション)* | `/memories` | RAGを使用してナレッジベースから取得された関連チャンク。|
 | [コンディショニング](/ja/features/knowledge/memory/#conditioning) | *(任意)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`; `/conditioning remove`で管理 | このサーバーでペルソナに蓄積された行動の傾向。 |
 | [サンプルダイアログ](/ja/features/chatting-personality/multiple-personas/#sample-dialogues) | *(オプション)* | `/config` > `ペルソナ` > `アイデンティティと性格` | このペルソナがどのように話すかの例 (設定されている場合)。|
-| [最近のメッセージ](/ja/features/chatting-personality/behavior-tweaking/#generation-tuning) |  | `/config` > エンジン > 一般 | 実際の会話、最大この数のメッセージ (デフォルトは80)。コンテキストノートと再会ノートは、独自の別個のブロックとしてではなく、構成可能な深さでこのブロック内にインラインで挿入されます。|
+| [最近のメッセージ](/ja/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > 動作 > 一般的な動作 | 実際の会話、最大この数のメッセージ（デフォルトは80）。 |
+| コンテキストノート | *(任意)* | `/config` > 動作 > 一般的な動作、ペルソナ > 高度、または チャンネル > チャンネルオーバーライド | 最新メッセージから指定した深さで最近のメッセージの中に挿入される指示。 |
 
 *(オプション)* とマークされた行は、何も言うことがない場合には何も貢献しません (トークンもかかりません)。一致するドキュメントがないか、サーバーにカスタム絵文字がありません。
 

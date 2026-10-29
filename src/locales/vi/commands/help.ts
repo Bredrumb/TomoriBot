@@ -93,8 +93,8 @@ export default {
         short_term_memory_description: `Ghi chú tạm thời của mình về cuộc trò chuyện này`,
         rewards_punishments: `Thưởng và phạt`,
         rewards_punishments_description: `Các tương tác mình chú ý và ghi nhớ`,
-        memory_tagging: `Gắn thẻ bộ nhớ (nâng cao)`,
-        memory_tagging_description: `Chỉ gọi bộ nhớ dậy khi thực sự liên quan`,
+        memory_tagging: `Gắn thẻ bộ nhớ cá nhân (nâng cao)`,
+        memory_tagging_description: `Chỉ gọi bộ nhớ cá nhân dậy khi thực sự liên quan`,
         blacklisting: `Đưa vào danh sách đen`,
         blacklisting_description: "Khiến mình bỏ qua hoàn toàn một thành viên",
       },
@@ -235,7 +235,7 @@ Dùng {helpCustomModels} để xem hướng dẫn đầy đủ, các loại endp
       zai_title: `Thiết lập API key cho Z.ai`,
       zai_description: `Z.ai cung cấp dòng GLM qua API chung và endpoint lập trình riêng.
 
-⚠️ **Cập nhật điều khoản:** Điều khoản Z.ai chỉ cho phép dùng cho lập trình/agent. Dùng endpoint chung cho chat thông thường có thể vi phạm điều khoản.`,
+🟡 **Cập nhật điều khoản:** Điều khoản Z.ai chỉ cho phép dùng cho lập trình/agent. Dùng endpoint chung cho chat thông thường có thể vi phạm điều khoản.`,
       zai_getting_key_title: `Lấy API key của bạn:`,
       zai_getting_key_description: `1. Mở [nền tảng Z.ai](https://z.ai)
 2. Đăng nhập hoặc tạo một tài khoản
@@ -245,7 +245,7 @@ Dùng {helpCustomModels} để xem hướng dẫn đầy đủ, các loại endp
       zai_important_title: `Lưu ý quan trọng:`,
       zai_important_description: `- Dùng endpoint chung cho chat, suy luận và tạo ảnh gốc
   - Endpoint Coding riêng chỉ dành cho tác vụ lập trình
-  - ⚠️ Z.ai giới hạn sử dụng cho lập trình/agent, tự chịu rủi ro khi dùng để chat/nhập vai`,
+  - 🟡 Z.ai giới hạn sử dụng cho lập trình/agent, tự chịu rủi ro khi dùng để chat/nhập vai`,
       zai_footer: `Sau khi thiết lập, bạn có thể đổi model mặc định bằng {configModel}`,
       novelai_title: `Thiết lập API key cho NovelAI`,
       novelai_description: `NovelAI là dịch vụ trả phí định kỳ cho nhập vai và sáng tác truyện.
@@ -510,9 +510,9 @@ Nhập \`{project_id}::{location}\` bằng {configSetup} hoặc {configApikeySet
         footer: `Chọn persona bạn muốn tương tác khi có nhiều persona.`,
       },
       memory_tagging: {
-        title: `Gắn thẻ bộ nhớ (nâng cao)`,
+        title: `Gắn thẻ bộ nhớ cá nhân (nâng cao)`,
         description:
-          "Mặc định mọi bộ nhớ trong phạm vi đều được gửi kèm tin nhắn. Việc gắn thẻ giúp thu hẹp lại.\n> **Thẻ từ khóa**: bộ nhớ có thẻ chỉ thức dậy khi từ khóa xuất hiện trong hội thoại. Bộ nhớ không gắn thẻ sẽ luôn hoạt động.\n> **Kênh**: bộ nhớ máy chủ có thể giới hạn ở các kênh bạn chọn trong biểu mẫu (bao gồm các luồng trong đó), và bộ nhớ cá nhân qua thẻ `#channel`. Cả hai đều kết hợp được với thẻ từ khóa.\n\nBật cả hai trong {configAdvancedMemory}, rồi dùng {toolPromptSnapshot} để xem chính xác các bộ nhớ đang hoạt động lúc này.",
+          "Bộ nhớ cá nhân có thể mang thẻ từ khóa hoặc thẻ `#channel`, và việc gắn thẻ sẽ quyết định xem các thẻ đó có thu hẹp thời điểm chúng xuất hiện hay không.\n> **Thẻ từ khóa**: bộ nhớ cá nhân có thẻ chỉ thức dậy khi từ khóa của nó xuất hiện trong hội thoại. Bộ nhớ cá nhân không gắn thẻ sẽ luôn hoạt động.\n> **Kênh**: bộ nhớ cá nhân có thể được giới hạn trong một kênh bằng thẻ `#channel`. Bộ nhớ máy chủ và tài liệu sử dụng các lựa chọn kênh trong `/memories`.\n\nBật tính năng gắn thẻ trong {configAdvancedMemory}, rồi dùng {toolPromptSnapshot} để xem chính xác các bộ nhớ đang hoạt động lúc này.\n> Thiết lập thế giới là phần riêng biệt: các mục lorebook trong `/memories` sử dụng từ khóa và cài đặt Luôn bật riêng.",
         footer: "Tài liệu tải lên và lịch sử trích xuất cũng có thể được giới hạn theo kênh.",
       },
     },

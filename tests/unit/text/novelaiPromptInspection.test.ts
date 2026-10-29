@@ -82,8 +82,8 @@ describe("NovelAI prompt inspection credentials", () => {
         apiKey: "test-key",
       });
       const json = await buildJsonSnapshot(prepared.contextItems, persona, "novelai", model, null, {}, prepared);
-      const text = buildTextSnapshot(prepared.contextItems, prepared);
       const requestConfig = buildRequestConfig(persona, "novelai", model, prepared.report.outputCap, prepared);
+      const text = buildTextSnapshot(prepared.contextItems, requestConfig, [], prepared);
       if (getNovelAIProfile(model).endpoint === "/oa/v1/completions") {
         expect(requestConfig.stop).toContain("\nMirri:");
         expect(requestConfig.stop).not.toContain("\nJuno:");
@@ -112,8 +112,8 @@ describe("NovelAI prompt inspection credentials", () => {
       if (!actualRequest) throw new Error("Generation sent no request");
       expect(payload).toEqual(actualRequest);
       expect(fitting).toEqual(prepared.report);
-      expect(text).toStartWith(`${prepared.prompt}\n\n`);
-      expect(JSON.parse(text.slice(prepared.prompt.length).trim())).toEqual(prepared.report);
+      expect(text).toContain(`${prepared.prompt}\n\n`);
+      expect(JSON.parse(text.split("Fitting Report (annotation, NOT part of the prompt) ===").at(-1) ?? "")).toEqual(prepared.report);
       expect(prepared.report.excluded.some((id) => id.includes(ContextItemTag.SYSTEM_INSTRUCTION_BLOCK))).toBe(true);
       expect(prepared.report.trimmed.some((id) => id.includes(ContextItemTag.KNOWLEDGE_SERVER_MEMORIES))).toBe(true);
       expect(prepared.report.included.some((id) => id.includes(ContextItemTag.SYSTEM_PERSONALITY))).toBe(true);
@@ -290,7 +290,7 @@ describe("NovelAI prompt inspection credentials", () => {
       expect(snapshot.novelaiRequest?.prompt).toEndWith("Juno: opening-fragment");
       expect(snapshot.novelaiRequest?.prompt).toContain("_Bau");
       expect(snapshot.novelaiRequest?.prompt).not.toContain("System:");
-      const textSnapshot = buildTextSnapshot(snapshot.contextItems, snapshot.novelaiRequest);
+      const textSnapshot = buildTextSnapshot(snapshot.contextItems, {}, [], snapshot.novelaiRequest);
       const jsonSnapshot = await buildJsonSnapshot(
         snapshot.contextItems,
         snapshot.answeringState,
@@ -307,7 +307,7 @@ describe("NovelAI prompt inspection credentials", () => {
       );
       expect(jsonSnapshot.input).toBe(snapshot.novelaiRequest?.prompt);
       expect(jsonSnapshot.parameters).toMatchObject({ max_length: snapshot.novelaiRequest?.report.outputCap });
-      expect(textSnapshot).toStartWith(snapshot.novelaiRequest?.prompt ?? "");
+      expect(textSnapshot).toContain(snapshot.novelaiRequest?.prompt ?? "");
       const exports = JSON.stringify([textSnapshot, jsonSnapshot]);
       for (const key of ["server-key", "personal-key"]) {
         expect(exports).not.toContain(key);

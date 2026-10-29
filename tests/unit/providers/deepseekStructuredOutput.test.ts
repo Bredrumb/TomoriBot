@@ -7,6 +7,7 @@ import {
 } from "@/providers/deepseek/compactGenerator";
 import * as imageProcessor from "@/utils/image/imageProcessor";
 import { z } from "zod";
+import { log } from "@/utils/misc/logger";
 
 describe("DeepSeek structured output", () => {
   const originalFetch = globalThis.fetch;
@@ -16,6 +17,70 @@ describe("DeepSeek structured output", () => {
     globalThis.fetch = originalFetch;
     imageSpy?.mockRestore();
     imageSpy = undefined;
+  });
+
+  it("retains empty-response finish and token diagnostics without copying private content", async () => {
+    const warnings = spyOn(log, "warn").mockImplementation(() => {});
+    try {
+      for (const finishReason of ["length", "stop", "PRIVATE_REASONING"]) {
+        globalThis.fetch = (async (_input: string | URL | Request, _init?: RequestInit) =>
+          new Response(
+            JSON.stringify({
+              id: "req_PRIVATE_KEY",
+              choices: [
+                { finish_reason: finishReason, message: { content: "", reasoning_content: "PRIVATE_REASONING" } },
+              ],
+              usage:
+                finishReason === "PRIVATE_REASONING"
+                  ? {
+                      prompt_tokens: "PRIVATE_EVIDENCE",
+                      completion_tokens: -1,
+                      completion_tokens_details: { reasoning_tokens: "PRIVATE_REASONING" },
+                    }
+                  : {
+                      prompt_tokens: 150,
+                      completion_tokens: 8192,
+                      completion_tokens_details: { reasoning_tokens: 8192 },
+                    },
+            }),
+            { status: 200 },
+          )) as typeof fetch;
+        const result = await callDeepseekStructuredJSON(
+          {
+            apiKey: "PRIVATE_KEY",
+            model: "deepseek-flash",
+            systemPrompt: "PRIVATE_PROTOCOL",
+            userPrompt: "PRIVATE_EVIDENCE",
+            schemaName: "expression_batch_result",
+          },
+          { type: "object" },
+          z.object({}),
+        );
+        expect(result.success).toBe(false);
+        if (result.success) throw new Error("Expected empty-response failure");
+        expect(result.diagnostics).toMatchObject({
+          finishReason: finishReason === "PRIVATE_REASONING" ? "unknown" : finishReason,
+          inputTokens: finishReason === "PRIVATE_REASONING" ? undefined : 150,
+          outputTokens: finishReason === "PRIVATE_REASONING" ? undefined : 8192,
+          reasoningTokens: finishReason === "PRIVATE_REASONING" ? undefined : 8192,
+          reasoningPresent: true,
+          maxOutputTokens: 8192,
+          thinkingMode: "provider-default",
+          imageCount: 0,
+        });
+        expect(warnings.mock.lastCall?.[2]?.metadata).toMatchObject(result.diagnostics ?? {});
+        expect(warnings.mock.lastCall?.[3]?.retain).toBe(true);
+        const diagnosticPayload = JSON.stringify({
+          diagnostics: result.diagnostics,
+          context: warnings.mock.lastCall?.[2],
+        });
+        for (const privateValue of ["PRIVATE_KEY", "PRIVATE_PROTOCOL", "PRIVATE_EVIDENCE", "PRIVATE_REASONING"]) {
+          expect(diagnosticPayload).not.toContain(privateValue);
+        }
+      }
+    } finally {
+      warnings.mockRestore();
+    }
   });
 
   it("formats multimodal image inputs into OpenAI-compatible image_url parts", async () => {

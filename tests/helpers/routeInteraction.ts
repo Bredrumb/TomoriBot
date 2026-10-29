@@ -43,6 +43,7 @@ export interface RouteInteraction {
   id: string;
   customId: string;
   user: { id: string; username: string; displayName: string; globalName: string; displayAvatarURL?: () => string };
+  locale: string;
   channelId: string;
   channel: { id: string; name: string; type: number; isThread: () => boolean; send: () => Promise<unknown> };
   guildId: string | null;
@@ -208,6 +209,7 @@ export function createRouteInteraction(options: RouteInteractionOptions = {}): R
       globalName: "Mirri",
       displayAvatarURL: () => "https://cdn.example.invalid/avatar.png",
     },
+    locale: "en-US",
     channelId: "channel-1",
     channel: {
       id: "channel-1",

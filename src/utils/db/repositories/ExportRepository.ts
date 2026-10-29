@@ -1,3 +1,5 @@
+import { LorebookRepository, lorebookRepository } from "@/modules/lorebooks/db/repositories";
+import { lorebookEntryToInput, type LorebookEntryInput } from "@/modules/lorebooks/db/types";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import type { NoticeVerbosity } from "@/constants/toolNotices";
@@ -146,6 +148,8 @@ type DatabaseId = number | string | bigint;
 interface MemoryProjectionRow {
   content: string;
   tags: string[] | null;
+  channel_disc_ids?: string[];
+  legacy_channel_tags?: string[];
   persona_lineage_id?: DatabaseId;
 }
 
@@ -189,7 +193,7 @@ export class ExportRepository {
     return items.map((item, index) => {
       const { sanitized, wasSanitized } = this.sanitizeForJson(item.content);
       if (wasSanitized) log.warn(`Sanitized ${contextLabel} at index ${index}: removed control characters`);
-      return { content: sanitized, tags: item.tags };
+      return { ...item, content: sanitized };
     });
   }
 
@@ -206,7 +210,12 @@ export class ExportRepository {
 
   private memoryItems(rows: MemoryProjectionRow[]): MemoryItem[] {
     return this.sanitizeMemoryItems(
-      rows.map((row) => ({ content: row.content, tags: row.tags ?? [] })),
+      rows.map((row) => ({
+        content: row.content,
+        tags: row.tags ?? [],
+        ...(row.channel_disc_ids ? { channel_disc_ids: row.channel_disc_ids } : {}),
+        ...(row.legacy_channel_tags ? { legacy_channel_tags: row.legacy_channel_tags } : {}),
+      })),
       "memory bundle",
     );
   }
@@ -231,7 +240,7 @@ export class ExportRepository {
           u.language_pref,
           upc.impersonation_prompt,
           COALESCE(upc.physical_appearance_tags, ARRAY[]::TEXT[]) AS physical_appearance_tags,
-          upc.nai_char_ref_url
+          upc.char_ref_url
         FROM users u
         LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
         WHERE u.user_disc_id = ${userDiscId}
@@ -482,26 +491,38 @@ export class ExportRepository {
       const memoryRows =
         targetPersonaLineageId !== null
           ? await sql`
-              SELECT content, tags
+              SELECT content, tags, channel_disc_ids,
+                (SELECT channel_tags FROM legacy_channel_scope_tags l WHERE l.source_table = 'server_memories'
+                  AND l.row_id = server_memories.server_memory_id AND l.resolved_at IS NULL) AS legacy_channel_tags
               FROM server_memories
               WHERE server_id = ${serverId}
                 AND persona_lineage_id = ${targetPersonaLineageId}
               ORDER BY created_at DESC
             `
           : await sql`
-              SELECT content, tags
+              SELECT content, tags, channel_disc_ids,
+                (SELECT channel_tags FROM legacy_channel_scope_tags l WHERE l.source_table = 'server_memories'
+                  AND l.row_id = server_memories.server_memory_id AND l.resolved_at IS NULL) AS legacy_channel_tags
               FROM server_memories
               WHERE server_id = ${serverId}
               ORDER BY created_at DESC
             `;
 
-      const rawServerMemories: MemoryItem[] = memoryRows.map((row: { content: string; tags: string[] | null }) => ({
+      const rawServerMemories: MemoryItem[] = memoryRows.map((row: MemoryProjectionRow) => ({
         content: row.content,
         tags: row.tags ?? [],
+        channel_disc_ids: row.channel_disc_ids ?? [],
+        legacy_channel_tags: row.legacy_channel_tags ?? [],
       }));
 
       // Sanitize memories for safe JSON export
       const sanitizedServerMemories = this.sanitizeMemoryItems(rawServerMemories, "server memories");
+
+      const lore = await lorebookRepository.listScope(serverId, targetPersonaLineageId);
+      const globalLore = await lorebookRepository.listScope(serverId, null);
+      if (lore.status !== "fresh" || globalLore.status !== "fresh") {
+        return { success: false, error: "commands.data.export.error_export_failed" };
+      }
 
       // Per-channel STM state is intentionally excluded from the export: only the
       // reusable customization (cadence, render mode, prompt overrides, categories)
@@ -603,6 +624,8 @@ export class ExportRepository {
             stm_categories: stmExport?.stm_categories ?? [],
           },
           server_memories: sanitizedServerMemories,
+          lorebook_entries: lore.entries.map(lorebookEntryToInput),
+          serverwide_lorebook_entries: globalLore.entries.map(lorebookEntryToInput),
         },
       };
 
@@ -631,7 +654,7 @@ export class ExportRepository {
           u.language_pref,
           upc.impersonation_prompt,
           COALESCE(upc.physical_appearance_tags, ARRAY[]::TEXT[]) AS physical_appearance_tags,
-          upc.nai_char_ref_url,
+          upc.char_ref_url,
           u.privacy_level,
           COALESCE(upc.personal_dtm, 'follow') AS personal_dtm,
           COALESCE(upc.personal_deliberate_tool_mode, 'follow') AS personal_deliberate_tool_mode,
@@ -683,7 +706,7 @@ export class ExportRepository {
           language_pref: userData.language_pref,
           impersonation_prompt: userData.impersonation_prompt ?? null,
           physical_appearance_tags: userData.physical_appearance_tags ?? [],
-          nai_char_ref_url: userData.nai_char_ref_url ?? null,
+          char_ref_url: userData.char_ref_url ?? null,
           privacy_level: userData.privacy_level ?? undefined,
           personal_dtm: userData.personal_dtm ?? undefined,
           personal_deliberate_tool_mode: userData.personal_deliberate_tool_mode ?? undefined,
@@ -1096,15 +1119,29 @@ export class ExportRepository {
         return { success: false, error: "commands.data.export.error_no_server_data" };
       }
 
-      let buckets: Array<{ name: string; label: string; memories: MemoryItem[] }>;
+      const lore =
+        scope.mode === "all"
+          ? await new LorebookRepository(this.database).listServer(serverId)
+          : { status: "fresh" as const, entries: [] };
+      if (lore.status !== "fresh") return { success: false, error: "commands.data.export.error_export_failed" };
+      const loreFor = (lineage: number | null) =>
+        lore.entries.filter((entry) => entry.persona_lineage_id === lineage).map(lorebookEntryToInput);
+      let buckets: Array<{
+        name: string;
+        label: string;
+        memories: MemoryItem[];
+        lorebook_entries?: LorebookEntryInput[];
+      }>;
       if (scope.mode === "all") {
         const memoryRows = await this.database<MemoryProjectionRow[]>`
-          SELECT persona_lineage_id, content, tags
+          SELECT persona_lineage_id, content, tags, channel_disc_ids,
+            (SELECT channel_tags FROM legacy_channel_scope_tags l WHERE l.source_table = 'server_memories'
+              AND l.row_id = server_memories.server_memory_id AND l.resolved_at IS NULL) AS legacy_channel_tags
           FROM server_memories
           WHERE server_id = ${serverId}
           ORDER BY persona_lineage_id ASC, created_at DESC NULLS LAST, server_memory_id DESC
         `;
-        if (!memoryRows.length) {
+        if (!memoryRows.length && !lore.entries.length) {
           return { success: false, error: "commands.data.export.error_no_server_data" };
         }
 
@@ -1122,6 +1159,10 @@ export class ExportRepository {
           groupedRows.set(lineageId, lineageRows);
         }
 
+        for (const entry of lore.entries) {
+          if (entry.persona_lineage_id !== null && !groupedRows.has(entry.persona_lineage_id))
+            groupedRows.set(entry.persona_lineage_id, []);
+        }
         const lineageIds = [...groupedRows.keys()].sort((left, right) => left - right);
         const labelRows = await this.database<PersonaLabelProjectionRow[]>`
           SELECT persona_lineage_id, persona_nickname
@@ -1142,6 +1183,7 @@ export class ExportRepository {
           name: `persona-${index + 1}`,
           label: this.bucketLabel(labels.get(lineageId), `Persona ${index + 1}`),
           memories: this.memoryItems(groupedRows.get(lineageId) ?? []),
+          lorebook_entries: loreFor(lineageId),
         }));
       } else {
         const personaRows =
@@ -1171,7 +1213,9 @@ export class ExportRepository {
         }
 
         const memoryRows = await this.database<MemoryProjectionRow[]>`
-          SELECT content, tags
+          SELECT content, tags, channel_disc_ids,
+            (SELECT channel_tags FROM legacy_channel_scope_tags l WHERE l.source_table = 'server_memories'
+              AND l.row_id = server_memories.server_memory_id AND l.resolved_at IS NULL) AS legacy_channel_tags
           FROM server_memories
           WHERE server_id = ${serverId}
             AND persona_lineage_id = ${lineageId}
@@ -1189,11 +1233,12 @@ export class ExportRepository {
         ];
       }
 
+      if (buckets.length === 0) buckets = [{ name: "workspace", label: "Workspace", memories: [] }];
       const exportCandidate = {
         version: EXPORT_V2_VERSION,
         type: "workspace_memories",
         exported_at: new Date().toISOString(),
-        data: { buckets },
+        data: { buckets, ...(scope.mode === "all" ? { serverwide_lorebook_entries: loreFor(null) } : {}) },
       };
       const validated = getWorkspaceMemoriesExportSchema().safeParse(exportCandidate);
       if (!validated.success) {

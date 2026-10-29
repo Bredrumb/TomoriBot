@@ -214,7 +214,8 @@ export interface ToolContext {
   activePersonaId?: number; // Active responding persona for tool-driven follow-up turns
   isUserImpersonation?: boolean; // True when the active turn is a user impersonation session
   impersonatedUserId?: string; // Discord user ID currently being impersonated, if any
-  suppressProgressNotices?: boolean; // Skip public "working..." embeds for fire-and-forget flows
+  suppressProgressNotices?: boolean;
+  mirrorSuppressedProgressNotices?: boolean;
   suppressFailureNotices?: boolean;
   /** Shared across search-engine attempts, so fallback notices are deduplicated without hiding error embeds. */
   progressNoticeState?: { attempted: boolean };

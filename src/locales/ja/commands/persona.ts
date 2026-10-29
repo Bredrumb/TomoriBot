@@ -118,6 +118,7 @@ export default {
       avatar_update_rate_limited: `🟡 Discordのレート制限によりサーバーアバターは更新されませんでした。手動で変更してください。`,
       avatar_update_failed: `🟡 サーバーアバターを更新できませんでした。Discordのレート制限が原因である可能性があります。手動で変更してください。`,
       alter_success_title: `🟢 オルタペルソナのインポートに成功しました`,
+      lorebook_count: `インポートされたロアブックエントリ: {count}`,
       alter_success_description: `オルタペルソナ **{nickname}** が正常にインポートされました！
 固有トリガーワード: {trigger_count}
 トリガー: {triggers}
@@ -125,10 +126,9 @@ export default {
 これらのトリガーがメッセージに含まれると、このペルソナが応答します。`,
       alter_success_confirmation: `オルタペルソナ **{nickname}** が {trigger_count} 個の固有トリガーワードで正常にインポートされました！詳細なインポート情報がチャンネルに投稿されました。`,
       alter_avatar_fallback_main: `🟡 このインポートにはアバター画像が含まれていなかったため、このオルタはフォールバックとして **{nickname}** の現在のメインペルソナアバターを使用します。変更したい場合は \`/config\` > ペルソナ > アイデンティティと性格 を使用できます。`,
-      alter_avatar_warning: `⚠️ 上記のアバター画像埋め込みを削除しないでください。削除するとオルタペルソナのアバターが失われます。`,
       alter_dm_not_allowed_title: `🔴 DMではオルタペルソナは許可されていません`,
       alter_dm_not_allowed_description: `オルタペルソナはサーバーでのみインポートできます。ダイレクトメッセージではインポートできません。サーバーでこのコマンドを実行してください。`,
-      alter_no_triggers_warning: `⚠️ このペルソナにはトリガーワードがありません。\`/config\` > ペルソナ > アイデンティティと性格を使用してトリガーを追加するまで、メッセージに応答しません。`,
+      alter_no_triggers_warning: `このペルソナにはトリガーワードがありません。\`/config\` > ペルソナ > アイデンティティと性格を使用してトリガーを追加するまで、メッセージに応答しません。`,
       alter_name_conflict_title: `🔴 ペルソナ名が既に存在します`,
       alter_name_conflict_description: `**{name}** という名前のペルソナは既にこのサーバーに存在します。各ペルソナには固有の名前が必要です。
 
@@ -326,7 +326,7 @@ export default {
         character_desc_label: `キャラクター説明`,
         character_desc_placeholder: `キャラクターを説明してください（性格、外見、背景など）`,
         example_user_label: `ユーザーメッセージの例`,
-        example_user_description: `ヒント: インポート後に /persona sample-dialogue add で例を追加できます`,
+        example_user_description: `ヒント: 作成後に /config > ペルソナ > アイデンティティと性格 で例を追加できます`,
         example_user_placeholder: `こんにちは、{bot}！`,
         example_bot_label: `ボット返信の例`,
         example_bot_placeholder: `こんにちは、{user}！お元気ですか？`,

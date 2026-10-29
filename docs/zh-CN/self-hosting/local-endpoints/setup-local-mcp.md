@@ -1,8 +1,8 @@
 ---
 title: "配置：本地MCP服务器"
 sidebar:
+  label: "本地MCP服务器"
   order: 6
-aiGenerated: true
 ---
 
 将TomoriBot连接到在本地计算机或专用网络上运行的Model Context Protocol ([MCP](https://modelcontextprotocol.io/)) 服务器，以提供自定义本地工具。

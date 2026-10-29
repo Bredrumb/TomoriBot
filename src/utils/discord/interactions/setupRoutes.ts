@@ -105,6 +105,7 @@ import { getCachedPresetAvatar, getPresetAvatarBuffer } from "@/utils/image/avat
 import { lazySyncGuildEmojis } from "@/utils/cache/emojiLazySync";
 import { lazySyncGuildStickers } from "@/utils/cache/stickerLazySync";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer, getDefaultBotName } from "@/utils/text/localizer";
 import { UTC_OFFSET_MAX, UTC_OFFSET_MIN } from "@/constants/utcOffset";
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
@@ -787,14 +788,14 @@ function buildSetupReceiptNotes(
 
   if (context === "guild" && !canChatHere) {
     notes.push({
-      label: localizer(locale, "commands.setup.channel_access_warning_field"),
+      label: statusNote("error", localizer(locale, "commands.setup.channel_access_warning_field")),
       detail: localizer(locale, "commands.setup.channel_access_warning_value"),
     });
   }
 
   if (access.mode === "catalog" && (access.provider === "zai" || access.provider === "zaicoding")) {
     notes.push({
-      label: localizer(locale, "commands.setup.zai_tos_warning_field"),
+      label: statusNote("warning", localizer(locale, "commands.setup.zai_tos_warning_field")),
       detail: localizer(locale, "commands.setup.zai_tos_warning_value"),
     });
   }

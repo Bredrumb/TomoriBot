@@ -23,6 +23,7 @@ import { buildOptionalThumbnailSection, buildStateControlRow, buildPaginationRow
 import { resolveRangeSelection } from "@/utils/discord/interactions/panelController";
 import { DISCORD_SELECT_OPTIONS_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import { renderFencedPreview } from "@/utils/text/textPreview";
 
@@ -479,14 +480,17 @@ export function buildConfigVoiceBody(input: ConfigVoicePanelInput): ComponentInC
   if (!view.effectiveSource) {
     components.push({
       type: ComponentType.TextDisplay,
-      content: `**${localizer(input.locale, "commands.config.panel.capability_notice_title")}**\n${localizer(
-        input.locale,
-        view.hasTargets
-          ? "commands.config.panel.voice_page_no_usable_source"
-          : "commands.config.panel.voice_page_no_model_notice",
-        {
-          models: `${commandRegistry.getCommandMention("config")} > ${localizer(input.locale, "commands.config.panel.category_models")}`,
-        },
+      content: `**${localizer(input.locale, "commands.config.panel.capability_notice_title")}**\n${statusNote(
+        "error",
+        localizer(
+          input.locale,
+          view.hasTargets
+            ? "commands.config.panel.voice_page_no_usable_source"
+            : "commands.config.panel.voice_page_no_model_notice",
+          {
+            models: `${commandRegistry.getCommandMention("config")} > ${localizer(input.locale, "commands.config.panel.category_models")}`,
+          },
+        ),
       )}`,
     });
   }

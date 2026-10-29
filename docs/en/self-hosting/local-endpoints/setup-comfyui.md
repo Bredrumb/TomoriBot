@@ -2,6 +2,7 @@
 title: "Setup: ComfyUI"
 aiGenerated: false
 sidebar:
+  label: "ComfyUI"
   order: 2
 ---
 
@@ -11,8 +12,7 @@ submitting an API-format workflow with your prompt/size substituted in, then pol
 ComfyUI's `/history` endpoint until the output is ready.
 
 This guide covers installing/running ComfyUI and registering it. For authoring or editing
-a TomoriBot-compatible workflow (the `{TOMORI_*}` placeholders), use the in-Discord deep
-dive, open `/help`, choose `Features`, then `Custom Endpoints`, and use the
+a TomoriBot-compatible workflow (the `{TOMORI_*}` placeholders), use the
 [workflow README](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows)
 on GitHub.
 
@@ -24,26 +24,25 @@ See the [local endpoints hub](/self-hosting/local-endpoints/).
 ## Hardware requirements
 
 Image and video generation is GPU-bound: the heavy cost is VRAM (your graphics card's
-memory, separate from system RAM), set by the model checkpoint your workflow loads, not by
-ComfyUI itself. An NVIDIA GPU is strongly recommended. The two workflows TomoriBot ships are
-both modern, heavier-than-SDXL models:
+memory, separate from system RAM), determined by the model checkpoint your workflow loads.
+An NVIDIA GPU is strongly recommended. The two workflows TomoriBot ships need:
 
 | Bundled workflow | Base model | Practical VRAM | Notes |
 |---|---|---|---|
-| Anima v1 (image) | Qwen-Image (~20B), fp8 | ~16 GB floor · 24 GB comfortable | Text encoder + VAE add ~8-10 GB of overhead. Below 16 GB, use a GGUF build + `--lowvram`. |
+| Anima turbo (image) | Anima Turbo v1.1 (2B), bf16 | ~8 GB workable · 12 GB+ comfortable | The 4.2 GB model plus a 1.2 GB text encoder, at 10 steps plus a short 2x upscale pass. A character reference adds about half again to generation time. |
+| Anima detailed (image) | Anima Aesthetic v1.1 (2B), bf16 | ~8 GB workable · 12 GB+ comfortable | Same memory as turbo, but 30 steps plus face and hand detailers, so several times slower per image. Other Anima models are in the [model folder](https://huggingface.co/circlestone-labs/Anima/tree/main/split_files/diffusion_models); the workflow README covers switching. |
 | WAN i2v loop (video) | Wan 2.2 14B, fp8 + 4-step LightX2V LoRAs | ~16 GB workable · 24 GB+ comfortable | Heaviest option expect minutes per clip. Offload the UMT5 text encoder to RAM (`t5_cpu`, needs 24 GB+ system RAM) on smaller cards. |
 
-Both bundled checkpoints are already fp8-quantized to fit consumer cards. If you have less
+The Wan checkpoint is already fp8-quantized to fit consumer cards. If you have less
 VRAM, swap the UNET for a smaller quant and enable ComfyUI's `--lowvram` / CPU offload. CPU-only diffusion is
 impractical (many minutes per image, worse for video) and can exceed TomoriBot's poll window,
 so a GPU is effectively required for regular use.
 
 :::tip[Going lower: pick a GGUF quant]
-Quantization stores each model weight in fewer bits to cut VRAM and disk use, at a small
-precision cost. The bundled fp8 files are a mild form of it, and to shrink further, download a
+To shrink further, download a
 GGUF build of the model from Hugging Face: the code in names like `Q4_K_M` / `Q5_K_M` is the
 bits-per-weight, and 4-bit (Q4) or 5-bit (Q5) is the usual sweet spot with most of the quality
-for a fraction of the fp8/fp16 footprint. Below 4-bit shrinks more but degrades quickly. Loading
+for a fraction of the fp8/fp16 footprint. Loading
 GGUF UNETs in ComfyUI needs the [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) custom
 node.
 :::
@@ -75,13 +74,20 @@ Download a ready-to-use API-format workflow. Examples can be found in the repo u
 
 | Workflow | Modes |
 |----------|-------|
-| Anima v1 (image) : `tomoribot-anima-v1-comfyui.json` | `txt2img`, `img2img`, `inpaint` |
+| Anima turbo (image, fast) : `tomoribot-anima-image-turbo.json` | text to image, character reference, inpaint/outpaint |
+| Anima detailed (image, slower, face and hand detailers) : `tomoribot-anima-image-detailed.json` | text to image, character reference, inpaint/outpaint |
 | WAN i2v loop (video) : `tomoribot-wan-i2v-loop-video.json` | image-to-video |
+
+Each workflow needs specific custom nodes and model files in specific ComfyUI folders. The
+[workflow README](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows) lists
+them for the Anima workflow, with download links and the folder each file goes in. Install those
+before registering, or generation fails with a missing node or `Value not in list` error.
 
 These are API format (the JSON ComfyUI exports via *Save (API Format)*), not the regular
 UI-save format. If you author your own, it must contain the `{TOMORI_*}` placeholders
-TomoriBot substitutes (prompt, width/height, seed, reference images, etc.). See the workflow
-README and the `Custom Endpoints` page under `Providers` in `/help`.
+TomoriBot substitutes (prompt, width/height, seed, reference images, etc.). See the
+[workflow README](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows) and the
+`Custom Endpoints` page under `Providers` in `/help`.
 
 ## 3. Register it in Discord
 
@@ -99,11 +105,9 @@ from the model dropdown. Enter the checkpoint's exact code name and upload the w
 downloaded from Step 2 into `ComfyUI Workflow`. The model capability must match the workflow (image
 workflow → `image`, video workflow → `video`).
 
-An image model also asks for its `Image Capabilities`: text to image, reference image,
-inpainting, and negative prompt. Tick only the modes your workflow actually implements, because
-Tomori offers the tool only the modes you declare. Inpainting appears for ComfyUI connections
-only, since no other API compatibility accepts a mask. Editing the model later reopens the form
-with your current selection, so changing a code name will not clear it.
+For the Anima workflows, tick `Text to image`, `Reference image`, and `Inpainting` under
+`Image Capabilities`. `Reference image` is what lets Tomori draw a user or persona from their
+character reference.
 
 Adding the model makes it the active `image`/`video` model automatically. Trigger generation by asking Tomori directly in chat. If it isn't active for some reason, run `/config` > Models > Switch Models
 and select your registered ComfyUI endpoint.
@@ -117,5 +121,8 @@ and select your registered ComfyUI endpoint.
   starts and large models on CPU can exceed the poll window.
 - **Prompt/size ignored or wrong output size:** the workflow is missing the required
   `{TOMORI_*}` placeholders, or you uploaded a UI-format export instead of API format.
+- **Missing node or `Value not in list`:** a custom node pack or model file from the
+  workflow README is not installed, or a model file was renamed. Install it, restart ComfyUI, and
+  try again. You don't need to re-upload the workflow.
 - **Wrong capability:** an `image` workflow registered under `video` (or vice-versa) won't
   run. Re-add it under the matching capability.

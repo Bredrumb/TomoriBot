@@ -14,7 +14,7 @@ sidebar:
 aiGenerated: true
 ---
 
-TomoriBotは、[SillyTavern](https://github.com/SillyTavern/SillyTavern) から2つのアセット、プロンプトマネージャー プリセット (プロンプト構造を制御する) とキャラクター カード (キャラクター定義) をインポートできます。SillyTavernを使用したことがない場合は、このページをスキップしても問題ありません。
+TomoriBotは、[SillyTavern](https://github.com/SillyTavern/SillyTavern)からアセット（プロンプト構造を制御するプロンプトマネージャーのプリセット、キャラクター定義であるキャラクターカード、埋め込みキャラクターブックまたはスタンドアロンのワールドインフォファイルであるロアブック）をインポートできます。SillyTavernを使用したことがない場合は、このページをスキップしても問題ありません。
 
 ## キャラクターカードのインポート
 
@@ -30,6 +30,10 @@ TomoriBotは、[SillyTavern](https://github.com/SillyTavern/SillyTavern) から2
 アップロードされたファイルがTomoriBotメタデータのない有効なSillyTavernカードである場合、インポートによって自動的に変換されます。`/persona generate`にカードを渡して、キャラクターからインスピレーションを得た新しいペルソナを作成することもできます。
 
 インポートは保存する前に検証されます (デフォルトの制限: テキストフィールドあたり5,000文字、属性200、片面あたり100のサンプルダイアログ、100のトリガー ワード)。フィールドマッピングと変換の仕組みについては、[カードサポートアーキテクチャ](/en/architecture/integrations/sillytavern/card-support/) を参照してください。
+
+:::tip
+カードのキャラクターブックはそのペルソナの[ロアブック](/features/knowledge/lorebooks/)になります。無効化されていたエントリは無効のまま保持されます。カードを再インポートすると、自分で追加したエントリを含め、そのペルソナのロアブック全体が置き換えられます。
+:::
 
 ## プロンプトプリセット
 <!-- anchor: prompt-presets -->

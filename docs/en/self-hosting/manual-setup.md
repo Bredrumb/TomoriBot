@@ -46,10 +46,7 @@ Required:
 - PostgreSQL connection: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`,
   `POSTGRES_PASSWORD`, `POSTGRES_DB`.
 
-Keep a protected copy of your encryption secret separately from database backups. New backups contain no `.env`. For rotation, use `CRYPTO_SECRET_V1`, `CRYPTO_SECRET_V2`, or any later positive integer version, with optional `CRYPTO_SECRET_CURRENT` selection. `CRYPTO_SECRET` remains V1. Startup and maintenance commands load the same source: local environment values in development, or mounted JSON / AWS Secrets Manager in production. See [Rotating encryption keys](/self-hosting/maintenance/#rotating-encryption-keys) before replacing a secret.
-
-In JSON secret sources, master keys must be strings. `CRYPTO_SECRET_CURRENT` accepts a string such as `"2"` or a numeric positive safe integer such as `2` that names an available version.
-
+Keep a protected copy of your encryption secret separately from database backups. New backups contain no `.env`. For rotation, use `CRYPTO_SECRET_V1`, `CRYPTO_SECRET_V2`, or any later positive integer version, with optional `CRYPTO_SECRET_CURRENT` selection.
 :::note[No native PostgreSQL?]
 Run just the database in a container, then point the `POSTGRES_*` values at it:
 
@@ -81,8 +78,7 @@ bun run dev
 
 When you see `TomoriBot up and running!`, go to Discord and run `/setup` in your
 server to connect an AI provider and initialize the bot. The command opens a guided
-checklist panel, and nothing is written until you press `Finish Setup`; see the
-[Quickstart](/introduction/quickstart/) for the steps.
+checklist panel, and nothing is written until you press `Finish Setup`;
 
 Use `bun run launch` instead of `bun run dev` if you want optional local servers (SearXNG, Crawl4AI, local TTS/STT) launched alongside the bot:
 
@@ -94,7 +90,7 @@ bun run launch --help        # see all flags
 ## Optional extras (the manual "Full Install")
 <!-- anchor: optional-extras-the-manual-full-install -->
 
-The [setup wizard](/self-hosting/setup-wizard/)'s `Full Install` path layers four lightweight extras on
+The [setup wizard](/self-hosting/setup-wizard/)'s `Full Install` path layers lightweight extras on
 top of the base install. None are required to run the bot, but each unlocks a feature. If
 you're installing by hand, add whichever you want:
 
@@ -136,7 +132,7 @@ CREATE EXTENSION vector;
 
 Without pgvector the bot still runs but RAG features become completely unavailable. This extension is
 also required on the target database before restoring a backup; see
-[Safe Migration](/self-hosting/safe-migration/) for details.
+[Maintenance & Backups](/self-hosting/maintenance/) for details.
 
 ### `pg_cron` : scheduled cleanup jobs
 
@@ -209,4 +205,4 @@ neither needs an extra installation.
 Once you're installed, the host-side scripts (`bun run update`, `bun run backup`,
 `bun run restore-backup`, `bun run nuke-db`, `bun run rotate-keys`, …) and the update and
 backup procedures all live on the [Maintenance & Backups](/self-hosting/maintenance/) page. If you're about
-to pull a new version, start with [Safe Migration](/self-hosting/safe-migration/).
+to pull a new version, start with [Maintenance & Backups](/self-hosting/maintenance/).

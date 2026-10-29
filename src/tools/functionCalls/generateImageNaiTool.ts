@@ -25,9 +25,11 @@ import {
   sendToolProgressNotice,
 } from "@/utils/discord/toolProgressNotice";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
-import { sql } from "../../utils/db/client";
+import type { TomoriState } from "@/types/db/schema";
 import { decryptApiKey } from "../../utils/security/crypto";
-import { checkImageQuota, incrementImageQuota, type QuotaCheckResult } from "../../utils/quota/imageQuotaManager";
+import { releaseImageQuota, reserveImageQuota, type ImageQuotaClaim } from "../../utils/quota/imageQuotaManager";
+import { QuotaUnavailableError } from "@/utils/quota/quotaErrors";
+import type { QuotaReservation } from "@/utils/db/repositories/QuotaRepository";
 import { llmProviderRepo, statRepository, userRepository } from "@/utils/db/repositories";
 import { extractImagesFromMessage } from "../../utils/image/imageExtractor";
 import { segmentImage } from "../../utils/image/segmentationService";
@@ -47,6 +49,7 @@ import {
   type NaiGenerationCharacterPayload,
 } from "@/utils/image/naiImageGeneration";
 import { loadCharRefAsBase64 } from "@/utils/storage/charrefStorage";
+import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
 import { CredentialUnavailableError, getResolvedCapabilityModelId } from "@/utils/provider/credentialResolver";
@@ -116,7 +119,30 @@ export async function loadUserNaiProfileByDiscordId(
 
   return {
     tags: user.physical_appearance_tags ?? [],
-    refUrl: user.nai_char_ref_url ?? null,
+    refUrl: user.char_ref_url ?? null,
+  };
+}
+
+/**
+ * Reads a persona's tags and character reference from the assembled persona state, which resolves a preset
+ * pointer's shared reference that `persona_imagegen_configs` does not store.
+ */
+export async function loadPersonaNaiProfile(
+  guildId: string | undefined,
+  personaId: number,
+  loadPersonas: (guildId: string) => Promise<TomoriState[]> = getCachedAllPersonas,
+): Promise<NAIIdentityProfile | null> {
+  if (!guildId) {
+    return null;
+  }
+  const persona = (await loadPersonas(guildId)).find((entry) => entry.persona_id === personaId);
+  if (!persona) {
+    return null;
+  }
+
+  return {
+    tags: persona.physical_appearance_tags ?? [],
+    refUrl: persona.char_ref_url ?? null,
   };
 }
 
@@ -383,31 +409,6 @@ export class GenerateImageNaiTool extends BaseTool {
     return null;
   }
 
-  private async loadPersonaNaiProfile(serverId: number, personaId: number): Promise<NAIIdentityProfile | null> {
-    const rows = await sql<
-      Array<{
-        physical_appearance_tags: string[] | null;
-        nai_char_ref_url: string | null;
-      }>
-    >`
-			SELECT physical_appearance_tags, nai_char_ref_url
-			FROM personas
-			WHERE server_id = ${serverId}
-			  AND persona_id = ${personaId}
-			LIMIT 1
-		`;
-
-    const row = rows[0];
-    if (!row) {
-      return null;
-    }
-
-    return {
-      tags: row.physical_appearance_tags ?? [],
-      refUrl: row.nai_char_ref_url,
-    };
-  }
-
   private validateCharacterArgs(characters: GenerateImageNaiCharacterArg[], context: ToolContext): string | null {
     for (const [index, character] of characters.entries()) {
       const hasId = typeof character.id === "string" && character.id.trim().length > 0;
@@ -486,7 +487,7 @@ export class GenerateImageNaiTool extends BaseTool {
         let foundProfile = false;
 
         if (personaId !== null) {
-          const personaProfile = await this.loadPersonaNaiProfile(context.tomoriState.server_id, personaId);
+          const personaProfile = await loadPersonaNaiProfile(context.guildId, personaId);
           foundProfile = personaProfile !== null;
           resolvedTags = personaProfile?.tags ?? [];
 
@@ -871,21 +872,24 @@ export class GenerateImageNaiTool extends BaseTool {
     }
 
     // Default to allowed; overwritten below for server-credential users
-    let quotaCheck: QuotaCheckResult = { allowed: true };
+    let quotaCheck: ImageQuotaClaim = { allowed: true, reservation: null };
     let failureScope: "server" | "personal" | undefined;
+    let quotaReservation: QuotaReservation | null = null;
+    let quotaDelivered = false;
 
     try {
       const { credentials: creds, quotaCheck: serverQuotaCheck } = await resolveCredentialsWithMediaQuota(
         context.tomoriState.server_id,
         "image-nai",
         context.internalUserId ?? null,
-        checkImageQuota,
+        reserveImageQuota,
         userDiscId,
         quotaCheck,
         undefined,
         context.streamContext?.imageModelSelection,
       );
       quotaCheck = serverQuotaCheck;
+      quotaReservation = serverQuotaCheck.reservation;
       failureScope = creds.source;
 
       if (!quotaCheck.allowed) {
@@ -957,46 +961,44 @@ export class GenerateImageNaiTool extends BaseTool {
 
       const apiKey = creds.apiKey;
 
-      if (!context.suppressProgressNotices) {
-        const baseNoticeDescription = localizer(
-          context.locale,
-          isInpaintMode ? "tools.image.editing_description" : "tools.image.generating_description",
-          isInpaintMode ? { edit_target: editTarget as string } : undefined,
-        );
-        const extraNoticeLines: string[] = [];
-        if (messageId) {
-          const referencedMessageUrl = buildReferencedMessageUrl(context, messageId);
-          extraNoticeLines.push(
-            referencedMessageUrl
-              ? localizer(context.locale, "tools.image.notice_reference_line", {
-                  message_url: referencedMessageUrl,
-                })
-              : localizer(context.locale, "tools.image.notice_reference_count_line", {
-                  count: "1",
-                }),
-          );
-        }
-        extraNoticeLines.push(...buildCharacterNoticeLines(context.locale, characters));
-        extraNoticeLines.push("");
-        extraNoticeLines.push(localizer(context.locale, "tools.image.notice_image_tags_tip_line"));
-        await sendToolProgressNotice(
-          context,
-          isInpaintMode ? "image_editing" : "image_generation",
-          {
-            titleKey: isInpaintMode ? "tools.image.editing_title" : "tools.image.generating_title",
-            description: buildImageToolNoticeDescription(
-              context.locale,
-              baseNoticeDescription,
-              baseModelCodename,
-              prompt,
-              localizer(context.locale, "tools.image.generating_footer"),
-              extraNoticeLines,
-            ),
-            color: ColorCode.INFO,
-          },
-          "GenerateImageNaiTool",
+      const baseNoticeDescription = localizer(
+        context.locale,
+        isInpaintMode ? "tools.image.editing_description" : "tools.image.generating_description",
+        isInpaintMode ? { edit_target: editTarget as string } : undefined,
+      );
+      const extraNoticeLines: string[] = [];
+      if (messageId) {
+        const referencedMessageUrl = buildReferencedMessageUrl(context, messageId);
+        extraNoticeLines.push(
+          referencedMessageUrl
+            ? localizer(context.locale, "tools.image.notice_reference_line", {
+                message_url: referencedMessageUrl,
+              })
+            : localizer(context.locale, "tools.image.notice_reference_count_line", {
+                count: "1",
+              }),
         );
       }
+      extraNoticeLines.push(...buildCharacterNoticeLines(context.locale, characters));
+      extraNoticeLines.push("");
+      extraNoticeLines.push(localizer(context.locale, "tools.image.notice_image_tags_tip_line"));
+      await sendToolProgressNotice(
+        context,
+        isInpaintMode ? "image_editing" : "image_generation",
+        {
+          titleKey: isInpaintMode ? "tools.image.editing_title" : "tools.image.generating_title",
+          description: buildImageToolNoticeDescription(
+            context.locale,
+            baseNoticeDescription,
+            baseModelCodename,
+            prompt,
+            localizer(context.locale, "tools.image.generating_footer"),
+            extraNoticeLines,
+          ),
+          color: ColorCode.INFO,
+        },
+        "GenerateImageNaiTool",
+      );
 
       // Build base scene tag list, so server style tags are trusted and should
       //    bypass suggest-tags normalization. Character tags are handled separately
@@ -1227,10 +1229,7 @@ export class GenerateImageNaiTool extends BaseTool {
 
       log.success(`Successfully ${isInpaintMode ? "inpainted" : "generated"} and sent NAI image to Discord`);
 
-      // Increment quota after successful generation (server providers only)
-      if (creds.source === "server") {
-        await incrementImageQuota(context.tomoriState.server_id, userDiscId);
-      }
+      quotaDelivered = true;
       // Record canonical generation telemetry for all providers; quotas enforce limits only.
       if (context.internalUserId) {
         statRepository.recordStat({
@@ -1267,6 +1266,13 @@ export class GenerateImageNaiTool extends BaseTool {
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };
     } catch (error) {
+      if (error instanceof QuotaUnavailableError) {
+        return {
+          success: false,
+          error: "Quota check unavailable",
+          message: localizer(context.locale, "tools.generate_image.quota_unavailable"),
+        };
+      }
       if (error instanceof DiscordDeliveryError) return mediaDeliveryFailure(context, error.outcome);
       if (context.abortSignal?.aborted) {
         return { success: false, error: "NAI image generation was cancelled." };
@@ -1302,6 +1308,10 @@ export class GenerateImageNaiTool extends BaseTool {
                 ? "rate_limit"
                 : undefined,
       });
+    } finally {
+      if (quotaReservation && !quotaDelivered) {
+        await releaseImageQuota(context.tomoriState.server_id, userDiscId, quotaReservation);
+      }
     }
   }
 }

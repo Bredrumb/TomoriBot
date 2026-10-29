@@ -9,7 +9,7 @@ sidebar:
 aiGenerated: true
 ---
 
-TomoriBot puede importar dos recursos desde [SillyTavern](https://github.com/SillyTavern/SillyTavern): ajustes preestablecidos del Administrador de mensajes (que controlan la estructura de mensajes) y tarjetas de personajes (la definición del personaje). Si nunca ha utilizado SillyTavern, puede saltarse esta página de forma segura.
+TomoriBot puede importar recursos desde [SillyTavern](https://github.com/SillyTavern/SillyTavern): preajustes del Administrador de prompts (que controlan la estructura del prompt), tarjetas de personajes (la definición del personaje) y lorebooks (Character Books incrustados o archivos de world info independientes). Si nunca has usado SillyTavern, puedes saltarte esta página con tranquilidad.
 
 ## Importación de tarjetas de personaje
 
@@ -25,6 +25,10 @@ Un archivo `.charx` es un archivo ZIP que contiene una definición de `card.json
 Si un archivo cargado es una tarjeta SillyTavern válida sin metadatos TomoriBot, la importación lo convierte automáticamente. También puedes pasar una tarjeta a `/persona generate` para crear una nueva personalidad inspirada en el personaje.
 
 Las importaciones se validan antes de guardar (límites predeterminados: 5000 caracteres por campo de texto, 200 atributos, 100 diálogos de muestra por lado, 100 palabras de activación). Para conocer la mecánica de conversión y mapeo de campos, consulte la [arquitectura de soporte de tarjeta](/en/architecture/integrations/sillytavern/card-support/).
+
+:::tip
+El Character Book de una tarjeta se convierte en el [lorebook](/features/knowledge/lorebooks/) de esa persona. Las entradas desactivadas permanecen desactivadas. Reimportar la tarjeta reemplaza todo el lorebook de la persona, incluidas las entradas que hayas agregado tú.
+:::
 
 ## Preajustes de prompt
 <!-- anchor: prompt-presets -->

@@ -1517,8 +1517,8 @@ async function runPersonaWrite(
           receipt: receipt(
             locale,
             "error",
-            "commands.novelai.character-reference.invalid_image_title",
-            "commands.novelai.character-reference.invalid_image_description",
+            "commands.shared.character_reference.invalid_image_title",
+            "commands.shared.character_reference.invalid_image_description",
           ),
         };
       }
@@ -1533,11 +1533,11 @@ async function runPersonaWrite(
             locale,
             "success",
             result.cleared
-              ? "commands.novelai.character-reference.cleared_title"
-              : "commands.novelai.character-reference.success_title",
+              ? "commands.shared.character_reference.cleared_title"
+              : "commands.shared.character_reference.success_title",
             result.cleared
-              ? "commands.novelai.character-reference.cleared_persona_description"
-              : "commands.novelai.character-reference.success_persona_description",
+              ? "commands.shared.character_reference.cleared_persona_description"
+              : "commands.shared.character_reference.success_persona_description",
             { persona_name: persona.persona_nickname },
           ),
           telemetry: "server-config.workspace.persona-character-reference.set",
@@ -3100,6 +3100,10 @@ async function runPersonaWrite(
                 count: result.presetSpritesRemoved,
               },
             )}`;
+          }
+          if (result.presetCharacterReferenceRemoved) {
+            avatarReceipt.detail += `
+${localizer(locale, "commands.config.panel.avatar_preset_character_reference_removed_detail")}`;
           }
           return { receipt: avatarReceipt, telemetry: "server-config.workspace.persona-avatar.set" };
         }

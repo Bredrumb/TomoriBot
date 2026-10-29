@@ -10,6 +10,9 @@ import {
   sanitizeLogPayload,
 } from "@/utils/misc/logger";
 import pino from "pino";
+import type { StreamContext, StreamProvider } from "@/types/stream/interfaces";
+import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { createPersona } from "../../helpers/fixtures";
 import { useEnvSandbox } from "../../helpers/env";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -378,6 +381,70 @@ describe("log.error persistence", () => {
       const payload = JSON.stringify(insert.mock.calls[0]);
       expect(payload).not.toContain(key);
       for (const field of ["UPSTREAM_DETAIL", "UPSTREAM_BODY", "UPSTREAM_METADATA"]) expect(payload).toContain(field);
+    } finally {
+      insert.mockRestore();
+    }
+  });
+  test("removes an unlabelled personal request key from a persisted stream incident", async () => {
+    const requestKey = "unlabelled-personal-credential";
+    const insert = spyOn(errorLogRepository, "insertErrorLog").mockResolvedValue("written");
+    try {
+      const provider = {
+        async *startStream() {
+          yield { data: {}, provider: "custom" };
+        },
+        processChunk: () => ({
+          type: "error",
+          error: {
+            type: "api_error",
+            code: "400",
+            retryable: false,
+            message: `STREAM_DETAIL ${requestKey}`,
+            originalError: { nested: [`ATTACHED_DETAIL ${requestKey}`] },
+          },
+        }),
+        handleProviderError: () => ({ type: "unknown", retryable: false, message: "unused" }),
+        getProviderInfo: () => ({
+          name: "custom",
+          version: "fixture",
+          supportsStreaming: true,
+          supportsFunctionCalling: false,
+        }),
+        createErrorDescription: () => "SAFE_FAILURE",
+      } as unknown as StreamProvider;
+      const result = await new StreamOrchestrator().streamToDiscord(
+        provider,
+        {
+          apiKey: requestKey,
+          model: "fixture/model",
+          temperature: 1,
+          maxMessageLength: 1950,
+          flushBufferSize: 1000,
+          flushBufferSizeCodeBlock: 15000,
+          inactivityTimeoutMs: 10000,
+          baseTypeSpeedMsPerChar: 0,
+          maxTypingTimeMs: 0,
+          minVisibleTypingDurationMs: 0,
+          humanizerDegree: 0,
+          emojiUsageEnabled: false,
+        },
+        {
+          channel: { id: "fixture-channel" } as StreamContext["channel"],
+          client: {} as StreamContext["client"],
+          tomoriState: createPersona(),
+          contextItems: [],
+          currentTurnModelParts: [],
+          provider: "custom",
+          locale: "en-US",
+          textCredentialSource: "personal",
+          suppressUserErrors: true,
+        },
+      );
+      expect(result.status).toBe("error");
+      expect(insert).toHaveBeenCalledTimes(1);
+      const payload = JSON.stringify(insert.mock.calls[0]);
+      expect(payload).not.toContain(requestKey);
+      for (const field of ["STREAM_DETAIL", "ATTACHED_DETAIL", "ProviderStreamError"]) expect(payload).toContain(field);
     } finally {
       insert.mockRestore();
     }

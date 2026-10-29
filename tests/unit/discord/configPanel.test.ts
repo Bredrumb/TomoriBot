@@ -1325,7 +1325,7 @@ describe("config Persona Appearance and Advanced bodies", () => {
   const advancedPersona = makePersona({
     persona_id: 55,
     physical_appearance_tags: ["silver hair", "green eyes"],
-    nai_char_ref_url: "data/charreferences/personas/55/old.png",
+    char_ref_url: "data/charreferences/personas/55/old.png",
     nai_attg_author: "A careful author",
     nai_attg_title: "A careful title",
     nai_attg_tags: "archivist, mystery",
@@ -1383,7 +1383,7 @@ describe("config Persona Appearance and Advanced bodies", () => {
 
     const absentReferencePayload = build(GUILD_MANAGER, {
       page: "appearance",
-      personas: [makePersona({ persona_id: 55, nai_char_ref_url: null })],
+      personas: [makePersona({ persona_id: 55, char_ref_url: null })],
       selectedPersonaId: 55,
     });
     const hasBlankQuoteMarker = walk(absentReferencePayload).some(
@@ -2107,6 +2107,28 @@ describe("config Behavior pages", () => {
         }
       });
     }
+  });
+
+  describe("configModelsPanel BYOK notice", () => {
+    const imageView = {
+      positiveTags: [],
+      negativeTags: [],
+      sampler: "Euler",
+      steps: "28",
+      scale: "5.0",
+      noiseSchedule: "native",
+      cfgRescale: "0.0",
+    };
+    const noticeCopy = () => localizedCopy("en-US", "commands.config.panel.byok_models_notice");
+    const textOf = (userByokMode: boolean) =>
+      walk(buildConfigModelsBody({ locale: "en-US", page: "image", readStatus: "fresh", imageView, userByokMode }))
+        .map((c) => (typeof c.content === "string" ? c.content : ""))
+        .join("\n");
+
+    it("points to /moderation on a models page only while the server requires personal providers", () => {
+      expect(textOf(true)).toContain(noticeCopy());
+      expect(textOf(false)).not.toContain(noticeCopy());
+    });
   });
 });
 

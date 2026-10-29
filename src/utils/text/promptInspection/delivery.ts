@@ -1,7 +1,16 @@
 import { resolveRequestMaxOutputTokens } from "@/utils/provider/modelLimits";
-import { AttachmentBuilder, EmbedBuilder, type InteractionEditReplyOptions, type User } from "discord.js";
+import {
+  AttachmentBuilder,
+  ComponentType,
+  EmbedBuilder,
+  MessageFlags,
+  type InteractionEditReplyOptions,
+  type TopLevelComponentData,
+  type User,
+} from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
-import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
+import { buildPanelContainer, type PanelAccentTone } from "@/utils/discord/ui/panel";
+import { localizedStatusTitle, statusNote } from "@/utils/discord/ui/statusTitle";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { PromptInspection } from "@/utils/text/promptInspection/assemble";
@@ -38,8 +47,6 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
   const { inspection, format, locale } = delivery;
   const { selectedPersona, providerName, modelName, toolsData } = inspection;
 
-  // Both output formats show the request config in the DM, while JSON also
-  // stores it at the top level for machine-readable inspection.
   const requestConfig = buildRequestConfig(
     inspection.answeringState,
     providerName,
@@ -65,7 +72,16 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
     fileContent = JSON.stringify(snapshotData, null, 2);
     fileName = `${fileStem}.json`;
   } else {
-    fileContent = buildTextSnapshot(inspection.contextItems, inspection.novelaiRequest);
+    const infoLines = [
+      `server_id: ${delivery.guildId}`,
+      `channel: #${inspection.channelName}`,
+      `persona: ${selectedPersona.persona_nickname}`,
+      `provider: ${providerName}`,
+      `model: ${modelName}`,
+      `preset: ${inspection.presetName ?? "(native)"}`,
+      `captured: ${inspection.capturedAt}`,
+    ];
+    fileContent = buildTextSnapshot(inspection.contextItems, requestConfig, infoLines, inspection.novelaiRequest);
     fileName = `${fileStem}.txt`;
   }
 
@@ -79,27 +95,6 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
       format: formatLabel,
     }),
   );
-  descriptionParts.push(
-    [
-      "```yaml",
-      `server_id: ${delivery.guildId}`,
-      `channel: #${inspection.channelName}`,
-      `persona: ${selectedPersona.persona_nickname}`,
-      `provider: ${providerName}`,
-      `model: ${modelName}`,
-      `preset: ${inspection.presetName ?? "(native)"}`,
-      `captured: ${inspection.capturedAt}`,
-      "```",
-    ].join("\n"),
-  );
-  descriptionParts.push(
-    [
-      localizer(locale, "commands.tool.prompt.snapshot.dm_config_heading"),
-      "```json",
-      JSON.stringify(requestConfig, null, 2),
-      "```",
-    ].join("\n"),
-  );
   if (format === "text") {
     descriptionParts.push(localizer(locale, "commands.tool.prompt.snapshot.dm_txt_headers_note"));
     if (delivery.includeRerunHints) {
@@ -110,24 +105,31 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
       descriptionParts.push(localizer(locale, "commands.tool.prompt.snapshot.dm_hint_try_text"));
     }
     if (toolsData) {
-      descriptionParts.push(localizer(locale, "commands.tool.prompt.snapshot.dm_tools_filtering_note"));
+      descriptionParts.push(
+        statusNote("warning", localizer(locale, "commands.tool.prompt.snapshot.dm_tools_filtering_note")),
+      );
     }
   }
   if (inspection.historyPairsDropped > 0) {
     descriptionParts.push(
-      localizer(locale, "commands.tool.prompt.snapshot.dm_truncated_note", { count: inspection.historyPairsDropped }),
+      statusNote(
+        "warning",
+        localizer(locale, "commands.tool.prompt.snapshot.dm_truncated_note", { count: inspection.historyPairsDropped }),
+      ),
     );
   }
+  descriptionParts.push(statusNote("error", localizer(locale, "commands.tool.prompt.snapshot.dm_privacy_warning")));
   const dmDescription = descriptionParts.join("\n\n");
 
   try {
     await delivery.user.send({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(localizer(locale, "commands.tool.prompt.snapshot.dm_title"))
-          .setDescription(dmDescription)
-          .setColor(ColorCode.INFO),
-      ],
+      components: buildSnapshotCard(
+        localizer(locale, "commands.tool.prompt.snapshot.dm_title"),
+        dmDescription,
+        fileName,
+        "info",
+      ),
+      flags: MessageFlags.IsComponentsV2,
       files: [attachment],
     });
 
@@ -142,15 +144,36 @@ export async function deliverPromptSnapshot(delivery: PromptSnapshotDelivery): P
   } catch (dmError) {
     log.warn(`Failed to DM prompt snapshot to user ${delivery.user.id}:`, dmError as Error);
     await delivery.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(localizedStatusTitle(locale, "commands.tool.prompt.snapshot.dm_failed_title", ColorCode.WARN))
-          .setDescription(
-            `${localizer(locale, "commands.tool.prompt.snapshot.dm_failed_description")}\n\n${dmDescription}`,
-          )
-          .setColor(ColorCode.WARN),
-      ],
+      components: buildSnapshotCard(
+        localizedStatusTitle(locale, "commands.tool.prompt.snapshot.dm_failed_title", ColorCode.WARN),
+        `${localizer(locale, "commands.tool.prompt.snapshot.dm_failed_description")}\n\n${dmDescription}`,
+        fileName,
+        "warning",
+      ),
+      flags: MessageFlags.IsComponentsV2,
       files: [attachment],
     });
   }
+}
+
+/**
+ * Discord renders message attachments above embeds, so the file rides inside a Components V2
+ * container instead, where a File component can follow the text and sit at the bottom.
+ */
+function buildSnapshotCard(
+  title: string,
+  body: string,
+  attachmentName: string,
+  tone: PanelAccentTone,
+): TopLevelComponentData[] {
+  return [
+    buildPanelContainer(
+      [
+        { type: ComponentType.TextDisplay, content: `### ${title}\n${body}` },
+        { type: ComponentType.File, file: { url: `attachment://${attachmentName}` } },
+      ],
+      tone,
+      { formatProse: false },
+    ),
+  ];
 }

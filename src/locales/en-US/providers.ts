@@ -50,6 +50,8 @@ export default {
       description: `Source: {source_line}`,
       personal_attribution: `Generated via {user_mention}'s personal {provider} configuration.`,
       personal_attribution_title: `Personal Provider Attribution`,
+      randomizer_attribution: `Model randomizer: answered by {model}.`,
+      randomizer_attribution_title: `Model Randomizer Attribution`,
       summary_field: `Thought Summary`,
       raw_field: `Raw Thoughts`,
       fetched_content_field: `Fetched Content`,
@@ -69,6 +71,8 @@ export default {
     text_quota_resets_in_hours: `Quota resets in {hours} hour(s).`,
     text_quota_resets_in_days: `Quota resets in {days} day(s).`,
     text_quota_exceeded_footer: `This quota is configured by this server's managers via \`/moderation\`.`,
+    text_quota_unavailable_title: `Text Quota Unavailable`,
+    text_quota_unavailable_description: `I could not check this server's text generation quota right now. Please try again in a moment.`,
     stream: {
       response_stopped_title: `Response Interrupted`,
       response_stopped_description: `The response was interrupted for the following reason: {reason}. Make sure that content sent is not too large for the AI provider to handle. Run \`/refresh\` to clear conversation content.`,

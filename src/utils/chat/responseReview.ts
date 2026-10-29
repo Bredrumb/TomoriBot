@@ -92,6 +92,7 @@ function acceptReviewResult<T extends z.ZodType>(schema: T) {
 export interface TurnUsageEntry {
   kind: "author" | "reviewer";
   model: string;
+  source: "measured" | "estimated";
   usage: TokenUsage;
 }
 
@@ -752,7 +753,12 @@ async function reviewCandidate(
                 abortSignal: signal,
                 onUsage: (reported) => {
                   usage = reported;
-                  recordResponseReviewUsage(state, { kind: "reviewer", model: model ?? "", usage: reported });
+                  recordResponseReviewUsage(state, {
+                    kind: "reviewer",
+                    model: model ?? "",
+                    source: "measured",
+                    usage: reported,
+                  });
                   reportProviderUsage(resolved.usageContext, {
                     modelCodename: model ?? "",
                     costUsd: reported.costUsd,

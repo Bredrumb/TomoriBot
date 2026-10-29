@@ -4,6 +4,7 @@ import {
   MessageFlags,
   type ChatInputCommandInteraction,
   type Client,
+  type ModalSubmitInteraction,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { configRepository, personaRepository, personaSpriteRepository } from "@/utils/db/repositories";
@@ -19,9 +20,10 @@ import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilena
 import { getCachedPresetAvatar, getPresetAvatarBuffer } from "../../utils/image/avatarHelper";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { deletePersonaAvatarFromStorage, deletePersonaSpriteFromStorage } from "../../utils/storage/avatarStorage";
+import { deleteCharRef } from "@/utils/storage/charrefStorage";
 import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 import { orderPersonaPresetChoices } from "@/utils/persona/presetOrdering";
-import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
+import { localizedStatusTitle, statusNote } from "@/utils/discord/ui/statusTitle";
 
 function isUniqueViolation(error: unknown): boolean {
   return (
@@ -221,6 +223,7 @@ export async function applyPresetDefault(
     }
   }
 
+  let modalSubmitInteraction: ModalSubmitInteraction | undefined;
   try {
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     const tomoriState = await getCachedTomoriState(serverDiscId);
@@ -279,7 +282,7 @@ export async function applyPresetDefault(
     }
 
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
-    const modalSubmitInteraction = modalResult.interaction!;
+    modalSubmitInteraction = modalResult.interaction!;
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
     const selectedPresetName = modalResult.values![PRESET_SELECT_ID];
 
@@ -344,6 +347,7 @@ export async function applyPresetDefault(
       // applyPresetPointerToPersona clears webhook_avatar_url, so retain the current
       // server-owned image for deletion afterward. The guard skips shared presets/ images.
       const previousMainAvatarUrl = mainPersona.webhook_avatar_url ?? null;
+      const previousCharRefUrl = mainPersona.char_ref_url ?? null;
 
       // Turn the main persona into a live preset pointer (this also drops the
       //      persona's own sprite rows, so it resolves preset sprites live again).
@@ -395,6 +399,10 @@ export async function applyPresetDefault(
       // webhook_avatar_url. The guard skips shared presets/.
       if (previousMainAvatarUrl) {
         await deletePersonaAvatarFromStorage(previousMainAvatarUrl);
+      }
+      // The repoint also clears the character reference; the owner check skips shared preset art.
+      if (previousCharRefUrl) {
+        await deleteCharRef(previousCharRefUrl, "personas", targetPersonaId);
       }
 
       const isDM = !interaction.guild;
@@ -624,17 +632,16 @@ export async function applyPresetDefault(
       }),
     ];
     if (hasNoTriggers) {
-      descriptionParts.push(`\n\n${localizer(locale, "commands.persona.import.alter_no_triggers_warning")}`);
+      descriptionParts.push(
+        `\n\n${statusNote("error", localizer(locale, "commands.persona.import.alter_no_triggers_warning"))}`,
+      );
     }
 
     const alterSuccessColor = hasNoTriggers ? ColorCode.WARN : ColorCode.SUCCESS;
     const successEmbed = new EmbedBuilder()
       .setTitle(localizedStatusTitle(locale, "commands.persona.import.alter_success_title", alterSuccessColor))
       .setDescription(descriptionParts.join(""))
-      .setColor(alterSuccessColor)
-      .setFooter({
-        text: localizer(locale, "commands.persona.import.alter_avatar_warning"),
-      });
+      .setColor(alterSuccessColor);
 
     const presetAvatarBuffer = await getPresetAvatarBuffer(selectedPreset);
     let avatarAttachment: AttachmentBuilder | null = null;
@@ -686,7 +693,7 @@ export async function applyPresetDefault(
     });
   } catch (error) {
     if (isUniqueViolation(error)) {
-      await replyInfoEmbed(interaction, locale, {
+      await replyInfoEmbed(modalSubmitInteraction ?? interaction, locale, {
         titleKey: "commands.persona.name_conflict_title",
         descriptionKey: "commands.persona.name_conflict_description",
         descriptionVars: { name: getDefaultBotName(locale) },
@@ -718,16 +725,11 @@ export async function applyPresetDefault(
     };
     await log.error(`Error executing /${commandLabel} for user ${userData.user_disc_id}`, error as Error, context);
 
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({
-        content: localizer(locale, "general.errors.unknown_error_description"),
-        flags: MessageFlags.Ephemeral,
-      });
-    } else {
-      await interaction.followUp({
-        content: localizer(locale, "general.errors.unknown_error_description"),
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+    await replyInfoEmbed(modalSubmitInteraction ?? interaction, locale, {
+      titleKey: "general.errors.unknown_error_title",
+      descriptionKey: "general.errors.unknown_error_description",
+      color: ColorCode.ERROR,
+      flags: MessageFlags.Ephemeral,
+    });
   }
 }

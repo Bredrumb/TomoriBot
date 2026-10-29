@@ -39,6 +39,7 @@ function makeState(overrides: Record<string, unknown> = {}): TomoriState {
     persona_nickname: "Mirri",
     is_alter: false,
     trigger_words: [],
+    attribute_list: [],
     naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
     llm: createLlmRow(),
     config: {

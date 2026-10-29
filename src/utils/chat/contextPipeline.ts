@@ -63,15 +63,14 @@ import {
 import {
   buildCombinedTailDirectiveMessage,
   buildReactionContextAnnotation,
+  hasContextReactions,
   buildReplyReferenceContextAnnotation,
-  createReactionContextBudgetState,
   findReplyContextTargetInMessage,
   insertAtDialogueDepth,
   insertBeforeLatestDialoguePair,
   appendInjectedContextItems,
   mergeForcedMentions,
   stripAtPersonaTriggers,
-  type ReactionContextBudgetState,
 } from "@/utils/chat/contextAnnotations";
 import {
   appendDirectMediaFromMessage,
@@ -700,6 +699,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     assistantPrefill,
     expressionDelivery,
     simplifiedMessages: history.simplifiedMessages,
+    reactedMessages: history.reactedMessages,
     streamingContext,
     messageIdMap,
     emojiStrings: assets.emojiStrings,
@@ -789,6 +789,7 @@ async function buildSimplifiedHistory(
   syntheticUsers: Map<string, { displayName: string; type: "persona" | "webhook" }>;
   messageProxyUsers: Map<string, MessageProxyConversationUser>;
   rawMessages: Message[];
+  reactedMessages: Message[];
   activeUserBlocks: PersonaUserBlockRow[];
 }> {
   const channel = turn.lockedTurn.admission.channel;
@@ -910,7 +911,7 @@ async function buildSimplifiedHistory(
   const personaByName = new Map(
     turn.allPersonas.map((persona) => [normalizeRenderModifierName(persona.persona_nickname), persona]),
   );
-  const reactionBudgetState = createReactionContextBudgetState();
+  const reactedMessages: Message[] = [];
 
   // Tracks whether the most recently pushed entry came from a "$:" debug message.
   // A debug message and a normal message from the same user share an authorId, so
@@ -971,12 +972,12 @@ async function buildSimplifiedHistory(
       matrixUsers,
       messageProxyIdentitiesByMessageId,
       messageProxyUsers,
-      reactionBudgetState,
       hiddenAuthorIds,
       minimalNoticeBodies,
       fetchedMessagesById,
     );
     if (!result) continue;
+    if (hasContextReactions(msg)) reactedMessages.push(msg);
     const { message: simplified, isDebug } = result;
     previousBlockNoticeAuthorId = null;
     userIds.add(simplified.authorId);
@@ -1138,6 +1139,7 @@ async function buildSimplifiedHistory(
     syntheticUsers,
     messageProxyUsers,
     rawMessages: visibleRawMessages,
+    reactedMessages,
     activeUserBlocks,
   };
 }
@@ -1151,7 +1153,6 @@ async function simplifyMessage(
   matrixUsers: Map<string, string>,
   messageProxyIdentitiesByMessageId: Map<string, MessageProxyHistoryIdentity>,
   messageProxyUsers: Map<string, MessageProxyConversationUser>,
-  reactionBudgetState: ReactionContextBudgetState,
   blockedContextUserIds: Set<string>,
   minimalNoticeBodies: ReadonlyMap<string, string>,
   fetchedMessagesById: ReadonlyMap<string, Message>,
@@ -1180,7 +1181,7 @@ async function simplifyMessage(
     fetchedMessagesById,
   );
   content = replyContext.content;
-  content = await withReactionContext(turn, msg, content, reactionBudgetState);
+  content = withReactionContext(msg, content);
 
   const imageAttachments: SimplifiedMessageForContext["imageAttachments"] = [];
   const videoAttachments: SimplifiedMessageForContext["videoAttachments"] = [];
@@ -1545,16 +1546,8 @@ async function resolveBlockedAuthorLabel(msg: Message, comparableId: string): Pr
   return `<@${comparableId}>`;
 }
 
-async function withReactionContext(
-  turn: ChatTurn,
-  msg: Message,
-  content: string,
-  reactionBudgetState: ReactionContextBudgetState,
-): Promise<string> {
-  const annotation = await buildReactionContextAnnotation(msg, reactionBudgetState, {
-    clientUserId: turn.lockedTurn.admission.client.user?.id,
-    mainPersonaNickname: turn.mainPersona?.persona_nickname ?? turn.persona.persona_nickname,
-  });
+function withReactionContext(msg: Message, content: string): string {
+  const annotation = buildReactionContextAnnotation(msg);
   if (!annotation) return content;
   return content ? `${content}\n${annotation}` : annotation;
 }

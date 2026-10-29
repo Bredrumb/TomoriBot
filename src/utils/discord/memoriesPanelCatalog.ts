@@ -14,7 +14,7 @@ import { parseLocale } from "@/utils/discord/panelRouteTokens";
 export const MEMORIES_ROUTE_NAMESPACE = "memories";
 export const MEMORIES_ROUTE_VERSION = "v1";
 
-export type MemoriesCategory = "memories" | "documents" | "stm";
+export type MemoriesCategory = "memories" | "documents" | "lorebooks" | "stm";
 
 export function computeServerStmFingerprint(
   workspaceId: string,
@@ -63,12 +63,38 @@ type MemoriesAction =
   | "document-chunk-remove-prompt"
   | "document-chunk-remove-confirm"
   | "document-chunk-remove-cancel"
+  | "lore-book-toggle-enabled"
+  | "lore-book-channels-open"
+  | "lore-book-channels-submit"
+  | "lore-book-rename-open"
+  | "lore-book-rename-submit"
+  | "lore-book-remove-prompt"
+  | "lore-book-remove-confirm"
+  | "lore-book-remove-cancel"
+  | "lore-book-select"
+  | "lore-book-create-submit"
+  | "lore-scope"
+  | "lore-persona-select"
+  | "lore-persona-page"
+  | "lore-select"
+  | "lore-range"
+  | "lore-add-submit"
+  | "lore-book-import-submit"
+  | "lore-import-submit"
+  | "lore-edit-open"
+  | "lore-edit-submit"
+  | "lore-activation-open"
+  | "lore-activation-submit"
+  | "lore-toggle-enabled"
+  | "lore-remove-prompt"
+  | "lore-remove-confirm"
+  | "lore-remove-cancel"
   | "stm-open"
   | "stm-submit"
   | "stm-entry"
   | "retry";
 
-export type MemoriesPanelRoute =
+export type MemoriesPanelRoute = (
   | { action: "category"; locale: string; category: MemoriesCategory }
   | { action: "persona-select"; locale: string; lineageId: number }
   | { action: "persona-page"; locale: string; lineageId: number; rangeIndex: number }
@@ -135,15 +161,55 @@ export type MemoriesPanelRoute =
       chunkIdx: number;
       nonce: string;
     }
+  | {
+      action:
+        | "lore-book-toggle-enabled"
+        | "lore-book-channels-open"
+        | "lore-book-rename-open"
+        | "lore-book-remove-prompt"
+        | "lore-book-remove-confirm"
+        | "lore-book-remove-cancel";
+      locale: string;
+      bookId: number;
+    }
+  | { action: "lore-book-rename-submit" | "lore-book-channels-submit"; locale: string; bookId: number; nonce: string }
+  | { action: "lore-book-select"; locale: string; rangeIndex?: number }
+  | { action: "lore-book-import-submit"; locale: string; nonce: string }
+  | { action: "lore-book-create-submit"; locale: string; nonce: string }
+  | { action: "lore-scope" | "lore-persona-select"; locale: string; scopeLineageId: number }
+  | { action: "lore-persona-page" | "lore-range"; locale: string; scopeLineageId: number; rangeIndex: number }
+  | { action: "lore-select"; locale: string; scopeLineageId: number; rangeIndex?: number }
+  | { action: "lore-add-submit"; locale: string; scopeLineageId: number; nonce: string }
+  | { action: "lore-import-submit"; locale: string; scopeLineageId: number; nonce: string }
+  | {
+      action:
+        | "lore-edit-open"
+        | "lore-activation-open"
+        | "lore-toggle-enabled"
+        | "lore-remove-prompt"
+        | "lore-remove-confirm"
+        | "lore-remove-cancel";
+      locale: string;
+      scopeLineageId: number;
+      entryId: number;
+    }
+  | {
+      action: "lore-edit-submit" | "lore-activation-submit";
+      locale: string;
+      scopeLineageId: number;
+      entryId: number;
+      nonce: string;
+    }
   | { action: "stm-open"; locale: string }
   | { action: "stm-submit"; locale: string; nonce: string }
   | { action: "stm-entry"; locale: string; channelId: string; personaId: number }
-  | { action: "retry"; locale: string; category: MemoriesCategory; lineageId?: number };
+  | { action: "retry"; locale: string; category: MemoriesCategory; lineageId?: number }
+) & { bookId?: number };
 
 const categoryField: RouteFieldCodec<"category", MemoriesCategory> = {
   key: "category",
   encode: (val) => String(val),
-  decode: (raw) => (raw === "memories" || raw === "documents" || raw === "stm" ? raw : null),
+  decode: (raw) => (raw === "memories" || raw === "documents" || raw === "lorebooks" || raw === "stm" ? raw : null),
 };
 
 const lineageIdField: RouteFieldCodec<"lineageId", number> = {
@@ -201,11 +267,30 @@ const rangeIndexField: RouteFieldCodec<"rangeIndex", number> = {
   decode: (raw) => parseNonNegativeInt(raw),
 };
 
+const scopeLineageIdField: RouteFieldCodec<"scopeLineageId", number> = {
+  key: "scopeLineageId",
+  encode: (val) => String(val),
+  decode: (raw) => parseNonNegativeInt(raw),
+};
+
+const entryIdField: RouteFieldCodec<"entryId", number> = {
+  key: "entryId",
+  encode: (val) => String(val),
+  decode: (raw) => parsePositiveId(raw),
+};
+
 const optionalRangeIndexField: RouteFieldCodec<"rangeIndex", number> = {
   key: "rangeIndex",
   optional: true,
   encode: (val) => String(val),
   decode: (raw) => parseNonNegativeInt(raw),
+};
+
+const optionalBookIdField: RouteFieldCodec<"bookId", number> = {
+  key: "bookId",
+  optional: true,
+  encode: (val) => String(val),
+  decode: (raw) => parsePositiveId(raw),
 };
 
 export const MEMORIES_ROUTE_CODECS: Record<
@@ -348,6 +433,107 @@ export const MEMORIES_ROUTE_CODECS: Record<
     wireToken: "document-chunk-remove-cancel",
     fields: [personaIdField, documentIdField, chunkIdxField],
   },
+  "lore-book-toggle-enabled": {
+    wireToken: "lore-book-toggle-enabled",
+    fields: [{ ...optionalBookIdField, optional: false }],
+  },
+  "lore-book-channels-open": {
+    wireToken: "lore-book-channels-open",
+    fields: [{ ...optionalBookIdField, optional: false }],
+  },
+  "lore-book-channels-submit": {
+    wireToken: "lore-book-channels-submit",
+    fields: [{ ...optionalBookIdField, optional: false }, nonceField],
+  },
+  "lore-book-rename-open": {
+    wireToken: "lore-book-rename-open",
+    fields: [{ ...optionalBookIdField, optional: false }],
+  },
+  "lore-book-rename-submit": {
+    wireToken: "lore-book-rename-submit",
+    fields: [{ ...optionalBookIdField, optional: false }, nonceField],
+  },
+  "lore-book-remove-prompt": {
+    wireToken: "lore-book-remove-prompt",
+    fields: [{ ...optionalBookIdField, optional: false }],
+  },
+  "lore-book-remove-confirm": {
+    wireToken: "lore-book-remove-confirm",
+    fields: [{ ...optionalBookIdField, optional: false }],
+  },
+  "lore-book-remove-cancel": {
+    wireToken: "lore-book-remove-cancel",
+    fields: [{ ...optionalBookIdField, optional: false }],
+  },
+  "lore-book-select": {
+    wireToken: "lore-book-select",
+    fields: [optionalRangeIndexField],
+  },
+  "lore-book-create-submit": {
+    wireToken: "lore-book-create-submit",
+    fields: [nonceField],
+  },
+  "lore-scope": {
+    wireToken: "lore-scope",
+    fields: [scopeLineageIdField, optionalBookIdField],
+  },
+  "lore-persona-select": {
+    wireToken: "lore-persona-select",
+    fields: [scopeLineageIdField, optionalBookIdField],
+  },
+  "lore-persona-page": {
+    wireToken: "lore-persona-page",
+    fields: [scopeLineageIdField, rangeIndexField, optionalBookIdField],
+  },
+  "lore-select": {
+    wireToken: "lore-select",
+    fields: [scopeLineageIdField, optionalRangeIndexField, optionalBookIdField],
+  },
+  "lore-range": {
+    wireToken: "lore-range",
+    fields: [scopeLineageIdField, rangeIndexField, optionalBookIdField],
+  },
+  "lore-add-submit": {
+    wireToken: "lore-add-submit",
+    fields: [scopeLineageIdField, nonceField, optionalBookIdField],
+  },
+  "lore-book-import-submit": { wireToken: "lore-book-import-submit", fields: [nonceField] },
+  "lore-import-submit": {
+    wireToken: "lore-import-submit",
+    fields: [scopeLineageIdField, nonceField, optionalBookIdField],
+  },
+  "lore-edit-open": {
+    wireToken: "lore-edit-open",
+    fields: [scopeLineageIdField, entryIdField, optionalBookIdField],
+  },
+  "lore-edit-submit": {
+    wireToken: "lore-edit-submit",
+    fields: [scopeLineageIdField, entryIdField, nonceField, optionalBookIdField],
+  },
+  "lore-activation-open": {
+    wireToken: "lore-activation-open",
+    fields: [scopeLineageIdField, entryIdField, optionalBookIdField],
+  },
+  "lore-activation-submit": {
+    wireToken: "lore-activation-submit",
+    fields: [scopeLineageIdField, entryIdField, nonceField, optionalBookIdField],
+  },
+  "lore-toggle-enabled": {
+    wireToken: "lore-toggle-enabled",
+    fields: [scopeLineageIdField, entryIdField, optionalBookIdField],
+  },
+  "lore-remove-prompt": {
+    wireToken: "lore-remove-prompt",
+    fields: [scopeLineageIdField, entryIdField, optionalBookIdField],
+  },
+  "lore-remove-confirm": {
+    wireToken: "lore-remove-confirm",
+    fields: [scopeLineageIdField, entryIdField, optionalBookIdField],
+  },
+  "lore-remove-cancel": {
+    wireToken: "lore-remove-cancel",
+    fields: [scopeLineageIdField, entryIdField, optionalBookIdField],
+  },
   "stm-open": {
     wireToken: "stm-open",
     fields: [],
@@ -373,7 +559,10 @@ export function listMemoriesPanelActions(): string[] {
 }
 
 export function buildMemoriesRouteSegments(route: MemoriesPanelRoute): string[] {
-  return buildRouteSegments(MEMORIES_ROUTE_CODECS[route.action], route);
+  return buildRouteSegments(
+    MEMORIES_ROUTE_CODECS[route.action],
+    route.action === "lore-select" && route.bookId ? { ...route, rangeIndex: route.rangeIndex ?? 0 } : route,
+  );
 }
 
 export function buildMemoriesRouteId(route: MemoriesPanelRoute): string {

@@ -78,7 +78,7 @@ export const landingCopyByLocale: Record<string, LandingCopy> = {
       },
       {
         title: "SillyTavern Support",
-        description: "Import SillyTavern prompt presets and character cards for use directly in Discord.",
+        description: "Import SillyTavern prompt presets, character cards, and lorebooks for use directly in Discord.",
       },
       {
         title: "Server Moderation",
@@ -156,7 +156,7 @@ export const landingCopyByLocale: Record<string, LandingCopy> = {
       { title: "代理工具", description: "搜尋網路、排定提醒、使用自訂 MCP 工具，並完成多步驟任務。" },
       { title: "媒體生成", description: "直接在 Discord 中理解並生成圖片、短片與語音訊息。" },
       { title: "完全本機部署", description: "使用本機模型、ComfyUI、SearXNG、語音伺服器與 MCP 整合自行託管。" },
-      { title: "支援 SillyTavern", description: "直接在 Discord 中使用 SillyTavern 提示詞預設與角色卡。" },
+      { title: "支援 SillyTavern", description: "直接在 Discord 中使用 SillyTavern 提示詞預設、角色卡與世界書。" },
       { title: "伺服器管理", description: "透過配額、權限、頻道規則、身分組規則與稽核工具控制存取與成本。" },
       { title: "在 Discord 中管理", description: "可直接從 Discord 設定角色、提供者、提示詞、模型、工具、記憶與權限。" },
     ],
@@ -191,7 +191,7 @@ export const landingCopyByLocale: Record<string, LandingCopy> = {
       { title: "智能体工具", description: "搜索网络、安排提醒、使用自定义 MCP 工具，并完成多步骤任务。" },
       { title: "媒体生成", description: "直接在 Discord 中理解并生成图片、短视频和语音消息。" },
       { title: "完全本地部署", description: "使用本地模型、ComfyUI、SearXNG、语音服务器和 MCP 集成自行托管。" },
-      { title: "支持 SillyTavern", description: "直接在 Discord 中使用 SillyTavern 提示词预设和角色卡。" },
+      { title: "支持 SillyTavern", description: "直接在 Discord 中使用 SillyTavern 提示词预设、角色卡和世界书。" },
       { title: "服务器管理", description: "通过配额、权限、频道规则、身份组规则和审计工具控制访问与成本。" },
       { title: "在 Discord 中管理", description: "可直接从 Discord 配置角色、提供商、提示词、模型、工具、记忆和权限。" },
     ],

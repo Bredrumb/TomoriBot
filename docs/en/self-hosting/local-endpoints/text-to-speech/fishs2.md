@@ -18,9 +18,7 @@ TomoriBot does not redistribute the model weights. Each self-hosting user downlo
 ## Hardware and operating systems
 
 > [!IMPORTANT]
-> Fish Audio officially targets Linux and WSL2. Fish S2 Pro uses a Dual-Autoregressive (Dual-AR) architecture (36 slow transformer layers + 10 fast codebook passes = 76 layer evaluations per token). On Linux, OpenAI Triton compiles this loop into fused GPU kernels (`torch.compile(backend="inductor")`), enabling real-time synthesis. The wrapper leaves compilation off by default; set `FISH_S2_COMPILE=1` to enable it.
->
-> On native Windows, Triton is unsupported, forcing PyTorch into uncompiled eager mode with over 120,000 sequential CUDA kernel dispatches through the Windows WDDM driver. This causes a severe dispatch stall, slowing generation down to ~8-10 minutes (~65s compute per second of audio) for the exact same clip. For usable inference, run Fish S2 Pro inside Linux or WSL2.
+> Use Linux or WSL2 for practical inference speed. The wrapper disables compilation by default; set `FISH_S2_COMPILE=1` to enable Triton compilation. Native Windows can take 8-10 minutes per clip.
 
 Recommended hardware:
 
@@ -40,14 +38,7 @@ bash servers/tts/fishs2/install-fishs2.sh
 servers/tts/fishs2/.venv/bin/python servers/tts/fishs2/server.py
 ```
 
-The installer:
-
-1. clones `Imagilux/fish-speech` into `servers/tts/fishs2/fish-speech/` and checks out the pinned runtime commit;
-2. creates the isolated `.venv`;
-3. installs Fish Speech plus the TomoriBot wrapper dependencies; and
-4. downloads the official BF16 `fishaudio/s2-pro` checkpoint into `fish-speech/checkpoints/fish-speech-s2-pro/`.
-
-A normal reinstall stays on the pinned runtime commit `2225e924e7d35cc0a1d24dbc67cd1819e6cf429f` rather than following a moving branch; moving to a newer runtime means changing that pin in the installer. The model revision defaults to `main`; pin `FISH_S2_MODEL_REVISION` to an immutable Hugging Face revision when a deployment must be reproducible. The installer settings are listed under [Installer variables](#installer-variables).
+The installer downloads the pinned Fish Speech runtime and the official BF16 checkpoint. Set `FISH_S2_MODEL_REVISION` to an immutable revision for reproducible model downloads.
 
 The Hugging Face model is gated. Accept its license on Hugging Face first. If the download asks for authentication, run:
 
@@ -83,11 +74,7 @@ TomoriBot stops waiting for a voice message after `TTS_SYNTHESIZE_TIMEOUT_MS` (d
 ## Mandatory reference transcript
 
 > [!WARNING]
-> Reference text (`ref_text`) is required for voice cloning; Fish S2 Pro's cross-attention mechanism requires the transcript of the reference audio to align phonetic tokens with acoustic codes.
->
-> If you upload a voice sample without providing its matching reference transcript, Fish Speech silently drops the reference audio tokens and falls back to random zero-reference speech. The TomoriBot Fish wrapper validates and rejects synthesis requests that lack reference text with a `400 Bad Request` to prevent accidental unconditioned generation.
-
-When adding a persona voice in `/config` under `Models > TTS Parameters & Voices`, always fill in the `Reference transcript` field with the verbatim text spoken in your reference audio clip.
+> Fish S2 Pro requires the exact transcript of the reference clip. Enter it in `Reference transcript` under `/config` > Models > TTS Parameters & Voices; the wrapper rejects requests without it.
 
 ## Register in TomoriBot
 
@@ -110,7 +97,7 @@ Then add the endpoint's model entry and activate it through `/config` under Mode
 4. In `/config`, open Persona > Voice and assign the sample to the persona.
 5. Generate a voice message with `/generate voice-message` or let TomoriBot generate one through its voice-message tool.
 
-Upstream describes accurate cloning from reference samples of typically 10-30 seconds. Fish S2 Pro's own runtime applies no reference-duration cap, so a longer clip is accepted rather than trimmed, but the documented clone quality comes from the 10-30 second range.
+Upstream recommends reference samples of 10-30 seconds.
 
 ## Expression controls
 

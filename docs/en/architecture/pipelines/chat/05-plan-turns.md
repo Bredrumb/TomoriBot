@@ -46,7 +46,7 @@ determineMatchingPersonas()
 `determineMatchingPersonas()` in `src/utils/chat/triggerProcessor.ts` selects which personas should respond:
 
 - **Single persona match**: produces one `ChatTurn` populated with the persona's `TomoriState`, resolved
-  credential policy (`textCredentialSource: "server" | "personal"`), and text quota preflight state.
+  credential policy (`textCredentialSource: "server" | "personal"`), and text quota reservation state.
 - **Multiple persona matches**: when multiple personas qualify on a real user message,
   `queueAdditionalPersonaTurns()` places the additional personas at the front of the channel's `messageQueue`.
   Only the first persona runs in the current turn. The remaining personas replay as priority jobs immediately
@@ -56,10 +56,11 @@ determineMatchingPersonas()
 
 ### Credential admission
 
-Each matched persona resolves credentials and checks text quota separately. A persona without usable
+Each matched persona resolves credentials and reserves text quota separately. A persona without usable
 credentials is skipped while other admitted personas can continue. A refused trigger shows at most
 one credential notice and one quota notice across persona jobs and retries. Personal text routes
 stay outside server quota, and any admitted server route requires the server trigger cooldown.
+A trigger whose turns produce no reply releases its reserved unit so a retry can claim one again.
 
 Server admission and generation use `src/utils/provider/textModelSelection.ts` for the same model
 choice: persona override, channel override (including a thread's parent), then workspace default.
@@ -74,8 +75,9 @@ messages can be evaluated for follow-up interrupts.
 
 ## Constraints and rationale
 
-- **Gating before generation**: access rules, cooldowns, and quota preflights execute before prompt assembly
-  or LLM requests, so rejected turns consume zero provider quota.
+- **Gating before generation**: access rules, cooldowns, and quota reservations execute before prompt
+  assembly or LLM requests, so a turn that never reaches a provider spends nothing, and a turn that
+  produces no reply returns its reserved unit.
 - **Front-of-queue multi-persona serialization**: breaking multi-persona replies into distinct serialized turns
   prevents long single-lock blocks and provides dedicated Discord typing indicators and webhook identities
   for each responding persona.
@@ -93,3 +95,4 @@ messages can be evaluated for follow-up interrupts.
 - `src/utils/chat/triggerProcessor.ts`: persona matching and trigger detection.
 - `src/utils/chat/personaQueue.ts`: `queueAdditionalPersonaTurns()` multi-persona queueing.
 - `src/utils/chat/admissionGuards.ts`: access, cooldown, and rate limit validation helpers.
+- `src/utils/chat/textQuotaState.ts`: per-trigger text quota reservation and release state.

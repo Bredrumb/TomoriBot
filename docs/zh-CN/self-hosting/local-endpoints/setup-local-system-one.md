@@ -1,6 +1,7 @@
 ---
 title: "设置：本地判断模型"
 sidebar:
+  label: "本地判断模型"
   order: 7
 aiGenerated: true
 ---

@@ -21,6 +21,7 @@ import { enrichErrorContext, runWithErrorContext } from "@/utils/misc/errorConte
 import { isDeliveredTurnResult, runPostTurnEffects, shouldRetryEmptyResponse } from "@/utils/chat/postTurnEffects";
 import { createChatResponseSink, handleStopResponse } from "@/utils/chat/responseEmitter";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
+import { releaseTextQuotaForTrigger } from "@/utils/chat/textQuotaState";
 import { planChatTurns } from "@/utils/chat/turnPlanner";
 
 export {
@@ -99,30 +100,38 @@ async function runAdmittedChatTurn(incoming: ChatIncoming): Promise<ChatAdmissio
       let nudgeContinues = false;
 
       if (turnPlan.turns.length > 0) {
-        await startTyping();
+        try {
+          await startTyping();
 
-        for (const turn of turnPlan.turns) {
-          recordChatDiagnostic({ kind: "turn_started", ordinal: turn.personaIndex + 1, total: turn.totalPersonas });
-          const context = await buildChatTurnContext(turn);
-          const responseSink = createChatResponseSink(context);
-          const result = await runWithChatDiagnosticStage({ turn: turn.personaIndex + 1 }, () =>
-            runGenerationTurn(context, responseSink),
-          );
-          recordChatDiagnostic({
-            kind: "turn_finished",
-            status: result.status,
-            responseCount: result.personaResponses.length,
-          });
-          const willRetryEmptyResponse = shouldRetryEmptyResponse(context.turn.lockedTurn.admission.incoming, result);
+          for (const turn of turnPlan.turns) {
+            recordChatDiagnostic({ kind: "turn_started", ordinal: turn.personaIndex + 1, total: turn.totalPersonas });
+            const context = await buildChatTurnContext(turn);
+            const responseSink = createChatResponseSink(context);
+            const result = await runWithChatDiagnosticStage({ turn: turn.personaIndex + 1 }, () =>
+              runGenerationTurn(context, responseSink),
+            );
+            recordChatDiagnostic({
+              kind: "turn_finished",
+              status: result.status,
+              responseCount: result.personaResponses.length,
+            });
+            const willRetryEmptyResponse = shouldRetryEmptyResponse(context.turn.lockedTurn.admission.incoming, result);
 
-          await runPostTurnEffects(context, result);
-          generationResultCount++;
-          // A pending retry decides for itself, because clearing here would drop nudge turns the retry could still save.
-          nudgeContinues ||= willRetryEmptyResponse || isDeliveredTurnResult(result);
+            await runPostTurnEffects(context, result);
+            generationResultCount++;
+            // A pending retry decides for itself, because clearing here would drop nudge turns the retry could still save.
+            nudgeContinues ||= willRetryEmptyResponse || isDeliveredTurnResult(result);
 
-          if (!willRetryEmptyResponse) {
-            await incoming.onGenerationResult?.(result);
+            if (!willRetryEmptyResponse) {
+              await incoming.onGenerationResult?.(result);
+            }
           }
+        } catch (error) {
+          // A throw between planning and settlement must not leave a reserved text unit held.
+          for (const turn of turnPlan.turns) {
+            await releaseTextQuotaForTrigger(turn.textQuotaTriggerKey);
+          }
+          throw error;
         }
       }
 

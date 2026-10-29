@@ -49,7 +49,7 @@ export default {
     added_receipt_detail: `**{name}** を{nodes}個のノード（{enabled}個有効）でインポートし、有効化しました。`,
     import_note_comment_only: `コメントのみのノード{count}個は一覧に表示されますが、モデルには送信されません。`,
     import_note_disabled_by_preset: `このプリセットではノード{count}個が初期状態で無効です。**ノードを切り替え**で有効にできます。`,
-    import_note_unsupported_macros: `有効なノードに、TomoriBotが未対応のプリセットマクロが残っています：{macros}。その部分はそのまま送信されるか、SillyTavernとは異なる動作になる場合があります。`,
+    import_note_unsupported_macros: `有効なノードに、未対応のマクロまたは形式が不正な条件分岐が含まれています：{macros}。未対応のマクロはそのまま表示される可能性があり、形式が不正なブロックは省略される場合があります。プリセットを使用する前にこれらのノードを確認してください。`,
     import_note_more_macros: `ほか{count}件`,
     import_note_legacy_text_completion: `この古いtext-completionsプリセットは、旧形式の\`story_string\`フィールドからベストエフォートで変換されました。\`persona\`、\`scenario\`、アンカー、stop strings、バックエンド設定などのSillyTavern専用要素は無視されます。`,
     deleted_receipt: `プリセットを削除しました`,

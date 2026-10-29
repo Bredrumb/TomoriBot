@@ -61,6 +61,7 @@ export default {
       quota_resets_in_hours: `Quota resets in {hours} hour(s).`,
       quota_resets_in_days: `Quota resets in {days} day(s).`,
       quota_exceeded_footer: `This quota is configured by this server's managers via \`/moderation\`.`,
+      quota_unavailable_description: `I could not check this server's image generation quota right now. Please try again in a moment.`,
     },
     video: {
       nsfw_description: `Add a Discord spoiler to the video only; does not change generation or content filters`,
@@ -116,6 +117,7 @@ export default {
       quota_resets_in_hours: `Quota resets in {hours} hour(s).`,
       quota_resets_in_days: `Quota resets in {days} day(s).`,
       quota_exceeded_footer: `This quota is configured by this server's managers via \`/moderation\`.`,
+      quota_unavailable_description: `I could not check this server's video generation quota right now. Please try again in a moment.`,
     },
 
     scene: {

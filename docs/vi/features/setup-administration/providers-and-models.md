@@ -29,12 +29,12 @@ Mỗi nhà cung cấp có các bước tạo khóa riêng. Trong `/help`, chọn
 | nhà cung cấp | Ghi chú | Nhận chìa khóa |
 |---|---|---|
 | Google Song Tử | Cấp miễn phí, chạy mọi tính năng. Khuyến nghị thiết lập đầu tiên. | [AI Studio](https://aistudio.google.com/apikey) |
-| OpenRouter | Một phím, nhiều mẫu (một số miễn phí). | [Phím OpenRouter](https://openrouter.ai/settings/keys) |
+| OpenRouter | Các model trả phí thông qua một API key. | [Key OpenRouter](https://openrouter.ai/settings/keys) |
 | NovelAI | Đăng ký; kể chuyện và nhập vai không bị kiểm duyệt (chỉ văn bản). | [NovelAI](https://novelai.net/) |
 | tìm kiếm sâu | Model lý luận trả tiền khi bạn đi. | [Tìm sâu](https://platform.deepseek.com/api_keys) |
 | NVIDIA NIM | Lưu trữ văn bản, nội dung nhúng và hình ảnh. | [Bản dựng NVIDIA](https://build.nvidia.com/) |
 | nhân loại | Model Claude thông qua API (không phải Mã Claude). | [Nhân loại](https://console.anthropic.com/) |
-| Z.ai | Gia đình GLM. ⚠️ ToS hạn chế sử dụng trong các tình huống mã hóa và tác nhân. | [Z.ai](https://z.ai/) |
+| Z.ai | Gia đình GLM. 🟡 ToS hạn chế sử dụng trong các tình huống mã hóa và tác nhân. | [Z.ai](https://z.ai/) |
 | Vertex AI | Đám mây Google thông qua `gcloud` ADC (tốt nhất cho thiết lập nhà phát triển hoặc chạy cục bộ). | xem bên dưới |
 | Vertex AI Express | Google Đám mây API-key BYOK (Xem trước, tập hợp con Gemini). | [Chế độ tốc hành](https://console.cloud.google.com/expressmode) |
 | Phong tục | Bất kỳ điểm cuối tương thích OpenAI nào (Ollama, vLLM, LiteLLM,…). | xem [Điểm cuối tùy chỉnh](#custom-endpoints) |
@@ -49,13 +49,15 @@ Quá trình thiết lập Google Gemini và Vertex AI xác thực thông tin đ�
 
 ### Tùy chọn: Key Brave Search
 
-Brave Search tách biệt với nhà cung cấp AI của bạn và nâng cao khả năng tìm kiếm trên web bằng các kết quả hình ảnh, video và tin tức. Đặt nó trong `/providers`. ⚠️ Brave bao gồm tín dụng miễn phí $5/tháng, vì vậy hãy đặt giới hạn sử dụng $5 trong bảng điều khiển Brave để tránh các khoản phí không mong muốn.
+Brave Search tách biệt với nhà cung cấp AI của bạn và nâng cao khả năng tìm kiếm trên web bằng các kết quả hình ảnh, video và tin tức. Đặt nó trong `/providers`. 🟡 Brave bao gồm tín dụng miễn phí $5/tháng, vì vậy hãy đặt giới hạn sử dụng $5 trong bảng điều khiển Brave để tránh các khoản phí không mong muốn.
 
 ## Chọn model
 
 Sử dụng `/providers` để quản lý thông tin xác thực máy chủ, danh mục model và đăng ký điểm cuối. Sau đó, sử dụng `/config` > `Model` > Switch Models để chọn các nhiệm vụ khả năng chia sẻ mà mọi thành viên của máy chủ sử dụng. Cả hai lệnh đều yêu cầu quyền quản lý máy chủ.
 
 Các thành viên cá nhân quản lý thông tin xác thực và danh mục của riêng họ bằng `/personal providers`, sau đó chọn các mẫu cá nhân trong `/personal config`. Cài đặt cá nhân tuân theo họ trên mọi máy chủ nơi họ sử dụng TomoriBot. Xem [Cá nhân hóa](/vi/features/knowledge/personalization/#your-own-providers) để biết thiết lập của người dùng.
+
+Cấu hình OpenRouter mới sử dụng DeepSeek Flash Latest cho trò chuyện và Gemini 3.1 Flash Lite làm phương án dự phòng thị giác. Cả hai đều dùng tín dụng OpenRouter. Việc thay thế API key sẽ giữ nguyên lựa chọn thị giác của bạn, bao gồm cả `- No Model`.
 
 Các bảng này có tiêu đề `Nhà cung cấp của máy chủ` và `Nhà cung cấp cá nhân` nên quyền sở hữu rõ ràng khi mở.
 
@@ -131,12 +133,12 @@ Nếu bạn không có phần cứng để lưu trữ các model của riêng m�
 | nhà cung cấp | Truyền phát | Gọi công cụ | Nhập hình ảnh | Nhúng | Ghi chú |
 |---|---|---|---|---|---|
 | Google Song Tử | ✅ | ✅ | ✅ | ✅ | Có sẵn các mẫu miễn phí |
-| OpenRouter | ✅ | ✅ | ✅ | ✅ | Có sẵn các mẫu miễn phí |
+| OpenRouter | ✅ | ✅ | ✅ | ✅ | Dùng tín dụng OpenRouter |
 | Nhân loại (API) | ✅ | ✅ | ✅ | - | Không phải mã Claude |
 | NovelAI | ✅ | ✅ | - | - | Chỉ GLM 4.6 mới có thể sử dụng công cụ |
 | NVIDIA NIM | ✅ | ✅ | ✅ | ✅ | Có sẵn các mẫu miễn phí |
 | tìm kiếm sâu | ✅ | ✅ | - | - | - |
-| Z.ai | ✅ | ✅ | ✅ | - | Model miễn phí; ⚠️ ToS = chỉ sử dụng mã hóa và tác nhân |
+| Z.ai | ✅ | ✅ | ✅ | - | Model miễn phí; 🟡 ToS = chỉ sử dụng mã hóa và tác nhân |
 | Mã hóa Z.ai | ✅ | ✅ | - | - | Gói đăng ký |
 | Google Vertex AI | ✅ | ✅ | ✅ | ✅ | Bao gồm phiên bản Express 'miễn phí' |
 | Codex CLI (thông qua ChatMock) | ✅ | ✅ | ✅ | - | [Thiết lập](/vi/self-hosting/local-endpoints/setup-chatmock/) |

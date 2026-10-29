@@ -1,3 +1,13 @@
+import {
+  documentHeadingText,
+  formatDocumentEmbeddingInput,
+  type DocumentHeadingPath,
+} from "@/utils/documents/documentChunker";
+import {
+  buildDocumentLexicalText,
+  buildDocumentLexicalQuery,
+  DOCUMENT_TEXT_SEARCH_CONFIG,
+} from "@/utils/documents/lexicalText";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import { generateEmbeddingsBatched, providerSupportsEmbeddingTaskType } from "@/utils/embeddings/embeddingProvider";
@@ -12,6 +22,58 @@ export interface RetrievedDocumentChunk {
   similarity: number;
 }
 
+export interface RetrievalTimings {
+  embeddingMs?: number;
+  sqlMs?: number;
+}
+
+const LEXICAL_BACKFILL_BATCH_SIZE = 50;
+
+export async function backfillDocumentLexicalTextBatch(): Promise<{ selected: number; updated: number }> {
+  const [schema] = await sql`SELECT to_regclass('public.document_chunks') IS NOT NULL AS ready`;
+  if (!schema?.ready) return { selected: 0, updated: 0 };
+  const rows = await sql<
+    Array<{
+      document_chunk_id: number;
+      document_id: number;
+      content: string;
+      document_name: string;
+      heading_path: DocumentHeadingPath | null;
+    }>
+  >`
+    SELECT dc.document_chunk_id, dc.document_id, dc.content, d.document_name, dc.heading_path
+    FROM document_chunks dc JOIN documents d ON d.document_id = dc.document_id
+    WHERE dc.lex_text IS NULL
+    ORDER BY dc.document_chunk_id
+    LIMIT ${LEXICAL_BACKFILL_BATCH_SIZE}
+  `;
+  const prepared = rows.map((row) => ({
+    ...row,
+    lexicalText: buildDocumentLexicalText(row.document_name, row.content, documentHeadingText(row.heading_path)),
+  }));
+  let updated = 0;
+  for (const row of prepared) {
+    updated += await sql.transaction(async (tx) => {
+      // Lock the name after tokenizing, so it cannot change between validation and the chunk write.
+      const [document] = await tx`
+        SELECT document_id FROM documents
+        WHERE document_id = ${row.document_id} AND document_name = ${row.document_name}
+        FOR SHARE
+      `;
+      if (!document) return 0;
+      const written = await tx`
+        UPDATE document_chunks SET lex_text = ${row.lexicalText}
+        WHERE document_chunk_id = ${row.document_chunk_id}
+          AND document_id = ${row.document_id}
+          AND content = ${row.content} AND heading_path IS NOT DISTINCT FROM ${row.heading_path}::jsonb AND lex_text IS NULL
+        RETURNING document_chunk_id
+      `;
+      return written.length;
+    });
+  }
+  return { selected: rows.length, updated };
+}
+
 export function normalizeDocumentText(text: string): string {
   return text
     .replaceAll("\u0000", "")
@@ -19,31 +81,6 @@ export function normalizeDocumentText(text: string): string {
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-}
-
-export function chunkDocumentText(text: string, chunkSize: number, overlap: number): string[] {
-  const chunks: string[] = [];
-
-  if (chunkSize <= 0) {
-    return chunks;
-  }
-
-  const safeOverlap = Math.max(0, Math.min(overlap, Math.max(0, chunkSize - 1)));
-  let start = 0;
-
-  while (start < text.length) {
-    const end = Math.min(start + chunkSize, text.length);
-    const chunk = text.slice(start, end).trim();
-    if (chunk.length > 0) {
-      chunks.push(chunk);
-    }
-    if (end >= text.length) {
-      break;
-    }
-    start = Math.max(0, end - safeOverlap);
-  }
-
-  return chunks;
 }
 
 export function formatVector(values: number[]): string {
@@ -90,14 +127,18 @@ export async function createDocumentRecord(params: {
  */
 export async function appendDocumentChunks(params: {
   documentId: number;
+  documentName: string;
   serverId: number;
   embeddingModelId: number;
   embeddingFamily: string;
   startIndex: number;
   chunks: string[];
+  headingPaths?: (DocumentHeadingPath | null)[];
   embeddings: number[][];
 }): Promise<void> {
-  const { documentId, serverId, embeddingModelId, embeddingFamily, startIndex, chunks, embeddings } = params;
+  const { documentId, documentName, serverId, embeddingModelId, embeddingFamily, startIndex, chunks, embeddings } =
+    params;
+  const headingPaths = params.headingPaths;
   if (chunks.length !== embeddings.length) {
     throw new Error(`Chunk/embedding count mismatch: ${chunks.length} vs ${embeddings.length}`);
   }
@@ -107,10 +148,10 @@ export async function appendDocumentChunks(params: {
       await tx`
         INSERT INTO document_chunks (
           document_id, server_id, embedding_model_id, embedding_family,
-          chunk_index, content, embedding
+          chunk_index, content, heading_path, lex_text, embedding
         ) VALUES (
           ${documentId}, ${serverId}, ${embeddingModelId}, ${embeddingFamily},
-          ${startIndex + i}, ${chunks[i]}, ${embeddingVector}::vector
+          ${startIndex + i}, ${chunks[i]}, ${headingPaths?.[i] ?? null}::jsonb, ${buildDocumentLexicalText(documentName, chunks[i], documentHeadingText(headingPaths?.[i]))}, ${embeddingVector}::vector
         )
       `;
     }
@@ -118,18 +159,14 @@ export async function appendDocumentChunks(params: {
 }
 
 /**
- * Sets the text_content column on a document after all chunks have been appended.
- * Required for reembedServerDocuments to work correctly on history imports.
+ * Sets text_content after all chunks have been appended.
  */
 export async function finalizeDocumentContent(documentId: number, textContent: string): Promise<void> {
   await sql`UPDATE documents SET text_content = ${textContent} WHERE document_id = ${documentId}`;
 }
 
 /**
- * Rebuilds a document's text_content column from its current chunks (ordered by
- * chunk_index, joined by blank lines). Call this after any edit/delete that
- * mutates chunk content so reembedServerDocuments stays consistent with the
- * stored chunk set.
+ * Keeps text_content consistent with stored chunks after edits or deletes.
  */
 export async function rebuildDocumentTextContent(documentId: number): Promise<void> {
   const rows = await sql<Array<{ content: string }>>`
@@ -152,6 +189,7 @@ export async function insertDocumentWithChunks(params: {
   fileSizeBytes: number | null;
   textContent: string;
   chunks: string[];
+  headingPaths?: (DocumentHeadingPath | null)[];
   embeddings: number[][];
   embeddingModelId: number;
   embeddingFamily: string;
@@ -171,6 +209,7 @@ export async function insertDocumentWithChunks(params: {
     textContent,
     chunks,
     embeddings,
+    headingPaths,
     embeddingModelId,
     embeddingFamily,
     sourceType = "upload",
@@ -225,6 +264,8 @@ export async function insertDocumentWithChunks(params: {
 					embedding_family,
 					chunk_index,
 					content,
+					heading_path,
+					lex_text,
 					embedding
 				) VALUES (
 					${documentId},
@@ -233,6 +274,8 @@ export async function insertDocumentWithChunks(params: {
 					${embeddingFamily},
 					${i},
 					${chunks[i]},
+					${headingPaths?.[i] ?? null}::jsonb,
+					${buildDocumentLexicalText(documentName, chunks[i], documentHeadingText(headingPaths?.[i]))},
 					${embeddingVector}::vector
 				)
 			`;
@@ -257,6 +300,8 @@ export async function retrieveRelevantDocumentChunks(params: {
    * channel and, inside a thread, its parent so a thread inherits its channel's scope.
    */
   channelIds?: readonly string[] | null;
+  /** Optional sink filled in place, so callers that only need chunks keep the same return type. */
+  timings?: RetrievalTimings;
 }): Promise<RetrievedDocumentChunk[]> {
   const {
     serverId,
@@ -269,12 +314,14 @@ export async function retrieveRelevantDocumentChunks(params: {
     minSimilarity,
     batchSize,
     channelIds,
+    timings,
   } = params;
 
   if (!query.trim()) {
     return [];
   }
 
+  const embeddingStartedAt = performance.now();
   const queryEmbeddings = await generateEmbeddingsBatched({
     provider: embeddingModel.provider,
     apiKey,
@@ -285,6 +332,7 @@ export async function retrieveRelevantDocumentChunks(params: {
     batchSize,
     onUsage,
   });
+  if (timings) timings.embeddingMs = performance.now() - embeddingStartedAt;
 
   if (queryEmbeddings.length === 0) {
     return [];
@@ -311,6 +359,7 @@ export async function retrieveRelevantDocumentChunks(params: {
   // especially effective for proper-noun-heavy content where embeddings can miss exact name
   // matches. fts_candidates is a no-op when plainto_tsquery returns an empty tsquery (all
   // stop words), so pure vector ranking applies transparently as the fallback.
+  const sqlStartedAt = performance.now();
   const rows = await sql<
     Array<{
       document_id: number;
@@ -318,12 +367,10 @@ export async function retrieveRelevantDocumentChunks(params: {
       chunk_index: number;
       content: string;
       distance: number | string;
-      fts_rank: number | string | null;
-      vector_rank: number | string | null;
     }>
   >`
     WITH fts_q AS (
-      SELECT plainto_tsquery('english', ${query}::text) AS q
+      SELECT plainto_tsquery(${DOCUMENT_TEXT_SEARCH_CONFIG}::regconfig, ${buildDocumentLexicalQuery(query)}::text) AS q
     ),
     vector_candidates AS (
       SELECT dc.document_chunk_id,
@@ -366,25 +413,24 @@ export async function retrieveRelevantDocumentChunks(params: {
       GROUP BY document_chunk_id
     )
     SELECT dc.document_id, d.document_name, dc.chunk_index, dc.content,
-           (dc.embedding <=> ${queryVector}::vector) AS distance,
-           r.fts_rank, r.vector_rank
+           (dc.embedding <=> ${queryVector}::vector) AS distance
     FROM rrf_merged r
     JOIN document_chunks dc ON dc.document_chunk_id = r.document_chunk_id
     JOIN documents d ON d.document_id = dc.document_id
+    -- Filter before the limit, or a below-floor row takes a slot from a lower-ranked qualifying one.
+    -- FTS hits bypass the floor: verbose chunks have dilute centroids that under-rate contextual
+    -- queries, so the lexical match is the trusted signal for those rows.
+    WHERE r.fts_rank IS NOT NULL
+       OR (1 - (dc.embedding <=> ${queryVector}::vector)) >= ${minSimilarity}::float8
     ORDER BY r.rrf_score DESC
     LIMIT ${maxResults}
   `;
+  if (timings) timings.sqlMs = performance.now() - sqlStartedAt;
 
   const results: RetrievedDocumentChunk[] = [];
   for (const row of rows) {
     const distance = typeof row.distance === "string" ? Number.parseFloat(row.distance) : Number(row.distance);
     const similarity = Number.isFinite(distance) ? 1 - distance : 0;
-    // FTS hits bypass the cosine floor: verbose chunks have dilute centroids that under-rate
-    // contextual queries, so the lexical match is the trusted signal for those rows.
-    const ftsMatched = row.fts_rank != null;
-    if (similarity < minSimilarity && !ftsMatched) {
-      continue;
-    }
     results.push({
       document_id: row.document_id,
       document_name: row.document_name,
@@ -422,75 +468,142 @@ export async function reembedServerDocuments(params: {
   embeddingModel: EmbeddingModelRow;
   apiKey: string;
   onUsage?: EmbeddingRequest["onUsage"];
-  chunkSize: number;
-  chunkOverlap: number;
 }): Promise<void> {
-  const { serverId, embeddingModel, apiKey, onUsage, chunkSize, chunkOverlap } = params;
-
-  if (!embeddingModel.embedding_model_id) {
+  const { serverId, embeddingModel, apiKey, onUsage } = params;
+  const modelId = embeddingModel.embedding_model_id;
+  if (!modelId) {
     throw new Error("Embedding model ID is missing for re-embedding");
   }
 
-  const documents = await sql<
-    Array<{
-      document_id: number;
-      text_content: string;
-    }>
-  >`
-		SELECT document_id, text_content
-		FROM documents
-		WHERE server_id = ${serverId}
-		ORDER BY document_id ASC
-	`;
+  interface StoredChunk {
+    document_chunk_id: number;
+    chunk_index: number;
+    content: string;
+    heading_path: DocumentHeadingPath | null;
+    embedding_model_id: number;
+    embedding_family: string;
+  }
+
+  const documents = await sql<Array<{ document_id: number }>>`
+    SELECT document_id FROM documents
+    WHERE server_id = ${serverId}
+    ORDER BY document_id ASC
+  `;
+  let completed = 0;
+  let skipped = 0;
+  let failed = 0;
+  let conflicted = 0;
+  let firstFailure: unknown;
 
   for (const document of documents) {
-    const normalized = normalizeDocumentText(document.text_content);
-    const chunks = chunkDocumentText(normalized, chunkSize, chunkOverlap);
+    try {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const chunks = await sql<StoredChunk[]>`
+          SELECT document_chunk_id, chunk_index, content, heading_path, embedding_model_id, embedding_family
+          FROM document_chunks
+          WHERE document_id = ${document.document_id}
+          ORDER BY chunk_index ASC
+        `;
+        const pending = chunks.filter((chunk) => chunk.embedding_model_id !== modelId);
+        const embeddings =
+          pending.length === 0
+            ? []
+            : await generateEmbeddingsBatched({
+                provider: embeddingModel.provider,
+                apiKey,
+                model: embeddingModel.codename,
+                modelId,
+                inputs: pending.map((chunk) => formatDocumentEmbeddingInput(chunk.content, chunk.heading_path)),
+                taskType: (await providerSupportsEmbeddingTaskType(embeddingModel.provider))
+                  ? "RETRIEVAL_DOCUMENT"
+                  : undefined,
+                batchSize: 16,
+                onUsage,
+              });
+        if (pending.length > 0) {
+          const dimensions = embeddings[0]?.length ?? 0;
+          if (
+            embeddings.length !== pending.length ||
+            dimensions === 0 ||
+            embeddings.some((vector) => vector.length !== dimensions || !vector.every(Number.isFinite))
+          ) {
+            throw new Error("Invalid re-embedding vector count or dimensions");
+          }
+          const familyDimensions = await sql<Array<{ dimensions: number }>>`
+            SELECT DISTINCT vector_dims(embedding) AS dimensions
+            FROM document_chunks
+            WHERE server_id = ${serverId}
+              AND embedding_family = ${embeddingModel.model_family}
+              AND embedding IS NOT NULL
+          `;
+          if (familyDimensions.some((row) => row.dimensions !== dimensions)) {
+            throw new Error("Re-embedding dimensions do not match the stored target family");
+          }
+        }
 
-    if (chunks.length === 0) {
-      log.warn(`Skipping empty document during re-embed: ${document.document_id}`);
-      continue;
-    }
-
-    const embeddings = await generateEmbeddingsBatched({
-      provider: embeddingModel.provider,
-      apiKey,
-      model: embeddingModel.codename,
-      modelId: embeddingModel.embedding_model_id,
-      inputs: chunks,
-      taskType: (await providerSupportsEmbeddingTaskType(embeddingModel.provider)) ? "RETRIEVAL_DOCUMENT" : undefined,
-      batchSize: 16,
-      onUsage,
-    });
-
-    await sql.transaction(async (tx) => {
-      await tx`
-				DELETE FROM document_chunks
-				WHERE document_id = ${document.document_id}
-			`;
-
-      for (let i = 0; i < chunks.length; i += 1) {
-        const embeddingVector = formatVector(embeddings[i]);
-        await tx`
-					INSERT INTO document_chunks (
-						document_id,
-						server_id,
-					embedding_model_id,
-					embedding_family,
-					chunk_index,
-					content,
-					embedding
-				) VALUES (
-					${document.document_id},
-					${serverId},
-					${embeddingModel.embedding_model_id},
-					${embeddingModel.model_family},
-					${i},
-					${chunks[i]},
-					${embeddingVector}::vector
-				)
-				`;
+        const committed = await sql.transaction(async (tx) => {
+          // The parent lock blocks FK inserts until commit, and the chunk locks block edits and deletes after comparison.
+          const [parent] = await tx`
+            SELECT document_id FROM documents
+            WHERE document_id = ${document.document_id} AND server_id = ${serverId}
+            FOR UPDATE
+          `;
+          if (!parent) return false;
+          const current = await tx<StoredChunk[]>`
+            SELECT document_chunk_id, chunk_index, content, heading_path, embedding_model_id, embedding_family
+            FROM document_chunks
+            WHERE document_id = ${document.document_id}
+            ORDER BY chunk_index ASC
+            FOR UPDATE
+          `;
+          if (
+            current.length !== chunks.length ||
+            current.some((chunk, index) => {
+              const snapshot = chunks[index];
+              return (
+                chunk.document_chunk_id !== snapshot.document_chunk_id ||
+                chunk.chunk_index !== snapshot.chunk_index ||
+                chunk.content !== snapshot.content ||
+                !Bun.deepEquals(chunk.heading_path, snapshot.heading_path) ||
+                chunk.embedding_model_id !== snapshot.embedding_model_id ||
+                chunk.embedding_family !== snapshot.embedding_family
+              );
+            })
+          ) {
+            return false;
+          }
+          for (let index = 0; index < pending.length; index++) {
+            await tx`
+              UPDATE document_chunks
+              SET embedding = ${formatVector(embeddings[index])}::vector,
+                  embedding_model_id = ${modelId},
+                  embedding_family = ${embeddingModel.model_family}
+              WHERE document_chunk_id = ${pending[index].document_chunk_id}
+            `;
+          }
+          return true;
+        });
+        if (committed) {
+          if (pending.length === 0) skipped++;
+          else completed++;
+          break;
+        }
+        if (attempt === 1) {
+          conflicted++;
+          throw new Error("Document chunks changed during both re-embedding attempts");
+        }
       }
+    } catch (error) {
+      failed++;
+      firstFailure ??= error;
+    }
+  }
+
+  if (failed > 0) {
+    log.warn("Document re-embedding incomplete", undefined, {
+      serverId,
+      metadata: { total: documents.length, completed, skipped, failed, conflicted },
     });
+    throw new Error("Document re-embedding incomplete", { cause: firstFailure });
   }
 }

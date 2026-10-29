@@ -1,3 +1,4 @@
+import { taggedMemoryToLorebook } from "@/modules/lorebooks/imports";
 import type { Client } from "discord.js";
 import { createHash } from "node:crypto";
 import { encryptApiKey } from "@/utils/security/crypto";
@@ -67,7 +68,7 @@ function cardData(nickname: string, overrides: Partial<PresetExportData> = {}): 
     trigger_words: [CARD_PRESET_TRIGGER],
     persona_prompt: CARD_PRESET_PROMPT,
     physical_appearance_tags: [],
-    nai_char_ref_url: null,
+    char_ref_url: null,
     nai_attg_author: null,
     nai_attg_title: null,
     nai_attg_tags: null,
@@ -239,7 +240,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Preset import - regression", () => {
       persona_prompt: "_rt_persona_prompt",
       persona_lineage_id: refs.personaLineageId,
       physical_appearance_tags: [],
-      nai_char_ref_url: null,
+      char_ref_url: null,
       nai_attg_author: null,
       nai_attg_title: null,
       nai_attg_tags: null,
@@ -330,7 +331,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Preset import - regression", () => {
         persona_lineage_id: presetLineageId,
         preset_lineage_id: presetLineageId,
         physical_appearance_tags: [],
-        nai_char_ref_url: null,
+        char_ref_url: null,
         nai_attg_author: null,
         nai_attg_title: null,
         nai_attg_tags: null,
@@ -364,6 +365,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Preset import - regression", () => {
         expect(exportResult.data.data.preset_lineage_id).toBe(presetLineageId);
         expect(exportResult.data.data.attribute_list).toEqual(["_rt_import_pointer_attr"]);
       }
+      const importedLore = taggedMemoryToLorebook({ content: "The manor overlooks the sea.", tags: ["manor"] }, true);
+      if (!importedLore) throw new Error("Missing fixture lore");
+      expect(await presetRepository.findMatchingOfficialPresetForImport(presetData)).not.toBeNull();
+      expect(
+        await presetRepository.findMatchingOfficialPresetForImport({ ...presetData, lorebook_entries: [importedLore] }),
+      ).toBeNull();
       const voicedData = {
         ...presetData,
         speech_voice_design_prompt: "Warm narration",

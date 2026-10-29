@@ -68,6 +68,10 @@ export default {
     memory_export_persona_invalid_title: "無法使用該人格",
     memory_export_persona_invalid_description: "這個伺服器沒有那個人格，所以沒有匯出任何內容。",
     memory_preview_title: "檢查記憶匯入",
+    memory_preview_lore_count: "{count} 條世界書條目（取代此範圍）",
+    memory_preview_serverwide_lore: "全伺服器世界書：{count} 條條目（取代所有全伺服器世界書）。",
+    workspace_memory_preview_description:
+      "此工作區匯入包含檔案中的記憶與所有世界書。即使選擇「合併」，所包含的世界書也會完整取代該範圍的書（包含在此處新增的條目）。全伺服器世界書會取代全伺服器世界書。",
     memory_preview_description: "這個{ownership}匯入只包含記憶。",
     memory_preview_exclusions: "不包含文件與人格。",
     memory_preview_groups_heading: "偵測到的記憶群組",

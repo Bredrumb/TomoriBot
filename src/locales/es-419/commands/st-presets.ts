@@ -51,7 +51,7 @@ export default {
     added_receipt_detail: `Se importó y activó **{name}** con {nodes} nodos ({enabled} activados).`,
     import_note_comment_only: `{count} nodo(s) solo de comentario aparecen en la lista, pero nunca se envían al modelo.`,
     import_note_disabled_by_preset: `{count} nodo(s) empiezan desactivados en este preset. Usa **Alternar nodos** para activarlos.`,
-    import_note_unsupported_macros: `Hay nodos activados que usan macros de preset que TomoriBot no admite: {macros}. Esas partes pueden enviarse tal cual o comportarse distinto que en SillyTavern.`,
+    import_note_unsupported_macros: `Los nodos habilitados contienen macros no compatibles o condicionales con formato incorrecto: {macros}. Las macros no compatibles pueden aparecer de forma literal; los bloques con formato incorrecto pueden omitirse. Revisa estos nodos antes de usar el preajuste.`,
     import_note_more_macros: `+{count} más`,
     import_note_legacy_text_completion: `Este preset antiguo de text-completions se convirtió lo mejor posible desde sus campos heredados \`story_string\`. Los bloques exclusivos de SillyTavern, como \`persona\`, \`scenario\`, anclas, stop strings y ajustes del backend, se ignoran.`,
     deleted_receipt: `Preajuste eliminado`,

@@ -96,14 +96,19 @@ async function loadProviderDefaultSelectionIds(provider: string): Promise<Provid
     };
   }
 
-  const [defaultTextModel, defaultEmbeddingModel, defaultDiffusionModel, defaultVideoModel] = await Promise.all([
-    llmModelRepo.loadDefaultModel(normalizedProvider),
-    llmModelRepo.loadDefaultEmbeddingModel(normalizedProvider),
-    llmModelRepo.loadDefaultDiffusionModel(normalizedProvider),
-    llmModelRepo.loadDefaultVideoGenerationModel(normalizedProvider),
-  ]);
+  const providerInfo = getStaticProviderInfo(normalizedProvider);
+  const [defaultTextModel, defaultEmbeddingModel, defaultDiffusionModel, defaultVideoModel, defaultVisionModel] =
+    await Promise.all([
+      llmModelRepo.loadDefaultModel(normalizedProvider),
+      llmModelRepo.loadDefaultEmbeddingModel(normalizedProvider),
+      llmModelRepo.loadDefaultDiffusionModel(normalizedProvider),
+      llmModelRepo.loadDefaultVideoGenerationModel(normalizedProvider),
+      providerInfo?.defaultVisionModel
+        ? llmModelRepo.loadByProviderAndCodename(normalizedProvider, providerInfo.defaultVisionModel)
+        : null,
+    ]);
 
-  const imageGenerationStyle = getStaticProviderInfo(normalizedProvider)?.featureSupport.imageGeneration ?? "none";
+  const imageGenerationStyle = providerInfo?.featureSupport.imageGeneration ?? "none";
 
   return {
     llm_id: defaultTextModel?.llm_id ?? null,
@@ -113,9 +118,7 @@ async function loadProviderDefaultSelectionIds(provider: string): Promise<Provid
     nai_diffusion_model_id:
       imageGenerationStyle === "nai-pipeline" ? (defaultDiffusionModel?.diffusion_model_id ?? null) : null,
     video_model_id: defaultVideoModel?.video_model_id ?? null,
-    // Vision is an opt-in fallback slot, never seeded: a provider whose default text model happens
-    // to see images would otherwise silently fill it with the model already answering chat.
-    vision_llm_id: null,
+    vision_llm_id: defaultVisionModel?.llm_id ?? null,
   };
 }
 
@@ -195,7 +198,7 @@ export async function buildSavedProviderConfigFromExistingOrDefaults(params: {
           : (existingConfig?.nai_diffusion_model_id ?? null)
         : null,
     video_model_id: existingConfig?.video_model_id ?? defaults?.video_model_id ?? null,
-    vision_llm_id: existingConfig?.vision_llm_id ?? null,
+    vision_llm_id: existingConfig ? (existingConfig.vision_llm_id ?? null) : (defaults?.vision_llm_id ?? null),
     nai_preset_name: existingConfig?.nai_preset_name ?? null,
     llm_temperature: existingConfig?.llm_temperature ?? params.baseConfig.llm_temperature,
     llm_top_p: existingConfig?.llm_top_p ?? params.baseConfig.llm_top_p,
@@ -260,7 +263,7 @@ export async function buildUserSavedProviderConfigFromExistingOrDefaults(params:
     video_model_id: existingConfig?.video_model_id ?? defaults?.video_model_id ?? null,
     speech_design_model_id: existingConfig?.speech_design_model_id ?? null,
     speech_clone_model_id: existingConfig?.speech_clone_model_id ?? null,
-    vision_llm_id: existingConfig?.vision_llm_id ?? null,
+    vision_llm_id: existingConfig ? (existingConfig.vision_llm_id ?? null) : (defaults?.vision_llm_id ?? null),
     nai_preset_name: existingConfig?.nai_preset_name ?? null,
     llm_temperature: existingConfig?.llm_temperature ?? params.baseConfig?.llm_temperature ?? null,
     llm_top_p: existingConfig?.llm_top_p ?? params.baseConfig?.llm_top_p ?? null,

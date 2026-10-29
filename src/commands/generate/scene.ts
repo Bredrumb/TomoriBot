@@ -21,6 +21,11 @@ import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { safeSelectOptionText } from "@/utils/discord/interactionHelper";
+import {
+  DISCORD_SELECT_OPTION_DESCRIPTION_MAX,
+  DISCORD_SELECT_OPTIONS_MAX,
+} from "@/utils/discord/ui/componentsV2Limits";
+import { resolvePersonaSnippet } from "@/utils/text/personaPrompt";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { tomoriChat } from "@/events/messageCreate/tomoriChat";
@@ -53,19 +58,26 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
   );
 export const autocomplete = createGenerationModelAutocomplete("text");
 
+/**
+ * Discord rejects the whole modal past 25 options, which only installs raising `MAX_PERSONAS_PER_SERVER`
+ * above 25 reach; personas past the cut then cannot be cast in a scene.
+ */
 function getPersonaOptions(personas: TomoriState[], locale: string) {
   return personas
     .filter((persona) => typeof persona.persona_id === "number")
     .map((persona) => ({
       label: safeSelectOptionText(persona.persona_nickname),
       value: String(persona.persona_id),
-      description: localizer(
-        locale,
-        persona.is_alter
-          ? "commands.generate.scene.modal.alter_persona_description"
-          : "commands.generate.scene.modal.main_persona_description",
-      ),
-    }));
+      description:
+        resolvePersonaSnippet(persona, DISCORD_SELECT_OPTION_DESCRIPTION_MAX) ??
+        localizer(
+          locale,
+          persona.is_alter
+            ? "commands.generate.scene.modal.alter_persona_description"
+            : "commands.generate.scene.modal.main_persona_description",
+        ),
+    }))
+    .slice(0, DISCORD_SELECT_OPTIONS_MAX);
 }
 
 function parseCycleCount(rawValue: string | undefined): number | null {

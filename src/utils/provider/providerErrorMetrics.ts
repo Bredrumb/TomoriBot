@@ -13,9 +13,15 @@
 import type { ProviderError, StreamContext } from "@/types/stream/interfaces";
 import { statRepository } from "@/utils/db/repositories/StatRepository";
 import { log, redactLogString } from "@/utils/misc/logger";
+import {
+  formatProviderErrorCodeForDisplay,
+  getProviderErrorDetail,
+  isOperatorActionableProviderError,
+} from "@/utils/provider/providerErrorClassification";
 import { readBoundedResponse } from "@/utils/security/boundedResponse";
 
 const MAX_PROVIDER_ERROR_BYTES = 64 * 1024;
+const OPERATOR_ERROR_DETAIL_CHARS = 2000;
 
 export function redactProviderDetail(detail: string, apiKey: string): string {
   return redactLogString(apiKey ? detail.replaceAll(apiKey, "[REDACTED]") : detail);
@@ -52,6 +58,8 @@ export interface ProviderFailureReport {
   /** Metric dimensions drawn from fixed sets; they are also copied into the record's metadata. */
   dimensions: Record<string, string | number>;
   metadata?: Record<string, unknown>;
+  /** Exact credentials removed from the message, attached error, and metadata before truncation or persistence. */
+  redactValues?: readonly string[];
 }
 
 /**
@@ -69,10 +77,58 @@ export async function reportProviderFailure(report: ProviderFailureReport): Prom
   };
   if (report.expected) {
     log.metric("provider_failure", { errorType: report.errorType, ...report.dimensions });
-    log.warn(message, report.error, context, { retain: true });
+    log.warn(message, report.error, context, { retain: true, redactValues: report.redactValues });
     return;
   }
-  await log.error(message, report.error, context);
+  await log.error(message, report.error, context, { redactValues: report.redactValues });
+}
+
+/**
+ * Reports a provider failure chunk once per stream attempt, whether or not the user sees it, so
+ * callers handling the returned result must not report it again.
+ * @param args.requestApiKey - The key this attempt sent, which may be a personal or rotated key rather than the server's.
+ * @param args.denied - TomoriBot refused the request itself, so there is no provider text and no incident.
+ * @param args.surfaced - Whether the error UI will show this failure to the user.
+ */
+export async function reportStreamProviderFailure(args: {
+  providerError: ProviderError;
+  providerName: string;
+  context: StreamContext;
+  requestApiKey: string;
+  denied: boolean;
+  surfaced: boolean;
+}): Promise<void> {
+  const { providerError, context } = args;
+  const rawCode = providerError.code ?? "unknown";
+  const rawDetail = args.denied ? null : getProviderErrorDetail(providerError);
+  await reportProviderFailure({
+    summary: `Provider stream error (${args.providerName} ${providerError.type}/${rawCode})`,
+    errorType: "ProviderStreamError",
+    error: providerError.originalError ?? providerError,
+    expected: args.denied || !isOperatorActionableProviderError(providerError),
+    detail: rawDetail ? boundOperatorDetail(redactProviderDetail(rawDetail, args.requestApiKey)) : undefined,
+    serverId: context.tomoriState.server_id,
+    userId: context.triggererUserId ?? null,
+    dimensions: {
+      provider: args.providerName,
+      providerErrorType: providerError.type,
+      code: formatProviderErrorCodeForDisplay(providerError.code),
+    },
+    metadata: {
+      textCredentialSource: context.textCredentialSource ?? "server",
+      model: context.requestDiagnostics?.model ?? context.tomoriState.llm.llm_codename,
+      providerErrorCode: rawCode,
+      channelId: context.channel.id,
+      surfaced: args.surfaced,
+      requestDiagnostics: context.requestDiagnostics,
+    },
+    redactValues: [args.requestApiKey],
+  });
+}
+
+/** Response bodies are unbounded, and logger truncation is opt-in per deployment. */
+function boundOperatorDetail(detail: string): string {
+  return detail.length > OPERATOR_ERROR_DETAIL_CHARS ? `${detail.slice(0, OPERATOR_ERROR_DETAIL_CHARS)}...` : detail;
 }
 
 /**

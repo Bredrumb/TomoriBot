@@ -84,6 +84,26 @@ export interface StreamConfig extends ProviderConfig {
  * Contains all the Discord and application context needed for streaming
  */
 export interface StreamContext {
+  requestDiagnostics?: {
+    model: string;
+    contextItemCount: number;
+    contentsCount: number;
+    tailRoles: Array<"user" | "model" | "unknown">;
+    lastTurn: {
+      textParts: number;
+      inlineDataParts: number;
+      fileDataParts: number;
+      functionCallParts: number;
+      functionResponseParts: number;
+    };
+    functionHistoryCount: number;
+    currentTurnModelPartCount: number;
+    prefillPresent: boolean;
+    manuallyTriggered: boolean;
+    toolCount: number;
+    chunksReceived: number;
+    elapsedMs: number;
+  };
   deliveryMode?: PersonaDeliveryMode;
   deliveryReceipts?: PersonaDeliveryReceipt[];
   deliveryState?: { unconfirmed: boolean };

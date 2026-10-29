@@ -143,6 +143,11 @@ export interface PersonaInput {
    * simply has no default sprites, so a graceful no-op.
    */
   sprites?: PresetSpriteInput[];
+  /**
+   * Optional full-body character reference image, relative to `avatarPath` (e.g. `"character-reference/front.png"`).
+   * Kept in a subfolder because the avatar seed takes the first image directly inside `avatarPath`.
+   */
+  characterReference?: string;
   /** Hides the preset from `/persona default`; only the age-restricted `/nsfw persona default` lists it. */
   isNsfw?: boolean;
 }

@@ -29,6 +29,7 @@ import {
   AttachmentBuilder,
   type ChatInputCommandInteraction,
   type Client,
+  type ModalSubmitInteraction,
   type SlashCommandSubcommandBuilder,
   type APIAttachment,
 } from "discord.js";
@@ -38,7 +39,14 @@ import { localizer } from "../../utils/text/localizer";
 import { personaRepository, llmModelRepo, statRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
-import { checkImageQuota, incrementImageQuota } from "../../utils/quota/imageQuotaManager";
+import {
+  checkImageQuota,
+  releaseImageQuota,
+  reserveImageQuota,
+  type QuotaCheckResult,
+} from "../../utils/quota/imageQuotaManager";
+import { QuotaUnavailableError } from "../../utils/quota/quotaErrors";
+import type { QuotaReservation } from "../../utils/db/repositories/QuotaRepository";
 import { getProviderDisplayName, resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { resolveNativeImageGenerationCapability } from "@/utils/provider/providerCapabilityResolver";
 import { ZAI_CODING_IMAGES_GENERATIONS_URL, ZAI_GENERAL_IMAGES_GENERATIONS_URL } from "@/providers/zai/zaiShared";
@@ -58,7 +66,7 @@ import { safeDownload } from "@/utils/security/safeDownload";
 import { executeAutoImageCommand } from "@/utils/image/autoImageCommand";
 import { prepareGeneratedImage } from "@/utils/image/generatedImageMetadata";
 import { buildImageGenerationInputAttachment } from "@/utils/image/imageGenerationInput";
-import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
+import { localizedStatusTitle, statusNote } from "@/utils/discord/ui/statusTitle";
 import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 
 const MODAL_CUSTOM_ID = "generate_image_modal";
@@ -131,6 +139,57 @@ async function convertAttachmentToBase64(attachment: APIAttachment): Promise<{ m
     mimeType: attachment.content_type,
     data: base64Data,
   };
+}
+
+async function replyImageQuotaExceeded(
+  target: ChatInputCommandInteraction | ModalSubmitInteraction,
+  locale: string,
+  quotaCheck: QuotaCheckResult,
+  tipKeys: string[],
+): Promise<void> {
+  const descriptionVars: Record<string, string> = {};
+
+  if (quotaCheck.resetTime) {
+    const now = new Date();
+    const hoursUntilReset = Math.ceil((quotaCheck.resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
+
+    if (hoursUntilReset < 24) {
+      descriptionVars.reset_info = localizer(locale, "commands.generate.image.quota_resets_in_hours", {
+        hours: hoursUntilReset.toString(),
+      });
+    } else {
+      descriptionVars.reset_info = localizer(locale, "commands.generate.image.quota_resets_in_days", {
+        days: Math.ceil(hoursUntilReset / 24).toString(),
+      });
+    }
+  }
+
+  await replyInfoEmbed(target, locale, {
+    titleKey: "commands.generate.image.quota_exceeded_title",
+    descriptionKey:
+      quotaCheck.reason === "user_quota_exceeded"
+        ? "commands.generate.image.user_quota_exceeded_description"
+        : quotaCheck.reason === "serverwide_quota_exceeded"
+          ? "commands.generate.image.serverwide_quota_exceeded_description"
+          : "commands.generate.image.quota_exceeded_description",
+    descriptionVars,
+    footerKey: "commands.generate.image.quota_exceeded_footer",
+    tipKeys,
+    color: ColorCode.ERROR,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function replyImageQuotaUnavailable(
+  target: ChatInputCommandInteraction | ModalSubmitInteraction,
+  locale: string,
+): Promise<void> {
+  await replyInfoEmbed(target, locale, {
+    titleKey: "commands.generate.image.error_generation_failed_title",
+    descriptionKey: "commands.generate.image.quota_unavailable_description",
+    color: ColorCode.ERROR,
+    flags: MessageFlags.Ephemeral,
+  });
 }
 
 type ImageCredentials = Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
@@ -394,53 +453,27 @@ export async function execute(
 
   // Check image generation quota BEFORE showing modal (personal-provider users bypass quota)
   if (imageCreds.source === "server") {
-    const quotaCheck = await checkImageQuota(tomoriState.server_id, interaction.user.id);
+    let quotaCheck: QuotaCheckResult;
+    try {
+      quotaCheck = await checkImageQuota(tomoriState.server_id, interaction.user.id);
+    } catch (error) {
+      if (error instanceof QuotaUnavailableError) {
+        await replyImageQuotaUnavailable(interaction, locale);
+        return;
+      }
+      throw error;
+    }
 
     if (!quotaCheck.allowed) {
-      const errorTitleKey = "commands.generate.image.quota_exceeded_title";
-      let errorDescriptionKey = "commands.generate.image.quota_exceeded_description";
-      const descriptionVars: Record<string, string> = {};
-
-      if (quotaCheck.resetTime) {
-        const now = new Date();
-        const resetTime = quotaCheck.resetTime;
-        const hoursUntilReset = Math.ceil((resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
-
-        if (hoursUntilReset < 24) {
-          descriptionVars.reset_info = localizer(locale, "commands.generate.image.quota_resets_in_hours", {
-            hours: hoursUntilReset.toString(),
-          });
-        } else {
-          const daysUntilReset = Math.ceil(hoursUntilReset / 24);
-          descriptionVars.reset_info = localizer(locale, "commands.generate.image.quota_resets_in_days", {
-            days: daysUntilReset.toString(),
-          });
-        }
-      }
-
-      if (quotaCheck.reason === "user_quota_exceeded") {
-        errorDescriptionKey = "commands.generate.image.user_quota_exceeded_description";
-      } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
-        errorDescriptionKey = "commands.generate.image.serverwide_quota_exceeded_description";
-      }
-
-      if (!interaction.replied && !interaction.deferred)
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: errorTitleKey,
-        descriptionKey: errorDescriptionKey,
-        descriptionVars,
-        footerKey: "commands.generate.image.quota_exceeded_footer",
-        tipKeys: await recoveryTips([], imageCreds.source),
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
+      await replyImageQuotaExceeded(interaction, locale, quotaCheck, await recoveryTips([], imageCreds.source));
       return;
     }
   }
 
   // Track modal submit interaction for error handling in catch block
-  let modalSubmitInteraction: import("discord.js").ModalSubmitInteraction | undefined;
+  let modalSubmitInteraction: ModalSubmitInteraction | undefined;
+  let quotaReservation: QuotaReservation | null = null;
+  let quotaConsumed = false;
   let submittedInput: { prompt: string; aspectRatio: string; referenceFilenames: string[] } | undefined;
   const recoveryOptions = () =>
     submittedInput
@@ -585,6 +618,15 @@ export async function execute(
       `Generating image with ${executionProvider} via ${displayModelName}: "${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio}, references: ${referenceImages.length})`,
     );
 
+    if (imageCreds.source === "server") {
+      const claim = await reserveImageQuota(tomoriState.server_id, interaction.user.id);
+      if (!claim.allowed) {
+        await replyImageQuotaExceeded(modalSubmitInteraction, locale, claim, await recoveryTips([], "server"));
+        return;
+      }
+      quotaReservation = claim.reservation;
+    }
+
     const startTime = performance.now();
 
     let generatedImageData: string | null = null;
@@ -647,7 +689,7 @@ export async function execute(
     } else if (imageRoute.kind === "zai") {
       if (referenceImages.length > 0) {
         await modalSubmitInteraction.followUp({
-          content: localizer(locale, "commands.generate.image.zai_no_img2img_warning"),
+          content: statusNote("warning", localizer(locale, "commands.generate.image.zai_no_img2img_warning")),
         });
       }
       const { generateZaiNativeImage } = await import("@/providers/zai/zaiImageGeneration");
@@ -663,7 +705,7 @@ export async function execute(
     } else {
       if (referenceImages.length > 0) {
         await modalSubmitInteraction.followUp({
-          content: localizer(locale, "commands.generate.image.nvidia_no_img2img_warning"),
+          content: statusNote("warning", localizer(locale, "commands.generate.image.nvidia_no_img2img_warning")),
         });
       }
       const { generateNvidiaNativeImage } = await import("@/providers/nvidia/nvidiaImageGeneration");
@@ -701,10 +743,8 @@ export async function execute(
     const filename = `generated_${Date.now()}.${preparedImage.extension}`;
     const attachment = new AttachmentBuilder(preparedImage.buffer, { name: filename }).setSpoiler(spoiler);
 
-    // Increment quota after successful generation (server providers only)
-    if (imageCreds.source === "server") {
-      await incrementImageQuota(tomoriState.server_id, interaction.user.id);
-    }
+    // Settled before delivery so a failed send still counts, matching the old increment point.
+    quotaConsumed = true;
     // Record canonical generation telemetry; quota tables enforce limits only.
     if (userData.user_id) {
       statRepository.recordStat({
@@ -761,6 +801,10 @@ export async function execute(
 
     log.success(`Successfully generated and sent image (${generationTimeSeconds}s)`);
   } catch (error) {
+    if (error instanceof QuotaUnavailableError) {
+      await replyImageQuotaUnavailable(modalSubmitInteraction ?? interaction, locale);
+      return;
+    }
     if (error instanceof GenerationModelUnavailableError) {
       await replyGenerationModelUnavailable(modalSubmitInteraction ?? interaction, locale);
       return;
@@ -855,5 +899,9 @@ export async function execute(
       tipKeys,
       ...recoveryOptions(),
     });
+  } finally {
+    if (quotaReservation && !quotaConsumed) {
+      await releaseImageQuota(tomoriState.server_id, interaction.user.id, quotaReservation);
+    }
   }
 }

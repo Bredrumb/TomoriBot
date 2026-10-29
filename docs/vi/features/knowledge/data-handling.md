@@ -54,7 +54,7 @@ Dữ liệu có thể xuất được gửi tới DM của bạn dưới dạng 
 - `/export personal memories`: ký ức cá nhân, có phạm vi toàn cầu hoặc từng cá nhân.
 - `/persona export`: định nghĩa đầy đủ về tính cách.
 
-Phương tiện biểu thức đã tải lên được lưu trữ trên máy chủ lưu trữ và nằm ngoài các bản xuất JSON này. Người self-hosting phải sao lưu cơ sở dữ liệu lưu trữ và nội dung đa phương tiện cùng nhau; xem [sao lưu phương tiện tùy chỉnh](/vi/self-hosting/safe-migration/#custom-expression-media-backups).
+Phương tiện biểu thức đã tải lên được lưu trữ trên máy chủ lưu trữ và nằm ngoài các bản xuất JSON này. Người self-hosting phải sao lưu cơ sở dữ liệu lưu trữ và nội dung đa phương tiện cùng nhau; xem [sao lưu phương tiện tùy chỉnh](/self-hosting/maintenance/#database-backups-and-recovery-keys).
 
 ## Nhập dữ liệu của bạn
 

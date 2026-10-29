@@ -64,7 +64,7 @@ export const userSchema = z.object({
   privacy_level: z.nativeEnum(PrivacyLevel).default(PrivacyLevel.MINIMAL),
   personal_memories: z.array(z.string()).default([]),
   physical_appearance_tags: z.array(z.string()).default([]), // Public imageboard-style physical appearance tags
-  nai_char_ref_url: z.string().nullable().optional(), // Added March 2026 - User-specific NovelAI character reference image
+  char_ref_url: z.string().nullable().optional(), // User-specific character reference image for image generation
   impersonation_prompt: z.string().nullable().optional(), // Added March 2026 - Global user-owned prompt for user impersonation replies
   shortterm_cache_crossserver_opt_in: z.boolean().default(false), // Short-term memory cross-server sharing
   personal_dtm: z.enum(["off", "follow", "on"]).default("follow"), // Added April 2026 - User-scoped DTM tri-state: 'off' (always disabled), 'follow' (server setting), 'on' (always enabled)
@@ -135,7 +135,7 @@ export type TomoriRow = z.infer<typeof tomoriSchema>;
 
 const personaScopedConfigStateSchema = z.object({
   physical_appearance_tags: z.array(z.string()).default([]), // From persona_imagegen_configs
-  nai_char_ref_url: z.string().nullable().optional(), // From persona_imagegen_configs
+  char_ref_url: z.string().nullable().optional(), // From persona_imagegen_configs
   nai_attg_author: z.string().nullable().optional(), // From persona_textgen_configs
   nai_attg_title: z.string().nullable().optional(), // From persona_textgen_configs
   nai_attg_tags: z.string().nullable().optional(), // From persona_textgen_configs
@@ -748,7 +748,7 @@ const userPersonalizationConfigsSchema = z.object({
   user_nickname: z.string().nullable(),
   shortterm_cache_crossserver_opt_in: z.boolean().default(false),
   physical_appearance_tags: z.array(z.string()).default([]),
-  nai_char_ref_url: z.string().nullable().optional(),
+  char_ref_url: z.string().nullable().optional(),
   impersonation_prompt: z.string().nullable().optional(),
   personal_dtm: z.enum(["off", "follow", "on"]).default("follow"),
   personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).default("follow"),
@@ -1214,6 +1214,7 @@ const tomoriPresetSchema = z.object({
   // content-addressed version token used to gate the main-avatar fan-out.
   preset_avatar_shared_url: z.string().nullable().optional(),
   preset_avatar_hash: z.string().nullable().optional(),
+  preset_char_ref_shared_url: z.string().nullable().optional(),
   preset_trigger_words: z.array(z.string()).default([]),
   preset_naming_config: z.preprocess((value) => {
     if (typeof value !== "string") return value;
@@ -1616,33 +1617,6 @@ export const textQuotaConfigSchema = z.object({
   updated_at: z.date().optional(), // Handled by DB default/trigger
 });
 export type TextQuotaConfigRow = z.infer<typeof textQuotaConfigSchema>;
-
-/**
- * Schema for per-user daily text quota tracking
- * Resets daily at midnight (server timezone)
- */
-export const textQuotaSchema = z.object({
-  quota_id: z.number().optional(), // Primary key, auto-generated
-  server_id: z.number(), // Foreign key to servers table
-  user_disc_id: z.string(), // User's Discord ID
-  usage_count: z.number().int().min(0).default(0), // Text generations triggered today
-  quota_date: z.date(), // Date this quota is for (YYYY-MM-DD)
-  last_reset: z.date().optional(), // Handled by DB default
-});
-export type TextQuotaRow = z.infer<typeof textQuotaSchema>;
-
-/**
- * Schema for server-wide text quota tracking
- * Resets based on serverwide_quota_resets_in configuration
- */
-export const textServerwideQuotaSchema = z.object({
-  server_id: z.number(), // Primary key, foreign key to servers table
-  usage_count: z.number().int().min(0).default(0), // Total text generations this period
-  quota_period_start: z.date(), // When this quota period started
-  quota_period_end: z.date(), // When this quota period ends (calculated from config)
-  updated_at: z.date().optional(), // Handled by DB default
-});
-export type TextServerwideQuotaRow = z.infer<typeof textServerwideQuotaSchema>;
 
 /**
  * Schema for video quota configuration (per-server settings)

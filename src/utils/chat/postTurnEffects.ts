@@ -8,8 +8,9 @@ import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { resolveProviderErrorFooter } from "@/utils/discord/stream/errorUi";
 import { hasThoughtLogContent, sendAttributionOnlyEmbed, sendThoughtLogEmbed } from "@/utils/discord/thoughtLog";
 import { ColorCode, log } from "@/utils/misc/logger";
+import { getLlmDisplayName } from "@/utils/provider/modelDisplay";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
-import { incrementTextQuota } from "@/utils/quota/textQuotaManager";
+import { releaseTextQuotaForTrigger, textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { localizer } from "@/utils/text/localizer";
 import { normalizeCustomEmojisForLlm } from "@/utils/text/processors/mentionProcessor";
 import { MAX_EMPTY_RESPONSE_RETRIES } from "@/utils/discord/stream/constants";
@@ -26,8 +27,8 @@ import {
   setLastRespondedPersona,
   updateSelfReplyChainState,
 } from "@/utils/chat/selfReplyState";
-import { textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { statRepository } from "@/utils/db/repositories";
+import { metricSampleRepository, type MetricFields } from "@/utils/db/repositories/MetricSampleRepository";
 import { charsToTokensText, estimateContextItemsTokens, sumTurnUsage } from "@/utils/text/tokenEstimate";
 import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import type { TurnUsageEntry } from "@/utils/chat/responseReview";
@@ -56,7 +57,7 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
     discordPresenceRetention.retain(context.serverDiscId, context.userDiscId);
   }
   await maybeScheduleEmptyResponseRetry(context, result);
-  await consumeTextQuota(context, result);
+  await settleTextQuota(context, result);
   updateSelfReplyBookkeeping(context, result);
   queueNaturalNudgeReplies(context, result);
   await writeShortTermMemory(context, result);
@@ -82,33 +83,30 @@ function rememberLastReplyUsage(context: ChatTurnContext, result: GenerationTurn
   });
 }
 
-/**
- * Records per-turn usage stats at the single post-turn chokepoint:
- * message_sent, active_hour, model_used, tokens_in/tokens_out (estimated),
- * user_impersonation_triggered, emoji_used, sprite_shown, and sprite_emotion
- * (non-identity sprites only). Only counts turns that actually produced a persona
- * response. DMs are skipped (stat_counters.server_id is a NOT NULL FK).
- *
- * Expression metrics (emoji_used, sprite_shown, sprite_emotion) are delivery-gated:
- * they count only what Discord accepted, never what the model merely produced. Text
- * the output cleaner stripped, `<details>` scene metadata, and an abandoned attempt's
- * purged messages therefore score nothing. `sticker_used` and `custom_expression_used`
- * follow the same rule from their own delivery site in `expressionDelivery.ts`.
- *
- * Tokens prefer REAL provider usage when available: the orchestrator normalizes
- * each provider's reported usage onto `StreamResult.usage`, and these are summed
- * across the turn's stream segments (one per tool-loop request, each billed
- * separately). When no segment reports usage (e.g. NovelAI, or a provider that
- * omits it), tokens fall back to the CHARACTER-ESTIMATE ("Track A", shared with
- * `/tool estimate cost`): input from the built context, output from the response
- * text. The estimate over-counts dense languages (e.g. Japanese) and is rough;
- * real usage is billing-accurate. Either way the metric shape is identical
- * (`tokens_in`/`tokens_out` keyed by model id), so getEstimatedCost is unchanged.
- *
- * @param context - The completed turn's context (model + persona + server scope).
- * @param result  - The turn result; personaResponses carry the responding lineages.
- */
+/** Records turn usage in both metric sinks and guild counters, with dialogue counters gated on delivery. */
 async function recordUsageStats(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
+  const accountedUsage = sumTurnUsage(result.usageEntries ?? result.streamResults);
+  const turnUsage = accountedUsage ?? {
+    inputTokens: estimateContextItemsTokens(context.contextItems),
+    outputTokens: result.personaResponses.reduce(
+      (total, response) => total + charsToTokensText(response.text.length),
+      0,
+    ),
+  };
+  const fields: MetricFields = {
+    provider: context.tomoriState.llm.llm_provider,
+    model: context.tomoriState.llm.llm_codename,
+    source:
+      accountedUsage && !result.usageEntries?.some((entry) => entry.source === "estimated") ? "measured" : "estimated",
+    input_tokens: turnUsage.inputTokens,
+    cache_read_tokens: accountedUsage?.cacheReadTokens ?? "unknown",
+    cache_write_tokens: accountedUsage?.cacheWriteTokens ?? "unknown",
+    output_tokens: turnUsage.outputTokens,
+  };
+  if (accountedUsage?.costUsd !== undefined) fields.cost_usd = accountedUsage.costUsd;
+  log.metric("turn_usage", fields);
+  void metricSampleRepository.recordSample("turn_usage", fields);
+
   // Actual spend survives cancellation and discarded drafts; dialogue metrics require delivery.
   if (!context.isDMChannel && context.tomoriState.server_id && context.triggererUserId && result.usageEntries) {
     const lineageId = context.currentPersona.persona_lineage_id ?? 0;
@@ -137,6 +135,13 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
             metricKey: entry.model,
             delta,
           });
+      }
+      for (const [metric, delta] of [
+        ["cache_read_tokens", entry.usage.cacheReadTokens],
+        ["cache_write_tokens", entry.usage.cacheWriteTokens],
+      ] as const) {
+        if (delta === undefined || delta <= 0) continue;
+        statRepository.recordStat({ serverId, userId, lineageId, metric, metricKey: entry.model, delta });
       }
     };
     for (const entry of result.usageEntries) recordEntry(entry);
@@ -289,6 +294,22 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
         metricKey: modelCodename,
         delta: outputTokens,
       });
+    }
+    if (!result.usageEntries && realUsage) {
+      for (const [metric, delta] of [
+        ["cache_read_tokens", realUsage.cacheReadTokens],
+        ["cache_write_tokens", realUsage.cacheWriteTokens],
+      ] as const) {
+        if (delta === undefined || delta <= 0) continue;
+        statRepository.recordStat({
+          serverId,
+          userId,
+          lineageId: primaryLineage,
+          metric,
+          metricKey: modelCodename,
+          delta,
+        });
+      }
     }
 
     // Sprite deliveries surfaced from the stream (one entry per delivered sprite
@@ -481,19 +502,25 @@ export function isDeliveredTurnResult(result: GenerationTurnResult): boolean {
   return result.status === "completed" && (result.personaResponses.length > 0 || result.toolResponseDelivered === true);
 }
 
-async function consumeTextQuota(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
+async function settleTextQuota(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
   if (
-    !context.shouldApplyTextQuota ||
-    !context.textQuotaState ||
-    context.textQuotaState.consumed ||
-    result.personaResponses.length === 0
+    context.shouldApplyTextQuota &&
+    context.textQuotaState &&
+    !context.textQuotaState.consumed &&
+    result.personaResponses.length > 0
   ) {
-    return;
+    context.textQuotaState.consumed = true;
+    context.textQuotaState.reservation = null;
+    context.textQuotaState.reservationReleased = false;
+    textQuotaTriggerStates.set(context.textQuotaTriggerKey, context.textQuotaState);
   }
 
-  await incrementTextQuota(context.textQuotaState.serverId, context.textQuotaState.userDiscId);
-  context.textQuotaState.consumed = true;
-  textQuotaTriggerStates.set(context.textQuotaTriggerKey, context.textQuotaState);
+  const isLastTurn = context.turn.personaIndex + 1 >= context.turn.totalPersonas;
+  // A queued persona job may still spend a unit reserved during planning, so a personal-route turn
+  // releases only as the last turn of a multi-persona plan, which queues no jobs.
+  if (isLastTurn && (context.shouldApplyTextQuota || context.turn.totalPersonas > 1)) {
+    await releaseTextQuotaForTrigger(context.textQuotaTriggerKey);
+  }
 }
 
 function updateSelfReplyBookkeeping(context: ChatTurnContext, result: GenerationTurnResult): void {
@@ -648,13 +675,24 @@ async function emitThoughtLog(context: ChatTurnContext, result: GenerationTurnRe
     return;
   }
 
-  const attributionLine =
-    context.textCredentialSource === "personal" && context.personalTextProvider
+  const personalProvider = context.textCredentialSource === "personal" ? context.personalTextProvider : undefined;
+  // context.tomoriState is the attempt that answered, so this names the model actually used and reads
+  // the randomizer flag of the route (server or personal) that drew it.
+  const { tomoriState } = context;
+  const attributionLines = [
+    personalProvider
       ? localizer(context.locale, "genai.thought_log.personal_attribution", {
           user_mention: `<@${context.userDiscId}>`,
-          provider: getProviderDisplayName(context.personalTextProvider),
+          provider: getProviderDisplayName(personalProvider),
         })
-      : undefined;
+      : undefined,
+    tomoriState.config.model_randomizer_enabled
+      ? localizer(context.locale, "genai.thought_log.randomizer_attribution", {
+          model: getLlmDisplayName(tomoriState.llm, tomoriState.config.custom_model_name),
+        })
+      : undefined,
+  ].filter((line): line is string => Boolean(line));
+  const attributionLine = attributionLines.length > 0 ? attributionLines.join("\n") : undefined;
 
   if (thoughtLog && hasThoughtLogContent(thoughtLog)) {
     thoughtLog.generationDurationMs = Date.now() - context.message.createdTimestamp;
@@ -678,6 +716,12 @@ async function emitThoughtLog(context: ChatTurnContext, result: GenerationTurnRe
       tomoriState: context.tomoriState,
       sourceChannel: context.channel as Parameters<typeof sendAttributionOnlyEmbed>[0]["sourceChannel"],
       thoughtLogChannelId,
+      title: localizer(
+        context.locale,
+        personalProvider
+          ? "genai.thought_log.personal_attribution_title"
+          : "genai.thought_log.randomizer_attribution_title",
+      ),
       attributionLine,
     });
   }

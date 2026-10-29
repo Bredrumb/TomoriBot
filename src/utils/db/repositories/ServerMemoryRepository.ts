@@ -1,3 +1,6 @@
+import { documentHeadingText, type DocumentHeadingPath } from "@/utils/documents/documentChunker";
+import { buildDocumentLexicalText } from "@/utils/documents/lexicalText";
+import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
 /**
  * ServerMemoryRepository: manages the `server_memories` table.
  *
@@ -32,7 +35,7 @@ type ServerMemoryExportShape = {
   memories: Array<{ content: string; tags: string[] }>;
 };
 
-type LegacyChannelScopeSource = "documents" | "server_memories";
+type LegacyChannelScopeSource = "documents" | "server_memories" | "persona_lorebook_entries";
 
 export type PendingLegacyChannelScope = {
   source_table: LegacyChannelScopeSource;
@@ -338,36 +341,30 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
    * @param personaId - null = serverwide only; non-null = persona OR serverwide
    */
   async hasDocumentInScope(serverId: number, personaId: number | null): Promise<boolean> {
-    try {
-      const rows =
-        personaId === null
-          ? await sql`
-              SELECT document_id FROM documents
-              WHERE server_id = ${serverId}
-                AND persona_id IS NULL
-              LIMIT 1
-            `
-          : await sql`
-              SELECT document_id FROM documents
-              WHERE server_id = ${serverId}
-                AND (persona_id = ${personaId} OR persona_id IS NULL)
-              LIMIT 1
-            `;
-      return rows.length > 0;
-    } catch (error) {
-      log.error(`Error checking document existence for server ${serverId}:`, error);
-      return false;
-    }
+    const rows =
+      personaId === null
+        ? await sql`
+            SELECT document_id FROM documents
+            WHERE server_id = ${serverId}
+              AND persona_id IS NULL
+            LIMIT 1
+          `
+        : await sql`
+            SELECT document_id FROM documents
+            WHERE server_id = ${serverId}
+              AND (persona_id = ${personaId} OR persona_id IS NULL)
+            LIMIT 1
+          `;
+    return rows.length > 0;
   }
 
   /** Saving the form is the admin's channel choice, so it also settles a pending legacy scope. */
-  async edit(serverMemoryId: number, content: string, tags: string[], channelDiscIds: string[]): Promise<boolean> {
+  async edit(serverMemoryId: number, content: string, channelDiscIds: string[]): Promise<boolean> {
     try {
       return await sql.transaction(async (tx) => {
         const [updated] = await tx`
           UPDATE server_memories
           SET content = ${content},
-              tags = ${sql.array(tags, "TEXT")},
               channel_disc_ids = ${sql.array(channelDiscIds, "TEXT")},
               updated_at = NOW()
           WHERE server_memory_id = ${serverMemoryId}
@@ -400,24 +397,13 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     }
   }
 
-  /**
-   * Batch-inserts multiple server memories in a single transaction.
-   * All rows share the same serverId, personaId, personaLineageId, userId, tags, and channel scope.
-   * Rolls back all inserts if any row fails (atomicity guarantee).
-   * Cache invalidation is the caller's responsibility after a successful return.
-   *
-   * @param personaLineageId - Persona lineage scope for all memories
-   * @param tags             - Optional classification tags applied to all memories
-   * @param channelDiscIds   - Channels the memories are limited to; empty means every channel
-   * @returns true on full success, false if the transaction was rolled back
-   */
+  /** Callers invalidate the Tomori cache after the batch transaction commits. */
   async addBatch(
     serverId: number,
     personaId: number,
     personaLineageId: number,
     taughtByUserId: number,
     memories: string[],
-    tags: string[] = [],
     channelDiscIds: string[] = [],
   ): Promise<boolean> {
     if (memories.length === 0) return true;
@@ -426,10 +412,10 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
       await sql.transaction(async (tx) => {
         for (const memory of memories) {
           await tx`
-            INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, tags, channel_disc_ids)
+            INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, channel_disc_ids)
             VALUES (
               ${serverId}, ${personaId}, ${personaLineageId}, ${taughtByUserId}, ${memory},
-              ${sql.array(tags, "TEXT")}, ${sql.array(channelDiscIds, "TEXT")}
+              ${sql.array(channelDiscIds, "TEXT")}
             )
           `;
         }
@@ -470,7 +456,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     personaLineageId: number,
     taughtByUserId: number,
     content: string,
-    tags: string[] = [],
     serverDiscId?: string,
     channelDiscIds: string[] = [],
   ): Promise<ServerMemoryRow | null> {
@@ -498,7 +483,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
       personaLineageId,
       taughtByUserId,
       content,
-      tags,
       channelDiscIds,
     );
     if (row && serverDiscId) invalidateTomoriStateCache(serverDiscId);
@@ -655,10 +639,19 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     documentId: number,
     serverId: number,
     personaId: number | null,
-  ): Promise<Array<{ document_chunk_id: number; chunk_index: number; content: string }>> {
+  ): Promise<
+    Array<{ document_chunk_id: number; chunk_index: number; content: string; heading_path: DocumentHeadingPath | null }>
+  > {
     return personaId === null
-      ? await sql<Array<{ document_chunk_id: number; chunk_index: number; content: string }>>`
-          SELECT dc.document_chunk_id, dc.chunk_index, dc.content
+      ? await sql<
+          Array<{
+            document_chunk_id: number;
+            chunk_index: number;
+            content: string;
+            heading_path: DocumentHeadingPath | null;
+          }>
+        >`
+          SELECT dc.document_chunk_id, dc.chunk_index, dc.content, dc.heading_path
           FROM document_chunks dc
           JOIN documents d ON d.document_id = dc.document_id
           WHERE dc.document_id = ${documentId}
@@ -666,8 +659,15 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
             AND d.persona_id IS NULL
           ORDER BY dc.chunk_index ASC
         `
-      : await sql<Array<{ document_chunk_id: number; chunk_index: number; content: string }>>`
-          SELECT dc.document_chunk_id, dc.chunk_index, dc.content
+      : await sql<
+          Array<{
+            document_chunk_id: number;
+            chunk_index: number;
+            content: string;
+            heading_path: DocumentHeadingPath | null;
+          }>
+        >`
+          SELECT dc.document_chunk_id, dc.chunk_index, dc.content, dc.heading_path
           FROM document_chunks dc
           JOIN documents d ON d.document_id = dc.document_id
           WHERE dc.document_id = ${documentId}
@@ -693,11 +693,24 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
   }): Promise<boolean> {
     const { chunkId, serverId, personaId, content, embeddingVector, embeddingModelId, embeddingFamily } = params;
     try {
+      const [document] = await sql<Array<{ document_name: string; heading_path: DocumentHeadingPath | null }>>`
+        SELECT d.document_name, dc.heading_path
+        FROM document_chunks dc JOIN documents d ON d.document_id = dc.document_id
+        WHERE dc.document_chunk_id = ${chunkId} AND dc.server_id = ${serverId}
+          AND d.persona_id IS NOT DISTINCT FROM ${personaId}::integer
+      `;
+      if (!document) return false;
+      const lexicalText = buildDocumentLexicalText(
+        document.document_name,
+        content,
+        documentHeadingText(document.heading_path),
+      );
       const [updated] =
         personaId === null
           ? await sql`
               UPDATE document_chunks
               SET content = ${content},
+                  lex_text = ${lexicalText},
                   embedding = ${embeddingVector}::vector,
                   embedding_model_id = ${embeddingModelId},
                   embedding_family = ${embeddingFamily}
@@ -711,6 +724,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
           : await sql`
               UPDATE document_chunks
               SET content = ${content},
+                  lex_text = ${lexicalText},
                   embedding = ${embeddingVector}::vector,
                   embedding_model_id = ${embeddingModelId},
                   embedding_family = ${embeddingFamily}
@@ -844,11 +858,9 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     `;
   }
 
-  /**
-   * Drops holding rows whose memory or document no longer exists, so a deleted item cannot stay in
-   * the backfill's pending set. Runs once per boot.
-   */
+  /** Drops legacy scopes after their memory, document, or lorebook entry is deleted. */
   async pruneOrphanedLegacyChannelScopes(): Promise<void> {
+    await lorebookRepository.pruneLegacyChannelScopes();
     await sql`
       DELETE FROM legacy_channel_scope_tags l
       WHERE l.source_table = 'server_memories'
@@ -886,6 +898,8 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
             UPDATE documents SET channel_disc_ids = ${sql.array(channelDiscIds, "TEXT")}
             WHERE document_id = ${rowId} AND server_id = ${serverId}
           `;
+        } else if (sourceTable === "persona_lorebook_entries") {
+          await lorebookRepository.resolveLegacyChannelScope(tx, serverId, rowId, channelDiscIds);
         } else {
           await tx`
             UPDATE server_memories SET channel_disc_ids = ${sql.array(channelDiscIds, "TEXT")}
@@ -1063,15 +1077,14 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     personaLineageId: number,
     taughtByUserId: number,
     content: string,
-    tags: string[],
     channelDiscIds: string[],
   ): Promise<ServerMemoryRow | null> {
     try {
       const [newMemory] = await sql`
-        INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, tags, channel_disc_ids)
+        INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, user_id, content, channel_disc_ids)
         VALUES (
           ${serverId}, ${personaId}, ${personaLineageId}, ${taughtByUserId}, ${content},
-          ${sql.array(tags, "TEXT")}, ${sql.array(channelDiscIds, "TEXT")}
+          ${sql.array(channelDiscIds, "TEXT")}
         )
         RETURNING *
       `;

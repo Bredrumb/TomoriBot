@@ -105,7 +105,7 @@ Model nhìn thấy một công cụ `web_search(query, category)` thống nhất
 
 Brave → SearXNG → DuckDuckGo
 
-- **Brave** chạy đầu tiên khi khóa Brave API được định cấu hình (đặt nó bằng `/providers`); nó thêm tìm kiếm hình ảnh, video và tin tức. ⚠️ Đặt giới hạn sử dụng $5 trong bảng điều khiển Brave để tránh bị tính phí bất ngờ.
+- **Brave** chạy đầu tiên khi khóa Brave API được định cấu hình (đặt nó bằng `/providers`); nó thêm tìm kiếm hình ảnh, video và tin tức. 🟡 Đặt giới hạn sử dụng $5 trong bảng điều khiển Brave để tránh bị tính phí bất ngờ.
 - DuckDuckGo là mặc định khi chưa đặt key. Công cụ này chỉ hỗ trợ tìm kiếm văn bản. Khi DuckDuckGo giới hạn tần suất bot hoặc hiển thị kiểm tra bot, quá trình tìm kiếm sẽ thất bại và bot sẽ đăng thông báo gợi ý dùng Brave.
 - SearXNG và Crawl4AI là các máy chủ self-hosting tùy chọn bổ sung thêm nhiều danh mục và tìm nạp trang do trình duyệt hiển thị; xem [Tự lưu trữ](/vi/self-hosting/).
 

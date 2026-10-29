@@ -120,6 +120,7 @@ describe("panel prose runtime formatting", () => {
           persona_lineage_id: 1770,
           persona_nickname: "Aphel",
           is_alter: false,
+          attribute_list: [],
         } as unknown as TomoriState,
       ];
       const build = (selectedPersonaAvatarUrl: string | null) =>
@@ -281,6 +282,7 @@ describe("panel prose runtime formatting", () => {
           persona_nickname: "Aphel",
           is_alter: false,
           trigger_words: ["aphel"],
+          attribute_list: [],
           naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
         } as unknown as TomoriState,
         {
@@ -289,6 +291,7 @@ describe("panel prose runtime formatting", () => {
           persona_nickname: "Wren",
           is_alter: true,
           trigger_words: [],
+          attribute_list: [],
           naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
         } as unknown as TomoriState,
       ];
@@ -328,6 +331,7 @@ describe("panel prose runtime formatting", () => {
           persona_nickname: "Aphel",
           is_alter: false,
           trigger_words: [],
+          attribute_list: [],
           naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
         } as unknown as TomoriState,
       ];

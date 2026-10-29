@@ -109,17 +109,20 @@ import { SEED_CATEGORY_UPDATE_HINT, SEED_SUMMARY_UPDATE_HINT } from "@/utils/tex
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { formatModelSelectionLabel } from "@/utils/discord/ui/modelRoutingControls";
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer, resolveDescription } from "@/utils/text/localizer";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 import { buildSlugMap } from "@/utils/text/slugifyLabel";
 import {
   DISCORD_BUTTON_LABEL_MAX,
   DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX,
+  DISCORD_SELECT_OPTION_DESCRIPTION_MAX,
   DISCORD_SELECT_PLACEHOLDER_MAX,
   getDiscordTextLength,
 } from "@/utils/discord/ui/componentsV2Limits";
 import { measureFormattedPanelTextLength } from "@/utils/discord/ui/panelProse";
 import { neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
+import { resolvePersonaSnippet } from "@/utils/text/personaPrompt";
 import { renderFencedPreview } from "@/utils/text/textPreview";
 import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/contextBuilder";
 import { formatUTCOffset } from "@/utils/text/timezoneHelper";
@@ -443,11 +446,12 @@ function buildPersonaSelectorRows(input: ConfigPanelRenderInput): ComponentInCon
     label: safeSelectOptionText(persona.persona_nickname, 100),
     value: String(persona.persona_id),
     description: safeSelectOptionText(
-      localizer(
-        locale,
-        persona.is_alter ? "commands.config.panel.persona_alter" : "commands.config.panel.persona_main",
-      ),
-      100,
+      resolvePersonaSnippet(persona, DISCORD_SELECT_OPTION_DESCRIPTION_MAX) ??
+        localizer(
+          locale,
+          persona.is_alter ? "commands.config.panel.persona_alter" : "commands.config.panel.persona_main",
+        ),
+      DISCORD_SELECT_OPTION_DESCRIPTION_MAX,
     ),
     default: persona.persona_id === selectedPersonaId,
   }));
@@ -1143,7 +1147,7 @@ function buildPersonaCharacterReferenceClearBody(
   const persona = input.personas.find((candidate) => candidate.persona_id === view.personaId);
   if (!persona || resolvePersonaAdvancedActionState("character-reference", input.actor) === "omitted") return [];
   const writesDisabled = input.readStatus !== "fresh";
-  const actionDisabled = writesDisabled || !persona.nai_char_ref_url;
+  const actionDisabled = writesDisabled || !persona.char_ref_url;
   return [
     {
       type: ComponentType.TextDisplay,
@@ -1221,7 +1225,7 @@ ${localizer(locale, "commands.config.panel.appearance_description")}`,
   const characterReferenceState = actionState("character-reference");
   let characterRefTextDisplay: ComponentInContainerData | undefined;
   if (characterReferenceState !== "omitted") {
-    const reference = persona.nai_char_ref_url
+    const reference = persona.char_ref_url
       ? localizer(locale, "commands.config.panel.character_reference_uploaded")
       : localizer(locale, "commands.config.panel.none_label");
     characterRefTextDisplay = {
@@ -1287,7 +1291,7 @@ ${localizer(locale, "commands.config.panel.image_tags_description")}
           style: ButtonStyle.Danger,
           customId: buildConfigRouteId({ action: "character-reference-clear-view", locale, personaId }),
           label: localizer(locale, "commands.config.panel.clear_reference_button"),
-          disabled: writesDisabled || characterReferenceState === "disabled" || !persona.nai_char_ref_url,
+          disabled: writesDisabled || characterReferenceState === "disabled" || !persona.char_ref_url,
         },
       ],
     });
@@ -2279,11 +2283,26 @@ ${localizer(locale, "commands.config.panel.promote_confirm_description", {
   ];
 }
 
-function behaviorHeading(locale: string, titleKey: string, descriptionKey: string): TextDisplayComponentData {
+function behaviorHeading(
+  locale: string,
+  titleKey: string,
+  descriptionKey: string,
+  suffix = "",
+): ComponentInContainerData {
   return {
     type: ComponentType.TextDisplay,
-    content: `### ${localizer(locale, titleKey)}\n${localizer(locale, descriptionKey)}`,
+    content: `### ${localizer(locale, titleKey)}\n${localizer(locale, descriptionKey)}${suffix}`,
   };
+}
+
+/**
+ * Rides inside the page heading rather than its own TextDisplay, because one more component pushes a
+ * fully paginated Channels Rules page past Discord's 40-component cap.
+ */
+function whitelistLocationHint(locale: string, actor: ConfigPanelRenderInput["actor"]): string {
+  if (actor.workspaceKind !== "guild" || !actor.isManager) return "";
+  const moderation = `${commandRegistry.getCommandMention("moderation", undefined, undefined, true)} > ${localizer(locale, "commands.moderation.category_whitelist")}`;
+  return `\n${withLinePrefix("-# ", localizer(locale, "commands.config.panel.whitelist_location_hint", { moderation }))}`;
 }
 
 function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInContainerData[] {
@@ -2296,10 +2315,8 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
     locale,
     "commands.config.panel.behavior_general_title",
     "commands.config.panel.behavior_general_description",
+    isNovelAI ? `\n\n> ${localizer(locale, "commands.config.panel.behavior_novelai_notice")}` : "",
   );
-  if (isNovelAI) {
-    heading.content += `\n\n> ${localizer(locale, "commands.config.panel.behavior_novelai_notice")}`;
-  }
   const components: ComponentInContainerData[] = [heading];
 
   if (input.actor.workspaceKind === "guild" && !input.actor.isManager) {
@@ -2528,7 +2545,8 @@ function responsePrefillStatus(locale: string, view: ConfigBehaviorGeneralView):
         : view.prefillBlocker === "tools"
           ? "commands.config.panel.response_prefill_inactive_tools"
           : "commands.config.panel.response_prefill_active";
-  return localizer(locale, key, { model: view.prefillModelName });
+  const text = localizer(locale, key, { model: view.prefillModelName });
+  return view.prefillBlocker ? statusNote("warning", text) : text;
 }
 
 function cooldownLabel(locale: string, value: number): string {
@@ -2647,6 +2665,7 @@ function buildBehaviorTriggerBody(input: ConfigPanelRenderInput): ComponentInCon
       locale,
       "commands.config.panel.behavior_trigger_title",
       "commands.config.panel.behavior_trigger_description",
+      whitelistLocationHint(locale, input.actor),
     ),
   ];
   if (input.actor.workspaceKind === "guild" && !input.actor.isManager) {
@@ -3632,7 +3651,7 @@ function buildChannelsAutoTriggerBody(input: ConfigPanelRenderInput): ComponentI
     {
       type: ComponentType.TextDisplay,
       content: `### ${localizer(locale, "commands.config.panel.channels_auto_trigger_title")}
-${localizer(locale, "commands.config.panel.channels_auto_trigger_description")}`,
+${localizer(locale, "commands.config.panel.channels_auto_trigger_description")}${whitelistLocationHint(locale, actor)}`,
     },
   ];
 
@@ -3790,7 +3809,7 @@ function buildChannelsRulesBody(input: ConfigPanelRenderInput): ComponentInConta
     {
       type: ComponentType.TextDisplay,
       content: `### ${localizer(locale, "commands.config.panel.channels_rules_title")}
-${localizer(locale, "commands.config.panel.channels_rules_description")}`,
+${localizer(locale, "commands.config.panel.channels_rules_description")}${whitelistLocationHint(locale, actor)}`,
     },
   ];
 
@@ -3984,7 +4003,7 @@ function buildChannelsOverridesBody(input: ConfigPanelRenderInput): ComponentInC
     {
       type: ComponentType.TextDisplay,
       content: `### ${localizer(locale, "commands.config.panel.channels_overrides_title")}
-${localizer(locale, "commands.config.panel.channels_overrides_description")}`,
+${localizer(locale, "commands.config.panel.channels_overrides_description")}${whitelistLocationHint(locale, actor)}`,
     },
     {
       type: ComponentType.TextDisplay,
@@ -4505,6 +4524,7 @@ export function buildConfigPanelPayload(input: ConfigPanelRenderInput): ConfigPa
           fallbacksView: input.modelFallbacksView,
           imageView: input.imageGenerationView,
           voicesView: input.voicesView,
+          userByokMode: input.personas[0]?.config.user_byok_mode === true,
         }),
       );
     }

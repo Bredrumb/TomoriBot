@@ -1,3 +1,8 @@
+import {
+  lorebookEntryInputSchema,
+  LOREBOOK_ENTRIES_PER_SCOPE_MAX,
+  type LorebookEntryInput,
+} from "@/modules/lorebooks/db/types";
 /**
  * Type definitions and schemas for TomoriBot preset export/import system
  * Enables sharing personalities as PNG files with embedded metadata
@@ -60,6 +65,7 @@ export function buildGeneratedPresetAttributePublicFlags(attributeList: readonly
  * Contains all personality-related fields from personas and persona-scoped config tables.
  */
 export interface PresetExportData {
+  lorebook_entries?: LorebookEntryInput[];
   tomori_nickname: string;
   attribute_list: string[];
   /** Visibility flags aligned to attribute_list; true exposes the attribute to other triggered personas */
@@ -76,8 +82,8 @@ export interface PresetExportData {
   preset_lineage_id?: number;
   /** Public imageboard-style persona physical appearance tags for image generation */
   physical_appearance_tags?: string[];
-  /** Persona-specific NovelAI character reference image URL */
-  nai_char_ref_url?: string | null;
+  /** Persona-specific character reference image URL */
+  char_ref_url?: string | null;
   /** ATTG: Story author name */
   nai_attg_author?: string | null;
   /** ATTG: Story title */
@@ -145,6 +151,7 @@ export interface ValidationResult {
 }
 
 export const presetExportDataSchema = z.object({
+  lorebook_entries: z.array(lorebookEntryInputSchema).max(LOREBOOK_ENTRIES_PER_SCOPE_MAX).optional(),
   tomori_nickname: z.string().min(1, "Nickname cannot be empty").max(100, "Nickname too long"),
   attribute_list: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_ATTRIBUTES),
   attribute_public_flags: z.array(z.boolean()).max(PRESET_MAX_ATTRIBUTES).optional(),
@@ -178,7 +185,7 @@ export const presetExportDataSchema = z.object({
     }, z.number().int().nonnegative())
     .optional(),
   physical_appearance_tags: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_IMAGE_TAGS).optional(),
-  nai_char_ref_url: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
+  char_ref_url: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
   nai_attg_author: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
   nai_attg_title: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
   nai_attg_tags: z.string().max(PRESET_MAX_STRING_LENGTH).nullable().optional(),
@@ -191,11 +198,23 @@ export const presetExportDataSchema = z.object({
 });
 
 /**
+ * Files exported before the character reference became provider-neutral name it `nai_char_ref_url`;
+ * those files are still in users' hands, so imports rename the key before validation.
+ */
+export function renameLegacyCharRefKey(data: unknown): unknown {
+  if (typeof data !== "object" || data === null || Array.isArray(data) || !("nai_char_ref_url" in data)) {
+    return data;
+  }
+  const { nai_char_ref_url: legacyCharRefUrl, ...rest } = data as Record<string, unknown>;
+  return "char_ref_url" in rest ? rest : { ...rest, char_ref_url: legacyCharRefUrl };
+}
+
+/**
  * Zod schema for complete preset export structure validation
  */
 export const presetExportSchema = z.object({
   version: z.string(),
   type: z.literal("preset"),
   exported_at: z.string(), // ISO 8601 format
-  data: presetExportDataSchema,
+  data: z.preprocess(renameLegacyCharRefKey, presetExportDataSchema),
 });

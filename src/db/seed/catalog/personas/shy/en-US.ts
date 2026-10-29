@@ -76,6 +76,7 @@ export const persona: PersonaInput = {
   ],
   language: "en-US",
   avatarPath: "src/db/seed/catalog/personas/shy",
+  characterReference: "character-reference/front.png",
   triggerWords: ["tomori", "lilya"],
   lineageId: 3585,
   namingConfig: { prefixes: {}, suffixes: { neutral: "-senpai" }, addressTerms: {} },

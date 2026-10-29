@@ -51,6 +51,7 @@ import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories
 import { type MemoryValidationResult, getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { getUnconfiguredLlm } from "@/utils/provider/unconfiguredLlm";
 import { log } from "@/utils/misc/logger";
+import { isSharedPresetAssetReference } from "@/utils/storage/avatarStorage";
 import { getAllBaseTriggerWords, getBaseTriggerWords } from "@/utils/text/localizer";
 import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 import type { IRepository } from "./IRepository";
@@ -76,7 +77,7 @@ type PersonaVoiceConfigsRow = {
 type PersonaImagegenConfigsRow = {
   persona_id: number;
   physical_appearance_tags: string[];
-  nai_char_ref_url: string | null;
+  char_ref_url: string | null;
 };
 
 /** Row shape for persona_textgen_configs (Phase 6). */
@@ -764,7 +765,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
 
   /**
    * Replace the persona's physical appearance image tags.
-   * Writes only `physical_appearance_tags`, preserving `nai_char_ref_url`.
+   * Writes only `physical_appearance_tags`, preserving `char_ref_url`.
    *
    * @param personaId - Internal persona DB ID
    * @param tags - Full replacement tag array (use [] to clear)
@@ -796,7 +797,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
    * @param personaId - Internal persona DB ID
    * @param refUrl    - Stored reference URL/path, or null to clear
    */
-  async setNaiCharRef(personaId: number, refUrl: string | null): Promise<boolean> {
+  async setCharRef(personaId: number, refUrl: string | null): Promise<boolean> {
     try {
       const materialized = await this.materializeIfPointer(personaId);
       if (!materialized) {
@@ -804,10 +805,10 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
       }
 
       await sql`
-        INSERT INTO persona_imagegen_configs (persona_id, nai_char_ref_url)
+        INSERT INTO persona_imagegen_configs (persona_id, char_ref_url)
         VALUES (${personaId}, ${refUrl})
         ON CONFLICT (persona_id) DO UPDATE SET
-          nai_char_ref_url = EXCLUDED.nai_char_ref_url,
+          char_ref_url = EXCLUDED.char_ref_url,
           updated_at = NOW()
       `;
       return true;
@@ -815,6 +816,25 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
       log.error(`Error setting NAI character reference for persona ${personaId}:`, e);
       return false;
     }
+  }
+
+  /**
+   * Clears the persona's character reference only when it is still the shared preset image.
+   * @returns Whether a preset reference was cleared
+   */
+  async clearPresetCharRef(personaId: number): Promise<boolean> {
+    const [row] = await sql<Array<{ char_ref_url: string | null }>>`
+      SELECT char_ref_url FROM persona_imagegen_configs WHERE persona_id = ${personaId}
+    `;
+    if (!isSharedPresetAssetReference(row?.char_ref_url)) {
+      return false;
+    }
+    const cleared = await sql`
+      UPDATE persona_imagegen_configs SET char_ref_url = NULL, updated_at = NOW()
+      WHERE persona_id = ${personaId} AND char_ref_url = ${row?.char_ref_url ?? null}
+      RETURNING persona_id
+    `;
+    return cleared.length > 0;
   }
 
   async addSampleDialoguePair(personaId: number, inputs: string[], outputs: string[]): Promise<boolean> {
@@ -1107,7 +1127,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
     sampleDialoguesOut: string[];
     personaLineageId?: number | null;
     physicalAppearanceTags?: string[];
-    naiCharRefUrl?: string | null;
+    charRefUrl?: string | null;
     naiAttgAuthor?: string | null;
     naiAttgTitle?: string | null;
     naiAttgTags?: string | null;
@@ -1145,11 +1165,11 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
       const personaId = insertedRow.persona_id as number;
 
       await tx`
-        INSERT INTO persona_imagegen_configs (persona_id, physical_appearance_tags, nai_char_ref_url)
-        VALUES (${personaId}, ${sql.array(params.physicalAppearanceTags ?? [], "TEXT")}, ${params.naiCharRefUrl ?? null})
+        INSERT INTO persona_imagegen_configs (persona_id, physical_appearance_tags, char_ref_url)
+        VALUES (${personaId}, ${sql.array(params.physicalAppearanceTags ?? [], "TEXT")}, ${params.charRefUrl ?? null})
         ON CONFLICT (persona_id) DO UPDATE SET
           physical_appearance_tags = EXCLUDED.physical_appearance_tags,
-          nai_char_ref_url = EXCLUDED.nai_char_ref_url,
+          char_ref_url = EXCLUDED.char_ref_url,
           updated_at = NOW()
       `;
 
@@ -1246,6 +1266,11 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         // the official preset sprite set live again. Server-owned sprite IMAGES
         // are cleaned up by the caller (the shared preset images are immutable).
         await tx`DELETE FROM persona_sprites WHERE persona_id = ${params.personaId}`;
+        // Same for the character reference; the caller deletes a server-owned image.
+        await tx`
+          UPDATE persona_imagegen_configs SET char_ref_url = NULL, updated_at = NOW()
+          WHERE persona_id = ${params.personaId}
+        `;
         await naturalNudgeRepository.clearPersonaConfig(tx, params.personaId);
 
         return updatedRow;
@@ -1741,7 +1766,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
   private async sqlLoadPersonaImagegenConfigs(personaId: number): Promise<PersonaImagegenConfigsRow | null> {
     try {
       const [row] = await sql`
-        SELECT persona_id, physical_appearance_tags, nai_char_ref_url
+        SELECT persona_id, physical_appearance_tags, char_ref_url
         FROM persona_imagegen_configs WHERE persona_id = ${personaId}
       `;
       return row ? (row as unknown as PersonaImagegenConfigsRow) : null;
@@ -1796,11 +1821,11 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
 
   private async sqlUpsertPersonaImagegenConfigs(row: PersonaImagegenConfigsRow): Promise<void> {
     await sql`
-      INSERT INTO persona_imagegen_configs (persona_id, physical_appearance_tags, nai_char_ref_url)
-      VALUES (${row.persona_id}, ${sql.array(row.physical_appearance_tags, "TEXT")}, ${row.nai_char_ref_url})
+      INSERT INTO persona_imagegen_configs (persona_id, physical_appearance_tags, char_ref_url)
+      VALUES (${row.persona_id}, ${sql.array(row.physical_appearance_tags, "TEXT")}, ${row.char_ref_url})
       ON CONFLICT (persona_id) DO UPDATE SET
         physical_appearance_tags       = EXCLUDED.physical_appearance_tags,
-        nai_char_ref_url = EXCLUDED.nai_char_ref_url,
+        char_ref_url = EXCLUDED.char_ref_url,
         updated_at     = NOW()
     `;
   }
@@ -2249,6 +2274,17 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
           AND webhook_avatar_url IS NULL
       `;
     }
+    // The character reference freezes by reference like the sprites; an avatar change later drops it.
+    if (preset.preset_char_ref_shared_url) {
+      await client`
+        INSERT INTO persona_imagegen_configs (persona_id, char_ref_url)
+        VALUES (${personaId}, ${preset.preset_char_ref_shared_url})
+        ON CONFLICT (persona_id) DO UPDATE SET
+          char_ref_url = EXCLUDED.char_ref_url,
+          updated_at = NOW()
+        WHERE persona_imagegen_configs.char_ref_url IS NULL
+      `;
+    }
 
     return true;
   }
@@ -2465,7 +2501,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
       physical_appearance_tags: Array.isArray(row.split_physical_appearance_tags)
         ? (row.split_physical_appearance_tags as string[])
         : [],
-      nai_char_ref_url: (row.split_nai_char_ref_url as string | null | undefined) ?? null,
+      char_ref_url: (row.split_char_ref_url as string | null | undefined) ?? null,
       nai_attg_author: (row.split_nai_attg_author as string | null | undefined) ?? null,
       nai_attg_title: (row.split_nai_attg_title as string | null | undefined) ?? null,
       nai_attg_tags: (row.split_nai_attg_tags as string | null | undefined) ?? null,
@@ -2488,7 +2524,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
           pvc.speech_voice_design_prompt AS split_speech_voice_design_prompt,
           pvc.voice_source_priority AS split_voice_source_priority,
           pic.physical_appearance_tags AS split_physical_appearance_tags,
-          pic.nai_char_ref_url AS split_nai_char_ref_url,
+          pic.char_ref_url AS split_char_ref_url,
           ptc.nai_attg_author AS split_nai_attg_author,
           ptc.nai_attg_title AS split_nai_attg_title,
           ptc.nai_attg_tags AS split_nai_attg_tags,
@@ -2755,6 +2791,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         ...tomoriData,
         // Pointer alters live-resolve the shared preset avatar (see helper).
         webhook_avatar_url: this.resolvePointerAlterAvatarUrl(tomoriData, pointerPreset),
+        char_ref_url: tomoriData.char_ref_url ?? pointerPreset?.preset_char_ref_shared_url ?? null,
         attribute_list: attributeList,
         sample_dialogues_in: sampleDialoguesIn,
         sample_dialogues_out: sampleDialoguesOut,
@@ -2805,7 +2842,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
               pvc.speech_voice_design_prompt AS split_speech_voice_design_prompt,
           pvc.voice_source_priority AS split_voice_source_priority,
               pic.physical_appearance_tags AS split_physical_appearance_tags,
-              pic.nai_char_ref_url AS split_nai_char_ref_url,
+              pic.char_ref_url AS split_char_ref_url,
               ptc.nai_attg_author AS split_nai_attg_author,
               ptc.nai_attg_title AS split_nai_attg_title,
               ptc.nai_attg_tags AS split_nai_attg_tags,
@@ -3128,6 +3165,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
             ...tomoriRow,
             // Pointer alters live-resolve the shared preset avatar (see helper).
             webhook_avatar_url: this.resolvePointerAlterAvatarUrl(tomoriRow, pointerPreset),
+            char_ref_url: tomoriRow.char_ref_url ?? pointerPreset?.preset_char_ref_shared_url ?? null,
             attribute_list: attributeList,
             sample_dialogues_in: sampleDialoguesIn,
             sample_dialogues_out: sampleDialoguesOut,

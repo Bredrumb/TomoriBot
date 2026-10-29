@@ -93,8 +93,8 @@ export default {
         short_term_memory_description: `我對這段對話的隨手筆記`,
         rewards_punishments: `獎勵與懲罰`,
         rewards_punishments_description: `我會注意到並記住的互動`,
-        memory_tagging: `記憶標籤（進階）`,
-        memory_tagging_description: `只在相關時喚醒某則記憶`,
+        memory_tagging: `個人記憶標籤（進階）`,
+        memory_tagging_description: `只在相關時喚醒某則個人記憶`,
         blacklisting: `黑名單`,
         blacklisting_description: "讓我完全忽略某位成員",
       },
@@ -235,7 +235,7 @@ export default {
       zai_title: `設定 Z.ai API 金鑰`,
       zai_description: `Z.ai 透過一般 API 與另一個程式開發端點提供 GLM 系列模型。
 
-⚠️ **服務條款更新：** Z.ai 的服務條款已更新，只允許程式開發與代理用途。用一般端點進行非程式開發的聊天需自行承擔風險，且可能違反他們的條款。`,
+🟡 **服務條款更新：** Z.ai 的服務條款已更新，只允許程式開發與代理用途。用一般端點進行非程式開發的聊天需自行承擔風險，且可能違反他們的條款。`,
       zai_getting_key_title: `取得你的 API 金鑰：`,
       zai_getting_key_description: `1. 前往 [Z.ai 平台](https://z.ai)
 2. 登入或建立帳號
@@ -245,7 +245,7 @@ export default {
       zai_important_title: `重要提醒：`,
       zai_important_description: `- 一般端點用於一般聊天、推理與原生圖片生成
   - 專用的程式開發端點是分開的，供程式開發相關流程使用
-  - ⚠️ Z.ai 的服務條款只允許程式開發與代理情境，一般聊天與角色扮演需自行承擔風險`,
+  - 🟡 Z.ai 的服務條款只允許程式開發與代理情境，一般聊天與角色扮演需自行承擔風險`,
       zai_footer: `設定好這個供應商後，你可以用 {configModel} 變更它的預設模型`,
       novelai_title: `設定 NovelAI API 金鑰`,
       novelai_description: `NovelAI 是訂閱制服務，專注於創意故事創作與角色扮演。
@@ -507,9 +507,9 @@ export default {
         footer: `同時有多個人格時，請選擇你指的是哪一個。`,
       },
       memory_tagging: {
-        title: `記憶標籤（進階）`,
+        title: `個人記憶標籤（進階）`,
         description:
-          "預設情況下，範圍內的每則記憶都會隨每則訊息送出。標籤可以把範圍縮小。\n> **關鍵字標籤**：有標籤的記憶只在它的關鍵字出現在對話中時才會醒來。沒有標籤的記憶則永遠有效。\n> **頻道**：伺服器記憶可限制在你在表單中挑選的頻道（包含其討論串），個人記憶則可使用 `#channel` 標籤限制。兩者皆可與關鍵字標籤合併使用。\n\n在 {configAdvancedMemory} 同時開啟兩者，再用 {toolPromptSnapshot} 查看目前實際有哪些記憶生效。",
+          "個人記憶可以帶有關鍵詞或 `#channel` 標籤，而標籤功能決定是否由這些標籤來限制它們何時出現。\n> **關鍵詞標籤**：帶標籤的個人記憶只在其關鍵詞出現在對話中時才會喚醒。沒有標籤的個人記憶始終有效。\n> **頻道**：個人記憶可透過 `#channel` 標籤限制在特定頻道。伺服器記憶與文件則改用 `/memories` 中的頻道選取。\n\n在 {configAdvancedMemory} 中開啟標籤功能，然後使用 {toolPromptSnapshot} 查看目前究竟有哪些記憶處於有效狀態。\n> 世界設定是獨立的：`/memories` 中的世界書條目使用它們自己的關鍵詞與始終有效設定。",
         footer: "上傳的文件與擷取的歷史紀錄也可以限定頻道。",
       },
     },

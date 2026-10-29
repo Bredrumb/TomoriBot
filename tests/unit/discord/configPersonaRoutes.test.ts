@@ -4066,7 +4066,7 @@ describe("config Persona Advanced routes", () => {
 
   it("does not clear a saved character reference when an upload is missing", async () => {
     let writes = 0;
-    const persona = makePersona({ persona_id: 55, nai_char_ref_url: "saved/reference.png" });
+    const persona = makePersona({ persona_id: 55, char_ref_url: "saved/reference.png" });
     const harness = makeHarness({
       personas: [persona],
       operations: {
@@ -4094,7 +4094,7 @@ describe("config Persona Advanced routes", () => {
 
     expect(writes).toBe(0);
     expect(JSON.stringify(harness.edits.at(-1))).toContain(
-      localizer("en-US", "commands.novelai.character-reference.invalid_image_description"),
+      localizer("en-US", "commands.shared.character_reference.invalid_image_description"),
     );
   });
 
@@ -4391,7 +4391,7 @@ describe("config Persona Advanced routes", () => {
     const contextSpy = spyOn(personaRepository, "setContextNote").mockResolvedValue(true);
     const attgSpy = spyOn(personaRepository, "setNaiAttg").mockResolvedValue(true);
     const humanizerSpy = spyOn(personaRepository, "setHumanizerOverride").mockResolvedValue(true);
-    const charRefSpy = spyOn(personaRepository, "setNaiCharRef").mockResolvedValue(true);
+    const charRefSpy = spyOn(personaRepository, "setCharRef").mockResolvedValue(true);
     const modelSpy = spyOn(llmOverrideRepo, "setPersonaLlmOverride").mockResolvedValue(true);
 
     const harness = makeHarness({
@@ -4456,7 +4456,7 @@ describe("config Persona Advanced routes", () => {
   it.each(GUILD_ONLY_WRITES)("denies the guild-only $label write in a DM", async (entry) => {
     const imageTagsSpy = spyOn(personaRepository, "setPhysicalAppearanceTags").mockResolvedValue(true);
     const attgSpy = spyOn(personaRepository, "setNaiAttg").mockResolvedValue(true);
-    const charRefSpy = spyOn(personaRepository, "setNaiCharRef").mockResolvedValue(true);
+    const charRefSpy = spyOn(personaRepository, "setCharRef").mockResolvedValue(true);
     const harness = makeHarness({ inGuild: false, personas: [makePersona({ persona_id: 55 })] });
 
     await dispatch(

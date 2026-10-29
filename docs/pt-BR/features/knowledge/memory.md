@@ -174,7 +174,7 @@ O escopo filtra tudo antes de qualquer outra coisa: uma memória do servidor só
 no seu próprio servidor, uma memória pessoal apenas quando aquele usuário é visível na conversa,
 e ambas apenas para a persona que as possui. Dentro desse escopo, **toda memória é enviada
 com todo prompt** por padrão. A marcação por tags restringe ainda mais, para que uma memória seja ativada apenas por
-uma palavra-chave ou apenas em um canal. Ative com `/config` > Engine > Memory & STM.
+uma palavra-chave ou apenas em um canal. Ative com `/config` > Comportamento > Memória Avançada.
 
 ### Tags de Palavra-chave
 <!-- anchor: keyword-tags -->
@@ -200,75 +200,31 @@ uma palavra-chave ou apenas em um canal. Ative com `/config` > Engine > Memory &
 
 Em `/help`, escolha `Memória`, depois `Marcação de Memória`, para o mesmo resumo no Discord.
 
-## Memória de Curto Prazo (STM)
+## Memória de curto prazo
 <!-- anchor: short-term-memory-stm -->
 
-A TomoriBot consegue ler facilmente as mensagens do canal atual em que está conversando, mas a STM permite que ela faça o seguinte sem salvar uma memória de longo prazo de fato:
-1. Reforçar temporariamente o cenário/situação atual do canal no contexto
-2. Lembrar temporariamente de conversas de outros canais/servidores
+O TomoriBot lê mensagens recentes no canal ativo. A memória de curto prazo (STM) estende isso mantendo o contexto de trabalho temporário:
 
-Ela só lembra de conversas das quais participou. Ela atualiza a memória de um canal quando
-responde, e em nenhum outro momento, então um canal movimentado onde ninguém fala com ela não deixa
-rastro.
+- **Contexto do canal:** Reforça o tópico ou a situação em andamento no canal atual.
+- **Contexto entre canais:** Recorda conversas recentes de outros canais, e entre servidores quando a recordação entre servidores estiver ativada.
 
-A STM de cada canal expira após 24 horas por padrão e, se você optou por sair com `/personal config`, suas mensagens nunca entram nela de forma alguma.
+Ela só lembra de conversas das quais participou. Ela atualiza o resumo de um canal quando responde, e em nenhum outro momento, então um canal movimentado onde ninguém fala com ela não deixa memória. A memória de curto prazo de cada canal expira após 24 horas por padrão. Se você optar por não participar em `/personal config`, suas mensagens serão excluídas da memória de curto prazo.
 
-### O que ela pode e não pode ver
+### Exemplo entre canais
 
-| Onde | O que isso significa |
-|---|---|
-| Em um servidor | Uma memória compartilhada por canal, não uma por pessoa. Ela não está fazendo anotações sobre você individualmente. |
-| Em DMs | Apenas suas. |
-| Outros canais | Ela pode relembrar suas conversas recentes de alguns outros canais no mesmo servidor. |
-| Canais privados | Qualquer coisa configurada com `/config` > Channels > Channel Rules permanece lá e não aparece em outro lugar. |
-| Outros servidores | Nunca, a menos que você ative `/personal config` → `crossserver`. Mesmo assim, apenas *suas próprias* conversas acompanham você. |
-| Cada persona | Mantém sua própria memória separada, então trocar de persona troca a memória. |
+- **Canais públicos:** Você discute uma recomendação de álbum com o TomoriBot em `#music`. Alguns minutos depois em `#general`, você pergunta qual álbum ela sugeriu. Como ela respondeu em `#music`, ela lembra desse contexto em `#general`.
+- **Canais privados:** Se essa conversa aconteceu em um canal privado, ela não se lembrará dela em `#general`. Os resumos de canais privados permanecem isolados, a menos que um administrador ative o Desvio de privacidade de STM em `/config` > `Permissions`.
 
-A memória de cada canal contém as últimas mensagens mais um resumo curto que ela mesma escreve
-e atualiza conforme a conversa avança. Ela desaparece sozinha após algumas horas de silêncio.
+### Gerenciando a memória de curto prazo
 
-### Comandos
+Você pode visualizar ou corrigir o resumo do canal atual em `/config` > `Persona` > `Memórias`.
+Os administradores do servidor podem ajustar parâmetros ou desativar a memória de curto prazo em `/config` > `Comportamento` > `Memória Avançada`, e revisar ou limpar resumos de canais ativos em `/memories` > `Curto Prazo`.
+`/refresh` limpa a memória do canal atual.
 
-| Comando | O que faz |
-|---|---|
-| `/config` > Persona > Memories | Ver o resumo que ela está mantendo para este canal |
-| `/config` > Persona > Memories | Corrigir ou escrever você mesmo |
-| `/personal config` / `/personal memories` | Optar pelo recall entre servidores, ou limpar o seu |
-| `/refresh` | Fazer ela esquecer este canal agora |
-| `/config` > Engine > Memory & STM | Com que frequência ela atualiza, e quanto detalhe ela mantém |
-| `/config` > Engine > Memory & STM | Trocar o resumo por até 5 campos rotulados (*Cena atual*, *Humor*, …) |
-| `/config` > Engine > Memory & STM | Reformular como ela é instruída a mantê-lo |
-| `/memories` | Revisar e limpar seletivamente entradas ativas do servidor a partir de um painel de gerenciamento |
-| `/config` > Permissions | Permitir que memórias de canais privados apareçam em outros lugares |
-| `/config` > Permissions | Ativar ou desativar o recurso (memórias armazenadas são mantidas de qualquer forma) |
+## Identidades de proxy de mensagens
 
-Qualquer pessoa pode executar `/config` > Persona > Memories, `/personal config` e `/personal memories`. O restante requer Gerenciar Servidor.
-
-### Configuração da STM
-
-Administradores do servidor podem ajustar a memória de curto prazo em `/config` → `Comportamento` → Memory & STM.
-Essas configurações se aplicam aos registros de STM ativos do servidor:
-
-- Frequência de atualização controla quantos turnos do bot passam entre os empurrões de atualização. O intervalo permitido é 1-100.
-- Modo de renderização escolhe se os valores das categorias substituem os turnos recentes ou aparecem como um resumo bruto.
-- Mensagens brutas controla quantas mensagens recentes são retidas, de 1 até o máximo do canal.
-- Profundidade do toque posiciona o empurrão de atualização a partir do final do contexto montado, de 0-20.
-- Profundidade do conteúdo posiciona o conteúdo da STM a partir do final do contexto montado, de −1-20.
-
-Categorias STM substitui o campo padrão Summary por até cinco campos rotulados. Insira cada campo como
-`Rótulo: Descrição`; deixar todos os campos em branco restaura a categoria padrão Summary. Salvar categorias
-limpa as STM ativas de canais do servidor que são incompatíveis, e o painel informa os canais afetados antes de salvar.
-
-Prompt STM permite que gerentes substituam a descrição da ferramenta e o empurrão de atualização. Substituições em branco restauram os
-valores padrão efetivos, incluindo o empurrão que considera as categorias quando elas estão habilitadas.
-
-:::tip
-Esses comandos de STM são apenas para usuários avançados; é recomendado manter as configurações padrão, a menos que você queira permitir que ela se lembre de você entre servidores com `/personal config`
-:::
-
----
+Os serviços de proxy de mensagens suportados permitem que o TomoriBot mantenha memórias pessoais separadas para identidades com proxy verificadas. A conta do Discord que hospeda controla a privacidade e a autorização. Consulte o [Suporte a proxy de mensagens](/features/integrations/message-proxy-support/) para configuração e limitações.
 
 ## Privacidade
-Para saber exatamente o que ela armazena e como exportar ou excluir, veja
-[Manuseio de Dados](/pt-BR/features/knowledge/data-handling/) e `/legal privacy-policy`. Você pode optar por sair da memória
-inteiramente com `/personal config`.
+
+Para saber o que o TomoriBot armazena e como exportar ou excluir, consulte [Tratamento de dados](/features/knowledge/data-handling/) e `/legal privacy-policy`. Você pode desativar a memória com `/personal config`.

@@ -25,7 +25,10 @@ import {
   validateMemoryContent,
   validateSampleDialogue,
 } from "@/utils/misc/memoryLimits";
-import { removePresetSpritesAfterAvatarChange } from "@/utils/persona/avatarChangeSpriteCleanup";
+import {
+  clearPresetCharacterReferenceAfterAvatarChange,
+  removePresetSpritesAfterAvatarChange,
+} from "@/utils/persona/avatarChangeSpriteCleanup";
 import { forkPointerForAvatarChange } from "@/utils/persona/pointerFork";
 import { PERSONA_LIMITS, memoryGuard, reserveAvatarQuota } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
@@ -38,6 +41,7 @@ import {
 import { normalizeTriggerWord, parseTriggerWordListInput } from "@/utils/text/triggerWords";
 import { log } from "@/utils/misc/logger";
 import { prepareApiAttachmentForStorage, replaceStoredCharReference } from "@/utils/storage/charRefOperations";
+import { deleteCharRef } from "@/utils/storage/charrefStorage";
 import { hasPersonaPrompt } from "@/utils/discord/ui/personaEligibility";
 import {
   setTextModelOverride as persistTextModelOverride,
@@ -101,7 +105,13 @@ type ConfigTriggerRemoveResult =
   | { status: "write-failed" };
 
 type ConfigAvatarResult =
-  | { status: "success"; scope: "main" | "alter"; cleared: boolean; presetSpritesRemoved: number }
+  | {
+      status: "success";
+      scope: "main" | "alter";
+      cleared: boolean;
+      presetSpritesRemoved: number;
+      presetCharacterReferenceRemoved: boolean;
+    }
   | { status: "memory-critical" }
   | { status: "pointer-fork-failed" }
   | { status: "quota-exceeded"; resetAt: number | null }
@@ -382,6 +392,7 @@ export const configPersonaOperations: ConfigPersonaOperations = {
       return { status: "write-failed" };
     }
     const oldAvatar = persona.webhook_avatar_url;
+    const oldCharRef = persona.char_ref_url;
     const written = await personaRepository.applyPresetPointerToPersona({
       personaId,
       nickname: persona.persona_nickname,
@@ -398,6 +409,7 @@ export const configPersonaOperations: ConfigPersonaOperations = {
     try {
       for (const sprite of sprites) await deletePersonaSpriteFromStorage(sprite.avatar_url);
       if (oldAvatar) await deletePersonaAvatarFromStorage(oldAvatar);
+      if (oldCharRef) await deleteCharRef(oldCharRef, "personas", personaId);
     } catch (error) {
       log.warn("Could not clean up images after preset resync", { personaId, error });
     }
@@ -512,9 +524,9 @@ export const configPersonaOperations: ConfigPersonaOperations = {
     const ok = await replaceStoredCharReference({
       entityType: "personas",
       entityId: personaId,
-      previousRef: persona.nai_char_ref_url ?? null,
+      previousRef: persona.char_ref_url ?? null,
       nextBuffer,
-      persistNextRef: (nextRef) => personaRepository.setNaiCharRef(personaId, nextRef),
+      persistNextRef: (nextRef) => personaRepository.setCharRef(personaId, nextRef),
       onPersistSuccess: () => invalidateTomoriStateCache(serverDiscId),
     });
     return ok ? { status: "success", cleared: !attachment } : { status: "write-failed" };
@@ -983,6 +995,10 @@ export const configPersonaOperations: ConfigPersonaOperations = {
           scope: "main",
           cleared: true,
           presetSpritesRemoved: await removePresetSpritesAfterAvatarChange(personaId, serverDiscId),
+          presetCharacterReferenceRemoved: await clearPresetCharacterReferenceAfterAvatarChange(
+            personaId,
+            serverDiscId,
+          ),
         };
       }
 
@@ -996,6 +1012,7 @@ export const configPersonaOperations: ConfigPersonaOperations = {
         scope: "alter",
         cleared: true,
         presetSpritesRemoved: await removePresetSpritesAfterAvatarChange(personaId, serverDiscId),
+        presetCharacterReferenceRemoved: await clearPresetCharacterReferenceAfterAvatarChange(personaId, serverDiscId),
       };
     }
 
@@ -1040,6 +1057,7 @@ export const configPersonaOperations: ConfigPersonaOperations = {
         scope: "main",
         cleared: false,
         presetSpritesRemoved: await removePresetSpritesAfterAvatarChange(personaId, serverDiscId),
+        presetCharacterReferenceRemoved: await clearPresetCharacterReferenceAfterAvatarChange(personaId, serverDiscId),
       };
     }
 
@@ -1063,6 +1081,7 @@ export const configPersonaOperations: ConfigPersonaOperations = {
       scope: "alter",
       cleared: false,
       presetSpritesRemoved: await removePresetSpritesAfterAvatarChange(personaId, serverDiscId),
+      presetCharacterReferenceRemoved: await clearPresetCharacterReferenceAfterAvatarChange(personaId, serverDiscId),
     };
   },
 

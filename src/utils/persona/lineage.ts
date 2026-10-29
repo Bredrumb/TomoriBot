@@ -1,5 +1,17 @@
 import type { TomoriState } from "@/types/db/schema";
 
+export function groupPersonasByLineage(personas: readonly TomoriState[]): Map<number, TomoriState[]> {
+  const grouped = new Map<number, TomoriState[]>();
+  for (const persona of personas) {
+    const lineageId = persona.persona_lineage_id;
+    if (lineageId === undefined || lineageId === null || lineageId === 0) continue;
+    const bucket = grouped.get(lineageId);
+    if (bucket) bucket.push(persona);
+    else grouped.set(lineageId, [persona]);
+  }
+  return grouped;
+}
+
 /**
  * Chooses the persona that represents a lineage in labels and thumbnails.
  *
