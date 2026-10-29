@@ -70,9 +70,9 @@ record ownership through their assigned and enabled capabilities.
 
 Server-funded subscription routes reserve the same per-member text quota as server BYOK, and any
 admitted server route requires the server trigger cooldown. Personal subscriptions and personal BYOK
-stay outside server quota. Admission reserves one unit per trigger, shared across persona jobs and
-retries; a delivered reply keeps it, and a trigger whose turns produce no reply releases it so a retry
-can claim one again.
+stay outside server quota. Admission reserves one unit per trigger, and persona jobs and retries share
+it. A delivered reply keeps the unit. A trigger whose turns produce no reply releases it, so a retry can
+claim one again.
 
 An inactive or unlinked personal subscription retains its configured personal text fallback pool.
 A server route is considered only after that pool fails, subject to the user's fallback setting and
