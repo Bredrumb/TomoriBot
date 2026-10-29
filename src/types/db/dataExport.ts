@@ -1,3 +1,4 @@
+import { lorebookEntryInputSchema, LOREBOOK_ENTRIES_PER_SCOPE_MAX } from "@/modules/lorebooks/db/types";
 import {
   responseReviewItemsSchema,
   responseRuleCheckerRefSchema,
@@ -55,8 +56,20 @@ const memoryStringSchema = z.string().transform((s) => ({ content: s, tags: [] a
 export const memoryItemSchema = z.union([memoryStringSchema, memoryItemObjectSchema]);
 
 const strictMemoryItemSchema = z.union([memoryStringSchema, memoryItemObjectSchema.strict()]);
+const serverMemoryItemObjectSchema = memoryItemObjectSchema.extend({
+  channel_disc_ids: z.array(z.string().regex(/^\d{17,20}$/)).optional(),
+  legacy_channel_tags: z.array(z.string()).optional(),
+});
+const serverMemoryItemSchema = z.union([memoryStringSchema, serverMemoryItemObjectSchema]);
+const strictServerMemoryItemSchema = z.union([memoryStringSchema, serverMemoryItemObjectSchema.strict()]);
+const lorebookEntriesSchema = z.array(lorebookEntryInputSchema).max(LOREBOOK_ENTRIES_PER_SCOPE_MAX);
 
-export type MemoryItem = { content: string; tags: string[] };
+export type MemoryItem = {
+  content: string;
+  tags: string[];
+  channel_disc_ids?: string[];
+  legacy_channel_tags?: string[];
+};
 
 function normalizeMemoryWhitespace(value: string): string {
   return value.trim().replace(/\s+/gu, " ");
@@ -624,6 +637,11 @@ const memoryBucketSchema = z
   })
   .strict();
 
+const workspaceMemoryBucketSchema = memoryBucketSchema.extend({
+  memories: z.array(strictServerMemoryItemSchema),
+  lorebook_entries: lorebookEntriesSchema.optional(),
+});
+
 function getMemoryBucketSchema(maxMemories: number) {
   return memoryBucketSchema.extend({ memories: z.array(strictMemoryItemSchema).max(maxMemories) }).strict();
 }
@@ -649,7 +667,16 @@ function getMemoryBundleDataSchema(maxMemories: number) {
     });
 }
 
-export type MemoryBucket = z.infer<typeof memoryBucketSchema>;
+function getWorkspaceMemoryBundleDataSchema(maxMemories: number) {
+  return getMemoryBundleDataSchema(maxMemories).safeExtend({
+    buckets: z
+      .array(workspaceMemoryBucketSchema.extend({ memories: z.array(strictServerMemoryItemSchema).max(maxMemories) }))
+      .min(1),
+    serverwide_lorebook_entries: lorebookEntriesSchema.optional(),
+  });
+}
+
+export type MemoryBucket = z.infer<typeof workspaceMemoryBucketSchema>;
 
 export function getWorkspaceMemoriesExportSchema() {
   return z
@@ -657,7 +684,7 @@ export function getWorkspaceMemoriesExportSchema() {
       version: z.literal(EXPORT_V2_VERSION),
       type: z.literal("workspace_memories"),
       exported_at: z.string(),
-      data: getMemoryBundleDataSchema(getMemoryLimits().maxServerMemories),
+      data: getWorkspaceMemoryBundleDataSchema(getMemoryLimits().maxServerMemories),
     })
     .strict();
 }
@@ -869,11 +896,17 @@ function adaptV1MemoryData(
   }
 
   const adapted = outputSchema.safeParse({
+    ...(memoryField === "server_memories" && sourceValues.serverwide_lorebook_entries !== undefined
+      ? { serverwide_lorebook_entries: sourceValues.serverwide_lorebook_entries }
+      : {}),
     buckets: [
       {
         name: bucketName,
         label: bucketName,
         memories: memories as MemoryItem[],
+        ...(memoryField === "server_memories" && sourceValues.lorebook_entries !== undefined
+          ? { lorebook_entries: sourceValues.lorebook_entries }
+          : {}),
       },
     ],
   });
@@ -900,7 +933,7 @@ export function adaptV1PersonalMemories(
 }
 
 export function adaptV1WorkspaceMemories(input: unknown): V2AdapterResult<WorkspaceMemoriesExportData> {
-  const outputSchema = getMemoryBundleDataSchema(
+  const outputSchema = getWorkspaceMemoryBundleDataSchema(
     getMemoryLimits().maxServerMemories,
   ) as z.ZodType<WorkspaceMemoriesExportData>;
   return adaptV1MemoryData(input, getServerMemoriesExportDataSchema(), "server_memories", outputSchema, "workspace");
@@ -1075,7 +1108,9 @@ export function parseExportFile(input: unknown): ExportParseResult {
 function getServerMemoriesExportDataSchema() {
   const limits = getMemoryLimits();
   return z.object({
-    server_memories: z.array(memoryItemSchema).max(limits.maxServerMemories),
+    server_memories: z.array(serverMemoryItemSchema).max(limits.maxServerMemories),
+    lorebook_entries: lorebookEntriesSchema.optional(),
+    serverwide_lorebook_entries: lorebookEntriesSchema.optional(),
   });
 }
 
@@ -1096,7 +1131,9 @@ function getServerExportDataSchema() {
   const limits = getMemoryLimits();
   return z.object({
     config: serverConfigExportSchema,
-    server_memories: z.array(memoryItemSchema).max(limits.maxServerMemories),
+    server_memories: z.array(serverMemoryItemSchema).max(limits.maxServerMemories),
+    lorebook_entries: lorebookEntriesSchema.optional(),
+    serverwide_lorebook_entries: lorebookEntriesSchema.optional(),
   });
 }
 

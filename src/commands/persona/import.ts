@@ -1,8 +1,10 @@
+import { LOREBOOK_ENTRIES_PER_SCOPE_MAX, isLorebookRegexKey } from "@/modules/lorebooks/db/types";
 /**
  * Preset Import Command
  * Imports TomoriBot's personality from a PNG or JSON file
  */
 
+import { convertCharacterBook, extractCharacterBook } from "@/modules/lorebooks/imports/characterBook";
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags, EmbedBuilder, AttachmentBuilder } from "discord.js";
 import { localizer } from "../../utils/text/localizer";
@@ -282,13 +284,25 @@ export function describeUnmappedCardFields(card: unknown): string | null {
     dropped.push("group_only_greetings");
   }
 
-  const characterBook = scopes.map((scope) => asPlainObject(scope.character_book)).find(Boolean);
+  const characterBook = extractCharacterBook(card);
+  if (characterBook) {
+    const droppedEntries = convertCharacterBook(characterBook).entries.length - LOREBOOK_ENTRIES_PER_SCOPE_MAX;
+    if (droppedEntries > 0) dropped.push(`${droppedEntries} character_book entries over the storage limit`);
+  }
   const entries = characterBook?.entries;
   if (Array.isArray(entries)) {
-    const disabledCount = entries.filter((entry) => asPlainObject(entry)?.enabled === false).length;
-    if (disabledCount > 0) {
-      dropped.push(`${disabledCount} disabled character_book entr(ies)`);
-    }
+    const regexCount = entries.reduce((count, raw) => {
+      const entry = asPlainObject(raw);
+      const keys = [
+        ...(Array.isArray(entry?.keys) ? entry.keys : []),
+        ...(Array.isArray(entry?.secondary_keys) ? entry.secondary_keys : []),
+      ];
+      return (
+        count +
+        keys.filter((key) => typeof key === "string" && (entry?.use_regex === true || isLorebookRegexKey(key))).length
+      );
+    }, 0);
+    if (regexCount > 0) dropped.push(`${regexCount} unsupported character_book regex key(s)`);
   }
 
   return dropped.length > 0 ? dropped.join(", ") : null;
@@ -926,6 +940,11 @@ export async function importPersona(
         }),
       ];
 
+      if (presetData.lorebook_entries !== undefined) {
+        descriptionLines.push(
+          localizer(locale, "commands.persona.import.lorebook_count", { count: presetData.lorebook_entries.length }),
+        );
+      }
       if (failedSpriteStorageDeletes > 0) {
         descriptionLines.push(
           localizer(locale, "commands.persona.import.sprite_storage_cleanup_partial_description", {
@@ -1095,6 +1114,11 @@ export async function importPersona(
           triggers: alterResult.displayedTriggers.length > 0 ? alterResult.displayedTriggers.join(", ") : "N/A",
         }),
       ];
+      if (presetData.lorebook_entries !== undefined) {
+        alterDescriptionParts.push(
+          `\n\n${localizer(locale, "commands.persona.import.lorebook_count", { count: presetData.lorebook_entries.length })}`,
+        );
+      }
       if (alterResult.usedMainAvatarFallback) {
         alterDescriptionParts.push(
           `\n\n${localizer(locale, "commands.persona.import.alter_avatar_fallback_main", {

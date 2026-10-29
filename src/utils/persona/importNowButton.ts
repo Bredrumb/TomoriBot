@@ -257,7 +257,10 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
               localizer(locale, "commands.persona.import.alter_success_confirmation", {
                 nickname: result.nickname,
                 trigger_count: result.uniqueTriggerCount,
-              }),
+              }) +
+                (presetData.lorebook_entries !== undefined
+                  ? `\n\n${localizer(locale, "commands.persona.import.lorebook_count", { count: presetData.lorebook_entries.length })}`
+                  : ""),
             ),
         ],
         flags: MessageFlags.Ephemeral,

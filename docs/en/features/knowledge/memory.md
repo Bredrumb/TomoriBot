@@ -12,12 +12,15 @@ TomoriBot remembers conversations in several ways. For personality and behavior,
 
 | Type | What TomoriBot remembers | How long it lasts |
 |---|---|---|
-| Long-term memory | Saved facts, documents, and conditioning | Until removed; survives `/refresh` and restarts |
+| Long-term memory | Saved facts, documents, lorebooks, and conditioning | Until removed; survives `/refresh` and restarts |
 | Short-term memory (STM) | A channel summary and recent messages | 24 hours by default |
 | Chat history | Recent messages in the current channel | Until they fall outside the configured history range or `/refresh` clears it |
 
 For what TomoriBot receives on each turn, see
 [Inside The Prompt](/features/knowledge/inside-the-prompt/).
+
+In `/memories`, Memories holds saved facts, Documents holds references searched by meaning, Lorebooks
+contains authored canon, and Short-Term holds conversation summaries.
 
 ## Long-term memory
 <!-- anchor: long-term-memory -->
@@ -69,6 +72,13 @@ by default; managers can grant access through `/moderation` > `Member Access`.
 History imports offer prompts for conversation, roleplay, and a persona's point of view. You can review
 and adjust the prompt before importing.
 
+### Lorebooks
+
+Lorebooks hold world canon that appears only when its keywords match recent messages. Entries can be
+Serverwide or belong to one persona lineage, can be Always On, and can be limited to channels. Manage
+them under `/memories` > `Lorebooks`; every member can read them and members with `Manage Server` can
+change them. See [Lorebooks](/features/knowledge/lorebooks/).
+
 ### Conditioning
 <!-- anchor: conditioning -->
 
@@ -82,20 +92,24 @@ managers can disable the tool under `/config` > `Plugins` > `Available Tools`.
 
 ## Controlling when memories activate
 
-By default, memories are included whenever their owner and scope match the conversation. Keyword tags
-and channel restrictions can narrow when they appear. Enable tagging under `/config` > `Engine` >
-`Memory & STM`.
+By default, memories are included whenever their owner and scope match the conversation. Channel
+restrictions narrow where they apply, and personal memories can also use keyword tags.
 
-### Keyword tags
+### Personal memory tags
 <!-- anchor: keyword-tags -->
 
-A tagged memory activates when a keyword appears in the visible conversation. Untagged memories are
-always active within their scope. Use `/tool prompt snapshot` to see which memories are active.
+Personal memories can carry keyword or `#channel` tags. Turn tagging on under `/config` > `Behavior` >
+`Advanced Memory`. When it is on, a tagged personal memory appears only when one of its keywords is in
+the conversation, and an untagged one stays active. A `#channel` tag limits it to that channel. Use
+`/tool prompt snapshot` to see which memories are active.
+
+Server memories no longer use keyword tags. Their authored lore belongs in
+[Lorebooks](/features/knowledge/lorebooks/), where keywords and Always On are set per entry.
 
 ### Channels
 
 Server memories and documents can be limited to selected channels and their threads. Personal memories
-use a `#channel` tag. Channel restrictions and keyword tags can be combined.
+use a `#channel` tag. Lorebook entries also accept a channel selection.
 
 Older server memory and document `#channel` tags were converted to channel selections. If a tagged
 channel no longer exists, the item remains active in every channel; `/memories` identifies these items
@@ -114,7 +128,7 @@ default. Conversations do not follow you between servers unless you enable cross
 messages are excluded from short-term memory.
 
 You can view or correct the current channel's summary under `/config` > `Persona` > `Memories`.
-Server managers can adjust or disable short-term memory under `/config` > `Engine` > `Memory & STM`.
+Server managers can adjust or disable short-term memory under `/config` > `Behavior` > `Advanced Memory`.
 `/refresh` clears the current channel's memory.
 
 ## Message-proxy identities

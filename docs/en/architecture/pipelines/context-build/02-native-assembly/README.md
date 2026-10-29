@@ -23,6 +23,7 @@ Prompt order matters for LLM reasoning and caching: identity framing sits at the
 [07] Short-term memory           ← same/other channel summary and categories
 [07b] Verbatim tool definitions  ← optional in-band tool JSON schemas
 [08] RAG documents               ← vector retrieval over uploaded documents
+[08b] Lorebooks                  ← activated world info for both placements
 [09] Conditioning                ← reward and punishment reinforcement notes
 [10] Sample dialogues            ← few-shot persona examples
 [11] Dialogue history            ← recent conversation messages and notes
@@ -40,6 +41,7 @@ Prompt order matters for LLM reasoning and caching: identity framing sits at the
 | [Short-term memory](/architecture/pipelines/context-build/02-native-assembly/07-short-term-memory/) | Supplies recent memory and deferred refresh instructions. |
 | [Verbatim tool definitions](/architecture/pipelines/context-build/02-native-assembly/07b-verbatim-tool-definitions/) | Adapts tool schemas for text-based calling. |
 | [RAG documents](/architecture/pipelines/context-build/02-native-assembly/08-rag-documents/) | Retrieves relevant uploaded document excerpts. |
+| [Lorebooks](/architecture/subsystems/lorebooks/#prompt-integration) | Adds activated world info after documents. |
 | [Conditioning](/architecture/pipelines/context-build/02-native-assembly/09-conditioning/) | Adds server-configured reinforcement. |
 | [Sample dialogues](/architecture/pipelines/context-build/02-native-assembly/10-sample-dialogues/) | Shows persona response examples. |
 | [Dialogue history](/architecture/pipelines/context-build/02-native-assembly/11-dialogue-history/) | Supplies recent messages and capability-neutral media descriptors. |

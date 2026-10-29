@@ -1033,6 +1033,70 @@ BEGIN
     END IF;
 END $$;
 
+CREATE TABLE IF NOT EXISTS server_lorebooks (
+  lorebook_id SERIAL PRIMARY KEY,
+  server_id INT NOT NULL REFERENCES servers(server_id) ON DELETE CASCADE,
+  name VARCHAR(128) NOT NULL CHECK (length(trim(name)) > 0),
+  enabled BOOLEAN NOT NULL DEFAULT true,
+  channel_disc_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  UNIQUE (server_id, name)
+);
+
+SELECT add_column_if_not_exists('server_lorebooks', 'enabled', 'BOOLEAN', 'true');
+SELECT add_column_if_not_exists('server_lorebooks', 'channel_disc_ids', 'TEXT[]', 'ARRAY[]::TEXT[]');
+
+CREATE TABLE IF NOT EXISTS persona_lorebook_entries (
+  entry_id SERIAL PRIMARY KEY,
+  server_id INT NOT NULL REFERENCES servers(server_id) ON DELETE CASCADE,
+  persona_lineage_id BIGINT,
+  lorebook_name VARCHAR(128),
+  title VARCHAR(128) NOT NULL,
+  content TEXT NOT NULL,
+  keys TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  secondary_keys TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  selective_logic INT NOT NULL DEFAULT 0 CHECK (selective_logic BETWEEN 0 AND 3),
+  scan_depth INT NOT NULL DEFAULT 5 CHECK (scan_depth BETWEEN 1 AND 100),
+  trigger_chance INT NOT NULL DEFAULT 100 CHECK (trigger_chance BETWEEN 0 AND 100),
+  insertion_order INT NOT NULL DEFAULT 100,
+  placement SMALLINT NOT NULL DEFAULT 0 CHECK (placement IN (0, 1)),
+  constant BOOLEAN NOT NULL DEFAULT false,
+  enabled BOOLEAN NOT NULL DEFAULT true,
+  channel_disc_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT persona_lorebook_entries_activatable CHECK (constant OR cardinality(keys) > 0)
+);
+
+DO $$
+BEGIN
+  PERFORM add_column_if_not_exists('persona_lorebook_entries', 'lorebook_name', 'VARCHAR(128)', NULL);
+  INSERT INTO server_lorebooks (server_id, name)
+  SELECT DISTINCT server_id, 'General' FROM persona_lorebook_entries
+    WHERE persona_lineage_id IS NULL AND lorebook_name IS NULL
+  ON CONFLICT (server_id, name) DO NOTHING;
+  UPDATE persona_lorebook_entries SET lorebook_name = 'General'
+  WHERE persona_lineage_id IS NULL AND lorebook_name IS NULL;
+  ALTER TABLE persona_lorebook_entries DROP CONSTRAINT IF EXISTS persona_lorebook_entries_book;
+  ALTER TABLE persona_lorebook_entries ADD CONSTRAINT persona_lorebook_entries_book
+    FOREIGN KEY (server_id, lorebook_name) REFERENCES server_lorebooks(server_id, name)
+    ON UPDATE CASCADE ON DELETE CASCADE;
+  ALTER TABLE persona_lorebook_entries DROP CONSTRAINT IF EXISTS persona_lorebook_entries_book_scope;
+  ALTER TABLE persona_lorebook_entries ADD CONSTRAINT persona_lorebook_entries_book_scope
+    CHECK ((persona_lineage_id IS NULL) = (lorebook_name IS NOT NULL));
+  ALTER TABLE persona_lorebook_entries DROP CONSTRAINT IF EXISTS persona_lorebook_entries_trigger_chance_check;
+  ALTER TABLE persona_lorebook_entries ADD CONSTRAINT persona_lorebook_entries_trigger_chance_check
+    CHECK (trigger_chance BETWEEN 0 AND 100);
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_persona_lorebook_entries_scope
+  ON persona_lorebook_entries (server_id, persona_lineage_id, enabled);
+
+DROP TRIGGER IF EXISTS update_persona_lorebook_entries_timestamp ON persona_lorebook_entries;
+CREATE TRIGGER update_persona_lorebook_entries_timestamp
+BEFORE UPDATE ON persona_lorebook_entries
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
 CREATE TABLE IF NOT EXISTS server_memories (
   server_memory_id SERIAL PRIMARY KEY,
   server_id INT NOT NULL,
@@ -1057,16 +1121,18 @@ SELECT add_column_if_not_exists('server_memories', 'tags', 'TEXT[]', 'ARRAY[]::T
 -- Add channel scope column for existing databases
 SELECT add_column_if_not_exists('server_memories', 'channel_disc_ids', 'TEXT[]', 'ARRAY[]::TEXT[]', 'NOT NULL');
 
--- Legacy `#name` channel scopes migration 111 set aside; a row with resolved_at NULL keeps its document
--- or server memory active in every channel until the startup backfill or an admin resolves it.
+-- Pending legacy #name channel scopes remain active everywhere until startup backfill or an admin resolves them.
 CREATE TABLE IF NOT EXISTS legacy_channel_scope_tags (
-  source_table TEXT NOT NULL CHECK (source_table IN ('documents', 'server_memories')),
+  source_table TEXT NOT NULL CHECK (source_table IN ('documents', 'server_memories', 'persona_lorebook_entries')),
   row_id INT NOT NULL,
   server_id INT NOT NULL,
   channel_tags TEXT[] NOT NULL,
   resolved_at TIMESTAMPTZ,
   PRIMARY KEY (source_table, row_id)
 );
+ALTER TABLE legacy_channel_scope_tags DROP CONSTRAINT IF EXISTS legacy_channel_scope_tags_source_table_check;
+ALTER TABLE legacy_channel_scope_tags ADD CONSTRAINT legacy_channel_scope_tags_source_table_check
+  CHECK (source_table IN ('documents', 'server_memories', 'persona_lorebook_entries'));
 
 -- Backfill server memories to the current main persona for each server
 DO $$

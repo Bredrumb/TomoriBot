@@ -1,3 +1,4 @@
+import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
 /**
  * ServerRepository: manages server identity, emojis/stickers, managed webhooks,
  * and the personalization blacklist.
@@ -2442,6 +2443,7 @@ class ServerRepository implements IRepository<ServerExportShape> {
           `;
           totalDeleted += docResult.count ?? 0;
         }
+        totalDeleted += await lorebookRepository.deleteServerwide(serverId, tx);
         return { deleted: totalDeleted > 0, media };
       });
       if (result.deleted) {

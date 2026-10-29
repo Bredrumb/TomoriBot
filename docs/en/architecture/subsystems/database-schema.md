@@ -147,6 +147,12 @@ matching credential revision, including after the persona is removed.
 
 ### Memory, dialogue, and expression data
 
+- **`server_lorebooks`**: named Serverwide collections with an enabled flag and channel scope; renaming or deleting a book cascades to its entries.
+- **`persona_lorebook_entries`**: authored lore scoped by server and nullable persona lineage; NULL
+  means Serverwide. The `(server_id, persona_lineage_id, enabled)` index serves scope reads. Server
+  deletion cascades entries; persona deletion preserves them. A timestamp trigger updates
+  `updated_at` on edits. The module repository owns validation and transactional replacement.
+  See [Lorebooks](/architecture/subsystems/lorebooks/) for retrieval and activation contracts.
 - **`server_memories`**: shared server-wide long-term memories.
 - **`personal_memories`**: personal memories scoped by user ID and cross-server `persona_lineage_id`.
 - **`conditioning_history`**: behavioral reinforcement records from `/reward`, `/punish`, and `interact_with_target`, grouped by server, target persona lineage, conditioning type, action, and normalized reason. Each row has exactly one actor: `user_id` or `actor_persona_id`, with separate repeat counts per actor and cascading deletion when that actor is deleted. The tool's workspace capability, `conditioning_interactions_enabled`, defaults to true.

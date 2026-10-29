@@ -1,3 +1,8 @@
+import {
+  lorebookEntryInputSchema,
+  LOREBOOK_ENTRIES_PER_SCOPE_MAX,
+  type LorebookEntryInput,
+} from "@/modules/lorebooks/db/types";
 /**
  * Type definitions and schemas for TomoriBot preset export/import system
  * Enables sharing personalities as PNG files with embedded metadata
@@ -60,6 +65,7 @@ export function buildGeneratedPresetAttributePublicFlags(attributeList: readonly
  * Contains all personality-related fields from personas and persona-scoped config tables.
  */
 export interface PresetExportData {
+  lorebook_entries?: LorebookEntryInput[];
   tomori_nickname: string;
   attribute_list: string[];
   /** Visibility flags aligned to attribute_list; true exposes the attribute to other triggered personas */
@@ -145,6 +151,7 @@ export interface ValidationResult {
 }
 
 export const presetExportDataSchema = z.object({
+  lorebook_entries: z.array(lorebookEntryInputSchema).max(LOREBOOK_ENTRIES_PER_SCOPE_MAX).optional(),
   tomori_nickname: z.string().min(1, "Nickname cannot be empty").max(100, "Nickname too long"),
   attribute_list: z.array(z.string().max(PRESET_MAX_STRING_LENGTH)).max(PRESET_MAX_ATTRIBUTES),
   attribute_public_flags: z.array(z.boolean()).max(PRESET_MAX_ATTRIBUTES).optional(),

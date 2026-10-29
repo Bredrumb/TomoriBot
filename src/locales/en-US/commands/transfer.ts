@@ -72,6 +72,10 @@ export default {
     memory_export_persona_invalid_title: "Persona Unavailable",
     memory_export_persona_invalid_description: "That persona does not exist in this server, so nothing was exported.",
     memory_preview_title: "Review Memory Import",
+    memory_preview_lore_count: "{count} lorebook entries (replace this scope)",
+    memory_preview_serverwide_lore: "Serverwide lore: {count} entries (replace all Serverwide books).",
+    workspace_memory_preview_description:
+      "This workspace import includes memories and any lorebooks in the file. An included lorebook replaces that scope's complete book, including entries added here, even with Merge. Serverwide lore replaces the Serverwide book.",
     memory_preview_description: "This {ownership} import contains memories only.",
     memory_preview_exclusions: "Documents and personas are excluded.",
     memory_preview_groups_heading: "Detected memory groups",

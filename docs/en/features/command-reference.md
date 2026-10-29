@@ -175,11 +175,11 @@ Link Discord channels to Matrix rooms for bidirectional relay.
 
 ## `/memories`
 
-Inspect and manage server memories, documents, and short-term memory.
+Inspect and manage server memories, documents, lorebooks, and short-term memory.
 
 | Command | Summary |
 |---|---|
-| `/memories` | Inspect and manage server memories, documents, and short-term memory. |
+| `/memories` | Inspect and manage server memories, documents, lorebooks, and short-term memory. |
 
 ## `/model`
 

@@ -69,6 +69,12 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
             sampleDialoguesIn: tomoriStateForPreset?.sample_dialogues_in ?? [],
             sampleDialoguesOut: tomoriStateForPreset?.sample_dialogues_out ?? [],
             lastUserMessage,
+            // Effective randomizer and fallback models require the resolved request model in BuildContextParams.
+            model: tomoriStateForPreset?.llm?.llm_codename ?? "",
+            provider: tomoriStateForPreset?.llm?.llm_provider ?? "",
+            utcOffsetHours:
+              params.tomoriConfig.time_awareness_enabled !== false ? params.tomoriConfig.timezone_offset : null,
+            nowMs: Date.now(),
           },
           {
             client: params.client,

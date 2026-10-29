@@ -363,9 +363,8 @@ describe("charx card conversion", () => {
     }
 
     expect(conversion.data.tomori_nickname).toBe("Mirri");
-    // description, personality, scenario, system prompt, post-history, depth
-    // prompt, and the character book entry.
-    expect(conversion.data.attribute_list).toHaveLength(7);
+    expect(conversion.data.lorebook_entries?.map((entry) => entry.keys)).toEqual([["library"]]);
+    expect(conversion.data.attribute_list.some((attribute) => attribute.includes("library flooded"))).toBe(false);
     expect(conversion.data.attribute_list[0]).toContain("wandering archivist");
     expect(conversion.data.sample_dialogues_in).toHaveLength(3);
     expect(conversion.data.sample_dialogues_out).toHaveLength(3);

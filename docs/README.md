@@ -31,6 +31,7 @@ Pages are bucketed into task-based sub-categories:
   - [`natural-nudges.md`](./en/features/chatting-personality/natural-nudges/)
 - **Knowledge**:
   - [`memory.md`](./en/features/knowledge/memory/)
+  - [`lorebooks.md`](./en/features/knowledge/lorebooks/)
   - [`inside-the-prompt.md`](./en/features/knowledge/inside-the-prompt/)
   - [`personalization.md`](./en/features/knowledge/personalization/)
   - [`data-handling.md`](./en/features/knowledge/data-handling/)
@@ -133,6 +134,7 @@ Per-stage reference. Each folder has a `README.md` (overview + ASCII flow) and n
 
 Supporting services that pipelines depend on.
 
+- [`architecture/subsystems/lorebooks.md`](./en/architecture/subsystems/lorebooks.md): lorebook storage, scope ownership, and pure activation contracts
 - [`architecture/subsystems/`](./en/architecture/subsystems/README.md): database schema, events, commands, tools,
   caching, cooldowns, security, localization, multi-persona, persona-presets, natural-nudges, and more
 

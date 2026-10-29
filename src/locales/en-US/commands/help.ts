@@ -93,8 +93,8 @@ export default {
         short_term_memory_description: `My working note of this conversation`,
         rewards_punishments: `Rewards and Punishments`,
         rewards_punishments_description: `Gestures I notice and remember`,
-        memory_tagging: `Memory Tagging (Advanced)`,
-        memory_tagging_description: `Wake a memory only when it is relevant`,
+        memory_tagging: `Personal Memory Tagging (Advanced)`,
+        memory_tagging_description: `Wake a personal memory only when it is relevant`,
         blacklisting: `Blacklisting`,
         blacklisting_description: "Make me ignore one member completely",
       },
@@ -512,9 +512,9 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
         footer: `Pick which persona you meant when several are active.`,
       },
       memory_tagging: {
-        title: `Memory Tagging (Advanced)`,
+        title: `Personal Memory Tagging (Advanced)`,
         description:
-          "By default every memory in scope is sent with every message. Tagging narrows that down.\n> **Keyword tags**: a tagged memory wakes up only when its keyword appears in the conversation. An untagged memory is always active.\n> **Channels**: a server memory can be limited to channels you pick in its form (their threads included), and a personal memory to a `#channel` tag. Both combine with keyword tags.\n\nTurn both on in {configAdvancedMemory}, then use {toolPromptSnapshot} to see exactly which memories are active right now.",
+          "Personal memories can carry keyword or `#channel` tags, and tagging decides whether those tags narrow when they appear.\n> **Keyword tags**: a tagged personal memory wakes up only when its keyword appears in the conversation. An untagged personal memory is always active.\n> **Channels**: a personal memory can be limited to a channel with a `#channel` tag. Server memories and documents use channel selections in `/memories` instead.\n\nTurn tagging on in {configAdvancedMemory}, then use {toolPromptSnapshot} to see exactly which memories are active right now.\n> World canon is separate: lorebook entries in `/memories` use their own keywords and Always On setting.",
         footer: "Uploaded documents and extracted history can be limited to channels too.",
       },
     },

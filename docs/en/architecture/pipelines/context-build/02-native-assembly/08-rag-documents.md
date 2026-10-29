@@ -32,7 +32,7 @@ The contributor `buildServerDocumentContextItem` in `src/utils/text/context/rag.
 
 - **Memory guard short-circuit**: Under critical host memory pressure, RAG retrieval aborts immediately. This avoids high-memory vector and embedding operations during traffic spikes.
 - **Fail-safe fallback**: Database or embedding API failures log a warning and return `null`, allowing context assembly to finish without document chunks.
-- **Preset reassembly**: Tagged as `KNOWLEDGE_SERVER_DOCUMENTS`. SillyTavern preset reassembly maps this to `worldInfoBefore`/`worldInfoAfter` markers or flushes it before the first dialogue anchor.
+- **Preset reassembly**: Tagged as `KNOWLEDGE_SERVER_DOCUMENTS`. Each world info marker pulls its own lore block first and then documents, and the first marker consumes the document block. When neither marker exists, the before lore block, documents, and the after lore block flush before the first dialogue anchor.
 
 ## Source pointers
 
