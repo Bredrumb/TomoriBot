@@ -1,8 +1,10 @@
 import { embeddingModelSchema } from "@/types/db/schema";
 import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
-import type { ChatInputCommandInteraction, Client } from "discord.js";
+import type { ButtonInteraction, ChatInputCommandInteraction, Client } from "discord.js";
 import { createLlmRow, createPersona, createUserRow } from "../../../helpers/fixtures";
 import { executeCompactCommand } from "@/utils/compaction/compact/commandImplementation";
+import { COMPACT_ROUTE_NAMESPACE, COMPACT_ROUTE_VERSION } from "@/utils/compaction/compact/rendering";
+import { handleSummarySaveClick } from "@/utils/compaction/compact/summaryControls";
 import * as compactModal from "@/utils/compaction/compact/modal";
 import * as compactSummary from "@/utils/compaction/compact/summaryGeneration";
 import * as compactHistory from "@/utils/compaction/compact/historyExtraction";
@@ -44,7 +46,6 @@ const embeddingModel = embeddingModelSchema.parse({
 });
 
 type Embed = { data: { title?: string; description?: string } };
-type Handler = (argument: never) => Promise<unknown>;
 
 function createHarness(
   options: {
@@ -55,16 +56,12 @@ function createHarness(
 ) {
   const edits: Array<{ embeds?: Embed[] }> = [];
   const sent: Array<{ embeds?: unknown[] }> = [];
-  const collectors: Array<Map<string, Handler>> = [];
   const summaryMessage = {
     id: "summary-message",
-    fetch: async () => ({ embeds: [{ description: "fixture summary" }] }),
+    embeds: [{ description: "fixture summary" }],
+    components: [{ components: [{ customId: `${COMPACT_ROUTE_NAMESPACE}:${COMPACT_ROUTE_VERSION}:save:fixture` }] }],
+    fetch: async () => summaryMessage,
     edit: async () => undefined,
-    createMessageComponentCollector: () => {
-      const handlers = new Map<string, Handler>();
-      collectors.push(handlers);
-      return { on: (event: string, handler: Handler) => handlers.set(event, handler) };
-    },
   };
   const channel = {
     id: "fixture-channel",
@@ -134,7 +131,7 @@ function createHarness(
       request.onUsage?.({ inputTokens: 20, outputTokens: 8, costUsd: 0.03 });
       return { summary: "fixture summary" } as never;
     }),
-    spyOn(modals, "promptWithRawModal").mockResolvedValue({
+    spyOn(modals, "promptWithPaginatedModal").mockResolvedValue({
       outcome: "submit",
       interaction: submitInteraction,
       values: { compact_doc_name: "fixture document", compact_doc_scope: "serverwide" },
@@ -153,9 +150,16 @@ function createHarness(
   ];
   return {
     interaction,
+    saveButton: {
+      id: "fixture-save",
+      locale: "en-US",
+      guild: { id: "_fixture_guild" },
+      user: { id: "fixture-user" },
+      memberPermissions: { has: () => true },
+      message: summaryMessage,
+    } as unknown as ButtonInteraction,
     edits,
     sent,
-    collectors,
     restore: () => {
       for (const spy of spies) spy.mockRestore();
     },
@@ -232,13 +236,7 @@ describe("compact add-to-docs usage", () => {
             : null,
         });
         restore.push(harness.restore);
-        await executeCompactCommand({} as Client, harness.interaction, user, "en-US");
-        const endHandler = harness.collectors[0]?.get("end");
-        if (!endHandler) throw new Error("compact collector end handler was not registered");
-        await endHandler(undefined as never);
-        const collectHandler = harness.collectors[1]?.get("collect");
-        if (!collectHandler) throw new Error("add-to-docs collect handler was not registered");
-        await collectHandler({ customId: "compact_add_to_docs", memberPermissions: { has: () => true } } as never);
+        await handleSummarySaveClick(harness.saveButton, { locale: "en-US", refresh: false, editDeadline: 0 });
         await settleUsage();
         const embeddingRows = usage.rows.filter((row) => row.capability === "embedding");
         expect(embeddingRows).toHaveLength(funded ? 1 : 0);

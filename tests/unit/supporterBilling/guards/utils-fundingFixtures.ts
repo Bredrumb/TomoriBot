@@ -256,7 +256,7 @@ export async function renderReturnedDenial(result: object, funding: SupporterFun
   try {
     await new StreamErrorUi().handleProviderError(
       { type: "api_error", message: "fixture refusal", retryable: false, originalError: denial },
-      { createErrorDescription: () => null } as never,
+      { createErrorDescription: () => null, getProviderInfo: () => ({ name: "openrouter" }) } as never,
       {
         channel: { id: "guard-denial" },
         tomoriState: createPersona(),
