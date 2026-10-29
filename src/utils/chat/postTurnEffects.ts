@@ -10,7 +10,7 @@ import { hasThoughtLogContent, sendAttributionOnlyEmbed, sendThoughtLogEmbed } f
 import { ColorCode, log } from "@/utils/misc/logger";
 import { getLlmDisplayName } from "@/utils/provider/modelDisplay";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
-import { incrementTextQuota } from "@/utils/quota/textQuotaManager";
+import { releaseTextQuotaForTrigger, textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { localizer } from "@/utils/text/localizer";
 import { normalizeCustomEmojisForLlm } from "@/utils/text/processors/mentionProcessor";
 import { MAX_EMPTY_RESPONSE_RETRIES } from "@/utils/discord/stream/constants";
@@ -27,7 +27,6 @@ import {
   setLastRespondedPersona,
   updateSelfReplyChainState,
 } from "@/utils/chat/selfReplyState";
-import { textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { statRepository } from "@/utils/db/repositories";
 import { charsToTokensText, estimateContextItemsTokens, sumTurnUsage } from "@/utils/text/tokenEstimate";
 import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
@@ -57,7 +56,7 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
     discordPresenceRetention.retain(context.serverDiscId, context.userDiscId);
   }
   await maybeScheduleEmptyResponseRetry(context, result);
-  await consumeTextQuota(context, result);
+  await settleTextQuota(context, result);
   updateSelfReplyBookkeeping(context, result);
   queueNaturalNudgeReplies(context, result);
   await writeShortTermMemory(context, result);
@@ -483,18 +482,22 @@ export function isDeliveredTurnResult(result: GenerationTurnResult): boolean {
   return result.status === "completed" && (result.personaResponses.length > 0 || result.toolResponseDelivered === true);
 }
 
-async function consumeTextQuota(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
-  if (
-    !context.shouldApplyTextQuota ||
-    !context.textQuotaState ||
-    context.textQuotaState.consumed ||
-    result.personaResponses.length === 0
-  ) {
+async function settleTextQuota(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
+  if (!context.shouldApplyTextQuota || !context.textQuotaState || context.textQuotaState.consumed) {
     return;
   }
 
-  await incrementTextQuota(context.textQuotaState.serverId, context.textQuotaState.userDiscId);
+  if (result.personaResponses.length === 0) {
+    // A later persona turn in the same plan can still reply, so only the last one releases.
+    if (context.turn.personaIndex + 1 >= context.turn.totalPersonas) {
+      await releaseTextQuotaForTrigger(context.textQuotaTriggerKey);
+    }
+    return;
+  }
+
   context.textQuotaState.consumed = true;
+  context.textQuotaState.reservation = null;
+  context.textQuotaState.reservationReleased = false;
   textQuotaTriggerStates.set(context.textQuotaTriggerKey, context.textQuotaState);
 }
 

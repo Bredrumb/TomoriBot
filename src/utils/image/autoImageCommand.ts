@@ -20,6 +20,7 @@ import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { checkImageQuota } from "@/utils/quota/imageQuotaManager";
+import { QuotaUnavailableError } from "@/utils/quota/quotaErrors";
 import { hasOptApiKey } from "@/utils/security/crypto";
 import { CooldownType, type TomoriState, type UserRow } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
@@ -489,10 +490,28 @@ export async function executeAutoImageCommand(
   }
 
   // Quota check before showing the modal (avoids wasting user interaction).
-  const quotaCheck: ImageQuotaCheckResult =
-    modelSelection?.source === "personal"
-      ? { allowed: true }
-      : await checkImageQuota(tomoriState.server_id, interaction.user.id);
+  let quotaCheck: ImageQuotaCheckResult;
+  if (modelSelection?.source === "personal") {
+    quotaCheck = { allowed: true };
+  } else {
+    try {
+      quotaCheck = await checkImageQuota(tomoriState.server_id, interaction.user.id);
+    } catch (error) {
+      if (error instanceof QuotaUnavailableError) {
+        if (!interaction.replied && !interaction.deferred)
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.generate.image.error_generation_failed_title",
+          descriptionKey: "commands.generate.image.quota_unavailable_description",
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+          tipKeys: await recoveryTips([]),
+        });
+        return;
+      }
+      throw error;
+    }
+  }
   if (!quotaCheck.allowed) {
     if (!interaction.replied && !interaction.deferred) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     await replyQuotaExceeded(interaction, locale, quotaCheck, await recoveryTips([]));

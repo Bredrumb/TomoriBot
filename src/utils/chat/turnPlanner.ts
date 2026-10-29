@@ -54,6 +54,7 @@ import {
   claimCredentialRefusalNotice,
   hasTextQuotaBeenRefused,
   markTextQuotaRefused,
+  releaseTextQuotaForTrigger,
 } from "@/utils/chat/textQuotaState";
 import type { ChatIncoming, ChatTurn, ChatTurnPlan, LockedChatTurn } from "@/utils/chat/types";
 import { userNamingRepository, userPersonaNamingPairKey } from "@/utils/db/repositories/UserNamingRepository";
@@ -282,9 +283,15 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     personaQuotas.set(persona, quota);
   }
   personasToRespond = personasToRespond.filter((persona) => personaPolicies.has(persona));
-  if (personasToRespond.length === 0) return { lockedTurn, turns: [] };
+  if (personasToRespond.length === 0) {
+    await releaseTextQuotaForTrigger(refusalNoticeKey);
+    return { lockedTurn, turns: [] };
+  }
   const textQuota = personaQuotas.get(personasToRespond[0]);
-  if (!textQuota) return { lockedTurn, turns: [] };
+  if (!textQuota) {
+    await releaseTextQuotaForTrigger(refusalNoticeKey);
+    return { lockedTurn, turns: [] };
+  }
   const guardSource: "server" | "personal" = personasToRespond.some((persona) => {
     const policy = personaPolicies.get(persona);
     return policy?.source === "server";
@@ -301,6 +308,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
       shouldSurfaceUserErrors,
     ))
   ) {
+    await releaseTextQuotaForTrigger(refusalNoticeKey);
     return { lockedTurn, turns: [] };
   }
 
@@ -408,6 +416,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
   });
   if (!naming) {
     log.warn(`Dropping Ping User turn for message ${message.id}: its target's user row could not be read.`);
+    await releaseTextQuotaForTrigger(refusalNoticeKey);
     return { lockedTurn, turns: [] };
   }
   const { displayName, row: namingRow } = naming;
