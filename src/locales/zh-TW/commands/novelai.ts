@@ -1,20 +1,6 @@
 export default {
   novelai: {
     description: `設定這個伺服器的 NovelAI 文字與圖片生成。`,
-    "character-reference": {
-      invalid_image_title: `圖片無效`,
-      invalid_image_description: `請上傳圖片附件做為角色參考。`,
-      download_failed_title: `下載失敗`,
-      download_failed_description: `無法下載選取的圖片附件。請再試一次。`,
-      conversion_failed_title: `圖片轉換失敗`,
-      conversion_failed_description: `我無法把這張圖片轉成 PNG 儲存。請換一張圖片試試。`,
-      success_title: `角色參考已更新`,
-      success_me_description: `已更新你的 NovelAI 角色參考圖片。`,
-      success_persona_description: `已更新 **{persona_name}** 的 NovelAI 角色參考圖片。`,
-      cleared_title: `角色參考已清除`,
-      cleared_me_description: `已清除你的 NovelAI 角色參考圖片。`,
-      cleared_persona_description: `已清除 **{persona_name}** 的 NovelAI 角色參考圖片。`,
-    },
     usage: {
       description: `顯示這個伺服器的 NovelAI Opus 生成用量表（需要管理伺服器權限）。`,
       title: `NovelAI Opus 生成用量`,

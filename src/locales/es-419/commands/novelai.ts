@@ -1,20 +1,6 @@
 export default {
   novelai: {
     description: `Configura la generación de texto e imágenes de NovelAI para este servidor.`,
-    "character-reference": {
-      invalid_image_title: `Imagen No Válida`,
-      invalid_image_description: `Sube un archivo adjunto de imagen para la referencia de personaje.`,
-      download_failed_title: `Descarga Fallida`,
-      download_failed_description: `No se pudo descargar el archivo adjunto de imagen seleccionado. Inténtalo de nuevo.`,
-      conversion_failed_title: `Conversión de Imagen Fallida`,
-      conversion_failed_description: `No pude convertir esa imagen a PNG para guardarla. Prueba con una imagen diferente.`,
-      success_title: `Referencia de Personaje Actualizada`,
-      success_me_description: `Se actualizó tu imagen de referencia de personaje de NovelAI.`,
-      success_persona_description: `Se actualizó la imagen de referencia de personaje de NovelAI para **{persona_name}**.`,
-      cleared_title: `Referencia de Personaje Eliminada`,
-      cleared_me_description: `Se eliminó tu imagen de referencia de personaje de NovelAI.`,
-      cleared_persona_description: `Se eliminó la imagen de referencia de personaje de NovelAI para **{persona_name}**.`,
-    },
     usage: {
       description: `Medidor de uso de generación Opus de NovelAI del servidor (requiere Administrar servidor).`,
       title: `Uso de Generación Opus de NovelAI`,
