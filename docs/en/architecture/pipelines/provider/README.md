@@ -128,6 +128,8 @@ segments, retaining a cache field or cost only when every segment with usage rep
 It labels the turn's provider and model, marks usage as measured or estimated, and includes input,
 output, cache subsets (`unknown` when absent), and reported cost when known across requests.
 Response-review ledgers supply accounting when present; otherwise stream segments supply it.
+Ledger entries retain their measurement source, and a turn containing an estimated entry is labeled
+estimated even when other requests reported native usage.
 The sample has no conversation or account identifiers. Guild token counters keep total input in
 `tokens_in` and record reported subsets as `cache_read_tokens` and `cache_write_tokens`, keyed by model.
 

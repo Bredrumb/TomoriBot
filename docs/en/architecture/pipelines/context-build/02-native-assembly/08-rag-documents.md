@@ -17,7 +17,7 @@ The contributor `buildServerDocumentContextItem` in `src/utils/text/context/rag.
    - Scans recent history for the latest non-system user message.
    - Truncates query text to `DOCUMENT_QUERY_MAX_LENGTH` (1,000 characters). Queries shorter than `DOCUMENT_QUERY_MIN_LENGTH` (3 characters) return `null`.
 3. **Scope and credentials**:
-   - Checks `serverMemoryRepository.hasDocumentInScope(serverId, personaId)`. If no documents exist for the persona or server, returns `null`.
+   - Checks `serverMemoryRepository.hasDocumentInScope(serverId, personaId)`. An empty scope returns `null` with outcome `no_documents`; a failed lookup reaches the contributor's error handler and records `error`.
    - Resolves embedding credentials via `resolveCapabilityCredentials`, supporting server and personal providers, including registered managed options.
    - Loads the configured embedding model via `llmModelRepo.loadEmbeddingModelById`.
 4. **Hybrid retrieval**:

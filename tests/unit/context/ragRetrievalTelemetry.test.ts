@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
 import * as ragAvailability from "@/utils/db/ragAvailability";
+import * as dbClient from "@/utils/db/client";
 import type { RetrievedDocumentChunk } from "@/utils/documents/documentService";
 import { log } from "@/utils/misc/logger";
 import * as credentialResolver from "@/utils/provider/credentialResolver";
@@ -185,9 +186,20 @@ describe("RAG retrieval telemetry", () => {
     expect(Object.entries(fields).filter(([key, value]) => key !== "outcome" && typeof value === "string")).toEqual([]);
   });
 
-  it("records error when a precondition throws", async () => {
-    spies.documents.mockRejectedValue(new Error("fixture database unavailable"));
-    expect(await build()).toBeNull();
-    expectRecordedOutcome("error");
+  it("records error when the real document-scope lookup fails", async () => {
+    spies.documents.mockRestore();
+    const databaseError = new Error("fixture database unavailable");
+    const query = spyOn(dbClient, "sql").mockImplementation((() => {
+      throw databaseError;
+    }) as unknown as typeof dbClient.sql);
+    try {
+      expect(await build()).toBeNull();
+      expectRecordedOutcome("error");
+      expect(query).toHaveBeenCalledTimes(1);
+      expect(spies.warn).toHaveBeenCalledWith(expect.any(String), databaseError);
+      expect(spies.retrieve).not.toHaveBeenCalled();
+    } finally {
+      query.mockRestore();
+    }
   });
 });

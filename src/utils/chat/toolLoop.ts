@@ -279,7 +279,12 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
             }
           : undefined);
       if (usage)
-        recordResponseReviewUsage(review, { kind: "author", model: params.tomoriState.llm.llm_codename, usage });
+        recordResponseReviewUsage(review, {
+          kind: "author",
+          model: params.tomoriState.llm.llm_codename,
+          source: streamResult.usage ? "measured" : "estimated",
+          usage,
+        });
       if (streamResult.pendingResponse) review.pending.push(streamResult.pendingResponse);
     }
     thoughtLog = mergeThoughtLogPayloads(thoughtLog, streamResult.thoughtLog);

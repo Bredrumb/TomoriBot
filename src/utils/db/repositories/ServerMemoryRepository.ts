@@ -341,26 +341,21 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
    * @param personaId - null = serverwide only; non-null = persona OR serverwide
    */
   async hasDocumentInScope(serverId: number, personaId: number | null): Promise<boolean> {
-    try {
-      const rows =
-        personaId === null
-          ? await sql`
-              SELECT document_id FROM documents
-              WHERE server_id = ${serverId}
-                AND persona_id IS NULL
-              LIMIT 1
-            `
-          : await sql`
-              SELECT document_id FROM documents
-              WHERE server_id = ${serverId}
-                AND (persona_id = ${personaId} OR persona_id IS NULL)
-              LIMIT 1
-            `;
-      return rows.length > 0;
-    } catch (error) {
-      log.error(`Error checking document existence for server ${serverId}:`, error);
-      return false;
-    }
+    const rows =
+      personaId === null
+        ? await sql`
+            SELECT document_id FROM documents
+            WHERE server_id = ${serverId}
+              AND persona_id IS NULL
+            LIMIT 1
+          `
+        : await sql`
+            SELECT document_id FROM documents
+            WHERE server_id = ${serverId}
+              AND (persona_id = ${personaId} OR persona_id IS NULL)
+            LIMIT 1
+          `;
+    return rows.length > 0;
   }
 
   /** Saving the form is the admin's channel choice, so it also settles a pending legacy scope. */

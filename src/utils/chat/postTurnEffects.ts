@@ -85,8 +85,8 @@ function rememberLastReplyUsage(context: ChatTurnContext, result: GenerationTurn
 
 /** Records turn usage in both metric sinks and guild counters, with dialogue counters gated on delivery. */
 async function recordUsageStats(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
-  const measuredUsage = sumTurnUsage(result.usageEntries ?? result.streamResults);
-  const turnUsage = measuredUsage ?? {
+  const accountedUsage = sumTurnUsage(result.usageEntries ?? result.streamResults);
+  const turnUsage = accountedUsage ?? {
     inputTokens: estimateContextItemsTokens(context.contextItems),
     outputTokens: result.personaResponses.reduce(
       (total, response) => total + charsToTokensText(response.text.length),
@@ -96,13 +96,14 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
   const fields: MetricFields = {
     provider: context.tomoriState.llm.llm_provider,
     model: context.tomoriState.llm.llm_codename,
-    source: measuredUsage ? "measured" : "estimated",
+    source:
+      accountedUsage && !result.usageEntries?.some((entry) => entry.source === "estimated") ? "measured" : "estimated",
     input_tokens: turnUsage.inputTokens,
-    cache_read_tokens: measuredUsage?.cacheReadTokens ?? "unknown",
-    cache_write_tokens: measuredUsage?.cacheWriteTokens ?? "unknown",
+    cache_read_tokens: accountedUsage?.cacheReadTokens ?? "unknown",
+    cache_write_tokens: accountedUsage?.cacheWriteTokens ?? "unknown",
     output_tokens: turnUsage.outputTokens,
   };
-  if (measuredUsage?.costUsd !== undefined) fields.cost_usd = measuredUsage.costUsd;
+  if (accountedUsage?.costUsd !== undefined) fields.cost_usd = accountedUsage.costUsd;
   log.metric("turn_usage", fields);
   void metricSampleRepository.recordSample("turn_usage", fields);
 

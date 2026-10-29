@@ -8,6 +8,7 @@ import { runPostTurnEffects } from "@/utils/chat/postTurnEffects";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createPersona } from "../../helpers/fixtures";
 import { createResponseReviewState, recordResponseReviewUsage } from "@/utils/chat/responseReview";
+import type { TurnUsageEntry } from "@/utils/chat/responseReview";
 import { buildSceneTextQuotaTriggerKey } from "@/utils/chat/sceneTurn";
 import { discordPresenceRetention } from "@/utils/cache/discordPresenceRetention";
 import { log } from "@/utils/misc/logger";
@@ -175,11 +176,13 @@ describe("emoji stats count only what Discord accepted", () => {
         usageEntries: [
           {
             kind: "author",
+            source: "measured",
             model: "author",
             usage: { inputTokens: 100, outputTokens: 10, cacheReadTokens: 50, cacheWriteTokens: 0, costUsd: 0.01 },
           },
           {
             kind: "reviewer",
+            source: "measured",
             model: "reviewer",
             usage: { inputTokens: 200, outputTokens: 20, cacheReadTokens: 80, cacheWriteTokens: 0, costUsd: 0.02 },
           },
@@ -205,6 +208,42 @@ describe("emoji stats count only what Discord accepted", () => {
       expect.objectContaining({ metricKey: "author", delta: 50 }),
       expect.objectContaining({ metricKey: "reviewer", delta: 80 }),
     ]);
+  });
+
+  it("labels estimated review usage and mixed ledgers as estimated without losing measured cache stats", async () => {
+    const estimated: TurnUsageEntry = {
+      kind: "author",
+      model: "author",
+      source: "estimated",
+      usage: { inputTokens: 30, outputTokens: 4 },
+    };
+    const measured: TurnUsageEntry = {
+      kind: "reviewer",
+      model: "reviewer",
+      source: "measured",
+      usage: { inputTokens: 200, outputTokens: 20, cacheReadTokens: 80, cacheWriteTokens: 0, costUsd: 0.02 },
+    };
+    for (const entries of [[estimated], [measured, estimated]]) {
+      metricSpy.mockClear();
+      sampleSpy.mockClear();
+      recorded.length = 0;
+      const mixed = entries.length > 1;
+      await runPostTurnEffects(makeContext(), makeResult({ usageEntries: entries }));
+      const calls = metricSpy.mock.calls.filter(([name]) => name === "turn_usage");
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.[1]).toMatchObject({
+        source: "estimated",
+        input_tokens: mixed ? 230 : 30,
+        output_tokens: mixed ? 24 : 4,
+        cache_read_tokens: "unknown",
+        cache_write_tokens: "unknown",
+      });
+      expect(calls[0]?.[1]).not.toHaveProperty("cost_usd");
+      expect(sampleSpy).toHaveBeenCalledWith("turn_usage", calls[0]?.[1]);
+      expect(recorded.filter((entry) => entry.metric === "cache_read_tokens")).toEqual(
+        mixed ? [expect.objectContaining({ metricKey: "reviewer", delta: 80 })] : [],
+      );
+    }
   });
 
   it("emits unknown cache counts for unreported usage, including estimated DM turns", async () => {
@@ -286,9 +325,9 @@ describe("emoji stats count only what Discord accepted", () => {
         status: "stopped_by_user",
         personaResponses: [],
         usageEntries: [
-          { kind: "author", model: "first-author", usage: { inputTokens: 11, outputTokens: 7 } },
-          { kind: "reviewer", model: "review-model", usage: { inputTokens: 20, outputTokens: 3 } },
-          { kind: "author", model: "fallback-author", usage: { inputTokens: 6, outputTokens: 2 } },
+          { kind: "author", source: "measured", model: "first-author", usage: { inputTokens: 11, outputTokens: 7 } },
+          { kind: "reviewer", source: "measured", model: "review-model", usage: { inputTokens: 20, outputTokens: 3 } },
+          { kind: "author", source: "measured", model: "fallback-author", usage: { inputTokens: 6, outputTokens: 2 } },
         ],
       }),
     );
@@ -311,13 +350,19 @@ describe("emoji stats count only what Discord accepted", () => {
     const review = createResponseReviewState(context);
     if (!review) throw new Error("Missing review fixture");
     context.responseReview = review;
-    recordResponseReviewUsage(review, { kind: "author", model: "author", usage: { inputTokens: 11, outputTokens: 2 } });
+    recordResponseReviewUsage(review, {
+      kind: "author",
+      source: "measured",
+      model: "author",
+      usage: { inputTokens: 11, outputTokens: 2 },
+    });
     await runPostTurnEffects(
       context,
       makeResult({ status: "stopped_by_user", personaResponses: [], usageEntries: review.usage }),
     );
     recordResponseReviewUsage(review, {
       kind: "reviewer",
+      source: "measured",
       model: "reviewer",
       usage: { inputTokens: 13, outputTokens: 3 },
     });
@@ -370,8 +415,8 @@ describe("emoji stats count only what Discord accepted", () => {
         ],
         personaResponses: [{ text: "delivered reply", personaName: "Mirri", personaId: 3 }],
         usageEntries: [
-          { kind: "author", model: "author", usage: { inputTokens: 10, outputTokens: 6 } },
-          { kind: "reviewer", model: "reviewer", usage: { inputTokens: 12, outputTokens: 2 } },
+          { kind: "author", source: "measured", model: "author", usage: { inputTokens: 10, outputTokens: 6 } },
+          { kind: "reviewer", source: "measured", model: "reviewer", usage: { inputTokens: 12, outputTokens: 2 } },
         ],
       });
       await runPostTurnEffects(context, result);
@@ -443,7 +488,9 @@ describe("emoji stats count only what Discord accepted", () => {
         makeResult({
           status: "stopped_by_user",
           personaResponses: [],
-          usageEntries: [{ kind: "reviewer", model: "reviewer", usage: { inputTokens: 9, outputTokens: 1 } }],
+          usageEntries: [
+            { kind: "reviewer", source: "measured", model: "reviewer", usage: { inputTokens: 9, outputTokens: 1 } },
+          ],
         }),
       );
       expect(recorded).toHaveLength(before);
@@ -504,6 +551,7 @@ describe("emoji stats count only what Discord accepted", () => {
         context.responseReview = review;
         recordResponseReviewUsage(review, {
           kind: "reviewer",
+          source: "measured",
           model: "fixture_reviewer",
           usage: { inputTokens: 13, outputTokens: 3 },
         });
