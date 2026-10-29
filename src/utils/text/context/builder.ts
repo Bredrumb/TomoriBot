@@ -39,6 +39,7 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
                   nai_diffusion_model_id: tomoriStateForPreset.config.nai_diffusion_model_id,
                   video_model_id: tomoriStateForPreset.config.video_model_id,
                   config: {
+                    emoji_usage_enabled: params.tomoriConfig.emoji_usage_enabled,
                     sticker_usage_enabled: params.tomoriConfig.sticker_usage_enabled,
                     web_search_enabled: params.tomoriConfig.web_search_enabled,
                     self_teaching_enabled: params.tomoriConfig.self_teaching_enabled,
@@ -68,6 +69,12 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
             sampleDialoguesIn: tomoriStateForPreset?.sample_dialogues_in ?? [],
             sampleDialoguesOut: tomoriStateForPreset?.sample_dialogues_out ?? [],
             lastUserMessage,
+            // Effective randomizer and fallback models require the resolved request model in BuildContextParams.
+            model: tomoriStateForPreset?.llm?.llm_codename ?? "",
+            provider: tomoriStateForPreset?.llm?.llm_provider ?? "",
+            utcOffsetHours:
+              params.tomoriConfig.time_awareness_enabled !== false ? params.tomoriConfig.timezone_offset : null,
+            nowMs: Date.now(),
           },
           {
             client: params.client,

@@ -82,6 +82,17 @@ function resolve(context: ToolContext, message: Message): Promise<DeliveryResult
 }
 
 describe("interact_with_recent_message reply delivery identity", () => {
+  it("rejects reactions before touching Discord when emojis are disabled", async () => {
+    const context = makeContext(MAIN.persona_id);
+    context.tomoriState = createPersona({ config: { emoji_usage_enabled: false } });
+    const result = await new InteractWithRecentMessageTool().execute(
+      { action: "react", message_id: mainBotMessage.id, content: "👍" },
+      context,
+    );
+    expect(result.success).toBe(false);
+    expect(result.data).toMatchObject({ status: "emoji_reactions_disabled" });
+  });
+
   let personas: ReturnType<typeof spyOn<typeof tomoriStateCache, "getCachedAllPersonas">>;
   let managed: ReturnType<typeof spyOn<typeof serverRepository, "loadManagedWebhookByChannelAndWebhookId">>;
   const tracked: Array<{ mockRestore(): void }> = [];
@@ -155,7 +166,7 @@ describe("interact_with_recent_message reply delivery identity", () => {
     expect(result.senderPersona.persona_id).toBe(MAIN.persona_id);
   });
 
-  it("delivers every reply as the invoking persona, never as the target persona", async () => {
+  it("delivers text replies with emojis disabled as the invoking persona", async () => {
     personas.mockResolvedValue([MAIN, ALTER]);
     tracked.push(
       spyOn(personaPost, "resolvePersonaPostAuthor").mockResolvedValue({
@@ -179,6 +190,7 @@ describe("interact_with_recent_message reply delivery identity", () => {
     tracked.push(send);
 
     const context = makeContext(MAIN.persona_id);
+    context.tomoriState = createPersona({ ...MAIN, config: { ...MAIN.config, emoji_usage_enabled: false } });
     const channel = context.channel as unknown as {
       messages: { fetch: () => Promise<Collection<string, Message>> };
     };

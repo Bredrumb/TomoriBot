@@ -15,10 +15,15 @@ export default {
     execution: {
       unavailable: `ツール \`{tool}\` は、現在の設定、モデルの機能、またはBotの権限では利用できません。`,
     },
+    sprite_selection: {
+      unavailable:
+        "このペルソナまたはこのターンではスプライト選択を利用できません。spriteパラメーターを省略してください。",
+      invalid:
+        "現在利用可能なスプライトからスプライトのラベルを選択するか、基本の外見には空の文字列を使用してください。",
+    },
     generate_voice_message: {
       persona_missing: `このペルソナはもう利用できません。`,
       stale: `このターンの間に音声モデル、認証情報、またはペルソナの声が変更されました。ボイスメッセージを生成する前に新しいターンを始めてください。`,
-      script_too_long: `このボイスデザインモデルに対してセリフが長すぎます。セリフを短くして、もう一度お試しください。`,
     },
     generate_image: {
       quota_exceeded_generic: `画像生成クォータを超過しました。`,
@@ -43,7 +48,6 @@ export default {
     generate_image_nai: {
       no_google_api_key: `インペインティングには画像セグメンテーション用のGoogleプロバイダー認証情報が必要です。\`/providers\` で追加するか、Googleプロバイダーに切り替えてください。`,
       model_not_configured: `現在、NovelAI画像生成は無効です。まず \`/config\` > モデル > モデルの切り替え でNovelAI画像モデルを選択してください。`,
-      provider_quota_exceeded: `このアカウントではNovelAI画像生成クォータを使い切っています。Anlasを補充するか、クォータのリフレッシュ後に再試行してください。`,
       characters_require_v4: `キャラクター配置にはNovelAI V4以降の拡散モデルが必要です。`,
       character_requires_id_or_tags: `キャラクター項目 #{index} には id か tags のどちらかが必要です。`,
       invalid_character_identity: `無効なキャラクターIDです: {id}。persona:<id>、短い数値のペルソナID、またはDiscordのユーザースノーフレークを使用してください。`,
@@ -159,7 +163,7 @@ export default {
     document: {
       reading_title: `📄 ドキュメントを読み取り中...`,
       reading_description: `\`{filename}\` の内容を読み取っています`,
-      truncated_title: `⚠️ ファイルが省略されました`,
+      truncated_title: `ファイルが省略されました`,
       truncated_description: `\`{filename}\` が長すぎるため、{limit}文字に省略されました（元のサイズ：{original}文字）。応答が不完全な場合があります。ファイルを小さく分割して、一つずつ送ることをお勧めします。`,
     },
     image: {

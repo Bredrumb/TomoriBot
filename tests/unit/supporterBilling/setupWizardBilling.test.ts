@@ -4,7 +4,7 @@ import { SETUP_DRAFT_SCHEMA_VERSION, type SetupDraftRecord } from "@/types/disco
 import { readSetupDraft, resetSetupDrafts, storeSetupDraft } from "@/utils/discord/interactions/setupDraftStore";
 import { buildSetupFinishRouteId, buildSetupProviderModeRouteId } from "@/utils/discord/interactions/setupRoutes";
 import { configRepository, llmModelRepo, personaRepository, serverRepository } from "@/utils/db/repositories";
-import type { SystemPromptPresetRow, TomoriPresetRow } from "@/types/db/schema";
+import { SETUP_FEATURES, type SystemPromptPresetRow, type TomoriPresetRow } from "@/types/db/schema";
 import { dispatchGlobalInteraction } from "@/utils/discord/interactions/router";
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import { initializeLocalizer } from "@/utils/text/localizer";
@@ -198,6 +198,7 @@ describe("subscription setup wizard routes", () => {
         humanizer: 2,
         timezoneOffset: 9,
         systemPrompt: { kind: "preset", presetName: COMMIT_CATALOGS.prompt.system_prompt_preset_name },
+        features: [...SETUP_FEATURES],
       },
       ...overrides,
     });

@@ -18,6 +18,7 @@
  * Read/aggregation methods (§6) live on this same class, below the write path,
  * and read straight from the DB (no read cache in Phase 1).
  */
+import { REWARD_HEAT_MULTIPLIER } from "@/modules/natural-nudges/runtime/tuning";
 import type { StatMetric } from "@/constants/statMetrics";
 import { PERSONA_AGNOSTIC_METRICS } from "@/constants/statMetrics";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
@@ -1379,21 +1380,19 @@ class StatRepository implements IRepository<null> {
     }
   }
 
-  /**
-   * Daily `message_sent` totals for one server since `from`, keyed by UTC bucket date. Natural
-   * Nudges heat weighs each day by its age.
-   */
-  async getServerDailyMessageCounts(args: { serverId: number; from: Date }): Promise<Map<string, number>> {
+  /** Daily heat contributions preserve message counts while weighting human rewards more strongly. */
+  async getServerDailyHeatCounts(args: { serverId: number; from: Date }): Promise<Map<string, number>> {
     const rows = await withTransientDbRetry(
       () => sql<{ bucket: Date | string; total: number | string }[]>`
-        SELECT bucket::text AS bucket, SUM(count) AS total
+        SELECT bucket::text AS bucket,
+          SUM(count * CASE WHEN metric_key = 'reward' THEN ${REWARD_HEAT_MULTIPLIER} ELSE 1 END) AS total
         FROM stat_counters
         WHERE metric = 'message_sent'
           AND server_id = ${args.serverId}
           AND bucket >= ${windowFloor(args.from)}::date
         GROUP BY bucket
       `,
-      "load server daily message counts",
+      "load server daily heat counts",
     );
     return new Map(rows.map((row) => [String(row.bucket), Number(row.total)]));
   }

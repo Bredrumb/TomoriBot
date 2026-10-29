@@ -58,11 +58,15 @@ Serializes the reconstructed context into provider-native request shapes:
 
 ### Request configuration block
 
-Exports include provider sampling parameters constructed by `buildRequestConfig()`:
+Exports include provider sampling parameters constructed by `buildRequestConfig()`. They lead the file instead of the Discord message: in JSON they follow `model`, and in text they sit under a `=== Request Config (annotation, NOT part of the prompt) ===` header. The server, channel, persona, provider, model, preset, and capture time also stay out of the Discord card, so the card cannot be mistaken for the prompt: text files carry them under a `=== Snapshot Info ... ===` header, and JSON files omit them so the payload stays shaped like the provider request.
 
 - Lists active parameters (such as `temperature`, `top_p`, `max_output_tokens`, and stop sequences).
 - Includes provider-specific thinking configurations (such as Anthropic adaptive thinking or Gemini thinking budgets).
 - Notes explicitly disabled parameters (`disabled_params`) and tool availability.
+
+### Delivery
+
+`deliverPromptSnapshot()` sends the file by DM as a Components V2 card: Discord draws plain attachments above embeds, so the file is a File component placed after the text, which keeps it at the bottom. The card ends with a warning not to share the file, since it can contain memories and chat text. If the DM fails, the same card goes in the private reply.
 
 ## Context usage panel (`/context`)
 

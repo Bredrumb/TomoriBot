@@ -46,6 +46,8 @@ const TAG_LABELS: Readonly<Record<ContextItemTag, TagLabel>> = {
   [ContextItemTag.KNOWLEDGE_PERSONA_SPRITES]: { title: "Persona Sprites", hint: "/persona sprites" },
   [ContextItemTag.KNOWLEDGE_SERVER_MEMORIES]: { title: "Server Memories", hint: "/memories" },
   [ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS]: { title: "Server Documents", hint: "/memories" },
+  [ContextItemTag.KNOWLEDGE_LOREBOOK_BEFORE]: { title: "Lorebook (Before)", hint: "/memories" },
+  [ContextItemTag.KNOWLEDGE_LOREBOOK_AFTER]: { title: "Lorebook (After)", hint: "/memories" },
   [ContextItemTag.KNOWLEDGE_SERVER_CONDITIONING]: { title: "Conditioning Log", hint: "/conditioning" },
   [ContextItemTag.KNOWLEDGE_PERSONA_USER_BLOCKS]: { title: "Persona-User Blocks", hint: "/moderation" },
   [ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS]: { title: "Tool Definitions", hint: "system-managed" },
@@ -98,9 +100,23 @@ function renderTagHeader(tag: ContextItemTag | undefined): string {
  * Each context item gets a `=== Title (/command) ===` header derived from its
  * `metadataTag`. These headers are annotations: they are NOT part of the prompt
  * actually sent to the LLM. The DM body that ships with the file explains this.
+ *
+ * The snapshot info and request config lead the file under their own annotation headers,
+ * so they read as request metadata rather than prompt text.
  */
-export function buildTextSnapshot(contextItems: StructuredContextItem[]): string {
-  const lines: string[] = [];
+export function buildTextSnapshot(
+  contextItems: StructuredContextItem[],
+  requestConfig: Record<string, unknown>,
+  snapshotInfo: string[],
+): string {
+  const lines: string[] = [
+    "=== Snapshot Info (annotation, NOT part of the prompt) ===",
+    ...snapshotInfo,
+    "",
+    "=== Request Config (annotation, NOT part of the prompt) ===",
+    JSON.stringify(requestConfig, null, 2),
+    "",
+  ];
 
   for (const item of contextItems) {
     lines.push(renderTagHeader(item.metadataTag));
@@ -144,10 +160,10 @@ export function buildTextSnapshot(contextItems: StructuredContextItem[]): string
  * OpenAI-vision array-content form; text-only messages use plain strings.
  *
  * Metadata (server/channel/persona/provider/preset) is NOT embedded in the file:
- * it is rendered in the DM body instead, to keep the file focused on payload.
+ * the payload must stay shaped like the provider request.
  *
  * When `toolsData` is provided, a top-level `tools` key is appended in the same
- * shape the adapter would send to the provider.
+ * shape the adapter would send to the provider. The request config keys follow `model`.
  */
 export async function buildJsonSnapshot(
   contextItems: StructuredContextItem[],
@@ -303,18 +319,15 @@ export async function buildJsonSnapshot(
   // requestConfig is already provider-shaped: Google/Vertex nest samplers under
   //    `generation_config`, `safety_settings`, and friends, while Anthropic and
   //    OpenAI-compatible providers use root-level keys. Copying at the top level keeps
-  //    that shape and cannot overwrite a key the adapter already set.
-  for (const [key, value] of Object.entries(requestConfig)) {
-    if (!(key in requestData)) requestData[key] = value;
-  }
+  //    that shape and cannot overwrite a key the adapter already set. It is placed right
+  //    after `model` so the short config is the first thing a reader sees, ahead of the
+  //    long message list.
+  const { model, ...payload } = requestData;
+  const config = Object.fromEntries(Object.entries(requestConfig).filter(([key]) => !(key in requestData)));
 
-  // Append provider-formatted tools when requested, including an empty list
-  //    when per-turn filtering deliberately suppresses every tool.
-  if (toolsData) {
-    requestData.tools = toolsData;
-  }
-
-  return requestData;
+  // Provider-formatted tools are included even as an empty list, because per-turn
+  //    filtering can deliberately suppress every tool.
+  return { model, ...config, ...payload, ...(toolsData ? { tools: toolsData } : {}) };
 }
 
 /**
@@ -329,8 +342,8 @@ export async function buildJsonSnapshot(
  *   - openai-compat    : `{temperature?, top_p?, top_k?, frequency_penalty?, presence_penalty?, min_p?, max_tokens?, stop}`
  *
  * Used in two places:
- *   - Baked into the JSON snapshot file at the top level (alongside `messages`/`contents`)
- *   - Rendered as a second ```json code block in the DM body (shown for BOTH text and JSON formats)
+ *   - Baked into the JSON snapshot file at the top level, right after `model`
+ *   - Written at the top of the text snapshot file under an annotation header
  *
  * @param maxOutputTokens - From `resolveRequestMaxOutputTokens()`; undefined omits the key, as the request does.
  */

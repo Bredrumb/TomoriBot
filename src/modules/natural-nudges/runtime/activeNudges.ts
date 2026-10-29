@@ -8,7 +8,7 @@ import {
   isHumanMessage,
   resolveEffectiveChannelIds,
 } from "@/modules/natural-nudges/runtime/channels";
-import { readActiveNudgeGate } from "@/modules/natural-nudges/runtime/configCache";
+import { isNaturalNudgeServerActive, readNaturalNudgeGate } from "@/modules/natural-nudges/runtime/configCache";
 import { isFailureStopped } from "@/modules/natural-nudges/runtime/failureStop";
 import { claimNudgeServer, releaseNudgeServer } from "@/modules/natural-nudges/runtime/inFlight";
 import {
@@ -203,7 +203,7 @@ export async function observeActiveNudgeMessage(client: Client, message: Message
   const watch = watches.get(channelId);
   if (watch) watch.humans++;
 
-  const gate = await readActiveNudgeGate(message.guildId);
+  const gate = await readNaturalNudgeGate(message.guildId);
   if (!gate?.config.active_nudges_enabled || !gate.channelIds.has(listedChannelId)) return;
   if (checkBudget.isPaused(gate.serverId, Date.now())) return;
   const range = activeNudgeTripRange(gate.heat, gate.config.active_nudge_frequency);
@@ -311,6 +311,8 @@ async function checkSettingsAndCaps(
   budget: ActiveNudgeCheckBudget,
   now: Date,
 ): Promise<CheckSettings | string> {
+  if (!(await isNaturalNudgeServerActive(check.serverId, now)) || !(await readNaturalNudgeGate(check.guildId)))
+    return "dormant";
   const config = await naturalNudgeRepository.loadServerConfig(check.serverId);
   if (!config.active_nudges_enabled) return "disabled";
   if (!(await resolveEffectiveChannelIds(check.serverId, config, now)).includes(check.listedChannelId))
@@ -467,6 +469,7 @@ export async function runActiveNudgeCheck(
   watches.set(check.channel.id, watch);
   try {
     const now = new Date();
+    if (!(await readNaturalNudgeGate(check.guildId))) return finish("aborted", "a", "dormant");
     const personas = (await getCachedAllPersonas(check.guildId)).filter(
       (persona): persona is NudgePersona => typeof persona.persona_id === "number",
     );

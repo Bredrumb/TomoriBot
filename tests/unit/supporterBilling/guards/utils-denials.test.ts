@@ -174,6 +174,7 @@ describe("supporter denial rendering guards", () => {
         wrapDenial(denial),
         provider,
         createStreamContext({ textCredentialSource: "supporter", ...fundingContext(funding) }),
+        "fixture-key",
       );
 
       expect(providerDescriptionCalls).toBe(0);

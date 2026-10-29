@@ -11,7 +11,13 @@ import { log } from "@/utils/misc/logger";
 import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 import { readBoundedResponse } from "@/utils/security/boundedResponse";
 import { RemoteUrlPolicyError } from "@/utils/security/userRemoteFetch";
-import { readOpenRouterLimitResponse } from "@/providers/openrouter/openrouterLimit";
+import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
+import {
+  readProviderErrorBody,
+  redactProviderDetail,
+  reportProviderFailure,
+} from "@/utils/provider/providerErrorMetrics";
+import { isOperatorActionableProviderError } from "@/utils/provider/providerErrorClassification";
 import { currentProviderUsageContext, findProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 
 const DECISION_TIMEOUT_MS = parseIntegerEnvFlag(process.env.STREAM_SDK_CALL_TIMEOUT_MS, 120_000, 10_000);
@@ -243,9 +249,29 @@ export async function reportDecisionFailure(
   startedAt: number,
   httpStatus?: number,
   cause?: Error,
+  detail?: string,
 ): Promise<DecisionResult> {
-  await log.error("Decision operation failed", new Error(`Decision ${stage} failed (${category})`), {
+  await reportProviderFailure({
+    summary: "Decision operation failed",
+    error: new Error(`Decision ${stage} failed (${category})`),
     errorType: "DecisionOperationFailed",
+    detail,
+    expected: !isOperatorActionableProviderError({
+      type: "api_error",
+      message: category,
+      code: httpStatus?.toString(),
+      retryable:
+        category === "timeout" ||
+        category === "network" ||
+        httpStatus === 429 ||
+        (httpStatus !== undefined && httpStatus >= 500),
+    }),
+    dimensions: {
+      operation: "decision-request",
+      stage,
+      category,
+      provider: request.reference.provider.startsWith("custom:") ? "custom" : "openrouter",
+    },
     metadata: {
       operation: "decision-request",
       stage,
@@ -305,7 +331,9 @@ export async function executeDecisionTransport(
       return cancelled();
     }
     if (!response.ok) {
-      const limit = await readOpenRouterLimitResponse(response);
+      const detail = await readProviderErrorBody(response, request.apiKey ?? "");
+      if (request.abortSignal?.aborted) return cancelled();
+      const limit = readOpenRouterLimitError(response.status, response.headers, detail);
       const denied = limit && findProviderRequestDeniedError(limit, currentProviderUsageContext());
       if (denied) return { status: "denied", error: denied, correlationId, errorLogged: false };
       return await reportDecisionFailure(
@@ -315,6 +343,7 @@ export async function executeDecisionTransport(
         startedAt,
         httpStatus,
         limit ?? undefined,
+        detail,
       );
     }
     stage = "response";
@@ -353,6 +382,10 @@ export async function executeDecisionTransport(
       stage,
       startedAt,
       httpStatus,
+      undefined,
+      stage === "transport"
+        ? redactProviderDetail(error instanceof Error ? error.message : String(error), request.apiKey ?? "")
+        : undefined,
     );
   }
 }

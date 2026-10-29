@@ -84,6 +84,32 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     return row ? Number(row.count) : 0;
   }
 
+  it("weights human rewards at three and punishments at one without inflating message totals", async () => {
+    for (const [age, metricKey, count] of [
+      [0, "", 2],
+      [1, "reward", 2],
+      [2, "punish", 2],
+      [5, "reward", 100],
+    ] as const) {
+      await testSql`
+        INSERT INTO stat_counters (server_id, user_id, persona_lineage_id, metric, metric_key, bucket, count)
+        VALUES (${refs.serverId}, ${refs.userId}, ${lineageA}, 'message_sent', ${metricKey}, ${dayOffset(age)}::date, ${count})
+      `;
+    }
+    const from = new Date(`${dayOffset(2)}T00:00:00Z`);
+    const heat = await statRepository.getServerDailyHeatCounts({ serverId: refs.serverId, from });
+    expect(heat).toEqual(
+      new Map([
+        [dayOffset(0), 2],
+        [dayOffset(1), 6],
+        [dayOffset(2), 2],
+      ]),
+    );
+    expect((await statRepository.getServerPersonaMessageCounts({ serverId: refs.serverId, from })).get(lineageA)).toBe(
+      6,
+    );
+  });
+
   it("recordStat then flush produces one row with the delta", async () => {
     statRepository.recordStat({
       serverId: refs.serverId,

@@ -115,4 +115,4 @@ host-approved instance with `instance:`, and disable it with `service:none`. The
 `MESSAGE_PROXY_WAIT_MS`; only transport authentication and lookup timing remain under `PLURALKIT_*`
 variables. The optional `PLURALKIT_API_TOKEN` goes only to the official PluralKit origin.
 
-For user-visible behavior and limitations, see [PluralKit Support](/features/integrations/pluralkit-support/).
+For user-visible behavior and limitations, see [Message-Proxy Support](/features/integrations/message-proxy-support/#pluralkit).

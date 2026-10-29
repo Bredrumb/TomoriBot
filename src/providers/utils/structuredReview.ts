@@ -4,6 +4,7 @@ import { log } from "@/utils/misc/logger";
 import { readBoundedResponse } from "@/utils/security/boundedResponse";
 import { parseEmbeddedJson } from "@/utils/text/jsonRepair";
 import { normalizeProviderUsage, type TokenUsage } from "@/utils/text/tokenEstimate";
+import { redactProviderDetail } from "@/utils/provider/providerErrorMetrics";
 
 const MAX_PRIVATE_RESPONSE_BYTES = 1024 * 1024;
 const MAX_PRIVATE_OUTPUT_CHARS = 16384;
@@ -14,7 +15,26 @@ export function privateStructuredFailure<T>(
   httpStatus?: number,
   malformed?: MalformedDetail,
   cause?: Error,
+  detail?: string,
 ): StructuredOutputResult<T> {
+  if (detail && !request.abortSignal?.aborted) {
+    log.warn(
+      "Private structured request failed",
+      undefined,
+      {
+        errorType: "PrivateStructuredRequestFailure",
+        metadata: {
+          correlation: request.correlationId,
+          model: request.model,
+          operation: request.schemaName ?? "structured-json",
+          httpStatus,
+          failure,
+          providerDetail: redactProviderDetail(detail, request.apiKey),
+        },
+      },
+      { retain: true },
+    );
+  }
   return {
     success: false,
     error: "Structured request unavailable",
@@ -34,18 +54,31 @@ export async function readStructuredResponse(
     : response.json();
 }
 
-/**
- * Info is hidden at the production default level, the same exposure as the reviewer prompt dump, and
- * a rejected reply is the one an operator needs to see to tell a format drift from a refusal. Output
- * tokens beside an empty reply separate an exhausted budget (reasoning or truncation) from a blank answer.
- */
-function logMalformedPrivateOutput(serialized: string, usage: TokenUsage | null): void {
+function logMalformedPrivateOutput(
+  request: ProviderStructuredJsonRequest,
+  serialized: string,
+  usage: TokenUsage | null,
+): void {
   const detail = serialized
     ? serialized.length > MAX_PRIVATE_OUTPUT_CHARS
       ? `${serialized.length} chars, over the ${MAX_PRIVATE_OUTPUT_CHARS} char limit`
       : serialized
     : "empty reply";
-  log.info(`Structured output rejected as malformed (output tokens: ${usage?.outputTokens ?? "unknown"})\n${detail}`);
+  log.warn(
+    "Structured output rejected as malformed",
+    undefined,
+    {
+      errorType: "PrivateStructuredOutputMalformed",
+      metadata: {
+        correlation: request.correlationId,
+        model: request.model,
+        operation: request.schemaName ?? "structured-json",
+        outputTokens: usage?.outputTokens,
+        providerDetail: redactProviderDetail(detail, request.apiKey),
+      },
+    },
+    { retain: true },
+  );
 }
 
 /** Private callers receive validated data or bounded metadata, never provider prose in errors. */
@@ -61,7 +94,7 @@ export function parsePrivateStructuredOutput<T>(
   if (request.abortSignal?.aborted) return privateStructuredFailure(request);
   if (refused) return privateStructuredFailure(request, "refusal");
   const malformed = (serialized: string, detail: MalformedDetail): StructuredOutputResult<T> => {
-    logMalformedPrivateOutput(serialized, normalized);
+    logMalformedPrivateOutput(request, serialized, normalized);
     return privateStructuredFailure<T>(request, "malformed", undefined, detail);
   };
   const serialized = typeof raw === "string" ? raw : (JSON.stringify(raw) ?? "");

@@ -650,7 +650,10 @@ export function buildBehaviorPromptModal(
         type: TEXT_INPUT,
         custom_id: buildConfigModalFieldId(field, nonce),
         style: TextInputStyle.Paragraph,
-        placeholder: safeSelectOptionText(localizer(locale, placeholders[index] as string), 100),
+        placeholder: safeSelectOptionText(
+          localizer(locale, index === 0 ? placeholders[0] : "commands.config.panel.continuation_placeholder"),
+          100,
+        ),
         max_length: 4000,
         required: index === 0,
         value: parts[index] || undefined,

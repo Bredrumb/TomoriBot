@@ -194,6 +194,7 @@ async function runGenerationAttempts(
       context.tomoriState = attempt.tomoriState;
       const attemptContextItems = await prepareProviderContextItems({
         contextItems: baseContextItems,
+        isUserImpersonation: context.isUserImpersonation,
         tomoriState: attempt.tomoriState,
         deliberateToolAllowedNames: context.streamingContext.deliberateToolAllowedNames,
       });
@@ -1243,6 +1244,7 @@ function extractErrorDetail(streamResult: StreamResult | undefined): string {
 
 async function prepareProviderContextItems(args: {
   contextItems: StructuredContextItem[];
+  isUserImpersonation: boolean;
   tomoriState: TomoriState;
   deliberateToolAllowedNames: string[] | undefined;
 }): Promise<StructuredContextItem[]> {
@@ -1262,7 +1264,11 @@ async function prepareProviderContextItems(args: {
     // with neither: without them the custom model receives no tool schemas and no calling-format
     // instructions, so every tool (voice messages included) fails.
     if (!contextItems.some((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS)) {
-      const toolItem = await buildVerbatimToolDefinitionsContextItem({ tomoriState: args.tomoriState });
+      const toolItem = await buildVerbatimToolDefinitionsContextItem({
+        tomoriState: args.tomoriState,
+        contextItems,
+        isUserImpersonation: args.isUserImpersonation,
+      });
       if (toolItem) {
         contextItems = injectVerbatimToolDefinitionsItem(contextItems, toolItem);
       }

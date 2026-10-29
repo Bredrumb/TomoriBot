@@ -5,8 +5,13 @@ sidebar:
   order: 8
 ---
 
-The bot host must authorize one PluralBuddy application per instance so TomoriBot can verify webhook reposts. People
-using your bot select PluralBuddy in Discord; they do not create applications or supply tokens.
+This guide is for the host of a self-hosted TomoriBot. The host must authorize a PluralBuddy
+application for the official PluralBuddy service and for each approved custom instance.
+
+If you use the [public deployed bot](https://discord.com/oauth2/authorize?client_id=841644102059556915),
+you do not need to complete this host-side setup. Select PluralBuddy with
+`/personal message-proxy service:pluralbuddy`; see
+[Message-Proxy Support](/features/integrations/message-proxy-support/#pluralbuddy).
 
 ## Before you start
 
@@ -43,20 +48,13 @@ client secret at the prompt; do not place it in a command argument or Discord me
 revokes the connection, repeat these steps with the same instance ID. A failed selection leaves the
 user's current message-proxy choice unchanged.
 
-## Where the OAuth credentials go
-
-The helper stores the client ID, encrypted client secret, and encrypted refresh token in the
-`pluralbuddy_oauth_connections` database table. TomoriBot uses the encryption key from `.env` or
-`SECRET_FILE` to read them and renew access. The OAuth client secret does not belong in `.env`, and
-the bot no longer reads `PLURALBUDDY_CLIENT_ID` or `PLURALBUDDY_CLIENT_SECRET` variables.
+The helper stores the client ID and encrypted credentials in the database. Keep the encryption key
+with your backups. Do not put the OAuth client secret in `.env`.
 
 ## Add an approved instance
 
 The custom origin must serve a proxy bot and its matching API. An API URL alone cannot make the
-public PluralKit or PluralBuddy bot write records there. The first version accepts public HTTPS
-origins only: no path, query, fragment, user information, private address, loopback address, or
-link-local address. The bot rechecks DNS before each request and never follows redirects on lookup
-or token requests.
+public bot write records there. Use a public HTTPS origin without a path, query, or fragment.
 
 1. On a computer with deployment database access, register a disabled instance:
 
@@ -85,14 +83,12 @@ or token requests.
    bun scripts/db/register-message-proxy-instance.ts enable <instance-id> <repost-id> <sender-id>
    ```
 
-   The command checks discovery and requires a lookup result for that exact repost and sender.
-   A `401` or a reachable URL alone does not pass. For a new fork, also complete an integrated
-   TomoriBot check in a disposable deployment before offering it to ordinary users. Keep the
-   instance disabled on the main deployment until its bot write, OAuth code exchange and refresh
-   (if applicable), and TomoriBot lookup have passed.
+   The command requires a lookup result for that exact repost and sender. For a new fork, test its
+   bot, OAuth exchange and refresh (if applicable), and TomoriBot lookup in a disposable deployment
+   before enabling it for users.
 4. Users select the enabled instance with `/personal message-proxy service:pluralbuddy instance:<name>`.
-   Leaving `instance` empty chooses the official instance. The choice is checked again when the
-   command runs; disabling an instance stops new lookups without changing stored profiles.
+   Leaving `instance` empty chooses the official instance. Disabling an instance stops new lookups
+   without changing stored profiles.
 
 If the custom proxy bot is replaced, update its Discord bot user ID before offering the instance again:
 
@@ -110,6 +106,6 @@ bun scripts/db/register-message-proxy-instance.ts remove <instance-id>
 Removal deletes its PluralBuddy OAuth connection and keeps a hidden catalog row so identities,
 memories, and message attribution still resolve. That origin cannot be registered again after
 removal; use `disable` when you may need to resume the same instance. Catalog changes take effect on the next command
-or lookup without restarting TomoriBot. The [PluralBuddy support page](/features/integrations/pluralbuddy-support/)
+or lookup without restarting TomoriBot. The [Message-Proxy Support page](/features/integrations/message-proxy-support/#pluralbuddy)
 explains what users can expect. See the [message-proxy architecture](/architecture/integrations/message-proxy/)
 for token storage and refresh behavior.

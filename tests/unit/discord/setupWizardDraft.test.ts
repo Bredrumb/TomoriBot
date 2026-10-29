@@ -1,3 +1,4 @@
+import { SETUP_FEATURES } from "@/types/db/schema";
 import { describe, expect, it } from "bun:test";
 import {
   SETUP_DRAFT_SCHEMA_VERSION,
@@ -24,6 +25,7 @@ function makeStartingSettings(overrides: Partial<SetupDraftStartingSettings> = {
     presetId: 1,
     humanizer: 1,
     timezoneOffset: 9,
+    features: [...SETUP_FEATURES],
     systemPrompt: { kind: "built-in" },
     ...overrides,
   };

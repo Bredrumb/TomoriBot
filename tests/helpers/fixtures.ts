@@ -71,7 +71,7 @@ const BASE_CONFIG: AssembledServerConfig = {
   manage_message_enabled: true,
   thread_creation_enabled: true,
   conditioning_interactions_enabled: true,
-  dice_rolling_enabled: false,
+  dice_rolling_enabled: true,
   imagegen_enabled: true,
   danbooru_enabled: true,
   videogen_enabled: false,

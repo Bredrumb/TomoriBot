@@ -1214,6 +1214,13 @@ const WIRE_CONTRACT_V2: ReadonlyArray<readonly [string, ConfigPanelRoute]> = [
     { action: "nudge-checker-decision-submit", locale: "en-US", provider: "custom:12", nonce: "nonce1234567" },
   ],
   ["config:v2:nn-idle-frequency:en-US", { action: "nudge-idle-nudges-frequency-select", locale: "en-US" }],
+  ["config:v2:nn-heat:en-US:up", { action: "nudge-heat-adjust", locale: "en-US", direction: "up" }],
+  ["config:v2:nn-heat:en-US:down", { action: "nudge-heat-adjust", locale: "en-US", direction: "down" }],
+  ["config:v2:nn-weights-open:en-US", { action: "nudge-weights-open", locale: "en-US" }],
+  [
+    "config:v2:nn-weights:en-US:nonce1234567",
+    { action: "nudge-weights-submit", locale: "en-US", nonce: "nonce1234567" },
+  ],
   ["config:v2:nn-active-set:en-US:0", { action: "nudge-active-nudges-set", locale: "en-US", enabled: false }],
   ["config:v2:nn-active-frequency:en-US", { action: "nudge-active-nudges-frequency-select", locale: "en-US" }],
 ];

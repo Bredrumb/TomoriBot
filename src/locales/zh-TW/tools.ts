@@ -14,10 +14,13 @@ export default {
     execution: {
       unavailable: `在目前的設定、模型功能或 bot 權限下，工具 \`{tool}\` 無法使用。`,
     },
+    sprite_selection: {
+      unavailable: "目前人格或此輪無法選擇立繪。請省略 sprite 參數。",
+      invalid: "從目前可用的立繪中選擇立繪標籤，或使用空字串表示基礎外觀。",
+    },
     generate_voice_message: {
       persona_missing: `這個人格已無法使用。`,
       stale: `這一輪期間，語音模型、憑證或人格語音已變更。請先開始新的一輪，再生成語音訊息。`,
-      script_too_long: `這段台詞超出了該語音設計模型的長度上限。請縮短台詞後再試一次。`,
     },
     generate_image: {
       quota_exceeded_generic: `圖片生成額度已用完。`,
@@ -42,7 +45,6 @@ export default {
     generate_image_nai: {
       no_google_api_key: `局部重繪需要已儲存的 Google 供應商憑證來進行圖片分割。請用 \`/providers\` 新增，或改用 Google 供應商。`,
       model_not_configured: `NovelAI 圖片生成目前停用。請先使用 \`/config\` > 模型 > 切換模型選擇 NovelAI 圖片模型。`,
-      provider_quota_exceeded: `這個帳號的 NovelAI 圖片生成額度已用完。請補充 Anlas 或等額度重置後再試。`,
       characters_require_v4: `角色定位需要 NovelAI V4 或更新的擴散模型。`,
       character_requires_id_or_tags: `角色項目 #{index} 必須包含 id 或標籤。`,
       invalid_character_identity: `角色身分無效：{id}。請使用 persona:<id>、簡短的數字人格 ID，或 Discord 使用者 snowflake。`,
@@ -158,7 +160,7 @@ export default {
     document: {
       reading_title: `📄 正在讀取檔案內容...`,
       reading_description: `正在讀取 \`{filename}\` 裡面的文字`,
-      truncated_title: `⚠️ 檔案已截斷`,
+      truncated_title: `檔案已截斷`,
       truncated_description: `\`{filename}\` 太長，已截斷為 {limit} 個字元（原始為 {original} 個字元）。回覆內容可能不完整，建議把檔案拆成幾個小部分，再分批分享。`,
     },
     image: {

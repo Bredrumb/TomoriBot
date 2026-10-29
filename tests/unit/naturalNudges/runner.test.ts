@@ -3,6 +3,7 @@ import { Collection, type Client, type GuildTextBasedChannel, type Message } fro
 import * as tomoriChatModule from "@/events/messageCreate/tomoriChat";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import {
+  defaultServerNaturalNudgeConfig,
   personaAuthoredIdleNudgeSchema,
   type NaturalNudgeFireRow,
   type PersonaAuthoredIdleNudge,
@@ -15,6 +16,7 @@ import {
   type IdleNudgeDefinition,
 } from "@/modules/natural-nudges/runtime/idleNudges";
 import * as planner from "@/modules/natural-nudges/runtime/planner";
+import * as configCache from "@/modules/natural-nudges/runtime/configCache";
 import * as plannerModel from "@/modules/natural-nudges/runtime/model";
 import * as toolsModule from "@/modules/natural-nudges/runtime/tools";
 import * as targetsModule from "@/modules/natural-nudges/runtime/targets";
@@ -54,6 +56,7 @@ beforeEach(() => {
   samples = [];
   configSpy = spyOn(naturalNudgeRepository, "loadServerConfig");
   configSpy.mockResolvedValue({
+    ...defaultServerNaturalNudgeConfig(SERVER_ID),
     idle_nudges_enabled: true,
     channel_disc_ids: ["fixture-channel"],
     llm_id: 1,
@@ -101,6 +104,12 @@ beforeEach(() => {
     },
   });
   spies.push(
+    spyOn(configCache, "readNaturalNudgeGate").mockImplementation(async () => ({
+      serverId: SERVER_ID,
+      config: await naturalNudgeRepository.loadServerConfig(SERVER_ID),
+      channelIds: new Set(["fixture-channel"]),
+      heat: 10,
+    })),
     plannerSpy,
     configSpy,
     spyOn(naturalNudgeRepository, "loadRuntimeState").mockResolvedValue({ stopped_at: null } as never),
@@ -250,6 +259,51 @@ function attemptWithOwnerNudge(config = ownerConfig()): { attempt: IdleNudgeAtte
 }
 
 describe("idle nudge channel context", () => {
+  it("makes no planner call or Discord post while dormant", async () => {
+    const { attempt, sent } = attemptWithHistory(async () => []);
+    spyOn(configCache, "readNaturalNudgeGate").mockResolvedValue(null);
+    expect(await runIdleNudgeAttempt(attempt)).toBe("aborted");
+    expect(plannerSpy).not.toHaveBeenCalled();
+    expect(configSpy).not.toHaveBeenCalled();
+    expect(chatInputs).toHaveLength(0);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("drops an attempt that becomes dormant during planning before any Discord post", async () => {
+    const { attempt, sent } = attemptWithHistory(async () => []);
+    spyOn(configCache, "readNaturalNudgeGate")
+      .mockResolvedValueOnce({
+        serverId: SERVER_ID,
+        config: defaultServerNaturalNudgeConfig(SERVER_ID),
+        channelIds: new Set(["fixture-channel"]),
+        heat: 10,
+      })
+      .mockResolvedValue(null);
+    expect(await runIdleNudgeAttempt(attempt)).toBe("aborted");
+    expect(plannerSpy).toHaveBeenCalledTimes(1);
+    expect(chatInputs).toHaveLength(0);
+    expect(sent).toHaveLength(0);
+    expect(samples.at(-1)).toMatchObject({ outcome: "aborted", reason: "dormant" });
+  });
+
+  it("keeps generation failure silent and records no nudge fire", async () => {
+    const { attempt } = attemptWithHistory(async () => [messageWithId(OLDER_ID)]);
+    const fire = spyOn(naturalNudgeRepository, "recordIdleNudgeFire").mockResolvedValue(true);
+    const failure = spyOn(naturalNudgeRepository, "recordFailure").mockResolvedValue(null);
+    spies.push(fire, failure);
+    onChatCall = async () => {
+      expect(chatInputs.at(-1)?.shouldSurfaceUserErrors).toBe(false);
+      await chatInputs.at(-1)?.onGenerationResult?.({
+        status: "error",
+        streamResults: [],
+        personaResponses: [],
+      });
+    };
+    expect(await runIdleNudgeAttempt(attempt)).toBe("failed");
+    expect(failure).toHaveBeenCalledTimes(1);
+    expect(fire).not.toHaveBeenCalled();
+  });
+
   it("aborts an untargeted selection when the target context exposed during planning is no longer eligible", async () => {
     const { attempt, sent } = attemptWithHistory(async () => [messageWithId(OLDER_ID)]);
     const targetedNudge = customIdleNudgeDefinition(
@@ -488,14 +542,15 @@ describe("idle nudge anchor", () => {
 describe("daily idle nudge cap", () => {
   const CAP_BY_LEVEL = [
     [0, 1],
-    [1, 3],
-    [2, 5],
-    [3, 8],
+    [1, 2],
+    [2, 3],
+    [3, 6],
   ] as const;
 
   it("counts the idle nudges already fired today against the level's cap", async () => {
     for (const [level, cap] of CAP_BY_LEVEL) {
       configSpy.mockResolvedValue({
+        ...defaultServerNaturalNudgeConfig(SERVER_ID),
         idle_nudges_enabled: true,
         channel_disc_ids: ["fixture-channel"],
         llm_id: 1,
@@ -714,6 +769,7 @@ describe("persona-authored delivery recheck", () => {
   it("aborts when a built-in was disabled during planning", async () => {
     const { attempt } = attemptWithHistory(async () => [messageWithId(OLDER_ID)]);
     configSpy.mockResolvedValue({
+      ...defaultServerNaturalNudgeConfig(SERVER_ID),
       idle_nudges_enabled: true,
       channel_disc_ids: ["fixture-channel"],
       llm_id: 1,
@@ -810,4 +866,15 @@ describe("Play Scene", () => {
       { personaId: PARTNER_ID, agenda: PARTNER_AGENDA },
     ]);
   });
+});
+
+it("aborts when the selected type is given zero weight during planning", async () => {
+  const { attempt, sent } = attemptWithHistory(async () => [messageWithId(OLDER_ID)]);
+  const config = defaultServerNaturalNudgeConfig(SERVER_ID);
+  config.category_weights[attempt.candidates[0].idleNudge.category] = 0;
+  configSpy.mockResolvedValue(config);
+  expect(await runIdleNudgeAttempt(attempt)).toBe("aborted");
+  expect(samples.at(-1)).toMatchObject({ reason: "idle_nudge_unavailable", phase: "c" });
+  expect(chatInputs).toHaveLength(0);
+  expect(sent).toHaveLength(0);
 });

@@ -11,7 +11,7 @@ Tính năng hỗ trợ proxy tin nhắn cho phép TomoriBot theo dõi các tin n
 
 Chạy `/personal message-proxy service:pluralkit` hoặc `/personal message-proxy service:pluralbuddy`. Chọn `service:none` (hiển thị là Tắt) để hủy kích hoạt xử lý proxy. Đây là cài đặt cá nhân trên tài khoản Discord gửi tin nhắn gốc và đi theo tài khoản đó qua các máy chủ.
 
-Sau khi TomoriBot thấy tin nhắn xác minh đầu tiên của một alter, hãy dùng `/personal config identity:` để chỉnh sửa hồ sơ và `/personal memories identity:` để chỉnh sửa bộ nhớ của alter đó. Tính năng tự động hoàn thành bao gồm các danh tính đã lưu từ cả hai dịch vụ ngay cả khi tính năng xử lý proxy đang tắt. Giao diện tài khoản, quyền riêng tư và cài đặt model vẫn nằm trên tài khoản chủ. Biệt danh được đặt trong TomoriBot sẽ giữ nguyên cho đến khi bị xóa; nếu không, tên hiển thị của dịch vụ sẽ được làm mới khi có tin nhắn xác minh. Xem [Hỗ trợ PluralKit](/vi/features/integrations/pluralkit-support/) để biết chi tiết về thành viên và tiểu sử.
+Sau khi TomoriBot thấy tin nhắn xác minh đầu tiên của một alter, hãy dùng `/personal config identity:` để chỉnh sửa hồ sơ và `/personal memories identity:` để chỉnh sửa bộ nhớ của alter đó. Tính năng tự động hoàn thành bao gồm các danh tính đã lưu từ cả hai dịch vụ ngay cả khi tính năng xử lý proxy đang tắt. Giao diện tài khoản, quyền riêng tư và cài đặt model vẫn nằm trên tài khoản chủ. Biệt danh được đặt trong TomoriBot sẽ giữ nguyên cho đến khi bị xóa; nếu không, tên hiển thị của dịch vụ sẽ được làm mới khi có tin nhắn xác minh.
 
 ## Ý nghĩa của việc kiểm tra an toàn
 

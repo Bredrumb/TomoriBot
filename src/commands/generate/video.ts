@@ -12,6 +12,7 @@ import {
   getProviderRequestFailureCopy,
 } from "@/utils/provider/providerUsage";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 /**
  * Video Generation Command (/generate video)
  * Allows users to generate AI videos using Google Veo, OpenRouter, or Z.ai.
@@ -26,6 +27,7 @@ import {
   AttachmentBuilder,
   type ChatInputCommandInteraction,
   type Client,
+  type ModalSubmitInteraction,
   type SlashCommandSubcommandBuilder,
   type APIAttachment,
 } from "discord.js";
@@ -35,7 +37,14 @@ import { personaRepository, llmModelRepo, statRepository } from "@/utils/db/repo
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
 import { safeReply } from "@/utils/discord/safeReply";
 import type { UserRow } from "../../types/db/schema";
-import { checkVideoQuota, incrementVideoQuota } from "../../utils/quota/videoQuotaManager";
+import {
+  checkVideoQuota,
+  releaseVideoQuota,
+  reserveVideoQuota,
+  type VideoQuotaCheckResult,
+} from "../../utils/quota/videoQuotaManager";
+import { QuotaUnavailableError } from "../../utils/quota/quotaErrors";
+import type { QuotaReservation } from "../../utils/db/repositories/QuotaRepository";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { generateCustomVideoViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
 import {
@@ -156,6 +165,57 @@ async function convertAttachmentToBase64(attachment: APIAttachment): Promise<{ m
     mimeType: attachment.content_type,
     data: base64Data,
   };
+}
+
+async function replyVideoQuotaExceeded(
+  target: ChatInputCommandInteraction | ModalSubmitInteraction,
+  locale: string,
+  quotaCheck: VideoQuotaCheckResult,
+  tipKeys: string[],
+): Promise<void> {
+  const descriptionVars: Record<string, string> = {};
+
+  if (quotaCheck.resetTime) {
+    const now = new Date();
+    const hoursUntilReset = Math.ceil((quotaCheck.resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
+
+    if (hoursUntilReset < 24) {
+      descriptionVars.reset_info = localizer(locale, "commands.generate.video.quota_resets_in_hours", {
+        hours: hoursUntilReset.toString(),
+      });
+    } else {
+      descriptionVars.reset_info = localizer(locale, "commands.generate.video.quota_resets_in_days", {
+        days: Math.ceil(hoursUntilReset / 24).toString(),
+      });
+    }
+  }
+
+  await replyInfoEmbed(target, locale, {
+    titleKey: "commands.generate.video.quota_exceeded_title",
+    descriptionKey:
+      quotaCheck.reason === "user_quota_exceeded"
+        ? "commands.generate.video.user_quota_exceeded_description"
+        : quotaCheck.reason === "serverwide_quota_exceeded"
+          ? "commands.generate.video.serverwide_quota_exceeded_description"
+          : "commands.generate.video.quota_exceeded_description",
+    descriptionVars,
+    footerKey: "commands.generate.video.quota_exceeded_footer",
+    tipKeys,
+    color: ColorCode.ERROR,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function replyVideoQuotaUnavailable(
+  target: ChatInputCommandInteraction | ModalSubmitInteraction,
+  locale: string,
+): Promise<void> {
+  await replyInfoEmbed(target, locale, {
+    titleKey: "commands.generate.video.error_title",
+    descriptionKey: "commands.generate.video.quota_unavailable_description",
+    color: ColorCode.ERROR,
+    flags: MessageFlags.Ephemeral,
+  });
 }
 
 /**
@@ -349,47 +409,26 @@ export async function execute(
 
   // Check video quota before showing modal (personal-provider users bypass quota)
   if (videoCreds.source === "server") {
-    const quotaCheck = await checkVideoQuota(tomoriState.server_id, interaction.user.id);
-    if (!quotaCheck.allowed) {
-      const descriptionVars: Record<string, string> = {};
-
-      if (quotaCheck.resetTime) {
-        const now = new Date();
-        const hoursUntilReset = Math.ceil((quotaCheck.resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
-
-        if (hoursUntilReset < 24) {
-          descriptionVars.reset_info = localizer(locale, "commands.generate.video.quota_resets_in_hours", {
-            hours: hoursUntilReset.toString(),
-          });
-        } else {
-          const daysUntilReset = Math.ceil(hoursUntilReset / 24);
-          descriptionVars.reset_info = localizer(locale, "commands.generate.video.quota_resets_in_days", {
-            days: daysUntilReset.toString(),
-          });
-        }
+    let quotaCheck: VideoQuotaCheckResult;
+    try {
+      quotaCheck = await checkVideoQuota(tomoriState.server_id, interaction.user.id);
+    } catch (error) {
+      if (error instanceof QuotaUnavailableError) {
+        await replyVideoQuotaUnavailable(interaction, locale);
+        return;
       }
+      throw error;
+    }
 
-      if (!interaction.replied && !interaction.deferred)
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.generate.video.quota_exceeded_title",
-        descriptionKey:
-          quotaCheck.reason === "user_quota_exceeded"
-            ? "commands.generate.video.user_quota_exceeded_description"
-            : quotaCheck.reason === "serverwide_quota_exceeded"
-              ? "commands.generate.video.serverwide_quota_exceeded_description"
-              : "commands.generate.video.quota_exceeded_description",
-        descriptionVars,
-        footerKey: "commands.generate.video.quota_exceeded_footer",
-        tipKeys: await recoveryTips("server"),
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
+    if (!quotaCheck.allowed) {
+      await replyVideoQuotaExceeded(interaction, locale, quotaCheck, await recoveryTips("server"));
       return;
     }
   }
 
-  let modalSubmitInteraction: import("discord.js").ModalSubmitInteraction | undefined;
+  let modalSubmitInteraction: ModalSubmitInteraction | undefined;
+  let quotaReservation: QuotaReservation | null = null;
+  let quotaConsumed = false;
 
   try {
     const modalComponents = [
@@ -532,6 +571,15 @@ export async function execute(
       `Generating video with ${executionProvider} via ${displayModelName}: "${prompt.substring(0, 100)}${prompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio}, duration: ${durationSeconds}s, fps: ${fps ?? "default"}, reference: ${referenceImages ? "yes" : "no"})`,
     );
 
+    if (videoCreds.source === "server") {
+      const claim = await reserveVideoQuota(tomoriState.server_id, interaction.user.id);
+      if (!claim.allowed) {
+        await replyVideoQuotaExceeded(modalSubmitInteraction, locale, claim, await recoveryTips("server"));
+        return;
+      }
+      quotaReservation = claim.reservation;
+    }
+
     await modalSubmitInteraction.editReply({
       embeds: [
         new EmbedBuilder()
@@ -668,10 +716,8 @@ export async function execute(
       files: [attachment],
     });
 
-    // Increment quota (server providers only)
-    if (videoCreds.source === "server") {
-      await incrementVideoQuota(tomoriState.server_id, interaction.user.id);
-    }
+    // Delivery succeeded, so the reservation is spent rather than released.
+    quotaConsumed = true;
     // Record canonical generation telemetry; quota tables enforce limits only.
     if (userData.user_id) {
       statRepository.recordStat({
@@ -685,6 +731,10 @@ export async function execute(
     }
     log.success(`Video generated in ${elapsedSec}s via ${displayModelName}`);
   } catch (error) {
+    if (error instanceof QuotaUnavailableError) {
+      await replyVideoQuotaUnavailable(modalSubmitInteraction ?? interaction, locale);
+      return;
+    }
     if (error instanceof GenerationModelUnavailableError) {
       await replyGenerationModelUnavailable(modalSubmitInteraction ?? interaction, locale);
       return;
@@ -695,7 +745,10 @@ export async function execute(
         summary: "Video generation command failed",
         errorType: "VideoGenerationFailed",
         error,
-        expected: isExpectedVideoFailure(error instanceof Error ? error.message : String(error)),
+        expected: isExpectedVideoFailure(
+          error instanceof Error ? error.message : String(error),
+          createProviderToolFailure(error, { locale, provider: executionProvider }).failure?.code,
+        ),
         serverId: tomoriState.server_id,
         userId: userData.user_id ?? null,
         dimensions: { operation: "video-generation", provider: executionProvider },
@@ -733,5 +786,9 @@ export async function execute(
       }),
       "video error embed",
     );
+  } finally {
+    if (quotaReservation && !quotaConsumed) {
+      await releaseVideoQuota(tomoriState.server_id, interaction.user.id, quotaReservation);
+    }
   }
 }

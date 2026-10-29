@@ -23,11 +23,15 @@ Filtering evaluates multiple layers:
 
 ## Dice rolling
 
-`roll_dice` requires `dice_rolling_enabled`, which defaults to false and is
+`roll_dice` requires `dice_rolling_enabled`, which defaults to true and is
 managed through `/config` > Plugins > Available Tools. The switch controls tool
 advertisement and execution independently of the `/roll` command. Both callers
 use `src/utils/dice/diceRoll.ts` for validated dice notation and OS-backed random
 integers, and `diceRollEmbed.ts` for their result embeds.
+
+Migration `122_enable_dice_rolling_by_default` enables the tool once for existing
+servers. The migration ledger prevents later startups from overwriting saved choices.
+New setups default to enabled and can turn it off in the `/setup` feature checklist.
 
 Dice result embeds have no title. The embed protocol reads their localized
 visibility footers and admits only shared results into model history, including
@@ -42,10 +46,19 @@ a reply. Tool rolls also return their structured result to the current model tur
 Before provider serialization, tools pass through `assembleToolsForContext()` in `src/tools/assembly.ts`. Most tools return their static definition unchanged. Capability-sensitive tools implement `assembleForContext(context)` and return tailored variants via `createToolVariant()`:
 
 - `web_search`: Narrows category enums to the active search backend. SearXNG exposes all categories; Brave exposes text, image, video, and news. With neither available, the schema advertises text search only, including on OpenRouter turns.
+- `interact_with_recent_message`: Offers only `reply` when `emoji_usage_enabled` is off, removing reaction instructions from its schema while retaining text replies; execution rejects reaction calls using the refreshed setting too.
 - `generate_image`: Prunes parameters to match active backend capabilities (text-to-image, reference image fields, and ComfyUI inpaint or outpaint controls). Parameter descriptions omit instructions for unconfigured modes, preventing the model from receiving unsupported guidance.
 - `generate_voice_message`: Resolves persona priority against independently inherited personal/server Design and Clone targets, then prunes markup and delivery controls for the selected target. Execution revalidates that source, target, and credential revision. Speech synthesis and delivery are shared with `/generate voice-message`; see [Voice System](/architecture/integrations/voice/).
 
 Assembly guards prevent the model from seeing unsupported parameters, while execution-time checks guard against stale configurations and crafted tool calls.
+
+`generate_voice_message` and `interact_with_target` also offer an optional `sprite` parameter when
+the turn includes the active persona's sprite list. The parameter refers to that list without
+repeating it in either schema. Execution checks the selection against both the advertised list and
+the current persona sprites before synthesis or interaction writes. Omission preserves appearance
+inheritance; an empty string selects the base appearance. Both tools use the shared persona delivery
+resolver, which remembers the selected appearance only after successful delivery. Sprite selection
+does not add speech delivery instructions.
 
 ## Execution dispatch and failure boundaries
 
@@ -132,6 +145,7 @@ The `update_user_info` tool (`src/tools/functionCalls/updateUserInfoTool.ts`) up
 - **Clearing values:** Fields listed in the `clear` array are removed. Submitting empty string values folds into clearing. Cleared prefixes or suffixes persist as explicit suppressions (`none`), preventing lower-precedence defaults from resurfacing.
 - **Affix deduplication:** When a submitted nickname contains an already-resolved prefix or suffix, redundant affixes are stripped by comparing against resolved values.
 - **Privacy and permissions:** Mutations require `user_info_updates_enabled`. Restrictive privacy levels block updates but permit clearing existing values.
+- **Confirmation notices:** Successful updates use the shared notice router even on turns that suppress progress notices, matching memory and task updates. Notice visibility, verbosity, and thought-log privacy checks still apply.
 
 ## Capability self-diagnosis
 

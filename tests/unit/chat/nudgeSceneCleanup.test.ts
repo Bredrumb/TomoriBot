@@ -36,7 +36,7 @@ const message = {
 
 beforeEach(() => {
   admissionDisposition = "run";
-  clearSpy = spyOn(channelQueue, "clearQueuedNudgeSceneWork").mockReturnValue([]);
+  clearSpy = spyOn(channelQueue, "clearQueuedNudgeWork");
   spies.push(
     clearSpy,
     spyOn(admission, "evaluateChatAdmission").mockImplementation(
@@ -90,7 +90,77 @@ async function runSceneTurn(naturalNudge: NaturalNudgeTurn | undefined): Promise
   return clearSpy.mock.calls.some(([channelId]) => channelId === CHANNEL_ID);
 }
 
-describe("Natural Nudges scene cleanup", () => {
+describe("Natural Nudges queue cleanup", () => {
+  it("clears rejected ordinary handoffs when their channel no longer resolves, preserving unrelated jobs", async () => {
+    const discarded: string[] = [];
+    const pendingNudge: QueuedMessage = {
+      message,
+      naturalNudge: NUDGE,
+      selectedPersonaId: 2,
+      onQueueDiscard: (reason) => {
+        discarded.push(reason);
+      },
+    };
+    const ordinaryJob: QueuedMessage = { message, selectedPersonaId: 3 };
+    const lockEntry = channelQueue.getOrCreateChannelLockEntry(CHANNEL_ID, "300000000000000041");
+    lockEntry.messageQueue = [pendingNudge, ordinaryJob];
+    const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 6000);
+    spies.push(clock);
+    expect(channelQueue.isNudgeOutputActive(CHANNEL_ID)).toBe(true);
+    admissionDisposition = "ignore";
+
+    await tomoriChat({
+      client: {} as Client,
+      message: { ...message, channel: null } as unknown as Message,
+      isFromQueue: true,
+      isManuallyTriggered: true,
+      isPersonaJob: true,
+      naturalNudge: NUDGE,
+    });
+
+    expect(lockEntry.messageQueue).toEqual([ordinaryJob]);
+    expect(channelQueue.isNudgeOutputActive(CHANNEL_ID)).toBe(false);
+    expect(discarded).toEqual(["scene_interrupted"]);
+  });
+
+  it("discards remaining ordinary nudge handoffs on planning refusal or terminal delivery failure", async () => {
+    for (const status of ["skipped", "error", "timeout", "empty_response"] as const) {
+      const discarded: string[] = [];
+      const lockEntry = channelQueue.getOrCreateChannelLockEntry(CHANNEL_ID, "300000000000000041");
+      lockEntry.messageQueue = [
+        {
+          message,
+          naturalNudge: NUDGE,
+          selectedPersonaId: 2,
+          onQueueDiscard: (reason) => {
+            discarded.push(reason);
+          },
+        },
+      ];
+      generationResult = result(status);
+      const planner = spyOn(turnPlanner, "planChatTurns").mockImplementation(async (lockedTurn) => ({
+        lockedTurn,
+        turns: status === "skipped" ? [] : ([{ lockedTurn, personaIndex: 0, totalPersonas: 1 }] as never),
+      }));
+      try {
+        await tomoriChat({
+          client: {} as Client,
+          message,
+          isFromQueue: true,
+          isManuallyTriggered: true,
+          isPersonaJob: true,
+          naturalNudge: NUDGE,
+          retryCount: 2,
+        });
+        expect({ status, discarded }).toEqual({ status, discarded: ["scene_interrupted"] });
+        expect(lockEntry.messageQueue).toHaveLength(0);
+      } finally {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        planner.mockRestore();
+      }
+    }
+  });
+
   it("drops the rest of the scene when a queued turn is rejected or posts nothing", async () => {
     admissionDisposition = "blocked";
     expect(await runSceneTurn(NUDGE)).toBe(true);

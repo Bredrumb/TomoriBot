@@ -16,9 +16,6 @@ export default {
     channel_access_warning_field: "我还无法在这个频道聊天",
     channel_access_warning_value:
       "设置已完成，但我的身份组无法查看这个频道或在这里发送消息，所以我不会在这里回复。请在这个频道或所属频道分类的权限设置中，给我的身份组授予**查看频道**、**发送消息**和**读取消息历史**权限。",
-    novelai_expressions_warning_field: `表情与贴纸已关闭`,
-    novelai_expressions_warning_value:
-      "表情和贴纸已自动关闭，好让 NovelAI 的上下文保持精简稳定。你可以随时用 `/config` > 插件重新打开。",
     zai_tos_warning_field: `Z.ai 服务条款`,
     zai_tos_warning_value:
       "Z.ai 的服务条款已更新，现在只允许 编码和智能体用途。把 Z.ai 用于普通聊天 风险自负，而且可能违反他们的条款。",
@@ -83,7 +80,7 @@ export default {
       provider_option_byok: `用户 BYOK`,
       provider_option_byok_description: `每位成员通过 /personal providers 自行配置 API 密钥或端点。`,
       settings_name: `初始设置`,
-      settings_description: `选择初始人格和回复行为。`,
+      settings_description: `选择初始人格、回复行为以及可选功能。`,
       settings_pending: `还没有配置。`,
       settings_button_start: `设置初始选项`,
       settings_button_edit: `编辑初始选项`,
@@ -100,6 +97,47 @@ export default {
       settings_system_prompt_label: `默认系统提示词`,
       settings_system_prompt_description: `选择回复的基础指令。`,
       settings_system_prompt_placeholder: `选择一个默认系统提示词...`,
+      settings_features_label: `可选功能`,
+      settings_features_description: `取消勾选你不想要的功能。你之后随时可以在 /config 中修改。`,
+      settings_features_invalid: `这些功能选择无效。请重新打开初始设置并重试。`,
+      settings_features: {
+        expressions: {
+          label: `使用表情表达`,
+          description: `在回复中使用表情符号，向消息添加表情反应，以及发送服务器贴纸。`,
+        },
+        playful_interactions: {
+          label: `趣味互动`,
+          description: `让人格通过可见的拥抱、轻咬、敲头和投喂食物来表达情感。`,
+        },
+        danbooru: {
+          label: `Danbooru 工具`,
+          description: `查询动漫角色标签并分享来自 Danbooru 的插画。`,
+        },
+        natural_nudges: {
+          label: `Natural Nudges`,
+          description: `让人格无需被提及即可主动发起对话或加入正在进行的聊天。`,
+        },
+        dice_rolls: {
+          label: `掷骰子`,
+          description: `让人格在聊天中掷骰子，用于游戏、检定和随机决定。`,
+        },
+        self_message_management: {
+          label: `管理自身消息与子区`,
+          description: `编辑/删除 bot 或人格的消息，置顶近期消息，以及创建公开子区。`,
+        },
+        user_blocking: {
+          label: `人格屏蔽用户`,
+          description: `让人格暂时忽略特定用户或从其自身上下文中隐藏对方的消息。`,
+        },
+        user_info_updates: {
+          label: `自动更新用户信息`,
+          description: `根据对话内容自动更新已保存的昵称、人称代词和时区。`,
+        },
+        short_term_memory: {
+          label: `自动总结短期记忆`,
+          description: `自动总结近期对话以保持短期记忆最新。`,
+        },
+      },
       settings_built_in_prompt: `内置默认（推荐）`,
       settings_built_in_prompt_description: `回复简短，主动使用记忆和工具。`,
       settings_built_in_prompt_summary: `内置默认`,
@@ -114,6 +152,7 @@ export default {
       settings_summary_reply_style: `回复风格：{style}`,
       settings_summary_timezone: `时区：{tz}`,
       settings_summary_system_prompt: `系统提示词：{prompt}`,
+      settings_summary_features: `可选功能：已启用 {enabled}/{total} 项`,
       finish_label: `完成设置`,
       cancel_label: `取消`,
       cancelled_title: `设置已取消`,
@@ -149,7 +188,7 @@ export default {
 - 用 \`/config\` 调整我的行为和能力。
 - 用 \`/memories\` 教我关于你的事。`,
       receipt_learn_more:
-        "阅读[官方 Wiki](https://docs.tomoribot.app/zh-CN/features/)，或打开 {help} （然后选功能），了解更多我能做的事。\n- [多个人格](https://docs.tomoribot.app/zh-CN/features/chatting-personality/multiple-personas/) = 外观、声音和触发设置\n- [聊天与触发](https://docs.tomoribot.app/zh-CN/features/chatting-personality/chatting-and-triggers/) = 我何时以及如何加入\n- [记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/) = 人物、事实和上下文\n- [个性化](https://docs.tomoribot.app/zh-CN/features/knowledge/personalization/) = 你希望被如何对待\n- [媒体生成](https://docs.tomoribot.app/zh-CN/features/capabilities/media-generation/) = 图像、视频和语音\n- [工具与扩展](https://docs.tomoribot.app/zh-CN/features/capabilities/tools-and-extensions/) = 网络搜索和自定义工具",
+        "阅读[官方 Wiki](https://docs.tomoribot.app/zh-CN/features/)，或打开 {help} （然后选功能），了解更多我能做的事。\n- [多个人格](https://docs.tomoribot.app/zh-CN/features/chatting-personality/multiple-personas/) = 外观、声音和触发设置\n- [聊天与触发](https://docs.tomoribot.app/zh-CN/features/chatting-personality/chatting-and-triggers/) = 我何时以及如何加入\n- [记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/) = 人物、事实和上下文\n- [个性化](https://docs.tomoribot.app/zh-CN/features/knowledge/personalization/) = 你希望被如何对待\n- [媒体生成](https://docs.tomoribot.app/zh-CN/features/capabilities/media-generation/image-generation/) = 图像、视频和语音\n- [工具与扩展](https://docs.tomoribot.app/zh-CN/features/capabilities/tools-and-extensions/built-in-tools/) = 网络搜索和自定义工具",
       permission_denied: `你需要有管理服务器权限才能进行设置。`,
       env_mismatch: `环境配置已变更。请重新开始设置。`,
       forbidden: `这次设置会话属于其他用户或频道。`,

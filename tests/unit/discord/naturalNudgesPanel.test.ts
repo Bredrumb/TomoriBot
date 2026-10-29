@@ -1,22 +1,39 @@
-import { beforeAll, describe, expect, it, spyOn } from "bun:test";
+import { beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import {
   IDLE_NUDGE_FREQUENCY_LEVELS,
+  NATURAL_NUDGE_CATEGORIES,
+  DEFAULT_IDLE_NUDGE_CATEGORY_WEIGHTS,
+  NUDGE_HEAT_OFFSET_MAX,
   PERSONA_AUTHORED_IDLE_NUDGE_LIMIT,
   defaultServerNaturalNudgeConfig,
   type PersonaNaturalNudgeConfig,
 } from "@/modules/natural-nudges/db/types";
-import type { NaturalNudgesSettingsView } from "@/modules/natural-nudges/discord/operations";
+import {
+  naturalNudgePanelDependencies,
+  type NaturalNudgesSettingsView,
+} from "@/modules/natural-nudges/discord/operations";
 import {
   buildNaturalNudgesSettingsBody,
+  buildNudgeWeightsModal,
   buildPersonaNudgesBody,
   NUDGE_CLEAR_MODEL_VALUE,
   NUDGE_DECISION_PROVIDER_PREFIX,
 } from "@/modules/natural-nudges/discord/panel";
-import { buildConfigRouteId } from "@/utils/discord/configPanelCatalog";
-import { collectTextDisplays } from "../../helpers/panelLimits";
+import { buildConfigRouteId, type ConfigPanelRoute } from "@/utils/discord/configPanelCatalog";
+import { collectTextDisplays, expectSafePanelPayload } from "../../helpers/panelLimits";
 import { createPersona } from "../../helpers/fixtures";
-import { expectForEveryLocale, localizedCopy } from "../../helpers/localeCases";
+import { expectForEveryLocale, localizedCopy, localizedProse } from "../../helpers/localeCases";
 import { initializeLocalizer, localizer, hasLocaleKey } from "@/utils/text/localizer";
+import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
+import { idleNudgesPerDay } from "@/modules/natural-nudges/runtime/meters";
+import { validateRawModalLimits } from "@/utils/discord/ui/componentsV2Limits";
+import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
+import { createConfigInteractionRoute } from "@/utils/discord/interactions/configRoutes";
+import { InteractionRouteRegistry, type GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
+import type { ConfigScope } from "@/utils/discord/interactions/configRouteContext";
+import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
+import type { Client } from "discord.js";
+import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
 import * as localizerModule from "@/utils/text/localizer";
 
 const LOCALE = "en-US";
@@ -96,9 +113,10 @@ function makeView(overrides: Partial<NaturalNudgesSettingsView> = {}): NaturalNu
       { provider: "openrouter", models: [{ id: 3, name: "typesafe/jev-1.13", description: null }] },
     ],
     trackingEnabled: true,
-    heat: 120,
-    perDay: 2,
-    activeNudgeRange: { min: 40, max: 80 },
+    baseHeat: 15,
+    heat: 15,
+    perDay: 1,
+    activeNudgeRange: { min: 15, max: 40 },
     status: {
       effectiveChannelIds: [CHANNEL_ID],
       plannerModel: { kind: "ready", slot: "text", llmId: 7, source: "chat" },
@@ -109,7 +127,6 @@ function makeView(overrides: Partial<NaturalNudgesSettingsView> = {}): NaturalNu
   };
 }
 
-/** The Idle Nudges section always ends with a pointer to /nudge-studio, so model footnotes are the other `-#` lines. */
 const isModelFootnote = (component: Observed): boolean =>
   Boolean(component.content?.startsWith("-# ")) && !component.content?.includes("/nudge-studio");
 
@@ -314,10 +331,10 @@ describe("Persona authored idle nudges panel", () => {
 });
 
 describe("Natural Nudges settings panel", () => {
-  it("orders the shared channel section, both modes, and the model last", () => {
+  it("orders channels and both modes before model selection, then advanced settings", () => {
     const body = buildNaturalNudgesSettingsBody(LOCALE, makeView(), false, false);
     const seen = walk(body);
-    const headingAt = (key: string) => seen.findIndex((component) => component.content?.startsWith(`### ${t(key)}`));
+    const headingAt = (key: string) => seen.findIndex((component) => component.content?.includes(`### ${t(key)}`));
 
     const order = [
       seen.findIndex((component) => component.content?.startsWith(`## ${t("commands.config.natural_nudges.title")}`)),
@@ -328,11 +345,13 @@ describe("Natural Nudges settings panel", () => {
       headingAt("commands.config.natural_nudges.active_nudges_title"),
       seen.findIndex((component) => component.customId === ROUTE_IDS.activeFrequency),
       seen.findIndex((component) => component.content === modelSectionText()),
+      seen.findIndex((component) => component.customId === ROUTE_IDS.provider),
+      seen.findIndex((component) => component.customId === ROUTE_IDS.checker),
+      seen.findIndex((component) => component.content?.startsWith(`## ${t("commands.nudge-studio.title_advanced")}`)),
     ];
 
     expect(order.every((index) => index >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((left, right) => left - right));
-    expect(seen.findIndex((component) => component.customId === ROUTE_IDS.provider)).toBeGreaterThan(order[7]);
   });
 
   it("labels both frequency selects through the same key", () => {
@@ -413,8 +432,8 @@ describe("Natural Nudges settings panel", () => {
       }),
     );
     expect(
-      walk(pinnedBody).some(
-        (component) => component.content === `-# ${t("commands.config.natural_nudges.checker_pinned_unavailable")}`,
+      walk(pinnedBody).some((component) =>
+        component.content?.includes(`-# 🔴 ${t("commands.config.natural_nudges.checker_pinned_unavailable")}`),
       ),
     ).toBe(true);
   });
@@ -433,17 +452,257 @@ describe("Natural Nudges settings panel", () => {
       false,
       false,
     );
-    expect(walk(unusableDefault).filter(isModelFootnote)).toEqual([
-      expect.objectContaining({
-        content: `-# ${t("commands.config.natural_nudges.model_chat_no_structured", { model: CHAT_MODEL_LABEL })}`,
-      }),
-    ]);
-
+    const footnotes = (body: unknown) => {
+      const content =
+        collectTextDisplays(body)
+          .join("\n")
+          .split(`## ${t("commands.nudge-studio.title_advanced")}`)[0] ?? "";
+      return content
+        .slice(content.indexOf(`## ${t("commands.config.natural_nudges.model_title")}`))
+        .split("\n")
+        .filter((line) => line.startsWith("-# "));
+    };
+    expect(footnotes(unusableDefault)).toHaveLength(1);
+    expect(footnotes(unusableDefault)[0]).toContain(
+      t("commands.config.natural_nudges.model_chat_no_structured", { model: CHAT_MODEL_LABEL }),
+    );
     const noStructuredModels = buildNaturalNudgesSettingsBody(LOCALE, makeView({ plannerModels: [] }), false, false);
-    const noStructuredSeen = walk(noStructuredModels);
-    expect(noStructuredSeen.some((component) => component.customId === ROUTE_IDS.provider)).toBe(false);
-    expect(noStructuredSeen.filter(isModelFootnote)).toEqual([
-      expect.objectContaining({ content: `-# ${t("commands.config.natural_nudges.model_none_available")}` }),
-    ]);
+    expect(walk(noStructuredModels).some((component) => component.customId === ROUTE_IDS.provider)).toBe(false);
+    expect(footnotes(noStructuredModels)).toHaveLength(1);
+    expect(footnotes(noStructuredModels)[0]).toContain(t("commands.config.natural_nudges.model_none_available"));
   });
+});
+
+it("prefills four weight inputs with saved values and describes their own defaults in every locale", () => {
+  expectForEveryLocale((locale) => {
+    const weights = { ping_user: 10, revive_topic: 20, start_topic: 30, play_scene: 40 };
+    const modal = buildNudgeWeightsModal(locale, "nonce1234567", weights);
+    expect(validateRawModalLimits(modal).violations).toEqual([]);
+    expect(modal.components).toHaveLength(NATURAL_NUDGE_CATEGORIES.length);
+    for (const [index, category] of NATURAL_NUDGE_CATEGORIES.entries()) {
+      expect(modal.components[index]?.component?.value).toBe(String(weights[category]));
+      expect(modal.components[index]?.description).toBe(
+        localizedCopy(locale, "commands.nudge-studio.weights_default", {
+          default: DEFAULT_IDLE_NUDGE_CATEGORY_WEIGHTS[category],
+        }),
+      );
+    }
+  });
+});
+
+it("rejects invalid weights before writing and saves a valid total together", async () => {
+  const save = spyOn(naturalNudgeRepository, "saveServerConfig").mockResolvedValue(true);
+  const submit = naturalNudgePanelDependencies.operations.setCategoryWeights;
+  const valid = { ping_user: "30", revive_topic: "25", start_topic: "30", play_scene: "15" };
+  try {
+    for (const value of ["", "0", "-1", "101", "Infinity", "NaN", "2.5", "1e1", "25x", "29", "31"]) {
+      expect(await submit(1, { ...valid, ping_user: value })).toBe("invalid");
+    }
+    expect(save).not.toHaveBeenCalled();
+    expect(await submit(1, valid)).toBe("success");
+    expect(save).toHaveBeenCalledWith(1, { category_weights: DEFAULT_IDLE_NUDGE_CATEGORY_WEIGHTS });
+    save.mockResolvedValue(false);
+    expect(await submit(1, valid)).toBe("write-failed");
+  } finally {
+    save.mockRestore();
+  }
+});
+
+it("shows one pace estimate per mode below the bold heat summary and puts heat buttons underneath", () => {
+  expectForEveryLocale((locale) => {
+    for (const sample of [
+      { heat: 15, idle: 1, active: 1, weekly: 4.2, idleCap: 2, min: 15, max: 40, checkCap: 20, activeCap: 3 },
+      { heat: 15, idle: 3, active: 0, weekly: 13.1, idleCap: 6, min: 30, max: 80, checkCap: 10, activeCap: 1 },
+      { heat: 50, idle: 1, active: 1, weekly: 14, idleCap: 2, min: 8, max: 20, checkCap: 20, activeCap: 3 },
+      { heat: 50, idle: 0, active: 1, weekly: 2, idleCap: 1, min: 8, max: 20, checkCap: 20, activeCap: 3 },
+    ] as const) {
+      const view = makeView({
+        baseHeat: sample.heat,
+        heat: sample.heat,
+        perDay: idleNudgesPerDay(sample.heat, sample.idle),
+        activeNudgeRange: { min: sample.min, max: sample.max },
+      });
+      view.config.idle_nudge_frequency = sample.idle;
+      view.config.active_nudge_frequency = sample.active;
+      const payload = buildConfigPanelPayload({
+        locale,
+        actor: { workspaceKind: "guild", isManager: true },
+        category: "plugins",
+        page: "natural-nudges",
+        personas: [createPersona()],
+        selectedPersonaId: null,
+        readStatus: "fresh",
+        naturalNudges: { settings: view },
+        receipt: {
+          tone: "success",
+          heading: localizedCopy("en-US", "commands.config.natural_nudges.saved_heading"),
+          detail: localizedCopy("en-US", "commands.config.natural_nudges.saved_detail"),
+        },
+      });
+      expectSafePanelPayload(payload, `${locale}:${sample.heat}:${sample.idle}:${sample.active}`);
+      const texts = collectTextDisplays(payload).join("\n");
+      const format = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
+      const summary = localizedCopy(locale, "commands.nudge-studio.heat_values", {
+        effective: format.format(sample.heat),
+        max: 50,
+      });
+      expect(texts).toMatch(
+        localizedProse(locale, "commands.nudge-studio.heat_values", {
+          effective: format.format(sample.heat),
+          max: 50,
+        }),
+      );
+      const idleEffect = localizedCopy(locale, "commands.nudge-studio.idle_pace_estimate", {
+        per_week: format.format(sample.weekly),
+        daily_cap: sample.idleCap,
+      });
+      const activeEffect = localizedCopy(locale, "commands.nudge-studio.active_pace_estimate", {
+        min: sample.min,
+        max: sample.max,
+        check_cap: sample.checkCap,
+        daily_cap: sample.activeCap,
+      });
+      const rows = texts.split("\n").filter((line) => line.startsWith("> - **"));
+      expect(rows).toHaveLength(2);
+      expect(texts).toMatch(
+        localizedProse(locale, "commands.nudge-studio.idle_pace", {
+          frequency: localizedCopy(locale, FREQUENCY_KEYS[sample.idle]),
+          effect: idleEffect,
+        }),
+      );
+      expect(texts).toMatch(
+        localizedProse(locale, "commands.nudge-studio.active_pace", {
+          frequency: localizedCopy(locale, FREQUENCY_KEYS[sample.active]),
+          effect: activeEffect,
+        }),
+      );
+      const body = buildNaturalNudgesSettingsBody(locale, view, false, false);
+      const items = walk(body);
+      const summaryIndex = items.findIndex((item) => item.content?.includes(summary));
+      const increaseIndex = items.findIndex(
+        (item) => item.customId === buildConfigRouteId({ action: "nudge-heat-adjust", locale, direction: "up" }),
+      );
+      expect(summaryIndex).toBeGreaterThanOrEqual(0);
+      expect(increaseIndex).toBeGreaterThan(summaryIndex);
+      expect(items[summaryIndex]?.content).toMatch(/\n\*\*[^\n]+\*\*\n-# [^\n]+\n> - \*\*/u);
+    }
+  });
+});
+
+it("keeps heat controls disabled for readers and at their effective or saved boundaries", () => {
+  for (const disabled of [false, true]) {
+    for (const [baseHeat, heat, offset] of [
+      [0, 0, 0],
+      [50, 50, 0],
+      [10, 50, NUDGE_HEAT_OFFSET_MAX],
+      [10, 0, -NUDGE_HEAT_OFFSET_MAX],
+    ]) {
+      const view = makeView({ baseHeat, heat });
+      view.config.heat_offset = offset;
+      const observed = JSON.parse(
+        JSON.stringify(buildNaturalNudgesSettingsBody(LOCALE, view, false, disabled)),
+      ) as Array<{ components?: Array<{ customId?: string; disabled?: boolean }> }>;
+      const buttons = observed.flatMap((item) => item.components ?? []);
+      for (const direction of ["up", "down"] as const) {
+        expect(
+          buttons.find(
+            (button) =>
+              button.customId === buildConfigRouteId({ action: "nudge-heat-adjust", locale: LOCALE, direction }),
+          )?.disabled,
+        ).toBe(
+          disabled ||
+            (direction === "up"
+              ? heat >= 50 || offset >= NUDGE_HEAT_OFFSET_MAX
+              : heat <= 0 || offset <= -NUDGE_HEAT_OFFSET_MAX),
+        );
+      }
+    }
+  }
+});
+
+it("opens the weight modal before deferring and repaints the config page after validated writes", async () => {
+  const nonce = "nonce1234567";
+  const persona = createPersona({ server_id: 1 });
+  const scope: ConfigScope = {
+    serverDiscId: "guild-1",
+    guildId: "guild-1",
+    internalServerId: 1,
+    userId: 1,
+    actor: { workspaceKind: "guild", isManager: true },
+    personas: [persona],
+    readStatus: "fresh",
+  };
+  const save = spyOn(naturalNudgeRepository, "saveServerConfig").mockResolvedValue(true);
+  const heat = spyOn(naturalNudgeRepository, "adjustHeat").mockResolvedValue(true);
+  const recordAction = mock(() => undefined);
+  const registry = new InteractionRouteRegistry([
+    createConfigInteractionRoute({
+      resolveScope: async () => scope,
+      getPersonaAvatarData: async () => ({ url: null, files: [] }),
+      naturalNudges: {
+        ...naturalNudgePanelDependencies,
+        loadServerConfig: async () => defaultServerNaturalNudgeConfig(1),
+        loadSettings: async () => makeView(),
+      },
+      recordAction,
+      createNonce: () => nonce,
+      showModal: async (interaction, payload) => {
+        await (interaction as unknown as RouteInteraction).showModal(payload);
+      },
+    }),
+  ]);
+  const dispatch = async (route: ConfigPanelRoute, kind: "button" | "modal", fields?: Record<string, string>) => {
+    const interaction = createRouteInteraction({
+      customId: buildConfigRouteId(route),
+      kind,
+      fields,
+      isManager: scope.actor.isManager,
+    });
+    await registry.dispatch({} as Client, interaction as unknown as GlobalRoutableInteraction);
+    return interaction;
+  };
+  try {
+    const opened = await dispatch({ action: "nudge-weights-open", locale: LOCALE }, "button");
+    expect(opened.calls.map((call) => call.method)).toEqual(["showModal"]);
+    const fields = Object.fromEntries(
+      NATURAL_NUDGE_CATEGORIES.map((category) => [
+        buildConfigModalFieldId(category, nonce),
+        String(DEFAULT_IDLE_NUDGE_CATEGORY_WEIGHTS[category]),
+      ]),
+    );
+    const route = { action: "nudge-weights-submit", locale: LOCALE, nonce } as const;
+    const invalid = await dispatch(route, "modal", { ...fields, [buildConfigModalFieldId("ping_user", nonce)]: "0" });
+    expect(save).not.toHaveBeenCalled();
+    expect(recordAction).not.toHaveBeenCalled();
+    expect(collectTextDisplays(invalid.edits).join("\n")).toMatch(
+      localizedProse(LOCALE, "commands.nudge-studio.weights_invalid"),
+    );
+    const saved = await dispatch(route, "modal", fields);
+    expect(saved.calls[0]?.method).toBe("deferUpdate");
+    expect(save).toHaveBeenCalledWith(1, { category_weights: DEFAULT_IDLE_NUDGE_CATEGORY_WEIGHTS });
+    expect(recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "server-config.workspace.natural-nudge-weights.set", serverId: 1 }),
+    );
+    expectSafePanelPayload(saved.edits[0] as Parameters<typeof expectSafePanelPayload>[0], "saved weights");
+    const adjusted = await dispatch({ action: "nudge-heat-adjust", locale: LOCALE, direction: "up" }, "button");
+    expect(adjusted.calls[0]?.method).toBe("deferUpdate");
+    expect(heat).toHaveBeenCalledWith(1, "up");
+    expect(recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "server-config.workspace.natural-nudge-heat.set", serverId: 1 }),
+    );
+    scope.actor = { workspaceKind: "guild", isManager: false };
+    const denied = await dispatch({ action: "nudge-weights-open", locale: LOCALE }, "button");
+    expect(denied.calls.some((call) => call.method === "showModal")).toBe(false);
+  } finally {
+    save.mockRestore();
+    heat.mockRestore();
+  }
+});
+
+it("does not estimate nudges when an adjustment masks insufficient measured activity", () => {
+  const view = makeView({ baseHeat: 0.5, heat: 5.5 });
+  view.config.heat_offset = 5;
+  const contents = collectTextDisplays(buildNaturalNudgesSettingsBody(LOCALE, view, false, false)).join("\n");
+  expect(contents).toMatch(localizedProse(LOCALE, "commands.config.natural_nudges.frequency_effect_none"));
+  expect(contents).toMatch(localizedProse(LOCALE, "commands.config.natural_nudges.active_nudges_on_cold"));
 });

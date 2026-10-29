@@ -16,8 +16,6 @@ export default {
     channel_access_warning_field: "このチャンネルではまだ会話できません",
     channel_access_warning_value:
       "設定は完了しましたが、私のロールはこのチャンネルを表示できないか、メッセージを送信できないため、ここでは応答しません。このチャンネルまたはカテゴリーの権限設定で、私のロールに**チャンネルを見る**、**メッセージを送信**、**メッセージ履歴を読む**を許可してください。",
-    novelai_expressions_warning_field: `表現機能の無効化`,
-    novelai_expressions_warning_value: `NovelAIのコンテキストを安定させるため、絵文字とスタンプの使用が自動的に無効化されました。\`/config\` > プラグイン でいつでも再有効化できます。`,
     zai_tos_warning_field: `Z.ai利用規約について`,
     zai_tos_warning_value: `Z.aiの利用規約が更新され、コーディング/エージェントのユースケースのみが許可されるようになりました。Z.aiを一般チャットに使用する場合は自己責任となり、規約に違反する可能性があります。`,
     byok_bootstrap_field: `ユーザーBYOK`,
@@ -81,7 +79,7 @@ export default {
       provider_option_byok: `ユーザーBYOK`,
       provider_option_byok_description: `各メンバーが/personal providersから各自のAPIキーやエンドポイントを設定します。`,
       settings_name: `初期設定`,
-      settings_description: `初期ペルソナと返信スタイルを選択してください。`,
+      settings_description: `初期ペルソナ、返信スタイル、追加機能を選択してください。`,
       settings_pending: `まだ設定されていません。`,
       settings_button_start: `初期設定を行う`,
       settings_button_edit: `初期設定を編集する`,
@@ -98,6 +96,47 @@ export default {
       settings_system_prompt_label: `デフォルトのシステムプロンプト`,
       settings_system_prompt_description: `返信の基本方針となるシステムプロンプトを選択してください。`,
       settings_system_prompt_placeholder: `デフォルトのシステムプロンプトを選択...`,
+      settings_features_label: `追加機能`,
+      settings_features_description: `使用しない機能のチェックを外してください。これらは後から /config で変更できます。`,
+      settings_features_invalid: `機能の選択内容が無効です。初期設定をもう一度開いてやり直してください。`,
+      settings_features: {
+        expressions: {
+          label: `表現機能を使用`,
+          description: `返答での絵文字の使用、メッセージへの絵文字リアクション、サーバースタンプの送信を行います。`,
+        },
+        playful_interactions: {
+          label: `ふれあい機能`,
+          description: `ハグ、甘噛み、コツン、食べ物を差し出すなどのスキンシップを通じて感情を表現します。`,
+        },
+        danbooru: {
+          label: `Danbooruツール`,
+          description: `アニメキャラクターのタグを検索し、Danbooruのイラストを共有します。`,
+        },
+        natural_nudges: {
+          label: `Natural Nudges`,
+          description: `メンションされなくても、ペルソナが自発的に会話を始めたり、進行中のチャットに参加したりします。`,
+        },
+        dice_rolls: {
+          label: `ダイスロール`,
+          description: `ゲーム、判定、ランダムな決定のために、ペルソナがチャットでダイスを振れるようにします。`,
+        },
+        self_message_management: {
+          label: `自身のメッセージとスレッドの管理`,
+          description: `ボットやペルソナのメッセージの編集・削除、最近のメッセージのピン留め、公開スレッドの作成を行います。`,
+        },
+        user_blocking: {
+          label: `ペルソナによるユーザーブロック`,
+          description: `ペルソナが特定のユーザーを一時的に無視したり、自身のコンテキストからそのメッセージを隠したりできるようにします。`,
+        },
+        user_info_updates: {
+          label: `ユーザー情報の自動更新`,
+          description: `会話に基づいて、保存されているニックネーム、代名詞、タイムゾーンを自動で更新します。`,
+        },
+        short_term_memory: {
+          label: `短期記憶の自動要約`,
+          description: `最近の会話を自動的に要約し、短期記憶を最新の状態に維持します。`,
+        },
+      },
       settings_built_in_prompt: `組み込みデフォルト（推奨）`,
       settings_built_in_prompt_description: `簡潔な返信を基本に、必要に応じて記憶とツールを活用する標準設定。`,
       settings_built_in_prompt_summary: `組み込みデフォルト`,
@@ -112,6 +151,7 @@ export default {
       settings_summary_reply_style: `返信スタイル: {style}`,
       settings_summary_timezone: `タイムゾーン: {tz}`,
       settings_summary_system_prompt: `システムプロンプト: {prompt}`,
+      settings_summary_features: `追加機能：{total}個中{enabled}個が有効`,
       finish_label: `セットアップを完了`,
       cancel_label: `キャンセル`,
       cancelled_title: `セットアップをキャンセルしました`,
@@ -149,7 +189,7 @@ export default {
 - \`/config\` で私の振る舞いやできることを調整できます。
 - \`/memories\` であなたについて教えてください。`,
       receipt_learn_more:
-        "詳しくは[公式Wiki](https://docs.tomoribot.app/ja/features/)を読むか、{help} （「機能」）を開いてください。\n- [複数ペルソナ](https://docs.tomoribot.app/ja/features/chatting-personality/multiple-personas/) = 見た目、声、トリガー\n- [チャットとトリガー](https://docs.tomoribot.app/ja/features/chatting-personality/chatting-and-triggers/) = いつどのように会話に参加するか\n- [記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/) = 人物、事実、文脈\n- [パーソナライズ](https://docs.tomoribot.app/ja/features/knowledge/personalization/) = あなたへの接し方の好み\n- [メディア生成](https://docs.tomoribot.app/ja/features/capabilities/media-generation/) = 画像、動画、音声\n- [ツールと拡張機能](https://docs.tomoribot.app/ja/features/capabilities/tools-and-extensions/) = Web検索とカスタムツール",
+        "詳しくは[公式Wiki](https://docs.tomoribot.app/ja/features/)を読むか、{help} （「機能」）を開いてください。\n- [複数ペルソナ](https://docs.tomoribot.app/ja/features/chatting-personality/multiple-personas/) = 見た目、声、トリガー\n- [チャットとトリガー](https://docs.tomoribot.app/ja/features/chatting-personality/chatting-and-triggers/) = いつどのように会話に参加するか\n- [記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/) = 人物、事実、文脈\n- [パーソナライズ](https://docs.tomoribot.app/ja/features/knowledge/personalization/) = あなたへの接し方の好み\n- [メディア生成](https://docs.tomoribot.app/ja/features/capabilities/media-generation/image-generation/) = 画像、動画、音声\n- [ツールと拡張機能](https://docs.tomoribot.app/ja/features/capabilities/tools-and-extensions/built-in-tools/) = Web検索とカスタムツール",
       permission_denied: `セットアップを行うには「サーバー管理」権限が必要です。`,
       env_mismatch: `環境設定が変更されました。セットアップをやり直してください。`,
       forbidden: `このセットアップセッションは別のユーザーまたはチャンネルのものです。`,

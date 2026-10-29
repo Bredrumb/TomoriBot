@@ -8,24 +8,31 @@ import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { resolveProviderErrorFooter } from "@/utils/discord/stream/errorUi";
 import { hasThoughtLogContent, sendAttributionOnlyEmbed, sendThoughtLogEmbed } from "@/utils/discord/thoughtLog";
 import { ColorCode, log } from "@/utils/misc/logger";
+import { getLlmDisplayName } from "@/utils/provider/modelDisplay";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
-import { incrementTextQuota } from "@/utils/quota/textQuotaManager";
+import { releaseTextQuotaForTrigger, textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { localizer } from "@/utils/text/localizer";
 import { normalizeCustomEmojisForLlm } from "@/utils/text/processors/mentionProcessor";
 import { MAX_EMPTY_RESPONSE_RETRIES } from "@/utils/discord/stream/constants";
-import { suppressNextSelfReply } from "@/utils/chat/channelQueue";
+import { channelLocks, queuePersonaJobsAtFront, suppressNextSelfReply } from "@/utils/chat/channelQueue";
+import { getMatchLimit } from "@/utils/chat/personaQueue";
+import { getTriggerFirstMatchIndexInContent } from "@/utils/chat/triggerProcessor";
 import {
   buildSpeakerGuardRetryDirective,
   mergeInjectedContextItems,
   stripInjectedContextAnnotations,
 } from "@/utils/chat/contextAnnotations";
-import { getSelfReplyChainState, setLastRespondedPersona } from "@/utils/chat/selfReplyState";
-import { textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
+import {
+  getSelfReplyChainState,
+  setLastRespondedPersona,
+  updateSelfReplyChainState,
+} from "@/utils/chat/selfReplyState";
 import { statRepository } from "@/utils/db/repositories";
 import { charsToTokensText, estimateContextItemsTokens, sumTurnUsage } from "@/utils/text/tokenEstimate";
 import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import type { TurnUsageEntry } from "@/utils/chat/responseReview";
 import { recordReunionPresence } from "@/utils/chat/reunionPresence";
+import { invalidateInactiveNaturalNudgeGates } from "@/modules/natural-nudges/runtime/configCache";
 import { discordPresenceRetention } from "@/utils/cache/discordPresenceRetention";
 
 /**
@@ -49,8 +56,9 @@ export async function runPostTurnEffects(context: ChatTurnContext, result: Gener
     discordPresenceRetention.retain(context.serverDiscId, context.userDiscId);
   }
   await maybeScheduleEmptyResponseRetry(context, result);
-  await consumeTextQuota(context, result);
+  await settleTextQuota(context, result);
   updateSelfReplyBookkeeping(context, result);
+  queueNaturalNudgeReplies(context, result);
   await writeShortTermMemory(context, result);
   await emitThoughtLog(context, result);
   scheduleBoomerangFollowUp(context);
@@ -158,10 +166,10 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
       metric: "model_used",
       metricKey: modelCodename,
     });
-    // A nudge borrows the latest channel message as its trigger, so counting it would let each nudge
-    // raise heat and pull the learned waking hours toward its own fire times.
-    const isNaturalNudge = context.turn.lockedTurn.admission.incoming.naturalNudge !== undefined;
-    if (!isNaturalNudge) {
+    // Generated nudges and persona reactions must not sustain their own heat or learned waking hours.
+    const incoming = context.turn.lockedTurn.admission.incoming;
+    const recordsEngagement = !incoming.naturalNudge && incoming.conditioningInteraction?.actorType !== "persona";
+    if (recordsEngagement) {
       statRepository.recordStat({
         serverId,
         userId,
@@ -172,7 +180,7 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     }
     // Automatic Natural Nudges channels come from human-triggered turns, so a random trigger cannot
     // keep its own channel eligible.
-    if (!isNaturalNudge && !context.turn.lockedTurn.admission.incoming.borrowsTriggerMessage) {
+    if (recordsEngagement && !incoming.borrowsTriggerMessage) {
       statRepository.recordStat({
         serverId,
         userId,
@@ -193,9 +201,15 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
       //     only as the fallback when the provider reported no real usage (5).
       if (response.text) estimatedOutputTokens += charsToTokensText(response.text.length);
     }
-    if (!isNaturalNudge) {
+    if (recordsEngagement) {
       for (const lineageId of lineages) {
-        statRepository.recordStat({ serverId, userId, lineageId, metric: "message_sent" });
+        statRepository.recordStat({
+          serverId,
+          userId,
+          lineageId,
+          metric: "message_sent",
+          metricKey: incoming.conditioningInteraction?.type,
+        });
       }
     }
 
@@ -314,6 +328,10 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
         delta: count,
       });
     }
+    // An in-flight flush can predate this turn's stats, so the following snapshot must finish before eligibility refreshes.
+    if (incoming.isDirectChat && (await statRepository.flush()) && (await statRepository.flush())) {
+      invalidateInactiveNaturalNudgeGates(serverId);
+    }
   } catch (error) {
     log.warn("Failed to record usage stats for turn", error);
   }
@@ -417,6 +435,7 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     message: context.message,
     isFromQueue: context.isFromQueue,
     isManuallyTriggered: true,
+    isDirectChat: incoming.isDirectChat,
     forceReason: incoming.forceReason,
     reasoningQuery: incoming.reasoningQuery,
     llmOverrideCodename: incoming.llmOverrideCodename,
@@ -444,6 +463,7 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     manualStreamingContextOverrides: incoming.manualStreamingContextOverrides,
     sceneTurn: incoming.sceneTurn,
     naturalNudge: incoming.naturalNudge,
+    conditioningInteraction: incoming.conditioningInteraction,
     borrowsTriggerMessage: incoming.borrowsTriggerMessage,
     carriedExpressionDelivery: context.currentPersona.persona_id
       ? { personaId: context.currentPersona.persona_id, state: context.expressionDelivery }
@@ -462,27 +482,36 @@ export function isDeliveredTurnResult(result: GenerationTurnResult): boolean {
   return result.status === "completed" && (result.personaResponses.length > 0 || result.toolResponseDelivered === true);
 }
 
-async function consumeTextQuota(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
+async function settleTextQuota(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
   if (
-    !context.shouldApplyTextQuota ||
-    !context.textQuotaState ||
-    context.textQuotaState.consumed ||
-    result.personaResponses.length === 0
+    context.shouldApplyTextQuota &&
+    context.textQuotaState &&
+    !context.textQuotaState.consumed &&
+    result.personaResponses.length > 0
   ) {
-    return;
+    context.textQuotaState.consumed = true;
+    context.textQuotaState.reservation = null;
+    context.textQuotaState.reservationReleased = false;
+    textQuotaTriggerStates.set(context.textQuotaTriggerKey, context.textQuotaState);
   }
 
-  await incrementTextQuota(context.textQuotaState.serverId, context.textQuotaState.userDiscId);
-  context.textQuotaState.consumed = true;
-  textQuotaTriggerStates.set(context.textQuotaTriggerKey, context.textQuotaState);
+  const isLastTurn = context.turn.personaIndex + 1 >= context.turn.totalPersonas;
+  // A queued persona job may still spend a unit reserved during planning, so a personal-route turn
+  // releases only as the last turn of a multi-persona plan, which queues no jobs.
+  if (isLastTurn && (context.shouldApplyTextQuota || context.turn.totalPersonas > 1)) {
+    await releaseTextQuotaForTrigger(context.textQuotaTriggerKey);
+  }
 }
 
 function updateSelfReplyBookkeeping(context: ChatTurnContext, result: GenerationTurnResult): void {
+  const incoming = context.turn.lockedTurn.admission.incoming;
+  if (isDeliveredTurnResult(result) && incoming.naturalNudge && !incoming.isPersonaJob && !incoming.sceneTurn) {
+    updateSelfReplyChainState(context.channel.id, false).triggerCount = 1;
+  }
   if (result.personaResponses.length > 0 && context.currentPersona.persona_id) {
     setLastRespondedPersona(context.channel.id, context.currentPersona.persona_id);
   }
 
-  const incoming = context.turn.lockedTurn.admission.incoming;
   if (
     result.personaResponses.length > 0 &&
     (!incoming.isManuallyTriggered || incoming.isPersonaJob) &&
@@ -500,11 +529,63 @@ function updateSelfReplyBookkeeping(context: ChatTurnContext, result: Generation
   }
 }
 
+function queueNaturalNudgeReplies(context: ChatTurnContext, result: GenerationTurnResult): void {
+  const incoming = context.turn.lockedTurn.admission.incoming;
+  if (!incoming.naturalNudge || incoming.sceneTurn || !isDeliveredTurnResult(result)) return;
+  const lockEntry = channelLocks.get(context.channel.id);
+  if (!lockEntry?.isLocked || lockEntry.nudgeInterrupted) return;
+
+  const content = result.streamResults.map((stream) => stream.accumulatedText ?? "").join("\n");
+  const personaJobs = context.allPersonas
+    .flatMap((persona) =>
+      persona.persona_id === undefined ||
+      persona.persona_id === context.currentPersona.persona_id ||
+      lockEntry.messageQueue.some(
+        (job) =>
+          job.naturalNudge &&
+          job.textQuotaTriggerKey === context.textQuotaTriggerKey &&
+          job.selectedPersonaId === persona.persona_id,
+      )
+        ? []
+        : [
+            {
+              personaName: persona.persona_nickname,
+              selectedPersonaId: persona.persona_id,
+              index: Math.min(
+                ...(persona.trigger_words ?? []).map((trigger) =>
+                  getTriggerFirstMatchIndexInContent(content, trigger, true),
+                ),
+              ),
+            },
+          ],
+    )
+    .filter((match) => Number.isFinite(match.index))
+    .sort((a, b) => a.index - b.index)
+    .slice(0, getMatchLimit(context.tomoriState))
+    .map(({ personaName, selectedPersonaId }) => ({ personaName, selectedPersonaId }));
+  if (personaJobs.length === 0) return;
+
+  queuePersonaJobsAtFront({
+    lockEntry,
+    message: context.message,
+    personaJobs,
+    triggeredPersonaIds: personaJobs.map((job) => job.selectedPersonaId),
+    textQuotaSource: "system",
+    textQuotaTriggerKey: context.textQuotaTriggerKey,
+    textQuotaUserDiscId: incoming.textQuotaUserDiscId ?? context.userDiscId,
+    shouldSurfaceUserErrors: false,
+    naturalNudge: { toolNames: [], targetUserDiscId: incoming.naturalNudge.targetUserDiscId },
+    borrowsTriggerMessage: true,
+    manualSystemPrompt:
+      "Answer the persona who addressed you in the latest conversation; the borrowed channel message is only an anchor, not a new request.",
+  });
+}
+
 async function writeShortTermMemory(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
-  // A nudge answers nobody, so storing it would hand whoever spoke last a short-term memory, which
-  // Ping User counts as a relationship.
+  // Generated nudges and persona reactions cannot establish a human relationship for Ping User.
   if (
     context.turn.lockedTurn.admission.incoming.naturalNudge ||
+    context.turn.lockedTurn.admission.incoming.conditioningInteraction?.actorType === "persona" ||
     context.isStopResponse ||
     context.simplifiedMessages.length === 0 ||
     context.turn.requestSnapshot.triggererPrivacyLevel === PrivacyLevel.FULL ||
@@ -574,13 +655,24 @@ async function emitThoughtLog(context: ChatTurnContext, result: GenerationTurnRe
     return;
   }
 
-  const attributionLine =
-    context.textCredentialSource === "personal" && context.personalTextProvider
+  const personalProvider = context.textCredentialSource === "personal" ? context.personalTextProvider : undefined;
+  // context.tomoriState is the attempt that answered, so this names the model actually used and reads
+  // the randomizer flag of the route (server or personal) that drew it.
+  const { tomoriState } = context;
+  const attributionLines = [
+    personalProvider
       ? localizer(context.locale, "genai.thought_log.personal_attribution", {
           user_mention: `<@${context.userDiscId}>`,
-          provider: getProviderDisplayName(context.personalTextProvider),
+          provider: getProviderDisplayName(personalProvider),
         })
-      : undefined;
+      : undefined,
+    tomoriState.config.model_randomizer_enabled
+      ? localizer(context.locale, "genai.thought_log.randomizer_attribution", {
+          model: getLlmDisplayName(tomoriState.llm, tomoriState.config.custom_model_name),
+        })
+      : undefined,
+  ].filter((line): line is string => Boolean(line));
+  const attributionLine = attributionLines.length > 0 ? attributionLines.join("\n") : undefined;
 
   if (thoughtLog && hasThoughtLogContent(thoughtLog)) {
     thoughtLog.generationDurationMs = Date.now() - context.message.createdTimestamp;
@@ -604,6 +696,12 @@ async function emitThoughtLog(context: ChatTurnContext, result: GenerationTurnRe
       tomoriState: context.tomoriState,
       sourceChannel: context.channel as Parameters<typeof sendAttributionOnlyEmbed>[0]["sourceChannel"],
       thoughtLogChannelId,
+      title: localizer(
+        context.locale,
+        personalProvider
+          ? "genai.thought_log.personal_attribution_title"
+          : "genai.thought_log.randomizer_attribution_title",
+      ),
       attributionLine,
     });
   }

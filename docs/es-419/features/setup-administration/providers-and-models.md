@@ -34,12 +34,12 @@ Cada proveedor tiene sus propios pasos de generación de claves. En `/help`, eli
 | Proveedora | Notas | obtener una clave |
 |---|---|---|
 | Google Géminis | Nivel gratuito, ejecuta todas las funciones. Primera configuración recomendada. | [Estudio de IA](https://aistudio.google.com/apikey) |
-| OpenRouter | Una clave, muchos modelos (algunos gratuitos). | [Teclas OpenRouter](https://openrouter.ai/settings/keys) |
+| OpenRouter | Modelos de pago a través de una sola clave. | [Claves de OpenRouter](https://openrouter.ai/settings/keys) |
 | NovelAI | Suscripción; Narración sin censura y juegos de rol (solo texto). | [NovelAI](https://novelai.net/) |
 | búsqueda profunda | Modelos de razonamiento de pago por uso. | [Búsqueda profunda](https://platform.deepseek.com/api_keys) |
 | NVIDIA NIM | Texto alojado, incrustaciones e imágenes. | [Construcción de NVIDIA](https://build.nvidia.com/) |
 | antrópico | Modelos Claude a través del API (no Claude Code). | [Antrópico](https://console.anthropic.com/) |
-| Z.ai | Familia GLM. ⚠️ ToS restringe el uso a escenarios de codificación y agentes. | [Z.ai](https://z.ai/) |
+| Z.ai | Familia GLM. 🟡 ToS restringe el uso a escenarios de codificación y agentes. | [Z.ai](https://z.ai/) |
 | Vertex AI | Google Cloud a través de `gcloud` ADC (mejor para configuraciones de desarrollo o ejecutadas localmente). | vea abajo |
 | Vertex AI Express | Google Cloud API-key BYOK (Vista previa, subconjunto Gemini). | [Modo exprés](https://console.cloud.google.com/expressmode) |
 | Costumbre | Cualquier punto final compatible con OpenAI (Ollama, vLLM, LiteLLM,…). | consulte [Puntos finales personalizados](#custom-endpoints) |
@@ -54,13 +54,15 @@ La configuración de Google Gemini y Vertex AI valida las credenciales mediante 
 
 ### Opcional: clave de Brave Search
 
-Brave Search es independiente de su proveedor de inteligencia artificial y mejora la búsqueda web con resultados de imágenes, videos y noticias. Configúrelo en `/providers`. ⚠️ Brave incluye $5/mes de crédito gratuito, así que establece un límite de uso de $5 en el panel de Brave para evitar cargos inesperados.
+Brave Search es independiente de su proveedor de inteligencia artificial y mejora la búsqueda web con resultados de imágenes, videos y noticias. Configúrelo en `/providers`. 🟡 Brave incluye $5/mes de crédito gratuito, así que establece un límite de uso de $5 en el panel de Brave para evitar cargos inesperados.
 
 ## Elegir modelos
 
 Utilice `/providers` para administrar credenciales de servidor, catálogos de modelos y registros de terminales. Luego use `/config` > `Modelos` > Modelos de conmutador para seleccionar las asignaciones de capacidad compartida que utiliza cada miembro del servidor. Ambos comandos requieren permisos de administración del servidor.
 
 Los miembros individuales administran sus propias credenciales y catálogos con `/personal providers` y luego seleccionan modelos personales en `/personal config`. La configuración personal los sigue en todos los servidores donde usan TomoriBot. Consulta [Personalización](/es-419/features/knowledge/personalization/#your-own-providers) para la configuración del usuario.
+
+Las nuevas configuraciones de OpenRouter usan DeepSeek Flash Latest para el chat y Gemini 3.1 Flash Lite como alternativa de visión. Ambos consumen créditos de OpenRouter. Reemplazar una clave conserva tu selección de visión, incluyendo `- No Model`.
 
 Los paneles se titulan `Proveedores del servidor` y `Proveedores personales`, por lo que la propiedad queda clara al abrirlos.
 
@@ -136,12 +138,12 @@ Si no tiene el hardware para alojar sus propios modelos, TomoriBot admite una am
 | Proveedora | Transmisión | Llamada de herramientas | Entrada de imagen | Incrustaciones | Notas |
 |---|---|---|---|---|---|
 | Google Géminis | ✅ | ✅ | ✅ | ✅ | Modelos gratuitos disponibles |
-| OpenRouter | ✅ | ✅ | ✅ | ✅ | Modelos gratuitos disponibles |
+| OpenRouter | ✅ | ✅ | ✅ | ✅ | Usa créditos de OpenRouter |
 | Antrópico (API) | ✅ | ✅ | ✅ | - | No código Claude |
 | NovelAI | ✅ | ✅ | - | - | Sólo GLM 4.6 puede utilizar herramientas |
 | NVIDIA NIM | ✅ | ✅ | ✅ | ✅ | Modelos gratuitos disponibles |
 | búsqueda profunda | ✅ | ✅ | - | - | - |
-| Z.ai | ✅ | ✅ | ✅ | - | Modelos gratuitos; ⚠️ ToS = codificación y uso exclusivo del agente |
+| Z.ai | ✅ | ✅ | ✅ | - | Modelos gratuitos; 🟡 ToS = codificación y uso exclusivo del agente |
 | Codificación Z.ai | ✅ | ✅ | - | - | Plan de suscripción |
 | Google Vertex AI | ✅ | ✅ | ✅ | ✅ | Incluye versión Express 'gratuita' |
 | CLI del códice (a través de ChatMock) | ✅ | ✅ | ✅ | - | [Configuración](/es-419/self-hosting/local-endpoints/setup-chatmock/) |

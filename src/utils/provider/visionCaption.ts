@@ -1,3 +1,10 @@
+import {
+  getProviderContentRejectionCode,
+  providerContentRejectionSchema,
+} from "@/utils/provider/providerErrorClassification";
+import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
+import type { ToolFailure } from "@/types/tool/interfaces";
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import {
   createProviderUsageRecorder,
@@ -23,7 +30,7 @@ import {
 
 import { GoogleGenAI, type Part } from "@google/genai";
 import { llmModelRepo } from "@/utils/db/repositories";
-import { log } from "@/utils/misc/logger";
+import { redactLogString } from "@/utils/misc/logger";
 import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import { normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
@@ -95,6 +102,7 @@ export interface VisionCallResult {
   model?: string;
   failure?: { reason: VisionCallFailureReason; detail?: string };
   requestDenied?: ProviderRequestDeniedError;
+  toolFailure?: ToolFailure;
 }
 
 /**
@@ -152,6 +160,7 @@ export function resolveVisionApiModelName(
  */
 export async function analyzeImageWithVisionModel(input: {
   serverId: number;
+  locale?: string;
   image: VisionImage;
   prompt: string;
   /** Cached vision row, used only when the resolved credentials name the same model. */
@@ -202,12 +211,37 @@ export async function analyzeImageWithVisionModel(input: {
       return { ok: false, provider, model, failure: { reason: "unsupported_provider", detail: error.message } };
     }
     const requestDenied = findProviderRequestDeniedError(error, creds.usageContext) ?? undefined;
-    if (!requestDenied) log.error(`Vision call failed for ${provider}/${model}:`, error as Error);
+    const toolFailure = requestDenied
+      ? undefined
+      : createProviderToolFailure(error, {
+          locale: input.locale ?? "en-US",
+          provider,
+          credentialScope: creds.source,
+          kind: signal.aborted ? "timeout" : undefined,
+        }).failure;
+    const detail = error instanceof Error ? error.message : String(error);
+    if (!requestDenied)
+      await reportProviderFailure({
+        summary: "Vision request failed",
+        errorType: "VisionRequestFailed",
+        error: undefined,
+        detail: redactLogString(creds.apiKey ? detail.replaceAll(creds.apiKey, "[REDACTED]") : detail),
+        expected:
+          signal.aborted ||
+          providerContentRejectionSchema.safeParse(toolFailure?.code).success ||
+          ["401", "402", "403", "429", "timeout", "authentication", "quota", "rate_limit", "content_blocked"].includes(
+            toolFailure?.code ?? "",
+          ),
+        serverId: input.serverId,
+        userId: input.userId,
+        dimensions: { operation: "vision", provider, model, code: toolFailure?.code ?? "unknown" },
+      });
     return {
       ok: false,
       provider,
       model,
       requestDenied,
+      toolFailure,
       failure: {
         reason: "request_failed",
         detail: error instanceof Error ? error.message : String(error),
@@ -298,6 +332,8 @@ async function callGoogleSdkVision(
     config: { abortSignal: signal, maxOutputTokens: resolveVisionCaptionMaxOutputTokens() },
   });
 
+  const rejection = getProviderContentRejectionCode(result);
+  if (rejection) throw Object.assign(new Error("Vision request blocked by the provider"), { code: rejection });
   const text = result.text;
   if (!text) {
     throw new Error("Vision model returned an empty response.");

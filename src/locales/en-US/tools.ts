@@ -15,10 +15,14 @@ export default {
     execution: {
       unavailable: `The tool \`{tool}\` is unavailable under the current settings, model capabilities, or bot permissions.`,
     },
+    sprite_selection: {
+      unavailable: "Sprite selection is unavailable for this persona or turn. Omit the sprite parameter.",
+      invalid:
+        "Choose a sprite label from your current available sprites, or use an empty string for your base appearance.",
+    },
     generate_voice_message: {
       persona_missing: `The persona is no longer available.`,
       stale: `The speech model, credentials, or persona voice changed during this turn. Start a new turn before generating a voice message.`,
-      script_too_long: `The script is too long for this voice design model. Shorten the script and try again.`,
     },
     generate_image: {
       quota_exceeded_generic: `Image generation quota has been exceeded.`,
@@ -27,6 +31,7 @@ export default {
       quota_resets_in_hours: `Quota resets in {hours} hour(s).`,
       quota_resets_in_days: `Quota resets in {days} day(s).`,
       quota_remaining: `You have {remaining} image(s) remaining for today.`,
+      quota_unavailable: `I could not check this server's image generation quota right now. Please try again in a moment.`,
     },
     generate_video: {
       disabled: `Video generation is disabled for this server.`,
@@ -36,6 +41,7 @@ export default {
       quota_resets_in_hours: `Quota resets in {hours} hour(s).`,
       quota_resets_in_days: `Quota resets in {days} day(s).`,
       quota_remaining: `You have {remaining} video(s) remaining for today.`,
+      quota_unavailable: `I could not check this server's video generation quota right now. Please try again in a moment.`,
       file_too_large: `The generated video ({size_mb} MB) exceeds Discord's 25 MB file size limit.`,
       reference_unsupported: `The selected OpenRouter model \`{model}\` cannot use an image as the exact first frame. Remove the reference image or choose a compatible video model.`,
       loop_unsupported: `The selected OpenRouter model \`{model}\` cannot use a last frame for looping video. Disable looping or choose a compatible video model.`,
@@ -43,7 +49,6 @@ export default {
     generate_image_nai: {
       no_google_api_key: `Inpainting requires saved Google provider credentials for image segmentation. Add them with \`/providers\`, or switch to the Google provider.`,
       model_not_configured: `NovelAI image generation is disabled right now. Select a NovelAI image model with \`/config\` > Models > Switch Models first.`,
-      provider_quota_exceeded: `NovelAI image generation quota is exhausted for this account. Recharge Anlas or wait for the quota to refresh, then try again.`,
       characters_require_v4: `Character positioning requires a NovelAI V4 diffusion model or newer.`,
       character_requires_id_or_tags: `Character entry #{index} must include either an id or tags.`,
       invalid_character_identity: `Invalid character identity: {id}. Use persona:<id>, a short numeric persona ID, or a Discord user snowflake.`,
@@ -159,7 +164,7 @@ export default {
     document: {
       reading_title: `📄 Reading file contents...`,
       reading_description: `Reading the text inside \`{filename}\``,
-      truncated_title: `⚠️ File truncated`,
+      truncated_title: `File truncated`,
       truncated_description: `\`{filename}\` was too long and has been truncated to {limit} characters (original: {original} characters). The response may be incomplete so consider splitting the file into smaller parts and sharing them one at a time.`,
     },
     image: {

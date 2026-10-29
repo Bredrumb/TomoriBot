@@ -7,6 +7,7 @@ import { join } from "node:path";
 import type { AssembledServerConfig } from "@/types/db/schema";
 import type { ToolStateForContext } from "@/tools/toolRegistry";
 import { DOCUMENT_HINT_TEMPLATE } from "@/utils/text/context/dialogueHistory";
+import { CONDITIONING_INTERACTION_RESPONSE_TEMPLATE } from "@/utils/conditioning/conditioningInteractionContext";
 import { systemPromptSections } from "@/db/seed/catalog/systemPrompts";
 import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/context/templates";
 import { SPACER_TEMPLATE } from "@/utils/text/context/timeAwareness";
@@ -16,7 +17,11 @@ import {
   type PromptCapabilityValues,
   resolvePromptCapabilityValues,
 } from "@/utils/tools/toolPromptMacros";
-import { renderPromptConditionals, type PromptConditionPredicate } from "@/utils/tools/promptConditionals";
+import {
+  renderPromptConditionals,
+  renderStConditionals,
+  type PromptConditionPredicate,
+} from "@/utils/tools/promptConditionals";
 
 const ENABLED_CAPABILITIES: PromptCapabilityValues = {
   tool_use: true,
@@ -47,6 +52,7 @@ const TOOL_STATE = {
     supports_structoutput: false,
   },
   config: {
+    emoji_usage_enabled: true,
     sticker_usage_enabled: true,
     web_search_enabled: true,
     self_teaching_enabled: true,
@@ -236,6 +242,7 @@ describe("prompt macro resolver condition integration", () => {
     const hints = [
       { template: DOCUMENT_HINT_TEMPLATE, toolName: "read_file" },
       { template: SPACER_TEMPLATE, toolName: "reveal_message_metadata" },
+      { template: CONDITIONING_INTERACTION_RESPONSE_TEMPLATE, toolName: "interact_with_target" },
     ];
     const failures: string[] = [];
     for (const { template, toolName } of hints) {
@@ -248,7 +255,7 @@ describe("prompt macro resolver condition integration", () => {
           deliberateToolAllowedNames: allowed ? [toolName] : ["web_search"],
         });
         const expanded = await resolver.expand(template);
-        if (expanded.includes(toolName) !== allowed || expanded.includes("{{")) {
+        if (expanded.includes(toolName) !== allowed || /\{(?:\{|conditioning_interaction_tool)/u.test(expanded)) {
           failures.push(`${toolName} allowed=${allowed}: ${expanded}`);
         }
       }
@@ -393,12 +400,109 @@ describe("prompt macro resolver condition integration", () => {
 });
 
 describe("SillyTavern conditional compatibility reporting", () => {
-  it("accepts TomoriBot predicates while retaining warnings for legacy blocks", () => {
+  it("accepts both conditional dialects", () => {
     expect(
       findUnsupportedPresetMacros(
         "{{if capability:self_teaching}}memory{{else}}none{{/if}} {{if !tool:web_search}}offline{{/if}}",
       ),
     ).toEqual([]);
-    expect(findUnsupportedPresetMacros("{{#if self_teaching}}legacy{{/if}}")).toContain("{{#if ...}}");
+    expect(findUnsupportedPresetMacros("{{#if self_teaching}}legacy{{/if}}")).toEqual([]);
+  });
+});
+
+describe("shared SillyTavern conditional tree", () => {
+  function renderSt(text: string, values: Record<string, string> = {}) {
+    const warnings: string[] = [];
+    const rendered = renderStConditionals(text, {
+      resolveCondition: (expression) => values[expression] ?? "",
+      warn: (message) => warnings.push(message),
+    });
+    return { text: rendered, warnings };
+  }
+
+  it.each(["", "false", " FALSE ", "0", " 0 "])("treats %j as falsy and inverts unless", (value) => {
+    expect(
+      renderSt("{{#if flag}}yes{{else}}no{{/if}}/{{#unless flag}}off{{else}}on{{/unless}}", { flag: value }).text,
+    ).toBe("no/off");
+  });
+
+  it.each(["true", "1", "text", "00"])("treats %j as truthy", (value) => {
+    expect(renderSt("{{#if flag}}yes{{else}}no{{/if}}", { flag: value }).text).toBe("yes");
+  });
+
+  it("pairs shared closers across both nesting directions", async () => {
+    const input =
+      "{{#if {{description}}}}A{{if capability:web_search}}B{{#unless missing}}C{{/unless}}{{else}}D{{/if}}{{else}}E{{/if}}";
+    const first = renderSt(input, { "{{description}}": "present" });
+    expect(first.text).toBe("A{{if capability:web_search}}BC{{else}}D{{/if}}");
+    const second = await render(first.text, { "capability:web_search": true });
+    expect(second.text).toBe("ABC");
+    expect(first.warnings).toEqual([]);
+    expect(second.warnings).toEqual([]);
+  });
+
+  it("renders native conditionals alongside preserved Handlebars blocks", async () => {
+    const input = "{{#unless flag}}legacy{{/unless}}/{{if tool:search}}live{{else}}off{{/if}}";
+    expect((await render(input, { "tool:search": true })).text).toBe("{{#unless flag}}legacy{{/unless}}/live");
+  });
+
+  it("closes unclosed Handlebars blocks at the node end", () => {
+    const result = renderSt("before{{#if flag}}yes{{#unless missing}}nested", { flag: "1" });
+    expect(result.text).toBe("beforeyesnested");
+    expect(result.warnings).toHaveLength(2);
+  });
+
+  it.each([
+    "{{#if flag}}a{{else}}b{{else}}c{{/if}}",
+    "{{#if flag}}a{{else extra}}b{{/if}}",
+    "{{#unless flag}}a{{/if}}",
+    "{{#if flag}}a{{/unless}}",
+    "{{#if}}a{{/if}}",
+    "{{#unless}}a{{/unless}}",
+    "{{#if flag}}a{{/if extra}}",
+  ])("omits malformed blocks: %s", (block) => {
+    const result = renderSt(`before${block}after`, { flag: "1" });
+    expect(result.text).toBe("beforeafter");
+    expect(result.warnings).toHaveLength(1);
+    expect(findUnsupportedPresetMacros(block)).toHaveLength(1);
+  });
+
+  it("omits unterminated opening tags without repeatedly scanning their nested braces", () => {
+    const input = `prefix${"{{#if ".repeat(10_000)}`;
+    const result = renderSt(input);
+    expect(result.text).toBe("prefix");
+    expect(result.warnings).toHaveLength(1);
+    expect(findUnsupportedPresetMacros(input)).toHaveLength(1);
+  });
+
+  it("drops stray else and both closers with warnings", () => {
+    const result = renderSt("a{{else}}b{{/if}}c{{/unless}}d");
+    expect(result.text).toBe("abcd");
+    expect(result.warnings).toHaveLength(3);
+  });
+
+  it("bounds nesting without applying text transformations on overflow", () => {
+    const valid = `${"{{#if flag}}".repeat(32)}kept${"{{/if}}".repeat(32)}`;
+    expect(renderSt(valid, { flag: "1" }).text).toBe("kept");
+    const input = `{{setvar::flag::1}}{{#if flag}}${valid}{{/if}}`;
+    let transforms = 0;
+    const warnings: string[] = [];
+    expect(
+      renderStConditionals(input, {
+        resolveCondition: () => "1",
+        transformText: () => {
+          transforms++;
+          return "changed";
+        },
+        warn: (message) => warnings.push(message),
+      }),
+    ).toBe(input);
+    expect(transforms).toBe(0);
+    expect(warnings).toHaveLength(1);
+    expect(findUnsupportedPresetMacros(input).length).toBeGreaterThan(0);
+  });
+
+  it("keeps paragraph separators consistent with native conditionals", () => {
+    expect(renderSt("intro.\n\n{{#if absent}}gone{{/if}}\n\noutro.").text).toBe("intro.\n\noutro.");
   });
 });

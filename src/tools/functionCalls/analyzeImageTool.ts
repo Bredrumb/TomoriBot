@@ -1,3 +1,4 @@
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 /**
  * Vision analysis tool for non-vision chat models.
  * Delegates image analysis to a configured vision model via the same provider's API.
@@ -153,6 +154,7 @@ export class AnalyzeImageTool extends BaseTool {
       for (const image of images) {
         const result = await analyzeImageWithVisionModel({
           serverId: context.tomoriState.server_id,
+          locale: context.locale,
           image,
           prompt,
           cachedVisionLlm: context.tomoriState.vision_llm,
@@ -164,12 +166,13 @@ export class AnalyzeImageTool extends BaseTool {
         });
 
         if (result.requestDenied) {
-          return { success: false, error: await notifyProviderToolFailure(context, result.requestDenied) };
+          return notifyProviderToolFailure(context, result.requestDenied);
         }
         if (!result.ok) {
           return {
             success: false,
-            error: `Image analysis failed: ${describeVisionFailure(result.failure)}`,
+            error: result.toolFailure?.reason ?? `Image analysis failed: ${describeVisionFailure(result.failure)}`,
+            failure: result.toolFailure,
           };
         }
 
@@ -186,16 +189,12 @@ export class AnalyzeImageTool extends BaseTool {
       };
     } catch (error) {
       const timedOut = timeoutSignal.aborted && !context.abortSignal?.aborted;
-      const errorMessage = timedOut
-        ? `Image analysis timed out after ${VISION_ANALYSIS_TIMEOUT_MS}ms`
-        : error instanceof Error
-          ? error.message
-          : String(error);
       log.error(`Vision analysis failed for message ${messageId}:`, error as Error);
-      return {
-        success: false,
-        error: timedOut ? errorMessage : "Image analysis failed because the vision provider returned an error.",
-      };
+      return createProviderToolFailure(error, {
+        locale: context.locale,
+        provider: context.tomoriState.vision_llm?.llm_provider ?? "unknown",
+        kind: timedOut ? "timeout" : undefined,
+      });
     }
   }
 

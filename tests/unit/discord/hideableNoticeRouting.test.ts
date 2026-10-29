@@ -10,6 +10,10 @@ import {
 } from "discord.js";
 import { NOTICE_CONFIG_HINT_KEY, type NoticeVerbosity, type ToolNoticeKey } from "@/constants/toolNotices";
 import type { ToolContext } from "@/types/tool/interfaces";
+import { UpdateLongTermMemoryTool } from "@/tools/functionCalls/updateLongTermMemoryTool";
+import { UpdateUserInfoTool } from "@/tools/functionCalls/updateUserInfoTool";
+import { serverMemoryRepository, userNamingRepository, userRepository } from "@/utils/db/repositories";
+import { minimalNoticeRefRepository } from "@/utils/db/repositories/MinimalNoticeRefRepository";
 import { clearPersonaAppearances, commitPersonaAppearance } from "@/utils/cache/personaAppearanceCacheStore";
 import { clearPersonaSpriteCache, setPersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
 import { sendMemoryEmbedWithExpand, sendToolNoticeContainer } from "@/utils/discord/expandableEmbedNotice";
@@ -19,10 +23,11 @@ import {
   getChannelLastDelivery,
   recordChannelDeliveredWebhookIdentity,
 } from "@/utils/discord/stream/channelDeliveryContinuity";
-import { sendToolNotice } from "@/utils/discord/toolProgressNotice";
+import { routeHiddenToolNotice, sendToolNotice } from "@/utils/discord/toolProgressNotice";
+import { sendThoughtLogEmbed } from "@/utils/discord/thoughtLog";
 import * as lifecycle from "@/utils/discord/webhook/lifecycle";
 import { initializeLocalizer } from "@/utils/text/localizer";
-import { createPersona } from "../../helpers/fixtures";
+import { createPersona, createUserRow } from "../../helpers/fixtures";
 import { localizedCopy } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
@@ -45,6 +50,7 @@ function fakeChannel(id: string, options: { dm?: boolean; parentId?: string; res
     delivered,
     guildId: "guild_1",
     guild: {
+      id: "guild_1",
       roles: { everyone: { id: "guild_1" } },
       members: { me: { id: "bot", displayAvatarURL: () => undefined } },
     },
@@ -85,6 +91,8 @@ function buildContext(input: {
     deliveryMode: "persona",
     client: {
       user: { id: "bot" },
+      guilds: { cache: new Collection() },
+      users: { cache: new Collection(), fetch: async () => null },
       channels: { fetch: async (id: string) => (input.thoughtLog?.id === id ? input.thoughtLog : null) },
     },
     tomoriState: createPersona({
@@ -120,6 +128,65 @@ afterEach(() => {
 });
 
 describe("hideable tool notices", () => {
+  it.each([
+    ["public", false, false],
+    ["private", true, false],
+    ["passive public", false, true],
+    ["passive private", true, true],
+  ] as const)("routes user-info details from a %s channel", async (_label, isPrivate, suppressProgressNotices) => {
+    const conversation = fakeChannel("200");
+    const thoughtLog = fakeChannel("900");
+    const context = buildContext({ hidden: [], conversation, thoughtLog, privateChannelIds: isPrivate ? ["200"] : [] });
+    const user = createUserRow({ user_disc_id: "123456789012345678", user_nickname: "Juno" });
+    context.userId = user.user_disc_id;
+    context.guildId = conversation.guildId;
+    context.suppressProgressNotices = suppressProgressNotices;
+    spyOn(userRepository, "loadByDiscordId").mockResolvedValue(user);
+    spyOn(userNamingRepository, "loadPreferences").mockResolvedValue(new Map());
+    spyOn(userNamingRepository, "applyUserInfoBatch").mockResolvedValue(undefined);
+
+    const result = await new UpdateUserInfoTool().execute({ pronouns: "they/them" }, context);
+
+    expect(result).toMatchObject({ success: true });
+    expect(conversation.sent).toHaveLength(1);
+    expect(conversation.sent[0]).not.toContain("they/them");
+    expect(thoughtLog.sent).toHaveLength(isPrivate ? 0 : 1);
+    if (!isPrivate) {
+      expect(thoughtLog.sent[0]).toContain("they/them");
+      expect(thoughtLog.sent[0]).toContain(SOURCE_URL);
+      expect(thoughtLog.sent[0]).toContain(configHint());
+    }
+  });
+
+  it.each(["update", "delete"] as const)("mirrors the memory %s tool's content", async (operation) => {
+    const conversation = fakeChannel("200");
+    const thoughtLog = fakeChannel("900");
+    const context = buildContext({ hidden: [], conversation, thoughtLog });
+    const user = createUserRow({ user_disc_id: "123456789012345678", user_nickname: "Juno" });
+    context.userId = user.user_disc_id;
+    const content = "prefers jasmine tea";
+    context.tomoriState.config.self_teaching_enabled = true;
+    const memory = { server_memory_id: 24, content, user_id: 1 };
+    spyOn(userRepository, "loadByDiscordId").mockResolvedValue(user);
+    spyOn(serverMemoryRepository, "updateByIdWithLineage").mockResolvedValue(memory);
+    spyOn(serverMemoryRepository, "removeByIdWithLineage").mockResolvedValue(memory);
+    spyOn(minimalNoticeRefRepository, "record").mockResolvedValue(true);
+    spyOn(minimalNoticeRefRepository, "pruneOlderThanDays").mockResolvedValue(0);
+
+    const result = await new UpdateLongTermMemoryTool().execute(
+      { memory_id: memory.server_memory_id, memory_content: operation === "update" ? content : "" },
+      context,
+    );
+
+    expect(result).toMatchObject({ success: true });
+    expect(conversation.sent).toHaveLength(1);
+    expect(conversation.sent[0]).not.toContain(content);
+    expect(thoughtLog.sent).toHaveLength(1);
+    expect(thoughtLog.sent[0]).toContain(content);
+    expect(thoughtLog.sent[0]).toContain(SOURCE_URL);
+    expect(thoughtLog.sent[0]).toContain(configHint());
+  });
+
   it("posts a visible memory notice in the conversation with the shared /config line under its own footer", async () => {
     const conversation = fakeChannel("200");
     const thoughtLog = fakeChannel("900");
@@ -252,6 +319,86 @@ describe("hideable tool notices", () => {
 
     expect(conversation.sent).toHaveLength(1);
     expect(thoughtLog.sent).toHaveLength(0);
+  });
+
+  it("keeps a quiet turn's progress notice out of the conversation but in the thought log", async () => {
+    const conversation = fakeChannel("200");
+    const thoughtLog = fakeChannel("900");
+    const context = buildContext({ hidden: [], conversation, thoughtLog });
+    context.suppressProgressNotices = true;
+    context.mirrorSuppressedProgressNotices = true;
+
+    await sendToolNotice(
+      context,
+      "web_search",
+      {
+        titleKey: "tools.search.category_search_title",
+        titleVars: { category: "Web", query: "tea" },
+        description: "Looking around",
+      },
+      "test",
+    );
+
+    expect(conversation.sent).toHaveLength(0);
+    expect(thoughtLog.sent).toHaveLength(1);
+    expect(thoughtLog.sent[0]).toContain("Looking around");
+    expect(thoughtLog.sent[0]).toContain(SOURCE_URL);
+  });
+
+  it("keeps background progress notices out of both channels", async () => {
+    const conversation = fakeChannel("200");
+    const thoughtLog = fakeChannel("900");
+    const context = buildContext({ hidden: [], conversation, thoughtLog });
+    context.suppressProgressNotices = true;
+
+    await sendToolNotice(context, "web_search", { titleKey: "genai.thought_log.title" }, "test");
+
+    expect(conversation.sent).toHaveLength(0);
+    expect(thoughtLog.sent).toHaveLength(0);
+  });
+
+  it("renders reasoning from each request in order with matching iteration labels", async () => {
+    const conversation = fakeChannel("200");
+    const thoughtLog = fakeChannel("900");
+    const context = buildContext({ hidden: [], conversation, thoughtLog });
+
+    await sendThoughtLogEmbed({
+      client: context.client,
+      locale: context.locale,
+      tomoriState: context.tomoriState,
+      sourceChannel: context.channel as Parameters<typeof sendThoughtLogEmbed>[0]["sourceChannel"],
+      thoughtLogChannelId: thoughtLog.id,
+      thoughtLog: { iterations: [{ summary: "first summary", raw: "first thought" }, { raw: "second thought" }] },
+    });
+
+    expect(thoughtLog.sent).toHaveLength(3);
+    expect(thoughtLog.sent[0]).toContain(`${localizedCopy("en-US", "genai.thought_log.summary_field")} (1)`);
+    expect(thoughtLog.sent[0]).toContain("first summary");
+    expect(thoughtLog.sent[1]).toContain(`${localizedCopy("en-US", "genai.thought_log.raw_field")} (1)`);
+    expect(thoughtLog.sent[1]).toContain("first thought");
+    expect(thoughtLog.sent[2]).toContain(`${localizedCopy("en-US", "genai.thought_log.raw_field")} (2)`);
+    expect(thoughtLog.sent[2]).toContain("second thought");
+  });
+
+  it("posts a deliberate-mode tool trigger notice on a quiet turn", async () => {
+    const conversation = fakeChannel("200");
+    const thoughtLog = fakeChannel("900");
+    const context = buildContext({ hidden: [], conversation, thoughtLog });
+    context.suppressProgressNotices = true;
+
+    const routed = await routeHiddenToolNotice(
+      context,
+      {
+        titleKey: "genai.thought_log.title",
+        description: "Tool `web_search` was used after deliberate tool mode exposed it.",
+      },
+      "test",
+    );
+
+    expect(routed).toBe(true);
+    expect(conversation.sent).toHaveLength(0);
+    expect(thoughtLog.sent).toHaveLength(1);
+    expect(thoughtLog.sent[0]).toContain("deliberate tool mode");
   });
 
   it("does not mirror a Minimal notice to the thought log when sent from a DM or private channel", async () => {

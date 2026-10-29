@@ -125,10 +125,10 @@ export default {
 消息里出现这些触发词时，这个人格会回复。`,
       alter_success_confirmation: `已成功导入副人格 **{nickname}**，共有 {trigger_count} 个专属触发词！详细的导入信息已发到频道里。`,
       alter_avatar_fallback_main: `🟡 这次导入没有头像图片，所以这个副人格暂时使用 **{nickname}** 当前主人格的头像。你可以到 \`/config\` > 人格 > 常规 里更换。`,
-      alter_avatar_warning: `⚠️ 请不要删除上面的头像图片嵌入，否则副人格头像会丢失。`,
+      alter_avatar_warning: `请不要删除上面的头像图片嵌入，否则副人格头像会丢失。`,
       alter_dm_not_allowed_title: `🔴 私信里不能用副人格`,
       alter_dm_not_allowed_description: `副人格只能在服务器里导入，不能私信（DM）里导入。请在服务器里运行这条指令。`,
-      alter_no_triggers_warning: `⚠️ 这个人格没有触发词。在你用 \`/config\` > 人格 > 常规 添加触发词之前，它不会回复任何消息。`,
+      alter_no_triggers_warning: `这个人格没有触发词。在你用 \`/config\` > 人格 > 常规 添加触发词之前，它不会回复任何消息。`,
       alter_name_conflict_title: `🔴 人格名称已存在`,
       alter_name_conflict_description: `这个服务器上已经有一个叫 **{name}** 的人格了。每个人格的名称都必须是唯一的。
 

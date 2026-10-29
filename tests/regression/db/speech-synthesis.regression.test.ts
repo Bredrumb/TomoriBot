@@ -1,3 +1,4 @@
+import { localizedCopy } from "../../helpers/localeCases";
 import { createSpeechCallerFixture } from "../../helpers/speechCallers";
 import { getAvailableToolsWithMCP } from "@/tools/availability";
 import type { ChatInputCommandInteraction, Client } from "discord.js";
@@ -38,6 +39,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech synthesis lifecycle and fall
   let creationExpiry: string;
   let malformedSynthesis: boolean;
   let upstreamError: string;
+  let rejectionCode: string | undefined;
   let onCreate: (() => Promise<void>) | undefined;
   let onSynthesize: (() => Promise<void>) | undefined;
   const requests: Array<{ url: string; init: RequestInit }> = [];
@@ -71,6 +73,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech synthesis lifecycle and fall
     creationExpiry = "2099-01-01T00:00:00Z";
     malformedSynthesis = false;
     upstreamError = "synthetic upstream content";
+    rejectionCode = undefined;
     onCreate = undefined;
     onSynthesize = undefined;
     requests.length = 0;
@@ -108,6 +111,11 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech synthesis lifecycle and fall
             });
           }
           await onSynthesize?.();
+          if (rejectionCode)
+            return Response.json(
+              { error: { code: rejectionCode, message: upstreamError }, usage: { total_input_tokens: 3 } },
+              { status: 400 },
+            );
           const status = synthesisStatuses.shift() ?? 200;
           if (status !== 200)
             return Response.json({ usage: { total_input_tokens: 3 }, error: { message: upstreamError } }, { status });
@@ -301,6 +309,43 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Hosted speech synthesis lifecycle and fall
     expect(result.success).toBe(false);
     expect(result.errorKind).toBe("invalid_request");
     expect(requests).toHaveLength(0);
+  });
+
+  it("returns a speech rejection and recovery guidance to the tool without server fallback or upstream text", async () => {
+    rejectionCode = "PROHIBITED_CONTENT";
+    upstreamError = "private provider diagnostic synthetic-personal-google";
+    const persona = createPersona({
+      persona_id: refs.personaId,
+      server_id: refs.serverId,
+      speech_voice_design_prompt: "Warm narration",
+      voice_source_priority: "design",
+    });
+    const callers = createSpeechCallerFixture(() => persona);
+    const errorSpy = spyOn(log, "error").mockResolvedValue(undefined);
+    try {
+      const result = await new GenerateVoiceMessageTool().execute({ title: "greeting", script: "Hello" }, {
+        channel: callers.channel,
+        client: {},
+        guildId: "synthetic-guild",
+        tomoriState: persona,
+        locale: "en-US",
+        provider: "openrouter",
+        internalUserId: refs.userId,
+        suppressFailureNotices: true,
+      } as unknown as ToolContext);
+      expect(result.success).toBe(false);
+      expect(result.failure?.code).toBe("PROHIBITED_CONTENT");
+      expect(result.failure?.reason).toBe(localizedCopy("en-US", "genai.tool_failure.content_blocked"));
+      expect(result.failure?.suggestedActions.length).toBeGreaterThan(0);
+      expect(JSON.stringify(result)).not.toContain(upstreamError);
+      expect(JSON.stringify(result)).not.toContain("synthetic-personal-google");
+      expect(syntheses()).toHaveLength(1);
+      expect(callers.delivered).toBe(0);
+      expect(errorSpy).not.toHaveBeenCalled();
+    } finally {
+      callers.restore();
+      errorSpy.mockRestore();
+    }
   });
 
   it("reuses saved identity across models and direction changes while keeping usage per operation", async () => {

@@ -45,6 +45,12 @@ Ajuste a aparência, fala e comportamento de uma persona:
 
 Abra `/config` > `Persona` > `Identidade e Personalidade` para definir traços de personalidade ou detalhes físicos (como `friendly`, `red hair` ou `ends sentences with *Nya~*`).
 
+:::tip
+Ao adicionar ou editar um atributo, marque `Atributo público` em `Visibilidade` para que outras personas
+possam ver esse detalhe quando compartilharem uma conversa. Mantenha segredos como privados e marque detalhes
+que outros personagens notariam, como aparência ou maneirismos, como públicos.
+:::
+
 ### Diálogos de Exemplo
 <!-- anchor: sample-dialogues -->
 

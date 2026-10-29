@@ -1,5 +1,7 @@
 import { OpenAICompatibleToolAdapter } from "@/providers/openaiCompatible/openaiCompatibleToolAdapter";
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
+import { applyStreamContextAvailability } from "@/tools/availability";
+import { getToolSpriteRoster } from "@/tools/spriteSelection";
 import { log } from "@/utils/misc/logger";
 import { shouldInjectVerbatimToolCallingNudge } from "@/utils/tools/verbatimToolCalling";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -28,6 +30,8 @@ const VERBATIM_TOOL_DEFINITIONS_HEADER =
  */
 async function buildVerbatimToolDefinitionsJson(
   tomoriState: TomoriState,
+  contextItems: StructuredContextItem[],
+  isUserImpersonation: boolean,
   userId?: number,
 ): Promise<Array<Record<string, unknown>>> {
   // Build the minimal availability state (mirrors every <Provider>.getTools block).
@@ -57,6 +61,7 @@ async function buildVerbatimToolDefinitionsJson(
     nai_diffusion_model_id: tomoriState.config.nai_diffusion_model_id,
     video_model_id: tomoriState.config.video_model_id,
     config: {
+      emoji_usage_enabled: tomoriState.config.emoji_usage_enabled,
       sticker_usage_enabled: tomoriState.config.sticker_usage_enabled,
       web_search_enabled: tomoriState.config.web_search_enabled,
       self_teaching_enabled: tomoriState.config.self_teaching_enabled,
@@ -79,7 +84,21 @@ async function buildVerbatimToolDefinitionsJson(
   // Serialize to full native schemas (built-in + global/guild MCP) via the
   //    OpenAI-compatible adapter: the same shape that lands in `config.tools`.
   const adapter = new OpenAICompatibleToolAdapter(provider);
-  return adapter.getAllToolsInProviderFormat(builtInTools, tomoriState.server_id, mcpFunctionNames);
+  return adapter.getAllToolsInProviderFormat(
+    applyStreamContextAvailability({
+      providerLabel: provider,
+      provider,
+      builtInTools,
+      tomoriState,
+      streamContext: {
+        disableYouTubeProcessing: false,
+        personaSprites: getToolSpriteRoster(contextItems, tomoriState.persona_id),
+        deliveryMode: isUserImpersonation ? "user_impersonation" : "persona",
+      },
+    }),
+    tomoriState.server_id,
+    mcpFunctionNames,
+  );
 }
 
 /**
@@ -95,6 +114,8 @@ async function buildVerbatimToolDefinitionsJson(
 export async function buildVerbatimToolDefinitionsContextItem(params: {
   tomoriState: TomoriState | null | undefined;
   userId?: number;
+  contextItems: StructuredContextItem[];
+  isUserImpersonation: boolean;
 }): Promise<StructuredContextItem | null> {
   try {
     const { tomoriState } = params;
@@ -102,7 +123,12 @@ export async function buildVerbatimToolDefinitionsContextItem(params: {
       return null;
     }
 
-    const tools = await buildVerbatimToolDefinitionsJson(tomoriState, params.userId);
+    const tools = await buildVerbatimToolDefinitionsJson(
+      tomoriState,
+      params.contextItems,
+      params.isUserImpersonation,
+      params.userId,
+    );
     if (tools.length === 0) {
       return null;
     }

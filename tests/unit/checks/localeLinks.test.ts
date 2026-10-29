@@ -19,7 +19,7 @@ describe("locale documentation link and fragment validator", () => {
     expect(slugifyHeading("Custom Heading")).toBe("custom-heading");
   });
 
-  it("extracts all anchor types from markdown content", () => {
+  it.each(["\n", "\r\n"])("extracts all anchor types with %j line endings", (lineEnding) => {
     const doc = `
 # Page Title
 
@@ -36,7 +36,7 @@ Some intro text with [link](/somewhere).
 
 ## 日本語の見出し
 `;
-    const anchors = extractDocAnchors(doc);
+    const anchors = extractDocAnchors(doc.replace(/\r?\n/g, lineEnding));
 
     expect(anchors.has("page-title")).toBe(true);
     expect(anchors.has("explicit-id-anchor")).toBe(true);

@@ -125,10 +125,10 @@ Activaciones: {triggers}
 Esta persona responderá cuando estas activaciones aparezcan en los mensajes.`,
       alter_success_confirmation: `¡Alter **{nickname}** importado con éxito con {trigger_count} palabras de activación únicas! La información detallada de la importación se ha publicado en el canal.`,
       alter_avatar_fallback_main: `🟡 Esta importación no incluía un avatar, así que este alter está usando el avatar principal actual de **{nickname}** como respaldo. Puedes cambiarlo en \`/config\` > Persona > General.`,
-      alter_avatar_warning: `⚠️ No elimines el embed de la imagen del avatar de arriba, o el avatar del alter se perderá.`,
+      alter_avatar_warning: `No elimines el embed de la imagen del avatar de arriba, o el avatar del alter se perderá.`,
       alter_dm_not_allowed_title: `🔴 Alters no permitidos en MD`,
       alter_dm_not_allowed_description: `Los alters solo se pueden importar en servidores, no en Mensajes Directos. Por favor, ejecuta este comando en un servidor.`,
-      alter_no_triggers_warning: `⚠️ Esta persona no tiene palabras de activación. No responderá a ningún mensaje hasta que agregues activaciones usando \`/config\` > Persona > General.`,
+      alter_no_triggers_warning: `Esta persona no tiene palabras de activación. No responderá a ningún mensaje hasta que agregues activaciones usando \`/config\` > Persona > General.`,
       alter_name_conflict_title: `🔴 El nombre de la persona ya existe`,
       alter_name_conflict_description: `Ya existe una persona con el nombre **{name}** en este servidor. Cada persona debe tener un nombre único.
 

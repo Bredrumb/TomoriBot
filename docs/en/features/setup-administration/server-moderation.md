@@ -2,7 +2,6 @@
 title: "Server Moderation"
 sidebar:
   order: 2
-aiGenerated: true
 ---
 
 TomoriBot provides server managers with fine-grained control over usage, costs, permissions,
@@ -70,11 +69,16 @@ Trigger Behavior.
 In `/config` > Channels > Logs & Welcome, click `Set Log Channel` to designate a channel where
 TomoriBot posts her internal reasoning, fallback notices, and successful tool calls. This is
 useful for auditing what she is doing, including which trigger exposed a tool in
-[Deliberate Tool Mode](/features/capabilities/tools-and-extensions/#deliberate-tool-mode).
+[Deliberate Tool Mode](/features/capabilities/tools-and-extensions/deliberate-tool-mode/).
 
 The log only copies from channels every member of your server can already see. Activity in a
 channel or thread that some members cannot open stays out of the log, so the log never shows
 people something they could not read where it happened. The log channel must be in the same server.
+
+:::tip
+Keep the log channel private to your moderation team. TomoriBot checks who can read the channel
+being copied from, so activity from public channels can go to an admin-only log channel.
+:::
 
 ## Welcome Greetings
 
@@ -83,8 +87,7 @@ chosen channel. TomoriBot waits until the new member completes Discord's rules s
 onboarding before sending the greeting. If a member leaves before finishing screening, no greeting
 is sent. Click `Clear Welcome` on that same page to disable greetings.
 
-## Expressions
-
-Run `/expressions initialize` to index your server's custom emojis and stickers so personas can
-use them accurately in conversation. For how personas use emojis, stickers, and reactions, see
-[Expressions & Reactions](/features/chatting-personality/chatting-and-triggers/#expressions--reactions).
+:::tip
+Use the `Welcome prompt` to introduce new members to your server's rules. Include the rules or
+point to your rules channel, for example: "Welcome them and remind them to read #rules."
+:::

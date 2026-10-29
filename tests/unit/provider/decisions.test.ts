@@ -29,13 +29,16 @@ const request: ProviderDecisionRequest = {
 describe("Decision transports", () => {
   const info = spyOn(log, "info").mockImplementation(() => {});
   const error = spyOn(log, "error").mockImplementation(async () => {});
+  const warn = spyOn(log, "warn").mockImplementation(() => {});
   afterEach(() => {
     info.mockClear();
     error.mockClear();
+    warn.mockClear();
   });
   afterAll(() => {
     info.mockRestore();
     error.mockRestore();
+    warn.mockRestore();
   });
 
   it("preserves validated limit causes without retaining provider prose", async () => {
@@ -107,7 +110,8 @@ describe("Decision transports", () => {
     ]);
     expect(owned).toMatchObject({ status: "denied", error: denied, errorLogged: false });
     expect(foreign).toMatchObject({ status: "failed", category: "network", errorLogged: true });
-    expect(error).toHaveBeenCalledTimes(1);
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 
   it("translates native and System One requests without chat routes", async () => {
@@ -342,31 +346,42 @@ describe("Decision transports", () => {
   });
 
   it("reports operational failures safely and leaves cancellation and rejected input expected", async () => {
-    for (const status of [401, 403, 429, 500]) {
+    for (const status of [400, 401, 403, 404, 429, 500]) {
       error.mockClear();
-      const result = await callOpenRouterDecisions(request, async () => new Response("PRIVATE_RESPONSE", { status }));
+      warn.mockClear();
+      const result = await callOpenRouterDecisions(
+        request,
+        async () => new Response(`PRIVATE_RESPONSE ${request.apiKey}`, { status }),
+      );
       expect(result).toMatchObject({ status: "failed", errorLogged: true });
-      expect(error).toHaveBeenCalledTimes(1);
-      expect(error.mock.calls[0][2]?.metadata).toMatchObject({
+      expect(error.mock.calls.length).toBe(status === 400 ? 1 : 0);
+      expect(warn.mock.calls.length).toBe(status === 400 ? 0 : 1);
+      const logged = status === 400 ? error.mock.calls : warn.mock.calls;
+      expect(logged[0]?.[2]?.metadata).toMatchObject({
         operation: "decision-request",
         httpStatus: status,
         correlation: request.correlationId,
       });
+      expect(logged[0]?.[0]).toContain("PRIVATE_RESPONSE");
+      expect(JSON.stringify(logged)).not.toContain(request.apiKey);
+      expect(JSON.stringify(result)).not.toContain("PRIVATE_RESPONSE");
     }
     error.mockClear();
+    warn.mockClear();
     await callOpenRouterDecisions(request, async () => {
       throw new Error("PRIVATE_EVIDENCE PRIVATE_RESPONSE private-credential https://secret.invalid?token=SECRET");
     });
-    expect(error).toHaveBeenCalledTimes(1);
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
     const records = JSON.stringify(
-      error.mock.calls.map(([message, cause, context]) => ({
+      warn.mock.calls.map(([message, cause, context]) => ({
         message,
         cause: cause instanceof Error ? { ...cause, message: cause.message, stack: cause.stack } : cause,
         context,
       })),
     );
-    for (const secret of ["PRIVATE_EVIDENCE", "PRIVATE_RESPONSE", "private-credential", "SECRET"])
-      expect(records).not.toContain(secret);
+    expect(records).toContain("PRIVATE_RESPONSE");
+    for (const secret of ["private-credential", "SECRET"]) expect(records).not.toContain(secret);
     error.mockClear();
     const abort = new AbortController();
     const cancelled = await callOpenRouterDecisions({ ...request, abortSignal: abort.signal }, async () => {
@@ -409,7 +424,8 @@ describe("Decision transports", () => {
         throw init.signal?.reason;
       });
       expect(result).toMatchObject({ status: "failed", category: "timeout", errorLogged: true });
-      expect(error).toHaveBeenCalledTimes(1);
+      expect(error).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledTimes(1);
     } finally {
       timeout.mockRestore();
     }
@@ -456,7 +472,7 @@ describe("Decision transports", () => {
     }
   });
 
-  it("emits production ERROR once per recovered fake request, hides INFO and omits private content", async () => {
+  it("retains expected production failures as warnings with scrubbed diagnostics and no request dumps", async () => {
     const script = `import {callOpenRouterDecisions} from "./src/providers/openrouter/openrouterDecisions";
       const result = await callOpenRouterDecisions(${JSON.stringify(request)}, async () => new Response("PRIVATE_RESPONSE", {status:401}));
       if(result.status !== "failed" || !result.errorLogged) process.exit(1);
@@ -477,18 +493,13 @@ describe("Decision transports", () => {
       .split("\n")
       .filter(Boolean)
       .map((line) => JSON.parse(line));
-    const errors = records.filter((record) => record.level === 50);
+    const warnings = records.filter((record) => record.level === 40);
     for (const correlation of [request.correlationId, "fixture-network"]) {
-      expect(errors.filter((record) => record.context?.metadata?.correlation === correlation)).toHaveLength(1);
+      expect(warnings.filter((record) => record.context?.metadata?.correlation === correlation)).toHaveLength(1);
     }
+    expect(records.some((record) => record.level === 50)).toBe(false);
     expect(records.some((record) => record.level === 30)).toBe(false);
-    for (const secret of [
-      "PRIVATE_RESPONSE",
-      "SECRET",
-      request.evidence,
-      request.questions[0].instructions,
-      request.apiKey,
-    ])
-      expect(stdout).not.toContain(String(secret));
+    expect(stdout).toContain("PRIVATE_RESPONSE");
+    for (const secret of ["SECRET", request.apiKey]) expect(stdout).not.toContain(String(secret));
   });
 });

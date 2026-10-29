@@ -8,11 +8,14 @@ import * as guards from "@/utils/chat/admissionGuards";
 import * as userCache from "@/utils/cache/userCache";
 import * as triggers from "@/utils/chat/triggerProcessor";
 import * as replyDecision from "@/utils/chat/replyDecision";
+import * as nudgeCache from "@/modules/natural-nudges/runtime/configCache";
+import { defaultServerNaturalNudgeConfig } from "@/modules/natural-nudges/db/types";
 import * as textModels from "@/utils/provider/textModelSelection";
 import { userNamingRepository } from "@/utils/db/repositories/UserNamingRepository";
 import { normalizeChatInvocation } from "@/utils/chat/admission";
 import type { LockedChatTurn } from "@/utils/chat/types";
 import { claimCredentialRefusalNotice, cleanupTextQuotaTriggerStates } from "@/utils/chat/textQuotaState";
+import { getSelfReplyChainState } from "@/utils/chat/selfReplyState";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 import { createScopedModuleMocker, stubLogMembers } from "../../helpers/mockSurface";
 
@@ -82,6 +85,7 @@ function lockedTurn(): LockedChatTurn {
     client,
     author: { id: user.user_disc_id, username: "Juno", bot: false },
     content: "Mirri, Juno",
+    mentions: { users: new Map() },
     webhookId: null,
     guild: null,
   } as unknown as Message;
@@ -112,6 +116,13 @@ beforeEach(() => {
   send.mockClear();
   resolutions = [];
   restores.push(
+    spyOn(nudgeCache, "recordNaturalNudgeDirectChat").mockResolvedValue(undefined),
+    spyOn(nudgeCache, "readNaturalNudgeGate").mockResolvedValue({
+      serverId: personas[0].server_id,
+      config: defaultServerNaturalNudgeConfig(personas[0].server_id),
+      channelIds: new Set(["fixture-channel"]),
+      heat: 10,
+    }),
     spyOn(textModels, "resolveServerTextModel").mockImplementation(async (state) => state.persona_llm ?? state.llm),
     spyOn(userCache, "getCachedUserRow").mockResolvedValue(user),
     spyOn(userCache, "getCachedBlacklistStatus").mockResolvedValue(false),
@@ -225,6 +236,141 @@ describe("text credential admission", () => {
 });
 
 describe("per-persona planning", () => {
+  it("keeps nudge handoffs on server credentials and stops at the cascade limit", async () => {
+    const turn = lockedTurn();
+    const incoming = turn.admission.incoming;
+    Object.assign(incoming, {
+      isManuallyTriggered: true,
+      isPersonaJob: true,
+      borrowsTriggerMessage: true,
+      selectedPersonaId: personas[1].persona_id,
+      naturalNudge: { toolNames: [] },
+      textQuotaSource: "system",
+    });
+    const chain = getSelfReplyChainState(turn.channelId);
+    try {
+      chain.triggerCount = 1;
+      resolutions.push(resolved("server"));
+      const plan = await planChatTurns(turn);
+      expect(plan.turns.map((planned) => planned.persona.persona_id)).toEqual([personas[1].persona_id]);
+      expect(plan.turns[0]).toMatchObject({ textCredentialSource: "server", shouldApplyTextQuota: false });
+      expect(nudgeCache.recordNaturalNudgeDirectChat).not.toHaveBeenCalled();
+
+      chain.triggerCount = 4;
+      resolutions.push(resolved("server"));
+      expect((await planChatTurns(turn)).turns).toHaveLength(0);
+    } finally {
+      chain.triggerCount = 0;
+    }
+  });
+
+  it("rechecks the selected nudge responder's persona channel whitelist", async () => {
+    const turn = lockedTurn();
+    Object.assign(turn.admission.incoming, {
+      isManuallyTriggered: true,
+      isPersonaJob: true,
+      borrowsTriggerMessage: true,
+      selectedPersonaId: personas[1].persona_id,
+      naturalNudge: { toolNames: [] },
+      textQuotaSource: "system",
+    });
+    spyOn(guards, "evaluateChatAccess").mockResolvedValue({
+      whitelistStatus: {
+        isTriggerAllowed: true,
+        hasActiveWhitelist: true,
+        hasActiveChannelWhitelist: false,
+        isChannelWhitelisted: false,
+        hasActiveRoleWhitelist: false,
+        isRoleWhitelisted: false,
+        hasActivePersonaWhitelist: true,
+        hasChannelCooldownOverride: false,
+        restrictedPersonaIds: [2],
+        whitelistedPersonaIds: [],
+      },
+      personalSpotlightStatus: null,
+      allowedPersonaIds: null,
+      blockedPersonaIds: new Set(),
+      rejectedByWhitelist: false,
+    });
+    expect((await planChatTurns(turn)).turns).toHaveLength(0);
+    expect(resolve).not.toHaveBeenCalled();
+  });
+
+  it("discards queued nudge scene turns after dormancy without credentials or public notices", async () => {
+    const turn = lockedTurn();
+    turn.admission.incoming.naturalNudge = { toolNames: [] };
+    turn.admission.incoming.isFromQueue = true;
+    spyOn(nudgeCache, "readNaturalNudgeGate").mockResolvedValue(null);
+    expect((await planChatTurns(turn)).turns).toHaveLength(0);
+    expect(resolve).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    expect(nudgeCache.recordNaturalNudgeDirectChat).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "mention",
+    "reply",
+    "persona-trigger",
+  ])("records one direct-chat wake for a %s before credential failures", async (signal) => {
+    const turn = lockedTurn();
+    if (signal !== "mention") {
+      spyOn(guards, "validateDirectChatTrigger").mockResolvedValue({
+        shouldContinue: true,
+        isReplyToBot: signal === "reply",
+        replyPersona: null,
+        isBotMentioned: false,
+        isDirectUserIntent: signal === "reply",
+        isUserImpersonation: false,
+      });
+    }
+    if (signal === "persona-trigger") {
+      turn.admission.allPersonas = [createPersona({ trigger_words: ["mirri"] })];
+    }
+    resolutions.push(
+      new credentials.PersonalProviderRequiredError("text"),
+      new credentials.PersonalProviderRequiredError("text"),
+    );
+    await planChatTurns(turn);
+    expect(nudgeCache.recordNaturalNudgeDirectChat).toHaveBeenCalledTimes(1);
+    expect(turn.admission.incoming.isDirectChat).toBe(true);
+    expect(nudgeCache.recordNaturalNudgeDirectChat).toHaveBeenCalledWith(personas[0].server_id);
+  });
+
+  it.each([
+    "passive",
+    "nudge",
+    "random-trigger",
+    "reminder",
+    "persona-job",
+    "dm",
+  ])("does not wake nudges for %s turns", async (kind) => {
+    const turn = lockedTurn();
+    const incoming = turn.admission.incoming;
+    if (kind === "passive") {
+      turn.admission.message.content = "clouds in the sky";
+      spyOn(guards, "validateDirectChatTrigger").mockResolvedValue({
+        shouldContinue: true,
+        isReplyToBot: false,
+        replyPersona: null,
+        isBotMentioned: false,
+        isDirectUserIntent: false,
+        isUserImpersonation: false,
+      });
+    }
+    if (kind === "nudge") incoming.naturalNudge = { toolNames: [] };
+    if (kind === "nudge" || kind === "random-trigger") incoming.borrowsTriggerMessage = true;
+    if (kind === "reminder") incoming.reminderRecipientID = user.user_disc_id;
+    if (kind === "persona-job") incoming.isPersonaJob = true;
+    if (kind === "dm") turn.admission.isDMChannel = true;
+    resolutions.push(
+      new credentials.PersonalProviderRequiredError("text"),
+      new credentials.PersonalProviderRequiredError("text"),
+    );
+    await planChatTurns(turn);
+    expect(nudgeCache.recordNaturalNudgeDirectChat).not.toHaveBeenCalled();
+    expect(turn.admission.incoming.isDirectChat).not.toBe(true);
+  });
+
   it("skips an unavailable persona and retains the next persona's own route", async () => {
     resolutions.push(new credentials.PersonalProviderRequiredError("text"), resolved("personal"));
     const plan = await planChatTurns(lockedTurn());

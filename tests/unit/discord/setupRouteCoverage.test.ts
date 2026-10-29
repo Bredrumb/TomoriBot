@@ -1,3 +1,4 @@
+import { SETUP_FEATURES } from "@/types/db/schema";
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
@@ -187,7 +188,13 @@ function renderedPayloads(): Array<[string, unknown]> {
           requiresPolicies: true,
           policiesAccepted: true,
           providerAccess: { mode: "user-byok" },
-          startingSettings: { presetId: 7, humanizer: 1, timezoneOffset: 0, systemPrompt: { kind: "built-in" } },
+          startingSettings: {
+            presetId: 7,
+            humanizer: 1,
+            timezoneOffset: 0,
+            features: [...SETUP_FEATURES],
+            systemPrompt: { kind: "built-in" },
+          },
         }),
         true,
       ),
@@ -241,7 +248,8 @@ describe("setup wizard route coverage", () => {
     expect(declared.length).toBeGreaterThan(0);
 
     const routeIds = declared.map((action) => {
-      return `${SETUP_ROUTE_NAMESPACE}:${SETUP_ROUTE_VERSION}:${action}:${LOCALE}:${NONCE}`;
+      const modalNonce = action === "settings-submit" ? ":modal1234" : "";
+      return `${SETUP_ROUTE_NAMESPACE}:${SETUP_ROUTE_VERSION}:${action}:${LOCALE}:${NONCE}${modalNonce}`;
     });
 
     expect(routeIds.map((routeId) => actionOf(routeId))).toEqual(declared);

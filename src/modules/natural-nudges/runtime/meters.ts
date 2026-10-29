@@ -6,6 +6,7 @@ import {
   DAY_MS,
   HEAT_HALF_LIFE_DAYS,
   HEAT_WINDOW_DAYS,
+  MAX_EFFECTIVE_HEAT,
   AUTOMATIC_CHANNEL_DAYS,
   MIN_IDLE_NUDGE_HEAT,
   IDLE_NUDGE_HEAT_DIVISORS,
@@ -45,11 +46,7 @@ function bucketKey(dayStartMs: number): string {
   return new Date(dayStartMs).toISOString().slice(0, 10);
 }
 
-/**
- * Recency-weighted messages per day: each day's `message_sent` total is weighted by
- * 0.5^(age / 3 days) and divided by the steady-state weight, so a server that sends N messages
- * every day reads as heat N.
- */
+/** Recency-weighted engagement per day, normalized so N weighted turns every day read as heat N. */
 export function computeHeat(dailyCounts: ReadonlyMap<string, number>, now: Date): number {
   const today = utcDayStart(now);
   let weighted = 0;
@@ -60,6 +57,10 @@ export function computeHeat(dailyCounts: ReadonlyMap<string, number>, now: Date)
     weighted += (dailyCounts.get(bucketKey(today - age * DAY_MS)) ?? 0) * weight;
   }
   return weighted / steadyState;
+}
+
+export function computeEffectiveHeat(measuredHeat: number, offset: number): number {
+  return Math.min(MAX_EFFECTIVE_HEAT, Math.max(0, measuredHeat + offset));
 }
 
 export function heatWindowStart(now: Date): Date {

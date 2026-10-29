@@ -470,6 +470,9 @@ export type ConfigPanelRoute =
   | { action: "nudge-persona-restore-confirm"; locale: string; personaId: number; nonce: string }
   | { action: "nudge-persona-restore-cancel"; locale: string; personaId: number }
   | { action: "nudge-idle-nudges-set"; locale: string; enabled: boolean }
+  | { action: "nudge-heat-adjust"; locale: string; direction: "up" | "down" }
+  | { action: "nudge-weights-open"; locale: string }
+  | { action: "nudge-weights-submit"; locale: string; nonce: string }
   | { action: "nudge-channels-select"; locale: string }
   | { action: "nudge-provider"; locale: string }
   | { action: "nudge-model-submit"; locale: string; provider: string; nonce: string }
@@ -1030,6 +1033,18 @@ export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
   "nudge-persona-restore-confirm": { wireToken: "nnp-r", fields: [personaIdField, nonceField] },
   "nudge-persona-restore-cancel": { wireToken: "nnp-rc", fields: [personaIdField] },
   "nudge-idle-nudges-set": { wireToken: "nn-idle-set", fields: [enabledField] },
+  "nudge-heat-adjust": {
+    wireToken: "nn-heat",
+    fields: [
+      {
+        key: "direction",
+        encode: (value) => String(value),
+        decode: (value) => (value === "up" || value === "down" ? value : null),
+      },
+    ],
+  },
+  "nudge-weights-open": { wireToken: "nn-weights-open", fields: [] },
+  "nudge-weights-submit": { wireToken: "nn-weights", fields: [nonceField] },
   "nudge-channels-select": { wireToken: "nn-channels", fields: [] },
   "nudge-provider": { wireToken: "nn-provider", fields: [] },
   "nudge-model-submit": { wireToken: "nn-model", fields: [providerField, nonceField] },

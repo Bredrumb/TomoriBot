@@ -1,3 +1,4 @@
+import { SETUP_FEATURES } from "@/types/db/schema";
 import { describe, expect, it } from "bun:test";
 import { setupConfigSchema } from "@/types/db/schema";
 
@@ -8,6 +9,7 @@ describe("setupConfigSchema", () => {
     humanizer: 1,
     tomoriName: "Tomori",
     timezoneOffset: 0,
+    features: [...SETUP_FEATURES],
     locale: "en-US",
     registrationLocale: "en-US",
   };

@@ -877,7 +877,14 @@ describe("runGenerationTurn fallback behavior", () => {
     textQuotaAdmissions.length = 0;
     textQuotaAdmissionResult = {
       allowed: true,
-      state: { serverId: 1, userDiscId: "user_1", consumed: false, createdAt: Date.now() },
+      state: {
+        serverId: 1,
+        userDiscId: "user_1",
+        consumed: false,
+        reservation: null,
+        reservationReleased: false,
+        createdAt: Date.now(),
+      },
     };
     textQuotaAdmissionFailure = null;
     cooldownAdmissions.length = 0;

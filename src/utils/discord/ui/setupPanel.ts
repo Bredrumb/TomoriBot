@@ -17,7 +17,7 @@ import {
   type SetupDraftStartingSettings,
   type SetupDraftSystemPrompt,
 } from "@/types/discord/setupWizard";
-import type { SystemPromptPresetRow, TomoriPresetRow } from "@/types/db/schema";
+import { SETUP_FEATURES, type SetupFeature, type SystemPromptPresetRow, type TomoriPresetRow } from "@/types/db/schema";
 import {
   buildSetupCancelRouteId,
   buildSetupEndpointConnectionRouteId,
@@ -46,6 +46,7 @@ import type { PanelReceipt } from "@/types/discord/panel";
 import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
 import { ColorCode } from "@/utils/misc/logger";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer, resolveDescription, resolvePresetDisplayName } from "@/utils/text/localizer";
 import { formatUTCOffset, formatUtcOffsetInput, parseUtcOffsetInput } from "@/utils/text/timezoneHelper";
 import { buildLegalDocUrl } from "@/utils/misc/docsUrl";
@@ -168,6 +169,45 @@ export function areSetupSettingsCatalogsRenderable(
     catalogs.prompts.length + 1 <= SETUP_MODAL_SELECT_OPTION_LIMIT
   );
 }
+
+const SETUP_FEATURE_KEYS: Record<SetupFeature, { label: string; description: string }> = {
+  expressions: {
+    label: "commands.setup.wizard.settings_features.expressions.label",
+    description: "commands.setup.wizard.settings_features.expressions.description",
+  },
+  playful_interactions: {
+    label: "commands.setup.wizard.settings_features.playful_interactions.label",
+    description: "commands.setup.wizard.settings_features.playful_interactions.description",
+  },
+  danbooru: {
+    label: "commands.setup.wizard.settings_features.danbooru.label",
+    description: "commands.setup.wizard.settings_features.danbooru.description",
+  },
+  natural_nudges: {
+    label: "commands.setup.wizard.settings_features.natural_nudges.label",
+    description: "commands.setup.wizard.settings_features.natural_nudges.description",
+  },
+  dice_rolls: {
+    label: "commands.setup.wizard.settings_features.dice_rolls.label",
+    description: "commands.setup.wizard.settings_features.dice_rolls.description",
+  },
+  self_message_management: {
+    label: "commands.setup.wizard.settings_features.self_message_management.label",
+    description: "commands.setup.wizard.settings_features.self_message_management.description",
+  },
+  user_blocking: {
+    label: "commands.setup.wizard.settings_features.user_blocking.label",
+    description: "commands.setup.wizard.settings_features.user_blocking.description",
+  },
+  user_info_updates: {
+    label: "commands.setup.wizard.settings_features.user_info_updates.label",
+    description: "commands.setup.wizard.settings_features.user_info_updates.description",
+  },
+  short_term_memory: {
+    label: "commands.setup.wizard.settings_features.short_term_memory.label",
+    description: "commands.setup.wizard.settings_features.short_term_memory.description",
+  },
+};
 
 const HUMANIZER_KEYS: Record<0 | 1 | 2 | 3, { label: string; description: string }> = {
   0: {
@@ -313,6 +353,10 @@ function resolveSettingsSummary(
     }),
     localizer(locale, "commands.setup.wizard.settings_summary_system_prompt", {
       prompt: promptName,
+    }),
+    localizer(locale, "commands.setup.wizard.settings_summary_features", {
+      enabled: settings.features.length,
+      total: SETUP_FEATURES.length,
     }),
   ]
     .map((row) => `> ${row}`)
@@ -1076,9 +1120,12 @@ export function buildSetupByokModal(
     components: [
       {
         type: 10,
-        content: localizer(locale, "commands.setup.wizard.byok_modal_notice", {
-          command: commandRegistry.getCommandMention("personal", "providers"),
-        }),
+        content: statusNote(
+          "warning",
+          localizer(locale, "commands.setup.wizard.byok_modal_notice", {
+            command: commandRegistry.getCommandMention("personal", "providers"),
+          }),
+        ),
       },
       {
         // 18 is Label, and it is the only path by which a routed modal value is recorded: the
@@ -1109,7 +1156,7 @@ export function buildSetupByokModal(
   };
 }
 
-export type SetupSettingsModalField = "persona" | "humanizer" | "timezone" | "system-prompt";
+export type SetupSettingsModalField = "persona" | "humanizer" | "timezone" | "system-prompt" | "features";
 
 export function buildSetupSettingsModalFieldId(field: SetupSettingsModalField, nonce: string): string {
   return `${field}_${nonce}`;
@@ -1157,6 +1204,7 @@ export function buildSetupSettingsModal(
   catalogs: SetupSettingsCatalogs,
   existing?: SetupDraftStartingSettings | null,
 ): { custom_id: string; title: string; components: RawDiscordComponent[] } {
+  const modalNonce = Date.now().toString(36);
   const humanizerOptions = Object.values(HUMANIZER_KEYS).map((keys, index) => ({
     label: safeSelectOptionText(localizer(locale, keys.label), 100),
     value: String(index),
@@ -1171,7 +1219,7 @@ export function buildSetupSettingsModal(
   const storedPrompt = existing?.systemPrompt;
 
   return {
-    custom_id: buildSetupSettingsSubmitRouteId({ locale, nonce }),
+    custom_id: buildSetupSettingsSubmitRouteId({ locale, nonce, modalNonce }),
     title: safeSelectOptionText(localizer(locale, "commands.setup.wizard.settings_modal_title"), 45),
     components: [
       {
@@ -1266,6 +1314,24 @@ export function buildSetupSettingsModal(
               default: storedPrompt?.kind === "preset" && storedPrompt.presetName === prompt.name,
             })),
           ],
+        },
+      },
+      {
+        type: 18,
+        label: localizer(locale, "commands.setup.wizard.settings_features_label"),
+        description: localizer(locale, "commands.setup.wizard.settings_features_description"),
+        component: {
+          type: 22,
+          custom_id: buildSetupSettingsModalFieldId("features", modalNonce),
+          required: false,
+          min_values: 0,
+          max_values: SETUP_FEATURES.length,
+          options: SETUP_FEATURES.map((feature) => ({
+            label: localizer(locale, SETUP_FEATURE_KEYS[feature].label),
+            description: localizer(locale, SETUP_FEATURE_KEYS[feature].description),
+            value: feature,
+            default: existing ? existing.features.includes(feature) : true,
+          })),
         },
       },
     ],

@@ -56,6 +56,7 @@ const STATIC_TOOL_PROMPT_MACROS: Record<string, string> = {
   "{manage_message_tool}": "manage_message",
   "{pin_tool}": "manage_message",
   "{message_interaction_tool}": "interact_with_recent_message",
+  "{conditioning_interaction_tool}": "interact_with_target",
   "{profile_picture_tool}": "peek_profile_picture",
   "{document_tool}": "read_file",
   "{message_metadata_tool}": "reveal_message_metadata",
@@ -436,6 +437,7 @@ export function createToolPromptMacroResolverForState(
             nai_diffusion_model_id: tomoriState.config.nai_diffusion_model_id,
             video_model_id: tomoriState.config.video_model_id,
             config: {
+              emoji_usage_enabled: tomoriState.config.emoji_usage_enabled,
               sticker_usage_enabled: tomoriState.config.sticker_usage_enabled,
               web_search_enabled: tomoriState.config.web_search_enabled,
               self_teaching_enabled: tomoriState.config.self_teaching_enabled,

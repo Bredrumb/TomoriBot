@@ -65,7 +65,6 @@ export default {
       idle_nudges_title: "Gợi ý nhàn rỗi",
       idle_nudges_description: "Mình tự khởi xướng điều gì đó trong kênh nếu kênh trở nên quá yên ắng.",
       idle_nudges_off: "Mình chỉ lên tiếng khi có ai đó nói chuyện với mình.",
-      idle_nudges_on: "Mình sẽ bắt đầu gợi ý nhàn rỗi trong một kênh yên ắng khi đến thời điểm phù hợp.",
       idle_nudges_on_no_channels:
         "Mình chưa có kênh nào để bắt đầu gợi ý nhàn rỗi. Các kênh tự động sẽ được bổ sung khi mọi người nói chuyện với mình.",
       idle_nudges_on_no_model:
@@ -75,15 +74,12 @@ export default {
       active_nudges_description:
         "Mình tham gia cuộc trò chuyện khi chủ đề nói về điều một persona yêu thích, dựa trên sở thích trong trang Gợi ý của persona đó.",
       active_nudges_off: "Mình chỉ tham gia cuộc trò chuyện khi có ai đó nói chuyện với mình.",
-      active_nudges_on:
-        "Mình kiểm tra chủ đề cuộc trò chuyện sau mỗi {min}-{max} tin nhắn của thành viên, sử dụng {matcher}.",
       active_nudges_on_no_channels:
         "Mình chưa có kênh nào để tham gia trò chuyện. Các kênh tự động sẽ được bổ sung khi mọi người nói chuyện với mình.",
       active_nudges_on_no_matcher:
         "Chưa có công cụ nào có thể kiểm tra sở thích trong cuộc trò chuyện, vì vậy mình giữ im lặng. Hãy chọn Trình kiểm tra gợi ý chủ động bên dưới.",
       active_nudges_on_cold:
         "Máy chủ này quá hiếm khi nói chuyện với mình nên hiện tại mình sẽ không tham gia trò chuyện.",
-      active_nudges_matcher_checker: "Trình kiểm tra gợi ý chủ động",
       active_nudge_frequency_option: "Tần suất: {level}",
       channels_title: "Kênh",
       channels_description:
@@ -124,8 +120,6 @@ export default {
       frequency_1: "Nhẹ nhàng",
       frequency_2: "Bình thường",
       frequency_3: "Sôi nổi",
-      frequency_effect:
-        "Máy chủ này gửi cho mình khoảng {heat} tin nhắn mỗi ngày, vì vậy dự kiến có khoảng {per_week} gợi ý nhàn rỗi mỗi tuần.",
       frequency_effect_none:
         "Mình sẽ bắt đầu gợi ý nhàn rỗi trong kênh yên ắng khi đến lúc, nhưng hiện tại máy chủ này quá ít nói chuyện với mình.",
       saved_heading: "Đã cập nhật Natural Nudges",
@@ -311,7 +305,8 @@ export default {
       channels_welcome_not_configured_detail: `Chưa có kênh hoặc prompt chào mừng nào được cấu hình.`,
       channels_collection_hidden: `Hiển thị {shown}/{total} kênh ({hidden} bị ẩn).`,
       channels_auto_trigger_title: `Kênh tự động kích hoạt`,
-      channels_auto_trigger_description: `Chọn nơi hoạt động tin nhắn có thể tự động kích hoạt mình.`,
+      channels_auto_trigger_description: `Nơi mình tự phản hồi khi có đủ tin nhắn trôi qua mà không cần được nhắc đến. Điều này không giới hạn những nơi mọi người có thể gọi mình.`,
+      whitelist_location_hint: `Để giới hạn các kênh, vai trò hoặc persona mình được phép trả lời, hãy dùng {moderation}.`,
       channels_auto_trigger_enabled_title: `Kênh đã bật`,
       channels_auto_trigger_enabled_description: `Tin nhắn ở đây được tính vào việc tự động kích hoạt.`,
       channels_auto_trigger_none: `Không có kênh nào được bật.`,
@@ -399,6 +394,8 @@ export default {
       channels_overrides_prompt_mode_append: `Nối thêm`,
       channels_overrides_prompt_mode_replace: `Thay thế`,
       channels_overrides_prompt_modal_title: `Đặt prompt của kênh`,
+      continuation_description: `Tiếp tục phần trước.`,
+      continuation_placeholder: `Dùng ô này nếu văn bản của bạn không vừa ở trên.`,
       prompt_part_label: `{name} (Phần {index}/{total})`,
       prompt_part_first_description: `Discord giới hạn một trường 4.000 ký tự, nên prompt dài sẽ viết tiếp ở Phần 2.`,
       prompt_part_continued_description: `Tiếp tục Phần {previous}. Bỏ trống nếu không dùng.`,
@@ -1011,7 +1008,7 @@ export default {
       attribute_file_label: `Tệp văn bản thuộc tính`,
       attribute_file_description: `Tệp .txt tùy chọn với mỗi thuộc tính trên một dòng.`,
       attribute_public_label: `Khả năng hiển thị`,
-      attribute_public_description: `Chọn việc các persona khác có thể dùng thuộc tính này.`,
+      attribute_public_description: `Chọn việc các persona khác có thể thấy thuộc tính này.`,
       attribute_public_option: `Thuộc tính công khai`,
       dialogues_title: `**[Đoạn hội thoại mẫu](https://docs.tomoribot.app/vi/features/chatting-personality/multiple-personas/#sample-dialogues)**`,
       dialogues_description: `Các ví dụ này định hướng cách persona này nói chuyện.`,
@@ -1023,11 +1020,11 @@ export default {
       dialogue_edit_modal_title: `Sửa đoạn hội thoại mẫu`,
       dialogue_user_input_label: `Tin nhắn người dùng`,
       dialogue_user_input_description: `Những gì người dùng nói trong ví dụ này.`,
-      dialogue_user_input_placeholder: `Tin nhắn người dùng mẫu...`,
+      dialogue_user_input_placeholder: `Chào {bot}!`,
       dialogue_user_input_part2_label: `Tin nhắn người dùng (Phần 2)`,
       dialogue_bot_input_label: `Phản hồi của persona`,
       dialogue_bot_input_description: `Cách persona phản hồi trong ví dụ này.`,
-      dialogue_bot_input_placeholder: `Phản hồi persona mẫu...`,
+      dialogue_bot_input_placeholder: `Fufu~ chào {user} nhé.`,
       dialogue_bot_input_part2_label: `Phản hồi persona (Phần 2)`,
       dialogue_file_label: `Tệp văn bản hội thoại`,
       dialogue_file_description: `Tệp .txt tùy chọn dùng các dòng {user}: và {bot}:.`,
@@ -1077,6 +1074,7 @@ export default {
       capability_tts_clone: `TTS (Sao chép giọng đọc)`,
       capability_stt: `Chuyển giọng nói thành văn bản`,
       capability_notice_title: `Lưu ý`,
+      byok_models_notice: `Máy chủ này yêu cầu thành viên tự dùng nhà cung cấp của riêng mình, nên các thiết lập model toàn máy chủ tại đây sẽ không được áp dụng. Để sử dụng, hãy mở \`/moderation\`, vào Quyền thành viên và chọn Cho phép dùng model máy chủ.`,
       image_generation_disabled_direction:
         "Tính năng tạo hình ảnh đã bị tắt. Bật tính năng này trong Plugin > Công cụ khả dụng.",
       image_generation_missing_model: `Chưa có model khả dụng nào được cấu hình cho việc tạo ảnh.`,

@@ -9,7 +9,7 @@ import {
   PUBLISHED_DOCS_LOCALES,
   buildLocalizedDocsPath,
 } from "@/constants/docsLocales";
-import { ANCHOR_COMMENT } from "../../../scripts/checks/checkLocaleLinks";
+import { extractDocAnchors } from "../../../scripts/checks/checkLocaleLinks";
 
 const repoRoot = join(import.meta.dir, "..", "..", "..");
 const docsRoot = join(repoRoot, "docs");
@@ -40,34 +40,6 @@ function resolveRoute(route: string): string | undefined {
   return undefined;
 }
 
-/** Anchor ids a Markdown heading or an explicit anchor element produces. */
-function collectAnchors(source: string): Set<string> {
-  const anchors = new Set<string>();
-  for (const match of source.matchAll(/<a\s+(?:[^>]*?\s+)?(?:id|name)=["']([^"']+)["']/gi)) {
-    anchors.add(match[1]);
-  }
-  const lines = source.split("\n");
-  for (const [index, line] of lines.entries()) {
-    const anchor = ANCHOR_COMMENT.exec(line);
-    if (anchor && index > 0 && /^#{1,6}\s+.+$/.test(lines[index - 1])) anchors.add(anchor[1]);
-
-    const heading = line.match(/^#{1,6}\s+(.+)$/);
-    if (!heading) continue;
-    anchors.add(
-      heading[1]
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-        .replace(/[*_~`]/g, "")
-        .replace(/<[^>]+>/g, "")
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, "-")
-        .replace(/[^\p{L}\p{N}\p{M}\-_]/gu, "")
-        .replace(/-+/g, "-"),
-    );
-  }
-  return anchors;
-}
-
 const routeEntries = Object.entries(DOCS_ROUTES);
 const legalRouteEntries = Object.entries(LEGAL_DOC_ROUTES);
 
@@ -85,7 +57,7 @@ describe("bot docs route registry", () => {
       if (!fragment) continue;
       const file = resolveRoute(path);
       if (!file) continue;
-      const anchors = collectAnchors(readFileSync(join(docsRoot, defaultLocale, file), "utf8"));
+      const anchors = extractDocAnchors(readFileSync(join(docsRoot, defaultLocale, file), "utf8"));
       if (!anchors.has(fragment)) missing.push(`${name}#${fragment}`);
     }
 

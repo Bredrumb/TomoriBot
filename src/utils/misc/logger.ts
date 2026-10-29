@@ -207,6 +207,8 @@ const metricLogger = customLevels.child(
   { level: resolveMetricLevel(usePrettyTransport, pinoLogger.level) },
 ) as CustomLevelLogger;
 
+const diagnosticLogger = pinoLogger.child({}, { level: usePrettyTransport ? pinoLogger.level : "warn" });
+
 /**
  * ANSI color codes for terminal output
  */
@@ -244,7 +246,12 @@ function getLogMaxStringLength(): number | undefined {
 // is matched whole; cutting first could leave a password that lost its trailing `@` unredacted.
 const REDACTION_OVERLAP_CHARS = 512;
 
-function sanitizeLogString(value: string): string {
+function redactLogValues(value: string, redactValues: readonly string[] = []): string {
+  return redactValues.reduce((text, secret) => (secret ? text.replaceAll(secret, REDACTED) : text), value);
+}
+
+function sanitizeLogString(value: string, redactValues: readonly string[] = []): string {
+  value = redactLogValues(value, redactValues);
   const maxStringLength = getLogMaxStringLength();
   if (!maxStringLength || value.length <= maxStringLength) {
     return redactLogString(value);
@@ -316,17 +323,26 @@ export function sanitizeCredentialPayload(value: unknown, redactSensitiveKeys = 
  * Recursively removes structured credentials and common credential-bearing URL
  * forms before a value reaches either stdout or the JSONL sink.
  */
-export function sanitizeLogPayload(value: unknown, depth = 0, truncateStrings = true): unknown {
+export function sanitizeLogPayload(
+  value: unknown,
+  depth = 0,
+  truncateStrings = true,
+  redactValues: readonly string[] = [],
+): unknown {
   if (depth > 8) return "[TRUNCATED]";
-  if (typeof value === "string") return truncateStrings ? sanitizeLogString(value) : redactLogString(value);
+  if (typeof value === "string")
+    return truncateStrings
+      ? sanitizeLogString(value, redactValues)
+      : redactLogString(redactLogValues(value, redactValues));
   if (value === null || typeof value !== "object") return value;
-  if (Array.isArray(value)) return value.map((entry) => sanitizeLogPayload(entry, depth + 1, truncateStrings));
+  if (Array.isArray(value))
+    return value.map((entry) => sanitizeLogPayload(entry, depth + 1, truncateStrings, redactValues));
 
   const output: Record<string, unknown> = {};
   for (const [key, entry] of Object.entries(value)) {
-    output[key] = SENSITIVE_NORMALIZED_KEYS.has(normalizeSensitiveKey(key))
+    output[redactLogValues(key, redactValues)] = SENSITIVE_NORMALIZED_KEYS.has(normalizeSensitiveKey(key))
       ? REDACTED
-      : sanitizeLogPayload(entry, depth + 1, truncateStrings);
+      : sanitizeLogPayload(entry, depth + 1, truncateStrings, redactValues);
   }
   return output;
 }
@@ -339,19 +355,25 @@ export function buildMetricPayload(name: string, fields: Record<string, number |
   return sanitizeLogPayload({ metric: name, ...fields }) as Record<string, unknown>;
 }
 
-const toLoggableError = (err: unknown): Record<string, unknown> => {
+const toLoggableError = (err: unknown, redactValues: readonly string[] = []): Record<string, unknown> => {
   if (err instanceof Error) {
     const safeExtraFields = Object.fromEntries(Object.entries(err).filter(([, value]) => isCloneSafeLogValue(value)));
 
-    return sanitizeLogPayload({
-      ...safeExtraFields,
-      name: err.name,
-      message: err.message,
-      stack: err.stack,
-    }) as Record<string, unknown>;
+    return sanitizeLogPayload(
+      {
+        ...safeExtraFields,
+        name: err.name,
+        message: err.message,
+        stack: err.stack,
+      },
+      0,
+      true,
+      redactValues,
+    ) as Record<string, unknown>;
   }
-  if (typeof err === "object" && err !== null) return sanitizeLogPayload(err) as Record<string, unknown>;
-  return { message: sanitizeLogString(String(err)) };
+  if (typeof err === "object" && err !== null)
+    return sanitizeLogPayload(err, 0, true, redactValues) as Record<string, unknown>;
+  return { message: sanitizeLogString(String(err), redactValues) };
 };
 
 /**
@@ -375,22 +397,23 @@ export const log = {
     customLevels.success(shouldHideLogs ? `✓ ${sanitizedMsg}` : `${colors.green}✓ ${sanitizedMsg}${colors.reset}`);
   },
 
-  /**
-   * Logs developer trace: causes, free text, and stack details that explain an outcome to someone
-   * running their own instance. Hidden at the production default level; a hoster opts in with
-   * `LOG_LEVEL=warn`.
-   * @param err - Optional error object to include.
-   */
-  warn: (msg: string, err?: unknown, context?: ErrorContext) => {
-    const sanitizedPlainMsg = sanitizeLogString(msg);
+  /** Retained provider diagnostics bypass the JSON level filter so expected refusals remain diagnosable. */
+  warn: (
+    msg: string,
+    err?: unknown,
+    context?: ErrorContext,
+    options?: { retain?: boolean; redactValues?: readonly string[] },
+  ) => {
+    const sanitizedPlainMsg = sanitizeLogString(msg, options?.redactValues);
     const coloredMsg = shouldHideLogs ? sanitizedPlainMsg : `${colors.yellow}${sanitizedPlainMsg}${colors.reset}`;
     const resolvedContext = resolveErrorContext(context);
-    const sanitizedContext = sanitizeLogPayload(resolvedContext);
-    const sanitizedError = err ? toLoggableError(err) : undefined;
+    const sanitizedContext = sanitizeLogPayload(resolvedContext, 0, true, options?.redactValues);
+    const sanitizedError = err ? toLoggableError(err, options?.redactValues) : undefined;
+    const logger = options?.retain ? diagnosticLogger : pinoLogger;
     if (sanitizedError) {
-      pinoLogger.warn({ err: sanitizedError, context: sanitizedContext }, coloredMsg);
+      logger.warn({ err: sanitizedError, context: sanitizedContext }, coloredMsg);
     } else {
-      pinoLogger.warn({ context: sanitizedContext }, coloredMsg);
+      logger.warn({ context: sanitizedContext }, coloredMsg);
     }
   },
 
@@ -433,12 +456,19 @@ export const log = {
    * @param options.persist - `false` when the failure is the database path itself, where an
    *   `error_logs` insert would queue on the pool that just failed.
    */
-  error: async (msg: string, err?: unknown, context?: ErrorContext, options?: { persist?: boolean }): Promise<void> => {
-    const sanitizedPlainMsg = sanitizeLogString(msg);
+  error: async (
+    msg: string,
+    err?: unknown,
+    context?: ErrorContext,
+    options?: { persist?: boolean; redactValues?: readonly string[] },
+  ): Promise<void> => {
+    const sanitizedPlainMsg = sanitizeLogString(msg, options?.redactValues);
     const coloredMsg = shouldHideLogs ? sanitizedPlainMsg : `${colors.red}${sanitizedPlainMsg}${colors.reset}`;
     const resolvedContext = resolveErrorContext(context);
-    const sanitizedContext = sanitizeLogPayload(resolvedContext) as ErrorContext | undefined;
-    const sanitizedError = err ? toLoggableError(err) : undefined;
+    const sanitizedContext = sanitizeLogPayload(resolvedContext, 0, true, options?.redactValues) as
+      | ErrorContext
+      | undefined;
+    const sanitizedError = err ? toLoggableError(err, options?.redactValues) : undefined;
 
     if (sanitizedError) {
       pinoLogger.error({ err: sanitizedError, context: sanitizedContext }, coloredMsg);

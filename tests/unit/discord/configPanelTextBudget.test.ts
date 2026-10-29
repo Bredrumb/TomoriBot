@@ -129,7 +129,8 @@ const MAX_NUDGE_SETTINGS: NaturalNudgesSettingsView = {
     models: [{ id: 9000 + index, name: `decision-${index}`.padEnd(90, "d"), description: null }],
   })),
   trackingEnabled: false,
-  heat: 1234.5,
+  baseHeat: 1234.5,
+  heat: 50,
   perDay: 3,
   activeNudgeRange: { min: 160, max: 320 },
   status: {
@@ -420,6 +421,12 @@ function makeExplicitSlotView(
   };
 }
 
+/** Switched-off capabilities note in yellow; enabled ones with nothing usable behind them note in red. */
+function capabilityNoteLine(locale: string, key: string): string {
+  const circle = key.endsWith("_disabled_direction") ? "🟡" : "🔴";
+  return formatPanelProse(withLinePrefix("> ", `- ${circle} ${localizer(locale, key)}`));
+}
+
 function getCapabilityWarningKey(capability: "image" | "video", enabled: boolean): string {
   if (capability === "image") {
     return enabled
@@ -491,6 +498,8 @@ const PREVIEW_TIGHTNESS_TOLERANCE = 3;
 // hidden notices), where a single channel row is ~25 characters. Multi-section pages (e.g. Channels Rules with 3
 // sections) compound this waste across independent truncations plus a floor division remainder of up to 2 characters.
 const COLLECTION_ROW_TIGHTNESS_TOLERANCE = 80;
+// An Auto-Trigger row also carries the escaped persona nickname, which costs 112 characters in this fixture.
+const AUTO_TRIGGER_ROW_TIGHTNESS_TOLERANCE = 112;
 
 describe("config page text budgeting at stored maxima", () => {
   const memoryLimits = getMemoryLimits();
@@ -705,7 +714,7 @@ describe("config page text budgeting at stored maxima", () => {
     },
     {
       name: "Channels Auto-Trigger",
-      maxTolerance: COLLECTION_ROW_TIGHTNESS_TOLERANCE,
+      maxTolerance: AUTO_TRIGGER_ROW_TIGHTNESS_TOLERANCE,
       buildPayload: (locale: string, receipt: boolean) => {
         const channels = makeChannelList(220);
         const channelsView: ConfigChannelsView = {
@@ -1338,22 +1347,12 @@ describe("Switch Models capability notice budgeting", () => {
                 const expectedWarnings: string[] = [];
                 if (!imageHealthy) {
                   expectedWarnings.push(
-                    formatPanelProse(
-                      withLinePrefix(
-                        "> ",
-                        `- ${localizer(locale, getCapabilityWarningKey("image", flags.imageGenerationEnabled))}`,
-                      ),
-                    ),
+                    capabilityNoteLine(locale, getCapabilityWarningKey("image", flags.imageGenerationEnabled)),
                   );
                 }
                 if (!videoHealthy) {
                   expectedWarnings.push(
-                    formatPanelProse(
-                      withLinePrefix(
-                        "> ",
-                        `- ${localizer(locale, getCapabilityWarningKey("video", flags.videoGenerationEnabled))}`,
-                      ),
-                    ),
+                    capabilityNoteLine(locale, getCapabilityWarningKey("video", flags.videoGenerationEnabled)),
                   );
                 }
 
@@ -1367,9 +1366,7 @@ describe("Switch Models capability notice budgeting", () => {
                       "commands.config.panel.image_generation_missing_model",
                       "commands.config.panel.video_generation_disabled_direction",
                       "commands.config.panel.video_generation_missing_model",
-                    ].some((key) =>
-                      text.includes(formatPanelProse(withLinePrefix("> ", `- ${localizer(locale, key)}`))),
-                    ),
+                    ].some((key) => text.includes(capabilityNoteLine(locale, key))),
                   );
                   expect(capabilityNotice).toBeUndefined();
                 }
@@ -1523,9 +1520,7 @@ describe("Switch Models capability notice budgeting", () => {
         });
         const renderedText = getTextDisplays(payload).join("\n");
         for (const key of speechState.present) {
-          expect(renderedText).toContain(
-            formatPanelProse(withLinePrefix("> ", `- ${localizer(locale, `commands.config.panel.${key}`)}`)),
-          );
+          expect(renderedText).toContain(capabilityNoteLine(locale, `commands.config.panel.${key}`));
         }
         for (const key of speechState.absent) {
           expect(renderedText).not.toContain(localizer(locale, `commands.config.panel.${key}`));

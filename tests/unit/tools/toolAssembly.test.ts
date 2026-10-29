@@ -1,6 +1,9 @@
 import { describe, expect, it, mock } from "bun:test";
 import { assembleToolsForContext } from "@/tools/assembly";
-import { getAvailableToolsForContext } from "@/tools/availability";
+import { InteractWithRecentMessageTool } from "@/tools/functionCalls/interactWithRecentMessageTool";
+import { applyStreamContextAvailability, getAvailableToolsForContext } from "@/tools/availability";
+import { ConditioningInteractionTool } from "@/tools/functionCalls/conditioningInteractionTool";
+import { createPersona } from "../../helpers/fixtures";
 import {
   DanbooruGetPostTool,
   DanbooruSearchPostsTool,
@@ -55,6 +58,7 @@ function createAssemblyState(overrides: Partial<ToolAssemblyState> = {}): ToolAs
       supports_structoutput: true,
     },
     config: {
+      emoji_usage_enabled: true,
       sticker_usage_enabled: true,
       web_search_enabled: true,
       self_teaching_enabled: true,
@@ -95,6 +99,40 @@ function createStaticTool(): Tool {
   };
 }
 
+it("exposes optional sprite selection only for the active persona's advertised roster", () => {
+  const persona = createPersona({ persona_id: 7 });
+  const voice = buildVoiceMessageToolVariant(new GenerateVoiceMessageTool(), "plain");
+  const interaction = new ConditioningInteractionTool();
+  const unrelated = createStaticTool();
+  for (const scenario of [
+    { personaSprites: undefined, enabled: false },
+    { personaSprites: { personaId: 7, spriteKeys: [] }, enabled: false },
+    { personaSprites: { personaId: 8, spriteKeys: ["joy"] }, enabled: false },
+    { personaSprites: { personaId: 7, spriteKeys: ["joy"] }, enabled: true },
+    { personaSprites: { personaId: 7, spriteKeys: ["joy"] }, impersonating: true, enabled: false },
+  ]) {
+    const tools = applyStreamContextAvailability({
+      providerLabel: "fixture",
+      provider: "google",
+      builtInTools: [voice, interaction, unrelated],
+      tomoriState: persona,
+      streamContext: {
+        disableYouTubeProcessing: false,
+        personaSprites: scenario.personaSprites,
+        deliveryMode: scenario.impersonating ? "user_impersonation" : "persona",
+      },
+    });
+    for (const tool of tools.slice(0, 2)) {
+      expect(Boolean(tool.parameters.properties.sprite)).toBe(scenario.enabled);
+      expect(tool.parameters.required).not.toContain("sprite");
+      expect(tool.parameters.properties.sprite?.enum).toBeUndefined();
+    }
+    expect(tools[2].parameters.properties.sprite).toBeUndefined();
+  }
+  expect(voice.parameters.properties.sprite).toBeUndefined();
+  expect(interaction.parameters.properties.sprite).toBeUndefined();
+});
+
 function getEnum(tool: Tool, parameterName: string): string[] {
   const parameter = tool.parameters.properties[parameterName];
   return parameter.enum ?? [];
@@ -105,6 +143,21 @@ function getPropertyNames(tool: Tool): string[] {
 }
 
 describe("tool schema assembly", () => {
+  it("hides emoji reactions while keeping replies available without mutating the shared tool", async () => {
+    const tool = new InteractWithRecentMessageTool();
+    const state = createAssemblyState();
+    state.config.emoji_usage_enabled = false;
+    const [replyOnly] = await assembleToolsForContext([tool], createAssemblyContext(state));
+    expect(replyOnly).toBeDefined();
+    expect(getEnum(replyOnly, "action")).toEqual(["reply"]);
+    expect(JSON.stringify({ description: replyOnly.description, parameters: replyOnly.parameters })).not.toMatch(
+      /react|emoji|sticker/i,
+    );
+    const [full] = await assembleToolsForContext([tool], createAssemblyContext());
+    expect(getEnum(full, "action")).toEqual(["react", "reply"]);
+    expect(getEnum(tool, "action")).toEqual(["react", "reply"]);
+  });
+
   it("leaves tools without an assembly hook unchanged", async () => {
     const tool = createStaticTool();
 

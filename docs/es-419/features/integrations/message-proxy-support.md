@@ -11,7 +11,7 @@ La compatibilidad con proxy de mensajes permite a TomoriBot seguir los mensajes 
 
 Ejecuta `/personal message-proxy service:pluralkit` o `/personal message-proxy service:pluralbuddy`. Elige `service:none` (mostrado como Desactivado) para inhabilitar el procesamiento de proxy. Este es un ajuste personal en la cuenta de Discord que envía los mensajes originales y sigue a esa cuenta en todos los servidores.
 
-Después de que TomoriBot vea el primer mensaje verificado de un alter, usa `/personal config identity:` para editar su perfil y `/personal memories identity:` para editar sus memorias. El autocompletado incluye identidades guardadas de ambos servicios incluso cuando el procesamiento de proxy está desactivado. La interfaz de cuenta, la privacidad y la configuración de modelos permanecen en la cuenta anfitriona. El apodo establecido en TomoriBot se conserva hasta que se elimine; de lo contrario, el nombre visible del servicio se actualiza en los mensajes verificados. Consulta [Compatibilidad con PluralKit](/es-419/features/integrations/pluralkit-support/) para ver detalles sobre miembros y biografías.
+Después de que TomoriBot vea el primer mensaje verificado de un alter, usa `/personal config identity:` para editar su perfil y `/personal memories identity:` para editar sus memorias. El autocompletado incluye identidades guardadas de ambos servicios incluso cuando el procesamiento de proxy está desactivado. La interfaz de cuenta, la privacidad y la configuración de modelos permanecen en la cuenta anfitriona. El apodo establecido en TomoriBot se conserva hasta que se elimine; de lo contrario, el nombre visible del servicio se actualiza en los mensajes verificados.
 
 ## Qué significa la comprobación de seguridad
 

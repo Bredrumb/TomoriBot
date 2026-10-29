@@ -1,3 +1,4 @@
+import { buildFailedToolResponse } from "@/utils/tools/toolResult";
 import { buildChatPersonaPostContext } from "@/utils/chat/responseEmitter";
 import { expandDeliberateToolAllowedNames } from "@/utils/tools/deliberateToolMode";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
@@ -15,11 +16,13 @@ import { charsToTokensText, estimateContextItemsTokens } from "@/utils/text/toke
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { ToolRegistry } from "@/tools/toolRegistry";
+import { getToolSpriteRoster } from "@/tools/spriteSelection";
 import { statRepository } from "@/utils/db/repositories";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { withProviderOptionCopy } from "@/utils/provider/providerOptionRegistry";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { isDirectMessageChannel, resolveProviderErrorFooter } from "@/utils/discord/stream/errorUi";
+import { mergeThoughtLogPayloads } from "@/utils/discord/stream/thoughtLog";
 import { routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
@@ -278,7 +281,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         recordResponseReviewUsage(review, { kind: "author", model: params.tomoriState.llm.llm_codename, usage });
       if (streamResult.pendingResponse) review.pending.push(streamResult.pendingResponse);
     }
-    thoughtLog = streamResult.thoughtLog ?? thoughtLog;
+    thoughtLog = mergeThoughtLogPayloads(thoughtLog, streamResult.thoughtLog);
 
     switch (streamResult.status) {
       case "completed":
@@ -683,6 +686,10 @@ async function streamOnce(
     if (item) requestItems = insertBeforeNativePrefill(requestItems, outputPrefill, item);
   }
   const request = foldPrefillIntoToolHistory(requestItems, outputPrefill, functionHistory);
+  params.context.streamingContext.personaSprites = getToolSpriteRoster(
+    request.contextItems,
+    params.tomoriState.persona_id,
+  );
   const streamPromise = params.provider.streamToDiscord(
     params.context.channel as Parameters<LLMProvider["streamToDiscord"]>[0],
     params.context.client,
@@ -880,6 +887,7 @@ async function executeToolCall(
     isUserImpersonation: params.context.isUserImpersonation,
     impersonatedUserId: params.context.impersonatedUserId,
     suppressProgressNotices: !params.context.shouldSurfaceUserErrors || undefined,
+    mirrorSuppressedProgressNotices: true,
     contextItems: params.context.contextItems,
     messageIdMap: params.context.messageIdMap,
     showKillHint: iteration >= SOFT_WARN_ITERATION_THRESHOLD,
@@ -1217,11 +1225,7 @@ async function executeToolCall(
         functionResponse: {
           name: functionCall.name,
           response: {
-            result: {
-              status: "tool_execution_failed",
-              reason: toolResult.message || toolResult.error || "Tool execution failed without specific error",
-              tool_name: functionName,
-            },
+            result: buildFailedToolResponse(toolResult, functionName),
           },
         },
       };
@@ -1274,13 +1278,8 @@ async function emitFailedToolCallThoughtLog(
   args: Record<string, unknown>,
   toolResult: ToolResult,
 ): Promise<void> {
-  const noticeContext: ToolContext = {
-    ...context,
-    suppressProgressNotices: false,
-  };
-
   await routeHiddenToolNotice(
-    noticeContext,
+    context,
     {
       color: ColorCode.ERROR,
       titleKey: "genai.thought_log.title",

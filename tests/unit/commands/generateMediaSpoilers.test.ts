@@ -32,6 +32,10 @@ import { log } from "@/utils/misc/logger";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 import { makeFakeInteraction } from "../../helpers/fakeInteraction";
+import * as downloads from "@/utils/security/safeDownload";
+import * as nvidia from "@/providers/nvidia/nvidiaImageGeneration";
+import * as zai from "@/providers/zai/zaiImageGeneration";
+import { STUB_PUBLIC_HOST, stubGlobalFetch } from "../../helpers/fetchStub";
 
 let png: Buffer;
 let modal: ReturnType<typeof makeFakeInteraction>;
@@ -126,9 +130,11 @@ beforeEach(() => {
     filename: "generated.mp4",
   }));
   spyOn(imageQuota, "checkImageQuota").mockResolvedValue({ allowed: true });
-  spyOn(imageQuota, "incrementImageQuota").mockResolvedValue(undefined);
+  spyOn(imageQuota, "reserveImageQuota").mockResolvedValue({ allowed: true, reservation: null });
+  spyOn(imageQuota, "releaseImageQuota").mockResolvedValue(undefined);
   spyOn(videoQuota, "checkVideoQuota").mockResolvedValue({ allowed: true });
-  spyOn(videoQuota, "incrementVideoQuota").mockResolvedValue(undefined);
+  spyOn(videoQuota, "reserveVideoQuota").mockResolvedValue({ allowed: true, reservation: null });
+  spyOn(videoQuota, "releaseVideoQuota").mockResolvedValue(undefined);
   spyOn(statRepository, "recordStat").mockImplementation(() => undefined);
 });
 afterEach(() => mock.restore());
@@ -168,6 +174,114 @@ describe("Generation command spoilers", () => {
 });
 
 describe("Media generation failures", () => {
+  it("sends reference-image warnings through the acknowledged modal and continues generation", async () => {
+    spyOn(downloads, "safeDownload").mockResolvedValue({ success: true, buffer: png, contentType: "image/png" });
+    for (const provider of ["nvidia", "zai"] as const) {
+      modal = makeFakeInteraction();
+      spyOn(credentials, "resolveCapabilityCredentials").mockResolvedValue({
+        provider,
+        source: "personal",
+        apiKey: "fixture-key",
+        keyVersion: 1,
+        modelId: 1,
+        savedConfig: savedProviderConfigSchema.parse({
+          server_id: 1,
+          provider,
+          api_key: null,
+          llm_id: null,
+          diffusion_model_id: 1,
+          embedding_model_id: null,
+          nai_diffusion_model_id: null,
+          nai_preset_name: null,
+        }),
+      });
+      const generate =
+        provider === "nvidia" ? spyOn(nvidia, "generateNvidiaNativeImage") : spyOn(zai, "generateZaiNativeImage");
+      generate.mockResolvedValue({ imageData: png.toString("base64"), mimeType: "image/png" });
+      spyOn(modals, "promptWithRawModal").mockImplementation(async () => {
+        await modal.interaction.deferReply();
+        return {
+          outcome: "submit",
+          interaction: modal.interaction as unknown as ModalSubmitInteraction,
+          values: { prompt_input: "fixture prompt", aspect_ratio_select: "1:1" },
+          attachments: {
+            image_upload_1: {
+              id: "fixture-upload",
+              filename: "reference.png",
+              url: "https://cdn.example.com/reference.png",
+              proxy_url: "https://cdn.example.com/reference.png",
+              content_type: "image/png",
+              size: png.length,
+            },
+          },
+        };
+      });
+      const originalFollowUp = mock(async () => {
+        throw new Error("Original command interaction was not acknowledged");
+      });
+      const { interaction } = makeFakeInteraction({
+        channel: {},
+        followUp: originalFollowUp,
+        options: { getString: (name) => (name === "mode" ? "manual" : null), getBoolean: () => false },
+      });
+      await image({} as Client, interaction as unknown as ChatInputCommandInteraction, createUserRow(), "en-US");
+      expect(originalFollowUp).not.toHaveBeenCalled();
+      expect(modal.calls.some((call) => call.method === "followUp")).toBe(true);
+      expect(generate).toHaveBeenCalled();
+      expect(
+        modal.calls.some(
+          (call) => call.method === "editReply" && Boolean((call.args[0] as { files?: unknown[] }).files?.length),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("classifies real custom image and video HTTP failures as warnings or operational errors", async () => {
+    const errorLog = spyOn(log, "error").mockResolvedValue(undefined);
+    const warnLog = spyOn(log, "warn").mockImplementation(() => {});
+    const baseCredentials = await credentials.resolveCapabilityCredentials(1, "image-standard");
+    spyOn(credentials, "resolveCapabilityCredentials").mockImplementation(async (_server, capability) => ({
+      ...baseCredentials,
+      modelId: capability === "video" ? 2 : 1,
+      customEndpoint: customEndpointSchema.parse({
+        ...endpoint,
+        capability: capability === "video" ? "video" : "image",
+        api_style: "openai-compatible",
+        endpoint_url: `https://${STUB_PUBLIC_HOST}/v1`,
+      }),
+    }));
+    spyOn(dispatcher, "generateCustomImageViaEndpoint").mockRestore();
+    spyOn(dispatcher, "generateCustomVideoViaEndpoint").mockRestore();
+    let responseStatus = 401;
+    const fetch = stubGlobalFetch(
+      async () => new Response("UPSTREAM_AUTH", { status: responseStatus, statusText: "Fixture status" }),
+    );
+    for (const [command, errorType] of [
+      [image, "ImageGenerationFailed"],
+      [video, "VideoGenerationFailed"],
+    ] as const) {
+      for (const status of [401, 403, 422]) {
+        responseStatus = status;
+        errorLog.mockClear();
+        warnLog.mockClear();
+        fetch.mockClear();
+        modal = makeFakeInteraction();
+        const { interaction } = makeFakeInteraction({
+          channel: {},
+          options: { getString: (name) => (name === "mode" ? "manual" : null), getBoolean: () => false },
+        });
+        await command({} as Client, interaction as unknown as ChatInputCommandInteraction, createUserRow(), "en-US");
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(errorLog.mock.calls.filter((call) => call[2]?.errorType === errorType).length).toBe(
+          status === 422 ? 1 : 0,
+        );
+        const warnings = warnLog.mock.calls.filter((call) => call[2]?.errorType === errorType);
+        expect(warnings.length).toBe(status === 422 ? 0 : 1);
+        if (status !== 422) expect(warnings[0]?.[1]).toMatchObject({ status });
+      }
+    }
+  });
+
   it("acknowledges missing-credential errors before awaiting recovery copy and leaves successful modal flows alone", async () => {
     for (const command of [image, video]) {
       const pending = Promise.withResolvers<string[]>();

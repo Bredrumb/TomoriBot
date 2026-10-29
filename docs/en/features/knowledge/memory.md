@@ -5,282 +5,140 @@ sidebar:
 aiGenerated: false
 ---
 
-TomoriBot has a persistent memory system so she remembers facts across conversations. This
-page is about *what she knows* (facts, context, documents). For *how she behaves*
-(personality, tone), see [Multiple Personas](/features/chatting-personality/multiple-personas/).
+TomoriBot remembers conversations in several ways. For personality and behavior, see
+[Multiple Personas](/features/chatting-personality/multiple-personas/).
 
-## Memory Hierarchy
+## Types of memory
 
-From most permanent to most fleeting
-
-| Tier | What it is | How long it lasts |
+| Type | What TomoriBot remembers | How long it lasts |
 |---|---|---|
-| Long-term memory (LTM) | Saved facts about a user or a server, uploaded documents, and conditioning | Forever, until someone removes it. Survives `/refresh`, restarts, everything |
-| Short-term memory (STM) | A summary she writes for a channel, plus a few recent messages | 24 hours. Can reach across channels |
-| Chat history | The recent messages in the channel she's replying in | Only this channel, only until they scroll out of `/config` > Engine > General range (defaults to latest 80 messages). `/refresh` cuts it off immediately |
+| Long-term memory | Saved facts, documents, lorebooks, and conditioning | Until removed; survives `/refresh` and restarts |
+| Short-term memory (STM) | A channel summary and recent messages | 24 hours by default |
+| Chat history | Recent messages in the current channel | Until they fall outside the configured history range or `/refresh` clears it |
 
-Almost everything she appears to "know" in a conversation is just recent chat history, which is why
-she seems to forget a message once the conversation becomes too long. **Only long-term memory is
-permanent.** STM sits in between: useful for carrying a scene across channels without
-committing anything, but it still expires.
-
-To see exactly what she is handed on any given turn, see
+For what TomoriBot receives on each turn, see
 [Inside The Prompt](/features/knowledge/inside-the-prompt/).
 
-## Long-Term Memory
+In `/memories`, Memories holds saved facts, Documents holds references searched by meaning, Lorebooks
+contains authored canon, and Short-Term holds conversation summaries.
+
+## Long-term memory
 <!-- anchor: long-term-memory -->
 
-Long-term memories are the only thing she keeps permanently. They are not affected by
-`/refresh`, by restarts, or by moving to another channel.
-
-### Personal vs. Server Memories
+### Personal and server memories
 <!-- anchor: personal-vs-server-memories -->
 
-There are two kinds of long-term memory:
+Personal memories are facts about you. They follow you across servers and are used when you take part
+in a conversation. Server memories contain information for everyone in that server.
 
-- **Personal memories** (`/personal memories`): facts about an individual user, e.g.
-  "Amaori loves cats", "prefers dark mode", "allergic to peanuts". These are tied to *you*
-  and follow you across every server, but she only draws on them in conversations you're actively part of.
-- **Server memories** (`/memories`): information relevant to the whole server,
-  e.g. "Game night is every Friday at 8 PM", "no NSFW posting", "#general is for
-  announcements". These stay within the server and are always in mind there.
+Each persona has its own personal and server memories. A personal memory added on the Global page of
+`/personal memories` applies to every persona. Manage personal memories with `/personal memories` and
+server memories with `/memories`.
 
-Memories are isolated per persona by default: each persona (including alters) keeps its
-own separate set of personal and server memories, so different personas means she can't recall
-what another persona learned. The one exception is a personal memory added from the Global page
-on `/personal memories`, which then applies to every persona for you specifically. Server
-memories have no such option, each persona's server-memory set always stays separate, even
-within the same server.
+### Saving memories
 
-Use `/memories` to browse, add, edit, remove, or move server memories into the
-document knowledge base. `/personal memories` manages the facts tied to you.
-Memories persist until you remove them.
+You can save memories yourself, or TomoriBot can decide to save them during a conversation. When she
+saves one, she posts an embed confirming what she learned. Without that confirmation, the information
+remains in the conversation history rather than long-term memory.
 
-In new servers, non-manager member access to create, edit, or remove shared server memories is disabled by default. Members with `Manage Server` permission retain access at all times, and managers can opt other members in through `/moderation` Member Access.
+If you want her to save something, ask her to remember it or add it yourself. Server managers can
+disable automatic saving under `/config` > `Permissions`.
 
-### Message-Proxy Identities
-
-When you enable a supported message-proxy service, TomoriBot can keep personal memories for each
-verified proxied identity separately from the Discord account that sent the message. The host
-account still controls privacy, blocking, cooldowns, and authorization. TomoriBot never guesses an
-identity from a webhook name or avatar, and an unverified webhook does not receive a separate
-memory profile.
-
-PluralKit and PluralBuddy are selectable services. See
-[Message-Proxy Support](/features/integrations/message-proxy-support/) for setup and limitations.
-
-
-### How Memories Get Saved
-
-There are exactly two ways a long-term memory is created:
-
-1. **You save it** with `/personal memories` or `/memories`.
-2. **She saves it herself** when she decides something is worth keeping.
-
-When she saves one herself, she posts an embed saying she learned something. **That embed is
-the confirmation.** If you tell her something and no embed appears, nothing was saved: it is
-still only chat history, so she will lose it once the conversation moves on, and she will not
-have it in a different channel.
-
-If she is not saving things you want kept, you have three options, in increasing order of
-force:
-
-- Ask her directly to remember it.
-- Add a nudge with `/config` > Engine > General, or with any of the other prompt-carrying
-  commands from [Inside The Prompt](/features/knowledge/inside-the-prompt/) (`/config` > Persona > Advanced,
-  `/config` > Engine > General, `/config` > Channels > Channel Overrides). A context note in particular sits low
-  in her prompt, which makes it more likely to be acted on. Something as simple as *"It is
-  encouraged to create long-term memories for information that is worth remembering"* is usually
-  enough. To reference the actual save-memory tool by name without hardcoding something that can
-  vary by provider, use the `{memory_tool}`
-  [prompt macro](/features/capabilities/tools-and-extensions/#built-in-tools) instead, e.g.
-  *"Use {memory_tool} whenever..."*.
-- Save it yourself with `/personal memories`, which is a guaranteed method.
-
-Server admins can turn her self-saving off entirely with `/config` > Permissions.
-
-### How Many Memories 
+### Memory limits
 <!-- anchor: how-many-memories -->
 
-By default she holds up to 100 personal memories and 100 server memories. Self-hosters can change these with .env variables `MAX_PERSONAL_MEMORIES`, `MAX_SERVER_MEMORIES`, and
-`MAX_MEMORY_LENGTH`. Raising the *length* costs far more context than raising the *count*, so
-prefer more short memories over fewer long ones.
+Each persona can hold 100 personal memories and 100 server memories by default. Global personal
+memories count toward each persona's personal limit. Self-hosters can change the limits with
+`MAX_PERSONAL_MEMORIES`, `MAX_SERVER_MEMORIES`, and `MAX_MEMORY_LENGTH`.
 
-Each persona has a separate personal-memory limit and server-memory limit. A server with four
-personas has four of each. Your global personal memories count against every persona's personal
-allowance.
+:::tip
+Prefer more short memories over fewer long ones. A memory that uses a raised `MAX_MEMORY_LENGTH` is
+sent in full every time it is active, while extra slots in `MAX_PERSONAL_MEMORIES` and
+`MAX_SERVER_MEMORIES` cost nothing until filled.
+:::
 
-
-### Document Knowledge Base (RAG)
+### Document knowledge base
 <!-- anchor: document-knowledge-base-rag -->
 
-Server admins can give her documents to reference using RAG. Documents are chunked and stored as searchable embeddings; she automatically retrieves
-  relevant content when answering. In new servers, document management is similarly restricted to members with `Manage Server` by default; managers can grant member access through `/moderation` Member Access.
+Documents give TomoriBot a searchable knowledge base. She retrieves relevant passages when answering.
+This requires an embedding model; see
+[Providers & Models](/features/setup-administration/providers-and-models/).
 
-Requires an embedding model, configured with `/config` > Models > Switch Models. See
-[Providers & Models](/features/setup-administration/providers-and-models/). The
-Documents page in `/memories` provides persona and server-wide scopes, live document
-and chunk counts, uploads, document browsing, and removal:
+Use `/memories` to manage documents and `/learn history` to turn channel conversations into searchable
+knowledge. Documents can belong to one persona or be shared across personas, and can be limited to
+selected channels. On new servers, document management is restricted to members with `Manage Server`
+by default; managers can grant access through `/moderation` > `Member Access`.
 
-- Upload text, PDF, or Markdown files as server knowledge. The scope picks whether it is
-  tied to just this persona (the default) or server-wide for every persona to reference.
-- `/learn history`: extract channel history into searchable knowledge. The `learner` option picks
-  who learns it: one persona (leave it blank for the main persona), **Automatic** (each persona that
-  spoke gets its own copy), or **Global** (every persona shares it).
-- Browse stored documents chunk by chunk. Server admins can edit individual chunks, change
-  which channels a document is limited to, or delete a single chunk without removing the whole
-  document.
-- Remove stored documents or individual chunks directly from the panel.
+History imports offer prompts for conversation, roleplay, and a persona's point of view. You can review
+and adjust the prompt before importing.
 
-#### History Import Prompts
+### Lorebooks
 
-When importing channel history with `/learn history`, the `prompt` option changes how TomoriBot extracts
-memories:
-
-- **Conversation** extracts standalone facts from normal chat. It resolves pronouns and uses absolute timestamps when dates or times are mentioned or can be inferred.
-- **Roleplay** looks for scenes, lore, relationships, and memorable events without trying to preserve every small beat.
-- **In-Character** needs a persona in `learner`. It extracts memories from that persona's point of view, using that persona's prompt, attributes, existing memories, and relevant documents as context.
-
-The prompt is shown before import so you can adjust it for the channel or scene.
-
-History imports are stored as documents, so `/memories` works on them too.
+Lorebooks hold world canon that appears only when its keywords match recent messages. Entries can be
+Serverwide or belong to one persona lineage, can be Always On, and can be limited to channels. Manage
+them under `/memories` > `Lorebooks`; every member can read them and members with `Manage Server` can
+change them. See [Lorebooks](/features/knowledge/lorebooks/).
 
 ### Conditioning
 <!-- anchor: conditioning -->
 
-`/conditioning` is a per-persona, per-server memory that steers a persona's behavior over
-time. A lighter-weight nudge than a full attribute or system prompt. Use it to reinforce
-how a specific character should act in a specific server.
+Conditioning guides a persona's behavior in a server. Rewards and punishments given to a persona with
+a reason become conditioning that she can act on. Interactions without a reason are counted but do not
+appear in her prompt. Review or clear conditioning with `/conditioning`.
 
-Use the optional `user` option on `/reward` or `/punish` for a playful embed named after that user.
-Choose either `user` or `persona`, not both. User targets never save conditioning or trigger an AI
-reply, even with a `reason`; the "will remember this" footer is just for fun.
-For both users and personas, the reason appears in italics within the action sentence.
+Playful interactions can also let personas reward or punish users and other personas. Interactions
+with users do not save conditioning; interactions with personas can prompt them to respond. Server
+managers can disable the tool under `/config` > `Plugins` > `Available Tools`.
 
-`Playful Interactions` lets personas make deliberate gestures toward users or other personas. It is on
-by default; disable it under `/config` > `Plugins` > `Available Tools`. Each gesture needs a target, an
-action, and a reason; feeding also needs food. User targets get a playful embed. Persona targets
-receive conditioning and are queued to react after the current speaker finishes. The reacting persona
-cannot use this tool during that reply. Both the tool and slash commands vary their localized titles.
+## Controlling when memories activate
 
-Every `/reward` or `/punish` targeting a persona is tallied, but it only
-becomes a memory she actually acts on when you give it a `reason`, which appears like this in her prompt:
+By default, memories are included whenever their owner and scope match the conversation. Channel
+restrictions narrow where they apply, and personal memories can also use keyword tags.
 
-```text
-## Rewarded Behaviors
-Here are past things Tomori did that got rewarded for. Strive to do them again:
-- [Tomori was fed by Amaori. Reason: `being extra helpful today` with `cookies`] (2 times)
-
-## Punished Behaviors
-Here are past things Tomori did that got punished for. Avoid doing them again:
-- [Tomori was bonked by Amaori. Reason: `spamming pings after being told to stop`]
-```
-
-Without a `reason`, the tally is
-recorded but never surfaces in her prompt. Review or clear entries with `/conditioning remove`.
-
-## Controlling When Memories Activate
-
-Scope narrows things before anything else does: a server memory only ever reaches prompts
-in its own server, a personal memory only when that user is visible in the conversation,
-and both only for the persona that owns them. Within that scope, **every memory is sent
-with every prompt** by default. Tagging narrows it further, so a memory activates only on
-a keyword or only in one channel. Turn it on with `/config` > Engine > Memory & STM.
-
-### Keyword Tags
+### Personal memory tags
 <!-- anchor: keyword-tags -->
 
-- Memories without keyword tags are always active (the default).
-- Memories with keyword tags only activate when the keyword appears in the visible
-  context.
-- Use `/tool prompt snapshot` to see which memories are currently activating.
+Personal memories can carry keyword or `#channel` tags. Turn tagging on under `/config` > `Behavior` >
+`Advanced Memory`. When it is on, a tagged personal memory appears only when one of its keywords is in
+the conversation, and an untagged one stays active. A `#channel` tag limits it to that channel. Use
+`/tool prompt snapshot` to see which memories are active.
+
+Server memories no longer use keyword tags. Their authored lore belongs in
+[Lorebooks](/features/knowledge/lorebooks/), where keywords and Always On are set per entry.
 
 ### Channels
 
-- A server memory can be limited to channels you pick in its add or edit form. It then
-  activates only in those channels and in their threads. Leave the picker empty for every
-  channel.
-- A personal memory uses a `#channel` tag instead, which activates it only in that channel.
-- Channel limits combine with keyword tags. On server memories, a tag starting with `#` is an
-  ordinary keyword.
-- Server memories and documents that used older `#channel` tags were converted to channels
-  automatically. If an old tag named a channel that no longer exists, the item stays active in
-  every channel and `/memories` says so; edit it and pick channels to limit it again.
-- If you use the document knowledge base (RAG), documents and extracted histories can be
-  limited to channels the same way. With `/learn history`, pick the channels in the window that
-  opens before extraction starts.
+Server memories and documents can be limited to selected channels and their threads. Personal memories
+use a `#channel` tag. Lorebook entries also accept a channel selection.
 
-In `/help`, choose `Memory`, then `Memory Tagging`, for the same summary in Discord.
+Older server memory and document `#channel` tags were converted to channel selections. If a tagged
+channel no longer exists, the item remains active in every channel; `/memories` identifies these items
+so you can choose new channels.
 
-## Short-Term Memory (STM)
+## Short-term memory
 <!-- anchor: short-term-memory-stm -->
 
-TomoriBot can easily read messages from the current channel she's talking in, but STM allows her to do the following without saving an actual long-term memory:
-1. Temporarily reinforce the current scenario/situation of the channel in context
-2. Temporarily remember conversations from other channels/servers
+Short-term memory helps TomoriBot recall recent conversations, including conversations in other
+channels. Each persona keeps a separate summary for each channel she participates in. She updates it
+when she replies, and it expires after 24 hours by default.
 
-She only remembers conversations she took part in; she updates a channel's memory when
-she replies, and at no other time, so a busy channel where nobody talks to her leaves no
-trace. 
+Server channel memories are shared within that channel. Private-channel memories stay private by
+default. Conversations do not follow you between servers unless you enable cross-server recall in
+`/personal config`; only your own conversations follow you. If you opt out of memory there, your
+messages are excluded from short-term memory.
 
-STM of each channel expires after 24 hours by default and if you've opted out with `/personal config`, your messages never go into it at all as well.
+You can view or correct the current channel's summary under `/config` > `Persona` > `Memories`.
+Server managers can adjust or disable short-term memory under `/config` > `Behavior` > `Advanced Memory`.
+`/refresh` clears the current channel's memory.
 
-### What she can and can't see
+## Message-proxy identities
 
-| Where | What that means |
-|---|---|
-| In a server | The server uses one shared memory per channel. It does not keep separate server memories for each member. |
-| In DMs | Yours alone. |
-| Other channels | She can recall her recent conversations from a few other channels in the same server. |
-| Private channels | Anything set with `/config` > Channels > Channel Rules stays there and won't surface elsewhere. |
-| Other servers | Never, unless you turn on `/personal config` → `crossserver`. Even then only *your own* conversations follow you. |
-| Each persona | Keeps her own separate memory, so switching persona switches memory. |
+Supported message-proxy services let TomoriBot keep separate personal memories for verified proxied
+identities. The host Discord account controls privacy and authorization. See
+[Message-Proxy Support](/features/integrations/message-proxy-support/) for setup and limitations.
 
-Each channel's memory holds the last few messages plus a short summary she writes herself
-and refreshes as the conversation moves along. It fades on its own after a few quiet hours.
+## Privacy
 
-### Commands
-
-| Command | What it does |
-|---|---|
-| `/config` > Persona > Memories | See the summary she's keeping for this channel |
-| `/config` > Persona > Memories | Correct it or write it yourself |
-| `/personal config` / `/personal memories` | Opt into cross-server recall, or wipe your own |
-| `/refresh` | Make her forget this channel right now |
-| `/config` > Engine > Memory & STM | How often she updates it, and how much detail she keeps |
-| `/config` > Engine > Memory & STM | Swap the summary for up to 5 labeled fields (*Current scene*, *Mood*, …) |
-| `/config` > Engine > Memory & STM | Reword how she's asked to keep it |
-| `/memories` | Review and selectively clear active server entries from one manager panel |
-| `/config` > Permissions | Let private-channel memories surface elsewhere |
-| `/config` > Permissions | Turn the feature on or off (stored memories are kept either way) |
-
-Anyone can run `/config` > Persona > Memories, `/personal config`, and `/personal memories`. The rest need Manage Server.
-
-### STM Configuration
-
-Server managers can tune short-term memory from `/config` → `Behavior` → `Memory & STM`.
-These settings apply to the server's active STM records:
-
-- **Refresh cadence** controls how many bot turns pass between refresh nudges. The allowed range is 1-100.
-- **Render mode** chooses whether category values supersede recent turns or appear as a crude summary.
-- **Crude messages** controls how many recent messages are retained, from 1 to the channel maximum.
-- **Nudge depth** places the refresh nudge from the end of the assembled context, from 0-20.
-- **Content depth** places STM content from the end of the assembled context, from −1-20.
-
-`STM Categories` replaces the default Summary field with up to five labeled fields. Enter each field as
-`Label: Description`; leaving every field blank restores the default Summary category. Saving categories
-clears incompatible active server-channel STM, and the panel discloses the affected channels before saving.
-
-`STM Prompt` lets managers override the tool description and update nudge. Blank overrides restore the
-effective defaults, including the category-aware nudge when categories are enabled.
-
-:::tip
-These STM commands are for advanced users only, it is recommended to keep the default settings, unless you want to allow her to remember you across servers with `/personal config`
-:::
-
----
-
-## Privacy 
-For exactly what she stores and how to export or delete it, see
-[Data Handling](/features/knowledge/data-handling/) and `/legal privacy-policy`. You can opt out of memory
-entirely with `/personal config`.
+For what TomoriBot stores and how to export or delete it, see
+[Data Handling](/features/knowledge/data-handling/) and `/legal privacy-policy`. You can opt out of
+memory with `/personal config`.

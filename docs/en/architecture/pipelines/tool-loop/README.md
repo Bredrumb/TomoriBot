@@ -134,7 +134,7 @@ operator's `send_message_limit` caused the cut, which stays silent as it does wh
 
 Cancellation discards held text and retains the existing queued stop/follow-up handling. Result
 assembly includes accepted dialogue and the actual-usage ledger; presentation carries no second
-usage copy. The [tool checkpoint](02-execute-tool-call.md#actual-request-review) runs before dispatch,
+usage copy. The [tool checkpoint](/architecture/pipelines/tool-loop/02-execute-tool-call/#actual-request-review) runs before dispatch,
 with correction budgets independent of final-response review.
 
 ## Source pointers

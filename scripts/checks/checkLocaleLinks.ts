@@ -63,7 +63,7 @@ export function extractDocAnchors(content: string): Set<string> {
   }
 
   // Heading lines: # Heading
-  const lines = content.split("\n");
+  const lines = content.split(/\r?\n/);
   for (const [index, line] of lines.entries()) {
     const anchor = ANCHOR_COMMENT.exec(line);
     if (anchor && index > 0 && /^#{1,6}\s+.+$/.test(lines[index - 1])) {

@@ -77,7 +77,7 @@ TomoriBot 是一套免費且開源的 Discord 個人 AI 助理與角色扮演系
 
 ![Screenshots 3](../assets/img/scs/3-commands.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/zh-TW/features/command-reference/">原生設定斜線指令與執行</a></h3>
-<p align="center">所有設定與執行都能透過 Discord 原生的斜線指令與互動介面完成。完整管理人格、提示詞、模型端點與參數，設定 MCP 工具伺服器，調整權限，設定記憶，設定伺服器成員的速率限制，還有更多！</p>
+<p align="center">無需離開 Discord 即可設定並自訂 TomoriBot。使用斜線指令與互動選單建立人格、微調提示詞與模型設定、連接 MCP 伺服器、管理記憶，並掌控權限與用量限制。你也可以自己執行指令來生成圖片與語音訊息、擲骰子，並體驗更多有趣功能。</p>
 
 <br />
 
@@ -127,13 +127,15 @@ TomoriBot 是一套免費且開源的 Discord 個人 AI 助理與角色扮演系
 - `/setup` - 伺服器的 bot 初始設定
 - `/config` 與 `/personal config` - 在目前 Discord 伺服器或個人調整 TomoriBot 的多種方式
 - `/providers` 與 `/personal providers` - 新增更多模型端點或雲端供應商
+- `/persona` - 為她賦予性格或新增角色（請參閱[多個人格](https://docs.tomoribot.app/zh-TW/features/chatting-personality/multiple-personas/)）
+- `/memories` - 跨對話教導她記住事實（請參閱[記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/)）
 
 所有斜線指令請參閱完整的[指令參考](https://docs.tomoribot.app/zh-TW/features/command-reference/)。
 
 
 ## 謝辭
 
-衷心感謝所有人，*特別*感謝以下各位好友的程式碼貢獻與寶貴建議，幫助打造出今天的 TomoriBot！
+衷心感謝所有人，*特別*感謝以下各位好友的重大貢獻與寶貴建議，大力協助 TomoriBot 變得更好！
 
 <table>
   <tr>

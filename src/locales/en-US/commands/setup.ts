@@ -15,9 +15,6 @@ export default {
     heads_up_title: `A Few Things to Note`,
     channel_access_warning_field: `I Can't Chat in This Channel Yet`,
     channel_access_warning_value: `Setup is done, but my role can't see or post here, so I won't answer messages in this channel. In this channel's or its category's permission settings, give my role **View Channel**, **Send Messages**, and **Read Message History**.`,
-    novelai_expressions_warning_field: `Expressions Disabled`,
-    novelai_expressions_warning_value:
-      "Emoji and sticker usage have been automatically disabled to keep NovelAI's context lean and stable. You can re-enable them anytime with `/config` > Plugins.",
     zai_tos_warning_field: `Z.ai Terms of Service`,
     zai_tos_warning_value:
       "Z.ai's ToS have been updated to only permit coding/agent use cases. Using Z.ai for general chat is at your own risk and may violate their terms.",
@@ -82,7 +79,7 @@ Try {model_text_command} to assign a working model, or {provider_add_command} to
       provider_option_byok: `User BYOK`,
       provider_option_byok_description: `Each member brings their own API key or endpoint through /personal providers.`,
       settings_name: `Starting Settings`,
-      settings_description: `Choose a starting persona and reply behavior.`,
+      settings_description: `Choose a starting persona, reply behavior, and optional features.`,
       settings_pending: `Not yet configured.`,
       settings_button_start: `Set Starting Settings`,
       settings_button_edit: `Edit Starting Settings`,
@@ -99,6 +96,47 @@ Try {model_text_command} to assign a working model, or {provider_add_command} to
       settings_system_prompt_label: `Default System Prompt`,
       settings_system_prompt_description: `Choose the base instructions for replies.`,
       settings_system_prompt_placeholder: `Choose a default system prompt...`,
+      settings_features_label: `Optional Features`,
+      settings_features_description: `Uncheck features you do not want. You can change these later in /config.`,
+      settings_features_invalid: `Those feature selections are invalid. Reopen Starting Settings and try again.`,
+      settings_features: {
+        expressions: {
+          label: `Use Expressions`,
+          description: `Use emojis in replies, add emoji reactions to messages, and send server stickers.`,
+        },
+        playful_interactions: {
+          label: `Playful Interactions`,
+          description: `Let personas express feelings through visible hugs, bites, bonks, and food offerings.`,
+        },
+        danbooru: {
+          label: `Danbooru Tools`,
+          description: `Look up anime character tags and share artwork from Danbooru.`,
+        },
+        natural_nudges: {
+          label: `Natural Nudges`,
+          description: `Let personas start conversations and join ongoing chats without being mentioned.`,
+        },
+        dice_rolls: {
+          label: `Dice Rolls`,
+          description: `Let personas roll dice in chat for games, checks, and random decisions.`,
+        },
+        self_message_management: {
+          label: `Manage Own Messages & Threads`,
+          description: `Edit/delete bot or persona messages, pin any recent message, and create public threads.`,
+        },
+        user_blocking: {
+          label: `Persona User Blocking`,
+          description: `Let personas temporarily ignore users or hide their messages from their own context.`,
+        },
+        user_info_updates: {
+          label: `Automatic User Info Updates`,
+          description: `Update saved nicknames, pronouns, and timezones based on conversations.`,
+        },
+        short_term_memory: {
+          label: `Auto Short-Term Memory Summarization`,
+          description: `Automatically summarize recent conversations to keep short-term memory up to date.`,
+        },
+      },
       settings_built_in_prompt: `Built-in Default (Recommended)`,
       settings_built_in_prompt_description: `Concise replies, proactive memory and tools.`,
       settings_built_in_prompt_summary: `Built-in Default`,
@@ -113,6 +151,7 @@ Try {model_text_command} to assign a working model, or {provider_add_command} to
       settings_summary_reply_style: `Reply style: {style}`,
       settings_summary_timezone: `Timezone: {tz}`,
       settings_summary_system_prompt: `System prompt: {prompt}`,
+      settings_summary_features: `Optional features: {enabled}/{total} enabled`,
       finish_label: `Finish Setup`,
       cancel_label: `Cancel`,
       cancelled_title: `Setup Cancelled`,
@@ -150,7 +189,7 @@ Try {model_text_command} to assign a working model, or {provider_add_command} to
 - Use \`/config\` to adjust how I act and what I can do.
 - Use \`/memories\` to teach me things about you.`,
       receipt_learn_more:
-        "Read the [Official Wiki](https://docs.tomoribot.app/en/features/) or open {help} (then Features) for more on what I can do.\n- [Multiple Personas](https://docs.tomoribot.app/en/features/chatting-personality/multiple-personas/) = looks, voices, and triggers\n- [Chatting & Triggers](https://docs.tomoribot.app/en/features/chatting-personality/chatting-and-triggers/) = when and how I join in\n- [Memory](https://docs.tomoribot.app/en/features/knowledge/memory/) = people, facts, and context\n- [Personalization](https://docs.tomoribot.app/en/features/knowledge/personalization/) = how you like to be treated\n- [Media Generation](https://docs.tomoribot.app/en/features/capabilities/media-generation/) = images, video, and voice\n- [Tools & Extensions](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/) = web search and custom tools",
+        "Read the [Official Wiki](https://docs.tomoribot.app/en/features/) or open {help} (then Features) for more on what I can do.\n- [Multiple Personas](https://docs.tomoribot.app/en/features/chatting-personality/multiple-personas/) = looks, voices, and triggers\n- [Chatting & Triggers](https://docs.tomoribot.app/en/features/chatting-personality/chatting-and-triggers/) = when and how I join in\n- [Memory](https://docs.tomoribot.app/en/features/knowledge/memory/) = people, facts, and context\n- [Personalization](https://docs.tomoribot.app/en/features/knowledge/personalization/) = how you like to be treated\n- [Media Generation](https://docs.tomoribot.app/en/features/capabilities/media-generation/image-generation/) = images, video, and voice\n- [Tools & Extensions](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/built-in-tools/) = web search and custom tools",
       permission_denied: `You must have the Manage Server permission to set up.`,
       env_mismatch: `Environment configuration changed. Please restart setup.`,
       forbidden: `This setup session belongs to another user or channel.`,

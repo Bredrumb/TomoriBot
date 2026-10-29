@@ -42,8 +42,9 @@ import {
   validateDirectChatTrigger,
 } from "@/utils/chat/admissionGuards";
 import { channelLocks, queueScenePersonaJobsAtFront, setActiveChannelTurnState } from "@/utils/chat/channelQueue";
-import { shouldSurfaceChatUserErrors } from "@/utils/chat/errorVisibility";
-import { queueAdditionalPersonaTurns } from "@/utils/chat/personaQueue";
+import { hasDirectChatSignal, shouldSurfaceChatUserErrors } from "@/utils/chat/errorVisibility";
+import { readNaturalNudgeGate, recordNaturalNudgeDirectChat } from "@/modules/natural-nudges/runtime/configCache";
+import { getMatchLimit, queueAdditionalPersonaTurns } from "@/utils/chat/personaQueue";
 import { shouldBotReply } from "@/utils/chat/replyDecision";
 import { buildSceneTextQuotaTriggerKey, buildSceneTurnDirective } from "@/utils/chat/sceneTurn";
 import {
@@ -66,15 +67,13 @@ import {
   claimCredentialRefusalNotice,
   hasTextQuotaBeenRefused,
   markTextQuotaRefused,
+  releaseTextQuotaForTrigger,
 } from "@/utils/chat/textQuotaState";
 import type { ChatIncoming, ChatTurn, ChatTurnPlan, LockedChatTurn, TextCredentialSource } from "@/utils/chat/types";
 import { userNamingRepository, userPersonaNamingPairKey } from "@/utils/db/repositories/UserNamingRepository";
 import { resolveEffectiveUserNaming } from "@/utils/text/userNaming";
 const DEFAULT_CASCADE_LIMIT = 3;
 const MAX_CASCADE_LIMIT = 10;
-const DEFAULT_MATCH_LIMIT = 3;
-const MIN_MATCH_LIMIT = 1;
-const MAX_MATCH_LIMIT = 10;
 type SendableChannel = Parameters<typeof sendStandardEmbed>[0];
 
 export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTurnPlan> {
@@ -117,6 +116,10 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
       });
     }
     log.info(`No persona state available for message ${message.id} in server ${serverDiscId}.`);
+    return { lockedTurn, turns: [] };
+  }
+
+  if (incoming.naturalNudge && !(await readNaturalNudgeGate(serverDiscId))) {
     return { lockedTurn, turns: [] };
   }
 
@@ -247,6 +250,26 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     return { lockedTurn, turns: [] };
   }
 
+  if (
+    !isDMChannel &&
+    !isSystemInitiatedTurn &&
+    !incoming.isManuallyTriggered &&
+    !incoming.isPersonaJob &&
+    !incoming.isUserImpersonation &&
+    isRealUserMessage(message) &&
+    hasDirectChatSignal({
+      client,
+      message,
+      allPersonas,
+      referencedMessage: admission.referencedMessage,
+      isReplyToBotOrPersona: directTrigger.isReplyToBot || Boolean(directTrigger.replyPersona),
+      isBotMentioned: directTrigger.isBotMentioned,
+    })
+  ) {
+    incoming.isDirectChat = true;
+    await recordNaturalNudgeDirectChat(tomoriState.server_id);
+  }
+
   const personaPolicies = new Map<TomoriState, NonNullable<Awaited<ReturnType<typeof resolveTextCredentialPolicy>>>>();
   const personaQuotas = new Map<TomoriState, Awaited<ReturnType<typeof prepareTextQuota>>>();
   const refusalNoticeKey = incoming.textQuotaTriggerKey ?? lockedTurn.admission.message.id;
@@ -280,9 +303,15 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
     personaQuotas.set(persona, quota);
   }
   personasToRespond = personasToRespond.filter((persona) => personaPolicies.has(persona));
-  if (personasToRespond.length === 0) return { lockedTurn, turns: [] };
+  if (personasToRespond.length === 0) {
+    await releaseTextQuotaForTrigger(refusalNoticeKey);
+    return { lockedTurn, turns: [] };
+  }
   const textQuota = personaQuotas.get(personasToRespond[0]);
-  if (!textQuota) return { lockedTurn, turns: [] };
+  if (!textQuota) {
+    await releaseTextQuotaForTrigger(refusalNoticeKey);
+    return { lockedTurn, turns: [] };
+  }
   const guardSource: TextCredentialSource = personasToRespond.some((persona) => {
     const policy = personaPolicies.get(persona);
     return policy?.source === "server" || policy?.supporterFunding?.fundingScope === "server";
@@ -299,6 +328,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
       shouldSurfaceUserErrors,
     ))
   ) {
+    await releaseTextQuotaForTrigger(refusalNoticeKey);
     return { lockedTurn, turns: [] };
   }
 
@@ -406,6 +436,7 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
   });
   if (!naming) {
     log.warn(`Dropping Ping User turn for message ${message.id}: its target's user row could not be read.`);
+    await releaseTextQuotaForTrigger(refusalNoticeKey);
     return { lockedTurn, turns: [] };
   }
   const { displayName, row: namingRow } = naming;
@@ -614,11 +645,6 @@ function isSystemInitiatedIncoming(incoming: ChatIncoming): boolean {
 
 function isRealUserMessage(message: Message): boolean {
   return (!message.author.bot && !message.webhookId) || isMatrixRelayMessage(message) || isMessageProxyMessage(message);
-}
-
-function getMatchLimit(tomoriState: TomoriState): number {
-  const rawMatchLimit = tomoriState.config.match_limit ?? DEFAULT_MATCH_LIMIT;
-  return Math.min(Math.max(rawMatchLimit, MIN_MATCH_LIMIT), MAX_MATCH_LIMIT);
 }
 
 export interface TextCredentialPolicyDependencies {

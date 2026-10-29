@@ -2,6 +2,31 @@ export default {
   "nudge-studio": {
     description: "Escolha quais toques ociosos eu uso neste servidor e escreva os seus.",
     unavailable: "Não consegui carregar o Nudge Studio agora. Tente novamente em instantes.",
+    title_advanced: "Configurações Avançadas de Toques",
+    advanced_description: "Só altere estas configurações se souber o que está fazendo.",
+    heat_heading:
+      "[Ajuste de Heat](https://docs.tomoribot.app/pt-BR/features/chatting-personality/natural-nudges/#heat)",
+    heat_description:
+      "Heat mede as interações recentes deste servidor entre membros e personas. Adicione Heat para tornar os toques mais frequentes usando os botões abaixo ou simplesmente conversando comigo naturalmente.",
+    heat_values: "Heat: {effective}/{max}",
+    heat_increased: "Heat original: {base}, aumentado manualmente em {offset}.",
+    heat_decreased: "Heat original: {base}, diminuído manualmente em {offset}.",
+    heat_unadjusted: "Heat original: {base}, sem ajuste manual.",
+    idle_pace: "- **Toques Ociosos** (`{frequency}`): {effect}",
+    active_pace: "- **Toques Ativos** (`{frequency}`): {effect}",
+    idle_pace_estimate:
+      "Espere até cerca de {per_week} toques ociosos por semana, com um limite diário de {daily_cap}.",
+    active_pace_estimate:
+      "Verifico a cada cerca de `{min}-{max}` mensagens de membros em um canal, com limites diários de {check_cap} verificações e {daily_cap} respostas. Uma verificação só leva a uma resposta quando há interesse correspondente.",
+    idle_pace_no_types: "Todos os pesos de tipo são 0, então não iniciarei nenhum toque ocioso.",
+    weights_heading: "Pesos dos tipos de toques ociosos",
+    weights_description: "Quanto maior o peso, maior a chance de essa categoria de toque ocorrer em relação às outras.",
+    weights_button: "Editar pesos dos tipos",
+    weights_default: "O valor padrão é {default}.",
+    weights_invalid:
+      "Digite um número inteiro de 1 a 100 para cada categoria. Os quatro pesos devem somar 100 no total.",
+    increase_button: "+{amount}",
+    decrease_button: "-{amount}",
     tab_ping_user: "Menções",
     tab_revive_topic: "Retomadas",
     tab_start_topic: "Novos Tópicos",

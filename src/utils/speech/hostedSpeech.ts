@@ -3,6 +3,10 @@ import { MAX_VOICE_DESIGN_PROMPT_LENGTH } from "@/constants/speech";
 import { z } from "zod";
 import { readBoundedResponse } from "@/utils/security/boundedResponse";
 import { redactLogString } from "@/utils/misc/logger";
+import {
+  getProviderContentRejectionCode,
+  providerContentRejectionSchema,
+} from "@/utils/provider/providerErrorClassification";
 
 export const HOSTED_SPEECH_LIMITS = {
   scriptCharacters: 2_000,
@@ -53,6 +57,7 @@ export interface SpeechOperation {
 }
 
 export type HostedSpeechErrorKind =
+  | "content_blocked"
   | "invalid_request"
   | "script_too_long"
   | "authentication"
@@ -64,6 +69,7 @@ export type HostedSpeechErrorKind =
   | "timeout";
 
 export class HostedSpeechError extends Error {
+  readonly providerCode?: string;
   /**
    * @param providerStatus - Set only when the provider answered, which separates a provider 400 from
    *   the local checks that also throw `invalid_request`.
@@ -72,9 +78,10 @@ export class HostedSpeechError extends Error {
     readonly kind: HostedSpeechErrorKind,
     readonly providerStatus?: number,
     readonly providerBody?: string,
-    options?: ErrorOptions,
+    options?: ErrorOptions & { code?: string },
   ) {
     super(`Hosted speech failed: ${kind}`, options);
+    this.providerCode = options?.code;
   }
 
   /** The provider's status and body as logged and shown behind "Show Full Error". */
@@ -92,15 +99,22 @@ export function speechErrorBody(body: unknown, apiKey: string): string {
 
 export function checkSpeechStatus(response: Response, body?: string): void {
   if (response.ok) return;
-  const kind =
-    response.status === 401 || response.status === 403
+  const code = providerContentRejectionSchema.options.find((value) => new RegExp(`\\b${value}\\b`).test(body ?? ""));
+  const kind = code
+    ? "content_blocked"
+    : response.status === 401 || response.status === 403
       ? "authentication"
       : response.status === 429 || response.status === 402
         ? "quota"
         : response.status === 400 || response.status === 422
           ? "invalid_request"
           : "provider_error";
-  throw new HostedSpeechError(kind, response.status, body);
+  throw new HostedSpeechError(kind, response.status, body, { code });
+}
+
+export function checkSpeechRejection(body: unknown, apiKey: string): void {
+  const code = getProviderContentRejectionCode(body);
+  if (code) throw new HostedSpeechError("content_blocked", 200, speechErrorBody(body, apiKey), { code });
 }
 
 export async function readSpeechJson(

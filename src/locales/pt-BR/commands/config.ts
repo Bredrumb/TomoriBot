@@ -65,7 +65,6 @@ export default {
       idle_nudges_title: "Toques Ociosos",
       idle_nudges_description: "Inicio algo em um canal por conta própria se ele ficar silencioso demais.",
       idle_nudges_off: "Só falo quando alguém falar comigo.",
-      idle_nudges_on: "Inicio um toque ocioso em um canal silencioso quando chegar o momento.",
       idle_nudges_on_no_channels:
         "Ainda não tenho canais para iniciar um toque ocioso. Os canais automáticos serão preenchidos conforme as pessoas falarem comigo.",
       idle_nudges_on_no_model: "Nenhum modelo utilizável pode planejar um toque ocioso ainda, então fico em silêncio.",
@@ -74,13 +73,11 @@ export default {
       active_nudges_description:
         "Entro em uma conversa quando ela é sobre algo que uma persona gosta, usando os interesses na página de Toques dessa persona.",
       active_nudges_off: "Só entro em uma conversa quando alguém falar comigo.",
-      active_nudges_on: "Verifico sobre o que é a conversa a cada {min}-{max} mensagens de membros, usando {matcher}.",
       active_nudges_on_no_channels:
         "Ainda não tenho canais para participar de conversas. Os canais automáticos serão preenchidos conforme as pessoas falarem comigo.",
       active_nudges_on_no_matcher:
         "Nada pode verificar os interesses nas conversas ainda, então fico em silêncio. Escolha um Verificador de Toques Ativos abaixo.",
       active_nudges_on_cold: "Este servidor fala comigo muito raramente para eu entrar em uma conversa agora.",
-      active_nudges_matcher_checker: "o Verificador de Toques Ativos",
       active_nudge_frequency_option: "Frequência: {level}",
       channels_title: "Canais",
       channels_description:
@@ -121,8 +118,6 @@ export default {
       frequency_1: "Suave",
       frequency_2: "Normal",
       frequency_3: "Animada",
-      frequency_effect:
-        "Este servidor me envia cerca de {heat} mensagens por dia, então espere cerca de {per_week} toques ociosos por semana.",
       frequency_effect_none:
         "Iniciarei um toque ocioso em um canal silencioso quando chegar o momento, mas este servidor fala comigo muito raramente agora.",
       saved_heading: "Natural Nudges atualizado",
@@ -311,7 +306,8 @@ export default {
       channels_welcome_not_configured_detail: `Nenhum canal ou prompt de boas-vindas está configurado.`,
       channels_collection_hidden: `Mostrando {shown} de {total} canais ({hidden} ocultos).`,
       channels_auto_trigger_title: `Canais de Gatilho Automático`,
-      channels_auto_trigger_description: `Escolha onde as mensagens podem me acionar automaticamente.`,
+      channels_auto_trigger_description: `Onde eu respondo por conta própria quando mensagens suficientes são enviadas, sem precisar ser mencionada. Isso não limita onde as pessoas podem me chamar.`,
+      whitelist_location_hint: `Para limitar em quais canais, cargos ou personas eu respondo, use {moderation}.`,
       channels_auto_trigger_enabled_title: `Canais ativados`,
       channels_auto_trigger_enabled_description: `As mensagens aqui contam para o acionamento automático.`,
       channels_auto_trigger_none: `Nenhum canal está ativado.`,
@@ -400,6 +396,8 @@ export default {
       channels_overrides_prompt_mode_append: `Anexar`,
       channels_overrides_prompt_mode_replace: `Substituir`,
       channels_overrides_prompt_modal_title: `Definir Prompt de Canal`,
+      continuation_description: `Continuação da parte anterior.`,
+      continuation_placeholder: `Use este espaço se o seu texto não couber acima.`,
       prompt_part_label: `{name} (Parte {index} de {total})`,
       prompt_part_first_description: `O Discord limita a 4.000 caracteres; prompts longos continuam na Parte 2.`,
       prompt_part_continued_description: `Continuação da Parte {previous}. Deixe vazio se não for usar.`,
@@ -1014,7 +1012,7 @@ export default {
       attribute_file_label: `Arquivo de Texto do Atributo`,
       attribute_file_description: `Arquivo .txt opcional com um atributo por linha.`,
       attribute_public_label: `Visibilidade`,
-      attribute_public_description: `Escolha se outras personas podem usar este atributo.`,
+      attribute_public_description: `Escolha se outras personas podem ver este atributo.`,
       attribute_public_option: `Atributo público`,
       dialogues_title: `**[Diálogos de Exemplo](https://docs.tomoribot.app/pt-BR/features/chatting-personality/multiple-personas/#sample-dialogues)**`,
       dialogues_description: `Estes exemplos guiam como esta persona fala.`,
@@ -1026,11 +1024,11 @@ export default {
       dialogue_edit_modal_title: `Editar Diálogo de Exemplo`,
       dialogue_user_input_label: `Mensagem do Usuário`,
       dialogue_user_input_description: `O que o usuário diz neste exemplo.`,
-      dialogue_user_input_placeholder: `Exemplo de mensagem do usuário...`,
+      dialogue_user_input_placeholder: `Oi {bot}!`,
       dialogue_user_input_part2_label: `Mensagem do Usuário (Parte 2)`,
       dialogue_bot_input_label: `Resposta da Persona`,
       dialogue_bot_input_description: `Como a persona responde neste exemplo.`,
-      dialogue_bot_input_placeholder: `Exemplo de resposta da persona...`,
+      dialogue_bot_input_placeholder: `Fufu~ ora, olá, {user}.`,
       dialogue_bot_input_part2_label: `Resposta da Persona (Parte 2)`,
       dialogue_file_label: `Arquivo de Texto do Diálogo`,
       dialogue_file_description: `Arquivo .txt opcional usando linhas {user}: e {bot}:.`,
@@ -1080,6 +1078,7 @@ export default {
       capability_tts_clone: `TTS (Clone de Voz)`,
       capability_stt: `Fala para Texto`,
       capability_notice_title: `Notas`,
+      byok_models_notice: `Este servidor exige que os membros usem seus próprios provedores, portanto as configurações de modelos do servidor não são usadas. Para usá-las, abra \`/moderation\`, vá em Acesso de Membros e escolha Modelos do Servidor Permitidos.`,
       image_generation_disabled_direction:
         "A geração de imagem está desativada. Ative-a em Plugins > Ferramentas Disponíveis.",
       image_generation_missing_model: `Nenhum modelo utilizável está configurado para geração de Imagem.`,

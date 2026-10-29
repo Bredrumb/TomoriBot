@@ -1,3 +1,4 @@
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
 import { localizer } from "@/utils/text/localizer";
 import { HOSTED_SPEECH_LIMITS } from "@/utils/speech/hostedSpeech";
@@ -14,6 +15,7 @@ import {
   type ToolResult,
 } from "@/types/tool/interfaces";
 import { createToolVariant } from "@/tools/assembly";
+import { resolveToolSpriteSelection } from "@/tools/spriteSelection";
 import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
 import { setCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { generateVoiceMessageMetadata } from "@/utils/audio/voiceMessageMetadata";
@@ -45,10 +47,11 @@ export const VOICE_TOOL_VARIANTS = {
   "bracket-tags": {
     toolDescription:
       "Generate a spoken Discord audio message using the active persona's configured voice. " +
-      "Use this only when voice delivery materially improves the reply. " +
+      "Use this when voice delivery is requested or required by the conversation instructions. " +
+      "Otherwise, use it when spoken delivery improves the reply. " +
       "You may include bracketed expression tags anywhere in the script to shape delivery " +
       "(e.g. [happy], [sad], [whispers], [laughs]). " +
-      "The tool sends the audio directly to the channel with no text caption.",
+      "The tool sends the audio directly to the channel and adds a text transcript when the transcript setting is enabled.",
     scriptDescription:
       "The exact spoken script for the voice message. Keep it concise and natural for speech. " +
       "Bracketed expression tags (emotional states like [happy], [sad], [tired] or actions like " +
@@ -57,9 +60,10 @@ export const VOICE_TOOL_VARIANTS = {
   plain: {
     toolDescription:
       "Generate a spoken Discord audio message using the active persona's configured voice. " +
-      "Use this only when voice delivery materially improves the reply. " +
+      "Use this when voice delivery is requested or required by the conversation instructions. " +
+      "Otherwise, use it when spoken delivery improves the reply. " +
       "Write the script as natural plain speech text only; do not include any bracketed tags or special markup. " +
-      "The tool sends the audio directly to the channel with no text caption.",
+      "The tool sends the audio directly to the channel and adds a text transcript when the transcript setting is enabled.",
     scriptDescription:
       "The exact spoken script for the voice message. Keep it concise and natural for speech. " +
       "Plain text only: do not write bracketed tags or any special markup.",
@@ -67,10 +71,11 @@ export const VOICE_TOOL_VARIANTS = {
   emoji: {
     toolDescription:
       "Generate a spoken Discord audio message using the active persona's configured voice. " +
-      "Use this only when voice delivery materially improves the reply. " +
+      "Use this when voice delivery is requested or required by the conversation instructions. " +
+      "Otherwise, use it when spoken delivery improves the reply. " +
       "You may embed emoji characters inline in the script to convey emotion " +
       "(e.g. 😊 for happy, 😢 for sad, 😮 for surprised). Do not use bracketed tags. " +
-      "The tool sends the audio directly to the channel with no text caption.",
+      "The tool sends the audio directly to the channel and adds a text transcript when the transcript setting is enabled.",
     scriptDescription:
       "The exact spoken script for the voice message. Keep it concise and natural for speech. " +
       "Embed emoji characters inline to convey emotion (e.g. 😊, 😢, 😮). No bracketed tags.",
@@ -78,10 +83,11 @@ export const VOICE_TOOL_VARIANTS = {
   "voice-design": {
     toolDescription:
       "Generate a spoken Discord audio message using the active persona's configured voice design prompt. " +
-      "Use this only when voice delivery materially improves the reply. " +
+      "Use this when voice delivery is requested or required by the conversation instructions. " +
+      "Otherwise, use it when spoken delivery improves the reply. " +
       "Write the script as natural plain speech text. You may optionally provide extra one-off delivery instructions " +
       'such as "sound mad", "near tears", or "sleepy and quiet"; those instructions shape this message only and are not spoken aloud. ' +
-      "The tool sends the audio directly to the channel with no text caption.",
+      "The tool sends the audio directly to the channel and adds a text transcript when the transcript setting is enabled.",
     scriptDescription:
       "The exact spoken script for the voice message. Keep it concise and natural for speech. " +
       "Plain text only: put delivery direction in voice_instructions instead of in the spoken script.",
@@ -132,6 +138,7 @@ export class GenerateVoiceMessageTool extends BaseTool {
   name = "generate_voice_message";
   description = VOICE_TOOL_VARIANTS["bracket-tags"].toolDescription;
   category = "discord" as const;
+  supportsSpriteSelection = true;
 
   parameters: ToolParameterSchema = {
     type: "object",
@@ -226,6 +233,8 @@ export class GenerateVoiceMessageTool extends BaseTool {
     }
 
     const userId = context.internalUserId ?? context.streamContext?.triggererUserId;
+    const spriteSelection = await resolveToolSpriteSelection(args, context, context.tomoriState.persona_id);
+    if (!spriteSelection.success) return spriteSelection;
     const targets = await resolveSpeechTargets(context.tomoriState.server_id, userId);
     const scopeId = context.guildId ?? ("recipientId" in context.channel ? context.channel.recipientId : undefined);
     const persona = scopeId
@@ -300,14 +309,19 @@ export class GenerateVoiceMessageTool extends BaseTool {
     }
 
     if (!synthesisResult.success || !synthesisResult.audioBuffer) {
+      if (synthesisResult.requestDenied) return notifyProviderToolFailure(context, synthesisResult.requestDenied);
+      const attempt = synthesisResult.attempts?.at(-1);
       return {
-        success: false,
-        error: synthesisResult.requestDenied
-          ? await notifyProviderToolFailure(context, synthesisResult.requestDenied)
-          : synthesisResult.errorKind === "script_too_long"
-            ? localizer(context.locale, "tools.generate_voice_message.script_too_long")
-            : synthesisResult.details || "Failed to generate the voice message.",
-
+        ...createProviderToolFailure(
+          { message: synthesisResult.details },
+          {
+            locale: context.locale,
+            provider: attempt?.provider ?? synthesisResult.backendKey,
+            credentialScope: attempt?.owner.kind ?? speechEndpoint?.owner.kind,
+            kind: synthesisResult.errorKind,
+            code: synthesisResult.providerCode,
+          },
+        ),
         data: { attempts: synthesisResult.attempts, cleanupPending: synthesisResult.cleanupPending },
       };
     }
@@ -329,7 +343,10 @@ export class GenerateVoiceMessageTool extends BaseTool {
     const target: VoiceDeliveryTarget = {
       ownership: "persona",
       channel: context.channel as VoiceDeliveryTarget["channel"],
-      personaPost: buildToolPersonaPostContext(context, context.tomoriState),
+      personaPost: {
+        ...buildToolPersonaPostContext(context, context.tomoriState),
+        appearance: spriteSelection.appearance,
+      },
     };
 
     let sentMessageId: string | undefined;

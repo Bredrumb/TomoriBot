@@ -1,19 +1,13 @@
 import { beforeAll, describe, expect, it, mock } from "bun:test";
+import type { QuotaReservation } from "@/utils/db/repositories/QuotaRepository";
 import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import type { TextQuotaTriggerState } from "@/utils/chat/textQuotaState";
 import * as realTextQuotaManager from "@/utils/quota/textQuotaManager";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createScopedModuleMocker } from "../../helpers/mockSurface";
 
-/**
- * A personal turn that fell back to the server's model reaches the post-turn effects with the
- * server's text quota admitted and unconsumed. Consumption is the only thing that charges the
- * server for that answer, so it has to follow the reply rather than the admission.
- *
- * The quota manager is mocked here because `incrementTextQuota` writes usage rows: this verifies
- * which outcomes charge the account, not what the increment statement does.
- */
-const incrementCalls: Array<{ serverId: number; userDiscId: string }> = [];
+/** A reply keeps the trigger's reserved unit; a turn with no reply gives it back. */
+const releaseCalls: Array<{ serverId: number; userDiscId: string; reservation: QuotaReservation }> = [];
 
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/quota/textQuotaManager": realTextQuotaManager,
@@ -21,12 +15,25 @@ const scopedMock = createScopedModuleMocker(mock, {
 
 scopedMock.module("@/utils/quota/textQuotaManager", () => ({
   ...realTextQuotaManager,
-  incrementTextQuota: async (serverId: number, userDiscId: string) => {
-    incrementCalls.push({ serverId, userDiscId });
+  releaseTextQuota: async (serverId: number, userDiscId: string, reservation: QuotaReservation) => {
+    releaseCalls.push({ serverId, userDiscId, reservation });
   },
 }));
 
-function makeArmedContext(): ChatTurnContext & { textQuotaState: TextQuotaTriggerState } {
+const RESERVATION: QuotaReservation = {
+  quotaDate: "2026-10-28",
+  userCounted: true,
+  serverwidePeriodStart: null,
+};
+
+let textQuotaTriggerStates: Map<string, TextQuotaTriggerState>;
+
+function makeArmedContext(options?: {
+  personaIndex?: number;
+  totalPersonas?: number;
+  state?: TextQuotaTriggerState;
+  triggerKey?: string;
+}): ChatTurnContext & { textQuotaState: TextQuotaTriggerState } {
   const channel = { id: "channel_1", send: async () => undefined, isThread: () => false };
   const message = { id: "message_1", channel, createdTimestamp: Date.now() };
   const incoming = {
@@ -40,13 +47,27 @@ function makeArmedContext(): ChatTurnContext & { textQuotaState: TextQuotaTrigge
     textQuotaSource: "user",
   } as unknown as ChatIncoming;
   const tomoriState = { config: { thought_log_channel_disc_id: null, private_channel_ids: [] } };
+  const triggerKey = options?.triggerKey ?? `trigger_${Math.random().toString(36).slice(2)}`;
+  const state = options?.state ?? {
+    serverId: 1,
+    userDiscId: "user_1",
+    consumed: false,
+    reservation: RESERVATION,
+    reservationReleased: false,
+    createdAt: Date.now(),
+  };
+  textQuotaTriggerStates.set(triggerKey, state);
 
   const context = {
     client: incoming.client,
     message,
     channel,
     locale: "en-US",
-    turn: { lockedTurn: { admission: { incoming } } },
+    turn: {
+      lockedTurn: { admission: { incoming } },
+      personaIndex: options?.personaIndex ?? 0,
+      totalPersonas: options?.totalPersonas ?? 1,
+    },
     currentPersona: tomoriState,
     tomoriState,
     shouldSurfaceUserErrors: true,
@@ -56,8 +77,8 @@ function makeArmedContext(): ChatTurnContext & { textQuotaState: TextQuotaTrigge
     isDMChannel: false,
     reunionPresence: null,
     shouldApplyTextQuota: true,
-    textQuotaTriggerKey: "trigger_1",
-    textQuotaState: { serverId: 1, userDiscId: "user_1", consumed: false, createdAt: Date.now() },
+    textQuotaTriggerKey: triggerKey,
+    textQuotaState: state,
   } as unknown as ChatTurnContext & { textQuotaState: TextQuotaTriggerState };
 
   return context;
@@ -79,41 +100,113 @@ function failedReply(): GenerationTurnResult {
   };
 }
 
-describe("text quota consumption after a server model fallback", () => {
+describe("text quota settlement after a turn", () => {
   beforeAll(async () => {
     await initializeLocalizer();
+    textQuotaTriggerStates = (await import("@/utils/chat/textQuotaState")).textQuotaTriggerStates;
   });
 
-  it("charges the admitted quota once for a server-backed reply", async () => {
-    incrementCalls.length = 0;
+  it("keeps the reservation for a reply instead of releasing it", async () => {
+    releaseCalls.length = 0;
     const context = makeArmedContext();
     const { runPostTurnEffects } = await import("@/utils/chat/postTurnEffects");
 
     await runPostTurnEffects(context, completedReply());
 
-    expect(incrementCalls).toEqual([{ serverId: 1, userDiscId: "user_1" }]);
+    expect(releaseCalls).toEqual([]);
     expect(context.textQuotaState.consumed).toBe(true);
+    expect(context.textQuotaState.reservation).toBeNull();
   });
 
-  it("charges nothing when the server model answered with no reply text", async () => {
-    incrementCalls.length = 0;
+  it("releases the reservation when the turn produced no reply", async () => {
+    releaseCalls.length = 0;
     const context = makeArmedContext();
     const { runPostTurnEffects } = await import("@/utils/chat/postTurnEffects");
 
     await runPostTurnEffects(context, failedReply());
 
-    expect(incrementCalls).toEqual([]);
+    expect(releaseCalls).toEqual([{ serverId: 1, userDiscId: "user_1", reservation: RESERVATION }]);
     expect(context.textQuotaState.consumed).toBe(false);
+    expect(context.textQuotaState.reservation).toBeNull();
+    expect(context.textQuotaState.reservationReleased).toBe(true);
   });
 
-  it("charges an already-consumed trigger group nothing more", async () => {
-    incrementCalls.length = 0;
+  it("does not release a trigger that already consumed its reservation", async () => {
+    releaseCalls.length = 0;
     const context = makeArmedContext();
     context.textQuotaState.consumed = true;
+    context.textQuotaState.reservation = null;
     const { runPostTurnEffects } = await import("@/utils/chat/postTurnEffects");
 
     await runPostTurnEffects(context, completedReply());
 
-    expect(incrementCalls).toEqual([]);
+    expect(releaseCalls).toEqual([]);
+  });
+
+  it("waits for the last persona turn of the same plan before releasing", async () => {
+    releaseCalls.length = 0;
+    const state: TextQuotaTriggerState = {
+      serverId: 1,
+      userDiscId: "user_1",
+      consumed: false,
+      reservation: RESERVATION,
+      reservationReleased: false,
+      createdAt: Date.now(),
+    };
+    const triggerKey = "trigger_shared";
+    const { runPostTurnEffects } = await import("@/utils/chat/postTurnEffects");
+
+    const first = makeArmedContext({ personaIndex: 0, totalPersonas: 2, state, triggerKey });
+    await runPostTurnEffects(first, failedReply());
+    expect(releaseCalls).toEqual([]);
+    expect(first.textQuotaState.reservation).toBe(RESERVATION);
+
+    const second = makeArmedContext({ personaIndex: 1, totalPersonas: 2, state, triggerKey });
+    await runPostTurnEffects(second, failedReply());
+    expect(releaseCalls).toEqual([{ serverId: 1, userDiscId: "user_1", reservation: RESERVATION }]);
+    expect(second.textQuotaState.reservation).toBeNull();
+  });
+
+  it("releases a silent server turn's unit when the last turn replies on personal credentials", async () => {
+    releaseCalls.length = 0;
+    const state: TextQuotaTriggerState = {
+      serverId: 1,
+      userDiscId: "user_1",
+      consumed: false,
+      reservation: RESERVATION,
+      reservationReleased: false,
+      createdAt: Date.now(),
+    };
+    const triggerKey = "trigger_mixed_routes";
+    const { runPostTurnEffects } = await import("@/utils/chat/postTurnEffects");
+
+    const serverTurn = makeArmedContext({ personaIndex: 0, totalPersonas: 2, state, triggerKey });
+    await runPostTurnEffects(serverTurn, failedReply());
+    expect(releaseCalls).toEqual([]);
+
+    const personalTurn = makeArmedContext({ personaIndex: 1, totalPersonas: 2, state, triggerKey });
+    const unarmed = personalTurn as ChatTurnContext;
+    unarmed.shouldApplyTextQuota = false;
+    unarmed.textQuotaState = null;
+    await runPostTurnEffects(personalTurn, completedReply());
+
+    expect(releaseCalls).toEqual([{ serverId: 1, userDiscId: "user_1", reservation: RESERVATION }]);
+    expect(state.consumed).toBe(false);
+    expect(state.reservation).toBeNull();
+  });
+
+  it("keeps a unit reserved for a queued server persona job when a lone personal turn finishes", async () => {
+    releaseCalls.length = 0;
+    const personalTurn = makeArmedContext({ personaIndex: 0, totalPersonas: 1 });
+    const reserved = personalTurn.textQuotaState;
+    const unarmed = personalTurn as ChatTurnContext;
+    unarmed.shouldApplyTextQuota = false;
+    unarmed.textQuotaState = null;
+    const { runPostTurnEffects } = await import("@/utils/chat/postTurnEffects");
+
+    await runPostTurnEffects(personalTurn, completedReply());
+
+    expect(releaseCalls).toEqual([]);
+    expect(reserved.reservation).toBe(RESERVATION);
   });
 });

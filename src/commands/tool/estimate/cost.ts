@@ -11,6 +11,7 @@ import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder
 import { MessageFlags } from "discord.js";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed, replySummaryEmbed } from "@/utils/discord/ui/embeds";
@@ -272,6 +273,7 @@ function estimateToolSchemaTokens(): number {
       },
       config: {
         // Defaults match DB defaults in schema.sql (true)
+        emoji_usage_enabled: true,
         sticker_usage_enabled: true,
         web_search_enabled: true,
         self_teaching_enabled: true,
@@ -283,7 +285,7 @@ function estimateToolSchemaTokens(): number {
         user_info_updates_enabled: true,
         thread_creation_enabled: true,
         conditioning_interactions_enabled: false,
-        dice_rolling_enabled: false,
+        dice_rolling_enabled: true,
         danbooru_enabled: true,
       },
     };
@@ -1491,7 +1493,7 @@ async function sendLegacyEstimateEmbed(
       ? [
           {
             nameKey: "commands.tool.estimate.cost.fallback_notice_title",
-            value: localizer(locale, "commands.tool.estimate.cost.fallback_notice_value"),
+            value: statusNote("warning", localizer(locale, "commands.tool.estimate.cost.fallback_notice_value")),
             inline: false,
           },
         ]

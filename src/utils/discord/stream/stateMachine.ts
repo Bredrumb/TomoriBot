@@ -231,9 +231,13 @@ export class StreamOrchestrator implements IStreamOrchestrator {
         },
       };
       if (sendFailureReason) {
-        log.warn(`Stream orchestrator failed: ${lastError.message}`, lastError, orchestratorMetadata);
+        log.warn(`Stream orchestrator failed: ${lastError.message}`, lastError, orchestratorMetadata, {
+          redactValues: [config.apiKey],
+        });
       } else {
-        log.error(`Stream orchestrator failed: ${lastError.message}`, lastError, orchestratorMetadata);
+        log.error(`Stream orchestrator failed: ${lastError.message}`, lastError, orchestratorMetadata, {
+          redactValues: [config.apiKey],
+        });
       }
 
       const deferredDenialNotice =
@@ -246,7 +250,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
       ) {
         await this.errorUi.handleStreamError(lastError, context);
       } else {
-        log.warn("Stream: Suppressing stream error embed", lastError);
+        log.warn("Stream: Suppressing stream error embed", lastError, undefined, { redactValues: [config.apiKey] });
       }
 
       return { status: "error", data: lastError, ...this.collectDeliveredOutput(state) };
@@ -364,7 +368,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
   ): Promise<StreamResult | { status: "continue" }> {
     switch (chunk.type) {
       case "error":
-        return await this.handleChunkError(chunk, provider, context, textConfig, typingConfig, state);
+        return await this.handleChunkError(chunk, provider, config, context, textConfig, typingConfig, state);
       case "function_call":
         if (chunk.functionCall) {
           if (state.buffer.length > 0 || this.delivery.hasPendingAggregatedText(state)) {
@@ -418,6 +422,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
   private async handleChunkError(
     chunk: ProcessedChunk,
     provider: StreamProvider,
+    config: StreamConfig,
     context: StreamContext,
     textConfig: TextProcessingConfig,
     typingConfig: TypingSimulationConfig,
@@ -446,9 +451,26 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     const deferredDenialNotice =
       findProviderRequestDeniedError(chunk.error, context.usageContext)?.deferNotice ?? false;
     if (!context.suppressUserErrors && !deferredDenialNotice && !isUserImpersonationStreamContext(context)) {
-      await this.errorUi.handleProviderError(chunk.error, provider, context);
+      await this.errorUi.handleProviderError(chunk.error, provider, context, config.apiKey);
     } else {
-      log.warn("Stream: Suppressing provider error embed due to retryable failure", chunk.error);
+      log.warn(
+        "Stream: Suppressing provider error embed due to retryable failure",
+        chunk.error,
+        {
+          errorType: "ProviderStreamError",
+          serverId: context.tomoriState.server_id,
+          userId: context.triggererUserId ?? null,
+          metadata: {
+            provider: context.provider,
+            providerErrorCode: chunk.error?.code,
+            requestDiagnostics: context.requestDiagnostics,
+          },
+        },
+        {
+          retain: true,
+          redactValues: [config.apiKey],
+        },
+      );
     }
     return { status: "error", data: chunk.error, ...this.collectDeliveredOutput(state) };
   }

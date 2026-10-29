@@ -77,7 +77,7 @@ TomoriBot es un asistente de IA personal y sistema de juego de rol gratuito y de
 
 ![Screenshots 3](../assets/img/scs/3-commands.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/es-419/features/command-reference/">Comandos de barra nativos para configuración y ejecución</a></h3>
-<p align="center">Todo se puede gestionar y ejecutar mediante los comandos de barra nativos de Discord y la interfaz de usuario interactiva. ¡Administra por completo las personas, los prompts, los puntos de enlace y parámetros de modelos, configura servidores de herramientas MCP, ajusta permisos, configura la memoria, establece límites de cuota para miembros del servidor y mucho más!</p>
+<p align="center">Configura y personaliza a TomoriBot sin salir de Discord. Usa comandos de barra y menús interactivos para crear personas, ajustar prompts y parámetros de modelos, conectar servidores MCP, gestionar memorias y controlar permisos y límites de uso. Ejecuta comandos tú mismo para generar imágenes y mensajes de voz, tirar dados y probar otras funciones divertidas.</p>
 
 <br />
 
@@ -127,13 +127,15 @@ Simplemente menciona al bot en un servidor o usa las palabras de activación con
 - `/setup` - Configuración inicial del bot para tu servidor
 - `/config` y `/personal config` - Múltiples formas de ajustar a TomoriBot en el servidor actual o para ti
 - `/providers` y `/personal providers` - Agrega más puntos de enlace de modelos o proveedores en la nube
+- `/persona` - Dale una personalidad o añade nuevos personajes (consulta [Personas múltiples](https://docs.tomoribot.app/es-419/features/chatting-personality/multiple-personas/))
+- `/memories` - Enséñale datos a través de las conversaciones (consulta [Memoria](https://docs.tomoribot.app/es-419/features/knowledge/memory/))
 
 Consulta la [referencia de comandos](https://docs.tomoribot.app/es-419/features/command-reference/) completa para ver todos los comandos de barra.
 
 
 ## Agradecimientos
 
-¡Muchísimas gracias a todos, *especialmente* a las siguientes increíbles personas por sus contribuciones de código y consejos que ayudaron a darle forma a TomoriBot!
+¡Muchísimas gracias a todos, *especialmente* a las siguientes increíbles personas por sus significativas contribuciones y consejos que ayudaron enormemente a moldear a TomoriBot para mejor!
 
 <table>
   <tr>

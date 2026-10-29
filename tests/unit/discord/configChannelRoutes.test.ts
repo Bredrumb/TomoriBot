@@ -1518,9 +1518,7 @@ describe("Channels Rules", () => {
     expect(serialized).toContain(localizer("en-US", "commands.config.panel.channels_rules_roleplay_manage_button"));
     expect(serialized).toContain(localizer("en-US", "commands.config.panel.channels_rules_blocklist_manage_button"));
     expect(serialized).not.toContain("Add Private Channels");
-    expect(serialized).toContain(
-      "https://docs.tomoribot.app/en/features/chatting-personality/chatting-and-triggers/#roleplay-channels",
-    );
+    expect(serialized).toContain(`**${localizer("en-US", "commands.config.panel.channels_rules_roleplay_title")}**`);
 
     const routes: ConfigPanelRoute[] = [
       {

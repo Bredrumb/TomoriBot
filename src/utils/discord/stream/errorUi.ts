@@ -1,5 +1,6 @@
+import { resolveProviderErrorPresentation } from "@/utils/provider/providerErrorPresentation";
 import { findProviderRequestDeniedError, getProviderRequestFailureCopy } from "@/utils/provider/providerUsage";
-import { MessageFlags, PermissionFlagsBits, type ButtonInteraction, type ColorResolvable } from "discord.js";
+import { MessageFlags, PermissionFlagsBits, type ButtonInteraction } from "discord.js";
 import type { RestrictedDetailModal } from "@/types/discord/embed";
 import type { ProviderError, StreamProvider, StreamContext } from "@/types/stream/interfaces";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
@@ -7,28 +8,12 @@ import { ColorCode, log, redactLogString } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import {
   getProviderErrorDetail,
-  isAccountBalanceExhaustedError,
-  isContextLengthError,
-  isCreditAffordabilityError,
-  isNvidiaCredentialRejected,
   isOperatorActionableProviderError,
   isProviderModelError,
 } from "@/utils/provider/providerErrorClassification";
 import { localizer } from "@/utils/text/localizer";
 import { withProviderOptionCopy, type ProviderOptionCopyContext } from "@/utils/provider/providerOptionRegistry";
-
-const PERSONAL_TIP_KEYS = {
-  "genai.tips.adjust_parameters": "genai.tips.adjust_parameters_personal",
-  "genai.tips.choose_supported_model": "genai.tips.choose_supported_model_personal",
-  "genai.tips.model_fallback": "genai.tips.model_fallback_personal",
-  "genai.tips.nvidia_register_free_model": "genai.tips.nvidia_register_free_model_personal",
-  "genai.tips.openrouter_add_credits": "genai.tips.openrouter_add_credits_personal",
-  "genai.tips.openrouter_free_models": "genai.tips.openrouter_free_models_personal",
-  "genai.tips.openrouter_models": "genai.tips.openrouter_models_personal",
-  "genai.tips.reduce_output_tokens": "genai.tips.reduce_output_tokens_personal",
-  "genai.tips.switch_model_provider": "genai.tips.switch_model_provider_personal",
-  "genai.tips.verify_api_key": "genai.tips.verify_api_key_personal",
-};
+import { redactProviderDetail } from "@/utils/provider/providerErrorMetrics";
 
 /** Attributes an internal failure to TomoriBot so users do not debug their provider for it. */
 export const TOMORIBOT_ERROR_FOOTER_KEY = "genai.stream.error_footer_tomoribot";
@@ -78,7 +63,12 @@ function providerCopyContext(context: StreamContext): ProviderOptionCopyContext 
  * Owns provider and generic stream error reporting to Discord.
  */
 export class StreamErrorUi {
-  public async handleProviderError(error: unknown, provider: StreamProvider, context: StreamContext): Promise<void> {
+  public async handleProviderError(
+    error: unknown,
+    provider: StreamProvider,
+    context: StreamContext,
+    requestApiKey: string,
+  ): Promise<void> {
     const providerError = error as ProviderError;
     const locale = context.locale;
     const denied = findProviderRequestDeniedError(error, context.usageContext);
@@ -92,31 +82,40 @@ export class StreamErrorUi {
         reason: providerError.type || "unknown",
       });
 
-    const providerDetail = denied ? null : getProviderErrorDetail(providerError);
+    const rawDetail = denied ? null : getProviderErrorDetail(providerError);
+    const providerDetail = rawDetail ? redactProviderDetail(rawDetail, requestApiKey) : null;
     const operatorDetail = boundOperatorDetail(providerDetail);
+    const providerName = provider.getProviderInfo().name;
+    const errorContext = {
+      serverId: context.tomoriState.server_id,
+      userId: context.triggererUserId ?? null,
+      errorType: "ProviderStreamError",
+      metadata: {
+        textCredentialSource: context.textCredentialSource ?? "server",
+        provider: providerName,
+        model: context.requestDiagnostics?.model ?? context.tomoriState.llm.llm_codename,
+        providerErrorType: providerError.type,
+        providerErrorCode: providerError.code ?? "unknown",
+        channelId: context.channel.id,
+        requestDiagnostics: context.requestDiagnostics,
+      },
+    };
     if (!denied && isOperatorActionableProviderError(providerError)) {
-      const providerName = provider.getProviderInfo().name;
       // Not awaited: an unacknowledged initialInteraction is replied to below. The raw provider
       // error is the payload because errorMessage is localized for the guild, not the operator.
       void log.error(
         `Provider stream error (${providerName} ${providerError.type}/${providerError.code ?? "unknown"}): ${operatorDetail}`,
         providerError.originalError ?? providerError,
-        {
-          serverId: context.tomoriState.server_id,
-          userId: context.triggererUserId ?? null,
-          errorType: "ProviderStreamError",
-          metadata: {
-            // A personal route ran on the user's own key and endpoint, not the server's provider.
-            textCredentialSource: context.textCredentialSource ?? "server",
-            provider: providerName,
-            providerErrorType: providerError.type,
-            providerErrorCode: providerError.code ?? "unknown",
-            channelId: context.channel.id,
-          },
-        },
+        errorContext,
+        { redactValues: [requestApiKey] },
       );
     } else {
-      log.warn(`Stream error (${providerError.type}/${providerError.code ?? "unknown"}): ${operatorDetail}`, error);
+      log.warn(
+        `Stream error (${providerError.type}/${providerError.code ?? "unknown"}): ${operatorDetail}`,
+        error,
+        errorContext,
+        { retain: true, redactValues: [requestApiKey] },
+      );
     }
 
     if (context.initialInteraction) {
@@ -142,7 +141,7 @@ export class StreamErrorUi {
     if (providerDescription) {
       const { titleKey, tipKeys, color } = denialCopy
         ? { titleKey: denialCopy.titleKey, tipKeys: [], color: ColorCode.ERROR }
-        : this.resolveProviderErrorPresentation(providerError, provider, context);
+        : resolveProviderErrorPresentation(providerError, provider.getProviderInfo().name, context);
 
       await sendStandardEmbed(context.channel, locale, {
         titleKey,
@@ -217,209 +216,6 @@ export class StreamErrorUi {
       tipKeys: await withProviderOptionCopy(["genai.tips.refresh_context"], providerCopyContext(context)),
       footerKey: TOMORIBOT_ERROR_FOOTER_KEY,
     }).catch((e) => log.warn("Stream: Failed to send generic error embed to channel", e));
-  }
-
-  /**
-   * Resolves the title, tip-item keys, and color for a provider error embed.
-   *
-   * Tips are composed from atomic keys so conditional items stay declarative:
-   * - `model_fallback` is only offered when the server has no fallback chain configured yet.
-   * - OpenRouter-specific items (free-model list / model list) are appended only for that provider.
-   * - Every command-bearing tip resolves against `context.textCredentialSource`, so a failure on
-   *   the user's own key never recommends a manager-only server command that cannot repair it.
-   * @param provider - The active stream provider (used to detect OpenRouter for conditional tips).
-   * @returns The title key, ordered tip-item keys, and embed color.
-   */
-  private resolveProviderErrorPresentation(
-    providerError: ProviderError,
-    provider: StreamProvider,
-    context: StreamContext,
-  ): {
-    titleKey: string;
-    tipKeys: string[];
-    color: ColorResolvable;
-  } {
-    // Detect the provider and whether a fallback chain already exists: both gate conditional tips.
-    const providerName = provider.getProviderInfo().name;
-    const isOpenRouter = providerName === "openrouter";
-    const isPersonal = context.textCredentialSource === "personal";
-
-    /** Picks the personal variant of a tip key when the failing request used a personal key. */
-    const scoped = (key: keyof typeof PERSONAL_TIP_KEYS): string => (isPersonal ? PERSONAL_TIP_KEYS[key] : key);
-
-    // A personal text override reads the user's own fallback chain, not the server's, so the
-    // server-side chain says nothing about whether this request had a fallback to fall back to.
-    const hasFallbackModels =
-      !isPersonal && (context.tomoriState.fallback_chain?.length ?? context.tomoriState.fallback_llms?.length ?? 0) > 0;
-    const modelFallbackTip = hasFallbackModels ? [] : [scoped("genai.tips.model_fallback")];
-
-    // Offered whenever a personal text route failed: the user can usually recover immediately by
-    // handing the turn back to the server default, except where User BYOK mode forbids it.
-    const disableOverrideTip = isPersonal ? ["genai.tips.disable_personal_text_override"] : [];
-
-    // Unscoped: the tip names no command, so it reads the same for a personal key.
-    const keyRejectionTips = isNvidiaCredentialRejected(providerName, providerError)
-      ? ["genai.tips.verify_api_key_expiry"]
-      : [];
-
-    // NVIDIA retires hosted models faster than the seeded catalog can follow, and a backed-up free
-    // queue looks like a timeout or overload, so each of those points at a model NVIDIA serves today.
-    const nvidiaFreeModelTip = providerName === "nvidia" ? [scoped("genai.tips.nvidia_register_free_model")] : [];
-
-    // Specialized Error Conditions
-    const isPrivacyError = providerError.message.includes("Privacy Policy Error");
-    if (isPrivacyError) {
-      return {
-        titleKey: "genai.stream.privacy_error_title",
-        tipKeys: [
-          "genai.tips.openrouter_privacy_settings",
-          scoped("genai.tips.choose_supported_model"),
-          ...(isOpenRouter ? [scoped("genai.tips.openrouter_models")] : []),
-        ],
-        color: ColorCode.ERROR,
-      };
-    }
-
-    const isTempTopPConflict =
-      typeof providerError.userMessage === "string" &&
-      providerError.userMessage.includes("`temperature` and `top_p` cannot both be specified");
-    if (isTempTopPConflict) {
-      return {
-        titleKey: "genai.stream.api_error_title",
-        tipKeys: [scoped("genai.tips.adjust_parameters"), scoped("genai.tips.switch_model_provider")],
-        color: ColorCode.ERROR,
-      };
-    }
-
-    // Model errors (unsupported/unknown/deprecated model IDs): steer toward a supported model.
-    if (isProviderModelError(providerError)) {
-      return {
-        titleKey: "genai.stream.model_error_title",
-        tipKeys: [
-          scoped("genai.tips.choose_supported_model"),
-          ...nvidiaFreeModelTip,
-          ...(isOpenRouter ? [scoped("genai.tips.openrouter_models")] : []),
-          ...disableOverrideTip,
-        ],
-        color: ColorCode.ERROR,
-      };
-    }
-
-    // Exhausted account balance (e.g. DeepSeek 402 "Insufficient Balance"): checked before the
-    //    affordability branch because an empty wallet is the stricter condition, and before the
-    //    generic api_error default, whose `verify_api_key` tip misdiagnoses a perfectly valid key.
-    if (isAccountBalanceExhaustedError(providerError)) {
-      return {
-        titleKey: "genai.stream.balance_exhausted_title",
-        tipKeys: [
-          "genai.tips.top_up_provider_balance",
-          ...(providerName === "deepseek" ? ["genai.tips.deepseek_top_up"] : []),
-          ...(isOpenRouter ? [scoped("genai.tips.openrouter_add_credits")] : []),
-          scoped("genai.tips.switch_model_provider"),
-          ...disableOverrideTip,
-        ],
-        color: ColorCode.ERROR,
-      };
-    }
-
-    // Credit-affordability ceiling (e.g. OpenRouter 402): the account cannot pay for the
-    //    requested max_tokens. Adding history back does not help, so steer toward lowering the
-    //    output-token cap or topping up credits. Checked before the context-length branch
-    //    because the 402 copy is the more specific signal.
-    if (isCreditAffordabilityError(providerError)) {
-      return {
-        titleKey: "genai.stream.credit_limit_title",
-        tipKeys: [
-          scoped("genai.tips.reduce_output_tokens"),
-          ...(isOpenRouter ? [scoped("genai.tips.openrouter_add_credits")] : []),
-          scoped("genai.tips.switch_model_provider"),
-          ...disableOverrideTip,
-        ],
-        color: ColorCode.ERROR,
-      };
-    }
-
-    // Hard context-window overflow (e.g. OpenRouter 400 "maximum context length"): trimming the
-    //    request genuinely helps. Lead with the output-token cap (the reserve the truncator honors),
-    //    then context refresh / shorter message, then a model-fallback nudge when none is configured.
-    if (isContextLengthError(providerError)) {
-      return {
-        titleKey: "genai.stream.context_length_title",
-        tipKeys: [
-          scoped("genai.tips.reduce_output_tokens"),
-          "genai.tips.refresh_context",
-          "genai.tips.shorten_message",
-          ...modelFallbackTip,
-        ],
-        color: ColorCode.ERROR,
-      };
-    }
-
-    switch (providerError.type) {
-      case "rate_limit":
-        return {
-          titleKey: context.rotationKeyRetriesUsed
-            ? "genai.stream.rate_limit_title_all_rotation_keys"
-            : "genai.stream.rate_limit_title",
-          tipKeys: [
-            "genai.tips.wait_and_retry",
-            // Rotation pools are a server-scoped, manager-only feature; a personal key has none.
-            ...(isPersonal ? [] : ["genai.tips.api_key_rotation"]),
-            ...modelFallbackTip,
-            ...(isOpenRouter ? [scoped("genai.tips.openrouter_free_models")] : []),
-            ...(isOpenRouter && providerError.message.includes("free-models-per-day")
-              ? ["genai.tips.openrouter_fund_account"]
-              : []),
-            ...disableOverrideTip,
-          ],
-          color: ColorCode.WARN,
-        };
-      case "content_blocked":
-        return {
-          titleKey: "genai.stream.content_blocked_title",
-          tipKeys: [
-            "genai.tips.nsfw_jailbreaks",
-            "genai.tips.review_messages",
-            "genai.tips.review_memories",
-            "genai.tips.blacklist_member",
-            scoped("genai.tips.switch_model_provider"),
-          ],
-          color: ColorCode.ERROR,
-        };
-      case "timeout":
-        return {
-          titleKey: "genai.stream.timeout_title",
-          tipKeys: ["genai.tips.shorten_message", "genai.tips.refresh_context", ...nvidiaFreeModelTip],
-          color: ColorCode.WARN,
-        };
-      case "provider_overloaded":
-        return {
-          titleKey: "genai.stream.provider_overloaded_title",
-          tipKeys: ["genai.tips.provider_overloaded_wait", ...modelFallbackTip, ...nvidiaFreeModelTip],
-          color: ColorCode.WARN,
-        };
-      default:
-        return {
-          titleKey: "genai.stream.api_error_title",
-          tipKeys: [
-            // Google rejects a Vertex-style OAuth/service account credential with
-            // ACCESS_TOKEN_TYPE_UNSUPPORTED. "Double-check your API key" misleads here: the key is
-            // not mistyped, it is the wrong kind of credential for this provider.
-            ...(providerError.message.includes("ACCESS_TOKEN_TYPE_UNSUPPORTED")
-              ? ["genai.tips.google_credential_type"]
-              : []),
-            scoped("genai.tips.verify_api_key"),
-            ...keyRejectionTips,
-            // NIM answers some retired routes with a bare "404 page not found" that no model
-            // pattern can recognize without also catching unrelated 404s.
-            ...(providerError.code === "404" || providerError.code === "410" ? nvidiaFreeModelTip : []),
-            scoped("genai.tips.switch_model_provider"),
-            ...(isOpenRouter ? [scoped("genai.tips.openrouter_models")] : []),
-            ...disableOverrideTip,
-          ],
-          color: providerError.retryable ? ColorCode.WARN : ColorCode.ERROR,
-        };
-    }
   }
 
   /**

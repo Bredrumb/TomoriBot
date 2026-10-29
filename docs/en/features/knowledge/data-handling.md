@@ -2,11 +2,10 @@
 title: "Data Handling"
 sidebar:
   order: 4
-aiGenerated: true
 ---
 
 Export, back up, import, or delete your settings, memories, and personas using Discord slash
-commands. For service terms and privacy details, see `/legal terms-of-service` and
+commands. For service terms and privacy details for the [public deployed bot](https://discord.com/oauth2/authorize?client_id=841644102059556915), see `/legal terms-of-service` and
 `/legal privacy-policy`.
 
 :::note
@@ -18,7 +17,7 @@ and restores are host-side operations; see [Maintenance & Backups](/self-hosting
 
 ### Stored data
 
-- Server and personal memories
+- Server and personal memories, and authored lorebooks
 - Persona profiles, traits, and dialogue examples
 - Server configuration settings
 - Encrypted provider API keys
@@ -39,51 +38,26 @@ Your chosen AI provider (Google, OpenRouter, NovelAI, …) processes messages un
 privacy policy. Avoid sharing sensitive personal credentials or confidential data.
 :::
 
-### Response Drafting selections
-
-`/config` > `Plugins` > `Response Drafting` stores reviewer, optional rule checker,
-prompt choices, and enabled review items for that server or DM. When On, replies are reviewed before
-they are sent. Tool requests are reviewed before execution only with `Tool Calls` enabled. An optional checker receives pending reply text and sends advisory findings
-only to the reviewer. Off keeps ordinary replies and tools without review requests.
-
-The selected reviewer always receives the pending response, triggering message, and reply target.
-`Content to Check` controls which additional context already admitted to the author it receives:
-persona instructions, example dialogues, recent conversation, memories and other context, and tool
-calls. Persona instructions, example dialogues, and recent conversation start enabled. Memories and
-other context includes visible participant relationships and documents. With `Tool Calls` enabled,
-the reviewer receives completed outcomes and available tool definitions; a proposed request includes
-its exact target and arguments, including any message text. Review adds no
-private profile lookup. Credentials and authentication arguments are redacted. Required evidence
-must fit; incomplete media coverage, hidden tool arguments or missing model limits makes review
-unavailable. An unavailable review keeps ordinary application checks; an earlier rejected action
-stays blocked.
-
-Inheritance uses the model and credentials actually answering, including personal routing, key
-rotation, overrides, and fallback. A pinned reviewer uses the registration and saved provider key
-for that server or DM. Its provider has its own privacy policy. Choosing it leaves the primary response
-provider unchanged. Pending replies and correction packets last only for the turn. Only dialogue
-accepted by Discord enters conversation memory; token accounting includes actual unsuccessful
-attempts when the provider reports usage. Diagnostics contain metadata and counts, without drafts,
-evidence, corrections, provider response bodies, or keys.
-
-Configuration exports include these settings without API keys or MCP authentication tokens. Imports
-preserve model and checker references only when they are available to the receiving server or DM.
-Register a local equivalent or clear unavailable selections before importing. Server configuration
-reset restores Off, reviewer inheritance, the default prompt, and no checker.
-
 ## Export Your Data
 
 Exportable data is delivered to your DMs as a JSON file:
 
 - `/export config`: server configuration values (excludes API keys and credentials).
 - `/export personal config`: personal profile settings (privacy, appearance tags, naming).
-- `/export memories`: server memories, scoped to the main persona, one persona, or all personas. Channel limits are not exported, so imported memories apply in every channel until you pick channels again.
+- `/export memories`: server memories and persona lorebooks, scoped to the main persona, one persona,
+  or all personas, plus Serverwide lore. Channel limits are included.
 - `/export personal memories`: personal memories, scoped globally or per persona.
-- `/persona export`: full persona definitions.
+- `/persona export`: full persona definitions, including the persona's lorebook.
 
 Uploaded expression media is stored on the server host and is outside these JSON exports.
 Self-hosters must back up database storage and media assets together; see
 [custom media backups](/self-hosting/safe-migration/#custom-expression-media-backups).
+
+:::tip
+`/export config` is not a complete backup. It leaves out channel overrides, per-channel auto-trigger
+rules, user blacklists, and channel whitelists, which `/reset config` and `/nuke` clear. Copy the
+settings you rely on before either command.
+:::
 
 ## Import Your Data
 
@@ -96,12 +70,18 @@ Attach an exported file to restore it:
 - `/persona import`: restore a persona. Also imports SillyTavern PNG cards, JSON cards, and `.charx`
   archives (see [SillyTavern Support](/features/integrations/sillytavern-support/)).
 
+An included lorebook replaces that scope's complete book, including entries added locally. This
+also applies when merging memories. An empty book clears it; a file without a lorebook keeps existing
+lore. Older server backups with keyword-tagged memories convert those memories into persona lore.
+Channel-only memories stay memories, and personal memory tags are unchanged. Channel ids belong to
+their original Discord server, so review channel limits when moving a backup to another server.
+
 ## Delete Your Data
 
 These actions permanently remove or reset stored data:
 
 - `/personal memories`: manage or remove personal memories.
-- `/memories`: manage or remove server memories (requires Manage Server).
+- `/memories`: manage or remove server memories, documents, and lorebooks (requires Manage Server).
 - `/personal nuke`: permanently deletes all personal data across servers.
 - `/nuke`: wipes server data, including custom expressions and persona access rules. Set
   `preserve_personas: true` to keep personas while removing custom expressions and media.

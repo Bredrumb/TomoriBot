@@ -25,6 +25,8 @@ export const PANEL_ACTIONS = [
   "server-config.workspace.natural-nudge-idle-nudges-frequency.set",
   "server-config.workspace.natural-nudge-active-nudges.set",
   "server-config.workspace.natural-nudge-active-nudges-frequency.set",
+  "server-config.workspace.natural-nudge-heat.set",
+  "server-config.workspace.natural-nudge-weights.set",
   "nudge-studio.workspace.idle-nudge.add",
   "nudge-studio.workspace.idle-nudge.edit",
   "nudge-studio.workspace.idle-nudge.set",
@@ -106,6 +108,12 @@ export const PANEL_ACTIONS = [
   "memories.workspace.document-chunk.edit",
   "memories.workspace.document-chunk.remove",
   "memories.workspace.stm.clear",
+  "memories.workspace.lorebook.add",
+  "memories.workspace.lorebook.edit",
+  "memories.workspace.lorebook.activation",
+  "memories.workspace.lorebook.set",
+  "memories.workspace.lorebook.import",
+  "memories.workspace.lorebook.remove",
 
   // personal-config
   "personal-config.personal.naming.set",

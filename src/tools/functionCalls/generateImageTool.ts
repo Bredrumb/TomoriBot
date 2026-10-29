@@ -1,3 +1,8 @@
+import {
+  getProviderContentRejectionCode,
+  providerContentRejectionSchema,
+} from "@/utils/provider/providerErrorClassification";
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import {
   findProviderRequestDeniedError,
@@ -42,7 +47,9 @@ import {
   resolveImageToolCapabilities,
   type ImageToolCapabilities,
 } from "@/tools/functionCalls/generateImageToolCapabilities";
-import { checkImageQuota, incrementImageQuota, type QuotaCheckResult } from "../../utils/quota/imageQuotaManager";
+import { releaseImageQuota, reserveImageQuota, type ImageQuotaClaim } from "../../utils/quota/imageQuotaManager";
+import { QuotaUnavailableError } from "@/utils/quota/quotaErrors";
+import type { QuotaReservation } from "@/utils/db/repositories/QuotaRepository";
 import { statRepository } from "@/utils/db/repositories";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { resolveNativeImageGenerationCapability } from "@/utils/provider/providerCapabilityResolver";
@@ -890,22 +897,27 @@ export class GenerateImageTool extends BaseTool {
     }
 
     // Default to allowed; overwritten below for server-credential users
-    let quotaCheck: QuotaCheckResult = { allowed: true };
+    let quotaCheck: ImageQuotaClaim = { allowed: true, reservation: null };
     let usageContext: ProviderUsageContext | undefined;
-    let generationRoute: { provider: string; modelId: number; model: string; credentialSource: string } | undefined;
+    let quotaReservation: QuotaReservation | null = null;
+    let quotaDelivered = false;
+    let generationRoute:
+      | { provider: string; modelId: number; model: string; credentialSource: "server" | "personal" }
+      | undefined;
 
     try {
       const { credentials: creds, quotaCheck: serverQuotaCheck } = await resolveCredentialsWithMediaQuota(
         context.tomoriState.server_id,
         "image-standard",
         context.internalUserId ?? null,
-        checkImageQuota,
+        reserveImageQuota,
         userDiscId,
         quotaCheck,
         undefined,
         context.streamContext?.imageModelSelection,
       );
       quotaCheck = serverQuotaCheck;
+      quotaReservation = serverQuotaCheck.reservation;
 
       if (!quotaCheck.allowed) {
         let errorMessage = "";
@@ -1064,83 +1076,81 @@ export class GenerateImageTool extends BaseTool {
       const usedAvatarReferences = avatarReferences.slice(0, survivingAvatarCount);
       const referencedIdentityNames = usedAvatarReferences.map((avatarReference) => avatarReference.username);
 
-      if (!context.suppressProgressNotices) {
-        const actualUsesReferences = referenceImages.length > 0;
-        const baseNoticeDescription = localizer(
-          context.locale,
-          actualUsesReferences
-            ? "tools.image.generating_with_references_description"
-            : "tools.image.generating_description",
-        );
-        const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
-        const messageReferenceCount = referenceImages.filter((reference) => reference.sourceType === "message").length;
-        const extraNoticeLines: string[] = [];
-        const imageModeKey = outpaint
-          ? "tools.image.mode_outpaint"
-          : inpaint
-            ? "tools.image.mode_inpaint"
-            : actualUsesReferences
-              ? "tools.image.mode_img2img"
-              : "tools.image.mode_txt2img";
-        const modeNoticeLine = localizer(context.locale, "tools.image.notice_mode_line", {
-          mode: localizer(context.locale, imageModeKey),
-        });
-        if (outpaint) {
-          extraNoticeLines.push(
-            localizer(context.locale, "tools.image.notice_outpaint_direction_line", {
-              direction: this.formatOutpaintDirection(extendDirection),
-            }),
-          );
-        }
-        if (inpaint && !outpaint && maskPrompt) {
-          extraNoticeLines.push(`Mask: \`${this.formatNoticeValue(maskPrompt)}\``);
-        }
-        if (messageReferenceCount > 0) {
-          extraNoticeLines.push(
-            referencedMessageUrl
-              ? localizer(context.locale, "tools.image.notice_reference_line", {
-                  message_url: referencedMessageUrl,
-                })
-              : localizer(context.locale, "tools.image.notice_reference_count_line", {
-                  count: messageReferenceCount.toString(),
-                }),
-          );
-        }
-        if (referencedIdentityNames.length > 0) {
-          extraNoticeLines.push(
-            localizer(context.locale, "tools.image.notice_avatar_reference_line", {
-              name: referencedIdentityNames.join(", "),
-            }),
-          );
-        }
-        if (referenceImages.length > 1) {
-          extraNoticeLines.push(
-            localizer(context.locale, "tools.image.notice_reference_count_line", {
-              count: referenceImages.length.toString(),
-            }),
-          );
-        }
-        extraNoticeLines.push("");
-        extraNoticeLines.push(localizer(context.locale, "tools.image.notice_image_tags_tip_line"));
-        await sendToolProgressNotice(
-          context,
-          "image_generation",
-          {
-            titleKey: "tools.image.generating_title",
-            description: buildImageToolNoticeDescription(
-              context.locale,
-              baseNoticeDescription,
-              displayModelName,
-              prompt,
-              localizer(context.locale, "tools.image.generating_footer"),
-              extraNoticeLines,
-              [modeNoticeLine],
-            ),
-            color: ColorCode.INFO,
-          },
-          "GenerateImageTool",
+      const actualUsesReferences = referenceImages.length > 0;
+      const baseNoticeDescription = localizer(
+        context.locale,
+        actualUsesReferences
+          ? "tools.image.generating_with_references_description"
+          : "tools.image.generating_description",
+      );
+      const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
+      const messageReferenceCount = referenceImages.filter((reference) => reference.sourceType === "message").length;
+      const extraNoticeLines: string[] = [];
+      const imageModeKey = outpaint
+        ? "tools.image.mode_outpaint"
+        : inpaint
+          ? "tools.image.mode_inpaint"
+          : actualUsesReferences
+            ? "tools.image.mode_img2img"
+            : "tools.image.mode_txt2img";
+      const modeNoticeLine = localizer(context.locale, "tools.image.notice_mode_line", {
+        mode: localizer(context.locale, imageModeKey),
+      });
+      if (outpaint) {
+        extraNoticeLines.push(
+          localizer(context.locale, "tools.image.notice_outpaint_direction_line", {
+            direction: this.formatOutpaintDirection(extendDirection),
+          }),
         );
       }
+      if (inpaint && !outpaint && maskPrompt) {
+        extraNoticeLines.push(`Mask: \`${this.formatNoticeValue(maskPrompt)}\``);
+      }
+      if (messageReferenceCount > 0) {
+        extraNoticeLines.push(
+          referencedMessageUrl
+            ? localizer(context.locale, "tools.image.notice_reference_line", {
+                message_url: referencedMessageUrl,
+              })
+            : localizer(context.locale, "tools.image.notice_reference_count_line", {
+                count: messageReferenceCount.toString(),
+              }),
+        );
+      }
+      if (referencedIdentityNames.length > 0) {
+        extraNoticeLines.push(
+          localizer(context.locale, "tools.image.notice_avatar_reference_line", {
+            name: referencedIdentityNames.join(", "),
+          }),
+        );
+      }
+      if (referenceImages.length > 1) {
+        extraNoticeLines.push(
+          localizer(context.locale, "tools.image.notice_reference_count_line", {
+            count: referenceImages.length.toString(),
+          }),
+        );
+      }
+      extraNoticeLines.push("");
+      extraNoticeLines.push(localizer(context.locale, "tools.image.notice_image_tags_tip_line"));
+      await sendToolProgressNotice(
+        context,
+        "image_generation",
+        {
+          titleKey: "tools.image.generating_title",
+          description: buildImageToolNoticeDescription(
+            context.locale,
+            baseNoticeDescription,
+            displayModelName,
+            prompt,
+            localizer(context.locale, "tools.image.generating_footer"),
+            extraNoticeLines,
+            [modeNoticeLine],
+          ),
+          color: ColorCode.INFO,
+        },
+        "GenerateImageTool",
+      );
 
       const providerReferenceImages = referenceImages.map(({ mimeType, data }) => ({ mimeType, data }));
 
@@ -1320,6 +1330,8 @@ export class GenerateImageTool extends BaseTool {
           },
         });
 
+        const rejection = getProviderContentRejectionCode(response);
+        if (rejection) throw Object.assign(new Error("Image request blocked by the provider"), { code: rejection });
         if (response?.candidates && response.candidates.length > 0 && response.candidates[0]?.content?.parts) {
           for (const part of response.candidates[0].content.parts) {
             if (part.inlineData) {
@@ -1405,10 +1417,7 @@ export class GenerateImageTool extends BaseTool {
 
       log.success("Successfully generated and sent image to Discord");
 
-      // Increment quota after successful generation (server providers only)
-      if (creds.source === "server") {
-        await incrementImageQuota(context.tomoriState.server_id, userDiscId);
-      }
+      quotaDelivered = true;
       // Record canonical generation telemetry for all providers; quotas enforce limits only.
       if (context.internalUserId) {
         statRepository.recordStat({
@@ -1446,63 +1455,62 @@ export class GenerateImageTool extends BaseTool {
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };
     } catch (error) {
+      if (error instanceof QuotaUnavailableError) {
+        return {
+          success: false,
+          error: "Quota check unavailable",
+          message: localizer(context.locale, "tools.generate_image.quota_unavailable"),
+        };
+      }
       if (error instanceof DiscordDeliveryError) return mediaDeliveryFailure(context, error.outcome);
       const denied = findProviderRequestDeniedError(error, usageContext);
-      if (denied) return { success: false, error: await notifyProviderToolFailure(context, denied) };
+      if (denied) return notifyProviderToolFailure(context, denied);
       if (context.abortSignal?.aborted) {
         return { success: false, error: "Image generation was cancelled." };
       }
+      const toolFailure = createProviderToolFailure(error, {
+        locale: context.locale,
+        provider: generationRoute?.provider ?? "unknown",
+        credentialScope: generationRoute?.credentialSource,
+      });
       const errorMessage = error instanceof Error ? error.message : String(error);
-
-      // Localize errors, but fall back to readable defaults if the localizer
-      // isn't initialized or a key is missing (to avoid leaking locale keys)
-      const getReadableError = (key: string, fallback: string): string => {
-        const localized = localizer(context.locale, key);
-        return localized === key ? fallback : localized;
-      };
 
       const isBillingRefusal = /\b(?:billing|payment|quota|balance|credits?|402|PERMISSION_DENIED)\b/i.test(
         errorMessage,
       );
       const isSafetyRefusal =
-        errorMessage.includes("safety") || errorMessage.includes("blocked") || errorMessage.includes("RECITATION");
+        providerContentRejectionSchema.safeParse(toolFailure.failure?.code).success ||
+        errorMessage.includes("safety") ||
+        errorMessage.includes("blocked") ||
+        errorMessage.includes("RECITATION");
+      const isAuthenticationRefusal = ["401", "403", "authentication"].includes(toolFailure.failure?.code ?? "");
 
       await reportProviderFailure({
         summary: "Image generation failed",
         errorType: "ImageGenerationFailed",
         error,
-        expected: isBillingRefusal || isSafetyRefusal || classifySendFailure(error) !== null,
+        expected: isBillingRefusal || isSafetyRefusal || isAuthenticationRefusal || classifySendFailure(error) !== null,
         serverId: context.tomoriState.server_id,
         userId: context.internalUserId ?? null,
         dimensions: {
           operation: "image-generation",
           provider: generationRoute?.provider ?? "unknown",
-          refusal: isBillingRefusal ? "billing" : isSafetyRefusal ? "safety" : "none",
+          refusal: isBillingRefusal
+            ? "billing"
+            : isSafetyRefusal
+              ? "safety"
+              : isAuthenticationRefusal
+                ? "authentication"
+                : "none",
         },
         metadata: generationRoute,
       });
 
-      if (isBillingRefusal) {
-        return {
-          success: false,
-          error: getReadableError("genai.google.400_billing_default_message", "Billing is required for this service"),
-        };
+      return toolFailure;
+    } finally {
+      if (quotaReservation && !quotaDelivered) {
+        await releaseImageQuota(context.tomoriState.server_id, userDiscId, quotaReservation);
       }
-
-      if (isSafetyRefusal) {
-        return {
-          success: false,
-          error: getReadableError(
-            "genai.google.content_blocked_default_message",
-            "Your content was blocked by safety filters",
-          ),
-        };
-      }
-
-      return {
-        success: false,
-        error: "Failed to generate the image because the provider returned an error.",
-      };
     }
   }
   /**

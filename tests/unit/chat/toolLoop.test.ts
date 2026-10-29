@@ -49,6 +49,9 @@ import type { TomoriState } from "@/types/db/schema";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import type { ToolLoopParams } from "@/utils/chat/toolLoop";
 import { createExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
+import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy } from "../../helpers/localeCases";
 
 let toolExecuteCalls: Array<{
   name: string;
@@ -519,6 +522,45 @@ describe("runToolLoop — contract tests", () => {
     expect(result.streamResults).toHaveLength(2);
   });
 
+  it("keeps an earlier request's reasoning when the tool follow-up reports none", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+
+    const { provider } = makeProvider([
+      { ...makeFunctionCallResult("echo_tool"), thoughtLog: { raw: "checked the shelf first" } },
+      { status: "completed", accumulatedText: "done", thoughtLog: { generationDurationMs: 900 } },
+    ]);
+    toolExecuteQueue.push({ success: true, data: { ok: true } });
+
+    const result = await runToolLoop(makeParams(makeContext(), provider));
+
+    expect(result.status).toBe("completed");
+    expect(result.thoughtLog?.raw).toBe("checked the shelf first");
+  });
+
+  it("preserves each request's reasoning and the first reply link across tool calls", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { provider } = makeProvider([
+      {
+        ...makeFunctionCallResult("echo_tool"),
+        thoughtLog: { summary: "first summary", raw: "first thought", firstReplyUrl: "https://example.com/first" },
+      },
+      {
+        status: "completed",
+        accumulatedText: "done",
+        thoughtLog: { raw: "second thought", firstReplyUrl: "https://example.com/second" },
+      },
+    ]);
+    toolExecuteQueue.push({ success: true, data: { ok: true } });
+
+    const result = await runToolLoop(makeParams(makeContext(), provider));
+
+    expect(result.thoughtLog?.iterations).toEqual([
+      { summary: "first summary", raw: "first thought" },
+      { summary: undefined, raw: "second thought" },
+    ]);
+    expect(result.thoughtLog?.firstReplyUrl).toBe("https://example.com/first");
+  });
+
   it("preserves message-only, empty, array, scalar and message-bearing payload successes", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
     const cases: Array<{ label: string; result: ToolResult; expected: Record<string, unknown> }> = [
@@ -619,6 +661,40 @@ describe("runToolLoop — contract tests", () => {
 
     // The raw internal error string is not surfaced as the final response text.
     expect(result.personaResponses[0]?.text).not.toContain("something broke");
+  });
+
+  it("returns provider codes and recovery guidance to the next model pass without private failure data", async () => {
+    await initializeLocalizer();
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { provider, capturedHistories } = makeProvider([
+      makeFunctionCallResult("generate_voice_message", {}),
+      { status: "completed", accumulatedText: "Failure explained" },
+    ]);
+    toolExecuteQueue.push({
+      ...createProviderToolFailure(
+        { code: "PROHIBITED_CONTENT", message: "PRIVATE_PROVIDER_BODY" },
+        {
+          locale: "en-US",
+          provider: "google",
+        },
+      ),
+      message: "Generic notice",
+      data: { private: "PRIVATE_FAILURE_DATA" },
+    });
+    const result = await runToolLoop(makeParams(makeContext(), provider));
+    expect(result.status).toBe("completed");
+    const history = capturedHistories[1] as Array<{
+      functionResponse: { functionResponse: { response: { result: Record<string, unknown> } } };
+    }>;
+    expect(history[0]?.functionResponse.functionResponse.response.result).toMatchObject({
+      status: "tool_execution_failed",
+      tool_name: "generate_voice_message",
+      code: "PROHIBITED_CONTENT",
+      reason: localizedCopy("en-US", "genai.tool_failure.content_blocked"),
+    });
+    expect(history[0]?.functionResponse.functionResponse.response.result.suggested_actions).not.toEqual([]);
+    expect(JSON.stringify(history)).not.toContain("PRIVATE_PROVIDER_BODY");
+    expect(JSON.stringify(history)).not.toContain("PRIVATE_FAILURE_DATA");
   });
 
   it("consecutive tool errors: loop exits with 'error' after MAX_CONSECUTIVE_TOOL_ERRORS failures", async () => {

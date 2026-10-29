@@ -195,6 +195,13 @@ Use Starlight's `Card`, `CardGrid`, `LinkCard`, and `LinkButton`. Keep screensho
 router pages, where the screenshots are worth maintaining. Site images must be under
 `apps/docs/public`; root `assets/img` is for the repository README and is not deployed.
 
+## Math
+
+Write LaTeX equations between `$$` delimiters on their own lines for display math, or use
+`$$...$$` within a paragraph for inline math. Single dollar signs stay literal so prices render
+normally. The docs build uses `remark-math` and `rehype-katex` to render equations, with KaTeX CSS
+and fonts bundled locally. Keep a plain-language explanation beside each equation.
+
 ## Prose
 
 Run `bun run audit-comments --docs <file>` on pages you write. It applies the calibrated slop-guard

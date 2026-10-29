@@ -32,7 +32,9 @@ Tool embeds use the invoking persona's shared author resolution, including its c
 and sprite for main and alter personas. One persona delivery receipt records the delivered message and
 every artifact posted with it.
 
-The tool records the active persona as the actor when targeting another persona. Rows contain exactly
+The tool's reason is optional. When provided for a persona target, it saves conditioning with the
+active persona as the actor. Without a reason, the gesture is posted and the target can react, but no
+conditioning is saved. Rows contain exactly
 one of `user_id` or `actor_persona_id`; repeats are counted separately for each actor. Actor names are
 resolved when the groups are read, and feedback is included without requiring that actor to be present.
 Deleting an actor's user or persona row cascades to their feedback. Managers remove mixed-actor groups
@@ -40,9 +42,21 @@ through the existing conditioning panel.
 
 After a successful post, persona targets enter the normal chat admission and channel queue with the
 selected target and the initiating member's access identity. The queued turn receives an injected
-context item that names the actor, the selected target, the action, the reason, and the delivered
-message reference. The target reacts to that event; a later message or embed cannot redirect it. The
-queued reply disables this interaction tool to stop reciprocal tool chains. User targets receive only
+context item that names the actor, the selected target, the action, and the reason, with the delivered
+message ID in metadata. `/reward` and `/punish` use the same event builder and fetch their own reply as
+the trigger, so a later message or embed cannot redirect the reaction. The receiving turn uses the
+delivered embed's history text when present and replaces that history entry with one recent `user`
+item formatted as `[System: <gesture> <tool hint>]`. The trigger stays separate from adjacent notices
+during history merging. If the message is outside the fetched history, the injected event supplies
+the gesture. The receiving turn resolves `{conditioning_interaction_tool}` inside
+`{{if tool:interact_with_target}}` against its own model capabilities and Deliberate Tool Mode
+allowlist. When unavailable, the event appears without the hint. The hint exists only for this
+reaction turn; later history contains the posted gesture without it.
+
+The interaction tool remains available to the receiving persona and allows one call per turn.
+No runtime limit bounds the number of reciprocal turns. Persona-triggered replies also skip human
+engagement counters and short-term memory writes, so persona reactions cannot sustain Natural Nudges
+or establish a relationship with the initiating member. User targets receive only
 the embed. Cancellation is checked before writing, posting, and triggering a reply; a completed write
 is retained if delivery fails or is cancelled, no reaction is queued, and an uncertain send is never
 reposted as the bot.

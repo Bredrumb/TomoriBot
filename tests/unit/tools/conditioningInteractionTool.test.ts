@@ -25,7 +25,8 @@ import { createPersona } from "../../helpers/fixtures";
 import { localizedCopy } from "../../helpers/localeCases";
 import * as lifecycle from "@/utils/discord/webhook/lifecycle";
 import * as identity from "@/utils/discord/webhook/identity";
-import { clearPersonaAppearances } from "@/utils/cache/personaAppearanceCacheStore";
+import { clearPersonaAppearances, getPersonaAppearance } from "@/utils/cache/personaAppearanceCacheStore";
+import { buildPersonaSpriteContextItem } from "@/utils/text/context/personaSprites";
 import { clearPersonaSpriteCache, setPersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
 import {
   clearAllChannelDeliveryContinuity,
@@ -220,6 +221,45 @@ function queuedEvent(queued: ReturnType<typeof spyOn>, call: number): string {
   return item.parts[0].text ?? "";
 }
 
+it("selects a sprite for a playful interaction without a preceding text reply", async () => {
+  const f = fixture("user");
+  const { messages } = webhookFixture();
+  setPersonaSpriteCache(ACTOR_ID, [spriteRow(true)]);
+  const item = await buildPersonaSpriteContextItem({
+    client: f.context.client,
+    guildId: "guild",
+    tomoriState: f.actor,
+    tomoriConfig: f.actor.config,
+    botName: "Juno",
+    isUserImpersonation: false,
+    convertMentions: async (text) => text,
+  });
+  f.context.contextItems = item ? [item] : [];
+  const result = await new ConditioningInteractionTool().execute(
+    { target: "Mirri", action: "hug", sprite: "shy" },
+    f.context,
+  );
+  expect(result.success).toBe(true);
+  expect(messages[0]).toMatchObject({ username: "shy (Juno)", avatarURL: spriteRow().avatar_url });
+  expect(getPersonaAppearance(CHANNEL, ACTOR_ID)?.sprite).toMatchObject({ spriteName: "shy", isIdentity: true });
+  expect(f.channel.send).not.toHaveBeenCalled();
+});
+
+it("rejects an invalid interaction sprite before saving conditioning or posting", async () => {
+  const f = fixture();
+  const { messages } = webhookFixture();
+  const result = await new ConditioningInteractionTool().execute(
+    { target: "Mirri", action: "hug", reason: "sharing snacks", sprite: "shy" },
+    f.context,
+  );
+  expect(result.success).toBe(false);
+  expect(result.error).toBe(localizedCopy("en-US", "tools.sprite_selection.unavailable"));
+  expect(f.record).not.toHaveBeenCalled();
+  expect(f.channel.send).not.toHaveBeenCalled();
+  expect(messages).toHaveLength(0);
+  expect(f.context.streamContext?.disableConditioningInteraction).not.toBe(true);
+});
+
 it("saves persona-attributed feedback and queues the target with the exact interaction event", async () => {
   const f = fixture();
   const tool = new ConditioningInteractionTool();
@@ -251,7 +291,7 @@ it("saves persona-attributed feedback and queues the target with the exact inter
       selectedPersonaId: 2,
       isManuallyTriggered: true,
       textQuotaSource: "system",
-      manualStreamingContextOverrides: { disableConditioningInteraction: true },
+      conditioningInteraction: { actorType: "persona", type: "reward" },
     }),
   );
   const event = queuedEvent(f.queued, 0);
@@ -260,13 +300,46 @@ it("saves persona-attributed feedback and queues the target with the exact inter
   expect(event).toContain("fed");
   expect(event).toContain("sharing snacks");
   expect(event).toContain("a cookie");
-  expect(event).toContain(f.delivered[0].url);
+  expect(f.queued.mock.calls[0][0].injectedContextItems?.[0].messageId).toBe(f.delivered[0].id);
   expect(event).not.toMatch(/latest embed/i);
+  const receiver = f.queued.mock.calls[0][0];
+  expect(receiver.manualStreamingContextOverrides?.disableConditioningInteraction).not.toBe(true);
+  expect(
+    tool.isAvailableForContext("google", {
+      ...f.context,
+      streamContext: { disableYouTubeProcessing: false, ...receiver.manualStreamingContextOverrides },
+    }),
+  ).toBe(true);
   expect(tool.isAvailableForContext("google", f.context)).toBe(false);
   expect((await tool.execute({ target: "Mirri", action: "bonk", reason: "being silly" }, f.context)).success).toBe(
     false,
   );
   expect(f.channel.send).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+  undefined,
+  "",
+  "   ",
+])("delivers a persona gesture with reason %j without saving conditioning", async (reason) => {
+  const f = fixture();
+  const result = await new ConditioningInteractionTool().execute(
+    { target: "Mirri", action: "hug", ...(reason === undefined ? {} : { reason }) },
+    f.context,
+  );
+  expect(result.success).toBe(true);
+  expect(result.responseDelivered).toBe(true);
+  expect(f.record).not.toHaveBeenCalled();
+  const payload = f.channel.send.mock.calls[0][0] as { embeds: EmbedBuilder[] };
+  expect(payload.embeds[0].data.description).toBe(
+    localizedCopy("en-US", "commands.reward.hug.embed_description", { user: "Juno", bot: "Mirri" }),
+  );
+  expect(payload.embeds[0].data.footer).toBeUndefined();
+  expect(f.queued).toHaveBeenCalledWith(expect.objectContaining({ selectedPersonaId: 2, message: f.delivered[0] }));
+  const event = queuedEvent(f.queued, 0);
+  expect(event).toContain("Juno");
+  expect(event).toContain("Mirri");
+  expect(event).not.toContain("undefined");
 });
 
 it("posts user interactions without writing conditioning or queueing a response", async () => {
@@ -402,16 +475,15 @@ it("queues two interactions with their own actors, actions, reasons, and source 
   const second = queuedEvent(f.queued, 1);
   expect(first).toContain("hugged");
   expect(first).toContain("the first kind moment");
-  expect(first).toContain(f.delivered[0].url);
   expect(first).not.toContain("the second silly moment");
   expect(second).toContain("bonked");
   expect(second).toContain("the second silly moment");
-  expect(second).toContain(f.delivered[1].url);
   expect(second).not.toContain("the first kind moment");
   for (const call of [0, 1]) {
     const args = (f.queued.mock.calls[call][0] ?? {}) as unknown as Record<string, unknown>;
     expect(args.selectedPersonaId).toBe(2);
     expect(args.textQuotaSource).toBe("system");
+    expect(f.queued.mock.calls[call][0].injectedContextItems?.[0].messageId).toBe(f.delivered[call].id);
   }
 });
 
@@ -471,12 +543,11 @@ it("keeps a completed conditioning write when delivery is cancelled afterwards",
   expect(f.queued).not.toHaveBeenCalled();
 });
 
-it("rejects missing feed food, blank reasons, and oversized input before any side effects", async () => {
+it("rejects missing feed food and oversized input before any side effects", async () => {
   const f = fixture();
   const tool = new ConditioningInteractionTool();
   for (const args of [
     { target: "Mirri", action: "feed", reason: "sharing" },
-    { target: "Mirri", action: "hug", reason: "  " },
     { target: "Mirri", action: "hug", reason: "x".repeat(251) },
     { target: "Mirri", action: "feed", reason: "sharing", food: "x".repeat(251) },
   ])
@@ -580,7 +651,7 @@ it("keeps the queued interaction source and its continuation together through su
   expect(deliveredOutcome?.success).toBe(true);
   const event = queuedEvent(f.queued, 0);
   const original = f.delivered[0];
-  expect(event).toContain(original.url);
+  expect(f.queued.mock.calls[0][0].injectedContextItems?.[0].messageId).toBe(original.id);
   expect(event).toContain(f.actor.persona_nickname);
   expect(event).toContain(f.target.persona_nickname);
   expect(event).toContain(args.reason);

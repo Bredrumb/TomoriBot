@@ -6,7 +6,14 @@ import { verifyMessageWebhook } from "@/utils/chat/webhookIdentity";
 
 import type { Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
-import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
+import {
+  BaseTool,
+  type ToolAssemblyContext,
+  type ToolContext,
+  type ToolParameterSchema,
+  type ToolResult,
+} from "@/types/tool/interfaces";
+import { createToolVariant } from "@/tools/assembly";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { DISCORD_ID_PATTERN, findFuzzyMessageMatch } from "@/utils/text/fuzzyMessageMatch";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
@@ -112,6 +119,27 @@ export class InteractWithRecentMessageTool extends BaseTool {
 
   isAvailableFor(_provider: string): boolean {
     return true;
+  }
+
+  assembleForContext(context: ToolAssemblyContext): InteractWithRecentMessageTool {
+    if (context.state.config.emoji_usage_enabled) return this;
+
+    return createToolVariant(this, {
+      description:
+        "Reply to a recent message in the current channel with a short follow-up or backtrack comment. Replies are always sent as yourself, even when the target is another persona's message. Use `reveal_message_metadata` first when you need fresh `ref_N` handles or sent timestamps.",
+      parameters: {
+        ...this.parameters,
+        properties: {
+          ...this.parameters.properties,
+          action: {
+            type: "string",
+            enum: ["reply"],
+            description: "Send a text reply to a recent message.",
+          },
+          content: { type: "string", description: "The text to send in the reply." },
+        },
+      },
+    });
   }
 
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
@@ -266,6 +294,13 @@ export class InteractWithRecentMessageTool extends BaseTool {
   }
 
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
+    if (args.action === "react" && !context.tomoriState.config.emoji_usage_enabled) {
+      return {
+        success: false,
+        error: "Emoji reactions are disabled for this server.",
+        data: { status: "emoji_reactions_disabled" },
+      };
+    }
     if (context.streamContext?.disableAllTools) {
       log.info("InteractWithRecentMessageTool: Execution blocked because tools are suppressed for this turn");
       return {

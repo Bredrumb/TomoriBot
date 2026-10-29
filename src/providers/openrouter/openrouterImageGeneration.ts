@@ -4,6 +4,10 @@ import { log, redactLogString } from "@/utils/misc/logger";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { z } from "zod";
+import {
+  formatProviderErrorCodeForDisplay,
+  getProviderContentRejectionCode,
+} from "@/utils/provider/providerErrorClassification";
 import { readBoundedResponse } from "@/utils/security/boundedResponse";
 import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit";
 import { fetchWithProviderRequest } from "@/utils/provider/providerRequestHook";
@@ -51,10 +55,16 @@ function buildRequestFailure(
   const safeBody = redactLogString(apiKey ? body.replaceAll(apiKey, "[REDACTED]") : body);
 
   let parsedMessage = "";
+  let providerCode: string | number | undefined;
   try {
     const parsed = z
       .object({
-        error: z.union([z.string(), z.object({ message: z.string().optional() })]).optional(),
+        error: z
+          .union([
+            z.string(),
+            z.object({ message: z.string().optional(), code: z.union([z.string(), z.number()]).optional() }),
+          ])
+          .optional(),
         message: z.string().optional(),
       })
       .safeParse(JSON.parse(safeBody));
@@ -62,15 +72,19 @@ function buildRequestFailure(
       const providerError = parsed.data.error;
       parsedMessage =
         (typeof providerError === "string" ? providerError : providerError?.message) || parsed.data.message || "";
+      providerCode = typeof providerError === "object" ? providerError.code : undefined;
     }
   } catch {}
 
   const statusLabel = `${status} ${statusText}`.trim();
   const friendlyMessage = parsedMessage || statusLabel;
   const message = `OpenRouter API request failed (${statusLabel}) for model "${modelCodename}": ${friendlyMessage}`;
-  return new Error(redactLogString(apiKey ? message.replaceAll(apiKey, "[REDACTED]") : message), {
-    cause: readOpenRouterLimitError(status, headers, body) ?? undefined,
-  });
+  return Object.assign(
+    new Error(redactLogString(apiKey ? message.replaceAll(apiKey, "[REDACTED]") : message), {
+      cause: readOpenRouterLimitError(status, headers, body) ?? undefined,
+    }),
+    { status, code: formatProviderErrorCodeForDisplay(providerCode) },
+  );
 }
 
 async function resolveImageUrl(imageUrl: string, abortSignal?: AbortSignal): Promise<OpenRouterImageGenerationResult> {
@@ -144,6 +158,7 @@ async function generateViaChatCompletions(
       choices: z
         .array(
           z.object({
+            finish_reason: z.string().nullish(),
             message: z
               .object({
                 images: z
@@ -163,6 +178,8 @@ async function generateViaChatCompletions(
       usage: usageCostSchema,
     })
     .parse(JSON.parse((await readBoundedResponse(response, OPENROUTER_IMAGE_RESPONSE_MAX_BYTES)).toString("utf8")));
+  const rejection = getProviderContentRejectionCode(result);
+  if (rejection) throw Object.assign(new Error("Image request blocked by the provider"), { code: rejection });
   const message = result.choices?.[0]?.message;
   const costUsd = result.usage?.cost ?? undefined;
 

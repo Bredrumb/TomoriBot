@@ -16,9 +16,6 @@ export default {
     channel_access_warning_field: "Ainda não consigo conversar neste canal",
     channel_access_warning_value:
       "A configuração terminou, mas meu cargo não pode ver este canal ou enviar mensagens aqui, então não vou responder nele. Nas permissões deste canal ou da categoria, conceda ao meu cargo **Ver canal**, **Enviar mensagens** e **Ler histórico de mensagens**.",
-    novelai_expressions_warning_field: `Expressões Desativadas`,
-    novelai_expressions_warning_value:
-      "O uso de emojis e figurinhas foi automaticamente desativado para manter o contexto do NovelAI enxuto e estável. Você pode reativá-los depois em `/config` > Plugins.",
     zai_tos_warning_field: `Termos de Serviço do Z.ai`,
     zai_tos_warning_value:
       "Os ToS do Z.ai foram atualizados para permitir apenas casos de uso de código/agente. Usar Z.ai para chat geral é por sua conta e risco e pode violar os termos deles.",
@@ -83,7 +80,7 @@ Tente {model_text_command} para atribuir um modelo funcional, ou {provider_add_c
       provider_option_byok: `BYOK de Usuário`,
       provider_option_byok_description: `Cada membro fornece sua própria chave de API ou endpoint via /personal providers.`,
       settings_name: `Configurações Iniciais`,
-      settings_description: `Escolha uma persona inicial e o comportamento de resposta.`,
+      settings_description: `Escolha uma persona inicial, o comportamento de resposta e recursos opcionais.`,
       settings_pending: `Ainda não configurado.`,
       settings_button_start: `Definir Configurações Iniciais`,
       settings_button_edit: `Editar Configurações Iniciais`,
@@ -100,6 +97,47 @@ Tente {model_text_command} para atribuir um modelo funcional, ou {provider_add_c
       settings_system_prompt_label: `Prompt de Sistema Padrão`,
       settings_system_prompt_description: `Escolha as instruções base para as respostas.`,
       settings_system_prompt_placeholder: `Escolha um prompt de sistema padrão...`,
+      settings_features_label: `Recursos Opcionais`,
+      settings_features_description: `Desmarque os recursos que você não deseja. Você pode alterá-los mais tarde no /config.`,
+      settings_features_invalid: `Essas seleções de recursos são inválidas. Reabra as Configurações Iniciais e tente novamente.`,
+      settings_features: {
+        expressions: {
+          label: `Usar Expressões`,
+          description: `Usa emojis nas respostas, adiciona reações de emoji a mensagens e envia figurinhas do servidor.`,
+        },
+        playful_interactions: {
+          label: `Interações Divertidas`,
+          description: `Permite que as personas expressem carinho com abraços, mordidas, petelecos e comida visíveis.`,
+        },
+        danbooru: {
+          label: `Ferramentas do Danbooru`,
+          description: `Pesquisa tags de personagens de anime e compartilha artes do Danbooru.`,
+        },
+        natural_nudges: {
+          label: `Natural Nudges`,
+          description: `Permite que as personas iniciem conversas e entrem em bate-papos em andamento sem serem mencionadas.`,
+        },
+        dice_rolls: {
+          label: `Rolagens de Dados`,
+          description: `Permite que as personas rolem dados no chat para jogos, testes e decisões aleatórias.`,
+        },
+        self_message_management: {
+          label: `Gerenciar Mensagens Próprias e Tópicos`,
+          description: `Edita/exclui mensagens do bot ou de personas, fixa mensagens recentes e cria tópicos públicos.`,
+        },
+        user_blocking: {
+          label: `Bloqueio de Usuários por Persona`,
+          description: `Permite que as personas ignorem usuários ou ocultem suas mensagens do próprio contexto.`,
+        },
+        user_info_updates: {
+          label: `Atualizações Automáticas de Informações do Usuário`,
+          description: `Atualiza apelidos, pronomes e fusos horários salvos com base nas conversas.`,
+        },
+        short_term_memory: {
+          label: `Resumo Automático de Memória de Curto Prazo`,
+          description: `Resume automaticamente conversas recentes para manter a memória de curto prazo atualizada.`,
+        },
+      },
       settings_built_in_prompt: `Padrão Integrado (Recomendado)`,
       settings_built_in_prompt_description: `Respostas concisas, memória e ferramentas proativas.`,
       settings_built_in_prompt_summary: `Padrão Integrado`,
@@ -114,6 +152,7 @@ Tente {model_text_command} para atribuir um modelo funcional, ou {provider_add_c
       settings_summary_reply_style: `Estilo de resposta: {style}`,
       settings_summary_timezone: `Fuso horário: {tz}`,
       settings_summary_system_prompt: `Prompt do sistema: {prompt}`,
+      settings_summary_features: `Recursos opcionais: {enabled}/{total} ativados`,
       finish_label: `Concluir Configuração`,
       cancel_label: `Cancelar`,
       cancelled_title: `Configuração Cancelada`,
@@ -151,7 +190,7 @@ Tente {model_text_command} para atribuir um modelo funcional, ou {provider_add_c
 - Use \`/config\` para ajustar como eu ajo e o que posso fazer.
 - Use \`/memories\` para me ensinar sobre você.`,
       receipt_learn_more:
-        "Leia a [Wiki Oficial](https://docs.tomoribot.app/pt-BR/features/) ou abra {help} (então Features) para mais do que posso fazer.\n- [Múltiplas Personas](https://docs.tomoribot.app/pt-BR/features/chatting-personality/multiple-personas/) = visuais, vozes e gatilhos\n- [Chat & Gatilhos](https://docs.tomoribot.app/pt-BR/features/chatting-personality/chatting-and-triggers/) = quando e como eu participo\n- [Memória](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/) = pessoas, fatos e contexto\n- [Personalização](https://docs.tomoribot.app/pt-BR/features/knowledge/personalization/) = como você gosta de ser tratado\n- [Geração de Mídia](https://docs.tomoribot.app/pt-BR/features/capabilities/media-generation/) = imagens, vídeo e voz\n- [Ferramentas e Extensões](https://docs.tomoribot.app/pt-BR/features/capabilities/tools-and-extensions/) = pesquisa na web e mais",
+        "Leia a [Wiki Oficial](https://docs.tomoribot.app/pt-BR/features/) ou abra {help} (então Features) para mais do que posso fazer.\n- [Múltiplas Personas](https://docs.tomoribot.app/pt-BR/features/chatting-personality/multiple-personas/) = visuais, vozes e gatilhos\n- [Chat & Gatilhos](https://docs.tomoribot.app/pt-BR/features/chatting-personality/chatting-and-triggers/) = quando e como eu participo\n- [Memória](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/) = pessoas, fatos e contexto\n- [Personalização](https://docs.tomoribot.app/pt-BR/features/knowledge/personalization/) = como você gosta de ser tratado\n- [Geração de Mídia](https://docs.tomoribot.app/pt-BR/features/capabilities/media-generation/image-generation/) = imagens, vídeo e voz\n- [Ferramentas e Extensões](https://docs.tomoribot.app/pt-BR/features/capabilities/tools-and-extensions/built-in-tools/) = pesquisa na web e mais",
       permission_denied: `Você precisa da permissão Gerenciar Servidor para configurar.`,
       env_mismatch: `A configuração do ambiente mudou. Por favor, reinicie a configuração.`,
       forbidden: `Esta sessão de configuração pertence a outro usuário ou canal.`,

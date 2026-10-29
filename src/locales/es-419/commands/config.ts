@@ -65,7 +65,6 @@ export default {
       idle_nudges_title: "Intervenciones espontáneas",
       idle_nudges_description: "Inicio algo en un canal por mi cuenta si se vuelve demasiado silencioso.",
       idle_nudges_off: "Solo hablo cuando alguien me habla.",
-      idle_nudges_on: "Inicio una intervención espontánea en un canal tranquilo cuando corresponda.",
       idle_nudges_on_no_channels:
         "Aún no tengo canales donde iniciar una intervención espontánea. Los canales automáticos se irán añadiendo conforme la gente hable conmigo.",
       idle_nudges_on_no_model:
@@ -75,15 +74,12 @@ export default {
       active_nudges_description:
         "Me uno a una conversación cuando trata sobre algo que le gusta a una persona, usando los intereses de la página de Intervenciones de esa persona.",
       active_nudges_off: "Solo me uno a una conversación cuando alguien me habla.",
-      active_nudges_on:
-        "Compruebo de qué trata la conversación tras cada {min}-{max} mensajes de miembros, usando {matcher}.",
       active_nudges_on_no_channels:
         "Aún no tengo canales donde unirme a una conversación. Los canales automáticos se irán añadiendo conforme la gente hable conmigo.",
       active_nudges_on_no_matcher:
         "Aún no hay nada que pueda comprobar los intereses en las conversaciones, así que guardo silencio. Elige un verificador de intervenciones activas abajo.",
       active_nudges_on_cold:
         "En este servidor me hablan con muy poca frecuencia como para unirme a una conversación en este momento.",
-      active_nudges_matcher_checker: "el verificador de intervenciones activas",
       active_nudge_frequency_option: "Frecuencia: {level}",
       channels_title: "Canales",
       channels_description:
@@ -125,8 +121,6 @@ export default {
       frequency_1: "Suave",
       frequency_2: "Normal",
       frequency_3: "Animada",
-      frequency_effect:
-        "Este servidor me envía unos {heat} mensajes al día, así que espera unas {per_week} intervenciones espontáneas a la semana.",
       frequency_effect_none:
         "Iniciaré una intervención espontánea en un canal tranquilo cuando corresponda, pero este servidor me habla con muy poca frecuencia por ahora.",
       saved_heading: "Natural Nudges actualizado",
@@ -317,7 +311,8 @@ export default {
       channels_welcome_not_configured_detail: `No hay canal o prompt de bienvenida configurado.`,
       channels_collection_hidden: `Mostrando {shown} de {total} canales ({hidden} ocultos).`,
       channels_auto_trigger_title: `Canales de activación automática`,
-      channels_auto_trigger_description: "Elige dónde la actividad de mensajes puede activarme automáticamente.",
+      channels_auto_trigger_description: `Donde respondo por mi cuenta una vez que pasan suficientes mensajes, sin que me mencionen. Esto no limita dónde la gente puede llamarme.`,
+      whitelist_location_hint: `Para limitar en qué canales, roles o personas respondo, usa {moderation}.`,
       channels_auto_trigger_enabled_title: `Canales habilitados`,
       channels_auto_trigger_enabled_description: `Los mensajes aquí cuentan para la activación automática.`,
       channels_auto_trigger_none: `No hay canales habilitados.`,
@@ -408,6 +403,8 @@ export default {
       channels_overrides_prompt_mode_append: `Anexar`,
       channels_overrides_prompt_mode_replace: `Reemplazar`,
       channels_overrides_prompt_modal_title: `Establecer prompt de canal`,
+      continuation_description: `Continúa la parte anterior.`,
+      continuation_placeholder: `Usa este espacio si tu texto no cabe arriba.`,
       prompt_part_label: `{name} (Parte {index} de {total})`,
       prompt_part_first_description: `Discord limita un campo a 4000 caracteres, así que un prompt largo continúa en la Parte 2.`,
       prompt_part_continued_description: `Continúa la Parte {previous}. Déjalo vacío si no se usa.`,
@@ -1028,7 +1025,7 @@ export default {
       attribute_file_label: `Archivo de texto del atributo`,
       attribute_file_description: `Archivo .txt opcional con un atributo por línea.`,
       attribute_public_label: `Visibilidad`,
-      attribute_public_description: `Elige si otras personas pueden usar este atributo.`,
+      attribute_public_description: `Elige si otras personas pueden ver este atributo.`,
       attribute_public_option: `Atributo público`,
       dialogues_title: `**[Diálogos de muestra](https://docs.tomoribot.app/es-419/features/chatting-personality/multiple-personas/#sample-dialogues)**`,
       dialogues_description: `Estos ejemplos guían cómo habla esta persona.`,
@@ -1040,11 +1037,11 @@ export default {
       dialogue_edit_modal_title: `Editar diálogo de muestra`,
       dialogue_user_input_label: `Mensaje del usuario`,
       dialogue_user_input_description: `Lo que el usuario dice en este ejemplo.`,
-      dialogue_user_input_placeholder: `Mensaje del usuario de ejemplo...`,
+      dialogue_user_input_placeholder: `¡Hola {bot}!`,
       dialogue_user_input_part2_label: `Mensaje del usuario (Parte 2)`,
       dialogue_bot_input_label: `Respuesta de la persona`,
       dialogue_bot_input_description: `Cómo responde la persona en este ejemplo.`,
-      dialogue_bot_input_placeholder: `Respuesta de la persona de ejemplo...`,
+      dialogue_bot_input_placeholder: `Fufu~ pero hola, {user}.`,
       dialogue_bot_input_part2_label: `Respuesta de la persona (Parte 2)`,
       dialogue_file_label: `Archivo de texto del diálogo`,
       dialogue_file_description: `Archivo .txt opcional usando líneas {user}: y {bot}:.`,
@@ -1094,6 +1091,7 @@ export default {
       capability_tts_clone: `TTS (Clon de voz)`,
       capability_stt: `Voz a texto`,
       capability_notice_title: `Notas`,
+      byok_models_notice: `Este servidor requiere que los miembros usen sus propios proveedores, por lo que las opciones de modelos para todo el servidor no se utilizan. Para usarlas, abre \`/moderation\`, ve a Acceso de miembros y selecciona Modelos del servidor permitidos.`,
       image_generation_disabled_direction:
         "La generación de imágenes está desactivada. Actívala bajo Plugins > Herramientas disponibles.",
       image_generation_missing_model: `No hay un modelo utilizable configurado para generación de imágenes.`,

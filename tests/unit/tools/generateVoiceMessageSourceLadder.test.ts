@@ -3,6 +3,9 @@ import { localizedCopy } from "../../helpers/localeCases";
 import { redactToolParametersForStorage } from "@/utils/tools/toolParameterRedaction";
 import * as realCrypto from "@/utils/security/crypto";
 import { createPersona } from "../../helpers/fixtures";
+import { personaSpriteSchema } from "@/types/db/schema";
+import { clearPersonaSpriteCache, setPersonaSpriteCache } from "@/utils/cache/personaSpriteCacheStore";
+import { buildPersonaSpriteContextItem } from "@/utils/text/context/personaSprites";
 /**
  * The tool's source-selection ladder.
  *
@@ -21,7 +24,7 @@ import { createPersona } from "../../helpers/fixtures";
  */
 import { beforeAll, describe, expect, it, mock } from "bun:test";
 import { speechModelSchema, type CustomEndpointRow } from "@/types/db/schema";
-import type { ToolContext, ToolAssemblyState } from "@/types/tool/interfaces";
+import type { ToolContext, ToolAssemblyState, ToolResult } from "@/types/tool/interfaces";
 import type { ResolvedVoiceSource } from "@/utils/speech/voiceMessageSynthesis";
 import * as realSpeechEndpointResolver from "@/utils/provider/speechEndpointResolver";
 import * as realVoiceMessageSynthesis from "@/utils/speech/voiceMessageSynthesis";
@@ -63,9 +66,19 @@ const dispatchedSignals: Array<AbortSignal | undefined> = [];
 let deliveryCount = 0;
 let deliveryError: DiscordDeliveryError | undefined;
 let captionCount = 0;
+const deliveryTargets: realVoiceMessageDelivery.VoiceDeliveryTarget[] = [];
+const captionTargets: realVoiceMessageDelivery.VoiceDeliveryTarget[] = [];
 
-const endpointResolverMock = mock(async () =>
-  activeEndpoint ? { endpoint: activeEndpoint, apiKey: "endpoint-key" } : null,
+const endpointResolverMock = mock(
+  async (serverId: number): Promise<realSpeechEndpointResolver.SpeechTargetResult | null> =>
+    activeEndpoint
+      ? {
+          kind: "custom-endpoint",
+          endpoint: activeEndpoint,
+          apiKey: "endpoint-key",
+          owner: { kind: "server", ownerId: serverId },
+        }
+      : null,
 );
 
 const synthesizeMock = mock(async (request: realVoiceMessageSynthesis.VoiceMessageSynthesisRequest) => {
@@ -93,10 +106,10 @@ const scopedMock = createScopedModuleMocker(mock, {
 
 scopedMock.module("@/utils/provider/speechEndpointResolver", () => ({
   ...realSpeechEndpointResolver,
-  resolveSpeechTargets: async (_serverId: number, userId?: number) => {
+  resolveSpeechTargets: async (serverId: number, userId?: number) => {
     resolvedOwners.push(userId);
     if (hostedTargets) return hostedTargets;
-    const target = await endpointResolverMock();
+    const target = await endpointResolverMock(serverId);
     return { design: target, clone: target };
   },
 }));
@@ -118,13 +131,15 @@ scopedMock.module("@/utils/audio/voiceMessageMetadata", () => ({
 
 scopedMock.module("@/utils/discord/webhook/voiceMessageDelivery", () => ({
   ...realVoiceMessageDelivery,
-  deliverVoiceMessage: async () => {
+  deliverVoiceMessage: async (input: Parameters<typeof realVoiceMessageDelivery.deliverVoiceMessage>[0]) => {
     deliveryCount += 1;
+    deliveryTargets.push(input.target);
     if (deliveryError) throw deliveryError;
     return "message-id";
   },
-  postVoiceTranscriptCaption: async () => {
+  postVoiceTranscriptCaption: async (target: realVoiceMessageDelivery.VoiceDeliveryTarget) => {
     captionCount += 1;
+    captionTargets.push(target);
   },
 }));
 
@@ -155,6 +170,7 @@ interface PersonaVoiceFields {
 function makeContext(fields: PersonaVoiceFields): ToolContext {
   return {
     channel: {},
+    locale: "en-US",
     tomoriState: createPersona(fields),
   } as unknown as ToolContext;
 }
@@ -163,7 +179,7 @@ function makeContext(fields: PersonaVoiceFields): ToolContext {
 async function runTool(
   fields: PersonaVoiceFields,
   endpoint: CustomEndpointRow | null,
-): Promise<{ source: ResolvedVoiceSource | null; error: string | null }> {
+): Promise<{ source: ResolvedVoiceSource | null; error: string | null; failure: ToolResult["failure"] }> {
   activeEndpoint = endpoint;
   hostedTargets = null;
   dispatchedSources.length = 0;
@@ -176,6 +192,7 @@ async function runTool(
   return {
     source: dispatchedSources[0] ?? null,
     error: result.success ? null : (result.error ?? null),
+    failure: result.failure,
   };
 }
 
@@ -184,6 +201,83 @@ const DESIGN_PROMPT = { speech_voice_design_prompt: "Warm and unhurried" };
 const ELEVENLABS_VOICE = { speech_voice_id: "voice-abc" };
 
 describe("GenerateVoiceMessageTool source ladder", () => {
+  it("passes an explicit sprite to both audio and transcript without changing speech directions", async () => {
+    activeEndpoint = makeEndpoint("clone");
+    hostedTargets = null;
+    const context = makeContext(SAMPLE);
+    context.tomoriState.config.voice_transcript_chat_mode = true;
+    const personaId = context.tomoriState.persona_id ?? 1;
+    const sprite = personaSpriteSchema.parse({
+      persona_id: personaId,
+      sprite_name: "joy",
+      sprite_key: "joy",
+      avatar_url: "https://example.com/joy.png",
+    });
+    setPersonaSpriteCache(personaId, [sprite]);
+    const item = await buildPersonaSpriteContextItem({
+      client: context.client,
+      guildId: "guild",
+      tomoriState: context.tomoriState,
+      tomoriConfig: context.tomoriState.config,
+      botName: "Juno",
+      isUserImpersonation: false,
+      convertMentions: async (text) => text,
+    });
+    context.contextItems = item ? [item] : [];
+    synthesisResultOverride = { cleanedCaptionText: "hello" };
+    try {
+      const result = await new GenerateVoiceMessageTool().execute(
+        { title: "greeting", script: "hello", sprite: "joy", voice_instructions: "whisper" },
+        context,
+      );
+      expect(result.success).toBe(true);
+      expect(deliveryTargets.at(-1)?.personaPost?.appearance).toEqual({ kind: "sprite", sprite });
+      expect(captionTargets.at(-1)).toBe(deliveryTargets.at(-1));
+      expect(synthesisRequests.at(-1)?.voiceInstructions).toBe("whisper");
+    } finally {
+      synthesisResultOverride = {};
+      clearPersonaSpriteCache();
+    }
+  });
+
+  it("rejects malformed, unadvertised, and deleted sprites before synthesis", async () => {
+    const context = makeContext(SAMPLE);
+    const personaId = context.tomoriState.persona_id ?? 1;
+    const sprite = personaSpriteSchema.parse({
+      persona_id: personaId,
+      sprite_name: "joy",
+      sprite_key: "joy",
+      avatar_url: "https://example.com/joy.png",
+    });
+    setPersonaSpriteCache(personaId, [sprite]);
+    const item = await buildPersonaSpriteContextItem({
+      client: context.client,
+      guildId: "guild",
+      tomoriState: context.tomoriState,
+      tomoriConfig: context.tomoriState.config,
+      botName: "Juno",
+      isUserImpersonation: false,
+      convertMentions: async (text) => text,
+    });
+    context.contextItems = item ? [item] : [];
+    const tool = new GenerateVoiceMessageTool();
+    const before = synthesisRequests.length;
+    try {
+      for (const selection of [42, "unknown", "\njoy"]) {
+        const result = await tool.execute({ title: "greeting", script: "hello", sprite: selection }, context);
+        expect(result.success).toBe(false);
+        expect(result.error).toBe(localizedCopy("en-US", "tools.sprite_selection.invalid"));
+      }
+      setPersonaSpriteCache(personaId, []);
+      const removed = await tool.execute({ title: "greeting", script: "hello", sprite: "joy" }, context);
+      expect(removed.success).toBe(false);
+      expect(removed.error).toBe(localizedCopy("en-US", "tools.sprite_selection.invalid"));
+      expect(synthesisRequests).toHaveLength(before);
+    } finally {
+      clearPersonaSpriteCache();
+    }
+  });
+
   it("returns the final target label instead of empty model metadata after fallback", async () => {
     activeEndpoint = makeEndpoint("voice-design");
     hostedTargets = null;
@@ -416,8 +510,11 @@ describe("GenerateVoiceMessageTool refusals", () => {
         cleanedCaptionText: "",
       };
     });
-    const { error } = await runTool({ ...SAMPLE, ...DESIGN_PROMPT }, makeEndpoint("auto"));
-    expect(Boolean(error)).toBe(true);
+    const { error, failure } = await runTool({ ...SAMPLE, ...DESIGN_PROMPT }, makeEndpoint("auto"));
+    const expectedReason = localizedCopy("en-US", "genai.tool_failure.provider_error");
+    expect(failure?.code).toBe("provider_error");
+    expect(error).toBe(expectedReason);
+    expect(failure?.reason).toBe(expectedReason);
     expect(dispatchedSources).toEqual([
       { kind: "design", designPrompt: DESIGN_PROMPT.speech_voice_design_prompt, personaId: 1 },
     ]);

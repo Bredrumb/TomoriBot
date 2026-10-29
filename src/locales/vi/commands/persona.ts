@@ -125,10 +125,10 @@ Từ kích hoạt: {triggers}
 Persona này sẽ phản hồi khi các từ kích hoạt xuất hiện.`,
       alter_success_confirmation: `Đã nhập thành công persona alter **{nickname}** với {trigger_count} từ kích hoạt duy nhất! Thông tin nhập chi tiết đã được gửi trong kênh.`,
       alter_avatar_fallback_main: `🟡 Bản nhập này không có ảnh avatar, nên alter này sẽ dùng tạm avatar persona chính của **{nickname}**. Bạn có thể dùng \`/config\` > Persona > General để thay đổi.`,
-      alter_avatar_warning: `⚠️ Đừng xóa khung nhúng ảnh avatar ở trên, nếu không avatar của persona alter sẽ bị mất.`,
+      alter_avatar_warning: `Đừng xóa khung nhúng ảnh avatar ở trên, nếu không avatar của persona alter sẽ bị mất.`,
       alter_dm_not_allowed_title: `🔴 Không cho phép persona alter trong DM`,
       alter_dm_not_allowed_description: `Persona alter chỉ có thể được nhập trong máy chủ, không hỗ trợ trong tin nhắn trực tiếp. Vui lòng chạy lệnh này trong một máy chủ.`,
-      alter_no_triggers_warning: `⚠️ Persona này không có từ kích hoạt nào. Persona sẽ không phản hồi tin nhắn nào cho đến khi bạn thêm từ kích hoạt bằng \`/config\` > Persona > General.`,
+      alter_no_triggers_warning: `Persona này không có từ kích hoạt nào. Persona sẽ không phản hồi tin nhắn nào cho đến khi bạn thêm từ kích hoạt bằng \`/config\` > Persona > General.`,
       alter_name_conflict_title: `🔴 Tên persona đã tồn tại`,
       alter_name_conflict_description: `Một persona có tên **{name}** đã tồn tại trên máy chủ này. Mỗi persona phải có một tên riêng biệt.
 

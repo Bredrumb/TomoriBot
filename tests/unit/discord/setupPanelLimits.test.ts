@@ -1,3 +1,4 @@
+import { SETUP_FEATURES } from "@/types/db/schema";
 import { beforeAll, describe, expect, it } from "bun:test";
 import {
   ButtonStyle,
@@ -17,9 +18,11 @@ import {
   buildSetupExpiredPayload,
   buildSetupSuccessPayload,
   buildSetupWizardPayload,
+  buildSetupSettingsModal,
 } from "@/utils/discord/ui/setupPanel";
-import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/componentsV2Limits";
-import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { validateComponentsV2MessageLimits, validateRawModalLimits } from "@/utils/discord/ui/componentsV2Limits";
+import { hasLocaleKey, initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { expectForEveryLocale, localizedCopy } from "../../helpers/localeCases";
 import { collectTextDisplays } from "../../helpers/panelLimits";
 import { localizedProse } from "../../helpers/localeCases";
 
@@ -78,6 +81,7 @@ function createCompleteDraftInput(isHosted = false): {
         presetId: COMPLETE_DRAFT_CATALOGS.personas[0].id,
         humanizer: 1,
         timezoneOffset: 9,
+        features: [...SETUP_FEATURES],
         systemPrompt: { kind: "preset", presetName: COMPLETE_DRAFT_CATALOGS.prompts[0].name },
       },
     }),
@@ -93,6 +97,52 @@ function getContainerComponents(
 }
 
 describe("setupPanel Components V2 layout and limits", () => {
+  it("offers the agreed feature checklist within modal limits and restores saved selections in every locale", () => {
+    expectForEveryLocale((locale) => {
+      const initial = buildSetupSettingsModal(locale, TEST_NONCE, COMPLETE_DRAFT_CATALOGS);
+      expect(validateRawModalLimits(initial).violations).toEqual([]);
+      const group = initial.components.at(-1)?.component;
+      expect(group?.type).toBe(22);
+      expect(group?.min_values).toBe(0);
+      expect(group?.required).toBe(false);
+      expect(group?.options?.map((option) => option.value)).toEqual([
+        "expressions",
+        "playful_interactions",
+        "danbooru",
+        "natural_nudges",
+        "dice_rolls",
+        "self_message_management",
+        "user_blocking",
+        "user_info_updates",
+        "short_term_memory",
+      ]);
+      expect(group?.options?.every((option) => option.default === true)).toBe(true);
+      for (const feature of SETUP_FEATURES) {
+        const option = group?.options?.find((entry) => entry.value === feature);
+        const labelKey = `commands.setup.wizard.settings_features.${feature}.label`;
+        const descriptionKey = `commands.setup.wizard.settings_features.${feature}.description`;
+        expect(option?.label).toBe(localizedCopy(hasLocaleKey(locale, labelKey) ? locale : "en-US", labelKey));
+        expect(option?.description).toBe(
+          localizedCopy(hasLocaleKey(locale, descriptionKey) ? locale : "en-US", descriptionKey),
+        );
+      }
+      const { draft } = createCompleteDraftInput();
+      const startingSettings = draft.startingSettings;
+      if (!startingSettings) throw new Error("Expected completed starting settings");
+      for (const features of [[], ["expressions", "short_term_memory"]] as const) {
+        const existing = { ...startingSettings, features: [...features] };
+        const reopened = buildSetupSettingsModal(locale, TEST_NONCE, COMPLETE_DRAFT_CATALOGS, existing);
+        expect(validateRawModalLimits(reopened).violations).toEqual([]);
+        expect(
+          reopened.components
+            .at(-1)
+            ?.component?.options?.filter((option) => option.default)
+            .map((option) => option.value),
+        ).toEqual([...features]);
+      }
+    });
+  });
+
   it("renders exactly one Markdown heading marker for the wizard title", () => {
     const payload = buildSetupWizardPayload({
       draft: createDraft(),
@@ -326,6 +376,7 @@ describe("setupPanel Components V2 layout and limits", () => {
               presetId: 7,
               humanizer: 3,
               timezoneOffset: -12,
+              features: [...SETUP_FEATURES],
               systemPrompt: { kind: "preset", presetName: maxPromptName },
             },
           }),
@@ -388,6 +439,7 @@ describe("setupPanel Components V2 layout and limits", () => {
           presetId: 99999,
           humanizer: 3,
           timezoneOffset: 14,
+          features: [...SETUP_FEATURES],
           systemPrompt: { kind: "preset", presetName: maxPresetName },
         },
       },
@@ -418,6 +470,7 @@ describe("setupPanel Components V2 layout and limits", () => {
           presetId: 1,
           humanizer: 0,
           timezoneOffset: -12,
+          features: [...SETUP_FEATURES],
           systemPrompt: { kind: "built-in" },
         },
       },
@@ -446,6 +499,7 @@ describe("setupPanel Components V2 layout and limits", () => {
           presetId: 1,
           humanizer: 1,
           timezoneOffset: 0,
+          features: [...SETUP_FEATURES],
           systemPrompt: { kind: "built-in" },
         },
       },
@@ -480,6 +534,7 @@ describe("setupPanel Components V2 layout and limits", () => {
           presetId: 1,
           humanizer: 1,
           timezoneOffset: 0,
+          features: [...SETUP_FEATURES],
           systemPrompt: { kind: "built-in" },
         },
       },
@@ -519,6 +574,7 @@ describe("setupPanel Components V2 layout and limits", () => {
           presetId: 1,
           humanizer: 1,
           timezoneOffset: 0,
+          features: [...SETUP_FEATURES],
           systemPrompt: { kind: "built-in" },
         },
       },

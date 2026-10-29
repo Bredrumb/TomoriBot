@@ -77,7 +77,7 @@ TomoriBotは、SillyTavernとDiscordの廃止されたClydeにインスパイア
 
 ![Screenshots 3](../assets/img/scs/3-commands.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/ja/features/command-reference/">設定と実行のためのネイティブスラッシュコマンド</a></h3>
-<p align="center">すべてDiscordのネイティブスラッシュコマンドとインタラクティブUIから管理・実行できます。ペルソナ、プロンプト、モデルエンドポイントやパラメータの完全な管理、MCPツールサーバーのセットアップ、権限の調整、記憶の設定、サーバーメンバーのレート制限の設定など、さらに多くのことが可能です！</p>
+<p align="center">Discordから離れることなくTomoriBotをセットアップ・カスタマイズできます。スラッシュコマンドとインタラクティブメニューを使って、ペルソナの作成、プロンプトやモデル設定の微調整、MCPサーバーの接続、記憶の管理、権限や利用制限の管理が可能です。ご自身でコマンドを実行して画像や音声メッセージの生成、ダイスロール、その他の楽しい機能を試すこともできます。</p>
 
 <br />
 
@@ -127,13 +127,15 @@ TomoriBotは、SillyTavernとDiscordの廃止されたClydeにインスパイア
 - `/setup` - サーバーの初期ボットセットアップ
 - `/config` および `/personal config` - 現在のDiscordサーバーまたは個人向けにTomoriBotを調整する複数の方法
 - `/providers` および `/personal providers` - モデルエンドポイントやクラウドプロバイダーの追加
+- `/persona` - 性格を与えたり、新しいキャラクターを追加したりできます（[複数ペルソナ](https://docs.tomoribot.app/ja/features/chatting-personality/multiple-personas/)を参照）
+- `/memories` - 会話を通じて事実を教えます（[記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/)を参照）
 
 すべてのスラッシュコマンドについては、[コマンドリファレンス](https://docs.tomoribot.app/ja/features/command-reference/)を参照してください。
 
 
 ## 謝辞
 
-TomoriBotの制作に貢献や助言をいただき、現在の形へと導いてくれた以下の素晴らしい方々をはじめ、すべての人に心から感謝します！
+TomoriBotのより良い発展に大きく貢献し、貴重な助言をくださった以下の素晴らしい方々をはじめ、すべての人に心から感謝します！
 
 <table>
   <tr>

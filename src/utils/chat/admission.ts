@@ -84,6 +84,7 @@ export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
     message: input.message,
     isFromQueue: input.isFromQueue,
     isManuallyTriggered: input.isManuallyTriggered,
+    isDirectChat: input.isDirectChat,
     forceReason: input.forceReason,
     reasoningQuery: input.reasoningQuery,
     llmOverrideCodename: input.llmOverrideCodename,
@@ -112,6 +113,7 @@ export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
     manualStreamingContextOverrides: input.manualStreamingContextOverrides,
     sceneTurn: input.sceneTurn,
     naturalNudge: input.naturalNudge,
+    conditioningInteraction: input.conditioningInteraction,
     nudgeSceneCatcherPersonaId: input.nudgeSceneCatcherPersonaId,
     borrowsTriggerMessage: input.borrowsTriggerMessage,
     carriedExpressionDelivery: input.carriedExpressionDelivery,
@@ -200,7 +202,6 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   }
 
   if (!incoming.isManuallyTriggered && isLikelySelfMessage && isNudgeOutputActive(channel.id)) {
-    updateSelfReplyChainState(channel.id, false);
     return ignored("nudge_output");
   }
 

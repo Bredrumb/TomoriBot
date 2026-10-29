@@ -2,6 +2,7 @@ import type { Client, GuildTextBasedChannel, Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
+import { readNaturalNudgeGate } from "@/modules/natural-nudges/runtime/configCache";
 import {
   HANGING_CONVERSATION_PREREQUISITE,
   type NaturalNudgeCategory,
@@ -86,8 +87,10 @@ async function recheckBeforeSend(
   target: NudgeChannel,
   now: Date,
 ): Promise<string | null> {
+  if (!(await readNaturalNudgeGate(attempt.serverDiscId))) return "dormant";
   const config = await naturalNudgeRepository.loadServerConfig(attempt.serverId);
   if (!config.idle_nudges_enabled) return "disabled";
+  if (config.category_weights[attempt.idleNudge.category] === 0) return "idle_nudge_unavailable";
   const channelIds = await resolveEffectiveChannelIds(attempt.serverId, config, now);
   if (!channelIds.includes(target.channel.id)) return "channel_removed";
   if ((await naturalNudgeRepository.loadRuntimeState(attempt.serverId)).stopped_at) return "stopped";
@@ -331,6 +334,7 @@ export function isGenerationFailure(result: GenerationTurnResult): boolean {
  * delay reminders; a restart mid-flight loses only this attempt, and the idle nudge stays due.
  */
 export async function runIdleNudgeAttempt(input: IdleNudgeAttempt): Promise<AttemptResult> {
+  if (!(await readNaturalNudgeGate(input.serverDiscId))) return "aborted";
   const planned = await planIdleNudge({
     persona: input.persona,
     interests: input.interests,

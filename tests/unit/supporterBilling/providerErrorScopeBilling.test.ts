@@ -94,12 +94,17 @@ async function renderTips(
     createMessageComponentCollector: (options: { filter: (interaction: typeof tipClick) => boolean }) =>
       makeCollector(options.filter),
   }));
-  await new StreamErrorUi().handleProviderError(error, makeProvider(options.providerName), {
-    ...makeContext(send, textCredentialSource, options.fallbackChain ?? []),
-    triggererDiscId: options.userDiscId,
-    locale: options.locale ?? "en-US",
-    usageContext: options.usageContext,
-  });
+  await new StreamErrorUi().handleProviderError(
+    error,
+    makeProvider(options.providerName),
+    {
+      ...makeContext(send, textCredentialSource, options.fallbackChain ?? []),
+      triggererDiscId: options.userDiscId,
+      locale: options.locale ?? "en-US",
+      usageContext: options.usageContext,
+    },
+    "fixture-key",
+  );
   await Promise.resolve();
   return (
     modal?.components

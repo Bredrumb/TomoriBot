@@ -48,6 +48,7 @@ function buildToolAssemblyState(context: ToolContext): ToolStateForContext {
       supports_structoutput: llm.supports_structoutput,
     },
     config: {
+      emoji_usage_enabled: config.emoji_usage_enabled,
       sticker_usage_enabled: config.sticker_usage_enabled,
       web_search_enabled: config.web_search_enabled,
       self_teaching_enabled: config.self_teaching_enabled,

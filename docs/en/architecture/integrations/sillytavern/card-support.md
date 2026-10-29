@@ -48,7 +48,7 @@ Only `card.json` is decompressed and converted. The `assets/` directory is exclu
    contextual trigger metadata.
 
 When an imported archive carries bundled assets, the import succeeds for text data and surfaces a
-notice pointing the user to `/server avatar` and `/config` > Persona > Sprites to configure visuals
+notice pointing the user to `/config` > `Persona` > `Identity & Personality` and `/config` > `Persona` > `Sprites` to configure visuals
 manually.
 
 ## Field mapping and schema validation
@@ -66,7 +66,7 @@ Card attributes map into TomoriBot's persona schema:
 | `description` | `attribute_list` (injected without prefix) |
 | `personality`, `scenario`, `system_prompt` | `attribute_list` (prefixed with section headers) |
 | `post_history_instructions`, depth prompts | `attribute_list` (prefixed with section headers) |
-| `character_book.entries[].content` | `attribute_list` (enabled entries only) |
+| `character_book.entries` | Persona lorebook entries, including disabled entries |
 | `mes_example`, `first_mes`, `alternate_greetings` | `sample_dialogues_in` and `sample_dialogues_out` |
 | Character name derivations | `trigger_words` |
 
@@ -84,6 +84,50 @@ Converted data validates against TomoriBot's preset Zod schema before database i
   100 trigger words.
 - The SillyTavern converter also uses current runtime limits to split attribute text and cap
   sample dialogue lengths, pair counts, and trigger counts before Zod validation.
+
+### Character Books
+
+Character Book entries become the imported persona's lorebook. Their keys, optional selective
+secondary keys, constant flag, enabled flag, insertion order, and before/after position are retained.
+The supported extension fields are `selectiveLogic`, `probability`, `useProbability`, `scan_depth`,
+and numeric `position`. Entry scan depth overrides the book default. Explicit zero probability stays at 0%; missing or null
+probability defaults to 100%. Unsupported numeric ranges are
+clamped to the lorebook limits. Entries longer than 4,000 characters split into consecutive entries
+with shared activation settings, preserving Unicode characters. A book exceeding 250 stored entries
+after splitting keeps its first 250 entries in book order; the import notice reports how many were dropped.
+
+Regex keys remain inert and are counted in the import report. Keys declared with `use_regex` stay
+regex-shaped rather than becoming literal keyword matches. Evaluating untrusted regex requires a
+ReDoS-safe engine; real import reports of lost activations are the trigger for adding one. Empty,
+keyless non-constant entries are skipped and logged. Disabled entries remain editable data.
+
+A present `lorebook_entries` array replaces the persona's complete book, including hand-authored
+entries. An empty book clears it; cards without a Character Book preserve existing lore. Persona
+exports include lore inputs so JSON and PNG re-imports retain them. Persona generation from an
+uploaded card preserves its source book in the generated PNG and the `Import Now` payload.
+
+### World info files
+
+`+ Import Lorebook` in `/memories` > `Lorebooks` creates a Serverwide collection from a standalone
+SillyTavern world info file or a Character Book. `+ Import Entries` imports into a selected collection;
+Persona scope uses `+ Import Lorebook` for its single book. A file whose `entries` is an array is converted as a Character Book; a file
+whose `entries` is a keyed object is converted as a world info file. PNG and CHARX cards and card JSON
+import their embedded Character Book without importing the persona; cards without a book are reported
+separately. JSON is limited to 2 MB, while card carriers reuse the persona import and archive limits.
+
+`+ Export Lorebook` downloads the selected book as world info JSON with every supported entry field.
+Channel restrictions, pending channel names, and collection state do not travel in world info;
+All Personas memory backups retain them. Main Persona and Selected Persona memory exports omit lore.
+
+World info entries map their `key` and `keysecondary` arrays to primary and secondary keywords,
+`comment` to the title, `content` to the entry body, `disable` to the stored enabled flag, `order` to
+insertion order, and `position` to before or after the persona. `scanDepth`, `probability`,
+`useProbability`, and `selectiveLogic` map to the same activation fields as Character Book extensions.
+Content over 4,000 characters splits into numbered entries with shared settings.
+
+The supported ceiling is explicit: world info positions 2 through 7 become before persona, and
+groups, recursion flags, sticky timers, cooldowns, delays, and triggers have no destination. They are
+counted in the import report and dropped without reinterpretation. Regex keys stay inert.
 
 ## Conversation and template adaptations
 
@@ -116,5 +160,7 @@ preserved.
 - `src/utils/image/pngMetadata.ts`: PNG chunk parsing (`tEXt`, `zTXt`, `iTXt`).
 - `src/utils/db/repositories/PresetRepository.ts`: `convertSillyTavernJsonToPresetData` mapping and
   transformation logic.
+- `src/modules/lorebooks/imports/`: Character Book conversion shared by card import, plus the world
+  info and upload carriers used by `/memories` > `Lorebooks`.
 - `src/utils/text/context/templates.ts`: `buildSampleDialogueContextItems` and unpaired dialogue handling.
 - `src/types/preset/presetExport.ts`: Preset schema interfaces and Zod validation.

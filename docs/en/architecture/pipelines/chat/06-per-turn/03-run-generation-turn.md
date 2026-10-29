@@ -118,7 +118,7 @@ rotation only after server admission succeeds.
   ran. A call with different arguments still executes. With Response Drafting On, shared history also
   survives fallback.
 - **Deferred server admission**: resolving server fallback routes only on personal failure prevents
-  unnecessary database writes and server quota checks on successful member turns.
+  unnecessary database writes and server quota reservations on successful member turns.
 - **Per-turn cleanup**: a `finally` block invokes sink cleanup after exceptions. Temporary webhook
   deletion is best-effort, as described by [Response Sink](/architecture/pipelines/chat/06-per-turn/02-create-response-sink/).
 
@@ -161,7 +161,7 @@ Review can pass, request one author revision, or become unavailable. Two respons
 bound the turn; another revision verdict delivers the latest candidate. Unavailability ends review
 for the turn and permits current prose, while prior tool rejections remain blocked. Revision preserves
 successful tool outcomes. `/kill`, follow-up interruption and abort discard held prose. Actual tools
-use the separate [pre-execution checkpoint](../../tool-loop/02-execute-tool-call.md#actual-request-review).
+use the separate [pre-execution checkpoint](/architecture/pipelines/tool-loop/02-execute-tool-call/#actual-request-review).
 
 An optional rule checker is a tool on an owned `prose_linter` MCP registration whose only required
 input is a `text` string. Its output (structured content, JSON text or plain text, at most 32 KB) goes
@@ -171,8 +171,11 @@ registrations, so the author never sees or dispatches their tools. Checker failu
 an empty report cannot approve prose. A binding whose registration is disabled or removed acts as no
 checker: it logs no error and does not force review.
 
-INFO traces describe outcomes and budgets without private packets; operational failures have one
-sanitized ERROR owner.
+INFO traces describe outcomes and budgets without private packets. Reviewer transports retain
+scrubbed failure bodies and malformed output in private warning diagnostics, correlated with the
+review attempt. Unexpected exceptions retain safe metadata only because their messages can contain
+private draft or evidence text. Returned failures contain only safe metadata. Expected provider
+refusals, timeouts and upstream outages produce a metric plus a retained warning; unexpected failures remain errors.
 
 ## Source pointers
 

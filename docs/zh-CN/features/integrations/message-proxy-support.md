@@ -11,7 +11,7 @@ sidebar:
 
 运行 `/personal message-proxy service:pluralkit` 或 `/personal message-proxy service:pluralbuddy`。选择 `service:none`（显示为「关闭」）以停用代理处理。这是发送原始消息的 Discord 账号的个人设置，并跟随该账号跨服务器生效。
 
-在 TomoriBot 看到某位副人格的第一条验证消息后，可以使用 `/personal config identity:` 编辑其资料，并使用 `/personal memories identity:` 编辑其记忆。即使代理处理处于关闭状态，自动补全也会包含来自这两个服务的已存储身份。账号界面、隐私与模型设置仍保留在宿主账号上。在 TomoriBot 中设置的昵称会一直保留到被清除为止；否则服务的显示名称会在收到验证消息时刷新。关于成员与简介详情，请参阅 [PluralKit 支持](/zh-CN/features/integrations/pluralkit-support/)。
+在 TomoriBot 看到某位副人格的第一条验证消息后，可以使用 `/personal config identity:` 编辑其资料，并使用 `/personal memories identity:` 编辑其记忆。即使代理处理处于关闭状态，自动补全也会包含来自这两个服务的已存储身份。账号界面、隐私与模型设置仍保留在宿主账号上。在 TomoriBot 中设置的昵称会一直保留到被清除为止；否则服务的显示名称会在收到验证消息时刷新。
 
 ## 安全检查的意义
 

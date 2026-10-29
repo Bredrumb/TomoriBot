@@ -198,7 +198,7 @@ const CAPABILITIES_MANAGE_PERMISSION_DEFINITIONS: readonly CapabilitiesManagePer
     dbColumn: "dice_rolling_enabled",
     labelKey: "commands.capabilities.manage.dicerolling_option",
     descKey: "commands.capabilities.manage.dicerolling_desc",
-    getState: (c) => c.dice_rolling_enabled,
+    getState: (c) => c.dice_rolling_enabled ?? true,
   },
   {
     value: "conditioninginteractions",

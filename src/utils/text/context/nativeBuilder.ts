@@ -1,6 +1,7 @@
 import { personaRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
+import { buildLorebookContextItems } from "@/modules/lorebooks/runtime/contextItems";
 import { buildUncensorInjectionText } from "@/utils/text/uncensor";
 import { createToolPromptMacroResolver, resolvePromptCapabilityValues } from "@/utils/tools/toolPromptMacros";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -149,6 +150,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
             nai_diffusion_model_id: tomoriState.config.nai_diffusion_model_id,
             video_model_id: tomoriState.config.video_model_id,
             config: {
+              emoji_usage_enabled: tomoriConfig.emoji_usage_enabled,
               sticker_usage_enabled: tomoriConfig.sticker_usage_enabled,
               web_search_enabled: tomoriConfig.web_search_enabled,
               self_teaching_enabled: tomoriConfig.self_teaching_enabled,
@@ -235,7 +237,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       isDMChannel,
       botName,
       personalMemoriesEnabled: tomoriConfig.personal_memories_enabled,
-      conversationCorpus,
       channelId,
       parentChannelId,
       channelMemoryEnabled: tomoriConfig.channel_memory_enabled,
@@ -371,7 +372,12 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   // before server documents) to stay inside the prompt-cache-friendly prefix.
   await appendOptionalItem(
     contextItems,
-    buildVerbatimToolDefinitionsContextItem({ tomoriState, userId: triggererUserId }),
+    buildVerbatimToolDefinitionsContextItem({
+      tomoriState,
+      userId: triggererUserId,
+      contextItems,
+      isUserImpersonation,
+    }),
   );
   await appendOptionalItem(
     contextItems,
@@ -382,6 +388,21 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       channelId,
       parentChannelId,
     }),
+  );
+  // Activated lore changes from turn to turn, so it stays after documents and outside the cache-stable prefix.
+  contextItems.push(
+    ...(await buildLorebookContextItems({
+      tomoriState,
+      recentMessages: simplifiedMessageHistory.map((message) => message.content ?? ""),
+      channelId,
+      parentChannelId,
+      channelScopeEnabled: tomoriConfig.channel_memory_enabled,
+      client,
+      guildId,
+      botName,
+      personalMemoriesEnabled: tomoriConfig.personal_memories_enabled,
+      convertMentions,
+    })),
   );
   await appendConditioningContext({
     contextItems,

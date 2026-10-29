@@ -146,6 +146,79 @@ Mỗi persona có một trang **Gợi ý** riêng trong `/config` > Persona:
 
 Các preset chính thức bao gồm các cài đặt này. `/persona generate` gợi ý sở thích cho các persona mới; `Tạo sở thích` thêm sở thích mới thông qua model văn bản hiện tại của bạn. Bản xuất persona bao gồm cả ba cài đặt.
 
+## Khi nào gợi ý kích hoạt
+
+### Heat
+<!-- anchor: heat -->
+
+Heat xác định nhịp độ của cả gợi ý nhàn rỗi và các lượt kiểm tra chủ động cho toàn bộ máy chủ của bạn, giữa các thành viên và persona. Cài đặt Natural Nudges hiển thị Heat đo được, mức điều chỉnh đã lưu của bạn và Heat dùng cho các gợi ý trên thang điểm 50.
+
+#### Tóm tắt: Càng nhiều tin nhắn gửi đến TomoriBot = Heat càng cao = Càng nhiều gợi ý tự động
+
+#### Mức độ hoạt động và sự suy giảm
+
+Heat đo được là giá trị trung bình hằng ngày có trọng số của các lượt tương tác trong 30 ngày qua. Các lượt hội thoại thông thường và lượt `/punish` của con người đóng góp 1 lần; lượt `/reward` của con người đóng góp gấp 3 lần. Các gợi ý được tạo ra và tương tác vui nhộn giữa các persona không đóng góp gì.
+
+Trọng số của một tương tác giảm một nửa sau mỗi ba ngày:
+
+$$
+w(d) = 2^{-d/3}
+$$
+
+Ở đây, `d` là số ngày trước tính theo ngày UTC: hoạt động hôm nay có trọng số 1, ba ngày trước có trọng số 0.5 và sáu ngày trước có trọng số 0.25. Hoạt động sẽ rời khỏi phép tính sau 30 ngày. Với `E_d` là tổng tương tác có trọng số của mỗi ngày, Heat đo được `A` là:
+
+$$
+A = \frac{\sum_{d=0}^{29} E_d \cdot w(d)}{\sum_{d=0}^{29} w(d)}
+$$
+
+Hoạt động đều đặn với 10 tương tác có trọng số mỗi ngày sẽ tạo ra khoảng 10 Heat đo được. Mức điều chỉnh đã lưu `Δ` của bạn được cộng sau giá trị trung bình này, sau đó kết quả được giới hạn trong khoảng 0-50:
+
+$$
+H = \min(50, \max(0, A + \Delta))
+$$
+
+Hoạt động đo được không có giới hạn trần, do đó Heat của một máy chủ bận rộn sẽ suy giảm từ giá trị đầy đủ của nó. Cả hai chế độ đều cần Heat đo được và Heat hiệu dụng từ 1 trở lên. Một mức điều chỉnh sẽ thay đổi nhịp độ khi hoạt động đo được đạt mức tối thiểu đó. Khoảng tạm dừng 14 ngày không có trò chuyện trực tiếp vẫn áp dụng ở bất kỳ mức Heat nào.
+
+#### Khoảng thời gian nhàn rỗi và kiểm tra chủ động
+
+Đối với Heat hiệu dụng `H` từ 1 trở lên, mức tần suất của bạn cung cấp các giá trị sau:
+
+| Tần suất | Số chia nhàn rỗi D | Giới hạn nhàn rỗi hằng ngày C | Hệ số nhân chủ động M |
+|---|---|---|---|
+| `Rare` | 175 | 1 | 2 |
+| `Gentle` | 25 | 2 | 1 |
+| `Normal` | 15 | 3 | 0.6 |
+| `Lively` | 8 | 6 | 0.35 |
+
+Số lượt gợi ý nhàn rỗi ước tính mỗi ngày `R` tăng theo Heat cho đến khi đạt giới hạn hằng ngày:
+
+$$
+R = \min\left(\frac{H}{D}, C\right)
+$$
+
+Khoảng thời gian cơ sở là `16 / R` giờ. Mỗi khoảng thời gian nhận một hệ số nhân ngẫu nhiên từ 0.5 đến 1.5, và mỗi lời mời liên tiếp không được trả lời sẽ tăng gấp ba lần khoảng thời gian tiếp theo. Ba lời mời không được trả lời sẽ tạm dừng gợi ý nhàn rỗi cho đến khi có ai đó trò chuyện lại với TomoriBot. Kênh yên ắng, giờ thức giấc, điều kiện tiên quyết và quyết định của người lập kế hoạch vẫn quyết định xem một gợi ý đến hạn có thực sự bắt đầu hay không.
+
+Đối với các lượt kiểm tra chủ động, Heat thay đổi số lượng tin nhắn của con người cần thiết trong một kênh. Đầu tiên tính toán tỷ lệ khoảng thời gian `s`, với đóng góp của Heat được giữ trong khoảng 0.5 đến 4:
+
+$$
+s = M \cdot \min\left(4, \max\left(0.5, \frac{15}{H}\right)\right)
+$$
+
+Mục tiêu tin nhắn của một lượt kiểm tra được rút ngẫu nhiên trong khoảng từ `max(1, round(15 × s))` đến `max(1, round(40 × s))`, bao gồm cả hai đầu. Việc làm tròn sử dụng tin nhắn nguyên gần nhất, với phần nửa được làm tròn lên. Các luồng dùng chung bộ đếm của kênh cha. Thời gian hồi chiêu và giới hạn hằng ngày vẫn áp dụng, và trình kiểm tra chỉ mời persona lên tiếng khi cuộc trò chuyện phù hợp với một sở thích. Các công thức này kiểm soát thời gian; một lượt kiểm tra có thể không tạo ra câu trả lời nào.
+
+Ví dụ: với cả hai tần suất được đặt thành `Gentle`:
+
+| Heat hiệu dụng | Gợi ý nhàn rỗi ước tính mỗi tuần | Tin nhắn thành viên giữa các lượt kiểm tra chủ động |
+|---|---|---|
+| Dưới 1 | 0 | Không kiểm tra |
+| 5 | Khoảng 1.4 | 45-120 |
+| 15 | Khoảng 4.2 | 15-40 |
+| 30 | Khoảng 8.4 | 8-20 |
+| 45 | Khoảng 12.6 | 8-20 |
+| 50 | Lên tới 14 | 8-20 |
+
+Các lượt kiểm tra chủ động đạt khoảng thời gian nhanh nhất ở mức Heat 30. Gợi ý nhàn rỗi đạt giới hạn hằng ngày ở mức Heat 50 cho `Gentle`, 45 cho `Normal` và 48 cho `Lively`. `Rare` đạt ước tính hai gợi ý nhàn rỗi mỗi tuần ở mức Heat 50, với tối đa một lần mỗi ngày. Ước tính hằng tuần là hướng dẫn về nhịp độ; thời gian ngẫu nhiên và việc kiểm tra tính đủ điều kiện sẽ ảnh hưởng đến việc phân phối thực tế. Heat trên 50 không tăng thêm tốc độ lập lịch.
+
 ## Dữ liệu được lưu trữ
 
 Cài đặt, gợi ý tùy chỉnh, sở thích và gợi ý nhàn rỗi của persona được lưu cùng với cấu hình máy chủ của bạn. Lịch sử gợi ý (bao gồm việc có ai trả lời hay không và ai đã được tag) được giữ trong 30 ngày. Mục tiêu được giữ tối đa 90 ngày.

@@ -97,7 +97,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("legacy channel scope backfill", () => {
   });
 
   it("settles a pending row when an admin saves the memory form", async () => {
-    expect(await serverMemoryRepository.edit(memoryIds.missing ?? 0, "missing", [], [GENERAL])).toBe(true);
+    expect(await serverMemoryRepository.edit(memoryIds.missing ?? 0, "missing", [GENERAL])).toBe(true);
     expect(await scopeOf("missing")).toMatchObject({ channel_disc_ids: [GENERAL], resolved: true });
   });
 

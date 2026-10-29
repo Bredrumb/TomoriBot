@@ -493,6 +493,7 @@ export async function execute(
             model: effectiveModelName,
             batchNumber,
             imageCount: images.length,
+            diagnostics: result.diagnostics,
           },
         });
         continue;
@@ -512,13 +513,19 @@ export async function execute(
         continue;
       }
 
+      const skippedImageIndices = new Set(result.skippedImages?.map((image) => image.imageIndex));
+      const availableBatchTargets = batchTargets.filter((_target, index) => !skippedImageIndices.has(index));
       const { emojiDiscIds, stickerDiscIds } = await serverRepository.initializeExpressions(
         tomoriState.server_id,
         validationResult.data.expressions,
         {
           overwrite,
-          emojiDiscIds: batchTargets.filter((target) => target.type === "emoji").map((target) => target.discId),
-          stickerDiscIds: batchTargets.filter((target) => target.type === "sticker").map((target) => target.discId),
+          emojiDiscIds: availableBatchTargets
+            .filter((target) => target.type === "emoji")
+            .map((target) => target.discId),
+          stickerDiscIds: availableBatchTargets
+            .filter((target) => target.type === "sticker")
+            .map((target) => target.discId),
         },
       );
       invalidateEmojiStickerCache(tomoriState.server_id);

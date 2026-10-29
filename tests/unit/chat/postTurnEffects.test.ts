@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeAll, describe, expect, it, mock, spyOn } from "bun:test";
 import { REST } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type { ChatIncoming, ChatTurn, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
@@ -10,6 +10,15 @@ import { localizedCopy } from "../../helpers/localeCases";
 import { localizedStatusTitle } from "@/utils/discord/ui/statusTitle";
 import { ColorCode } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import {
+  acquireChannelLockForTurn,
+  channelLocks,
+  getOrCreateChannelLockEntry,
+  interruptNudgeScene,
+} from "@/utils/chat/channelQueue";
+import { getSelfReplyChainState } from "@/utils/chat/selfReplyState";
+import { statRepository } from "@/utils/db/repositories";
+import * as shortTermMemory from "@/utils/cache/shortTermMemoryCache";
 
 const emptyResponseResult: GenerationTurnResult = {
   status: "empty_response",
@@ -187,6 +196,153 @@ describe("empty-response post-turn handling", () => {
       "User impersonation returned an empty response.",
     );
     expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe("nudge persona mention handoffs", () => {
+  const channelId = "nudge-handoff-channel";
+  const restores: Array<{ mockRestore(): void }> = [];
+  afterEach(() => {
+    channelLocks.delete(channelId);
+    for (const restore of restores.splice(0)) restore.mockRestore();
+  });
+
+  function nudgeTurn() {
+    const { context } = makeContext({ shouldSurfaceUserErrors: false });
+    Object.assign(context.channel, { id: channelId });
+    const moo = createPersona({ persona_id: 1, persona_nickname: "Moo", trigger_words: ["moo"] });
+    context.currentPersona = moo;
+    context.tomoriState = moo;
+    context.allPersonas = [
+      moo,
+      createPersona({ persona_id: 2, is_alter: true, persona_nickname: "Juno", trigger_words: ["juno"] }),
+      createPersona({ persona_id: 3, is_alter: true, persona_nickname: "Mirri", trigger_words: ["mirri"] }),
+      createPersona({ persona_id: 4, is_alter: true, persona_nickname: "Rye", trigger_words: ["rye"] }),
+    ];
+    context.userDiscId = "fixture-bystander";
+    context.triggererUserId = 77;
+    context.textQuotaTriggerKey = "fixture-nudge";
+    context.simplifiedMessages = [{ content: "earlier human message" }] as ChatTurnContext["simplifiedMessages"];
+    const incoming = context.turn.lockedTurn.admission.incoming;
+    incoming.isManuallyTriggered = true;
+    incoming.borrowsTriggerMessage = true;
+    incoming.naturalNudge = { toolNames: ["web_search"], targetUserDiscId: "fixture-target" };
+    const lockEntry = getOrCreateChannelLockEntry(channelId, "fixture-server");
+    acquireChannelLockForTurn(lockEntry, {
+      messageId: context.message.id,
+      userDiscId: context.userDiscId,
+      isPersonaJob: false,
+      isCommandTriggered: true,
+      naturalNudge: "single",
+    });
+    return { context, incoming, lockEntry };
+  }
+
+  function delivered(text: string, persona?: TomoriState): GenerationTurnResult {
+    return {
+      status: "completed",
+      streamResults: [{ status: "completed", accumulatedText: text }],
+      personaResponses: [
+        { personaName: persona?.persona_nickname ?? "Moo", personaId: persona?.persona_id ?? 1, text },
+      ],
+    };
+  }
+
+  it("queues explicit mentions once in text order and preserves system accounting without copying private goals", async () => {
+    const { context, incoming, lockEntry } = nudgeTurn();
+    const stats = spyOn(statRepository, "recordStat").mockImplementation(() => {});
+    const stm = spyOn(shortTermMemory, "storeShortTermMemory").mockImplementation(() => {});
+    restores.push(stats, stm);
+    incoming.injectedContextItems = [{ role: "system", parts: [{ type: "text", text: "private opener goal" }] }];
+    getSelfReplyChainState(channelId).triggerCount = 7;
+
+    await runPostTurnEffects(context, delivered("@Mirri, Rye has a point. @Juno, @Mirri, @Moo, what do you think?"));
+
+    expect(lockEntry.messageQueue.map((job) => job.selectedPersonaId)).toEqual([3, 2]);
+    for (const job of lockEntry.messageQueue) {
+      expect(job).toMatchObject({
+        isPersonaJob: true,
+        isManuallyTriggered: true,
+        borrowsTriggerMessage: true,
+        textQuotaSource: "system",
+        naturalNudge: { toolNames: [], targetUserDiscId: "fixture-target" },
+        shouldSurfaceUserErrors: false,
+      });
+      expect(job.injectedContextItems).toBeUndefined();
+      expect(job.manualSystemPrompt).toBeTruthy();
+    }
+    expect(getSelfReplyChainState(channelId).triggerCount).toBe(1);
+    expect(stm).not.toHaveBeenCalled();
+    const metrics = stats.mock.calls.map(([stat]) => stat.metric);
+    expect(metrics).toContain("model_used");
+    expect(metrics).not.toContain("message_sent");
+    expect(metrics).not.toContain("active_hour");
+    expect(metrics).not.toContain("channel_turn");
+  });
+
+  it("caps explicit co-matches at the server's match limit", async () => {
+    const { context, lockEntry } = nudgeTurn();
+    context.tomoriState.config.match_limit = 1;
+    await runPostTurnEffects(context, delivered("@Mirri and @Juno"));
+    expect(lockEntry.messageQueue.map((job) => job.selectedPersonaId)).toEqual([3]);
+  });
+
+  it("lets a nudge reply mention another persona while consuming the existing cascade budget", async () => {
+    const { context, incoming, lockEntry } = nudgeTurn();
+    incoming.isPersonaJob = true;
+    context.isPersonaJob = true;
+    getSelfReplyChainState(channelId).triggerCount = 1;
+    await runPostTurnEffects(context, delivered("@Juno, what do you think?"));
+    expect(getSelfReplyChainState(channelId).triggerCount).toBe(2);
+    expect(lockEntry.messageQueue.map((job) => job.selectedPersonaId)).toEqual([2]);
+    expect(lockEntry.messageQueue[0].naturalNudge).toBeDefined();
+  });
+
+  it("does not duplicate pending nudge responders and applies the match limit to newly queued personas", async () => {
+    const { context, incoming, lockEntry } = nudgeTurn();
+    await runPostTurnEffects(context, delivered("@Juno and @Mirri, what do you think?"));
+    expect(lockEntry.messageQueue.map((job) => job.selectedPersonaId)).toEqual([2, 3]);
+    const firstReply = lockEntry.messageQueue.shift();
+    const juno = context.allPersonas.find((persona) => persona.persona_id === firstReply?.selectedPersonaId);
+    if (!juno) throw new Error("Expected the first queued responder");
+    context.currentPersona = juno;
+    incoming.isPersonaJob = true;
+    context.isPersonaJob = true;
+    context.tomoriState.config.match_limit = 1;
+
+    await runPostTurnEffects(context, delivered("What about you, @Mirri? @Rye, any ideas?", juno));
+
+    expect(lockEntry.messageQueue.map((job) => job.selectedPersonaId)).toEqual([4, 3]);
+    expect(getSelfReplyChainState(channelId).triggerCount).toBe(2);
+  });
+
+  it("uses delivered dialogue, excluding scene metadata and unfinished turns", async () => {
+    for (const status of ["completed", "empty_response", "stopped_by_user", "error"] as const) {
+      const { context, lockEntry } = nudgeTurn();
+      const result = delivered(status === "completed" ? "Juno, hello" : "@Juno, hello");
+      result.status = status;
+      result.personaResponses[0].text += "\n\n[Scene Metadata]\n@Mirri";
+      result.streamResults[0].detailsContent = "@Mirri";
+      await runPostTurnEffects(context, result);
+      expect(lockEntry.messageQueue).toHaveLength(0);
+    }
+  });
+
+  it("keeps scripted scenes on their planned sequence", async () => {
+    const { context, incoming, lockEntry } = nudgeTurn();
+    incoming.sceneTurn = { commandId: "fixture-scene", sequence: [], turnIndex: 0, totalTurns: 2 };
+    await runPostTurnEffects(context, delivered("@Juno, hello"));
+    expect(lockEntry.messageQueue).toHaveLength(0);
+  });
+
+  it("does not add replies after a member interrupts and drops pending nudge handoffs", async () => {
+    const { context, lockEntry } = nudgeTurn();
+    await runPostTurnEffects(context, delivered("@Juno, hello"));
+    expect(lockEntry.messageQueue).toHaveLength(1);
+    expect(interruptNudgeScene(channelId)).toBe(2);
+    expect(lockEntry.messageQueue).toHaveLength(0);
+    await runPostTurnEffects(context, delivered("@Mirri, hello"));
+    expect(lockEntry.messageQueue).toHaveLength(0);
   });
 });
 

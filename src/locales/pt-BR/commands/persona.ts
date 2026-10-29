@@ -125,10 +125,10 @@ Gatilhos: {triggers}
 Esta persona responderá quando esses gatilhos aparecerem nas mensagens.`,
       alter_success_confirmation: `Alter **{nickname}** importado com sucesso com {trigger_count} palavras-gatilho únicas! As informações detalhadas da importação foram postadas no canal.`,
       alter_avatar_fallback_main: `🟡 Esta importação não incluiu uma imagem de avatar, então este alter está usando o avatar atual da persona principal de **{nickname}** como substituto. Você pode alterá-lo usando \`/config\` > Persona > Geral.`,
-      alter_avatar_warning: `⚠️ Não exclua o embed da imagem do avatar acima, ou o avatar do alter será perdido.`,
+      alter_avatar_warning: `Não exclua o embed da imagem do avatar acima, ou o avatar do alter será perdido.`,
       alter_dm_not_allowed_title: `🔴 Alters Não Permitidos em DMs`,
       alter_dm_not_allowed_description: `Alters só podem ser importados em servidores, não em Mensagens Diretas. Por favor, execute este comando em um servidor.`,
-      alter_no_triggers_warning: `⚠️ Esta persona não tem palavras-gatilho. Ela não responderá a nenhuma mensagem até que você adicione gatilhos usando \`/config\` > Persona > Geral.`,
+      alter_no_triggers_warning: `Esta persona não tem palavras-gatilho. Ela não responderá a nenhuma mensagem até que você adicione gatilhos usando \`/config\` > Persona > Geral.`,
       alter_name_conflict_title: `🔴 Nome de Persona Já Existe`,
       alter_name_conflict_description: `Uma persona com o nome **{name}** já existe neste servidor. Cada persona deve ter um nome único.
 

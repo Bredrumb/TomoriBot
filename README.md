@@ -77,7 +77,7 @@ TomoriBot is a free and open-source personal AI assistant and role-playing syste
 
 ![Screenshots 3](assets/img/scs/3-commands.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/en/features/command-reference/">Native Slash Commands for Config and Execution</a></h3>
-<p align="center">Everything can be managed and executed through Discord's native slash commands and interactive UI. Completely manage personas, prompts, model endpoints and parameters, set up MCP tool servers, adjust permissions, configure memory, set server member rate limits, and much more!</p>
+<p align="center">Set up and customize TomoriBot without leaving Discord. Use slash commands and interactive menus to create personas, fine-tune prompts and model settings, connect MCP servers, manage memories, and control permissions and usage limits. Run commands yourself to generate images and voice messages, roll dice, and try other fun features.</p>
 
 <br />
 
@@ -98,9 +98,13 @@ You can [invite the public TomoriBot](https://discord.com/oauth2/authorize?clien
 
 ## Self-Hosting
 
+There are two easy ways to get TomoriBot running on your PC:
+
+### Option 1: Setup Wizard (Recommended)
+
 1. **Prerequisites:**
    - [Bun](https://bun.sh/) v1.3.2+ (v1.4.0+ recommended)
-   - [PostgreSQL](https://www.postgresql.org/) or [Docker](https://www.docker.com/) (the setup wizard uses an existing PostgreSQL install or starts one in Docker)
+   - [PostgreSQL](https://www.postgresql.org/) or [Docker](https://www.docker.com/) (the setup wizard uses an existing PostgreSQL install or starts one in Docker for the database)
    - A [Discord bot token](https://discord.com/developers/applications) with `Presence Intent`, `Server Members Intent`, and `Message Content Intent` enabled
 2. **Run the setup wizard:**
    ```sh
@@ -110,7 +114,18 @@ You can [invite the public TomoriBot](https://discord.com/oauth2/authorize?clien
    bun run dev # starts the bot and runs DB migrations automatically
    ```
 
-For more details or if you're having issues with the steps above, see the full [self-hosting documentation](https://docs.tomoribot.app/en/self-hosting/).
+### Option 2: Docker Compose
+
+1. **Prerequisites:**
+   - [Docker](https://www.docker.com/) and Docker Compose v2+
+   - A [Discord bot token](https://discord.com/developers/applications) with `Presence Intent`, `Server Members Intent`, and `Message Content Intent` enabled
+2. **Run with Docker Compose:**
+   ```sh
+   git clone https://github.com/Bredrumb/TomoriBot.git
+   cd TomoriBot
+   cp .env.example .env # set DISCORD_TOKEN, CRYPTO_SECRET, and POSTGRES_PASSWORD
+   docker compose up
+   ```
 
 <!-- AFTER SETUP -->
 ### After Inviting / Setup
@@ -127,13 +142,15 @@ Or slide into TomoriBot's DMs and say hi!
 - `/setup` - Initial bot setup for your server
 - `/config` and `/personal config` - Multiple ways to tweak TomoriBot in the current Discord server or for yourself
 - `/providers` and `/personal providers` - Add more model endpoints or cloud providers
+- `/persona` - Give her a personality or add new characters (see [Multiple Personas](https://docs.tomoribot.app/en/features/chatting-personality/multiple-personas/))
+- `/memories` - Teach her facts across conversations (see [Memory](https://docs.tomoribot.app/en/features/knowledge/memory/))
 
 See the full [command reference](https://docs.tomoribot.app/en/features/command-reference/) for every slash command.
 
 
 ## Acknowledgements
 
-Huge thanks to everyone, *especially* to the following lovely people for their contributions and advice that helped shape TomoriBot!
+Huge thanks to everyone, *especially* to the following lovely people for their significant contributions and advices that greatly helped shape TomoriBot for the better!
 
 <table>
   <tr>

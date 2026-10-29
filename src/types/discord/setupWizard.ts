@@ -1,7 +1,12 @@
 import { z } from "zod";
-import { customEndpointApiStyleSchema, setupCustomEndpointCapabilitySchema, utcOffsetSchema } from "@/types/db/schema";
+import {
+  customEndpointApiStyleSchema,
+  setupCustomEndpointCapabilitySchema,
+  setupFeaturesSchema,
+  utcOffsetSchema,
+} from "@/types/db/schema";
 
-export const SETUP_DRAFT_SCHEMA_VERSION = 1;
+export const SETUP_DRAFT_SCHEMA_VERSION = 2;
 
 const setupDraftContextSchema = z.enum(["guild", "dm"]);
 export type SetupDraftContext = z.infer<typeof setupDraftContextSchema>;
@@ -92,6 +97,7 @@ export const setupDraftStartingSettingsSchema = z
     humanizer: z.number().int().min(0).max(3),
     timezoneOffset: utcOffsetSchema,
     systemPrompt: setupDraftSystemPromptSchema,
+    features: setupFeaturesSchema,
   })
   .strict();
 export type SetupDraftStartingSettings = z.infer<typeof setupDraftStartingSettingsSchema>;

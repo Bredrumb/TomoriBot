@@ -1,3 +1,8 @@
+import * as downloads from "@/utils/security/safeDownload";
+import * as pngMetadata from "@/utils/image/pngMetadata";
+import * as imageProcessor from "@/utils/image/imageProcessor";
+import { taggedMemoryToLorebook } from "@/modules/lorebooks/imports";
+import type { PresetExport } from "@/types/preset/presetExport";
 import { afterEach, beforeAll, expect, spyOn, test } from "bun:test";
 import type { ChatInputCommandInteraction, Client, ModalSubmitInteraction } from "discord.js";
 import { execute } from "@/commands/persona/generate";
@@ -118,4 +123,102 @@ test("a failed persona search renders one localized abort with the inputs and no
       tomoriState: { llm: selected, config: { llm_temperature: 0.42, custom_endpoint_url: null } },
     });
   }
+});
+
+test("persona generation preserves source Character Book lore in its exported PNG", async () => {
+  const state = createPersona({
+    llm: createLlmRow({ llm_provider: "google", supports_structoutput: true, sees_images: true }),
+  });
+  const fake = createRouteInteraction({ kind: "modal" });
+  const entry = taggedMemoryToLorebook({ content: "The manor overlooks the sea.", tags: ["manor"] }, true);
+  if (!entry) throw new Error("Missing fixture lore");
+  const captured: PresetExport[] = [];
+  restore.push(
+    spyOn(personaRepository, "loadState").mockResolvedValue(state),
+    spyOn(llmModelRepo, "loadById").mockResolvedValue(state.llm),
+    spyOn(personalProviders, "applyPersonalProviderSelectionsToTomoriState").mockResolvedValue({
+      tomoriState: state,
+      activeConfigs: {},
+    }),
+    spyOn(credentials, "resolveCapabilityCredentials").mockResolvedValue({
+      provider: "google",
+      apiKey: "fixture-api-key",
+      keyVersion: 1,
+      source: "personal",
+      modelId: state.llm.llm_id,
+      savedConfig: userSavedProviderConfigSchema.parse({
+        user_id: 1,
+        provider: "google",
+        api_key: null,
+        llm_id: state.llm.llm_id,
+        diffusion_model_id: null,
+        embedding_model_id: null,
+        nai_diffusion_model_id: null,
+        nai_preset_name: null,
+      }),
+    }),
+    spyOn(interactions, "promptWithRawModal").mockResolvedValue({
+      outcome: "submit",
+      interaction: fake as unknown as ModalSubmitInteraction,
+      values: { character_name: "Juno", character_info: "An explorer.", web_search: "no" },
+      attachments: {
+        avatar_image: {
+          id: "100000000000000001",
+          proxy_url: "https://example.invalid/card.png",
+          url: "https://example.invalid/card.png",
+          filename: "card.png",
+          content_type: "image/png",
+          size: 10,
+        },
+      },
+    }),
+    spyOn(rateLimiter, "reservePersonaQuota").mockReturnValue({ allowed: true }),
+    spyOn(rateLimiter.memoryGuard, "checkMemory").mockReturnValue({
+      status: "safe",
+      rssUsedMB: 1,
+      memoryLimitMB: 1000,
+      percentUsed: 0.001,
+      shouldProcessMedia: true,
+    }),
+    spyOn(modelLimits, "resolveModelLimits").mockResolvedValue({ contextWindow: 8192, maxOutputTokens: 4096 }),
+    spyOn(downloads, "safeDownload").mockResolvedValue({ success: true, buffer: Buffer.from("fixture image") }),
+    spyOn(pngMetadata, "extractMetadataFromPNG").mockReturnValue(null),
+    spyOn(pngMetadata, "extractSillyTavernMetadataFromPNG").mockReturnValue({
+      parsedJson: {
+        spec: "chara_card_v3",
+        data: {
+          name: "Juno",
+          character_book: { entries: [{ content: entry.content, keys: entry.keys, enabled: false }] },
+        },
+      },
+      metadataKey: "chara",
+      rawValue: "{}",
+      decodedValue: "{}",
+      decodedFromBase64: false,
+    }),
+    spyOn(imageProcessor, "centerCropToSquare").mockResolvedValue(Buffer.from("cropped image")),
+    spyOn(features, "generatePresetForProvider").mockResolvedValue({
+      preset: {
+        tomori_nickname: "Juno",
+        attribute_list: ["An explorer."],
+        sample_dialogues_in: [],
+        sample_dialogues_out: [],
+        trigger_words: ["juno"],
+      },
+    }),
+    spyOn(pngMetadata, "embedMetadataInPNG").mockImplementation((_png, data) => {
+      captured.push(data);
+      throw new Error("fixture stops after export serialization");
+    }),
+  );
+  await execute(
+    fake.client as unknown as Client,
+    fake as unknown as ChatInputCommandInteraction,
+    createUserRow(),
+    "en-US",
+  );
+  expect(captured).toHaveLength(1);
+  expect(captured[0].data.lorebook_entries).toMatchObject([
+    { content: entry.content, keys: entry.keys, enabled: false },
+  ]);
 });

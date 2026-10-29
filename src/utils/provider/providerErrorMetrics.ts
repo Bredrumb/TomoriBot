@@ -12,7 +12,28 @@
 
 import type { ProviderError, StreamContext } from "@/types/stream/interfaces";
 import { statRepository } from "@/utils/db/repositories/StatRepository";
-import { log } from "@/utils/misc/logger";
+import { log, redactLogString } from "@/utils/misc/logger";
+import { readBoundedResponse } from "@/utils/security/boundedResponse";
+
+const MAX_PROVIDER_ERROR_BYTES = 64 * 1024;
+
+export function redactProviderDetail(detail: string, apiKey: string): string {
+  return redactLogString(apiKey ? detail.replaceAll(apiKey, "[REDACTED]") : detail);
+}
+
+export async function readProviderErrorBody(response: Response, apiKey: string): Promise<string> {
+  try {
+    return redactProviderDetail(
+      (await readBoundedResponse(response, MAX_PROVIDER_ERROR_BYTES)).toString("utf8"),
+      apiKey,
+    );
+  } catch (error) {
+    return redactProviderDetail(
+      `Response body unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      apiKey,
+    );
+  }
+}
 
 export interface ProviderFailureReport {
   /** Stable prefix shared by every record of this failure, so operators can filter on it. */
@@ -41,14 +62,14 @@ export interface ProviderFailureReport {
 export async function reportProviderFailure(report: ProviderFailureReport): Promise<void> {
   const message = report.detail ? `${report.summary}: ${report.detail}` : report.summary;
   const context = {
-    serverId: report.serverId ?? null,
-    userId: report.userId ?? null,
+    ...(report.serverId != null ? { serverId: report.serverId } : {}),
+    ...(report.userId != null ? { userId: report.userId } : {}),
     errorType: report.errorType,
     metadata: { ...report.dimensions, ...report.metadata },
   };
   if (report.expected) {
     log.metric("provider_failure", { errorType: report.errorType, ...report.dimensions });
-    log.warn(message, report.error, context);
+    log.warn(message, report.error, context, { retain: true });
     return;
   }
   await log.error(message, report.error, context);

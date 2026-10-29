@@ -1,59 +1,25 @@
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
-import type { ResolvedCredentials } from "@/utils/provider/credentialResolver";
 import {
   createProviderUsageRecorder,
   findProviderRequestDeniedError,
   type ProviderUsageContext,
   getProviderRequestFailureCopy,
 } from "@/utils/provider/providerUsage";
-import type { ButtonInteraction, ChatInputCommandInteraction, Client, Message, TextBasedChannel } from "discord.js";
-import {
-  ActionRowBuilder,
-  ChannelType,
-  ComponentType,
-  EmbedBuilder,
-  MessageFlags,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-} from "discord.js";
+import type { ChatInputCommandInteraction, Client, TextBasedChannel } from "discord.js";
+import { EmbedBuilder, MessageFlags } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
-import type {
-  ModalChannelSelectField,
-  ModalInputField,
-  ModalRadioGroupField,
-  ModalSelectField,
-} from "@/types/discord/modal";
-import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import { isRagAvailable } from "@/utils/db/ragAvailability";
-import { llmModelRepo, personaRepository, ragRepository } from "@/utils/db/repositories";
-import { DISCORD_SELECT_VALUES_MAX } from "@/utils/discord/ui/componentsV2Limits";
+import { personaRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
-import { generateEmbeddingsBatched, providerSupportsEmbeddingTaskType } from "@/utils/embeddings/embeddingProvider";
 import { ColorCode, log } from "@/utils/misc/logger";
-import { getMemoryLimits } from "@/utils/misc/memoryLimits";
-import {
-  getCapabilityCredentialFailureCopy,
-  getResolvedCapabilityModelId,
-  resolveCapabilityCredentials,
-} from "@/utils/provider/credentialResolver";
+import { getCapabilityCredentialFailureCopy, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 import { providerSupportsFeature } from "@/utils/provider/providerInfoRegistry";
 import { resolveTextCredentialState } from "@/utils/provider/textModelSelection";
 import { localizer } from "@/utils/text/localizer";
 import { buildConversationContext } from "./historyExtraction";
 import { promptForCompactOptions, promptForManualOptions } from "./modal";
-import {
-  COMPACT_ADD_TO_DOCS_BUTTON_ID,
-  COMPACT_EDIT_BUTTON_ID,
-  buildAddToDocsButtonRow,
-  buildConversationEmbed,
-  buildEditSummaryButtonRow,
-  buildManualEmbed,
-  buildRoleplayEmbeds,
-  isDiscordThreadChannel,
-} from "./rendering";
+import { buildConversationEmbed, buildManualEmbed, buildRoleplayEmbeds, isDiscordThreadChannel } from "./rendering";
+import { postSummaryWithControls } from "./summaryControls";
 import { generateCompactSummary } from "./summaryGeneration";
 import { buildSupplementaryContext } from "./supplementaryContext";
 import type { SendableChannel } from "./types";
@@ -220,68 +186,16 @@ export async function executeCompactCommand(
       return;
     }
 
-    const COLLECTOR_DURATION_MS = 10 * 60 * 1000;
-    const deadlineDate = new Date(Date.now() + COLLECTOR_DURATION_MS);
-    const editDeadline = formatDeadline(deadlineDate);
-
-    const buildEmbed = (text: string, deadline?: string) =>
-      modalSelection.summaryType === "conversation"
-        ? buildConversationEmbed(locale, text, modalSelection.refresh, deadline)
-        : buildRoleplayEmbeds(locale, text, modalSelection.refresh, deadline)[0];
-
-    const summaryText = String(result.summary);
-    const buttonRow = buildEditSummaryButtonRow(locale);
-    const summaryMessage = await outputChannel.send({
-      embeds: [buildEmbed(summaryText, editDeadline)],
-      components: [buttonRow],
+    await postSummaryWithControls({
+      outputChannel,
+      embed:
+        modalSelection.summaryType === "conversation"
+          ? buildConversationEmbed(locale, String(result.summary), modalSelection.refresh)
+          : buildRoleplayEmbeds(locale, String(result.summary), modalSelection.refresh)[0],
+      locale,
+      refresh: modalSelection.refresh,
     });
     await editSuccess(modalSelection.submitInteraction, locale, targetChannelOption?.id ?? targetThreadId);
-
-    const collector = summaryMessage.createMessageComponentCollector({
-      componentType: ComponentType.Button,
-      filter: (i) => i.customId === COMPACT_EDIT_BUTTON_ID,
-      time: COLLECTOR_DURATION_MS,
-    });
-
-    collector.on("collect", async (buttonInteraction) => {
-      const liveMessage = await buttonInteraction.message.fetch();
-      const currentText = liveMessage.embeds[0]?.description ?? "";
-      const editModal = new ModalBuilder()
-        .setCustomId("compact_edit_modal")
-        .setTitle(localizer(locale, "commands.compact.edit_modal_title"));
-      const textInput = new TextInputBuilder()
-        .setCustomId("compact_edit_text")
-        .setLabel(localizer(locale, "commands.compact.edit_field_label"))
-        .setStyle(TextInputStyle.Paragraph)
-        .setMaxLength(4000)
-        .setRequired(true)
-        .setValue(currentText.slice(0, 4000));
-      editModal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(textInput));
-      await buttonInteraction.showModal(editModal);
-
-      try {
-        const submitted = await buttonInteraction.awaitModalSubmit({
-          time: 600000,
-          filter: (i) => i.customId === "compact_edit_modal" && i.user.id === buttonInteraction.user.id,
-        });
-        const newText = submitted.fields.getTextInputValue("compact_edit_text");
-        await submitted.deferUpdate();
-        await summaryMessage.edit({ embeds: [buildEmbed(newText, editDeadline)], components: [buttonRow] });
-      } catch {}
-    });
-
-    collector.on("end", async () => {
-      const liveMessage = await summaryMessage.fetch().catch(() => null);
-      if (!liveMessage) return;
-      const currentText = liveMessage.embeds[0]?.description ?? "";
-      const addToDocsFooter = localizer(locale, "commands.compact.add_to_docs_footer");
-      const updatedEmbed = buildEmbed(currentText).setFooter({ text: addToDocsFooter });
-      await summaryMessage
-        .edit({ embeds: [updatedEmbed], components: [buildAddToDocsButtonRow(locale)] })
-        .catch(() => {});
-      const serverDiscId = interaction.guild?.id ?? interaction.user.id;
-      setupAddToDocsCollector({ summaryMessage, buildEmbed: (text) => buildEmbed(text), locale, serverDiscId });
-    });
   } catch (error) {
     const denied = findProviderRequestDeniedError(error, usageContext);
     if (denied) {
@@ -504,63 +418,13 @@ async function executeManualCompact(
   }
 
   try {
-    const COLLECTOR_DURATION_MS = 10 * 60 * 1000;
-    const editDeadline = formatDeadline(new Date(Date.now() + COLLECTOR_DURATION_MS));
-    const buildEmbed = (text: string, deadline?: string) =>
-      buildManualEmbed(locale, text, manualSelection.refresh, deadline);
-
-    const buttonRow = buildEditSummaryButtonRow(locale);
-    const summaryMessage = await outputChannel.send({
-      embeds: [buildEmbed(manualSelection.summaryContent, editDeadline)],
-      components: [buttonRow],
+    await postSummaryWithControls({
+      outputChannel,
+      embed: buildManualEmbed(locale, manualSelection.summaryContent, manualSelection.refresh),
+      locale,
+      refresh: manualSelection.refresh,
     });
     await editSuccess(manualSelection.submitInteraction, locale, targetChannelOption?.id ?? targetThreadId);
-
-    const collector = summaryMessage.createMessageComponentCollector({
-      componentType: ComponentType.Button,
-      filter: (i) => i.customId === COMPACT_EDIT_BUTTON_ID,
-      time: COLLECTOR_DURATION_MS,
-    });
-
-    collector.on("collect", async (buttonInteraction) => {
-      const liveMessage = await buttonInteraction.message.fetch();
-      const currentText = liveMessage.embeds[0]?.description ?? "";
-      const editModal = new ModalBuilder()
-        .setCustomId("compact_edit_modal")
-        .setTitle(localizer(locale, "commands.compact.edit_modal_title"));
-      const textInput = new TextInputBuilder()
-        .setCustomId("compact_edit_text")
-        .setLabel(localizer(locale, "commands.compact.edit_field_label"))
-        .setStyle(TextInputStyle.Paragraph)
-        .setMaxLength(4000)
-        .setRequired(true)
-        .setValue(currentText.slice(0, 4000));
-      editModal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(textInput));
-      await buttonInteraction.showModal(editModal);
-
-      try {
-        const submitted = await buttonInteraction.awaitModalSubmit({
-          time: 600000,
-          filter: (i) => i.customId === "compact_edit_modal" && i.user.id === buttonInteraction.user.id,
-        });
-        const newText = submitted.fields.getTextInputValue("compact_edit_text");
-        await submitted.deferUpdate();
-        await summaryMessage.edit({ embeds: [buildEmbed(newText, editDeadline)], components: [buttonRow] });
-      } catch {}
-    });
-
-    collector.on("end", async () => {
-      const liveMessage = await summaryMessage.fetch().catch(() => null);
-      if (!liveMessage) return;
-      const currentText = liveMessage.embeds[0]?.description ?? "";
-      const addToDocsFooter = localizer(locale, "commands.compact.add_to_docs_footer");
-      const updatedEmbed = buildEmbed(currentText).setFooter({ text: addToDocsFooter });
-      await summaryMessage
-        .edit({ embeds: [updatedEmbed], components: [buildAddToDocsButtonRow(locale)] })
-        .catch(() => {});
-      const serverDiscId = interaction.guild?.id ?? interaction.user.id;
-      setupAddToDocsCollector({ summaryMessage, buildEmbed: (text) => buildEmbed(text), locale, serverDiscId });
-    });
   } catch (error) {
     log.error("Manual compact command failed", error);
     await editFailure(
@@ -569,284 +433,6 @@ async function executeManualCompact(
       error instanceof Error ? error.message : "Unknown error",
     );
   }
-}
-
-function setupAddToDocsCollector(params: {
-  summaryMessage: Message;
-  buildEmbed: (text: string) => EmbedBuilder;
-  locale: string;
-  serverDiscId: string;
-}): void {
-  const { summaryMessage, buildEmbed, locale, serverDiscId } = params;
-
-  const NAME_FIELD_ID = "compact_doc_name";
-  const SCOPE_FIELD_ID = "compact_doc_scope";
-  const PERSONA_FIELD_ID = "compact_doc_persona";
-  const CHANNELS_FIELD_ID = "compact_doc_channels";
-
-  const docsCollector = summaryMessage.createMessageComponentCollector({
-    componentType: ComponentType.Button,
-    filter: (i) => i.customId === COMPACT_ADD_TO_DOCS_BUTTON_ID,
-    max: 1,
-  });
-
-  docsCollector.on("collect", async (buttonInteraction: ButtonInteraction) => {
-    const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
-
-    const today = new Date().toISOString().slice(0, 10);
-    const autoName = localizer(locale, "commands.compact.add_to_docs_doc_name", { date: today });
-
-    const personaOptions = allPersonas
-      .filter((p) => p.persona_id !== undefined)
-      .map((p) => ({
-        label: safeSelectOptionText(p.persona_nickname),
-        value: p.persona_id?.toString() ?? "",
-        description: p.is_alter
-          ? localizer(locale, "commands.teach.document.alter_persona_description")
-          : localizer(locale, "commands.teach.document.main_persona_description"),
-      }))
-      .filter((o) => o.value !== "");
-
-    const modalResult = await promptWithRawModal(buttonInteraction, locale, {
-      modalCustomId: "compact_save_as_doc_modal",
-      modalTitleKey: "commands.compact.save_as_doc_modal_title",
-      components: [
-        {
-          customId: NAME_FIELD_ID,
-          labelKey: "commands.compact.save_as_doc_name_label",
-          descriptionKey: "commands.compact.save_as_doc_name_description",
-          value: autoName,
-          maxLength: 64,
-          required: true,
-        } as ModalInputField,
-        {
-          kind: "radioGroup",
-          customId: SCOPE_FIELD_ID,
-          labelKey: "commands.compact.save_as_doc_scope_label",
-          options: [
-            {
-              value: "serverwide",
-              label: localizer(locale, "commands.compact.save_as_doc_scope_serverwide"),
-              default: true,
-            },
-            {
-              value: "persona",
-              label: localizer(locale, "commands.compact.save_as_doc_scope_persona"),
-            },
-          ],
-          required: true,
-        } as ModalRadioGroupField,
-        ...(personaOptions.length > 0
-          ? [
-              {
-                customId: PERSONA_FIELD_ID,
-                labelKey: "commands.compact.save_as_doc_persona_label",
-                descriptionKey: "commands.compact.save_as_doc_persona_description",
-                placeholder: "commands.compact.save_as_doc_persona_placeholder",
-                options: personaOptions,
-                required: false,
-              } as ModalSelectField,
-            ]
-          : []),
-        {
-          kind: "channelSelect",
-          customId: CHANNELS_FIELD_ID,
-          labelKey: "commands.compact.save_as_doc_channels_label",
-          descriptionKey: "commands.compact.save_as_doc_channels_description",
-          channelTypes: [ChannelType.GuildText, ChannelType.GuildAnnouncement],
-          minValues: 0,
-          maxValues: DISCORD_SELECT_VALUES_MAX,
-          required: false,
-        } as ModalChannelSelectField,
-      ],
-    });
-
-    if (modalResult.outcome !== "submit" || !modalResult.interaction) return;
-
-    const submitInteraction = modalResult.interaction;
-    await submitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
-
-    const docName = (modalResult.values?.[NAME_FIELD_ID] ?? autoName).trim().slice(0, 64) || autoName;
-    const scope = modalResult.values?.[SCOPE_FIELD_ID] === "persona" ? "persona" : "serverwide";
-    const selectedPersonaIdStr = modalResult.values?.[PERSONA_FIELD_ID];
-    const channelDiscIds = [
-      ...new Set(
-        (modalResult.multiValues?.[CHANNELS_FIELD_ID] ?? []).filter((id) => DISCORD_SNOWFLAKE_PATTERN.test(id)),
-      ),
-    ];
-
-    let targetPersonaId: number | null = null;
-    if (scope === "persona") {
-      const selectedPersona = allPersonas.find((p) => p.persona_id?.toString() === selectedPersonaIdStr);
-      if (!selectedPersona?.persona_id) {
-        await replyInfoEmbed(submitInteraction, locale, {
-          titleKey: "commands.compact.add_to_docs_no_persona_title",
-          descriptionKey: "commands.compact.add_to_docs_no_persona_description",
-          color: ColorCode.ERROR,
-        });
-        return;
-      }
-      targetPersonaId = selectedPersona.persona_id;
-    }
-
-    if (!isRagAvailable()) {
-      await replyInfoEmbed(submitInteraction, locale, {
-        titleKey: "commands.compact.add_to_docs_rag_unavailable_title",
-        descriptionKey: "commands.compact.add_to_docs_rag_unavailable_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    const tomoriState = await personaRepository.loadState(serverDiscId);
-    if (!tomoriState) {
-      await replyInfoEmbed(submitInteraction, locale, {
-        titleKey: "general.errors.tomori_not_setup_title",
-        descriptionKey: "general.errors.tomori_not_setup_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    const hasManagePermission = buttonInteraction.memberPermissions?.has("ManageGuild") ?? false;
-    if (!tomoriState.config.server_memteaching_enabled && !hasManagePermission) {
-      await replyInfoEmbed(submitInteraction, locale, {
-        titleKey: "commands.compact.add_to_docs_no_permission_title",
-        descriptionKey: "commands.compact.add_to_docs_no_permission_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    let embeddingCreds: ResolvedCredentials | null = null;
-    try {
-      embeddingCreds = await resolveCapabilityCredentials(tomoriState.server_id, "embedding", { userId: null });
-    } catch (error) {
-      const denied = findProviderRequestDeniedError(error);
-      if (denied) {
-        await replyInfoEmbed(submitInteraction, locale, {
-          ...getProviderRequestFailureCopy(denied, locale),
-          color: ColorCode.ERROR,
-        });
-        return;
-      }
-    }
-    if (!embeddingCreds) {
-      await replyInfoEmbed(submitInteraction, locale, {
-        titleKey: "commands.compact.add_to_docs_no_embedding_title",
-        descriptionKey: "commands.compact.add_to_docs_no_embedding_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    const embeddingModelId =
-      getResolvedCapabilityModelId(embeddingCreds, "embedding") ?? tomoriState.config.embedding_model_id;
-    const embeddingModel = embeddingModelId ? await llmModelRepo.loadEmbeddingModelById(embeddingModelId) : null;
-    if (!embeddingModel?.embedding_model_id) {
-      await replyInfoEmbed(submitInteraction, locale, {
-        titleKey: "commands.compact.add_to_docs_no_embedding_title",
-        descriptionKey: "commands.compact.add_to_docs_no_embedding_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    const liveMessage = await summaryMessage.fetch().catch(() => null);
-    const summaryText = liveMessage?.embeds[0]?.description ?? "";
-    if (!summaryText) {
-      await replyInfoEmbed(submitInteraction, locale, {
-        titleKey: "commands.compact.add_to_docs_error_title",
-        descriptionKey: "commands.compact.add_to_docs_error_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    try {
-      const memLimits = getMemoryLimits();
-      const normalized = ragRepository.normalizeText(summaryText);
-      const chunks = ragRepository.chunkText(normalized, memLimits.documentChunkSize, memLimits.documentChunkOverlap);
-
-      if (chunks.length === 0) {
-        await replyInfoEmbed(submitInteraction, locale, {
-          titleKey: "commands.compact.add_to_docs_error_title",
-          descriptionKey: "commands.compact.add_to_docs_error_description",
-          color: ColorCode.ERROR,
-        });
-        return;
-      }
-
-      const embeddings = await withProviderUsageContext(embeddingCreds.usageContext, async () =>
-        generateEmbeddingsBatched({
-          provider: embeddingModel.provider,
-          apiKey: embeddingCreds.apiKey,
-          model: embeddingModel.codename,
-          modelId: embeddingModel.embedding_model_id,
-          inputs: chunks,
-          taskType: (await providerSupportsEmbeddingTaskType(embeddingModel.provider))
-            ? "RETRIEVAL_DOCUMENT"
-            : undefined,
-          batchSize: 16,
-          onUsage: createProviderUsageRecorder(embeddingCreds.usageContext, embeddingModel.codename),
-        }),
-      );
-
-      await ragRepository.insertWithChunks({
-        serverId: tomoriState.server_id,
-        personaId: targetPersonaId,
-        uploaderUserId: null,
-        documentName: docName,
-        fileName: null,
-        mimeType: "text/plain",
-        fileSizeBytes: normalized.length,
-        textContent: normalized,
-        chunks,
-        embeddings,
-        embeddingModelId: embeddingModel.embedding_model_id,
-        embeddingFamily: embeddingModel.model_family,
-        sourceType: "history",
-        channelDiscIds,
-      });
-
-      invalidateTomoriStateCache(serverDiscId);
-
-      const storedFooter = localizer(locale, "commands.compact.add_to_docs_stored_footer");
-      const finalEmbed = buildEmbed(summaryText).setFooter({ text: storedFooter });
-      await summaryMessage.edit({ embeds: [finalEmbed], components: [] }).catch(() => {});
-
-      await replyInfoEmbed(submitInteraction, locale, {
-        titleKey: "commands.compact.add_to_docs_success_title",
-        descriptionKey: "commands.compact.add_to_docs_success_description",
-        descriptionVars: { name: docName },
-        color: ColorCode.SUCCESS,
-      });
-    } catch (error) {
-      const denied = findProviderRequestDeniedError(error, embeddingCreds.usageContext);
-      if (denied) {
-        await replyInfoEmbed(submitInteraction, locale, {
-          ...getProviderRequestFailureCopy(denied, locale),
-          color: ColorCode.ERROR,
-        });
-        return;
-      }
-      log.error("Failed to save compact summary to document store", error);
-      await replyInfoEmbed(submitInteraction, locale, {
-        titleKey: "commands.compact.add_to_docs_error_title",
-        descriptionKey: "commands.compact.add_to_docs_error_description",
-        color: ColorCode.ERROR,
-      });
-    }
-  });
-}
-
-function formatDeadline(date: Date): string {
-  const hh = String(date.getUTCHours()).padStart(2, "0");
-  const mm = String(date.getUTCMinutes()).padStart(2, "0");
-  const dd = String(date.getUTCDate()).padStart(2, "0");
-  const mo = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const yyyy = String(date.getUTCFullYear());
-  return `${hh}:${mm} ${dd}/${mo}/${yyyy}`;
 }
 
 async function editSuccess(

@@ -6,6 +6,8 @@ import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories
 import { fireRowSchema } from "@/modules/natural-nudges/db/types";
 import { log } from "@/utils/misc/logger";
 import { useEnvSandbox } from "../../helpers/env";
+import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
+import { serverStmConfigSchema } from "@/types/db/schema";
 
 useEnvSandbox(["POSTGRES_TRANSIENT_RETRY_DELAY_MS", "POSTGRES_TRANSIENT_RETRY_ATTEMPTS"]);
 
@@ -14,12 +16,24 @@ beforeAll(() => {
   process.env.POSTGRES_TRANSIENT_RETRY_ATTEMPTS = "3";
 });
 
+it("recovers saved short-term memory settings after a connection lifetime timeout", async () => {
+  const row = serverStmConfigSchema.parse({ server_id: 1, refresh_cadence: 9, render_mode: "supersede" });
+  const thunk = failOnceThen("ERR_POSTGRES_LIFETIME_TIMEOUT", [row]);
+  const query = spyOn(dbClient, "sql").mockImplementation(thunk.run as unknown as typeof dbClient.sql);
+  try {
+    expect(await shortTermMemoryRepository.getStmConfig(1)).toEqual(row);
+    expect(thunk.calls()).toBe(2);
+  } finally {
+    query.mockRestore();
+  }
+});
+
 describe("natural nudge database reads", () => {
   const at = new Date("2026-01-01T12:00:00Z");
   const cases = [
     {
       name: "daily counts",
-      read: () => statRepository.getServerDailyMessageCounts({ serverId: 1, from: at }),
+      read: () => statRepository.getServerDailyHeatCounts({ serverId: 1, from: at }),
       rows: [{ bucket: "2026-01-01", total: "7" }],
       expected: new Map([["2026-01-01", 7]]),
     },

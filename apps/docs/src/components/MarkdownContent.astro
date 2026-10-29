@@ -15,6 +15,7 @@
 // it and place the <Aside> as the first child: this keeps the note inside the markdown content flow,
 // inheriting the correct prose spacing.
 import Default from "@astrojs/starlight/components/MarkdownContent.astro";
+import "katex/dist/katex.min.css";
 import { Aside } from "@astrojs/starlight/components";
 import { join } from "node:path";
 import {

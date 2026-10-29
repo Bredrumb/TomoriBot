@@ -11,6 +11,12 @@ import {
 import type { TomoriState } from "@/types/db/schema";
 import {
   IDLE_NUDGE_FREQUENCY_LEVELS,
+  NATURAL_NUDGE_CATEGORIES,
+  DEFAULT_IDLE_NUDGE_CATEGORY_WEIGHTS,
+  NUDGE_ADVANCED_STEP,
+  NUDGE_HEAT_OFFSET_MAX,
+  type ServerNaturalNudgeConfig,
+  type IdleNudgeFrequencyLevel,
   NATURAL_NUDGE_INTEREST_DESCRIPTION_MAX,
   NATURAL_NUDGE_INTEREST_LABEL_MAX,
   NATURAL_NUDGE_INTEREST_LIMIT,
@@ -31,6 +37,12 @@ import {
   nudgeBlockerLabel,
   nudgeCategoryLabel,
 } from "@/modules/natural-nudges/discord/studioPanel";
+import {
+  ACTIVE_NUDGE_DAILY_CAPS,
+  ACTIVE_NUDGE_DAILY_CHECK_CAPS,
+  IDLE_NUDGE_DAILY_CAPS,
+  MAX_EFFECTIVE_HEAT,
+} from "@/modules/natural-nudges/runtime/tuning";
 import { DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX, getDiscordTextLength } from "@/utils/discord/ui/componentsV2Limits";
 import { buildTextPreview, textPreviewFooterKey, textPreviewFooterVars } from "@/utils/text/textPreview";
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
@@ -50,6 +62,7 @@ import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { formatModelSelectionLabel } from "@/utils/discord/ui/modelRoutingControls";
 import { buildStateControlRow, withLinePrefix } from "@/utils/discord/ui/panel";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 
 export const NUDGE_ADD_VALUE = "add";
@@ -77,12 +90,16 @@ const TALKATIVENESS_EFFECT_KEYS: Record<number, string> = {
   4: "commands.config.natural_nudges.talkativeness_4_effect",
 };
 
-const FREQUENCY_LOCALE_KEYS: Record<number, string> = {
+const FREQUENCY_LOCALE_KEYS: Record<IdleNudgeFrequencyLevel, string> = {
   0: "commands.config.natural_nudges.frequency_0",
   1: "commands.config.natural_nudges.frequency_1",
   2: "commands.config.natural_nudges.frequency_2",
   3: "commands.config.natural_nudges.frequency_3",
 };
+
+function nudgeFrequencyLabel(locale: string, level: IdleNudgeFrequencyLevel): string {
+  return localizer(locale, FREQUENCY_LOCALE_KEYS[level]);
+}
 
 function text(content: string): ComponentInContainerData {
   return { type: ComponentType.TextDisplay, content };
@@ -267,7 +284,14 @@ function buildIdleNudgeSection(
     ],
   });
   if (!canAdd) {
-    tail.push(text(t("commands.config.natural_nudges.idle_limit_note", { max: PERSONA_AUTHORED_IDLE_NUDGE_LIMIT })));
+    tail.push(
+      text(
+        statusNote(
+          "warning",
+          t("commands.config.natural_nudges.idle_limit_note", { max: PERSONA_AUTHORED_IDLE_NUDGE_LIMIT }),
+        ),
+      ),
+    );
   }
   if (config.idle_nudges_inherited) {
     tail.push(text(`-# ${t("commands.config.natural_nudges.idle_inherited_note")}`));
@@ -644,11 +668,15 @@ function idleNudgeEffect(
   if (!config.idle_nudges_enabled) return t("commands.config.natural_nudges.idle_nudges_off");
   if (!hasEligibleChannel) return t("commands.config.natural_nudges.idle_nudges_on_no_channels");
   if (!hasUsableModel) return t("commands.config.natural_nudges.idle_nudges_on_no_model");
-  if (view.perDay <= 0) return t("commands.config.natural_nudges.frequency_effect_none");
-  return `${t("commands.config.natural_nudges.idle_nudges_on")} ${t("commands.config.natural_nudges.frequency_effect", {
-    heat: Math.round(view.heat),
-    per_week: Math.round(view.perDay * 7 * 10) / 10,
-  })}`;
+  if (view.baseHeat < 1 || view.heat < 1 || view.perDay <= 0)
+    return t("commands.config.natural_nudges.frequency_effect_none");
+  if (NATURAL_NUDGE_CATEGORIES.every((category) => config.category_weights[category] === 0))
+    return t("commands.nudge-studio.idle_pace_no_types");
+  const format = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 });
+  return t("commands.nudge-studio.idle_pace_estimate", {
+    per_week: format.format(Math.round(view.perDay * 70) / 10),
+    daily_cap: IDLE_NUDGE_DAILY_CAPS[config.idle_nudge_frequency],
+  });
 }
 
 function activeNudgeEffect(locale: string, view: NaturalNudgesSettingsView, hasEligibleChannel: boolean): string {
@@ -658,19 +686,19 @@ function activeNudgeEffect(locale: string, view: NaturalNudgesSettingsView, hasE
   if (!hasEligibleChannel) return t("commands.config.natural_nudges.active_nudges_on_no_channels");
   // Modal paths render without status, so the checker is only judged when it was resolved.
   if (status && status.checker.model === null) return t("commands.config.natural_nudges.active_nudges_on_no_matcher");
-  if (!view.activeNudgeRange) return t("commands.config.natural_nudges.active_nudges_on_cold");
-  const matcher = status?.checker.model ?? t("commands.config.natural_nudges.active_nudges_matcher_checker");
-  return t("commands.config.natural_nudges.active_nudges_on", {
+  if (view.baseHeat < 1 || view.heat < 1 || !view.activeNudgeRange)
+    return t("commands.config.natural_nudges.active_nudges_on_cold");
+  return t("commands.nudge-studio.active_pace_estimate", {
     min: view.activeNudgeRange.min,
     max: view.activeNudgeRange.max,
-    matcher,
+    check_cap: ACTIVE_NUDGE_DAILY_CHECK_CAPS[config.active_nudge_frequency],
+    daily_cap: ACTIVE_NUDGE_DAILY_CAPS[config.active_nudge_frequency],
   });
 }
 
 function buildActiveNudgeSection(
   locale: string,
   view: NaturalNudgesSettingsView,
-  hasEligibleChannel: boolean,
   writesDisabled: boolean,
 ): ComponentInContainerData[] {
   const t = (key: string, vars: Record<string, string | number> = {}) => localizer(locale, key, vars);
@@ -695,7 +723,6 @@ function buildActiveNudgeSection(
       config.active_nudges_enabled,
       writesDisabled,
     ),
-    text(`> ${activeNudgeEffect(locale, view, hasEligibleChannel)}`),
     {
       type: ComponentType.ActionRow,
       components: [
@@ -705,7 +732,7 @@ function buildActiveNudgeSection(
           options: IDLE_NUDGE_FREQUENCY_LEVELS.map((level) => ({
             label: safeSelectOptionText(
               t("commands.config.natural_nudges.active_nudge_frequency_option", {
-                level: t(FREQUENCY_LOCALE_KEYS[level]),
+                level: nudgeFrequencyLabel(locale, level),
               }),
               100,
             ),
@@ -730,18 +757,21 @@ export function buildNaturalNudgesSettingsBody(
   const hasEligibleChannel = (status?.effectiveChannelIds ?? config.channel_disc_ids).length > 0;
   const hasUsableModel = status ? status.plannerModel.kind === "ready" : config.llm_id !== null;
   const notices = [
-    !view.trackingEnabled ? t("commands.config.natural_nudges.notice_tracking_disabled") : "",
-    byokMode ? t("commands.config.natural_nudges.notice_byok") : "",
-    view.runtime.stopped_at ? t("commands.config.natural_nudges.notice_stopped") : "",
+    !view.trackingEnabled ? statusNote("error", t("commands.config.natural_nudges.notice_tracking_disabled")) : "",
+    byokMode ? statusNote("error", t("commands.config.natural_nudges.notice_byok")) : "",
+    view.runtime.stopped_at ? statusNote("error", t("commands.config.natural_nudges.notice_stopped")) : "",
   ].filter(Boolean);
+  const providerOptions = modelProviderOptions(locale, view.plannerModels, "llm");
+  const plannerNotice =
+    providerOptions.length === 0
+      ? t("commands.config.natural_nudges.model_none_available")
+      : plannerDefaultNotice(locale, view);
+  const checkerNotice = checkerUnavailableNotice(locale, view);
   const components: ComponentInContainerData[] = [
     text(
       `## ${t("commands.config.natural_nudges.title")}\n${t("commands.config.natural_nudges.description")}${
         notices.length > 0 ? `\n${notices.map((notice) => `-# ${notice}`).join("\n")}` : ""
-      }`,
-    ),
-    text(
-      `### ${t("commands.config.natural_nudges.channels_title")}\n${t("commands.config.natural_nudges.channels_description")}`,
+      }\n### ${t("commands.config.natural_nudges.channels_title")}\n${t("commands.config.natural_nudges.channels_description")}`,
     ),
     {
       type: ComponentType.ActionRow,
@@ -761,7 +791,7 @@ export function buildNaturalNudgesSettingsBody(
       ],
     },
     text(
-      `### ${t("commands.config.natural_nudges.idle_nudges_title")}\n${t("commands.config.natural_nudges.idle_nudges_description")}`,
+      `### ${t("commands.config.natural_nudges.idle_nudges_title")}\n${t("commands.config.natural_nudges.idle_nudges_description")}\n-# ${t("commands.config.natural_nudges.idle_nudges_studio_hint", { command: commandRegistry.getCommandMention("nudge-studio") })}`,
     ),
     buildStateControlRow(
       [
@@ -779,7 +809,6 @@ export function buildNaturalNudgesSettingsBody(
       config.idle_nudges_enabled,
       writesDisabled,
     ),
-    text(`> ${idleNudgeEffect(locale, view, hasEligibleChannel, hasUsableModel)}`),
     {
       type: ComponentType.ActionRow,
       components: [
@@ -789,7 +818,7 @@ export function buildNaturalNudgesSettingsBody(
           options: IDLE_NUDGE_FREQUENCY_LEVELS.map((level) => ({
             label: safeSelectOptionText(
               t("commands.config.natural_nudges.active_nudge_frequency_option", {
-                level: t(FREQUENCY_LOCALE_KEYS[level]),
+                level: nudgeFrequencyLabel(locale, level),
               }),
               100,
             ),
@@ -800,20 +829,14 @@ export function buildNaturalNudgesSettingsBody(
         },
       ],
     },
-    text(
-      `-# ${t("commands.config.natural_nudges.idle_nudges_studio_hint", {
-        command: commandRegistry.getCommandMention("nudge-studio"),
-      })}`,
-    ),
-    ...buildActiveNudgeSection(locale, view, hasEligibleChannel, writesDisabled),
+    ...buildActiveNudgeSection(locale, view, writesDisabled),
     text(
       `## ${t("commands.config.natural_nudges.model_title")}\n${t("commands.config.natural_nudges.model_description")}\n**${t(
         "commands.config.natural_nudges.planner_title",
-      )}**\n${t("commands.config.natural_nudges.planner_description")}`,
+      )}**\n${t("commands.config.natural_nudges.planner_description")}${plannerNotice ? `\n-# ${statusNote("error", plannerNotice)}` : ""}`,
     ),
   ];
 
-  const providerOptions = modelProviderOptions(locale, view.plannerModels, "llm");
   const plannerOptions = [
     ...(config.llm_id !== null
       ? [{ label: t("commands.config.natural_nudges.model_same_as_chat_option"), value: NUDGE_CLEAR_MODEL_VALUE }]
@@ -827,15 +850,10 @@ export function buildNaturalNudgesSettingsBody(
     writesDisabled,
   );
   if (plannerSelect) components.push(plannerSelect);
-  const plannerNotice =
-    providerOptions.length === 0
-      ? t("commands.config.natural_nudges.model_none_available")
-      : plannerDefaultNotice(locale, view);
-  if (plannerNotice) components.push(text(`-# ${plannerNotice}`));
 
   components.push(
     text(
-      `**${t("commands.config.natural_nudges.checker_title")}**\n${t("commands.config.natural_nudges.checker_description")}`,
+      `**${t("commands.config.natural_nudges.checker_title")}**\n${t("commands.config.natural_nudges.checker_description")}${checkerNotice ? `\n-# ${statusNote("error", checkerNotice)}` : ""}`,
     ),
   );
   const checkerSelect = modelSelectRow(
@@ -851,8 +869,61 @@ export function buildNaturalNudgesSettingsBody(
     writesDisabled,
   );
   if (checkerSelect) components.push(checkerSelect);
-  const checkerNotice = checkerUnavailableNotice(locale, view);
-  if (checkerNotice) components.push(text(`-# ${checkerNotice}`));
+  components.push(
+    text(
+      `## ${t("commands.nudge-studio.title_advanced")}\n${t("commands.nudge-studio.advanced_description")}\n### ${t("commands.nudge-studio.heat_heading")}\n${t("commands.nudge-studio.heat_description")}\n\n**${t(
+        "commands.nudge-studio.heat_values",
+        {
+          effective: new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(view.heat),
+          max: MAX_EFFECTIVE_HEAT,
+        },
+      )}**\n-# ${t(
+        config.heat_offset > 0
+          ? "commands.nudge-studio.heat_increased"
+          : config.heat_offset < 0
+            ? "commands.nudge-studio.heat_decreased"
+            : "commands.nudge-studio.heat_unadjusted",
+        {
+          base: new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(view.baseHeat),
+          offset: new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(Math.abs(config.heat_offset)),
+        },
+      )}\n${withLinePrefix(
+        "> ",
+        [
+          t("commands.nudge-studio.idle_pace", {
+            frequency: nudgeFrequencyLabel(locale, config.idle_nudge_frequency),
+            effect: idleNudgeEffect(locale, view, hasEligibleChannel, hasUsableModel),
+          }),
+          t("commands.nudge-studio.active_pace", {
+            frequency: nudgeFrequencyLabel(locale, config.active_nudge_frequency),
+            effect: activeNudgeEffect(locale, view, hasEligibleChannel),
+          }),
+        ].join("\n"),
+      )}`,
+    ),
+    {
+      type: ComponentType.ActionRow,
+      components: (["down", "up"] as const).map((direction) =>
+        button(
+          t(direction === "up" ? "commands.nudge-studio.increase_button" : "commands.nudge-studio.decrease_button", {
+            amount: NUDGE_ADVANCED_STEP,
+          }),
+          { action: "nudge-heat-adjust", locale, direction },
+          writesDisabled ||
+            (direction === "up"
+              ? config.heat_offset >= NUDGE_HEAT_OFFSET_MAX || view.heat >= MAX_EFFECTIVE_HEAT
+              : config.heat_offset <= -NUDGE_HEAT_OFFSET_MAX || view.heat <= 0),
+        ),
+      ),
+    },
+    text(`### ${t("commands.nudge-studio.weights_heading")}\n${t("commands.nudge-studio.weights_description")}`),
+    {
+      type: ComponentType.ActionRow,
+      components: [
+        button(t("commands.nudge-studio.weights_button"), { action: "nudge-weights-open", locale }, writesDisabled),
+      ],
+    },
+  );
   return components;
 }
 
@@ -978,4 +1049,31 @@ export function buildCheckerModelModal(
     MODAL_TEXT_MAX,
   );
   return payload;
+}
+
+export function buildNudgeWeightsModal(
+  locale: string,
+  nonce: string,
+  weights: ServerNaturalNudgeConfig["category_weights"],
+): RawModalPayload {
+  return {
+    custom_id: buildConfigRouteId({ action: "nudge-weights-submit", locale, nonce }),
+    title: safeSelectOptionText(localizer(locale, "commands.nudge-studio.weights_heading"), MODAL_TEXT_MAX),
+    components: NATURAL_NUDGE_CATEGORIES.map((category) => ({
+      type: 18,
+      label: safeSelectOptionText(nudgeCategoryLabel(locale, category), MODAL_TEXT_MAX),
+      description: localizer(locale, "commands.nudge-studio.weights_default", {
+        default: DEFAULT_IDLE_NUDGE_CATEGORY_WEIGHTS[category],
+      }),
+      component: {
+        type: 4,
+        custom_id: buildConfigModalFieldId(category, nonce),
+        style: TextInputStyle.Short,
+        required: true,
+        min_length: 1,
+        max_length: 3,
+        value: String(weights[category]),
+      },
+    })),
+  };
 }

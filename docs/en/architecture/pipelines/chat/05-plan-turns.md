@@ -46,7 +46,7 @@ determineMatchingPersonas()
 `determineMatchingPersonas()` in `src/utils/chat/triggerProcessor.ts` selects which personas should respond:
 
 - **Single persona match**: produces one `ChatTurn` populated with the persona's `TomoriState`, resolved
-  credential policy (`textCredentialSource: "server" | "personal" | "supporter"`), funding scope, and text quota preflight state.
+  credential policy (`textCredentialSource: "server" | "personal" | "supporter"`), funding scope, and text quota reservation state.
 - **Multiple persona matches**: when multiple personas qualify on a real user message,
   `queueAdditionalPersonaTurns()` places the additional personas at the front of the channel's `messageQueue`.
   Only the first persona runs in the current turn. The remaining personas replay as priority jobs immediately
@@ -68,9 +68,11 @@ Subscription ownership comes from the selected saved provider entry. The server'
 OpenRouter BYOK entry keeps its own key even while the server has a sponsor. Personal provider rows
 record ownership through their assigned and enabled capabilities.
 
-Server-funded subscription routes take the same per-member text quota admission as server BYOK.
-Personal subscriptions and personal BYOK stay outside server quota. Admission shares one trigger
-state across persona jobs and retries; post-turn effects consume it once after a delivered reply.
+Server-funded subscription routes reserve the same per-member text quota as server BYOK, and any
+admitted server route requires the server trigger cooldown. Personal subscriptions and personal BYOK
+stay outside server quota. Admission reserves one unit per trigger, shared across persona jobs and
+retries; a delivered reply keeps it, and a trigger whose turns produce no reply releases it so a retry
+can claim one again.
 
 An inactive or unlinked personal subscription retains its configured personal text fallback pool.
 A server route is considered only after that pool fails, subject to the user's fallback setting and
@@ -93,13 +95,19 @@ messages can be evaluated for follow-up interrupts.
 
 ## Constraints and rationale
 
-- **Gating before generation**: access rules, cooldowns, and quota preflights execute before prompt assembly
-  or LLM requests, so rejected turns consume zero provider quota.
+- **Gating before generation**: access rules, cooldowns, and quota reservations execute before prompt
+  assembly or LLM requests, so a turn that never reaches a provider spends nothing, and a turn that
+  produces no reply returns its reserved unit.
 - **Front-of-queue multi-persona serialization**: breaking multi-persona replies into distinct serialized turns
   prevents long single-lock blocks and provides dedicated Discord typing indicators and webhook identities
   for each responding persona.
 - **Selective error visibility**: `shouldSurfaceUserErrors` suppresses error notices for passive autochat
   and random triggers while delivering error feedback for direct mentions, DMs, and slash commands.
+- **Nudge dormancy**: admitted direct guild chat renews the server's 14-day nudge activity window
+  before credentials resolve; passive and system turns do not renew it, and queued nudge turns
+  are discarded when the shared eligibility gate closes. Direct turns keep `isDirectChat` on an
+  empty-response retry, and their persisted stats refresh heat and channel eligibility (see
+  [Natural Nudges](/architecture/subsystems/natural-nudges/)).
 
 ## Source pointers
 
@@ -107,3 +115,4 @@ messages can be evaluated for follow-up interrupts.
 - `src/utils/chat/triggerProcessor.ts`: persona matching and trigger detection.
 - `src/utils/chat/personaQueue.ts`: `queueAdditionalPersonaTurns()` multi-persona queueing.
 - `src/utils/chat/admissionGuards.ts`: access, cooldown, and rate limit validation helpers.
+- `src/utils/chat/textQuotaState.ts`: per-trigger text quota reservation and release state.

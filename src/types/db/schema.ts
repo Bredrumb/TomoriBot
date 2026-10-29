@@ -919,7 +919,7 @@ const serverCapabilitiesConfigSchema = z.object({
   manage_message_enabled: z.boolean().default(true),
   thread_creation_enabled: z.boolean().default(true),
   conditioning_interactions_enabled: z.boolean().default(true),
-  dice_rolling_enabled: z.boolean().default(false),
+  dice_rolling_enabled: z.boolean().default(true),
   imagegen_enabled: z.boolean().default(true),
   danbooru_enabled: z.boolean().default(true),
   videogen_enabled: z.boolean().default(false),
@@ -1851,6 +1851,24 @@ const setupProviderAccessSchema = z.discriminatedUnion("mode", [
 ]);
 export type SetupProviderAccess = z.infer<typeof setupProviderAccessSchema>;
 
+export const SETUP_FEATURES = [
+  "expressions",
+  "playful_interactions",
+  "danbooru",
+  "natural_nudges",
+  "dice_rolls",
+  "self_message_management",
+  "user_blocking",
+  "user_info_updates",
+  "short_term_memory",
+] as const;
+
+export const setupFeaturesSchema = z
+  .array(z.enum(SETUP_FEATURES))
+  .max(SETUP_FEATURES.length)
+  .refine((features) => new Set(features).size === features.length);
+export type SetupFeature = (typeof SETUP_FEATURES)[number];
+
 /**
  * Configuration data needed for server setup
  */
@@ -1861,6 +1879,7 @@ export const setupConfigSchema = z
     humanizer: z.number().default(1),
     tomoriName: z.string(),
     timezoneOffset: utcOffsetSchema.default(0),
+    features: setupFeaturesSchema,
     locale: z.string(),
     registrationLocale: z.string().nullable(), // Analytics-only locale captured at setup; not used for functionality
     // The sole provider-selection field, and the only place a credential and its key version live.

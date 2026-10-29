@@ -274,8 +274,8 @@ function setupWebSocketInterception(client: unknown) {
                 }
 
                 // Checkbox Group (type 22): store array of selected values
-                if (inner.type === 22 && Array.isArray(inner.values)) {
-                  checkboxGroupValues[customId] = inner.values;
+                if (inner.type === 22) {
+                  checkboxGroupValues[customId] = Array.isArray(inner.values) ? inner.values : [];
                 }
 
                 if (inner.type === 23) {
@@ -3585,15 +3585,16 @@ export async function promptWithRawModal(
 export const MODAL_OPTIONS_PER_PAGE = 25;
 
 /**
- * Finds the single option-bearing select component in a modal's component list.
- * Radio/checkbox groups also carry `options`, but they are capped well under the
- * page size so pagination never triggers for them: matching prior behavior in
- * both the legacy and persona paths.
+ * Finds the single string select in a modal's component list. Radio and checkbox groups also carry
+ * `options` but are capped at 10, so they are skipped; matching one that precedes the select would
+ * hide the select from pagination.
  *
  * @returns The paginatable select component, or `undefined` when none exists.
  */
 export function getPaginatedModalComponent(options: ModalOptions): ModalComponent | undefined {
-  return options.components.find((component) => "options" in component && Array.isArray(component.options));
+  return options.components.find(
+    (component) => "options" in component && Array.isArray(component.options) && !("kind" in component),
+  );
 }
 
 /**

@@ -8,6 +8,7 @@ import { readOpenRouterLimitError } from "@/providers/openrouter/openrouterLimit
 import * as tomoriStateCache from "@/utils/cache/tomoriStateCache";
 import { llmModelRepo, ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import * as ragAvailability from "@/utils/db/ragAvailability";
+import { lorebookOperations } from "@/modules/lorebooks/discord/operations";
 import { serverDocumentsOperations } from "@/utils/discord/interactions/memoriesDocumentOperations";
 import {
   createMemoriesInteractionRoute,
@@ -150,6 +151,10 @@ function createTestDependencies(overrides: Partial<MemoriesRouteDependencies> = 
     },
     getDocumentCountsByPersona: async () => ({ byPersona: new Map([[10, 3]]), serverwide: 1 }),
     getEligibleHistoryPersonaIds: async () => new Set(),
+    loadLorebooks: async () => ({ status: "fresh" as const, entries: [] }),
+    getLorebookCounts: async () => new Map(),
+    getLorebookCollections: async () => [],
+    lorebookOperations,
     getStmEntries: async (workspaceId) => {
       calls.push(`getStmEntries:${workspaceId}`);
       return [
@@ -188,7 +193,23 @@ function createTestDependencies(overrides: Partial<MemoriesRouteDependencies> = 
     showStmModal: async () => {
       calls.push("showStmModal");
     },
+    showAddLorebookModal: async () => {
+      calls.push("showAddLorebookModal");
+    },
+    showImportLorebookModal: async () => {
+      calls.push("showImportLorebookModal");
+    },
+    showEditLorebookModal: async () => {
+      calls.push("showEditLorebookModal");
+    },
+    showLorebookActivationModal: async () => {
+      calls.push("showLorebookActivationModal");
+    },
+    takeLorebookFileUpload: () => undefined,
+    parseLorebookUpload: () => ({ ok: false, reason: "unsupported" as const }),
+    filterChannelScope: async (_interaction, channelIds) => channelIds,
     takeCheckboxValues: () => [],
+    takeStringSelectValues: () => undefined,
     takeChannelSelectValues: () => [],
     clearStm: () => {
       calls.push("clearStm");

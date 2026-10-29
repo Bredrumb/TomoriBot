@@ -75,7 +75,7 @@ discovery, and before MCP transport. Already-started tools retain their own canc
 The normalized adapter interface dispatches one call at a time; approval covers only that actual call.
 
 Internal prose-checker ownership follows the
-[generation review lifecycle](../chat/06-per-turn/03-run-generation-turn.md#response-text-review).
+[generation review lifecycle](/architecture/pipelines/chat/06-per-turn/03-run-generation-turn/#response-text-review).
 
 ## Expression delivery and side effects
 <!-- anchor: expression-delivery-and-side-effects -->
@@ -94,7 +94,9 @@ Tool execution coordinates several turn-level side effects:
   for non-DM channels.
 - **Diagnostic notices:** Failed tool calls emit a hidden thought-log notice containing redacted
   arguments unless their Discord delivery is unconfirmed. When deliberate tool mode admitted a tool via a trigger match, the stage emits a hidden
-  notice recording the matched trigger pattern.
+  notice recording the matched trigger pattern. On a turn that keeps its conversation quiet (a nudge,
+  a reminder, or a random trigger), progress notices skip the conversation and post their full card
+  to the thought log instead. Hidden image planning and persona generation suppress progress notices.
 - **One-shot memory guard:** A successful `update_short_term_memory` call sets
   `streamingContext.disableShortTermMemoryUpdate = true`, blocking subsequent memory updates within the
   same turn.
@@ -133,8 +135,12 @@ message. The loop still passes the raw tool data to `handleEnhancedContextRestar
 such as `type` and `enhanced_context_item` retain their meaning. Off omits the restart call from
 history because the injected context replaces it.
 
-A failed call stores `{ status: "tool_execution_failed", reason, tool_name }`, built from the tool's
-message or error. Its data is not copied into model history.
+A failed call stores `{ status: "tool_execution_failed", reason, tool_name, code, suggested_actions }`.
+Provider-backed media tools supply a classified reason, a safe provider code, and localized recovery
+guidance selected from the same tips as the error UI. Other failures retain the tool's message or
+error, with `tool_error` when no code is available and an empty guidance list when none is supplied.
+The normal tool loop and hidden image agent use the same failure builder. Internal data and raw
+provider responses are not copied into model history.
 
 ## Source pointers
 <!-- anchor: source-pointers -->

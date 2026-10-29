@@ -1,7 +1,5 @@
 import { MessageFlags, PermissionFlagsBits, escapeMarkdown } from "discord.js";
 import { z } from "zod";
-import type { StructuredContextItem } from "@/types/misc/context";
-import type { TomoriState } from "@/types/db/schema";
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import { tomoriChat, suppressNextSelfReply } from "@/events/messageCreate/tomoriChat";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
@@ -11,18 +9,18 @@ import {
   CONDITIONING_ACTION_TYPES,
   CONDITIONING_FOOTER_LOCALE_KEYS,
   CONDITIONING_REASON_MAX_LENGTH,
-  getConditioningContextPastParticiple,
   normalizeConditioningReason,
   type ConditioningActionKey,
 } from "@/utils/conditioning/conditioning";
 import { buildConditioningInteractionEmbed } from "@/utils/conditioning/conditioningEmbed";
 import { conditioningMemoryRepository } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import { resolveIdentityTarget, resolveTriggererDiscordId } from "@/utils/discord/targetResolver";
-import { buildReferencedMessageUrl } from "@/utils/discord/toolProgressNotice";
 import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
-import { ContextItemTag } from "@/types/misc/context";
+import { buildConditioningInteractionEvent } from "@/utils/conditioning/conditioningInteractionContext";
 import { log } from "@/utils/misc/logger";
-import { sendToolPersonaPost } from "@/utils/discord/webhook/toolPersonaDelivery";
+import { buildToolPersonaPostContext } from "@/utils/discord/webhook/toolPersonaDelivery";
+import { sendPersonaPost } from "@/utils/discord/webhook/personaPost";
+import { resolveToolSpriteSelection } from "@/tools/spriteSelection";
 
 const actionKeys = Object.keys(CONDITIONING_ACTION_TYPES) as [ConditioningActionKey, ...ConditioningActionKey[]];
 const interactionArgs = z
@@ -32,7 +30,9 @@ const interactionArgs = z
     reason: z
       .string()
       .transform(normalizeConditioningReason)
-      .pipe(z.string().min(1).max(CONDITIONING_REASON_MAX_LENGTH)),
+      .pipe(z.string().max(CONDITIONING_REASON_MAX_LENGTH))
+      .optional()
+      .default(""),
     food: z.string().trim().min(1).max(CONDITIONING_REASON_MAX_LENGTH).optional(),
   })
   .superRefine((value, ctx) => {
@@ -41,37 +41,12 @@ const interactionArgs = z
     }
   });
 
-function buildInteractionEvent(params: {
-  context: ToolContext;
-  actor: TomoriState;
-  targetName: string;
-  action: ConditioningActionKey;
-  reason: string;
-  food: string | undefined;
-  messageId: string;
-  messageUrl: string | undefined;
-}): StructuredContextItem {
-  const sourceReference =
-    params.messageUrl || buildReferencedMessageUrl(params.context, params.messageId) || params.messageId;
-  const action = getConditioningContextPastParticiple(CONDITIONING_ACTION_TYPES[params.action], params.action);
-  const food = params.action === "feed" && params.food ? ` with ${normalizeConditioningReason(params.food)}` : "";
-  return {
-    role: "system",
-    metadataTag: ContextItemTag.SYSTEM_INSTRUCTION_BLOCK,
-    parts: [
-      {
-        type: "text",
-        text: `${params.actor.persona_nickname} just ${action} ${params.targetName}${food}: ${params.reason}. That interaction is the message at ${sourceReference}. React to that interaction specifically; a later message or embed is not this event.`,
-      },
-    ],
-  };
-}
-
 export class ConditioningInteractionTool extends BaseTool {
   name = "interact_with_target";
   description =
-    "Express a strong feeling toward a user or persona through a playful physical interaction, such as a hug, bite, bonk, or offering food. Use this for a deliberate gesture that deserves its own visible moment, especially when reacting to something specific they did. Keep incidental gestures in ordinary roleplay text. The reason should explain what prompted the action. Use at most once per turn.";
+    "Express a strong feeling toward a user or persona through a playful physical interaction, such as a hug, bite, bonk, or offering food. Use this for a deliberate gesture that deserves its own visible moment, especially when reacting to something specific they did. Keep incidental gestures in ordinary roleplay text. An optional reason explains what prompted the action and saves conditioning when targeting a persona. Omit it for a gesture without lasting conditioning. Use at most once per turn.";
   category = "discord" as const;
+  supportsSpriteSelection = true;
   requiresFeatureFlag = "conditioning_interactions";
   parameters: ToolParameterSchema = {
     type: "object",
@@ -84,14 +59,14 @@ export class ConditioningInteractionTool extends BaseTool {
       action: { type: "string", enum: actionKeys, description: "The physical gesture to perform." },
       reason: {
         type: "string",
-        description: `What prompted this gesture, phrased to fit after 'because'. Maximum ${CONDITIONING_REASON_MAX_LENGTH} characters.`,
+        description: `Optional: what prompted this gesture, phrased to fit after 'because'. Saves conditioning for persona targets; omit to avoid saving conditioning. Maximum ${CONDITIONING_REASON_MAX_LENGTH} characters.`,
       },
       food: {
         type: "string",
         description: `What you are offering. Required when action is feed. Maximum ${CONDITIONING_REASON_MAX_LENGTH} characters.`,
       },
     },
-    required: ["target", "action", "reason"],
+    required: ["target", "action"],
   };
 
   isAvailableFor(_provider: string): boolean {
@@ -126,6 +101,8 @@ export class ConditioningInteractionTool extends BaseTool {
       if (!actor?.persona_id || actor.server_id !== context.tomoriState.server_id) {
         return { success: false, error: "The active persona is unavailable." };
       }
+      const spriteSelection = await resolveToolSpriteSelection(args, context, actor.persona_id);
+      if (!spriteSelection.success) return spriteSelection;
       const resolution = await resolveIdentityTarget(target, context, personas);
       if (resolution.status !== "resolved") {
         return {
@@ -179,7 +156,7 @@ export class ConditioningInteractionTool extends BaseTool {
       context.streamContext ??= { disableYouTubeProcessing: false };
       context.streamContext.disableConditioningInteraction = true;
       const type = CONDITIONING_ACTION_TYPES[action];
-      if (resolution.targetType === "persona") {
+      if (resolution.targetType === "persona" && reason) {
         const recorded = await conditioningMemoryRepository.recordEvent({
           serverId: actor.server_id,
           personaLineageId: resolution.persona.persona_lineage_id,
@@ -223,10 +200,10 @@ export class ConditioningInteractionTool extends BaseTool {
           data: { conditioningSaved },
         };
       suppressNextSelfReply(context.channel.id);
-      const outcome = await sendToolPersonaPost(context, actor, {
-        embeds: [embed],
-        flags: MessageFlags.SuppressNotifications,
-      });
+      const outcome = await sendPersonaPost(
+        { ...buildToolPersonaPostContext(context, actor), appearance: spriteSelection.appearance },
+        { embeds: [embed], flags: MessageFlags.SuppressNotifications },
+      );
       if (outcome.status !== "sent") {
         log.warn("Conditioning interaction was not delivered", outcome.error, {
           errorType: "conditioning_interaction_delivery_failed",
@@ -261,6 +238,7 @@ export class ConditioningInteractionTool extends BaseTool {
           isFromQueue: false,
           isManuallyTriggered: true,
           selectedPersonaId: resolution.persona.persona_id,
+          conditioningInteraction: { actorType: "persona", type },
           isPersonaJob: true,
           textQuotaSource: "system",
           manualTriggerInvoker:
@@ -268,17 +246,14 @@ export class ConditioningInteractionTool extends BaseTool {
               ? { userDiscId: invoker.id, username: invoker.user.username, locale: context.locale, member: invoker }
               : undefined,
           borrowsTriggerMessage: !invoker || invoker.user.bot,
-          manualStreamingContextOverrides: { disableConditioningInteraction: true },
           injectedContextItems: [
-            buildInteractionEvent({
-              context,
-              actor,
+            buildConditioningInteractionEvent({
+              actorName: actor.persona_nickname,
               targetName: resolution.displayLabel,
               action,
               reason,
               food,
               messageId: message.id,
-              messageUrl: message.url,
             }),
           ],
         });

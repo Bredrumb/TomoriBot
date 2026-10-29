@@ -261,7 +261,10 @@ creation is not automatically repeated because a failed request may have created
 without returning its ID. A provider `invalid_request` is told apart from a local one by the status
 it carries. The command's failure notice offers that same detail behind **Show Full Error**, gated
 like the chat error modal: Manage Server for a server credential, and only the requester for a personal
-one. The voice tool keeps the detail out of its result because the model reads tool results.
+one. The voice tool returns a classified reason, a safe provider code when available, and recovery
+guidance to the model. Recognized content rejections, including `PROHIBITED_CONTENT`, are preserved
+before audio validation and do not trigger server fallback. Raw provider detail stays out of tool
+results because the model reads them.
 
 ## Native Discord delivery constraints
 
@@ -286,6 +289,11 @@ resolver. Native audio, attachment-only audio, and captions inherit that persona
 delivered own appearance in the destination channel. Main-persona sprites use webhooks, including
 identity sprites. Intervening messages do not replace remembered appearance. A confirmed base revert
 does replace it. Explicit user impersonation remains separate from persona appearance.
+
+When the turn includes the persona's sprite list, the voice tool can select a sprite explicitly
+through its optional `sprite` parameter. The audio and transcript use that appearance; an empty
+string selects the base appearance. Omitting the parameter keeps the inherited appearance. Sprite
+selection affects appearance only; supported speech delivery directions use `voice_instructions`.
 
 The slash command has no active persona turn. It supplies a resolved base author deliberately:
 main-persona audio uses the bot, and alter audio uses the selected persona's base webhook identity.

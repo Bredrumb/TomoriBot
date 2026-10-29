@@ -4,7 +4,7 @@ aiGenerated: true
 ---
 
 The post-turn stage executes side effects after generation finishes. It coordinates empty-response
-retries, text quota consumption, self-reply tracking, short-term memory caching, thought logging,
+retries, text quota settlement, self-reply tracking, short-term memory caching, thought logging,
 cross-channel boomerangs, and usage statistics.
 
 ## Flow and ownership
@@ -16,7 +16,7 @@ ChatTurnContext & GenerationTurnResult
   │
   ├─► 1. recordReunionPresence()           ──► commits or releases triggerer presence claim
   ├─► 2. maybeScheduleEmptyResponseRetry() ──► re-enters tomoriChat(skipLock=true) on empty output
-  ├─► 3. consumeTextQuota()                ──► charges server text quota on non-empty reply
+  ├─► 3. settleTextQuota()                 ──► keeps the reservation for a reply or releases it
   ├─► 4. updateSelfReplyBookkeeping()      ──► updates last-responded persona and chain counters
   ├─► 5. writeShortTermMemory()            ──► stores conversation turn in STM cache per persona
   ├─► 6. emitThoughtLog()                  ──► sends reasoning or BYOK attribution embeds
@@ -36,9 +36,11 @@ ChatTurnContext & GenerationTurnResult
    - Re-enters `tomoriChat()` with `skipLock=true`, incremented `retryCount`, pinned persona, and carried
      expression delivery receipts so already-posted stickers or reactions are not duplicated.
    - Upon retry exhaustion, deliberate turns post a warning embed while passive autochat turns stay silent.
-3. **Text quota consumption**: `consumeTextQuota()` checks whether text quota was armed during admission
-   and the response was non-empty. If so, it increments the server quota via `incrementTextQuota()` and
-   marks the trigger key consumed in `textQuotaTriggerStates`.
+3. **Text quota settlement**: `settleTextQuota()` checks whether text quota was reserved during admission
+   and the response was non-empty. A reply keeps the reserved unit as the charge and marks the trigger key
+   consumed in `textQuotaTriggerStates`. The last turn of a plan releases an unspent reservation through
+   `releaseTextQuotaForTrigger()`. A lone personal-route turn keeps it, because a queued server persona job
+   from the same trigger may still spend it.
 4. **Self-reply bookkeeping**: on non-empty responses, `setLastRespondedPersona()` records which persona
    spoke last. For non-stop real user messages, it increments `selfReplyChainState.triggerCount`.
 5. **Short-term memory write**: for non-stop responses where the user is not full-privacy,
@@ -46,8 +48,9 @@ ChatTurnContext & GenerationTurnResult
    persona. It then increments the cadence counter via `incrementStmTurnCounter()`, driving proactive memory
    refresh nudges in future turns.
 6. **Thought log emission**: if a thought-log channel is configured in a guild text channel, `emitThoughtLog()`
-   sends reasoning and duration details via `sendThoughtLogEmbed()`. If personal BYOK was used without reasoning,
-   it sends an attribution embed crediting the user's provider. Like tool notices and image diagnostics, it
+   sends reasoning and duration details via `sendThoughtLogEmbed()`. When personal BYOK or the model randomizer
+   was used, the embed names the user's provider or the model that answered, and a turn without reasoning
+   still gets a standalone attribution embed. Like tool notices and image diagnostics, it
    copies only when `canMirrorToThoughtLog()` confirms the log is in the same guild and everyone there can
    already read the source channel (or a public thread's parent) with no `ViewChannel` deny overwrite.
    The bot cannot list who reads the log, so a private thread, a private-listed channel, or an
@@ -65,8 +68,8 @@ ChatTurnContext & GenerationTurnResult
 
 - **Non-blocking failure tolerance**: errors in secondary side effects (such as memory writes, thought logs,
   or usage stats) are caught and logged, so completed replies are never disrupted by cache or logging errors.
-- **Single quota deduction**: text quota increments at most once per trigger sequence, requiring a successful,
-  non-empty response.
+- **Single quota settlement**: a trigger sequence reserves at most one text quota unit and settles it
+  once, keeping the charge only for a successful, non-empty response.
 - **Coordinated re-entrancy**: recursive calls explicitly declare lock behavior: empty-response retries reuse
   the active lock (`skipLock=true`), whereas cross-channel boomerangs defer execution until after lock release
   via `setImmediate`.
@@ -88,5 +91,6 @@ describe their actual effects independently of prose review.
 
 - `src/utils/chat/postTurnEffects.ts`: `runPostTurnEffects()` and side effect helpers.
 - `src/utils/cache/shortTermMemoryCache.ts`: short-term memory caching and cadence tracking.
-- `src/utils/quota/textQuotaManager.ts`: text quota deduction.
+- `src/utils/quota/textQuotaManager.ts`: text quota reservation and release.
+- `src/utils/chat/textQuotaState.ts`: per-trigger reservation state and release helper.
 - `src/utils/discord/thoughtLog.ts`: thought-log and provider attribution embeds.

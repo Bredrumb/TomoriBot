@@ -34,12 +34,12 @@ TomoriBotは、組み込みモデルをホストするのではなく、外部AI
 | プロバイダー | 注意事項 | 鍵を入手する |
 |---|---|---|
 | Googleジェミニ | 無料利用枠では、すべての機能が実行されます。最初のセットアップを推奨します。| [AIスタジオ](https://aistudio.google.com/apikey) |
-| OpenRouter | 1つのキーで多くのモデル (一部は無料)。| [OpenRouterキー](https://openrouter.ai/settings/keys) |
+| OpenRouter | 1つのキーで利用できる有料モデル。| [OpenRouterキー](https://openrouter.ai/settings/keys) |
 | NovelAI | サブスクリプション; 無修正のストーリーテリングとロールプレイ (テキストのみ)。| [NovelAI](https://novelai.net/) |
 | ディープシーク | 従量課金制推論モデル。| [ディープシーク](https://platform.deepseek.com/api_keys) |
 | NVIDIA NIM | ホストされたテキスト、埋め込み、および画像。| [NVIDIAビルド](https://build.nvidia.com/) |
 | 人間的 | クロードモデルはAPI (クロードコードではありません) を介して作成されます。| [人外](https://console.anthropic.com/) |
-| Z.ai | GLMファミリー。⚠️ ToSにより、使用はコーディングとエージェントのシナリオに制限されます。| [Z.ai](https://z.ai/) |
+| Z.ai | GLMファミリー。🟡 ToSにより、使用はコーディングとエージェントのシナリオに制限されます。| [Z.ai](https://z.ai/) |
 | Vertex AI | `gcloud` ADC経由のGoogleクラウド (ローカルで実行または開発セットアップに最適)。| 以下を参照してください |
 | Vertex AI Express | GoogleクラウドAPI-キー BYOK (プレビュー、Geminiサブセット)。| [エクスプレスモード](https://console.cloud.google.com/expressmode) |
 | カスタム | 任意のOpenAI互換エンドポイント (Ollama、vLLM、LiteLLMなど)。| [カスタムエンドポイント](#custom-endpoints) を参照してください。|
@@ -54,13 +54,15 @@ Google GeminiとVertex AIのセットアップは認証済みのモデル一覧�
 
 ### オプション：Brave Searchキー
 
-Brave SearchはAIプロバイダーとは別のもので、画像、ビデオ、ニュースの結果を使用してWeb検索を強化します。`/providers`に設定します。⚠️ Braveには月額5ドルの無料クレジットが含まれているため、予期せぬ請求を避けるために、Braveダッシュボードで5ドルの使用制限を設定してください。
+Brave SearchはAIプロバイダーとは別のもので、画像、ビデオ、ニュースの結果を使用してWeb検索を強化します。`/providers`に設定します。🟡 Braveには月額5ドルの無料クレジットが含まれているため、予期せぬ請求を避けるために、Braveダッシュボードで5ドルの使用制限を設定してください。
 
 ## モデルの選択
 
 `/providers`を使用して、サーバー資格情報、モデルカタログ、エンドポイント登録を管理します。次に、`/config` > `モデル` > `モデルの切り替え` を使用して、サーバーのすべてのメンバーが使用する共有機能の割り当てを選択します。どちらのコマンドにもサーバー管理権限が必要です。
 
 個々のメンバーは、`/personal providers`で自分の認証情報とカタログを管理し、`/personal config`で個人モデルを選択します。個人設定は、TomoriBotを使用するすべてのサーバーに適用されます。ユーザー設定については、[個人設定](/ja/features/knowledge/personalization/#your-own-providers)を参照してください。
+
+新規のOpenRouter設定では、チャットにDeepSeek Flash Latest、ビジョンのフォールバックにGemini 3.1 Flash Liteが使用されます。どちらもOpenRouterクレジットを使用します。キーを置き換えても、`- No Model`を含めビジョンの選択は維持されます。
 
 パネルには`サーバープロバイダー`および`個人プロバイダー`というタイトルが付いているため、開くと所有権が明確になります。
 
@@ -136,12 +138,12 @@ OpenCode Go (`https://opencode.ai/zen/go/v1`) とOpenCode Zen (`https://opencode
 | プロバイダー | ストリーミング | ツール呼び出し | 画像入力 | 埋め込み | 注意事項 |
 |---|---|---|---|---|---|
 | Googleジェミニ | ✅ | ✅ | ✅ | ✅ | 無料モデルが利用可能 |
-| OpenRouter | ✅ | ✅ | ✅ | ✅ | 無料モデルが利用可能 |
+| OpenRouter | ✅ | ✅ | ✅ | ✅ | OpenRouterクレジットを使用 |
 | 人間性 (API) | ✅ | ✅ | ✅ | - | クロード・コードではない |
 | NovelAI | ✅ | ✅ | - | - | GLM 4.6のみがツールを使用できます |
 | NVIDIA NIM | ✅ | ✅ | ✅ | ✅ | 無料モデルが利用可能 |
 | ディープシーク | ✅ | ✅ | - | - | - |
-| Z.ai | ✅ | ✅ | ✅ | - | 無料モデル。⚠️ ToS = コーディングとエージェントのみの使用 |
+| Z.ai | ✅ | ✅ | ✅ | - | 無料モデル。🟡 ToS = コーディングとエージェントのみの使用 |
 | Z.aiコーディング | ✅ | ✅ | - | - | 定期購入プラン |
 | Google Vertex AI | ✅ | ✅ | ✅ | ✅ | 「無料」Expressバージョンが含まれています |
 | Codex CLI (ChatMock経由) | ✅ | ✅ | ✅ | - | [セットアップ](/ja/self-hosting/local-endpoints/setup-chatmock/) |

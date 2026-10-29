@@ -1,12 +1,18 @@
 import { log } from "@/utils/misc/logger";
 import type { VideoQuotaConfigRow } from "@/types/db/schema";
+import { QuotaUnavailableError } from "@/utils/quota/quotaErrors";
 import {
   getOrCreateVideoConfig,
-  incrementVideoQuota as repositoryIncrementVideoQuota,
+  getVideoConfigResult,
+  reserveVideoQuotaUnits,
   resetServerwideVideoPeriod,
   touchServerwideVideoQuota,
   touchUserVideoQuota,
+  type QuotaReservation,
+  type QuotaReservationOutcome,
 } from "@/utils/db/repositories/QuotaRepository";
+
+export { releaseVideoQuotaUnits as releaseVideoQuota } from "@/utils/db/repositories/QuotaRepository";
 
 /** Shares the same shape as image quota checks for consistency. */
 export interface VideoQuotaCheckResult {
@@ -15,6 +21,10 @@ export interface VideoQuotaCheckResult {
   userRemaining?: number;
   serverwideRemaining?: number;
   resetTime?: Date;
+}
+
+export interface VideoQuotaClaim extends VideoQuotaCheckResult {
+  reservation: QuotaReservation | null;
 }
 
 /**
@@ -40,33 +50,28 @@ async function checkUserDailyVideoQuota(
     return { allowed: true };
   }
 
-  try {
-    const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toISOString().split("T")[0];
 
-    const userQuota = await touchUserVideoQuota(serverId, userDiscId, today);
+  const userQuota = await touchUserVideoQuota(serverId, userDiscId, today);
 
-    const remaining = config.daily_user_quota - userQuota.usage_count;
+  const remaining = config.daily_user_quota - userQuota.usage_count;
 
-    if (remaining <= 0) {
-      const resetTime = new Date();
-      resetTime.setHours(24, 0, 0, 0);
-
-      return {
-        allowed: false,
-        reason: "user_quota_exceeded",
-        userRemaining: 0,
-        resetTime,
-      };
-    }
+  if (remaining <= 0) {
+    const resetTime = new Date();
+    resetTime.setHours(24, 0, 0, 0);
 
     return {
-      allowed: true,
-      userRemaining: remaining,
+      allowed: false,
+      reason: "user_quota_exceeded",
+      userRemaining: 0,
+      resetTime,
     };
-  } catch (error) {
-    log.error("Failed to check user daily video quota", error);
-    return { allowed: true };
   }
+
+  return {
+    allowed: true,
+    userRemaining: remaining,
+  };
 }
 
 /**
@@ -81,42 +86,37 @@ async function checkServerwideVideoQuota(
     return { allowed: true };
   }
 
-  try {
-    const serverwideQuota = await touchServerwideVideoQuota(serverId, config.serverwide_quota_resets_in);
+  const serverwideQuota = await touchServerwideVideoQuota(serverId, config.serverwide_quota_resets_in);
 
-    const now = new Date();
-    const periodEnd = new Date(serverwideQuota.quota_period_end);
+  const now = new Date();
+  const periodEnd = new Date(serverwideQuota.quota_period_end);
 
-    if (now >= periodEnd) {
-      const resetQuota = await resetServerwideVideoPeriod(serverId, config.serverwide_quota_resets_in);
-
-      return {
-        allowed: true,
-        serverwideRemaining: config.serverwide_quota,
-        resetTime: new Date(resetQuota.quota_period_end),
-      };
-    }
-
-    const remaining = config.serverwide_quota - serverwideQuota.usage_count;
-
-    if (remaining <= 0) {
-      return {
-        allowed: false,
-        reason: "serverwide_quota_exceeded",
-        serverwideRemaining: 0,
-        resetTime: periodEnd,
-      };
-    }
+  if (now >= periodEnd) {
+    const resetQuota = await resetServerwideVideoPeriod(serverId, config.serverwide_quota_resets_in);
 
     return {
       allowed: true,
-      serverwideRemaining: remaining,
+      serverwideRemaining: config.serverwide_quota,
+      resetTime: new Date(resetQuota.quota_period_end),
+    };
+  }
+
+  const remaining = config.serverwide_quota - serverwideQuota.usage_count;
+
+  if (remaining <= 0) {
+    return {
+      allowed: false,
+      reason: "serverwide_quota_exceeded",
+      serverwideRemaining: 0,
       resetTime: periodEnd,
     };
-  } catch (error) {
-    log.error("Failed to check serverwide video quota", error);
-    return { allowed: true };
   }
+
+  return {
+    allowed: true,
+    serverwideRemaining: remaining,
+    resetTime: periodEnd,
+  };
 }
 
 /**
@@ -124,17 +124,17 @@ async function checkServerwideVideoQuota(
  * Returns combined result indicating if generation is allowed.
  */
 export async function checkVideoQuota(serverId: number, userDiscId: string): Promise<VideoQuotaCheckResult> {
-  try {
-    const config = await getVideoQuotaConfig(serverId);
+  const read = await getVideoConfigResult(serverId);
+  if (read.status === "unavailable") throw new QuotaUnavailableError();
+  if (!read.config) return { allowed: true };
 
-    // Check user daily quota first (most common limit)
-    // Note: daily_user_quota === 0 means unlimited (handled inside checkUserDailyVideoQuota)
-    const userCheck = await checkUserDailyVideoQuota(serverId, userDiscId, config);
+  try {
+    const userCheck = await checkUserDailyVideoQuota(serverId, userDiscId, read.config);
     if (!userCheck.allowed) {
       return userCheck;
     }
 
-    const serverwideCheck = await checkServerwideVideoQuota(serverId, config);
+    const serverwideCheck = await checkServerwideVideoQuota(serverId, read.config);
     if (!serverwideCheck.allowed) {
       return serverwideCheck;
     }
@@ -147,19 +147,48 @@ export async function checkVideoQuota(serverId: number, userDiscId: string): Pro
     };
   } catch (error) {
     log.error("Failed to check video quota", error);
-    return { allowed: true };
+    throw new QuotaUnavailableError();
   }
 }
 
 /**
- * Increment both user daily and server-wide video quotas after successful generation.
- * Should only be called AFTER video generation succeeds.
+ * Claim one video generation on both counters or neither.
+ * A database failure throws, so the caller refuses instead of spending an uncounted generation.
  */
-export async function incrementVideoQuota(serverId: number, userDiscId: string): Promise<void> {
+export async function reserveVideoQuota(serverId: number, userDiscId: string): Promise<VideoQuotaClaim> {
+  const read = await getVideoConfigResult(serverId);
+  if (read.status === "unavailable") throw new QuotaUnavailableError();
+  if (!read.config) return { allowed: true, reservation: null };
+
+  let outcome: QuotaReservationOutcome;
   try {
-    await repositoryIncrementVideoQuota(serverId, userDiscId);
-    log.info("Incremented video quotas");
+    outcome = await reserveVideoQuotaUnits(serverId, userDiscId, read.config);
   } catch (error) {
-    log.error("Failed to increment video quota", error);
+    log.error("Failed to reserve video quota", error);
+    throw new QuotaUnavailableError();
   }
+
+  if (outcome.status === "reserved") {
+    return {
+      allowed: true,
+      reservation: outcome.reservation,
+      ...(outcome.userRemaining !== undefined ? { userRemaining: outcome.userRemaining } : {}),
+      ...(outcome.serverwideRemaining !== undefined ? { serverwideRemaining: outcome.serverwideRemaining } : {}),
+      ...(outcome.serverwidePeriodEnd ? { resetTime: outcome.serverwidePeriodEnd } : {}),
+    };
+  }
+
+  if (outcome.status === "user_quota_exceeded") {
+    const resetTime = new Date();
+    resetTime.setHours(24, 0, 0, 0);
+    return { allowed: false, reason: "user_quota_exceeded", userRemaining: 0, resetTime, reservation: null };
+  }
+
+  return {
+    allowed: false,
+    reason: "serverwide_quota_exceeded",
+    serverwideRemaining: 0,
+    resetTime: outcome.periodEnd,
+    reservation: null,
+  };
 }

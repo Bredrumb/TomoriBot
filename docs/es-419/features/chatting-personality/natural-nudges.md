@@ -146,6 +146,79 @@ Cada persona tiene su propia página de **Intervenciones** en `/config` > Person
 
 Los preajustes oficiales vienen con estos ajustes. `/persona generate` sugiere intereses para nuevas personas; `Generar intereses` añade nuevos a través de tu modelo de texto actual. Las exportaciones de personas incluyen los tres.
 
+## Cuándo se activan las intervenciones
+
+### Heat
+<!-- anchor: heat -->
+
+Heat marca el ritmo tanto de las intervenciones espontáneas como de las comprobaciones activas para todo el servidor, entre miembros y personas. La configuración de Natural Nudges muestra el Heat medido, tu ajuste guardado y el Heat usado para las intervenciones de un total de 50.
+
+#### TLDR: Más mensajes para TomoriBot = Más Heat = Más intervenciones automáticas
+
+#### Actividad y decaimiento
+
+El Heat medido es un promedio diario ponderado de interacciones durante los últimos 30 días. Los turnos ordinarios de conversación y los turnos de `/punish` humanos aportan una vez; los turnos de `/reward` humanos aportan tres veces más. Las intervenciones generadas y las interacciones juguetonas entre personas no aportan nada.
+
+El peso de una interacción se reduce a la mitad cada tres días:
+
+$$
+w(d) = 2^{-d/3}
+$$
+
+Aquí, `d` es el número de días transcurridos, según días UTC: la actividad de hoy tiene peso 1, la de hace tres días tiene peso 0.5 y la de hace seis días tiene peso 0.25. La actividad deja de calcularse tras 30 días. Con `E_d` como el total ponderado de interacciones de cada día, el Heat medido `A` es:
+
+$$
+A = \frac{\sum_{d=0}^{29} E_d \cdot w(d)}{\sum_{d=0}^{29} w(d)}
+$$
+
+Una actividad constante de 10 interacciones ponderadas cada día genera aproximadamente 10 de Heat medido. Tu ajuste guardado `Δ` se suma tras este promedio y el resultado se limita a 0-50:
+
+$$
+H = \min(50, \max(0, A + \Delta))
+$$
+
+La actividad medida no tiene límite superior, por lo que el Heat de un servidor activo decae desde su valor completo. Ambos modos necesitan un Heat medido y un Heat efectivo de al menos 1. Un ajuste altera el ritmo una vez que la actividad medida alcanza ese mínimo. La pausa de 14 días sin chat directo se sigue aplicando con cualquier valor de Heat.
+
+#### Tiempos de espera espontáneos y comprobaciones activas
+
+Para un Heat efectivo `H` de al menos 1, tu nivel de frecuencia proporciona los siguientes valores:
+
+| Frecuencia | Divisor espontáneo D | Límite diario espontáneo C | Multiplicador activo M |
+|---|---|---|---|
+| `Rare` | 175 | 1 | 2 |
+| `Gentle` | 25 | 2 | 1 |
+| `Normal` | 15 | 3 | 0.6 |
+| `Lively` | 8 | 6 | 0.35 |
+
+Las intervenciones espontáneas estimadas por día `R` aumentan con el Heat hasta alcanzar el límite diario:
+
+$$
+R = \min\left(\frac{H}{D}, C\right)
+$$
+
+El intervalo base es de `16 / R` horas. Cada intervalo recibe un multiplicador aleatorio entre 0.5 y 1.5, y cada invitación consecutiva sin respuesta triplica el siguiente intervalo. Tres invitaciones sin respuesta pausan las intervenciones espontáneas hasta que alguien hable de nuevo con TomoriBot. Los canales silenciosos, el horario activo, los prerrequisitos y la decisión del planificador siguen determinando si una intervención debida se inicia realmente.
+
+Para las comprobaciones activas, el Heat altera la cantidad de mensajes humanos necesarios en un canal. Primero se calcula una escala de intervalo `s`, con el aporte de Heat limitado entre 0.5 y 4:
+
+$$
+s = M \cdot \min\left(4, \max\left(0.5, \frac{15}{H}\right)\right)
+$$
+
+El objetivo de mensajes de una comprobación se elige al azar entre `max(1, round(15 × s))` y `max(1, round(40 × s))`, inclusive. El redondeo usa el mensaje entero más cercano, redondeando las mitades hacia arriba. Los hilos comparten el contador de su canal principal. Los enfriamientos y límites diarios siguen aplicándose, y el comprobador solo invita a una persona a hablar cuando la conversación coincide con un interés. Estas fórmulas controlan los tiempos; una comprobación puede no producir respuesta.
+
+Por ejemplo, con ambas frecuencias en `Gentle`:
+
+| Heat efectivo | Intervenciones espontáneas estimadas por semana | Mensajes humanos entre comprobaciones activas |
+|---|---|---|
+| Menos de 1 | 0 | Sin comprobaciones |
+| 5 | Aprox. 1.4 | 45-120 |
+| 15 | Aprox. 4.2 | 15-40 |
+| 30 | Aprox. 8.4 | 8-20 |
+| 45 | Aprox. 12.6 | 8-20 |
+| 50 | Hasta 14 | 8-20 |
+
+Las comprobaciones activas alcanzan su intervalo más rápido con Heat 30. Las intervenciones espontáneas alcanzan sus límites diarios con Heat 50 para `Gentle`, 45 para `Normal` y 48 para `Lively`. `Rare` alcanza unas dos intervenciones espontáneas estimadas por semana con Heat 50, con a lo sumo una por día. Su estimación semanal es una guía de ritmo; los tiempos aleatorios y las verificaciones de idoneidad afectan la entrega real. Un Heat superior a 50 no añade velocidad de programación.
+
 ## Qué se almacena
 
 Los ajustes, intervenciones personalizadas, intereses e intervenciones espontáneas de persona se guardan con la configuración de tu servidor. El historial de intervenciones, incluido si alguien respondió y a quién se mencionó, se conserva durante 30 días. Los propósitos se conservan hasta 90 días.

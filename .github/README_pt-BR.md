@@ -77,7 +77,7 @@ TomoriBot é um assistente pessoal de IA e sistema de RPG gratuito e de código 
 
 ![Screenshots 3](../assets/img/scs/3-commands.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/pt-BR/features/command-reference/">Comandos Slash Nativos para Configuração e Execução</a></h3>
-<p align="center">Tudo pode ser gerenciado e executado através de comandos slash nativos do Discord e UI interativa. Gerencie completamente personas, prompts, endpoints e parâmetros de modelos, configure servidores de ferramentas MCP, ajuste permissões, configure memórias, defina limites de taxa para membros do servidor e muito mais!</p>
+<p align="center">Configure e personalize a TomoriBot sem sair do Discord. Use comandos slash e menus interativos para criar personas, ajustar prompts e configurações de modelos, conectar servidores MCP, gerenciar memórias e controlar permissões e limites de uso. Execute comandos você mesmo para gerar imagens e mensagens de voz, rolar dados e experimentar outros recursos divertidos.</p>
 
 <br />
 
@@ -127,13 +127,15 @@ Ou mande uma mensagem direta (DM) para a TomoriBot e diga oi!
 - `/setup` - Configuração inicial do bot para o seu servidor
 - `/config` e `/personal config` - Várias maneiras de ajustar a TomoriBot no servidor atual do Discord ou para você
 - `/providers` e `/personal providers` - Adicione mais endpoints de modelos ou provedores em nuvem
+- `/persona` - Dê a ela uma personalidade ou adicione novos personagens (veja [Múltiplas Personas](https://docs.tomoribot.app/pt-BR/features/chatting-personality/multiple-personas/))
+- `/memories` - Ensine fatos a ela através de conversas (veja [Memória](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/))
 
 Consulte a [referência de comandos](https://docs.tomoribot.app/pt-BR/features/command-reference/) completa para todos os comandos slash.
 
 
 ## Agradecimentos
 
-Um enorme agradecimento a todos, *especialmente* às seguintes pessoas queridas por suas contribuições de código e conselhos que ajudaram a moldar a TomoriBot!
+Um enorme agradecimento a todos, *especialmente* às seguintes pessoas queridas por suas contribuições significativas e conselhos que ajudaram muito a aprimorar a TomoriBot!
 
 <table>
   <tr>

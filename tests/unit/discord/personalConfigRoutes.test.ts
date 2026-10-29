@@ -6852,7 +6852,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
 
         // The runtime wrapper re-marks prose continuation lines, so the notice is matched as rendered.
         const notice = JSON.stringify(
-          formatPanelProse(`-# ${localizedCopy("en-US", "commands.personal.config.server_fallback_byok_notice")}`),
+          formatPanelProse(`-# 🟡 ${localizedCopy("en-US", "commands.personal.config.server_fallback_byok_notice")}`),
         ).slice(1, -1);
 
         expect(JSON.stringify(buildPayload(true))).toContain(notice);

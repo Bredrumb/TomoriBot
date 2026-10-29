@@ -243,6 +243,14 @@ export const COMPONENTS_V2_PRODUCER_MANIFEST: readonly ProducerManifestEntry[] =
     },
   },
   {
+    modulePath: "src/utils/text/promptInspection/delivery.ts",
+    reason: "One-shot prompt snapshot card carrying the snapshot file",
+    coverage: {
+      kind: "delivery",
+      note: "The card's single TextDisplay holds localized notes and a YAML header of bounded Discord names, far below the TextDisplay ceiling; it skips validateAndFallbackPanelPayload because that fallback empties the attachments the card exists to deliver.",
+    },
+  },
+  {
     modulePath: "src/utils/discord/ui/contextUsagePanel.ts",
     reason: "/context window usage grid with full-prompt buttons",
     coverage: { kind: "suite", suites: ["tests/unit/discord/componentsV2DeclaredProducerSmoke.test.ts"] },

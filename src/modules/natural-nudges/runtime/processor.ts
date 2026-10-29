@@ -27,12 +27,10 @@ import {
 } from "@/modules/natural-nudges/runtime/channels";
 import {
   computeIdleNudgeDueAt,
-  computeHeat,
   countUnansweredStreak,
   drawRaffle,
   idleNudgesPerDay,
   idleNudgeTickets,
-  heatWindowStart,
   isWithinWakingHours,
   resolveWakingHours,
   restedShare,
@@ -44,7 +42,6 @@ import {
   AGENDA_RETENTION_MS,
   CATEGORY_REST_MS,
   DAY_MS,
-  IDLE_NUDGE_CATEGORY_WEIGHTS,
   IDLE_NUDGE_DAILY_CAPS,
   IDLE_NUDGE_REST_MS,
   FIRE_RETENTION_MS,
@@ -61,6 +58,7 @@ import {
   WAKING_HOURS_WINDOW_DAYS,
 } from "@/modules/natural-nudges/runtime/tuning";
 import { isFailureStopped } from "@/modules/natural-nudges/runtime/failureStop";
+import { readNaturalNudgeGate } from "@/modules/natural-nudges/runtime/configCache";
 import { claimNudgeServer, isNudgeServerBusy, releaseNudgeServer } from "@/modules/natural-nudges/runtime/inFlight";
 import { type NudgeModelRef, resolvePlannerModel } from "@/modules/natural-nudges/runtime/model";
 import { runIdleNudgeAttempt, type IdleNudgeAttempt } from "@/modules/natural-nudges/runtime/runner";
@@ -74,7 +72,7 @@ import { log } from "@/utils/misc/logger";
 import { runWithErrorContext } from "@/utils/misc/errorContextStore";
 import type { WhitelistCheckResult } from "@/types/misc/channelWhitelist";
 
-/** Heat and waking hours move over days, so re-reading them every minute would only cost queries. */
+/** Waking hours move over days, so re-reading the histogram every minute would only cost queries. */
 const METER_CACHE_TTL_MS = 15 * 60 * 1000;
 /** A pending verdict needs a Discord read, so it is checked at most this often per server. */
 const VERDICT_CHECK_INTERVAL_MS = 5 * 60 * 1000;
@@ -127,7 +125,7 @@ export class NaturalNudgeProcessor {
     await this.pruneIfDue();
     let servers: EnabledIdleNudgeServer[];
     try {
-      servers = await naturalNudgeRepository.listEnabledIdleNudgeServers(heatWindowStart(new Date()));
+      servers = await naturalNudgeRepository.listEnabledIdleNudgeServers(new Date());
     } catch (error) {
       log.error("Natural Nudges: failed to list enabled servers", error);
       return;
@@ -155,11 +153,10 @@ export class NaturalNudgeProcessor {
     }
   }
 
-  private async loadMeters(serverId: number, timezoneOffset: number, now: Date): Promise<ServerMeters> {
+  private async loadMeters(serverId: number, timezoneOffset: number, now: Date, heat: number): Promise<ServerMeters> {
     const cached = this.meters.get(serverId);
-    if (cached && cached.expiresAt > now.getTime()) return cached;
-    const [dailyCounts, histogram, lastMessageSentAt] = await Promise.all([
-      statRepository.getServerDailyMessageCounts({ serverId, from: heatWindowStart(now) }),
+    if (cached && cached.expiresAt > now.getTime()) return { ...cached, heat };
+    const [histogram, lastMessageSentAt] = await Promise.all([
       statRepository.getServerActiveHourHistogram({
         serverId,
         from: new Date(now.getTime() - WAKING_HOURS_WINDOW_DAYS * DAY_MS),
@@ -168,7 +165,7 @@ export class NaturalNudgeProcessor {
     ]);
     const meters = {
       expiresAt: now.getTime() + METER_CACHE_TTL_MS,
-      heat: computeHeat(dailyCounts, now),
+      heat,
       awake: resolveWakingHours(histogram, timezoneOffset),
       lastMessageSentAt,
     };
@@ -206,6 +203,8 @@ export class NaturalNudgeProcessor {
     const now = new Date();
     const serverId = server.server_id;
     const { config } = server;
+    const gate = await readNaturalNudgeGate(server.server_disc_id);
+    if (!gate) return;
     if ((this.retryNotBefore.get(serverId) ?? 0) > now.getTime()) return;
 
     const history = await naturalNudgeRepository.loadFireHistory(
@@ -223,7 +222,7 @@ export class NaturalNudgeProcessor {
     if (await isFailureStopped(serverId, runtime.stopped_at)) return;
 
     const timezoneOffset = server.timezone_offset ?? 0;
-    const meters = await this.loadMeters(serverId, timezoneOffset, now);
+    const meters = await this.loadMeters(serverId, timezoneOffset, now, gate.heat);
     const streak = countUnansweredStreak(history.latestIdleNudges, meters.lastMessageSentAt);
     if (streak >= UNANSWERED_STOP_STREAK) return;
     const perDay = idleNudgesPerDay(meters.heat, config.idle_nudge_frequency);
@@ -263,7 +262,16 @@ export class NaturalNudgeProcessor {
       return;
     }
 
-    const attempt = await this.drawAttempt(server, personas, quiet, history.recent, meters, plannerModel, now);
+    const attempt = await this.drawAttempt(
+      server,
+      personas,
+      quiet,
+      history.recent,
+      history.latestIdleNudges,
+      meters,
+      plannerModel,
+      now,
+    );
     if (typeof attempt === "string") {
       this.abortInPhaseA(server, now, attempt, meters.heat);
       return;
@@ -292,6 +300,7 @@ export class NaturalNudgeProcessor {
     personas: NudgePersona[],
     quiet: NudgeChannel[],
     recentFires: readonly NaturalNudgeFireRow[],
+    latestIdleFires: readonly NaturalNudgeFireRow[],
     meters: ServerMeters,
     plannerModel: NudgeModelRef,
     now: Date,
@@ -366,13 +375,22 @@ export class NaturalNudgeProcessor {
     const channelEligible = runnable.filter((idleNudge) =>
       plannerChannels.some((channel) => isIdleNudgeChannelEligible(idleNudge, channelFacts(channel.channel.id))),
     );
-    const categoryFiredAt = lastFireBy(recentFires, (fire) => fire.category);
+    const idleFires = [...recentFires, ...latestIdleFires]
+      .filter((fire) => fire.mode === "idle")
+      .sort((left, right) => right.fired_at.getTime() - left.fired_at.getTime());
+    const eligibleCategories = NATURAL_NUDGE_CATEGORIES.filter(
+      (category) =>
+        server.config.category_weights[category] > 0 &&
+        channelEligible.some((idleNudge) => idleNudge.category === category),
+    );
+    const otherCategories = eligibleCategories.filter((category) => category !== idleFires[0]?.category);
+    const categories = otherCategories.length > 0 ? otherCategories : eligibleCategories;
+    const categoryFiredAt = lastFireBy(idleFires, (fire) => fire.category);
     const category = drawRaffle(
-      NATURAL_NUDGE_CATEGORIES.map((category) => ({
+      categories.map((category) => ({
         item: category,
-        tickets: channelEligible.some((idleNudge) => idleNudge.category === category)
-          ? IDLE_NUDGE_CATEGORY_WEIGHTS[category] * restedShare(categoryFiredAt.get(category), now, CATEGORY_REST_MS)
-          : 0,
+        tickets:
+          server.config.category_weights[category] * restedShare(categoryFiredAt.get(category), now, CATEGORY_REST_MS),
       })),
     );
     if (!category) return "no_eligible_idle_nudge";
@@ -445,7 +463,9 @@ export class NaturalNudgeProcessor {
             new Date(now.getTime() - PING_USER_REPEAT_REST_MS),
           )
         : new Map<string, Date>();
-    const remaining = [...idleNudges];
+    const lastCategoryNudgeKey = idleFires.find((fire) => fire.category === category)?.idle_nudge_key;
+    const otherIdleNudges = idleNudges.filter((candidate) => candidate.idleNudge.key !== lastCategoryNudgeKey);
+    const remaining = otherIdleNudges.length > 0 ? otherIdleNudges : [...idleNudges];
     const candidates: PlannerCandidate[] = [];
     while (candidates.length < MAX_PLANNER_NUDGES && remaining.length > 0) {
       const picked = drawRaffle(

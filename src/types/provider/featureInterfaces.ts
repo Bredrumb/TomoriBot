@@ -35,19 +35,48 @@ export interface ProviderImageInput {
   mimeType?: string;
 }
 
+export interface StructuredImageFailureDiagnostics {
+  failureStage: "image-download" | "image-decode" | "image-format" | "image-size";
+  imageIndex: number;
+  imageName?: string;
+  imageCount: number;
+  httpStatus?: number;
+}
+
 export type StructuredOutputResult<T> =
-  | { success: true; data: T }
+  | { success: true; data: T; skippedImages?: StructuredImageFailureDiagnostics[] }
   | {
       success: false;
       error: string;
       failure?: "transport" | "malformed" | "refusal" | "cancelled";
       httpStatus?: number;
       cause?: Error;
+      diagnostics?:
+        | StructuredImageFailureDiagnostics
+        | {
+            finishReason:
+              | "stop"
+              | "length"
+              | "content_filter"
+              | "tool_calls"
+              | "insufficient_system_resource"
+              | "unknown";
+            inputTokens?: number;
+            outputTokens?: number;
+            reasoningTokens?: number;
+            reasoningPresent: boolean;
+            maxOutputTokens: number;
+            thinkingMode: "enabled" | "disabled" | "provider-default";
+            imageCount: number;
+            elapsedMs: number;
+            providerRequestId?: string;
+          };
       /** Why a private reply was malformed, so the caller can ask once more with the exact format problem. */
       malformed?: { reason: "empty" | "unparsable" | "schema"; issues?: string[] };
     };
 
 export interface ProviderStructuredJsonRequest {
+  correlationId?: string;
   abortSignal?: AbortSignal;
   onUsage?: (usage: import("@/utils/text/tokenEstimate").TokenUsage) => void;
   /** Private output uses one attempt and returns safe failure metadata to its caller for logging. */

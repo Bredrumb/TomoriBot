@@ -59,7 +59,14 @@ Todas as personas podem usar uma nova expressão personalizada. Para limitar o a
 
 ### Como ela usa as expressões
 
-Com o uso de figurinhas ativado em `/config` > `Plugins`, ela envia no máximo uma expressão por resposta, em uma mensagem própria antes, durante ou depois do texto. Ela não as usa em [canais de roleplay](/pt-BR/features/chatting-personality/chatting-and-triggers/#roleplay-channels). `/expressions manage` mostra quantas vezes as personas usaram cada expressão.
+Com o uso de figurinhas ativado em `/config` > `Plugins`, ela envia no máximo uma expressão por resposta, em uma mensagem própria antes, durante ou depois do texto. Ela não as usa em [canais de roleplay](#roleplay-channels). `/expressions manage` mostra quantas vezes as personas usaram cada expressão.
+
+## Canais de Roleplay
+<!-- anchor: roleplay-channels -->
+
+Os canais de roleplay suprimem emojis personalizados e mensagens de figurinhas em suas respostas. Os membros também podem usar `/tool delete turn` em canais de RPG para excluir seu último turno sem precisar da permissão Gerenciar Servidor.
+
+Configure canais de roleplay em `/config` > `Canais` > Regras de Canal.
 
 ## Ajuste de Geração
 <!-- anchor: generation-tuning -->

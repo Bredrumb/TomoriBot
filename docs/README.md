@@ -21,32 +21,31 @@ The marketing front door: what TomoriBot is and how to start using it.
 Capability-oriented pages for people *using* TomoriBot. Category pages with sections;
 a section graduates to its own file when it outgrows ~2-3 screens or gains its own setup flow.
 
-Pages are bucketed into task-based sub-categories, each with a landing card-grid README.
+Pages are bucketed into task-based sub-categories:
 
 - [`features/README.mdx`](./en/features/README.mdx): capability tour card grid
-- **Chatting & Personality**: [`chatting-personality/`](./en/features/chatting-personality/README.mdx)
+- **Chatting & Personality**:
   - [`chatting-and-triggers.md`](./en/features/chatting-personality/chatting-and-triggers/)
   - [`multiple-personas.md`](./en/features/chatting-personality/multiple-personas/)
   - [`behavior-tweaking.md`](./en/features/chatting-personality/behavior-tweaking/)
   - [`natural-nudges.md`](./en/features/chatting-personality/natural-nudges/)
-- **Knowledge**: [`knowledge/`](./en/features/knowledge/README.mdx)
+- **Knowledge**:
   - [`memory.md`](./en/features/knowledge/memory/)
+  - [`lorebooks.md`](./en/features/knowledge/lorebooks/)
   - [`inside-the-prompt.md`](./en/features/knowledge/inside-the-prompt/)
   - [`personalization.md`](./en/features/knowledge/personalization/)
   - [`data-handling.md`](./en/features/knowledge/data-handling/)
-- **Capabilities**: [`capabilities/`](./en/features/capabilities/README.mdx)
-  - [`tools-and-extensions.md`](./en/features/capabilities/tools-and-extensions/)
+- **Capabilities**:
+  - [`tools-and-extensions/`](./en/features/capabilities/tools-and-extensions/): built-in tools, web search, MCP servers, and tool settings
   - [`scheduled-tasks.md`](./en/features/capabilities/scheduled-tasks/)
-  - [`media-generation/`](./en/features/capabilities/media-generation/README.mdx): image, video, and voice generation
-- **Setup & Administration**: [`setup-administration/`](./en/features/setup-administration/README.mdx)
+  - [`media-generation/`](./en/features/capabilities/media-generation/): image, video, and voice generation
+- **Setup & Administration**:
   - [`providers-and-models.md`](./en/features/setup-administration/providers-and-models/)
   - [`server-moderation.md`](./en/features/setup-administration/server-moderation/)
   - [`age-restricted-commands.md`](./en/features/setup-administration/age-restricted-commands/)
   - [`stats-and-insights.md`](./en/features/setup-administration/stats-and-insights/)
-- **Integrations**: [`integrations/`](./en/features/integrations/README.mdx)
+- **Integrations**:
   - [`message-proxy-support.md`](./en/features/integrations/message-proxy-support/)
-  - [`pluralkit-support.md`](./en/features/integrations/pluralkit-support/)
-  - [`pluralbuddy-support.md`](./en/features/integrations/pluralbuddy-support/)
   - [`matrix-bridge.md`](./en/features/integrations/matrix-bridge/)
   - [`sillytavern-support.md`](./en/features/integrations/sillytavern-support/)
 - [`features/command-reference.md`](./en/features/command-reference/): generated from command locales (Phase 3)
@@ -135,6 +134,7 @@ Per-stage reference. Each folder has a `README.md` (overview + ASCII flow) and n
 
 Supporting services that pipelines depend on.
 
+- [`architecture/subsystems/lorebooks.md`](./en/architecture/subsystems/lorebooks.md): lorebook storage, scope ownership, and pure activation contracts
 - [`architecture/subsystems/`](./en/architecture/subsystems/README.md): database schema, events, commands, tools,
   caching, cooldowns, security, localization, multi-persona, persona-presets, natural-nudges, and more
 

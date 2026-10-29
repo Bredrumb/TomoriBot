@@ -199,6 +199,23 @@ describe("routed raw modal gateway support", () => {
       expect(takeRawModalCheckboxGroupValues("modal-submit-empty", "memberaccess_checkbox_empty123")).toEqual([]);
       expect(takeRawModalCheckboxGroupValues("modal-submit-empty", "memberaccess_checkbox_empty123")).toBeUndefined();
 
+      client.ws.handlePacket(
+        {
+          op: 0,
+          t: "INTERACTION_CREATE",
+          d: {
+            id: "modal-submit-empty",
+            type: 5,
+            data: {
+              components: [{ type: 18, component: { type: 22, custom_id: "memberaccess_checkbox_empty123" } }],
+            },
+          },
+        },
+        { id: 0 },
+      );
+      expect(takeRawModalCheckboxGroupValues("modal-submit-empty", "memberaccess_checkbox_empty123")).toEqual([]);
+      expect(takeRawModalCheckboxGroupValues("modal-submit-empty", "memberaccess_checkbox_empty123")).toBeUndefined();
+
       expect(
         takeRawModalCheckboxGroupValues("non-existent-interaction", "memberaccess_checkbox_empty123"),
       ).toBeUndefined();

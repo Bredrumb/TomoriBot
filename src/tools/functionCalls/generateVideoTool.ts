@@ -1,3 +1,5 @@
+import { providerContentRejectionSchema } from "@/utils/provider/providerErrorClassification";
+import { createProviderToolFailure } from "@/utils/provider/providerToolFailure";
 import { withProviderUsageContext } from "@/utils/provider/providerUsage";
 import {
   findProviderRequestDeniedError,
@@ -28,7 +30,9 @@ import {
   sendToolProgressNotice,
 } from "@/utils/discord/toolProgressNotice";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
-import { checkVideoQuota, incrementVideoQuota, type VideoQuotaCheckResult } from "../../utils/quota/videoQuotaManager";
+import { releaseVideoQuota, reserveVideoQuota, type VideoQuotaClaim } from "../../utils/quota/videoQuotaManager";
+import { QuotaUnavailableError } from "@/utils/quota/quotaErrors";
+import type { QuotaReservation } from "@/utils/db/repositories/QuotaRepository";
 import { statRepository } from "@/utils/db/repositories";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { generateCustomVideoViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
@@ -42,11 +46,7 @@ import {
   getDefaultOpenRouterVideoResolution,
   isOpenRouterVideoCapabilityError,
 } from "@/providers/openrouter/openrouterVideoRequest";
-import {
-  isExpectedVideoFailure,
-  isVideoContentRefusal,
-  ProviderVideoFilteredError,
-} from "@/providers/utils/providerVideoErrors";
+import { isExpectedVideoFailure, ProviderVideoFilteredError } from "@/providers/utils/providerVideoErrors";
 import { resolveMessageImageUrls } from "@/utils/image/imageExtractor";
 import { beginTextModelHandoffBeforeComfyUi } from "@/utils/provider/textModelComfyUiHandoff";
 
@@ -246,7 +246,7 @@ export class GenerateVideoTool extends BaseTool {
    *   5. Route to appropriate provider implementation
    *   6. Check Discord file size limit
    *   7. Send video attachment to Discord
-   *   8. Increment quota and return success
+   *   8. Settle the quota reservation and return success
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     // Capture generation start time for the "Generated in Xs" caption (mirrors image tool)
@@ -305,20 +305,24 @@ export class GenerateVideoTool extends BaseTool {
     }
 
     // Default to allowed; overwritten below for server-credential users
-    let quotaCheck: VideoQuotaCheckResult = { allowed: true };
+    let quotaCheck: VideoQuotaClaim = { allowed: true, reservation: null };
     let usageContext: ProviderUsageContext | undefined;
     let failureProvider: string | undefined;
+    let failureScope: "server" | "personal" | undefined;
+    let quotaReservation: QuotaReservation | null = null;
+    let quotaDelivered = false;
 
     try {
       const { credentials: creds, quotaCheck: serverQuotaCheck } = await resolveCredentialsWithMediaQuota(
         context.tomoriState.server_id,
         "video",
         context.internalUserId ?? null,
-        checkVideoQuota,
+        reserveVideoQuota,
         userDiscId,
         quotaCheck,
       );
       quotaCheck = serverQuotaCheck;
+      quotaReservation = serverQuotaCheck.reservation;
 
       if (!quotaCheck.allowed) {
         let errorMessage = "";
@@ -376,45 +380,44 @@ export class GenerateVideoTool extends BaseTool {
 
       const apiKey = creds.apiKey;
       usageContext = creds.usageContext;
+      failureScope = creds.source;
       const executionProvider = creds.provider;
       failureProvider = executionProvider;
 
       // Send progress notice, so video generation takes 1-3 minutes
-      if (!context.suppressProgressNotices) {
-        const baseNoticeDescription = localizer(
-          context.locale,
-          usesReference ? "tools.video.generating_with_references_description" : "tools.video.generating_description",
-        );
-        const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
-        const extraNoticeLines = usesReference
-          ? [
-              referencedMessageUrl
-                ? localizer(context.locale, "tools.video.notice_reference_line", {
-                    message_url: referencedMessageUrl,
-                  })
-                : localizer(context.locale, "tools.video.notice_reference_count_line", {
-                    count: "1",
-                  }),
-            ]
-          : [];
-        await sendToolProgressNotice(
-          context,
-          "video_generation",
-          {
-            titleKey: "tools.video.generating_title",
-            description: buildVideoToolNoticeDescription(
-              context.locale,
-              baseNoticeDescription,
-              displayModelName,
-              prompt,
-              localizer(context.locale, "tools.video.generating_footer"),
-              extraNoticeLines,
-            ),
-            color: ColorCode.INFO,
-          },
-          "GenerateVideoTool",
-        );
-      }
+      const baseNoticeDescription = localizer(
+        context.locale,
+        usesReference ? "tools.video.generating_with_references_description" : "tools.video.generating_description",
+      );
+      const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
+      const extraNoticeLines = usesReference
+        ? [
+            referencedMessageUrl
+              ? localizer(context.locale, "tools.video.notice_reference_line", {
+                  message_url: referencedMessageUrl,
+                })
+              : localizer(context.locale, "tools.video.notice_reference_count_line", {
+                  count: "1",
+                }),
+          ]
+        : [];
+      await sendToolProgressNotice(
+        context,
+        "video_generation",
+        {
+          titleKey: "tools.video.generating_title",
+          description: buildVideoToolNoticeDescription(
+            context.locale,
+            baseNoticeDescription,
+            displayModelName,
+            prompt,
+            localizer(context.locale, "tools.video.generating_footer"),
+            extraNoticeLines,
+          ),
+          color: ColorCode.INFO,
+        },
+        "GenerateVideoTool",
+      );
 
       let referenceImages: Array<{ mimeType: string; data: string; url?: string; fallbackUrl?: string }> | undefined;
 
@@ -568,10 +571,7 @@ export class GenerateVideoTool extends BaseTool {
 
       log.success("Successfully generated and sent video to Discord");
 
-      // Increment quota after successful generation (server providers only)
-      if (creds.source === "server") {
-        await incrementVideoQuota(context.tomoriState.server_id, userDiscId);
-      }
+      quotaDelivered = true;
       // Record canonical generation telemetry for all providers; quotas enforce limits only.
       if (context.internalUserId) {
         statRepository.recordStat({
@@ -600,19 +600,35 @@ export class GenerateVideoTool extends BaseTool {
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };
     } catch (error) {
+      if (error instanceof QuotaUnavailableError) {
+        return {
+          success: false,
+          error: "Quota check unavailable",
+          message: localizer(context.locale, "tools.generate_video.quota_unavailable"),
+        };
+      }
       if (error instanceof DiscordDeliveryError) return mediaDeliveryFailure(context, error.outcome);
       if (context.abortSignal?.aborted) {
         return { success: false, error: "Video generation was cancelled." };
       }
       const denied = findProviderRequestDeniedError(error, usageContext);
-      if (denied) return { success: false, error: await notifyProviderToolFailure(context, denied) };
+      if (denied) return notifyProviderToolFailure(context, denied);
+      const toolFailure = createProviderToolFailure(error, {
+        locale: context.locale,
+        provider: failureProvider ?? "unknown",
+        credentialScope: failureScope,
+        kind: error instanceof ProviderVideoFilteredError ? "content_blocked" : undefined,
+      });
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (!(error instanceof ProviderVideoFilteredError)) {
         await reportProviderFailure({
           summary: "Video generation failed",
           errorType: "VideoGenerationFailed",
           error,
-          expected: isExpectedVideoFailure(errorMessage) || classifySendFailure(error) !== null,
+          expected:
+            providerContentRejectionSchema.safeParse(toolFailure.failure?.code).success ||
+            isExpectedVideoFailure(errorMessage, toolFailure.failure?.code) ||
+            classifySendFailure(error) !== null,
           serverId: context.tomoriState.server_id,
           userId: context.internalUserId ?? null,
           dimensions: { operation: "video-generation", provider: failureProvider ?? "unknown" },
@@ -631,27 +647,15 @@ export class GenerateVideoTool extends BaseTool {
           success: false,
           error: localizedMessage,
           message: localizedMessage,
+          failure: { code: error.code, reason: localizedMessage, suggestedActions: [] },
         };
       }
 
-      if (errorMessage.includes("timed out")) {
-        return {
-          success: false,
-          error: "Video generation timed out. The provider may be experiencing high load. Please try again later.",
-        };
+      return toolFailure;
+    } finally {
+      if (quotaReservation && !quotaDelivered) {
+        await releaseVideoQuota(context.tomoriState.server_id, userDiscId, quotaReservation);
       }
-
-      if (isVideoContentRefusal(errorMessage)) {
-        return {
-          success: false,
-          error: "Video generation was blocked by the provider's content safety filter. Please try a different prompt.",
-        };
-      }
-
-      return {
-        success: false,
-        error: "Video generation failed because the provider returned an error.",
-      };
     }
   }
 }

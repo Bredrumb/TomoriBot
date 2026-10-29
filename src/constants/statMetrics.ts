@@ -31,6 +31,7 @@
  *   - emoji_used        → emoji name
  *   - sticker_used      → sticker name/id
  *   - custom_expression_used → stable custom UUID (one per accepted delivery)
+ *   - message_sent      → "reward" or "punish" for human conditioning commands, otherwise "".
  *   - active_hour       → hour-of-day "0".."23"
  *   Natural Nudges turns record neither message_sent nor active_hour: both drive nudge heat and
  *   learned waking hours, so a nudge counting itself would feed its own frequency.

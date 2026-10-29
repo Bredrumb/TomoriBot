@@ -77,7 +77,7 @@ TomoriBot là một trợ lý AI cá nhân và hệ thống nhập vai mã ngu�
 
 ![Screenshots 3](../assets/img/scs/3-commands.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/vi/features/command-reference/">Các lệnh slash gốc để cấu hình và thực thi</a></h3>
-<p align="center">Mọi thứ đều có thể được quản lý và thực thi thông qua các lệnh slash gốc của Discord và giao diện người dùng tương tác. Quản lý hoàn toàn các persona, prompt, endpoint và tham số model, thiết lập máy chủ công cụ MCP, điều chỉnh quyền hạn, cấu hình bộ nhớ, đặt giới hạn tần suất cho thành viên máy chủ và nhiều hơn nữa!</p>
+<p align="center">Thiết lập và tùy biến TomoriBot mà không cần rời khỏi Discord. Sử dụng các lệnh slash và menu tương tác để tạo persona, tinh chỉnh prompt và cài đặt model, kết nối máy chủ MCP, quản lý bộ nhớ cũng như kiểm soát quyền hạn và giới hạn sử dụng. Tự chạy các lệnh để tạo hình ảnh và tin nhắn thoại, đổ xúc xắc cùng nhiều tính năng thú vị khác.</p>
 
 <br />
 
@@ -127,13 +127,15 @@ Hoặc nhắn tin trực tiếp (DM) cho TomoriBot và nói lời chào!
 - `/setup` - Thiết lập bot ban đầu cho máy chủ của bạn
 - `/config` và `/personal config` - Nhiều cách để tùy biến TomoriBot trong máy chủ Discord hiện tại hoặc cho riêng bạn
 - `/providers` và `/personal providers` - Thêm các endpoint model hoặc nhà cung cấp đám mây
+- `/persona` - Tạo tính cách hoặc thêm nhân vật mới (xem [Nhiều persona](https://docs.tomoribot.app/vi/features/chatting-personality/multiple-personas/))
+- `/memories` - Dạy bot ghi nhớ thông tin qua các cuộc trò chuyện (xem [Bộ nhớ](https://docs.tomoribot.app/vi/features/knowledge/memory/))
 
 Xem [danh mục lệnh](https://docs.tomoribot.app/vi/features/command-reference/) đầy đủ để biết mọi lệnh slash.
 
 
 ## Lời cảm ơn
 
-Xin gửi lời cảm ơn chân thành đến mọi người, *đặc biệt* là những người bạn tuyệt vời dưới đây vì những đóng góp mã nguồn và lời khuyên quý báu đã giúp định hình TomoriBot ngày hôm nay!
+Xin gửi lời cảm ơn chân thành đến mọi người, *đặc biệt* là những người bạn tuyệt vời dưới đây vì những đóng góp to lớn và lời khuyên quý báu đã giúp TomoriBot ngày càng hoàn thiện hơn!
 
 <table>
   <tr>

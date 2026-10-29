@@ -2,6 +2,31 @@ export default {
   "nudge-studio": {
     description: "Chọn gợi ý nhàn rỗi mình sẽ dùng trong máy chủ này và tự viết gợi ý của bạn.",
     unavailable: "Mình không thể tải Nudge Studio lúc này. Vui lòng thử lại sau giây lát.",
+    title_advanced: "Cài đặt gợi ý nâng cao",
+    advanced_description: "Chỉ điều chỉnh các cài đặt này nếu bạn hiểu rõ cách hoạt động của chúng.",
+    heat_heading:
+      "[Điều chỉnh độ sôi nổi (Heat)](https://docs.tomoribot.app/vi/features/chatting-personality/natural-nudges/#heat)",
+    heat_description:
+      "Heat đo lường các tương tác gần đây của máy chủ này giữa các thành viên và persona. Tăng heat để các gợi ý xuất hiện thường xuyên hơn bằng các nút bên dưới hoặc chỉ cần trò chuyện tự nhiên với mình.",
+    heat_values: "Heat: {effective}/{max}",
+    heat_increased: "Heat gốc: {base}, tăng thủ công {offset}.",
+    heat_decreased: "Heat gốc: {base}, giảm thủ công {offset}.",
+    heat_unadjusted: "Heat gốc: {base}, không điều chỉnh thủ công.",
+    idle_pace: "- **Gợi ý nhàn rỗi** (`{frequency}`): {effect}",
+    active_pace: "- **Gợi ý chủ động** (`{frequency}`): {effect}",
+    idle_pace_estimate:
+      "Dự kiến có tối đa khoảng {per_week} gợi ý nhàn rỗi mỗi tuần, với giới hạn hằng ngày là {daily_cap}.",
+    active_pace_estimate:
+      "Mình kiểm tra sau khoảng mỗi `{min}-{max}` tin nhắn của thành viên trong kênh, với giới hạn hằng ngày là {check_cap} lượt kiểm tra và {daily_cap} câu trả lời. Lượt kiểm tra chỉ dẫn đến câu trả lời khi có sở thích phù hợp.",
+    idle_pace_no_types: "Tất cả trọng số phân loại đều là 0, vì vậy mình sẽ không bắt đầu bất kỳ gợi ý nhàn rỗi nào.",
+    weights_heading: "Trọng số phân loại gợi ý nhàn rỗi",
+    weights_description:
+      "Trọng số càng cao thì khả năng danh mục gợi ý đó xuất hiện càng lớn so với các danh mục khác.",
+    weights_button: "Chỉnh sửa trọng số phân loại",
+    weights_default: "Giá trị mặc định là {default}.",
+    weights_invalid: "Nhập một số nguyên từ 1 đến 100 cho mỗi danh mục. Tổng bốn trọng số phải bằng 100.",
+    increase_button: "+{amount}",
+    decrease_button: "-{amount}",
     tab_ping_user: "Tag",
     tab_revive_topic: "Nối lại",
     tab_start_topic: "Chủ đề mới",

@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories";
 import {
   NATURAL_NUDGE_INTEREST_LIMIT,
+  NATURAL_NUDGE_CATEGORIES,
+  NUDGE_CATEGORY_WEIGHT_MAX,
   PERSONA_AUTHORED_IDLE_NUDGE_LIMIT,
   naturalNudgeInterestSchema,
   supportsCheckerChoice,
@@ -22,6 +24,7 @@ import {
 } from "@/modules/natural-nudges/discord/studioOperations";
 import {
   activeNudgeTripRange,
+  computeEffectiveHeat,
   computeHeat,
   idleNudgesPerDay,
   heatWindowStart,
@@ -87,6 +90,7 @@ export interface NaturalNudgesSettingsView {
   plannerModels: StructuredOutputModelGroup[];
   checkerDecisionModels: CheckerDecisionModelGroup[];
   trackingEnabled: boolean;
+  baseHeat: number;
   heat: number;
   perDay: number;
   /** Human messages between Active Nudge checks at the current heat and level; null below the heat floor. */
@@ -166,15 +170,17 @@ async function loadSettingsView(
     naturalNudgeRepository.loadRuntimeState(serverId),
     loadStructuredOutputModelGroups(serverId, locale),
     loadCheckerDecisionModels(serverId, locale),
-    statRepository.getServerDailyMessageCounts({ serverId, from: heatWindowStart(now) }),
+    statRepository.getServerDailyHeatCounts({ serverId, from: heatWindowStart(now) }),
   ]);
-  const heat = computeHeat(dailyCounts, now);
+  const baseHeat = computeHeat(dailyCounts, now);
+  const heat = computeEffectiveHeat(baseHeat, config.heat_offset);
   return {
     config,
     runtime,
     plannerModels,
     checkerDecisionModels,
     trackingEnabled: statRepository.isTrackingEnabled,
+    baseHeat,
     heat,
     perDay: idleNudgesPerDay(heat, config.idle_nudge_frequency),
     activeNudgeRange: activeNudgeTripRange(heat, config.active_nudge_frequency),
@@ -217,6 +223,25 @@ const MAX_ALLOWED_CHANNELS = 25;
 const SNOWFLAKE_RE = /^\d{17,20}$/;
 
 const naturalNudgeOperations = {
+  async adjustHeat(serverId: number, direction: "up" | "down"): Promise<NudgeWriteResult> {
+    if (!(await naturalNudgeRepository.adjustHeat(serverId, direction))) return "write-failed";
+    invalidateNaturalNudgeConfigCache(serverId);
+    return "success";
+  },
+
+  setCategoryWeights(serverId: number, inputs: Record<NaturalNudgeCategory, string>): Promise<NudgeWriteResult> {
+    const weights = {} as ServerNaturalNudgeConfig["category_weights"];
+    for (const category of NATURAL_NUDGE_CATEGORIES) {
+      const input = inputs[category].trim();
+      if (!/^\d{1,3}$/.test(input)) return Promise.resolve("invalid");
+      const weight = Number(input);
+      if (weight <= 0 || weight > NUDGE_CATEGORY_WEIGHT_MAX) return Promise.resolve("invalid");
+      weights[category] = weight;
+    }
+    if (Object.values(weights).reduce((sum, weight) => sum + weight, 0) !== 100) return Promise.resolve("invalid");
+    return patchConfig(serverId, { category_weights: weights });
+  },
+
   setIdleNudgesEnabled(serverId: number, enabled: boolean): Promise<NudgeWriteResult> {
     return patchConfig(serverId, { idle_nudges_enabled: enabled });
   },
@@ -455,6 +480,7 @@ export interface NaturalNudgesPanelState {
 }
 
 export interface NaturalNudgePanelDependencies {
+  loadServerConfig(serverId: number): Promise<ServerNaturalNudgeConfig>;
   loadSettings(serverId: number, locale: string, chatState: TomoriState | null): Promise<NaturalNudgesSettingsView>;
   loadPersonaConfig(personaId: number): Promise<PersonaNaturalNudgeConfig | null>;
   loadPersonaNudges(
@@ -466,6 +492,7 @@ export interface NaturalNudgePanelDependencies {
 }
 
 export const naturalNudgePanelDependencies: NaturalNudgePanelDependencies = {
+  loadServerConfig: (serverId) => naturalNudgeRepository.loadServerConfig(serverId),
   loadSettings: loadSettingsView,
   loadPersonaConfig: loadPersonaNudgeConfig,
   loadPersonaNudges: loadPersonaNudgeBlockerView,

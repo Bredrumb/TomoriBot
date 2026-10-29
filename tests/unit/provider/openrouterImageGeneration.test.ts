@@ -28,6 +28,38 @@ afterEach(() => {
 });
 
 describe("OpenRouter image generation routing", () => {
+  it("preserves HTTP error codes and successful-response content refusals for the calling tool", async () => {
+    const cases = [
+      {
+        status: 401,
+        payload: { error: { code: "invalid_api_key", message: "Authentication refused" } },
+        code: "invalid_api_key",
+      },
+      { status: 429, payload: { error: { code: 429, message: "Request limit reached" } }, code: "429" },
+      {
+        status: 200,
+        payload: { choices: [{ finish_reason: "content_filter", message: { content: null } }] },
+        code: "content_filter",
+      },
+    ];
+    for (const testCase of cases) {
+      const spy = stubFetch(testCase.payload, [], testCase.status);
+      try {
+        const error = await generateOpenRouterImage({
+          apiKey: "fixture-private-credential",
+          modelCodename: "google/gemini-2.5-flash-image",
+          prompt: "a red cube",
+          aspectRatio: "1:1",
+        }).catch((failure: unknown) => failure);
+        expect(error).toBeInstanceOf(Error);
+        expect(error).toMatchObject({ code: testCase.code });
+        if (testCase.status !== 200) expect(error).toMatchObject({ status: testCase.status });
+      } finally {
+        spy.mockRestore();
+      }
+    }
+  });
+
   it("sends dedicated image models to the images endpoint, not chat completions", () => {
     // Chat completions answers these with a 404 naming the images endpoint, or an opaque 500.
     expect(usesChatCompletionsImageGeneration("bytedance-seed/seedream-5-0-pro")).toBe(false);

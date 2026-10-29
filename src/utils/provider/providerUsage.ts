@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { ToolContext } from "@/types/tool/interfaces";
+import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { ColorCode, log } from "@/utils/misc/logger";
 import type { TokenUsage } from "@/utils/text/tokenEstimate";
 
@@ -137,7 +137,7 @@ export function getProviderRequestFailureCopy(
 export async function notifyProviderToolFailure(
   context: Pick<ToolContext, "channel" | "locale" | "isUserImpersonation" | "suppressFailureNotices">,
   error: ProviderRequestDeniedError,
-): Promise<string> {
+): Promise<ToolResult> {
   const copy = getProviderRequestFailureCopy(error, context.locale);
   if (!context.isUserImpersonation && !context.suppressFailureNotices) {
     // Lazy because the embed helper's import graph reaches provider consumers that import this module.
@@ -146,5 +146,9 @@ export async function notifyProviderToolFailure(
       log.warn("Failed to send provider request denial notice", sendError),
     );
   }
-  return copy.description;
+  return {
+    success: false,
+    error: copy.description,
+    failure: { code: "provider_request_denied", reason: copy.description, suggestedActions: [] },
+  };
 }

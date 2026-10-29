@@ -30,6 +30,8 @@ order.
   split server configuration tables, copy-on-write persona pointers, and `/reset` domain boundaries.
 - [Caching](/architecture/subsystems/caching/): In-memory caching layers, lazy TTL eviction, insert-time
   size bounding, and post-commit write invalidation.
+- [Lorebooks](/architecture/subsystems/lorebooks/): Serverwide and persona lore storage, scope
+  ownership, and pure keyword activation.
 - [Cooldowns](/architecture/subsystems/cooldowns/): Ephemeral rate limit tracking in unlogged tables,
   fail-open database resilience, and periodic cleanup.
 - [Security](/architecture/subsystems/security/): SSRF protection with DNS pinning, PGP symmetric

@@ -111,6 +111,8 @@ import { userNamingRepository, userPersonaNamingPairKey } from "@/utils/db/repos
 import { userRepository } from "@/utils/db/repositories/UserRepository";
 import { resolveEffectiveUserNaming } from "@/utils/text/userNaming";
 import { createExpressionDeliveryState } from "@/utils/chat/expressionDelivery";
+import { CONDITIONING_INTERACTION_RESPONSE_TEMPLATE } from "@/utils/conditioning/conditioningInteractionContext";
+import { createToolPromptMacroResolverForState } from "@/utils/tools/toolPromptMacros";
 
 const participantRequestScopes = new WeakMap<LockedChatTurn, ParticipantRequestScope>();
 
@@ -586,11 +588,45 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     typeof effectivePersona.persona_id === "number" &&
     (await getCachedPersonaSprites(effectivePersona.persona_id).catch(() => [])).length > 0;
 
+  let injectedContextItems = incoming.injectedContextItems;
+  let builtContextItems = contextBuild.contextItems;
+  if (incoming.conditioningInteraction && !incoming.isUserImpersonation) {
+    const resolver = createToolPromptMacroResolverForState(
+      effectivePersona,
+      streamingContext.deliberateToolAllowedNames,
+    );
+    const hint = await resolver.expand(CONDITIONING_INTERACTION_RESPONSE_TEMPLATE);
+    injectedContextItems = await Promise.all(
+      (injectedContextItems ?? []).map(async (item) => {
+        if (item.messageId !== message.id) return item;
+        const historyItem = builtContextItems.find((entry) => entry.messageId === message.id);
+        const parts = await Promise.all(
+          (historyItem?.parts ?? item.parts).map(async (part, index) => {
+            if (part.type !== "text" || index !== 0) return part;
+            const text = await convertMentions(
+              normalizeTailDirective(part.text),
+              client,
+              turn.serverDiscId,
+              turn.triggererName,
+              effectivePersona.persona_nickname,
+              effectivePersona.config.personal_memories_enabled,
+              turn.requestSnapshot,
+              "preserve",
+            );
+            return { ...part, text: `[System: ${text}${hint ? ` ${hint}` : ""}]` };
+          }),
+        );
+        return { ...item, parts };
+      }),
+    );
+    builtContextItems = builtContextItems.filter((item) => item.messageId !== message.id);
+  }
+
   const contextItems = attachPersonaMentionMapToContextItems(
     appendTailDirectives({
       turn,
       simplifiedMessages: history.simplifiedMessages,
-      contextItems: appendInjectedContextItems(contextBuild.contextItems, incoming.injectedContextItems),
+      contextItems: appendInjectedContextItems(builtContextItems, injectedContextItems),
       lowerPriorityTailDirectives: contextBuild.lowerPriorityTailDirectives,
       tailDirectives: contextBuild.tailDirectives,
       uncensorDirective: contextBuild.uncensorDirective,
@@ -971,6 +1007,11 @@ async function buildSimplifiedHistory(
 
     if (
       previousEntry &&
+      !(
+        turn.lockedTurn.admission.incoming.conditioningInteraction &&
+        (previousEntry.id === turn.lockedTurn.admission.message.id ||
+          simplified.id === turn.lockedTurn.admission.message.id)
+      ) &&
       isSameEffectiveAuthor &&
       simplified.content &&
       previousHasContent &&

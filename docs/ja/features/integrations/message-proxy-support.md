@@ -11,7 +11,7 @@ sidebar:
 
 `/personal message-proxy service:pluralkit` または `/personal message-proxy service:pluralbuddy` を実行します。プロキシ処理を無効にするには `service:none`（「なし」と表示）を選択します。この設定は元のメッセージを送るDiscordアカウントの個人設定で、サーバーをまたいで適用されます。
 
-TomoriBotがオルタの最初の検証済みメッセージを検出した後は、`/personal config identity:` でそのプロフィールを、`/personal memories identity:` でその記憶を編集できます。オートコンプリートには、プロキシ処理が無効の場合でも両サービスで保存されたアイデンティティが表示されます。アカウントのインターフェース、プライバシー、モデルの設定はホストアカウントに残ります。TomoriBotで設定したニックネームは消去されるまで維持され、それ以外の場合は検証済みメッセージのたびにサービスの表示名へ更新されます。メンバーやプロフィールの詳細については[PluralKitサポート](/ja/features/integrations/pluralkit-support/)をご覧ください。
+TomoriBotがオルタの最初の検証済みメッセージを検出した後は、`/personal config identity:` でそのプロフィールを、`/personal memories identity:` でその記憶を編集できます。オートコンプリートには、プロキシ処理が無効の場合でも両サービスで保存されたアイデンティティが表示されます。アカウントのインターフェース、プライバシー、モデルの設定はホストアカウントに残ります。TomoriBotで設定したニックネームは消去されるまで維持され、それ以外の場合は検証済みメッセージのたびにサービスの表示名へ更新されます。
 
 ## 安全性のための検証
 

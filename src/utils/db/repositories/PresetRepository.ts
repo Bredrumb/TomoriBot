@@ -1,3 +1,7 @@
+import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
+import { convertCharacterBook, extractCharacterBook } from "@/modules/lorebooks/imports";
+import { LOREBOOK_ENTRIES_PER_SCOPE_MAX, lorebookEntryToInput } from "@/modules/lorebooks/db/types";
+import { sanitizeSillyTavernText } from "@/utils/text/sillyTavernText";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 /**
  * PresetRepository: manages SillyTavern preset data, persona preset import/export,
@@ -182,13 +186,6 @@ class PresetRepository {
       .filter((item) => item.length > 0);
   }
 
-  private sanitizeSillyTavernText(input: string): string {
-    return input
-      .replace(/\r\n/g, "\n")
-      .replace(/<!--[\s\S]*?--!?>/g, "")
-      .trim();
-  }
-
   private capitalizeFirstLetter(input: string): string {
     const trimmed = input.trim();
     if (!trimmed) return "Imported Persona";
@@ -251,7 +248,7 @@ class PresetRepository {
     content: string,
     maxAttributeLength: number,
   ): string[] {
-    const sanitized = this.sanitizeSillyTavernText(content);
+    const sanitized = sanitizeSillyTavernText(content);
     if (!sanitized) return [];
     const prefix = heading ? `${heading}\n` : "";
     const maxContentLength = Math.max(maxAttributeLength - prefix.length, 200);
@@ -315,7 +312,7 @@ class PresetRepository {
       if (!rawContent) continue;
       turns.push({
         speaker: current.speaker,
-        content: this.sanitizeSillyTavernText(rawContent),
+        content: sanitizeSillyTavernText(rawContent),
       });
     }
 
@@ -350,7 +347,7 @@ class PresetRepository {
 
   private parseMesExamplePairs(mesExample: string | null, maxDialogueLength: number): DialoguePair[] {
     if (!mesExample) return [];
-    const cleaned = this.sanitizeSillyTavernText(mesExample);
+    const cleaned = sanitizeSillyTavernText(mesExample);
     if (!cleaned) return [];
 
     const segments = cleaned
@@ -386,7 +383,7 @@ class PresetRepository {
     rawOutputs.push(...alternateGreetings);
 
     return rawOutputs
-      .map((text) => this.sanitizeSillyTavernText(text))
+      .map((text) => sanitizeSillyTavernText(text))
       .filter((text) => text.length > 0)
       .map((text) => ({
         input: UNPAIRED_SAMPLE_DIALOGUE_SENTINEL,
@@ -428,35 +425,6 @@ class PresetRepository {
     return this.asObject(cardData?.[key]) ?? this.asObject(rootData[key]);
   }
 
-  private collectCharacterBookSections(characterBook: JsonObject | null): ContentSection[] {
-    if (!characterBook) return [];
-    const entriesRaw = characterBook.entries;
-    if (!Array.isArray(entriesRaw)) return [];
-
-    const sections: ContentSection[] = [];
-    for (const entryRaw of entriesRaw) {
-      const entry = this.asObject(entryRaw);
-      if (!entry) continue;
-      const isEnabled = entry.enabled !== false;
-      if (!isEnabled) continue;
-      const content = this.getStringField(entry, "content");
-      if (!content) continue;
-
-      let entryTitle = this.getStringField(entry, "name") ?? "";
-      if (!entryTitle) {
-        const keys = this.getStringArrayField(entry, "keys");
-        if (keys.length > 0) entryTitle = keys.slice(0, 3).join(", ");
-      }
-
-      sections.push({
-        heading: entryTitle ? `Character Book - ${entryTitle}` : "Character Book Entry",
-        content,
-      });
-    }
-
-    return sections;
-  }
-
   /** Returns true if the given unknown value looks like a SillyTavern character card JSON. */
   private isUniqueViolation(error: unknown): boolean {
     return (
@@ -471,6 +439,7 @@ class PresetRepository {
     }
 
     if (
+      (data.lorebook_entries?.length ?? 0) > 0 ||
       (data.physical_appearance_tags?.length ?? 0) > 0 ||
       data.nai_char_ref_url ||
       data.nai_attg_author ||
@@ -1033,12 +1002,16 @@ class PresetRepository {
           ? pointerPreset.preset_naming_config
           : (namingConfigs?.get(presetData.persona_id as number) ?? EMPTY_PERSONA_NAMING_CONFIG);
 
+      const lore = await lorebookRepository.listScope(serverId, lineageId);
+      if (lore.status !== "fresh") return { success: false, error: "commands.persona.export.error_export_failed" };
+
       // Build export object with metadata (includes NovelAI persona fields)
       const exportData: PresetExport = {
         version: PRESET_EXPORT_VERSION,
         type: "preset",
         exported_at: new Date().toISOString(),
         data: {
+          lorebook_entries: lore.entries.map(lorebookEntryToInput),
           tomori_nickname: presetData.persona_nickname,
           attribute_list: exportedAttributes,
           attribute_public_flags: exportedPublicFlags,
@@ -1171,6 +1144,16 @@ class PresetRepository {
         if (!pointerRow) {
           return { success: false, error: "commands.persona.import.error_import_failed" };
         }
+        if (
+          validatedImportData.lorebook_entries !== undefined &&
+          (await lorebookRepository.replaceLineageEntries(
+            serverId,
+            targetPersonaLineageId,
+            validatedImportData.lorebook_entries,
+          )) !== "replaced"
+        ) {
+          return { success: false, error: "commands.persona.import.error_import_failed" };
+        }
 
         if (
           !(await personaRepository.setVoiceConfig(
@@ -1222,8 +1205,9 @@ class PresetRepository {
         .join(",")}}`;
       const shouldUseImportedLineage = identityMode === "preserve" && importedLineageId !== null;
 
+      let resolvedLineageId: number | null = null;
       try {
-        await sql`
+        const [updated] = await sql`
           UPDATE personas
           SET
             persona_nickname = ${validatedImportData.tomori_nickname},
@@ -1240,7 +1224,10 @@ class PresetRepository {
             preset_language = NULL,
             is_nsfw = ${validatedImportData.is_nsfw === true}
           WHERE persona_id = ${mainTomoriId}
+          RETURNING persona_lineage_id
         `;
+        resolvedLineageId = normalizeLineageId(updated?.persona_lineage_id);
+        invalidateTomoriStateCache(serverDiscId);
       } catch (error) {
         if (this.isUniqueViolation(error)) {
           return {
@@ -1325,6 +1312,17 @@ class PresetRepository {
         }))
       )
         return { success: false, error: "commands.persona.import.error_import_failed" };
+      if (
+        validatedImportData.lorebook_entries !== undefined &&
+        (resolvedLineageId === null ||
+          (await lorebookRepository.replaceLineageEntries(
+            serverId,
+            resolvedLineageId,
+            validatedImportData.lorebook_entries,
+          )) !== "replaced")
+      ) {
+        return { success: false, error: "commands.persona.import.error_import_failed" };
+      }
       invalidateTomoriStateCache(serverDiscId);
       await sql`UPDATE speech_voice_bindings SET pending_delete = true WHERE persona_id = ${mainTomoriId}`;
       log.success(`Successfully imported preset for server ${serverDiscId}: ${validatedImportData.tomori_nickname}`);
@@ -1497,8 +1495,18 @@ class PresetRepository {
     const depthPrompt = this.getStringField(this.asObject(extensions?.depth_prompt), "prompt");
     if (depthPrompt) sections.push({ heading: "Depth Prompt", content: depthPrompt });
 
-    const characterBook = this.pickObjectFromCard(cardData, rootData, "character_book");
-    sections.push(...this.collectCharacterBookSections(characterBook));
+    const characterBook = extractCharacterBook(rootData);
+    const lorebookConversion = characterBook ? convertCharacterBook(characterBook) : null;
+    const lorebookReport = lorebookConversion?.report;
+    if (lorebookReport && (lorebookReport.unsupportedKeys || lorebookReport.skippedEntries)) {
+      log.warn("Character Book import has unsupported activations", undefined, {
+        metadata: {
+          unsupportedKeys: lorebookReport.unsupportedKeys,
+          skippedEntries: lorebookReport.skippedEntries,
+        },
+      });
+    }
+    const lorebookEntries = lorebookConversion?.entries.slice(0, LOREBOOK_ENTRIES_PER_SCOPE_MAX);
 
     const attributeList = sections
       .flatMap((section) => this.buildAttributeSectionChunks(section.heading, section.content, maxAttributeLength))
@@ -1518,6 +1526,7 @@ class PresetRepository {
     return {
       success: true,
       data: {
+        ...(lorebookEntries !== undefined ? { lorebook_entries: lorebookEntries } : {}),
         tomori_nickname: normalizedName,
         attribute_list: attributeList,
         sample_dialogues_in: cappedDialoguePairs.map((pair) => pair.input),

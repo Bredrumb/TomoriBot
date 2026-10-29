@@ -2,7 +2,7 @@
 title: "Threat Models"
 ---
 
-Updated on: 2026-10-18
+Updated on: 2026-10-28
 
 TomoriBot accepts untrusted messages and files, lets models request tools, and stores credentials
 for guilds and personal scopes. This review groups threats by four places where input can gain
@@ -81,7 +81,7 @@ what the model sees; dispatch and each tool must enforce the permissions of the 
 | A member invokes a server-management interaction despite command defaults. | Sensitive routes re-check `memberPermissions`; `/config` applies `src/utils/discord/interactions/configPermissionPolicy.ts` on each interaction. | Guild admins can override Discord registration defaults. A default `ManageGuild` permission is insufficient as a runtime authorization control. |
 | A model copies messages from a channel the requester cannot view. | `src/tools/functionCalls/crossChannelMessageTool.ts` resolves the invoking guild member, requires the bot and member to have `ViewChannel` on the target, and applies the server blocklist. | Cross-channel reads have no separate feature flag. Block sensitive channels and limit the bot's channel access. |
 | An MCP description or name collision substitutes an attacker-controlled tool. | `src/utils/mcp/guildMcpManager.ts` reserves built-in names and routes only unique registrations or explicit replacements. Configuration through `src/utils/discord/interactions/configMcpRoutes.ts` requires `ManageGuild`; responses are capped and SDK-schema checked. | Descriptions and results remain untrusted. Registering shell, file, or database tools grants the remote service those capabilities; TomoriBot cannot sandbox that service. |
-| Repeated tool calls or external failures cause runaway work. | `src/utils/chat/toolLoop.ts` bounds iterations and consecutive errors; streams and tool calls have deadlines. Generation flags and quotas limit costly capabilities. | Quotas and cooldowns fail open on database errors. Turn limits leave aggregate spending during an outage unbounded; operators must choose quotas and supervise the process. |
+| Repeated tool calls or external failures cause runaway work. | `src/utils/chat/toolLoop.ts` bounds iterations and consecutive errors; streams and tool calls have deadlines. Generation flags and quotas limit costly capabilities. Text, image, and video quotas reserve a unit before the paid request and refuse the request when the counter database is unavailable. | Cooldowns fail open on database errors, so an outage can admit repeated invocations until the rate limiter or provider rejects them. Operators must choose quotas and supervise the process. |
 | A malicious installed dependency gains runtime authority. | `bun.lock` records integrity hashes; frozen installs, dependency audits, and image controls reduce supply-chain changes. See the [dependency security policy](/contributing/policies/dependency-security/). | Dependency code shares runtime authority. A compromised bot process can use the credentials and provider access the bot needs; this design supplies no isolation for untrusted in-process plugins. |
 
 ## 4. Multi-tenant data and secret custody

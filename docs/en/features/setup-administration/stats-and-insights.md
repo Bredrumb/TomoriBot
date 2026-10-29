@@ -2,7 +2,6 @@
 title: "Stats & Insights"
 sidebar:
   order: 4
-aiGenerated: true
 ---
 
 TomoriBot tracks interaction metrics so you can inspect activity trends, model token usage,
@@ -44,6 +43,11 @@ directly in chat:
   stats and top conversational partners on this server.
 - **`/stats generate server`** (Server Leaderboard): displays server-wide activity and member
   standings.
+
+:::tip
+Cards use `All-Time` data unless you choose a timeframe. Pick `Last Year` for an annual recap, or
+set a personal card's scope to `All Servers` to include every server where you use TomoriBot.
+:::
 
 Users with their privacy level set to `Full` in `/personal config` cannot generate personal stats
 cards.

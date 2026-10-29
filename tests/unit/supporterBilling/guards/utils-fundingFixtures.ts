@@ -264,6 +264,7 @@ export async function renderReturnedDenial(result: object, funding: SupporterFun
         textCredentialSource: "supporter",
         ...fundingContext(funding),
       } as unknown as StreamContext,
+      "fixture-key",
     );
     return send.mock.calls[0]?.[2];
   } finally {

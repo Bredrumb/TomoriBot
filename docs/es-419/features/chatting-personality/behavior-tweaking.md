@@ -59,8 +59,15 @@ Cada persona puede usar una nueva expresión personalizada. Para guardarla para 
 
 ### Cómo las usa
 
-Con `Uso de stickers` activado en `/config` > `Plugins`, envía como máximo una expresión por respuesta, como su propio mensaje antes, entre o después de su texto. No las usa en [canales de rol](/es-419/features/chatting-personality/chatting-and-triggers/#roleplay-channels).
+Con `Uso de stickers` activado en `/config` > `Plugins`, envía como máximo una expresión por respuesta, como su propio mensaje antes, entre o después de su texto. No las usa en [canales de rol](#roleplay-channels).
 `/expressions manage` muestra cuántas veces las personas han usado cada una.
+
+## Canales de roleplay
+<!-- anchor: roleplay-channels -->
+
+Los canales de juegos de rol suprimen los mensajes de stickers y emojis personalizados en sus respuestas. Los miembros también pueden usar `/tool delete turn` en canales de juegos de rol para eliminar su último turno sin necesidad del permiso Administrar servidor.
+
+Configura canales de juego de rol en `/config` > `Canales` > Reglas del canal.
 
 ## Ajuste de generación
 <!-- anchor: generation-tuning -->

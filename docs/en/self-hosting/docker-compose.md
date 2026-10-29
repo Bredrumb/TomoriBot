@@ -2,14 +2,9 @@
 title: "Docker Compose"
 sidebar:
   order: 3
-aiGenerated: true
 ---
 
 Docker Compose runs TomoriBot and PostgreSQL together in containers. It is the third install option alongside the [setup wizard](/self-hosting/setup-wizard/) and [manual setup](/self-hosting/manual-setup/): choose it when you want to run everything in Docker without installing Bun or PostgreSQL on your host system. It bypasses the interactive setup wizard and configures the database connection automatically.
-
-:::caution[Host tools for updates]
-`bun run update --docker` needs host Bun and Git to pull code changes. Its database backup runs inside the application container. You can also run manual backups and restores through Compose; see [Maintenance & Backups](/self-hosting/maintenance/).
-:::
 
 ## 1. Get the code
 
@@ -46,12 +41,17 @@ Generate a separate password for `POSTGRES_PASSWORD`. You can copy optional tuni
 The Compose PostgreSQL service runs in development mode (without SSL) on an internal Docker network. The bundled image includes `pgvector` and `pg_cron`, so document memory, vector search, and scheduled cleanup work immediately. Do not set `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, or `POSTGRES_DB` in `.env`; Compose configures them automatically.
 :::
 
-On Linux, create the bind-mount directories on the host and assign ownership to UID 1001 before starting the containers. Docker creates missing mount points as root, which prevents the bot container from saving backups, logs, or uploads:
+On Linux, the bot container runs as UID 1001 and needs write access to the host's `backups/`,
+`logs/`, and `data/` directories. If they aren't already writable by UID 1001, create them and
+assign ownership before the first start:
 
 ```sh
 mkdir -p backups logs data
 sudo chown 1001:1001 backups logs data
 ```
+
+If you already ran Compose and Docker created the directories as root, you can run these commands
+afterward. They do not change ownership of files already inside the directories.
 
 ## 3. Build and run
 
@@ -79,4 +79,11 @@ See [SearXNG](/self-hosting/local-endpoints/setup-searxng/), [Crawl4AI](/self-ho
 
 ## Maintenance, updating, and backups
 
-Use `bun run update --docker` for backup-first updates on Compose deployments. To back up or restore your Compose database, see [Maintenance & Backups](/self-hosting/maintenance/). Before pulling a new version, review [Safe Migration](/self-hosting/safe-migration/).
+Before updating, stop the bot and back up your database and media; see
+[Maintenance & Backups](/self-hosting/maintenance/) and [Safe Migration](/self-hosting/safe-migration/).
+Then pull the new code and rebuild the container:
+
+```sh
+git pull
+docker compose up -d --build
+```

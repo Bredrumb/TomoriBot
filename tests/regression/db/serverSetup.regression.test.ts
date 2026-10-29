@@ -1,3 +1,4 @@
+import { SETUP_FEATURES, type SetupFeature } from "@/types/db/schema";
 /**
  * Regression harness: atomic server setup transactions across provider modes.
  *
@@ -20,12 +21,14 @@ import { cleanupFixtures, insertFixtures } from "./setup/fixtures";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
 const CATALOG_SERVER_ID = "_rt_setup_catalog_001";
+const OPENROUTER_SERVER_ID = "_rt_setup_openrouter_001";
 const BYOK_SERVER_ID = "_rt_setup_byok_001";
 const CUSTOM_SERVER_ID = "_rt_setup_custom_001";
 const PROMPT_SERVER_ID = "_rt_setup_prompt_001";
 const ORPHAN_SERVER_ID = "_rt_setup_orphan_001";
 const ROLLBACK_SERVER_ID = "_rt_setup_rollback_001";
 const CACHE_SERVER_ID = "_rt_setup_cache_001";
+const FEATURE_SERVER_IDS = ["_rt_setup_features_all", "_rt_setup_features_none", "_rt_setup_features_bundles"];
 
 describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () => {
   let presetId = 1;
@@ -55,15 +58,73 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       DELETE FROM servers
       WHERE server_disc_id IN (
         ${CATALOG_SERVER_ID},
+        ${OPENROUTER_SERVER_ID},
         ${BYOK_SERVER_ID},
         ${CUSTOM_SERVER_ID},
         ${PROMPT_SERVER_ID},
         ${ORPHAN_SERVER_ID},
         ${ROLLBACK_SERVER_ID},
         ${CACHE_SERVER_ID}
+        , ${FEATURE_SERVER_IDS[0]}, ${FEATURE_SERVER_IDS[1]}, ${FEATURE_SERVER_IDS[2]}
       )
     `;
     await cleanupFixtures(testSql);
+  });
+
+  it("persists selected setup features and both bundles without changing web search", async () => {
+    const disabled = {
+      emoji_usage_enabled: false,
+      sticker_usage_enabled: false,
+      conditioning_interactions_enabled: false,
+      danbooru_enabled: false,
+      dice_rolling_enabled: false,
+      manage_message_enabled: false,
+      thread_creation_enabled: false,
+      user_blocking_enabled: false,
+      user_info_updates_enabled: false,
+      short_term_memory_enabled: false,
+      idle_nudges_enabled: false,
+      active_nudges_enabled: false,
+    };
+    const cases: Array<{ features: SetupFeature[]; expected: Record<string, boolean> }> = [
+      { features: [...SETUP_FEATURES], expected: Object.fromEntries(Object.keys(disabled).map((key) => [key, true])) },
+      { features: [], expected: disabled },
+      {
+        features: ["expressions", "self_message_management"],
+        expected: {
+          ...disabled,
+          emoji_usage_enabled: true,
+          sticker_usage_enabled: true,
+          manage_message_enabled: true,
+          thread_creation_enabled: true,
+        },
+      },
+    ];
+    for (const [index, { features, expected }] of cases.entries()) {
+      const serverId = FEATURE_SERVER_IDS[index];
+      await serverRepository.setup(null, {
+        serverId,
+        presetId,
+        humanizer: 1,
+        tomoriName: "FeaturePersona",
+        timezoneOffset: 0,
+        features,
+        locale: "en-US",
+        registrationLocale: "en-US",
+        providerAccess: { mode: "user-byok" },
+      });
+      const [saved] = await testSql<Array<Record<string, boolean>>>`
+        SELECT c.emoji_usage_enabled, c.sticker_usage_enabled, c.conditioning_interactions_enabled,
+          c.danbooru_enabled, c.dice_rolling_enabled, c.manage_message_enabled, c.thread_creation_enabled,
+          c.user_blocking_enabled, c.user_info_updates_enabled, c.short_term_memory_enabled,
+          c.web_search_enabled, n.idle_nudges_enabled, n.active_nudges_enabled
+        FROM server_capabilities_configs c
+        JOIN servers s USING (server_id)
+        JOIN server_natural_nudge_configs n USING (server_id)
+        WHERE s.server_disc_id = ${serverId}
+      `;
+      expect(saved).toEqual({ ...expected, web_search_enabled: true });
+    }
   });
 
   it("sets up a workspace in catalog mode with default models and saved provider config", async () => {
@@ -75,6 +136,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       humanizer: 1,
       tomoriName: "TomoriCatalog",
       timezoneOffset: 0,
+      features: [...SETUP_FEATURES],
       locale: "en-US",
       registrationLocale: "en-US",
       providerAccess: {
@@ -122,6 +184,41 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
     expect(savedConfig.llm_id).toBe(modelConfig.llm_id);
   });
 
+  it("initializes OpenRouter text and vision selections in active and saved configuration", async () => {
+    const { encrypted, version } = await encryptApiKey("test-openrouter-key");
+    await serverRepository.setup(null, {
+      serverId: OPENROUTER_SERVER_ID,
+      presetId,
+      humanizer: 1,
+      tomoriName: "Mirri",
+      timezoneOffset: 0,
+      features: [...SETUP_FEATURES],
+      locale: "en-US",
+      registrationLocale: "en-US",
+      providerAccess: {
+        mode: "catalog",
+        provider: "openrouter",
+        encryptedApiKey: encrypted,
+        keyVersion: version,
+      },
+    });
+    const [selection] = await testSql`
+      SELECT text_model.llm_codename AS text_model, vision_model.llm_codename AS vision_model,
+        mc.llm_id = spc.llm_id AS same_text, mc.vision_llm_id = spc.vision_llm_id AS same_vision
+      FROM servers s JOIN server_model_configs mc USING (server_id)
+      JOIN saved_provider_configs spc ON spc.server_id = s.server_id AND spc.provider = 'openrouter'
+      JOIN llms text_model ON text_model.llm_id = mc.llm_id
+      JOIN llms vision_model ON vision_model.llm_id = mc.vision_llm_id
+      WHERE s.server_disc_id = ${OPENROUTER_SERVER_ID}
+    `;
+    expect(selection).toEqual({
+      text_model: "~deepseek/deepseek-flash-latest",
+      vision_model: "google/gemini-3.1-flash-lite",
+      same_text: true,
+      same_vision: true,
+    });
+  });
+
   it("sets up a user-byok workspace with a quarter-hour timezone and no server provider rows", async () => {
     await serverRepository.setup(null, {
       serverId: BYOK_SERVER_ID,
@@ -129,6 +226,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       humanizer: 1,
       tomoriName: "TomoriByok",
       timezoneOffset: 5.75,
+      features: [...SETUP_FEATURES],
       locale: "en-US",
       registrationLocale: "en-US",
       providerAccess: {
@@ -172,6 +270,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       humanizer: 2,
       tomoriName: "TomoriCustom",
       timezoneOffset: 1,
+      features: [...SETUP_FEATURES],
       locale: "en-US",
       registrationLocale: "en-US",
       providerAccess: {
@@ -264,6 +363,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       humanizer: 1,
       tomoriName: "TomoriInvalid",
       timezoneOffset: 0,
+      features: [...SETUP_FEATURES],
       locale: "en-US",
       registrationLocale: "en-US",
       providerAccess: {
@@ -292,6 +392,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       humanizer: 1,
       tomoriName: "TomoriPrompt",
       timezoneOffset: 0,
+      features: [...SETUP_FEATURES],
       locale: "en-US",
       registrationLocale: "en-US",
       providerAccess: {
@@ -336,6 +437,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       humanizer: 1,
       tomoriName: "TomoriDuplicate",
       timezoneOffset: 0,
+      features: [...SETUP_FEATURES],
       locale: "en-US",
       registrationLocale: "en-US",
       providerAccess: {
@@ -393,6 +495,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       humanizer: 1,
       tomoriName: "TomoriFails",
       timezoneOffset: 0,
+      features: [...SETUP_FEATURES],
       locale: "en-US",
       registrationLocale: "en-US",
       providerAccess: {
@@ -426,6 +529,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server setup transaction regression", () =
       humanizer: 1,
       tomoriName: "TomoriCacheCheck",
       timezoneOffset: 0,
+      features: [...SETUP_FEATURES],
       locale: "en-US",
       registrationLocale: "en-US",
       providerAccess: {

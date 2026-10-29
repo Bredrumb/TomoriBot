@@ -85,6 +85,7 @@ export interface DeliveredStreamMessage {
  * Streaming context for enhanced functionality during streaming
  */
 export interface StreamingContext {
+  personaSprites?: StructuredContextItem["personaSprites"];
   deliveryMode?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryMode;
   deliveryReceipts?: import("@/utils/discord/webhook/personaPost").PersonaDeliveryReceipt[];
   deliveryState?: { unconfirmed: boolean };
@@ -214,7 +215,8 @@ export interface ToolContext {
   activePersonaId?: number; // Active responding persona for tool-driven follow-up turns
   isUserImpersonation?: boolean; // True when the active turn is a user impersonation session
   impersonatedUserId?: string; // Discord user ID currently being impersonated, if any
-  suppressProgressNotices?: boolean; // Skip public "working..." embeds for fire-and-forget flows
+  suppressProgressNotices?: boolean;
+  mirrorSuppressedProgressNotices?: boolean;
   suppressFailureNotices?: boolean;
   /** Shared across search-engine attempts, so fallback notices are deduplicated without hiding error embeds. */
   progressNoticeState?: { attempted: boolean };
@@ -231,8 +233,15 @@ export interface ToolContext {
   isExecutionCancelled?: () => boolean;
 }
 
+export interface ToolFailure {
+  code: string;
+  reason: string;
+  suggestedActions: string[];
+}
+
 export interface ToolResult {
   success: boolean;
+  failure?: ToolFailure;
   /** A resolved expression the tool loop sends before building history. Never shown to the model. */
   stickerSelection?: StickerSelection;
   data?: unknown;
@@ -280,6 +289,7 @@ export interface ToolAssemblyState {
   nai_diffusion_model_id?: number | null;
   video_model_id?: number | null;
   config: {
+    emoji_usage_enabled: boolean;
     sticker_usage_enabled: boolean;
     web_search_enabled: boolean;
     self_teaching_enabled: boolean;
@@ -314,6 +324,7 @@ export interface Tool {
   name: string;
   description: string;
   category: ToolCategory;
+  supportsSpriteSelection?: boolean;
 
   parameters: ToolParameterSchema;
 

@@ -34,12 +34,12 @@ TomoriBot連接到外部AI供應商，而不是託管內建模型。你可以連
 | 供應商 | 筆記 | 取得鑰匙 |
 |---|---|---|
 | Google雙子座 | 免費套餐，運行所有功能。建議先設定。| [AI工作室](https://aistudio.google.com/apikey) |
-| OpenRouter | 一鍵，多種型號（部分免費）。| [OpenRouter鍵](https://openrouter.ai/settings/keys) |
+| OpenRouter | 透過單一金鑰存取付費模型。| [OpenRouter金鑰](https://openrouter.ai/settings/keys) |
 | NovelAI | 訂閱;未經審查的講故事和角色扮演（僅限文本）。| [NovelAI](https://novelai.net/) |
 | 深度搜尋 | 即用即付推理模型。| [DeepSeek](https://platform.deepseek.com/api_keys) |
 | NVIDIA NIM | 託管文字、嵌入和圖像。| [NVIDIA建置](https://build.nvidia.com/) |
 | 人擇 | 透過API進行克勞德模型（不是克勞德代碼）。| [人擇](https://console.anthropic.com/) |
-| Z.ai | GLM家族。⚠️ ToS將使用限制於編碼和代理場景。| [Z.ai](https://z.ai/) |
+| Z.ai | GLM家族。🟡 ToS將使用限制於編碼和代理場景。| [Z.ai](https://z.ai/) |
 | Vertex AI | 透過`gcloud` ADC的Google雲端（最適合本地運行或開發設定）。| 見下文 |
 | Vertex AI Express | Google雲端API-金鑰BYOK（預覽版，Gemini子集）。| [快速模式](https://console.cloud.google.com/expressmode) |
 | 風俗 | 任何OpenAI相容端點（Ollama、vLLM、LiteLLM，...）。| 請參閱[自訂端點](#custom-endpoints) |
@@ -54,13 +54,15 @@ Google Gemini 與 Vertex AI 的設定透過已通過驗證的模型清單端點�
 
 ### 選用：Brave Search金鑰
 
-Brave Search與你的AI供應商分開，並透過圖像、影片和新聞結果增強網路搜尋。設定為`/providers`。⚠️ Brave包含每月5美元的免費信用，因此請在Brave儀表板中設定5美元的使用限額，以避免意外收費。
+Brave Search與你的AI供應商分開，並透過圖像、影片和新聞結果增強網路搜尋。設定為`/providers`。🟡 Brave包含每月5美元的免費信用，因此請在Brave儀表板中設定5美元的使用限額，以避免意外收費。
 
 ## 選擇模型
 
 使用`/providers`管理伺服器憑證、模型目錄和端點註冊。然後使用`/config` > `模型` > 交換器模型來選擇伺服器的每個成員所使用的共用功能分配。這兩個命令都需要伺服器管理權限。
 
 個人成員使用`/personal providers`管理自己的憑證和目錄，然後在`/personal config`中選擇個人模型。個人設定遵循他們使用TomoriBot的每台伺服器。使用者設定請參考[個人化](/zh-TW/features/knowledge/personalization/#your-own-providers)。
+
+新的 OpenRouter 設定使用 DeepSeek Flash Latest 進行聊天，並以 Gemini 3.1 Flash Lite 作為視覺備用模型。兩者皆消耗 OpenRouter 額度。更換金鑰時會保留你的視覺模型選用，包含 `- No Model`。
 
 面板的標題為`伺服器供應商`和`個人供應商`，因此開啟時所有權很明確。
 
@@ -136,12 +138,12 @@ OpenCode Go (`https://opencode.ai/zen/go/v1`) 和OpenCode Zen (`https://opencode
 | 供應商 | 串流媒體 | 工具調用 | 影像輸入 | 嵌入 | 筆記 |
 |---|---|---|---|---|---|
 | Google雙子座 | ✅ | ✅ | ✅ | ✅ | 提供免費模型 |
-| OpenRouter | ✅ | ✅ | ✅ | ✅ | 提供免費模型 |
+| OpenRouter | ✅ | ✅ | ✅ | ✅ | 消耗 OpenRouter 額度 |
 | 人擇 (API) | ✅ | ✅ | ✅ | - | 不是克勞德·代碼 |
 | NovelAI | ✅ | ✅ | - | - | 只有GLM 4.6可以使用工具 |
 | NVIDIA NIM | ✅ | ✅ | ✅ | ✅ | 提供免費模型 |
 | 深度搜尋 | ✅ | ✅ | - | - | - |
-| Z.ai | ✅ | ✅ | ✅ | - | 免費模型； ⚠️ ToS = 僅限編碼和代理使用 |
+| Z.ai | ✅ | ✅ | ✅ | - | 免費模型； 🟡 ToS = 僅限編碼和代理使用 |
 | Z.ai編碼 | ✅ | ✅ | - | - | 認購計劃 |
 | Google Vertex AI | ✅ | ✅ | ✅ | ✅ | 包括「免費」Express版本 |
 | Codex CLI（透過ChatMock） | ✅ | ✅ | ✅ | - | [設定](/zh-TW/self-hosting/local-endpoints/setup-chatmock/) |

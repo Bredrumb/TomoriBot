@@ -46,6 +46,16 @@ GHSA ID is the one to use: `bun audit --json` shows the `url`, and a missing CVE
 
 ## Active exceptions
 
+### Docs math dependencies
+
+The docs build uses KaTeX 0.18.2 or newer in the 0.18 release line to address
+[GHSA-238p-pmpm-9mq7](https://github.com/advisories/GHSA-238p-pmpm-9mq7).
+Scoped overrides for `rehype-katex` and `micromark-extension-math` replace their older KaTeX
+requirements. Both use its `renderToString` interface. Remove each override when its parent accepts
+a patched KaTeX version, and verify the docs build before removing it.
+
+### Advisory exceptions
+
 - **`CVE-2026-25128`, fast-xml-parser (Trivy only)**: reached through the AWS SDK v3, whose input comes
 only from AWS endpoints. The global `"fast-xml-parser": ">=5.7.0"` override in `package.json` raises
 every copy, including the one nested under `@aws-sdk/xml-builder` (5.7.0 in `bun.lock`). Recheck with
