@@ -1,4 +1,5 @@
 import path from "node:path";
+import { buildDocumentLexicalText } from "@/utils/documents/lexicalText";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, spyOn, type Mock } from "bun:test";
 import type { EmbeddingModelRow } from "@/types/db/schema";
 import { ragRepository, serverMemoryRepository } from "@/utils/db/repositories";
@@ -17,11 +18,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("document re-embedding in place", () => {
   let taskType: Mock<typeof embeddingProvider.providerSupportsEmbeddingTaskType>;
 
   async function insertChunk(documentId: number, index: number, content: string): Promise<void> {
+    const [document] = await testSql`SELECT document_name FROM documents WHERE document_id = ${documentId}`;
     await testSql`
       INSERT INTO document_chunks
-        (document_id, server_id, embedding_model_id, embedding_family, chunk_index, content, embedding)
+        (document_id, server_id, embedding_model_id, embedding_family, chunk_index, content, lex_text, embedding)
       VALUES (${documentId}, ${refs.serverId}, ${oldModel.embedding_model_id}, ${oldModel.model_family},
-        ${index}, ${content}, ${OLD_VECTOR}::vector)
+        ${index}, ${content}, ${buildDocumentLexicalText(document.document_name, content)}, ${OLD_VECTOR}::vector)
     `;
   }
 
@@ -44,12 +46,13 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("document re-embedding in place", () => {
         document_id: number;
         chunk_index: number;
         content: string;
+        lex_text: string | null;
         embedding_model_id: number;
         embedding_family: string;
         embedding: string;
       }>
     >`
-      SELECT document_chunk_id, document_id, chunk_index, content, embedding_model_id,
+      SELECT document_chunk_id, document_id, chunk_index, content, lex_text, embedding_model_id,
         embedding_family, embedding::text AS embedding
       FROM document_chunks WHERE server_id = ${refs.serverId}
       ORDER BY document_id, chunk_index
@@ -165,7 +168,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("document re-embedding in place", () => {
     });
     await expect(reembed()).rejects.toBeInstanceOf(Error);
     expect(edits).toBe(2);
-    expect(await storedChunks()).toEqual([{ ...before[0], content: "edit 2" }, before[1]]);
+    expect(await storedChunks()).toEqual([
+      { ...before[0], content: "edit 2", lex_text: buildDocumentLexicalText("_rt_edit_twice", "edit 2") },
+      before[1],
+    ]);
   });
 
   it("detects appended and deleted rows on both attempts", async () => {

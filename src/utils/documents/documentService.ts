@@ -1,3 +1,8 @@
+import {
+  buildDocumentLexicalText,
+  buildDocumentLexicalQuery,
+  DOCUMENT_TEXT_SEARCH_CONFIG,
+} from "@/utils/documents/lexicalText";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import { generateEmbeddingsBatched, providerSupportsEmbeddingTaskType } from "@/utils/embeddings/embeddingProvider";
@@ -15,6 +20,45 @@ export interface RetrievedDocumentChunk {
 export interface RetrievalTimings {
   embeddingMs?: number;
   sqlMs?: number;
+}
+
+const LEXICAL_BACKFILL_BATCH_SIZE = 50;
+
+export async function backfillDocumentLexicalTextBatch(): Promise<{ selected: number; updated: number }> {
+  const rows = await sql<
+    Array<{ document_chunk_id: number; document_id: number; content: string; document_name: string }>
+  >`
+    SELECT dc.document_chunk_id, dc.document_id, dc.content, d.document_name
+    FROM document_chunks dc JOIN documents d ON d.document_id = dc.document_id
+    WHERE dc.lex_text IS NULL
+    ORDER BY dc.document_chunk_id
+    LIMIT ${LEXICAL_BACKFILL_BATCH_SIZE}
+  `;
+  const prepared = rows.map((row) => ({
+    ...row,
+    lexicalText: buildDocumentLexicalText(row.document_name, row.content),
+  }));
+  let updated = 0;
+  for (const row of prepared) {
+    updated += await sql.transaction(async (tx) => {
+      // Lock the name after tokenizing, so it cannot change between validation and the chunk write.
+      const [document] = await tx`
+        SELECT document_id FROM documents
+        WHERE document_id = ${row.document_id} AND document_name = ${row.document_name}
+        FOR SHARE
+      `;
+      if (!document) return 0;
+      const written = await tx`
+        UPDATE document_chunks SET lex_text = ${row.lexicalText}
+        WHERE document_chunk_id = ${row.document_chunk_id}
+          AND document_id = ${row.document_id}
+          AND content = ${row.content} AND lex_text IS NULL
+        RETURNING document_chunk_id
+      `;
+      return written.length;
+    });
+  }
+  return { selected: rows.length, updated };
 }
 
 export function normalizeDocumentText(text: string): string {
@@ -95,6 +139,7 @@ export async function createDocumentRecord(params: {
  */
 export async function appendDocumentChunks(params: {
   documentId: number;
+  documentName: string;
   serverId: number;
   embeddingModelId: number;
   embeddingFamily: string;
@@ -102,7 +147,8 @@ export async function appendDocumentChunks(params: {
   chunks: string[];
   embeddings: number[][];
 }): Promise<void> {
-  const { documentId, serverId, embeddingModelId, embeddingFamily, startIndex, chunks, embeddings } = params;
+  const { documentId, documentName, serverId, embeddingModelId, embeddingFamily, startIndex, chunks, embeddings } =
+    params;
   if (chunks.length !== embeddings.length) {
     throw new Error(`Chunk/embedding count mismatch: ${chunks.length} vs ${embeddings.length}`);
   }
@@ -112,10 +158,10 @@ export async function appendDocumentChunks(params: {
       await tx`
         INSERT INTO document_chunks (
           document_id, server_id, embedding_model_id, embedding_family,
-          chunk_index, content, embedding
+          chunk_index, content, lex_text, embedding
         ) VALUES (
           ${documentId}, ${serverId}, ${embeddingModelId}, ${embeddingFamily},
-          ${startIndex + i}, ${chunks[i]}, ${embeddingVector}::vector
+          ${startIndex + i}, ${chunks[i]}, ${buildDocumentLexicalText(documentName, chunks[i])}, ${embeddingVector}::vector
         )
       `;
     }
@@ -226,6 +272,7 @@ export async function insertDocumentWithChunks(params: {
 					embedding_family,
 					chunk_index,
 					content,
+					lex_text,
 					embedding
 				) VALUES (
 					${documentId},
@@ -234,6 +281,7 @@ export async function insertDocumentWithChunks(params: {
 					${embeddingFamily},
 					${i},
 					${chunks[i]},
+					${buildDocumentLexicalText(documentName, chunks[i])},
 					${embeddingVector}::vector
 				)
 			`;
@@ -328,7 +376,7 @@ export async function retrieveRelevantDocumentChunks(params: {
     }>
   >`
     WITH fts_q AS (
-      SELECT plainto_tsquery('english', ${query}::text) AS q
+      SELECT plainto_tsquery(${DOCUMENT_TEXT_SEARCH_CONFIG}::regconfig, ${buildDocumentLexicalQuery(query)}::text) AS q
     ),
     vector_candidates AS (
       SELECT dc.document_chunk_id,
