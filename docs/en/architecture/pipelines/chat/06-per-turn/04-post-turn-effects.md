@@ -38,8 +38,9 @@ ChatTurnContext & GenerationTurnResult
    - Upon retry exhaustion, deliberate turns post a warning embed while passive autochat turns stay silent.
 3. **Text quota settlement**: `settleTextQuota()` checks whether text quota was reserved during admission
    and the response was non-empty. A reply keeps the reserved unit as the charge and marks the trigger key
-   consumed in `textQuotaTriggerStates`. A turn that produced no reply releases the reservation through
-   `releaseTextQuotaForTrigger()`, unless a later persona turn in the same plan can still reply.
+   consumed in `textQuotaTriggerStates`. The last turn of a plan releases an unspent reservation through
+   `releaseTextQuotaForTrigger()`. A lone personal-route turn keeps it, because a queued server persona job
+   from the same trigger may still spend it.
 4. **Self-reply bookkeeping**: on non-empty responses, `setLastRespondedPersona()` records which persona
    spoke last. For non-stop real user messages, it increments `selfReplyChainState.triggerCount`.
 5. **Short-term memory write**: for non-stop responses where the user is not full-privacy,

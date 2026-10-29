@@ -166,4 +166,47 @@ describe("text quota settlement after a turn", () => {
     expect(releaseCalls).toEqual([{ serverId: 1, userDiscId: "user_1", reservation: RESERVATION }]);
     expect(second.textQuotaState.reservation).toBeNull();
   });
+
+  it("releases a silent server turn's unit when the last turn replies on personal credentials", async () => {
+    releaseCalls.length = 0;
+    const state: TextQuotaTriggerState = {
+      serverId: 1,
+      userDiscId: "user_1",
+      consumed: false,
+      reservation: RESERVATION,
+      reservationReleased: false,
+      createdAt: Date.now(),
+    };
+    const triggerKey = "trigger_mixed_routes";
+    const { runPostTurnEffects } = await import("@/utils/chat/postTurnEffects");
+
+    const serverTurn = makeArmedContext({ personaIndex: 0, totalPersonas: 2, state, triggerKey });
+    await runPostTurnEffects(serverTurn, failedReply());
+    expect(releaseCalls).toEqual([]);
+
+    const personalTurn = makeArmedContext({ personaIndex: 1, totalPersonas: 2, state, triggerKey });
+    const unarmed = personalTurn as ChatTurnContext;
+    unarmed.shouldApplyTextQuota = false;
+    unarmed.textQuotaState = null;
+    await runPostTurnEffects(personalTurn, completedReply());
+
+    expect(releaseCalls).toEqual([{ serverId: 1, userDiscId: "user_1", reservation: RESERVATION }]);
+    expect(state.consumed).toBe(false);
+    expect(state.reservation).toBeNull();
+  });
+
+  it("keeps a unit reserved for a queued server persona job when a lone personal turn finishes", async () => {
+    releaseCalls.length = 0;
+    const personalTurn = makeArmedContext({ personaIndex: 0, totalPersonas: 1 });
+    const reserved = personalTurn.textQuotaState;
+    const unarmed = personalTurn as ChatTurnContext;
+    unarmed.shouldApplyTextQuota = false;
+    unarmed.textQuotaState = null;
+    const { runPostTurnEffects } = await import("@/utils/chat/postTurnEffects");
+
+    await runPostTurnEffects(personalTurn, completedReply());
+
+    expect(releaseCalls).toEqual([]);
+    expect(reserved.reservation).toBe(RESERVATION);
+  });
 });

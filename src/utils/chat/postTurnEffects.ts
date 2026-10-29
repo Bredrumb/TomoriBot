@@ -483,22 +483,24 @@ export function isDeliveredTurnResult(result: GenerationTurnResult): boolean {
 }
 
 async function settleTextQuota(context: ChatTurnContext, result: GenerationTurnResult): Promise<void> {
-  if (!context.shouldApplyTextQuota || !context.textQuotaState || context.textQuotaState.consumed) {
-    return;
+  if (
+    context.shouldApplyTextQuota &&
+    context.textQuotaState &&
+    !context.textQuotaState.consumed &&
+    result.personaResponses.length > 0
+  ) {
+    context.textQuotaState.consumed = true;
+    context.textQuotaState.reservation = null;
+    context.textQuotaState.reservationReleased = false;
+    textQuotaTriggerStates.set(context.textQuotaTriggerKey, context.textQuotaState);
   }
 
-  if (result.personaResponses.length === 0) {
-    // A later persona turn in the same plan can still reply, so only the last one releases.
-    if (context.turn.personaIndex + 1 >= context.turn.totalPersonas) {
-      await releaseTextQuotaForTrigger(context.textQuotaTriggerKey);
-    }
-    return;
+  const isLastTurn = context.turn.personaIndex + 1 >= context.turn.totalPersonas;
+  // A queued persona job may still spend a unit reserved during planning, so a personal-route turn
+  // releases only as the last turn of a multi-persona plan, which queues no jobs.
+  if (isLastTurn && (context.shouldApplyTextQuota || context.turn.totalPersonas > 1)) {
+    await releaseTextQuotaForTrigger(context.textQuotaTriggerKey);
   }
-
-  context.textQuotaState.consumed = true;
-  context.textQuotaState.reservation = null;
-  context.textQuotaState.reservationReleased = false;
-  textQuotaTriggerStates.set(context.textQuotaTriggerKey, context.textQuotaState);
 }
 
 function updateSelfReplyBookkeeping(context: ChatTurnContext, result: GenerationTurnResult): void {
