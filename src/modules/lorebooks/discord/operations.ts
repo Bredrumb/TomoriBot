@@ -16,14 +16,14 @@ type LorebookEntryWriteResult =
 type LorebookEntryEditResult =
   | { status: "success"; title: string }
   | {
-      status: "forbidden" | "missing" | "invalid" | "failed" | "title-required" | "content-required" | "keys-required";
+      status: "forbidden" | "missing" | "invalid" | "failed" | "title-required" | "content-required";
     };
 
 type LorebookFlagsResult = { status: "success" } | { status: "forbidden" | "missing" | "invalid" | "failed" };
 
 type LorebookAddResult =
   | { status: "success"; entryId: number; title: string }
-  | { status: "forbidden" | "limit" | "invalid" | "failed" | "title-required" | "content-required" | "keys-required" };
+  | { status: "forbidden" | "limit" | "invalid" | "failed" | "title-required" | "content-required" };
 
 interface LorebookWriteScope {
   serverId: number;
@@ -35,7 +35,8 @@ interface LorebookAddInput extends LorebookWriteScope {
   title: string;
   content: string;
   keys: string[];
-  placement: 0 | 1;
+  lorebookName?: string;
+  bookId?: number;
   channelDiscIds: string[];
 }
 
@@ -44,7 +45,6 @@ interface LorebookEntryEditInput extends LorebookWriteScope {
   title: string;
   content: string;
   keys: string[];
-  placement: 0 | 1;
   channelDiscIds: string[];
 }
 
@@ -104,8 +104,8 @@ export const lorebookOperations: LorebookOperations = {
     const title = input.title.trim();
     if (!title) return { status: "title-required" };
     if (!filledContent(input.content)) return { status: "content-required" };
-    if (input.keys.length === 0) return { status: "keys-required" };
     const entry: LorebookEntryInput = {
+      lorebook_name: input.lorebookName,
       title,
       content: input.content,
       keys: input.keys,
@@ -114,12 +114,12 @@ export const lorebookOperations: LorebookOperations = {
       scan_depth: LOREBOOK_DEFAULT_SCAN_DEPTH,
       trigger_chance: 100,
       insertion_order: LOREBOOK_DEFAULT_INSERTION_ORDER,
-      placement: input.placement,
-      constant: false,
+      placement: 1,
+      constant: input.keys.length === 0,
       enabled: true,
       channel_disc_ids: input.channelDiscIds,
     };
-    const result = await lorebookRepository.insert(input.serverId, input.lineageId, entry);
+    const result = await lorebookRepository.insert(input.serverId, input.lineageId, entry, undefined, input.bookId);
     if (typeof result === "number") return { status: "success", entryId: result, title };
     return { status: result };
   },
@@ -131,14 +131,13 @@ export const lorebookOperations: LorebookOperations = {
     if (!filledContent(input.content)) return { status: "content-required" };
     const found = await findEntry(input.serverId, input.lineageId, input.entryId);
     if (found.status !== "fresh") return { status: found.status };
-    if (!found.entry.constant && input.keys.length === 0) return { status: "keys-required" };
     const scopeUnchanged = sameChannelScope(input.channelDiscIds, found.entry.channel_disc_ids);
     const entry: LorebookEntryInput = {
       ...lorebookEntryToInput(found.entry),
       title,
       content: input.content,
       keys: input.keys,
-      placement: input.placement,
+      constant: input.keys.length === 0,
       channel_disc_ids: input.channelDiscIds,
       legacy_channel_tags: scopeUnchanged ? (found.entry.legacy_channel_tags ?? []) : [],
     };

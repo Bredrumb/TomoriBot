@@ -118,6 +118,7 @@ Trigger Words: {trigger_word_count}`,
       avatar_update_rate_limited: `🟡 Server avatar was not updated due to Discord rate limits. Please change it manually instead.`,
       avatar_update_failed: `🟡 Server avatar could not be updated, likely due to Discord rate limits. Please change it manually instead.`,
       alter_success_title: `Alter Persona Imported Successfully`,
+      lorebook_count: `Lorebook entries imported: {count}`,
       alter_success_description: `Successfully imported alter persona **{nickname}**!
 Unique Trigger Words: {trigger_count}
 Triggers: {triggers}

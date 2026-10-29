@@ -75,10 +75,19 @@ export function evaluateActiveLorebookEntries(
   const activated = entries
     .filter((entry) => entry.server_id === options.serverId && entry.enabled && entry.content.trim().length > 0)
     .filter((entry) => entry.persona_lineage_id === null || entry.persona_lineage_id === options.lineageId)
-    .filter((entry) => !options.channelScopeEnabled || channelScopeAdmits(entry.channel_disc_ids, candidates))
+    .filter((entry) => entry.persona_lineage_id !== null || entry.lorebook_enabled !== false)
     .filter(
       (entry) =>
-        entry.constant || (matchesKeys(entry, windowFor(entry.scan_depth)) && random() * 100 < entry.trigger_chance),
+        !options.channelScopeEnabled ||
+        channelScopeAdmits(
+          entry.persona_lineage_id === null ? (entry.lorebook_channel_disc_ids ?? []) : entry.channel_disc_ids,
+          candidates,
+        ),
+    )
+    .filter(
+      (entry) =>
+        entry.trigger_chance > 0 &&
+        (entry.constant || (matchesKeys(entry, windowFor(entry.scan_depth)) && random() * 100 < entry.trigger_chance)),
     )
     .sort((left, right) => left.insertion_order - right.insertion_order || left.entry_id - right.entry_id);
 

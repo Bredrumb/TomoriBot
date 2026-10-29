@@ -90,10 +90,11 @@ Converted data validates against TomoriBot's preset Zod schema before database i
 Character Book entries become the imported persona's lorebook. Their keys, optional selective
 secondary keys, constant flag, enabled flag, insertion order, and before/after position are retained.
 The supported extension fields are `selectiveLogic`, `probability`, `useProbability`, `scan_depth`,
-and numeric `position`. Entry scan depth overrides the book default. Unsupported numeric ranges are
+and numeric `position`. Entry scan depth overrides the book default. Explicit zero probability stays at 0%; missing or null
+probability defaults to 100%. Unsupported numeric ranges are
 clamped to the lorebook limits. Entries longer than 4,000 characters split into consecutive entries
 with shared activation settings, preserving Unicode characters. A book exceeding 250 stored entries
-after splitting is rejected as a whole.
+after splitting keeps its first 250 entries in book order; the import notice reports how many were dropped.
 
 Regex keys remain inert and are counted in the import report. Keys declared with `use_regex` stay
 regex-shaped rather than becoming literal keyword matches. Evaluating untrusted regex requires a
@@ -107,9 +108,16 @@ uploaded card preserves its source book in the generated PNG and the `Import Now
 
 ### World info files
 
-`+ Import Lorebook` in `/memories` > `Lorebooks` accepts a standalone SillyTavern world info file as
-well as a Character Book. A file whose `entries` is an array is converted as a Character Book; a file
-whose `entries` is a keyed object is converted as a world info file. Anything else is rejected.
+`+ Import Lorebook` in `/memories` > `Lorebooks` creates a Serverwide collection from a standalone
+SillyTavern world info file or a Character Book. `+ Import Entries` imports into a selected collection;
+Persona scope uses `+ Import Lorebook` for its single book. A file whose `entries` is an array is converted as a Character Book; a file
+whose `entries` is a keyed object is converted as a world info file. PNG and CHARX cards and card JSON
+import their embedded Character Book without importing the persona; cards without a book are reported
+separately. JSON is limited to 2 MB, while card carriers reuse the persona import and archive limits.
+
+`+ Export Lorebook` downloads the selected book as world info JSON with every supported entry field.
+Channel restrictions, pending channel names, and collection state do not travel in world info;
+All Personas memory backups retain them. Main Persona and Selected Persona memory exports omit lore.
 
 World info entries map their `key` and `keysecondary` arrays to primary and secondary keywords,
 `comment` to the title, `content` to the entry body, `disable` to the stored enabled flag, `order` to

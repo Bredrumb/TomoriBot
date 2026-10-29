@@ -1,5 +1,5 @@
 import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
-import { convertCharacterBook } from "@/modules/lorebooks/imports";
+import { convertCharacterBook, extractCharacterBook } from "@/modules/lorebooks/imports";
 import { LOREBOOK_ENTRIES_PER_SCOPE_MAX, lorebookEntryToInput } from "@/modules/lorebooks/db/types";
 import { sanitizeSillyTavernText } from "@/utils/text/sillyTavernText";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
@@ -1495,7 +1495,7 @@ class PresetRepository {
     const depthPrompt = this.getStringField(this.asObject(extensions?.depth_prompt), "prompt");
     if (depthPrompt) sections.push({ heading: "Depth Prompt", content: depthPrompt });
 
-    const characterBook = this.pickObjectFromCard(cardData, rootData, "character_book");
+    const characterBook = extractCharacterBook(rootData);
     const lorebookConversion = characterBook ? convertCharacterBook(characterBook) : null;
     const lorebookReport = lorebookConversion?.report;
     if (lorebookReport && (lorebookReport.unsupportedKeys || lorebookReport.skippedEntries)) {
@@ -1506,10 +1506,7 @@ class PresetRepository {
         },
       });
     }
-    const lorebookEntries = lorebookConversion?.entries;
-    if (lorebookEntries && lorebookEntries.length > LOREBOOK_ENTRIES_PER_SCOPE_MAX) {
-      return { success: false, error: "commands.persona.import.error_invalid_format" };
-    }
+    const lorebookEntries = lorebookConversion?.entries.slice(0, LOREBOOK_ENTRIES_PER_SCOPE_MAX);
 
     const attributeList = sections
       .flatMap((section) => this.buildAttributeSectionChunks(section.heading, section.content, maxAttributeLength))

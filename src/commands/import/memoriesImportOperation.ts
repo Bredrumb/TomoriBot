@@ -183,6 +183,10 @@ export async function startMemoryImport(
         locale,
         kind,
         buckets,
+        serverwideLoreCount:
+          "serverwide_lorebook_entries" in parseResult.payload
+            ? parseResult.payload.serverwide_lorebook_entries?.length
+            : undefined,
         nonce,
         crossOwnership: sourceClassification === "cross-ownership",
       }),

@@ -98,8 +98,8 @@ restrictions narrow where they apply, and personal memories can also use keyword
 ### Personal memory tags
 <!-- anchor: keyword-tags -->
 
-Personal memories can carry keyword or `#channel` tags. Turn tagging on under `/config` > `Engine` >
-`Memory & STM`. When it is on, a tagged personal memory appears only when one of its keywords is in
+Personal memories can carry keyword or `#channel` tags. Turn tagging on under `/config` > `Behavior` >
+`Advanced Memory`. When it is on, a tagged personal memory appears only when one of its keywords is in
 the conversation, and an untagged one stays active. A `#channel` tag limits it to that channel. Use
 `/tool prompt snapshot` to see which memories are active.
 
@@ -128,7 +128,7 @@ default. Conversations do not follow you between servers unless you enable cross
 messages are excluded from short-term memory.
 
 You can view or correct the current channel's summary under `/config` > `Persona` > `Memories`.
-Server managers can adjust or disable short-term memory under `/config` > `Engine` > `Memory & STM`.
+Server managers can adjust or disable short-term memory under `/config` > `Behavior` > `Advanced Memory`.
 `/refresh` clears the current channel's memory.
 
 ## Message-proxy identities

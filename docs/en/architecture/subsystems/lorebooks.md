@@ -10,13 +10,20 @@ Persona cards and workspace memory backups carry lore separately from episodic m
 ## Storage and ownership
 
 `persona_lorebook_entries` belongs to a server. A NULL `persona_lineage_id` means Serverwide; a
-lineage id means Persona scope. Lineage has no foreign key because no table owns a unique lineage,
+lineage id means Persona scope. `server_lorebooks` owns named Serverwide collections, and each
+Serverwide entry references its collection by `(server_id, lorebook_name)`. Persona entries have no
+collection name because the lineage is their book. Renaming a collection cascades to its entries;
+deleting one removes its entries and pending legacy channel markers. Lineage has no foreign key because no table owns a unique lineage,
 and lore must survive persona removal and re-import. Deleting the server cascades its lore.
+`/nuke` with preserved personas deletes Serverwide lore, collections, and their pending channel
+markers in the wipe transaction while keeping Persona lore.
 
 `db/repositories.ts` is the only SQL owner. `loadEnabledForScope` loads enabled Serverwide and Persona
 entries together; `listScope` reads exactly one scope, including disabled entries. Mutations require
 the server, lineage (or NULL), and entry id together. An edit cannot move an entry between scopes.
-Channel ids remain attached to the entry through edits and replacement. Callers resolve channels
+Serverwide channels and enabled state belong to `server_lorebooks`; Persona channel ids remain
+attached to individual entries through edits and replacement. Runtime reads join collection state
+and omit disabled books without changing entry flags. Callers resolve channels
 against the owning Discord server before writing; the repository validates snowflake syntax.
 Unresolved legacy channel names stay in `legacy_channel_scope_tags` under the lorebook entry id.
 The shared startup backfill resolves them into channel ids. Until resolution, readers admit every
@@ -52,7 +59,16 @@ are deferred before the read, then repaint after the write or failure.
 
 `discord/panelSection.ts` owns the tab body and its add, edit, activation, and import modals.
 `discord/operations.ts` owns write authorization, field validation, and the preservation rule below.
-Each entry select page holds 23 entries so the Add and Import options fit Discord's 25-option cap.
+Serverwide scope places the heading before its collection picker and entry picker. Persona scope
+keeps the persona picker before the heading. Collection controls show Active/Disabled, Channels,
+Rename, and Delete, followed by the collection channel scope and a separator. Serverwide entry
+modals omit channels; Persona entry modals keep them. Collection pages hold 23 books plus Add and Import;
+entry pages hold 23 entries plus Add and Import Entries (Import Lorebook for Persona scope). Collection ids travel as an optional
+trailing route field. The optional entry range is emitted as 0 before a collection id to keep field
+positions unambiguous.
+
+New panel entries default to after-persona placement. Edit preserves imported placement and derives
+`constant` from whether the submitted keywords are blank, so no separate toggle is needed.
 
 Edits keep activation fields and stored channel ids the member did not change. Unresolved legacy
 channel names survive a content or activation edit when the submitted channel set matches the stored
@@ -62,11 +78,20 @@ Discord reject the modal. Channel submissions are filtered against the guild aga
 valid snowflake from another server is refused with a receipt and no write.
 
 `imports/` accepts a SillyTavern world info file or a Character Book through one JSON carrier.
-An import appends entries that are not already present, or replaces the scope when the member checks
-the replace box. The append is one locked transaction, so a batch that would exceed 250 entries is
+Collection imports create the book and its entries in one transaction, reject duplicate names, and
+select the imported book. The optional modal name overrides the name in the JSON, then the filename.
+A failed or oversized import leaves no empty book behind. Imports into an existing book keep its
+name and use the append or replace behavior below.
+
+An import appends entries that are not already present, or replaces the selected book when the member checks
+the replace box. Replacement in Serverwide scope filters by collection name inside the same server
+lock, counts entries in other collections against the shared limit, and leaves them intact. Panel
+writes recheck the collection id and name under that lock, so a book removed or renamed during a
+file download cannot be recreated by a stale import. The append is one locked transaction, so a batch that would exceed 250 entries is
 refused whole. Parsing is limited to 2 MB. Conversion reports skipped entries, unsupported keys,
 ignored settings, and collapsed placement; the route logs the four counts and adds skipped entries to
-the receipt's skipped total. No file content enters logs.
+the receipt's skipped total. Unsupported keywords, ignored settings, and collapsed placements are
+shown in the receipt. No file content enters logs.
 
 ## Migration and rollback
 
@@ -94,7 +119,20 @@ Deleted users or personas become NULL attribution, and deleted servers are skipp
 original memory id aborts rollback before overwriting anything. Back up post-migration edits before
 rolling back. Keep `lorebook_migration_123_backup` until rollback is no longer needed.
 
+Migration `124_server_lorebook_collections.sql` assigns existing Serverwide entries to `General` and
+admits explicit 0% trigger chances. It includes the collection enabled flag and channel array;
+previous Serverwide entry channel restrictions are discarded. Persona restrictions are unchanged.
+Rollback refuses named or configured collections and zero-chance entries, so their settings cannot
+be discarded or their activation behavior changed.
+
 ## Import and export
+
+Entry inputs carry optional `lorebook_name`, `lorebook_enabled`, and
+`lorebook_channel_disc_ids` for Serverwide backup grouping and collection settings. Inputs without
+these fields use `General`, enabled, and all channels. Collection settings do not participate in entry
+duplicate identity. Whole-scope replacement validates that entries in each collection agree on its
+settings and restores them in the same transaction. Import Entries preserves the selected book's
+settings. Persona writes ignore collection names. Empty collections contain no entry payload.
 
 Persona exports carry optional `lorebook_entries` inputs without database ids. A present array
 replaces the persona lineage's complete book, including hand-authored entries; an empty array clears
@@ -102,9 +140,10 @@ it. An absent array preserves existing lore. Replacement validates the complete 
 anything. A failed replacement keeps the previous book. Alter imports remove a newly created persona
 if lore replacement fails. Lore survives normal persona removal through its lineage.
 
-Workspace memory exports attach optional `lorebook_entries` to each mapped persona bucket and
-`serverwide_lorebook_entries` to the bundle. The all-personas export includes lore-only and removed
-persona lineages. Bucket mapping selects the destination lineage; Serverwide lore stays Serverwide.
+Only All Personas workspace memory exports attach `lorebook_entries` to each mapped persona bucket
+and `serverwide_lorebook_entries` to the bundle. Main Persona and Selected Persona exports omit both
+fields, so their imports preserve destination lore. All Personas includes lore-only and removed
+persona lineages, and its preview shows per-scope lore replacement counts. Bucket mapping selects the destination lineage; Serverwide lore stays Serverwide.
 Included books replace their entire scopes even with memory Merge. Absent books preserve existing
 lore. Memories and books commit in one transaction, and failure leaves the import available to retry.
 Legacy combined server exports use the same two arrays for the selected persona and Serverwide scope.
@@ -115,6 +154,15 @@ Converted entries are added without clearing an absent book and deduplicated on 
 Channel-only rows remain memories. Channel ids and pending names travel through workspace backups;
 personal backup behavior stays unchanged.
 
+Standalone exports serialize only the selected collection or persona book as SillyTavern world info.
+Channel scope, pending channel names, and collection state have no field in that format. The upload
+parser detects PNG and CHARX from byte signatures, extracts the card's Character Book through the
+same field lookup as persona import, and otherwise reads JSON. JSON uses the lorebook upload ceiling;
+PNG and CHARX reuse persona import and archive limits. Attachment media types select the initial
+download budget; the parser enforces the actual carrier's ceiling before extraction. Panel imports
+refuse batches exceeding 250 entries; persona card conversion keeps the first 250 after splitting and
+reports the dropped count in the unmapped-fields notice.
+
 ## Activation contract
 
 `runtime/activation.ts` accepts loaded rows, message text ordered oldest to newest, and the active
@@ -122,10 +170,11 @@ server, lineage, channel, optional parent channel, and channel-scoping switch. I
 rows in insertion order, breaking ties by entry id, without mutating the inputs. Both placements
 share one budget; the returned rows retain `placement` 0 (before) or 1 (after) for a context consumer.
 
-Enabled, server, lineage, and channel gates apply even to `constant` entries. Channel matching uses
+Enabled, server, lineage, collection, and channel gates apply even to `constant` entries. Serverwide
+entries use the collection channel array; Persona entries use their own array. Channel matching uses
 the shared `channelScopeCandidates` and `channelScopeAdmits` helpers, including thread inheritance.
 Turning channel scoping off bypasses only the channel gate. Constants bypass keys, secondary logic,
-and chance. Keyword entries scan only their last `scan_depth` messages, normalize keys and text with
+and positive chance rolls. A zero trigger chance prevents every entry from activating. Keyword entries scan only their last `scan_depth` messages, normalize keys and text with
 NFKC and lowercase, and apply secondary logic before rolling chance.
 
 Latin, Cyrillic, Greek, and numeric keys require Unicode word boundaries; other keys use substring
@@ -172,7 +221,7 @@ Prompt inspection counts both blocks in the `memory` segment and labels them `Lo
 - `src/modules/lorebooks/runtime/contextItems.ts`: runtime read, the two prompt blocks, and identity
   conversion.
 - `src/modules/lorebooks/imports/`: card, world info, and upload conversion plus legacy tag mapping.
-- `src/modules/lorebooks/discord/panelSection.ts`: the Lorebooks tab and its four modals.
+- `src/modules/lorebooks/discord/panelSection.ts`: the Lorebooks tab and its modals.
 - `src/modules/lorebooks/discord/operations.ts`: write authorization, validation, and pending scope
   preservation.
 - `src/utils/discord/memoriesPanelCatalog.ts`: the `lore-*` route actions and field encoding.

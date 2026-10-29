@@ -48,7 +48,6 @@ describe("lorebook write operations", () => {
             title: "Title",
             content: "Content",
             keys: ["key"],
-            placement: 0,
             channelDiscIds: [],
           })
         ).status,
@@ -61,7 +60,6 @@ describe("lorebook write operations", () => {
             title: "Title",
             content: "Content",
             keys: ["key"],
-            placement: 0,
             channelDiscIds: [],
           })
         ).status,
@@ -106,7 +104,6 @@ describe("lorebook write operations", () => {
             title: "   ",
             content: "Content",
             keys: ["key"],
-            placement: 0,
             channelDiscIds: [],
           })
         ).status,
@@ -118,7 +115,6 @@ describe("lorebook write operations", () => {
             title: "Title",
             content: "   ",
             keys: ["key"],
-            placement: 0,
             channelDiscIds: [],
           })
         ).status,
@@ -130,36 +126,48 @@ describe("lorebook write operations", () => {
             title: "Title",
             content: "Content",
             keys: [],
-            placement: 0,
             channelDiscIds: [],
           })
         ).status,
-      ).toBe("keys-required");
-      expect(insertSpy).not.toHaveBeenCalled();
+      ).toBe("success");
+      expect(insertSpy).toHaveBeenCalledWith(
+        1,
+        null,
+        expect.objectContaining({ keys: [], constant: true, placement: 1 }),
+        undefined,
+        undefined,
+      );
+      insertSpy.mockClear();
 
       const result = await lorebookOperations.add({
         ...scope,
         title: "  New Entry  ",
         content: "Body",
         keys: ["key"],
-        placement: 1,
         channelDiscIds: ["111111111111111111"],
       });
       expect(result).toEqual({ status: "success", entryId: 7, title: "New Entry" });
-      expect(insertSpy).toHaveBeenCalledWith(1, null, {
-        title: "New Entry",
-        content: "Body",
-        keys: ["key"],
-        secondary_keys: [],
-        selective_logic: LOREBOOK_SELECTIVE_LOGIC.AND_ANY,
-        scan_depth: LOREBOOK_DEFAULT_SCAN_DEPTH,
-        trigger_chance: 100,
-        insertion_order: LOREBOOK_DEFAULT_INSERTION_ORDER,
-        placement: 1,
-        constant: false,
-        enabled: true,
-        channel_disc_ids: ["111111111111111111"],
-      });
+      expect(insertSpy).toHaveBeenCalledWith(
+        1,
+        null,
+        {
+          lorebook_name: undefined,
+          title: "New Entry",
+          content: "Body",
+          keys: ["key"],
+          secondary_keys: [],
+          selective_logic: LOREBOOK_SELECTIVE_LOGIC.AND_ANY,
+          scan_depth: LOREBOOK_DEFAULT_SCAN_DEPTH,
+          trigger_chance: 100,
+          insertion_order: LOREBOOK_DEFAULT_INSERTION_ORDER,
+          placement: 1,
+          constant: false,
+          enabled: true,
+          channel_disc_ids: ["111111111111111111"],
+        },
+        undefined,
+        undefined,
+      );
     } finally {
       insertSpy.mockRestore();
     }
@@ -176,7 +184,6 @@ describe("lorebook write operations", () => {
         title: "Title",
         content: "Content",
         keys: ["key"],
-        placement: 0 as const,
         channelDiscIds: [],
       };
       expect((await lorebookOperations.add(input)).status).toBe("limit");
@@ -199,7 +206,6 @@ describe("lorebook write operations", () => {
         title: "Renamed Manor",
         content: "New body",
         keys: ["renamed"],
-        placement: 0,
         channelDiscIds: ["111111111111111111"],
       });
       expect(result).toEqual({ status: "success", title: "Renamed Manor" });
@@ -212,7 +218,7 @@ describe("lorebook write operations", () => {
           title: "Renamed Manor",
           content: "New body",
           keys: ["renamed"],
-          placement: 0,
+          placement: LOREBOOK_PLACEMENT.AFTER,
           secondary_keys: ["storm"],
           selective_logic: LOREBOOK_SELECTIVE_LOGIC.NOT_ALL,
           scan_depth: 8,
@@ -242,7 +248,6 @@ describe("lorebook write operations", () => {
         title: "Hollow Manor",
         content: "The manor overlooks the sea.",
         keys: ["manor", "estate"],
-        placement: LOREBOOK_PLACEMENT.AFTER,
         channelDiscIds: [],
       });
       expect(updateSpy).toHaveBeenCalledWith(
@@ -257,7 +262,7 @@ describe("lorebook write operations", () => {
     }
   });
 
-  it("refuses to strip the last key from a keyword entry and reports stale ids", async () => {
+  it("makes an entry constant when its last keyword is cleared and reports stale ids", async () => {
     const listSpy = spyOn(lorebookRepository, "listScope");
     const updateSpy = spyOn(lorebookRepository, "update").mockResolvedValue("updated");
     try {
@@ -272,12 +277,11 @@ describe("lorebook write operations", () => {
             title: "Hollow Manor",
             content: "Body",
             keys: [],
-            placement: 0,
             channelDiscIds: [],
           })
         ).status,
-      ).toBe("keys-required");
-      expect(updateSpy).not.toHaveBeenCalled();
+      ).toBe("success");
+      expect(updateSpy).toHaveBeenCalledWith(1, 1770, 42, expect.objectContaining({ keys: [], constant: true }));
 
       listSpy.mockResolvedValue(freshScope([]));
       expect(
@@ -290,7 +294,6 @@ describe("lorebook write operations", () => {
             title: "Hollow Manor",
             content: "Body",
             keys: ["manor"],
-            placement: 0,
             channelDiscIds: [],
           })
         ).status,

@@ -1,3 +1,6 @@
+import { AttachmentBuilder } from "discord.js";
+import * as modalModule from "@/utils/discord/ui/modals";
+import { IMPORT_LIMITS } from "@/utils/security/rateLimiter";
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import type { APIAttachment, Client, ModalSubmitInteraction } from "discord.js";
 import type { LorebookEntryRow } from "@/modules/lorebooks/db/types";
@@ -72,7 +75,12 @@ interface InteractionOptions {
 }
 
 function makeInteraction(customId: string, options: InteractionOptions = {}) {
-  const state = { deferred: false, replied: false, payload: null as unknown };
+  const state = {
+    deferred: false,
+    replied: false,
+    payload: null as unknown,
+    followUps: [] as Array<{ content?: string; files?: AttachmentBuilder[] }>,
+  };
   const kind = options.kind ?? "button";
   const manage = options.manage ?? true;
   const guild = {
@@ -99,6 +107,13 @@ function makeInteraction(customId: string, options: InteractionOptions = {}) {
     },
     get payload() {
       return state.payload;
+    },
+    get followUps() {
+      return state.followUps;
+    },
+    followUp: async (payload: { content?: string; files?: AttachmentBuilder[] }) => {
+      expect(state.deferred).toBe(true);
+      state.followUps.push(payload);
     },
     isButton: () => kind === "button",
     isStringSelectMenu: () => kind === "select",
@@ -170,6 +185,7 @@ function createDependencies(
         entries: entries.filter((entry) => entry.persona_lineage_id === lineageId),
       };
     },
+    getLorebookCollections: async () => [{ lorebook_id: 1, name: "General", enabled: true, channel_disc_ids: [] }],
     getLorebookCounts: async () =>
       new Map<number | null, number>([
         [null, 1],
@@ -269,7 +285,7 @@ function emptyReport() {
 }
 
 async function runRoute(
-  dependencies: MemoriesRouteDependencies,
+  dependencies: Partial<MemoriesRouteDependencies>,
   interaction: ReturnType<typeof makeInteraction>,
 ): Promise<void> {
   const route = createMemoriesInteractionRoute(dependencies);
@@ -302,6 +318,13 @@ describe("lorebook panel routes", () => {
     await runRoute(dependencies, importInteraction);
     expect(calls).toContain("showImportLorebookModal:0");
     expect(importInteraction.deferred).toBe(false);
+    const collectionImport = makeInteraction("memories:v1:lore-book-select:en-US", {
+      kind: "select",
+      values: ["action:import-book"],
+    });
+    await runRoute(dependencies, collectionImport);
+    expect(calls).toContain("showImportLorebookModal:null");
+    expect(collectionImport.deferred).toBe(false);
   });
 
   it("refuses modal opening for non-managers and stale scopes by repainting in place", async () => {
@@ -331,6 +354,68 @@ describe("lorebook panel routes", () => {
         text.includes(localizer("en-US", "commands.memories.lorebook_changed_state_heading")),
       ),
     ).toBe(true);
+  });
+
+  it("prefills Edit from cached channels without fetching deleted channels before the modal", async () => {
+    const { dependencies } = createDependencies({}, [
+      makeEntry(1, { channel_disc_ids: [VALID_CHANNEL, FORGED_CHANNEL] }),
+    ]);
+    const overrides: Partial<MemoriesRouteDependencies> = { ...dependencies };
+    delete overrides.showEditLorebookModal;
+    const interaction = makeInteraction("memories:v1:lore-edit-open:en-US:1770:1");
+    const fetch = spyOn(interaction.guild.channels, "fetch");
+    const modal = spyOn(modalModule, "showRoutedRawModal").mockResolvedValue();
+    try {
+      await runRoute(overrides, interaction);
+      expect(fetch).not.toHaveBeenCalled();
+      expect(modal).toHaveBeenCalled();
+      expect(interaction.deferred).toBe(false);
+      const payload = JSON.stringify(modal.mock.calls[0]?.[1]);
+      expect(payload).toContain(VALID_CHANNEL);
+      expect(payload).not.toContain(FORGED_CHANNEL);
+    } finally {
+      fetch.mockRestore();
+      modal.mockRestore();
+    }
+  });
+
+  it("exports only the selected collection after acknowledgement and guards empty or unauthorized scopes", async () => {
+    const entry = makeEntry(1, { persona_lineage_id: null, lorebook_name: "General" });
+    const { dependencies } = createDependencies({}, [
+      entry,
+      makeEntry(2, { persona_lineage_id: null, lorebook_name: "Other" }),
+    ]);
+    const interaction = makeInteraction("memories:v1:lore-select:en-US:0:0:1", {
+      kind: "select",
+      values: ["action:export-lorebook"],
+    });
+    await runRoute(dependencies, interaction);
+    const attachment = interaction.followUps[0]?.files?.[0];
+    expect(attachment).toBeInstanceOf(AttachmentBuilder);
+    if (!attachment || !Buffer.isBuffer(attachment.attachment)) throw new Error("Missing export buffer");
+    const exported = JSON.parse(attachment.attachment.toString());
+    expect(Object.values(exported.entries)).toHaveLength(1);
+    expect(exported.entries["0"].content).toBe(entry.content);
+    expect(interaction.followUps[0]?.content).toBe(
+      localizedCopy("en-US", "commands.memories.lorebook_export_detail", { count: 1 }),
+    );
+    for (const [scope, manage, entries, key] of [
+      [1770, false, [makeEntry(1)], "manager_only_heading"],
+      [9999, true, [makeEntry(1)], "lorebook_changed_state_heading"],
+      [1770, true, [], "lorebook_export_empty_heading"],
+    ] as const) {
+      const blocked = createDependencies({}, [...entries]);
+      const target = makeInteraction(`memories:v1:lore-select:en-US:${scope}`, {
+        kind: "select",
+        manage,
+        values: ["action:export-lorebook"],
+      });
+      await runRoute(blocked.dependencies, target);
+      expect(target.followUps).toHaveLength(0);
+      expect(
+        payloadText(target).some((text) => text.includes(localizedCopy("en-US", `commands.memories.${key}`))),
+      ).toBe(true);
+    }
   });
 
   it("keeps Serverwide and Persona reads distinct and falls back for an unknown lineage", async () => {
@@ -378,9 +463,7 @@ describe("lorebook panel routes", () => {
       order: 100,
       placement: localizedCopy("en-US", "commands.memories.lorebook_placement_before"),
     });
-    expect(payloadText(selected).some((text) => text.replace(/\n-# /g, " ").replace(/^-# /, "").includes(meta))).toBe(
-      true,
-    );
+    expect(payloadText(selected).some((text) => text.replace(/^> /gm, "").includes(meta))).toBe(true);
 
     const page = makeInteraction("memories:v1:lore-range:en-US:1770:1", { kind: "button" });
     await runRoute(dependencies, page);
@@ -388,15 +471,64 @@ describe("lorebook panel routes", () => {
     expect(rendered).toContain("memories:v1:lore-select:en-US:1770:1");
   });
 
+  it("keeps book mutations authorized and acknowledged and makes deletion wait for confirmation", async () => {
+    const create = spyOn(lorebookRepository, "createBook").mockResolvedValue(1);
+    const rename = spyOn(lorebookRepository, "renameBook").mockResolvedValue(true);
+    const remove = spyOn(lorebookRepository, "deleteBook").mockResolvedValue(true);
+    try {
+      const { dependencies } = createDependencies();
+      for (const customId of [
+        "memories:v1:lore-book-create-submit:en-US:nonce123",
+        "memories:v1:lore-book-rename-submit:en-US:1:nonce123",
+        "memories:v1:lore-book-remove-confirm:en-US:1",
+      ]) {
+        await runRoute(
+          dependencies,
+          makeInteraction(customId, { kind: customId.includes("submit") ? "modal" : "button", manage: false }),
+        );
+      }
+      expect(create).not.toHaveBeenCalled();
+      expect(rename).not.toHaveBeenCalled();
+      expect(remove).not.toHaveBeenCalled();
+      const prompt = makeInteraction("memories:v1:lore-book-remove-prompt:en-US:1");
+      await runRoute(dependencies, prompt);
+      expect(JSON.stringify(prompt.payload)).toContain("lore-book-remove-confirm");
+      expect(remove).not.toHaveBeenCalled();
+      const submit = makeInteraction("memories:v1:lore-book-create-submit:en-US:nonce123", {
+        kind: "modal",
+        fields: { book_name_nonce123: "Manor" },
+      });
+      create.mockImplementation(async () => {
+        expect(submit.deferred).toBe(true);
+        return 1;
+      });
+      await runRoute(dependencies, submit);
+      expect(create).toHaveBeenCalledWith(1, "Manor");
+      await runRoute(
+        dependencies,
+        makeInteraction("memories:v1:lore-book-rename-submit:en-US:1:nonce123", {
+          kind: "modal",
+          fields: { book_name_nonce123: "Estate" },
+        }),
+      );
+      expect(rename).toHaveBeenCalledWith(1, 1, "Estate");
+      await runRoute(dependencies, makeInteraction("memories:v1:lore-book-remove-confirm:en-US:1"));
+      expect(remove).toHaveBeenCalledWith(1, 1);
+    } finally {
+      create.mockRestore();
+      rename.mockRestore();
+      remove.mockRestore();
+    }
+  });
+
   it("rechecks permission and scope on every write before calling the operation", async () => {
     const { dependencies, calls } = createDependencies();
     const routes = [
-      "memories:v1:lore-add-submit:en-US:0:nonce123",
-      "memories:v1:lore-import-submit:en-US:0:nonce123",
+      "memories:v1:lore-add-submit:en-US:0:nonce123:1",
+      "memories:v1:lore-import-submit:en-US:0:nonce123:1",
       "memories:v1:lore-edit-submit:en-US:0:1:nonce123",
       "memories:v1:lore-activation-submit:en-US:0:1:nonce123",
       "memories:v1:lore-toggle-enabled:en-US:0:1",
-      "memories:v1:lore-toggle-constant:en-US:0:1",
       "memories:v1:lore-remove-prompt:en-US:0:1",
       "memories:v1:lore-remove-confirm:en-US:0:1",
       "memories:v1:lore-remove-cancel:en-US:0:1",
@@ -410,7 +542,7 @@ describe("lorebook panel routes", () => {
     expect(calls.some((call) => call.startsWith("record:"))).toBe(false);
   });
 
-  it("adds an entry with parsed keys, placement, and a verified channel scope", async () => {
+  it("adds an entry with parsed keys in its collection and a verified channel scope", async () => {
     let written: Parameters<MemoriesRouteDependencies["lorebookOperations"]["add"]>[0] | undefined;
     let acknowledgedDuringWrite = false;
     let interaction: ReturnType<typeof makeInteraction>;
@@ -444,7 +576,6 @@ describe("lorebook panel routes", () => {
       title: "  The Manor  ",
       content: "It overlooks the sea.",
       keys: ["manor", "estate"],
-      placement: 1,
       channelDiscIds: [VALID_CHANNEL],
     });
     expect(calls).toContain("record:memories.workspace.lorebook.add");
@@ -460,7 +591,7 @@ describe("lorebook panel routes", () => {
       takeStringSelectValues: () => ["0"],
       takeChannelSelectValues: () => [FORGED_CHANNEL],
     });
-    const forged = makeInteraction("memories:v1:lore-add-submit:en-US:0:nonce123", {
+    const forged = makeInteraction("memories:v1:lore-add-submit:en-US:1770:nonce123", {
       kind: "modal",
       fields: {
         title_nonce123: "Title",
@@ -480,7 +611,7 @@ describe("lorebook panel routes", () => {
       takeStringSelectValues: () => ["0"],
       takeChannelSelectValues: () => undefined,
     });
-    const noChannelField = makeInteraction("memories:v1:lore-add-submit:en-US:0:nonce123", {
+    const noChannelField = makeInteraction("memories:v1:lore-add-submit:en-US:1770:nonce123", {
       kind: "modal",
       fields: {
         title_nonce123: "Title",
@@ -490,6 +621,58 @@ describe("lorebook panel routes", () => {
     });
     await runRoute(missing.dependencies, noChannelField);
     expect(missing.calls).not.toContain("op:add");
+  });
+
+  it("authorizes collection state and channels, rejects foreign channels, and repaints the new state", async () => {
+    let book = { lorebook_id: 1, name: "General", enabled: true, channel_disc_ids: [] as string[] };
+    const state = spyOn(lorebookRepository, "setBookEnabled");
+    const channels = spyOn(lorebookRepository, "setBookChannels").mockResolvedValue(true);
+    try {
+      const { dependencies } = createDependencies({
+        getLorebookCollections: async () => [book],
+        takeChannelSelectValues: () => [FORGED_CHANNEL],
+      });
+      for (const customId of [
+        "memories:v1:lore-book-toggle-enabled:en-US:1",
+        "memories:v1:lore-book-channels-submit:en-US:1:nonce123",
+      ]) {
+        await runRoute(
+          dependencies,
+          makeInteraction(customId, { kind: customId.includes("submit") ? "modal" : "button", manage: false }),
+        );
+      }
+      expect(state).not.toHaveBeenCalled();
+      expect(channels).not.toHaveBeenCalled();
+      await runRoute(
+        dependencies,
+        makeInteraction("memories:v1:lore-book-channels-submit:en-US:1:nonce123", { kind: "modal" }),
+      );
+      expect(channels).not.toHaveBeenCalled();
+      const toggle = makeInteraction("memories:v1:lore-book-toggle-enabled:en-US:1");
+      state.mockImplementation(async (_serverId, _bookId, enabled) => {
+        expect(toggle.deferred).toBe(true);
+        book = { ...book, enabled };
+        return true;
+      });
+      await runRoute(dependencies, toggle);
+      expect(state).toHaveBeenCalledWith(1, 1, false);
+      expect(JSON.stringify(toggle.payload)).toContain(
+        localizedCopy("en-US", "commands.memories.lorebook_status_disabled"),
+      );
+      const valid = createDependencies({ takeChannelSelectValues: () => [VALID_CHANNEL] });
+      await runRoute(
+        valid.dependencies,
+        makeInteraction("memories:v1:lore-book-channels-submit:en-US:1:nonce123", { kind: "modal" }),
+      );
+      expect(channels).toHaveBeenCalledWith(1, 1, [VALID_CHANNEL]);
+      const missing = createDependencies({ getLorebookCollections: async () => [] });
+      state.mockClear();
+      await runRoute(missing.dependencies, makeInteraction("memories:v1:lore-book-toggle-enabled:en-US:1"));
+      expect(state).not.toHaveBeenCalled();
+    } finally {
+      state.mockRestore();
+      channels.mockRestore();
+    }
   });
 
   it("edits an entry only when the submitted modal fields are complete", async () => {
@@ -518,7 +701,6 @@ describe("lorebook panel routes", () => {
       entryId: 1,
       title: "Renamed",
       keys: ["renamed"],
-      placement: 0,
       channelDiscIds: [],
     });
 
@@ -633,7 +815,7 @@ describe("lorebook panel routes", () => {
         add: async () => ({ status: "failed" }),
       },
     });
-    const add = makeInteraction("memories:v1:lore-add-submit:en-US:0:nonce123", {
+    const add = makeInteraction("memories:v1:lore-add-submit:en-US:0:nonce123:1", {
       kind: "modal",
       fields: {
         title_nonce123: "Title",
@@ -695,6 +877,55 @@ describe("lorebook import route", () => {
     return { entries, report };
   }
 
+  it("creates and selects an imported collection using an override, the file's name, or its filename", async () => {
+    const download = spyOn(safeDownloadModule, "safeDownload").mockResolvedValue({
+      success: true,
+      buffer: MODAL_BUFFER,
+    });
+    const importer = spyOn(lorebookRepository, "importNewBook");
+    try {
+      for (const [override, sourceName, expected] of [
+        ["Renamed", "Source", "Renamed"],
+        ["", "Source", "Source"],
+        ["", undefined, MODAL_ATTACHMENT.filename.replace(/\.[^.]+$/u, "")],
+      ] as const) {
+        const { dependencies } = createDependencies({
+          parseLorebookUpload: () => ({ ok: true, name: sourceName, conversion: conversion() }),
+          getLorebookCollections: async () => [{ lorebook_id: 7, name: expected, enabled: true, channel_disc_ids: [] }],
+        });
+        const interaction = makeInteraction("memories:v1:lore-book-import-submit:en-US:nonce123", {
+          kind: "modal",
+          fields: { book_name_nonce123: override },
+        });
+        importer.mockImplementation(async () => {
+          expect(interaction.deferred).toBe(true);
+          return { status: "appended", bookId: 7, added: 1, skipped: 0 };
+        });
+        await runRoute(dependencies, interaction);
+        expect(importer).toHaveBeenLastCalledWith(1, expected, expect.any(Array));
+        expect(JSON.stringify(interaction.payload)).toContain("lore-select:en-US:0:0:7");
+      }
+      const { dependencies } = createDependencies();
+      importer.mockClear();
+      await runRoute(
+        dependencies,
+        makeInteraction("memories:v1:lore-book-import-submit:en-US:nonce123", { kind: "modal", manage: false }),
+      );
+      expect(importer).not.toHaveBeenCalled();
+      importer.mockResolvedValue({ status: "exists" });
+      const collision = makeInteraction("memories:v1:lore-book-import-submit:en-US:nonce123", { kind: "modal" });
+      await runRoute(dependencies, collision);
+      expect(
+        payloadText(collision).some((text) =>
+          text.includes(localizedCopy("en-US", "commands.memories.lorebook_import_exists_heading")),
+        ),
+      ).toBe(true);
+    } finally {
+      download.mockRestore();
+      importer.mockRestore();
+    }
+  });
+
   it("appends converted entries and reports duplicates plus skipped entries", async () => {
     const downloadSpy = spyOn(safeDownloadModule, "safeDownload").mockResolvedValue({
       success: true,
@@ -716,7 +947,7 @@ describe("lorebook import route", () => {
         kind: "modal",
       });
       await runRoute(dependencies, interaction);
-      expect(appendSpy).toHaveBeenCalledWith(1, 1770, expect.any(Array));
+      expect(appendSpy).toHaveBeenCalledWith(1, 1770, expect.any(Array), undefined, undefined);
       expect(calls).toContain("record:memories.workspace.lorebook.import");
       expect(
         payloadText(interaction).some((text) =>
@@ -740,11 +971,11 @@ describe("lorebook import route", () => {
         takeCheckboxValues: () => ["replace"],
         parseLorebookUpload: () => ({ ok: true, conversion: conversion([makeEntry(50)]) }),
       });
-      const interaction = makeInteraction("memories:v1:lore-import-submit:en-US:0:nonce123", {
+      const interaction = makeInteraction("memories:v1:lore-import-submit:en-US:0:nonce123:1", {
         kind: "modal",
       });
       await runRoute(dependencies, interaction);
-      expect(replaceSpy).toHaveBeenCalledWith(1, null, expect.any(Array));
+      expect(replaceSpy).toHaveBeenCalledWith(1, null, expect.any(Array), undefined, "General", 1);
       expect(
         payloadText(interaction).some((text) =>
           localizedProse("en-US", "commands.memories.lorebook_import_replaced_detail", { count: 1 }).test(text),
@@ -753,6 +984,68 @@ describe("lorebook import route", () => {
     } finally {
       downloadSpy.mockRestore();
       replaceSpy.mockRestore();
+    }
+  });
+
+  it("reports conversion losses for both append and replacement", async () => {
+    const download = spyOn(safeDownloadModule, "safeDownload").mockResolvedValue({
+      success: true,
+      buffer: MODAL_BUFFER,
+    });
+    const append = spyOn(lorebookRepository, "appendScopeEntries").mockResolvedValue({
+      status: "appended",
+      added: 1,
+      skipped: 0,
+    });
+    const replace = spyOn(lorebookRepository, "replaceScopeEntries").mockResolvedValue("replaced");
+    try {
+      for (const replacing of [false, true]) {
+        const report = { skippedEntries: 2, unsupportedKeys: 3, ignoredEntries: 4, collapsedPlacement: 5 };
+        const { dependencies } = createDependencies({
+          takeCheckboxValues: () => (replacing ? ["replace"] : []),
+          parseLorebookUpload: () => ({ ok: true, conversion: conversion([makeEntry(50)], report) }),
+        });
+        const interaction = makeInteraction("memories:v1:lore-import-submit:en-US:1770:nonce123", { kind: "modal" });
+        await runRoute(dependencies, interaction);
+        expect(
+          payloadText(interaction).some((text) =>
+            localizedProse("en-US", "commands.memories.lorebook_conversion_note", {
+              skipped: 2,
+              keys: 3,
+              ignored: 4,
+              placements: 5,
+            }).test(text),
+          ),
+        ).toBe(true);
+      }
+    } finally {
+      download.mockRestore();
+      append.mockRestore();
+      replace.mockRestore();
+    }
+  });
+
+  it("refuses oversized PNG cards before downloading", async () => {
+    const download = spyOn(safeDownloadModule, "safeDownload");
+    try {
+      const { dependencies } = createDependencies({
+        takeLorebookFileUpload: () => ({
+          ...MODAL_ATTACHMENT,
+          filename: "card.json",
+          content_type: "image/png",
+          size: IMPORT_LIMITS.MAX_PERSONA_IMPORT_SIZE_MB * 1024 * 1024 + 1,
+        }),
+      });
+      const interaction = makeInteraction("memories:v1:lore-import-submit:en-US:1770:nonce123", { kind: "modal" });
+      await runRoute(dependencies, interaction);
+      expect(download).not.toHaveBeenCalled();
+      expect(
+        payloadText(interaction).some((text) =>
+          text.includes(localizedCopy("en-US", "commands.memories.lorebook_import_too_large_heading")),
+        ),
+      ).toBe(true);
+    } finally {
+      download.mockRestore();
     }
   });
 
@@ -778,6 +1071,10 @@ describe("lorebook import route", () => {
           overrides: { parseLorebookUpload: () => ({ ok: false, reason: "invalid_json" }) },
         },
         {
+          label: "no-book",
+          overrides: { parseLorebookUpload: () => ({ ok: false, reason: "no_book" }) },
+        },
+        {
           label: "unsupported",
           overrides: { parseLorebookUpload: () => ({ ok: false, reason: "unsupported" }) },
         },
@@ -799,6 +1096,7 @@ describe("lorebook import route", () => {
         limit: "lorebook_import_limit_heading",
         "invalid-json": "lorebook_invalid_json_heading",
         unsupported: "lorebook_import_unsupported_heading",
+        "no-book": "lorebook_import_no_book_heading",
         empty: "lorebook_import_empty_heading",
         missing: "lorebook_import_failed_heading",
         oversized: "lorebook_import_too_large_heading",
@@ -811,7 +1109,7 @@ describe("lorebook import route", () => {
           takeLorebookFileUpload: () => attachment,
           ...testCase.overrides,
         });
-        const interaction = makeInteraction("memories:v1:lore-import-submit:en-US:0:nonce123", {
+        const interaction = makeInteraction("memories:v1:lore-import-submit:en-US:0:nonce123:1", {
           kind: "modal",
         });
         await runRoute(dependencies, interaction);
@@ -821,7 +1119,7 @@ describe("lorebook import route", () => {
           testCase.label,
         ).toBe(true);
       }
-      expect(downloadSpy).toHaveBeenCalledTimes(4);
+      expect(downloadSpy).toHaveBeenCalledTimes(5);
       expect(appendSpy).toHaveBeenCalledTimes(1);
     } finally {
       downloadSpy.mockRestore();
@@ -839,7 +1137,7 @@ describe("lorebook import route", () => {
       const { dependencies } = createDependencies({
         parseLorebookUpload: () => ({ ok: true, conversion: conversion([makeEntry(50)]) }),
       });
-      const interaction = makeInteraction("memories:v1:lore-import-submit:en-US:0:nonce123", {
+      const interaction = makeInteraction("memories:v1:lore-import-submit:en-US:0:nonce123:1", {
         kind: "modal",
       });
       await runRoute(dependencies, interaction);
@@ -858,7 +1156,7 @@ describe("lorebook import route", () => {
     const downloadSpy = spyOn(safeDownloadModule, "safeDownload");
     try {
       const { dependencies, calls } = createDependencies();
-      const interaction = makeInteraction("memories:v1:lore-import-submit:en-US:0:nonce123", {
+      const interaction = makeInteraction("memories:v1:lore-import-submit:en-US:0:nonce123:1", {
         kind: "modal",
         manage: false,
       });

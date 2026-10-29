@@ -1,6 +1,8 @@
 import {
   ButtonStyle,
   ComponentType,
+  escapeInlineCode,
+  inlineCode,
   type ButtonComponentData,
   type ComponentInContainerData,
   type SelectMenuComponentOptionData,
@@ -17,7 +19,9 @@ import {
   LOREBOOK_TITLE_MAX,
   normalizeLorebookKeys,
   type LorebookEntryRow,
+  type ServerLorebook,
 } from "@/modules/lorebooks/db/types";
+import { IMPORT_LIMITS } from "@/utils/security/rateLimiter";
 import { LOREBOOK_IMPORT_MAX_FILE_MB } from "@/modules/lorebooks/imports";
 import { resolveRangeSelection } from "@/utils/discord/interactions/panelController";
 import {
@@ -37,23 +41,35 @@ import {
   withLinePrefix,
 } from "@/utils/discord/ui/panel";
 import { measureFormattedPanelTextLength, renderPanelContentBlock } from "@/utils/discord/ui/panelProse";
+import { statusNote } from "@/utils/discord/ui/statusTitle";
 import { localizer } from "@/utils/text/localizer";
 import { groupPersonasByLineage, personaRepresentativeForLineage } from "@/utils/persona/lineage";
 
-/** Two fixed add and import options leave 23 entry slots under Discord's 25-option select cap. */
-export const LOREBOOK_ENTRY_PAGE_SIZE = 23;
+/** Three fixed add, import, and export options leave 22 entry slots under Discord's 25-option select cap. */
+export const LOREBOOK_ENTRY_PAGE_SIZE = 22;
+export const LOREBOOK_COLLECTION_PAGE_SIZE = 23;
 
 export type LorebookPanelPage =
-  | { kind: "lorebooks"; selectedEntryId?: number; rangeIndex?: number; personaRangeIndex?: number }
-  | { kind: "lore-remove"; entryId: number };
+  | {
+      kind: "lorebooks";
+      bookId?: number;
+      bookRangeIndex?: number;
+      selectedEntryId?: number;
+      rangeIndex?: number;
+      personaRangeIndex?: number;
+    }
+  | { kind: "lore-book-remove"; bookId: number }
+  | { kind: "lore-remove"; entryId: number; bookId?: number };
 
 export interface LorebookPanelRenderInput {
   locale: string;
   scopeLineageId: number;
   personas: TomoriState[];
   entries: readonly LorebookEntryRow[];
+  books?: readonly ServerLorebook[];
   countsByLineage: ReadonlyMap<number | null, number> | null;
   canManage: boolean;
+  channelScopeAvailable?: boolean;
   readStatus: PanelReadStatus;
   page: LorebookPanelPage;
   availableTextLength: number;
@@ -61,10 +77,10 @@ export interface LorebookPanelRenderInput {
 }
 
 type LorebookModalField =
+  | "book_name"
   | "title"
   | "keys"
   | "content"
-  | "placement"
   | "channels"
   | "secondary_keys"
   | "secondary_logic"
@@ -80,12 +96,6 @@ export function buildLorebookModalFieldId(field: LorebookModalField, nonce: stri
 
 export function parseLorebookKeys(rawKeys: string): string[] {
   return normalizeLorebookKeys(rawKeys.split(","));
-}
-
-export function parseLorebookPlacement(raw: string | undefined): 0 | 1 | null {
-  if (raw === String(LOREBOOK_PLACEMENT.BEFORE)) return 0;
-  if (raw === String(LOREBOOK_PLACEMENT.AFTER)) return 1;
-  return null;
 }
 
 export function parseLorebookSelectiveLogic(raw: string | undefined): 0 | 1 | 2 | 3 | null {
@@ -155,7 +165,19 @@ function lorebookHeading(locale: string, avatarUrl?: string | null): ComponentIn
 }
 
 export function buildLorebookPanelSection(input: LorebookPanelRenderInput): ComponentInContainerData[] {
-  const { locale, scopeLineageId, personas, entries, countsByLineage, canManage, readStatus, page } = input;
+  const { locale, scopeLineageId, personas, countsByLineage, canManage, readStatus, page } = input;
+  const books = input.books ?? [];
+  const requestedBook = books.find((book) => book.lorebook_id === page.bookId);
+  const entryBook =
+    page.kind === "lorebooks"
+      ? input.entries.find((entry) => entry.entry_id === page.selectedEntryId)?.lorebook_name
+      : undefined;
+  const selectedBook = requestedBook ?? books.find((book) => book.name === entryBook) ?? books[0];
+  const bookId = scopeLineageId === 0 ? selectedBook?.lorebook_id : undefined;
+  const entries =
+    scopeLineageId === 0 && selectedBook
+      ? input.entries.filter((entry) => entry.lorebook_name === selectedBook.name)
+      : input.entries;
   const writesDisabled = readStatus !== "fresh";
   const personaScope = scopeLineageId !== 0;
   const lineageEntries = [...groupPersonasByLineage(personas).entries()];
@@ -236,6 +258,7 @@ export function buildLorebookPanelSection(input: LorebookPanelRenderInput): Comp
             action: "lore-persona-page",
             locale,
             scopeLineageId,
+            bookId,
             rangeIndex,
           }),
       },
@@ -245,10 +268,65 @@ export function buildLorebookPanelSection(input: LorebookPanelRenderInput): Comp
 
   components.push(lorebookHeading(locale, personaScope ? input.selectedPersonaAvatarUrl : null));
 
+  if (!personaScope) {
+    const bookRange = resolveRangeSelection(
+      books,
+      page.kind === "lorebooks"
+        ? (page.bookRangeIndex ??
+            Math.max(0, Math.floor((selectedBook ? books.indexOf(selectedBook) : 0) / LOREBOOK_COLLECTION_PAGE_SIZE)))
+        : 0,
+      LOREBOOK_COLLECTION_PAGE_SIZE,
+    );
+    const options: SelectMenuComponentOptionData[] = bookRange.visibleItems.map((book) => ({
+      label: safeSelectOptionText(book.name, 100),
+      value: String(book.lorebook_id),
+      default: book.lorebook_id === bookId,
+    }));
+    if (canManage)
+      options.unshift(
+        {
+          label: `+ ${localizer(locale, "commands.memories.lorebook_collection_add")}`,
+          value: "action:add-book",
+        },
+        {
+          label: `+ ${localizer(locale, "commands.memories.lorebook_import_option")}`,
+          value: "action:import-book",
+        },
+      );
+    if (options.length)
+      components.push({
+        type: ComponentType.ActionRow,
+        components: [
+          {
+            type: ComponentType.StringSelect,
+            customId: buildMemoriesRouteId({ action: "lore-book-select", locale }),
+            placeholder: localizer(locale, "commands.memories.lorebook_collection_placeholder"),
+            options,
+            disabled: writesDisabled,
+          },
+        ],
+      });
+    const pagination = buildPaginationRow({
+      locale,
+      rangeIndex: bookRange.rangeIndex,
+      rangeCount: bookRange.rangeCount,
+      namespace: MEMORIES_ROUTE_NAMESPACE,
+      version: MEMORIES_ROUTE_VERSION,
+      disabled: writesDisabled,
+      buildSegments: {
+        page: (rangeIndex) => buildMemoriesRouteSegments({ action: "lore-book-select", locale, rangeIndex }),
+      },
+    });
+    if (pagination) components.push(pagination);
+  }
+
   if (entries.some((entry) => (entry.legacy_channel_tags?.length ?? 0) > 0)) {
     components.push({
       type: ComponentType.TextDisplay,
-      content: withLinePrefix("-# ", localizer(locale, "commands.memories.channel_scope_legacy_notice")),
+      content: withLinePrefix(
+        "-# ",
+        statusNote("warning", localizer(locale, "commands.memories.channel_scope_legacy_notice")),
+      ),
     });
   }
 
@@ -257,6 +335,110 @@ export function buildLorebookPanelSection(input: LorebookPanelRenderInput): Comp
       type: ComponentType.TextDisplay,
       content: withLinePrefix("-# ", localizer(locale, "commands.memories.lorebook_read_only_notice")),
     });
+  }
+
+  if (!personaScope && !selectedBook) return components;
+
+  if (!personaScope && selectedBook) {
+    if (page.kind === "lore-book-remove") {
+      components.push(
+        {
+          type: ComponentType.TextDisplay,
+          content: localizer(locale, "commands.memories.lorebook_collection_remove_description", {
+            name: selectedBook.name,
+          }),
+        },
+        {
+          type: ComponentType.ActionRow,
+          components: [
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Danger,
+              customId: buildMemoriesRouteId({
+                action: "lore-book-remove-confirm",
+                locale,
+                bookId: selectedBook.lorebook_id,
+              }),
+              label: localizer(locale, "commands.memories.remove_confirm"),
+              disabled: writesDisabled || !canManage,
+            },
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Secondary,
+              customId: buildMemoriesRouteId({
+                action: "lore-book-remove-cancel",
+                locale,
+                bookId: selectedBook.lorebook_id,
+              }),
+              label: localizer(locale, "commands.memories.cancel"),
+            },
+          ],
+        },
+      );
+      return components;
+    }
+    components.push({
+      type: ComponentType.ActionRow,
+      components: [
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: buildMemoriesRouteId({
+            action: "lore-book-toggle-enabled",
+            locale,
+            bookId: selectedBook.lorebook_id,
+          }),
+          label: localizer(
+            locale,
+            selectedBook.enabled
+              ? "commands.memories.lorebook_status_active"
+              : "commands.memories.lorebook_status_disabled",
+          ),
+          emoji: { name: selectedBook.enabled ? "🟢" : "🔴" },
+          disabled: writesDisabled || !canManage,
+        },
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: buildMemoriesRouteId({
+            action: "lore-book-channels-open",
+            locale,
+            bookId: selectedBook.lorebook_id,
+          }),
+          label: localizer(locale, "commands.memories.lorebook_collection_channels"),
+          disabled: writesDisabled || !canManage || input.channelScopeAvailable === false,
+        },
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: buildMemoriesRouteId({ action: "lore-book-rename-open", locale, bookId: selectedBook.lorebook_id }),
+          label: localizer(locale, "commands.memories.lorebook_collection_rename"),
+          disabled: writesDisabled || !canManage,
+        },
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Danger,
+          customId: buildMemoriesRouteId({
+            action: "lore-book-remove-prompt",
+            locale,
+            bookId: selectedBook.lorebook_id,
+          }),
+          label: localizer(locale, "commands.memories.lorebook_collection_remove"),
+          disabled: writesDisabled || !canManage,
+        },
+      ],
+    });
+    const collectionScopeLine = buildChannelScopeLine(locale, {
+      channel_disc_ids: selectedBook.channel_disc_ids,
+      channel_scope_pending: false,
+    });
+    components.push({
+      type: ComponentType.TextDisplay,
+      content: collectionScopeLine
+        ? collectionScopeLine.replace(/^-# /gm, "> ")
+        : `> ${localizer(locale, "commands.memories.lorebook_collection_all_channels")}`,
+    });
+    components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
   }
 
   if (page.kind === "lore-remove") {
@@ -281,6 +463,7 @@ export function buildLorebookPanelSection(input: LorebookPanelRenderInput): Comp
                 action: "lore-remove-confirm",
                 locale,
                 scopeLineageId,
+                bookId,
                 entryId: target.entry_id,
               }),
               label: localizer(locale, "commands.memories.remove_confirm"),
@@ -293,6 +476,7 @@ export function buildLorebookPanelSection(input: LorebookPanelRenderInput): Comp
                 action: "lore-remove-cancel",
                 locale,
                 scopeLineageId,
+                bookId,
                 entryId: target.entry_id,
               }),
               label: localizer(locale, "commands.memories.cancel"),
@@ -323,9 +507,24 @@ export function buildLorebookPanelSection(input: LorebookPanelRenderInput): Comp
       description: safeSelectOptionText(localizer(locale, "commands.memories.lorebook_add_option_description"), 100),
     });
     selectOptions.push({
-      label: safeSelectOptionText(`+ ${localizer(locale, "commands.memories.lorebook_import_option")}`, 100),
+      label: safeSelectOptionText(
+        `+ ${localizer(
+          locale,
+          personaScope
+            ? "commands.memories.lorebook_import_option"
+            : "commands.memories.lorebook_import_entries_option",
+        )}`,
+        100,
+      ),
       value: "action:import-lorebook",
       description: safeSelectOptionText(localizer(locale, "commands.memories.lorebook_import_option_description"), 100),
+    });
+  }
+  if (canManage) {
+    selectOptions.push({
+      label: safeSelectOptionText(`+ ${localizer(locale, "commands.memories.lorebook_export_option")}`, 100),
+      value: "action:export-lorebook",
+      description: safeSelectOptionText(localizer(locale, "commands.memories.lorebook_export_option_description"), 100),
     });
   }
   selectOptions.push(
@@ -336,6 +535,20 @@ export function buildLorebookPanelSection(input: LorebookPanelRenderInput): Comp
   );
 
   if (selectOptions.length > 0) {
+    if (!personaScope && selectedBook) {
+      components.push({
+        type: ComponentType.TextDisplay,
+        content: localizer(
+          locale,
+          canManage
+            ? "commands.memories.lorebook_entries_description"
+            : "commands.memories.lorebook_entries_read_only_description",
+          {
+            name: inlineCode(escapeInlineCode(selectedBook.name)),
+          },
+        ),
+      });
+    }
     components.push({
       type: ComponentType.ActionRow,
       components: [
@@ -345,6 +558,7 @@ export function buildLorebookPanelSection(input: LorebookPanelRenderInput): Comp
             action: "lore-select",
             locale,
             scopeLineageId,
+            bookId,
             rangeIndex: range.rangeIndex,
           }),
           placeholder: localizer(locale, "commands.memories.lorebook_select_placeholder"),
@@ -368,6 +582,7 @@ export function buildLorebookPanelSection(input: LorebookPanelRenderInput): Comp
           action: "lore-range",
           locale,
           scopeLineageId,
+          bookId,
           rangeIndex: targetRangeIndex,
         }),
     },
@@ -396,11 +611,13 @@ export function buildLorebookPanelSection(input: LorebookPanelRenderInput): Comp
         order: selectedEntry.insertion_order,
         placement: placementLabel(locale, selectedEntry.placement),
       });
-  const metaLine = `-# ${meta}`;
-  const scopeLine = buildChannelScopeLine(locale, {
-    channel_disc_ids: selectedEntry.channel_disc_ids,
-    channel_scope_pending: (selectedEntry.legacy_channel_tags?.length ?? 0) > 0,
-  });
+  const metaLine = withLinePrefix("> ", meta);
+  const scopeLine = personaScope
+    ? buildChannelScopeLine(locale, {
+        channel_disc_ids: selectedEntry.channel_disc_ids,
+        channel_scope_pending: (selectedEntry.legacy_channel_tags?.length ?? 0) > 0,
+      })?.replace(/^-# /gm, "> ")
+    : null;
   const fixedTextLength =
     measureFormattedPanelTextLength(components) +
     measureFormattedPanelTextLength({
@@ -421,9 +638,24 @@ export function buildLorebookPanelSection(input: LorebookPanelRenderInput): Comp
       type: ComponentType.Button,
       style: ButtonStyle.Secondary,
       customId: buildMemoriesRouteId({
+        action: "lore-toggle-enabled",
+        locale,
+        scopeLineageId,
+        bookId,
+        entryId: selectedEntry.entry_id,
+      }),
+      label: statusLabel(locale, selectedEntry),
+      emoji: { name: selectedEntry.enabled ? "🟢" : "🔴" },
+      disabled: writesDisabled || !canManage,
+    },
+    {
+      type: ComponentType.Button,
+      style: ButtonStyle.Secondary,
+      customId: buildMemoriesRouteId({
         action: "lore-edit-open",
         locale,
         scopeLineageId,
+        bookId,
         entryId: selectedEntry.entry_id,
       }),
       label: localizer(locale, "commands.memories.lorebook_edit_button"),
@@ -436,44 +668,11 @@ export function buildLorebookPanelSection(input: LorebookPanelRenderInput): Comp
         action: "lore-activation-open",
         locale,
         scopeLineageId,
+        bookId,
         entryId: selectedEntry.entry_id,
       }),
       label: localizer(locale, "commands.memories.lorebook_activation_button"),
       disabled: writesDisabled || !canManage,
-    },
-    {
-      type: ComponentType.Button,
-      style: ButtonStyle.Secondary,
-      customId: buildMemoriesRouteId({
-        action: "lore-toggle-enabled",
-        locale,
-        scopeLineageId,
-        entryId: selectedEntry.entry_id,
-      }),
-      label: localizer(
-        locale,
-        selectedEntry.enabled
-          ? "commands.memories.lorebook_disable_button"
-          : "commands.memories.lorebook_enable_button",
-      ),
-      disabled: writesDisabled || !canManage,
-    },
-    {
-      type: ComponentType.Button,
-      style: ButtonStyle.Secondary,
-      customId: buildMemoriesRouteId({
-        action: "lore-toggle-constant",
-        locale,
-        scopeLineageId,
-        entryId: selectedEntry.entry_id,
-      }),
-      label: localizer(
-        locale,
-        selectedEntry.constant
-          ? "commands.memories.lorebook_keyword_button"
-          : "commands.memories.lorebook_constant_button",
-      ),
-      disabled: writesDisabled || !canManage || selectedEntry.keys.length === 0,
     },
     {
       type: ComponentType.Button,
@@ -482,6 +681,7 @@ export function buildLorebookPanelSection(input: LorebookPanelRenderInput): Comp
         action: "lore-remove-prompt",
         locale,
         scopeLineageId,
+        bookId,
         entryId: selectedEntry.entry_id,
       }),
       label: localizer(locale, "commands.memories.lorebook_remove_button"),
@@ -498,9 +698,10 @@ export function buildAddLorebookModal(
   scopeLineageId: number,
   nonce: string,
   channelScope: readonly string[] | null,
+  bookId?: number,
 ): { custom_id: string; title: string; components: RawDiscordComponent[] } {
   return {
-    custom_id: buildMemoriesRouteId({ action: "lore-add-submit", locale, scopeLineageId, nonce }),
+    custom_id: buildMemoriesRouteId({ action: "lore-add-submit", locale, scopeLineageId, nonce, bookId }),
     title: safeSelectOptionText(localizer(locale, "commands.memories.lorebook_add_modal_title"), 45),
     components: [
       {
@@ -540,31 +741,12 @@ export function buildAddLorebookModal(
           required: true,
         },
       },
-      {
-        type: ComponentType.Label,
-        label: safeSelectOptionText(localizer(locale, "commands.memories.lorebook_placement_label"), 45),
-        component: {
-          type: ComponentType.StringSelect,
-          custom_id: buildLorebookModalFieldId("placement", nonce),
-          options: [
-            {
-              label: safeSelectOptionText(localizer(locale, "commands.memories.lorebook_placement_before_option"), 100),
-              value: String(LOREBOOK_PLACEMENT.BEFORE),
-              default: true,
-            },
-            {
-              label: safeSelectOptionText(localizer(locale, "commands.memories.lorebook_placement_after_option"), 100),
-              value: String(LOREBOOK_PLACEMENT.AFTER),
-            },
-          ],
-        },
-      },
       ...buildChannelScopeField(
         locale,
         buildLorebookModalFieldId("channels", nonce),
         "commands.memories.lorebook_channels_label",
         "commands.memories.lorebook_channels_description",
-        channelScope,
+        scopeLineageId === 0 ? null : channelScope,
       ),
     ],
   };
@@ -609,7 +791,7 @@ export function buildEditLorebookModal(
           custom_id: buildLorebookModalFieldId("keys", nonce),
           style: 1,
           placeholder: safeSelectOptionText(localizer(locale, "commands.memories.lorebook_keys_placeholder"), 100),
-          value: entry.keys.join(", "),
+          value: entry.constant ? "" : entry.keys.join(", "),
           max_length: LOREBOOK_KEYS_MAX * (LOREBOOK_KEY_LENGTH_MAX + 2),
           required: false,
         },
@@ -627,32 +809,12 @@ export function buildEditLorebookModal(
           required: true,
         },
       },
-      {
-        type: ComponentType.Label,
-        label: safeSelectOptionText(localizer(locale, "commands.memories.lorebook_placement_label"), 45),
-        component: {
-          type: ComponentType.StringSelect,
-          custom_id: buildLorebookModalFieldId("placement", nonce),
-          options: [
-            {
-              label: safeSelectOptionText(localizer(locale, "commands.memories.lorebook_placement_before_option"), 100),
-              value: String(LOREBOOK_PLACEMENT.BEFORE),
-              default: entry.placement === LOREBOOK_PLACEMENT.BEFORE,
-            },
-            {
-              label: safeSelectOptionText(localizer(locale, "commands.memories.lorebook_placement_after_option"), 100),
-              value: String(LOREBOOK_PLACEMENT.AFTER),
-              default: entry.placement === LOREBOOK_PLACEMENT.AFTER,
-            },
-          ],
-        },
-      },
       ...buildChannelScopeField(
         locale,
         buildLorebookModalFieldId("channels", nonce),
         "commands.memories.lorebook_channels_label",
         "commands.memories.lorebook_channels_description",
-        channelScope,
+        scopeLineageId === 0 ? null : channelScope,
       ),
     ],
   };
@@ -775,12 +937,25 @@ export function buildLorebookActivationModal(
 
 export function buildImportLorebookModal(
   locale: string,
-  scopeLineageId: number,
+  scopeLineageId: number | null,
   nonce: string,
+  bookId?: number,
 ): { custom_id: string; title: string; components: RawDiscordComponent[] } {
   return {
-    custom_id: buildMemoriesRouteId({ action: "lore-import-submit", locale, scopeLineageId, nonce }),
-    title: safeSelectOptionText(localizer(locale, "commands.memories.lorebook_import_modal_title"), 45),
+    custom_id: buildMemoriesRouteId(
+      scopeLineageId === null
+        ? { action: "lore-book-import-submit", locale, nonce }
+        : { action: "lore-import-submit", locale, scopeLineageId, nonce, bookId },
+    ),
+    title: safeSelectOptionText(
+      localizer(
+        locale,
+        scopeLineageId === 0
+          ? "commands.memories.lorebook_import_entries_option"
+          : "commands.memories.lorebook_import_modal_title",
+      ),
+      45,
+    ),
     components: [
       {
         type: ComponentType.Label,
@@ -788,6 +963,8 @@ export function buildImportLorebookModal(
         description: safeSelectOptionText(
           localizer(locale, "commands.memories.lorebook_import_file_description", {
             max: LOREBOOK_IMPORT_MAX_FILE_MB,
+            cardMax: IMPORT_LIMITS.MAX_PERSONA_IMPORT_SIZE_MB,
+            charxMax: IMPORT_LIMITS.MAX_CHARX_IMPORT_SIZE_MB,
           }),
           100,
         ),
@@ -799,27 +976,98 @@ export function buildImportLorebookModal(
           required: true,
         },
       },
+      ...(scopeLineageId === null
+        ? [
+            {
+              type: ComponentType.Label,
+              label: localizer(locale, "commands.memories.lorebook_collection_name"),
+              description: localizer(locale, "commands.memories.lorebook_import_name_description"),
+              component: {
+                type: ComponentType.TextInput,
+                custom_id: buildLorebookModalFieldId("book_name", nonce),
+                style: 1,
+                required: false,
+                max_length: LOREBOOK_TITLE_MAX,
+              },
+            },
+          ]
+        : [
+            {
+              type: ComponentType.Label,
+              label: safeSelectOptionText(localizer(locale, "commands.memories.lorebook_import_replace_label"), 45),
+              description: safeSelectOptionText(
+                localizer(locale, "commands.memories.lorebook_import_replace_description"),
+                100,
+              ),
+              component: {
+                type: ComponentType.CheckboxGroup,
+                custom_id: buildLorebookModalFieldId("replace", nonce),
+                options: [
+                  {
+                    label: safeSelectOptionText(
+                      localizer(locale, "commands.memories.lorebook_import_replace_label"),
+                      100,
+                    ),
+                    value: "replace",
+                  },
+                ],
+                min_values: 0,
+                max_values: 1,
+                required: false,
+              },
+            },
+          ]),
+    ],
+  };
+}
+
+export function buildLorebookCollectionModal(
+  locale: string,
+  nonce: string,
+  book?: ServerLorebook,
+): { custom_id: string; title: string; components: RawDiscordComponent[] } {
+  return {
+    custom_id: buildMemoriesRouteId(
+      book
+        ? { action: "lore-book-rename-submit", locale, nonce, bookId: book.lorebook_id }
+        : { action: "lore-book-create-submit", locale, nonce },
+    ),
+    title: localizer(
+      locale,
+      book ? "commands.memories.lorebook_collection_rename" : "commands.memories.lorebook_collection_add",
+    ),
+    components: [
       {
         type: ComponentType.Label,
-        label: safeSelectOptionText(localizer(locale, "commands.memories.lorebook_import_replace_label"), 45),
-        description: safeSelectOptionText(
-          localizer(locale, "commands.memories.lorebook_import_replace_description"),
-          100,
-        ),
+        label: localizer(locale, "commands.memories.lorebook_collection_name"),
         component: {
-          type: ComponentType.CheckboxGroup,
-          custom_id: buildLorebookModalFieldId("replace", nonce),
-          options: [
-            {
-              label: safeSelectOptionText(localizer(locale, "commands.memories.lorebook_import_replace_label"), 100),
-              value: "replace",
-            },
-          ],
-          min_values: 0,
-          max_values: 1,
-          required: false,
+          type: ComponentType.TextInput,
+          custom_id: buildLorebookModalFieldId("book_name", nonce),
+          style: 1,
+          required: true,
+          max_length: 128,
+          ...(book ? { value: book.name } : {}),
         },
       },
     ],
+  };
+}
+
+export function buildLorebookChannelsModal(
+  locale: string,
+  book: ServerLorebook,
+  nonce: string,
+  channels: readonly string[],
+): { custom_id: string; title: string; components: RawDiscordComponent[] } {
+  return {
+    custom_id: buildMemoriesRouteId({ action: "lore-book-channels-submit", locale, bookId: book.lorebook_id, nonce }),
+    title: localizer(locale, "commands.memories.lorebook_collection_channels_title"),
+    components: buildChannelScopeField(
+      locale,
+      buildLorebookModalFieldId("channels", nonce),
+      "commands.memories.lorebook_channels_label",
+      "commands.memories.lorebook_collection_channels_description",
+      channels,
+    ),
   };
 }

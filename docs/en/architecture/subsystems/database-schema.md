@@ -147,6 +147,7 @@ matching credential revision, including after the persona is removed.
 
 ### Memory, dialogue, and expression data
 
+- **`server_lorebooks`**: named Serverwide collections with an enabled flag and channel scope; renaming or deleting a book cascades to its entries.
 - **`persona_lorebook_entries`**: authored lore scoped by server and nullable persona lineage; NULL
   means Serverwide. The `(server_id, persona_lineage_id, enabled)` index serves scope reads. Server
   deletion cascades entries; persona deletion preserves them. A timestamp trigger updates

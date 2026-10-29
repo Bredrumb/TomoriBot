@@ -24,7 +24,7 @@ import {
   type MemoriesCategory,
 } from "@/utils/discord/memoriesPanelCatalog";
 import type { DocumentChunkRow, DocumentListRow } from "@/utils/discord/interactions/memoriesDocumentOperations";
-import type { LorebookEntryRow } from "@/modules/lorebooks/db/types";
+import type { LorebookEntryRow, ServerLorebook } from "@/modules/lorebooks/db/types";
 import { buildLorebookPanelSection, type LorebookPanelPage } from "@/modules/lorebooks/discord/panelSection";
 import {
   buildCategoryButtonRow,
@@ -413,6 +413,8 @@ export interface MemoriesPanelRenderInput {
   documentChunks?: DocumentChunkRow[];
   documentCountsByPersona?: ReadonlyMap<number, number>;
   eligibleHistoryPersonaIds?: ReadonlySet<number>;
+  channelScopeAvailable?: boolean;
+  lorebookCollections?: readonly ServerLorebook[];
   lorebookEntries?: readonly LorebookEntryRow[];
   lorebookCounts?: ReadonlyMap<number | null, number> | null;
   stmEntries?: StmPanelEntry[];
@@ -1305,13 +1307,17 @@ ${localizer(locale, "commands.memories.documents_description")}`,
         measureFormattedPanelTextLength(components),
     );
     const lorebookPage: LorebookPanelPage =
-      page.kind === "lorebooks" || page.kind === "lore-remove" ? page : { kind: "lorebooks" };
+      page.kind === "lorebooks" || page.kind === "lore-remove" || page.kind === "lore-book-remove"
+        ? page
+        : { kind: "lorebooks" };
     components.push(
       ...buildLorebookPanelSection({
         locale,
         scopeLineageId: selectedLineageId,
         personas,
         entries: input.lorebookEntries ?? [],
+        books: input.lorebookCollections,
+        channelScopeAvailable: input.channelScopeAvailable,
         countsByLineage: input.lorebookCounts ?? null,
         canManage,
         readStatus,

@@ -1119,7 +1119,10 @@ export class ExportRepository {
         return { success: false, error: "commands.data.export.error_no_server_data" };
       }
 
-      const lore = await new LorebookRepository(this.database).listServer(serverId);
+      const lore =
+        scope.mode === "all"
+          ? await new LorebookRepository(this.database).listServer(serverId)
+          : { status: "fresh" as const, entries: [] };
       if (lore.status !== "fresh") return { success: false, error: "commands.data.export.error_export_failed" };
       const loreFor = (lineage: number | null) =>
         lore.entries.filter((entry) => entry.persona_lineage_id === lineage).map(lorebookEntryToInput);
@@ -1226,7 +1229,6 @@ export class ExportRepository {
               scope.mode === "main" ? "Main Persona" : "Selected Persona",
             ),
             memories: this.memoryItems(memoryRows),
-            lorebook_entries: loreFor(lineageId),
           },
         ];
       }
@@ -1236,7 +1238,7 @@ export class ExportRepository {
         version: EXPORT_V2_VERSION,
         type: "workspace_memories",
         exported_at: new Date().toISOString(),
-        data: { buckets, serverwide_lorebook_entries: loreFor(null) },
+        data: { buckets, ...(scope.mode === "all" ? { serverwide_lorebook_entries: loreFor(null) } : {}) },
       };
       const validated = getWorkspaceMemoriesExportSchema().safeParse(exportCandidate);
       if (!validated.success) {

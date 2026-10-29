@@ -100,7 +100,7 @@ describe("lorebook import mapping", () => {
     }
   });
 
-  it("preserves absence and rejects oversized books without truncating", () => {
+  it("preserves absence and keeps the first 250 converted entries from oversized books", () => {
     const absent = presetRepository.convertSillyTavernJsonToPresetData({ spec: "chara_card_v3", name: "Juno" });
     expect(absent.success && absent.data.lorebook_entries).toBeUndefined();
     const empty = presetRepository.convertSillyTavernJsonToPresetData({
@@ -113,9 +113,15 @@ describe("lorebook import mapping", () => {
       spec: "chara_card_v3",
       name: "Juno",
       character_book: {
-        entries: Array.from({ length: LOREBOOK_ENTRIES_PER_SCOPE_MAX + 1 }, () => ({ content: "Lore", keys: ["key"] })),
+        entries: Array.from({ length: LOREBOOK_ENTRIES_PER_SCOPE_MAX + 1 }, (_, index) => ({
+          content: `Lore ${index}`,
+          keys: ["key"],
+        })),
       },
     });
-    expect(oversized.success).toBe(false);
+    expect(oversized.success).toBe(true);
+    if (!oversized.success) throw new Error("Card conversion failed");
+    expect(oversized.data.lorebook_entries).toHaveLength(LOREBOOK_ENTRIES_PER_SCOPE_MAX);
+    expect(oversized.data.lorebook_entries?.at(-1)?.content).toBe(`Lore ${LOREBOOK_ENTRIES_PER_SCOPE_MAX - 1}`);
   });
 });

@@ -297,6 +297,48 @@ describe("memories panel route catalog", () => {
       },
     ],
     ["memories:v1:category:en-US:lorebooks", { action: "category", locale: "en-US", category: "lorebooks" }],
+    [
+      "memories:v1:lore-book-toggle-enabled:en-US:42",
+      { action: "lore-book-toggle-enabled", locale: "en-US", bookId: 42 },
+    ],
+    [
+      "memories:v1:lore-book-channels-open:en-US:42",
+      { action: "lore-book-channels-open", locale: "en-US", bookId: 42 },
+    ],
+    [
+      "memories:v1:lore-book-channels-submit:en-US:42:nonce123",
+      { action: "lore-book-channels-submit", locale: "en-US", bookId: 42, nonce: "nonce123" },
+    ],
+    ["memories:v1:lore-book-rename-open:en-US:42", { action: "lore-book-rename-open", locale: "en-US", bookId: 42 }],
+    [
+      "memories:v1:lore-book-remove-prompt:en-US:42",
+      { action: "lore-book-remove-prompt", locale: "en-US", bookId: 42 },
+    ],
+    [
+      "memories:v1:lore-book-remove-confirm:en-US:42",
+      { action: "lore-book-remove-confirm", locale: "en-US", bookId: 42 },
+    ],
+    [
+      "memories:v1:lore-book-remove-cancel:en-US:42",
+      { action: "lore-book-remove-cancel", locale: "en-US", bookId: 42 },
+    ],
+    [
+      "memories:v1:lore-book-rename-submit:en-US:42:nonce123",
+      { action: "lore-book-rename-submit", locale: "en-US", bookId: 42, nonce: "nonce123" },
+    ],
+    [
+      "memories:v1:lore-book-create-submit:en-US:nonce123",
+      { action: "lore-book-create-submit", locale: "en-US", nonce: "nonce123" },
+    ],
+    [
+      "memories:v1:lore-book-import-submit:en-US:nonce123",
+      { action: "lore-book-import-submit", locale: "en-US", nonce: "nonce123" },
+    ],
+    ["memories:v1:lore-book-select:en-US", { action: "lore-book-select", locale: "en-US" }],
+    [
+      "memories:v1:lore-select:en-US:0:0:42",
+      { action: "lore-select", locale: "en-US", scopeLineageId: 0, rangeIndex: 0, bookId: 42 },
+    ],
     ["memories:v1:lore-scope:en-US:0", { action: "lore-scope", locale: "en-US", scopeLineageId: 0 }],
     [
       "memories:v1:lore-persona-select:en-US:1770",
@@ -339,10 +381,6 @@ describe("memories panel route catalog", () => {
     [
       "memories:v1:lore-toggle-enabled:en-US:0:42",
       { action: "lore-toggle-enabled", locale: "en-US", scopeLineageId: 0, entryId: 42 },
-    ],
-    [
-      "memories:v1:lore-toggle-constant:en-US:0:42",
-      { action: "lore-toggle-constant", locale: "en-US", scopeLineageId: 0, entryId: 42 },
     ],
     [
       "memories:v1:lore-remove-prompt:en-US:0:42",
@@ -560,6 +598,7 @@ describe("memories permissions and scoping", () => {
       getEligibleHistoryPersonaIds: async () => new Set(),
       loadLorebooks: async () => ({ status: "fresh" as const, entries: [] }),
       getLorebookCounts: async () => new Map(),
+      getLorebookCollections: async () => [],
       lorebookOperations,
       getStmEntries: async (workspaceId) => {
         calls.push(`getStmEntries:${workspaceId}`);

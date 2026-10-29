@@ -378,6 +378,7 @@ export function buildMemoryTransferPreviewPayload(input: {
   locale: string;
   kind: MemoryTransferKind;
   buckets: readonly MemoryBucket[];
+  serverwideLoreCount?: number;
   nonce: string;
   /** Set when the file's own ownership differs from the destination's, which the reader must be told about. */
   crossOwnership?: boolean;
@@ -387,7 +388,14 @@ export function buildMemoryTransferPreviewPayload(input: {
   }
 
   const bucketRows = input.buckets
-    .map((bucket) => `• ${safeUserText(bucket.label, 80)}: ${memoryBucketCount(input.locale, bucket.memories.length)}`)
+    .map((bucket) => {
+      const memories = memoryBucketCount(input.locale, bucket.memories.length);
+      const lore =
+        bucket.lorebook_entries !== undefined
+          ? `, ${localizer(input.locale, "commands.transfer.memory_preview_lore_count", { count: bucket.lorebook_entries.length })}`
+          : "";
+      return `• ${safeUserText(bucket.label, 80)}: ${memories}${lore}`;
+    })
     .join("\n");
   const ownershipLabelKey =
     input.kind === "workspace_memories"
@@ -396,7 +404,9 @@ export function buildMemoryTransferPreviewPayload(input: {
   const description = safeUserText(
     localizer(
       input.locale,
-      input.kind === "workspace_memories"
+      input.kind === "workspace_memories" &&
+        (input.serverwideLoreCount !== undefined ||
+          input.buckets.some((bucket) => bucket.lorebook_entries !== undefined))
         ? "commands.transfer.workspace_memory_preview_description"
         : "commands.transfer.memory_preview_description",
       {
@@ -436,6 +446,13 @@ export function buildMemoryTransferPreviewPayload(input: {
         : []),
       safeUserText(localizer(input.locale, "commands.transfer.memory_preview_groups_heading"), 100),
       withLinePrefix("> ", safeUserText(bucketRows, 1500)),
+      ...(input.serverwideLoreCount !== undefined
+        ? [
+            localizer(input.locale, "commands.transfer.memory_preview_serverwide_lore", {
+              count: input.serverwideLoreCount,
+            }),
+          ]
+        : []),
     ].join("\n"),
     3900,
   );

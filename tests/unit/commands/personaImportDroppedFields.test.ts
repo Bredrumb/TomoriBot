@@ -106,6 +106,22 @@ describe("import dropped-field reporting", () => {
     ).toBeNull();
   });
 
+  it("reports the entries dropped after splitting an oversized Character Book", () => {
+    const report = describeUnmappedCardFields({
+      spec: "chara_card_v3",
+      data: {
+        character_book: {
+          entries: [
+            ...Array.from({ length: 249 }, () => ({ keys: ["key"], content: "Lore" })),
+            { keys: ["long"], content: "x".repeat(8001) },
+          ],
+        },
+      },
+    });
+    expect(report?.split(", ")).toHaveLength(1);
+    expect(report).toMatch(/^2 /);
+  });
+
   it("collects several losses into one report", () => {
     const report = describeUnmappedCardFields({
       spec: "chara_card_v3",

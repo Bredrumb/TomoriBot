@@ -16,6 +16,12 @@ import {
   getSillyTavernStringArray,
 } from "./sillyTavernFields";
 
+export function extractCharacterBook(card: unknown): Record<string, unknown> | null {
+  const root = asSillyTavernObject(card);
+  const data = asSillyTavernObject(root?.data);
+  return asSillyTavernObject(data?.character_book) ?? asSillyTavernObject(root?.character_book);
+}
+
 export interface LorebookConversionReport {
   skippedEntries: number;
   unsupportedKeys: number;
@@ -121,7 +127,7 @@ export function convertCharacterBook(characterBook: unknown): LorebookConversion
           LOREBOOK_DEFAULT_SCAN_DEPTH,
         ),
         trigger_chance:
-          extensions?.useProbability === false ? 100 : clampSillyTavernInt(extensions?.probability, 1, 100, 100),
+          extensions?.useProbability === false ? 100 : clampSillyTavernInt(extensions?.probability, 0, 100, 100),
         insertion_order: clampSillyTavernInt(
           entry.insertion_order,
           INT32_MIN,

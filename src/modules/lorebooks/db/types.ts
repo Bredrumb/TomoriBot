@@ -34,6 +34,9 @@ export const lorebookScopeSchema = z.object({
 
 const keyListSchema = z.array(z.string().max(LOREBOOK_KEY_LENGTH_MAX)).max(LOREBOOK_KEYS_MAX);
 const entryFields = {
+  lorebook_name: z.string().trim().min(1).max(128).optional(),
+  lorebook_enabled: z.boolean().optional(),
+  lorebook_channel_disc_ids: z.array(z.string().regex(/^\d{17,20}$/)).optional(),
   title: z.string().trim().min(1).max(LOREBOOK_TITLE_MAX),
   content: z
     .string()
@@ -44,7 +47,7 @@ const entryFields = {
   secondary_keys: keyListSchema,
   selective_logic: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]),
   scan_depth: z.number().int().min(1).max(LOREBOOK_SCAN_DEPTH_MAX),
-  trigger_chance: z.number().int().min(1).max(100),
+  trigger_chance: z.number().int().min(0).max(100),
   insertion_order: postgresInt,
   placement: z.union([z.literal(0), z.literal(1)]),
   constant: z.boolean(),
@@ -64,6 +67,21 @@ export const lorebookEntryInputSchema = z
 export const lorebookEntryRowSchema = z
   .object({
     ...entryFields,
+    lorebook_name: z
+      .string()
+      .nullable()
+      .transform((value) => value ?? undefined)
+      .optional(),
+    lorebook_enabled: z
+      .boolean()
+      .nullable()
+      .transform((value) => value ?? undefined)
+      .optional(),
+    lorebook_channel_disc_ids: z
+      .array(z.string())
+      .nullable()
+      .transform((value) => value ?? undefined)
+      .optional(),
     entry_id: postgresInt.positive(),
     server_id: postgresInt.positive(),
     persona_lineage_id: z.coerce.number().int().positive().nullable(),
@@ -83,12 +101,26 @@ export type LorebookEntryFlags = z.infer<typeof lorebookEntryFlagsSchema>;
 
 export function lorebookEntryToInput(row: LorebookEntryRow): LorebookEntryInput {
   const { entry_id, server_id, persona_lineage_id, ...input } = row;
-  return lorebookEntryInputSchema.parse(input);
+  return lorebookEntryInputSchema.parse({
+    ...input,
+    lorebook_name: persona_lineage_id === null ? input.lorebook_name : undefined,
+    lorebook_enabled: persona_lineage_id === null ? input.lorebook_enabled : undefined,
+    lorebook_channel_disc_ids: persona_lineage_id === null ? input.lorebook_channel_disc_ids : undefined,
+  });
 }
 
 /** Comparable identity for duplicate detection across imports and stored rows. */
 export function lorebookEntryIdentity(entry: LorebookEntryInput): string {
-  return JSON.stringify(
-    lorebookEntryInputSchema.parse({ ...entry, legacy_channel_tags: entry.legacy_channel_tags ?? [] }),
-  );
+  const { lorebook_enabled, lorebook_channel_disc_ids, ...identity } = lorebookEntryInputSchema.parse({
+    ...entry,
+    legacy_channel_tags: entry.legacy_channel_tags ?? [],
+  });
+  return JSON.stringify(identity);
+}
+
+export interface ServerLorebook {
+  lorebook_id: number;
+  name: string;
+  enabled: boolean;
+  channel_disc_ids: string[];
 }

@@ -132,8 +132,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("lorebook migration and transfer", () => {
 
         await tx`UPDATE persona_lorebook_entries SET content = 'Edited later' WHERE entry_id = ${first[0].entry_id}`;
         await tx`DELETE FROM persona_lorebook_entries WHERE entry_id = ${first[1].entry_id}`;
-        const [newLore] = await tx`INSERT INTO persona_lorebook_entries (server_id, title, content, constant)
-          VALUES (${refs.serverId}, 'New', 'Authored later', true) RETURNING *`;
+        await tx`INSERT INTO server_lorebooks (server_id, name) VALUES (${refs.serverId}, 'General') ON CONFLICT DO NOTHING`;
+        const [newLore] =
+          await tx`INSERT INTO persona_lorebook_entries (server_id, lorebook_name, title, content, constant)
+          VALUES (${refs.serverId}, 'General', 'New', 'Authored later', true) RETURNING *`;
         await migration(tx, true);
         expect<unknown>(
           await tx`SELECT * FROM server_memories WHERE server_memory_id IN (${keyword.server_memory_id}, ${mixed.server_memory_id})
@@ -254,12 +256,23 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("lorebook migration and transfer", () => {
   it("round-trips combined server-data lore and preserves absent arrays", async () => {
     await lorebookRepository.insert(refs.serverId, refs.personaLineageId, lore({ enabled: false }));
     await lorebookRepository.insert(refs.serverId, null, lore({ constant: true }));
+    const book = (await lorebookRepository.listBooks(refs.serverId))?.[0];
+    if (!book) throw new Error("Missing Serverwide collection");
+    await lorebookRepository.setBookEnabled(refs.serverId, book.lorebook_id, false);
+    await lorebookRepository.setBookChannels(refs.serverId, book.lorebook_id, [CHANNEL]);
+
     const exported = await exportRepository.exportServerData(FIXTURE_IDS.serverDiscId, refs.personaId);
     expect(exported.success).toBe(true);
     const serverExport = getServerExportSchema().parse(exported.data);
     const parsed = parseExportFile(serverExport);
     expect(parsed.success).toBe(true);
     if (!parsed.success || !("memories" in parsed.payload)) throw new Error("Missing combined memories");
+    expect(serverExport.data.serverwide_lorebook_entries?.[0]).toMatchObject({
+      lorebook_enabled: false,
+      lorebook_channel_disc_ids: [CHANNEL],
+    });
+    await lorebookRepository.setBookEnabled(refs.serverId, book.lorebook_id, true);
+    await lorebookRepository.setBookChannels(refs.serverId, book.lorebook_id, []);
     const firstBucket: MemoryBucket = parsed.payload.memories.buckets[0];
     expect(firstBucket.lorebook_entries).toHaveLength(1);
     expect(
@@ -268,6 +281,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("lorebook migration and transfer", () => {
     expect(
       (await lorebookRepository.listScope(refs.serverId, refs.personaLineageId)).entries.map(lorebookEntryToInput),
     ).toEqual([lore({ enabled: false })]);
+    expect((await lorebookRepository.listBooks(refs.serverId))?.[0]).toMatchObject({
+      enabled: false,
+      channel_disc_ids: [CHANNEL],
+    });
     const { lorebook_entries, serverwide_lorebook_entries, ...withoutLore } = serverExport.data;
     expect(
       (await importRepository.importServerData(FIXTURE_IDS.serverDiscId, withoutLore, refs.personaId)).success,
@@ -306,6 +323,46 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("lorebook migration and transfer", () => {
     expect(
       (await lorebookRepository.listScope(refs.serverId, refs.personaLineageId + 99)).entries.map(lorebookEntryToInput),
     ).toEqual([lore()]);
+  });
+
+  it("omits lore from persona-scoped memory exports and preserves destination lore under Merge", async () => {
+    await testSql`INSERT INTO server_memories (server_id, persona_id, persona_lineage_id, content)
+      VALUES (${refs.serverId}, ${refs.personaId}, ${refs.personaLineageId}, 'A memory')`;
+    for (const scope of [{ mode: "main" }, { mode: "persona", personaId: refs.personaId }] as const) {
+      const exported = await exportRepository.exportWorkspaceMemories(FIXTURE_IDS.serverDiscId, scope);
+      if (!exported.success) throw new Error("Export failed");
+      const parsed = parseExportFile(exported.data);
+      if (!parsed.success || !("buckets" in parsed.payload)) throw new Error("Missing memory bundle");
+      expect("serverwide_lorebook_entries" in parsed.payload).toBe(false);
+      expect(parsed.payload.buckets.every((bucket) => !("lorebook_entries" in bucket))).toBe(true);
+      await lorebookRepository.replaceScopeEntries(refs.serverId, null, [lore({ title: "Server canon" })]);
+      await lorebookRepository.replaceScopeEntries(refs.serverId, refs.personaLineageId, [
+        lore({ title: "Persona canon" }),
+      ]);
+      const mapping = buildMemoryImportMappings(
+        "workspace_memories",
+        parsed.payload.buckets,
+        [{ bucketName: parsed.payload.buckets[0].name, destinationLineageId: refs.personaLineageId }],
+        [{ ownership: "workspace", personaId: refs.personaId, lineageId: refs.personaLineageId, label: "Mirri" }],
+      );
+      if (mapping.status !== "ok" || mapping.kind !== "workspace_memories") throw new Error("Missing mapping");
+      expect(
+        (
+          await importRepository.importWorkspaceMemoryBundle(
+            FIXTURE_IDS.serverDiscId,
+            FIXTURE_IDS.userDiscId,
+            mapping.mappings,
+            "merge",
+          )
+        ).success,
+      ).toBe(true);
+      expect((await lorebookRepository.listScope(refs.serverId, null)).entries.map((entry) => entry.title)).toEqual([
+        "Server canon",
+      ]);
+      expect(
+        (await lorebookRepository.listScope(refs.serverId, refs.personaLineageId)).entries.map((entry) => entry.title),
+      ).toEqual(["Persona canon"]);
+    }
   });
 
   it("round-trips workspace books, including orphaned lineages, Serverwide lore, and channel-only memories", async () => {

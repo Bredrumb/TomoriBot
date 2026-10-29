@@ -71,6 +71,21 @@ describe("lorebook activation", () => {
     expect(active(entry({ channel_disc_ids: [options.channelId] }), ["manor"])).toBe(true);
   });
 
+  it("uses collection state and channels for Serverwide entries while preserving Persona channel rules", () => {
+    const global = entry({
+      persona_lineage_id: null,
+      constant: true,
+      lorebook_enabled: true,
+      lorebook_channel_disc_ids: ["100000000000000002"],
+    });
+    expect(active(global, [])).toBe(false);
+    expect(active(global, [], { parentChannelId: "100000000000000002" })).toBe(true);
+    expect(active({ ...global, lorebook_enabled: false }, [], { parentChannelId: "100000000000000002" })).toBe(false);
+    expect(active({ ...global, lorebook_channel_disc_ids: [] }, [])).toBe(true);
+    expect(active(global, [], { channelScopeEnabled: false })).toBe(true);
+    expect(active(entry({ constant: true, channel_disc_ids: ["100000000000000002"] }), [])).toBe(false);
+  });
+
   it("scans the last depth messages oldest to newest, including persona turns", () => {
     expect(active(entry({ scan_depth: 1 }), ["manor", "the sea"])).toBe(false);
     expect(active(entry({ scan_depth: 2 }), ["manor", "the sea"])).toBe(true);
@@ -124,6 +139,12 @@ describe("lorebook activation", () => {
     );
     expect(active(entry({ secondary_keys: ["red", "blue"], selective_logic: logic }), [text])).toBe(false);
     expect(active(entry({ selective_logic: logic }), ["manor"])).toBe(true);
+  });
+
+  it("never activates zero-chance keyword or constant entries", () => {
+    for (const constant of [false, true]) {
+      expect(active(entry({ trigger_chance: 0, constant }), ["manor"], { random: () => 0 })).toBe(false);
+    }
   });
 
   it("uses strict chance boundaries and never rolls for constants or ineligible entries", () => {
@@ -194,7 +215,7 @@ describe("lorebook input normalization", () => {
       { content: "x".repeat(LOREBOOK_CONTENT_MAX + 1) },
       { scan_depth: 0 },
       { scan_depth: 101 },
-      { trigger_chance: 0 },
+      { trigger_chance: -1 },
       { trigger_chance: 101 },
       { selective_logic: 4 },
       { placement: 2 },

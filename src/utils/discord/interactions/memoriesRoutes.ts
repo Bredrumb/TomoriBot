@@ -1,5 +1,6 @@
 import { type ProviderRequestDeniedError, getProviderRequestFailureCopy } from "@/utils/provider/providerUsage";
 import {
+  AttachmentBuilder,
   type APIAttachment,
   type ButtonInteraction,
   ComponentType,
@@ -26,20 +27,24 @@ import {
   LOREBOOK_IMPORT_MAX_FILE_MB,
   type LorebookUploadParseResult,
   parseLorebookUpload,
+  exportWorldInfo,
 } from "@/modules/lorebooks/imports";
 import { lorebookOperations, type LorebookOperations } from "@/modules/lorebooks/discord/operations";
 import {
   LOREBOOK_ENTRY_PAGE_SIZE,
   buildAddLorebookModal,
+  buildLorebookCollectionModal,
+  buildLorebookChannelsModal,
   buildEditLorebookModal,
   buildImportLorebookModal,
   buildLorebookActivationModal,
   buildLorebookModalFieldId,
   parseLorebookInteger,
   parseLorebookKeys,
-  parseLorebookPlacement,
   parseLorebookSelectiveLogic,
 } from "@/modules/lorebooks/discord/panelSection";
+import { IMPORT_LIMITS } from "@/utils/security/rateLimiter";
+import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import { safeDownload } from "@/utils/security/safeDownload";
 import type { GlobalInteractionRoute, GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import {
@@ -439,6 +444,7 @@ export interface MemoriesRouteDependencies {
   getDocumentCountsByPersona(serverId: number): Promise<{ byPersona: Map<number, number>; serverwide: number }>;
   getEligibleHistoryPersonaIds(serverId: number): Promise<Set<number>>;
   loadLorebooks(serverId: number, lineageId: number | null): Promise<LorebookScopeReadResult>;
+  getLorebookCollections(serverId: number): Promise<import("@/modules/lorebooks/db/types").ServerLorebook[] | null>;
   getLorebookCounts(serverId: number): Promise<Map<number | null, number> | null>;
   lorebookOperations: LorebookOperations;
   getStmEntries(workspaceId: string, personas: TomoriState[], locale: string): Promise<StmPanelEntry[]>;
@@ -497,12 +503,14 @@ export interface MemoriesRouteDependencies {
     locale: string,
     scopeLineageId: number,
     nonce: string,
+    bookId?: number,
   ): Promise<void>;
   showImportLorebookModal(
     interaction: StringSelectMenuInteraction | ButtonInteraction,
     locale: string,
-    scopeLineageId: number,
+    scopeLineageId: number | null,
     nonce: string,
+    bookId?: number,
   ): Promise<void>;
   showEditLorebookModal(
     interaction: ButtonInteraction,
@@ -519,7 +527,7 @@ export interface MemoriesRouteDependencies {
     nonce: string,
   ): Promise<void>;
   takeLorebookFileUpload(interactionId: string, nonce: string): APIAttachment | undefined;
-  parseLorebookUpload(buffer: Uint8Array): LorebookUploadParseResult;
+  parseLorebookUpload(buffer: Uint8Array): LorebookUploadParseResult | Promise<LorebookUploadParseResult>;
   filterChannelScope(interaction: GlobalRoutableInteraction, channelIds: string[]): Promise<string[]>;
   takeCheckboxValues(interactionId: string, fieldId: string): string[] | undefined;
   takeStringSelectValues(interactionId: string, fieldId: string): string[] | undefined;
@@ -692,6 +700,14 @@ const RECEIPT_LOCALE_KEYS = {
     heading: "commands.memories.stm_cleared_heading",
     detail: "commands.memories.stm_cleared_detail",
   },
+  lorebook_import_no_book: {
+    heading: "commands.memories.lorebook_import_no_book_heading",
+    detail: "commands.memories.lorebook_import_no_book_detail",
+  },
+  lorebook_export_empty: {
+    heading: "commands.memories.lorebook_export_empty_heading",
+    detail: "commands.memories.lorebook_export_empty_detail",
+  },
   lorebook_added: {
     heading: "commands.memories.lorebook_added_heading",
     detail: "commands.memories.lorebook_added_detail",
@@ -711,14 +727,6 @@ const RECEIPT_LOCALE_KEYS = {
   lorebook_disabled: {
     heading: "commands.memories.lorebook_disabled_heading",
     detail: "commands.memories.lorebook_disabled_detail",
-  },
-  lorebook_always_on: {
-    heading: "commands.memories.lorebook_always_on_heading",
-    detail: "commands.memories.lorebook_always_on_detail",
-  },
-  lorebook_keywords: {
-    heading: "commands.memories.lorebook_keywords_heading",
-    detail: "commands.memories.lorebook_keywords_detail",
   },
   lorebook_removed: {
     heading: "commands.memories.lorebook_removed_heading",
@@ -748,10 +756,6 @@ const RECEIPT_LOCALE_KEYS = {
     heading: "commands.memories.lorebook_content_required_heading",
     detail: "commands.memories.lorebook_content_required_detail",
   },
-  lorebook_keys_required: {
-    heading: "commands.memories.lorebook_keys_required_heading",
-    detail: "commands.memories.lorebook_keys_required_detail",
-  },
   lorebook_invalid_number: {
     heading: "commands.memories.lorebook_invalid_number_heading",
     detail: "commands.memories.lorebook_invalid_number_detail",
@@ -767,6 +771,10 @@ const RECEIPT_LOCALE_KEYS = {
   lorebook_limit_reached: {
     heading: "commands.memories.lorebook_limit_reached_heading",
     detail: "commands.memories.lorebook_limit_reached_detail",
+  },
+  lorebook_import_exists: {
+    heading: "commands.memories.lorebook_import_exists_heading",
+    detail: "commands.memories.lorebook_import_exists_detail",
   },
   lorebook_imported: {
     heading: "commands.memories.lorebook_imported_heading",
@@ -1250,6 +1258,7 @@ async function repaint(
     }
   }
 
+  let lorebookCollections: import("@/modules/lorebooks/db/types").ServerLorebook[] | undefined;
   let lorebookEntries: LorebookEntryRow[] | undefined;
   let lorebookCounts: Map<number | null, number> | null = null;
   let readStatus = scope.readStatus;
@@ -1258,6 +1267,11 @@ async function repaint(
       dependencies.loadLorebooks(scope.serverId, lorebookLineageId(selectedLineageId)),
       dependencies.getLorebookCounts(scope.serverId),
     ]);
+    if (selectedLineageId === 0) {
+      const books = await dependencies.getLorebookCollections(scope.serverId);
+      if (books === null) readStatus = "unavailable";
+      else lorebookCollections = books;
+    }
     lorebookCounts = counts;
     if (lorebooks.status === "unavailable") readStatus = "unavailable";
     else lorebookEntries = lorebooks.entries;
@@ -1299,6 +1313,8 @@ async function repaint(
         documentCountsByPersona,
         eligibleHistoryPersonaIds,
         lorebookEntries,
+        lorebookCollections,
+        channelScopeAvailable: scope.guildId !== null,
         lorebookCounts,
         stmEntries,
         stmCount: stmEntries?.length,
@@ -1326,6 +1342,7 @@ const defaultDependencies: MemoriesRouteDependencies = {
   getDocumentCountsByPersona: (serverId) => serverMemoryRepository.documentCountsByPersona(serverId),
   getEligibleHistoryPersonaIds: (serverId) => serverMemoryRepository.personaIdsWithHistoryDocuments(serverId),
   loadLorebooks: (serverId, lineageId) => lorebookRepository.listScope(serverId, lineageId),
+  getLorebookCollections: (serverId) => lorebookRepository.listBooks(serverId),
   getLorebookCounts: (serverId) => lorebookRepository.countsByLineage(serverId),
   lorebookOperations,
   getStmEntries,
@@ -1388,16 +1405,16 @@ const defaultDependencies: MemoriesRouteDependencies = {
     ),
   showStmModal: (interaction, locale, entries, fingerprint) =>
     showRoutedRawModal(interaction, buildServerStmModal(locale, entries, fingerprint)),
-  showAddLorebookModal: (interaction, locale, scopeLineageId, nonce) =>
+  showAddLorebookModal: (interaction, locale, scopeLineageId, nonce, bookId) =>
     showRoutedRawModal(
       interaction,
-      buildAddLorebookModal(locale, scopeLineageId, nonce, interaction.guildId ? [] : null),
+      buildAddLorebookModal(locale, scopeLineageId, nonce, interaction.guildId ? [] : null, bookId),
     ),
-  showImportLorebookModal: (interaction, locale, scopeLineageId, nonce) =>
-    showRoutedRawModal(interaction, buildImportLorebookModal(locale, scopeLineageId, nonce)),
+  showImportLorebookModal: (interaction, locale, scopeLineageId, nonce, bookId) =>
+    showRoutedRawModal(interaction, buildImportLorebookModal(locale, scopeLineageId, nonce, bookId)),
   showEditLorebookModal: async (interaction, locale, scopeLineageId, entry, nonce) => {
     const channelScope = interaction.guildId
-      ? await filterGuildChannelScope(interaction, entry.channel_disc_ids)
+      ? entry.channel_disc_ids.filter((id) => interaction.guild?.channels.cache.has(id))
       : null;
     await showRoutedRawModal(interaction, buildEditLorebookModal(locale, scopeLineageId, entry, nonce, channelScope));
   },
@@ -1477,7 +1494,6 @@ export const LOREBOOK_RESULT_RECEIPT_KEYS: Record<string, MemoryReceiptKey> = {
   failed: "lorebook_write_failed",
   "title-required": "lorebook_title_required",
   "content-required": "lorebook_content_required",
-  "keys-required": "lorebook_keys_required",
   "channels-invalid": "lorebook_channels_invalid",
 };
 
@@ -1653,6 +1669,63 @@ export function createMemoriesInteractionRoute(
         return;
       }
 
+      if (
+        route.action === "lore-book-select" &&
+        interaction.isStringSelectMenu() &&
+        (interaction.values[0] === "action:add-book" || interaction.values[0] === "action:import-book")
+      ) {
+        const cachedScope = await dependencies.resolveScope(interaction, false);
+        if (!cachedScope?.canManage) {
+          await refuseInPlace(interaction, route.locale, cachedScope, "lorebooks", 0, "manager_only", dependencies);
+          return;
+        }
+        if (interaction.values[0] === "action:import-book") {
+          await dependencies.showImportLorebookModal(interaction, route.locale, null, dependencies.createNonce());
+        } else {
+          await showRoutedRawModal(interaction, buildLorebookCollectionModal(route.locale, dependencies.createNonce()));
+        }
+        return;
+      }
+
+      if (route.action === "lore-book-rename-open" || route.action === "lore-book-channels-open") {
+        if (!interaction.isButton()) throw new Error("Lorebook rename route requires Button interaction");
+        const cachedScope = await dependencies.resolveScope(interaction, false);
+        if (route.action === "lore-book-channels-open" && !interaction.guildId) {
+          await refuseInPlace(
+            interaction,
+            route.locale,
+            cachedScope,
+            "lorebooks",
+            0,
+            "lorebook_channels_invalid",
+            dependencies,
+          );
+          return;
+        }
+        const books = cachedScope?.canManage ? await dependencies.getLorebookCollections(cachedScope.serverId) : [];
+        const book = books?.find((candidate) => candidate.lorebook_id === route.bookId);
+        if (!book) {
+          await refuseInPlace(
+            interaction,
+            route.locale,
+            cachedScope,
+            "lorebooks",
+            0,
+            cachedScope?.canManage ? "lorebook_changed_state" : "manager_only",
+            dependencies,
+          );
+          return;
+        }
+        const nonce = dependencies.createNonce();
+        if (route.action === "lore-book-channels-open") {
+          const channels = await dependencies.filterChannelScope(interaction, book.channel_disc_ids);
+          await showRoutedRawModal(interaction, buildLorebookChannelsModal(route.locale, book, nonce, channels));
+        } else {
+          await showRoutedRawModal(interaction, buildLorebookCollectionModal(route.locale, nonce, book));
+        }
+        return;
+      }
+
       if (route.action === "lore-select" && interaction.isStringSelectMenu()) {
         const selectedValue = interaction.values[0];
         if (selectedValue === "action:add-lorebook" || selectedValue === "action:import-lorebook") {
@@ -1695,9 +1768,21 @@ export function createMemoriesInteractionRoute(
           }
           const nonce = dependencies.createNonce();
           if (selectedValue === "action:add-lorebook") {
-            await dependencies.showAddLorebookModal(interaction, route.locale, route.scopeLineageId, nonce);
+            await dependencies.showAddLorebookModal(
+              interaction,
+              route.locale,
+              route.scopeLineageId,
+              nonce,
+              route.bookId,
+            );
           } else {
-            await dependencies.showImportLorebookModal(interaction, route.locale, route.scopeLineageId, nonce);
+            await dependencies.showImportLorebookModal(
+              interaction,
+              route.locale,
+              route.scopeLineageId,
+              nonce,
+              route.bookId,
+            );
           }
           return;
         }
@@ -2088,6 +2173,183 @@ export function createMemoriesInteractionRoute(
         return;
       }
 
+      if (route.action === "lore-book-select") {
+        const selected = interaction.isStringSelectMenu() ? Number(interaction.values[0]) : undefined;
+        await repaint(
+          interaction,
+          route.locale,
+          scope,
+          "lorebooks",
+          0,
+          [],
+          { kind: "lorebooks", bookId: selected, bookRangeIndex: route.rangeIndex },
+          undefined,
+          dependencies,
+        );
+        return;
+      }
+      if (
+        route.action === "lore-book-toggle-enabled" ||
+        route.action === "lore-book-channels-submit" ||
+        route.action === "lore-book-remove-cancel" ||
+        route.action === "lore-book-remove-prompt" ||
+        route.action === "lore-book-remove-confirm" ||
+        route.action === "lore-book-rename-submit"
+      ) {
+        const books = await dependencies.getLorebookCollections(scope.serverId);
+        const book = books?.find((candidate) => candidate.lorebook_id === route.bookId);
+        if (!book || (!scope.canManage && route.action !== "lore-book-remove-cancel")) {
+          await repaint(
+            interaction,
+            route.locale,
+            scope,
+            "lorebooks",
+            0,
+            [],
+            { kind: "lorebooks" },
+            !scope.canManage ? receipt(route.locale, "manager_only") : lorebookChangedReceipt(route.locale),
+            dependencies,
+          );
+          return;
+        }
+        if (route.action === "lore-book-remove-prompt" || route.action === "lore-book-remove-cancel") {
+          await repaint(
+            interaction,
+            route.locale,
+            scope,
+            "lorebooks",
+            0,
+            [],
+            route.action === "lore-book-remove-prompt"
+              ? { kind: "lore-book-remove", bookId: book.lorebook_id }
+              : { kind: "lorebooks", bookId: book.lorebook_id },
+            undefined,
+            dependencies,
+          );
+          return;
+        }
+        if (route.action === "lore-book-toggle-enabled" || route.action === "lore-book-channels-submit") {
+          const channels =
+            route.action === "lore-book-channels-submit"
+              ? await takeLorebookChannelScope(dependencies, interaction as ModalSubmitInteraction, route.nonce)
+              : [];
+          if (channels === null) {
+            await repaint(
+              interaction,
+              route.locale,
+              scope,
+              "lorebooks",
+              0,
+              [],
+              { kind: "lorebooks", bookId: book.lorebook_id },
+              receipt(route.locale, "lorebook_channels_invalid"),
+              dependencies,
+            );
+            return;
+          }
+          const success =
+            route.action === "lore-book-toggle-enabled"
+              ? await lorebookRepository.setBookEnabled(scope.serverId, book.lorebook_id, !book.enabled)
+              : await lorebookRepository.setBookChannels(scope.serverId, book.lorebook_id, channels);
+          await repaint(
+            interaction,
+            route.locale,
+            scope,
+            "lorebooks",
+            0,
+            [],
+            { kind: "lorebooks", bookId: book.lorebook_id },
+            success
+              ? {
+                  tone: "success",
+                  heading: localizer(route.locale, "commands.memories.lorebook_collection_updated_heading"),
+                  detail: localizer(route.locale, "commands.memories.lorebook_collection_updated_detail"),
+                }
+              : receipt(route.locale, "lorebook_write_failed"),
+            dependencies,
+          );
+          return;
+        }
+        const removed = route.action === "lore-book-remove-confirm";
+        const name =
+          route.action === "lore-book-rename-submit"
+            ? (readModalField(
+                interaction as ModalSubmitInteraction,
+                buildLorebookModalFieldId("book_name", route.nonce),
+              ) ?? "")
+            : "";
+        const success = removed
+          ? await lorebookRepository.deleteBook(scope.serverId, book.lorebook_id)
+          : await lorebookRepository.renameBook(scope.serverId, book.lorebook_id, name);
+        await repaint(
+          interaction,
+          route.locale,
+          scope,
+          "lorebooks",
+          0,
+          [],
+          { kind: "lorebooks", bookId: removed ? undefined : book.lorebook_id },
+          success
+            ? {
+                tone: "success",
+                heading: localizer(
+                  route.locale,
+                  removed
+                    ? "commands.memories.lorebook_collection_removed_heading"
+                    : "commands.memories.lorebook_collection_updated_heading",
+                ),
+                detail: localizer(
+                  route.locale,
+                  removed
+                    ? "commands.memories.lorebook_collection_removed_detail"
+                    : "commands.memories.lorebook_collection_updated_detail",
+                ),
+              }
+            : receipt(route.locale, "lorebook_write_failed"),
+          dependencies,
+        );
+        return;
+      }
+
+      if (route.action === "lore-book-create-submit") {
+        if (!scope.canManage) {
+          await repaint(
+            interaction,
+            route.locale,
+            scope,
+            "lorebooks",
+            0,
+            [],
+            { kind: "lorebooks" },
+            receipt(route.locale, "manager_only"),
+            dependencies,
+          );
+          return;
+        }
+        const name =
+          readModalField(interaction as ModalSubmitInteraction, buildLorebookModalFieldId("book_name", route.nonce)) ??
+          "";
+        const bookId = await lorebookRepository.createBook(scope.serverId, name);
+        await repaint(
+          interaction,
+          route.locale,
+          scope,
+          "lorebooks",
+          0,
+          [],
+          { kind: "lorebooks", bookId: bookId ?? undefined },
+          bookId
+            ? {
+                tone: "success",
+                heading: localizer(route.locale, "commands.memories.lorebook_collection_created_heading"),
+                detail: localizer(route.locale, "commands.memories.lorebook_collection_created_detail"),
+              }
+            : receipt(route.locale, "lorebook_write_failed"),
+          dependencies,
+        );
+        return;
+      }
+
       if (route.action === "lore-scope" || route.action === "lore-persona-select") {
         if (route.action === "lore-persona-select" && !interaction.isStringSelectMenu()) {
           throw new Error("Lorebook persona route requires StringSelectMenu interaction");
@@ -2104,7 +2366,7 @@ export function createMemoriesInteractionRoute(
           "lorebooks",
           scopeLineageId,
           [],
-          { kind: "lorebooks" },
+          { kind: "lorebooks", bookId: route.bookId },
           scopeLineageId === requested ? undefined : lorebookChangedReceipt(route.locale),
           dependencies,
         );
@@ -2121,8 +2383,8 @@ export function createMemoriesInteractionRoute(
           scopeLineageId,
           [],
           scopeLineageId === route.scopeLineageId
-            ? { kind: "lorebooks", personaRangeIndex: route.rangeIndex }
-            : { kind: "lorebooks" },
+            ? { kind: "lorebooks", bookId: route.bookId, personaRangeIndex: route.rangeIndex }
+            : { kind: "lorebooks", bookId: route.bookId },
           scopeLineageId === route.scopeLineageId ? undefined : lorebookChangedReceipt(route.locale),
           dependencies,
         );
@@ -2134,6 +2396,52 @@ export function createMemoriesInteractionRoute(
           throw new Error("Lorebook select route requires StringSelectMenu interaction");
         }
         const selectedValue = interaction.values[0] ?? "";
+        if (selectedValue === "action:export-lorebook") {
+          const guard = await guardLorebookWrite(interaction, route.locale, scope, route.scopeLineageId, dependencies);
+          if (!guard.ok) return;
+          const books = guard.lineageId === null ? await dependencies.getLorebookCollections(scope.serverId) : [];
+          const book = books?.find((candidate) => candidate.lorebook_id === route.bookId);
+          const loaded = await dependencies.loadLorebooks(scope.serverId, guard.lineageId);
+          const entries = loaded.entries.filter(
+            (entry) => guard.lineageId !== null || entry.lorebook_name === book?.name,
+          );
+          if (loaded.status !== "fresh" || (guard.lineageId === null && !book) || entries.length === 0) {
+            await repaint(
+              interaction,
+              route.locale,
+              scope,
+              "lorebooks",
+              route.scopeLineageId,
+              [],
+              { kind: "lorebooks", bookId: route.bookId },
+              receipt(
+                route.locale,
+                loaded.status !== "fresh"
+                  ? "lorebook_read_failed"
+                  : guard.lineageId === null && !book
+                    ? "lorebook_changed_state"
+                    : "lorebook_export_empty",
+              ),
+              dependencies,
+            );
+            return;
+          }
+          const name =
+            book?.name ??
+            personaRepresentativeForLineage(scope.personas, guard.lineageId ?? 0)?.persona_nickname ??
+            "Lorebook";
+          const file = exportWorldInfo(entries, name);
+          await interaction.followUp({
+            content: localizer(route.locale, "commands.memories.lorebook_export_detail", { count: entries.length }),
+            files: [
+              new AttachmentBuilder(Buffer.from(JSON.stringify(file, null, 2)), {
+                name: `${sanitizeAttachmentFilenamePart(name, { fallback: "lorebook" })}.json`,
+              }),
+            ],
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
         const entryId = Number(selectedValue);
         const validSelection = Number.isSafeInteger(entryId) && entryId > 0;
         const scopeLineageId = isValidLorebookScope(scope, route.scopeLineageId) ? route.scopeLineageId : 0;
@@ -2145,8 +2453,8 @@ export function createMemoriesInteractionRoute(
           scopeLineageId,
           [],
           validSelection && scopeLineageId === route.scopeLineageId
-            ? { kind: "lorebooks", selectedEntryId: entryId, rangeIndex: route.rangeIndex }
-            : { kind: "lorebooks" },
+            ? { kind: "lorebooks", bookId: route.bookId, selectedEntryId: entryId, rangeIndex: route.rangeIndex }
+            : { kind: "lorebooks", bookId: route.bookId },
           validSelection && scopeLineageId === route.scopeLineageId ? undefined : lorebookChangedReceipt(route.locale),
           dependencies,
         );
@@ -2163,8 +2471,8 @@ export function createMemoriesInteractionRoute(
           scopeLineageId,
           [],
           scopeLineageId === route.scopeLineageId
-            ? { kind: "lorebooks", rangeIndex: route.rangeIndex }
-            : { kind: "lorebooks" },
+            ? { kind: "lorebooks", bookId: route.bookId, rangeIndex: route.rangeIndex }
+            : { kind: "lorebooks", bookId: route.bookId },
           scopeLineageId === route.scopeLineageId ? undefined : lorebookChangedReceipt(route.locale),
           dependencies,
         );
@@ -2813,9 +3121,27 @@ export function createMemoriesInteractionRoute(
       if (route.action === "lore-add-submit") {
         const guard = await guardLorebookWrite(interaction, route.locale, scope, route.scopeLineageId, dependencies);
         if (!guard.ok) return;
+        const books = guard.lineageId === null ? await dependencies.getLorebookCollections(scope.serverId) : [];
+        const book = books?.find((candidate) => candidate.lorebook_id === route.bookId);
+        if (guard.lineageId === null && !book) {
+          await repaint(
+            interaction,
+            route.locale,
+            scope,
+            "lorebooks",
+            0,
+            [],
+            { kind: "lorebooks" },
+            lorebookChangedReceipt(route.locale),
+            dependencies,
+          );
+          return;
+        }
+
         const modal = interaction as ModalSubmitInteraction;
         const nonce = route.nonce;
-        const channelDiscIds = await takeLorebookChannelScope(dependencies, modal, nonce);
+        const channelDiscIds =
+          guard.lineageId === null ? [] : await takeLorebookChannelScope(dependencies, modal, nonce);
         if (!channelDiscIds) {
           await repaint(
             interaction,
@@ -2824,27 +3150,8 @@ export function createMemoriesInteractionRoute(
             "lorebooks",
             route.scopeLineageId,
             [],
-            { kind: "lorebooks" },
+            { kind: "lorebooks", bookId: route.bookId },
             receipt(route.locale, "lorebook_channels_invalid"),
-            dependencies,
-          );
-          return;
-        }
-        const placement = parseLorebookPlacement(
-          dependencies.takeStringSelectValues(interaction.id, buildLorebookModalFieldId("placement", nonce))?.[0],
-        );
-        if (placement === null) {
-          await repaint(
-            interaction,
-            route.locale,
-            scope,
-            "lorebooks",
-            route.scopeLineageId,
-            [],
-            { kind: "lorebooks" },
-            receipt(route.locale, "lorebook_invalid_selection", {
-              field: localizer(route.locale, "commands.memories.lorebook_placement_label"),
-            }),
             dependencies,
           );
           return;
@@ -2853,10 +3160,11 @@ export function createMemoriesInteractionRoute(
           serverId: scope.serverId,
           lineageId: guard.lineageId,
           canManage: scope.canManage,
+          lorebookName: book?.name,
+          bookId: book?.lorebook_id,
           title: readModalField(modal, buildLorebookModalFieldId("title", nonce)) ?? "",
           content: readModalField(modal, buildLorebookModalFieldId("content", nonce)) ?? "",
           keys: parseLorebookKeys(readModalField(modal, buildLorebookModalFieldId("keys", nonce)) ?? ""),
-          placement,
           channelDiscIds,
         });
         if (result.status === "success") {
@@ -2872,7 +3180,7 @@ export function createMemoriesInteractionRoute(
             "lorebooks",
             route.scopeLineageId,
             [],
-            { kind: "lorebooks", selectedEntryId: result.entryId },
+            { kind: "lorebooks", bookId: route.bookId, selectedEntryId: result.entryId },
             receipt(route.locale, "lorebook_added", { title: result.title }),
             dependencies,
           );
@@ -2885,7 +3193,7 @@ export function createMemoriesInteractionRoute(
           "lorebooks",
           route.scopeLineageId,
           [],
-          { kind: "lorebooks" },
+          { kind: "lorebooks", bookId: route.bookId },
           lorebookResultReceipt(route.locale, result.status, {
             max: LOREBOOK_ENTRIES_PER_SCOPE_MAX,
           }),
@@ -2894,9 +3202,29 @@ export function createMemoriesInteractionRoute(
         return;
       }
 
-      if (route.action === "lore-import-submit") {
-        const guard = await guardLorebookWrite(interaction, route.locale, scope, route.scopeLineageId, dependencies);
+      if (route.action === "lore-import-submit" || route.action === "lore-book-import-submit") {
+        const newCollection = route.action === "lore-book-import-submit";
+        const scopeLineageId = route.action === "lore-import-submit" ? route.scopeLineageId : 0;
+        const guard = await guardLorebookWrite(interaction, route.locale, scope, scopeLineageId, dependencies);
         if (!guard.ok) return;
+        const books =
+          !newCollection && guard.lineageId === null ? await dependencies.getLorebookCollections(scope.serverId) : [];
+        const book = books?.find((candidate) => candidate.lorebook_id === route.bookId);
+        if (!newCollection && guard.lineageId === null && !book) {
+          await repaint(
+            interaction,
+            route.locale,
+            scope,
+            "lorebooks",
+            0,
+            [],
+            { kind: "lorebooks" },
+            lorebookChangedReceipt(route.locale),
+            dependencies,
+          );
+          return;
+        }
+
         const attachment = dependencies.takeLorebookFileUpload(interaction.id, route.nonce);
         if (!attachment) {
           await repaint(
@@ -2904,31 +3232,45 @@ export function createMemoriesInteractionRoute(
             route.locale,
             scope,
             "lorebooks",
-            route.scopeLineageId,
+            scopeLineageId,
             [],
-            { kind: "lorebooks" },
+            { kind: "lorebooks", bookId: route.bookId },
             receipt(route.locale, "lorebook_import_failed"),
             dependencies,
           );
           return;
         }
-        const maxBytes = LOREBOOK_IMPORT_MAX_FILE_MB * 1024 * 1024;
+        // Attachment media types are untrusted, so byte signatures must enforce the actual carrier's parser and size limit.
+        const mediaType = attachment.content_type?.split(";")[0].trim().toLowerCase();
+        const maxMB =
+          mediaType === "image/png"
+            ? IMPORT_LIMITS.MAX_PERSONA_IMPORT_SIZE_MB
+            : mediaType === "application/zip" || mediaType === "application/x-zip-compressed"
+              ? IMPORT_LIMITS.MAX_CHARX_IMPORT_SIZE_MB
+              : mediaType === "application/json" || mediaType === "text/plain"
+                ? LOREBOOK_IMPORT_MAX_FILE_MB
+                : Math.max(
+                    LOREBOOK_IMPORT_MAX_FILE_MB,
+                    IMPORT_LIMITS.MAX_PERSONA_IMPORT_SIZE_MB,
+                    IMPORT_LIMITS.MAX_CHARX_IMPORT_SIZE_MB,
+                  );
+        const maxBytes = maxMB * 1024 * 1024;
         if (attachment.size > maxBytes) {
           await repaint(
             interaction,
             route.locale,
             scope,
             "lorebooks",
-            route.scopeLineageId,
+            scopeLineageId,
             [],
-            { kind: "lorebooks" },
-            receipt(route.locale, "lorebook_import_too_large", { max: LOREBOOK_IMPORT_MAX_FILE_MB }),
+            { kind: "lorebooks", bookId: route.bookId },
+            receipt(route.locale, "lorebook_import_too_large", { max: maxMB }),
             dependencies,
           );
           return;
         }
         const download = await safeDownload(attachment.url, {
-          maxSizeMB: LOREBOOK_IMPORT_MAX_FILE_MB,
+          maxSizeMB: maxMB,
           timeoutMs: 15_000,
           knownSize: attachment.size,
         });
@@ -2938,42 +3280,50 @@ export function createMemoriesInteractionRoute(
             route.locale,
             scope,
             "lorebooks",
-            route.scopeLineageId,
+            scopeLineageId,
             [],
-            { kind: "lorebooks" },
+            { kind: "lorebooks", bookId: route.bookId },
             receipt(route.locale, "lorebook_import_failed"),
             dependencies,
           );
           return;
         }
-        const parsed = dependencies.parseLorebookUpload(download.buffer);
+        const parsed = await dependencies.parseLorebookUpload(download.buffer);
         if (!parsed.ok) {
           await repaint(
             interaction,
             route.locale,
             scope,
             "lorebooks",
-            route.scopeLineageId,
+            scopeLineageId,
             [],
-            { kind: "lorebooks" },
+            { kind: "lorebooks", bookId: route.bookId },
             receipt(
               route.locale,
-              parsed.reason === "invalid_json" ? "lorebook_invalid_json" : "lorebook_import_unsupported",
+              parsed.reason === "too_large"
+                ? "lorebook_import_too_large"
+                : parsed.reason === "no_book"
+                  ? "lorebook_import_no_book"
+                  : parsed.reason === "invalid_json"
+                    ? "lorebook_invalid_json"
+                    : "lorebook_import_unsupported",
+              parsed.reason === "too_large" ? { max: parsed.maxMB } : {},
             ),
             dependencies,
           );
           return;
         }
-        const { entries, report } = parsed.conversion;
+        const { report } = parsed.conversion;
+        const entries = parsed.conversion.entries.map((entry) => ({ ...entry, lorebook_name: book?.name }));
         if (entries.length === 0) {
           await repaint(
             interaction,
             route.locale,
             scope,
             "lorebooks",
-            route.scopeLineageId,
+            scopeLineageId,
             [],
-            { kind: "lorebooks" },
+            { kind: "lorebooks", bookId: route.bookId },
             receipt(route.locale, "lorebook_import_empty"),
             dependencies,
           );
@@ -2985,21 +3335,48 @@ export function createMemoriesInteractionRoute(
             route.locale,
             scope,
             "lorebooks",
-            route.scopeLineageId,
+            scopeLineageId,
             [],
-            { kind: "lorebooks" },
+            { kind: "lorebooks", bookId: route.bookId },
             receipt(route.locale, "lorebook_import_limit", { max: LOREBOOK_ENTRIES_PER_SCOPE_MAX }),
             dependencies,
           );
           return;
         }
+        const name =
+          readModalField(
+            interaction as ModalSubmitInteraction,
+            buildLorebookModalFieldId("book_name", route.nonce),
+          )?.trim() ||
+          parsed.name ||
+          attachment.filename.replace(/\.[^.]+$/u, "").trim();
         const replace =
-          dependencies
+          !newCollection &&
+          (dependencies
             .takeCheckboxValues(interaction.id, buildLorebookModalFieldId("replace", route.nonce))
-            ?.includes("replace") ?? false;
-        const writeResult = replace
-          ? await lorebookRepository.replaceScopeEntries(scope.serverId, guard.lineageId, entries)
-          : await lorebookRepository.appendScopeEntries(scope.serverId, guard.lineageId, entries);
+            ?.includes("replace") ??
+            false);
+        const importedBook = newCollection
+          ? await lorebookRepository.importNewBook(scope.serverId, name, entries)
+          : undefined;
+        const writeResult =
+          importedBook ??
+          (replace
+            ? await lorebookRepository.replaceScopeEntries(
+                scope.serverId,
+                guard.lineageId,
+                entries,
+                undefined,
+                book?.name,
+                book?.lorebook_id,
+              )
+            : await lorebookRepository.appendScopeEntries(
+                scope.serverId,
+                guard.lineageId,
+                entries,
+                undefined,
+                book?.lorebook_id,
+              ));
         if (
           report.skippedEntries > 0 ||
           report.unsupportedKeys > 0 ||
@@ -3028,14 +3405,22 @@ export function createMemoriesInteractionRoute(
                   added: writeResult.added,
                   skipped: writeResult.skipped + report.skippedEntries,
                 });
+          if (report.skippedEntries || report.unsupportedKeys || report.ignoredEntries || report.collapsedPlacement) {
+            importReceipt.detail += `\n${localizer(route.locale, "commands.memories.lorebook_conversion_note", {
+              skipped: report.skippedEntries,
+              keys: report.unsupportedKeys,
+              ignored: report.ignoredEntries,
+              placements: report.collapsedPlacement,
+            })}`;
+          }
           await repaint(
             interaction,
             route.locale,
             scope,
             "lorebooks",
-            route.scopeLineageId,
+            scopeLineageId,
             [],
-            { kind: "lorebooks" },
+            { kind: "lorebooks", bookId: importedBook?.status === "appended" ? importedBook.bookId : route.bookId },
             importReceipt,
             dependencies,
           );
@@ -3047,14 +3432,16 @@ export function createMemoriesInteractionRoute(
           route.locale,
           scope,
           "lorebooks",
-          route.scopeLineageId,
+          scopeLineageId,
           [],
-          { kind: "lorebooks" },
-          status === "limit"
-            ? receipt(route.locale, "lorebook_import_limit", { max: LOREBOOK_ENTRIES_PER_SCOPE_MAX })
-            : status === "invalid"
-              ? receipt(route.locale, "lorebook_import_invalid")
-              : receipt(route.locale, "lorebook_import_failed"),
+          { kind: "lorebooks", bookId: route.bookId },
+          status === "exists"
+            ? receipt(route.locale, "lorebook_import_exists", { name })
+            : status === "limit"
+              ? receipt(route.locale, "lorebook_import_limit", { max: LOREBOOK_ENTRIES_PER_SCOPE_MAX })
+              : status === "invalid"
+                ? receipt(route.locale, "lorebook_import_invalid")
+                : receipt(route.locale, "lorebook_import_failed"),
           dependencies,
         );
         return;
@@ -3064,7 +3451,8 @@ export function createMemoriesInteractionRoute(
         const guard = await guardLorebookWrite(interaction, route.locale, scope, route.scopeLineageId, dependencies);
         if (!guard.ok) return;
         const modal = interaction as ModalSubmitInteraction;
-        const channelDiscIds = await takeLorebookChannelScope(dependencies, modal, route.nonce);
+        const channelDiscIds =
+          guard.lineageId === null ? [] : await takeLorebookChannelScope(dependencies, modal, route.nonce);
         if (!channelDiscIds) {
           await repaint(
             interaction,
@@ -3073,27 +3461,8 @@ export function createMemoriesInteractionRoute(
             "lorebooks",
             route.scopeLineageId,
             [],
-            { kind: "lorebooks", selectedEntryId: route.entryId },
+            { kind: "lorebooks", bookId: route.bookId, selectedEntryId: route.entryId },
             receipt(route.locale, "lorebook_channels_invalid"),
-            dependencies,
-          );
-          return;
-        }
-        const placement = parseLorebookPlacement(
-          dependencies.takeStringSelectValues(interaction.id, buildLorebookModalFieldId("placement", route.nonce))?.[0],
-        );
-        if (placement === null) {
-          await repaint(
-            interaction,
-            route.locale,
-            scope,
-            "lorebooks",
-            route.scopeLineageId,
-            [],
-            { kind: "lorebooks", selectedEntryId: route.entryId },
-            receipt(route.locale, "lorebook_invalid_selection", {
-              field: localizer(route.locale, "commands.memories.lorebook_placement_label"),
-            }),
             dependencies,
           );
           return;
@@ -3106,7 +3475,6 @@ export function createMemoriesInteractionRoute(
           title: readModalField(modal, buildLorebookModalFieldId("title", route.nonce)) ?? "",
           content: readModalField(modal, buildLorebookModalFieldId("content", route.nonce)) ?? "",
           keys: parseLorebookKeys(readModalField(modal, buildLorebookModalFieldId("keys", route.nonce)) ?? ""),
-          placement,
           channelDiscIds,
         });
         if (result.status === "success") {
@@ -3122,7 +3490,7 @@ export function createMemoriesInteractionRoute(
             "lorebooks",
             route.scopeLineageId,
             [],
-            { kind: "lorebooks", selectedEntryId: route.entryId },
+            { kind: "lorebooks", bookId: route.bookId, selectedEntryId: route.entryId },
             receipt(route.locale, "lorebook_edited", { title: result.title }),
             dependencies,
           );
@@ -3135,7 +3503,7 @@ export function createMemoriesInteractionRoute(
           "lorebooks",
           route.scopeLineageId,
           [],
-          { kind: "lorebooks", selectedEntryId: route.entryId },
+          { kind: "lorebooks", bookId: route.bookId, selectedEntryId: route.entryId },
           lorebookResultReceipt(route.locale, result.status),
           dependencies,
         );
@@ -3160,7 +3528,7 @@ export function createMemoriesInteractionRoute(
             "lorebooks",
             route.scopeLineageId,
             [],
-            { kind: "lorebooks", selectedEntryId: route.entryId },
+            { kind: "lorebooks", bookId: route.bookId, selectedEntryId: route.entryId },
             receipt(route.locale, "lorebook_invalid_selection", {
               field: localizer(route.locale, "commands.memories.lorebook_secondary_logic_label"),
             }),
@@ -3178,7 +3546,7 @@ export function createMemoriesInteractionRoute(
           return parseLorebookInteger(raw, min, max);
         };
         const scanDepth = readNumber("scan_depth", 1, 100);
-        const triggerChance = readNumber("trigger_chance", 1, 100);
+        const triggerChance = readNumber("trigger_chance", 0, 100);
         const insertionOrder = readNumber("insertion_order", -2147483648, 2147483647);
         const invalidField =
           scanDepth === null
@@ -3190,7 +3558,7 @@ export function createMemoriesInteractionRoute(
             : triggerChance === null
               ? {
                   key: "commands.memories.lorebook_trigger_chance_label",
-                  min: 1,
+                  min: 0,
                   max: 100,
                 }
               : insertionOrder === null
@@ -3208,7 +3576,7 @@ export function createMemoriesInteractionRoute(
             "lorebooks",
             route.scopeLineageId,
             [],
-            { kind: "lorebooks", selectedEntryId: route.entryId },
+            { kind: "lorebooks", bookId: route.bookId, selectedEntryId: route.entryId },
             receipt(route.locale, "lorebook_invalid_number", {
               field: localizer(route.locale, invalidField?.key ?? "commands.memories.lorebook_scan_depth_label"),
               min: invalidField?.min ?? 1,
@@ -3244,7 +3612,7 @@ export function createMemoriesInteractionRoute(
             "lorebooks",
             route.scopeLineageId,
             [],
-            { kind: "lorebooks", selectedEntryId: route.entryId },
+            { kind: "lorebooks", bookId: route.bookId, selectedEntryId: route.entryId },
             receipt(route.locale, "lorebook_activation_saved", { title: result.title }),
             dependencies,
           );
@@ -3257,14 +3625,14 @@ export function createMemoriesInteractionRoute(
           "lorebooks",
           route.scopeLineageId,
           [],
-          { kind: "lorebooks", selectedEntryId: route.entryId },
+          { kind: "lorebooks", bookId: route.bookId, selectedEntryId: route.entryId },
           lorebookResultReceipt(route.locale, result.status),
           dependencies,
         );
         return;
       }
 
-      if (route.action === "lore-toggle-enabled" || route.action === "lore-toggle-constant") {
+      if (route.action === "lore-toggle-enabled") {
         const guard = await guardLorebookWrite(interaction, route.locale, scope, route.scopeLineageId, dependencies);
         if (!guard.ok) return;
         const lorebooks = await dependencies.loadLorebooks(scope.serverId, guard.lineageId);
@@ -3280,7 +3648,7 @@ export function createMemoriesInteractionRoute(
             "lorebooks",
             route.scopeLineageId,
             [],
-            { kind: "lorebooks" },
+            { kind: "lorebooks", bookId: route.bookId },
             lorebooks.status === "fresh"
               ? lorebookChangedReceipt(route.locale)
               : receipt(route.locale, "lorebook_read_failed"),
@@ -3288,22 +3656,7 @@ export function createMemoriesInteractionRoute(
           );
           return;
         }
-        if (route.action === "lore-toggle-constant" && target.constant && target.keys.length === 0) {
-          await repaint(
-            interaction,
-            route.locale,
-            scope,
-            "lorebooks",
-            route.scopeLineageId,
-            [],
-            { kind: "lorebooks", selectedEntryId: target.entry_id },
-            receipt(route.locale, "lorebook_keys_required"),
-            dependencies,
-          );
-          return;
-        }
-        const flags =
-          route.action === "lore-toggle-enabled" ? { enabled: !target.enabled } : { constant: !target.constant };
+        const flags = { enabled: !target.enabled };
         const result = await dependencies.lorebookOperations.setFlags({
           serverId: scope.serverId,
           lineageId: guard.lineageId,
@@ -3317,14 +3670,7 @@ export function createMemoriesInteractionRoute(
             serverId: scope.serverId,
             userDiscId: scope.userDiscId,
           });
-          const receiptKey =
-            route.action === "lore-toggle-enabled"
-              ? target.enabled
-                ? "lorebook_disabled"
-                : "lorebook_enabled"
-              : target.constant
-                ? "lorebook_keywords"
-                : "lorebook_always_on";
+          const receiptKey = target.enabled ? "lorebook_disabled" : "lorebook_enabled";
           await repaint(
             interaction,
             route.locale,
@@ -3332,7 +3678,7 @@ export function createMemoriesInteractionRoute(
             "lorebooks",
             route.scopeLineageId,
             [],
-            { kind: "lorebooks", selectedEntryId: target.entry_id },
+            { kind: "lorebooks", bookId: route.bookId, selectedEntryId: target.entry_id },
             receipt(route.locale, receiptKey, { title: target.title }),
             dependencies,
           );
@@ -3345,7 +3691,7 @@ export function createMemoriesInteractionRoute(
           "lorebooks",
           route.scopeLineageId,
           [],
-          { kind: "lorebooks", selectedEntryId: target.entry_id },
+          { kind: "lorebooks", bookId: route.bookId, selectedEntryId: target.entry_id },
           lorebookResultReceipt(route.locale, result.status),
           dependencies,
         );
@@ -3368,7 +3714,7 @@ export function createMemoriesInteractionRoute(
             "lorebooks",
             route.scopeLineageId,
             [],
-            { kind: "lorebooks" },
+            { kind: "lorebooks", bookId: route.bookId },
             lorebooks.status === "fresh"
               ? lorebookChangedReceipt(route.locale)
               : receipt(route.locale, "lorebook_read_failed"),
@@ -3383,7 +3729,7 @@ export function createMemoriesInteractionRoute(
           "lorebooks",
           route.scopeLineageId,
           [],
-          { kind: "lore-remove", entryId: target.entry_id },
+          { kind: "lore-remove", bookId: route.bookId, entryId: target.entry_id },
           undefined,
           dependencies,
         );
@@ -3398,7 +3744,7 @@ export function createMemoriesInteractionRoute(
           "lorebooks",
           isValidLorebookScope(scope, route.scopeLineageId) ? route.scopeLineageId : 0,
           [],
-          { kind: "lorebooks", selectedEntryId: route.entryId },
+          { kind: "lorebooks", bookId: route.bookId, selectedEntryId: route.entryId },
           undefined,
           dependencies,
         );
@@ -3437,7 +3783,7 @@ export function createMemoriesInteractionRoute(
             "lorebooks",
             route.scopeLineageId,
             [],
-            { kind: "lorebooks", rangeIndex },
+            { kind: "lorebooks", bookId: route.bookId, rangeIndex },
             receipt(route.locale, "lorebook_removed", { title: result.title }),
             dependencies,
           );
@@ -3450,7 +3796,7 @@ export function createMemoriesInteractionRoute(
           "lorebooks",
           route.scopeLineageId,
           [],
-          { kind: "lorebooks" },
+          { kind: "lorebooks", bookId: route.bookId },
           lorebookResultReceipt(route.locale, result.status),
           dependencies,
         );
@@ -3907,7 +4253,7 @@ export function createMemoriesInteractionRoute(
           route.category === "documents"
             ? { kind: "documents" as const }
             : route.category === "lorebooks"
-              ? { kind: "lorebooks" as const }
+              ? { kind: "lorebooks" as const, bookId: route.bookId }
               : { kind: "main" as const };
         await repaint(
           interaction,
