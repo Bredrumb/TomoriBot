@@ -48,10 +48,13 @@ Adapters enforce strict structural constraints required by downstream model endp
   embedding them, avoiding provider-side fetches of expiring URLs. Media handling remains
   provider-specific: Google's adapter can pass supported video links as `fileData`.
 - **Anthropic structured images:** Remote and inline images pass through the bounded image downloader
-  and header validation before becoming base64 blocks. An unreadable, unsupported, or oversized image
-  fails the request before provider submission, preserving the caller's batch membership. Diagnostics
-  identify the zero-based image index, optional name, preparation stage, and available HTTP status;
-  they exclude source URLs and image bytes. The base64 size cap follows
+  and header validation before becoming base64 blocks. Unreadable, unsupported, or oversized images
+  are skipped with retained warnings. Image labels preserve the original positions, and omission
+  notices tell the model which images are unavailable. Successful results carry `skippedImages`, so
+  expression initialization excludes those Discord IDs from writes and leaves them uninitialized.
+  If every image fails, the request stops before provider submission. Diagnostics identify the
+  zero-based image index, optional name, preparation stage, and available HTTP status; they exclude
+  source URLs and image bytes. The base64 size cap follows
   [Anthropic's image limits](https://platform.claude.com/docs/en/build-with-claude/vision#request-limits).
 - **Speaker guard reset:** Adapters initialize rolling tail buffers before streaming starts. Guard
   state belongs strictly to a single attempt and resets on each new call to `startStream()`.

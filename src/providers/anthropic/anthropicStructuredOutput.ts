@@ -38,15 +38,18 @@ const UNSUPPORTED_OUTPUT_SCHEMA_KEYWORDS = new Set([
 
 class AnthropicImagePreparationError extends Error {
   constructor(readonly diagnostics: StructuredImageFailureDiagnostics) {
-    super("An image could not be prepared for Anthropic.");
+    super("No images could be prepared for Anthropic.");
   }
 }
 
-async function buildAnthropicMessages(
-  request: ProviderStructuredJsonRequest,
-): Promise<{ system: string; messages: Array<Record<string, unknown>> }> {
+async function buildAnthropicMessages(request: ProviderStructuredJsonRequest): Promise<{
+  system: string;
+  messages: Array<Record<string, unknown>>;
+  skippedImages: StructuredImageFailureDiagnostics[];
+}> {
   const { systemPrompt, userPrompt, images } = request;
   const messages: Array<Record<string, unknown>> = [];
+  const skippedImages: StructuredImageFailureDiagnostics[] = [];
 
   if (images && images.length > 0) {
     const contentBlocks: Array<Record<string, unknown>> = [{ type: "text", text: userPrompt }];
@@ -67,6 +70,10 @@ async function buildAnthropicMessages(
         if (optimized.data.length > ANTHROPIC_MAX_BASE64_IMAGE_BYTES)
           throw new Error("Image exceeds base64 size limit");
         contentBlocks.push({
+          type: "text",
+          text: `Image ${imageIndex + 1}${image.name ? ` (${JSON.stringify(image.name)})` : ""}:`,
+        });
+        contentBlocks.push({
           type: "image",
           source: {
             type: "base64",
@@ -75,23 +82,38 @@ async function buildAnthropicMessages(
           },
         });
       } catch (error) {
+        request.abortSignal?.throwIfAborted();
         const status = error instanceof Error ? /\bHTTP ([1-5]\d{2})\b/.exec(error.message)?.[1] : undefined;
-        throw new AnthropicImagePreparationError({
+        const diagnostics: StructuredImageFailureDiagnostics = {
           failureStage,
           imageIndex,
           imageName: image.name ? redactProviderDetail(image.name, request.apiKey) : undefined,
           imageCount: images.length,
           httpStatus: status ? Number(status) : undefined,
+        };
+        skippedImages.push(diagnostics);
+        await reportProviderFailure({
+          summary: "Anthropic image preparation failed",
+          error: new Error("Image input unavailable"),
+          errorType: "AnthropicStructuredImageError",
+          expected: true,
+          dimensions: { provider: "anthropic", operation: "structured-image", category: diagnostics.failureStage },
+          metadata: { model: request.model, correlation: request.correlationId, ...diagnostics },
+        });
+        contentBlocks.push({
+          type: "text",
+          text: `Image ${imageIndex + 1} is unavailable. Omit this image from the results; do not infer its contents.`,
         });
       }
     }
+    if (skippedImages.length === images.length) throw new AnthropicImagePreparationError(skippedImages[0]);
 
     messages.push({ role: "user", content: contentBlocks });
   } else {
     messages.push({ role: "user", content: userPrompt });
   }
 
-  return { system: systemPrompt, messages };
+  return { system: systemPrompt, messages, skippedImages };
 }
 
 /**
@@ -168,7 +190,7 @@ export async function callAnthropicStructuredJSON<T>(
   zodSchema: z.ZodType<T>,
 ): Promise<StructuredOutputResult<T>> {
   try {
-    const { system, messages } = await buildAnthropicMessages(request);
+    const { system, messages, skippedImages } = await buildAnthropicMessages(request);
     const thinking =
       request.thinkingLevel === undefined
         ? undefined
@@ -188,14 +210,16 @@ export async function callAnthropicStructuredJSON<T>(
     });
 
     const responseText = extractResponseText(response);
-    if (request.privateOutput)
-      return parsePrivateStructuredOutput(
+    if (request.privateOutput) {
+      const result = parsePrivateStructuredOutput(
         request,
         responseText,
         zodSchema,
         response.usage,
         response.stop_reason === "refusal",
       );
+      return result.success && skippedImages.length > 0 ? { ...result, skippedImages } : result;
+    }
 
     let parsed: unknown;
     try {
@@ -230,19 +254,12 @@ export async function callAnthropicStructuredJSON<T>(
     return {
       success: true,
       data: validationResult.data,
+      ...(skippedImages.length > 0 ? { skippedImages } : {}),
     };
   } catch (error) {
     if (request.abortSignal?.aborted) return privateStructuredFailure(request);
     if (error instanceof AnthropicImagePreparationError) {
       const diagnostics = error.diagnostics;
-      await reportProviderFailure({
-        summary: "Anthropic image preparation failed",
-        error,
-        errorType: "AnthropicStructuredImageError",
-        expected: true,
-        dimensions: { provider: "anthropic", operation: "structured-image", category: diagnostics.failureStage },
-        metadata: { model: request.model, correlation: request.correlationId, ...diagnostics },
-      });
       return {
         success: false,
         error: error.message,

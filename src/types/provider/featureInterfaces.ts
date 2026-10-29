@@ -44,7 +44,7 @@ export interface StructuredImageFailureDiagnostics {
 }
 
 export type StructuredOutputResult<T> =
-  | { success: true; data: T }
+  | { success: true; data: T; skippedImages?: StructuredImageFailureDiagnostics[] }
   | {
       success: false;
       error: string;
