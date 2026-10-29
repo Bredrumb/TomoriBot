@@ -21,7 +21,7 @@ import { isRagAvailable } from "@/utils/db/ragAvailability";
 import { llmModelRepo, personaRepository, ragRepository } from "@/utils/db/repositories";
 import { DISCORD_SELECT_VALUES_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { generateEmbeddingsBatched, providerSupportsEmbeddingTaskType } from "@/utils/embeddings/embeddingProvider";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
@@ -245,9 +245,12 @@ async function promptSaveAsDocModal(
     }))
     .filter((o) => o.value !== "");
 
-  const modalResult = await promptWithRawModal(buttonInteraction, locale, {
+  const modalResult = await promptWithPaginatedModal(buttonInteraction, locale, {
     modalCustomId: "compact_save_as_doc_modal",
     modalTitleKey: "commands.compact.save_as_doc_modal_title",
+    selectorStyle: "componentsV2",
+    pageSelectTitleKey: "general.pagination.select_persona_title",
+    pageSelectDescriptionKey: "general.pagination.select_persona_page_description",
     components: [
       {
         customId: DOC_NAME_FIELD_ID,

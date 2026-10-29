@@ -9,12 +9,14 @@ const items: StructuredContextItem[] = [
 ];
 
 describe("prompt snapshot request config placement", () => {
-  test("text snapshot opens with the config under a not-part-of-the-prompt header", () => {
-    const text = buildTextSnapshot(items, { temperature: 0.5 });
+  test("text snapshot opens with the info and config annotations before any prompt text", () => {
+    const text = buildTextSnapshot(items, { temperature: 0.5 }, ["persona: Mirri"]);
+    const infoAt = text.indexOf("persona: Mirri");
     const configAt = text.indexOf('"temperature": 0.5');
-    expect(text.startsWith("=== Request Config")).toBe(true);
-    expect(configAt).toBeGreaterThan(-1);
-    expect(configAt).toBeLessThan(text.indexOf("You are Mirri."));
+    const promptAt = text.indexOf("You are Mirri.");
+    expect(infoAt).toBeGreaterThan(-1);
+    expect(infoAt).toBeLessThan(configAt);
+    expect(configAt).toBeLessThan(promptAt);
   });
 
   test("json snapshot lists model and config keys before the message list, with tools last", async () => {
