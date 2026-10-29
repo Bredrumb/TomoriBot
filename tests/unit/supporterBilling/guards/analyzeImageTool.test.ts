@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
-import type { Client } from "discord.js";
+import { REST, type Client } from "discord.js";
 import { AnalyzeImageTool } from "@/tools/functionCalls/analyzeImageTool";
 import * as visionCaption from "@/utils/provider/visionCaption";
 import * as imageExtractor from "@/utils/image/imageExtractor";
@@ -30,6 +30,7 @@ function noticeChannel(): { channel: ToolContext["channel"]; sends: string[] } {
   const sends: string[] = [];
   const channel = {
     id: "synthetic-notice-channel",
+    client: { rest: new REST() },
     send: async (payload: unknown) => {
       sends.push(JSON.stringify(payload));
       return { id: `synthetic-notice-${sends.length}` };

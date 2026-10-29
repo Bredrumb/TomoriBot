@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
-import type { Client } from "discord.js";
+import { REST, type Client } from "discord.js";
 import { supporterUsageStatisticsRepository } from "@/modules/supporter-billing/db/repositories";
 import { GenerateImageTool } from "@/tools/functionCalls/generateImageTool";
 import { diffusionModelSchema } from "@/types/db/schema";
@@ -40,6 +40,7 @@ function noticeChannel(): { channel: ToolContext["channel"]; sends: string[] } {
   const sends: string[] = [];
   const channel = {
     id: "synthetic-notice-channel",
+    client: { rest: new REST() },
     isThread: () => false,
     send: async (payload: unknown) => {
       sends.push(JSON.stringify(payload));

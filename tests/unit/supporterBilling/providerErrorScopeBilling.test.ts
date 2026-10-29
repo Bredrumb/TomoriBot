@@ -1,7 +1,8 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
-import type { Client, ModalBuilder, TextChannel } from "discord.js";
+import { REST, type Client, type ModalBuilder, type TextChannel } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type { ProviderError, StreamContext, StreamProvider } from "@/types/stream/interfaces";
+import * as interactionLocale from "@/utils/discord/interactionLocale";
 import { StreamErrorUi } from "@/utils/discord/stream/errorUi";
 import { ProviderRequestDeniedError } from "@/utils/provider/providerUsage";
 import { findProviderOption } from "@/utils/provider/providerOptionRegistry";
@@ -21,7 +22,12 @@ function makeContext(
   inGuild = true,
 ): StreamContext {
   return {
-    channel: { id: "channel_1", send, ...(inGuild ? { guild: { id: "guild_1" } } : {}) } as unknown as TextChannel,
+    channel: {
+      id: "channel_1",
+      client: { rest: new REST() },
+      send,
+      ...(inGuild ? { guild: { id: "guild_1" } } : {}),
+    } as unknown as TextChannel,
     client: {} as Client,
     tomoriState: {
       server_id: 1,
@@ -74,6 +80,8 @@ async function renderTips(
   } = {},
 ): Promise<string> {
   let modal: ReturnType<ModalBuilder["toJSON"]> | undefined;
+  let clickPromise: Promise<void> | undefined;
+  const localeSpy = spyOn(interactionLocale, "resolveUserLocale").mockResolvedValue(options.locale ?? "en-US");
   const tipClick = {
     customId: "error_tip_details",
     user: { bot: false },
@@ -84,13 +92,15 @@ async function renderTips(
   const makeCollector = (filter: (interaction: typeof tipClick) => boolean) => {
     const collector = {
       on(event: string, listener: (interaction: unknown) => Promise<void>) {
-        if (event === "collect" && filter(tipClick)) void listener(tipClick);
+        if (event === "collect" && filter(tipClick)) clickPromise = listener(tipClick);
         return collector;
       },
     };
     return collector;
   };
   const send = mock(async (_payload: unknown) => ({
+    id: "123456789012345678",
+    channelId: "123456789012345679",
     createMessageComponentCollector: (options: { filter: (interaction: typeof tipClick) => boolean }) =>
       makeCollector(options.filter),
   }));
@@ -105,7 +115,8 @@ async function renderTips(
     },
     "fixture-key",
   );
-  await Promise.resolve();
+  await clickPromise;
+  localeSpy.mockRestore();
   return (
     modal?.components
       ?.map((component) => ("content" in component ? component.content : ""))

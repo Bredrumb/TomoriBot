@@ -1,6 +1,6 @@
 import * as triggerProcessor from "@/utils/chat/triggerProcessor";
 import * as replyDecision from "@/utils/chat/replyDecision";
-import type { Client, Message } from "discord.js";
+import { REST, type Client, type Message } from "discord.js";
 import { createPersona } from "../../helpers/fixtures";
 import type { ChatTurnContext, LockedChatTurn, GenerationTurnResult } from "@/utils/chat/types";
 import type { TomoriState } from "@/types/db/schema";
@@ -67,6 +67,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("subscription capability ownership", () => 
     const sends: Array<{ embeds?: unknown[] }> = [];
     const channel = {
       id: "_rt_planner_channel",
+      client: { rest: new REST() },
       isThread: () => false,
       send: async (payload: { embeds?: unknown[] }) => {
         sends.push(payload);
@@ -304,8 +305,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("subscription capability ownership", () => 
     await configRepository.updateModelConfig(refs.serverId, { llm_id: llmId }, "supporter");
     const channel = {
       id: "_rt_quota_channel",
+      client: { rest: new REST() },
       isThread: () => false,
-      send: async () => undefined,
+      send: async () => ({ id: "_rt_quota_notice", channelId: "_rt_quota_channel" }),
     } as unknown as Message["channel"];
     const client = { user: { id: "_rt_bot" } } as Client;
     const message = {

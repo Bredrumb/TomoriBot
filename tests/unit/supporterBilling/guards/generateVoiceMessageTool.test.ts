@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, mock } from "bun:test";
-import type { Client } from "discord.js";
+import { REST, type Client } from "discord.js";
 import { speechModelSchema } from "@/types/db/schema";
 import * as realTargets from "@/utils/provider/speechEndpointResolver";
 import * as realSynthesis from "@/utils/speech/voiceMessageSynthesis";
@@ -66,6 +66,7 @@ function noticeChannel(): { channel: ToolContext["channel"]; sends: string[] } {
   const sends: string[] = [];
   const channel = {
     id: "synthetic-notice-channel",
+    client: { rest: new REST() },
     send: async (payload: unknown) => {
       sends.push(JSON.stringify(payload));
       return { id: `synthetic-notice-${sends.length}` };
