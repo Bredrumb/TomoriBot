@@ -70,6 +70,10 @@ import type { CustomEndpointRow } from "@/types/db/schema";
 import { readImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
 import { extractImagesFromMessage } from "@/utils/image/imageExtractor";
 import { beginTextModelHandoffBeforeComfyUi } from "@/utils/provider/textModelComfyUiHandoff";
+import { PrivacyLevel, type TomoriState, type UserRow } from "@/types/db/schema";
+import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
+import { getCachedUserRow } from "@/utils/cache/userCache";
+import { loadCharRefAsBase64 } from "@/utils/storage/charrefStorage";
 
 const IMAGE_REFERENCE_MAX_COUNT = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_COUNT ?? "3", 10);
 const IMAGE_REFERENCE_MAX_TOTAL_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_TOTAL_BYTES ?? "6291456", 10);
@@ -81,6 +85,45 @@ type ImageReference = {
   data: string;
   sourceType?: "message" | "avatar";
 };
+
+type IdentityCharacterReferenceDependencies = {
+  loadPersonas: (guildId: string) => Promise<Array<Pick<TomoriState, "persona_id" | "char_ref_url">>>;
+  loadUser: (userDiscId: string) => Promise<Pick<UserRow, "char_ref_url" | "privacy_level"> | null>;
+  loadReference: typeof loadCharRefAsBase64;
+};
+
+const DEFAULT_IDENTITY_CHARACTER_REFERENCE_DEPENDENCIES: IdentityCharacterReferenceDependencies = {
+  loadPersonas: getCachedAllPersonas,
+  loadUser: getCachedUserRow,
+  loadReference: loadCharRefAsBase64,
+};
+
+/**
+ * Loads the saved character reference for a resolved `target_identity`, or null when the caller
+ * should send the avatar instead. A Full-privacy user's upload never enters someone else's
+ * generation, so they fall back to their public avatar.
+ */
+export async function loadIdentityCharacterReference(
+  avatar: ResolvedAvatarData,
+  guildId: string | null | undefined,
+  dependencies: IdentityCharacterReferenceDependencies = DEFAULT_IDENTITY_CHARACTER_REFERENCE_DEPENDENCIES,
+): Promise<string | null> {
+  if (avatar.personaId !== undefined) {
+    if (!guildId) return null;
+    const persona = (await dependencies.loadPersonas(guildId)).find((entry) => entry.persona_id === avatar.personaId);
+    return persona?.char_ref_url
+      ? await dependencies.loadReference(persona.char_ref_url, "personas", avatar.personaId)
+      : null;
+  }
+
+  if (avatar.userDiscId !== undefined) {
+    const user = await dependencies.loadUser(avatar.userDiscId);
+    if (!user?.char_ref_url || user.privacy_level === PrivacyLevel.FULL) return null;
+    return await dependencies.loadReference(user.char_ref_url, "users", avatar.userDiscId);
+  }
+
+  return null;
+}
 
 const IMAGE_TO_IMAGE_PARAMETER_NAMES = ["media_id", "target_identity", "denoise"] as const;
 const INPAINT_PARAMETER_NAMES = [
@@ -420,7 +463,7 @@ export class GenerateImageTool extends BaseTool {
       target_identity: {
         type: "array",
         description:
-          "One or more user/persona identities whose avatars should be used as references (e.g. ['Aphel', 'Miku']). Each name is resolved to that user's or persona's avatar.",
+          "One or more user/persona identities to use as visual references (e.g. ['Aphel', 'Miku']). Each name is resolved to that user's or persona's saved character reference image, or to their avatar when none is saved.",
         items: {
           type: "string",
         },
@@ -991,7 +1034,7 @@ export class GenerateImageTool extends BaseTool {
       const referenceImages: ImageReference[] = [];
       // Resolved avatar metadata, in request order, for every identity that was
       // successfully fetched. Used to surface referenced users in the notice/embed.
-      const avatarReferences: ResolvedAvatarData[] = [];
+      const avatarReferences: Array<{ avatar: ResolvedAvatarData; usedCharacterReference: boolean }> = [];
 
       if (messageId) {
         log.info(`Extracting images from message ${messageId} for image-to-image generation`);
@@ -1014,20 +1057,29 @@ export class GenerateImageTool extends BaseTool {
             const avatarData = await resolveAvatarByIdentity(identity, context, {
               forceStatic: true,
             });
-            const avatarBase64 = await this.fetchAndConvertImageToBase64(avatarData.avatarUrl, context.abortSignal);
+            const characterReferenceBase64 = await loadIdentityCharacterReference(avatarData, context.guildId).catch(
+              (error) => {
+                log.warn(`Failed to load character reference for identity ${identity}; using avatar instead`, error);
+                return null;
+              },
+            );
             referenceImages.push({
               mimeType: "image/png",
-              data: avatarBase64,
+              data:
+                characterReferenceBase64 ??
+                (await this.fetchAndConvertImageToBase64(avatarData.avatarUrl, context.abortSignal)),
               sourceType: "avatar",
             });
-            avatarReferences.push(avatarData);
+            avatarReferences.push({ avatar: avatarData, usedCharacterReference: characterReferenceBase64 !== null });
             const avatarTypeLabel =
               avatarData.sourceType === "persona"
                 ? "persona"
                 : avatarData.sourceType === "webhook"
                   ? "webhook"
                   : "user";
-            log.info(`Added profile picture reference for ${avatarTypeLabel} ${avatarData.username} (${identity})`);
+            log.info(
+              `Added ${characterReferenceBase64 ? "character reference" : "profile picture reference"} for ${avatarTypeLabel} ${avatarData.username} (${identity})`,
+            );
           } catch (avatarErr) {
             log.error(`Failed to fetch profile picture for identity ${identity}`, avatarErr as Error);
             failedIdentities.push(identity);
@@ -1074,7 +1126,13 @@ export class GenerateImageTool extends BaseTool {
       // avatars that survived the count/byte caps are a prefix of the resolved list.
       const survivingAvatarCount = referenceImages.filter((reference) => reference.sourceType === "avatar").length;
       const usedAvatarReferences = avatarReferences.slice(0, survivingAvatarCount);
-      const referencedIdentityNames = usedAvatarReferences.map((avatarReference) => avatarReference.username);
+      const referencedIdentityNames = usedAvatarReferences.map((reference) => reference.avatar.username);
+      const characterReferenceNames = usedAvatarReferences
+        .filter((reference) => reference.usedCharacterReference)
+        .map((reference) => reference.avatar.username);
+      const avatarReferenceNames = usedAvatarReferences
+        .filter((reference) => !reference.usedCharacterReference)
+        .map((reference) => reference.avatar.username);
 
       const actualUsesReferences = referenceImages.length > 0;
       const baseNoticeDescription = localizer(
@@ -1117,10 +1175,17 @@ export class GenerateImageTool extends BaseTool {
               }),
         );
       }
-      if (referencedIdentityNames.length > 0) {
+      if (characterReferenceNames.length > 0) {
+        extraNoticeLines.push(
+          localizer(context.locale, "tools.image.notice_character_reference_line", {
+            name: characterReferenceNames.join(", "),
+          }),
+        );
+      }
+      if (avatarReferenceNames.length > 0) {
         extraNoticeLines.push(
           localizer(context.locale, "tools.image.notice_avatar_reference_line", {
-            name: referencedIdentityNames.join(", "),
+            name: avatarReferenceNames.join(", "),
           }),
         );
       }

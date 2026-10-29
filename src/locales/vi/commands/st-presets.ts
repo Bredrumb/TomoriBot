@@ -48,7 +48,7 @@ export default {
     added_receipt_detail: `Đã nhập và kích hoạt **{name}** với {nodes} node ({enabled} node bật).`,
     import_note_comment_only: `{count} node chỉ chứa chú thích được liệt kê nhưng không bao giờ được gửi tới mô hình.`,
     import_note_disabled_by_preset: `{count} node bị tắt sẵn trong preset này. Dùng **Bật/tắt node** để bật chúng.`,
-    import_note_unsupported_macros: `Một số node đang bật vẫn dùng macro preset mà TomoriBot không hỗ trợ: {macros}. Những phần đó có thể được gửi nguyên văn hoặc hoạt động khác với SillyTavern.`,
+    import_note_unsupported_macros: `Các node đang bật chứa macro không được hỗ trợ hoặc câu điều kiện sai định dạng: {macros}. Macro không được hỗ trợ có thể xuất hiện nguyên văn; khối sai định dạng có thể bị bỏ qua. Hãy xem lại các node này trước khi dùng preset.`,
     import_note_more_macros: `+{count} macro khác`,
     import_note_legacy_text_completion: `Preset text-completions cũ này đã được chuyển đổi hết mức có thể từ các trường \`story_string\` kiểu cũ. Các khối chỉ dành cho SillyTavern như \`persona\`, \`scenario\`, anchor, stop strings và thiết lập backend sẽ bị bỏ qua.`,
     deleted_receipt: `Đã xóa preset`,

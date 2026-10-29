@@ -1147,7 +1147,7 @@ function buildPersonaCharacterReferenceClearBody(
   const persona = input.personas.find((candidate) => candidate.persona_id === view.personaId);
   if (!persona || resolvePersonaAdvancedActionState("character-reference", input.actor) === "omitted") return [];
   const writesDisabled = input.readStatus !== "fresh";
-  const actionDisabled = writesDisabled || !persona.nai_char_ref_url;
+  const actionDisabled = writesDisabled || !persona.char_ref_url;
   return [
     {
       type: ComponentType.TextDisplay,
@@ -1225,7 +1225,7 @@ ${localizer(locale, "commands.config.panel.appearance_description")}`,
   const characterReferenceState = actionState("character-reference");
   let characterRefTextDisplay: ComponentInContainerData | undefined;
   if (characterReferenceState !== "omitted") {
-    const reference = persona.nai_char_ref_url
+    const reference = persona.char_ref_url
       ? localizer(locale, "commands.config.panel.character_reference_uploaded")
       : localizer(locale, "commands.config.panel.none_label");
     characterRefTextDisplay = {
@@ -1291,7 +1291,7 @@ ${localizer(locale, "commands.config.panel.image_tags_description")}
           style: ButtonStyle.Danger,
           customId: buildConfigRouteId({ action: "character-reference-clear-view", locale, personaId }),
           label: localizer(locale, "commands.config.panel.clear_reference_button"),
-          disabled: writesDisabled || characterReferenceState === "disabled" || !persona.nai_char_ref_url,
+          disabled: writesDisabled || characterReferenceState === "disabled" || !persona.char_ref_url,
         },
       ],
     });

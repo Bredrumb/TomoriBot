@@ -512,9 +512,9 @@ export const configPersonaOperations: ConfigPersonaOperations = {
     const ok = await replaceStoredCharReference({
       entityType: "personas",
       entityId: personaId,
-      previousRef: persona.nai_char_ref_url ?? null,
+      previousRef: persona.char_ref_url ?? null,
       nextBuffer,
-      persistNextRef: (nextRef) => personaRepository.setNaiCharRef(personaId, nextRef),
+      persistNextRef: (nextRef) => personaRepository.setCharRef(personaId, nextRef),
       onPersistSuccess: () => invalidateTomoriStateCache(serverDiscId),
     });
     return ok ? { status: "success", cleared: !attachment } : { status: "write-failed" };

@@ -73,6 +73,8 @@ export default {
     text_quota_resets_in_hours: `配额会在 {hours} 小时后重置。`,
     text_quota_resets_in_days: `配额会在 {days} 天后重置。`,
     text_quota_exceeded_footer: `这项配额由这个服务器的管理员通过 \`/moderation\` 设置。`,
+    text_quota_unavailable_title: `文本配额无法查询`,
+    text_quota_unavailable_description: `我现在查不到这个服务器的文本生成配额，请稍后再试。`,
     stream: {
       response_stopped_title: `回复被中断`,
       response_stopped_description: `回复因为下面的原因被中断：{reason}。请确认发送的内容没有大到 AI 提供方处理不了。运行 \`/refresh\` 可以清空对话内容。`,

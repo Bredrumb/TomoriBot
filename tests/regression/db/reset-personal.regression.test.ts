@@ -47,7 +47,7 @@ async function dirtyPersonalSingletons(userId: number): Promise<void> {
       user_nickname,
       shortterm_cache_crossserver_opt_in,
       physical_appearance_tags,
-      nai_char_ref_url,
+      char_ref_url,
       impersonation_prompt,
       personal_dtm,
       personal_deliberate_tool_mode,
@@ -79,7 +79,7 @@ async function dirtyPersonalSingletons(userId: number): Promise<void> {
       user_nickname = EXCLUDED.user_nickname,
       shortterm_cache_crossserver_opt_in = EXCLUDED.shortterm_cache_crossserver_opt_in,
       physical_appearance_tags = EXCLUDED.physical_appearance_tags,
-      nai_char_ref_url = EXCLUDED.nai_char_ref_url,
+      char_ref_url = EXCLUDED.char_ref_url,
       impersonation_prompt = EXCLUDED.impersonation_prompt,
       personal_dtm = EXCLUDED.personal_dtm,
       personal_deliberate_tool_mode = EXCLUDED.personal_deliberate_tool_mode,
@@ -212,7 +212,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Atomic personal configuration reset: regre
           user_nickname,
           shortterm_cache_crossserver_opt_in,
           physical_appearance_tags,
-          nai_char_ref_url,
+          char_ref_url,
           impersonation_prompt,
           personal_dtm,
           personal_deliberate_tool_mode,
@@ -230,7 +230,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Atomic personal configuration reset: regre
       expect(configRow.user_nickname).toBeNull();
       expect(configRow.shortterm_cache_crossserver_opt_in).toBe(false);
       expect(configRow.physical_appearance_tags).toEqual([]);
-      expect(configRow.nai_char_ref_url).toBeNull();
+      expect(configRow.char_ref_url).toBeNull();
       expect(configRow.impersonation_prompt).toBeNull();
       expect(configRow.personal_dtm).toBe("follow");
       expect(configRow.personal_deliberate_tool_mode).toBe("follow");

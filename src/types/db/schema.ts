@@ -64,7 +64,7 @@ export const userSchema = z.object({
   privacy_level: z.nativeEnum(PrivacyLevel).default(PrivacyLevel.MINIMAL),
   personal_memories: z.array(z.string()).default([]),
   physical_appearance_tags: z.array(z.string()).default([]), // Public imageboard-style physical appearance tags
-  nai_char_ref_url: z.string().nullable().optional(), // Added March 2026 - User-specific NovelAI character reference image
+  char_ref_url: z.string().nullable().optional(), // User-specific character reference image for image generation
   impersonation_prompt: z.string().nullable().optional(), // Added March 2026 - Global user-owned prompt for user impersonation replies
   shortterm_cache_crossserver_opt_in: z.boolean().default(false), // Short-term memory cross-server sharing
   personal_dtm: z.enum(["off", "follow", "on"]).default("follow"), // Added April 2026 - User-scoped DTM tri-state: 'off' (always disabled), 'follow' (server setting), 'on' (always enabled)
@@ -135,7 +135,7 @@ export type TomoriRow = z.infer<typeof tomoriSchema>;
 
 const personaScopedConfigStateSchema = z.object({
   physical_appearance_tags: z.array(z.string()).default([]), // From persona_imagegen_configs
-  nai_char_ref_url: z.string().nullable().optional(), // From persona_imagegen_configs
+  char_ref_url: z.string().nullable().optional(), // From persona_imagegen_configs
   nai_attg_author: z.string().nullable().optional(), // From persona_textgen_configs
   nai_attg_title: z.string().nullable().optional(), // From persona_textgen_configs
   nai_attg_tags: z.string().nullable().optional(), // From persona_textgen_configs
@@ -748,7 +748,7 @@ const userPersonalizationConfigsSchema = z.object({
   user_nickname: z.string().nullable(),
   shortterm_cache_crossserver_opt_in: z.boolean().default(false),
   physical_appearance_tags: z.array(z.string()).default([]),
-  nai_char_ref_url: z.string().nullable().optional(),
+  char_ref_url: z.string().nullable().optional(),
   impersonation_prompt: z.string().nullable().optional(),
   personal_dtm: z.enum(["off", "follow", "on"]).default("follow"),
   personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).default("follow"),

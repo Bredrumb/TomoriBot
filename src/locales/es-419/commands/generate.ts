@@ -61,6 +61,7 @@ export default {
       quota_resets_in_hours: `La cuota se reinicia en {hours} hora(s).`,
       quota_resets_in_days: `La cuota se reinicia en {days} día(s).`,
       quota_exceeded_footer: `Esta cuota la configuran los administradores de este servidor mediante \`/moderation\`.`,
+      quota_unavailable_description: `No pude verificar la cuota de generación de imágenes de este servidor en este momento. Por favor, intenta de nuevo en un momento.`,
     },
     video: {
       nsfw_description: `Añade un spoiler de Discord al video; no cambia la generación ni los filtros de contenido`,
@@ -116,6 +117,7 @@ export default {
       quota_resets_in_hours: `La cuota se reinicia en {hours} hora(s).`,
       quota_resets_in_days: `La cuota se reinicia en {days} día(s).`,
       quota_exceeded_footer: `Esta cuota la configuran los administradores de este servidor mediante \`/moderation\`.`,
+      quota_unavailable_description: `No pude verificar la cuota de generación de videos de este servidor en este momento. Por favor, intenta de nuevo en un momento.`,
     },
 
     scene: {

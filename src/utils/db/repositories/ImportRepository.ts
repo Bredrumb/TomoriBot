@@ -836,7 +836,7 @@ class ImportRepository {
   ): Promise<ImportResult> {
     try {
       const physicalAppearanceTags = importData.physical_appearance_tags ?? [];
-      const naiCharRefUrl = importData.nai_char_ref_url ?? null;
+      const charRefUrl = importData.char_ref_url ?? null;
       const impersonationPrompt = importData.impersonation_prompt ?? null;
 
       const updateResult = await sql.begin(async (tx) => {
@@ -882,7 +882,7 @@ class ImportRepository {
             shortterm_cache_crossserver_opt_in,
             natural_nudge_opt_out,
             physical_appearance_tags,
-            nai_char_ref_url,
+            char_ref_url,
             impersonation_prompt,
             personal_dtm,
             personal_deliberate_tool_mode,
@@ -898,7 +898,7 @@ class ImportRepository {
             ${importData.shortterm_cache_crossserver_opt_in ?? false},
             ${importData.natural_nudge_opt_out ?? false},
             ${sql.array(physicalAppearanceTags, "TEXT")},
-            ${naiCharRefUrl},
+            ${charRefUrl},
             ${impersonationPrompt},
             ${importData.personal_dtm ?? "follow"},
             ${importData.personal_deliberate_tool_mode ?? "follow"},
@@ -914,7 +914,7 @@ class ImportRepository {
             shortterm_cache_crossserver_opt_in = COALESCE(${importData.shortterm_cache_crossserver_opt_in ?? null}, user_personalization_configs.shortterm_cache_crossserver_opt_in),
             natural_nudge_opt_out = COALESCE(${importData.natural_nudge_opt_out ?? null}, user_personalization_configs.natural_nudge_opt_out),
             physical_appearance_tags = EXCLUDED.physical_appearance_tags,
-            nai_char_ref_url = EXCLUDED.nai_char_ref_url,
+            char_ref_url = EXCLUDED.char_ref_url,
             impersonation_prompt = EXCLUDED.impersonation_prompt,
             personal_dtm = COALESCE(${importData.personal_dtm ?? null}, user_personalization_configs.personal_dtm),
             personal_deliberate_tool_mode = COALESCE(${importData.personal_deliberate_tool_mode ?? null}, user_personalization_configs.personal_deliberate_tool_mode),
@@ -961,7 +961,7 @@ class ImportRepository {
       let fieldsCount = 2;
       if (impersonationPrompt) fieldsCount++;
       if (physicalAppearanceTags.length > 0) fieldsCount++;
-      if (naiCharRefUrl) fieldsCount++;
+      if (charRefUrl) fieldsCount++;
       if (importData.privacy_level !== undefined) fieldsCount++;
       if (importData.personal_dtm !== undefined) fieldsCount++;
       if (importData.personal_deliberate_tool_mode !== undefined) fieldsCount++;
@@ -1365,7 +1365,7 @@ class ImportRepository {
       language_pref: importData.language_pref,
       impersonation_prompt: importData.impersonation_prompt ?? null,
       physical_appearance_tags: [],
-      nai_char_ref_url: null,
+      char_ref_url: null,
       persona_naming_preferences: [],
     });
     if (!settingsResult.success) return settingsResult;

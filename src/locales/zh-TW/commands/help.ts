@@ -93,8 +93,8 @@ export default {
         short_term_memory_description: `我對這段對話的隨手筆記`,
         rewards_punishments: `獎勵與懲罰`,
         rewards_punishments_description: `我會注意到並記住的互動`,
-        memory_tagging: `記憶標籤（進階）`,
-        memory_tagging_description: `只在相關時喚醒某則記憶`,
+        memory_tagging: `個人記憶標籤（進階）`,
+        memory_tagging_description: `只在相關時喚醒某則個人記憶`,
         blacklisting: `黑名單`,
         blacklisting_description: "讓我完全忽略某位成員",
       },
@@ -507,9 +507,9 @@ export default {
         footer: `同時有多個人格時，請選擇你指的是哪一個。`,
       },
       memory_tagging: {
-        title: `記憶標籤（進階）`,
+        title: `個人記憶標籤（進階）`,
         description:
-          "預設情況下，範圍內的每則記憶都會隨每則訊息送出。標籤可以把範圍縮小。\n> **關鍵字標籤**：有標籤的記憶只在它的關鍵字出現在對話中時才會醒來。沒有標籤的記憶則永遠有效。\n> **頻道**：伺服器記憶可限制在你在表單中挑選的頻道（包含其討論串），個人記憶則可使用 `#channel` 標籤限制。兩者皆可與關鍵字標籤合併使用。\n\n在 {configAdvancedMemory} 同時開啟兩者，再用 {toolPromptSnapshot} 查看目前實際有哪些記憶生效。",
+          "個人記憶可以帶有關鍵詞或 `#channel` 標籤，而標籤功能決定是否由這些標籤來限制它們何時出現。\n> **關鍵詞標籤**：帶標籤的個人記憶只在其關鍵詞出現在對話中時才會喚醒。沒有標籤的個人記憶始終有效。\n> **頻道**：個人記憶可透過 `#channel` 標籤限制在特定頻道。伺服器記憶與文件則改用 `/memories` 中的頻道選取。\n\n在 {configAdvancedMemory} 中開啟標籤功能，然後使用 {toolPromptSnapshot} 查看目前究竟有哪些記憶處於有效狀態。\n> 世界設定是獨立的：`/memories` 中的世界書條目使用它們自己的關鍵詞與始終有效設定。",
         footer: "上傳的文件與擷取的歷史紀錄也可以限定頻道。",
       },
     },

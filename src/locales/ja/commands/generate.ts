@@ -61,6 +61,7 @@ export default {
       quota_resets_in_hours: `クォータは {hours} 時間後にリセットされます。`,
       quota_resets_in_days: `クォータは {days} 日後にリセットされます。`,
       quota_exceeded_footer: `このクォータは、このサーバーの管理者が \`/moderation\` で設定しています。`,
+      quota_unavailable_description: `このサーバーの画像生成クォータを現在確認できませんでした。しばらくしてからもう一度お試しください。`,
     },
     video: {
       nsfw_description: `動画にDiscordのスポイラーを追加します（生成内容やコンテンツフィルターには影響しません）`,
@@ -116,6 +117,7 @@ export default {
       quota_resets_in_hours: `クォータは {hours} 時間後にリセットされます。`,
       quota_resets_in_days: `クォータは {days} 日後にリセットされます。`,
       quota_exceeded_footer: `このクォータは、このサーバーの管理者が \`/moderation\` で設定しています。`,
+      quota_unavailable_description: `このサーバーの動画生成クォータを現在確認できませんでした。しばらくしてからもう一度お試しください。`,
     },
 
     scene: {

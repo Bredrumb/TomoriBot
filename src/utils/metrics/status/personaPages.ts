@@ -159,8 +159,8 @@ export async function buildPersonaStatusPages(
         inline: true,
       },
       {
-        nameKey: "commands.status.field_persona_nai_ref",
-        value: formatBooleanLocalized(!!selectedPersona.nai_char_ref_url, locale),
+        nameKey: "commands.status.field_persona_char_ref",
+        value: formatBooleanLocalized(!!selectedPersona.char_ref_url, locale),
         inline: true,
       },
       {

@@ -68,6 +68,10 @@ export default {
     memory_export_persona_invalid_title: "人格不可用",
     memory_export_persona_invalid_description: "这个服务器里不存在该人格，所以没有导出任何内容。",
     memory_preview_title: "确认记忆导入",
+    memory_preview_lore_count: "{count} 条世界书条目（替换此作用域）",
+    memory_preview_serverwide_lore: "全服务器世界书：{count} 条条目（替换所有全服务器书）。",
+    workspace_memory_preview_description:
+      "此工作区导入包含文件中的记忆和所有世界书。即使选择「合并」，所包含的世界书也会完整替换该作用域的书（包括在此处添加的条目）。全服务器世界书会替换全服务器书。",
     memory_preview_description: "这次{ownership}导入只包含记忆。",
     memory_preview_exclusions: "不包含文档与人格。",
     memory_preview_groups_heading: "检测到的记忆分组",

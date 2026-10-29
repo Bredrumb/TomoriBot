@@ -66,7 +66,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
         speech_voice_design_prompt: "_rt_voice_prompt_from_setter",
       });
       await personaRepository.setPhysicalAppearanceTags(refs.personaId, ["_rt_tag_from_setter"]);
-      await personaRepository.setNaiCharRef(refs.personaId, "_rt_ref_from_setter");
+      await personaRepository.setCharRef(refs.personaId, "_rt_ref_from_setter");
       await personaRepository.setNaiAttg(refs.personaId, {
         nai_attg_author: "_rt_author_from_setter",
         nai_attg_title: "_rt_title_from_setter",
@@ -90,7 +90,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
       `;
       await testSql`
         UPDATE persona_imagegen_configs
-        SET physical_appearance_tags = ARRAY['_rt_tag_from_split']::TEXT[], nai_char_ref_url = '_rt_ref_from_split'
+        SET physical_appearance_tags = ARRAY['_rt_tag_from_split']::TEXT[], char_ref_url = '_rt_ref_from_split'
         WHERE persona_id = ${refs.personaId}
       `;
       await testSql`
@@ -111,7 +111,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
       expect(state?.speech_voice_name).toBe("_rt_voice_name_from_split");
       expect(state?.speech_voice_design_prompt).toBe("_rt_voice_prompt_from_split");
       expect(state?.physical_appearance_tags).toEqual(["_rt_tag_from_split"]);
-      expect(state?.nai_char_ref_url).toBe("_rt_ref_from_split");
+      expect(state?.char_ref_url).toBe("_rt_ref_from_split");
       expect(state?.nai_attg_author).toBe("_rt_author_from_split");
       expect(state?.nai_attg_title).toBe("_rt_title_from_split");
       expect(state?.nai_attg_tags).toBe("_rt_tags_from_split");
@@ -147,7 +147,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
     expect(state?.speech_voice_name).toBeNull();
     expect(state?.speech_voice_design_prompt).toBeNull();
     expect(state?.physical_appearance_tags).toEqual([]);
-    expect(state?.nai_char_ref_url).toBeNull();
+    expect(state?.char_ref_url).toBeNull();
     expect(state?.nai_attg_author).toBeNull();
     expect(state?.nai_attg_stars).toBeNull();
   });
@@ -164,7 +164,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
         sampleDialoguesIn: ["_rt_seed_in"],
         sampleDialoguesOut: ["_rt_seed_out"],
         physicalAppearanceTags: ["_rt_seed_tag"],
-        naiCharRefUrl: "_rt_seed_ref",
+        charRefUrl: "_rt_seed_ref",
         naiAttgAuthor: "_rt_seed_author",
         naiAttgTitle: "_rt_seed_title",
         naiAttgTags: "_rt_seed_tags",
@@ -174,13 +174,13 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
       alterPersonaId = alter?.persona_id ?? null;
       expect(alterPersonaId).not.toBeNull();
 
-      const [imagegenRow] = await testSql<Array<{ physical_appearance_tags: string[]; nai_char_ref_url: string }>>`
-        SELECT physical_appearance_tags, nai_char_ref_url
+      const [imagegenRow] = await testSql<Array<{ physical_appearance_tags: string[]; char_ref_url: string }>>`
+        SELECT physical_appearance_tags, char_ref_url
         FROM persona_imagegen_configs
         WHERE persona_id = ${alterPersonaId}
       `;
       expect(imagegenRow.physical_appearance_tags).toEqual(["_rt_seed_tag"]);
-      expect(imagegenRow.nai_char_ref_url).toBe("_rt_seed_ref");
+      expect(imagegenRow.char_ref_url).toBe("_rt_seed_ref");
 
       const [textgenRow] = await testSql<Array<{ nai_attg_author: string; nai_attg_stars: number }>>`
         SELECT nai_attg_author, nai_attg_stars
@@ -193,7 +193,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
       const personas = await personaRepository.loadAllForServer(FIXTURE_IDS.serverDiscId);
       const loadedAlter = personas.find((persona) => persona.persona_id === alterPersonaId);
       expect(loadedAlter?.physical_appearance_tags).toEqual(["_rt_seed_tag"]);
-      expect(loadedAlter?.nai_char_ref_url).toBe("_rt_seed_ref");
+      expect(loadedAlter?.char_ref_url).toBe("_rt_seed_ref");
       expect(loadedAlter?.nai_attg_author).toBe("_rt_seed_author");
       expect(loadedAlter?.nai_attg_stars).toBe(4);
     } finally {
@@ -209,6 +209,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
     let missingSplitPersonaId: number | null = null;
 
     try {
+      await executeMigrationFile("125_rename_character_reference_columns.down.sql");
       await executeMigrationFile("046_drop_persona_mirror_columns.down.sql");
 
       const [missingSplitPersona] = await testSql<Array<{ persona_id: number }>>`
@@ -337,6 +338,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
         await testSql`DELETE FROM personas WHERE persona_id = ${missingSplitPersonaId}`;
       }
       await executeMigrationFile("046_drop_persona_mirror_columns.sql");
+      await executeMigrationFile("125_rename_character_reference_columns.sql");
       await testSql`DELETE FROM persona_context_note_configs WHERE persona_id = ${refs.personaId}`;
       await testSql`DELETE FROM persona_voice_configs WHERE persona_id = ${refs.personaId}`;
       await testSql`DELETE FROM persona_imagegen_configs WHERE persona_id = ${refs.personaId}`;
@@ -356,7 +358,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
         speech_voice_design_prompt: "_rt_046_prompt",
       });
       await personaRepository.setPhysicalAppearanceTags(refs.personaId, ["_rt_046_tag"]);
-      await personaRepository.setNaiCharRef(refs.personaId, "_rt_046_ref");
+      await personaRepository.setCharRef(refs.personaId, "_rt_046_ref");
       await personaRepository.setNaiAttg(refs.personaId, {
         nai_attg_author: "_rt_046_author",
         nai_attg_title: "_rt_046_title",
@@ -365,6 +367,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
         nai_attg_stars: 5,
       });
 
+      await executeMigrationFile("125_rename_character_reference_columns.down.sql");
       await executeMigrationFile("046_drop_persona_mirror_columns.down.sql");
 
       const [row] = await testSql<
@@ -402,6 +405,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
       expect(row.nai_attg_stars).toBe(5);
     } finally {
       await executeMigrationFile("046_drop_persona_mirror_columns.sql");
+      await executeMigrationFile("125_rename_character_reference_columns.sql");
       await testSql`DELETE FROM persona_context_note_configs WHERE persona_id = ${refs.personaId}`;
       await testSql`DELETE FROM persona_voice_configs WHERE persona_id = ${refs.personaId}`;
       await testSql`DELETE FROM persona_imagegen_configs WHERE persona_id = ${refs.personaId}`;
@@ -420,7 +424,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
         speech_voice_design_prompt: "_rt_export_prompt",
       });
       await personaRepository.setPhysicalAppearanceTags(refs.personaId, ["_rt_export_tag"]);
-      await personaRepository.setNaiCharRef(refs.personaId, "_rt_export_ref");
+      await personaRepository.setCharRef(refs.personaId, "_rt_export_ref");
       await personaRepository.setNaiAttg(refs.personaId, {
         nai_attg_author: "_rt_export_author",
         nai_attg_title: "_rt_export_title",

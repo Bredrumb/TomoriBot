@@ -24,8 +24,8 @@ const ASSET_COLUMN_TARGETS: AssetColumnTarget[] = [
   { table: "preset_sprites", column: "avatar_url" },
   { table: "persona_presets", column: "preset_avatar_shared_url" },
   { table: "voice_samples", column: "file_path" },
-  { table: "persona_imagegen_configs", column: "nai_char_ref_url" },
-  { table: "user_personalization_configs", column: "nai_char_ref_url" },
+  { table: "persona_imagegen_configs", column: "char_ref_url" },
+  { table: "user_personalization_configs", column: "char_ref_url" },
 ];
 
 function getArgValue(name: string): string | null {

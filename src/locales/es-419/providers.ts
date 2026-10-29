@@ -73,6 +73,8 @@ export default {
     text_quota_resets_in_hours: `La cuota se reinicia en {hours} hora(s).`,
     text_quota_resets_in_days: `La cuota se reinicia en {days} día(s).`,
     text_quota_exceeded_footer: `Esta cuota está configurada por los administradores de este servidor a través de \`/moderation\`.`,
+    text_quota_unavailable_title: `Cuota de texto no disponible`,
+    text_quota_unavailable_description: `No pude verificar la cuota de generación de texto de este servidor en este momento. Por favor, inténtalo de nuevo en un momento.`,
     stream: {
       response_stopped_title: `Respuesta interrumpida`,
       response_stopped_description: `La respuesta se interrumpió por el siguiente motivo: {reason}. Asegúrate de que el contenido enviado no sea demasiado grande para que el proveedor de IA lo maneje. Ejecuta \`/refresh\` para borrar el contenido de la conversación.`,

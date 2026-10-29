@@ -45,7 +45,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User personalization config cutover", () =
 
     const updated = await userRepository.update(refs.userId, {
       physical_appearance_tags: ["silver hair", "green eyes"],
-      nai_char_ref_url: "https://example.invalid/split-profile.png",
+      char_ref_url: "https://example.invalid/split-profile.png",
     });
     expect(updated?.physical_appearance_tags).toEqual(["silver hair", "green eyes"]);
 
@@ -89,7 +89,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User personalization config cutover", () =
     const loaded = await userRepository.loadByDiscordId(userDiscId);
     expect(loaded?.shortterm_cache_crossserver_opt_in).toBe(false);
     expect(loaded?.physical_appearance_tags).toEqual([]);
-    expect(loaded?.nai_char_ref_url).toBeNull();
+    expect(loaded?.char_ref_url).toBeNull();
     expect(loaded?.impersonation_prompt).toBeNull();
     expect(loaded?.personal_dtm).toBe("follow");
 
@@ -124,7 +124,11 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User personalization config cutover", () =
     `;
     const userId: number = userRow.user_id;
 
-    await testSql`
+    try {
+      await executeSqlFile(
+        path.join(process.cwd(), "src", "db", "migrations", "125_rename_character_reference_columns.down.sql"),
+      );
+      await testSql`
       INSERT INTO user_personalization_configs (
         user_id,
         shortterm_cache_crossserver_opt_in,
@@ -148,8 +152,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User personalization config cutover", () =
         impersonation_prompt = EXCLUDED.impersonation_prompt,
         personal_dtm = EXCLUDED.personal_dtm
     `;
-
-    try {
       await testSql`ALTER TABLE users ADD COLUMN IF NOT EXISTS shortterm_cache_crossserver_opt_in BOOLEAN DEFAULT false`;
       await testSql`ALTER TABLE users ADD COLUMN IF NOT EXISTS physical_appearance_tags TEXT[] DEFAULT ARRAY[]::TEXT[]`;
       await testSql`ALTER TABLE users ADD COLUMN IF NOT EXISTS nai_char_ref_url TEXT`;
@@ -193,6 +195,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User personalization config cutover", () =
       await testSql`ALTER TABLE users DROP COLUMN IF EXISTS nai_char_ref_url`;
       await testSql`ALTER TABLE users DROP COLUMN IF EXISTS impersonation_prompt`;
       await testSql`ALTER TABLE users DROP COLUMN IF EXISTS personal_dtm`;
+      await executeSqlFile(
+        path.join(process.cwd(), "src", "db", "migrations", "125_rename_character_reference_columns.sql"),
+      );
       clearUserCache();
     }
   });
@@ -283,7 +288,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User personalization config cutover", () =
       language_pref: "en-US",
       privacy_level: PrivacyLevel.PARTIAL,
       physical_appearance_tags: ["blue hair", "round glasses"],
-      nai_char_ref_url: "https://example.invalid/ref.png",
+      char_ref_url: "https://example.invalid/ref.png",
       impersonation_prompt: "Speak as the exported user.",
       personal_dtm: "on",
       personal_deliberate_tool_mode: "off",

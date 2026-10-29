@@ -298,12 +298,12 @@ describe("transfer panel Components V2 limits", () => {
           locale: "en-US",
           kind,
           detectedSections: SECTION_NAMES[kind],
-          droppedFields: ["nai_preset_name", "nai_char_ref_url"],
+          droppedFields: ["nai_preset_name", "char_ref_url"],
           nonce: `nonce-format-dropped-${kind}`,
         }),
       )[0];
       if (droppedContent === undefined) throw new Error(`Preview payload for ${kind} carries no TextDisplay`);
-      for (const field of ["nai_preset_name", "nai_char_ref_url"] as const) {
+      for (const field of ["nai_preset_name", "char_ref_url"] as const) {
         expect({
           kind,
           field,

@@ -240,7 +240,7 @@ export class ExportRepository {
           u.language_pref,
           upc.impersonation_prompt,
           COALESCE(upc.physical_appearance_tags, ARRAY[]::TEXT[]) AS physical_appearance_tags,
-          upc.nai_char_ref_url
+          upc.char_ref_url
         FROM users u
         LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
         WHERE u.user_disc_id = ${userDiscId}
@@ -654,7 +654,7 @@ export class ExportRepository {
           u.language_pref,
           upc.impersonation_prompt,
           COALESCE(upc.physical_appearance_tags, ARRAY[]::TEXT[]) AS physical_appearance_tags,
-          upc.nai_char_ref_url,
+          upc.char_ref_url,
           u.privacy_level,
           COALESCE(upc.personal_dtm, 'follow') AS personal_dtm,
           COALESCE(upc.personal_deliberate_tool_mode, 'follow') AS personal_deliberate_tool_mode,
@@ -706,7 +706,7 @@ export class ExportRepository {
           language_pref: userData.language_pref,
           impersonation_prompt: userData.impersonation_prompt ?? null,
           physical_appearance_tags: userData.physical_appearance_tags ?? [],
-          nai_char_ref_url: userData.nai_char_ref_url ?? null,
+          char_ref_url: userData.char_ref_url ?? null,
           privacy_level: userData.privacy_level ?? undefined,
           personal_dtm: userData.personal_dtm ?? undefined,
           personal_deliberate_tool_mode: userData.personal_deliberate_tool_mode ?? undefined,

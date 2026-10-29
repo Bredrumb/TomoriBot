@@ -17,7 +17,7 @@ function makePersona(): TomoriState {
     server_id: 9,
     persona_id: 55,
     persona_nickname: "Aphel",
-    nai_char_ref_url: "data/charreferences/personas/55/reference.png",
+    char_ref_url: "data/charreferences/personas/55/reference.png",
   });
 }
 

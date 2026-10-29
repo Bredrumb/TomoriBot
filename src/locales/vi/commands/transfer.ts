@@ -73,6 +73,10 @@ export default {
     memory_export_persona_invalid_title: "Persona không khả dụng",
     memory_export_persona_invalid_description: "Persona đó không tồn tại trên máy chủ này nên chưa có gì được xuất.",
     memory_preview_title: "Xem lại nhập bộ nhớ",
+    memory_preview_lore_count: "{count} mục lorebook (thay thế phạm vi này)",
+    memory_preview_serverwide_lore: "Lore toàn máy chủ: {count} mục (thay thế toàn bộ sách toàn máy chủ).",
+    workspace_memory_preview_description:
+      "Lần nhập không gian làm việc này bao gồm bộ nhớ và mọi lorebook có trong tệp. Lorebook đính kèm sẽ thay thế toàn bộ sách của phạm vi đó, bao gồm cả các mục đã thêm ở đây, ngay cả khi chọn Hợp nhất. Lore toàn máy chủ sẽ thay thế sách toàn máy chủ.",
     memory_preview_description: "Lần nhập {ownership} này chỉ bao gồm bộ nhớ.",
     memory_preview_exclusions: "Tài liệu và persona bị loại trừ.",
     memory_preview_groups_heading: "Các nhóm bộ nhớ được phát hiện",

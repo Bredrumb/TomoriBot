@@ -42,7 +42,7 @@ export type PersonalStatusIdentity = Pick<
   | "shortterm_cache_crossserver_opt_in"
   | "natural_nudge_opt_out"
   | "physical_appearance_tags"
-  | "nai_char_ref_url"
+  | "char_ref_url"
 >;
 
 export interface StatusViewerInteraction {
@@ -146,8 +146,8 @@ export async function buildPersonalStatusPages(
         inline: true,
       },
       {
-        nameKey: "commands.status.field_nai_char_ref",
-        value: formatBooleanLocalized(!!userData.nai_char_ref_url, locale),
+        nameKey: "commands.status.field_char_ref",
+        value: formatBooleanLocalized(!!userData.char_ref_url, locale),
         inline: true,
       },
       {

@@ -118,7 +118,7 @@ export async function loadUserNaiProfileByDiscordId(
 
   return {
     tags: user.physical_appearance_tags ?? [],
-    refUrl: user.nai_char_ref_url ?? null,
+    refUrl: user.char_ref_url ?? null,
   };
 }
 
@@ -389,10 +389,10 @@ export class GenerateImageNaiTool extends BaseTool {
     const rows = await sql<
       Array<{
         physical_appearance_tags: string[] | null;
-        nai_char_ref_url: string | null;
+        char_ref_url: string | null;
       }>
     >`
-			SELECT physical_appearance_tags, nai_char_ref_url
+			SELECT physical_appearance_tags, char_ref_url
 			FROM personas
 			WHERE server_id = ${serverId}
 			  AND persona_id = ${personaId}
@@ -406,7 +406,7 @@ export class GenerateImageNaiTool extends BaseTool {
 
     return {
       tags: row.physical_appearance_tags ?? [],
-      refUrl: row.nai_char_ref_url,
+      refUrl: row.char_ref_url,
     };
   }
 

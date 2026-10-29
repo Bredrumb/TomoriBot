@@ -14,8 +14,9 @@ sidebar:
 aiGenerated: true
 ---
 
-TomoriBot can import two assets from [SillyTavern](https://github.com/SillyTavern/SillyTavern):
-Prompt Manager presets (which control prompt structure) and character cards (the character definition).
+TomoriBot can import assets from [SillyTavern](https://github.com/SillyTavern/SillyTavern):
+Prompt Manager presets (which control prompt structure), character cards (the character definition),
+and lorebooks (embedded Character Books or standalone world info files).
 If you have never used SillyTavern, you can safely skip this page.
 
 ## Character Card Import

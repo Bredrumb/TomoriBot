@@ -118,6 +118,7 @@ Palavras-gatilho: {trigger_word_count}`,
       avatar_update_rate_limited: `🟡 O avatar do servidor não foi atualizado devido aos limites de taxa do Discord. Por favor, altere-o manualmente.`,
       avatar_update_failed: `🟡 O avatar do servidor não pôde ser atualizado, provavelmente devido aos limites de taxa do Discord. Por favor, altere-o manualmente.`,
       alter_success_title: `🟢 Alter Importado com Sucesso`,
+      lorebook_count: `Entradas do lorebook importadas: {count}`,
       alter_success_description: `Alter **{nickname}** importado com sucesso!
 Palavras-gatilho Únicas: {trigger_count}
 Gatilhos: {triggers}

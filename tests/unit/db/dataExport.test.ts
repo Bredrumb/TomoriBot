@@ -16,6 +16,7 @@ import {
   normalizeMemoryItem,
   parseExportFile,
   personalConfigExportSchema,
+  personalSettingsExportSchema,
   serverConfigExportSchema,
   workspaceConfigExportSchema,
   workspaceMemoriesExportSchema,
@@ -327,7 +328,7 @@ describe("v1 adaptation", () => {
       language_pref: "en-US",
       impersonation_prompt: "Use first person",
       physical_appearance_tags: ["short hair"],
-      nai_char_ref_url: "https://source.invalid/ref.png",
+      char_ref_url: "https://source.invalid/ref.png",
       privacy_level: 1,
       personal_dtm: "follow",
       personal_deliberate_tool_mode: "on",
@@ -350,8 +351,27 @@ describe("v1 adaptation", () => {
     expect(result.payload.privacy?.privacy_level).toBe(1);
     expect(result.payload.appearance?.physical_appearance_tags).toEqual(["short hair"]);
     expect(result.payload.response_modes?.personal_deliberate_tool_mode).toBe("on");
-    expect(result.payload).not.toHaveProperty("nai_char_ref_url");
-    expect(result.droppedFields).toEqual(["nai_char_ref_url", "persona_naming_preferences"]);
+    expect(result.payload).not.toHaveProperty("char_ref_url");
+    expect(result.droppedFields).toEqual(["char_ref_url", "persona_naming_preferences"]);
+  });
+
+  it("reads the pre-rename reference key from older personal settings files", () => {
+    const legacySettings = {
+      user_nickname: "Bau",
+      language_pref: "en-US",
+      nai_char_ref_url: "https://source.invalid/ref.png",
+    };
+
+    const adapted = adaptV1PersonalConfig(legacySettings);
+    expect(adapted.success && adapted.droppedFields).toEqual(["char_ref_url"]);
+
+    const envelope = personalSettingsExportSchema.safeParse({
+      version: EXPORT_VERSION,
+      type: "personal_settings",
+      exported_at: "2026-01-01T00:00:00.000Z",
+      data: legacySettings,
+    });
+    expect(envelope.success && envelope.data.data.char_ref_url).toBe("https://source.invalid/ref.png");
   });
 
   it("adapts each v1 single-scope memory format into a named bucket", () => {

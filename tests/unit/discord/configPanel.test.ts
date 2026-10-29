@@ -1324,7 +1324,7 @@ describe("config Persona Appearance and Advanced bodies", () => {
   const advancedPersona = makePersona({
     persona_id: 55,
     physical_appearance_tags: ["silver hair", "green eyes"],
-    nai_char_ref_url: "data/charreferences/personas/55/old.png",
+    char_ref_url: "data/charreferences/personas/55/old.png",
     nai_attg_author: "A careful author",
     nai_attg_title: "A careful title",
     nai_attg_tags: "archivist, mystery",
@@ -1382,7 +1382,7 @@ describe("config Persona Appearance and Advanced bodies", () => {
 
     const absentReferencePayload = build(GUILD_MANAGER, {
       page: "appearance",
-      personas: [makePersona({ persona_id: 55, nai_char_ref_url: null })],
+      personas: [makePersona({ persona_id: 55, char_ref_url: null })],
       selectedPersonaId: 55,
     });
     const hasBlankQuoteMarker = walk(absentReferencePayload).some(

@@ -14,7 +14,7 @@ function createUserRow(): UserRow {
     privacy_level: PrivacyLevel.MINIMAL,
     personal_memories: [],
     physical_appearance_tags: ["silver hair", "green eyes"],
-    nai_char_ref_url: "https://example.invalid/profile.png",
+    char_ref_url: "https://example.invalid/profile.png",
     impersonation_prompt: null,
     shortterm_cache_crossserver_opt_in: false,
     personal_dtm: "follow",

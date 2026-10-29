@@ -52,7 +52,7 @@ function userRow(discordId: string, nickname: string): UserRow {
     privacy_level: PrivacyLevel.MINIMAL,
     personal_memories: [],
     physical_appearance_tags: [],
-    nai_char_ref_url: null,
+    char_ref_url: null,
     impersonation_prompt: null,
     shortterm_cache_crossserver_opt_in: false,
     personal_dtm: "follow",

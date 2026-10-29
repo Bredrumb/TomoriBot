@@ -29,6 +29,7 @@ export default {
       quota_resets_in_hours: `配额会在 {hours} 小时后重置。`,
       quota_resets_in_days: `配额会在 {days} 天后重置。`,
       quota_remaining: `你今天还可以生成 {remaining} 张图像。`,
+      quota_unavailable: `我现在查不到这个服务器的图像生成配额，请稍后再试。`,
     },
     generate_video: {
       disabled: `这个服务器已经关闭视频生成。`,
@@ -38,6 +39,7 @@ export default {
       quota_resets_in_hours: `配额会在 {hours} 小时后重置。`,
       quota_resets_in_days: `配额会在 {days} 天后重置。`,
       quota_remaining: `你今天还可以生成 {remaining} 个视频。`,
+      quota_unavailable: `我现在查不到这个服务器的视频生成配额，请稍后再试。`,
       file_too_large: `生成的视频（{size_mb} MB）超过了 Discord 的 25 MB 文件大小上限。`,
       reference_unsupported: `所选的 OpenRouter 模型 \`{model}\` 没法把图片当作精确的首帧。请去掉参考图，或者换一个兼容的视频模型。`,
       loop_unsupported: `所选的 OpenRouter 模型 \`{model}\` 没法用尾帧做循环视频。请关闭循环，或者换一个兼容的视频模型。`,

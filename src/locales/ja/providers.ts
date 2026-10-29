@@ -73,6 +73,8 @@ export default {
     text_quota_resets_in_hours: `クォータは {hours} 時間後にリセットされます。`,
     text_quota_resets_in_days: `クォータは {days} 日後にリセットされます。`,
     text_quota_exceeded_footer: `このクォータは、このサーバーの管理者が \`/moderation\` で設定しています。`,
+    text_quota_unavailable_title: `テキストクォータを確認できません`,
+    text_quota_unavailable_description: `このサーバーのテキスト生成クォータを現在確認できませんでした。しばらくしてからもう一度お試しください。`,
     stream: {
       response_stopped_title: `応答が中断されました`,
       response_stopped_description: `次の理由で応答が中断されました: {reason}。送信されたコンテンツがAIプロバイダーにとって大きすぎないか確認してください。\`/refresh\`で会話コンテンツをクリアしてください。`,

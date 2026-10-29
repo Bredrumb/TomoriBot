@@ -28,8 +28,8 @@ async function prepareAttachmentForStorage(attachment: CharRefAttachmentSource):
   if (!attachment.contentType?.startsWith("image/")) {
     return {
       success: false,
-      titleKey: "commands.novelai.character-reference.invalid_image_title",
-      descriptionKey: "commands.novelai.character-reference.invalid_image_description",
+      titleKey: "commands.shared.character_reference.invalid_image_title",
+      descriptionKey: "commands.shared.character_reference.invalid_image_description",
     };
   }
 
@@ -43,18 +43,18 @@ async function prepareAttachmentForStorage(attachment: CharRefAttachmentSource):
     if (!response.success || !response.buffer) {
       return {
         success: false,
-        titleKey: "commands.novelai.character-reference.download_failed_title",
-        descriptionKey: "commands.novelai.character-reference.download_failed_description",
+        titleKey: "commands.shared.character_reference.download_failed_title",
+        descriptionKey: "commands.shared.character_reference.download_failed_description",
       };
     }
 
     sourceBuffer = response.buffer;
   } catch (error) {
-    log.warn("Failed to download NovelAI character reference attachment", error);
+    log.warn("Failed to download character reference attachment", error);
     return {
       success: false,
-      titleKey: "commands.novelai.character-reference.download_failed_title",
-      descriptionKey: "commands.novelai.character-reference.download_failed_description",
+      titleKey: "commands.shared.character_reference.download_failed_title",
+      descriptionKey: "commands.shared.character_reference.download_failed_description",
     };
   }
 
@@ -64,11 +64,11 @@ async function prepareAttachmentForStorage(attachment: CharRefAttachmentSource):
       buffer: await convertToPNG(sourceBuffer),
     };
   } catch (error) {
-    log.warn("Failed to convert NovelAI character reference attachment to PNG", error);
+    log.warn("Failed to convert character reference attachment to PNG", error);
     return {
       success: false,
-      titleKey: "commands.novelai.character-reference.conversion_failed_title",
-      descriptionKey: "commands.novelai.character-reference.conversion_failed_description",
+      titleKey: "commands.shared.character_reference.conversion_failed_title",
+      descriptionKey: "commands.shared.character_reference.conversion_failed_description",
     };
   }
 }

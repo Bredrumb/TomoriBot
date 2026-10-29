@@ -73,6 +73,8 @@ export default {
     text_quota_resets_in_hours: `Hạn mức sẽ đặt lại sau {hours} giờ.`,
     text_quota_resets_in_days: `Hạn mức sẽ đặt lại sau {days} ngày.`,
     text_quota_exceeded_footer: `Hạn mức này được quản lý máy chủ định cấu hình qua \`/moderation\`.`,
+    text_quota_unavailable_title: `Hạn ngạch văn bản không khả dụng`,
+    text_quota_unavailable_description: `Mình không thể kiểm tra hạn ngạch tạo văn bản của máy chủ này lúc này. Vui lòng thử lại sau giây lát.`,
     stream: {
       response_stopped_title: `Phản hồi bị gián đoạn`,
       response_stopped_description: `Phản hồi đã bị gián đoạn vì lý do sau: {reason}. Hãy đảm bảo nội dung gửi không quá lớn đối với nhà cung cấp AI. Chạy \`/refresh\` để xóa nội dung trò chuyện.`,

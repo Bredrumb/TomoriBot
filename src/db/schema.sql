@@ -168,7 +168,8 @@ SELECT add_column_if_not_exists('personas', 'is_nsfw', 'BOOLEAN', 'false', 'NOT 
 -- dropped by migration 010_complete_speech_voice_migration.sql (Phase 6 Step #14.2).
 -- physical_appearance_tags and nai_char_ref_url were added here and later
 -- moved to persona_imagegen_configs; personas mirrors were dropped by
--- migration 046_drop_persona_mirror_columns.sql.
+-- migration 046_drop_persona_mirror_columns.sql, and migration 125 renamed
+-- nai_char_ref_url to char_ref_url.
 
 CREATE TABLE IF NOT EXISTS persona_attributes (
   attribute_id SERIAL PRIMARY KEY,
@@ -962,7 +963,7 @@ SELECT add_column_if_not_exists('users', 'registration_locale', 'TEXT');
 -- 044_drop_user_personalization_mirror_columns.sql. The live fields are:
 --   user_personalization_configs.shortterm_cache_crossserver_opt_in
 --   user_personalization_configs.physical_appearance_tags
---   user_personalization_configs.nai_char_ref_url
+--   user_personalization_configs.char_ref_url
 --   user_personalization_configs.impersonation_prompt
 --   user_personalization_configs.personal_dtm
 
@@ -3252,7 +3253,7 @@ CREATE TRIGGER update_persona_voice_configs_timestamp
 CREATE TABLE IF NOT EXISTS persona_imagegen_configs (
   persona_id      INT    PRIMARY KEY REFERENCES personas(persona_id) ON DELETE CASCADE,
   physical_appearance_tags        TEXT[] NOT NULL DEFAULT '{}',
-  nai_char_ref_url TEXT,
+  char_ref_url TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -3288,7 +3289,7 @@ CREATE TABLE IF NOT EXISTS user_personalization_configs (
   user_nickname                      TEXT,
   shortterm_cache_crossserver_opt_in BOOLEAN NOT NULL DEFAULT false,
   physical_appearance_tags                      TEXT[]  NOT NULL DEFAULT '{}',
-  nai_char_ref_url                   TEXT,
+  char_ref_url                       TEXT,
   impersonation_prompt               TEXT,
   personal_dtm                       TEXT    NOT NULL DEFAULT 'follow',
   personal_deliberate_tool_mode      TEXT    NOT NULL DEFAULT 'follow',

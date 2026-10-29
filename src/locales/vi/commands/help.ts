@@ -93,8 +93,8 @@ export default {
         short_term_memory_description: `Ghi chú tạm thời của mình về cuộc trò chuyện này`,
         rewards_punishments: `Thưởng và phạt`,
         rewards_punishments_description: `Các tương tác mình chú ý và ghi nhớ`,
-        memory_tagging: `Gắn thẻ bộ nhớ (nâng cao)`,
-        memory_tagging_description: `Chỉ gọi bộ nhớ dậy khi thực sự liên quan`,
+        memory_tagging: `Gắn thẻ bộ nhớ cá nhân (nâng cao)`,
+        memory_tagging_description: `Chỉ gọi bộ nhớ cá nhân dậy khi thực sự liên quan`,
         blacklisting: `Đưa vào danh sách đen`,
         blacklisting_description: "Khiến mình bỏ qua hoàn toàn một thành viên",
       },
@@ -510,9 +510,9 @@ Nhập \`{project_id}::{location}\` bằng {configSetup} hoặc {configApikeySet
         footer: `Chọn persona bạn muốn tương tác khi có nhiều persona.`,
       },
       memory_tagging: {
-        title: `Gắn thẻ bộ nhớ (nâng cao)`,
+        title: `Gắn thẻ bộ nhớ cá nhân (nâng cao)`,
         description:
-          "Mặc định mọi bộ nhớ trong phạm vi đều được gửi kèm tin nhắn. Việc gắn thẻ giúp thu hẹp lại.\n> **Thẻ từ khóa**: bộ nhớ có thẻ chỉ thức dậy khi từ khóa xuất hiện trong hội thoại. Bộ nhớ không gắn thẻ sẽ luôn hoạt động.\n> **Kênh**: bộ nhớ máy chủ có thể giới hạn ở các kênh bạn chọn trong biểu mẫu (bao gồm các luồng trong đó), và bộ nhớ cá nhân qua thẻ `#channel`. Cả hai đều kết hợp được với thẻ từ khóa.\n\nBật cả hai trong {configAdvancedMemory}, rồi dùng {toolPromptSnapshot} để xem chính xác các bộ nhớ đang hoạt động lúc này.",
+          "Bộ nhớ cá nhân có thể mang thẻ từ khóa hoặc thẻ `#channel`, và việc gắn thẻ sẽ quyết định xem các thẻ đó có thu hẹp thời điểm chúng xuất hiện hay không.\n> **Thẻ từ khóa**: bộ nhớ cá nhân có thẻ chỉ thức dậy khi từ khóa của nó xuất hiện trong hội thoại. Bộ nhớ cá nhân không gắn thẻ sẽ luôn hoạt động.\n> **Kênh**: bộ nhớ cá nhân có thể được giới hạn trong một kênh bằng thẻ `#channel`. Bộ nhớ máy chủ và tài liệu sử dụng các lựa chọn kênh trong `/memories`.\n\nBật tính năng gắn thẻ trong {configAdvancedMemory}, rồi dùng {toolPromptSnapshot} để xem chính xác các bộ nhớ đang hoạt động lúc này.\n> Thiết lập thế giới là phần riêng biệt: các mục lorebook trong `/memories` sử dụng từ khóa và cài đặt Luôn bật riêng.",
         footer: "Tài liệu tải lên và lịch sử trích xuất cũng có thể được giới hạn theo kênh.",
       },
     },

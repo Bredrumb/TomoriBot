@@ -564,10 +564,10 @@ export async function repaint(
         !options.view &&
         resolvePersonaAdvancedActionState("character-reference", scope.actor) !== "omitted" &&
         persona.persona_id !== undefined &&
-        persona.nai_char_ref_url
+        persona.char_ref_url
       ) {
         characterReference = await dependencies.getPersonaCharacterReferenceData(
-          persona.nai_char_ref_url,
+          persona.char_ref_url,
           persona.persona_id,
           `persona_char_ref_${persona.persona_id}.png`,
         );

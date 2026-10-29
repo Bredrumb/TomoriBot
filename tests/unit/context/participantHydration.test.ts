@@ -60,7 +60,7 @@ function createUserRow(overrides: Partial<UserRow> = {}): UserRow {
     physical_appearance_tags: ["auburn hair", "green eyes"],
     message_proxy_service: null,
     message_proxy_instance_id: null,
-    nai_char_ref_url: null,
+    char_ref_url: null,
     impersonation_prompt: null,
     shortterm_cache_crossserver_opt_in: false,
     personal_dtm: "follow",

@@ -24,7 +24,7 @@ const USER_PERSONALIZATION_FIELD_NAMES = [
   "user_nickname",
   "shortterm_cache_crossserver_opt_in",
   "physical_appearance_tags",
-  "nai_char_ref_url",
+  "char_ref_url",
   "impersonation_prompt",
   "personal_dtm",
   "personal_deliberate_tool_mode",
@@ -93,7 +93,7 @@ export function isEligibleContextReferenceUserV1(
     evidence.hasPendingTasks ||
     user.shortterm_cache_crossserver_opt_in ||
     user.physical_appearance_tags.some((tag) => tag.trim().length > 0) ||
-    Boolean(user.nai_char_ref_url?.trim()) ||
+    Boolean(user.char_ref_url?.trim()) ||
     Boolean(user.impersonation_prompt?.trim()) ||
     user.personal_dtm !== "follow" ||
     user.personal_deliberate_tool_mode !== "follow" ||
@@ -131,7 +131,7 @@ class UserRepository implements IRepository<UserExportShape> {
             u.updated_at,
             COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in,
             COALESCE(upc.physical_appearance_tags, ARRAY[]::TEXT[]) AS physical_appearance_tags,
-            upc.nai_char_ref_url,
+            upc.char_ref_url,
             upc.impersonation_prompt,
             COALESCE(upc.personal_dtm, 'follow') AS personal_dtm,
             COALESCE(upc.personal_server_fallback_enabled, true) AS personal_server_fallback_enabled,
@@ -189,7 +189,7 @@ class UserRepository implements IRepository<UserExportShape> {
               u.updated_at,
               COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in,
               COALESCE(upc.physical_appearance_tags, ARRAY[]::TEXT[]) AS physical_appearance_tags,
-              upc.nai_char_ref_url,
+              upc.char_ref_url,
               upc.impersonation_prompt,
               COALESCE(upc.personal_dtm, 'follow') AS personal_dtm,
               COALESCE(upc.personal_server_fallback_enabled, true) AS personal_server_fallback_enabled,
@@ -247,7 +247,7 @@ class UserRepository implements IRepository<UserExportShape> {
                 u.updated_at,
                 COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in,
                 COALESCE(upc.physical_appearance_tags, ARRAY[]::TEXT[]) AS physical_appearance_tags,
-                upc.nai_char_ref_url,
+                upc.char_ref_url,
                 upc.impersonation_prompt,
                 COALESCE(upc.personal_dtm, 'follow') AS personal_dtm,
                 COALESCE(upc.personal_server_fallback_enabled, true) AS personal_server_fallback_enabled,
@@ -1017,7 +1017,7 @@ class UserRepository implements IRepository<UserExportShape> {
       personal_dtm: (user.personal_dtm as "off" | "follow" | "on") ?? undefined,
       shortterm_cache_crossserver_opt_in: user.shortterm_cache_crossserver_opt_in,
       physical_appearance_tags: user.physical_appearance_tags ?? [],
-      nai_char_ref_url: user.nai_char_ref_url ?? null,
+      char_ref_url: user.char_ref_url ?? null,
       personal_deliberate_tool_mode: user.personal_deliberate_tool_mode,
       timezone_offset: user.timezone_offset ?? null,
       prefix_override: user.prefix_override ?? null,
@@ -1063,7 +1063,7 @@ class UserRepository implements IRepository<UserExportShape> {
         this.sqlUpsertUserPersonalizationConfigs(user.user_id, {
           shortterm_cache_crossserver_opt_in: parsed.shortterm_cache_crossserver_opt_in ?? false,
           physical_appearance_tags: parsed.physical_appearance_tags,
-          nai_char_ref_url: parsed.nai_char_ref_url ?? null,
+          char_ref_url: parsed.char_ref_url ?? null,
           impersonation_prompt: parsed.impersonation_prompt ?? null,
           personal_dtm: parsed.personal_dtm,
           user_nickname: parsed.user_nickname,
@@ -1106,7 +1106,7 @@ class UserRepository implements IRepository<UserExportShape> {
     data: {
       shortterm_cache_crossserver_opt_in: boolean;
       physical_appearance_tags: string[];
-      nai_char_ref_url: string | null | undefined;
+      char_ref_url: string | null | undefined;
       impersonation_prompt: string | null | undefined;
       personal_dtm: "off" | "follow" | "on" | undefined;
       user_nickname: string | null;
@@ -1123,12 +1123,12 @@ class UserRepository implements IRepository<UserExportShape> {
     await client`
       INSERT INTO user_personalization_configs (
         user_id, user_nickname, shortterm_cache_crossserver_opt_in, physical_appearance_tags,
-        nai_char_ref_url, impersonation_prompt, personal_dtm, personal_deliberate_tool_mode,
+        char_ref_url, impersonation_prompt, personal_dtm, personal_deliberate_tool_mode,
         timezone_offset, prefix_override, suffix_override, gender_identity, pronouns,
         addressing_style
       ) VALUES (
         ${userId}, ${data.user_nickname}, ${data.shortterm_cache_crossserver_opt_in}, ${sql.array(data.physical_appearance_tags, "TEXT")},
-        ${data.nai_char_ref_url ?? null}, ${data.impersonation_prompt ?? null},
+        ${data.char_ref_url ?? null}, ${data.impersonation_prompt ?? null},
         ${data.personal_dtm ?? "follow"}, ${data.personal_deliberate_tool_mode ?? "follow"},
         ${data.timezone_offset ?? null}, ${data.prefix_override ?? null}, ${data.suffix_override ?? null},
         ${data.gender_identity ?? null}, ${data.pronouns ?? null},
@@ -1138,7 +1138,7 @@ class UserRepository implements IRepository<UserExportShape> {
         user_nickname                      = EXCLUDED.user_nickname,
         shortterm_cache_crossserver_opt_in = EXCLUDED.shortterm_cache_crossserver_opt_in,
         physical_appearance_tags                      = EXCLUDED.physical_appearance_tags,
-        nai_char_ref_url                   = EXCLUDED.nai_char_ref_url,
+        char_ref_url                   = EXCLUDED.char_ref_url,
         impersonation_prompt               = EXCLUDED.impersonation_prompt,
         personal_dtm                       = EXCLUDED.personal_dtm,
         personal_deliberate_tool_mode      = EXCLUDED.personal_deliberate_tool_mode,
@@ -1406,8 +1406,8 @@ class UserRepository implements IRepository<UserExportShape> {
       case "physical_appearance_tags":
         patch.physical_appearance_tags = rawValue as string[];
         break;
-      case "nai_char_ref_url":
-        patch.nai_char_ref_url = rawValue as string | null;
+      case "char_ref_url":
+        patch.char_ref_url = rawValue as string | null;
         break;
       case "impersonation_prompt":
         patch.impersonation_prompt = rawValue as string | null;

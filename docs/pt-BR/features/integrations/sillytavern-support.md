@@ -14,7 +14,10 @@ sidebar:
 aiGenerated: true
 ---
 
-TomoriBot pode importar dois ativos de [SillyTavern](https://github.com/SillyTavern/SillyTavern): predefinições do Prompt Manager (que controlam a estrutura do prompt) e cartões de caracteres (a definição de caracteres). Se você nunca usou SillyTavern, pode pular esta página com segurança.
+TomoriBot pode importar recursos do [SillyTavern](https://github.com/SillyTavern/SillyTavern):
+predefinições do Prompt Manager (que controlam a estrutura do prompt), cards de personagem (a definição do personagem)
+e lorebooks (Character Books incorporados ou arquivos de world info avulsos).
+Se você nunca usou o SillyTavern, pode pular esta página com segurança.
 
 ## Importação de Cards de Personagem
 
@@ -29,7 +32,11 @@ Um arquivo `.charx` é um arquivo ZIP que contém uma definição `card.json`. T
 
 Se um arquivo carregado for um cartão SillyTavern válido sem metadados TomoriBot, a importação o converterá automaticamente. Você também pode passar um cartão para `/persona generate` para criar uma nova personalidade inspirada no personagem.
 
-As importações são validadas antes de serem salvas (limites padrão: 5.000 caracteres por campo de texto, 200 atributos, 100 exemplos de diálogos por lado, 100 palavras de gatilho). Para mapeamento de campo e mecânica de conversão, consulte [arquitetura de suporte de cartão](/en/architecture/integrations/sillytavern/card-support/).
+As importações são validadas antes de serem salvas (limites padrão: 5.000 caracteres por campo de texto, 200 atributos, 100 exemplos de diálogos por lado, 100 palavras de gatilho). Para mapeamento de campo e mecânica de conversão, consulte [arquitetura de suporte de cartão](/architecture/integrations/sillytavern/card-support/).
+
+:::tip
+O Character Book de um card se torna o [lorebook](/features/knowledge/lorebooks/) dessa persona. Entradas desativadas permanecem desativadas. Importar o card novamente substitui todo o lorebook da persona, incluindo as entradas que você adicionou.
+:::
 
 ## Predefinições de Prompt
 <!-- anchor: prompt-presets -->
@@ -48,19 +55,19 @@ Uma predefinição do Prompt Manager SillyTavern controla a ordem e o layout do 
 Um layout de prompt de estruturas predefinidas; não substitui as fontes de texto que o preenchem:
 
 - Instruções do sistema e campos de persona: `/config` > `Comportamento` > `Comportamento Geral`, `/config` > `Persona` > Avançado e `/config` > `Persona` > `Identidade e Personalidade`.
-- Histórico de chat ao vivo e contexto do documento recuperado.
+- Histórico de chat ao vivo, contexto de documentos recuperados e entradas de lorebook ativadas.
 - Contexto automático: memórias do servidor, dados de emojis e figurinhas, listas de participantes e memórias de curto prazo.
 
 ### Como os Blocos Nativos São Mapeados
 
 Os blocos nativos são mapeados diretamente para os componentes do prompt TomoriBot:
 
-- `main`: o prompt do sistema ativo (`/config` > `Comportamento` > `Comportamento Geral` ou o substituto padrão)
+- `main`: a substituição de prompt do canal, quando configurada
 - `charDescription`: `/config` > `Persona` > Avançado
 - `charPersonality`: `/config` > `Persona` > `Identidade e Personalidade`
 - `dialogueExamples`: `/config` > `Persona` > `Identidade e Personalidade`
 - `chatHistory`: histórico de mensagens do canal ao vivo
-- `worldInfoBefore` e `worldInfoAfter`: contexto do documento recuperado (não livros de história SillyTavern)
+- `worldInfoBefore` e `worldInfoAfter`: entradas de lorebook para esse posicionamento, seguidas pelo contexto de documentos recuperados
 
 ### Regra do Prompt de Sistema
 

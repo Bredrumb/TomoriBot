@@ -229,6 +229,7 @@ function buildOpenerContextItem(
     targetSentence(attempt.target, plan.scene !== null),
     plan.openerDirection,
     `${name}'s private goal, which nobody else can see: ${plan.agenda}`,
+    "Keep the opener short and leave room for a reply. Do not add a question just to invite one or stack questions asking for the same response.",
     toolSentence(name, tools),
   ]);
 }

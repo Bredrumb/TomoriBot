@@ -73,6 +73,8 @@ export default {
     text_quota_resets_in_hours: `A cota reinicia em {hours} hora(s).`,
     text_quota_resets_in_days: `A cota reinicia em {days} dia(s).`,
     text_quota_exceeded_footer: `Esta cota é configurada pelos administradores deste servidor via \`/moderation\`.`,
+    text_quota_unavailable_title: `Cota de Texto Indisponível`,
+    text_quota_unavailable_description: `Não foi possível verificar a cota de geração de texto deste servidor no momento. Tente novamente em instantes.`,
     stream: {
       response_stopped_title: `Resposta Interrompida`,
       response_stopped_description: `A resposta foi interrompida pelo seguinte motivo: {reason}. Certifique-se de que o conteúdo enviado não seja muito grande para o provedor de IA processar. Execute \`/refresh\` para limpar o conteúdo da conversa.`,

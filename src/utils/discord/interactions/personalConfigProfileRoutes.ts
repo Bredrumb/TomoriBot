@@ -498,7 +498,7 @@ export async function handlePersonalConfigProfileWrites(context: PersonalConfigP
         dependencies.operations.replaceCharacterReference({
           userId: context.scope.userId,
           userDiscId: context.scope.userDiscId,
-          previousRef: context.scope.user.nai_char_ref_url ?? null,
+          previousRef: context.scope.user.char_ref_url ?? null,
           attachment,
         }),
       () => dependencies.resolveScope(interaction, true),
@@ -524,14 +524,14 @@ export async function handlePersonalConfigProfileWrites(context: PersonalConfigP
           heading: localizer(
             route.locale,
             result.cleared
-              ? "commands.novelai.character-reference.cleared_title"
-              : "commands.novelai.character-reference.success_title",
+              ? "commands.shared.character_reference.cleared_title"
+              : "commands.shared.character_reference.success_title",
           ),
           detail: localizer(
             route.locale,
             result.cleared
-              ? "commands.novelai.character-reference.cleared_me_description"
-              : "commands.novelai.character-reference.success_me_description",
+              ? "commands.shared.character_reference.cleared_me_description"
+              : "commands.shared.character_reference.success_me_description",
           ),
         },
         dependencies,
