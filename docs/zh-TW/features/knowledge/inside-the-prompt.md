@@ -9,7 +9,7 @@ aiGenerated: false
 
 | 堵塞 | 選修的？ | 命令 | 它是什麼 |
 |---|---|---|---|
-| [系統提示](/zh-TW/features/chatting-personality/behavior-tweaking/#system-prompt) |  | `/config` > 引擎 > 常規 | 上下文最頂部的基本說明。|
+| [系統提示](/zh-TW/features/chatting-personality/behavior-tweaking/#system-prompt) |  | `/config` > 行為 > 一般行為 | 上下文最頂部的基本說明。|
 
 > **預設系統提示文字**：僅在未設定伺服器系統提示時使用。>
 > *「你是 {bot}。{bot} 確保預設情況下做出簡短而簡潔的回應。{bot} 僅在情況允許的情況下才會做出冗長的回應。>
@@ -27,12 +27,13 @@ aiGenerated: false
 | [伺服器表情符號](/zh-TW/features/chatting-personality/behavior-tweaking/#capabilities-what-shes-allowed-to-do) | *（選修的）* | `/config` > `外掛` > 上下文新增（回復中的表情符號）（僅切換），使用`/expressions initialize`初始化 | 伺服器中存在的自訂表情符號。|
 | [伺服器貼圖](/zh-TW/features/chatting-personality/behavior-tweaking/#expressions) | *（選修的）* | `/config` > `外掛` > `可用工具`（`貼圖使用`），使用`/expressions initialize`將原生資產分類，使用`/expressions manage`進行管理 | 可傳送的原生貼圖和符合回應人格的每個自訂表情，包括名稱、描述和情緒。媒體來源和人格存取規則位於提示之外。|
 | [人格人格精靈](/zh-TW/features/chatting-personality/multiple-personas/#sprites-emotion-avatars) | *（選修的）* | `/config` > `人格` > 精靈 | 為人格配置的命名表情精靈（如果有）。|
-| [對話參加者](/zh-TW/features/knowledge/memory/#personal-vs-server-memories) | *（選修的）* | `/personal memories`（由`/config` > `權限`（個人化）閘控） | 對話中的人、他們的暱稱和提及句柄，以及保存的關於他們每個人的個人記憶。當此人在上下文中擁有某則訊息或提及其姓名/別名時載入。也使用`/config` > Engine > General將目前頻道和本地時間作為頁腳。|
+| [對話參加者](/zh-TW/features/knowledge/memory/#personal-vs-server-memories) | *（選修的）* | `/personal memories`（由`/config` > `權限`（個人化）閘控） | 對話中的人、他們的暱稱和提及句柄，以及保存的關於他們每個人的個人記憶。當此人在上下文中擁有某則訊息或提及其姓名/別名時載入。也使用`/config` > 行為 > 一般行為將目前頻道和本地時間作為頁腳。|
 | [短期記憶](/zh-TW/features/knowledge/memory/#short-term-memory-stm) |  | `/config` > `人格` > 回想；`/memories`清除條目；由`/config` > `權限`（短期記憶）閘控 | 包含不同管道的摘要和最新消息 |
 | [`文件`](/zh-TW/features/knowledge/memory/#document-knowledge-base-rag) | *（選修的）* | `/memories` | 使用RAG從知識庫中提取相關區塊。|
 | [獎勵與懲罰](/zh-TW/features/knowledge/memory/#conditioning) | *(選用)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`; 使用`/conditioning remove`管理 | 此人格在這個伺服器中累積的行為偏好。 |
 | [對話範例](/zh-TW/features/chatting-personality/multiple-personas/#sample-dialogues) | *（選修的）* | `/config` > `人格` > `身分與個性` | 此人格如何說話的範例（如果有）已配置。|
-| [最近消息](/zh-TW/features/chatting-personality/behavior-tweaking/#generation-tuning) |  | `/config` > 引擎 > 常規 | 實際對話，最多這麼多訊息（預設80條）。你的上下文註釋和任何團聚註釋都會以可配置的深度內聯注入此區塊內，而不是作為它們自己的單獨區塊。|
+| [最近訊息](/zh-TW/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > 行為 > 一般行為 | 實際對話，最多這麼多則訊息（預設 80 則）。 |
+| 上下文備忘 | *(選填)* | `/config` > 行為 > 一般行為、人格 > 進階，或 頻道 > 頻道覆寫 | 在距離最新訊息指定深度處，插入到最近訊息中的指示。 |
 
 當沒有什麼可說的時，標記為 *(可選)* 的行不貢獻任何內容（並且不花費任何代幣），例如沒有匹配的文件，或者伺服器沒有自訂表情符號。
 

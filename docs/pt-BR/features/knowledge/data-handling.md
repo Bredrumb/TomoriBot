@@ -54,7 +54,7 @@ Os dados exportáveis são entregues aos seus DMs como um arquivo JSON:
 - `/export personal memories`: memórias pessoais, com escopo global ou individual.
 - `/persona export`: definições completas de personalidade.
 
-A mídia de expressão carregada é armazenada no host do servidor e está fora dessas exportações JSON. Os auto-hosters devem fazer backup do armazenamento de banco de dados e dos ativos de mídia juntos; consulte [backups de mídia personalizados](/pt-BR/self-hosting/safe-migration/#custom-expression-media-backups).
+A mídia de expressão carregada é armazenada no host do servidor e está fora dessas exportações JSON. Os auto-hosters devem fazer backup do armazenamento de banco de dados e dos ativos de mídia juntos; consulte [backups de mídia personalizados](/self-hosting/maintenance/#database-backups-and-recovery-keys).
 
 ## Importe Seus Dados
 

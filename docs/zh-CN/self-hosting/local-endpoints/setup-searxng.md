@@ -1,6 +1,7 @@
 ---
 title: "配置：SearXNG"
 sidebar:
+  label: "SearXNG"
   order: 3
 aiGenerated: true
 ---

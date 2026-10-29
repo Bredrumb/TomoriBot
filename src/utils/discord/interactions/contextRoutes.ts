@@ -1,6 +1,7 @@
 import { MessageFlags } from "discord.js";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { userRepository } from "@/utils/db/repositories";
+import { resolveUserLocale } from "@/utils/discord/interactionLocale";
 import type { GlobalInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import { CONTEXT_ROUTE_NAMESPACE, CONTEXT_ROUTE_VERSION } from "@/utils/discord/ui/contextUsagePanel";
 import { replyInfoEmbed } from "@/utils/discord/ui/interactionCore";
@@ -23,7 +24,7 @@ export const contextInteractionRoute: GlobalInteractionRoute = {
       throw new Error(`Unsupported context interaction route: ${route.segments.join(":")}`);
     }
 
-    const locale = interaction.locale ?? interaction.guildLocale ?? "en-US";
+    const locale = await resolveUserLocale(interaction);
     const guild = interaction.guild;
     const channel = interaction.channel;
     if (!guild || !channel) {

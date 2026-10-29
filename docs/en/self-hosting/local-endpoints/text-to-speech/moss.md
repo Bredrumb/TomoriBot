@@ -5,9 +5,7 @@ aiGenerated: true
 
 Evaluate voice cloning and natural-language voice design locally through a unified speech endpoint using [MOSS-TTS](https://github.com/OpenMOSS/MOSS-TTS).
 
-Using `servers/tts/moss/server.py`, TomoriBot routes synthesis requests dynamically: it loads the clone model when a persona provides `ref_audio`, and switches to MOSS-VoiceGenerator when given natural-language `instruct` guidance. Only one model is held in GPU memory at a time to run within 16 GB VRAM budgets.
-
-The default clone model is [MOSS-TTS-Local-Transformer-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5) (4B), selected as a practical baseline for 16 GB GPUs. [MOSS-TTS-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-v1.5) is an 8B flagship alternative that requires more VRAM at BF16. Voice design uses [MOSS-VoiceGenerator](https://huggingface.co/OpenMOSS-Team/MOSS-VoiceGenerator) (roughly 1.7B). Swapping between cloning and voice design incurs a model loading delay.
+The default 4B clone model and 1.7B VoiceGenerator swap in GPU memory when the voice mode changes, so the first request after a switch takes longer. The 8B clone model requires more VRAM.
 
 ## Setup
 

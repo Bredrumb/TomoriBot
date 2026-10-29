@@ -10,7 +10,7 @@ model as the main prompt/context, in this order top-to-bottom:
 
 | Block | Optional? | Commands | What it is |
 |---|---|---|---|
-| [System prompt](/features/chatting-personality/behavior-tweaking/#system-prompt) | | `/config` > Engine > General | Basic instructions at the topmost of context. |
+| [System prompt](/features/chatting-personality/behavior-tweaking/#system-prompt) | | `/config` > Behavior > General Behavior | Basic instructions at the topmost of context. |
 | Channel prompt (append) | *(Optional)* | `/config` > Channels > Channel Overrides | Varies per-channel, layered in right after the system prompt. The same page's *replace* mode takes over the system prompt slot above instead of adding a new one. |
 | Persona prompt | *(Optional)* | `/config` > Persona > Advanced | A prompt written specifically for the active persona, separate from the system prompt.|
 | [Persona attributes](/features/chatting-personality/multiple-personas/#attributes) | | `/config` > Persona > Identity & Personality | The active persona's personality traits and speech patterns. |
@@ -20,14 +20,14 @@ model as the main prompt/context, in this order top-to-bottom:
 | [Server emojis](/features/chatting-personality/behavior-tweaking/#capabilities-what-shes-allowed-to-do) | *(Optional)* | `/config` > Plugins > Context Additions (`Emojis & Reactions`) (toggle only), initialize with `/expressions initialize` | The custom emojis present in the server.|
 | [Server stickers](/features/chatting-personality/behavior-tweaking/#expressions) | *(Optional)* | `/config` > Plugins > Available Tools (Sticker Usage), classify native assets with `/expressions initialize`, manage with `/expressions manage` | Sendable native stickers and every custom expression eligible for the responding persona, with names, descriptions, and emotions. Media sources and persona access rules stay outside the prompt. |
 | [Persona sprites](/features/chatting-personality/multiple-personas/#sprites-emotion-avatars) | *(Optional)* | `/config` > Persona > Sprites | Named expression sprites configured for the persona, if it has any. |
-| [Conversation Participants](/features/knowledge/memory/#personal-vs-server-memories) | *(Optional)* | `/personal memories` (gated by `/config` > Permissions (Personalization)) | The people in the conversation, their nicknames and mention handles, and the personal memories saved about each of them. Loaded when the person owns a message in context, or if their name/alias get mentioned. Also carries the current channel and local time as a footer, using `/config` > Engine > General. |
+| [Conversation Participants](/features/knowledge/memory/#personal-vs-server-memories) | *(Optional)* | `/personal memories` (gated by `/config` > Permissions (Personalization)) | The people in the conversation, their nicknames and mention handles, and the personal memories saved about each of them. Loaded when the person owns a message in context, or if their name/alias get mentioned. Also carries the current channel and local time as a footer, using `/config` > Behavior > General Behavior. |
 | [Short-term memory](/features/knowledge/memory/#short-term-memory-stm) | | `/config` > Persona > Memories; `/memories` to clear entries; gated by `/config` > Permissions (Short-Term Memory) | Contains summaries and recent messages of different channels |
 | [Documents](/features/knowledge/memory/#document-knowledge-base-rag) | *(Optional)* | `/memories` | Relevant chunks pulled from the knowledge base using RAG. |
 | [Lorebooks](/features/knowledge/lorebooks/) | *(Optional)* | `/memories` > Lorebooks | World canon whose keywords appear in recent messages, plus Always On entries. Sent after documents. |
 | [Conditioning](/features/knowledge/memory/#conditioning) | *(Optional)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`, managed via `/conditioning remove` | Accumulated behavioral nudges for this persona in this server. |
 | [Sample dialogues](/features/chatting-personality/multiple-personas/#sample-dialogues) | *(Optional)* | `/config` > Persona > Identity & Personality | Examples of how this persona talks, if any are configured. |
-| [Recent messages](/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > Engine > General | The actual conversation, up to this many messages (default 80). |
-| Context note | *(Optional)* | `/config` > Engine > General; Persona > Advanced; or Channels > Channel Overrides | An instruction inserted among recent messages at a chosen depth from the latest message. |
+| [Recent messages](/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > Behavior > General Behavior | The actual conversation, up to this many messages (default 80). |
+| Context note | *(Optional)* | `/config` > Behavior > General Behavior; Persona > Advanced; or Channels > Channel Overrides | An instruction inserted among recent messages at a chosen depth from the latest message. |
 
 Rows marked *(Optional)* contribute nothing (and cost no tokens) when there's nothing to say, e.g. no documents matched, or the server has no custom emojis.
 

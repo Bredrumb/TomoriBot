@@ -1,8 +1,8 @@
 ---
 title: "Thiết lập: Máy chủ MCP cục bộ"
 sidebar:
+  label: "Máy chủ MCP cục bộ"
   order: 6
-aiGenerated: true
 ---
 
 Kết nối các máy chủ TomoriBot với Model Context Protocol ([MCP](https://modelcontextprotocol.io/)) chạy trên máy cục bộ hoặc mạng riêng của bạn để cung cấp các công cụ cục bộ tùy chỉnh.

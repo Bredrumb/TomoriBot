@@ -43,7 +43,7 @@ docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"
 Gere uma senha separada para `POSTGRES_PASSWORD`. Você pode copiar configurações de ajuste opcionais do `.env.optional.example`.
 
 :::note[Database connection is automatic]
-O serviço Compose PostgreSQL é executado em modo de desenvolvimento (sem SSL) em uma rede interna Docker. A imagem incluída inclui `pgvector` e `pg_cron`, para que a memória de documentos, a pesquisa de vetores e a limpeza programada funcionem imediatamente. Não defina `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER` ou `POSTGRES_DB` em `.env`; O Compose os configura automaticamente.
+Não defina `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER` ou `POSTGRES_DB` em `.env`; O Compose os configura automaticamente.
 :::
 
 No Linux, crie os diretórios bind-mount no host e atribua propriedade ao UID 1001 antes de iniciar os contêineres. Docker cria pontos de montagem ausentes como raiz, o que impede que o contêiner do bot salve backups, logs ou uploads:
@@ -79,4 +79,4 @@ Consulte [SearXNG](/pt-BR/self-hosting/local-endpoints/setup-searxng/), [Crawl4A
 
 ## Manutenção, atualização e backups
 
-Use `bun run update --docker` para atualizações de backup inicial em implantações do Compose. Para fazer backup ou restaurar seu banco de dados Compose, consulte [Manutenção e backups](/pt-BR/self-hosting/maintenance/). Antes de obter uma nova versão, revise [Migração segura](/pt-BR/self-hosting/safe-migration/).
+Use `bun run update --docker` para atualizações de backup inicial em implantações do Compose. Para fazer backup ou restaurar seu banco de dados Compose, consulte [Manutenção e backups](/pt-BR/self-hosting/maintenance/).

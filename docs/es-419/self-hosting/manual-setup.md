@@ -45,10 +45,7 @@ Requerida:
 - `CRYPTO_SECRET`: una clave de cifrado de 32 caracteres (utilizada para cifrar las claves API almacenadas).
 - Conexión PostgreSQL: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`.
 
-Guarda una copia protegida de tu secreto de cifrado por separado de las copias de seguridad de la base de datos. Las copias de seguridad nuevas no contienen `.env`. Para la rotación, utiliza `CRYPTO_SECRET_V1`, `CRYPTO_SECRET_V2` o cualquier versión posterior con números enteros positivos, con la selección opcional de `CRYPTO_SECRET_CURRENT`. `CRYPTO_SECRET` sigue siendo V1. Los comandos de inicio y mantenimiento cargan la misma fuente: valores de entorno locales en desarrollo, o JSON montado / AWS Secrets Manager en producción. Consulta [Rotación de claves de cifrado](/es-419/self-hosting/maintenance/#rotating-encryption-keys) antes de reemplazar un secreto.
-
-En las fuentes de secretos JSON, las claves maestras deben ser cadenas. `CRYPTO_SECRET_CURRENT` acepta una cadena como `"2"` o un número entero seguro positivo como `2` que nombra una versión disponible.
-
+Guarda una copia protegida de tu secreto de cifrado por separado de las copias de seguridad de la base de datos. Las copias de seguridad nuevas no contienen `.env`. Para la rotación, utiliza `CRYPTO_SECRET_V1`, `CRYPTO_SECRET_V2` o cualquier versión posterior con números enteros positivos, con la selección opcional de `CRYPTO_SECRET_CURRENT`.
 :::note[No native PostgreSQL?]
 Ejecuta solo la base de datos en un contenedor, luego apunte los valores `POSTGRES_*` hacia ella:
 
@@ -90,7 +87,7 @@ bun run launch --help        # see all flags
 <!-- anchor: optional-extras-the-manual-full-install -->
 
 La ruta Instalación completa del [asistente de instalación](/es-419/self-hosting/setup-wizard/) agrega
-cuatro extras livianos encima de la instalación base. Ninguno es necesario para ejecutar el bot, pero
+extras livianos encima de la instalación base. Ninguno es necesario para ejecutar el bot, pero
 cada uno desbloquea una función. Si estás instalando a mano, agrega el que quieras:
 
 ### `pgvector` : memoria de documentos/RAG
@@ -131,7 +128,7 @@ CREATE EXTENSION vector;
 
 Sin pgvector el bot sigue funcionando, pero las funciones de RAG quedan completamente no disponibles.
 Esta extensión también se requiere en la base de datos de destino antes de restaurar una copia de
-seguridad; consulta [Migración segura](/es-419/self-hosting/safe-migration/) para más detalles.
+seguridad; consulta [Mantenimiento y copias de seguridad](/self-hosting/maintenance/) para más detalles.
 
 ### `pg_cron` : trabajos de limpieza programados
 
@@ -195,4 +192,4 @@ Una vez instalado, los scripts del lado del host (`bun run update`, `bun run bac
 `bun run restore-backup`, `bun run nuke-db`, `bun run rotate-keys`, …) y los procedimientos de
 actualización y copia de seguridad viven todos en la página de
 [Mantenimiento y copias de seguridad](/es-419/self-hosting/maintenance/). Si estás por descargar una
-nueva versión, comienza con [Migración segura](/es-419/self-hosting/safe-migration/).
+nueva versión, comienza con [Mantenimiento y copias de seguridad](/self-hosting/maintenance/).

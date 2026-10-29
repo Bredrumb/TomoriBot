@@ -1,6 +1,7 @@
 ---
 title: "設定：slop-guard"
 sidebar:
+  label: "slop-guard"
   order: 8
 aiGenerated: true
 ---

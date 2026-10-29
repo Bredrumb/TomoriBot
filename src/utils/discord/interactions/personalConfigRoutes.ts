@@ -1,6 +1,8 @@
 import { MessageFlags, type ChatInputCommandInteraction, type InteractionEditReplyOptions } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
+import { resolvePersonaSnippet } from "@/utils/text/personaPrompt";
+import { DISCORD_SELECT_OPTION_DESCRIPTION_MAX } from "@/utils/discord/ui/componentsV2Limits";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { llmProviderRepo, userRepository } from "@/utils/db/repositories";
 import type { GlobalInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
@@ -91,6 +93,7 @@ const defaultDependencies: PersonalConfigRouteDependencies = {
           id: p.persona_id,
           name: p.persona_nickname,
           isAlter: Boolean(p.is_alter),
+          snippet: resolvePersonaSnippet(p, DISCORD_SELECT_OPTION_DESCRIPTION_MAX),
         }))
     );
   },

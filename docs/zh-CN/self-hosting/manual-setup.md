@@ -41,10 +41,7 @@ cp .env.example .env
 - `CRYPTO_SECRET`：32个字符的加密密钥（用于加密存储的API密钥）。
 - PostgreSQL连接：`POSTGRES_HOST`、`POSTGRES_PORT`、`POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_DB`。
 
-请将加密密钥的受保护副本与数据库备份分开保存。新的备份不包含 `.env`。对于密钥轮换，请使用 `CRYPTO_SECRET_V1`、`CRYPTO_SECRET_V2` 或任何后续的正整数版本，并可选择使用 `CRYPTO_SECRET_CURRENT`。`CRYPTO_SECRET` 仍为 V1。启动和维护命令加载相同的配置来源：开发环境中为本地环境变量值，生产环境中为挂载的 JSON 或 AWS Secrets Manager。在替换密钥之前，请参阅[轮换加密密钥](/zh-CN/self-hosting/maintenance/#rotating-encryption-keys)。
-
-在 JSON 密钥源中，主密钥必须是字符串。`CRYPTO_SECRET_CURRENT` 接受指示可用版本的字符串（如 `"2"`）或正安全整数数值（如 `2`）。
-
+请将加密密钥的受保护副本与数据库备份分开保存。新的备份不包含 `.env`。对于密钥轮换，请使用 `CRYPTO_SECRET_V1`、`CRYPTO_SECRET_V2` 或任何后续的正整数版本，并可选择使用 `CRYPTO_SECRET_CURRENT`。
 :::note[No native PostgreSQL?]
 仅运行容器中的数据库，然后将`POSTGRES_*`值指向它：
 
@@ -117,7 +114,7 @@ CREATE EXTENSION vector;
 ```
 
 没有pgvector，bot照样能跑，但RAG功能会完全不可用。还原备份之前，目标数据库上也必须装好这个扩展；细节见
-[安全迁移](/zh-CN/self-hosting/safe-migration/)。
+[维护和备份](/self-hosting/maintenance/)。
 
 ### `pg_cron`：定时清理任务
 
@@ -172,4 +169,4 @@ HF_TOKEN=hf_xxx bun run setup:tokenizers
 ## 维护、更新与备份
 
 装好之后，主机端脚本（`bun run update`、`bun run backup`、`bun run restore-backup`、`bun run nuke-db`、`bun run rotate-keys`等）以及更新和备份流程，都写在
-[维护与备份](/zh-CN/self-hosting/maintenance/)页面。如果你准备拉取新版本，请先看[安全迁移](/zh-CN/self-hosting/safe-migration/)。
+[维护与备份](/zh-CN/self-hosting/maintenance/)页面。如果你准备拉取新版本，请先看[维护和备份](/self-hosting/maintenance/)。

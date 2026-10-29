@@ -9,7 +9,7 @@ aiGenerated: false
 
 | 堵塞 | 选修的？ | 命令 | 它是什么 |
 |---|---|---|---|
-| [系统提示](/zh-CN/features/chatting-personality/behavior-tweaking/#system-prompt) |  | `/config` > 发动机 > 常规 | 上下文最顶部的基本说明。|
+| [系统提示](/zh-CN/features/chatting-personality/behavior-tweaking/#system-prompt) |  | `/config` > 行为 > 常规行为 | 上下文最顶部的基本说明。|
 
 > **默认系统提示文本**：仅在未设置服务器系统提示时使用。>
 > *“你是 {bot}。{bot} 确保默认情况下做出简短而简洁的回复。{bot} 仅在情况允许的情况下才会做出冗长的回复。>
@@ -27,12 +27,13 @@ aiGenerated: false
 | [服务器表情符号](/zh-CN/features/chatting-personality/behavior-tweaking/#capabilities-what-shes-allowed-to-do) | *（选修的）* | `/config` > `插件` > `上下文补充`（`回复中的表情`）（仅切换），使用`/expressions initialize`初始化 | 服务器中存在的自定义表情符号。|
 | [服务器贴纸](/zh-CN/features/chatting-personality/behavior-tweaking/#expressions) | *（选修的）* | `/config` > `插件` > `可用工具`（`贴纸使用`），使用`/expressions initialize`对原生资产进行分类，使用`/expressions manage`进行管理 | 可发送的原生贴纸和符合响应人格的每个自定义表情，包括名称、描述和情感。媒体源和人格访问规则位于提示之外。|
 | [人格人格精灵](/zh-CN/features/chatting-personality/multiple-personas/#sprites-emotion-avatars) | *（选修的）* | `/config` > `人格` > 精灵 | 为人格配置的命名表情精灵（如果有）。|
-| [对话参加者](/zh-CN/features/knowledge/memory/#personal-vs-server-memories) | *（选修的）* | `/personal memories`（由`/config` > `权限`（个性化）门控） | 对话中的人、他们的昵称和提及句柄，以及保存的关于他们每个人的个人记忆。当此人在上下文中拥有某条消息或提及其姓名/别名时加载。还使用`/config` > Engine > General将当前频道和本地时间作为页脚。|
+| [对话参加者](/zh-CN/features/knowledge/memory/#personal-vs-server-memories) | *（选修的）* | `/personal memories`（由`/config` > `权限`（个性化）门控） | 对话中的人、他们的昵称和提及句柄，以及保存的关于他们每个人的个人记忆。当此人在上下文中拥有某条消息或提及其姓名/别名时加载。还使用`/config` > 行为 > 常规行为将当前频道和本地时间作为页脚。|
 | [短期记忆](/zh-CN/features/knowledge/memory/#short-term-memory-stm) |  | `/config` > `人格` > 回忆； `/memories`清除条目； 由`/config` > `权限`（短期记忆）门控 | 包含不同渠道的摘要和最新消息 |
 | [`文档`](/zh-CN/features/knowledge/memory/#document-knowledge-base-rag) | *（选修的）* | `/memories` | 使用RAG从知识库中提取相关块。|
 | [奖励与惩罚](/zh-CN/features/knowledge/memory/#conditioning) | *(可选)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`; 使用`/conditioning remove`管理 | 此人格在这个服务器中累积的行为偏好。 |
 | [对话示例](/zh-CN/features/chatting-personality/multiple-personas/#sample-dialogues) | *（选修的）* | `/config` > `人格` > `身份与性格` | 此人格如何说话的示例（如果有）已配置。|
-| [最近消息](/zh-CN/features/chatting-personality/behavior-tweaking/#generation-tuning) |  | `/config` > 发动机 > 常规 | 实际对话，最多这么多消息（默认80条）。你的上下文注释和任何团聚注释都会以可配置的深度内联注入此块内，而不是作为它们自己的单独块。|
+| [最近消息](/zh-CN/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > 行为 > 常规行为 | 实际对话，最多这么多条消息（默认 80 条）。 |
+| 上下文便签 | *(可选)* | `/config` > 行为 > 常规行为；人格 > 高级；或 频道 > 频道覆盖 | 在距离最新消息指定深度处插入最近消息中的指令。 |
 
 当没有什么可说的时，标记为 *(可选)* 的行不贡献任何内容（并且不花费任何代币），例如没有匹配的文档，或者服务器没有自定义表情符号。
 

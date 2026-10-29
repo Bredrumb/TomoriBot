@@ -1,6 +1,7 @@
 ---
 title: "Thiết lập: Codex CLI qua ChatMock"
 sidebar:
+  label: "Codex CLI qua ChatMock"
   order: 5
 aiGenerated: true
 ---

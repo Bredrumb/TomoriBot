@@ -62,7 +62,7 @@ Use this for personas that should imitate a reference clip:
 2. Open `/config` under Models > TTS Parameters & Voices and upload the clip.
 3. Open `/config` under Persona > Voice, then choose the persona and the voice sample.
 
-Qwen3-TTS advertises rapid cloning from as little as 3 seconds of reference audio, and its runtime neither documents nor enforces a reference-duration cap. Clip length is therefore a quality trade-off you control rather than a limit the server checks.
+Qwen3-TTS supports reference clips as short as 3 seconds.
 
 ### VoiceDesign
 
@@ -71,10 +71,6 @@ Use this for personas that should use a written voice description instead of a s
 1. Open `/config` under Persona > Voice and choose VoiceDesign.
 2. Choose the persona.
 3. Enter a natural-language voice prompt, such as the speaker's age, tone, accent, and delivery.
-
-Remove a persona's VoiceDesign prompt from Persona > Voice in `/config`. During generation, TomoriBot sends the saved prompt in the `/synthesize` JSON body as `instruct`; one-off `voice_instructions` from the tool are appended.
-
-Auto mode keeps both setups. Personas configured under Persona > Voice in `/config` use clone synthesis or VoiceDesign synthesis according to their selection.
 
 ## Optional: VoiceDesign-only server
 
