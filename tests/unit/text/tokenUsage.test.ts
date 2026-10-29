@@ -45,6 +45,50 @@ describe("normalizeProviderUsage", () => {
     expect(usage).toEqual({ inputTokens: 10, outputTokens: 5 });
   });
 
+  it("validates and clamps cache subsets while preserving unknown and zero", () => {
+    for (const cacheReadTokens of [undefined, null, "3", -1, Number.NaN, Number.POSITIVE_INFINITY, 0, 3, 100]) {
+      const usage = normalizeProviderUsage({
+        inputTokens: 10,
+        outputTokens: 2,
+        cacheReadTokens,
+        cacheWriteTokens: cacheReadTokens,
+      });
+      const expected =
+        typeof cacheReadTokens === "number" && Number.isFinite(cacheReadTokens) && cacheReadTokens >= 0
+          ? Math.min(cacheReadTokens, 10)
+          : undefined;
+      expect(usage?.cacheReadTokens).toBe(expected);
+      expect(usage?.cacheWriteTokens).toBe(expected);
+      expect(normalizeProviderUsage(usage)).toEqual(usage);
+    }
+  });
+
+  it("reads DeepSeek cache hits without adding them to the inclusive prompt total", () => {
+    expect(
+      normalizeProviderUsage({
+        prompt_tokens: 100,
+        completion_tokens: 10,
+        prompt_cache_hit_tokens: 80,
+        prompt_cache_miss_tokens: 20,
+      }),
+    ).toEqual({ inputTokens: 100, outputTokens: 10, cacheReadTokens: 80 });
+  });
+
+  it("preserves OpenRouter snake and camel case cache details and cost", () => {
+    for (const promptDetails of [
+      { prompt_tokens_details: { cached_tokens: 60, cache_write_tokens: 20 } },
+      { promptTokensDetails: { cachedTokens: 60, cacheWriteTokens: 20 } },
+    ]) {
+      expect(normalizeProviderUsage({ promptTokens: 100, completionTokens: 10, cost: 0, ...promptDetails })).toEqual({
+        inputTokens: 100,
+        outputTokens: 10,
+        cacheReadTokens: 60,
+        cacheWriteTokens: 20,
+        costUsd: 0,
+      });
+    }
+  });
+
   it("returns null when no usable token counts are present", () => {
     expect(normalizeProviderUsage({})).toBeNull();
     expect(normalizeProviderUsage(undefined)).toBeNull();
@@ -54,6 +98,28 @@ describe("normalizeProviderUsage", () => {
 });
 
 describe("sumTurnUsage", () => {
+  it("keeps each optional total only when all reported segments know it", () => {
+    const known = { inputTokens: 100, outputTokens: 10, cacheReadTokens: 0, cacheWriteTokens: 20, costUsd: 0.01 };
+    expect(sumTurnUsage([{ usage: known }, {}, { usage: known }])).toEqual({
+      inputTokens: 200,
+      outputTokens: 20,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 40,
+      costUsd: 0.02,
+    });
+    for (const field of ["cacheReadTokens", "cacheWriteTokens", "costUsd"] as const) {
+      const missing = { ...known };
+      delete missing[field];
+      for (const segments of [
+        [known, missing],
+        [missing, known],
+      ]) {
+        const total = sumTurnUsage(segments.map((usage) => ({ usage })));
+        expect(total?.[field]).toBeUndefined();
+        expect(total?.inputTokens).toBe(200);
+      }
+    }
+  });
   it("sums input and output across all stream segments (tool-loop billing truth)", () => {
     // A two-request tool turn: each request is billed for its own prompt + output.
     const segments: { usage?: TokenUsage }[] = [

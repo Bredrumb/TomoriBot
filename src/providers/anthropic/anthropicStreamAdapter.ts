@@ -137,8 +137,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
   private thinkingAccumulator = "";
   private currentContentBlockIndex = -1;
   private stopReason: string | null = null;
-  private inputTokens = 0;
-  private outputTokens = 0;
+  private usage: Record<string, unknown> = {};
 
   constructor() {
     super({
@@ -156,8 +155,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
     this.thinkingAccumulator = "";
     this.currentContentBlockIndex = -1;
     this.stopReason = null;
-    this.inputTokens = 0;
-    this.outputTokens = 0;
+    this.usage = {};
 
     const anthropicConfig = config as AnthropicStreamConfig;
 
@@ -388,14 +386,11 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
     switch (eventType) {
       case "message_start": {
-        const msgData = data as { message?: { usage?: { input_tokens?: number; output_tokens?: number } } };
+        const msgData = data as { message?: { usage?: Record<string, unknown> } };
         if (msgData.message?.usage) {
-          this.inputTokens = msgData.message.usage.input_tokens ?? 0;
-          this.outputTokens = msgData.message.usage.output_tokens ?? 0;
-          metadata.inputTokens = this.inputTokens;
-          // Surface normalized usage so the orchestrator can record real tokens.
-          // message_delta later overrides this with the final output_tokens.
-          metadata.usage = { inputTokens: this.inputTokens, outputTokens: this.outputTokens };
+          this.usage = { ...msgData.message.usage };
+          metadata.inputTokens = this.usage.input_tokens;
+          metadata.usage = { ...this.usage };
         }
         return { type: "text", content: "", thoughts: [], metadata };
       }
@@ -502,7 +497,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       case "message_delta": {
         const msgDelta = data as {
           delta?: { stop_reason?: string; stop_sequence?: string };
-          usage?: { output_tokens?: number };
+          usage?: Record<string, unknown>;
         };
 
         if (msgDelta.delta?.stop_reason) {
@@ -510,13 +505,11 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
           metadata.stopReason = this.stopReason;
         }
 
-        if (msgDelta.usage?.output_tokens) {
-          this.outputTokens = msgDelta.usage.output_tokens;
-          metadata.outputTokens = this.outputTokens;
-          // Final usage for the turn: input from message_start + final output here.
-          // Emitted on this `done`-bearing event so it survives the message_stop
-          // event (which otherwise clobbers terminal metadata).
-          metadata.usage = { inputTokens: this.inputTokens, outputTokens: this.outputTokens };
+        if (msgDelta.usage) {
+          // Preserve start counts because delta usage is cumulative and may omit input or cache fields.
+          this.usage = { ...this.usage, ...msgDelta.usage };
+          metadata.outputTokens = this.usage.output_tokens;
+          metadata.usage = { ...this.usage };
         }
 
         if (this.stopReason === "tool_use") {

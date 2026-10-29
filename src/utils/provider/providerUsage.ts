@@ -26,6 +26,8 @@ export interface ProviderUsageReport {
   costUsd: number | null | undefined;
   inputTokens?: number | null;
   outputTokens?: number | null;
+  cacheReadTokens?: number | null;
+  cacheWriteTokens?: number | null;
   /** Identifies one billed provider request, so repeated polling of the same job records it once. */
   providerRequestId?: string | null;
 }
