@@ -65,7 +65,7 @@ export async function postSummaryWithControls(params: {
     editDeadline: Math.ceil((Date.now() + COMPACT_EDIT_WINDOW_MS) / 1000),
   };
   const summaryMessage = await params.outputChannel.send(renderSummaryMessage(params.embed, controls, false));
-  // A restart drops this timer; the edit route then withdraws the stale button on its next click.
+  // Because a restart drops this timer, the edit route also withdraws the stale button on its next click.
   setTimeout(() => void withdrawExpiredEditButton(summaryMessage, controls), controls.editDeadline * 1000 - Date.now());
 }
 
@@ -143,9 +143,10 @@ export async function handleSummaryEditClick(interaction: ButtonInteraction, con
     .catch(() => null);
   if (!submitted) return;
 
-  const submittedMessage = submitted.message ?? interaction.message;
-  const submittedEmbed = submittedMessage.embeds[0];
+  const submittedMessage = await (submitted.message ?? interaction.message).fetch().catch(() => null);
+  const submittedEmbed = submittedMessage?.embeds[0];
   if (
+    !submittedMessage ||
     !submittedEmbed ||
     savingSummaryMessageIds.has(submittedMessage.id) ||
     !hasSummaryControl(submittedMessage, "save")

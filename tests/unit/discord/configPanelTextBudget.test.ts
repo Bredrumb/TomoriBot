@@ -498,6 +498,8 @@ const PREVIEW_TIGHTNESS_TOLERANCE = 3;
 // hidden notices), where a single channel row is ~25 characters. Multi-section pages (e.g. Channels Rules with 3
 // sections) compound this waste across independent truncations plus a floor division remainder of up to 2 characters.
 const COLLECTION_ROW_TIGHTNESS_TOLERANCE = 80;
+// An Auto-Trigger row also carries the escaped persona nickname, which costs 112 characters in this fixture.
+const AUTO_TRIGGER_ROW_TIGHTNESS_TOLERANCE = 112;
 
 describe("config page text budgeting at stored maxima", () => {
   const memoryLimits = getMemoryLimits();
@@ -712,7 +714,7 @@ describe("config page text budgeting at stored maxima", () => {
     },
     {
       name: "Channels Auto-Trigger",
-      maxTolerance: COLLECTION_ROW_TIGHTNESS_TOLERANCE,
+      maxTolerance: AUTO_TRIGGER_ROW_TIGHTNESS_TOLERANCE,
       buildPayload: (locale: string, receipt: boolean) => {
         const channels = makeChannelList(220);
         const channelsView: ConfigChannelsView = {

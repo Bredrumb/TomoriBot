@@ -243,11 +243,8 @@ async function resolveThoughtLogOwnerIdentity(
 }
 
 /**
- * Sends a standalone attribution embed to the thought-logs channel when a
- * personal provider or the model randomizer was used but the model produced no
- * reasoning/thinking content (so no thought-log embed was emitted). This ensures
- * server admins can always see whose credentials and which model were used,
- * regardless of model type.
+ * Posts attribution alone when no thought-log embed was emitted, so admins still see whose
+ * credentials and which model answered.
  */
 export async function sendAttributionOnlyEmbed({
   client,

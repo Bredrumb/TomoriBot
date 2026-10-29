@@ -1,12 +1,17 @@
-import { describe, expect, it, spyOn } from "bun:test";
+import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import { GoogleStreamAdapter } from "@/providers/google/googleStreamAdapter";
 import type { RawStreamChunk } from "@/types/stream/interfaces";
 import type { StreamConfig, StreamContext } from "@/types/stream/interfaces";
 import { log } from "@/utils/misc/logger";
 import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
 it("records the final Google request shape on rejection without retaining its content", async () => {
-  const originalFetch = globalThis.fetch;
   const info = spyOn(log, "info").mockImplementation(() => {});
   const section = spyOn(log, "section").mockImplementation(() => {});
   try {
@@ -67,7 +72,6 @@ it("records the final Google request shape on rejection without retaining its co
       }
     }
   } finally {
-    globalThis.fetch = originalFetch;
     info.mockRestore();
     section.mockRestore();
   }

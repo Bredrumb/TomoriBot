@@ -2280,19 +2280,26 @@ ${localizer(locale, "commands.config.panel.promote_confirm_description", {
   ];
 }
 
-function behaviorHeading(locale: string, titleKey: string, descriptionKey: string): ComponentInContainerData {
+function behaviorHeading(
+  locale: string,
+  titleKey: string,
+  descriptionKey: string,
+  suffix = "",
+): ComponentInContainerData {
   return {
     type: ComponentType.TextDisplay,
-    content: `### ${localizer(locale, titleKey)}\n${localizer(locale, descriptionKey)}`,
+    content: `### ${localizer(locale, titleKey)}\n${localizer(locale, descriptionKey)}${suffix}`,
   };
 }
 
-function whitelistLocationHint(locale: string): ComponentInContainerData {
+/**
+ * Rides inside the page heading rather than its own TextDisplay, because one more component pushes a
+ * fully paginated Channels Rules page past Discord's 40-component cap.
+ */
+function whitelistLocationHint(locale: string, actor: ConfigPanelRenderInput["actor"]): string {
+  if (actor.workspaceKind !== "guild" || !actor.isManager) return "";
   const moderation = `${commandRegistry.getCommandMention("moderation", undefined, undefined, true)} > ${localizer(locale, "commands.moderation.category_whitelist")}`;
-  return {
-    type: ComponentType.TextDisplay,
-    content: withLinePrefix("-# ", localizer(locale, "commands.config.panel.whitelist_location_hint", { moderation })),
-  };
+  return `\n${withLinePrefix("-# ", localizer(locale, "commands.config.panel.whitelist_location_hint", { moderation }))}`;
 }
 
 function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInContainerData[] {
@@ -2647,6 +2654,7 @@ function buildBehaviorTriggerBody(input: ConfigPanelRenderInput): ComponentInCon
       locale,
       "commands.config.panel.behavior_trigger_title",
       "commands.config.panel.behavior_trigger_description",
+      whitelistLocationHint(locale, input.actor),
     ),
   ];
   if (input.actor.workspaceKind === "guild" && !input.actor.isManager) {
@@ -2656,7 +2664,6 @@ function buildBehaviorTriggerBody(input: ConfigPanelRenderInput): ComponentInCon
     });
     return components;
   }
-  if (input.actor.workspaceKind === "guild") components.push(whitelistLocationHint(locale));
   if (!view) return components;
 
   if (input.randomTriggerRemoveMode) {
@@ -3633,7 +3640,7 @@ function buildChannelsAutoTriggerBody(input: ConfigPanelRenderInput): ComponentI
     {
       type: ComponentType.TextDisplay,
       content: `### ${localizer(locale, "commands.config.panel.channels_auto_trigger_title")}
-${localizer(locale, "commands.config.panel.channels_auto_trigger_description")}`,
+${localizer(locale, "commands.config.panel.channels_auto_trigger_description")}${whitelistLocationHint(locale, actor)}`,
     },
   ];
 
@@ -3644,7 +3651,6 @@ ${localizer(locale, "commands.config.panel.channels_auto_trigger_description")}`
     });
     return components;
   }
-  if (actor.workspaceKind === "guild") components.push(whitelistLocationHint(locale));
   if (!view || !input.channelsView) return components;
 
   const actionDisabled = writesDisabled || resolveChannelsAutoTriggerActionState("auto-trigger", actor) !== "enabled";
@@ -3792,7 +3798,7 @@ function buildChannelsRulesBody(input: ConfigPanelRenderInput): ComponentInConta
     {
       type: ComponentType.TextDisplay,
       content: `### ${localizer(locale, "commands.config.panel.channels_rules_title")}
-${localizer(locale, "commands.config.panel.channels_rules_description")}`,
+${localizer(locale, "commands.config.panel.channels_rules_description")}${whitelistLocationHint(locale, actor)}`,
     },
   ];
 
@@ -3803,7 +3809,6 @@ ${localizer(locale, "commands.config.panel.channels_rules_description")}`,
     });
     return components;
   }
-  if (actor.workspaceKind === "guild") components.push(whitelistLocationHint(locale));
   if (!view || !input.channelsView) return components;
 
   const privateTitle = localizer(locale, "commands.config.panel.channels_rules_private_title");
@@ -3987,9 +3992,8 @@ function buildChannelsOverridesBody(input: ConfigPanelRenderInput): ComponentInC
     {
       type: ComponentType.TextDisplay,
       content: `### ${localizer(locale, "commands.config.panel.channels_overrides_title")}
-${localizer(locale, "commands.config.panel.channels_overrides_description")}`,
+${localizer(locale, "commands.config.panel.channels_overrides_description")}${whitelistLocationHint(locale, actor)}`,
     },
-    ...(actor.workspaceKind === "guild" && actor.isManager ? [whitelistLocationHint(locale)] : []),
     {
       type: ComponentType.TextDisplay,
       content: localizer(locale, "commands.config.panel.channels_overrides_select_description"),
