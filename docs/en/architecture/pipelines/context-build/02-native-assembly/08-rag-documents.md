@@ -3,7 +3,7 @@ title: "02.8: RAG Documents"
 aiGenerated: true
 ---
 
-The RAG document contributor injects relevant text chunks from server-uploaded documents into the prompt using vector similarity retrieval.
+The RAG document contributor injects relevant text chunks from server-uploaded documents into the prompt using hybrid vector and lexical retrieval.
 
 ## Flow and ownership
 
@@ -22,7 +22,7 @@ The contributor `buildServerDocumentContextItem` in `src/utils/text/context/rag.
    - Loads the configured embedding model via `llmModelRepo.loadEmbeddingModelById`.
 4. **Hybrid retrieval**:
    - Calls `ragRepository.retrieveRelevantChunks` with a similarity threshold of `DOCUMENT_MIN_SIMILARITY` (0.5) and a result limit of `DOCUMENT_MAX_RESULTS` (10 chunks).
-   - Builds candidate lists from vector distance and English full-text rank, each limited to `maxResults * 4` (40), then fuses them by reciprocal rank fusion with k = 60.
+   - Builds candidate lists from vector distance and full-text rank, each limited to `maxResults * 4` (40), then fuses them by reciprocal rank fusion with k = 60.
    - Applies the cosine floor inside the SQL before the final limit. A chunk qualifies when its similarity reaches the floor or when the full-text list matched it, so a below-floor row cannot take a slot from a lower-ranked qualifying row.
    - Binds the resolved usage context and supplies `createProviderUsageRecorder` for each embedding response.
    - When `channel_memory_enabled` is true, retrieval scopes documents through `channelScopeCandidates(channelId, parentChannelId)`: the active channel ID and, inside a thread, the parent channel ID. It matches stored `channel_disc_ids` (empty means every channel), never a channel name.
@@ -31,6 +31,28 @@ The contributor `buildServerDocumentContextItem` in `src/utils/text/context/rag.
    - `ragRepository.formatChunksForPrompt` formats matching chunks into document sections.
    - Emits a `user`-role item tagged `KNOWLEDGE_SERVER_DOCUMENTS`.
    - Emits exactly one `rag_retrieval` metric per call.
+
+## Lexical text
+
+`src/utils/documents/lexicalText.ts` derives `lex_text` from the document name and chunk
+content, with an optional heading path for structured chunks. The shared tokenizer preserves
+non-CJK text, emits overlapping bigrams for Han and kana runs, and indexes Han characters
+individually for single-character queries. Multi-character CJK queries use bigrams with AND
+semantics. Kana terms are retained, and no common-character exclusions or term cap apply.
+
+Both the stored `tsv` and the query use PostgreSQL's `russian` configuration. On the labeled
+fixture tuning split, it recovered Cyrillic inflections without losing English matches;
+`simple` lost an English match. Accents remain significant. The lexical candidate
+pool still has depth 40, and every lexical hit still bypasses the cosine floor. Including a
+document name can admit sibling chunks that share the title but lack the requested detail.
+
+Document inserts, incremental history writes, and chunk edits derive lexical text when they
+write content. Compaction saves use the document insert path. Re-embedding updates vectors
+without changing lexical text. Existing rows are backfilled after login in bounded batches;
+until then, their full-text index uses raw content. See the
+[database schema](/architecture/subsystems/database-schema/#document-lexical-index) for the
+trigger and concurrent-edit safeguards. The contributor's three-character query minimum still
+applies before retrieval, even though the lexical stage supports shorter CJK terms.
 
 ## Constraints and rationale
 

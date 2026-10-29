@@ -1,3 +1,4 @@
+import { buildDocumentLexicalText } from "@/utils/documents/lexicalText";
 import { lorebookRepository } from "@/modules/lorebooks/db/repositories";
 /**
  * ServerMemoryRepository: manages the `server_memories` table.
@@ -680,11 +681,20 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
   }): Promise<boolean> {
     const { chunkId, serverId, personaId, content, embeddingVector, embeddingModelId, embeddingFamily } = params;
     try {
+      const [document] = await sql<Array<{ document_name: string }>>`
+        SELECT d.document_name
+        FROM document_chunks dc JOIN documents d ON d.document_id = dc.document_id
+        WHERE dc.document_chunk_id = ${chunkId} AND dc.server_id = ${serverId}
+          AND d.persona_id IS NOT DISTINCT FROM ${personaId}::integer
+      `;
+      if (!document) return false;
+      const lexicalText = buildDocumentLexicalText(document.document_name, content);
       const [updated] =
         personaId === null
           ? await sql`
               UPDATE document_chunks
               SET content = ${content},
+                  lex_text = ${lexicalText},
                   embedding = ${embeddingVector}::vector,
                   embedding_model_id = ${embeddingModelId},
                   embedding_family = ${embeddingFamily}
@@ -698,6 +708,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
           : await sql`
               UPDATE document_chunks
               SET content = ${content},
+                  lex_text = ${lexicalText},
                   embedding = ${embeddingVector}::vector,
                   embedding_model_id = ${embeddingModelId},
                   embedding_family = ${embeddingFamily}

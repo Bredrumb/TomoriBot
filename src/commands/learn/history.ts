@@ -100,6 +100,7 @@ type HistoryScope = "persona" | "automatic" | "global";
 /** Target document for incremental per-window chunk writes */
 interface WriteTarget {
   documentId: number;
+  documentName: string;
   dbServerId: number;
   personaId: number | null;
 }
@@ -824,6 +825,7 @@ async function runIncrementalExtraction(params: {
         const startIdx = chunkStartIndex.get(target.documentId) ?? 0;
         await appendDocumentChunks({
           documentId: target.documentId,
+          documentName: target.documentName,
           serverId: target.dbServerId,
           embeddingModelId,
           embeddingFamily,
@@ -1356,7 +1358,9 @@ export async function execute(
         composeSystemPrompt,
         replyInteraction: modalSubmitInteraction,
         locale,
-        writeTargets: [{ documentId, dbServerId: tomoriState.server_id, personaId: targetPersonaId }],
+        writeTargets: [
+          { documentId, documentName: nameInput, dbServerId: tomoriState.server_id, personaId: targetPersonaId },
+        ],
         ...embeddingParams,
       });
       if (!extractResult.ok) {
@@ -1465,7 +1469,7 @@ export async function execute(
         composeSystemPrompt: async () => globalSystemPrompt,
         replyInteraction: modalSubmitInteraction,
         locale,
-        writeTargets: [{ documentId, dbServerId: tomoriState.server_id, personaId: null }],
+        writeTargets: [{ documentId, documentName: nameInput, dbServerId: tomoriState.server_id, personaId: null }],
         ...embeddingParams,
       });
 
@@ -1581,7 +1585,7 @@ export async function execute(
         composeSystemPrompt: async () => autoSystemPrompt,
         replyInteraction: modalSubmitInteraction,
         locale,
-        writeTargets: [{ documentId, dbServerId: tomoriState.server_id, personaId: null }],
+        writeTargets: [{ documentId, documentName: nameInput, dbServerId: tomoriState.server_id, personaId: null }],
         ...embeddingParams,
       });
 
@@ -1643,7 +1647,7 @@ export async function execute(
       });
 
       personaTargets.push({
-        target: { documentId, dbServerId: tomoriState.server_id, personaId },
+        target: { documentId, documentName: docName, dbServerId: tomoriState.server_id, personaId },
         personaNickname: persona.persona_nickname,
         docName,
       });
