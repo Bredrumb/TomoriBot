@@ -31,8 +31,12 @@ const CHARS_PER_TOKEN_JSON = 3.5;
  * post-turn stat recorder above all: never branch on provider.
  */
 export interface TokenUsage {
-  /** Real prompt/input tokens billed for this response. */
+  /** Total input processed, including cache reads and writes. */
   inputTokens: number;
+  /** Reported cache-read subset of inputTokens; absent means unknown. */
+  cacheReadTokens?: number;
+  /** Reported cache-write subset of inputTokens; absent means unknown. */
+  cacheWriteTokens?: number;
   /** Real completion/output tokens billed for this response (incl. reasoning). */
   outputTokens: number;
   /** Provider-reported charge in USD, when the provider returns one (OpenRouter `usage.cost`). */
@@ -70,7 +74,29 @@ export function normalizeProviderUsage(raw: unknown): TokenUsage | null {
   };
 
   // Input: OpenAI/OpenRouter prompt tokens, Anthropic input, Gemini prompt count.
-  const inputTokens = num("prompt_tokens", "promptTokens", "input_tokens", "inputTokens", "promptTokenCount");
+  let inputTokens = num("prompt_tokens", "promptTokens", "input_tokens", "inputTokens", "promptTokenCount");
+  const optionalCount = (...values: unknown[]): number | undefined =>
+    values.find((value): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0);
+  const details = u.prompt_tokens_details ?? u.promptTokensDetails;
+  const promptDetails = details && typeof details === "object" ? (details as Record<string, unknown>) : {};
+  const cacheReadTokens = optionalCount(
+    u.cacheReadTokens,
+    u.cache_read_input_tokens,
+    promptDetails.cached_tokens,
+    promptDetails.cachedTokens,
+    u.cachedContentTokenCount,
+    u.prompt_cache_hit_tokens,
+  );
+  const cacheWriteTokens = optionalCount(
+    u.cacheWriteTokens,
+    u.cache_creation_input_tokens,
+    promptDetails.cache_write_tokens,
+    promptDetails.cacheWriteTokens,
+  );
+  // Add cache counts only for Anthropic because its input_tokens excludes cached input.
+  if (typeof u.input_tokens === "number") {
+    inputTokens += (cacheReadTokens ?? 0) + (cacheWriteTokens ?? 0);
+  }
   // Output: completion/output tokens, Gemini candidates count. Gemini bills
   //    thinking tokens separately (`thoughtsTokenCount`) at the output rate, so
   //    add them to avoid undercounting reasoning models.
@@ -79,10 +105,12 @@ export function normalizeProviderUsage(raw: unknown): TokenUsage | null {
     num("thoughtsTokenCount");
 
   if (inputTokens <= 0 && outputTokens <= 0) return null;
-  const cost = u.cost;
-  return typeof cost === "number" && Number.isFinite(cost) && cost >= 0
-    ? { inputTokens, outputTokens, costUsd: cost }
-    : { inputTokens, outputTokens };
+  const usage: TokenUsage = { inputTokens, outputTokens };
+  if (cacheReadTokens !== undefined) usage.cacheReadTokens = Math.min(cacheReadTokens, Math.max(0, inputTokens));
+  if (cacheWriteTokens !== undefined) usage.cacheWriteTokens = Math.min(cacheWriteTokens, Math.max(0, inputTokens));
+  const cost = optionalCount(u.costUsd, u.cost);
+  if (cost !== undefined) usage.costUsd = cost;
+  return usage;
 }
 
 /**
@@ -94,21 +122,25 @@ export function normalizeProviderUsage(raw: unknown): TokenUsage | null {
  * Returns null when no segment surfaced real usage, signalling the caller to
  * fall back to the character estimate for the whole turn.
  *
- * @param streamResults - The turn's stream segments (carry `usage` when real).
- * @returns Summed real usage, or null if no segment had real usage.
+ * Cache fields and cost are known only when every segment that reported usage reported that field.
  */
 export function sumTurnUsage(streamResults: ReadonlyArray<{ usage?: TokenUsage }>): TokenUsage | null {
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let found = false;
+  let total: TokenUsage | null = null;
   for (const result of streamResults) {
-    if (result.usage) {
-      inputTokens += result.usage.inputTokens;
-      outputTokens += result.usage.outputTokens;
-      found = true;
+    const usage = result.usage;
+    if (!usage) continue;
+    if (!total) {
+      total = { ...usage };
+      continue;
+    }
+    total.inputTokens += usage.inputTokens;
+    total.outputTokens += usage.outputTokens;
+    for (const field of ["cacheReadTokens", "cacheWriteTokens", "costUsd"] as const) {
+      if (total[field] !== undefined && usage[field] !== undefined) total[field] += usage[field];
+      else delete total[field];
     }
   }
-  return found ? { inputTokens, outputTokens } : null;
+  return total;
 }
 
 /**

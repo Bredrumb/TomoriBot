@@ -5,6 +5,7 @@ import type { TextQuotaTriggerState } from "@/utils/chat/textQuotaState";
 import * as realTextQuotaManager from "@/utils/quota/textQuotaManager";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { createScopedModuleMocker } from "../../helpers/mockSurface";
+import { createPersona } from "../../helpers/fixtures";
 
 /** A reply keeps the trigger's reserved unit; a turn with no reply gives it back. */
 const releaseCalls: Array<{ serverId: number; userDiscId: string; reservation: QuotaReservation }> = [];
@@ -46,7 +47,7 @@ function makeArmedContext(options?: {
     isUserImpersonation: false,
     textQuotaSource: "user",
   } as unknown as ChatIncoming;
-  const tomoriState = { config: { thought_log_channel_disc_id: null, private_channel_ids: [] } };
+  const tomoriState = createPersona({ config: { thought_log_channel_disc_id: null, private_channel_ids: [] } });
   const triggerKey = options?.triggerKey ?? `trigger_${Math.random().toString(36).slice(2)}`;
   const state = options?.state ?? {
     serverId: 1,
@@ -70,6 +71,7 @@ function makeArmedContext(options?: {
     },
     currentPersona: tomoriState,
     tomoriState,
+    contextItems: [],
     shouldSurfaceUserErrors: true,
     isUserImpersonation: false,
     simplifiedMessages: [],

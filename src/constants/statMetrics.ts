@@ -67,6 +67,8 @@ const STAT_METRICS = [
   "model_used",
   "tokens_in",
   "tokens_out",
+  "cache_read_tokens",
+  "cache_write_tokens",
   "reviewer_tokens_in",
   "reviewer_tokens_out",
   "decision_tokens_in",

@@ -86,6 +86,7 @@ function makeContext(options: {
       },
       currentPersona: tomoriState,
       tomoriState,
+      contextItems: [],
       shouldSurfaceUserErrors: options.shouldSurfaceUserErrors,
       isUserImpersonation: options.isUserImpersonation ?? false,
       textCredentialSource: options.textCredentialSource ?? "server",
