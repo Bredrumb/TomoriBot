@@ -87,6 +87,7 @@ export const persona: PersonaInput = {
   ],
   language: "en-US",
   avatarPath: "src/db/seed/catalog/personas/unhinged",
+  characterReference: "character-reference/front.png",
   triggerWords: ["tomori", "locke"],
   lineageId: 666,
   isNsfw: true,

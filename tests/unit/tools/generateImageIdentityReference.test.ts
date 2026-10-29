@@ -1,6 +1,9 @@
-import { describe, expect, it, mock } from "bun:test";
-import { loadIdentityCharacterReference } from "@/tools/functionCalls/generateImageTool";
+import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
+import type { Client } from "discord.js";
+import { GenerateImageTool, loadIdentityCharacterReference } from "@/tools/functionCalls/generateImageTool";
 import { PrivacyLevel } from "@/types/db/schema";
+import type { ToolContext } from "@/types/tool/interfaces";
+import * as mediaQuotaGate from "@/utils/quota/mediaQuotaGate";
 import type { ResolvedAvatarData } from "@/utils/discord/avatarResolver";
 import { createPersona, createUserRow } from "../../helpers/fixtures";
 
@@ -68,5 +71,32 @@ describe("generate_image identity character references", () => {
 
     await expect(loadIdentityCharacterReference(userAvatar(), GUILD_ID, deps)).resolves.toBeNull();
     expect(loadReference).not.toHaveBeenCalled();
+  });
+});
+
+describe("generate_image edit target", () => {
+  afterEach(() => mock.restore());
+
+  it("refuses an inpaint without media_id whose references name more than one image", async () => {
+    const resolveCredentials = spyOn(mediaQuotaGate, "resolveCredentialsWithMediaQuota");
+    const context: ToolContext = {
+      channel: { id: "fixture-channel" } as ToolContext["channel"],
+      client: {} as Client,
+      tomoriState: createPersona({ config: { imagegen_enabled: true } }),
+      locale: "en-US",
+      provider: "custom:1",
+      userId: USER_DISC_ID,
+      guildId: GUILD_ID,
+      suppressProgressNotices: true,
+    };
+
+    for (const flags of [{ inpaint: true, mask_prompt: "hat" }, { outpaint: true }]) {
+      const result = await new GenerateImageTool().execute(
+        { prompt: "fixture prompt", references: ["Mirri", "Juno"], ...flags },
+        context,
+      );
+      expect(result.success).toBe(false);
+    }
+    expect(resolveCredentials).not.toHaveBeenCalled();
   });
 });

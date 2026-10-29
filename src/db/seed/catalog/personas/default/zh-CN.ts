@@ -79,6 +79,7 @@ export const persona: PersonaInput = {
   ],
   language: "zh-CN",
   avatarPath: "src/db/seed/catalog/personas/default",
+  characterReference: "character-reference/front.png",
   triggerWords: ["tomori", "rose"],
   lineageId: 4,
   namingConfig: { prefixes: {}, suffixes: {}, addressTerms: { masculine: "哥们", feminine: "姐妹", neutral: "朋友" } },

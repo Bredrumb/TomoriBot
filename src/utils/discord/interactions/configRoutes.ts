@@ -3101,6 +3101,10 @@ async function runPersonaWrite(
               },
             )}`;
           }
+          if (result.presetCharacterReferenceRemoved) {
+            avatarReceipt.detail += `
+${localizer(locale, "commands.config.panel.avatar_preset_character_reference_removed_detail")}`;
+          }
           return { receipt: avatarReceipt, telemetry: "server-config.workspace.persona-avatar.set" };
         }
         case "memory-critical":

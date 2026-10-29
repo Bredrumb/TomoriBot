@@ -817,6 +817,77 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
     }
   });
 
+  it("preset character references resolve live, freeze on fork, and clear on avatar change or re-point", async () => {
+    const presetLineageId = 900_003;
+    const presetName = "_rt_char_ref_pointer_preset";
+    const alterName = `_rt_char_ref_pointer_alter_${Date.now()}`;
+    const presetRef = (version: string) => `data/avatars/presets/${presetLineageId}/character-reference-${version}.png`;
+    let alterPersonaId: number | null = null;
+
+    const loadCharRef = async () => {
+      const personas = await personaRepository.loadAllForServer(FIXTURE_IDS.serverDiscId);
+      return personas.find((item) => item.persona_id === alterPersonaId)?.char_ref_url ?? null;
+    };
+    const setPresetRef = (version: string) => testSql`
+      UPDATE persona_presets SET preset_char_ref_shared_url = ${presetRef(version)}
+      WHERE persona_preset_name = ${presetName}
+    `;
+
+    try {
+      const [preset] = await testSql<TomoriPresetRow[]>`
+        INSERT INTO persona_presets (
+          persona_preset_name, persona_preset_desc, preset_lineage_id, preset_language, preset_char_ref_shared_url
+        )
+        VALUES (${presetName}, '_rt_char_ref_prompt', ${presetLineageId}, 'en-US', ${presetRef("v1")})
+        ON CONFLICT (persona_preset_name) DO UPDATE SET
+          preset_lineage_id = EXCLUDED.preset_lineage_id,
+          preset_char_ref_shared_url = EXCLUDED.preset_char_ref_shared_url
+        RETURNING *
+      `;
+      const alter = await personaRepository.createPresetPointerAlterPersona({
+        serverId: refs.serverId,
+        nickname: alterName,
+        preset,
+        personaLineageId: presetLineageId,
+      });
+      alterPersonaId = alter?.persona_id ?? null;
+      if (alterPersonaId === null) throw new Error("Expected pointer alter persona to exist.");
+      expect(await loadCharRef()).toBe(presetRef("v1"));
+
+      await setPresetRef("v2");
+      expect(await loadCharRef()).toBe(presetRef("v2"));
+
+      expect(await personaRepository.materializeIfPointer(alterPersonaId)).toBe(true);
+      await setPresetRef("v3");
+      expect(await loadCharRef()).toBe(presetRef("v2"));
+
+      expect(await personaRepository.clearPresetCharRef(alterPersonaId)).toBe(true);
+      expect(await loadCharRef()).toBeNull();
+
+      const ownRef = `data/charreferences/personas/${alterPersonaId}/own.png`;
+      expect(await personaRepository.setCharRef(alterPersonaId, ownRef)).toBe(true);
+      expect(await personaRepository.clearPresetCharRef(alterPersonaId)).toBe(false);
+      expect(await loadCharRef()).toBe(ownRef);
+
+      const [currentPreset] = await testSql<TomoriPresetRow[]>`
+        SELECT * FROM persona_presets WHERE persona_preset_name = ${presetName}
+      `;
+      await personaRepository.applyPresetPointerToPersona({
+        personaId: alterPersonaId,
+        nickname: alterName,
+        preset: currentPreset,
+      });
+      expect(await loadCharRef()).toBe(presetRef("v3"));
+    } finally {
+      if (alterPersonaId !== null) {
+        await testSql`DELETE FROM personas WHERE persona_id = ${alterPersonaId}`;
+      } else {
+        await testSql`DELETE FROM personas WHERE server_id = ${refs.serverId} AND persona_nickname = ${alterName}`;
+      }
+      await testSql`DELETE FROM persona_presets WHERE persona_preset_name = ${presetName}`;
+    }
+  });
+
   it("loadPersonaConfigRow returns the fixture persona_config row", async () => {
     const config = await personaRepository.loadPersonaConfig(refs.personaId);
     expect(config).not.toBeNull();

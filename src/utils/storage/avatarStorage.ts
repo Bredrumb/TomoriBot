@@ -158,6 +158,37 @@ function getNonProductionPublicBaseUrl(): string | null {
   return baseUrl && baseUrl.length > 0 ? baseUrl.replace(/\/+$/, "") : null;
 }
 
+/**
+ * Whether a URL lives in this deployment's avatar storage, so the path-only preset check cannot be
+ * satisfied by an imported URL on another host.
+ */
+export function isAvatarStorageUrl(url: string): boolean {
+  const config = getAvatarStorageConfig();
+  return config !== null && extractKeyFromAvatarUrl(config, url) !== null;
+}
+
+/**
+ * Loads shared preset art for a caller that skips per-owner checks, so the reference must really sit
+ * in this deployment's `presets/` storage: a remote URL on the avatar storage host, or a local path
+ * that still resolves under `data/avatars/presets/` after `..` segments.
+ */
+export async function loadSharedPresetAssetBuffer(reference: string): Promise<Buffer | null> {
+  const target = reference.trim();
+  if (!isSharedPresetAssetReference(target)) {
+    return null;
+  }
+  if (/^https?:\/\//i.test(target)) {
+    return isAvatarStorageUrl(target) ? await loadStoredPersonaAvatarBuffer(target) : null;
+  }
+
+  const resolvedPath = path.resolve(process.cwd(), normalizeStoredPath(target));
+  const relativePath = path.relative(path.join(LOCAL_AVATAR_BASE_DIR, SHARED_PRESET_SEGMENT), resolvedPath);
+  if (relativePath === "" || relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    return null;
+  }
+  return await loadStoredPersonaAvatarBuffer(target);
+}
+
 export function isLocalPersonaAvatarPath(reference?: string | null): boolean {
   if (!reference) {
     return false;
@@ -363,6 +394,16 @@ export function buildPresetAvatarFilename(contentHash: string): string {
 }
 
 /**
+ * Build the storage-relative key/path for a shared preset character reference.
+ *
+ * Language-free and content-addressed like {@link buildPresetAvatarRelativeKey}, so changed art gets
+ * a new URL that pointer personas pick up on the next seed.
+ */
+export function buildPresetCharacterReferenceRelativeKey(options: { lineageId: number; contentHash: string }): string {
+  return `${SHARED_PRESET_SEGMENT}/${options.lineageId}/character-reference-${options.contentHash}.png`;
+}
+
+/**
  * Build the storage-relative key/path for a shared preset avatar.
  *
  * Language-free for the same reason as {@link buildPresetSpriteRelativeKey}: the avatar art is
@@ -493,6 +534,21 @@ export async function uploadPresetAvatarToStorage(options: {
 }
 
 /**
+ * Uploads a shared preset character reference image to the immutable `presets/` storage prefix.
+ *
+ * @returns The stored reference (URL or local path), or null on failure
+ */
+export async function uploadPresetCharacterReferenceToStorage(options: {
+  lineageId: number;
+  contentHash: string;
+  buffer: Buffer;
+}): Promise<string | null> {
+  const relativeKey = buildPresetCharacterReferenceRelativeKey(options);
+  const logLabel = `preset character reference (lineage ${options.lineageId})`;
+  return await uploadSharedPresetObject(relativeKey, options.buffer, logLabel);
+}
+
+/**
  * Detects whether a stored reference points at a SHARED preset asset (under the
  * immutable `presets/` prefix). Such assets are referenced by many servers'
  * pointer personas, so per-persona delete paths must never remove them.
@@ -511,13 +567,13 @@ export function isSharedPresetAssetReference(reference?: string | null): boolean
     return true;
   }
 
-  // URL form: match the preset layout regardless of host/prefix. Sprites live in a `sprites/`
-  // subfolder, avatars as a top-level `avatar-{hash}.png`. The optional middle segment keeps the
-  // retired per-language layout protected until every environment re-seeds.
+  // The optional middle segment keeps the retired per-language preset layout protected until every environment re-seeds.
   if (/^https?:\/\//i.test(trimmed)) {
     try {
       const pathName = new URL(trimmed).pathname.replace(/^\/+/, "");
-      return new RegExp(`(^|/)${SHARED_PRESET_SEGMENT}/[^/]+/([^/]+/)?(sprites/|avatar-)`).test(pathName);
+      return new RegExp(`(^|/)${SHARED_PRESET_SEGMENT}/[^/]+/([^/]+/)?(sprites/|avatar-|character-reference-)`).test(
+        pathName,
+      );
     } catch {
       return false;
     }

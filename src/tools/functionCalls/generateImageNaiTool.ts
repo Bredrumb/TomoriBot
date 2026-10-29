@@ -25,7 +25,7 @@ import {
   sendToolProgressNotice,
 } from "@/utils/discord/toolProgressNotice";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
-import { sql } from "../../utils/db/client";
+import type { TomoriState } from "@/types/db/schema";
 import { decryptApiKey } from "../../utils/security/crypto";
 import { releaseImageQuota, reserveImageQuota, type ImageQuotaClaim } from "../../utils/quota/imageQuotaManager";
 import { QuotaUnavailableError } from "@/utils/quota/quotaErrors";
@@ -49,6 +49,7 @@ import {
   type NaiGenerationCharacterPayload,
 } from "@/utils/image/naiImageGeneration";
 import { loadCharRefAsBase64 } from "@/utils/storage/charrefStorage";
+import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { reportProviderFailure } from "@/utils/provider/providerErrorMetrics";
 import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
 import { CredentialUnavailableError, getResolvedCapabilityModelId } from "@/utils/provider/credentialResolver";
@@ -119,6 +120,29 @@ export async function loadUserNaiProfileByDiscordId(
   return {
     tags: user.physical_appearance_tags ?? [],
     refUrl: user.char_ref_url ?? null,
+  };
+}
+
+/**
+ * Reads a persona's tags and character reference from the assembled persona state, which resolves a preset
+ * pointer's shared reference that `persona_imagegen_configs` does not store.
+ */
+export async function loadPersonaNaiProfile(
+  guildId: string | undefined,
+  personaId: number,
+  loadPersonas: (guildId: string) => Promise<TomoriState[]> = getCachedAllPersonas,
+): Promise<NAIIdentityProfile | null> {
+  if (!guildId) {
+    return null;
+  }
+  const persona = (await loadPersonas(guildId)).find((entry) => entry.persona_id === personaId);
+  if (!persona) {
+    return null;
+  }
+
+  return {
+    tags: persona.physical_appearance_tags ?? [],
+    refUrl: persona.char_ref_url ?? null,
   };
 }
 
@@ -385,31 +409,6 @@ export class GenerateImageNaiTool extends BaseTool {
     return null;
   }
 
-  private async loadPersonaNaiProfile(serverId: number, personaId: number): Promise<NAIIdentityProfile | null> {
-    const rows = await sql<
-      Array<{
-        physical_appearance_tags: string[] | null;
-        char_ref_url: string | null;
-      }>
-    >`
-			SELECT physical_appearance_tags, char_ref_url
-			FROM personas
-			WHERE server_id = ${serverId}
-			  AND persona_id = ${personaId}
-			LIMIT 1
-		`;
-
-    const row = rows[0];
-    if (!row) {
-      return null;
-    }
-
-    return {
-      tags: row.physical_appearance_tags ?? [],
-      refUrl: row.char_ref_url,
-    };
-  }
-
   private validateCharacterArgs(characters: GenerateImageNaiCharacterArg[], context: ToolContext): string | null {
     for (const [index, character] of characters.entries()) {
       const hasId = typeof character.id === "string" && character.id.trim().length > 0;
@@ -488,7 +487,7 @@ export class GenerateImageNaiTool extends BaseTool {
         let foundProfile = false;
 
         if (personaId !== null) {
-          const personaProfile = await this.loadPersonaNaiProfile(context.tomoriState.server_id, personaId);
+          const personaProfile = await loadPersonaNaiProfile(context.guildId, personaId);
           foundProfile = personaProfile !== null;
           resolvedTags = personaProfile?.tags ?? [];
 

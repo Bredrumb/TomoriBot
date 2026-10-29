@@ -2,6 +2,7 @@ import { sql } from "@/utils/db/client";
 import { initializeDatabase, invalidatePresetPointerStateCaches } from "@/utils/db/initializeDatabase";
 import { seedPersonaSpritesFromCatalog } from "@/db/seed/catalog/presetSpriteSeed";
 import { seedPersonaAvatarsFromCatalog } from "@/db/seed/catalog/presetAvatarSeed";
+import { seedPersonaCharacterReferencesFromCatalog } from "@/db/seed/catalog/presetCharacterReferenceSeed";
 import { withPresetAssetLock } from "@/db/seed/catalog/presetAssetLock";
 import { log } from "@/utils/misc/logger";
 import { collectProcessMemorySnapshot } from "@/utils/misc/processMemory";
@@ -106,7 +107,7 @@ export function isDatabaseSchemaManagementEnabled(raw = process.env.DATABASE_SCH
   return ["true", "1", "yes", "on"].includes(raw.trim().toLowerCase());
 }
 
-type PresetArtPhase = "total" | "sprites" | "avatars" | "fanout";
+type PresetArtPhase = "total" | "sprites" | "avatars" | "characterReferences" | "fanout";
 type PresetArtPhaseStatus = "started" | "completed" | "failed";
 
 function recordPresetArtPhase(phase: PresetArtPhase, status: PresetArtPhaseStatus, durationMs?: number): void {
@@ -141,11 +142,14 @@ export async function measurePresetArtPhase<T>(phase: PresetArtPhase, action: ()
 /** Seeds catalog art after gateway readiness, when the bot has storage credentials. */
 export async function seedStorageBackedCatalogs(): Promise<void> {
   try {
-    const { spriteSeed, avatarSeed } = await measurePresetArtPhase("total", () =>
+    const { spriteSeed, avatarSeed, characterReferenceSeed } = await measurePresetArtPhase("total", () =>
       withPresetAssetLock(sql, async (client) => {
         const spriteSeed = await measurePresetArtPhase("sprites", () => seedPersonaSpritesFromCatalog(client));
         const avatarSeed = await measurePresetArtPhase("avatars", () => seedPersonaAvatarsFromCatalog(client));
-        return { spriteSeed, avatarSeed };
+        const characterReferenceSeed = await measurePresetArtPhase("characterReferences", () =>
+          seedPersonaCharacterReferencesFromCatalog(client),
+        );
+        return { spriteSeed, avatarSeed, characterReferenceSeed };
       }),
     );
     log.success(
@@ -155,6 +159,10 @@ export async function seedStorageBackedCatalogs(): Promise<void> {
     log.success(
       `PostgreSQL preset avatar catalog seeded (${avatarSeed.seeded}/${avatarSeed.declarations} declarations seeded, ` +
         `${avatarSeed.failed} failed)`,
+    );
+    log.success(
+      `PostgreSQL preset character reference catalog seeded (${characterReferenceSeed.seeded}/` +
+        `${characterReferenceSeed.declarations} declarations seeded, ${characterReferenceSeed.failed} failed)`,
     );
   } finally {
     await invalidatePresetPointerStateCaches(sql);

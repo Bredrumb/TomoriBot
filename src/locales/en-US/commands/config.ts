@@ -948,6 +948,8 @@ export default {
       avatar_cleared_detail: `Removed the avatar for {name}.`,
       avatar_preset_sprites_removed_detail:
         "Removed {count} default sprite(s) that would not match. Run `/persona default` to restore them.",
+      avatar_preset_character_reference_removed_detail:
+        "Removed the default character reference so generated images follow the new look. Upload your own or run `/persona default` to restore it.",
       avatar_busy_heading: `Busy Right Now`,
       avatar_busy_detail: `Memory is constrained. Please try again shortly.`,
       avatar_quota_heading: `Avatar Limit Reached`,

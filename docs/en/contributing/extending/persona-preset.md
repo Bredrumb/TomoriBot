@@ -38,6 +38,9 @@ covered in [Adding a Locale](/contributing/localization/new-locale/).
 
    `name` becomes the `sprite_key`, `file` is relative to `avatarPath`, `usageInstructions` is prompt
    guidance, and `isIdentity` renders the name as `sprite (Persona)`.
+   Optionally add a full-body character reference for reference-based image generation, in every
+   locale file: `characterReference: "character-reference/front.png"`. Keep it in a subfolder, because an
+   image directly in the folder could become the avatar; `bun run check-seed-catalogs` enforces this.
 4. Add the lineage's Natural Nudges defaults to `PRESET_NATURAL_NUDGE_DEFAULTS` in
    `src/db/seed/catalog/personas/naturalNudges.ts`, keyed by `preset_lineage_id`. Every language
    variant shares one entry, and the seeder fails without it. `idleNudges` takes one to a few
@@ -70,6 +73,8 @@ boot.
   `preset_avatar_hash`. Pointer alters resolve that URL live. A pointer main persona uses the bot's
   guild avatar, which `reconcilePresetMainAvatars` re-uploads per guild when
   `applied_avatar_hash != preset_avatar_hash`.
+- **Character references** upload once to `presets/`, recording `preset_char_ref_shared_url`.
+  Pointer personas resolve it live; a fork keeps it, and changing the avatar removes it.
 - The first local content edit, including changing the main avatar in `/config`, turns the pointer into an independent
   copy that keeps `persona_id` and `persona_lineage_id`. Memory writes do not. `/persona default`
   restores the pointer and discards local changes.

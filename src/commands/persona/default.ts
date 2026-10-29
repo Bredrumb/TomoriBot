@@ -20,6 +20,7 @@ import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilena
 import { getCachedPresetAvatar, getPresetAvatarBuffer } from "../../utils/image/avatarHelper";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { deletePersonaAvatarFromStorage, deletePersonaSpriteFromStorage } from "../../utils/storage/avatarStorage";
+import { deleteCharRef } from "@/utils/storage/charrefStorage";
 import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 import { orderPersonaPresetChoices } from "@/utils/persona/presetOrdering";
 import { localizedStatusTitle, statusNote } from "@/utils/discord/ui/statusTitle";
@@ -346,6 +347,7 @@ export async function applyPresetDefault(
       // applyPresetPointerToPersona clears webhook_avatar_url, so retain the current
       // server-owned image for deletion afterward. The guard skips shared presets/ images.
       const previousMainAvatarUrl = mainPersona.webhook_avatar_url ?? null;
+      const previousCharRefUrl = mainPersona.char_ref_url ?? null;
 
       // Turn the main persona into a live preset pointer (this also drops the
       //      persona's own sprite rows, so it resolves preset sprites live again).
@@ -397,6 +399,10 @@ export async function applyPresetDefault(
       // webhook_avatar_url. The guard skips shared presets/.
       if (previousMainAvatarUrl) {
         await deletePersonaAvatarFromStorage(previousMainAvatarUrl);
+      }
+      // The repoint also clears the character reference; the owner check skips shared preset art.
+      if (previousCharRefUrl) {
+        await deleteCharRef(previousCharRefUrl, "personas", targetPersonaId);
       }
 
       const isDM = !interaction.guild;

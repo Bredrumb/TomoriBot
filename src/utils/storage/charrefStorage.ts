@@ -4,6 +4,11 @@ import path from "node:path";
 import { log } from "@/utils/misc/logger";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
+import {
+  isAvatarStorageUrl,
+  isSharedPresetAssetReference,
+  loadSharedPresetAssetBuffer,
+} from "@/utils/storage/avatarStorage";
 
 export type CharRefEntityType = "personas" | "users";
 
@@ -196,6 +201,16 @@ export async function resolveCharRefDisplayAsset(
     return null;
   }
 
+  // A preset persona's reference lives in the shared presets/ avatar storage, outside every owner's
+  // character reference prefix, and is public art that any persona may show.
+  if (isSharedPresetAssetReference(target)) {
+    if (/^https?:\/\//i.test(target)) {
+      return isAvatarStorageUrl(target) ? { type: "url", url: target } : null;
+    }
+    const buffer = await loadSharedPresetAssetBuffer(target);
+    return buffer ? { type: "buffer", buffer } : null;
+  }
+
   if (/^https?:\/\//i.test(target)) {
     const config = dependencies.storageConfig === undefined ? getCharRefStorageConfig() : dependencies.storageConfig;
     if (!config) {
@@ -342,7 +357,7 @@ export async function deleteCharRef(
 
 /**
  * Loads a reference image for generation. Remote URLs go through the SSRF-gated downloader; a
- * local path must sit in the owner's own directory.
+ * local path must sit in the owner's own directory unless it is shared preset art.
  */
 export async function loadCharRefAsBase64(
   urlOrPath: string,
@@ -352,6 +367,10 @@ export async function loadCharRefAsBase64(
   const target = urlOrPath.trim();
   if (!target) {
     return null;
+  }
+
+  if (isSharedPresetAssetReference(target)) {
+    return (await loadSharedPresetAssetBuffer(target))?.toString("base64") ?? null;
   }
 
   if (/^https?:\/\//i.test(target)) {

@@ -94,6 +94,15 @@ function validatePresetSprites(): string[] {
   return errors;
 }
 
+/** A reference beside the avatar would be picked up as the avatar, because the avatar seed takes the first image in `avatarPath`. */
+function validatePresetCharacterReferences(): string[] {
+  return personaSections.flatMap((section) =>
+    section.rows
+      .filter((persona) => persona.characterReference !== undefined && !persona.characterReference.includes("/"))
+      .map((persona) => `persona_presets/${persona.name}: characterReference must sit in a subfolder of avatarPath`),
+  );
+}
+
 // CI defers drift review to its last step so a drift PR still runs lifecycle and tests first.
 const deferDriftReview = process.argv.includes("--defer-drift-review");
 
@@ -102,6 +111,7 @@ const violations = [
   ...(deferDriftReview ? [] : validateModelDriftReview()),
   ...validatePersonas(),
   ...validatePresetSprites(),
+  ...validatePresetCharacterReferences(),
   ...validateSystemPrompts(),
   ...validateNaiPresets(),
   ...validateStartupSeedOrder(),

@@ -37,7 +37,8 @@ of me hugging you," TomoriBot can use your saved appearance and the persona's ap
 both of you in the image.
 
 - `/config` > `Persona` > `Image Generation Details`: the persona's appearance tags and character
-  reference image.
+  reference image. Default Tomori characters come with one. Giving the persona a new avatar
+  removes it, so upload your own reference for the new look.
 - `/personal config`: your appearance tags and character reference image. TomoriBot skips your
   reference image when your privacy level is Full. See
   [Personalization](/features/knowledge/personalization/).

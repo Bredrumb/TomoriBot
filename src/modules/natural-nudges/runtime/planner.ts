@@ -198,7 +198,7 @@ function buildSystemPrompt(input: PlannerInput): string {
       `- opener_direction tells ${name} what to say in one or two sentences. Do not write the message itself.`,
       "- A conversational opening can be a specific thought, observation, or action that leaves room for a reply. Do not default to a question; use one when it suits the brief and character.",
       "- Pick a concrete angle grounded in the character or available context. If the opening asks a question, avoid stacking questions or repeating the invitation to answer.",
-      `- agenda is one small conversational goal ${name} keeps pursuing in later replies. An agenda never seeks personal data, money, or any action outside the chat.`,
+      `- agenda is one small personal intention that guides ${name}'s later replies. It may be something ${name} wants to express, enjoy, share, or do, or something ${name} hopes to learn or invite. It does not need to make anyone respond or take action. Choose an intention that fits the nudge's brief and ${name}'s character. An agenda never seeks personal data, money, or any action outside the chat.`,
       hasScenes
         ? `- For a Play Scene nudge, script lists who speaks, in order, by character number: ${PLAY_SCENE_MIN_TURNS}-${PLAY_SCENE_MAX_TURNS} turns, starting with 1, never the same character twice in a row, and every character at least once. Use only that nudge's partners.`
         : "",

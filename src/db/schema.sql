@@ -777,6 +777,9 @@ SELECT add_column_if_not_exists('persona_presets', 'preset_attribute_public_flag
 -- avatar and a content-hash version token, populated by the avatar seed step.
 SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_shared_url', 'TEXT');
 SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_hash', 'TEXT');
+-- Shared storage URL of the official character reference image, seeded like the avatar and
+-- live-resolved by pointer personas for reference-based image generation.
+SELECT add_column_if_not_exists('persona_presets', 'preset_char_ref_shared_url', 'TEXT');
 SELECT add_column_if_not_exists('persona_presets', 'preset_naming_config', 'JSONB', '''{"prefixes":{},"suffixes":{},"addressTerms":{}}''::JSONB', 'NOT NULL');
 -- is_nsfw (migration 094): hides the preset from `/persona default`; only `/nsfw persona default` lists it.
 SELECT add_column_if_not_exists('persona_presets', 'is_nsfw', 'BOOLEAN', 'false', 'NOT NULL');

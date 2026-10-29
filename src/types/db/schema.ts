@@ -1214,6 +1214,7 @@ const tomoriPresetSchema = z.object({
   // content-addressed version token used to gate the main-avatar fan-out.
   preset_avatar_shared_url: z.string().nullable().optional(),
   preset_avatar_hash: z.string().nullable().optional(),
+  preset_char_ref_shared_url: z.string().nullable().optional(),
   preset_trigger_words: z.array(z.string()).default([]),
   preset_naming_config: z.preprocess((value) => {
     if (typeof value !== "string") return value;

@@ -86,6 +86,8 @@ type ImageReference = {
   sourceType?: "message" | "avatar";
 };
 
+type ReferenceEntry = { kind: "message"; messageId: string } | { kind: "identity"; name: string };
+
 type IdentityCharacterReferenceDependencies = {
   loadPersonas: (guildId: string) => Promise<Array<Pick<TomoriState, "persona_id" | "char_ref_url">>>;
   loadUser: (userDiscId: string) => Promise<Pick<UserRow, "char_ref_url" | "privacy_level"> | null>;
@@ -99,7 +101,7 @@ const DEFAULT_IDENTITY_CHARACTER_REFERENCE_DEPENDENCIES: IdentityCharacterRefere
 };
 
 /**
- * Loads the saved character reference for a resolved `target_identity`, or null when the caller
+ * Loads the saved character reference for a user or persona name in `references`, or null when the caller
  * should send the avatar instead. A Full-privacy user's upload never enters someone else's
  * generation, so they fall back to their public avatar.
  */
@@ -125,8 +127,9 @@ export async function loadIdentityCharacterReference(
   return null;
 }
 
-const IMAGE_TO_IMAGE_PARAMETER_NAMES = ["media_id", "target_identity", "denoise"] as const;
+const IMAGE_TO_IMAGE_PARAMETER_NAMES = ["references", "denoise"] as const;
 const INPAINT_PARAMETER_NAMES = [
+  "media_id",
   "inpaint",
   "mask_prompt",
   "clothing_segment_categories",
@@ -156,7 +159,7 @@ const OUTPAINT_PARAMETER_NAMES = [
 function getSupportedImageModeLabels(capabilities: ImageToolCapabilities): string[] {
   const labels = [];
   if (capabilities.textToImage) labels.push("text-to-image");
-  if (capabilities.imageToImage) labels.push("image-to-image");
+  if (capabilities.imageToImage) labels.push("reference images");
   if (capabilities.inpaint) labels.push("inpainting");
   if (capabilities.outpaint) labels.push("outpainting");
   return labels;
@@ -193,8 +196,10 @@ function formatModeList(modes: string[]): string {
  * @returns Capability-trimmed prompt description
  */
 function buildImagePromptDescription(capabilities: ImageToolCapabilities): string {
-  let description =
-    "Describe the desired image. Include relevant Physical Appearance context for known users/personas.";
+  let description = "Describe the desired image.";
+  description += capabilities.imageToImage
+    ? " For known users/personas, add them to references and describe only the scene, pose, and expression; their reference carries their look, so skip their name and outfit unless the outfit changes. With two characters, say in a few words who is on the left and who is on the right."
+    : " Include relevant Physical Appearance context for known users/personas.";
   // Only mention inpaint guidance when the backend can inpaint
   if (capabilities.inpaint) {
     description += " For inpaint, describe only the local replacement.";
@@ -207,18 +212,15 @@ function buildImagePromptDescription(capabilities: ImageToolCapabilities): strin
 }
 
 /**
- * Build the `media_id` description, listing only the reference-consuming modes
- * the active backend supports (img2img, inpaint, outpaint).
+ * Build the `media_id` description, naming only the edit modes the active backend supports.
  * @param capabilities - Resolved backend capabilities
  * @returns Capability-trimmed media_id description
  */
 function buildImageMediaIdDescription(capabilities: ImageToolCapabilities): string {
-  const referenceModes: string[] = [];
-  if (capabilities.imageToImage) referenceModes.push("img2img");
-  if (capabilities.inpaint) referenceModes.push("inpaint");
-  if (capabilities.outpaint) referenceModes.push("outpaint");
-  const modeList = formatModeList(referenceModes);
-  return modeList ? `Reference media ID such as media_1. Use for ${modeList}.` : "Reference media ID such as media_1.";
+  const editModes: string[] = [];
+  if (capabilities.inpaint) editModes.push("inpaint");
+  if (capabilities.outpaint) editModes.push("outpaint");
+  return `Media ID such as media_1 of the image to ${formatModeList(editModes)}.`;
 }
 
 /**
@@ -340,7 +342,7 @@ export class GenerateImageTool extends BaseTool {
       },
       media_id: {
         type: "string",
-        description: "Reference media ID such as media_1. Use for img2img, inpaint, or outpaint.",
+        description: "Media ID such as media_1 of the image to inpaint or outpaint.",
       },
       inpaint: {
         type: "boolean",
@@ -413,8 +415,7 @@ export class GenerateImageTool extends BaseTool {
       },
       outpaint: {
         type: "boolean",
-        description:
-          "Set true to expand the canvas. Requires media_id or target_identity. Do not also set inpaint=true.",
+        description: "Set true to expand the canvas. Requires media_id or references. Do not also set inpaint=true.",
       },
       outpaint_strategy: {
         type: "string",
@@ -460,10 +461,10 @@ export class GenerateImageTool extends BaseTool {
         type: "number",
         description: "Optional zoom-out source scale from 0.5 to 0.95.",
       },
-      target_identity: {
+      references: {
         type: "array",
         description:
-          "One or more user/persona identities to use as visual references (e.g. ['Aphel', 'Miku']). Each name is resolved to that user's or persona's saved character reference image, or to their avatar when none is saved.",
+          "Who or what to draw from, in left-to-right order: user/persona names and message image media IDs, e.g. ['Mirri', 'media_1']. A name uses their saved character reference, or their avatar when none is saved.",
         items: {
           type: "string",
         },
@@ -682,43 +683,48 @@ export class GenerateImageTool extends BaseTool {
   }
 
   /**
-   * Normalize the `target_identity` argument into an ordered, de-duplicated list
-   * of identity strings. Accepts the new string-array form, a single string
-   * (legacy/lenient models), and the deprecated `user_id` alias.
-   * @param args - Raw tool arguments
-   * @returns Trimmed, case-insensitively de-duplicated identity names
+   * Normalize the `references` argument into ordered, de-duplicated message and identity entries.
+   * Accepts a single string from lenient models, and the older `target_identity` and `user_id`
+   * names that earlier tool calls in the conversation history may still use.
+   * @returns Entries in the model's order, or the first media ID that matches no known message
    */
-  private parseTargetIdentities(args: Record<string, unknown>): string[] {
-    const raw = args.target_identity ?? args.user_id;
-    const collected: string[] = [];
+  private parseReferences(
+    args: Record<string, unknown>,
+    context: ToolContext,
+  ): { entries: ReferenceEntry[]; unknownMediaId: string | null } {
+    const raw = args.references ?? args.target_identity ?? args.user_id;
+    const collected = Array.isArray(raw)
+      ? raw.filter((entry): entry is string => typeof entry === "string")
+      : typeof raw === "string"
+        ? [raw]
+        : [];
 
-    if (Array.isArray(raw)) {
-      for (const entry of raw) {
-        if (typeof entry === "string") {
-          collected.push(entry);
-        }
-      }
-    } else if (typeof raw === "string") {
-      collected.push(raw);
-    }
-
-    // Trim, drop empties, and de-duplicate while preserving first-seen order
     const seen = new Set<string>();
-    const identities: string[] = [];
+    const entries: ReferenceEntry[] = [];
     for (const candidate of collected) {
       const trimmed = candidate.trim();
       if (!trimmed) {
         continue;
       }
-      const key = trimmed.toLowerCase();
-      if (seen.has(key)) {
+      if (MessageIdMap.isOpaqueKey(trimmed)) {
+        const messageId = this.resolveMediaId(trimmed, context);
+        if (!messageId) {
+          return { entries, unknownMediaId: trimmed };
+        }
+        if (!seen.has(messageId)) {
+          seen.add(messageId);
+          entries.push({ kind: "message", messageId });
+        }
         continue;
       }
-      seen.add(key);
-      identities.push(trimmed);
+      const key = trimmed.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        entries.push({ kind: "identity", name: trimmed });
+      }
     }
 
-    return identities;
+    return { entries, unknownMediaId: null };
   }
 
   private resolveMediaId(rawMediaId: string | undefined, context: ToolContext): string | undefined {
@@ -865,11 +871,11 @@ export class GenerateImageTool extends BaseTool {
 
     const prompt = args.prompt as string;
     const rawMediaId = args.media_id as string | undefined;
-    const messageId = this.resolveMediaId(rawMediaId, context);
-    const targetIdentities = this.parseTargetIdentities(args);
+    const editMessageId = this.resolveMediaId(rawMediaId, context);
+    const { entries: references, unknownMediaId } = this.parseReferences(args, context);
     const requestedAspectRatio = typeof args.aspect_ratio === "string" ? args.aspect_ratio : null;
     let aspectRatio = requestedAspectRatio || "1:1";
-    const usesReferences = !!(messageId || targetIdentities.length > 0);
+    const usesReferences = !!editMessageId || references.length > 0;
     const inpaint = this.shouldUseInpaint(args);
     const outpaint = this.shouldUseOutpaint(args);
     const explicitInpaint = this.isExplicitInpaintTrue(args);
@@ -913,16 +919,28 @@ export class GenerateImageTool extends BaseTool {
       context.tomoriState.config.image_default_negative_tags,
     );
 
-    if (rawMediaId && !messageId) {
+    if (rawMediaId && !editMessageId) {
       return {
         success: false,
         error: `Unknown media_id: "${rawMediaId}".`,
       };
     }
+    if (unknownMediaId) {
+      return {
+        success: false,
+        error: `Unknown media ID in references: "${unknownMediaId}".`,
+      };
+    }
     if (inpaint && !usesReferences) {
       return {
         success: false,
-        error: "Inpaint requires media_id or target_identity.",
+        error: "Inpaint requires media_id or references.",
+      };
+    }
+    if (inpaint && !editMessageId && references.length > 1) {
+      return {
+        success: false,
+        error: "Inpaint and outpaint edit one image: pass media_id, or a single entry in references.",
       };
     }
     if (outpaint && explicitInpaint) {
@@ -1036,72 +1054,70 @@ export class GenerateImageTool extends BaseTool {
       // successfully fetched. Used to surface referenced users in the notice/embed.
       const avatarReferences: Array<{ avatar: ResolvedAvatarData; usedCharacterReference: boolean }> = [];
 
-      if (messageId) {
-        log.info(`Extracting images from message ${messageId} for image-to-image generation`);
-        const messageImages = await extractImagesFromMessage(messageId, context);
-        referenceImages.push(...messageImages.map((image) => ({ ...image, sourceType: "message" as const })));
-        log.info(`Using ${messageImages.length} reference image(s) from message ${messageId} for generation`);
+      // Inpainting a media_id image skips other references, so that image alone defines the layout being edited.
+      const referenceSources: ReferenceEntry[] = [
+        ...(editMessageId ? [{ kind: "message" as const, messageId: editMessageId }] : []),
+        ...(inpaint && editMessageId
+          ? []
+          : references.filter((entry) => !(entry.kind === "message" && entry.messageId === editMessageId))),
+      ];
+      const referencedMessageIds: string[] = [];
+      const failedIdentities: string[] = [];
+
+      for (const source of referenceSources) {
+        if (source.kind === "message") {
+          const messageImages = await extractImagesFromMessage(source.messageId, context);
+          referenceImages.push(...messageImages.map((image) => ({ ...image, sourceType: "message" as const })));
+          referencedMessageIds.push(source.messageId);
+          log.info(`Using ${messageImages.length} reference image(s) from message ${source.messageId} for generation`);
+          continue;
+        }
+
+        const identity = source.name;
+        try {
+          const avatarData = await resolveAvatarByIdentity(identity, context, {
+            forceStatic: true,
+          });
+          const characterReferenceBase64 = await loadIdentityCharacterReference(avatarData, context.guildId).catch(
+            (error) => {
+              log.warn(`Failed to load character reference for identity ${identity}; using avatar instead`, error);
+              return null;
+            },
+          );
+          referenceImages.push({
+            mimeType: "image/png",
+            data:
+              characterReferenceBase64 ??
+              (await this.fetchAndConvertImageToBase64(avatarData.avatarUrl, context.abortSignal)),
+            sourceType: "avatar",
+          });
+          avatarReferences.push({ avatar: avatarData, usedCharacterReference: characterReferenceBase64 !== null });
+          const avatarTypeLabel =
+            avatarData.sourceType === "persona" ? "persona" : avatarData.sourceType === "webhook" ? "webhook" : "user";
+          log.info(
+            `Added ${characterReferenceBase64 ? "character reference" : "profile picture reference"} for ${avatarTypeLabel} ${avatarData.username} (${identity})`,
+          );
+        } catch (avatarErr) {
+          log.error(`Failed to fetch profile picture for identity ${identity}`, avatarErr as Error);
+          failedIdentities.push(identity);
+        }
       }
 
-      // Skip avatar references during inpaint when a message image is the edit source, so
-      // the source image already defines the layout being edited.
-      const allowAvatarReference = targetIdentities.length > 0 && !(inpaint && !!messageId);
-
-      if (allowAvatarReference) {
-        const failedIdentities: string[] = [];
-
-        // Resolve each requested identity to an avatar, normalizing gif → png at
-        //    the URL level via forceStatic (same behavior as peek_profile_picture).
-        for (const identity of targetIdentities) {
-          try {
-            const avatarData = await resolveAvatarByIdentity(identity, context, {
-              forceStatic: true,
-            });
-            const characterReferenceBase64 = await loadIdentityCharacterReference(avatarData, context.guildId).catch(
-              (error) => {
-                log.warn(`Failed to load character reference for identity ${identity}; using avatar instead`, error);
-                return null;
-              },
-            );
-            referenceImages.push({
-              mimeType: "image/png",
-              data:
-                characterReferenceBase64 ??
-                (await this.fetchAndConvertImageToBase64(avatarData.avatarUrl, context.abortSignal)),
-              sourceType: "avatar",
-            });
-            avatarReferences.push({ avatar: avatarData, usedCharacterReference: characterReferenceBase64 !== null });
-            const avatarTypeLabel =
-              avatarData.sourceType === "persona"
-                ? "persona"
-                : avatarData.sourceType === "webhook"
-                  ? "webhook"
-                  : "user";
-            log.info(
-              `Added ${characterReferenceBase64 ? "character reference" : "profile picture reference"} for ${avatarTypeLabel} ${avatarData.username} (${identity})`,
-            );
-          } catch (avatarErr) {
-            log.error(`Failed to fetch profile picture for identity ${identity}`, avatarErr as Error);
-            failedIdentities.push(identity);
-          }
+      // Only fail outright when every reference source came up empty; otherwise
+      // continue with whatever references resolved.
+      if (failedIdentities.length > 0) {
+        if (referenceImages.length === 0) {
+          return {
+            success: false,
+            error: "Failed to fetch profile picture for references",
+            message: `Could not fetch an avatar for: ${failedIdentities.join(", ")}. Please confirm the name(s) or persona(s) and try again.`,
+          };
         }
-
-        // Only fail outright when every reference source came up empty; otherwise
-        //    continue with whatever references (message images / other avatars) resolved.
-        if (failedIdentities.length > 0) {
-          if (referenceImages.length === 0) {
-            return {
-              success: false,
-              error: "Failed to fetch profile picture for target_identity",
-              message: `Could not fetch an avatar for: ${failedIdentities.join(", ")}. Please confirm the name(s) or persona(s) and try again.`,
-            };
-          }
-          log.warn(
-            `Continuing image generation without target_identit${failedIdentities.length > 1 ? "ies" : "y"} ${failedIdentities
-              .map((identity) => `"${identity}"`)
-              .join(", ")} because other reference image(s) are available`,
-          );
-        }
+        log.warn(
+          `Continuing image generation without reference${failedIdentities.length > 1 ? "s" : ""} ${failedIdentities
+            .map((identity) => `"${identity}"`)
+            .join(", ")} because other reference image(s) are available`,
+        );
       }
 
       const normalizedReferenceImages = await this.normalizeReferenceImages(referenceImages, {
@@ -1122,8 +1138,8 @@ export class GenerateImageTool extends BaseTool {
         }
       }
 
-      // Avatars are appended after message references and normalized in order, so the
-      // avatars that survived the count/byte caps are a prefix of the resolved list.
+      // References are normalized in request order, so the avatars that survived the
+      // count/byte caps are a prefix of the resolved avatar list.
       const survivingAvatarCount = referenceImages.filter((reference) => reference.sourceType === "avatar").length;
       const usedAvatarReferences = avatarReferences.slice(0, survivingAvatarCount);
       const referencedIdentityNames = usedAvatarReferences.map((reference) => reference.avatar.username);
@@ -1141,7 +1157,8 @@ export class GenerateImageTool extends BaseTool {
           ? "tools.image.generating_with_references_description"
           : "tools.image.generating_description",
       );
-      const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
+      const referencedMessageUrl =
+        referencedMessageIds.length === 1 ? buildReferencedMessageUrl(context, referencedMessageIds[0]) : null;
       const messageReferenceCount = referenceImages.filter((reference) => reference.sourceType === "message").length;
       const extraNoticeLines: string[] = [];
       const imageModeKey = outpaint

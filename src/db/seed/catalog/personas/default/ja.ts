@@ -79,6 +79,7 @@ export const persona: PersonaInput = {
   ],
   language: "ja",
   avatarPath: "src/db/seed/catalog/personas/default",
+  characterReference: "character-reference/front.png",
   triggerWords: ["ともり", "ロゼ", "トモリ", "ろせ"],
   lineageId: 4,
   namingConfig: { prefixes: {}, suffixes: {}, addressTerms: {} },

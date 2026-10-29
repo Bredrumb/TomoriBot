@@ -134,3 +134,41 @@ describe("character-reference generation loader", () => {
     expect(existsSync(join(ownerDir, "replaced.png"))).toBe(false);
   });
 });
+
+describe("shared preset character references", () => {
+  const presetDir = join(process.cwd(), "data", "avatars", "presets", "900000003");
+  const presetRef = "data/avatars/presets/900000003/character-reference-fixture.png";
+
+  afterAll(() => {
+    rmSync(presetDir, { recursive: true, force: true });
+  });
+
+  it("loads for any persona and is never deleted by a persona's cleanup", async () => {
+    mkdirSync(presetDir, { recursive: true });
+    writeFileSync(join(presetDir, "character-reference-fixture.png"), "preset");
+
+    expect(Buffer.from((await loadCharRefAsBase64(presetRef, "personas", 55)) ?? "", "base64").toString()).toBe(
+      "preset",
+    );
+    expect(await resolveCharRefDisplayAsset(presetRef, 56)).toEqual({ type: "buffer", buffer: Buffer.from("preset") });
+    expect(await deleteCharRef(presetRef, "personas", 55)).toBe(false);
+    expect(existsSync(join(presetDir, "character-reference-fixture.png"))).toBe(true);
+  });
+
+  it("refuses preset-shaped references that resolve outside this deployment's presets storage", async () => {
+    const serverDir = join(process.cwd(), "data", "avatars", "servers", "900000003");
+    mkdirSync(serverDir, { recursive: true });
+    writeFileSync(join(serverDir, "avatar.png"), "private");
+    try {
+      for (const reference of [
+        "https://elsewhere.example.invalid/presets/900000003/character-reference-fixture.png",
+        "data/avatars/presets/../servers/900000003/avatar.png",
+      ]) {
+        expect(await resolveCharRefDisplayAsset(reference, 55)).toBeNull();
+        expect(await loadCharRefAsBase64(reference, "personas", 55)).toBeNull();
+      }
+    } finally {
+      rmSync(serverDir, { recursive: true, force: true });
+    }
+  });
+});

@@ -51,6 +51,7 @@ import { naturalNudgeRepository } from "@/modules/natural-nudges/db/repositories
 import { type MemoryValidationResult, getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { getUnconfiguredLlm } from "@/utils/provider/unconfiguredLlm";
 import { log } from "@/utils/misc/logger";
+import { isSharedPresetAssetReference } from "@/utils/storage/avatarStorage";
 import { getAllBaseTriggerWords, getBaseTriggerWords } from "@/utils/text/localizer";
 import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 import type { IRepository } from "./IRepository";
@@ -817,6 +818,25 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
+  /**
+   * Clears the persona's character reference only when it is still the shared preset image.
+   * @returns Whether a preset reference was cleared
+   */
+  async clearPresetCharRef(personaId: number): Promise<boolean> {
+    const [row] = await sql<Array<{ char_ref_url: string | null }>>`
+      SELECT char_ref_url FROM persona_imagegen_configs WHERE persona_id = ${personaId}
+    `;
+    if (!isSharedPresetAssetReference(row?.char_ref_url)) {
+      return false;
+    }
+    const cleared = await sql`
+      UPDATE persona_imagegen_configs SET char_ref_url = NULL, updated_at = NOW()
+      WHERE persona_id = ${personaId} AND char_ref_url = ${row?.char_ref_url ?? null}
+      RETURNING persona_id
+    `;
+    return cleared.length > 0;
+  }
+
   async addSampleDialoguePair(personaId: number, inputs: string[], outputs: string[]): Promise<boolean> {
     if (inputs.length !== outputs.length) {
       log.error(`addSampleDialoguePair input/output length mismatch for persona ${personaId}`);
@@ -1246,6 +1266,11 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         // the official preset sprite set live again. Server-owned sprite IMAGES
         // are cleaned up by the caller (the shared preset images are immutable).
         await tx`DELETE FROM persona_sprites WHERE persona_id = ${params.personaId}`;
+        // Same for the character reference; the caller deletes a server-owned image.
+        await tx`
+          UPDATE persona_imagegen_configs SET char_ref_url = NULL, updated_at = NOW()
+          WHERE persona_id = ${params.personaId}
+        `;
         await naturalNudgeRepository.clearPersonaConfig(tx, params.personaId);
 
         return updatedRow;
@@ -2249,6 +2274,17 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
           AND webhook_avatar_url IS NULL
       `;
     }
+    // The character reference freezes by reference like the sprites; an avatar change later drops it.
+    if (preset.preset_char_ref_shared_url) {
+      await client`
+        INSERT INTO persona_imagegen_configs (persona_id, char_ref_url)
+        VALUES (${personaId}, ${preset.preset_char_ref_shared_url})
+        ON CONFLICT (persona_id) DO UPDATE SET
+          char_ref_url = EXCLUDED.char_ref_url,
+          updated_at = NOW()
+        WHERE persona_imagegen_configs.char_ref_url IS NULL
+      `;
+    }
 
     return true;
   }
@@ -2755,6 +2791,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         ...tomoriData,
         // Pointer alters live-resolve the shared preset avatar (see helper).
         webhook_avatar_url: this.resolvePointerAlterAvatarUrl(tomoriData, pointerPreset),
+        char_ref_url: tomoriData.char_ref_url ?? pointerPreset?.preset_char_ref_shared_url ?? null,
         attribute_list: attributeList,
         sample_dialogues_in: sampleDialoguesIn,
         sample_dialogues_out: sampleDialoguesOut,
@@ -3128,6 +3165,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
             ...tomoriRow,
             // Pointer alters live-resolve the shared preset avatar (see helper).
             webhook_avatar_url: this.resolvePointerAlterAvatarUrl(tomoriRow, pointerPreset),
+            char_ref_url: tomoriRow.char_ref_url ?? pointerPreset?.preset_char_ref_shared_url ?? null,
             attribute_list: attributeList,
             sample_dialogues_in: sampleDialoguesIn,
             sample_dialogues_out: sampleDialoguesOut,
