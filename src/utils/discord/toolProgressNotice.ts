@@ -311,9 +311,13 @@ export async function sendToolNotice(
   options: StandardEmbedOptions,
   logLabel: string,
 ): Promise<void> {
-  if (context.suppressProgressNotices || context.progressNoticeState?.attempted) return;
+  if (context.progressNoticeState?.attempted) return;
   if (context.progressNoticeState) context.progressNoticeState.attempted = true;
   try {
+    if (context.suppressProgressNotices) {
+      if (context.mirrorSuppressedProgressNotices) await routeToolNoticeToThoughtLog(context, options, logLabel);
+      return;
+    }
     const { config } = context.tomoriState;
     const isVisible = isToolNoticeVisible(config, noticeKey);
     const isMinimal = isVisible && isMinimalNotice(config, noticeKey);
@@ -338,8 +342,6 @@ export async function routeHiddenToolNotice(
   options: StandardEmbedOptions,
   logLabel: string,
 ): Promise<boolean> {
-  if (context.suppressProgressNotices) return false;
-
   try {
     return await routeToolNoticeToThoughtLog(context, options, logLabel);
   } catch (error) {

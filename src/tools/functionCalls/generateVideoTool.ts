@@ -380,41 +380,39 @@ export class GenerateVideoTool extends BaseTool {
       failureProvider = executionProvider;
 
       // Send progress notice, so video generation takes 1-3 minutes
-      if (!context.suppressProgressNotices) {
-        const baseNoticeDescription = localizer(
-          context.locale,
-          usesReference ? "tools.video.generating_with_references_description" : "tools.video.generating_description",
-        );
-        const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
-        const extraNoticeLines = usesReference
-          ? [
-              referencedMessageUrl
-                ? localizer(context.locale, "tools.video.notice_reference_line", {
-                    message_url: referencedMessageUrl,
-                  })
-                : localizer(context.locale, "tools.video.notice_reference_count_line", {
-                    count: "1",
-                  }),
-            ]
-          : [];
-        await sendToolProgressNotice(
-          context,
-          "video_generation",
-          {
-            titleKey: "tools.video.generating_title",
-            description: buildVideoToolNoticeDescription(
-              context.locale,
-              baseNoticeDescription,
-              displayModelName,
-              prompt,
-              localizer(context.locale, "tools.video.generating_footer"),
-              extraNoticeLines,
-            ),
-            color: ColorCode.INFO,
-          },
-          "GenerateVideoTool",
-        );
-      }
+      const baseNoticeDescription = localizer(
+        context.locale,
+        usesReference ? "tools.video.generating_with_references_description" : "tools.video.generating_description",
+      );
+      const referencedMessageUrl = messageId ? buildReferencedMessageUrl(context, messageId) : null;
+      const extraNoticeLines = usesReference
+        ? [
+            referencedMessageUrl
+              ? localizer(context.locale, "tools.video.notice_reference_line", {
+                  message_url: referencedMessageUrl,
+                })
+              : localizer(context.locale, "tools.video.notice_reference_count_line", {
+                  count: "1",
+                }),
+          ]
+        : [];
+      await sendToolProgressNotice(
+        context,
+        "video_generation",
+        {
+          titleKey: "tools.video.generating_title",
+          description: buildVideoToolNoticeDescription(
+            context.locale,
+            baseNoticeDescription,
+            displayModelName,
+            prompt,
+            localizer(context.locale, "tools.video.generating_footer"),
+            extraNoticeLines,
+          ),
+          color: ColorCode.INFO,
+        },
+        "GenerateVideoTool",
+      );
 
       let referenceImages: Array<{ mimeType: string; data: string; url?: string; fallbackUrl?: string }> | undefined;
 

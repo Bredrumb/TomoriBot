@@ -94,7 +94,9 @@ Tool execution coordinates several turn-level side effects:
   for non-DM channels.
 - **Diagnostic notices:** Failed tool calls emit a hidden thought-log notice containing redacted
   arguments unless their Discord delivery is unconfirmed. When deliberate tool mode admitted a tool via a trigger match, the stage emits a hidden
-  notice recording the matched trigger pattern.
+  notice recording the matched trigger pattern. On a turn that keeps its conversation quiet (a nudge,
+  a reminder, or a random trigger), progress notices skip the conversation and post their full card
+  to the thought log instead. Hidden image planning and persona generation suppress progress notices.
 - **One-shot memory guard:** A successful `update_short_term_memory` call sets
   `streamingContext.disableShortTermMemoryUpdate = true`, blocking subsequent memory updates within the
   same turn.

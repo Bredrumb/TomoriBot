@@ -84,8 +84,9 @@ function buildThoughtLogEmbeds(args: {
       })
     : getProviderDisplayName(tomoriState.llm.llm_provider);
   const model = getLlmDisplayName(tomoriState.llm, tomoriState.config.custom_model_name);
-  const hasThinkingContent = Boolean(
-    normalizeThoughtLogText(thoughtLog.summary) || normalizeThoughtLogText(thoughtLog.raw),
+  const reasoning = thoughtLog.iterations ?? [thoughtLog];
+  const hasThinkingContent = reasoning.some(
+    (iteration) => normalizeThoughtLogText(iteration.summary) || normalizeThoughtLogText(iteration.raw),
   );
   const generationTime = hasThinkingContent ? formatGenerationDuration(thoughtLog.generationDurationMs) : undefined;
   const footerText = generationTime
@@ -100,17 +101,18 @@ function buildThoughtLogEmbeds(args: {
       });
 
   const sections = [
-    {
-      label: localizer(locale, "genai.thought_log.summary_field"),
-      content: normalizeThoughtLogText(thoughtLog.summary),
-      /** Whether to wrap the content in a code block */
-      codeBlock: false,
-    },
-    {
-      label: localizer(locale, "genai.thought_log.raw_field"),
-      content: normalizeThoughtLogText(thoughtLog.raw),
-      codeBlock: false,
-    },
+    ...reasoning.flatMap((iteration, index) => [
+      {
+        label: `${localizer(locale, "genai.thought_log.summary_field")}${reasoning.length > 1 ? ` (${index + 1})` : ""}`,
+        content: normalizeThoughtLogText(iteration.summary),
+        codeBlock: false,
+      },
+      {
+        label: `${localizer(locale, "genai.thought_log.raw_field")}${reasoning.length > 1 ? ` (${index + 1})` : ""}`,
+        content: normalizeThoughtLogText(iteration.raw),
+        codeBlock: false,
+      },
+    ]),
     {
       label: localizer(locale, "genai.thought_log.fetched_content_field"),
       content: normalizeThoughtLogText(thoughtLog.fetchedContent),
@@ -191,6 +193,9 @@ export function hasThoughtLogContent(payload?: ThoughtLogPayload | null): boolea
   return Boolean(
     normalizeThoughtLogText(payload?.summary) ||
       normalizeThoughtLogText(payload?.raw) ||
+      payload?.iterations?.some(
+        (iteration) => normalizeThoughtLogText(iteration.summary) || normalizeThoughtLogText(iteration.raw),
+      ) ||
       normalizeThoughtLogText(payload?.fetchedContent),
   );
 }

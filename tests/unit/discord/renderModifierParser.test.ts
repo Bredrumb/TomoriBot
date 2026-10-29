@@ -6,6 +6,7 @@ import {
   hasLeadingPlainOwnNameLabel,
   isAllowedRenderModifierSpeakerLabel,
   matchesRenderModifierName,
+  parseLeadingBareSpriteModifier,
   parseLeadingGenericSpeakerLabel,
   parseLeadingRenderModifier,
   parseNestedRenderModifier,
@@ -190,6 +191,49 @@ describe("render modifier parser", () => {
     expect(isAllowedRenderModifierSpeakerLabel("Ren (Zallya)", sourceNames)).toBe(true);
     expect(isAllowedRenderModifierSpeakerLabel("Tomori (Zallya)", sourceNames)).toBe(true);
     expect(isAllowedRenderModifierSpeakerLabel("Other (Zallya)", sourceNames)).toBe(false);
+  });
+});
+
+describe("shortened bare sprite label parser", () => {
+  const sourceNames = collectRenderModifierSourceNames("Tomori", ["Lockie"]);
+
+  it("parses a bare label that opens the response", () => {
+    expect(parseLeadingBareSpriteModifier("(happy): Yo wassup guys!", sourceNames)).toEqual({
+      modifier: "happy",
+      body: "Yo wassup guys!",
+      afterOwnLabelChain: false,
+    });
+  });
+
+  it("peels the persona's own plain labels before the bare label", () => {
+    expect(parseLeadingBareSpriteModifier("Tomori: (happy): Yo", sourceNames)).toEqual({
+      modifier: "happy",
+      body: "Yo",
+      afterOwnLabelChain: true,
+    });
+  });
+
+  it("does not treat another speaker's label as its own chain", () => {
+    expect(parseLeadingBareSpriteModifier("Chris: (happy): Yo", sourceNames)).toBeNull();
+  });
+
+  it("accepts full-width parentheses and colon", () => {
+    expect(parseLeadingBareSpriteModifier("（照れ）： うるさい！", sourceNames)).toEqual({
+      modifier: "照れ",
+      body: "うるさい！",
+      afterOwnLabelChain: false,
+    });
+  });
+
+  it("leaves sprite resolution to the caller", () => {
+    expect(parseLeadingBareSpriteModifier("(laughs): heh", sourceNames)?.modifier).toBe("laughs");
+  });
+
+  it("rejects overlong modifiers, code fences, and non-label openings", () => {
+    expect(parseLeadingBareSpriteModifier(`(${"a".repeat(65)}): hi`, sourceNames)).toBeNull();
+    expect(parseLeadingBareSpriteModifier("```(happy): hi", sourceNames)).toBeNull();
+    expect(parseLeadingBareSpriteModifier("- (happy): hi", sourceNames)).toBeNull();
+    expect(parseLeadingBareSpriteModifier("(happy) hi", sourceNames)).toBeNull();
   });
 });
 
